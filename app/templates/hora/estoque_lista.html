@@ -409,9 +409,16 @@
           {% endif %}
         </td>
         <td>
-          <span class="badge hora-badge-{{ m.ultimo_evento|lower }}">{{ m.ultimo_evento }}</span>
-          {% if not m.moto_disponivel %}
-            <span class="badge bg-secondary" title="Moto não disponível em estoque">Fora</span>
+          {% if m.ultimo_evento %}
+            <span class="badge hora-badge-{{ m.ultimo_evento|lower }}">{{ m.ultimo_evento }}</span>
+            {% if not m.moto_disponivel %}
+              <span class="badge bg-secondary" title="Moto não disponível em estoque">Fora</span>
+            {% endif %}
+          {% else %}
+            <span class="badge bg-warning text-dark"
+                  title="Chassi cadastrado em pedido/NF, mas ainda sem evento físico (não recebido).">
+              Aguardando NF
+            </span>
           {% endif %}
         </td>
         <td>

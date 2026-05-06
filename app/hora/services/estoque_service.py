@@ -367,6 +367,84 @@ def listar_estoque(
             'moto_disponivel': ev.tipo in EVENTOS_EM_ESTOQUE,
         })
 
+    # ------------------------------------------------------------------
+    # Chassis "puros" (em hora_moto mas SEM evento ainda) — somente se a
+    # listagem foi pedida com `incluir_fora_estoque=True`. Esses chassis
+    # vem de pedido/NF entrada/venda mas ainda nao tiveram o primeiro
+    # evento (RECEBIDA so nasce no recebimento fisico). Aparecem como
+    # "Aguardando NF" na UI.
+    # ------------------------------------------------------------------
+    if incluir_fora_estoque:
+        from app.hora.services.auth_helper import chassis_acessiveis_subquery
+
+        chassis_com_evento_subq = (
+            db.session.query(HoraMotoEvento.numero_chassi).distinct().subquery()
+        )
+
+        qb = (
+            db.session.query(HoraMoto, HoraModelo)
+            .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
+            .filter(~HoraMoto.numero_chassi.in_(chassis_com_evento_subq))
+        )
+        if modelo_id:
+            qb = qb.filter(HoraMoto.modelo_id == modelo_id)
+        if cor:
+            qb = qb.filter(HoraMoto.cor == cor.strip().upper())
+        if chassi:
+            chassi_norm = chassi.strip().upper()
+            if chassi_norm:
+                qb = qb.filter(HoraMoto.numero_chassi.ilike(f'%{chassi_norm}%'))
+        if pedido_id:
+            qb = qb.filter(HoraMoto.numero_chassi.in_(
+                db.session.query(HoraPedidoItem.numero_chassi)
+                .filter(
+                    HoraPedidoItem.pedido_id == pedido_id,
+                    HoraPedidoItem.numero_chassi.isnot(None),
+                )
+            ))
+        if nf_entrada_id:
+            qb = qb.filter(HoraMoto.numero_chassi.in_(
+                db.session.query(HoraNfEntradaItem.numero_chassi)
+                .filter(HoraNfEntradaItem.nf_id == nf_entrada_id)
+            ))
+        if venda_id:
+            qb = qb.filter(HoraMoto.numero_chassi.in_(
+                db.session.query(HoraVendaItem.numero_chassi)
+                .filter(HoraVendaItem.venda_id == venda_id)
+            ))
+        # Filtro explicito por loja_id: aplicar via mesma helper de
+        # autorizacao com lista [loja_id] (cobre pedido/NF/venda).
+        if loja_id:
+            subq_loja = chassis_acessiveis_subquery([loja_id])
+            if subq_loja is not None:
+                qb = qb.filter(HoraMoto.numero_chassi.in_(subq_loja))
+        # Autorizacao por usuario escopado.
+        if lojas_permitidas_ids is not None:
+            if not lojas_permitidas_ids:
+                # Ja retornado [] acima — manter consistencia, nao deve chegar aqui.
+                pass
+            else:
+                subq_perm = chassis_acessiveis_subquery(lojas_permitidas_ids)
+                if subq_perm is not None:
+                    qb = qb.filter(HoraMoto.numero_chassi.in_(subq_perm))
+
+        qb = qb.order_by(HoraMoto.numero_chassi)
+        for moto, modelo in qb.all():
+            resultado.append({
+                'chassi': moto.numero_chassi,
+                'modelo_id': modelo.id,
+                'modelo_nome': modelo.nome_modelo,
+                'cor': moto.cor,
+                'motor': moto.numero_motor,
+                'ano_modelo': moto.ano_modelo,
+                'loja_id': None,
+                'loja_nome': None,
+                'ultimo_evento': None,            # template renderiza "Aguardando NF"
+                'ultimo_evento_em': None,
+                'ultimo_evento_detalhe': None,
+                'moto_disponivel': False,
+            })
+
     if not resultado:
         return resultado
 
@@ -546,8 +624,9 @@ def autocomplete_chassi(
 ) -> List[dict]:
     """Busca parcial de chassis no universo das lojas permitidas.
 
-    Filtra para chassis que ja tiveram ao menos 1 evento em loja permitida
-    (mesmo criterio que estoque_chassi_detalhe usa para autorizacao).
+    Filtra para chassis acessiveis (evento OU pedido OU NF entrada OU venda em
+    loja permitida) — mesmo criterio de `estoque_chassi_detalhe`. Permite
+    sugerir chassis que ainda estao apenas em pedido (sem NF/evento ainda).
     """
     q_norm = (q or '').strip().upper()
     if not q_norm or len(q_norm) < 2:
@@ -561,13 +640,10 @@ def autocomplete_chassi(
     if lojas_permitidas_ids is not None:
         if not lojas_permitidas_ids:
             return []
-        chassis_permitidos = (
-            db.session.query(HoraMotoEvento.numero_chassi)
-            .filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
-            .distinct()
-            .subquery()
-        )
-        base = base.filter(HoraMoto.numero_chassi.in_(chassis_permitidos))
+        from app.hora.services.auth_helper import chassis_acessiveis_subquery
+        subq = chassis_acessiveis_subquery(lojas_permitidas_ids)
+        # subq nao deve ser None aqui pois ja checamos `is not None` acima
+        base = base.filter(HoraMoto.numero_chassi.in_(subq))
 
     base = base.order_by(HoraMoto.numero_chassi).limit(limit)
     return [

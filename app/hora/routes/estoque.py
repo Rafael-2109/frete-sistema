@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 
-from app import db
 from app.hora.decorators import require_hora_perm
 from app.hora.models import HoraLoja, HoraModelo, HoraMoto
 from app.hora.routes import hora_bp
 from app.hora.services import estoque_service
 from app.hora.services.auth_helper import (
+    chassi_acessivel,
     lojas_permitidas_ids,
     usuario_tem_acesso_a_loja,
 )
@@ -153,29 +153,20 @@ def estoque_autocomplete_cor():
 @hora_bp.route('/estoque/chassi/<numero_chassi>')
 @require_hora_perm('estoque', 'ver')
 def estoque_chassi_detalhe(numero_chassi: str):
-    from app.hora.models import HoraMotoEvento
-
     chassi = numero_chassi.strip().upper()
     moto = HoraMoto.query.get_or_404(chassi)
 
     rastreio = estoque_service.rastreamento_completo(chassi)
 
-    # Autorizacao: usuario deve ter acesso a ALGUMA loja pela qual este chassi
-    # ja passou. Admin (lojas_permitidas_ids() is None) sempre passa.
+    # Autorizacao: usuario deve ter acesso a ALGUMA loja onde este chassi tem
+    # evento OU esta em pedido/NF entrada/venda. Admin (lojas_permitidas_ids()
+    # is None) sempre passa.
     permitidas = lojas_permitidas_ids()
     if permitidas is not None:
         if not permitidas:
             flash('Sem acesso a nenhuma loja.', 'danger')
             return redirect(url_for('hora.estoque_lista'))
-        tem_vinculo = (
-            db.session.query(HoraMotoEvento.id)
-            .filter(
-                HoraMotoEvento.numero_chassi == chassi,
-                HoraMotoEvento.loja_id.in_(permitidas),
-            )
-            .first()
-        )
-        if not tem_vinculo:
+        if not chassi_acessivel(chassi, permitidas):
             flash('Acesso negado a esse chassi.', 'danger')
             return redirect(url_for('hora.estoque_lista'))
 
