@@ -10,10 +10,9 @@
     "V1_inline_style_color": 245,
     "V2_hex_in_template": 70,
     "V7_text_bg_combo": 3,
-    "V5_important_in_css": 308,
-    "V4_rgb_in_css": 1431,
-    "V3_hex_in_css_module": 71,
-    "V14_untokenized_bs_var": 2
+    "V5_important_in_css": 232,
+    "V4_rgb_in_css": 1277,
+    "V3_hex_in_css_module": 46
   },
   "totals_by_module": {
     "templates/base.html": {
@@ -171,10 +170,6 @@
       "V5_important_in_css": 17,
       "V4_rgb_in_css": 30
     },
-    "css/components": {
-      "V4_rgb_in_css": 98,
-      "V5_important_in_css": 13
-    },
     "css/modules/_carvia.css": {
       "V4_rgb_in_css": 69,
       "V3_hex_in_css_module": 4,
@@ -225,7 +220,7 @@
       "V4_rgb_in_css": 45
     },
     "css/modules/_fretes.css": {
-      "V4_rgb_in_css": 34,
+      "V4_rgb_in_css": 32,
       "V5_important_in_css": 1
     },
     "css/modules/_recebimento.css": {
@@ -275,10 +270,8 @@
       "V5_important_in_css": 2
     },
     "css/modules/_hora.css": {
-      "V4_rgb_in_css": 2,
-      "V3_hex_in_css_module": 8,
-      "V5_important_in_css": 13,
-      "V14_untokenized_bs_var": 2
+      "V4_rgb_in_css": 5,
+      "V5_important_in_css": 13
     },
     "css/modules/_motochefe.css": {
       "V5_important_in_css": 4,
@@ -291,11 +284,6 @@
     "financeiro": {
       "V4_rgb_in_css": 156,
       "V5_important_in_css": 23
-    },
-    "css/base": {
-      "V4_rgb_in_css": 57,
-      "V5_important_in_css": 63,
-      "V3_hex_in_css_module": 17
     },
     "css/utilities": {
       "V4_rgb_in_css": 4,
@@ -345,15 +333,6 @@
         "V5_important_in_css": 23
       },
       "total": 140
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "violations": {
-        "V5_important_in_css": 59,
-        "V4_rgb_in_css": 44,
-        "V3_hex_in_css_module": 17
-      },
-      "total": 120
     },
     {
       "file": "app/static/css/modules/_carvia.css",
@@ -442,28 +421,6 @@
       "total": 39
     },
     {
-      "file": "app/static/css/components/_buttons.css",
-      "violations": {
-        "V4_rgb_in_css": 38
-      },
-      "total": 38
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "violations": {
-        "V4_rgb_in_css": 35
-      },
-      "total": 35
-    },
-    {
-      "file": "app/static/css/modules/_fretes.css",
-      "violations": {
-        "V4_rgb_in_css": 34,
-        "V5_important_in_css": 1
-      },
-      "total": 35
-    },
-    {
       "file": "app/static/css/modules/manufatura/macro-projecao.css",
       "violations": {
         "V4_rgb_in_css": 35
@@ -474,6 +431,14 @@
       "file": "app/templates/financeiro/extrato_itens.html",
       "violations": {
         "V1_inline_style_color": 33
+      },
+      "total": 33
+    },
+    {
+      "file": "app/static/css/modules/_fretes.css",
+      "violations": {
+        "V4_rgb_in_css": 32,
+        "V5_important_in_css": 1
       },
       "total": 33
     },
@@ -517,16 +482,6 @@
       "total": 26
     },
     {
-      "file": "app/static/css/modules/_hora.css",
-      "violations": {
-        "V4_rgb_in_css": 2,
-        "V3_hex_in_css_module": 8,
-        "V5_important_in_css": 13,
-        "V14_untokenized_bs_var": 2
-      },
-      "total": 25
-    },
-    {
       "file": "app/static/css/modules/_simulador_carga.css",
       "violations": {
         "V3_hex_in_css_module": 8,
@@ -542,14 +497,6 @@
         "V5_important_in_css": 18
       },
       "total": 22
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "violations": {
-        "V4_rgb_in_css": 8,
-        "V5_important_in_css": 13
-      },
-      "total": 21
     },
     {
       "file": "app/static/css/modules/_rastreamento.css",
@@ -618,6 +565,14 @@
       "total": 18
     },
     {
+      "file": "app/static/css/modules/_hora.css",
+      "violations": {
+        "V4_rgb_in_css": 5,
+        "V5_important_in_css": 13
+      },
+      "total": 18
+    },
+    {
       "file": "app/static/css/modules/_comercial.css",
       "violations": {
         "V5_important_in_css": 12,
@@ -630,14 +585,6 @@
       "violations": {
         "V1_inline_style_color": 7,
         "V2_hex_in_template": 10
-      },
-      "total": 17
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "violations": {
-        "V4_rgb_in_css": 13,
-        "V5_important_in_css": 4
       },
       "total": 17
     },
@@ -720,16 +667,55 @@
         "V6_badge_bg_text_combo": 11
       },
       "total": 11
+    },
+    {
+      "file": "app/templates/financeiro/comprovantes_hub.html",
+      "violations": {
+        "V1_inline_style_color": 3,
+        "V6_badge_bg_text_combo": 8
+      },
+      "total": 11
+    },
+    {
+      "file": "app/static/css/modules/_pallet-unified.css",
+      "violations": {
+        "V4_rgb_in_css": 10,
+        "V5_important_in_css": 1
+      },
+      "total": 11
+    },
+    {
+      "file": "app/templates/pessoal/transacoes.html",
+      "violations": {
+        "V6_badge_bg_text_combo": 7,
+        "V12_table_row_class": 3
+      },
+      "total": 10
+    },
+    {
+      "file": "app/templates/pessoal/configuracao.html",
+      "violations": {
+        "V6_badge_bg_text_combo": 4,
+        "V12_table_row_class": 6
+      },
+      "total": 10
+    },
+    {
+      "file": "app/templates/pallet/v2/tratativa_nfs/vincular_dfe_devolucao.html",
+      "violations": {
+        "V1_inline_style_color": 10
+      },
+      "total": 10
     }
   ],
   "unique_hex_in_css_top": [
     [
-      "#fff",
-      10
-    ],
-    [
       "#4a90d9",
       6
+    ],
+    [
+      "#fff",
+      4
     ],
     [
       "#044383",
@@ -765,10 +751,6 @@
     ],
     [
       "#1a2332",
-      2
-    ],
-    [
-      "#664d03",
       2
     ],
     [
@@ -841,6 +823,10 @@
     ],
     [
       "#fbbf24",
+      1
+    ],
+    [
+      "#4ade80",
       1
     ]
   ],
@@ -8061,783 +8047,6 @@
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
-      "file": "app/static/css/components/_tags.css",
-      "line": 28,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 28,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 32,
-      "code": "V4_rgb_in_css",
-      "snippet": ".badge-tag[data-color=\"0\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 32,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"0\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 33,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"1\"] { background-color: var(--semantic-danger) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 34,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"2\"] { background-color: var(--semantic-warning) !important; color: var(--gray-10) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 35,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"3\"] { background-color: var(--semantic-warning) !important; color: var(--gray-10) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 36,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"4\"] { background-color: var(--semantic-success) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 37,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"5\"] { background-color: var(--semantic-success) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 38,
-      "code": "V4_rgb_in_css",
-      "snippet": ".badge-tag[data-color=\"6\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 38,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"6\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 39,
-      "code": "V4_rgb_in_css",
-      "snippet": ".badge-tag[data-color=\"7\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 39,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"7\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 40,
-      "code": "V4_rgb_in_css",
-      "snippet": ".badge-tag[data-color=\"8\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 40,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"8\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 41,
-      "code": "V4_rgb_in_css",
-      "snippet": ".badge-tag[data-color=\"9\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 41,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"9\"] { background-color: hsl(0 0% 40%) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 42,
-      "code": "V4_rgb_in_css",
-      "snippet": ".badge-tag[data-color=\"10\"] { background-color: hsl(0 0% 30%) !important; }",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 42,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"10\"] { background-color: hsl(0 0% 30%) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 43,
-      "code": "V4_rgb_in_css",
-      "snippet": ".badge-tag[data-color=\"11\"] { background-color: hsl(0 0% 30%) !important; }",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tags.css",
-      "line": 43,
-      "code": "V5_important_in_css",
-      "snippet": ".badge-tag[data-color=\"11\"] { background-color: hsl(0 0% 30%) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/components/_cards.css",
-      "line": 48,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.4);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 226,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-bg: hsla(145 50% 35% / 0.15);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 227,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-hover-bg: hsla(145 50% 35% / 0.28);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 236,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-bg: hsla(45 90% 50% / 0.15);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 237,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-hover-bg: hsla(45 90% 50% / 0.28);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 246,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-bg: hsla(215 80% 50% / 0.15);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 247,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-hover-bg: hsla(215 80% 50% / 0.28);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 256,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-bg: hsla(0 70% 50% / 0.15);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 257,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-hover-bg: hsla(0 70% 50% / 0.28);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 266,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-bg: hsla(190 70% 45% / 0.15);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_tables.css",
-      "line": 267,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_row-hover-bg: hsla(190 70% 45% / 0.28);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 76,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 83,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.7);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 96,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 102,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 109,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 116,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 122,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-bg: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 123,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 136,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-bg: hsl(0 0% 20%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 137,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 95%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 154,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 177,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 189,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 201,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 207,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 55%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 208,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-border: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 212,
-      "code": "V4_rgb_in_css",
-      "snippet": "background: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 213,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 214,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 230,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 30%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 231,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-border: hsl(0 0% 30%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 235,
-      "code": "V4_rgb_in_css",
-      "snippet": "background: hsl(0 0% 20%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 236,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 95%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 237,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(0 0% 20%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 249,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 255,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 262,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 268,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 274,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 279,
-      "code": "V4_rgb_in_css",
-      "snippet": "background: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 280,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 281,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 361,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 362,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_btn-border: hsla(0 0% 100% / 0.5);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 366,
-      "code": "V4_rgb_in_css",
-      "snippet": "background: hsla(0 0% 100% / 0.15);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 367,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 368,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_buttons.css",
-      "line": 369,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(0 0% 100% / 0.3);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_modals.css",
-      "line": 29,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_modal-shadow: 0 4px 8px hsla(0 0% 0% / 0.15), 0 8px 16px hsla(0 0% 0% / 0.2);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_modals.css",
-      "line": 81,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(0 0% 0% / 0.5);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_forms.css",
-      "line": 33,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_input-focus-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_forms.css",
-      "line": 62,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_input-focus-shadow: 0 0 6px 1px hsla(145 65% 40% / 0.4);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_forms.css",
-      "line": 69,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_input-focus-shadow: 0 0 6px 1px hsla(0 70% 50% / 0.4);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_forms.css",
-      "line": 180,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 55,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 61,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 40%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 62,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 69,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 76,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 83,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 89,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 90,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 104,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 20%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 105,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 95%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 117,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(145 65% 35%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 124,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 40%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 139,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 163,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 177,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 20%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 193,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(145 65% 30%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 198,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 70% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 203,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(45 100% 35%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 208,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 60%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 221,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 230,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 239,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 248,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 254,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 40%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 255,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 275,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(45 95% 55%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 276,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 291,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(145 65% 35%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 296,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 92%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 297,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 20%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 308,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 316,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 329,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(135 65% 35%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 334,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(250 40% 40%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/components/_badges.css",
-      "line": 339,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 25%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
       "file": "app/static/css/modules/_carvia.css",
       "line": 38,
       "code": "V4_rgb_in_css",
@@ -12815,245 +12024,231 @@
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 38,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-bg: hsl(0 0% 35%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/modules/_fretes.css",
-      "line": 39,
+      "line": 54,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 52,
+      "line": 59,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 57,
-      "code": "V4_rgb_in_css",
-      "snippet": "--_badge-color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/modules/_fretes.css",
-      "line": 61,
+      "line": 63,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-bg: hsl(0 0% 40%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 62,
+      "line": 64,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 68,
+      "line": 70,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 73,
+      "line": 75,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 79,
+      "line": 81,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 84,
+      "line": 86,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(0 0% 10%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 165,
+      "line": 167,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-bg: hsla(217 91% 60% / 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 167,
+      "line": 169,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-border: hsla(217 91% 60% / 0.3);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 171,
+      "line": 173,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-bg: hsla(217 91% 60% / 0.1);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 177,
+      "line": 179,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-bg: hsla(145 65% 40% / 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 179,
+      "line": 181,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-border: hsla(145 65% 40% / 0.3);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 183,
+      "line": 185,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-bg: hsla(145 65% 40% / 0.1);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 184,
+      "line": 186,
       "code": "V4_rgb_in_css",
       "snippet": "--_badge-color: hsl(145 70% 28%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 195,
+      "line": 197,
       "code": "V4_rgb_in_css",
       "snippet": "background-color: hsla(45 100% 50% / 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 200,
+      "line": 202,
       "code": "V4_rgb_in_css",
       "snippet": "--bs-table-bg: hsla(158 64% 40% / 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 202,
+      "line": 204,
       "code": "V4_rgb_in_css",
       "snippet": "background-color: hsla(158 64% 40% / 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 207,
+      "line": 209,
       "code": "V4_rgb_in_css",
       "snippet": "--bs-table-bg: hsla(38 92% 50% / 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 209,
+      "line": 211,
       "code": "V4_rgb_in_css",
       "snippet": "background-color: hsla(38 92% 50% / 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 230,
+      "line": 232,
       "code": "V4_rgb_in_css",
       "snippet": "border: 1px solid hsl(0 0% 20%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/modules/_fretes.css",
-      "line": 235,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsl(210 17% 98%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/modules/_fretes.css",
-      "line": 236,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 20%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
       "line": 237,
       "code": "V4_rgb_in_css",
+      "snippet": "background-color: hsl(210 17% 98%);",
+      "detail": "preferir hsl(...) em token + var(--token)"
+    },
+    {
+      "file": "app/static/css/modules/_fretes.css",
+      "line": 238,
+      "code": "V4_rgb_in_css",
+      "snippet": "color: hsl(0 0% 20%);",
+      "detail": "preferir hsl(...) em token + var(--token)"
+    },
+    {
+      "file": "app/static/css/modules/_fretes.css",
+      "line": 239,
+      "code": "V4_rgb_in_css",
       "snippet": "border-bottom: 1px solid hsl(0 0% 20%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 241,
+      "line": 243,
       "code": "V4_rgb_in_css",
       "snippet": "border: 1px solid hsl(0 0% 20%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 245,
+      "line": 247,
       "code": "V4_rgb_in_css",
       "snippet": "border: 1px solid hsl(0 0% 20%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 250,
+      "line": 252,
       "code": "V5_important_in_css",
       "snippet": "display: none !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 420,
+      "line": 422,
       "code": "V4_rgb_in_css",
       "snippet": "color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 424,
+      "line": 426,
       "code": "V4_rgb_in_css",
       "snippet": "background: linear-gradient(135deg, hsl(145 65% 30%) 0%, hsl(145 65% 25%) 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 425,
+      "line": 427,
       "code": "V4_rgb_in_css",
       "snippet": "color: hsl(0 0% 100%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 429,
+      "line": 431,
       "code": "V4_rgb_in_css",
       "snippet": "background-color: hsla(220 80% 53% / 0.08);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 430,
+      "line": 432,
       "code": "V4_rgb_in_css",
       "snippet": "border-left: 4px solid hsl(220 45% 52%);",
       "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_fretes.css",
-      "line": 457,
+      "line": 459,
       "code": "V4_rgb_in_css",
       "snippet": "background: hsla(0 0% 0% / 0.5);",
       "detail": "preferir hsl(...) em token + var(--token)"
@@ -16168,164 +15363,115 @@
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 114,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-warning-text-emphasis, #664d03);",
-      "detail": "cor literal #664d03 (severidade: high) — preferir token CSS"
+      "line": 124,
+      "code": "V4_rgb_in_css",
+      "snippet": "--_badge-color: hsl(0 0% 10%);",
+      "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 119,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-white, #fff);",
-      "detail": "cor literal #fff (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/modules/_hora.css",
-      "line": 126,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-white, #fff);",
-      "detail": "cor literal #fff (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/modules/_hora.css",
-      "line": 132,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-warning-text-emphasis, #664d03);",
-      "detail": "cor literal #664d03 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/modules/_hora.css",
-      "line": 140,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-white, #fff);",
-      "detail": "cor literal #fff (severidade: high) — preferir token CSS"
+      "line": 137,
+      "code": "V4_rgb_in_css",
+      "snippet": "--_badge-color: hsl(0 0% 100%);",
+      "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_hora.css",
       "line": 146,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-white, #fff);",
-      "detail": "cor literal #fff (severidade: high) — preferir token CSS"
+      "code": "V4_rgb_in_css",
+      "snippet": "--_badge-color: hsl(0 0% 100%);",
+      "detail": "preferir hsl(...) em token + var(--token)"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 151,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-white, #fff);",
-      "detail": "cor literal #fff (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/modules/_hora.css",
-      "line": 157,
-      "code": "V3_hex_in_css_module",
-      "snippet": "color: var(--bs-white, #fff);",
-      "detail": "cor literal #fff (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/modules/_hora.css",
-      "line": 187,
+      "line": 178,
       "code": "V5_important_in_css",
       "snippet": "min-width: 20rem !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 188,
+      "line": 179,
       "code": "V5_important_in_css",
       "snippet": "width: 20rem !important;     /* fixa largura — wrap garantido em qualquer item */",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 189,
+      "line": 180,
       "code": "V5_important_in_css",
       "snippet": "max-width: 90vw !important;  /* mas nunca passa do viewport (mobile) */",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 193,
+      "line": 184,
       "code": "V5_important_in_css",
       "snippet": "max-height: none !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 194,
+      "line": 185,
       "code": "V5_important_in_css",
       "snippet": "overflow-y: visible !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 195,
+      "line": 186,
       "code": "V5_important_in_css",
       "snippet": "overflow-x: hidden !important;  /* belt-and-suspenders */",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 199,
+      "line": 190,
       "code": "V5_important_in_css",
       "snippet": "com !important para vencer a especificidade do tema/cdn. */",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 202,
+      "line": 193,
       "code": "V5_important_in_css",
       "snippet": "white-space: normal !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 237,
+      "line": 228,
       "code": "V5_important_in_css",
       "snippet": "width: 100% !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 238,
+      "line": 229,
       "code": "V5_important_in_css",
       "snippet": "min-width: 0 !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 239,
+      "line": 230,
       "code": "V5_important_in_css",
       "snippet": "max-width: 100% !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 241,
+      "line": 232,
       "code": "V5_important_in_css",
       "snippet": "overflow-x: hidden !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/modules/_hora.css",
-      "line": 246,
+      "line": 237,
       "code": "V5_important_in_css",
       "snippet": "white-space: normal !important;",
       "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/modules/_hora.css",
-      "line": 114,
-      "code": "V14_untokenized_bs_var",
-      "snippet": "color: var(--bs-warning-text-emphasis, #664d03);",
-      "detail": "var Bootstrap-native '--bs-warning-text-emphasis' nao e tematizada pelo design system (usar token semantico do design system: --semantic-X, --amber-X, hsl direto, ou definir override)"
-    },
-    {
-      "file": "app/static/css/modules/_hora.css",
-      "line": 132,
-      "code": "V14_untokenized_bs_var",
-      "snippet": "color: var(--bs-warning-text-emphasis, #664d03);",
-      "detail": "var Bootstrap-native '--bs-warning-text-emphasis' nao e tematizada pelo design system (usar token semantico do design system: --semantic-X, --amber-X, hsl direto, ou definir override)"
     },
     {
       "file": "app/static/css/modules/_motochefe.css",
@@ -17775,965 +16921,6 @@
       "code": "V4_rgb_in_css",
       "snippet": "background: hsla(0, 50%, 50%, 0.15);",
       "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 27,
-      "code": "V4_rgb_in_css",
-      "snippet": "background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 28,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 36,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(45 100% 28%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 146,
-      "code": "V4_rgb_in_css",
-      "snippet": "0 10px 40px rgba(0, 0, 0, 0.25),",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 150,
-      "code": "V5_important_in_css",
-      "snippet": "margin-top: 0.5rem !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 169,
-      "code": "V4_rgb_in_css",
-      "snippet": "background: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 171,
-      "code": "V4_rgb_in_css",
-      "snippet": "0 10px 40px rgba(0, 0, 0, 0.12),",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 172,
-      "code": "V4_rgb_in_css",
-      "snippet": "0 0 0 1px rgba(0, 0, 0, 0.05);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 178,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(45 100% 28%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 183,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(45 100% 28%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 225,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0, 0%, 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 230,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0, 0%, 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 365,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-image: url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(230, 237, 243, 0.85)' stroke-line",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 370,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-image: url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(30, 41, 59, 0.85)' stroke-linecap",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 410,
-      "code": "V5_important_in_css",
-      "snippet": "margin-top: 0 !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 514,
-      "code": "V5_important_in_css",
-      "snippet": "animation: none !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_navbar.css",
-      "line": 515,
-      "code": "V5_important_in_css",
-      "snippet": "transition: none !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 47,
-      "code": "V5_important_in_css",
-      "snippet": "background: var(--bg-light) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 48,
-      "code": "V5_important_in_css",
-      "snippet": "color: var(--text) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 53,
-      "code": "V5_important_in_css",
-      "snippet": "border-bottom: 2px solid var(--border) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 62,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--hover-bg) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 67,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(0 0% 50% / 0.03);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 76,
-      "code": "V5_important_in_css",
-      "snippet": "border-color: var(--border) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 84,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--bg-light) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 85,
-      "code": "V5_important_in_css",
-      "snippet": "color: var(--text) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 97,
-      "code": "V5_important_in_css",
-      "snippet": "color: var(--text) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 104,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(145 50% 35% / 0.15) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 104,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsla(145 50% 35% / 0.15) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 107,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(145 50% 35% / 0.28) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 107,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsla(145 50% 35% / 0.28) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 112,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(45 80% 50% / 0.06) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 112,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsla(45 80% 50% / 0.06) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 115,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(45 80% 50% / 0.12) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 115,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsla(45 80% 50% / 0.12) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 120,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(50 100% 50% / 0.08) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 120,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsla(50 100% 50% / 0.08) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 123,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(50 100% 50% / 0.15) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 123,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsla(50 100% 50% / 0.15) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 128,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: transparent !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 131,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--hover-bg) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 192,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color: #28a745\"],",
-      "detail": "cor literal #28a745 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 193,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color:#28a745\"],",
-      "detail": "cor literal #28a745 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 194,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color: #198754\"],",
-      "detail": "cor literal #198754 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 195,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color:#198754\"] {",
-      "detail": "cor literal #198754 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 196,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--semantic-success) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 197,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 197,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 201,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color: #ffc107\"],",
-      "detail": "cor literal #ffc107 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 202,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color:#ffc107\"] {",
-      "detail": "cor literal #ffc107 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 203,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--amber-50) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 204,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 204,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 208,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color: #dc3545\"],",
-      "detail": "cor literal #dc3545 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 209,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color:#dc3545\"] {",
-      "detail": "cor literal #dc3545 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 210,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--semantic-danger) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 211,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 211,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 215,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color: #17a2b8\"],",
-      "detail": "cor literal #17a2b8 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 216,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color:#17a2b8\"] {",
-      "detail": "cor literal #17a2b8 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 217,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsl(0 0% 45%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 217,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsl(0 0% 45%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 218,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 218,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 222,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color: #6c757d\"],",
-      "detail": "cor literal #6c757d (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 223,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color:#6c757d\"] {",
-      "detail": "cor literal #6c757d (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 224,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsl(0 0% 40%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 224,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsl(0 0% 40%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 225,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 225,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 229,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color: #f8f9fa\"],",
-      "detail": "cor literal #f8f9fa (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 230,
-      "code": "V3_hex_in_css_module",
-      "snippet": ".badge[style*=\"background-color:#f8f9fa\"] {",
-      "detail": "cor literal #f8f9fa (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 231,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--bg-light) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 232,
-      "code": "V5_important_in_css",
-      "snippet": "color: var(--text) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 236,
-      "code": "V3_hex_in_css_module",
-      "snippet": "td[style*=\"background-color: #198754\"],",
-      "detail": "cor literal #198754 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 237,
-      "code": "V3_hex_in_css_module",
-      "snippet": "td[style*=\"background-color:#198754\"] {",
-      "detail": "cor literal #198754 (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 238,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--semantic-success) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 239,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 239,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 100%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 245,
-      "code": "V5_important_in_css",
-      "snippet": "DARK MODE FIXES — via custom property injection (sem !important)",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 247,
-      "code": "V5_important_in_css",
-      "snippet": "Bootstrap utility classes usam !important no property final. CSS Cascade",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 248,
-      "code": "V5_important_in_css",
-      "snippet": "Layers inverte prioridade !important: @layer bootstrap (primeiro declarado)",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 249,
-      "code": "V5_important_in_css",
-      "snippet": "tem a MAIOR prioridade !important — overrides com !important em layers",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 304,
-      "code": "V4_rgb_in_css",
-      "snippet": "Estratégia: --bs-bg-opacity: 0 torna o rgba() transparente.",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 305,
-      "code": "V5_important_in_css",
-      "snippet": "O !important do Bootstrap continua, mas calcula cor transparente.",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 306,
-      "code": "V5_important_in_css",
-      "snippet": "Motivo: CSS Cascade Level 5 inverte prioridade de !important por layer.",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 307,
-      "code": "V5_important_in_css",
-      "snippet": "Bootstrap (@layer bootstrap, 1º) vence qualquer !important posterior.",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 388,
-      "code": "V5_important_in_css",
-      "snippet": "color: var(--text-muted) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 394,
-      "code": "V5_important_in_css",
-      "snippet": "color: inherit !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 402,
-      "code": "V5_important_in_css",
-      "snippet": ".card .far.text-success { color: var(--semantic-success) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 408,
-      "code": "V5_important_in_css",
-      "snippet": ".card .far.text-danger { color: var(--semantic-danger) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 414,
-      "code": "V5_important_in_css",
-      "snippet": ".card .far.text-warning { color: var(--amber-50) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 420,
-      "code": "V5_important_in_css",
-      "snippet": ".card .far.text-muted { color: var(--text-muted) !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 423,
-      "code": "V5_important_in_css",
-      "snippet": ".badge i { color: inherit !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 426,
-      "code": "V5_important_in_css",
-      "snippet": ".card-header i { color: inherit !important; }",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 472,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 497,
-      "code": "V5_important_in_css",
-      "snippet": "animation: none !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 507,
-      "code": "V5_important_in_css",
-      "snippet": "background: white !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 508,
-      "code": "V5_important_in_css",
-      "snippet": "color: black !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 511,
-      "code": "V3_hex_in_css_module",
-      "snippet": "border: 1px solid #ddd !important;",
-      "detail": "cor literal #ddd (severidade: high) — preferir token CSS"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 511,
-      "code": "V5_important_in_css",
-      "snippet": "border: 1px solid #ddd !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 512,
-      "code": "V5_important_in_css",
-      "snippet": "box-shadow: none !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 515,
-      "code": "V5_important_in_css",
-      "snippet": "display: none !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 535,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--bs-secondary) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 541,
-      "code": "V4_rgb_in_css",
-      "snippet": "WCAG 4.5:1 — hsl(0 0% 10%) sobre amber vs antigo branco (1.6:1)",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 546,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 546,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 553,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 553,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 572,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 588,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(50 100% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 589,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 590,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 601,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(50 100% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 603,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 614,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(50 100% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 615,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 616,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 627,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(50 100% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 628,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 629,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 640,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(50 100% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 641,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 642,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.6);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 652,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsl(0 0% 45%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 653,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(50 100% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 654,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 100%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 655,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 666,
-      "code": "V4_rgb_in_css",
-      "snippet": "border-color: hsl(50 100% 50%);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 667,
-      "code": "V4_rgb_in_css",
-      "snippet": "box-shadow: 0 0 6px 1px hsla(50 100% 55% / 0.5);",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 677,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: var(--amber-50) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 678,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 678,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 686,
-      "code": "V4_rgb_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 686,
-      "code": "V5_important_in_css",
-      "snippet": "color: hsl(0 0% 10%) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 691,
-      "code": "V4_rgb_in_css",
-      "snippet": "background-color: hsla(0 0% 100% / 0.2) !important;",
-      "detail": "preferir hsl(...) em token + var(--token)"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 691,
-      "code": "V5_important_in_css",
-      "snippet": "background-color: hsla(0 0% 100% / 0.2) !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
-    },
-    {
-      "file": "app/static/css/base/_bootstrap-overrides.css",
-      "line": 692,
-      "code": "V5_important_in_css",
-      "snippet": "color: inherit !important;",
-      "detail": "!important deveria viver em tokens ou _legacy.css apenas"
     },
     {
       "file": "app/static/css/utilities/_legacy.css",
