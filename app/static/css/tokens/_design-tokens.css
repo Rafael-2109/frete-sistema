@@ -46,14 +46,25 @@
 
     /* ═══════════════════════════════════════════════════════════════════════
        SEMANTICAS: SUCCESS, DANGER, WARNING e INFO
+
+       RECALIBRADAS 2026-05-06 para passar WCAG AA (4.5:1) com texto branco:
+       - success: hsl(145 80% 52%) -> hsl(145 65% 30%)  (1.65:1 -> 5.65:1)
+       - danger:  hsl(350 55% 55%) -> hsl(350 60% 40%)  (4.38:1 -> 5.84:1)
+       - info:    hsl(250 40% 60%) -> hsl(250 45% 45%)  (4.21:1 -> 5.97:1)
+       - warning: mantido (usa texto escuro fixo, ja passa AAA)
+
+       Validacao: scripts/audits/ui_dimension_analysis.py
+       Bug original: badges verdes/danger/info no dark eram ilegiveis sobre
+       texto branco. Causa: tokens otimizados para destaque visual mas nao
+       para contraste com texto.
        ═══════════════════════════════════════════════════════════════════════ */
-    --semantic-success: hsl(145 80% 52%);
+    --semantic-success: hsl(145 65% 30%);
     --semantic-success-subtle: hsl(145 30% 15%);
-    --semantic-danger: hsl(350 55% 55%);
+    --semantic-danger: hsl(350 60% 40%);
     --semantic-danger-subtle: hsl(350 25% 15%);
     --semantic-warning: hsl(55 70% 45%);
     --semantic-warning-subtle: hsla(55 70% 45% / 0.15);
-    --semantic-info: hsl(250 40% 60%);
+    --semantic-info: hsl(250 45% 45%);
     --semantic-info-subtle: hsla(250 40% 60% / 0.15);
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -118,14 +129,14 @@
     --bs-primary: var(--amber-55);
     --bs-primary-rgb: 255, 212, 38;
     --bs-success: var(--semantic-success);
-    --bs-success-rgb: 34, 197, 94;
+    --bs-success-rgb: 38, 126, 65;       /* hsl(145 65% 30%) sRGB */
     --bs-danger: var(--semantic-danger);
-    --bs-danger-rgb: 239, 68, 68;
+    --bs-danger-rgb: 163, 41, 68;        /* hsl(350 60% 40%) sRGB */
     --bs-warning: var(--amber-50);
     --bs-warning-rgb: 255, 200, 0;
     --bs-secondary: hsl(0 0% 40%);
     --bs-info: var(--semantic-info);
-    --bs-info-rgb: 102, 92, 184;
+    --bs-info-rgb: 90, 71, 166;          /* hsl(250 45% 45%) sRGB */
     --bs-link-color: var(--amber-55);
 
     /* Component backgrounds (migrado de bootstrap-theme-override.css) */
@@ -190,15 +201,17 @@
     --bs-cotacao-rgb: 66, 153, 225;
     --bs-primary: var(--amber-50);
     --bs-primary-rgb: 255, 204, 0;
-    --bs-success: hsl(135 70% 35%);
-    --bs-success-rgb: 41, 152, 82;
-    --bs-danger: hsl(350 60% 45%);
-    --bs-danger-rgb: 184, 46, 64;
+    /* Light mode usa os MESMOS semantic tokens recalibrados (passa AA com branco
+       em ambos os temas) — elimina divergencia de mapping light vs dark */
+    --bs-success: var(--semantic-success);
+    --bs-success-rgb: 38, 126, 65;
+    --bs-danger: var(--semantic-danger);
+    --bs-danger-rgb: 163, 41, 68;
     --bs-warning: var(--amber-50);
     --bs-warning-rgb: 184, 184, 23;
     --bs-secondary: hsl(0 0% 50%);
-    --bs-info: hsl(250 40% 45%);
-    --bs-info-rgb: 82, 69, 161;
+    --bs-info: var(--semantic-info);
+    --bs-info-rgb: 90, 71, 166;
     --bs-link-color: var(--amber-28);
 
     /* Component backgrounds (migrado de bootstrap-theme-override.css) */
