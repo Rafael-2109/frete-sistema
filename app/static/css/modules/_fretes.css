@@ -33,13 +33,15 @@
       border-radius: 0.375rem;
   }
 
-  /* Status: EM_TRATATIVA - Fretes-only (nao existe em _badges.css) */
-  .badge-status-tratativa {
-      --_badge-bg: hsl(0 0% 35%);
-      --_badge-color: hsl(0 0% 100%);
-  }
+  /* Status: EM_TRATATIVA — DELETADO 2026-05-06 (Fase C)
+     Agora vive em components/_badges.css canonical com mesma cor (cinza 35%).
+     Templates com class="badge-status-tratativa" continuam funcionando. */
 
-  /* Status: LANCADO - Design sutil diferente do _badges.css (neutro vs amber) */
+  /* Status: LANCADO — Cor neutra (bg-light + texto + borda) em vez do canonical
+     (amber, alias de "pago"). Em fretes, "LANCADO" = frete ja processado no
+     Odoo, estado terminal neutro, NAO acionavel. Mantido GLOBAL aqui ate que
+     paginas /fretes/ ganhem wrapper .fretes-module (TODO Fase futura para scopar).
+     Por enquanto sobrescreve canonical em qualquer pagina (modules > components). */
   .badge-status-lancado {
       --_badge-bg: var(--bg-light);
       --_badge-color: var(--text);

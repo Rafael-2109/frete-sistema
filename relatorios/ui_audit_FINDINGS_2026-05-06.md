@@ -2,7 +2,7 @@
 **Data**: 2026-05-06
 
 **Arquivos escaneados**: 569 templates, 57 CSS
-**Total de violacoes (V1-V10) + catalogo (V12, V14)**: 2536
+**Total de violacoes (V1-V10) + catalogo (V12, V14)**: 2527
 
 > Este documento e um espelho legivel do estado atual. Para violacoes automatizaveis ver `ui_audit_<data>.md` (top hotspots).
 > Para regras de uso correto ver `.claude/references/design/GUIA_COMPONENTES_UI.md`.
@@ -10,15 +10,14 @@
 ## 1. Sumario por categoria
 | Codigo | Descricao | Total |
 |---|---|---:|
-| `V4_rgb_in_css` | rgb/rgba/hsl literal em CSS (preferir token) | 1276 |
+| `V4_rgb_in_css` | rgb/rgba/hsl literal em CSS (preferir token) | 1277 |
 | `V6_badge_bg_text_combo` | Badge com bg-* + text-* (derruba design system) | 440 |
 | `V1_inline_style_color` | Inline style com cor (color/background/border) | 245 |
 | `V5_important_in_css` | !important em CSS fora de tokens/_legacy | 232 |
 | `V12_table_row_class` | Uso de table-secondary/light/dark/info em row | 214 |
 | `V2_hex_in_template` | Hex literal dentro de style= em template | 70 |
-| `V3_hex_in_css_module` | Hex literal em CSS fora de tokens/vendor | 54 |
+| `V3_hex_in_css_module` | Hex literal em CSS fora de tokens/vendor | 46 |
 | `V7_text_bg_combo` | Combinacao bg + text antagonistica (baixo contraste) | 3 |
-| `V14_untokenized_bs_var` | Var Bootstrap-native nao tematizada pelo design system | 2 |
 
 ## 2. Catalogo de classes badge
 
@@ -28,7 +27,7 @@ Lista todas as classes `*badge*` definidas em `components/` (canonical) e `modul
 | Classe | Arquivos | Recomendacao |
 |---|---|---|
 | `.score-badge` | `app/static/css/modules/_bi.css:186` (modulo), `app/static/css/modules/_pallet.css:1921` (modulo) | Consolidar em canonical ou prefixar com modulo |
-| `.status-badge` | `app/static/css/modules/_financeiro.css:369` (modulo), `app/static/css/modules/_fretes.css:490` (modulo), `app/static/css/modules/_recebimento.css:244` (modulo), `app/static/css/modules/_pallet.css:1816` (modulo) | Consolidar em canonical ou prefixar com modulo |
+| `.status-badge` | `app/static/css/modules/_financeiro.css:369` (modulo), `app/static/css/modules/_fretes.css:492` (modulo), `app/static/css/modules/_recebimento.css:244` (modulo), `app/static/css/modules/_pallet.css:1816` (modulo) | Consolidar em canonical ou prefixar com modulo |
 | `.tipo-badge` | `app/static/css/modules/_pallet.css:1850` (modulo), `app/static/css/modules/custeio/custeio.css:10` (modulo) | Consolidar em canonical ou prefixar com modulo |
 
 ### 2.2 Duplicacao SEMANTICA (sufixo equivale a status canonical mas vive em modulo)
@@ -169,13 +168,13 @@ Estes deveriam reusar a classe canonical de `_badges.css` em vez de redefinir.
 
 **`app/static/css/modules/_fretes.css`** (3 classes):
 
-- L490: `.status-badge`
-- L531: `.vinculado-badge`
-- L536: `.nao-vinculado-badge`
+- L492: `.status-badge`
+- L533: `.vinculado-badge`
+- L538: `.nao-vinculado-badge`
 
 **`app/static/css/modules/_hora.css`** (1 classes):
 
-- L111: `.hora-badge-divergencia`
+- L122: `.hora-badge-divergencia`
 
 **`app/static/css/modules/_insights.css`** (3 classes):
 
@@ -355,9 +354,7 @@ Estes deveriam reusar a classe canonical de `_badges.css` em vez de redefinir.
 
 Estas vars (`--bs-*-text-emphasis`, `--bs-*-bg-subtle`, `--bs-*-border-subtle`) vem do Bootstrap default e NAO sao tematizadas pelo design system. No dark mode podem retornar valores incompativeis (ex: `--bs-warning-text-emphasis` retorna `#ffda6a` no dark do Bootstrap, criando 'amarelo claro sobre amarelo solido' em badges com `bg: var(--bs-warning)`).
 
-| Var | Ocorrencias | Arquivos |
-|---|---:|---|
-| `--bs-warning-text-emphasis` | 2 | `app/static/css/modules/_hora.css` |
+Nenhuma encontrada.
 
 ## 5. Casos high-impact (curados)
 

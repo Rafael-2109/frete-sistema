@@ -106,55 +106,46 @@
 
   /* ═══════════════════════════════════════════════════════════════════════════
      HORA BADGES - Status e divergencias
-     API --_badge-bg/color seguindo padrao components/_badges.css
+     Refatorado 2026-05-06 (Fase C):
+     - Status genericos (faturado, parcialmente_faturado, em_conferencia, aberto,
+       vendida, devolvida, reservada, com_divergencia, avariada) DELETADOS daqui:
+       agora vivem em components/_badges.css canonical, com API --_badge-bg/color
+       (resolve bug "Parcialmente Faturado ilegivel no dark mode" eliminando uso
+       de --bs-warning-text-emphasis nao tematizado).
+     - Especificos hora (cancelado/recebida/conferida com cor diferente do canonical)
+       sao SCOPED em `.hora-module` para nao poluir outros modulos.
+     - hora-badge-divergencia (usado em recebimento_resolver.html e
+       pedido_importar_preview.html) mantido com API canonical.
      ═══════════════════════════════════════════════════════════════════════════ */
 
+  /* DIVERGENCIA — alerta visual em pre-recebimento e import preview */
   .hora-badge-divergencia {
-    background-color: var(--bs-warning);
-    color: var(--bs-warning-text-emphasis, #664d03);
+    --_badge-bg: var(--amber-50);
+    --_badge-color: hsl(0 0% 10%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
   }
 
-  .badge-status-aberto {
-    background-color: var(--bs-primary);
-    color: var(--bs-white, #fff);
+  /* SCOPED OVERRIDES — mantem semantica visual hora especifica
+     (canonical usa cores diferentes para esses status: cancelado=cinza,
+     conferida=success-verde. Hora destaca operacionalmente como danger/info-lavanda) */
+
+  /* Cancelamento operacional em hora = vermelho (canonical = cinza) */
+  .hora-module .badge-status-cancelada,
+  .hora-module .badge-status-cancelado {
+    --_badge-bg: var(--semantic-danger);
+    --_badge-color: hsl(0 0% 100%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
   }
 
-  .badge-status-faturado,
-  .badge-status-concluido,
-  .badge-status-concluida {
-    background-color: var(--bs-success);
-    color: var(--bs-white, #fff);
-  }
-
-  .badge-status-parcialmente_faturado,
-  .badge-status-em_conferencia {
-    background-color: var(--bs-warning);
-    color: var(--bs-warning-text-emphasis, #664d03);
-  }
-
-  .badge-status-com_divergencia,
-  .badge-status-cancelada,
-  .badge-status-cancelado,
-  .badge-status-avariada {
-    background-color: var(--bs-danger);
-    color: var(--bs-white, #fff);
-  }
-
-  .badge-status-recebida,
-  .badge-status-conferida {
-    background-color: var(--bs-info);
-    color: var(--bs-white, #fff);
-  }
-
-  .badge-status-vendida {
-    background-color: var(--bs-success);
-    color: var(--bs-white, #fff);
-  }
-
-  .badge-status-devolvida,
-  .badge-status-reservada {
-    background-color: var(--bs-secondary);
-    color: var(--bs-white, #fff);
+  /* Recebida/conferida em hora = info-lavanda (canonical = info-cinza/success-verde) */
+  .hora-module .badge-status-recebida,
+  .hora-module .badge-status-conferida {
+    --_badge-bg: var(--semantic-info);
+    --_badge-color: hsl(0 0% 100%);
+    background: var(--_badge-bg);
+    color: var(--_badge-color);
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
