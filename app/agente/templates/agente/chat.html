@@ -536,6 +536,18 @@
                 </label>
             </div>
         </div>
+
+        <!-- Mostrar Raciocinio (Thinking Display) -->
+        <div class="mobile-settings-group">
+            <label class="mobile-settings-label"><i class="fas fa-brain me-1"></i>Mostrar Raciocinio</label>
+            <div class="mobile-settings-toggle-row">
+                <span class="mobile-settings-desc">Resume do raciocinio (mais lento, custo extra em tokens)</span>
+                <label class="toggle-switch thinking">
+                    <input type="checkbox" id="mobile-thinking-display-toggle" onchange="syncMobileSetting('thinking', this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
     </div>
 </div>
 

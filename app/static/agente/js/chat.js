@@ -5001,6 +5001,13 @@ function openMobileSettings() {
         mobilePlan.checked = desktopPlan.checked;
     }
 
+    // Sync thinking display
+    const desktopThinking = document.getElementById('thinking-display-toggle');
+    const mobileThinking = document.getElementById('mobile-thinking-display-toggle');
+    if (desktopThinking && mobileThinking) {
+        mobileThinking.checked = desktopThinking.checked;
+    }
+
     sheet.style.display = 'block';
     backdrop.style.display = 'block';
 }
@@ -5044,6 +5051,14 @@ function syncMobileSetting(type, value) {
             if (desktopPlan && desktopPlan.checked !== value) {
                 desktopPlan.checked = value;
                 desktopPlan.dispatchEvent(new Event('change'));
+            }
+            break;
+        }
+        case 'thinking': {
+            const desktopThinking = document.getElementById('thinking-display-toggle');
+            if (desktopThinking && desktopThinking.checked !== value) {
+                desktopThinking.checked = value;
+                desktopThinking.dispatchEvent(new Event('change'));
             }
             break;
         }
