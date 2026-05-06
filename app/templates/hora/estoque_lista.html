@@ -3,25 +3,52 @@
 {% block hora_content %}
 <h2 class="mb-3">Estoque por loja</h2>
 
+{# Estrutura hierarquica: 1 bloco por loja, dentro tabela Modelo + Cor + Qtd.
+   So motos em estoque real (EVENTOS_EM_ESTOQUE). Recebimento e SOT — cor/
+   modelo ja refletem a conferencia. #}
+{% if kpis_loja_modelo_cor %}
 <div class="row g-3 mb-4">
-  {% for k in kpis_loja %}
-  <div class="col-md-3">
-    <div class="hora-kpi">
-      <div class="hora-kpi-label">{{ k.loja_nome }}</div>
-      <div class="hora-kpi-valor">{{ k.total }}</div>
-      <div class="small text-muted">
-        Disp.: <strong>{{ k.disponivel }}</strong>
-        · Avariada: <strong class="text-warning">{{ k.avariada }}</strong>
-        · Falt.peça: <strong class="text-info">{{ k.faltando_peca }}</strong>
+  {% for loja in kpis_loja_modelo_cor %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>{{ loja.loja_nome }}</strong>
+        <span class="badge bg-primary">Total: {{ loja.total_loja }}</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width: 50%">Modelo</th>
+              <th style="width: 30%">Cor</th>
+              <th style="width: 20%" class="text-end">Qtd</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for modelo in loja.modelos %}
+              {% for c in modelo.cores %}
+              <tr>
+                {% if loop.first %}
+                  <td rowspan="{{ modelo.cores|length }}" class="align-middle">
+                    {{ modelo.modelo_nome }}
+                    <div class="small text-muted">Total: {{ modelo.total_modelo }}</div>
+                  </td>
+                {% endif %}
+                <td>{{ c.cor or '—' }}</td>
+                <td class="text-end fw-bold">{{ c.qtd }}</td>
+              </tr>
+              {% endfor %}
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
-  {% else %}
-  <div class="col-12">
-    <div class="alert alert-warning">Nenhuma moto em estoque.</div>
-  </div>
   {% endfor %}
 </div>
+{% else %}
+<div class="alert alert-warning mb-4">Nenhuma moto em estoque.</div>
+{% endif %}
 
 <form method="get" class="card p-3 mb-3" id="estoque-filtros">
   <div class="row g-2">
@@ -140,22 +167,51 @@
   </div>
 
   <div class="row g-2 mt-1">
-    <div class="col-md-12 d-flex flex-wrap gap-3">
+    <div class="col-md-3">
+      <label class="form-label">Status do chassi</label>
+      <select name="status" class="form-select">
+        <option value="" {% if not filtro_status %}selected{% endif %}>
+          Disponíveis (em estoque)
+        </option>
+        <option value="MOTO_FALTANDO" {% if filtro_status == 'MOTO_FALTANDO' %}selected{% endif %}>
+          MOTO_FALTANDO (declarada NF, não chegou)
+        </option>
+        <option value="AVARIADA" {% if filtro_status == 'AVARIADA' %}selected{% endif %}>
+          Apenas avariadas
+        </option>
+        <option value="FALTANDO_PECA" {% if filtro_status == 'FALTANDO_PECA' %}selected{% endif %}>
+          Apenas faltando peça
+        </option>
+        <option value="EM_TRANSITO" {% if filtro_status == 'EM_TRANSITO' %}selected{% endif %}>
+          Em trânsito
+        </option>
+        <option value="VENDIDA" {% if filtro_status == 'VENDIDA' %}selected{% endif %}>
+          Vendidas
+        </option>
+        <option value="RESERVADA" {% if filtro_status == 'RESERVADA' %}selected{% endif %}>
+          Reservadas em pedido
+        </option>
+        <option value="DEVOLVIDA" {% if filtro_status == 'DEVOLVIDA' %}selected{% endif %}>
+          Devolvidas / descartadas
+        </option>
+      </select>
+    </div>
+    <div class="col-md-9 d-flex flex-wrap gap-3 align-items-end">
       <div class="form-check">
         <input type="checkbox" name="incluir_avariadas" id="ia" class="form-check-input"
                value="1" {% if incluir_avariadas %}checked{% endif %}>
-        <label for="ia" class="form-check-label">Incluir avariadas</label>
+        <label for="ia" class="form-check-label">Incluir avariadas (default)</label>
       </div>
       <div class="form-check">
         <input type="checkbox" name="incluir_faltando_peca" id="ifp" class="form-check-input"
                value="1" {% if incluir_faltando_peca %}checked{% endif %}>
-        <label for="ifp" class="form-check-label">Incluir faltando peça</label>
+        <label for="ifp" class="form-check-label">Incluir faltando peça (default)</label>
       </div>
       <div class="form-check">
         <input type="checkbox" name="incluir_fora_estoque" id="ife" class="form-check-input"
                value="1" {% if incluir_fora_estoque %}checked{% endif %}>
         <label for="ife" class="form-check-label">
-          Mostrar fora de estoque <span class="text-muted small">(histórico: vendidas, em trânsito, devolvidas)</span>
+          Mostrar fora de estoque <span class="text-muted small">(histórico)</span>
         </label>
       </div>
     </div>

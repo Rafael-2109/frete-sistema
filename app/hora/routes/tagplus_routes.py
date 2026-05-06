@@ -795,15 +795,33 @@ def tagplus_forma_map_salvar():
       tagplus_id[idx]       -> ID inteiro no TagPlus (vazio = remover)
       descricao[idx]        -> texto livre (opcional)
     """
+    from app.hora.models.tagplus import TIPOS_PAGAMENTO_VALIDOS
+
     formas_form = request.form.getlist('forma[]')
     ids_form = request.form.getlist('tagplus_id[]')
     descs_form = request.form.getlist('descricao[]')
+    tipos_form = request.form.getlist('tipo_pagamento[]')
+
+    # Garante alinhamento de listas (linhas adicionadas por JS podem nao ter
+    # o tipo_pagamento se template antigo cachado). Pad com None.
+    def _at(lst, idx):
+        return lst[idx] if idx < len(lst) else ''
 
     nomes_processados = set()
-    for forma_raw, id_raw, desc_raw in zip(formas_form, ids_form, descs_form):
+    for idx, forma_raw in enumerate(formas_form):
+        id_raw = _at(ids_form, idx)
+        desc_raw = _at(descs_form, idx)
+        tipo_raw = _at(tipos_form, idx)
         forma = (forma_raw or '').strip().upper()[:20]
         tagplus_id = (id_raw or '').strip()
         descricao = (desc_raw or '').strip() or None
+        tipo_pgto = (tipo_raw or '').strip().upper() or None
+        if tipo_pgto and tipo_pgto not in TIPOS_PAGAMENTO_VALIDOS:
+            flash(
+                f'tipo_pagamento invalido para {forma}: {tipo_pgto!r} '
+                f'(esperado A_VISTA ou A_PRAZO).', 'danger',
+            )
+            continue
 
         if not forma:
             continue
@@ -831,11 +849,13 @@ def tagplus_forma_map_salvar():
         if existente:
             existente.tagplus_forma_id = tagplus_id_int
             existente.descricao = descricao
+            existente.tipo_pagamento = tipo_pgto
         else:
             db.session.add(HoraTagPlusFormaPagamentoMap(
                 forma_pagamento_hora=forma,
                 tagplus_forma_id=tagplus_id_int,
                 descricao=descricao,
+                tipo_pagamento=tipo_pgto,
             ))
     db.session.commit()
     flash(f'Mapeamentos salvos ({len(nomes_processados)} formas processadas).', 'success')
@@ -1003,10 +1023,24 @@ def tagplus_pedido_venda_novo():
         .all()
     )
 
+    # Vendedores disponiveis: usuarios habilitados no modulo HORA. SELECT
+    # vem pre-selecionado com o usuario logado, mas operador pode trocar.
+    from app.hora.services import permissao_service
+    vendedores_disponiveis = permissao_service.listar_usuarios_habilitados()
+
+    # Lojas disponiveis: respeita escopo do operador + exclui CNPJ matriz
+    # (regra de negocio em cadastro_service.CNPJ_EXCLUIDO_PEDIDO_VENDA).
+    from app.hora.services import cadastro_service
+    lojas_disponiveis = cadastro_service.listar_lojas_para_pedido_venda(
+        lojas_permitidas_ids=permitidas,
+    )
+
     return render_template(
         'hora/tagplus/pedido_venda_novo.html',
         modelos=modelos,
         formas_pagamento=formas_pagamento,
+        vendedores_disponiveis=vendedores_disponiveis,
+        lojas_disponiveis=lojas_disponiveis,
     )
 
 
@@ -1037,6 +1071,26 @@ def tagplus_pedido_venda_criar():
         flash('Numero de parcelas / intervalo invalidos.', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
+    # Vendedor: SELECT no form, default = usuario logado. Server valida que o
+    # nome enviado pertence a um usuario HORA-habilitado (defesa em
+    # profundidade contra manipulacao do POST). Se vazio, fallback p/ logado.
+    from app.hora.services import permissao_service
+    vendedor_raw = _g('vendedor', 100)
+    if not vendedor_raw:
+        vendedor_final = _operador()
+    else:
+        nomes_validos = {
+            u.nome for u in permissao_service.listar_usuarios_habilitados()
+        }
+        if vendedor_raw in nomes_validos:
+            vendedor_final = vendedor_raw
+        else:
+            flash(
+                f'Vendedor invalido: {vendedor_raw!r} nao esta habilitado no modulo HORA.',
+                'danger',
+            )
+            return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+
     try:
         venda = venda_service.criar_venda_manual(
             cpf_cliente=_g('cpf', 14),
@@ -1053,7 +1107,7 @@ def tagplus_pedido_venda_criar():
             forma_pagamento=_g('forma_pagamento', 20),
             telefone_cliente=_g('telefone', 20) or None,
             email_cliente=_g('email', 120) or None,
-            vendedor=_g('vendedor', 100) or None,
+            vendedor=vendedor_final,
             observacoes=_g('observacoes', 500) or None,
             modalidade_frete=mod_frete,
             numero_parcelas=n_parcelas,
@@ -1114,6 +1168,54 @@ def tagplus_pedido_venda_api_chassis():
         lojas_permitidas_ids=permitidas,
     )
     return jsonify({'ok': True, 'chassis': chassis})
+
+
+@hora_bp.route('/tagplus/pedido-venda/api/preco-modelo')
+@require_hora_perm('vendas', 'criar')
+def tagplus_pedido_venda_api_preco_modelo():
+    """JSON: preço de tabela do modelo + classificacao da forma de pagamento.
+
+    Query string:
+      modelo_id        — obrigatorio (int)
+      forma_pagamento  — opcional (string da HoraVenda; ex: PIX, CARTAO_CREDITO)
+
+    Retorna:
+      {
+        ok: True,
+        preco: float | null,             # preço de tabela vigente (a vista vs a prazo conforme forma)
+        fonte: 'MODELO_A_VISTA'|'MODELO_A_PRAZO'|'TABELA_LEGADA'|'AUSENTE',
+        tipo_pagamento: 'A_VISTA'|'A_PRAZO'|null,
+        preco_a_vista: float | null,     # campo direto do modelo (informativo)
+        preco_a_prazo: float | null,
+      }
+    """
+    from app.hora.services.venda_service import buscar_preco_para_pedido
+
+    try:
+        modelo_id = int(request.args.get('modelo_id', '0'))
+    except ValueError:
+        return jsonify({'ok': False, 'error': 'modelo_id invalido'}), 400
+    if not modelo_id:
+        return jsonify({'ok': False, 'error': 'modelo_id obrigatorio'}), 400
+
+    forma_pgto = (request.args.get('forma_pagamento') or '').strip().upper() or None
+
+    info = buscar_preco_para_pedido(
+        modelo_id=modelo_id,
+        forma_pagamento_hora=forma_pgto,
+    )
+
+    def _f(v):
+        return float(v) if v is not None else None
+
+    return jsonify({
+        'ok': True,
+        'preco': _f(info['preco']),
+        'fonte': info['fonte'],
+        'tipo_pagamento': info['tipo_pagamento'],
+        'preco_a_vista': _f(info['preco_a_vista']),
+        'preco_a_prazo': _f(info['preco_a_prazo']),
+    })
 
 
 # ============================================================

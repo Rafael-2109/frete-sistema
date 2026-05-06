@@ -35,8 +35,11 @@
     <table class="table align-middle" id="tabela-formas">
       <thead>
         <tr>
-          <th style="width: 28%;">Forma HORA</th>
-          <th style="width: 22%;">ID TagPlus (int)</th>
+          <th style="width: 22%;">Forma HORA</th>
+          <th style="width: 14%;">ID TagPlus (int)</th>
+          <th style="width: 18%;" title="Determina qual preço do modelo (à vista vs a prazo) será trazido no Pedido de Venda quando essa forma for escolhida.">
+            Tipo de pagamento
+          </th>
           <th>Descrição (opcional)</th>
           <th style="width: 8%;"></th>
         </tr>
@@ -56,6 +59,13 @@
               <input type="number" min="1" class="form-control form-control-sm"
                      name="tagplus_id[]"
                      value="{{ r.map.tagplus_forma_id if r.map else '' }}">
+            </td>
+            <td>
+              <select name="tipo_pagamento[]" class="form-select form-select-sm">
+                <option value="" {% if not r.map or not r.map.tipo_pagamento %}selected{% endif %}>— não classificada —</option>
+                <option value="A_VISTA" {% if r.map and r.map.tipo_pagamento == 'A_VISTA' %}selected{% endif %}>À vista</option>
+                <option value="A_PRAZO" {% if r.map and r.map.tipo_pagamento == 'A_PRAZO' %}selected{% endif %}>A prazo</option>
+              </select>
             </td>
             <td>
               <input type="text" class="form-control form-control-sm"
@@ -104,6 +114,11 @@
         '<td><input type="text" maxlength="20" class="form-control form-control-sm text-uppercase" ' +
         'name="forma[]" placeholder="ex: CARTAO_DEBITO" pattern="[A-Z0-9_]+"></td>' +
         '<td><input type="number" min="1" class="form-control form-control-sm" name="tagplus_id[]"></td>' +
+        '<td><select name="tipo_pagamento[]" class="form-select form-select-sm">' +
+        '<option value="" selected>— não classificada —</option>' +
+        '<option value="A_VISTA">À vista</option>' +
+        '<option value="A_PRAZO">A prazo</option>' +
+        '</select></td>' +
         '<td><input type="text" class="form-control form-control-sm" name="descricao[]"></td>' +
         '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">' +
         '<i class="fas fa-times"></i></button></td>';

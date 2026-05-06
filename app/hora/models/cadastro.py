@@ -96,6 +96,12 @@ class HoraModelo(db.Model):
     descricao = db.Column(db.Text, nullable=True)
     ativo = db.Column(db.Boolean, nullable=False, default=True)
 
+    # Preços de tabela por modalidade (migration hora_33). NULL = nao cadastrado.
+    # Quando preenchidos, sao a fonte primaria de preço usada no Pedido de Venda
+    # (HoraTabelaPreco com vigencia continua sendo fallback legado).
+    preco_a_vista = db.Column(db.Numeric(15, 2), nullable=True)
+    preco_a_prazo = db.Column(db.Numeric(15, 2), nullable=True)
+
     # Auditoria de merge (migration hora_29). Quando este modelo e
     # absorvido em outro, ativo=False + merged_em_id=canonico.id.
     merged_em_id = db.Column(

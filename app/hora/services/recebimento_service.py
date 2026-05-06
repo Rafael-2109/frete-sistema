@@ -317,6 +317,13 @@ def registrar_conferencia_cega(
     # Deriva divergencias 1-N
     _redefinir_divergencias(conf, rec)
 
+    # Recebimento e SOT (regra de negocio confirmada 2026-05-06): se a
+    # conferencia divergir de cor/modelo da NF, atualiza hora_moto.cor e
+    # hora_moto.modelo_id para os valores conferidos. Excecao controlada a
+    # invariante 3 (insert-once) — mesmo precedente de retroatividade de
+    # modelo sentinela em hora_29. Documentado em docs/hora/INVARIANTES.md.
+    _aplicar_correcao_moto_se_divergir(conf)
+
     # Evento de moto
     item_nf = HoraNfEntradaItem.query.filter_by(
         nf_id=rec.nf_id, numero_chassi=chassi_norm,
@@ -445,6 +452,7 @@ def finalizar_recebimento(
 
     # Garantir que cada chassi faltante vire uma conferencia MOTO_FALTANDO.
     if faltantes:
+        agora = agora_utc_naive()
         for chassi in faltantes:
             ordem = proxima_ordem(recebimento_id)
             _garantir_moto(chassi, None, operador)
@@ -457,6 +465,10 @@ def finalizar_recebimento(
                 tipo_divergencia='MOTO_FALTANDO',
                 detalhe_divergencia='Faltante no fechamento',
                 operador=operador,
+                # Marca a conferencia como confirmada (decisao 2026-05-06)
+                # para distinguir "MOTO_FALTANDO consolidado no fechamento"
+                # de "conferencia pendente no wizard" (confirmado_em IS NULL).
+                confirmado_em=agora,
             )
             db.session.add(conf)
             db.session.flush()
@@ -466,14 +478,17 @@ def finalizar_recebimento(
                 tipo='MOTO_FALTANDO',
                 detalhe='Faltante no fechamento',
             ))
+            # Evento dedicado (categoria EVENTOS_FALTANDO_FISICAMENTE em
+            # estoque_service). NAO usar 'CONFERIDA' — esse tipo esta em
+            # EVENTOS_EM_ESTOQUE e fazia a moto ressuscitar no estoque.
             registrar_evento(
                 numero_chassi=chassi,
-                tipo='CONFERIDA',
+                tipo='MOTO_FALTANDO',
                 origem_tabela='hora_recebimento_conferencia',
                 origem_id=conf.id,
                 loja_id=rec.loja_id,
                 operador=operador,
-                detalhe='Divergencia: MOTO_FALTANDO (batch)',
+                detalhe='Faltante no fechamento (batch)',
             )
 
     # Recarrega conferencias (expira cache ORM apos batch insert de faltantes)
@@ -703,6 +718,40 @@ def _garantir_moto(chassi: str, item_nf: Optional[HoraNfEntradaItem], operador: 
             origem_pendencia=PENDENTE_ORIGEM_RECEBIMENTO,
             fallback_sentinela=True,
         )
+
+
+def _aplicar_correcao_moto_se_divergir(conf: HoraRecebimentoConferencia) -> None:
+    """Recebimento e SOT: se conferencia confirmou cor/modelo diferente da NF,
+    UPDATE-eia hora_moto.cor e hora_moto.modelo_id para os valores conferidos.
+
+    Excecao controlada a invariante 3 do modulo HORA (insert-once em
+    hora_moto). Justificada porque (a) recebimento e fonte de verdade de
+    cor/modelo apos o fato fisico — usuario confirmou regra em 2026-05-06,
+    e (b) ja existe precedente em hora_29 (retroatividade de modelo
+    sentinela DESCONHECIDO -> canonico).
+
+    Atualiza apenas se:
+      - Existe HoraMoto para o chassi.
+      - A conferencia ja tem `cor_conferida` ou `modelo_id_conferido` setado.
+      - O valor conferido difere do que esta em hora_moto.
+
+    Nao toca em chassis CHASSI_EXTRA (moto criada com modelo sentinela
+    DESCONHECIDO + cor 'NAO_INFORMADA' ou cor conferida — operador
+    eventualmente cataloga).
+    """
+    moto = HoraMoto.query.get(conf.numero_chassi)
+    if moto is None:
+        return
+
+    mudou = False
+    if conf.cor_conferida and conf.cor_conferida != moto.cor:
+        moto.cor = conf.cor_conferida
+        mudou = True
+    if conf.modelo_id_conferido and conf.modelo_id_conferido != moto.modelo_id:
+        moto.modelo_id = conf.modelo_id_conferido
+        mudou = True
+    if mudou:
+        db.session.flush()
 
 
 def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimento):

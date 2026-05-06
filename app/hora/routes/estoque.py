@@ -31,6 +31,7 @@ def estoque_lista():
     pedido_id = _int_arg('pedido_id')
     nf_entrada_id = _int_arg('nf_entrada_id')
     venda_id = _int_arg('venda_id')
+    status_filtro = (request.args.get('status') or '').strip().upper() or None
 
     if loja_id and not usuario_tem_acesso_a_loja(loja_id):
         flash('Acesso negado a essa loja.', 'danger')
@@ -42,6 +43,8 @@ def estoque_lista():
 
     # Filtros por documento forcam `incluir_fora_estoque=True` para permitir
     # ver vendidas ao filtrar por venda, NF entrada cujo chassi ja saiu, etc.
+    # Status explicito (MOTO_FALTANDO, AVARIADA, etc.) tambem ignora os flags
+    # — listar_estoque trata internamente.
     if pedido_id or nf_entrada_id or venda_id or chassi:
         incluir_fora_estoque = True
 
@@ -57,12 +60,9 @@ def estoque_lista():
         nf_entrada_id=nf_entrada_id,
         venda_id=venda_id,
         chassi=chassi,
+        status=status_filtro,
     )
-    kpis_loja = estoque_service.kpis_estoque_por_loja(
-        lojas_permitidas_ids=permitidas,
-    )
-    kpis_modelo = estoque_service.kpis_estoque_por_modelo(
-        loja_id=loja_id,
+    kpis_loja_modelo_cor = estoque_service.kpis_loja_modelo_cor(
         lojas_permitidas_ids=permitidas,
     )
 
@@ -91,8 +91,7 @@ def estoque_lista():
     return render_template(
         'hora/estoque_lista.html',
         motos=motos,
-        kpis_loja=kpis_loja,
-        kpis_modelo=kpis_modelo,
+        kpis_loja_modelo_cor=kpis_loja_modelo_cor,
         lojas=lojas,
         modelos=opcoes['modelos'],
         cores=opcoes['cores'],
@@ -107,6 +106,7 @@ def estoque_lista():
         filtro_pedido_id=pedido_id,
         filtro_nf_entrada_id=nf_entrada_id,
         filtro_venda_id=venda_id,
+        filtro_status=status_filtro,
         incluir_avariadas=incluir_avariadas,
         incluir_faltando_peca=incluir_faltando_peca,
         incluir_fora_estoque=incluir_fora_estoque,

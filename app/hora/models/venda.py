@@ -216,6 +216,14 @@ class HoraVendaItem(db.Model):
 
     preco_tabela_referencia = db.Column(db.Numeric(15, 2), nullable=False)
     desconto_aplicado = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    desconto_percentual = db.Column(
+        db.Numeric(5, 2), nullable=False, default=0, server_default='0',
+    )
+    # Migration hora_33: percentual de desconto sobre o preço de tabela.
+    # Sempre coerente com `desconto_aplicado` (R$): pct = desconto_aplicado / preco_tabela_referencia * 100.
+    # Operador pode preencher % OU R$ no formulario; o JS sincroniza ambos
+    # antes do submit, e o backend grava os 2 valores ja consistentes.
+
     preco_final = db.Column(db.Numeric(15, 2), nullable=False)
     # Invariante: preco_final = preco_tabela_referencia - desconto_aplicado.
 

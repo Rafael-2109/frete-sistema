@@ -61,6 +61,8 @@
       <th>Nome</th>
       <th>Potência</th>
       <th>Descrição</th>
+      <th class="text-end" title="Preço de tabela utilizado quando a forma de pagamento e À vista">Preço à vista</th>
+      <th class="text-end" title="Preço de tabela utilizado quando a forma de pagamento e A prazo">Preço a prazo</th>
       <th>Status</th>
       <th title="ID inteiro (emissão NFe) e Código de Produto (backfill DANFE)">Mapeamento TagPlus</th>
       <th class="text-end">Ações</th>
@@ -73,6 +75,20 @@
           <td><strong>{{ m.nome_modelo }}</strong></td>
           <td>{{ m.potencia_motor or '—' }}</td>
           <td><small>{{ m.descricao or '' }}</small></td>
+          <td class="text-end">
+            {% if m.preco_a_vista is not none %}
+              R$ {{ m.preco_a_vista|valor_br }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if m.preco_a_prazo is not none %}
+              R$ {{ m.preco_a_prazo|valor_br }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
           <td>
             {% if m.ativo %}<span class="badge bg-success">Ativo</span>
             {% else %}<span class="badge bg-secondary">Inativo</span>{% endif %}
@@ -129,7 +145,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-center text-muted">Nenhum modelo cadastrado.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted">Nenhum modelo cadastrado.</td></tr>
       {% endfor %}
     </tbody>
   </table>

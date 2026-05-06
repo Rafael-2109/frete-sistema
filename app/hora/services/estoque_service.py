@@ -42,6 +42,13 @@ EVENTOS_FORA_ESTOQUE = (
 # Eventos "em limbo" — nao estao no estoque de nenhuma loja
 EVENTOS_EM_TRANSITO = ('EM_TRANSITO',)
 
+# Eventos que indicam chassi declarado em NF mas que NAO chegou fisicamente.
+# Emitido por finalizar_recebimento no batch de faltantes. Categoria propria:
+# nao conta como disponivel para venda, nao e "fora de estoque" (a moto nunca
+# saiu — ela nunca chegou). UI mostra via filtro de status para operador
+# resolver (ajuste no recebimento ou correcao na NF — recebimento e SOT).
+EVENTOS_FALTANDO_FISICAMENTE = ('MOTO_FALTANDO',)
+
 
 def _subquery_ultimo_evento_id():
     """Subquery: para cada chassi, o id do evento mais recente."""
@@ -246,13 +253,22 @@ def listar_estoque(
     nf_entrada_id: Optional[int] = None,
     venda_id: Optional[int] = None,
     chassi: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> List[dict]:
     """Lista motos chassi-a-chassi.
 
-    Quando `incluir_fora_estoque=False` (default): somente motos cujo ultimo
-    evento esta em EVENTOS_EM_ESTOQUE.
-    Quando `incluir_fora_estoque=True`: TODAS as motos cadastradas (inclusive
-    VENDIDA, DEVOLVIDA, EM_TRANSITO), com o flag `moto_disponivel`.
+    Comportamento por valor de `status`:
+      - None / 'disponivel': default — motos cujo ultimo evento esta em
+        EVENTOS_EM_ESTOQUE (respeita flags `incluir_avariadas` e
+        `incluir_faltando_peca`).
+      - 'MOTO_FALTANDO': apenas chassis cujo ultimo evento e MOTO_FALTANDO
+        (declarado em NF mas nao chegou fisicamente).
+      - 'AVARIADA' / 'FALTANDO_PECA' / 'EM_TRANSITO' / 'VENDIDA' /
+        'DEVOLVIDA' / 'RESERVADA': apenas chassis com aquele ultimo evento.
+
+    Quando `incluir_fora_estoque=True` (compatibilidade): TODAS as motos
+    cadastradas (inclusive VENDIDA, DEVOLVIDA, EM_TRANSITO) com flag
+    `moto_disponivel`. Ignorado se `status` for explicito.
 
     Filtros por documento (pedido/NF entrada/venda):
       - `pedido_id`: chassis presentes em HoraPedidoItem.pedido_id=X
@@ -263,11 +279,15 @@ def listar_estoque(
     Retorna dicts com: chassi, modelo_*, cor, loja_*, ultimo_evento, ...,
     nf_id, nf_numero, nf_serie, recebimento_id, avarias_abertas,
     pecas_faltando_abertas, transferencias_em_transito, moto_disponivel,
-    venda_id, nf_saida_numero.
+    moto_faltando, venda_id, nf_saida_numero.
     """
     from app.hora.models import HoraNfEntradaItem, HoraPedidoItem, HoraVendaItem
 
-    if incluir_fora_estoque:
+    status_norm = (status or '').strip().upper() or None
+    # Status explicito sobrescreve incluir_fora_estoque e ignora os flags.
+    if status_norm and status_norm != 'DISPONIVEL':
+        tipos = [status_norm]
+    elif incluir_fora_estoque:
         tipos = None  # sem filtro de tipo
     else:
         tipos = list(EVENTOS_EM_ESTOQUE)
@@ -365,6 +385,7 @@ def listar_estoque(
             'ultimo_evento_em': ev.timestamp,
             'ultimo_evento_detalhe': ev.detalhe,
             'moto_disponivel': ev.tipo in EVENTOS_EM_ESTOQUE,
+            'moto_faltando': ev.tipo in EVENTOS_FALTANDO_FISICAMENTE,
         })
 
     # ------------------------------------------------------------------
@@ -444,6 +465,7 @@ def listar_estoque(
                 'ultimo_evento_em': None,
                 'ultimo_evento_detalhe': None,
                 'moto_disponivel': False,
+                'moto_faltando': False,
             })
 
     if not resultado:
@@ -813,25 +835,16 @@ def chassis_disponiveis_para_venda(
     avarias_map = avarias_abertas_por_chassi(chassis)
     pecas_map = _pecas_abertas_por_chassi(chassis)
 
-    # Preco tabela vigente hoje para o modelo (1 query).
-    from sqlalchemy import or_
-    from app.hora.models import HoraTabelaPreco
+    # Preco sugerido (A vista preferencial) — usa _buscar_preco_modelo (novo fluxo
+    # migration hora_33). Quando ainda nao se sabe a forma de pagamento, prefere
+    # preco_a_vista do modelo; fallback preco_a_prazo; ultimo recurso HoraTabelaPreco.
+    # Atualizado dinamicamente no JS quando o operador escolhe forma de pagamento.
+    from app.hora.services.venda_service import _buscar_preco_modelo
     hoje = date.today()
-    tabela = (
-        HoraTabelaPreco.query
-        .filter(
-            HoraTabelaPreco.modelo_id == modelo_id,
-            HoraTabelaPreco.ativo.is_(True),
-            HoraTabelaPreco.vigencia_inicio <= hoje,
-            or_(
-                HoraTabelaPreco.vigencia_fim.is_(None),
-                HoraTabelaPreco.vigencia_fim >= hoje,
-            ),
-        )
-        .order_by(HoraTabelaPreco.vigencia_inicio.desc())
-        .first()
+    preco_dec, _fonte, _tab_id = _buscar_preco_modelo(
+        modelo_id, forma_pagamento_hora=None, na_data=hoje,
     )
-    preco_sugerido = float(tabela.preco_tabela) if tabela else None
+    preco_sugerido = float(preco_dec) if preco_dec is not None else None
 
     resultado = []
     for ev, moto, modelo, loja in rows:
@@ -904,6 +917,97 @@ def kpis_estoque_por_loja(
             acum[k]['disponivel'] += row.total
 
     return sorted(acum.values(), key=lambda x: x['loja_nome'] or '')
+
+
+def kpis_loja_modelo_cor(
+    lojas_permitidas_ids: Optional[List[int]] = None,
+) -> List[dict]:
+    """Estrutura hierarquica Loja -> Modelo -> Cor -> Qtd, somente
+    EVENTOS_EM_ESTOQUE (motos disponiveis fisicamente).
+
+    Returns:
+        [
+          {
+            'loja_id': int, 'loja_nome': str, 'total_loja': int,
+            'modelos': [
+              {
+                'modelo_id': int, 'modelo_nome': str, 'total_modelo': int,
+                'cores': [{'cor': str, 'qtd': int}, ...],
+              }, ...
+            ],
+          }, ...
+        ]
+    """
+    sub = _subquery_ultimo_evento_id()
+    q = (
+        db.session.query(
+            HoraLoja.id.label('loja_id'),
+            HoraLoja.apelido,
+            HoraLoja.nome,
+            HoraLoja.nome_fantasia,
+            HoraModelo.id.label('modelo_id'),
+            HoraModelo.nome_modelo,
+            HoraMoto.cor,
+            func.count().label('qtd'),
+        )
+        .join(
+            sub,
+            and_(
+                HoraMotoEvento.numero_chassi == sub.c.chassi,
+                HoraMotoEvento.id == sub.c.max_id,
+            ),
+        )
+        .join(HoraMoto, HoraMotoEvento.numero_chassi == HoraMoto.numero_chassi)
+        .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
+        .join(HoraLoja, HoraMotoEvento.loja_id == HoraLoja.id)
+        .filter(HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE))
+        .group_by(
+            HoraLoja.id, HoraLoja.apelido, HoraLoja.nome, HoraLoja.nome_fantasia,
+            HoraModelo.id, HoraModelo.nome_modelo, HoraMoto.cor,
+        )
+        .order_by(HoraLoja.nome, HoraModelo.nome_modelo, HoraMoto.cor)
+    )
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        q = q.filter(HoraLoja.id.in_(lojas_permitidas_ids))
+
+    # Acumula em estrutura hierarquica.
+    lojas_dict: Dict[int, dict] = {}
+    for row in q.all():
+        loja_id = row.loja_id
+        if loja_id not in lojas_dict:
+            lojas_dict[loja_id] = {
+                'loja_id': loja_id,
+                'loja_nome': row.apelido or row.nome_fantasia or row.nome,
+                'total_loja': 0,
+                '_modelos_idx': {},  # modelo_id -> dict
+            }
+        loja_entry = lojas_dict[loja_id]
+        loja_entry['total_loja'] += row.qtd
+
+        modelo_id = row.modelo_id
+        if modelo_id not in loja_entry['_modelos_idx']:
+            loja_entry['_modelos_idx'][modelo_id] = {
+                'modelo_id': modelo_id,
+                'modelo_nome': row.nome_modelo,
+                'total_modelo': 0,
+                'cores': [],
+            }
+        modelo_entry = loja_entry['_modelos_idx'][modelo_id]
+        modelo_entry['total_modelo'] += row.qtd
+        modelo_entry['cores'].append({'cor': row.cor, 'qtd': row.qtd})
+
+    # Materializa ordenado.
+    resultado = []
+    for loja in sorted(lojas_dict.values(), key=lambda x: x['loja_nome'] or ''):
+        modelos = sorted(
+            loja.pop('_modelos_idx').values(),
+            key=lambda m: m['modelo_nome'] or '',
+        )
+        loja['modelos'] = modelos
+        resultado.append(loja)
+    return resultado
 
 
 def kpis_estoque_por_modelo(

@@ -243,22 +243,153 @@ def _emissao_nfe(venda_id: int) -> Optional[HoraTagPlusNfeEmissao]:
     return HoraTagPlusNfeEmissao.query.filter_by(venda_id=venda_id).first()
 
 
-def _resolver_preco_tabela(
-    modelo_id: int, na_data, valor_final: Decimal,
-) -> tuple[Decimal, Decimal, Optional[int], Optional[str]]:
-    """Retorna (preco_tabela_ref, desconto, tabela_preco_id, divergencia_tipo).
+def _buscar_preco_modelo(
+    modelo_id: int, forma_pagamento_hora: Optional[str], na_data,
+) -> tuple[Optional[Decimal], str, Optional[int]]:
+    """Resolve preço de tabela do modelo conforme forma de pagamento.
 
+    Retorna `(preco, fonte, tabela_preco_id)`:
+      preco: Decimal ou None se nao houver tabela alguma para o modelo.
+      fonte: 'MODELO_A_VISTA' | 'MODELO_A_PRAZO' | 'TABELA_LEGADA' | 'AUSENTE'.
+      tabela_preco_id: id da HoraTabelaPreco usada (so quando fonte='TABELA_LEGADA').
+
+    Prioridade:
+      1. HoraModelo.preco_a_vista / preco_a_prazo conforme tipo da forma de
+         pagamento (HoraTagPlusFormaPagamentoMap.tipo_pagamento).
+      2. Se forma desconhecida ou tipo nao classificado, prefere preco_a_vista
+         (default mais comum); fallback para preco_a_prazo.
+      3. Ultimo recurso: HoraTabelaPreco vigente em na_data (legado).
+    """
+    from app.hora.models import HoraModelo
+    from app.hora.models.tagplus import (
+        HoraTagPlusFormaPagamentoMap,
+        TIPO_PAGAMENTO_A_VISTA,
+        TIPO_PAGAMENTO_A_PRAZO,
+    )
+
+    modelo = HoraModelo.query.get(modelo_id) if modelo_id else None
+    if modelo is None:
+        return None, 'AUSENTE', None
+
+    tipo = None
+    if forma_pagamento_hora:
+        forma_norm = forma_pagamento_hora.strip().upper()
+        if forma_norm and forma_norm != 'NAO_INFORMADO':
+            mapa = HoraTagPlusFormaPagamentoMap.query.filter_by(
+                forma_pagamento_hora=forma_norm,
+            ).first()
+            if mapa is not None:
+                tipo = mapa.tipo_pagamento
+
+    if tipo == TIPO_PAGAMENTO_A_VISTA and modelo.preco_a_vista is not None:
+        return Decimal(str(modelo.preco_a_vista)), 'MODELO_A_VISTA', None
+    if tipo == TIPO_PAGAMENTO_A_PRAZO and modelo.preco_a_prazo is not None:
+        return Decimal(str(modelo.preco_a_prazo)), 'MODELO_A_PRAZO', None
+
+    # Fallback intra-modelo: prefere a vista, depois a prazo.
+    if modelo.preco_a_vista is not None:
+        return Decimal(str(modelo.preco_a_vista)), 'MODELO_A_VISTA', None
+    if modelo.preco_a_prazo is not None:
+        return Decimal(str(modelo.preco_a_prazo)), 'MODELO_A_PRAZO', None
+
+    # Ultimo fallback: HoraTabelaPreco legado.
+    tabela = _buscar_preco_vigente(modelo_id, na_data)
+    if tabela is not None:
+        return Decimal(str(tabela.preco_tabela)), 'TABELA_LEGADA', tabela.id
+
+    return None, 'AUSENTE', None
+
+
+def buscar_preco_para_pedido(
+    modelo_id: int,
+    forma_pagamento_hora: Optional[str] = None,
+    na_data=None,
+) -> dict:
+    """API publica para o JS do pedido de venda manual.
+
+    Retorna dict com preço sugerido e qual a fonte:
+      {
+        'preco': Decimal | None,
+        'fonte': 'MODELO_A_VISTA' | 'MODELO_A_PRAZO' | 'TABELA_LEGADA' | 'AUSENTE',
+        'tipo_pagamento': 'A_VISTA' | 'A_PRAZO' | None,
+        'preco_a_vista': Decimal | None,   # campo direto do modelo (informativo).
+        'preco_a_prazo': Decimal | None,
+      }
+    """
+    from app.hora.models import HoraModelo
+    from app.hora.models.tagplus import HoraTagPlusFormaPagamentoMap
+
+    if na_data is None:
+        na_data = date.today()
+
+    preco, fonte, _tab_id = _buscar_preco_modelo(
+        modelo_id, forma_pagamento_hora, na_data,
+    )
+
+    tipo = None
+    if forma_pagamento_hora:
+        forma_norm = forma_pagamento_hora.strip().upper()
+        if forma_norm and forma_norm != 'NAO_INFORMADO':
+            mapa = HoraTagPlusFormaPagamentoMap.query.filter_by(
+                forma_pagamento_hora=forma_norm,
+            ).first()
+            if mapa is not None:
+                tipo = mapa.tipo_pagamento
+
+    modelo = HoraModelo.query.get(modelo_id) if modelo_id else None
+    return {
+        'preco': preco,
+        'fonte': fonte,
+        'tipo_pagamento': tipo,
+        'preco_a_vista': modelo.preco_a_vista if modelo else None,
+        'preco_a_prazo': modelo.preco_a_prazo if modelo else None,
+    }
+
+
+def _resolver_preco_tabela(
+    modelo_id: int,
+    na_data,
+    valor_final: Decimal,
+    forma_pagamento_hora: Optional[str] = None,
+) -> tuple[Decimal, Decimal, Decimal, Optional[int], Optional[str]]:
+    """Retorna (preco_tabela_ref, desconto_rs, desconto_pct, tabela_preco_id, divergencia_tipo).
+
+    `desconto_pct` e Decimal(5,2) — coerente com hora_venda_item.desconto_percentual.
     `divergencia_tipo` (se preenchido) deve ser registrado pelo chamador com
     detalhe apropriado (vence aqui o calculo, nao o registro).
+
+    Assinatura atualizada (migration hora_33): agora aceita `forma_pagamento_hora`
+    para escolher entre preco_a_vista / preco_a_prazo do modelo. Callers legacy
+    (DANFE import) podem omitir; nesse caso usa fallback prefere-A_VISTA.
     """
-    tabela = _buscar_preco_vigente(modelo_id, na_data)
-    if tabela:
-        preco_ref = Decimal(str(tabela.preco_tabela))
-        desconto = preco_ref - valor_final
-        if desconto < 0:
-            return valor_final, Decimal('0.00'), None, 'PRECO_ACIMA_TABELA'
-        return preco_ref, desconto, tabela.id, None
-    return valor_final, Decimal('0.00'), None, 'TABELA_PRECO_AUSENTE'
+    preco_ref, _fonte, tabela_id = _buscar_preco_modelo(
+        modelo_id, forma_pagamento_hora, na_data,
+    )
+    if preco_ref is None:
+        return (
+            Decimal(str(valor_final)),
+            Decimal('0.00'),
+            Decimal('0.00'),
+            None,
+            'TABELA_PRECO_AUSENTE',
+        )
+    desconto = preco_ref - Decimal(str(valor_final))
+    if desconto < 0:
+        # Preço final acima da tabela — registra como divergencia, item nao
+        # ganha desconto negativo (preserva auditoria).
+        return (
+            Decimal(str(valor_final)),
+            Decimal('0.00'),
+            Decimal('0.00'),
+            None,
+            'PRECO_ACIMA_TABELA',
+        )
+    if preco_ref > 0:
+        pct = (desconto / preco_ref) * Decimal('100')
+        pct = pct.quantize(Decimal('0.01'))
+    else:
+        pct = Decimal('0.00')
+    return preco_ref, desconto, pct, tabela_id, None
 
 
 # --------------------------------------------------------------------------
@@ -286,12 +417,15 @@ def criar_venda_manual(
     numero_parcelas: int = 1,
     intervalo_parcelas_dias: int = 30,
     criado_por: Optional[str] = None,
+    loja_id_esperada: Optional[int] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO.
 
     1. Valida CPF, nome, valor, forma_pagamento, chassi.
     2. SELECT FOR UPDATE no chassi (impede 2 operadores reservarem o mesmo).
     3. Resolve loja_id pelo ultimo evento.
+    3.5. Se `loja_id_esperada` for fornecido, valida que bate com a loja
+       resolvida do chassi (defesa contra select de loja incoerente no form).
     4. Resolve preco tabela vigente.
     5. Cria HoraVenda(status=COTACAO) + HoraVendaItem.
     6. Emite evento RESERVADA (saida do estoque disponivel).
@@ -344,6 +478,16 @@ def criar_venda_manual(
             f'investigar inconsistencia em hora_moto_evento.'
         )
 
+    # Se o operador informou loja_id_esperada (vindo do SELECT do form),
+    # validar coerencia com a loja real do chassi. Evita pedido com loja
+    # selecionada divergente do estoque do chassi.
+    if loja_id_esperada is not None and int(loja_id_esperada) != int(loja_id):
+        raise ValueError(
+            f'Loja selecionada (id={loja_id_esperada}) nao corresponde a loja '
+            f'atual do chassi {chassi_norm} (id={loja_id}). '
+            f'Selecione a loja correta ou escolha outro chassi.'
+        )
+
     cep_norm = ''.join(c for c in (cep or '') if c.isdigit()) or None
     if cep_norm and len(cep_norm) != 8:
         raise ValueError(f'CEP invalido: {cep!r} (esperado 8 digitos)')
@@ -354,8 +498,12 @@ def criar_venda_manual(
 
     valor_final_dec = Decimal(str(valor_final))
     data_venda = date.today()
-    preco_tabela_ref, desconto, tabela_preco_id, divergencia_tipo = _resolver_preco_tabela(
+    (
+        preco_tabela_ref, desconto, desconto_pct,
+        tabela_preco_id, divergencia_tipo,
+    ) = _resolver_preco_tabela(
         moto.modelo_id, data_venda, valor_final_dec,
+        forma_pagamento_hora=forma_norm,
     )
 
     venda = HoraVenda(
@@ -398,6 +546,7 @@ def criar_venda_manual(
         tabela_preco_id=tabela_preco_id,
         preco_tabela_referencia=preco_tabela_ref,
         desconto_aplicado=desconto,
+        desconto_percentual=desconto_pct,
         preco_final=valor_final_dec,
     )
     db.session.add(venda_item)
@@ -725,8 +874,9 @@ def adicionar_item_pedido(
         )
 
     valor_final_dec = Decimal(str(valor_final))
-    preco_ref, desconto, tabela_id, _ = _resolver_preco_tabela(
+    preco_ref, desconto, desconto_pct, tabela_id, _ = _resolver_preco_tabela(
         moto.modelo_id, venda.data_venda, valor_final_dec,
+        forma_pagamento_hora=venda.forma_pagamento,
     )
 
     item = HoraVendaItem(
@@ -735,6 +885,7 @@ def adicionar_item_pedido(
         tabela_preco_id=tabela_id,
         preco_tabela_referencia=preco_ref,
         desconto_aplicado=desconto,
+        desconto_percentual=desconto_pct,
         preco_final=valor_final_dec,
     )
     db.session.add(item)
@@ -876,24 +1027,28 @@ def editar_item_pedido(
         )
         item.numero_chassi = chassi_alvo
         # Re-resolve preco_tabela com modelo do novo chassi.
-        preco_ref, desconto, tabela_id, _ = _resolver_preco_tabela(
+        preco_ref, desconto, desconto_pct, tabela_id, _ = _resolver_preco_tabela(
             moto.modelo_id, venda.data_venda, valor_alvo or valor_atual,
+            forma_pagamento_hora=venda.forma_pagamento,
         )
         item.tabela_preco_id = tabela_id
         item.preco_tabela_referencia = preco_ref
         item.desconto_aplicado = desconto
+        item.desconto_percentual = desconto_pct
 
     # Mudanca de valor.
     if valor_alvo is not None and valor_alvo != valor_atual:
         # Re-resolve preco_tabela apenas para ajustar desconto (mesmo modelo).
         moto = HoraMoto.query.get(item.numero_chassi)
         if moto:
-            preco_ref, desconto, tabela_id, _ = _resolver_preco_tabela(
+            preco_ref, desconto, desconto_pct, tabela_id, _ = _resolver_preco_tabela(
                 moto.modelo_id, venda.data_venda, valor_alvo,
+                forma_pagamento_hora=venda.forma_pagamento,
             )
             item.tabela_preco_id = tabela_id
             item.preco_tabela_referencia = preco_ref
             item.desconto_aplicado = desconto
+            item.desconto_percentual = desconto_pct
         item.preco_final = valor_alvo
         venda.valor_total = Decimal(str(venda.valor_total)) - valor_atual + valor_alvo
         venda_audit.registrar_auditoria(
@@ -1518,8 +1673,9 @@ def _criar_itens_e_eventos(
                     valor_conferido=str(ult.loja_id),
                 )
 
-        preco_ref, desconto, tabela_id, divergencia_tipo = _resolver_preco_tabela(
+        preco_ref, desconto, desconto_pct, tabela_id, divergencia_tipo = _resolver_preco_tabela(
             moto.modelo_id, data_venda, preco_final,
+            forma_pagamento_hora=venda.forma_pagamento,
         )
         if divergencia_tipo:
             _registrar_divergencia(
@@ -1539,6 +1695,7 @@ def _criar_itens_e_eventos(
             tabela_preco_id=tabela_id,
             preco_tabela_referencia=preco_ref,
             desconto_aplicado=desconto,
+            desconto_percentual=desconto_pct,
             preco_final=preco_final,
         )
         db.session.add(venda_item)

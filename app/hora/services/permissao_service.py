@@ -54,6 +54,34 @@ def is_admin(usuario: Usuario | None) -> bool:
     return getattr(usuario, 'perfil', None) == 'administrador'
 
 
+def listar_usuarios_habilitados() -> list[Usuario]:
+    """Retorna usuarios habilitados no modulo HORA (candidatos a 'vendedor').
+
+    Criterio (alinhado com regras de `tem_perm`):
+    - `status='ativo'` (rejeitado/bloqueado/pendente excluidos).
+    - E (`perfil='administrador'` OR `sistema_lojas=True`).
+
+    Admins entram porque tem bypass de permissao em todo o modulo.
+    Nao-admins entram quando ja foram aprovados para Lojas HORA — ainda
+    que possam estar sem permissao granular concedida (continuam validos
+    como vendedor/responsavel pelo pedido).
+
+    Ordem: por nome (asc) — facilita selecao no SELECT.
+    """
+    return (
+        Usuario.query
+        .filter(Usuario.status == 'ativo')
+        .filter(
+            db.or_(
+                Usuario.perfil == 'administrador',
+                Usuario.sistema_lojas.is_(True),
+            )
+        )
+        .order_by(Usuario.nome)
+        .all()
+    )
+
+
 def tem_perm(usuario: Usuario | None, modulo: str, acao: str = 'ver') -> bool:
     """Checa se `usuario` tem permissao de `acao` em `modulo`.
 

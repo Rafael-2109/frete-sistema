@@ -128,11 +128,39 @@
           </select>
           <small class="text-muted" id="chassi-status"></small>
         </div>
+      </div>
+
+      <hr class="my-3">
+
+      <div class="row g-3 align-items-start">
+        <div class="col-md-3">
+          <label class="form-label">
+            Preço de tabela (R$)
+            <i class="fas fa-info-circle text-muted ms-1"
+               title="Definido em Cadastros → Modelos. Trazido automaticamente conforme o tipo da forma de pagamento (À vista vs A prazo)."></i>
+          </label>
+          <input type="text" id="f-preco-tabela" class="form-control" readonly
+                 placeholder="—" tabindex="-1">
+          <small class="text-muted" id="preco-sugerido-info">Escolha o modelo e a forma de pagamento.</small>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Desconto (%)</label>
+          <input type="text" name="desconto_percentual" id="f-desconto-pct"
+                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Desconto (R$)</label>
+          <input type="text" id="f-desconto-rs"
+                 class="form-control" inputmode="decimal" placeholder="0,00" value="0,00">
+          <small class="text-muted">Preencha % ou R$ — o outro e calculado automaticamente.</small>
+        </div>
         <div class="col-md-4">
-          <label class="form-label">Valor (R$) <span class="text-danger">*</span></label>
-          <input type="text" name="valor" id="f-valor" class="form-control" required
-                 placeholder="0,00" inputmode="decimal">
-          <small class="text-muted" id="preco-sugerido-info"></small>
+          <label class="form-label">
+            <strong>Valor final (R$)</strong> <span class="text-danger">*</span>
+          </label>
+          <input type="text" name="valor" id="f-valor"
+                 class="form-control fw-bold" required inputmode="decimal" placeholder="0,00">
+          <small class="text-muted">Preço de tabela menos desconto. Editavel.</small>
         </div>
       </div>
     </div>
@@ -145,15 +173,19 @@
       <div class="row g-3">
         <div class="col-md-6">
           <label class="form-label">Forma de pagamento <span class="text-danger">*</span></label>
-          <select name="forma_pagamento" class="form-select" required>
+          <select name="forma_pagamento" id="f-forma-pagamento" class="form-select" required>
             <option value="">— escolha —</option>
             {% for f in formas_pagamento %}
-              <option value="{{ f.forma_pagamento_hora }}">
-                {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+              <option value="{{ f.forma_pagamento_hora }}"
+                      data-tipo="{{ f.tipo_pagamento or '' }}">
+                {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}{% if f.tipo_pagamento == 'A_VISTA' %} (à vista){% elif f.tipo_pagamento == 'A_PRAZO' %} (a prazo){% endif %}
               </option>
             {% endfor %}
           </select>
-          <small class="text-muted">Apenas formas mapeadas no TagPlus aparecem aqui.</small>
+          <small class="text-muted">
+            Apenas formas mapeadas no TagPlus aparecem aqui. O tipo (à vista vs a prazo)
+            define qual preço do modelo sera trazido.
+          </small>
         </div>
         <div class="col-md-3">
           <label class="form-label">Nº de parcelas</label>
@@ -176,7 +208,22 @@
         </div>
         <div class="col-md-6">
           <label class="form-label">Vendedor</label>
-          <input type="text" name="vendedor" class="form-control" maxlength="100">
+          <select name="vendedor" class="form-select" required>
+            {% for u in vendedores_disponiveis %}
+              <option value="{{ u.nome }}"
+                      {% if u.id == current_user.id %}selected{% endif %}>
+                {{ u.nome }}{% if u.id == current_user.id %} (você){% endif %}
+              </option>
+            {% else %}
+              <option value="{{ current_user.nome or 'desconhecido' }}" selected>
+                {{ current_user.nome or 'desconhecido' }} (você)
+              </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">
+            <i class="fas fa-info-circle"></i>
+            Pré-selecionado com o usuário logado. Troque se outro vendedor for o responsável.
+          </small>
         </div>
         <div class="col-md-6">
           <label class="form-label">Modalidade de frete (NFe)</label>
@@ -217,9 +264,47 @@
   const elCor = document.getElementById('f-cor');
   const elChassi = document.getElementById('f-chassi');
   const elValor = document.getElementById('f-valor');
+  const elPrecoTabela = document.getElementById('f-preco-tabela');
+  const elDescontoPct = document.getElementById('f-desconto-pct');
+  const elDescontoRs = document.getElementById('f-desconto-rs');
+  const elFormaPgto = document.getElementById('f-forma-pagamento');
   const elPrecoInfo = document.getElementById('preco-sugerido-info');
   const elCorStatus = document.getElementById('cor-status');
   const elChassiStatus = document.getElementById('chassi-status');
+
+  // ----------------- Estado e helpers numericos --------------------------
+  // precoTabela e o preço de referência (vindo do backend); atualizado quando
+  // o modelo OU a forma de pagamento muda. Tudo em "Number" interno; a UI
+  // formata via fmtBR.
+  const state = { precoTabela: null, syncLock: false };
+
+  // Parse formato BR ("1.234,56") OU ingles ("1234.56"); retorna Number ou NaN.
+  function parseBR(s) {
+    if (s == null) return NaN;
+    s = String(s).trim();
+    if (!s) return NaN;
+    // Se tem virgula e ponto, ponto e milhar BR; remove e troca virgula.
+    if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.indexOf(',') >= 0) {
+      s = s.replace(',', '.');
+    }
+    const n = Number(s);
+    return isFinite(n) ? n : NaN;
+  }
+
+  function setBR(input, value) {
+    if (input == null) return;
+    if (value == null || isNaN(value)) {
+      input.value = '';
+      return;
+    }
+    input.value = fmtBR(value);
+  }
+
+  function arred2(n) {
+    return Math.round(n * 100) / 100;
+  }
 
   const elCep = document.getElementById('f-cep');
   const btnCep = document.getElementById('btn-busca-cep');
@@ -336,23 +421,12 @@
         if (c.pecas_faltando_abertas > 0) flags.push(`⚙ ${c.pecas_faltando_abertas} peça(s) faltando`);
         const sufix = flags.length ? ` [${flags.join(' / ')}]` : '';
         const loja = c.loja_nome ? ` — ${c.loja_nome}` : '';
-        return `<option value="${c.chassi}" data-preco="${c.preco_tabela_sugerido ?? ''}">${c.chassi}${loja}${sufix}</option>`;
+        return `<option value="${c.chassi}">${c.chassi}${loja}${sufix}</option>`;
       }).join('');
       elChassi.innerHTML = '<option value="">— escolha o chassi —</option>' + opts;
       elChassi.disabled = false;
       elChassiStatus.textContent = `${data.chassis.length} chassi(s) disponível(eis).`;
       elChassiStatus.className = 'text-muted';
-
-      // Preco sugerido: vem da tabela vigente; mesmo para todos os chassis do
-      // modelo, mas mostramos so apos selecionar o chassi para evitar confusao.
-      const precoTab = data.chassis[0] && data.chassis[0].preco_tabela_sugerido;
-      if (precoTab != null) {
-        elPrecoInfo.textContent = `Preço sugerido (tabela vigente): R$ ${fmtBR(precoTab)}`;
-        elPrecoInfo.className = 'text-muted';
-      } else {
-        elPrecoInfo.textContent = 'Sem tabela de preço vigente para este modelo.';
-        elPrecoInfo.className = 'text-warning';
-      }
     } catch (e) {
       elChassi.innerHTML = '<option value="">— erro ao carregar —</option>';
       elChassiStatus.textContent = 'Falha: ' + e.message;
@@ -360,18 +434,130 @@
     }
   }
 
-  function autoPreencherValor() {
-    const opt = elChassi.options[elChassi.selectedIndex];
-    if (!opt) return;
-    const preco = opt.dataset.preco;
-    if (preco && !elValor.value) {
-      elValor.value = fmtBR(preco);
+  // ----------------- Preço (modelo + forma) -> auto preenche -------------
+  async function atualizarPrecoTabela() {
+    const modeloId = elModelo.value;
+    if (!modeloId) {
+      state.precoTabela = null;
+      elPrecoTabela.value = '';
+      elPrecoInfo.textContent = 'Escolha o modelo e a forma de pagamento.';
+      elPrecoInfo.className = 'text-muted';
+      recalcular('pct');
+      return;
+    }
+    const forma = elFormaPgto ? elFormaPgto.value : '';
+    const params = new URLSearchParams({ modelo_id: modeloId });
+    if (forma) params.set('forma_pagamento', forma);
+
+    elPrecoInfo.textContent = 'Buscando preço…';
+    elPrecoInfo.className = 'text-muted';
+    try {
+      const r = await fetch(`{{ url_for('hora.tagplus_pedido_venda_api_preco_modelo') }}?${params}`);
+      const data = await r.json();
+      if (!data.ok) {
+        state.precoTabela = null;
+        elPrecoTabela.value = '';
+        elPrecoInfo.textContent = 'Erro: ' + (data.error || 'desconhecido');
+        elPrecoInfo.className = 'text-danger';
+        return;
+      }
+      if (data.preco == null) {
+        state.precoTabela = null;
+        elPrecoTabela.value = '';
+        // Mostra o que foi tentado (informativo).
+        let msg = 'Modelo sem preço cadastrado.';
+        if (data.preco_a_vista != null) msg += ` (à vista: R$ ${fmtBR(data.preco_a_vista)})`;
+        if (data.preco_a_prazo != null) msg += ` (a prazo: R$ ${fmtBR(data.preco_a_prazo)})`;
+        elPrecoInfo.textContent = msg;
+        elPrecoInfo.className = 'text-warning';
+      } else {
+        state.precoTabela = arred2(Number(data.preco));
+        setBR(elPrecoTabela, state.precoTabela);
+        const tipoLabel = data.tipo_pagamento === 'A_VISTA'
+          ? 'à vista'
+          : (data.tipo_pagamento === 'A_PRAZO' ? 'a prazo' : 'forma sem classificação — usando preço à vista');
+        const fonteLabel = data.fonte === 'TABELA_LEGADA'
+          ? ' (de tabela legada com vigência)'
+          : '';
+        elPrecoInfo.textContent = `Preço de tabela ${tipoLabel}${fonteLabel}.`;
+        elPrecoInfo.className = 'text-muted';
+      }
+    } catch (e) {
+      state.precoTabela = null;
+      elPrecoTabela.value = '';
+      elPrecoInfo.textContent = 'Falha ao buscar preço: ' + e.message;
+      elPrecoInfo.className = 'text-danger';
+    }
+    // Recalcula valor final mantendo o desconto % atual (preserva intencao do operador).
+    recalcular('pct');
+  }
+
+  // ----------------- Sincronizacao desconto % <-> R$ <-> valor -----------
+  // origem: 'pct' | 'rs' | 'valor' — qual campo o operador acabou de mexer.
+  function recalcular(origem) {
+    if (state.syncLock) return;
+    state.syncLock = true;
+    try {
+      const preco = state.precoTabela;
+      if (preco == null || preco <= 0) {
+        // Sem preço de tabela: mantem o que o operador digitou.
+        if (origem === 'rs') {
+          const rs = parseBR(elDescontoRs.value);
+          if (!isNaN(rs)) setBR(elDescontoRs, arred2(rs));
+        } else if (origem === 'pct') {
+          // Sem preço, % nao tem como virar R$. Deixa zerado.
+          const pct = parseBR(elDescontoPct.value);
+          if (isNaN(pct)) setBR(elDescontoPct, 0);
+        }
+        return;
+      }
+
+      let pct = parseBR(elDescontoPct.value);
+      let rs = parseBR(elDescontoRs.value);
+      let valor = parseBR(elValor.value);
+
+      if (origem === 'pct') {
+        if (isNaN(pct)) pct = 0;
+        pct = Math.max(0, Math.min(100, pct));
+        rs = arred2(preco * pct / 100);
+        valor = arred2(preco - rs);
+        setBR(elDescontoPct, arred2(pct));
+        setBR(elDescontoRs, rs);
+        setBR(elValor, valor);
+      } else if (origem === 'rs') {
+        if (isNaN(rs)) rs = 0;
+        rs = Math.max(0, Math.min(preco, rs));
+        pct = preco > 0 ? arred2(rs / preco * 100) : 0;
+        valor = arred2(preco - rs);
+        setBR(elDescontoRs, arred2(rs));
+        setBR(elDescontoPct, pct);
+        setBR(elValor, valor);
+      } else if (origem === 'valor') {
+        // Operador edita o valor final manualmente — recalcula desconto.
+        if (isNaN(valor)) valor = preco;
+        valor = Math.max(0, Math.min(preco, valor));
+        rs = arred2(preco - valor);
+        pct = preco > 0 ? arred2(rs / preco * 100) : 0;
+        setBR(elValor, valor);
+        setBR(elDescontoRs, rs);
+        setBR(elDescontoPct, pct);
+      }
+    } finally {
+      state.syncLock = false;
     }
   }
 
-  elModelo.addEventListener('change', carregarCores);
+  elModelo.addEventListener('change', () => {
+    carregarCores();
+    atualizarPrecoTabela();
+  });
   elCor.addEventListener('change', carregarChassis);
-  elChassi.addEventListener('change', autoPreencherValor);
+  if (elFormaPgto) {
+    elFormaPgto.addEventListener('change', atualizarPrecoTabela);
+  }
+  elDescontoPct.addEventListener('input', () => recalcular('pct'));
+  elDescontoRs.addEventListener('input', () => recalcular('rs'));
+  elValor.addEventListener('input', () => recalcular('valor'));
 
   // ----------------- Validacao no submit -----------------------------------
   document.getElementById('form-pedido-venda').addEventListener('submit', (e) => {

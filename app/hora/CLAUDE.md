@@ -462,6 +462,48 @@ Resolve duplicação histórica: TagPlus, NFs e pedidos podem se referir ao mesm
 
 ---
 
+## 15. Preço A vista / A prazo + desconto % por moto — 2026-05-06
+
+Cadastro de modelo passou a guardar 2 preços (`preco_a_vista`, `preco_a_prazo`)
+diretos em `hora_modelo`. Forma de pagamento (`hora_tagplus_forma_pagamento_map`)
+ganhou `tipo_pagamento` ('A_VISTA' | 'A_PRAZO' | NULL). Item de venda
+(`hora_venda_item`) ganhou `desconto_percentual` (Numeric(5,2)).
+
+**Fluxo no Pedido de Venda manual (`/hora/tagplus/pedido-venda/novo`)**:
+- Operador escolhe modelo + forma de pagamento → JS chama
+  `GET /hora/tagplus/pedido-venda/api/preco-modelo?modelo_id=&forma_pagamento=`
+  → backend resolve via `venda_service.buscar_preco_para_pedido` (prioriza
+  preço do modelo conforme `tipo_pagamento`; fallback A_VISTA; ultimo recurso
+  `HoraTabelaPreco` legada).
+- 2 campos novos sincronizam: `desconto_percentual` ↔ `desconto (R$)` ↔ `valor final`.
+  Fonte de verdade no submit é `valor` (preço final). Backend em
+  `_resolver_preco_tabela` recalcula `desconto_aplicado` e `desconto_percentual`
+  a partir de `preco_tabela_referencia - valor_final`.
+
+**Mudancas de assinatura**:
+- `_resolver_preco_tabela(modelo_id, na_data, valor_final, forma_pagamento_hora=None)`
+  → retorna agora 5-tupla: `(preco_ref, desconto_rs, desconto_pct, tabela_id, divergencia)`.
+- `cadastro_service.criar_modelo` / `atualizar_modelo` aceitam `preco_a_vista` e
+  `preco_a_prazo` (str/Decimal/None — `_normalizar_preco` aceita formato BR).
+
+**API publica** (consumida pelo JS, mas reutilizavel):
+- `venda_service.buscar_preco_para_pedido(modelo_id, forma_pagamento_hora)` → dict
+  `{preco, fonte, tipo_pagamento, preco_a_vista, preco_a_prazo}`.
+
+**HoraTabelaPreco mantida** como fallback legado (vigência continua valendo
+para vendas legacy DANFE). Se modelo tem `preco_a_vista`/`preco_a_prazo`
+preenchido, esses valores ganham prioridade — `HoraTabelaPreco` so e usada
+quando os dois sao NULL.
+
+**Permissão `tagplus/editar`** (mantida): cadastrar/editar `tipo_pagamento` em
+formas; cadastros nao-tagplus (preco no modelo) usam permissão `modelos/criar`
+/ `modelos/editar`.
+
+**Migration**: `scripts/migrations/hora_33_preco_avp_desconto.{py,sql}` —
+ALTER 3 tabelas. Idempotente.
+
+---
+
 ## Referências
 
 - **Contrato de design**: `docs/hora/INVARIANTES.md`

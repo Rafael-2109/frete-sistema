@@ -136,6 +136,11 @@ def registrar_evento(
         'EM_TRANSITO', 'CANCELADA',
         'RESERVADA', 'VENDIDA', 'DEVOLVIDA', 'AVARIADA',
         'FALTANDO_PECA',
+        # MOTO_FALTANDO: chassi declarado na NF mas que NAO chegou fisicamente.
+        # Emitido por finalizar_recebimento no batch de faltantes. Categoria
+        # propria (EVENTOS_FALTANDO_FISICAMENTE) — nao entra em EM_ESTOQUE
+        # nem em FORA_ESTOQUE.
+        'MOTO_FALTANDO',
         # Emprestimo entre lojas (nossa HORA <-> loja externa).
         # EMPRESTIMO_SAIDA: chassi nosso saiu para loja externa (fora estoque).
         # EMPRESTIMO_ENTRADA: chassi externo entrou no nosso estoque.

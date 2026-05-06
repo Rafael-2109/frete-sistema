@@ -21,6 +21,31 @@
     <textarea name="descricao" class="form-control" rows="3">{{ modelo.descricao or '' }}</textarea>
   </div>
 
+  <hr>
+  <h5 class="mb-3"><i class="fas fa-tags"></i> Preço de tabela</h5>
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <label class="form-label">Preço à vista (R$)</label>
+      <input type="text" name="preco_a_vista" class="form-control"
+             inputmode="decimal" placeholder="Ex.: 8.500,00"
+             value="{{ ('%.2f' % modelo.preco_a_vista)|replace('.', ',') if modelo.preco_a_vista is not none else '' }}">
+      <small class="text-muted">
+        Trazido automaticamente no Pedido de Venda quando a forma de pagamento
+        for classificada como <strong>À vista</strong>.
+      </small>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Preço a prazo (R$)</label>
+      <input type="text" name="preco_a_prazo" class="form-control"
+             inputmode="decimal" placeholder="Ex.: 9.200,00"
+             value="{{ ('%.2f' % modelo.preco_a_prazo)|replace('.', ',') if modelo.preco_a_prazo is not none else '' }}">
+      <small class="text-muted">
+        Trazido automaticamente no Pedido de Venda quando a forma de pagamento
+        for classificada como <strong>A prazo</strong>.
+      </small>
+    </div>
+  </div>
+
   {% if pode_editar_tagplus %}
   <hr>
   <h5 class="mb-3"><i class="fas fa-link"></i> Mapeamento TagPlus</h5>

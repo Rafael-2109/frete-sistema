@@ -302,6 +302,8 @@ def modelos_novo():
                 nome_modelo=request.form['nome_modelo'],
                 potencia_motor=request.form.get('potencia_motor') or None,
                 descricao=request.form.get('descricao') or None,
+                preco_a_vista=request.form.get('preco_a_vista') or None,
+                preco_a_prazo=request.form.get('preco_a_prazo') or None,
             )
             # Cria mapeamento TagPlus se o usuario tem permissao e preencheu
             # o ID TagPlus (chave para emissao). tagplus_codigo sozinho nao
@@ -354,6 +356,8 @@ def modelos_editar(modelo_id: int):
                 nome_modelo=request.form['nome_modelo'],
                 potencia_motor=request.form.get('potencia_motor') or None,
                 descricao=request.form.get('descricao') or None,
+                preco_a_vista=request.form.get('preco_a_vista') or None,
+                preco_a_prazo=request.form.get('preco_a_prazo') or None,
             )
             # Atualiza mapeamento TagPlus se o usuario tem permissao.
             if pode_editar_tagplus:

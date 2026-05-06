@@ -147,6 +147,14 @@ class HoraTagPlusProdutoMap(db.Model):
         )
 
 
+# Tipos de pagamento para HoraTagPlusFormaPagamentoMap (migration hora_33).
+# Determinam qual preço do modelo (preco_a_vista vs preco_a_prazo) sera
+# usado quando esta forma de pagamento for selecionada no pedido de venda.
+TIPO_PAGAMENTO_A_VISTA = 'A_VISTA'
+TIPO_PAGAMENTO_A_PRAZO = 'A_PRAZO'
+TIPOS_PAGAMENTO_VALIDOS = (TIPO_PAGAMENTO_A_VISTA, TIPO_PAGAMENTO_A_PRAZO)
+
+
 class HoraTagPlusFormaPagamentoMap(db.Model):
     """De-para forma_pagamento HORA -> ID inteiro de forma no TagPlus."""
     __tablename__ = 'hora_tagplus_forma_pagamento_map'
@@ -160,13 +168,18 @@ class HoraTagPlusFormaPagamentoMap(db.Model):
 
     descricao = db.Column(db.String(80), nullable=True)
 
+    tipo_pagamento = db.Column(db.String(10), nullable=True)
+    # 'A_VISTA' | 'A_PRAZO' | NULL (nao classificada). CHECK constraint no DB
+    # garante apenas esses valores. Usado pelo pedido de venda manual para
+    # decidir qual preço do modelo trazer (preco_a_vista vs preco_a_prazo).
+
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
 
     def __repr__(self) -> str:
         return (
             f'<HoraTagPlusFormaPagamentoMap {self.forma_pagamento_hora} '
-            f'-> {self.tagplus_forma_id}>'
+            f'-> {self.tagplus_forma_id} ({self.tipo_pagamento or "—"})>'
         )
 
 

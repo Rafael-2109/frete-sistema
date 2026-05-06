@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Iterable, Optional
+from typing import Iterable, List, Optional
 
 from app import db
 from app.hora.models import HoraLoja, HoraModelo, HoraTabelaPreco
@@ -111,12 +111,69 @@ def buscar_loja_por_cnpj(cnpj: str) -> Optional[HoraLoja]:
     return HoraLoja.query.filter_by(cnpj=cnpj_norm).first()
 
 
+# CNPJ que NAO deve aparecer na listagem de lojas para criar pedido de venda
+# (regra de negocio fornecida pelo usuario em 2026-05-06).
+CNPJ_EXCLUIDO_PEDIDO_VENDA = '62634044000120'
+
+
+def listar_lojas_para_pedido_venda(
+    lojas_permitidas_ids: Optional[List[int]] = None,
+) -> List[HoraLoja]:
+    """Lojas elegiveis para SELECT em criar pedido de venda.
+
+    Regras:
+    - Apenas ativas (`ativa=True`).
+    - Respeita escopo do operador (`lojas_permitidas_ids`):
+      None = sem restricao (admin/global); [] = nenhuma loja; [...] = filtra.
+    - Exclui CNPJ `CNPJ_EXCLUIDO_PEDIDO_VENDA`.
+    - Ordenadas por nome.
+    """
+    if lojas_permitidas_ids is not None and not lojas_permitidas_ids:
+        return []
+    query = HoraLoja.query.filter_by(ativa=True)
+    if lojas_permitidas_ids is not None:
+        query = query.filter(HoraLoja.id.in_(lojas_permitidas_ids))
+    query = query.filter(HoraLoja.cnpj != CNPJ_EXCLUIDO_PEDIDO_VENDA)
+    return query.order_by(HoraLoja.nome).all()
+
+
 # ----------------------------- Modelo -----------------------------
+
+def _normalizar_preco(valor) -> Optional[Decimal]:
+    """Converte string/Decimal/None em Decimal positivo (ou None se vazio).
+
+    Aceita formatos brasileiros ('1.234,56', '1234,56') e ingleses ('1234.56').
+    Levanta ValueError se valor invalido (negativo ou nao numerico).
+    """
+    if valor is None or valor == '' or valor == 0:
+        return None
+    if isinstance(valor, Decimal):
+        if valor < 0:
+            raise ValueError(f'Preço nao pode ser negativo: {valor}')
+        return valor if valor > 0 else None
+    s = str(valor).strip()
+    if not s:
+        return None
+    # Remove separador de milhar BR e troca virgula por ponto.
+    if ',' in s and '.' in s:
+        s = s.replace('.', '').replace(',', '.')
+    elif ',' in s:
+        s = s.replace(',', '.')
+    try:
+        dec = Decimal(s)
+    except Exception:
+        raise ValueError(f'Preço invalido: {valor!r}')
+    if dec < 0:
+        raise ValueError(f'Preço nao pode ser negativo: {valor}')
+    return dec if dec > 0 else None
+
 
 def criar_modelo(
     nome_modelo: str,
     potencia_motor: Optional[str] = None,
     descricao: Optional[str] = None,
+    preco_a_vista=None,
+    preco_a_prazo=None,
 ) -> HoraModelo:
     nome_norm = nome_modelo.strip()
     if not nome_norm:
@@ -130,6 +187,8 @@ def criar_modelo(
         nome_modelo=nome_norm,
         potencia_motor=potencia_motor,
         descricao=descricao,
+        preco_a_vista=_normalizar_preco(preco_a_vista),
+        preco_a_prazo=_normalizar_preco(preco_a_prazo),
         ativo=True,
     )
     db.session.add(modelo)
@@ -209,8 +268,14 @@ def atualizar_modelo(
     nome_modelo: str,
     potencia_motor: Optional[str] = None,
     descricao: Optional[str] = None,
+    preco_a_vista=None,
+    preco_a_prazo=None,
 ) -> HoraModelo:
-    """Atualiza atributos descritivos do modelo. Não altera `ativo` (use `toggle_ativo_modelo`)."""
+    """Atualiza atributos descritivos do modelo. Não altera `ativo` (use `toggle_ativo_modelo`).
+
+    Preços (preco_a_vista, preco_a_prazo): aceitar None/'' grava NULL (limpa).
+    Strings sao parseadas via _normalizar_preco (aceita formato BR ou ingles).
+    """
     modelo = HoraModelo.query.get(modelo_id)
     if modelo is None:
         raise ValueError(f"Modelo não encontrado: id={modelo_id}")
@@ -231,6 +296,8 @@ def atualizar_modelo(
     modelo.nome_modelo = nome_norm
     modelo.potencia_motor = (potencia_motor or '').strip() or None
     modelo.descricao = (descricao or '').strip() or None
+    modelo.preco_a_vista = _normalizar_preco(preco_a_vista)
+    modelo.preco_a_prazo = _normalizar_preco(preco_a_prazo)
     db.session.commit()
     return modelo
 
