@@ -19,11 +19,11 @@ PERMISSIONS = {
     'administrador': {
         'all': True  # Acesso total
     },
-    
+
     'gerente_comercial': {
         'all': True  # Acesso total também
     },
-    
+
     'logistica': {
         # Tudo exceto auth/permissions
         'modules': [
@@ -35,7 +35,7 @@ PERMISSIONS = {
         ],
         'can_edit': True
     },
-    
+
     'financeiro': {
         # Tudo exceto auth/permissions
         'modules': [
@@ -47,12 +47,12 @@ PERMISSIONS = {
         ],
         'can_edit': True
     },
-    
+
     'portaria': {
         'modules': ['portaria', 'embarques', 'veiculos', 'transportadoras'],
         'can_edit': ['portaria']  # Edita só portaria
     },
-    
+
     'vendedor': {
         'modules': [
             'carteira',  # Ver seus clientes
@@ -66,6 +66,32 @@ PERMISSIONS = {
 }
 
 
+# Modulos pertencentes ao dominio Nacom Goya (logistica). Acesso a estes
+# modulos exige sistema_logistica=True OU perfil='administrador'.
+# Modulos fora desta lista (ex.: 'hora', 'motochefe', 'carvia', 'comercial',
+# 'pessoal') sao dominios isolados e seguem suas proprias regras.
+NACOM_MODULES = frozenset({
+    'cadastros_agendamento', 'carteira', 'agente', 'cotacao',
+    'embarques', 'estoque', 'faturamento', 'financeiro', 'fretes',
+    'localidades', 'main', 'manufatura', 'monitoramento', 'odoo',
+    'pedidos', 'portaria', 'producao', 'separacao', 'tabelas',
+    'transportadoras', 'veiculos', 'vinculos',
+})
+
+
+def _tem_acesso_nacom(user):
+    """Verifica se o usuario tem acesso ao dominio Nacom (logistica).
+
+    Sistema e 100% Nacom exceto 5 dominios isolados. Acesso a modulos
+    Nacom exige status='ativo' E (sistema_logistica=True OU admin).
+    """
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    if getattr(user, 'status', None) != 'ativo':
+        return False
+    return getattr(user, 'sistema_logistica', False) or getattr(user, 'perfil', None) == 'administrador'
+
+
 # =============================================================================
 # DECORADORES E FUNÇÕES DE PERMISSÃO
 # =============================================================================
@@ -73,7 +99,7 @@ PERMISSIONS = {
 def check_permission(module_name, action='view'):
     """
     Decorador simples para verificar permissões.
-    
+
     Uso:
         @check_permission('carteira')  # Verifica permissão de visualização
         @check_permission('carteira', 'edit')  # Verifica permissão de edição
@@ -86,19 +112,27 @@ def check_permission(module_name, action='view'):
                 if request.is_json:
                     return jsonify({'error': 'Não autenticado'}), 401
                 abort(401)
-            
+
             # Obter perfil do usuário
             user_profile = getattr(current_user, 'perfil', None)
             if not user_profile:
                 abort(403)
-            
+
+            # Modulos Nacom exigem sistema_logistica (excecao: admin sempre passa).
+            # Bloqueia usuarios HORA-only com perfil 'financeiro'/'logistica'/etc
+            # de acessar rotas Nacom indevidamente.
+            if module_name in NACOM_MODULES and not _tem_acesso_nacom(current_user):
+                if request.is_json:
+                    return jsonify({'error': 'Acesso negado: modulo Nacom requer sistema_logistica'}), 403
+                abort(403)
+
             # Buscar permissões do perfil
             profile_perms = PERMISSIONS.get(user_profile, {})
-            
+
             # Admin e gerente_comercial têm acesso total
             if profile_perms.get('all', False):
                 return f(*args, **kwargs)
-            
+
             # Verificar se tem acesso ao módulo
             allowed_modules = profile_perms.get('modules', [])
             if module_name not in allowed_modules:
@@ -263,24 +297,28 @@ def has_permission(module_name, action='view'):
     """
     Função helper para verificar permissão sem decorador.
     Útil para verificações condicionais no código.
-    
+
     Uso:
         if has_permission('carteira', 'edit'):
             # mostrar botão de editar
     """
     if not current_user.is_authenticated:
         return False
-    
+
     user_profile = getattr(current_user, 'perfil', None)
     if not user_profile:
         return False
-    
+
+    # Modulos Nacom exigem sistema_logistica (admin sempre passa).
+    if module_name in NACOM_MODULES and not _tem_acesso_nacom(current_user):
+        return False
+
     profile_perms = PERMISSIONS.get(user_profile, {})
-    
+
     # Admin e gerente têm tudo
     if profile_perms.get('all', False):
         return True
-    
+
     # Verificar módulo
     allowed_modules = profile_perms.get('modules', [])
     if module_name not in allowed_modules:

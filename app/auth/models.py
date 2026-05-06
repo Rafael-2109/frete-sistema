@@ -121,32 +121,61 @@ class Usuario(db.Model, UserMixin):
         return nomes.get(self.perfil, self.perfil.title())
     
     # Métodos de verificação de permissões
+    def _tem_acesso_nacom(self):
+        """Helper interno: usuario tem acesso aos modulos Nacom Goya (logistica)?
+
+        Sistema e 100% Nacom exceto 5 dominios isolados (Lojas HORA, Motochefe,
+        CarVia, Comercial, Pessoal). Acesso aos modulos Nacom exige:
+        - status='ativo' (bloqueado/rejeitado/pendente nao acessa nada);
+        - sistema_logistica=True OU perfil='administrador' (admin sempre passa).
+
+        Usuario HORA-only (sistema_lojas=True, sistema_logistica=False) com
+        perfil 'financeiro'/'logistica'/'vendedor' NAO acessa Nacom.
+        """
+        if self.status != 'ativo':
+            return False
+        return self.sistema_logistica or self.perfil == 'administrador'
+
     def pode_aprovar_usuarios(self):
-        """Verifica se pode aprovar usuários"""
+        """Verifica se pode aprovar usuários (Nacom)"""
+        if not self._tem_acesso_nacom():
+            return False
         return self.perfil in ['administrador', 'gerente_comercial']
-    
+
     def pode_acessar_financeiro(self):
-        """Verifica se pode acessar módulos financeiros"""
+        """Verifica se pode acessar módulos financeiros (Nacom)"""
+        if not self._tem_acesso_nacom():
+            return False
         return self.perfil in ['administrador', 'financeiro', 'logistica', 'gerente_comercial']
-    
+
     def pode_acessar_embarques(self):
-        """Verifica se pode acessar embarques"""
+        """Verifica se pode acessar embarques (Nacom)"""
+        if not self._tem_acesso_nacom():
+            return False
         return self.perfil in ['administrador', 'financeiro', 'logistica', 'gerente_comercial', 'portaria']
-    
+
     def pode_acessar_portaria(self):
-        """Verifica se pode acessar módulos de portaria"""
+        """Verifica se pode acessar módulos de portaria (Nacom)"""
+        if not self._tem_acesso_nacom():
+            return False
         return self.perfil in ['administrador', 'financeiro', 'logistica', 'gerente_comercial', 'portaria']
-    
+
     def pode_acessar_monitoramento_geral(self):
-        """Verifica se pode acessar todo monitoramento"""
+        """Verifica se pode acessar todo monitoramento (Nacom)"""
+        if not self._tem_acesso_nacom():
+            return False
         return self.perfil in ['administrador', 'financeiro', 'logistica', 'gerente_comercial']
-    
+
     def pode_acessar_monitoramento_vendedor(self):
-        """Verifica se pode acessar monitoramento como vendedor"""
+        """Verifica se pode acessar monitoramento como vendedor (Nacom)"""
+        if not self._tem_acesso_nacom():
+            return False
         return self.perfil == 'vendedor' and self.vendedor_vinculado
-    
+
     def pode_editar_cadastros(self):
-        """Verifica se pode editar cadastros"""
+        """Verifica se pode editar cadastros (Nacom)"""
+        if not self._tem_acesso_nacom():
+            return False
         return self.perfil in ['administrador', 'financeiro', 'logistica', 'gerente_comercial']
 
     # Métodos de verificação de acesso aos sistemas

@@ -379,8 +379,8 @@
           </li>
           {% endif %}
 
-          <!-- OPERACIONAL - Fluxo principal do dia a dia -->
-          {% if not is_comercial_only %}
+          <!-- OPERACIONAL - Fluxo principal do dia a dia (Nacom: pedidos, separacao, embarques, monitoramento) -->
+          {% if not is_comercial_only and (current_user.sistema_logistica or current_user.perfil == 'administrador') %}
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="menuOperacional" role="button" data-bs-toggle="dropdown">
               <i class="fas fa-tasks"></i> Operacional
@@ -651,7 +651,9 @@
           </li>
           {% endif %}
 
-          {% if not is_comercial_only %}
+          {# Bloco Nacom (Consultas + Carteira & Estoque): exige sistema_logistica ou admin.
+             Esconde links de modulos Nacom para usuarios HORA-only/Motochefe-only/CarVia-only. #}
+          {% if not is_comercial_only and (current_user.sistema_logistica or current_user.perfil == 'administrador') %}
           <!-- CONSULTAS - Informações e análises -->
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle" href="#" id="menuConsultas" role="button" data-bs-toggle="dropdown">
