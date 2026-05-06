@@ -1,9 +1,9 @@
-"""Migration HORA 21: cadastro de pecas.
+"""Migration HORA 26: cadastro de pecas.
 
 Cria hora_peca e hora_tagplus_peca_map.
 
 Uso:
-    python scripts/migrations/hora_21_pecas_cadastro.py
+    python scripts/migrations/hora_26_pecas_cadastro.py
 """
 import os
 import sys
@@ -24,7 +24,7 @@ def existe_tabela(conn, nome: str) -> bool:
 def main():
     app = create_app()
     with app.app_context():
-        sql_path = os.path.join(os.path.dirname(__file__), 'hora_21_pecas_cadastro.sql')
+        sql_path = os.path.join(os.path.dirname(__file__), 'hora_26_pecas_cadastro.sql')
         with open(sql_path, encoding='utf-8') as f:
             sql_full = f.read()
 
@@ -38,7 +38,7 @@ def main():
             print('[after]')
             print(f'  hora_peca exists:              {existe_tabela(conn, "hora_peca")}')
             print(f'  hora_tagplus_peca_map exists:  {existe_tabela(conn, "hora_tagplus_peca_map")}')
-            print('OK - hora_21 aplicada.')
+            print('OK - hora_26 aplicada.')
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-"""Migration HORA 22: movimento + itens peca (NF entrada / venda) + ALTER pedido_item."""
+"""Migration HORA 27: movimento + itens peca (NF entrada / venda) + ALTER pedido_item."""
 import os
 import sys
 
@@ -11,7 +11,7 @@ from app import create_app, db
 def main():
     app = create_app()
     with app.app_context():
-        sql_path = os.path.join(os.path.dirname(__file__), 'hora_22_pecas_movimento_e_itens.sql')
+        sql_path = os.path.join(os.path.dirname(__file__), 'hora_27_pecas_movimento_e_itens.sql')
         with open(sql_path, encoding='utf-8') as f:
             sql_full = f.read()
 
@@ -43,7 +43,7 @@ def main():
                 "WHERE table_name='hora_pedido_item' AND column_name='peca_id'"
             )).fetchone() is not None
             print(f'  hora_pedido_item.peca_id col exists: {col_peca}')
-            print('OK - hora_22 aplicada.')
+            print('OK - hora_27 aplicada.')
 
 
 if __name__ == '__main__':

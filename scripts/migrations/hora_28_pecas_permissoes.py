@@ -1,4 +1,4 @@
-"""Migration HORA 23: data fix — admins ja recebem perm de pecas_cadastro/pecas_estoque
+"""Migration HORA 28: data fix — admins ja recebem perm de pecas_cadastro/pecas_estoque
 automaticamente (decorator nao exige entry para admin); este script e apenas
 documentacao e ponto de extensao caso queira ativar perm para usuarios nao-admin.
 
