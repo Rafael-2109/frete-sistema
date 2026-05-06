@@ -1,0 +1,81 @@
+{
+  "name": "hora_peca",
+  "description": "Tabela hora_peca",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo_interno",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "ncm",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "cfop_default",
+      "type": "varchar(5)",
+      "nullable": false,
+      "default": "5.102"
+    },
+    {
+      "name": "unidade",
+      "type": "varchar(5)",
+      "nullable": false,
+      "default": "UN"
+    },
+    {
+      "name": "preco_venda_padrao",
+      "type": "numeric(15,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "foto_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_peca_codigo_interno",
+      "columns": [
+        "codigo_interno"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_hora_peca_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    }
+  ]
+}

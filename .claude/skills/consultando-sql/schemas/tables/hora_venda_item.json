@@ -35,6 +35,12 @@
       "default": 0
     },
     {
+      "name": "desconto_percentual",
+      "type": "numeric(5,2)",
+      "nullable": false,
+      "default": 0
+    },
+    {
       "name": "preco_final",
       "type": "numeric(15,2)",
       "nullable": false
@@ -56,16 +62,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_item_venda_id",
+      "name": "ix_hora_venda_item_numero_chassi",
       "columns": [
-        "venda_id"
+        "numero_chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_item_numero_chassi",
+      "name": "ix_hora_venda_item_venda_id",
       "columns": [
-        "numero_chassi"
+        "venda_id"
       ],
       "unique": false
     }

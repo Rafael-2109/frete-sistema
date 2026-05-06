@@ -51,16 +51,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_conferencia_divergencia_tipo",
+      "name": "ix_hora_conferencia_divergencia_conferencia_id",
       "columns": [
-        "tipo"
+        "conferencia_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_divergencia_conferencia_id",
+      "name": "ix_hora_conferencia_divergencia_tipo",
       "columns": [
-        "conferencia_id"
+        "tipo"
       ],
       "unique": false
     }

@@ -22,6 +22,10 @@
       "type": "varchar(80)"
     },
     {
+      "name": "tipo_pagamento",
+      "type": "varchar(10)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",

@@ -185,17 +185,17 @@
       "unique": false
     },
     {
-      "name": "idx_hist_req_num_data",
+      "name": "ix_historico_requisicao_compras_alterado_por",
       "columns": [
-        "num_requisicao",
-        "alterado_em"
+        "alterado_por"
       ],
       "unique": false
     },
     {
-      "name": "ix_historico_requisicao_compras_alterado_por",
+      "name": "idx_hist_req_num_data",
       "columns": [
-        "alterado_por"
+        "num_requisicao",
+        "alterado_em"
       ],
       "unique": false
     }

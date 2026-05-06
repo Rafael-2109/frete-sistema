@@ -1,0 +1,166 @@
+{
+  "name": "hora_tagplus_backfill_job",
+  "description": "Tabela hora_tagplus_backfill_job",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "NF"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "PENDENTE"
+    },
+    {
+      "name": "since",
+      "type": "date"
+    },
+    {
+      "name": "until",
+      "type": "date"
+    },
+    {
+      "name": "limite",
+      "type": "integer"
+    },
+    {
+      "name": "operador",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "rq_job_id",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "iniciado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "finalizado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "total_listadas",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "processadas",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_criado",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_atualizado",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_inalterado",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_cancelado",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_pulada_cancelada",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_pulada_invalida",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_dup",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_erro",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "n_divergencias",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "ultimo_erro",
+      "type": "text"
+    },
+    {
+      "name": "relatorio",
+      "type": "json"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_tagplus_backfill_job_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_backfill_job_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_backfill_job_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_backfill_job_rq_job_id",
+      "columns": [
+        "rq_job_id"
+      ],
+      "unique": false
+    }
+  ]
+}

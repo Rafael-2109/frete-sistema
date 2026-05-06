@@ -165,39 +165,18 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_pagar_partner_id",
-      "columns": [
-        "partner_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_status_sistema",
-      "columns": [
-        "status_sistema"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_metodo_baixa",
-      "columns": [
-        "metodo_baixa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_cnpj",
-      "columns": [
-        "cnpj"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_pagar_odoo_line_id",
       "columns": [
         "odoo_line_id"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_contas_a_pagar_titulo_nf",
+      "columns": [
+        "titulo_nf"
+      ],
+      "unique": false
     },
     {
       "name": "idx_conta_pagar_vencimento",
@@ -214,16 +193,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_empresa",
+      "name": "ix_contas_a_pagar_odoo_move_id",
       "columns": [
-        "empresa"
+        "odoo_move_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_odoo_move_id",
+      "name": "ix_contas_a_pagar_metodo_baixa",
       "columns": [
-        "odoo_move_id"
+        "metodo_baixa"
       ],
       "unique": false
     },
@@ -235,16 +214,16 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_odoo_line",
+      "name": "ix_contas_a_pagar_status_sistema",
       "columns": [
-        "odoo_line_id"
+        "status_sistema"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_titulo_nf",
+      "name": "idx_conta_pagar_odoo_line",
       "columns": [
-        "titulo_nf"
+        "odoo_line_id"
       ],
       "unique": false
     },
@@ -256,9 +235,30 @@
       "unique": false
     },
     {
+      "name": "ix_contas_a_pagar_empresa",
+      "columns": [
+        "empresa"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_partner_id",
+      "columns": [
+        "partner_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_contas_a_pagar_parcela",
       "columns": [
         "parcela"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_cnpj",
+      "columns": [
+        "cnpj"
       ],
       "unique": false
     }

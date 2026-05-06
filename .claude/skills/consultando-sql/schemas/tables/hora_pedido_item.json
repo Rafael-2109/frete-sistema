@@ -30,6 +30,15 @@
       "name": "preco_compra_esperado",
       "type": "numeric(15,2)",
       "nullable": false
+    },
+    {
+      "name": "peca_id",
+      "type": "integer",
+      "description": "FK → hora_peca.id"
+    },
+    {
+      "name": "qtd_pedida",
+      "type": "numeric(15,3)"
     }
   ],
   "foreign_keys": [
@@ -44,9 +53,20 @@
     {
       "column": "modelo_id",
       "references": "hora_modelo.id"
+    },
+    {
+      "column": "peca_id",
+      "references": "hora_peca.id"
     }
   ],
   "indices": [
+    {
+      "name": "ix_hora_pedido_item_numero_chassi",
+      "columns": [
+        "numero_chassi"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_hora_pedido_item_pedido_id",
       "columns": [
@@ -55,9 +75,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_item_numero_chassi",
+      "name": "ix_hora_pedido_item_peca_id",
       "columns": [
-        "numero_chassi"
+        "peca_id"
       ],
       "unique": false
     }

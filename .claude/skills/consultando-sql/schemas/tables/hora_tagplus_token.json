@@ -35,6 +35,10 @@
       "nullable": false
     },
     {
+      "name": "scope_efetivo",
+      "type": "varchar(255)"
+    },
+    {
       "name": "obtido_em",
       "type": "timestamp",
       "nullable": false

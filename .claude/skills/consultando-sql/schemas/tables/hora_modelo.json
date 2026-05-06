@@ -28,6 +28,27 @@
       "default": true
     },
     {
+      "name": "preco_a_vista",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "preco_a_prazo",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "merged_em_id",
+      "type": "integer",
+      "description": "FK → hora_modelo.id"
+    },
+    {
+      "name": "merged_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "merged_por",
+      "type": "varchar(100)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -39,7 +60,20 @@
       "description": "Última atualização"
     }
   ],
+  "foreign_keys": [
+    {
+      "column": "merged_em_id",
+      "references": "hora_modelo.id"
+    }
+  ],
   "indices": [
+    {
+      "name": "ix_hora_modelo_merged_em_id",
+      "columns": [
+        "merged_em_id"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_hora_modelo_nome_modelo",
       "columns": [

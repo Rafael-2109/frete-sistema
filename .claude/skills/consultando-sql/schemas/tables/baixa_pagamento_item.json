@@ -229,9 +229,9 @@
   ],
   "indices": [
     {
-      "name": "idx_baixa_pag_item_cnpj",
+      "name": "idx_baixa_pag_item_status_match",
       "columns": [
-        "cnpj_beneficiario"
+        "status_match"
       ],
       "unique": false
     },
@@ -243,9 +243,9 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_titulo",
+      "name": "idx_baixa_pag_item_cnpj",
       "columns": [
-        "titulo_id"
+        "cnpj_beneficiario"
       ],
       "unique": false
     },
@@ -257,9 +257,9 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_lote",
+      "name": "idx_baixa_pag_item_titulo",
       "columns": [
-        "lote_id"
+        "titulo_id"
       ],
       "unique": false
     },
@@ -271,9 +271,9 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_status",
+      "name": "idx_baixa_pag_item_lote",
       "columns": [
-        "status"
+        "lote_id"
       ],
       "unique": false
     },
@@ -299,9 +299,9 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_pag_item_status_match",
+      "name": "idx_baixa_pag_item_status",
       "columns": [
-        "status_match"
+        "status"
       ],
       "unique": false
     }

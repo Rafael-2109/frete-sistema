@@ -54,6 +54,10 @@
       "type": "varchar(255)"
     },
     {
+      "name": "cte_pdf_path",
+      "type": "varchar(500)"
+    },
+    {
       "name": "cte_data_emissao",
       "type": "date"
     },
@@ -139,16 +143,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_ctrc_numero",
+      "name": "ix_carvia_cte_complementares_status",
       "columns": [
-        "ctrc_numero"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_status",
+      "name": "ix_carvia_cte_complementares_ctrc_numero",
       "columns": [
-        "status"
+        "ctrc_numero"
       ],
       "unique": false
     },

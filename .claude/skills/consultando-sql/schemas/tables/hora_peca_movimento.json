@@ -1,0 +1,98 @@
+{
+  "name": "hora_peca_movimento",
+  "description": "Tabela hora_peca_movimento",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "peca_id",
+      "type": "integer",
+      "description": "FK → hora_peca.id",
+      "nullable": false
+    },
+    {
+      "name": "loja_id",
+      "type": "integer",
+      "description": "FK → hora_loja.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(25)",
+      "nullable": false
+    },
+    {
+      "name": "qtd",
+      "type": "numeric(15,3)",
+      "nullable": false
+    },
+    {
+      "name": "ref_tabela",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "ref_id",
+      "type": "integer"
+    },
+    {
+      "name": "motivo",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "operador",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "peca_id",
+      "references": "hora_peca.id"
+    },
+    {
+      "column": "loja_id",
+      "references": "hora_loja.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_hora_peca_mov_ref_idx",
+      "columns": [
+        "ref_tabela",
+        "ref_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_peca_movimento_peca_id",
+      "columns": [
+        "peca_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_peca_mov_saldo_idx",
+      "columns": [
+        "peca_id",
+        "loja_id",
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_peca_movimento_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    }
+  ]
+}
