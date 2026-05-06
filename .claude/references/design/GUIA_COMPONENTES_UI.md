@@ -241,18 +241,38 @@ Rodar audit: `python scripts/audits/ui_audit.py` (gera 3 reports em `relatorios/
 
 ### Regression check (pre-commit / CI)
 
-`scripts/audits/ui_audit_regression.py` compara audit atual vs baseline commitado
-(`relatorios/ui_audit_baseline.json`):
+Dois niveis complementares:
+
+**1. Audit numerico** (`scripts/audits/ui_audit_regression.py`):
 
 ```bash
-# antes de commit — falha se alguma categoria aumentou
-python scripts/audits/ui_audit_regression.py
-
-# apos cleanup intencional (atingiu novo piso) — atualiza baseline
-python scripts/audits/ui_audit_regression.py --update-baseline
+python scripts/audits/ui_audit_regression.py            # antes de commit
+python scripts/audits/ui_audit_regression.py --update-baseline  # apos cleanup
 ```
 
-Exit code 0 = OK, 1 = regressao detectada (uma ou mais categorias subiram), 2 = erro de execucao.
+Detecta se a contagem de violacoes aumentou. Rapido, mas NAO detecta mudanca visual.
+
+**2. Visual regression** (`tests/visual/`):
+
+```bash
+# uma vez (estabelecer baseline)
+python tests/visual/capture.py --target baseline
+
+# antes de cada PR de cleanup
+python tests/visual/capture.py --target current
+python tests/visual/compare.py
+# exit 0 = OK, exit 1 = pixel diff > threshold
+
+# apos cleanup que mudou visual de proposito
+python tests/visual/compare.py --update-baseline
+```
+
+Pre-requisitos: app rodando local + `UI_VISUAL_EMAIL` / `UI_VISUAL_PASSWORD` env vars +
+`python -m playwright install chromium`. Detalhes em `tests/visual/README.md`.
+
+**Quando usar cada um**:
+- Audit numerico: SEMPRE antes de commit (rapido, sem dependencias)
+- Visual: antes de PRs que alteram CSS/templates em volume (Fase E codemod)
 
 ---
 

@@ -1,0 +1,95 @@
+# Visual Regression — paginas-chave para snapshot
+#
+# Cada pagina e capturada em DARK e LIGHT mode.
+# Para paginas que precisam de id de registro, use {id} placeholder e o ID
+# sera lido de SAMPLE_IDS env var (JSON: {"hora_pedido": 123, "hora_chassi_detalhe": "ABC..."}).
+# Se SAMPLE_IDS nao definir, paginas com placeholder sao puladas.
+#
+# Ordem foi escolhida para cobrir:
+# - Bugs reportados originalmente (hora pedidos/estoque)
+# - Hotspots de violacao do audit (financeiro baixas/extrato, comercial lista_clientes)
+# - Modulos com muitas badges (carvia, fretes)
+# - Tabelas e dashboards representativos
+
+pages:
+  # ────────────────────────────────────────────────────────────────────
+  # Bugs originais — devem permanecer estaveis pos-Fase B/C
+  # ────────────────────────────────────────────────────────────────────
+  - name: hora_pedidos_lista
+    url: "/hora/pedidos"
+    description: "Lista de pedidos HORA — badge Parcialmente Faturado (bug original)"
+
+  - name: hora_estoque_lista
+    url: "/hora/estoque"
+    description: "Estoque por loja — table-secondary em rows fora de estoque (bug original)"
+
+  - name: hora_dashboard
+    url: "/hora/"
+    description: "Dashboard HORA — KPIs e cards"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Fretes — badge-status-cancelado/lancado (apos Fase C)
+  # ────────────────────────────────────────────────────────────────────
+  - name: fretes_listar
+    url: "/fretes/listar_fretes"
+    description: "Lista de fretes — varias badges status"
+
+  - name: fretes_dashboard
+    url: "/fretes/dashboard"
+    description: "Dashboard fretes"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Financeiro — hotspots V1 (245 inline styles)
+  # ────────────────────────────────────────────────────────────────────
+  - name: financeiro_baixas_hub
+    url: "/financeiro/baixas_hub"
+    description: "Baixas hub — 41 inline styles (V1 hotspot)"
+
+  - name: financeiro_extrato_itens
+    url: "/financeiro/extrato_itens"
+    description: "Extrato itens — 33 inline styles"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Carvia — 40 badges (segundo maior modulo de V11)
+  # ────────────────────────────────────────────────────────────────────
+  - name: carvia_operacoes
+    url: "/carvia/operacoes"
+    description: "Operacoes CarVia — varios badges status (rascunho/cotado/confirmado/etc)"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Comercial — V1 hotspot
+  # ────────────────────────────────────────────────────────────────────
+  - name: comercial_lista_clientes
+    url: "/comercial/lista_clientes"
+    description: "Lista de clientes — 23 inline styles"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Embarques — V2 hotspot (hex em template)
+  # ────────────────────────────────────────────────────────────────────
+  - name: embarques_listar
+    url: "/embarques/listar"
+    description: "Lista embarques — V2 hotspot em _carvia_separacao_content.html"
+
+  # ────────────────────────────────────────────────────────────────────
+  # Pedidos & Carteira — paginas de uso intenso
+  # ────────────────────────────────────────────────────────────────────
+  - name: pedidos_lista
+    url: "/pedidos/lista_pedidos"
+    description: "Lista pedidos — visao tradicional"
+
+  - name: carteira_agrupada
+    url: "/carteira/agrupados"
+    description: "Carteira agrupada por cliente"
+
+# Configuracao default
+config:
+  viewport:
+    width: 1440
+    height: 900
+  themes:
+    - dark
+    - light
+  full_page: true
+  wait_for: "networkidle"
+  timeout_ms: 15000
+  diff_threshold_pct: 1.0   # falha se >1% de pixels diferentes (cobre antialiasing/fontes)
