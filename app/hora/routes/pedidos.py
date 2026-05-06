@@ -63,6 +63,10 @@ def pedidos_lista():
     }
     # Comparativo de valores (match/sem-match por chassi) — 1 query agregada.
     comparativos_valores = matching_service.comparativos_valores_pedidos_batch(pedidos)
+    # Deteccao de chassi duplicado entre pedidos ATIVOS (1 query agregada).
+    # {pedido_id: count_chassis_duplicados} — pedidos sem duplicidade sao
+    # omitidos. Pedidos CANCELADO nao aparecem (regra: nao alerta cancelado).
+    duplicidades_chassi = pedido_service.chassis_duplicados_em_outros_pedidos_batch(pedido_ids)
     # Lojas para o modal de exportacao (filtradas pelo escopo do usuario).
     escopo = lojas_permitidas_ids()
     lojas_q = HoraLoja.query.filter_by(ativa=True)
@@ -80,6 +84,7 @@ def pedidos_lista():
         filtro_data_fim=data_fim_str,
         resumos=resumos,
         comparativos_valores=comparativos_valores,
+        duplicidades_chassi=duplicidades_chassi,
         lojas_ativas=lojas_ativas,
     )
 
@@ -135,6 +140,12 @@ def pedidos_detalhe(pedido_id: int):
             .all()
         )
 
+    # Deteccao de chassi duplicado em outros pedidos ATIVOS.
+    # Mapa {chassi: [{pedido_id, numero_pedido, status, item_id}]} usado pelo
+    # template para alerta visual. Vazio se pedido base esta CANCELADO ou nao
+    # ha duplicidades.
+    duplicidades_chassi = pedido_service.chassis_duplicados_em_outros_pedidos(pedido.id)
+
     return render_template(
         'hora/pedido_detalhe.html',
         pedido=pedido,
@@ -147,6 +158,7 @@ def pedidos_detalhe(pedido_id: int):
         pode_excluir_pedido=pode_excluir_pedido,
         comparativo_valores=comparativo_valores,
         pedidos_candidatos_movimento=pedidos_candidatos_movimento,
+        duplicidades_chassi=duplicidades_chassi,
     )
 
 

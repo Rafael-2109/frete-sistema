@@ -63,9 +63,19 @@
         {% else %}
           {% set fat_color = 'secondary' %}
         {% endif %}
-        <tr>
+        {% set n_dup = duplicidades_chassi.get(p.id, 0) %}
+        <tr {% if n_dup %}class="table-danger"{% endif %}>
           <td><small>{{ p.id }}</small></td>
-          <td><strong>{{ p.numero_pedido }}</strong></td>
+          <td>
+            <strong>{{ p.numero_pedido }}</strong>
+            {% if n_dup %}
+              <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=p.id) }}"
+                 class="badge bg-danger text-decoration-none ms-1"
+                 title="{{ n_dup }} chassi(s) deste pedido aparecem em outro pedido NAO cancelado — clique para revisar">
+                <i class="fas fa-exclamation-triangle"></i> chassi duplicado ({{ n_dup }})
+              </a>
+            {% endif %}
+          </td>
           <td>{{ p.data_pedido.strftime('%d/%m/%Y') }}</td>
           <td>
             {% if p.loja_destino %}

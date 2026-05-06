@@ -3,11 +3,19 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Iterable, List, Mapping, Optional
+from typing import Dict, Iterable, List, Mapping, Optional
+
+from sqlalchemy.orm import aliased
 
 from app import db
 from app.hora.models import HoraPedido, HoraPedidoItem
 from app.hora.services.moto_service import get_or_create_moto
+
+
+# Pedidos com este status sao desconsiderados na deteccao de duplicidade
+# cross-pedidos: se foi cancelado, o chassi voltou ao mercado e nao representa
+# conflito. Status validos: ABERTO, PARCIALMENTE_FATURADO, FATURADO, CANCELADO.
+_STATUS_IGNORADOS_DUPLICIDADE = ('CANCELADO',)
 
 
 def criar_pedido(
@@ -329,6 +337,9 @@ def adicionar_item_pedido(
     )
     db.session.add(item)
     db.session.commit()
+    # Mudar a composicao do pedido pode trocar o status (ex: absorver chassi
+    # extra de NF ja vinculada deve passar de PARCIAL -> FATURADO).
+    atualizar_status_pedido_por_faturamento(pedido.id)
     return item
 
 
@@ -371,6 +382,10 @@ def adicionar_item_peca_pedido(
     )
     db.session.add(item)
     db.session.commit()
+    # Defesa: a funcao filtra itens-peca, entao adicionar peca em pedido
+    # so-de-motos nao muda status. Mas se a regra de status passar a
+    # considerar pecas no futuro, o caller ja esta correto.
+    atualizar_status_pedido_por_faturamento(pedido.id)
     return item
 
 
@@ -393,6 +408,7 @@ def remover_item_peca_pedido(
         raise ValueError('Pedido precisa ter pelo menos 1 item')
     db.session.delete(item)
     db.session.commit()
+    atualizar_status_pedido_por_faturamento(pedido_id)
 
 
 def excluir_item_pedido(
@@ -428,6 +444,9 @@ def excluir_item_pedido(
 
     db.session.delete(item)
     db.session.commit()
+    # Remover item-moto pode passar pedido de PARCIAL -> FATURADO
+    # (se o item removido era o unico chassi nao faturado).
+    atualizar_status_pedido_por_faturamento(pedido_id)
 
 
 def exportar_pedidos_excel(
@@ -726,9 +745,14 @@ def mover_item_para_outro_pedido(
 def atualizar_status_pedido_por_faturamento(pedido_id: int) -> None:
     """Recalcula status do pedido com base em quais chassis já foram faturados.
 
-    Regra: se todos os chassis do pedido aparecem em hora_nf_entrada_item ligados
-    a uma NF que referencia este pedido → FATURADO. Se alguns → PARCIALMENTE_FATURADO.
-    Se nenhum → mantém ABERTO.
+    Regra: se todos os chassis-moto do pedido aparecem em hora_nf_entrada_item
+    ligados a uma NF que referencia este pedido → FATURADO. Se alguns →
+    PARCIALMENTE_FATURADO. Se nenhum → mantém ABERTO.
+
+    Considera APENAS itens-moto com chassi preenchido. Itens-peca (peca_id IS
+    NOT NULL) e itens-moto pre-NF (numero_chassi IS NULL) sao ignorados — nao
+    travam o status. Se o pedido nao tem nenhum item-moto com chassi (so
+    pecas, ou so motos pre-NF), o status nao e recalculado por esta funcao.
     """
     from app.hora.models import HoraNfEntrada, HoraNfEntradaItem
 
@@ -736,7 +760,10 @@ def atualizar_status_pedido_por_faturamento(pedido_id: int) -> None:
     if not pedido:
         return
 
-    chassis_pedido = {i.numero_chassi for i in pedido.itens}
+    chassis_pedido = {
+        i.numero_chassi for i in pedido.itens
+        if i.peca_id is None and i.numero_chassi is not None
+    }
     if not chassis_pedido:
         return
 
@@ -760,3 +787,113 @@ def atualizar_status_pedido_por_faturamento(pedido_id: int) -> None:
     if pedido.status != novo_status:
         pedido.status = novo_status
         db.session.commit()
+
+
+# ========================================================================
+# Deteccao de duplicidade de chassi entre pedidos ATIVOS
+# ========================================================================
+#
+# A constraint UNIQUE parcial (uq_hora_pedido_item_chassi_parcial em
+# scripts/migrations/hora_02_pedido_item_chassi_nullable.sql) impede chassi
+# duplicado DENTRO do mesmo pedido. Mas o sistema PERMITE intencionalmente que
+# o mesmo chassi exista em pedidos diferentes — pedido cancelado libera o
+# chassi para reentrada em outro pedido (mesma logica de hora_venda_item).
+#
+# Estas funcoes detectam o caso problematico: chassi presente em 2+ pedidos
+# que NAO foram cancelados — sintoma de pedido duplicado, importacao em
+# duplicata ou erro de operador. Sao usadas pela UI (listagem e detalhe) para
+# alertar visualmente sem bloquear a operacao.
+
+
+def chassis_duplicados_em_outros_pedidos(pedido_id: int) -> Dict[str, List[dict]]:
+    """Retorna mapa {chassi: [outros pedidos ativos com o mesmo chassi]}.
+
+    Considera duplicidade apenas entre pedidos cujo status nao esta em
+    `_STATUS_IGNORADOS_DUPLICIDADE` (atualmente: 'CANCELADO').
+
+    Se o pedido base estiver CANCELADO, retorna mapa vazio — nao alerta
+    sobre pedidos cancelados (regra explicita do usuario).
+
+    Cada entrada do mapa lista dicts com chaves: pedido_id, numero_pedido,
+    status, item_id (do outro pedido). Util para o template de detalhe
+    construir links e tooltips.
+    """
+    pedido_base = HoraPedido.query.get(pedido_id)
+    if not pedido_base or pedido_base.status in _STATUS_IGNORADOS_DUPLICIDADE:
+        return {}
+
+    chassis_base = [
+        i.numero_chassi for i in pedido_base.itens
+        if i.numero_chassi and i.peca_id is None
+    ]
+    if not chassis_base:
+        return {}
+
+    rows = (
+        db.session.query(
+            HoraPedidoItem.numero_chassi,
+            HoraPedidoItem.id,
+            HoraPedido.id,
+            HoraPedido.numero_pedido,
+            HoraPedido.status,
+        )
+        .join(HoraPedido, HoraPedidoItem.pedido_id == HoraPedido.id)
+        .filter(HoraPedidoItem.numero_chassi.in_(chassis_base))
+        .filter(HoraPedido.id != pedido_id)
+        .filter(~HoraPedido.status.in_(_STATUS_IGNORADOS_DUPLICIDADE))
+        .all()
+    )
+
+    resultado: Dict[str, List[dict]] = {}
+    for chassi, item_id, p_id, num, status in rows:
+        resultado.setdefault(chassi, []).append({
+            'pedido_id': p_id,
+            'numero_pedido': num,
+            'status': status,
+            'item_id': item_id,
+        })
+    return resultado
+
+
+def chassis_duplicados_em_outros_pedidos_batch(
+    pedido_ids: List[int],
+) -> Dict[int, int]:
+    """Versao batch para a listagem: retorna {pedido_id: count_chassis_duplicados}.
+
+    `count_chassis_duplicados` = numero de chassis distintos do pedido_id que
+    aparecem em algum OUTRO pedido cujo status nao esta em
+    `_STATUS_IGNORADOS_DUPLICIDADE`. Pedidos com status ignorado nao aparecem
+    no resultado (regra: nao alerta em pedido cancelado).
+
+    Implementacao: 1 query agregada (self-join + GROUP BY). Evita N+1.
+    """
+    if not pedido_ids:
+        return {}
+
+    pi_local = aliased(HoraPedidoItem, name='pi_local')
+    pi_outro = aliased(HoraPedidoItem, name='pi_outro')
+    p_local = aliased(HoraPedido, name='p_local')
+    p_outro = aliased(HoraPedido, name='p_outro')
+
+    rows = (
+        db.session.query(
+            pi_local.pedido_id,
+            db.func.count(db.distinct(pi_local.numero_chassi)).label('n_dup'),
+        )
+        .join(p_local, p_local.id == pi_local.pedido_id)
+        .join(
+            pi_outro,
+            db.and_(
+                pi_outro.numero_chassi == pi_local.numero_chassi,
+                pi_outro.pedido_id != pi_local.pedido_id,
+            ),
+        )
+        .join(p_outro, p_outro.id == pi_outro.pedido_id)
+        .filter(pi_local.pedido_id.in_(pedido_ids))
+        .filter(pi_local.numero_chassi.isnot(None))
+        .filter(~p_local.status.in_(_STATUS_IGNORADOS_DUPLICIDADE))
+        .filter(~p_outro.status.in_(_STATUS_IGNORADOS_DUPLICIDADE))
+        .group_by(pi_local.pedido_id)
+        .all()
+    )
+    return {pid: int(n) for pid, n in rows if n}
