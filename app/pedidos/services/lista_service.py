@@ -465,6 +465,24 @@ class ListaPedidosService:
                     if lote_ped not in cotado and lote_ped not in embarcado:
                         target.add(lote_ped)
 
+        # (c) PED direto — EmbarqueItem com lote CARVIA-PED-* nao provisorio
+        # Cobre o cenario predominante em producao: NF anexada cria item real
+        # com lote CARVIA-PED-{id} (provisorio=False), sem expansao para
+        # CARVIA-NF-*. Sem este caminho o pedido nunca entra em cotado/embarcado
+        # e o filtro 'aberto' acaba listando pedidos ja em embarque.
+        rows_ped_direto = db.session.query(
+            EmbarqueItem.separacao_lote_id.label('lote'),
+            Embarque.data_embarque.label('data_embarque'),
+        ).join(
+            Embarque, Embarque.id == EmbarqueItem.embarque_id
+        ).filter(
+            EmbarqueItem.status == 'ativo',
+            Embarque.status == 'ativo',
+            EmbarqueItem.separacao_lote_id.like('CARVIA-PED-%'),
+        ).all()
+        for row in rows_ped_direto:
+            (embarcado if row.data_embarque else cotado).add(row.lote)
+
         return {'cotado': cotado, 'embarcado': embarcado}
 
     @staticmethod
