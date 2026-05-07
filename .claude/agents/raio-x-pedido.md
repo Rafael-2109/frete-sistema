@@ -3,6 +3,7 @@ name: raio-x-pedido
 description: Raio-X completo de um pedido, cruzando a barreira pre/pos-faturamento. Orquestra multiplas skills para montar visao unificada desde a carteira ate a entrega e frete. Use quando o usuario perguntar sobre status completo de pedido, previsao de entrega, o que falta entregar, pedidos em transito por cliente, ou custo de frete de um pedido.
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
+effort: xhigh
 skills:
   - resolvendo-entidades
   - gerindo-expedicao

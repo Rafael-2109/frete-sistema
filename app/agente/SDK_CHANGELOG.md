@@ -1,9 +1,146 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.1.73)
+# Agente Web — SDK Changelog (0.1.49 → 0.1.76)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-05-05 (SDK 0.1.73 + anthropic 0.98.1)
+> **Atualizado**: 2026-05-07 (SDK 0.1.76 + anthropic 0.98.1)
+
+---
+
+## SDK 0.1.76 (atualizado 2026-05-07) — xhigh subagentes + api_error_status + permission enrichment
+
+**Versao**: `claude-agent-sdk==0.1.76` (CLI bundled 2.1.132) + `anthropic==0.98.1`
+**Bumps intermediarios**: 0.1.74 (CLI 2.1.129), 0.1.75 (CLI 2.1.131)
+
+### Features adotadas
+
+#### F4: Permission context enrichment (SDK 0.1.74) — display_name + description
+
+**Mecanica**: `ToolPermissionContext` ganhou `display_name` (ex: "Web Search"), `description`,
+`decision_reason`, `blocked_path`, `title`. Bonus 0.1.74: doc clarificou que `can_use_tool`
+so dispara em `"ask"` permission decisions, nao em `allow`/`deny`.
+
+**Aplicacao**: `app/agente/config/permissions.py:can_use_tool` extrai `display_name` e
+`description` via `getattr` (forward-compat). Logs admin de subagentes ficam mais legiveis.
+
+**Arquivos modificados**:
+- `app/agente/config/permissions.py:300-345`: extracao + log enriquecido (ja tinha
+  `agent_id`/`tool_use_id` desde SDK 0.1.52).
+
+**Justificativa do escopo**: `decision_reason` redundante (sempre "ask" — ver doc 0.1.74),
+`blocked_path` redundante (ja temos `ALLOWED_WRITE_PREFIXES` check).
+
+#### F6: `xhigh` effort level (SDK 0.1.74) — Opus 4.7-specific
+
+**Mecanica**: `"xhigh"` adicionado ao Literal de `effort` em `ClaudeAgentOptions` E
+`AgentDefinition`. Entre `high` e `max`. Doc Anthropic: *"the best setting for most coding
+and agentic use cases on 4.7, and the default in Claude Code"*. Fallback automatico para
+`high` em modelos nao-Opus 4.7. SDK 0.1.60 ja documentava como acessivel via `extra_args`
+(workaround); SDK 0.1.74 oficializa no campo nativo.
+
+**Arquitetura adotada**: opcional via frontmatter dos `.claude/agents/*.md` (per-subagente).
+
+- **Parser** (`agent_loader.py`): novo `_check_effort_field()` (introspection), `_VALID_EFFORTS`
+  whitelist (`{low, medium, high, xhigh, max}`), parse de `effort` do frontmatter com
+  validacao silenciosa (valor invalido = ignora + warn, nao quebra carregamento).
+- **Forward-compat**: `agent_kwargs["effort"] = effort` so se `_SDK_HAS_EFFORT_FIELD=True`
+  (SDK >= 0.1.74). SDK < 0.1.74: log debug + ignora (subagente herda effort do main).
+
+**Aplicado em** (6 subagentes Opus pesados):
+- `analista-carteira.md` — analise multi-step P1-P7 + comunicacao PCP/Comercial
+- `auditor-financeiro.md` — reconciliacao Local x Odoo + SEM_MATCH
+- `desenvolvedor-integracao-odoo.md` — criar/modificar integracoes (dev-only)
+- `especialista-odoo.md` — pipeline Odoo cross-area
+- `gestor-recebimento.md` — pipeline 4 fases recebimento
+- `raio-x-pedido.md` — visao 360 cruzando carteira/entrega/frete
+
+**NAO aplicado em** 7 subagentes Sonnet — `xhigh` em Sonnet faz fallback para `high`,
+que ja eh o default do Sonnet 4.6 (no-op efetivo).
+
+**Custo esperado**: 20-40% mais tokens nos 6 Opus vs `high`. Cap atual `MAX_BUDGET_USD=5.0`
+permanece como guard. Monitorar `cost_tracker.py` por subagent_type por 7 dias.
+
+**Rollback**: remover linha `effort: xhigh` dos frontmatter dos 6 .md.
+
+**Arquivos modificados**:
+- `app/agente/config/agent_loader.py:42-90`: `_check_effort_field()` + `_VALID_EFFORTS`.
+- `app/agente/config/agent_loader.py:359-373`: parse de frontmatter `effort` + validacao.
+- `app/agente/config/agent_loader.py:391-401`: aplicacao com forward-compat introspection.
+- `app/agente/config/agent_loader.py:417-419`: log enriquecido com `effort=xhigh`.
+- `.claude/agents/{6 Opus}.md`: linha `effort: xhigh` no frontmatter.
+
+#### F8: `api_error_status` em ResultMessage (SDK 0.1.76) — classificacao granular de falhas API
+
+**Mecanica**: `ResultMessage.api_error_status: int | None` traz HTTP status (429/500/529)
+quando `is_error=True`. Permite classificar falhas vs apenas inspecao de string em `errors[]`.
+Compoe com `APIStatusError.type` ja adotado em `scanner` e `memory_consolidator`
+(anthropic 0.87.0+).
+
+**Aplicacao**:
+- **Captura** (`client.py:_parse_sdk_message` handler ResultMessage): `getattr(message,
+  'api_error_status', None)` (forward-compat: None se SDK < 0.1.76 ou sem erro).
+- **Log enriquecido** (`client.py:980-989`): `http_status={api_error_status}` no log
+  de ResultMessage quando preenchido.
+- **Propagacao SSE** (`client.py:done event content`): `'api_error_status': api_error_status`.
+- **`done_payload`** (`routes/chat.py:910+`): incluido no SSE para frontend.
+- **Sentry tag** (`routes/chat.py`): `anthropic_http_status=<code>` + `anthropic_http_5xx=true`
+  quando >= 500. Best-effort (try/except), nao quebra stream se Sentry indisponivel.
+- **Log warning** (`routes/chat.py`): `"[AGENTE] Anthropic API error: HTTP {code}..."`.
+
+**Beneficio**: distinguir 429 (rate limit, retry imediato) de 529 (overloaded, retry longo)
+de 500 (server error real). Permite dashboards `/admin/insights` agruparem por codigo HTTP.
+
+**Arquivos modificados**:
+- `app/agente/sdk/client.py:920-1058`: captura + log + propagacao no done event.
+- `app/agente/routes/chat.py:910-944`: done_payload + Sentry tag (sem alerta automatico).
+
+### Bug fixes gratuitos via upgrade (SDK 0.1.74-0.1.76)
+
+- **F7: Atexit subprocess cleanup** (0.1.74): SDK registra atexit handler que termina
+  subprocesses CLI vivos quando processo Python encerra (anti-zombie no shutdown abrupto).
+  Complementa nosso `_force_kill_subprocess` em `client_pool.py` (cobre cenario operacional
+  normal). Validar pos-deploy: `kill -9 <gunicorn_worker>` + `ps -ef | grep claude`.
+- **F9: PermissionUpdate.from_dict()** (0.1.76): `ToolPermissionContext.suggestions` agora
+  vem como `list[PermissionUpdate]` (antes era `list[dict]` raw). Bug fix preventivo —
+  nao consumimos `suggestions` no projeto (CLI nao tem UI interativa para gerar regras).
+- **ResourceWarning on disconnect** (0.1.74): fix `Unclosed <MemoryObjectReceiveStream>`.
+- **Session created_at timestamp** (0.1.74): `list_sessions()` mais nao retorna `None` em
+  sessoes cujo primeiro JSONL record nao tem timestamp.
+
+### Features documentadas mas NAO implementadas
+
+#### F3: `strict_mcp_config` (SDK 0.1.74) — DOCUMENTADO, nao adotado
+
+**Mecanica**: quando `True`, CLI usa APENAS `mcp_servers` passados em `ClaudeAgentOptions`,
+ignorando project/user/global config (`.mcp.json`).
+
+**Beneficio**: determinismo total DEV vs PROD. Em PROD (Render com `HOME=/tmp`)
+provavelmente nao muda nada (sem `.mcp.json`). Em DEV local, evita MCP "fantasma" do
+usuario vazar pra agente.
+
+**Quando implementar**: ativar via flag `AGENT_STRICT_MCP_CONFIG=true` quando aparecer
+caso real de divergencia DEV/PROD. Adocao trivial (~15 LOC):
+```python
+if 'strict_mcp_config' in {f.name for f in dataclasses.fields(ClaudeAgentOptions)}:
+    options_dict["strict_mcp_config"] = AGENT_STRICT_MCP_CONFIG
+```
+
+### Features NAO adotadas (sem caso de uso)
+
+- **F1: `include_hook_events`** (SDK 0.1.74) — emite `HookEventMessage` no stream principal.
+  Nossos 8 hooks Python ja logam tudo via `logger.info`. Stream poluido sem consumidor
+  claro. Reavaliar se aparecer caso de "hook silenciosamente falhou".
+- **F2: `defer` permission decision + `DeferredToolUse`** (SDK 0.1.74) — round-trip async
+  para aprovacao demorada. Nosso fluxo `register_question`/`wait_for_answer` (Event +
+  TeamsTask.status='awaiting_user_input') ja cobre 95% dos casos com timeouts 55s/120s.
+  Reabrir caso se TeamsTask timeouts >5%/mes em prod.
+- **F5: `updatedToolOutput` em PostToolUse** (SDK 0.1.74) — antes so MCP, agora qualquer
+  tool. Sem caso de governance/compliance que demande reescrita de output. Reavaliar se
+  surgir requisito (ex: "agente nunca pode ver coluna X").
+- **F10: anthropic 0.99.0 (workspace OIDC) + 0.100.0 (Managed Agents multiagents/outcomes/
+  webhooks/vault validation)** — sistema usa API key direto (sem OIDC), e Managed Agents
+  duplica stack atual de 35K LOC. Nossos 13 `.claude/agents/*.md` + Task tool nativo +
+  validador Haiku cobrem multi-agent + outcomes + observability.
 
 ---
 

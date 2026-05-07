@@ -4,7 +4,7 @@
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
-> **Historico SDK** (changelog 0.1.49 → 0.1.73 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
+> **Historico SDK** (changelog 0.1.49 → 0.1.76 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
 
 ---
 
@@ -436,7 +436,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ## Versao SDK atual
 
-- **claude-agent-sdk**: `0.1.73` | **CLI bundled**: 2.1.128 | **anthropic**: `0.98.1`
+- **claude-agent-sdk**: `0.1.76` | **CLI bundled**: 2.1.132 | **anthropic**: `0.98.1`
 - **Floor**: `mcp>=1.19.0` (fix `CallToolResult` silenciosamente perdido em 0.1.70)
 - **Modelo default**: `claude-opus-4-7` (Opus 4.7, $5/$25 per MTok, adaptive thinking, 1M context)
 - **Rollback rapido**: `AGENT_MODEL=claude-opus-4-6` + `TEAMS_DEFAULT_MODEL=claude-opus-4-6`
@@ -454,9 +454,18 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 - **Erro Anthropic granular**: `APIStatusError.type` adotado em `app/scanner/service.py` e
   `app/agente/services/memory_consolidator.py` para classificacao por tipo
   (`rate_limit_error`, `overloaded_error`, `billing_error`, etc.).
+- **API error HTTP status** (SDK 0.1.76): `ResultMessage.api_error_status` capturado em
+  `client.py`, propagado em `StreamEvent('done').content['api_error_status']` e SSE
+  `done_payload`. Sentry tag `anthropic_http_status` (e `anthropic_http_5xx=true` quando
+  >= 500) para classificar 429/500/529 sem inspecao de string em `errors[]`.
+- **Effort xhigh per-subagente** (SDK 0.1.74): 6 subagentes Opus pesados (`analista-carteira`,
+  `auditor-financeiro`, `desenvolvedor-integracao-odoo`, `especialista-odoo`,
+  `gestor-recebimento`, `raio-x-pedido`) marcados `effort: xhigh` no frontmatter.
+  `agent_loader.py` parseia com forward-compat (`_SDK_HAS_EFFORT_FIELD` introspection).
+  Sonnet ignorado (xhigh fallback para high = no-op).
 
 > **Historico completo de adocoes, breaking changes, bug fixes e features NAO adotadas**:
-> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.1.73 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
+> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.1.76 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
 
 ---
 

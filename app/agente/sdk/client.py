@@ -930,6 +930,12 @@ Nunca invente informações."""
             # SDK 0.1.51+: errors detalhados (API errors, tool crashes, validation fails)
             result_errors = getattr(message, 'errors', []) or []
 
+            # SDK 0.1.76+: api_error_status — codigo HTTP (429/500/529) quando is_error=True
+            # Permite classificar falhas API granularmente vs apenas inspecao de string em errors[].
+            # None se SDK < 0.1.76, sem erro, ou erro nao-API (tool crash, validation, etc.).
+            # Compoe com APIStatusError.type ja adotado em scanner/memory_consolidator (anthropic 0.87.0+).
+            api_error_status = getattr(message, 'api_error_status', None)
+
             # Anthropic SDK 0.88.0+ (streaming fix em 0.98.0):
             # stop_details estruturado quando stop_reason == "refusal" — contem
             # category ("cyber"|"bio"|None) + explanation. Propaga ate UI/admin
@@ -984,6 +990,7 @@ Nunca invente informações."""
                 f"usage={message.usage} | turns={message.num_turns} | "
                 f"duration={message.duration_ms}ms | "
                 f"tokens_captured=({state.input_tokens},{state.output_tokens})"
+                f"{f' | http_status={api_error_status}' if api_error_status else ''}"
                 f"{f' | errors={result_errors}' if result_errors else ''}"
             )
 
@@ -1046,6 +1053,9 @@ Nunca invente informações."""
                         # ({"category": "cyber"|"bio"|None, "explanation": str|None}).
                         # None se Anthropic SDK < 0.88.0 ou stop_reason nao for refusal.
                         'stop_details': stop_details,
+                        # SDK 0.1.76+: codigo HTTP (429/500/529) quando is_error=True.
+                        # None se SDK < 0.1.76, sem erro, ou erro nao-API.
+                        'api_error_status': api_error_status,
                         'structured_output': structured_output,
                         'errors': result_errors if result_errors else None,
                     },

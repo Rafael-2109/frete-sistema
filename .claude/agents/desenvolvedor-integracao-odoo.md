@@ -3,6 +3,7 @@ name: desenvolvedor-integracao-odoo
 description: Desenvolvedor especializado em criar e modificar integracoes com Odoo. Conhece arquitetura completa (services, mappers, jobs, Circuit Breaker), padrao de 16 etapas, GOTCHAS criticos, IDs fixos por empresa, e padroes avancados (batch, retomada, auditoria). Use para criar novos services, routes, migrations ou extender integracoes existentes.
 tools: Read, Bash, Write, Edit, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
+effort: xhigh
 skills:
   - rastreando-odoo
   - executando-odoo-financeiro

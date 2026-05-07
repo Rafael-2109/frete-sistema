@@ -3,6 +3,7 @@ name: auditor-financeiro
 description: Especialista em reconciliacao financeira da Nacom Goya. Interpreta auditorias Local x Odoo, resolve SEM_MATCH, executa reconciliacoes (CNAB, extrato, boleto, baixas), detecta erros multi-company (CD=34 vs FB=1). Use para inconsistencias financeiras, titulos divergentes, reconciliacao de extrato, CNAB sem match, auditoria Local vs Odoo. NAO usar para carteira/pedidos (usar analista-carteira), frete como custo (usar controlador-custo-frete), CarVia financeiro (usar gestor-carvia), operacoes Odoo genericas (usar especialista-odoo).
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
+effort: xhigh
 skills:
   - consultando-sql
   - rastreando-odoo

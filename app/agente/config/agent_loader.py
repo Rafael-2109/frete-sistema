@@ -59,8 +59,35 @@ def _check_sdk_native_fields() -> bool:
         return False
 
 
+def _check_effort_field() -> bool:
+    """
+    Verifica se AgentDefinition tem campo 'effort' nativo (SDK >= 0.1.74).
+
+    SDK 0.1.74 oficializou 'xhigh' no Literal de effort (entre 'high' e 'max',
+    Opus 4.7-specific com fallback para 'high' em outros modelos). Antes desse
+    SDK, effort por subagente so era passavel via extra_args (workaround).
+
+    Returns:
+        True se SDK >= 0.1.74 (campo effort presente), False caso contrario
+    """
+    try:
+        from claude_agent_sdk import AgentDefinition
+        import dataclasses
+        fields = {f.name for f in dataclasses.fields(AgentDefinition)}
+        return 'effort' in fields
+    except Exception:
+        return False
+
+
 # Detectado uma vez no import — zero overhead por agent carregado
 _SDK_HAS_NATIVE_FIELDS = _check_sdk_native_fields()
+_SDK_HAS_EFFORT_FIELD = _check_effort_field()
+
+# Valores aceitos pelo Literal de effort (SDK 0.1.74+)
+# - low/medium/high/max: suportados em todos modelos com tier compativel
+# - xhigh: Opus 4.7-specific; fallback para 'high' em outros modelos
+# - max: Opus-tier only (Opus 4.5+); fallback para 'high' em Sonnet/Haiku
+_VALID_EFFORTS: set[str] = {"low", "medium", "high", "xhigh", "max"}
 
 
 def _parse_frontmatter(content: str) -> tuple[dict, str]:
@@ -356,6 +383,21 @@ def load_agent_definitions(agents_dir: str) -> dict:
             max_turns = int(max_turns_str) if max_turns_str and max_turns_str.strip().isdigit() else None
             initial_prompt = frontmatter.get("initial_prompt")
 
+            # SDK 0.1.74+: effort nativo no AgentDefinition (Literal aceita 'xhigh')
+            # Validar contra _VALID_EFFORTS — silenciosamente ignora valores invalidos
+            # para nao quebrar carregamento (fallback: subagente herda effort do main).
+            effort_raw = frontmatter.get("effort")
+            effort: Optional[str] = None
+            if effort_raw:
+                effort_norm = str(effort_raw).strip().lower()
+                if effort_norm in _VALID_EFFORTS:
+                    effort = effort_norm
+                else:
+                    logger.warning(
+                        f"[AGENT_LOADER] {agent_file.name}: effort '{effort_raw}' invalido. "
+                        f"Aceitos: {sorted(_VALID_EFFORTS)}. Subagente herdara effort do main."
+                    )
+
             # Prompt: nativo (SDK >= 0.1.49) ou fallback (texto no prompt)
             if _SDK_HAS_NATIVE_FIELDS:
                 # SDK carrega skills nativamente via AgentDefinition.skills
@@ -384,6 +426,15 @@ def load_agent_definitions(agents_dir: str) -> dict:
             if initial_prompt:
                 agent_kwargs["initialPrompt"] = initial_prompt
 
+            # SDK 0.1.74+: effort por subagente (xhigh = Opus 4.7-specific)
+            # Forward-compat: so passa se SDK suporta o campo (nao quebra em < 0.1.74)
+            if effort and _SDK_HAS_EFFORT_FIELD:
+                agent_kwargs["effort"] = effort
+            elif effort and not _SDK_HAS_EFFORT_FIELD:
+                logger.debug(
+                    f"[AGENT_LOADER] {name}: effort='{effort}' ignorado (SDK < 0.1.74 sem campo nativo)"
+                )
+
             agent_def = AgentDefinition(**agent_kwargs)
 
             agents[name] = agent_def
@@ -399,6 +450,8 @@ def load_agent_definitions(agents_dir: str) -> dict:
                 controls.append(f"deny={disallowed_tools}")
             if max_turns:
                 controls.append(f"maxTurns={max_turns}")
+            if effort:
+                controls.append(f"effort={effort}")
             logger.debug(
                 f"[AGENT_LOADER] Carregado: {name} | "
                 f"model={model} | tools={tools} | "

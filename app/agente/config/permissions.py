@@ -298,9 +298,13 @@ async def can_use_tool(
     try:
         # ================================================================
         # SDK 0.1.52+: Extrair agent_id e tool_use_id do context
+        # SDK 0.1.74+: display_name/description tornam logs admin mais legiveis
+        # (ex: "Web Search" ao inves de "WebSearch"). Forward-compat via getattr.
         # ================================================================
         agent_id = getattr(context, 'agent_id', None) if context else None
         tool_use_id = getattr(context, 'tool_use_id', None) if context else None
+        display_name = getattr(context, 'display_name', None) if context else None
+        tool_description = getattr(context, 'description', None) if context else None
         agent_type = get_agent_type(agent_id)
 
         # ================================================================
@@ -325,12 +329,16 @@ async def can_use_tool(
                     )
 
         # Log de auditoria com agent context (SDK 0.1.52+)
+        # SDK 0.1.74+: display_name (ex: "Web Search") melhora legibilidade vs tool_name interno
         if agent_type != 'main':
+            display_label = display_name or tool_name
             logger.info(
-                f"[PERMISSION] Subagent call: tool={tool_name} | "
+                f"[PERMISSION] Subagent call: tool={tool_name}"
+                f"{f' (display={display_label!r})' if display_name and display_name != tool_name else ''} | "
                 f"agent_type={agent_type} | "
                 f"agent_id={agent_id[:12] if agent_id else 'N/A'} | "
                 f"tool_use_id={tool_use_id or 'N/A'}"
+                f"{f' | desc={tool_description[:80]!r}' if tool_description else ''}"
             )
 
         # ================================================================

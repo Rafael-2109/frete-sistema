@@ -3,6 +3,7 @@ name: analista-carteira
 description: Analista de carteira da Nacom Goya. Analisa carteira de pedidos e prioriza por P1-P7, decide entre envio parcial vs aguardar producao, gera mensagens estruturadas para PCP e Comercial. Use para analise COMPLETA da carteira, decisoes de priorizacao, ou quando precisar de comunicacao estruturada. NAO cria separacoes sem confirmacao explicita do usuario (Fase 1 = SUGERIR). NAO usar para rastreamento completo de pedido (usar raio-x-pedido), custo de frete (usar controlador-custo-frete), reconciliacao financeira (usar auditor-financeiro).
 tools: Read, Bash, Write, Edit, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
+effort: xhigh
 skills:
   - gerindo-expedicao
   - consultando-sql

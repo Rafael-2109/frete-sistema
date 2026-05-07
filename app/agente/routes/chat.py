@@ -648,7 +648,7 @@ def _stream_chat_response(
     from app.agente.sdk import get_client, get_cost_tracker
     from app.agente.config.permissions import can_use_tool
     from queue import Queue, Empty
-    from threading import Thread
+    from threading import Thread, Lock
     app = current_app._get_current_object()
     event_queue = Queue()
 
@@ -667,6 +667,13 @@ def _stream_chat_response(
         'our_session_id': session_id,
         'session_expired': False,
         'error_message': None,
+        # FIX 2026-05-07: persistencia idempotente entre thread daemon (primary)
+        # e finally do generator (defesa em profundidade). Lock evita race;
+        # _persisted=True apos commit garante que segunda thread skipa save.
+        # Sem isso, cliente desconectado abortava o finally do generator
+        # antes de _save_messages_to_db rodar, perdendo a AssistantMessage.
+        '_persisted': False,
+        '_save_lock': Lock(),
     }
 
     def run_async_stream():
@@ -921,6 +928,36 @@ def _stream_chat_response(
                             f"[AGENTE] Refusal/stop_details surfaced: "
                             f"stop_reason={stop_reason_done} "
                             f"category={stop_details_done.get('category')} "
+                            f"session={response_state.get('our_session_id', '?')[:12]}"
+                        )
+
+                    # SDK 0.1.76+: api_error_status — codigo HTTP (429/500/529)
+                    # Propaga ao frontend para classificacao granular de falhas API.
+                    # Sentry tag para HTTP >= 500 facilita filtragem em producao
+                    # (5xx = problema servidor Anthropic; 4xx = problema do request).
+                    # Defensive: coerce para int antes de comparar — se vier string
+                    # (artefato de JSON ou drift de SDK), comparacao crasharia o stream.
+                    api_error_status_raw = event.content.get('api_error_status')
+                    api_error_status = None
+                    if api_error_status_raw is not None:
+                        try:
+                            api_error_status = int(api_error_status_raw)
+                        except (TypeError, ValueError):
+                            logger.debug(
+                                f"[AGENTE] api_error_status nao-numerico ignorado: "
+                                f"{api_error_status_raw!r}"
+                            )
+                    if api_error_status is not None:
+                        done_payload['api_error_status'] = api_error_status
+                        try:
+                            import sentry_sdk as _sentry
+                            _sentry.set_tag("anthropic_http_status", api_error_status)
+                            if api_error_status >= 500:
+                                _sentry.set_tag("anthropic_http_5xx", "true")
+                        except Exception:
+                            pass  # Best-effort: nao quebrar stream se Sentry indisponivel
+                        logger.warning(
+                            f"[AGENTE] Anthropic API error: HTTP {api_error_status} | "
                             f"session={response_state.get('our_session_id', '?')[:12]}"
                         )
 
@@ -1397,6 +1434,77 @@ def _stream_chat_response(
                 cleanup_session_context(response_state['our_session_id'])
         except Exception:
             pass
+
+
+def _save_messages_dedup(
+    app,
+    response_state: dict,
+    original_message: str,
+    user_id: int,
+    model: str,
+    source: str,
+) -> None:
+    """
+    FIX 2026-05-07: persistencia idempotente entre dois call sites.
+
+    A persistencia das mensagens precisa rodar em DOIS pontos:
+      1. Finally da thread daemon `run_async_stream` (PRIMARY) — sempre
+         executa mesmo com cliente desconectado (GeneratorExit no SSE).
+      2. Finally do generator `_stream_chat_response` (DEFESA) — backup
+         caso a thread daemon falhe antes de salvar.
+
+    Esta funcao protege contra dupla persistencia via Lock + flag:
+      - Lock garante exclusao mutua entre as duas threads.
+      - `_persisted=True` so e setado APOS `_save_messages_to_db` retornar
+        com sucesso. Se falhar, flag continua False e proxima thread tenta.
+      - Pre-condicao para correcao: `_save_messages_to_db` NAO deve
+        propagar excecoes de pos-processamento (`run_post_session_processing`,
+        memory v2 feedback) — isso e tratado dentro da propria funcao.
+
+    Args:
+        app: Flask app
+        response_state: dict compartilhado com flag/lock + dados do stream
+        original_message: mensagem do usuario (pre-enriquecimento)
+        user_id: ID do usuario
+        model: modelo usado
+        source: 'thread_daemon' ou 'finally_generator' — apenas para log
+    """
+    save_lock = response_state.get('_save_lock')
+    if save_lock is None:
+        # Defensivo: response_state sem lock (codepath antigo). Nao bloqueia.
+        logger.warning(
+            f"[AGENTE] _save_messages_dedup ({source}): sem _save_lock, "
+            "pulando dedup (risco de duplicacao)"
+        )
+        save_lock = Lock()  # Lock dummy para o `with` funcionar
+
+    with save_lock:
+        if response_state.get('_persisted'):
+            logger.debug(
+                f"[AGENTE] save skipped ({source}): mensagens ja persistidas"
+            )
+            return
+
+        _save_messages_to_db(
+            app=app,
+            our_session_id=response_state['our_session_id'],
+            sdk_session_id=response_state['sdk_session_id'],
+            user_id=user_id,
+            user_message=original_message,
+            assistant_message=response_state['full_text'],
+            input_tokens=response_state['input_tokens'],
+            output_tokens=response_state['output_tokens'],
+            tools_used=response_state['tools_used'],
+            model=model,
+            session_expired=response_state['session_expired'],
+            sdk_cost_usd=response_state.get('sdk_cost_usd', 0),
+            cache_read_tokens=response_state.get('cache_read_tokens', 0),
+            cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
+        )
+        # Marca apenas se _save_messages_to_db NAO levantou excecao.
+        # Excecoes de pos-processamento sao isoladas dentro da funcao.
+        response_state['_persisted'] = True
+        logger.info(f"[AGENTE] Mensagens salvas no banco ({source})")
 
 
 def _save_messages_to_db(
