@@ -117,7 +117,7 @@
               <option value="">— selecione a loja —</option>
               {% for l in lojas_disponiveis %}
                 <option value="{{ l.id }}">
-                  {{ l.nome_exibicao if l.nome_exibicao else l.nome }}
+                  {{ l.apelido or l.nome_fantasia or l.razao_social or l.nome }}
                 </option>
               {% endfor %}
             </select>
