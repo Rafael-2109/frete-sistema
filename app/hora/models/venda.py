@@ -20,17 +20,24 @@ from app.utils.timezone import agora_utc_naive
 # --------------------------------------------------------------------------
 # Status validos (manter sincronizado com hora_20_pedido_workflow.sql).
 # --------------------------------------------------------------------------
+# INCOMPLETO: pedido salvo com dados parciais (formas de pagamento ausentes,
+#   soma das formas != valor_total, ou AUT/ID faltando em forma que exige).
+#   Reserva o chassi mas NAO permite confirmar/emitir NFe. Vendedor pode
+#   editar e completar para promover a COTACAO.
+VENDA_STATUS_INCOMPLETO = 'INCOMPLETO'
 VENDA_STATUS_COTACAO = 'COTACAO'
 VENDA_STATUS_CONFIRMADO = 'CONFIRMADO'
 VENDA_STATUS_FATURADO = 'FATURADO'
 VENDA_STATUS_CANCELADO = 'CANCELADO'
 
 VENDA_STATUS_VALIDOS = (
+    VENDA_STATUS_INCOMPLETO,
     VENDA_STATUS_COTACAO, VENDA_STATUS_CONFIRMADO,
     VENDA_STATUS_FATURADO, VENDA_STATUS_CANCELADO,
 )
 # Status que reservam chassi (saem do estoque disponivel).
 VENDA_STATUS_RESERVA_CHASSI = (
+    VENDA_STATUS_INCOMPLETO,
     VENDA_STATUS_COTACAO, VENDA_STATUS_CONFIRMADO, VENDA_STATUS_FATURADO,
 )
 
@@ -337,4 +344,70 @@ class HoraVendaAuditoria(db.Model):
         return (
             f'<HoraVendaAuditoria venda={self.venda_id} acao={self.acao} '
             f'usuario={self.usuario}>'
+        )
+
+
+class HoraVendaPagamento(db.Model):
+    """Pagamento parcial de uma venda (1:N com HoraVenda).
+
+    Migration hora_34 (2026-05-07): permite registrar N formas de pagamento
+    em 1 pedido. Soma dos valores deve igualar `HoraVenda.valor_total` para
+    o pedido sair de status INCOMPLETO. Cada forma pode ter parcelas proprias
+    e, quando exige_aut_id=True na forma, requer `aut_id` preenchido.
+
+    Exemplo (pedido R$10.000):
+      - DINHEIRO R$3.000 (1x)
+      - PIX_AVISTA R$2.500 (1x)
+      - CARTAO_CREDITO R$4.500 (12x, aut_id='123456')
+    """
+    __tablename__ = 'hora_venda_pagamento'
+
+    id = db.Column(db.Integer, primary_key=True)
+    venda_id = db.Column(
+        db.Integer,
+        db.ForeignKey('hora_venda.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    forma_pagamento_hora = db.Column(db.String(20), nullable=False)
+    # Sem FK formal para hora_tagplus_forma_pagamento_map para preservar
+    # historicidade — se a forma for renomeada/removida, o pagamento mantem
+    # o nome usado no momento do pedido.
+
+    valor = db.Column(db.Numeric(15, 2), nullable=False)
+    numero_parcelas = db.Column(db.Integer, nullable=False, default=1)
+    aut_id = db.Column(db.String(50), nullable=True)
+    # Numero de autorizacao / comprovante. Obrigatorio quando a forma de
+    # pagamento esta marcada com `exige_aut_id=True` em
+    # HoraTagPlusFormaPagamentoMap.
+
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+
+    venda = db.relationship(
+        'HoraVenda',
+        backref=db.backref(
+            'pagamentos',
+            cascade='all, delete-orphan',
+            lazy='selectin',
+            order_by='HoraVendaPagamento.id',
+        ),
+    )
+
+    @property
+    def forma_map(self):
+        """Lookup tardio do mapeamento TagPlus (tipo + exige_aut_id).
+
+        Pode retornar None se a forma foi removida do cadastro depois.
+        """
+        from app.hora.models.tagplus import HoraTagPlusFormaPagamentoMap
+        return (
+            HoraTagPlusFormaPagamentoMap.query
+            .filter_by(forma_pagamento_hora=self.forma_pagamento_hora)
+            .first()
+        )
+
+    def __repr__(self):
+        return (
+            f'<HoraVendaPagamento venda={self.venda_id} '
+            f'{self.forma_pagamento_hora}={self.valor} '
+            f'({self.numero_parcelas}x)>'
         )

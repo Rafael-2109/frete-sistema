@@ -35,10 +35,13 @@
     <table class="table align-middle" id="tabela-formas">
       <thead>
         <tr>
-          <th style="width: 22%;">Forma HORA</th>
-          <th style="width: 14%;">ID TagPlus (int)</th>
-          <th style="width: 18%;" title="Determina qual preço do modelo (à vista vs a prazo) será trazido no Pedido de Venda quando essa forma for escolhida.">
+          <th style="width: 20%;">Forma HORA</th>
+          <th style="width: 12%;">ID TagPlus (int)</th>
+          <th style="width: 16%;" title="Determina qual preço do modelo (à vista vs a prazo) será trazido no Pedido de Venda quando essa forma for escolhida.">
             Tipo de pagamento
+          </th>
+          <th style="width: 10%;" title="Quando marcado, o vendedor deve preencher o número de autorização ao usar essa forma em um pedido de venda (típico de cartão).">
+            Exige AUT/ID
           </th>
           <th>Descrição (opcional)</th>
           <th style="width: 8%;"></th>
@@ -66,6 +69,13 @@
                 <option value="A_VISTA" {% if r.map and r.map.tipo_pagamento == 'A_VISTA' %}selected{% endif %}>À vista</option>
                 <option value="A_PRAZO" {% if r.map and r.map.tipo_pagamento == 'A_PRAZO' %}selected{% endif %}>A prazo</option>
               </select>
+            </td>
+            <td class="text-center">
+              <input type="checkbox"
+                     class="form-check-input chk-aut"
+                     name="exige_aut_id[]"
+                     value="{{ loop.index0 }}"
+                     {% if r.map and r.map.exige_aut_id %}checked{% endif %}>
             </td>
             <td>
               <input type="text" class="form-control form-control-sm"
@@ -119,11 +129,26 @@
         '<option value="A_VISTA">À vista</option>' +
         '<option value="A_PRAZO">A prazo</option>' +
         '</select></td>' +
+        '<td class="text-center"><input type="checkbox" class="form-check-input chk-aut" name="exige_aut_id[]" value="0"></td>' +
         '<td><input type="text" class="form-control form-control-sm" name="descricao[]"></td>' +
         '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row">' +
         '<i class="fas fa-times"></i></button></td>';
       tbody.appendChild(tr);
       tr.querySelector('input[name="forma[]"]').focus();
+    });
+  }
+  // Antes de submit: reindexa value de cada checkbox `exige_aut_id` com a
+  // posicao da linha (essencial para `aut_form` sincronizar com `forma[]`).
+  const formEl = document.querySelector('form[action$="forma_pag_salvar"], form[action*="forma-map"], form[action*="formas-pagamento"]');
+  // Fallback robusto: o form e o unico do tipo POST nesta pagina.
+  const formAct = document.querySelector('form[method="post"]');
+  if (formAct) {
+    formAct.addEventListener('submit', function () {
+      const linhas = tbody ? tbody.querySelectorAll('tr') : [];
+      linhas.forEach((tr, idx) => {
+        const chk = tr.querySelector('.chk-aut');
+        if (chk) chk.value = String(idx);
+      });
     });
   }
   document.addEventListener('click', function (e) {

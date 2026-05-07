@@ -800,6 +800,7 @@ def tagplus_forma_map_salvar():
     ids_form = request.form.getlist('tagplus_id[]')
     descs_form = request.form.getlist('descricao[]')
     tipos_form = request.form.getlist('tipo_pagamento[]')
+    aut_form = request.form.getlist('exige_aut_id[]')
 
     # Garante alinhamento de listas (linhas adicionadas por JS podem nao ter
     # o tipo_pagamento se template antigo cachado). Pad com None.
@@ -815,6 +816,11 @@ def tagplus_forma_map_salvar():
         tagplus_id = (id_raw or '').strip()
         descricao = (desc_raw or '').strip() or None
         tipo_pgto = (tipo_raw or '').strip().upper() or None
+        # exige_aut_id chega como '1' (checkbox marcado) ou ausente. Como
+        # form-array nao envia o checkbox quando desmarcado, usar lista
+        # paralela de "indices marcados" via name=exige_aut_id[] value=idx.
+        # Aqui o getlist retorna a lista dos indices marcados.
+        exige_aut = str(idx) in aut_form
         if tipo_pgto and tipo_pgto not in TIPOS_PAGAMENTO_VALIDOS:
             flash(
                 f'tipo_pagamento invalido para {forma}: {tipo_pgto!r} '
@@ -849,12 +855,14 @@ def tagplus_forma_map_salvar():
             existente.tagplus_forma_id = tagplus_id_int
             existente.descricao = descricao
             existente.tipo_pagamento = tipo_pgto
+            existente.exige_aut_id = exige_aut
         else:
             db.session.add(HoraTagPlusFormaPagamentoMap(
                 forma_pagamento_hora=forma,
                 tagplus_forma_id=tagplus_id_int,
                 descricao=descricao,
                 tipo_pagamento=tipo_pgto,
+                exige_aut_id=exige_aut,
             ))
     db.session.commit()
     flash(f'Mapeamentos salvos ({len(nomes_processados)} formas processadas).', 'success')
@@ -1080,13 +1088,46 @@ def tagplus_pedido_venda_criar():
         flash(f'Modalidade de frete invalida: {mod_frete!r} (esperado 0 ou 1).', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
-    # Parcelamento: intervalo fixo em 30 dias (campo removido do formulario).
-    try:
-        n_parcelas = int(_g('numero_parcelas', 3) or '1')
-    except ValueError:
-        flash('Numero de parcelas invalido.', 'danger')
-        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+    # Parcelamento legacy (cache): pega numero_parcelas da MAIOR forma a prazo,
+    # senao 1. Service agora persiste parcelas por forma em hora_venda_pagamento.
     intervalo = 30
+    n_parcelas = 1  # cache HoraVenda.numero_parcelas (legacy); real fica em pagamentos.
+
+    # Pagamentos multi-formas (migration hora_34): listas paralelas vindas do
+    # form (cada index = uma forma). Listas vazias -> pedido nasce INCOMPLETO.
+    formas_lista = request.form.getlist('pagamento_forma')
+    valores_lista = request.form.getlist('pagamento_valor')
+    parcelas_lista = request.form.getlist('pagamento_parcelas')
+    aut_ids_lista = request.form.getlist('pagamento_aut_id')
+
+    pagamentos_in: list[dict] = []
+    for i, forma_raw in enumerate(formas_lista):
+        forma = (forma_raw or '').strip().upper()
+        if not forma:
+            continue
+        valor_raw_p = valores_lista[i] if i < len(valores_lista) else '0'
+        # Normaliza formato BR (1.234,56) ou ingles (1234.56).
+        valor_str = (valor_raw_p or '').strip()
+        if ',' in valor_str:
+            valor_str = valor_str.replace('.', '').replace(',', '.')
+        try:
+            valor_p = Decimal(valor_str) if valor_str else Decimal('0')
+        except (InvalidOperation, ValueError):
+            continue
+        try:
+            par_p = int((parcelas_lista[i] if i < len(parcelas_lista) else '1') or '1')
+        except ValueError:
+            par_p = 1
+        aut_p = (aut_ids_lista[i] if i < len(aut_ids_lista) else '').strip() or None
+        pagamentos_in.append({
+            'forma_pagamento_hora': forma,
+            'valor': valor_p,
+            'numero_parcelas': par_p,
+            'aut_id': aut_p,
+        })
+    # Cache legacy: usa parcelas da PRIMEIRA forma como n_parcelas para o header.
+    if pagamentos_in:
+        n_parcelas = pagamentos_in[0]['numero_parcelas'] or 1
 
     # Vendedor: SELECT no form, default = usuario logado. Server valida que o
     # nome enviado pertence a um usuario HORA-habilitado (defesa em
@@ -1139,7 +1180,7 @@ def tagplus_pedido_venda_criar():
             endereco_uf=_g('uf', 2),
             numero_chassi=_g('chassi', 30),
             valor_final=valor_dec,
-            forma_pagamento=_g('forma_pagamento', 20),
+            forma_pagamento=None,  # Legacy fallback: nao mais usado se ha pagamentos.
             telefone_cliente=_g('telefone', 20) or None,
             email_cliente=_g('email', 120) or None,
             vendedor=vendedor_final,
@@ -1149,16 +1190,24 @@ def tagplus_pedido_venda_criar():
             intervalo_parcelas_dias=intervalo,
             criado_por=_operador(),
             loja_id_override=loja_id_int,
+            pagamentos=pagamentos_in,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
-    flash(
-        f'Pedido de venda #{venda.id} criado para {venda.nome_cliente}. '
-        f'Confirme o pedido e emita a NFe.',
-        'success',
-    )
+    if venda.status == 'INCOMPLETO':
+        flash(
+            f'Pedido #{venda.id} salvo como INCOMPLETO — complete as formas de '
+            f'pagamento antes de faturar.',
+            'warning',
+        )
+    else:
+        flash(
+            f'Pedido de venda #{venda.id} criado para {venda.nome_cliente}. '
+            f'Confirme o pedido e emita a NFe.',
+            'success',
+        )
     return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
 
 

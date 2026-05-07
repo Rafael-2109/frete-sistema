@@ -173,6 +173,13 @@ class HoraTagPlusFormaPagamentoMap(db.Model):
     # garante apenas esses valores. Usado pelo pedido de venda manual para
     # decidir qual preço do modelo trazer (preco_a_vista vs preco_a_prazo).
 
+    exige_aut_id = db.Column(
+        db.Boolean, nullable=False, default=False, server_default='false',
+    )
+    # Migration hora_34 (2026-05-07): quando True, ao usar essa forma em
+    # criar pedido de venda, o vendedor deve preencher `aut_id` (nº de
+    # autorizacao / comprovante). Tipico de cartao de credito.
+
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     atualizado_em = db.Column(db.DateTime, nullable=True, onupdate=agora_utc_naive)
 

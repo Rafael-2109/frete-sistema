@@ -35,10 +35,12 @@ from app.hora.models import (
     HoraVenda,
     HoraVendaDivergencia,
     HoraVendaItem,
+    HoraVendaPagamento,
     VENDA_STATUS_CANCELADO,
     VENDA_STATUS_CONFIRMADO,
     VENDA_STATUS_COTACAO,
     VENDA_STATUS_FATURADO,
+    VENDA_STATUS_INCOMPLETO,
 )
 from app.hora.models.tagplus import (
     HoraTagPlusNfeEmissao,
@@ -393,7 +395,141 @@ def _resolver_preco_tabela(
 
 
 # --------------------------------------------------------------------------
-# Fluxo de criacao manual: COTACAO + lock pessimista + evento RESERVADA
+# Helpers de pagamento (multi-formas — migration hora_34)
+# --------------------------------------------------------------------------
+
+def _normalizar_pagamentos(pagamentos: Optional[List[dict]]) -> List[dict]:
+    """Sanitiza lista de pagamentos vindas do form/API.
+
+    Cada item de entrada deve ter as chaves:
+        forma_pagamento_hora: str (obrigatorio)
+        valor: Decimal | str (obrigatorio, > 0)
+        numero_parcelas: int (default 1)
+        aut_id: str | None (opcional)
+
+    Retorna lista normalizada (forma upper, valor Decimal, parcelas int >= 1,
+    aut_id stripped). Pagamentos com `valor <= 0` ou `forma` vazia sao
+    descartados silenciosamente.
+    """
+    if not pagamentos:
+        return []
+    out: List[dict] = []
+    for p in pagamentos:
+        forma = (p.get('forma_pagamento_hora') or '').strip().upper()
+        if not forma:
+            continue
+        try:
+            valor = Decimal(str(p.get('valor') or '0'))
+        except Exception:
+            continue
+        if valor <= 0:
+            continue
+        try:
+            parcelas = int(p.get('numero_parcelas') or 1)
+        except (TypeError, ValueError):
+            parcelas = 1
+        if parcelas < 1 or parcelas > 60:
+            parcelas = 1
+        aut = (p.get('aut_id') or '').strip() or None
+        out.append({
+            'forma_pagamento_hora': forma[:20],
+            'valor': valor,
+            'numero_parcelas': parcelas,
+            'aut_id': aut[:50] if aut else None,
+        })
+    return out
+
+
+def _classificar_formas_para_preco(pagamentos: List[dict]) -> Optional[str]:
+    """Retorna nome da forma representativa para resolver preco do modelo.
+
+    Regra (decisao do dono em 2026-05-07): se QUALQUER pagamento e A_PRAZO,
+    o preco do modelo deve ser A_PRAZO. Senao, A_VISTA. Esta funcao escolhe
+    uma forma "vencedora" para passar ao `_buscar_preco_modelo` existente.
+
+    Retorna:
+        - Nome de uma forma A_PRAZO se houver alguma na lista.
+        - Senao, nome de uma forma A_VISTA se houver.
+        - Senao, primeiro nome bruto (caller cai em fallback de tabela legada).
+        - None se lista vazia.
+    """
+    from app.hora.models.tagplus import (
+        HoraTagPlusFormaPagamentoMap,
+        TIPO_PAGAMENTO_A_PRAZO,
+        TIPO_PAGAMENTO_A_VISTA,
+    )
+    if not pagamentos:
+        return None
+    nomes = [p['forma_pagamento_hora'] for p in pagamentos]
+    mapas = (
+        HoraTagPlusFormaPagamentoMap.query
+        .filter(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora.in_(nomes))
+        .all()
+    )
+    mapas_por_nome = {m.forma_pagamento_hora: m for m in mapas}
+    for nome in nomes:
+        m = mapas_por_nome.get(nome)
+        if m and m.tipo_pagamento == TIPO_PAGAMENTO_A_PRAZO:
+            return nome
+    for nome in nomes:
+        m = mapas_por_nome.get(nome)
+        if m and m.tipo_pagamento == TIPO_PAGAMENTO_A_VISTA:
+            return nome
+    return nomes[0]
+
+
+def _avaliar_status_pagamento(
+    pagamentos: List[dict],
+    valor_total: Decimal,
+) -> tuple[str, List[str]]:
+    """Decide se a venda nasce COTACAO ou INCOMPLETO baseado nos pagamentos.
+
+    Criterios para INCOMPLETO (qualquer um dispara):
+      - lista de pagamentos vazia.
+      - soma dos valores != valor_total (tolerancia R$ 0,01 para arred).
+      - alguma forma exige_aut_id=True com aut_id vazio/None.
+
+    Returns:
+        (status, motivos): status = VENDA_STATUS_COTACAO ou VENDA_STATUS_INCOMPLETO.
+        motivos: lista de strings explicativas (vazio se status=COTACAO).
+    """
+    motivos: List[str] = []
+    if not pagamentos:
+        motivos.append('Nenhuma forma de pagamento informada.')
+        return VENDA_STATUS_INCOMPLETO, motivos
+
+    soma = sum((p['valor'] for p in pagamentos), Decimal('0'))
+    diff = (soma - Decimal(str(valor_total))).copy_abs()
+    if diff > Decimal('0.01'):
+        motivos.append(
+            f'Soma das formas de pagamento (R$ {soma}) difere do valor total '
+            f'(R$ {valor_total}).'
+        )
+
+    # Aut/ID: checar formas com exige_aut_id=True.
+    from app.hora.models.tagplus import HoraTagPlusFormaPagamentoMap
+    nomes = [p['forma_pagamento_hora'] for p in pagamentos]
+    mapas = (
+        HoraTagPlusFormaPagamentoMap.query
+        .filter(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora.in_(nomes))
+        .all()
+    )
+    mapas_por_nome = {m.forma_pagamento_hora: m for m in mapas}
+    for p in pagamentos:
+        m = mapas_por_nome.get(p['forma_pagamento_hora'])
+        if m and m.exige_aut_id and not p.get('aut_id'):
+            motivos.append(
+                f'Forma {p["forma_pagamento_hora"]} exige AUT/ID — preencher '
+                f'numero de autorizacao.'
+            )
+
+    if motivos:
+        return VENDA_STATUS_INCOMPLETO, motivos
+    return VENDA_STATUS_COTACAO, []
+
+
+# --------------------------------------------------------------------------
+# Fluxo de criacao manual: COTACAO/INCOMPLETO + lock pessimista + RESERVADA
 # --------------------------------------------------------------------------
 
 def criar_venda_manual(
@@ -408,7 +544,7 @@ def criar_venda_manual(
     endereco_uf: Optional[str],
     numero_chassi: str,
     valor_final: Decimal,
-    forma_pagamento: str,
+    forma_pagamento: Optional[str] = None,
     telefone_cliente: Optional[str] = None,
     email_cliente: Optional[str] = None,
     vendedor: Optional[str] = None,
@@ -418,23 +554,32 @@ def criar_venda_manual(
     intervalo_parcelas_dias: int = 30,
     criado_por: Optional[str] = None,
     loja_id_override: Optional[int] = None,
+    pagamentos: Optional[List[dict]] = None,
 ) -> HoraVenda:
-    """Cria pedido de venda manual em status COTACAO.
+    """Cria pedido de venda manual em status COTACAO ou INCOMPLETO.
 
-    1. Valida CPF, nome, valor, forma_pagamento, chassi.
+    1. Valida CPF, nome, valor, chassi.
     2. SELECT FOR UPDATE no chassi (impede 2 operadores reservarem o mesmo).
-    3. Resolve loja_id da venda:
-       - Se `loja_id_override` fornecido (operador escolheu loja no SELECT
-         do form): essa e a loja oficial da venda. O chassi pode estar
-         fisicamente em outra loja — equivale a uma transferencia implicita
-         no momento da reserva.
-       - Caso contrario, usa a loja do ultimo evento do chassi (default).
-       Em ambos os casos, `HoraVenda.loja_id` e o evento RESERVADA usam o
-       mesmo valor — invariante de consistencia interna mantida.
-    4. Resolve preco tabela vigente.
-    5. Cria HoraVenda(status=COTACAO) + HoraVendaItem.
-    6. Emite evento RESERVADA (saida do estoque disponivel).
-    7. Auditoria: CRIOU.
+    3. Resolve loja_id da venda (override do form ou loja do chassi).
+    4. Multi-formas (migration hora_34): aceita `pagamentos: List[dict]` com
+       N formas. Compat: se nao informado mas `forma_pagamento` sim, gera
+       1 pagamento sintetico com valor=valor_final.
+    5. Resolve preco do modelo: se QUALQUER forma e A_PRAZO -> preco a prazo.
+    6. Decide status final via `_avaliar_status_pagamento`:
+       - COTACAO se pagamentos validos (soma == valor_total + AUT/ID OK).
+       - INCOMPLETO senao (vendedor pode editar e completar depois).
+    7. Cria HoraVenda + HoraVendaItem + N HoraVendaPagamento.
+    8. Emite evento RESERVADA mesmo em INCOMPLETO (chassi reservado).
+    9. Auditoria: CRIOU.
+
+    Args:
+        forma_pagamento: legacy. Quando `pagamentos` nao fornecido, gera 1
+            pagamento sintetico com essa forma e valor=valor_final. Se ambos
+            None, status final sera INCOMPLETO (sem forma).
+        pagamentos: lista de dicts com keys forma_pagamento_hora, valor,
+            numero_parcelas, aut_id. Soma deve igualar valor_final para sair
+            INCOMPLETO. Pagamentos invalidos (valor<=0 ou forma vazia) sao
+            descartados.
     """
     # Aceita CPF (11) ou CNPJ (14) — coluna `cpf_cliente` eh String(14) e
     # comporta ambos. Ver app/hora/services/tagplus/_documento.py.
@@ -453,9 +598,34 @@ def criar_venda_manual(
     if valor_final is None or Decimal(valor_final) <= 0:
         raise ValueError('Valor final deve ser maior que zero')
 
-    forma_norm = (forma_pagamento or '').strip().upper()
-    if not forma_norm or forma_norm == 'NAO_INFORMADO':
-        raise ValueError('Forma de pagamento obrigatoria')
+    valor_final_dec_pre = Decimal(str(valor_final))
+
+    # Compat: se `pagamentos` nao foi fornecido mas `forma_pagamento` sim,
+    # cria pagamento sintetico (1 forma com valor=valor_final). Se nem um
+    # nem outro, lista fica vazia -> status final sera INCOMPLETO.
+    pagamentos_norm = _normalizar_pagamentos(pagamentos)
+    if not pagamentos_norm and forma_pagamento:
+        forma_legacy = (forma_pagamento or '').strip().upper()
+        if forma_legacy and forma_legacy != 'NAO_INFORMADO':
+            pagamentos_norm = [{
+                'forma_pagamento_hora': forma_legacy[:20],
+                'valor': valor_final_dec_pre,
+                'numero_parcelas': max(1, int(numero_parcelas or 1)),
+                'aut_id': None,
+            }]
+
+    # Forma representativa para resolucao de preco (qualquer A_PRAZO -> A_PRAZO).
+    forma_para_preco = _classificar_formas_para_preco(pagamentos_norm)
+
+    # forma_pagamento legacy (cache em HoraVenda): MISTO se >1 forma distinta;
+    # senao, a unica forma; senao, 'NAO_INFORMADO'.
+    formas_distintas = {p['forma_pagamento_hora'] for p in pagamentos_norm}
+    if len(formas_distintas) >= 2:
+        forma_norm = 'MISTO'
+    elif len(formas_distintas) == 1:
+        forma_norm = next(iter(formas_distintas))
+    else:
+        forma_norm = 'NAO_INFORMADO'
 
     mod_frete = (modalidade_frete or '9').strip()
     if mod_frete not in ('0', '1', '2', '3', '4', '9'):
@@ -507,7 +677,13 @@ def criar_venda_manual(
         tabela_preco_id, divergencia_tipo,
     ) = _resolver_preco_tabela(
         moto.modelo_id, data_venda, valor_final_dec,
-        forma_pagamento_hora=forma_norm,
+        forma_pagamento_hora=forma_para_preco,
+    )
+
+    # Status final: COTACAO se pagamentos consistentes, senao INCOMPLETO.
+    # INCOMPLETO ainda reserva chassi; bloqueia confirmar/emitir NFe.
+    status_final, motivos_incompleto = _avaliar_status_pagamento(
+        pagamentos_norm, valor_final_dec,
     )
 
     venda = HoraVenda(
@@ -526,7 +702,7 @@ def criar_venda_manual(
         parser_usado=None,
         parseada_em=None,
         cnpj_emitente=None,
-        status=VENDA_STATUS_COTACAO,
+        status=status_final,
         vendedor=(vendedor or '').strip()[:100] or None,
         observacoes=(observacoes or '').strip() or None,
         cep=cep_formatado,
@@ -575,7 +751,20 @@ def criar_venda_manual(
                 valor_conferido=str(valor_final_dec),
             )
 
-    # Evento RESERVADA: tira chassi do estoque disponivel.
+    # Persistencia das N formas de pagamento (multi-formas).
+    for p in pagamentos_norm:
+        db.session.add(HoraVendaPagamento(
+            venda_id=venda.id,
+            forma_pagamento_hora=p['forma_pagamento_hora'],
+            valor=p['valor'],
+            numero_parcelas=p['numero_parcelas'],
+            aut_id=p['aut_id'],
+        ))
+    if pagamentos_norm:
+        db.session.flush()
+
+    # Evento RESERVADA: tira chassi do estoque disponivel — emitido mesmo em
+    # INCOMPLETO (a reserva e' valida; a venda e' que ainda esta a completar).
     registrar_evento(
         numero_chassi=chassi_norm,
         tipo='RESERVADA',
@@ -583,16 +772,19 @@ def criar_venda_manual(
         origem_id=venda_item.id,
         loja_id=loja_id,
         operador=criado_por,
-        detalhe=f'Pedido #{venda.id} (COTACAO) para {nome_norm} CPF {cpf_norm}',
+        detalhe=f'Pedido #{venda.id} ({status_final}) para {nome_norm} CPF {cpf_norm}',
     )
 
+    detalhe_audit = (
+        f'Pedido manual ({status_final}) chassi={chassi_norm} '
+        f'cliente={nome_norm} valor={valor_final_dec}'
+    )
+    if motivos_incompleto:
+        detalhe_audit += f' INCOMPLETO: {"; ".join(motivos_incompleto)}'
     venda_audit.registrar_auditoria(
         venda_id=venda.id, usuario=criado_por or '',
         acao='CRIOU',
-        detalhe=(
-            f'Pedido manual (COTACAO) chassi={chassi_norm} '
-            f'cliente={nome_norm} valor={valor_final_dec}'
-        ),
+        detalhe=detalhe_audit,
     )
 
     db.session.commit()
@@ -611,6 +803,11 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
     venda = HoraVenda.query.get(venda_id)
     if not venda:
         raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.status == VENDA_STATUS_INCOMPLETO:
+        raise TransicaoInvalidaError(
+            f'Pedido {venda_id} esta INCOMPLETO — complete formas de pagamento '
+            f'(soma == valor total + AUT/ID quando exigido) antes de confirmar.'
+        )
     if venda.status != VENDA_STATUS_COTACAO:
         raise TransicaoInvalidaError(
             f'Pedido {venda_id} esta em {venda.status}; so COTACAO pode ser confirmado.'
@@ -629,6 +826,81 @@ def confirmar_venda(venda_id: int, usuario: Optional[str] = None) -> HoraVenda:
         venda_id=venda.id, usuario=usuario or '',
         acao='CONFIRMOU',
         detalhe=f'Pedido confirmado ({len(venda.itens)} chassi(s)).',
+    )
+
+    db.session.commit()
+    return venda
+
+
+def editar_pagamentos(
+    venda_id: int,
+    pagamentos: List[dict],
+    usuario: Optional[str] = None,
+) -> HoraVenda:
+    """Substitui as formas de pagamento de uma venda e re-avalia status.
+
+    Permitido em status INCOMPLETO ou COTACAO (vendedor completando ou
+    ajustando antes de confirmar). Bloqueado em CONFIRMADO/FATURADO/CANCELADO.
+
+    Mecanica:
+      1. Apaga HoraVendaPagamento existentes da venda.
+      2. Cria os novos a partir de `pagamentos` (normalizados).
+      3. Re-avalia status via _avaliar_status_pagamento (INCOMPLETO ou COTACAO).
+      4. Atualiza HoraVenda.forma_pagamento legacy (MISTO se >1 forma).
+      5. Auditoria EDITOU_HEADER.
+
+    Args:
+        pagamentos: lista [{forma_pagamento_hora, valor, numero_parcelas, aut_id}].
+    """
+    venda = HoraVenda.query.get(venda_id)
+    if not venda:
+        raise ValueError(f'Venda {venda_id} nao encontrada')
+    if venda.status not in (VENDA_STATUS_INCOMPLETO, VENDA_STATUS_COTACAO):
+        raise TransicaoInvalidaError(
+            f'Pedido {venda_id} esta em {venda.status}; pagamentos so podem ser '
+            f'editados em INCOMPLETO ou COTACAO.'
+        )
+
+    pagamentos_norm = _normalizar_pagamentos(pagamentos)
+    valor_total_dec = Decimal(str(venda.valor_total))
+
+    novo_status, motivos = _avaliar_status_pagamento(pagamentos_norm, valor_total_dec)
+
+    # Apaga pagamentos atuais e recria.
+    HoraVendaPagamento.query.filter_by(venda_id=venda.id).delete()
+    db.session.flush()
+    for p in pagamentos_norm:
+        db.session.add(HoraVendaPagamento(
+            venda_id=venda.id,
+            forma_pagamento_hora=p['forma_pagamento_hora'],
+            valor=p['valor'],
+            numero_parcelas=p['numero_parcelas'],
+            aut_id=p['aut_id'],
+        ))
+
+    # forma_pagamento legacy (cache).
+    formas_distintas = {p['forma_pagamento_hora'] for p in pagamentos_norm}
+    if len(formas_distintas) >= 2:
+        venda.forma_pagamento = 'MISTO'
+    elif len(formas_distintas) == 1:
+        venda.forma_pagamento = next(iter(formas_distintas))[:20]
+    else:
+        venda.forma_pagamento = 'NAO_INFORMADO'
+
+    status_antes = venda.status
+    venda.status = novo_status
+
+    detalhe = (
+        f'Pagamentos editados: {len(pagamentos_norm)} forma(s). '
+        f'Status {status_antes}->{novo_status}.'
+    )
+    if motivos:
+        detalhe += ' Motivos INCOMPLETO: ' + '; '.join(motivos)
+    venda_audit.registrar_auditoria(
+        venda_id=venda.id, usuario=usuario or '',
+        acao='EDITOU_HEADER',
+        campo_alterado='pagamentos',
+        detalhe=detalhe,
     )
 
     db.session.commit()
@@ -1854,6 +2126,7 @@ __all__ = [
     'criar_venda_manual',
     'confirmar_venda',
     'editar_venda',
+    'editar_pagamentos',
     'adicionar_item_pedido',
     'remover_item_pedido',
     'editar_item_pedido',

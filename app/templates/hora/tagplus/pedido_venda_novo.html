@@ -156,6 +156,15 @@
 
       <hr class="my-3">
 
+      <!-- Preços de referência do modelo (leve, informativo): -->
+      <div id="precos-ref-modelo" class="text-muted small mb-2"
+           style="display:none;">
+        <i class="fas fa-tag"></i>
+        <span>Tabela:</span>
+        <span class="ms-2">À vista: <strong id="ref-preco-avista">—</strong></span>
+        <span class="ms-3">A prazo: <strong id="ref-preco-aprazo">—</strong></span>
+      </div>
+
       <div class="row g-3 align-items-start">
         <div class="col-md-3">
           <label class="form-label">
@@ -195,30 +204,63 @@
     <div class="card-header"><strong><i class="fas fa-money-bill-wave"></i> Pagamento</strong></div>
     <div class="card-body">
       <div class="row g-3">
-        <div class="col-md-6">
-          <label class="form-label">Forma de pagamento <span class="text-danger">*</span></label>
-          <select name="forma_pagamento" id="f-forma-pagamento" class="form-select" required>
-            <option value="">— escolha —</option>
-            {% for f in formas_pagamento %}
-              <option value="{{ f.forma_pagamento_hora }}"
-                      data-tipo="{{ f.tipo_pagamento or '' }}">
-                {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}{% if f.tipo_pagamento == 'A_VISTA' %} (à vista){% elif f.tipo_pagamento == 'A_PRAZO' %} (a prazo){% endif %}
-              </option>
-            {% endfor %}
-          </select>
-          <small class="text-muted">
-            Apenas formas mapeadas no TagPlus aparecem aqui. O tipo (à vista vs a prazo)
-            define qual preço do modelo sera trazido.
-          </small>
+        <div class="col-12">
+          <p class="text-muted mb-2">
+            <i class="fas fa-info-circle"></i>
+            Adicione uma ou mais formas de pagamento. A soma dos valores deve
+            igualar o <strong>Valor final</strong> da moto. Pedidos com soma
+            divergente ou AUT/ID faltando são salvos como
+            <span class="badge bg-warning text-dark">INCOMPLETO</span> e não podem ser faturados até completar.
+          </p>
+          <div id="pagamentos-container">
+            <!-- linhas de pagamento adicionadas via JS -->
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btn-add-pagamento">
+            <i class="fas fa-plus"></i> Adicionar forma de pagamento
+          </button>
+          <div class="mt-2 d-flex gap-3 small">
+            <span>Total formas: <strong id="pag-soma">R$ 0,00</strong></span>
+            <span>Pedido: <strong id="pag-total-pedido">R$ 0,00</strong></span>
+            <span id="pag-status-aviso" class="text-danger" style="display:none;"></span>
+          </div>
         </div>
-        <div class="col-md-6">
-          <label class="form-label">Nº de parcelas</label>
-          <input type="number" name="numero_parcelas" class="form-control"
-                 min="1" max="60" value="1">
-          <small class="text-muted">
-            1 = à vista. Máx 60. Intervalo entre parcelas fixo em 30 dias.
-          </small>
-        </div>
+        <!-- Template (escondido) usado pelo JS para adicionar nova linha de pagamento -->
+        <template id="tpl-linha-pagamento">
+          <div class="row g-2 align-items-end mb-2 pag-linha border rounded p-2">
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Forma <span class="text-danger">*</span></label>
+              <select name="pagamento_forma" class="form-select form-select-sm pag-forma" required>
+                <option value="">— escolha —</option>
+                {% for f in formas_pagamento %}
+                  <option value="{{ f.forma_pagamento_hora }}"
+                          data-tipo="{{ f.tipo_pagamento or '' }}"
+                          data-aut="{{ '1' if f.exige_aut_id else '0' }}">
+                    {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}{% if f.tipo_pagamento == 'A_VISTA' %} (à vista){% elif f.tipo_pagamento == 'A_PRAZO' %} (a prazo){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">Valor (R$) <span class="text-danger">*</span></label>
+              <input type="text" name="pagamento_valor" class="form-control form-control-sm pag-valor"
+                     inputmode="decimal" placeholder="0,00" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1">Parcelas</label>
+              <input type="number" name="pagamento_parcelas" class="form-control form-control-sm pag-parcelas"
+                     min="1" max="60" value="1">
+            </div>
+            <div class="col-md-2 pag-aut-wrap" style="display:none;">
+              <label class="form-label small mb-1">AUT/ID <span class="text-danger pag-aut-req">*</span></label>
+              <input type="text" name="pagamento_aut_id" class="form-control form-control-sm pag-aut" maxlength="50">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+              <button type="button" class="btn btn-sm btn-outline-danger pag-remover" title="Remover">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </template>
         <div class="col-md-6">
           <label class="form-label">Vendedor</label>
           <select name="vendedor" class="form-select" required>
@@ -276,10 +318,21 @@
   const elPrecoTabela = document.getElementById('f-preco-tabela');
   const elDescontoPct = document.getElementById('f-desconto-pct');
   const elDescontoRs = document.getElementById('f-desconto-rs');
-  const elFormaPgto = document.getElementById('f-forma-pagamento');
+  // Pagamentos multi-formas (migration hora_34): UI repetivel substitui o
+  // SELECT unico antigo. `formaRepresentativaParaPreco()` decide qual tipo
+  // (A_VISTA vs A_PRAZO) usar para resolver o preco do modelo.
+  const elPagContainer = document.getElementById('pagamentos-container');
+  const tplPagLinha = document.getElementById('tpl-linha-pagamento');
+  const elBtnAddPag = document.getElementById('btn-add-pagamento');
+  const elPagSoma = document.getElementById('pag-soma');
+  const elPagTotalPedido = document.getElementById('pag-total-pedido');
+  const elPagAviso = document.getElementById('pag-status-aviso');
   const elPrecoInfo = document.getElementById('preco-sugerido-info');
   const elCorStatus = document.getElementById('cor-status');
   const elChassiStatus = document.getElementById('chassi-status');
+  const elPrecosRef = document.getElementById('precos-ref-modelo');
+  const elRefAvista = document.getElementById('ref-preco-avista');
+  const elRefAprazo = document.getElementById('ref-preco-aprazo');
 
   // ----------------- Estado e helpers numericos --------------------------
   // precoTabela e o preço de referência (vindo do backend); atualizado quando
@@ -443,6 +496,114 @@
     }
   }
 
+  // ----------------- Pagamentos multi-formas -----------------------------
+  // Retorna a forma "representativa" para resolver preco — se alguma a prazo,
+  // pega ela; senao a primeira a vista. Espelha _classificar_formas_para_preco
+  // do backend (regra: qualquer A_PRAZO -> preco a prazo).
+  function formaRepresentativaParaPreco() {
+    if (!elPagContainer) return '';
+    const linhas = elPagContainer.querySelectorAll('.pag-linha');
+    let primeiraAVista = '';
+    for (const linha of linhas) {
+      const sel = linha.querySelector('.pag-forma');
+      if (!sel || !sel.value) continue;
+      const opt = sel.options[sel.selectedIndex];
+      const tipo = opt ? opt.dataset.tipo : '';
+      if (tipo === 'A_PRAZO') return sel.value;
+      if (tipo === 'A_VISTA' && !primeiraAVista) primeiraAVista = sel.value;
+    }
+    return primeiraAVista;
+  }
+
+  function atualizarSomaPagamentos() {
+    if (!elPagContainer) return;
+    let soma = 0;
+    elPagContainer.querySelectorAll('.pag-valor').forEach(inp => {
+      const v = parseBR(inp.value);
+      if (!isNaN(v)) soma += v;
+    });
+    if (elPagSoma) elPagSoma.textContent = 'R$ ' + fmtBR(soma);
+    const totalPedido = parseBR(elValor.value);
+    if (elPagTotalPedido) elPagTotalPedido.textContent =
+      isNaN(totalPedido) ? 'R$ 0,00' : 'R$ ' + fmtBR(totalPedido);
+    if (elPagAviso) {
+      const diff = Math.abs(soma - (isNaN(totalPedido) ? 0 : totalPedido));
+      if (diff > 0.01) {
+        elPagAviso.textContent = '⚠ Soma das formas difere do total — pedido salvara como INCOMPLETO.';
+        elPagAviso.style.display = '';
+      } else {
+        elPagAviso.style.display = 'none';
+      }
+    }
+  }
+
+  function adicionarLinhaPagamento() {
+    if (!tplPagLinha || !elPagContainer) return;
+    const frag = tplPagLinha.content.cloneNode(true);
+    const linha = frag.querySelector('.pag-linha');
+    elPagContainer.appendChild(frag);
+    // Wire handlers da linha recem-adicionada.
+    const sel = linha.querySelector('.pag-forma');
+    const valor = linha.querySelector('.pag-valor');
+    const autWrap = linha.querySelector('.pag-aut-wrap');
+    const autInput = linha.querySelector('.pag-aut');
+    const btnRemover = linha.querySelector('.pag-remover');
+    if (sel) sel.addEventListener('change', () => {
+      const opt = sel.options[sel.selectedIndex];
+      const exigeAut = opt && opt.dataset.aut === '1';
+      if (autWrap) autWrap.style.display = exigeAut ? '' : 'none';
+      if (autInput) autInput.required = !!exigeAut;
+      atualizarPrecoTabela();
+    });
+    if (valor) {
+      valor.addEventListener('input', atualizarSomaPagamentos);
+      valor.addEventListener('blur', () => {
+        const v = parseBR(valor.value);
+        if (!isNaN(v)) setBR(valor, arred2(v));
+      });
+    }
+    if (btnRemover) btnRemover.addEventListener('click', () => {
+      linha.remove();
+      atualizarSomaPagamentos();
+      atualizarPrecoTabela();
+    });
+    atualizarSomaPagamentos();
+  }
+
+  if (elBtnAddPag) elBtnAddPag.addEventListener('click', adicionarLinhaPagamento);
+  // Inicializa com 1 linha vazia.
+  if (elPagContainer && elPagContainer.children.length === 0) {
+    adicionarLinhaPagamento();
+  }
+
+  // ----------------- Refs A_VISTA / A_PRAZO (informativo) ----------------
+  async function atualizarPrecosRef() {
+    if (!elPrecosRef) return;
+    const modeloId = elModelo.value;
+    if (!modeloId) {
+      elPrecosRef.style.display = 'none';
+      return;
+    }
+    try {
+      const r = await fetch(
+        `{{ url_for('hora.tagplus_pedido_venda_api_preco_modelo') }}?modelo_id=${modeloId}`
+      );
+      const data = await r.json();
+      if (!data.ok) { elPrecosRef.style.display = 'none'; return; }
+      const av = data.preco_a_vista;
+      const ap = data.preco_a_prazo;
+      if (av == null && ap == null) {
+        elPrecosRef.style.display = 'none';
+        return;
+      }
+      if (elRefAvista) elRefAvista.textContent = av != null ? `R$ ${fmtBR(av)}` : '—';
+      if (elRefAprazo) elRefAprazo.textContent = ap != null ? `R$ ${fmtBR(ap)}` : '—';
+      elPrecosRef.style.display = '';
+    } catch (e) {
+      elPrecosRef.style.display = 'none';
+    }
+  }
+
   // ----------------- Preço (modelo + forma) -> auto preenche -------------
   async function atualizarPrecoTabela() {
     const modeloId = elModelo.value;
@@ -454,7 +615,7 @@
       recalcular('pct');
       return;
     }
-    const forma = elFormaPgto ? elFormaPgto.value : '';
+    const forma = formaRepresentativaParaPreco();
     const params = new URLSearchParams({ modelo_id: modeloId });
     if (forma) params.set('forma_pagamento', forma);
 
@@ -554,19 +715,22 @@
     } finally {
       state.syncLock = false;
     }
+    // Notifica painel de pagamentos sobre mudanca em valor final.
+    atualizarSomaPagamentos();
   }
 
   elModelo.addEventListener('change', () => {
     carregarCores();
     atualizarPrecoTabela();
+    atualizarPrecosRef();
   });
   elCor.addEventListener('change', carregarChassis);
-  if (elFormaPgto) {
-    elFormaPgto.addEventListener('change', atualizarPrecoTabela);
-  }
   elDescontoPct.addEventListener('input', () => recalcular('pct'));
   elDescontoRs.addEventListener('input', () => recalcular('rs'));
-  elValor.addEventListener('input', () => recalcular('valor'));
+  elValor.addEventListener('input', () => {
+    recalcular('valor');
+    atualizarSomaPagamentos();
+  });
 
   // ----------------- Validacao no submit -----------------------------------
   document.getElementById('form-pedido-venda').addEventListener('submit', (e) => {

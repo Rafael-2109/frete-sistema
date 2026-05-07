@@ -84,6 +84,16 @@ echo "HORA 29: unificacao de modelos (alias + pendencias)..."
 python scripts/migrations/hora_29_modelo_alias.py \
     || echo "⚠️ Migration hora_29 falhou, continuando deploy..."
 
+# 10b. HORA 34: multiplas formas de pagamento por pedido (1:N) + exige_aut_id.
+echo "HORA 34: multiplas formas de pagamento + AUT/ID..."
+python scripts/migrations/hora_34_pagamento_multiformas.py \
+    || echo "⚠️ Migration hora_34 falhou, continuando deploy..."
+
+# 10c. HORA 35: cleanup de motos vinculadas a aliases mergidos.
+echo "HORA 35: cleanup motos em aliases mergidos..."
+python scripts/migrations/hora_35_cleanup_alias_motos.py \
+    || echo "⚠️ Migration hora_35 falhou, continuando deploy..."
+
 # 10. HORA 30: seed inicial de hora_modelo_alias.
 # Para cada modelo existente, cria alias NOME_LIVRE com nome_modelo
 # + aliases TAGPLUS_CODIGO/TAGPLUS_PRODUTO_ID a partir do legado

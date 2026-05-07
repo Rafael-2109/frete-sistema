@@ -61,16 +61,35 @@ class PayloadBuilder:
         if not venda.itens and not getattr(venda, 'itens_peca', []):
             raise PayloadBuilderError('venda_sem_itens', 'Venda sem itens (motos nem pecas).')
 
-        if venda.forma_pagamento in (None, '', 'NAO_INFORMADO'):
-            raise PayloadBuilderError(
-                'forma_pagamento_ausente',
-                'Forma de pagamento nao informada — preencher antes de emitir.'
+        # Multi-formas (migration hora_34, 2026-05-07): se venda tem
+        # `pagamentos`, valida e usa essa lista. Senao, fallback ao campo
+        # legacy `venda.forma_pagamento` (1 forma unica).
+        pagamentos_lista = list(getattr(venda, 'pagamentos', []) or [])
+        if pagamentos_lista:
+            # Validacao de coerencia: soma == valor_total.
+            soma_pag = sum(
+                (Decimal(str(p.valor)) for p in pagamentos_lista),
+                Decimal('0'),
             )
-        if venda.forma_pagamento == 'MISTO':
-            raise PayloadBuilderError(
-                'pagamento_misto_nao_suportado',
-                'Pagamento MISTO nao suportado na v1 — emitir manualmente.'
-            )
+            valor_total_dec = Decimal(str(venda.valor_total or 0))
+            if abs(soma_pag - valor_total_dec) > Decimal('0.01'):
+                raise PayloadBuilderError(
+                    'pagamentos_soma_divergente',
+                    f'Soma dos pagamentos (R$ {soma_pag}) difere do valor total '
+                    f'(R$ {valor_total_dec}). Pedido em status incompleto.'
+                )
+        else:
+            if venda.forma_pagamento in (None, '', 'NAO_INFORMADO'):
+                raise PayloadBuilderError(
+                    'forma_pagamento_ausente',
+                    'Forma de pagamento nao informada — preencher antes de emitir.'
+                )
+            if venda.forma_pagamento == 'MISTO':
+                raise PayloadBuilderError(
+                    'pagamento_misto_legacy',
+                    'Venda legacy marcada como MISTO sem detalhamento — '
+                    'editar pagamentos antes de emitir.'
+                )
 
         destinatario_id = self._resolver_destinatario(venda)
 
@@ -604,6 +623,61 @@ class PayloadBuilder:
     # Faturas
     # --------------------------------------------------------------
     def _montar_faturas(self, venda: 'HoraVenda') -> list[dict]:
+        """Monta lista de faturas para o payload TagPlus.
+
+        Multi-formas (hora_34): itera `venda.pagamentos`; cada pagamento vira
+        uma entrada `{forma_pagamento, parcelas}`. Cada uma com seu proprio
+        numero de parcelas. Documento das parcelas:
+            "<venda_id>-p<pag_id>/<idx>" se 1+ pagamento;
+            "<venda_id>/<idx>" para o caso legacy (1 forma sintetica).
+
+        Legacy (sem pagamentos): mantem comportamento antigo (1 fatura unica
+        usando venda.forma_pagamento + venda.numero_parcelas).
+        """
+        intervalo = max(1, int(venda.intervalo_parcelas_dias or 30))
+        base_date = venda.data_venda or date.today()
+
+        pagamentos_lista = list(getattr(venda, 'pagamentos', []) or [])
+
+        if pagamentos_lista:
+            # Pre-fetch de mapeamentos em 1 query.
+            nomes = [p.forma_pagamento_hora for p in pagamentos_lista]
+            mapas = (
+                HoraTagPlusFormaPagamentoMap.query
+                .filter(HoraTagPlusFormaPagamentoMap.forma_pagamento_hora.in_(nomes))
+                .all()
+            )
+            mapas_por_nome = {m.forma_pagamento_hora: m for m in mapas}
+
+            faturas: list[dict] = []
+            for pag in pagamentos_lista:
+                fmap = mapas_por_nome.get(pag.forma_pagamento_hora)
+                if not fmap:
+                    raise PayloadBuilderError(
+                        'forma_pagamento_nao_mapeada',
+                        f'forma_pagamento={pag.forma_pagamento_hora!r} sem '
+                        f'mapeamento TagPlus. Configurar em '
+                        f'/hora/tagplus/conta/formas-pagamento.',
+                    )
+                if fmap.exige_aut_id and not (pag.aut_id or '').strip():
+                    raise PayloadBuilderError(
+                        'aut_id_ausente',
+                        f'forma {pag.forma_pagamento_hora} exige AUT/ID — '
+                        f'preencher antes de emitir.',
+                    )
+                n = max(1, int(pag.numero_parcelas or 1))
+                valor_pag = Decimal(str(pag.valor))
+                doc_prefix = f'{venda.id}-p{pag.id}'
+                parcelas = self._dividir_parcelas(
+                    valor_pag, n, intervalo, base_date, doc_prefix,
+                )
+                faturas.append({
+                    'forma_pagamento': int(fmap.tagplus_forma_id),
+                    'parcelas': parcelas,
+                })
+            return faturas
+
+        # ---------- Legacy: 1 forma unica via venda.forma_pagamento ----------
         forma_map = (
             HoraTagPlusFormaPagamentoMap.query
             .filter_by(forma_pagamento_hora=venda.forma_pagamento)
@@ -621,14 +695,7 @@ class PayloadBuilder:
             Decimal('0'),
         )
 
-        # Parcelamento: N parcelas iguais com diferenca de centavos absorvida
-        # pela ULTIMA parcela. Vencimentos espacados por intervalo_dias a partir
-        # da data_venda. Documento: "<venda_id>/<idx>" para parcelas > 1
-        # (idempotencia caso TagPlus rejeite parcelado e operador re-envie).
         n = max(1, int(venda.numero_parcelas or 1))
-        intervalo = max(1, int(venda.intervalo_parcelas_dias or 30))
-        base_date = venda.data_venda or date.today()
-
         parcelas = self._dividir_parcelas(valor_total, n, intervalo, base_date, venda.id)
 
         return [{
@@ -642,18 +709,23 @@ class PayloadBuilder:
         n: int,
         intervalo_dias: int,
         base_date: 'date',
-        venda_id: int,
+        doc_prefix,
     ) -> list[dict]:
         """Divide `valor_total` em `n` parcelas iguais, ajustando ultima.
 
         Regra: cada parcela = round2(valor_total / n). Diferenca de
         arredondamento vai para a ULTIMA parcela.
+
+        Args:
+            doc_prefix: int (legacy) ou str (multi-formas: f"{venda_id}-p{pag_id}").
+                Usado como prefixo do campo `documento` para idempotencia em
+                eventual reenvio.
         """
         from datetime import timedelta
 
         if n <= 1:
             return [{
-                'documento': str(venda_id),
+                'documento': str(doc_prefix),
                 'valor_parcela': self._round2_float(valor_total),
                 'data_vencimento': base_date.isoformat(),
             }]
@@ -669,7 +741,7 @@ class PayloadBuilder:
         soma = Decimal('0.00')
         for i in range(1, n):
             parcelas.append({
-                'documento': f'{venda_id}/{i}',
+                'documento': f'{doc_prefix}/{i}',
                 'valor_parcela': float(parcela_base),
                 'data_vencimento': (base_date + timedelta(days=intervalo_dias * i)).isoformat(),
             })
@@ -679,7 +751,7 @@ class PayloadBuilder:
             Decimal('0.01'), rounding=ROUND_HALF_UP,
         )
         parcelas.append({
-            'documento': f'{venda_id}/{n}',
+            'documento': f'{doc_prefix}/{n}',
             'valor_parcela': float(ultima),
             'data_vencimento': (base_date + timedelta(days=intervalo_dias * n)).isoformat(),
         })
