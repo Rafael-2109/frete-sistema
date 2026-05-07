@@ -1,17 +1,24 @@
 """
-Conferencia Service — Conferencia de CTe Subcontratado via TabelaFrete
-=====================================================================
+Conferencia Service — Calculo de opcoes de tabela e resumo de Fatura
+======================================================================
 
-Permite conferir individualmente cada CTe de subcontratado contra as tabelas
-de frete Nacom (TabelaFrete + CidadeAtendida), usando o mesmo fluxo de
-calculo da CotacaoService.
+REFATOR 2026-05-07: Conferencia individual de frete REMOVIDA.
+A conferencia automatica de cada CarviaFrete passou a ser disparada no
+lancamento do CTe (editar_frete_carvia), via
+`AprovacaoFreteService.verificar_e_solicitar_se_necessario`. A aprovacao
+da fatura e explicita via botao "Aprovar Conferencia"
+(rota `aprovar_conferencia_fatura_transportadora`), independente do
+status individual de cada frete (so bloqueia se ha tratativa D4 pendente).
 
-Reutiliza (R1 — permitidos por isolamento):
-- app/utils/calculadora_frete.py: CalculadoraFrete.calcular_frete_unificado()
-- app/utils/tabela_frete_manager.py: TabelaFreteManager.preparar_dados_tabela()
-- app/utils/grupo_empresarial.py: GrupoEmpresarialService.obter_transportadoras_grupo()
-- app/utils/frete_simulador.py: buscar_cidade_unificada()
-- app/vinculos/models.py: CidadeAtendida
+Este service mantem:
+- `calcular_opcoes_conferencia`: read-only, usado por
+  `subcontratos/detalhe.html` (modalCotacao) para exibir opcoes de tabela
+  de frete em modo simulacao (nao registra conferencia).
+- `resumo_conferencia_fatura`: agregacao usada pela tela de conferencia da
+  fatura (gate de tolerancia de R$ 1,00).
+
+Metodos removidos: `listar_fretes_divergentes`, `registrar_conferencia`,
+`_verificar_fatura_completa`.
 """
 
 import logging
@@ -23,33 +30,21 @@ logger = logging.getLogger(__name__)
 
 
 class ConferenciaService:
-    """Servico de conferencia de CTe subcontratado contra tabelas de frete."""
+    """Servico de agregacao de conferencia de Fatura Transportadora."""
 
     def calcular_opcoes_conferencia(self, subcontrato_id: int) -> Dict:
         """
         Calcula TODAS as opcoes de frete para um subcontrato,
         para o conferente comparar com o cte_valor cobrado.
 
-        Fluxo:
-        1. Carrega sub + operacao
-        2. GrupoEmpresarialService → grupo_ids
-        3. buscar_cidade_unificada → codigo_ibge
-        4. CidadeAtendida.filter(codigo_ibge, transportadora_id.in_(grupo_ids))
-        5. TabelaFrete.filter(grupo_ids, uf_origem, uf_destino, nome_tabela)
-        6. CalculadoraFrete.calcular_frete_unificado() para cada tabela
-        7. CotacaoService._montar_descritivo() para breakdown legivel
+        Read-only. Reutilizado pela tela `subcontratos/detalhe.html`
+        (modal de cotacao simulada) — nao persiste conferencia.
 
         Args:
             subcontrato_id: ID do CarviaSubcontrato
 
         Returns:
-            Dict com:
-            - sucesso: bool
-            - subcontrato_info: {id, cte_numero, cte_valor, valor_cotado, valor_final, status}
-            - operacao_info: {id, cidade_destino, uf_destino, uf_origem, peso, valor_mercadoria}
-            - opcoes: [{tabela_nome, tipo_carga, modalidade, valor_frete, descritivo, ...}]
-            - total_opcoes: int
-            - erro: str (se falhou)
+            Dict com sucesso, subcontrato_info, operacao_info, opcoes, total_opcoes.
         """
         from app.carvia.models import CarviaSubcontrato, CarviaOperacao
 
@@ -61,7 +56,6 @@ class ConferenciaService:
         if not operacao:
             return {'sucesso': False, 'erro': 'Operacao nao encontrada'}
 
-        # Fallback defensivo: max(bruto, cubado) — consistente com CotacaoService
         peso_bruto = float(operacao.peso_bruto or 0)
         peso_cubado = float(operacao.peso_cubado or 0)
         peso = max(peso_bruto, peso_cubado)
@@ -75,8 +69,6 @@ class ConferenciaService:
         if not uf_destino:
             return {'sucesso': False, 'erro': 'UF destino nao informada'}
 
-        # Phase C (2026-04-14): status_conferencia/valor_considerado lidos
-        # via sub.frete (campos migrados para CarviaFrete)
         subcontrato_info = {
             'id': sub.id,
             'cte_numero': sub.cte_numero,
@@ -107,14 +99,11 @@ class ConferenciaService:
         try:
             from app.carvia.services.pricing.cotacao_service import CotacaoService
             cotacao_svc = CotacaoService()
-
-            # Buscar todas opcoes para a transportadora do subcontrato
             opcoes = self._buscar_opcoes_transportadora(
                 cotacao_svc, sub.transportadora_id,
                 peso, valor_mercadoria,
                 uf_destino, uf_origem, cidade_destino,
             )
-
             return {
                 'sucesso': True,
                 'subcontrato_info': subcontrato_info,
@@ -122,7 +111,6 @@ class ConferenciaService:
                 'opcoes': opcoes,
                 'total_opcoes': len(opcoes),
             }
-
         except Exception as e:
             logger.error(f"Erro ao calcular opcoes conferencia sub {subcontrato_id}: {e}")
             return {'sucesso': False, 'erro': str(e)}
@@ -131,13 +119,7 @@ class ConferenciaService:
                                        peso: float, valor_mercadoria: float,
                                        uf_destino: str, uf_origem: str,
                                        cidade_destino: str) -> list:
-        """
-        Busca todas tabelas de frete para a transportadora do subcontrato
-        e calcula frete com cada uma.
-
-        Reutiliza metodos privados da CotacaoService (mesmo modulo CarVia,
-        nao viola R1).
-        """
+        """Busca tabelas de frete da transportadora e calcula valor para cada."""
         from app.tabelas.models import TabelaFrete
         from app.transportadoras.models import Transportadora
 
@@ -146,20 +128,16 @@ class ConferenciaService:
         transportadora_nome = transportadora.razao_social if transportadora else '?'
 
         opcoes = []
-
-        # Resolver cidade para IBGE
         cidade_obj = None
         if cidade_destino:
             cidade_obj = cotacao_svc._resolver_cidade(cidade_destino, uf_destino)
 
-        # Via CidadeAtendida (preciso)
         tabelas_encontradas = {}
         if cidade_obj:
             vinculos = cotacao_svc._buscar_vinculos_cidade(cidade_obj.codigo_ibge)
             for vinculo in vinculos:
                 if vinculo.transportadora_id not in grupo_ids:
                     continue
-
                 query = TabelaFrete.query.filter(
                     TabelaFrete.transportadora_id.in_(grupo_ids),
                     TabelaFrete.uf_destino == uf_destino,
@@ -167,11 +145,9 @@ class ConferenciaService:
                 )
                 if uf_origem:
                     query = query.filter(TabelaFrete.uf_origem == uf_origem)
-
                 for tf in query.all():
                     tabelas_encontradas[tf.id] = tf
 
-        # Fallback: busca direta por transportadora + UF
         if not tabelas_encontradas:
             query = TabelaFrete.query.filter(
                 TabelaFrete.transportadora_id.in_(grupo_ids),
@@ -182,7 +158,6 @@ class ConferenciaService:
             for tf in query.all():
                 tabelas_encontradas[tf.id] = tf
 
-        # Calcular com cada tabela
         for tabela in tabelas_encontradas.values():
             try:
                 resultado = cotacao_svc._calcular_com_tabela(
@@ -191,16 +166,12 @@ class ConferenciaService:
                 )
                 if not resultado:
                     continue
-
                 tabela_dados = resultado.get('tabela_dados', {})
                 detalhes = resultado.get('detalhes', {})
                 descritivo = cotacao_svc._montar_descritivo(
                     tabela_dados, detalhes, peso, valor_mercadoria,
                 )
-
-                # Buscar transportadora real da tabela
                 transp_tabela = db.session.get(Transportadora, tabela.transportadora_id)
-
                 opcoes.append({
                     'tabela_frete_id': tabela.id,
                     'tabela_nome': tabela.nome_tabela,
@@ -219,296 +190,8 @@ class ConferenciaService:
                 logger.warning(f"Erro ao calcular com tabela {tabela.id}: {e}")
                 continue
 
-        # Ordenar por valor
         opcoes.sort(key=lambda x: x['valor_frete'])
         return opcoes
-
-    # ==================================================================
-    # E8 (2026-04-19): Fila de resolucao de fretes DIVERGENTE
-    # ==================================================================
-
-    def listar_fretes_divergentes(self, limit=200):
-        """E8: lista fretes com status_conferencia=DIVERGENTE para resolver.
-
-        Ordenado por conferido_em asc (mais antigos primeiro — maior prioridade).
-        """
-        from app.carvia.models import CarviaFrete
-
-        try:
-            fretes = (
-                CarviaFrete.query
-                .filter(
-                    CarviaFrete.status_conferencia == 'DIVERGENTE',
-                    CarviaFrete.status != 'CANCELADO',
-                )
-                .order_by(CarviaFrete.conferido_em.asc().nullsfirst())
-                .limit(limit)
-                .all()
-            )
-        except Exception as e:
-            # Schema drift (status_conferencia ausente no DB local) nao
-            # derruba a query. Retorna lista vazia.
-            logger.warning('E8 listar_fretes_divergentes drift: %s', e)
-            db.session.rollback()
-            return []
-
-        resultado = []
-        for f in fretes:
-            resultado.append({
-                'frete_id': f.id,
-                'operacao_id': getattr(f, 'operacao_id', None),
-                'transportadora_id': f.transportadora_id,
-                'valor_cotado': float(f.valor_cotado) if f.valor_cotado else None,
-                'valor_considerado': (
-                    float(f.valor_considerado) if f.valor_considerado else None
-                ),
-                'valor_pago': float(f.valor_pago) if f.valor_pago else None,
-                'conferido_por': f.conferido_por,
-                'conferido_em': (
-                    f.conferido_em.isoformat()
-                    if f.conferido_em else None
-                ),
-                'observacoes': f.observacoes,
-            })
-        return resultado
-
-    def registrar_conferencia(self, frete_id: int, valor_considerado: float,
-                               status: str, usuario: str,
-                               observacoes: str = None,
-                               valor_pago: float = None) -> Dict:
-        """
-        Registra conferencia de um CarviaFrete (unidade de analise — paridade Nacom).
-
-        Paridade Nacom: equivalente a editar_frete com valor_considerado/pago
-        (app/fretes/routes.py:editar_frete linhas ~750-900).
-
-        REFATOR D4 (.claude/plans/wobbly-tumbling-treasure.md):
-        Quando o conferente decide DIVERGENTE, uma CarviaAprovacaoFrete
-        PENDENTE e criada via AprovacaoFreteService, e o frete fica com
-        status_conferencia='PENDENTE' + requer_aprovacao=True ate o aprovador
-        decidir. APROVADO continua sendo gravado direto (se dentro da tolerancia).
-
-        Args:
-            frete_id: ID do CarviaFrete
-            valor_considerado: Valor registrado pelo conferente
-            status: APROVADO ou DIVERGENTE (decisao inicial)
-            usuario: Email do conferente
-            observacoes: Texto opcional
-            valor_pago: Valor efetivamente pago (opcional)
-
-        Returns:
-            Dict com sucesso, status_conferencia, fatura_atualizada,
-            fatura_status, tratativa_aberta, aprovacao_id.
-        """
-        from app.carvia.models import CarviaFrete
-        from app.utils.timezone import agora_utc_naive
-        from app.utils.json_helpers import sanitize_for_json
-
-        if status not in ('APROVADO', 'DIVERGENTE'):
-            return {'sucesso': False, 'erro': 'Status deve ser APROVADO ou DIVERGENTE'}
-
-        frete = db.session.get(CarviaFrete, frete_id)
-        if not frete:
-            return {'sucesso': False, 'erro': 'Frete nao encontrado'}
-
-        if frete.status == 'CANCELADO':
-            return {'sucesso': False, 'erro': 'Frete cancelado — sem conferencia'}
-
-        try:
-            # Snapshot dos calculos (opcional — usar primary sub como proxy)
-            snapshot = None
-            primary_sub = frete.subcontratos.first()
-            if primary_sub:
-                try:
-                    resultado = self.calcular_opcoes_conferencia(primary_sub.id)
-                    if resultado.get('sucesso'):
-                        # CalculadoraFrete retorna Decimals em detalhes —
-                        # sanitize antes de gravar no JSON column (regra CLAUDE.md)
-                        snapshot = sanitize_for_json({
-                            'opcoes': resultado.get('opcoes', []),
-                            'operacao_info': resultado.get('operacao_info'),
-                            'conferido_em': str(agora_utc_naive()),
-                        })
-                except Exception as e:
-                    logger.warning(f"Erro ao gerar snapshot frete {frete_id}: {e}")
-
-            # E9 (2026-04-19): snapshot antes de mutar para gravar historico
-            status_antes_e9 = frete.status_conferencia
-            valor_considerado_antes_e9 = frete.valor_considerado
-
-            frete.valor_considerado = valor_considerado
-            if valor_pago is not None:
-                frete.valor_pago = valor_pago
-            frete.conferido_por = usuario
-            frete.conferido_em = agora_utc_naive()
-            frete.detalhes_conferencia = snapshot
-
-            if observacoes:
-                frete.observacoes = (frete.observacoes or '') + f'\n[Conferencia] {observacoes}'
-
-            # REFATOR D4: roteamento entre APROVADO direto ou abrir tratativa
-            from app.carvia.services.documentos.aprovacao_frete_service import (
-                AprovacaoFreteService,
-            )
-            aprov_svc = AprovacaoFreteService()
-
-            tratativa_aberta = False
-            aprovacao_id = None
-
-            if status == 'DIVERGENTE':
-                frete.status_conferencia = 'PENDENTE'
-                resultado_trat = aprov_svc.verificar_e_solicitar_se_necessario(
-                    frete_id=frete_id, usuario=usuario,
-                )
-                if resultado_trat.get('sucesso') and resultado_trat.get('tratativa_aberta'):
-                    tratativa_aberta = True
-                    aprovacao_id = resultado_trat.get('aprovacao_id')
-                else:
-                    frete.status_conferencia = 'DIVERGENTE'
-            else:  # APROVADO
-                resultado_trat = aprov_svc.verificar_e_solicitar_se_necessario(
-                    frete_id=frete_id, usuario=usuario,
-                )
-                if resultado_trat.get('sucesso') and resultado_trat.get('tratativa_aberta'):
-                    frete.status_conferencia = 'PENDENTE'
-                    tratativa_aberta = True
-                    aprovacao_id = resultado_trat.get('aprovacao_id')
-                else:
-                    frete.status_conferencia = 'APROVADO'
-
-            # E9 (2026-04-19): registra historico append-only da transicao.
-            # Nao-bloqueante: erro aqui nao reverte a conferencia.
-            try:
-                from app.carvia.models import CarviaConferenciaHistorico
-                hist = CarviaConferenciaHistorico(
-                    frete_id=frete_id,
-                    status_antes=status_antes_e9,
-                    status_depois=frete.status_conferencia,
-                    valor_considerado_antes=valor_considerado_antes_e9,
-                    valor_considerado_depois=valor_considerado,
-                    usuario=usuario,
-                    detalhes_json={
-                        'observacoes': observacoes,
-                        'tratativa_aberta': tratativa_aberta,
-                        'aprovacao_id': aprovacao_id,
-                    },
-                )
-                db.session.add(hist)
-            except Exception as e_hist:
-                logger.warning(
-                    'E9 historico conferencia: erro frete=%s: %s',
-                    frete_id, e_hist,
-                )
-
-            # Cascade para fatura
-            fatura_atualizada = False
-            fatura_status = None
-            if frete.fatura_transportadora_id:
-                fatura_atualizada, fatura_status = self._verificar_fatura_completa(
-                    frete.fatura_transportadora_id, usuario,
-                )
-
-            db.session.commit()
-
-            logger.info(
-                f"Conferencia registrada | frete_id={frete_id} | "
-                f"considerado={valor_considerado} | pago={valor_pago} | "
-                f"solicitado={status} | final={frete.status_conferencia} | "
-                f"tratativa={tratativa_aberta} | usuario={usuario}"
-            )
-
-            return {
-                'sucesso': True,
-                'status_conferencia': frete.status_conferencia,
-                'valor_considerado': float(valor_considerado),
-                'valor_pago': float(valor_pago) if valor_pago is not None else None,
-                'fatura_atualizada': fatura_atualizada,
-                'fatura_status': fatura_status,
-                'tratativa_aberta': tratativa_aberta,
-                'aprovacao_id': aprovacao_id,
-            }
-
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao registrar conferencia frete {frete_id}: {e}")
-            return {'sucesso': False, 'erro': str(e)}
-
-    def _verificar_fatura_completa(self, fatura_id: int, usuario: str):
-        """Verifica se todos fretes da fatura foram conferidos.
-
-        Paridade Nacom: itera CarviaFrete (nao Sub).
-
-        Returns:
-            Tuple (fatura_atualizada: bool, novo_status: str)
-        """
-        from app.carvia.models import CarviaFaturaTransportadora, CarviaFrete
-        from app.utils.timezone import agora_utc_naive
-
-        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
-        if not fatura:
-            return False, None
-
-        fretes = CarviaFrete.query.filter(
-            CarviaFrete.fatura_transportadora_id == fatura_id,
-            CarviaFrete.status != 'CANCELADO',
-        ).all()
-
-        if not fretes:
-            return False, fatura.status_conferencia
-
-        contagem = {'APROVADO': 0, 'DIVERGENTE': 0, 'PENDENTE': 0}
-        for f in fretes:
-            sc = f.status_conferencia or 'PENDENTE'
-            if sc in contagem:
-                contagem[sc] += 1
-            else:
-                # Valor desconhecido: tratar como PENDENTE para evitar
-                # promocao silenciosa da fatura a CONFERIDO
-                logger.warning(
-                    f"Frete {f.id}: status_conferencia desconhecido '{sc}', "
-                    f"tratando como PENDENTE"
-                )
-                contagem['PENDENTE'] += 1
-
-        total = len(fretes)
-        status_anterior = fatura.status_conferencia
-
-        # D6 (2026-04-19): popula autoria de DIVERGENTE / EM_CONFERENCIA
-        # alem de CONFERIDO (antes so CONFERIDO tinha rastreabilidade).
-        agora = agora_utc_naive()
-        if contagem['APROVADO'] == total:
-            fatura.status_conferencia = 'CONFERIDO'
-            fatura.conferido_por = usuario
-            fatura.conferido_em = agora
-            for f in fretes:
-                if f.status == 'FATURADO':
-                    f.status = 'CONFERIDO'
-        elif contagem['DIVERGENTE'] > 0:
-            fatura.status_conferencia = 'DIVERGENTE'
-            fatura.conferido_por = usuario
-            fatura.conferido_em = agora
-            # D6: autoria dedicada — preserva mesmo apos mudanca de status
-            if hasattr(fatura, 'divergente_por'):
-                fatura.divergente_por = usuario
-                fatura.divergente_em = agora
-        elif contagem['APROVADO'] > 0:
-            fatura.status_conferencia = 'EM_CONFERENCIA'
-            # D6: autoria EM_CONFERENCIA
-            if hasattr(fatura, 'em_conferencia_por'):
-                fatura.em_conferencia_por = usuario
-                fatura.em_conferencia_em = agora
-
-        novo_status = fatura.status_conferencia
-        atualizado = novo_status != status_anterior
-
-        if atualizado:
-            logger.info(
-                f"Fatura #{fatura_id}: {status_anterior} → {novo_status} | "
-                f"aprovados={contagem['APROVADO']}/{total} "
-                f"divergentes={contagem['DIVERGENTE']}/{total}"
-            )
-
-        return atualizado, novo_status
 
     def resumo_conferencia_fatura(self, fatura_id: int) -> Dict:
         """Retorna resumo da conferencia de uma fatura.

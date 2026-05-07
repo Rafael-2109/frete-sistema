@@ -1774,50 +1774,181 @@ def register_fatura_routes(bp):
             logger.error(f"Erro ao listar subcontratos disponiveis: {e}")
             return jsonify({'sucesso': False, 'erro': str(e)}), 500
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/atualizar-valor', methods=['POST']) # type: ignore
+    @bp.route('/faturas-transportadora/<int:fatura_id>/editar', methods=['GET', 'POST']) # type: ignore
     @login_required
-    def atualizar_valor_fatura_transportadora(fatura_id): # type: ignore
-        """Atualiza valor total de uma fatura de transportadora"""
+    def editar_fatura_transportadora(fatura_id): # type: ignore
+        """Edita uma fatura de transportadora (paridade Nacom).
+
+        Espelho de `fretes.editar_fatura` (fretes/routes.py:2419-2518).
+        Substitui os fluxos inline anteriores (atualizar_valor,
+        editar_vencimento, atualizar_pdf) por uma unica pagina dedicada
+        com formulario completo. Bloqueia edicao se a fatura ja foi
+        conferida — usuario deve reabrir antes.
+        """
         if not getattr(current_user, 'sistema_carvia', False):
-            return jsonify({'sucesso': False, 'erro': 'Acesso negado'}), 403
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
 
         fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
         if not fatura:
-            return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_transportadora'))
 
+        # Usa pode_editar() do model (espelha Nacom + protege fatura PAGA
+        # / conciliada). Nacom nao tem essa protecao porque o financeiro
+        # vive no Odoo; aqui o status_pagamento e local e editar valor de
+        # fatura paga quebra a equacao de conciliacao bancaria.
         pode, razao = fatura.pode_editar()
         if not pode:
-            return jsonify({'sucesso': False, 'erro': razao}), 400
-
-        data = request.get_json(silent=True) or {}
-        try:
-            valor_total = float(data.get('valor_total', 0))
-        except (ValueError, TypeError):
-            return jsonify({'sucesso': False, 'erro': 'Valor invalido.'}), 400
-
-        if valor_total <= 0:
-            return jsonify({'sucesso': False, 'erro': 'Valor deve ser maior que zero.'}), 400
-
-        try:
-            valor_anterior = float(fatura.valor_total or 0)
-            fatura.valor_total = valor_total
-            db.session.commit()
-
-            logger.info(
-                f"Fatura transportadora #{fatura_id}: valor atualizado "
-                f"R$ {valor_anterior:.2f} -> R$ {valor_total:.2f} "
-                f"por {current_user.email}"
+            flash(razao, 'warning')
+            return redirect(
+                url_for(
+                    'carvia.detalhe_fatura_transportadora',
+                    fatura_id=fatura_id,
+                )
             )
 
-            return jsonify({
-                'sucesso': True,
-                'valor_total': round(valor_total, 2),
-            })
+        if request.method == 'POST':
+            try:
+                from app.utils.valores_brasileiros import converter_valor_brasileiro
 
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao atualizar valor fatura #{fatura_id}: {e}")
-            return jsonify({'sucesso': False, 'erro': str(e)}), 500
+                numero_antigo = fatura.numero_fatura
+                numero_novo = request.form.get('numero_fatura', '').strip()
+                data_emissao_str = request.form.get('data_emissao', '').strip()
+                valor_total_str = request.form.get('valor_total', '').strip()
+                vencimento_str = request.form.get('vencimento', '').strip()
+                transp_id_str = request.form.get('transportadora_id', '').strip()
+
+                if not numero_novo:
+                    flash('Numero da fatura e obrigatorio.', 'warning')
+                    return redirect(
+                        url_for(
+                            'carvia.editar_fatura_transportadora',
+                            fatura_id=fatura_id,
+                        )
+                    )
+
+                fatura.numero_fatura = numero_novo
+                if data_emissao_str:
+                    fatura.data_emissao = date.fromisoformat(data_emissao_str)
+                if valor_total_str:
+                    fatura.valor_total = converter_valor_brasileiro(valor_total_str)
+                fatura.vencimento = (
+                    date.fromisoformat(vencimento_str) if vencimento_str else None
+                )
+                if transp_id_str:
+                    fatura.transportadora_id = int(transp_id_str)
+
+                # Upload/troca/remocao de PDF (paridade Nacom editar_fatura
+                # fretes/routes.py:2450-2499)
+                arquivo = request.files.get('arquivo_pdf')
+                remover_pdf = request.form.get('remover_pdf') == '1'
+
+                if arquivo and arquivo.filename:
+                    from app.utils.file_storage import get_file_storage
+                    storage = get_file_storage()
+                    path_antigo = fatura.arquivo_pdf_path
+                    try:
+                        novo_path = storage.save_file(
+                            arquivo, 'carvia/faturas_transportadora',
+                            allowed_extensions=['pdf'],
+                        )
+                    except ValueError as e_val:
+                        db.session.rollback()
+                        flash(f'PDF invalido: {e_val}', 'danger')
+                        return redirect(
+                            url_for(
+                                'carvia.editar_fatura_transportadora',
+                                fatura_id=fatura_id,
+                            )
+                        )
+                    if not novo_path:
+                        db.session.rollback()
+                        flash('Erro ao salvar o novo PDF.', 'danger')
+                        return redirect(
+                            url_for(
+                                'carvia.editar_fatura_transportadora',
+                                fatura_id=fatura_id,
+                            )
+                        )
+                    fatura.arquivo_pdf_path = novo_path
+                    fatura.arquivo_nome_original = arquivo.filename
+                    if path_antigo:
+                        try:
+                            storage.delete_file(path_antigo)
+                        except Exception as e_del:
+                            logger.warning(
+                                f'Falha ao remover PDF antigo da fatura '
+                                f'transportadora {fatura_id}: {e_del}'
+                            )
+                elif remover_pdf and fatura.arquivo_pdf_path:
+                    from app.utils.file_storage import get_file_storage
+                    storage = get_file_storage()
+                    path_antigo = fatura.arquivo_pdf_path
+                    fatura.arquivo_pdf_path = None
+                    fatura.arquivo_nome_original = None
+                    try:
+                        storage.delete_file(path_antigo)
+                    except Exception as e_del:
+                        logger.warning(
+                            f'Falha ao remover PDF da fatura '
+                            f'transportadora {fatura_id}: {e_del}'
+                        )
+
+                db.session.commit()
+
+                if numero_novo != numero_antigo:
+                    flash(
+                        f'Fatura editada com sucesso! '
+                        f'Numero alterado de "{numero_antigo}" para '
+                        f'"{numero_novo}".',
+                        'success',
+                    )
+                else:
+                    flash(
+                        f'Fatura {fatura.numero_fatura} atualizada com sucesso!',
+                        'success',
+                    )
+
+                return redirect(
+                    url_for(
+                        'carvia.detalhe_fatura_transportadora',
+                        fatura_id=fatura_id,
+                    )
+                )
+
+            except ValueError as ev:
+                db.session.rollback()
+                flash(f'Dados invalidos: {ev}', 'danger')
+            except Exception as e:
+                db.session.rollback()
+                logger.exception(
+                    f'Erro ao editar fatura transportadora {fatura_id}'
+                )
+                flash(f'Erro ao atualizar fatura: {e}', 'danger')
+
+        # GET (e POST com erro): renderizar form
+        from app.transportadoras.models import Transportadora
+        transportadoras = Transportadora.query.filter_by(ativo=True).order_by(
+            Transportadora.razao_social
+        ).all()
+
+        subcontratos = CarviaSubcontrato.query.filter_by(
+            fatura_transportadora_id=fatura_id,
+        ).order_by(CarviaSubcontrato.id.desc()).all()
+
+        from app.carvia.models import CarviaCustoEntrega
+        custos_entrega = CarviaCustoEntrega.query.filter_by(
+            fatura_transportadora_id=fatura_id,
+        ).order_by(CarviaCustoEntrega.id.desc()).all()
+
+        return render_template(
+            'carvia/faturas_transportadora/editar.html',
+            fatura=fatura,
+            transportadoras=transportadoras,
+            subcontratos=subcontratos,
+            custos_entrega=custos_entrega,
+        )
 
     @bp.route('/faturas-transportadora/<int:fatura_id>') # type: ignore
     @login_required
@@ -1985,128 +2116,9 @@ def register_fatura_routes(bp):
             papeis=papeis,
         )
 
-    @bp.route('/faturas-transportadora/<int:fatura_id>/editar-vencimento', methods=['POST']) # type: ignore
-    @login_required
-    def editar_vencimento_fatura_transportadora(fatura_id): # type: ignore
-        """Edita vencimento de uma fatura transportadora"""
-        if not getattr(current_user, 'sistema_carvia', False):
-            flash('Acesso negado.', 'danger')
-            return redirect(url_for('main.dashboard'))
-
-        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
-        if not fatura:
-            flash('Fatura nao encontrada.', 'warning')
-            return redirect(url_for('carvia.listar_faturas_transportadora'))
-
-        pode, razao = fatura.pode_editar()
-        if not pode:
-            flash(razao, 'warning')
-            return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
-
-        vencimento_str = request.form.get('vencimento', '').strip()
-        if not vencimento_str:
-            flash('Informe a data de vencimento.', 'warning')
-            return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
-
-        try:
-            fatura.vencimento = date.fromisoformat(vencimento_str)
-            db.session.commit()
-            flash(f'Vencimento atualizado para {fatura.vencimento.strftime("%d/%m/%Y")}.', 'success')
-        except ValueError:
-            flash('Data de vencimento invalida.', 'danger')
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao editar vencimento fatura transportadora {fatura_id}: {e}")
-            flash(f'Erro: {e}', 'danger')
-
-        return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
-
-    @bp.route('/faturas-transportadora/<int:fatura_id>/atualizar-pdf', methods=['POST']) # type: ignore
-    @login_required
-    def atualizar_pdf_fatura_transportadora(fatura_id): # type: ignore
-        """Anexa, substitui ou remove o PDF de uma fatura transportadora.
-
-        Aceita multipart/form-data com:
-          - arquivo_pdf: novo arquivo PDF (opcional)
-          - remover_pdf=1: remove o PDF atual sem substituicao
-
-        PDF e anexo — permitido em qualquer status. Sem bloqueio adicional.
-        """
-        if not getattr(current_user, 'sistema_carvia', False):
-            flash('Acesso negado.', 'danger')
-            return redirect(url_for('main.dashboard'))
-
-        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
-        if not fatura:
-            flash('Fatura nao encontrada.', 'warning')
-            return redirect(url_for('carvia.listar_faturas_transportadora'))
-
-        arquivo = request.files.get('arquivo_pdf')
-        remover = request.form.get('remover_pdf') == '1'
-
-        if not (arquivo and arquivo.filename) and not remover:
-            flash('Selecione um PDF ou marque "Remover PDF atual".', 'warning')
-            return redirect(
-                url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id)
-            )
-
-        try:
-            from app.utils.file_storage import get_file_storage
-            storage = get_file_storage()
-            path_antigo = fatura.arquivo_pdf_path
-
-            if arquivo and arquivo.filename:
-                try:
-                    novo_path = storage.save_file(
-                        arquivo, 'carvia/faturas_transportadora',
-                        allowed_extensions=['pdf'],
-                    )
-                except ValueError as e_val:
-                    flash(f'PDF invalido: {e_val}', 'danger')
-                    return redirect(
-                        url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id)
-                    )
-
-                if not novo_path:
-                    flash('Erro ao salvar o novo PDF.', 'danger')
-                    return redirect(
-                        url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id)
-                    )
-
-                fatura.arquivo_pdf_path = novo_path
-                fatura.arquivo_nome_original = arquivo.filename
-                db.session.commit()
-
-                if path_antigo:
-                    try:
-                        storage.delete_file(path_antigo)
-                    except Exception as e_del:
-                        logger.warning(
-                            f'Falha ao remover PDF antigo da fatura transportadora {fatura_id}: {e_del}'
-                        )
-
-                flash('PDF atualizado com sucesso.', 'success')
-
-            elif remover and path_antigo:
-                fatura.arquivo_pdf_path = None
-                fatura.arquivo_nome_original = None
-                db.session.commit()
-                try:
-                    storage.delete_file(path_antigo)
-                except Exception as e_del:
-                    logger.warning(
-                        f'Falha ao remover PDF da fatura transportadora {fatura_id}: {e_del}'
-                    )
-                flash('PDF removido com sucesso.', 'success')
-            else:
-                flash('Nenhuma alteracao realizada.', 'info')
-
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f'Erro ao atualizar PDF fatura transportadora {fatura_id}: {e}')
-            flash(f'Erro ao atualizar PDF: {e}', 'danger')
-
-        return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+    # Rotas removidas (2026-05-07): editar_vencimento_fatura_transportadora,
+    # atualizar_pdf_fatura_transportadora. Substituidas por
+    # `editar_fatura_transportadora` (formulario completo, paridade Nacom).
 
     @bp.route('/faturas-transportadora/<int:fatura_id>/conferir') # type: ignore
     @login_required
@@ -2327,48 +2339,22 @@ def register_fatura_routes(bp):
             CarviaFrete.status != 'CANCELADO',
         ).all()
 
-        # Gate 1: todos fretes APROVADO (defense in depth).
-        # 3 checks: DIVERGENTE (frete reprovado), requer_aprovacao (tratativa
-        # D4 pendente no AprovacaoFreteService) e ausencia de conferencia
-        # individual. Espelha classificacao de status_doc na rota GET /conferir
-        # para evitar bypass via POST direto.
-        fretes_divergentes = [
-            f for f in fretes_ativos if f.status_conferencia == 'DIVERGENTE'
-        ]
+        # Gate unico de status: bloqueia se ha frete com tratativa D4 pendente
+        # (decisao do aprovador ainda nao tomada). Frete DIVERGENTE (decisao
+        # final negativa) e PENDENTE (sem conferencia individual) NAO bloqueiam
+        # — paridade Nacom: a aprovacao da fatura e independente do estado
+        # individual de cada frete; o usuario quis explicitamente que "trata-se
+        # de fatura, nao frete". A unica trava e tratativa em aberto, porque
+        # representa decisao formal nao concluida.
         fretes_em_tratativa = [
             f for f in fretes_ativos
             if getattr(f, 'requer_aprovacao', False)
         ]
-        fretes_pendentes = [
-            f for f in fretes_ativos
-            if f.status_conferencia not in ('APROVADO', 'DIVERGENTE')
-            and not getattr(f, 'requer_aprovacao', False)
-        ]
-        if fretes_divergentes:
-            flash(
-                f'Fatura nao pode ser conferida: '
-                f'{len(fretes_divergentes)} frete(s) DIVERGENTE. '
-                f'Resolva em Aprovacoes antes de aprovar.',
-                'danger',
-            )
-            return redirect(
-                url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura_id)
-            )
         if fretes_em_tratativa:
             flash(
                 f'Fatura nao pode ser conferida: '
                 f'{len(fretes_em_tratativa)} frete(s) com tratativa pendente '
                 f'(D4). Resolva em Aprovacoes antes de aprovar.',
-                'danger',
-            )
-            return redirect(
-                url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura_id)
-            )
-        if fretes_pendentes:
-            flash(
-                f'Fatura nao pode ser conferida: '
-                f'{len(fretes_pendentes)} frete(s) sem conferencia individual. '
-                f'Confira cada frete antes de aprovar a fatura.',
                 'danger',
             )
             return redirect(
@@ -2449,7 +2435,7 @@ def register_fatura_routes(bp):
             # Atualiza fatura
             fatura.valor_total = valor_final_float
             fatura.status_conferencia = 'CONFERIDO'
-            fatura.conferido_por = current_user.email
+            fatura.conferido_por = current_user.nome
             fatura.conferido_em = agora_utc_naive()
             fatura.observacoes_conferencia = observacoes or None
 
@@ -2509,30 +2495,57 @@ def register_fatura_routes(bp):
             )
             return redirect(url_for('carvia.listar_faturas_transportadora'))
 
-        if fatura.status_pagamento == 'PAGO':
-            flash(
-                'Fatura ja paga. Desconcilie via Extrato Bancario antes '
-                'de reabrir a conferencia.',
-                'warning',
-            )
-            return redirect(
-                url_for(
-                    'carvia.conferir_fatura_transportadora', fatura_id=fatura_id
-                )
-            )
-
         motivo = request.form.get('motivo_reabertura', '').strip()
-        if not motivo:
-            flash('Informe o motivo da reabertura.', 'warning')
-            return redirect(
-                url_for(
-                    'carvia.conferir_fatura_transportadora',
-                    fatura_id=fatura_id,
-                )
-            )
+        fatura_estava_paga = fatura.status_pagamento == 'PAGO'
 
         try:
             from app.utils.timezone import agora_utc_naive
+
+            # Se a fatura estava PAGA, desconciliar TODAS as conciliacoes
+            # bancarias vinculadas (REAL ou MANUAL) e reverter status_pagamento
+            # para PENDENTE. O usuario foi avisado no JS confirm que o
+            # pagamento sera desvinculado e exigira nova conciliacao.
+            # Refs: CarviaConciliacaoService.desconciliar (carvia_conciliacao_service.py:493)
+            #       — usado tambem pelo fluxo admin_corrigir_ft_conferida (1085).
+            desconciliacoes_removidas = 0
+            if fatura_estava_paga:
+                from app.carvia.models import CarviaConciliacao
+                from app.carvia.services.financeiro.carvia_conciliacao_service import (
+                    CarviaConciliacaoService,
+                )
+
+                concs = CarviaConciliacao.query.filter_by(
+                    tipo_documento='fatura_transportadora',
+                    documento_id=fatura.id,
+                ).all()
+                for c in concs:
+                    try:
+                        CarviaConciliacaoService.desconciliar(c.id, current_user.nome)
+                        desconciliacoes_removidas += 1
+                    except Exception as e_desc:
+                        logger.exception(
+                            'Erro ao desconciliar conciliacao #%s ao reabrir '
+                            'fatura transportadora #%s: %s',
+                            c.id, fatura.id, e_desc,
+                        )
+                        flash(
+                            f'Erro ao desconciliar pagamento da fatura: '
+                            f'{e_desc}. Operacao abortada.',
+                            'danger',
+                        )
+                        db.session.rollback()
+                        return redirect(
+                            url_for(
+                                'carvia.conferir_fatura_transportadora',
+                                fatura_id=fatura_id,
+                            )
+                        )
+
+                # Defense in depth: garantir reversao de status_pagamento
+                # mesmo que _atualizar_totais_documento ja tenha feito.
+                fatura.status_pagamento = 'PENDENTE'
+                fatura.pago_em = None
+                fatura.pago_por = None
 
             # Historico: prepend com timestamp + usuario + motivo.
             # Paridade Nacom (fretes/routes.py:2398): SEM .strip() no fim —
@@ -2541,7 +2554,7 @@ def register_fatura_routes(bp):
             agora_str = agora_utc_naive().strftime('%d/%m/%Y %H:%M')
             obs_anterior = fatura.observacoes_conferencia or ''
             fatura.observacoes_conferencia = (
-                f'REABERTA EM {agora_str} por {current_user.email} '
+                f'REABERTA EM {agora_str} por {current_user.nome} '
                 f'- {motivo}\n\n{obs_anterior}'
             )
             fatura.status_conferencia = 'PENDENTE'
@@ -2558,7 +2571,12 @@ def register_fatura_routes(bp):
                     sub.status = 'FATURADO'
 
             # Phase C (2026-04-14): fretes tambem vao CONFERIDO em aprovar_conferencia.
-            # Reverter para permitir reconferencia apos reabrir.
+            # Reverter status documental do frete (CONFERIDO → FATURADO) para
+            # permitir nova conferencia da fatura. NAO mexer em
+            # status_conferencia/conferido_por/conferido_em do frete: a
+            # conferencia individual do frete tem fluxo proprio (tratativa D4)
+            # e nao deve ser resetada ao reabrir a fatura ("trata-se de fatura,
+            # nao frete").
             fretes_ativos = CarviaFrete.query.filter(
                 CarviaFrete.fatura_transportadora_id == fatura_id,
                 CarviaFrete.status != 'CANCELADO',
@@ -2566,18 +2584,19 @@ def register_fatura_routes(bp):
             for frete in fretes_ativos:
                 if frete.status == 'CONFERIDO':
                     frete.status = 'FATURADO'
-                # Resetar conferencia individual tambem
-                if frete.status_conferencia == 'APROVADO':
-                    frete.status_conferencia = 'PENDENTE'
-                    frete.conferido_por = None
-                    frete.conferido_em = None
 
             db.session.commit()
-            flash(
+            msg_sucesso = (
                 f'Fatura {fatura.numero_fatura} reaberta com sucesso! '
-                f'Subcontratos liberados para nova conferencia.',
-                'success',
+                f'Subcontratos liberados para nova conferencia.'
             )
+            if fatura_estava_paga:
+                msg_sucesso += (
+                    f' Pagamento desvinculado: {desconciliacoes_removidas} '
+                    f'conciliacao(oes) bancaria(s) removida(s) — sera '
+                    f'necessaria nova conciliacao apos a reconferencia.'
+                )
+            flash(msg_sucesso, 'success')
             return redirect(
                 url_for('carvia.listar_faturas_transportadora')
             )

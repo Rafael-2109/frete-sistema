@@ -253,8 +253,8 @@
                                 <div class="input-group-prepend">
                                     <span class="input-group-text">R$</span>
                                 </div>
-                                <input type="text" class="form-control" id="valor_final" name="valor_final" value="{{ "
-                                    %.2f"|format(analise_valores.valor_total_pago) }}" required>
+                                <input type="text" class="form-control" id="valor_final" name="valor_final"
+                                    value="{{ '%.2f'|format(analise_valores.valor_total_pago)|replace('.', ',') }}" required>
                             </div>
                             <small class="form-text text-muted">
                                 Sugerido: {{ (analise_valores.valor_total_pago)|moeda_carteira }} (Total Pago)

@@ -11,6 +11,10 @@
         <h2><i class="fas fa-eye"></i> Visualizar Fatura Subcontrato - {{ fatura.numero_fatura }}</h2>
         <div>
             {% if fatura.status_conferencia != 'CONFERIDO' %}
+            <a href="{{ url_for('carvia.editar_fatura_transportadora', fatura_id=fatura.id) }}" class="btn btn-primary"
+               title="Editar dados da fatura (numero, valor, vencimento, PDF, transportadora)">
+                <i class="fas fa-edit"></i> Editar
+            </a>
             <a href="{{ url_for('carvia.conferir_fatura_transportadora', fatura_id=fatura.id) }}" class="btn btn-warning">
                 <i class="fas fa-check-double"></i> Conferir
             </a>
@@ -20,11 +24,6 @@
                 <i class="fas fa-download"></i> PDF
             </button>
             {% endif %}
-            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAtualizarPdfFt"
-                    title="{% if fatura.arquivo_pdf_path %}Substituir{% else %}Anexar{% endif %} PDF da fatura">
-                <i class="fas {% if fatura.arquivo_pdf_path %}fa-sync-alt{% else %}fa-paperclip{% endif %}"></i>
-                {% if fatura.arquivo_pdf_path %}Trocar PDF{% else %}Anexar PDF{% endif %}
-            </button>
             {% if current_user.perfil == 'administrador' %}
             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
                     title="Exclusao permanente (admin)">
@@ -78,13 +77,6 @@
                             <td><strong>Vencimento:</strong></td>
                             <td>
                                 {{ fatura.vencimento|formatar_data_segura if fatura.vencimento else '-' }}
-                                {% if fatura.pode_editar()[0] %}
-                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
-                                        data-bs-toggle="modal" data-bs-target="#modalEditarVencimento"
-                                        title="Editar vencimento">
-                                    <i class="fas fa-pencil-alt"></i>
-                                </button>
-                                {% endif %}
                             </td>
                         </tr>
                     </table>
@@ -96,13 +88,6 @@
                             <td><strong>Valor Total:</strong></td>
                             <td>
                                 <span class="h5 text-success" id="valor-total-display">{{ fatura.valor_total|moeda_carteira }}</span>
-                                {% if fatura.pode_editar()[0] %}
-                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
-                                        data-bs-toggle="modal" data-bs-target="#modalEditarValorTotal"
-                                        title="Editar valor total">
-                                    <i class="fas fa-pencil-alt"></i>
-                                </button>
-                                {% endif %}
                             </td>
                         </tr>
                         <tr>
@@ -112,8 +97,6 @@
                                 <span class="badge bg-success">CONFERIDO</span>
                                 {% elif fatura.status_conferencia == 'EM_CONFERENCIA' %}
                                 <span class="badge bg-warning">EM CONFERENCIA</span>
-                                {% elif fatura.status_conferencia == 'DIVERGENTE' %}
-                                <span class="badge bg-danger">DIVERGENTE</span>
                                 {% else %}
                                 <span class="badge bg-secondary">PENDENTE</span>
                                 {% endif %}
@@ -338,13 +321,6 @@
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 {% if fatura.status_conferencia != 'CONFERIDO' %}
-                                {% if sub.status in ('FATURADO', 'CONFERIDO') %}
-                                <button type="button" class="btn btn-sm btn-outline-info"
-                                        onclick="conferirSubcontrato({{ sub.id }})"
-                                        title="Conferir subcontrato (calcular tabela de frete)">
-                                    <i class="fas fa-search-dollar"></i>
-                                </button>
-                                {% endif %}
                                 <button type="button" class="btn btn-sm btn-outline-danger"
                                         onclick="desanexarSubcontrato({{ sub.id }}, '{{ sub.cte_numero or sub.id }}')"
                                         title="Desanexar da Fatura">
@@ -628,55 +604,8 @@
     {% include 'carvia/_conciliacoes_documento.html' %}
 </div>
 
-<!-- Modal Editar Vencimento -->
-<div class="modal fade" id="modalEditarVencimento" tabindex="-1" aria-labelledby="modalEditarVencimentoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <form method="POST" action="{{ url_for('carvia.editar_vencimento_fatura_transportadora', fatura_id=fatura.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalEditarVencimentoLabel">Editar Vencimento</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                </div>
-                <div class="modal-body">
-                    <label for="vencimento" class="form-label">Data de Vencimento</label>
-                    <input type="date" class="form-control" id="vencimento" name="vencimento"
-                           value="{{ fatura.vencimento.strftime('%Y-%m-%d') if fatura.vencimento else '' }}" required>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Editar Valor Total -->
-<div class="modal fade" id="modalEditarValorTotal" tabindex="-1" aria-labelledby="modalEditarValorTotalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalEditarValorTotalLabel">Editar Valor Total</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <label for="input-valor-total" class="form-label">Valor Total (R$)</label>
-                <input type="number" class="form-control" id="input-valor-total"
-                       step="0.01" min="0.01"
-                       value="{{ '%.2f'|format(fatura.valor_total|float) }}">
-                <small class="text-muted d-block mt-1">Valor declarado pela transportadora na fatura.</small>
-                <div id="erro-editar-valor" class="alert alert-danger mt-2 d-none mb-0 py-2"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary btn-sm" id="btn-salvar-valor-total">
-                    <i class="fas fa-save"></i> Salvar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Modais inline removidos (2026-05-07) — edicao agora via pagina dedicada
+     `editar_fatura_transportadora`, paridade Nacom. -->
 
 <!-- Modal Anexar Subcontratos -->
 <div class="modal fade" id="modalAnexarSubcontratos" tabindex="-1" aria-labelledby="modalAnexarLabel" aria-hidden="true">
@@ -737,173 +666,6 @@
 {# Modal 'Vincular Custos de Entrega' removido — fluxo xerox Nacom: Despesas #}
 {# Extras sao criadas e vinculadas pelo CarviaFrete, nao pela FaturaTransportadora. #}
 
-<!-- Modal Confirmar Valor -->
-<div class="modal fade" id="modalConfirmarValor" tabindex="-1" aria-labelledby="modalConfirmarValorLabel" aria-hidden="true">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalConfirmarValorLabel">
-                    <i class="fas fa-dollar-sign"></i> Atualizar Valor?
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <p>Valor atual da fatura: <strong id="cv-valor-atual"></strong></p>
-                <p>Soma dos subcontratos: <strong id="cv-soma-subs"></strong></p>
-                <p class="text-muted">Deseja atualizar o valor da fatura para a soma dos subcontratos?</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" id="btn-manter-valor">Manter Valor Atual</button>
-                <button type="button" class="btn btn-primary btn-sm" id="btn-atualizar-valor">
-                    <i class="fas fa-sync"></i> Atualizar Valor
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Conferencia Subcontrato (ferramenta opcional para calcular tabelas de frete) -->
-<div class="modal fade" id="modalConferenciaSubcontrato" tabindex="-1" aria-labelledby="modalConferenciaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalConferenciaLabel">
-                    <i class="fas fa-search-dollar"></i> Conferencia
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <div id="conf-loading" class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Carregando...</span>
-                    </div>
-                    <p class="text-muted mt-2">Calculando opcoes de frete...</p>
-                </div>
-                <div id="conf-erro" class="alert alert-danger d-none"></div>
-                <div id="conf-conteudo" class="d-none">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="card mb-3">
-                                <div class="card-header"><h6 class="mb-0">Valores CTe</h6></div>
-                                <div class="card-body">
-                                    <div class="mb-2">
-                                        <small class="text-muted d-block">CTe Valor (cobrado)</small>
-                                        <h5 id="conf-cte-valor" class="mb-0">-</h5>
-                                    </div>
-                                    <div class="mb-2">
-                                        <small class="text-muted d-block">Valor Cotado</small>
-                                        <strong id="conf-valor-cotado">-</strong>
-                                    </div>
-                                    <div class="mb-2">
-                                        <small class="text-muted d-block">Valor Previsto</small>
-                                        <strong id="conf-valor-final" title="Valor de referencia pre-conferencia (negociado ou cotado)">-</strong>
-                                    </div>
-                                    <hr>
-                                    <div class="mb-2">
-                                        <small class="text-muted d-block">Rota</small>
-                                        <strong id="conf-rota">-</strong>
-                                    </div>
-                                    <div class="mb-2">
-                                        <small class="text-muted d-block">Cliente</small>
-                                        <span id="conf-cliente">-</span>
-                                    </div>
-                                    <div>
-                                        <small class="text-muted d-block">Peso</small>
-                                        <span id="conf-peso">-</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-8">
-                            <div class="card mb-3">
-                                <div class="card-header">
-                                    <h6 class="mb-0">Calculos por Tabela de Frete (<span id="conf-total-opcoes">0</span>)</h6>
-                                </div>
-                                <div class="card-body p-0">
-                                    <div id="conf-sem-opcoes" class="text-center py-4 text-muted d-none">
-                                        <i class="fas fa-exclamation-circle fa-2x mb-2 d-block"></i>
-                                        Nenhuma tabela de frete encontrada para esta rota/transportadora.
-                                    </div>
-                                    <div class="table-responsive">
-                                        <table class="table table-sm table-striped table-hover mb-0" id="conf-tabela-opcoes">
-                                            <thead>
-                                                <tr>
-                                                    <th>Tabela</th>
-                                                    <th>Tipo</th>
-                                                    <th>Modalidade</th>
-                                                    <th>Valor Frete</th>
-                                                    <th>Detalhe</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="conf-tbody-opcoes">
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="conf-breakdown" class="d-none">
-                                <div class="card">
-                                    <div class="card-header d-flex justify-content-between align-items-center">
-                                        <h6 class="mb-0" id="conf-breakdown-titulo">Breakdown</h6>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1"
-                                                onclick="document.getElementById('conf-breakdown').classList.add('d-none')">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                    <div class="card-body p-0">
-                                        <table class="table table-sm mb-0">
-                                            <thead>
-                                                <tr>
-                                                    <th>Componente</th>
-                                                    <th>Fator</th>
-                                                    <th>Base</th>
-                                                    <th>Resultado</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="conf-tbody-breakdown">
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <hr>
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label for="conf-valor-considerado" class="form-label">Valor Considerado (R$)</label>
-                            <input type="number" class="form-control" id="conf-valor-considerado"
-                                   step="0.01" min="0" placeholder="0,00" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Status</label>
-                            <div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="conf-status" id="conf-status-aprovado" value="APROVADO" checked>
-                                    <label class="form-check-label text-success" for="conf-status-aprovado">Aprovado</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="conf-status" id="conf-status-divergente" value="DIVERGENTE">
-                                    <label class="form-check-label text-danger" for="conf-status-divergente">Divergente</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="conf-observacoes" class="form-label">Observacoes</label>
-                            <input type="text" class="form-control" id="conf-observacoes" placeholder="Opcional">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-primary w-100" id="btn-salvar-conferencia">
-                                <i class="fas fa-save"></i> Salvar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 {{ modal_admin_excluir(
     entidade_tipo='fatura-transportadora',
     entidade_id=fatura.id,
@@ -915,59 +677,8 @@
     ]
 ) }}
 
-{# Modal Anexar/Trocar PDF #}
-<div class="modal fade" id="modalAtualizarPdfFt" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST"
-                  action="{{ url_for('carvia.atualizar_pdf_fatura_transportadora', fatura_id=fatura.id) }}"
-                  enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-file-pdf"></i>
-                        {% if fatura.arquivo_pdf_path %}Substituir{% else %}Anexar{% endif %} PDF da Fatura
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    {% if fatura.arquivo_pdf_path %}
-                    <div class="alert alert-info py-2 small">
-                        <strong>PDF atual:</strong> {{ fatura.arquivo_nome_original or 'fatura.pdf' }}
-                    </div>
-                    {% endif %}
-                    <div class="mb-3">
-                        <label for="arquivo_pdf_ft" class="form-label">
-                            Selecionar novo PDF
-                        </label>
-                        <input type="file" class="form-control" id="arquivo_pdf_ft"
-                               name="arquivo_pdf" accept=".pdf">
-                        <small class="text-muted">
-                            Apenas .pdf. O arquivo anterior sera substituido.
-                        </small>
-                    </div>
-                    {% if fatura.arquivo_pdf_path %}
-                    <div class="form-check mt-3">
-                        <input class="form-check-input" type="checkbox"
-                               id="remover_pdf_ft" name="remover_pdf" value="1">
-                        <label class="form-check-label" for="remover_pdf_ft">
-                            Remover PDF atual (sem substituir)
-                        </label>
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Salvar
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+{# Modal "Atualizar PDF" removido (2026-05-07) — PDF e gerenciado pela
+   tela `editar_fatura_transportadora` (paridade Nacom). #}
 {% endblock %}
 
 {% block scripts %}

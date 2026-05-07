@@ -369,6 +369,41 @@ def register_frete_routes(bp):
                     sub.cte_valor = frete.valor_cte
                     sub.valor_acertado = frete.valor_cte
 
+                # Conferencia automatica no lancamento de CTe (2026-05-07,
+                # paridade Nacom lancar_cte fretes/routes.py:884-915):
+                # - Dentro da tolerancia (R$ 5,00 entre cotado/considerado/pago)
+                #   = APROVADO direto.
+                # - Acima da tolerancia = tratativa D4 (`requer_aprovacao=True`)
+                #   + status PENDENTE; aprovador decide em /aprovacoes-subcontrato
+                #   e fica APROVADO ou DIVERGENTE.
+                # AprovacaoFreteService.verificar_e_solicitar_se_necessario e
+                # idempotente — re-avalia a cada salvamento.
+                from app.carvia.services.documentos.aprovacao_frete_service import (
+                    AprovacaoFreteService,
+                )
+                from app.utils.timezone import agora_utc_naive
+
+                aprov_svc = AprovacaoFreteService()
+                resultado_trat = aprov_svc.verificar_e_solicitar_se_necessario(
+                    frete_id=frete.id, usuario=current_user.nome,
+                )
+                if resultado_trat.get('sucesso') and resultado_trat.get('tratativa_aberta'):
+                    # Divergencia acima da tolerancia → tratativa aberta.
+                    # AprovacaoFreteService ja setou requer_aprovacao=True.
+                    # Limpar conferido_por/em: status PENDENTE significa "sem
+                    # decisao tomada", logo a auditoria de conferencia anterior
+                    # nao se aplica mais ate o aprovador decidir.
+                    frete.status_conferencia = 'PENDENTE'
+                    frete.conferido_por = None
+                    frete.conferido_em = None
+                else:
+                    # Dentro da tolerancia (ou sem valores suficientes) →
+                    # APROVADO direto, sem passar por aprovador.
+                    frete.status_conferencia = 'APROVADO'
+                    frete.conferido_por = current_user.nome
+                    frete.conferido_em = agora_utc_naive()
+                    frete.requer_aprovacao = False
+
                 db.session.commit()
                 flash('Frete atualizado com sucesso!', 'success')
 
