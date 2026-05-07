@@ -140,21 +140,19 @@ class PayloadBuilder:
         # design — qualquer mudanca neste comportamento exige aprovacao
         # explicita do dono fiscal da HORA.
         # consumidor_final (TagPlus boolean — doc:320-322):
-        #   - Usa venda.consumidor_final se nao-NULL (operador escolheu).
-        #   - Senao, infere via tipo do documento (CPF=True, CNPJ=False).
-        # Migration hora_36 adicionou a coluna; vendas legadas (DANFE) gravam
-        # NULL e caem no caminho de inferencia automatica. UI em /tagplus/
-        # pedido-venda/novo grava sempre TRUE/FALSE explicito.
-        from app.hora.services.tagplus._documento import inferir_consumidor_final
-        if venda.consumidor_final is None:
-            consumidor_final_flag = inferir_consumidor_final(venda.cpf_cliente)
-        else:
-            consumidor_final_flag = bool(venda.consumidor_final)
+        # REGRA DE NEGOCIO (2026-05-07): 100% das NFe da Lojas HORA saem com
+        # consumidor_final=True, independentemente de PF/PJ no destinatario.
+        # Decisao do dono fiscal HORA (rafael6250@gmail.com). Substitui o
+        # comportamento anterior que inferia via tipo de documento ou usava
+        # venda.consumidor_final.
+        # A coluna hora_venda.consumidor_final continua existindo (migration
+        # hora_36) mas e ignorada — fica vestigial para retrocompat de dados
+        # legados. Nao remover sem migration de drop coordenada.
 
         payload = {
             'tipo': 'S',
             'finalidade_emissao': 1,            # Normal (CONFIRMAR fiscal HORA — ver §15.1).
-            'consumidor_final': consumidor_final_flag,
+            'consumidor_final': True,
             'indicador_presenca': 1,            # Presencial (loja fisica).
             'tipo_emissao': 1,                  # Normal (nao contingencia).
             # TagPlus exige string ('0'-'4', '9') conforme doc:258-272.

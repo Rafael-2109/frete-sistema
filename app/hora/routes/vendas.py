@@ -299,14 +299,8 @@ def vendas_editar(venda_id: int):
         flash('Pedido sem loja definida — apenas admin edita.', 'warning')
         return redirect(url_for('hora.vendas_lista'))
 
-    # consumidor_final: checkbox + hidden flag de "campo presente no form".
-    # Sem o flag, nao distinguimos "operador deixou tudo como esta" de
-    # "operador desmarcou o checkbox". Quando flag=='1', interpretamos a
-    # presenca/ausencia do name 'consumidor_final' (value='1') no POST.
-    if request.form.get('consumidor_final_flag') == '1':
-        consumidor_final_edit = request.form.get('consumidor_final') == '1'
-    else:
-        consumidor_final_edit = None
+    # consumidor_final: campo removido da UI em 2026-05-07. Payload TagPlus
+    # agora envia sempre True (ver payload_builder.py). Nao lemos mais do form.
 
     try:
         venda_service.editar_venda(
@@ -328,7 +322,6 @@ def vendas_editar(venda_id: int):
             modalidade_frete=request.form.get('modalidade_frete'),
             numero_parcelas=request.form.get('numero_parcelas'),
             intervalo_parcelas_dias=request.form.get('intervalo_parcelas_dias'),
-            consumidor_final=consumidor_final_edit,
             usuario=_operador_atual(),
         )
         flash('Pedido atualizado.', 'success')

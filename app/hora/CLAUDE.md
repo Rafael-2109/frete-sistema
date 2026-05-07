@@ -509,57 +509,45 @@ ALTER 3 tabelas. Idempotente.
 
 ---
 
-## 16. Campo `consumidor_final` no faturamento TagPlus — 2026-05-07
+## 16. Campo `consumidor_final` no faturamento TagPlus — 2026-05-07 (revisado)
 
-Operador agora seleciona explicitamente se o destinatário da NF-e é
-consumidor final ou não. Substitui o hardcode `'consumidor_final': True`
-que estava no `payload_builder` desde a primeira versão da emissão.
+**Decisão final do dono fiscal HORA (2026-05-07)**: 100% das NFe da Lojas
+HORA saem com `consumidor_final=True`, independentemente de PF/PJ no
+destinatário. Campo removido da UI; payload_builder hardcoded.
 
-**Coluna**: `hora_venda.consumidor_final` BOOLEAN nullable (migration
-`hora_36_consumidor_final.{py,sql}`).
-- `NULL`  → não definido; `payload_builder` infere via tipo de documento
-            (CPF=True, CNPJ=False) na hora da emissão. Default das
-            vendas legadas (DANFE / backfill).
-- `TRUE`  → consumidor final (B2C; PF tipica).
-- `FALSE` → não-consumidor (B2B / revenda PJ).
+**Histórico**: Inicialmente (mesmo dia, mais cedo) o operador podia
+escolher Sim/Não no pedido. Após validação fiscal, decidiu-se que toda
+venda da HORA é tratada como consumidor final, sem exceção.
 
-**Helper**: `app/hora/services/tagplus/_documento.inferir_consumidor_final(doc)`
-— True para CPF/inválido, False para CNPJ.
+**Estado atual**:
+- `payload_builder.py` — `'consumidor_final': True` hardcoded.
+- `pedido_venda_novo.html` — sem switch (apenas detector CPF/CNPJ no
+  info text, que continua útil para validação visual do documento).
+- `venda_detalhe.html` — sem switch.
+- `tagplus_routes.tagplus_pedido_venda_criar` — não lê mais `consumidor_final`
+  do form; não passa para `criar_venda_manual`.
+- `vendas.vendas_editar` — não lê mais `consumidor_final_flag`/`consumidor_final`
+  do form; não passa para `editar_venda`.
+- Coluna `hora_venda.consumidor_final` (migration `hora_36`) **continua
+  existindo no banco como vestigial** — não foi feita migration de drop
+  para preservar histórico de vendas que já foram emitidas com escolha
+  explícita do operador. Service aceita o kwarg mas o valor é ignorado
+  pelo payload TagPlus.
 
-**Payload builder** (`app/hora/services/tagplus/payload_builder.py:140-150`):
-usa `venda.consumidor_final` se não-NULL; senão chama `inferir_consumidor_final(
-venda.cpf_cliente)`.
+**Limite CPF/CNPJ**: 18 caracteres no form/route (acomoda máscara
+"00.000.000/0000-00"); banco continua String(14), service normaliza para
+dígitos.
 
-**Service** (`venda_service.py`):
-- `criar_venda_manual(... consumidor_final=Optional[bool])` — quando None,
-  grava o resultado da inferência por documento.
-- `editar_venda(... consumidor_final=Optional[bool])` — só aplica se
-  diferente do valor atual; passa por `_validar_campo_editavel`.
-- `_CAMPOS_EDITAVEIS_HEADER` inclui `consumidor_final` em
-  COTACAO/INCOMPLETO/CONFIRMADO. Em FATURADO o campo é bloqueado (NF já
-  saiu — o flag não tem mais efeito sobre a SEFAZ).
+**Não confundir com a invariante fiscal do item 7** (NFe sai sempre pela
+MATRIZ HORA): independentes. consumidor_final=True informa à SEFAZ que o
+destinatário é PF/B2C; emitente continua sendo a matriz HORA via OAuth
+TagPlus.
 
-**UI**:
-- `pedido_venda_novo.html` — switch "Consumidor final" no card do cliente.
-  JS observa o input `f-cpf` e ajusta o default automaticamente (CPF →
-  marcado, CNPJ → desmarcado). Operador pode sobrescrever; após o clique
-  manual, o JS para de inferir (`consumidorFinalUserTouched=true`).
-  Limite do campo CPF/CNPJ subiu de 14 → 18 caracteres no form/route
-  para aceitar máscara CNPJ "00.000.000/0000-00" (banco continua
-  String(14) — service normaliza para dígitos).
-- `venda_detalhe.html` — switch + flag oculto `consumidor_final_flag`
-  para distinguir "operador não mexeu" de "operador desmarcou". Em
-  FATURADO/CANCELADO o switch é `disabled` e o flag é omitido.
-
-**Rotas**:
-- `POST /hora/tagplus/pedido-venda` lê `consumidor_final` (bool) e
-  propaga.
-- `POST /hora/vendas/<id>/editar` lê `consumidor_final_flag`+`consumidor_final`
-  e só envia ao service quando o flag é '1'.
-
-**Não é regra fiscal nova**: continua valendo a invariante de que NFe sai
-sempre pela MATRIZ HORA (item 7). Mudar de `True` para `False` apenas
-informa à SEFAZ que o destinatário é revenda — não muda CNPJ emitente.
+**Para reverter** (se um dia o requisito fiscal mudar):
+1. Tirar hardcode no `payload_builder.py:157`.
+2. Reativar leitura do campo nas rotas (commit `c667c28d` tem o histórico).
+3. Reativar switch nos templates.
+4. Coluna no banco já existe — não precisa de migration.
 
 ---
 

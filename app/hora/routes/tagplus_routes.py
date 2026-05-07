@@ -1167,10 +1167,8 @@ def tagplus_pedido_venda_criar():
         flash('Loja invalida (inativa ou nao permitida).', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
-    # Consumidor final (NF-e): checkbox no formulario.
-    # Sem hidden duplicado, browser nao envia o name quando desmarcado.
-    # Default UI: marcado para CPF, desmarcado para CNPJ (inferencia client-side).
-    consumidor_final_form = request.form.get('consumidor_final') == '1'
+    # consumidor_final: campo removido da UI em 2026-05-07. Payload TagPlus
+    # agora envia sempre True (ver payload_builder.py). Nao lemos mais do form.
 
     try:
         venda = venda_service.criar_venda_manual(
@@ -1198,7 +1196,6 @@ def tagplus_pedido_venda_criar():
             criado_por=_operador(),
             loja_id_override=loja_id_int,
             pagamentos=pagamentos_in,
-            consumidor_final=consumidor_final_form,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')
