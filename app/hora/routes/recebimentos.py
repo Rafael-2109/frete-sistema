@@ -231,9 +231,36 @@ def recebimentos_motos_nf(recebimento_id: int):
     if filtro not in ('todas', 'conferidas'):
         filtro = 'todas'
 
+    from app.hora.services.modelo_resolver_service import resolver_modelo
+    from app.hora.models import ALIAS_TIPO_NOME_NF, HoraMoto
+
     confs_ativas = [c for c in rec.conferencias if not c.substituida]
     conf_por_chassi = {c.numero_chassi: c for c in confs_ativas}
     total_conferidas = sum(1 for c in confs_ativas if c.confirmado_em is not None)
+
+    # Pre-carrega motos dos chassis da NF para evitar N+1 ao resolver canonico.
+    chassis_nf = [it.numero_chassi for it in rec.nf.itens if it.numero_chassi]
+    motos_por_chassi = {
+        m.numero_chassi: m
+        for m in HoraMoto.query.filter(HoraMoto.numero_chassi.in_(chassis_nf)).all()
+    } if chassis_nf else {}
+
+    def _resolver_modelo_canonico(it):
+        """Modelo canonico para exibir no modal: prioriza HoraMoto.modelo
+        (FK ja segue cadeia merged_em_id apos correcao do recebimento) e
+        cai em resolver_modelo do texto NF como fallback. Retorna None se
+        ainda nao resolveu (pendencia)."""
+        moto = motos_por_chassi.get(it.numero_chassi)
+        if moto and moto.modelo:
+            return moto.modelo.nome_modelo
+        if it.modelo_texto_original:
+            mc = (
+                resolver_modelo(it.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
+                or resolver_modelo(it.modelo_texto_original)
+            )
+            if mc is not None:
+                return mc.nome_modelo
+        return None
 
     itens = []
     for it in rec.nf.itens:
@@ -243,7 +270,7 @@ def recebimentos_motos_nf(recebimento_id: int):
             continue
         itens.append({
             'chassi': it.numero_chassi,
-            'modelo': it.modelo_texto_original,
+            'modelo': _resolver_modelo_canonico(it),
             'cor': it.cor_texto_original,
             'motor': it.numero_motor_texto_original,
             'conferida': conferida,
@@ -525,22 +552,41 @@ def recebimentos_resolver_aplicar(recebimento_id: int, conferencia_id: int):
 def modelos_criar_rapido():
     """Cria um modelo intencionalmente (operador clica "Criar modelo X").
 
-    Migration hora_29: usa cadastro_service.criar_modelo direto + adiciona
-    o nome_modelo como HoraModeloAlias NOME_LIVRE (preserva auto-resolucao
-    em ingestoes futuras).
+    Antes de criar, consulta hora_modelo_alias (qualquer tipo) e
+    hora_modelo.nome_modelo para evitar duplicacao quando o nome digitado
+    for sinonimo de um canonico ja existente. Se resolver, devolve o
+    canonico com aviso ao inves de criar um novo modelo (regra
+    2026-05-06: padronizar nomes na conferencia/recebimento/estoque/venda
+    via canonico unico).
+
+    Apenas se nao resolver e que cria HoraModelo + HoraModeloAlias
+    NOME_LIVRE (consistencia com seed hora_30).
     """
     from app.hora.services import cadastro_service
+    from app.hora.services.modelo_resolver_service import resolver_modelo
     from app.hora.models import HoraModeloAlias, ALIAS_TIPO_NOME_LIVRE
 
     nome = (request.form.get('nome_modelo') or '').strip()
     if not nome:
         return jsonify({'ok': False, 'erro': 'nome_modelo obrigatorio'}), 400
+
+    # 1. Tenta resolver via aliases ANTES de criar (evita duplicado lateral)
+    canonico = resolver_modelo(nome)
+    if canonico is not None:
+        return jsonify({
+            'ok': True,
+            'modelo_id': canonico.id,
+            'nome_modelo': canonico.nome_modelo,
+            'aviso': (
+                f'Nome {nome!r} ja vinculado ao modelo canonico '
+                f'{canonico.nome_modelo!r} via alias. Reusando.'
+            ),
+            'reusou_canonico': True,
+        })
+
+    # 2. Nao resolveu — cria HoraModelo novo + alias NOME_LIVRE
     try:
-        # criar_modelo valida unicidade de nome_modelo e levanta ValueError
-        # se ja existe.
         modelo = cadastro_service.criar_modelo(nome_modelo=nome)
-        # Auto-alias: o proprio nome canonico vira alias para o resolver
-        # bater diretamente em HoraModeloAlias (consistencia com seed).
         existente = (
             HoraModeloAlias.query
             .filter_by(tipo=ALIAS_TIPO_NOME_LIVRE, nome_alias=nome)
@@ -557,7 +603,7 @@ def modelos_criar_rapido():
         db.session.commit()
     except ValueError as exc:
         db.session.rollback()
-        # Pode ser "ja existe" — tenta recuperar e devolver o existente.
+        # Race: outro request criou entre o resolver e o criar_modelo.
         modelo = HoraModelo.query.filter_by(nome_modelo=nome).first()
         if modelo:
             return jsonify({

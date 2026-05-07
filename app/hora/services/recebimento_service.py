@@ -72,6 +72,9 @@ def validar_chassi_contra_recebimento(
     Retorna dict com contexto para o wizard: item da NF (se existir),
     sugestoes de modelo/cor, ja_conferido.
     """
+    from app.hora.services.modelo_resolver_service import resolver_modelo
+    from app.hora.models import ALIAS_TIPO_NOME_NF
+
     chassi_norm = (numero_chassi or '').strip().upper()
     resultado = {
         'chassi': chassi_norm,
@@ -81,6 +84,8 @@ def validar_chassi_contra_recebimento(
         'conferencia_ativa_id': None,
         'moto_existe': False,
         'modelo_esperado': None,
+        'modelo_id_esperado': None,
+        'modelo_canonico_esperado': None,
         'cor_esperada': None,
         'mensagem': '',
         'modelos_sugeridos': [],
@@ -102,8 +107,25 @@ def validar_chassi_contra_recebimento(
     )
     resultado['na_nf'] = item_nf is not None
     if item_nf:
+        # `modelo_esperado` (texto bruto) preservado para retrocompat / auditoria.
         resultado['modelo_esperado'] = item_nf.modelo_texto_original
         resultado['cor_esperada'] = item_nf.cor_texto_original
+        # Resolve canonico para que a UI selecione pelo id (nao por texto).
+        # Prioridade: HoraMoto.modelo (FK ja segue _seguir_canonico apos
+        # _aplicar_correcao_moto_se_divergir); fallback para resolver_modelo
+        # do texto NF (alias NOME_NF, depois qualquer tipo).
+        modelo_canonico = None
+        moto_existente = HoraMoto.query.get(chassi_norm)
+        if moto_existente and moto_existente.modelo:
+            modelo_canonico = moto_existente.modelo
+        elif item_nf.modelo_texto_original:
+            modelo_canonico = (
+                resolver_modelo(item_nf.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
+                or resolver_modelo(item_nf.modelo_texto_original)
+            )
+        if modelo_canonico is not None:
+            resultado['modelo_id_esperado'] = modelo_canonico.id
+            resultado['modelo_canonico_esperado'] = modelo_canonico.nome_modelo
 
     moto = HoraMoto.query.get(chassi_norm)
     resultado['moto_existe'] = moto is not None
@@ -126,19 +148,28 @@ def validar_chassi_contra_recebimento(
         resultado['ja_conferido'] = True
         resultado['conferencia_ativa_id'] = existente.id
 
-    modelos, cores = set(), set()
+    # modelos_sugeridos: lista nomes CANONICOS para casar com o select do
+    # wizard (que so contem canonicos). Resolve cada texto livre da NF e
+    # cada modelo_id de pedido para o canonico correspondente.
+    modelos_canonicos: dict[int, str] = {}
+    cores: set[str] = set()
     for i in rec.nf.itens:
         if i.modelo_texto_original:
-            modelos.add(i.modelo_texto_original.strip())
+            mc = (
+                resolver_modelo(i.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
+                or resolver_modelo(i.modelo_texto_original)
+            )
+            if mc is not None:
+                modelos_canonicos[mc.id] = mc.nome_modelo
         if i.cor_texto_original:
             cores.add(i.cor_texto_original.strip().upper())
     if rec.nf.pedido_id and rec.nf.pedido:
         for pi in rec.nf.pedido.itens:
             if pi.modelo and pi.modelo.nome_modelo:
-                modelos.add(pi.modelo.nome_modelo.strip())
+                modelos_canonicos[pi.modelo.id] = pi.modelo.nome_modelo
             if pi.cor:
                 cores.add(pi.cor.strip().upper())
-    resultado['modelos_sugeridos'] = sorted(m for m in modelos if m)
+    resultado['modelos_sugeridos'] = sorted(modelos_canonicos.values())
     resultado['cores_sugeridas'] = sorted(c for c in cores if c)
 
     if not resultado['na_nf']:
@@ -776,20 +807,50 @@ def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimen
         ))
         snapshot = 'CHASSI_EXTRA'
     else:
-        modelo_nf = _normalizar_modelo_nome(item_nf.modelo_texto_original)
-        modelo_conf_nome = None
-        if conf.modelo_id_conferido:
-            m = HoraModelo.query.get(conf.modelo_id_conferido)
-            if m:
-                modelo_conf_nome = _normalizar_modelo_nome(m.nome_modelo)
-        if modelo_nf and modelo_conf_nome and modelo_nf != modelo_conf_nome:
-            db.session.add(HoraConferenciaDivergencia(
-                conferencia_id=conf.id,
-                tipo='MODELO_DIFERENTE',
-                valor_esperado=item_nf.modelo_texto_original,
-                valor_conferido=modelo_conf_nome,
-            ))
-            snapshot = snapshot or 'MODELO_DIFERENTE'
+        # Compara modelo via modelo_id CANONICO resolvido — evita falso
+        # positivo MODELO_DIFERENTE quando NF traz nome livre ('BOB AM') que
+        # eh alias do canonico conferido ('BOB'). Se o texto da NF nao
+        # resolver para nenhum canonico (pendencia ainda nao decidida), cai
+        # no comparativo textual antigo (preserva sinal).
+        from app.hora.services.modelo_resolver_service import resolver_modelo
+        from app.hora.models import ALIAS_TIPO_NOME_NF
+
+        modelo_conf = (
+            HoraModelo.query.get(conf.modelo_id_conferido)
+            if conf.modelo_id_conferido else None
+        )
+        modelo_conf_nome = (
+            _normalizar_modelo_nome(modelo_conf.nome_modelo) if modelo_conf else None
+        )
+
+        modelo_nf_canonico = None
+        if item_nf.modelo_texto_original:
+            modelo_nf_canonico = (
+                resolver_modelo(item_nf.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
+                or resolver_modelo(item_nf.modelo_texto_original)
+            )
+
+        if modelo_conf and modelo_nf_canonico:
+            # Caminho preferencial: ambos canonicos disponiveis. Compara IDs.
+            if modelo_conf.id != modelo_nf_canonico.id:
+                db.session.add(HoraConferenciaDivergencia(
+                    conferencia_id=conf.id,
+                    tipo='MODELO_DIFERENTE',
+                    valor_esperado=modelo_nf_canonico.nome_modelo,
+                    valor_conferido=modelo_conf.nome_modelo,
+                ))
+                snapshot = snapshot or 'MODELO_DIFERENTE'
+        else:
+            # Fallback textual (compat): NF nao resolveu canonico ainda.
+            modelo_nf_txt = _normalizar_modelo_nome(item_nf.modelo_texto_original)
+            if modelo_nf_txt and modelo_conf_nome and modelo_nf_txt != modelo_conf_nome:
+                db.session.add(HoraConferenciaDivergencia(
+                    conferencia_id=conf.id,
+                    tipo='MODELO_DIFERENTE',
+                    valor_esperado=item_nf.modelo_texto_original,
+                    valor_conferido=modelo_conf_nome,
+                ))
+                snapshot = snapshot or 'MODELO_DIFERENTE'
 
         cor_nf = _normalizar_cor(item_nf.cor_texto_original)
         cor_conf = _normalizar_cor(conf.cor_conferida)

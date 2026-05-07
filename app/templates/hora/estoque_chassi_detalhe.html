@@ -118,13 +118,10 @@
         {% else %}—{% endif %}
       </div>
     </div>
-    {% if rastreio.nf_item and (rastreio.nf_item.modelo_texto_original or rastreio.nf_item.cor_texto_original) %}
-      <hr class="my-2">
-      <small class="text-muted">Texto original na NF:
-        {{ rastreio.nf_item.modelo_texto_original }}
-        {% if rastreio.nf_item.cor_texto_original %} — {{ rastreio.nf_item.cor_texto_original }}{% endif %}
-      </small>
-    {% endif %}
+    {# Texto cru da NF intencionalmente omitido aqui — modelo canonico ja
+       eh exibido em "Modelo" (linha 25) via moto.modelo.nome_modelo. Para
+       conferir o texto original como veio na DANFE, abra `nf_detalhe.html`
+       (que preserva auditoria). #}
   {% else %}
     <p class="text-muted mb-0">Sem NF de entrada vinculada.</p>
   {% endif %}

@@ -164,7 +164,12 @@
 
           <!-- NF -->
           <td class="border-start">
-            {{ nf_item.modelo_texto_original if nf_item and nf_item.modelo_texto_original else '—' }}
+            {# Exibe modelo CANONICO (via FK HoraMoto.modelo, que segue
+               cadeia merged_em_id). Texto cru `modelo_texto_original`
+               permanece em `nf_detalhe.html` para auditoria. #}
+            {% if nf_item and nf_item.moto and nf_item.moto.modelo %}
+              {{ nf_item.moto.modelo.nome_modelo }}
+            {% else %}—{% endif %}
           </td>
           <td>{{ nf_item.cor_texto_original if nf_item and nf_item.cor_texto_original else '—' }}</td>
           <td class="chassi-mono small">

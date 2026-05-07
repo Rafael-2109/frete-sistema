@@ -432,14 +432,27 @@
       ctx.classList.remove('d-none');
       msg.textContent = data.mensagem || '';
       // pre-seleciona modelo/cor se houver no contexto (sem forcar, operador decide)
-      if (data.modelo_esperado && !state.modeloNome) {
-        // tentar achar modelo_esperado no select
-        const opts = document.getElementById('select-modelo').options;
-        for (let i = 0; i < opts.length; i++) {
-          if (opts[i].textContent.trim().toUpperCase()
-              === String(data.modelo_esperado).trim().toUpperCase()) {
-            document.getElementById('select-modelo').value = opts[i].value;
-            break;
+      // Prioriza modelo_id_esperado (canonico resolvido) — evita falha quando
+      // texto da NF eh alias ('BOB AM' nao bate em option 'BOB'). Fallback
+      // para casamento textual quando id nao esta disponivel (NF com nome
+      // ainda nao resolvido em hora_modelo_alias).
+      if (!state.modeloNome) {
+        const sel = document.getElementById('select-modelo');
+        if (data.modelo_id_esperado) {
+          const optById = sel.querySelector(
+            'option[value="' + String(data.modelo_id_esperado) + '"]'
+          );
+          if (optById) {
+            sel.value = optById.value;
+          }
+        } else if (data.modelo_esperado) {
+          const opts = sel.options;
+          for (let i = 0; i < opts.length; i++) {
+            if (opts[i].textContent.trim().toUpperCase()
+                === String(data.modelo_esperado).trim().toUpperCase()) {
+              sel.value = opts[i].value;
+              break;
+            }
           }
         }
       }
