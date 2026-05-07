@@ -11,7 +11,7 @@ Data: 21/01/2025
 
 from sqlalchemy import func, distinct, text
 from decimal import Decimal
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app import db
 from app.carteira.models import CarteiraPrincipal
 import logging
@@ -495,3 +495,384 @@ class AgregacaoComercialService:
                 'total_clientes': 0,
                 'valor_total_aberto': 0.0
             }
+
+    @staticmethod
+    def obter_lista_clientes_paginada(
+        page: int = 1,
+        per_page: int = 50,
+        filtro_posicao: str = 'em_aberto',
+        equipe_filtro: Optional[str] = None,
+        vendedor_filtro: Optional[str] = None,
+        filtros_avancados: Optional[Dict[str, str]] = None,
+        is_vendedor: bool = False,
+        equipes_permitidas: Optional[List[str]] = None,
+        vendedores_permitidos: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Lista paginada de clientes para a tela /comercial/clientes.
+
+        Substitui o N+1 brutal do antigo `_coletar_clientes_data` por
+        2 queries SQL agregadas (CTEs). Mantém feature parity com:
+        - filtros: cnpj_cpf, cliente, pedido, pedido_cliente, uf,
+          raz_social, raz_social_red, num_pedido (legacy)
+        - permissões de vendedor (equipes/vendedores)
+        - filtro_posicao 'em_aberto' (saldo + faturado nao entregue)
+          ou 'todos' (saldo + faturado total)
+        - cobertura de clientes via CarteiraPrincipal E FaturamentoProduto
+
+        Returns:
+            Dict com: clientes (list), total (int), page, per_page,
+            total_pages, valor_total_pagina (Decimal)
+        """
+        if filtros_avancados is None:
+            filtros_avancados = {}
+
+        # Saneamento dos parametros
+        if page < 1:
+            page = 1
+        if per_page < 1:
+            per_page = 50
+        if per_page > 200:
+            per_page = 200
+
+        offset = (page - 1) * per_page
+
+        cnpj_cpf = (filtros_avancados.get('cnpj_cpf') or '').strip()
+        cliente = (filtros_avancados.get('cliente') or '').strip()
+        pedido = (filtros_avancados.get('pedido') or '').strip()
+        uf = (filtros_avancados.get('uf') or '').strip()
+        raz_social = (filtros_avancados.get('raz_social') or '').strip()
+        raz_social_red = (filtros_avancados.get('raz_social_red') or '').strip()
+        num_pedido = (filtros_avancados.get('num_pedido') or '').strip()
+        pedido_cliente = (filtros_avancados.get('pedido_cliente') or '').strip()
+
+        # ANY(:array) com array vazia gera erro no PG; usamos sentinela ''
+        equipes_permitidas_param = equipes_permitidas or ['']
+        vendedores_permitidos_param = vendedores_permitidos or ['']
+
+        params = {
+            'posicao': filtro_posicao,
+            'is_vendedor': bool(is_vendedor),
+            'equipes_permitidas': equipes_permitidas_param,
+            'vendedores_permitidos': vendedores_permitidos_param,
+            'equipe_filtro': equipe_filtro or '',
+            'vendedor_filtro': vendedor_filtro or '',
+            'cnpj_cpf': cnpj_cpf,
+            'cliente': cliente,
+            'pedido': pedido,
+            'uf': uf,
+            'raz_social': raz_social,
+            'raz_social_red': raz_social_red,
+            'num_pedido': num_pedido,
+            'pedido_cliente': pedido_cliente,
+            'limit': per_page,
+            'offset': offset
+        }
+
+        # CTE master: aplica filtros + permissoes em CarteiraPrincipal e
+        # FaturamentoProduto, faz UNION e calcula valores agregados.
+        # Filtro por pedido/pedido_cliente em registros que so aparecem em
+        # FaturamentoProduto e o JOIN via fp.origem = cp.num_pedido.
+        sql_clientes = text("""
+            WITH cnpjs_carteira AS (
+                SELECT DISTINCT cnpj_cpf
+                FROM carteira_principal cp
+                WHERE cnpj_cpf IS NOT NULL AND cnpj_cpf != ''
+                  AND (:posicao = 'todos' OR qtd_saldo_produto_pedido > 0.02)
+                  AND (:cnpj_cpf = '' OR cnpj_cpf LIKE '%' || :cnpj_cpf || '%')
+                  AND (:cliente = '' OR
+                       lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')) OR
+                       lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')))
+                  AND (:raz_social = '' OR
+                       lower(f_unaccent(COALESCE(raz_social, ''))) LIKE lower(f_unaccent('%' || :raz_social || '%')))
+                  AND (:raz_social_red = '' OR
+                       lower(f_unaccent(COALESCE(raz_social_red, ''))) LIKE lower(f_unaccent('%' || :raz_social_red || '%')))
+                  AND (:uf = '' OR estado = :uf)
+                  AND (:equipe_filtro = '' OR equipe_vendas = :equipe_filtro)
+                  AND (:vendedor_filtro = '' OR vendedor = :vendedor_filtro)
+                  AND (:pedido = '' OR
+                       lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')) OR
+                       lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')))
+                  AND (:num_pedido = '' OR
+                       lower(f_unaccent(COALESCE(num_pedido, ''))) LIKE lower(f_unaccent('%' || :num_pedido || '%')))
+                  AND (:pedido_cliente = '' OR
+                       lower(f_unaccent(COALESCE(pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido_cliente || '%')))
+                  AND (NOT :is_vendedor OR
+                       (:equipe_filtro != '' AND equipe_vendas = :equipe_filtro) OR
+                       (:vendedor_filtro != '' AND vendedor = :vendedor_filtro) OR
+                       (:equipe_filtro = '' AND :vendedor_filtro = '' AND
+                        (equipe_vendas = ANY(:equipes_permitidas) OR
+                         vendedor = ANY(:vendedores_permitidos))))
+            ),
+            cnpjs_faturamento AS (
+                SELECT DISTINCT fp.cnpj_cliente AS cnpj_cpf
+                FROM faturamento_produto fp
+                LEFT JOIN entregas_monitoradas em ON em.numero_nf = fp.numero_nf
+                WHERE fp.cnpj_cliente IS NOT NULL AND fp.cnpj_cliente != ''
+                  AND fp.status_nf != 'Cancelado'
+                  AND (:posicao = 'todos' OR
+                       em.status_finalizacao IS NULL OR
+                       em.status_finalizacao != 'Entregue')
+                  AND (:cnpj_cpf = '' OR fp.cnpj_cliente LIKE '%' || :cnpj_cpf || '%')
+                  AND (:cliente = '' OR
+                       lower(f_unaccent(COALESCE(fp.nome_cliente, ''))) LIKE lower(f_unaccent('%' || :cliente || '%')))
+                  AND (:raz_social = '' OR
+                       lower(f_unaccent(COALESCE(fp.nome_cliente, ''))) LIKE lower(f_unaccent('%' || :raz_social || '%')))
+                  AND (:raz_social_red = '' OR
+                       lower(f_unaccent(COALESCE(fp.nome_cliente, ''))) LIKE lower(f_unaccent('%' || :raz_social_red || '%')))
+                  AND (:uf = '' OR fp.estado = :uf)
+                  AND (:equipe_filtro = '' OR fp.equipe_vendas = :equipe_filtro)
+                  AND (:vendedor_filtro = '' OR fp.vendedor = :vendedor_filtro)
+                  -- Filtro por pedido/pedido_cliente: usa subquery em CarteiraPrincipal
+                  AND (:pedido = '' OR EXISTS (
+                       SELECT 1 FROM carteira_principal cpp
+                       WHERE cpp.num_pedido = fp.origem
+                         AND (lower(f_unaccent(COALESCE(cpp.num_pedido, ''))) LIKE lower(f_unaccent('%' || :pedido || '%'))
+                           OR lower(f_unaccent(COALESCE(cpp.pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido || '%')))
+                  ))
+                  AND (:num_pedido = '' OR
+                       lower(f_unaccent(COALESCE(fp.origem, ''))) LIKE lower(f_unaccent('%' || :num_pedido || '%')))
+                  AND (:pedido_cliente = '' OR EXISTS (
+                       SELECT 1 FROM carteira_principal cpp
+                       WHERE cpp.num_pedido = fp.origem
+                         AND lower(f_unaccent(COALESCE(cpp.pedido_cliente, ''))) LIKE lower(f_unaccent('%' || :pedido_cliente || '%'))
+                  ))
+                  AND (NOT :is_vendedor OR
+                       (:equipe_filtro != '' AND fp.equipe_vendas = :equipe_filtro) OR
+                       (:vendedor_filtro != '' AND fp.vendedor = :vendedor_filtro) OR
+                       (:equipe_filtro = '' AND :vendedor_filtro = '' AND
+                        (fp.equipe_vendas = ANY(:equipes_permitidas) OR
+                         fp.vendedor = ANY(:vendedores_permitidos))))
+            ),
+            todos_cnpjs AS (
+                SELECT cnpj_cpf FROM cnpjs_carteira
+                UNION
+                SELECT cnpj_cpf FROM cnpjs_faturamento
+            ),
+            valores AS (
+                SELECT
+                    tc.cnpj_cpf,
+                    COALESCE((
+                        SELECT SUM(qtd_saldo_produto_pedido * preco_produto_pedido)
+                        FROM carteira_principal
+                        WHERE cnpj_cpf = tc.cnpj_cpf
+                          AND qtd_saldo_produto_pedido > 0.02
+                    ), 0)::numeric AS saldo_carteira,
+                    COALESCE((
+                        SELECT SUM(valor_produto_faturado)
+                        FROM faturamento_produto
+                        WHERE cnpj_cliente = tc.cnpj_cpf
+                          AND status_nf != 'Cancelado'
+                    ), 0)::numeric AS faturado_total,
+                    COALESCE((
+                        SELECT SUM(fp2.valor_produto_faturado)
+                        FROM faturamento_produto fp2
+                        LEFT JOIN entregas_monitoradas em2 ON em2.numero_nf = fp2.numero_nf
+                        WHERE fp2.cnpj_cliente = tc.cnpj_cpf
+                          AND fp2.status_nf != 'Cancelado'
+                          AND (em2.status_finalizacao IS NULL OR em2.status_finalizacao != 'Entregue')
+                    ), 0)::numeric AS faturado_nao_entregue
+                FROM todos_cnpjs tc
+            ),
+            valores_finais AS (
+                SELECT
+                    cnpj_cpf,
+                    saldo_carteira,
+                    faturado_total,
+                    faturado_nao_entregue,
+                    CASE WHEN :posicao = 'todos'
+                         THEN saldo_carteira + faturado_total
+                         ELSE saldo_carteira + faturado_nao_entregue
+                    END AS valor_principal,
+                    saldo_carteira + faturado_total AS valor_total
+                FROM valores
+                WHERE
+                    -- Em 'em_aberto' so mantemos clientes com algum valor positivo
+                    (:posicao = 'todos' OR (saldo_carteira + faturado_nao_entregue) > 0)
+            )
+            SELECT
+                cnpj_cpf,
+                saldo_carteira,
+                faturado_total,
+                faturado_nao_entregue,
+                valor_principal,
+                valor_total,
+                COUNT(*) OVER() AS total_clientes,
+                SUM(valor_principal) OVER() AS valor_total_geral
+            FROM valores_finais
+            ORDER BY valor_principal DESC, cnpj_cpf
+            LIMIT :limit OFFSET :offset
+        """)
+
+        try:
+            rows = db.session.execute(sql_clientes, params).fetchall()
+        except Exception as e:
+            logger.error(f"Erro ao buscar lista paginada de clientes: {e}")
+            return {
+                'clientes': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': 0,
+                'valor_total_pagina': Decimal('0.00'),
+                'valor_total_geral': Decimal('0.00')
+            }
+
+        if not rows:
+            return {
+                'clientes': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': 0,
+                'valor_total_pagina': Decimal('0.00'),
+                'valor_total_geral': Decimal('0.00')
+            }
+
+        total_clientes = int(rows[0].total_clientes)
+        total_pages = (total_clientes + per_page - 1) // per_page
+        valor_total_geral = Decimal(str(rows[0].valor_total_geral or 0))
+        cnpjs_pagina = [r.cnpj_cpf for r in rows]
+
+        # Mapa de valores por CNPJ
+        valores_por_cnpj: Dict[str, Dict[str, Any]] = {}
+        for r in rows:
+            valores_por_cnpj[r.cnpj_cpf] = {
+                'saldo_carteira': Decimal(str(r.saldo_carteira or 0)),
+                'faturado_total': Decimal(str(r.faturado_total or 0)),
+                'faturado_nao_entregue': Decimal(str(r.faturado_nao_entregue or 0)),
+                'valor_principal': Decimal(str(r.valor_principal or 0)),
+                'valor_total': Decimal(str(r.valor_total or 0))
+            }
+
+        # Query 2: dados descritivos para os CNPJs da pagina
+        sql_dados = text("""
+            WITH cnpjs_pagina AS (
+                SELECT unnest(CAST(:cnpjs AS varchar[])) AS cnpj_cpf
+            ),
+            dados_carteira AS (
+                SELECT DISTINCT ON (cnpj_cpf)
+                    cnpj_cpf,
+                    raz_social,
+                    raz_social_red,
+                    estado,
+                    municipio,
+                    vendedor,
+                    equipe_vendas
+                FROM carteira_principal
+                WHERE cnpj_cpf = ANY(CAST(:cnpjs AS varchar[]))
+                ORDER BY cnpj_cpf, updated_at DESC NULLS LAST, id DESC
+            ),
+            dados_faturamento AS (
+                SELECT DISTINCT ON (cnpj_cliente)
+                    cnpj_cliente AS cnpj_cpf,
+                    nome_cliente,
+                    estado,
+                    municipio,
+                    vendedor,
+                    equipe_vendas
+                FROM faturamento_produto
+                WHERE cnpj_cliente = ANY(CAST(:cnpjs AS varchar[]))
+                  AND status_nf != 'Cancelado'
+                ORDER BY cnpj_cliente, data_fatura DESC NULLS LAST, id DESC
+            ),
+            dados_contato AS (
+                -- contatos_agendamento NAO tem unique constraint em cnpj.
+                -- DISTINCT ON garante 1 linha por cnpj (deterministico),
+                -- evitando fan-out na query final que duplicaria CNPJs.
+                SELECT DISTINCT ON (cnpj)
+                    cnpj,
+                    forma
+                FROM contatos_agendamento
+                WHERE cnpj = ANY(CAST(:cnpjs AS varchar[]))
+                ORDER BY cnpj, atualizado_em DESC NULLS LAST, id DESC
+            ),
+            pedidos_unicos AS (
+                SELECT cnpj_cpf, num_pedido
+                FROM carteira_principal
+                WHERE cnpj_cpf = ANY(CAST(:cnpjs AS varchar[]))
+                  AND num_pedido IS NOT NULL
+                  AND (:posicao = 'todos' OR qtd_saldo_produto_pedido > 0.02)
+                UNION
+                SELECT fp.cnpj_cliente AS cnpj_cpf, fp.origem AS num_pedido
+                FROM faturamento_produto fp
+                LEFT JOIN entregas_monitoradas em ON em.numero_nf = fp.numero_nf
+                WHERE fp.cnpj_cliente = ANY(CAST(:cnpjs AS varchar[]))
+                  AND fp.origem IS NOT NULL
+                  AND fp.status_nf != 'Cancelado'
+                  AND (:posicao = 'todos' OR
+                       em.status_finalizacao IS NULL OR
+                       em.status_finalizacao != 'Entregue')
+            ),
+            pedidos_count AS (
+                SELECT cnpj_cpf, COUNT(DISTINCT num_pedido) AS total_pedidos
+                FROM pedidos_unicos
+                GROUP BY cnpj_cpf
+            )
+            SELECT
+                cp.cnpj_cpf,
+                dc.raz_social AS raz_social,
+                COALESCE(dc.raz_social_red, df.nome_cliente) AS raz_social_red,
+                COALESCE(dc.estado, df.estado) AS estado,
+                COALESCE(dc.municipio, df.municipio) AS municipio,
+                COALESCE(dc.vendedor, df.vendedor) AS vendedor,
+                COALESCE(dc.equipe_vendas, df.equipe_vendas) AS equipe_vendas,
+                ca.forma AS forma_agendamento,
+                COALESCE(pc.total_pedidos, 0) AS total_pedidos
+            FROM cnpjs_pagina cp
+            LEFT JOIN dados_carteira dc ON dc.cnpj_cpf = cp.cnpj_cpf
+            LEFT JOIN dados_faturamento df ON df.cnpj_cpf = cp.cnpj_cpf
+            LEFT JOIN dados_contato ca ON ca.cnpj = cp.cnpj_cpf
+            LEFT JOIN pedidos_count pc ON pc.cnpj_cpf = cp.cnpj_cpf
+        """)
+
+        try:
+            dados_rows = db.session.execute(
+                sql_dados,
+                {'cnpjs': cnpjs_pagina, 'posicao': filtro_posicao}
+            ).fetchall()
+        except Exception as e:
+            logger.error(f"Erro ao buscar dados descritivos dos clientes: {e}")
+            dados_rows = []
+
+        dados_por_cnpj: Dict[str, Any] = {}
+        for r in dados_rows:
+            dados_por_cnpj[r.cnpj_cpf] = r
+
+        clientes: List[Dict[str, Any]] = []
+        valor_total_pagina = Decimal('0.00')
+        for cnpj in cnpjs_pagina:
+            valores = valores_por_cnpj.get(cnpj, {})
+            dados = dados_por_cnpj.get(cnpj)
+            valor_principal = valores.get('valor_principal', Decimal('0.00'))
+            valor_total_pagina += valor_principal
+
+            clientes.append({
+                'cnpj_cpf': cnpj,
+                'raz_social': dados.raz_social if dados else None,
+                'raz_social_red': dados.raz_social_red if dados else None,
+                'estado': dados.estado if dados else None,
+                'municipio': dados.municipio if dados else None,
+                'vendedor': dados.vendedor if dados else None,
+                'equipe_vendas': dados.equipe_vendas if dados else None,
+                'forma_agendamento': dados.forma_agendamento if dados else None,
+                'total_pedidos': int(dados.total_pedidos) if dados else 0,
+                'valor_em_aberto': float(valores.get('saldo_carteira', 0) + valores.get('faturado_nao_entregue', 0)),
+                'valor_total': float(valores.get('valor_total', 0)),
+                'valor_principal': float(valor_principal)
+            })
+
+        logger.info(
+            "Lista paginada de clientes carregada: "
+            f"page={page}, per_page={per_page}, total={total_clientes}, retornados={len(clientes)}"
+        )
+
+        return {
+            'clientes': clientes,
+            'total': total_clientes,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
+            'valor_total_pagina': valor_total_pagina,
+            'valor_total_geral': valor_total_geral
+        }

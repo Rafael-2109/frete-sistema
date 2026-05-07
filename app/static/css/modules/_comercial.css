@@ -18,12 +18,78 @@
      LISTA CLIENTES
      ═══════════════════════════════════════════════════════════════════════════ */
 
-  /* Custom Table Styling */
-  .table-custom {
+  /* ─────────────────────────────────────────────────────────────────────
+     Custom Table Styling
+     - .table-custom-card: wrapper EXTERNO com border-radius e overflow:hidden.
+       Contem o filho .table-responsive que cria seu proprio scroll
+       horizontal (overflow-x: auto), sem que o pai cancele essa rolagem.
+     - .table-custom: classe legada mantida para compatibilidade. NAO usar
+       em conjunto com .table-responsive no mesmo elemento (o overflow
+       hidden corta o scroll horizontal — bug historico ate 2026-05-07).
+     ───────────────────────────────────────────────────────────────────── */
+  .table-custom-card {
     background: var(--bs-secondary-bg);
     border: 1px solid var(--bs-border-color);
     border-radius: 12px;
     overflow: hidden;
+    /* Limita altura para forcar scroll interno + sticky thead em listas longas.
+       Subtrai navbar (~64px) + breadcrumb/header/filtros (~280px) + paginacao (~60px).
+       Comporta-se bem em viewports >= 600px de altura; abaixo disso o scroll do
+       body assume. */
+    max-height: calc(100vh - 360px);
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .table-custom-card .table-responsive {
+    /* O filho cria proprio scroll horizontal — bordas arredondadas do pai
+       continuam respeitadas via overflow:hidden externo. */
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .table-custom-card table {
+    margin-bottom: 0;
+  }
+
+  .table-custom-card thead th {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+    border-bottom: 2px solid var(--bs-border-color);
+    /* Cabecalho fixo durante scroll vertical da tabela */
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+
+  .table-custom-card tbody tr {
+    border-bottom: 1px solid var(--bs-border-color);
+    transition: all 0.2s ease;
+  }
+
+  .table-custom-card tbody tr:hover {
+    background: var(--bs-tertiary-bg);
+  }
+
+  .table-custom-card tbody td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+  }
+
+  /* Compatibilidade: alias legado .table-custom replica visual basico.
+     Mantem-se sem overflow para nao reproduzir bug historico. */
+  .table-custom {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
   }
 
   .table-custom table {
@@ -53,6 +119,22 @@
   .table-custom tbody td {
     padding: 0.75rem 1rem;
     vertical-align: middle;
+  }
+
+  /* Paginacao server-side (lista de clientes) */
+  .paginacao-clientes .pagination .page-link {
+    background-color: var(--bs-tertiary-bg);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+  }
+  .paginacao-clientes .pagination .page-item.active .page-link {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: var(--bg-light);
+  }
+  .paginacao-clientes .pagination .page-item.disabled .page-link {
+    color: var(--bs-secondary-color);
+    background-color: var(--bs-secondary-bg);
   }
 
   /* DataTables Customization */

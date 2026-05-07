@@ -129,6 +129,8 @@
     }
 
     /* === OCULTAR TABELA DESKTOP === */
+    /* Cobre estrutura nova (.table-custom-card) e legada (.table-dark-custom) */
+    .table-custom-card,
     .table-responsive.table-dark-custom {
         display: none !important;
     }
@@ -203,6 +205,8 @@
     }
 
     /* === OCULTAR TABELA DESKTOP === */
+    /* Cobre estrutura nova (.table-custom-card) e legada (.table-dark-custom) */
+    .table-custom-card,
     .table-responsive.table-dark-custom {
         display: none !important;
     }
@@ -231,8 +235,10 @@
    =========================== */
 @media (min-width: 992px) and (max-width: 1199px) {
     /* === LAYOUT DESKTOP NORMAL === */
+    .table-custom-card,
     .table-responsive.table-dark-custom {
-        display: block !important;
+        display: flex !important;
+        flex-direction: column;
     }
 
     #tabelaClientes_wrapper {
@@ -266,8 +272,10 @@
    =========================== */
 @media (min-width: 1200px) {
     /* === LAYOUT ORIGINAL COMPLETO === */
+    .table-custom-card,
     .table-responsive.table-dark-custom {
-        display: block !important;
+        display: flex !important;
+        flex-direction: column;
     }
 
     #tabelaClientes_wrapper {

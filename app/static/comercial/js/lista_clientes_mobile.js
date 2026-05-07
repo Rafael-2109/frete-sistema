@@ -49,6 +49,18 @@ function inicializarMobile() {
 
     // Contar filtros ativos
     atualizarContadorFiltros();
+
+    // Event delegation: click em card mobile abre modal de pedidos.
+    // Substitui onclick inline (anti-XSS) usando data-* attrs.
+    const containerCards = document.getElementById('clientesListaMobile');
+    if (containerCards && !containerCards.dataset.delegationBound) {
+        containerCards.addEventListener('click', function(ev) {
+            const card = ev.target.closest('.cliente-card-mobile');
+            if (!card) return;
+            verPedidosMobile(card.dataset.cnpj, card.dataset.nomeCliente);
+        });
+        containerCards.dataset.delegationBound = '1';
+    }
 }
 
 // ===========================
@@ -196,7 +208,23 @@ function renderizarCardsMobile(inicio, quantidade) {
 }
 
 // ===========================
+// HELPERS DE ESCAPE (anti-XSS)
+// ===========================
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// ===========================
 // CRIAR CARD HTML
+// Usa data-* attrs + escapeHtml para evitar quebra/XSS quando o nome do
+// cliente contem aspas, & ou caracteres especiais. Click via event
+// delegation registrado em inicializarMobile().
 // ===========================
 function criarCardCliente(cliente) {
     // Truncar nome se muito longo
@@ -204,13 +232,22 @@ function criarCardCliente(cliente) {
         ? cliente.nome.reduzido.substring(0, 32) + '...'
         : cliente.nome.reduzido;
 
+    const cnpjEsc = escapeHtml(cliente.cnpj);
+    const nomeReduzidoEsc = escapeHtml(cliente.nome.reduzido);
+    const nomeCompletoEsc = escapeHtml(cliente.nome.completo);
+    const nomeExibicaoEsc = escapeHtml(nomeExibicao);
+    const ufEsc = escapeHtml(cliente.uf);
+    const municipioEsc = escapeHtml(cliente.municipio || '-');
+    const vendedorEsc = escapeHtml(cliente.vendedor);
+    const valorFormatadoEsc = escapeHtml(cliente.valorFormatado);
+
     return `
-        <div class="cliente-card-mobile" onclick="verPedidosMobile('${cliente.cnpj}', '${cliente.nome.reduzido.replace(/'/g, "\\'")}')">
+        <div class="cliente-card-mobile" data-cnpj="${cnpjEsc}" data-nome-cliente="${nomeReduzidoEsc}">
             <div class="cliente-card-mobile-header">
                 <div style="flex: 1;">
-                    <div class="cliente-card-mobile-cnpj">${cliente.cnpj}</div>
-                    <div class="cliente-card-mobile-nome" title="${cliente.nome.completo}">
-                        ${nomeExibicao}
+                    <div class="cliente-card-mobile-cnpj">${cnpjEsc}</div>
+                    <div class="cliente-card-mobile-nome" title="${nomeCompletoEsc}">
+                        ${nomeExibicaoEsc}
                     </div>
                 </div>
             </div>
@@ -218,20 +255,20 @@ function criarCardCliente(cliente) {
             <div class="cliente-card-mobile-body">
                 <div class="cliente-card-mobile-row">
                     <span class="emoji">📍</span>
-                    <span>${cliente.uf} • ${cliente.municipio || '-'}</span>
+                    <span>${ufEsc} • ${municipioEsc}</span>
                 </div>
 
                 ${cliente.vendedor !== '-' ? `
                 <div class="cliente-card-mobile-row">
                     <span class="emoji">👤</span>
-                    <span>${cliente.vendedor}</span>
+                    <span>${vendedorEsc}</span>
                 </div>
                 ` : ''}
             </div>
 
             <div class="cliente-card-mobile-footer">
                 <div>
-                    <div class="cliente-card-mobile-valor">${cliente.valorFormatado}</div>
+                    <div class="cliente-card-mobile-valor">${valorFormatadoEsc}</div>
                     <div class="text-secondary-color" style="font-size: 0.75rem; margin-top: 0.1rem;">
                         <span class="emoji" style="font-size: 0.85rem;">📦</span> ${cliente.pedidos} pedido${cliente.pedidos !== 1 ? 's' : ''}
                     </div>
@@ -243,34 +280,71 @@ function criarCardCliente(cliente) {
 
 // ===========================
 // BOTÃO CARREGAR MAIS
+//
+// Estratégia em 2 niveis:
+// 1) Local: enquanto houver clientes na pagina atual (server-side) ainda
+//    nao renderizados como card, "Carregar Mais" mostra os proximos
+//    clientesMobilePorPagina dentro do array em memoria.
+// 2) Server-side: ao esgotar a pagina atual, troca o link para
+//    "Proxima Pagina" que navega para ?page=N+1 preservando filtros.
+//    Isso evita carregar todas as linhas de uma vez (causa raiz do
+//    problema cumulativo) e mantem feature parity com o desktop.
 // ===========================
 function atualizarBotaoCarregarMais() {
     let btnCarregar = document.getElementById('btnCarregarMais');
+    const container = document.getElementById('clientesListaMobile');
 
-    // Criar botão se não existir
     if (!btnCarregar) {
-        const container = document.getElementById('clientesListaMobile');
         container.insertAdjacentHTML('afterend', `
             <button id="btnCarregarMais" onclick="carregarMaisClientes()">
-                <i class="fas fa-chevron-down"></i> Carregar Mais (<span id="countRestantes">0</span> restantes)
+                <i class="fas fa-chevron-down"></i>
+                <span id="btnCarregarMaisLabel">Carregar Mais</span>
+                (<span id="countRestantes">0</span> restantes)
             </button>
         `);
         btnCarregar = document.getElementById('btnCarregarMais');
     }
 
-    const restantes = clientesMobileData.length - clientesMobileCarregados;
+    const restantesLocal = clientesMobileData.length - clientesMobileCarregados;
+    const labelEl = document.getElementById('btnCarregarMaisLabel');
+    const countEl = document.getElementById('countRestantes');
 
-    if (restantes > 0) {
+    if (restantesLocal > 0) {
+        // Ainda há cards locais (mesma pagina server) para renderizar
         btnCarregar.style.display = 'block';
-        document.getElementById('countRestantes').textContent = restantes;
+        if (labelEl) labelEl.textContent = 'Carregar Mais';
+        if (countEl) countEl.textContent = restantesLocal;
+        btnCarregar.onclick = carregarMaisClientes;
     } else {
-        btnCarregar.style.display = 'none';
+        // Esgotou a pagina atual; oferece navegar para a próxima se houver
+        const params = new URLSearchParams(window.location.search);
+        const paginaAtual = parseInt(params.get('page') || '1', 10);
+        const meta = document.getElementById('paginacaoMobileMeta');
+        const totalPages = meta ? parseInt(meta.dataset.totalPages || '1', 10) : 1;
+
+        if (paginaAtual < totalPages) {
+            btnCarregar.style.display = 'block';
+            if (labelEl) labelEl.textContent = 'Carregar Próxima Página';
+            if (countEl) {
+                countEl.textContent = `${paginaAtual + 1}/${totalPages}`;
+            }
+            btnCarregar.onclick = irParaProximaPagina;
+        } else {
+            btnCarregar.style.display = 'none';
+        }
     }
 }
 
 function carregarMaisClientes() {
     const inicio = clientesMobileCarregados;
     renderizarCardsMobile(inicio, clientesMobilePorPagina);
+}
+
+function irParaProximaPagina() {
+    const params = new URLSearchParams(window.location.search);
+    const pagina = parseInt(params.get('page') || '1', 10);
+    params.set('page', String(pagina + 1));
+    window.location.search = params.toString();
 }
 
 // ===========================

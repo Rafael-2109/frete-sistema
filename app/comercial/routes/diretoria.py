@@ -459,13 +459,26 @@ def vendedores_equipe(equipe_nome):
 @comercial_required
 def lista_clientes():
     """
-    Lista de clientes agrupados com filtros avançados
-    Suporta busca sem acento e filtros múltiplos
+    Lista de clientes agrupados com filtros avançados.
+
+    Paginação SERVER-SIDE (50 itens por página, max 200) através de
+    AgregacaoComercialService.obter_lista_clientes_paginada — substitui o
+    N+1 antigo (~6500 queries/load) por 2 queries SQL agregadas.
     """
     # Obter parâmetros de filtro
     filtro_posicao = request.args.get('posicao', 'em_aberto')  # em_aberto ou todos
     equipe_filtro = request.args.get('equipe', None)
     vendedor_filtro = request.args.get('vendedor', None)
+
+    # Paginação server-side
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    if page < 1:
+        page = 1
+    if per_page < 1:
+        per_page = 50
+    if per_page > 200:
+        per_page = 200
 
     # Novos filtros unificados
     cnpj_cpf_filtro = request.args.get('cnpj_cpf', '').strip()
@@ -479,22 +492,35 @@ def lista_clientes():
     num_pedido_filtro = request.args.get('num_pedido', '').strip()
     pedido_cliente_filtro = request.args.get('pedido_cliente', '').strip()
 
-    # Se for vendedor, aplicar restrições de permissões
-    if current_user.perfil == 'vendedor':
+    # Permissões: para passar para a query agregada
+    is_vendedor = current_user.perfil == 'vendedor'
+    equipes_permitidas: t.List[str] = []
+    vendedores_permitidos: t.List[str] = []
+
+    if is_vendedor:
         # OTIMIZAÇÃO: Usa cache de permissões para evitar múltiplas queries
         permissoes = get_permissoes_cached()
+        equipes_permitidas = permissoes.get('equipes', [])
+        vendedores_permitidos = permissoes.get('vendedores', [])
 
         # Se não tem permissões, mostrar página vazia
-        if not permissoes['equipes'] and not permissoes['vendedores']:
+        if not equipes_permitidas and not vendedores_permitidos:
             flash('Você não possui permissões configuradas.', 'warning')
             return render_template('comercial/lista_clientes.html',
                                  clientes=[],
                                  filtro_posicao=filtro_posicao,
                                  equipe_filtro=equipe_filtro,
-                                 vendedor_filtro=vendedor_filtro)
+                                 vendedor_filtro=vendedor_filtro,
+                                 ufs_disponiveis=[],
+                                 total_clientes=0,
+                                 valor_total=0,
+                                 page=1,
+                                 per_page=per_page,
+                                 total_pages=0,
+                                 query_args={})
 
         # Validar filtros contra permissões
-        if equipe_filtro and equipe_filtro not in permissoes['equipes']:
+        if equipe_filtro and equipe_filtro not in equipes_permitidas:
             # Verificar se tem acesso a algum vendedor da equipe
             tem_acesso = False
             vendedores_equipe = db.session.query(
@@ -505,7 +531,7 @@ def lista_clientes():
             ).all()
 
             for v in vendedores_equipe:
-                if v[0] in permissoes['vendedores']:
+                if v[0] in vendedores_permitidos:
                     tem_acesso = True
                     break
 
@@ -513,13 +539,13 @@ def lista_clientes():
                 flash('Você não tem permissão para acessar esta equipe.', 'danger')
                 return redirect(url_for('comercial.dashboard_diretoria'))
 
-        if vendedor_filtro and vendedor_filtro not in permissoes['vendedores']:
+        if vendedor_filtro and vendedor_filtro not in vendedores_permitidos:
             # Verificar se tem acesso à equipe do vendedor
             vendedor_equipe = db.session.query(CarteiraPrincipal.equipe_vendas).filter(
                 CarteiraPrincipal.vendedor == vendedor_filtro
             ).first()
 
-            if not vendedor_equipe or vendedor_equipe[0] not in permissoes['equipes']:
+            if not vendedor_equipe or vendedor_equipe[0] not in equipes_permitidas:
                 flash('Você não tem permissão para acessar este vendedor.', 'danger')
                 return redirect(url_for('comercial.dashboard_diretoria'))
 
@@ -534,31 +560,46 @@ def lista_clientes():
         'pedido_cliente': pedido_cliente_filtro
     }
 
-    clientes_data = _coletar_clientes_data(
+    resultado = AgregacaoComercialService.obter_lista_clientes_paginada(
+        page=page,
+        per_page=per_page,
         filtro_posicao=filtro_posicao,
         equipe_filtro=equipe_filtro,
         vendedor_filtro=vendedor_filtro,
-        filtros_avancados=filtros_avancados
+        filtros_avancados=filtros_avancados,
+        is_vendedor=is_vendedor,
+        equipes_permitidas=equipes_permitidas,
+        vendedores_permitidos=vendedores_permitidos
     )
 
-    # Buscar UFs disponíveis para o dropdown
-    ufs_disponiveis = []
-    if clientes_data:
-        # Extrair UFs únicas dos clientes já filtrados
-        ufs_set = {c['estado'] for c in clientes_data if c['estado']}
-        ufs_disponiveis = sorted(list(ufs_set))
-    else:
-        # Se não há clientes, buscar UFs disponíveis no banco
-        # TOLERÂNCIA: Considera saldo > 0.02 para evitar ruído de arredondamento
-        ufs = db.session.query(distinct(CarteiraPrincipal.estado)).filter(
-            CarteiraPrincipal.estado.isnot(None),
-            CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02 if filtro_posicao == 'em_aberto' else True
-        ).all()
-        ufs_disponiveis = sorted([uf[0] for uf in ufs if uf[0]])
+    clientes_data = resultado['clientes']
+    total_clientes = resultado['total']
+    total_pages = resultado['total_pages']
+    # valor_total_geral cobre TODAS as páginas (vem da window function SUM OVER())
+    valor_total = float(resultado['valor_total_geral'])
 
-    # Calcular totais
-    total_clientes = len(clientes_data)
-    valor_total = sum(c['valor_principal'] for c in clientes_data)
+    # Clamp page contra total_pages: se o usuario mexer na URL (?page=999),
+    # redireciona para a ultima pagina valida em vez de mostrar
+    # "Mostrando 4951 a 0 de 0 clientes" (UX confusa).
+    if total_pages > 0 and page > total_pages:
+        return redirect(url_for(
+            'comercial.lista_clientes',
+            **{k: v for k, v in request.args.items() if k != 'page' and v},
+            page=total_pages
+        ))
+
+    # UFs disponíveis para o dropdown do filtro
+    # OBS: lista global (não filtrada pelos filtros aplicados) para o usuário
+    # poder mudar entre UFs sem precisar limpar antes
+    ufs_query = db.session.query(distinct(CarteiraPrincipal.estado)).filter(
+        CarteiraPrincipal.estado.isnot(None)
+    )
+    if filtro_posicao == 'em_aberto':
+        ufs_query = ufs_query.filter(CarteiraPrincipal.qtd_saldo_produto_pedido > 0.02)
+    ufs_disponiveis = sorted([uf[0] for uf in ufs_query.all() if uf[0]])
+
+    # query_args: dict de filtros para paginacao preservar URL (sem 'page')
+    query_args = {k: v for k, v in request.args.items() if k != 'page' and v}
 
     return render_template('comercial/lista_clientes.html',
                          clientes=clientes_data,
@@ -567,7 +608,11 @@ def lista_clientes():
                          vendedor_filtro=vendedor_filtro,
                          ufs_disponiveis=ufs_disponiveis,
                          total_clientes=total_clientes,
-                         valor_total=valor_total)
+                         valor_total=valor_total,
+                         page=page,
+                         per_page=per_page,
+                         total_pages=total_pages,
+                         query_args=query_args)
 
 
 @comercial_bp.route('/clientes/exportar_excel')
