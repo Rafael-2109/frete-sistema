@@ -555,6 +555,7 @@ def criar_venda_manual(
     criado_por: Optional[str] = None,
     loja_id_override: Optional[int] = None,
     pagamentos: Optional[List[dict]] = None,
+    consumidor_final: Optional[bool] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO ou INCOMPLETO.
 
@@ -583,7 +584,10 @@ def criar_venda_manual(
     """
     # Aceita CPF (11) ou CNPJ (14) — coluna `cpf_cliente` eh String(14) e
     # comporta ambos. Ver app/hora/services/tagplus/_documento.py.
-    from app.hora.services.tagplus._documento import normalizar_documento
+    from app.hora.services.tagplus._documento import (
+        inferir_consumidor_final,
+        normalizar_documento,
+    )
     cpf_norm, _tipo_doc = normalizar_documento(cpf_cliente)
     if not _tipo_doc:
         raise ValueError(
@@ -716,6 +720,13 @@ def criar_venda_manual(
         modalidade_frete=mod_frete,
         numero_parcelas=n_parcelas,
         intervalo_parcelas_dias=intervalo,
+        # consumidor_final: se nao explicito, infere via tipo de documento
+        # (CPF=True / CNPJ=False). Operador pode sobrescrever na tela de
+        # detalhe enquanto pedido estiver em COTACAO ou CONFIRMADO.
+        consumidor_final=(
+            bool(consumidor_final) if consumidor_final is not None
+            else inferir_consumidor_final(cpf_norm)
+        ),
     )
     db.session.add(venda)
     db.session.flush()
@@ -962,6 +973,7 @@ _CAMPOS_COTACAO_FULL = {
     'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
     'endereco_bairro', 'endereco_cidade', 'endereco_uf',
     'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
+    'consumidor_final',
 }
 _CAMPOS_EDITAVEIS_HEADER = {
     VENDA_STATUS_INCOMPLETO: _CAMPOS_COTACAO_FULL,
@@ -972,6 +984,9 @@ _CAMPOS_EDITAVEIS_HEADER = {
         'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
         'endereco_bairro', 'endereco_cidade', 'endereco_uf',
         'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
+        # consumidor_final permanece editavel ate FATURADO porque influencia
+        # diretamente o payload da NFe ainda nao enviada.
+        'consumidor_final',
     },
     VENDA_STATUS_FATURADO: {'observacoes'},
     VENDA_STATUS_CANCELADO: set(),
@@ -1012,13 +1027,14 @@ def editar_venda(
     modalidade_frete: Optional[str] = None,
     numero_parcelas: Optional[int] = None,
     intervalo_parcelas_dias: Optional[int] = None,
+    consumidor_final: Optional[bool] = None,
     usuario: Optional[str] = None,
 ) -> HoraVenda:
     """Edita campos do header conforme regra por status.
 
-    - COTACAO: tudo (incluindo cliente/endereco).
-    - CONFIRMADO: contato/endereco/operacionais (sem mexer em CPF/nome — sao
-      do payload TagPlus).
+    - COTACAO: tudo (incluindo cliente/endereco e consumidor_final).
+    - CONFIRMADO: contato/endereco/operacionais + consumidor_final (sem mexer
+      em CPF/nome — sao do payload TagPlus).
     - FATURADO: so observacoes.
     - CANCELADO: nada (raise).
     """
@@ -1115,6 +1131,8 @@ def editar_venda(
                 f'intervalo_parcelas_dias fora do intervalo 1..90: {d}'
             )
         _atualizar('intervalo_parcelas_dias', d)
+    if consumidor_final is not None:
+        _atualizar('consumidor_final', bool(consumidor_final))
 
     db.session.commit()
     return venda

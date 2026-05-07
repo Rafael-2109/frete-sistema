@@ -46,3 +46,21 @@ def documento_valido(valor: Optional[str]) -> bool:
     """True se for CPF (11) ou CNPJ (14)."""
     _, tipo = normalizar_documento(valor)
     return tipo != TIPO_INVALIDO
+
+
+def inferir_consumidor_final(valor: Optional[str]) -> bool:
+    """Infere o flag `consumidor_final` (NF-e) a partir do documento.
+
+    Regra heuristica usada como DEFAULT quando o operador nao marcou
+    explicitamente o checkbox no formulario:
+      - CPF (PF, 11 digitos)  -> True  (B2C tipico de loja HORA)
+      - CNPJ (PJ, 14 digitos) -> False (revenda / B2B)
+      - documento invalido     -> True  (fallback seguro: B2C)
+
+    Operador pode sobrescrever este default via `HoraVenda.consumidor_final`
+    (UI: checkbox no /tagplus/pedido-venda/novo).
+    """
+    _, tipo = normalizar_documento(valor)
+    if tipo == TIPO_CNPJ:
+        return False
+    return True

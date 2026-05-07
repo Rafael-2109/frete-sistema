@@ -139,10 +139,22 @@ class PayloadBuilder:
         # ou em qualquer outro callsite. Multi-emitente NAO E SUPORTADO por
         # design — qualquer mudanca neste comportamento exige aprovacao
         # explicita do dono fiscal da HORA.
+        # consumidor_final (TagPlus boolean — doc:320-322):
+        #   - Usa venda.consumidor_final se nao-NULL (operador escolheu).
+        #   - Senao, infere via tipo do documento (CPF=True, CNPJ=False).
+        # Migration hora_36 adicionou a coluna; vendas legadas (DANFE) gravam
+        # NULL e caem no caminho de inferencia automatica. UI em /tagplus/
+        # pedido-venda/novo grava sempre TRUE/FALSE explicito.
+        from app.hora.services.tagplus._documento import inferir_consumidor_final
+        if venda.consumidor_final is None:
+            consumidor_final_flag = inferir_consumidor_final(venda.cpf_cliente)
+        else:
+            consumidor_final_flag = bool(venda.consumidor_final)
+
         payload = {
             'tipo': 'S',
             'finalidade_emissao': 1,            # Normal (CONFIRMAR fiscal HORA — ver §15.1).
-            'consumidor_final': True,
+            'consumidor_final': consumidor_final_flag,
             'indicador_presenca': 1,            # Presencial (loja fisica).
             'tipo_emissao': 1,                  # Normal (nao contingencia).
             # TagPlus exige string ('0'-'4', '9') conforme doc:258-272.

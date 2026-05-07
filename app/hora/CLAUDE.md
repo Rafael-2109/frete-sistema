@@ -509,6 +509,60 @@ ALTER 3 tabelas. Idempotente.
 
 ---
 
+## 16. Campo `consumidor_final` no faturamento TagPlus — 2026-05-07
+
+Operador agora seleciona explicitamente se o destinatário da NF-e é
+consumidor final ou não. Substitui o hardcode `'consumidor_final': True`
+que estava no `payload_builder` desde a primeira versão da emissão.
+
+**Coluna**: `hora_venda.consumidor_final` BOOLEAN nullable (migration
+`hora_36_consumidor_final.{py,sql}`).
+- `NULL`  → não definido; `payload_builder` infere via tipo de documento
+            (CPF=True, CNPJ=False) na hora da emissão. Default das
+            vendas legadas (DANFE / backfill).
+- `TRUE`  → consumidor final (B2C; PF tipica).
+- `FALSE` → não-consumidor (B2B / revenda PJ).
+
+**Helper**: `app/hora/services/tagplus/_documento.inferir_consumidor_final(doc)`
+— True para CPF/inválido, False para CNPJ.
+
+**Payload builder** (`app/hora/services/tagplus/payload_builder.py:140-150`):
+usa `venda.consumidor_final` se não-NULL; senão chama `inferir_consumidor_final(
+venda.cpf_cliente)`.
+
+**Service** (`venda_service.py`):
+- `criar_venda_manual(... consumidor_final=Optional[bool])` — quando None,
+  grava o resultado da inferência por documento.
+- `editar_venda(... consumidor_final=Optional[bool])` — só aplica se
+  diferente do valor atual; passa por `_validar_campo_editavel`.
+- `_CAMPOS_EDITAVEIS_HEADER` inclui `consumidor_final` em
+  COTACAO/INCOMPLETO/CONFIRMADO. Em FATURADO o campo é bloqueado (NF já
+  saiu — o flag não tem mais efeito sobre a SEFAZ).
+
+**UI**:
+- `pedido_venda_novo.html` — switch "Consumidor final" no card do cliente.
+  JS observa o input `f-cpf` e ajusta o default automaticamente (CPF →
+  marcado, CNPJ → desmarcado). Operador pode sobrescrever; após o clique
+  manual, o JS para de inferir (`consumidorFinalUserTouched=true`).
+  Limite do campo CPF/CNPJ subiu de 14 → 18 caracteres no form/route
+  para aceitar máscara CNPJ "00.000.000/0000-00" (banco continua
+  String(14) — service normaliza para dígitos).
+- `venda_detalhe.html` — switch + flag oculto `consumidor_final_flag`
+  para distinguir "operador não mexeu" de "operador desmarcou". Em
+  FATURADO/CANCELADO o switch é `disabled` e o flag é omitido.
+
+**Rotas**:
+- `POST /hora/tagplus/pedido-venda` lê `consumidor_final` (bool) e
+  propaga.
+- `POST /hora/vendas/<id>/editar` lê `consumidor_final_flag`+`consumidor_final`
+  e só envia ao service quando o flag é '1'.
+
+**Não é regra fiscal nova**: continua valendo a invariante de que NFe sai
+sempre pela MATRIZ HORA (item 7). Mudar de `True` para `False` apenas
+informa à SEFAZ que o destinatário é revenda — não muda CNPJ emitente.
+
+---
+
 ## Referências
 
 - **Contrato de design**: `docs/hora/INVARIANTES.md`

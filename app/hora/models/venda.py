@@ -59,11 +59,24 @@ class HoraVenda(db.Model):
         index=True,
     )
 
-    # Consumidor final: sempre pessoa física.
+    # Documento do destinatario: CPF (PF) ou CNPJ (PJ). Coluna String(14) comporta
+    # ambos. Comentario "sempre pessoa física" antigo nao reflete mais a realidade
+    # — desde NF #727 (2026-04-28) PJ tambem e aceito. Tipo se infere via
+    # `app/hora/services/tagplus/_documento.normalizar_documento`.
     cpf_cliente = db.Column(db.String(14), nullable=False, index=True)
     nome_cliente = db.Column(db.String(200), nullable=False)
     telefone_cliente = db.Column(db.String(20), nullable=True)
     email_cliente = db.Column(db.String(120), nullable=True)
+
+    # Indica se o destinatario eh consumidor final (B2C) ou nao (B2B / revenda).
+    # Migration hora_36 (2026-05-07).
+    #   NULL  -> nao informado; payload_builder infere via CPF/CNPJ
+    #            (CPF=True, CNPJ=False).
+    #   TRUE  -> consumidor final explicito (PF tipico ou PJ-uso-proprio).
+    #   FALSE -> nao-consumidor (PJ-revenda; SEFAZ exige IE / outros campos).
+    # UI no formulario `/tagplus/pedido-venda/novo` define o default client-side
+    # via tipo do documento e operador pode sobrescrever.
+    consumidor_final = db.Column(db.Boolean, nullable=True)
 
     data_venda = db.Column(db.Date, nullable=False, default=agora_utc_naive, index=True)
     forma_pagamento = db.Column(

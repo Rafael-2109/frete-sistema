@@ -94,6 +94,13 @@ echo "HORA 35: cleanup motos em aliases mergidos..."
 python scripts/migrations/hora_35_cleanup_alias_motos.py \
     || echo "⚠️ Migration hora_35 falhou, continuando deploy..."
 
+# 10d. HORA 36: campo consumidor_final em hora_venda (NF-e TagPlus).
+# Boolean nullable: NULL=infere via doc, TRUE/FALSE=explicito do operador.
+# Idempotente (ADD COLUMN IF NOT EXISTS).
+echo "HORA 36: campo consumidor_final em hora_venda..."
+python scripts/migrations/hora_36_consumidor_final.py \
+    || echo "⚠️ Migration hora_36 falhou, continuando deploy..."
+
 # 10. HORA 30: seed inicial de hora_modelo_alias.
 # Para cada modelo existente, cria alias NOME_LIVRE com nome_modelo
 # + aliases TAGPLUS_CODIGO/TAGPLUS_PRODUTO_ID a partir do legado

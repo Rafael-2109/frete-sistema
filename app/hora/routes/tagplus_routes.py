@@ -1167,9 +1167,16 @@ def tagplus_pedido_venda_criar():
         flash('Loja invalida (inativa ou nao permitida).', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
+    # Consumidor final (NF-e): checkbox no formulario.
+    # Sem hidden duplicado, browser nao envia o name quando desmarcado.
+    # Default UI: marcado para CPF, desmarcado para CNPJ (inferencia client-side).
+    consumidor_final_form = request.form.get('consumidor_final') == '1'
+
     try:
         venda = venda_service.criar_venda_manual(
-            cpf_cliente=_g('cpf', 14),
+            # 18 chars acomoda mascara de CNPJ "00.000.000/0000-00".
+            # Service normaliza para apenas digitos antes de gravar.
+            cpf_cliente=_g('cpf', 18),
             nome_cliente=_g('nome', 200),
             cep=_g('cep', 9),
             endereco_logradouro=_g('logradouro', 255),
@@ -1191,6 +1198,7 @@ def tagplus_pedido_venda_criar():
             criado_por=_operador(),
             loja_id_override=loja_id_int,
             pagamentos=pagamentos_in,
+            consumidor_final=consumidor_final_form,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')

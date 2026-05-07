@@ -28,18 +28,19 @@
 
 <form method="post" action="{{ url_for('hora.tagplus_pedido_venda_criar') }}" id="form-pedido-venda" novalidate>
 
-  <!-- ========================== Cliente ========================== -->
+  <!-- ========================== Cliente / Destinatário ========================== -->
   <div class="card mb-3">
-    <div class="card-header"><strong><i class="fas fa-user"></i> Cliente (consumidor final)</strong></div>
+    <div class="card-header"><strong><i class="fas fa-user"></i> Cliente / Destinatário</strong></div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label">CPF <span class="text-danger">*</span></label>
+          <label class="form-label">CPF / CNPJ <span class="text-danger">*</span></label>
           <input type="text" name="cpf" id="f-cpf" class="form-control" required
-                 maxlength="14" placeholder="000.000.000-00" pattern="[\d\.\-]{11,14}">
+                 maxlength="18" placeholder="CPF ou CNPJ" pattern="[\d\.\-/]{11,18}">
+          <small class="text-muted" id="doc-tipo-info">Digite 11 dígitos para CPF ou 14 para CNPJ.</small>
         </div>
         <div class="col-md-8">
-          <label class="form-label">Nome completo <span class="text-danger">*</span></label>
+          <label class="form-label">Nome / Razão social <span class="text-danger">*</span></label>
           <input type="text" name="nome" id="f-nome" class="form-control" required maxlength="200">
         </div>
         <div class="col-md-4">
@@ -47,9 +48,26 @@
           <input type="text" name="telefone" class="form-control" maxlength="20"
                  placeholder="(11) 99999-9999">
         </div>
-        <div class="col-md-8">
+        <div class="col-md-5">
           <label class="form-label">E-mail</label>
           <input type="email" name="email" class="form-control" maxlength="120">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label d-block">
+            Consumidor final
+            <i class="fas fa-info-circle text-muted ms-1"
+               title="Indica se o destinatário é consumidor final na NF-e (campo SEFAZ). Default: marcado para CPF (PF), desmarcado para CNPJ (PJ-revenda). Operador pode sobrescrever."></i>
+          </label>
+          <div class="form-check form-switch mt-1">
+            {# Sem hidden duplicado: ausencia do checkbox no POST = unchecked (False).
+               Ver tratamento no backend (tagplus_routes.tagplus_pedido_venda_criar). #}
+            <input type="checkbox" class="form-check-input" role="switch"
+                   id="f-consumidor-final" name="consumidor_final" value="1" checked>
+            <label class="form-check-label" for="f-consumidor-final" id="f-consumidor-final-label">
+              Sim
+            </label>
+          </div>
+          <small class="text-muted" id="consumidor-final-info">Default inferido pelo CPF/CNPJ.</small>
         </div>
       </div>
     </div>
@@ -376,6 +394,71 @@
   const elBairro = document.getElementById('f-bairro');
   const elCidade = document.getElementById('f-cidade');
   const elUf = document.getElementById('f-uf');
+
+  // ----------------- Consumidor final (inferência por documento) -----------
+  // Default: 11 dígitos (CPF) -> marcado; 14 dígitos (CNPJ) -> desmarcado.
+  // Operador pode sobrescrever clicando no switch — quando isso acontece,
+  // marcamos `userTouched` e o JS para de inferir automaticamente.
+  const elDoc = document.getElementById('f-cpf');
+  const elDocTipoInfo = document.getElementById('doc-tipo-info');
+  const elConsumidorFinal = document.getElementById('f-consumidor-final');
+  const elConsumidorFinalLabel = document.getElementById('f-consumidor-final-label');
+  const elConsumidorFinalInfo = document.getElementById('consumidor-final-info');
+  let consumidorFinalUserTouched = false;
+
+  function atualizarLabelConsumidorFinal() {
+    if (!elConsumidorFinalLabel) return;
+    elConsumidorFinalLabel.textContent = elConsumidorFinal.checked ? 'Sim' : 'Não';
+  }
+
+  function inferirConsumidorFinal() {
+    if (consumidorFinalUserTouched) return;
+    const digitos = (elDoc.value || '').replace(/\D/g, '');
+    let tipo = '';
+    if (digitos.length === 11) tipo = 'CPF';
+    else if (digitos.length === 14) tipo = 'CNPJ';
+
+    if (elDocTipoInfo) {
+      if (tipo === 'CPF') {
+        elDocTipoInfo.textContent = 'CPF detectado (PF).';
+        elDocTipoInfo.className = 'text-success';
+      } else if (tipo === 'CNPJ') {
+        elDocTipoInfo.textContent = 'CNPJ detectado (PJ).';
+        elDocTipoInfo.className = 'text-success';
+      } else {
+        elDocTipoInfo.textContent = 'Digite 11 dígitos para CPF ou 14 para CNPJ.';
+        elDocTipoInfo.className = 'text-muted';
+      }
+    }
+
+    if (tipo === 'CPF') {
+      elConsumidorFinal.checked = true;
+    } else if (tipo === 'CNPJ') {
+      elConsumidorFinal.checked = false;
+    }
+    if (elConsumidorFinalInfo) {
+      elConsumidorFinalInfo.textContent = (tipo === 'CNPJ')
+        ? 'Default: CNPJ → desmarcado (revenda).'
+        : 'Default: CPF → marcado (B2C).';
+    }
+    atualizarLabelConsumidorFinal();
+  }
+
+  if (elDoc) {
+    elDoc.addEventListener('input', inferirConsumidorFinal);
+    elDoc.addEventListener('blur', inferirConsumidorFinal);
+  }
+  if (elConsumidorFinal) {
+    elConsumidorFinal.addEventListener('change', () => {
+      consumidorFinalUserTouched = true;
+      atualizarLabelConsumidorFinal();
+      if (elConsumidorFinalInfo) {
+        elConsumidorFinalInfo.textContent = 'Definido manualmente.';
+        elConsumidorFinalInfo.className = 'text-warning';
+      }
+    });
+    atualizarLabelConsumidorFinal();
+  }
 
   // ----------------- ViaCEP ------------------------------------------------
   async function buscarCep() {

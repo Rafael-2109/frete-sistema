@@ -338,8 +338,8 @@
                value="{{ venda.nome_cliente or '' }}" {% if bloqueia_cliente %}readonly{% endif %}>
       </div>
       <div class="mb-2">
-        <label class="form-label small mb-1">CPF</label>
-        <input type="text" name="cpf_cliente" maxlength="14" class="form-control form-control-sm chassi-mono"
+        <label class="form-label small mb-1">CPF / CNPJ</label>
+        <input type="text" name="cpf_cliente" maxlength="18" class="form-control form-control-sm chassi-mono"
                value="{{ venda.cpf_cliente or '' }}" {% if bloqueia_cliente %}readonly{% endif %}>
       </div>
       <div class="mb-2">
@@ -347,10 +347,41 @@
         <input type="text" name="telefone_cliente" maxlength="20" class="form-control form-control-sm"
                value="{{ venda.telefone_cliente or '' }}" {% if bloqueia_oper %}readonly{% endif %}>
       </div>
-      <div>
+      <div class="mb-2">
         <label class="form-label small mb-1">Email</label>
         <input type="email" name="email_cliente" maxlength="120" class="form-control form-control-sm"
                value="{{ venda.email_cliente or '' }}" {% if bloqueia_oper %}readonly{% endif %}>
+      </div>
+      {# ----- Consumidor final (NF-e) ----- #}
+      {# Bloqueia em FATURADO/CANCELADO (mesma regra do _CAMPOS_EDITAVEIS_HEADER
+         no backend: depois de FATURADO, NF-e ja foi emitida — flag nao tem mais
+         efeito). Flag oculto sinaliza ao backend que o campo veio do form
+         (distingue "operador nao mexeu" de "operador desmarcou"). #}
+      {% set bloqueia_consumidor_final = is_faturado or is_cancelado %}
+      <div>
+        <label class="form-label small mb-1">
+          Consumidor final (NF-e)
+          <i class="fas fa-info-circle text-muted ms-1"
+             title="Indica se o destinatário é consumidor final na NF-e. Se nunca foi definido, será inferido pelo CPF/CNPJ no momento do faturamento."></i>
+        </label>
+        <div class="form-check form-switch">
+          {% if not bloqueia_consumidor_final %}
+            <input type="hidden" name="consumidor_final_flag" value="1">
+          {% endif %}
+          <input type="checkbox" class="form-check-input" role="switch"
+                 id="d-consumidor-final" name="consumidor_final" value="1"
+                 {% if venda.consumidor_final %}checked{% endif %}
+                 {% if bloqueia_consumidor_final %}disabled{% endif %}>
+          <label class="form-check-label small" for="d-consumidor-final">
+            {% if venda.consumidor_final is none %}
+              <span class="text-muted">não definido — será inferido</span>
+            {% elif venda.consumidor_final %}
+              Sim
+            {% else %}
+              Não
+            {% endif %}
+          </label>
+        </div>
       </div>
     </div>
   </div>
