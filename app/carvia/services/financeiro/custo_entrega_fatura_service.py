@@ -16,6 +16,8 @@ Regras de integridade:
 - FT deve existir e nao estar CONFERIDA (bloqueio via pode_editar())
 - Ao vincular com FT ja PAGA: auto-propaga status PAGO
 - Ao desvincular: se foi PAGO via auto-propagacao, reverte para PENDENTE
+- Ao desvincular: reset campos `numero_documento='PENDENTE_FATURA'`,
+  `tipo_documento='PENDENTE_DOCUMENTO'`, `data_vencimento=None` (xerox Nacom).
 """
 
 import logging
@@ -25,17 +27,29 @@ from app import db
 logger = logging.getLogger(__name__)
 
 
+# Sentinelas (xerox DespesaExtra Nacom)
+SENTINEL_NUMERO_DOCUMENTO = 'PENDENTE_FATURA'
+SENTINEL_TIPO_DOCUMENTO = 'PENDENTE_DOCUMENTO'
+
+
 class CustoEntregaFaturaService:
     """Servico para vincular/desvincular CE <-> FaturaTransportadora."""
 
     @staticmethod
-    def vincular(ce_id, fatura_id, usuario):
+    def vincular(ce_id, fatura_id, usuario, ajustes=None):
         """Vincula CarviaCustoEntrega a uma CarviaFaturaTransportadora.
 
         Args:
             ce_id: ID do CarviaCustoEntrega
             fatura_id: ID da CarviaFaturaTransportadora
             usuario: email/nome do usuario
+            ajustes: dict opcional para atualizar campos do CE em transacao
+                unica (xerox DespesaExtra Nacom). Chaves suportadas:
+                - tipo_documento (str): tipo_documento_cobranca
+                - valor (float): valor_cobranca
+                - numero_documento (str): numero_cte_documento (vazio -> sentinela)
+                - copiar_vencimento_fatura (bool): se True, copia
+                  fatura.vencimento -> ce.data_vencimento
 
         Returns:
             dict com sucesso e detalhes
@@ -88,6 +102,29 @@ class CustoEntregaFaturaService:
                 f'Fatura {fatura.numero_fatura} nao pode receber novos vinculos: {razao}'
             )
 
+        # Aplicar ajustes ANTES de setar FK/status — transacao unica.
+        # Xerox de DespesaExtra Nacom (fretes/routes.py:4341-4348).
+        if ajustes:
+            tipo_documento = ajustes.get('tipo_documento')
+            if tipo_documento:
+                ce.tipo_documento = tipo_documento
+
+            valor = ajustes.get('valor')
+            if valor is not None:
+                ce.valor = valor
+
+            numero_documento = ajustes.get('numero_documento')
+            if numero_documento is not None:
+                # Vazio vira sentinela; preenchido vai direto.
+                ce.numero_documento = (
+                    numero_documento.strip()
+                    if numero_documento and numero_documento.strip()
+                    else SENTINEL_NUMERO_DOCUMENTO
+                )
+
+            if ajustes.get('copiar_vencimento_fatura') and fatura.vencimento:
+                ce.data_vencimento = fatura.vencimento
+
         # Executar vinculo — status vai para VINCULADO_FT.
         # Auto-propagacao para PAGO nao e necessaria aqui: se a FT pudesse estar
         # PAGA, `pode_editar()` teria falhado acima.
@@ -95,8 +132,9 @@ class CustoEntregaFaturaService:
         ce.status = 'VINCULADO_FT'
 
         logger.info(
-            "CE %s vinculado a FT #%d (%s) por %s",
+            "CE %s vinculado a FT #%d (%s) por %s (ajustes=%s)",
             ce.numero_custo, fatura.id, fatura.numero_fatura, usuario,
+            bool(ajustes),
         )
 
         return {
@@ -114,6 +152,11 @@ class CustoEntregaFaturaService:
 
         Se CE foi PAGO via auto-propagacao (pago_por startswith 'auto:'),
         reverte para PENDENTE — desde que nao tenha movimentacao FC propria.
+
+        Reset de campos (xerox DespesaExtra Nacom em fretes/routes.py:4395-4396):
+        - numero_documento -> 'PENDENTE_FATURA'
+        - tipo_documento -> 'PENDENTE_DOCUMENTO'
+        - data_vencimento -> None
 
         Bloqueios:
         - FT ja CONFERIDA (nao pode mais alterar itens)
@@ -171,6 +214,15 @@ class CustoEntregaFaturaService:
             ce.status = 'PENDENTE'
             status_revertido = True
 
+        # Reset de campos de documento e vencimento (xerox Nacom).
+        # Aplicado SOMENTE quando status volta para PENDENTE — se CE permanece
+        # PAGO (com FC propria), nao mexer em campos que o operador preencheu
+        # manualmente.
+        if status_revertido:
+            ce.numero_documento = SENTINEL_NUMERO_DOCUMENTO
+            ce.tipo_documento = SENTINEL_TIPO_DOCUMENTO
+            ce.data_vencimento = None
+
         logger.info(
             "CE %s desvinculado da FT #%d por %s (status_revertido=%s)",
             ce.numero_custo, old_ft_id, usuario, status_revertido,
@@ -184,17 +236,20 @@ class CustoEntregaFaturaService:
         }
 
     @staticmethod
-    def faturas_disponiveis(ce_id):
+    def faturas_disponiveis(ce_id, restrito_por_transportadora=True):
         """Retorna CarviaFaturaTransportadora disponiveis para vincular este CE.
 
         Filtros:
         - FT nao CONFERIDA e nao PAGA (consistente com vincular() que usa pode_editar)
-        - Se CE tem frete_id, filtra por mesma transportadora via
-          CarviaSubcontrato vinculado ao frete. Caso contrario, retorna todas
-          elegiveis (usuario decide).
+        - Se restrito_por_transportadora=True (default) E CE tem frete_id,
+          filtra por mesma transportadora via CarviaSubcontrato vinculado ao
+          frete. Caso contrario, retorna todas elegiveis (paridade Nacom).
 
         Args:
             ce_id: ID do CarviaCustoEntrega
+            restrito_por_transportadora: se True, restringe a FTs da mesma
+                transportadora que opera o frete. Default True (compat).
+                Passar False para alinhar com Nacom (qualquer FT pendente).
 
         Returns:
             list[dict] com id, numero_fatura, transportadora_nome, valor_total,
@@ -212,7 +267,7 @@ class CustoEntregaFaturaService:
 
         # Identificar transportadoras candidatas via frete_id (se disponivel)
         transportadora_ids = set()
-        if ce.frete_id:
+        if restrito_por_transportadora and ce.frete_id:
             frete = db.session.get(CarviaFrete, ce.frete_id)
             if frete:
                 subs = CarviaSubcontrato.query.filter_by(frete_id=frete.id).all()

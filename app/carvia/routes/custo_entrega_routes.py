@@ -951,37 +951,115 @@ def register_custo_entrega_routes(bp):
     def gerenciar_custos_entrega(): # type: ignore
         """Lista CEs agrupados por status de vinculacao a FT.
 
+        Xerox de fretes.gerenciar_despesas_extras (Nacom) — abas Sem/Com
+        Fatura, paginacao dupla, filtros NF/documento/tipo/transportadora/
+        com_fatura.
+
         Abas:
-        - Sem Fatura: fatura_transportadora_id IS NULL, status != CANCELADO
-        - Com Fatura: fatura_transportadora_id IS NOT NULL
+        - sem: fatura_transportadora_id IS NULL, status != CANCELADO
+        - com: fatura_transportadora_id IS NOT NULL
         """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
 
-        aba = request.args.get('aba', 'sem_fatura')
+        from app.carvia.models import (
+            CarviaFrete, CarviaSubcontrato, CarviaOperacaoNf, CarviaNf,
+        )
+
+        # Filtros (espelho Nacom)
+        filtro_nf = request.args.get('filtro_nf', '').strip()
+        filtro_documento = request.args.get('filtro_documento', '').strip()
         filtro_tipo = request.args.get('tipo_custo', '').strip()
+        filtro_transportadora = request.args.get(
+            'filtro_transportadora', '',
+        ).strip()
+        transportadora_id_param = request.args.get(
+            'transportadora_id', type=int,
+        )
+        filtro_com_fatura = request.args.get('filtro_com_fatura', '').strip()
         busca = request.args.get('busca', '').strip()
+        aba = request.args.get('aba', 'sem')
+
+        # Paginacao dupla por aba (Nacom usa per_page=20)
+        pagina_sem = request.args.get('pagina_sem', 1, type=int)
+        pagina_com = request.args.get('pagina_com', 1, type=int)
+        por_pagina = 20
 
         def _aplicar_filtros(query):
-            """Aplica filtros tipo/busca sobre query base (espelho Nacom /despesas/gerenciar)."""
+            """Aplica filtros NF/documento/tipo/transportadora/busca."""
             if filtro_tipo:
-                query = query.filter(CarviaCustoEntrega.tipo_custo == filtro_tipo)
+                query = query.filter(
+                    CarviaCustoEntrega.tipo_custo == filtro_tipo
+                )
+            if filtro_documento:
+                query = query.filter(
+                    CarviaCustoEntrega.numero_documento.ilike(
+                        f'%{filtro_documento}%'
+                    )
+                )
+            if filtro_nf:
+                # CE -> Operacao -> NF (via CarviaOperacaoNf) OU
+                # CE -> Frete -> CarviaFrete.numeros_nfs (string concatenada)
+                op_match = db.session.query(CarviaOperacaoNf.operacao_id).join(
+                    CarviaNf, CarviaOperacaoNf.nf_id == CarviaNf.id,
+                ).filter(
+                    CarviaNf.numero_nf.ilike(f'%{filtro_nf}%')
+                ).subquery()
+
+                frete_match = db.session.query(CarviaFrete.id).filter(
+                    CarviaFrete.numeros_nfs.ilike(f'%{filtro_nf}%')
+                ).subquery()
+
+                query = query.filter(
+                    db.or_(
+                        CarviaCustoEntrega.operacao_id.in_(
+                            db.session.query(op_match.c.operacao_id)
+                        ),
+                        CarviaCustoEntrega.frete_id.in_(
+                            db.session.query(frete_match.c.id)
+                        ),
+                    )
+                )
+            if transportadora_id_param:
+                # CE.transportadora_id (override direto) OU
+                # CE.frete_id -> CarviaSubcontrato.transportadora_id (frete subcontratado)
+                sub_transp = db.session.query(
+                    CarviaSubcontrato.frete_id,
+                ).filter(
+                    CarviaSubcontrato.transportadora_id == transportadora_id_param,
+                    CarviaSubcontrato.status != 'CANCELADO',
+                    CarviaSubcontrato.frete_id.isnot(None),
+                ).subquery()
+                query = query.filter(
+                    db.or_(
+                        CarviaCustoEntrega.transportadora_id == transportadora_id_param,
+                        CarviaCustoEntrega.frete_id.in_(
+                            db.session.query(sub_transp.c.frete_id)
+                        ),
+                    )
+                )
             if busca:
                 like = f'%{busca}%'
                 query = query.filter(
                     db.or_(
                         CarviaCustoEntrega.numero_custo.ilike(like),
                         CarviaCustoEntrega.descricao.ilike(like),
+                        CarviaCustoEntrega.fornecedor_nome.ilike(like),
                     )
                 )
             return query.order_by(CarviaCustoEntrega.criado_em.desc())
 
-        # Eager loading para evitar N+1 no template que acessa
-        # ce.operacao.cte_numero e ce.fatura_transportadora.numero_fatura
+        # Eager loading para evitar N+1 no template (acesso a operacao,
+        # fatura_transportadora, transportadora_efetiva via frete.transportadora
+        # ou transportadora direta)
         base_query = CarviaCustoEntrega.query.options(
             db.joinedload(CarviaCustoEntrega.operacao),
             db.joinedload(CarviaCustoEntrega.fatura_transportadora),
+            db.joinedload(CarviaCustoEntrega.transportadora),
+            db.joinedload(CarviaCustoEntrega.frete).joinedload(
+                CarviaFrete.transportadora
+            ),
         )
 
         query_sem = _aplicar_filtros(
@@ -996,20 +1074,62 @@ def register_custo_entrega_routes(bp):
             )
         )
 
-        ces_sem_fatura = query_sem.all()
-        ces_com_fatura = query_com.all()
+        # Filtro com_fatura sim/nao zera a aba oposta (paridade Nacom)
+        if filtro_com_fatura == 'sim':
+            paginacao_sem = query_sem.filter(False).paginate(
+                page=1, per_page=por_pagina, error_out=False,
+            )
+            paginacao_com = query_com.paginate(
+                page=pagina_com, per_page=por_pagina, error_out=False,
+            )
+        elif filtro_com_fatura == 'nao':
+            paginacao_sem = query_sem.paginate(
+                page=pagina_sem, per_page=por_pagina, error_out=False,
+            )
+            paginacao_com = query_com.filter(False).paginate(
+                page=1, per_page=por_pagina, error_out=False,
+            )
+        else:
+            paginacao_sem = query_sem.paginate(
+                page=pagina_sem, per_page=por_pagina, error_out=False,
+            )
+            paginacao_com = query_com.paginate(
+                page=pagina_com, per_page=por_pagina, error_out=False,
+            )
 
-        total_sem = sum(float(ce.valor or 0) for ce in ces_sem_fatura)
-        total_com = sum(float(ce.valor or 0) for ce in ces_com_fatura)
+        # Totais agregados (sobre TODOS os itens filtrados, nao apenas a pagina)
+        total_sem = float(
+            db.session.query(db.func.coalesce(
+                db.func.sum(CarviaCustoEntrega.valor), 0,
+            )).filter(
+                CarviaCustoEntrega.id.in_(
+                    query_sem.with_entities(CarviaCustoEntrega.id)
+                )
+            ).scalar() or 0
+        )
+        total_com = float(
+            db.session.query(db.func.coalesce(
+                db.func.sum(CarviaCustoEntrega.valor), 0,
+            )).filter(
+                CarviaCustoEntrega.id.in_(
+                    query_com.with_entities(CarviaCustoEntrega.id)
+                )
+            ).scalar() or 0
+        )
 
         return render_template(
             'carvia/custos_entrega/gerenciar.html',
-            ces_sem_fatura=ces_sem_fatura,
-            ces_com_fatura=ces_com_fatura,
+            paginacao_sem=paginacao_sem,
+            paginacao_com=paginacao_com,
             total_sem=total_sem,
             total_com=total_com,
             aba=aba,
+            filtro_nf=filtro_nf,
+            filtro_documento=filtro_documento,
             filtro_tipo=filtro_tipo,
+            filtro_transportadora=filtro_transportadora,
+            transportadora_id=transportadora_id_param,
+            filtro_com_fatura=filtro_com_fatura,
             busca=busca,
             tipos_custo=TIPOS_CUSTO,
         )
@@ -1021,65 +1141,26 @@ def register_custo_entrega_routes(bp):
     @bp.route('/custos-entrega/<int:custo_id>/vincular-fatura', methods=['GET', 'POST']) # type: ignore
     @login_required
     def vincular_fatura_custo_entrega(custo_id): # type: ignore
-        """Vincula CE a uma CarviaFaturaTransportadora (tela dedicada).
+        """DEPRECATED — redireciona para o fluxo canonico xerox Nacom.
 
-        GET: renderiza tela com lista de FTs disponiveis da transportadora do frete
-        POST: executa vinculacao via CustoEntregaFaturaService
+        Mantida apenas para compatibilidade de bookmarks/links antigos.
+        Toda UI atual aponta para `vincular_despesa_fatura_carvia`
+        (`/carvia/despesas-extras/<id>/vincular-fatura`), que usa
+        `CustoEntregaFaturaService.vincular(..., ajustes={...})` para
+        atualizar tipo_documento/valor/numero_documento/vencimento em
+        transacao unica.
+
+        Redirect 302 (default): POSTs antigos do template antigo viram GET
+        na nova URL, que renderiza o form xerox Nacom. Isso e seguro porque
+        os campos do POST antigo (`fatura_transportadora_id`) sao diferentes
+        dos campos do POST novo (`fatura_id`, `tipo_documento_cobranca`,
+        `valor_cobranca`, `numero_cte_documento`).
         """
         if not getattr(current_user, 'sistema_carvia', False):
             flash('Acesso negado.', 'danger')
             return redirect(url_for('main.dashboard'))
-
-        custo = db.session.get(CarviaCustoEntrega, custo_id)
-        if not custo:
-            flash('Custo de entrega nao encontrado.', 'danger')
-            return redirect(url_for('carvia.listar_custos_entrega'))
-
-        from app.carvia.services.financeiro.custo_entrega_fatura_service import (
-            CustoEntregaFaturaService,
-        )
-
-        if request.method == 'POST':
-            fatura_id = request.form.get('fatura_transportadora_id', type=int)
-            if not fatura_id:
-                flash('Selecione uma Fatura Transportadora.', 'warning')
-                return redirect(url_for(
-                    'carvia.vincular_fatura_custo_entrega', custo_id=custo_id
-                ))
-
-            try:
-                resultado = CustoEntregaFaturaService.vincular(
-                    custo_id, fatura_id, current_user.email
-                )
-                db.session.commit()
-                flash(
-                    f'Custo {resultado["ce_numero"]} vinculado a Fatura '
-                    f'{resultado["ft_numero"]} com sucesso.',
-                    'success',
-                )
-                return redirect(url_for(
-                    'carvia.detalhe_custo_entrega', custo_id=custo_id
-                ))
-            except ValueError as e:
-                db.session.rollback()
-                flash(str(e), 'danger')
-                return redirect(url_for(
-                    'carvia.vincular_fatura_custo_entrega', custo_id=custo_id
-                ))
-            except Exception as e:
-                db.session.rollback()
-                logger.exception(f'Erro ao vincular CE #{custo_id} a FT: {e}')
-                flash(f'Erro: {e}', 'danger')
-                return redirect(url_for(
-                    'carvia.vincular_fatura_custo_entrega', custo_id=custo_id
-                ))
-
-        # GET
-        faturas = CustoEntregaFaturaService.faturas_disponiveis(custo_id)
-        return render_template(
-            'carvia/custos_entrega/vincular_fatura.html',
-            custo=custo,
-            faturas_disponiveis=faturas,
+        return redirect(
+            url_for('carvia.vincular_despesa_fatura_carvia', custo_id=custo_id)
         )
 
     @bp.route('/custos-entrega/<int:custo_id>/desvincular-fatura', methods=['POST']) # type: ignore
@@ -1978,7 +2059,8 @@ def register_custo_entrega_routes(bp):
         """Vincular despesa extra a fatura transportadora (xerox Nacom).
 
         Form POST recebe: fatura_id, tipo_documento_cobranca, valor_cobranca,
-        numero_cte_documento. Atualiza CE + chama CustoEntregaFaturaService.
+        numero_cte_documento. Delega ajustes ao service via parametro
+        `ajustes={...}` para garantir transacao unica.
 
         Xerox de fretes.vincular_despesa_fatura.
         """
@@ -2003,7 +2085,9 @@ def register_custo_entrega_routes(bp):
             if custo.frete_id else None
         )
 
-        # Faturas disponiveis = nao CONFERIDAS e nao PAGAS
+        # Faturas disponiveis = nao CONFERIDAS e nao PAGAS — paridade Nacom
+        # (sem restringir por transportadora). Se quiser filtrar, usar a tela
+        # antiga `vincular_fatura.html` (deprecated) ou enriquecer este list.
         faturas_disponiveis = CarviaFaturaTransportadora.query.filter(
             CarviaFaturaTransportadora.status_conferencia != 'CONFERIDO',
             CarviaFaturaTransportadora.status_pagamento != 'PAGO',
@@ -2027,8 +2111,11 @@ def register_custo_entrega_routes(bp):
                 )
 
             try:
+                fatura_id_int = int(fatura_id_str)
+                # Pre-check: existencia da fatura — mensagem amigavel (o
+                # service tambem valida, mas aqui rendemos a tela com flash).
                 fatura = db.session.get(
-                    CarviaFaturaTransportadora, int(fatura_id_str)
+                    CarviaFaturaTransportadora, fatura_id_int
                 )
                 if not fatura:
                     flash('Fatura nao encontrada!', 'warning')
@@ -2044,19 +2131,16 @@ def register_custo_entrega_routes(bp):
                     if valor_cobranca_str else float(custo.valor or 0)
                 )
 
-                # Atualiza dados do CE antes de vincular via service
-                custo.tipo_documento = tipo_documento_cobranca
-                custo.valor = valor_cobranca_float
-                custo.numero_documento = (
-                    numero_cte_documento if numero_cte_documento
-                    else 'PENDENTE_FATURA'
-                )
-                if fatura.vencimento:
-                    custo.data_vencimento = fatura.vencimento
-
-                # Vincula via service (valida regras de integridade)
+                # Vincula via service em transacao unica (valida regras de
+                # integridade + aplica ajustes em uma so operacao).
                 CustoEntregaFaturaService.vincular(
-                    custo.id, fatura.id, current_user.email,
+                    custo.id, fatura_id_int, current_user.email,
+                    ajustes={
+                        'tipo_documento': tipo_documento_cobranca,
+                        'valor': valor_cobranca_float,
+                        'numero_documento': numero_cte_documento,
+                        'copiar_vencimento_fatura': True,
+                    },
                 )
 
                 db.session.commit()

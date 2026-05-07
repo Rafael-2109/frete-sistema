@@ -1,35 +1,163 @@
 {% extends "base.html" %}
 
+{% block title %}Gerenciar Custos de Entrega{% endblock %}
+
+{% block extra_css %}{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-money-bill-wave"></i> Gerenciar Custos de Entrega</h2>
-        <div class="d-flex gap-2">
-            <a href="{{ url_for('carvia.listar_custos_entrega') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-list"></i> Listar Todos
-            </a>
-            <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}" class="btn btn-success btn-sm">
-                <i class="fas fa-plus"></i> Nova Despesa Extra
-            </a>
-            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-arrow-left"></i> Dashboard
-            </a>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4">
+                <i class="fas fa-money-bill-wave"></i> Gerenciar Custos de Entrega
+                <small class="text-muted">Vincular a faturas e editar</small>
+            </h1>
         </div>
     </div>
 
     {% set carvia_active = 'custos_entrega' %}
     {% include 'carvia/_quick_nav.html' %}
 
-    <!-- Cards de Total -->
-    <div class="row mb-3 g-3">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('carvia.dashboard') }}">CarVia</a></li>
+            <li class="breadcrumb-item active">Gerenciar Custos</li>
+        </ol>
+    </nav>
+
+    <!-- Aviso da regra de negocio (xerox Nacom) -->
+    <div class="alert alert-info mb-4">
+        <h5><i class="fas fa-info-circle"></i> Fluxo de Vinculacao de Custos</h5>
+        <p class="mb-2">
+            <strong><i class="fas fa-list-ol"></i> Etapas obrigatorias:</strong>
+        </p>
+        <ol class="mb-2">
+            <li><strong>1.</strong> Criar custo de entrega (sem documento)</li>
+            <li><strong>2.</strong> Vincular fatura da transportadora</li>
+            <li><strong>3.</strong> Preencher numero do CTe/documento</li>
+        </ol>
+        <small class="text-muted">
+            <i class="fas fa-lock"></i>
+            O numero do documento (CTe, NFS, etc.) so pode ser preenchido APOS vincular uma fatura.
+        </small>
+    </div>
+
+    <!-- Filtros de Pesquisa -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter"></i> Filtros de Pesquisa
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('carvia.gerenciar_custos_entrega') }}" id="formFiltros">
+                        <input type="hidden" name="aba" id="filtro_aba" value="{{ aba if aba else 'sem' }}">
+                        <div class="row g-3">
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_nf">
+                                        <i class="fas fa-file-invoice"></i> Numero da NF
+                                    </label>
+                                    <input type="text" name="filtro_nf" id="filtro_nf"
+                                           class="form-control"
+                                           value="{{ filtro_nf or '' }}"
+                                           placeholder="Ex: 12345">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_documento">
+                                        <i class="fas fa-file-alt"></i> Numero Documento
+                                    </label>
+                                    <input type="text" name="filtro_documento" id="filtro_documento"
+                                           class="form-control"
+                                           value="{{ filtro_documento or '' }}"
+                                           placeholder="Ex: CTe-123">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_tipo">
+                                        <i class="fas fa-tag"></i> Tipo de Custo
+                                    </label>
+                                    <select name="tipo_custo" id="filtro_tipo" class="form-control">
+                                        <option value="">Todos</option>
+                                        {% for tipo in tipos_custo %}
+                                        <option value="{{ tipo }}" {% if filtro_tipo == tipo %}selected{% endif %}>{{ tipo }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_transportadora">
+                                        <i class="fas fa-truck"></i> Transportadora
+                                    </label>
+                                    <input type="text" name="filtro_transportadora" id="filtro_transportadora"
+                                           class="form-control"
+                                           value="{{ filtro_transportadora or '' }}"
+                                           placeholder="Nome ou CNPJ"
+                                           data-transportadora-autocomplete
+                                           data-transportadora-id="#filtro_transportadora_id_hidden">
+                                    <input type="hidden" id="filtro_transportadora_id_hidden" name="transportadora_id"
+                                           value="{{ transportadora_id or '' }}">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label for="filtro_com_fatura">
+                                        <i class="fas fa-file-invoice-dollar"></i> C/ Fatura
+                                    </label>
+                                    <select name="filtro_com_fatura" id="filtro_com_fatura" class="form-control">
+                                        <option value="">Todos</option>
+                                        <option value="sim" {% if filtro_com_fatura == 'sim' %}selected{% endif %}>Sim</option>
+                                        <option value="nao" {% if filtro_com_fatura == 'nao' %}selected{% endif %}>Nao</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <div class="form-group w-100">
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-search"></i> Filtrar
+                                    </button>
+                                    <a href="{{ url_for('carvia.gerenciar_custos_entrega') }}"
+                                       class="btn btn-secondary w-100 mt-2">
+                                        <i class="fas fa-times"></i> Limpar
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="busca">
+                                        <i class="fas fa-search"></i> Busca livre (numero do custo / descricao / fornecedor)
+                                    </label>
+                                    <input type="text" name="busca" id="busca"
+                                           class="form-control"
+                                           value="{{ busca or '' }}"
+                                           placeholder="CE-001, REENTREGA, fornecedor X...">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatisticas -->
+    <div class="row mb-4 g-3">
         <div class="col-md-6">
             <div class="card border-warning">
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <small class="text-muted d-block">Sem Fatura Transportadora</small>
-                            <strong class="h4 mb-0">{{ ces_sem_fatura|length }}</strong>
-                            <span class="text-muted small">custos</span>
+                            <h4 class="mb-0">{{ paginacao_sem.total }}</h4>
+                            <span class="small">Custos SEM Fatura</span>
                         </div>
                         <div class="text-end">
                             <small class="text-muted d-block">Total</small>
@@ -44,9 +172,8 @@
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <small class="text-muted d-block">Com Fatura Transportadora</small>
-                            <strong class="h4 mb-0">{{ ces_com_fatura|length }}</strong>
-                            <span class="text-muted small">custos</span>
+                            <h4 class="mb-0">{{ paginacao_com.total }}</h4>
+                            <span class="small">Custos COM Fatura</span>
                         </div>
                         <div class="text-end">
                             <small class="text-muted d-block">Total</small>
@@ -58,173 +185,376 @@
         </div>
     </div>
 
-    <!-- Filtros -->
-    <div class="card mb-3">
-        <div class="card-body py-2">
-            <form method="GET" class="row g-2 align-items-end">
-                <input type="hidden" name="aba" value="{{ aba }}">
-                <div class="col-md-3">
-                    <label class="form-label small">Tipo</label>
-                    <select name="tipo_custo" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        {% for tipo in tipos_custo %}
-                        <option value="{{ tipo }}" {{ 'selected' if filtro_tipo == tipo }}>{{ tipo }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-5">
-                    <label class="form-label small">Busca (numero do custo / descricao)</label>
-                    <input type="text" name="busca" class="form-control form-control-sm"
-                           value="{{ busca }}" placeholder="CE-001, REENTREGA, etc.">
-                </div>
-                <div class="col-md-4">
-                    <button type="submit" class="btn btn-primary btn-sm">
-                        <i class="fas fa-filter"></i> Filtrar
+    <!-- Abas Sem/Com Fatura -->
+    <div class="row">
+        <div class="col-12">
+            <ul class="nav nav-tabs nav-fill" id="custosTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link {{ 'active' if aba == 'sem' or not aba else '' }}"
+                            id="sem-fatura-tab" data-bs-toggle="tab"
+                            data-bs-target="#sem-fatura" type="button" role="tab">
+                        <i class="fas fa-exclamation-triangle text-warning"></i>
+                        <strong>SEM Fatura</strong>
+                        <span class="badge bg-warning ms-2">{{ paginacao_sem.total }}</span>
                     </button>
-                    <a href="{{ url_for('carvia.gerenciar_custos_entrega') }}"
-                       class="btn btn-outline-secondary btn-sm">Limpar</a>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link {{ 'active' if aba == 'com' else '' }}"
+                            id="com-fatura-tab" data-bs-toggle="tab"
+                            data-bs-target="#com-fatura" type="button" role="tab">
+                        <i class="fas fa-check-circle text-success"></i>
+                        <strong>COM Fatura</strong>
+                        <span class="badge bg-success ms-2">{{ paginacao_com.total }}</span>
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="custosTabContent">
+                <!-- ========== ABA: CUSTOS SEM FATURA ========== -->
+                <div class="tab-pane fade {{ 'show active' if aba == 'sem' or not aba else '' }}"
+                     id="sem-fatura" role="tabpanel">
+                    <div class="card border-0 border-top-0 rounded-0 rounded-bottom">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-exclamation-triangle"></i> Custos SEM Fatura
+                                <small class="ms-2">({{ paginacao_sem.total }} itens{% if paginacao_sem.pages > 1 %} - Pagina {{ paginacao_sem.page }} de {{ paginacao_sem.pages }}{% endif %})</small>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if paginacao_sem.items %}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover carvia-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Numero</th>
+                                            <th>Operacao / Frete</th>
+                                            <th>Cliente</th>
+                                            <th>Transportadora</th>
+                                            <th>Tipo Custo</th>
+                                            <th class="text-end">Valor</th>
+                                            <th>Vencimento</th>
+                                            <th>Criado em</th>
+                                            <th class="text-center">Acoes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ce in paginacao_sem.items %}
+                                        <tr>
+                                            <td><strong>{{ ce.numero_custo }}</strong></td>
+                                            <td>
+                                                {% if ce.operacao %}
+                                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ce.operacao_id) }}"
+                                                   class="text-decoration-none">
+                                                    {{ ce.operacao.cte_numero or 'Op #' ~ ce.operacao_id }}
+                                                </a>
+                                                {% elif ce.frete_id %}
+                                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=ce.frete_id) }}"
+                                                   class="text-decoration-none">
+                                                    Frete #{{ ce.frete_id }}
+                                                </a>
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if ce.operacao and ce.operacao.nome_cliente %}
+                                                {{ ce.operacao.nome_cliente[:25] }}{% if ce.operacao.nome_cliente|length > 25 %}...{% endif %}
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% set transp = ce.transportadora_efetiva %}
+                                                {% if transp %}
+                                                {{ transp.razao_social[:20] }}{% if transp.razao_social|length > 20 %}...{% endif %}
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td><span class="badge bg-info">{{ ce.tipo_custo }}</span></td>
+                                            <td class="text-end"><strong>{{ ce.valor|valor_br }}</strong></td>
+                                            <td>{{ ce.data_vencimento|formatar_data_segura if ce.data_vencimento else 'N/A' }}</td>
+                                            <td>{{ ce.criado_em|formatar_data_hora_brasil }}</td>
+                                            <td class="text-center">
+                                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
+                                                   class="btn btn-outline-primary btn-sm" title="Ver detalhes">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                {% if ce.pode_vincular_fatura %}
+                                                <a href="{{ url_for('carvia.vincular_despesa_fatura_carvia', custo_id=ce.id) }}"
+                                                   class="btn btn-success btn-sm" title="Vincular a Fatura">
+                                                    <i class="fas fa-link"></i> Vincular
+                                                </a>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {% if paginacao_sem.pages > 1 %}
+                            <nav aria-label="Paginacao custos sem fatura">
+                                <ul class="pagination justify-content-center">
+                                    {% if paginacao_sem.has_prev %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('carvia.gerenciar_custos_entrega', pagina_sem=paginacao_sem.prev_num, aba='sem', filtro_nf=filtro_nf, filtro_documento=filtro_documento, tipo_custo=filtro_tipo, filtro_transportadora=filtro_transportadora, transportadora_id=transportadora_id, filtro_com_fatura=filtro_com_fatura, busca=busca) }}">Anterior</a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                                    {% endif %}
+
+                                    {% for page_num in paginacao_sem.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                        {% if page_num %}
+                                            {% if page_num == paginacao_sem.page %}
+                                            <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                                            {% else %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="{{ url_for('carvia.gerenciar_custos_entrega', pagina_sem=page_num, aba='sem', filtro_nf=filtro_nf, filtro_documento=filtro_documento, tipo_custo=filtro_tipo, filtro_transportadora=filtro_transportadora, transportadora_id=transportadora_id, filtro_com_fatura=filtro_com_fatura, busca=busca) }}">{{ page_num }}</a>
+                                            </li>
+                                            {% endif %}
+                                        {% else %}
+                                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        {% endif %}
+                                    {% endfor %}
+
+                                    {% if paginacao_sem.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('carvia.gerenciar_custos_entrega', pagina_sem=paginacao_sem.next_num, aba='sem', filtro_nf=filtro_nf, filtro_documento=filtro_documento, tipo_custo=filtro_tipo, filtro_transportadora=filtro_transportadora, transportadora_id=transportadora_id, filtro_com_fatura=filtro_com_fatura, busca=busca) }}">Proximo</a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled"><span class="page-link">Proximo</span></li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                            {% endif %}
+                            {% else %}
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle"></i>
+                                <strong>Excelente!</strong> Nenhum custo pendente de vinculacao.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
-            </form>
+
+                <!-- ========== ABA: CUSTOS COM FATURA ========== -->
+                <div class="tab-pane fade {{ 'show active' if aba == 'com' else '' }}"
+                     id="com-fatura" role="tabpanel">
+                    <div class="card border-0 border-top-0 rounded-0 rounded-bottom">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-check-circle"></i> Custos COM Fatura
+                                <small class="ms-2">({{ paginacao_com.total }} itens{% if paginacao_com.pages > 1 %} - Pagina {{ paginacao_com.page }} de {{ paginacao_com.pages }}{% endif %})</small>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if paginacao_com.items %}
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover carvia-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Numero</th>
+                                            <th>Operacao / Frete</th>
+                                            <th>Cliente</th>
+                                            <th>Transportadora</th>
+                                            <th>Tipo Custo</th>
+                                            <th class="text-end">Valor</th>
+                                            <th>Fatura</th>
+                                            <th>Vencimento</th>
+                                            <th class="text-center">Acoes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for ce in paginacao_com.items %}
+                                        <tr>
+                                            <td><strong>{{ ce.numero_custo }}</strong></td>
+                                            <td>
+                                                {% if ce.operacao %}
+                                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ce.operacao_id) }}"
+                                                   class="text-decoration-none">
+                                                    {{ ce.operacao.cte_numero or 'Op #' ~ ce.operacao_id }}
+                                                </a>
+                                                {% elif ce.frete_id %}
+                                                <a href="{{ url_for('carvia.detalhe_frete_carvia', id=ce.frete_id) }}"
+                                                   class="text-decoration-none">
+                                                    Frete #{{ ce.frete_id }}
+                                                </a>
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if ce.operacao and ce.operacao.nome_cliente %}
+                                                {{ ce.operacao.nome_cliente[:25] }}{% if ce.operacao.nome_cliente|length > 25 %}...{% endif %}
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% set transp = ce.transportadora_efetiva %}
+                                                {% if transp %}
+                                                {{ transp.razao_social[:20] }}{% if transp.razao_social|length > 20 %}...{% endif %}
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td><span class="badge bg-success">{{ ce.tipo_custo }}</span></td>
+                                            <td class="text-end"><strong>{{ ce.valor|valor_br }}</strong></td>
+                                            <td>
+                                                {% if ce.fatura_transportadora %}
+                                                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=ce.fatura_transportadora_id) }}"
+                                                   class="badge bg-primary text-decoration-none">
+                                                    {{ ce.fatura_transportadora.numero_fatura }}
+                                                </a>
+                                                <br>
+                                                <small class="text-muted">
+                                                    Conf: {{ ce.fatura_transportadora.status_conferencia }} /
+                                                    Pag: {{ ce.fatura_transportadora.status_pagamento }}
+                                                </small>
+                                                {% else %}
+                                                <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ ce.data_vencimento|formatar_data_segura if ce.data_vencimento else 'N/A' }}</td>
+                                            <td class="text-center">
+                                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
+                                                   class="btn btn-outline-primary btn-sm" title="Ver detalhes">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                {% if ce.fatura_transportadora and ce.fatura_transportadora.status_conferencia != 'CONFERIDO' and ce.fatura_transportadora.status_pagamento != 'PAGO' %}
+                                                <button type="button" class="btn btn-warning btn-sm"
+                                                        title="Desvincular da Fatura"
+                                                        onclick="desvincularCusto({{ ce.id }}, '{{ ce.numero_custo }}', '{{ ce.fatura_transportadora.numero_fatura }}')">
+                                                    <i class="fas fa-unlink"></i>
+                                                </button>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {% if paginacao_com.pages > 1 %}
+                            <nav aria-label="Paginacao custos com fatura">
+                                <ul class="pagination justify-content-center">
+                                    {% if paginacao_com.has_prev %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('carvia.gerenciar_custos_entrega', pagina_com=paginacao_com.prev_num, aba='com', filtro_nf=filtro_nf, filtro_documento=filtro_documento, tipo_custo=filtro_tipo, filtro_transportadora=filtro_transportadora, transportadora_id=transportadora_id, filtro_com_fatura=filtro_com_fatura, busca=busca) }}">Anterior</a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                                    {% endif %}
+
+                                    {% for page_num in paginacao_com.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                        {% if page_num %}
+                                            {% if page_num == paginacao_com.page %}
+                                            <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                                            {% else %}
+                                            <li class="page-item">
+                                                <a class="page-link" href="{{ url_for('carvia.gerenciar_custos_entrega', pagina_com=page_num, aba='com', filtro_nf=filtro_nf, filtro_documento=filtro_documento, tipo_custo=filtro_tipo, filtro_transportadora=filtro_transportadora, transportadora_id=transportadora_id, filtro_com_fatura=filtro_com_fatura, busca=busca) }}">{{ page_num }}</a>
+                                            </li>
+                                            {% endif %}
+                                        {% else %}
+                                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                                        {% endif %}
+                                    {% endfor %}
+
+                                    {% if paginacao_com.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('carvia.gerenciar_custos_entrega', pagina_com=paginacao_com.next_num, aba='com', filtro_nf=filtro_nf, filtro_documento=filtro_documento, tipo_custo=filtro_tipo, filtro_transportadora=filtro_transportadora, transportadora_id=transportadora_id, filtro_com_fatura=filtro_com_fatura, busca=busca) }}">Proximo</a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item disabled"><span class="page-link">Proximo</span></li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                            {% endif %}
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Informacao:</strong> Nenhum custo de entrega esta vinculado a faturas ainda.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Abas Sem Fatura / Com Fatura -->
-    <ul class="nav nav-tabs" id="tabs-gerenciar" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {{ 'active' if aba == 'sem_fatura' }}"
-                    id="tab-sem" data-bs-toggle="tab" data-bs-target="#pane-sem" type="button">
-                <i class="fas fa-exclamation-circle text-warning"></i>
-                Sem Fatura ({{ ces_sem_fatura|length }})
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {{ 'active' if aba == 'com_fatura' }}"
-                    id="tab-com" data-bs-toggle="tab" data-bs-target="#pane-com" type="button">
-                <i class="fas fa-check-circle text-success"></i>
-                Com Fatura ({{ ces_com_fatura|length }})
-            </button>
-        </li>
-    </ul>
-
-    <div class="tab-content border border-top-0 p-3">
-        <!-- Aba Sem Fatura -->
-        <div class="tab-pane fade {{ 'show active' if aba == 'sem_fatura' }}" id="pane-sem">
-            {% if ces_sem_fatura %}
-            <div class="table-responsive">
-                <table class="table table-hover table-sm carvia-table">
-                    <thead>
-                        <tr>
-                            <th>Numero</th>
-                            <th>Tipo</th>
-                            <th>Operacao</th>
-                            <th class="text-end">Valor</th>
-                            <th>Data</th>
-                            <th>Status</th>
-                            <th>Acoes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for ce in ces_sem_fatura %}
-                        <tr>
-                            <td><strong>{{ ce.numero_custo }}</strong></td>
-                            <td><span class="badge bg-secondary">{{ ce.tipo_custo }}</span></td>
-                            <td>
-                                {% if ce.operacao %}
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ce.operacao_id) }}"
-                                   class="text-decoration-none">
-                                    {{ ce.operacao.cte_numero or 'Op #' ~ ce.operacao_id }}
-                                </a>
-                                {% endif %}
-                            </td>
-                            <td class="valor-col">{{ ce.valor|valor_br }}</td>
-                            <td>{{ ce.data_custo.strftime('%d/%m/%Y') if ce.data_custo else '-' }}</td>
-                            <td><span class="badge carvia-badge-{{ ce.status|lower }}">{{ ce.status }}</span></td>
-                            <td>
-                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
-                                   class="btn btn-sm btn-outline-primary" title="Ver detalhes">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                {% if ce.pode_vincular_fatura %}
-                                <a href="{{ url_for('carvia.vincular_fatura_custo_entrega', custo_id=ce.id) }}"
-                                   class="btn btn-sm btn-outline-success" title="Vincular Fatura Transportadora">
-                                    <i class="fas fa-link"></i> Vincular
-                                </a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="text-center text-muted p-4">
-                <i class="fas fa-check-circle fa-2x mb-2"></i>
-                <p class="mb-0">Nenhum custo pendente de vinculacao.</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Aba Com Fatura -->
-        <div class="tab-pane fade {{ 'show active' if aba == 'com_fatura' }}" id="pane-com">
-            {% if ces_com_fatura %}
-            <div class="table-responsive">
-                <table class="table table-hover table-sm carvia-table">
-                    <thead>
-                        <tr>
-                            <th>Numero</th>
-                            <th>Tipo</th>
-                            <th>Operacao</th>
-                            <th class="text-end">Valor</th>
-                            <th>Fatura Transportadora</th>
-                            <th>Status</th>
-                            <th>Acoes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for ce in ces_com_fatura %}
-                        <tr>
-                            <td><strong>{{ ce.numero_custo }}</strong></td>
-                            <td><span class="badge bg-secondary">{{ ce.tipo_custo }}</span></td>
-                            <td>
-                                {% if ce.operacao %}
-                                <a href="{{ url_for('carvia.detalhe_operacao', operacao_id=ce.operacao_id) }}"
-                                   class="text-decoration-none">
-                                    {{ ce.operacao.cte_numero or 'Op #' ~ ce.operacao_id }}
-                                </a>
-                                {% endif %}
-                            </td>
-                            <td class="valor-col">{{ ce.valor|valor_br }}</td>
-                            <td>
-                                {% if ce.fatura_transportadora %}
-                                <a href="{{ url_for('carvia.detalhe_fatura_transportadora', fatura_id=ce.fatura_transportadora_id) }}"
-                                   class="text-decoration-none">
-                                    FT {{ ce.fatura_transportadora.numero_fatura }}
-                                </a>
-                                <br>
-                                <small class="text-muted">
-                                    {{ ce.fatura_transportadora.status_pagamento }}
-                                </small>
-                                {% endif %}
-                            </td>
-                            <td><span class="badge carvia-badge-{{ ce.status|lower }}">{{ ce.status }}</span></td>
-                            <td>
-                                <a href="{{ url_for('carvia.detalhe_custo_entrega', custo_id=ce.id) }}"
-                                   class="btn btn-sm btn-outline-primary" title="Ver detalhes">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="text-center text-muted p-4">
-                <i class="fas fa-inbox fa-2x mb-2"></i>
-                <p class="mb-0">Nenhum custo vinculado a fatura.</p>
-            </div>
-            {% endif %}
+    <!-- Botoes de acao -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <a href="{{ url_for('carvia.dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+            <a href="{{ url_for('carvia.listar_custos_entrega') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-list"></i> Listagem completa
+            </a>
+            <a href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}" class="btn btn-success">
+                <i class="fas fa-plus"></i> Nova Despesa Extra
+            </a>
         </div>
     </div>
 </div>
+
+<!-- Form oculto para desvincular CE da FT (POST + JSON via fetch) -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ativar aba via parametro URL
+        const semTab = document.querySelector('#sem-fatura-tab');
+        const comTab = document.querySelector('#com-fatura-tab');
+        const filtroAbaInput = document.getElementById('filtro_aba');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const abaParam = urlParams.get('aba');
+
+        if (abaParam === 'com' && comTab) {
+            new bootstrap.Tab(comTab).show();
+        } else if (semTab) {
+            new bootstrap.Tab(semTab).show();
+        }
+
+        if (semTab) {
+            semTab.addEventListener('shown.bs.tab', function() {
+                if (filtroAbaInput) filtroAbaInput.value = 'sem';
+            });
+        }
+        if (comTab) {
+            comTab.addEventListener('shown.bs.tab', function() {
+                if (filtroAbaInput) filtroAbaInput.value = 'com';
+            });
+        }
+    });
+
+    // Desvincular CE da FT (mesma rota usada em detalhe.html:607)
+    function desvincularCusto(custoId, numeroCusto, numeroFatura) {
+        if (!confirm('Deseja realmente desvincular o custo ' + numeroCusto +
+                     ' da fatura ' + numeroFatura + '?')) {
+            return;
+        }
+
+        fetch('/carvia/custos-entrega/' + custoId + '/desvincular-fatura', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}',
+            },
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.sucesso) {
+                window.location.reload();
+            } else {
+                alert('Erro: ' + (data.erro || 'Falha ao desvincular'));
+            }
+        })
+        .catch(function(err) {
+            alert('Erro de comunicacao: ' + err);
+        });
+    }
+</script>
+<script src="{{ url_for('static', filename='js/shared/transportadora-autocomplete.js') }}"></script>
 {% endblock %}
