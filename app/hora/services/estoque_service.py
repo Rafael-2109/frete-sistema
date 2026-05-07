@@ -509,9 +509,18 @@ def listar_estoque(
 
 def opcoes_filtro_estoque(
     lojas_permitidas_ids: Optional[List[int]] = None,
+    apenas_canonicos: bool = False,
 ) -> dict:
     """Retorna opcoes para SELECTs de filtro: apenas modelos/cores que
     atualmente tem ao menos 1 moto em EVENTOS_EM_ESTOQUE nas lojas permitidas.
+
+    Args:
+        lojas_permitidas_ids: filtra escopo de lojas (None = sem filtro).
+        apenas_canonicos: quando True, agrupa motos vinculadas a aliases
+            (`HoraModelo.merged_em_id IS NOT NULL`) sob o modelo canonico
+            (id e nome_modelo do canonico). Para listas de Pedido de Venda,
+            evita duplicar BOB e BOB-AM (alias) — o operador ve so BOB e o
+            backend resolve via alias na hora de buscar cores/chassis.
 
     Returns:
         {
@@ -520,6 +529,51 @@ def opcoes_filtro_estoque(
         }
     """
     sub = _subquery_ultimo_evento_id()
+
+    if apenas_canonicos:
+        # Estrategia em 2 passos para evitar self-join com alias ambiguo:
+        # 1. Pegar tuplas (modelo_id_da_moto, merged_em_id, cor) com chassi
+        #    em estoque. O modelo_id_da_moto pode ser o canonico OU um alias.
+        # 2. Reduzir a (canonico_id := merged_em_id or modelo_id_da_moto) e
+        #    buscar nomes em segunda query.
+        q_base = (
+            db.session.query(
+                HoraModelo.id,
+                HoraModelo.merged_em_id,
+                HoraMoto.cor,
+            )
+            .join(HoraMoto, HoraMoto.modelo_id == HoraModelo.id)
+            .join(sub, HoraMoto.numero_chassi == sub.c.chassi)
+            .join(HoraMotoEvento, HoraMotoEvento.id == sub.c.max_id)
+            .filter(HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE))
+        )
+        if lojas_permitidas_ids is not None:
+            if not lojas_permitidas_ids:
+                return {'modelos': [], 'cores': []}
+            q_base = q_base.filter(HoraMotoEvento.loja_id.in_(lojas_permitidas_ids))
+
+        canonico_ids: set[int] = set()
+        cores_set: set[str] = set()
+        for mid, merged, cor in q_base.distinct().all():
+            canonico_ids.add(merged or mid)
+            if cor:
+                cores_set.add(cor)
+
+        if not canonico_ids:
+            return {'modelos': [], 'cores': sorted(cores_set)}
+
+        canonicos = (
+            HoraModelo.query
+            .filter(HoraModelo.id.in_(canonico_ids))
+            .order_by(HoraModelo.nome_modelo)
+            .all()
+        )
+        modelos = [
+            {'id': m.id, 'nome_modelo': m.nome_modelo} for m in canonicos
+        ]
+        return {'modelos': modelos, 'cores': sorted(cores_set)}
+
+    # Comportamento legado (sem agrupamento por canonico).
     q_base = (
         db.session.query(
             HoraModelo.id,
@@ -741,9 +795,29 @@ def autocomplete_cor(
     return [row[0] for row in base.all() if row[0]]
 
 
+def _expandir_modelo_com_aliases(modelo_id: int) -> List[int]:
+    """Retorna lista de ids: o canonico + todos os aliases absorvidos.
+
+    Quando `modelo_id` aponta para um canonico, inclui ele mesmo + todos os
+    modelos com `merged_em_id == modelo_id`. Quando aponta para um alias
+    (foi absorvido), inclui o canonico + todos os outros aliases do mesmo
+    canonico (irmaos).
+    """
+    modelo = HoraModelo.query.get(modelo_id)
+    if modelo is None:
+        return []
+    canonico_id = modelo.merged_em_id or modelo.id
+    aliases_ids = [
+        m.id for m in
+        HoraModelo.query.filter(HoraModelo.merged_em_id == canonico_id).all()
+    ]
+    return list({canonico_id, *aliases_ids})
+
+
 def cores_disponiveis_por_modelo(
     modelo_id: int,
     lojas_permitidas_ids: Optional[List[int]] = None,
+    incluir_aliases: bool = False,
 ) -> List[str]:
     """Lista cores distintas com pelo menos 1 chassi em EVENTOS_EM_ESTOQUE
     para o modelo informado.
@@ -751,9 +825,23 @@ def cores_disponiveis_por_modelo(
     Usado pelo SELECT cascateado da tela "Novo Pedido de Venda" (Faturamento):
     operador escolhe modelo -> aparecem cores -> aparecem chassis. Filtra por
     lojas permitidas ao usuario quando `lojas_permitidas_ids` nao e None.
+
+    Args:
+        incluir_aliases: quando True, busca tambem motos vinculadas aos
+            aliases do modelo canonico (HoraModelo com merged_em_id apontando
+            para o canonico). Util para tela de Pedido de Venda — operador
+            escolheu o canonico no SELECT e queremos cobrir chassis legados
+            que ainda apontam para aliases.
     """
     if not modelo_id:
         return []
+
+    if incluir_aliases:
+        modelos_ids = _expandir_modelo_com_aliases(modelo_id)
+        if not modelos_ids:
+            return []
+    else:
+        modelos_ids = [modelo_id]
 
     sub = _subquery_ultimo_evento_id()
     q = (
@@ -761,7 +849,7 @@ def cores_disponiveis_por_modelo(
         .join(sub, HoraMoto.numero_chassi == sub.c.chassi)
         .join(HoraMotoEvento, HoraMotoEvento.id == sub.c.max_id)
         .filter(
-            HoraMoto.modelo_id == modelo_id,
+            HoraMoto.modelo_id.in_(modelos_ids),
             HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE),
             HoraMoto.cor.isnot(None),
         )
@@ -779,6 +867,7 @@ def chassis_disponiveis_para_venda(
     modelo_id: int,
     cor: Optional[str] = None,
     lojas_permitidas_ids: Optional[List[int]] = None,
+    incluir_aliases: bool = False,
 ) -> List[dict]:
     """Lista chassis disponiveis para venda manual (tela Faturamento ->
     Novo Pedido de Venda).
@@ -799,6 +888,13 @@ def chassis_disponiveis_para_venda(
     if not modelo_id:
         return []
 
+    if incluir_aliases:
+        modelos_ids = _expandir_modelo_com_aliases(modelo_id)
+        if not modelos_ids:
+            return []
+    else:
+        modelos_ids = [modelo_id]
+
     sub = _subquery_ultimo_evento_id()
     q = (
         db.session.query(HoraMotoEvento, HoraMoto, HoraModelo, HoraLoja)
@@ -813,7 +909,7 @@ def chassis_disponiveis_para_venda(
         .join(HoraModelo, HoraMoto.modelo_id == HoraModelo.id)
         .outerjoin(HoraLoja, HoraMotoEvento.loja_id == HoraLoja.id)
         .filter(
-            HoraMoto.modelo_id == modelo_id,
+            HoraMoto.modelo_id.in_(modelos_ids),
             HoraMotoEvento.tipo.in_(EVENTOS_EM_ESTOQUE),
         )
     )

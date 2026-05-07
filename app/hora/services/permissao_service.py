@@ -54,12 +54,21 @@ def is_admin(usuario: Usuario | None) -> bool:
     return getattr(usuario, 'perfil', None) == 'administrador'
 
 
+# Emails ocultados do SELECT de vendedor (decisao do dono em 2026-05-07).
+# Usuarios continuam ativos no sistema, apenas nao aparecem como vendedor
+# elegivel em criar pedido de venda.
+EMAILS_OCULTOS_VENDEDOR = frozenset({
+    'renatagalafassi@hotmail.com',
+})
+
+
 def listar_usuarios_habilitados() -> list[Usuario]:
     """Retorna usuarios habilitados no modulo HORA (candidatos a 'vendedor').
 
     Criterio (alinhado com regras de `tem_perm`):
     - `status='ativo'` (rejeitado/bloqueado/pendente excluidos).
     - E (`perfil='administrador'` OR `sistema_lojas=True`).
+    - E email NAO em `EMAILS_OCULTOS_VENDEDOR`.
 
     Admins entram porque tem bypass de permissao em todo o modulo.
     Nao-admins entram quando ja foram aprovados para Lojas HORA — ainda
@@ -77,6 +86,7 @@ def listar_usuarios_habilitados() -> list[Usuario]:
                 Usuario.sistema_lojas.is_(True),
             )
         )
+        .filter(~Usuario.email.in_(EMAILS_OCULTOS_VENDEDOR))
         .order_by(Usuario.nome)
         .all()
     )

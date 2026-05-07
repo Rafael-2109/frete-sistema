@@ -1017,8 +1017,14 @@ def tagplus_pedido_venda_novo():
     # todo o estoque + todas as lojas.
 
     # Modelos com pelo menos 1 chassi em estoque (visao global, sem escopo).
+    # Apenas canonicos: aliases (BOB AM, etc.) sao agrupados sob o canonico
+    # (BOB) — operador ve uma linha so. Cores/chassis abaixo expandem
+    # automaticamente para incluir motos vinculadas a aliases.
     from app.hora.services.estoque_service import opcoes_filtro_estoque
-    opcoes = opcoes_filtro_estoque(lojas_permitidas_ids=None)
+    opcoes = opcoes_filtro_estoque(
+        lojas_permitidas_ids=None,
+        apenas_canonicos=True,
+    )
     modelos = opcoes['modelos']
 
     # Formas de pagamento mapeadas no TagPlus.
@@ -1066,14 +1072,21 @@ def tagplus_pedido_venda_criar():
         flash(f'Valor invalido: {valor_raw!r}', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
-    # Frete e parcelamento (defaults preservam comportamento anterior).
-    mod_frete = _g('modalidade_frete', 1) or '9'
+    # Frete: modalidade restrita a 0 (CIF) ou 1 (FOB) por decisao do dono
+    # (2026-05-07). Outros valores (2, 3, 4, 9) ainda podem entrar via DANFE
+    # PDF / TagPlus, mas nao por este formulario.
+    mod_frete = _g('modalidade_frete', 1) or '0'
+    if mod_frete not in ('0', '1'):
+        flash(f'Modalidade de frete invalida: {mod_frete!r} (esperado 0 ou 1).', 'danger')
+        return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+
+    # Parcelamento: intervalo fixo em 30 dias (campo removido do formulario).
     try:
         n_parcelas = int(_g('numero_parcelas', 3) or '1')
-        intervalo = int(_g('intervalo_parcelas_dias', 3) or '30')
     except ValueError:
-        flash('Numero de parcelas / intervalo invalidos.', 'danger')
+        flash('Numero de parcelas invalido.', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
+    intervalo = 30
 
     # Vendedor: SELECT no form, default = usuario logado. Server valida que o
     # nome enviado pertence a um usuario HORA-habilitado (defesa em
@@ -1162,10 +1175,12 @@ def tagplus_pedido_venda_api_cores():
     if not modelo_id:
         return jsonify({'ok': True, 'cores': []})
 
-    # Sem filtro de escopo: pedido de venda permite chassi de qualquer loja.
+    # Sem filtro de escopo + incluir aliases: operador escolheu canonico no
+    # SELECT; cores devem cobrir motos vinculadas tambem aos aliases.
     cores = cores_disponiveis_por_modelo(
         modelo_id=modelo_id,
         lojas_permitidas_ids=None,
+        incluir_aliases=True,
     )
     return jsonify({'ok': True, 'cores': cores})
 
@@ -1184,11 +1199,13 @@ def tagplus_pedido_venda_api_chassis():
     if not modelo_id:
         return jsonify({'ok': True, 'chassis': []})
 
-    # Sem filtro de escopo: pedido de venda permite chassi de qualquer loja.
+    # Sem filtro de escopo + incluir aliases: operador escolheu canonico no
+    # SELECT; chassis devem cobrir motos vinculadas tambem aos aliases.
     chassis = chassis_disponiveis_para_venda(
         modelo_id=modelo_id,
         cor=cor,
         lojas_permitidas_ids=None,
+        incluir_aliases=True,
     )
     return jsonify({'ok': True, 'chassis': chassis})
 
