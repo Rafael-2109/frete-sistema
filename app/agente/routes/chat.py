@@ -1120,6 +1120,35 @@ def _stream_chat_response(
             except Exception as e:
                 logger.debug(f"[SSE] Cleanup session context falhou (ignorado): {e}")
 
+            # =================================================================
+            # FIX 2026-05-07: PERSISTENCIA PRIMARY na thread daemon
+            # =================================================================
+            # A thread daemon SEMPRE completa seu finally (provado por logs:
+            # "Thread finalizada - None enviado" aparece mesmo quando cliente
+            # desconecta do SSE). O finally do generator do route, ao contrario,
+            # pode ser saltado quando GeneratorExit propaga durante yield.
+            #
+            # Persistir aqui garante que a AssistantMessage e salva mesmo se o
+            # cliente fechar a aba antes do `done` event chegar. O finally do
+            # generator continua chamando _save_messages_dedup como defesa em
+            # profundidade — vai dar skip pela flag se daemon ja persistiu.
+            # =================================================================
+            try:
+                _save_messages_dedup(
+                    app=app,
+                    response_state=response_state,
+                    original_message=original_message,
+                    user_id=user_id,
+                    model=model,
+                    source='thread_daemon',
+                )
+            except Exception as save_err:
+                logger.error(
+                    f"[AGENTE] save no thread_daemon falhou "
+                    f"(generator finally vai retentar): {save_err}",
+                    exc_info=True,
+                )
+
             if not none_sent:
                 try:
                     event_queue.put(None)
@@ -1405,26 +1434,25 @@ def _stream_chat_response(
         # no banco para que o resume funcione na próxima mensagem.
         # Sem isso, o agente perde o contexto da conversa.
         # =================================================================
+        # FIX 2026-05-07: usa _save_messages_dedup (idempotente) ao inves de
+        # _save_messages_to_db direto. Em sessao saudavel, thread daemon ja
+        # persistiu — esta chamada vai dar skip pela flag _persisted. Em caso
+        # raro de daemon falhar antes de salvar, este finally salva de fato.
         try:
-            _save_messages_to_db(
+            _save_messages_dedup(
                 app=app,
-                our_session_id=response_state['our_session_id'],
-                sdk_session_id=response_state['sdk_session_id'],
+                response_state=response_state,
+                original_message=original_message,
                 user_id=user_id,
-                user_message=original_message,
-                assistant_message=response_state['full_text'],
-                input_tokens=response_state['input_tokens'],
-                output_tokens=response_state['output_tokens'],
-                tools_used=response_state['tools_used'],
                 model=model,
-                session_expired=response_state['session_expired'],
-                sdk_cost_usd=response_state.get('sdk_cost_usd', 0),
-                cache_read_tokens=response_state.get('cache_read_tokens', 0),
-                cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
+                source='finally_generator',
             )
-            logger.info("[AGENTE] Mensagens salvas no banco (finally)")
         except Exception as save_error:
-            logger.error(f"[AGENTE] ERRO ao salvar mensagens no finally: {save_error}", exc_info=True)
+            logger.error(
+                f"[AGENTE] ERRO ao salvar mensagens no finally do generator: "
+                f"{save_error}",
+                exc_info=True,
+            )
 
         # Garantir cleanup do _stream_context mesmo se thread interna não iniciou
         # (complementa cleanup em linha 719 que só roda se thread executou)
@@ -1469,14 +1497,7 @@ def _save_messages_dedup(
         model: modelo usado
         source: 'thread_daemon' ou 'finally_generator' — apenas para log
     """
-    save_lock = response_state.get('_save_lock')
-    if save_lock is None:
-        # Defensivo: response_state sem lock (codepath antigo). Nao bloqueia.
-        logger.warning(
-            f"[AGENTE] _save_messages_dedup ({source}): sem _save_lock, "
-            "pulando dedup (risco de duplicacao)"
-        )
-        save_lock = Lock()  # Lock dummy para o `with` funcionar
+    save_lock = response_state['_save_lock']
 
     with save_lock:
         if response_state.get('_persisted'):
@@ -1485,7 +1506,7 @@ def _save_messages_dedup(
             )
             return
 
-        _save_messages_to_db(
+        saved = _save_messages_to_db(
             app=app,
             our_session_id=response_state['our_session_id'],
             sdk_session_id=response_state['sdk_session_id'],
@@ -1501,10 +1522,18 @@ def _save_messages_dedup(
             cache_read_tokens=response_state.get('cache_read_tokens', 0),
             cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
         )
-        # Marca apenas se _save_messages_to_db NAO levantou excecao.
-        # Excecoes de pos-processamento sao isoladas dentro da funcao.
-        response_state['_persisted'] = True
-        logger.info(f"[AGENTE] Mensagens salvas no banco ({source})")
+        # Marca flag SO SE o commit do DB foi bem-sucedido.
+        # Falhas de pos-processamento NAO afetam o retorno (isolados na propria
+        # _save_messages_to_db). Falha no commit retorna False, flag fica False
+        # e a outra thread (defesa em profundidade) tenta novamente.
+        if saved:
+            response_state['_persisted'] = True
+            logger.info(f"[AGENTE] Mensagens salvas no banco ({source})")
+        else:
+            logger.warning(
+                f"[AGENTE] _save_messages_to_db retornou False ({source}) — "
+                "flag _persisted NAO setada (outra thread pode tentar)"
+            )
 
 
 def _save_messages_to_db(
@@ -1522,9 +1551,20 @@ def _save_messages_to_db(
     sdk_cost_usd: float = 0,
     cache_read_tokens: int = 0,
     cache_creation_tokens: int = 0,
-) -> None:
+) -> bool:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
+
+    Returns:
+        True se o commit das mensagens foi bem-sucedido. False em caso de
+        erro pre-commit (DB down, integrity error, etc.). Falhas de
+        pos-processamento (run_post_session_processing, memory v2) NAO
+        afetam o retorno — sao isoladas internamente.
+
+        FIX 2026-05-07: o retorno bool e usado por _save_messages_dedup
+        para decidir se marca a flag _persisted=True. So setar flag em
+        sucesso real previne falso positivo que mascararia mensagens
+        nao persistidas.
 
     Args:
         app: Flask app
@@ -1544,7 +1584,7 @@ def _save_messages_to_db(
     """
     if not our_session_id:
         logger.warning("[AGENTE] Não foi possível salvar: session_id não definido")
-        return
+        return False
 
     try:
         from app.agente.models import AgentSession
@@ -1619,15 +1659,30 @@ def _save_messages_to_db(
 
             # =============================================================
             # Post-session processing (reutilizável por web e Teams)
+            #
+            # FIX 2026-05-07: isolado em try/except. Falhas aqui NAO devem
+            # propagar pois o commit ja passou e as mensagens estao no banco.
+            # Sem este isolamento, o `except Exception` global desta funcao
+            # (linha ~1671) capturaria o erro e fariamos rollback inutil
+            # (commit ja foi). A funcao retornaria False, levando
+            # _save_messages_dedup a NAO setar flag, e a defesa em profundidade
+            # tentaria salvar novamente — duplicando mensagens.
             # =============================================================
-            run_post_session_processing(
-                app=app,
-                session=session,
-                session_id=our_session_id,
-                user_id=user_id,
-                user_message=user_message,
-                assistant_message=assistant_message,
-            )
+            try:
+                run_post_session_processing(
+                    app=app,
+                    session=session,
+                    session_id=our_session_id,
+                    user_id=user_id,
+                    user_message=user_message,
+                    assistant_message=assistant_message,
+                )
+            except Exception as pp_err:
+                logger.error(
+                    f"[AGENTE] post-session processing falhou "
+                    f"(mensagens ja salvas): {pp_err}",
+                    exc_info=True,
+                )
 
             # =============================================================
             # Memory v2: Feedback Loop — rastrear efetividade de memórias
@@ -1647,6 +1702,10 @@ def _save_messages_to_db(
             except Exception as eff_err:
                 logger.warning(f"[AGENTE] Memory effectiveness tracking falhou (ignorado): {eff_err}")
 
+        # Sucesso: commit do DB foi feito. Falhas de pos-processamento foram
+        # isoladas e logadas mas nao afetam este retorno.
+        return True
+
     except Exception as e:
         logger.error(f"[AGENTE] Erro ao salvar mensagens: {e}")
         try:
@@ -1654,6 +1713,9 @@ def _save_messages_to_db(
                 db.session.rollback()
         except Exception:
             pass
+        # Falha real no commit ou setup da sessao: caller NAO deve marcar
+        # _persisted, permitindo retry pela defesa em profundidade.
+        return False
 
 
 def _record_routing_resolution(user_id: int, question_text: str, answer_text: str) -> None:
