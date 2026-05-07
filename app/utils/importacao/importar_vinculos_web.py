@@ -1,9 +1,10 @@
 import pandas as pd
 import math
+from sqlalchemy import func
 from app.localidades.models import Cidade
 from app.transportadoras.models import Transportadora
 from app.vinculos.models import CidadeAtendida
-from app import db
+from app.utils.string_utils import normalizar_nome_corporativo, colapsar_espacos
 
 
 def _limpar_lead_time(valor):
@@ -29,15 +30,34 @@ def validar_vinculos(caminho):
     for _, row in df.iterrows():
         erro = None
 
-        transportadora_nome = str(row['TRANSPORTADORA']).strip()
-        cidade_nome = str(row['CIDADE']).strip()
+        # Normalizacoes: trim + colapsa espacos internos
+        transportadora_nome = colapsar_espacos(str(row['TRANSPORTADORA'])) or ''
+        cidade_nome = colapsar_espacos(str(row['CIDADE'])) or ''
         uf = str(row['UF']).strip()
         codigo_ibge = str(row['CODIGO IBGE']).strip()
-        nome_tabela = str(row['TABELA']).strip().upper()  # ✅ NORMALIZADO PARA MAIÚSCULA
+        # nome_tabela: trim + colapsa espacos + UPPER
+        nome_tabela = normalizar_nome_corporativo(str(row['TABELA'])) or ''
         lead_time = _limpar_lead_time(row.get('LEAD TIME', None))
 
+        # Match insensivel a acento, cedilha e variacoes de espaco.
+        # 1. f_unaccent: remove acentos/cedilha
+        # 2. regexp_replace(\s+, ' '): colapsa espacos internos
+        # 3. btrim: remove espacos no inicio/fim
+        # Tolerante a dados antigos no banco que podem ter espaco extra.
+        razao_db_norm = func.btrim(
+            func.regexp_replace(
+                func.f_unaccent(Transportadora.razao_social),
+                r'\s+', ' ', 'g'
+            )
+        )
+        razao_excel_norm = func.btrim(
+            func.regexp_replace(
+                func.f_unaccent(transportadora_nome),
+                r'\s+', ' ', 'g'
+            )
+        )
         transportadora = Transportadora.query.filter(
-            Transportadora.razao_social.ilike(transportadora_nome)
+            razao_db_norm.ilike(razao_excel_norm)
         ).first()
 
         cidade = Cidade.query.filter(
@@ -50,10 +70,20 @@ def validar_vinculos(caminho):
             erro = "Cidade (IBGE) não encontrada"
         elif not nome_tabela:
             erro = "Tabela não informada"
-        elif CidadeAtendida.query.filter_by(
-            cidade_id=cidade.id,
-            transportadora_id=transportadora.id,
-            nome_tabela=nome_tabela
+        elif CidadeAtendida.query.filter(
+            CidadeAtendida.cidade_id == cidade.id,
+            CidadeAtendida.transportadora_id == transportadora.id,
+            func.btrim(
+                func.regexp_replace(
+                    func.f_unaccent(CidadeAtendida.nome_tabela),
+                    r'\s+', ' ', 'g'
+                )
+            ) == func.btrim(
+                func.regexp_replace(
+                    func.f_unaccent(nome_tabela),
+                    r'\s+', ' ', 'g'
+                )
+            )
         ).first():
             erro = "Vínculo já existente"
 

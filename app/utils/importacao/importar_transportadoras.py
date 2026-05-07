@@ -1,6 +1,7 @@
 import pandas as pd
 from app import db
 from app.transportadoras.models import Transportadora
+from app.utils.string_utils import normalizar_nome_corporativo, colapsar_espacos
 
 def importar_transportadoras(caminho_arquivo):
     df = pd.read_excel(caminho_arquivo)
@@ -40,16 +41,27 @@ def importar_transportadoras(caminho_arquivo):
             continue
 
         try:
-            # Verifica se já existe uma transportadora com este CNPJ
-            transportadora_existente = Transportadora.query.filter_by(cnpj=str(row['CNPJ']).strip()).first()
-            
+            # Verifica se já existe uma transportadora com este CPF/CNPJ (compara pelos digitos)
+            cnpj_excel = str(row['CNPJ']).strip()
+            digitos_excel = ''.join(filter(str.isdigit, cnpj_excel))
+            transportadora_existente = Transportadora.query.filter(
+                db.func.regexp_replace(Transportadora.cnpj, r'\D', '', 'g') == digitos_excel
+            ).first()
+
+            condicao_raw = row.get('Condição de pgto', None)
+            condicao_norm = (
+                colapsar_espacos(str(condicao_raw))
+                if condicao_raw is not None and not pd.isna(condicao_raw)
+                else None
+            )
+
             dados = {
-                'cnpj': str(row['CNPJ']).strip(),
-                'razao_social': str(row['Razão Social']).strip(),
-                'cidade': str(row['Cidade']).strip(),
+                'cnpj': cnpj_excel,
+                'razao_social': normalizar_nome_corporativo(row['Razão Social']) or '',
+                'cidade': colapsar_espacos(row['Cidade']) or '',
                 'uf': str(row['UF']).strip().upper(),
                 'optante': row['OPTANTE'],
-                'condicao_pgto': row.get('Condição de pgto', None) if not pd.isna(row.get('Condição de pgto', None)) else None
+                'condicao_pgto': condicao_norm,
             }
 
             # Adiciona campo nao_aceita_nf_pallet se a coluna existir

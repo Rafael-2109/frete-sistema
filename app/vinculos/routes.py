@@ -13,6 +13,7 @@ from app.tabelas.models import TabelaFrete
 from app.utils.importacao.utils_importacao import salvar_temp, limpar_temp
 from app.utils.importacao.importar_vinculos_web import validar_vinculos
 from app.utils.timezone import agora_utc_naive
+from app.utils.string_utils import normalizar_nome_corporativo, colapsar_espacos
 import io
 import openpyxl
 import math
@@ -104,13 +105,14 @@ def confirmar_importacao_vinculos():
         uf_value = linha.get('uf', '').strip()
         if uf_value in ['', 'nan', 'NaN', 'null', 'None'] or len(uf_value) > 2:
             continue  # Pular linha com UF inválida
-            
+
         novo = CidadeAtendida(
             cidade_id=linha['cidade_id'],
             transportadora_id=linha['transportadora_id'],
             codigo_ibge=linha['codigo_ibge'],
             uf=uf_value,
-            nome_tabela=linha['nome_tabela'].upper(),  # ✅ NORMALIZADO PARA MAIÚSCULA
+            # trim + colapsa espacos + UPPER (normalizar_nome_corporativo)
+            nome_tabela=normalizar_nome_corporativo(linha['nome_tabela']) or '',
             lead_time=_safe_int_or_none(linha['lead_time'])  # Trata nan/NaN do pandas
         )
         db.session.add(novo)
@@ -277,17 +279,31 @@ def editar_vinculo():
 
     vinculo = CidadeAtendida.query.get_or_404(form.vinculo_id.data)
 
+    # Normaliza nome para match insensivel a acento/cedilha/espacos extras
+    razao_social_busca = colapsar_espacos(form.razao_social.data) or ''
+    razao_db_norm = func.btrim(
+        func.regexp_replace(
+            func.f_unaccent(Transportadora.razao_social),
+            r'\s+', ' ', 'g'
+        )
+    )
+    razao_busca_norm = func.btrim(
+        func.regexp_replace(
+            func.f_unaccent(razao_social_busca),
+            r'\s+', ' ', 'g'
+        )
+    )
     transportadora = Transportadora.query.filter(
-        Transportadora.razao_social.ilike(form.razao_social.data.strip())
+        razao_db_norm.ilike(razao_busca_norm)
     ).first()
 
     if not transportadora:
-        flash(f'🚫 Transportadora "{form.razao_social.data.strip()}" não encontrada.', 'danger')
+        flash(f'🚫 Transportadora "{razao_social_busca}" não encontrada.', 'danger')
         return redirect(url_for('vinculos.consulta_vinculos'))
 
     codigo_ibge = form.codigo_ibge.data.strip()
     uf = form.uf.data.strip().upper()
-    cidade_nome = form.cidade.data.strip()
+    cidade_nome = colapsar_espacos(form.cidade.data) or ''
 
     cidade = Cidade.query.filter_by(codigo_ibge=codigo_ibge).first()
 
@@ -304,7 +320,8 @@ def editar_vinculo():
     vinculo.cidade_id = cidade.id
     vinculo.codigo_ibge = cidade.codigo_ibge
     vinculo.uf = cidade.uf
-    vinculo.nome_tabela = form.nome_tabela.data.strip().upper()  # ✅ NORMALIZADO PARA MAIÚSCULA
+    # trim + colapsa espacos + UPPER
+    vinculo.nome_tabela = normalizar_nome_corporativo(form.nome_tabela.data) or ''
 
     try:
         vinculo.lead_time = int(form.lead_time.data) if form.lead_time.data else None

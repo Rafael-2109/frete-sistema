@@ -3,6 +3,9 @@ Gerenciador centralizado dos campos da tabela de frete.
 ÚNICO LUGAR PARA ADICIONAR NOVOS CAMPOS!
 """
 
+from app.utils.string_utils import normalizar_nome_corporativo
+
+
 class TabelaFreteManager:
     """
     Centraliza todos os campos da tabela de frete.
@@ -116,9 +119,9 @@ class TabelaFreteManager:
             if hasattr(form, campo):
                 field = getattr(form, campo)
                 if campo == 'modalidade':
-                    dados[campo] = field.data.upper() if field.data else ''
+                    dados[campo] = normalizar_nome_corporativo(field.data) or ''
                 elif campo == 'nome_tabela':
-                    dados[campo] = field.data.upper() if field.data else ''
+                    dados[campo] = normalizar_nome_corporativo(field.data) or ''
                 elif campo == 'icms_incluso':
                     dados[campo] = field.data
                 else:
@@ -146,8 +149,8 @@ class TabelaFreteManager:
         Mapeia nomes das colunas do CSV para campos do modelo.
         """
         return {
-            'modalidade': row.get('MODALIDADE', '').strip().upper(),
-            'nome_tabela': row.get('NOME_TABELA', '').strip().upper(),
+            'modalidade': normalizar_nome_corporativo(row.get('MODALIDADE', '')) or '',
+            'nome_tabela': normalizar_nome_corporativo(row.get('NOME_TABELA', '')) or '',
             'valor_kg': round(limpar_valor(row.get('FRETE PESO')), 6),
             'percentual_valor': round(limpar_valor(row.get('FRETE VALOR')) * 100, 4),
             'frete_minimo_valor': round(limpar_valor(row.get('VALOR')), 2),

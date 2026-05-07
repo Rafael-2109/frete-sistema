@@ -105,20 +105,110 @@ def formatar_cnpj(cnpj):
     """
     Formata um CNPJ adicionando pontuação padrão.
     Garante que o CNPJ tenha 14 dígitos antes de formatar.
-    
+
     Args:
         cnpj: String com CNPJ sem formatação
-        
+
     Returns:
         String com CNPJ formatado (XX.XXX.XXX/XXXX-XX)
     """
     cnpj_limpo = normalizar_cnpj(cnpj)  # Já adiciona zeros à esquerda se necessário
-    
+
     if not cnpj_limpo or len(cnpj_limpo) != 14:
         return cnpj  # Retorna como veio se não tem 14 dígitos
-    
+
     # Aplica máscara XX.XXX.XXX/XXXX-XX
     return f"{cnpj_limpo[:2]}.{cnpj_limpo[2:5]}.{cnpj_limpo[5:8]}/{cnpj_limpo[8:12]}-{cnpj_limpo[12:14]}"
+
+
+def validar_cpf(cpf: str) -> bool:
+    """
+    Valida CPF brasileiro verificando digitos verificadores (modulo 11).
+
+    Aceita CPF com ou sem formatacao (pontos, hifens).
+    Rejeita CPFs com todos os digitos iguais (ex: 111.111.111-11).
+
+    Args:
+        cpf: String com CPF formatado ou nao
+
+    Returns:
+        True se CPF e valido (11 digitos + digitos verificadores corretos),
+        False caso contrario
+
+    Exemplos:
+        validar_cpf('393.754.958-76') -> True (se DV correto)
+        validar_cpf('11111111111') -> False
+    """
+    if not cpf:
+        return False
+
+    digitos = re.sub(r'\D', '', str(cpf))
+
+    if len(digitos) != 11:
+        return False
+
+    if len(set(digitos)) == 1:
+        return False
+
+    # Primeiro digito verificador
+    soma = sum(int(digitos[i]) * (10 - i) for i in range(9))
+    resto = soma % 11
+    dv1 = 0 if resto < 2 else 11 - resto
+    if int(digitos[9]) != dv1:
+        return False
+
+    # Segundo digito verificador
+    soma = sum(int(digitos[i]) * (11 - i) for i in range(10))
+    resto = soma % 11
+    dv2 = 0 if resto < 2 else 11 - resto
+    return int(digitos[10]) == dv2
+
+
+def formatar_cpf(cpf):
+    """
+    Formata um CPF adicionando pontuacao padrao (XXX.XXX.XXX-XX).
+    """
+    if not cpf:
+        return cpf
+    digitos = re.sub(r'\D', '', str(cpf))
+    if len(digitos) != 11:
+        return cpf
+    return f"{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:11]}"
+
+
+def formatar_cpf_cnpj(valor):
+    """
+    Formata CPF (11 digitos) ou CNPJ (14 digitos) automaticamente
+    com base na quantidade de digitos. Retorna o valor original se
+    nao bater nem com 11 nem com 14.
+
+    Exemplos:
+        '39375495876' -> '393.754.958-76'
+        '04108518000102' -> '04.108.518/0001-02'
+    """
+    if not valor:
+        return valor
+    digitos = re.sub(r'\D', '', str(valor))
+    if len(digitos) == 11:
+        return formatar_cpf(digitos)
+    if len(digitos) == 14:
+        return formatar_cnpj(digitos)
+    return valor
+
+
+def validar_cpf_ou_cnpj(valor: str) -> bool:
+    """
+    Aceita tanto CPF (11 digitos) quanto CNPJ (14 digitos) e valida
+    os digitos verificadores conforme o tipo detectado.
+    """
+    if not valor:
+        return False
+    digitos = re.sub(r'\D', '', str(valor))
+    if len(digitos) == 11:
+        return validar_cpf(digitos)
+    if len(digitos) == 14:
+        return validar_cnpj(digitos)
+    return False
 
 
 # =============================================================================

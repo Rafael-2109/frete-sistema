@@ -6,6 +6,7 @@ from app.transportadoras.models import Transportadora, GrupoTransportadora
 from app.transportadoras import transportadoras_bp
 from app.utils.importacao.importar_transportadoras import importar_transportadoras
 from app.utils.importacao.utils_importacao import salvar_temp
+from app.utils.string_utils import normalizar_nome_corporativo, colapsar_espacos
 from sqlalchemy.exc import IntegrityError
 from io import BytesIO
 from datetime import datetime
@@ -22,22 +23,25 @@ def cadastrar_transportadora():
     erros_importacao = session.get('erros_importacao', [])
 
     if form.validate_on_submit():
-        # Mantém o CNPJ como digitado (sem limpeza)
-        cnpj_digitado = form.cnpj.data.strip()
+        # Mantém o CNPJ/CPF como digitado (sem limpeza), apenas trim
+        cnpj_digitado = (form.cnpj.data or '').strip()
 
-        # Verifica se o CNPJ já existe ANTES de tentar criar
-        transportadora_existente = Transportadora.query.filter_by(cnpj=cnpj_digitado).first()
+        # Verifica se o documento ja existe ANTES de tentar criar (compara pelos digitos)
+        digitos_novos = ''.join(filter(str.isdigit, cnpj_digitado))
+        transportadora_existente = Transportadora.query.filter(
+            db.func.regexp_replace(Transportadora.cnpj, r'\D', '', 'g') == digitos_novos
+        ).first()
         if transportadora_existente:
-            flash(f'ERRO: CNPJ {cnpj_digitado} já está cadastrado para a transportadora "{transportadora_existente.razao_social}". Não é permitido cadastrar duas transportadoras com o mesmo CNPJ.', 'danger')
+            flash(f'ERRO: CPF/CNPJ {cnpj_digitado} já está cadastrado para a transportadora "{transportadora_existente.razao_social}". Não é permitido cadastrar duas transportadoras com o mesmo CPF/CNPJ.', 'danger')
             # Não processa o cadastro, apenas retorna o formulário com o erro
         else:
             nova = Transportadora(
                 cnpj=cnpj_digitado,
-                razao_social=form.razao_social.data,
-                cidade=form.cidade.data,
-                uf=form.uf.data.upper(),
+                razao_social=normalizar_nome_corporativo(form.razao_social.data) or '',
+                cidade=colapsar_espacos(form.cidade.data) or '',
+                uf=(form.uf.data or '').strip().upper(),
                 optante=form.optante.data == 'True',
-                condicao_pgto=form.condicao_pgto.data,
+                condicao_pgto=colapsar_espacos(form.condicao_pgto.data),
                 freteiro=form.freteiro.data == 'True'
             )
             db.session.add(nova)
@@ -156,29 +160,30 @@ def editar_transportadora_ajax(id):
     try:
         transportadora = Transportadora.query.get_or_404(id)
 
-        # Mantém o CNPJ como recebido (sem limpeza)
+        # Mantém o CPF/CNPJ como recebido (sem limpeza), apenas trim
         cnpj_recebido = request.form.get('cnpj', '').strip()
+        digitos_recebidos = ''.join(filter(str.isdigit, cnpj_recebido))
 
-        # Verifica se o CNPJ já existe para outra transportadora
+        # Verifica se o documento ja existe para outra transportadora (compara pelos digitos)
         cnpj_existente = Transportadora.query.filter(
-            Transportadora.cnpj == cnpj_recebido,
+            db.func.regexp_replace(Transportadora.cnpj, r'\D', '', 'g') == digitos_recebidos,
             Transportadora.id != id
         ).first()
 
         if cnpj_existente:
             return jsonify({
                 'success': False,
-                'message': f'ERRO: CNPJ {cnpj_recebido} já está cadastrado para a transportadora "{cnpj_existente.razao_social}". Não é permitido ter duas transportadoras com o mesmo CNPJ. Por favor, verifique o CNPJ informado.'
+                'message': f'ERRO: CPF/CNPJ {cnpj_recebido} já está cadastrado para a transportadora "{cnpj_existente.razao_social}". Não é permitido ter duas transportadoras com o mesmo CPF/CNPJ. Por favor, verifique o documento informado.'
             })
 
-        # Atualiza os dados
+        # Atualiza os dados (com normalizacao de espacos)
         transportadora.cnpj = cnpj_recebido
-        transportadora.razao_social = request.form.get('razao_social', '')
-        transportadora.cidade = request.form.get('cidade', '')
-        transportadora.uf = request.form.get('uf', '').upper()
+        transportadora.razao_social = normalizar_nome_corporativo(request.form.get('razao_social', '')) or ''
+        transportadora.cidade = colapsar_espacos(request.form.get('cidade', '')) or ''
+        transportadora.uf = request.form.get('uf', '').strip().upper()
         transportadora.optante = request.form.get('optante') == 'True'
         transportadora.freteiro = request.form.get('freteiro') == 'True'
-        transportadora.condicao_pgto = request.form.get('condicao_pgto', '')
+        transportadora.condicao_pgto = colapsar_espacos(request.form.get('condicao_pgto', ''))
         # Campo ativo - checkbox envia 'on' quando marcado
         transportadora.ativo = request.form.get('ativo') == 'on'
         # Campo NF de pallet - checkbox envia 'on' quando marcado

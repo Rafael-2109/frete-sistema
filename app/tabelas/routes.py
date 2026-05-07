@@ -15,6 +15,7 @@ from app.localidades.models import Cidade
 from app.utils.ufs import UF_LIST
 from app.vinculos.models import CidadeAtendida
 from app.utils.timezone import agora_utc_naive
+from app.utils.string_utils import normalizar_nome_corporativo
 
 tabelas_bp = Blueprint('tabelas', __name__, url_prefix='/tabelas')
 
@@ -137,11 +138,15 @@ def importar_tabela_frete():
 
                 cnpj = str(row['CÓD. TRANSP']).strip()
                 uf_destino = str(row['DESTINO']).strip()
-                nome_tabela = str(row['NOME TABELA']).strip()
-                
+                nome_tabela = normalizar_nome_corporativo(str(row['NOME TABELA'])) or ''
+
                 print(f"🔍 Dados extraídos - CNPJ: {cnpj}, UF: {uf_destino}, Tabela: '{nome_tabela}'")
 
-                transportadora = Transportadora.query.filter_by(cnpj=cnpj).first()
+                # Match por digitos do CNPJ (tolerante a formatacao)
+                digitos_cnpj_excel = ''.join(filter(str.isdigit, cnpj))
+                transportadora = Transportadora.query.filter(
+                    db.func.regexp_replace(Transportadora.cnpj, r'\D', '', 'g') == digitos_cnpj_excel
+                ).first()
                 if not transportadora:
                     erros += 1
                     print(f"❌ Transportadora {cnpj} não encontrada (linha {index+2})") # type: ignore
@@ -172,7 +177,9 @@ def importar_tabela_frete():
                 else:
                     # Template sem nome de tabela - gera nome automático
                     modalidade = str(row['FRETE']).upper()
-                    nome_tabela = f"TEMPLATE_{transportadora.razao_social}_{uf_destino}_{modalidade}" # type: ignore
+                    nome_tabela = normalizar_nome_corporativo(
+                        f"TEMPLATE_{transportadora.razao_social}_{uf_destino}_{modalidade}"
+                    ) or ''
                     print(f"📋 Template detectado - gerando nome automático: {nome_tabela}")
 
                 tipo_carga = str(row['CARGA']).upper()
@@ -729,12 +736,13 @@ def editar_tabela_frete(tabela_id):
             tabela.atualizado_em = agora_utc_naive()
 
             # Prepara e atribui campos de frete usando TabelaFreteManager com conversão brasileira
+            # (preparar_dados_formulario ja normaliza nome_tabela e modalidade)
             dados_tabela = TabelaFreteManager.preparar_dados_formulario(form, converter_valor_brasileiro)
-            # Aplica sanitização no nome_tabela e modalidade
+            # sanitiza encoding apos normalizacao
             if 'nome_tabela' in dados_tabela:
-                dados_tabela['nome_tabela'] = sanitize_string(dados_tabela['nome_tabela'])
+                dados_tabela['nome_tabela'] = normalizar_nome_corporativo(sanitize_string(dados_tabela['nome_tabela'])) or ''
             if 'modalidade' in dados_tabela:
-                dados_tabela['modalidade'] = sanitize_string(dados_tabela['modalidade'])
+                dados_tabela['modalidade'] = normalizar_nome_corporativo(sanitize_string(dados_tabela['modalidade'])) or ''
 
             TabelaFreteManager.atribuir_campos_tabela(tabela, dados_tabela)
 

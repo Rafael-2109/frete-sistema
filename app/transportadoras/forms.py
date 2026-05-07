@@ -2,6 +2,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms import StringField, SelectField, SubmitField, HiddenField
 from wtforms.validators import DataRequired, Length, ValidationError
+from app import db
 from app.utils.ufs import UF_LIST
 
 class TransportadoraForm(FlaskForm):
@@ -16,17 +17,27 @@ class TransportadoraForm(FlaskForm):
     
     def validate_cnpj(self, field):
         from app.transportadoras.models import Transportadora
-        from app.utils.cnpj_utils import validar_cnpj
+        from app.utils.cnpj_utils import validar_cnpj, validar_cpf
 
-        # Limpa o CNPJ (remove caracteres especiais)
-        cnpj_limpo = ''.join(filter(str.isdigit, field.data))
+        # Limpa o documento (remove caracteres especiais)
+        digitos = ''.join(filter(str.isdigit, field.data or ''))
 
-        # Validar digitos verificadores
-        if cnpj_limpo and len(cnpj_limpo) == 14 and not validar_cnpj(cnpj_limpo):
-            raise ValidationError('CNPJ invalido (digito verificador).')
+        # Validar digitos verificadores conforme tipo (CPF=11, CNPJ=14)
+        if digitos:
+            if len(digitos) == 14:
+                if not validar_cnpj(digitos):
+                    raise ValidationError('CNPJ invalido (digito verificador).')
+            elif len(digitos) == 11:
+                if not validar_cpf(digitos):
+                    raise ValidationError('CPF invalido (digito verificador).')
+            else:
+                raise ValidationError('Documento invalido: informe CPF (11 digitos) ou CNPJ (14 digitos).')
 
-        # Busca transportadora com este CNPJ
-        query = Transportadora.query.filter_by(cnpj=cnpj_limpo)
+        # Busca transportadora com este documento (compara pelos digitos limpos
+        # para tolerar diferencas de formatacao no que ja esta gravado)
+        query = Transportadora.query.filter(
+            db.func.regexp_replace(Transportadora.cnpj, r'\D', '', 'g') == digitos
+        )
 
         # Se é edição, exclui o próprio registro da verificação
         if self.id.data:
@@ -35,7 +46,7 @@ class TransportadoraForm(FlaskForm):
         transportadora_existente = query.first()
 
         if transportadora_existente:
-            raise ValidationError(f'CNPJ já cadastrado para a transportadora: {transportadora_existente.razao_social}')
+            raise ValidationError(f'CPF/CNPJ ja cadastrado para a transportadora: {transportadora_existente.razao_social}')
 
 class ImportarTransportadorasForm(FlaskForm):
     arquivo = FileField('Arquivo Excel', validators=[

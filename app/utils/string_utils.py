@@ -7,15 +7,83 @@ def remover_acentos(texto):
     """
     if not texto:
         return texto
-        
+
     # Normaliza para forma NFKD e remove diacríticos
     texto = unicodedata.normalize('NFKD', texto)
     texto = ''.join(c for c in texto if not unicodedata.combining(c))
-    
+
     # Remove caracteres especiais e converte para maiúsculo
     texto = ''.join(c for c in texto if c.isalnum() or c.isspace() or c == '-')
     texto = ' '.join(texto.split())  # Remove espaços extras
     return texto.upper()
+
+
+def colapsar_espacos(texto):
+    """
+    Remove espacos no inicio/fim e colapsa espacos internos consecutivos
+    em um unico espaco. Preserva acentos e caixa original.
+
+    Exemplos:
+        '  WANDERLEI   DA   CONCEICAO  ' -> 'WANDERLEI DA CONCEICAO'
+        'TABELA  AB' -> 'TABELA AB'
+        None -> None
+    """
+    if texto is None:
+        return None
+    s = str(texto)
+    if not s:
+        return s
+    return ' '.join(s.split())
+
+
+def normalizar_nome_corporativo(texto):
+    """
+    Normaliza um nome corporativo (transportadora, tabela de frete, etc.)
+    para uso consistente em comparacoes e armazenamento.
+
+    Regras:
+    1. Trim (remove espacos no inicio/fim)
+    2. Colapsa espacos internos consecutivos em um unico espaco
+    3. Converte para MAIUSCULO
+
+    Mantem acentos e caracteres especiais (cedilha, etc.) — para
+    comparacao insensivel a acento, usar `f_unaccent` no SQL ou
+    `remover_acentos` no Python.
+
+    Exemplos:
+        '  Wanderlei  da   Conceicao  ' -> 'WANDERLEI DA CONCEICAO'
+        'Tabela 408' -> 'TABELA 408'
+        None -> None
+        '' -> ''
+    """
+    if texto is None:
+        return None
+    s = str(texto).strip()
+    if not s:
+        return s
+    return ' '.join(s.split()).upper()
+
+
+def chave_comparacao_nome(texto):
+    """
+    Gera chave canonica para comparar nomes corporativos:
+    1. Trim + colapsa espacos
+    2. Remove acentos
+    3. Converte para MAIUSCULO
+
+    Usar APENAS para comparacao em memoria (Python). Para SQL, prefira
+    `func.f_unaccent(coluna).ilike(func.f_unaccent(valor))`.
+
+    Exemplos:
+        'WANDERLEI DA CONCEIÇÂO' -> 'WANDERLEI DA CONCEICAO'
+        'wanderlei  da  conceiçao' -> 'WANDERLEI DA CONCEICAO'
+    """
+    if texto is None:
+        return ''
+    s = ' '.join(str(texto).split())
+    if not s:
+        return ''
+    return remover_acentos(s)
 
 def normalizar_nome_cidade(nome, rota=None):
     """

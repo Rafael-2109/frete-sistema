@@ -1021,12 +1021,22 @@
       // Aplica máscara apenas para campos de texto (não tipo date)
       $('input[name="data_embarque"]').not('[type="date"]').mask('00/00/0000');
 
-      // Máscara CNPJ global — cadastros e formulários
+      // Máscara CPF/CNPJ dinâmica — alterna conforme quantidade de dígitos
+      // CPF (até 11 dig): 000.000.000-00
+      // CNPJ (12+ dig):   00.000.000/0000-00
       // Exclui: filtros (form-control-sm), readonly, hidden, e campos com data-no-mask
+      var cpfCnpjBehavior = function (val) {
+        return val.replace(/\D/g, '').length <= 11 ? '000.000.000-009' : '00.000.000/0000-00';
+      };
+      var cpfCnpjOptions = {
+        onKeyPress: function (val, e, field, options) {
+          field.mask(cpfCnpjBehavior.apply({}, arguments), options);
+        }
+      };
       $('input[name*="cnpj"], input[id*="cnpj"]')
         .filter(':visible')
         .not('.form-control-sm, [data-no-mask], [readonly], [type="hidden"]')
-        .mask('00.000.000/0000-00');
+        .mask(cpfCnpjBehavior, cpfCnpjOptions);
     });
   </script>
 
