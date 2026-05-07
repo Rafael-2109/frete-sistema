@@ -110,23 +110,20 @@
           {% if not lojas_disponiveis %}
             <div class="alert alert-warning py-2 mb-0">
               <i class="fas fa-exclamation-triangle"></i>
-              Nenhuma loja disponível para você criar pedido. Fale com o admin.
+              Nenhuma loja cadastrada. Fale com o admin.
             </div>
           {% else %}
             <select name="loja_id" id="f-loja" class="form-select" required>
-              {% if lojas_disponiveis|length > 1 %}
-                <option value="">— selecione a loja —</option>
-              {% endif %}
+              <option value="">— selecione a loja —</option>
               {% for l in lojas_disponiveis %}
-                <option value="{{ l.id }}"
-                        {% if lojas_disponiveis|length == 1 %}selected{% endif %}>
+                <option value="{{ l.id }}">
                   {{ l.nome_exibicao if l.nome_exibicao else l.nome }}
                 </option>
               {% endfor %}
             </select>
             <small class="text-muted">
               <i class="fas fa-info-circle"></i>
-              A loja deve corresponder à loja onde o chassi está disponível.
+              Loja oficial da venda. O chassi pode estar fisicamente em outra loja.
             </small>
           {% endif %}
         </div>

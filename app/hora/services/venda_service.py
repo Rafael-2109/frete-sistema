@@ -417,15 +417,20 @@ def criar_venda_manual(
     numero_parcelas: int = 1,
     intervalo_parcelas_dias: int = 30,
     criado_por: Optional[str] = None,
-    loja_id_esperada: Optional[int] = None,
+    loja_id_override: Optional[int] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO.
 
     1. Valida CPF, nome, valor, forma_pagamento, chassi.
     2. SELECT FOR UPDATE no chassi (impede 2 operadores reservarem o mesmo).
-    3. Resolve loja_id pelo ultimo evento.
-    3.5. Se `loja_id_esperada` for fornecido, valida que bate com a loja
-       resolvida do chassi (defesa contra select de loja incoerente no form).
+    3. Resolve loja_id da venda:
+       - Se `loja_id_override` fornecido (operador escolheu loja no SELECT
+         do form): essa e a loja oficial da venda. O chassi pode estar
+         fisicamente em outra loja — equivale a uma transferencia implicita
+         no momento da reserva.
+       - Caso contrario, usa a loja do ultimo evento do chassi (default).
+       Em ambos os casos, `HoraVenda.loja_id` e o evento RESERVADA usam o
+       mesmo valor — invariante de consistencia interna mantida.
     4. Resolve preco tabela vigente.
     5. Cria HoraVenda(status=COTACAO) + HoraVendaItem.
     6. Emite evento RESERVADA (saida do estoque disponivel).
@@ -471,22 +476,21 @@ def criar_venda_manual(
 
     moto, ult = _lock_chassi_e_validar_disponivel(numero_chassi)
     chassi_norm = moto.numero_chassi
-    loja_id = ult.loja_id
-    if not loja_id:
+    loja_id_chassi = ult.loja_id
+    if not loja_id_chassi:
         raise ValueError(
             f'Chassi {chassi_norm} sem loja definida no ultimo evento — '
             f'investigar inconsistencia em hora_moto_evento.'
         )
 
-    # Se o operador informou loja_id_esperada (vindo do SELECT do form),
-    # validar coerencia com a loja real do chassi. Evita pedido com loja
-    # selecionada divergente do estoque do chassi.
-    if loja_id_esperada is not None and int(loja_id_esperada) != int(loja_id):
-        raise ValueError(
-            f'Loja selecionada (id={loja_id_esperada}) nao corresponde a loja '
-            f'atual do chassi {chassi_norm} (id={loja_id}). '
-            f'Selecione a loja correta ou escolha outro chassi.'
-        )
+    # Loja oficial da venda: override do form (se fornecido) OU loja do chassi.
+    # Quando override e diferente da loja fisica do chassi, equivale a uma
+    # transferencia implicita: o evento RESERVADA gravado abaixo move o chassi
+    # para a loja escolhida (sem evento TRANSFERIDA formal). Decisao de
+    # negocio: usuario optou por nao restringir a coerencia loja-chassi.
+    loja_id = (
+        int(loja_id_override) if loja_id_override is not None else int(loja_id_chassi)
+    )
 
     cep_norm = ''.join(c for c in (cep or '') if c.isdigit()) or None
     if cep_norm and len(cep_norm) != 8:

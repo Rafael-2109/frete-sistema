@@ -39,7 +39,6 @@ from app.hora.models.tagplus import (
     NFE_STATUS_CANCELADA,
     NFE_STATUS_VALIDOS,
 )
-from app.hora.services.auth_helper import lojas_permitidas_ids
 from app.hora.routes import hora_bp
 from app.hora.services.tagplus.api_client import ApiClient
 from app.hora.services.tagplus.cancelador_nfe import (
@@ -1007,13 +1006,19 @@ def tagplus_pedido_venda_novo():
     pagamento. Submissao cria venda em status COTACAO + redireciona para o
     detalhe da venda; a emissao da NFe e feita la pelo botao "Emitir NFe".
 
-    Filtros do SELECT respeitam o escopo de loja (`lojas_permitidas_ids`).
+    Decisao de negocio (2026-05-06): qualquer operador HORA-habilitado pode
+    criar pedido em qualquer loja com chassi de qualquer loja — listas globais
+    (sem filtro de escopo). A loja escolhida no SELECT vira a loja oficial da
+    venda.
     """
-    permitidas = lojas_permitidas_ids()
+    # Decisao de negocio (2026-05-06): qualquer operador HORA-habilitado pode
+    # criar pedido em qualquer loja, com chassi de qualquer loja. Por isso
+    # NAO aplicamos `lojas_permitidas_ids()` aqui — passamos None para listar
+    # todo o estoque + todas as lojas.
 
-    # Modelos com pelo menos 1 chassi em estoque (mesmo escopo do estoque).
+    # Modelos com pelo menos 1 chassi em estoque (visao global, sem escopo).
     from app.hora.services.estoque_service import opcoes_filtro_estoque
-    opcoes = opcoes_filtro_estoque(lojas_permitidas_ids=permitidas)
+    opcoes = opcoes_filtro_estoque(lojas_permitidas_ids=None)
     modelos = opcoes['modelos']
 
     # Formas de pagamento mapeadas no TagPlus.
@@ -1023,16 +1028,15 @@ def tagplus_pedido_venda_novo():
         .all()
     )
 
-    # Vendedores disponiveis: usuarios habilitados no modulo HORA. SELECT
-    # vem pre-selecionado com o usuario logado, mas operador pode trocar.
+    # Vendedores: todos os usuarios habilitados no modulo HORA (sem escopo).
     from app.hora.services import permissao_service
     vendedores_disponiveis = permissao_service.listar_usuarios_habilitados()
 
-    # Lojas disponiveis: respeita escopo do operador + exclui CNPJ matriz
-    # (regra de negocio em cadastro_service.CNPJ_EXCLUIDO_PEDIDO_VENDA).
+    # Lojas: todas ativas, exceto CNPJ matriz (regra fixa em
+    # cadastro_service.CNPJ_EXCLUIDO_PEDIDO_VENDA). Sem filtro de escopo.
     from app.hora.services import cadastro_service
     lojas_disponiveis = cadastro_service.listar_lojas_para_pedido_venda(
-        lojas_permitidas_ids=permitidas,
+        lojas_permitidas_ids=None,
     )
 
     return render_template(
@@ -1091,21 +1095,22 @@ def tagplus_pedido_venda_criar():
             )
             return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
-    # Loja: SELECT obrigatorio no form. Validar que esta na lista de lojas
-    # disponiveis do operador (escopo + nao-excluida). Coerencia com a loja
-    # do chassi e validada no service via `loja_id_esperada`.
+    # Loja: SELECT obrigatorio no form. Lista global (sem escopo); valida
+    # apenas que a loja existe, esta ativa e nao e a CNPJ matriz excluida.
+    # A loja escolhida vira a loja oficial da venda — pode diferir da loja
+    # fisica do chassi (transferencia implicita). Decisao do usuario em
+    # 2026-05-06.
     from app.hora.services import cadastro_service
     loja_id_raw = _g('loja_id', 20)
     if not loja_id_raw or not loja_id_raw.isdigit():
         flash('Loja obrigatoria — selecione a loja do pedido.', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
     loja_id_int = int(loja_id_raw)
-    permitidas = lojas_permitidas_ids()
     lojas_validas = cadastro_service.listar_lojas_para_pedido_venda(
-        lojas_permitidas_ids=permitidas,
+        lojas_permitidas_ids=None,
     )
     if loja_id_int not in {l.id for l in lojas_validas}:
-        flash('Loja invalida ou fora do seu escopo.', 'danger')
+        flash('Loja invalida (inativa ou nao permitida).', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
     try:
@@ -1130,7 +1135,7 @@ def tagplus_pedido_venda_criar():
             numero_parcelas=n_parcelas,
             intervalo_parcelas_dias=intervalo,
             criado_por=_operador(),
-            loja_id_esperada=loja_id_int,
+            loja_id_override=loja_id_int,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')
@@ -1157,10 +1162,10 @@ def tagplus_pedido_venda_api_cores():
     if not modelo_id:
         return jsonify({'ok': True, 'cores': []})
 
-    permitidas = lojas_permitidas_ids()
+    # Sem filtro de escopo: pedido de venda permite chassi de qualquer loja.
     cores = cores_disponiveis_por_modelo(
         modelo_id=modelo_id,
-        lojas_permitidas_ids=permitidas,
+        lojas_permitidas_ids=None,
     )
     return jsonify({'ok': True, 'cores': cores})
 
@@ -1179,11 +1184,11 @@ def tagplus_pedido_venda_api_chassis():
     if not modelo_id:
         return jsonify({'ok': True, 'chassis': []})
 
-    permitidas = lojas_permitidas_ids()
+    # Sem filtro de escopo: pedido de venda permite chassi de qualquer loja.
     chassis = chassis_disponiveis_para_venda(
         modelo_id=modelo_id,
         cor=cor,
-        lojas_permitidas_ids=permitidas,
+        lojas_permitidas_ids=None,
     )
     return jsonify({'ok': True, 'chassis': chassis})
 
