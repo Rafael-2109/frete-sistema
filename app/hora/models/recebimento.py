@@ -222,7 +222,7 @@ class HoraConferenciaAuditoria(db.Model):
     acao = db.Column(db.String(40), nullable=False, index=True)
     # INICIOU_RECEBIMENTO, DEFINIU_QTD, ALTEROU_QTD, CONFERIU_MOTO,
     # MARCOU_AVARIA, RECONFEREU_MOTO, SUBSTITUIU_CONFERENCIA,
-    # FINALIZOU, AJUSTOU_CAMPO
+    # DESCARTOU_PARCIAL, FINALIZOU, AJUSTOU_CAMPO
     campo_alterado = db.Column(db.String(60), nullable=True)
     valor_antes = db.Column(db.Text, nullable=True)
     valor_depois = db.Column(db.Text, nullable=True)

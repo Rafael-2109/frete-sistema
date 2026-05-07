@@ -470,10 +470,42 @@ def finalizar_recebimento(
 ) -> HoraRecebimento:
     """Marca MOTO_FALTANDO em batch para chassis da NF sem conferencia ativa,
     e seta status CONCLUIDO ou COM_DIVERGENCIA.
+
+    Descarta conferencias parciais (confirmado_em IS NULL) antes de calcular
+    faltantes — decisao 2026-05-07 do dono do modulo: "abandonada pela metade
+    -> descartar". Conferencia abandonada nao deve bloquear o chassi de virar
+    MOTO_FALTANDO se ele estiver na NF.
     """
     rec = HoraRecebimento.query.get(recebimento_id)
     if not rec:
         raise ValueError(f"Recebimento {recebimento_id} nao encontrado")
+
+    # 1. Descartar conferencias parciais (operador abandonou wizard).
+    parciais = [
+        c for c in rec.conferencias
+        if not c.substituida and c.confirmado_em is None
+    ]
+    for parcial in parciais:
+        # Limpa substituida_por_id de antecessoras para nao violar FK ao
+        # deletar a parcial. Antecessoras (substituida=true) preservam o
+        # historico de reconferencias mas perdem o link para a parcial.
+        HoraRecebimentoConferencia.query.filter_by(
+            substituida_por_id=parcial.id
+        ).update({'substituida_por_id': None}, synchronize_session=False)
+        recebimento_audit.registrar(
+            recebimento_id=rec.id,
+            conferencia_id=None,  # parcial sera deletada — FK invalida
+            acao='DESCARTOU_PARCIAL',
+            usuario=operador,
+            detalhe=(
+                f'ordem={parcial.ordem} chassi={parcial.numero_chassi} '
+                f'(abandonada — confirmado_em IS NULL)'
+            ),
+        )
+        db.session.delete(parcial)
+    if parciais:
+        db.session.flush()
+        db.session.expire(rec, ['conferencias'])
 
     chassis_nf = {i.numero_chassi for i in rec.nf.itens}
     chassis_conferidos_ativos = {
@@ -570,7 +602,16 @@ def comparativo_recebimento_nf(
 
     # Chassis conhecidos: da NF + da conferencia ativa
     chassis_nf = [i.numero_chassi for i in rec.nf.itens if i.numero_chassi]
-    confs_ativas = [c for c in rec.conferencias if not c.substituida]
+    # Conferencia parcial (confirmado_em IS NULL) NAO conta como conferida:
+    # operador abandonou o wizard sem completar (passos B, C, D). Decisao
+    # 2026-05-07 do dono do modulo: "abandonada pela metade -> descartar".
+    # Sem esse filtro, parciais caiam em status='OK' (badge "bate") por nao
+    # terem divergencias derivadas (que so sao calculadas em
+    # registrar_conferencia_cega -> _redefinir_divergencias).
+    confs_ativas = [
+        c for c in rec.conferencias
+        if not c.substituida and c.confirmado_em is not None
+    ]
     chassis_conf = [c.numero_chassi for c in confs_ativas]
 
     todos = []
