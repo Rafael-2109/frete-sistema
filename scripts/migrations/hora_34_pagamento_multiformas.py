@@ -67,7 +67,15 @@ SELECT
     v.forma_pagamento,
     v.valor_total,
     COALESCE(v.numero_parcelas, 1),
-    COALESCE(v.criado_em, NOW())
+    -- Preserva timestamp historico: criado_em > data_venda > NOW (fallback).
+    -- Vendas legacy podem ter criado_em NULL (importadas antes do default
+    -- server_default ser populado); nesse caso a data da venda e' a melhor
+    -- aproximacao.
+    COALESCE(
+        v.criado_em,
+        v.data_venda::timestamp,
+        NOW()
+    )
 FROM hora_venda v
 WHERE v.forma_pagamento IS NOT NULL
   AND v.forma_pagamento <> ''

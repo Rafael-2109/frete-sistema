@@ -22,6 +22,7 @@ ALTER TABLE hora_tagplus_forma_pagamento_map
     ADD COLUMN IF NOT EXISTS exige_aut_id BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- 3. Backfill: 1 pagamento por HoraVenda existente (skipa NAO_INFORMADO/NULL).
+-- criado_em: preserva historico (criado_em > data_venda > NOW fallback).
 INSERT INTO hora_venda_pagamento
     (venda_id, forma_pagamento_hora, valor, numero_parcelas, criado_em)
 SELECT
@@ -29,7 +30,11 @@ SELECT
     v.forma_pagamento,
     v.valor_total,
     COALESCE(v.numero_parcelas, 1),
-    COALESCE(v.criado_em, NOW())
+    COALESCE(
+        v.criado_em,
+        v.data_venda::timestamp,
+        NOW()
+    )
 FROM hora_venda v
 WHERE v.forma_pagamento IS NOT NULL
   AND v.forma_pagamento <> ''

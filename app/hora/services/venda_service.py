@@ -953,14 +953,19 @@ def voltar_para_cotacao(venda_id: int, usuario: Optional[str] = None) -> HoraVen
 # --------------------------------------------------------------------------
 
 # Campos editaveis em cada status. FATURADO so permite observacoes.
+# INCOMPLETO usa o mesmo conjunto de COTACAO — pedido em INCOMPLETO precisa
+# ser livremente editavel para o vendedor corrigir cliente/endereco/etc.
+# antes de promover via editar_pagamentos.
+_CAMPOS_COTACAO_FULL = {
+    'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
+    'observacoes', 'nome_cliente', 'cpf_cliente',
+    'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
+    'endereco_bairro', 'endereco_cidade', 'endereco_uf',
+    'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
+}
 _CAMPOS_EDITAVEIS_HEADER = {
-    VENDA_STATUS_COTACAO: {
-        'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
-        'observacoes', 'nome_cliente', 'cpf_cliente',
-        'cep', 'endereco_logradouro', 'endereco_numero', 'endereco_complemento',
-        'endereco_bairro', 'endereco_cidade', 'endereco_uf',
-        'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
-    },
+    VENDA_STATUS_INCOMPLETO: _CAMPOS_COTACAO_FULL,
+    VENDA_STATUS_COTACAO: _CAMPOS_COTACAO_FULL,
     VENDA_STATUS_CONFIRMADO: {
         'vendedor', 'forma_pagamento', 'telefone_cliente', 'email_cliente',
         'observacoes',

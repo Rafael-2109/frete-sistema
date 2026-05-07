@@ -7,15 +7,18 @@
 {% set pode_criar = current_user.tem_perm_hora('vendas', 'criar') %}
 
 {% set status_badge = {
+    'INCOMPLETO': 'warning',
     'COTACAO': 'secondary',
     'CONFIRMADO': 'primary',
     'FATURADO': 'success',
     'CANCELADO': 'danger',
 }.get(venda.status, 'secondary') %}
+{% set is_incompleto = venda.status == 'INCOMPLETO' %}
 {% set is_cotacao = venda.status == 'COTACAO' %}
 {% set is_confirmado = venda.status == 'CONFIRMADO' %}
 {% set is_faturado = venda.status == 'FATURADO' %}
 {% set is_cancelado = venda.status == 'CANCELADO' %}
+{% set permite_editar_pagamentos = is_incompleto or is_cotacao %}
 {% set tem_emissao = venda.emissao_nfe is not none %}
 
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
@@ -483,6 +486,164 @@
 </form>
 
 {# ---------------------------------------------------------------
+   Formas de pagamento (multi-formas — hora_34)
+   --------------------------------------------------------------- #}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong><i class="fas fa-money-bill-wave"></i> Formas de pagamento</strong>
+    {% if is_incompleto %}
+      <span class="badge bg-warning text-dark">
+        <i class="fas fa-exclamation-triangle"></i>
+        Pedido INCOMPLETO — soma das formas deve igualar o valor total
+      </span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if not venda.pagamentos %}
+      <p class="text-muted mb-3">Nenhuma forma de pagamento registrada.</p>
+    {% else %}
+      <table class="table table-sm align-middle mb-3">
+        <thead>
+          <tr>
+            <th>Forma</th>
+            <th class="text-end">Valor</th>
+            <th class="text-center">Parcelas</th>
+            <th>AUT/ID</th>
+            <th class="text-center">Tipo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(soma=0) %}
+          {% for p in venda.pagamentos %}
+            {% set ns.soma = ns.soma + p.valor|float %}
+            <tr>
+              <td><code>{{ p.forma_pagamento_hora }}</code></td>
+              <td class="text-end">R$ {{ '%.2f'|format(p.valor|float)|replace('.', ',') }}</td>
+              <td class="text-center">{{ p.numero_parcelas }}x</td>
+              <td>{{ p.aut_id or '—' }}</td>
+              <td class="text-center">
+                {% set fm = p.forma_map %}
+                {% if fm and fm.tipo_pagamento %}
+                  <small class="text-muted">{{ fm.tipo_pagamento }}</small>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          <tr class="fw-bold">
+            <td>Total formas</td>
+            <td class="text-end">R$ {{ '%.2f'|format(ns.soma)|replace('.', ',') }}</td>
+            <td colspan="3">
+              <span class="text-muted">vs Pedido: R$ {{ '%.2f'|format(venda.valor_total|float)|replace('.', ',') }}</span>
+              {% if (ns.soma - venda.valor_total|float)|abs > 0.01 %}
+                <span class="badge bg-warning text-dark ms-2">⚠ Diferença</span>
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if permite_editar_pagamentos and pode_editar %}
+      <form method="post"
+            action="{{ url_for('hora.vendas_pagamentos_editar', venda_id=venda.id) }}"
+            id="form-pagamentos">
+        <div id="pag-edit-container">
+          {% for p in venda.pagamentos %}
+            {% set fm = p.forma_map %}
+            <div class="row g-2 align-items-end mb-2 pag-linha border rounded p-2">
+              <div class="col-md-4">
+                <label class="form-label small mb-1">Forma <span class="text-danger">*</span></label>
+                <select name="pagamento_forma" class="form-select form-select-sm pag-forma" required>
+                  <option value="">— escolha —</option>
+                  {% for f in formas_pagamento %}
+                    <option value="{{ f.forma_pagamento_hora }}"
+                            data-tipo="{{ f.tipo_pagamento or '' }}"
+                            data-aut="{{ '1' if f.exige_aut_id else '0' }}"
+                            {% if f.forma_pagamento_hora == p.forma_pagamento_hora %}selected{% endif %}>
+                      {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small mb-1">Valor (R$) <span class="text-danger">*</span></label>
+                <input type="text" name="pagamento_valor" class="form-control form-control-sm pag-valor"
+                       inputmode="decimal" required
+                       value="{{ '%.2f'|format(p.valor|float)|replace('.', ',') }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Parcelas</label>
+                <input type="number" name="pagamento_parcelas" class="form-control form-control-sm"
+                       min="1" max="60" value="{{ p.numero_parcelas }}">
+              </div>
+              <div class="col-md-2 pag-aut-wrap"
+                   style="{% if not (fm and fm.exige_aut_id) %}display:none;{% endif %}">
+                <label class="form-label small mb-1">AUT/ID <span class="text-danger">*</span></label>
+                <input type="text" name="pagamento_aut_id" class="form-control form-control-sm pag-aut"
+                       maxlength="50" value="{{ p.aut_id or '' }}">
+              </div>
+              <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-sm btn-outline-danger pag-remover">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-pag-edit">
+            <i class="fas fa-plus"></i> Adicionar forma
+          </button>
+          <button type="submit" class="btn btn-sm btn-success">
+            <i class="fas fa-save"></i> Salvar pagamentos
+          </button>
+          <span class="ms-auto small text-muted">
+            Total: <strong id="pag-edit-soma">R$ 0,00</strong> /
+            Pedido: R$ {{ '%.2f'|format(venda.valor_total|float)|replace('.', ',') }}
+          </span>
+        </div>
+        <template id="tpl-pag-edit">
+          <div class="row g-2 align-items-end mb-2 pag-linha border rounded p-2">
+            <div class="col-md-4">
+              <label class="form-label small mb-1">Forma <span class="text-danger">*</span></label>
+              <select name="pagamento_forma" class="form-select form-select-sm pag-forma" required>
+                <option value="">— escolha —</option>
+                {% for f in formas_pagamento %}
+                  <option value="{{ f.forma_pagamento_hora }}"
+                          data-tipo="{{ f.tipo_pagamento or '' }}"
+                          data-aut="{{ '1' if f.exige_aut_id else '0' }}">
+                    {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">Valor (R$) <span class="text-danger">*</span></label>
+              <input type="text" name="pagamento_valor" class="form-control form-control-sm pag-valor"
+                     inputmode="decimal" placeholder="0,00" required>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-1">Parcelas</label>
+              <input type="number" name="pagamento_parcelas" class="form-control form-control-sm"
+                     min="1" max="60" value="1">
+            </div>
+            <div class="col-md-2 pag-aut-wrap" style="display:none;">
+              <label class="form-label small mb-1">AUT/ID <span class="text-danger">*</span></label>
+              <input type="text" name="pagamento_aut_id" class="form-control form-control-sm pag-aut" maxlength="50">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+              <button type="button" class="btn btn-sm btn-outline-danger pag-remover">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+        </template>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{# ---------------------------------------------------------------
    Itens do pedido
    --------------------------------------------------------------- #}
 <h4>Itens do pedido</h4>
@@ -741,14 +902,79 @@
   // Aviso de intervalo atípico (<7 dias) — defesa contra erro de digitacao.
   const el = document.getElementById('d-intervalo');
   const aviso = document.getElementById('d-intervalo-aviso');
-  if (!el || !aviso) return;
-  const checar = () => {
-    const v = parseInt(el.value, 10);
-    aviso.style.display = (v && v < 7) ? '' : 'none';
+  if (el && aviso) {
+    const checar = () => {
+      const v = parseInt(el.value, 10);
+      aviso.style.display = (v && v < 7) ? '' : 'none';
+    };
+    el.addEventListener('input', checar);
+    el.addEventListener('change', checar);
+    checar();
+  }
+
+  // ----- Editor de pagamentos multi-formas (INCOMPLETO/COTACAO) ----------
+  const pagContainer = document.getElementById('pag-edit-container');
+  const tplPag = document.getElementById('tpl-pag-edit');
+  const btnAdd = document.getElementById('btn-add-pag-edit');
+  const elSoma = document.getElementById('pag-edit-soma');
+  if (!pagContainer || !tplPag) return;
+
+  const fmtBR = (v) => isNaN(v) ? '0,00'
+    : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const parseBR = (s) => {
+    if (!s) return NaN;
+    s = String(s).trim();
+    if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    else if (s.indexOf(',') >= 0) s = s.replace(',', '.');
+    const n = Number(s);
+    return isFinite(n) ? n : NaN;
   };
-  el.addEventListener('input', checar);
-  el.addEventListener('change', checar);
-  checar();
+
+  function atualizarSoma() {
+    let soma = 0;
+    pagContainer.querySelectorAll('.pag-valor').forEach(inp => {
+      const v = parseBR(inp.value);
+      if (!isNaN(v)) soma += v;
+    });
+    if (elSoma) elSoma.textContent = 'R$ ' + fmtBR(soma);
+  }
+
+  function wireLinha(linha) {
+    const sel = linha.querySelector('.pag-forma');
+    const valor = linha.querySelector('.pag-valor');
+    const autWrap = linha.querySelector('.pag-aut-wrap');
+    const autInput = linha.querySelector('.pag-aut');
+    const btnRemover = linha.querySelector('.pag-remover');
+    if (sel) {
+      const aplicarAut = () => {
+        const opt = sel.options[sel.selectedIndex];
+        const exigeAut = opt && opt.dataset.aut === '1';
+        if (autWrap) autWrap.style.display = exigeAut ? '' : 'none';
+        if (autInput) autInput.required = !!exigeAut;
+      };
+      sel.addEventListener('change', aplicarAut);
+      aplicarAut();
+    }
+    if (valor) {
+      valor.addEventListener('input', atualizarSoma);
+    }
+    if (btnRemover) btnRemover.addEventListener('click', () => {
+      linha.remove();
+      atualizarSoma();
+    });
+  }
+
+  // Wire linhas existentes (renderizadas pelo Jinja).
+  pagContainer.querySelectorAll('.pag-linha').forEach(wireLinha);
+  atualizarSoma();
+
+  if (btnAdd) btnAdd.addEventListener('click', () => {
+    const frag = tplPag.content.cloneNode(true);
+    const linha = frag.querySelector('.pag-linha');
+    pagContainer.appendChild(frag);
+    wireLinha(linha);
+    atualizarSoma();
+  });
 })();
 </script>
 {% endblock %}

@@ -696,7 +696,15 @@ class PayloadBuilder:
         )
 
         n = max(1, int(venda.numero_parcelas or 1))
-        parcelas = self._dividir_parcelas(valor_total, n, intervalo, base_date, venda.id)
+        # Idempotencia: prefixa documento com 'L' (legacy) para evitar colisao
+        # com o esquema multi-formas '<venda_id>-p<pag_id>/<idx>'. Caso a venda
+        # legacy seja repuxada apos a migration hora_34 (que faz backfill em
+        # hora_venda_pagamento), o reenvio ira pelo caminho multi-formas e usar
+        # outro prefixo — TagPlus nao confunde com a parcela legacy.
+        doc_prefix_legacy = f'L{venda.id}'
+        parcelas = self._dividir_parcelas(
+            valor_total, n, intervalo, base_date, doc_prefix_legacy,
+        )
 
         return [{
             'forma_pagamento': int(forma_map.tagplus_forma_id),

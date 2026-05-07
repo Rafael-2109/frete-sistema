@@ -15,11 +15,30 @@ WHERE m.merged_em_id IS NOT NULL
 ORDER BY mt.numero_chassi;
 
 -- UPDATE: cada moto vinculada a alias passa a apontar para o canonico.
+-- WITH RECURSIVE protege contra cadeias A -> B -> C (alias B foi mergido
+-- em C depois de A ter sido mergido em B). UPDATE simples deixaria moto
+-- apontando para B intermediario.
+WITH RECURSIVE cadeia(alias_id, current_id) AS (
+    SELECT id, merged_em_id
+    FROM hora_modelo
+    WHERE merged_em_id IS NOT NULL
+    UNION ALL
+    SELECT c.alias_id, m.merged_em_id
+    FROM cadeia c
+    JOIN hora_modelo m ON m.id = c.current_id
+    WHERE m.merged_em_id IS NOT NULL
+),
+canonico_final AS (
+    SELECT c.alias_id AS id, c.current_id AS canonico_id
+    FROM cadeia c
+    JOIN hora_modelo m ON m.id = c.current_id
+    WHERE m.merged_em_id IS NULL
+)
 UPDATE hora_moto AS mt
-SET modelo_id = m.merged_em_id
-FROM hora_modelo AS m
-WHERE mt.modelo_id = m.id
-  AND m.merged_em_id IS NOT NULL;
+SET modelo_id = cf.canonico_id
+FROM canonico_final cf
+WHERE mt.modelo_id = cf.id
+  AND mt.modelo_id <> cf.canonico_id;
 
 -- Diagnostico DEPOIS — deve retornar 0 linhas.
 SELECT COUNT(*) AS motos_ainda_em_alias

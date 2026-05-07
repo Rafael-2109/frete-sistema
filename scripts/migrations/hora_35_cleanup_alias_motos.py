@@ -52,14 +52,45 @@ def main() -> int:
             print('[OK] Nada a fazer — todas as motos ja apontam para canonicos.')
             return 0
 
-        # 2. UPDATE: para cada moto, modelo_id = canonico (m.merged_em_id).
+        # 2. UPDATE: resolve cadeia recursiva (A -> B -> C). Para cada moto
+        # apontando para um alias, sobe ate o canonico final (sem
+        # merged_em_id) e atualiza modelo_id. WITH RECURSIVE protege contra
+        # casos onde B foi mergido em C depois de A ser mergido em B —
+        # UPDATE simples deixaria moto apontando para B (intermediario).
+        #
+        # Estrategia:
+        #   1. recursao parte de cada alias (merged_em_id IS NOT NULL),
+        #      seguindo current_id ate encontrar terminal (canonico).
+        #   2. canonico_final = registros onde current_id e canonico (sem
+        #      merged_em_id).
         result = db.session.execute(text(
             """
+            WITH RECURSIVE cadeia(alias_id, current_id) AS (
+                -- Base: cada alias parte dele mesmo.
+                SELECT id, merged_em_id
+                FROM hora_modelo
+                WHERE merged_em_id IS NOT NULL
+                UNION ALL
+                -- Sobe um nivel enquanto current_id ainda for alias.
+                SELECT c.alias_id, m.merged_em_id
+                FROM cadeia c
+                JOIN hora_modelo m ON m.id = c.current_id
+                WHERE m.merged_em_id IS NOT NULL
+            ),
+            canonico_final AS (
+                -- Filtra apenas as linhas onde current_id apontou para um
+                -- modelo SEM merged_em_id (terminal). Para cada alias, deve
+                -- haver exatamente 1 linha terminal.
+                SELECT c.alias_id AS id, c.current_id AS canonico_id
+                FROM cadeia c
+                JOIN hora_modelo m ON m.id = c.current_id
+                WHERE m.merged_em_id IS NULL
+            )
             UPDATE hora_moto AS mt
-            SET modelo_id = m.merged_em_id
-            FROM hora_modelo AS m
-            WHERE mt.modelo_id = m.id
-              AND m.merged_em_id IS NOT NULL
+            SET modelo_id = cf.canonico_id
+            FROM canonico_final cf
+            WHERE mt.modelo_id = cf.id
+              AND mt.modelo_id <> cf.canonico_id
             """
         ))
         n_atualizadas = result.rowcount

@@ -328,6 +328,88 @@ def vendas_editar(venda_id: int):
 
 
 # ------------------------------------------------------------------------
+# Editar formas de pagamento (multi-formas — INCOMPLETO ou COTACAO)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/vendas/<int:venda_id>/pagamentos/editar', methods=['POST'])
+@require_hora_perm('vendas', 'editar')
+def vendas_pagamentos_editar(venda_id: int):
+    """Substitui a lista de formas de pagamento de um pedido.
+
+    Permitido em status INCOMPLETO ou COTACAO. Apos a edicao, o service
+    re-avalia status (INCOMPLETO se soma!=total ou aut_id faltando, senao
+    COTACAO). UI deve mostrar o novo status na resposta.
+
+    Form-array esperado (cada index = 1 forma):
+      pagamento_forma[]    forma_pagamento_hora (string)
+      pagamento_valor[]    valor (string com ',' BR ou '.' US)
+      pagamento_parcelas[] numero_parcelas (int, default 1)
+      pagamento_aut_id[]   aut_id (string, opcional)
+    """
+    venda = HoraVenda.query.get_or_404(venda_id)
+    if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('hora.vendas_lista'))
+    if not venda.loja_id and lojas_permitidas_ids() is not None:
+        flash('Pedido sem loja definida — apenas admin edita.', 'warning')
+        return redirect(url_for('hora.vendas_lista'))
+
+    formas_lista = request.form.getlist('pagamento_forma')
+    valores_lista = request.form.getlist('pagamento_valor')
+    parcelas_lista = request.form.getlist('pagamento_parcelas')
+    aut_ids_lista = request.form.getlist('pagamento_aut_id')
+
+    pagamentos: list[dict] = []
+    for i, forma_raw in enumerate(formas_lista):
+        forma = (forma_raw or '').strip().upper()
+        if not forma:
+            continue
+        valor_raw = valores_lista[i] if i < len(valores_lista) else '0'
+        valor_str = (valor_raw or '').strip()
+        if ',' in valor_str:
+            valor_str = valor_str.replace('.', '').replace(',', '.')
+        try:
+            valor = Decimal(valor_str) if valor_str else Decimal('0')
+        except (InvalidOperation, ValueError):
+            continue
+        try:
+            par = int((parcelas_lista[i] if i < len(parcelas_lista) else '1') or '1')
+        except ValueError:
+            par = 1
+        aut = (aut_ids_lista[i] if i < len(aut_ids_lista) else '').strip() or None
+        pagamentos.append({
+            'forma_pagamento_hora': forma,
+            'valor': valor,
+            'numero_parcelas': par,
+            'aut_id': aut,
+        })
+
+    try:
+        res = venda_service.editar_pagamentos(
+            venda_id=venda.id, pagamentos=pagamentos, usuario=_operador_atual(),
+        )
+    except venda_service.TransicaoInvalidaError as exc:
+        flash(f'Erro: {exc}', 'danger')
+        return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+    except ValueError as exc:
+        flash(f'Dados invalidos: {exc}', 'danger')
+        return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+    if res.status == 'INCOMPLETO':
+        flash(
+            f'Pagamentos atualizados — pedido continua INCOMPLETO. Verifique '
+            f'soma vs valor total e AUT/ID das formas que exigem.',
+            'warning',
+        )
+    else:
+        flash(
+            f'Pagamentos atualizados — pedido pronto para confirmacao.',
+            'success',
+        )
+    return redirect(url_for('hora.vendas_detalhe', venda_id=venda.id))
+
+
+# ------------------------------------------------------------------------
 # Confirmar pedido (COTACAO -> CONFIRMADO)
 # ------------------------------------------------------------------------
 
