@@ -696,6 +696,97 @@ def register_fatura_routes(bp):
     # Rota editar-tipo-frete removida em 2026-04-20 — campo tipo_frete dropado.
     # SOT do tomador/incoterm e o CTe (cte_tomador).
 
+    @bp.route('/faturas-cliente/<int:fatura_id>/atualizar-pdf', methods=['POST']) # type: ignore
+    @login_required
+    def atualizar_pdf_fatura_cliente(fatura_id): # type: ignore
+        """Anexa, substitui ou remove o PDF de uma fatura cliente.
+
+        Aceita multipart/form-data com:
+          - arquivo_pdf: novo arquivo PDF (opcional)
+          - remover_pdf=1: remove o PDF atual sem substituicao
+
+        Bloqueio: apenas fatura CANCELADA. PDF e anexo — nao altera dados
+        financeiros nem regras de negocio, entao permitido em qualquer
+        outro status (PENDENTE/PAGA/CONFERIDA).
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaCliente, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_cliente'))
+
+        if fatura.status == 'CANCELADA':
+            flash('Nao e possivel alterar PDF de fatura cancelada.', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        arquivo = request.files.get('arquivo_pdf')
+        remover = request.form.get('remover_pdf') == '1'
+
+        if not (arquivo and arquivo.filename) and not remover:
+            flash('Selecione um PDF ou marque "Remover PDF atual".', 'warning')
+            return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            path_antigo = fatura.arquivo_pdf_path
+
+            if arquivo and arquivo.filename:
+                try:
+                    novo_path = storage.save_file(
+                        arquivo, 'carvia/faturas_cliente',
+                        allowed_extensions=['pdf'],
+                    )
+                except ValueError as e_val:
+                    flash(f'PDF invalido: {e_val}', 'danger')
+                    return redirect(
+                        url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id)
+                    )
+
+                if not novo_path:
+                    flash('Erro ao salvar o novo PDF.', 'danger')
+                    return redirect(
+                        url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id)
+                    )
+
+                fatura.arquivo_pdf_path = novo_path
+                fatura.arquivo_nome_original = arquivo.filename
+                db.session.commit()
+
+                if path_antigo:
+                    try:
+                        storage.delete_file(path_antigo)
+                    except Exception as e_del:
+                        logger.warning(
+                            f'Falha ao remover PDF antigo da fatura cliente {fatura_id}: {e_del}'
+                        )
+
+                flash('PDF atualizado com sucesso.', 'success')
+
+            elif remover and path_antigo:
+                fatura.arquivo_pdf_path = None
+                fatura.arquivo_nome_original = None
+                db.session.commit()
+                try:
+                    storage.delete_file(path_antigo)
+                except Exception as e_del:
+                    logger.warning(
+                        f'Falha ao remover PDF da fatura cliente {fatura_id}: {e_del}'
+                    )
+                flash('PDF removido com sucesso.', 'success')
+            else:
+                flash('Nenhuma alteracao realizada.', 'info')
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Erro ao atualizar PDF fatura cliente {fatura_id}: {e}')
+            flash(f'Erro ao atualizar PDF: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_cliente', fatura_id=fatura_id))
+
     @bp.route('/faturas-cliente/<int:fatura_id>/alterar-pagador', methods=['POST']) # type: ignore
     @login_required
     def alterar_pagador_fatura_cliente(fatura_id): # type: ignore
@@ -1927,6 +2018,93 @@ def register_fatura_routes(bp):
             db.session.rollback()
             logger.error(f"Erro ao editar vencimento fatura transportadora {fatura_id}: {e}")
             flash(f'Erro: {e}', 'danger')
+
+        return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
+
+    @bp.route('/faturas-transportadora/<int:fatura_id>/atualizar-pdf', methods=['POST']) # type: ignore
+    @login_required
+    def atualizar_pdf_fatura_transportadora(fatura_id): # type: ignore
+        """Anexa, substitui ou remove o PDF de uma fatura transportadora.
+
+        Aceita multipart/form-data com:
+          - arquivo_pdf: novo arquivo PDF (opcional)
+          - remover_pdf=1: remove o PDF atual sem substituicao
+
+        PDF e anexo — permitido em qualquer status. Sem bloqueio adicional.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        fatura = db.session.get(CarviaFaturaTransportadora, fatura_id)
+        if not fatura:
+            flash('Fatura nao encontrada.', 'warning')
+            return redirect(url_for('carvia.listar_faturas_transportadora'))
+
+        arquivo = request.files.get('arquivo_pdf')
+        remover = request.form.get('remover_pdf') == '1'
+
+        if not (arquivo and arquivo.filename) and not remover:
+            flash('Selecione um PDF ou marque "Remover PDF atual".', 'warning')
+            return redirect(
+                url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id)
+            )
+
+        try:
+            from app.utils.file_storage import get_file_storage
+            storage = get_file_storage()
+            path_antigo = fatura.arquivo_pdf_path
+
+            if arquivo and arquivo.filename:
+                try:
+                    novo_path = storage.save_file(
+                        arquivo, 'carvia/faturas_transportadora',
+                        allowed_extensions=['pdf'],
+                    )
+                except ValueError as e_val:
+                    flash(f'PDF invalido: {e_val}', 'danger')
+                    return redirect(
+                        url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id)
+                    )
+
+                if not novo_path:
+                    flash('Erro ao salvar o novo PDF.', 'danger')
+                    return redirect(
+                        url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id)
+                    )
+
+                fatura.arquivo_pdf_path = novo_path
+                fatura.arquivo_nome_original = arquivo.filename
+                db.session.commit()
+
+                if path_antigo:
+                    try:
+                        storage.delete_file(path_antigo)
+                    except Exception as e_del:
+                        logger.warning(
+                            f'Falha ao remover PDF antigo da fatura transportadora {fatura_id}: {e_del}'
+                        )
+
+                flash('PDF atualizado com sucesso.', 'success')
+
+            elif remover and path_antigo:
+                fatura.arquivo_pdf_path = None
+                fatura.arquivo_nome_original = None
+                db.session.commit()
+                try:
+                    storage.delete_file(path_antigo)
+                except Exception as e_del:
+                    logger.warning(
+                        f'Falha ao remover PDF da fatura transportadora {fatura_id}: {e_del}'
+                    )
+                flash('PDF removido com sucesso.', 'success')
+            else:
+                flash('Nenhuma alteracao realizada.', 'info')
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f'Erro ao atualizar PDF fatura transportadora {fatura_id}: {e}')
+            flash(f'Erro ao atualizar PDF: {e}', 'danger')
 
         return redirect(url_for('carvia.detalhe_fatura_transportadora', fatura_id=fatura_id))
 

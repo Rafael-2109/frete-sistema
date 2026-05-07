@@ -2447,6 +2447,57 @@ def editar_fatura(fatura_id):
             )
             fatura.transportadora_id = int(request.form.get("transportadora_id"))
 
+            # Upload/alteracao/remocao do PDF
+            arquivo_pdf_novo = request.files.get("arquivo_pdf")
+            remover_pdf = request.form.get("remover_pdf") == "1"
+
+            if arquivo_pdf_novo and arquivo_pdf_novo.filename:
+                from app.utils.file_storage import get_file_storage
+
+                storage = get_file_storage()
+                try:
+                    novo_path = storage.save_file(
+                        file=arquivo_pdf_novo,
+                        folder="faturas",
+                        allowed_extensions=["pdf"],
+                    )
+                    if not novo_path:
+                        flash("❌ Erro ao salvar o novo PDF da fatura.", "danger")
+                        transportadoras = Transportadora.query.all()
+                        return render_template(
+                            "fretes/editar_fatura.html",
+                            fatura=fatura,
+                            transportadoras=transportadoras,
+                        )
+                    # Remove o antigo apos salvar o novo com sucesso
+                    if fatura.arquivo_pdf:
+                        try:
+                            storage.delete_file(fatura.arquivo_pdf)
+                        except Exception as _e_del:
+                            logger.warning(
+                                f"Falha ao remover PDF antigo da fatura {fatura.id}: {_e_del}"
+                            )
+                    fatura.arquivo_pdf = novo_path
+                except ValueError as e_val:
+                    flash(f"❌ {e_val}", "danger")
+                    transportadoras = Transportadora.query.all()
+                    return render_template(
+                        "fretes/editar_fatura.html",
+                        fatura=fatura,
+                        transportadoras=transportadoras,
+                    )
+            elif remover_pdf and fatura.arquivo_pdf:
+                from app.utils.file_storage import get_file_storage
+
+                storage = get_file_storage()
+                try:
+                    storage.delete_file(fatura.arquivo_pdf)
+                except Exception as _e_del:
+                    logger.warning(
+                        f"Falha ao remover PDF antigo da fatura {fatura.id}: {_e_del}"
+                    )
+                fatura.arquivo_pdf = None
+
             db.session.commit()
 
             if numero_fatura_novo != numero_fatura_antigo:

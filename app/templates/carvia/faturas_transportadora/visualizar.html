@@ -20,6 +20,11 @@
                 <i class="fas fa-download"></i> PDF
             </button>
             {% endif %}
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAtualizarPdfFt"
+                    title="{% if fatura.arquivo_pdf_path %}Substituir{% else %}Anexar{% endif %} PDF da fatura">
+                <i class="fas {% if fatura.arquivo_pdf_path %}fa-sync-alt{% else %}fa-paperclip{% endif %}"></i>
+                {% if fatura.arquivo_pdf_path %}Trocar PDF{% else %}Anexar PDF{% endif %}
+            </button>
             {% if current_user.perfil == 'administrador' %}
             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalAdminExcluir"
                     title="Exclusao permanente (admin)">
@@ -909,6 +914,60 @@
         'Movimentacao financeira e conciliacoes serao removidas',
     ]
 ) }}
+
+{# Modal Anexar/Trocar PDF #}
+<div class="modal fade" id="modalAtualizarPdfFt" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST"
+                  action="{{ url_for('carvia.atualizar_pdf_fatura_transportadora', fatura_id=fatura.id) }}"
+                  enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-file-pdf"></i>
+                        {% if fatura.arquivo_pdf_path %}Substituir{% else %}Anexar{% endif %} PDF da Fatura
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if fatura.arquivo_pdf_path %}
+                    <div class="alert alert-info py-2 small">
+                        <strong>PDF atual:</strong> {{ fatura.arquivo_nome_original or 'fatura.pdf' }}
+                    </div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label for="arquivo_pdf_ft" class="form-label">
+                            Selecionar novo PDF
+                        </label>
+                        <input type="file" class="form-control" id="arquivo_pdf_ft"
+                               name="arquivo_pdf" accept=".pdf">
+                        <small class="text-muted">
+                            Apenas .pdf. O arquivo anterior sera substituido.
+                        </small>
+                    </div>
+                    {% if fatura.arquivo_pdf_path %}
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox"
+                               id="remover_pdf_ft" name="remover_pdf" value="1">
+                        <label class="form-check-label" for="remover_pdf_ft">
+                            Remover PDF atual (sem substituir)
+                        </label>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
