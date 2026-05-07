@@ -167,9 +167,26 @@ Arquivo Excel completo (4 abas) disponivel para download no link acima.
 ja sinalizou (sessao `feda2aa9-5623-4977-9a19-fa070bbaab2c`, 26/04/2026) que omitir as
 tabelas forca uma segunda rodada de pergunta — fluxo redundante deve ser eliminado.
 
-**SINAL DE FRICCAO**: Se o usuario perguntar "e as tabelas?" ou "verificar a solicitacao
-anterior" apos o link do Excel ter sido enviado, isso indica que esta secao foi pulada —
-registrar como pitfall via `log_system_pitfall`.
+**REGRA CRITICA — ENTREGA ATOMICA (I7 do system_prompt)**: A confirmacao de geracao,
+o link de download, o resumo (total + delta) e as duas tabelas DEVEM aparecer TODOS
+na MESMA mensagem. NUNCA emitir mensagens intermediarias do tipo "Script rodando…",
+"Script OK", "Extraindo dados…", "Gerando link…" sem o link real anexo. Aguarde o
+script terminar e retornar `arquivo.url_completa` antes de responder.
+
+**ANTI-PADRAO PROIBIDO** (sessoes 4cc8c1f6 e ed2fa68c, 07/05/2026):
+- Turno 1 do agente: "Script OK, extraindo tabelas..."
+- Turno 2 do usuario: "gerou?"
+- Turno 3 do agente: "Gerando link de download..."
+- Turno 4 do usuario: "gerou?"
+- ...repete 12 vezes...
+- Turno final: link postado.
+
+**PADRAO CORRETO** — UMA UNICA mensagem contendo: link + total + delta + Tabela 1 + Tabela 2.
+
+**SINAL DE FRICCAO**: Se o usuario perguntar "gerou?", "e as tabelas?", "envia o link"
+ou "verificar a solicitacao anterior" apos voce ter dito que o script terminou, isso
+indica que esta secao foi pulada — registrar como pitfall via `log_system_pitfall`
+e como `register_improvement` (category=`gotcha_report`).
 
 ## 5 Checkpoints de validacao
 

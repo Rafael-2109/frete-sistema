@@ -68,6 +68,33 @@ Erros comuns:
   - "Imagem nao encontrada" → caminho errado, pedir caminho correto
 ```
 
+### R6: Entrega atomica — link na mesma mensagem da confirmacao (I7)
+
+**Reforca a regra `I7` do system_prompt do agente.**
+
+```
+PROIBIDO: Confirmar geracao em uma mensagem e postar o link em outra
+PROIBIDO: Anunciar "arquivo gerado", "link acima", "preparando download"
+          sem o link literal (`https://...`) na mesma mensagem
+PROIBIDO: Mensagens de progresso intermediarias ("script OK", "extraindo
+          dados", "gerando link...") quando o script retorna em <30s
+CORRETO:  Aguardar o JSON de retorno do script, extrair `arquivo.url_completa`
+          e responder UMA UNICA vez com link + resumo + dados
+```
+
+**Self-check antes de enviar resposta de geracao**:
+- [ ] O link clicavel completo (`https://sistema-fretes.onrender.com/...`) esta no texto?
+- [ ] O resumo (registros + tamanho) esta no texto?
+- [ ] Se houver dados estruturados (tabelas), estao inline na mesma mensagem?
+
+Se qualquer item faltar → NAO envie. Aguarde ter tudo pronto.
+
+**ANTI-PADRAO PROIBIDO** (sessoes 4cc8c1f6 e ed2fa68c, 07/05/2026 — 3 e 12
+perguntas "gerou?" antes de receber o link, respectivamente): confirmar
+execucao do script em mensagem separada do link forca o usuario a
+perguntar repetidamente se o arquivo foi gerado. Geracao + entrega do
+link sao ATOMICAS do ponto de vista do usuario.
+
 ## Script Principal
 
 ### exportar.py

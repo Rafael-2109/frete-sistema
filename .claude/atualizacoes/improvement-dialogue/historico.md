@@ -18,6 +18,22 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 12 | 2026-04-30 | 3 | 3 | 0 | 0 | OK |
 | 13 | 2026-05-05 | 1 | 0 | 0 | 1 | OK (proposta — 3 areas RESTRITAS) |
 | 14 | 2026-05-06 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 15 | 2026-05-07 | 6 | 6 | 0 | 0 | OK (6 sugestoes do mesmo problema raiz resolvidas em uma unica mudanca atomica) |
+
+## 2026-05-07
+- 6 sugestoes avaliadas, todas validas e auto-implementadas em UMA mudanca atomica
+- Problema raiz: agente nao entrega link de download na MESMA mensagem em que confirma a geracao, causando 3-12 perguntas "gerou?" recorrentes
+- Sessoes-evidencia: `4cc8c1f6-8337-48e6-8c47-47423c96c677` (3 perguntas) e `ed2fa68c-8442-46a3-845f-0e1c46fc949f` (12 perguntas)
+- IMP-2026-05-07-001 (critical, instruction_request) — link nao entregue imediatamente
+- IMP-2026-05-07-002 (warning, gotcha_report) — confirma geracao antes de ter link (falsa expectativa)
+- IMP-2026-05-07-003 (critical, instruction_request) — duplicada com 001
+- IMP-2026-05-07-004 (critical, gotcha_report) — silencio durante processamento longo
+- IMP-2026-05-07-005 (critical, instruction_request) — duplicada com 001/003
+- IMP-2026-05-07-006 (critical, gotcha_report) — geracao e postagem como operacoes distintas
+- **Implementacao**: nova `rule id="I7"` (Entrega Atomica de Artefatos) adicionada inline no `app/agente/prompts/system_prompt.md` (bump 4.3.2 -> 4.3.3) na secao safety-critical apos I4. Skill `gerando-baseline-conciliacao/SKILL.md` ganhou bloco "REGRA CRITICA — ENTREGA ATOMICA" + ANTI-PADRAO PROIBIDO/PADRAO CORRETO com exemplo das sessoes recentes. Skill `exportando-arquivos/SKILL.md` ganhou nova R6 com checklist de self-check.
+- **Decisao IMP-004**: nao implementar heartbeats periodicos a cada 30-60s (exigiria infra de streaming async com risco vs beneficio limitado — atomicidade ja resolve causa raiz). Permitida UMA UNICA mensagem inicial "Processando..." em scripts > 30s.
+- Persistencia DB: 6/6 OK (IDs 68-73)
+- **Commit**: direto em main (sem branch dedicada — feedback 2026-04-14)
 
 ## 2026-05-06
 - **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
