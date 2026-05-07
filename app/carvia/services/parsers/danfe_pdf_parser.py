@@ -21,6 +21,7 @@ LLM (Haiku primario + Sonnet fallback). Gate rapido por NCM/keyword evita
 chamada API em NFs sem veiculo.
 """
 
+import base64
 import json
 import logging
 import os
@@ -1354,6 +1355,221 @@ class DanfePDFParser:
             'valor_total_item': valor_total_item,
         }
 
+    # --- Extracao via Claude Vision/document (PDFs sem text layer) ---
+
+    def _extrair_via_vision(self) -> Optional[Dict]:
+        """Extrai todos os campos via Claude `document` block (PDF nativo).
+
+        Usado como fallback quando pdfplumber/pypdf retornam texto vazio
+        (PDF e imagem renderizada, sem text layer). Envia o PDF inteiro
+        para a API e recebe JSON com campos da NF + lista de veiculos.
+
+        Pipeline: tenta Haiku; se chave_acesso_nf vier invalida (Vision em
+        PDF imagem perde digitos do codigo de barras), faz nova tentativa
+        com Sonnet (mais preciso). Mantém o melhor entre os dois.
+
+        Validacoes aplicadas:
+        - chave_acesso_nf: aceita apenas se tiver exatamente 44 digitos
+          (codigo de barras pode ser lido com erro pelo Vision em
+          renderizacoes baixa qualidade — preferimos None a chave invalida).
+        - data_emissao: parseada via _parse_date_br (string DD/MM/AAAA).
+        - cnpj_*: preserva formato bruto (sanitizacao no adapter).
+
+        Returns:
+            Dict no MESMO formato de get_todas_informacoes() (com `itens=[]`,
+            `veiculos=[...]`, `metodo_extracao='VISION_HAIKU'` ou
+            'VISION_SONNET') ou None se falhar.
+        """
+        client = self._get_anthropic_client()
+        if not client:
+            return None
+
+        pdf_bytes = self.pdf_bytes
+        if not pdf_bytes and self.pdf_path:
+            try:
+                with open(self.pdf_path, 'rb') as f:
+                    pdf_bytes = f.read()
+            except Exception as e:
+                logger.error("Vision: erro ao ler pdf_path %s: %s", self.pdf_path, e)
+                return None
+        if not pdf_bytes:
+            return None
+
+        try:
+            pdf_b64 = base64.b64encode(pdf_bytes).decode('ascii')
+        except Exception as e:
+            logger.error("Vision: erro ao base64-encode PDF: %s", e)
+            return None
+
+        # Camada 1: Haiku (mais barato + rapido).
+        data = self._chamar_vision(client, pdf_b64, self.HAIKU_MODEL)
+
+        # Se chave veio invalida (None apos validacao 44 digitos), Sonnet
+        # tende a ler com mais precisao em DANFEs renderizadas como imagem.
+        if data and not data.get('chave_acesso_nf'):
+            logger.info(
+                "Vision Haiku sem chave valida — tentando Sonnet"
+            )
+            data_sonnet = self._chamar_vision(client, pdf_b64, self.SONNET_MODEL)
+            if data_sonnet and data_sonnet.get('chave_acesso_nf'):
+                # Sonnet acertou a chave: usa o resultado dele integralmente.
+                data = data_sonnet
+
+        return data
+
+    def _chamar_vision(
+        self, client, pdf_b64: str, model: str,
+    ) -> Optional[Dict]:
+        """Faz uma chamada Vision/document e normaliza o JSON retornado.
+
+        Helper compartilhado por `_extrair_via_vision` (2-stage Haiku→Sonnet).
+        """
+        prompt = (
+            "Esta e uma DANFE NF-e brasileira (PDF nativo). Extraia em JSON "
+            "EXATAMENTE neste formato:\n"
+            "{\n"
+            "  \"chave_acesso_nf\": str ou null (44 digitos, sem espacos/pontos. "
+            "Se nao conseguir ler exatamente 44 digitos, retorne null),\n"
+            "  \"numero_nf\": str (numero da NF, ex: \"31912\"),\n"
+            "  \"serie_nf\": str (serie, ex: \"000\" ou \"1\"),\n"
+            "  \"cnpj_emitente\": str (14 digitos, sem pontuacao),\n"
+            "  \"nome_emitente\": str,\n"
+            "  \"cnpj_destinatario\": str (14 digitos PJ ou 11 digitos PF, sem pontuacao),\n"
+            "  \"nome_destinatario\": str,\n"
+            "  \"uf_emitente\": str (2 letras ex: \"RJ\"),\n"
+            "  \"cidade_emitente\": str,\n"
+            "  \"uf_destinatario\": str (2 letras),\n"
+            "  \"cidade_destinatario\": str,\n"
+            "  \"data_emissao\": \"DD/MM/AAAA\",\n"
+            "  \"valor_total\": float (sem R$, ponto como decimal, ex: 102466.44),\n"
+            "  \"peso_bruto\": float ou null,\n"
+            "  \"peso_liquido\": float ou null,\n"
+            "  \"quantidade_volumes\": int ou null,\n"
+            "  \"veiculos\": [\n"
+            "    {\n"
+            "      \"chassi\": str (alfanumerico ou numerico, 10+ chars),\n"
+            "      \"modelo\": str (ex: \"JET MAX\", \"X12-10\", \"SCOOTER ELETRICO\"),\n"
+            "      \"cor\": str (ex: \"AZUL\", \"PRETO\"),\n"
+            "      \"numero_motor\": str ou null,\n"
+            "      \"ano_modelo\": str ou null (ex: \"2025/2025\")\n"
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "REGRAS CRITICAS:\n"
+            "- Se a NF nao for de moto/veiculo (ex: alimentos, eletronicos), "
+            "retorne `veiculos`: [].\n"
+            "- Para cada moto/veiculo no PDF, extraia chassi+modelo+cor. Use a "
+            "secao DADOS ADICIONAIS / INFORMACOES COMPLEMENTARES como fonte "
+            "principal de chassis. Use a descricao do produto (NCM 8711*) "
+            "como fonte de modelo.\n"
+            "- chave_acesso_nf eh OBRIGATORIAMENTE 44 digitos. Conte os digitos "
+            "antes de retornar. Olhe a chave em DUAS fontes no PDF: o codigo "
+            "de barras (linha de digitos no topo) E o campo \"CHAVE DE ACESSO\" "
+            "(geralmente abaixo, no canhoto). Confira que ambos batem e tem "
+            "44 digitos. Se ler 43, releia com mais cuidado — provavelmente "
+            "voce omitiu 1 digito. Se mesmo apos releitura tiver duvida, "
+            "retorne null em vez de valor parcial.\n"
+            "- Retorne SOMENTE o JSON. Sem markdown, sem comentarios, sem texto "
+            "antes ou depois."
+        )
+
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=8000,
+                messages=[{
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'document',
+                            'source': {
+                                'type': 'base64',
+                                'media_type': 'application/pdf',
+                                'data': pdf_b64,
+                            }
+                        },
+                        {'type': 'text', 'text': prompt},
+                    ]
+                }]
+            )
+            texto = response.content[0].text.strip()
+            # Extrair JSON object da resposta (pode vir com ```json``` ou direto)
+            json_match = re.search(r'\{.*\}', texto, re.DOTALL)
+            if not json_match:
+                logger.warning(
+                    "Vision DANFE (%s): resposta sem JSON object "
+                    "(stop_reason=%s, response_chars=%d)",
+                    model,
+                    getattr(response, 'stop_reason', '?'),
+                    len(texto),
+                )
+                return None
+            try:
+                data = json.loads(json_match.group(0))
+            except json.JSONDecodeError as e:
+                logger.warning("Vision DANFE (%s): JSON invalido: %s", model, e)
+                return None
+            if not isinstance(data, dict):
+                return None
+
+            # Validar chave 44 digitos (exigencia legal NF-e). Vision em PDF
+            # imagem pode ler codigo de barras com perda de digitos.
+            chave = data.get('chave_acesso_nf')
+            if chave:
+                chave_digitos = ''.join(c for c in str(chave) if c.isdigit())
+                if len(chave_digitos) == 44:
+                    data['chave_acesso_nf'] = chave_digitos
+                else:
+                    logger.warning(
+                        "Vision DANFE (%s): chave invalida (%d digitos, "
+                        "esperado 44) — descartando: %r",
+                        model, len(chave_digitos), chave,
+                    )
+                    data['chave_acesso_nf'] = None
+
+            # Parsear data_emissao para date object (consumido pelo adapter)
+            data_str = data.get('data_emissao')
+            if data_str and isinstance(data_str, str):
+                data['data_emissao_str'] = data_str
+                data['data_emissao'] = self._parse_date_br(data_str)
+            else:
+                data['data_emissao_str'] = None
+                data['data_emissao'] = None
+
+            # Veiculos: garantir lista
+            if not isinstance(data.get('veiculos'), list):
+                data['veiculos'] = []
+
+            # Itens (NCM detalhado): nao tentamos extrair via Vision por enquanto
+            # — fluxos que dependem de itens ainda receberiam [] aqui. Adapter
+            # HORA usa apenas `veiculos`, entao isso eh seguro.
+            data.setdefault('itens', [])
+
+            # Quantidade declarada de veiculos: usar tamanho da lista como
+            # melhor estimativa quando nao temos itens NCM.
+            data.setdefault(
+                'qtd_declarada_itens_veiculo',
+                len(data.get('veiculos') or []) or None,
+            )
+
+            data['tipo_fonte'] = 'PDF_DANFE'
+            data['metodo_extracao'] = (
+                'VISION_HAIKU' if model == self.HAIKU_MODEL else 'VISION_SONNET'
+            )
+            data['confianca'] = 0.7  # Vision tem incerteza maior que regex
+
+            logger.info(
+                "Vision DANFE (%s): extraidos %d veiculo(s), chave=%s, numero=%s",
+                model,
+                len(data.get('veiculos') or []),
+                'OK' if data.get('chave_acesso_nf') else 'AUSENTE',
+                data.get('numero_nf') or 'AUSENTE',
+            )
+            return data
+        except Exception as e:
+            logger.error("Vision DANFE (%s): erro inesperado: %s", model, e)
+            return None
+
     # --- Extracao de veiculos (chassi/motor/cor) via LLM ---
 
     def _tem_indicativo_veiculo(self) -> bool:
@@ -1579,9 +1795,13 @@ class DanfePDFParser:
         )
 
         try:
+            # max_tokens=8000: 24 veiculos verbosos (~250 tokens cada com modelo
+            # completo + numero_motor + ano_modelo) podem estourar 2000 tokens e
+            # truncar JSON, fazendo o regex `\[.*\]` falhar (sem `]` fechando).
+            # Validado em NF Laiouns 31912 (24 motos): 2000 = 0/3 sucesso, 8000 = 3/3.
             response = client.messages.create(
                 model=model,
-                max_tokens=2000,
+                max_tokens=8000,
                 messages=[{"role": "user", "content": prompt}],
             )
 
@@ -1591,7 +1811,10 @@ class DanfePDFParser:
             json_match = re.search(r'\[.*\]', texto_resposta, re.DOTALL)
             if not json_match:
                 logger.warning(
-                    "Extracao veiculos LLM (%s): resposta sem JSON array", model
+                    "Extracao veiculos LLM (%s): resposta sem JSON array "
+                    "(stop_reason=%s, response_chars=%d)",
+                    model, getattr(response, 'stop_reason', '?'),
+                    len(texto_resposta),
                 )
                 return None
 
@@ -1943,10 +2166,37 @@ class DanfePDFParser:
     def get_todas_informacoes(self) -> Dict:
         """Extrai todas as informacoes disponiveis.
 
-        Pipeline: Regex → Haiku (campos faltantes) → Sonnet (fallback).
-        Itens e veiculos sao sempre via regex/LLM dedicado (sem mudanca).
+        Pipeline:
+        - Camada 0 (PDF imagem): se texto < 50 chars, tenta Vision/document.
+        - Camada 1 (Regex) → Camada 2 (Haiku) → Camada 3 (Sonnet) para
+          campos faltantes em PDFs com text layer.
+        - Itens e veiculos via regex/LLM dedicado (mesmo fluxo).
         """
         self.confianca = 0.0
+
+        # --- Camada 0: Vision/document para PDFs sem text layer ---
+        # PDFs renderizados como imagem (escaneados, ou gerados por
+        # impressoras virtuais sem fonts embutidas) caem aqui — pdfplumber
+        # e pypdf retornam vazio. Validado em NFs Mibeles 1487 e 1651.
+        if not self.is_valid():
+            logger.info(
+                "DANFE: texto extraido vazio (%d chars) — tentando Vision/document",
+                len(self.texto_completo.strip()),
+            )
+            vision_data = self._extrair_via_vision()
+            if vision_data:
+                # Garantir todas as chaves esperadas pelo contrato
+                vision_data.setdefault('serie_nf', None)
+                vision_data.setdefault('peso_bruto', None)
+                vision_data.setdefault('peso_liquido', None)
+                vision_data.setdefault('quantidade_volumes', None)
+                vision_data.setdefault('uf_emitente', None)
+                vision_data.setdefault('cidade_emitente', None)
+                vision_data.setdefault('uf_destinatario', None)
+                vision_data.setdefault('cidade_destinatario', None)
+                return vision_data
+            # Vision falhou — segue fluxo normal (que vai retornar maioria
+            # dos campos None). Adapter levantara DanfeParseError.
 
         # --- Camada 1: Regex ---
         uf_emit, cidade_emit = self.get_uf_cidade_emitente()
