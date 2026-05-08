@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 352,
+  "total_relationships": 376,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1167,6 +1167,90 @@
       "to_column": "id"
     },
     {
+      "from_table": "hora_devolucao_venda",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_venda",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_venda_item",
+      "from_column": "devolucao_id",
+      "to_table": "hora_devolucao_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_venda_item",
+      "from_column": "numero_chassi",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_devolucao_venda_item",
+      "from_column": "venda_item_id",
+      "to_table": "hora_venda_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_venda_item",
+      "from_column": "avaria_id",
+      "to_table": "hora_avaria",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_devolucao_venda_item",
+      "from_column": "peca_faltando_id",
+      "to_table": "hora_peca_faltando",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_emprestimo_moto",
+      "from_column": "loja_hora_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_emprestimo_moto",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_emprestimo_moto",
+      "from_column": "chassi_saida",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_emprestimo_moto",
+      "from_column": "chassi_entrada",
+      "to_table": "hora_moto",
+      "to_column": "numero_chassi"
+    },
+    {
+      "from_table": "hora_modelo",
+      "from_column": "merged_em_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_modelo_alias",
+      "from_column": "modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_modelo_pendente",
+      "from_column": "resolvido_modelo_id",
+      "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_moto",
       "from_column": "modelo_id",
       "to_table": "hora_modelo",
@@ -1209,6 +1293,18 @@
       "to_column": "numero_chassi"
     },
     {
+      "from_table": "hora_nf_entrada_item_peca",
+      "from_column": "nf_id",
+      "to_table": "hora_nf_entrada",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_nf_entrada_item_peca",
+      "from_column": "peca_id",
+      "to_table": "hora_peca",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_peca_faltando",
       "from_column": "numero_chassi",
       "to_table": "hora_moto",
@@ -1233,6 +1329,18 @@
       "to_column": "id"
     },
     {
+      "from_table": "hora_peca_movimento",
+      "from_column": "peca_id",
+      "to_table": "hora_peca",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_peca_movimento",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_pedido",
       "from_column": "loja_destino_id",
       "to_table": "hora_loja",
@@ -1254,6 +1362,12 @@
       "from_table": "hora_pedido_item",
       "from_column": "modelo_id",
       "to_table": "hora_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_pedido_item",
+      "from_column": "peca_id",
+      "to_table": "hora_peca",
       "to_column": "id"
     },
     {
@@ -1299,6 +1413,12 @@
       "to_column": "id"
     },
     {
+      "from_table": "hora_tagplus_departamento_map",
+      "from_column": "loja_id",
+      "to_table": "hora_loja",
+      "to_column": "id"
+    },
+    {
       "from_table": "hora_tagplus_nfe_emissao",
       "from_column": "venda_id",
       "to_table": "hora_venda",
@@ -1308,6 +1428,12 @@
       "from_table": "hora_tagplus_nfe_emissao",
       "from_column": "conta_id",
       "to_table": "hora_tagplus_conta",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_tagplus_peca_map",
+      "from_column": "peca_id",
+      "to_table": "hora_peca",
       "to_column": "id"
     },
     {
@@ -1404,6 +1530,24 @@
       "from_table": "hora_venda_item",
       "from_column": "tabela_preco_id",
       "to_table": "hora_tabela_preco",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_item_peca",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_item_peca",
+      "from_column": "peca_id",
+      "to_table": "hora_peca",
+      "to_column": "id"
+    },
+    {
+      "from_table": "hora_venda_pagamento",
+      "from_column": "venda_id",
+      "to_table": "hora_venda",
       "to_column": "id"
     },
     {

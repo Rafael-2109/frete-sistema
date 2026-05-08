@@ -26,6 +26,12 @@
       "type": "varchar(10)"
     },
     {
+      "name": "exige_aut_id",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",

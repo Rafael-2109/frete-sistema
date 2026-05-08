@@ -52,16 +52,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_modelo_alias_tipo",
+      "name": "ix_hora_modelo_alias_modelo_id",
       "columns": [
-        "tipo"
+        "modelo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_modelo_alias_modelo_id",
+      "name": "ix_hora_modelo_alias_tipo",
       "columns": [
-        "modelo_id"
+        "tipo"
       ],
       "unique": false
     }

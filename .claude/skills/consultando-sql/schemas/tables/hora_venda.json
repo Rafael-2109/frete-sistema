@@ -31,6 +31,10 @@
       "type": "varchar(120)"
     },
     {
+      "name": "consumidor_final",
+      "type": "boolean"
+    },
+    {
       "name": "data_venda",
       "type": "date",
       "nullable": false
@@ -58,6 +62,14 @@
       "type": "integer",
       "nullable": false,
       "default": 30
+    },
+    {
+      "name": "valor_frete",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "tipo_frete_calc",
+      "type": "varchar(10)"
     },
     {
       "name": "valor_total",
@@ -195,37 +207,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_nf_saida_numero",
-      "columns": [
-        "nf_saida_numero"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_loja_id",
-      "columns": [
-        "loja_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_data_venda",
-      "columns": [
-        "data_venda"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_venda_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_cpf_cliente",
+      "columns": [
+        "cpf_cliente"
       ],
       "unique": false
     },
@@ -237,9 +228,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_cpf_cliente",
+      "name": "ix_hora_venda_loja_id",
       "columns": [
-        "cpf_cliente"
+        "loja_id"
       ],
       "unique": false
     },
@@ -254,6 +245,27 @@
       "name": "ix_hora_venda_origem_criacao",
       "columns": [
         "origem_criacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_nf_saida_numero",
+      "columns": [
+        "nf_saida_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_data_venda",
+      "columns": [
+        "data_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
       ],
       "unique": false
     }

@@ -1,11 +1,17 @@
 {
-  "name": "hora_devolucao_fornecedor",
-  "description": "Tabela hora_devolucao_fornecedor",
+  "name": "hora_devolucao_venda",
+  "description": "Tabela hora_devolucao_venda",
   "fields": [
     {
       "name": "id",
       "type": "integer",
       "description": "Primary key"
+    },
+    {
+      "name": "venda_id",
+      "type": "integer",
+      "description": "FK → hora_venda.id",
+      "nullable": false
     },
     {
       "name": "loja_id",
@@ -14,24 +20,15 @@
       "nullable": false
     },
     {
-      "name": "nf_entrada_id",
-      "type": "integer",
-      "description": "FK → hora_nf_entrada.id"
-    },
-    {
       "name": "motivo",
-      "type": "varchar(50)",
+      "type": "text",
       "nullable": false
-    },
-    {
-      "name": "observacoes",
-      "type": "text"
     },
     {
       "name": "status",
       "type": "varchar(20)",
       "nullable": false,
-      "default": "ABERTA"
+      "default": "PENDENTE"
     },
     {
       "name": "data_devolucao",
@@ -39,23 +36,23 @@
       "nullable": false
     },
     {
-      "name": "data_envio",
+      "name": "data_resolucao",
       "type": "date"
     },
     {
-      "name": "data_confirmacao",
-      "type": "date"
-    },
-    {
-      "name": "nf_saida_numero",
-      "type": "varchar(20)"
-    },
-    {
-      "name": "nf_saida_chave_44",
-      "type": "varchar(44)"
+      "name": "cancelamento_motivo",
+      "type": "varchar(500)"
     },
     {
       "name": "criado_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "resolvida_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cancelada_por",
       "type": "varchar(100)"
     },
     {
@@ -72,31 +69,31 @@
   ],
   "foreign_keys": [
     {
-      "column": "loja_id",
-      "references": "hora_loja.id"
+      "column": "venda_id",
+      "references": "hora_venda.id"
     },
     {
-      "column": "nf_entrada_id",
-      "references": "hora_nf_entrada.id"
+      "column": "loja_id",
+      "references": "hora_loja.id"
     }
   ],
   "indices": [
     {
-      "name": "ix_hora_devolucao_fornecedor_nf_entrada_id",
-      "columns": [
-        "nf_entrada_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_devolucao_fornecedor_loja_id",
+      "name": "ix_hora_devolucao_venda_loja_id",
       "columns": [
         "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_fornecedor_status",
+      "name": "ix_hora_devolucao_venda_venda_id",
+      "columns": [
+        "venda_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_devolucao_venda_status",
       "columns": [
         "status"
       ],

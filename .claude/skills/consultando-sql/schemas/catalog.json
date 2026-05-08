@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 230,
+  "total_tabelas": 244,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1139,6 +1139,15 @@
       ]
     },
     {
+      "name": "hora_danfe_parser_append",
+      "description": "Tabela hora_danfe_parser_append",
+      "key_fields": [
+        "versao",
+        "texto_append",
+        "acrescimo_aplicado"
+      ]
+    },
+    {
       "name": "hora_devolucao_fornecedor",
       "description": "Tabela hora_devolucao_fornecedor",
       "key_fields": [
@@ -1157,6 +1166,33 @@
       ]
     },
     {
+      "name": "hora_devolucao_venda",
+      "description": "Tabela hora_devolucao_venda",
+      "key_fields": [
+        "venda_id",
+        "loja_id",
+        "motivo"
+      ]
+    },
+    {
+      "name": "hora_devolucao_venda_item",
+      "description": "Tabela hora_devolucao_venda_item",
+      "key_fields": [
+        "devolucao_id",
+        "numero_chassi",
+        "venda_item_id"
+      ]
+    },
+    {
+      "name": "hora_emprestimo_moto",
+      "description": "Tabela hora_emprestimo_moto",
+      "key_fields": [
+        "tipo",
+        "status",
+        "loja_hora_id"
+      ]
+    },
+    {
       "name": "hora_loja",
       "description": "Tabela hora_loja",
       "key_fields": [
@@ -1172,6 +1208,24 @@
         "nome_modelo",
         "potencia_motor",
         "descricao"
+      ]
+    },
+    {
+      "name": "hora_modelo_alias",
+      "description": "Tabela hora_modelo_alias",
+      "key_fields": [
+        "modelo_id",
+        "nome_alias",
+        "tipo"
+      ]
+    },
+    {
+      "name": "hora_modelo_pendente",
+      "description": "Tabela hora_modelo_pendente",
+      "key_fields": [
+        "nome_observado",
+        "origem",
+        "origem_id"
       ]
     },
     {
@@ -1211,6 +1265,24 @@
       ]
     },
     {
+      "name": "hora_nf_entrada_item_peca",
+      "description": "Tabela hora_nf_entrada_item_peca",
+      "key_fields": [
+        "nf_id",
+        "peca_id",
+        "qtd_nf"
+      ]
+    },
+    {
+      "name": "hora_peca",
+      "description": "Tabela hora_peca",
+      "key_fields": [
+        "codigo_interno",
+        "descricao",
+        "ncm"
+      ]
+    },
+    {
       "name": "hora_peca_faltando",
       "description": "Tabela hora_peca_faltando",
       "key_fields": [
@@ -1226,6 +1298,15 @@
         "peca_faltando_id",
         "foto_s3_key",
         "legenda"
+      ]
+    },
+    {
+      "name": "hora_peca_movimento",
+      "description": "Tabela hora_peca_movimento",
+      "key_fields": [
+        "peca_id",
+        "loja_id",
+        "tipo"
       ]
     },
     {
@@ -1274,12 +1355,30 @@
       ]
     },
     {
+      "name": "hora_tagplus_backfill_job",
+      "description": "Tabela hora_tagplus_backfill_job",
+      "key_fields": [
+        "tipo",
+        "status",
+        "since"
+      ]
+    },
+    {
       "name": "hora_tagplus_conta",
       "description": "Tabela hora_tagplus_conta",
       "key_fields": [
         "client_id",
         "client_secret_encrypted",
         "webhook_secret"
+      ]
+    },
+    {
+      "name": "hora_tagplus_departamento_map",
+      "description": "Tabela hora_tagplus_departamento_map",
+      "key_fields": [
+        "departamento_norm",
+        "departamento_raw",
+        "loja_id"
       ]
     },
     {
@@ -1298,6 +1397,15 @@
         "venda_id",
         "conta_id",
         "status"
+      ]
+    },
+    {
+      "name": "hora_tagplus_peca_map",
+      "description": "Tabela hora_tagplus_peca_map",
+      "key_fields": [
+        "peca_id",
+        "tagplus_produto_id",
+        "tagplus_codigo"
       ]
     },
     {
@@ -1388,6 +1496,24 @@
         "venda_id",
         "numero_chassi",
         "tabela_preco_id"
+      ]
+    },
+    {
+      "name": "hora_venda_item_peca",
+      "description": "Tabela hora_venda_item_peca",
+      "key_fields": [
+        "venda_id",
+        "peca_id",
+        "qtd"
+      ]
+    },
+    {
+      "name": "hora_venda_pagamento",
+      "description": "Tabela hora_venda_pagamento",
+      "key_fields": [
+        "venda_id",
+        "forma_pagamento_hora",
+        "valor"
       ]
     },
     {
