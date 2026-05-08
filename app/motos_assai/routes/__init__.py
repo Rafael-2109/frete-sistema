@@ -15,3 +15,6 @@ motos_assai_bp = Blueprint(
 )
 
 # Sub-rotas serão importadas conforme criadas (Task 19, 23, 24, 25)
+
+# Importar sub-rotas (registra handlers no blueprint)
+from app.motos_assai.routes import dashboard  # noqa: E402,F401

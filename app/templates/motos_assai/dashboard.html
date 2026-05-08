@@ -1,0 +1,65 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<div class="motos-assai-dashboard">
+  <header class="dashboard-header">
+    <h2>Operação VOE
+      {% if cd %}<small class="text-muted"> · CD: {{ cd.nome }}</small>{% endif %}
+    </h2>
+  </header>
+
+  <section class="dashboard-cards row g-3">
+    <div class="col-md-3">
+      <div class="card dashboard-card">
+        <div class="card-body">
+          <h6 class="card-subtitle text-muted">Cadastros</h6>
+          <p class="card-text">
+            <strong>{{ lojas_ativas }}</strong> lojas ativas<br>
+            <strong>{{ modelos_ativos }}</strong> modelos ativos
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card dashboard-card">
+        <div class="card-body">
+          <h6 class="card-subtitle text-muted">Pedidos por status</h6>
+          {% if pedidos_por_status %}
+            <ul class="list-unstyled mb-0">
+              {% for status, count in pedidos_por_status.items() %}
+                <li>{{ status }}: <strong>{{ count }}</strong></li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="card-text text-muted">Sem pedidos cadastrados.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card dashboard-card">
+        <div class="card-body">
+          <h6 class="card-subtitle text-muted">Pipeline</h6>
+          <p class="card-text">
+            <strong>{{ compras_abertas }}</strong> compras Motochefe abertas<br>
+            <strong>{{ separacoes_em }}</strong> separações em andamento
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card dashboard-card">
+        <div class="card-body">
+          <h6 class="card-subtitle text-muted">Atalhos</h6>
+          <p class="card-text text-muted">
+            (rotas habilitadas no Plano 2: pedidos, compras, recibos, recebimento)
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
