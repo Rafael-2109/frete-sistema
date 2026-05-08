@@ -63,12 +63,21 @@
     // screen.width retorna a largura fisica do device (estavel, nao muda com pinch zoom)
     // Em portrait/landscape, varia conforme orientacao
     const physicalWidth = window.screen.width || window.innerWidth;
-    // Quanto menor o zoom, MAIOR a viewport virtual (mais conteudo cabe)
-    // Ex: zoom 80% em iPhone 428pt -> viewport virtual 535pt
+
+    // CRITICAL: initial-scale DEVE ser proporcional ao zoom desejado.
+    // Ex: level=50% em iPhone 428pt:
+    //   virtualWidth = 428 * (100/50) = 856  (viewport CSS de 856px)
+    //   initialScale = 50/100 = 0.5         (renderiza em escala 0.5x)
+    //   Resultado: 856px CSS escalados para 428px fisicos = cabe perfeitamente
+    //   = REFLOW real, conteudo de 856px aparece em 50% do tamanho.
+    //
+    // Sem initial-scale=0.5 (com initial-scale=1.0), o iOS renderiza 856px em
+    // 1:1 sobre 428px fisicos, gerando overflow horizontal (bug reportado).
     const virtualWidth = Math.round(physicalWidth * (DEFAULT_LEVEL / level));
+    const initialScale = (level / DEFAULT_LEVEL).toFixed(3);
     meta.setAttribute(
       'content',
-      `width=${virtualWidth}, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover`
+      `width=${virtualWidth}, initial-scale=${initialScale}, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover`
     );
   }
 
@@ -148,19 +157,29 @@
     if (btnHide) btnHide.addEventListener('click', hideBar);
     if (toggle) toggle.addEventListener('click', showBar);
 
-    // Reaplicar zoom em rotacao/resize (mobile <-> desktop)
+    // Reaplicar zoom APENAS em transicao mobile<->desktop (rotacao de tela).
+    // NAO reaplicar em qualquer resize porque iOS dispara resize quando usuario
+    // faz pinch zoom ou quando barra de endereco recolhe — re-aplicar viewport
+    // nessas situacoes causa "flash" e reseta o zoom visual feito pelo usuario
+    // (bug reportado: tela pisca apos alguns segundos de pinch zoom).
+    let lastIsMobile = isMobile();
     let resizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
-        if (!isMobile()) {
-          // Desktop: reset viewport e ocultar UI (CSS ja faz, mas garante estado JS)
+        const currentIsMobile = isMobile();
+        // Apenas age em transicao real mobile<->desktop
+        if (currentIsMobile === lastIsMobile) return;
+        lastIsMobile = currentIsMobile;
+
+        if (!currentIsMobile) {
+          // Mudou para desktop: reset viewport, oculta UI
           const meta = getMetaViewport();
           if (meta) meta.setAttribute('content', VIEWPORT_DEFAULT);
           document.body.classList.remove('has-mobile-zoom-bar');
         } else {
+          // Mudou para mobile: aplica zoom salvo + mostra barra se preferencia
           applyZoom(getLevel());
-          // Restaura visibilidade da barra conforme preferencia
           const barVisible = safeGet(STORAGE_KEY_VISIBLE) !== 'false';
           if (barVisible && !bar.classList.contains('is-active')) {
             showBar();

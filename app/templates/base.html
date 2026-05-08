@@ -17,9 +17,13 @@
         if (isNaN(lvl) || lvl === 100 || lvl < 50 || lvl > 100) return;
         var phys = window.screen.width || window.innerWidth;
         var virt = Math.round(phys * (100 / lvl));
+        // initial-scale DEVE ser proporcional ao zoom para iOS escalar corretamente.
+        // Sem isso (initial-scale=1.0), iOS renderiza 856px em 1:1 sobre 428px
+        // fisicos, gerando overflow horizontal em vez de reflow escalado.
+        var scale = (lvl / 100).toFixed(3);
         var meta = document.querySelector('meta[name=viewport]');
         if (meta) {
-          meta.setAttribute('content', 'width=' + virt + ', initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
+          meta.setAttribute('content', 'width=' + virt + ', initial-scale=' + scale + ', maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
         }
       } catch (e) { /* fail-silent: cai no viewport default */ }
     })();
