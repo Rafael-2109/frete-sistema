@@ -8,7 +8,7 @@
   </a>
 </header>
 
-<div class="table-responsive">
+<div id="tabela-modelos" class="table-responsive">
 <table class="table">
   <thead>
     <tr>
@@ -40,4 +40,8 @@
   </tbody>
 </table>
 </div>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/modelos_assai.js') }}"></script>
 {% endblock %}

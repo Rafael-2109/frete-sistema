@@ -11,7 +11,7 @@
 
 {# ===== Pendentes de aprovacao ===== #}
 {% if pendentes and current_user.tem_perm_hora('usuarios', 'aprovar') %}
-  <div class="card border-warning mb-4">
+  <div id="card-pendentes" class="card border-warning mb-4">
     <div class="card-header bg-warning-subtle text-warning-emphasis">
       <i class="fas fa-user-clock"></i>
       <strong>Solicitações pendentes</strong>
@@ -80,8 +80,11 @@
   </div>
 {% endif %}
 
+{% set onboarding_perm = namespace(usou_id_tabela=false, usou_id_matriz=false, usou_id_btn=false) %}
 {% for u in usuarios %}
-  <div class="card mb-3 {% if u.sistema_lojas %}border-success{% else %}border-secondary{% endif %}">
+  {% set primeiro_usuario = not onboarding_perm.usou_id_tabela %}
+  {% if primeiro_usuario %}{% set onboarding_perm.usou_id_tabela = true %}{% endif %}
+  <div {% if primeiro_usuario %}id="tabela-usuarios"{% endif %} class="card mb-3 {% if u.sistema_lojas %}border-success{% else %}border-secondary{% endif %}">
     <div class="card-header d-flex flex-wrap align-items-center gap-2">
       <strong class="me-2">{{ u.nome }}</strong>
       <span class="text-muted small">{{ u.email }}</span>
@@ -123,9 +126,11 @@
     {# Matriz granular: visivel apenas se sistema_lojas=True #}
     {% if u.sistema_lojas %}
       {% set m = matrizes.get(u.id, {}) %}
+      {% set primeira_matriz = not onboarding_perm.usou_id_matriz %}
+      {% if primeira_matriz %}{% set onboarding_perm.usou_id_matriz = true %}{% endif %}
       <form method="post" action="{{ url_for('hora.permissoes_salvar_granular', user_id=u.id) }}"
             class="card-body p-0">
-        <div class="table-responsive">
+        <div {% if primeira_matriz %}id="matriz-modulos"{% endif %} class="table-responsive">
           <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light">
               <tr>
@@ -175,7 +180,9 @@
           </table>
         </div>
         <div class="p-2 d-flex justify-content-end border-top">
-          <button type="submit" class="btn btn-sm btn-primary">
+          {% set primeiro_btn_salvar = not onboarding_perm.usou_id_btn %}
+          {% if primeiro_btn_salvar %}{% set onboarding_perm.usou_id_btn = true %}{% endif %}
+          <button {% if primeiro_btn_salvar %}id="btn-salvar-matriz"{% endif %} type="submit" class="btn btn-sm btn-primary">
             <i class="fas fa-save"></i> Salvar permissões granulares
           </button>
         </div>
@@ -212,4 +219,8 @@ document.querySelectorAll('.hora-perm-toggle-col').forEach(function(btn) {
   });
 });
 </script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/permissoes.js') }}"></script>
 {% endblock %}

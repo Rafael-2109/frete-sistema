@@ -9,7 +9,7 @@
 <form method="POST" enctype="multipart/form-data" class="card p-4 col-md-8 col-lg-6">
   {{ form.hidden_tag() }}
 
-  <div class="mb-3">
+  <div class="mb-3" id="upload-area">
     {{ form.pdf.label(class="form-label") }}
     {{ form.pdf(class="form-control", accept="application/pdf") }}
     {% for e in form.pdf.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
@@ -22,8 +22,12 @@
     Você revisará todos os dados extraídos antes de confirmar.
   </div>
 
-  <button type="submit" class="btn btn-primary">
+  <button id="btn-salvar-pedido" type="submit" class="btn btn-primary">
     <i class="fas fa-upload"></i> Importar pedido
   </button>
 </form>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/pedidos_upload.js') }}"></script>
 {% endblock %}

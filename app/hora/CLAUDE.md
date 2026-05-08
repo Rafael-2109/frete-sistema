@@ -551,6 +551,32 @@ TagPlus.
 
 ---
 
+## Onboarding Tours (2026-05-08)
+
+Tours guiados in-app via Driver.js para usuarios novos.
+
+**Spec:** `docs/superpowers/specs/2026-05-08-onboarding-tours-hora-assai-design.md`
+**Plano:** `docs/superpowers/plans/2026-05-08-onboarding-tours-hora-assai.md`
+
+**Estrutura:**
+- 1 macro adaptativo (`hora.macro`) com 9 passos filtrados por `requirePerm: { modulo, acao }`
+- 13 mini-tours por tela critica em `app/static/onboarding/tours/hora/`
+- Filtragem: usuario so ve tours com permissao no `permissao_service.get_matriz`
+- Auto-start no 1o acesso a cada tela (localStorage por user_id)
+
+**Adicionar tour novo:**
+1. Criar `app/static/onboarding/tours/hora/<nome>.js` com `requirePerm: { modulo, acao }`
+2. Adicionar IDs nos elementos do template alvo (em wrappers se necessario para nao colidir)
+3. Incluir no `{% block onboarding_tours %}` do template
+4. **OBRIGATORIO**: incluir `<script>` em `app/templates/admin/onboarding_health.html` E `onboarding_preview.html`. Sem isso o tour nao aparece nas paginas admin
+5. Validar em `/admin/onboarding/health` apos commit
+6. Preview em `/admin/onboarding/preview?tour=hora.<nome>`
+
+**Engine:** `window.OnboardingEngine` (register/start/isVisible/listAllVisible)
+**Tracker:** `window.OnboardingTracker` (wasSeen/markSeen/resetModule)
+
+---
+
 ## Referências
 
 - **Contrato de design**: `docs/hora/INVARIANTES.md`

@@ -4,7 +4,7 @@
 <h2 class="mb-3">Novo Modelo</h2>
 
 <form method="post" class="card p-3" style="max-width: 700px;">
-  <div class="mb-3">
+  <div class="mb-3" id="campo-nome">
     <label class="form-label">Nome do modelo <span class="text-danger">*</span></label>
     <input type="text" name="nome_modelo" class="form-control" required
            placeholder="Ex.: X11-MINI, JOY SUPER, DOT">
@@ -21,7 +21,7 @@
   <hr>
   <h5 class="mb-3"><i class="fas fa-tags"></i> Preço de tabela</h5>
   <div class="row g-3 mb-3">
-    <div class="col-md-6">
+    <div class="col-md-6" id="campo-preco-vista">
       <label class="form-label">Preço à vista (R$)</label>
       <input type="text" name="preco_a_vista" class="form-control"
              inputmode="decimal" placeholder="Ex.: 8.500,00">
@@ -30,7 +30,7 @@
         for classificada como <strong>À vista</strong>.
       </small>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-6" id="campo-preco-prazo">
       <label class="form-label">Preço a prazo (R$)</label>
       <input type="text" name="preco_a_prazo" class="form-control"
              inputmode="decimal" placeholder="Ex.: 9.200,00">
@@ -92,8 +92,12 @@
   {% endif %}
 
   <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary">Salvar</button>
+    <button id="btn-salvar" type="submit" class="btn btn-primary">Salvar</button>
     <a href="{{ url_for('hora.modelos_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/modelos_novo.js') }}"></script>
 {% endblock %}

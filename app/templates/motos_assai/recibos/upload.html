@@ -9,7 +9,7 @@
 <form method="POST" enctype="multipart/form-data" class="card p-4 recibo-upload-form">
   {{ form.hidden_tag() }}
 
-  <div class="mb-3">
+  <div class="mb-3" id="upload-recibo">
     {{ form.arquivo.label(class="form-label") }}
     {{ form.arquivo(class="form-control", accept=".pdf,.xlsx,.xls") }}
     {% for e in form.arquivo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
@@ -20,10 +20,14 @@
     primeiro; LLM (Haiku→Sonnet) ativado quando confiança &lt; 80%.
   </div>
 
-  <button type="submit" class="btn btn-primary">
+  <button id="btn-salvar-recibo" type="submit" class="btn btn-primary">
     <i class="fas fa-upload"></i> Importar
   </button>
   <a href="{{ url_for('motos_assai.compras_detalhe', compra_id=compra.id) }}"
      class="btn btn-outline-secondary">Cancelar</a>
 </form>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/recibos_upload.js') }}"></script>
 {% endblock %}

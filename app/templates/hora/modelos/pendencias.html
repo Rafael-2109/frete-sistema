@@ -49,6 +49,7 @@
     <p>Nenhuma pendencia em status <strong>{{ status_atual }}</strong>.</p>
   </div>
 {% else %}
+<div id="tabela-pendencias">
 <div class="table-responsive">
 <table class="table table-sm table-hover">
   <thead class="table-light">
@@ -63,6 +64,7 @@
     </tr>
   </thead>
   <tbody>
+    {% set onboarding_pend = namespace(usou_id_btn_vincular=false, usou_id_btn_criar=false, usou_id_btn_ignorar=false) %}
     {% for p in pendencias %}
     <tr>
       <td><small>{{ p.id }}</small></td>
@@ -85,23 +87,32 @@
       </td>
       <td class="text-end">
         {% if status_atual == 'PENDENTE' %}
-          <button type="button" class="btn btn-sm btn-outline-primary"
+          {% set primeira_vincular = not onboarding_pend.usou_id_btn_vincular %}
+          {% if primeira_vincular %}{% set onboarding_pend.usou_id_btn_vincular = true %}{% endif %}
+          <button {% if primeira_vincular %}id="btn-vincular"{% endif %}
+                  type="button" class="btn btn-sm btn-outline-primary"
                   data-bs-toggle="modal"
                   data-bs-target="#modalVincular{{ p.id }}">
             <i class="fas fa-link"></i> Vincular
           </button>
           {% if current_user.tem_perm_hora('modelos', 'criar') %}
-          <button type="button" class="btn btn-sm btn-outline-success"
+          {% set primeira_criar = not onboarding_pend.usou_id_btn_criar %}
+          {% if primeira_criar %}{% set onboarding_pend.usou_id_btn_criar = true %}{% endif %}
+          <button {% if primeira_criar %}id="btn-criar-novo"{% endif %}
+                  type="button" class="btn btn-sm btn-outline-success"
                   data-bs-toggle="modal"
                   data-bs-target="#modalCriar{{ p.id }}">
             <i class="fas fa-plus"></i> Criar novo
           </button>
           {% endif %}
+          {% set primeira_ignorar = not onboarding_pend.usou_id_btn_ignorar %}
+          {% if primeira_ignorar %}{% set onboarding_pend.usou_id_btn_ignorar = true %}{% endif %}
           <form method="POST"
                 action="{{ url_for('hora.modelos_pendencias_ignorar', pendencia_id=p.id) }}"
                 style="display:inline;"
                 onsubmit="return confirm('Ignorar esta pendencia?');">
-            <button type="submit" class="btn btn-sm btn-outline-secondary"
+            <button {% if primeira_ignorar %}id="btn-ignorar"{% endif %}
+                    type="submit" class="btn btn-sm btn-outline-secondary"
                     title="Marcar como ignorada (nao gera modelo nem alias)">
               <i class="fas fa-times"></i>
             </button>
@@ -127,6 +138,7 @@
   </tbody>
 </table>
 </div>
+</div>{# /#tabela-pendencias #}
 
 {# Modais por pendencia (apenas em status PENDENTE) #}
 {% if status_atual == 'PENDENTE' %}
@@ -220,4 +232,8 @@
 {% endif %}
 
 {% endif %}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/modelos_pendencias.js') }}"></script>
 {% endblock %}

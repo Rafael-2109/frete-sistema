@@ -111,7 +111,7 @@
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card text-white {% if saldo_periodo >= 0 %}bg-primary{% else %}bg-warning{% endif %}">
+            <div class="card {% if saldo_periodo >= 0 %}bg-primary{% else %}bg-warning{% endif %}">
                 <div class="card-body">
                     <h5>Saldo do Período</h5>
                     <h3>R$ {{ saldo_periodo|valor_br }}</h3>

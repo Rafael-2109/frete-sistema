@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, send_from_directory, current_app, request, jsonify, send_file
+from flask import Blueprint, render_template, redirect, url_for, send_from_directory, current_app, request, jsonify, send_file, abort
 from flask_login import current_user, login_required
 import os
 from app.utils.api_helper import APIDataHelper
@@ -870,3 +870,22 @@ def sync_orders():
             'status': 'error',
             'message': f'Erro na sincronização: {str(e)}'
         }), 500
+
+
+@main_bp.route('/admin/onboarding/health')
+@login_required
+def admin_onboarding_health():
+    """Pagina admin para validar selectors dos tours apos deploy."""
+    if current_user.perfil != 'administrador':
+        abort(403)
+    return render_template('admin/onboarding_health.html')
+
+
+@main_bp.route('/admin/onboarding/preview')
+@login_required
+def admin_onboarding_preview():
+    """Pagina admin para revisar tours sem precisar limpar localStorage."""
+    if current_user.perfil != 'administrador':
+        abort(403)
+    tour_id = request.args.get('tour', '')
+    return render_template('admin/onboarding_preview.html', tour_id=tour_id)

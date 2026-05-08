@@ -4,9 +4,9 @@
 <h2 class="mb-3">Novo Recebimento</h2>
 
 <form method="post" class="card p-3" style="max-width: 700px;">
-  <div class="mb-3">
+  <div class="mb-3" id="nf-upload-area">
     <label class="form-label">NF de entrada <span class="text-danger">*</span></label>
-    <select name="nf_id" class="form-select" required>
+    <select id="tabela-itens-extraidos" name="nf_id" class="form-select" required>
       <option value="">— Selecione —</option>
       {% for nf in nfs %}
         <option value="{{ nf.id }}">
@@ -15,11 +15,14 @@
         </option>
       {% endfor %}
     </select>
+    <small class="form-text text-muted">
+      A NF precisa ter sido importada antes (PDF parseado em <a href="{{ url_for('hora.nfs_upload') }}">Importar DANFE</a>).
+    </small>
   </div>
 
   <div class="mb-3">
     <label class="form-label">Loja receptora <span class="text-danger">*</span></label>
-    <select name="loja_id" class="form-select" required>
+    <select id="campo-loja-destino" name="loja_id" class="form-select" required>
       <option value="">— Selecione —</option>
       {% for l in lojas %}
         <option value="{{ l.id }}">
@@ -30,8 +33,12 @@
   </div>
 
   <div class="d-flex gap-2">
-    <button type="submit" class="btn btn-primary">Iniciar conferência</button>
+    <button id="btn-iniciar-conferencia" type="submit" class="btn btn-primary">Iniciar conferência</button>
     <a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/recebimento_nf.js') }}"></script>
 {% endblock %}
