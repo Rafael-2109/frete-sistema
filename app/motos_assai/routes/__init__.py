@@ -23,3 +23,4 @@ from app.motos_assai.routes import modelos  # noqa: E402,F401
 from app.motos_assai.routes import cd  # noqa: E402,F401
 from app.motos_assai.routes import pedidos  # noqa: E402,F401
 from app.motos_assai.routes import compras  # noqa: E402,F401
+from app.motos_assai.routes import recibos  # noqa: E402,F401
