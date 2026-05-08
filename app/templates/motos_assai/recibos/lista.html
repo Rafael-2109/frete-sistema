@@ -1,0 +1,22 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<h2>Recibos Motochefe</h2>
+<table class="table table-hover">
+  <thead><tr><th>#</th><th>PO</th><th>Data recibo</th><th>Equipe</th><th>Total</th><th>Status</th></tr></thead>
+  <tbody>
+    {% for r in recibos %}
+    <tr>
+      <td><a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=r.id) }}">#{{ r.id }}</a></td>
+      <td><a href="{{ url_for('motos_assai.compras_detalhe', compra_id=r.compra_id) }}">PO #{{ r.compra_id }}</a></td>
+      <td>{{ r.data_recibo.strftime('%d/%m/%Y') if r.data_recibo else '-' }}</td>
+      <td>{{ r.equipe or '-' }}</td>
+      <td>{{ r.total_motos_declarado or '-' }}</td>
+      <td><span class="badge bg-secondary">{{ r.status }}</span></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="text-center text-muted">Nenhum recibo.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
