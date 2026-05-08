@@ -133,5 +133,6 @@ app/mcp_sistema/.env.production
 # Superpowers visual companion mockups
 .superpowers/
 
-# Fixture PDFs para testes (arquivos binários reais, não versionar)
+# Fixture PDFs/Excel para testes (arquivos binários reais, não versionar)
 tests/motos_assai/fixtures/*.pdf
+tests/motos_assai/fixtures/*.xlsx

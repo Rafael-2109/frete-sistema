@@ -1,0 +1,138 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2>Recebimento — Recibo #{{ recibo.id }}
+    <span class="text-muted fw-normal">
+      — {{ conferidos }} de {{ total_chassis }} conferido(s)
+    </span>
+  </h2>
+  <div>
+    <a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=recibo.id) }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-pause"></i> Pausar
+    </a>
+    <button type="button" class="btn btn-sm btn-success ms-2"
+            id="btn-finalizar"
+            {% if pendentes > 0 %}data-pendentes="{{ pendentes }}"{% endif %}>
+      <i class="fas fa-check-double"></i> Finalizar
+    </button>
+  </div>
+</div>
+
+<div class="progress mb-3 recebimento-progress">
+  <div class="progress-bar bg-success"
+       style="width: {{ (conferidos * 100 / total_chassis) if total_chassis else 0 }}%"></div>
+</div>
+
+<!-- Stepper -->
+<div class="d-flex gap-2 mb-3 small" id="stepper">
+  <span class="badge bg-primary" data-step="A">A. Chassi</span>
+  <span class="badge bg-light border" data-step="B">B. Modelo</span>
+  <span class="badge bg-light border" data-step="C">C. Cor + Foto</span>
+  <span class="badge bg-light border" data-step="D">D. Confirmar</span>
+</div>
+
+<!-- ======= PASSO A: Chassi ======= -->
+<div class="card p-3 mb-3" id="step-A">
+  <h5>A. Ler chassi</h5>
+  <p class="text-muted small mb-2">
+    Aponte a câmera ao QR code do chassi. Se não houver QR/câmera, use o leitor USB ou digite manualmente abaixo.
+  </p>
+  <div class="row">
+    <div class="col-md-7">
+      <div id="qr-reader" class="qr-reader-container"></div>
+      <div class="d-flex gap-2 mt-2">
+        <button type="button" id="btn-start-qr" class="btn btn-primary btn-sm">
+          <i class="fas fa-camera"></i> Iniciar câmera
+        </button>
+        <button type="button" id="btn-stop-qr" class="btn btn-outline-secondary btn-sm d-none">
+          <i class="fas fa-stop"></i> Parar
+        </button>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <label class="form-label">ou digite/escaneie com leitor USB</label>
+      <input type="text" id="input-chassi" class="form-control" autofocus
+             placeholder="Chassi (Enter para validar)" maxlength="50">
+      <button type="button" id="btn-chassi-manual" class="btn btn-outline-primary mt-2">
+        Validar chassi <i class="fas fa-arrow-right"></i>
+      </button>
+
+      <div id="alerta-chassi" class="mt-3 d-none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======= PASSO B: Modelo ======= -->
+<div class="card p-3 mb-3 d-none" id="step-B">
+  <h5>B. Modelo</h5>
+  <p class="text-muted small mb-2">Confirme ou ajuste o modelo da moto em mãos.</p>
+  <select id="select-modelo" class="form-select form-select-lg">
+    <option value="">— Selecione —</option>
+    {% for m in modelos %}
+      <option value="{{ m.id }}">{{ m.codigo }} — {{ m.nome }}</option>
+    {% endfor %}
+  </select>
+  <div class="d-flex gap-2 mt-3">
+    <button type="button" id="btn-voltar-A" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </button>
+    <button type="button" id="btn-avancar-B" class="btn btn-primary ms-auto">
+      Próximo <i class="fas fa-arrow-right"></i>
+    </button>
+  </div>
+</div>
+
+<!-- ======= PASSO C: Cor + Foto ======= -->
+<div class="card p-3 mb-3 d-none" id="step-C">
+  <h5>C. Cor e foto</h5>
+  <div class="mb-3">
+    <label class="form-label">Cor</label>
+    <input type="text" id="input-cor" class="form-control" placeholder="CINZA / PRETO / AZUL...">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Foto da moto (opcional)</label>
+    <input type="file" id="input-foto" class="form-control"
+           accept="image/*" capture="environment">
+  </div>
+  <div class="form-check mb-3">
+    <input type="checkbox" id="chk-avaria" class="form-check-input">
+    <label for="chk-avaria" class="form-check-label">Avaria física detectada</label>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="button" id="btn-voltar-B" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </button>
+    <button type="button" id="btn-avancar-C" class="btn btn-primary ms-auto">
+      Confirmar conferência <i class="fas fa-check"></i>
+    </button>
+  </div>
+</div>
+
+<!-- ======= PASSO D: Confirmação visual ======= -->
+<div class="card p-3 mb-3 d-none" id="step-D">
+  <h5>D. Conferência registrada</h5>
+  <div id="resumo-conferencia"></div>
+  <button type="button" id="btn-proximo-chassi" class="btn btn-primary mt-3">
+    <i class="fas fa-redo"></i> Próximo chassi
+  </button>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+        integrity="sha384-c9d8RFSL+sJ0dC0WGqK7tQXg4/c5++8KkF+xbSPq3ji10/wfKLtAVk0M3IY+XJ7q"
+        crossorigin="anonymous"></script>
+<script>
+window.MOTOS_ASSAI_RECEBIMENTO = {
+  reciboId: {{ recibo.id }},
+  csrfToken: document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+  endpoints: {
+    validar: '{{ url_for("motos_assai.recebimento_validar_chassi") }}',
+    registrar: '{{ url_for("motos_assai.recebimento_registrar") }}',
+    finalizar: '{{ url_for("motos_assai.recebimento_finalizar", recibo_id=recibo.id) }}',
+    fotoUpload: '{{ url_for("motos_assai.recebimento_foto_upload") }}',
+  },
+};
+</script>
+<script src="{{ url_for('static', filename='motos_assai/js/recebimento_wizard.js') }}"></script>
+{% endblock %}

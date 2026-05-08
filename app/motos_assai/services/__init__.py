@@ -19,6 +19,16 @@ from .compra_service import (
     gerar_numero_po, criar_consolidado, get_compra, listar_compras,
     CompraValidationError, gerar_pdf_po,
 )
+from .recibo_service import importar as importar_recibo, get_recibo, listar_recibos, ReciboParserError
+from .chassi_validator import validar_chassi
+from .moto_evento_service import (
+    emitir_evento, ultimo_evento, status_efetivo, eventos_chassi,
+    chassis_em_estoque, EventoInvalidoError,
+)
+from .recebimento_service import (
+    validar_chassi_contra_recibo, registrar_conferencia, finalizar_recebimento,
+    RecebimentoConflictError, RecebimentoValidationError,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -32,4 +42,10 @@ __all__ = [
     'listar_pedidos_consolidaveis', 'calcular_totalizadores_por_modelo',
     'gerar_numero_po', 'criar_consolidado', 'get_compra', 'listar_compras',
     'CompraValidationError', 'gerar_pdf_po',
+    'importar_recibo', 'get_recibo', 'listar_recibos', 'ReciboParserError',
+    'validar_chassi',
+    'emitir_evento', 'ultimo_evento', 'status_efetivo', 'eventos_chassi',
+    'chassis_em_estoque', 'EventoInvalidoError',
+    'validar_chassi_contra_recibo', 'registrar_conferencia', 'finalizar_recebimento',
+    'RecebimentoConflictError', 'RecebimentoValidationError',
 ]

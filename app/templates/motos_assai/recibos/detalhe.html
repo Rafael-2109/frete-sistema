@@ -1,0 +1,65 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>Recibo Motochefe — {{ recibo.numero_recibo or '#' ~ recibo.id }}
+    <span class="badge bg-{% if recibo.status == 'CONCLUIDO' %}success{% elif recibo.status == 'COM_DIVERGENCIA' %}warning{% else %}primary{% endif %}">
+      {{ recibo.status }}
+    </span>
+  </h2>
+  {% if recibo.status == 'RECEBIDO_AGUARDANDO_CONFERENCIA' or recibo.status == 'EM_CONFERENCIA' %}
+  <a href="{{ url_for('motos_assai.recebimento_wizard', recibo_id=recibo.id) }}"
+     class="btn btn-primary">
+    <i class="fas fa-qrcode"></i> Iniciar conferência
+  </a>
+  {% endif %}
+</header>
+
+<dl class="row small">
+  <dt class="col-sm-2">Compra</dt>
+  <dd class="col-sm-4">
+    <a href="{{ url_for('motos_assai.compras_detalhe', compra_id=recibo.compra_id) }}">
+      PO #{{ recibo.compra_id }}
+    </a>
+  </dd>
+  <dt class="col-sm-2">Data recibo</dt>
+  <dd class="col-sm-4">{{ recibo.data_recibo.strftime('%d/%m/%Y') if recibo.data_recibo else '-' }}</dd>
+
+  <dt class="col-sm-2">Equipe</dt>
+  <dd class="col-sm-4">{{ recibo.equipe or '-' }}</dd>
+  <dt class="col-sm-2">Conferente</dt>
+  <dd class="col-sm-4">{{ recibo.conferente_motochefe or '-' }}</dd>
+
+  <dt class="col-sm-2">Total declarado</dt>
+  <dd class="col-sm-4">{{ recibo.total_motos_declarado or '-' }}</dd>
+  <dt class="col-sm-2">Conferidos</dt>
+  <dd class="col-sm-4">{{ conferidos }} / {{ items|length }}</dd>
+
+  <dt class="col-sm-2">Parser</dt>
+  <dd class="col-sm-10">
+    <code>{{ recibo.parser_usado }}</code>
+    (confiança {{ '%.0f%%' | format(recibo.parsing_confianca * 100) if recibo.parsing_confianca else '-' }})
+  </dd>
+</dl>
+
+<h4 class="mt-3">Chassis ({{ items|length }})</h4>
+<table class="table table-sm">
+  <thead>
+    <tr><th>Chassi</th><th>Modelo (recibo)</th><th>Modelo (resolvido)</th>
+        <th>Motor</th><th>Cor</th><th>Conferido</th><th>Divergência</th></tr>
+  </thead>
+  <tbody>
+    {% for it in items %}
+    <tr>
+      <td><code>{{ it.chassi }}</code></td>
+      <td>{{ it.modelo_texto_recibo }}</td>
+      <td>{% if it.modelo_id %}<span class="badge bg-success">{{ it.modelo.codigo }}</span>{% else %}<span class="badge bg-warning">não resolvido</span>{% endif %}</td>
+      <td><small>{{ it.motor or '-' }}</small></td>
+      <td>{{ it.cor_texto or '-' }}</td>
+      <td>{% if it.conferido %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-clock text-muted"></i>{% endif %}</td>
+      <td>{% if it.tipo_divergencia %}<span class="badge bg-warning">{{ it.tipo_divergencia }}</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

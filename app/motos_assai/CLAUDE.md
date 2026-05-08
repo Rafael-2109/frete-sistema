@@ -1,7 +1,7 @@
 # Módulo Motos Assaí
 
 **Data**: 2026-05-07
-**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) implementados.
+**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) implementados.
 **Propósito**: gerenciar a operação B2B Q.P.A. → Sendas/Assaí com motos elétricas, isolada de outros módulos.
 
 ---
@@ -96,6 +96,71 @@ Saída: `assai_separacao*`, `assai_nf_qpa*`.
 - `app/motos_assai/models/modelo.py`: `ALIAS_TIPO_*`
 - `app/motos_assai/services/pedido_service.py`: `CONFIANCA_LIMIAR = 0.70`
 - `app/motos_assai/services/compra_service.py`: `CompraValidationError`
+- `app/motos_assai/services/chassi_validator.py`: `MOTIVO_REGEX_INVALIDO`, `MOTIVO_MODELO_SEM_REGEX`, `MOTIVO_CHASSI_VAZIO`
+- `app/motos_assai/services/recebimento_service.py`: `RecebimentoConflictError`, `RecebimentoValidationError`
+
+---
+
+## Plano 3 implementado (2026-05-07)
+
+### Parsers de recibo Motochefe (PDF + XLSX + LLM)
+
+- `MotochefeReciboPdfExtractor` (`services/parsers/motochefe_recibo_pdf_extractor.py`): pdfplumber + `extract_tables()` com lines strategy. Detecta colunas CHASSI/MOTOR/COR no header. Extrai data, equipe (HAROLDO SP), conferente, total declarado.
+- `MotochefeReciboXlsxExtractor` (`services/parsers/motochefe_recibo_xlsx_extractor.py`): openpyxl `data_only=True`. Localiza header da tabela pela presença de células CHASSI.
+- `motochefe_recibo_llm_fallback.py`: Haiku 4.5 → Sonnet 4.6. Aceita PDF (document block) ou XLSX serializado como texto.
+- **Limiar de confiança**: `CONFIANCA_LIMIAR = 0.80` em `recibo_service`. Acionado quando `chassis_extraidos / total_declarado < 0.80`.
+
+### chassi_validator e moto_evento_service
+
+- `chassi_validator.py`: validação regex do chassi contra padrão configurado no `AssaiModelo.regex_chassi`. Não-bloqueante — retorna `{ok, motivo, regex_usado}`. Motivos: `MOTIVO_REGEX_INVALIDO`, `MOTIVO_MODELO_SEM_REGEX`, `MOTIVO_CHASSI_VAZIO`.
+- `moto_evento_service.py`: helpers `emitir_evento(chassi, tipo, ...)`, `status_atual(chassi)`, `historico(chassi)`. Append-only — nunca DELETE.
+
+### Wizard de recebimento físico A→B→C→D
+
+```
+A: selecionar recibo  →  B: escanear chassi  →  C: confirmar modelo/cor  →  D: progresso/finalizar
+```
+
+- Template `recebimento/wizard.html` com 4 passos + indicador de progresso.
+- JS `recebimento_wizard.js`: `html5-qrcode@2.3.8` para câmera mobile, leitor USB (Enter dispara), digitação manual. `cfg.endpoints` injetado via template.
+- Foto opcional: `<input type="file" capture="environment">` → upload S3 (`motos_assai/recebimento/<recibo_id>/<chassi>_<filename>`).
+
+**Endpoints AJAX (todos `require_motos_assai` + `login_required`)**:
+- `POST /recebimento/validar-chassi` → `{ok, na_nf, ja_conferido, modelo_id_esperado, cor_esperada, regex_check, mensagem}`
+- `POST /recebimento/registrar` → `{ok, item_id, tipo_divergencia, total, conferidos}` | 409 em race
+- `POST /recebimento/finalizar/<recibo_id>` → `{ok, status, redirect}` | 400 se faltantes sem confirmar
+- `POST /recebimento/foto-upload` → `{ok, s3_key}`
+
+### Lock pessimista e invariantes de concorrência
+
+- UNIQUE parcial em `(recibo_id, chassi)` (Migration 07 — idempotente).
+- `with_for_update(of=AssaiMoto)` ao buscar `AssaiMoto` antes de criar/atualizar.
+- `IntegrityError` → `RecebimentoConflictError` → HTTP 409 com `{retry: true}`.
+
+### Recebimento como SOT
+
+Se modelo/cor conferidos divergem do recibo, aplica UPDATE em `AssaiMoto.cor` e `AssaiMoto.modelo_id` (exceção autorizada à invariante 3).
+
+### Status do recibo
+
+`RECEBIDO_AGUARDANDO_CONFERENCIA` → `EM_CONFERENCIA` (1º chassi conferido) → `CONCLUIDO` (zero divergências) ou `COM_DIVERGENCIA`.
+
+### Rotas adicionadas (Plano 3)
+
+- `GET /recibos/upload` — upload PDF/XLSX recibo Motochefe, extração, resultado
+- `GET /recibos/<id>` — detalhe do recibo com lista de itens
+- `GET /recibos` — lista de recibos
+- `GET /recibos/<id>/conferir` — wizard A→B→C→D
+- `POST /recebimento/validar-chassi` — validação AJAX
+- `POST /recebimento/registrar` — conferência AJAX
+- `POST /recebimento/finalizar/<id>` — finalização AJAX
+- `POST /recebimento/foto-upload` — upload S3 AJAX
+
+### Fixtures de teste
+
+Exemplos de arquivos recibo em `.gitignore` (não commitados):
+- `tests/motos_assai/fixtures/recibo_motochefe_exemplo.pdf`
+- `tests/motos_assai/fixtures/recibo_motochefe_exemplo.xlsx`
 
 ---
 
@@ -169,8 +234,7 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 
 ## Próximos passos
 
-- **Plano 3**: recibo Motochefe (PDF + Excel) + wizard de recebimento físico (A→B→C→D).
-- **Plano 4**: separação, Excel Q.P.A., importação de NF Q.P.A.
+- **Plano 4**: separação + disponibilização, Excel Q.P.A. (saída), importação de NF Q.P.A. + match, polish.
 
 ---
 
@@ -179,6 +243,7 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 - Spec: `docs/superpowers/specs/2026-05-07-motos-assai-design.md`
 - Plano 1: `docs/superpowers/plans/2026-05-07-motos-assai-foundation.md`
 - Plano 2: `docs/superpowers/plans/2026-05-07-motos-assai-pedido-compra.md`
+- Plano 3: `docs/superpowers/plans/2026-05-07-motos-assai-recibo-recebimento.md`
 - Padrão arquitetural de referência: `app/hora/CLAUDE.md`
 - Identificador de documento (rede QPA): `app/pedidos/leitura/identificador.py`
 - Parser base de PDF: `app/pedidos/leitura/base.py:PDFExtractor`
