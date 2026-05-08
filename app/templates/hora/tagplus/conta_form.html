@@ -4,7 +4,7 @@
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h2><i class="fas fa-key"></i> Conta TagPlus</h2>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary">
+    <a id="secao-checklist" href="{{ url_for('hora.tagplus_checklist') }}" class="btn btn-outline-secondary">
       <i class="fas fa-clipboard-check"></i> Checklist
     </a>
     {% if conta and conta.token %}
@@ -53,7 +53,7 @@
       </dl>
     </div>
     <div class="card-footer d-flex gap-2">
-      <a href="{{ url_for('hora.tagplus_oauth_iniciar') }}" class="btn btn-primary">
+      <a id="btn-iniciar-oauth" href="{{ url_for('hora.tagplus_oauth_iniciar') }}" class="btn btn-primary">
         <i class="fas fa-sign-in-alt"></i>
         {% if conta.token %}Re-autorizar OAuth{% else %}Autorizar OAuth{% endif %}
       </a>
@@ -74,12 +74,12 @@
   </div>
   <div class="card-body">
     <form method="post" action="{{ url_for('hora.tagplus_conta_salvar') }}">
-      <div class="mb-3">
+      <div class="mb-3" id="campo-client-id">
         <label class="form-label">Client ID</label>
         <input type="text" name="client_id" class="form-control" required
                value="{{ conta.client_id if conta else '' }}">
       </div>
-      <div class="mb-3">
+      <div class="mb-3" id="campo-client-secret">
         <label class="form-label">Client Secret
           {% if conta %}<small class="text-muted">(em branco = mantém atual)</small>{% endif %}
         </label>
@@ -160,4 +160,8 @@
 })();
 </script>
 {% endif %}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/tagplus_conta.js') }}"></script>
 {% endblock %}
