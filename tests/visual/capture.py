@@ -176,6 +176,23 @@ def main():
             viewport={"width": viewport_w, "height": viewport_h},
             ignore_https_errors=True,
         )
+
+        # Neutralizar tours de onboarding: localStorage.getItem('onboarding.*')
+        # retorna 'visto', impedindo OnboardingTracker.wasSeen() de disparar
+        # tour novo em screenshot. Sem isso, balao do tour aparece sobre
+        # conteudo e gera diff falso de 60%+ no compare.
+        context.add_init_script("""
+            (function() {
+              const origGet = Storage.prototype.getItem;
+              Storage.prototype.getItem = function(k) {
+                if (typeof k === 'string' && k.indexOf('onboarding.') === 0) {
+                  return 'visto';
+                }
+                return origGet.call(this, k);
+              };
+            })();
+        """)
+
         page = context.new_page()
 
         if not login(page, args.base_url, email, password):
