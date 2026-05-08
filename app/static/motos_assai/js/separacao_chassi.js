@@ -5,6 +5,12 @@
   const inputChassi = document.getElementById('input-chassi');
   const alerta = document.getElementById('alerta-sep');
 
+  // CSRF token (injetado pelo base.html via meta[name="csrf-token"])
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.content : '';
+  }
+
   // Câmera (igual aos outros componentes)
   let html5Qr = null;
   document.getElementById('btn-camera')?.addEventListener('click', () => {
@@ -32,7 +38,7 @@
     if (!chassi) return;
     const r = await fetch(cfg.endpoints.registrar, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
       body: JSON.stringify({pedido_id: cfg.pedidoId, loja_id: cfg.lojaId, chassi}),
     });
     const data = await r.json();
@@ -46,14 +52,14 @@
     setTimeout(() => location.reload(), 800);  // recarrega para atualizar saldo + lista
   }
 
-  // Desfazer
+  // Desfazer (H4: usar desfazerBase em vez de replace('/0') frágil)
   document.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-action="desfazer"]');
     if (!btn) return;
     if (!confirm(`Remover chassi ${btn.closest('tr').querySelector('code').textContent}?`)) return;
     const itemId = btn.dataset.itemId;
-    const url = cfg.endpoints.desfazer.replace('/0', '/' + itemId);
-    const r = await fetch(url, {method: 'POST'});
+    const url = cfg.endpoints.desfazerBase + itemId;
+    const r = await fetch(url, {method: 'POST', headers: {'X-CSRFToken': getCsrfToken()}});
     const data = await r.json();
     if (data.ok) location.reload();
     else alert(data.erro);
@@ -61,7 +67,10 @@
 
   document.getElementById('btn-finalizar')?.addEventListener('click', async () => {
     if (!confirm('Finalizar separação? Saldos pendentes ficam para outra separação se houver.')) return;
-    const r = await fetch(cfg.endpoints.finalizar, {method: 'POST'});
+    const r = await fetch(cfg.endpoints.finalizar, {
+      method: 'POST',
+      headers: {'X-CSRFToken': getCsrfToken()},
+    });
     const data = await r.json();
     if (data.ok) location.reload();
     else alert(data.erro);
@@ -72,7 +81,7 @@
     if (!motivo || motivo.trim().length < 3) return;
     const r = await fetch(cfg.endpoints.cancelar, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
       body: JSON.stringify({motivo}),
     });
     const data = await r.json();

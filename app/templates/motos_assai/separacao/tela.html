@@ -97,7 +97,7 @@ window.MOTOS_ASSAI_SEP = {
   separacaoId: {{ separacao.id }},
   endpoints: {
     registrar: '{{ url_for("motos_assai.separacao_registrar_chassi") }}',
-    desfazer: '{{ url_for("motos_assai.separacao_desfazer", item_id=0) }}',
+    desfazerBase: '{{ url_for("motos_assai.separacao_desfazer", item_id=0)|replace("/0", "/") }}',
     finalizar: '{{ url_for("motos_assai.separacao_finalizar", separacao_id=separacao.id) }}',
     cancelar: '{{ url_for("motos_assai.separacao_cancelar", separacao_id=separacao.id) }}',
   },
