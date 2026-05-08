@@ -1,0 +1,19 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<h2>Separações</h2>
+<table class="table">
+  <thead><tr><th>#</th><th>Pedido</th><th>Loja</th><th>Status</th><th>Iniciada em</th></tr></thead>
+  <tbody>
+    {% for s in separacoes %}
+    <tr>
+      <td>{{ s.id }}</td>
+      <td>{{ s.pedido.numero }}</td>
+      <td>{{ s.loja.numero }} {{ s.loja.nome }}</td>
+      <td><span class="badge bg-secondary">{{ s.status }}</span></td>
+      <td>{{ s.iniciada_em.strftime('%d/%m %H:%M') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

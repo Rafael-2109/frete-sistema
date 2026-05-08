@@ -1,0 +1,16 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<h2>Importar NF Q.P.A.</h2>
+<form method="POST" enctype="multipart/form-data" class="card p-4 col-md-6">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.pdf.label(class="form-label") }}
+    {{ form.pdf(class="form-control", accept="application/pdf") }}
+    {% if form.pdf.errors %}
+      {% for e in form.pdf.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    {% endif %}
+  </div>
+  <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar</button>
+</form>
+{% endblock %}

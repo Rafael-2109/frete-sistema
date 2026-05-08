@@ -1,0 +1,61 @@
+from flask import render_template, request, jsonify
+from flask_login import login_required, current_user
+from app.motos_assai.routes import motos_assai_bp
+from app.motos_assai.decorators import require_motos_assai
+from app.motos_assai.services import (
+    registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
+    MontagemValidationError,
+)
+
+
+@motos_assai_bp.route('/montagem')
+@login_required
+@require_motos_assai
+def montagem_tela():
+    historico = historico_3_ultimas_montagens()
+    return render_template('motos_assai/montagem/quick.html', historico=historico)
+
+
+@motos_assai_bp.route('/montagem/registrar', methods=['POST'])
+@login_required
+@require_motos_assai
+def montagem_registrar():
+    data = request.get_json(silent=True) or {}
+    try:
+        result = registrar_montagem(
+            chassi=data.get('chassi', ''),
+            pendencia=bool(data.get('pendencia')),
+            descricao_pendencia=data.get('descricao_pendencia'),
+            chassi_doador=data.get('chassi_doador'),
+            operador_id=current_user.id,
+        )
+    except MontagemValidationError as e:
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    historico = historico_3_ultimas_montagens()
+    return jsonify({'ok': True, **result, 'historico': [
+        {**h, 'ocorrido_em': h['ocorrido_em'].strftime('%d/%m %H:%M')}
+        for h in historico
+    ]})
+
+
+@motos_assai_bp.route('/montagem/resolver-pendencia', methods=['POST'])
+@login_required
+@require_motos_assai
+def montagem_resolver_pendencia():
+    """Resolve pendência de montagem via chassi + descrição de resolução."""
+    data = request.get_json(silent=True) or {}
+    chassi = (data.get('chassi') or '').strip().upper()
+    descricao = (data.get('descricao_resolucao') or '').strip()
+    if not chassi:
+        return jsonify({'ok': False, 'erro': 'Chassi obrigatório'}), 400
+    try:
+        result = resolver_pendencia(
+            chassi=chassi,
+            descricao_resolucao=descricao,
+            operador_id=current_user.id,
+        )
+    except MontagemValidationError as e:
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'erro': f'Erro: {e}'}), 500
+    return jsonify({'ok': True, **(result if isinstance(result, dict) else {})})

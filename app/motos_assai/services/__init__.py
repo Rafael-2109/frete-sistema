@@ -29,6 +29,20 @@ from .recebimento_service import (
     validar_chassi_contra_recibo, registrar_conferencia, finalizar_recebimento,
     RecebimentoConflictError, RecebimentoValidationError,
 )
+from .montagem_service import (
+    registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
+    MontagemValidationError,
+)
+from .disponibilizar_service import (
+    disponibilizar, reverter_para_montada, historico_3_ultimas_disponibilizacoes,
+    DisponibilizarValidationError,
+)
+from .separacao_service import (
+    get_ou_criar_separacao, saldo_pendente_por_modelo, registrar_chassi,
+    desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    SeparacaoConflictError, SeparacaoValidationError,
+)
+from .faturamento_service import gerar_excel_qpa
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -48,4 +62,12 @@ __all__ = [
     'chassis_em_estoque', 'EventoInvalidoError',
     'validar_chassi_contra_recibo', 'registrar_conferencia', 'finalizar_recebimento',
     'RecebimentoConflictError', 'RecebimentoValidationError',
+    'registrar_montagem', 'resolver_pendencia', 'historico_3_ultimas_montagens',
+    'MontagemValidationError',
+    'disponibilizar', 'reverter_para_montada', 'historico_3_ultimas_disponibilizacoes',
+    'DisponibilizarValidationError',
+    'get_ou_criar_separacao', 'saldo_pendente_por_modelo', 'registrar_chassi',
+    'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
+    'SeparacaoConflictError', 'SeparacaoValidationError',
+    'gerar_excel_qpa',
 ]

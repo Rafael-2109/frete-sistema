@@ -1,7 +1,7 @@
 # Módulo Motos Assaí
 
 **Data**: 2026-05-07
-**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) implementados.
+**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) — TODOS implementados.
 **Propósito**: gerenciar a operação B2B Q.P.A. → Sendas/Assaí com motos elétricas, isolada de outros módulos.
 
 ---
@@ -98,6 +98,11 @@ Saída: `assai_separacao*`, `assai_nf_qpa*`.
 - `app/motos_assai/services/compra_service.py`: `CompraValidationError`
 - `app/motos_assai/services/chassi_validator.py`: `MOTIVO_REGEX_INVALIDO`, `MOTIVO_MODELO_SEM_REGEX`, `MOTIVO_CHASSI_VAZIO`
 - `app/motos_assai/services/recebimento_service.py`: `RecebimentoConflictError`, `RecebimentoValidationError`
+- `app/motos_assai/services/montagem_service.py`: `MontagemError` (chassi não em ESTOQUE)
+- `app/motos_assai/services/disponibilizar_service.py`: `DisponibilizarError` (PENDENTE bloqueia), `ReverterError` (motivo obrigatório ≥3 chars)
+- `app/motos_assai/services/separacao_service.py`: `SeparacaoError`, `SeparacaoConflictError` (race condition → 409)
+- `app/motos_assai/services/faturamento_service.py`: `gerar_excel_qpa()`, `FaturamentoError`
+- `app/motos_assai/services/parsers/nf_qpa_adapter.py`: `NfQpaAdapter`, `extrair_nf_qpa()`, `match_nf_separacao()`
 
 ---
 
@@ -232,9 +237,99 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 
 ---
 
-## Próximos passos
+## Plano 4 implementado (2026-05-07)
 
-- **Plano 4**: separação + disponibilização, Excel Q.P.A. (saída), importação de NF Q.P.A. + match, polish.
+### Pipeline de saída (ESTOQUE → MONTADA/PENDENTE → DISPONIVEL → SEPARADA → FATURADA)
+
+**Montagem** (`montagem_service`):
+- ESTOQUE → MONTADA (caminho feliz) ou ESTOQUE → PENDENTE (com descrição obrigatória)
+- PENDENTE → PENDENCIA_RESOLVIDA → MONTADA efetivo (via `resolver_pendencia()`)
+- Tela rápida `/motos-assai/montagem` com input QR/manual (operação de chão de fábrica)
+- Histórico 3 últimas ações exibido em `partials/_historico_3_ultimas.html`
+
+**Disponibilizar** (`disponibilizar_service`):
+- MONTADA ou REVERTIDA_PARA_MONTADA → DISPONIVEL
+- Reverter: DISPONIVEL → REVERTIDA_PARA_MONTADA (motivo ≥ 3 chars obrigatório)
+- Tela rápida `/motos-assai/disponibilizar` com modal motivo + reload pós-reverter
+
+**Separação** (`separacao_service`):
+- Fungível por modelo: chassi DISPONIVEL atende qualquer saldo do mesmo modelo
+- UNIQUE parcial em chassi (status != CANCELADA) — race condition retorna 409
+- Cancelar emite evento DISPONIVEL para cada chassi (volta direto, sem passar por MONTADA)
+- Tela `/motos-assai/separacao` e `/motos-assai/pedidos/<pid>/separar/<lid>` com saldo visual em barras
+
+**Excel Q.P.A.** (`faturamento_service.gerar_excel_qpa`):
+- Espelha `285.xlsx` — 2 abas (PEDIDO + BASE LOJAS) geradas por openpyxl
+- Persiste em `motos_assai/solicitacoes/` no S3
+- Atualiza `assai_separacao.solicitacao_excel_s3_key`
+
+**Importação de NF Q.P.A.** (`parsers/nf_qpa_adapter.py`):
+- Adapter sobre `app.carvia.services.parsers.danfe_pdf_parser.DanfePDFParser` — zero modificações ao módulo CarVia
+- Extrai loja_id de `nome_destinatario` via regex `LJ\d+`
+- Match BATEU / DIVERGENTE / NAO_RECONCILIADO com tolerância 1% no valor unitário
+- Quando BATEU: separação → status FATURADA; cada chassi emite evento FATURADA
+
+**SOL no CarVia** (`scripts/migrations/motos_assai_06_carvia_modelo_sol.py`):
+- Seed idempotente que adiciona `CarviaModeloMoto(nome='SOL')` para o parser DANFE reconhecer modelo SOL
+
+### Telas rápidas
+
+| Tela | URL | Descrição |
+|------|-----|-----------|
+| Montagem rápida | `/motos-assai/montagem` | QR/manual → ESTOQUE→MONTADA/PENDENTE |
+| Disponibilizar rápido | `/motos-assai/disponibilizar` | QR/manual → MONTADA→DISPONIVEL |
+| Separação lista | `/motos-assai/separacao` | Lista separações em andamento |
+| Faturamento lista | `/motos-assai/faturamento` | Separações prontas para faturar |
+| Upload NF Q.P.A. | `/motos-assai/faturamento/upload-nf` | Importação DANFE PDF + match |
+
+### Endpoints adicionados (Plano 4)
+
+- `GET /motos-assai/montagem` + `POST /motos-assai/montagem/registrar`
+- `GET /motos-assai/disponibilizar` + `POST /motos-assai/disponibilizar/registrar` + `POST /motos-assai/disponibilizar/reverter`
+- `GET /motos-assai/separacao` + `GET /motos-assai/pedidos/<pid>/separar/<lid>`
+- `POST /motos-assai/separacao/registrar-chassi`
+- `POST /motos-assai/separacao/desfazer/<item_id>`
+- `POST /motos-assai/separacao/<id>/finalizar`
+- `POST /motos-assai/separacao/<id>/cancelar`
+- `GET /motos-assai/faturamento` (lista separações)
+- `GET /motos-assai/faturamento/separacao/<id>/excel` (download Excel Q.P.A.)
+- `GET/POST /motos-assai/faturamento/separacao/<id>/upload-nf` (upload NF por separação)
+- `GET/POST /motos-assai/faturamento/upload-nf` (upload NF global)
+- `GET /motos-assai/faturamento/nfs/<id>` (detalhe + match BATEU/DIVERGENTE)
+
+### Estados de evento finais (Plano 4)
+
+Os seguintes tipos de evento em `assai_moto_evento` foram ativados neste plano:
+- `SEPARADA` — chassi vinculado a separação ativa (não conta como estoque disponível)
+- `FATURADA` — NF Q.P.A. importada e match BATEU (saída definitiva)
+- `CANCELADA` — separação cancelada (chassi retorna como DISPONIVEL via novo evento)
+- `MOTO_FALTANDO` — declarada no recibo mas não chegou fisicamente (implementado no Plano 3)
+- `REVERTIDA_PARA_MONTADA` — operador reverteu disponibilização (implementado no Plano 4)
+
+---
+
+## Módulo completo — visão geral arquitetural
+
+- **16 tabelas** com prefixo `assai_` (ver spec `docs/superpowers/specs/2026-05-07-motos-assai-design.md`)
+- **Toggle master** `sistema_motos_assai` em `usuarios` → decorator `@require_motos_assai`
+- **9 etapas do pipeline** implementadas (ESTOQUE → MONTADA → DISPONIVEL → SEPARADA → FATURADA)
+- **Parsers determinísticos** com fallback LLM (Haiku 4.5 → Sonnet 4.6) em PDFs e Excel
+- **Wizard QR/Barcode** adaptado de Hora (`html5-qrcode@2.3.8`) — reutilizado em recebimento/montagem/disponibilizar
+- **Reuso CarVia** DANFE parser via adapter (zero modificação ao módulo CarVia)
+- **Concorrência** controlada por UNIQUE parcial + `with_for_update` + IntegrityError → 409
+
+---
+
+## Manutenção / Roadmap futuro
+
+Módulo encerrado em 2026-05-07 (Planos 1-4 completos). Evoluções futuras:
+
+- `assai_avaria` — tabela para avarias detectadas pós-recebimento (acréscimo ao wizard)
+- Permissões granulares (`assai_user_permissao`) — atualmente toggle único
+- Múltiplos CDs — transferência inter-CD
+- Modelo MIA — atualmente fora do escopo
+- Automação envio Excel à Q.P.A. via SMTP
+- Resolver pendência via UI (atualmente só via service diretamente)
 
 ---
 
@@ -244,8 +339,12 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 - Plano 1: `docs/superpowers/plans/2026-05-07-motos-assai-foundation.md`
 - Plano 2: `docs/superpowers/plans/2026-05-07-motos-assai-pedido-compra.md`
 - Plano 3: `docs/superpowers/plans/2026-05-07-motos-assai-recibo-recebimento.md`
+- Plano 4: `docs/superpowers/plans/2026-05-07-motos-assai-saida-polish.md`
 - Padrão arquitetural de referência: `app/hora/CLAUDE.md`
 - Identificador de documento (rede QPA): `app/pedidos/leitura/identificador.py`
 - Parser base de PDF: `app/pedidos/leitura/base.py:PDFExtractor`
-- Parser DANFE Q.P.A. (CarVia, sem modificar): `app/carvia/services/parsers/danfe_pdf_parser.py`
+- Parser DANFE Q.P.A. (CarVia, adapter sem modificar): `app/carvia/services/parsers/danfe_pdf_parser.py`
+- Adapter NF Q.P.A.: `app/motos_assai/services/parsers/nf_qpa_adapter.py`
 - Wizard QR de referência: `app/templates/hora/recebimento_wizard.html`
+- JS operação rápida (montagem/disponibilizar): `app/static/motos_assai/js/operacao_quick.js`
+- JS separação: `app/static/motos_assai/js/separacao_chassi.js`

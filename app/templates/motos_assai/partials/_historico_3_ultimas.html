@@ -1,0 +1,25 @@
+{# Espera variável `historico` (list) e opcional `acao_label` + `endpoint_reverter` (url_for) #}
+<h6 class="mt-4 mb-2 text-muted">3 últimas {{ acao_label or 'operações' }}</h6>
+<ul class="list-group small" id="historico-list">
+  {% for h in historico %}
+  <li class="list-group-item d-flex justify-content-between align-items-center">
+    <div>
+      <code>{{ h.chassi }}</code> · <strong>{{ h.modelo_codigo }}</strong> · {{ h.cor }}
+      <span class="text-muted ms-2">
+        {{ h.ocorrido_em.strftime('%d/%m %H:%M') if h.ocorrido_em is not string else h.ocorrido_em }}
+        · {{ h.operador_nome }}
+      </span>
+    </div>
+    {% if endpoint_reverter %}
+    <button type="button" class="btn btn-sm btn-outline-warning"
+            data-evento-id="{{ h.evento_id }}"
+            data-chassi="{{ h.chassi }}"
+            data-action="reverter">
+      <i class="fas fa-undo"></i> Reverter
+    </button>
+    {% endif %}
+  </li>
+  {% else %}
+  <li class="list-group-item text-muted">Sem histórico recente.</li>
+  {% endfor %}
+</ul>

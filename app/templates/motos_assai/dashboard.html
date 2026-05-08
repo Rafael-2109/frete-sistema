@@ -53,12 +53,34 @@
     <div class="col-md-3">
       <div class="card dashboard-card">
         <div class="card-body">
-          <h6 class="card-subtitle text-muted">Atalhos</h6>
-          <p class="card-text text-muted">
-            (rotas habilitadas no Plano 2: pedidos, compras, recibos, recebimento)
-          </p>
+          <h6 class="card-subtitle text-muted">Estoque por status</h6>
+          {% if estoque_por_status %}
+            <ul class="list-unstyled mb-0">
+              {% set em_estoque = [EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_PENDENTE, EVENTO_DISPONIVEL, EVENTO_SEPARADA] %}
+              {% for tipo in em_estoque %}
+                {% if tipo in estoque_por_status %}
+                  <li>{{ tipo }}: <strong>{{ estoque_por_status[tipo] }}</strong></li>
+                {% endif %}
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="card-text text-muted">Sem motos no sistema.</p>
+          {% endif %}
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="dashboard-links mt-4">
+    <h5>Atalhos rápidos</h5>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('motos_assai.montagem_tela') }}" class="btn btn-outline-secondary btn-sm">Montagem</a>
+      <a href="{{ url_for('motos_assai.disponibilizar_tela') }}" class="btn btn-outline-secondary btn-sm">Disponibilizar</a>
+      <a href="{{ url_for('motos_assai.separacao_lista') }}" class="btn btn-outline-secondary btn-sm">Separação</a>
+      <a href="{{ url_for('motos_assai.faturamento_lista') }}" class="btn btn-outline-secondary btn-sm">Faturamento</a>
+      <a href="{{ url_for('motos_assai.pedidos_lista') }}" class="btn btn-outline-secondary btn-sm">Pedidos</a>
+      <a href="{{ url_for('motos_assai.compras_lista') }}" class="btn btn-outline-secondary btn-sm">Compras</a>
+      <a href="{{ url_for('motos_assai.recibos_lista') }}" class="btn btn-outline-secondary btn-sm">Recibos</a>
     </div>
   </section>
 </div>
