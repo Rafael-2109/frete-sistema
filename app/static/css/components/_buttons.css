@@ -437,13 +437,67 @@
         padding: 0.3rem 0.55rem;
     }
 
-    /* Header generico container-fluid > d-flex (padrao manufatura) — aplicar
-       wrap apenas quando o filho contem botoes (minimiza risco de quebrar
-       outros layouts que usam d-flex justify-between). */
-    .container-fluid > .d-flex.justify-content-between:has(> .btn-toolbar),
-    .container-fluid > .d-flex.justify-content-between:has(.btn-group) {
+    /* Header generico .d-flex justify-between que tem qualquer botao como filho
+       direto OU dentro de container — pega 109 templates restantes que nao usam
+       header semantico (.page-header / <header> / .fin-header / .btn-toolbar).
+       Exemplo: hora/pedidos_lista.html, manufatura/*, portal/*, recebimento/*.
+       :has() tem 94% de suporte (iOS Safari 15.4+, Chrome 105+). */
+    .d-flex.justify-content-between:has(> .btn),
+    .d-flex.justify-content-between:has(> a.btn),
+    .d-flex.justify-content-between:has(> button.btn),
+    .d-flex.justify-content-between:has(> .btn-toolbar),
+    .d-flex.justify-content-between:has(> .btn-group),
+    .d-flex.justify-content-between:has(> div > .btn),
+    .d-flex.justify-content-between:has(> .d-flex .btn) {
         flex-wrap: wrap;
-        gap: 0.6rem;
+        gap: 0.5rem;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE PEQUENO (< 576px): btn-group com botoes longos vira coluna
+
+   Caso reportado: carteira/agrupados_balanceado.html com 4 botoes "Importar
+   Saldo Disp. Sendas", "Exportar Planilhas Sendas", "Verificar Agendamentos
+   Sendas" (~600pt somados) — em iPhone (428pt) vazam mesmo com .btn-toolbar
+   wrappando entre groups, porque o grupo em si tem botoes longos demais.
+
+   Estrategia: em telas xs, botoes em headers viram coluna 100% width
+   (mesma abordagem ja usada por modulo comercial em
+   /static/comercial/css/dashboard_diretoria_responsive.css).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 575.98px) {
+    .page-header .btn-toolbar > .btn-group,
+    header .btn-toolbar > .btn-group,
+    .fin-header .btn-toolbar > .btn-group {
+        flex-direction: column;
+        width: 100%;
+        margin: 0 !important; /* override .me-2 hardcoded */
+    }
+
+    .page-header .btn-toolbar .btn-group > .btn,
+    header .btn-toolbar .btn-group > .btn,
+    .fin-header .btn-toolbar .btn-group > .btn {
+        width: 100%;
+        border-radius: 0.25rem !important; /* override merge de bordas do btn-group */
+        margin: 0 0 0.25rem 0 !important;
+    }
+
+    /* Botoes "soltos" no btn-toolbar (fora de btn-group) tambem viram width 100% */
+    .page-header .btn-toolbar > .btn,
+    header .btn-toolbar > .btn,
+    .fin-header .btn-toolbar > .btn {
+        width: 100%;
+    }
+
+    /* Botoes em d-flex generico tambem ganham largura razoavel (nao 100% pra
+       permitir 2 botoes lado a lado se couberem) */
+    .d-flex.justify-content-between:has(> .btn) > .btn,
+    .d-flex.justify-content-between:has(> a.btn) > .btn,
+    .d-flex.justify-content-between:has(> button.btn) > .btn {
+        flex: 1 1 auto;
+        min-width: 0; /* permite shrink alem do conteudo */
     }
 }
 
