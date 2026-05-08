@@ -124,13 +124,13 @@
                             {{ th_sort('valor_total', 'Valor Total', sort, direction, 'text-end') }}
                             {{ th_sort('vencimento', 'Vencimento', sort, direction) }}
                             {{ th_sort('status_conferencia', 'Status', sort, direction) }}
-                            <th>Subcontratos</th>
+                            <th>Conteudo</th>
                             <th>Arquivo</th>
                             <th>Acoes</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for f, qtd_subs, valor_subs in faturas %}
+                        {% for f, qtd_subs, valor_subs, qtd_ces, valor_ces in faturas %}
                         <tr>
                             <td>{{ f.id }}</td>
                             <td>
@@ -178,6 +178,12 @@
                                 {% if qtd_subs and qtd_subs > 0 %}
                                 <br><small class="text-muted">
                                     {{ valor_subs|moeda_carteira }}
+                                </small>
+                                {% endif %}
+                                {% if qtd_ces and qtd_ces > 0 %}
+                                <br><span class="badge bg-warning">{{ qtd_ces }} despesa(s)</span>
+                                <br><small class="text-muted">
+                                    {{ valor_ces|moeda_carteira }}
                                 </small>
                                 {% endif %}
                             </td>

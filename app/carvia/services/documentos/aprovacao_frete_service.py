@@ -147,7 +147,11 @@ class AprovacaoFreteService:
             valor_pago = Decimal(str(frete.valor_pago))
 
         # Idempotencia
-        existente = CarviaAprovacaoFrete.query.filter_by(
+        # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+        from sqlalchemy.orm import lazyload
+        existente = CarviaAprovacaoFrete.query.options(
+            lazyload('*')
+        ).filter_by(
             frete_id=frete_id,
             status='PENDENTE',
         ).with_for_update().first()
@@ -204,8 +208,12 @@ class AprovacaoFreteService:
     ) -> Dict:
         """Processa decisao APROVADO em uma aprovacao PENDENTE."""
         from app.carvia.models import CarviaAprovacaoFrete, CarviaFrete
+        # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+        from sqlalchemy.orm import lazyload
 
-        aprovacao = CarviaAprovacaoFrete.query.filter_by(
+        aprovacao = CarviaAprovacaoFrete.query.options(
+            lazyload('*')
+        ).filter_by(
             id=aprovacao_id
         ).with_for_update().first()
 
@@ -292,8 +300,12 @@ class AprovacaoFreteService:
     ) -> Dict:
         """Processa decisao REJEITADO em uma aprovacao PENDENTE."""
         from app.carvia.models import CarviaAprovacaoFrete, CarviaFrete
+        # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+        from sqlalchemy.orm import lazyload
 
-        aprovacao = CarviaAprovacaoFrete.query.filter_by(
+        aprovacao = CarviaAprovacaoFrete.query.options(
+            lazyload('*')
+        ).filter_by(
             id=aprovacao_id
         ).with_for_update().first()
 

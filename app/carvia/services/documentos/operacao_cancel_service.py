@@ -204,8 +204,11 @@ def executar_cancelamento_cascata(
 
     try:
         # Reserva a operacao com lock pessimista para evitar race
+        # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+        from sqlalchemy.orm import lazyload
         op = (
             db.session.query(CarviaOperacao)
+            .options(lazyload('*'))
             .filter(CarviaOperacao.id == operacao_id)
             .with_for_update()
             .first()

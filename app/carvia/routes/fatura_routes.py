@@ -204,9 +204,13 @@ def register_fatura_routes(bp):
 
                 # Buscar operacoes selecionadas
                 # GAP-29: FOR UPDATE para evitar faturamento duplo concorrente
+                # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+                from sqlalchemy.orm import lazyload
                 operacoes = []
                 if operacao_ids:
-                    operacoes = db.session.query(CarviaOperacao).filter(
+                    operacoes = db.session.query(CarviaOperacao).options(
+                        lazyload('*')
+                    ).filter(
                         CarviaOperacao.id.in_(operacao_ids),
                         CarviaOperacao.cnpj_cliente == cnpj_cliente,
                         CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
@@ -216,7 +220,9 @@ def register_fatura_routes(bp):
                 # Buscar CTe Complementares selecionados
                 ctes_comp = []
                 if cte_comp_ids:
-                    ctes_comp = db.session.query(CarviaCteComplementar).filter(
+                    ctes_comp = db.session.query(CarviaCteComplementar).options(
+                        lazyload('*')
+                    ).filter(
                         CarviaCteComplementar.id.in_(cte_comp_ids),
                         CarviaCteComplementar.cnpj_cliente == cnpj_cliente,
                         CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
@@ -1224,7 +1230,11 @@ def register_fatura_routes(bp):
             vencimento = date.fromisoformat(vencimento_str) if vencimento_str else None
 
             # Buscar operacao com lock
-            operacao = db.session.query(CarviaOperacao).filter(
+            # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+            from sqlalchemy.orm import lazyload
+            operacao = db.session.query(CarviaOperacao).options(
+                lazyload('*')
+            ).filter(
                 CarviaOperacao.id == operacao_id,
                 CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
                 CarviaOperacao.fatura_cliente_id.is_(None),
@@ -1345,10 +1355,27 @@ def register_fatura_routes(bp):
             CarviaSubcontrato.fatura_transportadora_id.isnot(None)
         ).group_by(CarviaSubcontrato.fatura_transportadora_id).subquery()
 
+        # Subquery: contar e somar valor das despesas extras (CarviaCustoEntrega)
+        # vinculadas a cada fatura. CEs CANCELADOs sao ignorados (paridade com
+        # Gate 2 da conferencia em routes/fatura_routes.py:2401-2406).
+        from app.carvia.models import CarviaCustoEntrega
+        subq_ces = db.session.query(
+            CarviaCustoEntrega.fatura_transportadora_id,
+            func.count(CarviaCustoEntrega.id).label('qtd_ces'),
+            func.sum(CarviaCustoEntrega.valor).label('valor_ces'),
+        ).filter(
+            CarviaCustoEntrega.fatura_transportadora_id.isnot(None),
+            CarviaCustoEntrega.status != 'CANCELADO',
+        ).group_by(CarviaCustoEntrega.fatura_transportadora_id).subquery()
+
         query = db.session.query(
-            CarviaFaturaTransportadora, subq_subs.c.qtd_subs, subq_subs.c.valor_subs
+            CarviaFaturaTransportadora,
+            subq_subs.c.qtd_subs, subq_subs.c.valor_subs,
+            subq_ces.c.qtd_ces, subq_ces.c.valor_ces,
         ).outerjoin(
             subq_subs, CarviaFaturaTransportadora.id == subq_subs.c.fatura_transportadora_id
+        ).outerjoin(
+            subq_ces, CarviaFaturaTransportadora.id == subq_ces.c.fatura_transportadora_id
         )
 
         # Filtros via WTForms
@@ -1417,7 +1444,7 @@ def register_fatura_routes(bp):
         from app.carvia.utils.papeis_frete import (
             batch_papeis_por_fatura_transportadora,
         )
-        fat_ids = [f.id for f, _qtd, _val in paginacao.items]
+        fat_ids = [f.id for f, _qs, _vs, _qc, _vc in paginacao.items]
         papeis_por_fatura = batch_papeis_por_fatura_transportadora(fat_ids)
 
         return render_template(
@@ -1639,7 +1666,12 @@ def register_fatura_routes(bp):
             return jsonify({'sucesso': False, 'erro': razao}), 400
 
         try:
-            sub = db.session.query(CarviaSubcontrato).filter(
+            # lazyload('*') evita LEFT OUTER JOINs (Transportadora tem lazy='joined')
+            # que conflitam com FOR UPDATE no PostgreSQL.
+            from sqlalchemy.orm import lazyload
+            sub = db.session.query(CarviaSubcontrato).options(
+                lazyload('*')
+            ).filter(
                 CarviaSubcontrato.id == sub_id,
                 CarviaSubcontrato.fatura_transportadora_id == fatura_id,
             ).with_for_update().first()
@@ -2645,7 +2677,11 @@ def register_fatura_routes(bp):
             return jsonify({'sucesso': False, 'erro': 'operacao_id obrigatorio.'}), 400
 
         try:
-            operacao = db.session.query(CarviaOperacao).filter(
+            # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+            from sqlalchemy.orm import lazyload
+            operacao = db.session.query(CarviaOperacao).options(
+                lazyload('*')
+            ).filter(
                 CarviaOperacao.id == operacao_id,
                 CarviaOperacao.status.in_(['RASCUNHO', 'COTADO', 'CONFIRMADO']),
                 CarviaOperacao.fatura_cliente_id.is_(None),
@@ -2729,7 +2765,11 @@ def register_fatura_routes(bp):
             }), 400
 
         try:
-            operacao = db.session.query(CarviaOperacao).filter(
+            # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+            from sqlalchemy.orm import lazyload
+            operacao = db.session.query(CarviaOperacao).options(
+                lazyload('*')
+            ).filter(
                 CarviaOperacao.id == op_id,
                 CarviaOperacao.fatura_cliente_id == fatura_id,
             ).with_for_update().first()
@@ -2841,7 +2881,11 @@ def register_fatura_routes(bp):
             return jsonify({'sucesso': False, 'erro': 'cte_comp_id obrigatorio.'}), 400
 
         try:
-            cte_comp = db.session.query(CarviaCteComplementar).filter(
+            # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+            from sqlalchemy.orm import lazyload
+            cte_comp = db.session.query(CarviaCteComplementar).options(
+                lazyload('*')
+            ).filter(
                 CarviaCteComplementar.id == cte_comp_id,
                 CarviaCteComplementar.status.in_(['RASCUNHO', 'EMITIDO']),
                 CarviaCteComplementar.fatura_cliente_id.is_(None),
@@ -2917,9 +2961,12 @@ def register_fatura_routes(bp):
 
         try:
             from sqlalchemy import func as sa_func
+            # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+            from sqlalchemy.orm import lazyload
 
             fatura = (
                 db.session.query(CarviaFaturaCliente)
+                .options(lazyload('*'))
                 .filter(CarviaFaturaCliente.id == fatura_id)
                 .with_for_update()
                 .first()
@@ -3005,7 +3052,11 @@ def register_fatura_routes(bp):
             }), 400
 
         try:
-            cte_comp = db.session.query(CarviaCteComplementar).filter(
+            # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+            from sqlalchemy.orm import lazyload
+            cte_comp = db.session.query(CarviaCteComplementar).options(
+                lazyload('*')
+            ).filter(
                 CarviaCteComplementar.id == cte_comp_id,
                 CarviaCteComplementar.fatura_cliente_id == fatura_id,
             ).with_for_update().first()

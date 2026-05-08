@@ -892,8 +892,11 @@ class LinkingService:
             fatura_id = fatura_ids.pop()
 
             # Carrega fatura com lock (NN1)
+            # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+            from sqlalchemy.orm import lazyload
             fatura = (
                 db.session.query(CarviaFaturaCliente)
+                .options(lazyload('*'))
                 .filter(CarviaFaturaCliente.id == fatura_id)
                 .with_for_update()
                 .first()

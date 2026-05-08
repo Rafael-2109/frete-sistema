@@ -483,7 +483,11 @@ class CarviaPreVinculoService:
         # concorrentes que tentem resolver os mesmos pre-vinculos. Previne
         # IntegrityError em uq_carvia_conc_linha_doc quando 2 requests tentam
         # criar conciliacoes identicas simultaneamente.
-        prevs = CarviaPreVinculoExtratoCotacao.query.filter(
+        # lazyload('*') previne FOR UPDATE em outer joins (defensive)
+        from sqlalchemy.orm import lazyload
+        prevs = CarviaPreVinculoExtratoCotacao.query.options(
+            lazyload('*')
+        ).filter(
             CarviaPreVinculoExtratoCotacao.cotacao_id.in_(cotacoes_ids),
             CarviaPreVinculoExtratoCotacao.status == 'ATIVO',
         ).order_by(
