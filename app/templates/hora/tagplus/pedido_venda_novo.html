@@ -33,13 +33,13 @@
     <div class="card-header"><strong><i class="fas fa-user"></i> Cliente / Destinatário</strong></div>
     <div class="card-body">
       <div class="row g-3">
-        <div class="col-md-4">
+        <div class="col-md-4" id="campo-cliente-cpfcnpj">
           <label class="form-label">CPF / CNPJ <span class="text-danger">*</span></label>
           <input type="text" name="cpf" id="f-cpf" class="form-control" required
                  maxlength="18" placeholder="CPF ou CNPJ" pattern="[\d\.\-/]{11,18}">
           <small class="text-muted" id="doc-tipo-info">Digite 11 dígitos para CPF ou 14 para CNPJ.</small>
         </div>
-        <div class="col-md-8">
+        <div class="col-md-8" id="campo-cliente-nome">
           <label class="form-label">Nome / Razão social <span class="text-danger">*</span></label>
           <input type="text" name="nome" id="f-nome" class="form-control" required maxlength="200">
         </div>
@@ -102,9 +102,9 @@
   </div>
 
   <!-- ========================== Item / Moto ========================== -->
-  <div class="card mb-3">
+  <div class="card mb-3" id="secao-itens">
     <div class="card-header"><strong><i class="fas fa-motorcycle"></i> Moto vendida</strong></div>
-    <div class="card-body">
+    <div class="card-body" id="btn-add-moto">
       <div class="row g-3 mb-3">
         <div class="col-md-6">
           <label class="form-label">Loja (filial) <span class="text-danger">*</span></label>
@@ -220,7 +220,7 @@
   </div>
 
   <!-- ========================== Pagamento ========================== -->
-  <div class="card mb-3">
+  <div class="card mb-3" id="campo-forma-pagamento">
     <div class="card-header"><strong><i class="fas fa-money-bill-wave"></i> Pagamento</strong></div>
     <div class="card-body">
       <div class="row g-3">
@@ -315,7 +315,7 @@
     </div>
   </div>
 
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2" id="btn-salvar-cotacao">
     <button type="submit" class="btn btn-success" id="btn-salvar">
       <i class="fas fa-save"></i> Salvar e conferir NFe
     </button>
@@ -878,4 +878,8 @@
 </script>
 
 {% endif %}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/venda_manual_nova.js') }}"></script>
 {% endblock %}
