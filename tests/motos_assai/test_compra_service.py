@@ -1,3 +1,4 @@
+import uuid
 import pytest
 from app import db
 from app.motos_assai.services import (
@@ -12,8 +13,10 @@ from app.motos_assai.models import (
 
 
 def _criar_pedido_minimo(numero, admin_user):
+    # Sufixo único para evitar colisão de constraint entre execuções
+    sufixo = uuid.uuid4().hex[:8]
     p = AssaiPedidoVenda(
-        numero=numero,
+        numero=f'{numero}-{sufixo}',
         status=PEDIDO_STATUS_ABERTO,
         criado_por_id=admin_user.id,
     )
