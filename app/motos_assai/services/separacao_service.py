@@ -124,7 +124,7 @@ def registrar_chassi(
     """
     chassi_norm = chassi.strip().upper()
 
-    moto = AssaiMoto.query.filter_by(chassi=chassi_norm).with_for_update().first()
+    moto = AssaiMoto.query.filter_by(chassi=chassi_norm).with_for_update(of=AssaiMoto).first()
     if not moto:
         raise SeparacaoValidationError(f'Chassi {chassi_norm} não cadastrado')
 
