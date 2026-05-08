@@ -93,13 +93,31 @@ def importar_nf_qpa(
     db.session.flush()
 
     # Items
-    for v in resultado.get('veiculos') or []:
+    veiculos = resultado.get('veiculos') or []
+    n_veiculos = max(1, len(veiculos))
+    for v in veiculos:
         chassi = (v.get('chassi') or '').strip().upper()
         if not chassi:
             continue
         modelo = resolver_modelo(v.get('modelo', ''), origem='NF_QPA')
-        # Valor unitário: parser distribui valor_total / qtd. Manter o que vier.
-        valor_extraido = Decimal(str(nf.valor_total / max(1, len(resultado.get('veiculos', [])))))
+        # Valor unitário: tentar campos do parser (valor_unitario, valor, vUnCom,
+        # vlrUnitario) — DanfePDFParser atual não retorna valor por veículo,
+        # apenas chassi/cor/modelo/numero_motor/ano_modelo/codigo.
+        # TODO: quando DanfePDFParser expor valor_unitario por veículo, remover fallback.
+        valor_unit_v = (
+            v.get('valor_unitario')
+            or v.get('valor')
+            or v.get('vUnCom')
+            or v.get('vlrUnitario')
+        )
+        if valor_unit_v:
+            try:
+                valor_extraido = Decimal(str(valor_unit_v))
+            except Exception:
+                valor_extraido = Decimal(str(nf.valor_total / n_veiculos))
+        else:
+            # Fallback: distribuir valor_total igualmente entre veículos
+            valor_extraido = Decimal(str(nf.valor_total / n_veiculos))
         db.session.add(AssaiNfQpaItem(
             nf_id=nf.id,
             chassi=chassi,
