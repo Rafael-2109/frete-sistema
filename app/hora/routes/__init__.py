@@ -23,6 +23,7 @@ from . import (  # noqa: E402, F401
     permissoes,
     estoque,
     devolucoes,
+    devolucoes_venda,
     pecas_faltando,
     pecas_cadastro,
     pecas_estoque,

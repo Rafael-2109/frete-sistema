@@ -1,0 +1,262 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="fas fa-undo-alt"></i> Devolução de Venda #{{ devolucao.id }}</h2>
+  <span class="badge fs-6
+    {% if devolucao.status == STATUS_PENDENTE %}bg-warning text-dark
+    {% elif devolucao.status == STATUS_RESOLVIDA %}bg-success
+    {% elif devolucao.status == STATUS_CANCELADA %}bg-secondary
+    {% else %}bg-light text-dark{% endif %}">
+    {{ devolucao.status }}
+  </span>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">NF de Venda</div>
+      <div>
+        {% if devolucao.venda %}
+          <a href="{{ url_for('hora.vendas_detalhe', venda_id=devolucao.venda.id) }}">
+            {{ devolucao.venda.nf_saida_numero or ('Venda #' ~ devolucao.venda.id) }}
+          </a>
+        {% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">Cliente</div>
+      <div>{{ devolucao.venda.nome_cliente if devolucao.venda else '—' }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">Loja</div>
+      <div>{{ devolucao.loja.rotulo_display if devolucao.loja else '—' }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">Resolução</div>
+      <div>{{ devolucao.total_resolvidos }} / {{ devolucao.total_itens }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">Aberta em</div>
+      <div><small>{{ devolucao.data_devolucao.strftime('%d/%m/%Y') }}</small></div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">Resolvida em</div>
+      <div>
+        <small>
+          {% if devolucao.data_resolucao %}
+            {{ devolucao.data_resolucao.strftime('%d/%m/%Y') }}
+          {% else %}—{% endif %}
+        </small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">Criada por</div>
+      <div><small>{{ devolucao.criado_por or '—' }}</small></div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="hora-kpi">
+      <div class="hora-kpi-label">Resolvida por</div>
+      <div><small>{{ devolucao.resolvida_por or '—' }}</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h5><i class="fas fa-comment-dots"></i> Motivo da devolução</h5>
+  <p class="mb-0" style="white-space:pre-wrap;">{{ devolucao.motivo }}</p>
+</div>
+
+<h4>Chassis devolvidos ({{ devolucao.itens|length }})</h4>
+<div class="table-responsive mb-3">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Chassi</th>
+        <th>Modelo / Cor</th>
+        <th>Motivo específico</th>
+        <th>Status item</th>
+        <th>Resolução</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in devolucao.itens %}
+        {% set moto = item.moto %}
+        <tr>
+          <td><strong class="chassi-mono">{{ item.numero_chassi }}</strong></td>
+          <td>
+            <small>
+              {{ moto.modelo.nome_modelo if moto and moto.modelo else '—' }}
+              {% if moto and moto.cor %} / {{ moto.cor }}{% endif %}
+            </small>
+          </td>
+          <td><small>{{ item.motivo_especifico or '—' }}</small></td>
+          <td>
+            {% if item.status_item == 'PENDENTE' %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% elif item.status_item == 'RESOLVIDA' %}
+              <span class="badge bg-success">Resolvida</span>
+            {% else %}
+              <span class="badge bg-light text-dark">{{ item.status_item }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.resolucao_acao %}
+              <small>
+                <strong>{{ item.resolucao_acao }}</strong>
+                {% if item.resolvida_em %}
+                  em {{ item.resolvida_em.strftime('%d/%m %H:%M') }}
+                {% endif %}
+                {% if item.resolvida_por %} por {{ item.resolvida_por }}{% endif %}
+                {% if item.avaria_id %}
+                  · <a href="{{ url_for('hora.avarias_lista') }}">avaria #{{ item.avaria_id }}</a>
+                {% endif %}
+                {% if item.peca_faltando_id %}
+                  · <a href="{{ url_for('hora.pecas_lista') }}">peça #{{ item.peca_faltando_id }}</a>
+                {% endif %}
+                {% if item.resolucao_observacoes %}
+                  <br><em>{{ item.resolucao_observacoes }}</em>
+                {% endif %}
+              </small>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if item.pendente
+                  and devolucao.status == STATUS_PENDENTE
+                  and current_user.tem_perm_hora('devolucoes_venda', 'editar') %}
+              <button type="button" class="btn btn-sm btn-primary"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#resolver-{{ item.id }}">
+                <i class="fas fa-check"></i> Resolver
+              </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% if item.pendente and devolucao.status == STATUS_PENDENTE %}
+        <tr class="collapse" id="resolver-{{ item.id }}">
+          <td colspan="6" class="bg-light">
+            <form method="post"
+                  action="{{ url_for('hora.devolucoes_venda_resolver_item', devolucao_id=devolucao.id, item_id=item.id) }}"
+                  class="p-3">
+              <h6>Resolver chassi {{ item.numero_chassi }}</h6>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Ação <span class="text-danger">*</span></label>
+                  <select name="acao" class="form-select acao-select" data-item="{{ item.id }}" required>
+                    <option value="">— escolha —</option>
+                    <option value="{{ ACAO_DISPONIVEL }}">Disponível (volta ao estoque)</option>
+                    <option value="{{ ACAO_AVARIA }}">Avaria registrada</option>
+                    <option value="{{ ACAO_PECA_FALTANDO }}">Peça faltando</option>
+                  </select>
+                </div>
+                <div class="col-md-8 detalhe-avaria" style="display:none;" data-item="{{ item.id }}">
+                  <label class="form-label">Descrição da avaria <span class="text-danger">*</span></label>
+                  <input type="text" name="avaria_descricao" class="form-control"
+                         placeholder="Ex: risco no para-lama dianteiro lado direito" minlength="3">
+                </div>
+                <div class="col-md-8 detalhe-peca" style="display:none;" data-item="{{ item.id }}">
+                  <label class="form-label">Descrição da peça faltando <span class="text-danger">*</span></label>
+                  <input type="text" name="peca_descricao" class="form-control"
+                         placeholder="Ex: chave reserva, manual, retrovisor esquerdo" minlength="3">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Observações (opcional)</label>
+                  <textarea name="observacoes" rows="2" class="form-control"></textarea>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                  <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-check"></i> Aplicar resolução
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#resolver-{{ item.id }}">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </form>
+          </td>
+        </tr>
+        {% endif %}
+      {% else %}
+        <tr><td colspan="6" class="text-muted text-center py-3">Sem chassis.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if devolucao.status == STATUS_CANCELADA and devolucao.cancelamento_motivo %}
+<div class="alert alert-secondary">
+  <strong>Cancelada por {{ devolucao.cancelada_por or 'sistema' }}.</strong>
+  Motivo: {{ devolucao.cancelamento_motivo }}
+</div>
+{% endif %}
+
+<div class="d-flex gap-2 flex-wrap">
+  {% if devolucao.status == STATUS_PENDENTE
+        and current_user.tem_perm_hora('devolucoes_venda', 'apagar') %}
+  <button type="button" class="btn btn-outline-danger btn-sm"
+          data-bs-toggle="collapse" data-bs-target="#cancelar-form">
+    <i class="fas fa-times"></i> Cancelar devolução
+  </button>
+  {% endif %}
+  <a href="{{ url_for('hora.devolucoes_venda_lista') }}" class="btn btn-secondary btn-sm">
+    Voltar
+  </a>
+</div>
+
+{% if devolucao.status == STATUS_PENDENTE %}
+<div class="collapse mt-3" id="cancelar-form">
+  <form method="post"
+        action="{{ url_for('hora.devolucoes_venda_cancelar', devolucao_id=devolucao.id) }}"
+        class="card p-3"
+        onsubmit="return confirm('Cancelar a devolução? Motos com último evento DEVOLVIDA voltarão ao estoque automaticamente.');">
+    <label class="form-label">Motivo do cancelamento <span class="text-danger">*</span></label>
+    <textarea name="motivo_cancelamento" rows="2" class="form-control mb-2"
+              required minlength="3"
+              placeholder="Ex: criado por engano, cliente desistiu da devolução..."></textarea>
+    <button type="submit" class="btn btn-danger btn-sm" style="max-width:200px;">
+      Confirmar cancelamento
+    </button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  document.querySelectorAll('.acao-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const itemId = sel.dataset.item;
+      const detAv = document.querySelector(`.detalhe-avaria[data-item="${itemId}"]`);
+      const detPc = document.querySelector(`.detalhe-peca[data-item="${itemId}"]`);
+      const inpAv = detAv ? detAv.querySelector('input[name="avaria_descricao"]') : null;
+      const inpPc = detPc ? detPc.querySelector('input[name="peca_descricao"]') : null;
+
+      detAv.style.display = sel.value === '{{ ACAO_AVARIA }}' ? '' : 'none';
+      detPc.style.display = sel.value === '{{ ACAO_PECA_FALTANDO }}' ? '' : 'none';
+      if (inpAv) inpAv.required = sel.value === '{{ ACAO_AVARIA }}';
+      if (inpPc) inpPc.required = sel.value === '{{ ACAO_PECA_FALTANDO }}';
+    });
+  });
+})();
+</script>
+{% endblock %}

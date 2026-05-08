@@ -1,0 +1,110 @@
+{% extends "hora/base.html" %}
+{% from "hora/_filtros.html" import filtros_form, filtro_loja, filtro_status, filtro_data %}
+
+{% block hora_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="fas fa-undo-alt"></i> Devolução de Venda</h2>
+  {% if current_user.tem_perm_hora('devolucoes_venda', 'criar') %}
+  <a href="{{ url_for('hora.devolucoes_venda_novo') }}" class="btn btn-primary btn-sm">
+    <i class="fas fa-plus"></i> Nova devolução
+  </a>
+  {% endif %}
+</div>
+
+{% call filtros_form(url_for('hora.devolucoes_venda_lista')) %}
+  {{ filtro_loja('loja_id', 'Loja', filtro_loja_id, lojas, 'col-md-2') }}
+  {{ filtro_status('status', 'Status', filtro_status, STATUS_OPCOES, 'col-md-2') }}
+  <div class="col-md-3">
+    <label class="form-label small mb-1">Chassi (item)</label>
+    <input type="text" name="chassi"
+           value="{{ filtro_chassi or '' }}"
+           placeholder="parte do chassi"
+           class="form-control form-control-sm chassi-mono"
+           style="text-transform:uppercase;"
+           data-hora-autocomplete="chassi">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label small mb-1">NF saída</label>
+    <input type="text" name="nf_saida"
+           value="{{ filtro_nf_saida or '' }}"
+           class="form-control form-control-sm">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label small mb-1">Motivo (contém)</label>
+    <input type="text" name="motivo"
+           value="{{ filtro_motivo or '' }}"
+           class="form-control form-control-sm">
+  </div>
+  {{ filtro_data('data_inicio', 'Data a partir', filtro_data_inicio, 'col-md-2') }}
+  {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
+  <div class="col-md-auto d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary">
+      <i class="fas fa-filter"></i> Filtrar
+    </button>
+    <a href="{{ url_for('hora.devolucoes_venda_lista') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-eraser"></i> Limpar
+    </a>
+  </div>
+{% endcall %}
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Data</th>
+        <th>Loja</th>
+        <th>NF saída</th>
+        <th>Cliente</th>
+        <th>Itens</th>
+        <th>Status</th>
+        <th>Resolução</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in devolucoes %}
+        <tr>
+          <td>
+            <a href="{{ url_for('hora.devolucoes_venda_detalhe', devolucao_id=d.id) }}">
+              #{{ d.id }}
+            </a>
+          </td>
+          <td><small>{{ d.data_devolucao.strftime('%d/%m/%Y') }}</small></td>
+          <td><small>{{ d.loja.rotulo_display if d.loja else '—' }}</small></td>
+          <td>
+            {% if d.venda %}
+              <a href="{{ url_for('hora.vendas_detalhe', venda_id=d.venda.id) }}">
+                {{ d.venda.nf_saida_numero or ('Venda #' ~ d.venda.id) }}
+              </a>
+            {% else %}—{% endif %}
+          </td>
+          <td><small>{{ d.venda.nome_cliente if d.venda else '—' }}</small></td>
+          <td>
+            <span class="badge bg-secondary">
+              {{ d.total_resolvidos }} / {{ d.total_itens }}
+            </span>
+          </td>
+          <td>
+            {% if d.status == 'PENDENTE' %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% elif d.status == 'RESOLVIDA' %}
+              <span class="badge bg-success">Resolvida</span>
+            {% elif d.status == 'CANCELADA' %}
+              <span class="badge bg-secondary">Cancelada</span>
+            {% else %}
+              <span class="badge bg-light text-dark">{{ d.status }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <small>
+              {% if d.data_resolucao %}{{ d.data_resolucao.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
+            </small>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-3">Nenhuma devolução de venda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

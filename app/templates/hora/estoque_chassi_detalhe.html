@@ -416,7 +416,7 @@
   {% endif %}
 </div>
 
-{# ========== 8. DEVOLUÇÕES AO FORNECEDOR ========== #}
+{# ========== 8a. DEVOLUÇÕES AO FORNECEDOR (interno - resolução de recebimento) ========== #}
 {% if rastreio.devolucoes %}
 <h4><i class="fas fa-undo text-danger"></i> Devoluções ao fornecedor ({{ rastreio.devolucoes|length }})</h4>
 <div class="card p-3 mb-3">
@@ -440,6 +440,53 @@
             {% elif d.status=='CONFIRMADA' %}<span class="badge bg-success">Confirmada</span>
             {% else %}<span class="badge bg-secondary">{{ d.status }}</span>{% endif %}
           </td>
+          <td><small>{{ d.loja.rotulo_display if d.loja else '—' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ========== 8b. DEVOLUÇÕES DE VENDA (cliente -> HORA) ========== #}
+{% if rastreio.devolucoes_venda %}
+<h4><i class="fas fa-undo-alt text-warning"></i> Devoluções de Venda ({{ rastreio.devolucoes_venda|length }})</h4>
+<div class="card p-3 mb-3">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr>
+        <th>#</th><th>Data</th><th>NF Venda</th><th>Motivo</th>
+        <th>Status</th><th>Resolução</th><th>Loja</th>
+      </tr></thead>
+      <tbody>
+        {% for d in rastreio.devolucoes_venda %}
+        <tr>
+          <td>
+            <a href="{{ url_for('hora.devolucoes_venda_detalhe', devolucao_id=d.id) }}"
+               class="btn btn-sm btn-outline-primary py-0">#{{ d.id }}</a>
+          </td>
+          <td><small>{{ d.data_devolucao.strftime('%d/%m/%Y') if d.data_devolucao else '—' }}</small></td>
+          <td>
+            <small>
+              {% if d.venda %}
+                {{ d.venda.nf_saida_numero or ('Venda #' ~ d.venda.id) }}
+              {% else %}—{% endif %}
+            </small>
+          </td>
+          <td>{{ d.motivo[:80] }}{% if d.motivo|length > 80 %}…{% endif %}</td>
+          <td>
+            {% if d.status == 'PENDENTE' %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% elif d.status == 'RESOLVIDA' %}
+              <span class="badge bg-success">Resolvida</span>
+            {% elif d.status == 'CANCELADA' %}
+              <span class="badge bg-secondary">Cancelada</span>
+            {% else %}
+              <span class="badge bg-light text-dark">{{ d.status }}</span>
+            {% endif %}
+          </td>
+          <td><small>{{ d.total_resolvidos }} / {{ d.total_itens }}</small></td>
           <td><small>{{ d.loja.rotulo_display if d.loja else '—' }}</small></td>
         </tr>
         {% endfor %}

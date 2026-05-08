@@ -1,0 +1,97 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<div id="dv-novo-root"
+     data-url-buscar-vendas="{{ url_for('hora.devolucoes_venda_api_buscar_vendas') }}"
+     data-url-motos-venda="{{ url_for('hora.devolucoes_venda_api_motos_da_venda') }}"
+     data-url-lista="{{ url_for('hora.devolucoes_venda_lista') }}">
+<h2 class="mb-3"><i class="fas fa-undo-alt"></i> Nova Devolução de Venda</h2>
+
+<div class="alert alert-info">
+  <strong>Como funciona:</strong> pesquise a NF de saída (FATURADO) → selecione →
+  marque os chassis devolvidos → informe o motivo. As motos sairão do estoque
+  com status DEVOLVIDA e ficarão pendentes de resolução
+  (Disponível, Avaria ou Peça faltando).
+</div>
+
+{# ========== Etapa 1: pesquisa de venda ========== #}
+<div class="card p-3 mb-3" id="card-pesquisa-venda">
+  <h5 class="mb-3">1. Localize a NF de venda</h5>
+  <div class="row g-2 align-items-end">
+    <div class="col-md-8">
+      <label class="form-label small">NF / cliente / CPF</label>
+      <input type="text" id="busca-venda" class="form-control"
+             placeholder="Digite parte do número da NF, nome do cliente ou CPF (mín. 2 chars)">
+    </div>
+    <div class="col-md-2">
+      <button type="button" class="btn btn-primary w-100" id="btn-buscar">
+        <i class="fas fa-search"></i> Buscar
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive mt-3" id="resultados-busca-wrap" style="display:none;">
+    <table class="table table-sm table-hover">
+      <thead><tr>
+        <th>NF</th><th>Data</th><th>Cliente</th><th>CPF/CNPJ</th>
+        <th>Loja</th><th>Total</th><th></th>
+      </tr></thead>
+      <tbody id="resultados-busca"></tbody>
+    </table>
+  </div>
+  <div id="busca-vazia" class="text-muted small mt-2" style="display:none;">
+    Nenhuma NF FATURADA encontrada para este termo.
+  </div>
+</div>
+
+{# ========== Etapa 2: motos da venda + motivo (form) ========== #}
+<form method="post" id="form-devolucao" style="display:none;" autocomplete="off">
+  <input type="hidden" name="venda_id" id="venda_id_input">
+
+  <div class="card p-3 mb-3">
+    <h5 class="mb-2">2. Venda selecionada</h5>
+    <div id="venda-info" class="mb-3"></div>
+
+    <h5 class="mb-2">3. Selecione as motos a devolver</h5>
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr>
+          <th><input type="checkbox" id="check-todos"></th>
+          <th>Chassi</th>
+          <th>Modelo</th>
+          <th>Cor</th>
+          <th>Preço</th>
+          <th>Status atual</th>
+          <th>Motivo específico (opcional)</th>
+        </tr></thead>
+        <tbody id="motos-da-venda"></tbody>
+      </table>
+    </div>
+    <div id="motos-vazio" class="text-muted small" style="display:none;">
+      Nenhum chassi elegível encontrado nesta venda.
+    </div>
+
+    <h5 class="mb-2 mt-4">4. Motivo da devolução <span class="text-danger">*</span></h5>
+    <textarea name="motivo" id="motivo-geral" class="form-control" rows="3"
+              required minlength="3"
+              placeholder="Detalhe o motivo (mínimo 3 caracteres). Ex: arrependimento de compra, defeito de fábrica, divergência no produto..."></textarea>
+  </div>
+
+  <div class="d-flex gap-2 mb-4">
+    <button type="submit" class="btn btn-primary" id="btn-criar">
+      <i class="fas fa-check"></i> Criar devolução
+    </button>
+    <button type="button" class="btn btn-outline-secondary" id="btn-trocar-venda">
+      <i class="fas fa-undo"></i> Trocar venda
+    </button>
+    <a href="{{ url_for('hora.devolucoes_venda_lista') }}" class="btn btn-secondary">
+      Cancelar
+    </a>
+  </div>
+</form>
+</div>{# /#dv-novo-root #}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/hora/devolucao_venda_novo.js') }}"></script>
+{% endblock %}

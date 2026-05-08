@@ -1184,7 +1184,7 @@ def rastreamento_completo(numero_chassi: str) -> dict:
     Returns dict com chaves: pedido, pedido_item, pedido_da_nf,
     chassi_no_pedido_da_nf, nf, nf_item, recebimento, conferencia,
     conferencia_divergencias, transferencias, avarias, pecas_faltando, venda,
-    devolucoes, ultimo_evento, moto_disponivel.
+    devolucoes, devolucoes_venda, ultimo_evento, moto_disponivel.
     Campos ausentes vem como None (ou [] para coleções).
 
     Regra (corrigida 2026-05-05): `pedido` so e populado se o chassi REALMENTE
@@ -1200,6 +1200,7 @@ def rastreamento_completo(numero_chassi: str) -> dict:
         HoraPedidoItem, HoraRecebimento, HoraRecebimentoConferencia,
         HoraTransferencia, HoraTransferenciaItem, HoraVendaItem,
     )
+    from app.hora.services import devolucao_venda_service as _dev_venda_svc
 
     chassi = numero_chassi.strip().upper()
     resultado = {
@@ -1218,6 +1219,7 @@ def rastreamento_completo(numero_chassi: str) -> dict:
         'venda': None,
         'venda_item': None,
         'devolucoes': [],
+        'devolucoes_venda': [],
         'ultimo_evento': None,
         'moto_disponivel': False,
     }
@@ -1322,7 +1324,7 @@ def rastreamento_completo(numero_chassi: str) -> dict:
         resultado['venda_item'] = venda_item
         resultado['venda'] = venda_item.venda
 
-    # Devolucoes (ao fornecedor)
+    # Devolucoes (ao fornecedor) — fluxo interno via resolucao_service.
     resultado['devolucoes'] = (
         HoraDevolucaoFornecedor.query
         .join(HoraDevolucaoFornecedorItem,
@@ -1332,6 +1334,9 @@ def rastreamento_completo(numero_chassi: str) -> dict:
         .order_by(HoraDevolucaoFornecedor.criado_em.desc())
         .all()
     )
+
+    # Devolucoes de venda (cliente -> HORA).
+    resultado['devolucoes_venda'] = _dev_venda_svc.listar_devolucoes_por_chassi(chassi)
 
     # Ultimo evento para status geral
     ult = (

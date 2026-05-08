@@ -142,13 +142,21 @@
     {% endif %}
 
     {# ---------------- 3. Ocorrências ---------------- #}
+    {# Permissoes separadas:
+       - 'devolucoes_venda' = cliente devolveu compra (HoraDevolucaoVenda).
+       - 'devolucoes'       = HORA devolve a Motochefe / fornecedor
+                              (HoraDevolucaoFornecedor — usado internamente
+                              pelo recebimento ao escolher acao DEVOLVER em
+                              divergencia). Conceder com cuidado, pois envolve
+                              fluxo de NF de saida. #}
     {% set show_oco =
         current_user.tem_perm_hora('pecas', 'ver') or
+        current_user.tem_perm_hora('devolucoes_venda', 'ver') or
         current_user.tem_perm_hora('devolucoes', 'ver') or
         current_user.tem_perm_hora('avarias', 'ver') %}
     {% if show_oco %}
     <div class="nav-item dropdown">
-      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pecas') or request.endpoint.startswith('hora.devolucoes') or request.endpoint.startswith('hora.avaria')) %}active{% endif %}"
+      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pecas') or request.endpoint.startswith('hora.devolucoes_venda') or request.endpoint.startswith('hora.devolucoes') or request.endpoint.startswith('hora.avaria')) %}active{% endif %}"
          href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
         <i class="fas fa-exclamation-triangle"></i> Ocorrências
       </a>
@@ -158,9 +166,14 @@
             <i class="fas fa-puzzle-piece fa-fw"></i> Peças faltando
           </a></li>
         {% endif %}
+        {% if current_user.tem_perm_hora('devolucoes_venda', 'ver') %}
+          <li><a class="dropdown-item" href="{{ url_for('hora.devolucoes_venda_lista') }}">
+            <i class="fas fa-undo-alt fa-fw"></i> Devolução de Venda
+          </a></li>
+        {% endif %}
         {% if current_user.tem_perm_hora('devolucoes', 'ver') %}
           <li><a class="dropdown-item" href="{{ url_for('hora.devolucoes_lista') }}">
-            <i class="fas fa-undo fa-fw"></i> Devoluções
+            <i class="fas fa-truck-loading fa-fw"></i> Devolução ao Fornecedor
           </a></li>
         {% endif %}
         {% if current_user.tem_perm_hora('avarias', 'ver') %}

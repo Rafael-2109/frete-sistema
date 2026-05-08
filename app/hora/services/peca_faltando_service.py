@@ -37,8 +37,19 @@ def registrar_peca_faltando(
     loja_id: Optional[int] = None,
     observacoes: Optional[str] = None,
     criado_por: Optional[str] = None,
+    *,
+    commit: bool = True,
 ) -> HoraPecaFaltando:
-    """Cria pendencia de peca faltando + emite evento FALTANDO_PECA na moto."""
+    """Cria pendencia de peca faltando + emite evento FALTANDO_PECA na moto.
+
+    Args:
+        commit: quando True (default), faz db.session.commit() ao final
+            (retrocompat com chamadores existentes — recebimento, resolucao).
+            Quando False, apenas db.session.flush() — usado quando um caller
+            externo (ex.: devolucao_venda_service.resolver_item) precisa
+            agrupar este registro com outras escritas em UMA transacao
+            atomica e fazer o commit final por conta propria.
+    """
     chassi = numero_chassi.strip().upper()
     moto = HoraMoto.query.get(chassi)
     if not moto:
@@ -83,7 +94,10 @@ def registrar_peca_faltando(
         detalhe=f'Peca faltando: {peca.descricao}',
     )
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
     return peca
 
 
