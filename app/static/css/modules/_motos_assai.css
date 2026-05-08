@@ -1,0 +1,56 @@
+/* ============================================================
+   Módulo Motos Assaí — estilos
+   Usa design tokens de tokens/_design-tokens.css (light/dark).
+   Sem cores hardcoded.
+   ============================================================ */
+
+.motos-assai-wrapper {
+  background: var(--bg-light);
+  color: var(--text);
+  min-height: calc(100vh - var(--navbar-h, 56px));
+}
+
+.motos-assai-nav {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.motos-assai-nav-link {
+  color: var(--text);
+  text-decoration: none;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-sm);
+  transition: background-color 120ms ease;
+}
+
+.motos-assai-nav-link:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.dashboard-header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-header h2 {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dashboard-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  height: 100%;
+}
+
+.dashboard-card .card-subtitle {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

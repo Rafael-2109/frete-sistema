@@ -1258,6 +1258,19 @@ def create_app(config_name=None):
 
         app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
 
+    # 🛵 Módulo Motos Assaí (B2B Q.P.A. → Sendas/Assaí)
+    # Isolado do módulo HORA. Ver app/motos_assai/CLAUDE.md.
+    try:
+        from app.motos_assai.routes import motos_assai_bp
+
+        app.register_blueprint(motos_assai_bp)
+        app.logger.info("✅ Módulo Motos Assaí registrado com sucesso")
+    except ImportError as e:
+        app.logger.error(f"❌ Módulo Motos Assaí - ImportError: {e}")
+        import traceback
+
+        app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+
     # 🚀 MCP Logistica
 
     # 🔗 Integração TagPlus

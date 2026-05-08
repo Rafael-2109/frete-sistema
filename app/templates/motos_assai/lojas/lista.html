@@ -1,0 +1,59 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Lojas Assaí</h2>
+  <a href="{{ url_for('motos_assai.lojas_nova') }}" class="btn btn-primary">
+    <i class="fas fa-plus"></i> Nova loja
+  </a>
+</header>
+
+<form method="GET" class="row g-2 mb-3">
+  <div class="col-md-6">
+    <input type="text" name="q" value="{{ busca or '' }}" class="form-control"
+           placeholder="Buscar por número, nome ou cidade...">
+  </div>
+  <div class="col-md-3 d-flex align-items-center">
+    <div class="form-check">
+      <input type="checkbox" name="ativas" value="1" id="ativas"
+             {% if somente_ativas %}checked{% endif %} class="form-check-input">
+      <label for="ativas" class="form-check-label">Somente ativas</label>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <button class="btn btn-outline-secondary w-100">Filtrar</button>
+  </div>
+</form>
+
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Nº</th><th>Nome</th><th>CNPJ</th><th>Cidade</th><th>UF</th>
+      <th>Regional</th><th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in lojas %}
+    <tr>
+      <td><a href="{{ url_for('motos_assai.lojas_detalhe', loja_id=l.id) }}">{{ l.numero }}</a></td>
+      <td>{{ l.nome }}</td>
+      <td>{{ l.cnpj }}</td>
+      <td>{{ l.cidade or '-' }}</td>
+      <td>{{ l.uf or '-' }}</td>
+      <td>{{ l.regional or '-' }}</td>
+      <td>
+        {% if l.ativo %}
+          <span class="badge bg-success">ATIVA</span>
+        {% else %}
+          <span class="badge bg-secondary">INATIVA</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="text-center text-muted">Nenhuma loja.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p class="text-muted">Total: {{ lojas|length }} loja(s)</p>
+{% endblock %}
