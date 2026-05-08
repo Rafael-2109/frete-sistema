@@ -21,6 +21,10 @@ from .compra_service import (
 )
 from .recibo_service import importar as importar_recibo, get_recibo, listar_recibos, ReciboParserError
 from .chassi_validator import validar_chassi
+from .moto_evento_service import (
+    emitir_evento, ultimo_evento, status_efetivo, eventos_chassi,
+    chassis_em_estoque, EventoInvalidoError,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -36,4 +40,6 @@ __all__ = [
     'CompraValidationError', 'gerar_pdf_po',
     'importar_recibo', 'get_recibo', 'listar_recibos', 'ReciboParserError',
     'validar_chassi',
+    'emitir_evento', 'ultimo_evento', 'status_efetivo', 'eventos_chassi',
+    'chassis_em_estoque', 'EventoInvalidoError',
 ]
