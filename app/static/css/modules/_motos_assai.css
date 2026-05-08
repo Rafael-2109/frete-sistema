@@ -17,14 +17,24 @@
   background: var(--surface);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
 }
+.motos-assai-nav::-webkit-scrollbar { display: none; }
 
 .motos-assai-nav-link {
   color: var(--text);
   text-decoration: none;
-  padding: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
   transition: background-color 120ms ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .motos-assai-nav-link:hover {
@@ -66,7 +76,7 @@
 }
 
 .qr-reader-container {
-  max-width: 380px;
+  max-width: 380px; /* desktop; mobile override below */
 }
 
 /* Telas de operação rápida (montagem, disponibilizar) — substituem inline styles (H4) */
@@ -79,5 +89,36 @@
 }
 
 .motos-assai-qr-reader {
-  max-width: 300px;
+  max-width: 300px; /* desktop; mobile override below */
+}
+
+/* Safe-area padding (após viewport-fit=cover) */
+.motos-assai-wrapper {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mobile-specific overrides */
+@media (max-width: 767.98px) {
+  .motos-assai-wrapper {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Inputs >= 16px evita zoom iOS */
+  .motos-assai-wrapper .form-control,
+  .motos-assai-wrapper .form-select {
+    font-size: 1rem;
+  }
+
+  /* QR readers: usar 100% da largura disponível em mobile */
+  .qr-reader-container,
+  .motos-assai-qr-reader {
+    max-width: 100%;
+  }
+
+  /* Cards de operação: full width em mobile */
+  .motos-assai-card-sm,
+  .motos-assai-card-lg {
+    max-width: 100%;
+  }
 }
