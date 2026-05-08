@@ -5,9 +5,21 @@ window.OnboardingEngine.register({
   autoStartRoute: '/motos-assai/dashboard',
   steps: [
     {
+      element: '#menu-pedidos-voe',
+      title: 'Pedidos VOE Q.P.A.',
+      description: 'Ponto de partida do fluxo. Suba o PDF VOE do Sendas/Assai. O sistema parseia 38 paginas em ~30s e cria os itens automaticamente.',
+      adminOnly: true
+    },
+    {
+      element: '#menu-compras',
+      title: 'Compras Motochefe',
+      description: 'Consolida N pedidos VOE em 1 pedido de compra (PO) para a Motochefe. Gera PDF com modelos e quantidades.',
+      adminOnly: true
+    },
+    {
       element: '#menu-recibos',
       title: 'Recibos da Motochefe',
-      description: 'Cada recibo lista os chassis que vao chegar. Suba o PDF/Excel para comecar a conferencia.'
+      description: 'Quando as motos do PO chegam ao CD, cada recibo lista os chassis. Suba o PDF/Excel para comecar a conferencia.'
     },
     {
       element: '#menu-montagem',
@@ -23,18 +35,6 @@ window.OnboardingEngine.register({
       element: '#menu-separacao',
       title: 'Separacao',
       description: 'Vincula chassis DISPONIVEL aos pedidos. <strong>Fungivel:</strong> qualquer chassi do mesmo modelo serve.'
-    },
-    {
-      element: '#menu-pedidos-voe',
-      title: 'Pedidos VOE Q.P.A.',
-      description: 'Suba o PDF VOE do Sendas/Assai. O sistema parseia 38 paginas em ~30s e cria os itens automaticamente.',
-      adminOnly: true
-    },
-    {
-      element: '#menu-compras',
-      title: 'Compras Motochefe',
-      description: 'Consolida N pedidos VOE em 1 pedido de compra (PO) para a Motochefe. Gera PDF com modelos e quantidades.',
-      adminOnly: true
     },
     {
       element: '#menu-faturamento',
