@@ -20,9 +20,9 @@ from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiPedidoVenda, AssaiPedidoVendaItem,
     AssaiMoto, AssaiModelo,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
-    SEPARACAO_STATUS_CANCELADA,
+    SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
     PEDIDO_STATUS_EM_PRODUCAO, PEDIDO_STATUS_SEPARANDO,
-    EVENTO_DISPONIVEL, EVENTO_SEPARADA,
+    EVENTO_DISPONIVEL, EVENTO_SEPARADA, EVENTO_FATURADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
 
@@ -222,16 +222,27 @@ def finalizar_separacao(separacao_id: int, operador_id: int) -> AssaiSeparacao:
 
 
 def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> AssaiSeparacao:
-    """Cancela. Para cada item: emite DISPONIVEL para devolver chassi ao estoque."""
+    """Cancela. Para cada item: emite DISPONIVEL para devolver chassi ao estoque.
+
+    Regras:
+    - FATURADA: não pode cancelar (NF já emitida)
+    - CANCELADA: já cancelada, idempotente erro
+    - FECHADA ou EM_SEPARACAO: pode cancelar
+    """
     if not motivo or len(motivo.strip()) < 3:
         raise SeparacaoValidationError('Motivo obrigatório (≥3 chars)')
 
     sep = AssaiSeparacao.query.get_or_404(separacao_id)
-    if sep.status == SEPARACAO_STATUS_CANCELADA:
-        raise SeparacaoValidationError('Já cancelada')
+    if sep.status in (SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA):
+        raise SeparacaoValidationError(
+            f'Não é possível cancelar separação com status {sep.status}'
+        )
 
     items = AssaiSeparacaoItem.query.filter_by(separacao_id=sep.id).all()
     for it in items:
+        # H6: skip chassis já faturados — não reverter para DISPONIVEL
+        if status_efetivo(it.chassi) == EVENTO_FATURADA:
+            continue
         emitir_evento(
             it.chassi, EVENTO_DISPONIVEL,
             operador_id=operador_id,
