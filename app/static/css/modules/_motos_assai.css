@@ -54,3 +54,8 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* Upload de recibo — limita largura do card sem style= inline (H4) */
+.recibo-upload-form {
+  max-width: 600px;
+}

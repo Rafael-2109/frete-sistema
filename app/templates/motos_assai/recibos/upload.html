@@ -1,0 +1,29 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="mb-3">
+  <h2>Upload de Recibo Motochefe</h2>
+  <p class="text-muted">PO Motochefe: <strong>{{ compra.numero }}</strong></p>
+</header>
+
+<form method="POST" enctype="multipart/form-data" class="card p-4 recibo-upload-form">
+  {{ form.hidden_tag() }}
+
+  <div class="mb-3">
+    {{ form.arquivo.label(class="form-label") }}
+    {{ form.arquivo(class="form-control", accept=".pdf,.xlsx,.xls") }}
+    {% for e in form.arquivo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+  </div>
+
+  <div class="alert alert-info small">
+    Aceita PDF (recibo digitalizado/gerado) ou Excel (.xlsx). Determinístico
+    primeiro; LLM (Haiku→Sonnet) ativado quando confiança &lt; 80%.
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    <i class="fas fa-upload"></i> Importar
+  </button>
+  <a href="{{ url_for('motos_assai.compras_detalhe', compra_id=compra.id) }}"
+     class="btn btn-outline-secondary">Cancelar</a>
+</form>
+{% endblock %}
