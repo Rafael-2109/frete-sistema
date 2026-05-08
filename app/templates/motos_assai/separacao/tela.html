@@ -1,0 +1,101 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>Separação — Pedido {{ pedido.numero }} · Loja {{ loja.numero }} {{ loja.nome }}
+    <span class="badge bg-{% if separacao.status == 'EM_SEPARACAO' %}primary{% elif separacao.status == 'FECHADA' %}success{% elif separacao.status == 'CANCELADA' %}danger{% else %}secondary{% endif %}">
+      {{ separacao.status }}
+    </span>
+  </h2>
+</header>
+
+<h4>Saldo pendente por modelo</h4>
+<div class="row g-2 mb-3" id="saldos-container">
+  {% for s in saldos %}
+  <div class="col-md-4">
+    <div class="card p-2">
+      <strong>{{ s.codigo }} — {{ s.nome }}</strong>
+      <div class="progress my-1" style="height: 20px;">
+        <div class="progress-bar bg-success"
+             style="width: {{ (s.qtd_separada * 100 / s.qtd_pedida) if s.qtd_pedida else 0 }}%">
+          {{ s.qtd_separada }}/{{ s.qtd_pedida }}
+        </div>
+      </div>
+      <small class="text-muted">
+        {% if s.qtd_pendente == 0 %}<span class="text-success">✓ COMPLETO</span>
+        {% else %}{{ s.qtd_pendente }} pendentes{% endif %}
+      </small>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if separacao.status == 'EM_SEPARACAO' %}
+<div class="card p-3 mb-3" style="max-width: 600px;">
+  <label class="form-label">Chassi</label>
+  <div class="input-group">
+    <input type="text" id="input-chassi" class="form-control form-control-lg"
+           autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50">
+    <button type="button" id="btn-camera" class="btn btn-outline-secondary">
+      <i class="fas fa-camera"></i>
+    </button>
+  </div>
+  <div id="qr-reader" class="mt-2 d-none" style="max-width:300px;"></div>
+  <div id="alerta-sep" class="mt-2 d-none"></div>
+</div>
+{% endif %}
+
+<h4>Chassis registrados ({{ items|length }})</h4>
+<table class="table table-sm" id="items-table">
+  <thead><tr><th>Chassi</th><th>Modelo</th><th>Valor unit.</th><th>Registrado em</th><th>Ação</th></tr></thead>
+  <tbody>
+    {% for it in items %}
+    <tr data-item-id="{{ it.id }}">
+      <td><code>{{ it.chassi }}</code></td>
+      <td>{{ it.modelo.codigo }}</td>
+      <td>R$ {{ it.valor_unitario_qpa | numero_br(2) }}</td>
+      <td class="small text-muted">{{ it.registrada_em.strftime('%d/%m %H:%M') }}</td>
+      <td>
+        {% if separacao.status == 'EM_SEPARACAO' %}
+        <button type="button" class="btn btn-sm btn-outline-warning"
+                data-action="desfazer" data-item-id="{{ it.id }}">
+          <i class="fas fa-undo"></i> Desfazer
+        </button>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if separacao.status == 'EM_SEPARACAO' %}
+<div class="d-flex gap-2 mt-3">
+  <button type="button" class="btn btn-success" id="btn-finalizar">
+    <i class="fas fa-check-double"></i> Finalizar separação
+  </button>
+  <button type="button" class="btn btn-outline-danger ms-auto" id="btn-cancelar">
+    <i class="fas fa-ban"></i> Cancelar separação
+  </button>
+</div>
+{% elif separacao.status == 'FECHADA' %}
+<p class="text-muted mt-3">Separação finalizada.</p>
+{% endif %}
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+        integrity="sha384-c9d8RFSL+sJ0dC0WGqK7tQXg4/c5++8KkF+xbSPq3ji10/wfKLtAVk0M3IY+XJ7q"
+        crossorigin="anonymous"></script>
+<script>
+window.MOTOS_ASSAI_SEP = {
+  pedidoId: {{ pedido.id }},
+  lojaId: {{ loja.id }},
+  separacaoId: {{ separacao.id }},
+  endpoints: {
+    registrar: '{{ url_for("motos_assai.separacao_registrar_chassi") }}',
+    desfazer: '{{ url_for("motos_assai.separacao_desfazer", item_id=0) }}',
+    finalizar: '{{ url_for("motos_assai.separacao_finalizar", separacao_id=separacao.id) }}',
+    cancelar: '{{ url_for("motos_assai.separacao_cancelar", separacao_id=separacao.id) }}',
+  },
+};
+</script>
+<script src="{{ url_for('static', filename='motos_assai/js/separacao_chassi.js') }}"></script>
+{% endblock %}
