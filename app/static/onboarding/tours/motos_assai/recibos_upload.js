@@ -2,10 +2,9 @@ window.OnboardingEngine.register({
   id: 'motos_assai.recibos_upload',
   titulo: 'Subir recibo Motochefe',
   adminOnly: true,
-  autoStartRoute: '/motos-assai/recibos/upload',
+  autoStartRoute: '/motos-assai/compras/*/recibos/upload',
   steps: [
-    { element: '#upload-recibo',         title: 'PDF ou XLSX',                  description: 'Recibo emitido pela equipe Motochefe (Haroldo SP, etc.). Lista os chassis que vao chegar fisicamente.' },
-    { element: '#preview-chassis',       title: 'Preview dos chassis extraidos', description: 'Confirme que o numero total bate. Limiar de confianca 80% — abaixo disso aciona LLM.' },
-    { element: '#btn-salvar-recibo',     title: 'Salvar como AGUARDANDO',       description: 'Status RECEBIDO_AGUARDANDO_CONFERENCIA. Operadores comecam a conferir via wizard QR.' }
+    { element: '#upload-recibo',         title: 'PDF ou XLSX deste PO',         description: 'Voce esta subindo o recibo da Motochefe vinculado ao PO mostrado no topo. Cada recibo pertence a 1 PO especifico (chave: compra_id).' },
+    { element: '#btn-salvar-recibo',     title: 'Importar',                     description: 'Parser deterministico extrai os chassis. Se confianca < 80%, aciona LLM (Haiku → Sonnet). O recibo nasce em <strong>RECEBIDO_AGUARDANDO_CONFERENCIA</strong> e fica disponivel para o operador conferir via wizard QR.' }
   ]
 });
