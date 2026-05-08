@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, Response
+from flask import render_template, redirect, url_for, flash, Response, current_app
 from flask_login import login_required, current_user
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
@@ -31,7 +31,15 @@ def faturamento_lista():
 @login_required
 @require_motos_assai
 def faturamento_solicitacao_excel(separacao_id):
-    bytes_xlsx, s3_key = gerar_excel_qpa(separacao_id, current_user.id)
+    try:
+        bytes_xlsx, s3_key = gerar_excel_qpa(separacao_id, current_user.id)
+    except ValueError as e:
+        # H3: separação em status inválido para geração de Excel
+        flash(str(e), 'danger')
+        return redirect(url_for('motos_assai.faturamento_lista'))
+    # H1: s3_key pode ser None se FileStorage falhar — log mas não bloquear download
+    if not s3_key:
+        current_app.logger.error('S3 save falhou para separacao %s', separacao_id)
     return Response(
         bytes_xlsx,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

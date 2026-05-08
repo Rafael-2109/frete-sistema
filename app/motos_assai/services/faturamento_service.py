@@ -21,16 +21,26 @@ from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_brasil_naive
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiLoja, AssaiMoto, AssaiModelo,
+    SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
 )
 
 
-def gerar_excel_qpa(separacao_id: int, gerada_por_id: int) -> Tuple[bytes, str]:
+def gerar_excel_qpa(separacao_id: int, gerada_por_id: int) -> Tuple[bytes, Optional[str]]:
     """Gera Excel da solicitação. Retorna (bytes, s3_key).
 
     Salva em S3 em `motos_assai/solicitacoes/<separacao_id>.xlsx` e atualiza
     `assai_separacao.solicitacao_excel_s3_key`.
+
+    Raises:
+        ValueError: se separação não está em status FECHADA ou FATURADA.
     """
     sep = AssaiSeparacao.query.get_or_404(separacao_id)
+    # H3: validar status antes de gerar — apenas separações fechadas/faturadas
+    if sep.status not in (SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA):
+        raise ValueError(
+            f'Separação {separacao_id} está {sep.status}, '
+            f'esperado {SEPARACAO_STATUS_FECHADA} ou {SEPARACAO_STATUS_FATURADA}'
+        )
     loja = AssaiLoja.query.get(sep.loja_id)
 
     items = (
