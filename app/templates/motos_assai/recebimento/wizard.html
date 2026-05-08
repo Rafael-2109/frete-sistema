@@ -121,6 +121,49 @@
   </button>
 </div>
 
+<!-- Modal: falha ao subir foto — continuar mesmo assim? -->
+<div class="modal fade" id="modal-falha-foto" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Falha ao enviar foto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Falha ao subir foto. Continuar o registro sem foto?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal"
+                id="wiz-btn-cancelar-foto">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-lg" id="wiz-btn-confirmar-sem-foto">
+          Continuar sem foto
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: finalizar com pendentes -->
+<div class="modal fade" id="modal-finalizar-wiz" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Finalizar recebimento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="wiz-msg-finalizar"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success btn-lg" id="wiz-btn-confirmar-finalizar">
+          <i class="fas fa-check-double"></i> Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
         integrity="sha384-c9d8RFSL+sJ0dC0WGqK7tQXg4/c5++8KkF+xbSPq3ji10/wfKLtAVk0M3IY+XJ7q"
         crossorigin="anonymous"></script>

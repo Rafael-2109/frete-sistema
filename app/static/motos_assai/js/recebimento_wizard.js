@@ -136,7 +136,7 @@
 
   async function registrarConferencia() {
     if (!state.chassi || !state.modeloId) {
-      alert('Chassi e modelo são obrigatórios.');
+      showAlerta('danger', 'Chassi e modelo são obrigatórios.');
       return;
     }
 
@@ -160,14 +160,14 @@
 
     if (r.status === 409) {
       // Race condition: chassis já conferido por outro operador (H2)
-      alert(data.erro || 'Conflito: chassi já conferido. Atualize a tela e tente outro chassi.');
+      showAlerta('danger', data.erro || 'Conflito: chassi já conferido. Atualize a tela e tente outro chassi.');
       // Recarrega a página para atualizar lista de pendentes
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 2000);
       return;
     }
 
     if (!data.ok) {
-      alert('Erro: ' + (data.erro || 'desconhecido'));
+      showAlerta('danger', 'Erro: ' + (data.erro || 'desconhecido'));
       return;
     }
 
@@ -241,7 +241,7 @@
   document.getElementById('btn-avancar-B').addEventListener('click', () => {
     state.modeloId = parseInt(document.getElementById('select-modelo').value, 10) || null;
     if (!state.modeloId) {
-      alert('Selecione um modelo.');
+      showAlerta('warning', 'Selecione um modelo.');
       return;
     }
     if (state.cor) {
@@ -251,6 +251,8 @@
   });
 
   document.getElementById('btn-voltar-B').addEventListener('click', () => setStep('B'));
+
+  // btn-avancar-C: se foto falhar, abre modal de confirmação
   document.getElementById('btn-avancar-C').addEventListener('click', async () => {
     state.cor = document.getElementById('input-cor').value.trim().toUpperCase() || null;
     state.avaria = document.getElementById('chk-avaria').checked;
@@ -258,7 +260,21 @@
     if (fileInput.files && fileInput.files[0]) {
       const ok = await uploadFoto(fileInput.files[0]);
       if (!ok) {
-        if (!confirm('Falha ao subir foto. Continuar mesmo assim?')) return;
+        // Bootstrap modal para confirmar continuar sem foto
+        const modalEl = document.getElementById('modal-falha-foto');
+        if (modalEl) {
+          bootstrap.Modal.getOrCreateInstance(modalEl).show();
+          // O handler do botão "Continuar sem foto" executa registrarConferencia
+          document.getElementById('wiz-btn-confirmar-sem-foto').onclick = async () => {
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            await registrarConferencia();
+          };
+          // "Cancelar" no modal não faz nada (modal fecha via data-bs-dismiss)
+        } else {
+          // fallback: prosseguir sem modal
+          await registrarConferencia();
+        }
+        return;
       }
     }
     await registrarConferencia();
@@ -266,13 +282,23 @@
 
   document.getElementById('btn-proximo-chassi').addEventListener('click', reset);
 
-  document.getElementById('btn-finalizar').addEventListener('click', async () => {
+  // Finalizar recebimento — Bootstrap modal
+  document.getElementById('btn-finalizar').addEventListener('click', () => {
     const pend = document.getElementById('btn-finalizar').dataset.pendentes;
-    let confirmar_faltantes = false;
-    if (pend && parseInt(pend, 10) > 0) {
-      if (!confirm(`Há ${pend} chassis não conferidos. Finalizar marca-os como MOTO_FALTANDO. Continuar?`)) return;
-      confirmar_faltantes = true;
+    const pendNum = pend ? parseInt(pend, 10) : 0;
+    const msgEl = document.getElementById('wiz-msg-finalizar');
+    if (msgEl) {
+      msgEl.textContent = pendNum > 0
+        ? `Há ${pendNum} chassis não conferidos. Finalizar marca-os como MOTO_FALTANDO. Continuar?`
+        : 'Finalizar o recebimento?';
     }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-finalizar-wiz')).show();
+  });
+
+  document.getElementById('wiz-btn-confirmar-finalizar')?.addEventListener('click', async () => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-finalizar-wiz'))?.hide();
+    const pend = document.getElementById('btn-finalizar').dataset.pendentes;
+    const confirmar_faltantes = pend && parseInt(pend, 10) > 0;
     const r = await fetch(cfg.endpoints.finalizar, {
       method: 'POST',
       headers: jsonHeaders(),
@@ -282,7 +308,7 @@
     if (data.ok) {
       window.location.href = data.redirect;
     } else {
-      alert('Erro: ' + (data.erro || ''));
+      showAlerta('danger', 'Erro: ' + (data.erro || ''));
     }
   });
 
