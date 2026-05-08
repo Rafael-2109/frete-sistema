@@ -437,20 +437,18 @@
         padding: 0.3rem 0.55rem;
     }
 
-    /* Header generico .d-flex justify-between que tem qualquer botao como filho
-       direto OU dentro de container — pega 109 templates restantes que nao usam
-       header semantico (.page-header / <header> / .fin-header / .btn-toolbar).
-       Exemplo: hora/pedidos_lista.html, manufatura/*, portal/*, recebimento/*.
-       :has() tem 94% de suporte (iOS Safari 15.4+, Chrome 105+). */
-    .d-flex.justify-content-between:has(> .btn),
-    .d-flex.justify-content-between:has(> a.btn),
-    .d-flex.justify-content-between:has(> button.btn),
-    .d-flex.justify-content-between:has(> .btn-toolbar),
-    .d-flex.justify-content-between:has(> .btn-group),
-    .d-flex.justify-content-between:has(> div > .btn),
-    .d-flex.justify-content-between:has(> .d-flex .btn) {
+    /* Solucao universal: TODO .d-flex.justify-content-between em mobile faz
+       wrap. Pega os 109+ templates que usam esse padrao para headers ou linhas
+       de acao sem header semantico (.page-header/<header>/.fin-header/.btn-toolbar).
+       Exemplos: pedidos/_partials/_tabela_pedidos.html (7 botoes em 1 linha),
+       hora/pedidos_lista.html, manufatura/*, portal/*, recebimento/*.
+
+       Risco minimo: flex-wrap so afeta visualmente quando ha overflow horizontal
+       — em modais com 2 botoes que ja cabem, nada muda; em headers densos, quebra
+       em 2 linhas em vez de vazar. */
+    .d-flex.justify-content-between {
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: 0.4rem;
     }
 }
 
