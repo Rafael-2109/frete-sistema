@@ -6,7 +6,7 @@
 </header>
 
 <div class="card p-3 motos-assai-card-sm">
-  <div class="mb-3">
+  <div class="mb-3" id="scan-input">
     <label class="form-label">Chassi</label>
     <div class="input-group">
       <input type="text" id="input-chassi" class="form-control form-control-lg"
@@ -19,7 +19,7 @@
     <div id="qr-reader" class="mt-2 d-none motos-assai-qr-reader"></div>
   </div>
 
-  <div class="form-check mb-2">
+  <div class="form-check mb-2" id="btn-marcar-pendente">
     <input type="checkbox" id="chk-pendencia" class="form-check-input">
     <label for="chk-pendencia" class="form-check-label">
       Pendência de peça com defeito?
@@ -40,14 +40,16 @@
     </div>
   </div>
 
-  <button type="button" id="btn-registrar" class="btn btn-primary btn-lg">
-    <i class="fas fa-check"></i> Registrar montagem (Ctrl+Enter)
-  </button>
+  <div id="btn-marcar-montada">
+    <button type="button" id="btn-registrar" class="btn btn-primary btn-lg">
+      <i class="fas fa-check"></i> Registrar montagem (Ctrl+Enter)
+    </button>
+  </div>
 
   <div id="alerta" class="mt-3 d-none"></div>
 </div>
 
-<div class="motos-assai-card-lg">
+<div class="motos-assai-card-lg" id="historico-3-ultimas">
   {% with acao_label = 'montagens' %}
     {% include 'motos_assai/partials/_historico_3_ultimas.html' %}
   {% endwith %}
@@ -63,4 +65,8 @@ window.MOTOS_ASSAI_OP_CONFIG = {
 };
 </script>
 <script src="{{ url_for('static', filename='motos_assai/js/operacao_quick.js') }}"></script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/montagem_quick.js') }}"></script>
 {% endblock %}

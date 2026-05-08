@@ -1,7 +1,7 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
-<header class="d-flex justify-content-between mb-3">
+<header class="d-flex justify-content-between mb-3" id="header-pedido-loja">
   <h2>Separação — Pedido {{ pedido.numero }} · Loja {{ loja.numero }} {{ loja.nome }}
     <span class="badge bg-{% if separacao.status == 'EM_SEPARACAO' %}primary{% elif separacao.status == 'FECHADA' %}success{% elif separacao.status == 'CANCELADA' %}danger{% else %}secondary{% endif %}">
       {{ separacao.status }}
@@ -11,27 +11,29 @@
 
 <h4>Saldo pendente por modelo</h4>
 <div class="row g-2 mb-3" id="saldos-container">
-  {% for s in saldos %}
-  <div class="col-md-4">
-    <div class="card p-2">
-      <strong>{{ s.codigo }} — {{ s.nome }}</strong>
-      <div class="progress my-1" style="height: 20px;">
-        <div class="progress-bar bg-success"
-             style="width: {{ (s.qtd_separada * 100 / s.qtd_pedida) if s.qtd_pedida else 0 }}%">
-          {{ s.qtd_separada }}/{{ s.qtd_pedida }}
+  <div id="barras-saldo" class="d-contents">
+    {% for s in saldos %}
+    <div class="col-md-4">
+      <div class="card p-2">
+        <strong>{{ s.codigo }} — {{ s.nome }}</strong>
+        <div class="progress my-1" style="height: 20px;">
+          <div class="progress-bar bg-success"
+               style="width: {{ (s.qtd_separada * 100 / s.qtd_pedida) if s.qtd_pedida else 0 }}%">
+            {{ s.qtd_separada }}/{{ s.qtd_pedida }}
+          </div>
         </div>
+        <small class="text-muted">
+          {% if s.qtd_pendente == 0 %}<span class="text-success">✓ COMPLETO</span>
+          {% else %}{{ s.qtd_pendente }} pendentes{% endif %}
+        </small>
       </div>
-      <small class="text-muted">
-        {% if s.qtd_pendente == 0 %}<span class="text-success">✓ COMPLETO</span>
-        {% else %}{{ s.qtd_pendente }} pendentes{% endif %}
-      </small>
     </div>
+    {% endfor %}
   </div>
-  {% endfor %}
 </div>
 
 {% if separacao.status == 'EM_SEPARACAO' %}
-<div class="card p-3 mb-3" style="max-width: 600px;">
+<div class="card p-3 mb-3" style="max-width: 600px;" id="scan-input">
   <label class="form-label">Chassi</label>
   <div class="input-group">
     <input type="text" id="input-chassi" class="form-control form-control-lg"
@@ -72,7 +74,7 @@
 </div>
 
 {% if separacao.status == 'EM_SEPARACAO' %}
-<div class="d-flex gap-2 mt-3">
+<div class="d-flex gap-2 mt-3" id="btn-finalizar-separacao">
   <button type="button" class="btn btn-success btn-lg" id="btn-finalizar">
     <i class="fas fa-check-double"></i> Finalizar separação
   </button>
@@ -173,4 +175,8 @@ window.MOTOS_ASSAI_SEP = {
 };
 </script>
 <script src="{{ url_for('static', filename='motos_assai/js/separacao_chassi.js') }}"></script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/separacao_chassi.js') }}"></script>
 {% endblock %}
