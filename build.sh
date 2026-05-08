@@ -125,40 +125,43 @@ echo "MOTOS ASSAI 01: schema 16 tabelas..."
 python scripts/migrations/motos_assai_01_schema.py \
     || echo "⚠️ Migration motos_assai_01 falhou, continuando deploy..."
 
-# 13. MOTOS ASSAI 03: seed CD 'Operacao VOE' (single record, campos opcionais).
+# 13. MOTOS ASSAI 07: UNIQUE (recibo_id, chassi) em assai_recibo_item (idempotente).
+# DDL — DEVE rodar antes dos seeds que usam o ORM atualizado.
+echo "MOTOS ASSAI 07: UNIQUE index assai_recibo_item..."
+python scripts/migrations/motos_assai_07_unique_recibo_item.py \
+    || echo "⚠️ Migration motos_assai_07 falhou, continuando deploy..."
+
+# 14. MOTOS ASSAI 08: campos de geocoding (lat, lng, provider, geocoded_at) em assai_loja.
+# Idempotente (DO $$ + IF NOT EXISTS). NAO geocoda lojas — so adiciona colunas.
+# DDL — DEVE rodar ANTES do seed 04 (AssaiLoja ORM tem os 4 campos novos —
+# fresh install quebraria o seed sem essas colunas; corrige PYTHON-FLASK-R9).
+echo "MOTOS ASSAI 08: geocoding fields em assai_loja..."
+python scripts/migrations/motos_assai_08_loja_geocoding.py \
+    || echo "⚠️ Migration motos_assai_08 falhou, continuando deploy..."
+
+# 15. MOTOS ASSAI 03: seed CD 'Operacao VOE' (single record, campos opcionais).
 # Idempotente (skip se ja existe).
 echo "MOTOS ASSAI 03: seed CD..."
 python scripts/migrations/motos_assai_03_seed_cd.py \
     || echo "⚠️ Seed motos_assai_03 falhou, continuando deploy..."
 
-# 14. MOTOS ASSAI 04: seed 39 lojas Assai (extraidas de 285.xlsx BASE LOJAS).
+# 16. MOTOS ASSAI 04: seed 39 lojas Assai (extraidas de 285.xlsx BASE LOJAS).
 # Idempotente (skip se numero ja existe).
 echo "MOTOS ASSAI 04: seed 39 lojas Assai..."
 python scripts/migrations/motos_assai_04_seed_lojas.py \
     || echo "⚠️ Seed motos_assai_04 falhou, continuando deploy..."
 
-# 15. MOTOS ASSAI 05: seed 3 modelos canonicos (X11_MINI, DOT, SOL) + aliases.
+# 17. MOTOS ASSAI 05: seed 3 modelos canonicos (X11_MINI, DOT, SOL) + aliases.
 # Regex de chassi aprovados em 2026-05-07. Idempotente (skip se codigo existe).
 echo "MOTOS ASSAI 05: seed modelos + aliases..."
 python scripts/migrations/motos_assai_05_seed_modelos.py \
     || echo "⚠️ Seed motos_assai_05 falhou, continuando deploy..."
 
-# 16. MOTOS ASSAI 06: seed CarviaModeloMoto SOL (cubagem CarVia para NFs Q.P.A.).
+# 18. MOTOS ASSAI 06: seed CarviaModeloMoto SOL (cubagem CarVia para NFs Q.P.A.).
 # Idempotente: skip se nome SOL já existe. Dimensões: 158x45x80 cm (classe DOT).
 echo "MOTOS ASSAI 06: seed CarviaModeloMoto SOL..."
 python scripts/migrations/motos_assai_06_carvia_modelo_sol.py \
     || echo "⚠️ Seed motos_assai_06 falhou, continuando deploy..."
-
-# 17. MOTOS ASSAI 07: UNIQUE (recibo_id, chassi) em assai_recibo_item (idempotente).
-echo "MOTOS ASSAI 07: UNIQUE index assai_recibo_item..."
-python scripts/migrations/motos_assai_07_unique_recibo_item.py \
-    || echo "⚠️ Migration motos_assai_07 falhou, continuando deploy..."
-
-# 18. MOTOS ASSAI 08: campos de geocoding (lat, lng, provider, geocoded_at) em assai_loja.
-# Idempotente (DO $$ + IF NOT EXISTS). NAO geocoda lojas — so adiciona colunas.
-echo "MOTOS ASSAI 08: geocoding fields em assai_loja..."
-python scripts/migrations/motos_assai_08_loja_geocoding.py \
-    || echo "⚠️ Migration motos_assai_08 falhou, continuando deploy..."
 
 echo "Build concluído com sucesso!"
 
