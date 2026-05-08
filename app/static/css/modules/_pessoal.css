@@ -14,7 +14,7 @@
 /* Fundo base de row-grupo (equivalente ao que `table-light` dava, mas sem
    setar --bs-table-bg, que sobrepunha o destaque de row-saldo-ativo). */
 #tabelaAgrupada tr.row-grupo > td {
-  background-color: var(--bs-tertiary-bg, #f8f9fa);
+  background-color: var(--bs-tertiary-bg);
 }
 
 [data-bs-theme="dark"] #tabelaAgrupada tr.row-grupo > td {

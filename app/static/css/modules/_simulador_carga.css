@@ -40,11 +40,11 @@
   position: relative;
   min-height: 600px;
   height: 600px;
-  background: var(--bg-dark, #0d1117);
+  background: var(--bg-dark);
 }
 
 [data-bs-theme="light"] .simulador-canvas-wrap {
-  background: #f0f2f5;
+  background: var(--bg);
 }
 
 .simulador-canvas-wrap canvas {
@@ -139,7 +139,7 @@
 
 .simulador-stat-card.stat-success .stat-value { color: var(--semantic-success); }
 .simulador-stat-card.stat-danger .stat-value { color: var(--semantic-danger); }
-.simulador-stat-card.stat-info .stat-value { color: var(--semantic-info, #4a90d9); }
+.simulador-stat-card.stat-info .stat-value { color: var(--semantic-info); }
 .simulador-stat-card.stat-warning .stat-value { color: var(--semantic-warning); }
 
 .simulador-stat-alert {
@@ -189,9 +189,9 @@
 }
 
 .simulador-view-btn.active {
-  border-color: var(--semantic-info, #4a90d9);
-  background: color-mix(in srgb, var(--semantic-info, #4a90d9) 15%, transparent);
-  color: var(--semantic-info, #4a90d9);
+  border-color: var(--semantic-info);
+  background: color-mix(in srgb, var(--semantic-info) 15%, transparent);
+  color: var(--semantic-info);
   font-weight: 600;
 }
 
@@ -282,8 +282,8 @@
 }
 
 .simulador-add-btn:hover {
-  border-color: var(--semantic-info, #4a90d9);
-  color: var(--semantic-info, #4a90d9);
+  border-color: var(--semantic-info);
+  color: var(--semantic-info);
 }
 
 /* --- Peso info --- */

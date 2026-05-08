@@ -40,14 +40,14 @@
 .chat-badge--system {
   top: 2px;
   left: 2px;
-  background: var(--warning, #f59e0b);
-  color: #fff;
+  background: var(--bs-warning);
+  color: var(--white-fixed);
 }
 .chat-badge--user {
   top: 2px;
   right: 2px;
-  background: var(--danger, #dc2626);
-  color: #fff;
+  background: var(--bs-danger);
+  color: var(--white-fixed);
 }
 .chat-badge.hidden { display: none; }
 
@@ -270,16 +270,16 @@
   color: var(--text);
 }
 .chat-message--system .chat-message__body {
-  background: var(--info-bg, rgba(59, 130, 246, 0.1));
-  border-left: 3px solid var(--info, #3b82f6);
+  background: var(--semantic-info-subtle);
+  border-left: 3px solid var(--semantic-info);
 }
 .chat-message--critico .chat-message__body {
-  background: var(--danger-bg, rgba(220, 38, 38, 0.1));
-  border-left: 3px solid var(--danger, #dc2626);
+  background: var(--semantic-danger-subtle);
+  border-left: 3px solid var(--semantic-danger);
 }
 .chat-message--atencao .chat-message__body {
-  background: var(--warning-bg, rgba(245, 158, 11, 0.1));
-  border-left: 3px solid var(--warning, #f59e0b);
+  background: var(--semantic-warning-subtle);
+  border-left: 3px solid var(--amber-50);
 }
 .chat-message__meta {
   font-size: 0.7rem;

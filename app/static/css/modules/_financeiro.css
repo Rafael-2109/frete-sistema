@@ -1008,7 +1008,7 @@
 
   /* ═══════════════════════════════════════════════════════════════════════════
      BADGE RECONCILIADO - Purple/roxo for reconciliation status
-     Replaces inline style="background-color: #6f42c1" in financeiro templates
+     Replaces inline background-color in financeiro templates
      ═══════════════════════════════════════════════════════════════════════════ */
 
   .badge-reconciliado {
