@@ -1,0 +1,86 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<h2>{% if modo == 'novo' %}Novo modelo{% else %}Editar modelo {{ modelo.codigo }}{% endif %}</h2>
+
+<form method="POST" class="row g-3">
+  {{ form.hidden_tag() }}
+
+  <div class="col-md-3">
+    {{ form.codigo.label(class="form-label") }}
+    {{ form.codigo(class="form-control", placeholder="X11_MINI") }}
+    {% for e in form.codigo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="col-md-9">
+    {{ form.nome.label(class="form-label") }}
+    {{ form.nome(class="form-control") }}
+  </div>
+
+  <div class="col-md-8">
+    {{ form.descricao_qpa.label(class="form-label") }}
+    {{ form.descricao_qpa(class="form-control") }}
+  </div>
+  <div class="col-md-4">
+    {{ form.codigo_qpa.label(class="form-label") }}
+    {{ form.codigo_qpa(class="form-control") }}
+  </div>
+
+  <div class="col-12">
+    {{ form.regex_chassi.label(class="form-label") }}
+    {{ form.regex_chassi(class="form-control", id="regex_chassi", placeholder="^LA2025SA1\\d+$") }}
+    {% for e in form.regex_chassi.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <small class="text-muted">Use anchors `^` e `$` para validação completa.</small>
+  </div>
+
+  <div class="col-12 form-check ms-3">
+    {{ form.ativo(class="form-check-input") }}
+    {{ form.ativo.label(class="form-check-label") }}
+  </div>
+
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Salvar</button>
+    <a href="{{ url_for('motos_assai.modelos_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+
+<hr>
+
+<h4>Testador de regex</h4>
+<div class="row g-2">
+  <div class="col-md-6">
+    <input type="text" id="teste_chassi" class="form-control" placeholder="Chassi para testar (ex: LA2025SA110007354)">
+  </div>
+  <div class="col-md-2">
+    <button type="button" class="btn btn-outline-info w-100" id="btn_testar">Testar</button>
+  </div>
+  <div class="col-md-4">
+    <div id="resultado_teste" class="form-control-plaintext"></div>
+  </div>
+</div>
+
+<script>
+document.getElementById('btn_testar').addEventListener('click', async () => {
+  const regex = document.getElementById('regex_chassi').value;
+  const chassi = document.getElementById('teste_chassi').value;
+  const resultEl = document.getElementById('resultado_teste');
+  resultEl.textContent = '...';
+  try {
+    const r = await fetch('{{ url_for("motos_assai.modelos_api_testar_regex") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+      body: JSON.stringify({regex, chassi})
+    });
+    const data = await r.json();
+    if (data.ok) {
+      resultEl.innerHTML = data.bate
+        ? '<span class="text-success">✓ BATE</span>'
+        : '<span class="text-danger">✗ NÃO BATE</span>';
+    } else {
+      resultEl.innerHTML = '<span class="text-danger">' + (data.erro || 'erro') + '</span>';
+    }
+  } catch (e) {
+    resultEl.innerHTML = '<span class="text-danger">erro: ' + e + '</span>';
+  }
+});
+</script>
+{% endblock %}

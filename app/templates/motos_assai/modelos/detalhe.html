@@ -1,0 +1,39 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>{{ modelo.codigo }} — {{ modelo.nome }}
+    {% if modelo.ativo %}<span class="badge bg-success">ATIVO</span>
+    {% else %}<span class="badge bg-secondary">INATIVO</span>{% endif %}
+  </h2>
+  <a href="{{ url_for('motos_assai.modelos_editar', modelo_id=modelo.id) }}" class="btn btn-outline-primary">
+    <i class="fas fa-edit"></i> Editar
+  </a>
+</header>
+
+<dl class="row">
+  <dt class="col-sm-3">Descrição Q.P.A.</dt><dd class="col-sm-9">{{ modelo.descricao_qpa or '-' }}</dd>
+  <dt class="col-sm-3">Código Q.P.A.</dt><dd class="col-sm-9">{{ modelo.codigo_qpa or '-' }}</dd>
+  <dt class="col-sm-3">Regex chassi</dt>
+  <dd class="col-sm-9">
+    {% if modelo.regex_chassi %}<code>{{ modelo.regex_chassi }}</code>
+    {% else %}<span class="text-warning">não configurado</span>{% endif %}
+  </dd>
+</dl>
+
+<h4>Aliases ({{ modelo.aliases|length }})</h4>
+<table class="table table-sm">
+  <thead><tr><th>Alias</th><th>Tipo</th><th>Ativo</th></tr></thead>
+  <tbody>
+    {% for a in modelo.aliases %}
+    <tr>
+      <td>{{ a.alias }}</td>
+      <td><code>{{ a.tipo }}</code></td>
+      <td>{% if a.ativo %}sim{% else %}não{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<a href="{{ url_for('motos_assai.modelos_lista') }}" class="btn btn-outline-secondary">Voltar</a>
+{% endblock %}
