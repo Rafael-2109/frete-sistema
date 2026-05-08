@@ -69,20 +69,34 @@
 
     closeExisting();
 
+    // Append direto ao body (escapa qualquer stacking context isolado por
+    // ancestor com transform/filter/will-change). O wrapper e meramente
+    // um container para event delegation e cleanup.
     var wrapper = document.createElement('div');
     wrapper.id = 'onboarding-dropdown';
     wrapper.innerHTML = html;
+    // Estilos do wrapper aplicados via !important para vencer qualquer CSS
+    // residual de modulos (ex: motos_assai/_motochefe usa z-index 9999).
+    wrapper.style.setProperty('position', 'fixed', 'important');
+    wrapper.style.setProperty('z-index', '2147483647', 'important'); // max int32
+    wrapper.style.setProperty('top', '0', 'important');
+    wrapper.style.setProperty('left', '0', 'important');
+    wrapper.style.setProperty('width', '0', 'important');
+    wrapper.style.setProperty('height', '0', 'important');
+    wrapper.style.setProperty('pointer-events', 'none', 'important');
     document.body.appendChild(wrapper);
 
-    // posicionar relativo ao botao (fixed, dentro da viewport)
+    // posicionar o menu fixed relativo ao botao (dentro da viewport)
     var rect = btn.getBoundingClientRect();
     var menu = wrapper.firstElementChild;
-    menu.style.position = 'fixed';
-    menu.style.top = (rect.bottom + 6) + 'px';
+    menu.style.setProperty('position', 'fixed', 'important');
+    menu.style.setProperty('z-index', '2147483647', 'important');
+    menu.style.setProperty('top', (rect.bottom + 6) + 'px', 'important');
     var rightOffset = window.innerWidth - rect.right;
     if (rightOffset < 10) rightOffset = 10;
-    menu.style.right = rightOffset + 'px';
-    menu.style.left = 'auto';
+    menu.style.setProperty('right', rightOffset + 'px', 'important');
+    menu.style.setProperty('left', 'auto', 'important');
+    menu.style.setProperty('pointer-events', 'auto', 'important');
 
     wrapper.addEventListener('click', function (e) {
       var a = e.target.closest('a');
@@ -120,10 +134,11 @@
   function injectStyles() {
     if (document.getElementById('onboarding-dropdown-styles')) return;
     var css = ''
+      + '#onboarding-dropdown { z-index: 2147483647 !important; }'
       + '#onboarding-dropdown .onboarding-dropdown-menu {'
       + '  background: #fff; border: 1px solid #d4d4d4; border-radius: 10px;'
       + '  box-shadow: 0 12px 32px rgba(0,0,0,0.18); min-width: 280px; max-width: 360px;'
-      + '  z-index: 99999; padding: 0; overflow: hidden;'
+      + '  z-index: 2147483647 !important; padding: 0; overflow: hidden;'
       + '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;'
       + '  font-size: 14px; color: #2d2d2d;'
       + '}'
