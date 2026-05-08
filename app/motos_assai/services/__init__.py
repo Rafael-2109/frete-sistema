@@ -19,6 +19,7 @@ from .compra_service import (
     gerar_numero_po, criar_consolidado, get_compra, listar_compras,
     CompraValidationError, gerar_pdf_po,
 )
+from .recibo_service import importar as importar_recibo, get_recibo, listar_recibos, ReciboParserError
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -32,4 +33,5 @@ __all__ = [
     'listar_pedidos_consolidaveis', 'calcular_totalizadores_por_modelo',
     'gerar_numero_po', 'criar_consolidado', 'get_compra', 'listar_compras',
     'CompraValidationError', 'gerar_pdf_po',
+    'importar_recibo', 'get_recibo', 'listar_recibos', 'ReciboParserError',
 ]
