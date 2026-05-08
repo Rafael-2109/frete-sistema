@@ -65,9 +65,12 @@
       for (var id in registry) {
         var t = registry[id];
         if (!isVisible(t)) continue;
-        if (routeMatches(t.autoStartRoute, path)) {
-          out.push({ id: id, titulo: t.titulo });
-        }
+        if (!routeMatches(t.autoStartRoute, path)) continue;
+        // Defesa: nao listar tour sem ao menos 1 step com elemento visivel
+        // (selector quebrado, IDs faltando, etc.) — evita usuario clicar e
+        // o tour abortar com warning silencioso.
+        if (filterSteps(t.steps).length === 0) continue;
+        out.push({ id: id, titulo: t.titulo });
       }
       return out;
     },
