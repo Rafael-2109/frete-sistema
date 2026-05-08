@@ -385,4 +385,66 @@
     filter: none;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE TOOLBARS (MOBILE OVERFLOW FIX)
+
+   Bootstrap .btn-toolbar e .btn-group nao quebram em wrap por default — em
+   viewports < 768px, toolbars com 3+ botoes longos vazam horizontalmente.
+   Caso reportado: carteira/agrupados_balanceado.html com 4 botoes Sendas
+   ("Sincronizar", "Importar Saldo Disp. Sendas", "Exportar Planilhas Sendas",
+   "Verificar Agendamentos Sendas").
+
+   Estrategia: wrap automatico em mobile, aparencia desktop preservada.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 767.98px) {
+    /* Toolbars sempre fazem wrap em mobile — regra universal segura */
+    .btn-toolbar {
+        flex-wrap: wrap !important;
+        gap: 0.4rem;
+    }
+
+    /* btn-groups dentro de toolbars: grupo continua unido, mas wrappam entre si */
+    .btn-toolbar > .btn-group {
+        flex-wrap: wrap;
+    }
+
+    /* Headers de pagina: justify-between forca overflow quando soma do titulo +
+       toolbar excede viewport. Forcar wrap entre titulo e botoes.
+       Cobre 4 padroes em uso no sistema:
+       - .page-header (carteira, comercial, pallet)
+       - <header.d-flex...> (motos_assai)
+       - <header> > .d-flex... (qualquer header semantico)
+       - .fin-header (financeiro — extrato, abatimentos, etc.) */
+    .page-header .d-flex.justify-content-between,
+    header.d-flex.justify-content-between,
+    header > .d-flex.justify-content-between,
+    .fin-header,
+    .fin-header > .d-flex,
+    .fin-header__content {
+        flex-wrap: wrap !important;
+        gap: 0.6rem;
+    }
+
+    /* Botoes em headers ficam mais compactos para caber mais por linha */
+    .page-header .btn-toolbar .btn,
+    .page-header .btn-group .btn-sm,
+    header .btn-toolbar .btn,
+    header .btn-group .btn-sm,
+    .fin-header .btn,
+    .fin-header__actions .btn {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.55rem;
+    }
+
+    /* Header generico container-fluid > d-flex (padrao manufatura) — aplicar
+       wrap apenas quando o filho contem botoes (minimiza risco de quebrar
+       outros layouts que usam d-flex justify-between). */
+    .container-fluid > .d-flex.justify-content-between:has(> .btn-toolbar),
+    .container-fluid > .d-flex.justify-content-between:has(.btn-group) {
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+}
+
 } /* End of @layer components */
