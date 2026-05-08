@@ -25,7 +25,7 @@
     {{ form.codigo_qpa(class="form-control", inputmode="numeric") }}
   </div>
 
-  <div class="col-12">
+  <div class="col-12" id="campo-regex-chassi">
     {{ form.regex_chassi.label(class="form-label") }}
     {{ form.regex_chassi(class="form-control", id="regex_chassi", placeholder="^LA2025SA1\\d+$") }}
     {% for e in form.regex_chassi.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
@@ -38,7 +38,7 @@
   </div>
 
   <div class="col-12">
-    <button type="submit" class="btn btn-primary">Salvar</button>
+    <button id="btn-salvar-modelo" type="submit" class="btn btn-primary">Salvar</button>
     <a href="{{ url_for('motos_assai.modelos_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
   </div>
 </form>

@@ -4,10 +4,11 @@
 <h2>Faturamento</h2>
 <p class="text-muted">Separações fechadas — gere Excel para Q.P.A. e suba a NF emitida.</p>
 
-<div class="table-responsive">
+<div id="tabela-separacoes-fechadas" class="table-responsive">
 <table class="table table-hover">
   <thead><tr><th>#</th><th>Pedido</th><th>Loja</th><th>Itens</th><th>Status</th><th>Excel</th><th>Ações</th></tr></thead>
   <tbody>
+    {% set onboarding_fat = namespace(usou_id_excel=false, usou_id_upload=false) %}
     {% for s in separacoes %}
     <tr>
       <td>{{ s.id }}</td>
@@ -17,9 +18,15 @@
       <td><span class="badge bg-secondary">{{ s.status }}</span></td>
       <td>{% if s.solicitacao_excel_s3_key %}<i class="fas fa-check text-success"></i>{% else %}-{% endif %}</td>
       <td>
-        <a href="{{ url_for('motos_assai.faturamento_solicitacao_excel', separacao_id=s.id) }}"
+        {% set primeiro_excel = not onboarding_fat.usou_id_excel %}
+        {% if primeiro_excel %}{% set onboarding_fat.usou_id_excel = true %}{% endif %}
+        <a {% if primeiro_excel %}id="btn-gerar-excel"{% endif %}
+           href="{{ url_for('motos_assai.faturamento_solicitacao_excel', separacao_id=s.id) }}"
            class="btn btn-sm btn-primary"><i class="fas fa-file-excel"></i> Excel</a>
-        <a href="{{ url_for('motos_assai.faturamento_upload_nf', separacao_id=s.id) }}"
+        {% set primeiro_upload = not onboarding_fat.usou_id_upload %}
+        {% if primeiro_upload %}{% set onboarding_fat.usou_id_upload = true %}{% endif %}
+        <a {% if primeiro_upload %}id="btn-upload-nf"{% endif %}
+           href="{{ url_for('motos_assai.faturamento_upload_nf', separacao_id=s.id) }}"
            class="btn btn-sm btn-outline-primary"><i class="fas fa-upload"></i> Upload NF</a>
       </td>
     </tr>
@@ -27,4 +34,8 @@
   </tbody>
 </table>
 </div>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/faturamento.js') }}"></script>
 {% endblock %}

@@ -10,7 +10,7 @@
   {{ form.hidden_tag() }}
 
   <div class="row g-3">
-    <div class="col-md-7">
+    <div class="col-md-7" id="multiselect-pedidos">
       <h5>Pedidos VOE em ABERTO ({{ pedidos|length }})</h5>
       {% if not pedidos %}
         <p class="text-muted">Nenhum pedido em ABERTO. Importe um pedido VOE primeiro.</p>
@@ -40,7 +40,7 @@
       {% endif %}
     </div>
 
-    <div class="col-md-5">
+    <div class="col-md-5" id="preview-totalizadores">
       <h5>Preview totalizadores</h5>
       {% if totais_preview %}
       <table class="table table-sm">
@@ -77,7 +77,7 @@
               formmethod="get" formaction="{{ url_for('motos_assai.compras_nova') }}">
         <i class="fas fa-sync"></i> Atualizar preview
       </button>
-      <button type="submit" name="action" value="confirmar" class="btn btn-primary">
+      <button id="btn-gerar-compra" type="submit" name="action" value="confirmar" class="btn btn-primary">
         <i class="fas fa-check"></i> Gerar PO Motochefe
       </button>
     </div>
@@ -89,4 +89,8 @@ document.getElementById('select-all').addEventListener('change', (e) => {
   document.querySelectorAll('.pedido-check').forEach(c => c.checked = e.target.checked);
 });
 </script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/compras_nova.js') }}"></script>
 {% endblock %}
