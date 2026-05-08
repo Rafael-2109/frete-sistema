@@ -216,6 +216,16 @@ class Usuario(db.Model, UserMixin):
             return False
         return self.sistema_lojas or self.perfil == 'administrador'
 
+    def pode_acessar_motos_assai(self):
+        """Acesso ao módulo Motos Assaí.
+
+        Gate de status (idêntico ao Hora): admin sempre passa; usuário
+        com status != 'ativo' é bloqueado mesmo que tenha o flag True.
+        """
+        if self.status != 'ativo':
+            return False
+        return self.sistema_motos_assai or self.perfil == 'administrador'
+
     def lojas_hora_ids_permitidas(self):
         """Retorna restricao de loja para este usuario no modulo HORA.
 
