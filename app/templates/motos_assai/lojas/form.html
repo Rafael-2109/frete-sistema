@@ -8,7 +8,7 @@
 
   <div class="col-md-3">
     {{ form.numero.label(class="form-label") }}
-    {{ form.numero(class="form-control") }}
+    {{ form.numero(class="form-control", inputmode="numeric") }}
     {% for e in form.numero.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
   </div>
 
@@ -50,7 +50,7 @@
   </div>
   <div class="col-md-2">
     {{ form.cep.label(class="form-label") }}
-    {{ form.cep(class="form-control") }}
+    {{ form.cep(class="form-control", inputmode="numeric") }}
   </div>
   <div class="col-md-5">
     {{ form.cidade.label(class="form-label") }}

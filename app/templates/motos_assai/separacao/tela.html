@@ -35,7 +35,8 @@
   <label class="form-label">Chassi</label>
   <div class="input-group">
     <input type="text" id="input-chassi" class="form-control form-control-lg"
-           autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50">
+           autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50"
+           autocapitalize="characters" enterkeyhint="search">
     <button type="button" id="btn-camera" class="btn btn-outline-secondary">
       <i class="fas fa-camera"></i>
     </button>
@@ -46,6 +47,7 @@
 {% endif %}
 
 <h4>Chassis registrados ({{ items|length }})</h4>
+<div class="table-responsive">
 <table class="table table-sm" id="items-table">
   <thead><tr><th>Chassi</th><th>Modelo</th><th>Valor unit.</th><th>Registrado em</th><th>Ação</th></tr></thead>
   <tbody>
@@ -67,13 +69,14 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 {% if separacao.status == 'EM_SEPARACAO' %}
 <div class="d-flex gap-2 mt-3">
-  <button type="button" class="btn btn-success" id="btn-finalizar">
+  <button type="button" class="btn btn-success btn-lg" id="btn-finalizar">
     <i class="fas fa-check-double"></i> Finalizar separação
   </button>
-  <button type="button" class="btn btn-outline-danger ms-auto" id="btn-cancelar">
+  <button type="button" class="btn btn-outline-danger btn-lg ms-auto" id="btn-cancelar">
     <i class="fas fa-ban"></i> Cancelar separação
   </button>
 </div>
@@ -86,6 +89,72 @@
   </a>
 </div>
 {% endif %}
+
+<!-- Modal: confirmar desfazer chassi -->
+<div class="modal fade" id="modal-desfazer-sep" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Remover chassi</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Remover chassi <code id="sep-desfazer-chassi"></code> desta separação?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning btn-lg" id="sep-btn-confirmar-desfazer">
+          <i class="fas fa-undo"></i> Confirmar remoção
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: confirmar finalizar separação -->
+<div class="modal fade" id="modal-finalizar-sep" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Finalizar separação</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Finalizar separação? Saldos pendentes ficam para outra separação se houver.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success btn-lg" id="sep-btn-confirmar-finalizar">
+          <i class="fas fa-check-double"></i> Confirmar finalização
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: cancelar separação (com input de motivo) -->
+<div class="modal fade" id="modal-cancelar-sep" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Cancelar separação</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">Motivo do cancelamento (≥3 chars)</label>
+        <input type="text" id="sep-input-motivo-cancelar" class="form-control form-control-lg"
+               placeholder="Informe o motivo..." autocapitalize="sentences">
+        <div id="sep-erro-cancelar" class="text-danger small mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-danger btn-lg" id="sep-btn-confirmar-cancelar">
+          <i class="fas fa-ban"></i> Confirmar cancelamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
         integrity="sha384-c9d8RFSL+sJ0dC0WGqK7tQXg4/c5++8KkF+xbSPq3ji10/wfKLtAVk0M3IY+XJ7q"

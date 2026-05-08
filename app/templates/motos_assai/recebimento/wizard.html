@@ -9,10 +9,10 @@
   </h2>
   <div>
     <a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=recibo.id) }}"
-       class="btn btn-sm btn-outline-secondary">
+       class="btn btn-outline-secondary">
       <i class="fas fa-pause"></i> Pausar
     </a>
-    <button type="button" class="btn btn-sm btn-success ms-2"
+    <button type="button" class="btn btn-success ms-2"
             id="btn-finalizar"
             {% if pendentes > 0 %}data-pendentes="{{ pendentes }}"{% endif %}>
       <i class="fas fa-check-double"></i> Finalizar
@@ -43,18 +43,19 @@
     <div class="col-md-7">
       <div id="qr-reader" class="qr-reader-container"></div>
       <div class="d-flex gap-2 mt-2">
-        <button type="button" id="btn-start-qr" class="btn btn-primary btn-sm">
+        <button type="button" id="btn-start-qr" class="btn btn-primary">
           <i class="fas fa-camera"></i> Iniciar câmera
         </button>
-        <button type="button" id="btn-stop-qr" class="btn btn-outline-secondary btn-sm d-none">
+        <button type="button" id="btn-stop-qr" class="btn btn-outline-secondary d-none">
           <i class="fas fa-stop"></i> Parar
         </button>
       </div>
     </div>
     <div class="col-md-5">
       <label class="form-label">ou digite/escaneie com leitor USB</label>
-      <input type="text" id="input-chassi" class="form-control" autofocus
-             placeholder="Chassi (Enter para validar)" maxlength="50">
+      <input type="text" id="input-chassi" class="form-control form-control-lg" autofocus
+             placeholder="Chassi (Enter para validar)" maxlength="50"
+             autocapitalize="characters" enterkeyhint="search">
       <button type="button" id="btn-chassi-manual" class="btn btn-outline-primary mt-2">
         Validar chassi <i class="fas fa-arrow-right"></i>
       </button>
@@ -89,7 +90,8 @@
   <h5>C. Cor e foto</h5>
   <div class="mb-3">
     <label class="form-label">Cor</label>
-    <input type="text" id="input-cor" class="form-control" placeholder="CINZA / PRETO / AZUL...">
+    <input type="text" id="input-cor" class="form-control" placeholder="CINZA / PRETO / AZUL..."
+           autocapitalize="characters">
   </div>
   <div class="mb-3">
     <label class="form-label">Foto da moto (opcional)</label>
@@ -117,6 +119,49 @@
   <button type="button" id="btn-proximo-chassi" class="btn btn-primary mt-3">
     <i class="fas fa-redo"></i> Próximo chassi
   </button>
+</div>
+
+<!-- Modal: falha ao subir foto — continuar mesmo assim? -->
+<div class="modal fade" id="modal-falha-foto" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Falha ao enviar foto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Falha ao subir foto. Continuar o registro sem foto?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal"
+                id="wiz-btn-cancelar-foto">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-lg" id="wiz-btn-confirmar-sem-foto">
+          Continuar sem foto
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: finalizar com pendentes -->
+<div class="modal fade" id="modal-finalizar-wiz" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Finalizar recebimento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="wiz-msg-finalizar"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success btn-lg" id="wiz-btn-confirmar-finalizar">
+          <i class="fas fa-check-double"></i> Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
