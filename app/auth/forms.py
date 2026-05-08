@@ -38,6 +38,7 @@ class AprovarUsuarioForm(FlaskForm):
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
     sistema_lojas = BooleanField('Acesso ao Sistema Lojas HORA')
+    sistema_motos_assai = BooleanField('Acesso ao Sistema Motos Assaí')
     loja_hora_id = SelectField(
         'Loja HORA (segregação)',
         choices=[('', 'Todas as lojas')],
@@ -72,6 +73,7 @@ class EditarUsuarioForm(FlaskForm):
     sistema_motochefe = BooleanField('Acesso ao Sistema MotoChefe')
     sistema_carvia = BooleanField('Acesso ao Sistema CarVia')
     sistema_lojas = BooleanField('Acesso ao Sistema Lojas HORA')
+    sistema_motos_assai = BooleanField('Acesso ao Sistema Motos Assaí')
     loja_hora_id = SelectField(
         'Loja HORA (segregação)',
         choices=[('', 'Todas as lojas')],
