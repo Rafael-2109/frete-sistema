@@ -29,7 +29,7 @@ def main():
             return
 
         file_path = tool_input.get("file_path", "")
-        if not file_path.endswith("models.py"):
+        if "/models/" not in file_path and not file_path.endswith("models.py"):
             return
 
         # Descobrir diretorio do projeto
