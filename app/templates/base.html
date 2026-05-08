@@ -366,8 +366,8 @@
 
           {# 🏍️ Motos Assaí — link direto para usuários do módulo #}
           {% if current_user.is_authenticated and current_user.pode_acessar_motos_assai() %}
-          <li>
-            <a class="dropdown-item" href="{{ url_for('motos_assai.dashboard') }}">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('motos_assai.dashboard') }}">
               <i class="fas fa-motorcycle"></i> Motos Assaí
             </a>
           </li>

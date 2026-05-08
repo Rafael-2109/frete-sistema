@@ -67,7 +67,11 @@ document.getElementById('btn_testar').addEventListener('click', async () => {
   try {
     const r = await fetch('{{ url_for("motos_assai.modelos_api_testar_regex") }}', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': '{{ csrf_token() }}'
+      },
       body: JSON.stringify({regex, chassi})
     });
     const data = await r.json();
