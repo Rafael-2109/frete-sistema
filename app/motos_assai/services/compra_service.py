@@ -73,7 +73,7 @@ def calcular_totalizadores_por_modelo(pedido_ids: List[int]) -> List[Dict[str, A
 
 def gerar_numero_po(hoje: Optional[date] = None) -> str:
     """Gera numero MA-YYYY-NNNN sequencial dentro do ano."""
-    hoje = hoje or date.today()
+    hoje = hoje or agora_brasil_naive().date()
     ano = hoje.year
     count = (
         AssaiCompraMotochefe.query
@@ -108,7 +108,7 @@ def criar_consolidado(
     # Cria header
     compra = AssaiCompraMotochefe(
         numero=gerar_numero_po(),
-        data_emissao=date.today(),
+        data_emissao=agora_brasil_naive().date(),
         motochefe_cnpj=motochefe_cnpj,
         status=COMPRA_STATUS_ABERTA,
         criada_por_id=criada_por_id,

@@ -1,12 +1,14 @@
 """Orquestração de importação de pedido VOE Q.P.A.
 
 Fluxo:
-1. Salva PDF em S3 (`motos_assai/pedidos/<numero_ou_uuid>.pdf`)
+1. Salva PDF em arquivo temporário
 2. Roda QpaPedidoExtractor (determinístico)
 3. Calcula confiança = (paginas_com_itens / paginas_total) * (lojas_resolvidas / lojas_total)
 4. Se confiança < 0.70 OU zero items: aciona LLM fallback (Haiku → Sonnet)
-5. Persiste AssaiPedidoVenda + N AssaiPedidoVendaItem
-6. Status final: ABERTO
+5. Valida duplicidade (número do pedido já importado?)
+6. SE TUDO OK: upload S3 (`motos_assai/pedidos/<numero_ou_uuid>.pdf`)
+7. Persiste AssaiPedidoVenda + N AssaiPedidoVendaItem (com rollback em caso de erro)
+8. Status final: ABERTO
 
 Não confirma o pedido — operador deve revisar tela de detalhe e clicar
 "Confirmar pedido" para liberar consolidação em PO Motochefe.
@@ -60,22 +62,14 @@ def importar_pdf_voe(
         PedidoVoeJaExisteError: se número do pedido já existe.
         PedidoVoeParserError: se determinístico e LLM falham.
     """
-    # 1. Salvar PDF no S3
-    buf = io.BytesIO(pdf_bytes)
-    buf.name = nome_arquivo
-    s3_key = FileStorage().save_file(
-        buf, folder='motos_assai/pedidos',
-        filename=nome_arquivo,
-        allowed_extensions=['pdf'],
-    )
-
-    # 2. Determinístico
-    extractor = QpaPedidoExtractor()
+    # 1. Salvar PDF em arquivo temporário para parse
     with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
         f.write(pdf_bytes)
         tmp_path = f.name
 
     try:
+        # 2. Determinístico (sem S3 ainda — upload só ocorre se parsing OK)
+        extractor = QpaPedidoExtractor()
         items = extractor.extract(tmp_path)
         confianca = _calcular_confianca(tmp_path, items)
         parser_usado = 'DETERMINISTICO'
@@ -105,7 +99,7 @@ def importar_pdf_voe(
     if not items:
         raise PedidoVoeParserError("Zero items extraídos por ambos parsers")
 
-    # 4. Persistir
+    # 4. Validar duplicidade ANTES de subir S3
     numero_pedido = items[0].get('numero_pedido')
     if not numero_pedido:
         raise PedidoVoeParserError("numero_pedido ausente nos items")
@@ -115,82 +109,102 @@ def importar_pdf_voe(
             f"Pedido {numero_pedido} já foi importado anteriormente"
         )
 
-    pedido = AssaiPedidoVenda(
-        numero=numero_pedido,
-        data_emissao=_parse_data(items[0].get('data_emissao')),
-        previsao_entrega=_parse_data(items[0].get('previsao_entrega')),
-        fornecedor_cnpj=items[0].get('fornecedor_cnpj'),
-        pdf_s3_key=s3_key,
-        parser_usado=parser_usado,
-        parsing_confianca=Decimal(str(round(confianca, 2))),
-        status=PEDIDO_STATUS_ABERTO,
-        criado_por_id=importado_por_id,
+    # 5. Parsing OK + sem duplicata → upload S3 (sem arquivo órfão em caso de erro antecipado)
+    buf = io.BytesIO(pdf_bytes)
+    buf.name = nome_arquivo
+    s3_key = FileStorage().save_file(
+        buf, folder='motos_assai/pedidos',
+        filename=nome_arquivo,
+        allowed_extensions=['pdf'],
     )
-    db.session.add(pedido)
-    db.session.flush()
 
-    # Cache de lojas e modelos para não fazer N queries
-    lojas_cache: Dict[str, AssaiLoja] = {}
-    modelos_cache: Dict[str, Optional[AssaiModelo]] = {}
-
-    items_persistidos = 0
-    items_pulados = []
-
-    for item in items:
-        numero_loja = item.get('numero_loja')
-        codigo_qpa = item.get('codigo_qpa')
-        if not numero_loja or not codigo_qpa:
-            items_pulados.append({'motivo': 'numero_loja ou codigo_qpa ausente', 'item': item})
-            continue
-
-        # Resolver loja
-        if numero_loja not in lojas_cache:
-            lojas_cache[numero_loja] = AssaiLoja.query.filter_by(numero=numero_loja).first()
-        loja = lojas_cache[numero_loja]
-        if not loja:
-            items_pulados.append({
-                'motivo': f'loja {numero_loja} não cadastrada',
-                'item': item,
-            })
-            continue
-
-        # Resolver modelo
-        if codigo_qpa not in modelos_cache:
-            modelos_cache[codigo_qpa] = resolver_por_codigo_qpa(codigo_qpa)
-        modelo = modelos_cache[codigo_qpa]
-        if not modelo:
-            items_pulados.append({
-                'motivo': f'modelo codigo_qpa={codigo_qpa} não cadastrado',
-                'item': item,
-            })
-            continue
-
-        # Verifica se já existe (evita duplicata em pages re-processed)
-        existente = AssaiPedidoVendaItem.query.filter_by(
-            pedido_id=pedido.id, loja_id=loja.id, modelo_id=modelo.id,
-        ).first()
-        if existente:
-            existente.qtd_pedida += int(item['qtd'])
-            existente.valor_total = (existente.valor_total or Decimal('0')) + Decimal(str(item['valor_total']))
-            continue
-
-        db.session.add(AssaiPedidoVendaItem(
-            pedido_id=pedido.id,
-            loja_id=loja.id,
-            modelo_id=modelo.id,
-            qtd_pedida=int(item['qtd']),
-            valor_unitario=Decimal(str(item['valor_unitario'])),
-            valor_total=Decimal(str(item['valor_total'])),
-        ))
-        items_persistidos += 1
-
-    if items_persistidos == 0:
-        db.session.rollback()
-        raise PedidoVoeParserError(
-            f"Nenhum item válido. Pulados: {len(items_pulados)} (primeiros 3: {items_pulados[:3]})"
+    # 6. Persistir — try/except garante rollback em caso de erro.
+    #    Se commit falhar após S3 upload, tenta delete best-effort (raro mas possível).
+    try:
+        pedido = AssaiPedidoVenda(
+            numero=numero_pedido,
+            data_emissao=_parse_data(items[0].get('data_emissao')),
+            previsao_entrega=_parse_data(items[0].get('previsao_entrega')),
+            fornecedor_cnpj=items[0].get('fornecedor_cnpj'),
+            pdf_s3_key=s3_key,
+            parser_usado=parser_usado,
+            parsing_confianca=Decimal(str(round(confianca, 2))),
+            status=PEDIDO_STATUS_ABERTO,
+            criado_por_id=importado_por_id,
         )
+        db.session.add(pedido)
+        db.session.flush()
 
-    db.session.commit()
+        # Cache de lojas e modelos para não fazer N queries
+        lojas_cache: Dict[str, AssaiLoja] = {}
+        modelos_cache: Dict[str, Optional[AssaiModelo]] = {}
+
+        items_persistidos = 0
+        items_pulados = []
+
+        for item in items:
+            numero_loja = item.get('numero_loja')
+            codigo_qpa = item.get('codigo_qpa')
+            if not numero_loja or not codigo_qpa:
+                items_pulados.append({'motivo': 'numero_loja ou codigo_qpa ausente', 'item': item})
+                continue
+
+            # Resolver loja
+            if numero_loja not in lojas_cache:
+                lojas_cache[numero_loja] = AssaiLoja.query.filter_by(numero=numero_loja).first()
+            loja = lojas_cache[numero_loja]
+            if not loja:
+                items_pulados.append({
+                    'motivo': f'loja {numero_loja} não cadastrada',
+                    'item': item,
+                })
+                continue
+
+            # Resolver modelo
+            if codigo_qpa not in modelos_cache:
+                modelos_cache[codigo_qpa] = resolver_por_codigo_qpa(codigo_qpa)
+            modelo = modelos_cache[codigo_qpa]
+            if not modelo:
+                items_pulados.append({
+                    'motivo': f'modelo codigo_qpa={codigo_qpa} não cadastrado',
+                    'item': item,
+                })
+                continue
+
+            # Verifica se já existe (evita duplicata em pages re-processed)
+            existente = AssaiPedidoVendaItem.query.filter_by(
+                pedido_id=pedido.id, loja_id=loja.id, modelo_id=modelo.id,
+            ).first()
+            if existente:
+                existente.qtd_pedida += int(item['qtd'])
+                existente.valor_total = (existente.valor_total or Decimal('0')) + Decimal(str(item['valor_total']))
+                continue
+
+            db.session.add(AssaiPedidoVendaItem(
+                pedido_id=pedido.id,
+                loja_id=loja.id,
+                modelo_id=modelo.id,
+                qtd_pedida=int(item['qtd']),
+                valor_unitario=Decimal(str(item['valor_unitario'])),
+                valor_total=Decimal(str(item['valor_total'])),
+            ))
+            items_persistidos += 1
+
+        if items_persistidos == 0:
+            raise PedidoVoeParserError(
+                f"Nenhum item válido. Pulados: {len(items_pulados)} (primeiros 3: {items_pulados[:3]})"
+            )
+
+        db.session.commit()
+
+    except Exception:
+        db.session.rollback()
+        # Cleanup best-effort: tenta remover o arquivo do S3 se commit falhou
+        try:
+            FileStorage().delete_file(s3_key)
+        except Exception as s3_err:
+            logger.warning(f"Não foi possível remover arquivo órfão do S3 ({s3_key}): {s3_err}")
+        raise
 
     if items_pulados:
         logger.warning(
