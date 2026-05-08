@@ -87,27 +87,53 @@
     </div>
     {% endif %}
 
-    <!-- Link público para registro -->
+    <!-- Links públicos para registro (um por sistema) -->
     <div class="card mt-4">
         <div class="card-header">
-            <i class="fas fa-share"></i> Link Público de Registro
+            <i class="fas fa-share"></i> Links Públicos de Registro
         </div>
         <div class="card-body">
-            <p class="mb-2">Compartilhe este link para permitir que novos usuários solicitem acesso:</p>
-            <div class="input-group">
-                <input type="text" class="form-control" readonly value="{{ request.url_root }}auth/registro"
-                    id="linkRegistro">
-                <button class="btn btn-outline-secondary" type="button" onclick="copiarLink()">
-                    <i class="fas fa-copy"></i> Copiar
-                </button>
+            <p class="mb-3">Compartilhe um destes links — cada um já pré-marca o sistema correto, e o usuário só precisa ser aprovado depois:</p>
+
+            <div class="mb-3">
+                <label class="form-label small text-muted mb-1">Sistema de Logística (Nacom Goya)</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" readonly value="{{ request.url_root }}auth/registro"
+                        id="linkRegistro">
+                    <button class="btn btn-outline-secondary" type="button" onclick="copiarLink('linkRegistro')">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small text-muted mb-1">Motochefe SP (Lojas HORA)</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" readonly value="{{ request.url_root }}auth/registro-motochefe-sp"
+                        id="linkRegistroMotochefeSp">
+                    <button class="btn btn-outline-secondary" type="button" onclick="copiarLink('linkRegistroMotochefeSp')">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-0">
+                <label class="form-label small text-muted mb-1">Motos Assaí (Q.P.A. → Sendas/Assaí)</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" readonly value="{{ request.url_root }}auth/registro-motos-assai"
+                        id="linkRegistroMotosAssai">
+                    <button class="btn btn-outline-secondary" type="button" onclick="copiarLink('linkRegistroMotosAssai')">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    function copiarLink() {
-        const input = document.getElementById('linkRegistro');
+    function copiarLink(inputId) {
+        const input = document.getElementById(inputId || 'linkRegistro');
         input.select();
         input.setSelectionRange(0, 99999);
         navigator.clipboard.writeText(input.value);
