@@ -2,9 +2,22 @@
 
 {% block title %}Motos Assaí{% endblock %}
 
+{% block extra_css %}
+{% if current_user.is_authenticated %}
+<link rel="stylesheet" href="{{ url_for('static', filename='onboarding/lib/driver.css') }}">
+<script>
+  window.OnboardingContext = {
+    user_id: {{ current_user.id }},
+    is_admin: {{ g.onboarding_is_admin | tojson }},
+    permissoes: null
+  };
+</script>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid motos-assai-wrapper py-3">
-  <nav class="motos-assai-nav mb-3">
+  <nav class="motos-assai-nav mb-3 d-flex align-items-center flex-wrap gap-2">
     <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.dashboard') }}">
       <i class="fas fa-tachometer-alt"></i> Dashboard
     </a>
@@ -17,29 +30,42 @@
     <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.cd_detalhe') }}">
       <i class="fas fa-warehouse"></i> CD
     </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.pedidos_lista') }}">
+    <a id="menu-pedidos-voe" class="motos-assai-nav-link" href="{{ url_for('motos_assai.pedidos_lista') }}">
       <i class="fas fa-file-invoice"></i> Pedidos VOE
     </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.compras_lista') }}">
+    <a id="menu-compras" class="motos-assai-nav-link" href="{{ url_for('motos_assai.compras_lista') }}">
       <i class="fas fa-shopping-cart"></i> POs Motochefe
     </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.recibos_lista') }}">
+    <a id="menu-recibos" class="motos-assai-nav-link" href="{{ url_for('motos_assai.recibos_lista') }}">
       <i class="fas fa-truck-loading"></i> Recibos
     </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.montagem_tela') }}">
+    <a id="menu-montagem" class="motos-assai-nav-link" href="{{ url_for('motos_assai.montagem_tela') }}">
       <i class="fas fa-tools"></i> Montagem
     </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.disponibilizar_tela') }}">
+    <a id="menu-disponibilizar" class="motos-assai-nav-link" href="{{ url_for('motos_assai.disponibilizar_tela') }}">
       <i class="fas fa-check-circle"></i> Disponibilizar
     </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.separacao_lista') }}">
+    <a id="menu-separacao" class="motos-assai-nav-link" href="{{ url_for('motos_assai.separacao_lista') }}">
       <i class="fas fa-truck"></i> Separação
     </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.faturamento_lista') }}">
+    <a id="menu-faturamento" class="motos-assai-nav-link" href="{{ url_for('motos_assai.faturamento_lista') }}">
       <i class="fas fa-file-invoice-dollar"></i> Faturamento
     </a>
+    {% if current_user.is_authenticated %}
+    <button id="help-button" class="btn btn-link btn-sm ms-auto p-0" title="Ajuda" type="button">
+      <i class="bi bi-question-circle"></i>
+    </button>
+    {% endif %}
   </nav>
 
   {% block motos_assai_content %}{% endblock %}
 </div>
+
+{% if current_user.is_authenticated %}
+<script src="{{ url_for('static', filename='onboarding/lib/driver.min.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/core/localstorage_tracker.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/core/tour_engine.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/core/tour_button.js') }}"></script>
+{% block onboarding_tours %}{% endblock %}
+{% endif %}
 {% endblock %}
