@@ -91,9 +91,8 @@ def test_gerar_excel_estrutura_basica(app, admin_user):
 
 
 def test_gerar_excel_separacao_nao_fechada_falha(app, admin_user):
-    """gerar_excel_qpa com separação não fechada deve funcionar (sem validação extra no service)."""
-    # O service gera Excel sem verificar status — validação é na rota.
-    # Este teste garante que o service não quebra com separação em EM_SEPARACAO.
+    """gerar_excel_qpa com separação EM_SEPARACAO deve levantar ValueError (H3)."""
+    # H3: service valida status antes de gerar — EM_SEPARACAO não permitido.
     with app.app_context():
         modelo_dot = AssaiModelo.query.filter_by(codigo='DOT').first()
         loja = AssaiLoja.query.first()
@@ -125,10 +124,9 @@ def test_gerar_excel_separacao_nao_fechada_falha(app, admin_user):
         sep_id = sep.id
         db.session.commit()
 
-        # EM_SEPARACAO: service deve gerar Excel sem crashar
-        with patch('app.motos_assai.services.faturamento_service.FileStorage') as mock_fs:
-            mock_fs.return_value.save_file.return_value = f'motos_assai/solicitacoes/{sep_id}.xlsx'
-            bytes_xlsx, s3_key = gerar_excel_qpa(sep_id, admin_user.id)
+        # EM_SEPARACAO: service deve levantar ValueError (status inválido)
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match='EM_SEPARACAO'):
+            gerar_excel_qpa(sep_id, admin_user.id)
 
-        assert isinstance(bytes_xlsx, bytes)
         db.session.rollback()
