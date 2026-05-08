@@ -20,6 +20,14 @@ from .atacadao_pedido import AtacadaoPedidoExtractor
 from .assai import AssaiExtractor
 from .identificador import identificar_documento, IdentificacaoDocumento
 
+# QpaPedidoExtractor e importado lazy (abaixo, dentro de _get_qpa_extractor) para
+# evitar importacao circular:
+#   processor.py -> qpa_pedido_extractor.py -> base.PDFExtractor
+#   -> pedidos/leitura/__init__.py -> processor.py
+def _get_qpa_extractor_class():
+    from app.motos_assai.services.parsers.qpa_pedido_extractor import QpaPedidoExtractor
+    return QpaPedidoExtractor
+
 
 class PedidoProcessor:
     """Processador principal de pedidos de redes de atacarejo"""
@@ -39,6 +47,8 @@ class PedidoProcessor:
         'assai': AssaiExtractor,  # Default
         'sendas': AssaiExtractor,  # Alias
         'sendas_pedido': AssaiExtractor,
+        # Q.P.A. — entradas resolvidas via _get_qpa_extractor_class() (lazy, evita circular import).
+        # Chaves aqui sao placeholders; process_file() intercepta 'qpa*' antes do lookup.
         # Futuros extratores
         # 'tenda_proposta': TendaPropostaExtractor,
         # 'tenda_pedido': TendaPedidoExtractor,
@@ -107,6 +117,13 @@ class PedidoProcessor:
                     and 'CCPMERM02' in (self.identificacao.texto_extraido or '')):
                 from .atacadao_pedido_v2 import AtacadaoPedidoV2Extractor
                 extractor_class = AtacadaoPedidoV2Extractor
+
+            # Resolucao lazy do QpaPedidoExtractor (evita importacao circular em nivel de modulo).
+            # qpa_pedido / qpa: extractor da rota /motos-assai/pedidos/upload reusado aqui
+            # para evitar quebra silenciosa quando o fluxo legado /pedidos/upload identifica
+            # rede=QPA. A rota canonica para QPA e /motos-assai/pedidos/upload.
+            if extractor_class is None and formato.lower().startswith('qpa'):
+                extractor_class = _get_qpa_extractor_class()
 
             # Obtém extrator apropriado (fallback padrao via EXTRACTORS)
             if extractor_class is None:

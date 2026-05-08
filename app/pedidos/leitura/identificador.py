@@ -63,7 +63,12 @@ class IdentificadorDocumento:
         'QPA': [
             r'Q\.?P\.?A\s*DISTRIBUI[CÇ][AÃ]O',
             r'53\.?780\.?554\.?/?0001-?15',
-            r'PEDIDO\s+DE\s+COMPRAS\s+\d+/[A-Z]',  # cabeçalho Consinco do VOE
+            # REMOVIDO: r'PEDIDO\s+DE\s+COMPRAS\s+\d+/[A-Z]' — padrão Consinco
+            # que também aparece em PDFs Assaí nativos (Sendas usa Consinco).
+            # Causava empate de score 0.8 entre QPA e ASSAI.
+            # Identificação de QPA já é garantida pelo CNPJ 53.780.554/0001-15
+            # (step 0 de _identificar_rede, confiança 0.97) e pelo padrão
+            # PADROES_NUMERO['QPA_PEDIDO'] checado separadamente.
         ],
     }
 
