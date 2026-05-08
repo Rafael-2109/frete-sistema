@@ -53,6 +53,13 @@
             </span>
             {% endif %}
 
+            {# Analise de Diferencas — sempre disponivel (mesmo conferido/cancelado, util para post-mortem) #}
+            <a href="{{ url_for('carvia.analise_diferencas_frete_carvia', id=frete.id) }}"
+               class="btn btn-outline-info" target="_blank"
+               title="Detalha componentes da tabela e permite comparar com valores do CTe — sempre disponivel">
+                <i class="fas fa-calculator"></i> Analise de Diferencas
+            </a>
+
             {% if not fatura_transportadora or fatura_transportadora.status_conferencia != 'CONFERIDO' %}
             <a href="{{ url_for('carvia.nova_despesa_do_frete_carvia', frete_id=frete.id) }}"
                class="btn btn-warning">

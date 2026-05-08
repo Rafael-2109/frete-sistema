@@ -304,18 +304,23 @@
                             </div>
                         </div>
 
-                        <!-- Diferenças -->
+                        <!-- Análise da Tabela — botão SEMPRE disponível (útil para post-mortem) -->
+                        <div class="row mb-3">
+                            <div class="col-12 text-end">
+                                <a href="{{ url_for('fretes.analise_diferencas', frete_id=frete.id) }}"
+                                   class="btn btn-sm btn-outline-info" target="_blank"
+                                   title="Componentes detalhados da tabela vs CTe — sempre disponível">
+                                    <i class="fas fa-calculator"></i> Análise Detalhada da Tabela
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Diferenças (mostradas dinamicamente quando há diferença real) -->
                         <div id="diferencas-info" class="row" style="display: none;">
                             <div class="col-12">
                                 <div class="card bg-light">
                                     <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-center mb-3">
-                                            <h6 class="mb-0">Análise das Diferenças:</h6>
-                                            <a href="{{ url_for('fretes.analise_diferencas', frete_id=frete.id) }}" 
-                                               class="btn btn-sm btn-info" target="_blank">
-                                                <i class="fas fa-calculator"></i> Análise Detalhada da Tabela
-                                            </a>
-                                        </div>
+                                        <h6 class="mb-3">Análise das Diferenças:</h6>
                                         <div id="diferenca-cotado-cte"></div>
                                         <div id="diferenca-considerado-pago"></div>
                                     </div>

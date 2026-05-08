@@ -1198,6 +1198,109 @@ def register_frete_routes(bp):
         return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
 
     # ------------------------------------------------------------------
+    # Analise Detalhada de Diferencas (espelha Nacom: fretes.analise_diferencas)
+    # ------------------------------------------------------------------
+
+    @bp.route('/fretes/<int:id>/analise-diferencas', methods=['GET'])  # type: ignore
+    @login_required
+    def analise_diferencas_frete_carvia(id):  # type: ignore
+        """Analise detalhada das diferencas com dados da tabela do CarviaFrete.
+
+        Diferenca vs Nacom:
+        - Sem toggle Embarque/Cadastrada — CarVia tem 1 unica fonte (snapshot
+          do frete `tabela_*`).
+        - cidade=None na CalculadoraFrete (CarVia usa apenas icms_proprio).
+        - Funciona em qualquer status (PENDENTE, CONFERIDO, FATURADO,
+          CANCELADO) — util para verificacao pos-morte mesmo apos conferencia.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            flash('Acesso negado.', 'danger')
+            return redirect(url_for('main.dashboard'))
+
+        frete = CarviaFrete.query.get_or_404(id)
+
+        # Lazy import: helper de calculo do Nacom. Funcao pura — recebe frete
+        # com peso_total/valor_total_nfs (CarviaFrete tem ambos), nao depende
+        # de modelos Nacom. Justifica excecao a R1 (modulo CarVia isolado).
+        from app.fretes.routes import _calcular_componentes_analise
+        from app.utils.tabela_frete_manager import TabelaFreteManager
+
+        # Configuracao da transportadora (pre/pos minimo, pedagio por fracao)
+        transportadora_config = {
+            "aplica_gris_pos_minimo": False,
+            "aplica_adv_pos_minimo": False,
+            "aplica_rca_pos_minimo": False,
+            "aplica_pedagio_pos_minimo": False,
+            "aplica_tas_pos_minimo": False,
+            "aplica_despacho_pos_minimo": False,
+            "aplica_cte_pos_minimo": False,
+            "pedagio_por_fracao": True,
+        }
+        if frete.transportadora and hasattr(frete.transportadora, "aplica_gris_pos_minimo"):
+            transp = frete.transportadora
+            transportadora_config = {
+                "aplica_gris_pos_minimo": transp.aplica_gris_pos_minimo or False,
+                "aplica_adv_pos_minimo": transp.aplica_adv_pos_minimo or False,
+                "aplica_rca_pos_minimo": transp.aplica_rca_pos_minimo or False,
+                "aplica_pedagio_pos_minimo": transp.aplica_pedagio_pos_minimo or False,
+                "aplica_tas_pos_minimo": transp.aplica_tas_pos_minimo or False,
+                "aplica_despacho_pos_minimo": transp.aplica_despacho_pos_minimo or False,
+                "aplica_cte_pos_minimo": transp.aplica_cte_pos_minimo or False,
+                "pedagio_por_fracao": getattr(transp, "pedagio_por_fracao", True) or True,
+            }
+
+        # Snapshot da tabela (campos `tabela_*` do CarviaFrete).
+        # IMPORTANTE: subcontrato CarVia NAO tem ICMS — diferente de Nacom
+        # (venda outbound) onde ICMS faz parte do valor. Aqui CarVia eh
+        # compra inbound (subcontrato), entao zeramos toda dimensao de ICMS:
+        #   - icms_destino = 0 (cidade nao contribui)
+        #   - icms_proprio = 0 (tabela nao contribui)
+        #   - icms_incluso = True (impede _aplicar_icms_final de embutir)
+        #   - transportadora_optante = True (impede _calcular_valor_liquido de descontar)
+        tabela_dados = TabelaFreteManager.preparar_dados_tabela(frete)
+        tabela_dados["icms_destino"] = 0
+        tabela_dados["icms_proprio"] = 0
+        tabela_dados["icms_incluso"] = True
+        tabela_dados["transportadora_optante"] = True
+
+        # Adapter: _calcular_componentes_analise usa frete.peso_total e
+        # frete.valor_total_nfs — CarviaFrete tem ambos. ✓
+        # Tambem usa frete.transportadora.optante via tabela_dados (ja seteado).
+        if not frete.peso_total or frete.peso_total <= 0:
+            flash(
+                'Frete sem peso_total preenchido — nao e possivel analisar a tabela.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
+
+        if not frete.tabela_nome_tabela:
+            flash(
+                'Frete sem tabela ancorada — campos tabela_* estao vazios. '
+                'Edite o frete e selecione uma tabela ou rode o backfill.',
+                'warning',
+            )
+            return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
+
+        try:
+            componentes, resumo_cotacao, configuracao_info = _calcular_componentes_analise(
+                frete, tabela_dados, transportadora_config
+            )
+        except Exception as e:
+            logger.exception('Erro ao calcular componentes de analise: %s', e)
+            flash(f'Erro ao calcular analise: {e}', 'danger')
+            return redirect(url_for('carvia.detalhe_frete_carvia', id=id))
+
+        return render_template(
+            'carvia/fretes/analise_diferencas.html',
+            frete=frete,
+            tabela_dados=tabela_dados,
+            componentes=componentes,
+            resumo_cotacao=resumo_cotacao,
+            configuracao_info=configuracao_info,
+            transportadora_config=transportadora_config,
+        )
+
+    # ------------------------------------------------------------------
     # API: Buscar CTes por NF (AJAX)
     # ------------------------------------------------------------------
 

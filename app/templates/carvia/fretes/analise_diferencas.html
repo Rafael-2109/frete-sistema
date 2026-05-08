@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+
+{% block title %}Analise Detalhada das Diferencas — Frete CarVia #{{ frete.id }}{% endblock %}
+
+{% block extra_css %}
+{# Reaproveita styles modulares de _fretes.css (badges, tabelas, formato monetario) #}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-2">
+                <i class="fas fa-calculator"></i> Analise Detalhada das Diferencas
+                <small class="text-muted">Frete CarVia #{{ frete.id }}</small>
+            </h1>
+            <p class="text-muted mb-3">
+                <strong>Subcontrato CarVia:</strong> calculo do valor que a transportadora cobra
+                pela <em>compra</em> do frete (sem ICMS — diferente do fluxo Nacom de venda).
+            </p>
+        </div>
+    </div>
+
+    <!-- Configuracao da Transportadora -->
+    {% if configuracao_info %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info mb-3">
+                <h6><i class="fas fa-cog"></i> Configuracao da Transportadora</h6>
+                <small>
+                    <strong>Aplicacao de componentes:</strong>
+                    {% set pos_minimo_count = 0 %}
+                    {% if transportadora_config %}
+                    {% for key, value in transportadora_config.items() %}
+                    {% if key.startswith('aplica_') and key.endswith('_pos_minimo') and value %}
+                    {% set pos_minimo_count = pos_minimo_count + 1 %}
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    {% if pos_minimo_count > 0 %}
+                    <span class="badge bg-warning">{{ pos_minimo_count }} componentes aplicados POS-MINIMO</span>
+                    {% else %}
+                    <span class="badge bg-success">Todos componentes aplicados PRE-MINIMO</span>
+                    {% endif %}
+
+                    {% if transportadora_config and transportadora_config.pedagio_por_fracao %}
+                    <span class="badge bg-info">Pedagio por FRACAO</span>
+                    {% else %}
+                    <span class="badge bg-info">Pedagio DIRETO</span>
+                    {% endif %}
+
+                    <span class="badge bg-secondary">Sem ICMS (subcontrato CarVia)</span>
+
+                    {% if configuracao_info.tem_ajuste_minimo %}
+                    <span class="badge bg-danger">Ajuste de minimo: {{ (configuracao_info.valor_ajuste)|moeda_carteira }}</span>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Informacoes do Frete -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header card-header-theme-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-truck"></i> Informacoes do Frete
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Destinatario:</strong><br>
+                            {{ frete.nome_destino or '-' }}<br>
+                            <small class="text-muted">CNPJ: {{ frete.cnpj_destino }}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Transportadora:</strong><br>
+                            {{ frete.transportadora.razao_social if frete.transportadora else 'N/D' }}<br>
+                            <small class="text-muted">
+                                {% if frete.embarque_id %}Embarque #{{ frete.embarque_id }}{% else %}Backfill (sem embarque){% endif %}
+                            </small>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Dados Fisicos:</strong><br>
+                            Peso: {{ frete.peso_total|numero_br(2) }} kg<br>
+                            <small class="text-muted">Valor NFs: {{ (frete.valor_total_nfs)|moeda_carteira }}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Tabela Usada:</strong><br>
+                            <span>{{ tabela_dados.nome_tabela or 'N/A' }}</span><br>
+                            <small class="text-muted">
+                                Tipo: {{ frete.tipo_carga }}{% if frete.uf_destino %} · {{ frete.uf_destino }}{% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Componentes da Tabela -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header card-header-theme-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-table"></i> Componentes da Tabela de Frete
+                        <span class="badge bg-primary ms-2">SNAPSHOT DO FRETE</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm" id="tabela-componentes">
+                            <thead class="table-thead-theme">
+                                <tr>
+                                    <th width="160">Componente</th>
+                                    <th width="100">Valor Tabela</th>
+                                    <th width="100">Valor Usado</th>
+                                    <th width="160">Formula</th>
+                                    <th width="110" class="text-end">Valor Calculado</th>
+                                    <th width="110" class="text-center">Valor CTe</th>
+                                    <th width="110" class="text-center">Tabela CTe</th>
+                                    <th width="90" class="text-end">Diferenca</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-componentes">
+                                {% for componente in componentes %}
+                                {# Pular linhas relacionadas a ICMS (subcontrato CarVia nao tem) #}
+                                {% if componente.tipo != 'icms' and componente.tipo != 'total_final' %}
+                                <tr {% if componente.tipo in ['subtotal_pre', 'subtotal_pos', 'total', 'total_final'] %}class="table-active font-weight-bold"{% endif %}>
+                                    <td>
+                                        <strong>{{ componente.nome }}</strong>
+                                        {% if componente.tipo == 'peso' %}<span class="badge bg-warning badge-sm">PESO</span>
+                                        {% elif componente.tipo == 'subtotal' %}<span class="badge bg-success badge-sm">SUBTOTAL</span>
+                                        {% elif componente.tipo == 'subtotal_pre' %}<span class="badge bg-primary badge-sm">PRE-MINIMO</span>
+                                        {% elif componente.tipo == 'subtotal_pos' %}<span class="badge bg-secondary badge-sm">POS-MINIMO</span>
+                                        {% elif componente.tipo == 'ajuste' %}<span class="badge bg-warning badge-sm">AJUSTE MINIMO</span>
+                                        {% elif componente.tipo == 'total' %}<span class="badge bg-success badge-sm">TOTAL</span>
+                                        {% endif %}
+
+                                        {% if componente.pos_minimo %}
+                                        <span class="badge bg-warning badge-sm" title="Aplicado APOS o frete minimo">
+                                            <i class="fas fa-exclamation-triangle"></i> POS-MINIMO
+                                        </span>
+                                        {% endif %}
+
+                                        {% if componente.tem_minimo and componente.valor_sem_minimo and componente.valor_sem_minimo < componente.valor_calculado %}
+                                        <span class="badge bg-info badge-sm" title="Valor minimo aplicado">
+                                            <i class="fas fa-arrow-up"></i> MINIMO APLICADO
+                                        </span>
+                                        {% endif %}
+
+                                        {% if componente.observacao %}
+                                        <br><small class="text-muted">{{ componente.observacao }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td><small><strong>{{ componente.valor_tabela }}</strong></small></td>
+                                    <td><small>{{ componente.valor_usado }}</small></td>
+                                    <td><code style="font-size: 11px;">{{ componente.formula }}</code></td>
+                                    <td class="text-end">
+                                        {% if componente.unidade == 'R$' %}
+                                        <span class="badge badge-valor-destaque">
+                                            {{ (componente.valor_calculado)|moeda_carteira }}
+                                        </span>
+                                        {% else %}
+                                        <span class="badge badge-valor-calculado">
+                                            {{ (componente.valor_calculado)|numero_br(2) }} {{ componente.unidade }}
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td style="text-align: center;">
+                                        {% if componente.tipo == 'valor' %}
+                                        <input type="text" class="form-control form-control-sm valor-cte-campo"
+                                               data-componente="{{ componente.input_index }}"
+                                               placeholder="0,00" style="font-size: 11px;">
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td style="text-align: center;">
+                                        {% if componente.tipo == 'valor' %}
+                                        <span class="usado-transportadora text-dark"
+                                              data-componente="{{ componente.input_index }}"
+                                              style="font-size: 11px; font-weight: bold;">-</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td style="text-align: right;">
+                                        {% if componente.tipo == 'valor' %}
+                                        <span class="diferenca-componente text-dark"
+                                              data-componente="{{ componente.input_index }}"
+                                              style="font-size: 11px; font-weight: bold;">-</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumos -->
+    <div class="row">
+        <!-- Resumo da Cotacao -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-list"></i> Resumo da Cotacao (Tabela)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr class="table-success">
+                            <td><strong>Total Liquido (sem ICMS):</strong></td>
+                            <td class="text-end">
+                                <h5 class="mb-0">
+                                    <span class="badge badge-valor-destaque">
+                                        {{ (resumo_cotacao.total_liquido)|moeda_carteira }}
+                                    </span>
+                                </h5>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><small class="text-muted">Subcontrato CarVia nao tem ICMS — total bruto = total liquido</small></td>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resumo do CTe Subcontrato -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-invoice"></i> Resumo do CTe Subcontrato
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr class="table-warning">
+                            <td><strong>Total Liquido CTe:</strong></td>
+                            <td class="text-end">
+                                <h5 class="mb-0">
+                                    <span class="badge badge-valor-destaque" id="total-liquido-cte-display">R$ 0,00</span>
+                                </h5>
+                                <input type="hidden" id="total-liquido-cte" value="0">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><small class="text-muted">Preencha os valores CTe na tabela acima por componente</small></td>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Valores do Frete (referencia) -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card border-secondary">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">
+                        <i class="fas fa-history"></i> Valores Persistidos no Frete (referencia)
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Cotado</small>
+                            <strong>{{ (frete.valor_cotado or 0)|moeda_carteira }}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">CTe (registrado)</small>
+                            <strong>{{ (frete.valor_cte or 0)|moeda_carteira }}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Considerado</small>
+                            <strong>{{ (frete.valor_considerado or 0)|moeda_carteira }}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Pago</small>
+                            <strong>{{ (frete.valor_pago or 0)|moeda_carteira }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diferenca Final -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-balance-scale"></i> Analise Final das Diferencas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <h6>Diferenca Total:</h6>
+                            <h4 id="diferenca-total" class="text-secondary">R$ 0,00</h4>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <h6>Percentual:</h6>
+                            <h4 id="percentual-diferenca" class="text-secondary">0,00%</h4>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <h6>Status:</h6>
+                            <h4 id="status-diferenca" class="text-secondary">Em analise</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botoes -->
+    <div class="row mt-4 mb-4">
+        <div class="col-12 text-center">
+            <a href="{{ url_for('carvia.detalhe_frete_carvia', id=frete.id) }}" class="btn btn-secondary btn-lg me-3">
+                <i class="fas fa-arrow-left"></i> Voltar ao Frete
+            </a>
+            <button type="button" class="btn btn-primary btn-lg" onclick="window.print()">
+                <i class="fas fa-print"></i> Imprimir Analise
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const componentesCalculados = {{ componentes|tojson }};
+    const componentesValor = componentesCalculados.filter(c => c.tipo === 'valor');
+    const valorCotacaoTotal = {{ resumo_cotacao.total_liquido|tojson }};
+    const valorCteInformado = {{ frete.valor_cte or 0 }};
+    const pesoConsiderado = {{ frete.peso_total or 0 }};
+    const valorMercadoria = {{ frete.valor_total_nfs or 0 }};
+
+    function converterValor(valor) {
+        if (!valor || String(valor).trim() === '') return 0;
+        return parseFloat(String(valor).replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    function formatarValor(valor) {
+        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function calcularTotalLiquidoCte() {
+        let total = 0;
+        document.querySelectorAll('.valor-cte-campo').forEach(c => {
+            total += converterValor(c.value);
+        });
+        document.getElementById('total-liquido-cte').value = total;
+        document.getElementById('total-liquido-cte-display').textContent = formatarValor(total);
+        return total;
+    }
+
+    function atualizarDiferencas() {
+        const totalLiquidoCte = calcularTotalLiquidoCte();
+
+        document.querySelectorAll('.valor-cte-campo').forEach(campo => {
+            const idx = parseInt(campo.getAttribute('data-componente'));
+            const valorCte = converterValor(campo.value);
+            const componente = componentesValor[idx];
+            if (!componente) return;
+
+            const valorCalc = componente.valor_calculado;
+            const dif = valorCte - valorCalc;
+            const spanDif = document.querySelector(`.diferenca-componente[data-componente="${idx}"]`);
+            const spanUso = document.querySelector(`.usado-transportadora[data-componente="${idx}"]`);
+            if (!spanDif || !spanUso) return;
+
+            if (valorCte > 0) {
+                let tabelaCte = '';
+                if (componente.nome === 'Frete por Peso' && pesoConsiderado > 0) {
+                    tabelaCte = `R$ ${(valorCte / pesoConsiderado).toFixed(4)}/kg`;
+                } else if (componente.nome === 'Frete por Valor (%)' && valorMercadoria > 0) {
+                    tabelaCte = `${((valorCte / valorMercadoria) * 100).toFixed(4)}%`;
+                } else if ((componente.nome.includes('GRIS') || componente.nome.includes('ADV') || componente.nome.includes('RCA')) && valorMercadoria > 0) {
+                    tabelaCte = `${((valorCte / valorMercadoria) * 100).toFixed(4)}%`;
+                } else if (componente.nome.includes('Pedagio') || componente.nome.includes('Pedágio')) {
+                    if (pesoConsiderado > 0) {
+                        const fracoes = Math.ceil(pesoConsiderado / 100);
+                        if (fracoes > 0) tabelaCte = `R$ ${(valorCte / fracoes).toFixed(2)}/100kg`;
+                    }
+                } else {
+                    tabelaCte = `R$ ${valorCte.toFixed(2)} (fixo)`;
+                }
+                spanUso.innerHTML = tabelaCte;
+                spanDif.innerHTML = `<span class="${dif >= 0 ? 'text-danger' : 'text-success'}">${dif >= 0 ? '+' : ''}${formatarValor(dif)}</span>`;
+            } else {
+                spanUso.innerHTML = '-';
+                spanDif.innerHTML = '-';
+            }
+        });
+
+        atualizarResumoFinal(totalLiquidoCte);
+    }
+
+    function atualizarResumoFinal(totalCte) {
+        const dif = totalCte - valorCotacaoTotal;
+        const pct = valorCotacaoTotal > 0 ? (dif / valorCotacaoTotal) * 100 : 0;
+
+        const elDif = document.getElementById('diferenca-total');
+        const elPct = document.getElementById('percentual-diferenca');
+        const elSt = document.getElementById('status-diferenca');
+
+        if (totalCte === 0) {
+            elDif.textContent = 'R$ 0,00';
+            elDif.className = 'text-secondary';
+            elPct.textContent = '0,00%';
+            elPct.className = 'text-secondary';
+            elSt.textContent = 'Aguardando preenchimento CTe';
+            elSt.className = 'text-secondary';
+            return;
+        }
+
+        elDif.textContent = formatarValor(dif);
+        elDif.className = dif >= 0 ? 'text-danger' : 'text-success';
+        elPct.textContent = pct.toFixed(2) + '%';
+        elPct.className = Math.abs(pct) > 10 ? 'text-danger' : (Math.abs(pct) <= 0.5 ? 'text-success' : 'text-warning');
+
+        if (Math.abs(pct) <= 0.5) {
+            elSt.textContent = 'Diferenca Baixa';
+            elSt.className = 'text-success';
+        } else if (Math.abs(pct) > 10) {
+            elSt.textContent = 'Diferenca Alta';
+            elSt.className = 'text-danger';
+        } else {
+            elSt.textContent = 'Em analise';
+            elSt.className = 'text-warning';
+        }
+    }
+
+    document.querySelectorAll('.valor-cte-campo').forEach(campo => {
+        campo.addEventListener('input', atualizarDiferencas);
+    });
+
+    // Pre-popular com valor_cte se ja existir (rateio simples no campo 0)
+    if (valorCteInformado > 0) {
+        const primeiro = document.querySelector('.valor-cte-campo[data-componente="0"]');
+        if (primeiro && componentesValor.length === 1) {
+            primeiro.value = valorCteInformado.toFixed(2).replace('.', ',');
+        }
+    }
+
+    setTimeout(atualizarDiferencas, 100);
+});
+</script>
+{% endblock %}

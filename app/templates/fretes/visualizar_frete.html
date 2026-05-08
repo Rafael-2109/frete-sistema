@@ -53,6 +53,13 @@
                 <i class="fas fa-truck"></i> Ver Embarque
             </a>
 
+            {# Análise de Diferenças — sempre disponível (útil para post-mortem mesmo após conferência) #}
+            <a href="{{ url_for('fretes.analise_diferencas', frete_id=frete.id) }}"
+               class="btn btn-outline-info" target="_blank"
+               title="Detalha componentes da tabela e diferença vs CTe — sempre disponível">
+                <i class="fas fa-calculator"></i> Análise de Diferenças
+            </a>
+
             <!-- Botão Lançar no Odoo -->
             {% if not frete.odoo_invoice_id %}
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalLancarOdoo">

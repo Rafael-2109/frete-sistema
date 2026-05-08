@@ -124,12 +124,11 @@
                         class="btn btn-outline-primary" target="_blank">
                         <i class="fas fa-external-link-alt"></i> Ver Detalhes do Frete
                     </a>
-                    {% if frete.numero_cte %}
+                    {# Sempre disponível (mesmo sem CTe lançado, útil para auditoria pós-morte) #}
                     <a href="{{ url_for('fretes.analise_diferencas', frete_id=frete.id) }}" class="btn btn-outline-info"
                         target="_blank">
                         <i class="fas fa-chart-line"></i> Análise de Diferenças
                     </a>
-                    {% endif %}
                 </div>
             </div>
         </div>
