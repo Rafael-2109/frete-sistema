@@ -71,6 +71,7 @@
 {# ---------------------------------------------------------------
    Linha do tempo (status + marcos)
    --------------------------------------------------------------- #}
+<div id="timeline-status">
 <div class="card mb-3">
   <div class="card-body py-2">
     <div class="d-flex flex-wrap gap-3">
@@ -92,6 +93,7 @@
     {% endif %}
   </div>
 </div>
+</div>{# /#timeline-status #}
 
 {# ---------------------------------------------------------------
    Acoes principais (transicoes de status)
@@ -99,6 +101,7 @@
 <div class="card mb-3">
   <div class="card-body d-flex flex-wrap gap-2">
     {% if is_cotacao and pode_aprovar %}
+      <div id="btn-confirmar">
       <form method="post" action="{{ url_for('hora.vendas_confirmar', venda_id=venda.id) }}"
             onsubmit="return confirm('Confirmar pedido #{{ venda.id }}? Apos confirmar, edicao de itens nao sera mais permitida.');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -106,8 +109,10 @@
           <i class="fas fa-check-circle"></i> Confirmar pedido
         </button>
       </form>
+      </div>
     {% endif %}
     {% if is_confirmado and pode_criar %}
+      <div id="btn-emitir-nfe">
       <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
             onsubmit="return confirm('Confirma emissao da NFe para o pedido #{{ venda.id }}? A NFe sera enviada para a SEFAZ.');"
             class="d-inline">
@@ -116,6 +121,7 @@
           <i class="fas fa-paper-plane"></i> Emitir NFe
         </button>
       </form>
+      </div>
     {% endif %}
     {% if is_confirmado and pode_editar %}
       <form method="post" action="{{ url_for('hora.vendas_voltar_cotacao', venda_id=venda.id) }}"
@@ -133,10 +139,12 @@
       </a>
     {% endif %}
     {% if not is_cancelado and pode_apagar %}
+      <div id="btn-cancelar-pedido" class="d-inline-block">
       <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse"
               data-bs-target="#cancelar-pedido-form">
         <i class="fas fa-ban"></i> Cancelar pedido
       </button>
+      </div>
     {% endif %}
     {% set pode_descartar_teste = current_user.tem_perm_hora('vendas_descarte', 'apagar') %}
     {% if is_faturado and pode_descartar_teste %}
@@ -872,6 +880,7 @@
    Auditoria (timeline append-only)
    --------------------------------------------------------------- #}
 {% if venda.auditoria %}
+<div id="secao-historico">
 <details class="mb-4">
   <summary><strong><i class="fas fa-history"></i> Historico de auditoria ({{ venda.auditoria|length }} entradas)</strong></summary>
   <div class="table-responsive mt-2">
@@ -901,6 +910,7 @@
     </table>
   </div>
 </details>
+</div>{# /#secao-historico #}
 {% endif %}
 
 {# ---------------------------------------------------------------
@@ -1135,4 +1145,8 @@
   atualizarAlerta();
 })();
 </script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/vendas_aprovar.js') }}"></script>
 {% endblock %}

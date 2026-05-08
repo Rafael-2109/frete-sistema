@@ -50,6 +50,7 @@
 <div class="alert alert-warning mb-4">Nenhuma moto em estoque.</div>
 {% endif %}
 
+<div id="filtros-estoque">
 <form method="get" class="card p-3 mb-3" id="estoque-filtros">
   <div class="row g-2">
     {# Linha 1: Loja + Chassi (autocomplete) + Modelo (autocomplete) + Cor (autocomplete) #}
@@ -222,6 +223,7 @@
     <a href="{{ url_for('hora.estoque_lista') }}" class="btn btn-outline-secondary btn-sm">Limpar</a>
   </div>
 </form>
+</div>{# /#filtros-estoque #}
 
 {# --------------------------------------------------------------
    Autocomplete JS: preenche datalists via fetch conforme digitacao.
@@ -363,6 +365,7 @@
 </script>
 
 <h5>Motos chassi-a-chassi ({{ motos|length }})</h5>
+<div id="tabela-estoque">
 <div class="table-responsive">
   <table class="table table-sm table-hover align-middle">
     <thead><tr>
@@ -378,6 +381,7 @@
       <th></th>
     </tr></thead>
     <tbody>
+      {% set onboarding_ns = namespace(usou_id_avaria=false, usou_id_reserva=false) %}
       {% for m in motos %}
       <tr class="{% if m.moto_faltando %}table-danger{% elif not m.moto_disponivel %}table-secondary text-muted{% elif m.ultimo_evento == 'AVARIADA' %}table-warning{% elif m.ultimo_evento == 'FALTANDO_PECA' %}table-info{% endif %}">
         <td class="chassi-mono">{{ m.chassi }}</td>
@@ -420,16 +424,19 @@
           {# Reserva em pedido (chassi com RESERVADA — pedido COTACAO ou CONFIRMADO sem NF). #}
           {% if m.venda_id and not m.nf_saida_numero and m.venda_status in ('COTACAO','CONFIRMADO') %}
             {% set ped_badge = 'secondary' if m.venda_status == 'COTACAO' else 'primary' %}
+            {% set primeira_reserva = not onboarding_ns.usou_id_reserva %}
+            {% if primeira_reserva %}{% set onboarding_ns.usou_id_reserva = true %}{% endif %}
             <br>
             {% if current_user.tem_perm_hora('vendas', 'ver') %}
-              <a href="{{ url_for('hora.vendas_detalhe', venda_id=m.venda_id) }}"
+              <a {% if primeira_reserva %}id="badge-reservado"{% endif %}
+                 href="{{ url_for('hora.vendas_detalhe', venda_id=m.venda_id) }}"
                  class="btn btn-sm btn-outline-{{ ped_badge }} py-0 mt-1"
                  title="Reservado em Pedido #{{ m.venda_id }}">
                 <i class="fas fa-bookmark"></i> Pedido #{{ m.venda_id }}
                 <span class="badge bg-{{ ped_badge }} ms-1">{{ m.venda_status }}</span>
               </a>
             {% else %}
-              <small class="text-{{ ped_badge }}">
+              <small {% if primeira_reserva %}id="badge-reservado"{% endif %} class="text-{{ ped_badge }}">
                 <i class="fas fa-bookmark"></i> Reservado em Pedido #{{ m.venda_id }} ({{ m.venda_status }})
               </small>
             {% endif %}
@@ -467,7 +474,10 @@
         </td>
         <td>
           {% if m.avarias_abertas and m.avarias_abertas > 0 %}
-            <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}#avarias"
+            {% set primeira_avaria = not onboarding_ns.usou_id_avaria %}
+            {% if primeira_avaria %}{% set onboarding_ns.usou_id_avaria = true %}{% endif %}
+            <a {% if primeira_avaria %}id="badge-avaria"{% endif %}
+               href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=m.chassi) }}#avarias"
                class="badge bg-warning text-decoration-none"
                title="Avarias abertas">
               ⚠ {{ m.avarias_abertas }} avaria{{ 's' if m.avarias_abertas > 1 else '' }}
@@ -503,4 +513,9 @@
     </tbody>
   </table>
 </div>
+</div>{# /#tabela-estoque #}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/estoque_lista.js') }}"></script>
 {% endblock %}

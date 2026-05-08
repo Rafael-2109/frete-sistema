@@ -15,6 +15,7 @@
 </div>
 
 {# ========== Etapa 1: pesquisa de venda ========== #}
+<div id="campo-venda-origem">
 <div class="card p-3 mb-3" id="card-pesquisa-venda">
   <h5 class="mb-3">1. Localize a NF de venda</h5>
   <div class="row g-2 align-items-end">
@@ -43,6 +44,7 @@
     Nenhuma NF FATURADA encontrada para este termo.
   </div>
 </div>
+</div>{# /#campo-venda-origem #}
 
 {# ========== Etapa 2: motos da venda + motivo (form) ========== #}
 <form method="post" id="form-devolucao" style="display:none;" autocomplete="off">
@@ -52,6 +54,7 @@
     <h5 class="mb-2">2. Venda selecionada</h5>
     <div id="venda-info" class="mb-3"></div>
 
+    <div id="secao-itens-devolvidos">
     <h5 class="mb-2">3. Selecione as motos a devolver</h5>
     <div class="table-responsive">
       <table class="table table-sm">
@@ -70,17 +73,22 @@
     <div id="motos-vazio" class="text-muted small" style="display:none;">
       Nenhum chassi elegível encontrado nesta venda.
     </div>
+    </div>{# /#secao-itens-devolvidos #}
 
+    <div id="campo-motivo">
     <h5 class="mb-2 mt-4">4. Motivo da devolução <span class="text-danger">*</span></h5>
     <textarea name="motivo" id="motivo-geral" class="form-control" rows="3"
               required minlength="3"
               placeholder="Detalhe o motivo (mínimo 3 caracteres). Ex: arrependimento de compra, defeito de fábrica, divergência no produto..."></textarea>
+    </div>
   </div>
 
   <div class="d-flex gap-2 mb-4">
+    <div id="btn-salvar-devolucao" class="d-inline-block">
     <button type="submit" class="btn btn-primary" id="btn-criar">
       <i class="fas fa-check"></i> Criar devolução
     </button>
+    </div>
     <button type="button" class="btn btn-outline-secondary" id="btn-trocar-venda">
       <i class="fas fa-undo"></i> Trocar venda
     </button>
@@ -94,4 +102,8 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/hora/devolucao_venda_novo.js') }}"></script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/devolucao_venda.js') }}"></script>
 {% endblock %}
