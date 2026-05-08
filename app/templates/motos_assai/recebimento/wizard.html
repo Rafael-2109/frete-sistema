@@ -9,10 +9,10 @@
   </h2>
   <div>
     <a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=recibo.id) }}"
-       class="btn btn-sm btn-outline-secondary">
+       class="btn btn-outline-secondary">
       <i class="fas fa-pause"></i> Pausar
     </a>
-    <button type="button" class="btn btn-sm btn-success ms-2"
+    <button type="button" class="btn btn-success ms-2"
             id="btn-finalizar"
             {% if pendentes > 0 %}data-pendentes="{{ pendentes }}"{% endif %}>
       <i class="fas fa-check-double"></i> Finalizar
@@ -43,17 +43,17 @@
     <div class="col-md-7">
       <div id="qr-reader" class="qr-reader-container"></div>
       <div class="d-flex gap-2 mt-2">
-        <button type="button" id="btn-start-qr" class="btn btn-primary btn-sm">
+        <button type="button" id="btn-start-qr" class="btn btn-primary">
           <i class="fas fa-camera"></i> Iniciar câmera
         </button>
-        <button type="button" id="btn-stop-qr" class="btn btn-outline-secondary btn-sm d-none">
+        <button type="button" id="btn-stop-qr" class="btn btn-outline-secondary d-none">
           <i class="fas fa-stop"></i> Parar
         </button>
       </div>
     </div>
     <div class="col-md-5">
       <label class="form-label">ou digite/escaneie com leitor USB</label>
-      <input type="text" id="input-chassi" class="form-control" autofocus
+      <input type="text" id="input-chassi" class="form-control form-control-lg" autofocus
              placeholder="Chassi (Enter para validar)" maxlength="50">
       <button type="button" id="btn-chassi-manual" class="btn btn-outline-primary mt-2">
         Validar chassi <i class="fas fa-arrow-right"></i>
