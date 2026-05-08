@@ -1,10 +1,14 @@
 # Agente Lojas HORA — Guia de Desenvolvimento
 
-**LOC**: ~500 (M0) | **Status**: esqueleto M0 | **Atualizado**: 2026-04-22
+**LOC**: ~959 | **Arquivos**: 14 | **Status**: M1 completo + M2 PARCIAL (skills wired, subagent `orientador-loja` ativo, mas pending_questions e output structuring SDK ainda nao migrados) | **Atualizado**: 2026-05-08
 
 Agente dedicado ao pessoal das Lojas Motochefe (HORA), endpoint `/agente-lojas/*`.
 Compartilha SDK com `app/agente/` mas com system_prompt, skills, subagents e
 escopo de dados isolados.
+
+> **Skills ativas** (`config/skills_whitelist.py`): `consultando-estoque-loja`, `rastreando-chassi` (M1) + `acompanhando-pedido`, `conferindo-recebimento`, `consultando-pecas-faltando` (M2) + `lendo-arquivos`, `exportando-arquivos`, `orientador-loja` (subagent M2).
+
+> **GAP M2** (`sdk/client.py:M1 nao implementa`): Pending questions / AskUserQuestion e Output structuring JSON schema marcados para M2 ainda NAO foram migrados do agente Nacom. O preset menciona `AskUserQuestion` como tool disponivel, mas nao ha codigo wired no SDK desta agente — chamada falha silenciosamente.
 
 ---
 
@@ -130,10 +134,11 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
 
 | Fase | Escopo | Status |
 |------|--------|--------|
-| M0   | Esqueleto: endpoint, auth, menu dual, prompt stub | Este commit |
-| M1   | Skills M1: `consultando-estoque-loja`, `rastreando-chassi` | Planejado |
-| M2   | Recebimento: conferencia + pedido + pecas faltando | Planejado |
-| M3   | Venda + isolamento total de memoria | Planejado |
+| M0   | Esqueleto: endpoint, auth, menu dual, prompt stub | **Concluido** |
+| M1   | Skills M1: `consultando-estoque-loja`, `rastreando-chassi` + system prompt + hook `<loja_context>` | **Concluido** |
+| M2 (skills) | `acompanhando-pedido`, `conferindo-recebimento`, `consultando-pecas-faltando`, subagent `orientador-loja` | **Concluido** |
+| M2 (SDK)    | Pending questions / AskUserQuestion + Output structuring JSON schema + Pool persistente | **PARCIAL** — nao migrado de `app/agente/sdk/` |
+| M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | Planejado |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 
 ---

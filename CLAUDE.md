@@ -134,18 +134,19 @@ Gotchas rapidos:
 | Agente Lojas HORA | `app/agente_lojas/` (Claude Agent SDK isolado, endpoint `/agente-lojas/*`) — ver `app/agente_lojas/CLAUDE.md` |
 | Chat in-app | `app/chat/routes/`, `app/chat/services/`, `app/templates/chat/` — ver `app/chat/CLAUDE.md` |
 | Lojas HORA (Motochefe) | `app/hora/routes/`, `app/hora/services/`, `app/hora/models/`, `app/templates/hora/` — ver `app/hora/CLAUDE.md` |
+| Motos Assai (B2B Q.P.A.) | `app/motos_assai/routes/`, `app/motos_assai/services/`, `app/motos_assai/models/`, `app/templates/motos_assai/` — ver `app/motos_assai/CLAUDE.md` |
 | Financeiro | `app/financeiro/routes/`, `app/financeiro/services/`, `app/financeiro/workers/` — ver `app/financeiro/CLAUDE.md` |
 | Odoo | `app/odoo/services/`, `app/odoo/utils/`, `app/odoo/jobs/` — ver `app/odoo/CLAUDE.md` |
 | CarVia | `app/carvia/routes/`, `app/carvia/services/`, `app/templates/carvia/` — ver `app/carvia/CLAUDE.md` |
 | Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` — ver `app/seguranca/CLAUDE.md` |
 | Teams Bot | `app/teams/` — ver `app/teams/CLAUDE.md` |
-| Fretes | `app/fretes/routes.py`, `app/fretes/services/`, `app/templates/fretes/` |
+| Fretes | `app/fretes/routes.py`, `app/fretes/services/`, `app/templates/fretes/` — ver `app/fretes/CLAUDE.md` |
 | Recebimento | `app/recebimento/routes/`, `app/recebimento/services/`, `app/recebimento/workers/` |
 | Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/CLAUDE.md` (dev) ou `app/devolucao/README.md` (narrativa) |
 | Pallet | `app/pallet/routes/`, `app/pallet/services/`, `app/templates/pallet/` |
 | Producao | `app/producao/routes.py`, `app/producao/models.py` |
 | Pedidos | `app/pedidos/routes/`, `app/pedidos/services/`, `app/pedidos/workers/` |
-| **OBSOLETO** | `app/carteira/main_routes.py` — NAO usar |
+| **NAO ESTENDER** | `app/carteira/main_routes.py` — apenas dashboard `index()` (Fase 3 limpa). Novas rotas: usar `app/carteira/routes/` |
 
 > Para lista completa de modulos e rotas: `.claude/references/INDEX.md`
 

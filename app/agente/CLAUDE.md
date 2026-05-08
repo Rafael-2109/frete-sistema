@@ -14,7 +14,7 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 app/agente/                          # Root — 6 arquivos
 ├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
-├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.1.66 (features, breaking, fixes)
+├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.1.76 (features, breaking, fixes)
 ├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
