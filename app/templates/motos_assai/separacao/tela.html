@@ -78,7 +78,13 @@
   </button>
 </div>
 {% elif separacao.status == 'FECHADA' %}
-<p class="text-muted mt-3">Separação finalizada.</p>
+<div class="d-flex gap-2 mt-3">
+  <p class="text-muted mb-0">Separação finalizada.</p>
+  <a href="{{ url_for('motos_assai.faturamento_solicitacao_excel', separacao_id=separacao.id) }}"
+     class="btn btn-sm btn-success ms-auto">
+    <i class="fas fa-file-excel"></i> Baixar Excel Q.P.A.
+  </a>
+</div>
 {% endif %}
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
