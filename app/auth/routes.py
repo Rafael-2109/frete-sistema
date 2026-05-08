@@ -156,6 +156,44 @@ def registro_motochefe_sp():
 
     return render_template('auth/registro.html', form=form, sistema='lojas_sp')
 
+@auth_bp.route('/registro-motos-assai', methods=['GET', 'POST'])
+def registro_motos_assai():
+    """Página pública de registro - Motos Assaí (operação Q.P.A. → Sendas/Assaí)."""
+    form = RegistroForm()
+    # Perfil padrão: financeiro (acesso ao módulo é gated apenas por sistema_motos_assai)
+    if not form.is_submitted():
+        form.perfil.data = 'financeiro'
+    if form.validate_on_submit():
+        # Verificar se email já existe
+        usuario_existente = db.session.query(Usuario).filter_by(email=form.email.data).first()
+        if usuario_existente:
+            flash('Este e-mail já está cadastrado.', 'danger')
+            return render_template('auth/registro.html', form=form, sistema='motos_assai')
+
+        # Criar novo usuário para sistema Motos Assaí
+        usuario = Usuario(
+            nome=form.nome.data,
+            email=form.email.data,
+            empresa=form.empresa.data,
+            cargo=form.cargo.data,
+            telefone=form.telefone.data,
+            perfil=form.perfil.data,
+            status='pendente',
+            sistema_logistica=False,
+            sistema_motochefe=False,
+            sistema_lojas=False,
+            sistema_motos_assai=True
+        )
+        usuario.set_senha(form.senha.data)
+
+        db.session.add(usuario)
+        db.session.commit()
+
+        flash('Solicitação de acesso ao Sistema Motos Assaí enviada! Aguarde aprovação da administração.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('auth/registro.html', form=form, sistema='motos_assai')
+
 @auth_bp.route('/usuarios/pendentes')
 @login_required
 def usuarios_pendentes():

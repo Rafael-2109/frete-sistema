@@ -10,6 +10,8 @@
                 - Sistema MotoChefe
                 {% elif sistema == 'lojas_sp' %}
                 - Motochefe SP
+                {% elif sistema == 'motos_assai' %}
+                - Sistema Motos Assaí
                 {% else %}
                 - Sistema Logística Nacom Goya
                 {% endif %}
@@ -22,6 +24,8 @@
                 <strong>Sistema MotoChefe</strong>
                 {% elif sistema == 'lojas_sp' %}
                 <strong>Motochefe SP</strong> (módulo de Lojas)
+                {% elif sistema == 'motos_assai' %}
+                <strong>Sistema Motos Assaí</strong> (operação Q.P.A. → Sendas/Assaí)
                 {% else %}
                 <strong>Sistema de Logística</strong>
                 {% endif %}.
@@ -91,6 +95,9 @@
                             {% elif sistema == 'lojas_sp' %}
                             <strong>Financeiro:</strong> Acesso padrão ao módulo de Lojas (recomendado)<br>
                             <strong>Vendedor/Portaria/Logística:</strong> Opções alternativas — o acesso à loja é definido na aprovação
+                            {% elif sistema == 'motos_assai' %}
+                            <strong>Financeiro:</strong> Acesso padrão ao módulo Motos Assaí (recomendado)<br>
+                            <strong>Vendedor/Logística:</strong> Opções alternativas — o acesso é controlado pelo flag <em>sistema_motos_assai</em>
                             {% else %}
                             <strong>Vendedor:</strong> Acesso apenas ao monitoramento de suas vendas<br>
                             <strong>Portaria:</strong> Acesso aos embarques e controle de portaria<br>
