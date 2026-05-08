@@ -568,8 +568,9 @@ Tours guiados in-app via Driver.js para usuarios novos.
 1. Criar `app/static/onboarding/tours/hora/<nome>.js` com `requirePerm: { modulo, acao }`
 2. Adicionar IDs nos elementos do template alvo (em wrappers se necessario para nao colidir)
 3. Incluir no `{% block onboarding_tours %}` do template
-4. Validar em `/admin/onboarding/health` apos commit
-5. Preview em `/admin/onboarding/preview?tour=hora.<nome>`
+4. **OBRIGATORIO**: incluir `<script>` em `app/templates/admin/onboarding_health.html` E `onboarding_preview.html`. Sem isso o tour nao aparece nas paginas admin
+5. Validar em `/admin/onboarding/health` apos commit
+6. Preview em `/admin/onboarding/preview?tour=hora.<nome>`
 
 **Engine:** `window.OnboardingEngine` (register/start/isVisible/listAllVisible)
 **Tracker:** `window.OnboardingTracker` (wasSeen/markSeen/resetModule)

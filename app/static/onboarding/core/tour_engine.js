@@ -32,7 +32,8 @@
 
   function routeMatches(pattern, currentPath) {
     if (!pattern) return false;
-    var glob = pattern.replace(/\*/g, '[^/]+');
+    var escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    var glob = escaped.replace(/\*/g, '[^/]+');
     var re = new RegExp('^' + glob + '/?$');
     return re.test(currentPath);
   }
@@ -79,8 +80,7 @@
       }
       return out;
     },
-    start: function (tourId, opts) {
-      opts = opts || {};
+    start: function (tourId) {
       var t = registry[tourId];
       if (!t || !isVisible(t)) return false;
       var steps = filterSteps(t.steps);
@@ -88,6 +88,7 @@
         console.warn('[onboarding] Tour ' + tourId + ' sem passos visiveis (selectors faltam?)');
         return false;
       }
+      var foiPulado = false;
       var d = window.driver.js.driver({
         showProgress: true,
         progressText: 'Passo {{current}} de {{total}}',
@@ -96,8 +97,12 @@
         doneBtnText: 'Concluir',
         showButtons: ['next', 'previous', 'close'],
         steps: buildDriverSteps(steps),
+        onCloseClick: function () {
+          foiPulado = true;
+          d.destroy();
+        },
         onDestroyed: function () {
-          window.OnboardingTracker.markSeen(tourId, opts.skipped ? 'pulou' : 'visto');
+          window.OnboardingTracker.markSeen(tourId, foiPulado ? 'pulou' : 'visto');
           if (t.onFinish) t.onFinish();
         }
       });

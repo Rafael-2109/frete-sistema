@@ -36,8 +36,7 @@
     html += '<li><a class="dropdown-item text-danger" href="#" data-reset="' + modulo + '">Resetar tours vistos</a></li>';
     html += '</ul>';
 
-    var existing = document.getElementById('onboarding-dropdown');
-    if (existing) existing.remove();
+    closeExisting();
 
     var wrapper = document.createElement('div');
     wrapper.id = 'onboarding-dropdown';
@@ -55,17 +54,27 @@
         var n = window.OnboardingTracker.resetModule(a.dataset.reset);
         alert(n + ' tours marcados como nao-vistos. Recarregue a pagina para ver os tours automaticos.');
       }
-      wrapper.remove();
+      closeExisting();
     });
 
+    var closeListener = function (e) {
+      if (!wrapper.contains(e.target) && e.target !== btn) {
+        closeExisting();
+      }
+    };
+    wrapper._closeListener = closeListener;
     setTimeout(function () {
-      document.addEventListener('click', function close(e) {
-        if (!wrapper.contains(e.target) && e.target !== btn) {
-          wrapper.remove();
-          document.removeEventListener('click', close);
-        }
-      });
+      document.addEventListener('click', closeListener);
     }, 100);
+  }
+
+  function closeExisting() {
+    var existing = document.getElementById('onboarding-dropdown');
+    if (!existing) return;
+    if (existing._closeListener) {
+      document.removeEventListener('click', existing._closeListener);
+    }
+    existing.remove();
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -76,7 +85,7 @@
       e.stopPropagation();
       var existing = document.getElementById('onboarding-dropdown');
       if (existing) {
-        existing.remove();
+        closeExisting();
         return;
       }
       render(btn);

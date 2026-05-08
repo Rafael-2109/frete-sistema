@@ -32,6 +32,12 @@
 <script src="{{ url_for('static', filename='onboarding/core/localstorage_tracker.js') }}"></script>
 <script src="{{ url_for('static', filename='onboarding/core/tour_engine.js') }}"></script>
 
+<!--
+  ATENCAO MANUTENCAO: ao adicionar um tour novo em app/static/onboarding/tours/,
+  inclua o <script> aqui TAMBEM. Sem isto, o health check nao valida o tour novo
+  (registry global fica sem ele) e voce nao detecta selectors quebrados.
+  O mesmo vale para app/templates/admin/onboarding_preview.html.
+-->
 <!-- Carrega TODOS os tours HORA -->
 <script src="{{ url_for('static', filename='onboarding/tours/hora/_macro.js') }}"></script>
 <script src="{{ url_for('static', filename='onboarding/tours/hora/recebimento_nf.js') }}"></script>

@@ -19,6 +19,11 @@
 <script src="{{ url_for('static', filename='onboarding/core/localstorage_tracker.js') }}"></script>
 <script src="{{ url_for('static', filename='onboarding/core/tour_engine.js') }}"></script>
 
+<!--
+  ATENCAO MANUTENCAO: ao adicionar um tour novo em app/static/onboarding/tours/,
+  inclua o <script> aqui TAMBEM. Sem isto, o tour nao aparece no preview admin
+  (registry global fica sem ele). O mesmo vale para onboarding_health.html.
+-->
 <!-- Mesmo bloco de scripts dos 24 tours do health -->
 <script src="{{ url_for('static', filename='onboarding/tours/hora/_macro.js') }}"></script>
 <script src="{{ url_for('static', filename='onboarding/tours/hora/recebimento_nf.js') }}"></script>
@@ -46,7 +51,7 @@
 <script src="{{ url_for('static', filename='onboarding/tours/motos_assai/modelos_assai.js') }}"></script>
 
 <script>
-const tourId = "{{ tour_id }}";
+const tourId = {{ tour_id | tojson }};
 const registry = window.OnboardingEngine._registry || {};
 
 if (!tourId) {

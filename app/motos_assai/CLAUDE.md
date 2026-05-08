@@ -370,8 +370,9 @@ Tours guiados in-app via Driver.js para usuarios novos.
 1. Criar `app/static/onboarding/tours/motos_assai/<nome>.js` (com `adminOnly: true` se for admin)
 2. Adicionar IDs nos elementos do template alvo
 3. Incluir no `{% block onboarding_tours %}` do template
-4. Validar em `/admin/onboarding/health`
-5. Preview em `/admin/onboarding/preview?tour=motos_assai.<nome>`
+4. **OBRIGATORIO**: incluir `<script>` em `app/templates/admin/onboarding_health.html` E `onboarding_preview.html`. Sem isso o tour nao aparece nas paginas admin
+5. Validar em `/admin/onboarding/health`
+6. Preview em `/admin/onboarding/preview?tour=motos_assai.<nome>`
 
 **Mobile-first:** tours das telas de chao (recebimento wizard, montagem, disponibilizar, separacao) estao otimizados para celular do operador.
 
