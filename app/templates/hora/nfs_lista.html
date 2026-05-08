@@ -12,12 +12,13 @@
     <a href="{{ url_for('hora.nfs_upload_lote') }}" class="btn btn-outline-primary">
       <i class="fas fa-layer-group"></i> Upload em lote
     </a>
-    <a href="{{ url_for('hora.nfs_upload') }}" class="btn btn-primary">
+    <a id="btn-upload-nf" href="{{ url_for('hora.nfs_upload') }}" class="btn btn-primary">
       <i class="fas fa-upload"></i> Importar DANFE
     </a>
   </div>
 </div>
 
+<div id="filtros-nfs">
 {% call filtros_form(url_for('hora.nfs_lista')) %}
   {{ filtro_texto('numero_nf', 'Número NF', filtro_numero_nf, 'ex.: 12345', 'col-md-2') }}
   {{ filtro_texto('emitente', 'Emissor (nome ou CNPJ)', filtro_emitente, '', 'col-md-3') }}
@@ -27,8 +28,9 @@
   {{ filtro_data('data_fim', 'Emitida até', filtro_data_fim, 'col-md-2') }}
   {{ filtros_botoes(url_for('hora.nfs_lista')) }}
 {% endcall %}
+</div>{# /#filtros-nfs #}
 
-<div class="table-responsive">
+<div id="tabela-nfs" class="table-responsive">
   <table class="table table-hover">
     <thead><tr>
       <th>#</th>
@@ -170,7 +172,7 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-nfs #}
 
 <!-- Modal exportar NFs -->
 <div class="modal fade" id="modalExportarNfs" tabindex="-1" aria-hidden="true">
@@ -233,4 +235,8 @@
   });
 })();
 </script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/nfs_lista.js') }}"></script>
 {% endblock %}

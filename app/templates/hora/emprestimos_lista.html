@@ -7,7 +7,7 @@
   <h2><i class="fas fa-handshake"></i> Empréstimos com lojas externas</h2>
   <div class="d-flex gap-2">
     {% if current_user.tem_perm_hora('emprestimos', 'criar') %}
-      <a href="{{ url_for('hora.emprestimos_novo') }}" class="btn btn-primary">
+      <a id="btn-novo-emprestimo" href="{{ url_for('hora.emprestimos_novo') }}" class="btn btn-primary">
         <i class="fas fa-plus-circle"></i> Novo empréstimo
       </a>
     {% endif %}
@@ -27,6 +27,7 @@
   Ressarcimento entra/sai com OUTRA moto do mesmo modelo.
 </div>
 
+<div id="filtros-emprestimos">
 {# Atalhos rapidos: tipo + status #}
 <div class="mb-2 d-flex gap-2 flex-wrap align-items-center">
   <small class="text-muted me-1">Tipo:</small>
@@ -100,6 +101,7 @@
     </select>
   </div>
 {% endcall %}
+</div>{# /#filtros-emprestimos #}
 
 {% set status_badge = {
     'EM_ABERTO': 'warning',
@@ -108,7 +110,7 @@
 } %}
 {% set tipo_badge = {'SAIDA': 'danger', 'ENTRADA': 'primary'} %}
 
-<div class="table-responsive">
+<div id="tabela-emprestimos" class="table-responsive">
   <table class="table table-hover align-middle">
     <thead>
       <tr>
@@ -171,7 +173,11 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-emprestimos #}
 
 {{ render_pagination(pagination, request) }}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/emprestimos_lista.js') }}"></script>
 {% endblock %}

@@ -7,7 +7,7 @@
   <h2>Pedidos de Venda (HORA &rarr; consumidor)</h2>
   <div class="d-flex gap-2">
     {% if current_user.tem_perm_hora('vendas', 'criar') %}
-      <a href="{{ url_for('hora.tagplus_pedido_venda_novo') }}" class="btn btn-primary">
+      <a id="btn-nova-venda" href="{{ url_for('hora.tagplus_pedido_venda_novo') }}" class="btn btn-primary">
         <i class="fas fa-plus-circle"></i> Novo pedido (manual)
       </a>
       <a href="{{ url_for('hora.vendas_upload') }}" class="btn btn-outline-secondary"
@@ -29,6 +29,7 @@
   </div>
 </div>
 
+<div id="filtros-vendas">
 {{ status_botoes('hora.vendas_lista',
                  [('COTACAO','Cotação'),('CONFIRMADO','Confirmado'),('FATURADO','Faturado'),('CANCELADO','Cancelado')],
                  status_filtro,
@@ -72,8 +73,9 @@
     </select>
   </div>
 {% endcall %}
+</div>{# /#filtros-vendas #}
 
-<div class="table-responsive">
+<div id="tabela-vendas" class="table-responsive">
   <table class="table table-hover align-middle">
     <thead><tr>
       <th>#</th>
@@ -165,7 +167,11 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-vendas #}
 
 {{ render_pagination(pagination, request) }}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/vendas_lista.js') }}"></script>
 {% endblock %}

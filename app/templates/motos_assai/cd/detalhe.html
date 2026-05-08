@@ -10,11 +10,15 @@
   </a>
 </header>
 
-<dl class="row">
+<dl id="info-cd" class="row">
   <dt class="col-sm-3">CNPJ</dt><dd class="col-sm-9">{{ cd.cnpj or '-' }}</dd>
   <dt class="col-sm-3">Endereço</dt>
   <dd class="col-sm-9">{{ cd.endereco or '-' }}{% if cd.bairro %} — {{ cd.bairro }}{% endif %}</dd>
   <dt class="col-sm-3">Cidade/UF</dt>
   <dd class="col-sm-9">{{ cd.cidade or '-' }}/{{ cd.uf or '-' }} {% if cd.cep %}— CEP {{ cd.cep }}{% endif %}</dd>
 </dl>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/cd_detalhe.js') }}"></script>
 {% endblock %}

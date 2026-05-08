@@ -4,11 +4,12 @@
 {% block hora_content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2>Devoluções ao fornecedor</h2>
-  <a href="{{ url_for('hora.devolucoes_novo') }}" class="btn btn-primary btn-sm">
+  <a id="btn-nova-devolucao" href="{{ url_for('hora.devolucoes_novo') }}" class="btn btn-primary btn-sm">
     <i class="fas fa-plus"></i> Nova devolução
   </a>
 </div>
 
+<div id="filtros-devolucoes">
 {% call filtros_form(url_for('hora.devolucoes_lista')) %}
   {{ filtro_loja('loja_id', 'Loja', filtro_loja_id, lojas, 'col-md-2') }}
   {{ filtro_status('status', 'Status', filtro_status,
@@ -45,8 +46,9 @@
     </a>
   </div>
 {% endcall %}
+</div>{# /#filtros-devolucoes #}
 
-<div class="table-responsive">
+<div id="tabela-devolucoes" class="table-responsive">
   <table class="table table-sm table-hover">
     <thead><tr>
       <th>#</th><th>Data</th><th>Loja</th><th>Motivo</th>
@@ -68,5 +70,9 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-devolucoes #}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/devolucoes_lista.js') }}"></script>
 {% endblock %}

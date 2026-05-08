@@ -2,7 +2,7 @@
 
 {% block motos_assai_content %}
 <h2>Recibos Motochefe</h2>
-<div class="table-responsive">
+<div id="tabela-recibos-assai" class="table-responsive">
 <table class="table table-hover">
   <thead><tr><th>#</th><th>PO</th><th>Data recibo</th><th>Equipe</th><th>Total</th><th>Status</th></tr></thead>
   <tbody>
@@ -20,5 +20,9 @@
     {% endfor %}
   </tbody>
 </table>
-</div>
+</div>{# /#tabela-recibos-assai #}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/recibos_lista.js') }}"></script>
 {% endblock %}

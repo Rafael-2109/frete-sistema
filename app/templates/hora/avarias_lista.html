@@ -5,12 +5,13 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2><i class="fas fa-exclamation-triangle"></i> Avarias</h2>
   {% if current_user.tem_perm_hora('avarias', 'criar') %}
-    <a href="{{ url_for('hora.avaria_nova') }}" class="btn btn-sm btn-primary">
+    <a id="btn-nova-avaria" href="{{ url_for('hora.avaria_nova') }}" class="btn btn-sm btn-primary">
       <i class="fas fa-plus"></i> Nova avaria
     </a>
   {% endif %}
 </div>
 
+<div id="filtros-avarias">
 {% call filtros_form(url_for('hora.avarias_lista')) %}
   {{ filtro_status('status', 'Status', filtros.status,
                    [('ABERTA','Aberta'),('RESOLVIDA','Resolvida'),('IGNORADA','Ignorada')], 'col-md-2') }}
@@ -52,8 +53,9 @@
     </a>
   </div>
 {% endcall %}
+</div>{# /#filtros-avarias #}
 
-<div class="card">
+<div id="tabela-avarias" class="card">
   <div class="table-responsive">
     <table class="table table-hover table-sm mb-0 align-middle">
       <thead class="table-light">
@@ -87,5 +89,9 @@
       </tbody>
     </table>
   </div>
-</div>
+</div>{# /#tabela-avarias #}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/avarias_lista.js') }}"></script>
 {% endblock %}

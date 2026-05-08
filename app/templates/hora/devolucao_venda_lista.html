@@ -5,12 +5,13 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2><i class="fas fa-undo-alt"></i> Devolução de Venda</h2>
   {% if current_user.tem_perm_hora('devolucoes_venda', 'criar') %}
-  <a href="{{ url_for('hora.devolucoes_venda_novo') }}" class="btn btn-primary btn-sm">
+  <a id="btn-nova-devolucao-venda" href="{{ url_for('hora.devolucoes_venda_novo') }}" class="btn btn-primary btn-sm">
     <i class="fas fa-plus"></i> Nova devolução
   </a>
   {% endif %}
 </div>
 
+<div id="filtros-devolucoes-venda">
 {% call filtros_form(url_for('hora.devolucoes_venda_lista')) %}
   {{ filtro_loja('loja_id', 'Loja', filtro_loja_id, lojas, 'col-md-2') }}
   {{ filtro_status('status', 'Status', filtro_status, STATUS_OPCOES, 'col-md-2') }}
@@ -46,8 +47,9 @@
     </a>
   </div>
 {% endcall %}
+</div>{# /#filtros-devolucoes-venda #}
 
-<div class="table-responsive">
+<div id="tabela-devolucoes-venda" class="table-responsive">
   <table class="table table-sm table-hover">
     <thead>
       <tr>
@@ -106,5 +108,9 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-devolucoes-venda #}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/devolucoes_venda_lista.js') }}"></script>
 {% endblock %}

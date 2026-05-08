@@ -5,10 +5,10 @@
 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
   <h2>Lojas HORA</h2>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('hora.lojas_mapa') }}" class="btn btn-outline-primary">
+    <a id="btn-mapa-lojas" href="{{ url_for('hora.lojas_mapa') }}" class="btn btn-outline-primary">
       <i class="fas fa-map-marked-alt"></i> Ver no mapa
     </a>
-    <a href="{{ url_for('hora.lojas_novo') }}" class="btn btn-primary">
+    <a id="btn-nova-loja" href="{{ url_for('hora.lojas_novo') }}" class="btn btn-primary">
       <i class="fas fa-plus"></i> Nova loja
     </a>
   </div>
@@ -51,7 +51,7 @@
   </div>
 {% endcall %}
 
-<div class="table-responsive">
+<div id="tabela-lojas" class="table-responsive">
   <table class="table table-hover align-middle">
     <thead><tr>
       <th>Apelido <small class="text-muted">(clique para editar)</small></th>
@@ -109,7 +109,7 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-lojas #}
 
 <script>
 (function() {
@@ -176,4 +176,8 @@
   });
 })();
 </script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/lojas_lista.js') }}"></script>
 {% endblock %}

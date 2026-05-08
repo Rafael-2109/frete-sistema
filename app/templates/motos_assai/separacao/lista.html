@@ -2,7 +2,7 @@
 
 {% block motos_assai_content %}
 <h2>Separações</h2>
-<div class="table-responsive">
+<div id="tabela-separacao" class="table-responsive">
 <table class="table">
   <thead><tr><th>#</th><th>Pedido</th><th>Loja</th><th>Status</th><th>Iniciada em</th></tr></thead>
   <tbody>
@@ -17,5 +17,9 @@
     {% endfor %}
   </tbody>
 </table>
-</div>
+</div>{# /#tabela-separacao #}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/separacao_lista_assai.js') }}"></script>
 {% endblock %}

@@ -4,11 +4,12 @@
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>Recebimentos</h2>
-  <a href="{{ url_for('hora.recebimentos_novo') }}" class="btn btn-primary">
+  <a id="btn-novo-recebimento" href="{{ url_for('hora.recebimentos_novo') }}" class="btn btn-primary">
     <i class="fas fa-plus"></i> Novo recebimento
   </a>
 </div>
 
+<div id="filtros-recebimentos">
 {% call filtros_form(url_for('hora.recebimentos_lista')) %}
   <div class="col-md-3">
     <label class="form-label small mb-1">Número NF</label>
@@ -26,9 +27,10 @@
   {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
   {{ filtros_botoes(url_for('hora.recebimentos_lista')) }}
 {% endcall %}
+</div>{# /#filtros-recebimentos #}
 
 {% set pode_ver_motos_nf = current_user.tem_perm_hora('recebimento_motos_nf', 'ver') %}
-<div class="table-responsive">
+<div id="tabela-recebimentos" class="table-responsive">
   <table class="table table-hover">
     <thead><tr>
       <th>#</th><th>Data</th><th>NF</th><th>Loja</th>
@@ -60,5 +62,9 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-recebimentos #}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/recebimentos_lista.js') }}"></script>
 {% endblock %}

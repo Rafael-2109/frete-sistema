@@ -4,7 +4,7 @@
 <header class="d-flex justify-content-between align-items-center mb-3">
   <h2>Lojas Assaí</h2>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('motos_assai.lojas_mapa') }}" class="btn btn-outline-secondary">
+    <a id="btn-mapa-lojas-assai" href="{{ url_for('motos_assai.lojas_mapa') }}" class="btn btn-outline-secondary">
       <i class="fas fa-map-marked-alt"></i> Ver mapa
     </a>
     <a href="{{ url_for('motos_assai.lojas_nova') }}" class="btn btn-primary">
@@ -30,7 +30,7 @@
   </div>
 </form>
 
-<div class="table-responsive">
+<div id="tabela-lojas-assai" class="table-responsive">
 <table class="table table-hover">
   <thead>
     <tr>
@@ -60,7 +60,11 @@
     {% endfor %}
   </tbody>
 </table>
-</div>
+</div>{# /#tabela-lojas-assai #}
 
 <p class="text-muted">Total: {{ lojas|length }} loja(s)</p>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/lojas_lista.js') }}"></script>
 {% endblock %}

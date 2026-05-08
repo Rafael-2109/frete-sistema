@@ -3,12 +3,12 @@
 {% block motos_assai_content %}
 <header class="d-flex justify-content-between mb-3">
   <h2>Pedidos VOE</h2>
-  <a href="{{ url_for('motos_assai.pedidos_upload') }}" class="btn btn-primary">
+  <a id="btn-upload-pedido-voe" href="{{ url_for('motos_assai.pedidos_upload') }}" class="btn btn-primary">
     <i class="fas fa-upload"></i> Importar PDF
   </a>
 </header>
 
-<form method="GET" class="row g-2 mb-3">
+<form id="filtros-pedidos-voe" method="GET" class="row g-2 mb-3">
   <div class="col-md-3">
     <select name="status" class="form-select">
       <option value="">— Todos os status —</option>
@@ -22,7 +22,7 @@
   </div>
 </form>
 
-<div class="table-responsive">
+<div id="tabela-pedidos-voe" class="table-responsive">
 <table class="table table-hover">
   <thead>
     <tr>
@@ -46,7 +46,11 @@
     {% endfor %}
   </tbody>
 </table>
-</div>
+</div>{# /#tabela-pedidos-voe #}
 
 <p class="text-muted small">{{ pedidos|length }} pedido(s)</p>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/pedidos_lista.js') }}"></script>
 {% endblock %}

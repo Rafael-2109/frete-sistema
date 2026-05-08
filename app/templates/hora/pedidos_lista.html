@@ -12,13 +12,14 @@
     <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-outline-primary">
       <i class="fas fa-file-import"></i> Importar XLSX
     </a>
-    <a href="{{ url_for('hora.pedidos_novo') }}" class="btn btn-primary">
+    <a id="btn-novo-pedido" href="{{ url_for('hora.pedidos_novo') }}" class="btn btn-primary">
       <i class="fas fa-plus"></i> Novo pedido de compra
     </a>
   </div>
 </div>
 
 {# Filtros rapidos por status (atalhos GET) #}
+<div id="filtros-pedidos">
 {{ status_botoes('hora.pedidos_lista',
                  [('ABERTO','Abertos'),('PARCIALMENTE_FATURADO','Parc. faturados'),('FATURADO','Faturados')],
                  filtro_status) }}
@@ -39,8 +40,9 @@
   {{ filtro_data('data_fim', 'Data até', filtro_data_fim, 'col-md-2') }}
   {{ filtros_botoes(url_for('hora.pedidos_lista', status=(filtro_status or None))) }}
 {% endcall %}
+</div>{# /#filtros-pedidos #}
 
-<div class="table-responsive">
+<div id="tabela-pedidos" class="table-responsive">
   <table class="table table-hover">
     <thead><tr>
       <th>#</th>
@@ -175,7 +177,7 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+</div>{# /#tabela-pedidos #}
 
 <!-- Modal exportar pedidos -->
 <div class="modal fade" id="modalExportarPedidos" tabindex="-1" aria-hidden="true">
@@ -240,4 +242,8 @@
   });
 })();
 </script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/pedidos_lista.js') }}"></script>
 {% endblock %}
