@@ -1,61 +1,47 @@
 // app/static/onboarding/tours/hora/_macro.js
+//
+// Tour macro do modulo Lojas HORA.
+// Aponta para os triggers VISIVEIS dos dropdowns Bootstrap (nao itens internos).
+// Itens dentro de dropdowns colapsados tem dimensoes 0,0 e quebram o Driver.js.
 window.OnboardingEngine.register({
   id: 'hora.macro',
   titulo: 'Bem-vindo a Lojas HORA',
   autoStartRoute: '/hora/dashboard',
   steps: [
     {
-      element: '#menu-vendas',
-      title: 'Vendas (NF saida)',
-      description: 'Aqui voce cria pedidos de venda, acompanha o que foi faturado e gerencia devolucoes.',
-      requirePerm: { modulo: 'vendas', acao: 'ver' }
+      element: '#menu-dashboard',
+      title: 'Dashboard',
+      description: 'Visao geral das suas lojas: motos disponiveis, vendas do mes, pedidos em aberto, divergencias.',
+      requirePerm: { modulo: 'dashboard', acao: 'ver' }
     },
     {
-      element: '#menu-estoque',
-      title: 'Estoque de motos',
-      description: 'Lista de motos por loja e por chassi. Mostra tambem avarias e reservas de pedido.',
-      requirePerm: { modulo: 'estoque', acao: 'ver' }
-    },
-    {
-      element: '#menu-recebimentos',
-      title: 'Receber NF da Motochefe',
-      description: 'Suba o PDF da NF, confira chassi por chassi e finalize o recebimento. <strong>Daqui sai a entrada de motos no estoque.</strong>',
-      requirePerm: { modulo: 'recebimentos', acao: 'ver' }
-    },
-    {
-      element: '#menu-transferencias',
-      title: 'Transferir entre lojas',
-      description: 'Movimentacao de motos entre filiais. Precisa de confirmacao na loja destino para concluir.',
-      requirePerm: { modulo: 'transferencias', acao: 'ver' }
-    },
-    {
-      element: '#menu-pecas-estoque',
-      title: 'Pecas e acessorios',
-      description: 'Capacete, retrovisor, bateria. Saldo por loja, transferencia e ajuste manual.',
-      requirePerm: { modulo: 'pecas_estoque', acao: 'ver' }
-    },
-    {
-      element: '#menu-tagplus',
-      title: 'NFe via TagPlus',
-      description: 'Emissao fiscal eletronica. Precisa de OAuth configurado e mapeamento de produtos.',
-      requirePerm: { modulo: 'tagplus', acao: 'ver' }
-    },
-    {
-      element: '#menu-modelos',
-      title: 'Catalogo de modelos',
-      description: 'Cadastro central de modelos com preco a vista/a prazo. Resolve nomes divergentes (BOB AM = BOB).',
+      element: '#menu-trigger-cadastros',
+      title: 'Cadastros',
+      description: 'Lojas, modelos de motos, tabelas de preco, usuarios e permissoes. Tudo que e configuracao base do sistema.',
       requirePerm: { modulo: 'modelos', acao: 'ver' }
     },
     {
-      element: '#menu-permissoes',
-      title: 'Gerenciar usuarios',
-      description: 'Aprovar cadastros pendentes, atribuir lojas e configurar permissoes granulares por modulo.',
-      requirePerm: { modulo: 'usuarios', acao: 'ver' }
+      element: '#menu-trigger-movimentacao',
+      title: 'Movimentacao (operacao do dia)',
+      description: 'Aqui voce acessa <strong>Pedidos, NFs, Recebimentos, Vendas, Transferencias, Estoque e Pecas</strong>. E o menu mais usado no dia a dia.',
+      requirePerm: { modulo: 'estoque', acao: 'ver' }
+    },
+    {
+      element: '#menu-trigger-ocorrencias',
+      title: 'Ocorrencias',
+      description: 'Devolucoes (de cliente ou ao fornecedor), avarias e pecas faltando. Onde voce registra problemas que aparecem na operacao.',
+      requirePerm: { modulo: 'avarias', acao: 'ver' }
+    },
+    {
+      element: '#menu-trigger-faturamento',
+      title: 'Faturamento (NFe via TagPlus)',
+      description: 'Configuracao OAuth do TagPlus, mapeamento de produtos, formas de pagamento e fila de emissoes de NFe.',
+      requirePerm: { modulo: 'tagplus', acao: 'ver' }
     },
     {
       element: '#help-button',
-      title: 'Precisou de ajuda?',
-      description: 'Clique no <strong>?</strong> em qualquer tela para ver o tour daquela tela especifica.'
+      title: 'Precisou de ajuda em alguma tela?',
+      description: 'Clique neste botao <strong>Ajuda</strong> em qualquer tela. Se houver tour especifico daquela tela, ele aparece em destaque no topo do menu.'
     }
   ]
 });

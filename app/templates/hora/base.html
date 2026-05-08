@@ -26,7 +26,7 @@
 
     {# ---------------- Dashboard (sempre primeiro, fora de categoria) ---------------- #}
     {% if current_user.tem_perm_hora('dashboard', 'ver') %}
-      <a class="nav-link {% if request.endpoint == 'hora.dashboard' %}active{% endif %}"
+      <a id="menu-dashboard" class="nav-link {% if request.endpoint == 'hora.dashboard' %}active{% endif %}"
          href="{{ url_for('hora.dashboard') }}">
          <i class="fas fa-chart-line"></i> Dashboard
       </a>
@@ -41,7 +41,7 @@
         current_user.tem_perm_hora('pecas_cadastro', 'ver') %}
     {% if show_cadastros %}
     <div class="nav-item dropdown">
-      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.modelos') or request.endpoint.startswith('hora.lojas') or request.endpoint.startswith('hora.permissoes') or 'forma_map' in (request.endpoint or '')) %}active{% endif %}"
+      <a id="menu-trigger-cadastros" class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.modelos') or request.endpoint.startswith('hora.lojas') or request.endpoint.startswith('hora.permissoes') or 'forma_map' in (request.endpoint or '')) %}active{% endif %}"
          href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
         <i class="fas fa-folder-open"></i> Cadastros
       </a>
@@ -99,7 +99,7 @@
         current_user.tem_perm_hora('pecas_estoque', 'ver') %}
     {% if show_mov %}
     <div class="nav-item dropdown">
-      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pedidos') or request.endpoint.startswith('hora.nfs') or request.endpoint.startswith('hora.recebimentos') or request.endpoint.startswith('hora.vendas') or request.endpoint.startswith('hora.transferencia') or request.endpoint.startswith('hora.emprestimos') or request.endpoint.startswith('hora.estoque') or request.endpoint == 'hora.tagplus_emissoes_lista' or request.endpoint == 'hora.venda_nfe_status') %}active{% endif %}"
+      <a id="menu-trigger-movimentacao" class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pedidos') or request.endpoint.startswith('hora.nfs') or request.endpoint.startswith('hora.recebimentos') or request.endpoint.startswith('hora.vendas') or request.endpoint.startswith('hora.transferencia') or request.endpoint.startswith('hora.emprestimos') or request.endpoint.startswith('hora.estoque') or request.endpoint == 'hora.tagplus_emissoes_lista' or request.endpoint == 'hora.venda_nfe_status') %}active{% endif %}"
          href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
         <i class="fas fa-truck-moving"></i> Movimentação
       </a>
@@ -172,7 +172,7 @@
         current_user.tem_perm_hora('avarias', 'ver') %}
     {% if show_oco %}
     <div class="nav-item dropdown">
-      <a class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pecas') or request.endpoint.startswith('hora.devolucoes_venda') or request.endpoint.startswith('hora.devolucoes') or request.endpoint.startswith('hora.avaria')) %}active{% endif %}"
+      <a id="menu-trigger-ocorrencias" class="nav-link dropdown-toggle {% if request.endpoint and (request.endpoint.startswith('hora.pecas') or request.endpoint.startswith('hora.devolucoes_venda') or request.endpoint.startswith('hora.devolucoes') or request.endpoint.startswith('hora.avaria')) %}active{% endif %}"
          href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
         <i class="fas fa-exclamation-triangle"></i> Ocorrências
       </a>
@@ -207,7 +207,7 @@
         current_user.tem_perm_hora('vendas', 'criar') %}
     {% if show_fat %}
     <div class="nav-item dropdown">
-      <a class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint.startswith('hora.tagplus') %}active{% endif %}"
+      <a id="menu-trigger-faturamento" class="nav-link dropdown-toggle {% if request.endpoint and request.endpoint.startswith('hora.tagplus') %}active{% endif %}"
          href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
         <i class="fas fa-file-invoice-dollar"></i> Faturamento
       </a>
