@@ -59,7 +59,12 @@ class IdentificadorDocumento:
             r'Pedidos/Lotes\s+De\s+Compra',  # Header específico do PDF Assaí
             r'Consinco',  # Sistema usado pelo Assaí
             r'NACOM\s+GOYA',  # Fornecedor específico
-        ]
+        ],
+        'QPA': [
+            r'Q\.?P\.?A\s*DISTRIBUI[CÇ][AÃ]O',
+            r'53\.?780\.?554\.?/?0001-?15',
+            r'PEDIDO\s+DE\s+COMPRAS\s+\d+/[A-Z]',  # cabeçalho Consinco do VOE
+        ],
     }
 
     # Padrões para identificação de TIPO
@@ -75,6 +80,7 @@ class IdentificadorDocumento:
         },
         'PEDIDO': {
             'textos': [
+                r'PEDIDO\s+DE\s+COMPRAS\s+\d+/[A-Z]',  # Header Consinco Q.P.A. (ALTA CONFIANÇA)
                 r'PEDIDO\s+DE\s+COMPRA',
                 r'Pedido\s+de\s+Compra',  # Header CCPMERM02 Atacadão (case sensitive, minusculo)
                 r'P\s*E\s*D\s*I\s*D\s*O\s+D\s*E\s+C\s*O\s*M\s*P\s*R\s*A',  # Texto espaçado
@@ -91,7 +97,7 @@ class IdentificadorDocumento:
                 r'Cond\.\s*Pagto:',  # Condição de Pagamento (Assaí)
                 r'Data\s+Pedido:',  # Campo Data Pedido (Assaí)
             ],
-            'peso': [1.0, 1.0, 1.0, 0.9, 0.8, 0.9, 0.7, 0.6, 0.8, 1.0, 1.0, 1.0, 0.8, 0.8, 0.8]
+            'peso': [1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.9, 0.7, 0.6, 0.8, 1.0, 1.0, 1.0, 0.8, 0.8, 0.8]
         }
     }
 
@@ -103,6 +109,7 @@ class IdentificadorDocumento:
         'ASSAI': r'Pedido:?\s*(\d+)',
         'ASSAI_PEDIDO': r'Pedido:?\s*(\d+)',  # Campo "Pedido:21046597" no cabeçalho
         'ASSAI_LOTE': r'Lote:\s*(\d+)',  # Campo "Lote: 104093" (backup)
+        'QPA_PEDIDO': r'PEDIDO\s+DE\s+COMPRAS\s+(\d+/[A-Z])',
     }
 
     def __init__(self):
@@ -204,7 +211,14 @@ class IdentificadorDocumento:
 
     def _identificar_rede(self) -> Tuple[str, float]:
         """
-        Identifica a rede do documento usando CNPJs e padrões de texto
+        Identifica a rede do documento usando CNPJs e padrões de texto.
+
+        Ordem de prioridade:
+        0. Redes "emissoras" em PADROES_TEXTO_REDE com CNPJ próprio no texto
+           (ex: QPA como fornecedor/emitente — o CNPJ do comprador Sendas não
+           deve sobrescrever o emitente real do documento)
+        1. CNPJs de redes compradoras via GRUPOS_EMPRESARIAIS
+        2. Padrões de texto genéricos
 
         Returns:
             Tupla (nome_rede, confianca)
@@ -213,6 +227,16 @@ class IdentificadorDocumento:
         melhor_score = 0.0
 
         texto = self.texto_primeira_pagina
+
+        # 0. Checa redes "emissoras" com CNPJ próprio (prioridade máxima).
+        #    QPA usa seu CNPJ como fornecedor: 53.780.554/0001-15.
+        #    Quando esse CNPJ aparece como **emitente** do documento, a rede é QPA.
+        CNPJS_EMISSORES = {
+            'QPA': r'53\.?780\.?554\.?/?0001-?15',
+        }
+        for rede, padrao_cnpj in CNPJS_EMISSORES.items():
+            if re.search(padrao_cnpj, texto):
+                return rede, 0.97  # confiança máxima: CNPJ do emitente
 
         # 1. Primeiro tenta identificar por CNPJ (mais confiável)
         for rede, padroes in self.padroes_cnpj.items():
@@ -258,9 +282,15 @@ class IdentificadorDocumento:
                     score += config['peso'][i]
                     matches += 1
 
-            # Normaliza score
+            # Normaliza score: compara score acumulado vs score máximo possível com
+            # os top-N padrões (onde N = número de matches encontrados).
+            # Isso evita penalizar formatos que não compartilham padrões específicos
+            # de outras redes (ex: QPA com 4 matches sólidos mas sem padrões Assaí).
             if matches > 0:
-                score_normalizado = score / sum(config['peso'])
+                # Top-N pesos (os N maiores pesos disponíveis) = melhor caso possível
+                top_n_pesos = sorted(config['peso'], reverse=True)[:matches]
+                score_max_n = sum(top_n_pesos)
+                score_normalizado = min(score / score_max_n, 1.0) if score_max_n > 0 else 0.0
                 if score_normalizado > melhor_score:
                     melhor_score = score_normalizado
                     melhor_tipo = tipo
