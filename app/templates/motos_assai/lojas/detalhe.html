@@ -1,0 +1,27 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>Loja {{ loja.numero }} — {{ loja.nome }}
+    {% if loja.ativo %}<span class="badge bg-success">ATIVA</span>
+    {% else %}<span class="badge bg-secondary">INATIVA</span>{% endif %}
+  </h2>
+  <a href="{{ url_for('motos_assai.lojas_editar', loja_id=loja.id) }}" class="btn btn-outline-primary">
+    <i class="fas fa-edit"></i> Editar
+  </a>
+</header>
+
+<dl class="row">
+  <dt class="col-sm-3">Razão Social</dt><dd class="col-sm-9">{{ loja.razao_social }}</dd>
+  <dt class="col-sm-3">CNPJ</dt><dd class="col-sm-9">{{ loja.cnpj }}</dd>
+  <dt class="col-sm-3">IE</dt><dd class="col-sm-9">{{ loja.ie or '-' }}</dd>
+  <dt class="col-sm-3">Endereço</dt>
+  <dd class="col-sm-9">{{ loja.endereco or '-' }}{% if loja.bairro %} — {{ loja.bairro }}{% endif %}</dd>
+  <dt class="col-sm-3">Cidade/UF</dt>
+  <dd class="col-sm-9">{{ loja.cidade or '-' }}/{{ loja.uf or '-' }} {% if loja.cep %}— CEP {{ loja.cep }}{% endif %}</dd>
+  <dt class="col-sm-3">Regional</dt><dd class="col-sm-9">{{ loja.regional or '-' }}</dd>
+  <dt class="col-sm-3">Criada em</dt><dd class="col-sm-9">{{ loja.criado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+</dl>
+
+<a href="{{ url_for('motos_assai.lojas_lista') }}" class="btn btn-outline-secondary">Voltar</a>
+{% endblock %}
