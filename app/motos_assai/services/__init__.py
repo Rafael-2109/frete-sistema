@@ -33,6 +33,10 @@ from .montagem_service import (
     registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
     MontagemValidationError,
 )
+from .disponibilizar_service import (
+    disponibilizar, reverter_para_montada, historico_3_ultimas_disponibilizacoes,
+    DisponibilizarValidationError,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -54,4 +58,6 @@ __all__ = [
     'RecebimentoConflictError', 'RecebimentoValidationError',
     'registrar_montagem', 'resolver_pendencia', 'historico_3_ultimas_montagens',
     'MontagemValidationError',
+    'disponibilizar', 'reverter_para_montada', 'historico_3_ultimas_disponibilizacoes',
+    'DisponibilizarValidationError',
 ]
