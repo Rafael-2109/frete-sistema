@@ -12,7 +12,7 @@ from flask import url_for
 def url_primeiro_dashboard_disponivel(user):
     """Retorna URL do primeiro dashboard de dominio que o usuario pode acessar.
 
-    Ordem de prioridade: lojas -> motochefe -> carvia -> comercial -> pessoal.
+    Ordem de prioridade: lojas -> motochefe -> motos_assai -> carvia -> comercial -> pessoal.
     Retorna None se o usuario nao tem acesso a nenhum dominio.
     """
     if not user or not getattr(user, 'is_authenticated', False):
@@ -26,7 +26,11 @@ def url_primeiro_dashboard_disponivel(user):
     if getattr(user, 'sistema_motochefe', False):
         return url_for('motochefe.dashboard_motochefe')
 
-    # 3. CarVia
+    # 3. Motos Assaí
+    if getattr(user, 'sistema_motos_assai', False):
+        return url_for('motos_assai.dashboard')
+
+    # 4. CarVia
     if getattr(user, 'sistema_carvia', False):
         return url_for('carvia.dashboard')
 
