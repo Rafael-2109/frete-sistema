@@ -1,6 +1,7 @@
 /**
  * Componente compartilhado entre montagem/disponibilizar.
  * Lê chassi via input/QR/leitor USB, faz POST AJAX, atualiza histórico inline.
+ * CSRF token lido de meta[name="csrf-token"] (injetado pelo base.html).
  */
 (function() {
   const cfg = window.MOTOS_ASSAI_OP_CONFIG;
@@ -54,6 +55,11 @@
   });
   btnRegistrar.addEventListener('click', registrar);
 
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
   async function registrar() {
     const chassi = inputChassi.value.trim().toUpperCase();
     if (!chassi) { showAlerta('warning', 'Digite/escaneie um chassi'); return; }
@@ -69,7 +75,10 @@
     try {
       const r = await fetch(cfg.endpoint, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+        },
         body: JSON.stringify(payload),
       });
       const data = await r.json();
