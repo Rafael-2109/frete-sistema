@@ -15,8 +15,9 @@ from app.motos_assai.models import (
     RECIBO_STATUS_AGUARDANDO, RECIBO_STATUS_EM_CONFERENCIA,
     RECIBO_STATUS_CONCLUIDO, RECIBO_STATUS_COM_DIVERGENCIA,
     DIVERGENCIA_MODELO_DIFERENTE, DIVERGENCIA_COR_DIFERENTE,
-    DIVERGENCIA_CHASSI_EXTRA, DIVERGENCIA_MOTO_FALTANDO,
+    DIVERGENCIA_CHASSI_EXTRA, DIVERGENCIA_MOTO_FALTANDO, DIVERGENCIA_AVARIA_FISICA,
     EVENTO_ESTOQUE, EVENTO_MOTO_FALTANDO,
+    COMPRA_STATUS_RECEBIMENTO_PARCIAL, COMPRA_STATUS_FECHADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
 from app.motos_assai.services.chassi_validator import validar_chassi
@@ -114,6 +115,12 @@ def registrar_conferencia(
         recibo_id=recibo_id, chassi=chassi_norm,
     ).first()
 
+    # Race condition: item já conferido por outro operador (H2)
+    if item and item.conferido:
+        raise RecebimentoConflictError(
+            f'Chassi {chassi_norm} já conferido — atualize a tela'
+        )
+
     # Detecta divergências
     tipo_divergencia = None
     if not item:
@@ -144,7 +151,7 @@ def registrar_conferencia(
              item.cor_texto.upper() != (cor_conferida or '').upper():
             tipo_divergencia = DIVERGENCIA_COR_DIFERENTE
         if avaria_fisica:
-            tipo_divergencia = 'AVARIA_FISICA'  # spec valid value
+            tipo_divergencia = DIVERGENCIA_AVARIA_FISICA
 
         item.conferido = True
         item.qr_code_lido = qr_code_lido
@@ -152,46 +159,50 @@ def registrar_conferencia(
         if tipo_divergencia:
             item.tipo_divergencia = tipo_divergencia
 
-    # Cria/atualiza AssaiMoto
-    # with_for_update(of=AssaiMoto) evita erro "FOR UPDATE cannot be applied to nullable side
-    # of outer join" causado pelo lazy='joined' em AssaiMoto.modelo.
-    moto = (
-        db.session.query(AssaiMoto)
-        .filter(AssaiMoto.chassi == chassi_norm)
-        .with_for_update(of=AssaiMoto)
-        .first()
-    )
-    if not moto:
-        moto = AssaiMoto(
-            chassi=chassi_norm,
-            modelo_id=modelo_conferido_id,
-            cor=cor_conferida,
-            motor=item.motor if item else None,
+    try:
+        # Cria/atualiza AssaiMoto
+        # with_for_update(of=AssaiMoto) evita erro "FOR UPDATE cannot be applied to nullable side
+        # of outer join" causado pelo lazy='joined' em AssaiMoto.modelo.
+        moto = (
+            db.session.query(AssaiMoto)
+            .filter(AssaiMoto.chassi == chassi_norm)
+            .with_for_update(of=AssaiMoto)
+            .first()
         )
-        db.session.add(moto)
-    else:
-        # Recebimento como SOT: UPDATE em cor/modelo se divergiu (exceção autorizada)
-        if moto.modelo_id != modelo_conferido_id:
-            moto.modelo_id = modelo_conferido_id
-        if cor_conferida and moto.cor != cor_conferida:
-            moto.cor = cor_conferida
+        if not moto:
+            moto = AssaiMoto(
+                chassi=chassi_norm,
+                modelo_id=modelo_conferido_id,
+                cor=cor_conferida,
+                motor=item.motor if item else None,
+            )
+            db.session.add(moto)
+        else:
+            # Recebimento como SOT: UPDATE em cor/modelo se divergiu (exceção autorizada)
+            if moto.modelo_id != modelo_conferido_id:
+                moto.modelo_id = modelo_conferido_id
+            if cor_conferida and moto.cor != cor_conferida:
+                moto.cor = cor_conferida
 
-    # Atualiza recibo para EM_CONFERENCIA se ainda AGUARDANDO
-    recibo = AssaiReciboMotochefe.query.get(recibo_id)
-    if recibo and recibo.status == RECIBO_STATUS_AGUARDANDO:
-        recibo.status = RECIBO_STATUS_EM_CONFERENCIA
+        # Atualiza recibo para EM_CONFERENCIA se ainda AGUARDANDO
+        recibo = AssaiReciboMotochefe.query.get(recibo_id)
+        if recibo and recibo.status == RECIBO_STATUS_AGUARDANDO:
+            recibo.status = RECIBO_STATUS_EM_CONFERENCIA
 
-    # Emite evento ESTOQUE
-    emitir_evento(
-        chassi_norm, EVENTO_ESTOQUE,
-        operador_id=operador_id,
-        dados_extras={
-            'recibo_id': recibo_id, 'item_id': item.id,
-            'tipo_divergencia': tipo_divergencia,
-        },
-    )
+        # Emite evento ESTOQUE
+        emitir_evento(
+            chassi_norm, EVENTO_ESTOQUE,
+            operador_id=operador_id,
+            dados_extras={
+                'recibo_id': recibo_id, 'item_id': item.id,
+                'tipo_divergencia': tipo_divergencia,
+            },
+        )
 
-    db.session.commit()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return item
 
 
@@ -218,25 +229,48 @@ def finalizar_recebimento(
             f'{len(nao_conferidos)} chassis não conferidos. Confirme MOTO_FALTANDO ou continue conferindo.'
         )
 
-    # Marca cada não-conferido como MOTO_FALTANDO
-    for item in nao_conferidos:
-        item.tipo_divergencia = DIVERGENCIA_MOTO_FALTANDO
-        emitir_evento(
-            item.chassi, EVENTO_MOTO_FALTANDO,
-            operador_id=operador_id,
-            observacao='Declarado no recibo mas não chegou fisicamente',
-            dados_extras={'recibo_id': recibo_id, 'item_id': item.id},
+    try:
+        # Marca cada não-conferido como MOTO_FALTANDO
+        for item in nao_conferidos:
+            item.tipo_divergencia = DIVERGENCIA_MOTO_FALTANDO
+            emitir_evento(
+                item.chassi, EVENTO_MOTO_FALTANDO,
+                operador_id=operador_id,
+                observacao='Declarado no recibo mas não chegou fisicamente',
+                dados_extras={'recibo_id': recibo_id, 'item_id': item.id},
+            )
+
+        # Status final do recibo
+        com_divergencia = (
+            nao_conferidos
+            or AssaiReciboItem.query.filter(
+                AssaiReciboItem.recibo_id == recibo_id,
+                AssaiReciboItem.tipo_divergencia.isnot(None),
+            ).count() > 0
         )
+        recibo.status = RECIBO_STATUS_COM_DIVERGENCIA if com_divergencia else RECIBO_STATUS_CONCLUIDO
 
-    # Status final
-    com_divergencia = (
-        nao_conferidos
-        or AssaiReciboItem.query.filter(
-            AssaiReciboItem.recibo_id == recibo_id,
-            AssaiReciboItem.tipo_divergencia.isnot(None),
-        ).count() > 0
-    )
-    recibo.status = RECIBO_STATUS_COM_DIVERGENCIA if com_divergencia else RECIBO_STATUS_CONCLUIDO
+        # Propaga status para AssaiCompraMotochefe quando TODOS os recibos estão finalizados
+        if recibo.compra_id:
+            todos_recibos = AssaiReciboMotochefe.query.filter_by(
+                compra_id=recibo.compra_id,
+            ).all()
+            status_finais = {RECIBO_STATUS_CONCLUIDO, RECIBO_STATUS_COM_DIVERGENCIA}
+            if all(r.status in status_finais or r.id == recibo_id for r in todos_recibos):
+                compra = recibo.compra
+                if compra:
+                    algum_com_divergencia = any(
+                        (r.status == RECIBO_STATUS_COM_DIVERGENCIA or com_divergencia and r.id == recibo_id)
+                        for r in todos_recibos
+                    )
+                    compra.status = (
+                        COMPRA_STATUS_RECEBIMENTO_PARCIAL
+                        if algum_com_divergencia
+                        else COMPRA_STATUS_FECHADA
+                    )
 
-    db.session.commit()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return recibo
