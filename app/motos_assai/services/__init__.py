@@ -37,6 +37,11 @@ from .disponibilizar_service import (
     disponibilizar, reverter_para_montada, historico_3_ultimas_disponibilizacoes,
     DisponibilizarValidationError,
 )
+from .separacao_service import (
+    get_ou_criar_separacao, saldo_pendente_por_modelo, registrar_chassi,
+    desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    SeparacaoConflictError, SeparacaoValidationError,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -60,4 +65,7 @@ __all__ = [
     'MontagemValidationError',
     'disponibilizar', 'reverter_para_montada', 'historico_3_ultimas_disponibilizacoes',
     'DisponibilizarValidationError',
+    'get_ou_criar_separacao', 'saldo_pendente_por_modelo', 'registrar_chassi',
+    'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
+    'SeparacaoConflictError', 'SeparacaoValidationError',
 ]
