@@ -9,6 +9,11 @@ from .cd_service import (
     get_cd_principal, atualizar_cd,
 )
 from .modelo_resolver import resolver_modelo, resolver_por_codigo_qpa
+from .pedido_service import (
+    importar_pdf_voe, confirmar_pedido,
+    PedidoVoeJaExisteError, PedidoVoeParserError,
+    CONFIANCA_LIMIAR,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -16,4 +21,7 @@ __all__ = [
     'testar_regex', 'ModeloJaExisteError',
     'get_cd_principal', 'atualizar_cd',
     'resolver_modelo', 'resolver_por_codigo_qpa',
+    'importar_pdf_voe', 'confirmar_pedido',
+    'PedidoVoeJaExisteError', 'PedidoVoeParserError',
+    'CONFIANCA_LIMIAR',
 ]
