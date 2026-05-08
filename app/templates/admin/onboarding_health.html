@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}Onboarding Health{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1>Onboarding — Health Check</h1>
+  <p class="text-muted">Verifica se todos os selectors dos tours ainda existem no DOM das telas alvo. Use apos deploys que mexem em templates HORA/Assai.</p>
+
+  <div class="mb-3">
+    <button id="btn-run" class="btn btn-primary">Rodar verificacao</button>
+    <span id="status" class="ms-3 text-muted"></span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm" id="results">
+      <thead>
+        <tr>
+          <th>Tour</th>
+          <th>Rota</th>
+          <th>Passo</th>
+          <th>Selector</th>
+          <th>OK?</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='onboarding/lib/driver.css') }}">
+<script>window.OnboardingContext = {user_id: {{ current_user.id }}, is_admin: true, permissoes: null};</script>
+<script src="{{ url_for('static', filename='onboarding/lib/driver.min.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/core/localstorage_tracker.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/core/tour_engine.js') }}"></script>
+
+<!-- Carrega TODOS os tours HORA -->
+<script src="{{ url_for('static', filename='onboarding/tours/hora/_macro.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/recebimento_nf.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/venda_manual_nova.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/transferencia_nova.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/vendas_aprovar.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/devolucao_venda.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/estoque_lista.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/avaria_nova.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/pecas_estoque.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/modelos_novo.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/modelos_pendencias.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/modelos_unificar.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/tagplus_conta.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/hora/permissoes.js') }}"></script>
+
+<!-- Carrega TODOS os tours Motos Assai -->
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/_macro.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/recebimento_wizard.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/montagem_quick.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/disponibilizar_quick.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/separacao_chassi.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/pedidos_upload.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/compras_nova.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/recibos_upload.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/faturamento.js') }}"></script>
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/modelos_assai.js') }}"></script>
+
+<script>
+document.getElementById('btn-run').addEventListener('click', async function () {
+  const tbody = document.querySelector('#results tbody');
+  tbody.innerHTML = '';
+  const status = document.getElementById('status');
+  status.textContent = 'Carregando...';
+
+  const registry = window.OnboardingEngine._registry || {};
+  const tourIds = Object.keys(registry);
+  let totalOk = 0, totalFail = 0;
+
+  for (const tourId of tourIds) {
+    const tour = registry[tourId];
+    const route = tour.autoStartRoute || '(sem rota)';
+    const renderRoute = route.replace(/\*/g, '1');
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:absolute;left:-9999px;width:1280px;height:800px;border:0;';
+    iframe.src = renderRoute;
+    document.body.appendChild(iframe);
+    await new Promise(res => {
+      iframe.onload = res;
+      setTimeout(res, 5000);
+    });
+
+    for (let i = 0; i < tour.steps.length; i++) {
+      const step = tour.steps[i];
+      let found = false;
+      try {
+        found = !!iframe.contentDocument.querySelector(step.element);
+      } catch (e) {
+        found = '(?)';
+      }
+
+      const tr = tbody.insertRow();
+      tr.innerHTML = '<td><code>' + tourId + '</code></td>' +
+                     '<td>' + route + '</td>' +
+                     '<td>' + (i + 1) + '</td>' +
+                     '<td><code>' + step.element + '</code></td>' +
+                     '<td>' + (found === true ? '<span class="text-success">OK</span>' : '<span class="text-danger">' + (found === false ? 'NAO' : found) + '</span>') + '</td>';
+      if (found === true) totalOk++;
+      else totalFail++;
+    }
+    iframe.remove();
+  }
+  status.textContent = 'Concluido. OK: ' + totalOk + ' | Falhou: ' + totalFail;
+});
+</script>
+{% endblock %}
