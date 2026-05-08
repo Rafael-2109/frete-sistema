@@ -132,3 +132,6 @@ app/mcp_sistema/.env.production
 
 # Superpowers visual companion mockups
 .superpowers/
+
+# Fixture PDFs para testes (arquivos binários reais, não versionar)
+tests/motos_assai/fixtures/*.pdf

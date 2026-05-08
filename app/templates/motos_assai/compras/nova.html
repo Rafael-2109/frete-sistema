@@ -1,0 +1,92 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="mb-3">
+  <h2>Novo Pedido de Compra Motochefe</h2>
+  <p class="text-muted">Selecione 1 ou mais pedidos VOE em ABERTO para consolidar.</p>
+</header>
+
+<form method="POST" id="form-compra">
+  {{ form.hidden_tag() }}
+
+  <div class="row g-3">
+    <div class="col-md-7">
+      <h5>Pedidos VOE em ABERTO ({{ pedidos|length }})</h5>
+      {% if not pedidos %}
+        <p class="text-muted">Nenhum pedido em ABERTO. Importe um pedido VOE primeiro.</p>
+      {% else %}
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all"></th>
+            <th>Número</th><th>Data</th><th>Confiança</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pedidos %}
+          <tr>
+            <td>
+              <input type="checkbox" name="pedido_ids" value="{{ p.id }}"
+                     class="form-check-input pedido-check"
+                     {% if p.id in pedido_ids_preview %}checked{% endif %}>
+            </td>
+            <td>{{ p.numero }}</td>
+            <td>{{ p.data_emissao.strftime('%d/%m/%Y') if p.data_emissao else '-' }}</td>
+            <td>{{ '%.0f%%' | format(p.parsing_confianca * 100) if p.parsing_confianca else '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="col-md-5">
+      <h5>Preview totalizadores</h5>
+      {% if totais_preview %}
+      <table class="table table-sm">
+        <thead><tr><th>Modelo</th><th class="text-end">Qtd</th><th class="text-end">Valor</th></tr></thead>
+        <tbody>
+          {% set sum_qtd = namespace(v=0) %}
+          {% set sum_v = namespace(v=0) %}
+          {% for r in totais_preview %}
+          <tr>
+            <td>{{ r.codigo }}</td>
+            <td class="text-end">{{ r.qtd_total }}</td>
+            <td class="text-end">R$ {{ r.valor_total | numero_br(2) }}</td>
+          </tr>
+          {% set sum_qtd.v = sum_qtd.v + r.qtd_total %}
+          {% set sum_v.v = sum_v.v + r.valor_total %}
+          {% endfor %}
+          <tr class="table-active">
+            <td><strong>TOTAL</strong></td>
+            <td class="text-end"><strong>{{ sum_qtd.v }}</strong></td>
+            <td class="text-end"><strong>R$ {{ sum_v.v | numero_br(2) }}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+        <p class="text-muted small">Selecione pedidos para ver o preview e clique em "Atualizar preview".</p>
+      {% endif %}
+
+      <div class="mb-3">
+        {{ form.motochefe_cnpj.label(class="form-label") }}
+        {{ form.motochefe_cnpj(class="form-control", placeholder="37.542.484/0001-00") }}
+      </div>
+
+      <button type="submit" name="action" value="preview" class="btn btn-outline-secondary"
+              formmethod="get" formaction="{{ url_for('motos_assai.compras_nova') }}">
+        <i class="fas fa-sync"></i> Atualizar preview
+      </button>
+      <button type="submit" name="action" value="confirmar" class="btn btn-primary">
+        <i class="fas fa-check"></i> Gerar PO Motochefe
+      </button>
+    </div>
+  </div>
+</form>
+
+<script>
+document.getElementById('select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.pedido-check').forEach(c => c.checked = e.target.checked);
+});
+</script>
+{% endblock %}

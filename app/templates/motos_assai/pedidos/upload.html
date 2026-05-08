@@ -1,0 +1,29 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="mb-3">
+  <h2>Importar pedido VOE (Q.P.A. → Sendas)</h2>
+  <p class="text-muted">Faça upload do PDF gerado pelo Consinco.</p>
+</header>
+
+<form method="POST" enctype="multipart/form-data" class="card p-4 col-md-8 col-lg-6">
+  {{ form.hidden_tag() }}
+
+  <div class="mb-3">
+    {{ form.pdf.label(class="form-label") }}
+    {{ form.pdf(class="form-control", accept="application/pdf") }}
+    {% for e in form.pdf.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+  </div>
+
+  <div class="alert alert-info small">
+    <i class="fas fa-info-circle"></i>
+    O parser determinístico tenta primeiro. Se a confiança for inferior a 70%,
+    o sistema usa fallback LLM (Haiku → Sonnet) automaticamente.
+    Você revisará todos os dados extraídos antes de confirmar.
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    <i class="fas fa-upload"></i> Importar pedido
+  </button>
+</form>
+{% endblock %}

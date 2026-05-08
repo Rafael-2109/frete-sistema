@@ -1,0 +1,93 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>Pedido VOE — {{ pedido.numero }}
+    <span class="badge bg-{% if pedido.status == 'ABERTO' %}primary{% else %}secondary{% endif %}">
+      {{ pedido.status }}
+    </span>
+  </h2>
+  <div>
+    {% if pedido.pdf_s3_key %}
+      <a href="#" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-file-pdf"></i> Baixar PDF original
+      </a>
+    {% endif %}
+  </div>
+</header>
+
+<dl class="row small">
+  <dt class="col-sm-2">Data emissão</dt>
+  <dd class="col-sm-4">{{ pedido.data_emissao.strftime('%d/%m/%Y') if pedido.data_emissao else '-' }}</dd>
+  <dt class="col-sm-2">Previsão entrega</dt>
+  <dd class="col-sm-4">{{ pedido.previsao_entrega.strftime('%d/%m/%Y') if pedido.previsao_entrega else '-' }}</dd>
+
+  <dt class="col-sm-2">Fornecedor</dt>
+  <dd class="col-sm-4">Q.P.A. — {{ pedido.fornecedor_cnpj or '-' }}</dd>
+  <dt class="col-sm-2">Parser</dt>
+  <dd class="col-sm-4">
+    <code>{{ pedido.parser_usado }}</code>
+    (confiança {{ '%.0f%%' | format(pedido.parsing_confianca * 100) if pedido.parsing_confianca else '-' }})
+  </dd>
+</dl>
+
+<h4 class="mt-4">Totais por modelo</h4>
+<table class="table table-sm">
+  <thead>
+    <tr><th>Modelo</th><th class="text-end">Qtd total</th><th class="text-end">Valor total</th></tr>
+  </thead>
+  <tbody>
+    {% for r in totais_por_modelo %}
+    <tr>
+      <td>{{ r.codigo }} — {{ r.nome }}</td>
+      <td class="text-end">{{ r.qtd }}</td>
+      <td class="text-end">R$ {{ r.valor | numero_br(2) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h4 class="mt-4">Por loja ({{ por_loja|length }})</h4>
+<div class="accordion" id="acc-lojas">
+  {% for entry in por_loja %}
+    {% set loja = entry.loja %}
+    <div class="accordion-item">
+      <h5 class="accordion-header">
+        <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#loja-{{ loja.id }}">
+          Loja {{ loja.numero }} — {{ loja.nome }}
+          <span class="ms-3 text-muted">{{ loja.cidade }}/{{ loja.uf }}</span>
+        </button>
+      </h5>
+      <div id="loja-{{ loja.id }}" class="accordion-collapse collapse" data-bs-parent="#acc-lojas">
+        <div class="accordion-body">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Modelo</th><th class="text-end">Qtd</th><th class="text-end">Valor unit.</th><th class="text-end">Total</th></tr></thead>
+            <tbody>
+              {% for it in entry.items %}
+              <tr>
+                <td>{{ it.modelo.codigo }} — {{ it.modelo.nome }}</td>
+                <td class="text-end">{{ it.item.qtd_pedida }}</td>
+                <td class="text-end">R$ {{ it.item.valor_unitario | numero_br(2) }}</td>
+                <td class="text-end">R$ {{ it.item.valor_total | numero_br(2) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="mt-3">
+  <a href="{{ url_for('motos_assai.pedidos_lista') }}" class="btn btn-outline-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar
+  </a>
+  {% if pedido.status == 'ABERTO' %}
+  <a href="{{ url_for('motos_assai.compras_nova', pedido_ids=[pedido.id]) }}" class="btn btn-primary">
+    <i class="fas fa-arrow-right"></i> Consolidar em PO Motochefe
+  </a>
+  {% endif %}
+</div>
+{% endblock %}

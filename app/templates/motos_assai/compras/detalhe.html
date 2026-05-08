@@ -1,0 +1,58 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>PO Motochefe — {{ compra.numero }}
+    <span class="badge bg-primary">{{ compra.status }}</span>
+  </h2>
+  <a href="{{ url_for('motos_assai.compras_pdf', compra_id=compra.id) }}"
+     class="btn btn-primary">
+    <i class="fas fa-file-pdf"></i> Baixar PDF do PO
+  </a>
+</header>
+
+<dl class="row small">
+  <dt class="col-sm-2">Data</dt>
+  <dd class="col-sm-4">{{ compra.data_emissao.strftime('%d/%m/%Y') if compra.data_emissao else '-' }}</dd>
+  <dt class="col-sm-2">Motochefe CNPJ</dt>
+  <dd class="col-sm-4">{{ compra.motochefe_cnpj or '-' }}</dd>
+  <dt class="col-sm-2">Criada em</dt>
+  <dd class="col-sm-10">{{ compra.criada_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+</dl>
+
+<h4>Totais por modelo</h4>
+<table class="table table-sm">
+  <thead><tr><th>Modelo</th><th class="text-end">Qtd</th><th class="text-end">Valor</th></tr></thead>
+  <tbody>
+    {% for r in totais %}
+    <tr>
+      <td>{{ r.codigo }} — {{ r.nome }}</td>
+      <td class="text-end">{{ r.qtd_total }}</td>
+      <td class="text-end">R$ {{ r.valor_total | numero_br(2) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h4 class="mt-4">Pedidos VOE consolidados ({{ compra.pedido_links|length }})</h4>
+<table class="table">
+  <thead><tr><th>Pedido</th><th>Data</th><th>Status atual</th></tr></thead>
+  <tbody>
+    {% for link in compra.pedido_links %}
+    <tr>
+      <td>
+        <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=link.pedido.id) }}">
+          {{ link.pedido.numero }}
+        </a>
+      </td>
+      <td>{{ link.pedido.data_emissao.strftime('%d/%m/%Y') if link.pedido.data_emissao else '-' }}</td>
+      <td><span class="badge bg-secondary">{{ link.pedido.status }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<a href="{{ url_for('motos_assai.compras_lista') }}" class="btn btn-outline-secondary mt-3">
+  <i class="fas fa-arrow-left"></i> Voltar à lista
+</a>
+{% endblock %}

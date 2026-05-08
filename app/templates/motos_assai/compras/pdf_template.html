@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<!-- TEMPLATE PDF — gerado por WeasyPrint. CSS inline é obrigatório para PDF (não é UI web). -->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pedido de Compra Motochefe — {{ compra.numero }}</title>
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    body { font-family: Arial, sans-serif; font-size: 11pt; color: #222; }
+    h1 { font-size: 16pt; margin: 0 0 0.5em 0; }
+    .header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 1em; padding-bottom: 0.5em; border-bottom: 2px solid #000; }
+    .meta { font-size: 9pt; }
+    .meta dt { font-weight: bold; display: inline; }
+    .meta dd { display: inline; margin-left: 0.5em; }
+    .meta div { margin-bottom: 0.2em; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+    th, td { padding: 0.4em 0.6em; border: 1px solid #ccc; font-size: 10pt; }
+    th { background: #f0f0f0; text-align: left; }
+    td.num { text-align: right; }
+    .total-row td { font-weight: bold; background: #f8f8f8; }
+    .footer { margin-top: 2em; padding-top: 0.5em; border-top: 1px solid #999; font-size: 9pt; color: #666; }
+    .assinatura { margin-top: 3em; display: flex; justify-content: space-between; }
+    .assinatura div { width: 45%; text-align: center; border-top: 1px solid #000; padding-top: 0.3em; font-size: 9pt; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Pedido de Compra — {{ compra.numero }}</h1>
+      <div class="meta">
+        <div><dt>Data:</dt><dd>{{ compra.data_emissao.strftime('%d/%m/%Y') if compra.data_emissao else '-' }}</dd></div>
+        <div><dt>Fornecedor:</dt><dd>Motochefe — CNPJ {{ compra.motochefe_cnpj or '-' }}</dd></div>
+        <div><dt>Status:</dt><dd>{{ compra.status }}</dd></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Total por modelo</h3>
+  <table>
+    <thead>
+      <tr><th>Código</th><th>Modelo</th><th class="num">Qtd total</th><th class="num">Valor total</th></tr>
+    </thead>
+    <tbody>
+      {% set sum_qtd = namespace(v=0) %}
+      {% set sum_valor = namespace(v=0) %}
+      {% for r in totais %}
+        <tr>
+          <td><code>{{ r.codigo }}</code></td>
+          <td>{{ r.nome }}</td>
+          <td class="num">{{ r.qtd_total }}</td>
+          <td class="num">R$ {{ '{:,.2f}'.format(r.valor_total) | replace(',', 'X') | replace('.', ',') | replace('X', '.') }}</td>
+        </tr>
+        {% set sum_qtd.v = sum_qtd.v + r.qtd_total %}
+        {% set sum_valor.v = sum_valor.v + r.valor_total %}
+      {% endfor %}
+      <tr class="total-row">
+        <td colspan="2">TOTAL GERAL</td>
+        <td class="num">{{ sum_qtd.v }}</td>
+        <td class="num">R$ {{ '{:,.2f}'.format(sum_valor.v) | replace(',', 'X') | replace('.', ',') | replace('X', '.') }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Pedidos Sendas/Assaí consolidados ({{ pedidos|length }})</h3>
+  <table>
+    <thead><tr><th>Pedido VOE</th><th>Data</th><th class="num">Lojas</th><th class="num">Itens</th></tr></thead>
+    <tbody>
+      {% for entry in pedidos %}
+      <tr>
+        <td>{{ entry.pedido.numero }}</td>
+        <td>{{ entry.pedido.data_emissao.strftime('%d/%m/%Y') if entry.pedido.data_emissao else '-' }}</td>
+        <td class="num">{{ entry.qtd_lojas }}</td>
+        <td class="num">{{ entry.qtd_items }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="assinatura">
+    <div>Comprador (Q.P.A. / Operação VOE)</div>
+    <div>Motochefe</div>
+  </div>
+
+  <div class="footer">
+    Documento gerado pelo sistema em {{ gerado_em }}.
+  </div>
+</body>
+</html>
