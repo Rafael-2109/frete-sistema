@@ -6,18 +6,22 @@
   <h2><i class="fas fa-warehouse"></i> Estoque de Peças</h2>
   <div class="d-flex gap-2">
     {% if current_user.tem_perm_hora('pecas_estoque', 'editar') %}
+    <div id="btn-ajuste-manual" class="d-inline-block">
     <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAjuste">
       <i class="fas fa-edit"></i> Ajuste manual
     </button>
+    </div>
+    <div id="btn-transferir" class="d-inline-block">
     <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalTransf">
       <i class="fas fa-exchange-alt"></i> Transferência
     </button>
+    </div>
     {% endif %}
   </div>
 </div>
 
 {% call filtros_form(url_for('hora.pecas_estoque_lista')) %}
-  {{ filtro_loja(name='loja_id', valor=filtro_loja_id, lojas=lojas_ativas) }}
+  <div id="filtro-loja" class="d-contents">{{ filtro_loja(name='loja_id', valor=filtro_loja_id, lojas=lojas_ativas) }}</div>
   <div class="col-md-4">
     <label class="form-label small mb-1">Busca peça</label>
     <input type="text" name="busca" value="{{ filtro_busca or '' }}"
@@ -39,6 +43,7 @@
   </div>
 {% endcall %}
 
+<div id="tabela-pecas">
 <div class="table-responsive">
   <table class="table table-hover align-middle">
     <thead><tr>
@@ -65,7 +70,12 @@
     </tbody>
   </table>
 </div>
+</div>{# /#tabela-pecas #}
 
 {% include 'hora/pecas_estoque_ajuste_modal.html' %}
 {% include 'hora/pecas_estoque_transferencia_modal.html' %}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/hora/pecas_estoque.js') }}"></script>
 {% endblock %}
