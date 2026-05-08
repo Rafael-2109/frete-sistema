@@ -67,7 +67,7 @@
           <table class="table table-sm mb-0">
             <thead><tr><th>Modelo</th><th class="text-end">Qtd</th><th class="text-end">Valor unit.</th><th class="text-end">Total</th></tr></thead>
             <tbody>
-              {% for it in entry.items %}
+              {% for it in entry['items'] %}
               <tr>
                 <td>{{ it.modelo.codigo }} — {{ it.modelo.nome }}</td>
                 <td class="text-end">{{ it.item.qtd_pedida }}</td>
