@@ -171,4 +171,7 @@ def gerar_pdf_po(compra_id: int) -> bytes:
         gerado_em=agora_brasil_naive().strftime('%d/%m/%Y %H:%M'),
     )
 
-    return HTML(string=html_str).write_pdf()
+    pdf_bytes = HTML(string=html_str).write_pdf()
+    if not pdf_bytes:
+        raise RuntimeError(f'WeasyPrint retornou vazio ao gerar PDF da compra {compra.numero}')
+    return pdf_bytes
