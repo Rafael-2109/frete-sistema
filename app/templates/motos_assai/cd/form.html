@@ -11,7 +11,7 @@
   </div>
   <div class="col-md-4">
     {{ form.cnpj.label(class="form-label") }}
-    {{ form.cnpj(class="form-control", placeholder="14 dígitos") }}
+    {{ form.cnpj(class="form-control", placeholder="14 dígitos", inputmode="numeric") }}
     {% for e in form.cnpj.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
   </div>
   <div class="col-12">
@@ -19,7 +19,7 @@
     {{ form.endereco(class="form-control") }}
   </div>
   <div class="col-md-3">{{ form.bairro.label(class="form-label") }}{{ form.bairro(class="form-control") }}</div>
-  <div class="col-md-2">{{ form.cep.label(class="form-label") }}{{ form.cep(class="form-control") }}</div>
+  <div class="col-md-2">{{ form.cep.label(class="form-label") }}{{ form.cep(class="form-control", inputmode="numeric") }}</div>
   <div class="col-md-5">{{ form.cidade.label(class="form-label") }}{{ form.cidade(class="form-control") }}</div>
   <div class="col-md-2">{{ form.uf.label(class="form-label") }}{{ form.uf(class="form-select") }}</div>
   <div class="col-12 form-check ms-3">

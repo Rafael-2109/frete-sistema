@@ -10,7 +10,8 @@
     <label class="form-label">Chassi</label>
     <div class="input-group">
       <input type="text" id="input-chassi" class="form-control form-control-lg"
-             autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50">
+             autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50"
+             autocapitalize="characters" enterkeyhint="search">
       <button type="button" id="btn-camera" class="btn btn-outline-secondary">
         <i class="fas fa-camera"></i>
       </button>
@@ -29,11 +30,13 @@
     <div class="mb-2">
       <label class="form-label small">Descrição da pendência (≥3 chars)</label>
       <textarea id="input-descricao-pendencia" class="form-control" rows="2"
-                placeholder="Ex: bateria com defeito, retrovisor faltando..."></textarea>
+                placeholder="Ex: bateria com defeito, retrovisor faltando..."
+                autocapitalize="sentences"></textarea>
     </div>
     <div class="mb-2">
       <label class="form-label small">Chassi doador (opcional)</label>
-      <input type="text" id="input-chassi-doador" class="form-control" placeholder="Chassi de outra moto">
+      <input type="text" id="input-chassi-doador" class="form-control" placeholder="Chassi de outra moto"
+             autocapitalize="characters" enterkeyhint="search">
     </div>
   </div>
 

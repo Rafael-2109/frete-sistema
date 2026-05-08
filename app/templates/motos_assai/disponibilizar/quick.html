@@ -11,7 +11,8 @@
     <label class="form-label">Chassi</label>
     <div class="input-group">
       <input type="text" id="input-chassi" class="form-control form-control-lg"
-             autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50">
+             autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50"
+             autocapitalize="characters" enterkeyhint="search">
       <button type="button" id="btn-camera" class="btn btn-outline-secondary">
         <i class="fas fa-camera"></i>
       </button>
@@ -41,7 +42,7 @@
       <div class="modal-body">
         <p>Reverter o chassi <code id="modal-chassi"></code>?</p>
         <label class="form-label small">Motivo (obrigatório, ≥3 chars)</label>
-        <textarea id="modal-motivo" class="form-control" rows="3"></textarea>
+        <textarea id="modal-motivo" class="form-control" rows="3" autocapitalize="sentences"></textarea>
         <div id="modal-erro" class="text-danger small mt-2 d-none"></div>
       </div>
       <div class="modal-footer">
