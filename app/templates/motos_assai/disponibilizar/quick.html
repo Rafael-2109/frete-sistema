@@ -32,7 +32,8 @@
 </div>
 
 <!-- Modal reverter -->
-<div class="modal fade" id="modal-reverter" tabindex="-1">
+<div class="modal fade" id="modal-reverter" tabindex="-1"
+     data-endpoint-reverter="{{ url_for('motos_assai.disponibilizar_reverter') }}">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
@@ -57,58 +58,13 @@
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
         integrity="sha384-c9d8RFSL+sJ0dC0WGqK7tQXg4/c5++8KkF+xbSPq3ji10/wfKLtAVk0M3IY+XJ7q"
-        crossorigin="anonymous"></script>
+        crossorigin="anonymous" defer></script>
 <script>
 window.MOTOS_ASSAI_OP_CONFIG = {
   endpoint: '{{ url_for("motos_assai.disponibilizar_registrar") }}',
   modo: 'disponibilizar',
 };
 </script>
-<script src="{{ url_for('static', filename='motos_assai/js/operacao_quick.js') }}"></script>
-<script>
-(function() {
-  function getCsrfToken() {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? meta.getAttribute('content') : '';
-  }
-
-  // Handler do botão Reverter (delegação)
-  document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-action="reverter"]');
-    if (!btn) return;
-    const chassi = btn.dataset.chassi;
-    document.getElementById('modal-chassi').textContent = chassi;
-    document.getElementById('modal-motivo').value = '';
-    document.getElementById('modal-erro').classList.add('d-none');
-    const modalEl = document.getElementById('modal-reverter');
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
-
-    document.getElementById('btn-confirmar-reverter').onclick = async () => {
-      const motivo = document.getElementById('modal-motivo').value.trim();
-      if (motivo.length < 3) {
-        document.getElementById('modal-erro').textContent = 'Motivo precisa ter ≥3 chars';
-        document.getElementById('modal-erro').classList.remove('d-none');
-        return;
-      }
-      const r = await fetch('{{ url_for("motos_assai.disponibilizar_reverter") }}', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCsrfToken(),
-        },
-        body: JSON.stringify({chassi, motivo}),
-      });
-      const data = await r.json();
-      if (!data.ok) {
-        document.getElementById('modal-erro').textContent = data.erro;
-        document.getElementById('modal-erro').classList.remove('d-none');
-        return;
-      }
-      modal.hide();
-      location.reload();  // recarrega para atualizar histórico
-    };
-  });
-})();
-</script>
+<script src="{{ url_for('static', filename='motos_assai/js/operacao_quick.js') }}" defer></script>
+<script src="{{ url_for('static', filename='motos_assai/js/disponibilizar_modal.js') }}" defer></script>
 {% endblock %}

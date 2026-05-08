@@ -136,3 +136,19 @@ def test_smoke_faturamento_upload_nf_por_separacao(login_admin):
     # Upload NF com separacao_id opcional — rota mostra o form mesmo sem separação existente
     r = login_admin.get('/motos-assai/faturamento/separacao/999999/upload-nf')
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Mapa de lojas
+# ---------------------------------------------------------------------------
+
+def test_smoke_lojas_mapa(login_admin):
+    r = login_admin.get('/motos-assai/lojas/mapa')
+    assert r.status_code == 200
+
+
+def test_smoke_lojas_geocodar_inexistente(login_admin):
+    # POST para loja inexistente -> 404
+    r = login_admin.post('/motos-assai/lojas/999999/geocodar',
+                         content_type='application/json')
+    assert r.status_code == 404

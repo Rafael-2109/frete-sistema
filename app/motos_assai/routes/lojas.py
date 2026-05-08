@@ -1,10 +1,15 @@
-from flask import render_template, request, redirect, url_for, flash
+import os
+
+from flask import jsonify, render_template, request, redirect, url_for, flash
 from flask_login import login_required
+
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.forms import LojaForm
+from app.motos_assai.models.loja import AssaiLoja
 from app.motos_assai.services import (
     listar_lojas, criar_loja, atualizar_loja, get_loja, LojaJaExisteError,
+    geocodar_loja, GeocodingError,
 )
 
 
@@ -78,3 +83,63 @@ def lojas_editar(loja_id):
         flash(f'Loja {loja.numero} atualizada.', 'success')
         return redirect(url_for('motos_assai.lojas_detalhe', loja_id=loja_id))
     return render_template('motos_assai/lojas/form.html', form=form, loja=loja, modo='editar')
+
+
+@motos_assai_bp.route('/lojas/mapa')
+@login_required
+@require_motos_assai
+def lojas_mapa():
+    """Renderiza mapa com todas as lojas (Google Maps se chave; Leaflet fallback)."""
+    lojas = AssaiLoja.query.filter_by(ativo=True).order_by(AssaiLoja.nome).all()
+    google_key = os.getenv('GOOGLE_MAPS_API_KEY', '').strip()
+
+    lojas_json = [
+        {
+            'id': l.id,
+            'apelido': l.nome,
+            'cnpj': l.cnpj,
+            'endereco': ', '.join(filter(None, [
+                l.endereco,
+                l.bairro,
+                l.cidade,
+                l.uf,
+            ])),
+            'lat': float(l.latitude) if l.latitude is not None else None,
+            'lng': float(l.longitude) if l.longitude is not None else None,
+            'regional': l.regional,
+        }
+        for l in lojas
+    ]
+
+    return render_template(
+        'motos_assai/lojas/mapa.html',
+        lojas=lojas,
+        lojas_json=lojas_json,
+        google_key=google_key,
+        tem_google=bool(google_key),
+    )
+
+
+@motos_assai_bp.route('/lojas/<int:loja_id>/geocodar', methods=['POST'])
+@login_required
+@require_motos_assai
+def lojas_geocodar(loja_id: int):
+    """AJAX: forca geocoding da loja e retorna novas coords."""
+    loja = AssaiLoja.query.get_or_404(loja_id)
+    forcar = request.args.get('forcar') == '1'
+    try:
+        coords = geocodar_loja(loja, forcar=forcar)
+        if coords is None:
+            return jsonify({
+                'ok': False,
+                'error': 'Endereco insuficiente. Preencha endereco, cidade e UF.',
+            }), 400
+        lat, lng = coords
+        return jsonify({
+            'ok': True,
+            'lat': float(lat),
+            'lng': float(lng),
+            'provider': loja.geocoding_provider,
+        })
+    except GeocodingError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 502

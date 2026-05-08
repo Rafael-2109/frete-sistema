@@ -154,6 +154,12 @@ echo "MOTOS ASSAI 07: UNIQUE index assai_recibo_item..."
 python scripts/migrations/motos_assai_07_unique_recibo_item.py \
     || echo "⚠️ Migration motos_assai_07 falhou, continuando deploy..."
 
+# 18. MOTOS ASSAI 08: campos de geocoding (lat, lng, provider, geocoded_at) em assai_loja.
+# Idempotente (DO $$ + IF NOT EXISTS). NAO geocoda lojas — so adiciona colunas.
+echo "MOTOS ASSAI 08: geocoding fields em assai_loja..."
+python scripts/migrations/motos_assai_08_loja_geocoding.py \
+    || echo "⚠️ Migration motos_assai_08 falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

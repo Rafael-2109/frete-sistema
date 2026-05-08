@@ -20,5 +20,11 @@ class AssaiLoja(db.Model):
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     criado_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)
 
+    # Geocoding (migration motos_assai_08)
+    latitude = db.Column(db.Numeric(10, 7), nullable=True)
+    longitude = db.Column(db.Numeric(11, 7), nullable=True)
+    geocoding_provider = db.Column(db.String(20), nullable=True)
+    geocoded_at = db.Column(db.DateTime, nullable=True)
+
     def __repr__(self):
         return f'<AssaiLoja {self.numero} {self.nome}>'
