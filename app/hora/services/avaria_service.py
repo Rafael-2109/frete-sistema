@@ -3,6 +3,9 @@
 Regra-chave: avaria NAO bloqueia venda. Apenas registra + emite evento
 AVARIADA em hora_moto_evento. Moto continua em estoque vendavel (AVARIADA
 esta em EVENTOS_EM_ESTOQUE).
+
+Foto: opcional desde 2026-05-07 (pedido do dono — UI agora aceita upload
+direto via camera/arquivo, foto deixou de ser bloqueador).
 """
 from __future__ import annotations
 
@@ -12,7 +15,12 @@ from app import db
 from app.hora.models import HoraAvaria, HoraAvariaFoto, HoraMoto, HoraMotoEvento
 from app.hora.services.moto_service import registrar_evento
 from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
+from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_utc_naive
+
+# Extensoes aceitas para upload de foto de avaria (alinhado com
+# `peca_service.ALLOWED_FOTO_EXT`).
+ALLOWED_FOTO_EXT = {'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'}
 
 
 def _ultimo_evento_tipo(numero_chassi: str) -> Optional[str]:
@@ -32,24 +40,25 @@ def registrar_avaria(
     usuario: str,
     loja_id: int,
 ) -> HoraAvaria:
-    """Cria avaria + N fotos na mesma transaction. Emite evento AVARIADA.
+    """Cria avaria + 0..N fotos na mesma transaction. Emite evento AVARIADA.
 
     Args:
         numero_chassi: chassi da moto (deve estar em estoque).
         descricao: texto livre (>= 3 chars apos strip).
-        fotos: iteravel de (foto_s3_key, legenda_opcional). Min 1.
+        fotos: iteravel de (foto_s3_key, legenda_opcional). Pode ser vazio
+            — desde 2026-05-07 foto deixou de ser obrigatoria. Operador
+            pode adicionar fotos depois pela tela de detalhe.
         usuario: nome do operador.
         loja_id: loja onde moto esta (snapshot).
 
     Raises:
-        ValueError: se >=1 foto nao fornecida, descricao curta, chassi
-            inexistente, ou chassi fora de estoque.
+        ValueError: descricao curta, chassi inexistente, ou chassi fora de
+            estoque. Foto vazia NAO levanta mais (regra antiga removida).
     """
     fotos_list: List[Tuple[str, Optional[str]]] = [
         (fk, leg) for fk, leg in list(fotos) if fk and fk.strip()
     ]
-    if not fotos_list:
-        raise ValueError("Avaria requer pelo menos 1 foto")
+    # Foto opcional desde 2026-05-07 — nao validar lista vazia.
 
     desc_limpa = (descricao or '').strip()
     if len(desc_limpa) < 3:
@@ -116,6 +125,69 @@ def adicionar_foto(
     db.session.add(foto)
     db.session.flush()
     return foto
+
+
+def adicionar_foto_upload(
+    avaria_id: int,
+    file_obj,
+    legenda: Optional[str],
+    usuario: str,
+) -> HoraAvariaFoto:
+    """Recebe arquivo (FileStorage do Werkzeug ou BytesIO), salva no S3 e
+    cria HoraAvariaFoto.
+
+    Levanta ValueError em extensao invalida ou falha de upload.
+    """
+    avaria = HoraAvaria.query.get(avaria_id)
+    if not avaria:
+        raise ValueError(f"avaria inexistente: {avaria_id}")
+    storage = FileStorage()
+    folder = f'hora/avarias/{avaria.id}'
+    s3_key = storage.save_file(
+        file=file_obj, folder=folder, allowed_extensions=ALLOWED_FOTO_EXT,
+    )
+    if not s3_key:
+        raise ValueError('Falha ao salvar foto no storage')
+    return adicionar_foto(avaria_id, s3_key, legenda, usuario)
+
+
+def upload_fotos_temporarias(
+    file_objs: Iterable,
+) -> Tuple[List[Tuple[str, Optional[str]]], List[str]]:
+    """Faz upload das fotos antes de criar a avaria; retorna pares
+    (s3_key, legenda=None) prontos para `registrar_avaria(fotos=...)`,
+    junto com lista de filenames ignorados por extensao invalida ou
+    falha de upload.
+
+    NOTA: arquivos so chegam aqui se passaram no filtro inicial da rota
+    (filename nao vazio). O caller deve flashar warning quando
+    `len(ignorados) > 0` para nao mascarar erros de tipo de arquivo.
+
+    Files com erro/extensao invalida sao silenciosamente pulados na
+    listagem retornada (avaria pode ser criada sem foto desde 2026-05-07).
+    Riscos de orfaos S3: arquivos validos so vao para `hora/avarias/tmp/`;
+    se `registrar_avaria` falhar depois, ficam orfaos (aceito — baixo
+    volume; lifecycle S3 pode ser configurada para expirar `tmp/`).
+    """
+    storage = FileStorage()
+    folder = 'hora/avarias/tmp'
+    pares: List[Tuple[str, Optional[str]]] = []
+    ignorados: List[str] = []
+    for f in file_objs:
+        if not f or not getattr(f, 'filename', '').strip():
+            continue
+        try:
+            s3_key = storage.save_file(
+                file=f, folder=folder, allowed_extensions=ALLOWED_FOTO_EXT,
+            )
+        except ValueError:
+            ignorados.append(f.filename)
+            continue
+        if s3_key:
+            pares.append((s3_key, None))
+        else:
+            ignorados.append(f.filename)
+    return pares, ignorados
 
 
 def resolver_avaria(avaria_id: int, observacao: str, usuario: str) -> HoraAvaria:

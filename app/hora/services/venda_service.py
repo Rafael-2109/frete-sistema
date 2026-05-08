@@ -31,10 +31,12 @@ from app.hora.models import (
     HoraLoja,
     HoraMoto,
     HoraMotoEvento,
+    HoraPeca,
     HoraTabelaPreco,
     HoraVenda,
     HoraVendaDivergencia,
     HoraVendaItem,
+    HoraVendaItemPeca,
     HoraVendaPagamento,
     VENDA_STATUS_CANCELADO,
     VENDA_STATUS_CONFIRMADO,
@@ -44,7 +46,6 @@ from app.hora.models import (
 )
 from app.hora.models.tagplus import (
     HoraTagPlusNfeEmissao,
-    HoraTagPlusProdutoMap,
     NFE_STATUS_APROVADA,
     NFE_STATUS_CANCELAMENTO_SOLICITADO,
     NFE_STATUS_EM_ENVIO,
@@ -77,6 +78,74 @@ TIPOS_DIVERGENCIA_VENDA = (
 
 # Estados de NFe que bloqueiam edicao/cancelamento livre da venda.
 _NFE_EM_VOO = (NFE_STATUS_EM_ENVIO, NFE_STATUS_ENVIADA_SEFAZ, NFE_STATUS_CANCELAMENTO_SOLICITADO)
+
+# --------------------------------------------------------------------------
+# Frete CIF (migration hora_38)
+# --------------------------------------------------------------------------
+# Valores validos de tipo_frete_calc (ver app/hora/models/venda.py).
+TIPOS_FRETE_CALC = ('INCLUSO', 'ADICIONAR')
+
+
+def _normalizar_frete(
+    modalidade_frete: Optional[str],
+    valor_frete,
+    tipo_frete_calc: Optional[str],
+):
+    """Normaliza e valida (valor_frete, tipo_frete_calc) contra modalidade.
+
+    Regras:
+        - tipo_frete_calc deve estar em TIPOS_FRETE_CALC ou ser None.
+        - Se tipo_frete_calc preenchido, modalidade DEVE ser '0' (CIF).
+        - valor_frete >= 0; aceita Decimal/str/int. Vazio/None -> None.
+
+    Retorna:
+        (valor_frete_dec_or_none, tipo_frete_calc_or_none)
+    """
+    tipo_norm = (tipo_frete_calc or '').strip().upper() or None
+    if tipo_norm and tipo_norm not in TIPOS_FRETE_CALC:
+        raise ValueError(
+            f'tipo_frete_calc invalido: {tipo_frete_calc!r} '
+            f"(esperado {TIPOS_FRETE_CALC} ou vazio)"
+        )
+
+    if isinstance(valor_frete, str):
+        s = valor_frete.strip()
+        if not s:
+            valor_dec = None
+        else:
+            # Aceita formato BR (1.234,56) ou US (1234.56).
+            if ',' in s:
+                s = s.replace('.', '').replace(',', '.')
+            try:
+                valor_dec = Decimal(s)
+            except Exception as exc:
+                raise ValueError(f'valor_frete invalido: {valor_frete!r}') from exc
+    elif valor_frete is None:
+        valor_dec = None
+    else:
+        try:
+            valor_dec = Decimal(str(valor_frete))
+        except Exception as exc:
+            raise ValueError(f'valor_frete invalido: {valor_frete!r}') from exc
+
+    if valor_dec is not None and valor_dec < 0:
+        raise ValueError(f'valor_frete deve ser >= 0 (recebido: {valor_dec})')
+
+    # Coerencia: tipo_frete_calc so faz sentido com modalidade CIF ('0').
+    # Se modalidade != '0', SILENCIOSAMENTE descarta tipo + valor (UI ja
+    # esconde os controles via JS; este return None,None cobre o cenario
+    # de operador trocar CIF->FOB no mesmo submit que ainda traz dados de
+    # frete antigos no payload). Levantar ValueError aqui daria erro
+    # confuso ao operador (intent claro era trocar para FOB, nao validar
+    # frete). Defesa em profundidade contra POST automatizado/JS desligado.
+    if tipo_norm and (modalidade_frete or '').strip() != '0':
+        return None, None
+
+    # Se nao informou tipo, valor_frete tambem nao faz sentido — zera.
+    if not tipo_norm:
+        valor_dec = None
+
+    return valor_dec, tipo_norm
 
 
 def _para_datetime(valor) -> Optional[datetime]:
@@ -556,6 +625,8 @@ def criar_venda_manual(
     loja_id_override: Optional[int] = None,
     pagamentos: Optional[List[dict]] = None,
     consumidor_final: Optional[bool] = None,
+    valor_frete=None,
+    tipo_frete_calc: Optional[str] = None,
 ) -> HoraVenda:
     """Cria pedido de venda manual em status COTACAO ou INCOMPLETO.
 
@@ -631,12 +702,20 @@ def criar_venda_manual(
     else:
         forma_norm = 'NAO_INFORMADO'
 
-    mod_frete = (modalidade_frete or '9').strip()
-    if mod_frete not in ('0', '1', '2', '3', '4', '9'):
+    mod_frete = (modalidade_frete or '0').strip()
+    # Lojas HORA so emitem com modalidade 0 (CIF) ou 1 (FOB) — restricao
+    # aplicada em 2026-05-07. Pedidos legados DANFE com modalidades 2,3,4,9
+    # ficam preservados no banco mas nao podem ser GERADOS por este path.
+    if mod_frete not in ('0', '1'):
         raise ValueError(
             f'modalidade_frete invalida: {modalidade_frete!r} '
-            f"(esperado '0','1','2','3','4','9')"
+            f"(esperado '0' CIF ou '1' FOB)"
         )
+    valor_frete_dec, tipo_frete_norm = _normalizar_frete(
+        modalidade_frete=mod_frete,
+        valor_frete=valor_frete,
+        tipo_frete_calc=tipo_frete_calc,
+    )
     n_parcelas = int(numero_parcelas or 1)
     if n_parcelas < 1 or n_parcelas > 60:
         raise ValueError(
@@ -718,6 +797,8 @@ def criar_venda_manual(
         endereco_uf=uf_norm,
         origem_criacao='MANUAL',
         modalidade_frete=mod_frete,
+        valor_frete=valor_frete_dec,
+        tipo_frete_calc=tipo_frete_norm,
         numero_parcelas=n_parcelas,
         intervalo_parcelas_dias=intervalo,
         # consumidor_final: se nao explicito, infere via tipo de documento
@@ -974,6 +1055,8 @@ _CAMPOS_COTACAO_FULL = {
     'endereco_bairro', 'endereco_cidade', 'endereco_uf',
     'modalidade_frete', 'numero_parcelas', 'intervalo_parcelas_dias',
     'consumidor_final',
+    # Frete CIF (migration hora_38) — UI mostra apenas com modalidade='0'.
+    'valor_frete', 'tipo_frete_calc',
 }
 _CAMPOS_EDITAVEIS_HEADER = {
     VENDA_STATUS_INCOMPLETO: _CAMPOS_COTACAO_FULL,
@@ -987,6 +1070,9 @@ _CAMPOS_EDITAVEIS_HEADER = {
         # consumidor_final permanece editavel ate FATURADO porque influencia
         # diretamente o payload da NFe ainda nao enviada.
         'consumidor_final',
+        # Frete CIF — auditoria/calculo de comissao depende; permitido em
+        # CONFIRMADO porque ainda nao foi gerado o registro fiscal.
+        'valor_frete', 'tipo_frete_calc',
     },
     VENDA_STATUS_FATURADO: {'observacoes'},
     VENDA_STATUS_CANCELADO: set(),
@@ -1028,6 +1114,8 @@ def editar_venda(
     numero_parcelas: Optional[int] = None,
     intervalo_parcelas_dias: Optional[int] = None,
     consumidor_final: Optional[bool] = None,
+    valor_frete=None,
+    tipo_frete_calc: Optional[str] = None,
     usuario: Optional[str] = None,
 ) -> HoraVenda:
     """Edita campos do header conforme regra por status.
@@ -1103,10 +1191,15 @@ def editar_venda(
         _atualizar('endereco_uf', uf_norm)
     if modalidade_frete is not None:
         mod_norm = (modalidade_frete or '').strip()
-        if mod_norm not in ('0', '1', '2', '3', '4', '9'):
+        # Restricao 2026-05-07: edicao so aceita 0 (CIF) ou 1 (FOB).
+        # Vendas legadas com 2,3,4,9 mantem o valor no banco se o operador
+        # nao mexer no campo (pois `if modalidade_frete is not None` so
+        # entra quando o form envia o campo); ao salvar uma edicao com
+        # qualquer outro valor, a request e rejeitada.
+        if mod_norm not in ('0', '1'):
             raise ValueError(
                 f'modalidade_frete invalida: {modalidade_frete!r} '
-                f"(esperado '0','1','2','3','4','9')"
+                f"(esperado '0' CIF ou '1' FOB)"
             )
         _atualizar('modalidade_frete', mod_norm)
     if numero_parcelas is not None:
@@ -1133,6 +1226,21 @@ def editar_venda(
         _atualizar('intervalo_parcelas_dias', d)
     if consumidor_final is not None:
         _atualizar('consumidor_final', bool(consumidor_final))
+
+    # Frete CIF (hora_38): edita os 2 campos como bloco coerente. Se um
+    # dos dois e fornecido, normaliza ambos contra a modalidade efetiva
+    # (a vigente apos um eventual _atualizar('modalidade_frete', ...) acima).
+    if valor_frete is not None or tipo_frete_calc is not None:
+        modalidade_efetiva = venda.modalidade_frete
+        valor_dec_norm, tipo_norm = _normalizar_frete(
+            modalidade_frete=modalidade_efetiva,
+            valor_frete=valor_frete if valor_frete is not None else venda.valor_frete,
+            tipo_frete_calc=(
+                tipo_frete_calc if tipo_frete_calc is not None else venda.tipo_frete_calc
+            ),
+        )
+        _atualizar('valor_frete', valor_dec_norm)
+        _atualizar('tipo_frete_calc', tipo_norm)
 
     db.session.commit()
     return venda
@@ -1459,7 +1567,7 @@ def adicionar_item_peca(
     qtd,
     valor_unitario_final,
     usuario: Optional[str] = None,
-) -> 'HoraVendaItemPeca':
+) -> HoraVendaItemPeca:
     """Adiciona peca em pedido COTACAO. Emite SAIDA_VENDA na loja do pedido.
 
     Validacoes:
@@ -1469,7 +1577,6 @@ def adicionar_item_peca(
     - venda.loja_id definido
     - saldo na loja suficiente
     """
-    from app.hora.models import HoraVenda, HoraVendaItemPeca, HoraPeca
     from app.hora.services import peca_estoque_service
 
     venda = HoraVenda.query.get(venda_id)
@@ -1528,7 +1635,6 @@ def adicionar_item_peca(
 
 def remover_item_peca(venda_id: int, item_id: int, usuario: Optional[str] = None) -> None:
     """Remove peca de pedido COTACAO. Emite DEVOLUCAO_VENDA (devolve estoque)."""
-    from app.hora.models import HoraVenda, HoraVendaItemPeca
     from app.hora.services import peca_estoque_service
 
     venda = HoraVenda.query.get(venda_id)

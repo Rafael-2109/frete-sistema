@@ -107,7 +107,7 @@
     <div class="card-body">
       <div class="row g-3 mb-3">
         <div class="col-md-6">
-          <label class="form-label">Loja <span class="text-danger">*</span></label>
+          <label class="form-label">Loja (filial) <span class="text-danger">*</span></label>
           {% if not lojas_disponiveis %}
             <div class="alert alert-warning py-2 mb-0">
               <i class="fas fa-exclamation-triangle"></i>
@@ -127,6 +127,25 @@
               Loja oficial da venda. O chassi pode estar fisicamente em outra loja.
             </small>
           {% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Vendedor <span class="text-danger">*</span></label>
+          <select name="vendedor" class="form-select" required>
+            {% for u in vendedores_disponiveis %}
+              <option value="{{ u.nome }}"
+                      {% if u.id == current_user.id %}selected{% endif %}>
+                {{ u.nome }}{% if u.id == current_user.id %} (você){% endif %}
+              </option>
+            {% else %}
+              <option value="{{ current_user.nome or 'desconhecido' }}" selected>
+                {{ current_user.nome or 'desconhecido' }} (você)
+              </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted">
+            <i class="fas fa-info-circle"></i>
+            Pré-selecionado com o usuário logado. Troque se outro vendedor for o responsável.
+          </small>
         </div>
       </div>
       <div class="row g-3">
@@ -263,30 +282,30 @@
           </div>
         </template>
         <div class="col-md-6">
-          <label class="form-label">Vendedor</label>
-          <select name="vendedor" class="form-select" required>
-            {% for u in vendedores_disponiveis %}
-              <option value="{{ u.nome }}"
-                      {% if u.id == current_user.id %}selected{% endif %}>
-                {{ u.nome }}{% if u.id == current_user.id %} (você){% endif %}
-              </option>
-            {% else %}
-              <option value="{{ current_user.nome or 'desconhecido' }}" selected>
-                {{ current_user.nome or 'desconhecido' }} (você)
-              </option>
-            {% endfor %}
-          </select>
-          <small class="text-muted">
-            <i class="fas fa-info-circle"></i>
-            Pré-selecionado com o usuário logado. Troque se outro vendedor for o responsável.
-          </small>
-        </div>
-        <div class="col-md-6">
           <label class="form-label">Modalidade de frete (NFe) <span class="text-danger">*</span></label>
-          <select name="modalidade_frete" class="form-select" required>
+          <select name="modalidade_frete" id="f-modalidade-frete" class="form-select" required>
             <option value="0" selected>0 — Contratação Remetente (CIF)</option>
             <option value="1">1 — Contratação Destinatário (FOB)</option>
           </select>
+        </div>
+        <div class="col-md-6" id="bloco-frete-cif">
+          <div class="row g-2">
+            <div class="col-7">
+              <label class="form-label">Valor do frete (R$)</label>
+              <input type="text" name="valor_frete" id="f-valor-frete"
+                     class="form-control" inputmode="decimal" placeholder="0,00">
+            </div>
+            <div class="col-5">
+              <label class="form-label">Tipo</label>
+              <select name="tipo_frete_calc" id="f-tipo-frete-calc" class="form-select">
+                <option value="">—</option>
+                <option value="ADICIONAR">Adicionar valor frete</option>
+                <option value="INCLUSO">Valor frete incluso</option>
+              </select>
+            </div>
+          </div>
+          <div id="alerta-frete" class="alert alert-info py-2 mt-2 mb-0 small"
+               style="display:none;"></div>
         </div>
         <div class="col-12">
           <label class="form-label">Observações</label>
@@ -757,7 +776,81 @@
   elValor.addEventListener('input', () => {
     recalcular('valor');
     atualizarSomaPagamentos();
+    atualizarAlertaFrete();
   });
+
+  // ----------------- Frete CIF (hora_38) ---------------------------------
+  // Mostra/esconde bloco de frete quando modalidade muda. INCLUSO compara
+  // (valor moto - frete) com preco de tabela; ADICIONAR mostra rateio
+  // (1 moto neste form, mas helper deixa pronto para multi-item no detalhe).
+  const elModFrete = document.getElementById('f-modalidade-frete');
+  const elBlocoFrete = document.getElementById('bloco-frete-cif');
+  const elValorFrete = document.getElementById('f-valor-frete');
+  const elTipoFrete = document.getElementById('f-tipo-frete-calc');
+  const elAlertaFrete = document.getElementById('alerta-frete');
+
+  function atualizarVisibilidadeBlocoFrete() {
+    if (!elBlocoFrete) return;
+    const cif = elModFrete && elModFrete.value === '0';
+    elBlocoFrete.style.display = cif ? '' : 'none';
+    if (!cif) {
+      // Limpa para nao enviar dado inutil ao backend (que ja descarta).
+      if (elValorFrete) elValorFrete.value = '';
+      if (elTipoFrete) elTipoFrete.value = '';
+      if (elAlertaFrete) elAlertaFrete.style.display = 'none';
+    } else {
+      atualizarAlertaFrete();
+    }
+  }
+
+  function atualizarAlertaFrete() {
+    if (!elAlertaFrete) return;
+    if (!elModFrete || elModFrete.value !== '0') {
+      elAlertaFrete.style.display = 'none';
+      return;
+    }
+    const tipo = (elTipoFrete && elTipoFrete.value || '').trim();
+    const valorFrete = parseBR(elValorFrete && elValorFrete.value);
+    const valorMoto = parseBR(elValor && elValor.value);
+    if (!tipo || isNaN(valorFrete) || valorFrete <= 0 || isNaN(valorMoto) || valorMoto <= 0) {
+      elAlertaFrete.style.display = 'none';
+      return;
+    }
+    const tabela = state.precoTabela;
+    if (tipo === 'INCLUSO') {
+      const base = arred2(valorMoto - valorFrete);
+      let html = `<strong>Moto R$ ${fmtBR(valorMoto)}</strong> − Frete R$ ${fmtBR(valorFrete)} `
+               + `= <strong>R$ ${fmtBR(base)}</strong> (preço base sem frete).`;
+      if (tabela != null && tabela > 0 && base < tabela) {
+        const diff = arred2(tabela - base);
+        html += `<br><span class="text-danger">⚠ Abaixo R$ ${fmtBR(diff)} `
+              + `da tabela R$ ${fmtBR(tabela)}.</span>`;
+        elAlertaFrete.classList.remove('alert-info');
+        elAlertaFrete.classList.add('alert-warning');
+      } else {
+        elAlertaFrete.classList.remove('alert-warning');
+        elAlertaFrete.classList.add('alert-info');
+      }
+      elAlertaFrete.innerHTML = html;
+    } else if (tipo === 'ADICIONAR') {
+      // Form atual cria 1 moto por pedido — rateio = frete inteiro nesta moto.
+      // (O detalhe ja cuida do rateio multi-item.)
+      const total = arred2(valorMoto + valorFrete);
+      elAlertaFrete.classList.remove('alert-warning');
+      elAlertaFrete.classList.add('alert-info');
+      elAlertaFrete.innerHTML =
+        `<strong>VALOR A SER FATURADO COM FRETE:</strong><br>`
+      + `Moto R$ ${fmtBR(valorMoto)} + R$ ${fmtBR(valorFrete)} (frete) `
+      + `= <strong>R$ ${fmtBR(total)}</strong>.`;
+    }
+    elAlertaFrete.style.display = '';
+  }
+
+  if (elModFrete) elModFrete.addEventListener('change', atualizarVisibilidadeBlocoFrete);
+  if (elValorFrete) elValorFrete.addEventListener('input', atualizarAlertaFrete);
+  if (elTipoFrete) elTipoFrete.addEventListener('change', atualizarAlertaFrete);
+  // Estado inicial.
+  atualizarVisibilidadeBlocoFrete();
 
   // ----------------- Validacao no submit -----------------------------------
   document.getElementById('form-pedido-venda').addEventListener('submit', (e) => {

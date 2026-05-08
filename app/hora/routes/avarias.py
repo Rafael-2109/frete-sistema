@@ -1,17 +1,18 @@
 """Rotas de avaria em moto do estoque HORA."""
 from __future__ import annotations
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app import db
 from app.hora.decorators import require_hora_perm
-from app.hora.models import HoraAvaria, HoraLoja
+from app.hora.models import HoraAvaria, HoraLoja, HoraMoto, HoraMotoEvento
 from app.hora.routes import hora_bp
 from app.hora.services import avaria_service
 from app.hora.services.auth_helper import (
     lojas_permitidas_ids, usuario_tem_acesso_a_loja,
 )
+from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
 
 
 @hora_bp.route('/avarias')
@@ -116,13 +117,29 @@ def avaria_nova():
             flash('Loja fora do seu escopo', 'danger')
             return redirect(url_for('hora.avaria_nova'))
 
-        fotos_raw = request.form.getlist('foto_s3_key')
-        legendas_raw = request.form.getlist('foto_legenda')
-        fotos = [
-            (fk.strip(), (leg.strip() or None) if leg else None)
-            for fk, leg in zip(fotos_raw, legendas_raw)
-            if fk and fk.strip()
+        # Upload de fotos: dois canais possiveis (camera ou arquivo). Multi-
+        # upload via field name `foto_arquivo`. Foto e opcional desde
+        # 2026-05-07 — service aceita lista vazia.
+        arquivos = [
+            f for f in request.files.getlist('foto_arquivo')
+            if f and (f.filename or '').strip()
         ]
+        try:
+            fotos, ignorados = avaria_service.upload_fotos_temporarias(arquivos)
+        except Exception as exc:  # noqa: BLE001 — quer log + mensagem amigavel
+            db.session.rollback()
+            flash(f'Erro ao salvar foto(s): {exc}', 'danger')
+            return redirect(url_for('hora.avaria_nova'))
+
+        # Sinaliza arquivos ignorados (extensao invalida / falha S3) para
+        # o operador nao perceber tarde que faltou uma foto.
+        if ignorados:
+            flash(
+                f'{len(ignorados)} arquivo(s) ignorado(s) por tipo invalido '
+                f'(aceitos: JPG, PNG, WEBP, HEIC): {", ".join(ignorados[:3])}'
+                + ('...' if len(ignorados) > 3 else ''),
+                'warning',
+            )
 
         try:
             avaria = avaria_service.registrar_avaria(
@@ -133,7 +150,18 @@ def avaria_nova():
                 loja_id=loja_id,
             )
             db.session.commit()
-            flash(f'Avaria #{avaria.id} registrada.', 'success')
+            n_fotos = len(fotos)
+            if n_fotos:
+                flash(
+                    f'Avaria #{avaria.id} registrada com {n_fotos} foto(s).',
+                    'success',
+                )
+            else:
+                flash(
+                    f'Avaria #{avaria.id} registrada (sem fotos — voce pode '
+                    f'anexar fotos depois).',
+                    'success',
+                )
             return redirect(url_for('hora.avaria_detalhe', avaria_id=avaria.id))
         except ValueError as e:
             db.session.rollback()
@@ -146,6 +174,75 @@ def avaria_nova():
         else HoraLoja.query.filter(HoraLoja.id.in_(permitidas)).all()
     )
     return render_template('hora/avaria_nova.html', lojas=lojas_filtradas)
+
+
+@hora_bp.route('/avarias/api/info-chassi')
+@require_hora_perm('avarias', 'criar')
+def avaria_api_info_chassi():
+    """JSON com modelo, cor, loja_id, loja_nome e em_estoque para um chassi.
+
+    Usado pelo template avaria_nova para pre-preencher os campos quando o
+    operador digita ou escaneia um chassi via QR. Respeita escopo de
+    `lojas_permitidas_ids` — chassis fora do escopo do usuario retornam
+    `ok=False` (sem revelar dados).
+    """
+    chassi = (request.args.get('chassi') or '').strip().upper()
+    if not chassi or len(chassi) < 5:
+        return jsonify({'ok': False, 'error': 'chassi muito curto'}), 200
+
+    moto = HoraMoto.query.get(chassi)
+    if not moto:
+        return jsonify({'ok': False, 'error': 'chassi nao cadastrado'}), 200
+
+    # Ultimo evento determina loja atual + status em estoque.
+    ultimo = (
+        HoraMotoEvento.query
+        .filter_by(numero_chassi=chassi)
+        .order_by(HoraMotoEvento.timestamp.desc())
+        .first()
+    )
+    loja_atual_id = ultimo.loja_id if ultimo else None
+    em_estoque = bool(ultimo and ultimo.tipo in EVENTOS_EM_ESTOQUE)
+
+    # Escopo: usuario com `lojas_permitidas_ids() != None` (nao-admin) so ve
+    # chassi cuja loja atual esta no seu escopo. loja_atual_id=None
+    # (chassi sem evento) e estado inconsistente — bloqueia para nao
+    # vazar dados em estado anomalo. Admin (permitidas=None) ve tudo.
+    permitidas = lojas_permitidas_ids()
+    if permitidas is not None:
+        if loja_atual_id is None or loja_atual_id not in permitidas:
+            return jsonify({
+                'ok': False, 'error': 'chassi fora do seu escopo de loja',
+            }), 200
+
+    loja_nome = None
+    if loja_atual_id:
+        loja = HoraLoja.query.get(loja_atual_id)
+        if loja:
+            loja_nome = (
+                getattr(loja, 'rotulo_display', None)
+                or loja.apelido
+                or getattr(loja, 'nome_fantasia', None)
+                or getattr(loja, 'razao_social', None)
+                or f'Loja #{loja.id}'
+            )
+
+    modelo_nome = (
+        moto.modelo.nome_modelo
+        if getattr(moto, 'modelo', None) is not None
+        else None
+    )
+    return jsonify({
+        'ok': True,
+        'chassi': chassi,
+        'modelo_id': moto.modelo_id,
+        'modelo_nome': modelo_nome,
+        'cor': moto.cor,
+        'loja_id': loja_atual_id,
+        'loja_nome': loja_nome,
+        'em_estoque': em_estoque,
+        'ultimo_evento_tipo': ultimo.tipo if ultimo else None,
+    })
 
 
 @hora_bp.route('/avarias/<int:avaria_id>/foto', methods=['POST'])

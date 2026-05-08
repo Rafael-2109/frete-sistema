@@ -103,6 +103,21 @@ class HoraVenda(db.Model):
     )
     # 1..90. Mensal=30, semanal=7, diario=1. NF #738 usou intervalo=1.
 
+    # ---- Frete CIF (migration hora_38) ----
+    # valor_frete: valor monetario do frete (R$). Aplicavel quando
+    #   modalidade_frete == '0' (CIF). NULL para FOB / sem ocorrencia /
+    #   pedidos legados.
+    # tipo_frete_calc: como o valor da moto se relaciona com o frete:
+    #   'INCLUSO'   -> valor da moto JA inclui o frete (UI compara
+    #                  preco - frete vs tabela).
+    #   'ADICIONAR' -> frete e somado ao valor da moto (UI rateia o frete
+    #                  entre os itens do pedido).
+    #   NULL        -> nao aplicavel ou nao informado.
+    # Validacao da combinacao (tipo_frete_calc != NULL exige modalidade='0',
+    # valor_frete >= 0) ocorre em venda_service.
+    valor_frete = db.Column(db.Numeric(15, 2), nullable=True)
+    tipo_frete_calc = db.Column(db.String(10), nullable=True)
+
     valor_total = db.Column(db.Numeric(15, 2), nullable=False)
     # Soma de hora_venda_item.preco_final (validado em serviço).
 

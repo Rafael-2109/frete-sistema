@@ -1088,6 +1088,16 @@ def tagplus_pedido_venda_criar():
         flash(f'Modalidade de frete invalida: {mod_frete!r} (esperado 0 ou 1).', 'danger')
         return redirect(url_for('hora.tagplus_pedido_venda_novo'))
 
+    # Frete CIF (hora_38): tipo_frete_calc + valor_frete sao opcionais e
+    # so fazem sentido quando modalidade='0'. Service revalida e zera se
+    # combinacao for incoerente. Aqui apenas extrai brutos do form.
+    valor_frete_raw = _g('valor_frete', 30) or None
+    tipo_frete_calc_raw = (_g('tipo_frete_calc', 10) or '').upper() or None
+    if mod_frete != '0':
+        # Modalidade FOB descarta dados de frete inadvertidamente enviados.
+        valor_frete_raw = None
+        tipo_frete_calc_raw = None
+
     # Parcelamento legacy (cache): pega numero_parcelas da MAIOR forma a prazo,
     # senao 1. Service agora persiste parcelas por forma em hora_venda_pagamento.
     intervalo = 30
@@ -1196,6 +1206,8 @@ def tagplus_pedido_venda_criar():
             criado_por=_operador(),
             loja_id_override=loja_id_int,
             pagamentos=pagamentos_in,
+            valor_frete=valor_frete_raw,
+            tipo_frete_calc=tipo_frete_calc_raw,
         )
     except ValueError as exc:
         flash(f'Erro ao criar pedido de venda: {exc}', 'danger')

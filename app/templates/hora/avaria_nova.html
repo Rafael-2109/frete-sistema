@@ -2,62 +2,276 @@
 
 {% block hora_content %}
 <h2><i class="fas fa-exclamation-triangle"></i> Nova avaria</h2>
-<form method="post" class="card p-3">
+
+<form method="post" enctype="multipart/form-data" class="card p-3" id="form-avaria">
   <div class="row g-3">
-    <div class="col-md-6">
-      <label class="form-label">Chassi *</label>
-      <input type="text" name="numero_chassi" required minlength="5"
-             class="form-control chassi-mono text-uppercase"
-             placeholder="Digite ou cole o chassi">
-      <small class="text-muted">A moto deve estar em estoque da loja selecionada.</small>
+    <div class="col-md-8">
+      <label class="form-label">Chassi <span class="text-danger">*</span></label>
+      <div class="input-group">
+        <input type="text" name="numero_chassi" id="f-chassi" required minlength="5"
+               class="form-control chassi-mono text-uppercase"
+               placeholder="Digite, cole ou escaneie o chassi" autocomplete="off">
+        <button type="button" class="btn btn-outline-primary" id="btn-qr"
+                data-bs-toggle="modal" data-bs-target="#modal-qr"
+                title="Escanear chassi via QR code (camera)">
+          <i class="fas fa-qrcode"></i> QR
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-buscar-chassi"
+                title="Buscar dados da moto">
+          <i class="fas fa-search"></i>
+        </button>
+      </div>
+      <small class="text-muted">
+        Apos preencher, modelo / cor / loja sao pre-preenchidos automaticamente.
+      </small>
+      <div id="info-chassi" class="alert alert-info py-2 mt-2 mb-0 small" style="display:none;"></div>
     </div>
-    <div class="col-md-6">
-      <label class="form-label">Loja *</label>
-      <select name="loja_id" required class="form-select">
+    <div class="col-md-4">
+      <label class="form-label">Loja <span class="text-danger">*</span></label>
+      <select name="loja_id" id="f-loja" required class="form-select">
         <option value="">(selecione a loja)</option>
         {% for l in lojas %}
           <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
         {% endfor %}
       </select>
+      <small class="text-muted">Pre-selecionada pelo local atual da moto.</small>
     </div>
     <div class="col-12">
-      <label class="form-label">Descrição *</label>
+      <label class="form-label">Descrição <span class="text-danger">*</span></label>
       <textarea name="descricao" required minlength="3" rows="3" class="form-control"
                 placeholder="Ex: arranhão profundo no para-lama esquerdo; bateria com problema"></textarea>
     </div>
     <div class="col-12">
-      <label class="form-label">Fotos * (mín. 1)</label>
-      <div id="fotos-container">
-        <div class="input-group mb-2">
-          <input type="text" name="foto_s3_key" required class="form-control" placeholder="S3 key (ex: hora/avarias/tmp/abc.jpg)">
-          <input type="text" name="foto_legenda" class="form-control" placeholder="Legenda (opcional)">
-        </div>
+      <label class="form-label">Fotos <small class="text-muted">(opcional)</small></label>
+      <div class="d-flex flex-wrap gap-2 mb-2">
+        <label class="btn btn-outline-primary mb-0">
+          <i class="fas fa-camera"></i> Tirar foto
+          <input type="file" name="foto_arquivo" accept="image/*"
+                 capture="environment" class="d-none foto-input">
+        </label>
+        <label class="btn btn-outline-secondary mb-0">
+          <i class="fas fa-folder-open"></i> Importar arquivo(s)
+          <input type="file" name="foto_arquivo" accept="image/*"
+                 multiple class="d-none foto-input">
+        </label>
+        <span class="align-self-center text-muted small" id="fotos-resumo">
+          Nenhuma foto selecionada.
+        </span>
       </div>
-      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="adicionarFoto()">
-        <i class="fas fa-plus"></i> Adicionar outra foto
-      </button>
+      <div id="fotos-preview" class="d-flex flex-wrap gap-2"></div>
       <small class="d-block text-muted mt-1">
-        Upload real de S3 segue padrão de <code>hora_peca_faltando_foto</code> (a implementar).
+        Foto deixou de ser obrigatoria — voce pode salvar sem foto e anexar depois
+        na tela de detalhe da avaria. Formatos: JPG, PNG, WEBP, HEIC.
       </small>
     </div>
   </div>
   <div class="d-flex justify-content-between mt-3">
     <a href="{{ url_for('hora.avarias_lista') }}" class="btn btn-outline-secondary">Cancelar</a>
-    <button class="btn btn-primary">Registrar avaria</button>
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-save"></i> Registrar avaria
+    </button>
   </div>
 </form>
 
+{# ------------------------------------------------------------------
+   Modal de QR scan (html5-qrcode via CDN unpkg).
+   ------------------------------------------------------------------ #}
+<div class="modal fade" id="modal-qr" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-qrcode"></i> Escanear chassi</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="qr-reader" style="width:100%;"></div>
+        <p class="text-muted small mt-2 mb-0" id="qr-status">
+          Aponte a camera para o QR code do chassi.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# html5-qrcode via CDN com SRI (Subresource Integrity).
+   Hash sha384 calculado em 2026-05-07 a partir do conteudo oficial.
+   Para regenerar (ex: trocar versao):
+     curl -L https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js \
+       | openssl dgst -sha384 -binary | openssl base64 -A
+   O bloco JS abaixo ja tem fallback gracioso se Html5Qrcode for undefined
+   (CDN bloqueado por CSP / rede / hash mismatch). #}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+        integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+"
+        crossorigin="anonymous"></script>
 <script>
-function adicionarFoto() {
-  const c = document.getElementById('fotos-container');
-  const row = document.createElement('div');
-  row.className = 'input-group mb-2';
-  row.innerHTML = `
-    <input type="text" name="foto_s3_key" class="form-control" placeholder="S3 key">
-    <input type="text" name="foto_legenda" class="form-control" placeholder="Legenda">
-    <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">×</button>
-  `;
-  c.appendChild(row);
-}
+(function() {
+  // ======================================================================
+  // 1) Pre-preenchimento via API info-chassi
+  // ======================================================================
+  const elChassi    = document.getElementById('f-chassi');
+  const elBtnBuscar = document.getElementById('btn-buscar-chassi');
+  const elLoja      = document.getElementById('f-loja');
+  const elInfo      = document.getElementById('info-chassi');
+
+  function setInfo(html, classe) {
+    if (!elInfo) return;
+    elInfo.className = 'alert py-2 mt-2 mb-0 small ' + (classe || 'alert-info');
+    elInfo.innerHTML = html;
+    elInfo.style.display = '';
+  }
+
+  function clearInfo() {
+    if (elInfo) elInfo.style.display = 'none';
+  }
+
+  async function buscarInfoChassi() {
+    const chassi = (elChassi.value || '').trim().toUpperCase();
+    if (chassi.length < 5) {
+      clearInfo();
+      return;
+    }
+    elChassi.value = chassi; // normaliza no input
+    setInfo('<i class="fas fa-spinner fa-spin"></i> Buscando dados...', 'alert-info');
+    try {
+      const url = `{{ url_for('hora.avaria_api_info_chassi') }}?chassi=` + encodeURIComponent(chassi);
+      const r = await fetch(url);
+      const data = await r.json();
+      if (!data.ok) {
+        setInfo('<i class="fas fa-exclamation-triangle"></i> ' + (data.error || 'chassi nao encontrado.'), 'alert-warning');
+        return;
+      }
+      // Preenche loja se possivel.
+      if (data.loja_id && elLoja) {
+        const opt = elLoja.querySelector(`option[value="${data.loja_id}"]`);
+        if (opt) {
+          elLoja.value = String(data.loja_id);
+        } else {
+          // Loja fora do escopo do operador — alerta visivel.
+          setInfo(
+            `<i class="fas fa-exclamation-triangle"></i> Chassi esta na loja `
+            + `<strong>${data.loja_nome || ('#' + data.loja_id)}</strong>, mas voce `
+            + `nao tem acesso a essa loja. Selecione manualmente uma loja permitida.`,
+            'alert-warning'
+          );
+          return;
+        }
+      }
+      let html = '';
+      if (data.modelo_nome) html += `<strong>${data.modelo_nome}</strong>`;
+      if (data.cor)         html += ` · ${data.cor}`;
+      if (data.loja_nome)   html += ` · Loja: <strong>${data.loja_nome}</strong>`;
+      if (data.em_estoque) {
+        html += ' <span class="badge bg-success ms-1">em estoque</span>';
+        setInfo(html, 'alert-info');
+      } else {
+        html += ` <span class="badge bg-warning text-dark ms-1">fora do estoque (${data.ultimo_evento_tipo || '?'})</span>`;
+        setInfo(html, 'alert-warning');
+      }
+    } catch (exc) {
+      setInfo('<i class="fas fa-times-circle"></i> Falha ao consultar: ' + exc.message, 'alert-danger');
+    }
+  }
+
+  if (elBtnBuscar) elBtnBuscar.addEventListener('click', buscarInfoChassi);
+  if (elChassi) {
+    elChassi.addEventListener('blur', buscarInfoChassi);
+    elChassi.addEventListener('input', () => {
+      // Maiusculiza ao digitar; nao busca automaticamente para evitar
+      // chamadas excessivas — busca acontece em blur ou click.
+      const pos = elChassi.selectionStart;
+      elChassi.value = elChassi.value.toUpperCase();
+      try { elChassi.setSelectionRange(pos, pos); } catch (e) {}
+    });
+  }
+
+  // ======================================================================
+  // 2) Preview de fotos selecionadas
+  // ======================================================================
+  const elPreview = document.getElementById('fotos-preview');
+  const elResumo  = document.getElementById('fotos-resumo');
+  const fotoInputs = document.querySelectorAll('.foto-input');
+
+  function atualizarPreview() {
+    if (!elPreview) return;
+    elPreview.innerHTML = '';
+    let total = 0;
+    fotoInputs.forEach(inp => {
+      if (!inp.files) return;
+      total += inp.files.length;
+      Array.from(inp.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const card = document.createElement('div');
+          card.className = 'border rounded p-1 d-flex flex-column align-items-center';
+          card.style.width = '120px';
+          card.innerHTML = `
+            <img src="${e.target.result}" style="max-width:100px;max-height:100px;object-fit:cover;" alt="preview">
+            <small class="text-muted text-truncate mt-1" style="max-width:110px;">${file.name}</small>
+          `;
+          elPreview.appendChild(card);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+    if (elResumo) {
+      elResumo.textContent = total
+        ? `${total} foto(s) selecionada(s).`
+        : 'Nenhuma foto selecionada.';
+    }
+  }
+
+  fotoInputs.forEach(inp => inp.addEventListener('change', atualizarPreview));
+
+  // ======================================================================
+  // 3) QR Code scan via html5-qrcode (modal)
+  // ======================================================================
+  let html5QrInstance = null;
+  const elModal = document.getElementById('modal-qr');
+  const elQrStatus = document.getElementById('qr-status');
+
+  function pararQR() {
+    if (html5QrInstance) {
+      try { html5QrInstance.stop().catch(() => {}); } catch (e) {}
+      try { html5QrInstance.clear(); } catch (e) {}
+      html5QrInstance = null;
+    }
+  }
+
+  if (elModal) {
+    elModal.addEventListener('shown.bs.modal', () => {
+      if (typeof Html5Qrcode === 'undefined') {
+        if (elQrStatus) elQrStatus.textContent = 'Lib QR indisponivel — verifique conexao.';
+        return;
+      }
+      html5QrInstance = new Html5Qrcode('qr-reader');
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+      html5QrInstance.start(
+        { facingMode: 'environment' },
+        config,
+        (decodedText) => {
+          // Sucesso — preenche e fecha modal.
+          if (elChassi) {
+            elChassi.value = (decodedText || '').trim().toUpperCase();
+            buscarInfoChassi();
+          }
+          pararQR();
+          const modalInst = bootstrap.Modal.getInstance(elModal);
+          if (modalInst) modalInst.hide();
+        },
+        (_err) => {
+          // Frame sem QR — comportamento normal, nao mostra erro.
+        }
+      ).catch((err) => {
+        if (elQrStatus) {
+          elQrStatus.textContent = 'Camera indisponivel: ' + err;
+        }
+      });
+    });
+    elModal.addEventListener('hidden.bs.modal', pararQR);
+  }
+})();
 </script>
 {% endblock %}

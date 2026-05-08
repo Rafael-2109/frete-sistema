@@ -449,16 +449,43 @@
       </div>
       <div class="mb-2">
         <label class="form-label small mb-1">Modalidade de frete (NFe)</label>
-        {% set mf = venda.modalidade_frete or '9' %}
-        <select name="modalidade_frete" class="form-select form-select-sm"
+        {% set mf = venda.modalidade_frete or '0' %}
+        {# Lojas HORA so emitem CIF (0) ou FOB (1) — restricao 2026-05-07.
+           Vendas legadas DANFE com modalidades 2,3,4,9 ainda existem no
+           banco; mostramos como opcao "(legado)" para preservar o valor
+           no submit, mas backend recusa salvar trocando para outro legado. #}
+        <select name="modalidade_frete" id="d-modalidade-frete" class="form-select form-select-sm"
                 {% if bloqueia_oper %}disabled{% endif %}>
-          <option value="9" {% if mf == '9' %}selected{% endif %}>9 — Sem ocorrência (cliente leva)</option>
           <option value="0" {% if mf == '0' %}selected{% endif %}>0 — Contratação Remetente (CIF)</option>
           <option value="1" {% if mf == '1' %}selected{% endif %}>1 — Contratação Destinatário (FOB)</option>
-          <option value="2" {% if mf == '2' %}selected{% endif %}>2 — Contratação por Terceiros</option>
-          <option value="3" {% if mf == '3' %}selected{% endif %}>3 — Transporte Próprio Remetente</option>
-          <option value="4" {% if mf == '4' %}selected{% endif %}>4 — Transporte Próprio Destinatário</option>
+          {% if mf not in ('0', '1') %}
+            <option value="{{ mf }}" selected disabled>
+              {{ mf }} — (legado, troque para CIF ou FOB)
+            </option>
+          {% endif %}
         </select>
+      </div>
+      {# Frete CIF (hora_38) — visivel apenas com modalidade='0'. JS no fim
+         do template controla visibilidade e atualiza o preview de rateio. #}
+      <div id="d-bloco-frete" class="row g-2 mb-2"
+           style="{% if mf != '0' %}display:none;{% endif %}">
+        <div class="col-7">
+          <label class="form-label small mb-1">Valor do frete (R$)</label>
+          <input type="text" name="valor_frete" id="d-valor-frete"
+                 class="form-control form-control-sm" inputmode="decimal"
+                 placeholder="0,00"
+                 value="{% if venda.valor_frete %}{{ venda.valor_frete|valor_br }}{% endif %}"
+                 {% if bloqueia_oper %}readonly{% endif %}>
+        </div>
+        <div class="col-5">
+          <label class="form-label small mb-1">Tipo</label>
+          <select name="tipo_frete_calc" id="d-tipo-frete-calc" class="form-select form-select-sm"
+                  {% if bloqueia_oper %}disabled{% endif %}>
+            <option value="">—</option>
+            <option value="ADICIONAR" {% if venda.tipo_frete_calc == 'ADICIONAR' %}selected{% endif %}>Adicionar valor frete</option>
+            <option value="INCLUSO"   {% if venda.tipo_frete_calc == 'INCLUSO'   %}selected{% endif %}>Valor frete incluso</option>
+          </select>
+        </div>
       </div>
     </div>
   </div>
@@ -647,6 +674,12 @@
    Itens do pedido
    --------------------------------------------------------------- #}
 <h4>Itens do pedido</h4>
+
+{# Frete CIF (hora_38) — preview de rateio/comparacao por item.
+   Renderizado por JS no fim do template; aparece apenas quando
+   tipo_frete_calc + valor_frete preenchidos e modalidade='0'. #}
+<div id="d-alerta-frete" class="alert alert-info mb-3" style="display:none;"></div>
+
 <div class="table-responsive mb-3">
   <table class="table table-sm align-middle">
     <thead><tr>
@@ -660,7 +693,9 @@
     </tr></thead>
     <tbody>
       {% for item in venda.itens %}
-        <tr>
+        <tr data-item-chassi="{{ item.numero_chassi }}"
+            data-item-final="{{ item.preco_final|float }}"
+            data-item-tabela="{{ (item.preco_tabela_referencia or 0)|float }}">
           <td>
             <a href="{{ url_for('hora.estoque_chassi_detalhe', numero_chassi=item.numero_chassi) }}"
                class="chassi-mono">{{ item.numero_chassi }}</a>
@@ -975,6 +1010,129 @@
     wireLinha(linha);
     atualizarSoma();
   });
+})();
+</script>
+
+<script>
+// =====================================================================
+// Frete CIF (migration hora_38) — preview de rateio/comparacao multi-item.
+// =====================================================================
+(function() {
+  const elModFrete   = document.getElementById('d-modalidade-frete');
+  const elBlocoFrete = document.getElementById('d-bloco-frete');
+  const elValorFrete = document.getElementById('d-valor-frete');
+  const elTipoFrete  = document.getElementById('d-tipo-frete-calc');
+  const elAlerta     = document.getElementById('d-alerta-frete');
+
+  if (!elAlerta) return; // template renderizado sem o bloco (cancelado etc).
+
+  const fmtBR = (v) => Number(v).toLocaleString(
+    'pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  );
+  const arred2 = (n) => Math.round(n * 100) / 100;
+  const parseBR = (s) => {
+    if (s == null) return NaN;
+    s = String(s).trim();
+    if (!s) return NaN;
+    if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.indexOf(',') >= 0) {
+      s = s.replace(',', '.');
+    }
+    const n = Number(s);
+    return isFinite(n) ? n : NaN;
+  };
+
+  function listarItensVisiveis() {
+    return Array.from(
+      document.querySelectorAll('tr[data-item-chassi]')
+    ).map(tr => ({
+      chassi: tr.dataset.itemChassi,
+      final: parseFloat(tr.dataset.itemFinal) || 0,
+      tabela: parseFloat(tr.dataset.itemTabela) || 0,
+    }));
+  }
+
+  function atualizarVisibilidadeBloco() {
+    if (!elBlocoFrete) return;
+    const cif = elModFrete && elModFrete.value === '0';
+    elBlocoFrete.style.display = cif ? '' : 'none';
+    if (!cif) {
+      if (elValorFrete) elValorFrete.value = '';
+      if (elTipoFrete) elTipoFrete.value = '';
+    }
+    atualizarAlerta();
+  }
+
+  function atualizarAlerta() {
+    if (!elModFrete || elModFrete.value !== '0') {
+      elAlerta.style.display = 'none';
+      return;
+    }
+    const tipo = (elTipoFrete && elTipoFrete.value || '').trim();
+    const valorFrete = parseBR(elValorFrete && elValorFrete.value);
+    const itens = listarItensVisiveis();
+    if (!tipo || isNaN(valorFrete) || valorFrete <= 0 || itens.length === 0) {
+      elAlerta.style.display = 'none';
+      return;
+    }
+
+    const reset = () => {
+      elAlerta.classList.remove('alert-warning', 'alert-info');
+    };
+
+    if (tipo === 'INCLUSO') {
+      // Distribui o frete proporcionalmente ao valor final do item;
+      // base = valor_item - rateio. Compara contra preco_tabela do item.
+      const totalFinal = itens.reduce((s, i) => s + i.final, 0);
+      let html = '<strong>Valor frete incluso — preço base por moto:</strong>';
+      html += '<ul class="mb-0 ps-3 mt-1">';
+      let temAlerta = false;
+      for (const it of itens) {
+        const fracao = totalFinal > 0 ? (it.final / totalFinal) : (1 / itens.length);
+        const rateio = arred2(valorFrete * fracao);
+        const base = arred2(it.final - rateio);
+        let linha = `<li><code class="chassi-mono">${it.chassi}</code> — `
+                  + `R$ ${fmtBR(it.final)} − R$ ${fmtBR(rateio)} `
+                  + `= <strong>R$ ${fmtBR(base)}</strong>`;
+        if (it.tabela > 0 && base < it.tabela) {
+          const diff = arred2(it.tabela - base);
+          linha += ` <span class="text-danger">⚠ Abaixo R$ ${fmtBR(diff)} `
+                + `da tabela R$ ${fmtBR(it.tabela)}</span>`;
+          temAlerta = true;
+        }
+        linha += '</li>';
+        html += linha;
+      }
+      html += '</ul>';
+      reset();
+      elAlerta.classList.add(temAlerta ? 'alert-warning' : 'alert-info');
+      elAlerta.innerHTML = html;
+    } else if (tipo === 'ADICIONAR') {
+      // Frete rateado igualmente entre os itens (regra solicitada pelo
+      // dono: "rateado pela qtd de motos abaixo").
+      const rateio = arred2(valorFrete / itens.length);
+      let html = '<strong>VALOR A SER FATURADO COM FRETE:</strong>';
+      html += '<ul class="mb-0 ps-3 mt-1">';
+      for (const it of itens) {
+        const total = arred2(it.final + rateio);
+        html += `<li><code class="chassi-mono">${it.chassi}</code> — `
+             + `R$ ${fmtBR(it.final)} + R$ ${fmtBR(rateio)} (frete) `
+             + `= <strong>R$ ${fmtBR(total)}</strong></li>`;
+      }
+      html += '</ul>';
+      reset();
+      elAlerta.classList.add('alert-info');
+      elAlerta.innerHTML = html;
+    }
+    elAlerta.style.display = '';
+  }
+
+  if (elModFrete) elModFrete.addEventListener('change', atualizarVisibilidadeBloco);
+  if (elValorFrete) elValorFrete.addEventListener('input', atualizarAlerta);
+  if (elTipoFrete) elTipoFrete.addEventListener('change', atualizarAlerta);
+  // Estado inicial — render se ja vier preenchido do banco.
+  atualizarAlerta();
 })();
 </script>
 {% endblock %}

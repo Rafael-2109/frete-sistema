@@ -322,6 +322,10 @@ def vendas_editar(venda_id: int):
             modalidade_frete=request.form.get('modalidade_frete'),
             numero_parcelas=request.form.get('numero_parcelas'),
             intervalo_parcelas_dias=request.form.get('intervalo_parcelas_dias'),
+            # Frete CIF (hora_38): service valida combinacao com modalidade
+            # efetiva e zera quando modalidade != '0'.
+            valor_frete=request.form.get('valor_frete'),
+            tipo_frete_calc=request.form.get('tipo_frete_calc'),
             usuario=_operador_atual(),
         )
         flash('Pedido atualizado.', 'success')

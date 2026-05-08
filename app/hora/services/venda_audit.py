@@ -46,6 +46,12 @@ ACOES_VALIDAS = {
     'DESCARTOU_TESTE',
     'RESOLVEU_DIVERGENCIA',
     'DEFINIU_LOJA',
+    # Adicionado 2026-05-07: trigger 'Voltar para COTACAO' em
+    # venda_detalhe.html chama venda_service.voltar_para_cotacao, que
+    # registra esta acao de auditoria. Sem esta entrada, o set rejeita
+    # e a request quebra com ValueError. Bug introduzido com o workflow
+    # do pedido (commit 8d77276f) e corrigido durante review desta sessao.
+    'VOLTOU_PARA_COTACAO',
 }
 
 
