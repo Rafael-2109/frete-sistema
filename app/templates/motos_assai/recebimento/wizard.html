@@ -20,7 +20,7 @@
   </div>
 </div>
 
-<div class="progress mb-3" style="height: 10px;">
+<div class="progress mb-3 recebimento-progress">
   <div class="progress-bar bg-success"
        style="width: {{ (conferidos * 100 / total_chassis) if total_chassis else 0 }}%"></div>
 </div>
@@ -41,7 +41,7 @@
   </p>
   <div class="row">
     <div class="col-md-7">
-      <div id="qr-reader" style="max-width:380px;"></div>
+      <div id="qr-reader" class="qr-reader-container"></div>
       <div class="d-flex gap-2 mt-2">
         <button type="button" id="btn-start-qr" class="btn btn-primary btn-sm">
           <i class="fas fa-camera"></i> Iniciar câmera

@@ -143,8 +143,8 @@ echo "MOTOS ASSAI 05: seed modelos + aliases..."
 python scripts/migrations/motos_assai_05_seed_modelos.py \
     || echo "⚠️ Seed motos_assai_05 falhou, continuando deploy..."
 
-# 16. MOTOS ASSAI 06: UNIQUE (recibo_id, chassi) em assai_recibo_item (idempotente).
-echo "MOTOS ASSAI 06: UNIQUE index assai_recibo_item..."
+# 16. MOTOS ASSAI 07: UNIQUE (recibo_id, chassi) em assai_recibo_item (idempotente).
+echo "MOTOS ASSAI 07: UNIQUE index assai_recibo_item..."
 python scripts/migrations/motos_assai_07_unique_recibo_item.py \
     || echo "⚠️ Migration motos_assai_07 falhou, continuando deploy..."
 

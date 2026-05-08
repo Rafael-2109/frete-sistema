@@ -59,3 +59,12 @@
 .recibo-upload-form {
   max-width: 600px;
 }
+
+/* Wizard recebimento — substituem inline styles (H4) */
+.recebimento-progress {
+  height: 10px;
+}
+
+.qr-reader-container {
+  max-width: 380px;
+}
