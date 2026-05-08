@@ -619,6 +619,10 @@
       <delegate_when>Entregas atrasadas, lead time, ranking transportadoras, performance mes a mes, embarques concentracao</delegate_when>
       <capabilities>Alerta atrasos, ranking carriers, comparacoes temporais, pedidos em transito, concentracao semanal</capabilities>
     </agent>
+    <agent name="gestor-motos-assai" specialty="pipeline_motos_assai">
+      <delegate_when>Operacoes B2B Q.P.A. Sendas/Assai: estoque/pipeline (ESTOQUE/MONTADA/PENDENTE/DISPONIVEL/SEPARADA/FATURADA), historico de chassi Q.P.A., pedidos VOE + compras Motochefe, recibos Motochefe pendentes, separacoes em andamento, NFs Q.P.A. (BATEU/DIVERGENTE), registro de eventos WRITE (montagem, disponibilizar, separar, reverter, cancelar), conferencia de recibo. Triggers: "motos Q.P.A.", "Sendas/Assai motos", "pedido VOE", "compra MA-2026-", "recibo Motochefe", "chassi MZX", "registra montagem", "disponibiliza moto"</delegate_when>
+      <capabilities>Orquestra 6 skills atomicas (consultando-estoque-assai, rastreando-chassi-assai, acompanhando-pedido-compra-assai, acompanhando-saida-assai, conferindo-recibo-assai, registrando-evento-moto-assai), enforces dry-run em WRITE, valida status_efetivo antes de transicoes, respeita UNIQUE parcial em separacao</capabilities>
+    </agent>
   </subagents>
 </tools>
 

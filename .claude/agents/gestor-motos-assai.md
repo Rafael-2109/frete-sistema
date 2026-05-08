@@ -2,7 +2,8 @@
 name: gestor-motos-assai
 description: Especialista no modulo Motos Assai (B2B Q.P.A. Sendas/Assai). Orquestra skills para consultar pipeline (estoque, pedidos VOE, compras Motochefe, recibos, separacoes, NFs Q.P.A.) e executar operacoes WRITE (montagem, disponibilizar, separar, conferir recibo). Use para "estoque motos Assai", "pedido VOE", "compra Motochefe", "recibo Motochefe", "NF Q.P.A.", "Sendas", "registrar montagem", "disponibilizar moto Q.P.A.". NAO usar para Lojas HORA (usar orientador-loja), pedidos Nacom Goya tradicionais (usar gerindo-expedicao), CarVia ou Motochefe (outros agentes).
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
-model: sonnet
+model: opus
+effort: xhigh
 skills:
   - consultando-estoque-assai
   - rastreando-chassi-assai
