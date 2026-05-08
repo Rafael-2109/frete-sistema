@@ -131,6 +131,14 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'skill-creator': 'Criacao de Skills',
     'ralph-wiggum': 'Dev Autonomo',
     'prd-generator': 'Geracao de PRD',
+
+    # ── Motos Assai (B2B Q.P.A. Sendas) ──
+    'consultando-estoque-assai': 'Pipeline Motos Assai',
+    'rastreando-chassi-assai': 'Rastreamento Chassi Assai',
+    'acompanhando-pedido-compra-assai': 'Pedidos VOE Q.P.A. + Compras Motochefe',
+    'acompanhando-saida-assai': 'Saida Motos Assai (Separacao + NF Q.P.A.)',
+    'conferindo-recibo-assai': 'Recibos Motochefe (Conferencia)',
+    'registrando-evento-moto-assai': 'Eventos Pipeline Motos Assai',
 }
 
 
@@ -174,6 +182,14 @@ CATEGORY_TO_DOMAIN: Dict[str, str] = {
     # ── CarVia ──
     'Gestao CarVia': 'Logistica',
 
+    # ── Motos Assai ──
+    'Pipeline Motos Assai': 'Motos Assai',
+    'Rastreamento Chassi Assai': 'Motos Assai',
+    'Pedidos VOE Q.P.A. + Compras Motochefe': 'Motos Assai',
+    'Saida Motos Assai (Separacao + NF Q.P.A.)': 'Motos Assai',
+    'Recibos Motochefe (Conferencia)': 'Motos Assai',
+    'Eventos Pipeline Motos Assai': 'Motos Assai',
+
     # ── SSW ──
     'Consulta SSW': 'SSW',
     'Operacao SSW': 'SSW',
@@ -210,6 +226,7 @@ DOMAIN_COLORS: Dict[str, str] = {
     'Odoo': '#fb923c',         # orange
     'SSW': '#fbbf24',          # amber
     'Sistema': '#94a3b8',      # slate
+    'Motos Assai': '#34d399',  # emerald
     'Outros': '#6b7280',       # gray
 }
 
