@@ -320,6 +320,26 @@ Os seguintes tipos de evento em `assai_moto_evento` foram ativados neste plano:
 
 ---
 
+## Skills + Agente disponíveis
+
+Para consultas e operações via Claude Code ou agente web Nacom Goya:
+
+| Skill | Tipo | Uso |
+|-------|------|-----|
+| `consultando-estoque-assai` | READ | Pipeline (ESTOQUE/MONTADA/DISPONIVEL/SEPARADA/FATURADA) |
+| `rastreando-chassi-assai` | READ | Histórico completo de um chassi |
+| `acompanhando-pedido-compra-assai` | READ | Pedidos VOE Q.P.A. + compras Motochefe |
+| `acompanhando-saida-assai` | READ | Separações + NFs Q.P.A. (match BATEU/DIVERGENTE) |
+| `conferindo-recibo-assai` | READ + WRITE | Recibos Motochefe + wizard A→B→C→D |
+| `registrando-evento-moto-assai` | WRITE | Montagem, disponibilizar, separar, reverter, cancelar |
+
+Agente orquestrador: `gestor-motos-assai` (sub-agent — `model: sonnet`).
+
+Spec: `docs/superpowers/specs/2026-05-08-motos-assai-skills-agents-design.md`
+Plan: `docs/superpowers/plans/2026-05-08-motos-assai-skills-agents.md`
+
+---
+
 ## Manutenção / Roadmap futuro
 
 Módulo encerrado em 2026-05-07 (Planos 1-4 completos). Evoluções futuras:

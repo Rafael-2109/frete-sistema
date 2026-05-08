@@ -167,6 +167,7 @@ Gotchas rapidos:
 | `gestor-devolucoes` | Devolucoes NFD, De-Para AI, descarte vs retorno |
 | `gestor-estoque-producao` | Ruptura, estoque comprometido, producao vs programada |
 | `analista-performance-logistica` | KPIs entrega, ranking transportadoras, atrasos (read-only) |
+| `gestor-motos-assai` | Pipeline B2B Q.P.A. Sendas/Assaí (estoque, recibo, separação, NF) |
 
 ### Confiabilidade de Output (OBRIGATORIO)
 

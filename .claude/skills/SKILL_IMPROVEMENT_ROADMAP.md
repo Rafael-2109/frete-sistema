@@ -156,6 +156,28 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 |---|-------|---------|------|--------|------|
 | 27 | `operando-portal-atacadao` | 3 | ~120KB | DONE | 2026-03-08 |
 | 28 | `conciliando-transferencias-internas` | 0 | ~20KB | DONE | 2026-03-30 |
+| 29 | `consultando-estoque-assai` | n/a | n/a | NEW (motos_assai) | 2026-05-08 |
+| 30 | `rastreando-chassi-assai` | n/a | n/a | NEW (motos_assai) | 2026-05-08 |
+| 31 | `acompanhando-pedido-compra-assai` | n/a | n/a | NEW (motos_assai) | 2026-05-08 |
+| 32 | `acompanhando-saida-assai` | n/a | n/a | NEW (motos_assai) | 2026-05-08 |
+| 33 | `conferindo-recibo-assai` | n/a | n/a | NEW (motos_assai) | 2026-05-08 |
+| 34 | `registrando-evento-moto-assai` | n/a | n/a | NEW (motos_assai) | 2026-05-08 |
+
+#### 2026-05-08 — Skills motos_assai (6 novas)
+
+Criadas 6 skills + 1 agente para o módulo `app/motos_assai/`:
+
+- `consultando-estoque-assai` (READ)
+- `rastreando-chassi-assai` (READ)
+- `acompanhando-pedido-compra-assai` (READ)
+- `acompanhando-saida-assai` (READ)
+- `conferindo-recibo-assai` (READ + WRITE conferência)
+- `registrando-evento-moto-assai` (WRITE 8 sub-comandos)
+
+Agente: `gestor-motos-assai` (sonnet) — orquestra cross-entidade.
+
+Spec: `docs/superpowers/specs/2026-05-08-motos-assai-skills-agents-design.md`
+Plan: `docs/superpowers/plans/2026-05-08-motos-assai-skills-agents.md`
 
 ### SKIP — Meta-skills
 

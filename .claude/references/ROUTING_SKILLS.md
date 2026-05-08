@@ -39,6 +39,13 @@
 | LOJAS HORA — CONFERENCIA | "como esta a conferencia?", "quantos chassis faltam conferir?", "tem divergencia?" — APENAS no Agente Lojas HORA | -> `conferindo-recebimento` |
 | LOJAS HORA — PECAS FALTANDO | "pecas faltando?", "pecas pendentes", "chassi doador" — APENAS no Agente Lojas HORA | -> `consultando-pecas-faltando` |
 | LOJAS HORA — CROSS-ENTIDADE (orquestra varias skills) | "como esta minha loja hoje?", "o que preciso fazer?", "resumo operacional" — APENAS no Agente Lojas HORA | -> Subagente `orientador-loja` |
+| MOTOS ASSAÍ — ESTOQUE/PIPELINE | "quantas motos Q.P.A.?", "estoque Sendas", "pipeline Assaí", "quanto de SOL?" | -> `consultando-estoque-assai` |
+| MOTOS ASSAÍ — RASTREAR CHASSI | "cadê chassi MZX...?", "histórico chassi Q.P.A." | -> `rastreando-chassi-assai` |
+| MOTOS ASSAÍ — PEDIDOS/COMPRAS | "pedido VOE", "compra Motochefe MA-", "VOE Q.P.A." | -> `acompanhando-pedido-compra-assai` |
+| MOTOS ASSAÍ — SAÍDA/NFs | "separações Assaí", "NF Q.P.A.", "match BATEU/DIVERGENTE" | -> `acompanhando-saida-assai` |
+| MOTOS ASSAÍ — RECIBO MOTOCHEFE | "recibos pendentes Motochefe", "conferir recibo RM-", "wizard recebimento" | -> `conferindo-recibo-assai` |
+| MOTOS ASSAÍ — EVENTOS WRITE | "registra montagem", "disponibiliza", "reverte", "separar chassi" | -> `registrando-evento-moto-assai` |
+| MOTOS ASSAÍ — CROSS-ENTIDADE | "como está operação Q.P.A.?", "resumo Motos Assaí" | -> Subagente `gestor-motos-assai` |
 
 ---
 
@@ -123,10 +130,13 @@ Se a resposta esta no reference -> NAO usar skill.
 | gestor-estoque-producao vs visao-produto | **Estoque agregado** (ruptura multi-produto, giro, parado) -> gestor-estoque-producao. **Produto individual 360** (cadastro+estoque+custo+faturamento) -> visao-produto. Sinal: "quais vao faltar" -> estoque. "tudo sobre palmito" -> visao |
 | analista-performance-logistica vs monitorando-entregas | **Agregado/ranking** (lead time medio, taxa sucesso, comparacao mes) -> analista-performance. **Individual** (NF 12345 entregou?) -> monitorando-entregas. Sinal: "ranking", "media", "percentual" -> performance. NF/numero especifico -> entregas |
 | analista-performance-logistica vs controlador-custo-frete | **Performance entrega** (atraso, sucesso, lead time) -> analista-performance. **Custo frete** (valor, divergencia, despesa) -> controlador-custo-frete. Sinal: "atrasadas", "ranking" -> performance. "custo", "divergencia" -> controlador |
+| consultando-estoque-assai vs gerindo-expedicao | **Motos Q.P.A.** (B2B Sendas) -> consultando-estoque-assai. **Pedidos/separação Nacom Goya** -> gerindo-expedicao |
+| rastreando-chassi-assai vs rastreando-chassi (Hora) | **Q.P.A.** (assai_moto) -> rastreando-chassi-assai. **Lojas HORA** (hora_moto) -> rastreando-chassi |
+| consultando-estoque-assai vs consultando-estoque-loja | **B2B Q.P.A. Sendas** -> consultando-estoque-assai. **B2C Lojas HORA** -> consultando-estoque-loja |
 
 ---
 
-## Skills — Inventario Completo (30 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (36 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -167,5 +177,9 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `consultando-estoque-loja` (motos disponiveis por loja/modelo/chassi),
 `consultando-pecas-faltando` (pecas faltando registradas + chassi doador),
 `rastreando-chassi` (historico completo de UM chassi: pedido->NF->recebimento->venda)
+
+### Skills motos_assai (6)
+`consultando-estoque-assai`, `rastreando-chassi-assai`, `acompanhando-pedido-compra-assai`,
+`acompanhando-saida-assai`, `conferindo-recibo-assai`, `registrando-evento-moto-assai`
 
 > Skills dev (`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`, `integracao-odoo`) NAO existem em `.claude/skills/` — sao invocaveis apenas via Claude Code global (fora do escopo deste inventario).

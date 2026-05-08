@@ -125,3 +125,9 @@
 | `visao-produto` | modelos/CADEIA_PEDIDO_ENTREGA, negocio/REGRAS_NEGOCIO |
 | `gerindo-agente` | MEMORY_PROTOCOL, REGRAS_OUTPUT |
 | `resolvendo-entidades` | (sem references — consulta banco diretamente) |
+| `consultando-estoque-assai` | `app/motos_assai/CLAUDE.md` |
+| `rastreando-chassi-assai` | `app/motos_assai/CLAUDE.md` |
+| `acompanhando-pedido-compra-assai` | `app/motos_assai/CLAUDE.md` |
+| `acompanhando-saida-assai` | `app/motos_assai/CLAUDE.md` |
+| `conferindo-recibo-assai` | `app/motos_assai/CLAUDE.md` |
+| `registrando-evento-moto-assai` | `app/motos_assai/CLAUDE.md` |
