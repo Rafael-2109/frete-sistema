@@ -61,6 +61,7 @@
 @import url('./components/_tables.css') layer(components);
 @import url('./components/_tags.css') layer(components);
 @import url('./components/_layout.css') layer(components);
+@import url('./components/_mobile-zoom.css') layer(components);
 
 /* Modules - Feature-specific styles */
 @import url('./modules/_financeiro.css') layer(modules);

@@ -1,0 +1,25 @@
+{# Barra de controle de zoom mobile
+
+   Visivel apenas em viewport < 768px (CSS toggle por classe .is-active).
+   Logica em app/static/js/mobile-zoom.js — persiste em localStorage.
+   Estilos em app/static/css/components/_mobile-zoom.css.
+
+   Inserir logo apos abertura do <body> em base.html.
+#}
+<div class="mobile-zoom-bar" role="toolbar" aria-label="Controle de zoom da pagina em mobile">
+  <span class="zoom-icon" aria-hidden="true"><i class="fas fa-search-minus"></i></span>
+  <button type="button" class="btn-zoom-dec" aria-label="Diminuir zoom" title="Diminuir zoom 10%">−</button>
+  <span class="zoom-level" aria-live="polite" aria-atomic="true">100%</span>
+  <button type="button" class="btn-zoom-inc" aria-label="Aumentar zoom" title="Aumentar zoom 10%">+</button>
+  <button type="button" class="btn-zoom-reset" aria-label="Resetar zoom para 100%" title="Voltar ao tamanho padrao">
+    <i class="fas fa-undo" aria-hidden="true"></i>
+  </button>
+  <button type="button" class="btn-zoom-hide" aria-label="Ocultar barra de zoom" title="Ocultar (reabre pelo botao no canto)">
+    <i class="fas fa-times" aria-hidden="true"></i>
+  </button>
+</div>
+
+{# Botao flutuante (canto superior direito) para reabrir a barra apos ocultar #}
+<button type="button" class="mobile-zoom-toggle" aria-label="Mostrar controle de zoom mobile">
+  <i class="fas fa-search" aria-hidden="true"></i> <span>Zoom</span>
+</button>

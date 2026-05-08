@@ -1,0 +1,157 @@
+/**
+ * _mobile-zoom.css — Mobile Zoom Control
+ *
+ * Barra fixa no topo (mobile only) que permite ao usuario reduzir o zoom
+ * da pagina via meta viewport dinamico, escalando uniformemente todo o
+ * conteudo (texto, botoes, tabelas, modais, forms).
+ *
+ * Implementacao em:
+ *   - app/templates/_mobile_zoom_bar.html (HTML)
+ *   - app/static/js/mobile-zoom.js (logica)
+ *   - app/templates/base.html (script inline early-paint + include)
+ *
+ * Persiste zoom em localStorage. Visivel apenas em viewport < 768px.
+ */
+
+@layer components {
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     Barra de controle (default: hidden — JS adiciona .is-active em mobile)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .mobile-zoom-bar {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1035; /* acima de fixed-top (1030), abaixo de modal-backdrop (1040)
+                      — modais e dropdowns ficam por cima como deveriam */
+    background: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 0.25rem 0.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--bs-body-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    line-height: 1;
+    min-height: 32px;
+  }
+
+  .mobile-zoom-bar .zoom-icon {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .mobile-zoom-bar button {
+    background: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 28px;
+    min-height: 24px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-zoom-bar button:hover:not(:disabled) {
+    background: var(--bs-primary-bg-subtle, var(--bs-secondary-bg));
+    border-color: var(--bs-primary, var(--bs-border-color));
+  }
+
+  .mobile-zoom-bar button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .mobile-zoom-bar .zoom-level {
+    min-width: 3rem;
+    text-align: center;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mobile-zoom-bar .btn-zoom-reset,
+  .mobile-zoom-bar .btn-zoom-hide {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--bs-secondary-color);
+    padding: 0.2rem 0.4rem;
+  }
+
+  .mobile-zoom-bar .btn-zoom-reset:hover:not(:disabled),
+  .mobile-zoom-bar .btn-zoom-hide:hover:not(:disabled) {
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+  }
+
+  /* Aviso visual quando zoom < 70% (botoes podem ficar pequenos demais) */
+  .mobile-zoom-bar.is-warning .zoom-level {
+    color: var(--bs-warning, #ffc107);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     Botao flutuante para reabrir a barra apos ocultar
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .mobile-zoom-toggle {
+    display: none;
+    position: fixed;
+    top: 0.4rem;
+    right: 0.4rem;
+    z-index: 1034;
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    padding: 0.25rem 0.6rem;
+    border-radius: 1rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    line-height: 1;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .mobile-zoom-toggle:hover {
+    background: var(--bs-secondary-bg);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     Visibilidade: APENAS em viewport mobile (< 768px)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  @media (max-width: 767.98px) {
+    .mobile-zoom-bar.is-active {
+      display: flex;
+    }
+    .mobile-zoom-toggle.is-active {
+      display: inline-flex;
+    }
+    /* Empurra body para baixo quando barra esta visivel, para nao cobrir conteudo */
+    body.has-mobile-zoom-bar {
+      padding-top: 32px;
+    }
+  }
+
+  /* Em desktop (>= 768px), garante que mesmo com classes ativas nada apareca */
+  @media (min-width: 768px) {
+    .mobile-zoom-bar,
+    .mobile-zoom-toggle {
+      display: none !important;
+    }
+    body.has-mobile-zoom-bar {
+      padding-top: 0;
+    }
+  }
+}

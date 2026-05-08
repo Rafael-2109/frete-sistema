@@ -6,6 +6,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Frete Sistema</title>
+
+  {# Early-paint: aplica zoom mobile salvo ANTES do CSS carregar para evitar flash.
+     Logica completa em app/static/js/mobile-zoom.js — este bloco e apenas o "primer". #}
+  <script>
+    (function() {
+      try {
+        if (window.innerWidth >= 768) return;
+        var lvl = parseInt(localStorage.getItem('mobile-zoom-level'), 10);
+        if (isNaN(lvl) || lvl === 100 || lvl < 50 || lvl > 100) return;
+        var phys = window.screen.width || window.innerWidth;
+        var virt = Math.round(phys * (100 / lvl));
+        var meta = document.querySelector('meta[name=viewport]');
+        if (meta) {
+          meta.setAttribute('content', 'width=' + virt + ', initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
+        }
+      } catch (e) { /* fail-silent: cai no viewport default */ }
+    })();
+  </script>
   <!-- Bootstrap agora é self-hosted via @import layer(bootstrap) em main.css -->
   <!-- bootstrap-theme-override.css removido — regras migradas para design tokens e layer system -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -31,6 +49,9 @@
 </head>
 
 <body>
+
+  {# Barra de controle de zoom mobile — visivel apenas em < 768px #}
+  {% include '_mobile_zoom_bar.html' %}
 
   {% if current_user.is_authenticated %}
   <nav class="navbar navbar-expand-lg nc-navbar{% if request.path.startswith('/carvia/') %} nc-navbar--carvia{% elif not (current_user.sistema_motochefe and not current_user.sistema_logistica) %} nc-navbar--white-bg{% endif %}">
@@ -1249,6 +1270,10 @@
       });
     });
   </script>
+
+  {# Mobile zoom controller — UI, eventos e persistencia em localStorage.
+     Early-paint primer ja aplicou o zoom no <head>, este script gerencia o resto. #}
+  <script src="{{ 'js/mobile-zoom.js'|asset_url }}"></script>
 
   {% block scripts %}{% endblock %}
 </body>
