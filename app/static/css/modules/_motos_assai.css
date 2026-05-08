@@ -106,6 +106,28 @@
   border: 1px solid var(--bs-border-color);
 }
 
+/* Marker do Leaflet com numero da loja */
+.motos-assai-mapa-marker {
+  background: transparent;
+  border: none;
+}
+
+.motos-assai-mapa-marker-bubble {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bs-primary);
+  color: var(--bs-body-bg);
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bs-body-bg);
+  box-shadow: var(--shadow-sm);
+  line-height: 1;
+}
+
 /* Mobile-specific overrides */
 @media (max-width: 767.98px) {
   .motos-assai-wrapper {

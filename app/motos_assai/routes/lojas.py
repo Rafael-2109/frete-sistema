@@ -96,6 +96,7 @@ def lojas_mapa():
     lojas_json = [
         {
             'id': l.id,
+            'numero': l.numero,
             'apelido': l.nome,
             'cnpj': l.cnpj,
             'endereco': ', '.join(filter(None, [

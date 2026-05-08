@@ -105,12 +105,26 @@
       const marker = new google.maps.Marker({
         position: pos,
         map,
-        title: l.apelido,
+        title: `LJ${l.numero} — ${l.apelido}`,
+        label: {
+          text: String(l.numero || '?'),
+          color: '#fff',
+          fontWeight: '700',
+          fontSize: '12px',
+        },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 16,
+          fillColor: '#0d6efd',
+          fillOpacity: 1,
+          strokeColor: '#fff',
+          strokeWeight: 2,
+        },
       });
       const info = new google.maps.InfoWindow({
         content: `
           <div style="min-width: 200px;">
-            <strong>${l.apelido}</strong><br>
+            <strong>LJ${l.numero} — ${l.apelido}</strong><br>
             <small>${l.endereco || ''}</small><br>
             <small>CNPJ: ${l.cnpj}</small>
             ${l.regional ? `<br><small>Regional: ${l.regional}</small>` : ''}
@@ -138,9 +152,16 @@
 
     const markers = [];
     for (const l of comCoords) {
-      const m = L.marker([l.lat, l.lng]).addTo(map);
+      const icon = L.divIcon({
+        className: 'motos-assai-mapa-marker',
+        html: `<div class="motos-assai-mapa-marker-bubble">${l.numero || '?'}</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16],
+      });
+      const m = L.marker([l.lat, l.lng], { icon, title: `LJ${l.numero} — ${l.apelido}` }).addTo(map);
       m.bindPopup(`
-        <strong>${l.apelido}</strong><br>
+        <strong>LJ${l.numero} — ${l.apelido}</strong><br>
         <small>${l.endereco || ''}</small><br>
         <small>CNPJ: ${l.cnpj}</small>
         ${l.regional ? `<br><small>Regional: ${l.regional}</small>` : ''}
