@@ -43,6 +43,7 @@ from .separacao_service import (
     SeparacaoConflictError, SeparacaoValidationError,
 )
 from .faturamento_service import gerar_excel_qpa
+from .geocoding_service import geocodar_loja, geocodar_lote, GeocodingError
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -70,4 +71,5 @@ __all__ = [
     'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
     'SeparacaoConflictError', 'SeparacaoValidationError',
     'gerar_excel_qpa',
+    'geocodar_loja', 'geocodar_lote', 'GeocodingError',
 ]
