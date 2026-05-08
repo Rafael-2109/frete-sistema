@@ -1271,6 +1271,10 @@ def create_app(config_name=None):
 
         app.logger.error(f"Traceback completo:\n{traceback.format_exc()}")
 
+    # 🎓 Onboarding Tours API (HORA + Motos Assaí)
+    from app.api.onboarding import onboarding_api_bp
+    app.register_blueprint(onboarding_api_bp)
+
     # 🚀 MCP Logistica
 
     # 🔗 Integração TagPlus
