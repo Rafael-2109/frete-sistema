@@ -101,6 +101,15 @@ echo "HORA 36: campo consumidor_final em hora_venda..."
 python scripts/migrations/hora_36_consumidor_final.py \
     || echo "⚠️ Migration hora_36 falhou, continuando deploy..."
 
+# 10e. CarVia: corrigir 31 fretes backfill criados pela sessao Teams 541 (07/05/2026)
+# com tabela_* NULL. Espelha api_cotar_backfill (CalculadoraFrete + tabelas via
+# CidadeAtendida). Idempotente — pula fretes ja com tabela_nome_tabela preenchido.
+# Preserva valor_cotado dos 3 fretes manuais informados pelo usuario.
+echo "CarVia: corrigir fretes backfill sessao 541 (idempotente)..."
+python scripts/migrations/2026_05_07_corrigir_fretes_backfill_teams_sessao541.py \
+    --apply --preservar-manual \
+    || echo "⚠️ Correcao fretes backfill 541 falhou, continuando deploy..."
+
 # 10. HORA 30: seed inicial de hora_modelo_alias.
 # Para cada modelo existente, cria alias NOME_LIVRE com nome_modelo
 # + aliases TAGPLUS_CODIGO/TAGPLUS_PRODUTO_ID a partir do legado
