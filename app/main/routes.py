@@ -879,3 +879,13 @@ def admin_onboarding_health():
     if current_user.perfil != 'administrador':
         abort(403)
     return render_template('admin/onboarding_health.html')
+
+
+@main_bp.route('/admin/onboarding/preview')
+@login_required
+def admin_onboarding_preview():
+    """Pagina admin para revisar tours sem precisar limpar localStorage."""
+    if current_user.perfil != 'administrador':
+        abort(403)
+    tour_id = request.args.get('tour', '')
+    return render_template('admin/onboarding_preview.html', tour_id=tour_id)
