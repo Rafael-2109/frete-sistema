@@ -5,7 +5,7 @@ window.OnboardingEngine.register({
   autoStartRoute: '/motos-assai/compras',
   steps: [
     { element: '#filtros-compras', title: 'Filtros', description: 'Status, numero MA-AAAA-NNNN, periodo.' },
-    { element: '#btn-nova-compra', title: 'Consolidar nova compra', description: 'Selecione pedidos VOE abertos para criar 1 PO consolidado.' },
-    { element: '#tabela-compras', title: 'Lista de compras', description: 'Cada compra agrupa N pedidos. Baixe o PDF do PO para enviar a Motochefe.' }
+    { element: '#btn-nova-compra', title: 'Consolidar nova compra', description: 'Acao manual do admin: selecione pedidos VOE em ABERTO e some-os em 1 PO. <strong>O PO nao e gerado automaticamente</strong> ao subir VOE.' },
+    { element: '#tabela-compras', title: 'Lista de compras', description: 'Cada PO agrupa N pedidos VOE. Clique no numero do PO para abrir o detalhe — la voce <strong>baixa o PDF</strong> para enviar a Motochefe e, quando as motos chegarem, <strong>importa o recibo Motochefe</strong>.' }
   ]
 });

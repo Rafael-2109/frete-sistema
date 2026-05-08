@@ -19,7 +19,7 @@ window.OnboardingEngine.register({
     {
       element: '#menu-recibos',
       title: 'Recibos da Motochefe',
-      description: 'Quando as motos do PO chegam ao CD, cada recibo lista os chassis. Suba o PDF/Excel para comecar a conferencia.'
+      description: 'Quando as motos do PO chegam ao CD, suba o recibo PDF/Excel para iniciar a conferencia. <strong>O upload acontece pela tela do PO Motochefe</strong> (botao "Importar Recibo Motochefe" no detalhe da compra) — nao por esta lista, que e read-only.'
     },
     {
       element: '#menu-montagem',
