@@ -46,6 +46,7 @@
 {% endif %}
 
 <h4>Chassis registrados ({{ items|length }})</h4>
+<div class="table-responsive">
 <table class="table table-sm" id="items-table">
   <thead><tr><th>Chassi</th><th>Modelo</th><th>Valor unit.</th><th>Registrado em</th><th>Ação</th></tr></thead>
   <tbody>
@@ -67,6 +68,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 {% if separacao.status == 'EM_SEPARACAO' %}
 <div class="d-flex gap-2 mt-3">

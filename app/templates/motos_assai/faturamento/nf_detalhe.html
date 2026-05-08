@@ -20,6 +20,7 @@
 </dl>
 
 <h4>Itens ({{ items|length }})</h4>
+<div class="table-responsive">
 <table class="table table-sm">
   <thead><tr><th>Chassi</th><th>Modelo extraído</th><th>Valor</th><th>Match separação</th><th>Divergência</th></tr></thead>
   <tbody>
@@ -34,4 +35,5 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}
