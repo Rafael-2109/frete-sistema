@@ -29,6 +29,10 @@ from .recebimento_service import (
     validar_chassi_contra_recibo, registrar_conferencia, finalizar_recebimento,
     RecebimentoConflictError, RecebimentoValidationError,
 )
+from .montagem_service import (
+    registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
+    MontagemValidationError,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -48,4 +52,6 @@ __all__ = [
     'chassis_em_estoque', 'EventoInvalidoError',
     'validar_chassi_contra_recibo', 'registrar_conferencia', 'finalizar_recebimento',
     'RecebimentoConflictError', 'RecebimentoValidationError',
+    'registrar_montagem', 'resolver_pendencia', 'historico_3_ultimas_montagens',
+    'MontagemValidationError',
 ]
