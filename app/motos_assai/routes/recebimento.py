@@ -104,7 +104,7 @@ def recebimento_registrar():
             avaria_fisica=bool(data.get('avaria_fisica')),
         )
     except RecebimentoConflictError as e:
-        return jsonify({'ok': False, 'erro': str(e), 'retry': True}), 409
+        return jsonify({'ok': False, 'erro': str(e), 'retry': True, 'tipo': 'conflict'}), 409
     except RecebimentoValidationError as e:
         return jsonify({'ok': False, 'erro': str(e)}), 400
     except Exception:

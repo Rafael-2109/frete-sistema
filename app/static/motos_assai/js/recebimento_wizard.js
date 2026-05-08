@@ -156,12 +156,16 @@
       body: JSON.stringify(payload),
     });
 
+    const data = await r.json();
+
     if (r.status === 409) {
-      alert('Conflito: outro operador conferindo este chassi simultaneamente. Tente novamente.');
+      // Race condition: chassis já conferido por outro operador (H2)
+      alert(data.erro || 'Conflito: chassi já conferido. Atualize a tela e tente outro chassi.');
+      // Recarrega a página para atualizar lista de pendentes
+      window.location.reload();
       return;
     }
 
-    const data = await r.json();
     if (!data.ok) {
       alert('Erro: ' + (data.erro || 'desconhecido'));
       return;
@@ -173,6 +177,14 @@
       (data.tipo_divergencia ? `<strong>⚠ ${data.tipo_divergencia}</strong><br>` : '') +
       `Total conferido: ${data.conferidos} / ${data.total}` +
       `</div>`;
+
+    // Atualiza contador dinâmico de pendentes no botão Finalizar (C4)
+    const remaining = Math.max(0, (data.total || 0) - (data.conferidos || 0));
+    const btnFinalizar = document.getElementById('btn-finalizar');
+    if (btnFinalizar) {
+      btnFinalizar.dataset.pendentes = String(remaining);
+    }
+
     setStep('D');
   }
 
