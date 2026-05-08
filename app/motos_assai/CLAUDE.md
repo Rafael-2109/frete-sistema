@@ -353,6 +353,30 @@ Módulo encerrado em 2026-05-07 (Planos 1-4 completos). Evoluções futuras:
 
 ---
 
+## Onboarding Tours (2026-05-08)
+
+Tours guiados in-app via Driver.js para usuarios novos.
+
+**Spec:** `docs/superpowers/specs/2026-05-08-onboarding-tours-hora-assai-design.md`
+**Plano:** `docs/superpowers/plans/2026-05-08-onboarding-tours-hora-assai.md`
+
+**Estrutura:**
+- 1 macro (`motos_assai.macro`) com 8 passos (3 com `adminOnly`)
+- 9 mini-tours em `app/static/onboarding/tours/motos_assai/`
+- Filtragem: 4 universais + 5 admin-only (toggle via `current_user.perfil == 'administrador'`)
+- Quando o modulo ganhar permissoes granulares (roadmap), trocar `adminOnly` por `requirePerm` no engine — sem refactor
+
+**Adicionar tour novo:**
+1. Criar `app/static/onboarding/tours/motos_assai/<nome>.js` (com `adminOnly: true` se for admin)
+2. Adicionar IDs nos elementos do template alvo
+3. Incluir no `{% block onboarding_tours %}` do template
+4. Validar em `/admin/onboarding/health`
+5. Preview em `/admin/onboarding/preview?tour=motos_assai.<nome>`
+
+**Mobile-first:** tours das telas de chao (recebimento wizard, montagem, disponibilizar, separacao) estao otimizados para celular do operador.
+
+---
+
 ## Referências
 
 - Spec: `docs/superpowers/specs/2026-05-07-motos-assai-design.md`
