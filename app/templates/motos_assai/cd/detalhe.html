@@ -1,0 +1,20 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>CD — {{ cd.nome }}
+    {% if cd.ativo %}<span class="badge bg-success">ATIVO</span>{% endif %}
+  </h2>
+  <a href="{{ url_for('motos_assai.cd_editar') }}" class="btn btn-outline-primary">
+    <i class="fas fa-edit"></i> Editar
+  </a>
+</header>
+
+<dl class="row">
+  <dt class="col-sm-3">CNPJ</dt><dd class="col-sm-9">{{ cd.cnpj or '-' }}</dd>
+  <dt class="col-sm-3">Endereço</dt>
+  <dd class="col-sm-9">{{ cd.endereco or '-' }}{% if cd.bairro %} — {{ cd.bairro }}{% endif %}</dd>
+  <dt class="col-sm-3">Cidade/UF</dt>
+  <dd class="col-sm-9">{{ cd.cidade or '-' }}/{{ cd.uf or '-' }} {% if cd.cep %}— CEP {{ cd.cep }}{% endif %}</dd>
+</dl>
+{% endblock %}

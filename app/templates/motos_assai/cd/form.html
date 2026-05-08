@@ -1,0 +1,34 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<h2>Editar CD — {{ cd.nome }}</h2>
+
+<form method="POST" class="row g-3">
+  {{ form.hidden_tag() }}
+  <div class="col-md-8">
+    {{ form.nome.label(class="form-label") }}
+    {{ form.nome(class="form-control") }}
+  </div>
+  <div class="col-md-4">
+    {{ form.cnpj.label(class="form-label") }}
+    {{ form.cnpj(class="form-control", placeholder="14 dígitos") }}
+    {% for e in form.cnpj.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+  </div>
+  <div class="col-12">
+    {{ form.endereco.label(class="form-label") }}
+    {{ form.endereco(class="form-control") }}
+  </div>
+  <div class="col-md-3">{{ form.bairro.label(class="form-label") }}{{ form.bairro(class="form-control") }}</div>
+  <div class="col-md-2">{{ form.cep.label(class="form-label") }}{{ form.cep(class="form-control") }}</div>
+  <div class="col-md-5">{{ form.cidade.label(class="form-label") }}{{ form.cidade(class="form-control") }}</div>
+  <div class="col-md-2">{{ form.uf.label(class="form-label") }}{{ form.uf(class="form-select") }}</div>
+  <div class="col-12 form-check ms-3">
+    {{ form.ativo(class="form-check-input") }}
+    {{ form.ativo.label(class="form-check-label") }}
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Salvar</button>
+    <a href="{{ url_for('motos_assai.cd_detalhe') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
