@@ -1,7 +1,7 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
+<div class="d-flex align-items-center justify-content-between mb-3" id="recibo-header">
   <h2>Recebimento — Recibo #{{ recibo.id }}
     <span class="text-muted fw-normal">
       — {{ conferidos }} de {{ total_chassis }} conferido(s)
@@ -20,17 +20,19 @@
   </div>
 </div>
 
-<div class="progress mb-3 recebimento-progress">
+<div class="progress mb-3 recebimento-progress" id="lista-conferidos">
   <div class="progress-bar bg-success"
        style="width: {{ (conferidos * 100 / total_chassis) if total_chassis else 0 }}%"></div>
 </div>
 
 <!-- Stepper -->
-<div class="d-flex gap-2 mb-3 small" id="stepper">
-  <span class="badge bg-primary" data-step="A">A. Chassi</span>
-  <span class="badge bg-light border" data-step="B">B. Modelo</span>
-  <span class="badge bg-light border" data-step="C">C. Cor + Foto</span>
-  <span class="badge bg-light border" data-step="D">D. Confirmar</span>
+<div id="progress-steps">
+  <div class="d-flex gap-2 mb-3 small" id="stepper">
+    <span class="badge bg-primary" data-step="A">A. Chassi</span>
+    <span class="badge bg-light border" data-step="B">B. Modelo</span>
+    <span class="badge bg-light border" data-step="C">C. Cor + Foto</span>
+    <span class="badge bg-light border" data-step="D">D. Confirmar</span>
+  </div>
 </div>
 
 <!-- ======= PASSO A: Chassi ======= -->
@@ -40,7 +42,7 @@
     Aponte a câmera ao QR code do chassi. Se não houver QR/câmera, use o leitor USB ou digite manualmente abaixo.
   </p>
   <div class="row">
-    <div class="col-md-7">
+    <div class="col-md-7" id="scan-area">
       <div id="qr-reader" class="qr-reader-container"></div>
       <div class="d-flex gap-2 mt-2">
         <button type="button" id="btn-start-qr" class="btn btn-primary">
@@ -51,14 +53,16 @@
         </button>
       </div>
     </div>
-    <div class="col-md-5">
+    <div class="col-md-5" id="chassi-input">
       <label class="form-label">ou digite/escaneie com leitor USB</label>
       <input type="text" id="input-chassi" class="form-control form-control-lg" autofocus
              placeholder="Chassi (Enter para validar)" maxlength="50"
              autocapitalize="characters" enterkeyhint="search">
-      <button type="button" id="btn-chassi-manual" class="btn btn-outline-primary mt-2">
-        Validar chassi <i class="fas fa-arrow-right"></i>
-      </button>
+      <div id="btn-validar" class="d-inline-block">
+        <button type="button" id="btn-chassi-manual" class="btn btn-outline-primary mt-2">
+          Validar chassi <i class="fas fa-arrow-right"></i>
+        </button>
+      </div>
 
       <div id="alerta-chassi" class="mt-3 d-none"></div>
     </div>
@@ -180,4 +184,8 @@ window.MOTOS_ASSAI_RECEBIMENTO = {
 };
 </script>
 <script src="{{ url_for('static', filename='motos_assai/js/recebimento_wizard.js') }}"></script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/recebimento_wizard.js') }}"></script>
 {% endblock %}
