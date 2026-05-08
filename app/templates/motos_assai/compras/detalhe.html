@@ -1,14 +1,21 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
-<header class="d-flex justify-content-between mb-3">
-  <h2>PO Motochefe — {{ compra.numero }}
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">PO Motochefe — {{ compra.numero }}
     <span class="badge bg-primary">{{ compra.status }}</span>
   </h2>
-  <a href="{{ url_for('motos_assai.compras_pdf', compra_id=compra.id) }}"
-     class="btn btn-primary">
-    <i class="fas fa-file-pdf"></i> Baixar PDF do PO
-  </a>
+  <div class="d-flex gap-2 flex-wrap">
+    <a id="btn-importar-recibo"
+       href="{{ url_for('motos_assai.recibos_upload', compra_id=compra.id) }}"
+       class="btn btn-success">
+      <i class="fas fa-truck-loading"></i> Importar Recibo Motochefe
+    </a>
+    <a href="{{ url_for('motos_assai.compras_pdf', compra_id=compra.id) }}"
+       class="btn btn-primary">
+      <i class="fas fa-file-pdf"></i> Baixar PDF do PO
+    </a>
+  </div>
 </header>
 
 <dl class="row small">
@@ -51,6 +58,33 @@
     {% endfor %}
   </tbody>
 </table>
+
+<h4 class="mt-4">Recibos Motochefe importados ({{ compra.recibos|length }})</h4>
+{% if compra.recibos %}
+<div id="tabela-recibos-compra" class="table-responsive">
+<table class="table table-sm table-hover">
+  <thead>
+    <tr><th>#</th><th>Numero</th><th>Data</th><th>Equipe</th><th class="text-end">Total declarado</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    {% for r in compra.recibos %}
+    <tr>
+      <td><a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=r.id) }}">#{{ r.id }}</a></td>
+      <td>{{ r.numero_recibo or '-' }}</td>
+      <td>{{ r.data_recibo.strftime('%d/%m/%Y') if r.data_recibo else '-' }}</td>
+      <td>{{ r.equipe or '-' }}</td>
+      <td class="text-end">{{ r.total_motos_declarado or '-' }}</td>
+      <td><span class="badge bg-secondary">{{ r.status }}</span></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="alert alert-light border small text-muted">
+  Nenhum recibo importado para este PO. Use <strong>Importar Recibo Motochefe</strong> acima quando as motos chegarem.
+</div>
+{% endif %}
 
 <a href="{{ url_for('motos_assai.compras_lista') }}" class="btn btn-outline-secondary mt-3">
   <i class="fas fa-arrow-left"></i> Voltar à lista
