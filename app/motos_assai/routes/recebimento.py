@@ -91,11 +91,12 @@ def recebimento_registrar():
     Response 400: {ok: false, erro}               — validação
     """
     data = request.get_json(silent=True) or {}
+    modelo_id_raw = data.get('modelo_id')
     try:
         item = registrar_conferencia(
             recibo_id=int(data['recibo_id']),
             chassi=data['chassi'],
-            modelo_conferido_id=int(data['modelo_id']),
+            modelo_conferido_id=int(modelo_id_raw) if modelo_id_raw is not None else None,
             cor_conferida=data.get('cor'),
             qr_code_lido=bool(data.get('qr_code_lido')),
             foto_s3_key=data.get('foto_s3_key'),

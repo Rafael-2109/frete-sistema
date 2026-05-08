@@ -9,7 +9,7 @@ import pytest
 from app import db
 from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiCompraMotochefe, AssaiReciboMotochefe, AssaiReciboItem,
-    AssaiMoto, AssaiModelo,
+    AssaiMoto, AssaiMotoEvento, AssaiModelo,
     RECIBO_STATUS_AGUARDANDO, RECIBO_STATUS_EM_CONFERENCIA,
     RECIBO_STATUS_CONCLUIDO, RECIBO_STATUS_COM_DIVERGENCIA,
     DIVERGENCIA_CHASSI_EXTRA, DIVERGENCIA_MOTO_FALTANDO,
@@ -374,4 +374,50 @@ def test_finalizar_todos_conferidos_sem_divergencia(app, admin_user):
         # Pelo menos finalizado
         assert recibo_final.status != RECIBO_STATUS_AGUARDANDO
         assert recibo_final.status != RECIBO_STATUS_EM_CONFERENCIA
+        db.session.rollback()
+
+
+# ─────────────────────────────────────────────────────────────
+# Verificação de eventos emitidos (ESTOQUE + MOTO_FALTANDO)
+# ─────────────────────────────────────────────────────────────
+
+def test_registrar_emite_evento_estoque(app, admin_user):
+    """Conferência bem-sucedida → evento ESTOQUE emitido para o chassi."""
+    with app.app_context():
+        compra = _criar_compra_minima(admin_user)
+        chassi = f'EVT{_uid()}'
+        recibo, modelo = _criar_recibo_com_itens(compra, admin_user, [chassi])
+
+        registrar_conferencia(
+            recibo_id=recibo.id,
+            chassi=chassi,
+            modelo_conferido_id=modelo.id,
+            cor_conferida='PRETO',
+            qr_code_lido=True,
+            foto_s3_key=None,
+            operador_id=admin_user.id,
+        )
+
+        evento = AssaiMotoEvento.query.filter_by(
+            chassi=chassi, tipo=EVENTO_ESTOQUE,
+        ).first()
+        assert evento is not None, 'Evento ESTOQUE deve ser emitido ao registrar conferência'
+        assert evento.operador_id == admin_user.id
+        db.session.rollback()
+
+
+def test_finalizar_emite_evento_moto_faltando(app, admin_user):
+    """Chassis não conferido + confirmar=True → evento MOTO_FALTANDO emitido."""
+    with app.app_context():
+        compra = _criar_compra_minima(admin_user)
+        chassi_faltando = f'EVT{_uid()}'
+        recibo, _ = _criar_recibo_com_itens(compra, admin_user, [chassi_faltando])
+        # Não confere → faltante
+
+        finalizar_recebimento(recibo.id, admin_user.id, confirmar_faltantes=True)
+
+        evento = AssaiMotoEvento.query.filter_by(
+            chassi=chassi_faltando, tipo=EVENTO_MOTO_FALTANDO,
+        ).first()
+        assert evento is not None, 'Evento MOTO_FALTANDO deve ser emitido ao finalizar com faltante'
         db.session.rollback()
