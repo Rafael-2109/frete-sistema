@@ -59,32 +59,7 @@
 </div>
 
 <script>
-document.getElementById('btn_testar').addEventListener('click', async () => {
-  const regex = document.getElementById('regex_chassi').value;
-  const chassi = document.getElementById('teste_chassi').value;
-  const resultEl = document.getElementById('resultado_teste');
-  resultEl.textContent = '...';
-  try {
-    const r = await fetch('{{ url_for("motos_assai.modelos_api_testar_regex") }}', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-        'X-CSRFToken': '{{ csrf_token() }}'
-      },
-      body: JSON.stringify({regex, chassi})
-    });
-    const data = await r.json();
-    if (data.ok) {
-      resultEl.innerHTML = data.bate
-        ? '<span class="text-success">✓ BATE</span>'
-        : '<span class="text-danger">✗ NÃO BATE</span>';
-    } else {
-      resultEl.innerHTML = '<span class="text-danger">' + (data.erro || 'erro') + '</span>';
-    }
-  } catch (e) {
-    resultEl.innerHTML = '<span class="text-danger">erro: ' + e + '</span>';
-  }
-});
+window.MOTOS_ASSAI_REGEX_ENDPOINT = '{{ url_for("motos_assai.modelos_api_testar_regex") }}';
 </script>
+<script src="{{ url_for('static', filename='motos_assai/js/regex_tester.js') }}" defer></script>
 {% endblock %}

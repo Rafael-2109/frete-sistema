@@ -15,6 +15,8 @@
     -webkit-backdrop-filter: blur(12px);
     min-height: 56px;
     padding: 0.5rem 0;
+    /* Safe-area inset for notch/Dynamic Island (após viewport-fit=cover em base.html) */
+    padding-top: calc(0.5rem + env(safe-area-inset-top, 0px));
     position: sticky;
     top: 0;
     z-index: 1030;
