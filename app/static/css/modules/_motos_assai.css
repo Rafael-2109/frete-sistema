@@ -68,3 +68,16 @@
 .qr-reader-container {
   max-width: 380px;
 }
+
+/* Telas de operação rápida (montagem, disponibilizar) — substituem inline styles (H4) */
+.motos-assai-card-sm {
+  max-width: 600px;
+}
+
+.motos-assai-card-lg {
+  max-width: 800px;
+}
+
+.motos-assai-qr-reader {
+  max-width: 300px;
+}

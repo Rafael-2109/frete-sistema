@@ -1,0 +1,63 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="mb-3">
+  <h2>Montagem — Operação VOE</h2>
+</header>
+
+<div class="card p-3 motos-assai-card-sm">
+  <div class="mb-3">
+    <label class="form-label">Chassi</label>
+    <div class="input-group">
+      <input type="text" id="input-chassi" class="form-control form-control-lg"
+             autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50">
+      <button type="button" id="btn-camera" class="btn btn-outline-secondary">
+        <i class="fas fa-camera"></i>
+      </button>
+    </div>
+    <div id="qr-reader" class="mt-2 d-none motos-assai-qr-reader"></div>
+  </div>
+
+  <div class="form-check mb-2">
+    <input type="checkbox" id="chk-pendencia" class="form-check-input">
+    <label for="chk-pendencia" class="form-check-label">
+      Pendência de peça com defeito?
+    </label>
+  </div>
+
+  <div id="pendencia-fields" class="d-none mb-3 ps-4 border-start">
+    <div class="mb-2">
+      <label class="form-label small">Descrição da pendência (≥3 chars)</label>
+      <textarea id="input-descricao-pendencia" class="form-control" rows="2"
+                placeholder="Ex: bateria com defeito, retrovisor faltando..."></textarea>
+    </div>
+    <div class="mb-2">
+      <label class="form-label small">Chassi doador (opcional)</label>
+      <input type="text" id="input-chassi-doador" class="form-control" placeholder="Chassi de outra moto">
+    </div>
+  </div>
+
+  <button type="button" id="btn-registrar" class="btn btn-primary btn-lg">
+    <i class="fas fa-check"></i> Registrar montagem (Ctrl+Enter)
+  </button>
+
+  <div id="alerta" class="mt-3 d-none"></div>
+</div>
+
+<div class="motos-assai-card-lg">
+  {% with acao_label = 'montagens' %}
+    {% include 'motos_assai/partials/_historico_3_ultimas.html' %}
+  {% endwith %}
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+        integrity="sha384-c9d8RFSL+sJ0dC0WGqK7tQXg4/c5++8KkF+xbSPq3ji10/wfKLtAVk0M3IY+XJ7q"
+        crossorigin="anonymous"></script>
+<script>
+window.MOTOS_ASSAI_OP_CONFIG = {
+  endpoint: '{{ url_for("motos_assai.montagem_registrar") }}',
+  modo: 'montagem',
+};
+</script>
+<script src="{{ url_for('static', filename='motos_assai/js/operacao_quick.js') }}"></script>
+{% endblock %}
