@@ -25,6 +25,10 @@ from .moto_evento_service import (
     emitir_evento, ultimo_evento, status_efetivo, eventos_chassi,
     chassis_em_estoque, EventoInvalidoError,
 )
+from .recebimento_service import (
+    validar_chassi_contra_recibo, registrar_conferencia, finalizar_recebimento,
+    RecebimentoConflictError, RecebimentoValidationError,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -42,4 +46,6 @@ __all__ = [
     'validar_chassi',
     'emitir_evento', 'ultimo_evento', 'status_efetivo', 'eventos_chassi',
     'chassis_em_estoque', 'EventoInvalidoError',
+    'validar_chassi_contra_recibo', 'registrar_conferencia', 'finalizar_recebimento',
+    'RecebimentoConflictError', 'RecebimentoValidationError',
 ]
