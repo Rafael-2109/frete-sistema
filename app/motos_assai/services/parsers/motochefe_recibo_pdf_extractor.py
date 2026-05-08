@@ -157,22 +157,45 @@ class MotochefeReciboPdfExtractor(PDFExtractor):
         """Tabela tem header [PEDIDO, DESCRIÇÃO DO PRODUTO, CHASSI, MOTOR, COR].
 
         Tolera variações de capitalização e espaços extras.
+        Busca o header nas primeiras linhas (pode haver linha extra antes, ex: 'HAROLDO SP').
+        Se não encontrar header explícito, usa posição padrão (DESCRICAO=1, CHASSI=2, MOTOR=3, COR=4).
         """
         if not tabela or len(tabela) < 2:
             return []
 
-        # Identifica colunas pelo header
-        header = [str(c or '').strip().upper() for c in tabela[0]]
-        try:
-            idx_chassi = next(i for i, c in enumerate(header) if 'CHASSI' in c)
-            idx_descricao = next(i for i, c in enumerate(header) if 'DESCRI' in c)
-            idx_motor = next(i for i, c in enumerate(header) if 'MOTOR' in c)
-            idx_cor = next(i for i, c in enumerate(header) if 'COR' in c)
-        except StopIteration:
-            return []
+        # Busca o header nas primeiras 3 linhas (tolera linha extra antes do header)
+        header_row_idx = None
+        idx_chassi = idx_descricao = idx_motor = idx_cor = None
+        for search_idx in range(min(3, len(tabela))):
+            header = [str(c or '').strip().upper() for c in tabela[search_idx]]
+            if 'CHASSI' not in ' '.join(header):
+                continue
+            try:
+                idx_chassi = next(i for i, c in enumerate(header) if 'CHASSI' in c)
+                idx_descricao = next(i for i, c in enumerate(header) if 'DESCRI' in c)
+                idx_motor = next(i for i, c in enumerate(header) if 'MOTOR' in c)
+                idx_cor = next(i for i, c in enumerate(header) if 'COR' in c)
+                header_row_idx = search_idx
+                break
+            except StopIteration:
+                continue
 
+        # Fallback: sem header explícito, assume posição padrão (páginas 2+ do PDF)
+        # Formato: PEDIDO(0) | DESCRIÇÃO(1) | CHASSI(2) | MOTOR(3) | COR(4)
+        if header_row_idx is None:
+            # Verifica se primeira linha tem chassi na posição 2
+            first_row = tabela[0]
+            if len(first_row) >= 4:
+                candidate_chassi = (first_row[2] or '').strip()
+                if len(candidate_chassi) >= 5 and candidate_chassi.upper() == candidate_chassi:
+                    idx_chassi, idx_descricao, idx_motor, idx_cor = 2, 1, 3, 4
+                    header_row_idx = -1  # sentinela: dados começam na linha 0
+            if header_row_idx is None:
+                return []
+
+        data_start = header_row_idx + 1 if header_row_idx >= 0 else 0
         linhas: List[Dict[str, str]] = []
-        for row in tabela[1:]:
+        for row in tabela[data_start:]:
             if not row or all(not c for c in row):
                 continue
             chassi = (row[idx_chassi] or '').strip().upper()
