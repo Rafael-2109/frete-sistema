@@ -14,6 +14,11 @@ from .pedido_service import (
     PedidoVoeJaExisteError, PedidoVoeParserError,
     CONFIANCA_LIMIAR,
 )
+from .compra_service import (
+    listar_pedidos_consolidaveis, calcular_totalizadores_por_modelo,
+    gerar_numero_po, criar_consolidado, get_compra, listar_compras,
+    CompraValidationError, gerar_pdf_po,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -24,4 +29,7 @@ __all__ = [
     'importar_pdf_voe', 'confirmar_pedido',
     'PedidoVoeJaExisteError', 'PedidoVoeParserError',
     'CONFIANCA_LIMIAR',
+    'listar_pedidos_consolidaveis', 'calcular_totalizadores_por_modelo',
+    'gerar_numero_po', 'criar_consolidado', 'get_compra', 'listar_compras',
+    'CompraValidationError', 'gerar_pdf_po',
 ]
