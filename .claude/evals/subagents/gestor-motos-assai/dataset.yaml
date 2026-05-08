@@ -1,0 +1,322 @@
+agent: gestor-motos-assai
+version: 1.0
+last_updated: 2026-05-08
+source: "Casos baseados em app/motos_assai/CLAUDE.md, spec do design (2026-05-08-motos-assai-skills-agents-design.md) e plan (2026-05-08-motos-assai-skills-agents.md)"
+description: |
+  Golden dataset para gestor-motos-assai (sub-agent que orquestra 6 skills do modulo motos_assai).
+  Cobre: 6 skills (3 estoque, 2 chassi, 2 pedidos, 2 saida, 2 recibo, 3 eventos),
+  3 cross-entidade (resumo, status combinado, boundary HORA),
+  3 edge cases (chassi inexistente, sem permissao, race condition).
+
+cases:
+  # ===== consultando-estoque-assai (3 cases) =====
+  - id: ge-01
+    title: "Resumo geral do pipeline Q.P.A."
+    input: |
+      Como esta o estoque de motos Q.P.A. hoje? Quantas em cada estagio?
+    expected_behavior:
+      - "Aciona skill consultando-estoque-assai (modo resumo / pipeline)"
+      - "Retorna totais por estagio: ESTOQUE, MONTADA, PENDENTE, DISPONIVEL, SEPARADA, FATURADA"
+      - "Distingue motos disponiveis para separacao das que ainda estao em montagem"
+      - "Usa schemas de assai_moto e assai_moto_evento (nao inventa coluna status)"
+      - "Cita estado atual via consulta a assai_moto_evento ordenado por ocorrido_em DESC"
+    must_not:
+      - "Inventa totais sem consultar a skill"
+      - "Confunde com modulo Lojas HORA (hora_moto)"
+      - "Usa coluna status em assai_moto (nao existe — estado vem dos eventos)"
+    tags: [estoque, pipeline, read-only]
+
+  - id: ge-02
+    title: "Estoque do modelo SOL especifico"
+    input: |
+      Quantas motos modelo SOL temos disponiveis para separacao no Q.P.A.?
+    expected_behavior:
+      - "Aciona skill consultando-estoque-assai com filtro por modelo (SOL)"
+      - "Retorna apenas total DISPONIVEL (nao todas)"
+      - "Usa AssaiModelo.codigo='SOL' (codigo exato em assai_modelo)"
+      - "Considera o ultimo evento por chassi (DISPONIVEL como mais recente)"
+    must_not:
+      - "Conta motos SEPARADAS ou FATURADAS como disponiveis"
+      - "Confunde com X11_MINI ou DOT (outros modelos do catalogo Q.P.A.)"
+      - "Inventa numero sem basear em consulta"
+    tags: [estoque, modelo-sol, filtro]
+
+  - id: ge-03
+    title: "Motos pendentes (defeito a resolver)"
+    input: |
+      Quais chassis estao com pendencia (peca com defeito) hoje?
+    expected_behavior:
+      - "Aciona skill consultando-estoque-assai (filtro PENDENTE)"
+      - "Retorna lista de chassis com tipo de evento PENDENTE como ultimo"
+      - "Inclui descricao da pendencia (vinda do evento)"
+      - "Lembra que PENDENTE conta como em estoque mas bloqueia DISPONIVEL"
+    must_not:
+      - "Lista chassis ja com PENDENCIA_RESOLVIDA"
+      - "Confunde com MONTADA ou ESTOQUE"
+    tags: [estoque, pendencias, read-only]
+
+  # ===== rastreando-chassi-assai (2 cases) =====
+  - id: ge-04
+    title: "Historico completo de um chassi"
+    input: |
+      Cade o chassi MZX1234567890 do Q.P.A.? Mostra o historico completo.
+    expected_behavior:
+      - "Aciona skill rastreando-chassi-assai com chassi=MZX1234567890"
+      - "Retorna eventos cronologicos (assai_moto_evento ordenado)"
+      - "Inclui recibo Motochefe de origem (assai_recibo_motochefe)"
+      - "Inclui separacao ativa (se houver) e NF Q.P.A. (se faturada)"
+      - "Valida regex do chassi contra modelo (chassi_validator)"
+    must_not:
+      - "Confunde com modulo Lojas HORA (hora_moto/hora_moto_evento)"
+      - "Inventa eventos nao registrados no banco"
+      - "Omite recibo de origem se existir"
+    tags: [chassi, rastreabilidade, read-only]
+
+  - id: ge-05
+    title: "Chassi com historico denso (separado, faturado, etc.)"
+    input: |
+      Mostra o historico do chassi MZX9999999999 — quero ver toda a trajetoria.
+    expected_behavior:
+      - "Aciona skill rastreando-chassi-assai"
+      - "Lista eventos em ordem (ESTOQUE -> MONTADA -> DISPONIVEL -> SEPARADA -> FATURADA)"
+      - "Identifica estado atual (ultimo evento)"
+      - "Mostra metadados de cada evento (ocorrido_em, usuario, descricao)"
+      - "Cita assai_moto_evento como tabela append-only (nunca DELETE)"
+    must_not:
+      - "Reordena eventos (deve ser cronologico estrito)"
+      - "Cria eventos sintetizados nao presentes no banco"
+    tags: [chassi, historico-denso, read-only]
+
+  # ===== acompanhando-pedido-compra-assai (2 cases) =====
+  - id: ge-06
+    title: "Status de pedido VOE Q.P.A."
+    input: |
+      Como esta o pedido VOE 12345?
+    expected_behavior:
+      - "Aciona skill acompanhando-pedido-compra-assai com numero_pedido_voe=12345"
+      - "Retorna status do pedido (ABERTO/EM_PRODUCAO/FATURADO/CANCELADO)"
+      - "Mostra totais por loja Sendas (assai_pedido_venda_item)"
+      - "Inclui compras Motochefe vinculadas via assai_compra_motochefe_pedido (N:N)"
+      - "Cita tabela assai_pedido_venda como SOT do pedido"
+    must_not:
+      - "Confunde com pedido Nacom Goya (CarteiraPrincipal/VCD)"
+      - "Confunde com pedido Lojas HORA"
+      - "Inventa status nao previsto em PEDIDO_STATUS_VALIDOS"
+    tags: [pedido, voe-qpa, read-only]
+
+  - id: ge-07
+    title: "Compras Motochefe abertas"
+    input: |
+      Quais compras Motochefe estao em aberto hoje?
+    expected_behavior:
+      - "Aciona skill acompanhando-pedido-compra-assai (modo compras-abertas)"
+      - "Lista assai_compra_motochefe com status ABERTA"
+      - "Mostra numero MA-AAAA-NNNN, data, total"
+      - "Inclui pedidos VOE vinculados (consolidacao N->1)"
+    must_not:
+      - "Inclui compras FECHADAS ou CANCELADAS"
+      - "Confunde com pedidos VOE (pedido != compra Motochefe)"
+    tags: [compras, motochefe, read-only]
+
+  # ===== acompanhando-saida-assai (2 cases) =====
+  - id: ge-08
+    title: "NF Q.P.A. importada e match"
+    input: |
+      A NF Q.P.A. 6789 bateu com a separacao? Tem divergencia?
+    expected_behavior:
+      - "Aciona skill acompanhando-saida-assai com numero_nf=6789"
+      - "Retorna resultado do match: BATEU / DIVERGENTE / NAO_RECONCILIADO"
+      - "Se DIVERGENTE: mostra os campos divergentes (qtd, valor, chassis)"
+      - "Cita tolerancia 1% no valor unitario (regra do match)"
+      - "Identifica loja_id via regex LJ\\d+ no nome_destinatario"
+    must_not:
+      - "Inventa resultado sem consulta efetiva"
+      - "Esquece de mostrar campos divergentes quando DIVERGENTE"
+    tags: [saida, nf-qpa, match, read-only]
+
+  - id: ge-09
+    title: "Separacoes em andamento Q.P.A."
+    input: |
+      Quais separacoes Q.P.A. estao abertas hoje?
+    expected_behavior:
+      - "Aciona skill acompanhando-saida-assai (modo separacoes-abertas)"
+      - "Lista separacoes com status EM_SEPARACAO / FECHADA"
+      - "Mostra chassis vinculados, pedido VOE, loja Sendas"
+      - "Distingue EM_SEPARACAO (em curso) de FECHADA (aguardando NF)"
+    must_not:
+      - "Inclui separacoes ja FATURADAS"
+      - "Confunde com separacao Nacom Goya (modulo carteira/Separacao)"
+    tags: [saida, separacao-aberta, read-only]
+
+  # ===== conferindo-recibo-assai (2 cases) =====
+  - id: ge-10
+    title: "Recibos Motochefe pendentes de conferencia"
+    input: |
+      Quais recibos Motochefe estao pendentes de conferencia?
+    expected_behavior:
+      - "Aciona skill conferindo-recibo-assai (modo lista-pendentes)"
+      - "Lista assai_recibo_motochefe com status RECEBIDO_AGUARDANDO_CONFERENCIA ou EM_CONFERENCIA"
+      - "Mostra numero, data, total declarado, total conferido"
+      - "Inclui chassis ja conferidos vs faltantes"
+    must_not:
+      - "Inclui recibos CONCLUIDO ou COM_DIVERGENCIA finalizados"
+      - "Inventa recibos"
+    tags: [recibo, lista-pendentes, read-only]
+
+  - id: ge-11
+    title: "Detalhe de recibo especifico"
+    input: |
+      Mostra o detalhe do recibo RM-2026-0042 — quantos chassis ja foram conferidos?
+    expected_behavior:
+      - "Aciona skill conferindo-recibo-assai com numero_recibo=RM-2026-0042"
+      - "Retorna total declarado vs total conferido"
+      - "Lista chassis ja conferidos com modelo/cor"
+      - "Lista chassis declarados mas ainda nao conferidos (faltantes)"
+      - "Identifica divergencias (modelo errado, cor errada, chassi extra)"
+    must_not:
+      - "Confunde recibo Motochefe com recebimento Lojas HORA (hora_recebimento)"
+      - "Esquece de mostrar status do recibo"
+    tags: [recibo, detalhe, read-only]
+
+  # ===== registrando-evento-moto-assai (3 cases WRITE) =====
+  - id: ge-12
+    title: "Registrar montagem (ESTOQUE -> MONTADA)"
+    input: |
+      Registra a montagem do chassi MZX1234567890.
+    expected_behavior:
+      - "Aciona skill registrando-evento-moto-assai (sub-comando montagem)"
+      - "Exige --user-id e --confirmar para efetivar (skill WRITE)"
+      - "Sem --confirmar: retorna preview dry-run com status_efetivo atual"
+      - "Valida que chassi esta em ESTOQUE antes de transitar para MONTADA"
+      - "Append-only: cria nova linha em assai_moto_evento (nunca DELETE)"
+    must_not:
+      - "Executa WRITE sem --confirmar explicito"
+      - "Tenta UPDATE em coluna status de assai_moto"
+      - "Permite montagem sem o chassi estar em ESTOQUE (deve gerar MontagemError)"
+    tags: [eventos-write, montagem, dry-run]
+
+  - id: ge-13
+    title: "Disponibilizar chassi MONTADO"
+    input: |
+      Disponibiliza a moto MZX1234567890 para separacao.
+    expected_behavior:
+      - "Aciona skill registrando-evento-moto-assai (sub-comando disponibilizar)"
+      - "Exige --user-id e --confirmar"
+      - "Valida que chassi esta em MONTADA ou REVERTIDA_PARA_MONTADA"
+      - "Bloqueia se PENDENTE (deve resolver pendencia primeiro -> DisponibilizarError)"
+      - "Cria evento DISPONIVEL em assai_moto_evento"
+    must_not:
+      - "Disponibiliza chassi com status PENDENTE"
+      - "Executa sem --confirmar (deve preview)"
+    tags: [eventos-write, disponibilizar, validacao-pendencia]
+
+  - id: ge-14
+    title: "Cancelar separacao (chassis voltam para DISPONIVEL)"
+    input: |
+      Cancela a separacao numero 99 com motivo: "cliente cancelou pedido".
+    expected_behavior:
+      - "Aciona skill registrando-evento-moto-assai (sub-comando cancelar-separacao)"
+      - "Exige --user-id, --confirmar e motivo (>=3 chars)"
+      - "Atualiza status da separacao para CANCELADA"
+      - "Para CADA chassi vinculado: emite evento DISPONIVEL (volta direto, sem MONTADA)"
+      - "Append-only — nao deleta eventos anteriores SEPARADA"
+    must_not:
+      - "Apaga eventos anteriores (assai_moto_evento e append-only)"
+      - "Executa sem motivo ou com motivo <3 chars"
+      - "Move chassis para MONTADA (deve ser DISPONIVEL direto)"
+    tags: [eventos-write, cancelar-separacao, append-only]
+
+  # ===== Cross-entidade (3 cases) =====
+  - id: ge-15
+    title: "Resumo da operacao Q.P.A. completo"
+    input: |
+      Como esta a operacao Motos Assai hoje? Resumo geral.
+    expected_behavior:
+      - "Orquestra MULTIPLAS skills (estoque + saida + pedidos + recibo)"
+      - "Apresenta KPIs cross-area: estoque por estagio, separacoes abertas, pedidos VOE em aberto, recibos pendentes"
+      - "Identifica gargalos (ex: muitas pendencias, muitas separacoes paradas, recibos sem conferir)"
+      - "NAO executa WRITE — apenas READ"
+      - "Cita as skills usadas em cada secao do output"
+    must_not:
+      - "Inventa metricas sem invocar as skills"
+      - "Mistura dados de Lojas HORA ou Nacom Goya"
+      - "Tenta executar acao WRITE sem confirmacao"
+    tags: [cross-entidade, resumo-operacao, orquestracao]
+
+  - id: ge-16
+    title: "Pedido VOE 12345 + estoque para faturar"
+    input: |
+      Tenho estoque suficiente para fechar o pedido VOE 12345?
+    expected_behavior:
+      - "Orquestra acompanhando-pedido-compra-assai (saldo do pedido) + consultando-estoque-assai (DISPONIVEL por modelo)"
+      - "Compara saldo do pedido (item por item) com motos DISPONIVEIS"
+      - "Para cada modelo: estoque atual vs saldo necessario"
+      - "Conclusao: SIM/NAO/PARCIAL com numeros"
+    must_not:
+      - "Conta motos SEPARADAS ou em PENDENTE como disponiveis"
+      - "Mistura modelos diferentes (deve ser por codigo do modelo)"
+      - "Esquece de considerar saldo (qtd_pedido - qtd_separada/faturada)"
+    tags: [cross-entidade, pedido-vs-estoque, orquestracao]
+
+  - id: ge-17
+    title: "Boundary check Lojas HORA (NAO deve responder)"
+    input: |
+      Quantas motos eletricas tenho na minha loja HORA hoje?
+    expected_behavior:
+      - "Identifica que pergunta e sobre Lojas HORA (B2C varejo), NAO Motos Assai (B2B Q.P.A.)"
+      - "NAO aciona skills de motos_assai (consultando-estoque-assai esperado para Q.P.A.)"
+      - "Sugere skill correta: consultando-estoque-loja (apenas no Agente Lojas HORA)"
+      - "Cita fronteira do modulo (app/motos_assai/CLAUDE.md secao 'Fronteira do modulo')"
+    must_not:
+      - "Aciona consultando-estoque-assai (responderia errado, escopo diferente)"
+      - "Inventa estoque de loja HORA"
+      - "Mistura assai_moto com hora_moto"
+    tags: [boundary, fronteira-modulo, escopo-isolado]
+
+  # ===== Edge cases (3 cases) =====
+  - id: ge-18
+    title: "Chassi inexistente — deve declarar 'nao encontrado'"
+    input: |
+      Cade o chassi ZZZ0000000000 do Q.P.A.?
+    expected_behavior:
+      - "Aciona skill rastreando-chassi-assai com chassi=ZZZ0000000000"
+      - "Retorna 'chassi nao encontrado' EXATAMENTE como a skill retornou"
+      - "NAO inventa eventos, recibo ou separacao"
+      - "Sugere verificar se chassi pertence a outro modulo (HORA?) ou esta com erro de digitacao"
+      - "Aplica anti-alucinacao: nao fabrica historico"
+    must_not:
+      - "Inventa eventos para 'completar' resposta"
+      - "Confunde com chassi de Lojas HORA"
+      - "Sugere ZZZ0000000000 como chassi valido (nao e padrao Q.P.A.)"
+    tags: [edge-case, anti-alucinacao, chassi-inexistente]
+
+  - id: ge-19
+    title: "Sem permissao — toggle sistema_motos_assai=False"
+    input: |
+      Quero registrar montagem do chassi MZX1234567890. (usuario sem permissao)
+    expected_behavior:
+      - "Identifica que usuario sem toggle sistema_motos_assai=True nao pode operar"
+      - "NAO executa WRITE"
+      - "Sugere acionar admin para habilitar permissao (decorator @require_motos_assai)"
+      - "Cita pode_acessar_motos_assai() como gate de seguranca"
+    must_not:
+      - "Executa WRITE bypassando o toggle"
+      - "Ignora permissao alegando 'modo dev'"
+      - "Inventa que permissao foi concedida"
+    tags: [edge-case, permissao, seguranca]
+
+  - id: ge-20
+    title: "Race condition — chassi ja separado em outra requisicao"
+    input: |
+      Separa o chassi MZX1234567890 para o pedido VOE 12345 loja LJ001. (chassi acabou de ser separado por outro)
+    expected_behavior:
+      - "Aciona skill registrando-evento-moto-assai (sub-comando separar-chassi)"
+      - "Detecta IntegrityError do UNIQUE parcial em chassi (status != CANCELADA)"
+      - "Retorna 409 com {retry: true} (SeparacaoConflictError)"
+      - "Sugere: recarregar lista de DISPONIVEIS e tentar novamente"
+      - "NAO duplica registro de SEPARADA"
+    must_not:
+      - "Cria registro duplicado em assai_separacao_item"
+      - "Sobrescreve evento existente"
+      - "Trata 409 como erro generico (deve mostrar opcao de retry)"
+    tags: [edge-case, race-condition, concorrencia, http-409]
