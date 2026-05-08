@@ -276,6 +276,11 @@
                         <i class="fas fa-clipboard-list fa-fw"></i> Pedido de Compras
                     </a></li>
                     {% endif %}
+                    {% if current_user.tem_perm_hora('pedidos', 'criar') %}
+                    <li><a class="dropdown-item" href="{{ url_for('hora.pedidos_importar_imagem') }}">
+                        <i class="fas fa-camera fa-fw text-info"></i> Importar Pedido (Imagem/OCR)
+                    </a></li>
+                    {% endif %}
                     {% if current_user.tem_perm_hora('nfs', 'ver') %}
                     <li><a class="dropdown-item" href="{{ url_for('hora.nfs_lista') }}">
                         <i class="fas fa-file-invoice fa-fw"></i> NFs de Entrada

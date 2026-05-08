@@ -1,12 +1,21 @@
-"""RQ worker dedicado a emissao de NFe HORA via TagPlus.
+"""RQ worker dedicado a tarefas HORA: emissao de NFe via TagPlus + import via imagem.
 
-Queue: `hora_nfe`. Comando para rodar (Render ou local):
+Queues consumidas:
+    hora_nfe              — emissao/cancelamento/cce de NFe via TagPlus
+    hora_pedidos_imagem   — geracao de XLSX equivalente para pedido criado via imagem (OCR)
+
+Comando para rodar (Render ou local):
 
     python worker_hora_nfe.py
 
 Variaveis de ambiente obrigatorias:
     REDIS_URL                 (URL do Redis)
-    HORA_TAGPLUS_ENC_KEY      (Fernet key para encriptar tokens/secrets)
+    HORA_TAGPLUS_ENC_KEY      (Fernet key para encriptar tokens/secrets — necessaria para hora_nfe)
+
+Variaveis opcionais (necessarias para hora_pedidos_imagem):
+    ANTHROPIC_API_KEY         (so necessaria no parser na rota; o worker
+                                que GERA XLSX a partir do pedido ja persistido
+                                NAO usa Anthropic — usa apenas openpyxl + S3)
 
 Logs em STDOUT (formato compativel com Render).
 """
@@ -38,10 +47,14 @@ def main() -> None:
             sys.exit(1)
 
         redis_conn = Redis.from_url(redis_url)
-        log.info('worker_hora_nfe conectado em %s; consumindo queue=hora_nfe', redis_url)
+        queues = ['hora_nfe', 'hora_pedidos_imagem']
+        log.info(
+            'worker_hora_nfe conectado em %s; consumindo queues=%s',
+            redis_url, queues,
+        )
 
         with Connection(redis_conn):
-            worker = Worker([Queue('hora_nfe')])
+            worker = Worker([Queue(name) for name in queues])
             worker.work()
 
 

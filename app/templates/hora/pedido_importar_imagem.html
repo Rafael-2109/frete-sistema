@@ -1,0 +1,60 @@
+{% extends "hora/base.html" %}
+
+{% block hora_content %}
+<h2 class="mb-3">
+  <i class="fas fa-camera text-info"></i>
+  Importar Pedidos de Compra <small class="text-muted">(via imagem / OCR)</small>
+</h2>
+
+<form method="post" enctype="multipart/form-data" class="card p-3" style="max-width: 720px;">
+  <div class="mb-3">
+    <label class="form-label">
+      Imagens do pedido <span class="text-danger">*</span>
+      <small class="text-muted">(JPG, PNG ou WEBP — selecione 1 ou mais)</small>
+    </label>
+    <input type="file" name="imagens" accept="image/jpeg,image/png,image/webp"
+           class="form-control" multiple required>
+    <div class="form-text">
+      <strong>Use quando:</strong> recebeu o pedido como print de WhatsApp e nao tem o XLSX.<br>
+      <strong>Layout esperado:</strong> "PEDIDO DE VENDA - SCOOTER ELETRICA" com cabecalho
+      (CLIENTE, CNPJ, ENDERECO, ...) e tabela com PRODUTO | CHASSI | COR | PALLET | VALOR.<br>
+      <strong>Como funciona:</strong> sistema usa Claude Sonnet 4.6 para extrair os dados,
+      valida soma/chassi automaticamente, e mostra preview antes de criar.<br>
+      <strong>Multi-upload:</strong> ate <strong>50 imagens</strong> por vez,
+      <strong>100 MB no total</strong> (5 MB por imagem). Cada imagem vira 1 pedido.
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="fas fa-magic"></i> Extrair via OCR
+    </button>
+    <a href="{{ url_for('hora.pedidos_lista') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+
+<div class="alert alert-info mt-3" style="max-width: 720px;">
+  <strong><i class="fas fa-info-circle"></i> Sobre a extracao via OCR:</strong>
+  <ul class="mb-0 mt-2">
+    <li>Cada imagem e processada individualmente (~3-8 segundos por foto).</li>
+    <li>Sistema valida soma dos itens vs total declarado, comprimento de chassi,
+        e duplicatas — avisos aparecem no preview.</li>
+    <li>Voce <strong>SEMPRE</strong> revisa o preview antes de confirmar — nada e
+        criado direto.</li>
+    <li>O XLSX equivalente sera gerado em background apos confirmacao (auditoria).</li>
+  </ul>
+</div>
+
+<div class="alert alert-warning mt-3" style="max-width: 720px;">
+  <strong><i class="fas fa-exclamation-triangle"></i> Atencao:</strong> revise os
+  <strong>chassis</strong> com cuidado no preview. OCR pode confundir caracteres
+  visualmente parecidos (O vs 0, X vs K, I vs 1). O sistema marca chassis suspeitos,
+  mas voce e o ultimo filtro.
+</div>
+
+<div class="mt-3" style="max-width: 720px;">
+  <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-link btn-sm">
+    <i class="fas fa-file-excel"></i> Tem o XLSX? Use o import via XLSX (mais rapido e barato)
+  </a>
+</div>
+{% endblock %}

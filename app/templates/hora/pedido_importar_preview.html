@@ -1,16 +1,29 @@
 {% extends "hora/base.html" %}
 
+{# Variaveis injetadas pela rota:
+   - tipo_origem: 'XLSX' (default) ou 'IMAGEM' — controla icone/labels
+   - url_voltar: rota de upload (default hora.pedidos_importar_xlsx)
+   - url_confirmar: rota de confirmacao (default hora.pedidos_importar_xlsx_confirmar)
+   - cards_elegiveis, cards_descartados, token, lojas_ativas, total_arquivos,
+     total_elegiveis, numeros_vistos: contrato do parser (XLSX ou imagem) #}
+{% set tipo_origem = tipo_origem|default('XLSX') %}
+{% set url_voltar = url_voltar|default(url_for('hora.pedidos_importar_xlsx')) %}
+{% set url_confirmar = url_confirmar|default(url_for('hora.pedidos_importar_xlsx_confirmar')) %}
+{% set icone_arquivo = 'fa-image' if tipo_origem == 'IMAGEM' else 'fa-file-excel' %}
+{% set cor_icone = 'text-info' if tipo_origem == 'IMAGEM' else 'text-success' %}
+{% set label_origem = 'Imagem (OCR Sonnet 4.6)' if tipo_origem == 'IMAGEM' else 'XLSX' %}
+
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <div>
-    <h2 class="mb-1">Preview: Importar Pedidos de Compra</h2>
+    <h2 class="mb-1">Preview: Importar Pedidos de Compra <small class="text-muted">({{ label_origem }})</small></h2>
     <small class="text-muted">
       <strong>{{ total_arquivos }}</strong> arquivo(s) processado(s) ·
       <strong class="text-success">{{ total_elegiveis }}</strong> elegíveis (HORA) ·
       <strong class="text-secondary">{{ total_arquivos - total_elegiveis }}</strong> descartados
     </small>
   </div>
-  <a href="{{ url_for('hora.pedidos_importar_xlsx') }}" class="btn btn-secondary btn-sm">
+  <a href="{{ url_voltar }}" class="btn btn-secondary btn-sm">
     <i class="fas fa-arrow-left"></i> Voltar
   </a>
 </div>
@@ -29,7 +42,7 @@
 </div>
 {% endif %}
 
-<form method="post" action="{{ url_for('hora.pedidos_importar_xlsx_confirmar') }}" id="form-confirmar">
+<form method="post" action="{{ url_confirmar }}" id="form-confirmar">
   <input type="hidden" name="token" value="{{ token }}">
 
   {# Toolbar topo: select all / none + botão confirmar #}
@@ -64,7 +77,7 @@
                id="incluir-{{ idx }}" checked>
 
         <strong class="me-auto">
-          <i class="fas fa-file-excel text-success"></i>
+          <i class="fas {{ icone_arquivo }} {{ cor_icone }}"></i>
           {{ card.nome_arquivo }}
           <small class="text-muted">({{ card.tamanho_kb }} KB)</small>
         </strong>
@@ -206,7 +219,7 @@
         {{ cards_descartados|length }} arquivo(s) descartado(s)
       </strong>
       <small class="text-muted ms-2">
-        — XLSX que não são pedidos HORA (CNPJ matriz ausente) ou que falharam no parse
+        — {{ 'Imagens' if tipo_origem == 'IMAGEM' else 'XLSX' }} que não são pedidos HORA (CNPJ matriz ausente) ou que falharam no parse
       </small>
       <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
               data-bs-toggle="collapse" data-bs-target="#descartados-lista">

@@ -27,10 +27,24 @@ class HoraPedido(db.Model):
     # Valores: ABERTO, PARCIALMENTE_FATURADO (22 char), FATURADO, CANCELADO
 
     arquivo_origem_s3_key = db.Column(db.String(500), nullable=True)
-    # Excel original (quando importado do WhatsApp).
+    # Arquivo original do operador: XLSX (origem='XLSX') OU imagem JPG/PNG
+    # (origem='IMAGEM'). Para origem='MANUAL' fica NULL.
     observacoes = db.Column(db.Text, nullable=True)
     apelido_detectado = db.Column(db.String(100), nullable=True)
     # Texto do cabeçalho do Excel que foi usado para sugerir loja_destino (auditoria).
+
+    # Origem do pedido — controla qual fluxo criou o registro e qual UI mostrar.
+    # 'XLSX'   → import via /pedidos/importar-xlsx (legado e atual padrao)
+    # 'IMAGEM' → import via /pedidos/importar-imagem (OCR Sonnet 4.6, fallback)
+    # 'MANUAL' → criado direto via /pedidos/novo (sem arquivo)
+    # CHECK constraint hora_pedido_origem_check no banco.
+    origem = db.Column(db.String(20), nullable=False, default='MANUAL')
+
+    # Quando origem='IMAGEM', um job RQ gera um XLSX equivalente em background
+    # para auditoria. Estes campos sao preenchidos pelo worker apos geracao.
+    # Para origem='XLSX' ou 'MANUAL', ficam NULL.
+    xlsx_origem_s3_key = db.Column(db.String(500), nullable=True)
+    xlsx_origem_gerado_em = db.Column(db.DateTime, nullable=True)
 
     loja_destino = db.relationship('HoraLoja', foreign_keys=[loja_destino_id])
 

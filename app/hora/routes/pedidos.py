@@ -16,7 +16,9 @@ from app.hora.services import matching_service, pedido_service
 from app.hora.services.auth_helper import lojas_permitidas_ids, usuario_tem_acesso_a_loja
 from app.hora.services.parsers import (
     CNPJ_MATRIZ_HORA,
+    MIME_TYPES_ACEITOS,
     cnpj_matriz_presente,
+    parse_pedido_imagem,
     parse_pedido_xlsx,
     resolver_loja_por_apelido,
     PedidoParseError,
@@ -515,6 +517,7 @@ def pedidos_importar_xlsx_confirmar():
                 loja_destino_id=int(loja_str),
                 arquivo_origem_s3_key=arquivo_origem_s3_key,
                 criado_por=current_user.nome if hasattr(current_user, 'nome') else None,
+                origem='XLSX',
             )
             sucessos.append(
                 f'{pedido.numero_pedido} ({len(pedido.itens)} itens, {pedido.loja_destino.rotulo_display})'
@@ -548,20 +551,442 @@ def pedidos_importar_xlsx_confirmar():
 
 
 # ========================================================================
-# Download XLSX de origem
+# Importacao via IMAGEM (OCR Sonnet 4.6)
+# ========================================================================
+
+# Limites para imagens. Imagens sao maiores que XLSX em bytes mas o LLM
+# tambem cobra tokens proporcional ao numero de imagens, entao limite de
+# 50 por batch evita custo de uma imagem ruim multiplicado.
+MAX_IMAGEM_BYTES = 5 * 1024 * 1024
+MAX_BATCH_IMAGENS = 50
+MAX_BATCH_BYTES_IMAGENS = 100 * 1024 * 1024
+
+
+def _serializar_extracao_dict_imagem(
+    pedido_extraido,
+    imagem_bytes: bytes | None = None,
+    imagem_nome_original: str | None = None,
+    imagem_mime_type: str = 'image/jpeg',
+) -> dict:
+    """Serializa PedidoExtraido + bytes da imagem para o token de preview.
+
+    Espelha _serializar_extracao_dict (XLSX) mas guarda imagem em vez de XLSX.
+    """
+    return {
+        'numero_pedido': pedido_extraido.numero_pedido,
+        'cnpj_destino': pedido_extraido.cnpj_destino,
+        'cnpjs_candidatos': pedido_extraido.cnpjs_candidatos,
+        'apelido_detectado': pedido_extraido.apelido_detectado,
+        'data_pedido': pedido_extraido.data_pedido.isoformat() if pedido_extraido.data_pedido else None,
+        'cliente_nome': pedido_extraido.cliente_nome,
+        'cidade': pedido_extraido.cidade,
+        'uf': pedido_extraido.uf,
+        'header_row': pedido_extraido.header_row,
+        'avisos': pedido_extraido.avisos,
+        'metodo_extracao': pedido_extraido.metodo_extracao,
+        'itens': [
+            {
+                'numero_chassi': i.numero_chassi,
+                'modelo': i.modelo,
+                'cor': i.cor,
+                'preco_compra_esperado': str(i.preco_compra_esperado) if i.preco_compra_esperado is not None else None,
+                'linha_origem': i.linha_origem,
+                'aviso': i.aviso,
+            }
+            for i in pedido_extraido.itens
+        ],
+        'imagem_bytes_b64': (
+            base64.b64encode(imagem_bytes).decode('ascii') if imagem_bytes else None
+        ),
+        'imagem_nome_original': imagem_nome_original,
+        'imagem_mime_type': imagem_mime_type,
+    }
+
+
+def _deserializar_extracao_dict_imagem(d: dict):
+    """Reconstroi (PedidoExtraido, imagem_bytes, imagem_nome, mime) do dict."""
+    from app.hora.services.parsers import PedidoExtraido, ItemPedidoExtraido
+
+    itens = [
+        ItemPedidoExtraido(
+            numero_chassi=i['numero_chassi'],
+            modelo=i['modelo'],
+            cor=i['cor'],
+            preco_compra_esperado=Decimal(i['preco_compra_esperado']) if i['preco_compra_esperado'] else None,
+            linha_origem=i['linha_origem'],
+            aviso=i.get('aviso'),
+        )
+        for i in d['itens']
+    ]
+    extraido = PedidoExtraido(
+        numero_pedido=d['numero_pedido'],
+        cnpj_destino=d['cnpj_destino'],
+        cnpjs_candidatos=d.get('cnpjs_candidatos', []),
+        apelido_detectado=d.get('apelido_detectado'),
+        data_pedido=date.fromisoformat(d['data_pedido']) if d['data_pedido'] else None,
+        cliente_nome=d['cliente_nome'],
+        cidade=d['cidade'],
+        uf=d['uf'],
+        header_row=d.get('header_row'),
+        avisos=d['avisos'],
+        itens=itens,
+        metodo_extracao=d.get('metodo_extracao', 'IMAGEM_LLM_SONNET_4_6'),
+    )
+    img_b64 = d.get('imagem_bytes_b64')
+    img_bytes = base64.b64decode(img_b64) if img_b64 else None
+    img_nome = d.get('imagem_nome_original')
+    mime = d.get('imagem_mime_type', 'image/jpeg')
+    return extraido, img_bytes, img_nome, mime
+
+
+@hora_bp.route('/pedidos/importar-imagem', methods=['GET', 'POST'])
+@require_hora_perm('pedidos', 'criar')
+def pedidos_importar_imagem():
+    """Upload de N imagens → parseia cada uma via Claude Sonnet 4.6 → preview.
+
+    Espelho de pedidos_importar_xlsx mas com imagens (JPG/PNG/WEBP). Usa o
+    mesmo template de preview parametrizado (tipo_origem='IMAGEM').
+    """
+    import os
+
+    if request.method == 'GET':
+        # Pre-checa se ANTHROPIC_API_KEY esta configurado — se nao, mostra
+        # aviso ao operador antes que ele faca upload (evita perder tempo).
+        sem_api_key = not os.environ.get('ANTHROPIC_API_KEY')
+        return render_template(
+            'hora/pedido_importar_imagem.html', sem_api_key=sem_api_key,
+        )
+
+    if not os.environ.get('ANTHROPIC_API_KEY'):
+        flash(
+            'ANTHROPIC_API_KEY nao configurado no servidor — parser de imagem '
+            'desabilitado. Configure a variavel ou use o import via XLSX.',
+            'danger',
+        )
+        return render_template('hora/pedido_importar_imagem.html', sem_api_key=True)
+
+    arquivos = [a for a in request.files.getlist('imagens') if a and a.filename]
+    if not arquivos:
+        flash('Selecione pelo menos uma imagem (JPG/PNG/WEBP).', 'danger')
+        return render_template('hora/pedido_importar_imagem.html')
+
+    if len(arquivos) > MAX_BATCH_IMAGENS:
+        flash(
+            f'Muitas imagens ({len(arquivos)}; max {MAX_BATCH_IMAGENS}). '
+            f'Divida em uploads menores.',
+            'danger',
+        )
+        return render_template('hora/pedido_importar_imagem.html')
+
+    # 1ª passada: validar bytes + MIME.
+    arquivos_bytes: list[tuple[str, bytes, str]] = []  # (nome, bytes, mime)
+    total_bytes = 0
+    for arq in arquivos:
+        # Detecta MIME a partir do content_type (browser) ou extensao
+        mime = (arq.mimetype or '').lower().split(';')[0].strip()
+        if mime not in MIME_TYPES_ACEITOS:
+            # Tentativa de fallback via extensao
+            ext = (arq.filename or '').lower().rsplit('.', 1)[-1] if arq.filename and '.' in arq.filename else ''
+            mime_por_ext = {
+                'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                'png': 'image/png', 'webp': 'image/webp',
+            }.get(ext)
+            if mime_por_ext:
+                mime = mime_por_ext
+            else:
+                flash(
+                    f'Arquivo "{arq.filename}" tem MIME nao suportado: '
+                    f'{arq.mimetype or "(desconhecido)"}. Aceito: JPG, PNG, WEBP.',
+                    'danger',
+                )
+                return render_template('hora/pedido_importar_imagem.html')
+
+        conteudo = arq.read()
+        if len(conteudo) > MAX_IMAGEM_BYTES:
+            flash(
+                f'Imagem "{arq.filename}" muito grande ({len(conteudo) // 1024} KB; '
+                f'max {MAX_IMAGEM_BYTES // 1024} KB).',
+                'danger',
+            )
+            return render_template('hora/pedido_importar_imagem.html')
+        total_bytes += len(conteudo)
+        arquivos_bytes.append((arq.filename, conteudo, mime))
+
+    if total_bytes > MAX_BATCH_BYTES_IMAGENS:
+        flash(
+            f'Tamanho combinado excedido ({total_bytes // (1024*1024)} MB; '
+            f'max {MAX_BATCH_BYTES_IMAGENS // (1024*1024)} MB).',
+            'danger',
+        )
+        return render_template('hora/pedido_importar_imagem.html')
+
+    lojas_ativas = HoraLoja.query.filter_by(ativa=True).order_by(HoraLoja.nome).all()
+
+    # 2ª passada: chama LLM para cada imagem. Falha individual nao bloqueia outras.
+    cards = []
+    extracoes_para_token: list[dict] = []
+    numeros_vistos: dict[str, int] = {}
+
+    for filename, conteudo, mime in arquivos_bytes:
+        card = {
+            'nome_arquivo': filename,
+            'tamanho_kb': len(conteudo) // 1024,
+            'parse_ok': False,
+            'cnpj_matriz_ok': False,
+            'extracao': None,
+            'loja_sugerida_id': None,
+            'msg_lookup': None,
+            'erro': None,
+            'aviso_duplicado_batch': False,
+            'token_index': None,
+        }
+
+        try:
+            extracao = parse_pedido_imagem(conteudo, nome_arquivo=filename, mime_type=mime)
+        except PedidoParseError as exc:
+            card['erro'] = f'Erro na extracao OCR: {exc}'
+            cards.append(card)
+            continue
+        except Exception as exc:  # noqa: BLE001 — qualquer falha LLM
+            from flask import current_app as _app
+            _app.logger.exception(
+                'hora: erro inesperado parseando imagem %s', filename,
+            )
+            card['erro'] = f'Erro inesperado: {exc}'
+            cards.append(card)
+            continue
+
+        card['parse_ok'] = True
+        card['extracao'] = extracao
+
+        # Triagem CNPJ matriz
+        if not cnpj_matriz_presente(extracao.cnpjs_candidatos):
+            cnpjs_encontrados = (
+                ', '.join(extracao.cnpjs_candidatos)
+                if extracao.cnpjs_candidatos else 'nenhum'
+            )
+            card['erro'] = (
+                f'CNPJ da matriz HORA ({CNPJ_MATRIZ_HORA}) nao encontrado na imagem. '
+                f'CNPJs detectados: {cnpjs_encontrados}.'
+            )
+            cards.append(card)
+            continue
+        card['cnpj_matriz_ok'] = True
+
+        # Resolucao de loja
+        loja_sugerida_id, msg_lookup = resolver_loja_por_apelido(extracao.apelido_detectado)
+        card['loja_sugerida_id'] = loja_sugerida_id
+        card['msg_lookup'] = msg_lookup
+
+        # Duplicado no batch
+        numero = extracao.numero_pedido
+        if numero in numeros_vistos:
+            card['aviso_duplicado_batch'] = True
+
+        card['token_index'] = len(extracoes_para_token)
+        extracoes_para_token.append(
+            _serializar_extracao_dict_imagem(
+                extracao,
+                imagem_bytes=conteudo,
+                imagem_nome_original=filename,
+                imagem_mime_type=mime,
+            )
+        )
+        numeros_vistos[numero] = numeros_vistos.get(numero, 0) + 1
+
+        cards.append(card)
+
+    cards_elegiveis = [c for c in cards if c['token_index'] is not None]
+    cards_descartados = [c for c in cards if c['token_index'] is None]
+
+    if not cards_elegiveis:
+        flash(
+            'Nenhuma imagem elegivel para importacao. Veja os erros e tente novamente.',
+            'danger',
+        )
+        return render_template('hora/pedido_importar_imagem.html')
+
+    token = _serializar_extracoes(extracoes_para_token)
+    return render_template(
+        'hora/pedido_importar_preview.html',
+        cards_elegiveis=cards_elegiveis,
+        cards_descartados=cards_descartados,
+        token=token,
+        lojas_ativas=lojas_ativas,
+        total_arquivos=len(cards),
+        total_elegiveis=len(cards_elegiveis),
+        numeros_vistos=numeros_vistos,
+        # Parametros que diferenciam o template do XLSX:
+        tipo_origem='IMAGEM',
+        url_voltar=url_for('hora.pedidos_importar_imagem'),
+        url_confirmar=url_for('hora.pedidos_importar_imagem_confirmar'),
+    )
+
+
+@hora_bp.route('/pedidos/importar-imagem/confirmar', methods=['POST'])
+@require_hora_perm('pedidos', 'criar')
+def pedidos_importar_imagem_confirmar():
+    """Confirma criacao em batch de pedidos a partir de imagens.
+
+    Para cada pedido selecionado:
+      1. Faz upload da imagem original ao S3 (sincrono).
+      2. Cria HoraPedido com origem='IMAGEM' + arquivo_origem_s3_key=imagem.
+      3. Enfileira job RQ para gerar XLSX equivalente em background.
+    """
+    token = request.form.get('token')
+    if not token:
+        flash('Token ausente.', 'danger')
+        return redirect(url_for('hora.pedidos_importar_imagem'))
+
+    try:
+        extracoes_dicts = _deserializar_extracoes(token)
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        flash(f'Token invalido: {exc}', 'danger')
+        return redirect(url_for('hora.pedidos_importar_imagem'))
+
+    incluir_indices_raw = request.form.getlist('incluir_idx[]')
+    incluir_indices = {int(i) for i in incluir_indices_raw if i.isdigit()}
+
+    if not incluir_indices:
+        flash('Nenhum pedido selecionado.', 'warning')
+        return redirect(url_for('hora.pedidos_importar_imagem'))
+
+    sucessos: list[str] = []
+    erros: list[str] = []
+    primeiro_pedido_id = None
+    jobs_xlsx_enfileirados = 0
+    falhas_enfileirar_xlsx = 0
+
+    from flask import current_app as _app
+    from app.utils.file_storage import FileStorage
+
+    for idx, d in enumerate(extracoes_dicts):
+        if idx not in incluir_indices:
+            continue
+
+        loja_str = (request.form.get(f'loja_destino_id_{idx}') or '').strip()
+        nome_arq = d.get('imagem_nome_original') or f'imagem_{idx + 1}'
+        numero = d.get('numero_pedido') or f'(idx {idx})'
+
+        if not loja_str.isdigit():
+            erros.append(f'{nome_arq}: loja destino nao selecionada.')
+            continue
+
+        try:
+            extracao, img_bytes, img_nome, img_mime = _deserializar_extracao_dict_imagem(d)
+
+            # Upload da imagem original ao S3 (sincrono — falha cria pedido sem imagem).
+            arquivo_origem_s3_key = None
+            if img_bytes:
+                try:
+                    import io as _io
+                    buf = _io.BytesIO(img_bytes)
+                    ext_imagem = {
+                        'image/jpeg': 'jpg',
+                        'image/png': 'png',
+                        'image/webp': 'webp',
+                    }.get(img_mime, 'jpg')
+                    nome_persist = f'{extracao.numero_pedido}.{ext_imagem}'
+                    buf.name = nome_persist
+                    arquivo_origem_s3_key = FileStorage().save_file(
+                        buf,
+                        folder='hora/pedidos/imagem-import',
+                        filename=nome_persist,
+                        allowed_extensions=['jpg', 'jpeg', 'png', 'webp'],
+                    )
+                except Exception as exc:
+                    _app.logger.warning(
+                        'hora: falha ao persistir imagem do pedido %s: %s',
+                        extracao.numero_pedido, exc,
+                    )
+
+            pedido = pedido_service.criar_pedido_a_partir_de_extracao(
+                pedido_extraido=extracao,
+                loja_destino_id=int(loja_str),
+                arquivo_origem_s3_key=arquivo_origem_s3_key,
+                criado_por=current_user.nome if hasattr(current_user, 'nome') else None,
+                origem='IMAGEM',
+            )
+            sucessos.append(
+                f'{pedido.numero_pedido} ({len(pedido.itens)} itens, '
+                f'{pedido.loja_destino.rotulo_display})'
+            )
+            if primeiro_pedido_id is None:
+                primeiro_pedido_id = pedido.id
+
+            # Enfileira job para gerar XLSX equivalente em background.
+            try:
+                from app.hora.workers.pedido_imagem_worker import (
+                    enfileirar_gerar_xlsx_para_pedido_imagem,
+                )
+                enfileirar_gerar_xlsx_para_pedido_imagem(pedido.id)
+                jobs_xlsx_enfileirados += 1
+            except Exception as exc:  # noqa: BLE001
+                _app.logger.warning(
+                    'hora: falha ao enfileirar job XLSX para pedido %s: %s',
+                    pedido.id, exc,
+                )
+                falhas_enfileirar_xlsx += 1
+
+        except ValueError as exc:
+            erros.append(f'{nome_arq} (pedido {numero}): {exc}')
+        except Exception as exc:  # noqa: BLE001
+            _app.logger.exception(
+                'hora: erro inesperado ao criar pedido a partir da imagem %s', nome_arq,
+            )
+            erros.append(f'{nome_arq} (pedido {numero}): erro inesperado — {exc}')
+
+    if sucessos:
+        flash(
+            f'{len(sucessos)} pedido(s) criado(s) via imagem: ' + ' · '.join(sucessos),
+            'success',
+        )
+        if jobs_xlsx_enfileirados:
+            flash(
+                f'{jobs_xlsx_enfileirados} job(s) enfileirado(s) para gerar XLSX equivalente '
+                f'em background. Aguarde alguns segundos e atualize a tela do pedido.',
+                'info',
+            )
+        if falhas_enfileirar_xlsx:
+            flash(
+                f'{falhas_enfileirar_xlsx} job(s) falharam ao enfileirar — '
+                f'pedido(s) criado(s) mas XLSX equivalente nao sera gerado automaticamente. '
+                f'Verifique se REDIS_URL esta configurado.',
+                'warning',
+            )
+    if erros:
+        flash(
+            f'{len(erros)} pedido(s) com erro: ' + ' · '.join(erros),
+            'danger' if not sucessos else 'warning',
+        )
+
+    if len(sucessos) == 1 and primeiro_pedido_id:
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=primeiro_pedido_id))
+    return redirect(url_for('hora.pedidos_lista'))
+
+
+# ========================================================================
+# Download XLSX/imagem de origem
 # ========================================================================
 
 @hora_bp.route('/pedidos/<int:pedido_id>/download-xlsx')
 @require_hora_perm('pedidos', 'ver')
 def pedidos_download_xlsx(pedido_id: int):
-    """Redireciona para URL (S3 presigned ou local) do XLSX original do pedido."""
+    """Redireciona para URL (S3 presigned ou local) do arquivo original do pedido.
+
+    Para origem='XLSX': retorna o XLSX original que o operador subiu.
+    Para origem='IMAGEM': retorna a IMAGEM original que o operador subiu
+                          (apesar do nome legacy da rota — kept para compat URLs).
+    Se quiser o XLSX equivalente gerado em background para origem='IMAGEM',
+    use a rota /pedidos/<id>/download-xlsx-equivalente.
+    """
     pedido = HoraPedido.query.get_or_404(pedido_id)
     if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
         flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
         return redirect(url_for('hora.pedidos_lista'))
     if not pedido.arquivo_origem_s3_key:
         flash(
-            'XLSX deste pedido nao esta armazenado (pedido manual ou import anterior a esta feature).',
+            'Arquivo deste pedido nao esta armazenado (pedido manual ou import anterior a esta feature).',
             'warning',
         )
         return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
@@ -569,7 +994,41 @@ def pedidos_download_xlsx(pedido_id: int):
     from app.utils.file_storage import FileStorage
     url = FileStorage().get_file_url(pedido.arquivo_origem_s3_key)
     if not url:
-        flash('Falha ao gerar URL do XLSX.', 'danger')
+        flash('Falha ao gerar URL do arquivo.', 'danger')
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+    return redirect(url)
+
+
+@hora_bp.route('/pedidos/<int:pedido_id>/download-xlsx-equivalente')
+@require_hora_perm('pedidos', 'ver')
+def pedidos_download_xlsx_equivalente(pedido_id: int):
+    """Para origem='IMAGEM': baixa o XLSX equivalente gerado em background.
+
+    Se o job ainda nao terminou, mostra mensagem para tentar de novo.
+    """
+    pedido = HoraPedido.query.get_or_404(pedido_id)
+    if pedido.loja_destino_id and not usuario_tem_acesso_a_loja(pedido.loja_destino_id):
+        flash('Acesso negado: pedido de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.pedidos_lista'))
+    if pedido.origem != 'IMAGEM':
+        flash(
+            'Pedido nao foi criado via imagem — XLSX equivalente nao se aplica. '
+            'Para baixar o XLSX original, use o botao "Baixar arquivo original".',
+            'info',
+        )
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+    if not pedido.xlsx_origem_s3_key:
+        flash(
+            'XLSX equivalente ainda esta sendo gerado em background. '
+            'Atualize a tela em alguns segundos.',
+            'info',
+        )
+        return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
+
+    from app.utils.file_storage import FileStorage
+    url = FileStorage().get_file_url(pedido.xlsx_origem_s3_key)
+    if not url:
+        flash('Falha ao gerar URL do XLSX equivalente.', 'danger')
         return redirect(url_for('hora.pedidos_detalhe', pedido_id=pedido.id))
     return redirect(url)
 

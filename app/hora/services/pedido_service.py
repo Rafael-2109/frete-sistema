@@ -28,6 +28,7 @@ def criar_pedido(
     arquivo_origem_s3_key: Optional[str] = None,
     observacoes: Optional[str] = None,
     criado_por: Optional[str] = None,
+    origem: str = 'MANUAL',
 ) -> HoraPedido:
     """Cria HoraPedido + N HoraPedidoItem. Get-or-create de HoraMoto para cada chassi.
 
@@ -54,6 +55,11 @@ def criar_pedido(
         if not HoraLoja.query.get(loja_destino_id):
             raise ValueError(f'loja_destino_id={loja_destino_id} inexistente')
 
+    if origem not in ('XLSX', 'IMAGEM', 'MANUAL'):
+        raise ValueError(
+            f"origem inválido: '{origem}' — deve ser XLSX, IMAGEM ou MANUAL"
+        )
+
     pedido = HoraPedido(
         numero_pedido=numero_pedido,
         cnpj_destino=cnpj_norm,
@@ -64,6 +70,7 @@ def criar_pedido(
         arquivo_origem_s3_key=arquivo_origem_s3_key,
         observacoes=observacoes,
         criado_por=criado_por,
+        origem=origem,
     )
     db.session.add(pedido)
     db.session.flush()
@@ -134,8 +141,9 @@ def criar_pedido_a_partir_de_extracao(
     loja_destino_id: Optional[int] = None,
     arquivo_origem_s3_key: Optional[str] = None,
     criado_por: Optional[str] = None,
+    origem: str = 'XLSX',
 ):
-    """Cria HoraPedido a partir de um PedidoExtraido (output do parser XLSX).
+    """Cria HoraPedido a partir de um PedidoExtraido (output do parser XLSX ou imagem).
 
     Args:
         pedido_extraido: instância de PedidoExtraido.
@@ -143,8 +151,10 @@ def criar_pedido_a_partir_de_extracao(
             permite forçar (ex.: CNPJ da loja HORA resolvido via lookup).
         loja_destino_id: OBRIGATÓRIO. Loja HORA que receberá fisicamente as motos.
             Selecionado manualmente na UI (pode ser auto-sugerido via apelido_detectado).
-        arquivo_origem_s3_key: chave S3/local do XLSX original (para download).
+        arquivo_origem_s3_key: chave S3/local do arquivo original
+            (XLSX se origem='XLSX', imagem JPG/PNG se origem='IMAGEM').
         criado_por: usuário que importou.
+        origem: 'XLSX' (default) ou 'IMAGEM'. Usado para o campo HoraPedido.origem.
     """
     cnpj = cnpj_destino_override or pedido_extraido.cnpj_destino
     if not cnpj:
@@ -177,6 +187,7 @@ def criar_pedido_a_partir_de_extracao(
         arquivo_origem_s3_key=arquivo_origem_s3_key,
         observacoes='\n'.join(pedido_extraido.avisos) if pedido_extraido.avisos else None,
         criado_por=criado_por,
+        origem=origem,
     )
 
 
