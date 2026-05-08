@@ -4,7 +4,12 @@ from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import gerar_excel_qpa
 from app.motos_assai.models import (
-    AssaiSeparacao, SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
+    AssaiSeparacao, AssaiNfQpa, AssaiNfQpaItem,
+    SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
+)
+from app.motos_assai.forms import UploadNfQpaForm
+from app.motos_assai.services.parsers.nf_qpa_adapter import (
+    importar_nf_qpa, NfQpaParseError, NfQpaJaImportadaError,
 )
 
 
@@ -34,3 +39,35 @@ def faturamento_solicitacao_excel(separacao_id):
             'Content-Disposition': f'attachment; filename="solicitacao_qpa_{separacao_id}.xlsx"',
         },
     )
+
+
+@motos_assai_bp.route('/faturamento/separacao/<int:separacao_id>/upload-nf', methods=['GET', 'POST'])
+@motos_assai_bp.route('/faturamento/upload-nf', methods=['GET', 'POST'], defaults={'separacao_id': None})
+@login_required
+@require_motos_assai
+def faturamento_upload_nf(separacao_id):
+    form = UploadNfQpaForm()
+    if form.validate_on_submit():
+        f = form.pdf.data
+        try:
+            nf = importar_nf_qpa(
+                pdf_bytes=f.read(),
+                nome_arquivo=f.filename,
+                importada_por_id=current_user.id,
+            )
+            flash(f'NF {nf.numero} importada — status: {nf.status_match}', 'success')
+            return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id))
+        except NfQpaJaImportadaError as e:
+            flash(str(e), 'warning')
+        except NfQpaParseError as e:
+            flash(f'Erro ao parsear NF: {e}', 'danger')
+    return render_template('motos_assai/faturamento/upload_nf.html', form=form)
+
+
+@motos_assai_bp.route('/faturamento/nfs/<int:nf_id>')
+@login_required
+@require_motos_assai
+def faturamento_nf_detalhe(nf_id):
+    nf = AssaiNfQpa.query.get_or_404(nf_id)
+    items = AssaiNfQpaItem.query.filter_by(nf_id=nf_id).all()
+    return render_template('motos_assai/faturamento/nf_detalhe.html', nf=nf, items=items)

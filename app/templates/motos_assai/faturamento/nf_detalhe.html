@@ -1,0 +1,37 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between mb-3">
+  <h2>NF Q.P.A. — {{ nf.numero }}/{{ nf.serie or '-' }}
+    <span class="badge bg-{% if nf.status_match == 'BATEU' %}success{% elif nf.status_match == 'DIVERGENTE' %}warning{% else %}danger{% endif %}">
+      {{ nf.status_match }}
+    </span>
+  </h2>
+</header>
+
+<dl class="row small">
+  <dt class="col-sm-3">Chave 44</dt><dd class="col-sm-9"><code>{{ nf.chave_44 }}</code></dd>
+  <dt class="col-sm-3">Emitente</dt><dd class="col-sm-9">{{ nf.emitente_cnpj }}</dd>
+  <dt class="col-sm-3">Destinatário</dt><dd class="col-sm-9">{{ nf.destinatario_nome }}</dd>
+  <dt class="col-sm-3">Loja resolvida</dt>
+  <dd class="col-sm-9">{% if nf.loja %}{{ nf.loja.numero }} {{ nf.loja.nome }}{% else %}<span class="text-warning">não resolvida</span>{% endif %}</dd>
+  <dt class="col-sm-3">Valor total</dt><dd class="col-sm-9">R$ {{ nf.valor_total | numero_br(2) }}</dd>
+  <dt class="col-sm-3">Data</dt><dd class="col-sm-9">{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</dd>
+</dl>
+
+<h4>Itens ({{ items|length }})</h4>
+<table class="table table-sm">
+  <thead><tr><th>Chassi</th><th>Modelo extraído</th><th>Valor</th><th>Match separação</th><th>Divergência</th></tr></thead>
+  <tbody>
+    {% for it in items %}
+    <tr>
+      <td><code>{{ it.chassi }}</code></td>
+      <td>{{ it.modelo_extraido }}</td>
+      <td>R$ {{ it.valor_extraido | numero_br(2) }}</td>
+      <td>{% if it.separacao_item_id %}<i class="fas fa-check text-success"></i> #{{ it.separacao_item_id }}{% else %}-{% endif %}</td>
+      <td>{% if it.tipo_divergencia %}<span class="badge bg-warning">{{ it.tipo_divergencia }}</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
