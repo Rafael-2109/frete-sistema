@@ -148,8 +148,17 @@ class AgentLojasClient:
         perfil: str,
         loja_hora_id: Optional[int],
         sdk_session_id: Optional[str] = None,
+        output_format: Optional[Dict[str, Any]] = None,
+        stderr_queue: Optional[Any] = None,
     ) -> ClaudeAgentOptions:
         """Constroi ClaudeAgentOptions para o turno corrente.
+
+        Args:
+            output_format: JSON Schema para structured output (SDK nativo).
+                Ex: {"type": "json_schema", "schema": {...}}. ResultMessage
+                trara o output parseado em `structured_output`.
+            stderr_queue: queue.SimpleQueue para captura de stderr do CLI
+                (debug ProcessError). Quando None, stderr nao eh capturado.
 
         NOTA: can_use_tool e injetado em stream_response (apos
         set_current_session_id), nao aqui — e callback global do modulo
@@ -207,6 +216,38 @@ class AgentLojasClient:
         if sdk_session_id:
             options_kwargs["session_id"] = sdk_session_id
 
+        # Structured output (SDK nativo). ResultMessage.structured_output
+        # contera o JSON parseado. Util para skills que retornam tabelas.
+        if output_format:
+            options_kwargs["output_format"] = output_format
+
+        # Stderr callback: captura stderr do CLI subprocess para diagnostico
+        # de ProcessError (SDK 0.1.77+ ja propaga texto real, mas stderr eh
+        # complementar para ver erros do CLI antes do crash).
+        if stderr_queue is not None:
+            def _stderr_callback(line: str):
+                try:
+                    stderr_queue.put_nowait(line)
+                except Exception:
+                    pass
+            options_kwargs["stderr"] = _stderr_callback
+            options_kwargs["extra_args"] = {"debug-to-stderr": None}
+
+        # Budget control nativo: protege contra runaway sessions. Configuravel
+        # via env var (default 1.5 USD por request — operadores de loja tipicamente
+        # gastam <0.10 USD; valor alto eh sinal de loop ou ferramenta travada).
+        max_budget_env = os.getenv('AGENT_LOJAS_MAX_BUDGET_USD')
+        if max_budget_env:
+            try:
+                max_budget = float(max_budget_env)
+                if max_budget > 0:
+                    options_kwargs["max_budget_usd"] = max_budget
+            except (ValueError, TypeError):
+                logger.warning(
+                    "[AGENTE_LOJAS] AGENT_LOJAS_MAX_BUDGET_USD invalido: %s "
+                    "(esperado float, ex: 1.5)", max_budget_env,
+                )
+
         return ClaudeAgentOptions(**options_kwargs)
 
     async def stream_response(
@@ -219,6 +260,8 @@ class AgentLojasClient:
         sdk_session_id: Optional[str] = None,
         our_session_id: Optional[str] = None,
         event_queue: Optional[Any] = None,
+        output_format: Optional[Dict[str, Any]] = None,
+        stderr_queue: Optional[Any] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Stream de resposta do SDK.
 
@@ -229,6 +272,8 @@ class AgentLojasClient:
             event_queue: Queue thread-safe usada pelo can_use_tool para emitir
                 eventos `ask_user_question` ao SSE generator. Se None,
                 AskUserQuestion sera negado pelo can_use_tool.
+            output_format: JSON Schema opcional para structured output.
+            stderr_queue: queue.SimpleQueue opcional para stderr do CLI.
 
         Yields:
             dicts {type, content, metadata} — formato usado pelo SSE generator
@@ -249,6 +294,8 @@ class AgentLojasClient:
             perfil=perfil,
             loja_hora_id=loja_hora_id,
             sdk_session_id=sdk_session_id,
+            output_format=output_format,
+            stderr_queue=stderr_queue,
         )
 
         logger.info(
@@ -368,16 +415,22 @@ async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
     # Done
     if isinstance(msg, ResultMessage):
         usage = getattr(msg, 'usage', None) or {}
+        meta: Dict[str, Any] = {
+            'stop_reason': getattr(msg, 'stop_reason', None),
+            'input_tokens': usage.get('input_tokens', 0) if isinstance(usage, dict) else 0,
+            'output_tokens': usage.get('output_tokens', 0) if isinstance(usage, dict) else 0,
+            'total_cost_usd': getattr(msg, 'total_cost_usd', 0),
+            'num_turns': getattr(msg, 'num_turns', 0),
+            # SDK 0.1.76+: HTTP status code de erros API (forward-compat).
+            'api_error_status': getattr(msg, 'api_error_status', None),
+            # SDK 0.1.65+: structured output JSON parseado quando output_format
+            # foi passado em build_options (forward-compat — pode ser None).
+            'structured_output': getattr(msg, 'structured_output', None),
+        }
         yield {
             'type': 'done',
             'content': '',
-            'metadata': {
-                'stop_reason': getattr(msg, 'stop_reason', None),
-                'input_tokens': usage.get('input_tokens', 0) if isinstance(usage, dict) else 0,
-                'output_tokens': usage.get('output_tokens', 0) if isinstance(usage, dict) else 0,
-                'total_cost_usd': getattr(msg, 'total_cost_usd', 0),
-                'num_turns': getattr(msg, 'num_turns', 0),
-            },
+            'metadata': meta,
         }
 
 
@@ -402,6 +455,8 @@ async def stream_lojas_chat(
     sdk_session_id: Optional[str] = None,
     our_session_id: Optional[str] = None,
     event_queue: Optional[Any] = None,
+    output_format: Optional[Dict[str, Any]] = None,
+    stderr_queue: Optional[Any] = None,
 ):
     """High-level helper usado pelo route chat.py. Yields dicts.
 
@@ -409,6 +464,8 @@ async def stream_lojas_chat(
         our_session_id: AgentSession.session_id (UUID nosso). Usado para
             registrar event_queue cross-thread em can_use_tool.
         event_queue: Queue thread-safe para eventos `ask_user_question`.
+        output_format: JSON Schema opcional (structured output).
+        stderr_queue: queue.SimpleQueue opcional para stderr CLI.
     """
     client = get_lojas_client()
     async for event in client.stream_response(
@@ -420,5 +477,7 @@ async def stream_lojas_chat(
         sdk_session_id=sdk_session_id,
         our_session_id=our_session_id,
         event_queue=event_queue,
+        output_format=output_format,
+        stderr_queue=stderr_queue,
     ):
         yield event

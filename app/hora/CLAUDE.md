@@ -20,6 +20,8 @@ O módulo HORA **não compartilha dados** com os módulos abaixo. Joins, FKs cro
 - `app/carvia/services/parsers/danfe_pdf_parser.py` — extrai chassi/modelo/cor de DANFE via LLM. **Usar via `app/hora/services/parsers/danfe_adapter.py`** que encapsula a chamada e traduz para entidades HORA.
 - `app/carvia/services/pricing/moto_recognition_service.py` — regex de padronização de nomes de modelo. Mesmo padrão de adapter.
 
+**Barreira SDK adicional (Agente Lojas HORA)**: o `app/agente_lojas/` reforça este contrato em camada-tool via `skills=sorted(SKILLS_PERMITIDAS)` em `ClaudeAgentOptions` (SDK 0.1.77+). Skills do domínio Nacom Goya (`cotando-frete`, `rastreando-odoo`, `gerindo-expedicao`, `acessando-ssw`, `gerindo-carvia`, `executando-odoo-financeiro`, etc.) ficam **rejeitadas pelo Skill tool** — o operador HORA não consegue invocá-las mesmo via prompt. Detalhe técnico em `app/agente_lojas/CLAUDE.md` (seção "Barreira SDK adicional"). Esta barreira **complementa** o code review humano, não substitui.
+
 ---
 
 ## Convenções obrigatórias

@@ -1,6 +1,6 @@
 # Agente Lojas HORA — Guia de Desenvolvimento
 
-**LOC**: ~959 | **Arquivos**: 14 | **Status**: M1 completo + M2 PARCIAL (skills wired, subagent `orientador-loja` ativo, mas pending_questions e output structuring SDK ainda nao migrados) | **Atualizado**: 2026-05-08
+**LOC**: ~1700 | **Arquivos**: 16 | **Status**: M2 SDK completo (AskUserQuestion + output_format + pool persistente + filtro skills granular SDK 0.1.77+) | **Atualizado**: 2026-05-09
 
 Agente dedicado ao pessoal das Lojas Motochefe (HORA), endpoint `/agente-lojas/*`.
 Compartilha SDK com `app/agente/` mas com system_prompt, skills, subagents e
@@ -8,7 +8,7 @@ escopo de dados isolados.
 
 > **Skills ativas** (`config/skills_whitelist.py`): `consultando-estoque-loja`, `rastreando-chassi` (M1) + `acompanhando-pedido`, `conferindo-recebimento`, `consultando-pecas-faltando` (M2) + `lendo-arquivos`, `exportando-arquivos`, `orientador-loja` (subagent M2).
 
-> **GAP M2** (`sdk/client.py:M1 nao implementa`): Pending questions / AskUserQuestion e Output structuring JSON schema marcados para M2 ainda NAO foram migrados do agente Nacom. O preset menciona `AskUserQuestion` como tool disponivel, mas nao ha codigo wired no SDK desta agente — chamada falha silenciosamente.
+> **Barreira SDK adicional** (M2 SDK + skills option 0.1.77+): `build_options()` passa `skills=sorted(SKILLS_PERMITIDAS)` em `ClaudeAgentOptions`. SDK injeta patterns granulares `Skill(consultando-estoque-loja)`, `Skill(rastreando-chassi)`, etc. em allowed_tools (verificado em `_internal/transport/subprocess_cli.py:165-201:_apply_skills_defaults`). Skills do dominio Nacom Goya **rejeitadas pelo Skill tool** — defesa em profundidade do contrato `app/hora/CLAUDE.md`. Doc oficial: "context filter, not sandbox" — files das skills continuam acessiveis via Read/Bash, can_use_tool segue como barreira de seguranca real.
 
 ---
 
@@ -37,20 +37,27 @@ app/agente_lojas/
 |-- config/
 |   |-- __init__.py
 |   |-- settings.py                # AgentLojasSettings (model, prompt paths, skills)
-|   `-- skills_whitelist.py        # Lista de skills permitidas (M1+)
+|   |-- skills_whitelist.py        # Lista de skills permitidas (M1+)
+|   `-- permissions.py             # can_use_tool (M2 SDK — AskUserQuestion + /tmp)
 |-- prompts/
 |   |-- system_prompt.md           # Identidade + regras operacionais da loja
 |   `-- preset_operacional.md      # Tools + safety + /tmp
 |-- services/
 |   |-- __init__.py
 |   `-- scope_injector.py          # Injeta loja_hora_id no user_prompt_submit
+|-- sdk/
+|   |-- __init__.py                # Re-exports (get_lojas_client, stream_lojas_chat)
+|   |-- client.py                  # AgentLojasClient (build_options + stream_response)
+|   |-- client_pool.py             # Event loop persistente (M2 SDK Fase B)
+|   `-- hooks.py                   # UserPromptSubmit + PreToolUse (M2 SDK)
 |-- routes/
 |   |-- __init__.py                # Blueprint agente_lojas_bp
 |   |-- chat.py                    # POST /agente-lojas/api/chat (SSE)
 |   |-- sessions.py                # Listar/deletar sessoes filtrando agente='lojas'
-|   `-- health.py                  # GET /agente-lojas/api/health
+|   |-- health.py                  # GET /agente-lojas/api/health
+|   `-- user_answer.py             # POST /agente-lojas/api/user-answer (M2 SDK)
 `-- templates/agente_lojas/
-    `-- chat.html                  # UI de chat (template minimal)
+    `-- chat.html                  # UI de chat com modal AskUserQuestion (M2 SDK)
 ```
 
 ---
@@ -137,7 +144,9 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
 | M0   | Esqueleto: endpoint, auth, menu dual, prompt stub | **Concluido** |
 | M1   | Skills M1: `consultando-estoque-loja`, `rastreando-chassi` + system prompt + hook `<loja_context>` | **Concluido** |
 | M2 (skills) | `acompanhando-pedido`, `conferindo-recebimento`, `consultando-pecas-faltando`, subagent `orientador-loja` | **Concluido** |
-| M2 (SDK)    | Pending questions / AskUserQuestion + Output structuring JSON schema + Pool persistente | **PARCIAL** — nao migrado de `app/agente/sdk/` |
+| M2 (SDK Fase A) | AskUserQuestion + can_use_tool + frontend rico (tool_call/tool_result/thinking/error/modal ask) | **Concluido** (2026-05-09) |
+| M2 (SDK Fase B) | Event loop persistente + output_format + stderr_callback + max_budget_usd + barreira SDK skills | **Concluido** (2026-05-09) |
+| M2 (SDK Fase C) | Hooks PostToolUse audit + permissions hardening | **Concluido** (2026-05-09) |
 | M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | Planejado |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 

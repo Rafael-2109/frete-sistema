@@ -33,6 +33,10 @@ from app.agente_lojas.decorators import require_acesso_agente_lojas
 from app.agente_lojas.config.settings import AGENTE_ID
 from app.agente_lojas.services.scope_injector import build_loja_context_block
 from app.agente_lojas.sdk import stream_lojas_chat
+from app.agente_lojas.sdk.client_pool import (
+    submit_coroutine,
+    USE_PERSISTENT_LOJAS_LOOP,
+)
 from app.agente.models import AgentSession
 from app import db
 
@@ -133,6 +137,56 @@ def api_chat():
         }), 500
 
 
+async def _drain_async_gen(
+    *,
+    user_message: str,
+    user_id: int,
+    user_name: str,
+    perfil: str,
+    loja_hora_id: Optional[int],
+    sdk_session_id: Optional[str],
+    our_session_id: str,
+    event_queue: 'queue.Queue',
+    state: dict,
+):
+    """Coroutine que processa async gen do SDK e empurra para event_queue.
+
+    Encerra com sentinel None. `state` mutavel propaga metadata pos-stream
+    (sdk_session_id, total_cost_usd) para a thread principal.
+    """
+    try:
+        agen = stream_lojas_chat(
+            user_message=user_message,
+            user_id=user_id,
+            user_name=user_name,
+            perfil=perfil,
+            loja_hora_id=loja_hora_id,
+            sdk_session_id=sdk_session_id,
+            our_session_id=our_session_id,
+            event_queue=event_queue,
+        )
+        async for event in agen:
+            etype = event.get('type')
+            meta = event.get('metadata', {}) or {}
+            content = event.get('content', '')
+
+            if etype == 'init':
+                sid = meta.get('sdk_session_id')
+                if sid:
+                    state['sdk_session_id'] = sid
+                event_queue.put(_sse('init', {'sdk_session_id': sid}))
+            elif etype == 'done':
+                state['final_metadata'] = meta
+                event_queue.put(_sse('done', meta))
+            else:
+                event_queue.put(_sse(etype, {'content': content, **meta}))
+    except Exception as e:
+        logger.exception("[AGENTE_LOJAS] drain erro: %s", e)
+        event_queue.put(_sse('error', {'content': str(e)}))
+    finally:
+        event_queue.put(None)  # sentinel
+
+
 def _streaming_worker(
     *,
     user_message: str,
@@ -147,52 +201,48 @@ def _streaming_worker(
 ):
     """Worker em daemon thread que processa async gen do SDK.
 
-    Empurra strings SSE pre-formatadas em event_queue. Encerra com sentinel
-    None para sinalizar fim ao SSE generator.
+    Estrategia:
+        - Se pool persistente ativo (USE_PERSISTENT_LOJAS_LOOP=true): submete
+          coroutine ao loop daemon compartilhado via submit_coroutine —
+          economiza ~50-100ms de loop creation por request.
+        - Caso contrario: cria novo event loop por request (fallback).
 
-    `state` e dict mutavel para repassar metadata pos-stream (sdk_session_id,
-    total_cost_usd, etc.) ao thread principal.
+    Sinaliza fim com sentinel None em event_queue.
     """
+    coro = _drain_async_gen(
+        user_message=user_message,
+        user_id=user_id,
+        user_name=user_name,
+        perfil=perfil,
+        loja_hora_id=loja_hora_id,
+        sdk_session_id=sdk_session_id,
+        our_session_id=our_session_id,
+        event_queue=event_queue,
+        state=state,
+    )
+
+    fut = submit_coroutine(coro) if USE_PERSISTENT_LOJAS_LOOP else None
+
+    if fut is not None:
+        # Path com pool persistente — coroutine roda no loop daemon compartilhado
+        try:
+            fut.result(timeout=STREAM_MAX_DURATION_SECONDS + 30)
+        except Exception as e:
+            logger.exception("[AGENTE_LOJAS] worker (pool) erro: %s", e)
+            try:
+                event_queue.put(_sse('error', {'content': str(e)}))
+                event_queue.put(None)
+            except Exception:
+                pass
+        return
+
+    # Path fallback — loop por request (USE_PERSISTENT_LOJAS_LOOP=false)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-
-    async def _run():
-        try:
-            agen = stream_lojas_chat(
-                user_message=user_message,
-                user_id=user_id,
-                user_name=user_name,
-                perfil=perfil,
-                loja_hora_id=loja_hora_id,
-                sdk_session_id=sdk_session_id,
-                our_session_id=our_session_id,
-                event_queue=event_queue,
-            )
-            async for event in agen:
-                etype = event.get('type')
-                meta = event.get('metadata', {}) or {}
-                content = event.get('content', '')
-
-                if etype == 'init':
-                    sid = meta.get('sdk_session_id')
-                    if sid:
-                        state['sdk_session_id'] = sid
-                    event_queue.put(_sse('init', {'sdk_session_id': sid}))
-                elif etype == 'done':
-                    state['final_metadata'] = meta
-                    event_queue.put(_sse('done', meta))
-                else:
-                    event_queue.put(_sse(etype, {'content': content, **meta}))
-        except Exception as e:
-            logger.exception("[AGENTE_LOJAS] worker erro: %s", e)
-            event_queue.put(_sse('error', {'content': str(e)}))
-        finally:
-            event_queue.put(None)  # sentinel
-
     try:
-        loop.run_until_complete(_run())
+        loop.run_until_complete(coro)
     except Exception as e:
-        logger.exception("[AGENTE_LOJAS] worker outer erro: %s", e)
+        logger.exception("[AGENTE_LOJAS] worker (fallback) erro: %s", e)
         try:
             event_queue.put(_sse('error', {'content': str(e)}))
             event_queue.put(None)
