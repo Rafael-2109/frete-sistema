@@ -5,9 +5,10 @@ Prefix: /agente-lojas
 Autorizacao: sistema_lojas=True OU perfil='administrador'
 
 Estrutura:
-    - chat.py      GET /  + POST /api/chat (SSE)
-    - sessions.py  GET/DELETE /api/sessions (filtrado por agente='lojas')
-    - health.py    GET /api/health
+    - chat.py         GET /  + POST /api/chat (SSE)
+    - sessions.py     GET/DELETE /api/sessions (filtrado por agente='lojas')
+    - health.py       GET /api/health
+    - user_answer.py  POST /api/user-answer (AskUserQuestion — M2 SDK)
 """
 import os
 from flask import Blueprint
@@ -23,3 +24,4 @@ agente_lojas_bp = Blueprint(
 from app.agente_lojas.routes import chat  # noqa: F401, E402
 from app.agente_lojas.routes import sessions  # noqa: F401, E402
 from app.agente_lojas.routes import health  # noqa: F401, E402
+from app.agente_lojas.routes import user_answer  # noqa: F401, E402

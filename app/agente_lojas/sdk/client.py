@@ -4,24 +4,26 @@ AgentLojasClient — wrapper enxuto do Claude Agent SDK para o Agente Lojas HORA
 Usa ClaudeSDKClient diretamente (nao herda do AgentClient do agente logistico)
 para manter o codigo deste modulo independente e simples:
 
-    ~250 LOC total vs ~2200 do AgentClient.
+    ~350 LOC total vs ~2200 do AgentClient.
 
-M1 nao implementa:
-    - Pool persistente (uma conexao por request, sem resume do SDK)
-    - Memoria injection (cross-agente contaminante; em M3)
-    - Pending questions / ask user (em M2)
-    - Output structuring JSON schema (em M2)
-    - Cost tracking granular por subagente (em M3)
-
-O que M1 implementa:
+O que M2 implementa (atualizado 2026-05-09):
     - Stream SSE real via ClaudeSDKClient
     - System prompt proprio (sem briefing do agente logistico)
     - Hook user_prompt_submit injetando <loja_context> + <session_context>
+    - Hook PreToolUse `_keep_stream_open` (requerido pelo SDK para
+      can_use_tool funcionar)
+    - can_use_tool callback intercepta AskUserQuestion e roteia para
+      pending_questions / event_queue
     - Skills via option `skills=` em ClaudeAgentOptions (SDK 0.1.77+):
       filtra o listing do model para apenas SKILLS_PERMITIDAS, reforcando o
       contrato de isolamento HORA documentado em app/hora/CLAUDE.md.
-      SDK auto-configura "Skill" em allowed_tools + setting_sources=["project"].
+      SDK auto-configura "Skill" em allowed_tools + setting_sources.
       Fallback (SDK < 0.1.77): "Skill" injetado em allowed_tools manualmente.
+
+Pendente (M3):
+    - Pool persistente (Fase B: criar client_pool.py enxuto)
+    - Memoria injection (cross-agente contaminante; em M3)
+    - Cost tracking granular por subagente (em M3)
 """
 import dataclasses
 import logging
@@ -37,13 +39,23 @@ from claude_agent_sdk import (
     SystemMessage,
     ResultMessage,
     TextBlock,
+    ThinkingBlock,
     ToolUseBlock,
     ToolResultBlock,
 )
 
 from app.agente_lojas.config.settings import get_lojas_settings
 from app.agente_lojas.config.skills_whitelist import SKILLS_PERMITIDAS
-from app.agente_lojas.sdk.hooks import make_user_prompt_submit_hook
+from app.agente_lojas.config.permissions import (
+    can_use_tool as lojas_can_use_tool,
+    set_current_session_id,
+    set_event_queue,
+    cleanup_session_context,
+)
+from app.agente_lojas.sdk.hooks import (
+    make_user_prompt_submit_hook,
+    _keep_stream_open,
+)
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -137,7 +149,12 @@ class AgentLojasClient:
         loja_hora_id: Optional[int],
         sdk_session_id: Optional[str] = None,
     ) -> ClaudeAgentOptions:
-        """Constroi ClaudeAgentOptions para o turno corrente."""
+        """Constroi ClaudeAgentOptions para o turno corrente.
+
+        NOTA: can_use_tool e injetado em stream_response (apos
+        set_current_session_id), nao aqui — e callback global do modulo
+        permissions.py que le session_id via ContextVar.
+        """
         submit_hook = make_user_prompt_submit_hook(
             user_id=user_id,
             user_name=user_name,
@@ -146,9 +163,12 @@ class AgentLojasClient:
         )
 
         # Skills: passar lista explicita via SDK option (0.1.77+) reforca
-        # contrato de isolamento HORA — skills de Nacom Goya nao aparecem no
-        # listing do model. Fallback SDK < 0.1.77: 'Skill' em allowed_tools
-        # + setting_sources=["project"] descobre tudo (sem filtro).
+        # contrato de isolamento HORA. SDK injeta patterns granulares
+        # `Skill(name)` no allowed_tools (verificado em
+        # _internal/transport/subprocess_cli.py:165-201:_apply_skills_defaults) —
+        # filtro forte real, NAO apenas listing filter. Skills nao listadas
+        # sao rejeitadas pelo Skill tool. Fallback SDK < 0.1.77: 'Skill'
+        # em allowed_tools (sem filtro per-skill).
         allowed_tools = list(ALLOWED_TOOLS_M1)
         if not _SDK_HAS_SKILLS_OPTION:
             allowed_tools.append('Skill')
@@ -164,8 +184,15 @@ class AgentLojasClient:
             "permission_mode": "acceptEdits",
             "fallback_model": "sonnet",
             "disallowed_tools": ["Write", "Edit", "MultiEdit", "NotebookEdit"],
+            # can_use_tool: validacao dinamica de tools. Roteia AskUserQuestion
+            # para pending_questions + event_queue. Callback global le session_id
+            # da ContextVar setada em stream_response().
+            "can_use_tool": lojas_can_use_tool,
+            # Hooks: UserPromptSubmit (contexto loja) + PreToolUse (keep-alive
+            # OBRIGATORIO para can_use_tool funcionar — doc SDK).
             "hooks": {
                 "UserPromptSubmit": [HookMatcher(hooks=[submit_hook])],
+                "PreToolUse": [HookMatcher(hooks=[_keep_stream_open])],
             },
         }
 
@@ -190,14 +217,32 @@ class AgentLojasClient:
         perfil: str,
         loja_hora_id: Optional[int],
         sdk_session_id: Optional[str] = None,
+        our_session_id: Optional[str] = None,
+        event_queue: Optional[Any] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Stream de resposta do SDK.
+
+        Args:
+            our_session_id: Nosso UUID de sessao (AgentSession.session_id).
+                Setado em ContextVar para can_use_tool encontrar event_queue.
+                Distinto de sdk_session_id (UUID nomeando o JSONL do SDK).
+            event_queue: Queue thread-safe usada pelo can_use_tool para emitir
+                eventos `ask_user_question` ao SSE generator. Se None,
+                AskUserQuestion sera negado pelo can_use_tool.
 
         Yields:
             dicts {type, content, metadata} — formato usado pelo SSE generator
             da route chat.py. Tipos: 'text', 'tool_call', 'tool_result',
             'thinking', 'done', 'error'.
         """
+        # Registrar session_id e event_queue ANTES de iniciar o stream para
+        # que can_use_tool (rodando em thread daemon do SDK) consiga emitir
+        # eventos ask_user_question via event_queue cross-thread.
+        if our_session_id:
+            set_current_session_id(our_session_id)
+            if event_queue is not None:
+                set_event_queue(our_session_id, event_queue)
+
         options = self.build_options(
             user_id=user_id,
             user_name=user_name,
@@ -207,8 +252,11 @@ class AgentLojasClient:
         )
 
         logger.info(
-            "[AGENTE_LOJAS] stream_response start | user_id=%s loja_id=%s session=%s",
-            user_id, loja_hora_id, sdk_session_id,
+            "[AGENTE_LOJAS] stream_response start | user_id=%s loja_id=%s "
+            "our_session=%s sdk_session=%s ask_user=%s",
+            user_id, loja_hora_id,
+            (our_session_id or '')[:8], (sdk_session_id or '')[:8],
+            'yes' if event_queue is not None else 'no',
         )
 
         try:
@@ -245,6 +293,17 @@ class AgentLojasClient:
                 'content': str(e),
                 'metadata': {'exception_type': type(e).__name__},
             }
+        finally:
+            # Cleanup: cancelar pending_questions + remover stream_context.
+            # Garante que se cliente desconectou no meio de AskUserQuestion,
+            # a thread daemon do SDK desbloqueia (cancel_pending sinaliza event).
+            if our_session_id:
+                try:
+                    from app.agente.sdk.pending_questions import cancel_pending
+                    cancel_pending(our_session_id)
+                except Exception:
+                    pass
+                cleanup_session_context(our_session_id)
 
 
 async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
@@ -262,6 +321,15 @@ async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
         for block in (msg.content or []):
             if isinstance(block, TextBlock):
                 yield {'type': 'text', 'content': block.text, 'metadata': {}}
+            elif isinstance(block, ThinkingBlock):
+                # ThinkingBlock so eh emitido se thinking_display=summarized.
+                # Default do agente_lojas (heran ado de AgentSettings) e omitted —
+                # nesses casos esse branch nunca dispara.
+                yield {
+                    'type': 'thinking',
+                    'content': getattr(block, 'thinking', '') or '',
+                    'metadata': {},
+                }
             elif isinstance(block, ToolUseBlock):
                 yield {
                     'type': 'tool_call',
@@ -332,8 +400,16 @@ async def stream_lojas_chat(
     perfil: str,
     loja_hora_id: Optional[int],
     sdk_session_id: Optional[str] = None,
+    our_session_id: Optional[str] = None,
+    event_queue: Optional[Any] = None,
 ):
-    """High-level helper usado pelo route chat.py. Yields dicts."""
+    """High-level helper usado pelo route chat.py. Yields dicts.
+
+    Args:
+        our_session_id: AgentSession.session_id (UUID nosso). Usado para
+            registrar event_queue cross-thread em can_use_tool.
+        event_queue: Queue thread-safe para eventos `ask_user_question`.
+    """
     client = get_lojas_client()
     async for event in client.stream_response(
         user_message=user_message,
@@ -342,5 +418,7 @@ async def stream_lojas_chat(
         perfil=perfil,
         loja_hora_id=loja_hora_id,
         sdk_session_id=sdk_session_id,
+        our_session_id=our_session_id,
+        event_queue=event_queue,
     ):
         yield event

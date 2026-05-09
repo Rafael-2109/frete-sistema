@@ -1,23 +1,29 @@
 """
-Chat do Agente Lojas HORA — SSE real com Claude Agent SDK (M1).
+Chat do Agente Lojas HORA — SSE real com Claude Agent SDK (M2 SDK).
 
 POST /agente-lojas/api/chat
     { "message": "...", "session_id": "uuid" }
     -> text/event-stream
 
-Implementacao:
-    - Async generator (`stream_lojas_chat`) iterado em event loop dedicado
-      por request (sem pool persistente ainda — M2 pode adicionar).
-    - SSE 1-para-1 dos eventos do SDK.
-    - Persiste AgentSession com `agente='lojas'` e incrementa message_count.
-    - Escopo de loja injetado via hook `UserPromptSubmit` do SDK.
+Implementacao M2:
+    - Thread daemon roda async generator do SDK; empurra eventos formatados
+      em event_queue.Queue() (cross-thread).
+    - SSE generator drena event_queue e yielda strings SSE.
+    - can_use_tool (em outra thread do SDK) tambem empurra raw SSE strings
+      em event_queue para `ask_user_question` — fluxo cross-thread.
+    - AgentSession pre-criada antes do stream (validacao de ownership do
+      POST /api/user-answer).
+    - Persiste sessao + sdk_session_id + total_cost_usd + message_count.
+    - Cleanup robusto: cancel_pending + cleanup_session_context no finally.
 """
 import asyncio
 import json
 import logging
-import uuid
+import queue
+import threading
 import time
-from typing import Generator
+import uuid
+from typing import Generator, Optional
 
 from flask import request, jsonify, render_template, Response, stream_with_context
 from flask_login import current_user
@@ -36,6 +42,7 @@ logger = logging.getLogger('sistema_fretes')
 HEARTBEAT_INTERVAL_SECONDS = 10
 INACTIVITY_TIMEOUT_SECONDS = 240
 STREAM_MAX_DURATION_SECONDS = 540
+QUEUE_GET_TIMEOUT_SECONDS = 1.0  # poll period para dreno do event_queue
 
 
 def _sse(event_type: str, payload: dict) -> str:
@@ -83,7 +90,8 @@ def api_chat():
         perfil = current_user.perfil
         loja_hora_id = getattr(current_user, 'loja_hora_id', None)
 
-        # Persiste sessao particionada (agente='lojas')
+        # Persiste sessao particionada (agente='lojas') ANTES do stream para
+        # validacao de ownership do POST /api/user-answer.
         session, created = AgentSession.get_or_create(
             session_id=session_id,
             user_id=user_id,
@@ -125,21 +133,117 @@ def api_chat():
         }), 500
 
 
+def _streaming_worker(
+    *,
+    user_message: str,
+    user_id: int,
+    user_name: str,
+    perfil: str,
+    loja_hora_id: Optional[int],
+    sdk_session_id: Optional[str],
+    our_session_id: str,
+    event_queue: 'queue.Queue',
+    state: dict,
+):
+    """Worker em daemon thread que processa async gen do SDK.
+
+    Empurra strings SSE pre-formatadas em event_queue. Encerra com sentinel
+    None para sinalizar fim ao SSE generator.
+
+    `state` e dict mutavel para repassar metadata pos-stream (sdk_session_id,
+    total_cost_usd, etc.) ao thread principal.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def _run():
+        try:
+            agen = stream_lojas_chat(
+                user_message=user_message,
+                user_id=user_id,
+                user_name=user_name,
+                perfil=perfil,
+                loja_hora_id=loja_hora_id,
+                sdk_session_id=sdk_session_id,
+                our_session_id=our_session_id,
+                event_queue=event_queue,
+            )
+            async for event in agen:
+                etype = event.get('type')
+                meta = event.get('metadata', {}) or {}
+                content = event.get('content', '')
+
+                if etype == 'init':
+                    sid = meta.get('sdk_session_id')
+                    if sid:
+                        state['sdk_session_id'] = sid
+                    event_queue.put(_sse('init', {'sdk_session_id': sid}))
+                elif etype == 'done':
+                    state['final_metadata'] = meta
+                    event_queue.put(_sse('done', meta))
+                else:
+                    event_queue.put(_sse(etype, {'content': content, **meta}))
+        except Exception as e:
+            logger.exception("[AGENTE_LOJAS] worker erro: %s", e)
+            event_queue.put(_sse('error', {'content': str(e)}))
+        finally:
+            event_queue.put(None)  # sentinel
+
+    try:
+        loop.run_until_complete(_run())
+    except Exception as e:
+        logger.exception("[AGENTE_LOJAS] worker outer erro: %s", e)
+        try:
+            event_queue.put(_sse('error', {'content': str(e)}))
+            event_queue.put(None)
+        except Exception:
+            pass
+    finally:
+        try:
+            loop.close()
+        except Exception:
+            pass
+
+
 def _generate_sse(
     user_message: str,
     session_id: str,
-    sdk_session_id: str,
+    sdk_session_id: Optional[str],
     user_id: int,
     user_name: str,
     perfil: str,
     loja_hora_id,
 ) -> Generator[str, None, None]:
-    """Generator SSE que bridgia async -> sync via event loop dedicado."""
-    loop = asyncio.new_event_loop()
+    """Generator SSE — drena event_queue alimentado pelo worker thread.
+
+    O worker thread roda o async gen do SDK e tambem o callback can_use_tool
+    (que pode emitir `ask_user_question` raw SSE). O generator aqui apenas
+    consome event_queue cross-thread com timeout para heartbeat/inatividade.
+    """
+    event_queue: 'queue.Queue[Optional[str]]' = queue.Queue()
+    state: dict = {
+        'sdk_session_id': sdk_session_id,
+        'final_metadata': {},
+    }
     t_start = time.time()
     last_event_time = t_start
-    captured_sdk_session_id = sdk_session_id
-    final_metadata = {}
+
+    worker = threading.Thread(
+        target=_streaming_worker,
+        kwargs={
+            'user_message': user_message,
+            'user_id': user_id,
+            'user_name': user_name,
+            'perfil': perfil,
+            'loja_hora_id': loja_hora_id,
+            'sdk_session_id': sdk_session_id,
+            'our_session_id': session_id,
+            'event_queue': event_queue,
+            'state': state,
+        },
+        daemon=True,
+        name=f'lojas-stream-{session_id[:8]}',
+    )
 
     try:
         yield _sse('start', {
@@ -147,14 +251,7 @@ def _generate_sse(
             'agente': AGENTE_ID,
         })
 
-        agen = stream_lojas_chat(
-            user_message=user_message,
-            user_id=user_id,
-            user_name=user_name,
-            perfil=perfil,
-            loja_hora_id=loja_hora_id,
-            sdk_session_id=sdk_session_id,
-        )
+        worker.start()
 
         while True:
             elapsed = time.time() - t_start
@@ -166,51 +263,43 @@ def _generate_sse(
                 break
 
             try:
-                event = loop.run_until_complete(agen.__anext__())
-            except StopAsyncIteration:
-                break
-            except Exception as e:
-                logger.exception("[AGENTE_LOJAS] Erro durante iteracao: %s", e)
-                yield _sse('error', {'content': str(e)})
+                evt = event_queue.get(timeout=QUEUE_GET_TIMEOUT_SECONDS)
+            except queue.Empty:
+                # Heartbeat para manter conexao viva (proxy Render mata idle).
+                # NAO renova last_event_time — heartbeat nao conta como progresso.
+                if time.time() - last_event_time >= HEARTBEAT_INTERVAL_SECONDS:
+                    yield _sse('heartbeat', {})
+                continue
+
+            if evt is None:
+                # sentinel de fim do worker
                 break
 
             last_event_time = time.time()
-            etype = event.get('type')
-            meta = event.get('metadata', {}) or {}
-            content = event.get('content', '')
-
-            if etype == 'init':
-                sid = meta.get('sdk_session_id')
-                if sid:
-                    captured_sdk_session_id = sid
-                yield _sse('init', {'sdk_session_id': sid})
-            elif etype == 'done':
-                final_metadata = meta
-                yield _sse('done', meta)
-                break
-            else:
-                # text, tool_call, tool_result, error, thinking
-                yield _sse(etype, {'content': content, **meta})
+            yield evt
 
         # Persistencia pos-stream (sdk_session_id + message_count)
         _persist_session_after_stream(
             session_id=session_id,
             user_message=user_message,
-            sdk_session_id=captured_sdk_session_id,
-            final_metadata=final_metadata,
+            sdk_session_id=state.get('sdk_session_id'),
+            final_metadata=state.get('final_metadata') or {},
         )
 
     finally:
-        try:
-            loop.close()
-        except Exception:
-            pass
+        # Garante que worker morre se cliente desconectou. cleanup_session_context
+        # e cancel_pending sao feitos pelo client.py:stream_response (finally).
+        if worker.is_alive():
+            try:
+                worker.join(timeout=2.0)
+            except Exception:
+                pass
 
 
 def _persist_session_after_stream(
     session_id: str,
     user_message: str,
-    sdk_session_id: str,
+    sdk_session_id: Optional[str],
     final_metadata: dict,
 ):
     """Atualiza AgentSession com sdk_session_id, message_count, cost, model."""

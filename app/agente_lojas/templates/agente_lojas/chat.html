@@ -2,6 +2,20 @@
 
 {% block title %}Agente Lojas HORA{% endblock %}
 
+{% block extra_css %}
+<style>
+  .lojas-chat-log { min-height: 280px; max-height: 65vh; overflow-y: auto; }
+  .lojas-msg { padding: .5rem .75rem; border-radius: .375rem; margin-bottom: .5rem; }
+  .lojas-msg-user { background: var(--bs-primary-bg-subtle); }
+  .lojas-msg-agent { background: var(--bs-light); border: 1px solid var(--bs-border-color); }
+  .lojas-tool-call { font-size: .85rem; color: var(--bs-info-text-emphasis); font-style: italic; }
+  .lojas-tool-result-toggle { font-size: .8rem; color: var(--bs-secondary); cursor: pointer; }
+  .lojas-tool-result-body { background: var(--bs-tertiary-bg); padding: .5rem; border-radius: .25rem; font-family: monospace; font-size: .8rem; white-space: pre-wrap; max-height: 240px; overflow-y: auto; }
+  .lojas-thinking { font-size: .85rem; color: var(--bs-secondary); font-style: italic; }
+  .lojas-error { background: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); padding: .5rem; border-radius: .25rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container my-3">
   <div class="d-flex align-items-center mb-3">
@@ -9,26 +23,21 @@
       <i class="fas fa-motorcycle text-primary"></i>
       Agente Lojas HORA
     </h4>
-    <span class="badge bg-warning text-dark">M0 — esqueleto</span>
-  </div>
-
-  <div class="alert alert-info small mb-3">
-    <strong>Status:</strong> esqueleto funcional. Skills e integracao com SDK
-    chegam em M1 (consultando-estoque-loja, rastreando-chassi).
+    <span class="badge bg-success">M2 SDK</span>
   </div>
 
   <div class="card mb-3">
-    <div class="card-header bg-light">
+    <div class="card-header bg-light py-2">
       <strong>Contexto da sua loja</strong>
     </div>
-    <div class="card-body">
+    <div class="card-body py-2">
       <pre class="mb-0" style="font-size: 0.85rem;">{{ loja_context_preview }}</pre>
     </div>
   </div>
 
   <div class="card">
     <div class="card-body">
-      <div id="chat-log" class="mb-3" style="min-height: 200px; max-height: 400px; overflow-y: auto;"></div>
+      <div id="chat-log" class="lojas-chat-log mb-3"></div>
       <form id="chat-form" class="d-flex gap-2">
         <input
           type="text"
@@ -38,10 +47,28 @@
           autocomplete="off"
           required
         />
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-primary" id="chat-send">
           <i class="fas fa-paper-plane"></i> Enviar
         </button>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal AskUserQuestion -->
+<div class="modal fade" id="askUserModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-question-circle text-primary"></i>
+          O agente precisa confirmar
+        </h5>
+      </div>
+      <div class="modal-body" id="askUserBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="askUserSubmit">Enviar respostas</button>
+      </div>
     </div>
   </div>
 </div>
@@ -50,27 +77,159 @@
 (function () {
   const form = document.getElementById('chat-form');
   const input = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('chat-send');
   const log = document.getElementById('chat-log');
   let sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
 
-  function appendMessage(role, text) {
+  // Modal AskUserQuestion
+  const askModalEl = document.getElementById('askUserModal');
+  const askModal = new bootstrap.Modal(askModalEl);
+  const askBody = document.getElementById('askUserBody');
+  const askSubmit = document.getElementById('askUserSubmit');
+  let askPendingSessionId = null;
+  let askPendingQuestions = [];
+
+  function appendBubble(role, text) {
     const div = document.createElement('div');
-    div.className = 'mb-2';
+    div.className = `lojas-msg lojas-msg-${role}`;
     const tag = role === 'user' ? 'strong' : 'span';
-    div.innerHTML = `<${tag}>${role === 'user' ? 'Voce' : 'Agente'}:</${tag}> <span class="text-body"></span>`;
-    div.querySelector('span.text-body').textContent = text;
+    const labelEl = document.createElement(tag);
+    labelEl.textContent = role === 'user' ? 'Voce: ' : 'Agente: ';
+    const textEl = document.createElement('span');
+    textEl.className = 'text-body';
+    textEl.textContent = text;
+    div.appendChild(labelEl);
+    div.appendChild(textEl);
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
+    return textEl;
   }
+
+  function appendInfo(html, klass) {
+    const div = document.createElement('div');
+    div.className = klass || '';
+    div.innerHTML = html;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    return div;
+  }
+
+  function appendToolCall(toolName, toolInput) {
+    const summary = toolName === 'Skill'
+      ? `invocando skill <code>${(toolInput && toolInput.skill) || ''}</code>...`
+      : (toolName === 'Bash'
+        ? `executando: <code>${(toolInput && (toolInput.description || toolInput.command || '')).slice(0, 80)}</code>`
+        : `chamando <code>${toolName}</code>...`);
+    return appendInfo(`<i class="fas fa-cog fa-spin"></i> ${summary}`, 'lojas-tool-call');
+  }
+
+  function appendToolResult(content, isError) {
+    const wrap = document.createElement('div');
+    const toggle = document.createElement('div');
+    toggle.className = 'lojas-tool-result-toggle';
+    toggle.innerHTML = isError
+      ? `<i class="fas fa-times-circle text-danger"></i> resultado (erro) <span class="text-decoration-underline">mostrar</span>`
+      : `<i class="fas fa-check-circle text-success"></i> resultado <span class="text-decoration-underline">mostrar</span>`;
+    const body = document.createElement('div');
+    body.className = 'lojas-tool-result-body d-none';
+    body.textContent = (content || '').slice(0, 4000);
+    toggle.addEventListener('click', () => {
+      body.classList.toggle('d-none');
+      const span = toggle.querySelector('span');
+      if (span) span.textContent = body.classList.contains('d-none') ? 'mostrar' : 'ocultar';
+    });
+    wrap.appendChild(toggle);
+    wrap.appendChild(body);
+    log.appendChild(wrap);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function appendThinking(text) {
+    if (!text) return;
+    appendInfo(`<i class="fas fa-brain"></i> ${text}`, 'lojas-thinking');
+  }
+
+  function appendError(content) {
+    appendInfo(`<i class="fas fa-exclamation-triangle"></i> ${content}`, 'lojas-error');
+  }
+
+  function showAskUserQuestion(payload) {
+    askPendingSessionId = payload.session_id;
+    askPendingQuestions = payload.questions || [];
+    askBody.innerHTML = '';
+    askPendingQuestions.forEach((q, idx) => {
+      const block = document.createElement('div');
+      block.className = 'mb-3';
+      const lbl = document.createElement('div');
+      lbl.className = 'fw-bold mb-2';
+      lbl.textContent = q.question;
+      block.appendChild(lbl);
+      const opts = q.options || [];
+      const radioName = `ask_q_${idx}`;
+      opts.forEach((opt, oidx) => {
+        const id = `${radioName}_${oidx}`;
+        const wrap = document.createElement('div');
+        wrap.className = 'form-check';
+        const inputEl = document.createElement('input');
+        inputEl.className = 'form-check-input';
+        inputEl.type = q.multiSelect ? 'checkbox' : 'radio';
+        inputEl.name = radioName;
+        inputEl.id = id;
+        inputEl.value = opt.label;
+        if (oidx === 0 && !q.multiSelect) inputEl.checked = true;
+        const lblEl = document.createElement('label');
+        lblEl.className = 'form-check-label';
+        lblEl.htmlFor = id;
+        lblEl.innerHTML = `<strong>${opt.label}</strong>` + (opt.description ? ` — <span class="text-secondary small">${opt.description}</span>` : '');
+        wrap.appendChild(inputEl);
+        wrap.appendChild(lblEl);
+        block.appendChild(wrap);
+      });
+      askBody.appendChild(block);
+    });
+    askModal.show();
+  }
+
+  askSubmit.addEventListener('click', async function () {
+    const answers = {};
+    askPendingQuestions.forEach((q, idx) => {
+      const radioName = `ask_q_${idx}`;
+      const checked = askBody.querySelectorAll(`input[name="${radioName}"]:checked`);
+      if (checked.length === 0) return;
+      const vals = Array.from(checked).map(el => el.value);
+      answers[q.question] = q.multiSelect ? vals.join(', ') : vals[0];
+    });
+
+    askSubmit.disabled = true;
+    try {
+      const resp = await fetch('/agente-lojas/api/user-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: askPendingSessionId, answers }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        appendError('Falha ao enviar resposta: ' + (err.error || resp.statusText));
+      }
+    } catch (e) {
+      appendError('Erro de conexao ao enviar resposta: ' + e.message);
+    } finally {
+      askSubmit.disabled = false;
+      askModal.hide();
+    }
+  });
 
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
     const message = input.value.trim();
     if (!message) return;
 
-    appendMessage('user', message);
+    appendBubble('user', message);
     input.value = '';
     input.disabled = true;
+    sendBtn.disabled = true;
+
+    let agentTextEl = null;
 
     try {
       const resp = await fetch('/agente-lojas/api/chat', {
@@ -81,14 +240,13 @@
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: resp.statusText }));
-        appendMessage('agent', 'ERRO: ' + (err.error || resp.statusText));
+        appendError('ERRO: ' + (err.error || resp.statusText));
         return;
       }
 
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let agentText = '';
 
       while (true) {
         const { value, done } = await reader.read();
@@ -109,18 +267,36 @@
           let payload;
           try { payload = JSON.parse(dataLine); } catch { continue; }
 
-          if (event === 'text' && payload.content) {
-            agentText = payload.content;
+          if (event === 'text') {
+            if (!agentTextEl) agentTextEl = appendBubble('agent', '');
+            agentTextEl.textContent += payload.content || '';
+            log.scrollTop = log.scrollHeight;
+          } else if (event === 'thinking') {
+            appendThinking(payload.content);
+          } else if (event === 'tool_call') {
+            appendToolCall(payload.tool_name, payload.tool_input);
+          } else if (event === 'tool_result') {
+            appendToolResult(payload.content, payload.is_error);
+          } else if (event === 'error') {
+            appendError(payload.content || 'erro desconhecido');
+          } else if (event === 'ask_user_question') {
+            showAskUserQuestion(payload);
+            // NAO interrompe o stream — agente continua aguardando resposta
+            // via POST /api/user-answer (event_queue desbloqueia can_use_tool)
+          } else if (event === 'init' || event === 'start' || event === 'heartbeat') {
+            // ignora
+          } else if (event === 'done') {
+            // mantem reset visual; o stream encerra logo depois
+            agentTextEl = null;
           }
         }
       }
 
-      appendMessage('agent', agentText || '(sem resposta)');
-
     } catch (err) {
-      appendMessage('agent', 'ERRO de conexao: ' + err.message);
+      appendError('ERRO de conexao: ' + err.message);
     } finally {
       input.disabled = false;
+      sendBtn.disabled = false;
       input.focus();
     }
   });
