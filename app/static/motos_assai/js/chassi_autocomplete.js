@@ -25,11 +25,16 @@
   function injectStylesOnce() {
     if (document.getElementById(STYLE_ID)) return;
     var css = ''
-      + '.ma-chassi-suggest{position:absolute;z-index:1080;display:none;'
+      // top:100% + left:0 ancora o dropdown ABAIXO do parent (.input-group),
+      // evitando sobrepor irmaos como o btn-camera. Sem essas coordenadas o
+      // navegador calcula static position em flex-wrap, alinhando o dropdown
+      // com o TOPO do parent — o que cobre o botao da camera ao lado do input.
+      + '.ma-chassi-suggest{position:absolute;top:100%;left:0;z-index:1080;display:none;'
+      + 'pointer-events:none;'
       + 'min-width:100%;max-width:480px;max-height:280px;overflow-y:auto;'
       + 'background:var(--bs-body-bg,#fff);border:1px solid var(--bs-border-color,#dee2e6);'
       + 'border-radius:.375rem;box-shadow:0 .5rem 1rem rgba(0,0,0,.15);margin-top:2px;}'
-      + '.ma-chassi-suggest.is-open{display:block;}'
+      + '.ma-chassi-suggest.is-open{display:block;pointer-events:auto;}'
       + '.ma-chassi-suggest__item{padding:.5rem .75rem;cursor:pointer;border-bottom:1px solid var(--bs-border-color,#eee);font-size:.95rem;line-height:1.3;}'
       + '.ma-chassi-suggest__item:last-child{border-bottom:none;}'
       + '.ma-chassi-suggest__item:hover,.ma-chassi-suggest__item.is-active{background:var(--bs-tertiary-bg,#f1f3f5);}'
@@ -178,7 +183,9 @@
           // Descarta respostas obsoletas
           if (seq !== state.requestSeq) return;
           state.items = (data && data.items) || [];
-          state.activeIdx = state.items.length ? 0 : -1;
+          // activeIdx = -1 (nada pre-selecionado): Enter passa para o handler
+          // de submit do leitor USB. Usuario navega com seta para escolher item.
+          state.activeIdx = -1;
           render();
         })
         .catch(function () {
@@ -201,16 +208,20 @@
 
     // capture:true para interceptar Enter ANTES dos handlers existentes
     // (operacao_quick.js / separacao_chassi.js / recebimento_wizard.js).
+    // SO interceptamos Enter quando o usuario navegou explicitamente com
+    // setas (activeIdx >= 0). Sem navegacao, Enter passa para o handler de
+    // submit (leitor USB / botao validar) sem precisar de Enter duplo.
     input.addEventListener('keydown', function (e) {
       if (!state.open || !state.items.length) return;
+      var n = state.items.length;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
-        setActive((state.activeIdx + 1) % state.items.length);
+        setActive(state.activeIdx < 0 ? 0 : (state.activeIdx + 1) % n);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         e.stopPropagation();
-        setActive((state.activeIdx - 1 + state.items.length) % state.items.length);
+        setActive(state.activeIdx < 0 ? n - 1 : (state.activeIdx - 1 + n) % n);
       } else if (e.key === 'Enter') {
         if (state.activeIdx >= 0) {
           e.preventDefault();
