@@ -11,7 +11,9 @@
     <div class="input-group">
       <input type="text" id="input-chassi" class="form-control form-control-lg"
              autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50"
-             autocapitalize="characters" enterkeyhint="search">
+             autocapitalize="characters" enterkeyhint="search"
+             autocomplete="off"
+             data-chassi-autocomplete='{"contexto":"montagem"}'>
       <button type="button" id="btn-camera" class="btn btn-outline-secondary">
         <i class="fas fa-camera"></i>
       </button>
@@ -36,7 +38,9 @@
     <div class="mb-2">
       <label class="form-label small">Chassi doador (opcional)</label>
       <input type="text" id="input-chassi-doador" class="form-control" placeholder="Chassi de outra moto"
-             autocapitalize="characters" enterkeyhint="search">
+             autocapitalize="characters" enterkeyhint="search"
+             autocomplete="off"
+             data-chassi-autocomplete='{"contexto":"montagem_doador"}'>
     </div>
   </div>
 
@@ -64,6 +68,7 @@ window.MOTOS_ASSAI_OP_CONFIG = {
   modo: 'montagem',
 };
 </script>
+<script src="{{ url_for('static', filename='motos_assai/js/chassi_autocomplete.js') }}" defer></script>
 <script src="{{ url_for('static', filename='motos_assai/js/operacao_quick.js') }}"></script>
 {% endblock %}
 

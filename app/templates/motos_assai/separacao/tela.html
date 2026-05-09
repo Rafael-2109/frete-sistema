@@ -38,7 +38,9 @@
   <div class="input-group">
     <input type="text" id="input-chassi" class="form-control form-control-lg"
            autofocus placeholder="QR / Barcode / digitar (Enter)" maxlength="50"
-           autocapitalize="characters" enterkeyhint="search">
+           autocapitalize="characters" enterkeyhint="search"
+           autocomplete="off"
+           data-chassi-autocomplete='{"contexto":"separacao"}'>
     <button type="button" id="btn-camera" class="btn btn-outline-secondary">
       <i class="fas fa-camera"></i>
     </button>
@@ -174,6 +176,7 @@ window.MOTOS_ASSAI_SEP = {
   },
 };
 </script>
+<script src="{{ url_for('static', filename='motos_assai/js/chassi_autocomplete.js') }}" defer></script>
 <script src="{{ url_for('static', filename='motos_assai/js/separacao_chassi.js') }}"></script>
 {% endblock %}
 

@@ -57,7 +57,9 @@
       <label class="form-label">ou digite/escaneie com leitor USB</label>
       <input type="text" id="input-chassi" class="form-control form-control-lg" autofocus
              placeholder="Chassi (Enter para validar)" maxlength="50"
-             autocapitalize="characters" enterkeyhint="search">
+             autocapitalize="characters" enterkeyhint="search"
+             autocomplete="off"
+             data-chassi-autocomplete='{"contexto":"recebimento","reciboId":{{ recibo.id }}}'>
       <div id="btn-validar" class="d-inline-block">
         <button type="button" id="btn-chassi-manual" class="btn btn-outline-primary mt-2">
           Validar chassi <i class="fas fa-arrow-right"></i>
@@ -183,6 +185,7 @@ window.MOTOS_ASSAI_RECEBIMENTO = {
   },
 };
 </script>
+<script src="{{ url_for('static', filename='motos_assai/js/chassi_autocomplete.js') }}" defer></script>
 <script src="{{ url_for('static', filename='motos_assai/js/recebimento_wizard.js') }}"></script>
 {% endblock %}
 
