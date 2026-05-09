@@ -1,18 +1,44 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
-<header class="d-flex justify-content-between mb-3">
-  <h2>Recibo Motochefe — {{ recibo.numero_recibo or '#' ~ recibo.id }}
-    <span class="badge bg-{% if recibo.status == 'CONCLUIDO' %}success{% elif recibo.status == 'COM_DIVERGENCIA' %}warning{% else %}primary{% endif %}">
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h2 class="mb-0">Recibo Motochefe — {{ recibo.numero_recibo or '#' ~ recibo.id }}
+    <span class="badge bg-{% if recibo.status == 'CONCLUIDO' %}success{% elif recibo.status == 'COM_DIVERGENCIA' %}warning{% elif recibo.status == 'RESOLVENDO_DUPLICIDADE' %}danger{% else %}primary{% endif %}">
       {{ recibo.status }}
     </span>
   </h2>
-  {% if recibo.status == 'RECEBIDO_AGUARDANDO_CONFERENCIA' or recibo.status == 'EM_CONFERENCIA' %}
-  <a href="{{ url_for('motos_assai.recebimento_wizard', recibo_id=recibo.id) }}"
-     class="btn btn-primary">
-    <i class="fas fa-qrcode"></i> Iniciar conferência
-  </a>
-  {% endif %}
+  <div class="d-flex gap-2 flex-wrap">
+    {% if recibo.doc_s3_key %}
+    <a href="{{ url_for('motos_assai.recibos_download', recibo_id=recibo.id) }}"
+       class="btn btn-outline-primary"
+       target="_blank" rel="noopener"
+       title="Abrir arquivo original ({{ recibo.tipo_documento or 'arquivo' }})">
+      <i class="fas fa-file-download"></i> Baixar arquivo
+    </a>
+    {% endif %}
+    {% if recibo.status == 'RESOLVENDO_DUPLICIDADE' %}
+    <a href="{{ url_for('motos_assai.recibos_resolver_duplicidade', recibo_id=recibo.id) }}"
+       class="btn btn-warning">
+      <i class="fas fa-clone"></i> Resolver duplicidade
+    </a>
+    {% elif recibo.status in ['RECEBIDO_AGUARDANDO_CONFERENCIA', 'EM_CONFERENCIA'] %}
+    <a href="{{ url_for('motos_assai.recebimento_wizard', recibo_id=recibo.id) }}"
+       class="btn btn-primary">
+      <i class="fas fa-qrcode"></i> Iniciar conferencia
+    </a>
+    {% endif %}
+    {% if pode_excluir %}
+    <form method="POST"
+          action="{{ url_for('motos_assai.recibos_excluir', recibo_id=recibo.id) }}"
+          onsubmit="return confirm('Excluir este recibo? Esta acao nao pode ser desfeita.');"
+          class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-danger">
+        <i class="fas fa-trash"></i> Excluir recibo
+      </button>
+    </form>
+    {% endif %}
+  </div>
 </header>
 
 <dl class="row small">
@@ -38,30 +64,127 @@
   <dt class="col-sm-2">Parser</dt>
   <dd class="col-sm-10">
     <code>{{ recibo.parser_usado }}</code>
-    (confiança {{ '%.0f%%' | format(recibo.parsing_confianca * 100) if recibo.parsing_confianca else '-' }})
+    (confianca {{ '%.0f%%' | format(recibo.parsing_confianca * 100) if recibo.parsing_confianca else '-' }})
   </dd>
 </dl>
 
-<h4 class="mt-3">Chassis ({{ items|length }})</h4>
+<h4 class="mt-3">Chassis ativos ({{ items|length }})</h4>
 <div class="table-responsive">
 <table class="table table-sm">
   <thead>
-    <tr><th>Chassi</th><th>Modelo (recibo)</th><th>Modelo (resolvido)</th>
-        <th>Motor</th><th>Cor</th><th>Conferido</th><th>Divergência</th></tr>
+    <tr>
+      <th>Chassi</th><th>Modelo (recibo)</th><th>Modelo (resolvido)</th>
+      <th>Motor</th><th>Cor</th><th>Conferido</th><th>Divergencia</th>
+      <th class="text-end">Acoes</th>
+    </tr>
   </thead>
   <tbody>
     {% for it in items %}
     <tr>
       <td><code>{{ it.chassi }}</code></td>
       <td>{{ it.modelo_texto_recibo }}</td>
-      <td>{% if it.modelo_id %}<span class="badge bg-success">{{ it.modelo.codigo }}</span>{% else %}<span class="badge bg-warning">não resolvido</span>{% endif %}</td>
+      <td>
+        {% if it.modelo_id %}
+          <span class="badge bg-success">{{ it.modelo.codigo }}</span>
+        {% else %}
+          <span class="badge bg-warning">nao resolvido</span>
+        {% endif %}
+      </td>
       <td><small>{{ it.motor or '-' }}</small></td>
       <td>{{ it.cor_texto or '-' }}</td>
-      <td>{% if it.conferido %}<i class="fas fa-check text-success"></i>{% else %}<i class="fas fa-clock text-muted"></i>{% endif %}</td>
-      <td>{% if it.tipo_divergencia %}<span class="badge bg-warning">{{ it.tipo_divergencia }}</span>{% endif %}</td>
+      <td>
+        {% if it.conferido %}
+          <i class="fas fa-check text-success"></i>
+        {% else %}
+          <i class="fas fa-clock text-muted"></i>
+        {% endif %}
+      </td>
+      <td>
+        {% if it.tipo_divergencia %}
+          <span class="badge bg-warning">{{ it.tipo_divergencia }}</span>
+        {% endif %}
+      </td>
+      <td class="text-end">
+        {% if not it.conferido %}
+        <form method="POST"
+              action="{{ url_for('motos_assai.recibos_item_inativar', item_id=it.id) }}"
+              onsubmit="return confirm('Inativar chassi {{ it.chassi }}?');"
+              class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-outline-secondary"
+                  title="Inativar este chassi">
+            <i class="fas fa-eye-slash"></i> Inativar
+          </button>
+        </form>
+        {% else %}
+        <button class="btn btn-sm btn-outline-secondary" disabled
+                title="Chassi ja recebido — nao pode ser inativado">
+          <i class="fas fa-lock"></i>
+        </button>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
+
+{% if items_inativos %}
+<details class="mt-4">
+  <summary class="h5 text-muted" style="cursor:pointer;">
+    Chassis inativos ({{ items_inativos|length }})
+  </summary>
+  <div class="alert alert-light border small text-muted mt-2">
+    Estes chassis estao desabilitados — nao sao considerados em contagens nem
+    no fluxo de conferencia. Reative se voltar a fazer parte do recibo.
+  </div>
+  <div class="table-responsive">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Chassi</th><th>Modelo (recibo)</th><th>Modelo (resolvido)</th>
+        <th>Motor</th><th>Cor</th><th>Motivo</th>
+        <th class="text-end">Acoes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items_inativos %}
+      <tr class="text-muted">
+        <td><code>{{ it.chassi }}</code></td>
+        <td>{{ it.modelo_texto_recibo }}</td>
+        <td>
+          {% if it.modelo_id %}
+            <span class="badge bg-secondary">{{ it.modelo.codigo }}</span>
+          {% else %}
+            <span class="badge bg-warning">nao resolvido</span>
+          {% endif %}
+        </td>
+        <td><small>{{ it.motor or '-' }}</small></td>
+        <td>{{ it.cor_texto or '-' }}</td>
+        <td>
+          {% if it.tipo_divergencia %}
+            <span class="badge bg-secondary">{{ it.tipo_divergencia }}</span>
+          {% else %}
+            <small>inativado manualmente</small>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <form method="POST"
+                action="{{ url_for('motos_assai.recibos_item_reativar', item_id=it.id) }}"
+                onsubmit="return confirm('Reativar chassi {{ it.chassi }}?');"
+                class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary"
+                    title="Reativar este chassi">
+              <i class="fas fa-undo"></i> Reativar
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</details>
+{% endif %}
 {% endblock %}

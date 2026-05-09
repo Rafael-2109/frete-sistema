@@ -4,7 +4,12 @@
 <h2>Recibos Motochefe</h2>
 <div id="tabela-recibos-assai" class="table-responsive">
 <table class="table table-hover">
-  <thead><tr><th>#</th><th>PO</th><th>Data recibo</th><th>Equipe</th><th>Total</th><th>Status</th></tr></thead>
+  <thead>
+    <tr>
+      <th>#</th><th>PO</th><th>Data recibo</th><th>Equipe</th>
+      <th>Total</th><th>Status</th><th class="text-end">Acoes</th>
+    </tr>
+  </thead>
   <tbody>
     {% for r in recibos %}
     <tr>
@@ -13,10 +18,33 @@
       <td>{{ r.data_recibo.strftime('%d/%m/%Y') if r.data_recibo else '-' }}</td>
       <td>{{ r.equipe or '-' }}</td>
       <td>{{ r.total_motos_declarado or '-' }}</td>
-      <td><span class="badge bg-secondary">{{ r.status }}</span></td>
+      <td>
+        <span class="badge bg-{% if r.status == 'CONCLUIDO' %}success{% elif r.status == 'COM_DIVERGENCIA' %}warning{% elif r.status == 'RESOLVENDO_DUPLICIDADE' %}danger{% else %}secondary{% endif %}">
+          {{ r.status }}
+        </span>
+      </td>
+      <td class="text-end">
+        {% if pode_excluir_map.get(r.id) %}
+        <form method="POST"
+              action="{{ url_for('motos_assai.recibos_excluir', recibo_id=r.id) }}"
+              onsubmit="return confirm('Excluir recibo #{{ r.id }}? Esta acao nao pode ser desfeita.');"
+              class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger"
+                  title="Excluir recibo">
+            <i class="fas fa-trash"></i>
+          </button>
+        </form>
+        {% else %}
+        <button class="btn btn-sm btn-outline-secondary" disabled
+                title="Tem motos recebidas — nao pode ser excluido">
+          <i class="fas fa-lock"></i>
+        </button>
+        {% endif %}
+      </td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="text-center text-muted">Nenhum recibo.</td></tr>
+    <tr><td colspan="7" class="text-center text-muted">Nenhum recibo.</td></tr>
     {% endfor %}
   </tbody>
 </table>

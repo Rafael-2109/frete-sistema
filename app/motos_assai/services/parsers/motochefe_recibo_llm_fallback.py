@@ -3,7 +3,8 @@
 Acionado quando determinístico extrai < 80% das linhas declaradas no header.
 
 Estrutura:
-- Haiku 4.5 → Sonnet 4.6 fallback
+- Sonnet 4.6 (modelo unico — Haiku descartado em 2026-05-09: imprecisao em
+  recibos com tabelas longas de chassis)
 - PDF: enviado como document block direto
 - XLSX: converte primeiro para texto plano (sem layout) e envia como text
 """
@@ -20,8 +21,8 @@ from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 SONNET_MODEL = 'claude-sonnet-4-6'
+LLM_MODELS = [SONNET_MODEL]  # ordem de fallback (atualmente unico)
 
 PROMPT_SYSTEM = """Você é um parser de recibos da Motochefe (contra-prova de entrega de motos elétricas para um CD).
 
@@ -75,17 +76,16 @@ def parse_pdf_via_llm(pdf_bytes: bytes) -> Dict[str, Any]:
     client = anthropic.Anthropic(api_key=api_key)
     pdf_b64 = base64.b64encode(pdf_bytes).decode('ascii')
 
-    for tentativa, modelo in enumerate([HAIKU_MODEL, SONNET_MODEL]):
+    for modelo in LLM_MODELS:
         try:
             data = _chamar_llm_pdf(client, pdf_b64, modelo)
             items = _converter_para_lista_flat(data)
             if items:
-                parser = 'LLM_HAIKU' if tentativa == 0 else 'LLM_SONNET'
-                return {'parser_usado': parser, 'items': items}
+                return {'parser_usado': _nome_parser(modelo), 'items': items}
         except Exception as e:
             logger.warning(f'{modelo} falhou: {e}')
 
-    raise MotochefeReciboLlmFallbackError("Haiku e Sonnet falharam")
+    raise MotochefeReciboLlmFallbackError(f"Todos os modelos LLM falharam: {LLM_MODELS}")
 
 
 def parse_xlsx_via_llm(xlsx_bytes: bytes) -> Dict[str, Any]:
@@ -119,7 +119,7 @@ def _parse_text_via_llm(texto: str) -> Dict[str, Any]:
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    for tentativa, modelo in enumerate([HAIKU_MODEL, SONNET_MODEL]):
+    for modelo in LLM_MODELS:
         try:
             response = client.messages.create(
                 model=modelo,
@@ -134,12 +134,20 @@ def _parse_text_via_llm(texto: str) -> Dict[str, Any]:
             data = json.loads(_extrair_json(raw))
             items = _converter_para_lista_flat(data)
             if items:
-                parser = 'LLM_HAIKU' if tentativa == 0 else 'LLM_SONNET'
-                return {'parser_usado': parser, 'items': items}
+                return {'parser_usado': _nome_parser(modelo), 'items': items}
         except Exception as e:
             logger.warning(f'{modelo} (xlsx) falhou: {e}')
 
-    raise MotochefeReciboLlmFallbackError("Haiku e Sonnet falharam (xlsx)")
+    raise MotochefeReciboLlmFallbackError(f"Todos os modelos LLM falharam (xlsx): {LLM_MODELS}")
+
+
+def _nome_parser(modelo: str) -> str:
+    """Devolve nome curto persistido em assai_recibo_motochefe.parser_usado."""
+    if 'sonnet' in modelo:
+        return 'LLM_SONNET'
+    if 'haiku' in modelo:
+        return 'LLM_HAIKU'
+    return f'LLM_{modelo.upper()}'
 
 
 def _chamar_llm_pdf(client, pdf_b64: str, model: str) -> Dict:

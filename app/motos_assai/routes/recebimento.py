@@ -38,9 +38,9 @@ from app.utils.file_storage import FileStorage
 def recebimento_wizard(recibo_id):
     """Renderiza o wizard de recebimento físico (A→B→C→D)."""
     recibo = get_recibo(recibo_id)
-    total = AssaiReciboItem.query.filter_by(recibo_id=recibo_id).count()
+    total = AssaiReciboItem.query.filter_by(recibo_id=recibo_id, ativo=True).count()
     conferidos = AssaiReciboItem.query.filter_by(
-        recibo_id=recibo_id, conferido=True,
+        recibo_id=recibo_id, conferido=True, ativo=True,
     ).count()
     return render_template(
         'motos_assai/recebimento/wizard.html',
@@ -111,9 +111,9 @@ def recebimento_registrar():
         current_app.logger.exception('Erro ao registrar conferência')
         return jsonify({'ok': False, 'erro': 'Erro interno ao registrar conferência'}), 500
 
-    total = AssaiReciboItem.query.filter_by(recibo_id=item.recibo_id).count()
+    total = AssaiReciboItem.query.filter_by(recibo_id=item.recibo_id, ativo=True).count()
     conferidos = AssaiReciboItem.query.filter_by(
-        recibo_id=item.recibo_id, conferido=True,
+        recibo_id=item.recibo_id, conferido=True, ativo=True,
     ).count()
     return jsonify({
         'ok': True,

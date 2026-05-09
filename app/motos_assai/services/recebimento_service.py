@@ -16,6 +16,7 @@ from app.motos_assai.models import (
     RECIBO_STATUS_CONCLUIDO, RECIBO_STATUS_COM_DIVERGENCIA,
     DIVERGENCIA_MODELO_DIFERENTE, DIVERGENCIA_COR_DIFERENTE,
     DIVERGENCIA_CHASSI_EXTRA, DIVERGENCIA_MOTO_FALTANDO, DIVERGENCIA_AVARIA_FISICA,
+    DIVERGENCIA_DESCARTADO_DUPLICIDADE,
     EVENTO_ESTOQUE, EVENTO_MOTO_FALTANDO,
     COMPRA_STATUS_RECEBIMENTO_PARCIAL, COMPRA_STATUS_FECHADA,
 )
@@ -49,7 +50,7 @@ def validar_chassi_contra_recibo(recibo_id: int, chassi: str) -> Dict[str, Any]:
     """
     chassi_norm = chassi.strip().upper()
     item = AssaiReciboItem.query.filter_by(
-        recibo_id=recibo_id, chassi=chassi_norm,
+        recibo_id=recibo_id, chassi=chassi_norm, ativo=True,
     ).first()
 
     if not item:
@@ -112,7 +113,7 @@ def registrar_conferencia(
         raise RecebimentoValidationError('Modelo conferido obrigatório')
 
     item = AssaiReciboItem.query.filter_by(
-        recibo_id=recibo_id, chassi=chassi_norm,
+        recibo_id=recibo_id, chassi=chassi_norm, ativo=True,
     ).first()
 
     # Race condition: item já conferido por outro operador (H2)
@@ -220,7 +221,7 @@ def finalizar_recebimento(
 
     nao_conferidos: List[AssaiReciboItem] = (
         AssaiReciboItem.query
-        .filter_by(recibo_id=recibo_id, conferido=False)
+        .filter_by(recibo_id=recibo_id, conferido=False, ativo=True)
         .all()
     )
 
@@ -245,7 +246,9 @@ def finalizar_recebimento(
             nao_conferidos
             or AssaiReciboItem.query.filter(
                 AssaiReciboItem.recibo_id == recibo_id,
+                AssaiReciboItem.ativo.is_(True),
                 AssaiReciboItem.tipo_divergencia.isnot(None),
+                AssaiReciboItem.tipo_divergencia != DIVERGENCIA_DESCARTADO_DUPLICIDADE,
             ).count() > 0
         )
         recibo.status = RECIBO_STATUS_COM_DIVERGENCIA if com_divergencia else RECIBO_STATUS_CONCLUIDO

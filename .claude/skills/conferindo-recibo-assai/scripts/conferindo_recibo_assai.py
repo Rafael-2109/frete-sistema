@@ -69,14 +69,15 @@ def _serializar_recibo_resumo(recibo):
     """Serializa recibo com totais agregados (sem itens individuais)."""
     from app.motos_assai.models import AssaiReciboItem
 
-    total_itens = AssaiReciboItem.query.filter_by(recibo_id=recibo.id).count()
+    total_itens = AssaiReciboItem.query.filter_by(recibo_id=recibo.id, ativo=True).count()
     total_conferidos = AssaiReciboItem.query.filter_by(
-        recibo_id=recibo.id, conferido=True,
+        recibo_id=recibo.id, conferido=True, ativo=True,
     ).count()
     total_divergencias = (
         AssaiReciboItem.query
         .filter(
             AssaiReciboItem.recibo_id == recibo.id,
+            AssaiReciboItem.ativo.is_(True),
             AssaiReciboItem.tipo_divergencia.isnot(None),
         )
         .count()
@@ -110,6 +111,7 @@ def _serializar_item(item):
         'qr_code_lido': item.qr_code_lido,
         'tipo_divergencia': item.tipo_divergencia,
         'foto_s3_key': item.foto_s3_key,
+        'ativo': item.ativo,
     }
 
 
@@ -153,12 +155,14 @@ def _read_detalhe_recibo(recibo_id):
             'exit_code': 0,
         }
 
-    itens = (
+    itens_todos = (
         AssaiReciboItem.query
         .filter_by(recibo_id=recibo_id)
         .order_by(AssaiReciboItem.id.asc())
         .all()
     )
+    itens = [i for i in itens_todos if i.ativo]
+    inativos = [_serializar_item(i) for i in itens_todos if not i.ativo]
     conferidos = [_serializar_item(i) for i in itens if i.conferido]
     faltantes = [_serializar_item(i) for i in itens if not i.conferido]
     divergencias = [
@@ -181,12 +185,14 @@ def _read_detalhe_recibo(recibo_id):
         },
         'itens_conferidos': conferidos,
         'itens_faltantes': faltantes,
+        'itens_inativos': inativos,
         'divergencias': divergencias,
         'totais': {
             'declarado': recibo.total_motos_declarado or 0,
             'no_recibo': len(itens),
             'conferidos': len(conferidos),
             'faltantes': len(faltantes),
+            'inativos': len(inativos),
             'divergencias': len(divergencias),
         },
         'exit_code': 0,

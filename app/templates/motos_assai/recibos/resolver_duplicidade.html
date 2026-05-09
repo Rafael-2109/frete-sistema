@@ -1,0 +1,171 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="mb-3">
+  <h2>
+    Resolver duplicidade do Recibo #{{ recibo.id }}
+    <span class="badge bg-danger">{{ recibo.status }}</span>
+  </h2>
+  <p class="text-muted small mb-0">
+    PO: <a href="{{ url_for('motos_assai.compras_detalhe', compra_id=recibo.compra_id) }}">#{{ recibo.compra_id }}</a> ·
+    Importado em {{ recibo.criado_em.strftime('%d/%m/%Y %H:%M') }}
+    {% if duplicidades %} · {{ duplicidades|length }} chassis em conflito{% endif %}
+  </p>
+</header>
+
+{% if not duplicidades %}
+<div class="alert alert-success">
+  Nao ha mais duplicidades pendentes. Voce pode prosseguir com a conferencia.
+</div>
+<a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=recibo.id) }}"
+   class="btn btn-primary">
+  <i class="fas fa-arrow-right"></i> Voltar ao recibo
+</a>
+
+{% else %}
+
+<div class="card mb-4">
+  <div class="card-header"><strong>Acoes em massa</strong></div>
+  <div class="card-body">
+    <p class="small text-muted">
+      Use as opcoes abaixo se quiser resolver todos os conflitos de uma vez. Para
+      decidir caso a caso, role para a tabela de chassis.
+    </p>
+    <div class="d-flex gap-2 flex-wrap">
+      <form method="POST"
+            action="{{ url_for('motos_assai.recibos_resolver_opcao_a', recibo_id=recibo.id) }}"
+            onsubmit="return confirm('Excluir o recibo NOVO inteiro? Os chassis nao duplicados tambem serao perdidos.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-danger">
+          <i class="fas fa-trash"></i> A &mdash; Excluir recibo NOVO
+        </button>
+      </form>
+
+      {% for antigo in antigos_elegiveis %}
+      <form method="POST"
+            action="{{ url_for('motos_assai.recibos_resolver_opcao_b', recibo_id=recibo.id, antigo_id=antigo.id) }}"
+            onsubmit="return confirm('Excluir o recibo ANTIGO #{{ antigo.id }} inteiro?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-warning">
+          <i class="fas fa-trash"></i> B &mdash; Excluir recibo ANTIGO #{{ antigo.id }}
+          {% if antigo.numero_recibo %}({{ antigo.numero_recibo }}){% endif %}
+        </button>
+      </form>
+      {% endfor %}
+
+      {% if not antigos_elegiveis %}
+      <span class="text-muted small align-self-center">
+        <i class="fas fa-info-circle"></i>
+        Nenhum recibo antigo pode ser excluido em massa (todos tem motos ja recebidas).
+        Use a tabela abaixo para resolver individualmente.
+      </span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<h4>Chassis em conflito</h4>
+<div class="table-responsive">
+<table class="table align-middle">
+  <thead>
+    <tr>
+      <th rowspan="2" class="align-middle">Chassi</th>
+      <th colspan="3" class="text-center bg-light">Recibo NOVO #{{ recibo.id }}</th>
+      <th colspan="5" class="text-center bg-light">Recibo ANTIGO</th>
+      <th rowspan="2" class="align-middle text-end">Acoes (linha)</th>
+    </tr>
+    <tr>
+      <th>Modelo</th><th>Cor</th><th>Motor</th>
+      <th>Recibo</th><th>Status do recibo</th><th>Conferido?</th>
+      <th>Status atual da moto</th><th>Modelo</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in duplicidades %}
+      {% set novo = d.novo_item %}
+      {% if not d.antigos %}
+      <tr>
+        <td><code>{{ novo.chassi }}</code></td>
+        <td>{{ novo.modelo_texto_recibo or '-' }}</td>
+        <td>{{ novo.cor_texto or '-' }}</td>
+        <td><small>{{ novo.motor or '-' }}</small></td>
+        <td colspan="5" class="text-muted small">
+          <i class="fas fa-info-circle"></i>
+          Conflito ja resolvido (nenhum recibo antigo ativo). Pode prosseguir.
+        </td>
+        <td></td>
+      </tr>
+      {% else %}
+        {% for ant in d.antigos %}
+        <tr>
+          {% if loop.first %}
+          <td rowspan="{{ d.antigos|length }}"><code>{{ novo.chassi }}</code></td>
+          <td rowspan="{{ d.antigos|length }}">{{ novo.modelo_texto_recibo or '-' }}</td>
+          <td rowspan="{{ d.antigos|length }}">{{ novo.cor_texto or '-' }}</td>
+          <td rowspan="{{ d.antigos|length }}"><small>{{ novo.motor or '-' }}</small></td>
+          {% endif %}
+          <td>
+            <a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=ant.recibo_id) }}">
+              #{{ ant.recibo_id }}
+            </a>
+            {% if ant.recibo_numero %}<small class="text-muted">{{ ant.recibo_numero }}</small>{% endif %}
+          </td>
+          <td><small><span class="badge bg-secondary">{{ ant.recibo_status }}</span></small></td>
+          <td>
+            {% if ant.item.conferido %}
+              <span class="badge bg-success"><i class="fas fa-check"></i> Recebida</span>
+            {% else %}
+              <span class="badge bg-light text-dark border">Pendente</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if ant.status_efetivo_chassi %}
+              <small><code>{{ ant.status_efetivo_chassi }}</code></small>
+            {% else %}
+              <small class="text-muted">sem eventos</small>
+            {% endif %}
+          </td>
+          <td>{{ ant.item.modelo_texto_recibo or '-' }}</td>
+          <td class="text-end">
+            <div class="d-flex gap-1 flex-wrap justify-content-end">
+              {# Manter no NOVO -> remove do antigo (bloqueado se antigo conferido) #}
+              <form method="POST"
+                    action="{{ url_for('motos_assai.recibos_resolver_opcao_c_manter_novo', recibo_id=recibo.id, item_antigo_id=ant.item.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit"
+                        class="btn btn-sm btn-outline-primary"
+                        {% if not ant.pode_remover %}disabled
+                        title="Moto ja foi recebida no recibo antigo"
+                        {% else %}title="Manter chassi no recibo NOVO (remove do antigo)"
+                        {% endif %}>
+                  <i class="fas fa-arrow-right"></i> Manter no novo
+                </button>
+              </form>
+              {# Descartar do recibo NOVO -> mantem item novo inativo (decisao por chassi, nao por linha) #}
+              {% if loop.first %}
+              <form method="POST"
+                    action="{{ url_for('motos_assai.recibos_resolver_opcao_c_manter_antigo', recibo_id=recibo.id, item_novo_id=novo.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-secondary"
+                        title="Descarta este chassi do recibo NOVO (mantem nos antigos onde estao)">
+                  <i class="fas fa-times"></i> Descartar do novo
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<a href="{{ url_for('motos_assai.recibos_detalhe', recibo_id=recibo.id) }}"
+   class="btn btn-outline-secondary mt-2">
+  <i class="fas fa-arrow-left"></i> Ver recibo
+</a>
+
+{% endif %}
+{% endblock %}

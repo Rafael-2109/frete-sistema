@@ -107,7 +107,7 @@ def _query_qualquer_chassi(q_like: str, limit: int):
 
 
 def _query_recibo(recibo_id: int, q_like: str, limit: int):
-    """Retorna chassis declarados no recibo, ainda nao conferidos."""
+    """Retorna chassis declarados no recibo, ainda nao conferidos e ativos."""
     return (
         db.session.query(
             AssaiReciboItem.chassi,
@@ -119,6 +119,7 @@ def _query_recibo(recibo_id: int, q_like: str, limit: int):
         .outerjoin(AssaiModelo, AssaiModelo.id == AssaiReciboItem.modelo_id)
         .filter(AssaiReciboItem.recibo_id == recibo_id)
         .filter(AssaiReciboItem.conferido.is_(False))
+        .filter(AssaiReciboItem.ativo.is_(True))
         .filter(AssaiReciboItem.chassi.ilike(q_like))
         .order_by(AssaiReciboItem.chassi.asc())
         .limit(limit)

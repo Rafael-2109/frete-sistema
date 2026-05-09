@@ -74,7 +74,17 @@
       <td>{{ r.data_recibo.strftime('%d/%m/%Y') if r.data_recibo else '-' }}</td>
       <td>{{ r.equipe or '-' }}</td>
       <td class="text-end">{{ r.total_motos_declarado or '-' }}</td>
-      <td><span class="badge bg-secondary">{{ r.status }}</span></td>
+      <td>
+        <span class="badge bg-{% if r.status == 'CONCLUIDO' %}success{% elif r.status == 'COM_DIVERGENCIA' %}warning{% elif r.status == 'RESOLVENDO_DUPLICIDADE' %}danger{% else %}secondary{% endif %}">
+          {{ r.status }}
+        </span>
+        {% if r.status == 'RESOLVENDO_DUPLICIDADE' %}
+        <a href="{{ url_for('motos_assai.recibos_resolver_duplicidade', recibo_id=r.id) }}"
+           class="btn btn-sm btn-warning ms-1">
+          <i class="fas fa-clone"></i> Resolver
+        </a>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

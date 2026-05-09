@@ -19,7 +19,22 @@ from .compra_service import (
     gerar_numero_po, criar_consolidado, get_compra, listar_compras,
     CompraValidationError, gerar_pdf_po,
 )
-from .recibo_service import importar as importar_recibo, get_recibo, listar_recibos, ReciboParserError
+from .recibo_service import (
+    importar as importar_recibo,
+    get_recibo,
+    listar_recibos,
+    listar_duplicidades,
+    recibos_antigos_passiveis_de_exclusao,
+    opcao_a_excluir_novo,
+    opcao_b_excluir_antigo,
+    opcao_c_remover_chassi_antigo,
+    opcao_c_remover_chassi_novo,
+    inativar_item as inativar_recibo_item,
+    reativar_item as reativar_recibo_item,
+    excluir_recibo,
+    ReciboParserError,
+    ReciboValidationError,
+)
 from .chassi_validator import validar_chassi
 from .moto_evento_service import (
     emitir_evento, ultimo_evento, status_efetivo, eventos_chassi,
@@ -58,6 +73,11 @@ __all__ = [
     'gerar_numero_po', 'criar_consolidado', 'get_compra', 'listar_compras',
     'CompraValidationError', 'gerar_pdf_po',
     'importar_recibo', 'get_recibo', 'listar_recibos', 'ReciboParserError',
+    'ReciboValidationError', 'listar_duplicidades',
+    'recibos_antigos_passiveis_de_exclusao',
+    'opcao_a_excluir_novo', 'opcao_b_excluir_antigo',
+    'opcao_c_remover_chassi_antigo', 'opcao_c_remover_chassi_novo',
+    'inativar_recibo_item', 'reativar_recibo_item', 'excluir_recibo',
     'validar_chassi',
     'emitir_evento', 'ultimo_evento', 'status_efetivo', 'eventos_chassi',
     'chassis_em_estoque', 'EventoInvalidoError',
