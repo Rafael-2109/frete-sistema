@@ -114,6 +114,33 @@ def _check_skills_option() -> bool:
 _SDK_HAS_SKILLS_OPTION = _check_skills_option()
 
 
+# =============================================================================
+# Feature flags via env var (default OFF para SessionStore — ativar apos
+# validar PostgresSessionStore no agente_lojas em DEV)
+# =============================================================================
+def _env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name, '').strip().lower()
+    if not val:
+        return default
+    return val in ('true', '1', 'yes', 'on')
+
+
+_LOJAS_SESSION_STORE_ENABLED: bool = _env_bool(
+    'AGENT_LOJAS_SESSION_STORE_ENABLED', default=False,
+)
+# Timeout em ms para load() do session_store (default 30s — mesmo que Nacom).
+_LOJAS_SESSION_STORE_LOAD_TIMEOUT_MS: int = int(
+    os.getenv('AGENT_LOJAS_SESSION_STORE_LOAD_TIMEOUT_MS', '30000') or '30000'
+)
+# Flush mode: 'batched' (default end-of-turn) ou 'eager' (near-real-time).
+# Eager util para live-tailing UI / crash durability — exige profiling Postgres.
+_LOJAS_SESSION_STORE_FLUSH: str = os.getenv(
+    'AGENT_LOJAS_SESSION_STORE_FLUSH', 'batched',
+).strip().lower() or 'batched'
+if _LOJAS_SESSION_STORE_FLUSH not in ('batched', 'eager'):
+    _LOJAS_SESSION_STORE_FLUSH = 'batched'
+
+
 class AgentLojasClient:
     """Cliente SDK enxuto para o Agente Lojas HORA."""
 
@@ -306,6 +333,40 @@ class AgentLojasClient:
             output_format=output_format,
             stderr_queue=stderr_queue,
         )
+
+        # PostgresSessionStore (SDK 0.1.64+) — multi-worker safe + observability.
+        # Flag-gated com fallback gracioso. Se desativado ou erro, SDK usa JSONL
+        # local nativo (default). Tabela `claude_session_store` eh compartilhada
+        # com agente Nacom (project_key + session_id UUID e chave unica — sem
+        # colisao entre agentes).
+        if _LOJAS_SESSION_STORE_ENABLED:
+            try:
+                import dataclasses as _dc
+                from app.agente.sdk.session_store_adapter import (
+                    get_or_create_session_store,
+                )
+                _store = await get_or_create_session_store()
+                _replace_kwargs: Dict[str, Any] = {
+                    "session_store": _store,
+                    "load_timeout_ms": _LOJAS_SESSION_STORE_LOAD_TIMEOUT_MS,
+                }
+                # SDK 0.1.73+: session_store_flush eh batched/eager. Aplicado
+                # via introspection forward-compat.
+                _opt_fields = {f.name for f in _dc.fields(options)}
+                if "session_store_flush" in _opt_fields:
+                    _replace_kwargs["session_store_flush"] = _LOJAS_SESSION_STORE_FLUSH
+                options = _dc.replace(options, **_replace_kwargs)
+                logger.info(
+                    "[AGENTE_LOJAS] SessionStore enabled: session=%s flush=%s",
+                    (our_session_id or 'pending')[:12],
+                    _replace_kwargs.get('session_store_flush', 'sdk_default'),
+                )
+            except Exception as _store_err:
+                logger.error(
+                    "[AGENTE_LOJAS] SessionStore init falhou — fallback "
+                    "para JSONL local nativo do SDK: %s", _store_err,
+                    exc_info=True,
+                )
 
         logger.info(
             "[AGENTE_LOJAS] stream_response start | user_id=%s loja_id=%s "

@@ -1,6 +1,6 @@
 # Agente Lojas HORA — Guia de Desenvolvimento
 
-**LOC**: ~1700 | **Arquivos**: 16 | **Status**: M2 SDK completo (AskUserQuestion + output_format + pool persistente + filtro skills granular SDK 0.1.77+) | **Atualizado**: 2026-05-09
+**LOC**: ~2400 (+65 testes) | **Arquivos**: 20 | **Status**: M2 SDK completo + UX hardened (markdown render, TodoWrite UI, SessionStore opcional, historico de sessoes na UI, 65 testes automatizados) | **Atualizado**: 2026-05-09
 
 Agente dedicado ao pessoal das Lojas Motochefe (HORA), endpoint `/agente-lojas/*`.
 Compartilha SDK com `app/agente/` mas com system_prompt, skills, subagents e
@@ -147,6 +147,8 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
 | M2 (SDK Fase A) | AskUserQuestion + can_use_tool + frontend rico (tool_call/tool_result/thinking/error/modal ask) | **Concluido** (2026-05-09) |
 | M2 (SDK Fase B) | Event loop persistente + output_format + stderr_callback + max_budget_usd + barreira SDK skills | **Concluido** (2026-05-09) |
 | M2 (SDK Fase C) | Hooks PostToolUse audit + permissions hardening | **Concluido** (2026-05-09) |
+| M2 (UX P0) | Markdown rendering (marked + DOMPurify), TodoWrite progress UI, 65 testes (can_use_tool, scope_injector, todos parser) | **Concluido** (2026-05-09) |
+| M2 (UX P1) | PostgresSessionStore opt-in (`AGENT_LOJAS_SESSION_STORE_ENABLED`), historico de sessoes no UI (dropdown + nova sessao) | **Concluido** (2026-05-09) |
 | M3   | Venda + isolamento total de memoria + Cost tracking granular por subagente | Planejado |
 | M4   | Analytics (apos fase financeira HORA) | Planejado |
 

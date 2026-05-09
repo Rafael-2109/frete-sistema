@@ -34,12 +34,23 @@
 
 {% block content %}
 <div class="container my-3">
-  <div class="d-flex align-items-center mb-3">
+  <div class="d-flex align-items-center mb-3 flex-wrap gap-2">
     <h4 class="mb-0 me-2">
       <i class="fas fa-motorcycle text-primary"></i>
       Agente Lojas HORA
     </h4>
     <span class="badge bg-success">M2 SDK</span>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <label for="session-picker" class="form-label small mb-0 text-secondary">
+        Sessao:
+      </label>
+      <select id="session-picker" class="form-select form-select-sm" style="min-width: 220px;">
+        <option value="">Nova sessao</option>
+      </select>
+      <button type="button" id="new-session-btn" class="btn btn-sm btn-outline-secondary" title="Nova sessao">
+        <i class="fas fa-plus"></i>
+      </button>
+    </div>
   </div>
 
   <div class="card mb-3">
@@ -95,7 +106,75 @@
   const input = document.getElementById('chat-input');
   const sendBtn = document.getElementById('chat-send');
   const log = document.getElementById('chat-log');
+  const sessionPicker = document.getElementById('session-picker');
+  const newSessionBtn = document.getElementById('new-session-btn');
   let sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+
+  // Histórico de sessões — popula dropdown com /api/sessions GET (filtered
+  // por agente='lojas' no backend). Click muda sessionId; nao carrega
+  // mensagens anteriores (operador continua dali — agente recupera contexto
+  // via PostgresSessionStore se ativo, ou JSONL local).
+  function fmtTimestamp(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+      if (sameDay) {
+        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    } catch { return ''; }
+  }
+
+  async function loadSessionHistory() {
+    try {
+      const resp = await fetch('/agente-lojas/api/sessions?limit=20');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (!data.success || !Array.isArray(data.sessions)) return;
+      // Manter "Nova sessao" como primeiro option, recriar os demais
+      sessionPicker.innerHTML = '<option value="">Nova sessao</option>';
+      data.sessions.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.session_id;
+        const label = (s.last_message || '').slice(0, 40) || '(sem mensagens)';
+        const ts = fmtTimestamp(s.updated_at || s.created_at);
+        opt.textContent = `${ts} — ${label}`;
+        sessionPicker.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('[LOJAS] Falha ao carregar historico:', e);
+    }
+  }
+
+  sessionPicker.addEventListener('change', () => {
+    const newId = sessionPicker.value;
+    if (newId === sessionId) return;
+    if (newId) {
+      sessionId = newId;
+      log.innerHTML = '';  // limpa mensagens da sessao anterior
+      const note = document.createElement('div');
+      note.className = 'small text-secondary text-center my-2';
+      note.textContent = `Sessao retomada (${newId.slice(0, 8)}...)`;
+      log.appendChild(note);
+    } else {
+      // "Nova sessao" selecionada
+      sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+      log.innerHTML = '';
+    }
+  });
+
+  newSessionBtn.addEventListener('click', () => {
+    sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+    sessionPicker.value = '';
+    log.innerHTML = '';
+    input.focus();
+  });
+
+  // Carrega historico no load — defer para nao bloquear render
+  if (document.readyState !== 'loading') loadSessionHistory();
+  else window.addEventListener('DOMContentLoaded', loadSessionHistory);
 
   // Modal AskUserQuestion
   const askModalEl = document.getElementById('askUserModal');
@@ -427,6 +506,9 @@
       input.disabled = false;
       sendBtn.disabled = false;
       input.focus();
+      // Refresh dropdown — nova sessao criada ou last_message atualizada.
+      // Best-effort: nao bloquear UI se falhar.
+      loadSessionHistory().catch(() => {});
     }
   });
 })();
