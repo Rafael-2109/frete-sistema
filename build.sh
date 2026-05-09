@@ -101,6 +101,17 @@ echo "HORA 36: campo consumidor_final em hora_venda..."
 python scripts/migrations/hora_36_consumidor_final.py \
     || echo "⚠️ Migration hora_36 falhou, continuando deploy..."
 
+# 10e. WhatsApp module: usuarios.whatsapp_autorizado + index parcial +
+# tabela whatsapp_tasks. Idempotente (ADD COLUMN IF NOT EXISTS,
+# CREATE INDEX IF NOT EXISTS, CREATE TABLE IF NOT EXISTS).
+# Backend: app/whatsapp/. Plugin OpenClaw em ~/.openclaw/plugins/nacom-bridge/.
+# Requer envs OPENCLAW_PLUGIN_TOKEN e OPENCLAW_GATEWAY_TOKEN no Render
+# (gateway OpenClaw e externo ao Render — apenas para envio de notificacoes
+# de fora; conversas inbound dependem do gateway local).
+echo "WhatsApp: usuarios.whatsapp_autorizado + whatsapp_tasks..."
+python scripts/migrations/2026_05_09_whatsapp_module.py \
+    || echo "⚠️ Migration whatsapp_module falhou, continuando deploy..."
+
 # 10. HORA 30: seed inicial de hora_modelo_alias.
 # Para cada modelo existente, cria alias NOME_LIVRE com nome_modelo
 # + aliases TAGPLUS_CODIGO/TAGPLUS_PRODUTO_ID a partir do legado
