@@ -30,6 +30,7 @@ from app.motos_assai.routes import montagem  # noqa: E402,F401
 from app.motos_assai.routes import disponibilizar  # noqa: E402,F401
 from app.motos_assai.routes import separacao  # noqa: E402,F401
 from app.motos_assai.routes import faturamento  # noqa: E402,F401
+from app.motos_assai.routes import api  # noqa: E402,F401
 
 
 @motos_assai_bp.before_request
