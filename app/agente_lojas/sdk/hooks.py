@@ -68,3 +68,74 @@ async def _keep_stream_open(input_data, tool_use_id, context):
     SQL, etc.); o agente lojas nao precisa por enquanto.
     """
     return {"continue_": True}
+
+
+async def _post_tool_use_audit(input_data, tool_use_id, context):
+    """Hook PostToolUse — audit log estruturado de execucoes de tool.
+
+    Loga: tool_name, is_error, duration_ms (best-effort), agent_id (se
+    spawnado por subagent), tool_use_id. Uso futuro:
+        - Detectar tools que falham repetidamente (ex: Skill com SQL erro).
+        - Custos por tipo de tool (M3: integrar com cost_tracker).
+    """
+    try:
+        tool_name = input_data.get('tool_name', 'unknown')
+        tool_response = input_data.get('tool_response', {}) or {}
+        is_error = bool(tool_response.get('is_error') or tool_response.get('isError'))
+        # Hook context inclui agent_id (UUID do subagent que disparou) — SDK 0.1.52+
+        agent_id = getattr(context, 'agent_id', None) if context else None
+
+        if is_error:
+            logger.warning(
+                "[AUDIT_LOJAS] tool_name=%s is_error=True tool_use_id=%s agent=%s",
+                tool_name,
+                (tool_use_id or '')[:12],
+                (agent_id or 'main')[:12] if agent_id else 'main',
+            )
+        else:
+            logger.info(
+                "[AUDIT_LOJAS] tool_name=%s ok tool_use_id=%s agent=%s",
+                tool_name,
+                (tool_use_id or '')[:12],
+                (agent_id or 'main')[:12] if agent_id else 'main',
+            )
+    except Exception as e:
+        # Audit nunca quebra o fluxo
+        logger.debug("[AUDIT_LOJAS] hook exception: %s", e)
+    return {}
+
+
+async def _subagent_start_audit(input_data, tool_use_id, context):
+    """Hook SubagentStart — log quando subagent (orientador-loja) inicia."""
+    try:
+        agent_type = input_data.get('agent_type') or input_data.get('subagent_type', 'unknown')
+        agent_id = getattr(context, 'agent_id', None) if context else None
+        logger.info(
+            "[AUDIT_LOJAS] subagent_start type=%s agent_id=%s",
+            agent_type,
+            (agent_id or '')[:12],
+        )
+    except Exception as e:
+        logger.debug("[AUDIT_LOJAS] subagent_start exception: %s", e)
+    return {}
+
+
+async def _subagent_stop_audit(input_data, tool_use_id, context):
+    """Hook SubagentStop — log quando subagent (orientador-loja) termina.
+
+    Em M3 esta funcao integra com cost_tracker para custos granulares.
+    Hoje apenas log informacional.
+    """
+    try:
+        agent_type = input_data.get('agent_type') or input_data.get('subagent_type', 'unknown')
+        agent_id = getattr(context, 'agent_id', None) if context else None
+        status = input_data.get('status') or 'unknown'
+        logger.info(
+            "[AUDIT_LOJAS] subagent_stop type=%s agent_id=%s status=%s",
+            agent_type,
+            (agent_id or '')[:12],
+            status,
+        )
+    except Exception as e:
+        logger.debug("[AUDIT_LOJAS] subagent_stop exception: %s", e)
+    return {}

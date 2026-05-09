@@ -101,6 +101,31 @@ _TMP_DIR = os.path.realpath(tempfile.gettempdir() or '/tmp')
 ALLOWED_WRITE_PREFIXES_LOJAS = (_TMP_DIR + os.sep, '/tmp/', '/tmp' + os.sep)
 
 
+# =============================================================================
+# Patterns destrutivos em Bash — bloqueio defensivo
+# =============================================================================
+# Operador de loja NUNCA precisa executar estes comandos. system_prompt ja
+# instrui "Nunca execute DELETE/DROP em hora_*" — esta lista eh defesa em
+# profundidade caso o model alucine.
+#
+# IMPORTANTE: lista conservadora — match por substring lowercase. Falsos
+# positivos sao preferiveis a falsos negativos para um agente de operacao.
+# Adicione padroes especificos aqui se aparecerem casos reais.
+# =============================================================================
+_DANGEROUS_BASH_PATTERNS = (
+    'drop table',
+    'drop database',
+    'truncate ',
+    'delete from hora_',  # qualquer DELETE em tabela do dominio HORA
+    'rm -rf',
+    'rm -fr',
+    'mkfs',
+    ':(){ :|:& };:',  # fork bomb classico
+    '> /dev/sda',
+    'dd if=',
+)
+
+
 def _is_path_in_tmp(file_path: str) -> bool:
     """Retorna True se file_path normalizado esta em /tmp."""
     if not file_path:
@@ -225,16 +250,38 @@ async def can_use_tool(
             return PermissionResultAllow(updated_input=tool_input)
 
         # ============================================================
-        # Outras tools (Skill, Bash, Task, Read, Glob, Grep, TodoWrite)
-        # Allow direto. Audit log opcional para Bash.
+        # Bash — audit + bloqueio de patterns destrutivos
         # ============================================================
         if tool_name == 'Bash':
-            command = tool_input.get('command', '')
+            command = tool_input.get('command', '') or ''
             description = tool_input.get('description', '')
+
+            # Bloqueio defensivo de comandos destrutivos. O system_prompt
+            # ja instrui "Nunca execute DELETE/DROP em hora_*" mas defesa
+            # em profundidade aqui evita execucao acidental por
+            # alucinacao do model.
+            cmd_lower = command.lower()
+            for pattern in _DANGEROUS_BASH_PATTERNS:
+                if pattern in cmd_lower:
+                    logger.warning(
+                        f"[PERMISSION_LOJAS] Bash NEGADO (pattern destrutivo "
+                        f"'{pattern}'): {command[:150]}"
+                    )
+                    return PermissionResultDeny(
+                        message=(
+                            f"Comando bash bloqueado: contem pattern destrutivo "
+                            f"'{pattern}'. Use INSERT em hora_moto_evento (invariante)."
+                        )
+                    )
+
             logger.info(
-                f"[PERMISSION_LOJAS] Bash: {description or command[:100]}"
+                f"[PERMISSION_LOJAS] Bash OK: {description or command[:100]}"
             )
 
+        # ============================================================
+        # Outras tools (Skill, Task, Read, Glob, Grep, TodoWrite)
+        # Allow direto.
+        # ============================================================
         return PermissionResultAllow(updated_input=tool_input)
 
     except Exception as e:

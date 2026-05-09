@@ -55,6 +55,9 @@ from app.agente_lojas.config.permissions import (
 from app.agente_lojas.sdk.hooks import (
     make_user_prompt_submit_hook,
     _keep_stream_open,
+    _post_tool_use_audit,
+    _subagent_start_audit,
+    _subagent_stop_audit,
 )
 
 logger = logging.getLogger('sistema_fretes')
@@ -197,11 +200,17 @@ class AgentLojasClient:
             # para pending_questions + event_queue. Callback global le session_id
             # da ContextVar setada em stream_response().
             "can_use_tool": lojas_can_use_tool,
-            # Hooks: UserPromptSubmit (contexto loja) + PreToolUse (keep-alive
-            # OBRIGATORIO para can_use_tool funcionar — doc SDK).
+            # Hooks SDK:
+            # - UserPromptSubmit: contexto loja injetado por turno
+            # - PreToolUse: keep-alive (OBRIGATORIO p/ can_use_tool — doc SDK)
+            # - PostToolUse: audit log estruturado de execucoes
+            # - SubagentStart/Stop: audit de delegacao para orientador-loja
             "hooks": {
                 "UserPromptSubmit": [HookMatcher(hooks=[submit_hook])],
                 "PreToolUse": [HookMatcher(hooks=[_keep_stream_open])],
+                "PostToolUse": [HookMatcher(hooks=[_post_tool_use_audit])],
+                "SubagentStart": [HookMatcher(hooks=[_subagent_start_audit])],
+                "SubagentStop": [HookMatcher(hooks=[_subagent_stop_audit])],
             },
         }
 
