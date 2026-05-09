@@ -58,6 +58,24 @@
     el.classList.remove('d-none');
   }
 
+  // Detecta erro de CSRF no body retornado e exibe modal "Sessão expirada"
+  // que recarrega a página. Retorna true se o erro foi de CSRF (caller deve abortar).
+  function tratarErroCsrf(resp, body) {
+    const isCsrfError = (
+      resp && resp.status === 400 &&
+      body && (body.csrf_error === true || /csrf/i.test(String(body.message || body.erro || '')))
+    );
+    if (!isCsrfError) return false;
+    const modalEl = document.getElementById('modal-sessao-expirada');
+    if (modalEl) {
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    } else {
+      // fallback: alerta + reload manual
+      showAlerta('danger', 'Sessão expirada. Recarregue a página.');
+    }
+    return true;
+  }
+
   // ============== QR scanner ==============
 
   let html5Qr = null;
@@ -92,18 +110,38 @@
 
   // ============== AJAX ==============
 
+  // Avança para o passo B aplicando os dados do contexto (modelo/cor esperados)
+  function aplicarContextoEAvancar(data) {
+    if (data.modelo_id_esperado) {
+      state.modeloId = data.modelo_id_esperado;
+      document.getElementById('select-modelo').value = data.modelo_id_esperado;
+    }
+    if (data.cor_esperada) {
+      state.cor = data.cor_esperada;
+    }
+    setStep('B');
+  }
+
   async function validarChassi(chassi) {
     const norm = chassi.trim().toUpperCase();
     if (!norm) { showAlerta('warning', 'Digite um chassi.'); return; }
 
     state.chassi = norm;
 
-    const r = await fetch(cfg.endpoints.validar, {
-      method: 'POST',
-      headers: jsonHeaders(),
-      body: JSON.stringify({recibo_id: cfg.reciboId, chassi: norm}),
-    });
-    const data = await r.json();
+    let r, data;
+    try {
+      r = await fetch(cfg.endpoints.validar, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({recibo_id: cfg.reciboId, chassi: norm}),
+      });
+      data = await r.json();
+    } catch (e) {
+      showAlerta('danger', 'Falha de rede ao validar chassi. Tente novamente.');
+      return;
+    }
+
+    if (tratarErroCsrf(r, data)) return;
 
     state.chassiContext = data;
 
@@ -113,25 +151,58 @@
     }
 
     if (!data.na_nf) {
-      showAlerta('danger', `<strong>${norm}</strong> NÃO está no recibo (CHASSI_EXTRA). Conferência continua mas será marcada como divergência.`);
-    } else {
-      let msg = `Chassi pertence ao recibo. Modelo esperado: <code>${data.modelo_texto_recibo || '-'}</code>`;
-      if (data.regex_check && !data.regex_check.ok) {
-        msg += `<br><span class="text-warning">⚠ Regex: ${data.regex_check.mensagem}</span>`;
+      // Mensagem neutra (não vermelha) — a confirmação real vem no modal abaixo
+      showAlerta(
+        'warning',
+        `<strong>${norm}</strong> NÃO consta na relação do recibo. Aguardando sua confirmação para receber como CHASSI_EXTRA…`
+      );
+      // Modal explícito de confirmação ANTES de seguir para Step B
+      const codigoEl = document.getElementById('extra-chassi-codigo');
+      if (codigoEl) codigoEl.textContent = norm;
+      const modalEl = document.getElementById('modal-chassi-extra');
+      if (!modalEl) {
+        // fallback: prossegue (template antigo sem modal)
+        aplicarContextoEAvancar(data);
+        return;
       }
-      showAlerta('info', msg);
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      const btnConfirmar = document.getElementById('wiz-btn-confirmar-extra');
+      const btnCancelar = document.getElementById('wiz-btn-cancelar-extra');
+      const onConfirmar = () => {
+        modal.hide();
+        showAlerta(
+          'warning',
+          `<strong>${norm}</strong> será registrado como CHASSI_EXTRA (divergência). Selecione modelo e cor manualmente.`
+        );
+        aplicarContextoEAvancar(data);
+        cleanup();
+      };
+      const onCancelar = () => {
+        modal.hide();
+        // Limpa input e volta para Step A para novo scan
+        showAlerta('info', `Chassi ${norm} cancelado pelo operador. Escaneie outro chassi.`);
+        document.getElementById('input-chassi').value = '';
+        setStep('A');
+        document.getElementById('input-chassi').focus();
+        cleanup();
+      };
+      const cleanup = () => {
+        btnConfirmar?.removeEventListener('click', onConfirmar);
+        btnCancelar?.removeEventListener('click', onCancelar);
+      };
+      btnConfirmar?.addEventListener('click', onConfirmar);
+      btnCancelar?.addEventListener('click', onCancelar);
+      modal.show();
+      return;
     }
 
-    // Pré-seleciona modelo no Step B se conhecido
-    if (data.modelo_id_esperado) {
-      state.modeloId = data.modelo_id_esperado;
-      document.getElementById('select-modelo').value = data.modelo_id_esperado;
+    // Caso happy path: chassi pertence ao recibo
+    let msg = `Chassi pertence ao recibo. Modelo esperado: <code>${data.modelo_texto_recibo || '-'}</code>`;
+    if (data.regex_check && !data.regex_check.ok) {
+      msg += `<br><span class="text-warning">⚠ Regex: ${data.regex_check.mensagem}</span>`;
     }
-    if (data.cor_esperada) {
-      state.cor = data.cor_esperada;
-    }
-
-    setStep('B');
+    showAlerta('info', msg);
+    aplicarContextoEAvancar(data);
   }
 
   async function registrarConferencia() {
@@ -150,13 +221,20 @@
       avaria_fisica: state.avaria,
     };
 
-    const r = await fetch(cfg.endpoints.registrar, {
-      method: 'POST',
-      headers: jsonHeaders(),
-      body: JSON.stringify(payload),
-    });
+    let r, data;
+    try {
+      r = await fetch(cfg.endpoints.registrar, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify(payload),
+      });
+      data = await r.json();
+    } catch (e) {
+      showAlerta('danger', 'Falha de rede ao registrar conferência. Tente novamente.');
+      return;
+    }
 
-    const data = await r.json();
+    if (tratarErroCsrf(r, data)) return;
 
     if (r.status === 409) {
       // Race condition: chassis já conferido por outro operador (H2)
@@ -167,7 +245,7 @@
     }
 
     if (!data.ok) {
-      showAlerta('danger', 'Erro: ' + (data.erro || 'desconhecido'));
+      showAlerta('danger', 'Erro: ' + (data.erro || data.message || 'desconhecido'));
       return;
     }
 
@@ -194,12 +272,18 @@
     fd.append('recibo_id', cfg.reciboId);
     fd.append('chassi', state.chassi);
     // FormData com CSRF token no header (não no body — evita conflito com multipart)
-    const r = await fetch(cfg.endpoints.fotoUpload, {
-      method: 'POST',
-      headers: {'X-CSRFToken': getCSRFToken()},
-      body: fd,
-    });
-    const data = await r.json();
+    let r, data;
+    try {
+      r = await fetch(cfg.endpoints.fotoUpload, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCSRFToken()},
+        body: fd,
+      });
+      data = await r.json();
+    } catch (e) {
+      return false;
+    }
+    if (tratarErroCsrf(r, data)) return false;
     if (data.ok) state.fotoS3Key = data.s3_key;
     return data.ok;
   }
@@ -299,17 +383,29 @@
     bootstrap.Modal.getInstance(document.getElementById('modal-finalizar-wiz'))?.hide();
     const pend = document.getElementById('btn-finalizar').dataset.pendentes;
     const confirmar_faltantes = pend && parseInt(pend, 10) > 0;
-    const r = await fetch(cfg.endpoints.finalizar, {
-      method: 'POST',
-      headers: jsonHeaders(),
-      body: JSON.stringify({confirmar_faltantes}),
-    });
-    const data = await r.json();
+    let r, data;
+    try {
+      r = await fetch(cfg.endpoints.finalizar, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({confirmar_faltantes}),
+      });
+      data = await r.json();
+    } catch (e) {
+      showAlerta('danger', 'Falha de rede ao finalizar. Tente novamente.');
+      return;
+    }
+    if (tratarErroCsrf(r, data)) return;
     if (data.ok) {
       window.location.href = data.redirect;
     } else {
-      showAlerta('danger', 'Erro: ' + (data.erro || ''));
+      showAlerta('danger', 'Erro: ' + (data.erro || data.message || ''));
     }
+  });
+
+  // Handler do botão "Recarregar página" do modal de sessão expirada (CSRF)
+  document.getElementById('wiz-btn-recarregar-sessao')?.addEventListener('click', () => {
+    window.location.reload();
   });
 
   // ============== Init ==============

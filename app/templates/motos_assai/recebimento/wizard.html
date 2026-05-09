@@ -149,6 +149,68 @@
   </div>
 </div>
 
+<!-- Modal: chassi EXTRA — confirmação explícita -->
+<div class="modal fade" id="modal-chassi-extra" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning-subtle">
+        <h5 class="modal-title">
+          <i class="fas fa-triangle-exclamation text-warning"></i>
+          Chassi EXTRA — não consta no recibo
+        </h5>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          O chassi <code id="extra-chassi-codigo" class="fs-5"></code> <strong>NÃO está na relação</strong> do recibo
+          <strong>#{{ recibo.id }}</strong>.
+        </p>
+        <p class="mb-2">
+          Receber este chassi vai criar um novo item no recibo marcado como divergência
+          <code>CHASSI_EXTRA</code>. Ele entrará no estoque normalmente, mas o recibo terminará com status
+          <strong>COM_DIVERGENCIA</strong>.
+        </p>
+        <p class="text-muted small mb-0">
+          Confirme apenas se você tem certeza de que esta moto chegou fisicamente e deve ser recebida.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" id="wiz-btn-cancelar-extra">
+          <i class="fas fa-arrow-left"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-warning btn-lg" id="wiz-btn-confirmar-extra">
+          <i class="fas fa-check"></i> Sim, receber EXTRA
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: sessão expirada (CSRF) -->
+<div class="modal fade" id="modal-sessao-expirada" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger-subtle">
+        <h5 class="modal-title">
+          <i class="fas fa-clock text-danger"></i> Sessão expirada
+        </h5>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          Sua sessão expirou (token CSRF ausente). Nenhum chassi conferido foi perdido — eles já estão salvos.
+        </p>
+        <p class="mb-0 text-muted small">
+          A página será recarregada para renovar a sessão. Após reabrir, continue do próximo chassi normalmente.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary btn-lg" id="wiz-btn-recarregar-sessao">
+          <i class="fas fa-rotate-right"></i> Recarregar página
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: finalizar com pendentes -->
 <div class="modal fade" id="modal-finalizar-wiz" tabindex="-1">
   <div class="modal-dialog">
