@@ -22,7 +22,7 @@
  * Eventos disparados:
  *   - 'moto-scanned' (CustomEvent) no document, com detail: {modelo, cor, chassi, numero_motor, confianca}
  *
- * Dependencia: html5-qrcode@2.3.8 (CDN ou local)
+ * Dependencia: html5-qrcode@2.3.8 (pinado em app/static/js/vendor/)
  *
  * @requires Html5Qrcode
  */
@@ -465,7 +465,7 @@
         _loadingLib = true;
 
         var script = document.createElement('script');
-        script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+        script.src = '/static/js/vendor/html5-qrcode-2.3.8.min.js';
         script.onload = function () {
             _loadingLib = false;
             callback();

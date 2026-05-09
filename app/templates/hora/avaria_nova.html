@@ -76,7 +76,7 @@
 </form>
 
 {# ------------------------------------------------------------------
-   Modal de QR scan (html5-qrcode via CDN unpkg).
+   Modal de QR scan (html5-qrcode pinado em app/static/js/vendor/).
    ------------------------------------------------------------------ #}
 <div class="modal fade" id="modal-qr" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
@@ -98,16 +98,11 @@
   </div>
 </div>
 
-{# html5-qrcode via CDN com SRI (Subresource Integrity).
-   Hash sha384 calculado em 2026-05-07 a partir do conteudo oficial.
-   Para regenerar (ex: trocar versao):
-     curl -L https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js \
-       | openssl dgst -sha384 -binary | openssl base64 -A
-   O bloco JS abaixo ja tem fallback gracioso se Html5Qrcode for undefined
-   (CDN bloqueado por CSP / rede / hash mismatch). #}
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
-        integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+"
-        crossorigin="anonymous"></script>
+{# html5-qrcode pinado em app/static/js/vendor/. Para upgrade:
+     curl -L https://unpkg.com/html5-qrcode@<NOVA>/html5-qrcode.min.js \
+       -o app/static/js/vendor/html5-qrcode-<NOVA>.min.js
+   O bloco JS abaixo tem fallback gracioso se Html5Qrcode for undefined. #}
+<script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}"></script>
 <script>
 (function() {
   // ======================================================================
