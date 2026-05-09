@@ -48,6 +48,14 @@ _GATEWAY_URL = os.environ.get("OPENCLAW_GATEWAY_URL", "http://127.0.0.1:18789")
 _GATEWAY_TOKEN = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "")
 _ENABLED = os.environ.get("OPENCLAW_NOTIFY_ENABLED", "true").lower() != "false"
 
+# Cloudflare Access Service Token (defense-in-depth quando o gateway esta
+# atras de Cloudflare Tunnel). Quando ambas as vars estao setadas, os headers
+# CF-Access-Client-Id e CF-Access-Client-Secret sao adicionados ao request,
+# permitindo Cloudflare Access validar antes do request chegar ao gateway.
+# Em dev local (gateway em loopback direto) deixar vazio.
+_CF_ACCESS_CLIENT_ID = os.environ.get("CF_ACCESS_CLIENT_ID", "")
+_CF_ACCESS_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
+
 # Rate limit empirico Baileys
 _RATE_PER_SECOND = 1
 _RATE_PER_MINUTE = 30
@@ -176,6 +184,11 @@ def send_whatsapp(
         "Authorization": f"Bearer {_GATEWAY_TOKEN}",
         "Content-Type": "application/json",
     }
+    # Cloudflare Access service token (defense-in-depth quando gateway esta atras de CF Tunnel).
+    # Em dev local (gateway loopback direto) deixar essas vars vazias.
+    if _CF_ACCESS_CLIENT_ID and _CF_ACCESS_CLIENT_SECRET:
+        headers["CF-Access-Client-Id"] = _CF_ACCESS_CLIENT_ID
+        headers["CF-Access-Client-Secret"] = _CF_ACCESS_CLIENT_SECRET
 
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
