@@ -140,6 +140,7 @@ Gotchas rapidos:
 | CarVia | `app/carvia/routes/`, `app/carvia/services/`, `app/templates/carvia/` — ver `app/carvia/CLAUDE.md` |
 | Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` — ver `app/seguranca/CLAUDE.md` |
 | Teams Bot | `app/teams/` — ver `app/teams/CLAUDE.md` |
+| WhatsApp Bot | `app/whatsapp/` (canal via OpenClaw + plugin nacom-bridge) — ver `app/whatsapp/CLAUDE.md` |
 | Fretes | `app/fretes/routes.py`, `app/fretes/services/`, `app/templates/fretes/` — ver `app/fretes/CLAUDE.md` |
 | Recebimento | `app/recebimento/routes/`, `app/recebimento/services/`, `app/recebimento/workers/` |
 | Devolucao | `app/devolucao/routes/`, `app/devolucao/services/` — ver `app/devolucao/CLAUDE.md` (dev) ou `app/devolucao/README.md` (narrativa) |

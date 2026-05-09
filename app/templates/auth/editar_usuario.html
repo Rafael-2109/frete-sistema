@@ -180,6 +180,16 @@
                                     {{ form.sistema_remessa_vortx.label(class="form-check-label", for="sistemaRemessaVortx") }}
                                     <small class="text-muted d-block">Gerar remessas CNAB VORTX (banco 310) e injetar no Odoo</small>
                                 </div>
+                                <hr class="my-2">
+                                <div class="form-check mt-2">
+                                    {{ form.whatsapp_autorizado(class="form-check-input", id="whatsappAutorizado") }}
+                                    {{ form.whatsapp_autorizado.label(class="form-check-label", for="whatsappAutorizado") }}
+                                    <small class="text-muted d-block">
+                                        Habilita o usuario a receber e responder pelo bot WhatsApp (canal OpenClaw).
+                                        Requer telefone preenchido. O numero tambem deve estar na <code>allowFrom</code>
+                                        do OpenClaw e na <code>dmAllowlist</code> do plugin <code>nacom-bridge</code>.
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>

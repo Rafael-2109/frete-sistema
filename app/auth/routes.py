@@ -324,6 +324,7 @@ def editar_usuario(user_id):
         usuario.loja_hora_id = int(form.loja_hora_id.data) if form.loja_hora_id.data else None
         usuario.acesso_comissao_carvia = form.acesso_comissao_carvia.data
         usuario.sistema_remessa_vortx = form.sistema_remessa_vortx.data
+        usuario.whatsapp_autorizado = form.whatsapp_autorizado.data
 
         db.session.commit()
         flash(f'Usuário {usuario.nome} atualizado com sucesso!', 'success')
@@ -347,6 +348,7 @@ def editar_usuario(user_id):
     form.loja_hora_id.data = str(usuario.loja_hora_id) if usuario.loja_hora_id else ''
     form.acesso_comissao_carvia.data = usuario.acesso_comissao_carvia
     form.sistema_remessa_vortx.data = usuario.sistema_remessa_vortx
+    form.whatsapp_autorizado.data = usuario.whatsapp_autorizado
 
     return render_template('auth/editar_usuario.html', form=form, usuario=usuario)
 

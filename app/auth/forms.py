@@ -82,6 +82,7 @@ class EditarUsuarioForm(FlaskForm):
     )
     acesso_comissao_carvia = BooleanField('Acesso a Comissoes CarVia')
     sistema_remessa_vortx = BooleanField('Gerar Remessas VORTX')
+    whatsapp_autorizado = BooleanField('WhatsApp Bot (opt-in: receber/enviar via OpenClaw)')
     status = SelectField('Status', choices=[
         ('ativo', 'Ativo'),
         ('bloqueado', 'Bloqueado'),

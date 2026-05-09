@@ -20,6 +20,10 @@ class Usuario(db.Model, UserMixin):
     empresa = db.Column(db.String(100), nullable=True)  # Empresa do usuário
     cargo = db.Column(db.String(100), nullable=True)  # Cargo do usuário
     telefone = db.Column(db.String(20), nullable=True)  # Telefone para contato
+    # Opt-in explicito para receber/enviar mensagens via WhatsApp Bot (canal OpenClaw).
+    # Migration: 2026_05_09_whatsapp_module. Default FALSE — telefone cadastrado para
+    # contato generico nao habilita bot automaticamente. Ver Usuario.find_by_whatsapp_jid.
+    whatsapp_autorizado = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
     vendedor_vinculado = db.Column(db.String(100), nullable=True)  # Nome do vendedor no faturamento (para perfil vendedor)
 
     # Sistemas permitidos (novo - para separar logística de motochefe)
@@ -77,6 +81,81 @@ class Usuario(db.Model, UserMixin):
         self.status = 'rejeitado'
         if motivo:
             self.observacoes = motivo
+
+    # ─── WhatsApp Bot integration ────────────────────────────────────────
+
+    @staticmethod
+    def normalize_whatsapp_identifier(jid_or_phone):
+        """Normaliza JID Baileys ou telefone livre para variantes pesquisaveis.
+
+        OpenClaw entrega `event.senderId` em formatos diferentes conforme contexto:
+        - DM: E.164 sem '+' (ex: '5511991642998')
+        - Grupo: JID Baileys completo (ex: '5511991642998@s.whatsapp.net')
+
+        E o campo `usuarios.telefone` no banco pode estar em formato legado BR
+        sem prefixo 55 (ex: '11991642998'). Esta funcao gera todas as variantes
+        equivalentes para match em `IN (...)`.
+
+        Args:
+            jid_or_phone: string em qualquer formato (com '+', '@s.whatsapp.net',
+                espacos, parenteses etc).
+
+        Returns:
+            set[str]: variantes em digitos puros. Vazio se input invalido.
+
+        Exemplos:
+            >>> Usuario.normalize_whatsapp_identifier('+5511991642998')
+            {'5511991642998', '11991642998'}
+            >>> Usuario.normalize_whatsapp_identifier('5511991642998@s.whatsapp.net')
+            {'5511991642998', '11991642998'}
+            >>> Usuario.normalize_whatsapp_identifier('11991642998')
+            {'11991642998', '5511991642998'}
+        """
+        if not jid_or_phone:
+            return set()
+
+        raw = str(jid_or_phone)
+        # Strip JID suffix Baileys
+        if '@' in raw:
+            raw = raw.split('@', 1)[0]
+        # Manter apenas digitos
+        digits = ''.join(c for c in raw if c.isdigit())
+        if not digits:
+            return set()
+
+        variants = {digits}
+        # Variante com 55 (E.164 BR): se nao comeca com 55 e tem 10-11 digitos (DDD+numero)
+        if not digits.startswith('55') and 10 <= len(digits) <= 11:
+            variants.add('55' + digits)
+        # Variante sem 55: se comeca com 55 e tem >= 12 digitos
+        if digits.startswith('55') and len(digits) >= 12:
+            variants.add(digits[2:])
+        return variants
+
+    @classmethod
+    def find_by_whatsapp_jid(cls, jid_or_phone):
+        """Resolve JID/telefone WhatsApp para Usuario autorizado e ativo.
+
+        Match em qualquer das variantes geradas por `normalize_whatsapp_identifier`,
+        filtrando obrigatoriamente por `whatsapp_autorizado=True` e `status='ativo'`.
+
+        Args:
+            jid_or_phone: identificador vindo do plugin OpenClaw (header
+                X-OpenClaw-Sender) ou string livre.
+
+        Returns:
+            Usuario | None
+        """
+        variants = cls.normalize_whatsapp_identifier(jid_or_phone)
+        if not variants:
+            return None
+        return (
+            cls.query
+            .filter(cls.telefone.in_(variants))
+            .filter(cls.whatsapp_autorizado.is_(True))
+            .filter(cls.status == 'ativo')
+            .first()
+        )
     
     def bloquear(self, motivo=None):
         """Bloqueia o usuário"""

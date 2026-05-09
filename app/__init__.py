@@ -1289,6 +1289,10 @@ def create_app(config_name=None):
     from app.teams import teams_bp
     app.register_blueprint(teams_bp)
 
+    # 💬 WhatsApp Integration - canal via OpenClaw + Baileys (plugin nacom-bridge)
+    from app.whatsapp import whatsapp_bp
+    app.register_blueprint(whatsapp_bp)
+
     # 💬 Chat In-App
     from app.chat import chat_bp
     app.register_blueprint(chat_bp)
