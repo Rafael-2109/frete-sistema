@@ -34,6 +34,28 @@ via `dataclasses.fields(ClaudeAgentOptions)`). Constante `_SDK_HAS_OPTIONS_SKILL
 calculada uma vez no import — zero overhead por request. Mesmo padrao usado em
 `agent_loader.py` (`_SDK_HAS_NATIVE_FIELDS`, `_SDK_HAS_EFFORT_FIELD`).
 
+**Auto-config interno do SDK** (verificado em
+`_internal/transport/subprocess_cli.py:165-201` — `_apply_skills_defaults`):
+
+| `options.skills` | injecao em `allowed_tools` | injecao em `setting_sources` |
+|------------------|----------------------------|------------------------------|
+| `None` (default) | nenhuma                    | nenhuma (NO-OP)              |
+| `"all"`          | `"Skill"` (pattern simples)| `["user", "project"]` se `None` |
+| `list[str]`      | `Skill(name)` por entry    | `["user", "project"]` se `None` |
+
+**Importante**: `setting_sources` explicito do caller eh PRESERVADO. O default
+`["user", "project"]` so eh aplicado se `setting_sources is None`. Como ambos
+agentes passam `setting_sources=["project"]` explicito, nosso valor sobrevive.
+
+**Filtro granular** (descoberta valiosa para `agente_lojas`): com
+`skills=list[str]`, o SDK injeta `Skill(name)` por entry — ex:
+`Skill(consultando-estoque-loja)`, `Skill(rastreando-chassi)`, etc. Isso eh
+filtro de auto-allow PER-SKILL, mais forte que apenas listing filter. Nomes
+nao listados em `SKILLS_PERMITIDAS` nao casam o pattern → rejeitados pelo
+Skill tool. `tool_name` no `can_use_tool` callback continua sendo `"Skill"`
+(nome real do tool no protocolo CLI), nao o pattern — validacoes em
+`permissions.py:705` (`tool_name == 'Skill'`) continuam intactas.
+
 **Aplicado em DOIS agentes com estrategias diferentes**:
 
 ##### `app/agente_lojas/` — whitelist explicita (defesa em profundidade)
