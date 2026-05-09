@@ -372,7 +372,10 @@ def api_chat():
                             f"{_persist_err}"
                         )
                 finally:
-                    yield None
+                    # Fix Sentry PYTHON-FLASK-KP: gunicorn rejeita yield None
+                    # com TypeError("None is not a byte"). Empty string e
+                    # equivalente para o cliente SSE (zero bytes, end-of-stream).
+                    yield ''
 
             return Response(
                 stream_with_context(_repeat_short_circuit_stream()),

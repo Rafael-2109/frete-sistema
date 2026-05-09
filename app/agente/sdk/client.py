@@ -1951,6 +1951,11 @@ Nunca invente informações."""
             # A SDK hardcoda "Check stderr output for details" no ProcessError.stderr
             # mas o stderr real foi capturado pelo callback → stderr_q.
             # Sem este drain, as ultimas linhas (que explicam o crash) sao perdidas.
+            #
+            # Fix Sentry PYTHON-FLASK-CK: aguardar 100ms antes de drenar para
+            # dar chance do callback emitir as ultimas linhas (race condition
+            # entre subprocess crash e flush do stderr).
+            time.sleep(0.1)
             real_stderr_lines = []
             while True:
                 try:
@@ -1970,10 +1975,15 @@ Nunca invente informações."""
                     for line in real_stderr_lines:
                         yield StreamEvent(type='stderr', content=line)
             else:
+                # Fix Sentry PYTHON-FLASK-CK: sem stderr real capturado, nao
+                # ha info actionable. Loga como WARNING para reduzir ruido em
+                # producao (issue era REGRESSED). Quem precisa investigar
+                # ProcessError repetido inspeciona o subprocess no Render logs.
                 stderr = getattr(e, 'stderr', '') or ''
-                logger.error(
+                logger.warning(
                     f"[AGENT_SDK_PERSISTENT] ProcessError {elapsed_total:.1f}s | "
-                    f"exit={exit_code} | stderr={stderr[:500]} | msg={e}"
+                    f"exit={exit_code} | stderr={stderr[:500]} | msg={e} | "
+                    f"(stderr_q vazia — sem info actionable; ver logs Render)"
                 )
             yield StreamEvent(
                 type='error',

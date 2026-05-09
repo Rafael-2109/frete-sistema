@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Dict, Iterable, List, Mapping, Optional
 
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 from app import db
 from app.hora.models import HoraPedido, HoraPedidoItem
@@ -209,7 +209,13 @@ def listar_pedidos(
     - loja_id: id especifico de loja_destino_id
     - data_inicio / data_fim: faixa em data_pedido
     """
-    query = HoraPedido.query.order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc())
+    # selectinload evita N+1 ao acessar p.itens no template (uma query agregada
+    # em vez de 1-por-pedido). Fix Sentry PYTHON-FLASK-R2.
+    query = (
+        HoraPedido.query
+        .options(selectinload(HoraPedido.itens))
+        .order_by(HoraPedido.data_pedido.desc(), HoraPedido.id.desc())
+    )
     if status:
         query = query.filter_by(status=status)
     if lojas_permitidas_ids is not None:

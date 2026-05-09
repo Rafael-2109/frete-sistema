@@ -949,7 +949,8 @@ class RecebimentoLfOdooService:
                     'l10n_br_ciel_it_account.dfe',
                     'action_processar_arquivo_manual',
                     [[dfe_id]],
-                    timeout_override=self.FIRE_TIMEOUT
+                    timeout_override=self.FIRE_TIMEOUT,
+                    expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
                 )
 
             def poll_processar():
@@ -1121,7 +1122,8 @@ class RecebimentoLfOdooService:
                 'action_gerar_po_dfe',
                 [[dfe_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_gerar_po():
@@ -1321,7 +1323,8 @@ class RecebimentoLfOdooService:
                 'purchase.order', 'button_confirm',
                 [[po_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_confirmar_po():
@@ -1364,7 +1367,8 @@ class RecebimentoLfOdooService:
             return odoo.execute_kw(
                 'purchase.order', 'button_approve',
                 [[po_id]],
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_aprovar_po():
@@ -1549,7 +1553,8 @@ class RecebimentoLfOdooService:
                     'skip_backorder': True,
                     'picking_ids_not_to_backorder': [picking_id],
                 }},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_validar():
@@ -1597,7 +1602,8 @@ class RecebimentoLfOdooService:
             return odoo.execute_kw(
                 'purchase.order', 'action_create_invoice',
                 [[po_id]],
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_criar():
@@ -1706,7 +1712,8 @@ class RecebimentoLfOdooService:
                 'account.move',
                 'onchange_l10n_br_calcular_imposto_btn',
                 [[invoice_id]],
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_impostos():
@@ -1760,7 +1767,8 @@ class RecebimentoLfOdooService:
                 'account.move', 'action_post',
                 [[invoice_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_confirmar():
@@ -2398,7 +2406,8 @@ class RecebimentoLfOdooService:
                     'skip_backorder': True,
                     'picking_ids_not_to_backorder': [picking_id],
                 }},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_validar():
@@ -2520,7 +2529,8 @@ class RecebimentoLfOdooService:
                 return odoo.execute_kw(
                     'stock.picking', 'action_liberar_faturamento',
                     [[picking_id]],
-                    timeout_override=self.FIRE_TIMEOUT
+                    timeout_override=self.FIRE_TIMEOUT,
+                    expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
                 )
 
             def poll_liberar():
@@ -2690,7 +2700,8 @@ class RecebimentoLfOdooService:
                     'account.move', 'action_post',
                     [[invoice_id]],
                     {'context': {'validate_analytic': True}},
-                    timeout_override=self.FIRE_TIMEOUT
+                    timeout_override=self.FIRE_TIMEOUT,
+                    expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
                 )
 
             def poll_post():
@@ -2978,7 +2989,8 @@ class RecebimentoLfOdooService:
                     'l10n_br_ciel_it_account.dfe',
                     'action_processar_arquivo_manual',
                     [[dfe_id]],
-                    timeout_override=self.FIRE_TIMEOUT
+                    timeout_override=self.FIRE_TIMEOUT,
+                    expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
                 )
 
             def poll_processar():
@@ -3116,7 +3128,8 @@ class RecebimentoLfOdooService:
                 'action_gerar_po_dfe',
                 [[dfe_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_gerar_po():
@@ -3252,7 +3265,8 @@ class RecebimentoLfOdooService:
                 'purchase.order', 'button_confirm',
                 [[po_id]],
                 {'context': {'validate_analytic': True}},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_confirmar():
@@ -3300,7 +3314,8 @@ class RecebimentoLfOdooService:
             return odoo.execute_kw(
                 'purchase.order', 'button_approve',
                 [[po_id]],
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_aprovar():
@@ -3590,7 +3605,8 @@ class RecebimentoLfOdooService:
                     'skip_backorder': True,
                     'picking_ids_not_to_backorder': [picking_id],
                 }},
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_validar():
@@ -3640,7 +3656,8 @@ class RecebimentoLfOdooService:
             return odoo.execute_kw(
                 'purchase.order', 'action_create_invoice',
                 [[po_id]],
-                timeout_override=self.FIRE_TIMEOUT
+                timeout_override=self.FIRE_TIMEOUT,
+                expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
             )
 
         def poll_criar():
@@ -3733,7 +3750,8 @@ class RecebimentoLfOdooService:
                     'account.move',
                     'onchange_l10n_br_calcular_imposto_btn',
                     [[invoice_id]],
-                    timeout_override=self.FIRE_TIMEOUT
+                    timeout_override=self.FIRE_TIMEOUT,
+                    expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
                 )
             except Exception as e:
                 logger.warning(f"  Atualizacao impostos CD falhou (nao critico): {e}")
@@ -3744,7 +3762,8 @@ class RecebimentoLfOdooService:
                     'account.move', 'action_post',
                     [[invoice_id]],
                     {'context': {'validate_analytic': True}},
-                    timeout_override=self.FIRE_TIMEOUT
+                    timeout_override=self.FIRE_TIMEOUT,
+                    expected_timeout=True,  # fire-and-poll: timeout esperado, polling cobre
                 )
 
             def poll_post():

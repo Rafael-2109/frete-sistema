@@ -148,11 +148,16 @@ RESPONDA APENAS JSON VALIDO, sem markdown, sem comentarios."""
 
 
 def _get_anthropic_client() -> anthropic.Anthropic:
-    """Obtém cliente Anthropic."""
+    """Obtém cliente Anthropic com retry automático para 5xx/529.
+
+    `max_retries=4` faz backoff exponencial nativo do SDK Anthropic em
+    `overloaded_error` (529), `rate_limit_error` (429) e 5xx genéricos.
+    Fix Sentry PYTHON-FLASK-R5.
+    """
     api_key = os.getenv('ANTHROPIC_API_KEY')
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY não configurada")
-    return anthropic.Anthropic(api_key=api_key)
+    return anthropic.Anthropic(api_key=api_key, max_retries=4)
 
 
 def _format_sessions_for_analysis(sessions_data: List[Dict[str, Any]]) -> str:

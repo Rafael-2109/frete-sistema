@@ -1671,7 +1671,13 @@ class AIResolverService:
             )
 
         except Exception as e:
-            logger.error(f"[AI_RESOLVER] Erro ao parsear resposta: {e}")
+            # WARNING (nao ERROR): fluxo tem fallback — usuario tem
+            # `requer_confirmacao=True` e resolve manualmente. Subir como
+            # error para Sentry e ruido. Fix Sentry PYTHON-FLASK-R4.
+            logger.warning(
+                f"[AI_RESOLVER] Erro ao parsear resposta (caira no fluxo "
+                f"manual): {e}"
+            )
             return ResultadoResolucaoProduto(
                 sucesso=False,
                 confianca=0.0,

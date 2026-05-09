@@ -55,11 +55,35 @@ class FileStorage:
         self._transfer_config = None
 
     def _ensure_initialized(self):
-        """Le current_app.config na primeira chamada de um metodo publico."""
+        """Le current_app.config na primeira chamada de um metodo publico.
+
+        Fix Sentry PYTHON-FLASK-RA/RB: quando chamado de thread/script sem
+        app_context, faz fallback para os.environ — `USE_S3`, `S3_BUCKET_NAME`,
+        `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`. Em
+        producao Render essas vars existem no env (sao copiadas pelo
+        `app/__init__.py` para `app.config`). Isso evita
+        `RuntimeError: Working outside of application context` ao salvar
+        arquivos a partir de threads do agente (ex: `agente_exports/*.xlsx`).
+        """
         if self._initialized:
             return
 
-        self._use_s3 = bool(current_app.config.get('USE_S3', False)) and S3_AVAILABLE
+        # Helper que tenta current_app.config primeiro, depois os.environ
+        def _cfg(key, default=None):
+            if has_app_context():
+                try:
+                    return current_app.config.get(key, default)
+                except RuntimeError:
+                    pass
+            env_val = os.environ.get(key)
+            if env_val is None:
+                return default
+            # Coercao basica para booleanos vindos de env
+            if isinstance(default, bool):
+                return env_val.lower() in ('1', 'true', 'yes', 'on')
+            return env_val
+
+        self._use_s3 = bool(_cfg('USE_S3', False)) and S3_AVAILABLE
 
         if self._use_s3:
             # ✅ OTIMIZAÇÃO: Configurar timeouts e retries
@@ -71,12 +95,12 @@ class FileStorage:
 
             self._s3_client = boto3.client(
                 's3',
-                aws_access_key_id=current_app.config.get('AWS_ACCESS_KEY_ID'),
-                aws_secret_access_key=current_app.config.get('AWS_SECRET_ACCESS_KEY'),
-                region_name=current_app.config.get('AWS_REGION', 'us-east-1'),
+                aws_access_key_id=_cfg('AWS_ACCESS_KEY_ID'),
+                aws_secret_access_key=_cfg('AWS_SECRET_ACCESS_KEY'),
+                region_name=_cfg('AWS_REGION', 'us-east-1'),
                 config=config  # ✅ Aplicar configuração
             )
-            self._bucket_name = current_app.config.get('S3_BUCKET_NAME')
+            self._bucket_name = _cfg('S3_BUCKET_NAME')
 
             # ✅ OTIMIZAÇÃO: Configurar TransferConfig para uploads mais rápidos
             self._transfer_config = TransferConfig(
