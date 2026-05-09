@@ -39,6 +39,11 @@ class PendingQuestion:
     event: threading.Event = field(default_factory=threading.Event)
     async_event: Optional[asyncio.Event] = field(default=None)  # Fase 2: para async context
     answer: Optional[Dict[str, str]] = None
+    # Loop dono do async_event — usado por submit_answer/cancel_pending para
+    # sinalizar via call_soon_threadsafe (cross-thread safe). Sem isso, set()
+    # direto da Flask thread quebra com pool persistente (loop em outra thread).
+    # Fix code-reviewer (2026-05-09).
+    _loop: Optional[asyncio.AbstractEventLoop] = field(default=None)
 
 
 # Registry global: session_id → PendingQuestion
@@ -62,17 +67,18 @@ def register_question(session_id: str, tool_input: Dict[str, Any]) -> PendingQue
         # para evitar deadlock (thread anterior ficaria bloqueada até timeout)
         existing = _pending.get(session_id)
         if existing:
-            existing.event.set()  # Desbloqueia thread anterior (sync)
-            if existing.async_event:
-                existing.async_event.set()  # Desbloqueia coroutine anterior (async)
+            existing.event.set()  # Desbloqueia thread anterior (sync) — thread-safe
+            _signal_async_event(existing)  # Cross-thread safe via loop dono
             logger.warning(
                 f"[ASK_USER] Sobrescrevendo pergunta anterior: session={session_id[:8]}..."
             )
 
         pq = PendingQuestion(session_id=session_id, tool_input=tool_input)
-        # Fase 2: Cria asyncio.Event se estamos em async context
+        # Fase 2: Cria asyncio.Event se estamos em async context.
+        # Captura o loop corrente para que submit_answer (chamado de outra
+        # thread — Flask route) possa sinalizar via call_soon_threadsafe.
         try:
-            asyncio.get_running_loop()
+            pq._loop = asyncio.get_running_loop()
             pq.async_event = asyncio.Event()
         except RuntimeError:
             pass  # Não estamos em async context — sem async_event
@@ -88,15 +94,39 @@ def get_pending_tool_input(session_id: str) -> Optional[Dict[str, Any]]:
         return pq.tool_input if pq else None
 
 
+def _signal_async_event(pq: 'PendingQuestion') -> None:
+    """Sinaliza pq.async_event de forma cross-thread safe.
+
+    Quando o async_event foi criado em loop A (daemon thread persistente)
+    e submit_answer roda em loop B (Flask thread), .set() direto NAO eh
+    oficialmente thread-safe — pode haver missed wakeup se GIL drop entre
+    set() e o check interno do asyncio. call_soon_threadsafe agenda no
+    loop dono.
+
+    Fallback (loop None ou closed): set() direto. Sob CPython GIL eh
+    seguro na pratica para o caso comum.
+    """
+    if not pq.async_event:
+        return
+    loop = pq._loop
+    if loop is not None and not loop.is_closed():
+        try:
+            loop.call_soon_threadsafe(pq.async_event.set)
+            return
+        except RuntimeError:
+            # Loop ja parou ou em estado invalido — fallback direto
+            pass
+    pq.async_event.set()
+
+
 def submit_answer(session_id: str, answers: Dict[str, str]) -> bool:
     """
     Submete resposta do usuário. Chamado pelo endpoint HTTP.
 
-    NOTA thread-safety do async_event.set():
-    Chamado pela Flask route (thread do Gunicorn worker) enquanto async_wait_for_answer
-    espera no event loop da thread daemon. No CPython, asyncio.Event.set() é protegido
-    pelo GIL, mas não é oficialmente thread-safe. Se causar problemas, substituir por
-    loop.call_soon_threadsafe(). Mantido simples até evidência de race condition.
+    Cross-thread safe: usa call_soon_threadsafe para sinalizar o
+    asyncio.Event no loop dono (capturado em register_question via
+    pq._loop). Necessario quando o agente usa pool persistente — o
+    loop daemon eh diferente da Flask thread que chama submit_answer.
 
     Args:
         session_id: ID da sessão
@@ -112,9 +142,8 @@ def submit_answer(session_id: str, answers: Dict[str, str]) -> bool:
             return False
 
         pq.answer = answers
-        pq.event.set()  # Desbloqueia threading.Event (sync path)
-        if pq.async_event:
-            pq.async_event.set()  # Desbloqueia asyncio.Event (async path)
+        pq.event.set()  # Desbloqueia threading.Event (sync path) — thread-safe
+        _signal_async_event(pq)  # Desbloqueia asyncio.Event via loop dono
         logger.info(
             f"[ASK_USER] Resposta recebida: session={session_id[:8]}... "
             f"answers={list(answers.keys())}"
@@ -219,7 +248,6 @@ def cancel_pending(session_id: str) -> None:
     with _lock:
         pq = _pending.pop(session_id, None)
         if pq:
-            pq.event.set()  # Desbloqueia sync path
-            if pq.async_event:
-                pq.async_event.set()  # Desbloqueia async path
+            pq.event.set()  # Desbloqueia sync path — thread-safe
+            _signal_async_event(pq)  # Cross-thread safe via loop dono
             logger.info(f"[ASK_USER] Pergunta cancelada: session={session_id[:8]}...")

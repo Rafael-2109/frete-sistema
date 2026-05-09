@@ -156,6 +156,13 @@
   function showAskUserQuestion(payload) {
     askPendingSessionId = payload.session_id;
     askPendingQuestions = payload.questions || [];
+    // Fix code-reviewer (2026-05-09): desabilita form principal enquanto
+    // modal aberta. Sem isso, usuario pode submeter nova mensagem (criando
+    // segundo stream concorrente) ou ficar com UI travada se stream encerrar
+    // por timeout enquanto modal aguarda resposta.
+    input.disabled = true;
+    sendBtn.disabled = true;
+    askSubmit.disabled = false;
     askBody.innerHTML = '';
     askPendingQuestions.forEach((q, idx) => {
       const block = document.createElement('div');
@@ -216,6 +223,11 @@
     } finally {
       askSubmit.disabled = false;
       askModal.hide();
+      // Limpa estado pendente — resposta enviada (ou falhou). Form principal
+      // continua disabled ate o stream emitir done/error (que re-enabilita
+      // no `finally` do submit handler).
+      askPendingSessionId = null;
+      askPendingQuestions = [];
     }
   });
 
@@ -279,6 +291,14 @@
             appendToolResult(payload.content, payload.is_error);
           } else if (event === 'error') {
             appendError(payload.content || 'erro desconhecido');
+            // Fix code-reviewer (2026-05-09): se modal AskUserQuestion estava
+            // aberto, o stream encerrou antes da resposta — fecha modal e
+            // limpa estado para evitar 404 ao tentar submeter resposta orfa.
+            if (askPendingSessionId) {
+              askPendingSessionId = null;
+              askPendingQuestions = [];
+              try { askModal.hide(); } catch {}
+            }
           } else if (event === 'ask_user_question') {
             showAskUserQuestion(payload);
             // NAO interrompe o stream — agente continua aguardando resposta
@@ -288,6 +308,13 @@
           } else if (event === 'done') {
             // mantem reset visual; o stream encerra logo depois
             agentTextEl = null;
+            // Se modal estava aberto e o stream foi finalizado sem resposta
+            // (timeout 55s no can_use_tool ou cancel), fecha modal silenciosamente.
+            if (askPendingSessionId) {
+              askPendingSessionId = null;
+              askPendingQuestions = [];
+              try { askModal.hide(); } catch {}
+            }
           }
         }
       }

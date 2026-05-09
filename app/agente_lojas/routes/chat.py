@@ -17,6 +17,7 @@ Implementacao M2:
     - Cleanup robusto: cancel_pending + cleanup_session_context no finally.
 """
 import asyncio
+import concurrent.futures
 import json
 import logging
 import queue
@@ -224,9 +225,18 @@ def _streaming_worker(
     fut = submit_coroutine(coro) if USE_PERSISTENT_LOJAS_LOOP else None
 
     if fut is not None:
-        # Path com pool persistente — coroutine roda no loop daemon compartilhado
+        # Expor fut em state para que _generate_sse possa cancelar no
+        # disconnect (cliente desconectou o SSE). Sem isso, coroutine
+        # continua viva no loop persistente ate STREAM_MAX_DURATION_SECONDS,
+        # vazando subprocess SDK + entry em pending_questions.
+        # Fix code-reviewer (2026-05-09).
+        state['_fut'] = fut
         try:
             fut.result(timeout=STREAM_MAX_DURATION_SECONDS + 30)
+        except concurrent.futures.CancelledError:
+            # Cancelamento esperado quando cliente desconectou — coroutine
+            # foi sinalizada via fut.cancel() em _generate_sse finally.
+            logger.info("[AGENTE_LOJAS] worker (pool) cancelado (cliente desconectou)")
         except Exception as e:
             logger.exception("[AGENTE_LOJAS] worker (pool) erro: %s", e)
             try:
@@ -337,8 +347,37 @@ def _generate_sse(
         )
 
     finally:
-        # Garante que worker morre se cliente desconectou. cleanup_session_context
-        # e cancel_pending sao feitos pelo client.py:stream_response (finally).
+        # Cancela coroutine no loop persistente se cliente desconectou.
+        # Sem isso, async gen continua rodando ate STREAM_MAX_DURATION_SECONDS,
+        # vazando subprocess SDK + entry em pending_questions ate timeout.
+        # Fix code-reviewer (2026-05-09).
+        fut = state.get('_fut')
+        if fut is not None and not fut.done():
+            try:
+                fut.cancel()
+                logger.info(
+                    "[AGENTE_LOJAS] fut.cancel() acionado (cliente desconectou). "
+                    "session=%s", session_id[:8],
+                )
+            except Exception:
+                pass
+
+        # Cleanup de pending_questions e stream_context tambem aqui (defesa
+        # em profundidade). client.py:stream_response.finally faz o mesmo,
+        # mas se a coroutine foi cancelada antes do `async with` exit, este
+        # cleanup garante que registry global nao acumula entries orfaos.
+        try:
+            from app.agente.sdk.pending_questions import cancel_pending
+            cancel_pending(session_id)
+        except Exception:
+            pass
+        try:
+            from app.agente_lojas.config.permissions import cleanup_session_context
+            cleanup_session_context(session_id)
+        except Exception:
+            pass
+
+        # Aguarda worker morrer (best-effort)
         if worker.is_alive():
             try:
                 worker.join(timeout=2.0)
