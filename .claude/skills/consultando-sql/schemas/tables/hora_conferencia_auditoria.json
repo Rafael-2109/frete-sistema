@@ -62,23 +62,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_conferencia_auditoria_criado_em",
-      "columns": [
-        "criado_em"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_conferencia_auditoria_recebimento_id",
-      "columns": [
-        "recebimento_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_conferencia_auditoria_acao",
       "columns": [
         "acao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_conferencia_auditoria_conferencia_id",
+      "columns": [
+        "conferencia_id"
       ],
       "unique": false
     },
@@ -91,9 +84,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_auditoria_conferencia_id",
+      "name": "ix_hora_conferencia_auditoria_recebimento_id",
       "columns": [
-        "conferencia_id"
+        "recebimento_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_conferencia_auditoria_criado_em",
+      "columns": [
+        "criado_em"
       ],
       "unique": false
     }

@@ -235,17 +235,17 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_numero_nfd",
-      "columns": [
-        "numero_nfd"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_nfd_numero_serie",
       "columns": [
         "numero_nfd",
         "serie_nfd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_numero_nfd",
+      "columns": [
+        "numero_nfd"
       ],
       "unique": false
     },
@@ -265,13 +265,6 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_data_registro",
-      "columns": [
-        "data_registro"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_devolucao_origem_registro",
       "columns": [
         "origem_registro"
@@ -282,6 +275,13 @@
       "name": "ix_nf_devolucao_numero_nf_venda",
       "columns": [
         "numero_nf_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nfd_data_registro",
+      "columns": [
+        "data_registro"
       ],
       "unique": false
     },

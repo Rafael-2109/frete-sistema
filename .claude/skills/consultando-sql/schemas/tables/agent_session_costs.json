@@ -1,0 +1,90 @@
+{
+  "name": "agent_session_costs",
+  "description": "F8 (2026-05-09) — Persistencia de cost_tracker entries.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "message_id",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "session_id",
+      "type": "text"
+    },
+    {
+      "name": "user_id",
+      "type": "integer"
+    },
+    {
+      "name": "tool_name",
+      "type": "text"
+    },
+    {
+      "name": "model",
+      "type": "text"
+    },
+    {
+      "name": "input_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "output_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "cache_read_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "cache_creation_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "cost_usd",
+      "type": "numeric(10,6)",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "recorded_at",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_session_costs_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_session_costs_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_session_costs_recorded_at",
+      "columns": [
+        "recorded_at"
+      ],
+      "unique": false
+    }
+  ]
+}

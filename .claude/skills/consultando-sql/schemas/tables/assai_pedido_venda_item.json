@@ -64,16 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_pedido_venda_item_loja_id",
+      "name": "ix_assai_pedido_venda_item_modelo_id",
       "columns": [
-        "loja_id"
+        "modelo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_pedido_venda_item_modelo_id",
+      "name": "ix_assai_pedido_venda_item_loja_id",
       "columns": [
-        "modelo_id"
+        "loja_id"
       ],
       "unique": false
     }

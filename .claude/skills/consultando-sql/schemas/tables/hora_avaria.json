@@ -65,13 +65,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_avaria_criado_em",
-      "columns": [
-        "criado_em"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_avaria_numero_chassi",
       "columns": [
         "numero_chassi"
@@ -79,16 +72,23 @@
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_loja_id",
+      "name": "ix_hora_avaria_status",
       "columns": [
-        "loja_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_status",
+      "name": "ix_hora_avaria_criado_em",
       "columns": [
-        "status"
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_avaria_loja_id",
+      "columns": [
+        "loja_id"
       ],
       "unique": false
     }
