@@ -37,9 +37,14 @@ class AgentSettings:
     # NOTA: Funcionalidades são implementadas via SKILLS, não Custom Tools MCP
     # Skills estão em: .claude/skills/ (gerindo-expedicao, memoria-usuario, etc.)
     # Referência: https://platform.claude.com/docs/pt-BR/agent-sdk/skills
+    #
+    # 'Skill' NÃO está listada aqui (SDK 0.1.77+ deprecou "Skill" em
+    # allowed_tools em favor da option `skills=` em ClaudeAgentOptions).
+    # client.py:_build_options() injeta `skills="all"` quando SDK >= 0.1.77
+    # (auto-config de "Skill" em allowed_tools) ou injeta 'Skill' aqui
+    # como fallback para SDK < 0.1.77. Ver _SDK_HAS_OPTIONS_SKILLS.
     tools_enabled: List[str] = field(default_factory=lambda: [
         # Core — operações de arquivo e busca
-        'Skill',            # OBRIGATÓRIO - permite invocar Skills
         'Bash',             # OBRIGATÓRIO - executa scripts das Skills
         'Task',             # Invocar subagentes (.claude/agents/)
         'Read',             # Leitura de arquivos

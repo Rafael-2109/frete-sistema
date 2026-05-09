@@ -17,8 +17,13 @@ O que M1 implementa:
     - Stream SSE real via ClaudeSDKClient
     - System prompt proprio (sem briefing do agente logistico)
     - Hook user_prompt_submit injetando <loja_context> + <session_context>
-    - Skills via .claude/skills/* (SDK descobre via setting_sources=project)
+    - Skills via option `skills=` em ClaudeAgentOptions (SDK 0.1.77+):
+      filtra o listing do model para apenas SKILLS_PERMITIDAS, reforcando o
+      contrato de isolamento HORA documentado em app/hora/CLAUDE.md.
+      SDK auto-configura "Skill" em allowed_tools + setting_sources=["project"].
+      Fallback (SDK < 0.1.77): "Skill" injetado em allowed_tools manualmente.
 """
+import dataclasses
 import logging
 import os
 from typing import AsyncGenerator, Optional, Dict, Any
@@ -37,6 +42,7 @@ from claude_agent_sdk import (
 )
 
 from app.agente_lojas.config.settings import get_lojas_settings
+from app.agente_lojas.config.skills_whitelist import SKILLS_PERMITIDAS
 from app.agente_lojas.sdk.hooks import make_user_prompt_submit_hook
 
 logger = logging.getLogger('sistema_fretes')
@@ -53,13 +59,15 @@ PROJECT_ROOT = os.path.dirname(
 
 
 # Tools minimas que o agente de lojas precisa em M1
-# - Skill: invocar skills do dominio HORA
 # - Bash: executar scripts das skills (consultas SQL via consultando-sql)
+# - Task: invocar subagent `orientador-loja` (M2)
 # - Read/Glob/Grep: leitura de arquivos do projeto (SKILL.md, schemas, etc.)
 # - TodoWrite: feedback visual de tarefas
 # NAO incluir Write/Edit/MultiEdit — operador de loja nao modifica codigo.
+# NOTA: 'Skill' NAO esta listada — SDK 0.1.77+ adiciona automaticamente quando
+# `skills=` esta set em ClaudeAgentOptions. Fallback (SDK < 0.1.77) injeta
+# 'Skill' em build_options() manualmente. Ver _SDK_HAS_SKILLS_OPTION.
 ALLOWED_TOOLS_M1 = [
-    'Skill',
     'Bash',
     'Task',
     'Read',
@@ -67,6 +75,28 @@ ALLOWED_TOOLS_M1 = [
     'Grep',
     'TodoWrite',
 ]
+
+
+def _check_skills_option() -> bool:
+    """Verifica se ClaudeAgentOptions tem campo `skills` nativo (SDK 0.1.77+).
+
+    SDK 0.1.77 deprecou "Skill" em allowed_tools em favor da option
+    `skills: list[str] | Literal["all"] | None` em ClaudeAgentOptions.
+    Quando set, SDK auto-configura "Skill" em allowed_tools E
+    setting_sources, alem de filtrar o listing do model.
+
+    Returns:
+        True se SDK >= 0.1.77 (campo skills presente), False caso contrario.
+    """
+    try:
+        fields = {f.name for f in dataclasses.fields(ClaudeAgentOptions)}
+        return 'skills' in fields
+    except Exception:
+        return False
+
+
+# Detectado uma vez no import — zero overhead por request
+_SDK_HAS_SKILLS_OPTION = _check_skills_option()
 
 
 class AgentLojasClient:
@@ -115,6 +145,14 @@ class AgentLojasClient:
             loja_hora_id=loja_hora_id,
         )
 
+        # Skills: passar lista explicita via SDK option (0.1.77+) reforca
+        # contrato de isolamento HORA — skills de Nacom Goya nao aparecem no
+        # listing do model. Fallback SDK < 0.1.77: 'Skill' em allowed_tools
+        # + setting_sources=["project"] descobre tudo (sem filtro).
+        allowed_tools = list(ALLOWED_TOOLS_M1)
+        if not _SDK_HAS_SKILLS_OPTION:
+            allowed_tools.append('Skill')
+
         options_kwargs: Dict[str, Any] = {
             "model": self.settings.model,
             "max_turns": 20,
@@ -122,7 +160,7 @@ class AgentLojasClient:
             "system_prompt": self._build_system_prompt(),
             "cwd": PROJECT_ROOT,
             "setting_sources": ["project"],  # descobre skills em .claude/skills/
-            "allowed_tools": list(ALLOWED_TOOLS_M1),
+            "allowed_tools": allowed_tools,
             "permission_mode": "acceptEdits",
             "fallback_model": "sonnet",
             "disallowed_tools": ["Write", "Edit", "MultiEdit", "NotebookEdit"],
@@ -130,6 +168,13 @@ class AgentLojasClient:
                 "UserPromptSubmit": [HookMatcher(hooks=[submit_hook])],
             },
         }
+
+        # SDK 0.1.77+: option `skills` filtra listing do model + auto-config
+        # de "Skill" em allowed_tools. Lista ordenada para determinismo.
+        # Doc: "context filter, not sandbox" — arquivos das skills continuam
+        # acessiveis via Read/Bash; o filtro complementa can_use_tool.
+        if _SDK_HAS_SKILLS_OPTION:
+            options_kwargs["skills"] = sorted(SKILLS_PERMITIDAS)
 
         # SDK 0.1.52+: passar nosso session_id para nomear o JSONL
         if sdk_session_id:

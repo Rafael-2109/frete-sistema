@@ -1,10 +1,10 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~35.4K | **Arquivos**: 72 | **Atualizado**: 05/05/2026
+**LOC**: ~35.4K | **Arquivos**: 72 | **Atualizado**: 09/05/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
-> **Historico SDK** (changelog 0.1.49 → 0.1.76 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
+> **Historico SDK** (changelog 0.1.49 → 0.1.80 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
 
 ---
 
@@ -436,7 +436,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ## Versao SDK atual
 
-- **claude-agent-sdk**: `0.1.76` | **CLI bundled**: 2.1.132 | **anthropic**: `0.98.1`
+- **claude-agent-sdk**: `0.1.80` | **CLI bundled**: 2.1.138 | **anthropic**: `0.98.1`
 - **Floor**: `mcp>=1.19.0` (fix `CallToolResult` silenciosamente perdido em 0.1.70)
 - **Modelo default**: `claude-opus-4-7` (Opus 4.7, $5/$25 per MTok, adaptive thinking, 1M context)
 - **Rollback rapido**: `AGENT_MODEL=claude-opus-4-6` + `TEAMS_DEFAULT_MODEL=claude-opus-4-6`
@@ -463,9 +463,16 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
   `gestor-recebimento`, `raio-x-pedido`) marcados `effort: xhigh` no frontmatter.
   `agent_loader.py` parseia com forward-compat (`_SDK_HAS_EFFORT_FIELD` introspection).
   Sonnet ignorado (xhigh fallback para high = no-op).
+- **`skills` option** (SDK 0.1.77, deprecou `"Skill"` em allowed_tools): `agente_lojas`
+  passa `skills=sorted(SKILLS_PERMITIDAS)` (filtro real do listing — defesa em
+  profundidade do contrato HORA); `agente` Nacom passa `skills="all"` (centralizacao).
+  Forward-compat via `_SDK_HAS_OPTIONS_SKILLS` (introspection).
+- **Actionable error messages** (SDK 0.1.77): `ProcessError` carrega texto real do
+  CLI (ex: "Reached maximum number of turns") em vez de generico "exit code 1".
+  Adocao gratis via upgrade.
 
 > **Historico completo de adocoes, breaking changes, bug fixes e features NAO adotadas**:
-> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.1.76 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
+> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.1.80 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
 
 ---
 

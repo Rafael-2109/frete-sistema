@@ -56,6 +56,23 @@ except ImportError:
         """Sentinel inerte para SDK < 0.1.64 (sem SessionStore). Nao e emitida."""
         pass
 
+
+# SDK 0.1.77+: option `skills` em ClaudeAgentOptions deprecou "Skill" em
+# allowed_tools. Quando set, SDK auto-configura "Skill" em allowed_tools E
+# setting_sources, alem de filtrar o listing do model. Detectado uma vez no
+# import (zero overhead por request).
+def _check_options_skills_field() -> bool:
+    """Retorna True se ClaudeAgentOptions tem campo `skills` nativo (SDK 0.1.77+)."""
+    try:
+        import dataclasses
+        fields = {f.name for f in dataclasses.fields(ClaudeAgentOptions)}
+        return 'skills' in fields
+    except Exception:
+        return False
+
+
+_SDK_HAS_OPTIONS_SKILLS = _check_options_skills_field()
+
 # Fallback para API direta (health check)
 import anthropic
 logger = logging.getLogger('sistema_fretes')
@@ -1216,7 +1233,9 @@ Nunca invente informações."""
             # Ref: https://platform.claude.com/docs/en/agent-sdk/skills
             "setting_sources": ["project"] if permission_mode == "acceptEdits" else ["user", "project"],
 
-            # Tools permitidas — lê de settings.py (fonte única de verdade)
+            # Tools permitidas — lê de settings.py (fonte única de verdade).
+            # 'Skill' NÃO está em tools_enabled (deprecation SDK 0.1.77+) —
+            # fallback para SDK < 0.1.77 e injetado abaixo via guard.
             "allowed_tools": list(self.settings.tools_enabled),
 
             # Modo de permissão
@@ -1243,6 +1262,22 @@ Nunca invente informações."""
                 "HOME": "/tmp",
             },
         }
+
+        # SDK 0.1.77+: option `skills` substitui "Skill" em allowed_tools.
+        # `"all"` mantem comportamento atual (todas as skills descobertas
+        # via setting_sources=["project"] disponiveis ao model). SDK
+        # auto-configura "Skill" em allowed_tools quando este campo esta set.
+        # Doc: "context filter, not sandbox" — arquivos das skills continuam
+        # acessiveis via Read/Bash; o filtro complementa can_use_tool.
+        # Fallback (SDK < 0.1.77): 'Skill' adicionado em allowed_tools manualmente.
+        if _SDK_HAS_OPTIONS_SKILLS:
+            options_dict["skills"] = "all"
+        else:
+            options_dict["allowed_tools"].append("Skill")
+            logger.debug(
+                "[AGENT_CLIENT] SDK < 0.1.77 detectado — 'Skill' injetado em "
+                "allowed_tools (fallback). Atualize requirements.txt para 0.1.77+."
+            )
 
         # SDK 0.1.52+: session_id nativo — pre-declara o UUID do JSONL
         # Permite naming deterministico: JSONL sera ~/.claude/projects/.../{our_session_id}.jsonl

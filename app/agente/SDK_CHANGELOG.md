@@ -1,9 +1,136 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.1.76)
+# Agente Web — SDK Changelog (0.1.49 → 0.1.80)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-05-07 (SDK 0.1.76 + anthropic 0.98.1)
+> **Atualizado**: 2026-05-09 (SDK 0.1.80 + anthropic 0.98.1)
+
+---
+
+## SDK 0.1.80 (atualizado 2026-05-09) — `skills` option + actionable errors + CLI bumps
+
+**Versao**: `claude-agent-sdk==0.1.80` (CLI bundled 2.1.138) + `anthropic==0.98.1`
+**Bumps intermediarios**: 0.1.77 (CLI 2.1.133), 0.1.78 (CLI 2.1.136), 0.1.79 (CLI 2.1.137)
+
+### Features adotadas
+
+#### F11: `skills` option em `ClaudeAgentOptions` (SDK 0.1.77, #924) — substitui `"Skill"` em `allowed_tools`
+
+**Mecanica**: novo campo `skills: list[str] | Literal["all"] | None = None` em
+`ClaudeAgentOptions`. Quando set, SDK auto-configura `"Skill"` em `allowed_tools`
+E `setting_sources` automaticamente. Doc oficial:
+
+> *"This is a context filter, not a sandbox: unlisted skills are hidden from the
+> model's listing and rejected by the Skill tool, but their files remain on disk
+> and are reachable via Read/Bash."*
+
+Valores:
+- `None` (default): nenhuma auto-config; CLI defaults aplicam (NAO eh "skills off").
+- `"all"`: habilita todas as skills descobertas via `setting_sources`.
+- `list[str]`: habilita apenas as skills listadas (filtro real para o model).
+
+**Forward-compat**: `_check_options_skills_field()` em `client.py` (introspection
+via `dataclasses.fields(ClaudeAgentOptions)`). Constante `_SDK_HAS_OPTIONS_SKILLS`
+calculada uma vez no import — zero overhead por request. Mesmo padrao usado em
+`agent_loader.py` (`_SDK_HAS_NATIVE_FIELDS`, `_SDK_HAS_EFFORT_FIELD`).
+
+**Aplicado em DOIS agentes com estrategias diferentes**:
+
+##### `app/agente_lojas/` — whitelist explicita (defesa em profundidade)
+- **Antes**: `'Skill'` em `ALLOWED_TOOLS_M1` + `setting_sources=["project"]`. Operador
+  HORA via TODAS as skills do projeto no listing (incluindo skills Nacom Goya como
+  `cotando-frete`, `rastreando-odoo`, `gerindo-expedicao` — violacao do contrato de
+  isolamento documentado em `app/hora/CLAUDE.md`).
+- **Depois**: `skills=sorted(SKILLS_PERMITIDAS)` (7 skills HORA + 2 compartilhadas).
+  Skills Nacom ficam ocultas do listing do model. Defesa em profundidade do contrato
+  HORA — nao substitui `can_use_tool` (filter, not sandbox).
+- **Bonus**: `'Skill'` removida de `ALLOWED_TOOLS_M1` (SDK auto-configura).
+  `setting_sources=["project"]` mantido explicito (descobre tambem subagents
+  `.claude/agents/orientador-loja.md`).
+
+##### `app/agente/` (Nacom) — `skills="all"` (centralizacao)
+- **Antes**: `'Skill'` em `tools_enabled` (settings.py).
+- **Depois**: `'Skill'` removida de `tools_enabled`; `options_dict["skills"] = "all"`
+  injetado em `_build_options()` apos init do dict. Mantem comportamento (todas as
+  skills disponiveis) mas com config centralizada via SDK option.
+- **Beneficio**: setting_sources auto-configurado pelo SDK (linha existente
+  `setting_sources=["project"|"user"]` em `_build_options:1217` continua valida e
+  explicita — a auto-config do SDK eh idempotente).
+
+**Fallback (SDK < 0.1.77)**:
+- Ambos agentes injetam `'Skill'` em `allowed_tools` manualmente quando
+  `_SDK_HAS_OPTIONS_SKILLS=False`. Log debug emitido em agente Nacom alertando para
+  upgrade do `requirements.txt`.
+
+**Arquivos modificados**:
+- `requirements.txt:70`: `claude-agent-sdk==0.1.76` -> `claude-agent-sdk==0.1.80`.
+- `app/agente_lojas/sdk/client.py`:
+  - Imports: adicionado `dataclasses` e `from app.agente_lojas.config.skills_whitelist import SKILLS_PERMITIDAS`.
+  - `ALLOWED_TOOLS_M1`: removido `'Skill'`.
+  - `_check_skills_option()` + `_SDK_HAS_SKILLS_OPTION` introspection.
+  - `build_options()`: aplica `skills=sorted(SKILLS_PERMITIDAS)` ou fallback.
+  - Docstring atualizada para mencionar option `skills=`.
+- `app/agente/config/settings.py:40-46`: `'Skill'` removida de `tools_enabled` +
+  comentario explicativo da deprecation.
+- `app/agente/sdk/client.py`:
+  - `_check_options_skills_field()` + `_SDK_HAS_OPTIONS_SKILLS` introspection
+    (apos import de `MirrorErrorMessage`).
+  - `_build_options()`: bloco condicional `skills="all"` ou fallback `'Skill'`
+    em `allowed_tools` (apos init do `options_dict`, antes do `session_id`).
+
+**Justificativa do escopo**:
+- Whitelist no `agente_lojas` eh ganho real de seguranca/UX — operador nao ve
+  skills inaplicaveis. Centralizacao no `agente` Nacom eh ganho de manutenibilidade
+  (config unica via SDK option).
+- NAO removido `setting_sources=["project"]` explicito (idempotente com auto-config
+  do SDK; mantido para descoberta de subagents `.claude/agents/*.md`).
+
+**Rollback rapido**: `claude-agent-sdk==0.1.76` no requirements.txt — codigo continua
+funcional (forward-compat detecta ausencia do field, injeta `'Skill'` em
+`allowed_tools` automaticamente). Sem mudancas de schema/migration.
+
+#### F12: Actionable error messages apos error result (SDK 0.1.77, #918) — `ProcessError` carrega texto real
+
+**Mecanica**: SDK 0.1.76 e anteriores: qualquer falha do CLI virava
+`Command failed with exit code 1` (generico). SDK 0.1.77+: substituiu pela
+mensagem real do erro (ex: `"Reached maximum number of turns"`), igual ao TS SDK.
+
+**Aplicabilidade**: `app/agente/sdk/client.py` tem 10+ callsites de `ProcessError`
+com comentarios explicitos sobre dificuldade de diagnostico (`# nunca propaga o
+stderr real` em `client.py:1362`). Diagnostico de timeouts, max-turns e refusals
+melhora automaticamente sem mudanca de codigo.
+
+**Adocao**: GRATIS via upgrade SDK. Nenhum codigo modificado. Comportamento ativo
+imediatamente para qualquer ProcessError lancado pelo SDK.
+
+**Beneficio observavel**:
+- Logs `[AGENT_CLIENT] ProcessError: ...` agora mostram causa raiz textual.
+- Sentry events com mensagem util em vez de `"exit code 1"` generico.
+- Stderr callback (`extra_args: {"debug-to-stderr": None}`) continua complementar.
+
+### Bug fixes gratuitos via upgrade (SDK 0.1.78-0.1.80)
+
+- **CLI bumps 2.1.133 -> 2.1.138** (0.1.78, 0.1.79, 0.1.80): tres bumps consecutivos
+  sem changelog Python (apenas patch-level no CLI subjacente). Padrao historico:
+  bumps adotados via upgrade rotineiro. Cadence de 2 dias entre releases sugere
+  estabilidade.
+
+### Features documentadas mas NAO implementadas
+
+- **`skills=[]` (filtro total)**: caso de uso "operar SEM skills" nao existe no
+  projeto. Os dois agentes precisam de pelo menos uma skill. `[]` permanece
+  documentado como possibilidade futura (ex: agente puramente conversacional).
+
+### Status pos-upgrade
+
+| Item | Antes (0.1.76) | Depois (0.1.80) |
+|------|----------------|-----------------|
+| `requirements.txt` | `claude-agent-sdk==0.1.76` | `claude-agent-sdk==0.1.80` |
+| Agente Nacom — `'Skill'` | em `tools_enabled` | removido; `skills="all"` em options |
+| Agente Lojas — `'Skill'` | em `ALLOWED_TOOLS_M1` | removido; `skills=sorted(SKILLS_PERMITIDAS)` |
+| Agente Lojas — listing skills | TODAS (~30 skills incluindo Nacom) | 9 skills (7 HORA + 2 compartilhadas) |
+| `ProcessError` mensagem | `"Command failed with exit code 1"` | causa raiz textual |
+| Forward-compat SDK < 0.1.77 | n/a | injeta `'Skill'` automaticamente |
 
 ---
 
