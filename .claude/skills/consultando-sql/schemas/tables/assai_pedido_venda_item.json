@@ -1,0 +1,81 @@
+{
+  "name": "assai_pedido_venda_item",
+  "description": "Tabela assai_pedido_venda_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pedido_id",
+      "type": "integer",
+      "description": "FK → assai_pedido_venda.id",
+      "nullable": false
+    },
+    {
+      "name": "loja_id",
+      "type": "integer",
+      "description": "FK → assai_loja.id",
+      "nullable": false
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → assai_modelo.id",
+      "nullable": false
+    },
+    {
+      "name": "qtd_pedida",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "valor_unitario",
+      "type": "numeric(12,2)",
+      "nullable": false
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(14,2)",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pedido_id",
+      "references": "assai_pedido_venda.id"
+    },
+    {
+      "column": "loja_id",
+      "references": "assai_loja.id"
+    },
+    {
+      "column": "modelo_id",
+      "references": "assai_modelo.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "pedido_id",
+      "loja_id",
+      "modelo_id"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_pedido_venda_item_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_pedido_venda_item_modelo_id",
+      "columns": [
+        "modelo_id"
+      ],
+      "unique": false
+    }
+  ]
+}

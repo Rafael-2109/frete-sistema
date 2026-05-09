@@ -1,0 +1,55 @@
+{
+  "name": "assai_modelo_alias",
+  "description": "Tabela assai_modelo_alias",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → assai_modelo.id",
+      "nullable": false
+    },
+    {
+      "name": "alias",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "modelo_id",
+      "references": "assai_modelo.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "tipo",
+      "alias"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_modelo_alias_modelo_id",
+      "columns": [
+        "modelo_id"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "assai_compra_motochefe_pedido",
+  "description": "Tabela assai_compra_motochefe_pedido",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "compra_id",
+      "type": "integer",
+      "description": "FK → assai_compra_motochefe.id",
+      "nullable": false
+    },
+    {
+      "name": "pedido_id",
+      "type": "integer",
+      "description": "FK → assai_pedido_venda.id",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "compra_id",
+      "references": "assai_compra_motochefe.id"
+    },
+    {
+      "column": "pedido_id",
+      "references": "assai_pedido_venda.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "compra_id",
+      "pedido_id"
+    ]
+  ]
+}

@@ -207,30 +207,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_status",
+      "name": "ix_hora_venda_origem_criacao",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_cpf_cliente",
-      "columns": [
-        "cpf_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_tagplus_pedido_id",
-      "columns": [
-        "tagplus_pedido_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_loja_id",
-      "columns": [
-        "loja_id"
+        "origem_criacao"
       ],
       "unique": false
     },
@@ -242,9 +221,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_origem_criacao",
+      "name": "ix_hora_venda_loja_id",
       "columns": [
-        "origem_criacao"
+        "loja_id"
       ],
       "unique": false
     },
@@ -266,6 +245,27 @@
       "name": "ix_hora_venda_cnpj_emitente",
       "columns": [
         "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_cpf_cliente",
+      "columns": [
+        "cpf_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_tagplus_pedido_id",
+      "columns": [
+        "tagplus_pedido_id"
       ],
       "unique": false
     }

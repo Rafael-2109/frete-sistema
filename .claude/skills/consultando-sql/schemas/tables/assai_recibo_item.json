@@ -1,0 +1,92 @@
+{
+  "name": "assai_recibo_item",
+  "description": "Tabela assai_recibo_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "recibo_id",
+      "type": "integer",
+      "description": "FK → assai_recibo_motochefe.id",
+      "nullable": false
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "modelo_texto_recibo",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → assai_modelo.id"
+    },
+    {
+      "name": "cor_texto",
+      "type": "varchar(40)"
+    },
+    {
+      "name": "motor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "conferido",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "tipo_divergencia",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "qr_code_lido",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "foto_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "recibo_id",
+      "references": "assai_recibo_motochefe.id"
+    },
+    {
+      "column": "modelo_id",
+      "references": "assai_modelo.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_recibo_item_recibo_id",
+      "columns": [
+        "recibo_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_recibo_item_chassi",
+      "columns": [
+        "chassi"
+      ],
+      "unique": false
+    }
+  ]
+}

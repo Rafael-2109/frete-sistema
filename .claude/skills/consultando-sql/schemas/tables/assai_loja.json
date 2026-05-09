@@ -1,0 +1,97 @@
+{
+  "name": "assai_loja",
+  "description": "Tabela assai_loja",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "nome",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "razao_social",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(18)",
+      "nullable": false
+    },
+    {
+      "name": "ie",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "endereco",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "bairro",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "cep",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "cidade",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "regional",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "latitude",
+      "type": "numeric(10,7)"
+    },
+    {
+      "name": "longitude",
+      "type": "numeric(11,7)"
+    },
+    {
+      "name": "geocoding_provider",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "geocoded_at",
+      "type": "timestamp"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_loja_cnpj",
+      "columns": [
+        "cnpj"
+      ],
+      "unique": false
+    }
+  ]
+}

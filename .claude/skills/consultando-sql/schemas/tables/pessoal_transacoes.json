@@ -212,11 +212,11 @@
   ],
   "indices": [
     {
-      "name": "idx_pessoal_transacoes_excluir",
+      "name": "uq_pessoal_transacoes_pluggy_tx",
       "columns": [
-        "excluir_relatorio"
+        "pluggy_transaction_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "idx_pessoal_transacoes_data",
@@ -238,13 +238,6 @@
         "conta_id"
       ],
       "unique": false
-    },
-    {
-      "name": "uq_pessoal_transacoes_pluggy_tx",
-      "columns": [
-        "pluggy_transaction_id"
-      ],
-      "unique": true
     },
     {
       "name": "idx_pessoal_transacoes_categoria",
@@ -271,6 +264,13 @@
       "name": "idx_pessoal_transacoes_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_excluir",
+      "columns": [
+        "excluir_relatorio"
       ],
       "unique": false
     }

@@ -1,0 +1,46 @@
+{
+  "name": "assai_compra_motochefe",
+  "description": "Tabela assai_compra_motochefe",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "motochefe_cnpj",
+      "type": "varchar(18)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "ABERTA"
+    },
+    {
+      "name": "criada_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "criada_em",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criada_por_id",
+      "references": "usuarios.id"
+    }
+  ]
+}

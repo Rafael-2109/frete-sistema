@@ -70,16 +70,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_transferencia_auditoria_transferencia_id",
+      "name": "ix_hora_transferencia_auditoria_acao",
       "columns": [
-        "transferencia_id"
+        "acao"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_transferencia_auditoria_acao",
+      "name": "ix_hora_transferencia_auditoria_transferencia_id",
       "columns": [
-        "acao"
+        "transferencia_id"
       ],
       "unique": false
     }

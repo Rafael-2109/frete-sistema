@@ -1,0 +1,104 @@
+{
+  "name": "assai_nf_qpa",
+  "description": "Tabela assai_nf_qpa",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "separacao_id",
+      "type": "integer",
+      "description": "FK → assai_separacao.id"
+    },
+    {
+      "name": "chave_44",
+      "type": "varchar(44)",
+      "nullable": false
+    },
+    {
+      "name": "numero",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "serie",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "emitente_cnpj",
+      "type": "varchar(18)"
+    },
+    {
+      "name": "destinatario_cnpj",
+      "type": "varchar(18)"
+    },
+    {
+      "name": "destinatario_nome",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "loja_id",
+      "type": "integer",
+      "description": "FK → assai_loja.id"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(14,2)"
+    },
+    {
+      "name": "data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "pdf_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "status_match",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "NAO_RECONCILIADO"
+    },
+    {
+      "name": "importada_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "importada_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "separacao_id",
+      "references": "assai_separacao.id"
+    },
+    {
+      "column": "loja_id",
+      "references": "assai_loja.id"
+    },
+    {
+      "column": "importada_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_nf_qpa_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_nf_qpa_separacao_id",
+      "columns": [
+        "separacao_id"
+      ],
+      "unique": false
+    }
+  ]
+}

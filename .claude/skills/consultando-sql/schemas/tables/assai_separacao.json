@@ -1,0 +1,81 @@
+{
+  "name": "assai_separacao",
+  "description": "Tabela assai_separacao",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pedido_id",
+      "type": "integer",
+      "description": "FK → assai_pedido_venda.id",
+      "nullable": false
+    },
+    {
+      "name": "loja_id",
+      "type": "integer",
+      "description": "FK → assai_loja.id",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "EM_SEPARACAO"
+    },
+    {
+      "name": "iniciada_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "fechada_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "fechada_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "solicitacao_excel_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "motivo_cancelamento",
+      "type": "text"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pedido_id",
+      "references": "assai_pedido_venda.id"
+    },
+    {
+      "column": "loja_id",
+      "references": "assai_loja.id"
+    },
+    {
+      "column": "fechada_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_separacao_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_separacao_pedido_id",
+      "columns": [
+        "pedido_id"
+      ],
+      "unique": false
+    }
+  ]
+}

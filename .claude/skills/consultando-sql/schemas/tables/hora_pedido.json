@@ -46,6 +46,20 @@
       "type": "varchar(100)"
     },
     {
+      "name": "origem",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "MANUAL"
+    },
+    {
+      "name": "xlsx_origem_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "xlsx_origem_gerado_em",
+      "type": "timestamp"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação",
@@ -69,13 +83,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_pedido_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_pedido_cnpj_destino",
       "columns": [
         "cnpj_destino"
@@ -83,9 +90,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_loja_destino_id",
+      "name": "ix_hora_pedido_status",
       "columns": [
-        "loja_destino_id"
+        "status"
       ],
       "unique": false
     },
@@ -95,6 +102,13 @@
         "numero_pedido"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_pedido_loja_destino_id",
+      "columns": [
+        "loja_destino_id"
+      ],
+      "unique": false
     }
   ]
 }

@@ -1,0 +1,65 @@
+{
+  "name": "assai_nf_qpa_item",
+  "description": "Tabela assai_nf_qpa_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_id",
+      "type": "integer",
+      "description": "FK → assai_nf_qpa.id",
+      "nullable": false
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "modelo_extraido",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "valor_extraido",
+      "type": "numeric(12,2)"
+    },
+    {
+      "name": "separacao_item_id",
+      "type": "integer",
+      "description": "FK → assai_separacao_item.id"
+    },
+    {
+      "name": "tipo_divergencia",
+      "type": "varchar(30)"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_id",
+      "references": "assai_nf_qpa.id"
+    },
+    {
+      "column": "separacao_item_id",
+      "references": "assai_separacao_item.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_nf_qpa_item_chassi",
+      "columns": [
+        "chassi"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_nf_qpa_item_nf_id",
+      "columns": [
+        "nf_id"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "assai_pedido_venda",
+  "description": "Tabela assai_pedido_venda",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "numero",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "previsao_entrega",
+      "type": "date"
+    },
+    {
+      "name": "fornecedor_cnpj",
+      "type": "varchar(18)"
+    },
+    {
+      "name": "pdf_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "parser_usado",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "parsing_confianca",
+      "type": "numeric(3,2)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "ABERTO"
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ]
+}

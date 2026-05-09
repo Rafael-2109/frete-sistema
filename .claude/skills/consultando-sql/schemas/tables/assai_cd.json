@@ -1,0 +1,53 @@
+{
+  "name": "assai_cd",
+  "description": "Tabela assai_cd",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(80)",
+      "nullable": false
+    },
+    {
+      "name": "cnpj",
+      "type": "varchar(14)"
+    },
+    {
+      "name": "endereco",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "bairro",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "cep",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "cidade",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "uf",
+      "type": "varchar(2)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ]
+}

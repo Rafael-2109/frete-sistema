@@ -1,0 +1,89 @@
+{
+  "name": "assai_recibo_motochefe",
+  "description": "Tabela assai_recibo_motochefe",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "compra_id",
+      "type": "integer",
+      "description": "FK → assai_compra_motochefe.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_recibo",
+      "type": "varchar(40)"
+    },
+    {
+      "name": "data_recibo",
+      "type": "date"
+    },
+    {
+      "name": "equipe",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "conferente_motochefe",
+      "type": "varchar(80)"
+    },
+    {
+      "name": "total_motos_declarado",
+      "type": "integer"
+    },
+    {
+      "name": "doc_s3_key",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "tipo_documento",
+      "type": "varchar(10)"
+    },
+    {
+      "name": "parser_usado",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "parsing_confianca",
+      "type": "numeric(3,2)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(40)",
+      "nullable": false,
+      "default": "RECEBIDO_AGUARDANDO_CONFERENCIA"
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "compra_id",
+      "references": "assai_compra_motochefe.id"
+    },
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_recibo_motochefe_compra_id",
+      "columns": [
+        "compra_id"
+      ],
+      "unique": false
+    }
+  ]
+}

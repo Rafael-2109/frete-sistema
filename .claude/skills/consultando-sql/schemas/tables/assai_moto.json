@@ -1,0 +1,45 @@
+{
+  "name": "assai_moto",
+  "description": "Tabela assai_moto",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → assai_modelo.id",
+      "nullable": false
+    },
+    {
+      "name": "cor",
+      "type": "varchar(40)"
+    },
+    {
+      "name": "motor",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "ano",
+      "type": "integer"
+    },
+    {
+      "name": "criada_em",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "modelo_id",
+      "references": "assai_modelo.id"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "name": "assai_modelo",
+  "description": "Tabela assai_modelo",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "nome",
+      "type": "varchar(80)",
+      "nullable": false
+    },
+    {
+      "name": "descricao_qpa",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "codigo_qpa",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "regex_chassi",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_modelo_codigo_qpa",
+      "columns": [
+        "codigo_qpa"
+      ],
+      "unique": false
+    }
+  ]
+}
