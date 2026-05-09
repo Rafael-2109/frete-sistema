@@ -362,6 +362,49 @@ class AgentLojasClient:
                 cleanup_session_context(our_session_id)
 
 
+def _try_parse_todos(content: Any) -> Optional[list]:
+    """Tenta detectar tool_result do TodoWrite e extrair lista de todos.
+
+    TodoWrite retorna texto contendo JSON `{"todos": [...]}` apos ser
+    chamado. Esta funcao parseia sem dependencias externas (json stdlib).
+
+    Returns:
+        Lista de dicts {content, status, activeForm} ou None se nao for TodoWrite.
+    """
+    if not content:
+        return None
+    text = str(content) if not isinstance(content, str) else content
+    # Heuristica rapida — se nao tem 'todos', nao eh TodoWrite output
+    if 'todos' not in text:
+        return None
+    import json as _json
+    # Procura JSON object dentro do texto
+    try:
+        # Caso 1: texto eh JSON puro
+        if text.lstrip().startswith('{'):
+            data = _json.loads(text)
+            todos = data.get('todos') if isinstance(data, dict) else None
+            if isinstance(todos, list):
+                return todos
+    except (_json.JSONDecodeError, ValueError):
+        pass
+    # Caso 2: JSON aninhado (procurar substring)
+    try:
+        start = text.find('{"todos"')
+        if start == -1:
+            start = text.find('{ "todos"')
+        if start >= 0:
+            # Tenta parsear ate o fim — json.loads stop no primeiro objeto valido
+            decoder = _json.JSONDecoder()
+            data, _ = decoder.raw_decode(text[start:])
+            todos = data.get('todos') if isinstance(data, dict) else None
+            if isinstance(todos, list):
+                return todos
+    except (_json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
 async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
     """Traduz mensagens do SDK em eventos SSE simples."""
     # Init (SystemMessage com session_id)
@@ -411,6 +454,22 @@ async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
                         if text:
                             parts.append(text)
                     content = "\n".join(parts) if parts else str(content)
+
+                # TodoWrite: extrai lista de todos e emite evento dedicado
+                # para renderizacao no UI. tool_result da TodoWrite contem
+                # JSON com {todos: [{content, status, activeForm}, ...]}.
+                # Mesmo padrao do agente Nacom (client.py:803).
+                todos_payload = _try_parse_todos(content)
+                if todos_payload is not None:
+                    yield {
+                        'type': 'todos',
+                        'content': '',
+                        'metadata': {'todos': todos_payload},
+                    }
+                    # Nao emite tool_result generico para evitar duplicacao
+                    # (UI renderiza so o evento 'todos').
+                    continue
+
                 yield {
                     'type': 'tool_result',
                     'content': str(content or ''),

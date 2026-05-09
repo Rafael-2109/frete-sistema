@@ -8,12 +8,28 @@
   .lojas-msg { padding: .5rem .75rem; border-radius: .375rem; margin-bottom: .5rem; }
   .lojas-msg-user { background: var(--bs-primary-bg-subtle); }
   .lojas-msg-agent { background: var(--bs-light); border: 1px solid var(--bs-border-color); }
+  .lojas-msg-agent .lojas-md { line-height: 1.5; }
+  .lojas-msg-agent .lojas-md p:last-child { margin-bottom: 0; }
+  .lojas-msg-agent .lojas-md table { width: auto; border-collapse: collapse; margin: .5rem 0; font-size: .9rem; }
+  .lojas-msg-agent .lojas-md th, .lojas-msg-agent .lojas-md td { border: 1px solid var(--bs-border-color); padding: .25rem .5rem; }
+  .lojas-msg-agent .lojas-md code { background: var(--bs-tertiary-bg); padding: .1rem .3rem; border-radius: .2rem; font-size: .85em; }
+  .lojas-msg-agent .lojas-md pre { background: var(--bs-tertiary-bg); padding: .5rem; border-radius: .25rem; overflow-x: auto; font-size: .85em; }
   .lojas-tool-call { font-size: .85rem; color: var(--bs-info-text-emphasis); font-style: italic; }
   .lojas-tool-result-toggle { font-size: .8rem; color: var(--bs-secondary); cursor: pointer; }
   .lojas-tool-result-body { background: var(--bs-tertiary-bg); padding: .5rem; border-radius: .25rem; font-family: monospace; font-size: .8rem; white-space: pre-wrap; max-height: 240px; overflow-y: auto; }
   .lojas-thinking { font-size: .85rem; color: var(--bs-secondary); font-style: italic; }
   .lojas-error { background: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); padding: .5rem; border-radius: .25rem; }
+  .lojas-todos { font-size: .85rem; padding: .5rem .75rem; background: var(--bs-info-bg-subtle); border-radius: .25rem; margin-bottom: .5rem; }
+  .lojas-todos ul { margin: 0; padding-left: 1.25rem; list-style: none; }
+  .lojas-todos li { padding: .15rem 0; }
+  .lojas-todos .ti { display: inline-block; width: 1.2em; }
+  .lojas-todos .completed { color: var(--bs-success); text-decoration: line-through; opacity: .8; }
+  .lojas-todos .in_progress { color: var(--bs-warning-text-emphasis); font-weight: 600; }
+  .lojas-todos .pending { color: var(--bs-secondary); }
 </style>
+<!-- Markdown rendering: marked + DOMPurify (CDN, mesmo padrao do agente Nacom) -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -89,6 +105,34 @@
   let askPendingSessionId = null;
   let askPendingQuestions = [];
 
+  // Configura marked quando lib carregar (defer)
+  function configureMarked() {
+    if (typeof marked !== 'undefined' && typeof marked.setOptions === 'function') {
+      try { marked.setOptions({ breaks: true, gfm: true }); } catch {}
+    }
+  }
+  if (document.readyState !== 'loading') configureMarked();
+  else window.addEventListener('DOMContentLoaded', configureMarked);
+
+  // Renderiza markdown com sanitizacao XSS via DOMPurify.
+  // Fallback: textContent (escapa tudo) se libs nao carregaram.
+  function renderMarkdown(text) {
+    if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+      return null;  // sinaliza fallback para textContent
+    }
+    try {
+      const rawHtml = marked.parse(text || '');
+      return DOMPurify.sanitize(rawHtml, {
+        // Manter classes basicas; bloquear iframes/objects/etc.
+        FORBID_TAGS: ['iframe', 'object', 'embed', 'script', 'style'],
+        FORBID_ATTR: ['onerror', 'onclick', 'onload'],
+      });
+    } catch (e) {
+      console.warn('[LOJAS] Markdown render falhou:', e);
+      return null;
+    }
+  }
+
   function appendBubble(role, text) {
     const div = document.createElement('div');
     div.className = `lojas-msg lojas-msg-${role}`;
@@ -96,14 +140,69 @@
     const labelEl = document.createElement(tag);
     labelEl.textContent = role === 'user' ? 'Voce: ' : 'Agente: ';
     const textEl = document.createElement('span');
-    textEl.className = 'text-body';
-    textEl.textContent = text;
+    textEl.className = role === 'agent' ? 'text-body lojas-md' : 'text-body';
+    if (role === 'agent') {
+      // Buffer de texto bruto para re-render incremental no streaming.
+      textEl.dataset.rawText = text || '';
+      const html = renderMarkdown(text || '');
+      if (html !== null) {
+        textEl.innerHTML = html;
+      } else {
+        textEl.textContent = text || '';
+      }
+    } else {
+      textEl.textContent = text;
+    }
     div.appendChild(labelEl);
     div.appendChild(textEl);
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
     return textEl;
   }
+
+  // Streaming markdown — re-renderiza o buffer acumulado a cada chunk.
+  function appendChunkToAgent(textEl, chunk) {
+    const newRaw = (textEl.dataset.rawText || '') + (chunk || '');
+    textEl.dataset.rawText = newRaw;
+    const html = renderMarkdown(newRaw);
+    if (html !== null) {
+      textEl.innerHTML = html;
+    } else {
+      textEl.textContent = newRaw;
+    }
+  }
+
+  // TodoWrite progress — renderiza/atualiza lista in-place.
+  // Mantem 1 unico container de todos por turno (atualiza conforme agent
+  // chama TodoWrite multiplas vezes para marcar progresso).
+  let todosEl = null;
+  function appendTodos(todos) {
+    if (!Array.isArray(todos) || todos.length === 0) return;
+    if (!todosEl || !todosEl.isConnected) {
+      todosEl = document.createElement('div');
+      todosEl.className = 'lojas-todos';
+      log.appendChild(todosEl);
+    }
+    const ul = document.createElement('ul');
+    todos.forEach(t => {
+      const li = document.createElement('li');
+      const status = (t.status || 'pending').toLowerCase();
+      const icon = status === 'completed' ? '✓' : status === 'in_progress' ? '▶' : '○';
+      const ti = document.createElement('span');
+      ti.className = 'ti';
+      ti.textContent = icon;
+      const txt = document.createElement('span');
+      txt.className = status;
+      txt.textContent = t.content || t.activeForm || '';
+      li.appendChild(ti);
+      li.appendChild(txt);
+      ul.appendChild(li);
+    });
+    todosEl.innerHTML = '';
+    todosEl.appendChild(ul);
+    log.scrollTop = log.scrollHeight;
+  }
+  function resetTodos() { todosEl = null; }
 
   function appendInfo(html, klass) {
     const div = document.createElement('div');
@@ -242,6 +341,7 @@
     sendBtn.disabled = true;
 
     let agentTextEl = null;
+    resetTodos();  // Novo turno: TodoWrite renderiza em container fresco
 
     try {
       const resp = await fetch('/agente-lojas/api/chat', {
@@ -281,7 +381,7 @@
 
           if (event === 'text') {
             if (!agentTextEl) agentTextEl = appendBubble('agent', '');
-            agentTextEl.textContent += payload.content || '';
+            appendChunkToAgent(agentTextEl, payload.content || '');
             log.scrollTop = log.scrollHeight;
           } else if (event === 'thinking') {
             appendThinking(payload.content);
@@ -289,6 +389,8 @@
             appendToolCall(payload.tool_name, payload.tool_input);
           } else if (event === 'tool_result') {
             appendToolResult(payload.content, payload.is_error);
+          } else if (event === 'todos') {
+            appendTodos(payload.todos);
           } else if (event === 'error') {
             appendError(payload.content || 'erro desconhecido');
             // Fix code-reviewer (2026-05-09): se modal AskUserQuestion estava
