@@ -23,7 +23,27 @@
     fotoS3Key: null,
     avaria: false,
     chassiContext: null,
+    // Valores esperados pelo recibo — usados APENAS como dica visual em B/C.
+    // Não pré-preenchem o SELECT (operador deve confirmar manualmente).
+    modeloEsperadoId: null,
+    modeloEsperadoTexto: null,
+    corEsperada: null,
   };
+
+  // Mapa gênero feminino → masculino para match visual da cor
+  // (espelha _COR_GENERO_FEMININO_PARA_MASCULINO em recebimento_service.py).
+  const COR_FEM_PARA_MASC = {
+    'PRETA': 'PRETO',
+    'BRANCA': 'BRANCO',
+    'VERMELHA': 'VERMELHO',
+  };
+
+  function normalizarCor(cor) {
+    if (!cor) return null;
+    const upper = String(cor).trim().toUpperCase();
+    if (!upper) return null;
+    return COR_FEM_PARA_MASC[upper] || upper;
+  }
 
   // ============== Helpers ==============
 
@@ -110,16 +130,60 @@
 
   // ============== AJAX ==============
 
-  // Avança para o passo B aplicando os dados do contexto (modelo/cor esperados)
+  // Avança para o passo B SEM pré-preencher modelo/cor — operador confirma
+  // manualmente. Os valores esperados ficam apenas como dica visual.
   function aplicarContextoEAvancar(data) {
-    if (data.modelo_id_esperado) {
-      state.modeloId = data.modelo_id_esperado;
-      document.getElementById('select-modelo').value = data.modelo_id_esperado;
+    state.modeloEsperadoId = data.modelo_id_esperado || null;
+    state.modeloEsperadoTexto = data.modelo_texto_recibo || null;
+    state.corEsperada = data.cor_esperada || null;
+
+    // Garante que o SELECT começa sem seleção (não herda valor de chassi anterior)
+    const sel = document.getElementById('select-modelo');
+    if (sel) sel.value = '';
+    state.modeloId = null;
+
+    // Dica visual no Step B (não bloqueia, é só referência)
+    const dicaModelo = document.getElementById('dica-modelo-recibo');
+    if (dicaModelo) {
+      if (state.modeloEsperadoTexto || state.modeloEsperadoId) {
+        const txt = state.modeloEsperadoTexto || `id ${state.modeloEsperadoId}`;
+        dicaModelo.className = 'small mt-2 text-muted';
+        dicaModelo.innerHTML = `<i class="fas fa-circle-info"></i> Recibo esperava: <code>${txt}</code> — confirme se bate.`;
+      } else {
+        dicaModelo.className = 'small mt-2 text-warning';
+        dicaModelo.innerHTML = '<i class="fas fa-triangle-exclamation"></i> Recibo não traz modelo de referência (CHASSI_EXTRA ou item livre). Selecione manualmente.';
+      }
+      dicaModelo.classList.remove('d-none');
     }
-    if (data.cor_esperada) {
-      state.cor = data.cor_esperada;
-    }
+
     setStep('B');
+  }
+
+  // Atualiza a dica visual de cor no Step C com base na cor selecionada vs esperada
+  function atualizarDicaCor() {
+    const dica = document.getElementById('dica-cor-recibo');
+    if (!dica) return;
+    const sel = document.getElementById('select-cor');
+    const escolhida = sel ? (sel.value || null) : null;
+    const esperadaRaw = state.corEsperada;
+    const esperadaNorm = normalizarCor(esperadaRaw);
+    const escolhidaNorm = normalizarCor(escolhida);
+
+    if (!esperadaRaw) {
+      dica.className = 'small mt-2 text-muted';
+      dica.innerHTML = '<i class="fas fa-circle-info"></i> Recibo não traz cor de referência. Selecione a cor visual da moto.';
+    } else if (!escolhidaNorm) {
+      dica.className = 'small mt-2 text-muted';
+      dica.innerHTML = `<i class="fas fa-circle-info"></i> Recibo: <code>${esperadaRaw}</code> — selecione a cor visual da moto.`;
+    } else if (escolhidaNorm === esperadaNorm) {
+      dica.className = 'small mt-2 text-success';
+      dica.innerHTML = `<i class="fas fa-check"></i> Bate com o recibo (<code>${esperadaRaw}</code>).`;
+    } else {
+      // Match visual divergente — NÃO bloqueia, apenas alerta. Backend grava o que foi escolhido.
+      dica.className = 'small mt-2 text-warning';
+      dica.innerHTML = `<i class="fas fa-triangle-exclamation"></i> Recibo: <code>${esperadaRaw}</code> · Você selecionou: <code>${escolhida}</code>. Será gravada como divergência <code>COR_DIFERENTE</code>.`;
+    }
+    dica.classList.remove('d-none');
   }
 
   async function validarChassi(chassi) {
@@ -296,12 +360,18 @@
     state.fotoS3Key = null;
     state.avaria = false;
     state.chassiContext = null;
+    state.modeloEsperadoId = null;
+    state.modeloEsperadoTexto = null;
+    state.corEsperada = null;
     document.getElementById('input-chassi').value = '';
     document.getElementById('select-modelo').value = '';
-    document.getElementById('input-cor').value = '';
+    const selCor = document.getElementById('select-cor');
+    if (selCor) selCor.value = '';
     document.getElementById('input-foto').value = '';
     document.getElementById('chk-avaria').checked = false;
     document.getElementById('alerta-chassi').classList.add('d-none');
+    document.getElementById('dica-modelo-recibo')?.classList.add('d-none');
+    document.getElementById('dica-cor-recibo')?.classList.add('d-none');
     setStep('A');
     document.getElementById('input-chassi').focus();
   }
@@ -328,17 +398,27 @@
       showAlerta('warning', 'Selecione um modelo.');
       return;
     }
-    if (state.cor) {
-      document.getElementById('input-cor').value = state.cor;
-    }
+    // SELECT de cor começa SEM seleção a cada chassi (operador confirma manualmente)
+    const selCor = document.getElementById('select-cor');
+    if (selCor) selCor.value = '';
+    atualizarDicaCor();
     setStep('C');
   });
 
   document.getElementById('btn-voltar-B').addEventListener('click', () => setStep('B'));
 
+  // Atualiza dica visual sempre que o operador troca a cor no SELECT
+  document.getElementById('select-cor')?.addEventListener('change', atualizarDicaCor);
+
   // btn-avancar-C: se foto falhar, abre modal de confirmação
   document.getElementById('btn-avancar-C').addEventListener('click', async () => {
-    state.cor = document.getElementById('input-cor').value.trim().toUpperCase() || null;
+    const selCor = document.getElementById('select-cor');
+    const corEscolhida = selCor ? (selCor.value || '').trim().toUpperCase() : '';
+    if (!corEscolhida) {
+      showAlerta('warning', 'Selecione a cor da moto.');
+      return;
+    }
+    state.cor = corEscolhida;
     state.avaria = document.getElementById('chk-avaria').checked;
     const fileInput = document.getElementById('input-foto');
     if (fileInput.files && fileInput.files[0]) {

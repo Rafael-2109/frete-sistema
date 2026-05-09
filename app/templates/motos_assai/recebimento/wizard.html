@@ -74,13 +74,15 @@
 <!-- ======= PASSO B: Modelo ======= -->
 <div class="card p-3 mb-3 d-none" id="step-B">
   <h5>B. Modelo</h5>
-  <p class="text-muted small mb-2">Confirme ou ajuste o modelo da moto em mãos.</p>
+  <p class="text-muted small mb-2">Selecione o modelo da moto em mãos.</p>
   <select id="select-modelo" class="form-select form-select-lg">
     <option value="">— Selecione —</option>
     {% for m in modelos %}
-      <option value="{{ m.id }}">{{ m.codigo }} — {{ m.nome }}</option>
+      <option value="{{ m.id }}" data-codigo="{{ m.codigo }}">{{ m.codigo }} — {{ m.nome }}</option>
     {% endfor %}
   </select>
+  <!-- Dica visual: modelo esperado pelo recibo (preenchida via JS) -->
+  <div id="dica-modelo-recibo" class="small mt-2 d-none"></div>
   <div class="d-flex gap-2 mt-3">
     <button type="button" id="btn-voltar-A" class="btn btn-secondary">
       <i class="fas fa-arrow-left"></i> Voltar
@@ -95,9 +97,18 @@
 <div class="card p-3 mb-3 d-none" id="step-C">
   <h5>C. Cor e foto</h5>
   <div class="mb-3">
-    <label class="form-label">Cor</label>
-    <input type="text" id="input-cor" class="form-control" placeholder="CINZA / PRETO / AZUL..."
-           autocapitalize="characters">
+    <label class="form-label" for="select-cor">Cor</label>
+    <select id="select-cor" class="form-select form-select-lg">
+      <option value="">— Selecione —</option>
+      <option value="PRETO">PRETO</option>
+      <option value="BRANCO">BRANCO</option>
+      <option value="CINZA">CINZA</option>
+      <option value="VERMELHO">VERMELHO</option>
+      <option value="AZUL">AZUL</option>
+    </select>
+    <!-- Dica visual: cor esperada pelo recibo (preenchida via JS, com normalização
+         genero feminino → masculino: "PRETA" no recibo bate com "PRETO" no select) -->
+    <div id="dica-cor-recibo" class="small mt-2 d-none"></div>
   </div>
   <div class="mb-3">
     <label class="form-label">Foto da moto (opcional)</label>

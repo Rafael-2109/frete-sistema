@@ -32,6 +32,37 @@ class RecebimentoValidationError(Exception):
     pass
 
 
+# Catálogo fixo de cores aceitas no SELECT do wizard (Step C).
+# Mantido aqui (não em models) porque é convenção operacional do recebimento,
+# não atributo da moto.
+CORES_VALIDAS = ('PRETO', 'BRANCO', 'CINZA', 'VERMELHO', 'AZUL')
+
+# Mapa gênero feminino → masculino para evitar COR_DIFERENTE espúria
+# quando o recibo da Motochefe vem com a cor no feminino ("PRETA")
+# e o operador seleciona "PRETO" no wizard.
+_COR_GENERO_FEMININO_PARA_MASCULINO = {
+    'PRETA': 'PRETO',
+    'BRANCA': 'BRANCO',
+    'VERMELHA': 'VERMELHO',
+    # CINZA e AZUL são iguais em ambos os gêneros — não precisam mapear
+}
+
+
+def normalizar_cor(cor: Optional[str]) -> Optional[str]:
+    """Normaliza cor para comparação: trim, upper, e converte gênero feminino
+    em masculino (ex: PRETA → PRETO).
+
+    Retorna None se entrada vazia. Não levanta erro para cores fora do catálogo
+    (apenas devolve a string upper) — match é uma comparação visual, não bloqueio.
+    """
+    if not cor:
+        return None
+    upper = cor.strip().upper()
+    if not upper:
+        return None
+    return _COR_GENERO_FEMININO_PARA_MASCULINO.get(upper, upper)
+
+
 def validar_chassi_contra_recibo(recibo_id: int, chassi: str) -> Dict[str, Any]:
     """Valida chassi contra o recibo (sem persistir).
 
@@ -148,9 +179,14 @@ def registrar_conferencia(
     else:
         if item.modelo_id and item.modelo_id != modelo_conferido_id:
             tipo_divergencia = DIVERGENCIA_MODELO_DIFERENTE
-        elif item.cor_texto and cor_conferida and \
-             item.cor_texto.upper() != (cor_conferida or '').upper():
-            tipo_divergencia = DIVERGENCIA_COR_DIFERENTE
+        else:
+            # Compara cor com normalização gênero feminino → masculino:
+            # recibo "PRETA" + selecionado "PRETO" NÃO é divergência.
+            cor_recibo_norm = normalizar_cor(item.cor_texto)
+            cor_conferida_norm = normalizar_cor(cor_conferida)
+            if cor_recibo_norm and cor_conferida_norm and \
+               cor_recibo_norm != cor_conferida_norm:
+                tipo_divergencia = DIVERGENCIA_COR_DIFERENTE
         if avaria_fisica:
             tipo_divergencia = DIVERGENCIA_AVARIA_FISICA
 
