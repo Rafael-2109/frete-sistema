@@ -143,9 +143,18 @@ def _build_full_url(quick_url: str) -> str:
 
 
 def _patch_render_env(service_id: str, value: str) -> bool:
-    """PATCH /v1/services/<id>/env-vars merge OPENCLAW_GATEWAY_URL=<value>."""
-    url = f"https://api.render.com/v1/services/{service_id}/env-vars"
-    payload = [{"key": "OPENCLAW_GATEWAY_URL", "value": value}]
+    """PUT /v1/services/<id>/env-vars/OPENCLAW_GATEWAY_URL = {value}.
+
+    CRITICO — usar endpoint SINGULAR (`/env-vars/<key>`), NAO plural
+    (`/env-vars`). O endpoint plural com PUT *substitui TODAS* as env
+    vars do service (incidente 2026-05-09 — apagou ~100 vars do servico
+    de producao). Endpoint singular atualiza/cria apenas a chave alvo.
+
+    Ref: https://api-docs.render.com/reference/update-env-var
+    """
+    key = "OPENCLAW_GATEWAY_URL"
+    url = f"https://api.render.com/v1/services/{service_id}/env-vars/{key}"
+    payload = {"value": value}
     data = json.dumps(payload).encode("utf-8")
     req = urlreq.Request(
         url, data=data, method="PUT",
@@ -158,17 +167,20 @@ def _patch_render_env(service_id: str, value: str) -> bool:
     try:
         with urlreq.urlopen(req, timeout=20) as resp:
             if 200 <= resp.status < 300:
-                logger.info("render PATCH ok service=%s status=%d", service_id, resp.status)
+                logger.info("render PUT ok service=%s key=%s status=%d",
+                            service_id, key, resp.status)
                 return True
-            logger.error("render PATCH failed service=%s status=%d", service_id, resp.status)
+            logger.error("render PUT failed service=%s key=%s status=%d",
+                         service_id, key, resp.status)
             return False
     except HTTPError as exc:
         body = exc.read()[:300] if exc else b""
-        logger.error("render PATCH http_err service=%s code=%d body=%s",
-                     service_id, exc.code, body.decode("utf-8", "replace"))
+        logger.error("render PUT http_err service=%s key=%s code=%d body=%s",
+                     service_id, key, exc.code, body.decode("utf-8", "replace"))
         return False
     except URLError as exc:
-        logger.error("render PATCH url_err service=%s err=%s", service_id, exc)
+        logger.error("render PUT url_err service=%s key=%s err=%s",
+                     service_id, key, exc)
         return False
 
 
