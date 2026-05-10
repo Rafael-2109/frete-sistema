@@ -15,8 +15,20 @@
 
     display: grid;
     grid-template-columns: var(--_sidebar-w-expanded) 1fr;
-    grid-template-rows: 100vh;
+    /* Altura preenche a viewport. Fallback `100vh` para browsers antigos;
+       `100dvh` (dynamic viewport height) eh iOS-safe — acompanha a barra
+       de URL do Safari sem deixar conteudo cortado. */
+    height: 100vh;
+    height: 100dvh;
     transition: grid-template-columns 0.2s ease;
+}
+
+/* Quando a barra de zoom mobile esta ativa (<768px), ela adiciona
+   `padding-top: 32px` no body. Subtrai do shell para nao estourar o
+   viewport e cortar o conteudo principal. */
+body.has-mobile-zoom-bar .nc-shell {
+    height: calc(100vh - 32px);
+    height: calc(100dvh - 32px);
 }
 
 .nc-shell[data-sidebar="collapsed"] {
@@ -59,6 +71,7 @@ html.nc-sidebar-init-drawer .nc-shell {
     left: 0;
     width: var(--_sidebar-w-expanded);
     height: 100vh;
+    height: 100dvh;
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     box-shadow: var(--shadow);
@@ -679,6 +692,7 @@ html.nc-sidebar-init-drawer .nc-shell {
         left: 0;
         width: var(--_sidebar-w-expanded);
         height: 100vh;
+        height: 100dvh;
         transform: translateX(-100%);
         transition: transform 0.2s ease;
         box-shadow: var(--shadow);
