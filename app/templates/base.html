@@ -48,6 +48,26 @@
     })();
   </script>
 
+  {# Previne FOUC da sidebar — pre-calcula estado antes do paint.
+     sidebar.js (no fim do body) remove a classe e aplica data-sidebar no shell. #}
+  <script>
+    (function() {
+      try {
+        var w = window.innerWidth;
+        var state;
+        if (w < 992) {
+          state = 'drawer';
+        } else if (w < 1280) {
+          state = 'collapsed';
+        } else {
+          var saved = localStorage.getItem('nc-sidebar-state');
+          state = (saved === 'collapsed' || saved === 'expanded') ? saved : 'expanded';
+        }
+        document.documentElement.classList.add('nc-sidebar-init-' + state);
+      } catch (e) { /* fail-silent */ }
+    })();
+  </script>
+
   <!-- Bloco para CSS adicional das páginas -->
   {% block extra_css %}{% endblock %}
 </head>
@@ -57,7 +77,26 @@
   {# Barra de controle de zoom mobile — visivel apenas em < 768px #}
   {% include '_mobile_zoom_bar.html' %}
 
+  {# ===========================================================
+     SHELL (sidebar + main) — substitui o antigo navbar topo.
+     Sidebar.js controla estados expanded|collapsed|drawer.
+     Templates filhos podem sobrescrever {% block breadcrumb %}.
+     =========================================================== #}
   {% if current_user.is_authenticated %}
+  <div class="nc-shell" id="nc-shell" data-sidebar="expanded">
+
+    {% include '_sidebar.html' %}
+
+    <div class="nc-main">
+      {% include '_topbar.html' %}
+      <div class="nc-content">
+  {% endif %}
+
+  {# Bloco antigo do navbar removido na migracao para sidebar.
+     O bloco `{% if false %}` abaixo preserva a estrutura para diff readability;
+     sera EXCLUIDO em commit seguinte apos validacao smoke test.
+  #}
+  {% if false %}
   <nav class="navbar navbar-expand-lg nc-navbar{% if request.path.startswith('/carvia/') %} nc-navbar--carvia{% elif not (current_user.sistema_motochefe and not current_user.sistema_logistica) %} nc-navbar--white-bg{% endif %}">
     <div class="container-fluid">
       {% if not is_comercial_only %}
@@ -1031,6 +1070,16 @@
     {% endwith %}
   </div>
 
+  {# Bloco de conteudo das paginas (DENTRO do .nc-content quando autenticado) #}
+  {% block content %}{% endblock %}
+
+  {% if current_user.is_authenticated %}
+      </div>{# /.nc-content #}
+    </div>{# /.nc-main #}
+  </div>{# /.nc-shell #}
+  <div class="nc-drawer-overlay" aria-hidden="true"></div>
+  {% endif %}
+
   <!-- Chat client JS (Task 17) + UI (Task 18). Apenas para usuarios autenticados. -->
   {% if current_user.is_authenticated %}
   <script src="{{ url_for('static', filename='chat/js/chat_client.js') }}" defer></script>
@@ -1043,8 +1092,9 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 
-  <!-- Bloco de conteúdo das páginas -->
-  {% block content %}{% endblock %}
+  {# Bloco de conteudo movido para dentro do .nc-content (acima dos scripts).
+     Este placeholder e mantido vazio porque Jinja so permite UM block com
+     o mesmo nome — o bloco real esta no shell acima. #}
 
 <!-- Widget removido - usar /agente/ para chat -->
 
@@ -1084,6 +1134,11 @@
 
   <!-- Theme Manager - Gerenciamento de Dark/Light Mode -->
   <script src="{{ url_for('static', filename='js/theme-manager.js') }}"></script>
+
+  {# Sidebar manager: toggle, persistencia, drawer mobile, flyout, atalho Ctrl+B #}
+  {% if current_user.is_authenticated %}
+  <script src="{{ 'js/sidebar.js'|asset_url }}"></script>
+  {% endif %}
 
   <!-- Premium Effects - Animações e efeitos visuais -->
   <script src="{{ url_for('static', filename='js/financeiro/premium-effects.js') }}"></script>
@@ -1243,42 +1298,8 @@
     });
   </script>
 
-  {# Helper para submenus do dropdown "Lojas HORA" — expansao inline tipo accordion #}
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // Click no toggle do submenu: expande/colapsa inline sem fechar o dropdown pai.
-      document.querySelectorAll('.dropdown-submenu > .dropdown-toggle').forEach(function (toggle) {
-        toggle.addEventListener('click', function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          var parentLi = toggle.parentElement;
-          var submenu = toggle.nextElementSibling;
-          if (!submenu) return;
-          // Fecha outros submenus do MESMO nivel (so um aberto por vez).
-          parentLi.parentElement.querySelectorAll(':scope > .dropdown-submenu').forEach(function (other) {
-            if (other !== parentLi) {
-              other.classList.remove('open');
-              var sm = other.querySelector(':scope > .dropdown-menu');
-              if (sm) sm.classList.remove('show');
-            }
-          });
-          parentLi.classList.toggle('open');
-          submenu.classList.toggle('show');
-        });
-      });
-      // Quando o dropdown principal fecha, fecha tambem todos os submenus.
-      document.querySelectorAll('.dropdown').forEach(function (dd) {
-        dd.addEventListener('hidden.bs.dropdown', function () {
-          dd.querySelectorAll('.dropdown-submenu.open').forEach(function (li) {
-            li.classList.remove('open');
-          });
-          dd.querySelectorAll('.dropdown-submenu > .dropdown-menu.show').forEach(function (sm) {
-            sm.classList.remove('show');
-          });
-        });
-      });
-    });
-  </script>
+  {# Helper de dropdown-submenu legado removido na migracao para sidebar.
+     Sidebar.js gerencia submenu accordion + flyout. #}
 
   {# Mobile zoom controller — UI, eventos e persistencia em localStorage.
      Early-paint primer ja aplicou o zoom no <head>, este script gerencia o resto. #}

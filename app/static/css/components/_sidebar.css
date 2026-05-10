@@ -1,0 +1,729 @@
+@layer components {
+/* ==========================================================================
+   NACOM GOYA — Sidebar (substitui navbar topo)
+   Estados: expanded / collapsed / drawer (mobile off-canvas)
+   Auto-responsive: ≥1280 expandida, 992-1279 colapsada, <992 drawer
+   ========================================================================== */
+
+/* ==========================================================================
+   SHELL GRID (sidebar + main)
+   ========================================================================== */
+.nc-shell {
+    --_sidebar-w-expanded: 248px;
+    --_sidebar-w-collapsed: 64px;
+    --_topbar-h: 56px;
+
+    display: grid;
+    grid-template-columns: var(--_sidebar-w-expanded) 1fr;
+    grid-template-rows: 100vh;
+    transition: grid-template-columns 0.2s ease;
+}
+
+.nc-shell[data-sidebar="collapsed"] {
+    grid-template-columns: var(--_sidebar-w-collapsed) 1fr;
+}
+
+.nc-shell[data-sidebar="drawer"] {
+    grid-template-columns: 0 1fr;
+}
+
+/* Pre-init via classe no <html> (inline script no head). Previne FOUC
+   antes do sidebar.js executar. Especificidade > selectors do .nc-shell
+   para vencer o data-sidebar="expanded" inicial do template. JS remove
+   essas classes ao iniciar e o controle volta para [data-sidebar=...] */
+html.nc-sidebar-init-collapsed .nc-shell {
+    grid-template-columns: var(--_sidebar-w-collapsed) 1fr;
+}
+
+html.nc-sidebar-init-drawer .nc-shell {
+    grid-template-columns: 0 1fr;
+}
+
+/* ==========================================================================
+   SIDEBAR (aside)
+   ========================================================================== */
+.nc-sidebar {
+    background: var(--bs-secondary-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    z-index: 100;
+}
+
+/* Drawer (mobile): vira off-canvas com transform */
+.nc-shell[data-sidebar="drawer"] .nc-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--_sidebar-w-expanded);
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: var(--shadow);
+}
+
+.nc-shell[data-sidebar="drawer"][data-drawer-open="true"] .nc-sidebar {
+    transform: translateX(0);
+}
+
+/* ==========================================================================
+   BRAND (logo + toggle)
+   ========================================================================== */
+.nc-sidebar__brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    height: var(--_topbar-h);
+    flex-shrink: 0;
+    /* Safe-area inset (iOS notch) */
+    padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+}
+
+.nc-sidebar__logo {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: 'Space Grotesk', var(--font-sans);
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    color: var(--bs-body-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.nc-sidebar__logo:hover {
+    color: var(--bs-primary);
+}
+
+.nc-sidebar__logo img {
+    flex-shrink: 0;
+    max-height: 32px;
+    width: auto;
+    display: block;
+}
+
+.nc-sidebar__logo i {
+    font-size: 1.25rem;
+    color: var(--bs-primary);
+    flex-shrink: 0;
+}
+
+.nc-sidebar__toggle {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nc-sidebar__toggle:hover {
+    background: var(--hover-bg);
+    color: var(--bs-primary);
+}
+
+/* Collapsed: oculta label do logo + toggle */
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__logo span,
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__toggle {
+    display: none;
+}
+
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__brand {
+    justify-content: center;
+    padding: 0.75rem 0.5rem;
+}
+
+/* ==========================================================================
+   SEARCH (placeholder Ctrl+K)
+   ========================================================================== */
+.nc-sidebar__search {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.nc-sidebar__search-wrap {
+    position: relative;
+}
+
+.nc-sidebar__search-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem 0.5rem 2rem;
+    background: var(--bg-light);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--bs-body-color);
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    transition: border-color 0.2s ease;
+}
+
+.nc-sidebar__search-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.nc-sidebar__search-input:focus {
+    outline: none;
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.nc-sidebar__search-wrap::before {
+    content: "\f002";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    position: absolute;
+    left: 0.625rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.nc-sidebar__search-kbd {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    background: var(--bg-dark);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    font-family: var(--font-sans);
+    pointer-events: none;
+}
+
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__search {
+    display: none;
+}
+
+/* ==========================================================================
+   NAV (scroll area)
+   ========================================================================== */
+.nc-sidebar__nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.5rem 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.nc-sidebar__nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.nc-sidebar__nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.nc-sidebar__nav::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+}
+
+.nc-sidebar__group {
+    padding: 0.5rem 0.75rem 0.25rem;
+    font-family: var(--font-sans);
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__group {
+    text-align: center;
+    padding: 0.5rem 0.25rem 0.25rem;
+    font-size: 0.5rem;
+    letter-spacing: 0.04em;
+}
+
+.nc-sidebar__item {
+    margin: 1px 0.5rem;
+    list-style: none;
+}
+
+.nc-sidebar__link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 0.8125rem;
+    text-decoration: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    position: relative;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    width: 100%;
+    text-align: left;
+}
+
+.nc-sidebar__link:hover {
+    background: var(--hover-bg);
+    color: var(--bs-body-color);
+}
+
+.nc-sidebar__link--active {
+    background: var(--focus-ring);
+    color: var(--bs-primary);
+}
+
+.nc-sidebar__link--active::before {
+    content: "";
+    position: absolute;
+    left: -0.5rem;
+    top: 0.375rem;
+    bottom: 0.375rem;
+    width: 3px;
+    background: var(--bs-primary);
+    border-radius: 0 2px 2px 0;
+}
+
+/* Estado de alerta — items com pendencias urgentes (ex: Confirmacao Motochefe
+   quando count > 0). Indica visualmente que ha acao pendente. */
+.nc-sidebar__link--alert {
+    color: var(--semantic-danger);
+}
+
+.nc-sidebar__link--alert:hover {
+    color: var(--semantic-danger);
+    background: var(--hover-bg);
+}
+
+.nc-sidebar__link--alert .nc-sidebar__icon {
+    color: var(--semantic-danger);
+}
+
+.nc-sidebar__icon {
+    width: 1.125rem;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 0.875rem;
+}
+
+.nc-sidebar__label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nc-sidebar__chevron {
+    font-size: 0.625rem;
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.nc-sidebar__item--open > .nc-sidebar__link .nc-sidebar__chevron {
+    transform: rotate(90deg);
+}
+
+/* Badges dentro da sidebar (contador, NOVO, etc.) */
+.nc-sidebar__badge {
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.0625rem 0.375rem;
+    border-radius: 10px;
+    background: var(--semantic-danger);
+    color: var(--white-fixed);
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.nc-sidebar__badge--warn {
+    background: var(--amber-50);
+    color: var(--black-fixed);
+}
+
+.nc-sidebar__badge--info {
+    background: var(--semantic-info);
+    color: var(--white-fixed);
+}
+
+.nc-sidebar__badge--new {
+    background: var(--semantic-success);
+    color: var(--white-fixed);
+}
+
+/* ==========================================================================
+   SUBMENU (inline accordion no estado expanded)
+   ========================================================================== */
+.nc-sidebar__submenu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+}
+
+.nc-sidebar__item--open > .nc-sidebar__submenu {
+    max-height: 800px;
+}
+
+.nc-sidebar__submenu .nc-sidebar__link {
+    padding-left: 2.375rem;
+    font-size: 0.78rem;
+    font-weight: 400;
+}
+
+.nc-sidebar__submenu hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 0.375rem 1rem;
+    opacity: 0.5;
+}
+
+/* Estado colapsado: oculta labels, chevrons, submenus inline e badges */
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__label,
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__chevron,
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__submenu,
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__badge {
+    display: none;
+}
+
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__link {
+    justify-content: center;
+    padding: 0.625rem;
+}
+
+/* Tooltip simples ao hover (apenas itens SEM submenu) */
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__link[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 0.75rem);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-light);
+    color: var(--bs-body-color);
+    padding: 0.375rem 0.625rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    z-index: 1100;
+}
+
+/* Esconde tooltip quando o item tem submenu (flyout assume) */
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__item:has(.nc-sidebar__submenu) .nc-sidebar__link[data-tooltip]:hover::after {
+    display: none;
+}
+
+/* ==========================================================================
+   FLYOUT (sidebar colapsada + hover em item com submenu)
+   ========================================================================== */
+.nc-sidebar__flyout {
+    position: fixed;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    min-width: 240px;
+    max-width: 280px;
+    padding: 0.375rem;
+    z-index: 1100;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-0.375rem);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.nc-sidebar__flyout--show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+}
+
+.nc-sidebar__flyout::before {
+    content: "";
+    position: absolute;
+    left: -6px;
+    top: 14px;
+    width: 6px;
+    height: 12px;
+    background: var(--bg-light);
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    transform: rotate(45deg) translateY(-3px);
+    z-index: -1;
+}
+
+.nc-sidebar__flyout-header {
+    padding: 0.625rem 0.875rem 0.5rem;
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nc-sidebar__flyout-header i {
+    color: var(--bs-primary);
+    font-size: 0.8rem;
+}
+
+.nc-sidebar__flyout-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.nc-sidebar__flyout .nc-sidebar__link {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.nc-sidebar__flyout .nc-sidebar__link .nc-sidebar__label {
+    flex: 1;
+    white-space: normal;
+}
+
+.nc-sidebar__flyout hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 0.25rem 0.5rem;
+    opacity: 0.5;
+}
+
+.nc-sidebar__flyout .nc-sidebar__group {
+    padding: 0.5rem 0.75rem 0.25rem;
+    font-size: 0.625rem;
+}
+
+/* ==========================================================================
+   FOOTER (user + tema + sair)
+   ========================================================================== */
+.nc-sidebar__footer {
+    border-top: 1px solid var(--border);
+    padding: 0.5rem;
+    flex-shrink: 0;
+    /* Safe-area inset bottom (iOS) */
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.nc-sidebar__footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem;
+}
+
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__footer-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.nc-sidebar__footer-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    flex-shrink: 0;
+    text-decoration: none;
+}
+
+.nc-sidebar__footer-btn:hover {
+    background: var(--hover-bg);
+    color: var(--bs-primary);
+}
+
+.nc-sidebar__user {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    min-width: 0;
+    color: var(--bs-body-color);
+    text-decoration: none;
+    transition: background-color 0.2s ease;
+}
+
+.nc-sidebar__user:hover {
+    background: var(--hover-bg);
+    color: var(--bs-body-color);
+}
+
+.nc-sidebar__avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--amber-55), var(--amber-40));
+    color: var(--black-fixed);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+}
+
+.nc-sidebar__user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.nc-sidebar__user-name {
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--bs-body-color);
+}
+
+.nc-sidebar__user-role {
+    font-size: 0.66rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__user-info {
+    display: none;
+}
+
+.nc-shell[data-sidebar="collapsed"] .nc-sidebar__user {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+}
+
+/* ==========================================================================
+   DRAWER OVERLAY (mobile)
+   ========================================================================== */
+.nc-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: hsla(0 0% 0% / 0.5);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    z-index: 99;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.nc-shell[data-sidebar="drawer"][data-drawer-open="true"] ~ .nc-drawer-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ==========================================================================
+   RESPONSIVE — auto-collapse em telas medias
+   ========================================================================== */
+@media (max-width: 1279.98px) and (min-width: 992px) {
+    /* Forca colapsada em telas medias (1280-1439 ja era colapsado por JS;
+       aqui garantimos pelo CSS pra quando JS nao rodou ainda) */
+    .nc-shell:not([data-sidebar="expanded"]) {
+        grid-template-columns: var(--_sidebar-w-collapsed) 1fr;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .nc-shell {
+        grid-template-columns: 0 1fr;
+    }
+
+    .nc-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: var(--_sidebar-w-expanded);
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        box-shadow: var(--shadow);
+    }
+
+    .nc-shell[data-drawer-open="true"] .nc-sidebar {
+        transform: translateX(0);
+    }
+
+    .nc-shell[data-drawer-open="true"] ~ .nc-drawer-overlay,
+    .nc-shell[data-drawer-open="true"] .nc-drawer-overlay {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* ==========================================================================
+   PRINT — esconde sidebar em impressao
+   ========================================================================== */
+@media print {
+    .nc-sidebar,
+    .nc-drawer-overlay {
+        display: none;
+    }
+
+    .nc-shell {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .nc-shell,
+    .nc-sidebar,
+    .nc-sidebar__link,
+    .nc-sidebar__submenu,
+    .nc-sidebar__chevron,
+    .nc-sidebar__flyout,
+    .nc-sidebar__toggle,
+    .nc-sidebar__footer-btn,
+    .nc-drawer-overlay {
+        transition: none;
+    }
+}
+
+} /* End @layer components */

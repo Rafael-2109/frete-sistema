@@ -1,0 +1,46 @@
+{# =================================================================
+   Topbar slim — Nacom Goya
+   Acompanha sidebar (substitui o antigo navbar topo).
+
+   Blocks expostos para templates filhos:
+     - {% block breadcrumb %} : conteudo customizado de breadcrumb
+   ================================================================= #}
+<header class="nc-topbar">
+
+  {# Hamburger: mobile abre drawer; desktop alterna collapse #}
+  <button class="nc-topbar__hamburger" id="nc-topbar-hamburger" type="button"
+          aria-label="Alternar menu" title="Menu (Ctrl+B)">
+    <i class="fas fa-bars"></i>
+  </button>
+
+  {# Breadcrumb dinamico — templates filhos podem sobrescrever
+       {% block breadcrumb %} ou apenas {% block page_title %} #}
+  <div class="nc-breadcrumb">
+    {% block breadcrumb %}
+      <span class="nc-breadcrumb__current">
+        {% block page_title %}Sistema de Fretes{% endblock %}
+      </span>
+    {% endblock %}
+  </div>
+
+  {# Acoes a direita #}
+  <div class="nc-topbar__actions">
+    {# Search placeholder (Ctrl+K em breve) #}
+    <button class="nc-topbar__search" type="button" disabled
+            title="Busca global em breve">
+      <i class="fas fa-magnifying-glass" style="font-size:0.75rem;"></i>
+      <span class="nc-topbar__search-text">Buscar...</span>
+      <span class="nc-topbar__search-kbd">Ctrl K</span>
+    </button>
+
+    {# Includes legados que retornam <li> precisam de <ul> wrapper #}
+    <ul class="nc-topbar__list">
+      {# Chat badge (Task 16) #}
+      {% include 'chat/_navbar_badge.html' %}
+    </ul>
+
+    {# Share button (Task 19) — ja eh <button> standalone #}
+    {% include 'chat/_share_button.html' %}
+  </div>
+
+</header>

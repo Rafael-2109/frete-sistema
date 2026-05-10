@@ -1,0 +1,881 @@
+{# =================================================================
+   Sidebar — Nacom Goya / MotoChefe / Lojas HORA / CarVia
+   Substitui o antigo <nav class="navbar"> em base.html.
+   Estados controlados pelo JS (sidebar.js): expanded | collapsed | drawer.
+
+   IMPORTANTE: preserva 100% das condicionais de permissao do navbar
+   antigo. Qualquer ajuste deve ser refletido em servicos correspondentes.
+   ================================================================= #}
+<aside class="nc-sidebar">
+
+  {# ───────────── BRAND (logo contextual + toggle) ───────────── #}
+  <div class="nc-sidebar__brand">
+    {% if not is_comercial_only %}
+      <a class="nc-sidebar__logo"
+         href="{% if current_user.sistema_motochefe and not current_user.sistema_logistica %}{{ url_for('motochefe.dashboard_motochefe') }}{% else %}{{ url_for('main.dashboard') }}{% endif %}">
+        {% if current_user.sistema_motochefe and not current_user.sistema_logistica %}
+          <i class="fas fa-motorcycle"></i><span>Sistema MotoChefe</span>
+        {% elif request.path.startswith('/carvia/') %}
+          <img src="{{ url_for('static', filename='carvia/logo_crop.png') }}" alt="CarVia">
+        {% elif request.path.startswith('/hora/') %}
+          <img src="{{ url_for('static', filename='motochefe/logo_crop.png') }}" alt="Lojas HORA">
+        {% else %}
+          <img src="{{ url_for('static', filename='nacom/logo_campo_belo_crop.png') }}" alt="Campo Belo Conservas">
+        {% endif %}
+      </a>
+    {% else %}
+      <span class="nc-sidebar__logo">
+        <i class="fas fa-briefcase"></i><span>Comercial Nacom Goya</span>
+      </span>
+    {% endif %}
+    <button class="nc-sidebar__toggle" id="nc-sidebar-toggle" type="button"
+            title="Recolher (Ctrl+B)" aria-label="Alternar sidebar">
+      <i class="fas fa-angles-left"></i>
+    </button>
+  </div>
+
+  {# ───────────── SEARCH (placeholder Ctrl+K) ───────────── #}
+  <div class="nc-sidebar__search">
+    <div class="nc-sidebar__search-wrap">
+      <input type="text" class="nc-sidebar__search-input"
+             placeholder="Buscar..." disabled
+             title="Busca global em breve (Ctrl+K)">
+      <span class="nc-sidebar__search-kbd">Ctrl K</span>
+    </div>
+  </div>
+
+  {# ───────────── NAV ───────────── #}
+  <nav class="nc-sidebar__nav" aria-label="Menu principal">
+
+    {# ============================================================
+       LOGISTICA (Nacom Goya — sistema_logistica OR admin)
+       ============================================================ #}
+    {% if not is_comercial_only and (current_user.sistema_logistica or current_user.perfil == 'administrador') %}
+    <div class="nc-sidebar__group">Logistica</div>
+
+    {# Operacional #}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Operacional" data-toggle="submenu">
+        <i class="fas fa-tasks nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Operacional</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('pedidos.lista_pedidos') }}">
+          <i class="fas fa-list-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Lista de Pedidos</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('separacao.listar') }}">
+          <i class="fas fa-boxes nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Separacao</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('separacao.importar') }}">
+          <i class="fas fa-upload nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Importar Separacao</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('embarques.listar_embarques') }}">
+          <i class="fas fa-shipping-fast nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Embarques</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('portaria.dashboard') }}">
+          <i class="fas fa-truck nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Portaria</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('rastreamento.tela_monitoramento') }}">
+          <i class="fas fa-satellite-dish nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Rastreamento GPS</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('monitoramento.listar_entregas') }}">
+          <i class="fas fa-eye nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Entregas Monitoradas</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('devolucao.devolucao_ocorrencia.index') }}">
+          <i class="fas fa-undo-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Ocorrencias Devolucao</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pallet_v3.unified.index') }}">
+          <i class="fas fa-pallet nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Gestao de Pallets</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('portaria.historico') }}">
+          <i class="fas fa-history nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Historico Portaria</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('recebimento_views.central_compras') }}">
+          <i class="fas fa-shopping-cart nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Central Compras</span></a></li>
+      </ul>
+    </li>
+
+    {# Carteira & Estoque #}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Carteira & Estoque" data-toggle="submenu">
+        <i class="fas fa-industry nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Carteira & Estoque</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('carteira.index') }}">
+          <i class="fas fa-shopping-cart nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Carteira de Pedidos</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--new">NOVO</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('manufatura.index') }}">
+          <i class="fas fa-industry nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Manufatura/PCP</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--new">NOVO</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('producao.listar_programacao') }}">
+          <i class="fas fa-calendar-check nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Programacao Producao</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('producao.listar_palletizacao') }}">
+          <i class="fas fa-cubes nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Cadastro Palletizacao</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('sugestao_compras.index') }}">
+          <i class="fas fa-shopping-cart nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Sugestao de Compras</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('estoque.listar_movimentacoes') }}">
+          <i class="fas fa-exchange-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Movimentacoes Estoque</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('estoque.saldo_estoque') }}">
+          <i class="fas fa-chart-line nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Saldo de Estoque</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--new">NOVO</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('estoque.listar_unificacao_codigos') }}">
+          <i class="fas fa-link nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Unificacao Codigos</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('faturamento.listar_faturamento_produtos') }}">
+          <i class="fas fa-receipt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Faturamento por Produto</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('localidades.listar_rotas') }}">
+          <i class="fas fa-route nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Cadastro de Rotas</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('localidades.listar_sub_rotas') }}">
+          <i class="fas fa-map-marker-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Sub-rotas</span></a></li>
+      </ul>
+    </li>
+
+    {# Cadastros (Logistica) #}
+    {% if current_user.tem_permissao('cadastros') or
+          current_user.tem_permissao('transportadoras') or
+          current_user.tem_permissao('tabelas') or
+          current_user.pode_editar_cadastros() or
+          current_user.perfil == 'administrador' %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Cadastros" data-toggle="submenu">
+        <i class="fas fa-database nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Cadastros</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        {% if current_user.tem_permissao('transportadoras', 'editar') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('transportadoras.cadastrar_transportadora') }}">
+          <i class="fas fa-truck nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Transportadoras</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('portaria', 'motoristas') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('portaria.cadastrar_motorista') }}">
+          <i class="fas fa-user-plus nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Cadastrar Motorista</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('portaria.listar_motoristas') }}">
+          <i class="fas fa-users nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Motoristas</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('localidades', 'editar') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('localidades.cadastrar_cidade') }}">
+          <i class="fas fa-map-marker-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Cidades</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('veiculos', 'administrar') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('veiculos.admin_veiculos') }}">
+          <i class="fas fa-truck nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Administrar Veiculos</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('agendamento', 'visualizar') or current_user.pode_editar_cadastros() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('cadastros_agendamento.listar_contatos') }}">
+          <i class="fas fa-calendar-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Agendamento</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('tabelas') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('tabelas.cadastrar_tabela_frete') }}">
+          <i class="fas fa-table nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Tabelas de Frete</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('tabelas.importar_tabela_frete') }}">
+          <i class="fas fa-upload nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Importar Tabelas</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('tabelas.historico_tabelas') }}">
+          <i class="fas fa-history nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Historico Tabelas</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('tabelas.simulacao_frete') }}">
+          <i class="fas fa-calculator nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Simulacao de Frete</span></a></li>
+        {% endif %}
+      </ul>
+    </li>
+    {% endif %}
+
+    {# Consultas #}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Consultas" data-toggle="submenu">
+        <i class="fas fa-search nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Consultas</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.listar_fretes') }}">
+          <i class="fas fa-search nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Buscar Fretes</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('tabelas.listar_todas_tabelas') }}">
+          <i class="fas fa-eye nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Consulta de Tabelas</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('vinculos.consulta_vinculos') }}">
+          <i class="fas fa-link nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Consulta de Vinculos</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('cadastros_agendamento.importar_contatos') }}">
+          <i class="fas fa-calendar-plus nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Importar Agendamento</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('vinculos.importar_vinculos') }}">
+          <i class="fas fa-link nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Importar Vinculos</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('financeiro.importar_pendencias') }}">
+          <i class="fas fa-file-import nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Pendencias Financeiras</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('faturamento.listar_faturamento_produtos') }}">
+          <i class="fas fa-file-upload nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Faturamento por Produto</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('tagplus.pagina_importacao') }}">
+          <i class="fas fa-sync nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">TagPlus</span></a></li>
+      </ul>
+    </li>
+    {% endif %}
+
+    {# ============================================================
+       MOTOS (MotoChefe + Confirmacao + HORA + Assai)
+       ============================================================ #}
+    {% set _show_motos_group =
+        (current_user.is_authenticated and current_user.pode_acessar_motochefe()) or
+        (current_user.is_authenticated and current_user.pode_acessar_lojas()) or
+        (current_user.is_authenticated and current_user.pode_acessar_motos_assai())
+    %}
+    {% if _show_motos_group %}
+    <div class="nc-sidebar__group">Motos</div>
+
+    {# MotoChefe #}
+    {% if current_user.is_authenticated and current_user.pode_acessar_motochefe() %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="MotoChefe" data-toggle="submenu">
+        <i class="fas fa-motorcycle nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">MotoChefe</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_equipes') }}">
+          <i class="fas fa-users nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Equipes de Vendas</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_crossdocking') }}">
+          <i class="fas fa-truck-loading nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">CrossDocking</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_vendedores') }}">
+          <i class="fas fa-user-tie nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Vendedores</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_transportadoras') }}">
+          <i class="fas fa-truck nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Transportadoras</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_clientes') }}">
+          <i class="fas fa-building nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Clientes</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_empresas') }}">
+          <i class="fas fa-industry nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Empresas Faturamento</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_modelos') }}">
+          <i class="fas fa-list nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Modelos de Motos</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_motos') }}">
+          <i class="fas fa-motorcycle nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Estoque (Chassi)</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_pedidos') }}">
+          <i class="fas fa-file-invoice nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Pedidos de Venda</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_titulos') }}">
+          <i class="fas fa-receipt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Titulos a Receber</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_comissoes') }}">
+          <i class="fas fa-hand-holding-usd nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Comissoes</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_embarques') }}">
+          <i class="fas fa-shipping-fast nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Embarques</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.extrato_financeiro') }}">
+          <i class="fas fa-file-invoice-dollar nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Extrato Financeiro</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_contas_a_pagar') }}">
+          <i class="fas fa-hand-holding-usd nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Contas a Pagar</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_contas_a_receber') }}">
+          <i class="fas fa-money-bill-wave nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Contas a Receber</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_titulos_a_pagar_route') }}">
+          <i class="fas fa-file-invoice nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Titulos a Pagar</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.custos_operacionais') }}">
+          <i class="fas fa-dollar-sign nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Custos Operacionais</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('motochefe.listar_despesas') }}">
+          <i class="fas fa-wallet nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Despesas Mensais</span></a></li>
+      </ul>
+    </li>
+
+    {# Confirmacao Motochefe (link direto com badge) #}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link {% if count_pendentes_motochefe and count_pendentes_motochefe > 0 %}nc-sidebar__link--alert{% endif %}"
+         href="{{ url_for('motochefe.confirmacao_pedidos') }}"
+         data-tooltip="Confirmacao Motochefe"
+         title="Confirmacao de Pedidos - Acoes pendentes">
+        <i class="fas fa-tasks nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Confirmacao</span>
+        {% if count_pendentes_motochefe and count_pendentes_motochefe > 0 %}
+        <span class="nc-sidebar__badge">{{ count_pendentes_motochefe }}</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endif %}
+
+    {# Lojas HORA #}
+    {% if current_user.is_authenticated and current_user.pode_acessar_lojas() %}
+    {% set _hora_show_cadastros = (
+        current_user.tem_perm_hora('modelos', 'ver') or
+        current_user.tem_perm_hora('lojas', 'ver') or
+        current_user.tem_perm_hora('usuarios', 'ver') or
+        current_user.tem_perm_hora('tagplus', 'ver')
+    ) %}
+    {% set _hora_show_mov = (
+        current_user.tem_perm_hora('pedidos', 'ver') or
+        current_user.tem_perm_hora('nfs', 'ver') or
+        current_user.tem_perm_hora('recebimentos', 'ver') or
+        current_user.tem_perm_hora('vendas', 'ver') or
+        current_user.tem_perm_hora('tagplus', 'ver') or
+        current_user.tem_perm_hora('transferencias', 'ver') or
+        current_user.tem_perm_hora('emprestimos', 'ver') or
+        current_user.tem_perm_hora('estoque', 'ver')
+    ) %}
+    {% set _hora_show_oco = (
+        current_user.tem_perm_hora('pecas', 'ver') or
+        current_user.tem_perm_hora('devolucoes', 'ver') or
+        current_user.tem_perm_hora('avarias', 'ver')
+    ) %}
+    {% set _hora_show_fat = (
+        current_user.tem_perm_hora('tagplus', 'ver') or
+        current_user.tem_perm_hora('vendas', 'criar')
+    ) %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Lojas HORA" data-toggle="submenu">
+        <i class="fas fa-store nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Lojas HORA</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        {% if current_user.tem_perm_hora('dashboard', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.dashboard') }}">
+          <i class="fas fa-tachometer-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Dashboard</span></a></li>
+        <li><hr></li>
+        {% endif %}
+        {% if _hora_show_cadastros %}
+        <li class="nc-sidebar__group">Cadastros</li>
+        {% if current_user.tem_perm_hora('modelos', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.modelos_lista') }}">
+          <i class="fas fa-motorcycle nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Modelos</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.modelos_pendencias_lista') }}">
+          <i class="fas fa-question-circle nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Modelos pendentes</span>
+          {% if hora_pendencias_qtd and hora_pendencias_qtd > 0 %}
+          <span class="nc-sidebar__badge nc-sidebar__badge--warn">{{ hora_pendencias_qtd }}</span>
+          {% endif %}</a></li>
+        {% if current_user.tem_perm_hora('modelos', 'aprovar') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.modelos_unificar_form') }}">
+          <i class="fas fa-compress-arrows-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Unificar modelos</span></a></li>
+        {% endif %}
+        {% endif %}
+        {% if current_user.tem_perm_hora('lojas', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.lojas_lista') }}">
+          <i class="fas fa-store-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Lojas</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('usuarios', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.permissoes_lista') }}">
+          <i class="fas fa-user-shield nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Usuarios</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_forma_map_lista') }}">
+          <i class="fas fa-money-bill-wave nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Formas de pagamento</span></a></li>
+        {% endif %}
+        {% endif %}
+        {% if _hora_show_mov %}
+        <li><hr></li>
+        <li class="nc-sidebar__group">Movimentacao</li>
+        {% if current_user.tem_perm_hora('pedidos', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.pedidos_lista') }}">
+          <i class="fas fa-clipboard-list nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Pedidos de Compras</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('pedidos', 'criar') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.pedidos_importar_imagem') }}">
+          <i class="fas fa-camera nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Importar Pedido (OCR)</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('nfs', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.nfs_lista') }}">
+          <i class="fas fa-file-invoice nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">NFs de Entrada</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('recebimentos', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.recebimentos_lista') }}">
+          <i class="fas fa-box-open nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Recebimento</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('vendas', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.vendas_lista') }}">
+          <i class="fas fa-cash-register nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Pedidos de Venda</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('tagplus', 'ver') or current_user.tem_perm_hora('vendas', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
+          <i class="fas fa-file-invoice-dollar nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">NFs de Saida</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('transferencias', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.transferencias_lista') }}">
+          <i class="fas fa-exchange-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Transferencias</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('emprestimos', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.emprestimos_lista') }}">
+          <i class="fas fa-handshake nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Emprestimos</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('estoque', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.estoque_lista') }}">
+          <i class="fas fa-warehouse nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Estoque</span></a></li>
+        {% endif %}
+        {% endif %}
+        {% if _hora_show_oco %}
+        <li><hr></li>
+        <li class="nc-sidebar__group">Ocorrencias</li>
+        {% if current_user.tem_perm_hora('pecas', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.pecas_lista') }}">
+          <i class="fas fa-puzzle-piece nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Pecas faltando</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('devolucoes', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.devolucoes_lista') }}">
+          <i class="fas fa-undo nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Devolucoes</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('avarias', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.avarias_lista') }}">
+          <i class="fas fa-tools nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Avarias</span></a></li>
+        {% endif %}
+        {% endif %}
+        {% if _hora_show_fat %}
+        <li><hr></li>
+        <li class="nc-sidebar__group">Faturamento (TagPlus)</li>
+        {% if current_user.tem_perm_hora('vendas', 'criar') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_pedido_venda_novo') }}">
+          <i class="fas fa-plus-circle nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Novo Pedido de Venda</span></a></li>
+        {% endif %}
+        {% if current_user.tem_perm_hora('tagplus', 'ver') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_emissoes_lista') }}">
+          <i class="fas fa-list-check nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">NFes emitidas</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_conta') }}">
+          <i class="fas fa-key nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Conta TagPlus</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_checklist') }}">
+          <i class="fas fa-clipboard-check nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Checklist</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_produto_map_lista') }}">
+          <i class="fas fa-link nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Mapeamento produtos</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_backfill') }}">
+          <i class="fas fa-cloud-download-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Backfill API</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.vendas_upload') }}">
+          <i class="fas fa-upload nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Backfill DANFE PDF</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('hora.tagplus_backfill_pedidos_legados') }}">
+          <i class="fas fa-history nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Backfill pedidos legados</span></a></li>
+        {% endif %}
+        {% endif %}
+      </ul>
+    </li>
+    {% endif %}
+
+    {# Motos Assai (link direto) #}
+    {% if current_user.is_authenticated and current_user.pode_acessar_motos_assai() %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="{{ url_for('motos_assai.dashboard') }}" data-tooltip="Motos Assai">
+        <i class="fas fa-motorcycle nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Motos Assai</span>
+      </a>
+    </li>
+    {% endif %}
+    {% endif %}
+
+    {# ============================================================
+       FRETE TERCEIRIZADO (CarVia)
+       ============================================================ #}
+    {% if current_user.is_authenticated and current_user.sistema_carvia %}
+    <div class="nc-sidebar__group">Frete Terceirizado</div>
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="{{ url_for('carvia.fluxo_caixa') }}"
+         data-tooltip="CarVia — Vencimentos"
+         title="CarVia — Vencimentos financeiros">
+        <i class="fas fa-truck-moving nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">CarVia</span>
+        {% if carvia_vencidos and carvia_vencidos > 0 %}
+        <span class="nc-sidebar__badge">{{ carvia_vencidos }}</span>
+        {% elif carvia_vencimento_dia and carvia_vencimento_dia > 0 %}
+        <span class="nc-sidebar__badge nc-sidebar__badge--warn">{{ carvia_vencimento_dia }}</span>
+        {% endif %}
+      </a>
+    </li>
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="{{ url_for('carvia.dashboard') }}" data-tooltip="CarVia Dashboard">
+        <i class="fas fa-tachometer-alt nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">CarVia Dashboard</span>
+      </a>
+    </li>
+    {% endif %}
+
+    {# ============================================================
+       FINANCEIRO
+       ============================================================ #}
+    {% if not is_comercial_only and current_user.is_authenticated and (
+          current_user.tem_permissao('fretes') or
+          current_user.tem_permissao('financeiro') or
+          current_user.tem_permissao('faturamento') or
+          current_user.pode_acessar_financeiro() or
+          current_user.perfil == 'administrador') %}
+    <div class="nc-sidebar__group">Financeiro</div>
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Financeiro" data-toggle="submenu">
+        <i class="fas fa-dollar-sign nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Financeiro</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('financeiro.dashboard') }}">
+          <i class="fas fa-landmark nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Central Financeira</span></a></li>
+
+        {% if current_user.tem_permissao('fretes') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+        <li><hr></li>
+        <li class="nc-sidebar__group">Fretes</li>
+        {% if current_user.tem_permissao('fretes', 'visualizar') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.index') }}">
+          <i class="fas fa-tachometer-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Dashboard Fretes</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.listar_fretes') }}">
+          <i class="fas fa-list nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Listar Fretes</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('fretes', 'lancar') or current_user.pode_editar('fretes') or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.lancar_cte') }}">
+          <i class="fas fa-plus-circle nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Lancar CTe</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('fretes', 'aprovar') or current_user.perfil in ['administrador', 'financeiro', 'gerente_comercial'] %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.listar_aprovacoes') }}">
+          <i class="fas fa-check-circle nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Aprovacoes</span></a></li>
+        {% endif %}
+        {% if current_user.tem_permissao('fretes', 'faturas') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.listar_faturas') }}">
+          <i class="fas fa-file-pdf nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Faturas de Frete</span></a></li>
+        {% endif %}
+        {% endif %}
+
+        {% if current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.relatorio_analise_fretes') }}">
+          <i class="fas fa-chart-bar nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Analise de Fretes</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('fretes.listar_pendencias_cancelamento_cte') }}">
+          <i class="fas fa-envelope-open-text nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Pendencias Cancel. CTe</span></a></li>
+        {% endif %}
+
+        {% if current_user.tem_permissao('financeiro', 'pendencias') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('recebimento_views.central_fiscal') }}">
+          <i class="fas fa-file-invoice nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Central Fiscal</span></a></li>
+        {% endif %}
+
+        {% if current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('financeiro.comprovantes_hub') }}">
+          <i class="fas fa-receipt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Comprovantes Boleto</span></a></li>
+        {% endif %}
+
+        {% if current_user.pode_gerar_remessa_vortx() %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('financeiro.remessa_vortx_historico') }}">
+          <i class="fas fa-file-invoice-dollar nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Remessas VORTX</span></a></li>
+        {% endif %}
+
+        {% if current_user.sistema_carvia %}
+        <li><hr></li>
+        <li class="nc-sidebar__group">CarVia (Frete)</li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('carvia.dashboard') }}">
+          <i class="fas fa-truck-moving nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">CarVia</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('carvia.nova_despesa_extra_por_nf_carvia') }}">
+          <i class="fas fa-plus nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Nova Despesa Extra</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('carvia.buscar_operacao_para_cte_complementar') }}">
+          <i class="fas fa-file-invoice nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Criar CTe Complementar</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('carvia.simulador_carga') }}">
+          <i class="fas fa-cube nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Simulador 3D</span></a></li>
+        {% endif %}
+      </ul>
+    </li>
+    {% endif %}
+
+    {# ============================================================
+       COMERCIAL
+       ============================================================ #}
+    {% if current_user.is_authenticated and (
+          current_user.tem_permissao('comercial') or
+          current_user.tem_permissao('vendas') or
+          current_user.perfil in ['administrador', 'diretoria', 'gerente_comercial', 'vendedor']) %}
+    <div class="nc-sidebar__group">Comercial</div>
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Comercial" data-toggle="submenu">
+        <i class="fas fa-chart-line nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Comercial</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('comercial.dashboard_diretoria') }}">
+          <i class="fas fa-chart-bar nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Dashboard Comercial</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--warn">NOVO</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('comercial.lista_clientes', posicao='em_aberto') }}">
+          <i class="fas fa-building nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Acompanhamento Clientes</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('comercial.lista_clientes', posicao='todos') }}">
+          <i class="fas fa-list-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Posicao Total Clientes</span></a></li>
+        {% if current_user.perfil != 'vendedor' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('comercial.analise_margem') }}">
+          <i class="fas fa-chart-pie nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Analise de Margem</span></a></li>
+        {% endif %}
+        {% if current_user.perfil in ['administrador', 'gerente_comercial'] %}
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('comercial.admin_permissoes') }}">
+          <i class="fas fa-user-shield nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Gerenciar Permissoes</span></a></li>
+        {% endif %}
+      </ul>
+    </li>
+    {% endif %}
+
+    {# ============================================================
+       ADMINISTRACAO (Usuarios + Pessoal + Seguranca + IA)
+       ============================================================ #}
+    {% set _show_admin =
+        (current_user.is_authenticated and (current_user.pode_aprovar_usuarios() or current_user.tem_permissao('usuarios') or current_user.tem_permissao('admin'))) or
+        (current_user.is_authenticated and current_user.id in [1, 62]) or
+        (current_user.is_authenticated and current_user.perfil == 'administrador') or
+        (current_user.sistema_logistica or current_user.sistema_motochefe or current_user.sistema_lojas)
+    %}
+    {% if _show_admin %}
+    <div class="nc-sidebar__group">Administracao</div>
+
+    {# Usuarios #}
+    {% if current_user.is_authenticated and (current_user.pode_aprovar_usuarios() or current_user.tem_permissao('usuarios') or current_user.tem_permissao('admin')) %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Usuarios" data-toggle="submenu">
+        <i class="fas fa-users nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Usuarios</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        {% if current_user.pode_aprovar_usuarios() or current_user.tem_permissao('usuarios', 'aprovar') %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('auth.usuarios_pendentes') }}">
+          <i class="fas fa-user-clock nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Pendentes Aprovacao</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('auth.listar_usuarios') }}">
+          <i class="fas fa-users nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Todos Usuarios</span></a></li>
+        {% endif %}
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('auth.registro') }}" target="_blank">
+          <i class="fas fa-external-link-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Link Registro Publico</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('auth.registro_motochefe_sp') }}" target="_blank">
+          <i class="fas fa-external-link-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Link Cadastro Motochefe</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('auth.registro_motos_assai') }}" target="_blank">
+          <i class="fas fa-external-link-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Link Cadastro Motos Assai</span></a></li>
+      </ul>
+    </li>
+    {% endif %}
+
+    {# Pessoal (restrito users 1, 62) #}
+    {% if current_user.is_authenticated and current_user.id in [1, 62] %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Pessoal" data-toggle="submenu">
+        <i class="fas fa-wallet nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Pessoal</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_dashboard.index') }}">
+          <i class="fas fa-chart-pie nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Dashboard</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_fluxo_caixa.index') }}">
+          <i class="fas fa-water nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Fluxo de Caixa</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_fluxo_caixa.faturas_index') }}">
+          <i class="fas fa-credit-card nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Faturas Cartao</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_matches_empresa.index') }}">
+          <i class="fas fa-link nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Matches Empresa</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_transacoes.listar') }}">
+          <i class="fas fa-receipt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Transacoes</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_analise.index') }}">
+          <i class="fas fa-chart-line nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Analise</span></a></li>
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_importacao.importar') }}">
+          <i class="fas fa-file-upload nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Importar CSV</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_orcamento.index') }}">
+          <i class="fas fa-calculator nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Orcamento</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_provisao.index') }}">
+          <i class="fas fa-calendar-plus nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Provisoes</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('pessoal.pessoal_configuracao.index') }}">
+          <i class="fas fa-cog nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Configuracao</span></a></li>
+      </ul>
+    </li>
+    {% endif %}
+
+    {# Seguranca (admin only) #}
+    {% if current_user.perfil == 'administrador' %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="Seguranca" data-toggle="submenu">
+        <i class="fas fa-shield-alt nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">Seguranca</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        <li><a class="nc-sidebar__link" href="{{ url_for('seguranca.dashboard') }}">
+          <i class="fas fa-tachometer-alt nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Dashboard</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('seguranca.listar_vulnerabilidades') }}">
+          <i class="fas fa-bug nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Vulnerabilidades</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('seguranca.verificar_senha') }}">
+          <i class="fas fa-key nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Verificar Senha</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('seguranca.configuracao') }}">
+          <i class="fas fa-cog nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Configuracao</span></a></li>
+      </ul>
+    </li>
+    {% endif %}
+
+    {# IA — Agentes e Analytics #}
+    {% set _can_agente_nacom = current_user.sistema_logistica or current_user.sistema_motochefe or current_user.perfil == 'administrador' %}
+    {% set _can_agente_lojas = current_user.sistema_lojas or current_user.perfil == 'administrador' %}
+    {% if _can_agente_nacom or _can_agente_lojas %}
+    <li class="nc-sidebar__item">
+      <a class="nc-sidebar__link" href="#" data-tooltip="IA" data-toggle="submenu">
+        <i class="fas fa-robot nc-sidebar__icon"></i>
+        <span class="nc-sidebar__label">IA</span>
+        <i class="fas fa-chevron-right nc-sidebar__chevron"></i>
+      </a>
+      <ul class="nc-sidebar__submenu">
+        {% if _can_agente_nacom %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('agente.pagina_chat') }}"
+               title="Agente Nacom — logistica, frete, carteira, Odoo, SSW">
+          <i class="fas fa-comments nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Agente Nacom</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--info">SDK</span></a></li>
+        {% endif %}
+        {% if _can_agente_lojas %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('agente_lojas.pagina_chat') }}"
+               title="Agente Lojas HORA — varejo B2C de motos eletricas">
+          <i class="fas fa-motorcycle nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Agente Lojas HORA</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--warn">M0</span></a></li>
+        {% endif %}
+        {% if current_user.perfil == 'administrador' %}
+        <li><hr></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('agente.pagina_insights') }}"
+               title="Insights e Analytics">
+          <i class="fas fa-chart-bar nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Insights</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('agente.admin_session_store_page') }}"
+               title="Observability SessionStore">
+          <i class="fas fa-database nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">SessionStore</span></a></li>
+        {% endif %}
+      </ul>
+    </li>
+    {% endif %}
+    {% endif %}
+
+  </nav>
+
+  {# ───────────── FOOTER (user + tema + sair) ───────────── #}
+  <div class="nc-sidebar__footer">
+    <div class="nc-sidebar__footer-actions">
+      <div class="nc-sidebar__user" title="{{ current_user.nome|default(current_user.email, true) }}">
+        <div class="nc-sidebar__avatar">
+          {{ (current_user.nome|default(current_user.email, true))[:2]|upper }}
+        </div>
+        <div class="nc-sidebar__user-info">
+          <div class="nc-sidebar__user-name">{{ current_user.nome|default(current_user.email, true) }}</div>
+          <div class="nc-sidebar__user-role">{{ current_user.perfil|default('Usuario', true)|capitalize }}</div>
+        </div>
+      </div>
+      <button class="nc-sidebar__footer-btn nc-theme-toggle" type="button" title="Alternar tema">
+        {# Sun e Moon ambos renderizados; CSS em _navbar.css alterna via opacity
+           baseado em [data-bs-theme="light"]. NUNCA usar display:none aqui. #}
+        <i class="fas fa-sun"></i>
+        <i class="fas fa-moon"></i>
+      </button>
+      <a class="nc-sidebar__footer-btn" href="{{ url_for('auth.logout') }}" title="Sair">
+        <i class="fas fa-sign-out-alt"></i>
+      </a>
+    </div>
+  </div>
+
+</aside>

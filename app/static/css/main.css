@@ -50,6 +50,9 @@
 
 /* Base - Bootstrap overrides and global defaults */
 @import url('./base/_bootstrap-overrides.css') layer(base);
+/* DEPRECATED: _navbar.css (estrutura antiga horizontal) — substituido por
+   components/_sidebar.css + _topbar.css. Mantido apenas para compatibilidade
+   ate validacao completa; remover em PR seguinte. */
 @import url('./base/_navbar.css') layer(base);
 
 /* Components - Reusable UI patterns */
@@ -62,6 +65,9 @@
 @import url('./components/_tags.css') layer(components);
 @import url('./components/_layout.css') layer(components);
 @import url('./components/_mobile-zoom.css') layer(components);
+/* Sidebar e Topbar (substituem nav horizontal) */
+@import url('./components/_sidebar.css') layer(components);
+@import url('./components/_topbar.css') layer(components);
 
 /* Modules - Feature-specific styles */
 @import url('./modules/_financeiro.css') layer(modules);
