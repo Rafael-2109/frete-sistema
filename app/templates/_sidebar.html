@@ -580,9 +580,11 @@
         <li><a class="nc-sidebar__link" href="{{ url_for('financeiro.dashboard') }}">
           <i class="fas fa-landmark nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Central Financeira</span></a></li>
+        {% if current_user.perfil == 'administrador' %}
         <li><a class="nc-sidebar__link" href="{{ url_for('custeio.index') }}">
           <i class="fas fa-calculator nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Sistema de Custeio</span></a></li>
+        {% endif %}
 
         {% if current_user.tem_permissao('fretes') or current_user.pode_acessar_financeiro() or current_user.perfil == 'administrador' %}
         <li><hr></li>
