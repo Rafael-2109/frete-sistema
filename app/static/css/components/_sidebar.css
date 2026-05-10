@@ -682,8 +682,41 @@ html.nc-sidebar-init-drawer .nc-shell {
 }
 
 @media (max-width: 991.98px) {
+    /* Mobile abandona o grid + altura-fixa + overflow-contido
+       (essa combinacao quebra em iOS Safari: o `.nc-shell` ficava
+       com altura computada como 0 ou era recortado pelo overflow
+       hidden do .nc-main, escondendo a topbar e o conteudo).
+       Em mobile, o body rola normalmente — mais robusto. */
     .nc-shell {
-        grid-template-columns: 0 1fr;
+        display: block;
+        height: auto;
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    body.has-mobile-zoom-bar .nc-shell {
+        height: auto;
+        min-height: calc(100vh - 32px);
+        min-height: calc(100dvh - 32px);
+    }
+
+    .nc-main {
+        display: block;
+        overflow: visible;
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    .nc-content {
+        overflow: visible;
+        height: auto;
+        flex: none;
+    }
+
+    .nc-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
     }
 
     .nc-sidebar {
