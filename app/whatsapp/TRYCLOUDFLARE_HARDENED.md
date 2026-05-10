@@ -17,7 +17,7 @@ Se preferir setup mais simples → `CLOUDFLARE_TUNNEL.md` (com dominio).
 
 ```
 Render (sistema-fretes.onrender.com)
-   │  POST <OPENCLAW_GATEWAY_URL><PATH_PREFIX>/api/tools/invoke
+   │  POST <OPENCLAW_GATEWAY_URL><PATH_PREFIX>/tools/invoke
    │  headers:
    │    Authorization: Bearer <OPENCLAW_GATEWAY_TOKEN>
    │    X-Timestamp: <epoch-utc>
@@ -151,14 +151,14 @@ Teste local (deve aceitar com headers corretos, rejeitar sem):
 
 ```bash
 # Sem headers HMAC (deve dar 401)
-curl -sS -i -X POST http://127.0.0.1:18790${PATH_PREFIX}/api/tools/invoke \
+curl -sS -i -X POST http://127.0.0.1:18790${PATH_PREFIX}/tools/invoke \
   -H "Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}'
 # Esperado: HTTP/1.0 401 + {"error":"deny"}
 
 # Path errado (deve dar 404)
-curl -sS -i http://127.0.0.1:18790/api/tools/invoke
+curl -sS -i http://127.0.0.1:18790/tools/invoke
 # Esperado: HTTP/1.0 404 + {"error":"deny"}
 ```
 

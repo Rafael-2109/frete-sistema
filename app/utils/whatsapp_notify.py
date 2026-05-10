@@ -3,7 +3,7 @@ Helper para envio de mensagens WhatsApp via gateway local OpenClaw.
 
 OpenClaw e plataforma local instalada em ~/.openclaw/ que roda WhatsApp Web
 via Baileys e expoe gateway HTTP em loopback:18789. Este helper encapsula
-o POST /api/tools/invoke com token bucket por target para evitar ban Baileys
+o POST /tools/invoke com token bucket por target para evitar ban Baileys
 (WhatsApp pode flagar numero por flood).
 
 Uso simples:
@@ -61,7 +61,7 @@ _CF_ACCESS_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
 
 # HMAC validation (alternativa ao CF Access para tunnel sem dominio CF).
 # Quando OPENCLAW_HMAC_SECRET esta setado, o helper:
-#   - Adiciona PATH_PREFIX em frente ao path: <prefix>/api/tools/invoke
+#   - Adiciona PATH_PREFIX em frente ao path: <prefix>/tools/invoke
 #   - Calcula HMAC-SHA256(secret, ts || nonce || method || gateway_path || body)
 #   - Envia headers X-Timestamp, X-Nonce, X-Signature
 # Servidor (proxy local em 127.0.0.1:18790) valida ANTES de encaminhar pro
@@ -183,9 +183,13 @@ def send_whatsapp(
     if not skip_rate_limit:
         _rate_limiter.check_and_consume(target_norm)
 
+    # Formato confirmado empiricamente em 2026-05-09 (OpenClaw 2026.5.7):
+    #   "name" (NAO "tool") + "args" (NAO "params").
+    # Outros formatos retornam "tool execution failed" sem extrair args, ou
+    # "action required" quando args fica em key errada.
     payload = {
-        "tool": "message",
-        "params": {
+        "name": "message",
+        "args": {
             "action": "send",
             "channel": "whatsapp",
             "target": target_norm,
@@ -193,9 +197,9 @@ def send_whatsapp(
         },
     }
 
-    # Path: gateway sempre usa /api/tools/invoke. Quando HMAC ativo, prepend
+    # Path: gateway sempre usa /tools/invoke. Quando HMAC ativo, prepend
     # do PATH_PREFIX secreto (ofuscacao + isolamento do proxy de validacao).
-    gateway_path = "/api/tools/invoke"
+    gateway_path = "/tools/invoke"
     full_path = f"{_PATH_PREFIX}{gateway_path}" if _HMAC_SECRET else gateway_path
     url = f"{_GATEWAY_URL.rstrip('/')}{full_path}"
 

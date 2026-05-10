@@ -7,7 +7,7 @@ Cloudflare Tunnel com Cloudflare Access (defense-in-depth).
 
 ```
 Render (sistema-fretes.onrender.com)
-   │  POST https://openclaw.<seu-dominio>/api/tools/invoke
+   │  POST https://openclaw.<seu-dominio>/tools/invoke
    │  headers:
    │    Authorization: Bearer <OPENCLAW_GATEWAY_TOKEN>
    │    CF-Access-Client-Id: <SERVICE_TOKEN_ID>
@@ -187,7 +187,7 @@ Mande mensagem WhatsApp pra voce mesmo. Sequencia esperada:
 1. Plugin nacom-bridge envia POST → `https://sistema-fretes.onrender.com/api/whatsapp/inbound`
 2. Render recebe, valida `OPENCLAW_PLUGIN_TOKEN`, cria task, dispara thread
 3. Thread chama Agent SDK, gera resposta
-4. Thread chama `send_whatsapp(target, text)` → POST → `https://openclaw.<seu-dominio>.com/api/tools/invoke`
+4. Thread chama `send_whatsapp(target, text)` → POST → `https://openclaw.<seu-dominio>.com/tools/invoke`
 5. Cloudflare Access valida service token + bearer token
 6. cloudflared encaminha pra `127.0.0.1:18789`
 7. Gateway envia mensagem WhatsApp
