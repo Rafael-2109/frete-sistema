@@ -907,6 +907,7 @@ def create_app(config_name=None):
     from app.estoque.routes import estoque_bp
     from app.producao.routes import producao_bp
     from app.producao.relatorios_bp import relatorios_producao_bp
+    from app.produtos.routes import produtos_bp
     from app.manufatura import manufatura_bp
     from app.permissions.api import permissions_api
 
@@ -947,6 +948,7 @@ def create_app(config_name=None):
     app.register_blueprint(permissions_api)
     app.register_blueprint(rastreamento_bp)  # 🚚 Rastreamento GPS
     app.register_blueprint(pessoal_bp)  # 💰 Finanças Pessoais
+    app.register_blueprint(produtos_bp)  # 🔍 Auditoria de cadastro de produtos
 
     # 🆕 API REST para funcionalidades MCP
     app.register_blueprint(api_bp)
