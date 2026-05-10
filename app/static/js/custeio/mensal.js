@@ -407,53 +407,9 @@ function mostrarPreview(data) {
     new bootstrap.Modal(document.getElementById('modalPreview')).show();
 }
 
-function confirmarFechamento() {
-    const meses = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-                   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    const mes = document.getElementById('filtro-mes').value;
-    const ano = document.getElementById('filtro-ano').value;
-
-    document.getElementById('fechamento-periodo').textContent = `${meses[mes]}/${ano}`;
-
-    // Fechar preview se estiver aberto
-    const modalPreview = bootstrap.Modal.getInstance(document.getElementById('modalPreview'));
-    if (modalPreview) modalPreview.hide();
-
-    new bootstrap.Modal(document.getElementById('modalFechamento')).show();
-}
-
-function executarFechamento() {
-    const mes = document.getElementById('filtro-mes').value;
-    const ano = document.getElementById('filtro-ano').value;
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-
-    mostrarLoading(true);
-    bootstrap.Modal.getInstance(document.getElementById('modalFechamento')).hide();
-
-    fetch('/custeio/api/mensal/fechar', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ mes, ano })
-    })
-    .then(r => r.json())
-    .then(data => {
-        mostrarLoading(false);
-        if (data.sucesso) {
-            alert(data.mensagem || 'Fechamento realizado com sucesso!');
-            carregarDados();
-        } else {
-            alert('Erro: ' + (data.erro || 'Erro desconhecido'));
-        }
-    })
-    .catch(err => {
-        mostrarLoading(false);
-        console.error(err);
-        alert('Erro ao executar fechamento');
-    });
-}
+// confirmarFechamento e executarFechamento foram removidas em 2026-05-10:
+// fechamento manual via UI desabilitado, agora ocorre via cron automatico
+// (dia 5 as 04:00). Apenas simulacao continua disponivel.
 
 // ==========================================================================
 // EXPORTAR

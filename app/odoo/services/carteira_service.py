@@ -1257,14 +1257,21 @@ class CarteiraService:
                     'custo_vigencia_snapshot': custo.vigencia_inicio,
                     'custo_producao_snapshot': float(custo.custo_producao) if custo.custo_producao else None
                 }
+            # Custo nao encontrado: log estruturado (WARNING para visibilidade em prod)
+            logger.warning(f"CustoConsiderado nao encontrado para cod_produto={cod_produto} - margem do pedido ficara NULL")
         except Exception as e:
-            logger.debug(f"Erro ao obter snapshot de custo para {cod_produto}: {e}")
+            logger.error(f"Erro ao obter snapshot de custo para {cod_produto}: {e}", exc_info=True)
 
         return {}
 
-    def _calcular_margem_bruta(self, item: Dict[str, Any]) -> Dict[str, Any]:
+    def _calcular_margem_bruta(self, item: Dict[str, Any], parametros_cache: Dict[str, float] = None) -> Dict[str, Any]:
         """
         Calcula margem bruta e liquida com base no snapshot de custo e preco de venda.
+
+        Args:
+            item: dict com campos do pedido/linha
+            parametros_cache: dict opcional {chave: valor} pre-carregado para evitar
+                N+1 em ParametroCusteio. Se None, faz queries individuais (compatibilidade).
 
         MELHORIAS v2:
         - Percentual de perda sobre custo (ParametroCusteio.PERCENTUAL_PERDA)
@@ -1299,6 +1306,10 @@ class CarteiraService:
 
             # Precisa de preco, custo e quantidade para calcular
             if preco is None or custo_unitario is None or qtd is None:
+                logger.warning(
+                    f"Margem nao calculada para {item.get('num_pedido')}/{item.get('cod_produto')}: "
+                    f"preco={preco}, custo_unitario_snapshot={custo_unitario}, qtd={qtd}"
+                )
                 return resultado
 
             preco = float(preco)
@@ -1309,11 +1320,16 @@ class CarteiraService:
                 return resultado
 
             # ============================================
-            # PARAMETROS GLOBAIS
+            # PARAMETROS GLOBAIS (cache batch evita N+1)
             # ============================================
-            percentual_perda = ParametroCusteio.obter_valor('PERCENTUAL_PERDA', 0.0)
-            custo_financeiro_percentual = ParametroCusteio.obter_valor('CUSTO_FINANCEIRO_PERCENTUAL', 0.0)
-            custo_operacao_percentual = ParametroCusteio.obter_valor('CUSTO_OPERACAO_PERCENTUAL', 0.0)
+            if parametros_cache is not None:
+                percentual_perda = parametros_cache.get('PERCENTUAL_PERDA', 0.0)
+                custo_financeiro_percentual = parametros_cache.get('CUSTO_FINANCEIRO_PERCENTUAL', 0.0)
+                custo_operacao_percentual = parametros_cache.get('CUSTO_OPERACAO_PERCENTUAL', 0.0)
+            else:
+                percentual_perda = ParametroCusteio.obter_valor('PERCENTUAL_PERDA', 0.0)
+                custo_financeiro_percentual = ParametroCusteio.obter_valor('CUSTO_FINANCEIRO_PERCENTUAL', 0.0)
+                custo_operacao_percentual = ParametroCusteio.obter_valor('CUSTO_OPERACAO_PERCENTUAL', 0.0)
 
             # ============================================
             # CUSTO DE PRODUCAO (snapshot)
@@ -1435,7 +1451,10 @@ class CarteiraService:
             }
 
         except Exception as e:
-            logger.debug(f"Erro ao calcular margem: {e}")
+            logger.error(
+                f"Erro ao calcular margem para {item.get('num_pedido')}/{item.get('cod_produto')}: {e}",
+                exc_info=True
+            )
 
         return resultado
 
@@ -2576,24 +2595,37 @@ class CarteiraService:
 
             # BATCH: Pre-carregar custos vigentes para TODOS os produtos novos
             # Substitui N queries individuais por 1 query batch
-            from app.custeio.models import CustoConsiderado
-            produtos_para_inserir = set()
+            # IMPORTANTE (CR4 fix): cache abrange TODOS os produtos da sync (insert + update),
+            # nao apenas os do path INSERT. Isso evita N+1 quando UPDATE recalcula margem
+            # e precisa popular snapshot para registros sem custo_unitario_snapshot.
+            from app.custeio.models import CustoConsiderado, ParametroCusteio
+            produtos_da_sync = set()
             for item in dados_novos:
-                chave = (item.get('num_pedido'), item.get('cod_produto'))
-                if chave not in registros_odoo_existentes and item.get('cod_produto'):
-                    produtos_para_inserir.add(item['cod_produto'])
+                cod = item.get('cod_produto')
+                if cod:
+                    produtos_da_sync.add(cod)
 
             cache_custos = {}
-            if produtos_para_inserir:
+            if produtos_da_sync:
                 custos_vigentes = CustoConsiderado.query.filter(
-                    CustoConsiderado.cod_produto.in_(list(produtos_para_inserir)),
+                    CustoConsiderado.cod_produto.in_(list(produtos_da_sync)),
                     CustoConsiderado.custo_atual == True
                 ).all()
                 cache_custos = {c.cod_produto: c for c in custos_vigentes}
                 logger.info(
                     f"   [BATCH] Custos carregados: {len(cache_custos)} produtos "
-                    f"(1 query vs {len(produtos_para_inserir)} N+1)"
+                    f"(1 query vs {len(produtos_da_sync)} N+1)"
                 )
+
+            # BATCH: Pre-carregar parametros globais (evita 3 queries por item)
+            CHAVES_PARAMETROS = ['PERCENTUAL_PERDA', 'CUSTO_FINANCEIRO_PERCENTUAL', 'CUSTO_OPERACAO_PERCENTUAL']
+            parametros_cache = {chave: 0.0 for chave in CHAVES_PARAMETROS}
+            for p in ParametroCusteio.query.filter(ParametroCusteio.chave.in_(CHAVES_PARAMETROS)).all():
+                parametros_cache[p.chave] = float(p.valor) if p.valor else 0.0
+            logger.info(
+                f"   [BATCH] Parametros carregados: {len(parametros_cache)} chaves "
+                f"(1 query vs {len(CHAVES_PARAMETROS) * len(dados_novos)} N+1)"
+            )
 
             # Inicializar contador (removido da otimização mas pode ser referenciado em outro lugar)
             contador_lote = 0
@@ -2611,9 +2643,77 @@ class CarteiraService:
                 if chave in registros_odoo_existentes:
                     # ATUALIZAR - Fazer inline, sem loops
                     registro_existente = registros_odoo_existentes[chave]
+
+                    # Detectar mudancas que requerem recalculo de margem
+                    # (preco, qtd, UF, incoterm, impostos, desconto, forma pgto, vendedor/equipe)
+                    CAMPOS_QUE_DISPARAM_RECALCULO_MARGEM = {
+                        'preco_produto_pedido', 'qtd_produto_pedido',
+                        'cod_uf', 'incoterm',
+                        'icms_valor', 'pis_valor', 'cofins_valor',
+                        'desconto_percentual', 'forma_pgto_pedido',
+                        'cnpj_cpf', 'vendedor', 'equipe_vendas'
+                    }
+                    precisa_recalcular_margem = False
+
                     for key, value in item.items():
                         if hasattr(registro_existente, key) and key != 'id':
+                            valor_atual = getattr(registro_existente, key)
+                            # Comparacao tolerante a tipos (Decimal vs float)
+                            if key in CAMPOS_QUE_DISPARAM_RECALCULO_MARGEM:
+                                try:
+                                    if valor_atual is None and value is not None:
+                                        precisa_recalcular_margem = True
+                                    elif valor_atual is not None and value is None:
+                                        precisa_recalcular_margem = True
+                                    elif isinstance(valor_atual, (int, float)) or isinstance(value, (int, float)):
+                                        if float(valor_atual or 0) != float(value or 0):
+                                            precisa_recalcular_margem = True
+                                    elif valor_atual != value:
+                                        precisa_recalcular_margem = True
+                                except (TypeError, ValueError):
+                                    if valor_atual != value:
+                                        precisa_recalcular_margem = True
                             setattr(registro_existente, key, value)
+
+                    # Recalcular margem se algum campo relevante mudou
+                    if precisa_recalcular_margem:
+                        # Garantir que temos snapshot de custo (pode estar ausente em registros antigos)
+                        if not registro_existente.custo_unitario_snapshot:
+                            snapshot = self._obter_snapshot_custo(
+                                registro_existente.cod_produto,
+                                cache_custos=cache_custos
+                            )
+                            if snapshot:
+                                for s_key, s_value in snapshot.items():
+                                    if hasattr(registro_existente, s_key):
+                                        setattr(registro_existente, s_key, s_value)
+
+                        # Montar item_dict com valores ATUALIZADOS para recalcular
+                        item_para_calculo = {
+                            'num_pedido': registro_existente.num_pedido,
+                            'cod_produto': registro_existente.cod_produto,
+                            'preco_produto_pedido': registro_existente.preco_produto_pedido,
+                            'qtd_produto_pedido': registro_existente.qtd_produto_pedido,
+                            'icms_valor': registro_existente.icms_valor,
+                            'pis_valor': registro_existente.pis_valor,
+                            'cofins_valor': registro_existente.cofins_valor,
+                            'desconto_percentual': registro_existente.desconto_percentual,
+                            'cod_uf': registro_existente.cod_uf,
+                            'incoterm': registro_existente.incoterm,
+                            'custo_unitario_snapshot': registro_existente.custo_unitario_snapshot,
+                            'custo_producao_snapshot': registro_existente.custo_producao_snapshot,
+                            'cnpj_cpf': registro_existente.cnpj_cpf,
+                            'raz_social_red': registro_existente.raz_social_red,
+                            'vendedor': registro_existente.vendedor,
+                            'equipe_vendas': registro_existente.equipe_vendas,
+                            'forma_pgto_pedido': registro_existente.forma_pgto_pedido,
+                        }
+                        nova_margem = self._calcular_margem_bruta(item_para_calculo, parametros_cache=parametros_cache)
+                        if nova_margem:
+                            for m_key, m_value in nova_margem.items():
+                                if hasattr(registro_existente, m_key):
+                                    setattr(registro_existente, m_key, m_value)
+
                     contador_atualizados += 1
                 else:
                     # INSERIR - Aplicar fallback para campos vazios ANTES de criar
@@ -2627,8 +2727,8 @@ class CarteiraService:
                     snapshot = self._obter_snapshot_custo(item.get('cod_produto'), cache_custos=cache_custos)
                     if snapshot:
                         item.update(snapshot)
-                        # CALCULAR MARGEM - Após capturar snapshot
-                        margem = self._calcular_margem_bruta(item)
+                        # CALCULAR MARGEM - Após capturar snapshot (com cache de parametros)
+                        margem = self._calcular_margem_bruta(item, parametros_cache=parametros_cache)
                         if margem:
                             item.update(margem)
 

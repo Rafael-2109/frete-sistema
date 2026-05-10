@@ -156,6 +156,36 @@ echo "Pessoal: re-aplicar heuristica L4 em transacoes orfas..."
 python scripts/migrations/recategorizar_pendentes_pessoal.py --aplicar \
     || echo "⚠️ recategorizar_pendentes_pessoal falhou, continuando deploy..."
 
+# 13. Custeio (2026-05-10): auditoria + Sprint 1+2+3 — 4 migrations DDL.
+# Aplicacao em ordem: partial UNIQUE (C8) -> CHECK constraints (C12)
+# -> soft delete columns (C17) -> audit log table (C16). Todas idempotentes.
+# Ordem importa apenas porque CHECK constraints de tipo_custo_selecionado
+# ja contemplam MANUAL/PRODUCAO conhecidos em prod (sem violacoes).
+
+# 13a. C8: partial UNIQUE em custo_considerado(cod_produto) WHERE custo_atual=TRUE
+# Valida ausencia de duplicatas antes de aplicar (aborta se encontrar).
+echo "Custeio C8: partial UNIQUE custo_considerado..."
+python scripts/migrations/partial_unique_custo_considerado.py \
+    || echo "⚠️ Migration partial_unique_custo_considerado falhou, continuando deploy..."
+
+# 13b. C12: 9 CHECK constraints (tipo_custo_selecionado, tipo_produto, status,
+# mes/ano, percentuais, vigencias). Valida violacoes antes de aplicar.
+echo "Custeio C12: CHECK constraints..."
+python scripts/migrations/check_constraints_custeio.py \
+    || echo "⚠️ Migration check_constraints_custeio falhou, continuando deploy..."
+
+# 13c. C17: soft delete em CustoFrete e ParametroCusteio.
+# Adiciona colunas ativo/desativado_em/desativado_por + indices.
+echo "Custeio C17: soft delete CustoFrete e ParametroCusteio..."
+python scripts/migrations/soft_delete_custeio.py \
+    || echo "⚠️ Migration soft_delete_custeio falhou, continuando deploy..."
+
+# 13d. C16: tabela audit_log_custeio + 7 indices.
+# CREATE TABLE IF NOT EXISTS — totalmente idempotente.
+echo "Custeio C16: audit_log_custeio..."
+python scripts/migrations/audit_log_custeio.py \
+    || echo "⚠️ Migration audit_log_custeio falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

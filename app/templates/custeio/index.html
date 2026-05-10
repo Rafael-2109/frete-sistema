@@ -137,7 +137,7 @@
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="#" onclick="simularFechamento()"><i class="bi bi-eye me-2"></i>Simular Fechamento</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="confirmarFechamento()"><i class="bi bi-lock me-2"></i>Fechar Mes</a></li>
+                            <li><span class="dropdown-item-text text-muted small"><i class="bi bi-info-circle me-2"></i>Fechamento automatico (cron dia 5, 04:00)</span></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="#" onclick="exportarExcel('mensal')"><i class="bi bi-file-earmark-excel me-2"></i>Exportar Mensal</a></li>
                             <li><a class="dropdown-item" href="#" onclick="exportarExcel('considerado')"><i class="bi bi-file-earmark-excel me-2"></i>Exportar Considerado</a></li>
@@ -348,54 +348,23 @@
     </div>
 </div>
 
-<!-- Modal Confirmacao Fechamento -->
-<div class="modal fade" id="modalFechamento" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-lock me-2"></i>Confirmar Fechamento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    Voce esta prestes a fechar os custos do mes <strong id="fechamento-periodo"></strong>.
-                </div>
-                <p>Esta acao ira:</p>
-                <ul>
-                    <li>Calcular custos de todos os produtos COMPRADOS</li>
-                    <li>Calcular custos de produtos INTERMEDIARIOS (via BOM)</li>
-                    <li>Calcular custos de produtos ACABADOS (via BOM)</li>
-                    <li>Atualizar a tabela de Custos Considerados</li>
-                </ul>
-                <p class="mb-0 text-muted small">O fechamento pode levar alguns minutos dependendo da quantidade de produtos.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" onclick="executarFechamento()">
-                    <i class="bi bi-check-lg me-1"></i>Confirmar Fechamento
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Preview Simulacao -->
+<!-- Modal Preview Simulacao (sem opcao de confirmar - cron faz fechamento) -->
 <div class="modal fade" id="modalPreview" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Preview do Fechamento</h5>
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Simulacao de Fechamento (sem efetivar)</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="preview-content">
                 <!-- Conteudo dinamico -->
             </div>
             <div class="modal-footer">
+                <small class="text-muted me-auto">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Fechamento real ocorre via cron automatico no dia 5 as 04:00.
+                </small>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-success" onclick="confirmarFechamento()">
-                    <i class="bi bi-lock me-1"></i>Prosseguir com Fechamento
-                </button>
             </div>
         </div>
     </div>
@@ -497,7 +466,8 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Valor</label>
-                    <input type="number" class="form-control" id="parametro-valor" step="0.000001" required>
+                    <input type="number" class="form-control" id="parametro-valor" step="0.000001" min="0" max="100" required>
+                    <small class="text-muted">Para parametros percentuais (PERCENTUAL_*, CUSTO_*, COMISSAO_*): 0-100</small>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Descricao</label>
@@ -533,16 +503,17 @@
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Custo Considerado (R$)</label>
-                        <input type="number" class="form-control" id="cadastro-custo" step="0.000001" required>
+                        <input type="number" class="form-control" id="cadastro-custo" step="0.000001" min="0.000001" required>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Custo Producao (R$) <small class="text-muted">(opcional)</small></label>
-                        <input type="number" class="form-control" id="cadastro-producao" step="0.000001">
+                        <input type="number" class="form-control" id="cadastro-producao" step="0.000001" min="0">
                     </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Tipo de Custo Base</label>
                     <select class="form-select" id="cadastro-tipo">
+                        <option value="MANUAL" selected>Manual (cadastro direto)</option>
                         <option value="MEDIO_MES">Medio do Mes</option>
                         <option value="ULTIMO_CUSTO">Ultimo Custo</option>
                         <option value="MEDIO_ESTOQUE">Medio do Estoque</option>

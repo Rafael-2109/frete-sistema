@@ -17,6 +17,9 @@
                     </h1>
                 </div>
                 <div class="btn-group" role="group">
+                    <a href="{{ url_for('produtos.auditoria') }}" class="btn btn-dark" title="Auditoria do cadastro de produtos: orfaos, semi-orfaos e divergencias">
+                        <i class="fas fa-search-dollar"></i> Auditoria
+                    </a>
                     <a href="{{ url_for('producao.nova_palletizacao') }}" class="btn btn-primary">
                         <i class="fas fa-plus"></i> Novo
                     </a>

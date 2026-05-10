@@ -68,16 +68,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_nf_itens_modelo_moto_id",
+      "name": "ix_carvia_nf_itens_nf_id",
       "columns": [
-        "modelo_moto_id"
+        "nf_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_nf_itens_nf_id",
+      "name": "ix_carvia_nf_itens_modelo_moto_id",
       "columns": [
-        "nf_id"
+        "modelo_moto_id"
       ],
       "unique": false
     }

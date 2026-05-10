@@ -116,8 +116,8 @@ function renderizarTabela(dados) {
 function salvarCustoOperacao() {
     const percentual = parseFloat(document.getElementById('operacao-percentual').value);
 
-    if (isNaN(percentual) || percentual < 0) {
-        alert('Informe um percentual valido');
+    if (isNaN(percentual) || percentual < 0 || percentual > 100) {
+        alert('Percentual deve estar entre 0 e 100');
         return;
     }
 
@@ -161,8 +161,8 @@ function salvarCustoOperacao() {
 function salvarCustoFinanceiro() {
     const percentual = parseFloat(document.getElementById('financeiro-percentual').value);
 
-    if (isNaN(percentual) || percentual < 0) {
-        alert('Informe um percentual valido');
+    if (isNaN(percentual) || percentual < 0 || percentual > 100) {
+        alert('Percentual deve estar entre 0 e 100');
         return;
     }
 

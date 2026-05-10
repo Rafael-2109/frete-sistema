@@ -1,0 +1,93 @@
+/**
+ * _produtos.css - Modulo Auditoria de Produtos
+ *
+ * Estilos especificos da tela /produtos/auditoria.
+ * Cards de categoria + paineis comutaveis + macros de tabela com problemas.
+ *
+ * Token mapping:
+ * - var(--bs-primary), var(--bs-tertiary-bg), var(--bs-secondary-color),
+ *   var(--bs-warning) sao tokens BS5 (light/dark adaptam automaticamente).
+ */
+
+.auditoria-cat-card {
+    transition: transform .1s ease, box-shadow .1s ease;
+    cursor: pointer;
+}
+
+.auditoria-cat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.auditoria-cat-card.active {
+    box-shadow: 0 0 0 3px var(--bs-primary);
+}
+
+.auditoria-categoria-icon {
+    font-size: 2rem;
+    opacity: .8;
+}
+
+.auditoria-row-detalhes {
+    background: var(--bs-tertiary-bg);
+}
+
+.auditoria-detalhes-table th {
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.auditoria-acao-btn {
+    white-space: nowrap;
+}
+
+.auditoria-pill {
+    font-size: .7rem;
+    padding: .15rem .5rem;
+    border-radius: 1rem;
+}
+
+.auditoria-flag-badge {
+    width: 1.6rem;
+    display: inline-block;
+    text-align: center;
+    font-weight: 600;
+}
+
+.auditoria-painel {
+    display: none;
+}
+
+.auditoria-painel.show {
+    display: block;
+}
+
+.auditoria-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--bs-secondary-color);
+}
+
+.auditoria-modal-header-icone {
+    font-size: 1.5rem;
+    margin-right: .5rem;
+}
+
+.auditoria-divergencia-card {
+    border-left: 4px solid var(--bs-warning);
+}
+
+.auditoria-mestre-card {
+    border-left: 4px solid var(--bs-info);
+}
+
+.auditoria-info-list dt {
+    color: var(--bs-secondary-color);
+    font-size: .8rem;
+    font-weight: 500;
+}
+
+.auditoria-info-list dd {
+    margin-bottom: .75rem;
+}

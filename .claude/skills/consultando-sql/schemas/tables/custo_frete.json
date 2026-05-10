@@ -34,6 +34,21 @@
       "description": "NULL = vigente"
     },
     {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "desativado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "desativado_por",
+      "type": "varchar(100)"
+    },
+    {
       "name": "criado_em",
       "type": "timestamp",
       "description": "Data de criação"
@@ -57,6 +72,13 @@
         "incoterm",
         "cod_uf",
         "vigencia_inicio"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_custo_frete_ativo",
+      "columns": [
+        "ativo"
       ],
       "unique": false
     }

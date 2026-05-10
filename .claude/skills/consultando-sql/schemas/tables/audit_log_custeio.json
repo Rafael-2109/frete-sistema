@@ -1,0 +1,114 @@
+{
+  "name": "audit_log_custeio",
+  "description": "Audit log dedicado do modulo Custeio (Sprint 3 - C16).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "timestamp",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "ip_address",
+      "type": "varchar(45)"
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "entidade",
+      "type": "varchar(50)",
+      "description": "CustoConsiderado, CustoFrete, etc.",
+      "nullable": false
+    },
+    {
+      "name": "entidade_id",
+      "type": "integer"
+    },
+    {
+      "name": "evento",
+      "type": "varchar(20)",
+      "description": "CRIAR/ATUALIZAR/DESATIVAR/REATIVAR/VERSIONAR",
+      "nullable": false
+    },
+    {
+      "name": "antes_json",
+      "type": "text"
+    },
+    {
+      "name": "depois_json",
+      "type": "text"
+    },
+    {
+      "name": "motivo",
+      "type": "text"
+    },
+    {
+      "name": "contexto",
+      "type": "varchar(255)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_audit_log_custeio_timestamp",
+      "columns": [
+        "timestamp"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_audit_log_custeio_usuario",
+      "columns": [
+        "usuario"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_audit_log_custeio_entidade_id",
+      "columns": [
+        "entidade_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_audit_custeio_entidade_id",
+      "columns": [
+        "entidade",
+        "entidade_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_audit_custeio_timestamp_evento",
+      "columns": [
+        "timestamp",
+        "evento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_audit_log_custeio_evento",
+      "columns": [
+        "evento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_audit_log_custeio_entidade",
+      "columns": [
+        "entidade"
+      ],
+      "unique": false
+    }
+  ]
+}

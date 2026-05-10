@@ -150,6 +150,14 @@ function salvarFrete() {
         alert('Preencha todos os campos obrigatorios');
         return;
     }
+    if (percentual_frete < 0 || percentual_frete > 100) {
+        alert('Percentual de frete deve estar entre 0 e 100');
+        return;
+    }
+    if (vigencia_fim && vigencia_inicio && vigencia_fim <= vigencia_inicio) {
+        alert('Vigencia fim deve ser maior que vigencia inicio');
+        return;
+    }
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
 

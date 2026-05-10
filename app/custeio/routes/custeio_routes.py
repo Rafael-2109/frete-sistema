@@ -63,10 +63,12 @@ def register_custeio_routes(bp):
     @bp.route('/api/dashboard/estatisticas') #type: ignore
     @login_required
     def dashboard_estatisticas():
-        """Retorna estatisticas para o dashboard"""
+        """Retorna estatisticas para o dashboard, incluindo alertas de saude."""
         try:
+            from app import db
             from app.custeio.models import CustoConsiderado, CustoFrete
             from app.producao.models import CadastroPalletizacao
+            from app.utils.timezone import agora_utc_naive
 
             # Produtos com custo definido
             produtos_custeados = CustoConsiderado.query.filter(
@@ -88,12 +90,34 @@ def register_custeio_routes(bp):
             # Tabelas de frete
             fretes = CustoFrete.query.count()
 
+            # SAUDE: ultima atualizacao de custos (dormencia)
+            ultima_atualizacao = db.session.query(
+                db.func.max(CustoConsiderado.atualizado_em)
+            ).filter(CustoConsiderado.custo_atual == True).scalar()
+
+            dias_dormencia = None
+            ultima_atualizacao_str = None
+            if ultima_atualizacao:
+                dias_dormencia = (agora_utc_naive() - ultima_atualizacao).days
+                ultima_atualizacao_str = ultima_atualizacao.strftime('%d/%m/%Y')
+
+            # SAUDE: produtos ativos sem custo cadastrado
+            produtos_ativos_total = CadastroPalletizacao.query.filter(
+                CadastroPalletizacao.ativo == True
+            ).count()
+            produtos_sem_custo = max(0, produtos_ativos_total - produtos_custeados)
+
             return jsonify({
                 'sucesso': True,
                 'produtos_custeados': produtos_custeados,
                 'comprados': comprados,
                 'produzidos': produzidos,
-                'fretes': fretes
+                'fretes': fretes,
+                # SAUDE
+                'dias_dormencia': dias_dormencia,
+                'ultima_atualizacao': ultima_atualizacao_str,
+                'produtos_ativos_total': produtos_ativos_total,
+                'produtos_sem_custo': produtos_sem_custo
             })
 
         except Exception as e:
@@ -153,14 +177,58 @@ def register_custeio_routes(bp):
     @bp.route('/api/mensal/fechar', methods=['POST']) #type: ignore
     @login_required
     def fechar_mes():
-        """Executa fechamento mensal de custos"""
+        """Executa fechamento mensal de custos.
+
+        IMPORTANTE: fechamento manual via UI esta DESABILITADO (decisao 2026-05-10).
+        Endpoint aceita apenas chamadas do cron automatico (dia 5 as 04:00).
+
+        Para autorizar via cron, header `X-Cron-Source: fechar_mes_automatico` deve ser enviado.
+        """
         try:
+            from datetime import date
+
+            # Bloquear chamadas que nao sejam do cron automatico (defesa em profundidade):
+            # 1. Header X-Cron-Source com valor exato (cron passaria)
+            # 2. Origem do request: apenas localhost (cron roda no mesmo host)
+            # NOTA: o cron `fechar_mes_automatico.py` chama o service direto
+            # (bypass do HTTP), entao na pratica este endpoint quase nunca e usado.
+            # Mantido apenas para compatibilidade com chamadas administrativas via curl.
+            fonte_cron = request.headers.get('X-Cron-Source') == 'fechar_mes_automatico'
+            origem_local = request.remote_addr in ('127.0.0.1', '::1', 'localhost')
+            if not (fonte_cron and origem_local):
+                return jsonify({
+                    'erro': 'Fechamento manual desabilitado. '
+                            'Use o botao Simular para visualizar. '
+                            'Fechamento ocorre automaticamente todo dia 5 as 04:00.'
+                }), 403
+
             dados = request.json or {}
             mes = dados.get('mes')
             ano = dados.get('ano')
 
             if not mes or not ano:
                 return jsonify({'erro': 'Mes e ano sao obrigatorios'}), 400
+
+            # Validar range
+            try:
+                mes = int(mes)
+                ano = int(ano)
+            except (TypeError, ValueError):
+                return jsonify({'erro': 'mes/ano devem ser numericos'}), 400
+
+            if not (1 <= mes <= 12):
+                return jsonify({'erro': 'mes deve estar entre 1 e 12'}), 400
+            ano_atual = date.today().year
+            if not (2020 <= ano <= ano_atual + 1):
+                return jsonify({'erro': f'ano deve estar entre 2020 e {ano_atual + 1}'}), 400
+
+            # Cron so fecha meses ja encerrados (mes anterior ou anteriores)
+            hoje = date.today()
+            mes_anterior_tupla = (hoje.year - 1, 12) if hoje.month == 1 else (hoje.year, hoje.month - 1)
+            if (ano, mes) > mes_anterior_tupla:
+                return jsonify({
+                    'erro': f'Cron so fecha meses ja encerrados. Mes alvo {mes}/{ano} esta no futuro ou em andamento.'
+                }), 400
 
             resultado = ServicoCusteio.fechar_mes(
                 mes=int(mes),
@@ -393,31 +461,51 @@ def register_custeio_routes(bp):
     @bp.route('/api/considerado/alterar-tipo', methods=['POST']) #type: ignore
     @login_required
     def alterar_tipo_custo():
-        """Altera o tipo de custo considerado para um produto"""
+        """Altera o tipo de custo considerado para um produto (audit C16)."""
         try:
+            from app.custeio.models import CustoConsiderado, AuditLogCusteio
+            from app import db
+
             dados = request.json or {}
             cod_produto = dados.get('cod_produto')
             tipo_custo = dados.get('tipo_custo')
+            motivo = dados.get('motivo')
 
             if not cod_produto or not tipo_custo:
                 return jsonify({'erro': 'cod_produto e tipo_custo sao obrigatorios'}), 400
 
+            usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+
+            # Capturar estado anterior antes da chamada de service
+            atual = CustoConsiderado.query.filter_by(cod_produto=cod_produto, custo_atual=True).first()
+            antes = {
+                'tipo_custo_selecionado': atual.tipo_custo_selecionado,
+                'custo_considerado': float(atual.custo_considerado) if atual and atual.custo_considerado else None,
+                'versao': atual.versao,
+            } if atual else None
+
             resultado = ServicoCusteio.alterar_tipo_custo(
-                cod_produto=cod_produto,
-                tipo_custo=tipo_custo,
-                usuario=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+                cod_produto=cod_produto, tipo_custo=tipo_custo, usuario=usuario, motivo=motivo
             )
 
             if resultado.get('erro'):
-                return jsonify({
-                    'sucesso': False,
-                    'erro': resultado['erro']
-                }), 400
+                return jsonify({'sucesso': False, 'erro': resultado['erro']}), 400
 
-            return jsonify({
-                'sucesso': True,
-                **resultado
-            })
+            # Audit log apos service ter feito as alteracoes
+            depois = {
+                'tipo_custo_selecionado': resultado.get('tipo_selecionado'),
+                'custo_considerado': float(resultado.get('custo_considerado') or 0),
+                'versao': resultado.get('versao'),
+            }
+            AuditLogCusteio.registrar(
+                entidade='CustoConsiderado', entidade_id=atual.id if atual else None,
+                evento='VERSIONAR', usuario=usuario, antes=antes, depois=depois,
+                motivo=motivo or f'Alterar tipo: {antes["tipo_custo_selecionado"] if antes else "?"} -> {tipo_custo}',
+                ip=request.remote_addr, contexto='/api/considerado/alterar-tipo'
+            )
+            db.session.commit()
+
+            return jsonify({'sucesso': True, **resultado})
 
         except Exception as e:
             logger.error(f"Erro ao alterar tipo de custo: {e}")
@@ -426,17 +514,45 @@ def register_custeio_routes(bp):
     @bp.route('/api/considerado/cadastrar', methods=['POST']) #type: ignore
     @login_required
     def cadastrar_custo_considerado():
-        """Cadastra ou atualiza custo considerado manualmente"""
+        """Cadastra ou atualiza custo considerado manualmente.
+
+        REGRA: Produtos INTERMEDIARIO/ACABADO nao podem ter custo cadastrado
+        diretamente - usar tela de Definicao para calculo via BOM (alinhar
+        com salvar_definicao em rota:2146).
+        """
         try:
+            from app.producao.models import CadastroPalletizacao
+
             dados = request.json or {}
             cod_produto = dados.get('cod_produto')
             custo_considerado = dados.get('custo_considerado')
             custo_producao = dados.get('custo_producao')
-            tipo_custo = dados.get('tipo_custo', 'MEDIO_MES')
+            tipo_custo = dados.get('tipo_custo', 'MANUAL')
             motivo = dados.get('motivo')
 
             if not cod_produto or custo_considerado is None:
                 return jsonify({'erro': 'cod_produto e custo_considerado sao obrigatorios'}), 400
+
+            # Validar que custo_considerado e numero positivo
+            try:
+                custo_considerado_float = float(custo_considerado)
+                if custo_considerado_float <= 0:
+                    return jsonify({'erro': 'custo_considerado deve ser maior que zero'}), 400
+            except (TypeError, ValueError):
+                return jsonify({'erro': 'custo_considerado deve ser numerico'}), 400
+
+            # Bloquear edicao direta de produzidos (alinhar com salvar_definicao:2171-2177)
+            produto = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+            if not produto:
+                return jsonify({'erro': 'Produto nao encontrado no cadastro'}), 404
+
+            if produto.produto_produzido and not produto.produto_comprado:
+                tipo = 'INTERMEDIARIO' if not produto.produto_vendido else 'ACABADO'
+                return jsonify({
+                    'sucesso': False,
+                    'erro': f'Produto {tipo} nao pode ter custo cadastrado diretamente. '
+                            f'Use a tela de Definicao para que o custo seja calculado via BOM.'
+                }), 400
 
             resultado = ServicoCusteio.cadastrar_custo_manual(
                 cod_produto=cod_produto,
@@ -677,9 +793,13 @@ def register_custeio_routes(bp):
             incoterm = request.args.get('incoterm')
             cod_uf = request.args.get('cod_uf')
             apenas_vigentes = request.args.get('apenas_vigentes', 'true').lower() == 'true'
+            incluir_inativos = request.args.get('incluir_inativos', 'false').lower() == 'true'
 
             query = CustoFrete.query
 
+            # Por padrao, lista apenas ativos (Sprint 3 - C17)
+            if not incluir_inativos:
+                query = query.filter(CustoFrete.ativo == True)
             if incoterm:
                 query = query.filter(CustoFrete.incoterm == incoterm)
             if cod_uf:
@@ -732,6 +852,51 @@ def register_custeio_routes(bp):
             if not incoterm or not cod_uf or percentual is None:
                 return jsonify({'erro': 'incoterm, cod_uf e percentual_frete são obrigatórios'}), 400
 
+            # Validar range do percentual
+            try:
+                percentual = float(percentual)
+            except (TypeError, ValueError):
+                return jsonify({'erro': 'percentual_frete deve ser numerico'}), 400
+            if not (0 <= percentual <= 100):
+                return jsonify({'erro': 'percentual_frete deve estar entre 0 e 100'}), 400
+
+            # Validar coerencia de vigencias
+            try:
+                vigencia_inicio_date = datetime.strptime(vigencia_inicio, '%Y-%m-%d').date() if vigencia_inicio else None
+                vigencia_fim_date = datetime.strptime(vigencia_fim, '%Y-%m-%d').date() if vigencia_fim else None
+            except (TypeError, ValueError):
+                return jsonify({'erro': 'vigencia_inicio/vigencia_fim devem estar no formato YYYY-MM-DD'}), 400
+
+            if vigencia_fim_date and vigencia_inicio_date and vigencia_fim_date <= vigencia_inicio_date:
+                return jsonify({'erro': 'vigencia_fim deve ser maior que vigencia_inicio'}), 400
+
+            # Detectar sobreposicao de vigencias para mesma combinacao incoterm+UF
+            # IMPORTANTE (CR2 fix): filtrar ativo=True para nao gerar false positive
+            # com registros soft-deletados, que precisam ser substituiveis.
+            inicio_efetivo = vigencia_inicio_date or agora_utc_naive().date()
+            sobreposicao_query = CustoFrete.query.filter(
+                CustoFrete.incoterm == incoterm,
+                CustoFrete.cod_uf == cod_uf,
+                CustoFrete.ativo == True,  # ignorar soft-deletados
+                db.or_(
+                    CustoFrete.vigencia_fim.is_(None),
+                    CustoFrete.vigencia_fim > inicio_efetivo
+                )
+            )
+            if id_registro:
+                sobreposicao_query = sobreposicao_query.filter(CustoFrete.id != id_registro)
+            sobreposicao = sobreposicao_query.first()
+            if sobreposicao:
+                # So bloqueia se a sobreposicao tem fim posterior ao novo inicio
+                if (sobreposicao.vigencia_fim is None
+                        or (vigencia_fim_date is None)
+                        or sobreposicao.vigencia_fim > inicio_efetivo):
+                    return jsonify({
+                        'erro': f'Existe vigencia sobreposta para {incoterm}/{cod_uf} '
+                                f'(id={sobreposicao.id}, inicio={sobreposicao.vigencia_inicio}). '
+                                f'Encerre a vigencia anterior antes de criar nova.'
+                    }), 400
+
             if id_registro:
                 # Atualizar existente
                 registro = db.session.get(CustoFrete, id_registro)
@@ -770,21 +935,47 @@ def register_custeio_routes(bp):
     @bp.route('/api/frete/excluir/<int:id_registro>', methods=['DELETE']) #type: ignore
     @login_required
     def excluir_custo_frete(id_registro):
-        """Remove registro de custo de frete"""
+        """Soft delete de registro de CustoFrete (Sprint 3 - C17 + C16 audit)."""
         try:
-            from app.custeio.models import CustoFrete
+            from app.custeio.models import CustoFrete, AuditLogCusteio
             from app import db
 
             registro = db.session.get(CustoFrete, id_registro)
             if not registro:
                 return jsonify({'erro': 'Registro não encontrado'}), 404
 
-            db.session.delete(registro)
+            if not registro.ativo:
+                return jsonify({'erro': 'Registro já está inativo'}), 400
+
+            usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+            motivo = (request.json or {}).get('motivo') if request.is_json else None
+
+            # Capturar estado anterior para audit
+            antes = {
+                'incoterm': registro.incoterm, 'cod_uf': registro.cod_uf,
+                'percentual_frete': float(registro.percentual_frete) if registro.percentual_frete else 0,
+                'vigencia_inicio': str(registro.vigencia_inicio), 'vigencia_fim': str(registro.vigencia_fim),
+                'ativo': True
+            }
+
+            # Soft delete: preserva audit trail
+            registro.ativo = False
+            registro.desativado_em = agora_utc_naive()
+            registro.desativado_por = usuario
+
+            # Audit log
+            AuditLogCusteio.registrar(
+                entidade='CustoFrete', entidade_id=registro.id, evento='DESATIVAR',
+                usuario=usuario, antes=antes, depois={'ativo': False},
+                motivo=motivo, ip=request.remote_addr,
+                contexto=f'/api/frete/excluir/{id_registro}'
+            )
+
             db.session.commit()
 
             return jsonify({
                 'sucesso': True,
-                'mensagem': 'Registro excluído com sucesso'
+                'mensagem': 'Registro desativado com sucesso (soft delete)'
             })
 
         except Exception as e:
@@ -798,11 +989,15 @@ def register_custeio_routes(bp):
     @bp.route('/api/parametros/listar') #type: ignore
     @login_required
     def listar_parametros():
-        """Lista todos os parâmetros de custeio"""
+        """Lista parametros de custeio (apenas ativos por default — Sprint 3 C17)."""
         try:
             from app.custeio.models import ParametroCusteio
 
-            parametros = ParametroCusteio.query.order_by(ParametroCusteio.chave).all()
+            incluir_inativos = request.args.get('incluir_inativos', 'false').lower() == 'true'
+            query = ParametroCusteio.query
+            if not incluir_inativos:
+                query = query.filter(ParametroCusteio.ativo == True)
+            parametros = query.order_by(ParametroCusteio.chave).all()
 
             return jsonify({
                 'sucesso': True,
@@ -838,6 +1033,25 @@ def register_custeio_routes(bp):
 
             if not chave or valor is None:
                 return jsonify({'erro': 'chave e valor são obrigatórios'}), 400
+
+            # Validar tipo numerico e range por chave conhecida
+            try:
+                valor = float(valor)
+            except (TypeError, ValueError):
+                return jsonify({'erro': 'valor deve ser numerico'}), 400
+
+            LIMITES_CONHECIDOS = {
+                'CUSTO_OPERACAO_PERCENTUAL': (0, 100),
+                'CUSTO_FINANCEIRO_PERCENTUAL': (0, 100),
+                'PERCENTUAL_PERDA': (0, 100),
+                'COMISSAO_PADRAO': (0, 30),
+            }
+            if chave in LIMITES_CONHECIDOS:
+                minv, maxv = LIMITES_CONHECIDOS[chave]
+                if not (minv <= valor <= maxv):
+                    return jsonify({
+                        'erro': f'{chave} deve estar entre {minv} e {maxv} (recebido: {valor})'
+                    }), 400
 
             if id_registro:
                 # Atualizar existente
@@ -907,19 +1121,43 @@ def register_custeio_routes(bp):
     @bp.route('/api/parametros/excluir/<int:id_param>', methods=['DELETE']) #type: ignore
     @login_required
     def excluir_parametro(id_param):
-        """Exclui um parâmetro de custeio"""
+        """Soft delete de ParametroCusteio (Sprint 3 - C17 + C16 audit)."""
         try:
-            from app.custeio.models import ParametroCusteio
+            from app.custeio.models import ParametroCusteio, AuditLogCusteio
             from app import db
 
             parametro = db.session.get(ParametroCusteio, id_param)
             if not parametro:
                 return jsonify({'erro': 'Parâmetro não encontrado'}), 404
 
-            db.session.delete(parametro)
+            if not parametro.ativo:
+                return jsonify({'erro': 'Parâmetro já está inativo'}), 400
+
+            usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+            motivo = (request.json or {}).get('motivo') if request.is_json else None
+
+            # Capturar estado anterior para audit
+            antes = {
+                'chave': parametro.chave,
+                'valor': float(parametro.valor) if parametro.valor else 0,
+                'descricao': parametro.descricao,
+                'ativo': True,
+            }
+
+            parametro.ativo = False
+            parametro.desativado_em = agora_utc_naive()
+            parametro.desativado_por = usuario
+
+            AuditLogCusteio.registrar(
+                entidade='ParametroCusteio', entidade_id=parametro.id, evento='DESATIVAR',
+                usuario=usuario, antes=antes, depois={'ativo': False},
+                motivo=motivo, ip=request.remote_addr,
+                contexto=f'/api/parametros/excluir/{id_param}'
+            )
+
             db.session.commit()
 
-            return jsonify({'sucesso': True, 'mensagem': 'Parâmetro excluído'})
+            return jsonify({'sucesso': True, 'mensagem': 'Parâmetro desativado (soft delete)'})
 
         except Exception as e:
             logger.error(f"Erro ao excluir parâmetro: {e}")
@@ -1015,11 +1253,18 @@ def register_custeio_routes(bp):
     @bp.route('/api/frete/importar', methods=['POST']) #type: ignore
     @login_required
     def importar_custos_frete():
-        """Importa custos de frete de arquivo Excel"""
+        """Importa custos de frete de arquivo Excel.
+
+        Suporta dry-run via query string ?dry_run=true (Sprint 3 - C18):
+        - dry_run=true: valida e retorna preview do que seria feito SEM gravar
+        - dry_run=false (default): grava normalmente
+        """
         try:
             import pandas as pd
             from app.custeio.models import CustoFrete
             from app import db
+
+            dry_run = request.args.get('dry_run', 'false').lower() == 'true'
 
             if 'arquivo' not in request.files:
                 return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
@@ -1043,12 +1288,17 @@ def register_custeio_routes(bp):
             inseridos = 0
             atualizados = 0
             erros = []
+            preview = []  # acumula linhas validas no dry-run
 
             for idx, row in df.iterrows():
                 try:
                     incoterm = str(row['Incoterm']).strip().upper()
                     cod_uf = str(row['UF']).strip().upper()
                     percentual = float(row['Percentual Frete (%)'])
+
+                    # Validacao de range (alinha com C11)
+                    if not (0 <= percentual <= 100):
+                        raise ValueError(f'percentual_frete {percentual} fora de 0-100')
 
                     # Vigência início
                     vigencia_inicio = row.get('Vigência Início')
@@ -1076,28 +1326,64 @@ def register_custeio_routes(bp):
                     ).first()
 
                     if existente:
-                        existente.percentual_frete = percentual
-                        existente.vigencia_fim = vigencia_fim
+                        if dry_run:
+                            preview.append({
+                                'linha': int(idx) + 2,
+                                'acao': 'ATUALIZAR',
+                                'incoterm': incoterm,
+                                'cod_uf': cod_uf,
+                                'percentual_atual': float(existente.percentual_frete),
+                                'percentual_novo': percentual,
+                            })
+                        else:
+                            existente.percentual_frete = percentual
+                            existente.vigencia_fim = vigencia_fim
                         atualizados += 1
                     else:
-                        novo = CustoFrete(
-                            incoterm=incoterm,
-                            cod_uf=cod_uf,
-                            percentual_frete=percentual,
-                            vigencia_inicio=vigencia_inicio,
-                            vigencia_fim=vigencia_fim,
-                            criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
-                        )
-                        db.session.add(novo)
+                        if dry_run:
+                            preview.append({
+                                'linha': int(idx) + 2,
+                                'acao': 'CRIAR',
+                                'incoterm': incoterm,
+                                'cod_uf': cod_uf,
+                                'percentual_frete': percentual,
+                                'vigencia_inicio': str(vigencia_inicio),
+                                'vigencia_fim': str(vigencia_fim) if vigencia_fim else None,
+                            })
+                        else:
+                            novo = CustoFrete(
+                                incoterm=incoterm,
+                                cod_uf=cod_uf,
+                                percentual_frete=percentual,
+                                vigencia_inicio=vigencia_inicio,
+                                vigencia_fim=vigencia_fim,
+                                criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
+                            )
+                            db.session.add(novo)
                         inseridos += 1
 
                 except Exception as e:
-                    erros.append(f"Linha {idx + 2}: {str(e)}") # type: ignore
+                    erros.append(f"Linha {int(idx) + 2}: {str(e)}")
+
+            if dry_run:
+                # Garantir que nada persistiu
+                db.session.rollback()
+                return jsonify({
+                    'sucesso': True,
+                    'dry_run': True,
+                    'inseridos_seriam': inseridos,
+                    'atualizados_seriam': atualizados,
+                    'erros': erros[:50],
+                    'preview': preview[:100],
+                    'total_preview': len(preview),
+                    'mensagem': f'PREVIEW: {inseridos} seriam inseridos, {atualizados} atualizados, {len(erros)} erros. NENHUM dado foi gravado.'
+                })
 
             db.session.commit()
 
             return jsonify({
                 'sucesso': True,
+                'dry_run': False,
                 'inseridos': inseridos,
                 'atualizados': atualizados,
                 'erros': erros[:10] if erros else [],
@@ -2509,10 +2795,16 @@ def register_custeio_routes(bp):
         IMPORTANTE: Apenas produtos COMPRADOS sao importados diretamente.
         Produtos INTERMEDIARIOS e ACABADOS tem seus custos calculados
         automaticamente via BOM apos a importacao.
+
+        Suporta dry-run via ?dry_run=true (Sprint 3 - C18):
+        valida e retorna preview do que seria feito SEM gravar.
         """
         try:
             import pandas as pd
             from app.producao.models import CadastroPalletizacao
+            from app.custeio.models import CustoConsiderado
+
+            dry_run = request.args.get('dry_run', 'false').lower() == 'true'
 
             if 'arquivo' not in request.files:
                 return jsonify({'erro': 'Nenhum arquivo enviado'}), 400
@@ -2526,6 +2818,7 @@ def register_custeio_routes(bp):
             atualizados = 0
             ignorados_produzidos = 0
             erros = []
+            preview = []
             usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
 
             for idx, row in df.iterrows():
@@ -2536,31 +2829,75 @@ def register_custeio_routes(bp):
                     if pd.isna(custo) or custo == '':
                         continue
 
+                    custo_float = float(custo)
+                    if custo_float <= 0:
+                        erros.append(f"Linha {int(idx) + 2}: custo {custo_float} deve ser maior que zero")
+                        continue
+
                     # Verificar se e produto COMPRADO
                     produto = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
                     if not produto:
-                        erros.append(f"Linha {idx + 2}: Produto {cod_produto} nao encontrado") # type: ignore
+                        erros.append(f"Linha {int(idx) + 2}: Produto {cod_produto} nao encontrado")
                         continue
 
                     # Ignorar produtos produzidos (serao calculados via BOM)
                     if produto.produto_produzido and not produto.produto_comprado:
                         ignorados_produzidos += 1
+                        if dry_run:
+                            preview.append({
+                                'linha': int(idx) + 2,
+                                'cod_produto': cod_produto,
+                                'acao': 'IGNORAR (produto produzido)',
+                                'custo_solicitado': custo_float,
+                            })
                         continue
 
-                    resultado = ServicoCusteio.cadastrar_custo_manual(
-                        cod_produto=cod_produto,
-                        custo_considerado=float(custo),
-                        custo_producao=None,
-                        tipo_custo='MANUAL',
-                        usuario=usuario,
-                        motivo='Importacao via Excel'
-                    )
-
-                    if not resultado.get('erro'):
+                    if dry_run:
+                        # Buscar custo atual para preview
+                        atual = CustoConsiderado.query.filter_by(
+                            cod_produto=cod_produto, custo_atual=True
+                        ).first()
+                        preview.append({
+                            'linha': int(idx) + 2,
+                            'cod_produto': cod_produto,
+                            'nome_produto': produto.nome_produto,
+                            'acao': 'NOVA VERSAO' if atual else 'CRIAR',
+                            'custo_atual': float(atual.custo_considerado) if atual and atual.custo_considerado else None,
+                            'custo_novo': custo_float,
+                            'tipo_custo_atual': atual.tipo_custo_selecionado if atual else None,
+                            'tipo_custo_novo': 'MANUAL',
+                        })
                         atualizados += 1
+                    else:
+                        resultado = ServicoCusteio.cadastrar_custo_manual(
+                            cod_produto=cod_produto,
+                            custo_considerado=custo_float,
+                            custo_producao=None,
+                            tipo_custo='MANUAL',
+                            usuario=usuario,
+                            motivo='Importacao via Excel'
+                        )
+                        if not resultado.get('erro'):
+                            atualizados += 1
 
                 except Exception as e:
-                    erros.append(f"Linha {idx + 2}: {str(e)}") # type: ignore
+                    erros.append(f"Linha {int(idx) + 2}: {str(e)}")
+
+            if dry_run:
+                from app import db
+                db.session.rollback()
+                return jsonify({
+                    'sucesso': True,
+                    'dry_run': True,
+                    'atualizados_seriam': atualizados,
+                    'ignorados_produzidos': ignorados_produzidos,
+                    'erros': erros[:50],
+                    'preview': preview[:200],
+                    'total_preview': len(preview),
+                    'mensagem': f'PREVIEW: {atualizados} seriam atualizados, '
+                                f'{ignorados_produzidos} produzidos ignorados, '
+                                f'{len(erros)} erros. NENHUM dado foi gravado.'
+                })
 
             # ============================================
             # PROPAGAR CUSTOS PARA INTERMEDIARIOS E ACABADOS
@@ -2579,6 +2916,7 @@ def register_custeio_routes(bp):
 
             return jsonify({
                 'sucesso': True,
+                'dry_run': False,
                 'atualizados': atualizados,
                 'propagacao': propagacao,
                 'ignorados_produzidos': ignorados_produzidos,
@@ -2713,6 +3051,16 @@ def register_custeio_routes(bp):
                            'CLIENTE', 'GRUPO', 'VENDEDOR', 'PRODUTO')
             if tipo_regra not in tipos_validos:
                 return jsonify({'erro': f'tipo_regra deve ser um de: {", ".join(tipos_validos)}'}), 400
+
+            # Validar range do percentual de comissao (CHECK constraint do banco: 0-30)
+            try:
+                comissao_percentual = float(comissao_percentual)
+            except (TypeError, ValueError):
+                return jsonify({'erro': 'comissao_percentual deve ser numerico'}), 400
+            if not (0 <= comissao_percentual <= 30):
+                return jsonify({
+                    'erro': f'comissao_percentual deve estar entre 0 e 30 (recebido: {comissao_percentual})'
+                }), 400
 
             # Validar criterios conforme tipo
             if tipo_regra == 'CLIENTE_PRODUTO':
@@ -3198,7 +3546,7 @@ def register_custeio_routes(bp):
 
     @bp.route('/api/margem/recalcular', methods=['POST']) #type: ignore
     @login_required
-    def recalcular_margem():
+    def recalcular_margem(): # type: ignore
         """Recalcula margem para pedidos especificos ou todos"""
         try:
             from app.carteira.models import CarteiraPrincipal
@@ -3230,21 +3578,31 @@ def register_custeio_routes(bp):
 
             for item in items:
                 try:
+                    # Pular itens sem snapshot de custo — calcular margem com custo=0
+                    # produziria margem aparente 100% (CR3 fix do code review).
+                    if not item.custo_unitario_snapshot:
+                        erros.append(
+                            f"{item.num_pedido}/{item.cod_produto}: "
+                            f"sem custo_unitario_snapshot, margem nao recalculada"
+                        )
+                        continue
+
                     # Montar dict com dados do item para recalculo
+                    # NOMES ALINHADOS com _calcular_margem_bruta (carteira_service.py:1296-1399)
+                    # Nota: ICMS-ST nao entra (cobrado adicional ao preco, repassado a SEFAZ)
                     item_dict = {
                         'num_pedido': item.num_pedido,
                         'cod_produto': item.cod_produto,
                         'preco_produto_pedido': float(item.preco_produto_pedido) if item.preco_produto_pedido else 0,
                         'qtd_produto_pedido': float(item.qtd_produto_pedido) if item.qtd_produto_pedido else 0,
-                        'icms_st_item_pedido': float(item.icms_st_item_pedido) if item.icms_st_item_pedido else 0,
-                        'pis_item_pedido': float(item.pis_item_pedido) if item.pis_item_pedido else 0,
-                        'cofins_item_pedido': float(item.cofins_item_pedido) if item.cofins_item_pedido else 0,
-                        'desconto_item_pedido': float(item.desconto_item_pedido) if item.desconto_item_pedido else 0,
+                        'icms_valor': float(item.icms_valor) if item.icms_valor else 0,
+                        'pis_valor': float(item.pis_valor) if item.pis_valor else 0,
+                        'cofins_valor': float(item.cofins_valor) if item.cofins_valor else 0,
+                        'desconto_percentual': float(item.desconto_percentual) if item.desconto_percentual else 0,
                         'cod_uf': item.cod_uf,
                         'incoterm': item.incoterm,
-                        'custo_considerado_snapshot': float(item.custo_considerado_snapshot) if item.custo_considerado_snapshot else 0,
+                        'custo_unitario_snapshot': float(item.custo_unitario_snapshot),
                         'custo_producao_snapshot': float(item.custo_producao_snapshot) if item.custo_producao_snapshot else 0,
-                        'desconto_contratual_snapshot': float(item.desconto_contratual_snapshot) if item.desconto_contratual_snapshot else 0,
                         'cnpj_cpf': item.cnpj_cpf,
                         'raz_social_red': item.raz_social_red,
                         'vendedor': item.vendedor,
@@ -3254,16 +3612,41 @@ def register_custeio_routes(bp):
 
                     resultado = service._calcular_margem_bruta(item_dict)
 
+                    if not resultado:
+                        erros.append(f"{item.num_pedido}/{item.cod_produto}: margem nao calculada (preco/custo/qtd ausentes)")
+                        continue
+
                     item.margem_bruta = resultado.get('margem_bruta')
                     item.margem_bruta_percentual = resultado.get('margem_bruta_percentual')
                     item.margem_liquida = resultado.get('margem_liquida')
                     item.margem_liquida_percentual = resultado.get('margem_liquida_percentual')
                     item.comissao_percentual = resultado.get('comissao_percentual', 0)
+                    # Snapshots de parametros para rastreabilidade
+                    if 'frete_percentual_snapshot' in resultado:
+                        item.frete_percentual_snapshot = resultado['frete_percentual_snapshot']
+                    if 'custo_financeiro_pct_snapshot' in resultado:
+                        item.custo_financeiro_pct_snapshot = resultado['custo_financeiro_pct_snapshot']
+                    if 'custo_operacao_pct_snapshot' in resultado:
+                        item.custo_operacao_pct_snapshot = resultado['custo_operacao_pct_snapshot']
+                    if 'percentual_perda_snapshot' in resultado:
+                        item.percentual_perda_snapshot = resultado['percentual_perda_snapshot']
 
                     atualizados += 1
 
                 except Exception as e:
+                    logger.exception(f"Erro recalculando margem {item.num_pedido}/{item.cod_produto}")
                     erros.append(f"{item.num_pedido}/{item.cod_produto}: {str(e)}")
+
+            # Defesa contra falha silenciosa: se 'todos=true' e 0 atualizados, rollback + erro
+            if recalcular_todos and total > 0 and atualizados == 0:
+                db.session.rollback()
+                logger.error(f"Recalculo retornou 0 atualizados em {total} pedidos. Verificar mapeamento de campos.")
+                return jsonify({
+                    'sucesso': False,
+                    'erro': 'Nenhum pedido foi atualizado - verifique logs do servidor',
+                    'total': total,
+                    'erros': erros[:10]
+                }), 500
 
             db.session.commit()
 

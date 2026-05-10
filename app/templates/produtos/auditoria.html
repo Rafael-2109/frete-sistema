@@ -1,0 +1,1262 @@
+{% extends "base.html" %}
+
+{% block title %}Auditoria de Produtos{% endblock %}
+
+{% block extra_css %}{% endblock %}
+
+{% block content %}
+
+{# ===================================================================== #}
+{# MACROS — definidas no topo (Jinja exige antes do uso)                 #}
+{# ===================================================================== #}
+
+{% macro botao_acao(produto, prob) %}
+{% set acao = prob.acao %}
+{% set cod = produto.cod_produto %}
+{% set nome = produto.nome_produto or '' %}
+{% set dados_modal = prob.dados_modal | default({}) %}
+
+{% if acao == 'editar_mestre' %}
+    <button class="btn btn-sm btn-warning auditoria-acao-btn"
+            onclick="abrirModalEditarMestre('{{ cod }}', '{{ prob.campo_alvo or '' }}')">
+        <i class="fas fa-pen"></i> Editar mestre
+    </button>
+
+{% elif acao == 'criar_mestre' %}
+    {% if prob.regra_id == 'B6' %}
+        {% set comps = dados_modal.componentes_orfaos | default([]) %}
+        <div class="btn-group btn-group-sm">
+            {% for comp in comps[:3] %}
+            <button class="btn btn-sm btn-success" title="Cadastrar componente {{ comp }}"
+                    onclick="abrirModalCriarMestre('{{ comp }}', '')">
+                <i class="fas fa-plus"></i> {{ comp }}
+            </button>
+            {% endfor %}
+            {% if comps|length > 3 %}
+                <span class="text-muted small ms-2 align-self-center">+{{ comps|length - 3 }}</span>
+            {% endif %}
+        </div>
+    {% else %}
+        <button class="btn btn-sm btn-success auditoria-acao-btn"
+                onclick="abrirModalCriarMestre('{{ cod }}', {{ nome|tojson }})">
+            <i class="fas fa-plus"></i> Cadastrar mestre
+        </button>
+    {% endif %}
+
+{% elif acao == 'add_bom' %}
+    <button class="btn btn-sm btn-primary auditoria-acao-btn"
+            onclick="abrirModalAddBom('{{ cod }}', {{ nome|tojson }})">
+        <i class="fas fa-sitemap"></i> Adicionar BOM
+    </button>
+
+{% elif acao == 'add_recurso' %}
+    <button class="btn btn-sm btn-primary auditoria-acao-btn"
+            onclick="abrirModalAddRecurso('{{ cod }}', {{ nome|tojson }})">
+        <i class="fas fa-industry"></i> Adicionar recurso
+    </button>
+
+{% elif acao == 'add_perfil_fiscal' %}
+    <button class="btn btn-sm btn-primary auditoria-acao-btn"
+            onclick="abrirModalAddPerfilFiscal('{{ cod }}', {{ nome|tojson }})">
+        <i class="fas fa-receipt"></i> Adicionar perfil fiscal
+    </button>
+
+{% elif acao == 'link_depara_atacadao' %}
+    <a href="/portal/atacadao/depara-produtos" target="_blank" class="btn btn-sm btn-outline-primary auditoria-acao-btn">
+        <i class="fas fa-external-link-alt"></i> Tela De-Para Atacadao
+    </a>
+
+{% elif acao == 'link_depara_sendas' %}
+    <a href="/portal/sendas/depara/produtos/listar"
+       target="_blank" class="btn btn-sm btn-outline-primary auditoria-acao-btn">
+        <i class="fas fa-external-link-alt"></i> Tela De-Para Sendas
+    </a>
+
+{% elif acao == 'link_preco_rede' %}
+    <span class="text-muted small">Cadastrar via SQL/Excel direto na tabela</span>
+
+{% elif acao == 'resolver_nome' %}
+    <button class="btn btn-sm btn-info auditoria-acao-btn"
+            onclick='abrirModalResolverNome("{{ cod }}", {{ nome|tojson }}, {{ dados_modal.nomes_alternativos|default([])|tojson }})'>
+        <i class="fas fa-equals"></i> Resolver nome
+    </button>
+
+{% elif acao == 'resolver_peso' %}
+    <button class="btn btn-sm btn-info auditoria-acao-btn"
+            onclick='abrirModalResolverPeso("{{ cod }}", {{ dados_modal|tojson }})'>
+        <i class="fas fa-balance-scale"></i> Resolver peso
+    </button>
+
+{% else %}
+    <span class="text-muted small">Apenas informativo</span>
+{% endif %}
+{% endmacro %}
+
+{% macro tabela_produtos(produtos, modal_acao) %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light">
+            <tr>
+                <th style="width: 40px;"></th>
+                <th>Codigo</th>
+                <th>Nome no mestre</th>
+                <th class="text-center" style="width: 90px;">Flags</th>
+                <th class="text-center" style="width: 90px;">Severidade</th>
+                <th class="text-center" style="width: 100px;">Problemas</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in produtos %}
+            <tr data-bs-toggle="collapse" data-bs-target="#det-{{ modal_acao }}-{{ loop.index }}" style="cursor:pointer;">
+                <td><i class="fas fa-chevron-down text-muted small"></i></td>
+                <td><code>{{ p.cod_produto }}</code></td>
+                <td>{{ p.nome_produto or '-' }}</td>
+                <td class="text-center">
+                    {% if p.produto_comprado %}<span class="auditoria-flag-badge badge bg-primary" title="Comprado">C</span>{% endif %}
+                    {% if p.produto_produzido %}<span class="auditoria-flag-badge badge bg-success" title="Produzido">P</span>{% endif %}
+                    {% if p.produto_vendido %}<span class="auditoria-flag-badge badge bg-warning text-dark" title="Vendido">V</span>{% endif %}
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-{{ classe_badge[p.max_severidade] }}">{{ p.max_severidade }}</span>
+                </td>
+                <td class="text-center"><strong>{{ p.qtd_problemas }}</strong></td>
+            </tr>
+            <tr class="collapse" id="det-{{ modal_acao }}-{{ loop.index }}">
+                <td colspan="6" class="auditoria-row-detalhes p-0">
+                    <div class="p-3">
+                        <table class="table table-sm mb-0 auditoria-detalhes-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 70px;">Regra</th>
+                                    <th style="width: 80px;">Severid.</th>
+                                    <th>Problema</th>
+                                    <th>Detalhe</th>
+                                    <th class="text-end" style="width: 220px;">Acao</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for prob in p.problemas %}
+                                <tr>
+                                    <td><code>{{ prob.regra_id }}</code></td>
+                                    <td><span class="badge bg-{{ classe_badge[prob.severidade] }}">{{ prob.severidade }}</span></td>
+                                    <td><strong>{{ prob.titulo }}</strong></td>
+                                    <td><small class="text-muted">{{ prob.detalhe }}</small></td>
+                                    <td class="text-end">
+                                        {{ botao_acao(p, prob) }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+<div class="container-fluid">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-search-dollar"></i> Auditoria de Produtos
+            </h1>
+            <p class="text-muted mb-0 small">
+                Cadastro centralizado: cruzamento de <code>cadastro_palletizacao</code> com transacionais.
+            </p>
+        </div>
+        <div class="btn-group" role="group">
+            <a href="{{ url_for('producao.listar_palletizacao') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('produtos.auditoria_exportar') }}" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Exportar
+            </a>
+            <button class="btn btn-primary" onclick="window.location.reload()">
+                <i class="fas fa-sync"></i> Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Resumo geral em 4 cards: cada card e uma categoria/aba -->
+    <div class="row g-3 mb-3">
+
+        {# === ORFAOS === #}
+        <div class="col-md-3 col-sm-6">
+            <div class="card auditoria-cat-card border-danger" data-categoria="{{ CAT_ORFAO }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="text-muted small">Orfaos puros</div>
+                            <div class="h2 mb-0 text-danger">{{ totais.por_categoria[CAT_ORFAO] }}</div>
+                            <div class="text-muted small">cod sem cadastro</div>
+                        </div>
+                        <i class="fas fa-ghost auditoria-categoria-icon text-danger"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# === REPARAR MESTRE === #}
+        <div class="col-md-3 col-sm-6">
+            <div class="card auditoria-cat-card border-warning" data-categoria="{{ CAT_MESTRE }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="text-muted small">Reparar mestre</div>
+                            <div class="h2 mb-0 text-warning">{{ totais.por_categoria[CAT_MESTRE] }}</div>
+                            <div class="text-muted small">campo faltando</div>
+                        </div>
+                        <i class="fas fa-wrench auditoria-categoria-icon text-warning"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# === CADASTROS FALTANTES === #}
+        <div class="col-md-3 col-sm-6">
+            <div class="card auditoria-cat-card border-primary" data-categoria="{{ CAT_FALTANTE }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="text-muted small">Cadastros faltantes</div>
+                            <div class="h2 mb-0 text-primary">{{ totais.por_categoria[CAT_FALTANTE] }}</div>
+                            <div class="text-muted small">tabela externa</div>
+                        </div>
+                        <i class="fas fa-puzzle-piece auditoria-categoria-icon text-primary"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# === DIVERGENCIAS === #}
+        <div class="col-md-3 col-sm-6">
+            <div class="card auditoria-cat-card border-info" data-categoria="{{ CAT_DIV }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="text-muted small">Divergencias</div>
+                            <div class="h2 mb-0 text-info">{{ totais.por_categoria[CAT_DIV] }}</div>
+                            <div class="text-muted small">mestre vs transacional</div>
+                        </div>
+                        <i class="fas fa-not-equal auditoria-categoria-icon text-info"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicadores secundarios -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row text-center small">
+                <div class="col">
+                    <i class="fas fa-database text-muted"></i>
+                    <strong>{{ totais.total_mestre_ativo }}</strong> ativos no mestre
+                </div>
+                <div class="col">
+                    <span class="badge bg-danger">BLOQ</span>
+                    <strong>{{ totais.por_severidade[SEVERIDADE_BLOQ] }}</strong> bloqueados
+                </div>
+                <div class="col">
+                    <span class="badge bg-warning text-dark">ALERTA</span>
+                    <strong>{{ totais.por_severidade[SEVERIDADE_ALERTA] }}</strong> alertas
+                </div>
+                <div class="col">
+                    <span class="badge bg-info">INFO</span>
+                    <strong>{{ totais.por_severidade[SEVERIDADE_INFO] }}</strong> avisos
+                </div>
+                <div class="col">
+                    <i class="fas fa-calendar text-muted"></i>
+                    <strong>{{ totais.data_auditoria }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Busca -->
+    <form method="GET" class="mb-3">
+        <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="text" name="busca" value="{{ busca }}" class="form-control" placeholder="Filtrar por codigo ou nome do produto...">
+            <button class="btn btn-primary" type="submit">Buscar</button>
+            {% if busca %}
+            <a class="btn btn-outline-secondary" href="{{ url_for('produtos.auditoria') }}">Limpar</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <!-- =================================================================== -->
+    <!-- PAINEL: ORFAOS PUROS                                                -->
+    <!-- =================================================================== -->
+    <div class="auditoria-painel show" id="painel-{{ CAT_ORFAO }}">
+        <div class="card mb-3">
+            <div class="card-header bg-danger-subtle d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-ghost text-danger"></i>
+                    <strong>Orfaos puros</strong>
+                    <span class="text-muted small">— {{ rotulo_categoria[CAT_ORFAO] }}</span>
+                </div>
+                <span class="badge bg-danger">{{ por_categoria[CAT_ORFAO]|length }} produtos</span>
+            </div>
+            <div class="card-body p-0">
+                <p class="text-muted small mb-0 px-3 pt-2">
+                    <i class="fas fa-info-circle"></i>
+                    {{ descricao_categoria[CAT_ORFAO] }}
+                </p>
+                {% if not por_categoria[CAT_ORFAO] %}
+                    <div class="auditoria-empty">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                        <div>Nenhum codigo orfao encontrado.</div>
+                    </div>
+                {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Codigo</th>
+                                    <th>Modulos onde aparece</th>
+                                    <th>Nomes encontrados</th>
+                                    <th class="text-center auditoria-acao-btn">Acao</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for o in por_categoria[CAT_ORFAO] %}
+                                <tr>
+                                    <td><code>{{ o.cod_produto }}</code></td>
+                                    <td>
+                                        {% for m in o.modulos %}
+                                            <span class="badge bg-secondary me-1">{{ m }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% for n in o.nomes_encontrados[:3] %}
+                                            <small>{{ n }}{% if not loop.last %} | {% endif %}</small>
+                                        {% endfor %}
+                                        {% if o.nomes_encontrados|length > 3 %}
+                                            <small class="text-muted">+{{ o.nomes_encontrados|length - 3 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-success"
+                                                onclick="abrirModalCriarMestre('{{ o.cod_produto }}', {{ (o.nomes_encontrados[0] if o.nomes_encontrados else '')|tojson }})">
+                                            <i class="fas fa-plus"></i> Cadastrar no mestre
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- PAINEL: REPARAR MESTRE                                              -->
+    <!-- =================================================================== -->
+    <div class="auditoria-painel" id="painel-{{ CAT_MESTRE }}">
+        <div class="card mb-3">
+            <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-wrench text-warning"></i>
+                    <strong>Reparar mestre</strong>
+                    <span class="text-muted small">— {{ rotulo_categoria[CAT_MESTRE] }}</span>
+                </div>
+                <span class="badge bg-warning text-dark">{{ por_categoria[CAT_MESTRE]|length }} produtos</span>
+            </div>
+            <div class="card-body p-0">
+                <p class="text-muted small mb-0 px-3 pt-2">
+                    <i class="fas fa-info-circle"></i>
+                    {{ descricao_categoria[CAT_MESTRE] }}
+                </p>
+                {% if not por_categoria[CAT_MESTRE] %}
+                    <div class="auditoria-empty">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                        <div>Nenhum produto com campo do mestre faltando.</div>
+                    </div>
+                {% else %}
+                    {{ tabela_produtos(por_categoria[CAT_MESTRE], modal_acao='editar_mestre') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- PAINEL: CADASTROS FALTANTES                                         -->
+    <!-- =================================================================== -->
+    <div class="auditoria-painel" id="painel-{{ CAT_FALTANTE }}">
+        <div class="card mb-3">
+            <div class="card-header bg-primary-subtle d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-puzzle-piece text-primary"></i>
+                    <strong>Cadastros faltantes</strong>
+                    <span class="text-muted small">— {{ rotulo_categoria[CAT_FALTANTE] }}</span>
+                </div>
+                <span class="badge bg-primary">{{ por_categoria[CAT_FALTANTE]|length }} produtos</span>
+            </div>
+            <div class="card-body p-0">
+                <p class="text-muted small mb-0 px-3 pt-2">
+                    <i class="fas fa-info-circle"></i>
+                    {{ descricao_categoria[CAT_FALTANTE] }}
+                </p>
+                {% if not por_categoria[CAT_FALTANTE] %}
+                    <div class="auditoria-empty">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                        <div>Nenhum cadastro externo faltante.</div>
+                    </div>
+                {% else %}
+                    {{ tabela_produtos(por_categoria[CAT_FALTANTE], modal_acao='cadastro_faltante') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- PAINEL: DIVERGENCIAS                                                -->
+    <!-- =================================================================== -->
+    <div class="auditoria-painel" id="painel-{{ CAT_DIV }}">
+        <div class="card mb-3">
+            <div class="card-header bg-info-subtle d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-not-equal text-info"></i>
+                    <strong>Divergencias</strong>
+                    <span class="text-muted small">— {{ rotulo_categoria[CAT_DIV] }}</span>
+                </div>
+                <span class="badge bg-info">{{ por_categoria[CAT_DIV]|length }} produtos</span>
+            </div>
+            <div class="card-body p-0">
+                <p class="text-muted small mb-0 px-3 pt-2">
+                    <i class="fas fa-info-circle"></i>
+                    {{ descricao_categoria[CAT_DIV] }}
+                </p>
+                {% if not por_categoria[CAT_DIV] %}
+                    <div class="auditoria-empty">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                        <div>Nenhuma divergencia detectada.</div>
+                    </div>
+                {% else %}
+                    {{ tabela_produtos(por_categoria[CAT_DIV], modal_acao='divergencia') }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ======================================================================= -->
+<!-- MODAL: Criar/Editar mestre (mesmo modal, modos diferentes)              -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalMestre" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-cube auditoria-modal-header-icone"></i>
+                    <span id="modalMestreTitulo">Cadastrar produto no mestre</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formMestre">
+                    <input type="hidden" id="formMestreModo" value="criar"><!-- criar | editar -->
+
+                    <!-- Identificacao -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Cod. Produto*</label>
+                            <input type="text" class="form-control" name="cod_produto" id="m_cod_produto" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold">Nome*</label>
+                            <input type="text" class="form-control" name="nome_produto" id="m_nome_produto" required>
+                        </div>
+                    </div>
+
+                    <!-- Logistica -->
+                    <h6 class="text-muted text-uppercase small mt-3">Logistica</h6>
+                    <hr class="mt-1">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label small">Palletizacao*</label>
+                            <input type="number" step="0.01" class="form-control" name="palletizacao" id="m_palletizacao" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Peso bruto (kg)*</label>
+                            <input type="number" step="0.001" class="form-control" name="peso_bruto" id="m_peso_bruto" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Codigo EAN</label>
+                            <input type="text" class="form-control" name="codigo_ean" id="m_codigo_ean">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Custo (R$)</label>
+                            <input type="number" step="0.0001" class="form-control" name="custo_produto" id="m_custo_produto">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small">Altura (cm)</label>
+                            <input type="number" step="0.01" class="form-control" name="altura_cm" id="m_altura_cm">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Largura (cm)</label>
+                            <input type="number" step="0.01" class="form-control" name="largura_cm" id="m_largura_cm">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Comprimento (cm)</label>
+                            <input type="number" step="0.01" class="form-control" name="comprimento_cm" id="m_comprimento_cm">
+                        </div>
+                    </div>
+
+                    <!-- Categorizacao -->
+                    <h6 class="text-muted text-uppercase small mt-3">Categorizacao</h6>
+                    <hr class="mt-1">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label small">Categoria</label>
+                            <input type="text" class="form-control" name="categoria_produto" id="m_categoria_produto">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Subcategoria</label>
+                            <input type="text" class="form-control" name="subcategoria" id="m_subcategoria">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Materia-prima</label>
+                            <input type="text" class="form-control" name="tipo_materia_prima" id="m_tipo_materia_prima">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Embalagem</label>
+                            <input type="text" class="form-control" name="tipo_embalagem" id="m_tipo_embalagem">
+                        </div>
+                    </div>
+
+                    <!-- Flags -->
+                    <h6 class="text-muted text-uppercase small mt-3">Flags de uso</h6>
+                    <hr class="mt-1">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" name="produto_comprado" id="m_produto_comprado" value="true">
+                                <label class="form-check-label" for="m_produto_comprado">
+                                    <span class="badge bg-primary">C</span> Produto comprado
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" name="produto_produzido" id="m_produto_produzido" value="true">
+                                <label class="form-check-label" for="m_produto_produzido">
+                                    <span class="badge bg-success">P</span> Produto produzido
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" name="produto_vendido" id="m_produto_vendido" value="true" checked>
+                                <label class="form-check-label" for="m_produto_vendido">
+                                    <span class="badge bg-warning text-dark">V</span> Produto vendido
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Producao (so quando produzido) -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small">Linha de producao</label>
+                            <input type="text" class="form-control" name="linha_producao" id="m_linha_producao">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Disparo (MTO/MTS)</label>
+                            <select class="form-select" name="disparo_producao" id="m_disparo_producao">
+                                <option value="">-</option>
+                                <option value="MTO">MTO (Make-to-Order)</option>
+                                <option value="MTS">MTS (Make-to-Stock)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Compras (so quando comprado) -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label small">Lead time (dias)</label>
+                            <input type="number" class="form-control" name="lead_time" id="m_lead_time">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Lote minimo (un)</label>
+                            <input type="number" class="form-control" name="lote_minimo_compra" id="m_lote_minimo_compra">
+                        </div>
+                    </div>
+                </form>
+                <div id="modalMestreFeedback"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarMestre" onclick="salvarMestre()">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ======================================================================= -->
+<!-- MODAL: Adicionar BOM (item de lista_materiais)                          -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalAddBom" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sitemap auditoria-modal-header-icone"></i>
+                    Adicionar componente ao BOM
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Produto produzido:</strong>
+                    <code id="bomProdutoCod"></code>
+                    <span id="bomProdutoNome" class="text-muted"></span>
+                </div>
+                <form id="formBom">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Codigo do componente*</label>
+                            <input type="text" class="form-control" name="cod_produto_componente" id="bom_cod_componente" required>
+                            <small class="text-muted">Componente deve existir em cadastro_palletizacao</small>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label small">Nome (preenchido apos validar)</label>
+                            <input type="text" class="form-control" id="bom_nome_componente" disabled>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Quantidade utilizada*</label>
+                            <input type="number" step="0.000001" class="form-control" name="qtd_utilizada" id="bom_qtd_utilizada" required>
+                            <small class="text-muted">Quantidade do componente para 1 un. do produzido</small>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label small">&nbsp;</label>
+                            <button type="button" class="btn btn-outline-info w-100" onclick="validarComponenteBom()">
+                                <i class="fas fa-search"></i> Validar componente
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                <div id="modalBomFeedback" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarBom()">
+                    <i class="fas fa-save"></i> Adicionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ======================================================================= -->
+<!-- MODAL: Adicionar recurso de producao                                    -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalAddRecurso" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-industry auditoria-modal-header-icone"></i>
+                    Adicionar recurso de producao
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Produto produzido:</strong>
+                    <code id="recProdutoCod"></code>
+                    <span id="recProdutoNome" class="text-muted"></span>
+                </div>
+                <form id="formRecurso">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Linha de producao*</label>
+                            <input type="text" class="form-control" name="linha_producao" id="rec_linha" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Qtd. unidade por caixa*</label>
+                            <input type="number" class="form-control" name="qtd_unidade_por_caixa" id="rec_qtd_caixa" required>
+                            <small class="text-muted">Conversao SKU</small>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Capacidade (un/min)*</label>
+                            <input type="number" step="0.001" class="form-control" name="capacidade_unidade_minuto" id="rec_capacidade" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Tempo de setup (min)</label>
+                            <input type="number" class="form-control" name="tempo_setup" id="rec_tempo_setup">
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-4">
+                            <label class="form-label small">Lote ideal (un)</label>
+                            <input type="number" step="0.001" class="form-control" name="qtd_lote_ideal" id="rec_lote_ideal">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Lote minimo (un)</label>
+                            <input type="number" step="0.001" class="form-control" name="qtd_lote_minimo" id="rec_lote_minimo">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">Eficiencia media (%)</label>
+                            <input type="number" step="0.01" class="form-control" name="eficiencia_media" id="rec_eficiencia">
+                        </div>
+                    </div>
+                </form>
+                <div id="modalRecursoFeedback" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarRecurso()">
+                    <i class="fas fa-save"></i> Adicionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ======================================================================= -->
+<!-- MODAL: Adicionar perfil fiscal                                          -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalAddPerfilFiscal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-receipt auditoria-modal-header-icone"></i>
+                    Adicionar perfil fiscal
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Produto comprado:</strong>
+                    <code id="pfProdutoCod"></code>
+                    <span id="pfProdutoNome" class="text-muted"></span>
+                </div>
+                <form id="formPerfilFiscal">
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label small fw-bold">CNPJ do fornecedor*</label>
+                            <input type="text" class="form-control" name="cnpj_fornecedor" id="pf_cnpj_fornecedor" required>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label small">NCM esperado</label>
+                            <input type="text" class="form-control" name="ncm_esperado" id="pf_ncm" maxlength="10">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">CFOPs esperados</label>
+                            <input type="text" class="form-control" name="cfop_esperados" id="pf_cfops" placeholder="ex: 1102,2102">
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-12">
+                            <label class="form-label small">CNPJ empresa compradora (opcional)</label>
+                            <input type="text" class="form-control" name="cnpj_empresa_compradora" id="pf_cnpj_compradora">
+                            <small class="text-muted">Deixe vazio se aplicar a todas as empresas</small>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning small mt-3">
+                        <i class="fas fa-info-circle"></i>
+                        Apenas campos minimos sao preenchidos aqui. Para configurar aliquotas e tolerancias detalhadas,
+                        use a tela completa do modulo Recebimento.
+                    </div>
+                </form>
+                <div id="modalPerfilFiscalFeedback" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarPerfilFiscal()">
+                    <i class="fas fa-save"></i> Adicionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ======================================================================= -->
+<!-- MODAL: Resolver divergencia de NOME                                     -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalResolverNome" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info-subtle">
+                <h5 class="modal-title">
+                    <i class="fas fa-equals auditoria-modal-header-icone"></i>
+                    Resolver divergencia de nome
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Produto:</strong> <code id="rnProdutoCod"></code>
+                </div>
+
+                <div class="card auditoria-mestre-card mb-3">
+                    <div class="card-header">
+                        <i class="fas fa-database"></i> <strong>Nome no mestre (atual)</strong>
+                    </div>
+                    <div class="card-body">
+                        <div id="rnNomeMestre" class="h6 mb-0"></div>
+                    </div>
+                </div>
+
+                <div class="card auditoria-divergencia-card mb-3">
+                    <div class="card-header">
+                        <i class="fas fa-table"></i> <strong>Nomes em transacionais</strong>
+                    </div>
+                    <div class="card-body p-2">
+                        <table class="table table-sm mb-0" id="rnTabelaAlternativos">
+                            <thead><tr><th>Tabela</th><th>Nome</th><th class="text-end">Ação</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <hr>
+                <label class="form-label small fw-bold">Novo nome no mestre</label>
+                <input type="text" class="form-control" id="rnNovoNome">
+                <small class="text-muted">
+                    O mestre sera atualizado com este nome. Transacionais NAO sao tocadas (snapshots historicos).
+                </small>
+                <div id="modalResolverNomeFeedback" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarSincronizarNome()">
+                    <i class="fas fa-save"></i> Atualizar mestre
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- ======================================================================= -->
+<!-- MODAL: Resolver divergencia de PESO                                     -->
+<!-- ======================================================================= -->
+<div class="modal fade" id="modalResolverPeso" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info-subtle">
+                <h5 class="modal-title">
+                    <i class="fas fa-balance-scale auditoria-modal-header-icone"></i>
+                    Resolver divergencia de peso
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>Produto:</strong> <code id="rpProdutoCod"></code>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <div class="card auditoria-mestre-card text-center h-100">
+                            <div class="card-body">
+                                <div class="text-muted small">Mestre</div>
+                                <div class="h3 mb-0" id="rpPesoMestre">0.000</div>
+                                <div class="text-muted small">kg</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card auditoria-divergencia-card text-center h-100">
+                            <div class="card-body">
+                                <div class="text-muted small">Faturamento (avg)</div>
+                                <div class="h3 mb-0" id="rpPesoFaturado">0.000</div>
+                                <div class="text-muted small">kg</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <dl class="row auditoria-info-list small">
+                    <dt class="col-sm-6">Diferenca</dt>
+                    <dd class="col-sm-6"><span id="rpDiff" class="badge bg-warning text-dark">0%</span></dd>
+                    <dt class="col-sm-6">Faixa em faturamento (min - max)</dt>
+                    <dd class="col-sm-6"><span id="rpRange">-</span></dd>
+                    <dt class="col-sm-6">Amostras</dt>
+                    <dd class="col-sm-6"><span id="rpAmostras">-</span></dd>
+                </dl>
+
+                <hr>
+                <label class="form-label small fw-bold">Novo peso_bruto no mestre (kg)</label>
+                <input type="number" step="0.001" class="form-control" id="rpNovoPeso">
+                <div id="modalResolverPesoFeedback" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarAtualizarPeso()">
+                    <i class="fas fa-save"></i> Atualizar mestre
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// =========================================================================
+// Navegacao entre paineis (cards de categoria)
+// =========================================================================
+const cards = document.querySelectorAll('.auditoria-cat-card');
+const paineis = document.querySelectorAll('.auditoria-painel');
+function mostrarCategoria(cat) {
+    cards.forEach(c => c.classList.toggle('active', c.dataset.categoria === cat));
+    paineis.forEach(p => p.classList.toggle('show', p.id === 'painel-' + cat));
+}
+cards.forEach(c => c.addEventListener('click', () => mostrarCategoria(c.dataset.categoria)));
+mostrarCategoria('{{ CAT_ORFAO }}');
+
+// =========================================================================
+// CSRF helper
+// =========================================================================
+function getCsrf() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    if (m) return m.getAttribute('content');
+    const i = document.querySelector('input[name="csrf_token"]');
+    return i ? i.value : '';
+}
+
+async function jsonFetch(url, opts = {}) {
+    opts.headers = Object.assign({}, opts.headers || {}, {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrf(),
+    });
+    if (opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+    const res = await fetch(url, opts);
+    let data;
+    try { data = await res.json(); } catch (e) { data = { sucesso: false, erro: 'Resposta invalida' }; }
+    return { ok: res.ok, data };
+}
+
+function feedbackBox(elId, ok, msg) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    // Construido com createElement + textContent para evitar XSS na msg
+    el.innerHTML = '';
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-' + (ok ? 'success' : 'danger') + ' small mb-0';
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-' + (ok ? 'check' : 'exclamation-triangle');
+    alert.appendChild(icon);
+    alert.appendChild(document.createTextNode(' ' + (msg || '')));
+    el.appendChild(alert);
+}
+
+// =========================================================================
+// MODAL: Mestre (criar / editar)
+// =========================================================================
+function limparFormMestre() {
+    document.getElementById('formMestre').reset();
+    document.getElementById('m_produto_vendido').checked = true;
+    document.getElementById('modalMestreFeedback').innerHTML = '';
+}
+
+function abrirModalCriarMestre(cod, nomeSugerido) {
+    limparFormMestre();
+    document.getElementById('formMestreModo').value = 'criar';
+    document.getElementById('modalMestreTitulo').textContent = 'Cadastrar produto no mestre';
+    document.getElementById('m_cod_produto').value = cod || '';
+    document.getElementById('m_cod_produto').readOnly = !!cod;
+    document.getElementById('m_nome_produto').value = nomeSugerido || '';
+    new bootstrap.Modal(document.getElementById('modalMestre')).show();
+}
+
+async function abrirModalEditarMestre(cod, campoFoco) {
+    limparFormMestre();
+    document.getElementById('formMestreModo').value = 'editar';
+    document.getElementById('modalMestreTitulo').textContent = 'Editar mestre — ' + cod;
+    document.getElementById('m_cod_produto').value = cod;
+    document.getElementById('m_cod_produto').readOnly = true;
+
+    const res = await jsonFetch('/produtos/api/produto/' + encodeURIComponent(cod));
+    if (!res.ok || !res.data.sucesso) {
+        feedbackBox('modalMestreFeedback', false, res.data.erro || 'Erro ao carregar');
+        return;
+    }
+    const m = res.data.mestre || {};
+    const setter = (id, key, isBool) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (isBool) {
+            el.checked = !!m[key];
+        } else {
+            el.value = (m[key] === null || m[key] === undefined) ? '' : m[key];
+        }
+    };
+    setter('m_nome_produto', 'nome_produto');
+    setter('m_codigo_ean', 'codigo_ean');
+    setter('m_palletizacao', 'palletizacao');
+    setter('m_peso_bruto', 'peso_bruto');
+    setter('m_altura_cm', 'altura_cm');
+    setter('m_largura_cm', 'largura_cm');
+    setter('m_comprimento_cm', 'comprimento_cm');
+    setter('m_categoria_produto', 'categoria_produto');
+    setter('m_subcategoria', 'subcategoria');
+    setter('m_tipo_materia_prima', 'tipo_materia_prima');
+    setter('m_tipo_embalagem', 'tipo_embalagem');
+    setter('m_linha_producao', 'linha_producao');
+    setter('m_disparo_producao', 'disparo_producao');
+    setter('m_lead_time', 'lead_time');
+    setter('m_lote_minimo_compra', 'lote_minimo_compra');
+    setter('m_custo_produto', 'custo_produto');
+    setter('m_produto_comprado', 'produto_comprado', true);
+    setter('m_produto_produzido', 'produto_produzido', true);
+    setter('m_produto_vendido', 'produto_vendido', true);
+
+    new bootstrap.Modal(document.getElementById('modalMestre')).show();
+    if (campoFoco) {
+        const target = document.getElementById('m_' + campoFoco);
+        if (target) { target.focus(); target.classList.add('border-warning'); }
+    }
+}
+
+function coletarFormMestre() {
+    const f = document.getElementById('formMestre');
+    const fd = new FormData(f);
+    const obj = Object.fromEntries(fd.entries());
+    // Switches: incluir false explicito quando nao marcado
+    ['produto_comprado', 'produto_produzido', 'produto_vendido'].forEach(k => {
+        obj[k] = document.getElementById('m_' + k).checked;
+    });
+    return obj;
+}
+
+async function salvarMestre() {
+    const dados = coletarFormMestre();
+    const modo = document.getElementById('formMestreModo').value;
+    let res;
+    if (modo === 'criar') {
+        res = await jsonFetch('/produtos/api/mestre', { method: 'POST', body: dados });
+    } else {
+        const cod = dados.cod_produto;
+        res = await jsonFetch('/produtos/api/mestre/' + encodeURIComponent(cod), { method: 'PUT', body: dados });
+    }
+    if (!res.ok || !res.data.sucesso) {
+        feedbackBox('modalMestreFeedback', false, res.data.erro || 'Erro');
+        return;
+    }
+    feedbackBox('modalMestreFeedback', true, res.data.mensagem || 'Salvo');
+    setTimeout(() => window.location.reload(), 800);
+}
+
+// =========================================================================
+// MODAL: Add BOM
+// =========================================================================
+function abrirModalAddBom(cod, nome) {
+    document.getElementById('bomProdutoCod').textContent = cod;
+    document.getElementById('bomProdutoNome').textContent = nome ? ' — ' + nome : '';
+    document.getElementById('formBom').reset();
+    document.getElementById('bom_nome_componente').value = '';
+    document.getElementById('modalBomFeedback').innerHTML = '';
+    document.getElementById('formBom').dataset.codProduzido = cod;
+    new bootstrap.Modal(document.getElementById('modalAddBom')).show();
+}
+
+async function validarComponenteBom() {
+    const cod = document.getElementById('bom_cod_componente').value.trim();
+    if (!cod) return;
+    const res = await jsonFetch('/produtos/api/produto/' + encodeURIComponent(cod));
+    if (!res.ok || !res.data.sucesso || !res.data.mestre) {
+        document.getElementById('bom_nome_componente').value = '';
+        feedbackBox('modalBomFeedback', false, 'Componente ' + cod + ' nao existe no mestre. Cadastre-o antes.');
+        return;
+    }
+    document.getElementById('bom_nome_componente').value = res.data.mestre.nome_produto || '';
+    feedbackBox('modalBomFeedback', true, 'Componente OK');
+}
+
+async function salvarBom() {
+    const codProduzido = document.getElementById('formBom').dataset.codProduzido;
+    const dados = {
+        cod_produto_produzido: codProduzido,
+        cod_produto_componente: document.getElementById('bom_cod_componente').value.trim(),
+        qtd_utilizada: document.getElementById('bom_qtd_utilizada').value,
+    };
+    const res = await jsonFetch('/produtos/api/bom-item', { method: 'POST', body: dados });
+    if (!res.ok || !res.data.sucesso) {
+        feedbackBox('modalBomFeedback', false, res.data.erro || 'Erro');
+        return;
+    }
+    feedbackBox('modalBomFeedback', true, res.data.mensagem || 'Adicionado');
+    setTimeout(() => window.location.reload(), 800);
+}
+
+// =========================================================================
+// MODAL: Add Recurso
+// =========================================================================
+function abrirModalAddRecurso(cod, nome) {
+    document.getElementById('recProdutoCod').textContent = cod;
+    document.getElementById('recProdutoNome').textContent = nome ? ' — ' + nome : '';
+    document.getElementById('formRecurso').reset();
+    document.getElementById('formRecurso').dataset.cod = cod;
+    document.getElementById('modalRecursoFeedback').innerHTML = '';
+    // pre-preencher linha do mestre se houver
+    jsonFetch('/produtos/api/produto/' + encodeURIComponent(cod)).then(res => {
+        if (res.ok && res.data.sucesso && res.data.mestre) {
+            const m = res.data.mestre;
+            if (m.linha_producao) document.getElementById('rec_linha').value = m.linha_producao;
+        }
+    });
+    new bootstrap.Modal(document.getElementById('modalAddRecurso')).show();
+}
+
+async function salvarRecurso() {
+    const cod = document.getElementById('formRecurso').dataset.cod;
+    const fd = new FormData(document.getElementById('formRecurso'));
+    const dados = Object.fromEntries(fd.entries());
+    dados.cod_produto = cod;
+    const res = await jsonFetch('/produtos/api/recurso', { method: 'POST', body: dados });
+    if (!res.ok || !res.data.sucesso) {
+        feedbackBox('modalRecursoFeedback', false, res.data.erro || 'Erro');
+        return;
+    }
+    feedbackBox('modalRecursoFeedback', true, res.data.mensagem || 'Adicionado');
+    setTimeout(() => window.location.reload(), 800);
+}
+
+// =========================================================================
+// MODAL: Add Perfil Fiscal
+// =========================================================================
+function abrirModalAddPerfilFiscal(cod, nome) {
+    document.getElementById('pfProdutoCod').textContent = cod;
+    document.getElementById('pfProdutoNome').textContent = nome ? ' — ' + nome : '';
+    document.getElementById('formPerfilFiscal').reset();
+    document.getElementById('formPerfilFiscal').dataset.cod = cod;
+    document.getElementById('modalPerfilFiscalFeedback').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('modalAddPerfilFiscal')).show();
+}
+
+async function salvarPerfilFiscal() {
+    const cod = document.getElementById('formPerfilFiscal').dataset.cod;
+    const fd = new FormData(document.getElementById('formPerfilFiscal'));
+    const dados = Object.fromEntries(fd.entries());
+    dados.cod_produto = cod;
+    const res = await jsonFetch('/produtos/api/perfil-fiscal', { method: 'POST', body: dados });
+    if (!res.ok || !res.data.sucesso) {
+        feedbackBox('modalPerfilFiscalFeedback', false, res.data.erro || 'Erro');
+        return;
+    }
+    feedbackBox('modalPerfilFiscalFeedback', true, res.data.mensagem || 'Adicionado');
+    setTimeout(() => window.location.reload(), 800);
+}
+
+// =========================================================================
+// MODAL: Resolver nome (D2)
+// =========================================================================
+function abrirModalResolverNome(cod, nomeMestre, nomesAlternativos) {
+    document.getElementById('rnProdutoCod').textContent = cod;
+    document.getElementById('rnNomeMestre').textContent = nomeMestre || '(vazio)';
+    document.getElementById('rnNovoNome').value = nomeMestre || '';
+    document.getElementById('rnNovoNome').dataset.cod = cod;
+    const tbody = document.querySelector('#rnTabelaAlternativos tbody');
+    tbody.innerHTML = '';
+    (nomesAlternativos || []).forEach(item => {
+        // createElement/textContent — evita XSS em item.nome (vem de transacionais)
+        const tr = document.createElement('tr');
+        const tdFonte = document.createElement('td');
+        const small = document.createElement('small');
+        small.className = 'text-muted';
+        small.textContent = item.fonte || '';
+        tdFonte.appendChild(small);
+        const tdNome = document.createElement('td');
+        tdNome.textContent = item.nome || '';
+        const tdBtn = document.createElement('td');
+        tdBtn.className = 'text-end';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-info';
+        btn.textContent = 'Usar este';
+        btn.addEventListener('click', () => {
+            document.getElementById('rnNovoNome').value = item.nome || '';
+        });
+        tdBtn.appendChild(btn);
+        tr.appendChild(tdFonte);
+        tr.appendChild(tdNome);
+        tr.appendChild(tdBtn);
+        tbody.appendChild(tr);
+    });
+    document.getElementById('modalResolverNomeFeedback').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('modalResolverNome')).show();
+}
+
+async function salvarSincronizarNome() {
+    const cod = document.getElementById('rnNovoNome').dataset.cod;
+    const novo = document.getElementById('rnNovoNome').value.trim();
+    if (!novo) {
+        feedbackBox('modalResolverNomeFeedback', false, 'Novo nome obrigatorio');
+        return;
+    }
+    const res = await jsonFetch('/produtos/api/sincronizar-nome/' + encodeURIComponent(cod),
+        { method: 'POST', body: { novo_nome: novo } });
+    if (!res.ok || !res.data.sucesso) {
+        feedbackBox('modalResolverNomeFeedback', false, res.data.erro || 'Erro');
+        return;
+    }
+    feedbackBox('modalResolverNomeFeedback', true, res.data.mensagem || 'Atualizado');
+    setTimeout(() => window.location.reload(), 800);
+}
+
+// =========================================================================
+// MODAL: Resolver peso (D3)
+// =========================================================================
+function abrirModalResolverPeso(cod, dadosModal) {
+    const d = dadosModal || {};
+    document.getElementById('rpProdutoCod').textContent = cod;
+    document.getElementById('rpPesoMestre').textContent = (d.peso_mestre || 0).toFixed(3);
+    document.getElementById('rpPesoFaturado').textContent = (d.peso_faturado_avg || 0).toFixed(3);
+    document.getElementById('rpDiff').textContent = (d.diff_pct || 0) + '%';
+    document.getElementById('rpRange').textContent =
+        (d.peso_faturado_min || 0).toFixed(3) + ' - ' + (d.peso_faturado_max || 0).toFixed(3) + ' kg';
+    document.getElementById('rpAmostras').textContent = d.qtd_amostras || 0;
+    document.getElementById('rpNovoPeso').value = (d.peso_faturado_avg || d.peso_mestre || 0).toFixed(3);
+    document.getElementById('rpNovoPeso').dataset.cod = cod;
+    document.getElementById('modalResolverPesoFeedback').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('modalResolverPeso')).show();
+}
+
+async function salvarAtualizarPeso() {
+    const cod = document.getElementById('rpNovoPeso').dataset.cod;
+    const peso = parseFloat(document.getElementById('rpNovoPeso').value);
+    if (!peso || peso <= 0) {
+        feedbackBox('modalResolverPesoFeedback', false, 'Peso invalido');
+        return;
+    }
+    const res = await jsonFetch('/produtos/api/atualizar-peso/' + encodeURIComponent(cod),
+        { method: 'POST', body: { novo_peso: peso } });
+    if (!res.ok || !res.data.sucesso) {
+        feedbackBox('modalResolverPesoFeedback', false, res.data.erro || 'Erro');
+        return;
+    }
+    feedbackBox('modalResolverPesoFeedback', true, res.data.mensagem || 'Atualizado');
+    setTimeout(() => window.location.reload(), 800);
+}
+</script>
+{% endblock %}
