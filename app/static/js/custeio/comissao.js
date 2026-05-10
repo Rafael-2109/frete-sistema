@@ -422,8 +422,8 @@ function salvarComissao() {
         return;
     }
 
-    if (isNaN(comissaoPercentual)) {
-        alert('Informe o percentual de comissao');
+    if (isNaN(comissaoPercentual) || comissaoPercentual < 0 || comissaoPercentual > 30) {
+        alert('Percentual de comissao deve estar entre 0 e 30');
         return;
     }
 

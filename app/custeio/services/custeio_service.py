@@ -801,26 +801,46 @@ class ServicoCusteio:
 
         Args:
             cod_produto: Codigo do produto
-            tipo_custo: Novo tipo de custo (MEDIO_MES, ULTIMO_CUSTO, MEDIO_ESTOQUE, BOM)
+            tipo_custo: Novo tipo de custo (MEDIO_MES, ULTIMO_CUSTO, MEDIO_ESTOQUE, BOM, MANUAL, PRODUCAO)
             usuario: Nome do usuario que fez a alteracao
             motivo: Motivo da alteracao (opcional)
 
         Returns:
             Dict com resultado da operacao
         """
-        tipos_validos = ['MEDIO_MES', 'ULTIMO_CUSTO', 'MEDIO_ESTOQUE', 'BOM']
+        # MANUAL e PRODUCAO sao tipos de primeira classe (cadastrados manualmente
+        # via UI/importacao Excel ou pela tela de Custo de Producao)
+        tipos_validos = ['MEDIO_MES', 'ULTIMO_CUSTO', 'MEDIO_ESTOQUE', 'BOM', 'MANUAL', 'PRODUCAO']
 
         if tipo_custo not in tipos_validos:
             return {'erro': f'Tipo invalido. Valores permitidos: {tipos_validos}'}
 
-        # Buscar versao atual
+        # Buscar versao atual com lock pessimista (previne race condition em criar nova versao)
         custo_atual = CustoConsiderado.query.filter_by(
             cod_produto=cod_produto,
             custo_atual=True
-        ).first()
+        ).with_for_update().first()
 
         if not custo_atual:
             return {'erro': 'Produto nao encontrado'}
+
+        # PROTECAO: ao sair de MANUAL/PRODUCAO para outro tipo, validar que tipo destino
+        # tem valor preenchido. Caso contrario, custo manual seria perdido (vira NULL).
+        tipos_que_preservam = {'MANUAL', 'PRODUCAO'}
+        if custo_atual.tipo_custo_selecionado in tipos_que_preservam and tipo_custo not in tipos_que_preservam:
+            mapa_destino = {
+                'MEDIO_MES': custo_atual.custo_medio_mes,
+                'ULTIMO_CUSTO': custo_atual.ultimo_custo,
+                'MEDIO_ESTOQUE': custo_atual.custo_medio_estoque,
+                'BOM': custo_atual.custo_bom,
+            }
+            valor_destino = mapa_destino.get(tipo_custo)
+            if valor_destino is None or float(valor_destino or 0) == 0:
+                return {
+                    'erro': f'Nao e possivel mudar de {custo_atual.tipo_custo_selecionado} para {tipo_custo}: '
+                            f'campo de origem nao tem valor preenchido. '
+                            f'O custo atual ({custo_atual.custo_considerado}) seria perdido.'
+                }
 
         # Se o tipo nao mudou, apenas atualizar sem criar nova versao
         if custo_atual.tipo_custo_selecionado == tipo_custo:
@@ -904,12 +924,20 @@ class ServicoCusteio:
         )
 
         # Aplicar novos valores se fornecidos
+        # IMPORTANTE (CR1 fix): se `custo_considerado` vem None em novos_valores,
+        # NAO sobrescrever — preservar valor copiado da versao anterior. Isso
+        # protege rotas como `salvar_custo_producao` que so atualizam custo_producao
+        # mas passam custo_considerado=None, evitando que o setattr seguido de
+        # recalcular_custo_considerado() zere o custo manual existente.
         custo_definido_manual = False
         if novos_valores:
             for campo, valor in novos_valores.items():
                 if hasattr(nova_versao, campo):
+                    # Pular custo_considerado=None para nao apagar valor preservado
+                    if campo == 'custo_considerado' and valor is None:
+                        continue
                     setattr(nova_versao, campo, valor)
-                    # Se custo_considerado foi passado explicitamente, não recalcular
+                    # Se custo_considerado foi passado explicitamente nao-nulo, nao recalcular
                     if campo == 'custo_considerado' and valor is not None:
                         custo_definido_manual = True
 
@@ -954,18 +982,28 @@ class ServicoCusteio:
             return {'erro': 'Produto nao encontrado no cadastro'}
 
         # Determinar tipo do produto
+        # CASO BORDA: produto sem nenhuma flag (comprado=False, produzido=False) caia em ACABADO
+        # silenciosamente. Detectar e logar warning para o operador investigar.
         if produto.produto_comprado:
             tipo_produto = 'COMPRADO'
         elif produto.produto_produzido and not produto.produto_vendido:
             tipo_produto = 'INTERMEDIARIO'
+        elif produto.produto_produzido and produto.produto_vendido:
+            tipo_produto = 'ACABADO'
         else:
+            # Produto sem flag clara — fallback ACABADO + warning
+            logger.warning(
+                f"Produto {cod_produto} sem flag de tipo definida "
+                f"(comprado={produto.produto_comprado}, produzido={produto.produto_produzido}, "
+                f"vendido={produto.produto_vendido}). Classificado como ACABADO por default."
+            )
             tipo_produto = 'ACABADO'
 
-        # Buscar versao atual
+        # Buscar versao atual com lock pessimista (previne race condition)
         custo_atual = CustoConsiderado.query.filter_by(
             cod_produto=cod_produto,
             custo_atual=True
-        ).first()
+        ).with_for_update().first()
 
         if custo_atual:
             # Criar nova versao
@@ -1206,10 +1244,11 @@ class ServicoCusteio:
         """
         Salva custo propagado via BOM (uso interno)
         """
+        # Lock pessimista: previne race condition em propagacao concorrente
         custo_atual = CustoConsiderado.query.filter_by(
             cod_produto=cod_produto,
             custo_atual=True
-        ).first()
+        ).with_for_update().first()
 
         _D = ServicoCusteio._to_decimal
         if custo_atual:

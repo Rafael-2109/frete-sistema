@@ -18,13 +18,17 @@
             <button class="btn btn-outline-primary btn-sm" onclick="simularFechamento()">
                 <i class="bi bi-eye me-1"></i>Simular
             </button>
-            <button class="btn btn-success btn-sm" onclick="confirmarFechamento()">
-                <i class="bi bi-lock me-1"></i>Fechar Mes
-            </button>
-            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted">
+            <a href="{{ url_for('custeio.index') }}" class="text-decoration-none text-muted ms-3">
                 <i class="bi bi-arrow-left me-2"></i>Voltar
             </a>
         </div>
+    </div>
+
+    <!-- Aviso: fechamento manual desabilitado -->
+    <div class="alert alert-info py-2 mb-3" role="alert">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Fechamento mensal e automatico</strong> - executa todo dia 5 as 04:00.
+        Use o botao <strong>Simular</strong> para visualizar o calculo do mes corrente sem efetivar.
     </div>
 
     <!-- Filtros -->
@@ -191,54 +195,23 @@
     </div>
 </div>
 
-<!-- Modal Confirmacao Fechamento -->
-<div class="modal fade" id="modalFechamento" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-lock me-2"></i>Confirmar Fechamento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    Voce esta prestes a fechar os custos do mes <strong id="fechamento-periodo"></strong>.
-                </div>
-                <p>Esta acao ira:</p>
-                <ul>
-                    <li>Calcular custos de todos os produtos COMPRADOS</li>
-                    <li>Calcular custos de produtos INTERMEDIARIOS (via BOM)</li>
-                    <li>Calcular custos de produtos ACABADOS (via BOM)</li>
-                    <li>Atualizar a tabela de Custos Considerados</li>
-                </ul>
-                <p class="mb-0 text-muted small">O fechamento pode levar alguns minutos.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" onclick="executarFechamento()">
-                    <i class="bi bi-check-lg me-1"></i>Confirmar Fechamento
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Modal Preview Simulacao -->
 <div class="modal fade" id="modalPreview" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Preview do Fechamento</h5>
+                <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Simulacao do Fechamento (sem efetivar)</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="preview-content">
                 <!-- Conteudo dinamico -->
             </div>
             <div class="modal-footer">
+                <small class="text-muted me-auto">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Fechamento real ocorre via cron automatico no dia 5 as 04:00.
+                </small>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-success" onclick="confirmarFechamento()">
-                    <i class="bi bi-lock me-1"></i>Prosseguir com Fechamento
-                </button>
             </div>
         </div>
     </div>

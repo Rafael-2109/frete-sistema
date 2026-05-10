@@ -16,6 +16,17 @@
         </div>
     </div>
 
+    <!-- Alertas de Saude (preenchidos via dashboard.js) -->
+    <div id="alerta-dormencia" class="alert d-none mb-3" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <span id="alerta-dormencia-msg"></span>
+    </div>
+    <div id="alerta-sem-custo" class="alert alert-danger d-none mb-3 d-flex align-items-center" role="alert">
+        <i class="bi bi-x-circle me-2"></i>
+        <span id="alerta-sem-custo-msg" class="flex-grow-1"></span>
+        <a href="{{ url_for('custeio.tela_definicao') }}" class="btn btn-sm btn-outline-danger ms-auto">Definir agora</a>
+    </div>
+
     <!-- Cards de Estatisticas -->
     <div class="row mb-4">
         <div class="col-md-3">

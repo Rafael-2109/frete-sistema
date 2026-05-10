@@ -360,51 +360,10 @@ function mostrarPreview(preview, mes, ano) {
     new bootstrap.Modal(document.getElementById('modalPreview')).show();
 }
 
-function confirmarFechamento() {
-    const mes = document.getElementById('filtro-mes').value;
-    const ano = document.getElementById('filtro-ano').value;
-
-    document.getElementById('fechamento-periodo').textContent = `${mes}/${ano}`;
-
-    // Fechar modal de preview se estiver aberto
-    const previewModal = bootstrap.Modal.getInstance(document.getElementById('modalPreview'));
-    if (previewModal) previewModal.hide();
-
-    new bootstrap.Modal(document.getElementById('modalFechamento')).show();
-}
-
-function executarFechamento() {
-    const mes = document.getElementById('filtro-mes').value;
-    const ano = document.getElementById('filtro-ano').value;
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-
-    bootstrap.Modal.getInstance(document.getElementById('modalFechamento')).hide();
-    mostrarLoading(true);
-
-    fetch('/custeio/api/mensal/fechar', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken
-        },
-        body: JSON.stringify({ mes: mes, ano: ano })
-    })
-    .then(r => r.json())
-    .then(data => {
-        mostrarLoading(false);
-        if (data.sucesso) {
-            mostrarAlerta('sucesso', data.mensagem);
-            buscarCustos();
-            carregarEstatisticas();
-        } else {
-            mostrarAlerta('erro', data.erro);
-        }
-    })
-    .catch(err => {
-        mostrarLoading(false);
-        mostrarAlerta('erro', 'Erro ao executar fechamento');
-    });
-}
+// confirmarFechamento e executarFechamento foram removidas em 2026-05-10:
+// fechamento manual via UI desabilitado, agora ocorre via cron automatico
+// (dia 5 as 04:00). Endpoint /custeio/api/mensal/fechar so aceita header
+// `X-Cron-Source: fechar_mes_automatico`.
 
 function exportarExcel(tipo) {
     const mes = document.getElementById('filtro-mes').value;
@@ -891,6 +850,19 @@ function salvarCadastroManual() {
     if (!custo || isNaN(parseFloat(custo))) {
         mostrarAlerta('erro', 'Informe o custo considerado');
         return;
+    }
+    const custoNum = parseFloat(custo);
+    if (custoNum <= 0) {
+        mostrarAlerta('erro', 'Custo considerado deve ser maior que zero');
+        return;
+    }
+
+    if (producao) {
+        const producaoNum = parseFloat(producao);
+        if (isNaN(producaoNum) || producaoNum < 0) {
+            mostrarAlerta('erro', 'Custo producao deve ser zero ou positivo');
+            return;
+        }
     }
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';

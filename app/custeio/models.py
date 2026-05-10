@@ -241,14 +241,37 @@ class CustoConsiderado(db.Model):
         return f'<CustoConsiderado {self.cod_produto}>'
 
     def recalcular_custo_considerado(self):
-        """Recalcula custo_considerado baseado no tipo selecionado"""
+        """Recalcula custo_considerado baseado no tipo selecionado.
+
+        REGRA: 'MANUAL' e 'PRODUCAO' preservam o valor atual de custo_considerado
+        (cadastrado manualmente pelo usuario via UI/importacao Excel ou via
+        cadastro de custo de producao). Os demais tipos derivam do campo
+        correspondente (custo_medio_mes, ultimo_custo, etc.).
+
+        PROTECAO: se o mapa retornar None (ex: tipo BOM em produto sem custo_bom),
+        NAO sobrescreve custo_considerado existente - retorna sem alterar.
+        Isto previne perda silenciosa de valor manual em transicoes de tipo.
+        """
         mapa_custos = {
             'MEDIO_MES': self.custo_medio_mes,
             'ULTIMO_CUSTO': self.ultimo_custo,
             'MEDIO_ESTOQUE': self.custo_medio_estoque,
-            'BOM': self.custo_bom
+            'BOM': self.custo_bom,
+            'MANUAL': self.custo_considerado,    # MANUAL = valor cadastrado manualmente
+            'PRODUCAO': self.custo_considerado,  # PRODUCAO = preserva (foco e custo_producao)
         }
-        self.custo_considerado = mapa_custos.get(self.tipo_custo_selecionado, self.custo_medio_mes)
+        novo_valor = mapa_custos.get(self.tipo_custo_selecionado)
+
+        # PROTECAO: nao sobrescrever valor existente com None
+        if novo_valor is None and self.custo_considerado:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"recalcular_custo_considerado: {self.cod_produto} tipo={self.tipo_custo_selecionado} "
+                f"-> mapa retornou None, mantendo custo_considerado={self.custo_considerado}"
+            )
+            return
+
+        self.custo_considerado = novo_valor
 
     def to_dict(self):
         return {
@@ -304,6 +327,11 @@ class CustoFrete(db.Model):
     vigencia_inicio = db.Column(db.Date, nullable=False)
     vigencia_fim = db.Column(db.Date, nullable=True)  # NULL = vigente
 
+    # Soft delete (Sprint 3 - C17)
+    ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    desativado_em = db.Column(db.DateTime, nullable=True)
+    desativado_por = db.Column(db.String(100), nullable=True)
+
     # Auditoria
     criado_em = db.Column(db.DateTime, default=agora_utc_naive)
     criado_por = db.Column(db.String(100), nullable=True)
@@ -331,7 +359,8 @@ class CustoFrete(db.Model):
     @staticmethod
     def buscar_percentual_vigente(incoterm: str, cod_uf: str) -> float:
         """
-        Busca percentual de frete vigente para combinacao incoterm + UF
+        Busca percentual de frete vigente para combinacao incoterm + UF.
+        Considera apenas registros ativos (Sprint 3 - C17).
 
         Args:
             incoterm: Incoterm do pedido (CIF, FOB, etc)
@@ -344,6 +373,7 @@ class CustoFrete(db.Model):
         custo = CustoFrete.query.filter(
             CustoFrete.incoterm == incoterm,
             CustoFrete.cod_uf == cod_uf,
+            CustoFrete.ativo == True,  # ignorar soft-deletados
             CustoFrete.vigencia_inicio <= date.today(),
             db.or_(
                 CustoFrete.vigencia_fim.is_(None),
@@ -372,6 +402,11 @@ class ParametroCusteio(db.Model):
     # Descricao
     descricao = db.Column(db.Text, nullable=True)
 
+    # Soft delete (Sprint 3 - C17)
+    ativo = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    desativado_em = db.Column(db.DateTime, nullable=True)
+    desativado_por = db.Column(db.String(100), nullable=True)
+
     # Auditoria
     atualizado_em = db.Column(db.DateTime, default=agora_utc_naive, onupdate=agora_utc_naive)
     atualizado_por = db.Column(db.String(100), nullable=True)
@@ -392,16 +427,17 @@ class ParametroCusteio(db.Model):
     @staticmethod
     def obter_valor(chave: str, padrao: float = 0.0) -> float:
         """
-        Obtem valor de um parametro pelo nome da chave
+        Obtem valor de um parametro pelo nome da chave.
+        Considera apenas registros ativos (Sprint 3 - C17).
 
         Args:
             chave: Nome do parametro (ex: 'CUSTO_OPERACAO_PERCENTUAL')
-            padrao: Valor padrao se nao encontrado
+            padrao: Valor padrao se nao encontrado ou inativo
 
         Returns:
             Valor do parametro ou padrao
         """
-        param = ParametroCusteio.query.filter_by(chave=chave).first()
+        param = ParametroCusteio.query.filter_by(chave=chave, ativo=True).first()
         return float(param.valor) if param else padrao
 
 
@@ -609,3 +645,107 @@ class RegraComissao(db.Model):
             cod_produto=cod_produto,
             vendedor=vendedor
         )
+
+
+class AuditLogCusteio(db.Model):
+    """
+    Audit log dedicado do modulo Custeio (Sprint 3 - C16).
+
+    Registra mudancas em entidades criticas (CustoConsiderado, CustoFrete,
+    ParametroCusteio, RegraComissao) com WHO/WHAT/WHEN/WHY.
+
+    Eventos tipicos:
+    - CRIAR: novo registro
+    - ATUALIZAR: mudanca em registro existente (with before/after)
+    - DESATIVAR: soft delete (Sprint 3 - C17)
+    - REATIVAR: undo de soft delete
+    - VERSIONAR: nova versao em CustoConsiderado
+
+    Uso (helper):
+        AuditLogCusteio.registrar(
+            entidade='CustoConsiderado',
+            entidade_id=42,
+            evento='ATUALIZAR',
+            usuario='maria',
+            antes={'custo_considerado': 10.0},
+            depois={'custo_considerado': 12.5},
+            motivo='Ajuste apos auditoria fiscal'
+        )
+    """
+    __tablename__ = 'audit_log_custeio'
+
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=agora_utc_naive, nullable=False, index=True)
+
+    # Quem
+    usuario = db.Column(db.String(100), nullable=False, index=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    session_id = db.Column(db.String(100), nullable=True)
+
+    # O que
+    entidade = db.Column(db.String(50), nullable=False, index=True)  # CustoConsiderado, CustoFrete, etc.
+    entidade_id = db.Column(db.Integer, nullable=True, index=True)
+    evento = db.Column(db.String(20), nullable=False, index=True)  # CRIAR/ATUALIZAR/DESATIVAR/REATIVAR/VERSIONAR
+
+    # Estado anterior e novo (JSON serializado para flexibilidade)
+    antes_json = db.Column(db.Text, nullable=True)
+    depois_json = db.Column(db.Text, nullable=True)
+
+    # Por que
+    motivo = db.Column(db.Text, nullable=True)
+
+    # Contexto adicional (rota chamadora, etc.)
+    contexto = db.Column(db.String(255), nullable=True)
+
+    __table_args__ = (
+        db.Index('idx_audit_custeio_entidade_id', 'entidade', 'entidade_id'),
+        db.Index('idx_audit_custeio_timestamp_evento', 'timestamp', 'evento'),
+    )
+
+    @staticmethod
+    def registrar(entidade, entidade_id, evento, usuario,
+                  antes=None, depois=None, motivo=None,
+                  ip=None, session_id=None, contexto=None):
+        """
+        Helper para registrar evento de audit (commit-safe).
+
+        Captura excecoes para nao quebrar a operacao principal — audit
+        falhar nao deve impedir o WRITE legitimo. Erros vao para logger.
+        """
+        import json
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            entry = AuditLogCusteio(
+                entidade=entidade,
+                entidade_id=entidade_id,
+                evento=evento,
+                usuario=usuario or 'Sistema',
+                antes_json=json.dumps(antes, default=str) if antes else None,
+                depois_json=json.dumps(depois, default=str) if depois else None,
+                motivo=motivo,
+                ip_address=ip,
+                session_id=session_id,
+                contexto=contexto,
+            )
+            db.session.add(entry)
+            # Commit nao e feito aqui — caller deve commitar junto com a operacao
+        except Exception as e:
+            logger.error(f"Falha ao registrar audit log {entidade}/{entidade_id}: {e}")
+
+    def to_dict(self):
+        import json
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.strftime('%d/%m/%Y %H:%M:%S') if self.timestamp else None,
+            'usuario': self.usuario,
+            'entidade': self.entidade,
+            'entidade_id': self.entidade_id,
+            'evento': self.evento,
+            'antes': json.loads(self.antes_json) if self.antes_json else None,
+            'depois': json.loads(self.depois_json) if self.depois_json else None,
+            'motivo': self.motivo,
+            'contexto': self.contexto,
+            'ip_address': self.ip_address,
+        }

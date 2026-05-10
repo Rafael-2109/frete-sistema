@@ -496,6 +496,9 @@
               <li><a class="dropdown-item" href="{{ url_for('financeiro.dashboard') }}">
                   <i class="fas fa-landmark text-primary"></i> <strong>Central Financeira</strong>
                 </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('custeio.index') }}">
+                  <i class="fas fa-calculator text-info"></i> <strong>Sistema de Custeio</strong>
+                </a></li>
               <li><hr class="dropdown-divider"></li>
               {% if current_user.tem_permissao('fretes') or current_user.pode_acessar_financeiro() or
               current_user.perfil == 'administrador' %}
