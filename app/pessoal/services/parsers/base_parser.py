@@ -106,13 +106,54 @@ def extrair_cpf_cnpj(texto: str) -> Optional[str]:
     return None
 
 
+def normalizar_documento(documento: Optional[str]) -> str:
+    """Normaliza documento para hash de dedup: trim + remove zeros a esquerda.
+
+    Motivo: mesmo extrato re-importado pode trazer doc='0111654' em uma rodada
+    e '111654' em outra (formato variavel do CSV). Sem normalizacao, hashes
+    distintos -> dedup falha. Bug historico: 2026-05-10, importacao 52 criou
+    22 duplicatas dessa categoria.
+
+    Convencao: '' (string vazia) e tratada igual a None -> retorna ''.
+    """
+    if not documento:
+        return ''
+    return documento.strip().lstrip('0')
+
+
+def normalizar_valor(valor: Decimal) -> str:
+    """Normaliza valor para forma canonica do hash de dedup: 2 casas decimais.
+
+    Motivo: o parser pode produzir Decimal('50') ou Decimal('50.00') a depender
+    da rodada (e o coluna no banco e numeric(15,2)). f-string preserva a
+    precisao da entrada -> '50' vs '50.00' geram hashes distintos para a mesma
+    transacao. Bug historico: 2026-05-10 (alem do bug de documento), 13 pares
+    extras escaparam ao dedup.
+
+    Mantemos a representacao com 2 casas (string) para coincidir com a
+    precisao do tipo no banco.
+    """
+    if valor is None:
+        return '0.00'
+    if not isinstance(valor, Decimal):
+        valor = Decimal(str(valor))
+    return f'{valor.quantize(Decimal("0.01"))}'
+
+
 def gerar_hash_transacao(conta_id: int, data: date, historico: str, valor: Decimal, tipo: str, documento: str = '', sequencia: int = 0) -> str:
     """Gera hash SHA256 para deduplicacao.
 
     O parametro sequencia diferencia transacoes identicas no mesmo dia
     (ex: 3x GRAN COFFEE R$5,00 em 05/12 -> sequencias 0, 1, 2).
+
+    Normalizacoes aplicadas:
+    - documento: trim + lstrip '0' (formato variavel do CSV)
+    - valor: quantize 2 casas (parser as vezes produz '50' as vezes '50.00')
+    - historico: upper + unidecode + colapsar espacos
     """
-    conteudo = f"{conta_id}|{data.isoformat()}|{normalizar_historico(historico)}|{valor}|{tipo}|{documento or ''}|{sequencia}"
+    doc_norm = normalizar_documento(documento)
+    val_norm = normalizar_valor(valor)
+    conteudo = f"{conta_id}|{data.isoformat()}|{normalizar_historico(historico)}|{val_norm}|{tipo}|{doc_norm}|{sequencia}"
     return hashlib.sha256(conteudo.encode('utf-8')).hexdigest()
 
 

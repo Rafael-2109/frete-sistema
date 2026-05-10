@@ -135,6 +135,27 @@ python scripts/migrations/hora_30_seed_aliases_atuais.py \
 # manualmente apenas em fresh install / staging novo (ordem: 02, 01, 07, 08
 # DDLs primeiro; depois 03, 04, 05, 06 seeds).
 
+# 12. Pessoal (2026-05-10): corrige bugs do dedup de pessoal_transacoes.
+# Causa: hash usava `documento` cru (sensivel a zero-a-esquerda) e `valor`
+# Decimal sem precisao canonica (50 vs 50.00 -> hashes distintos). Re-importacoes
+# do mesmo extrato criavam duplicatas. Ordem importante:
+#   12a. Limpa duplicatas remanescentes detectadas pelo algoritmo NOVO.
+#   12b. Regenera todos os hash_transacao com algoritmo NOVO.
+#   12c. Reaplica heuristica L4 (PAGTO POR DEB EM C/C, etc) em transacoes que
+#        ficaram com excluir_relatorio=False por bug em propagar_para_pendentes.
+# Todos idempotentes (rodar 2x = nada faz).
+echo "Pessoal: limpar duplicatas detectadas pelo dedup v2..."
+python scripts/migrations/limpar_duplicatas_dedup_v2.py --aplicar \
+    || echo "⚠️ limpar_duplicatas_dedup_v2 falhou, continuando deploy..."
+
+echo "Pessoal: regenerar hash_transacao com algoritmo novo..."
+python scripts/migrations/recalcular_hash_transacao_pessoal.py --aplicar \
+    || echo "⚠️ recalcular_hash_transacao_pessoal falhou, continuando deploy..."
+
+echo "Pessoal: re-aplicar heuristica L4 em transacoes orfas..."
+python scripts/migrations/recategorizar_pendentes_pessoal.py --aplicar \
+    || echo "⚠️ recategorizar_pendentes_pessoal falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

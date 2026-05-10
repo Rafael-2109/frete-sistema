@@ -222,18 +222,29 @@ def propagar_para_pendentes() -> dict:
     for transacao in pendentes:
         resultado = categorizar_transacao(transacao)
 
-        if resultado.status == 'CATEGORIZADO' and resultado.categoria_id:
+        if resultado.status != 'CATEGORIZADO':
+            continue
+
+        # Layer 4 (heuristicas: PAGTO. POR DEB EM C/C, transferencia propria)
+        # marca a transacao como CATEGORIZADO com excluir_relatorio=True mas
+        # SEM categoria_id. Aplicar as flags mesmo nesse caso, senao a
+        # transacao volta ao relatorio incorretamente apos um descategorizar
+        # que reseta excluir_relatorio=False (bug 2026-05-10).
+        transacao.excluir_relatorio = resultado.excluir_relatorio
+        transacao.eh_pagamento_cartao = resultado.eh_pagamento_cartao
+        transacao.eh_transferencia_propria = resultado.eh_transferencia_propria
+        transacao.status = 'CATEGORIZADO'
+        transacao.categorizado_em = agora_utc_naive()
+        transacao.categorizado_por = 'sistema (propagacao)'
+
+        # Categoria so e atribuida quando Layer 0.5/1/2 acharam regra/parcela
+        if resultado.categoria_id:
             transacao.categoria_id = resultado.categoria_id
             transacao.regra_id = resultado.regra_id
             transacao.categorizacao_auto = True
             transacao.categorizacao_confianca = resultado.categorizacao_confianca
-            transacao.excluir_relatorio = resultado.excluir_relatorio
-            transacao.eh_pagamento_cartao = resultado.eh_pagamento_cartao
-            transacao.eh_transferencia_propria = resultado.eh_transferencia_propria
-            transacao.status = 'CATEGORIZADO'
-            transacao.categorizado_em = agora_utc_naive()
-            transacao.categorizado_por = 'sistema (propagacao)'
-            propagados += 1
+
+        propagados += 1
 
     logger.info(
         'Propagacao concluida: %d/%d pendentes categorizadas',
@@ -426,8 +437,12 @@ def despropagar_regra(regra_id: int) -> int:
         transacao.status = 'PENDENTE'
         transacao.categorizado_em = None
         transacao.categorizado_por = None
-        # Sair de categoria Desconsiderar => volta ao relatorio
+        # Sair de categoria Desconsiderar => volta ao relatorio.
+        # propagar_para_pendentes() em seguida re-aplica heuristica (PAGTO,
+        # transferencia propria) e ajusta excluir_relatorio se for o caso.
         transacao.excluir_relatorio = False
+        transacao.eh_pagamento_cartao = False
+        transacao.eh_transferencia_propria = False
 
     if count > 0:
         logger.info(

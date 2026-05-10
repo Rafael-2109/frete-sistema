@@ -8,7 +8,7 @@ from app.pessoal.models import PessoalConta, PessoalImportacao, PessoalTransacao
 from app.pessoal.forms import ImportarCSVForm
 from app.pessoal.services.parsers.base_parser import (
     gerar_hash_transacao, detectar_tipo_csv, resolver_conta, normalizar_historico,
-    extrair_cpf_cnpj,
+    normalizar_documento, normalizar_valor, extrair_cpf_cnpj,
 )
 from app.pessoal.services.parsers.bradesco_cc_parser import BradescoExtratoCC
 from app.pessoal.services.parsers.bradesco_cartao_parser import BradescoFaturaCartao
@@ -238,8 +238,11 @@ def _importar_transacoes(nome_arquivo: str, tipo_arquivo: str, conta, transacoes
     contagem_chaves = {}
 
     for t_raw in transacoes_raw:
-        # Gerar chave base para contagem de sequencia
-        chave_base = f"{conta_id}|{t_raw.data.isoformat()}|{normalizar_historico(t_raw.historico)}|{t_raw.valor}|{t_raw.tipo}|{t_raw.documento or ''}"
+        # Gerar chave base para contagem de sequencia (DEVE espelhar o que
+        # gerar_hash_transacao faz internamente — normalizar documento E valor
+        # para que dois CSVs com formatacoes diferentes contem como mesma
+        # sequencia).
+        chave_base = f"{conta_id}|{t_raw.data.isoformat()}|{normalizar_historico(t_raw.historico)}|{normalizar_valor(t_raw.valor)}|{t_raw.tipo}|{normalizar_documento(t_raw.documento)}"
         seq = contagem_chaves.get(chave_base, 0)
         contagem_chaves[chave_base] = seq + 1
 
