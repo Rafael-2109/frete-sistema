@@ -974,10 +974,16 @@ def build_hooks(
                     sql_admin_context = (
                         "\n<sql_admin_context>"
                         "MODO SQL ADMIN: voce tem acesso TOTAL ao banco via mcp__sql__consultar_sql.\n"
-                        "- Todas as tabelas desbloqueadas (incluindo agent_sessions, pessoal_*, bi_*)\n"
-                        "- INSERT, UPDATE, DELETE permitidos\n"
-                        "- CUIDADO: operacoes de escrita afetam producao. Confirme com o usuario ANTES de executar.\n"
-                        "- Para escrita, gere o SQL e mostre ao usuario antes de executar."
+                        "- Todas as tabelas desbloqueadas (incluindo agent_sessions, pessoal_*, bi_*).\n"
+                        "- INSERT, UPDATE, DELETE permitidos DIRETAMENTE pela tool mcp__sql__consultar_sql.\n"
+                        "  A tool NAO e read-only neste modo — o backend detecta seu user_id e ativa admin_mode automaticamente.\n"
+                        "- PROIBIDO usar Bash + Python/SQLAlchemy/psycopg para escrever no banco. Use SEMPRE mcp__sql__consultar_sql,\n"
+                        "  passando o proprio comando SQL como 'pergunta' (ex.: 'UPDATE pedidos SET status = ... WHERE ...').\n"
+                        "  Bash+Python para DML gera scripts descartaveis sem auditoria — a tool MCP registra tudo.\n"
+                        "- CUIDADO: operacoes de escrita afetam producao. SEMPRE mostre o SQL gerado ao usuario\n"
+                        "  e obtenha confirmacao explicita ANTES de executar (regra R3).\n"
+                        "- Fluxo correto: (1) gere o SQL, (2) apresente ao usuario, (3) aguarde confirmacao,\n"
+                        "  (4) execute via mcp__sql__consultar_sql, (5) confirme resultado com SELECT validador."
                         "</sql_admin_context>"
                     )
                     logger.info(

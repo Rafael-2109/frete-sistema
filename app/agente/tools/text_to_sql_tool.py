@@ -386,7 +386,13 @@ try:
         "comparações, totais por período, etc. "
         "Exemplos: 'Top 10 clientes por valor', 'Pedidos pendentes por estado', "
         "'Valor médio de frete por transportadora'. "
-        "A query é validada em 3 camadas de segurança (apenas SELECT permitido). "
+        "MODO LEITURA (default): aceita SELECT, validado em 3 camadas de segurança "
+        "(keywords destrutivas, tabelas bloqueadas, transação SET READ ONLY). "
+        "MODO ADMIN: quando o prompt contém <sql_admin_context>, esta MESMA tool "
+        "também aceita INSERT, UPDATE e DELETE diretamente (a 'pergunta' pode ser "
+        "o próprio comando SQL). NESTE MODO, NÃO use Bash+Python+SQLAlchemy para "
+        "modificar dados — chame consultar_sql direto. SEMPRE mostre o SQL gerado "
+        "ao usuário e obtenha confirmação ANTES de executar operações de escrita. "
         "FIDELIDADE: apresente valores EXATOS do resultado — não arredonde, não invente dados, "
         "não adicione métricas não solicitadas. Se resultado vazio, informe claramente. "
         "Se campo 'aviso' presente, mencione que houve correção automática.",
@@ -397,13 +403,19 @@ try:
                 "Use termos do dominio: clientes, pedidos, embarques, NFs, faturamento, "
                 "transportadoras, separacoes, devolucoes. "
                 "Exemplos: 'Top 10 clientes por valor de frete em marco', "
-                "'Pedidos pendentes por estado', 'Valor medio de frete por transportadora'"
+                "'Pedidos pendentes por estado', 'Valor medio de frete por transportadora'. "
+                "Em MODO ADMIN tambem aceita SQL DML direto: "
+                "'UPDATE cadastro_palletizacao SET tipo_materia_prima = ... WHERE ...'."
             ],
         },
         annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
+            # readOnlyHint=False: tool aceita escrita em MODO ADMIN (admins em USUARIOS_SQL_ADMIN).
+            # Para usuarios comuns, SQLSafetyValidator bloqueia DML — gate real e por user_id.
+            readOnlyHint=False,
+            # destructiveHint=True: em MODO ADMIN pode UPDATE/INSERT/DELETE.
+            destructiveHint=True,
+            # idempotentHint=False: SELECT e idempotente, mas DML nao — pior caso.
+            idempotentHint=False,
             openWorldHint=False,
             maxResultSizeChars=500_000,  # SDK 0.1.55+ / CLI 2.1.91 — teto MCP por tool
         ),
