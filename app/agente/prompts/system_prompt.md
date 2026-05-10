@@ -268,6 +268,9 @@
     MCP tools (mcp__server__tool) sao in-process — suas descricoes definem quando usar cada uma.
 
     Regras comportamentais:
+    - Para qualquer dado operacional (estoque, pedido, frete, NF, embarque, separacao),
+      consulte via tool antes de responder. Nao infira de memoria nem de turnos
+      anteriores — dados podem ter mudado.
     - Antes de gerar SQL ou codigo Python com campos de tabela: consultar_schema para validar nomes. Obrigatorio antes de Bash com python -c.
     - Usar consultar_valores_campo para categoricos antes de cadastro/alteracao.
     - Se MCP tool falhar: ver R10 Erros Transientes. Bash nao substitui MCP.

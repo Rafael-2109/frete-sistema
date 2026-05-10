@@ -27,6 +27,22 @@ SONNET_MODEL = "claude-sonnet-4-6"
 # Limite de caracteres da resposta do assistente para enviar ao Sonnet
 MAX_RESPONSE_CHARS = 5000
 
+# JSON Schema para output_config.format (anthropic SDK 0.85+ — structured outputs).
+# Schema NAO usa minItems/maxItems pois sao constraints nao suportadas — validamos
+# quantidade via _validate_suggestions() apos parse.
+SUGGESTION_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "suggestions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "2-3 sugestoes de follow-up, cada uma com no maximo 60 chars",
+        },
+    },
+    "required": ["suggestions"],
+    "additionalProperties": False,
+}
+
 # System prompt estático — separado para habilitar prompt caching (cache_control ephemeral)
 SUGGESTION_SYSTEM_PROMPT = """Voce eh um gerador de sugestoes para um sistema de logistica (Nacom Goya).
 Com base na ultima mensagem do usuario e resposta do assistente, gere 2-3 sugestoes de follow-up.
@@ -37,7 +53,7 @@ CONTEXTO DO SISTEMA:
 - Produtos: palmito, azeitona, conservas, molhos
 - Operacoes: roteirizacao, expedicao, faturamento, NF-e, embarques
 
-GERE um JSON array com 2-3 strings. Cada string eh uma sugestao de follow-up.
+GERE um JSON object com a chave "suggestions" contendo um array de 2-3 strings.
 
 RACIOCINIO PRE-SUGESTAO:
 Antes de gerar sugestoes, identifique internamente:
@@ -56,13 +72,10 @@ REGRAS:
 - Prefira sugestoes especificas do dominio logistico
 
 EXEMPLOS DE BOAS SUGESTOES:
-- Apos consulta de pedido: ["Ver detalhes da separacao", "Verificar estoque disponivel", "Criar separacao parcial"]
-- Apos consulta de estoque: ["Quais pedidos usam este produto?", "Ver lead time de producao"]
-- Apos criar separacao: ["Ver status do embarque", "Consultar outros pedidos do cliente"]
-- Apos consulta SQL: ["Exportar para Excel", "Filtrar por outro periodo"]
-
-RESPONDA APENAS um JSON array valido, sem markdown, sem comentarios.
-Exemplo: ["Sugestao 1", "Sugestao 2", "Sugestao 3"]"""
+- Apos consulta de pedido: {"suggestions": ["Ver detalhes da separacao", "Verificar estoque disponivel", "Criar separacao parcial"]}
+- Apos consulta de estoque: {"suggestions": ["Quais pedidos usam este produto?", "Ver lead time de producao"]}
+- Apos criar separacao: {"suggestions": ["Ver status do embarque", "Consultar outros pedidos do cliente"]}
+- Apos consulta SQL: {"suggestions": ["Exportar para Excel", "Filtrar por outro periodo"]}"""
 
 
 def _get_anthropic_client() -> anthropic.Anthropic:
@@ -114,6 +127,8 @@ def generate_suggestions(
             f"<ferramentas_usadas>\n{tools_str}\n</ferramentas_usadas>"
         )
 
+        # SDK 0.85+: output_config.format garante JSON valido conforme schema —
+        # elimina necessidade de fallback parse manual de markdown/text.
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=400,
@@ -126,6 +141,12 @@ def generate_suggestions(
                 "role": "user",
                 "content": user_content,
             }],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": SUGGESTION_OUTPUT_SCHEMA,
+                },
+            },
         )
 
         result_text = response.content[0].text.strip()
@@ -146,7 +167,24 @@ def generate_suggestions(
 
 
 def _parse_suggestions(result_text: str) -> List[str]:
-    """Parse seguro da resposta JSON do LLM. Wrapper para parse_llm_json_response."""
+    """Parse da resposta JSON do LLM.
+
+    Com output_config.format, o response e garantido como JSON valido conforme
+    SUGGESTION_OUTPUT_SCHEMA — extrai diretamente. Fallback para parse legado
+    (parse_llm_json_response) preservado por seguranca caso schema falhe.
+    """
+    import json
+    try:
+        data = json.loads(result_text)
+        if isinstance(data, dict) and "suggestions" in data:
+            return _validate_suggestions(data["suggestions"])
+        # Caso o modelo (raro) retorne array direto — backward compat
+        if isinstance(data, list):
+            return _validate_suggestions(data)
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.debug(f"[SUGGESTIONS] JSON parse direto falhou ({e}), tentando fallback")
+
+    # Fallback: parser tolerante usado antes de output_config.format
     from ._utils import parse_llm_json_response
     parsed = parse_llm_json_response(result_text, list, "SUGGESTIONS")
     return _validate_suggestions(parsed) if parsed else []

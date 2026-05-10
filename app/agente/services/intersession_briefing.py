@@ -89,7 +89,9 @@ def build_intersession_briefing(user_id: int) -> Optional[str]:
         if not parts:
             return None
 
-        since = last_session_at.strftime('%d/%m %H:%M') if last_session_at else '?'
+        # Granularidade horaria (nao por minuto) para evitar invalidar cache de
+        # messages a cada minuto. Ver analise: silent invalidator B5 (2026-05-09).
+        since = last_session_at.strftime('%d/%m %Hh') if last_session_at else '?'
         header = f'<intersession_briefing since="{since}">'
         footer = '</intersession_briefing>'
         return header + '\n' + '\n'.join(parts) + '\n' + footer
@@ -207,7 +209,7 @@ def _check_odoo_sync_errors(since) -> Optional[str]:
         top_etapa = rows[0][1] if rows else 'N/A'
 
         return (
-            f'<odoo_sync_errors total="{total_errors}" since="{cutoff.strftime("%d/%m %H:%M")}">'
+            f'<odoo_sync_errors total="{total_errors}" since="{cutoff.strftime("%d/%m %Hh")}">'
             f'Top: {top_etapa} ({rows[0][2]}x)'
             f'</odoo_sync_errors>'
         )
@@ -242,7 +244,7 @@ def _check_import_failures(since) -> Optional[str]:
         if count == 0:
             return None
 
-        return f'<import_failures count="{count}" since="{cutoff.strftime("%d/%m %H:%M")}"/>'
+        return f'<import_failures count="{count}" since="{cutoff.strftime("%d/%m %Hh")}"/>'
 
     except Exception as e:
         logger.debug(f"[BRIEFING] Import check falhou (ignorado): {e}")
@@ -367,7 +369,7 @@ def _check_recent_commits(since) -> Optional[str]:
         if not commits_xml:
             return None
 
-        since_fmt = since.strftime('%d/%m %H:%M') if since else '?'
+        since_fmt = since.strftime('%d/%m %Hh') if since else '?'
         return (
             f'<recent_commits since="{since_fmt}" count="{len(commits_xml)}">\n'
             + '\n'.join(commits_xml)

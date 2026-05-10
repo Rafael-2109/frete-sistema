@@ -26,6 +26,47 @@ logger = logging.getLogger(__name__)
 
 SONNET_MODEL = "claude-sonnet-4-6"
 
+# JSON Schema para output_config.format (anthropic SDK 0.85+ — structured outputs).
+# Nao usa minLength/maxLength/minItems pois nao sao suportados pelo schema validator.
+# Schema reflete a estrutura definida no SUMMARY_SYSTEM_PROMPT.
+SUMMARY_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "resumo_geral": {"type": "string"},
+        "acoes_usuario": {"type": "array", "items": {"type": "string"}},
+        "perfil_signals": {
+            "type": "object",
+            "properties": {
+                "dominio_provavel": {"type": "string"},
+                "tipo_atividade": {"type": "array", "items": {"type": "string"}},
+                "clientes_envolvidos": {"type": "array", "items": {"type": "string"}},
+                "volume": {"type": "string"},
+            },
+            "additionalProperties": True,
+        },
+        "pedidos_mencionados": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "cliente": {"type": "string"},
+                    "pedido": {"type": "string"},
+                    "status": {"type": "string"},
+                    "acao_pendente": {"type": "string"},
+                },
+                "additionalProperties": True,
+            },
+        },
+        "decisoes_tomadas": {"type": "array", "items": {"type": "string"}},
+        "tarefas_pendentes": {"type": "array", "items": {"type": "string"}},
+        "alertas": {"type": "array", "items": {"type": "string"}},
+        "ferramentas_usadas": {"type": "array", "items": {"type": "string"}},
+        "topicos_abordados": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["resumo_geral"],
+    "additionalProperties": True,
+}
+
 # Limite de caracteres das mensagens para enviar ao Sonnet
 MAX_MESSAGES_CHARS = 20000
 
@@ -171,6 +212,8 @@ def summarize_session(
         client = _get_anthropic_client()
         formatted = _format_messages_for_summary(messages)
 
+        # SDK 0.85+: output_config.format garante JSON valido conforme
+        # SUMMARY_OUTPUT_SCHEMA — elimina parse manual com fallback de markdown/text.
         response = client.messages.create(
             model=SONNET_MODEL,
             max_tokens=2500,
@@ -183,6 +226,12 @@ def summarize_session(
                 "role": "user",
                 "content": f"Analise a conversa abaixo e gere um resumo ESTRUTURADO em JSON.\n\n<conversa>\n{formatted}\n</conversa>",
             }],
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": SUMMARY_OUTPUT_SCHEMA,
+                },
+            },
         )
 
         result_text = response.content[0].text.strip()
@@ -216,9 +265,25 @@ def summarize_session(
 
 
 def _parse_json_response(result_text: str, session_id: str = "") -> Optional[Dict[str, Any]]:
-    """Parse seguro da resposta JSON do LLM. Wrapper para parse_llm_json_response."""
+    """Parse da resposta JSON do LLM.
+
+    Com output_config.format, o response e garantido como JSON valido conforme
+    SUMMARY_OUTPUT_SCHEMA. Tenta json.loads direto primeiro; se falhar, cai no
+    parser tolerante (parse_llm_json_response) por seguranca.
+    """
+    import json
+    try:
+        data = json.loads(result_text)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.debug(
+            f"[SUMMARIZER {session_id[:8]}] JSON parse direto falhou ({e}), tentando fallback"
+        )
+
     from ._utils import parse_llm_json_response
-    return parse_llm_json_response(result_text, dict, f"SUMMARIZER {session_id[:8]}")
+    parsed = parse_llm_json_response(result_text, dict, f"SUMMARIZER {session_id[:8]}")
+    return parsed if isinstance(parsed, dict) else None
 
 
 def summarize_and_save(

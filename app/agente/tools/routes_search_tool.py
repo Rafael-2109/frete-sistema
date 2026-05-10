@@ -105,10 +105,48 @@ def _format_results(results: list, query: str) -> str:
 # MCP TOOL DEFINITIONS
 # ============================================================================
 
-try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
+# Output schema (Enhanced wrapper) — modelo recebe lista estruturada de rotas
+# em vez de precisar parsear texto formatado.
+ROUTES_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "query": {"type": "string"},
+        "tipo": {"type": ["string", "null"]},
+        "result_count": {"type": "integer"},
+        "fallback_used": {
+            "type": "boolean",
+            "description": "true se busca semantica falhou e ILIKE foi usado",
+        },
+        "routes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "url_path": {"type": "string"},
+                    "function_name": {"type": ["string", "null"]},
+                    "blueprint_name": {"type": ["string", "null"]},
+                    "tipo": {"type": ["string", "null"]},
+                    "menu_path": {"type": ["string", "null"]},
+                    "template_path": {"type": ["string", "null"]},
+                },
+                "required": ["url_path"],
+                "additionalProperties": True,
+            },
+        },
+    },
+    "required": ["query", "result_count", "routes"],
+    "additionalProperties": False,
+}
 
-    @tool(
+
+try:
+    from claude_agent_sdk import ToolAnnotations
+    from app.agente.tools._mcp_enhanced import (
+        enhanced_tool,
+        create_enhanced_mcp_server,
+    )
+
+    @enhanced_tool(
         "search_routes",
         (
             "Busca rotas, telas e APIs do sistema por linguagem natural. "
@@ -117,13 +155,31 @@ try:
             "Retorna URL clicavel, menu, template e metadados. "
             "~300 rotas indexadas cobrindo todos os modulos do sistema."
         ),
-        {"query": Annotated[str, "Texto de busca para encontrar rotas, telas ou APIs do sistema (minimo 2 caracteres)"], "tipo": Annotated[str, "Filtrar por tipo: 'rota_template' (telas HTML), 'rota_api' (endpoints JSON). Omitir para ambos"], "limit": Annotated[int, "Numero maximo de resultados (1-20, default 5)"]},
+        {
+            "query": Annotated[
+                str,
+                "Texto de busca para encontrar rotas, telas ou APIs do sistema "
+                "(minimo 2 caracteres). Use linguagem natural — ex: 'tela de cadastro "
+                "de palletizacao', 'API de cotacao de frete'.",
+            ],
+            "tipo": Annotated[
+                str,
+                "Filtrar por tipo: 'rota_template' (telas HTML renderizadas) ou "
+                "'rota_api' (endpoints JSON/AJAX). Omitir para retornar ambos.",
+            ],
+            "limit": Annotated[
+                int,
+                "Numero maximo de resultados a retornar (1-20). Default 5. "
+                "Aumente para queries amplas, mantenha baixo para queries especificas.",
+            ],
+        },
         annotations=ToolAnnotations(
             readOnlyHint=True,
             destructiveHint=False,
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=ROUTES_OUTPUT_SCHEMA,
     )
     async def search_routes(args: Dict[str, Any]) -> Dict[str, Any]:
         """Busca semantica em rotas e templates do sistema."""
@@ -203,8 +259,26 @@ try:
             if fallback_used:
                 text = "Busca semantica indisponivel, usando busca textual:\n\n" + text
 
+            structured_routes = []
+            for r in (results or []):
+                structured_routes.append({
+                    "url_path": r.get("url_path", ""),
+                    "function_name": r.get("function_name"),
+                    "blueprint_name": r.get("blueprint_name"),
+                    "tipo": r.get("tipo"),
+                    "menu_path": r.get("menu_path"),
+                    "template_path": r.get("template_path"),
+                })
+
             return {
                 "content": [{"type": "text", "text": text}],
+                "structuredContent": {
+                    "query": query,
+                    "tipo": tipo,
+                    "result_count": len(structured_routes),
+                    "fallback_used": fallback_used,
+                    "routes": structured_routes,
+                },
             }
         except Exception as e:
             logger.error(f"[ROUTES_SEARCH] Erro na busca: {e}")
@@ -214,15 +288,15 @@ try:
             }
 
     # ========================================================================
-    # MCP Server Registration
+    # MCP Server Registration (Enhanced wrapper — outputSchema + structuredContent)
     # ========================================================================
-    routes_server = create_sdk_mcp_server(
+    routes_server = create_enhanced_mcp_server(
         name="routes",
-        version="1.0.0",
+        version="2.0.0",  # bump: Enhanced wrapper adoption
         tools=[search_routes],
     )
 
-    logger.info("[ROUTES_SEARCH] Custom Tool MCP 'routes' registrado com sucesso (1 tool)")
+    logger.info("[ROUTES_SEARCH] Custom Tool MCP 'routes' registrado com sucesso (1 tool, Enhanced v2.0)")
 
 except ImportError as e:
     routes_server = None

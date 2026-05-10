@@ -195,18 +195,19 @@ and agentic use cases on 4.7, and the default in Claude Code"*. Fallback automat
 - **Forward-compat**: `agent_kwargs["effort"] = effort` so se `_SDK_HAS_EFFORT_FIELD=True`
   (SDK >= 0.1.74). SDK < 0.1.74: log debug + ignora (subagente herda effort do main).
 
-**Aplicado em** (6 subagentes Opus pesados):
+**Aplicado em** (7 subagentes Opus pesados):
 - `analista-carteira.md` — analise multi-step P1-P7 + comunicacao PCP/Comercial
 - `auditor-financeiro.md` — reconciliacao Local x Odoo + SEM_MATCH
 - `desenvolvedor-integracao-odoo.md` — criar/modificar integracoes (dev-only)
 - `especialista-odoo.md` — pipeline Odoo cross-area
 - `gestor-recebimento.md` — pipeline 4 fases recebimento
+- `gestor-motos-assai.md` — pipeline B2B Q.P.A. Sendas/Assai
 - `raio-x-pedido.md` — visao 360 cruzando carteira/entrega/frete
 
-**NAO aplicado em** 7 subagentes Sonnet — `xhigh` em Sonnet faz fallback para `high`,
+**NAO aplicado em** 6 subagentes Sonnet — `xhigh` em Sonnet faz fallback para `high`,
 que ja eh o default do Sonnet 4.6 (no-op efetivo).
 
-**Custo esperado**: 20-40% mais tokens nos 6 Opus vs `high`. Cap atual `MAX_BUDGET_USD=5.0`
+**Custo esperado**: 20-40% mais tokens nos 7 Opus vs `high`. Cap atual `MAX_BUDGET_USD=5.0`
 permanece como guard. Monitorar `cost_tracker.py` por subagent_type por 7 dias.
 
 **Rollback**: remover linha `effort: xhigh` dos frontmatter dos 6 .md.
@@ -216,7 +217,7 @@ permanece como guard. Monitorar `cost_tracker.py` por subagent_type por 7 dias.
 - `app/agente/config/agent_loader.py:359-373`: parse de frontmatter `effort` + validacao.
 - `app/agente/config/agent_loader.py:391-401`: aplicacao com forward-compat introspection.
 - `app/agente/config/agent_loader.py:417-419`: log enriquecido com `effort=xhigh`.
-- `.claude/agents/{6 Opus}.md`: linha `effort: xhigh` no frontmatter.
+- `.claude/agents/{7 Opus}.md`: linha `effort: xhigh` no frontmatter.
 
 #### F8: `api_error_status` em ResultMessage (SDK 0.1.76) — classificacao granular de falhas API
 

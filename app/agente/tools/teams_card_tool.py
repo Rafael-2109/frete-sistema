@@ -51,13 +51,37 @@ _ALLOWED_TEMPLATES = {
 
 
 # =====================================================================
-# CUSTOM TOOL — @tool decorator
+# CUSTOM TOOL — @enhanced_tool decorator (outputSchema + structuredContent)
 # =====================================================================
 
-try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
+# Output schema enxuto: confirmacao binaria + template + session.
+TEAMS_CARD_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "queued": {
+            "type": "boolean",
+            "description": "true se o card foi salvo para renderizacao",
+        },
+        "template": {"type": "string"},
+        "session_teams": {"type": "boolean"},
+        "data_keys": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "chaves do dict data (sem valores — auditoria leve)",
+        },
+    },
+    "required": ["queued", "template"],
+    "additionalProperties": False,
+}
 
-    @tool(
+try:
+    from claude_agent_sdk import ToolAnnotations
+    from app.agente.tools._mcp_enhanced import (
+        enhanced_tool,
+        create_enhanced_mcp_server,
+    )
+
+    @enhanced_tool(
         "render_teams_card",
         "Retorna a resposta como Adaptive Card estruturado no Microsoft Teams "
         "em vez de texto puro. Use APENAS quando o usuario esta no Teams (a mensagem "
@@ -93,7 +117,9 @@ try:
         {
             "template": Annotated[
                 str,
-                "Nome do template do card. Deve ser um dos: 'pedido_status', 'ruptura'.",
+                "Nome do template do card. Deve ser um dos: 'pedido_status', "
+                "'ruptura', 'validacao_nf_po', 'criar_separacao_preview', "
+                "'conciliar_extrato_preview'.",
             ],
             "data": Annotated[
                 dict,
@@ -107,6 +133,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=TEAMS_CARD_OUTPUT_SCHEMA,
     )
     async def render_teams_card(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -201,16 +228,22 @@ try:
             "content": [{"type": "text", "text":
                 f"[OK] Card '{template}' preparado para renderizacao no Teams. "
                 f"O usuario vera o card adicionalmente a sua resposta em texto."}],
+            "structuredContent": {
+                "queued": True,
+                "template": template,
+                "session_teams": True,
+                "data_keys": list(data.keys()),
+            },
         }
 
-    # Criar MCP server in-process
-    teams_card_server = create_sdk_mcp_server(
+    # Criar MCP server in-process com Enhanced wrapper
+    teams_card_server = create_enhanced_mcp_server(
         name="teams-card",
-        version="1.0.0",
+        version="2.0.0",  # bump: Enhanced wrapper adoption
         tools=[render_teams_card],
     )
 
-    logger.info("[TEAMS_CARD] Custom Tool MCP 'teams_card' registrada (1 operacao)")
+    logger.info("[TEAMS_CARD] Custom Tool MCP 'teams_card' registrada (1 operacao, Enhanced v2.0)")
 
 except ImportError as e:
     # claude_agent_sdk nao disponivel (ex: rodando fora do agente)

@@ -112,7 +112,15 @@ echo "WhatsApp: usuarios.whatsapp_autorizado + whatsapp_tasks..."
 python scripts/migrations/2026_05_09_whatsapp_module.py \
     || echo "⚠️ Migration whatsapp_module falhou, continuando deploy..."
 
-# 10. HORA 30: seed inicial de hora_modelo_alias.
+# 10. F8 (2026-05-09): tabela agent_session_costs para persistencia opcional
+# do CostTracker (cross-deploy). Habilitada via flag AGENT_COST_TRACKER_PERSIST.
+# Sem flag, tabela fica vazia — comportamento legado in-memory preservado.
+# Idempotente (CREATE TABLE/INDEX IF NOT EXISTS).
+echo "Agente: agent_session_costs (cost_tracker persistente)..."
+python scripts/migrations/2026_05_09_agent_session_costs.py \
+    || echo "⚠️ Migration agent_session_costs falhou, continuando deploy..."
+
+# 11. HORA 30: seed inicial de hora_modelo_alias.
 # Para cada modelo existente, cria alias NOME_LIVRE com nome_modelo
 # + aliases TAGPLUS_CODIGO/TAGPLUS_PRODUTO_ID a partir do legado
 # hora_tagplus_produto_map. Tambem cria modelo sentinela DESCONHECIDO

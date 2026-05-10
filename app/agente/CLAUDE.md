@@ -458,11 +458,11 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
   `client.py`, propagado em `StreamEvent('done').content['api_error_status']` e SSE
   `done_payload`. Sentry tag `anthropic_http_status` (e `anthropic_http_5xx=true` quando
   >= 500) para classificar 429/500/529 sem inspecao de string em `errors[]`.
-- **Effort xhigh per-subagente** (SDK 0.1.74): 6 subagentes Opus pesados (`analista-carteira`,
+- **Effort xhigh per-subagente** (SDK 0.1.74): 7 subagentes Opus pesados (`analista-carteira`,
   `auditor-financeiro`, `desenvolvedor-integracao-odoo`, `especialista-odoo`,
-  `gestor-recebimento`, `raio-x-pedido`) marcados `effort: xhigh` no frontmatter.
-  `agent_loader.py` parseia com forward-compat (`_SDK_HAS_EFFORT_FIELD` introspection).
-  Sonnet ignorado (xhigh fallback para high = no-op).
+  `gestor-recebimento`, `gestor-motos-assai`, `raio-x-pedido`) marcados `effort: xhigh` no
+  frontmatter. `agent_loader.py` parseia com forward-compat (`_SDK_HAS_EFFORT_FIELD`
+  introspection). Sonnet ignorado (xhigh fallback para high = no-op).
 - **`skills` option** (SDK 0.1.77, deprecou `"Skill"` em allowed_tools): `agente_lojas`
   passa `skills=sorted(SKILLS_PERMITIDAS)` (filtro real do listing — defesa em
   profundidade do contrato HORA); `agente` Nacom passa `skills="all"` (centralizacao).

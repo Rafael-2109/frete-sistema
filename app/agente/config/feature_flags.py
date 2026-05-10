@@ -596,3 +596,62 @@ if AGENT_SDK_SESSION_STORE_FLUSH not in ("batched", "eager"):
 #
 # Ref: https://github.com/anthropics/claude-agent-sdk-python (release 0.1.65, #830)
 AGENT_THINKING_DISPLAY = os.getenv("AGENT_THINKING_DISPLAY", "omitted").lower()
+
+# ====================================================================
+# Strict MCP config (SDK 0.1.74+)
+# ====================================================================
+# Quando True, o CLI usa APENAS os mcp_servers passados em ClaudeAgentOptions —
+# ignora project/user/global config (.mcp.json, plugins). Util para garantir
+# determinismo DEV vs PROD: em DEV local, evita que MCP servers pessoais do
+# desenvolvedor (pyright-lsp, context7, etc.) vazem para a sessao do agente.
+#
+# Em PROD (Render com HOME=/tmp), nao muda comportamento (sem .mcp.json).
+# Em DEV, recomendado True para reproduzir ambiente PROD.
+#
+# Default false (rollback seguro). Ativacao: AGENT_STRICT_MCP_CONFIG=true.
+# Forward-compat via introspection em client.py — SDK < 0.1.74 ignora.
+#
+# Ref: claude-agent-sdk CHANGELOG 0.1.74, ClaudeAgentOptions.strict_mcp_config
+USE_STRICT_MCP_CONFIG = os.getenv("AGENT_STRICT_MCP_CONFIG", "false").lower() == "true"
+
+# ====================================================================
+# F1 — Cache hit alert (Sentry)
+# ====================================================================
+# Quando True, captura no Sentry quando uma request consome muitos tokens
+# de input mas cache_read_input_tokens=0 — sinal de silent invalidator
+# (datetime.now() em system prompt, tools mudando, model swap mid-session, etc).
+#
+# Threshold: input_tokens > MIN_CACHE_PREFIX (4096 Opus / 2048 Sonnet) AND
+# cache_read_tokens == 0 AND cache_creation_tokens == 0 (excluiu primeiro write).
+#
+# Cooldown 5min por (user_id, model) para evitar spam — capturas adicionais
+# logam DEBUG mas nao vao para Sentry.
+#
+# Default true (observabilidade barata). Desativar: AGENT_CACHE_MISS_ALERT_ENABLED=false.
+USE_CACHE_MISS_ALERT = os.getenv("AGENT_CACHE_MISS_ALERT_ENABLED", "true").lower() == "true"
+
+# ====================================================================
+# F7 — Browser (Playwright) lazy registration
+# ====================================================================
+# Quando False (default), playwright_mcp_tool NAO eh registrado no MCP server
+# do agente — reduz cold start (~1720 LOC nao carregadas) e RAM (server idle).
+# Subagentes que precisam de browser (gestor-ssw, operando-portal-atacadao via
+# skills) carregam playwright sob demanda via skill activation.
+#
+# Quando True, comportamento legado — playwright registrado no startup.
+#
+# Default false. Ativacao: AGENT_BROWSER_ENABLED=true.
+USE_BROWSER_TOOL = os.getenv("AGENT_BROWSER_ENABLED", "false").lower() == "true"
+
+# ====================================================================
+# F8 — cost_tracker persistente em DB
+# ====================================================================
+# Quando True, cost_tracker.record_cost() faz write-through na tabela
+# agent_session_costs (persiste cross-deploy). Quando False (default),
+# mantem comportamento runtime-only em memoria — perde dados ao redeploy.
+#
+# Persistencia eh best-effort: falha de DB nao quebra stream do agente.
+# Routes/insights le da tabela quando flag ON, fallback para in-memory quando OFF.
+#
+# Default false (opt-in). Ativacao: AGENT_COST_TRACKER_PERSIST=true.
+USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "false").lower() == "true"

@@ -248,13 +248,17 @@ def create_enhanced_mcp_server(
             """Return available tools with outputSchema support."""
             tool_list = []
             for tool_def in tools:
-                # Convert input_schema to JSON Schema format
+                # Convert input_schema to JSON Schema format.
+                # `additionalProperties: false` adicionado por default — previne modelo
+                # de alucinar parametros extras silenciosamente ignorados.
+                # Best practice Anthropic 2026 — strict tool schemas.
                 if isinstance(tool_def.input_schema, dict):
                     if (
                         "type" in tool_def.input_schema
                         and "properties" in tool_def.input_schema
                     ):
-                        schema = tool_def.input_schema
+                        schema = dict(tool_def.input_schema)
+                        schema.setdefault("additionalProperties", False)
                     else:
                         properties = {}
                         for param_name, param_type in tool_def.input_schema.items():
@@ -263,9 +267,14 @@ def create_enhanced_mcp_server(
                             "type": "object",
                             "properties": properties,
                             "required": list(properties.keys()),
+                            "additionalProperties": False,
                         }
                 else:
-                    schema = {"type": "object", "properties": {}}
+                    schema = {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    }
 
                 # Build Tool with optional outputSchema
                 tool_kwargs: dict[str, Any] = {

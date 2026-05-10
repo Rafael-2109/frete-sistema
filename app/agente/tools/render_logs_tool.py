@@ -347,16 +347,71 @@ def _format_service_status(status_data: Dict, servico: str) -> str:
 
 
 # =====================================================================
-# CUSTOM TOOLS — @tool decorator
+# CUSTOM TOOLS — @enhanced_tool decorator (outputSchema + structuredContent)
 # =====================================================================
 
+# Output schemas (Enhanced wrapper) — modelo recebe dados tipados em vez de
+# precisar parsear texto. Esquemas enxutos: campos estruturados criticos +
+# texto formatado em `content` para humanos.
+LOGS_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "service": {"type": "string"},
+        "period_hours": {"type": "integer"},
+        "log_type": {"type": "string"},
+        "level_filter": {"type": ["string", "null"]},
+        "text_filter": {"type": ["string", "null"]},
+        "total_logs": {"type": "integer"},
+        "has_more": {"type": "boolean"},
+    },
+    "required": ["service", "total_logs"],
+    "additionalProperties": True,
+}
+
+ERROS_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "service": {"type": "string"},
+        "period_minutes": {"type": "integer"},
+        "total_errors": {"type": "integer"},
+        "has_more": {"type": "boolean"},
+        "text_filter": {"type": ["string", "null"]},
+    },
+    "required": ["service", "total_errors"],
+    "additionalProperties": True,
+}
+
+STATUS_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "services": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "ok": {"type": "boolean"},
+                },
+                "required": ["name", "ok"],
+                "additionalProperties": True,
+            },
+        },
+    },
+    "required": ["services"],
+    "additionalProperties": False,
+}
+
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
+    from claude_agent_sdk import ToolAnnotations
+    from app.agente.tools._mcp_enhanced import (
+        enhanced_tool,
+        create_enhanced_mcp_server,
+    )
 
     # -----------------------------------------------------------------
     # Tool 1: consultar_logs
     # -----------------------------------------------------------------
-    @tool(
+    @enhanced_tool(
         "consultar_logs",
         (
             "Busca logs dos servicos em producao no Render com filtros. "
@@ -382,6 +437,7 @@ try:
             openWorldHint=True,
             maxResultSizeChars=500_000,  # SDK 0.1.55+ — 100 logs * stacktraces grandes
         ),
+        output_schema=LOGS_OUTPUT_SCHEMA,
     )
     async def consultar_logs(args: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -469,8 +525,18 @@ try:
             header = " | ".join(header_parts)
             output = f"{header}\n\n{formatted}"
 
+            logs = result.get("logs") or []
             return {
                 "content": [{"type": "text", "text": output}],
+                "structuredContent": {
+                    "service": servico,
+                    "period_hours": horas,
+                    "log_type": tipo,
+                    "level_filter": nivel,
+                    "text_filter": texto,
+                    "total_logs": len(logs),
+                    "has_more": bool(result.get("has_more", False)),
+                },
             }
 
         except Exception as e:
@@ -484,7 +550,7 @@ try:
     # -----------------------------------------------------------------
     # Tool 2: consultar_erros
     # -----------------------------------------------------------------
-    @tool(
+    @enhanced_tool(
         "consultar_erros",
         (
             "Atalho para buscar erros recentes nos servicos em producao. "
@@ -506,6 +572,7 @@ try:
             openWorldHint=True,
             maxResultSizeChars=500_000,  # SDK 0.1.55+ — stacktraces longas
         ),
+        output_schema=ERROS_OUTPUT_SCHEMA,
     )
     async def consultar_erros(args: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -580,6 +647,13 @@ try:
 
             return {
                 "content": [{"type": "text", "text": "\n".join(lines)}],
+                "structuredContent": {
+                    "service": servico,
+                    "period_minutes": minutos,
+                    "total_errors": total_errors,
+                    "has_more": bool(result_error.get("has_more", False)),
+                    "text_filter": texto,
+                },
             }
 
         except Exception as e:
@@ -593,7 +667,7 @@ try:
     # -----------------------------------------------------------------
     # Tool 3: status_servicos
     # -----------------------------------------------------------------
-    @tool(
+    @enhanced_tool(
         "status_servicos",
         (
             "Verifica o status e metricas (CPU, memoria) dos servicos em producao. "
@@ -608,6 +682,7 @@ try:
             idempotentHint=True,
             openWorldHint=True,
         ),
+        output_schema=STATUS_OUTPUT_SCHEMA,
     )
     async def status_servicos(args: Dict[str, Any]) -> Dict[str, Any]:  # noqa: ARG001
         """
@@ -615,6 +690,7 @@ try:
         """
         try:
             lines = ["**Status dos Servicos**\n"]
+            services_struct = []
 
             for servico in ["web", "worker"]:
                 service_id = SERVICOS[servico]
@@ -622,14 +698,24 @@ try:
 
                 if result["error"]:
                     lines.append(f"**{SERVICOS_NOMES[servico]}**: Erro — {result['error']}")
+                    services_struct.append({
+                        "name": servico,
+                        "ok": False,
+                        "error": result["error"],
+                    })
                 else:
                     formatted = _format_service_status(result, servico)
                     lines.append(formatted)
+                    services_struct.append({
+                        "name": servico,
+                        "ok": True,
+                    })
 
                 lines.append("")  # linha em branco
 
             return {
                 "content": [{"type": "text", "text": "\n".join(lines)}],
+                "structuredContent": {"services": services_struct},
             }
 
         except Exception as e:
@@ -641,15 +727,15 @@ try:
             }
 
     # =====================================================================
-    # MCP SERVER REGISTRATION
+    # MCP SERVER REGISTRATION (Enhanced wrapper — outputSchema + structuredContent)
     # =====================================================================
-    render_server = create_sdk_mcp_server(
+    render_server = create_enhanced_mcp_server(
         name="render",
-        version="1.0.0",
+        version="2.0.0",  # bump: Enhanced wrapper adoption
         tools=[consultar_logs, consultar_erros, status_servicos],
     )
 
-    logger.info("[RENDER_LOGS] Custom Tool MCP 'render' registrado com sucesso (3 tools)")
+    logger.info("[RENDER_LOGS] Custom Tool MCP 'render' registrado com sucesso (3 tools, Enhanced v2.0)")
 
 except ImportError as e:
     render_server = None

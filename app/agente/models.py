@@ -1389,3 +1389,198 @@ class AgentImprovementDialogue(db.Model):
         )
         db.session.add(response)
         return response
+
+
+class AgentSessionCost(db.Model):
+    """
+    F8 (2026-05-09) — Persistencia de cost_tracker entries.
+
+    Habilitado via flag AGENT_COST_TRACKER_PERSIST=true. Quando off, cost_tracker
+    permanece runtime-only (in-memory). Quando on, cada record_cost() faz
+    write-through aqui (best-effort: falha de DB nao bloqueia stream).
+
+    Sem FK para agent_sessions.session_id porque sessoes podem ser deletadas
+    (cascade) e queremos preservar custo historico para relatorios financeiros
+    e auditoria. Caller filtra orfaos quando necessario.
+
+    Schema completo: scripts/migrations/2026_05_09_agent_session_costs.sql
+    """
+    __tablename__ = 'agent_session_costs'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    # Deduplicacao (mesma logica de _seen_message_ids in-memory)
+    message_id = db.Column(db.Text, nullable=False, unique=True)
+
+    # Vinculos (sem FK — preserva historico apos cascade)
+    session_id = db.Column(db.Text, nullable=True, index=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+    tool_name = db.Column(db.Text, nullable=True)
+    model = db.Column(db.Text, nullable=True)
+
+    # Tokens (G2: cache breakdown)
+    input_tokens = db.Column(db.Integer, nullable=False, default=0)
+    output_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_read_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_creation_tokens = db.Column(db.Integer, nullable=False, default=0)
+
+    # Custo
+    cost_usd = db.Column(db.Numeric(10, 6), nullable=False, default=0)
+
+    # Timestamp
+    recorded_at = db.Column(db.DateTime, nullable=False, default=lambda: agora_utc_naive(), index=True)
+
+    def __repr__(self):
+        return (
+            f'<AgentSessionCost {self.message_id} ${self.cost_usd} '
+            f'user={self.user_id} session={self.session_id}>'
+        )
+
+    @classmethod
+    def insert_entry(
+        cls,
+        message_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        session_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        tool_name: Optional[str] = None,
+        model: Optional[str] = None,
+        cache_read_tokens: int = 0,
+        cache_creation_tokens: int = 0,
+    ) -> Optional['AgentSessionCost']:
+        """
+        Insere entrada de custo. Retorna None se duplicado (UNIQUE message_id).
+
+        SAVEPOINT pattern (H2 fix 2026-05-09): usa `begin_nested()` em vez de
+        `commit()` direto. Por que importa: o caller (cost_tracker._persist_to_db)
+        eh chamado dentro do stream do agente, onde JA EXISTE uma transaction
+        do request Flask em curso. Um `commit()` aqui faria flush prematuro de
+        TUDO que esta pendente na sessao (objetos meio-construidos do agente).
+        Um IntegrityError no commit faria rollback da transacao do REQUEST INTEIRO,
+        nao apenas deste insert.
+
+        Solucao: savepoint. begin_nested() cria SAVEPOINT na transaction pai,
+        e o commit do request final consolida o entry. IntegrityError aqui
+        rollba apenas o SAVEPOINT (entry descartado), preservando o resto.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        entry = cls(
+            message_id=message_id,
+            session_id=session_id,
+            user_id=user_id,
+            tool_name=tool_name,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
+            cost_usd=cost_usd,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(entry)
+                db.session.flush()
+            return entry
+        except IntegrityError:
+            # Savepoint ja foi rollback'd pelo context manager.
+            # Transacao pai (request) preservada.
+            return None
+
+    @classmethod
+    def aggregate_summary(
+        cls,
+        user_id: Optional[int] = None,
+        session_id: Optional[str] = None,
+        since=None,
+        until=None,
+    ) -> Dict[str, Any]:
+        """
+        Retorna agregado compativel com CostSummary.to_dict() do cost_tracker.
+
+        Usado por routes/insights.py quando AGENT_COST_TRACKER_PERSIST=true.
+        Estrutura: total_requests, total_input_tokens, ..., by_user, by_tool.
+
+        H3 trade-off: as 3 queries (totals, by_user, by_tool) NAO usam snapshot
+        REPEATABLE READ. Em volume baixo (< 10 usuarios concorrentes, dashboard
+        analitico raramente concorre com writes), inconsistencia transitoria eh
+        aceita. Tentamos SET TRANSACTION antes mas em sessao Flask ja com
+        transaction aberta o comando aborta o connection state (psycopg2
+        InFailedSqlTransaction). Se virar problema visivel no dashboard, mover
+        as 3 agregacoes para 1 query unica com CTE ou usar conn dedicada via
+        `db.engine.connect()`.
+        """
+        from sqlalchemy import func
+
+        q = cls.query
+        if user_id is not None:
+            q = q.filter(cls.user_id == user_id)
+        if session_id is not None:
+            q = q.filter(cls.session_id == session_id)
+        if since is not None:
+            q = q.filter(cls.recorded_at >= since)
+        if until is not None:
+            q = q.filter(cls.recorded_at <= until)
+
+        # Totais (1 query)
+        totals = q.with_entities(
+            func.count(cls.id).label('total_requests'),
+            func.coalesce(func.sum(cls.input_tokens), 0).label('total_input_tokens'),
+            func.coalesce(func.sum(cls.output_tokens), 0).label('total_output_tokens'),
+            func.coalesce(func.sum(cls.cache_read_tokens), 0).label('total_cache_read_tokens'),
+            func.coalesce(func.sum(cls.cache_creation_tokens), 0).label('total_cache_creation_tokens'),
+            func.coalesce(func.sum(cls.cost_usd), 0).label('total_cost_usd'),
+            func.min(cls.recorded_at).label('period_start'),
+            func.max(cls.recorded_at).label('period_end'),
+        ).first()
+
+        total_requests = totals.total_requests or 0
+        total_input = int(totals.total_input_tokens or 0)
+        total_output = int(totals.total_output_tokens or 0)
+        total_cache_read = int(totals.total_cache_read_tokens or 0)
+        total_cache_creation = int(totals.total_cache_creation_tokens or 0)
+        total_cost = float(totals.total_cost_usd or 0)
+
+        # Cache hit rate
+        denom = total_input + total_cache_read
+        cache_hit_rate = round(total_cache_read / denom, 4) if denom > 0 else 0.0
+
+        # Estimated savings (mesma formula de CostSummary.estimated_savings_usd)
+        opus_input_per_mil = 5.00 / 1_000_000
+        gross = total_cache_read * 0.9 - total_cache_creation * 0.25
+        estimated_savings = round(gross * opus_input_per_mil, 4)
+
+        # By user — top 50 por custo (M3 fix: aplicar limite que estava so em comentario)
+        by_user_rows = q.with_entities(
+            cls.user_id,
+            func.sum(cls.cost_usd).label('cost'),
+        ).filter(cls.user_id.isnot(None)).group_by(cls.user_id).order_by(
+            func.sum(cls.cost_usd).desc()
+        ).limit(50).all()
+        by_user = {int(uid): round(float(c), 4) for uid, c in by_user_rows if uid is not None}
+
+        # By tool — top 50 por custo
+        by_tool_rows = q.with_entities(
+            cls.tool_name,
+            func.sum(cls.cost_usd).label('cost'),
+        ).filter(cls.tool_name.isnot(None)).group_by(cls.tool_name).order_by(
+            func.sum(cls.cost_usd).desc()
+        ).limit(50).all()
+        by_tool = {tn: round(float(c), 4) for tn, c in by_tool_rows if tn}
+
+        return {
+            'total_requests': total_requests,
+            'total_input_tokens': total_input,
+            'total_output_tokens': total_output,
+            'total_cache_read_tokens': total_cache_read,
+            'total_cache_creation_tokens': total_cache_creation,
+            'cache_hit_rate': cache_hit_rate,
+            'estimated_savings_usd': estimated_savings,
+            'total_cost_usd': round(total_cost, 4),
+            'period_start': totals.period_start.isoformat() if totals.period_start else None,
+            'period_end': totals.period_end.isoformat() if totals.period_end else None,
+            'by_tool': by_tool,
+            'by_user': by_user,
+        }

@@ -4,6 +4,7 @@ description: Especialista no modulo Motos Assai (B2B Q.P.A. Sendas/Assai). Orque
 tools: Read, Bash, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
 effort: xhigh
+max_turns: 50
 skills:
   - consultando-estoque-assai
   - rastreando-chassi-assai

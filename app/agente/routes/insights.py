@@ -135,11 +135,13 @@ def api_insights_memory():
 def api_insights_cache_performance():
     """
     G9 (2026-04-15): Cache hit rate e economia estimada.
+    F8 (2026-05-09): source-aware — DB ou in-memory.
 
-    Le do cost_tracker em memoria (runtime-only — nao persistido em DB).
-    Cobertura temporal limitada a CostTracker.clear_old_entries (7 dias
-    default). Para analise historica longa, sera necessaria migration
-    DB futura (fora do escopo G2/G9 atual).
+    Source depende da flag AGENT_COST_TRACKER_PERSIST:
+    - true  → query agent_session_costs (DB, historico cross-deploy, ate 90d)
+    - false → cost_tracker in-memory (runtime-only, ~7d, perde ao redeploy)
+
+    Response inclui campo `source: "db" | "memory"` para o front saber a origem.
 
     GET /agente/api/insights/cache-performance?days=1&user_id=123
 
@@ -178,17 +180,40 @@ def api_insights_cache_performance():
     try:
         from datetime import timedelta
         from app.utils.timezone import agora_utc_naive
-        from app.agente.sdk.cost_tracker import get_cost_tracker
+        from app.agente.config.feature_flags import USE_COST_TRACKER_PERSIST
 
         days = request.args.get('days', 1, type=int)
-        days = min(max(days, 1), 7)  # tracker mantem ~7 dias por default
+        # F8: quando persistente, permite janela maior. Quando in-memory,
+        # tracker mantem ~7 dias por default (clear_old_entries).
+        days_max = 90 if USE_COST_TRACKER_PERSIST else 7
+        days = min(max(days, 1), days_max)
         user_id = request.args.get('user_id', None, type=int)
 
         since = agora_utc_naive() - timedelta(days=days)
 
-        tracker = get_cost_tracker()
-        summary = tracker.get_summary(user_id=user_id, since=since)
-        data = summary.to_dict()
+        # F8: source de dados depende da flag.
+        # ON  → query DB (agent_session_costs, historico cross-deploy)
+        # OFF → cost_tracker in-memory (~7 dias, perde ao redeploy)
+        if USE_COST_TRACKER_PERSIST:
+            from app.agente.models import AgentSessionCost
+            data = AgentSessionCost.aggregate_summary(
+                user_id=user_id,
+                since=since,
+            )
+            source_note = (
+                'Metricas persistidas em agent_session_costs (DB). '
+                f'Janela: {days}d. Historico cross-deploy preservado.'
+            )
+        else:
+            from app.agente.sdk.cost_tracker import get_cost_tracker
+            tracker = get_cost_tracker()
+            summary = tracker.get_summary(user_id=user_id, since=since)
+            data = summary.to_dict()
+            source_note = (
+                'Metricas runtime-only (cost_tracker em memoria). '
+                'Cobertura limitada a ~7 dias. Para historico longo, '
+                'ative AGENT_COST_TRACKER_PERSIST=true.'
+            )
 
         # Verdict textual para o dashboard — threshold empirico
         hit_rate = data.get('cache_hit_rate', 0)
@@ -222,11 +247,8 @@ def api_insights_cache_performance():
                 'verdict': verdict,
                 'by_user': data.get('by_user', {}),
                 'by_tool': data.get('by_tool', {}),
-                'note': (
-                    'Metricas runtime-only (cost_tracker em memoria). '
-                    'Cobertura limitada a ~7 dias. Historico longo '
-                    'requer migration DB futura.'
-                ),
+                'source': 'db' if USE_COST_TRACKER_PERSIST else 'memory',
+                'note': source_note,
             },
         })
 

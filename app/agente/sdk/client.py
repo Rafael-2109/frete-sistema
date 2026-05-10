@@ -73,9 +73,142 @@ def _check_options_skills_field() -> bool:
 
 _SDK_HAS_OPTIONS_SKILLS = _check_options_skills_field()
 
+
+# SDK 0.1.74+: option `strict_mcp_config` em ClaudeAgentOptions. Quando True,
+# CLI usa APENAS mcp_servers passados em options, ignorando project/user/global
+# config (.mcp.json). Util para determinismo DEV vs PROD. Detectado uma vez no
+# import (zero overhead por request).
+def _check_strict_mcp_config_field() -> bool:
+    """Retorna True se ClaudeAgentOptions tem campo `strict_mcp_config` nativo (SDK 0.1.74+)."""
+    try:
+        import dataclasses
+        fields = {f.name for f in dataclasses.fields(ClaudeAgentOptions)}
+        return 'strict_mcp_config' in fields
+    except Exception:
+        return False
+
+
+_SDK_HAS_STRICT_MCP_CONFIG = _check_strict_mcp_config_field()
+
 # Fallback para API direta (health check)
 import anthropic
 logger = logging.getLogger('sistema_fretes')
+
+
+# =====================================================================
+# F1 — Cache miss alert (Sentry) — observabilidade silent invalidator
+# =====================================================================
+# Threshold minimo para alertar: requests pequenos nao cacheam por design.
+# Anthropic prompt-caching docs: Opus/Haiku >= 4096; Sonnet/Haiku 3.x >= 2048.
+_CACHE_MIN_PREFIX_OPUS = 4096
+_CACHE_MIN_PREFIX_SONNET = 2048
+
+# Cooldown in-memory: dict[(user_id, model), float_unix_timestamp].
+# Evita spam Sentry — captura no maximo 1 alerta a cada 5min por par.
+# H1 fix (2026-05-09): Lock previne race condition em multi-thread.
+# Gunicorn gthread (4 workers x 2 threads) sem lock pode emitir N alertas
+# simultaneos para a mesma chave — duplo Sentry spam.
+import threading as _threading
+_cache_miss_cooldown: Dict[tuple, float] = {}
+_cache_miss_cooldown_lock = _threading.Lock()
+_CACHE_MISS_COOLDOWN_SEC = 300
+_CACHE_MISS_COOLDOWN_MAX_ENTRIES = 100  # M1: cleanup quando exceder
+
+
+def _alert_cache_miss(
+    input_tokens: int,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
+    model: Optional[str],
+    user_id: Optional[int],
+    session_id: Optional[str],
+) -> None:
+    """Captura no Sentry quando request grande nao bate cache (silent invalidator).
+
+    Chamado apos ResultMessage.usage parsed. Best-effort: qualquer falha eh
+    swallowed (logger.debug). Cooldown 5min por (user_id, model) evita spam.
+
+    Trigger: input_tokens > MIN_PREFIX AND cache_read=0 AND cache_creation=0.
+    cache_creation>0 indica primeiro write da sessao (esperado, nao alerta).
+    """
+    try:
+        from app.agente.config.feature_flags import USE_CACHE_MISS_ALERT
+        if not USE_CACHE_MISS_ALERT:
+            return
+
+        model_str = (model or "").lower()
+        # Threshold por familia (Anthropic prompt-caching docs):
+        #   Opus 4.x, Haiku 4.5  -> 4096 tokens
+        #   Sonnet 4.x, Haiku 3.x (3 e 3.5) -> 2048 tokens
+        # IDs reais: claude-3-haiku-20240307, claude-3-5-haiku-20241022,
+        # claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-7.
+        # Match explicito por familia — substring "haiku-3" NAO casa "3-5-haiku".
+        is_haiku_3x = ("3-haiku" in model_str) or ("3-5-haiku" in model_str)
+        is_sonnet_4x = "sonnet-4" in model_str
+        if is_sonnet_4x or is_haiku_3x:
+            min_prefix = _CACHE_MIN_PREFIX_SONNET
+        else:
+            # Opus 4.x, Haiku 4.5, ou desconhecido -> threshold mais alto (conservador)
+            min_prefix = _CACHE_MIN_PREFIX_OPUS
+
+        # Filtros: requests pequenos nao deveriam cachear; primeira write OK.
+        if input_tokens < min_prefix:
+            return
+        if cache_read_tokens > 0 or cache_creation_tokens > 0:
+            return
+
+        # Cooldown — H1: check-then-act sob lock para evitar race em gthread.
+        # M1: cleanup oportunistico quando dict cresce acima do threshold.
+        key = (user_id, model_str)
+        now = time.time()
+        with _cache_miss_cooldown_lock:
+            # M1: cleanup periodico — remove entries com last < (now - cooldown*2)
+            if len(_cache_miss_cooldown) > _CACHE_MISS_COOLDOWN_MAX_ENTRIES:
+                cutoff = now - (_CACHE_MISS_COOLDOWN_SEC * 2)
+                stale = [k for k, v in _cache_miss_cooldown.items() if v < cutoff]
+                for k in stale:
+                    del _cache_miss_cooldown[k]
+
+            last = _cache_miss_cooldown.get(key, 0.0)
+            if (now - last) < _CACHE_MISS_COOLDOWN_SEC:
+                logger.debug(
+                    f"[CACHE_MISS] cooldown ativo para {key}, suprimindo alerta "
+                    f"(input={input_tokens}, ultimo={int(now-last)}s atras)"
+                )
+                return
+            _cache_miss_cooldown[key] = now
+
+        # Sentry capture FORA do lock — evita serializacao de I/O.
+        # M2: usar new_scope (push_scope deprecou em sentry_sdk 2.x).
+        try:
+            import sentry_sdk
+            _client = sentry_sdk.get_client()
+            if _client is not None and _client.is_active():
+                with sentry_sdk.new_scope() as scope:
+                    scope.set_tag("cache_miss", "true")
+                    scope.set_tag("model", model_str or "unknown")
+                    if user_id is not None:
+                        scope.set_tag("user_id", str(user_id))
+                    scope.set_extra("input_tokens", input_tokens)
+                    scope.set_extra("cache_read_tokens", cache_read_tokens)
+                    scope.set_extra("cache_creation_tokens", cache_creation_tokens)
+                    scope.set_extra("min_prefix_threshold", min_prefix)
+                    if session_id:
+                        scope.set_extra("session_id", session_id)
+                    sentry_sdk.capture_message(
+                        f"Cache miss detectado: {input_tokens} input tokens sem "
+                        f"cache hit em {model_str or 'modelo desconhecido'}",
+                        level="warning",
+                    )
+        except ImportError:
+            pass
+
+        logger.warning(
+            f"[CACHE_MISS] input_tokens={input_tokens} cache_read=0 cache_creation=0 "
+            f"model={model_str} user_id={user_id} — possivel silent invalidator"
+        )
+    except Exception as e:
+        logger.debug(f"[CACHE_MISS] alert falhou (ignorado): {e}")
 
 
 
@@ -1000,6 +1133,28 @@ Nunca invente informações."""
                     state.cache_read_tokens = getattr(usage, 'cache_read_input_tokens', 0) or 0
                     state.cache_creation_tokens = getattr(usage, 'cache_creation_input_tokens', 0) or 0
 
+                # F1 — alerta cache miss (silent invalidator detection)
+                # Best-effort: model via settings, user_id via ContextVar tool (memory_mcp).
+                try:
+                    _user_id = None
+                    try:
+                        from ..tools.memory_mcp_tool import (
+                            get_current_user_id as _get_uid,
+                        )
+                        _user_id = _get_uid()
+                    except Exception:
+                        pass  # ContextVar nao setado em path admin/health
+                    _alert_cache_miss(
+                        input_tokens=state.input_tokens,
+                        cache_read_tokens=state.cache_read_tokens,
+                        cache_creation_tokens=state.cache_creation_tokens,
+                        model=str(self.settings.model) if self.settings else None,
+                        user_id=_user_id,
+                        session_id=state.result_session_id,
+                    )
+                except Exception as _cm_err:
+                    logger.debug(f"[CACHE_MISS] dispatch falhou (ignorado): {_cm_err}")
+
             logger.info(
                 f"[AGENT_SDK] ResultMessage | "
                 f"stop_reason={stop_reason} | "
@@ -1410,12 +1565,30 @@ Nunca invente informações."""
             USE_EXTENDED_CONTEXT,
             USE_CONTEXT_CLEARING,
             USE_PROMPT_CACHING,
+            USE_STRICT_MCP_CONFIG,
         )
 
         # Budget Control nativo
         if USE_BUDGET_CONTROL:
             options_dict["max_budget_usd"] = MAX_BUDGET_USD
             logger.info(f"[AGENT_CLIENT] Budget control nativo: max ${MAX_BUDGET_USD}/request")
+
+        # Strict MCP Config (SDK 0.1.74+)
+        # Quando True, CLI usa APENAS mcp_servers passados em options — ignora
+        # .mcp.json project/user/global. Garante determinismo DEV vs PROD.
+        # Forward-compat: SDK < 0.1.74 nao tem o campo, flag e ignorada.
+        if USE_STRICT_MCP_CONFIG and _SDK_HAS_STRICT_MCP_CONFIG:
+            options_dict["strict_mcp_config"] = True
+            logger.info(
+                "[AGENT_CLIENT] strict_mcp_config=True — apenas MCP servers em "
+                "options sao usados (project/user/.mcp.json ignorados)"
+            )
+        elif USE_STRICT_MCP_CONFIG and not _SDK_HAS_STRICT_MCP_CONFIG:
+            logger.warning(
+                "[AGENT_CLIENT] AGENT_STRICT_MCP_CONFIG=true mas SDK < 0.1.74 — "
+                "campo strict_mcp_config nao disponivel, flag ignorada. "
+                "Atualize claude-agent-sdk para 0.1.74+."
+            )
 
         # Extended Context (1M tokens)
         # Opus 4.7/4.6 e Sonnet 4.6: 1M tokens NATIVO — sem beta header necessário.
@@ -1528,14 +1701,25 @@ Nunca invente informações."""
             logger.warning(f"[AGENT_CLIENT] Erro MCP render: {e}")
 
         # Browser (Playwright headless — SSW + Atacadão, 12 operações)
-        try:
-            from ..tools.playwright_mcp_tool import browser_server
-            if _register_mcp("browser", browser_server):
-                logger.info("[AGENT_CLIENT] MCP 'browser' registrada (12 operações)")
-        except ImportError:
-            logger.debug("[AGENT_CLIENT] MCP browser não disponível")
-        except Exception as e:
-            logger.warning(f"[AGENT_CLIENT] Erro MCP browser: {e}")
+        # F7: registro lazy via flag USE_BROWSER_TOOL (default false). Quando off,
+        # playwright_mcp_tool (~1720 LOC) NAO eh importado — reduz cold start + RAM.
+        # Subagentes que precisam de browser (gestor-ssw via skill operando-ssw)
+        # usam Bash + scripts Python proprios, nao mcp__browser__*.
+        from ..config.feature_flags import USE_BROWSER_TOOL
+        if USE_BROWSER_TOOL:
+            try:
+                from ..tools.playwright_mcp_tool import browser_server
+                if _register_mcp("browser", browser_server):
+                    logger.info("[AGENT_CLIENT] MCP 'browser' registrada (12 operações)")
+            except ImportError:
+                logger.debug("[AGENT_CLIENT] MCP browser não disponível")
+            except Exception as e:
+                logger.warning(f"[AGENT_CLIENT] Erro MCP browser: {e}")
+        else:
+            logger.debug(
+                "[AGENT_CLIENT] MCP 'browser' SKIP (AGENT_BROWSER_ENABLED=false). "
+                "Ative para registrar playwright_mcp_tool no startup."
+            )
 
         # Routes (busca semântica de rotas — 1 operação)
         try:

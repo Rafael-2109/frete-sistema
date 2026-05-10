@@ -260,13 +260,72 @@ def _format_schema(schema: dict) -> str:
 
 
 # =====================================================================
-# CUSTOM TOOLS — @tool decorator
+# OUTPUT SCHEMAS (Enhanced wrapper — outputSchema + structuredContent)
+# =====================================================================
+
+# Schema enxuto: campos essenciais para o modelo parsear sem precisar fazer
+# regex no texto. Detalhes verbosos (lineage, query_hints, indices completos)
+# permanecem no campo `content` text — o modelo le quando precisa.
+SCHEMA_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "found": {"type": "boolean", "description": "true se tabela foi localizada"},
+        "table": {"type": "string", "description": "nome canonico da tabela"},
+        "field_count": {"type": "integer", "description": "total de campos"},
+        "fields": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "type": {"type": "string"},
+                    "nullable": {"type": "boolean"},
+                    "description": {"type": ["string", "null"]},
+                },
+                "required": ["name", "type"],
+                "additionalProperties": True,
+            },
+        },
+        "suggestions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "tabelas similares quando found=false",
+        },
+    },
+    "required": ["found", "table"],
+    "additionalProperties": False,
+}
+
+VALORES_CAMPO_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "table": {"type": "string"},
+        "field": {"type": "string"},
+        "field_type": {"type": "string"},
+        "value_count": {"type": "integer"},
+        "values": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "valores distintos encontrados (max 50)",
+        },
+    },
+    "required": ["table", "field", "value_count", "values"],
+    "additionalProperties": False,
+}
+
+
+# =====================================================================
+# CUSTOM TOOLS — @enhanced_tool decorator (outputSchema + structuredContent)
 # =====================================================================
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server, ToolAnnotations
+    from claude_agent_sdk import ToolAnnotations
+    from app.agente.tools._mcp_enhanced import (
+        enhanced_tool,
+        create_enhanced_mcp_server,
+    )
 
-    @tool(
+    @enhanced_tool(
         "consultar_schema",
         "Retorna o schema completo de uma tabela do banco de dados: "
         "campos, tipos, descrições, nullable, defaults, índices e foreign keys. "
@@ -281,6 +340,7 @@ try:
             openWorldHint=False,
             maxResultSizeChars=300_000,  # SDK 0.1.55+ — schemas com FKs/indices grandes
         ),
+        output_schema=SCHEMA_OUTPUT_SCHEMA,
     )
     async def consultar_schema(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -294,7 +354,7 @@ try:
             args: {"tabela": str} — nome da tabela
 
         Returns:
-            MCP tool response com schema formatado
+            MCP tool response com schema formatado E structuredContent.
         """
         tabela = args.get("tabela", "").strip().lower()
 
@@ -321,10 +381,38 @@ try:
                 msg = f"❌ Tabela '{tabela}' não encontrada no catálogo."
                 if suggestions:
                     msg += f"\n\nTabelas similares: {', '.join(suggestions)}"
-                return {"content": [{"type": "text", "text": msg}]}
+                return {
+                    "content": [{"type": "text", "text": msg}],
+                    "structuredContent": {
+                        "found": False,
+                        "table": tabela,
+                        "field_count": 0,
+                        "fields": [],
+                        "suggestions": suggestions,
+                    },
+                }
 
             formatted = _format_schema(schema)
-            return {"content": [{"type": "text", "text": formatted}]}
+            fields = schema.get('fields', []) or []
+            structured_fields = [
+                {
+                    "name": f.get("name", ""),
+                    "type": f.get("type", "?"),
+                    "nullable": bool(f.get("nullable", True)),
+                    "description": f.get("description"),
+                }
+                for f in fields
+            ]
+            return {
+                "content": [{"type": "text", "text": formatted}],
+                "structuredContent": {
+                    "found": True,
+                    "table": schema.get("name", tabela),
+                    "field_count": len(structured_fields),
+                    "fields": structured_fields,
+                    "suggestions": [],
+                },
+            }
 
         except Exception as e:
             error_msg = f"❌ Erro ao consultar schema: {str(e)}"
@@ -334,7 +422,7 @@ try:
                 "is_error": True,
             }
 
-    @tool(
+    @enhanced_tool(
         "consultar_valores_campo",
         "Retorna os valores distintos (únicos) de um campo categórico de uma tabela. "
         "Use ANTES de sugerir valores para campos como categoria_produto, linha_producao, "
@@ -349,6 +437,7 @@ try:
             idempotentHint=True,
             openWorldHint=False,
         ),
+        output_schema=VALORES_CAMPO_OUTPUT_SCHEMA,
     )
     async def consultar_valores_campo(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -425,16 +514,34 @@ try:
             values = _query_distinct_values(tabela, campo)
 
             if not values:
-                return {"content": [{"type": "text", "text":
-                    f"⚠️ Nenhum valor encontrado para {tabela}.{campo} "
-                    f"(campo pode estar vazio em todos os registros)."}]}
+                return {
+                    "content": [{"type": "text", "text":
+                        f"⚠️ Nenhum valor encontrado para {tabela}.{campo} "
+                        f"(campo pode estar vazio em todos os registros)."}],
+                    "structuredContent": {
+                        "table": tabela,
+                        "field": campo,
+                        "field_type": field_type,
+                        "value_count": 0,
+                        "values": [],
+                    },
+                }
 
             result = (
                 f"✅ Valores de {tabela}.{campo} ({len(values)} valores distintos):\n\n"
                 + "\n".join(f"  - {v}" for v in values)
             )
 
-            return {"content": [{"type": "text", "text": result}]}
+            return {
+                "content": [{"type": "text", "text": result}],
+                "structuredContent": {
+                    "table": tabela,
+                    "field": campo,
+                    "field_type": field_type,
+                    "value_count": len(values),
+                    "values": values,
+                },
+            }
 
         except Exception as e:
             error_msg = f"❌ Erro ao consultar valores: {str(e)}"
@@ -444,14 +551,14 @@ try:
                 "is_error": True,
             }
 
-    # Criar MCP server in-process
-    schema_server = create_sdk_mcp_server(
+    # Criar MCP server in-process com Enhanced wrapper (outputSchema + structuredContent)
+    schema_server = create_enhanced_mcp_server(
         name="schema-tools",
-        version="1.0.0",
+        version="2.0.0",  # bump: Enhanced wrapper adoption
         tools=[consultar_schema, consultar_valores_campo],
     )
 
-    logger.info("[SCHEMA_TOOL] Custom Tool MCP 'schema' registrada (2 operações)")
+    logger.info("[SCHEMA_TOOL] Custom Tool MCP 'schema' registrada (2 operações, Enhanced v2.0)")
 
 except ImportError as e:
     # claude_agent_sdk não disponível (ex: rodando fora do agente)

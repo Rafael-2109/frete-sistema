@@ -4,6 +4,7 @@ description: Analista de carteira da Nacom Goya. Analisa carteira de pedidos e p
 tools: Read, Bash, Write, Edit, Glob, Grep, mcp__memory__view_memories, mcp__memory__list_memories, mcp__memory__save_memory, mcp__memory__update_memory, mcp__memory__log_system_pitfall, mcp__memory__query_knowledge_graph
 model: opus
 effort: xhigh
+max_turns: 50
 skills:
   - gerindo-expedicao
   - consultando-sql
