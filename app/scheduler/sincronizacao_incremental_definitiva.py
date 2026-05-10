@@ -1864,8 +1864,12 @@ def executar_sincronizacao():
 
         # ── 2️⃣6️⃣ FECHAMENTO MENSAL DE CUSTEIO (mensal dia X, 26º módulo) ──
         # Sprint 2 C10: dispara fechar_mes do mes anterior. Idempotente (UNIQUE
-        # em custo_mensal). Controle: 1x por mes baseado em ano-mes do ultimo
-        # fechamento bem-sucedido.
+        # em custo_mensal). Controle DUAL contra duplicacao:
+        # 1. In-memory: _ultimo_fechamento_mes_custeio (rapido, mesmo processo)
+        # 2. Persistido em DB: query CustoMensal status='FECHADO' do mes alvo
+        #    (sobrevive restart do scheduler entre 04:00 e 04:30 do dia 5)
+        # Guard de hora usa >= (nao ==) para nao perder o dia se scheduler
+        # estiver down as 04:00 e voltar mais tarde no mesmo dia 5.
         _t_step = time.time()
         sucesso_fechar_mes_custeio = False
         fechar_mes_custeio_executou = False
@@ -1876,13 +1880,40 @@ def executar_sincronizacao():
             hora_atual_fmc = agora.hour
             chave_mes_atual = (agora.year, agora.month)
 
+            # Guard 1: in-memory (rapido)
             deve_rodar_fmc = (
-                dia_atual == FECHAR_MES_CUSTEIO_DAY
-                and hora_atual_fmc == FECHAR_MES_CUSTEIO_HOUR
+                dia_atual >= FECHAR_MES_CUSTEIO_DAY
+                and hora_atual_fmc >= FECHAR_MES_CUSTEIO_HOUR
                 and (_ultimo_fechamento_mes_custeio is None
                      or (_ultimo_fechamento_mes_custeio.year,
                          _ultimo_fechamento_mes_custeio.month) != chave_mes_atual)
             )
+
+            # Guard 2: persistido em DB (sobrevive restart)
+            # So consulta se passou no guard in-memory para evitar query desnecessaria
+            if deve_rodar_fmc:
+                try:
+                    from datetime import timedelta as _td
+                    from app.custeio.models import CustoMensal as _CM
+                    # Mes alvo = mes anterior ao dia atual
+                    primeiro_mes_atual = agora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                    ultimo_mes_anterior = (primeiro_mes_atual - _td(days=1))
+                    mes_alvo = ultimo_mes_anterior.month
+                    ano_alvo = ultimo_mes_anterior.year
+
+                    ja_fechado = _CM.query.filter_by(
+                        mes=mes_alvo, ano=ano_alvo, status='FECHADO'
+                    ).first()
+                    if ja_fechado:
+                        logger.info(
+                            f"⏭️ Fechamento de {mes_alvo:02d}/{ano_alvo} ja realizado "
+                            f"(custo_mensal tem registros FECHADO). Pulando step 26."
+                        )
+                        deve_rodar_fmc = False
+                        # Sincronizar in-memory com DB para evitar consulta repetida
+                        _ultimo_fechamento_mes_custeio = agora
+                except Exception as e:
+                    logger.warning(f"⚠️ Falha ao verificar custo_mensal existente: {e} (prosseguindo)")
 
             if deve_rodar_fmc:
                 fechar_mes_custeio_executou = True

@@ -27,7 +27,9 @@ import logging
 # Path setup obrigatorio quando rodado via python -m (standalone CLI)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app import db
+# Nota (CR-S3): `db` e importado lazy dentro das funcoes check_* para evitar
+# que o modulo dependa de app context no import time. Padrao alinhado com
+# fechar_mes_automatico.py.
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,7 @@ LIMIAR_DIAS_PARAMETROS_DORMENTES = 90
 
 def check_dormencia_custos():
     """Verifica se custo_considerado tem atualizacao recente."""
+    from app import db
     resultado = db.session.execute(db.text("""
         SELECT MAX(atualizado_em) AS ultima,
                EXTRACT(DAY FROM NOW() - MAX(atualizado_em))::INT AS dias
@@ -56,6 +59,7 @@ def check_dormencia_custos():
 
 def check_produtos_sem_custo():
     """Conta produtos ativos sem CustoConsiderado."""
+    from app import db
     count = db.session.execute(db.text("""
         SELECT COUNT(*) FROM cadastro_palletizacao cp
         WHERE cp.ativo = TRUE
@@ -74,6 +78,7 @@ def check_produtos_sem_custo():
 
 def check_regras_comissao():
     """Verifica se tabela de regras esta vazia (todas comissoes via fallback)."""
+    from app import db
     total_ativas = db.session.execute(db.text("""
         SELECT COUNT(*) FROM regra_comissao
         WHERE ativo = TRUE
@@ -93,6 +98,7 @@ def check_regras_comissao():
 
 def check_acabados_sem_custo_producao():
     """Conta produtos ACABADOS sem custo_producao definido (potencial margem liquida superestimada)."""
+    from app import db
     count = db.session.execute(db.text("""
         SELECT COUNT(*) FROM custo_considerado cc
         WHERE cc.custo_atual = TRUE
@@ -109,6 +115,7 @@ def check_acabados_sem_custo_producao():
 
 def check_versoes_duplicadas():
     """Detecta produtos com mais de uma versao custo_atual=TRUE (deveria ser 0 com partial UNIQUE)."""
+    from app import db
     duplicatas = db.session.execute(db.text("""
         SELECT COUNT(*) FROM (
             SELECT cod_produto FROM custo_considerado
@@ -124,6 +131,7 @@ def check_versoes_duplicadas():
 
 def check_parametros_dormentes():
     """Verifica se parametros globais nao foram revisados ha tempo."""
+    from app import db
     resultado = db.session.execute(db.text("""
         SELECT MAX(atualizado_em) AS ultima,
                EXTRACT(DAY FROM NOW() - MAX(atualizado_em))::INT AS dias
