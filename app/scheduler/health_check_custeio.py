@@ -1,33 +1,34 @@
 """
-Cron diario de saude do modulo Custeio.
+Health check diario do modulo Custeio.
 
-Executa todo dia as 07:00 e detecta:
+Detecta:
 - Custos dormentes (>30d sem atualizacao)
 - Produtos ativos sem CustoConsiderado
 - Tabela regra_comissao vazia (todas comissoes em fallback PADRAO)
 - Acabados sem custo_producao definido
 - Versoes duplicadas com custo_atual=TRUE (apos partial UNIQUE deveria ser 0)
+- Parametros globais nao revisados
+
+Uso:
+
+1. INTEGRADO ao scheduler unico (Render) — recomendado:
+   Importar `executar_health_check_no_contexto()` no
+   `sincronizacao_incremental_definitiva.py` step 27.
+
+2. STANDALONE via CLI (dev/staging):
+   python -m app.scheduler.health_check_custeio
 
 Sprint 3 - C19 (auditoria 2026-05-10)
-
-Crontab WSL2:
-    0 7 * * * cd /home/rafaelnascimento/projetos/frete_sistema && \
-        source .venv/bin/activate && \
-        python -m app.scheduler.health_check_custeio >> logs/cron/health_custeio.log 2>&1
 """
 import sys
 import os
 import logging
 
+# Path setup obrigatorio quando rodado via python -m (standalone CLI)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from app import create_app, db
+from app import db
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 
@@ -146,39 +147,59 @@ CHECKS = [
 ]
 
 
+def executar_health_check_no_contexto():
+    """Executa todos os checks. ASSUME app_context ja ativo.
+
+    Retorna dict {'criticos': [...], 'warnings': [...], 'ok': N}.
+    Nao chama sys.exit — caller decide como reportar.
+    """
+    logger.info("=== HEALTH CHECK CUSTEIO ===")
+    criticos = []
+    warnings = []
+    ok_count = 0
+
+    for nome, fn in CHECKS:
+        try:
+            nivel, mensagem = fn()
+            logger.info(f"[{nivel:8s}] {nome}: {mensagem}")
+            if nivel == 'CRITICO':
+                criticos.append(f"{nome}: {mensagem}")
+            elif nivel == 'WARNING':
+                warnings.append(f"{nome}: {mensagem}")
+            else:
+                ok_count += 1
+        except Exception as e:
+            logger.exception(f"Erro em check {nome}: {e}")
+            criticos.append(f"{nome}: erro inesperado: {e}")
+
+    # TODO: integrar com app.teams.notificacoes para enviar alerta
+    # quando houver criticos ou >2 warnings.
+    if criticos:
+        logger.error(f"=== {len(criticos)} CRITICOS detectados ===")
+        for c in criticos:
+            logger.error(f"  - {c}")
+
+    if warnings:
+        logger.warning(f"=== {len(warnings)} WARNINGS detectados ===")
+        for w in warnings:
+            logger.warning(f"  - {w}")
+
+    if not criticos and not warnings:
+        logger.info("Custeio saudavel: sem criticos nem warnings.")
+
+    return {'criticos': criticos, 'warnings': warnings, 'ok': ok_count}
+
+
 def main():
+    """Modo standalone CLI: cria app_context e roda health check."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+    )
+    from app import create_app
     app = create_app()
     with app.app_context():
-        logger.info("=== HEALTH CHECK CUSTEIO ===")
-        criticos = []
-        warnings = []
-
-        for nome, fn in CHECKS:
-            try:
-                nivel, mensagem = fn()
-                logger.info(f"[{nivel:8s}] {nome}: {mensagem}")
-                if nivel == 'CRITICO':
-                    criticos.append(f"{nome}: {mensagem}")
-                elif nivel == 'WARNING':
-                    warnings.append(f"{nome}: {mensagem}")
-            except Exception as e:
-                logger.exception(f"Erro em check {nome}: {e}")
-                criticos.append(f"{nome}: erro inesperado: {e}")
-
-        # TODO: integrar com app.teams.notificacoes para enviar alerta
-        # quando houver criticos ou >2 warnings.
-        if criticos:
-            logger.error(f"=== {len(criticos)} CRITICOS detectados ===")
-            for c in criticos:
-                logger.error(f"  - {c}")
-
-        if warnings:
-            logger.warning(f"=== {len(warnings)} WARNINGS detectados ===")
-            for w in warnings:
-                logger.warning(f"  - {w}")
-
-        if not criticos and not warnings:
-            logger.info("Custeio saudavel: sem criticos nem warnings.")
+        executar_health_check_no_contexto()
 
 
 if __name__ == '__main__':

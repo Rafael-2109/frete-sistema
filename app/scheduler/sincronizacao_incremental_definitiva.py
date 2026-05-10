@@ -90,6 +90,19 @@ IMPROVEMENT_DIALOGUE_ENABLED = os.environ.get("AGENT_IMPROVEMENT_DIALOGUE", "fal
 IMPROVEMENT_DIALOGUE_HOURS = [7, 10]  # Horarios de execucao
 _ultimo_improvement_dialogue = None  # Timestamp da ultima execucao bem-sucedida
 
+# Fechamento mensal automatico de custeio (26º módulo) — Sprint 2 C10
+# Roda mensalmente: dia 5 às 04:00. Idempotente (constraint UNIQUE em custo_mensal).
+FECHAR_MES_CUSTEIO_ENABLED = os.environ.get("FECHAR_MES_CUSTEIO_ENABLED", "true").lower() == "true"
+FECHAR_MES_CUSTEIO_DAY = int(os.environ.get("FECHAR_MES_CUSTEIO_DAY", "5"))
+FECHAR_MES_CUSTEIO_HOUR = int(os.environ.get("FECHAR_MES_CUSTEIO_HOUR", "4"))
+_ultimo_fechamento_mes_custeio = None  # Timestamp do ultimo fechamento bem-sucedido
+
+# Health check diário de custeio (27º módulo) — Sprint 3 C19
+# Roda diariamente às 07:00 (apos sync inicial e antes do horario comercial).
+HEALTH_CHECK_CUSTEIO_ENABLED = os.environ.get("HEALTH_CHECK_CUSTEIO_ENABLED", "true").lower() == "true"
+HEALTH_CHECK_CUSTEIO_HOUR = int(os.environ.get("HEALTH_CHECK_CUSTEIO_HOUR", "7"))
+_ultimo_health_check_custeio = None  # Timestamp do ultimo health check bem-sucedido
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -180,7 +193,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue, _ultimo_fechamento_mes_custeio, _ultimo_health_check_custeio
 
     _t_inicio = time.time()
     logger.info("=" * 60)
@@ -1849,6 +1862,118 @@ def executar_sincronizacao():
 
         logger.info(f"   [TIMER] Step 25 (Improvement Dialogue): {time.time() - _t_step:.1f}s")
 
+        # ── 2️⃣6️⃣ FECHAMENTO MENSAL DE CUSTEIO (mensal dia X, 26º módulo) ──
+        # Sprint 2 C10: dispara fechar_mes do mes anterior. Idempotente (UNIQUE
+        # em custo_mensal). Controle: 1x por mes baseado em ano-mes do ultimo
+        # fechamento bem-sucedido.
+        _t_step = time.time()
+        sucesso_fechar_mes_custeio = False
+        fechar_mes_custeio_executou = False
+
+        if FECHAR_MES_CUSTEIO_ENABLED:
+            agora = agora_utc_naive()
+            dia_atual = agora.day
+            hora_atual_fmc = agora.hour
+            chave_mes_atual = (agora.year, agora.month)
+
+            deve_rodar_fmc = (
+                dia_atual == FECHAR_MES_CUSTEIO_DAY
+                and hora_atual_fmc == FECHAR_MES_CUSTEIO_HOUR
+                and (_ultimo_fechamento_mes_custeio is None
+                     or (_ultimo_fechamento_mes_custeio.year,
+                         _ultimo_fechamento_mes_custeio.month) != chave_mes_atual)
+            )
+
+            if deve_rodar_fmc:
+                fechar_mes_custeio_executou = True
+
+                # Cleanup antes (padrao do scheduler)
+                try:
+                    db.session.remove()
+                    db.engine.dispose()
+                    logger.info("♻️ Reconexão antes de Fechamento Mensal de Custeio")
+                except Exception:
+                    pass
+
+                try:
+                    logger.info("📅 Fechamento mensal automatico de custeio...")
+                    from app.scheduler.fechar_mes_automatico import (
+                        executar_fechamento_mes_anterior_no_contexto,
+                    )
+                    resultado_fmc = executar_fechamento_mes_anterior_no_contexto()
+
+                    if resultado_fmc and not resultado_fmc.get('erro'):
+                        sucesso_fechar_mes_custeio = True
+                        logger.info(
+                            f"✅ Fechamento de custeio concluido: "
+                            f"{resultado_fmc.get('total', 0)} produtos"
+                        )
+                    else:
+                        logger.warning(
+                            f"⚠️ Fechamento de custeio com problema: "
+                            f"{resultado_fmc.get('erro') if resultado_fmc else 'sem retorno'}"
+                        )
+
+                    # Marcar como executado mesmo com erros parciais (evita retry no mesmo mes)
+                    _ultimo_fechamento_mes_custeio = agora
+                except Exception as e:
+                    logger.error(f"❌ Erro no fechamento mensal de custeio: {e}")
+                    _ultimo_fechamento_mes_custeio = agora
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
+        logger.info(f"   [TIMER] Step 26 (Fechamento Custeio): {time.time() - _t_step:.1f}s")
+
+        # ── 2️⃣7️⃣ HEALTH CHECK CUSTEIO (diário, 27º módulo) ──
+        # Sprint 3 C19: verifica dormencia, produtos sem custo, regras vazias,
+        # ACABADOS sem custo_producao, versoes duplicadas, parametros dormentes.
+        _t_step = time.time()
+        sucesso_health_custeio = False
+        health_custeio_executou = False
+
+        if HEALTH_CHECK_CUSTEIO_ENABLED:
+            hora_atual_hc = agora_utc_naive().hour
+            hoje_hc = agora_utc_naive().date()
+
+            deve_rodar_hc = (
+                hora_atual_hc == HEALTH_CHECK_CUSTEIO_HOUR
+                and (_ultimo_health_check_custeio is None
+                     or _ultimo_health_check_custeio.date() < hoje_hc)
+            )
+
+            if deve_rodar_hc:
+                health_custeio_executou = True
+                try:
+                    db.session.remove()
+                    db.engine.dispose()
+                    logger.info("♻️ Reconexão antes de Health Check Custeio")
+                except Exception:
+                    pass
+
+                try:
+                    logger.info("🩺 Health check diario de custeio...")
+                    from app.scheduler.health_check_custeio import (
+                        executar_health_check_no_contexto,
+                    )
+                    resultado_hc = executar_health_check_no_contexto()
+
+                    # OK se nao houver criticos (warnings sao informativos)
+                    if resultado_hc and not resultado_hc.get('criticos'):
+                        sucesso_health_custeio = True
+
+                    _ultimo_health_check_custeio = agora_utc_naive()
+                except Exception as e:
+                    logger.error(f"❌ Erro no health check de custeio: {e}")
+                    _ultimo_health_check_custeio = agora_utc_naive()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
+        logger.info(f"   [TIMER] Step 27 (Health Check Custeio): {time.time() - _t_step:.1f}s")
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -1876,6 +2001,12 @@ def executar_sincronizacao():
 
         if improvement_executou:
             modulos_sync.append(sucesso_improvement)
+
+        if fechar_mes_custeio_executou:
+            modulos_sync.append(sucesso_fechar_mes_custeio)
+
+        if health_custeio_executou:
+            modulos_sync.append(sucesso_health_custeio)
 
         total_modulos = len(modulos_sync)
         total_sucesso = sum(modulos_sync)
@@ -1973,6 +2104,10 @@ def executar_sincronizacao():
                 registrar_step('Auditoria Financeira', 23, sucesso_auditoria_fin)
             if improvement_executou:
                 registrar_step('Improvement Dialogue', 25, sucesso_improvement)
+            if fechar_mes_custeio_executou:
+                registrar_step('Fechamento Mensal Custeio', 26, sucesso_fechar_mes_custeio)
+            if health_custeio_executou:
+                registrar_step('Health Check Custeio', 27, sucesso_health_custeio)
 
             # Resumo geral
             registrar_step('CICLO_COMPLETO', 0, total_sucesso == total_modulos,
@@ -2052,6 +2187,8 @@ def main():
     logger.info("   3. Tratamento robusto de erros e reconexão")
     logger.info(f"   4. Embeddings: 20º módulo, diário às {EMBEDDINGS_REINDEX_HOUR:02d}:00 (enabled={EMBEDDINGS_REINDEX_ENABLED})")
     logger.info(f"   5. Segurança: 21º módulo, diário às {SEGURANCA_SCAN_HOUR:02d}:00 (enabled={SEGURANCA_SCAN_ENABLED})")
+    logger.info(f"   6. Fechamento Custeio: 26º módulo, mensal dia {FECHAR_MES_CUSTEIO_DAY} às {FECHAR_MES_CUSTEIO_HOUR:02d}:00 (enabled={FECHAR_MES_CUSTEIO_ENABLED})")
+    logger.info(f"   7. Health Check Custeio: 27º módulo, diário às {HEALTH_CHECK_CUSTEIO_HOUR:02d}:00 (enabled={HEALTH_CHECK_CUSTEIO_ENABLED})")
     logger.info(f"   Próxima execução em {INTERVALO_MINUTOS} minutos...")
     logger.info("=" * 60)
 
