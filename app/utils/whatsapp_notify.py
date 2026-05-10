@@ -31,10 +31,14 @@ Erros:
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json as _json
 import logging
 import os
 import threading
 import time
+import uuid
 from collections import deque
 
 import requests
@@ -49,12 +53,22 @@ _GATEWAY_TOKEN = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "")
 _ENABLED = os.environ.get("OPENCLAW_NOTIFY_ENABLED", "true").lower() != "false"
 
 # Cloudflare Access Service Token (defense-in-depth quando o gateway esta
-# atras de Cloudflare Tunnel). Quando ambas as vars estao setadas, os headers
-# CF-Access-Client-Id e CF-Access-Client-Secret sao adicionados ao request,
-# permitindo Cloudflare Access validar antes do request chegar ao gateway.
+# atras de Cloudflare Tunnel com Access). Quando ambas as vars estao setadas,
+# os headers CF-Access-Client-Id e CF-Access-Client-Secret sao adicionados.
 # Em dev local (gateway em loopback direto) deixar vazio.
 _CF_ACCESS_CLIENT_ID = os.environ.get("CF_ACCESS_CLIENT_ID", "")
 _CF_ACCESS_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
+
+# HMAC validation (alternativa ao CF Access para tunnel sem dominio CF).
+# Quando OPENCLAW_HMAC_SECRET esta setado, o helper:
+#   - Adiciona PATH_PREFIX em frente ao path: <prefix>/api/tools/invoke
+#   - Calcula HMAC-SHA256(secret, ts || nonce || method || gateway_path || body)
+#   - Envia headers X-Timestamp, X-Nonce, X-Signature
+# Servidor (proxy local em 127.0.0.1:18790) valida ANTES de encaminhar pro
+# gateway 127.0.0.1:18789. Ver scripts/openclaw_hmac_proxy.py.
+# Em dev local sem proxy: deixar OPENCLAW_HMAC_SECRET vazio.
+_HMAC_SECRET = os.environ.get("OPENCLAW_HMAC_SECRET", "").encode("utf-8")
+_PATH_PREFIX = os.environ.get("OPENCLAW_PATH_PREFIX", "").rstrip("/")
 
 # Rate limit empirico Baileys
 _RATE_PER_SECOND = 1
@@ -179,19 +193,43 @@ def send_whatsapp(
         },
     }
 
-    url = f"{_GATEWAY_URL.rstrip('/')}/api/tools/invoke"
+    # Path: gateway sempre usa /api/tools/invoke. Quando HMAC ativo, prepend
+    # do PATH_PREFIX secreto (ofuscacao + isolamento do proxy de validacao).
+    gateway_path = "/api/tools/invoke"
+    full_path = f"{_PATH_PREFIX}{gateway_path}" if _HMAC_SECRET else gateway_path
+    url = f"{_GATEWAY_URL.rstrip('/')}{full_path}"
+
+    # Body serializado (precisa ser identico ao usado no HMAC do servidor)
+    body_bytes = _json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
     headers = {
         "Authorization": f"Bearer {_GATEWAY_TOKEN}",
         "Content-Type": "application/json",
     }
-    # Cloudflare Access service token (defense-in-depth quando gateway esta atras de CF Tunnel).
-    # Em dev local (gateway loopback direto) deixar essas vars vazias.
+    # Cloudflare Access service token (quando o tunnel usa CF Access)
     if _CF_ACCESS_CLIENT_ID and _CF_ACCESS_CLIENT_SECRET:
         headers["CF-Access-Client-Id"] = _CF_ACCESS_CLIENT_ID
         headers["CF-Access-Client-Secret"] = _CF_ACCESS_CLIENT_SECRET
 
+    # HMAC signature (quando proxy local valida)
+    if _HMAC_SECRET:
+        ts = str(int(time.time()))
+        nonce = uuid.uuid4().hex
+        # Mensagem canonica DEVE bater com servidor (scripts/openclaw_hmac_proxy.py)
+        msg = b"\n".join([
+            ts.encode("utf-8"),
+            nonce.encode("utf-8"),
+            b"POST",
+            gateway_path.encode("utf-8"),  # path sem prefix (proxy strip antes)
+            body_bytes,
+        ])
+        sig = hmac.new(_HMAC_SECRET, msg, hashlib.sha256).hexdigest()
+        headers["X-Timestamp"] = ts
+        headers["X-Nonce"] = nonce
+        headers["X-Signature"] = sig
+
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+        resp = requests.post(url, data=body_bytes, headers=headers, timeout=timeout)
     except requests.RequestException as exc:
         raise WhatsAppNotifyError(
             f"Falha de rede ao chamar gateway OpenClaw: {exc}"
