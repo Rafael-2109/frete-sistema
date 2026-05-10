@@ -100,16 +100,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_nf_referenciada_numero_nf",
+      "name": "ix_nf_devolucao_nf_referenciada_entrega_monitorada_id",
       "columns": [
-        "numero_nf"
+        "entrega_monitorada_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_nf_referenciada_entrega_monitorada_id",
+      "name": "ix_nf_devolucao_nf_referenciada_numero_nf",
       "columns": [
-        "entrega_monitorada_id"
+        "numero_nf"
       ],
       "unique": false
     }

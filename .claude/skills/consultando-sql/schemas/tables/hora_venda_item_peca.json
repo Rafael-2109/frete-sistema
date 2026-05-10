@@ -53,16 +53,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_item_peca_peca_id",
+      "name": "ix_hora_venda_item_peca_venda_id",
       "columns": [
-        "peca_id"
+        "venda_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_item_peca_venda_id",
+      "name": "ix_hora_venda_item_peca_peca_id",
       "columns": [
-        "venda_id"
+        "peca_id"
       ],
       "unique": false
     }

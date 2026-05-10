@@ -22,6 +22,21 @@
       "type": "text"
     },
     {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "desativado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "desativado_por",
+      "type": "varchar(100)"
+    },
+    {
       "name": "atualizado_em",
       "type": "timestamp",
       "description": "Última atualização"
@@ -29,6 +44,15 @@
     {
       "name": "atualizado_por",
       "type": "varchar(100)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_parametro_custeio_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
     }
   ]
 }
