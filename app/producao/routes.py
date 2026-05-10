@@ -3,7 +3,6 @@ from flask_login import login_required, current_user
 from app import db
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
 from app.utils.auth_decorators import require_admin
-from app.utils.timezone import agora_utc_naive
 from datetime import datetime
 from sqlalchemy import inspect
 
@@ -742,8 +741,8 @@ def exportar_dados_programacao():
         import pandas as pd
         from flask import make_response
         from io import BytesIO
-        from datetime import datetime
         from sqlalchemy import inspect
+        from app.utils.timezone import agora_utc_naive
         
         # 🔧 CORREÇÃO: Definir inspector na função
         inspector = inspect(db.engine)
@@ -1184,8 +1183,8 @@ def exportar_dados_palletizacao():
         import pandas as pd
         from flask import make_response
         from io import BytesIO
-        from datetime import datetime
         from sqlalchemy import inspect
+        from app.utils.timezone import agora_utc_naive
         
         # 🔧 CORREÇÃO: Definir inspector na função
         inspector = inspect(db.engine)
