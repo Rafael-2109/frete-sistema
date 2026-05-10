@@ -40,16 +40,16 @@
   ],
   "indices": [
     {
-      "name": "ix_grupo_empresarial_nome_grupo",
+      "name": "ix_grupo_empresarial_prefixo_cnpj",
       "columns": [
-        "nome_grupo"
+        "prefixo_cnpj"
       ],
       "unique": false
     },
     {
-      "name": "ix_grupo_empresarial_prefixo_cnpj",
+      "name": "ix_grupo_empresarial_nome_grupo",
       "columns": [
-        "prefixo_cnpj"
+        "nome_grupo"
       ],
       "unique": false
     },

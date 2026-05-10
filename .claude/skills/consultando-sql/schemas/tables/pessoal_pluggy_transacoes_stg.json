@@ -145,16 +145,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pessoal_pluggy_transacoes_stg_status_processamento",
+      "name": "ix_pessoal_pluggy_transacoes_stg_date",
       "columns": [
-        "status_processamento"
+        "date"
       ],
       "unique": false
     },
     {
-      "name": "ix_pessoal_pluggy_transacoes_stg_status",
+      "name": "idx_pluggy_stg_transacao",
       "columns": [
-        "status"
+        "transacao_pessoal_id"
       ],
       "unique": false
     },
@@ -166,16 +166,16 @@
       "unique": false
     },
     {
-      "name": "ix_pessoal_pluggy_transacoes_stg_date",
+      "name": "ix_pessoal_pluggy_transacoes_stg_status_processamento",
       "columns": [
-        "date"
+        "status_processamento"
       ],
       "unique": false
     },
     {
-      "name": "idx_pluggy_stg_transacao",
+      "name": "ix_pessoal_pluggy_transacoes_stg_status",
       "columns": [
-        "transacao_pessoal_id"
+        "status"
       ],
       "unique": false
     }

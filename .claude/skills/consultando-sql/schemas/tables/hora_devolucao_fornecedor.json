@@ -82,16 +82,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_devolucao_fornecedor_nf_entrada_id",
+      "name": "ix_hora_devolucao_fornecedor_status",
       "columns": [
-        "nf_entrada_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_fornecedor_status",
+      "name": "ix_hora_devolucao_fornecedor_nf_entrada_id",
       "columns": [
-        "status"
+        "nf_entrada_id"
       ],
       "unique": false
     },

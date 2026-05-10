@@ -48,16 +48,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_grupo_cliente_membros_grupo_id",
+      "name": "ix_carvia_grupo_cliente_membros_cnpj",
       "columns": [
-        "grupo_id"
+        "cnpj"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_grupo_cliente_membros_cnpj",
+      "name": "ix_carvia_grupo_cliente_membros_grupo_id",
       "columns": [
-        "cnpj"
+        "grupo_id"
       ],
       "unique": false
     }
