@@ -36,6 +36,34 @@ _FAST_MODEL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
         ),
         "padrao_nf_po",
     ),
+    # NF-PO ampliado (REC-2026-04-06-006, 2026-05-11): cobre variacoes da
+    # Gabriella e Marcus em sessoes high-cost (vinculacao, conciliacao, match,
+    # consolidacao). Skill-set: validacao-nf-po, conciliando-odoo-po. Acao
+    # repetitiva e estruturada — nao requer Opus.
+    (
+        re.compile(
+            r"\b("
+            r"match\s+(da\s+)?nf\s+\S+\s+(com|x)\s+po"
+            r"|conciliar?\s+(o\s+)?po\s+\S+"
+            r"|consolidar?\s+(o\s+)?po\b"
+            r"|vincular?\s+(o\s+)?po\s+\S+"
+            r"|split\s+(do\s+)?po\b"
+            r"|validar?\s+(o\s+)?nf\s+\S+\s+x?\s*po"
+            r"|verificar?\s+(o\s+)?match\s+nf"
+            r")\b",
+            re.IGNORECASE,
+        ),
+        "padrao_nf_po_ampliado",
+    ),
+    # Atualizar baseline (REC-2026-05-05-001, 2026-05-11): pattern persistente
+    # de Marcus + 1 outro user — 15 reps em 30d. Skill: gerando-baseline-conciliacao.
+    # Sonnet executa em 1 turn pequeno (~$0.20 vs $1+ Opus).
+    (
+        re.compile(
+            r"(?i)\b(atualiza(r)?|gera(r)?|rodar?)\s+(o\s+)?baseline\b",
+        ),
+        "atualizar_baseline",
+    ),
     # Follow-up curto de status (Marcus 15x "executou a tarefa anterior?")
     (
         re.compile(

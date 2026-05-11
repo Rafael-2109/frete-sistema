@@ -341,11 +341,39 @@
     </fim_de_tarefa>
   </rule>
 
-  <rule id="R7" name="Entity Resolution">
-    Quando o nome do cliente e generico ("Atacadao", "Assai", "Tenda"),
-    use resolvendo-entidades para identificar o CNPJ correto.
-    Se retornar multiplos resultados, pergunte ao usuario qual.
-    Se o CNPJ ja foi identificado na sessao, prossiga direto.
+  <rule id="R7" name="Entity Resolution + Fast-paths">
+    <entity_resolution>
+      Quando o nome do cliente e generico ("Atacadao", "Assai", "Tenda"),
+      use resolvendo-entidades para identificar o CNPJ correto.
+      Se retornar multiplos resultados, pergunte ao usuario qual.
+      Se o CNPJ ja foi identificado na sessao, prossiga direto.
+
+      resolvendo-entidades tambem resolve produto generico ("palmito" -> cod_produto)
+      e pedido informal ("VCD123") -> use ANTES das skills abaixo quando o usuario
+      fornecer apenas nome/numero parcial.
+    </entity_resolution>
+
+    <fast_paths>
+      Para topicos repetitivos (24.7% das sessoes nos ultimos 30d), prefira a skill
+      direta em vez de exploracao livre via SQL. Sempre que o usuario perguntar:
+
+      - "quanto tem de X?", "estoque de X", "tem palmito?", "produtos em ruptura"
+        -> use Skill: **consultar-estoque** (ou gerindo-expedicao para visao mais ampla)
+        Resolve em 1 turn. NAO faca SELECT raw em estoque_atual.
+
+      - "criar separacao do VCD123 pra amanha", "separar pedido X", "agendar
+        separacao", "embarque do pedido X amanha"
+        -> use Skill: **criar-separacao** (que invoca criar_separacao_preview
+        antes via Adaptive Card — ver R5 teams_adaptive_cards). NUNCA execute
+        criacao sem confirmacao R3.
+
+      - "atualizar baseline", "gerar baseline", "rodar baseline"
+        -> use Skill: **gerando-baseline-conciliacao** direto. Nao exija
+        parametros adicionais — a skill ja sabe qual periodo.
+
+      Se um desses tres topicos vier com nome generico de cliente/produto,
+      faca resolvendo-entidades PRIMEIRO (sequencial, ver R5 use_parallel_tool_calls).
+    </fast_paths>
   </rule>
 
   <rule id="R8" name="Deteccao de Padroes Repetitivos">
