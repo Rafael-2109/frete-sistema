@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-05-11-1](atualizacao-2026-05-11-1.md) — 9 auditados, 9 modificados. Sem novos arquivos estruturais. Crescimento organico: agente +1.4K LOC (35.4K -> 36.8K), carvia +1.3K (63.3K -> 64.6K). CarVia services: financeiro/ +1 (custo_entrega_autolink), root +1 (cte_complementar_service) -> 41 services total. Carteira: contagem JS corrigida (22 -> 23, inclui interface_enhancements.js no root de templates/carteira/). Datas atualizadas.
+
 - [2026-05-05-1](atualizacao-2026-05-05-1.md) — 9 auditados, 9 modificados (datas). Unica mudanca estrutural: agente/sdk/ +1 arquivo (`shutdown_state.py` — flag atexit suprime Sentry de RuntimeError shutdown no worker Teams). CarVia subiu 600 LOC sem novos arquivos (62.7K -> 63.3K). Demais modulos sem variacao estrutural.
 
 - [2026-04-27-1](atualizacao-2026-04-27-1.md) — 9 auditados, 8 modificados. Agente +4 arquivos (admin_session_store, user_preferences, model_router, session_store_adapter, teams_card_tool). CarVia +3 arquivos (nf_transferencia route+service, importacao_config, rateio_conciliacao_helper, excel_export_helper, papeis_frete). Datas atualizadas.
