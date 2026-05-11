@@ -1,6 +1,6 @@
 # Agent Design Guide
 
-**Ultima Atualizacao**: 2026-05-05 (clarificacao do escopo Nacom Goya vs Lojas HORA)
+**Ultima Atualizacao**: 2026-05-11 (refresh SDK 0.1.80 + contagem 14 subagents)
 **Escopo**: Manual prescritivo para criar e editar subagents no sistema de fretes Nacom Goya. (O agente isolado `orientador-loja` para Lojas HORA, em `app/agente_lojas/`, segue os mesmos principios mas tem allowlist e contexto separados.)
 
 ---
@@ -36,10 +36,10 @@ Referencia oficial: https://code.claude.com/docs/en/sub-agents (secao "Supported
 
 | Campo | Tipo | Quando usar |
 |-------|------|-------------|
-| `memory` | `user`/`project`/`local` | **NAO USAR no contexto deste projeto**. Funciona apenas em Claude Code CLI dev — o `agent_loader.py` do agente web (producao) nao extrai este campo. **Persistencia em producao usa o MCP memory server** (`app/agente/tools/memory_mcp_tool.py`, 13 tools). Os 12 subagents Nacom Goya ja tem acesso via 6 tools no allowlist (`mcp__memory__view_memories`, `list_memories`, `save_memory`, `update_memory`, `log_system_pitfall`, `query_knowledge_graph`) e instrucoes de uso via `.claude/references/AGENT_TEMPLATES.md#memory-usage`. O subagent `orientador-loja` (Lojas HORA) tem allowlist proprio, sem acesso a memory MCP — escopo isolado por `<loja_context>`. |
+| `memory` | `user`/`project`/`local` | **NAO USAR no contexto deste projeto**. Funciona apenas em Claude Code CLI dev — o `agent_loader.py` do agente web (producao) nao extrai este campo. **Persistencia em producao usa o MCP memory server** (`app/agente/tools/memory_mcp_tool.py`, 13 tools). Os 13 subagents Nacom Goya (12 originais + `gestor-motos-assai` adicionado em 2026-05-09) ja tem acesso via 6 tools no allowlist (`mcp__memory__view_memories`, `list_memories`, `save_memory`, `update_memory`, `log_system_pitfall`, `query_knowledge_graph`) e instrucoes de uso via `.claude/references/AGENT_TEMPLATES.md#memory-usage`. O subagent `orientador-loja` (Lojas HORA) tem allowlist proprio, sem acesso a memory MCP — escopo isolado por `<loja_context>`. |
 | `disallowedTools` | string CSV ou lista | Denylist — inverso de `tools`. Use quando quer "todas menos X". |
 | `permissionMode` | string | `default`/`acceptEdits`/`auto`/`dontAsk`/`bypassPermissions`/`plan`. Cuidado com `bypassPermissions` em producao. |
-| `effort` | `low`/`medium`/`high`/`max` | Override do effort level da sessao. `max` apenas em Opus tier (Opus 4.5, 4.6, 4.7). Sonnet/Haiku fazem fallback para `high` no CLI. Opus 4.7 introduz `xhigh` (entre `high` e `max`) — confirmado: ainda nao exposto no Literal type do SDK 0.1.66 (`Literal["low", "medium", "high", "max"]` em `claude_agent_sdk/types.py`), usar via `extra_args` se necessario. |
+| `effort` | `low`/`medium`/`high`/`xhigh`/`max` | Override do effort level da sessao. `max` apenas em Opus tier (Opus 4.5, 4.6, 4.7). Sonnet/Haiku fazem fallback automatico para `high` quando recebem `xhigh`/`max`. **`xhigh`** (entre `high` e `max`, Opus 4.7-specific) foi oficializado no Literal type do SDK 0.1.74+ — disponivel em `ClaudeAgentOptions` E `AgentDefinition`. Em uso em 7 subagents Opus pesados (`analista-carteira`, `auditor-financeiro`, `desenvolvedor-integracao-odoo`, `especialista-odoo`, `gestor-recebimento`, `gestor-motos-assai`, `raio-x-pedido`) via frontmatter `effort: xhigh`. Parser em `app/agente/config/agent_loader.py` valida e aplica forward-compat (introspection `_SDK_HAS_EFFORT_FIELD`). |
 | `color` | string | Display color: `red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink`, `cyan`. |
 | `background` | bool | `true` = roda em background sempre. Default: `false`. |
 | `isolation` | `worktree` | Roda em git worktree isolado. |

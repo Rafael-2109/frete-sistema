@@ -1,6 +1,6 @@
-# MCP Capabilities — Estado do Sistema (Abr/2026)
+# MCP Capabilities — Estado do Sistema (Mai/2026)
 
-**Atualizado**: 2026-04-27
+**Atualizado**: 2026-05-11
 
 ---
 
@@ -8,8 +8,9 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.66 | CLI 2.1.119. 0.1.60: `list_subagents()`, `get_subagent_messages()`, `setting_sources=[]` fix, TRACEPARENT propagation. 0.1.62: top-level `skills=` em ClaudeAgentOptions. 0.1.64: SessionStore protocol + transcript mirroring + materialize_resume_session + 9 helpers async + 13 contratos + CLI 2.1.116. 0.1.65: ThinkingConfig.display + ServerToolUseBlock/ServerToolResultBlock parser fix + fold_session_summary/import_session_to_store + UUID idempotency + CLI 2.1.118. 0.1.66: atual |
-| `mcp` | 1.26.0 | MCP Python SDK (spec 2025-11-25). **Pin recomendado: `>=1.25,<2`** |
+| `claude-agent-sdk` | 0.1.80 | CLI 2.1.138 (bundled). Atualizado de 0.1.66 em 2026-05-09. 0.1.77: `skills` option em `ClaudeAgentOptions` (auto-config `"Skill"` + setting_sources). 0.1.78/0.1.79/0.1.80: actionable errors + CLI bumps. Historico completo (0.1.49->0.1.80) em `app/agente/SDK_CHANGELOG.md` |
+| `anthropic` | 0.98.1 | Atualizado de 0.84.0 em 2026-05-09 |
+| `mcp` | >=1.26.0 | MCP Python SDK (spec 2025-11-25). Pin atual em requirements.txt |
 
 ---
 
