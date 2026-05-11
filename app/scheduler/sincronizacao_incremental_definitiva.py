@@ -575,7 +575,29 @@ def executar_sincronizacao():
             except Exception:
                 pass
 
-        logger.info(f"   [TIMER] Step 4 (Pedidos + PO Changes): {time.time() - _t_step:.1f}s")
+        # 4️⃣.6️⃣ AUTO-HEAL: backfill incremental de cnpj_fornecedor NULL em POs ativos
+        # Sync por write_date nao detecta partner Odoo alterado APOS criacao do PO,
+        # entao POs nascidos com partner sem CNPJ ficam stuck com cnpj_fornecedor=None.
+        # Esses POs viram "sem_po" silencioso no match NF x PO (Fase 2).
+        # Investigacao: agent_sessions.id=560 (Teams, 11/05/2026).
+        # Roda a cada ciclo do scheduler em batch limitado (converge sem custo extra).
+        try:
+            logger.info("🔧 Auto-heal: backfill de POs com cnpj_fornecedor NULL...")
+            resultado_backfill_cnpj = pedido_service.backfill_cnpj_via_odoo(limit=50)
+            logger.info(
+                f"✅ Auto-heal CNPJ: processados={resultado_backfill_cnpj.get('pos_distintos_processados', 0)}, "
+                f"linhas_corrigidas={resultado_backfill_cnpj.get('linhas_corrigidas', 0)}, "
+                f"partner_sem_cnpj={resultado_backfill_cnpj.get('pos_partner_sem_cnpj', 0)}"
+            )
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"❌ Erro no auto-heal CNPJ: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+        logger.info(f"   [TIMER] Step 4 (Pedidos + PO Changes + Auto-heal CNPJ): {time.time() - _t_step:.1f}s")
 
         # Limpar sessão entre services
         try:

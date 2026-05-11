@@ -186,6 +186,19 @@ echo "Custeio C16: audit_log_custeio..."
 python scripts/migrations/audit_log_custeio.py \
     || echo "⚠️ Migration audit_log_custeio falhou, continuando deploy..."
 
+# 14. Pedido Compras (2026-05-11): backfill cnpj_fornecedor NULL via Odoo.
+# Problema: sync incremental usa filtro write_date dentro de janela (-90min).
+# Partner Odoo alterado APOS criacao do PO nao re-sincroniza, deixando POs
+# ativos com cnpj_fornecedor=NULL e bloqueando silenciosamente o match NF x PO.
+# Investigacao: agent_sessions.id=560 (Teams Rafael, 11/05/2026, NF 143343 Novacki).
+# Script idempotente — busca POs ativos com cnpj_fornecedor IS NULL e
+# re-sincroniza via purchase.order.partner_id -> res.partner.l10n_br_cnpj.
+# Limite de 500 POs por execucao para nao estourar tempo de build; restantes
+# convergem via scheduler step 4.6 (auto-heal incremental).
+echo "Pedido Compras: backfill cnpj_fornecedor NULL via Odoo..."
+python scripts/migrations/backfill_cnpj_pedido_compras_via_odoo.py --aplicar --max-pos 500 \
+    || echo "⚠️ Backfill cnpj pedido_compras falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

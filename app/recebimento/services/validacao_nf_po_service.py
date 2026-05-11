@@ -217,6 +217,34 @@ class ValidacaoNfPoService:
 
             validacao.total_itens = len(dfe_lines)
 
+            # AUTO-HEAL pre-validacao: re-sincroniza POs ativos com cnpj_fornecedor=NULL.
+            # O sync incremental nao detecta partner Odoo alterado APOS criacao do PO,
+            # entao POs nascidos com partner sem CNPJ ficam stuck em NULL e sao
+            # descartados silenciosamente pelo filtro por CNPJ. Investigacao:
+            # agent_sessions.id=560 (Teams - Rafael, 11/05/2026, NF 143343 da Novacki).
+            #
+            # IMPORTANTE: roda ANTES dos DELETEs (linhas abaixo) e em sessao limpa.
+            # Em caso de erro, o rollback NAO desfaz matches/divergencias antigos
+            # (que ainda nao foram deletados). Custo zero quando nao ha POs a corrigir.
+            if usar_dados_locais:
+                try:
+                    from app.odoo.services.pedido_compras_service import PedidoComprasServiceOtimizado
+                    heal = PedidoComprasServiceOtimizado().backfill_cnpj_via_odoo(limit=20)
+                    if heal.get('linhas_corrigidas', 0) > 0:
+                        # Commit isolado: heal eh independente do fluxo de validacao.
+                        # Persistir aqui evita perder correcoes caso a validacao falhe depois.
+                        db.session.commit()
+                        logger.info(
+                            f"[AUTO-HEAL CNPJ] {heal['linhas_corrigidas']} linhas corrigidas "
+                            f"antes do match do DFE {odoo_dfe_id}"
+                        )
+                except Exception as e:
+                    logger.warning(f"[AUTO-HEAL CNPJ] Falhou (seguindo sem heal): {e}")
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
             # Limpar matches/divergencias anteriores
             MatchNfPoItem.query.filter_by(validacao_id=validacao.id).delete()
             DivergenciaNfPo.query.filter_by(validacao_id=validacao.id).delete()
@@ -244,6 +272,7 @@ class ValidacaoNfPoService:
                 }
 
             # ETAPA 2: Buscar POs candidatos para cada item
+            # Auto-heal de cnpj_fornecedor NULL ja rodou ANTES dos DELETEs (acima).
             cnpj_fornecedor = self._limpar_cnpj(dfe_data.get('nfe_infnfe_emit_cnpj', ''))
 
             # 🚀 OTIMIZACAO: Usar dados locais por padrao (muito mais rapido)
@@ -253,6 +282,23 @@ class ValidacaoNfPoService:
                 pos_candidatos = self._buscar_pos_fornecedor(cnpj_fornecedor)
 
             if not pos_candidatos:
+                # DEFENSIVO: antes de bloquear, verificar se ha POs com cnpj_fornecedor
+                # NULL que NAO puderam ser auto-curados (partner Odoo sem CNPJ ou PO
+                # excluido do Odoo). Loga aviso explicito para visibilidade do operador.
+                try:
+                    pos_null_ativos = PedidoCompras.query.filter(
+                        PedidoCompras.cnpj_fornecedor.is_(None),
+                        PedidoCompras.status_odoo.in_(['purchase', 'done', 'to approve', 'draft'])
+                    ).count()
+                    if pos_null_ativos > 0:
+                        logger.warning(
+                            f"DFE {odoo_dfe_id}: SEM_PO para CNPJ {cnpj_fornecedor}, "
+                            f"mas {pos_null_ativos} POs ativos no banco com cnpj_fornecedor NULL "
+                            f"(podem incluir este fornecedor). Verificar res.partner no Odoo."
+                        )
+                except Exception:
+                    pass
+
                 # Nenhum PO do fornecedor
                 self._registrar_divergencias_sem_po(
                     validacao, itens_convertidos, dfe_data

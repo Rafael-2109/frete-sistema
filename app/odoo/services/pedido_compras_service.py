@@ -19,7 +19,7 @@ Data: 01/11/2025
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Set
+from typing import Dict, List, Any, Optional, Set
 from decimal import Decimal
 from collections import defaultdict
 
@@ -1135,3 +1135,218 @@ class PedidoComprasServiceOtimizado:
         except Exception as e:
             self.logger.error(f"❌ Erro ao detectar pedidos excluídos: {e}")
             return 0
+
+    # =========================================================================
+    # BACKFILL CNPJ — auto-heal de POs criados sem cnpj_fornecedor
+    # =========================================================================
+    #
+    # Contexto: o sync incremental usa filtro `create_date >= -90min OR
+    # write_date >= -90min`. Se um partner Odoo eh atualizado (CNPJ adicionado)
+    # APOS a criacao do PO, o write_date do purchase.order nao muda e o re-sync
+    # nunca corrige o cnpj_fornecedor=None local. Resultado: POs ativos com
+    # CNPJ NULL bloqueiam silenciosamente o match NF x PO (Fase 2).
+    #
+    # Este metodo busca POs ativos com cnpj_fornecedor IS NULL e
+    # re-sincroniza via purchase.order.partner_id -> res.partner.l10n_br_cnpj,
+    # sem depender da janela temporal. Idempotente.
+    #
+    # Sessao Teams investigatoria: agent_sessions.id=560 (Rafael, 11/05/2026).
+
+    def backfill_cnpj_via_odoo(
+        self,
+        limit: int = 100,
+        status_filter: Optional[List[str]] = None
+    ) -> Dict[str, int]:
+        """
+        Backfill de cnpj_fornecedor=NULL via Odoo (auto-heal).
+
+        Args:
+            limit: maximo de pedidos Odoo distintos a processar por chamada.
+                   Cada PO Odoo pode ter N linhas locais (todas serao atualizadas).
+            status_filter: lista de status_odoo a considerar.
+                           Default: ['purchase', 'to approve', 'draft'].
+
+        Returns:
+            Dict com contadores:
+            - pos_distintos_processados: POs Odoo lidos
+            - linhas_corrigidas: linhas pedido_compras com CNPJ atualizado
+            - pos_sem_partner: POs Odoo sem partner_id (anomalia)
+            - pos_partner_sem_cnpj: POs cujo partner Odoo nao tem l10n_br_cnpj
+            - pos_nao_encontrados_odoo: POs locais sem correspondencia no Odoo
+        """
+        from sqlalchemy import func
+
+        result = {
+            'pos_distintos_processados': 0,
+            'linhas_corrigidas': 0,
+            'pos_sem_partner': 0,
+            'pos_partner_sem_cnpj': 0,
+            'pos_nao_encontrados_odoo': 0,
+        }
+
+        if status_filter is None:
+            status_filter = ['purchase', 'to approve', 'draft']
+
+        try:
+            # PASSO 1: Coletar odoo_purchase_order_ids distintos (limitado)
+            # Agrupa por header para fazer 1 fetch por PO (nao por linha)
+            distinct_pos = (
+                db.session.query(
+                    PedidoCompras.odoo_purchase_order_id,
+                    func.min(PedidoCompras.id).label('min_id')
+                )
+                .filter(
+                    PedidoCompras.cnpj_fornecedor.is_(None),
+                    PedidoCompras.status_odoo.in_(status_filter),
+                    PedidoCompras.odoo_purchase_order_id.isnot(None)
+                )
+                .group_by(PedidoCompras.odoo_purchase_order_id)
+                .order_by('min_id')
+                .limit(limit)
+                .all()
+            )
+
+            if not distinct_pos:
+                self.logger.info("✅ [BACKFILL_CNPJ] Nenhum PO ativo com cnpj_fornecedor NULL")
+                return result
+
+            odoo_po_ids = [int(p.odoo_purchase_order_id) for p in distinct_pos if p.odoo_purchase_order_id]
+            self.logger.info(
+                f"🔧 [BACKFILL_CNPJ] Processando {len(odoo_po_ids)} POs Odoo distintos "
+                f"(de POs ativos com cnpj_fornecedor NULL)"
+            )
+
+            # PASSO 2: Autenticar e batch read purchase.order
+            uid = self.connection.authenticate()
+            if not uid:
+                raise Exception("Falha na autenticacao com Odoo")
+            self.logger.debug(f"[BACKFILL_CNPJ] Autenticado no Odoo com uid={uid}")
+
+            pos_odoo = self.connection.read(
+                'purchase.order',
+                odoo_po_ids,
+                fields=['id', 'name', 'partner_id', 'state']
+            ) or []
+
+            ids_encontrados_odoo = {p['id'] for p in pos_odoo}
+            result['pos_nao_encontrados_odoo'] = len(odoo_po_ids) - len(ids_encontrados_odoo)
+            if result['pos_nao_encontrados_odoo']:
+                self.logger.warning(
+                    f"   ⚠️  {result['pos_nao_encontrados_odoo']} POs nao encontrados no Odoo "
+                    f"(possivel exclusao). Serao ignorados."
+                )
+
+            # PASSO 3: Coletar partner_ids distintos
+            partner_ids_set: Set[int] = set()
+            po_to_partner: Dict[int, int] = {}
+            for po in pos_odoo:
+                partner_id_raw = po.get('partner_id')
+                if not partner_id_raw:
+                    result['pos_sem_partner'] += 1
+                    continue
+                partner_id = partner_id_raw[0] if isinstance(partner_id_raw, (list, tuple)) else partner_id_raw
+                if partner_id:
+                    partner_ids_set.add(int(partner_id))
+                    po_to_partner[po['id']] = int(partner_id)
+
+            if not partner_ids_set:
+                self.logger.warning("   ⚠️  Nenhum partner_id valido nos POs lidos")
+                return result
+
+            # PASSO 4: Batch read res.partner
+            partners = self.connection.read(
+                'res.partner',
+                list(partner_ids_set),
+                fields=['id', 'l10n_br_cnpj', 'name']
+            ) or []
+
+            partner_cnpj_map: Dict[int, Optional[str]] = {}
+            partner_name_map: Dict[int, Optional[str]] = {}
+            for p in partners:
+                cnpj_raw = p.get('l10n_br_cnpj')
+                cnpj = cnpj_raw if cnpj_raw and cnpj_raw is not False else None
+                partner_cnpj_map[p['id']] = cnpj
+                name_raw = p.get('name')
+                partner_name_map[p['id']] = name_raw if name_raw and name_raw is not False else None
+
+            # PASSO 5: UPDATE em pedido_compras + snapshot historico
+            for po_odoo_id, partner_id in po_to_partner.items():
+                cnpj_correto = partner_cnpj_map.get(partner_id)
+                raz_social_correta = partner_name_map.get(partner_id)
+                if not cnpj_correto:
+                    result['pos_partner_sem_cnpj'] += 1
+                    self.logger.warning(
+                        f"   ⚠️  PO Odoo {po_odoo_id} -> partner {partner_id} "
+                        f"sem l10n_br_cnpj no Odoo. Mantendo NULL."
+                    )
+                    continue
+
+                # Atualizar TODAS as linhas locais do mesmo PO header
+                linhas_locais = PedidoCompras.query.filter(
+                    PedidoCompras.odoo_purchase_order_id == str(po_odoo_id),
+                    PedidoCompras.cnpj_fornecedor.is_(None)
+                ).all()
+
+                for linha in linhas_locais:
+                    linha.cnpj_fornecedor = cnpj_correto
+                    # Preencher raz_social se estiver vazia tambem
+                    if (not linha.raz_social) and raz_social_correta:
+                        linha.raz_social = raz_social_correta
+
+                    # Snapshot historico (operacao='EDITAR' + autor identificavel)
+                    historico = HistoricoPedidoCompras(
+                        pedido_compra_id=linha.id,
+                        operacao='EDITAR',
+                        alterado_por='Backfill-CNPJ',
+                        num_pedido=linha.num_pedido,
+                        company_id=linha.company_id,
+                        num_requisicao=linha.num_requisicao,
+                        cnpj_fornecedor=linha.cnpj_fornecedor,
+                        raz_social=linha.raz_social,
+                        numero_nf=linha.numero_nf,
+                        data_pedido_criacao=linha.data_pedido_criacao,
+                        usuario_pedido_criacao=linha.usuario_pedido_criacao,
+                        lead_time_pedido=linha.lead_time_pedido,
+                        lead_time_previsto=linha.lead_time_previsto,
+                        data_pedido_previsao=linha.data_pedido_previsao,
+                        data_pedido_entrega=linha.data_pedido_entrega,
+                        cod_produto=linha.cod_produto,
+                        nome_produto=linha.nome_produto,
+                        qtd_produto_pedido=linha.qtd_produto_pedido,
+                        qtd_recebida=linha.qtd_recebida,
+                        preco_produto_pedido=linha.preco_produto_pedido,
+                        icms_produto_pedido=linha.icms_produto_pedido,
+                        pis_produto_pedido=linha.pis_produto_pedido,
+                        cofins_produto_pedido=linha.cofins_produto_pedido,
+                        confirmacao_pedido=linha.confirmacao_pedido,
+                        confirmado_por=linha.confirmado_por,
+                        confirmado_em=linha.confirmado_em,
+                        status_odoo=linha.status_odoo,
+                        tipo_pedido=linha.tipo_pedido,
+                        importado_odoo=linha.importado_odoo,
+                        odoo_id=linha.odoo_id,
+                        odoo_purchase_order_id=linha.odoo_purchase_order_id,
+                        criado_em=linha.criado_em,
+                        atualizado_em=linha.atualizado_em
+                    )
+                    db.session.add(historico)
+                    result['linhas_corrigidas'] += 1
+
+                result['pos_distintos_processados'] += 1
+
+            db.session.flush()
+
+            self.logger.info(
+                f"✅ [BACKFILL_CNPJ] {result['pos_distintos_processados']} POs corrigidos "
+                f"({result['linhas_corrigidas']} linhas atualizadas); "
+                f"partner_sem_cnpj={result['pos_partner_sem_cnpj']}, "
+                f"sem_partner={result['pos_sem_partner']}"
+            )
+            return result
+
+        except Exception as e:
+            # IMPORTANTE: NAO chamar db.session.rollback() aqui — o caller (scheduler,
+            # script standalone, validacao_nf_po) ja faz rollback em seu proprio
+            # except. Double-rollback pode mascarar a exception real no Render logs.
+            self.logger.error(f"❌ [BACKFILL_CNPJ] Erro: {e}", exc_info=True)
+            raise
