@@ -931,6 +931,113 @@ def _sanitize_type_mismatches(sql: str) -> str:
     return sql
 
 
+# Regex de UUID v4-like (8-4-4-4-12 hex). Case-insensitive.
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+# Tipos numericos do Postgres — comparacao com UUID sempre falha com
+# "invalid input syntax for type <tipo>". Detectado em 2026-05-11 (Sentry
+# PYTHON-FLASK-M, 32 events): consultar_sql recebia "ultima sessao" e o
+# LLM injetava o UUID da session em WHERE id = '...' onde id e bigint.
+_NUMERIC_TYPE_TOKENS = (
+    "bigint", "integer", "smallint", "int4", "int8", "int2",
+    "numeric", "decimal", "real", "double", "float", "money",
+    "serial", "bigserial", "smallserial",
+)
+
+
+def _detect_uuid_in_numeric_field(
+    sql: str,
+    schema_provider: "SchemaProvider",
+    tables_in_sql: list,
+) -> list:
+    """Detecta comparacoes de UUID com campo numerico antes da execucao.
+
+    Bug recorrente: o LLM gera `WHERE coluna = 'UUID-string'` quando coluna
+    e bigint/integer/etc. Postgres dispara `InvalidTextRepresentation` que
+    o usuario nao consegue interpretar. Esta funcao captura ANTES de executar
+    e devolve avisos legiveis.
+
+    Args:
+        sql: SQL gerada (pos-evaluator, pos-sanitize_type_mismatches).
+        schema_provider: Provider de schemas para introspectar tipo dos campos.
+        tables_in_sql: Lista de tabelas extraidas da SQL.
+
+    Returns:
+        Lista de strings descrevendo cada bug encontrado. Vazia se OK.
+    """
+    if not sql or not tables_in_sql:
+        return []
+
+    # Pattern: capturar (campo) (op) ('valor-tipo-UUID')
+    # Cobre =, <>, !=, <, >, <=, >=, LIKE, ILIKE, IS DISTINCT FROM
+    comparisons = re.findall(
+        r"""([A-Za-z_][A-Za-z0-9_\.]*)             # campo (opcional table.field)
+            \s*
+            (?:=|<>|!=|<=|>=|<|>|(?:I)?LIKE)       # operador
+            \s*
+            '([^']+)'                              # 'valor'
+        """,
+        sql,
+        re.IGNORECASE | re.VERBOSE,
+    )
+
+    if not comparisons:
+        return []
+
+    # Construir mapa: campo_lower -> tipo (de todas as tabelas usadas)
+    field_types: dict = {}
+    for table_name in tables_in_sql:
+        schema = schema_provider.get_table_schema(table_name)
+        if not schema:
+            continue
+        for field in schema.get("fields", []):
+            fname = (field.get("name") or "").strip().lower()
+            ftype = (field.get("type") or "").strip().lower()
+            if fname and ftype:
+                # Conserva o primeiro tipo encontrado; campos homonimos em
+                # tabelas diferentes com tipos divergentes sao raros e o
+                # benefit da deteccao supera o false positive raro.
+                field_types.setdefault(fname, ftype)
+
+    if not field_types:
+        return []
+
+    issues = []
+    seen = set()  # dedup por (campo, valor)
+    for raw_field, value in comparisons:
+        # Aceitar table.field — usar so a parte do field
+        field = raw_field.split(".")[-1].lower()
+        ftype = field_types.get(field)
+        if not ftype:
+            continue
+        # E tipo numerico?
+        if not any(tok in ftype for tok in _NUMERIC_TYPE_TOKENS):
+            continue
+        # Valor parece UUID?
+        if not _UUID_RE.match(value.strip()):
+            continue
+        key = (field, value)
+        if key in seen:
+            continue
+        seen.add(key)
+        issues.append(
+            f"Campo '{field}' e {ftype}, mas SQL compara com UUID '{value}'. "
+            f"Verifique se o campo correto seria de tipo texto/uuid (ex: "
+            f"session_id em vez de id) ou se a pergunta confundiu identificador "
+            f"numerico com identificador textual."
+        )
+
+    if issues:
+        logger.warning(
+            f"[TEXT_TO_SQL] UUID em campo numerico detectado: {len(issues)} problema(s)"
+        )
+
+    return issues
+
+
 # =====================================================================
 # TEXT-TO-SQL PIPELINE (Arquitetura B)
 # =====================================================================
@@ -1190,6 +1297,32 @@ class TextToSQLPipeline:
             # Esta sanitização remove cláusulas OR redundantes com tipo incompatível.
             sql = _sanitize_type_mismatches(sql)
             result["sql"] = sql
+
+            # =====================================================
+            # ETAPA 2c: DETECCAO — UUID em campo numerico
+            # =====================================================
+            # Bug recorrente (Sentry PYTHON-FLASK-M, 32 events): LLM gera
+            # `WHERE id = 'UUID-string'` em campo bigint. Postgres aborta
+            # com `InvalidTextRepresentation` ininteligivel para o usuario.
+            # Capturamos ANTES de executar e retornamos aviso claro.
+            uuid_issues = _detect_uuid_in_numeric_field(
+                sql, self.schema_provider, tables_in_sql
+            )
+            if uuid_issues:
+                result["sucesso"] = False
+                result["aviso"] = (
+                    "Type mismatch detectado: "
+                    + " | ".join(uuid_issues)
+                    + " Reformule a pergunta com o identificador correto "
+                    "(ex: session_id textual em vez de id numerico)."
+                )
+                result["etapas"]["uuid_in_numeric"] = uuid_issues
+                logger.warning(
+                    f"[TEXT_TO_SQL] BLOQUEADO por UUID em campo numerico: "
+                    f"{len(uuid_issues)} problema(s)"
+                )
+                result["tempo_total_ms"] = int((time.time() - start_time) * 1000)
+                return result
 
             # =====================================================
             # ETAPA 3: SAFETY — Validacao de seguranca

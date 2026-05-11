@@ -33,7 +33,10 @@ logger = logging.getLogger(__name__)
 
 RENDER_API_BASE = "https://api.render.com/v1"
 RENDER_OWNER_ID = "tea-d01amimuk2gs73dhlup0"
-REQUEST_TIMEOUT = 10  # segundos
+# 30s: aumentado de 10s em 2026-05-11 — periodos longos (horas=24) ou alto volume
+# de logs ultrapassavam 10s causando [HOOK:PostToolUseFailure] e agente reportando
+# "nao tem acesso ao MCP Render". CLAUDE_CODE_STREAM_CLOSE_TIMEOUT=240s acomoda.
+REQUEST_TIMEOUT = 30  # segundos
 
 # Mapeamento de nomes amigaveis -> IDs do Render (documentados em CLAUDE.md)
 SERVICOS = {
@@ -160,7 +163,7 @@ def _fetch_logs(
         return {"logs": logs, "has_more": has_more, "error": None}
 
     except requests.exceptions.Timeout:
-        return {"logs": [], "has_more": False, "error": "Timeout ao buscar logs (>10s). Reduza o periodo de busca."}
+        return {"logs": [], "has_more": False, "error": "Timeout ao buscar logs (>30s). Reduza o periodo de busca ou o limite."}
     except requests.exceptions.ConnectionError:
         return {"logs": [], "has_more": False, "error": "Erro de conexao com api.render.com. Verifique a rede."}
     except requests.exceptions.RequestException as e:

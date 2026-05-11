@@ -42,7 +42,7 @@ SUMMARY_OUTPUT_SCHEMA: dict = {
                 "clientes_envolvidos": {"type": "array", "items": {"type": "string"}},
                 "volume": {"type": "string"},
             },
-            "additionalProperties": True,
+            "additionalProperties": False,
         },
         "pedidos_mencionados": {
             "type": "array",
@@ -54,7 +54,7 @@ SUMMARY_OUTPUT_SCHEMA: dict = {
                     "status": {"type": "string"},
                     "acao_pendente": {"type": "string"},
                 },
-                "additionalProperties": True,
+                "additionalProperties": False,
             },
         },
         "decisoes_tomadas": {"type": "array", "items": {"type": "string"}},
@@ -64,7 +64,12 @@ SUMMARY_OUTPUT_SCHEMA: dict = {
         "topicos_abordados": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["resumo_geral"],
-    "additionalProperties": True,
+    # API Anthropic structured outputs exige additionalProperties=false (corrigido 2026-05-11).
+    # Bug historico: True gerava 62 events Sentry [PYTHON-FLASK-A0] desde 2026-03-27 com
+    # "For 'object' type, 'additionalProperties: true' is not supported".
+    # Semanticamente apropriado: o schema declara TODOS os campos uteis ao downstream
+    # (pattern_analyzer) — campos extras seriam ruido e custo de tokens sem leitor.
+    "additionalProperties": False,
 }
 
 # Limite de caracteres das mensagens para enviar ao Sonnet

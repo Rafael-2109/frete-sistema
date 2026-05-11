@@ -46,6 +46,9 @@ from claude_agent_sdk import (
 # SDK 0.1.64+: MirrorErrorMessage (SessionStore append falhou).
 # Import condicional — quando SDK < 0.1.64 instalado, classe nao existe.
 # isinstance contra tuple vazia = sempre False → handler e skipped graciosamente.
+# NOTA: basedpyright reporta `reportAssignmentType` aqui como falso positivo
+# (duas declaracoes do mesmo nome em escopo de modulo). Em runtime e seguro:
+# SDK 0.1.66 (atual) sempre cai no try; o fallback so existiria em downgrade.
 try:
     from claude_agent_sdk import MirrorErrorMessage as _MirrorErrorMessageClass
     MirrorErrorMessage = _MirrorErrorMessageClass
@@ -1306,7 +1309,7 @@ Nunca invente informações."""
         self,
         user_name: str = "Usuário",
         can_use_tool: Optional[Callable] = None,
-        max_turns: int = 30,
+        max_turns: Optional[int] = None,
         model: Optional[str] = None,
         effort_level: str = "off",
         plan_mode: bool = False,
@@ -1326,7 +1329,9 @@ Nunca invente informações."""
         Args:
             user_name: Nome do usuário
             can_use_tool: Callback de permissão
-            max_turns: Máximo de turnos
+            max_turns: Máximo de turnos. None (default) = sem limite — necessário
+                para sessões longas com muitos tool_use encadeados. Definir um valor
+                explícito (ex: 50) apenas se quiser cap defensivo.
             model: Modelo a usar (sobrescreve settings.model)
             effort_level: Nível de esforço do thinking ("off"|"low"|"medium"|"high"|"max")
             plan_mode: Ativar modo somente-leitura
@@ -1363,8 +1368,12 @@ Nunca invente informações."""
             # Modelo
             "model": model if model else self.settings.model,
 
-            # Máximo de turnos
-            "max_turns": max_turns,
+            # Máximo de turnos — omitido por padrão (sem limite).
+            # Bug observado 2026-05-11: max_turns=30 cortava respostas longas
+            # com erro `Reached maximum number of turns (30)` (stop_reason=tool_use),
+            # frontend ficava preso até READ_TIMEOUT_MS=60s no chat.js.
+            # Pattern idêntico a agent_loader.py:434 (subagentes).
+            # max_turns injetado abaixo via guard se != None.
 
             # Buffer size para JSON messages do subprocess CLI.
             # Default do SDK: 1MB (1_048_576 bytes) — insuficiente para
@@ -1417,6 +1426,11 @@ Nunca invente informações."""
                 "HOME": "/tmp",
             },
         }
+
+        # max_turns: injetar apenas se explicitamente definido (default None = sem limite).
+        # Padrão idêntico a agent_loader.py:434 para subagentes.
+        if max_turns is not None:
+            options_dict["max_turns"] = max_turns
 
         # SDK 0.1.77+: option `skills` substitui "Skill" em allowed_tools.
         # `"all"` mantem comportamento atual (todas as skills descobertas

@@ -147,38 +147,74 @@ Desconfiar quando:
 
 ---
 
-## Observabilidade — Padroes Normais (NAO sao bugs)
+## Caso 2026-05-11 — JSONL 6 linhas / turns=0: ERA bug de loader (NAO padrao normal)
 
-### Subagente sem `tool_use` -> JSONL 6 linhas + `turns=0` + `cost granular SKIP`
+**Resumo**: o D8 batch das 04:01 BRT (07:01 UTC) leu a sessao 554 (3cc9b481, "investigacao de
+18 sessoes com 6 linhas/turns=0") e deduziu erroneamente que o sintoma era "padrao normal para
+subagentes sem ferramentas". A causa real ja havia sido descoberta e corrigida pelo Rafael 39
+minutos antes do batch (commit `8d2d28f1` em 11/05 00:52 BRT), mas o D8 nao tinha visibilidade
+do commit recem-aplicado.
 
-**Sintoma na observabilidade**: ao auditar JSONLs em `~/.claude/projects/<proj>/<session>/subagents/`,
-encontra-se subagentes com estrutura fixa de **6 linhas** (user, attachment, user, user, user, user
-— SEM linha `assistant`), `turns=0`, e o hook `[HOOK:SubagentStop]` registra `cost granular SKIP`.
+### Causa real
 
-**Diagnostico correto**: **comportamento NORMAL** quando o subagente responde em uma unica virada
-sem chamar nenhuma ferramenta (zero `tool_use`). NAO e race condition, NAO e abort silencioso,
-NAO e parser corrompido.
+Em `app/agente/config/agent_loader.py`, o parser de frontmatter de subagentes fazia:
 
-**Contexto**: agentes read-only de resposta pura (acompanhando-pedido com query simples,
-consultando-estoque-loja com cache hit, etc.) podem responder direto via texto sem precisar
-de Bash/Read/Grep. O SDK gera o JSONL com apenas as linhas de input + system prompt + attachment,
-sem linha `assistant` porque o turn nao precisou ser "fechado" com ferramentas.
+```python
+max_turns_str = frontmatter.get("max_turns")
+max_turns = int(max_turns_str) if max_turns_str and max_turns_str.strip().isdigit() else None
+```
 
-**Padroes a comparar**:
+Quando o frontmatter tinha **listas YAML** (ex: `skills:` como lista), o parser caia em
+`yaml.safe_load`, que retornava `max_turns: N` como **int** (nao str). A chamada `.strip()`
+num int explodia `AttributeError` — capturado pelo bloco except do loader como falha de
+arquivo, **descartando silenciosamente 7 agents Opus heavy** do dict de agents:
 
-| Tipo de subagente | Linhas JSONL | `turns` | `cost granular` | Diagnostico |
-|-------------------|--------------|---------|-----------------|-------------|
-| Resposta pura (0 tool_use) | 6 | 0 | SKIP | Normal — nao alarmar |
-| Resposta com texto + finalizacao | 7+ | 1 | OK | Normal |
-| Multi-turn com tools | 10+ | 2+ | OK | Normal |
-| Abort/erro real | variavel | 0 | error | Investigar |
+1. `gestor-recebimento`
+2. `especialista-odoo`
+3. `analista-carteira`
+4. `auditor-financeiro`
+5. `raio-x-pedido`
+6. `gestor-motos-assai`
+7. `desenvolvedor-integracao-odoo`
 
-**Acao na investigacao**: ao revisar logs e detectar **N subagentes com padrao 6-linhas/turns=0**,
-PRIMEIRO filtrar subagentes intencionalmente sem `tool_use` (read-only response-only) ANTES de
-classificar como anomalia. Cruzar com prompt do subagente e tipo de pergunta esperada.
+### Cascade da falha
 
-**Referencia**: IMP-2026-05-11-002 (sessao `3cc9b481-a63c-44c3-821a-a2da8c6b56a9` mostrou
-gestor-recebimento com 7 linhas/turns=1 — nao reproduziu o bug, padrao esperado).
+1. Agent ausente do dict `agents={...}` em `ClaudeAgentOptions`
+2. Principal chamava `Agent(subagent_type="gestor-recebimento")`
+3. CLI bundled caia em **fallback filesystem** (tentava achar o agent em `.claude/agents/*.md` localmente)
+4. Fallback fazia spawn parcial que **abortava em ~3s** sem produzir `assistant` message
+5. Resultado: **18 SKIPs em 7 dias** com `cost granular SKIP`, `turns=0`, JSONL de 6 linhas
+
+### Fix
+
+Commit `8d2d28f1` (Rafael, 11/05/2026 00:52:36 -0300):
+
+```python
+max_turns_raw = frontmatter.get("max_turns")
+max_turns: Optional[int] = None
+if max_turns_raw is not None:
+    if isinstance(max_turns_raw, int) and max_turns_raw > 0:
+        max_turns = max_turns_raw
+    elif isinstance(max_turns_raw, str) and max_turns_raw.strip().isdigit():
+        max_turns = int(max_turns_raw)
+```
+
+Apos o fix, os 14 agents Nacom Goya carregam corretamente. **Os 18 SKIPs em 7 dias foram
+eliminados.**
+
+### Licao para investigacoes futuras
+
+- **NUNCA aceitar "padrao normal" como conclusao sem reproduzir empiricamente.** A sessao 554
+  tentou reproduzir e *nao conseguiu* (gerou 7 linhas/turns=1, nao 6 linhas/turns=0); o D8
+  transformou a hipotese explicativa em afirmacao categorica.
+- **Quando D8 sumariza sessoes recentes, considerar commits ocorridos no intervalo** — uma
+  causa pode ter sido corrigida antes da analise.
+- **JSONL com 6 linhas / turns=0** NAO e por si só comportamento normal de subagente sem
+  tool_use. Pode ser fallback filesystem do CLI quando agent ausente do dict. Investigar
+  primeiro o loader antes de descartar.
+
+**Referencia**: `agent_improvement_dialogue.suggestion_key='IMP-2026-05-11-002'` v3 no Render
+(correcao registrada apos o usuario apontar a confusao causal).
 
 ---
 
