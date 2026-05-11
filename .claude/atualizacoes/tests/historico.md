@@ -7,6 +7,7 @@
 
 ## Atualizacoes
 
+- [2026-05-11-1](atualizacao-2026-05-11-1.md) — 963/1019 testes (94.50%), 264.48s. 49 falhas + 1 erro coleta (`tests/skills/motos_assai/conftest.py` pytest_plugins deprecated, 20 testes nao coletados). Falhas: custeio (6, migrations nao aplicadas), hora (16, modalidade_frete=9 invalido), motos_assai (22, fixtures PDF/XLSX ausentes), carvia (3, mock SSW + ConferenciaService.listar_fretes_divergentes ausente), agente/sdk (2, async_event nao disparado). Sem correlacao D4.
 - [2026-05-05-1](atualizacao-2026-05-05-1.md) — 749/766 testes (97.78%), 96.13s. 15 falhas em `tests/hora/test_pedido_workflow.py` (coluna `modalidade_frete` ausente no DB local — migration `hora_21` nao aplicada) + 2 falhas reincidentes em `tests/carvia/test_a3_ctrnc_cte_comp.py` (mock SSW bypass, mesmo bug de 2026-04-27). Sem correlacao D4.
 - [2026-04-27-1](atualizacao-2026-04-27-1.md) — 735/737 testes (99.73%), 102.19s. 2 falhas em `tests/carvia/test_a3_ctrnc_cte_comp.py::TestCasoBVerificacao` por patch path incorreto de `resolver_ctrc_ssw` (worker chama SSW real em vez de mock). Sem correlacao D4.
 - [2026-04-20-1](atualizacao-2026-04-20-1.md) — 569/569 testes OK (100%), 41.20s. +281 testes desde 2026-04-06. Sem correlacao D4.
