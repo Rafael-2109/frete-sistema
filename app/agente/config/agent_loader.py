@@ -379,8 +379,18 @@ def load_agent_definitions(agents_dir: str) -> dict:
 
             # SDK 0.1.51+: Campos de controle de subagentes
             disallowed_tools = _parse_tools(frontmatter.get("disallowed_tools"))
-            max_turns_str = frontmatter.get("max_turns")
-            max_turns = int(max_turns_str) if max_turns_str and max_turns_str.strip().isdigit() else None
+            # max_turns: aceitar tanto int (yaml.safe_load) quanto str (parser simples).
+            # Quando frontmatter tem listas YAML (ex: skills:), cai em yaml.safe_load
+            # que retorna numeros como int. Parser simples retornaria str.
+            # Bug historico (2026-05): chamada `.strip()` em int explodia AttributeError
+            # e descartava 7 agents (todos com max_turns: N + skills: lista YAML).
+            max_turns_raw = frontmatter.get("max_turns")
+            max_turns: Optional[int] = None
+            if max_turns_raw is not None:
+                if isinstance(max_turns_raw, int) and max_turns_raw > 0:
+                    max_turns = max_turns_raw
+                elif isinstance(max_turns_raw, str) and max_turns_raw.strip().isdigit():
+                    max_turns = int(max_turns_raw)
             initial_prompt = frontmatter.get("initial_prompt")
 
             # SDK 0.1.74+: effort nativo no AgentDefinition (Literal aceita 'xhigh')
