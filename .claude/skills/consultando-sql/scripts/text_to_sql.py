@@ -300,12 +300,20 @@ class SchemaProvider:
         """Verifica se a tabela existe no catálogo."""
         return table_name.lower() in self._known_tables
 
-    def get_catalog_text(self) -> str:
+    def get_catalog_text(self, omit_blocked: bool = False) -> str:
         """
         Formata catálogo COMPACTO para prompt do Generator.
         Uma linha por tabela: nome | descrição | campos-chave
 
-        Resultado: ~3.000-4.000 tokens para 179 tabelas.
+        Resultado: ~3.000-4.000 tokens para ~260 tabelas.
+
+        Args:
+            omit_blocked: Se True (admin_mode):
+              - Omite a secao "TABELAS BLOQUEADAS" do prompt (LLM nao auto-recusa).
+              - INCLUI as tabelas em `tabelas_admin` (auth, agent, alembic, sessions)
+                como entradas regulares no catalog, com flag "[ADMIN]" para o LLM
+                saber que existem e pode usa-las.
+              Stateless — nao muta o catalog cacheado.
         """
         lines = []
         lines.append("=== CATALOGO DE TABELAS DO BANCO ===")
@@ -318,18 +326,34 @@ class SchemaProvider:
             keys = ', '.join(entry.get('key_fields', [])[:3])
             lines.append(f"  {name} | {desc} | [{keys}]")
 
+        # Admin mode: incluir tabelas admin no catalogo visivel ao LLM.
+        # Sem isso, o LLM nao sabe que essas tabelas existem e recusa a pergunta.
+        admin_count = 0
+        if omit_blocked:
+            for entry in self.catalog.get('tabelas_admin', []):
+                name = entry['name']
+                desc = entry.get('description', '')
+                keys = ', '.join(entry.get('key_fields', [])[:3])
+                lines.append(f"  {name} | [ADMIN] {desc} | [{keys}]")
+                admin_count += 1
+
         lines.append("")
-        lines.append(f"Total: {len(self.catalog.get('tabelas', []))} tabelas disponiveis")
+        total = len(self.catalog.get('tabelas', [])) + admin_count
+        if admin_count:
+            lines.append(f"Total: {total} tabelas disponiveis ({admin_count} admin-only marcadas [ADMIN])")
+        else:
+            lines.append(f"Total: {total} tabelas disponiveis")
 
         # Notas gerais
         lines.append("")
         for nota in self.catalog.get('notas_gerais', []):
             lines.append(f"NOTA: {nota}")
 
-        # Tabelas bloqueadas
-        blocked = self.catalog.get('tabelas_bloqueadas', [])
-        if blocked:
-            lines.append(f"\nTABELAS BLOQUEADAS (NUNCA usar): {', '.join(blocked)}")
+        # Tabelas bloqueadas (omitir em admin_mode)
+        if not omit_blocked:
+            blocked = self.catalog.get('tabelas_bloqueadas', [])
+            if blocked:
+                lines.append(f"\nTABELAS BLOQUEADAS (NUNCA usar): {', '.join(blocked)}")
 
         return "\n".join(lines)
 
@@ -358,10 +382,16 @@ class SchemaProvider:
             logger.warning(f"Schema nao encontrado para tabela: {table_name}")
             return None
 
-    def get_tables_schema_text(self, table_names: list) -> str:
+    def get_tables_schema_text(self, table_names: list, omit_blocked: bool = False) -> str:
         """
         Formata schema DETALHADO de múltiplas tabelas para prompt do Evaluator.
         Inclui campos, tipos, descrições, regras de negócio, FKs.
+
+        Args:
+            table_names: Lista de tabelas a incluir.
+            omit_blocked: Se True, omite a secao "TABELAS BLOQUEADAS" do prompt.
+                Usado em admin_mode para nao induzir o LLM a reprovar a SQL.
+                Stateless — nao muta o catalog cacheado.
         """
         lines = []
         lines.append("=== SCHEMA DETALHADO DAS TABELAS USADAS ===\n")
@@ -450,11 +480,12 @@ class SchemaProvider:
                 )
             lines.append("")
 
-        # Tabelas bloqueadas
-        blocked = self.catalog.get('tabelas_bloqueadas', [])
-        if blocked:
-            lines.append(f"TABELAS BLOQUEADAS (NUNCA usar): {', '.join(blocked)}")
-            lines.append("")
+        # Tabelas bloqueadas (omitir em admin_mode)
+        if not omit_blocked:
+            blocked = self.catalog.get('tabelas_bloqueadas', [])
+            if blocked:
+                lines.append(f"TABELAS BLOQUEADAS (NUNCA usar): {', '.join(blocked)}")
+                lines.append("")
 
         return "\n".join(lines)
 
@@ -564,12 +595,15 @@ class SQLGenerator:
     def __init__(self, catalog_text: str):
         self.catalog_text = catalog_text
 
-    def generate(self, question: str) -> str:
+    def generate(self, question: str, catalog_text_override: str = None) -> str:
         """
         Gera SQL para a pergunta usando catálogo leve.
 
         Args:
             question: Pergunta em linguagem natural
+            catalog_text_override: Catalogo alternativo (ex: admin sem TABELAS BLOQUEADAS).
+                Se None, usa self.catalog_text (default — nao-admin). Stateless: nao muta
+                self.catalog_text (pipeline e singleton, thread-safe).
 
         Returns:
             SQL string
@@ -578,9 +612,11 @@ class SQLGenerator:
 
         client = anthropic.Anthropic()
 
+        catalog = catalog_text_override if catalog_text_override is not None else self.catalog_text
+
         prompt = f"""Voce e um especialista em SQL PostgreSQL para um sistema de gestao de frete brasileiro.
 
-{self.catalog_text}
+{catalog}
 
 REGRAS OBRIGATORIAS:
 1. Gere APENAS uma query SELECT valida para PostgreSQL
@@ -963,6 +999,14 @@ class TextToSQLPipeline:
             "tempo_total_ms": 0,
         }
 
+        # Admin mode: pre-gerar catalogo sem "TABELAS BLOQUEADAS" para nao induzir
+        # o LLM Generator a auto-recusar tabelas que o admin TEM permissao de usar.
+        # Stateless: nao muta self.generator.catalog_text (singleton, thread-safe).
+        admin_catalog_text = (
+            self.schema_provider.get_catalog_text(omit_blocked=True)
+            if admin_mode else None
+        )
+
         try:
             # =====================================================
             # ETAPA 0: TEMPLATE RETRIEVAL — Buscar queries similares
@@ -1039,7 +1083,7 @@ class TextToSQLPipeline:
                         examples_text += f"Pergunta: {ex['question_text']}\nSQL: {ex['sql_text']}\n\n"
                     gen_question = question + examples_text
 
-                sql = self.generator.generate(gen_question)
+                sql = self.generator.generate(gen_question, catalog_text_override=admin_catalog_text)
                 result["etapas"]["generator_ms"] = int((time.time() - t1) * 1000)
                 result["sql_original"] = sql
                 result["sql"] = sql
@@ -1060,7 +1104,9 @@ class TextToSQLPipeline:
                 for dname, dschema in debug_schemas.items():
                     if dname not in self.schema_provider._table_cache:
                         self.schema_provider._table_cache[dname] = dschema
-            schema_text = self.schema_provider.get_tables_schema_text(tables_in_sql)
+            schema_text = self.schema_provider.get_tables_schema_text(
+                tables_in_sql, omit_blocked=admin_mode
+            )
 
             # =====================================================
             # ETAPA 2: EVALUATOR — Validar com schema detalhado
@@ -1084,7 +1130,9 @@ class TextToSQLPipeline:
                     if set(new_tables) != set(tables_in_sql):
                         tables_in_sql = new_tables
                         result["tabelas_usadas"] = tables_in_sql
-                        schema_text = self.schema_provider.get_tables_schema_text(tables_in_sql)
+                        schema_text = self.schema_provider.get_tables_schema_text(
+                            tables_in_sql, omit_blocked=admin_mode
+                        )
                         logger.info(f"[TEXT_TO_SQL] Tabelas atualizadas: {tables_in_sql}")
 
                     result["aviso"] = (
@@ -1107,13 +1155,18 @@ class TextToSQLPipeline:
                         f"A SQL anterior foi reprovada: {evaluation['reason']}. "
                         "Corrija os problemas apontados."
                     )
-                    sql = self.generator.generate(f"{question}\n\nFEEDBACK: {feedback}")
+                    sql = self.generator.generate(
+                        f"{question}\n\nFEEDBACK: {feedback}",
+                        catalog_text_override=admin_catalog_text,
+                    )
                     result["sql"] = sql
 
                     # Re-extrair tabelas
                     tables_in_sql = extract_tables_from_sql(sql)
                     result["tabelas_usadas"] = tables_in_sql
-                    schema_text = self.schema_provider.get_tables_schema_text(tables_in_sql)
+                    schema_text = self.schema_provider.get_tables_schema_text(
+                        tables_in_sql, omit_blocked=admin_mode
+                    )
                 else:
                     # MAX RETRIES EXCEEDED — NÃO continuar com SQL possivelmente quebrada
                     result["sucesso"] = False

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 376,
+  "total_relationships": 394,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -48,6 +48,114 @@
       "from_table": "arquivo_entrega",
       "from_column": "entrega_id",
       "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_compra_motochefe_pedido",
+      "from_column": "compra_id",
+      "to_table": "assai_compra_motochefe",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_compra_motochefe_pedido",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_modelo_alias",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_moto",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa_item",
+      "from_column": "nf_id",
+      "to_table": "assai_nf_qpa",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa_item",
+      "from_column": "separacao_item_id",
+      "to_table": "assai_separacao_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_item",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_item",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_item",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_recibo_item",
+      "from_column": "recibo_id",
+      "to_table": "assai_recibo_motochefe",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_recibo_item",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_recibo_motochefe",
+      "from_column": "compra_id",
+      "to_table": "assai_compra_motochefe",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_separacao",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_separacao",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_separacao_item",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_separacao_item",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
       "to_column": "id"
     },
     {

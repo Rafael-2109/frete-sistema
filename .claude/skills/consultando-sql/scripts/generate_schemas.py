@@ -684,6 +684,8 @@ def generate_all(stats_only=False):
     all_tables = sorted(metadata.tables.keys())
     excluded = BLOCKED_TABLES | DEAD_TABLES | IRRELEVANT_TABLES
     allowed_tables = [t for t in all_tables if t not in excluded]
+    # Admin-only: auth/agent/alembic/sessions/tokens — admin SQL bypassa o filtro padrao
+    admin_only_tables = [t for t in all_tables if t in BLOCKED_TABLES]
     blocked = [t for t in all_tables if t in BLOCKED_TABLES]
     dead = [t for t in all_tables if t in DEAD_TABLES]
     irrelevant = [t for t in all_tables if t in IRRELEVANT_TABLES]
@@ -722,14 +724,19 @@ def generate_all(stats_only=False):
     # Garantir diretórios
     os.makedirs(TABLES_DIR, exist_ok=True)
 
-    # 1. Gerar schemas individuais por tabela
+    # 1. Gerar schemas individuais por tabela (allowed + admin_only)
+    # admin_only tem schema gerado mas so e usavel via admin_mode (USUARIOS_SQL_ADMIN).
+    # Safety validator bloqueia uso por nao-admin via tabelas_bloqueadas.
     print(f"\n📝 Gerando schemas individuais...")
     tables_generated = 0
-    for table_name in allowed_tables:
+    admin_only_set = set(admin_only_tables)
+    for table_name in list(allowed_tables) + admin_only_tables:
         table = metadata.tables[table_name]
         model_class = model_map.get(table_name)
 
         schema = extract_table_schema(table_name, table, model_class)
+        if table_name in admin_only_set:
+            schema['admin_only'] = True
 
         output_path = os.path.join(TABLES_DIR, f"{table_name}.json")
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -737,12 +744,13 @@ def generate_all(stats_only=False):
 
         tables_generated += 1
 
-    print(f"   ✅ {tables_generated} schemas gerados em schemas/tables/")
+    print(f"   ✅ {tables_generated} schemas gerados em schemas/tables/ "
+          f"({len(allowed_tables)} normais + {len(admin_only_tables)} admin-only)")
 
     # 2. Gerar catálogo
     print(f"\n📝 Gerando catálogo...")
     catalog = {
-        'version': '2.0.0',
+        'version': '2.1.0',
         'database': 'postgresql',
         'notas_gerais': [
             'Todos os valores monetários em BRL (R$)',
@@ -751,9 +759,15 @@ def generate_all(stats_only=False):
             'Registros ativos: ativo = True (quando o campo existe)',
             'Para usar campos detalhados, consultar schemas/tables/{tabela}.json'
         ],
+        # tabelas_bloqueadas: usado pelo safety validator (bloqueia em nao-admin).
+        # Inclui BLOCKED_TABLES + DEAD_TABLES + IRRELEVANT_TABLES.
         'tabelas_bloqueadas': sorted(BLOCKED_TABLES | DEAD_TABLES | IRRELEVANT_TABLES),
         'total_tabelas': len(allowed_tables),
-        'tabelas': []
+        'tabelas': [],
+        # tabelas_admin: visiveis APENAS para usuarios em USUARIOS_SQL_ADMIN.
+        # Mesmo formato de 'tabelas' (name, description, key_fields). NUNCA incluir
+        # no prompt do LLM em modo nao-admin (ver SchemaProvider.get_catalog_text).
+        'tabelas_admin': []
     }
 
     for table_name in allowed_tables:
@@ -762,12 +776,20 @@ def generate_all(stats_only=False):
         entry = generate_catalog_entry(table_name, table, model_class)
         catalog['tabelas'].append(entry)
 
+    for table_name in admin_only_tables:
+        table = metadata.tables[table_name]
+        model_class = model_map.get(table_name)
+        entry = generate_catalog_entry(table_name, table, model_class)
+        entry['admin_only'] = True
+        catalog['tabelas_admin'].append(entry)
+
     catalog_path = os.path.join(SCHEMAS_DIR, 'catalog.json')
     with open(catalog_path, 'w', encoding='utf-8') as f:
         json.dump(catalog, f, ensure_ascii=False, indent=2)
 
     catalog_size = os.path.getsize(catalog_path)
-    print(f"   ✅ catalog.json gerado ({catalog_size:,} bytes, {len(catalog['tabelas'])} tabelas)")
+    print(f"   ✅ catalog.json gerado ({catalog_size:,} bytes, "
+          f"{len(catalog['tabelas'])} normais + {len(catalog['tabelas_admin'])} admin-only)")
 
     # 3. Gerar relationships
     print(f"\n📝 Gerando mapa de relacionamentos...")

@@ -1,0 +1,92 @@
+{
+  "name": "tagplus_oauth_token",
+  "description": "Armazena tokens OAuth2 do TagPlus no BANCO DE DADOS (não em session)",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "api_type",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "access_token",
+      "type": "text",
+      "description": "Expira em 24h",
+      "nullable": false
+    },
+    {
+      "name": "refresh_token",
+      "type": "text",
+      "description": "Dura 30-90 dias"
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp",
+      "description": "Quando access_token expira"
+    },
+    {
+      "name": "token_type",
+      "type": "varchar(20)",
+      "default": "Bearer"
+    },
+    {
+      "name": "scope",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização",
+      "nullable": false
+    },
+    {
+      "name": "ultimo_refresh",
+      "type": "timestamp",
+      "description": "Última renovação"
+    },
+    {
+      "name": "total_refreshes",
+      "type": "integer",
+      "description": "Contador de renovações",
+      "default": 0
+    },
+    {
+      "name": "ultima_requisicao",
+      "type": "timestamp",
+      "description": "Último uso"
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "default": true
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_tagplus_oauth_token_api_type",
+      "columns": [
+        "api_type"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_tagplus_oauth_token_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    }
+  ],
+  "admin_only": true
+}

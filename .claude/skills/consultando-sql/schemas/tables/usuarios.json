@@ -1,0 +1,153 @@
+{
+  "name": "usuarios",
+  "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "email",
+      "type": "varchar(120)",
+      "nullable": false
+    },
+    {
+      "name": "senha_hash",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "perfil",
+      "type": "varchar(30)",
+      "description": "portaria, vendedor, gerente_comercial, financeiro, logistica, administrador",
+      "default": "vendedor"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "description": "pendente, ativo, rejeitado, bloqueado",
+      "default": "pendente"
+    },
+    {
+      "name": "empresa",
+      "type": "varchar(100)",
+      "description": "Empresa do usuário"
+    },
+    {
+      "name": "cargo",
+      "type": "varchar(100)",
+      "description": "Cargo do usuário"
+    },
+    {
+      "name": "telefone",
+      "type": "varchar(20)",
+      "description": "Telefone para contato"
+    },
+    {
+      "name": "whatsapp_autorizado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "vendedor_vinculado",
+      "type": "varchar(100)",
+      "description": "Nome do vendedor no faturamento (para perfil vendedor)"
+    },
+    {
+      "name": "sistema_logistica",
+      "type": "boolean",
+      "description": "Acesso ao sistema de logística",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "sistema_motochefe",
+      "type": "boolean",
+      "description": "Acesso ao sistema motochefe",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "sistema_carvia",
+      "type": "boolean",
+      "description": "Acesso ao sistema CarVia (frete subcontratado)",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "sistema_seguranca",
+      "type": "boolean",
+      "description": "Acesso ao modulo de seguranca",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "acesso_comissao_carvia",
+      "type": "boolean",
+      "description": "Acesso a comissoes CarVia",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "sistema_remessa_vortx",
+      "type": "boolean",
+      "description": "Acesso a geracao de remessa VORTX",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "sistema_lojas",
+      "type": "boolean",
+      "description": "Acesso ao modulo Lojas HORA",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "sistema_motos_assai",
+      "type": "boolean",
+      "description": "Acesso ao módulo Motos Assaí",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "loja_hora_id",
+      "type": "integer"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "aprovado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "aprovado_por",
+      "type": "varchar(120)",
+      "description": "Email do admin que aprovou"
+    },
+    {
+      "name": "ultimo_login",
+      "type": "timestamp"
+    },
+    {
+      "name": "observacoes",
+      "type": "text",
+      "description": "Observações do admin"
+    },
+    {
+      "name": "preferences",
+      "type": "jsonb",
+      "nullable": false
+    }
+  ],
+  "admin_only": true
+}

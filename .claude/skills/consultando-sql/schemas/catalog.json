@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "database": "postgresql",
   "notas_gerais": [
     "Todos os valores monetários em BRL (R$)",
@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 244,
+  "total_tabelas": 262,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -160,6 +160,15 @@
       ]
     },
     {
+      "name": "agent_session_costs",
+      "description": "F8 (2026-05-09) — Persistencia de cost_tracker entries.",
+      "key_fields": [
+        "message_id",
+        "session_id",
+        "user_id"
+      ]
+    },
+    {
       "name": "aprovacoes_frete",
       "description": "Aprovações de fretes por alçada.",
       "key_fields": [
@@ -175,6 +184,158 @@
         "entrega_id",
         "nome_original",
         "nome_arquivo"
+      ]
+    },
+    {
+      "name": "assai_cd",
+      "description": "Tabela assai_cd",
+      "key_fields": [
+        "nome",
+        "cnpj",
+        "endereco"
+      ]
+    },
+    {
+      "name": "assai_compra_motochefe",
+      "description": "Tabela assai_compra_motochefe",
+      "key_fields": [
+        "numero",
+        "data_emissao",
+        "motochefe_cnpj"
+      ]
+    },
+    {
+      "name": "assai_compra_motochefe_pedido",
+      "description": "Tabela assai_compra_motochefe_pedido",
+      "key_fields": [
+        "compra_id",
+        "pedido_id"
+      ]
+    },
+    {
+      "name": "assai_loja",
+      "description": "Tabela assai_loja",
+      "key_fields": [
+        "numero",
+        "nome",
+        "razao_social"
+      ]
+    },
+    {
+      "name": "assai_modelo",
+      "description": "Tabela assai_modelo",
+      "key_fields": [
+        "codigo",
+        "nome",
+        "descricao_qpa"
+      ]
+    },
+    {
+      "name": "assai_modelo_alias",
+      "description": "Tabela assai_modelo_alias",
+      "key_fields": [
+        "modelo_id",
+        "alias",
+        "tipo"
+      ]
+    },
+    {
+      "name": "assai_moto",
+      "description": "Tabela assai_moto",
+      "key_fields": [
+        "chassi",
+        "modelo_id",
+        "cor"
+      ]
+    },
+    {
+      "name": "assai_moto_evento",
+      "description": "Tabela assai_moto_evento",
+      "key_fields": [
+        "chassi",
+        "tipo",
+        "ocorrido_em"
+      ]
+    },
+    {
+      "name": "assai_nf_qpa",
+      "description": "Tabela assai_nf_qpa",
+      "key_fields": [
+        "separacao_id",
+        "chave_44",
+        "numero"
+      ]
+    },
+    {
+      "name": "assai_nf_qpa_item",
+      "description": "Tabela assai_nf_qpa_item",
+      "key_fields": [
+        "nf_id",
+        "chassi",
+        "modelo_extraido"
+      ]
+    },
+    {
+      "name": "assai_pedido_venda",
+      "description": "Tabela assai_pedido_venda",
+      "key_fields": [
+        "numero",
+        "data_emissao",
+        "previsao_entrega"
+      ]
+    },
+    {
+      "name": "assai_pedido_venda_item",
+      "description": "Tabela assai_pedido_venda_item",
+      "key_fields": [
+        "pedido_id",
+        "loja_id",
+        "modelo_id"
+      ]
+    },
+    {
+      "name": "assai_recibo_item",
+      "description": "Tabela assai_recibo_item",
+      "key_fields": [
+        "recibo_id",
+        "chassi",
+        "modelo_texto_recibo"
+      ]
+    },
+    {
+      "name": "assai_recibo_motochefe",
+      "description": "Tabela assai_recibo_motochefe",
+      "key_fields": [
+        "compra_id",
+        "numero_recibo",
+        "data_recibo"
+      ]
+    },
+    {
+      "name": "assai_separacao",
+      "description": "Tabela assai_separacao",
+      "key_fields": [
+        "pedido_id",
+        "loja_id",
+        "status"
+      ]
+    },
+    {
+      "name": "assai_separacao_item",
+      "description": "Tabela assai_separacao_item",
+      "key_fields": [
+        "separacao_id",
+        "chassi",
+        "modelo_id"
+      ]
+    },
+    {
+      "name": "audit_log_custeio",
+      "description": "Audit log dedicado do modulo Custeio (Sprint 3 - C16).",
+      "key_fields": [
+        "timestamp",
+        "usuario",
+        "ip_address"
       ]
     },
     {
@@ -2291,6 +2452,78 @@
         "peso_maximo",
         "qtd_eixos"
       ]
+    }
+  ],
+  "tabelas_admin": [
+    {
+      "name": "agent_memories",
+      "description": "Memória persistente do agente por usuário.",
+      "key_fields": [
+        "user_id",
+        "agente",
+        "path"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "agent_memory_versions",
+      "description": "Histórico de versões de memórias.",
+      "key_fields": [
+        "memory_id",
+        "content",
+        "version"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "agent_sessions",
+      "description": "Sessão do Agente Claude.",
+      "key_fields": [
+        "session_id",
+        "user_id",
+        "agente"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "perfil_usuario",
+      "description": "Perfis flexiveis de usuario",
+      "key_fields": [
+        "nome",
+        "nome_exibicao",
+        "descricao"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "portal_sessoes",
+      "description": "Tabela para gerenciar sessões salvas",
+      "key_fields": [
+        "portal",
+        "usuario",
+        "cookies_criptografados"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "tagplus_oauth_token",
+      "description": "Armazena tokens OAuth2 do TagPlus no BANCO DE DADOS (não em session)",
+      "key_fields": [
+        "api_type",
+        "access_token",
+        "refresh_token"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "usuarios",
+      "description": "The base class of the :attr:`.SQLAlchemy.Model` declarative model class.",
+      "key_fields": [
+        "nome",
+        "email",
+        "senha_hash"
+      ],
+      "admin_only": true
     }
   ]
 }

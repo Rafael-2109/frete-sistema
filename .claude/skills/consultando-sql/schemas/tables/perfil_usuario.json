@@ -1,0 +1,55 @@
+{
+  "name": "perfil_usuario",
+  "description": "Perfis flexiveis de usuario",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nome",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_exibicao",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "nivel_hierarquico",
+      "type": "integer",
+      "description": "0=mais baixo, 10=mais alto",
+      "default": 0
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "integer"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criado_por",
+      "references": "usuarios.id"
+    }
+  ],
+  "admin_only": true
+}

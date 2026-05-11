@@ -1,0 +1,63 @@
+{
+  "name": "portal_sessoes",
+  "description": "Tabela para gerenciar sessões salvas",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "portal",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "usuario",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "cookies_criptografados",
+      "type": "text"
+    },
+    {
+      "name": "storage_state",
+      "type": "jsonb"
+    },
+    {
+      "name": "valido_ate",
+      "type": "timestamp"
+    },
+    {
+      "name": "ultima_utilizacao",
+      "type": "timestamp"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_portal_sessoes_valido_ate",
+      "columns": [
+        "valido_ate"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_portal_sessoes_portal",
+      "columns": [
+        "portal"
+      ],
+      "unique": false
+    }
+  ],
+  "admin_only": true
+}

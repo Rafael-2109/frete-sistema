@@ -1,0 +1,57 @@
+{
+  "name": "agent_memory_versions",
+  "description": "Histórico de versões de memórias.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "memory_id",
+      "type": "integer",
+      "description": "FK → agent_memories.id",
+      "nullable": false
+    },
+    {
+      "name": "content",
+      "type": "text"
+    },
+    {
+      "name": "version",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "changed_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "changed_by",
+      "type": "varchar(50)",
+      "description": "'user', 'sonnet', 'claude'"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "memory_id",
+      "references": "agent_memories.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "memory_id",
+      "version"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_memory_versions_memory_id",
+      "columns": [
+        "memory_id"
+      ],
+      "unique": false
+    }
+  ],
+  "admin_only": true
+}
