@@ -2,7 +2,6 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from app import db
 from app.producao.models import ProgramacaoProducao, CadastroPalletizacao
-from app.utils.auth_decorators import require_admin
 from datetime import datetime
 from sqlalchemy import inspect
 

@@ -592,7 +592,7 @@ def get_session_subagents_summary(
     agent_ids = list_session_subagents(session_id, directory=directory)
     return [
         get_subagent_summary(session_id, aid, directory=directory,
-                              include_pii=include_pii)
+                              include_pii=include_pii) # noqa: E127
         for aid in agent_ids
     ]
 
@@ -609,7 +609,7 @@ def get_subagent_findings(
     Retorna None se SDK nao encontrou nada (caller deve fallback para /tmp/).
     """
     summaries = get_session_subagents_summary(session_id, directory=directory,
-                                               include_pii=True)
+                                               include_pii=True) # noqa: E127
     matching = [s for s in summaries if s.agent_type == agent_type
                 and s.status == 'done']
     if not matching:
