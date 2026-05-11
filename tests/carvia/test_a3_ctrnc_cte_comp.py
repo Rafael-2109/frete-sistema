@@ -180,6 +180,10 @@ class TestCasoBVerificacao:
     """Caso B: ctrc ja preenchido -> resolver_ctrc_ssw compara com SSW."""
 
     def test_ctrc_confirmado_retorna_ok(self, app):
+        # Fix 2026-05-11: o worker so chama `resolver_ctrc_ssw` no fallback
+        # SO_CTRC (cte_numero=NULL). Quando ctrc + cte_numero estao preenchidos
+        # (Caso B), passa pelo MESMO caminho do Caso A: `consultar_101_por_cte`
+        # (sem dacte, pois MagicMock.cte_pdf_path eh truthy por padrao).
         with app.app_context():
             cte_comp = _fake_cte_comp(
                 ctrc_numero='CAR-110-9', cte_numero='161'
@@ -188,11 +192,19 @@ class TestCasoBVerificacao:
             with patch(
                 'app.db'
             ) as mock_db, patch(
-                'app.carvia.services.cte_complementar_persistencia.resolver_ctrc_ssw'
-            ) as mock_resolver:
+                'app.carvia.workers._ssw_helpers.consultar_101_por_cte'
+            ) as mock_consultar, patch(
+                'app.carvia.workers._ssw_helpers.liberar_conexao_antes_playwright'
+            ) as mock_liberar, patch(
+                'app.carvia.workers._ssw_helpers.commit_com_retry'
+            ) as mock_commit:
                 mock_db.session.get.return_value = cte_comp
-                # resolver_ctrc_ssw retorna None quando nao ha divergencia
-                mock_resolver.return_value = None
+                # SSW devolve o MESMO ctrc → status OK (sem alteracao) e nao
+                # chama commit_com_retry (early return na linha 377-387).
+                mock_consultar.return_value = _fake_resultado_ssw_sucesso(
+                    'CAR000110-9'
+                )
+                mock_commit.side_effect = lambda fn: fn()
 
                 from app.carvia.workers.verificar_ctrc_ssw_jobs import (
                     verificar_ctrc_cte_comp_job,
@@ -201,8 +213,13 @@ class TestCasoBVerificacao:
 
             assert resultado['status'] == 'OK'
             assert resultado['ctrc'] == 'CAR-110-9'
+            mock_liberar.assert_called_once()
+            mock_consultar.assert_called_once_with('161', filial='CAR')
 
     def test_ctrc_divergente_corrigido(self, app):
+        # Fix 2026-05-11: idem test_ctrc_confirmado_retorna_ok — Caso B
+        # usa o mesmo path do Caso A. Mock devolve ctrc DIFERENTE para forcar
+        # o ramo CORRIGIDO (linha 405-406).
         with app.app_context():
             cte_comp = _fake_cte_comp(
                 ctrc_numero='CAR-110-9', cte_numero='161'
@@ -211,10 +228,17 @@ class TestCasoBVerificacao:
             with patch(
                 'app.db'
             ) as mock_db, patch(
-                'app.carvia.services.cte_complementar_persistencia.resolver_ctrc_ssw'
-            ) as mock_resolver:
+                'app.carvia.workers._ssw_helpers.consultar_101_por_cte'
+            ) as mock_consultar, patch(
+                'app.carvia.workers._ssw_helpers.liberar_conexao_antes_playwright'
+            ) as mock_liberar, patch(
+                'app.carvia.workers._ssw_helpers.commit_com_retry'
+            ) as mock_commit:
                 mock_db.session.get.return_value = cte_comp
-                mock_resolver.return_value = 'CAR-113-9'
+                mock_consultar.return_value = _fake_resultado_ssw_sucesso(
+                    'CAR000113-9'
+                )
+                mock_commit.side_effect = lambda fn: fn()
 
                 from app.carvia.workers.verificar_ctrc_ssw_jobs import (
                     verificar_ctrc_cte_comp_job,
@@ -225,10 +249,10 @@ class TestCasoBVerificacao:
             assert resultado['ctrc_anterior'] == 'CAR-110-9'
             assert resultado['ctrc_novo'] == 'CAR-113-9'
             assert cte_comp.ctrc_numero == 'CAR-113-9'
-            # Commit e chamado pelo menos uma vez (Caso B usa commit direto).
-            # NAO exigir `_called_once` porque outros caminhos internos podem
-            # adicionar commits intermediarios.
-            assert mock_db.session.commit.called
+            mock_liberar.assert_called_once()
+            mock_consultar.assert_called_once_with('161', filial='CAR')
+            # commit_com_retry e chamado para persistir o novo CTRC (R15)
+            mock_commit.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

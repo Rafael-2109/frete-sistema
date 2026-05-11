@@ -17,6 +17,10 @@ from decimal import Decimal
 # NÃO sobrescrever DATABASE_URL - usar o PostgreSQL local
 os.environ['TESTING'] = 'true'
 
+# pytest_plugins precisa estar no conftest top-level (pytest 8.4+).
+# Compartilha fixtures de tests/motos_assai com tests/skills/motos_assai.
+pytest_plugins = ['tests.motos_assai.conftest']
+
 from app import create_app, db as _db
 
 
