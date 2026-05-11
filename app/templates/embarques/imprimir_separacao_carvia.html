@@ -6,34 +6,147 @@
     <title>Separacao CarVia - Embarque #{{ embarque.numero }}</title>
     <style>
         @page { size: A4; margin: 1cm; }
-        body { font-family: Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #000; background: white; margin: 0; padding: 0; position: relative; }
-        .carvia-header { text-align: center; border-bottom: 2px solid #17a2b8; padding-bottom: 5px; margin-bottom: 10px; }
-        .carvia-header h1 { margin: 0; font-size: 18px; }
-        .carvia-header h2 { margin: 2px 0; font-size: 14px; color: #555; }
-        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); font-size: 100px; font-weight: 900; color: rgba(255, 193, 7, 0.20); pointer-events: none; z-index: 0; white-space: nowrap; }
-        .provisorio-alert { background: #fff3cd; border: 2px solid #ffc107; padding: 10px; margin: 10px 0; text-align: center; }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #000;
+            background: white;
+            margin: 0;
+            padding: 0;
+            position: relative;
+        }
+
+        /* Header padrao Nacom (preto) */
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 2px;
+            margin-bottom: 6px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .header h2 {
+            margin: 5px 0 0 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* Watermark provisorio */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-35deg);
+            font-size: 100px;
+            font-weight: 900;
+            color: rgba(255, 193, 7, 0.20);
+            pointer-events: none;
+            z-index: 0;
+            white-space: nowrap;
+        }
+        .provisorio-alert {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            text-align: center;
+        }
         .provisorio-alert strong { font-size: 14px; }
-        .info-section { display: flex; justify-content: space-between; margin-bottom: 10px; border: 1px solid #ddd; padding: 4px; }
+
+        /* Totalizadores (mesmo box da Nacom) */
+        .totals-box {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 4px;
+            margin-bottom: 8px;
+        }
+
+        /* Info-section (igual Nacom) */
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            padding: 4px;
+        }
         .info-left, .info-right { flex: 1; }
         .info-right { margin-left: 20px; }
         .info-row { margin-bottom: 2px; }
-        .info-label { font-weight: bold; display: inline-block; width: 120px; }
+        .info-label {
+            font-weight: bold;
+            display: inline-block;
+            width: 140px;
+        }
+
+        /* Tabela de itens (igual Nacom) */
+        .products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        .products-table th,
+        .products-table td {
+            border: 1px solid #000;
+            padding: 2px 2px 2px 8px;
+            text-align: left;
+            font-size: 8px;
+        }
+        .products-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            text-align: center;
+            color: #000;
+        }
+        .products-table tr { page-break-inside: avoid; }
+
         .text-bold { font-weight: bold; }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .products-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        .products-table th, .products-table td { border: 1px solid #000; padding: 2px 2px 2px 8px; text-align: left; font-size: 8px; }
-        .products-table th { background-color: #f0f0f0; font-weight: bold; text-align: center; }
-        @media print { body { margin: 0; } }
+
+        /* Rodape */
+        .footer {
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 4px;
+            font-size: 10px;
+            color: #666;
+        }
+
+        @media print {
+            body { margin: 0; }
+        }
     </style>
 </head>
 <body>
 
 {% include 'embarques/_carvia_separacao_content.html' %}
 
-<div style="text-align: center; margin-top: 10px; font-size: 10px; color: #999;">
-    Impresso em {{ data_impressao.strftime('%d/%m/%Y %H:%M') }} por {{ current_user.nome if current_user.nome else current_user.email }}
+<!-- Rodape padrao Nacom -->
+<div class="footer">
+    <div style="display: flex; justify-content: space-between;">
+        <span>Sistema de Frete - Relatorio de Separacao CarVia</span>
+        <span>
+            Impresso em: {{ data_impressao | formatar_data_hora_brasil }}
+            {% if current_user and current_user.is_authenticated %}
+              | Impresso por: {{ current_user.nome or current_user.email or 'Usuario' }}
+            {% else %}
+              | Impresso por: Sistema
+            {% endif %}
+        </span>
+    </div>
 </div>
+
+<!-- Impressao automatica -->
+<script>
+    window.onload = function() {
+        window.print();
+    }
+</script>
 
 </body>
 </html>

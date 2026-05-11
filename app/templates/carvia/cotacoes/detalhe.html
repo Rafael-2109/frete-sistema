@@ -796,6 +796,9 @@
 {% if cotacao.status == 'APROVADO' %}
 {% include 'carvia/_modal_previncular_extrato.html' %}
 {% endif %}
+
+{# Modal Backfill de modelos (B4) — usado ao anexar NF que traz modelo novo #}
+{% include 'carvia/_modal_backfill_modelos.html' %}
 {% endblock %}
 
 {% block scripts %}

@@ -239,6 +239,11 @@ class CarviaCotacaoMoto(db.Model):
     valor_unitario = db.Column(db.Numeric(15, 2), nullable=True)
     valor_total = db.Column(db.Numeric(15, 2), nullable=True)
 
+    # Placeholder: registro criado via backfill de NF com modelo desconhecido na cotacao.
+    # Quando TRUE, o peso/dimensoes ainda precisam ser completados pelo usuario.
+    # A UI mostra badge amarelo "peso pendente" e o frete usa peso=0 ate ser corrigido.
+    placeholder = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+
     # Relacionamentos
     modelo_moto = db.relationship('CarviaModeloMoto', lazy='joined')
     categoria_moto = db.relationship('CarviaCategoriaMoto', lazy='joined')

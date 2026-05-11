@@ -528,7 +528,23 @@
     <!-- PAGINAS CARVIA: SEPARACOES INDIVIDUAIS (partial compartilhado) -->
     {% for cv in carvia_separacoes_data %}
     <div class="page-break{% if not cv.eh_pedido %} carvia-provisorio-page{% endif %}">
-        {% with cotacao=cv.cotacao, pedido=cv.pedido, itens_pedido=cv.itens_pedido, motos=cv.motos, veiculos_por_nf=cv.veiculos_por_nf, eh_pedido=cv.eh_pedido %}
+        {% with cotacao=cv.cotacao,
+                pedido=cv.pedido,
+                itens_pedido=cv.itens_pedido,
+                motos=cv.motos,
+                veiculos_por_nf=cv.veiculos_por_nf,
+                eh_pedido=cv.eh_pedido,
+                peso_bruto_nf=cv.peso_bruto_nf,
+                peso_cubado_nf=cv.peso_cubado_nf,
+                volumes_nf=cv.volumes_nf,
+                nf_corrente=cv.nf_corrente,
+                nf_obj_corrente=cv.nf_obj_corrente,
+                observacoes=cv.observacoes,
+                embarque_item=cv.embarque_item,
+                rota=cv.rota,
+                sub_rota=cv.sub_rota,
+                transportadora=cv.transportadora,
+                resumo=cv.resumo %}
         {% include 'embarques/_carvia_separacao_content.html' %}
         {% endwith %}
     </div>

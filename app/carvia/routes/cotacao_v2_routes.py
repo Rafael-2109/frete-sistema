@@ -1390,6 +1390,7 @@ def register_cotacao_v2_routes(bp):
 
         # Serializar motos para JS (evita tojson em SQLAlchemy objects)
         motos_list_json = json_lib.dumps([{
+            'id': m.id,
             'modelo_moto_id': m.modelo_moto_id,
             'modelo_nome': m.modelo_moto.nome if m.modelo_moto else '',
             'categoria_nome': m.categoria_moto.nome if m.categoria_moto else '',
@@ -1398,6 +1399,7 @@ def register_cotacao_v2_routes(bp):
             'valor_total': float(m.valor_total) if m.valor_total else None,
             'peso_cubado_unitario': float(m.peso_cubado_unitario) if m.peso_cubado_unitario else None,
             'peso_cubado_total': float(m.peso_cubado_total) if m.peso_cubado_total else None,
+            'placeholder': bool(getattr(m, 'placeholder', False)),
         } for m in motos_raw])
 
         # Modelos de moto para tabela inline
@@ -1838,6 +1840,339 @@ def register_cotacao_v2_routes(bp):
         except Exception as e:
             db.session.rollback()
             logger.error("Erro ao adicionar moto: %s", e)
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/backfill-modelos', methods=['POST']) # type: ignore
+    @login_required
+    def api_backfill_modelos_cotacao(cotacao_id): # type: ignore
+        """B4 — Backfill de modelos faltantes na cotacao (trazidos por NF).
+
+        Cadastra modelos novos em `CarviaCotacaoMoto` (com flag placeholder=TRUE
+        se peso=0) e dispara recalculo do provisorio + retry de expansao.
+
+        Body JSON:
+            {
+              "modelos": [
+                {
+                  "modelo_nome": "PITICA",         // obrigatorio
+                  "modelo_moto_id": int | null,    // opcional (se ja existe em CarviaModeloMoto)
+                  "quantidade": 9,                 // obrigatorio
+                  "valor_unitario": 1498.96,       // opcional
+                  "peso_cubado_unitario": 0        // opcional, 0 = placeholder
+                }
+              ],
+              "numero_nf": "37556",                // opcional - dispara re-expansao
+              "pedido_id": 85                      // opcional - junto com numero_nf
+            }
+
+        Returns:
+            200 com {sucesso, motos_criadas, modelos_criados, provisorio_recalculado, expansao_retry}
+            400 se cotacao nao existe ou body invalido.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import (
+            CarviaCotacao, CarviaCotacaoMoto, CarviaModeloMoto, CarviaPedidoItem,
+        )
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return jsonify({'erro': 'Cotacao nao encontrada.'}), 404
+
+        data = request.get_json() or {}
+        modelos_input = data.get('modelos') or []
+        if not modelos_input or not isinstance(modelos_input, list):
+            return jsonify({'erro': 'Campo "modelos" e obrigatorio (lista).'}), 400
+
+        usuario = (
+            current_user.email
+            if hasattr(current_user, 'email') and current_user.email
+            else (current_user.nome if hasattr(current_user, 'nome') else 'sistema')
+        )
+
+        try:
+            modelos_criados = []
+            motos_criadas = []
+            backfill_pedido_itens = 0
+
+            for m_in in modelos_input:
+                nome = (m_in.get('modelo_nome') or '').strip()
+                if not nome:
+                    continue
+                qtd = int(m_in.get('quantidade') or 0)
+                if qtd <= 0:
+                    continue
+                valor_unit = float(m_in.get('valor_unitario') or 0)
+                peso_cub_unit = float(m_in.get('peso_cubado_unitario') or 0)
+                placeholder = peso_cub_unit <= 0
+
+                # 1. Buscar/criar CarviaModeloMoto
+                modelo_id = m_in.get('modelo_moto_id')
+                modelo_mm = None
+                if modelo_id:
+                    modelo_mm = db.session.get(CarviaModeloMoto, int(modelo_id))
+                if not modelo_mm:
+                    # match exato por nome (case insensitive)
+                    modelo_mm = CarviaModeloMoto.query.filter(
+                        db.func.upper(CarviaModeloMoto.nome) == nome.upper(),
+                        CarviaModeloMoto.ativo == True,  # noqa: E712
+                    ).first()
+                if not modelo_mm:
+                    # criar novo com cadastro_pendente=TRUE
+                    modelo_mm = CarviaModeloMoto(
+                        nome=nome,
+                        comprimento=0,
+                        largura=0,
+                        altura=0,
+                        cubagem_minima=300,
+                        peso_medio=None,
+                        categoria_moto_id=None,
+                        ativo=True,
+                        cadastro_pendente=True,
+                        criado_por=usuario,
+                    )
+                    db.session.add(modelo_mm)
+                    db.session.flush()
+                    modelos_criados.append({
+                        'id': modelo_mm.id,
+                        'nome': modelo_mm.nome,
+                        'cadastro_pendente': True,
+                    })
+
+                # 2. Inserir CarviaCotacaoMoto (ou atualizar se ja existir com mesmo modelo)
+                existente = CarviaCotacaoMoto.query.filter_by(
+                    cotacao_id=cotacao_id,
+                    modelo_moto_id=modelo_mm.id,
+                ).first()
+
+                if existente:
+                    # Acumular quantidade
+                    existente.quantidade = (existente.quantidade or 0) + qtd
+                    if valor_unit > 0:
+                        existente.valor_unitario = valor_unit
+                        existente.valor_total = (
+                            float(existente.valor_total or 0)
+                            + qtd * valor_unit
+                        )
+                    if peso_cub_unit > 0:
+                        existente.peso_cubado_unitario = peso_cub_unit
+                        existente.peso_cubado_total = (
+                            float(existente.peso_cubado_total or 0)
+                            + qtd * peso_cub_unit
+                        )
+                        existente.placeholder = False
+                    motos_criadas.append({
+                        'id': existente.id,
+                        'modelo': modelo_mm.nome,
+                        'acao': 'incremento',
+                        'quantidade': existente.quantidade,
+                    })
+                else:
+                    nova_moto = CarviaCotacaoMoto(
+                        cotacao_id=cotacao_id,
+                        modelo_moto_id=modelo_mm.id,
+                        categoria_moto_id=modelo_mm.categoria_moto_id,
+                        quantidade=qtd,
+                        peso_cubado_unitario=peso_cub_unit if peso_cub_unit > 0 else None,
+                        peso_cubado_total=(qtd * peso_cub_unit) if peso_cub_unit > 0 else None,
+                        valor_unitario=valor_unit if valor_unit > 0 else None,
+                        valor_total=(qtd * valor_unit) if valor_unit > 0 else None,
+                        placeholder=placeholder,
+                    )
+                    db.session.add(nova_moto)
+                    db.session.flush()
+                    motos_criadas.append({
+                        'id': nova_moto.id,
+                        'modelo': modelo_mm.nome,
+                        'acao': 'criado',
+                        'placeholder': placeholder,
+                    })
+
+                # 3. Backfill em CarviaPedidoItem: vincular modelo_moto_id onde
+                # descricao bate (case insensitive substring).
+                # Filtro de cotacao_id no SQL para evitar scan global.
+                from app.carvia.models import CarviaPedido as _CP
+                itens_orfaos = CarviaPedidoItem.query.join(
+                    _CP, CarviaPedidoItem.pedido_id == _CP.id,
+                ).filter(
+                    CarviaPedidoItem.modelo_moto_id.is_(None),
+                    _CP.cotacao_id == cotacao_id,
+                    CarviaPedidoItem.descricao.ilike(f'%{nome}%'),
+                ).all()
+                for it in itens_orfaos:
+                    it.modelo_moto_id = modelo_mm.id
+                    backfill_pedido_itens += 1
+
+            # 4. Recalcular totais da cotacao
+            agg = db.session.query(
+                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0),
+                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.peso_cubado_total), 0),
+                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.valor_total), 0),
+            ).filter_by(cotacao_id=cotacao_id).first() or (0, 0, 0)
+            cotacao.volumes = int(agg[0] or 0)
+            # peso e tratado separadamente em CARGA_GERAL; em MOTO usamos cubado
+            if cotacao.tipo_material == 'MOTO':
+                cotacao.peso_cubado = float(agg[1] or 0)
+            cotacao.valor_mercadoria = float(agg[2] or 0)
+
+            db.session.flush()
+
+            # 5. Recalcular provisorio do embarque (se cotacao esta em algum)
+            provisorio_recalc = None
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    EmbarqueCarViaService,
+                )
+                provisorio_recalc = (
+                    EmbarqueCarViaService._recalcular_provisorio_saldo(
+                        carvia_cotacao_id=cotacao_id,
+                    )
+                )
+            except Exception as e:
+                logger.warning(
+                    "backfill: erro ao recalcular provisorio (nao-bloqueante): %s", e
+                )
+
+            # 6. Re-tentar expandir_provisorio se NF foi informada
+            expansao_retry = None
+            numero_nf = (data.get('numero_nf') or '').strip()
+            pedido_id_retry = data.get('pedido_id')
+            if numero_nf and pedido_id_retry:
+                try:
+                    from app.carvia.services.documentos.embarque_carvia_service import (
+                        EmbarqueCarViaService,
+                    )
+                    expansao_retry = EmbarqueCarViaService.expandir_provisorio(
+                        carvia_cotacao_id=cotacao_id,
+                        pedido_id=int(pedido_id_retry),
+                        numero_nf=numero_nf,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "backfill: retry expandir_provisorio falhou: %s", e
+                    )
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'cotacao_id': cotacao_id,
+                'modelos_criados': modelos_criados,
+                'motos_criadas': motos_criadas,
+                'backfill_pedido_itens': backfill_pedido_itens,
+                'cotacao_totais': {
+                    'volumes': cotacao.volumes,
+                    'valor_mercadoria': float(cotacao.valor_mercadoria or 0),
+                    'peso_cubado': float(cotacao.peso_cubado or 0)
+                        if cotacao.tipo_material == 'MOTO' else None,
+                },
+                'provisorio_recalculado': provisorio_recalc,
+                'expansao_retry': expansao_retry,
+                'mensagem': (
+                    f'Backfill concluido: {len(motos_criadas)} moto(s) na cotacao, '
+                    f'{len(modelos_criados)} modelo(s) novo(s), '
+                    f'{backfill_pedido_itens} CarviaPedidoItem vinculado(s).'
+                ),
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Erro no backfill de modelos cotacao %s: %s", cotacao_id, e,
+                exc_info=True,
+            )
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+    @bp.route('/api/cotacao-motos/<int:item_id>/completar-cadastro', methods=['PATCH']) # type: ignore
+    @login_required
+    def api_completar_cadastro_moto(item_id): # type: ignore
+        """F5 — Completa cadastro de moto placeholder.
+
+        Body JSON: {
+          "peso_cubado_unitario": 12.5,
+          "modelo_moto_id": int (opcional, troca o modelo)
+        }
+
+        Apos atualizar, recalcula provisorio do embarque.
+        Tambem atualiza CarviaModeloMoto.cadastro_pendente=False se aplicavel.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCotacaoMoto, CarviaModeloMoto
+
+        item = db.session.get(CarviaCotacaoMoto, item_id)
+        if not item:
+            return jsonify({'erro': 'Item nao encontrado.'}), 404
+
+        data = request.get_json() or {}
+        peso_unit = data.get('peso_cubado_unitario')
+        modelo_moto_id_novo = data.get('modelo_moto_id')
+
+        try:
+            if modelo_moto_id_novo:
+                novo_mm = db.session.get(CarviaModeloMoto, int(modelo_moto_id_novo))
+                if novo_mm:
+                    item.modelo_moto_id = novo_mm.id
+                    item.categoria_moto_id = novo_mm.categoria_moto_id
+
+            if peso_unit is not None:
+                peso_f = float(peso_unit)
+                item.peso_cubado_unitario = peso_f if peso_f > 0 else None
+                item.peso_cubado_total = (
+                    (item.quantidade or 0) * peso_f if peso_f > 0 else None
+                )
+                if peso_f > 0:
+                    item.placeholder = False
+                    # marca o CarviaModeloMoto como cadastro_completo se aplicavel
+                    if item.modelo_moto and getattr(item.modelo_moto, 'cadastro_pendente', False):
+                        if peso_f > 0:
+                            item.modelo_moto.cadastro_pendente = False
+
+            db.session.flush()
+
+            # Recalcular totais da cotacao
+            cotacao_id = item.cotacao_id
+            agg = db.session.query(
+                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.quantidade), 0),
+                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.peso_cubado_total), 0),
+                db.func.coalesce(db.func.sum(CarviaCotacaoMoto.valor_total), 0),
+            ).filter_by(cotacao_id=cotacao_id).first() or (0, 0, 0)
+            from app.carvia.models import CarviaCotacao
+            cot = db.session.get(CarviaCotacao, cotacao_id)
+            if cot:
+                cot.volumes = int(agg[0] or 0)
+                if cot.tipo_material == 'MOTO':
+                    cot.peso_cubado = float(agg[1] or 0)
+                cot.valor_mercadoria = float(agg[2] or 0)
+
+            # Recalcular provisorio do embarque
+            provisorio_recalc = None
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    EmbarqueCarViaService,
+                )
+                provisorio_recalc = (
+                    EmbarqueCarViaService._recalcular_provisorio_saldo(cotacao_id)
+                )
+            except Exception as e:
+                logger.warning("F5: erro recalculo provisorio: %s", e)
+
+            db.session.commit()
+
+            return jsonify({
+                'sucesso': True,
+                'mensagem': 'Cadastro do modelo completado.',
+                'item_id': item.id,
+                'placeholder': bool(item.placeholder),
+                'provisorio_recalculado': provisorio_recalc,
+            })
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Erro completar cadastro moto %s: %s", item_id, e, exc_info=True,
+            )
             return jsonify({'erro': f'Erro: {e}'}), 500
 
     @bp.route('/api/cotacao-motos/<int:item_id>', methods=['DELETE']) # type: ignore

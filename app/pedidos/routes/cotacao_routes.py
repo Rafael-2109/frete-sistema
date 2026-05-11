@@ -1,8 +1,12 @@
 """Routes de cotacao manual e embarque FOB."""
+import logging
+
 from flask import render_template, request, redirect, url_for, flash, session
 from flask_login import login_required
 
 from app import db
+
+logger = logging.getLogger(__name__)
 from app.pedidos.models import Pedido
 from app.separacao.models import Separacao
 from app.transportadoras.models import Transportadora
@@ -292,7 +296,17 @@ def register_cotacao_routes(bp):
                 # DIRETA: dados da tabela ficam no Embarque (campos vazio no item)
                 TabelaFreteManager.atribuir_campos_objeto(embarque_item, dados_vazio)
                 embarque_item.icms_destino = None
-                db.session.add(embarque_item)
+                # F1 dedup B1: evita duplicacao de provisorio CARVIA
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    EmbarqueCarViaService as _ECVS_F1,
+                )
+                _add_res = _ECVS_F1.adicionar_item_dedup(embarque_item)
+                if _add_res['acao'] == 'dedup_skip':
+                    logger.debug(
+                        "CarVia DEDUP F1 (proc_cot_manual): %s %s ja existe — skip",
+                        pedido.num_pedido, pedido.separacao_lote_id,
+                    )
+                    continue
 
             # Commit antes de atualizar separações (Embarque e itens já criados)
             db.session.commit()

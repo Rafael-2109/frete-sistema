@@ -136,6 +136,33 @@ class EmbarqueCarViaService:
                 'embarque_item_id': existente.id,
             }
 
+        # 4b. VALIDACAO B4: modelos da NF presentes na cotacao
+        # Se a NF traz modelo que nao existe em CarviaCotacaoMoto,
+        # NAO expandir — retornar para frontend abrir modal de backfill.
+        # Provisorio fica intacto ate o usuario cadastrar os modelos faltantes
+        # via POST /carvia/api/cotacoes/{id}/backfill-modelos.
+        modelos_faltantes = (
+            EmbarqueCarViaService.validar_modelos_da_nf_contra_cotacao(
+                carvia_cotacao_id, nf_obj
+            ) if nf_obj else []
+        )
+        if modelos_faltantes:
+            logger.warning(
+                "expandir_provisorio AGUARDA backfill: cotacao %s NF %s "
+                "modelos_faltantes=%s",
+                carvia_cotacao_id, numero_nf,
+                [m['modelo_nome'] for m in modelos_faltantes],
+            )
+            return {
+                'acao': 'aguardando_backfill',
+                'embarque_id': embarque_id,
+                'cotacao_id': carvia_cotacao_id,
+                'pedido_id': pedido_id,
+                'numero_nf': numero_nf,
+                'nf_id': nf_id,
+                'modelos_faltantes': modelos_faltantes,
+            }
+
         dest = cotacao.endereco_destino
 
         # ----------------------------------------------------------------
@@ -677,17 +704,25 @@ class EmbarqueCarViaService:
             embarque.valor_total = float(totais[1])
 
     @staticmethod
-    def resolver_lote_carvia(lote_id: str) -> Optional[Dict]:
+    def resolver_lote_carvia(lote_id: str, embarque_id: Optional[int] = None) -> Optional[Dict]:
         """Resolve separacao_lote_id CarVia para dados de cotacao/pedido/veiculos.
 
         Suporta todos os padroes:
-          CARVIA-NF-{nf_id}   → item real (NF anexada)
+          CARVIA-NF-{nf_id}   → item real (NF anexada) — escopo limitado a UMA NF
           CARVIA-COT-{cot_id} → provisorio recriado
-          CARVIA-PED-{ped_id} → legado (backward compat)
+          CARVIA-PED-{ped_id} → legado (backward compat) — escopo de todas NFs do pedido
           CARVIA-{id}         → provisorio original
 
-        Retorna dict com: cotacao, pedido, itens_pedido, motos,
-                          veiculos_por_nf, filial, eh_pedido
+        Args:
+            lote_id: separacao_lote_id (prefixo CARVIA-*)
+            embarque_id: opcional — se fornecido, busca o EmbarqueItem alvo para
+                expor `embarque_item`, `rota`, `sub_rota`, `transportadora`,
+                e calcula `resumo` (totalizadores prontos para impressao).
+
+        Retorna dict com: cotacao, pedido, itens_pedido (filtrados pela NF do
+        lote quando CARVIA-NF-*), motos, veiculos_por_nf, peso_bruto_nf,
+        peso_cubado_nf, filial, eh_pedido, observacoes, nf_corrente,
+        nf_obj_corrente, embarque_item, rota, sub_rota, transportadora, resumo.
         Retorna None se nao encontrar a cotacao.
         """
         from app.carvia.models import (
@@ -700,23 +735,28 @@ class EmbarqueCarViaService:
         pedido = None
         itens_pedido = []
         eh_pedido = False
+        nf_corrente = None
+        nf_obj_corrente = None
 
         try:
             if lote.startswith('CARVIA-NF-'):
-                # Item real: NF anexada ao pedido
+                # Item real: NF anexada ao pedido — escopo LIMITADO a UMA NF
                 nf_id = int(lote.replace('CARVIA-NF-', ''))
-                nf_obj = db.session.get(CarviaNf, nf_id)
-                if nf_obj:
+                nf_obj_corrente = db.session.get(CarviaNf, nf_id)
+                if nf_obj_corrente:
+                    nf_corrente = str(nf_obj_corrente.numero_nf)
                     # Achar PedidoItem com esse numero_nf
                     pi = CarviaPedidoItem.query.filter_by(
-                        numero_nf=str(nf_obj.numero_nf)
+                        numero_nf=nf_corrente
                     ).first()
                     if pi:
                         pedido = db.session.get(CarviaPedido, pi.pedido_id)
                         if pedido:
                             cotacao = db.session.get(CarviaCotacao, pedido.cotacao_id)
+                            # Filtra itens_pedido APENAS pela NF deste lote
                             itens_pedido = CarviaPedidoItem.query.filter_by(
-                                pedido_id=pedido.id
+                                pedido_id=pedido.id,
+                                numero_nf=nf_corrente,
                             ).all()
                             eh_pedido = True
 
@@ -726,7 +766,7 @@ class EmbarqueCarViaService:
                 cotacao = db.session.get(CarviaCotacao, cot_id)
 
             elif lote.startswith('CARVIA-PED-'):
-                # Legado: padrao antigo (backward compat)
+                # Legado: padrao antigo (backward compat) — todas NFs do pedido
                 ped_id = int(lote.replace('CARVIA-PED-', ''))
                 pedido = db.session.get(CarviaPedido, ped_id)
                 if pedido:
@@ -758,18 +798,24 @@ class EmbarqueCarViaService:
         veiculos_por_nf = {}
         peso_bruto_nf = 0
         volumes_nf = 0
-        for item in itens_pedido:
-            if item.numero_nf and item.numero_nf not in veiculos_por_nf:
-                nf_obj = CarviaNf.query.filter_by(
-                    numero_nf=str(item.numero_nf)
-                ).order_by(CarviaNf.id.desc()).first()
-                if nf_obj:
-                    veiculos_por_nf[item.numero_nf] = nf_obj.veiculos.all()
-                    peso_bruto_nf += float(nf_obj.peso_bruto or 0)
-                    volumes_nf += int(nf_obj.quantidade_volumes or 0)
+        if nf_corrente and nf_obj_corrente:
+            # CARVIA-NF-*: APENAS a NF deste lote
+            veiculos_por_nf[nf_corrente] = nf_obj_corrente.veiculos.all()
+            peso_bruto_nf = float(nf_obj_corrente.peso_bruto or 0)
+            volumes_nf = int(nf_obj_corrente.quantidade_volumes or 0)
+        elif eh_pedido:
+            # CARVIA-PED-* legado: todas as NFs do pedido
+            for item in itens_pedido:
+                if item.numero_nf and item.numero_nf not in veiculos_por_nf:
+                    nf_obj = CarviaNf.query.filter_by(
+                        numero_nf=str(item.numero_nf)
+                    ).order_by(CarviaNf.id.desc()).first()
+                    if nf_obj:
+                        veiculos_por_nf[item.numero_nf] = nf_obj.veiculos.all()
+                        peso_bruto_nf += float(nf_obj.peso_bruto or 0)
+                        volumes_nf += int(nf_obj.quantidade_volumes or 0)
 
         # Cubado real: somar cubado unitario de cada veiculo pelo modelo
-        from app.carvia.models import CarviaModeloMoto
         # Mapa modelo_nome → cubado unitario (a partir das motos da cotacao)
         cubado_por_modelo = {}
         for m in CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all():
@@ -777,7 +823,7 @@ class EmbarqueCarViaService:
                 cubado_por_modelo[m.modelo_moto.nome.upper()] = (
                     float(m.peso_cubado_total or 0) / int(m.quantidade)
                 )
-        # Somar cubado de cada veiculo das NFs deste pedido
+        # Somar cubado de cada veiculo das NFs do escopo (toda do pedido OU so a NF)
         peso_cubado_nf = 0
         for nf_num, veics in veiculos_por_nf.items():
             for v in veics:
@@ -806,6 +852,71 @@ class EmbarqueCarViaService:
         elif cotacao and cotacao.observacoes:
             observacoes = cotacao.observacoes
 
+        # ==========================================================
+        # ENRIQUECIMENTO p/ impressao (so quando embarque_id passado)
+        # ==========================================================
+        embarque_item = None
+        rota = None
+        sub_rota = None
+        transportadora = None
+        resumo = None
+
+        if embarque_id:
+            from app.embarques.models import EmbarqueItem, Embarque
+            from app.localidades.models import CadastroRota, CadastroSubRota
+
+            embarque_item = EmbarqueItem.query.filter_by(
+                embarque_id=embarque_id,
+                separacao_lote_id=lote,
+                status='ativo',
+            ).first()
+
+            emb_obj = db.session.get(Embarque, embarque_id)
+            if emb_obj and emb_obj.transportadora:
+                transportadora = emb_obj.transportadora
+
+            # Rota/sub_rota: mesma logica da VIEW pedidos (cadastro_rota por UF)
+            dest = cotacao.endereco_destino if cotacao else None
+            uf_lookup = (
+                (embarque_item.uf_destino if embarque_item else None)
+                or (dest.fisico_uf if dest else None)
+            )
+            cidade_lookup = (
+                (embarque_item.cidade_destino if embarque_item else None)
+                or (dest.fisico_cidade if dest else None)
+            )
+            if uf_lookup:
+                cr = CadastroRota.query.filter_by(
+                    cod_uf=uf_lookup, ativa=True
+                ).first()
+                if cr:
+                    rota = cr.rota
+            if uf_lookup and cidade_lookup:
+                cidade_upper = cidade_lookup.upper()
+                # Match com LIKE substring (mesma logica da VIEW pedidos)
+                candidatas = CadastroSubRota.query.filter(
+                    CadastroSubRota.cod_uf == uf_lookup,
+                    CadastroSubRota.ativa == True,  # noqa: E712
+                ).all()
+                for csr in candidatas:
+                    nome_csr = (csr.nome_cidade or '').upper()
+                    if nome_csr and nome_csr in cidade_upper:
+                        sub_rota = csr.sub_rota
+                        break
+
+            # Resumo (totalizadores prontos para o template)
+            resumo = EmbarqueCarViaService._construir_resumo_impressao(
+                cotacao=cotacao,
+                itens_pedido=itens_pedido,
+                motos=motos,
+                nf_obj_corrente=nf_obj_corrente,
+                peso_bruto_nf=peso_bruto_nf,
+                peso_cubado_nf=peso_cubado_nf,
+                volumes_nf=volumes_nf,
+                eh_pedido=eh_pedido,
+                embarque_item=embarque_item,
+            )
+
         return {
             'cotacao': cotacao,
             'pedido': pedido,
@@ -814,9 +925,336 @@ class EmbarqueCarViaService:
             'veiculos_por_nf': veiculos_por_nf,
             'peso_bruto_nf': peso_bruto_nf,
             'peso_cubado_nf': peso_cubado_nf,
+            'volumes_nf': volumes_nf,
             'filial': filial,
             'eh_pedido': eh_pedido,
             'observacoes': observacoes,
+            'nf_corrente': nf_corrente,
+            'nf_obj_corrente': nf_obj_corrente,
+            'embarque_item': embarque_item,
+            'rota': rota,
+            'sub_rota': sub_rota,
+            'transportadora': transportadora,
+            'resumo': resumo,
+        }
+
+    @staticmethod
+    def adicionar_item_dedup(item) -> Dict:
+        """Adiciona EmbarqueItem com dedup defensivo (BUG B1).
+
+        Verifica se ja existe item ativo com mesmo (embarque_id, separacao_lote_id).
+        - Se provisorio + ja existe ativo: skip (mantem registro original)
+        - Se nao-provisorio + ja existe ativo: skip (idempotent)
+        - Senao: db.session.add(item)
+
+        Retorna {'acao': 'adicionado' | 'dedup_skip', 'item_id': int | None}.
+
+        Uso em app/cotacao/routes.py callsites que criam provisorio CARVIA-*.
+        Proteje contra race condition antes do partial unique index estar criado
+        e contra retry/double-submit do usuario.
+        """
+        from app.embarques.models import EmbarqueItem
+
+        if not item.embarque_id or not item.separacao_lote_id:
+            db.session.add(item)
+            return {'acao': 'adicionado', 'item_id': None}
+
+        existente = EmbarqueItem.query.filter_by(
+            embarque_id=item.embarque_id,
+            separacao_lote_id=item.separacao_lote_id,
+            status='ativo',
+        ).first()
+
+        if existente:
+            logger.info(
+                "F1 dedup: item %s ja existe no embarque %s (id=%s) — skip",
+                item.separacao_lote_id, item.embarque_id, existente.id,
+            )
+            return {'acao': 'dedup_skip', 'item_id': existente.id}
+
+        db.session.add(item)
+        return {'acao': 'adicionado', 'item_id': None}
+
+    @staticmethod
+    def validar_modelos_da_nf_contra_cotacao(
+        carvia_cotacao_id: int, nf_obj,
+    ) -> List[Dict]:
+        """Verifica se modelos trazidos pela NF estao todos cadastrados na cotacao.
+
+        Compara `CarviaNfVeiculo.modelo` (uppercase) com
+        `CarviaCotacaoMoto.modelo_moto.nome` da cotacao. Match exato OU
+        substring (mesma logica de `calcular_cubado_por_modelos`).
+
+        Args:
+            carvia_cotacao_id: ID da cotacao alvo.
+            nf_obj: CarviaNf instancia. Se None/sem veiculos, retorna [].
+
+        Returns:
+            Lista de dicts (vazia se tudo OK):
+            [
+              {
+                'modelo_nome': str (do veiculo da NF),
+                'modelo_moto_id_existente': int | None,
+                'quantidade': int,
+                'valor_unitario_sugerido': float,
+                'valor_total_sugerido': float,
+              },
+              ...
+            ]
+        """
+        from app.carvia.models import CarviaCotacaoMoto, CarviaModeloMoto
+
+        if not nf_obj:
+            return []
+
+        veiculos = nf_obj.veiculos.all() if hasattr(nf_obj, 'veiculos') else []
+        if not veiculos:
+            return []
+
+        modelos_cotacao = set()
+        for m in CarviaCotacaoMoto.query.filter_by(
+            cotacao_id=carvia_cotacao_id
+        ).all():
+            if m.modelo_moto and m.modelo_moto.nome:
+                modelos_cotacao.add(m.modelo_moto.nome.upper())
+
+        agregado: Dict[str, Dict] = {}
+        for v in veiculos:
+            mod = (v.modelo or '').strip()
+            if not mod:
+                continue
+            mod_upper = mod.upper()
+            existe = mod_upper in modelos_cotacao
+            if not existe:
+                for nome_cot in modelos_cotacao:
+                    if nome_cot and (nome_cot in mod_upper or mod_upper in nome_cot):
+                        existe = True
+                        break
+            if existe:
+                continue
+            entry = agregado.setdefault(mod_upper, {
+                'modelo_nome': mod,
+                'quantidade': 0,
+                'valor_total': 0.0,
+            })
+            entry['quantidade'] += 1
+            entry['valor_total'] += float(v.valor or 0)
+
+        if not agregado:
+            return []
+
+        nomes_faltantes = list(agregado.keys())
+        candidatos_mm = CarviaModeloMoto.query.filter(
+            CarviaModeloMoto.ativo == True,  # noqa: E712
+        ).all()
+        modelos_existentes = {mm.nome.upper(): mm.id for mm in candidatos_mm}
+
+        resultado = []
+        for mod_upper, entry in agregado.items():
+            modelo_id_existente = modelos_existentes.get(mod_upper)
+            if modelo_id_existente is None:
+                for nome_mm, id_mm in modelos_existentes.items():
+                    if nome_mm in mod_upper or mod_upper in nome_mm:
+                        modelo_id_existente = id_mm
+                        break
+            valor_unit = (
+                entry['valor_total'] / entry['quantidade']
+                if entry['quantidade'] > 0 else 0
+            )
+            resultado.append({
+                'modelo_nome': entry['modelo_nome'],
+                'modelo_moto_id_existente': modelo_id_existente,
+                'quantidade': entry['quantidade'],
+                'valor_unitario_sugerido': round(valor_unit, 2),
+                'valor_total_sugerido': round(entry['valor_total'], 2),
+            })
+
+        return resultado
+
+    @staticmethod
+    def _recalcular_provisorio_saldo(
+        carvia_cotacao_id: int, embarque_id: Optional[int] = None,
+    ) -> Optional[Dict]:
+        """Recalcula peso/valor/volumes do provisorio CARVIA-{cot_id}.
+
+        Logica: provisorio = totais_da_cotacao - sum(CARVIA-NF-* ativos).
+
+        Chamado apos:
+          - Backfill de CarviaCotacaoMoto (B4 / F4c).
+          - Atualizacao manual de motos da cotacao.
+          - Adicao de pedido com itens nao previstos.
+
+        Returns:
+            Dict {acao, embarque_id, vol_antigo, vol_novo, peso_novo, valor_novo}
+            ou None se nao ha provisorio.
+        """
+        from app.embarques.models import EmbarqueItem
+        from app.carvia.models import CarviaCotacao, CarviaCotacaoMoto
+        from sqlalchemy import func as _func
+
+        query = EmbarqueItem.query.filter_by(
+            carvia_cotacao_id=carvia_cotacao_id,
+            provisorio=True,
+            status='ativo',
+        )
+        if embarque_id:
+            query = query.filter_by(embarque_id=embarque_id)
+        provisorio = query.first()
+
+        if not provisorio:
+            logger.info(
+                "_recalcular_provisorio_saldo: nao ha provisorio ativo "
+                "cotacao=%s embarque=%s",
+                carvia_cotacao_id, embarque_id,
+            )
+            return None
+
+        cotacao = db.session.get(CarviaCotacao, carvia_cotacao_id)
+        if not cotacao:
+            return None
+
+        emb_id = provisorio.embarque_id
+
+        if cotacao.tipo_material == 'MOTO':
+            motos_q = db.session.query(
+                _func.coalesce(_func.sum(CarviaCotacaoMoto.quantidade), 0),
+                _func.coalesce(_func.sum(CarviaCotacaoMoto.peso_cubado_total), 0),
+                _func.coalesce(_func.sum(CarviaCotacaoMoto.valor_total), 0),
+            ).filter_by(cotacao_id=carvia_cotacao_id).first() or (0, 0, 0)
+            cot_vol = int(motos_q[0] or 0)
+            cot_cubado = float(motos_q[1] or 0)
+            cot_valor = float(motos_q[2] or 0)
+            cot_peso = float(cotacao.peso or 0)
+        else:
+            cot_vol = int(cotacao.volumes or 0)
+            cot_cubado = float(cotacao.peso_cubado or 0)
+            cot_peso = float(cotacao.peso or 0)
+            cot_valor = float(cotacao.valor_mercadoria or 0)
+
+        consumido = db.session.query(
+            _func.coalesce(_func.sum(EmbarqueItem.volumes), 0),
+            _func.coalesce(_func.sum(EmbarqueItem.peso), 0),
+            _func.coalesce(_func.sum(EmbarqueItem.peso_cubado), 0),
+            _func.coalesce(_func.sum(EmbarqueItem.valor), 0),
+        ).filter(
+            EmbarqueItem.embarque_id == emb_id,
+            EmbarqueItem.carvia_cotacao_id == carvia_cotacao_id,
+            EmbarqueItem.status == 'ativo',
+            EmbarqueItem.provisorio == False,  # noqa: E712
+        ).first() or (0, 0, 0, 0)
+
+        vol_c = int(consumido[0] or 0)
+        peso_c = float(consumido[1] or 0)
+        cub_c = float(consumido[2] or 0)
+        val_c = float(consumido[3] or 0)
+
+        vol_antigo = provisorio.volumes
+        novo_vol = max(0, cot_vol - vol_c)
+        novo_peso = max(0, cot_peso - peso_c)
+        novo_cub = max(0, cot_cubado - cub_c)
+        novo_val = max(0, cot_valor - val_c)
+
+        if novo_vol <= 0:
+            db.session.delete(provisorio)
+            logger.info(
+                "_recalcular_provisorio_saldo: provisorio DELETADO "
+                "(cotacao %s 100%% resolvida)", carvia_cotacao_id,
+            )
+            acao = 'deletado'
+        else:
+            provisorio.volumes = novo_vol
+            provisorio.peso = round(novo_peso, 3)
+            provisorio.peso_cubado = round(novo_cub, 3) if novo_cub > 0 else None
+            provisorio.valor = round(novo_val, 2)
+            acao = 'atualizado'
+            logger.info(
+                "_recalcular_provisorio_saldo: cotacao %s saldo %s -> %s vol",
+                carvia_cotacao_id, vol_antigo, novo_vol,
+            )
+
+        EmbarqueCarViaService._recalcular_totais(emb_id)
+
+        return {
+            'acao': acao,
+            'embarque_id': emb_id,
+            'vol_antigo': vol_antigo,
+            'vol_novo': novo_vol,
+            'peso_novo': novo_peso,
+            'valor_novo': novo_val,
+        }
+
+    @staticmethod
+    def _construir_resumo_impressao(
+        cotacao, itens_pedido, motos,
+        nf_obj_corrente, peso_bruto_nf, peso_cubado_nf, volumes_nf,
+        eh_pedido, embarque_item,
+    ) -> Dict:
+        """Calcula totalizadores prontos para a impressao da separacao CarVia.
+
+        Comportamento:
+          - eh_pedido + nf_obj_corrente (CARVIA-NF-*): usa peso/valor/volumes
+            da NF especifica.
+          - eh_pedido sem NF (CARVIA-PED-* legado): soma itens_pedido +
+            peso bruto/cubado/volumes agregados das NFs.
+          - Provisorio (cotacao): usa dados da cotacao (peso_cubado_motos
+            para MOTO, peso/peso_cubado/volumes/valor_mercadoria para
+            CARGA_GERAL) com fallback no EmbarqueItem para saldo.
+        """
+        qtd_total = 0
+        valor_total = 0.0
+        peso_bruto_total = float(peso_bruto_nf or 0)
+        peso_cubado_total = float(peso_cubado_nf or 0)
+        volumes_total = int(volumes_nf or 0)
+
+        if eh_pedido:
+            # Itens do pedido (filtrados pela NF se CARVIA-NF-*)
+            for it in itens_pedido or []:
+                qtd_total += int(it.quantidade or 0)
+                valor_total += float(it.valor_total or 0)
+            # Se NF especifica: valor da NF preferencialmente
+            if nf_obj_corrente:
+                valor_nf = float(nf_obj_corrente.valor_total or 0)
+                if valor_nf > 0:
+                    valor_total = valor_nf
+        else:
+            # Provisorio: usar dados da cotacao
+            if cotacao.tipo_material == 'MOTO' and motos:
+                qtd_total = sum(int(m.quantidade or 0) for m in motos)
+                valor_total = float(cotacao.valor_mercadoria or 0)
+                peso_cubado_total = float(cotacao.peso_total_motos or 0)
+                peso_bruto_total = float(cotacao.peso or 0)
+                volumes_total = qtd_total  # 1 volume por moto
+            else:
+                # CARGA_GERAL provisorio: dados diretos da cotacao
+                qtd_total = int(cotacao.volumes or 0)
+                valor_total = float(cotacao.valor_mercadoria or 0)
+                peso_bruto_total = float(cotacao.peso or 0)
+                peso_cubado_total = float(cotacao.peso_cubado or 0)
+                volumes_total = int(cotacao.volumes or 0)
+
+            # Fallback para EmbarqueItem (caso provisorio ja deduzido)
+            if embarque_item:
+                if embarque_item.peso and embarque_item.peso > 0:
+                    peso_bruto_total = float(embarque_item.peso)
+                if embarque_item.peso_cubado and embarque_item.peso_cubado > 0:
+                    peso_cubado_total = float(embarque_item.peso_cubado)
+                if embarque_item.volumes:
+                    volumes_total = int(embarque_item.volumes)
+                if embarque_item.valor and embarque_item.valor > 0:
+                    valor_total = float(embarque_item.valor)
+
+        # pallets nao se aplicam a CarVia (motos nao palletizam, geral nao tem cadastro)
+        pallets_total = 0.0
+        if embarque_item and embarque_item.pallets:
+            pallets_total = float(embarque_item.pallets)
+
+        return {
+            'qtd': qtd_total,
+            'valor': round(valor_total, 2),
+            'peso_bruto': round(peso_bruto_total, 2),
+            'peso_cubado': round(peso_cubado_total, 2),
+            'volumes': volumes_total,
+            'pallets': pallets_total,
         }
 
 

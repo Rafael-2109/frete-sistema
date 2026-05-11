@@ -1,32 +1,64 @@
-{# Partial: conteúdo de separação CarVia (usado por imprimir_separacao_carvia.html e imprimir_completo.html)
-   Variáveis esperadas: cotacao, pedido, itens_pedido, motos, veiculos_por_nf, eh_pedido, embarque #}
+{# Partial: conteudo de separacao CarVia (usado por imprimir_separacao_carvia.html e imprimir_completo.html)
+   Variaveis esperadas:
+     - cotacao (CarviaCotacao)
+     - pedido (CarviaPedido | None)
+     - itens_pedido (List[CarviaPedidoItem]) — filtrados pela NF se CARVIA-NF-*
+     - motos (List[CarviaCotacaoMoto]) — preenchido so em provisorio MOTO
+     - veiculos_por_nf (Dict[nf_num -> List[CarviaNfVeiculo]])
+     - eh_pedido (bool)
+     - embarque (Embarque)
+     - peso_bruto_nf, peso_cubado_nf, volumes_nf (float/int)
+     - nf_corrente (str | None) — numero_nf especifico do lote (CARVIA-NF-*)
+     - observacoes (str | None)
+     - embarque_item (EmbarqueItem | None)
+     - rota, sub_rota (str | None)
+     - transportadora (Transportadora | None) — fallback p/ embarque.transportadora
+     - resumo (Dict com qtd/valor/peso_bruto/peso_cubado/volumes/pallets)
+#}
+
+{% set _tipo = cotacao.tipo_material %}
+{% set _eh_moto = _tipo == 'MOTO' %}
+{% set _eh_carga_geral = _tipo == 'CARGA_GERAL' %}
+{% set _transp = transportadora or embarque.transportadora %}
+{% set _dest = cotacao.endereco_destino %}
+{% set _resumo = resumo or {} %}
 
 {% if not eh_pedido %}
 <div class="watermark">PROVISORIO</div>
 {% endif %}
 
-<!-- Header CarVia -->
-<div class="carvia-header">
-    {% if eh_pedido %}
-    <div style="text-align:center; margin-bottom: 6px;">
-        <span style="font-size: 36px; font-weight: 900; color: white; padding: 4px 20px; border-radius: 6px;
+<!-- Header padrao Nacom -->
+<div class="header">
+    <h1>RELATORIO DE SEPARACAO{% if not eh_pedido %} - PROVISORIO{% endif %}</h1>
+    <h2>
+        Embarque #{{ embarque.numero }}
+        {% if eh_pedido and pedido %}
+            - Pedido {{ pedido.numero_pedido }}
+            {% if nf_corrente %} | NF {{ nf_corrente }}
+            {% else %}
+                {% set _nfs_pedido = itens_pedido | map(attribute='numero_nf') | select | unique | list %}
+                {% if _nfs_pedido %} | NF {{ _nfs_pedido | join(', ') }}{% endif %}
+            {% endif %}
+        {% else %}
+            - Cotacao {{ cotacao.numero_cotacao }}
+        {% endif %}
+    </h2>
+    {% if eh_pedido and pedido and pedido.filial %}
+    <div style="margin-top: 6px;">
+        <span style="display:inline-block; font-size: 14px; font-weight: 900; color: white;
+                     padding: 3px 14px; border-radius: 4px;
                      background-color: {{ '#1a73e8' if pedido.filial == 'SP' else '#d93025' }};">
-            {{ pedido.filial }}
+            FILIAL {{ pedido.filial }}
+        </span>
+        <span style="display:inline-block; font-size: 11px; margin-left: 8px; color: #555;">
+            Tipo: {{ pedido.tipo_separacao or '-' }} | Material: {{ _tipo }}{% if cotacao.tipo_carga %} ({{ cotacao.tipo_carga }}){% endif %}
         </span>
     </div>
-    <h1>SEPARACAO CARVIA — {{ pedido.numero_pedido }}</h1>
-    {% set nfs_pedido = itens_pedido | map(attribute='numero_nf') | select | unique | list %}
-    {% if nfs_pedido %}
-    <div style="font-size: 22px; font-weight: bold; margin: 4px 0 8px;">NF: {{ nfs_pedido | join(', ') }}</div>
-    {% endif %}
-    <h2 style="font-weight: bold; font-size: 16px;">Filial: {{ pedido.filial }} | Tipo: {{ pedido.tipo_separacao }}</h2>
     {% else %}
-    <h1>SEPARACAO CARVIA — {{ cotacao.numero_cotacao }} (PROVISORIO)</h1>
-    <h2>Aguardando pedidos/NF</h2>
+    <div style="margin-top: 6px; font-size: 11px; color: #555;">
+        Material: {{ _tipo }}{% if cotacao.tipo_carga %} ({{ cotacao.tipo_carga }}){% endif %} | Status cotacao: {{ cotacao.status }}
+    </div>
     {% endif %}
-    <h2>Embarque #{{ embarque.numero }}
-        {% if embarque.transportadora %} | {{ embarque.transportadora.razao_social }}{% endif %}
-    </h2>
 </div>
 
 {% if not eh_pedido %}
@@ -37,155 +69,286 @@
 </div>
 {% endif %}
 
-<!-- Dados da cotacao -->
+<!-- Totalizadores em destaque (igual Nacom) -->
+<div class="totals-box">
+    <div style="text-align: center; font-size: 12px; font-weight: bold;">
+        <span style="color: #666; margin-right: 15px;">TOTALIZADORES:</span>
+        Qtd: {{ "%.0f"|format(_resumo.get('qtd', 0)) }}
+        <span style="margin: 0 10px;">|</span>
+        Valor: R$ {{ _resumo.get('valor', 0) | valor_br }}
+        <span style="margin: 0 10px;">|</span>
+        Peso Bruto: {{ _resumo.get('peso_bruto', 0) | numero_br(2) }} kg
+        <span style="margin: 0 10px;">|</span>
+        Peso Cubado: {{ _resumo.get('peso_cubado', 0) | numero_br(2) }} kg
+        <span style="margin: 0 10px;">|</span>
+        Volumes: {{ _resumo.get('volumes', 0) }}
+    </div>
+</div>
+
+<!-- Informacoes Gerais (estrutura espelhada da Nacom) -->
 <div class="info-section">
     <div class="info-left">
+        <div class="info-row">
+            <span class="info-label">Data Cotacao:</span>
+            {{ cotacao.data_cotacao | formatar_data_segura if cotacao.data_cotacao else 'N/A' }}
+        </div>
         <div class="info-row">
             <span class="info-label">Cotacao:</span>
             <span class="text-bold">{{ cotacao.numero_cotacao }}</span>
         </div>
+        {% if eh_pedido and pedido %}
         <div class="info-row">
-            <span class="info-label">Destinatario:</span>
-            {% if cotacao.endereco_destino %}
-                {{ cotacao.endereco_destino.razao_social or 'N/A' }}
-                ({{ cotacao.endereco_destino.cnpj|cnpj_br }})
-            {% else %}N/A{% endif %}
+            <span class="info-label">Pedido:</span>
+            <span class="text-bold">{{ pedido.numero_pedido }}</span>
+        </div>
+        {% endif %}
+        {% if nf_corrente %}
+        <div class="info-row">
+            <span class="info-label">Nota Fiscal:</span>
+            <span class="text-bold">{{ nf_corrente }}</span>
+        </div>
+        {% endif %}
+        <div class="info-row">
+            <span class="info-label">Nome Comercial:</span>
+            {{ cotacao.cliente.nome_comercial if cotacao.cliente else '-' }}
         </div>
         <div class="info-row">
-            <span class="info-label">Material:</span>
-            {{ cotacao.tipo_material or 'N/A' }}
+            <span class="info-label">Razao Social:</span>
+            {{ _dest.razao_social if (_dest and _dest.razao_social) else '-' }}
         </div>
         <div class="info-row">
-            <span class="info-label">Peso Bruto:</span>
-            {{ "%.2f"|format(peso_bruto_nf or 0) }} kg
+            <span class="info-label">CNPJ/CPF:</span>
+            {{ (_dest.cnpj | cnpj_br) if (_dest and _dest.cnpj) else '-' }}
         </div>
         <div class="info-row">
-            <span class="info-label">Peso Cubado:</span>
-            {% if eh_pedido %}
-                {{ "%.2f"|format(peso_cubado_nf or 0) }} kg
-            {% else %}
-                {{ "%.2f"|format(cotacao.peso_total_motos or cotacao.peso_cubado or cotacao.peso or 0) }} kg
-            {% endif %}
+            <span class="info-label">Destino:</span>
+            {% if _dest %}
+                {{ _dest.fisico_cidade or '-' }}/{{ _dest.fisico_uf or '-' }}
+            {% else %}-{% endif %}
         </div>
     </div>
     <div class="info-right">
         <div class="info-row">
-            <span class="info-label">Destino:</span>
-            {% if cotacao.endereco_destino %}
-                {{ cotacao.endereco_destino.fisico_cidade or '' }}/{{ cotacao.endereco_destino.fisico_uf or '' }}
+            <span class="info-label">Data Expedicao:</span>
+            {{ cotacao.data_expedicao | formatar_data_segura if cotacao.data_expedicao else 'N/A' }}
+        </div>
+        <div class="info-row">
+            <span class="info-label">Data Agendamento:</span>
+            {{ cotacao.data_agenda | formatar_data_segura if cotacao.data_agenda else 'N/A' }}
+            {% if cotacao.agendamento_confirmado %}
+                <span style="font-size: 9px; color: #155724; background: #d4edda; padding: 1px 4px; border-radius: 2px; margin-left: 4px;">confirmado</span>
+            {% endif %}
+        </div>
+        <div class="info-row">
+            <span class="info-label">Transportadora:</span>
+            {{ _transp.razao_social if _transp else 'N/A' }}
+        </div>
+        <div class="info-row">
+            <span class="info-label">Rota:</span>
+            {% if rota %}
+                {{ rota }}{% if sub_rota %} / {{ sub_rota }}{% endif %}
             {% else %}N/A{% endif %}
         </div>
+        {% if eh_pedido and pedido %}
         <div class="info-row">
-            <span class="info-label">Valor Mercadoria:</span>
-            R$ {{ "%.2f"|format(cotacao.valor_mercadoria or 0) }}
-        </div>
-        {% if eh_pedido %}
-        <div class="info-row">
-            <span class="info-label">Pedido:</span>
-            {{ pedido.numero_pedido }}
+            <span class="info-label">Filial:</span>
+            {{ pedido.filial }}
         </div>
         {% endif %}
         <div class="info-row">
-            <span class="info-label">Status:</span>
-            {{ cotacao.status }}
+            <span class="info-label">Valor Mercadoria:</span>
+            R$ {{ cotacao.valor_mercadoria | valor_br if cotacao.valor_mercadoria else '0,00' }}
         </div>
     </div>
 </div>
 
-{# Observacoes do pedido ou cotacao (Ajuste 7) #}
-{% set obs = pedido.observacoes if (eh_pedido and pedido and pedido.observacoes) else cotacao.observacoes %}
-{% if obs %}
-<div style="margin: 10px 0; padding: 8px; border: 2px solid #f0ad4e; background: #fcf8e3; font-size: 13px;">
-    <strong>OBSERVACOES:</strong> {{ obs }}
+<!-- Observacoes em destaque (estilo Nacom) -->
+{% if observacoes %}
+<div style="border: 2px solid #ffc107; background-color: #fff3cd; padding: 4px; margin-bottom: 10px;">
+    <h3 style="margin: 0 0 2px 0; font-size: 14px; color: #856404;">OBSERVACOES:</h3>
+    <div style="font-weight: bold; line-height: 1.6; min-height: 30px;">
+        {{ observacoes }}
+    </div>
 </div>
 {% endif %}
 
-<!-- Tabela de itens: 1 linha por veiculo/chassi (pedido) ou motos (cotacao) -->
-{% if eh_pedido and itens_pedido %}
-<h3 style="margin: 10px 0 5px; font-size: 14px;">ITENS DO PEDIDO</h3>
-<table class="products-table">
-    <thead>
-        <tr>
-            <th style="background-color: #17a2b8; color: white; width: 25%;">Chassi</th>
-            <th style="background-color: #17a2b8; color: white; width: 25%;">Modelo</th>
-            <th style="background-color: #17a2b8; color: white; width: 15%;">Cor</th>
-            <th style="background-color: #17a2b8; color: white; width: 15%;">Valor</th>
-            <th style="background-color: #17a2b8; color: white; width: 10%;">Ano</th>
-            <th style="background-color: #17a2b8; color: white; width: 10%;">NF</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% set ns = namespace(total_valor=0, total_veiculos=0, nfs_rendered=[]) %}
-        {# Primeiro: renderizar veiculos por NF unica (evita duplicacao) #}
-        {% set nfs_unicas = itens_pedido | map(attribute='numero_nf') | select | unique | list %}
-        {% for nf_num in nfs_unicas %}
-            {% set nf_veics = veiculos_por_nf.get(nf_num, []) if veiculos_por_nf else [] %}
-            {% if nf_veics %}
-                {% for v in nf_veics %}
-                {% set ns.total_veiculos = ns.total_veiculos + 1 %}
-                {% set ns.total_valor = ns.total_valor + (v.valor or 0) %}
+<!-- ============================================================
+     Tabela de Itens — varia por tipo_material e estado (pedido/provisorio)
+============================================================ -->
+
+{% if eh_pedido and _eh_moto and (veiculos_por_nf or itens_pedido) %}
+    {# MOTO + pedido com NF: listar chassis #}
+    <h3 style="margin: 8px 0 4px 0; font-size: 14px;">VEICULOS A SEPARAR</h3>
+    <table class="products-table">
+        <thead>
+            <tr>
+                <th style="width: 30%;">Chassi</th>
+                <th style="width: 35%;">Modelo</th>
+                <th style="width: 15%;">Cor</th>
+                <th style="width: 20%;">NF</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(total_veiculos=0, nfs_rendered=[]) %}
+            {% set nfs_unicas = veiculos_por_nf.keys() | list %}
+            {% for nf_num in nfs_unicas %}
+                {% set nf_veics = veiculos_por_nf.get(nf_num, []) %}
+                {% if nf_veics %}
+                    {% for v in nf_veics %}
+                        {% set ns.total_veiculos = ns.total_veiculos + 1 %}
+                        <tr>
+                            <td><code style="font-size: 8px;">{{ v.chassi }}</code></td>
+                            <td>{{ v.modelo or '-' }}</td>
+                            <td>{{ v.cor or '-' }}</td>
+                            <td>{{ nf_num }}</td>
+                        </tr>
+                    {% endfor %}
+                    {% set ns.nfs_rendered = ns.nfs_rendered + [nf_num] %}
+                {% endif %}
+            {% endfor %}
+            {# Itens sem chassi vinculado (NF nao tem CarviaNfVeiculo) — fallback p/ itens_pedido #}
+            {% for item in itens_pedido %}
+                {% if (not item.numero_nf or item.numero_nf not in ns.nfs_rendered) and item.modelo_moto_id %}
+                    {% set ns.total_veiculos = ns.total_veiculos + (item.quantidade or 1) %}
+                    <tr>
+                        <td>-</td>
+                        <td>{{ item.descricao or (item.modelo_moto.nome if item.modelo_moto else '-') }} <span style="color:#999; font-size:9px;">(qtd {{ item.quantidade }})</span></td>
+                        <td>{{ item.cor or '-' }}</td>
+                        <td>{{ item.numero_nf or '-' }}</td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+            <tr style="font-weight: bold; background: #f0f0f0;">
+                <td colspan="3" style="text-align: right;">TOTAL DE VEICULOS:</td>
+                <td>{{ ns.total_veiculos }} un.</td>
+            </tr>
+        </tbody>
+    </table>
+
+{% elif eh_pedido and _eh_carga_geral and itens_pedido %}
+    {# CARGA_GERAL + pedido com NF: listar produtos #}
+    <h3 style="margin: 8px 0 4px 0; font-size: 14px;">PRODUTOS A SEPARAR</h3>
+    <table class="products-table">
+        <thead>
+            <tr>
+                <th style="width: 45%;">Descricao</th>
+                <th style="width: 10%;">Cor</th>
+                <th style="width: 10%;">Qtd</th>
+                <th style="width: 13%;">Vlr Unit.</th>
+                <th style="width: 13%;">Vlr Total</th>
+                <th style="width: 9%;">NF</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(qtd=0, valor=0) %}
+            {% for item in itens_pedido %}
+                {% set ns.qtd = ns.qtd + (item.quantidade or 0) %}
+                {% set ns.valor = ns.valor + (item.valor_total or 0) %}
                 <tr>
-                    <td><code>{{ v.chassi }}</code></td>
-                    <td>{{ v.modelo or '-' }}</td>
-                    <td>{{ v.cor or '-' }}</td>
-                    <td class="text-right">{{ "%.2f"|format(v.valor or 0) }}</td>
-                    <td>{{ v.ano or '-' }}</td>
-                    <td>{{ nf_num }}</td>
-                </tr>
-                {% endfor %}
-                {% set ns.nfs_rendered = ns.nfs_rendered + [nf_num] %}
-            {% endif %}
-        {% endfor %}
-        {# Depois: itens sem veiculos (NFs sem detalhe de chassi) #}
-        {% for item in itens_pedido %}
-            {% if not item.numero_nf or item.numero_nf not in ns.nfs_rendered %}
-                {% set ns.total_veiculos = ns.total_veiculos + (item.quantidade or 1) %}
-                {% set ns.total_valor = ns.total_valor + (item.valor_total or 0) %}
-                <tr>
-                    <td>-</td>
                     <td>{{ item.descricao or '-' }}</td>
                     <td>{{ item.cor or '-' }}</td>
-                    <td class="text-right">{{ "%.2f"|format(item.valor_total or 0) }}</td>
-                    <td>-</td>
+                    <td class="text-right">{{ "%.0f"|format(item.quantidade or 0) }}</td>
+                    <td class="text-right">{{ item.valor_unitario | valor_br if item.valor_unitario else '-' }}</td>
+                    <td class="text-right">{{ item.valor_total | valor_br if item.valor_total else '-' }}</td>
                     <td>{{ item.numero_nf or '-' }}</td>
                 </tr>
+            {% endfor %}
+            <tr style="font-weight: bold; background: #f0f0f0;">
+                <td colspan="2" style="text-align: right;">TOTAL:</td>
+                <td class="text-right">{{ "%.0f"|format(ns.qtd) }}</td>
+                <td></td>
+                <td class="text-right">R$ {{ ns.valor | valor_br }}</td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+
+{% elif not eh_pedido and _eh_moto and motos %}
+    {# MOTO + provisorio: tabela de motos cotadas #}
+    <h3 style="margin: 8px 0 4px 0; font-size: 14px;">MOTOS COTADAS</h3>
+    <table class="products-table">
+        <thead>
+            <tr>
+                <th style="width: 45%;">Modelo</th>
+                <th style="width: 15%;">Qtd</th>
+                <th style="width: 20%;">Peso Cubado Unit.</th>
+                <th style="width: 20%;">Peso Cubado Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(qtd=0, cubado=0) %}
+            {% for moto in motos %}
+                {% set ns.qtd = ns.qtd + (moto.quantidade or 0) %}
+                {% set ns.cubado = ns.cubado + (moto.peso_cubado_total or 0) %}
+                <tr>
+                    <td>{{ moto.modelo_moto.nome if moto.modelo_moto else '-' }}</td>
+                    <td class="text-center">{{ moto.quantidade }}</td>
+                    <td class="text-right">{{ moto.peso_cubado_unitario | numero_br(2) if moto.peso_cubado_unitario else '-' }}</td>
+                    <td class="text-right">{{ moto.peso_cubado_total | numero_br(2) if moto.peso_cubado_total else '-' }}</td>
+                </tr>
+            {% endfor %}
+            <tr style="font-weight: bold; background: #f0f0f0;">
+                <td style="text-align: right;">TOTAL:</td>
+                <td class="text-center">{{ "%.0f"|format(ns.qtd) }}</td>
+                <td></td>
+                <td class="text-right">{{ ns.cubado | numero_br(2) }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+{% elif not eh_pedido and _eh_carga_geral %}
+    {# CARGA_GERAL + provisorio: dados diretos da cotacao #}
+    <h3 style="margin: 8px 0 4px 0; font-size: 14px;">DADOS DA CARGA (COTACAO)</h3>
+    <table class="products-table">
+        <thead>
+            <tr>
+                <th>Campo</th>
+                <th>Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Tipo de carga</strong></td>
+                <td>{{ cotacao.tipo_carga or '-' }}</td>
+            </tr>
+            <tr>
+                <td><strong>Peso Bruto</strong></td>
+                <td>{{ cotacao.peso | numero_br(2) if cotacao.peso else '-' }} kg</td>
+            </tr>
+            <tr>
+                <td><strong>Peso Cubado</strong></td>
+                <td>{{ cotacao.peso_cubado | numero_br(2) if cotacao.peso_cubado else '-' }} kg</td>
+            </tr>
+            <tr>
+                <td><strong>Volumes</strong></td>
+                <td>{{ cotacao.volumes if cotacao.volumes else '-' }}</td>
+            </tr>
+            <tr>
+                <td><strong>Valor Mercadoria</strong></td>
+                <td>R$ {{ cotacao.valor_mercadoria | valor_br if cotacao.valor_mercadoria else '0,00' }}</td>
+            </tr>
+            {% if cotacao.dimensao_c or cotacao.dimensao_l or cotacao.dimensao_a %}
+            <tr>
+                <td><strong>Dimensoes (C x L x A)</strong></td>
+                <td>
+                    {{ cotacao.dimensao_c | numero_br(2) if cotacao.dimensao_c else '-' }}
+                    x {{ cotacao.dimensao_l | numero_br(2) if cotacao.dimensao_l else '-' }}
+                    x {{ cotacao.dimensao_a | numero_br(2) if cotacao.dimensao_a else '-' }} m
+                </td>
+            </tr>
             {% endif %}
-        {% endfor %}
-        <tr style="font-weight: bold; border-top: 2px solid #17a2b8;">
-            <td colspan="2">TOTAL</td>
-            <td></td>
-            <td class="text-right">{{ "%.2f"|format(ns.total_valor) }}</td>
-            <td></td>
-            <td>{{ ns.total_veiculos }} un.</td>
-        </tr>
-    </tbody>
-</table>
-{% elif motos and not eh_pedido %}
-<h3 style="margin: 10px 0 5px; font-size: 14px;">MOTOS COTADAS</h3>
-<table class="products-table">
-    <thead>
-        <tr>
-            <th style="background-color: #17a2b8; color: white; width: 40%;">Modelo</th>
-            <th style="background-color: #17a2b8; color: white; width: 20%;">Qtd</th>
-            <th style="background-color: #17a2b8; color: white; width: 20%;">Peso Cubado Unit.</th>
-            <th style="background-color: #17a2b8; color: white; width: 20%;">Peso Cubado Total</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for moto in motos %}
-        <tr>
-            <td>{{ moto.modelo_moto.nome if moto.modelo_moto else '-' }}</td>
-            <td class="text-center">{{ moto.quantidade }}</td>
-            <td class="text-right">{{ "%.2f"|format(moto.peso_cubado_unitario or 0) }}</td>
-            <td class="text-right">{{ "%.2f"|format(moto.peso_cubado_total or 0) }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+        </tbody>
+    </table>
+
+{% else %}
+    <h3 style="margin: 8px 0 4px 0; font-size: 14px;">ITENS</h3>
+    <p style="padding: 10px; background: #f8f9fa; border: 1px solid #ddd; font-size: 11px;">
+        <em>Nenhum item registrado para este lote. {% if not eh_pedido %}Aguardando criacao de pedidos.{% else %}Pedido sem itens.{% endif %}</em>
+    </p>
 {% endif %}
 
-<!-- Controle de Atividades -->
-<div style="margin-top: 20px; border: 1px solid #ddd; padding: 10px;">
+<!-- Secao Separacao / Conferencia (igual Nacom) -->
+<div style="margin-top: 10px; border: 1px solid #ddd; padding: 10px;">
     <div style="display: flex; justify-content: space-between;">
         <div style="width: 48%;">
             <h4 style="font-size: 11px; margin: 10px 0 10px 0;">SEPARACAO</h4>

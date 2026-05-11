@@ -1591,7 +1591,14 @@ def fechar_frete():
                     if tipo == 'FRACIONADA':
                         TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
                         item.icms_destino = dados_tabela.get('icms_destino')
-                    db.session.add(item)
+                    # F1 dedup B1: evita duplicacao de provisorio CARVIA-{cot_id}
+                    from app.carvia.services.documentos.embarque_carvia_service import (
+                        EmbarqueCarViaService as _ECVS_F1,
+                    )
+                    _add_res = _ECVS_F1.adicionar_item_dedup(item)
+                    if _add_res['acao'] == 'dedup_skip':
+                        print(f"[DEBUG] CarVia DEDUP F1: {pedido.num_pedido} {pedido.separacao_lote_id} ja existe — skip")
+                        continue
                     if _eh_multi_nf:
                         print(f"[DEBUG] ✅ CarVia MULTI-NF (provisorio): {pedido.num_pedido} → {_nf_raw} ({cidade_cv}/{uf_cv})")
                     elif _nota_fiscal_unica:
@@ -1985,7 +1992,14 @@ def fechar_frete_grupo():
                     dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
                     TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
                     item.icms_destino = dados_tabela.get('icms_destino', 0)
-                db.session.add(item)
+                # F1 dedup B1: evita duplicacao de provisorio CARVIA-{cot_id}
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    EmbarqueCarViaService as _ECVS_F1,
+                )
+                _add_res = _ECVS_F1.adicionar_item_dedup(item)
+                if _add_res['acao'] == 'dedup_skip':
+                    print(f"[DEBUG] CarVia DEDUP F1 grupo: {pedido.num_pedido} ja existe — skip")
+                    continue
                 if _eh_multi_nf:
                     print(f"[DEBUG] CarVia MULTI-NF grupo (provisorio): {pedido.num_pedido} → {_nf_raw} ({cidade_cv}/{uf_cv})")
                 elif _nota_fiscal_unica:
@@ -3762,7 +3776,14 @@ def incluir_em_embarque():
                 TabelaFreteManager.atribuir_campos_objeto(novo_item, dados_vazio_cv)
                 novo_item.icms_destino = None
 
-                db.session.add(novo_item)
+                # F1 dedup B1: evita duplicacao de provisorio em incluir_em_embarque
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    EmbarqueCarViaService as _ECVS_F1,
+                )
+                _add_res = _ECVS_F1.adicionar_item_dedup(novo_item)
+                if _add_res['acao'] == 'dedup_skip':
+                    print(f"[DEBUG] CarVia DEDUP F1 (incluir): {pedido.num_pedido} ja existe — skip")
+                    continue
 
                 if _eh_multi_nf:
                     print(f"[DEBUG] ✅ CarVia MULTI-NF (incluir_em_embarque): {pedido.num_pedido} → {_nf_raw}")

@@ -249,6 +249,22 @@ function anexarNF(inputId) {
     .then(r => r.json())
     .then(d => {
         if (d.sucesso) {
+            // B4: modal de backfill quando NF traz modelo novo
+            if (d.acao === 'aguardando_backfill' && d.modelos_faltantes && d.modelos_faltantes.length) {
+                if (typeof window.abrirModalBackfillModelos === 'function') {
+                    window.abrirModalBackfillModelos({
+                        cotacao_id: d.cotacao_id,
+                        numero_nf: d.numero_nf,
+                        pedido_id: {{ pedido.id }},
+                        modelos_faltantes: d.modelos_faltantes,
+                    });
+                    if (btn) btn.disabled = false;
+                    if (spin) spin.classList.add('d-none');
+                    return;
+                } else {
+                    alert('Modelos faltantes detectados, mas modal nao carregou. Recarregue a pagina.');
+                }
+            }
             const fb = document.getElementById('nfFeedback');
             if (fb) {
                 let msg = '<div class="alert alert-success py-2 small">';
@@ -274,4 +290,6 @@ function anexarNF(inputId) {
     });
 }
 </script>
+
+{% include 'carvia/_modal_backfill_modelos.html' %}
 {% endblock %}

@@ -225,11 +225,22 @@ function adicionarLinhaMotos(dados) {
     const pesoUnit = d.peso_cubado_unitario != null ? Number(d.peso_cubado_unitario).toFixed(3) : '';
     const valorTotal = d.valor_total != null ? Number(d.valor_total).toFixed(2) : '';
     const pesoTotal = d.peso_cubado_total != null ? Number(d.peso_cubado_total).toFixed(3) : '';
+    // F5: badge placeholder se peso=0 ou flag placeholder=true
+    const ehPlaceholder = (d.placeholder === true) ||
+        (d.peso_cubado_unitario != null && Number(d.peso_cubado_unitario) === 0);
 
     const tr = document.createElement('tr');
     tr.id = `motoRow${idx}`;
+    if (ehPlaceholder) {
+        tr.classList.add('table-warning');
+        tr.dataset.placeholder = 'true';
+        tr.dataset.cotacaoMotoId = d.id || '';
+    }
     tr.innerHTML = `
-        <td><select class="form-select form-select-sm" id="motoModelo${idx}" onchange="onModeloChange(${idx})">${buildOpcoesModelo(modeloId)}</select></td>
+        <td>
+            <select class="form-select form-select-sm" id="motoModelo${idx}" onchange="onModeloChange(${idx})">${buildOpcoesModelo(modeloId)}</select>
+            ${ehPlaceholder ? '<small class="text-warning d-block mt-1"><i class="fas fa-exclamation-triangle"></i> peso pendente — completar cadastro</small>' : ''}
+        </td>
         <td><input type="number" class="form-control form-control-sm" id="motoQtd${idx}" value="${qtd}" min="1" oninput="recalcularMoto(${idx})"></td>
         <td><input type="number" class="form-control form-control-sm" id="motoValorUnit${idx}" step="0.01" min="0" value="${valorUnit}" oninput="recalcularMoto(${idx})"></td>
         <td><input type="text" class="form-control form-control-sm bg-light" id="motoPesoUnit${idx}" readonly tabindex="-1" value="${pesoUnit}"></td>

@@ -302,6 +302,7 @@ def register_pedido_routes(bp):
 
             # 2. Expandir provisorio no embarque (se cotacao esta em algum)
             resultado_expansao = None
+            modelos_faltantes_resp = None
             try:
                 from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
                 resultado_expansao = EmbarqueCarViaService.expandir_provisorio(
@@ -309,6 +310,18 @@ def register_pedido_routes(bp):
                     pedido_id=pedido_id,
                     numero_nf=numero_nf,
                 )
+                # B4: NF traz modelo nao cadastrado na cotacao → retornar 200 OK
+                # com sinalizacao para frontend abrir modal de backfill.
+                # Mantemos o numero_nf gravado no CarviaPedidoItem (passo 1 ja foi
+                # feito) — assim o modelo pendente pode ser cadastrado depois e
+                # o sistema retenta a expansao via backfill endpoint.
+                if (
+                    isinstance(resultado_expansao, dict)
+                    and resultado_expansao.get('acao') == 'aguardando_backfill'
+                ):
+                    modelos_faltantes_resp = resultado_expansao.get(
+                        'modelos_faltantes', []
+                    )
             except Exception as e:
                 logger.warning(
                     "Erro ao expandir provisorio (nao-bloqueante): %s", e
@@ -355,6 +368,19 @@ def register_pedido_routes(bp):
             }
             if resultado_expansao:
                 resposta['embarque'] = resultado_expansao
+
+            # B4: sinaliza ao frontend que modelos da NF precisam ser
+            # cadastrados na cotacao antes da expansao do provisorio prosseguir.
+            if modelos_faltantes_resp:
+                resposta['acao'] = 'aguardando_backfill'
+                resposta['cotacao_id'] = pedido.cotacao_id
+                resposta['numero_nf'] = numero_nf
+                resposta['modelos_faltantes'] = modelos_faltantes_resp
+                resposta['mensagem'] = (
+                    f'NF {numero_nf} anexada, mas modelos novos detectados '
+                    f'na cotacao {pedido.cotacao_id}. Cadastre os modelos '
+                    f'no modal para liberar a expansao no embarque.'
+                )
 
             return jsonify(resposta)
 
@@ -530,7 +556,11 @@ def register_pedido_routes(bp):
                         provisorio=True,
                         carvia_cotacao_id=cotacao_id,
                     )
-                    db.session.add(novo_prov)
+                    # F1 dedup B1: evita criar 2 CARVIA-COT-{cot_id} provisorios
+                    from app.carvia.services.documentos.embarque_carvia_service import (
+                        EmbarqueCarViaService as _ECVS_F1,
+                    )
+                    _ECVS_F1.adicionar_item_dedup(novo_prov)
 
             # 4. Limpar numero_nf dos itens
             for item in pedido.itens.all():
@@ -718,7 +748,11 @@ def register_pedido_routes(bp):
                         provisorio=True,
                         carvia_cotacao_id=cotacao_id,
                     )
-                    db.session.add(novo_prov)
+                    # F1 dedup B1: evita criar 2 CARVIA-COT-{cot_id} provisorios
+                    from app.carvia.services.documentos.embarque_carvia_service import (
+                        EmbarqueCarViaService as _ECVS_F1,
+                    )
+                    _ECVS_F1.adicionar_item_dedup(novo_prov)
                     logger.info(
                         "Provisorio RECRIADO: vol=%d, peso=%.1f, valor=%.2f (cotacao %s, embarque %s)",
                         vol_devolver, peso_devolver, valor_devolver, cotacao_id, embarque_id_ref,
