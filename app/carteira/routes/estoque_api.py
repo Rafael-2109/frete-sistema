@@ -42,31 +42,35 @@ def obter_estoque_pedido(num_pedido):
             
             if projecao_completa and isinstance(projecao_completa, dict):
                 # Usar dados calculados pelo serviço (VALORES REAIS)
+                # NOTA: saldo_estoque_pedido / estoque / menor_estoque_produto_d7 / estoque_dN
+                # foram REMOVIDOS de CarteiraPrincipal (migration remover_campos_nao_utilizados_carteira).
+                # Fonte canonica: projecao_completa via ServicoEstoqueSimples.
                 produto_estoque = {
                     'cod_produto': produto.cod_produto,
                     'estoque': projecao_completa['estoque_atual'],
                     'estoque_d0': projecao_completa.get('estoque_d0', projecao_completa['estoque_atual']),
                     'menor_estoque_produto_d7': projecao_completa.get('menor_estoque_d7', 0),
-                    'saldo_estoque_pedido': float(produto.saldo_estoque_pedido or 0),
+                    'saldo_estoque_pedido': projecao_completa.get('estoque_atual', 0),
                     'dia_ruptura': projecao_completa.get('dia_ruptura')
                 }
-                
+
                 # Adicionar projeções D0-D28 calculadas
                 for i, valor in enumerate(projecao_completa.get('projecao', [])):
                     if i < 29:
                         produto_estoque[f'estoque_d{i}'] = valor
-                
+
                 produtos_estoque.append(produto_estoque)
             else:
-                # Fallback se o serviço falhar
+                # Fallback se o serviço falhar — campos de estoque nao existem mais
+                # em CarteiraPrincipal; retornar zeros para nao quebrar o frontend.
                 produtos_estoque.append({
                     'cod_produto': produto.cod_produto,
-                    'estoque': float(produto.estoque or 0),
-                    'estoque_d0': float(produto.estoque_d0 or 0),
-                    'menor_estoque_produto_d7': float(produto.menor_estoque_produto_d7 or 0),
-                    'saldo_estoque_pedido': float(produto.saldo_estoque_pedido or 0),
-                    # Adicionar projeções D0-D28 se necessário
-                    **{f'estoque_d{i}': float(getattr(produto, f'estoque_d{i}', 0) or 0) for i in range(29)}
+                    'estoque': 0,
+                    'estoque_d0': 0,
+                    'menor_estoque_produto_d7': 0,
+                    'saldo_estoque_pedido': 0,
+                    # Projeções D0-D28 zeradas (sem dados disponiveis)
+                    **{f'estoque_d{i}': 0 for i in range(29)}
                 })
         
         return jsonify({
