@@ -1308,6 +1308,12 @@
      Early-paint primer ja aplicou o zoom no <head>, este script gerencia o resto. #}
   <script src="{{ 'js/mobile-zoom.js'|asset_url }}"></script>
 
+  {# ⌘K Command Palette — modal global + controller #}
+  {% if current_user.is_authenticated %}
+    {% include '_cmdk_modal.html' %}
+    <script src="{{ 'js/cmdk.js'|asset_url }}"></script>
+  {% endif %}
+
   {% block scripts %}{% endblock %}
 </body>
 

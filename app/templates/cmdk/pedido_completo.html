@@ -1,0 +1,610 @@
+{% extends "base.html" %}
+
+{# Tela rica raio-X de pedido — agrega itens, separacoes, NFs faturadas,
+   status de entrega e estoque (lazy). Estilos em
+   app/static/css/modules/_cmdk_pedido.css. #}
+
+{% block page_title %}Pedido {{ pedido.num_pedido }}{% endblock %}
+
+{% block breadcrumb %}
+  <span class="nc-breadcrumb__sep">/</span>
+  <a href="{{ url_for('carteira.index') }}" class="nc-breadcrumb__link">Carteira</a>
+  <span class="nc-breadcrumb__sep">/</span>
+  <span class="nc-breadcrumb__current">Pedido {{ pedido.num_pedido }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="raio-x-pedido">
+
+  {# ─────────────────── Header: titulo + acoes ─────────────────── #}
+  <div class="raio-x-pedido__header">
+    <div>
+      <h1 class="raio-x-pedido__title">
+        <i class="fas fa-shopping-cart"></i>
+        Pedido {{ pedido.num_pedido }}
+        {% if pedido.status_badge %}
+          <span class="raio-x-badge raio-x-badge--{{ pedido.status_badge.tone }}">
+            {{ pedido.status_badge.label }}
+          </span>
+        {% endif %}
+        {% if pedido.pedido_cliente %}
+          <span class="raio-x-pedido__title-muted">PC {{ pedido.pedido_cliente }}</span>
+        {% endif %}
+      </h1>
+      {% if pedido.cliente.razao_social_red %}
+        <div class="text-muted">{{ pedido.cliente.razao_social_red }}</div>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('carteira.index') }}?num_pedido={{ pedido.num_pedido }}"
+         class="btn btn-sm btn-outline-secondary"
+         title="Abrir na carteira agrupada tradicional">
+        <i class="fas fa-list"></i> Ver na carteira
+      </a>
+    </div>
+  </div>
+
+  {# ─────────────────── Cards: cliente | entrega | totais ─────────────────── #}
+  <div class="raio-x-pedido__cards">
+
+    {# Cliente #}
+    <div class="raio-x-card">
+      <div class="raio-x-card__title"><i class="fas fa-building"></i> Cliente</div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">CNPJ</span>
+        <span class="raio-x-card__row-value">{{ pedido.cliente.cnpj_cpf or '—' }}</span>
+      </div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Razão Social</span>
+        <span class="raio-x-card__row-value" title="{{ pedido.cliente.razao_social or '' }}">
+          {{ pedido.cliente.razao_social_red or pedido.cliente.razao_social or '—' }}
+        </span>
+      </div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Município/UF</span>
+        <span class="raio-x-card__row-value">
+          {% if pedido.cliente.municipio %}{{ pedido.cliente.municipio }}/{{ pedido.cliente.estado or '' }}{% else %}—{% endif %}
+        </span>
+      </div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Vendedor</span>
+        <span class="raio-x-card__row-value">{{ pedido.cliente.vendedor or '—' }}</span>
+      </div>
+      {% if pedido.cliente.equipe_vendas %}
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Equipe</span>
+        <span class="raio-x-card__row-value">{{ pedido.cliente.equipe_vendas }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Endereco entrega #}
+    <div class="raio-x-card">
+      <div class="raio-x-card__title"><i class="fas fa-truck"></i> Entrega</div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Local</span>
+        <span class="raio-x-card__row-value">
+          {% if pedido.endereco_entrega.cidade %}
+            {{ pedido.endereco_entrega.cidade }}/{{ pedido.endereco_entrega.uf or '' }}
+          {% else %}—{% endif %}
+        </span>
+      </div>
+      {% if pedido.endereco_entrega.empresa %}
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Empresa</span>
+        <span class="raio-x-card__row-value">{{ pedido.endereco_entrega.empresa }}</span>
+      </div>
+      {% endif %}
+      {% if pedido.endereco_entrega.cep %}
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">CEP</span>
+        <span class="raio-x-card__row-value">{{ pedido.endereco_entrega.cep }}</span>
+      </div>
+      {% endif %}
+      {% if pedido.endereco_entrega.bairro %}
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Bairro</span>
+        <span class="raio-x-card__row-value">{{ pedido.endereco_entrega.bairro }}</span>
+      </div>
+      {% endif %}
+      {% if pedido.endereco_entrega.rua %}
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Endereço</span>
+        <span class="raio-x-card__row-value">
+          {{ pedido.endereco_entrega.rua }}{% if pedido.endereco_entrega.numero %}, {{ pedido.endereco_entrega.numero }}{% endif %}
+        </span>
+      </div>
+      {% endif %}
+      {% if pedido.endereco_entrega.telefone %}
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Telefone</span>
+        <span class="raio-x-card__row-value">{{ pedido.endereco_entrega.telefone }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {# Totais #}
+    <div class="raio-x-card">
+      <div class="raio-x-card__title"><i class="fas fa-coins"></i> Totais</div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Itens</span>
+        <span class="raio-x-card__row-value">{{ pedido.totais.qtd_itens|numero_br(0) }}</span>
+      </div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Valor pedido</span>
+        <span class="raio-x-card__row-value">R$ {{ pedido.totais.valor_pedido|valor_br }}</span>
+      </div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Valor saldo</span>
+        <span class="raio-x-card__row-value">R$ {{ pedido.totais.valor_saldo|valor_br }}</span>
+      </div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Peso saldo</span>
+        <span class="raio-x-card__row-value">{{ pedido.totais.peso_total|numero_br(0) }} kg</span>
+      </div>
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Pallets</span>
+        <span class="raio-x-card__row-value">{{ pedido.totais.pallet_total|numero_br(2) }}</span>
+      </div>
+      {% if pedido.data_pedido %}
+      <div class="raio-x-card__row">
+        <span class="raio-x-card__row-label">Data</span>
+        <span class="raio-x-card__row-value">{{ pedido.data_pedido }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ─────────────────── Itens do pedido (com Estoque lazy) ─────────────────── #}
+  <div class="raio-x-section">
+    <div class="raio-x-section__header">
+      <h2 class="raio-x-section__title">
+        <i class="fas fa-boxes"></i> Itens
+        <span class="raio-x-section__count">({{ pedido.totais.qtd_itens }})</span>
+      </h2>
+    </div>
+
+    {% if pedido.itens %}
+    <div class="table-responsive">
+      <table class="raio-x-table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Produto</th>
+            <th class="num">Qtd Pedido</th>
+            <th class="num">Qtd Saldo</th>
+            <th class="num">Preço</th>
+            <th class="num">Valor Saldo</th>
+            <th class="num">Peso</th>
+            <th class="num">Pallet</th>
+            <th class="num">Estoque</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in pedido.itens %}
+          <tr data-cod-produto="{{ item.cod_produto }}">
+            <td class="cod">{{ item.cod_produto }}</td>
+            <td>{{ item.nome_produto or '—' }}</td>
+            <td class="num">{{ item.qtd_pedido|numero_br(0) }}</td>
+            <td class="num">{{ item.qtd_saldo|numero_br(0) }}</td>
+            <td class="num">R$ {{ item.preco_unitario|valor_br }}</td>
+            <td class="num">R$ {{ item.valor_saldo|valor_br }}</td>
+            <td class="num">{{ item.peso_total|numero_br(0) }} kg</td>
+            <td class="num">{{ item.pallet_total|numero_br(2) }}</td>
+            <td class="raio-x-estoque-cell" data-estoque-cell="{{ item.cod_produto }}">
+              <span class="raio-x-estoque-cell__loading">carregando...</span>
+            </td>
+            <td>
+              <button type="button"
+                      class="raio-x-btn-projecao"
+                      data-cod-produto="{{ item.cod_produto }}"
+                      title="Ver projeção D0-D14 da linha de produção">
+                <i class="fas fa-chart-line"></i> Projeção
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="raio-x-tot">
+      <div class="raio-x-tot__item">
+        <span class="raio-x-tot__label">Valor pedido</span>
+        <span class="raio-x-tot__value">R$ {{ pedido.totais.valor_pedido|valor_br }}</span>
+      </div>
+      <div class="raio-x-tot__item">
+        <span class="raio-x-tot__label">Valor saldo</span>
+        <span class="raio-x-tot__value">R$ {{ pedido.totais.valor_saldo|valor_br }}</span>
+      </div>
+      <div class="raio-x-tot__item">
+        <span class="raio-x-tot__label">Peso total</span>
+        <span class="raio-x-tot__value">{{ pedido.totais.peso_total|numero_br(0) }} kg</span>
+      </div>
+      <div class="raio-x-tot__item">
+        <span class="raio-x-tot__label">Pallets</span>
+        <span class="raio-x-tot__value">{{ pedido.totais.pallet_total|numero_br(2) }}</span>
+      </div>
+    </div>
+    {% else %}
+    <div class="raio-x-empty">Nenhum item ativo neste pedido.</div>
+    {% endif %}
+  </div>
+
+  {# ─────────────────── Separações ativas ─────────────────── #}
+  <div class="raio-x-section">
+    <div class="raio-x-section__header">
+      <h2 class="raio-x-section__title">
+        <i class="fas fa-pallet"></i> Separações ativas
+        <span class="raio-x-section__count">({{ pedido.separacoes|length }})</span>
+      </h2>
+    </div>
+
+    {% if pedido.separacoes %}
+    <div class="raio-x-sep-list mb-3">
+      {% for sep in pedido.separacoes %}
+      <div class="raio-x-sep{% if sep.is_orfao %} raio-x-sep--orfao{% endif %}">
+        <div class="raio-x-sep__main">
+          <span class="raio-x-sep__lote">
+            {{ sep.lote_id }}
+            <span class="raio-x-badge raio-x-badge--{{ 'warning' if sep.is_previsao else 'info' }}">
+              {{ 'Pré-Sep' if sep.is_previsao else (sep.tipo_envio|capitalize) }}
+            </span>
+            <span class="raio-x-badge raio-x-badge--secondary">{{ sep.status }}</span>
+            {% if sep.is_orfao %}
+              <span class="raio-x-badge raio-x-badge--danger" title="Separação sem separacao_lote_id — verificar no banco">
+                Órfã
+              </span>
+            {% endif %}
+          </span>
+          <span class="raio-x-sep__meta">
+            {% if sep.expedicao %}Expedição: <strong>{{ sep.expedicao }}</strong>{% endif %}
+            {% if sep.agendamento %}
+              | Agendamento: <strong>{{ sep.agendamento }}</strong>
+              {% if sep.agendamento_confirmado %}<i class="fas fa-check text-success" title="Agendamento confirmado"></i>{% endif %}
+            {% endif %}
+            {% if sep.protocolo %} | Protocolo: <strong>{{ sep.protocolo }}</strong>{% endif %}
+            {% if sep.qtd_itens %} | <strong>{{ sep.qtd_itens }}</strong> itens{% endif %}
+            {% if sep.valor_total %} | R$ <strong>{{ sep.valor_total|valor_br }}</strong>{% endif %}
+          </span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="raio-x-empty mb-3">Nenhuma separação ativa para este pedido.</div>
+    {% endif %}
+
+    {# Form criar separacao #}
+    <form id="raio-x-form-criar-sep" class="raio-x-form-sep" onsubmit="return false;">
+      <label>
+        Data de Expedição
+        <input type="date" id="raio-x-expedicao" name="expedicao" required>
+      </label>
+      <label>
+        Agendamento (opcional)
+        <input type="date" id="raio-x-agendamento" name="agendamento">
+      </label>
+      <label>
+        Protocolo (opcional)
+        <input type="text" id="raio-x-protocolo" name="protocolo" maxlength="50" placeholder="—">
+      </label>
+      <button type="button" class="btn btn-primary"
+              id="raio-x-btn-criar-sep"
+              data-num-pedido="{{ pedido.num_pedido }}">
+        <i class="fas fa-plus"></i> Gerar separação completa
+      </button>
+    </form>
+    <div id="raio-x-criar-sep-status" class="mt-2" aria-live="polite"></div>
+  </div>
+
+  {# ─────────────────── NFs faturadas + status entrega ─────────────────── #}
+  <div class="raio-x-section">
+    <div class="raio-x-section__header">
+      <h2 class="raio-x-section__title">
+        <i class="fas fa-receipt"></i> NFs faturadas &amp; entregas
+        <span class="raio-x-section__count">({{ pedido.nfs_faturadas|length }})</span>
+      </h2>
+    </div>
+
+    {% if pedido.nfs_faturadas %}
+    <div class="table-responsive">
+      <table class="raio-x-table">
+        <thead>
+          <tr>
+            <th>NF</th>
+            <th>Faturada</th>
+            <th class="num">Valor</th>
+            <th class="num">Itens</th>
+            <th class="num">Peso</th>
+            <th>Status</th>
+            <th>Transportadora</th>
+            <th>Embarque</th>
+            <th>Entrega prev.</th>
+            <th>Entregue</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for nf in pedido.nfs_faturadas %}
+          <tr>
+            <td class="cod">{{ nf.numero_nf }}</td>
+            <td>{{ nf.data_fatura or '—' }}</td>
+            <td class="num">R$ {{ nf.valor_total|valor_br }}</td>
+            <td class="num">{{ nf.qtd_itens }}</td>
+            <td class="num">{{ nf.peso_total|numero_br(0) }} kg</td>
+            <td>
+              {% if nf.entrega_badge %}
+                <span class="raio-x-badge raio-x-badge--{{ nf.entrega_badge.tone }}">
+                  {{ nf.entrega_badge.label }}
+                </span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ nf.transportadora or '—' }}</td>
+            <td>{{ nf.data_embarque or '—' }}</td>
+            <td>{{ nf.data_entrega_prevista or '—' }}</td>
+            <td>{{ nf.data_entrega_realizada or '—' }}</td>
+            <td>
+              <a href="{{ nf.url_monitoramento }}"
+                 class="raio-x-btn-link"
+                 title="Abrir monitoramento desta NF">
+                <i class="fas fa-eye"></i> Ver
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="raio-x-empty">Nenhuma NF faturada vinculada a este pedido.</div>
+    {% endif %}
+  </div>
+
+  {# ─────────────────── Observações ─────────────────── #}
+  {% if pedido.observacoes %}
+  <div class="raio-x-section">
+    <div class="raio-x-section__header">
+      <h2 class="raio-x-section__title"><i class="fas fa-comment-dots"></i> Observações</h2>
+    </div>
+    <pre class="raio-x-observacoes">{{ pedido.observacoes }}</pre>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/modal-projecao-linha.js') }}"></script>
+<script>
+(function () {
+  'use strict';
+
+  const NUM_PEDIDO = {{ pedido.num_pedido|tojson }};
+  const URL_GERAR_SEP = '/carteira/api/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/gerar-separacao-completa';
+  const URL_ESTOQUE   = '/carteira/api/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/estoque';
+
+  // ============================================================ Projecao linha
+  let modalProjecao = null;
+  document.querySelectorAll('.raio-x-btn-projecao').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cod = btn.dataset.codProduto;
+      if (!cod) return;
+      if (!modalProjecao) modalProjecao = new ModalProjecaoLinha();
+      modalProjecao.abrir(cod);
+    });
+  });
+
+  // ============================================================ Estoque (lazy)
+  function carregarEstoqueInline() {
+    const cells = document.querySelectorAll('[data-estoque-cell]');
+    if (!cells.length) return;
+
+    fetch(URL_ESTOQUE, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' },
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+      .then((data) => {
+        if (!data.success || !Array.isArray(data.produtos)) {
+          marcarFalha(cells);
+          return;
+        }
+        // Indexar por cod_produto
+        const idx = {};
+        data.produtos.forEach((p) => { idx[p.cod_produto] = p; });
+
+        cells.forEach((cell) => {
+          const cod = cell.dataset.estoqueCell;
+          const info = idx[cod];
+          if (!info) {
+            renderEstoqueCell(cell, null);
+          } else {
+            renderEstoqueCell(cell, info);
+          }
+        });
+      })
+      .catch((err) => {
+        console.warn('[raio-x] estoque falhou:', err);
+        marcarFalha(cells);
+      });
+  }
+
+  function renderEstoqueCell(cell, info) {
+    cell.classList.remove(
+      'raio-x-estoque-cell--ok',
+      'raio-x-estoque-cell--alerta',
+      'raio-x-estoque-cell--ruptura',
+      'raio-x-estoque-cell--falha'
+    );
+
+    if (!info) {
+      cell.classList.add('raio-x-estoque-cell--falha');
+      cell.replaceChildren(textSpan('—', 'raio-x-estoque-cell__valor'));
+      return;
+    }
+
+    const estoque = Number(info.estoque) || 0;
+    const dia_ruptura = info.dia_ruptura;
+    const tone = classificarRuptura(dia_ruptura);
+    cell.classList.add('raio-x-estoque-cell--' + tone);
+
+    const valorStr = formatarNumero(estoque, 0);
+    const valorEl = textSpan(valorStr, 'raio-x-estoque-cell__valor');
+
+    let subEl = null;
+    if (typeof dia_ruptura === 'number') {
+      subEl = textSpan('Ruptura D+' + dia_ruptura, 'raio-x-estoque-cell__sub');
+    } else if (estoque > 0) {
+      subEl = textSpan('OK 28d', 'raio-x-estoque-cell__sub');
+    }
+    cell.replaceChildren(valorEl);
+    if (subEl) cell.appendChild(subEl);
+  }
+
+  function classificarRuptura(dia_ruptura) {
+    if (dia_ruptura === null || dia_ruptura === undefined) return 'ok';
+    if (typeof dia_ruptura !== 'number') return 'ok';
+    if (dia_ruptura <= 7) return 'ruptura';
+    if (dia_ruptura <= 14) return 'alerta';
+    return 'ok';
+  }
+
+  function marcarFalha(cells) {
+    cells.forEach((cell) => {
+      cell.classList.add('raio-x-estoque-cell--falha');
+      cell.replaceChildren(textSpan('—', 'raio-x-estoque-cell__valor'));
+    });
+  }
+
+  function textSpan(texto, cls) {
+    const sp = document.createElement('span');
+    sp.className = cls;
+    sp.textContent = texto;
+    return sp;
+  }
+
+  function formatarNumero(n, casas) {
+    return Number(n).toLocaleString('pt-BR', {
+      minimumFractionDigits: casas,
+      maximumFractionDigits: casas,
+    });
+  }
+
+  // Iniciar lazy load apos paint
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', carregarEstoqueInline);
+  } else {
+    carregarEstoqueInline();
+  }
+
+  // ============================================================ Criar separacao
+  const btnCriar = document.getElementById('raio-x-btn-criar-sep');
+  const inpExp   = document.getElementById('raio-x-expedicao');
+  const inpAgend = document.getElementById('raio-x-agendamento');
+  const inpProt  = document.getElementById('raio-x-protocolo');
+  const statusEl = document.getElementById('raio-x-criar-sep-status');
+
+  // Default: expedicao = amanha
+  const amanha = new Date();
+  amanha.setDate(amanha.getDate() + 1);
+  inpExp.value = amanha.toISOString().slice(0, 10);
+
+  if (btnCriar) {
+    btnCriar.addEventListener('click', criarSeparacao);
+  }
+
+  function csrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) return meta.getAttribute('content') || '';
+    const inp = document.querySelector('input[name="csrf_token"]');
+    return inp ? inp.value : '';
+  }
+
+  function criarSeparacao() {
+    const expedicao = inpExp.value.trim();
+    if (!expedicao) {
+      mostrarStatus('warning', 'Informe a data de expedição.');
+      inpExp.focus();
+      return;
+    }
+
+    const payload = { expedicao: expedicao };
+    if (inpAgend.value.trim())  payload.agendamento = inpAgend.value.trim();
+    if (inpProt.value.trim())   payload.protocolo   = inpProt.value.trim();
+
+    btnCriar.disabled = true;
+    btnCriar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+    mostrarStatus('info', 'Criando separação...');
+
+    fetch(URL_GERAR_SEP, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRFToken': csrfToken(),
+      },
+      body: JSON.stringify(payload),
+    })
+      .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, data: d })))
+      .then(({ ok, status, data }) => {
+        if (ok && data && data.success !== false) {
+          const lote = data.lote_id || data.separacao_lote_id || '(novo)';
+          mostrarStatus('success', 'Separação criada. Lote:', lote, ' Recarregando...');
+          setTimeout(() => window.location.reload(), 1200);
+        } else {
+          const msg = (data && (data.error || data.erro || data.message)) ||
+                      ('HTTP ' + status);
+          mostrarStatus('danger', 'Falha:', msg);
+          resetBtn();
+        }
+      })
+      .catch((err) => {
+        console.error('[raio-x] erro ao criar separacao:', err);
+        mostrarStatus('danger', 'Erro de rede:', err.message || String(err));
+        resetBtn();
+      });
+  }
+
+  function resetBtn() {
+    btnCriar.disabled = false;
+    btnCriar.innerHTML = '<i class="fas fa-plus"></i> Gerar separação completa';
+  }
+
+  /**
+   * Renderiza alert de status sem usar innerHTML em conteudo dinamico (XSS-safe).
+   * Args: tone, ...partes (alterna texto + valor; valores dinamicos viram <strong>).
+   * Ex: mostrarStatus('success', 'Separação criada. Lote:', 'LOTE_X', ' Recarregando...');
+   */
+  function mostrarStatus(tone, ...partes) {
+    const map = {
+      info:    'alert-info',
+      success: 'alert-success',
+      warning: 'alert-warning',
+      danger:  'alert-danger',
+    };
+    const cls = map[tone] || 'alert-secondary';
+
+    const div = document.createElement('div');
+    div.className = 'alert ' + cls + ' py-2 mb-0';
+
+    partes.forEach((p, i) => {
+      if (p === null || p === undefined) return;
+      // Indices impares = valor dinamico (envolver em <strong> via createElement)
+      if (i % 2 === 1) {
+        const strong = document.createElement('strong');
+        strong.textContent = String(p);
+        div.appendChild(strong);
+      } else {
+        div.appendChild(document.createTextNode(String(p)));
+      }
+    });
+
+    statusEl.replaceChildren(div);
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,88 @@
+{# =================================================================
+   Ctrl+K Command Palette — modal global
+
+   Incluido em base.html. Estilizado em css/components/_cmdk.css.
+   Controlado por static/js/cmdk.js (vanilla JS).
+   ================================================================= #}
+<div id="cmdk-overlay" class="cmdk-overlay" role="presentation" hidden>
+  <div class="cmdk-modal"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="cmdk-input"
+       data-cmdk-modal>
+
+    {# ─────────── Header: input + scope tag + close ─────────── #}
+    <div class="cmdk-header">
+      <i class="fas fa-magnifying-glass cmdk-search-icon" aria-hidden="true"></i>
+      <input
+        type="text"
+        id="cmdk-input"
+        class="cmdk-input"
+        placeholder="Buscar comandos, pedidos, NFs..."
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls="cmdk-listbox"
+        aria-activedescendant="" />
+      <span class="cmdk-scope-tag" id="cmdk-scope-tag" hidden></span>
+      <button class="cmdk-close" type="button" aria-label="Fechar (Esc)" data-cmdk-close>
+        <i class="fas fa-times" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    {# ─────────── Body: lista de resultados ─────────── #}
+    <div class="cmdk-body" id="cmdk-listbox" role="listbox" aria-label="Resultados">
+
+      {# Estado: vazio (recentes + dicas) — preenchido via JS #}
+      <div class="cmdk-state cmdk-state--empty" data-cmdk-state="empty" hidden>
+        <div class="cmdk-section-title">Recentes</div>
+        <div class="cmdk-recents" data-cmdk-recents></div>
+        <div class="cmdk-tips">
+          <div class="cmdk-tip">
+            <kbd>&gt;</kbd> ou <kbd>/</kbd> filtra <strong>comandos</strong>
+          </div>
+          <div class="cmdk-tip">
+            Digite <kbd>VCD</kbd> + número para ir direto a um <strong>pedido</strong>
+          </div>
+          <div class="cmdk-tip">
+            Digite <kbd>nf</kbd> + número (ou só dígitos) para uma <strong>NF</strong>
+          </div>
+        </div>
+      </div>
+
+      {# Estado: loading skeleton #}
+      <div class="cmdk-state cmdk-state--loading" data-cmdk-state="loading" hidden>
+        <div class="cmdk-skel"></div>
+        <div class="cmdk-skel"></div>
+        <div class="cmdk-skel"></div>
+      </div>
+
+      {# Estado: sem resultados #}
+      <div class="cmdk-state cmdk-state--no-results" data-cmdk-state="no-results" hidden>
+        <i class="fas fa-folder-open cmdk-empty-icon" aria-hidden="true"></i>
+        <div class="cmdk-empty-text">
+          Nenhum resultado para <strong data-cmdk-no-results-q></strong>
+        </div>
+        <div class="cmdk-empty-hint">
+          Tente outro termo, ou use <kbd>&gt;</kbd> para listar comandos.
+        </div>
+      </div>
+
+      {# Estado: resultados (preenchidos via JS) #}
+      <div class="cmdk-results" data-cmdk-results></div>
+    </div>
+
+    {# ─────────── Footer: hints de teclado ─────────── #}
+    <div class="cmdk-footer">
+      <span class="cmdk-hint"><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
+      <span class="cmdk-hint"><kbd>Enter</kbd> abrir</span>
+      <span class="cmdk-hint cmdk-hint--ctrl-enter">
+        <kbd>Ctrl</kbd>+<kbd>Enter</kbd> nova aba
+      </span>
+      <span class="cmdk-hint"><kbd>Tab</kbd> escopo</span>
+      <span class="cmdk-hint"><kbd>Esc</kbd> fechar</span>
+    </div>
+  </div>
+</div>

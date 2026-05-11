@@ -880,6 +880,7 @@ def create_app(config_name=None):
     from app.separacao.routes import separacao_bp
     from app.pedidos.routes import pedidos_bp
     from app.pedidos.leitura.routes import bp as leitura_pedidos_bp
+    from app.cmdk import cmdk_bp  # ⌘K Command Palette global
     from app.cotacao.routes import cotacao_bp
     from app.portaria.routes import portaria_bp
     from app.api.routes import api_bp
@@ -943,6 +944,7 @@ def create_app(config_name=None):
     app.register_blueprint(separacao_bp)
     app.register_blueprint(pedidos_bp)
     app.register_blueprint(leitura_pedidos_bp)
+    app.register_blueprint(cmdk_bp)  # ⌘K Command Palette global
     app.register_blueprint(cotacao_bp)
     app.register_blueprint(portaria_bp)
     app.register_blueprint(permissions_api)

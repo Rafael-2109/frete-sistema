@@ -1,0 +1,365 @@
+/* =============================================================================
+   Tela rica de pedido (Ctrl+K raio-X)
+   /cmdk/pedido/<num_pedido>  →  cmdk/pedido_completo.html
+
+   Layout: container + cards + secoes empilhadas (header, itens, separacoes,
+   NFs faturadas, observacoes). Usa design tokens (light/dark automatico).
+   ============================================================================= */
+
+.raio-x-pedido {
+  padding: 1.25rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* --------------------------------------------------------------- header */
+.raio-x-pedido__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.raio-x-pedido__title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.raio-x-pedido__title-muted {
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 0.5rem;
+}
+
+/* --------------------------------------------------------------- cards */
+.raio-x-pedido__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.raio-x-card {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.raio-x-card__title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.raio-x-card__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.88rem;
+}
+
+.raio-x-card__row-label { color: var(--text-muted); }
+.raio-x-card__row-value {
+  color: var(--text);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* --------------------------------------------------------------- sections */
+.raio-x-section {
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.raio-x-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.raio-x-section__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.raio-x-section__count {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+/* --------------------------------------------------------------- table */
+.raio-x-table {
+  width: 100%;
+  font-size: 0.88rem;
+}
+
+.raio-x-table th {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.raio-x-table td {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.raio-x-table tbody tr:hover { background: var(--bg-button, var(--bg)); }
+.raio-x-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.raio-x-table .cod {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+
+/* --------------------------------------------------------------- totais */
+.raio-x-tot {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 2px solid var(--border);
+  margin-top: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.raio-x-tot__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.raio-x-tot__label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.raio-x-tot__value {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- separacoes */
+.raio-x-sep-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.raio-x-sep {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.raio-x-sep--orfao {
+  border-color: color-mix(in srgb, var(--semantic-danger) 50%, transparent);
+  background: var(--semantic-danger-subtle);
+}
+
+.raio-x-sep__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.raio-x-sep__lote {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.raio-x-sep__meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------- form */
+.raio-x-form-sep {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) auto;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  align-items: end;
+}
+
+.raio-x-form-sep label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.raio-x-form-sep input {
+  padding: 0.45rem 0.6rem;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+/* --------------------------------------------------------------- empty */
+.raio-x-empty {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+/* --------------------------------------------------------------- badge */
+.raio-x-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.raio-x-badge--info {
+  background: var(--semantic-info-subtle);
+  color: var(--semantic-info-text);
+  border-color: color-mix(in srgb, var(--semantic-info) 30%, transparent);
+}
+.raio-x-badge--success {
+  background: var(--semantic-success-subtle);
+  color: var(--semantic-success-text);
+  border-color: color-mix(in srgb, var(--semantic-success) 30%, transparent);
+}
+.raio-x-badge--warning {
+  background: var(--semantic-warning-subtle);
+  color: var(--semantic-warning-text);
+  border-color: color-mix(in srgb, var(--semantic-warning) 30%, transparent);
+}
+.raio-x-badge--danger {
+  background: var(--semantic-danger-subtle);
+  color: var(--semantic-danger-text);
+  border-color: color-mix(in srgb, var(--semantic-danger) 30%, transparent);
+}
+.raio-x-badge--secondary {
+  background: var(--bg);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+/* --------------------------------------------------------------- botoes */
+.raio-x-btn-projecao,
+.raio-x-btn-link {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+
+.raio-x-btn-projecao:hover,
+.raio-x-btn-link:hover {
+  background: var(--bg-button, var(--bg));
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------- estoque inline (lazy) */
+.raio-x-estoque-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 0.85rem;
+}
+
+.raio-x-estoque-cell__loading {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.6;
+}
+
+.raio-x-estoque-cell__valor {
+  font-weight: 600;
+}
+
+.raio-x-estoque-cell__sub {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Tons baseados em dia_ruptura — tokens semanticos light/dark automatico */
+.raio-x-estoque-cell--ok       .raio-x-estoque-cell__valor { color: var(--semantic-success-text); }
+.raio-x-estoque-cell--alerta   .raio-x-estoque-cell__valor { color: var(--semantic-warning-text); }
+.raio-x-estoque-cell--ruptura  .raio-x-estoque-cell__valor { color: var(--semantic-danger-text); }
+.raio-x-estoque-cell--falha    .raio-x-estoque-cell__valor { color: var(--text-muted); }
+
+/* --------------------------------------------------------------- observacoes */
+.raio-x-observacoes {
+  white-space: pre-wrap;
+  font-family: inherit;
+  color: var(--text);
+  margin: 0;
+}

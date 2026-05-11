@@ -34,14 +34,16 @@
     </button>
   </div>
 
-  {# ───────────── SEARCH (placeholder Ctrl+K) ───────────── #}
+  {# ───────────── SEARCH (Ctrl+K — abre command palette) ───────────── #}
   <div class="nc-sidebar__search">
-    <div class="nc-sidebar__search-wrap">
-      <input type="text" class="nc-sidebar__search-input"
-             placeholder="Buscar..." disabled
-             title="Busca global em breve (Ctrl+K)">
+    <button type="button"
+            class="nc-sidebar__search-wrap nc-sidebar__search-wrap--button"
+            data-cmdk-toggle
+            title="Buscar (Ctrl+K)">
+      <input type="text" class="nc-sidebar__search-input nc-sidebar__search-input--readonly"
+             placeholder="Buscar..." readonly tabindex="-1">
       <span class="nc-sidebar__search-kbd">Ctrl K</span>
-    </div>
+    </button>
   </div>
 
   {# ───────────── NAV ───────────── #}

@@ -172,6 +172,18 @@ html.nc-sidebar-init-drawer .nc-shell {
     position: relative;
 }
 
+/* Quando renderizado como <button> (Ctrl+K trigger), zera estilos de botao */
+button.nc-sidebar__search-wrap {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    color: inherit;
+}
+
 .nc-sidebar__search-input {
     width: 100%;
     padding: 0.5rem 0.75rem 0.5rem 2rem;
@@ -193,6 +205,12 @@ html.nc-sidebar-init-drawer .nc-shell {
     outline: none;
     border-color: var(--bs-primary);
     box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* Variante readonly (input dentro do botao Ctrl+K — repassa clique ao botao) */
+.nc-sidebar__search-input--readonly {
+    cursor: pointer;
+    pointer-events: none;
 }
 
 .nc-sidebar__search-wrap::before {

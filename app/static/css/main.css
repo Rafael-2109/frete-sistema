@@ -69,9 +69,13 @@
 @import url('./components/_sidebar.css') layer(components);
 @import url('./components/_topbar.css') layer(components);
 
+/* Ctrl+K Command Palette */
+@import url('./components/_cmdk.css') layer(components);
+
 /* Modules - Feature-specific styles */
 @import url('./modules/_financeiro.css') layer(modules);
 @import url('./modules/_carteira.css') layer(modules);
+@import url('./modules/_cmdk_pedido.css') layer(modules);
 @import url('./modules/_embarques.css') layer(modules);
 @import url('./modules/_pallet.css') layer(modules);
 @import url('./modules/_pallet-unified.css') layer(modules);

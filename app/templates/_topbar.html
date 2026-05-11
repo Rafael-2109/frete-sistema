@@ -25,9 +25,10 @@
 
   {# Acoes a direita #}
   <div class="nc-topbar__actions">
-    {# Search placeholder (Ctrl+K em breve) #}
-    <button class="nc-topbar__search" type="button" disabled
-            title="Busca global em breve">
+    {# Search Ctrl+K — abre command palette global (cmdk.js) #}
+    <button class="nc-topbar__search" type="button"
+            data-cmdk-toggle
+            title="Buscar (Ctrl+K)">
       <i class="fas fa-magnifying-glass" style="font-size:0.75rem;"></i>
       <span class="nc-topbar__search-text">Buscar...</span>
       <span class="nc-topbar__search-kbd">Ctrl K</span>
