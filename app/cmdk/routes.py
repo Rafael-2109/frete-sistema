@@ -22,7 +22,13 @@ from flask import current_app, flash, jsonify, redirect, render_template, reques
 from flask_login import login_required
 
 from app.cmdk import cmdk_bp
-from app.cmdk.services import buscar_nfs, buscar_pedidos, comandos, pedido_completo
+from app.cmdk.services import (
+    buscar_nfs,
+    buscar_pedidos,
+    comandos,
+    pedido_completo,
+    projecao_pedido,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -224,3 +230,58 @@ def tela_pedido(num_pedido: str):
         return redirect(url_for('carteira.index'))
 
     return render_template('cmdk/pedido_completo.html', pedido=contexto)
+
+
+# =============================================================================
+# /api/cmdk/pedido/<num>/projecao-estoque
+# =============================================================================
+
+@cmdk_bp.route('/api/cmdk/pedido/<num_pedido>/projecao-estoque', methods=['GET'])
+@login_required
+def api_projecao_estoque_pedido(num_pedido: str):
+    """
+    Projecao de estoque (D0-D14) dos produtos do pedido.
+
+    Retorna formato compativel com modal-projecao-linha.js para reuso do modal.
+    Aplica UnificacaoCodigos para de-duplicar codigos relacionados.
+    """
+    num_pedido = (num_pedido or '').strip()
+    if not num_pedido or not NUM_PEDIDO_RE.match(num_pedido):
+        return jsonify({'success': False, 'error': 'num_pedido invalido'}), 400
+
+    try:
+        data = projecao_pedido.montar_projecao_estoque_pedido(num_pedido)
+    except Exception as e:
+        logger.exception(
+            f"[cmdk.api_projecao_estoque_pedido] erro num_pedido={num_pedido}"
+        )
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    if data is None:
+        return jsonify({'success': False, 'error': 'Pedido sem itens ativos'}), 404
+
+    return jsonify(data)
+
+
+# =============================================================================
+# /api/cmdk/pedido/<num>/codigos-canonicos
+# (usado pelo modal de projecao por linha para destacar produtos do pedido)
+# =============================================================================
+
+@cmdk_bp.route('/api/cmdk/pedido/<num_pedido>/codigos-canonicos', methods=['GET'])
+@login_required
+def api_codigos_canonicos_pedido(num_pedido: str):
+    """Lista de codigos canonicos (apos UnificacaoCodigos) do pedido."""
+    num_pedido = (num_pedido or '').strip()
+    if not num_pedido or not NUM_PEDIDO_RE.match(num_pedido):
+        return jsonify({'success': False, 'error': 'num_pedido invalido'}), 400
+
+    try:
+        cods = projecao_pedido.codigos_canonicos_do_pedido(num_pedido)
+    except Exception as e:
+        logger.exception(
+            f"[cmdk.api_codigos_canonicos_pedido] erro num_pedido={num_pedido}"
+        )
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    return jsonify({'success': True, 'num_pedido': num_pedido, 'codigos': cods})

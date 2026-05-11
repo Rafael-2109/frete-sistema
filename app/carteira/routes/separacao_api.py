@@ -715,3 +715,251 @@ def excluir_lote_separacao(lote_id):
         db.session.rollback()
         logger.error(f"Erro ao excluir lote {lote_id}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# =============================================================================
+# Variantes customizadas (Ctrl+K raio-X de pedido)
+# =============================================================================
+
+@carteira_bp.route("/api/pedido/<num_pedido>/gerar-separacao-customizada", methods=["POST"])
+@login_required
+def gerar_separacao_customizada_pedido(num_pedido):
+    """
+    Variante de gerar_separacao_completa_pedido que aceita quantidade
+    customizada por produto via body.items.
+
+    Body:
+    {
+        "expedicao": "YYYY-MM-DD",
+        "agendamento": "YYYY-MM-DD",        // opcional
+        "protocolo": "...",                  // opcional
+        "agendamento_confirmado": bool,      // opcional
+        "items": [
+            {"cod_produto": "X", "qtd": 50.0},
+            ...
+        ]
+    }
+
+    Diferenças vs gerar_separacao_completa_pedido:
+    - NAO aborta se ja existe separacao (permite multiplos lotes por pedido)
+    - Aceita qtd customizada por item (rejeita qtd <= 0)
+    - Valida que cod_produto pertence ao pedido (seguranca)
+
+    Demais campos da Separacao espelham EXATAMENTE gerar_separacao_completa_pedido
+    (cnpj_cpf, raz_social_red, nome_cidade, cod_uf, rota, sub_rota, observ_ped_1,
+    pedido_cliente, tags_pedido, tipo_envio, status, sincronizado_nf, criado_em).
+    """
+    try:
+        data = request.get_json() or {}
+
+        # ----------------------------------------------------------- datas
+        data_expedicao = data.get("expedicao")
+        data_agendamento = data.get("agendamento")
+        protocolo = data.get("protocolo")
+        agendamento_confirmado = data.get("agendamento_confirmado", False)
+        items_payload = data.get("items") or []
+
+        if not data_expedicao:
+            return jsonify({"success": False, "error": "Data de expedição é obrigatória"}), 400
+        if not items_payload:
+            return jsonify({"success": False, "error": "Nenhum item informado"}), 400
+
+        try:
+            data_expedicao_obj = datetime.strptime(data_expedicao, "%Y-%m-%d").date()
+            data_agendamento_obj = None
+            if data_agendamento:
+                data_agendamento_obj = datetime.strptime(data_agendamento, "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"success": False, "error": "Formato de data inválido"}), 400
+
+        # ------------------------------------------------- montar mapa qtd custom
+        # {cod_produto: qtd_solicitada} — filtra qtd > 0 e dedupe
+        qtd_por_cod = {}
+        for it in items_payload:
+            if not isinstance(it, dict):
+                continue
+            cod = (it.get("cod_produto") or "").strip()
+            try:
+                qtd = float(it.get("qtd") or 0)
+            except (TypeError, ValueError):
+                qtd = 0.0
+            if not cod or qtd <= 0:
+                continue
+            qtd_por_cod[cod] = qtd_por_cod.get(cod, 0.0) + qtd
+
+        if not qtd_por_cod:
+            return jsonify({"success": False, "error": "Nenhum item com qtd > 0"}), 400
+
+        # ----------------------------------------------- carregar itens carteira
+        itens_carteira = CarteiraPrincipal.query.filter(
+            CarteiraPrincipal.num_pedido == num_pedido,
+            CarteiraPrincipal.ativo == True,  # noqa: E712
+            CarteiraPrincipal.cod_produto.in_(list(qtd_por_cod.keys())),
+        ).all()
+
+        if not itens_carteira:
+            return jsonify({
+                "success": False,
+                "error": "Nenhum produto valido encontrado para este pedido (cod_produto fora do pedido?)"
+            }), 404
+
+        # Validar: todos cod_produto do payload devem existir na carteira do pedido
+        cods_validos = {it.cod_produto for it in itens_carteira}
+        cods_invalidos = [c for c in qtd_por_cod.keys() if c not in cods_validos]
+        if cods_invalidos:
+            return jsonify({
+                "success": False,
+                "error": f"Produtos não pertencem ao pedido {num_pedido}: {', '.join(cods_invalidos)}"
+            }), 400
+
+        # -------------------------------------------------------- criar separacoes
+        separacao_lote_id = gerar_novo_lote_id()
+        separacoes_criadas = []
+        valor_total = 0.0
+        peso_total = 0.0
+        pallet_total = 0.0
+
+        for item in itens_carteira:
+            qtd = qtd_por_cod.get(item.cod_produto, 0.0)
+            if qtd <= 0:
+                continue
+
+            valor_unitario = float(item.preco_produto_pedido or 0)
+            valor_separacao = qtd * valor_unitario
+            peso_calc, pallet_calc = calcular_peso_pallet_produto(item.cod_produto, qtd)
+
+            # Rota / sub-rota — mesma logica de gerar_separacao_completa_pedido
+            if item.incoterm in ["RED", "FOB"]:
+                rota_calc = item.incoterm
+            else:
+                rota_calc = buscar_rota_por_uf(item.cod_uf or "SP")
+            sub_rota_calc = buscar_sub_rota_por_uf_cidade(item.cod_uf or "", item.nome_cidade or "")
+
+            sep = Separacao(
+                separacao_lote_id=separacao_lote_id,
+                num_pedido=num_pedido,
+                data_pedido=item.data_pedido,
+                cnpj_cpf=item.cnpj_cpf,
+                raz_social_red=item.raz_social_red,
+                nome_cidade=item.nome_cidade,
+                cod_uf=item.cod_uf,
+                cod_produto=item.cod_produto,
+                nome_produto=item.nome_produto,
+                qtd_saldo=qtd,
+                valor_saldo=valor_separacao,
+                peso=peso_calc,
+                pallet=pallet_calc,
+                rota=rota_calc,
+                sub_rota=sub_rota_calc,
+                observ_ped_1=truncar_observacao(item.observ_ped_1),
+                roteirizacao=None,
+                expedicao=data_expedicao_obj,
+                agendamento=data_agendamento_obj,
+                protocolo=protocolo,
+                agendamento_confirmado=agendamento_confirmado,
+                pedido_cliente=item.pedido_cliente,
+                tags_pedido=item.tags_pedido,
+                tipo_envio="total",  # mesma convencao do completa
+                status='ABERTO',
+                sincronizado_nf=False,
+                criado_em=agora_utc_naive(),
+            )
+            db.session.add(sep)
+            separacoes_criadas.append(sep)
+            valor_total += valor_separacao
+            peso_total += peso_calc
+            pallet_total += float(pallet_calc or 0)
+
+        if not separacoes_criadas:
+            return jsonify({"success": False, "error": "Nenhuma separacao criada (qtds todas zeradas?)"}), 400
+
+        db.session.commit()
+
+        logger.info(
+            f"✅ Separação customizada criada: lote={separacao_lote_id} "
+            f"pedido={num_pedido} itens={len(separacoes_criadas)}"
+        )
+
+        return jsonify({
+            "success": True,
+            "message": f"Separação criada com {len(separacoes_criadas)} item(s)",
+            "lote_id": separacao_lote_id,
+            "total_produtos": len(separacoes_criadas),
+            "valor_total": valor_total,
+            "peso_total": peso_total,
+            "pallet_total": pallet_total,
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro em gerar_separacao_customizada_pedido({num_pedido}): {e}", exc_info=True)
+        return jsonify({"success": False, "error": f"Erro interno: {str(e)}"}), 500
+
+
+@carteira_bp.route("/api/separacao/<int:separacao_id>/atualizar-qtd", methods=["POST"])
+@login_required
+def atualizar_qtd_separacao(separacao_id):
+    """
+    Atualiza qtd_saldo de uma Separacao especifica e recalcula
+    valor_saldo, peso e pallet usando preco_produto_pedido da carteira.
+
+    Body: {"qtd": float}
+    """
+    try:
+        data = request.get_json() or {}
+        try:
+            nova_qtd = float(data.get("qtd"))
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "qtd invalida"}), 400
+
+        if nova_qtd <= 0:
+            return jsonify({
+                "success": False,
+                "error": "qtd deve ser maior que zero (use DELETE /remover para excluir item)"
+            }), 400
+
+        sep = Separacao.query.get(separacao_id)
+        if not sep:
+            return jsonify({"success": False, "error": f"Separacao {separacao_id} nao encontrada"}), 404
+
+        if sep.sincronizado_nf:
+            return jsonify({
+                "success": False,
+                "error": "Nao e possivel editar separacao ja sincronizada com NF"
+            }), 400
+
+        # Buscar preco_produto_pedido na carteira para recalcular valor
+        carteira_item = CarteiraPrincipal.query.filter_by(
+            num_pedido=sep.num_pedido,
+            cod_produto=sep.cod_produto,
+            ativo=True,
+        ).first()
+        preco = float(carteira_item.preco_produto_pedido or 0) if carteira_item else 0.0
+
+        # Recalcular
+        sep.qtd_saldo = nova_qtd
+        sep.valor_saldo = nova_qtd * preco
+        peso_calc, pallet_calc = calcular_peso_pallet_produto(sep.cod_produto, nova_qtd)
+        sep.peso = peso_calc
+        sep.pallet = pallet_calc
+
+        db.session.commit()
+
+        logger.info(
+            f"✅ Separacao {separacao_id} atualizada: "
+            f"qtd={nova_qtd} valor={sep.valor_saldo:.2f} peso={peso_calc:.2f}"
+        )
+
+        return jsonify({
+            "success": True,
+            "separacao_id": separacao_id,
+            "qtd_saldo": float(sep.qtd_saldo),
+            "valor_saldo": float(sep.valor_saldo),
+            "peso": float(sep.peso or 0),
+            "pallet": float(sep.pallet or 0),
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar qtd da separacao {separacao_id}: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500

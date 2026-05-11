@@ -96,10 +96,16 @@ def buscar(q: str, user=None, limit: int = 6) -> list[dict]:
             func.max(CarteiraPrincipal.equipe_vendas).label('equipe_vendas'),
             func.max(CarteiraPrincipal.status_pedido).label('status_pedido'),
             func.max(CarteiraPrincipal.data_pedido).label('data_pedido'),
+            # valor_total: SUM(qtd_pedido * preco) — valor total do pedido,
+            # independente do que ja foi faturado (subtitle Ctrl+K)
+            func.sum(
+                CarteiraPrincipal.qtd_produto_pedido
+                * CarteiraPrincipal.preco_produto_pedido
+            ).label('valor_total'),
             func.sum(
                 CarteiraPrincipal.qtd_saldo_produto_pedido
                 * CarteiraPrincipal.preco_produto_pedido
-            ).label('valor_total'),
+            ).label('valor_saldo'),
             func.count(CarteiraPrincipal.id).label('qtd_itens'),
         )
         .filter(CarteiraPrincipal.ativo.is_(True))
@@ -198,8 +204,16 @@ def _formatar_resultado(row) -> dict:
     valor_fmt = (
         f"R$ {valor:,.2f}".replace(',', '#').replace('.', ',').replace('#', '.')
     )
+    # Mostra "(saldo R$ X)" apenas se houver diferenca (parte ja faturada)
+    valor_saldo = float(row.valor_saldo or 0)
+    saldo_info = ''
+    if valor_saldo and abs(valor_saldo - valor) > 0.01:
+        saldo_fmt = (
+            f"R$ {valor_saldo:,.2f}".replace(',', '#').replace('.', ',').replace('#', '.')
+        )
+        saldo_info = f"saldo {saldo_fmt}"
 
-    subtitle_parts = [cliente, municipio_uf, valor_fmt, f"{row.qtd_itens} itens"]
+    subtitle_parts = [cliente, municipio_uf, valor_fmt, saldo_info, f"{row.qtd_itens} itens"]
     subtitle = '  •  '.join(p for p in subtitle_parts if p and p != '—')
 
     badge = _badge_status(row.status_pedido)

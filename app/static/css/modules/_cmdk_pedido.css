@@ -177,35 +177,72 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* --------------------------------------------------------------- separacoes */
+/* --------------------------------------------------------------- separacoes (lotes expansiveis) */
 .raio-x-sep-list {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
 
-.raio-x-sep {
+.raio-x-sep-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.raio-x-sep-card--orfao {
+  border-color: color-mix(in srgb, var(--semantic-danger) 50%, transparent);
+  background: var(--semantic-danger-subtle);
+}
+
+.raio-x-sep-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
 }
 
-.raio-x-sep--orfao {
-  border-color: color-mix(in srgb, var(--semantic-danger) 50%, transparent);
-  background: var(--semantic-danger-subtle);
-}
-
-.raio-x-sep__main {
+.raio-x-sep-card__main {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   min-width: 0;
+  flex: 1;
+}
+
+.raio-x-sep-card__expand {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  margin-right: 0.25rem;
+  font-size: 0.85rem;
+  transition: transform 0.18s;
+  display: inline-block;
+}
+
+.raio-x-sep-card__expand[aria-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+.raio-x-sep-card__actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.raio-x-sep-card__table {
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.raio-x-sep-card__table th,
+.raio-x-sep-card__table td {
+  padding: 0.4rem 0.6rem;
 }
 
 .raio-x-sep__lote {
@@ -223,33 +260,100 @@
   color: var(--text-muted);
 }
 
-/* --------------------------------------------------------------- form */
-.raio-x-form-sep {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) auto;
-  gap: 0.75rem;
-  padding: 1rem;
-  background: var(--bg);
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  align-items: end;
-}
-
-.raio-x-form-sep label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.raio-x-form-sep input {
-  padding: 0.45rem 0.6rem;
+/* Input qtd editavel inline */
+.raio-x-sep-edit-qtd {
+  width: 80px;
+  padding: 0.2rem 0.4rem;
   background: var(--bg-light);
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.raio-x-sep-edit-qtd:focus {
+  outline: none;
+  border-color: var(--bs-primary, var(--semantic-info));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--semantic-info) 20%, transparent);
+}
+
+.raio-x-input--saved {
+  border-color: var(--semantic-success);
+  background: var(--semantic-success-subtle);
+}
+
+/* --------------------------------------------------------------- card "Criar Separacao" (modo edicao) */
+.raio-x-criar-sep-card {
+  background: var(--semantic-info-subtle);
+  border: 1px solid color-mix(in srgb, var(--semantic-info) 40%, transparent);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--semantic-info) 20%, transparent);
+}
+
+.raio-x-criar-sep-card__header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+}
+
+.raio-x-criar-sep-card__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.raio-x-criar-sep-card__status:empty {
+  display: none;
+}
+
+/* --------------------------------------------------------------- modo edicao: cabecalho de grupo + input qtd */
+.raio-x-thead-grupo {
+  background: color-mix(in srgb, var(--semantic-info) 10%, transparent);
+}
+
+.raio-x-grupo-sep {
+  text-align: center;
+  font-weight: 700;
+  color: var(--semantic-info-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  border-left: 2px solid var(--semantic-info);
+  border-right: 2px solid var(--semantic-info);
+}
+
+.raio-x-table .raio-x-col-edit {
+  background: color-mix(in srgb, var(--semantic-info) 4%, transparent);
+}
+
+.raio-x-sep-qtd-input {
+  width: 90px;
+  padding: 0.25rem 0.4rem;
+  background: var(--bg-light);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.raio-x-sep-qtd-input:focus {
+  outline: none;
+  border-color: var(--semantic-info);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--semantic-info) 20%, transparent);
 }
 
 /* --------------------------------------------------------------- empty */
@@ -325,6 +429,23 @@
   color: var(--text);
 }
 
+/* --------------------------------------------------------------- saldo cell (tooltip) */
+.raio-x-saldo-cell {
+  cursor: help;
+  position: relative;
+}
+
+.raio-x-saldo-info {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+  opacity: 0.6;
+}
+
+.raio-x-saldo-cell:hover .raio-x-saldo-info {
+  opacity: 1;
+}
+
 /* --------------------------------------------------------------- estoque inline (lazy) */
 .raio-x-estoque-cell {
   font-variant-numeric: tabular-nums;
@@ -362,4 +483,24 @@
   font-family: inherit;
   color: var(--text);
   margin: 0;
+}
+
+/* --------------------------------------------------------------- modal projecao: destaque produto do pedido */
+/* Aplica-se no modal-projecao-linha quando produto aparece no pedido atual */
+tr.plinha-produto-header.plinha-do-pedido td {
+  background: var(--semantic-info-subtle);
+  border-left: 3px solid var(--semantic-info);
+}
+
+.plinha-tag-pedido {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  background: var(--semantic-info);
+  color: var(--bs-white, white);
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
 }

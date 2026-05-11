@@ -155,19 +155,52 @@
     </div>
   </div>
 
-  {# ─────────────────── Itens do pedido (com Estoque lazy) ─────────────────── #}
+  {# ─────────────────── Card "Criar Separação" (oculto até modal datas confirmar) ─────────────────── #}
+  <div id="raio-x-criar-sep-card" class="raio-x-criar-sep-card" hidden>
+    <div class="raio-x-criar-sep-card__header">
+      <strong><i class="fas fa-plus-circle"></i> Criar Separação</strong>
+      <span class="raio-x-badge raio-x-badge--info" data-sep-info-expedicao>Expedição: —</span>
+      <span class="raio-x-badge raio-x-badge--secondary" data-sep-info-agendamento hidden>Agendamento: —</span>
+      <span class="raio-x-badge raio-x-badge--secondary" data-sep-info-protocolo hidden>Protocolo: —</span>
+      <span class="raio-x-badge raio-x-badge--success" data-sep-info-confirmado hidden><i class="fas fa-check"></i> Confirmado</span>
+    </div>
+    <div class="raio-x-criar-sep-card__actions">
+      <button type="button" class="btn btn-success btn-sm" id="raio-x-btn-confirmar-sep">
+        <i class="fas fa-check"></i> Confirmar Criação
+      </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="raio-x-btn-cancelar-sep">
+        <i class="fas fa-times"></i> Cancelar
+      </button>
+    </div>
+    <div id="raio-x-criar-sep-status" class="raio-x-criar-sep-card__status" aria-live="polite"></div>
+  </div>
+
+  {# ─────────────────── Itens do pedido ─────────────────── #}
   <div class="raio-x-section">
     <div class="raio-x-section__header">
       <h2 class="raio-x-section__title">
         <i class="fas fa-boxes"></i> Itens
         <span class="raio-x-section__count">({{ pedido.totais.qtd_itens }})</span>
       </h2>
+      <button type="button" class="btn btn-primary btn-sm"
+              id="raio-x-btn-iniciar-sep"
+              data-bs-toggle="modal"
+              data-bs-target="#raio-x-modal-datas">
+        <i class="fas fa-plus"></i> Gerar Separação
+      </button>
     </div>
 
     {% if pedido.itens %}
     <div class="table-responsive">
-      <table class="raio-x-table">
+      <table class="raio-x-table" data-modo-sep="normal">
         <thead>
+          {# Cabeçalho de grupo: aparece no modo edição agrupando colunas Sep #}
+          <tr class="raio-x-thead-grupo raio-x-col-edit" hidden>
+            <th colspan="11"></th>
+            <th colspan="6" class="raio-x-grupo-sep">
+              <i class="fas fa-plus-circle"></i> Separação
+            </th>
+          </tr>
           <tr>
             <th>Código</th>
             <th>Produto</th>
@@ -177,32 +210,86 @@
             <th class="num">Valor Saldo</th>
             <th class="num">Peso</th>
             <th class="num">Pallet</th>
-            <th class="num">Estoque</th>
+            <th class="num">Estoque atual</th>
+            <th class="num">Ruptura D+7</th>
             <th></th>
+            {# Colunas modo edição #}
+            <th class="num raio-x-col-edit" hidden>Qtd Sep</th>
+            <th class="num raio-x-col-edit" hidden>Valor</th>
+            <th class="num raio-x-col-edit" hidden>Peso</th>
+            <th class="num raio-x-col-edit" hidden>Pallet</th>
+            <th class="num raio-x-col-edit" hidden>Est. dia exp.</th>
+            <th class="num raio-x-col-edit" hidden>Menor D+7 pós</th>
           </tr>
         </thead>
         <tbody>
           {% for item in pedido.itens %}
-          <tr data-cod-produto="{{ item.cod_produto }}">
+          <tr data-cod-produto="{{ item.cod_produto }}"
+              data-preco="{{ item.preco_unitario }}"
+              data-peso-unit="{{ item.peso_unit }}"
+              data-pallet-unit="{{ item.pallet_unit }}"
+              data-qtd-saldo="{{ item.qtd_saldo }}">
             <td class="cod">{{ item.cod_produto }}</td>
             <td>{{ item.nome_produto or '—' }}</td>
             <td class="num">{{ item.qtd_pedido|numero_br(0) }}</td>
-            <td class="num">{{ item.qtd_saldo|numero_br(0) }}</td>
+            <td class="num raio-x-saldo-cell" title="{{ item.tooltip_saldo }}">
+              {{ item.qtd_saldo|numero_br(0) }}
+              <i class="fas fa-info-circle raio-x-saldo-info" aria-hidden="true"></i>
+            </td>
             <td class="num">R$ {{ item.preco_unitario|valor_br }}</td>
             <td class="num">R$ {{ item.valor_saldo|valor_br }}</td>
             <td class="num">{{ item.peso_total|numero_br(0) }} kg</td>
             <td class="num">{{ item.pallet_total|numero_br(2) }}</td>
-            <td class="raio-x-estoque-cell" data-estoque-cell="{{ item.cod_produto }}">
-              <span class="raio-x-estoque-cell__loading">carregando...</span>
+            <td class="num raio-x-estoque-cell" data-estoque-atual="{{ item.cod_produto }}">
+              <span class="raio-x-estoque-cell__loading">…</span>
+            </td>
+            <td class="num raio-x-estoque-cell" data-estoque-ruptura="{{ item.cod_produto }}">
+              <span class="raio-x-estoque-cell__loading">…</span>
             </td>
             <td>
-              <button type="button"
-                      class="raio-x-btn-projecao"
-                      data-cod-produto="{{ item.cod_produto }}"
-                      title="Ver projeção D0-D14 da linha de produção">
-                <i class="fas fa-chart-line"></i> Projeção
-              </button>
+              <div class="btn-group">
+                <button type="button"
+                        class="raio-x-btn-projecao dropdown-toggle"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        title="Ver projeção (estoque do pedido ou linha de produção)">
+                  <i class="fas fa-chart-line"></i> Projeção
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <button class="dropdown-item" type="button"
+                            data-projecao-acao="estoque"
+                            data-cod-produto="{{ item.cod_produto }}">
+                      <i class="fas fa-warehouse fa-fw"></i>
+                      Estoque do pedido
+                    </button>
+                  </li>
+                  <li>
+                    <button class="dropdown-item" type="button"
+                            data-projecao-acao="linha"
+                            data-cod-produto="{{ item.cod_produto }}">
+                      <i class="fas fa-industry fa-fw"></i>
+                      Linha de produção
+                    </button>
+                  </li>
+                </ul>
+              </div>
             </td>
+            {# Colunas modo edição (preenchidas via JS quando entrar no modo) #}
+            <td class="num raio-x-col-edit" hidden>
+              <input type="number"
+                     class="raio-x-sep-qtd-input"
+                     data-sep-qtd="{{ item.cod_produto }}"
+                     value="{{ item.qtd_saldo }}"
+                     min="0"
+                     step="1"
+                     max="{{ item.qtd_saldo }}">
+            </td>
+            <td class="num raio-x-col-edit" hidden data-sep-valor="{{ item.cod_produto }}">—</td>
+            <td class="num raio-x-col-edit" hidden data-sep-peso="{{ item.cod_produto }}">—</td>
+            <td class="num raio-x-col-edit" hidden data-sep-pallet="{{ item.cod_produto }}">—</td>
+            <td class="num raio-x-col-edit raio-x-estoque-cell" hidden data-sep-estoque-dia="{{ item.cod_produto }}">—</td>
+            <td class="num raio-x-col-edit raio-x-estoque-cell" hidden data-sep-ruptura-pos="{{ item.cod_produto }}">—</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -231,7 +318,7 @@
     {% endif %}
   </div>
 
-  {# ─────────────────── Separações ativas ─────────────────── #}
+  {# ─────────────────── Separações ativas (lotes expansíveis com edit/delete) ─────────────────── #}
   <div class="raio-x-section">
     <div class="raio-x-section__header">
       <h2 class="raio-x-section__title">
@@ -241,61 +328,188 @@
     </div>
 
     {% if pedido.separacoes %}
-    <div class="raio-x-sep-list mb-3">
+    <div class="raio-x-sep-list">
       {% for sep in pedido.separacoes %}
-      <div class="raio-x-sep{% if sep.is_orfao %} raio-x-sep--orfao{% endif %}">
-        <div class="raio-x-sep__main">
-          <span class="raio-x-sep__lote">
-            {{ sep.lote_id }}
-            <span class="raio-x-badge raio-x-badge--{{ 'warning' if sep.is_previsao else 'info' }}">
-              {{ 'Pré-Sep' if sep.is_previsao else (sep.tipo_envio|capitalize) }}
-            </span>
-            <span class="raio-x-badge raio-x-badge--secondary">{{ sep.status }}</span>
-            {% if sep.is_orfao %}
-              <span class="raio-x-badge raio-x-badge--danger" title="Separação sem separacao_lote_id — verificar no banco">
-                Órfã
+      <div class="raio-x-sep-card{% if sep.is_orfao %} raio-x-sep-card--orfao{% endif %}"
+           data-lote-id="{{ sep.lote_id }}">
+        {# Header com info + acoes #}
+        <div class="raio-x-sep-card__header">
+          <div class="raio-x-sep-card__main">
+            <button type="button"
+                    class="raio-x-sep-card__expand"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#raio-x-sep-items-{{ loop.index }}"
+                    aria-expanded="false"
+                    aria-label="Expandir items">
+              <i class="fas fa-chevron-right"></i>
+            </button>
+            <span class="raio-x-sep__lote">
+              {{ sep.lote_id }}
+              <span class="raio-x-badge raio-x-badge--{{ 'warning' if sep.is_previsao else 'info' }}">
+                {{ 'Pré-Sep' if sep.is_previsao else (sep.tipo_envio|capitalize) }}
               </span>
-            {% endif %}
-          </span>
-          <span class="raio-x-sep__meta">
-            {% if sep.expedicao %}Expedição: <strong>{{ sep.expedicao }}</strong>{% endif %}
-            {% if sep.agendamento %}
-              | Agendamento: <strong>{{ sep.agendamento }}</strong>
-              {% if sep.agendamento_confirmado %}<i class="fas fa-check text-success" title="Agendamento confirmado"></i>{% endif %}
-            {% endif %}
-            {% if sep.protocolo %} | Protocolo: <strong>{{ sep.protocolo }}</strong>{% endif %}
-            {% if sep.qtd_itens %} | <strong>{{ sep.qtd_itens }}</strong> itens{% endif %}
-            {% if sep.valor_total %} | R$ <strong>{{ sep.valor_total|valor_br }}</strong>{% endif %}
-          </span>
+              <span class="raio-x-badge raio-x-badge--secondary">{{ sep.status }}</span>
+              {% if sep.is_orfao %}
+                <span class="raio-x-badge raio-x-badge--danger" title="Separação sem lote_id — verificar no banco">
+                  Órfã
+                </span>
+              {% endif %}
+            </span>
+            <span class="raio-x-sep__meta">
+              {% if sep.expedicao %}Expedição: <strong>{{ sep.expedicao }}</strong>{% endif %}
+              {% if sep.agendamento %}
+                | Agendamento: <strong>{{ sep.agendamento }}</strong>
+                {% if sep.agendamento_confirmado %}<i class="fas fa-check text-success" title="Confirmado"></i>{% endif %}
+              {% endif %}
+              {% if sep.protocolo %} | Protocolo: <strong>{{ sep.protocolo }}</strong>{% endif %}
+              | <strong>{{ sep.qtd_itens }}</strong> itens
+              {% if sep.valor_total %} | R$ <strong>{{ sep.valor_total|valor_br }}</strong>{% endif %}
+            </span>
+          </div>
+          <div class="raio-x-sep-card__actions">
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-acao-lote="editar-datas"
+                    data-lote-id="{{ sep.lote_id }}"
+                    data-expedicao="{{ sep.expedicao_iso or '' }}"
+                    data-agendamento="{{ sep.agendamento_iso or '' }}"
+                    data-protocolo="{{ sep.protocolo or '' }}"
+                    data-confirmado="{{ sep.agendamento_confirmado|tojson }}"
+                    title="Editar datas do lote">
+              <i class="fas fa-pen"></i> Datas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                    data-acao-lote="excluir-lote"
+                    data-lote-id="{{ sep.lote_id }}"
+                    title="Excluir lote inteiro">
+              <i class="fas fa-trash"></i> Excluir
+            </button>
+          </div>
+        </div>
+
+        {# Items expansíveis com qtd editável #}
+        <div class="collapse" id="raio-x-sep-items-{{ loop.index }}">
+          <table class="raio-x-table raio-x-sep-card__table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Produto</th>
+                <th class="num">Qtd</th>
+                <th class="num">Valor</th>
+                <th class="num">Peso</th>
+                <th class="num">Pallet</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in sep.items %}
+              <tr data-separacao-id="{{ it.separacao_id }}">
+                <td class="cod">{{ it.cod_produto }}</td>
+                <td>{{ it.nome_produto or '—' }}</td>
+                <td class="num">
+                  <input type="number"
+                         class="raio-x-sep-edit-qtd"
+                         data-sep-id="{{ it.separacao_id }}"
+                         data-original="{{ it.qtd_saldo }}"
+                         value="{{ it.qtd_saldo }}"
+                         min="0.001"
+                         step="1">
+                </td>
+                <td class="num" data-cell-valor="{{ it.separacao_id }}">R$ {{ it.valor_saldo|valor_br }}</td>
+                <td class="num" data-cell-peso="{{ it.separacao_id }}">{{ it.peso|numero_br(0) }} kg</td>
+                <td class="num" data-cell-pallet="{{ it.separacao_id }}">{{ it.pallet|numero_br(2) }}</td>
+                <td>
+                  <button type="button" class="btn btn-sm btn-outline-danger"
+                          data-acao-item="excluir-item"
+                          data-sep-id="{{ it.separacao_id }}"
+                          title="Remover este item">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="raio-x-empty mb-3">Nenhuma separação ativa para este pedido.</div>
+    <div class="raio-x-empty">Nenhuma separação ativa para este pedido.</div>
     {% endif %}
+  </div>
 
-    {# Form criar separacao #}
-    <form id="raio-x-form-criar-sep" class="raio-x-form-sep" onsubmit="return false;">
-      <label>
-        Data de Expedição
-        <input type="date" id="raio-x-expedicao" name="expedicao" required>
-      </label>
-      <label>
-        Agendamento (opcional)
-        <input type="date" id="raio-x-agendamento" name="agendamento">
-      </label>
-      <label>
-        Protocolo (opcional)
-        <input type="text" id="raio-x-protocolo" name="protocolo" maxlength="50" placeholder="—">
-      </label>
-      <button type="button" class="btn btn-primary"
-              id="raio-x-btn-criar-sep"
-              data-num-pedido="{{ pedido.num_pedido }}">
-        <i class="fas fa-plus"></i> Gerar separação completa
-      </button>
-    </form>
-    <div id="raio-x-criar-sep-status" class="mt-2" aria-live="polite"></div>
+  {# ─────────────────── Modal Bootstrap: Datas da nova separação ─────────────────── #}
+  <div class="modal fade" id="raio-x-modal-datas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-calendar-plus"></i> Dados da Nova Separação</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label" for="raio-x-modal-expedicao">Data de Expedição *</label>
+            <input type="date" id="raio-x-modal-expedicao" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="raio-x-modal-agendamento">Agendamento (opcional)</label>
+            <input type="date" id="raio-x-modal-agendamento" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="raio-x-modal-protocolo">Protocolo (opcional)</label>
+            <input type="text" id="raio-x-modal-protocolo" class="form-control" maxlength="50" placeholder="—">
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="raio-x-modal-confirmado">
+            <label class="form-check-label" for="raio-x-modal-confirmado">
+              Agendamento confirmado
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="raio-x-modal-prosseguir">
+            Prosseguir <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ─────────────────── Modal Bootstrap: Editar datas de lote existente ─────────────────── #}
+  <div class="modal fade" id="raio-x-modal-editar-datas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-pen"></i> Editar Datas do Lote
+            <span id="raio-x-edit-lote-id" class="text-muted ms-2"></span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label" for="raio-x-edit-expedicao">Data de Expedição</label>
+            <input type="date" id="raio-x-edit-expedicao" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="raio-x-edit-agendamento">Agendamento</label>
+            <input type="date" id="raio-x-edit-agendamento" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="raio-x-edit-protocolo">Protocolo</label>
+            <input type="text" id="raio-x-edit-protocolo" class="form-control" maxlength="50">
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="raio-x-edit-confirmado">
+            <label class="form-check-label" for="raio-x-edit-confirmado">Agendamento confirmado</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="raio-x-edit-salvar">Salvar</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   {# ─────────────────── NFs faturadas + status entrega ─────────────────── #}
@@ -386,21 +600,59 @@
   const URL_GERAR_SEP = '/carteira/api/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/gerar-separacao-completa';
   const URL_ESTOQUE   = '/carteira/api/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/estoque';
 
-  // ============================================================ Projecao linha
+  // ============================================================ Projecao (popup 2 opcoes)
   let modalProjecao = null;
-  document.querySelectorAll('.raio-x-btn-projecao').forEach((btn) => {
+  let codigosCanonicosCache = null;
+
+  function getModalProjecao() {
+    if (!modalProjecao) modalProjecao = new ModalProjecaoLinha();
+    return modalProjecao;
+  }
+
+  function getCodigosCanonicos() {
+    if (codigosCanonicosCache) return Promise.resolve(codigosCanonicosCache);
+    const url = '/api/cmdk/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/codigos-canonicos';
+    return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(r => r.json())
+      .then(d => {
+        codigosCanonicosCache = (d && d.success && Array.isArray(d.codigos)) ? d.codigos : [];
+        return codigosCanonicosCache;
+      })
+      .catch(() => []);
+  }
+
+  function abrirProjecaoEstoquePedido() {
+    const url = '/api/cmdk/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/projecao-estoque';
+    getModalProjecao().abrirComUrl(url, {
+      titulo: 'Projeção de Estoque — Pedido ' + NUM_PEDIDO
+    });
+  }
+
+  function abrirProjecaoLinha(codProduto) {
+    if (!codProduto) return;
+    getCodigosCanonicos().then(codigos => {
+      getModalProjecao().abrir(codProduto, { codigosDestaque: codigos });
+    });
+  }
+
+  // Dropdown items disparam acao especifica
+  document.querySelectorAll('[data-projecao-acao]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const cod = btn.dataset.codProduto;
-      if (!cod) return;
-      if (!modalProjecao) modalProjecao = new ModalProjecaoLinha();
-      modalProjecao.abrir(cod);
+      const acao = btn.dataset.projecaoAcao;
+      const cod  = btn.dataset.codProduto;
+      if (acao === 'estoque') {
+        abrirProjecaoEstoquePedido();
+      } else if (acao === 'linha') {
+        abrirProjecaoLinha(cod);
+      }
     });
   });
 
-  // ============================================================ Estoque (lazy)
+  // ============================================================ Estoque (lazy, 2 colunas)
   function carregarEstoqueInline() {
-    const cells = document.querySelectorAll('[data-estoque-cell]');
-    if (!cells.length) return;
+    const cellsAtual    = document.querySelectorAll('[data-estoque-atual]');
+    const cellsRuptura  = document.querySelectorAll('[data-estoque-ruptura]');
+    if (!cellsAtual.length && !cellsRuptura.length) return;
 
     fetch(URL_ESTOQUE, {
       credentials: 'same-origin',
@@ -409,71 +661,91 @@
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
       .then((data) => {
         if (!data.success || !Array.isArray(data.produtos)) {
-          marcarFalha(cells);
+          marcarFalha(cellsAtual);
+          marcarFalha(cellsRuptura);
           return;
         }
-        // Indexar por cod_produto
         const idx = {};
         data.produtos.forEach((p) => { idx[p.cod_produto] = p; });
 
-        cells.forEach((cell) => {
-          const cod = cell.dataset.estoqueCell;
-          const info = idx[cod];
-          if (!info) {
-            renderEstoqueCell(cell, null);
-          } else {
-            renderEstoqueCell(cell, info);
-          }
+        cellsAtual.forEach((cell) => {
+          const cod = cell.dataset.estoqueAtual;
+          renderEstoqueAtual(cell, idx[cod] || null);
+        });
+        cellsRuptura.forEach((cell) => {
+          const cod = cell.dataset.estoqueRuptura;
+          renderRuptura7d(cell, idx[cod] || null);
         });
       })
       .catch((err) => {
         console.warn('[raio-x] estoque falhou:', err);
-        marcarFalha(cells);
+        marcarFalha(cellsAtual);
+        marcarFalha(cellsRuptura);
       });
   }
 
-  function renderEstoqueCell(cell, info) {
+  function renderEstoqueAtual(cell, info) {
+    resetEstoqueClasses(cell);
+    if (!info) {
+      cell.classList.add('raio-x-estoque-cell--falha');
+      cell.replaceChildren(textSpan('—', 'raio-x-estoque-cell__valor'));
+      return;
+    }
+    const estoque = Number(info.estoque) || 0;
+    const tone = estoque < 0 ? 'ruptura' : (estoque === 0 ? 'alerta' : 'ok');
+    cell.classList.add('raio-x-estoque-cell--' + tone);
+    cell.replaceChildren(textSpan(formatarNumero(estoque, 0), 'raio-x-estoque-cell__valor'));
+  }
+
+  function renderRuptura7d(cell, info) {
+    resetEstoqueClasses(cell);
+    if (!info) {
+      cell.classList.add('raio-x-estoque-cell--falha');
+      cell.replaceChildren(textSpan('—', 'raio-x-estoque-cell__valor'));
+      return;
+    }
+    // menor_estoque_produto_d7: menor projetado nos proximos 7 dias
+    const menor = Number(info.menor_estoque_produto_d7);
+    const dia_ruptura = info.dia_ruptura;
+
+    let valor, sub, tone;
+    if (typeof dia_ruptura === 'number' && dia_ruptura <= 7) {
+      // Vai romper dentro de 7 dias
+      valor = formatarNumero(menor, 0);
+      sub = 'D+' + dia_ruptura;
+      tone = 'ruptura';
+    } else if (menor < 0) {
+      valor = formatarNumero(menor, 0);
+      sub = '7d';
+      tone = 'ruptura';
+    } else if (menor === 0) {
+      valor = '0';
+      sub = '7d';
+      tone = 'alerta';
+    } else {
+      valor = formatarNumero(menor, 0);
+      sub = 'OK 7d';
+      tone = 'ok';
+    }
+    cell.classList.add('raio-x-estoque-cell--' + tone);
+    cell.replaceChildren(
+      textSpan(valor, 'raio-x-estoque-cell__valor'),
+      textSpan(sub, 'raio-x-estoque-cell__sub'),
+    );
+  }
+
+  function resetEstoqueClasses(cell) {
     cell.classList.remove(
       'raio-x-estoque-cell--ok',
       'raio-x-estoque-cell--alerta',
       'raio-x-estoque-cell--ruptura',
       'raio-x-estoque-cell--falha'
     );
-
-    if (!info) {
-      cell.classList.add('raio-x-estoque-cell--falha');
-      cell.replaceChildren(textSpan('—', 'raio-x-estoque-cell__valor'));
-      return;
-    }
-
-    const estoque = Number(info.estoque) || 0;
-    const dia_ruptura = info.dia_ruptura;
-    const tone = classificarRuptura(dia_ruptura);
-    cell.classList.add('raio-x-estoque-cell--' + tone);
-
-    const valorStr = formatarNumero(estoque, 0);
-    const valorEl = textSpan(valorStr, 'raio-x-estoque-cell__valor');
-
-    let subEl = null;
-    if (typeof dia_ruptura === 'number') {
-      subEl = textSpan('Ruptura D+' + dia_ruptura, 'raio-x-estoque-cell__sub');
-    } else if (estoque > 0) {
-      subEl = textSpan('OK 28d', 'raio-x-estoque-cell__sub');
-    }
-    cell.replaceChildren(valorEl);
-    if (subEl) cell.appendChild(subEl);
-  }
-
-  function classificarRuptura(dia_ruptura) {
-    if (dia_ruptura === null || dia_ruptura === undefined) return 'ok';
-    if (typeof dia_ruptura !== 'number') return 'ok';
-    if (dia_ruptura <= 7) return 'ruptura';
-    if (dia_ruptura <= 14) return 'alerta';
-    return 'ok';
   }
 
   function marcarFalha(cells) {
     cells.forEach((cell) => {
+      resetEstoqueClasses(cell);
       cell.classList.add('raio-x-estoque-cell--falha');
       cell.replaceChildren(textSpan('—', 'raio-x-estoque-cell__valor'));
     });
@@ -500,21 +772,13 @@
     carregarEstoqueInline();
   }
 
-  // ============================================================ Criar separacao
-  const btnCriar = document.getElementById('raio-x-btn-criar-sep');
-  const inpExp   = document.getElementById('raio-x-expedicao');
-  const inpAgend = document.getElementById('raio-x-agendamento');
-  const inpProt  = document.getElementById('raio-x-protocolo');
-  const statusEl = document.getElementById('raio-x-criar-sep-status');
-
-  // Default: expedicao = amanha
-  const amanha = new Date();
-  amanha.setDate(amanha.getDate() + 1);
-  inpExp.value = amanha.toISOString().slice(0, 10);
-
-  if (btnCriar) {
-    btnCriar.addEventListener('click', criarSeparacao);
-  }
+  // ============================================================ URLs e CSRF
+  const URL_GERAR_SEP_CUSTOM = '/carteira/api/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/gerar-separacao-customizada';
+  const urlAtualizarQtd  = (id)   => '/carteira/api/separacao/' + encodeURIComponent(id) + '/atualizar-qtd';
+  const urlRemoverItem   = (id)   => '/carteira/api/separacao/' + encodeURIComponent(id) + '/remover';
+  const urlExcluirLote   = (lote) => '/carteira/api/separacao/' + encodeURIComponent(lote) + '/excluir';
+  const urlAtualizDatas  = (lote) => '/carteira/api/separacao/' + encodeURIComponent(lote) + '/atualizar-datas';
+  const URL_PROJ_PEDIDO  = '/api/cmdk/pedido/' + encodeURIComponent(NUM_PEDIDO) + '/projecao-estoque';
 
   function csrfToken() {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -523,23 +787,221 @@
     return inp ? inp.value : '';
   }
 
-  function criarSeparacao() {
-    const expedicao = inpExp.value.trim();
-    if (!expedicao) {
-      mostrarStatus('warning', 'Informe a data de expedição.');
-      inpExp.focus();
+  // ============================================================ Estado modo edicao
+  const modoSep = {
+    ativo: false,
+    expedicao: null,           // 'YYYY-MM-DD'
+    agendamento: null,
+    protocolo: null,
+    agendamento_confirmado: false,
+    projecao: null,            // {datas:[], produtos:[{cod_produto, saldo:[], ...}]}
+    projecaoFetched: false,
+  };
+
+  const cardCriar  = document.getElementById('raio-x-criar-sep-card');
+  const btnIniciar = document.getElementById('raio-x-btn-iniciar-sep');
+  const btnConfirm = document.getElementById('raio-x-btn-confirmar-sep');
+  const btnCancel  = document.getElementById('raio-x-btn-cancelar-sep');
+  const statusEl   = document.getElementById('raio-x-criar-sep-status');
+
+  // Modal datas (Bootstrap)
+  const modalDatasEl   = document.getElementById('raio-x-modal-datas');
+  const modalDatas     = modalDatasEl ? new bootstrap.Modal(modalDatasEl) : null;
+  const inpModalExp    = document.getElementById('raio-x-modal-expedicao');
+  const inpModalAgend  = document.getElementById('raio-x-modal-agendamento');
+  const inpModalProt   = document.getElementById('raio-x-modal-protocolo');
+  const inpModalConf   = document.getElementById('raio-x-modal-confirmado');
+  const btnProsseguir  = document.getElementById('raio-x-modal-prosseguir');
+
+  // Default expedicao = amanha
+  if (inpModalExp && !inpModalExp.value) {
+    const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
+    inpModalExp.value = amanha.toISOString().slice(0, 10);
+  }
+
+  // ============================================================ Modal Datas → entra modo edicao
+  if (btnProsseguir) {
+    btnProsseguir.addEventListener('click', () => {
+      const exp = (inpModalExp.value || '').trim();
+      if (!exp) {
+        inpModalExp.focus();
+        inpModalExp.classList.add('is-invalid');
+        return;
+      }
+      inpModalExp.classList.remove('is-invalid');
+      modoSep.expedicao              = exp;
+      modoSep.agendamento            = (inpModalAgend.value || '').trim() || null;
+      modoSep.protocolo              = (inpModalProt.value || '').trim() || null;
+      modoSep.agendamento_confirmado = !!inpModalConf.checked;
+      if (modalDatas) modalDatas.hide();
+      entrarModoEdicao();
+    });
+  }
+
+  function entrarModoEdicao() {
+    modoSep.ativo = true;
+    cardCriar.hidden = false;
+    btnIniciar.hidden = true;
+    document.querySelectorAll('.raio-x-col-edit').forEach(el => { el.hidden = false; });
+    preencherCardInfo();
+
+    // Inicializa qtd inputs com qtd_saldo, recalcula tudo
+    document.querySelectorAll('[data-sep-qtd]').forEach(inp => {
+      inp.value = inp.getAttribute('max') || inp.value;
+      recalcularLinhaEdicao(inp.closest('tr'));
+    });
+
+    // Lazy-load projecao para "Estoque dia exp" e "Menor D+7 pos"
+    fetchProjecaoPedido().then(() => {
+      document.querySelectorAll('[data-sep-qtd]').forEach(inp => {
+        recalcularEstoqueDia(inp.closest('tr'));
+      });
+    });
+  }
+
+  function sairModoEdicao() {
+    modoSep.ativo = false;
+    cardCriar.hidden = true;
+    btnIniciar.hidden = false;
+    document.querySelectorAll('.raio-x-col-edit').forEach(el => { el.hidden = true; });
+    if (statusEl) statusEl.replaceChildren();
+  }
+
+  if (btnCancel) btnCancel.addEventListener('click', sairModoEdicao);
+
+  // ============================================================ Recalculos modo edicao
+  document.querySelectorAll('[data-sep-qtd]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const tr = inp.closest('tr');
+      recalcularLinhaEdicao(tr);
+      recalcularEstoqueDia(tr);
+    });
+  });
+
+  function recalcularLinhaEdicao(tr) {
+    if (!tr) return;
+    const cod        = tr.dataset.codProduto;
+    const qtd        = parseFloat(tr.querySelector('[data-sep-qtd]').value) || 0;
+    const preco      = parseFloat(tr.dataset.preco) || 0;
+    const pesoUnit   = parseFloat(tr.dataset.pesoUnit) || 0;
+    const palletUnit = parseFloat(tr.dataset.palletUnit) || 0;
+    setCellText(tr, '[data-sep-valor]',  'R$ ' + formatarNumero(qtd * preco, 2));
+    setCellText(tr, '[data-sep-peso]',   formatarNumero(qtd * pesoUnit, 0) + ' kg');
+    setCellText(tr, '[data-sep-pallet]', formatarNumero(qtd * palletUnit, 2));
+  }
+
+  function recalcularEstoqueDia(tr) {
+    if (!tr || !modoSep.projecao) return;
+    const cod = tr.dataset.codProduto;
+    const qtd = parseFloat(tr.querySelector('[data-sep-qtd]').value) || 0;
+    const cellDia = tr.querySelector('[data-sep-estoque-dia]');
+    const cellRup = tr.querySelector('[data-sep-ruptura-pos]');
+    if (!cellDia || !cellRup) return;
+
+    const prod = (modoSep.projecao.produtos || []).find(p =>
+      String(p.cod_produto) === String(cod) || projecaoCanonicoMatch(p.cod_produto, cod)
+    );
+    if (!prod || !Array.isArray(prod.saldo)) {
+      setCellText(tr, '[data-sep-estoque-dia]', '—');
+      setCellText(tr, '[data-sep-ruptura-pos]', '—');
       return;
     }
 
-    const payload = { expedicao: expedicao };
-    if (inpAgend.value.trim())  payload.agendamento = inpAgend.value.trim();
-    if (inpProt.value.trim())   payload.protocolo   = inpProt.value.trim();
+    // Indice do dia da expedicao em relacao a hoje (D0)
+    const diaIdx = diasEntre(modoSep.projecao.datas[0], modoSep.expedicao);
+    if (diaIdx < 0 || diaIdx >= prod.saldo.length) {
+      setCellText(tr, '[data-sep-estoque-dia]', '—');
+      setCellText(tr, '[data-sep-ruptura-pos]', '—');
+      return;
+    }
 
-    btnCriar.disabled = true;
-    btnCriar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
-    mostrarStatus('info', 'Criando separação...');
+    // Estoque no dia exp APOS subtrair qtd da nova separacao
+    const estoqueDia = (prod.saldo[diaIdx] || 0) - qtd;
+    // Menor saldo D+7 a partir do dia da expedicao (todos subtraindo qtd)
+    const fim = Math.min(diaIdx + 7, prod.saldo.length - 1);
+    let menor = estoqueDia;
+    for (let i = diaIdx + 1; i <= fim; i++) {
+      menor = Math.min(menor, (prod.saldo[i] || 0) - qtd);
+    }
 
-    fetch(URL_GERAR_SEP, {
+    cellDia.replaceChildren(textSpan(formatarNumero(estoqueDia, 0), 'raio-x-estoque-cell__valor'));
+    resetEstoqueClasses(cellDia);
+    cellDia.classList.add('raio-x-estoque-cell--' + (estoqueDia < 0 ? 'ruptura' : (estoqueDia === 0 ? 'alerta' : 'ok')));
+
+    cellRup.replaceChildren(textSpan(formatarNumero(menor, 0), 'raio-x-estoque-cell__valor'));
+    resetEstoqueClasses(cellRup);
+    cellRup.classList.add('raio-x-estoque-cell--' + (menor < 0 ? 'ruptura' : (menor === 0 ? 'alerta' : 'ok')));
+  }
+
+  function projecaoCanonicoMatch() { return false; } // placeholder p/ futura unificacao
+
+  function diasEntre(isoStart, isoEnd) {
+    const a = new Date(isoStart + 'T00:00:00');
+    const b = new Date(isoEnd + 'T00:00:00');
+    return Math.round((b - a) / (1000 * 60 * 60 * 24));
+  }
+
+  function fetchProjecaoPedido() {
+    if (modoSep.projecaoFetched) return Promise.resolve(modoSep.projecao);
+    modoSep.projecaoFetched = true;
+    return fetch(URL_PROJ_PEDIDO, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' },
+    })
+      .then(r => r.json())
+      .then(d => { if (d && d.success) modoSep.projecao = d; return modoSep.projecao; })
+      .catch(err => { console.warn('[raio-x] fetch projecao falhou:', err); return null; });
+  }
+
+  function preencherCardInfo() {
+    setBadgeInfo('[data-sep-info-expedicao]',
+      'Expedição: ' + formatarDataBR(modoSep.expedicao), true);
+    setBadgeInfo('[data-sep-info-agendamento]',
+      modoSep.agendamento ? 'Agendamento: ' + formatarDataBR(modoSep.agendamento) : '',
+      !!modoSep.agendamento);
+    setBadgeInfo('[data-sep-info-protocolo]',
+      modoSep.protocolo ? 'Protocolo: ' + modoSep.protocolo : '',
+      !!modoSep.protocolo);
+    const elConf = cardCriar.querySelector('[data-sep-info-confirmado]');
+    if (elConf) elConf.hidden = !modoSep.agendamento_confirmado;
+  }
+
+  function setBadgeInfo(selector, texto, visivel) {
+    const el = cardCriar.querySelector(selector);
+    if (!el) return;
+    el.textContent = texto;
+    el.hidden = !visivel;
+  }
+
+  // ============================================================ Confirmar criacao (POST customizada)
+  if (btnConfirm) btnConfirm.addEventListener('click', confirmarCriacaoSep);
+
+  function confirmarCriacaoSep() {
+    const items = [];
+    document.querySelectorAll('[data-sep-qtd]').forEach(inp => {
+      const qtd = parseFloat(inp.value) || 0;
+      if (qtd > 0) {
+        items.push({ cod_produto: inp.dataset.sepQtd, qtd: qtd });
+      }
+    });
+    if (!items.length) {
+      mostrarStatus('warning', 'Nenhum item com qtd > 0.');
+      return;
+    }
+
+    const payload = {
+      expedicao: modoSep.expedicao,
+      items: items,
+    };
+    if (modoSep.agendamento) payload.agendamento = modoSep.agendamento;
+    if (modoSep.protocolo)   payload.protocolo   = modoSep.protocolo;
+    if (modoSep.agendamento_confirmado) payload.agendamento_confirmado = true;
+
+    btnConfirm.disabled = true;
+    btnConfirm.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
+    mostrarStatus('info', 'Criando separação com ' + items.length + ' item(s)...');
+
+    fetch(URL_GERAR_SEP_CUSTOM, {
       method: 'POST',
       credentials: 'same-origin',
       headers: {
@@ -549,51 +1011,209 @@
       },
       body: JSON.stringify(payload),
     })
-      .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, data: d })))
+      .then(r => r.json().then(d => ({ ok: r.ok, status: r.status, data: d })))
       .then(({ ok, status, data }) => {
         if (ok && data && data.success !== false) {
-          const lote = data.lote_id || data.separacao_lote_id || '(novo)';
+          const lote = data.lote_id || '(novo)';
           mostrarStatus('success', 'Separação criada. Lote:', lote, ' Recarregando...');
           setTimeout(() => window.location.reload(), 1200);
         } else {
-          const msg = (data && (data.error || data.erro || data.message)) ||
-                      ('HTTP ' + status);
+          const msg = (data && (data.error || data.erro || data.message)) || ('HTTP ' + status);
           mostrarStatus('danger', 'Falha:', msg);
-          resetBtn();
+          resetBtnConfirmar();
         }
       })
-      .catch((err) => {
-        console.error('[raio-x] erro ao criar separacao:', err);
+      .catch(err => {
+        console.error('[raio-x] erro confirmar separacao:', err);
         mostrarStatus('danger', 'Erro de rede:', err.message || String(err));
-        resetBtn();
+        resetBtnConfirmar();
       });
   }
 
-  function resetBtn() {
-    btnCriar.disabled = false;
-    btnCriar.innerHTML = '<i class="fas fa-plus"></i> Gerar separação completa';
+  function resetBtnConfirmar() {
+    btnConfirm.disabled = false;
+    btnConfirm.innerHTML = '<i class="fas fa-check"></i> Confirmar Criação';
+  }
+
+  // ============================================================ Edit qtd item-a-item (lotes existentes)
+  document.querySelectorAll('.raio-x-sep-edit-qtd').forEach(inp => {
+    inp.addEventListener('blur', () => atualizarQtdItem(inp));
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    });
+  });
+
+  function atualizarQtdItem(inp) {
+    const sepId    = inp.dataset.sepId;
+    const original = parseFloat(inp.dataset.original);
+    const nova     = parseFloat(inp.value);
+    if (isNaN(nova) || nova <= 0) {
+      inp.value = original;
+      return;
+    }
+    if (Math.abs(nova - original) < 0.001) return;
+
+    inp.disabled = true;
+    fetch(urlAtualizarQtd(sepId), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRFToken': csrfToken(),
+      },
+      body: JSON.stringify({ qtd: nova }),
+    })
+      .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+      .then(({ ok, data }) => {
+        if (ok && data && data.success !== false) {
+          // Atualizar celulas visualmente
+          const tr = inp.closest('tr');
+          setCellText(tr, '[data-cell-valor="'  + sepId + '"]', 'R$ ' + formatarNumero(data.valor_saldo, 2));
+          setCellText(tr, '[data-cell-peso="'   + sepId + '"]', formatarNumero(data.peso, 0) + ' kg');
+          setCellText(tr, '[data-cell-pallet="' + sepId + '"]', formatarNumero(data.pallet, 2));
+          inp.dataset.original = String(data.qtd_saldo);
+          inp.classList.add('raio-x-input--saved');
+          setTimeout(() => inp.classList.remove('raio-x-input--saved'), 800);
+        } else {
+          alert('Falha ao atualizar qtd: ' + (data && (data.error || data.erro) || 'erro desconhecido'));
+          inp.value = original;
+        }
+      })
+      .catch(err => {
+        console.error('[raio-x] atualizar qtd falhou:', err);
+        alert('Erro de rede: ' + err.message);
+        inp.value = original;
+      })
+      .finally(() => { inp.disabled = false; });
+  }
+
+  // ============================================================ Excluir item / lote
+  document.querySelectorAll('[data-acao-item="excluir-item"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sepId = btn.dataset.sepId;
+      if (!confirm('Remover este item da separação?')) return;
+      fetch(urlRemoverItem(sepId), {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrfToken(), 'Accept': 'application/json' },
+      })
+        .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (ok && data && data.success !== false) {
+            window.location.reload();
+          } else {
+            alert('Falha: ' + ((data && (data.error || data.erro)) || 'erro'));
+          }
+        });
+    });
+  });
+
+  document.querySelectorAll('[data-acao-lote="excluir-lote"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lote = btn.dataset.loteId;
+      if (!confirm('Excluir TODO o lote ' + lote + '? Esta acao nao pode ser desfeita.')) return;
+      fetch(urlExcluirLote(lote), {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrfToken(), 'Accept': 'application/json' },
+      })
+        .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (ok && data && data.success !== false) {
+            window.location.reload();
+          } else {
+            alert('Falha: ' + ((data && (data.error || data.erro)) || 'erro'));
+          }
+        });
+    });
+  });
+
+  // ============================================================ Editar datas do lote
+  const modalEditEl    = document.getElementById('raio-x-modal-editar-datas');
+  const modalEdit      = modalEditEl ? new bootstrap.Modal(modalEditEl) : null;
+  const editLoteIdEl   = document.getElementById('raio-x-edit-lote-id');
+  const editExpEl      = document.getElementById('raio-x-edit-expedicao');
+  const editAgendEl    = document.getElementById('raio-x-edit-agendamento');
+  const editProtEl     = document.getElementById('raio-x-edit-protocolo');
+  const editConfEl     = document.getElementById('raio-x-edit-confirmado');
+  const editSalvarEl   = document.getElementById('raio-x-edit-salvar');
+  let loteEditando = null;
+
+  document.querySelectorAll('[data-acao-lote="editar-datas"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      loteEditando        = btn.dataset.loteId;
+      editLoteIdEl.textContent = loteEditando;
+      editExpEl.value     = btn.dataset.expedicao   || '';
+      editAgendEl.value   = btn.dataset.agendamento || '';
+      editProtEl.value    = btn.dataset.protocolo   || '';
+      try {
+        editConfEl.checked = JSON.parse(btn.dataset.confirmado || 'false') === true;
+      } catch (_) { editConfEl.checked = false; }
+      if (modalEdit) modalEdit.show();
+    });
+  });
+
+  if (editSalvarEl) {
+    editSalvarEl.addEventListener('click', () => {
+      if (!loteEditando) return;
+      const payload = {
+        expedicao: editExpEl.value || null,
+        agendamento: editAgendEl.value || null,
+        protocolo: editProtEl.value || null,
+        agendamento_confirmado: !!editConfEl.checked,
+      };
+      editSalvarEl.disabled = true;
+      fetch(urlAtualizDatas(loteEditando), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': csrfToken(),
+        },
+        body: JSON.stringify(payload),
+      })
+        .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+        .then(({ ok, data }) => {
+          if (ok && data && data.success !== false) {
+            if (modalEdit) modalEdit.hide();
+            window.location.reload();
+          } else {
+            alert('Falha: ' + ((data && (data.error || data.erro)) || 'erro'));
+            editSalvarEl.disabled = false;
+          }
+        })
+        .catch(err => {
+          alert('Erro de rede: ' + err.message);
+          editSalvarEl.disabled = false;
+        });
+    });
+  }
+
+  // ============================================================ Util
+  function setCellText(tr, selector, texto) {
+    const el = tr.querySelector(selector);
+    if (el) el.textContent = texto;
+  }
+
+  function formatarDataBR(iso) {
+    if (!iso) return '—';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
   }
 
   /**
    * Renderiza alert de status sem usar innerHTML em conteudo dinamico (XSS-safe).
-   * Args: tone, ...partes (alterna texto + valor; valores dinamicos viram <strong>).
-   * Ex: mostrarStatus('success', 'Separação criada. Lote:', 'LOTE_X', ' Recarregando...');
    */
   function mostrarStatus(tone, ...partes) {
-    const map = {
-      info:    'alert-info',
-      success: 'alert-success',
-      warning: 'alert-warning',
-      danger:  'alert-danger',
-    };
+    if (!statusEl) return;
+    const map = { info: 'alert-info', success: 'alert-success', warning: 'alert-warning', danger: 'alert-danger' };
     const cls = map[tone] || 'alert-secondary';
-
     const div = document.createElement('div');
     div.className = 'alert ' + cls + ' py-2 mb-0';
-
     partes.forEach((p, i) => {
       if (p === null || p === undefined) return;
-      // Indices impares = valor dinamico (envolver em <strong> via createElement)
       if (i % 2 === 1) {
         const strong = document.createElement('strong');
         strong.textContent = String(p);
@@ -602,7 +1222,6 @@
         div.appendChild(document.createTextNode(String(p)));
       }
     });
-
     statusEl.replaceChildren(div);
   }
 })();

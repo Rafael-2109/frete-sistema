@@ -1,7 +1,16 @@
 /**
- * Modal de Projecao de Estoque por Linha de Producao (D0-D14)
- * Exibe Saida, Producao e Saldo dia-a-dia para todos os produtos
- * da mesma linha de producao do item clicado.
+ * Modal de Projecao de Estoque (D0-D14)
+ *
+ * Modos suportados:
+ *   1. abrir(codProduto)
+ *      → projecao da LINHA DE PRODUCAO do produto clicado
+ *      → endpoint: /carteira/api/produto/<cod>/projecao-linha
+ *
+ *   2. abrir(codProduto, { codigosDestaque: [...] })
+ *      → idem, mas destaca produtos cujo cod_produto esta em codigosDestaque
+ *
+ *   3. abrirComUrl(url, { codigosDestaque, titulo })
+ *      → busca em URL arbitraria (ex: projecao do pedido) e renderiza
  */
 
 class ModalProjecaoLinha {
@@ -9,9 +18,10 @@ class ModalProjecaoLinha {
         console.log('ModalProjecaoLinha inicializado');
     }
 
-    async abrir(codProduto) {
+    async abrir(codProduto, opts = {}) {
         try {
-            const response = await fetch(`/carteira/api/produto/${codProduto}/projecao-linha`);
+            const url = `/carteira/api/produto/${encodeURIComponent(codProduto)}/projecao-linha`;
+            const response = await fetch(url);
             const data = await response.json();
 
             if (!response.ok || !data.success) {
@@ -19,9 +29,35 @@ class ModalProjecaoLinha {
                 return;
             }
 
+            if (opts.codigosDestaque) {
+                data.codigos_destaque = opts.codigosDestaque;
+            }
             this.mostrarModal(data);
         } catch (error) {
             console.error('Erro ao carregar projecao por linha:', error);
+            alert(`Erro ao carregar projecao: ${error.message}`);
+        }
+    }
+
+    async abrirComUrl(url, opts = {}) {
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                alert(data.error || 'Erro ao carregar projecao');
+                return;
+            }
+
+            if (opts.codigosDestaque) {
+                data.codigos_destaque = opts.codigosDestaque;
+            }
+            if (opts.titulo) {
+                data._titulo_custom = opts.titulo;
+            }
+            this.mostrarModal(data);
+        } catch (error) {
+            console.error('Erro ao carregar projecao (url):', error);
             alert(`Erro ao carregar projecao: ${error.message}`);
         }
     }
@@ -53,6 +89,7 @@ class ModalProjecaoLinha {
 
     _renderizar(data) {
         const { linha_producao, cod_produto_clicado, datas, produtos } = data;
+        const codigosDestaque = new Set((data.codigos_destaque || []).map(String));
 
         // Formatar datas para header (DD/MM e dia da semana abreviado)
         const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
@@ -71,17 +108,25 @@ class ModalProjecaoLinha {
         // Renderizar linhas de cada produto
         const linhasProdutos = produtos.map(prod => {
             const isClicado = prod.cod_produto === cod_produto_clicado;
-            const classeHeader = isClicado ? 'plinha-produto-header plinha-clicado' : 'plinha-produto-header';
+            const isDoPedido = codigosDestaque.has(String(prod.cod_produto));
+            const classes = ['plinha-produto-header'];
+            if (isClicado) classes.push('plinha-clicado');
+            if (isDoPedido) classes.push('plinha-do-pedido');
+            const classeHeader = classes.join(' ');
 
-            // Header do produto (nome + estoque atual)
+            // Header do produto: colspan COMPLETO (mescla ate o final, nao
+            // forca primeiras colunas a esticar quando nome eh grande)
+            const tagDoPedido = isDoPedido
+                ? '<span class="plinha-tag-pedido" title="Item do pedido">PEDIDO</span>'
+                : '';
             const headerProd = `<tr class="${classeHeader}">
-                <td colspan="2" style="font-size:10px">
+                <td colspan="${datas.length + 2}" style="font-size:10px">
                     <strong>${this._escape(prod.cod_produto)}</strong> - ${this._escape(prod.nome_produto)}
                     <span style="margin-left:8px;font-weight:400;color:var(--bs-secondary-color)">
                         Est.Atual: ${prod.estoque_atual}
                     </span>
+                    ${tagDoPedido}
                 </td>
-                <td colspan="${datas.length}"></td>
             </tr>`;
 
             // L1: Saida
@@ -125,12 +170,17 @@ class ModalProjecaoLinha {
             return headerProd + linhaSaida + linhaProducao + linhaSaldo + separador;
         }).join('');
 
+        // Titulo do modal: customizado (data._titulo_custom) ou padrao por linha
+        const tituloHtml = data._titulo_custom
+            ? `<strong>${this._escape(data._titulo_custom)}</strong>`
+            : `Projecao por Linha: <strong>${this._escape(linha_producao || '—')}</strong>`;
+
         return `
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header py-2">
                     <h6 class="modal-title" style="font-size:12px">
-                        Projecao por Linha: <strong>${this._escape(linha_producao)}</strong>
+                        ${tituloHtml}
                         <span style="font-weight:400;color:var(--bs-secondary-color);margin-left:8px">
                             ${produtos.length} produto${produtos.length !== 1 ? 's' : ''} | D0-D14
                         </span>
