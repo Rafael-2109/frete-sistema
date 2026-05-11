@@ -618,7 +618,7 @@ def criar_venda_manual(
     email_cliente: Optional[str] = None,
     vendedor: Optional[str] = None,
     observacoes: Optional[str] = None,
-    modalidade_frete: str = '9',
+    modalidade_frete: str = '0',
     numero_parcelas: int = 1,
     intervalo_parcelas_dias: int = 30,
     criado_por: Optional[str] = None,
