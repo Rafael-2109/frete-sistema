@@ -254,21 +254,19 @@ button.nc-sidebar__search-wrap {
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0.5rem 0;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    /* Scrollbar invisivel mas funcional. Preserva 100% da largura util
+       da sidebar (especialmente na variante colapsada de 64px, onde
+       6px representam ~10% e empurravam labels/icones).
+       Funcionalidade scroll mantida via overflow-y:auto + roda do mouse,
+       trackpad, swipe ou teclado. */
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* IE/Edge legado */
 }
 
 .nc-sidebar__nav::-webkit-scrollbar {
-    width: 6px;
-}
-
-.nc-sidebar__nav::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.nc-sidebar__nav::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 3px;
+    width: 0;
+    height: 0;
+    display: none;                /* Chromium/WebKit (Chrome, Safari, Edge) */
 }
 
 .nc-sidebar__group {

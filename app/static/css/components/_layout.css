@@ -37,11 +37,11 @@
    CONTENT OVERFLOW PROTECTION
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Prevents horizontal overflow while allowing scroll when needed */
-.nc-content {
-    overflow-x: auto;
-    max-width: 100%;
-}
+/* NOTA: a regra `.nc-content` foi REMOVIDA daqui (conflitava com a
+   definicao canonica em components/_topbar.css que atua como o
+   container principal abaixo da topbar — `flex: 1; overflow-y: auto;
+   overflow-x: hidden`). As helpers abaixo continuam validas e nao
+   colidem. */
 
 /* Strict containment - clips overflow without scroll */
 .nc-content-clip {
