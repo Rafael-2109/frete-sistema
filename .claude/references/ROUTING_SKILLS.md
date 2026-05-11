@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 27/04/2026
+**Ultima Atualizacao**: 11/05/2026 (36 skills invocaveis — adicionadas: motos_assai 6 skills, conferindo-recibo-assai)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 

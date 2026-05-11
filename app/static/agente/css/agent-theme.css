@@ -232,7 +232,8 @@
 
 .chat-fullscreen-wrapper::before {
     content: '';
-    position: fixed;
+    /* absolute (nao fixed): glow contido na area do chat — nao vaza sobre o sidebar lateral */
+    position: absolute;
     top: -20%;
     right: -10%;
     width: 70%;
@@ -250,7 +251,7 @@
 
 .chat-fullscreen-wrapper::after {
     content: '';
-    position: fixed;
+    position: absolute;
     bottom: -30%;
     left: -15%;
     width: 60%;

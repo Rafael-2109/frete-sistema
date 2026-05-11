@@ -1920,11 +1920,14 @@ def register_custeio_routes(bp):
                 visitados.add(cod)
                 componentes = bom_cache.get(cod, [])
 
-                custo_total = 0
+                custo_total = 0.0
                 for comp in componentes:
                     custo_comp = calcular_custo_bom(comp['cod_componente'], campo_custo, visitados.copy())
                     if custo_comp is not None:
-                        custo_total += custo_comp * comp['qtd']
+                        # Coercao explicita para float: custo_comp pode vir como Decimal
+                        # (ServicoCusteio.calcular_custo_comprados retorna Decimal via _quantize_custo)
+                        # enquanto comp['qtd'] e float. Decimal * float levanta TypeError.
+                        custo_total += float(custo_comp) * float(comp['qtd'])
 
                 return custo_total if custo_total > 0 else None
 

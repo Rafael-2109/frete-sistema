@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 27/04/2026
+**Ultima atualizacao**: 11/05/2026
 
 ---
 

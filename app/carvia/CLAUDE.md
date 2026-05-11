@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**104 arquivos** | **~63.3K LOC** | **107 templates** | **Atualizado**: 2026-05-08
+**104 arquivos** | **~64.6K LOC** | **107 templates** | **Atualizado**: 2026-05-11
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -38,21 +38,21 @@ app/carvia/
                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
                    #   scanner, simulador, tabela_carvia, importacao_config, api)
-  services/        # 39 services em 6 sub-pacotes + 1 root:
+  services/        # 41 services em 6 sub-pacotes + 2 root:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
                    #                linking, matching, nf_transferencia, operacao_cancel,
                    #                ssw_emissao, aprovacao_frete) — 9
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
-                   #                sugestao, comissao, conta_corrente, custo_entrega_cobertura,
-                   #                custo_entrega_fatura, fluxo_caixa, gerencial, previnculo,
-                   #                rateio_conciliacao_helper) — 14
+                   #                sugestao, comissao, conta_corrente, custo_entrega_autolink,
+                   #                custo_entrega_cobertura, custo_entrega_fatura, fluxo_caixa,
+                   #                gerencial, previnculo, rateio_conciliacao_helper) — 15
                    #   parsers/ (importacao, importacao_config, cte_xml, danfe_pdf,
                    #            dacte_pdf, fatura_pdf, nfe_xml) — 7
                    #   pricing/ (cotacao, cotacao_v2, margem, moto_recognition,
                    #            carvia_tabela, config) — 6
-                   # + cte_complementar_persistencia.py (root)
+                   # + cte_complementar_persistencia.py + cte_complementar_service.py (root)
   workers/         # 4 workers RQ com SSL-drop resilience (R15):
                    #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
   utils/           # tomador.py, upload_policies.py, excel_export_helper.py, papeis_frete.py
@@ -61,7 +61,7 @@ app/carvia/
                    #   frete, tabelas
   forms.py         # 4 forms WTForms
 
-app/templates/carvia/  # 103 templates (dashboard, listagens, detalhes, wizards, modais)
+app/templates/carvia/  # 107 templates (dashboard, listagens, detalhes, wizards, modais)
 ```
 
 ---
