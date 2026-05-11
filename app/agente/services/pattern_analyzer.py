@@ -1931,8 +1931,10 @@ def _build_personal_extraction_path(tipo: str, descricao: str) -> str:
     elif tipo == 'preferencia':
         return "/memories/preferences.xml"
     elif tipo == 'expertise':
-        # Path dinamico (slug-based), computado dentro de _save_personal_insight
-        return ""
+        # Singleton (2026-05-11): expertises agora enriquecem um unico arquivo
+        # em vez de criar /learned/expertise_*.xml orfaos (que nao eram injetados
+        # por nenhum tier de memory_injection). Injetado via Tier 1.7.
+        return "/memories/user_expertise.xml"
     elif tipo == 'contexto':
         return "/memories/context/work_context.xml"
     return ""
@@ -1965,12 +1967,11 @@ def _save_personal_insight(
             f'DO: {_xml_escape(prescricao)}'
         )
 
-        # Expertise tem path dinamico — computar antes do dedup
-        if tipo == 'expertise':
-            slug = _slugify(descricao[:60])
-            path = f"/memories/learned/expertise_{slug}.xml" if slug else ""
-        else:
-            path = _build_personal_extraction_path(tipo, descricao)
+        # 2026-05-11: expertise agora usa o mesmo padrao singleton de preferencia
+        # (path retornado por _build_personal_extraction_path). O design antigo
+        # criava arquivos orfaos /learned/expertise_*.xml que nao tinham tier
+        # de injecao — toda nova expertise virava lixo zumbi.
+        path = _build_personal_extraction_path(tipo, descricao)
 
         if not path:
             return False
@@ -2022,13 +2023,43 @@ def _save_personal_insight(
                 mem.importance_score = 0.8
 
         elif tipo == 'expertise':
-            # Nota complementar a user.xml (que eh gerenciado por generate_and_save_profile)
+            # 2026-05-11: enriquecer singleton /memories/user_expertise.xml
+            # (mesmo padrao append de preferences). Injetado via Tier 1.7
+            # como <user_expertise> — frame "Conhecimento previo do usuario".
             existing = AgentMemory.get_by_path(user_id, path)
-            if existing:
-                return False  # Ja existe — dedup por path
-            mem = AgentMemory.create_file(user_id, path, content)
-            mem.category = 'structural'
-            mem.importance_score = 0.6
+            if existing and existing.content:
+                new_content = (
+                    f"{existing.content}\n"
+                    f"<!-- Extraido automaticamente -->\n"
+                    f"{content}"
+                )
+                if len(new_content) > 3000:
+                    # Merge inteligente via Sonnet (mesmo helper de preferences)
+                    merged = _merge_memories_via_sonnet(existing.content, content)
+                    if merged:
+                        existing.content = merged
+                        logger.info(
+                            f"[PERSONAL_EXTRACTION] user_expertise.xml consolidado "
+                            f"({len(existing.content)}→{len(merged)} chars)"
+                        )
+                    else:
+                        # Fallback: truncar antigas, manter novas
+                        existing.content = (
+                            f"<user_expertise>\n"
+                            f"<!-- Consolidado automaticamente (limite 3000 chars) -->\n"
+                            f"{existing.content[-2000:]}\n"
+                            f"{content}\n"
+                            f"</user_expertise>"
+                        )
+                else:
+                    existing.content = new_content
+            else:
+                mem = AgentMemory.create_file(
+                    user_id, path,
+                    f"<user_expertise>\n{content}\n</user_expertise>"
+                )
+                mem.category = 'structural'
+                mem.importance_score = 0.6
 
         elif tipo == 'contexto':
             # Sobrescrever work_context.xml (contexto eh efemero)

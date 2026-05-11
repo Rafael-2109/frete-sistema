@@ -383,10 +383,14 @@ def _check_recent_commits(since) -> Optional[str]:
 
 def _check_stale_empresa_memories() -> Optional[str]:
     """
-    Verifica memorias empresa sem revisao ha 60+ dias.
+    Verifica memorias empresa MADURAS sem revisao ha 60+ dias.
 
-    Memorias com reviewed_at=NULL e criadas ha mais de 60 dias
-    sao candidatas a revisao. Retorna alerta se count > 5.
+    Memorias com reviewed_at=NULL, criadas ha mais de 60 dias E com
+    usage_count>=5 sao candidatas a revisao. Filtro `usage_count>=5`
+    adicionado em 2026-05-11 — evita alertar sobre memorias jovens ou
+    sem oportunidade real de uso ainda. Threshold subiu para count > 20
+    pos-backfill conservador (memorias com volume+eficacia comprovados
+    foram auto-revisadas via SQL idempotente).
     """
     try:
         from ..models import AgentMemory
@@ -400,10 +404,11 @@ def _check_stale_empresa_memories() -> Optional[str]:
             AgentMemory.is_directory == False,  # noqa: E712
             AgentMemory.reviewed_at.is_(None),
             AgentMemory.created_at < cutoff,
+            AgentMemory.usage_count >= 5,  # so alerta memorias com uso real
         ).count()
 
-        if stale > 5:
-            return f'<stale_empresa count="{stale}">Memorias empresa sem revisao ha 60+ dias.</stale_empresa>'
+        if stale > 20:
+            return f'<stale_empresa count="{stale}">Memorias empresa maduras sem revisao ha 60+ dias.</stale_empresa>'
         return None
     except Exception as e:
         logger.debug(f"[BRIEFING] Stale empresa check falhou (ignorado): {e}")

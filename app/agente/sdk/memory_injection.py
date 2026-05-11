@@ -795,7 +795,14 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                 logger.debug(f"[MEMORY_INJECT] Routing context falhou (ignorado): {route_err}")
 
             # ── Tier 1: SEMPRE injetar memórias protegidas ──
-            PROTECTED_PATHS = ["/memories/user.xml", "/memories/preferences.xml"]
+            # user_expertise.xml (2026-05-11): consolida expertise do usuario
+            # (substitui /learned/expertise_*.xml que ficavam orfaos). Mesma
+            # mecanica de preferences.xml — singleton, sempre injetado.
+            PROTECTED_PATHS = [
+                "/memories/user.xml",
+                "/memories/preferences.xml",
+                "/memories/user_expertise.xml",
+            ]
             protected_memories = AgentMemory.query.filter(
                 AgentMemory.user_id == user_id,
                 AgentMemory.path.in_(PROTECTED_PATHS),
