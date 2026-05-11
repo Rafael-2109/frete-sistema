@@ -51,6 +51,15 @@ class CarviaNf(db.Model):
     # Status: ATIVA, CANCELADA (soft-delete conforme GAP-20)
     status = db.Column(db.String(20), nullable=False, default='ATIVA', index=True)
 
+    # Fase B (2026-05-11): NF importada com cnpj_destinatario diferente do
+    # cnpj do endereco destino da cotacao vinculada. Setado pelo
+    # EmbarqueCarViaService.expandir_provisorio quando detecta divergencia.
+    # Limpo quando operador decide (atualizar cotacao OU descartar).
+    # Index parcial em ix_carvia_nfs_divergencia_cnpj (so linhas TRUE).
+    divergencia_cnpj_cotacao = db.Column(
+        db.Boolean, nullable=False, default=False, server_default='false'
+    )
+
     # Auditoria de cancelamento
     cancelado_em = db.Column(db.DateTime)
     cancelado_por = db.Column(db.String(100))

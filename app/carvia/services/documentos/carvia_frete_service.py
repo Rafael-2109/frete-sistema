@@ -125,6 +125,66 @@ class CarviaFreteService:
         fretes_resultado = []
         itens_com_frete = []  # Apenas itens cujo frete foi criado/atualizado com sucesso
 
+        # --------------------------------------------------------------
+        # Fase B3 (2026-05-11): Cancelar fretes orfaos do embarque cujo
+        # cnpj_destino nao bate com nenhum grupo atual.
+        # Consequencia da Fase B2: quando NF importada tem CNPJ destino
+        # diferente, item.cnpj_cliente e atualizado. O frete antigo (com
+        # cnpj antigo) fica orfao — antes ficava pendurado e bloqueava
+        # cancelamento da NF. Agora cancelamos automaticamente quando
+        # ainda esta em PENDENTE; se ja avancou (CONFERIDO/FATURADO),
+        # mantemos e logamos warning para o operador intervir.
+        # Normaliza CNPJs (so digitos) para evitar falsos orfaos por
+        # diferenca de formatacao entre frete antigo (legado) e itens.
+        # --------------------------------------------------------------
+        from app.utils.cnpj_utils import normalizar_cnpj as _norm_cnpj_b3
+        chaves_atuais_norm = {
+            (_norm_cnpj_b3(e), _norm_cnpj_b3(d)) for e, d in grupos.keys()
+        }
+        cnpjs_destinos_norm = {
+            _norm_cnpj_b3(chave[1]) for chave in grupos.keys()
+        }
+        fretes_existentes_emb = CarviaFrete.query.filter(
+            CarviaFrete.embarque_id == embarque_id,
+            CarviaFrete.status != 'CANCELADO',
+        ).all()
+        for fr in fretes_existentes_emb:
+            fr_emit_norm = _norm_cnpj_b3(fr.cnpj_emitente or '')
+            fr_dest_norm = _norm_cnpj_b3(fr.cnpj_destino or '')
+            chave_fr = (fr_emit_norm, fr_dest_norm)
+            if chave_fr in chaves_atuais_norm:
+                continue  # ainda relevante
+            if fr_dest_norm in cnpjs_destinos_norm:
+                continue  # ha grupo com mesmo cnpj_destino (emitente diferente)
+            if fr.status in ('CONFERIDO', 'FATURADO'):
+                logger.warning(
+                    "Fase B3: frete #%s embarque %s cnpj_destino=%s ficou orfao "
+                    "(itens atualizaram CNPJ para %s) mas status=%s — "
+                    "nao cancelando. Operador deve revisar manualmente.",
+                    fr.id, embarque_id, fr.cnpj_destino,
+                    sorted(cnpjs_destinos_norm), fr.status,
+                )
+                continue
+            # Caso de borda Fase B3-G6: frete orfao com filhos ja criados
+            # (CarviaOperacao/CarviaSubcontrato vinculados). Nao cancelar
+            # silenciosamente para nao deixar filhos pendurados — sinalizar
+            # e deixar para revisao manual.
+            if fr.operacao_id or fr.subcontrato_id:
+                logger.warning(
+                    "Fase B3: frete #%s orfao mas tem operacao_id=%s / "
+                    "subcontrato_id=%s — NAO cancelando automaticamente. "
+                    "Operador deve cancelar manualmente apos avaliar filhos.",
+                    fr.id, fr.operacao_id, fr.subcontrato_id,
+                )
+                continue
+            logger.info(
+                "Fase B3: frete #%s embarque %s cnpj_destino=%s "
+                "(emitente=%s) sem itens atuais — cancelando para "
+                "permitir frete novo com cnpj atualizado.",
+                fr.id, embarque_id, fr.cnpj_destino, fr.cnpj_emitente,
+            )
+            fr.status = 'CANCELADO'
+
         # Mapa cotacao_id → valor_final_aprovado (preco VENDA)
         cotacao_valores = CarviaFreteService._carregar_cotacao_valores(itens_carvia)
         # Mapa cotacao_id → dados comerciais (condicao pagamento, responsavel frete)
@@ -144,32 +204,49 @@ class CarviaFreteService:
                     CarviaFreteService._limpar_frete_cancelado(existente)
                     # NAO dar continue — cair no _criar_frete_completo abaixo
                 else:
-                    # W11 (Sprint 3): Proibir NF tardia em frete existente.
-                    # Check por NF + CNPJ emitente: se qualquer NF do grupo
-                    # AINDA NAO esta no frete existente, bloquear.
-                    # Apos portaria (frete gerado), adicionar NFs muda pesos
-                    # e valores de forma nao controlada — usuario deve
-                    # cancelar o frete e recriar explicitamente.
+                    # W11 (Sprint 3) + Fase B3 (2026-05-11):
+                    # Antes bloqueava QUALQUER NF nova em frete existente.
+                    # Agora:
+                    #   - status PENDENTE:    substitui CSV in-place
+                    #                         (recalcula peso/valor/qtd)
+                    #   - status CONFERIDO+:  mantem bloqueio (toca conferencia)
                     nfs_no_frete = set(
                         (existente.numeros_nfs or '').split(',')
                     )
                     nfs_no_frete.discard('')
-                    nfs_novas = {
+                    nfs_atuais = {
                         item.nota_fiscal for item in itens_grupo
                         if item.nota_fiscal
-                    } - nfs_no_frete
+                    }
+                    nfs_novas = nfs_atuais - nfs_no_frete
+                    nfs_removidas = nfs_no_frete - nfs_atuais
 
-                    if nfs_novas:
-                        logger.warning(
-                            "W11: BLOQUEADO NF tardia para frete #%d "
-                            "(emitente=%s, destino=%s). NFs novas: %s. "
-                            "Cancele o frete e recrie para adicionar.",
-                            existente.id, cnpj_emitente, cnpj_destino,
-                            sorted(nfs_novas),
+                    if existente.status == 'PENDENTE' and (nfs_novas or nfs_removidas):
+                        # Substituir CSV + recalcular totais a partir dos itens
+                        peso_total = sum(float(it.peso or 0) for it in itens_grupo)
+                        valor_total = sum(float(it.valor or 0) for it in itens_grupo)
+                        nfs_csv = ','.join(sorted(nfs_atuais))
+                        logger.info(
+                            "Fase B3 W11: frete #%s PENDENTE - substituindo NFs "
+                            "in-place: '%s' -> '%s' (+%s -%s) peso=%.2f valor=%.2f",
+                            existente.id, existente.numeros_nfs, nfs_csv,
+                            sorted(nfs_novas), sorted(nfs_removidas),
+                            peso_total, valor_total,
                         )
-                        # Review Sprint 3 I1: salvar as NFs bloqueadas em
-                        # flask.g para o caller (portaria/routes) poder
-                        # exibir flash/alerta ao usuario operacional.
+                        existente.numeros_nfs = nfs_csv
+                        existente.quantidade_nfs = len(nfs_atuais)
+                        existente.peso_total = peso_total
+                        existente.valor_total_nfs = valor_total
+                    elif nfs_novas:
+                        # Status avancado: manter bloqueio do W11 original
+                        logger.warning(
+                            "W11: BLOQUEADO NF tardia para frete #%s "
+                            "(emitente=%s, destino=%s, status=%s). "
+                            "NFs novas: %s. Cancele o frete (depois de "
+                            "destravar a conferencia) e recrie.",
+                            existente.id, cnpj_emitente, cnpj_destino,
+                            existente.status, sorted(nfs_novas),
+                        )
                         try:
                             from flask import g
                             if not hasattr(g, 'carvia_w11_bloqueios'):
@@ -179,20 +256,19 @@ class CarviaFreteService:
                                 'cnpj_emitente': cnpj_emitente,
                                 'cnpj_destino': cnpj_destino,
                                 'nfs_bloqueadas': sorted(nfs_novas),
+                                'status_frete': existente.status,
                             })
                         except Exception:
                             # Fora de request context — OK, so log
                             pass
                     else:
-                        # Nenhuma NF nova — nada a fazer, frete ja reflete.
+                        # Nenhuma NF nova nem removida — frete ja reflete.
                         logger.debug(
-                            "Frete #%d: todas as NFs ja presentes, skip.",
+                            "Frete #%s: todas as NFs ja presentes, skip.",
                             existente.id,
                         )
-                    # Re-review Sprint 3 I2: marcar pedidos como EMBARCADO
-                    # tanto no branch de bloqueio quanto no "ja presentes".
-                    # Em ambos os casos o frete existe e os itens fisicamente
-                    # sairam — pedidos devem refletir EMBARCADO.
+                    # Marcar pedidos como EMBARCADO em todos os casos
+                    # (frete existe e itens fisicamente sairam).
                     itens_com_frete.extend(itens_grupo)
                     fretes_resultado.append(existente.id)
                     continue

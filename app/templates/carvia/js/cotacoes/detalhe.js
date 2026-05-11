@@ -125,12 +125,25 @@ function _setupAutoSave() {
     });
 }
 
-/* ===== API helper ===== */
+/* ===== API helper =====
+ * 2026-05-11: inclui X-CSRFToken do meta tag global definido em base.html
+ * (linha 7). Antes mandava POST/PUT sem header — Flask-WTF aceita header
+ * `X-CSRFToken` segundo config WTF_CSRF_HEADERS. Helper getCSRFToken e
+ * definido globalmente em base.html.
+ */
 function apiCall(url, method, body) {
+    const headers = {'Content-Type': 'application/json'};
+    try {
+        const token = (typeof getCSRFToken === 'function') ? getCSRFToken() : null;
+        if (token) headers['X-CSRFToken'] = token;
+    } catch (e) {
+        // Defensivo — getCSRFToken nao definido em testes
+    }
     return fetch(url, {
         method: method || 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: body ? JSON.stringify(body) : undefined
+        headers: headers,
+        body: body ? JSON.stringify(body) : undefined,
+        credentials: 'same-origin',
     }).then(r => r.json());
 }
 
@@ -503,6 +516,34 @@ function aplicarValorManual() {
     apiCall(`/carvia/api/cotacoes/${cotacaoId}/valor-manual`, 'POST', {valor: valor}).then(d => {
         if (d.sucesso) location.reload(); else alert(d.erro);
     });
+}
+
+/* Fase C (2026-05-11): valor pos-aprovacao quando exigir_aprovacao_admin=false */
+function aplicarValorPosAprovacao() {
+    const inp = document.getElementById('inpValorPosAprov');
+    if (!inp) return;
+    const valor = parseFloat(inp.value || 0);
+    if (!valor || valor <= 0) { alert('Informe um valor positivo.'); return; }
+    if (!confirm(
+        'Atualizar valor da cotacao para R$ ' + valor.toFixed(2) + ' (pos-aprovacao)?\n\n' +
+        'O status da cotacao NAO muda. CarviaFretes PENDENTE vinculados ' +
+        'a esta cotacao terao o valor_venda atualizado.'
+    )) return;
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/valor-pos-aprovacao`, 'POST', {valor: valor})
+        .then(d => {
+            if (d.sucesso) {
+                const fretes = (d.fretes_atualizados || []).length;
+                alert(
+                    'Valor atualizado: R$ ' +
+                    (d.valor_anterior || 0).toFixed(2) + ' -> R$ ' +
+                    (d.valor_novo || 0).toFixed(2) + '\n' +
+                    fretes + ' CarviaFrete(s) PENDENTE atualizado(s).'
+                );
+                location.reload();
+            } else {
+                alert(d.erro || 'Erro ao atualizar valor.');
+            }
+        });
 }
 
 /* ===== Veiculo DIRETA ===== */

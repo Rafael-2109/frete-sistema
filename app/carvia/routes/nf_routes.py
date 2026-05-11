@@ -1019,3 +1019,247 @@ def register_nf_routes(bp):
             'modelo_moto_id': modelo.id,
             'modelo_nome': modelo.nome,
         })
+
+    # ==================== DIVERGENCIA CNPJ vs COTACAO (Fase B4) ====================
+
+    @bp.route('/nfs/<int:nf_id>/aplicar-cnpj-na-cotacao', methods=['POST'])
+    @login_required
+    def aplicar_cnpj_da_nf_na_cotacao(nf_id):
+        """Aplica o CNPJ destinatario da NF na(s) cotacao(oes) vinculada(s).
+
+        Fase B4 (2026-05-11). Usado quando a NF chegou com cnpj_destinatario
+        diferente do cnpj do endereco destino da cotacao (sinalizado em
+        carvia_nf.divergencia_cnpj_cotacao por expandir_provisorio).
+
+        Acao:
+            1. Para cada cotacao vinculada a NF (via CarviaPedido):
+               - Procura CarviaClienteEndereco DESTINO ativo do cliente da
+                 cotacao com cnpj == nf.cnpj_destinatario
+               - Se nao existe: cria com dados da NF (uf, cidade, razao social)
+               - Atualiza cotacao.endereco_destino_id
+            2. Propaga para CarviaFretes vinculados ao embarque que ainda
+               estao em PENDENTE (atualiza cnpj_destino, nome_destino, etc.).
+            3. Limpa nf.divergencia_cnpj_cotacao = False
+            4. Auditoria.
+
+        Retorna JSON com resumo das mudancas.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import (
+            CarviaPedido, CarviaPedidoItem,
+            CarviaCotacao, CarviaClienteEndereco,
+            CarviaFrete,
+        )
+        from app.embarques.models import EmbarqueItem
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return jsonify({'erro': 'NF nao encontrada.'}), 404
+
+        if not nf.cnpj_destinatario:
+            return jsonify({
+                'erro': 'NF nao possui cnpj_destinatario para aplicar.'
+            }), 400
+
+        # 1. Encontrar cotacoes via CarviaPedidoItem.numero_nf
+        cotacoes_ids = {
+            cot_id for (cot_id,) in db.session.query(
+                CarviaPedido.cotacao_id
+            ).join(
+                CarviaPedidoItem, CarviaPedidoItem.pedido_id == CarviaPedido.id
+            ).filter(
+                CarviaPedidoItem.numero_nf == nf.numero_nf,
+                CarviaPedido.cotacao_id.isnot(None),
+            ).distinct().all()
+        }
+
+        if not cotacoes_ids:
+            return jsonify({
+                'erro': (
+                    f'Nenhuma cotacao encontrada para NF {nf.numero_nf}. '
+                    'Verifique se ha CarviaPedidoItem vinculado.'
+                ),
+            }), 404
+
+        resumo = {
+            'nf_id': nf.id,
+            'numero_nf': nf.numero_nf,
+            'cnpj_aplicado': nf.cnpj_destinatario,
+            'cotacoes_atualizadas': [],
+            'enderecos_criados': [],
+            'fretes_atualizados': [],
+            'embarque_itens_atualizados': [],
+        }
+
+        try:
+            for cot_id in cotacoes_ids:
+                cotacao = db.session.get(CarviaCotacao, cot_id)
+                if not cotacao or not cotacao.cliente_id:
+                    continue
+                # B4-Guard: nao tocar em cotacao CANCELADA (irrelevante) ou
+                # FATURADO (alteracao retroativa quebraria auditoria — o
+                # endereco que constou na fatura ja foi fechado).
+                if cotacao.status in ('CANCELADO', 'FATURADO'):
+                    logger.info(
+                        "B4: cotacao %s status=%s — pulando atualizacao "
+                        "(alteracao retroativa nao permitida).",
+                        cotacao.id, cotacao.status,
+                    )
+                    continue
+
+                # 2. Buscar endereco com CNPJ da NF para esse cliente
+                endereco = CarviaClienteEndereco.query.filter_by(
+                    cliente_id=cotacao.cliente_id,
+                    cnpj=nf.cnpj_destinatario,
+                    tipo='DESTINO',
+                    ativo=True,
+                ).first()
+
+                # 3. Se nao existe, criar a partir dos dados da NF
+                if not endereco:
+                    endereco = CarviaClienteEndereco(
+                        cliente_id=cotacao.cliente_id,
+                        cnpj=nf.cnpj_destinatario,
+                        razao_social=nf.nome_destinatario,
+                        receita_uf=nf.uf_destinatario,
+                        receita_cidade=nf.cidade_destinatario,
+                        fisico_uf=nf.uf_destinatario,
+                        fisico_cidade=nf.cidade_destinatario,
+                        tipo='DESTINO',
+                        principal=False,
+                        provisorio=False,
+                        ativo=True,
+                        criado_por=current_user.email,
+                    )
+                    db.session.add(endereco)
+                    db.session.flush()
+                    resumo['enderecos_criados'].append({
+                        'endereco_id': endereco.id,
+                        'cnpj': endereco.cnpj,
+                        'razao_social': endereco.razao_social,
+                        'cliente_id': endereco.cliente_id,
+                    })
+                    logger.info(
+                        "B4: novo CarviaClienteEndereco %s criado (cliente %s "
+                        "cnpj %s) a partir da NF %s",
+                        endereco.id, cotacao.cliente_id,
+                        nf.cnpj_destinatario, nf.numero_nf,
+                    )
+
+                # 4. Atualizar endereco_destino_id da cotacao
+                endereco_anterior_id = cotacao.endereco_destino_id
+                cotacao.endereco_destino_id = endereco.id
+                resumo['cotacoes_atualizadas'].append({
+                    'cotacao_id': cotacao.id,
+                    'numero_cotacao': cotacao.numero_cotacao,
+                    'endereco_anterior_id': endereco_anterior_id,
+                    'endereco_novo_id': endereco.id,
+                })
+                logger.info(
+                    "B4: cotacao %s endereco_destino_id %s -> %s (cnpj %s)",
+                    cotacao.id, endereco_anterior_id, endereco.id,
+                    nf.cnpj_destinatario,
+                )
+
+            # 5. Propagar para EmbarqueItens da NF (defensivo —
+            # expandir_provisorio ja faz isso, mas pode haver itens criados
+            # antes da Fase B2 ou em fluxo manual).
+            ei_atualizados = EmbarqueItem.query.filter_by(
+                nota_fiscal=nf.numero_nf,
+                status='ativo',
+            ).all()
+            for ei in ei_atualizados:
+                if not str(ei.separacao_lote_id or '').startswith('CARVIA-'):
+                    continue
+                if ei.cnpj_cliente == nf.cnpj_destinatario:
+                    continue
+                cnpj_old = ei.cnpj_cliente
+                ei.cnpj_cliente = nf.cnpj_destinatario
+                if nf.nome_destinatario:
+                    ei.cliente = nf.nome_destinatario
+                if nf.uf_destinatario:
+                    ei.uf_destino = nf.uf_destinatario
+                if nf.cidade_destinatario:
+                    ei.cidade_destino = nf.cidade_destinatario
+                resumo['embarque_itens_atualizados'].append({
+                    'embarque_item_id': ei.id,
+                    'embarque_id': ei.embarque_id,
+                    'cnpj_anterior': cnpj_old,
+                    'cnpj_novo': nf.cnpj_destinatario,
+                })
+
+            # 6. Propagar para CarviaFretes PENDENTE com NF no CSV
+            fretes_para_atualizar = CarviaFrete.query.filter(
+                CarviaFrete.status == 'PENDENTE',
+                CarviaFrete.numeros_nfs.isnot(None),
+                db.or_(
+                    CarviaFrete.numeros_nfs == nf.numero_nf,
+                    CarviaFrete.numeros_nfs.like(f"{nf.numero_nf},%"),
+                    CarviaFrete.numeros_nfs.like(f"%,{nf.numero_nf},%"),
+                    CarviaFrete.numeros_nfs.like(f"%,{nf.numero_nf}"),
+                ),
+            ).all()
+            for fr in fretes_para_atualizar:
+                if fr.cnpj_destino == nf.cnpj_destinatario:
+                    continue
+                cnpj_old = fr.cnpj_destino
+                fr.cnpj_destino = nf.cnpj_destinatario
+                if nf.nome_destinatario:
+                    fr.nome_destino = nf.nome_destinatario
+                if nf.uf_destinatario:
+                    fr.uf_destino = nf.uf_destinatario
+                if nf.cidade_destinatario:
+                    fr.cidade_destino = nf.cidade_destinatario
+                resumo['fretes_atualizados'].append({
+                    'frete_id': fr.id,
+                    'cnpj_anterior': cnpj_old,
+                    'cnpj_novo': nf.cnpj_destinatario,
+                })
+
+            # 7. Limpar flag da NF
+            nf.divergencia_cnpj_cotacao = False
+
+            db.session.commit()
+            logger.info(
+                "B4: aplicar_cnpj_na_cotacao concluido por %s: %s",
+                current_user.email, resumo,
+            )
+            return jsonify({'sucesso': True, **resumo})
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "B4: erro em aplicar_cnpj_na_cotacao NF=%s: %s",
+                nf_id, e, exc_info=True,
+            )
+            return jsonify({'erro': str(e)}), 500
+
+    @bp.route('/nfs/<int:nf_id>/descartar-divergencia-cnpj', methods=['POST'])
+    @login_required
+    def descartar_divergencia_cnpj(nf_id):
+        """Dispensa o alerta de divergencia CNPJ na NF (mantem cotacao).
+
+        Fase B4b. Usado quando o operador opta por NAO atualizar a cotacao —
+        EmbarqueItem ja foi atualizado pela Fase B2/B5, e a cotacao seguira
+        com cnpj_destino divergente da NF. Limpa apenas a flag.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        nf = db.session.get(CarviaNf, nf_id)
+        if not nf:
+            return jsonify({'erro': 'NF nao encontrada.'}), 404
+
+        nf.divergencia_cnpj_cotacao = False
+        try:
+            db.session.commit()
+            logger.info(
+                "B4b: divergencia CNPJ descartada para NF %s (numero=%s) por %s",
+                nf.id, nf.numero_nf, current_user.email,
+            )
+            return jsonify({'sucesso': True, 'nf_id': nf.id})
+        except Exception as e:
+            db.session.rollback()
+            logger.error("B4b: erro ao descartar divergencia NF %s: %s", nf_id, e)
+            return jsonify({'erro': str(e)}), 500

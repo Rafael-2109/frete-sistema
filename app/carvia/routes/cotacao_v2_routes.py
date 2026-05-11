@@ -1925,6 +1925,49 @@ def register_cotacao_v2_routes(bp):
             db.session.rollback()
             return jsonify({'erro': f'Erro: {e}'}), 500
 
+    # ==================== API: VALOR POS-APROVACAO (Fase C) ====================
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/valor-pos-aprovacao', methods=['POST']) # type: ignore
+    @login_required
+    def api_valor_pos_aprovacao(cotacao_id): # type: ignore
+        """Atualiza valor de cotacao APROVADA (ou ja em embarque).
+
+        Fase C (2026-05-11). Requer `exigir_aprovacao_admin == False`.
+        Propaga para CarviaFretes PENDENTE vinculados via NFs dos itens.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.services.pricing.cotacao_v2_service import CotacaoV2Service
+
+        data = request.get_json()
+        if not data:
+            return jsonify({'erro': 'Dados JSON invalidos.'}), 400
+
+        try:
+            valor = float(data.get('valor', 0))
+        except (TypeError, ValueError):
+            return jsonify({'erro': 'Valor invalido.'}), 400
+
+        try:
+            sucesso, erro, resumo = CotacaoV2Service.definir_valor_pos_aprovacao(
+                cotacao_id=cotacao_id,
+                valor=valor,
+                usuario=current_user.email,
+            )
+            if not sucesso:
+                return jsonify({'erro': erro}), 400
+
+            db.session.commit()
+            return jsonify({'sucesso': True, **resumo})
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Fase C: erro em api_valor_pos_aprovacao cot=%s: %s",
+                cotacao_id, e, exc_info=True,
+            )
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
     # ==================== API: COTACAO MANUAL ====================
 
     @bp.route('/api/cotacoes/<int:cotacao_id>/valor-manual', methods=['POST']) # type: ignore

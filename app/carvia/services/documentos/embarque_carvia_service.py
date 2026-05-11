@@ -138,6 +138,54 @@ class EmbarqueCarViaService:
 
         dest = cotacao.endereco_destino
 
+        # ----------------------------------------------------------------
+        # Fase B (2026-05-11): Detectar divergencia CNPJ destino
+        # ----------------------------------------------------------------
+        # Compara cnpj_destinatario da NF vs cnpj do endereco destino da
+        # cotacao. Se divergem (mesmo grupo ou outro CNPJ), o item de
+        # embarque ja nasce com os dados da NF (regra "afrouxada": a NF
+        # e fonte de verdade fiscal). A NF e marcada com
+        # divergencia_cnpj_cotacao=True para a UI alertar o operador, que
+        # pode decidir entre "atualizar cotacao" (B4) ou "manter" (B4b).
+        from app.utils.cnpj_utils import normalizar_cnpj as _norm_cnpj
+        cnpj_dest_cotacao = (dest.cnpj if dest else '') or ''
+        cnpj_dest_nf = (nf_obj.cnpj_destinatario if nf_obj else '') or ''
+        divergencia_cnpj = bool(
+            cnpj_dest_cotacao and cnpj_dest_nf
+            and _norm_cnpj(cnpj_dest_cotacao) != _norm_cnpj(cnpj_dest_nf)
+        )
+        if divergencia_cnpj and nf_obj:
+            if not nf_obj.divergencia_cnpj_cotacao:
+                nf_obj.divergencia_cnpj_cotacao = True
+            logger.warning(
+                "Fase B: NF %s (id=%s) cnpj_destinatario=%s diverge da "
+                "cotacao %s (endereco_destino_id=%s cnpj=%s). "
+                "EmbarqueItem nascera com dados da NF.",
+                numero_nf, nf_obj.id, cnpj_dest_nf,
+                carvia_cotacao_id,
+                (dest.id if dest else None), cnpj_dest_cotacao,
+            )
+            # B2-G3: Em FRACIONADA, mudanca de UF/cidade pode invalidar
+            # snapshot da tabela (icms_destino, valor_kg, etc) carregado
+            # com a cidade antiga. Sinaliza para revisao manual do custo
+            # do CarviaFrete que sera gerado. Nao bloqueia.
+            uf_dest_cotacao = (dest.fisico_uf if dest else None) or ''
+            uf_dest_nf = nf_obj.uf_destinatario or ''
+            modalidade_item = getattr(item_alvo, 'modalidade', '') or ''
+            if (
+                uf_dest_cotacao and uf_dest_nf
+                and uf_dest_cotacao.upper() != uf_dest_nf.upper()
+                and modalidade_item.upper() == 'FRACIONADA'
+            ):
+                logger.warning(
+                    "Fase B2-G3: UF destino mudou (%s -> %s) em item "
+                    "FRACIONADA (item=%s cot=%s NF=%s). Snapshot de tabela "
+                    "carregado com UF antiga pode estar incorreto (ICMS, "
+                    "valor_kg). REVISAR custo do CarviaFrete gerado.",
+                    uf_dest_cotacao, uf_dest_nf, item_alvo.id,
+                    carvia_cotacao_id, numero_nf,
+                )
+
         if eh_provisorio_real:
             # ===== CAMINHO PADRAO: provisorio=True =====
             # Criar novo EmbarqueItem real + deduzir/deletar provisorio
@@ -162,19 +210,40 @@ class EmbarqueCarViaService:
                                 _nf_cubado += _cub
                                 break
 
+            # Em caso de divergencia CNPJ destino, a NF prevalece (Fase B).
+            cnpj_cliente_novo = (
+                nf_obj.cnpj_destinatario
+                if (divergencia_cnpj and nf_obj and nf_obj.cnpj_destinatario)
+                else (dest.cnpj if dest else (item_alvo.cnpj_cliente or ''))
+            )
+            cliente_novo = (
+                nf_obj.nome_destinatario
+                if (divergencia_cnpj and nf_obj and nf_obj.nome_destinatario)
+                else (item_alvo.cliente or (cotacao.cliente.nome_comercial if cotacao.cliente else ''))
+            )
+            uf_destino_novo = (
+                nf_obj.uf_destinatario
+                if (divergencia_cnpj and nf_obj and nf_obj.uf_destinatario)
+                else (item_alvo.uf_destino or (dest.fisico_uf if dest else ''))
+            )
+            cidade_destino_novo = (
+                nf_obj.cidade_destinatario
+                if (divergencia_cnpj and nf_obj and nf_obj.cidade_destinatario)
+                else (item_alvo.cidade_destino or (dest.fisico_cidade if dest else ''))
+            )
             novo_item = EmbarqueItem(
                 embarque_id=embarque_id,
                 separacao_lote_id=lote_id_nf,
-                cnpj_cliente=dest.cnpj if dest else (item_alvo.cnpj_cliente or ''),
-                cliente=item_alvo.cliente or (cotacao.cliente.nome_comercial if cotacao.cliente else ''),
+                cnpj_cliente=cnpj_cliente_novo,
+                cliente=cliente_novo,
                 pedido=pedido.numero_pedido,
                 nota_fiscal=numero_nf,
                 peso=nf_peso,
                 peso_cubado=round(_nf_cubado, 2) if _nf_cubado > 0 else item_alvo.peso_cubado,
                 valor=nf_valor,
                 pallets=0,
-                uf_destino=item_alvo.uf_destino or (dest.fisico_uf if dest else ''),
-                cidade_destino=item_alvo.cidade_destino or (dest.fisico_cidade if dest else ''),
+                uf_destino=uf_destino_novo,
+                cidade_destino=cidade_destino_novo,
                 volumes=nf_volumes,
                 provisorio=False,
                 carvia_cotacao_id=carvia_cotacao_id,
@@ -230,6 +299,27 @@ class EmbarqueCarViaService:
             item_alvo.valor = nf_valor
             item_alvo.volumes = nf_volumes
             item_alvo.carvia_cotacao_id = carvia_cotacao_id
+
+            # Fase B: se NF tem CNPJ destinatario diferente da cotacao,
+            # propaga para o item (NF e fonte de verdade fiscal). Antes
+            # nao atualizava, gerando inconsistencia downstream (CarviaFrete
+            # agrupava por cnpj antigo, validar_nf_cliente bloqueava).
+            if divergencia_cnpj and nf_obj:
+                cnpj_old = item_alvo.cnpj_cliente
+                if nf_obj.cnpj_destinatario:
+                    item_alvo.cnpj_cliente = nf_obj.cnpj_destinatario
+                if nf_obj.nome_destinatario:
+                    item_alvo.cliente = nf_obj.nome_destinatario
+                if nf_obj.uf_destinatario:
+                    item_alvo.uf_destino = nf_obj.uf_destinatario
+                if nf_obj.cidade_destinatario:
+                    item_alvo.cidade_destino = nf_obj.cidade_destinatario
+                logger.warning(
+                    "Item legado: cnpj_cliente atualizado %s -> %s "
+                    "(item=%s NF=%s)",
+                    cnpj_old, nf_obj.cnpj_destinatario,
+                    item_alvo.id, numero_nf,
+                )
 
             logger.info(
                 "Item legado ATUALIZADO in-place: id=%s → lote=%s pedido=%s nf=%s",

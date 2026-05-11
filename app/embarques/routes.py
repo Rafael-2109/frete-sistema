@@ -318,12 +318,24 @@ def visualizar_embarque(id):
                     # Estes dados SÓ vêm da cotação e NUNCA devem ser alterados manualmente
 
                     # Validar NF do cliente
+                    # Defesa em profundidade (Fase A, 2026-05-11): se
+                    # validar_nf_cliente retornar False, o caminho Nacom legado
+                    # ja apagou item.nota_fiscal. Restaurar para old_nf para
+                    # nao persistir NULL no commit final (bug raiz anterior).
+                    # Caminho CarVia agora sempre retorna True com mensagem
+                    # informativa quando CNPJ diverge.
                     try:
                         sucesso, erro = validar_nf_cliente(item_existente)
                         if not sucesso:
+                            item_existente.nota_fiscal = old_nf
                             flash(f"⚠️ {erro}", "warning")
+                        elif erro:
+                            flash(f"ℹ️ {erro}", "info")
                     except Exception as e:
-                        pass
+                        logger.warning(
+                            "Erro em validar_nf_cliente para item %s: %s",
+                            item_existente.id, e,
+                        )
 
                 # ✅ FLUSH: Persistir mudanças em EmbarqueItem ANTES das sincronizações
                 # Isso garante que as queries feitas pelas funções de sincronização
@@ -1509,7 +1521,9 @@ def imprimir_embarque_completo(embarque_id):
 
     carvia_separacoes_data = []
     for lote_id in lotes_carvia:
-        dados = EmbarqueCarViaService.resolver_lote_carvia(lote_id)
+        dados = EmbarqueCarViaService.resolver_lote_carvia(
+            lote_id, embarque_id=embarque_id,
+        )
         if not dados or not dados['cotacao']:
             continue
 
@@ -1523,6 +1537,14 @@ def imprimir_embarque_completo(embarque_id):
             'veiculos_por_nf': dados['veiculos_por_nf'],
             'peso_bruto_nf': dados.get('peso_bruto_nf', 0),
             'peso_cubado_nf': dados.get('peso_cubado_nf', 0),
+            'volumes_nf': dados.get('volumes_nf', 0),
+            'nf_corrente': dados.get('nf_corrente'),
+            'nf_obj_corrente': dados.get('nf_obj_corrente'),
+            'embarque_item': dados.get('embarque_item'),
+            'rota': dados.get('rota'),
+            'sub_rota': dados.get('sub_rota'),
+            'transportadora': dados.get('transportadora'),
+            'resumo': dados.get('resumo') or {},
             'filial': dados['filial'],
             'observacoes': dados.get('observacoes'),
         })
@@ -1636,19 +1658,25 @@ def corrigir_cnpj_embarque(embarque_id):
 
 def validar_nf_cliente(item_embarque):
     """
-    Valida se a NF do item pertence ao cliente correto.
-    
-    REGRA RIGOROSA: NÃO atualiza dados do embarque, apenas valida!
-    
-    ✅ PERMITE:
-    - NF não preenchida (opcional)
-    - NF não encontrada no faturamento (pode ser preenchida antes da importação)
-    - NF pertence ao cliente correto
-    
-    ❌ BLOQUEIA:
-    - NF pertence a outro cliente (CNPJ divergente)
-    
-    Retorna (sucesso, mensagem_erro)
+    Valida (e atualiza) a NF do item de embarque vs cliente.
+
+    Comportamento por caminho:
+
+    Item CarVia (carvia_cotacao_id OR lote CARVIA-*) — fonte: CarviaNf
+      - NF nao encontrada na CarviaNf -> permite, marca PENDENTE_FATURAMENTO
+      - CNPJ destinatario diferente -> ATUALIZA item.cnpj_cliente/cliente
+        para o da NF (Fase A, 2026-05-11). Antes bloqueava + apagava NF.
+      - Atualiza peso/valor a partir da CarviaNf, limpa erro_validacao.
+      - Retorno: (True, mensagem_info | None)
+
+    Item Nacom legado — fonte: RelatorioFaturamentoImportado
+      - NF nao encontrada -> permite, marca PENDENTE_FATURAMENTO
+      - CNPJ divergente (com fallback de zero a esquerda) -> BLOQUEIA,
+        apaga item.nota_fiscal e retorna (False, erro). Caller deve
+        restaurar old_nf para nao persistir NULL (defesa em profundidade
+        ja presente em embarques/routes.py:329-334).
+
+    Retorna (sucesso, mensagem) onde mensagem pode ser None, info ou erro.
     """
     from app.faturamento.models import RelatorioFaturamentoImportado
     from app.utils.cnpj_utils import normalizar_cnpj
@@ -1680,20 +1708,41 @@ def validar_nf_cliente(item_embarque):
             )
 
         # Valida CNPJ do destinatario da NF CarVia vs CNPJ do item
+        #
+        # MUDANCA 2026-05-11 (Fase A): nao bloquear mais quando CNPJ diverge.
+        # Em vez disso, ATUALIZAR o cnpj_cliente do item para o da NF (a NF
+        # e a fonte de verdade fiscal). Razao:
+        #   - Bug raiz anterior: setava item.nota_fiscal=None + retornava
+        #     False; caller so dava flash sem rollback -> commit persistia
+        #     estado inconsistente (item sem NF, CarviaFrete intacto,
+        #     NF antiga nao podia ser cancelada).
+        #   - Caso real recorrente: NF re-emitida para filial do mesmo grupo
+        #     (mesma raiz CNPJ) depois da saida da portaria.
+        # Propagacao para CarviaCotacao / CarviaPedido / CarviaFrete fica na
+        # Fase B (separada). Aqui apenas o item de embarque + log para audit.
+        mensagem_info = None
         if item_embarque.cnpj_cliente and carvia_nf.cnpj_destinatario:
             cnpj_item = _norm_cnpj(item_embarque.cnpj_cliente)
             cnpj_nf = _norm_cnpj(carvia_nf.cnpj_destinatario)
             if cnpj_item != cnpj_nf:
-                nf_original = item_embarque.nota_fiscal
-                item_embarque.erro_validacao = (
-                    f"NF_DIVERGENTE: NF {nf_original} pertence ao CNPJ "
-                    f"{carvia_nf.cnpj_destinatario}, nao a {item_embarque.cnpj_cliente}"
+                cnpj_old = item_embarque.cnpj_cliente
+                nome_old = item_embarque.cliente
+                item_embarque.cnpj_cliente = carvia_nf.cnpj_destinatario
+                if carvia_nf.nome_destinatario:
+                    item_embarque.cliente = carvia_nf.nome_destinatario
+                logger.warning(
+                    "validar_nf_cliente: CNPJ destino do EmbarqueItem %s "
+                    "(embarque %s) atualizado a partir da NF %s: "
+                    "%s (%s) -> %s (%s)",
+                    item_embarque.id, item_embarque.embarque_id,
+                    item_embarque.nota_fiscal,
+                    cnpj_old, nome_old,
+                    carvia_nf.cnpj_destinatario, carvia_nf.nome_destinatario,
                 )
-                item_embarque.nota_fiscal = None
-                return False, (
-                    f"BLOQUEADO: NF {nf_original} nao pertence ao cliente "
-                    f"{item_embarque.cnpj_cliente} (pertence a "
-                    f"{carvia_nf.cnpj_destinatario})"
+                mensagem_info = (
+                    f"CNPJ destino atualizado para o da NF {item_embarque.nota_fiscal}: "
+                    f"{cnpj_old} -> {carvia_nf.cnpj_destinatario}"
+                    f"{' (' + carvia_nf.nome_destinatario + ')' if carvia_nf.nome_destinatario else ''}"
                 )
 
         # Atualiza peso/valor a partir da CarviaNf e limpa erro
@@ -1702,7 +1751,7 @@ def validar_nf_cliente(item_embarque):
         if carvia_nf.valor_total is not None:
             item_embarque.valor = float(carvia_nf.valor_total or 0)
         item_embarque.erro_validacao = None
-        return True, None
+        return True, mensagem_info
 
     # Busca a NF no faturamento
     nf_faturamento = RelatorioFaturamentoImportado.query.filter_by(
@@ -3295,7 +3344,9 @@ def _imprimir_separacao_carvia(embarque_id, separacao_lote_id):
     embarque = Embarque.query.get_or_404(embarque_id)
 
     from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
-    dados = EmbarqueCarViaService.resolver_lote_carvia(separacao_lote_id)
+    dados = EmbarqueCarViaService.resolver_lote_carvia(
+        separacao_lote_id, embarque_id=embarque_id,
+    )
 
     if not dados or not dados['cotacao']:
         flash('Cotacao CarVia nao encontrada.', 'warning')
@@ -3312,6 +3363,15 @@ def _imprimir_separacao_carvia(embarque_id, separacao_lote_id):
         veiculos_por_nf=dados['veiculos_por_nf'],
         peso_bruto_nf=dados.get('peso_bruto_nf', 0),
         peso_cubado_nf=dados.get('peso_cubado_nf', 0),
+        volumes_nf=dados.get('volumes_nf', 0),
+        nf_corrente=dados.get('nf_corrente'),
+        nf_obj_corrente=dados.get('nf_obj_corrente'),
+        observacoes=dados.get('observacoes'),
+        embarque_item=dados.get('embarque_item'),
+        rota=dados.get('rota'),
+        sub_rota=dados.get('sub_rota'),
+        transportadora=dados.get('transportadora'),
+        resumo=dados.get('resumo') or {},
         separacao_lote_id=separacao_lote_id,
         data_impressao=agora_utc_naive(),
         current_user=current_user,

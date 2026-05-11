@@ -347,6 +347,125 @@ class CotacaoV2Service:
 
     # ==================== COTACAO MANUAL ====================
 
+    # ==================== AJUSTE POS-APROVACAO (Fase C) ====================
+
+    @staticmethod
+    def definir_valor_pos_aprovacao(
+        cotacao_id: int,
+        valor: float,
+        usuario: str,
+    ) -> Tuple[bool, Optional[str], dict]:
+        """Atualiza valor de cotacao APROVADA (ou ja em embarque).
+
+        Fase C (2026-05-11). Permite ajustes pos-aprovacao quando o toggle
+        global `exigir_aprovacao_admin == False`. Casos tipicos:
+          - Venda negociada apos a aprovacao inicial
+          - Correcao de valor antes da emissao do CTe
+        Status da cotacao NAO muda (continua APROVADO se ja estava).
+
+        Propaga `valor_venda` para CarviaFretes ainda em PENDENTE cujos
+        `numeros_nfs` contem ao menos uma NF dos EmbarqueItems da cotacao.
+
+        Args:
+            cotacao_id: ID da CarviaCotacao
+            valor: novo valor (em reais)
+            usuario: email do executor (auditoria)
+
+        Returns:
+            (sucesso, mensagem_erro|None, resumo_dict)
+        """
+        from app.carvia.models import CarviaCotacao, CarviaFrete
+        from app.carvia.services.pricing.config_service import CarviaConfigService
+        from app.embarques.models import EmbarqueItem
+        from app.utils.timezone import agora_utc_naive
+
+        if CarviaConfigService.exigir_aprovacao_admin():
+            return False, (
+                "Atualizacao pos-aprovacao requer toggle global "
+                "exigir_aprovacao_admin=False. Configure primeiro."
+            ), {}
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return False, 'Cotacao nao encontrada.', {}
+        if cotacao.status == 'CANCELADO':
+            return False, 'Cotacao cancelada nao pode ser alterada.', {}
+        if valor is None or valor <= 0:
+            return False, 'Valor deve ser positivo.', {}
+
+        valor_anterior = float(cotacao.valor_final_aprovado or 0)
+
+        cotacao.cotacao_manual = True
+        cotacao.valor_manual = Decimal(str(valor))
+        cotacao.valor_final_aprovado = Decimal(str(valor))
+        cotacao.valor_descontado = Decimal(str(valor))
+        cotacao.detalhes_calculo = sanitize_for_json({
+            'tipo': 'manual_pos_aprovacao',
+            'valor_anterior': valor_anterior,
+            'valor_novo': float(valor),
+            'definido_por': usuario,
+            'definido_em': str(agora_utc_naive()),
+            'fase': 'C-2026-05-11',
+        })
+        # Status NAO muda — cotacao continua APROVADO se ja estava.
+
+        # Propagar para CarviaFretes PENDENTE vinculados via NFs dos itens
+        itens = EmbarqueItem.query.filter(
+            EmbarqueItem.carvia_cotacao_id == cotacao_id,
+            EmbarqueItem.status == 'ativo',
+        ).all()
+        nfs_da_cotacao = {ei.nota_fiscal for ei in itens if ei.nota_fiscal}
+        embarques_ids = {ei.embarque_id for ei in itens if ei.embarque_id}
+
+        fretes_atualizados = []
+        if embarques_ids:
+            fretes_candidatos = CarviaFrete.query.filter(
+                CarviaFrete.embarque_id.in_(embarques_ids),
+                CarviaFrete.status == 'PENDENTE',
+            ).all()
+            for fr in fretes_candidatos:
+                nfs_no_frete = set((fr.numeros_nfs or '').split(','))
+                nfs_no_frete.discard('')
+                # Heuristica: se algum item da cotacao tem NF no frete,
+                # consideramos que o frete pertence a esta cotacao
+                # (cotacoes diferentes raramente compartilham NFs).
+                tem_overlap = bool(nfs_da_cotacao & nfs_no_frete)
+                # Fallback: se NF ainda nao consta no frete (item provisorio
+                # sem NF), aceitar correspondencia por (embarque_id, cnpj).
+                if not tem_overlap and not nfs_da_cotacao:
+                    cnpjs_itens = {
+                        ei.cnpj_cliente for ei in itens
+                        if ei.cnpj_cliente and ei.embarque_id == fr.embarque_id
+                    }
+                    if fr.cnpj_destino in cnpjs_itens:
+                        tem_overlap = True
+                if not tem_overlap:
+                    continue
+                valor_venda_old = float(fr.valor_venda or 0)
+                fr.valor_venda = float(valor)
+                fretes_atualizados.append({
+                    'frete_id': fr.id,
+                    'embarque_id': fr.embarque_id,
+                    'valor_venda_anterior': valor_venda_old,
+                    'valor_venda_novo': float(valor),
+                })
+
+        logger.info(
+            "Fase C: cotacao %s valor atualizado pos-aprovacao por %s: "
+            "%.2f -> %.2f; fretes atualizados: %s",
+            cotacao.id, usuario, valor_anterior, float(valor),
+            [f['frete_id'] for f in fretes_atualizados],
+        )
+
+        db.session.flush()
+        return True, None, {
+            'cotacao_id': cotacao.id,
+            'numero_cotacao': cotacao.numero_cotacao,
+            'valor_anterior': valor_anterior,
+            'valor_novo': float(valor),
+            'fretes_atualizados': fretes_atualizados,
+        }
+
     @staticmethod
     def definir_valor_manual(
         cotacao_id: int,

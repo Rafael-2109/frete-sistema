@@ -134,6 +134,39 @@
     </div>
     {% endif %}
 
+    {# Fase B5 (2026-05-11): Alerta de divergencia CNPJ NF vs Cotacao #}
+    {% if nf.divergencia_cnpj_cotacao and nf.status != 'CANCELADA' %}
+    <div class="alert alert-warning d-flex align-items-start gap-3 mb-4" id="alertaDivergenciaCnpj">
+        <i class="fas fa-triangle-exclamation fa-lg mt-1"></i>
+        <div class="flex-grow-1">
+            <strong>Divergencia de CNPJ destino: NF vs Cotacao</strong>
+            <div class="small mt-1">
+                A NF foi emitida para o CNPJ
+                <code>{{ nf.cnpj_destinatario or '-' }}</code>
+                {% if nf.nome_destinatario %}({{ nf.nome_destinatario }}){% endif %}{% if nf.cidade_destinatario %},
+                {{ nf.cidade_destinatario }}/{{ nf.uf_destinatario }}{% endif %}, mas a cotacao
+                {% if cotacao_obj %}<strong>{{ cotacao_obj.numero_cotacao }}</strong>{% endif %}
+                aponta para um CNPJ diferente. O EmbarqueItem ja foi atualizado para
+                refletir a NF (regra "afrouxada" da Fase A/B).
+            </div>
+            <div class="mt-3 d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-warning btn-sm"
+                        id="btnAplicarCnpjCotacao"
+                        data-nf-id="{{ nf.id }}"
+                        title="Atualiza o endereco destino da(s) cotacao(oes) com o CNPJ da NF">
+                    <i class="fas fa-circle-check"></i> Aplicar CNPJ da NF na cotacao
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        id="btnDescartarDivergenciaCnpj"
+                        data-nf-id="{{ nf.id }}"
+                        title="Mantem a cotacao com o CNPJ original e apenas dispensa este alerta">
+                    <i class="fas fa-eye-slash"></i> Manter cotacao (descartar alerta)
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {# Banner de status da emissao CTe SSW (carregado via JS on-load) #}
     <div id="bannerEmissao" class="d-none mb-4"></div>
 
@@ -1722,6 +1755,103 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.innerHTML = '<i class="fas fa-unlink"></i> Desvincular';
         });
     });
+})();
+</script>
+
+{# Fase B5 (2026-05-11): handlers do alerta de divergencia CNPJ #}
+<script>
+(function() {
+    function csrfHeader() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? {'X-CSRFToken': meta.getAttribute('content')} : {};
+    }
+
+    function postJson(url) {
+        return fetch(url, {
+            method: 'POST',
+            headers: Object.assign(
+                {'Content-Type': 'application/json', 'Accept': 'application/json'},
+                csrfHeader()
+            ),
+            credentials: 'same-origin',
+        }).then(function(r) {
+            return r.json().then(function(body) {
+                return {ok: r.ok, status: r.status, body: body};
+            });
+        });
+    }
+
+    var btnAplicar = document.getElementById('btnAplicarCnpjCotacao');
+    if (btnAplicar) {
+        btnAplicar.addEventListener('click', function() {
+            var nfId = btnAplicar.getAttribute('data-nf-id');
+            if (!confirm(
+                'Atualizar o endereco destino da(s) cotacao(oes) vinculada(s) com o CNPJ da NF?\n\n' +
+                'Isso vai:\n' +
+                ' - Criar/encontrar o endereco com o CNPJ da NF no cliente da cotacao\n' +
+                ' - Apontar a cotacao para esse endereco\n' +
+                ' - Atualizar CarviaFretes PENDENTE e EmbarqueItens dessa NF\n\n' +
+                'Continuar?'
+            )) {
+                return;
+            }
+            btnAplicar.disabled = true;
+            btnAplicar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aplicando...';
+            postJson('/carvia/nfs/' + nfId + '/aplicar-cnpj-na-cotacao')
+                .then(function(res) {
+                    if (!res.ok) {
+                        alert('Erro: ' + (res.body.erro || 'falha desconhecida'));
+                        btnAplicar.disabled = false;
+                        btnAplicar.innerHTML = '<i class="fas fa-circle-check"></i> Aplicar CNPJ da NF na cotacao';
+                        return;
+                    }
+                    var b = res.body || {};
+                    var msg = 'CNPJ aplicado com sucesso.\n\n' +
+                        'Cotacoes atualizadas: ' + (b.cotacoes_atualizadas || []).length + '\n' +
+                        'Enderecos criados:    ' + (b.enderecos_criados || []).length + '\n' +
+                        'Fretes atualizados:   ' + (b.fretes_atualizados || []).length + '\n' +
+                        'Itens emb. atualizados: ' + (b.embarque_itens_atualizados || []).length;
+                    alert(msg);
+                    window.location.reload();
+                })
+                .catch(function(e) {
+                    alert('Erro de rede: ' + e.message);
+                    btnAplicar.disabled = false;
+                    btnAplicar.innerHTML = '<i class="fas fa-circle-check"></i> Aplicar CNPJ da NF na cotacao';
+                });
+        });
+    }
+
+    var btnDescartar = document.getElementById('btnDescartarDivergenciaCnpj');
+    if (btnDescartar) {
+        btnDescartar.addEventListener('click', function() {
+            var nfId = btnDescartar.getAttribute('data-nf-id');
+            if (!confirm(
+                'Descartar o alerta de divergencia (manter a cotacao com CNPJ original)?\n\n' +
+                'O EmbarqueItem ja foi atualizado para refletir a NF. Apenas o aviso visual sera removido.'
+            )) {
+                return;
+            }
+            btnDescartar.disabled = true;
+            btnDescartar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Descartando...';
+            postJson('/carvia/nfs/' + nfId + '/descartar-divergencia-cnpj')
+                .then(function(res) {
+                    if (!res.ok) {
+                        alert('Erro: ' + (res.body.erro || 'falha desconhecida'));
+                        btnDescartar.disabled = false;
+                        btnDescartar.innerHTML = '<i class="fas fa-eye-slash"></i> Manter cotacao (descartar alerta)';
+                        return;
+                    }
+                    var alerta = document.getElementById('alertaDivergenciaCnpj');
+                    if (alerta) alerta.remove();
+                })
+                .catch(function(e) {
+                    alert('Erro de rede: ' + e.message);
+                    btnDescartar.disabled = false;
+                    btnDescartar.innerHTML = '<i class="fas fa-eye-slash"></i> Manter cotacao (descartar alerta)';
+                });
+        });
+    }
 })();
 </script>
 {% endblock %}

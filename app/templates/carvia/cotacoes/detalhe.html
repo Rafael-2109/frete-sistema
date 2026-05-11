@@ -556,6 +556,30 @@
                         </div>
                     </div>
 
+                    {# Fase C (2026-05-11): editar valor pos-aprovacao quando toggle desativado #}
+                    {% if cotacao.status == 'APROVADO' and not exigir_aprovacao_admin %}
+                    <div class="mb-3 border rounded p-2 bg-light" id="blocoValorPosAprovacao">
+                        <small class="text-muted d-block mb-1">
+                            <i class="fas fa-pen"></i> Ajustar valor (pos-aprovacao)
+                        </small>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">R$</span>
+                            <input type="number" class="form-control" id="inpValorPosAprov"
+                                   step="0.01" min="0.01"
+                                   value="{{ cotacao.valor_final_aprovado or '' }}"
+                                   placeholder="Novo valor">
+                            <button class="btn btn-warning" type="button" onclick="aplicarValorPosAprovacao()">
+                                <i class="fas fa-check"></i> Aplicar
+                            </button>
+                        </div>
+                        <div class="alert alert-info py-1 small mt-2 mb-0">
+                            <i class="fas fa-info-circle"></i>
+                            Aprovacao admin desativada — ajustes pos-aprovacao propagam para
+                            CarviaFretes em PENDENTE.
+                        </div>
+                    </div>
+                    {% endif %}
+
                     {% if cotacao.status in ('RASCUNHO', 'PENDENTE_ADMIN', 'RECUSADO') %}
                     {# --- Dropdown veiculo (DIRETA only) --- #}
                     <div id="blocoVeiculoDireta" class="{{ 'd-none' if cotacao.tipo_carga != 'DIRETA' }} mb-2">
