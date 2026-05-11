@@ -186,17 +186,6 @@ echo "Custeio C16: audit_log_custeio..."
 python scripts/migrations/audit_log_custeio.py \
     || echo "⚠️ Migration audit_log_custeio falhou, continuando deploy..."
 
-# 14. Agente (2026-05-11): backfill KG links para memorias antigas sem entidades.
-# Roda extract_and_link_entities sobre memorias com is_directory=false,
-# content>=100 chars e SEM entrada em agent_memory_entity_links. Idempotente
-# via NOT EXISTS — execucoes subsequentes processam 0 memorias.
-# Layer 1 (regex) zero custo; Layer 2 (Voyage) ~$0.0001/mem; Layer 3 (Sonnet)
-# pulado em batch. Total estimado primeira execucao: <$0.05, ~5-10min.
-# Resolve queda historica de KG coverage (52.8% → 43.24% em 6 ciclos).
-echo "Agente: backfill KG links em memorias antigas..."
-python scripts/maintenance/backfill_kg_links.py --apply \
-    || echo "⚠️ Backfill KG links falhou, continuando deploy..."
-
 echo "Build concluído com sucesso!"
 
 
