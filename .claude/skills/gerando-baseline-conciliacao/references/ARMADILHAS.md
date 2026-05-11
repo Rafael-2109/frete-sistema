@@ -115,6 +115,31 @@ Omitir qualquer fonte produz contagem, valores e usuarios incorretos SEM sinaliz
 
 ---
 
+## 9. Baseline de data passada retorna estado atual
+
+**Sintoma**: usuario pede "baseline do dia 08/05" e recebe total **identico** ao baseline
+de 11/05 (3.287), com o agente adicionando uma nota "O total e identico ao baseline de
+hoje" sem alertar que o resultado pode estar errado.
+
+**Causa**: `query_odoo_pendentes()` filtrava apenas `is_reconciled=False` independentemente
+de `data_referencia`. O parametro era usado APENAS para nomear o arquivo e a aba D-1, sem
+reconstruir o estado historico das pendentes (abas 1 e 2).
+
+**Correcao** (2026-05-11):
+1. Filtro historico aplicado quando `data_ref < hoje`:
+   ```
+   (create_date <= data_ref) AND (
+     is_reconciled = False  OR  (is_reconciled = True AND write_date > data_ref)
+   )
+   ```
+2. Script emite `[WARNING] BASELINE HISTORICO COM TOTAL IDENTICO` quando total bate exato
+   com baseline anterior conhecido — agente deve PARAR e perguntar antes de entregar.
+3. SKILL.md secao "Validacao Historica Obrigatoria" detalha protocolo de alerta no chat.
+
+**Sessao**: `5ffdeace-6f95-4413-ab96-ed553d3b2d92` (11/05/2026) — IMP-2026-05-11-001 e -003.
+
+---
+
 ## Matriz de prevencao
 
 | Armadilha | Camada de defesa |
@@ -127,3 +152,4 @@ Omitir qualquer fonte produz contagem, valores e usuarios incorretos SEM sinaliz
 | 6. Faltando aba D-1 | SKILL.md fluxo + checkpoint 4 |
 | 7. payment_id IS NOT NULL | heuristica 531 + SQL_ODOO.md Query 1 |
 | 8. Apenas 1 fonte D-1 | SQL_ODOO.md Query 3 (uniao obrigatoria) + heuristica 529 |
+| 9. Data passada retorna estado atual | gerar_baseline.py query historica + WARNING + SKILL.md "Validacao Historica" |

@@ -12,6 +12,8 @@ Alternativa: conectar diretamente via psycopg2 ao banco Odoo (read-only) se conf
 
 ## Query 1: Pendentes por Mes x Journal
 
+### Estado ATUAL (data_ref = hoje)
+
 ```python
 from app.odoo.utils.connection import get_odoo_connection
 
@@ -39,6 +41,51 @@ results = models.execute_kw(db, uid, password,
      ['journal_id', 'date'],
      ['journal_id', 'date:month']],
     {'lazy': False})
+```
+
+### Estado HISTORICO (data_ref < hoje) — IMP-2026-05-11-001
+
+Quando o usuario solicita baseline para data passada, NAO basta filtrar `is_reconciled=False`
+— isso retorna o ESTADO ATUAL. Para reconstruir o estado em uma data X:
+
+```
+pendente_em_X = (create_date <= X)
+              AND (
+                is_reconciled = False                                    -- ainda pendente hoje
+                OR (is_reconciled = True AND write_date > X)             -- conciliada APOS X
+              )
+```
+
+```python
+from datetime import date
+
+data_ref = date(2026, 5, 8)            # exemplo: usuario pediu '08/05'
+data_ref_fim = '2026-05-08 23:59:59'
+
+dominio_historico = [
+    ('journal_id', 'in', journal_ids),
+    ('company_id', '=', 1),
+    ('create_date', '<=', data_ref_fim),
+    '|',
+    ('is_reconciled', '=', False),
+    '&', ('is_reconciled', '=', True), ('write_date', '>', data_ref_fim),
+]
+
+linhas = models.execute_kw(db, uid, password,
+    'account.bank.statement.line', 'search_read',
+    [dominio_historico],
+    {'fields': ['journal_id', 'date', 'amount']})
+```
+
+**Caveat conhecida**: `write_date` no Odoo atualiza em qualquer write — em teoria pode mudar
+por motivos NAO-conciliacao (edicao de payment_ref, attachment, etc). Na pratica, em
+`account.bank.statement.line` o `write_date` muda principalmente em transitions de
+`is_reconciled`. Se houver linhas com `is_reconciled=True` e `write_date > data_ref` mas
+que NAO foram conciliadas naquela janela, o baseline historico sobreconta. Documentar
+suspeita via `log_system_pitfall` se aparecer.
+
+**Validacao**: comparar com `## Historico de baseline` no SKILL.md. Se total bater EXATO
+com algum baseline anterior conhecido, o script emite WARNING — investigar antes de entregar.
 
 # Agrupar em Python (read_group limita agregacoes com filter)
 from collections import defaultdict

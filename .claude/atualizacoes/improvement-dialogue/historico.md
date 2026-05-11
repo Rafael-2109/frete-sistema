@@ -20,6 +20,18 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 14 | 2026-05-06 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 15 | 2026-05-07 | 6 | 6 | 0 | 0 | OK (6 sugestoes do mesmo problema raiz resolvidas em uma unica mudanca atomica) |
 | 16 | 2026-05-08 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 17 | 2026-05-11 | 3 | 3 | 0 | 0 | OK |
+
+## 2026-05-11
+- 3 sugestoes avaliadas (1 critical + 2 warning), todas validas e auto-implementadas
+- Tema raiz: IMP-001 + IMP-003 sao mesmo problema (skill bug + instrucao agente). IMP-002 e separado (observabilidade).
+- IMP-2026-05-11-001 (critical, skill_bug) — `gerando-baseline-conciliacao` ignorava `data_referencia` ao filtrar pendentes. Aba 1/2 sempre retornavam estado atual. Fix: filtro historico `(create_date<=ref) AND (is_reconciled=False OR (is_reconciled=True AND write_date>ref))` quando data_ref<hoje + guard automatico para total identico a baseline anterior + armadilha #9 documentada.
+- IMP-2026-05-11-002 (warning, gotcha_report) — subagentes sem `tool_use` produzem JSONL 6 linhas, `turns=0`, hook `cost granular SKIP`. Comportamento NORMAL para read-only response-only. Documentado em `SUBAGENT_RELIABILITY.md` com tabela diagnostica para evitar alarmes falsos.
+- IMP-2026-05-11-003 (warning, instruction_request) — agente deve comparar baseline historico com atual e alertar se totais identicos. Implementado como (1) secao "Validacao Historica Obrigatoria" em SKILL.md com tabela de cenarios + anti-padrao proibido (sessao 5ffdeace), e (2) guard automatico no script. Defesa em profundidade.
+- Sessoes-evidencia: `5ffdeace-6f95-4413-ab96-ed553d3b2d92` (IMP-001, -003) e `3cc9b481-a63c-44c3-821a-a2da8c6b56a9` (IMP-002).
+- Arquivos modificados: `gerar_baseline.py`, `SKILL.md`, `SQL_ODOO.md`, `ARMADILHAS.md`, `SUBAGENT_RELIABILITY.md`, relatorio + historico.
+- Persistencia DB: 3/3 OK (IDs 77, 78, 79).
+- **Commit**: direto em main (sem branch dedicada — feedback 2026-04-14).
 
 ## 2026-05-08
 - **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).

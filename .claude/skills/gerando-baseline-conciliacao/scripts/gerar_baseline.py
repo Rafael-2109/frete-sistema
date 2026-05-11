@@ -66,8 +66,15 @@ def _fmt_data_ref(d):
     return f'{d.day:02d}{MES_PT[d.month]}{d.year}'
 
 
-def query_odoo_pendentes(odoo_conn):
+def query_odoo_pendentes(odoo_conn, data_ref):
     """Query 1: Agregacao Mes x Journal + Query 2: Top N detalhadas.
+
+    Reconstroi o estado de pendentes EM `data_ref`:
+      - Linhas com create_date <= data_ref (existiam naquela data)
+      - E que estavam pendentes (is_reconciled=False) ou foram conciliadas APOS data_ref
+
+    Quando data_ref >= hoje, retorna o estado atual (comportamento original).
+    Quando data_ref < hoje, retorna estado historico via UNIAO de dois conjuntos.
 
     Usa API real de OdooConnection (app/odoo/utils/connection.py): metodos
     .search_read(model, domain, fields=, limit=, offset=). NAO usar dict-subscript.
@@ -86,6 +93,30 @@ def query_odoo_pendentes(odoo_conn):
         print('[ERRO] Nenhum journal monitorado encontrado no Odoo')
         return {}, [], journal_map
 
+    hoje = date.today()
+    historico = data_ref < hoje
+    data_ref_fim = f'{data_ref.isoformat()} 23:59:59'
+
+    # Quando historico: 2 dominios distintos (unidos em Python).
+    # Quando atual: 1 dominio simples (is_reconciled=False) — equivalente ao comportamento legado.
+    if historico:
+        dominio_pendentes_naquela_data = [
+            ['journal_id', 'in', journal_ids],
+            ['company_id', '=', COMPANY_ID_FB],
+            ['create_date', '<=', data_ref_fim],
+            '|',
+            ['is_reconciled', '=', False],
+            '&', ['is_reconciled', '=', True], ['write_date', '>', data_ref_fim],
+        ]
+        print(f'       [historico] Reconstruindo pendentes em {data_ref.isoformat()} (data passada): '
+              f'create_date<=ref UNION (is_reconciled=True AND write_date>ref).')
+    else:
+        dominio_pendentes_naquela_data = [
+            ['is_reconciled', '=', False],
+            ['journal_id', 'in', journal_ids],
+            ['company_id', '=', COMPANY_ID_FB],
+        ]
+
     # Buscar todas as linhas pendentes em batches
     agg = defaultdict(lambda: {'linhas': 0, 'pgtos': 0, 'recebs': 0, 'vl_deb': 0.0, 'vl_cred': 0.0})
     todas_linhas = []
@@ -95,9 +126,7 @@ def query_odoo_pendentes(odoo_conn):
     while True:
         linhas = odoo_conn.search_read(
             'account.bank.statement.line',
-            [['is_reconciled', '=', False],
-             ['journal_id', 'in', journal_ids],
-             ['company_id', '=', COMPANY_ID_FB]],
+            dominio_pendentes_naquela_data,
             fields=['journal_id', 'date', 'amount', 'payment_ref',
                     'partner_id', 'payment_id'],
             limit=batch_size,
@@ -429,7 +458,7 @@ def main():
             sys.exit(1)
 
         print('[1/4] Consultando pendentes por Mes x Journal (Odoo)...')
-        agg, pendentes, journal_map = query_odoo_pendentes(odoo_conn)
+        agg, pendentes, journal_map = query_odoo_pendentes(odoo_conn, data_ref)
         print(f'       {len(agg)} combinacoes Mes x Journal, {len(pendentes)} linhas detalhadas (top N).')
 
         print('[2/4] Consultando conciliacoes D-1 (UNIAO 3 fontes)...')
@@ -449,6 +478,46 @@ def main():
     print(f'     Aba 3 (Conciliacoes D-1): {result["aba3_usuarios"]} usuarios')
     print(f'     Aba 4 (Resumo): {result["aba4_linhas"]} linhas + Total Geral')
     print(f'     Total extratos pendentes: {result["total_pendentes"]}')
+
+    _emitir_warning_se_total_identico_a_baselines_historicos(
+        total_atual=result['total_pendentes'],
+        data_ref=data_ref,
+    )
+
+
+# Historico de baselines conhecidos (sincronizar com SKILL.md "Historico de baseline").
+# Usado para detectar resultado identico = suspeita de skill nao recalcular para data historica.
+_HISTORICO_BASELINES = [
+    ('09/04/2026', 8684),
+    ('16/04/2026', 6985),
+    ('17/04/2026', 6694),
+    ('18/04/2026', 6350),
+    ('22/04/2026', 6162),
+]
+
+
+def _emitir_warning_se_total_identico_a_baselines_historicos(total_atual, data_ref):
+    """Detecta caso suspeito de IMP-2026-05-11-001: data passada retornando total identico.
+
+    Quando o usuario solicita baseline para uma data HISTORICA (data_ref < hoje), o total
+    deve ser distinto do total atual e dos baselines anteriores ja registrados (espera-se
+    delta != 0). Se bater exato em um deles, emitir warning grosso no stdout para o agente
+    consumidor reconhecer e alertar o usuario antes de entregar como correto.
+    """
+    if data_ref >= date.today():
+        return
+    matches = [(d, t) for (d, t) in _HISTORICO_BASELINES if t == total_atual]
+    if matches:
+        print()
+        print('=' * 78)
+        print('[WARNING] BASELINE HISTORICO COM TOTAL IDENTICO A REGISTRO ANTERIOR')
+        print(f'         Data solicitada: {data_ref.isoformat()}')
+        print(f'         Total obtido: {total_atual}')
+        for d, t in matches:
+            print(f'         Bate com baseline anterior: {d} = {t}')
+        print('         AGENTE: confirme com o usuario antes de entregar.')
+        print('         Possivel causa: cache, filtro errado ou recalculo nao aplicou data passada.')
+        print('=' * 78)
 
 
 if __name__ == '__main__':

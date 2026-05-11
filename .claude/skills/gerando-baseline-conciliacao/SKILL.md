@@ -86,15 +86,51 @@ Ver `references/ARMADILHAS.md` — 8 armadilhas ja cometidas pelo agente em sess
 ```
 1. Detectar gatilho: "atualizar baseline" / "baseline de conciliacao" / etc.
 2. Confirmar data de referencia (default: hoje).
+   - Se usuario disser "do dia DD/MM" / "08/05" / "ontem" -> data passada -> PASSAR --data-referencia
+   - Sem mencao de data -> hoje.
 3. Rodar scripts/gerar_baseline.py com a data.
 4. Script:
    a. Executa 4 queries contra Odoo (ver SQL_ODOO.md).
+      - Quando data_ref < hoje: reconstroi estado historico via UNIAO
+        (create_date<=ref AND is_reconciled=False) OR (write_date>ref AND is_reconciled=True)
+      - Quando data_ref = hoje: filtra apenas is_reconciled=False (estado atual).
    b. Monta Excel openpyxl seguindo FORMATO_ABAS.md.
    c. Salva em /tmp/ e retorna URL de download.
+   d. Emite [WARNING] no stdout se o total bater EXATO com algum baseline historico
+      conhecido (sinal de cache, filtro errado, ou skill nao aplicou data passada).
 5. Validar 5 checkpoints antes de responder (ver Checkpoints).
-6. POS-EXECUCAO OBRIGATORIA (ver "Apresentacao Pos-Geracao Obrigatoria" abaixo).
-7. Se usuario pedir variacao: RECUSAR e pedir autorizacao explicita.
+6. VALIDACAO HISTORICA OBRIGATORIA quando data_ref < hoje (ver secao abaixo).
+7. POS-EXECUCAO OBRIGATORIA (ver "Apresentacao Pos-Geracao Obrigatoria" abaixo).
+8. Se usuario pedir variacao: RECUSAR e pedir autorizacao explicita.
 ```
+
+## Validacao Historica Obrigatoria (data_ref < hoje)
+
+**Trigger**: usuario pediu "baseline do dia DD/MM" para data anterior a hoje.
+
+ANTES de entregar o resultado, comparar o total obtido com:
+
+1. **Baseline anterior em memoria/historico** (tabela `## Historico de baseline` deste SKILL.md
+   ou ultimo Excel gerado).
+2. **Output do script**: se aparecer linha `[WARNING] BASELINE HISTORICO COM TOTAL IDENTICO`,
+   tratar como bloqueador.
+
+**Acao por cenario**:
+
+| Cenario | Acao |
+|---------|------|
+| Total IDENTICO ao baseline anterior (delta=0) | ALERTAR usuario explicitamente: "O total obtido para DD/MM e identico ao baseline anterior (NNN). Possivelmente a skill nao recalculou o estado historico. Quer forcar recalculo ou revisar o filtro?" — NAO entregar como correto. |
+| Total muito proximo (ex: delta < 10 em base de milhares) | Reportar delta no chat: "Delta vs baseline anterior: -3 linhas. Verifique se faz sentido para a janela de tempo." |
+| Total significativamente diferente | Entregar normalmente com delta explicito. |
+| Script emitiu [WARNING] | SEMPRE alertar usuario antes de entregar. |
+
+**Anti-padrao proibido** (sessao `5ffdeace-6f95-4413-ab96-ed553d3b2d92`, 11/05/2026):
+agente entregou baseline de 08/05 com total 3.287 IDENTICO ao baseline atual de 11/05,
+adicionando apenas uma nota de rodape "O total e identico ao baseline de hoje" — sem
+alertar que o resultado pode estar errado nem perguntar se deve recalcular.
+
+**Padrao correto**: se delta=0 inesperado em data passada, PARAR e perguntar ao usuario
+antes de gerar o link/tabelas.
 
 ## Pre-Execucao Obrigatoria
 
@@ -246,3 +282,4 @@ Tabela local no mesmo dia: 18.158 — NAO usar (acumula ja conciliados).
 | Data | Fix | Sessao trigger |
 |------|-----|----------------|
 | 22/04/2026 | (1) API OdooConnection (search_read em vez de dict-subscript). (2) Campos reais lancamento_comprovante (lancado_por/valor_alocado/lancado_em + status='LANCADO'). (3) _ROOT resiliente a /tmp. (4) **Removida Fonte 3 carvia_conciliacoes** — baseline e exclusiva Nacom Goya, CarVia e empresa separada. Smoke test: 6.162 pendentes OK. | Sessao 459 (Marcus, 22/04) — IMP-2026-04-22-001 |
+| 11/05/2026 | (1) `query_odoo_pendentes()` agora recebe `data_ref` e aplica filtro historico quando `data_ref < hoje`: `(create_date <= ref) AND (is_reconciled=False OR (is_reconciled=True AND write_date > ref))`. (2) Adicionado `_emitir_warning_se_total_identico_a_baselines_historicos()` que detecta IMP-2026-05-11-001 (data passada retornando estado atual). (3) Nova armadilha #9 + secao "Validacao Historica Obrigatoria" em SKILL.md. | Sessao `5ffdeace-6f95-4413-ab96-ed553d3b2d92` (Marcus, 11/05) — IMP-2026-05-11-001, -003 |

@@ -147,6 +147,41 @@ Desconfiar quando:
 
 ---
 
+## Observabilidade — Padroes Normais (NAO sao bugs)
+
+### Subagente sem `tool_use` -> JSONL 6 linhas + `turns=0` + `cost granular SKIP`
+
+**Sintoma na observabilidade**: ao auditar JSONLs em `~/.claude/projects/<proj>/<session>/subagents/`,
+encontra-se subagentes com estrutura fixa de **6 linhas** (user, attachment, user, user, user, user
+— SEM linha `assistant`), `turns=0`, e o hook `[HOOK:SubagentStop]` registra `cost granular SKIP`.
+
+**Diagnostico correto**: **comportamento NORMAL** quando o subagente responde em uma unica virada
+sem chamar nenhuma ferramenta (zero `tool_use`). NAO e race condition, NAO e abort silencioso,
+NAO e parser corrompido.
+
+**Contexto**: agentes read-only de resposta pura (acompanhando-pedido com query simples,
+consultando-estoque-loja com cache hit, etc.) podem responder direto via texto sem precisar
+de Bash/Read/Grep. O SDK gera o JSONL com apenas as linhas de input + system prompt + attachment,
+sem linha `assistant` porque o turn nao precisou ser "fechado" com ferramentas.
+
+**Padroes a comparar**:
+
+| Tipo de subagente | Linhas JSONL | `turns` | `cost granular` | Diagnostico |
+|-------------------|--------------|---------|-----------------|-------------|
+| Resposta pura (0 tool_use) | 6 | 0 | SKIP | Normal — nao alarmar |
+| Resposta com texto + finalizacao | 7+ | 1 | OK | Normal |
+| Multi-turn com tools | 10+ | 2+ | OK | Normal |
+| Abort/erro real | variavel | 0 | error | Investigar |
+
+**Acao na investigacao**: ao revisar logs e detectar **N subagentes com padrao 6-linhas/turns=0**,
+PRIMEIRO filtrar subagentes intencionalmente sem `tool_use` (read-only response-only) ANTES de
+classificar como anomalia. Cruzar com prompt do subagente e tipo de pergunta esperada.
+
+**Referencia**: IMP-2026-05-11-002 (sessao `3cc9b481-a63c-44c3-821a-a2da8c6b56a9` mostrou
+gestor-recebimento com 7 linhas/turns=1 — nao reproduziu o bug, padrao esperado).
+
+---
+
 ## Fontes
 
 - Anthropic Context Engineering: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
