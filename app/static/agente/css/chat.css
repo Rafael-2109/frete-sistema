@@ -18,13 +18,18 @@
 
 /* ============================================
    WRAPPER FULLSCREEN
-   ============================================ */
+   ============================================
+   Preenche o .nc-content do shell (sidebar + nc-main + nc-content).
+   Versao antiga usava `position: fixed; top: 56px; left: 0` referenciando
+   o navbar Bootstrap topo (removido na migracao para sidebar lateral).
+   Aquele left:0 sobre a viewport cobria o sidebar (248px/64px/drawer),
+   que entao aparecia por cima (z-index: 100) cortando a area esquerda do chat.
+   Solucao: ocupar 100% do .nc-content via position: relative + flex layout.
+*/
 .chat-fullscreen-wrapper {
-    position: fixed;
-    top: 56px; /* Altura do navbar Bootstrap */
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: relative;
+    width: 100%;
+    height: 100%;
     background: var(--agent-bg-primary, #f8f9fa);
     overflow: hidden;
 }
@@ -1620,18 +1625,10 @@
         max-height: 90vh;
     }
 
-    /* Fix #3: Navbar overlap — usar position sticky em vez de fixed no mobile */
-    .chat-fullscreen-wrapper {
-        position: fixed;
-        top: 56px;
-        z-index: 1020; /* Abaixo da navbar (1030) para nao sobrepor hamburger */
-    }
+    /* Layout shell (sidebar+nc-content) ja cuida do posicionamento — sem overrides aqui. */
 }
 
 @media (max-width: 480px) {
-    .chat-fullscreen-wrapper {
-        top: 56px;
-    }
 
     .chat-header {
         padding: 4px 8px;
@@ -1755,9 +1752,7 @@
    Header + thinking + input compactam para maximizar area do chat
    ============================================ */
 @media (orientation: landscape) and (max-height: 500px) {
-    .chat-fullscreen-wrapper {
-        top: 0; /* Esconde navbar em landscape */
-    }
+    /* Wrapper agora ocupa 100% do .nc-content — sem override de top necessario. */
 
     .chat-header {
         padding: 3px 8px;
@@ -2560,7 +2555,9 @@
    ============================================ */
 
 .debug-panel-container {
-    position: fixed;
+    /* absolute (nao fixed): ancorado ao .chat-fullscreen-wrapper para respeitar
+       o sidebar lateral. Com `fixed` + left:12px o painel cobria o sidebar. */
+    position: absolute;
     left: 12px;
     bottom: 80px;
     width: 480px;
