@@ -58,6 +58,22 @@ CSS_CANONICAL_DIRS = {"tokens", "vendor", "components", "base"}
 CSS_LEGACY_DIRS = {"legacy"}
 CSS_UTILITIES_LEGACY_FILES = {"_legacy.css"}
 
+# Templates de impressao (PDF/print) sao auto-contidos por necessidade
+# tecnica de renderizacao consistente entre navegadores e converters
+# (wkhtmltopdf, weasyprint, navegador). Inline styles e hex literals
+# sao aceitos nesses templates — replicam padrao dos modelos historicos
+# (imprimir_separacao.html, imprimir_completo.html, etc).
+PRINT_TEMPLATE_PATTERNS = (
+    "imprimir_",          # imprimir_separacao.html, imprimir_completo.html, ...
+    "_carvia_separacao_content",  # partial usado pelos templates imprimir_*
+)
+
+
+def _eh_template_impressao(file_path: Path) -> bool:
+    """True se o template e de impressao (PDF/print) — whitelist do lint."""
+    nome = file_path.name
+    return any(p in nome for p in PRINT_TEMPLATE_PATTERNS)
+
 # ─── Regex ──────────────────────────────────────────────────────────────────
 
 RE_HEX = re.compile(r"#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3,5})?\b")
@@ -113,6 +129,11 @@ class PolicyReport:
 # ─── Linters por tipo de arquivo ────────────────────────────────────────────
 
 def lint_template(file_path: Path, report: PolicyReport):
+    # Templates de impressao sao excecao legitima — pulam P1/P3/P4/P5/P7
+    # (precisam de inline styles auto-contidos para renderizacao PDF/print).
+    if _eh_template_impressao(file_path):
+        return
+
     try:
         text = file_path.read_text(encoding="utf-8", errors="replace")
     except Exception:
