@@ -1164,7 +1164,9 @@ def _atualizar_campos_vazios(
       - Strings: None, '' ou 'NAO_INFORMADO' (forma_pagamento).
       - Numero: para parcelas/intervalo, considera vazio se = default
         (1 / 30) E API tem valor diferente (>1 / != 30).
-      - modalidade_frete: vazio se = '9' (default) E API retorna outro.
+      - modalidade_frete: vazio se = '0' (default atual desde 2026-05-11)
+        ou = '9' (default legado, mantido para compat com vendas antigas)
+        E API retorna outro valor valido ('0' CIF ou '1' FOB).
 
     Returns:
         True se algum campo foi alterado, False caso contrario.
@@ -1203,8 +1205,17 @@ def _atualizar_campos_vazios(
         venda.loja_id = loja_emitente_id
         alterou = True
 
-    # Modalidade de frete: '9' eh default; se API retornou outro, atualiza.
-    if (venda.modalidade_frete or '9') == '9' and modalidade_frete != '9':
+    # Modalidade de frete: '0' (default atual) ou '9' (default legado pre-
+    # 2026-05-11) sao tratados como "vazio". Se API retornou valor valido
+    # diferente, atualiza. Vendas antigas com '9' ainda sao corrigidas neste
+    # fluxo. Vendas novas com '0' (default silencioso) tambem.
+    modalidade_atual = venda.modalidade_frete or '0'
+    if (
+        modalidade_atual in ('0', '9')
+        and modalidade_frete
+        and modalidade_frete in ('0', '1')
+        and modalidade_frete != modalidade_atual
+    ):
         venda.modalidade_frete = modalidade_frete
         alterou = True
 

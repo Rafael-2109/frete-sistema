@@ -40,16 +40,20 @@ _FAST_MODEL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # Gabriella e Marcus em sessoes high-cost (vinculacao, conciliacao, match,
     # consolidacao). Skill-set: validacao-nf-po, conciliando-odoo-po. Acao
     # repetitiva e estruturada — nao requer Opus.
+    # Fix 2026-05-11 (code-review): `consolidar` sem `?` para nao matchear
+    # `consolida` (3a pessoa, "o sistema consolida o PO?" eh pergunta diagnostica
+    # que precisa Opus). Mesmo principio para `conciliar`, `vincular`, `validar`,
+    # `verificar` — todos requerem infinitivo completo.
     (
         re.compile(
             r"\b("
             r"match\s+(da\s+)?nf\s+\S+\s+(com|x)\s+po"
-            r"|conciliar?\s+(o\s+)?po\s+\S+"
-            r"|consolidar?\s+(o\s+)?po\b"
-            r"|vincular?\s+(o\s+)?po\s+\S+"
+            r"|conciliar\s+(o\s+)?po\s+\S+"
+            r"|consolidar\s+(o\s+)?po\b"
+            r"|vincular\s+(o\s+)?po\s+\S+"
             r"|split\s+(do\s+)?po\b"
-            r"|validar?\s+(o\s+)?nf\s+\S+\s+x?\s*po"
-            r"|verificar?\s+(o\s+)?match\s+nf"
+            r"|validar\s+(o\s+)?nf\s+\S+\s+x?\s*po"
+            r"|verificar\s+(o\s+)?match\s+nf"
             r")\b",
             re.IGNORECASE,
         ),
@@ -60,7 +64,8 @@ _FAST_MODEL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # Sonnet executa em 1 turn pequeno (~$0.20 vs $1+ Opus).
     (
         re.compile(
-            r"(?i)\b(atualiza(r)?|gera(r)?|rodar?)\s+(o\s+)?baseline\b",
+            r"\b(atualizar?|gerar?|rodar?)\s+(o\s+)?baseline\b",
+            re.IGNORECASE,
         ),
         "atualizar_baseline",
     ),
@@ -135,6 +140,15 @@ def select_model(
         return default_model, "empty"
 
     stripped = prompt.strip()
+    word_count = len(stripped.split())
+
+    # Guard de complexidade (2026-05-11 code-review): patterns usam .search(),
+    # entao prompts longos podem casar substring inocente. Ex.: "match da nf X
+    # com PO mas considerando lote split, verificar premissas, validar formula"
+    # contem "match da nf X com PO" mas o todo eh complexo demais para Sonnet.
+    # Acima de 15 palavras, default para Opus mesmo se pattern matchar.
+    if word_count > 15:
+        return default_model, "prompt_complexo"
 
     # Patterns explicitos
     for pattern, reason in _FAST_MODEL_PATTERNS:
@@ -148,7 +162,6 @@ def select_model(
     #   "status pedido VCD123" (ID em caps, operacional)
     #   "odoo trava hoje"     (palavra-chave de dominio critico)
     # Sem isso, comandos operacionais 3-word cairiam em Sonnet silenciosamente.
-    word_count = len(stripped.split())
     if word_count <= 2:
         return fast_model, "prompt_muito_curto"
 
