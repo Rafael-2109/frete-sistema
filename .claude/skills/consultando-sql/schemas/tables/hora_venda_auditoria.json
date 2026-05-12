@@ -70,16 +70,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_auditoria_venda_id",
+      "name": "ix_hora_venda_auditoria_acao",
       "columns": [
-        "venda_id"
+        "acao"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_auditoria_acao",
+      "name": "ix_hora_venda_auditoria_venda_id",
       "columns": [
-        "acao"
+        "venda_id"
       ],
       "unique": false
     }

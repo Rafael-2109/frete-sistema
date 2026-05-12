@@ -1,0 +1,80 @@
+{
+  "name": "assai_pos_venda_ocorrencia",
+  "description": "Tabela assai_pos_venda_ocorrencia",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "categoria",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "atualizado_em",
+      "type": "timestamp",
+      "description": "Última atualização"
+    },
+    {
+      "name": "atualizado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "atualizado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_pos_venda_ocorrencia_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_pos_venda_ocorrencia_chassi",
+      "columns": [
+        "chassi"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_pos_venda_ocorrencia_categoria",
+      "columns": [
+        "categoria"
+      ],
+      "unique": false
+    }
+  ]
+}

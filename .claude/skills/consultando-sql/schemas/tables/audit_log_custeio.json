@@ -60,16 +60,17 @@
   ],
   "indices": [
     {
-      "name": "ix_audit_log_custeio_usuario",
+      "name": "idx_audit_custeio_timestamp_evento",
       "columns": [
-        "usuario"
+        "timestamp",
+        "evento"
       ],
       "unique": false
     },
     {
-      "name": "ix_audit_log_custeio_entidade",
+      "name": "ix_audit_log_custeio_evento",
       "columns": [
-        "entidade"
+        "evento"
       ],
       "unique": false
     },
@@ -82,9 +83,16 @@
       "unique": false
     },
     {
-      "name": "ix_audit_log_custeio_timestamp",
+      "name": "ix_audit_log_custeio_entidade",
       "columns": [
-        "timestamp"
+        "entidade"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_audit_log_custeio_usuario",
+      "columns": [
+        "usuario"
       ],
       "unique": false
     },
@@ -96,17 +104,9 @@
       "unique": false
     },
     {
-      "name": "idx_audit_custeio_timestamp_evento",
+      "name": "ix_audit_log_custeio_timestamp",
       "columns": [
-        "timestamp",
-        "evento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_audit_log_custeio_evento",
-      "columns": [
-        "evento"
+        "timestamp"
       ],
       "unique": false
     }

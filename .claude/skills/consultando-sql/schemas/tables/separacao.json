@@ -296,17 +296,17 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
-      "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_estoque_projetado",
       "columns": [
         "cod_produto",
         "expedicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -319,16 +319,16 @@
       "unique": false
     },
     {
-      "name": "idx_sep_status",
+      "name": "ix_separacao_chassi_assai",
       "columns": [
-        "status"
+        "chassi_assai"
       ],
       "unique": false
     },
     {
-      "name": "ix_separacao_chassi_assai",
+      "name": "idx_sep_status",
       "columns": [
-        "chassi_assai"
+        "status"
       ],
       "unique": false
     },

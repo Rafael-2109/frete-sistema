@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 265,
+  "total_tabelas": 268,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -166,6 +166,15 @@
         "message_id",
         "session_id",
         "user_id"
+      ]
+    },
+    {
+      "name": "agente_artifacts",
+      "description": "Artifact (bundle.html auto-contido) gerado pelo agente via skill",
+      "key_fields": [
+        "uuid",
+        "user_id",
+        "session_id"
       ]
     },
     {
@@ -300,6 +309,24 @@
         "pedido_id",
         "loja_id",
         "expedicao"
+      ]
+    },
+    {
+      "name": "assai_pos_venda_ocorrencia",
+      "description": "Tabela assai_pos_venda_ocorrencia",
+      "key_fields": [
+        "chassi",
+        "categoria",
+        "descricao"
+      ]
+    },
+    {
+      "name": "assai_pos_venda_ocorrencia_anexo",
+      "description": "Tabela assai_pos_venda_ocorrencia_anexo",
+      "key_fields": [
+        "ocorrencia_id",
+        "tipo",
+        "nome_original"
       ]
     },
     {

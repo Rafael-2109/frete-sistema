@@ -40,14 +40,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_histmatch_tokens_tipo",
-      "columns": [
-        "descricao_tokens",
-        "tipo_documento"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_historico_match_extrato_cnpj_pagador",
       "columns": [
         "cnpj_pagador"
@@ -58,6 +50,14 @@
       "name": "ix_carvia_historico_match_extrato_descricao_tokens",
       "columns": [
         "descricao_tokens"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_histmatch_tokens_tipo",
+      "columns": [
+        "descricao_tokens",
+        "tipo_documento"
       ],
       "unique": false
     },

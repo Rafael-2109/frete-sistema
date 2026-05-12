@@ -101,16 +101,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_loja_destino_id",
+      "name": "ix_hora_nf_entrada_pedido_id",
       "columns": [
-        "loja_destino_id"
+        "pedido_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_pedido_id",
+      "name": "ix_hora_nf_entrada_loja_destino_id",
       "columns": [
-        "pedido_id"
+        "loja_destino_id"
       ],
       "unique": false
     },

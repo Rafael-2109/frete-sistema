@@ -1,0 +1,70 @@
+{
+  "name": "assai_pos_venda_ocorrencia_anexo",
+  "description": "Tabela assai_pos_venda_ocorrencia_anexo",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "ocorrencia_id",
+      "type": "integer",
+      "description": "FK → assai_pos_venda_ocorrencia.id",
+      "nullable": false
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(10)",
+      "nullable": false
+    },
+    {
+      "name": "nome_original",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "s3_key",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "content_type",
+      "type": "varchar(120)"
+    },
+    {
+      "name": "tamanho_bytes",
+      "type": "bigint"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "ocorrencia_id",
+      "references": "assai_pos_venda_ocorrencia.id"
+    },
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_pos_venda_ocorrencia_anexo_ocorrencia_id",
+      "columns": [
+        "ocorrencia_id"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 399,
+  "total_relationships": 400,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -132,6 +132,12 @@
       "from_table": "assai_pedido_venda_loja",
       "from_column": "loja_id",
       "to_table": "assai_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pos_venda_ocorrencia_anexo",
+      "from_column": "ocorrencia_id",
+      "to_table": "assai_pos_venda_ocorrencia",
       "to_column": "id"
     },
     {
