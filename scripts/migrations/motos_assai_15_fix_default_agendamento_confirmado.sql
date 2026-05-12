@@ -19,8 +19,12 @@
 -- 3. Re-executar todo o backfill da Migration 10 explicitamente
 
 -- ===== 1. Garantir DEFAULT FALSE em agendamento_confirmado =====
+-- E DEFAULT NOW() em criado_em (mesma armadilha — Python default nao vira SQL DEFAULT)
 ALTER TABLE assai_pedido_venda_loja
     ALTER COLUMN agendamento_confirmado SET DEFAULT FALSE;
+
+ALTER TABLE assai_pedido_venda_loja
+    ALTER COLUMN criado_em SET DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo');
 
 -- Garantir NOT NULL (idempotente — se ja era NOT NULL, no-op)
 DO $$
@@ -42,11 +46,17 @@ BEGIN
     END IF;
 END $$;
 
--- ===== 2. Re-executar backfill da Migration 10 (INSERT explicito com FALSE) =====
+-- ===== 2. Re-executar backfill da Migration 10 (INSERT explicito com TODOS os NOT NULL) =====
 -- Idempotente via ON CONFLICT. Garante que cabecalhos existam para TODOS os
 -- (pedido_id, loja_id) distintos em assai_pedido_venda_item.
-INSERT INTO assai_pedido_venda_loja (pedido_id, loja_id, agendamento_confirmado)
-SELECT DISTINCT pedido_id, loja_id, FALSE FROM assai_pedido_venda_item
+-- TODOS os campos NOT NULL (agendamento_confirmado, criado_em) explicitos para
+-- evitar dependencia de DEFAULT no DB (que pode estar ausente se create_all
+-- criou a tabela).
+INSERT INTO assai_pedido_venda_loja
+    (pedido_id, loja_id, agendamento_confirmado, criado_em)
+SELECT DISTINCT
+    pedido_id, loja_id, FALSE, (NOW() AT TIME ZONE 'America/Sao_Paulo')
+FROM assai_pedido_venda_item
 ON CONFLICT (pedido_id, loja_id) DO NOTHING;
 
 -- ===== 3. Garantir coluna pedido_loja_id em items + backfill + NOT NULL =====

@@ -84,7 +84,12 @@ class AssaiSeparacaoSaldoModelo(db.Model):
                              nullable=False, index=True)
     modelo_id = db.Column(db.Integer, db.ForeignKey('assai_modelo.id'), nullable=False)
     qtd_planejada = db.Column(db.Integer, nullable=False)
-    criado_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)
+    # server_default: garante DEFAULT no DB quando tabela criada via create_all
+    criado_em = db.Column(
+        db.DateTime, default=agora_brasil_naive,
+        server_default=db.text("(NOW() AT TIME ZONE 'America/Sao_Paulo')"),
+        nullable=False,
+    )
 
     __table_args__ = (
         db.UniqueConstraint('separacao_id', 'modelo_id',
