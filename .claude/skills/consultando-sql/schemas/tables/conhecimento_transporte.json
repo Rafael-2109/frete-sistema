@@ -277,13 +277,6 @@
   ],
   "indices": [
     {
-      "name": "ix_conhecimento_transporte_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_conhecimento_transporte_frete_id",
       "columns": [
         "frete_id"
@@ -456,6 +449,13 @@
       "name": "idx_cte_complementa_id",
       "columns": [
         "cte_complementa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
       ],
       "unique": false
     }

@@ -288,14 +288,6 @@
   ],
   "indices": [
     {
-      "name": "idx_emb_transportadora_status",
-      "columns": [
-        "transportadora_id",
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_emb_tipo_carga",
       "columns": [
         "tipo_carga"
@@ -306,6 +298,14 @@
       "name": "idx_emb_data_embarque",
       "columns": [
         "data_embarque"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_emb_transportadora_status",
+      "columns": [
+        "transportadora_id",
+        "status"
       ],
       "unique": false
     },

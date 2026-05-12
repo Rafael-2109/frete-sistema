@@ -105,11 +105,11 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_reconciliacao_conta_a_receber_id",
+      "name": "ix_contas_a_receber_reconciliacao_odoo_id",
       "columns": [
-        "conta_a_receber_id"
+        "odoo_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_contas_a_receber_reconciliacao_tipo_baixa",
@@ -133,11 +133,11 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_reconciliacao_odoo_id",
+      "name": "ix_contas_a_receber_reconciliacao_conta_a_receber_id",
       "columns": [
-        "odoo_id"
+        "conta_a_receber_id"
       ],
-      "unique": true
+      "unique": false
     }
   ]
 }

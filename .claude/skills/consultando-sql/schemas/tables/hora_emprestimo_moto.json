@@ -130,16 +130,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_emprestimo_moto_modelo_id",
+      "name": "ix_hora_emprestimo_moto_loja_hora_id",
       "columns": [
-        "modelo_id"
+        "loja_hora_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_emprestimo_moto_loja_hora_id",
+      "name": "ix_hora_emprestimo_moto_modelo_id",
       "columns": [
-        "loja_hora_id"
+        "modelo_id"
       ],
       "unique": false
     },

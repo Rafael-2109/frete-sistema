@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 264,
+  "total_tabelas": 265,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -2370,6 +2370,15 @@
         "etapa",
         "tentativas",
         "ultimo_erro"
+      ]
+    },
+    {
+      "name": "remessa_vortx_conversao",
+      "description": "Auditoria de operacoes de conversao e validacao de arquivos CNAB 400 externos.",
+      "key_fields": [
+        "tipo",
+        "nome_arquivo_original",
+        "arquivo_original"
       ]
     },
     {

@@ -235,20 +235,6 @@
   ],
   "indices": [
     {
-      "name": "ix_nf_devolucao_odoo_nf_venda_id",
-      "columns": [
-        "odoo_nf_venda_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_devolucao_chave_nfd",
-      "columns": [
-        "chave_nfd"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_nf_devolucao_odoo_nota_credito_id",
       "columns": [
         "odoo_nota_credito_id"
@@ -390,6 +376,20 @@
         "status_monitoramento"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_odoo_nf_venda_id",
+      "columns": [
+        "odoo_nf_venda_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_devolucao_chave_nfd",
+      "columns": [
+        "chave_nfd"
+      ],
+      "unique": true
     }
   ]
 }

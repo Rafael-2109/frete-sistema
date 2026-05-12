@@ -137,16 +137,16 @@
       "unique": false
     },
     {
-      "name": "ix_agent_memories_category",
+      "name": "ix_agent_memories_user_id",
       "columns": [
-        "category"
+        "user_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_memories_user_id",
+      "name": "ix_agent_memories_category",
       "columns": [
-        "user_id"
+        "category"
       ],
       "unique": false
     }

@@ -51,9 +51,10 @@
   ],
   "indices": [
     {
-      "name": "ix_regiao_tabela_rede_rede",
+      "name": "idx_regiao_rede_uf",
       "columns": [
-        "rede"
+        "rede",
+        "uf"
       ],
       "unique": false
     },
@@ -65,10 +66,9 @@
       "unique": false
     },
     {
-      "name": "idx_regiao_rede_uf",
+      "name": "ix_regiao_tabela_rede_rede",
       "columns": [
-        "rede",
-        "uf"
+        "rede"
       ],
       "unique": false
     }

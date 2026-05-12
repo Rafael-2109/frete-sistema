@@ -100,12 +100,11 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_conferencia_ordem_ativa",
+      "name": "ix_hora_recebimento_conferencia_numero_chassi",
       "columns": [
-        "recebimento_id",
-        "ordem"
+        "numero_chassi"
       ],
-      "unique": true
+      "unique": false
     },
     {
       "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
@@ -137,11 +136,12 @@
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_numero_chassi",
+      "name": "ix_hora_conferencia_ordem_ativa",
       "columns": [
-        "numero_chassi"
+        "recebimento_id",
+        "ordem"
       ],
-      "unique": false
+      "unique": true
     }
   ]
 }
