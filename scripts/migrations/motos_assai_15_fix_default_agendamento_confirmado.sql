@@ -71,21 +71,19 @@ WHERE it.pedido_id = pvl.pedido_id
   AND it.loja_id = pvl.loja_id
   AND it.pedido_loja_id IS NULL;
 
--- Tornar NOT NULL (idempotente)
+-- Tornar NOT NULL (idempotente) — APENAS SE NAO HOUVER NULLs
+-- ISSUE 1 (code review): RAISE EXCEPTION abortava transacao inteira, rollback
+-- ate do DEFAULT fix. Trocar por skip silencioso; Python AFTER check captura.
 DO $$
 BEGIN
-    -- Verificar que nao ha NULL antes de SET NOT NULL
-    IF EXISTS (
-        SELECT 1 FROM assai_pedido_venda_item WHERE pedido_loja_id IS NULL
-    ) THEN
-        RAISE EXCEPTION 'Existem items com pedido_loja_id NULL — backfill incompleto. Investigar.';
-    END IF;
-
+    -- So aplica SET NOT NULL se: (a) coluna ainda nullable; (b) zero rows com NULL
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name='assai_pedido_venda_item'
           AND column_name='pedido_loja_id'
           AND is_nullable='YES'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM assai_pedido_venda_item WHERE pedido_loja_id IS NULL
     ) THEN
         ALTER TABLE assai_pedido_venda_item
             ALTER COLUMN pedido_loja_id SET NOT NULL;
@@ -96,23 +94,36 @@ CREATE INDEX IF NOT EXISTS ix_assai_pedido_venda_item_pedido_loja
     ON assai_pedido_venda_item(pedido_loja_id);
 
 -- ===== 4. Defensive — outras tabelas com Boolean NOT NULL criadas via create_all =====
--- assai_separacao.agendamento_confirmado (Migration 11) tem mesma vulnerabilidade
-ALTER TABLE assai_separacao
-    ALTER COLUMN agendamento_confirmado SET DEFAULT FALSE;
-
+-- assai_separacao.agendamento_confirmado (Migration 11) tem mesma vulnerabilidade.
+-- ISSUE 2 (code review): se Migration 11 nao rodou, coluna nao existe -> ALTER
+-- falha -> rollback de TUDO. Guard com IF EXISTS antes.
 DO $$
 BEGIN
-    UPDATE assai_separacao
-        SET agendamento_confirmado = FALSE
-        WHERE agendamento_confirmado IS NULL;
-
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name='assai_separacao'
           AND column_name='agendamento_confirmado'
-          AND is_nullable='YES'
     ) THEN
+        -- Coluna existe — aplicar fix do DEFAULT
         ALTER TABLE assai_separacao
-            ALTER COLUMN agendamento_confirmado SET NOT NULL;
+            ALTER COLUMN agendamento_confirmado SET DEFAULT FALSE;
+
+        UPDATE assai_separacao
+            SET agendamento_confirmado = FALSE
+            WHERE agendamento_confirmado IS NULL;
+
+        -- SET NOT NULL apenas se ainda nullable
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name='assai_separacao'
+              AND column_name='agendamento_confirmado'
+              AND is_nullable='YES'
+        ) THEN
+            ALTER TABLE assai_separacao
+                ALTER COLUMN agendamento_confirmado SET NOT NULL;
+        END IF;
     END IF;
+    -- Coluna nao existe (Migration 11 nao rodou): skip silencioso.
+    -- Quando Migration 11 rodar no proximo deploy, coluna sera criada com
+    -- server_default='false' do model -> DEFAULT correto desde o INSERT.
 END $$;
