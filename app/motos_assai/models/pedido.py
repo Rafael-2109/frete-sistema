@@ -61,7 +61,11 @@ class AssaiPedidoVendaLoja(db.Model):
     expedicao = db.Column(db.Date)
     agendamento = db.Column(db.Date)
     protocolo = db.Column(db.String(50))
-    agendamento_confirmado = db.Column(db.Boolean, default=False, nullable=False)
+    # server_default='false': garante DEFAULT FALSE no DB quando tabela criada
+    # via db.create_all() (sem migration). Previne incidente PYTHON-FLASK-RT.
+    agendamento_confirmado = db.Column(
+        db.Boolean, default=False, server_default='false', nullable=False,
+    )
     criado_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)
     atualizado_em = db.Column(db.DateTime)
 

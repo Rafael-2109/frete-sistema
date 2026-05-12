@@ -231,6 +231,13 @@ echo "Motos Assai 14: chassi_assai em separacao + ajuste UNIQUE..."
 python scripts/migrations/motos_assai_14_chassi_assai_em_separacao.py \
     || echo "⚠️ Migration motos_assai_14 falhou, continuando deploy..."
 
+# 15c. Motos Assai 15 (2026-05-12 — HOTFIX): Migration 10 falhou em prod por
+# falta de DEFAULT FALSE em agendamento_confirmado (criado via db.create_all
+# sem server_default). Re-aplica DEFAULT + re-executa backfill todo. Idempotente.
+echo "Motos Assai 15: HOTFIX DEFAULT agendamento_confirmado + rerodar backfill..."
+python scripts/migrations/motos_assai_15_fix_default_agendamento_confirmado.py \
+    || echo "⚠️ Migration motos_assai_15 falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

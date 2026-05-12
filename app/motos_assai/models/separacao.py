@@ -30,7 +30,11 @@ class AssaiSeparacao(db.Model):
     expedicao = db.Column(db.Date)
     agendamento = db.Column(db.Date)
     protocolo = db.Column(db.String(50))
-    agendamento_confirmado = db.Column(db.Boolean, default=False, nullable=False)
+    # server_default='false': garante DEFAULT FALSE no DB quando tabela criada
+    # via db.create_all() (sem migration). Previne NotNullViolation em backfill.
+    agendamento_confirmado = db.Column(
+        db.Boolean, default=False, server_default='false', nullable=False,
+    )
 
     itens = db.relationship('AssaiSeparacaoItem', backref='separacao',
                             cascade='all, delete-orphan', lazy='selectin')
