@@ -128,6 +128,13 @@
       "unique": false
     },
     {
+      "name": "ix_registro_pedido_odoo_rede",
+      "columns": [
+        "rede"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_registro_criado_em",
       "columns": [
         "criado_em"
@@ -138,13 +145,6 @@
       "name": "ix_registro_pedido_odoo_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_registro_pedido_odoo_rede",
-      "columns": [
-        "rede"
       ],
       "unique": false
     },

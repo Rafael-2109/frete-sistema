@@ -61,9 +61,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_pedido_item_peca_id",
+      "name": "ix_hora_pedido_item_pedido_id",
       "columns": [
-        "peca_id"
+        "pedido_id"
       ],
       "unique": false
     },
@@ -75,9 +75,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_item_pedido_id",
+      "name": "ix_hora_pedido_item_peca_id",
       "columns": [
-        "pedido_id"
+        "peca_id"
       ],
       "unique": false
     }
