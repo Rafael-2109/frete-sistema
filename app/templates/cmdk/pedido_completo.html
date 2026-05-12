@@ -401,7 +401,7 @@
               </tr>
             </thead>
             <tbody>
-              {% for it in sep.items %}
+              {% for it in sep['items'] %}
               <tr data-separacao-id="{{ it.separacao_id }}">
                 <td class="cod">{{ it.cod_produto }}</td>
                 <td>{{ it.nome_produto or '—' }}</td>
