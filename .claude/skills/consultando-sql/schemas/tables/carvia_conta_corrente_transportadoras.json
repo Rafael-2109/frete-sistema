@@ -96,16 +96,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_frete_id",
+      "name": "ix_carvia_conta_corrente_transportadoras_fatura_transportadora_id",
       "columns": [
-        "frete_id"
+        "fatura_transportadora_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
+      "name": "ix_carvia_conta_corrente_transportadoras_status",
       "columns": [
-        "criado_em"
+        "status"
       ],
       "unique": false
     },
@@ -117,16 +117,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_fatura_transportadora_id",
+      "name": "ix_carvia_conta_corrente_transportadoras_frete_id",
       "columns": [
-        "fatura_transportadora_id"
+        "frete_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_status",
+      "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
       "columns": [
-        "status"
+        "criado_em"
       ],
       "unique": false
     }

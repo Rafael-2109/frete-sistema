@@ -123,16 +123,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_subcontratos_operacao_id",
+      "name": "ix_carvia_subcontratos_frete_id",
       "columns": [
-        "operacao_id"
+        "frete_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_subcontratos_frete_id",
+      "name": "ix_carvia_subcontratos_operacao_id",
       "columns": [
-        "frete_id"
+        "operacao_id"
       ],
       "unique": false
     },

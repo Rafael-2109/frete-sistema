@@ -1,0 +1,94 @@
+{
+  "name": "agente_artifacts",
+  "description": "Artifact (bundle.html auto-contido) gerado pelo agente via skill",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "uuid",
+      "type": "varchar(36)",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "session_id",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "titulo",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "queued"
+    },
+    {
+      "name": "s3_key",
+      "type": "text"
+    },
+    {
+      "name": "bundle_size_bytes",
+      "type": "bigint"
+    },
+    {
+      "name": "error_message",
+      "type": "text"
+    },
+    {
+      "name": "spec_json",
+      "type": "json"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "build_started_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "build_completed_at",
+      "type": "timestamp"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_agente_artifacts_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agente_artifacts_uuid",
+      "columns": [
+        "uuid"
+      ],
+      "unique": true
+    },
+    {
+      "name": "ix_agente_artifacts_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    }
+  ]
+}

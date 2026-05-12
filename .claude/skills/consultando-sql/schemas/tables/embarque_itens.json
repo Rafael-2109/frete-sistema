@@ -248,16 +248,16 @@
       "unique": false
     },
     {
-      "name": "idx_ei_nota_fiscal",
+      "name": "idx_ei_cnpj_cliente",
       "columns": [
-        "nota_fiscal"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "idx_ei_cnpj_cliente",
+      "name": "idx_ei_nota_fiscal",
       "columns": [
-        "cnpj_cliente"
+        "nota_fiscal"
       ],
       "unique": false
     },
