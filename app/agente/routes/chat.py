@@ -917,6 +917,20 @@ def _stream_chat_response(
                     if structured is not None:
                         done_payload['structured_output'] = structured
 
+                    # R-CLI-CRASH (2026-05-12): resume falhou (probe miss store
+                    # OU CLI crash <5s). client.py:2326-2353 emite done com
+                    # recoverable_resume_failure=True para sinalizar ao caller
+                    # que precisa retry transparente. Frontend chat.js trata
+                    # no case 'done' (auto-retry com _lastUserMessage). Espelha
+                    # comportamento do Teams services.py:1245-1250.
+                    if event.content.get('recoverable_resume_failure'):
+                        done_payload['recoverable_resume_failure'] = True
+                        logger.warning(
+                            f"[AGENTE] recoverable_resume_failure propagado ao "
+                            f"frontend para auto-retry "
+                            f"session={response_state.get('our_session_id', '?')[:12]}"
+                        )
+
                     # Anthropic SDK 0.88.0+: stop_details estruturado para refusals
                     # ({"category": "cyber"|"bio"|None, "explanation": str|None}).
                     # Propaga ao frontend para distinguir refusals de safety reais

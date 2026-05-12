@@ -835,7 +835,7 @@ function clearTodoList() {
 // ============================================
 // ENVIO DE MENSAGEM
 // ============================================
-async function sendMessage(event) {
+async function sendMessage(event, { isAutoRetry = false } = {}) {
     if (event) event.preventDefault();
 
     const message = messageInput.value.trim();
@@ -847,7 +847,13 @@ async function sendMessage(event) {
     // Adiciona mensagem do usuário
     addMessage(message, 'user');
     _lastUserMessage = message;  // Auto-retry: guarda para possível retry
-    _autoRetryCount = 0;         // Reset retry counter para cada nova mensagem
+    // R-CLI-CRASH review (Issue 1, 2026-05-12): preservar _autoRetryCount em
+    // auto-retry — antes resetava sempre, defeating o cap _MAX_AUTO_RETRIES=1
+    // se backend emitir process_error OU recoverable_resume_failure repetido.
+    // Reset apenas em envios novos (usuario clicou submit / pressionou Enter).
+    if (!isAutoRetry) {
+        _autoRetryCount = 0;
+    }
     messageInput.value = '';
     sendBtn.disabled = true;
 
@@ -1567,7 +1573,10 @@ function processSSEEvent(eventType, data, state) {
                             lastMsg.remove();
                         }
                         messageInput.value = _lastUserMessage;
-                        sendMessage(null);
+                        // Issue 1 review (2026-05-12): isAutoRetry=true preserva
+                        // _autoRetryCount; senao seria resetado em sendMessage
+                        // e permitiria N retries em loop com process_error repetido.
+                        sendMessage(null, { isAutoRetry: true });
                     }, 2000);
                     break;
                 }
@@ -1623,7 +1632,9 @@ function processSSEEvent(eventType, data, state) {
                     finalizePendingTodos(true);
                     setTimeout(() => {
                         messageInput.value = _lastUserMessage;
-                        sendMessage(null);
+                        // Issue 1 review (2026-05-12): isAutoRetry=true preserva
+                        // _autoRetryCount para enforce cap _MAX_AUTO_RETRIES=1.
+                        sendMessage(null, { isAutoRetry: true });
                     }, 1500);
                     break;
                 }

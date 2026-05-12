@@ -381,15 +381,62 @@ def api_fork_session(session_id: str):
         from asgiref.sync import async_to_sync
 
         async def _do_fork():
-            from claude_agent_sdk import fork_session_via_store
+            from claude_agent_sdk import fork_session_via_store, project_key_for_directory
             from app.agente.sdk.session_store_adapter import get_or_create_session_store
 
             store = await get_or_create_session_store()
-            # project_key e derivado do cwd do SERVER (Render = /opt/render/project/src).
-            # Sem override — o cwd ja e o correto no ambiente de runtime.
+
+            # FIX 2026-05-12 (project_key mismatch):
+            # Descobrir project_key real onde a sessao foi gravada. Cenarios:
+            # (a) LOCAL com banco sync de prod: entries gravadas com
+            #     project_key='-opt-render-project-src' (CWD Render), mas cwd local
+            #     gera '-home-rafaelnascimento-projetos-frete-sistema' → fork falha.
+            # (b) PROD pos-incidente env vars 10/05: sessoes recentes podem nao ter
+            #     entries (batcher dropou frames por CLAUDE_CONFIG_DIR ausente) → 404.
+            cwd_pk = project_key_for_directory()
+            async with store._pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT DISTINCT project_key FROM claude_session_store "
+                    "WHERE session_id = $1 AND subpath = '' LIMIT 5",
+                    parent_sdk_sid,
+                )
+            found_pks = [r['project_key'] for r in rows]
+
+            if not found_pks:
+                # Sessao sem entries no store. Causas conhecidas:
+                # - sessao pre-Fase B (2026-04-21) sem migration
+                # - sessao recente afetada pelo bug do batcher (10/05-12/05)
+                raise FileNotFoundError(
+                    f"Session {parent_sdk_sid} has no entries in claude_session_store"
+                )
+
+            target_directory = None  # None = SDK usa CWD
+            if cwd_pk not in found_pks:
+                # Mapeamento reverso para envs conhecidos (project_key → directory)
+                KNOWN_PROJECT_KEYS = {
+                    '-opt-render-project-src': '/opt/render/project/src',
+                    '-home-rafaelnascimento-projetos-frete-sistema':
+                        '/home/rafaelnascimento/projetos/frete_sistema',
+                }
+                for pk in found_pks:
+                    if pk in KNOWN_PROJECT_KEYS:
+                        target_directory = KNOWN_PROJECT_KEYS[pk]
+                        logger.info(
+                            f"[FORK] sessao {parent_sdk_sid[:12]}... tem entries em "
+                            f"project_key='{pk}' (CWD='{cwd_pk}'). "
+                            f"Usando directory='{target_directory}'"
+                        )
+                        break
+                if target_directory is None:
+                    raise FileNotFoundError(
+                        f"Session {parent_sdk_sid} found in unknown project_key(s) "
+                        f"{found_pks} — no reverse mapping. CWD pk='{cwd_pk}'."
+                    )
+
             result = await fork_session_via_store(
                 store,
                 session_id=parent_sdk_sid,
+                directory=target_directory,
                 title=custom_title,
             )
             return result
@@ -489,6 +536,32 @@ def api_fork_session(session_id: str):
             'snapshot_messages': len(_snapshot_msgs),
         })
 
+    except FileNotFoundError as fnf_err:
+        # Sessao sem entries no claude_session_store. Causas conhecidas:
+        # (a) sessao antiga pre-Fase B sem migration aplicada
+        # (b) sessoes recentes (10/05+) afetadas pelo bug do batcher
+        #     (CLAUDE_CONFIG_DIR ausente apos incidente env vars do Render)
+        logger.warning(f"[FORK] Sessao sem historico no store: {fnf_err}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': (
+                'Sessao sem historico armazenado para forkar. '
+                'Pode ser uma sessao antiga (pre-migracao) OU recente (10/05+) '
+                'afetada pelo bug do batcher em correcao. Tente forkar uma sessao mais recente '
+                'apos a normalizacao.'
+            ),
+        }), 404
+    except ValueError as val_err:
+        # Issue 2 review (2026-05-12): NAO retornar str(val_err) — SDK pode levantar
+        # ValueError com paths/internal state em mensagem. Espelha politica do 500
+        # handler (review R6.4 pattern). Detalhes ficam em log.
+        logger.warning(f"[FORK] Erro de validacao: {val_err}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': 'Parametros invalidos para fork. Ver logs para detalhes.',
+        }), 400
     except Exception as e:
         logger.error(f"[FORK] Erro ao forkar sessao {session_id}: {e}", exc_info=True)
         db.session.rollback()
