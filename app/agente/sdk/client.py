@@ -1755,6 +1755,16 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro MCP teams_card: {e}")
 
+        # Artifact (bundle.html via skill gerando-artifact — 2026-05-12)
+        try:
+            from ..tools.artifact_tool import artifact_server
+            if _register_mcp("artifact", artifact_server):
+                logger.info("[AGENT_CLIENT] MCP 'artifact' registrada (1 operação)")
+        except ImportError:
+            logger.debug("[AGENT_CLIENT] MCP artifact não disponível")
+        except Exception as e:
+            logger.warning(f"[AGENT_CLIENT] Erro MCP artifact: {e}")
+
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
             f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "

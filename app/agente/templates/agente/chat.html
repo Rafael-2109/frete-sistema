@@ -6,7 +6,8 @@
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <!-- DESIGN-001: Agent Theme (Deep Ocean) - Carrega ANTES do chat.css -->
 <link rel="stylesheet" href="{{ url_for('static', filename='agente/css/agent-theme.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='agente/css/chat.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='agente/css/chat.css') }}?v=20260512d">
+<link rel="stylesheet" href="{{ url_for('static', filename='agente/css/artifact.css') }}?v=20260512d">
 <!-- FEAT-023: Highlight.js para syntax highlighting -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
 {% endblock %}
@@ -83,6 +84,17 @@
                     <div class="control-tooltip">
                         <strong><i class="fas fa-brain"></i> Memorias</strong>
                         <p>Veja o que a IA aprendeu sobre voce e resumos de sessoes anteriores.</p>
+                    </div>
+                </div>
+
+                <!-- Artifacts 2026-05-12: drawer com galeria de artifacts gerados -->
+                <div class="header-control has-tooltip">
+                    <button class="btn-artifacts" onclick="openArtifactsDrawer()" title="Meus artifacts" aria-label="Abrir galeria de artifacts">
+                        <i class="fas fa-th-large" aria-hidden="true"></i>
+                    </button>
+                    <div class="control-tooltip">
+                        <strong><i class="fas fa-th-large"></i> Artifacts</strong>
+                        <p>Visualizacoes interativas geradas pelo agente. Persistem indefinidamente.</p>
                     </div>
                 </div>
 
@@ -622,7 +634,7 @@
 <!-- FEAT-023: Markdown Avançado - Bibliotecas -->
 <script src="https://cdn.jsdelivr.net/npm/marked@13.0.0/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
-<script src="{{ url_for('static', filename='agente/js/chat.js') }}"></script>
+<script src="{{ url_for('static', filename='agente/js/chat.js') }}?v=20260512d"></script>
 
 <!-- DESIGN-001: Theme Management + FIX P3.1: Preferences Persistence -->
 <script>
@@ -1000,5 +1012,54 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Sessao F #21: inline <style> e <script> SPRINT-4 migrados para chat.css e chat.js -->
 <!-- Estilos: drop-overlay, voice, favorites → app/static/agente/css/chat.css -->
 <!-- JS: voice input, export DOM, favorites → app/static/agente/js/chat.js -->
+
+<!-- Artifacts Drawer (2026-05-12) — galeria de artifacts persistentes -->
+<div id="artifacts-drawer-backdrop" class="artifacts-drawer-backdrop" style="display: none;" onclick="closeArtifactsDrawer()"></div>
+<aside id="artifacts-drawer" class="artifacts-drawer" style="display: none;" role="dialog" aria-label="Galeria de artifacts">
+  <div class="artifacts-drawer-header">
+    <h3 class="artifacts-drawer-title">
+      <i class="fas fa-th-large" aria-hidden="true"></i> Meus Artifacts
+    </h3>
+    <button type="button" class="btn-close-modal" onclick="closeArtifactsDrawer()" aria-label="Fechar">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="artifacts-drawer-body">
+    <div id="artifacts-list" class="artifacts-list">
+      <div class="artifacts-empty">Carregando...</div>
+    </div>
+  </div>
+</aside>
+
+<!-- Artifact Modal (2026-05-12) — renderiza bundle.html em iframe sandboxed -->
+<div id="artifact-modal" class="artifact-modal" style="display: none;" role="dialog" aria-label="Visualizacao de artifact">
+  <div class="artifact-modal-backdrop" onclick="closeArtifactModal()"></div>
+  <div class="artifact-modal-content">
+    <div class="artifact-modal-header">
+      <div class="artifact-modal-title-wrap">
+        <h3 id="artifact-modal-title" class="artifact-modal-title">Visualizacao</h3>
+        <span id="artifact-modal-subtitle" class="artifact-modal-subtitle"></span>
+      </div>
+      <div class="artifact-modal-actions">
+        <a id="artifact-modal-open-new" href="#" target="_blank" rel="noopener noreferrer" class="btn-artifact-action" title="Abrir em nova aba">
+          ↗
+        </a>
+        <button type="button" class="btn-close-modal" onclick="closeArtifactModal()" aria-label="Fechar">
+          ✕
+        </button>
+      </div>
+    </div>
+    <div class="artifact-modal-body">
+      <iframe
+        id="artifact-modal-iframe"
+        src="about:blank"
+        sandbox="allow-scripts allow-forms"
+        referrerpolicy="no-referrer"
+        loading="lazy"
+        title="Artifact"
+      ></iframe>
+    </div>
+  </div>
+</div>
 
 {% endblock %}

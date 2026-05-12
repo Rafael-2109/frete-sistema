@@ -23,6 +23,7 @@
 | **Routing de skills** | [ROUTING_SKILLS.md](ROUTING_SKILLS.md) |
 | **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
 | **S3 storage (14+ modulos, todos os folders e triggers)** | [S3_STORAGE.md](S3_STORAGE.md) |
+| Artifacts no Agente Web (skill gerando-artifact, modal, worker) | `.claude/skills/gerando-artifact/SKILL.md` + `app/agente/CLAUDE.md` (secao Artifacts) |
 | **Confiabilidade de subagentes** | [SUBAGENT_RELIABILITY.md](SUBAGENT_RELIABILITY.md) |
 | **Manual para criar/editar subagents** | [AGENT_DESIGN_GUIDE.md](AGENT_DESIGN_GUIDE.md) |
 | **Blocos reusaveis (pre-mortem, self-critique, output format)** | [AGENT_TEMPLATES.md](AGENT_TEMPLATES.md) |

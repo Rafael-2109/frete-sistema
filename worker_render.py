@@ -140,7 +140,7 @@ def run_single_worker(config, burst=False):
 @click.option('--workers', default=2, help='Número de workers paralelos')
 @click.option('--verbose', is_flag=True, help='Modo verbose com mais logs')
 @click.option('--burst', is_flag=True, help='Executa jobs pendentes e para')
-@click.option('--queues', default='high,hora_nfe,hora_backfill,agent_validation,atacadao,odoo_lancamento,impostos,recebimento,default', help='Filas a processar')
+@click.option('--queues', default='high,hora_nfe,artifacts,atacadao,odoo_lancamento,impostos,recebimento,hora_backfill,agent_validation,default', help='Filas a processar')
 def run_worker(workers, verbose, burst, queues):
     """
     Executa o worker otimizado para o Render
@@ -181,27 +181,63 @@ def run_worker(workers, verbose, burst, queues):
 
             from multiprocessing import Process
 
-            # Fila exclusiva: apenas 1 worker processa impostos (evita concorrencia no Odoo)
+            # ============================================================
+            # 3 perfis de worker (refator 2026-05-12)
+            # ============================================================
+            # FILAS_PESADAS: consomem Odoo (update_taxes, criar moves) ou RAM
+            # (jobs longos). Tendem a 100% CPU + crescer RAM.
+            #   - impostos: Atualizar Impostos no Odoo (pesadissimo)
+            #   - odoo_lancamento: lancamento de frete/despesas (acessa Odoo)
+            #   - recebimento: pipeline Odoo + Playwright
+            #   - hora_backfill: jobs longos (ate 2h)
+            #
+            # FILA_EXCLUSIVA: apenas 1 worker processa (serializa contention Odoo).
+            #
+            # PERFIS:
+            #   - Worker 0 = LIGHT-RESERVED: pega so filas LEVES.
+            #     Sempre disponivel para hora_nfe (operador interativo) e
+            #     artifacts (usuario aguardando no chat web 30-60s).
+            #     NUNCA pega pesadas mesmo se as outras filas estao vazias.
+            #
+            #   - Worker 1 = FULL (apenas com workers>=2): pega TUDO,
+            #     incluindo impostos. Unico que processa fila exclusiva.
+            #
+            #   - Worker 2+ = GENERAL (apenas com workers>=3): pega tudo
+            #     exceto impostos. Absorve carga pesada nao-exclusiva.
+            #
+            # Resultado: max 2 workers em pesadas; worker 0 SEMPRE livre.
+            # ============================================================
             FILA_EXCLUSIVA = 'impostos'
+            FILAS_PESADAS = {'impostos', 'odoo_lancamento', 'recebimento', 'hora_backfill'}
+
+            queues_light = [q for q in queues_obj if q.name not in FILAS_PESADAS]
+            queues_full = queues_obj  # todas
+            queues_sem_impostos = [q for q in queues_obj if q.name != FILA_EXCLUSIVA]
 
             processes = []
             for i in range(workers):
                 if i == 0:
-                    # Worker 1: todas as filas (incluindo impostos)
-                    config_i = {**worker_config, 'queues': queues_obj}
+                    # Worker 0: LIGHT-RESERVED (sempre livre p/ hora_nfe + artifacts)
+                    config_i = {**worker_config, 'queues': queues_light}
+                    perfil = 'LIGHT-RESERVED'
+                elif i == 1:
+                    # Worker 1: FULL (unico com impostos)
+                    config_i = {**worker_config, 'queues': queues_full}
+                    perfil = 'FULL (com impostos)'
                 else:
-                    # Workers 2+: todas as filas EXCETO impostos
-                    config_i = {
-                        **worker_config,
-                        'queues': [q for q in queues_obj if q.name != FILA_EXCLUSIVA],
-                    }
+                    # Workers 2+: GENERAL (sem impostos)
+                    config_i = {**worker_config, 'queues': queues_sem_impostos}
+                    perfil = 'GENERAL (sem impostos)'
 
                 p = Process(target=run_single_worker, args=(config_i, burst))
                 p.start()
                 processes.append(p)
 
                 filas_worker = [q.name for q in config_i['queues']]
-                logger.info(f"   Worker {i+1} iniciado (PID: {p.pid}) — filas: {filas_worker}")
+                logger.info(
+                    f"   Worker {i+1} [{perfil}] iniciado (PID: {p.pid}) — "
+                    f"filas: {filas_worker}"
+                )
 
             # Aguardar todos terminarem
             for p in processes:

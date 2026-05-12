@@ -1584,3 +1584,98 @@ class AgentSessionCost(db.Model):
             'by_tool': by_tool,
             'by_user': by_user,
         }
+
+
+# =========================================================================
+# AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact
+# Build async via worker RQ (queue 'artifacts'). Bundle no S3.
+# Migration: scripts/migrations/2026_05_12_agente_artifacts.{py,sql}
+# =========================================================================
+
+class AgenteArtifact(db.Model):
+    """
+    Artifact (bundle.html auto-contido) gerado pelo agente via skill
+    `gerando-artifact`. Build assincrono via worker RQ (queue 'artifacts').
+
+    Lifecycle:
+        queued -> building -> ready|error
+        expired setado por job de cleanup quando expires_at passou.
+
+    Sem FK explicita para usuarios/agent_sessions — preserva historico
+    apos cascade delete (mesmo padrao de AgentSessionCost).
+    """
+    __tablename__ = 'agente_artifacts'
+
+    STATUS_QUEUED = 'queued'
+    STATUS_BUILDING = 'building'
+    STATUS_READY = 'ready'
+    STATUS_ERROR = 'error'
+    STATUS_EXPIRED = 'expired'
+    STATUS_VALIDOS = {STATUS_QUEUED, STATUS_BUILDING, STATUS_READY, STATUS_ERROR, STATUS_EXPIRED}
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    # UUID4 stable — referenciado externamente via token assinado (itsdangerous)
+    uuid = db.Column(db.String(36), nullable=False, unique=True, index=True)
+
+    # Ownership
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    session_id = db.Column(db.String(255), nullable=True, index=True)
+
+    # Metadados
+    titulo = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default=STATUS_QUEUED)
+
+    # Storage S3 (preenchido quando status=ready)
+    s3_key = db.Column(db.Text, nullable=True)
+    bundle_size_bytes = db.Column(db.BigInteger, nullable=True)
+
+    # Build failure
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Spec do artifact (componentes, dependencies). Usado pelo worker
+    # para reconstruir projeto e buildar. JSONB explicito (DDL cria JSONB;
+    # alinhar tipo Python para detectar tentativas futuras de mutate-in-place
+    # sem flag_modified — ver R7).
+    from sqlalchemy.dialects.postgresql import JSONB as _PG_JSONB
+    spec_json = db.Column(_PG_JSONB, nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: agora_utc_naive())
+    expires_at = db.Column(db.DateTime, nullable=False)
+    build_started_at = db.Column(db.DateTime, nullable=True)
+    build_completed_at = db.Column(db.DateTime, nullable=True)
+
+    def __repr__(self):
+        return f'<AgenteArtifact {self.uuid[:8]}... status={self.status} user={self.user_id}>'
+
+    def is_ready(self) -> bool:
+        return self.status == self.STATUS_READY
+
+    def is_expired(self) -> bool:
+        return (
+            self.status == self.STATUS_EXPIRED
+            or (self.expires_at and self.expires_at < agora_utc_naive())
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Converte para dict (API response). NAO inclui spec_json (pesado)."""
+        return {
+            'uuid': self.uuid,
+            'titulo': self.titulo,
+            'status': self.status,
+            'bundle_size_bytes': self.bundle_size_bytes,
+            'error_message': self.error_message,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'build_started_at': (
+                self.build_started_at.isoformat() if self.build_started_at else None
+            ),
+            'build_completed_at': (
+                self.build_completed_at.isoformat() if self.build_completed_at else None
+            ),
+            'build_duration_seconds': (
+                (self.build_completed_at - self.build_started_at).total_seconds()
+                if self.build_started_at and self.build_completed_at else None
+            ),
+        }

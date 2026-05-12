@@ -111,6 +111,22 @@ def _python_type_to_json_schema(py_type: Any) -> dict[str, Any]:
     if py_type is bool:
         return {"type": "boolean"}
 
+    # dict / typing.Dict → JSON Schema 'object' (FIX 2026-05-12)
+    # ANTES caia no default 'string' e gerava bug onde tool declarava input
+    # como string mas validacao interna esperava dict (artifact_tool, teams_card_tool).
+    if py_type is dict:
+        return {"type": "object"}
+    if origin is dict:
+        return {"type": "object"}
+
+    # list (sem args parametrizados)
+    if py_type is list:
+        return {"type": "array"}
+
+    # Any → vazio (qualquer tipo aceito)
+    if py_type is Any:
+        return {}
+
     # Fallback: dict com JSON Schema completo ja pronto
     if isinstance(py_type, dict) and "type" in py_type:
         return py_type

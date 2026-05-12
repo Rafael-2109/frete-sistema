@@ -246,6 +246,14 @@ echo "Remessa VORTX 16: auditoria conversor/validador externo..."
 python scripts/migrations/2026_05_12_add_remessa_vortx_conversao.py \
     || echo "⚠️ Migration remessa_vortx_conversao falhou, continuando deploy..."
 
+# 17. Agente Artifacts (2026-05-12): tabela agente_artifacts.
+# Artifacts (bundle.html auto-contido) gerados pela skill gerando-artifact.
+# Build async via worker RQ dedicado (worker_artifacts.py, fila 'artifacts').
+# Idempotente (CREATE TABLE IF NOT EXISTS + indices + check constraint).
+echo "Agente Artifacts 17: tabela agente_artifacts..."
+python scripts/migrations/2026_05_12_agente_artifacts.py \
+    || echo "⚠️ Migration agente_artifacts falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

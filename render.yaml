@@ -15,8 +15,13 @@ services:
       - key: WEB_CONCURRENCY
         value: 1
     autoDeploy: true
-    
+
   # Configuração adicional de banco se necessário
   databases:
     - name: sistema-fretes-db
       plan: starter
+
+# NOTE 2026-05-12: Builds de artifacts (skill gerando-artifact) reusam o worker
+# existente (sistema-fretes-worker-render). A fila 'artifacts' tem prioridade
+# media-alta (logo apos hora_nfe). Node.js 18+ instalado via NVM no
+# start_worker_render.sh.

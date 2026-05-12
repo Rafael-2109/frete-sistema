@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}{{ artifact.titulo }} — Artifact{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h4 mb-1">{{ artifact.titulo }}</h1>
+      <small class="text-muted">
+        Artifact gerado em {{ artifact.created_at.strftime('%d/%m/%Y %H:%M') if artifact.created_at else '-' }}
+        — uuid <code>{{ artifact.uuid[:8] }}</code>
+      </small>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="/agente/chat" class="btn btn-outline-secondary btn-sm">
+        Voltar ao chat
+      </a>
+    </div>
+  </div>
+
+  {% if bundle_url %}
+    <div class="card shadow-sm">
+      <div class="card-body p-0" style="overflow: hidden;">
+        <iframe
+          src="{{ bundle_url }}"
+          sandbox="allow-scripts allow-forms"
+          referrerpolicy="no-referrer"
+          loading="lazy"
+          title="{{ artifact.titulo }}"
+          style="width: 100%; height: 85vh; border: 0; display: block;"
+        ></iframe>
+      </div>
+    </div>
+  {% else %}
+    {# Status nao-ready: building, queued, error, expired #}
+    <div class="card shadow-sm">
+      <div class="card-body text-center py-5">
+        {% if artifact.status == 'building' %}
+          <div class="spinner-border text-primary mb-3" role="status">
+            <span class="visually-hidden">Construindo...</span>
+          </div>
+          <h3 class="h5">Construindo artifact...</h3>
+          <p class="text-muted">Isso pode levar 30-60 segundos.</p>
+          <p class="text-muted">
+            <small>Esta pagina recarrega automaticamente quando pronto.</small>
+          </p>
+        {% elif artifact.status == 'queued' %}
+          <div class="spinner-border text-secondary mb-3" role="status">
+            <span class="visually-hidden">Na fila...</span>
+          </div>
+          <h3 class="h5">Aguardando build...</h3>
+          <p class="text-muted">Build inicia em alguns segundos.</p>
+        {% elif artifact.status == 'error' %}
+          <div class="text-danger mb-3" style="font-size: 3rem;">!</div>
+          <h3 class="h5 text-danger">Falha na construcao do artifact</h3>
+          {% if artifact.error_message %}
+            <pre class="text-start mt-3 p-3 bg-light rounded" style="max-height: 200px; overflow: auto;">{{ artifact.error_message }}</pre>
+          {% endif %}
+        {% elif artifact.status == 'expired' %}
+          <div class="text-muted mb-3" style="font-size: 3rem;">⏰</div>
+          <h3 class="h5">Artifact expirado</h3>
+          <p class="text-muted">
+            Artifacts ficam disponiveis por 7 dias apos criacao.
+          </p>
+        {% else %}
+          <h3 class="h5">Status: {{ artifact.status }}</h3>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Auto-reload se ainda esta construindo #}
+    {% if artifact.status in ['queued', 'building'] %}
+      <script>
+        (function () {
+          var pollUrl = '/agente/artifact/{{ token }}/status';
+          var lastStatus = '{{ artifact.status }}';
+          function poll() {
+            fetch(pollUrl, { credentials: 'same-origin' })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (data.status && data.status !== lastStatus) {
+                  // Status mudou — recarrega pagina para mostrar bundle ou erro
+                  window.location.reload();
+                }
+              })
+              .catch(function () { /* silencia erros de polling */ });
+          }
+          setInterval(poll, 3000);
+        })();
+      </script>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

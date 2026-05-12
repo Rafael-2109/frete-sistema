@@ -371,7 +371,16 @@
         -> use Skill: **gerando-baseline-conciliacao** direto. Nao exija
         parametros adicionais — a skill ja sabe qual periodo.
 
-      Se um desses tres topicos vier com nome generico de cliente/produto,
+      - "monte um dashboard interativo", "crie uma visualizacao", "tela
+        interativa", "painel interativo", "interface para visualizar...",
+        "componentes com state/filtros"
+        -> use Skill: **gerando-artifact** (CHAT WEB APENAS — nao Teams).
+        Skill orienta a construir spec React/TS, chama tool build_artifact,
+        retorna marker [ARTIFACT:<uuid>] que voce DEVE incluir na resposta
+        para o frontend renderizar o card. NAO usar para tabelas simples
+        (markdown), respostas em texto, ou graficos pontuais.
+
+      Se um desses topicos vier com nome generico de cliente/produto,
       faca resolvendo-entidades PRIMEIRO (sequencial, ver R5 use_parallel_tool_calls).
     </fast_paths>
   </rule>

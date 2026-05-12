@@ -1343,6 +1343,12 @@ function processSSEEvent(eventType, data, state) {
                 state.text += data.content || '';
                 if (state.bubbleElement) {
                     state.bubbleElement.innerHTML = formatMessage(state.text);
+                    // FIX 2026-05-12: enhanceArtifactCards no streaming.
+                    // formatMessage substitui [ARTIFACT:<token>] por card HTML,
+                    // mas sem chamar enhance, o polling nunca inicia → "Carregando" eterno.
+                    if (typeof enhanceArtifactCards === 'function') {
+                        enhanceArtifactCards(state.bubbleElement);
+                    }
                     scrollToBottom();
                 }
                 hideTyping();
@@ -1604,6 +1610,24 @@ function processSSEEvent(eventType, data, state) {
                 if (data.session_id) sessionId = data.session_id;
                 updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
 
+                // R-CLI-CRASH (2026-05-12): resume falhou em sessao restaurada
+                // (probe ao session_store deu miss OU CLI crashou <5s). Backend
+                // (chat.py done_payload) propagou recoverable_resume_failure=true.
+                // Auto-retry transparente: reenviar a mesma msg do usuario sem resume.
+                // _lastUserMessage e _autoRetryCount ja existem (auto-retry process_error).
+                if (data.recoverable_resume_failure && _lastUserMessage && _autoRetryCount < _MAX_AUTO_RETRIES) {
+                    _autoRetryCount++;
+                    console.log(`[SSE] recoverable_resume_failure detectado, auto-retry #${_autoRetryCount}`);
+                    // Finaliza items pendentes ANTES de retry (UI limpa)
+                    finalizePendingTimelineItems('success');
+                    finalizePendingTodos(true);
+                    setTimeout(() => {
+                        messageInput.value = _lastUserMessage;
+                        sendMessage(null);
+                    }, 1500);
+                    break;
+                }
+
                 // FEAT-030: Finaliza items pendentes (timeline e todos)
                 finalizePendingTimelineItems('success');
                 finalizePendingTodos(true);  // Marca como completed
@@ -1811,6 +1835,9 @@ function createMessageElement(text, role) {
             });
         });
     }
+
+    // Inicializar artifact cards apos render (polling de status)
+    enhanceArtifactCards(div);
 
     return div;
 }
@@ -2353,6 +2380,8 @@ if (typeof marked !== 'undefined') {
 
 // Formata mensagem com Markdown avançado
 function formatMessage(text) {
+    // Pre-processar markers de artifact ANTES do markdown
+    text = preProcessArtifactMarkers(text);
     // Se marked.js está disponível, usa para renderização completa
     if (typeof marked !== 'undefined') {
         try {
@@ -5064,3 +5093,422 @@ function syncMobileSetting(type, value) {
         }
     }
 }
+
+// =====================================================================
+// ARTIFACTS (2026-05-12) — cards inline + modal + polling status
+// =====================================================================
+// Marker formato: [ARTIFACT:<token>] onde token e itsdangerous signed.
+// Token base64url + '.' + ('-' '_' tambem aceitos).
+const ARTIFACT_MARKER_RE = /\[ARTIFACT:([A-Za-z0-9_.\-]+)\]/g;
+// Map: token -> {intervalId, lastData}
+// lastData persiste apos polling parar — quando innerHTML eh reescrito durante
+// streaming, enhanceArtifactCards re-aplica lastData no card recriado.
+const _artifactPollers = new Map();
+const ARTIFACT_POLL_INTERVAL_MS = 3000;
+const ARTIFACT_POLL_MAX_MS = 5 * 60 * 1000;  // 5 min teto absoluto
+
+function _findArtifactCard(token) {
+    // Busca card ATUAL no DOM. Streaming reescreve innerHTML — referencia
+    // antiga vira fantasma. Sempre re-query antes de atualizar.
+    return document.querySelector(
+        '.artifact-card[data-artifact-token="' + encodeURIComponent(token) + '"]'
+    );
+}
+
+function preProcessArtifactMarkers(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text.replace(ARTIFACT_MARKER_RE, (match, token) => {
+        // Guard: tokens muito curtos sao suspeitos
+        if (!token || token.length < 20) return match;
+        // Card placeholder — JS popula apos render
+        const safeToken = encodeURIComponent(token);
+        return (
+            '<div class="artifact-card" data-artifact-token="' + safeToken + '" data-status="loading">'
+              + '<div class="artifact-card-header">'
+                + '<span class="artifact-card-icon">⧉</span>'
+                + '<div class="artifact-card-meta">'
+                  + '<span class="artifact-card-title">Artifact</span>'
+                  + '<span class="artifact-card-subtitle">Carregando...</span>'
+                + '</div>'
+                + '<button type="button" class="btn-artifact-open" disabled>Abrir</button>'
+              + '</div>'
+              + '<div class="artifact-card-body">'
+                + '<div class="artifact-card-progress">'
+                  + '<div class="artifact-spinner"></div>'
+                  + '<span class="artifact-card-msg">Aguardando build...</span>'
+                + '</div>'
+              + '</div>'
+            + '</div>'
+        );
+    });
+}
+
+function enhanceArtifactCards(container) {
+    if (!container || !container.querySelectorAll) return;
+    const cards = container.querySelectorAll('.artifact-card[data-artifact-token]');
+    cards.forEach(function(card) {
+        const token = decodeURIComponent(card.dataset.artifactToken || '');
+        if (!token) return;
+
+        const existing = _artifactPollers.get(token);
+        if (existing && existing.lastData) {
+            // Streaming recriou card — re-aplica ultimo status conhecido
+            updateArtifactCard(card, existing.lastData, token);
+            // Se ja terminou (ready/error/expired), nao reinicia poller
+            const s = existing.lastData.status;
+            if (s === 'ready' || s === 'error' || s === 'expired' || s === 'timeout') {
+                return;
+            }
+        }
+        if (!existing || !existing.intervalId) {
+            // Sem poller ativo: iniciar
+            startArtifactPolling(token);
+        }
+    });
+}
+
+function startArtifactPolling(token) {
+    const startedAt = Date.now();
+    const statusUrl = '/agente/artifact/' + encodeURIComponent(token) + '/status';
+
+    function tick() {
+        // Timeout absoluto
+        if (Date.now() - startedAt > ARTIFACT_POLL_MAX_MS) {
+            const card = _findArtifactCard(token);
+            const data = {status: 'timeout', error_message: 'Timeout aguardando build (>5 min)'};
+            if (card) updateArtifactCard(card, data, token);
+            _persistAndStop(token, data);
+            return;
+        }
+
+        fetch(statusUrl, { credentials: 'same-origin' })
+            .then(function(r) {
+                if (r.status === 404) throw new Error('Artifact nao encontrado ou expirado');
+                if (r.status === 403) throw new Error('Sem permissao para este artifact');
+                return r.json();
+            })
+            .then(function(data) {
+                // Persistir ultima resposta — sobrevive re-render do streaming
+                const entry = _artifactPollers.get(token);
+                if (entry) entry.lastData = data;
+
+                // Sempre re-query o card (streaming pode ter recriado)
+                const card = _findArtifactCard(token);
+                if (card) updateArtifactCard(card, data, token);
+
+                if (data.status === 'ready' || data.status === 'error' || data.status === 'expired') {
+                    _persistAndStop(token, data);
+                }
+            })
+            .catch(function(err) {
+                console.warn('[ARTIFACT] poll erro:', err);
+                const card = _findArtifactCard(token);
+                const data = {status: 'error', error_message: String(err.message || err)};
+                if (card) updateArtifactCard(card, data, token);
+                _persistAndStop(token, data);
+            });
+    }
+
+    tick();
+    const intervalId = setInterval(tick, ARTIFACT_POLL_INTERVAL_MS);
+    _artifactPollers.set(token, {intervalId: intervalId, lastData: null});
+}
+
+function _persistAndStop(token, data) {
+    // Para o setInterval mas MANTEM lastData no Map para que
+    // enhanceArtifactCards re-aplique se o card for recriado pelo streaming.
+    const entry = _artifactPollers.get(token);
+    if (entry && entry.intervalId) clearInterval(entry.intervalId);
+    _artifactPollers.set(token, {intervalId: null, lastData: data});
+}
+
+function stopArtifactPolling(token) {
+    // Backward-compat (chamado de outros lugares). Apenas para interval.
+    const entry = _artifactPollers.get(token);
+    if (entry && entry.intervalId) clearInterval(entry.intervalId);
+    if (entry) entry.intervalId = null;
+}
+
+function updateArtifactCard(cardElement, data, token) {
+    if (!cardElement) return;
+    const status = (data && data.status) || 'unknown';
+    cardElement.dataset.status = status;
+
+    const titleEl = cardElement.querySelector('.artifact-card-title');
+    const subtitleEl = cardElement.querySelector('.artifact-card-subtitle');
+    const msgEl = cardElement.querySelector('.artifact-card-msg');
+    const spinnerEl = cardElement.querySelector('.artifact-spinner');
+    const openBtn = cardElement.querySelector('.btn-artifact-open');
+
+    if (titleEl && data && data.titulo) {
+        titleEl.textContent = data.titulo;
+    }
+
+    let subtitleText = '';
+    let msgText = '';
+    let canOpen = false;
+    let spinnerVisible = true;
+    let extraClass = '';
+
+    switch (status) {
+        case 'queued':
+            subtitleText = 'Na fila...';
+            msgText = 'Build inicia em alguns segundos.';
+            break;
+        case 'building':
+            subtitleText = 'Construindo...';
+            msgText = 'Compilando bundle.html (30-60s)...';
+            break;
+        case 'ready':
+            subtitleText = 'Pronto para visualizar';
+            msgText = data.bundle_size_bytes
+                ? 'Bundle: ' + formatBytes(data.bundle_size_bytes)
+                : 'Bundle pronto.';
+            canOpen = true;
+            spinnerVisible = false;
+            extraClass = 'artifact-card-ready';
+            break;
+        case 'error':
+            subtitleText = 'Falha no build';
+            msgText = (data && data.error_message) || 'Erro desconhecido.';
+            spinnerVisible = false;
+            extraClass = 'artifact-card-error';
+            break;
+        case 'expired':
+            subtitleText = 'Expirado';
+            msgText = 'Artifact ficou indisponivel apos 7 dias.';
+            spinnerVisible = false;
+            extraClass = 'artifact-card-expired';
+            break;
+        case 'timeout':
+            subtitleText = 'Timeout';
+            msgText = (data && data.error_message) || 'Tempo esgotado.';
+            spinnerVisible = false;
+            extraClass = 'artifact-card-error';
+            break;
+        default:
+            subtitleText = status;
+            msgText = '...';
+    }
+
+    if (subtitleEl) subtitleEl.textContent = subtitleText;
+    if (msgEl) msgEl.textContent = msgText;
+    if (spinnerEl) spinnerEl.style.display = spinnerVisible ? '' : 'none';
+
+    cardElement.classList.remove('artifact-card-ready', 'artifact-card-error', 'artifact-card-expired');
+    if (extraClass) cardElement.classList.add(extraClass);
+
+    if (openBtn) {
+        openBtn.disabled = !canOpen;
+        if (canOpen) {
+            const titulo = (data && data.titulo) || 'Artifact';
+            openBtn.onclick = function(e) {
+                e.preventDefault();
+                openArtifactModal(token, titulo);
+            };
+        }
+    }
+}
+
+function openArtifactModal(token, titulo) {
+    const modal = document.getElementById('artifact-modal');
+    const iframe = document.getElementById('artifact-modal-iframe');
+    const titleEl = document.getElementById('artifact-modal-title');
+    const subtitleEl = document.getElementById('artifact-modal-subtitle');
+    const openNewEl = document.getElementById('artifact-modal-open-new');
+
+    if (!modal || !iframe) {
+        console.error('[ARTIFACT] modal nao encontrado no DOM');
+        return;
+    }
+
+    const bundleUrl = '/agente/artifact/' + encodeURIComponent(token) + '/bundle';
+    const wrapperUrl = '/agente/artifact/' + encodeURIComponent(token);
+
+    if (titleEl) titleEl.textContent = titulo || 'Artifact';
+    if (subtitleEl) subtitleEl.textContent = '';
+    if (openNewEl) openNewEl.href = wrapperUrl;
+
+    iframe.src = bundleUrl;
+    modal.style.display = '';
+    document.body.classList.add('artifact-modal-open');
+
+    // ESC handler
+    if (!modal._escHandler) {
+        modal._escHandler = function(ev) {
+            if (ev.key === 'Escape') closeArtifactModal();
+        };
+        document.addEventListener('keydown', modal._escHandler);
+    }
+}
+
+function closeArtifactModal() {
+    const modal = document.getElementById('artifact-modal');
+    const iframe = document.getElementById('artifact-modal-iframe');
+    if (!modal) return;
+
+    modal.style.display = 'none';
+    document.body.classList.remove('artifact-modal-open');
+
+    // Reset iframe para liberar memoria e parar scripts
+    if (iframe) iframe.src = 'about:blank';
+
+    if (modal._escHandler) {
+        document.removeEventListener('keydown', modal._escHandler);
+        modal._escHandler = null;
+    }
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes < 0) return '?';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+}
+
+// Exportar para uso inline (onclick no HTML)
+window.closeArtifactModal = closeArtifactModal;
+window.openArtifactModal = openArtifactModal;
+
+
+// =====================================================================
+// ARTIFACTS DRAWER (2026-05-12 v2) — galeria de artifacts persistentes
+// =====================================================================
+// Lista artifacts do user (sem TTL — persistem indefinidamente).
+// Clique no item -> regera token via /api/artifact/by-uuid/<uuid>/url ->
+// abre modal existente.
+
+function openArtifactsDrawer() {
+    const drawer = document.getElementById('artifacts-drawer');
+    const backdrop = document.getElementById('artifacts-drawer-backdrop');
+    if (!drawer) {
+        console.error('[ARTIFACTS] drawer nao encontrado no DOM');
+        return;
+    }
+    drawer.style.display = '';
+    if (backdrop) backdrop.style.display = '';
+    document.body.classList.add('artifacts-drawer-open');
+
+    // ESC handler
+    if (!drawer._escHandler) {
+        drawer._escHandler = function(ev) {
+            if (ev.key === 'Escape') closeArtifactsDrawer();
+        };
+        document.addEventListener('keydown', drawer._escHandler);
+    }
+
+    loadArtifactsList();
+}
+
+function closeArtifactsDrawer() {
+    const drawer = document.getElementById('artifacts-drawer');
+    const backdrop = document.getElementById('artifacts-drawer-backdrop');
+    if (!drawer) return;
+    drawer.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+    document.body.classList.remove('artifacts-drawer-open');
+    if (drawer._escHandler) {
+        document.removeEventListener('keydown', drawer._escHandler);
+        drawer._escHandler = null;
+    }
+}
+
+function loadArtifactsList() {
+    const list = document.getElementById('artifacts-list');
+    if (!list) return;
+    list.innerHTML = '<div class="artifacts-empty">Carregando...</div>';
+
+    fetch('/agente/api/artifacts?limit=100', { credentials: 'same-origin' })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            renderArtifactsList(data.artifacts || []);
+        })
+        .catch(function(err) {
+            console.error('[ARTIFACTS] load erro:', err);
+            list.innerHTML = '<div class="artifacts-empty artifacts-empty-error">'
+                + 'Falha ao carregar: ' + String(err.message || err)
+                + '</div>';
+        });
+}
+
+function renderArtifactsList(artifacts) {
+    const list = document.getElementById('artifacts-list');
+    if (!list) return;
+
+    if (!artifacts.length) {
+        list.innerHTML = '<div class="artifacts-empty">'
+            + 'Nenhum artifact ainda. Peca ao agente: "monte um dashboard interativo de..."'
+            + '</div>';
+        return;
+    }
+
+    const items = artifacts.map(function(a) {
+        const date = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR') : '-';
+        const sizeKB = a.bundle_size_bytes
+            ? (a.bundle_size_bytes / 1024).toFixed(0) + ' KB'
+            : '';
+        const statusLabel = {
+            'queued': 'Na fila',
+            'building': 'Construindo',
+            'ready': 'Pronto',
+            'error': 'Erro',
+            'expired': 'Expirado',
+        }[a.status] || a.status;
+
+        const isClickable = a.status === 'ready';
+        const safeUuid = encodeURIComponent(a.uuid);
+        const safeTitulo = (a.titulo || 'Artifact').replace(/[<>&"]/g, function(c) {
+            return {'<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;'}[c];
+        });
+
+        return (
+            '<button type="button" class="artifacts-list-item artifacts-status-' + a.status + '"'
+            + (isClickable
+                ? ' onclick="openArtifactByUuid(\'' + safeUuid + '\')"'
+                : ' disabled')
+            + '>'
+              + '<div class="artifacts-item-icon"><i class="fas fa-th-large"></i></div>'
+              + '<div class="artifacts-item-meta">'
+                + '<div class="artifacts-item-title">' + safeTitulo + '</div>'
+                + '<div class="artifacts-item-sub">'
+                  + '<span class="artifacts-item-status">' + statusLabel + '</span>'
+                  + (sizeKB ? ' · ' + sizeKB : '')
+                  + ' · ' + date
+                + '</div>'
+              + '</div>'
+            + '</button>'
+        );
+    }).join('');
+
+    list.innerHTML = items;
+}
+
+function openArtifactByUuid(uuidEncoded) {
+    const uuid = decodeURIComponent(uuidEncoded);
+    fetch('/agente/api/artifact/by-uuid/' + uuid + '/url', { credentials: 'same-origin' })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            if (data.status !== 'ready' || !data.token) {
+                alert('Artifact nao esta pronto (status: ' + data.status + ')');
+                return;
+            }
+            // Reusa modal existente: fecha drawer + abre modal
+            closeArtifactsDrawer();
+            openArtifactModal(data.token, data.titulo);
+        })
+        .catch(function(err) {
+            console.error('[ARTIFACTS] open erro:', err);
+            alert('Falha ao abrir artifact: ' + String(err.message || err));
+        });
+}
+
+window.openArtifactsDrawer = openArtifactsDrawer;
+window.closeArtifactsDrawer = closeArtifactsDrawer;
+window.openArtifactByUuid = openArtifactByUuid;
+

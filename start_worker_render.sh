@@ -198,16 +198,70 @@ fi
 
 echo ""
 
+# Node.js 18+ via NVM (lazy install) — necessario para fila 'artifacts'
+# (build de bundle.html via npm + parcel pela skill gerando-artifact).
+# Se Node ja esta no PATH (ex: dev local), pula.
+NODE_REQUIRED_MAJOR=18
+if command -v node &> /dev/null; then
+    NODE_VERSION_MAJOR=$(node -v | sed 's/v//' | cut -d'.' -f1)
+    echo "🟢 Node ja instalado: $(node -v)"
+    if [ "$NODE_VERSION_MAJOR" -lt "$NODE_REQUIRED_MAJOR" ]; then
+        echo "⚠️  Node $NODE_VERSION_MAJOR < $NODE_REQUIRED_MAJOR — instalando 20 via NVM..."
+        INSTALL_NODE=1
+    fi
+else
+    echo "📦 Node nao encontrado — instalando via NVM (necessario para fila 'artifacts')..."
+    INSTALL_NODE=1
+fi
+
+if [ "$INSTALL_NODE" = "1" ]; then
+    export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+        echo "📥 Baixando NVM..."
+        curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    fi
+    # shellcheck source=/dev/null
+    . "$NVM_DIR/nvm.sh"
+    nvm install 20
+    nvm use 20
+    nvm alias default 20
+    echo "🟢 Node instalado: $(node -v) / npm $(npm -v)"
+fi
+
+# CRITICAL: exportar PATH do Node para subprocess via `exec python worker_render.py`.
+# Sem isso, RQ jobs chamando `node`/`npm` via subprocess.run() recebem PATH herdado
+# do gunicorn (sem Node) e falham com "command not found". Detectar bin atual do
+# Node e prepender ao PATH antes do exec.
+NODE_BIN_PATH=$(dirname "$(command -v node 2>/dev/null)" 2>/dev/null || true)
+if [ -n "$NODE_BIN_PATH" ]; then
+    export PATH="$NODE_BIN_PATH:$PATH"
+    echo "🔧 Node bin exportado para PATH: $NODE_BIN_PATH"
+else
+    echo "⚠️  Node bin nao localizado — builds de artifacts podem falhar"
+fi
+
+echo ""
+
 # Configurar número de workers
-WORKER_COUNT=${WORKER_CONCURRENCY:-2}
+# NOTA 2026-05-12: 3 perfis isolados (ver worker_render.py:184+):
+#   Worker 0 [LIGHT-RESERVED] — so high/hora_nfe/artifacts/atacadao/default/agent_validation.
+#     NUNCA pega pesadas → sempre disponivel para HORA interativo + artifacts.
+#   Worker 1 [FULL] — tudo, INCLUSIVE impostos (fila exclusiva).
+#   Worker 2 [GENERAL] — tudo SEM impostos (absorve outras pesadas).
+# Pesadas (impostos/odoo_lancamento/recebimento/hora_backfill) consomem Odoo+RAM
+# e ficam capadas em max 2 workers. WORKER_CONCURRENCY<3 perde o LIGHT-RESERVED.
+WORKER_COUNT=${WORKER_CONCURRENCY:-3}
 echo "👷 Configuração do Worker:"
 echo "   Workers paralelos: $WORKER_COUNT"
 echo "   Timeout padrão: 30 minutos"
-echo "   Worker 1: todas as filas (impostos exclusivo)"
-echo "   Worker 2+: filas gerais (sem impostos)"
-echo "   Filas (ordem = prioridade): high, hora_nfe, atacadao, odoo_lancamento, impostos, recebimento, hora_backfill, default"
+echo "   Perfis:"
+echo "     - Worker 0 [LIGHT-RESERVED]: high, hora_nfe, artifacts, atacadao, default, agent_validation"
+echo "     - Worker 1 [FULL]: todas as filas (impostos exclusivo)"
+echo "     - Worker 2+ [GENERAL]: todas exceto impostos"
+echo "   Filas (ordem = prioridade): high, hora_nfe, artifacts, atacadao, odoo_lancamento, impostos, recebimento, hora_backfill, default"
 echo "   ↑ hora_nfe alta prioridade: operador aguarda emissao NFe interativamente"
-echo "   ↓ hora_backfill baixa prioridade: jobs longos (ate 2h), nao bloqueiam emissoes"
+echo "   ↑ artifacts media-alta: usuario aguarda build no chat web (30-60s)"
+echo "   ↓ hora_backfill / odoo_lancamento / impostos / recebimento: PESADAS — bloqueadas no Worker 0"
 echo ""
 
 # Iniciar worker
@@ -220,7 +274,7 @@ echo ""
 echo "⚡ Usando worker_render.py otimizado para evitar importações circulares"
 exec python worker_render.py \
     --workers $WORKER_COUNT \
-    --queues high,hora_nfe,atacadao,odoo_lancamento,impostos,recebimento,hora_backfill,default \
+    --queues high,hora_nfe,artifacts,atacadao,odoo_lancamento,impostos,recebimento,hora_backfill,default \
     --verbose
 
 

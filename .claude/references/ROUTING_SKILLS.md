@@ -166,10 +166,11 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 ### Sentry — monitoramento de erros (1)
 `consultando-sentry` (MCP-first, 20 tools, Seer AI)
 
-### Utilitarios compartilhados (10)
+### Utilitarios compartilhados (11)
 `exportando-arquivos`, `lendo-arquivos`, `lendo-documentos`, `consultando-sql`,
 `cotando-frete`, `visao-produto`, `resolvendo-entidades`, `gerindo-expedicao`,
-`monitorando-entregas`, `diagnosticando-banco`
+`monitorando-entregas`, `diagnosticando-banco`,
+`gerando-artifact` (chat web APENAS — bundle.html via React+Tailwind+Parcel, renderizado em modal sandboxed)
 
 ### Skills Lojas HORA (5) — APENAS no Agente Lojas HORA (escopo isolado por `<loja_context>`)
 `acompanhando-pedido` (pedidos HORA->Motochefe pendentes/faturados),

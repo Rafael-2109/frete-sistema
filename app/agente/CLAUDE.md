@@ -427,6 +427,71 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 ---
 
+## Artifacts (2026-05-12)
+
+Bundle.html auto-contido renderizado em modal no chat web (NAO no Teams).
+Build assincrono via fila RQ `artifacts` (reutiliza `worker_render` —
+prioridade logo apos `hora_nfe`).
+
+### Componentes
+
+| Camada | Arquivo |
+|---|---|
+| Modelo | `app/agente/models.py` (AgenteArtifact) |
+| Migration | `scripts/migrations/2026_05_12_agente_artifacts.{py,sql}` |
+| Service | `app/agente/services/artifact_service.py` |
+| Worker job | `app/agente/workers/artifact_worker.py` (build_artifact_job) |
+| Worker entry | Reusa `worker_render.py` (prod) e `worker_atacadao.py` (dev) — fila `artifacts` adicionada em `start_worker_render.sh` |
+| Endpoints | `app/agente/routes/artifacts.py` (5 rotas: 3 publicas + 2 API: list + by-uuid/url) |
+| Tool MCP | `app/agente/tools/artifact_tool.py` (build_artifact, Enhanced v1.0) |
+| Skill | `.claude/skills/gerando-artifact/` (SKILL.md + scripts) |
+| Frontend modal | `app/agente/templates/agente/chat.html` (#artifact-modal + #artifacts-drawer) |
+| Frontend JS | `app/static/agente/js/chat.js` (secao ARTIFACTS no final) |
+| Frontend CSS | `app/static/agente/css/artifact.css` |
+
+### Fluxo
+
+```
+1. Usuario: "monte um dashboard de X"
+2. Skill `gerando-artifact` orienta agente a preparar spec
+3. Agente chama tool build_artifact({titulo, spec={components, dependencies?}})
+4. Tool cria AgenteArtifact (status=queued) + enfileira RQ
+5. Tool retorna {token, render_url, status_url, marker: "[ARTIFACT:<token>]"}
+6. Agente responde texto + marker
+7. Frontend (chat.js): regex detecta marker, renderiza card inline + polling
+8. Worker: init-artifact.sh + escreve componentes + bundle-artifact.sh
+9. Worker: upload S3 (agente/artifacts/{user_id}/{uuid}.html), status=ready
+10. Frontend: card vira "Abrir visualizacao" → clique → modal com iframe sandboxed
+```
+
+### Seguranca
+
+- Token HMAC via `itsdangerous.URLSafeTimedSerializer` (TTL 7d)
+- iframe `sandbox="allow-scripts allow-forms allow-popups"` (sem `allow-same-origin`)
+- CSP restritivo no /bundle endpoint
+- Status/page exigem login + ownership (current_user.id == artifact.user_id)
+- /bundle endpoint sem login (necessario para iframe) — auth e via token assinado
+- Rate limit: 5 artifacts/user/hora (Redis)
+- Limite 5MB bundle final + 200KB por arquivo componente
+- Spec validada antes de salvar (path traversal bloqueado)
+
+### Gotchas
+
+- **Apenas chat web**: tool retorna erro se invocada fora de sessao web (Teams ignora marker)
+- **V1 sem shadcn/ui**: scripts criam apenas Vite+React+TS+Tailwind. shadcn/ui em V2.
+- **Node requerido**: `start_worker_render.sh` faz NVM install lazy de Node 20 se nao detectado (necessario para `npm` + Parcel no build_artifact_job). Tambem prepende `node` bin ao `PATH` exportado antes do `exec python worker_render.py` — sem isso subprocess do worker recebe PATH sem Node. Defesa em profundidade: `artifact_worker._ensure_node_in_path()` re-resolve NVM dir antes de cada subprocess.
+- **Fila prioritaria**: `artifacts` esta entre `hora_nfe` (alta) e `atacadao` em `start_worker_render.sh` — usuario aguarda no chat (30-60s). NAO mover para baixa prioridade.
+- **Persistencia indefinida (2026-05-12 v2)**: artifacts NAO expiram automaticamente. `expires_at` default = now + 100 anos (sem TTL efetivo). Bundle S3 mantido para sempre — sem cleanup job. Token assinado tem TTL 1 ano; usuario pode regerar via `/agente/api/artifact/by-uuid/<uuid>/url` (login + ownership). Drawer no chat (`#artifacts-drawer`) lista galeria do usuario via `/agente/api/artifacts` — clica e abre modal com bundle.
+- **Anti-starvation por perfis de worker** (`worker_render.py:184+` refatorado 2026-05-12): 3 workers paralelos com responsabilidades isoladas:
+  - **Worker 0 [LIGHT-RESERVED]**: pega apenas filas leves (`high, hora_nfe, artifacts, atacadao, default, agent_validation`). NUNCA pega `impostos`/`odoo_lancamento`/`recebimento`/`hora_backfill`. Garante que `hora_nfe` (operador interativo) e `artifacts` (usuario chat web) sempre tem capacidade.
+  - **Worker 1 [FULL]**: pega TUDO, incluindo `impostos` (fila exclusiva). Unico worker que processa `impostos` — serializa contention no Odoo.
+  - **Worker 2 [GENERAL]**: pega tudo exceto `impostos`. Absorve carga pesada nao-exclusiva.
+  - Pesadas (`impostos`, `odoo_lancamento`, `recebimento`, `hora_backfill`) ficam capadas em max 2 workers; usuario interativo nunca espera build/Odoo terminar.
+- **Rate limit atomico**: `artifact_service.check_rate_limit` usa pipeline MULTI/EXEC (SET NX+EX + INCR) para evitar race condition INCR+EXPIRE que poderia deixar contador permanente (sem TTL).
+- **S3 obrigatorio**: bundle.html grande demais para DB. USE_S3=true obrigatorio em prod.
+
+---
+
 ## Memoria Compartilhada (PRD v2.1)
 
 ### Conceito
