@@ -212,32 +212,18 @@
   ],
   "indices": [
     {
-      "name": "uq_pessoal_transacoes_pluggy_tx",
-      "columns": [
-        "pluggy_transaction_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "idx_pessoal_transacoes_data",
-      "columns": [
-        "data"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_origem",
-      "columns": [
-        "origem_import"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_pessoal_transacoes_conta",
       "columns": [
         "conta_id"
       ],
       "unique": false
+    },
+    {
+      "name": "uq_pessoal_transacoes_pluggy_tx",
+      "columns": [
+        "pluggy_transaction_id"
+      ],
+      "unique": true
     },
     {
       "name": "idx_pessoal_transacoes_categoria",
@@ -271,6 +257,20 @@
       "name": "idx_pessoal_transacoes_excluir",
       "columns": [
         "excluir_relatorio"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_data",
+      "columns": [
+        "data"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_origem",
+      "columns": [
+        "origem_import"
       ],
       "unique": false
     }

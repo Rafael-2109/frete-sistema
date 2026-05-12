@@ -83,6 +83,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_modelo_pendente_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_modelo_pendente_status",
       "columns": [
         "status"
@@ -93,13 +100,6 @@
       "name": "ix_hora_modelo_pendente_resolvido_modelo_id",
       "columns": [
         "resolvido_modelo_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_modelo_pendente_origem",
-      "columns": [
-        "origem"
       ],
       "unique": false
     }

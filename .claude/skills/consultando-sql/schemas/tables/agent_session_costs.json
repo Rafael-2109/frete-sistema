@@ -73,16 +73,16 @@
       "unique": false
     },
     {
-      "name": "ix_agent_session_costs_user_id",
+      "name": "ix_agent_session_costs_session_id",
       "columns": [
-        "user_id"
+        "session_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_session_costs_session_id",
+      "name": "ix_agent_session_costs_user_id",
       "columns": [
-        "session_id"
+        "user_id"
       ],
       "unique": false
     }
