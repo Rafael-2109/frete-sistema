@@ -23,9 +23,15 @@ CREATE TABLE IF NOT EXISTS assai_pedido_venda_loja (
 CREATE INDEX IF NOT EXISTS ix_assai_pedido_venda_loja_pedido ON assai_pedido_venda_loja(pedido_id);
 CREATE INDEX IF NOT EXISTS ix_assai_pedido_venda_loja_loja ON assai_pedido_venda_loja(loja_id);
 
--- Backfill: criar 1 cabeçalho por (pedido_id, loja_id) distinto
-INSERT INTO assai_pedido_venda_loja (pedido_id, loja_id)
-SELECT DISTINCT pedido_id, loja_id FROM assai_pedido_venda_item
+-- Backfill: criar 1 cabeçalho por (pedido_id, loja_id) distinto.
+-- INSERT EXPLICITO em TODOS os NOT NULL (agendamento_confirmado, criado_em)
+-- para evitar dependencia do DEFAULT no DB — tabela pode ter sido criada via
+-- db.create_all() sem DEFAULT (incidente 2026-05-12).
+INSERT INTO assai_pedido_venda_loja
+    (pedido_id, loja_id, agendamento_confirmado, criado_em)
+SELECT DISTINCT
+    pedido_id, loja_id, FALSE, (NOW() AT TIME ZONE 'America/Sao_Paulo')
+FROM assai_pedido_venda_item
 ON CONFLICT (pedido_id, loja_id) DO NOTHING;
 
 -- Adicionar coluna pedido_loja_id em items (idempotente)
