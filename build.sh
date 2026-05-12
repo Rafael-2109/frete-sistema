@@ -199,6 +199,38 @@ echo "Pedido Compras: backfill cnpj_fornecedor NULL via Odoo..."
 python scripts/migrations/backfill_cnpj_pedido_compras_via_odoo.py --aplicar --max-pos 500 \
     || echo "⚠️ Backfill cnpj pedido_compras falhou, continuando deploy..."
 
+# 15. Motos Assai (2026-05-12): integracao com fluxo Nacom de pedidos (lista_pedidos).
+# Adiciona cabecalho pedido x loja com 4 campos de agendamento, override em
+# AssaiSeparacao e tabela placeholder de qtd planejada por modelo. Ajusta UNIQUE
+# para permitir N separacoes FECHADAS por (pedido, loja) — fluxo de carregamentos
+# sucessivos. Ordem importa: 10 antes de 11/12 (nao depende, mas legibilidade).
+echo "Motos Assai 10: AssaiPedidoVendaLoja (cabecalho 4 campos)..."
+python scripts/migrations/motos_assai_10_pedido_venda_loja.py \
+    || echo "⚠️ Migration motos_assai_10 falhou, continuando deploy..."
+
+echo "Motos Assai 11: 4 campos override em assai_separacao..."
+python scripts/migrations/motos_assai_11_separacao_4campos.py \
+    || echo "⚠️ Migration motos_assai_11 falhou, continuando deploy..."
+
+echo "Motos Assai 12: assai_separacao_saldo_modelo + ajuste UNIQUE..."
+python scripts/migrations/motos_assai_12_separacao_saldo_modelo.py \
+    || echo "⚠️ Migration motos_assai_12 falhou, continuando deploy..."
+
+# 15a. Motos Assai 13 (2026-05-12): drop UNIQUE em_separacao.
+# Regra de negocio: separacoes = veiculos; N veiculos podem carregar
+# paralelamente do mesmo (pedido, loja). Concorrencia de chassi protegida
+# via lock pessimista em AssaiMoto + validacao status.
+echo "Motos Assai 13: drop UNIQUE em_separacao..."
+python scripts/migrations/motos_assai_13_drop_unique_em_separacao.py \
+    || echo "⚠️ Migration motos_assai_13 falhou, continuando deploy..."
+
+# 15b. Motos Assai 14 (2026-05-12 — code review fix): chassi_assai em `separacao` Nacom.
+# Bug pre-existente: UNIQUE em (lote, cod_produto) bloqueava 2 chassis do mesmo
+# modelo no mesmo lote ASSAI-SEP-*. Corrige granularidade para 1 linha por chassi.
+echo "Motos Assai 14: chassi_assai em separacao + ajuste UNIQUE..."
+python scripts/migrations/motos_assai_14_chassi_assai_em_separacao.py \
+    || echo "⚠️ Migration motos_assai_14 falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

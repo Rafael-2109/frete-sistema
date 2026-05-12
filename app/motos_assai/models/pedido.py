@@ -32,10 +32,54 @@ class AssaiPedidoVenda(db.Model):
 
     itens = db.relationship('AssaiPedidoVendaItem', backref='pedido',
                             cascade='all, delete-orphan', lazy='selectin')
+    lojas = db.relationship('AssaiPedidoVendaLoja', backref='pedido',
+                            cascade='all, delete-orphan', lazy='selectin')
     criado_por = db.relationship('Usuario', lazy='joined')
+
+    @property
+    def numero_pedido(self):
+        """Alias retrocompativel para self.numero — codigo legado em mirror_service usa numero_pedido."""
+        return self.numero
 
     def __repr__(self):
         return f'<AssaiPedidoVenda {self.numero} {self.status}>'
+
+
+class AssaiPedidoVendaLoja(db.Model):
+    """Cabecalho por (pedido, loja). Contem os 4 campos de agendamento que
+    propagam-se para todos os itens (loja x modelo) da mesma loja no pedido.
+
+    Migration 10 (2026-05-12).
+    """
+    __tablename__ = 'assai_pedido_venda_loja'
+
+    id = db.Column(db.Integer, primary_key=True)
+    pedido_id = db.Column(db.Integer, db.ForeignKey('assai_pedido_venda.id', ondelete='CASCADE'),
+                          nullable=False, index=True)
+    loja_id = db.Column(db.Integer, db.ForeignKey('assai_loja.id'),
+                        nullable=False, index=True)
+    expedicao = db.Column(db.Date)
+    agendamento = db.Column(db.Date)
+    protocolo = db.Column(db.String(50))
+    agendamento_confirmado = db.Column(db.Boolean, default=False, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime)
+
+    __table_args__ = (
+        db.UniqueConstraint('pedido_id', 'loja_id',
+                            name='uq_assai_pedido_venda_loja_pedido_loja'),
+    )
+
+    loja = db.relationship('AssaiLoja', lazy='joined')
+    # passive_deletes=True (H7): confia no ON DELETE CASCADE do SQL. Sem isso,
+    # SQLAlchemy emite UPDATE SET pedido_loja_id=NULL antes do cascade DB
+    # disparar — viola NOT NULL constraint.
+    itens = db.relationship('AssaiPedidoVendaItem', backref='pedido_loja',
+                            lazy='selectin', passive_deletes=True,
+                            primaryjoin='AssaiPedidoVendaLoja.id == AssaiPedidoVendaItem.pedido_loja_id')
+
+    def __repr__(self):
+        return f'<AssaiPedidoVendaLoja pedido={self.pedido_id} loja={self.loja_id}>'
 
 
 class AssaiPedidoVendaItem(db.Model):
@@ -43,6 +87,9 @@ class AssaiPedidoVendaItem(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     pedido_id = db.Column(db.Integer, db.ForeignKey('assai_pedido_venda.id', ondelete='CASCADE'), nullable=False)
+    pedido_loja_id = db.Column(db.Integer,
+                               db.ForeignKey('assai_pedido_venda_loja.id', ondelete='CASCADE'),
+                               nullable=False, index=True)
     loja_id = db.Column(db.Integer, db.ForeignKey('assai_loja.id'), nullable=False, index=True)
     modelo_id = db.Column(db.Integer, db.ForeignKey('assai_modelo.id'), nullable=False, index=True)
     qtd_pedida = db.Column(db.Integer, nullable=False)

@@ -3,7 +3,8 @@ import pytest
 from decimal import Decimal
 from app import db
 from app.motos_assai.models import (
-    AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiLoja, AssaiModelo,
+    AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
+    AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao, AssaiSeparacaoItem,
     PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_EM_PRODUCAO,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_CANCELADA,
@@ -30,8 +31,10 @@ def _setup(app, admin):
     p = AssaiPedidoVenda(numero=f'TST-SEP-{uid}', status=PEDIDO_STATUS_EM_PRODUCAO,
                          criado_por_id=admin.id)
     db.session.add(p); db.session.flush()
+    pvl = AssaiPedidoVendaLoja(pedido_id=p.id, loja_id=loja.id)
+    db.session.add(pvl); db.session.flush()
     db.session.add(AssaiPedidoVendaItem(
-        pedido_id=p.id, loja_id=loja.id, modelo_id=modelo_dot.id,
+        pedido_id=p.id, pedido_loja_id=pvl.id, loja_id=loja.id, modelo_id=modelo_dot.id,
         qtd_pedida=2, valor_unitario=Decimal('6900'), valor_total=Decimal('13800'),
     ))
     db.session.flush()

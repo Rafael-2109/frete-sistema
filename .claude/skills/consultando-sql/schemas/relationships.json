@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 394,
+  "total_relationships": 399,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -106,6 +106,12 @@
     },
     {
       "from_table": "assai_pedido_venda_item",
+      "from_column": "pedido_loja_id",
+      "to_table": "assai_pedido_venda_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_item",
       "from_column": "loja_id",
       "to_table": "assai_loja",
       "to_column": "id"
@@ -114,6 +120,18 @@
       "from_table": "assai_pedido_venda_item",
       "from_column": "modelo_id",
       "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_loja",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_venda_loja",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
       "to_column": "id"
     },
     {
@@ -154,6 +172,18 @@
     },
     {
       "from_table": "assai_separacao_item",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_separacao_saldo_modelo",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_separacao_saldo_modelo",
       "from_column": "modelo_id",
       "to_table": "assai_modelo",
       "to_column": "id"

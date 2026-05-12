@@ -9,6 +9,14 @@
   </h2>
 </header>
 
+{% if planejado_por_modelo %}
+<div class="alert alert-info small mb-3">
+  <i class="fas fa-info-circle"></i>
+  Esta separação tem <strong>plano de qtd. por modelo</strong>. Escaneio livre — ao finalizar,
+  saldo não-separado será redistribuído (modal de decisão).
+</div>
+{% endif %}
+
 <h4>Saldo pendente por modelo</h4>
 <div class="row g-2 mb-3" id="saldos-container">
   <div id="barras-saldo" class="d-contents">
@@ -16,6 +24,12 @@
     <div class="col-md-4">
       <div class="card p-2">
         <strong>{{ s.codigo }} — {{ s.nome }}</strong>
+        {% set planejado = planejado_por_modelo.get(s.modelo_id, 0) %}
+        {% if planejado %}
+        <div class="small text-muted">
+          Plano desta sep: <strong>{{ planejado }}</strong> · pendente pedido (geral): {{ s.qtd_pendente }}
+        </div>
+        {% endif %}
         <div class="progress my-1" style="height: 20px;">
           <div class="progress-bar bg-success"
                style="width: {{ (s.qtd_separada * 100 / s.qtd_pedida) if s.qtd_pedida else 0 }}%">
@@ -160,6 +174,72 @@
   </div>
 </div>
 
+<!-- Modal: Caso A — saldo nao-separado, sem outras seps EM_SEPARACAO -->
+<div class="modal fade" id="modal-finalizar-caso-a" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Finalizar separação — saldo pendente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-triangle"></i>
+          Esta separação tem motos planejadas mas não escaneadas. Não há outra
+          separação ativa para receber o saldo. Escolha o que fazer:
+        </div>
+        <p><strong>Saldo não escaneado:</strong></p>
+        <ul id="caso-a-lista-saldo"></ul>
+      </div>
+      <div class="modal-footer flex-column">
+        <button type="button" class="btn btn-primary w-100" id="caso-a-btn-voltar-saldo">
+          <i class="fas fa-undo"></i> Voltar saldo ao pedido
+          <small class="d-block">Sep fecha com qtd real. Saldo volta a estar disponível para nova separação.</small>
+        </button>
+        <button type="button" class="btn btn-warning w-100 mt-2" id="caso-a-btn-manter-planejado">
+          <i class="fas fa-bookmark"></i> Manter saldo na separação (divergência)
+          <small class="d-block">Sep fecha com qtd planejada original. NF Q.P.A. ajustará as motos efetivas.</small>
+        </button>
+        <button type="button" class="btn btn-link w-100 mt-2" data-bs-dismiss="modal">
+          Cancelar e continuar escaneando
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Caso B — saldo nao-separado, N outras seps EM_SEPARACAO -->
+<div class="modal fade" id="modal-finalizar-caso-b" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Finalizar separação — alocar saldo entre veículos</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small">
+          <i class="fas fa-info-circle"></i>
+          Distribua o saldo não escaneado entre as outras separações ativas
+          ou de volta ao pedido. A soma por modelo deve igualar o saldo.
+        </div>
+        <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle">
+          <thead id="caso-b-thead"></thead>
+          <tbody id="caso-b-tbody"></tbody>
+        </table>
+        </div>
+        <div id="caso-b-erro" class="alert alert-warning mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="caso-b-btn-confirmar" disabled>
+          <i class="fas fa-check-double"></i> Confirmar alocação e finalizar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}" defer></script>
 <script>
 window.MOTOS_ASSAI_SEP = {
@@ -168,14 +248,15 @@ window.MOTOS_ASSAI_SEP = {
   separacaoId: {{ separacao.id }},
   endpoints: {
     registrar: '{{ url_for("motos_assai.separacao_registrar_chassi") }}',
-    desfazerBase: '{{ url_for("motos_assai.separacao_desfazer", item_id=0)|replace("/0", "/") }}',
+    desfazerBase: '{{ url_for("motos_assai.separacao_desfazer", item_id=999999999)|replace("/999999999", "/") }}',
     finalizar: '{{ url_for("motos_assai.separacao_finalizar", separacao_id=separacao.id) }}',
+    analisarFinalizacao: '{{ url_for("motos_assai.separacao_analisar_finalizacao", separacao_id=separacao.id) }}',
     cancelar: '{{ url_for("motos_assai.separacao_cancelar", separacao_id=separacao.id) }}',
   },
 };
 </script>
 <script src="{{ url_for('static', filename='motos_assai/js/chassi_autocomplete.js') }}" defer></script>
-<script src="{{ url_for('static', filename='motos_assai/js/separacao_chassi.js') }}"></script>
+<script src="{{ url_for('static', filename='motos_assai/js/separacao_chassi.js') }}" defer></script>
 {% endblock %}
 
 {% block onboarding_tours %}

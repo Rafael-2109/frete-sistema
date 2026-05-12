@@ -91,9 +91,9 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_integracoes_job_id",
+      "name": "ix_portal_integracoes_criado_em",
       "columns": [
-        "job_id"
+        "criado_em"
       ],
       "unique": false
     },
@@ -112,16 +112,16 @@
       "unique": true
     },
     {
-      "name": "ix_portal_integracoes_criado_em",
+      "name": "ix_portal_integracoes_status",
       "columns": [
-        "criado_em"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_integracoes_status",
+      "name": "ix_portal_integracoes_job_id",
       "columns": [
-        "status"
+        "job_id"
       ],
       "unique": false
     }

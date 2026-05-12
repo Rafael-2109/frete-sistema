@@ -53,39 +53,201 @@
 <div class="accordion" id="acc-lojas">
   {% for entry in por_loja %}
     {% set loja = entry.loja %}
+    {% set pvl = entry.pvl %}
+    {% set seps_ativas = entry.seps_ativas %}
     <div class="accordion-item">
       <h5 class="accordion-header">
         <button class="accordion-button collapsed" type="button"
                 data-bs-toggle="collapse" data-bs-target="#loja-{{ loja.id }}">
           Loja {{ loja.numero }} — {{ loja.nome }}
           <span class="ms-3 text-muted">{{ loja.cidade }}/{{ loja.uf }}</span>
+          {% if pvl and pvl.agendamento %}
+            <span class="badge bg-info ms-3">
+              Agend. {{ pvl.agendamento.strftime('%d/%m') }}
+              {% if pvl.agendamento_confirmado %}<i class="fas fa-check"></i>{% endif %}
+            </span>
+          {% endif %}
+          {% if seps_ativas %}
+            <span class="badge bg-warning ms-2">{{ seps_ativas|length }} sep(s) ativa(s)</span>
+          {% endif %}
         </button>
       </h5>
       <div id="loja-{{ loja.id }}" class="accordion-collapse collapse" data-bs-parent="#acc-lojas">
         <div class="accordion-body">
-          <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Modelo</th><th class="text-end">Qtd</th><th class="text-end">Valor unit.</th><th class="text-end">Total</th></tr></thead>
-            <tbody>
-              {% for it in entry['items'] %}
-              <tr>
-                <td>{{ it.modelo.codigo }} — {{ it.modelo.nome }}</td>
-                <td class="text-end">{{ it.item.qtd_pedida }}</td>
-                <td class="text-end">R$ {{ it.item.valor_unitario | numero_br(2) }}</td>
-                <td class="text-end">R$ {{ it.item.valor_total | numero_br(2) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+
+          <!-- Resumo agendamento + botao editar -->
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="small">
+              <strong>Agendamento:</strong>
+              {% if pvl %}
+                Exp: <code>{{ pvl.expedicao.strftime('%d/%m/%Y') if pvl.expedicao else '—' }}</code>
+                · Agend: <code>{{ pvl.agendamento.strftime('%d/%m/%Y') if pvl.agendamento else '—' }}</code>
+                · Protocolo: <code>{{ pvl.protocolo or '—' }}</code>
+                · {% if pvl.agendamento_confirmado %}
+                    <span class="badge bg-success">Confirmado</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Não confirmado</span>
+                  {% endif %}
+              {% else %}
+                <span class="text-muted">Nenhum agendamento cadastrado</span>
+              {% endif %}
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal-agendamento-loja-{{ loja.id }}">
+              <i class="fas fa-calendar-alt"></i> Editar agendamento
+            </button>
           </div>
-          {% if pedido.status in ['EM_PRODUCAO', 'SEPARANDO', 'FATURADO_PARCIAL'] %}
-          <div class="mt-2">
-            <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=pedido.id, loja_id=loja.id) }}"
-               class="btn btn-sm btn-primary">
-              <i class="fas fa-truck"></i> Iniciar / Continuar separação desta loja
-            </a>
+
+          <!-- Tabela de items com checkbox + qtd editavel para criar separacao -->
+          <form class="form-criar-separacao" data-pedido-id="{{ pedido.id }}" data-loja-id="{{ loja.id }}">
+            <div class="table-responsive">
+            <table class="table table-sm mb-0">
+              <thead>
+                <tr>
+                  <th style="width: 40px"></th>
+                  <th>Modelo</th>
+                  <th class="text-end">Pedido</th>
+                  <th class="text-end">Já separado</th>
+                  <th class="text-end">Pendente</th>
+                  <th class="text-end" style="width: 130px">Qtd a separar</th>
+                  <th class="text-end">Valor unit.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in entry['items'] %}
+                <tr>
+                  <td>
+                    {% if it.qtd_pendente > 0 %}
+                    <input type="checkbox" class="form-check-input chk-item"
+                           data-modelo-id="{{ it.item.modelo_id }}"
+                           data-qtd-pendente="{{ it.qtd_pendente }}">
+                    {% endif %}
+                  </td>
+                  <td>{{ it.modelo.codigo }} — {{ it.modelo.nome }}</td>
+                  <td class="text-end">{{ it.item.qtd_pedida }}</td>
+                  <td class="text-end">{{ it.qtd_separada }}</td>
+                  <td class="text-end">
+                    {% if it.qtd_pendente == 0 %}
+                      <span class="text-success">✓</span>
+                    {% else %}
+                      <strong>{{ it.qtd_pendente }}</strong>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    {% if it.qtd_pendente > 0 %}
+                    <input type="number" min="0" max="{{ it.qtd_pendente }}" value="0"
+                           class="form-control form-control-sm text-end input-qtd"
+                           data-modelo-id="{{ it.item.modelo_id }}"
+                           disabled>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="text-end">R$ {{ it.item.valor_unitario | numero_br(2) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            </div>
+
+            <div class="d-flex gap-2 mt-2">
+              <button type="submit" class="btn btn-sm btn-success btn-criar-sep" disabled>
+                <i class="fas fa-plus"></i> Criar separação com itens selecionados
+              </button>
+              {% if seps_ativas %}
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#seps-ativas-{{ loja.id }}">
+                <i class="fas fa-list"></i> Ver {{ seps_ativas|length }} separação(ões) ativa(s)
+              </button>
+              {% endif %}
+            </div>
+            <div class="alert mt-2 d-none msg-erro-criar-sep" role="alert"></div>
+          </form>
+
+          <!-- Lista de separacoes ativas -->
+          {% if seps_ativas %}
+          <div class="collapse mt-3" id="seps-ativas-{{ loja.id }}">
+            <h6>Separações desta loja</h6>
+            <table class="table table-sm">
+              <thead>
+                <tr><th>ID</th><th>Status</th><th>Iniciada</th><th>Ações</th></tr>
+              </thead>
+              <tbody>
+                {% for s in seps_ativas %}
+                <tr>
+                  <td>#{{ s.id }}</td>
+                  <td>
+                    <span class="badge bg-{% if s.status == 'EM_SEPARACAO' %}primary{% elif s.status == 'FECHADA' %}success{% elif s.status == 'FATURADA' %}info{% else %}secondary{% endif %}">
+                      {{ s.status }}
+                    </span>
+                  </td>
+                  <td class="small text-muted">{{ s.iniciada_em.strftime('%d/%m %H:%M') }}</td>
+                  <td>
+                    <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=pedido.id, loja_id=loja.id) }}?sep_id={{ s.id }}"
+                       class="btn btn-sm btn-outline-primary">
+                      <i class="fas fa-truck"></i> Abrir
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
           {% endif %}
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal agendamento da loja -->
+    <div class="modal fade" id="modal-agendamento-loja-{{ loja.id }}" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Agendamento — Loja {{ loja.numero }} {{ loja.nome }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form class="form-agendamento" data-pedido-id="{{ pedido.id }}" data-loja-id="{{ loja.id }}">
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">Expedição (data)</label>
+                <input type="date" class="form-control" name="expedicao"
+                       value="{{ pvl.expedicao.strftime('%Y-%m-%d') if pvl and pvl.expedicao else '' }}">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Agendamento (data)</label>
+                <input type="date" class="form-control" name="agendamento"
+                       value="{{ pvl.agendamento.strftime('%Y-%m-%d') if pvl and pvl.agendamento else '' }}">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Protocolo</label>
+                <input type="text" class="form-control" name="protocolo" maxlength="50"
+                       value="{{ pvl.protocolo if pvl else '' }}">
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="agendamento_confirmado"
+                       id="ag-conf-{{ loja.id }}"
+                       {% if pvl and pvl.agendamento_confirmado %}checked{% endif %}>
+                <label class="form-check-label" for="ag-conf-{{ loja.id }}">
+                  Agendamento confirmado
+                </label>
+              </div>
+              <div class="alert mt-2 d-none msg-erro-agendamento" role="alert"></div>
+              <div class="alert alert-info small mt-2 mb-0">
+                <i class="fas fa-info-circle"></i>
+                Estes 4 campos serão usados pela Separação como padrão.
+                A Separação pode sobrescrever individualmente, se necessário.
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Salvar
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -102,4 +264,131 @@
   </a>
   {% endif %}
 </div>
+
+<script>
+(function() {
+  // CSRF token (Flask-WTF) — opcional se nao usar CSRF em fetch
+  function getCsrf() {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+  }
+
+  // ===== Agendamento da loja =====
+  document.querySelectorAll('.form-agendamento').forEach(function(form) {
+    form.addEventListener('submit', function(ev) {
+      ev.preventDefault();
+      var pedidoId = form.dataset.pedidoId;
+      var lojaId = form.dataset.lojaId;
+      var fd = new FormData(form);
+      var body = {
+        expedicao: fd.get('expedicao') || '',
+        agendamento: fd.get('agendamento') || '',
+        protocolo: fd.get('protocolo') || '',
+        agendamento_confirmado: fd.get('agendamento_confirmado') === 'on',
+      };
+      var msgEl = form.querySelector('.msg-erro-agendamento');
+      msgEl.className = 'alert mt-2 d-none msg-erro-agendamento';
+
+      fetch('/motos-assai/pedidos/' + pedidoId + '/loja/' + lojaId + '/agendamento', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+        body: JSON.stringify(body),
+      }).then(function(r) {
+        return r.json().then(function(data) { return {ok: r.ok, data: data}; });
+      }).then(function(res) {
+        if (!res.ok || !res.data.ok) {
+          msgEl.textContent = res.data.erro || 'Erro ao salvar';
+          msgEl.className = 'alert alert-danger mt-2 msg-erro-agendamento';
+          return;
+        }
+        location.reload();
+      }).catch(function(err) {
+        msgEl.textContent = 'Erro de rede: ' + err.message;
+        msgEl.className = 'alert alert-danger mt-2 msg-erro-agendamento';
+      });
+    });
+  });
+
+  // ===== Checkbox + qtd para criar separacao =====
+  document.querySelectorAll('.form-criar-separacao').forEach(function(form) {
+    var checkboxes = form.querySelectorAll('.chk-item');
+    var inputs = form.querySelectorAll('.input-qtd');
+    var btnCriar = form.querySelector('.btn-criar-sep');
+    var msgEl = form.querySelector('.msg-erro-criar-sep');
+
+    function atualizarEstado() {
+      var algumComQtd = false;
+      checkboxes.forEach(function(chk) {
+        var modeloId = chk.dataset.modeloId;
+        var inp = form.querySelector('.input-qtd[data-modelo-id="' + modeloId + '"]');
+        if (!inp) return;
+        if (chk.checked) {
+          inp.disabled = false;
+          if (parseInt(inp.value, 10) <= 0) {
+            inp.value = chk.dataset.qtdPendente;  // pre-preenche com qtd_pendente
+          }
+          if (parseInt(inp.value, 10) > 0) algumComQtd = true;
+        } else {
+          inp.disabled = true;
+          inp.value = 0;
+        }
+      });
+      btnCriar.disabled = !algumComQtd;
+    }
+
+    checkboxes.forEach(function(chk) {
+      chk.addEventListener('change', atualizarEstado);
+    });
+    inputs.forEach(function(inp) {
+      inp.addEventListener('input', atualizarEstado);
+    });
+
+    form.addEventListener('submit', function(ev) {
+      ev.preventDefault();
+      var pedidoId = form.dataset.pedidoId;
+      var lojaId = form.dataset.lojaId;
+      var alocacoes = [];
+      checkboxes.forEach(function(chk) {
+        if (!chk.checked) return;
+        var modeloId = chk.dataset.modeloId;
+        var inp = form.querySelector('.input-qtd[data-modelo-id="' + modeloId + '"]');
+        if (!inp) return;
+        var qtd = parseInt(inp.value, 10);
+        if (qtd > 0) {
+          alocacoes.push({modelo_id: parseInt(modeloId, 10), qtd: qtd});
+        }
+      });
+      if (alocacoes.length === 0) {
+        msgEl.textContent = 'Selecione ao menos 1 modelo com qtd > 0';
+        msgEl.className = 'alert alert-warning mt-2 msg-erro-criar-sep';
+        return;
+      }
+      msgEl.className = 'alert mt-2 d-none msg-erro-criar-sep';
+      btnCriar.disabled = true;
+
+      fetch('/motos-assai/pedidos/' + pedidoId + '/loja/' + lojaId + '/separacao/criar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+        body: JSON.stringify({alocacoes: alocacoes}),
+      }).then(function(r) {
+        return r.json().then(function(data) { return {ok: r.ok, data: data}; });
+      }).then(function(res) {
+        if (!res.ok || !res.data.ok) {
+          msgEl.textContent = res.data.erro || 'Erro ao criar separação';
+          msgEl.className = 'alert alert-danger mt-2 msg-erro-criar-sep';
+          btnCriar.disabled = false;
+          return;
+        }
+        // Redirecionar para a tela de escaneio da nova separacao
+        var url = res.data.redirect + '?sep_id=' + res.data.separacao_id;
+        window.location.href = url;
+      }).catch(function(err) {
+        msgEl.textContent = 'Erro de rede: ' + err.message;
+        msgEl.className = 'alert alert-danger mt-2 msg-erro-criar-sep';
+        btnCriar.disabled = false;
+      });
+    });
+  });
+})();
+</script>
 {% endblock %}

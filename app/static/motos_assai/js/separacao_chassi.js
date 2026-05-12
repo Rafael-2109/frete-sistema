@@ -11,6 +11,18 @@
     return meta ? meta.content : '';
   }
 
+  // K9: escape HTML para prevenir XSS interno (admin pode cadastrar modelo
+  // com `<` no nome). Usar em TODAS interpolacoes que viram innerHTML.
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"'`/]/g, function(c) {
+      return {
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
+        "'": '&#39;', '`': '&#96;', '/': '&#x2F;',
+      }[c];
+    });
+  }
+
   function showAlerta(level, html) {
     alerta.className = `alert alert-${level} small`;
     alerta.innerHTML = html;
@@ -46,7 +58,10 @@
     const r = await fetch(cfg.endpoints.registrar, {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
-      body: JSON.stringify({pedido_id: cfg.pedidoId, loja_id: cfg.lojaId, chassi}),
+      body: JSON.stringify({
+        pedido_id: cfg.pedidoId, loja_id: cfg.lojaId, chassi,
+        separacao_id: cfg.separacaoId,  // Plano 5 — alvo explicito quando ha N seps ativas
+      }),
     });
     const data = await r.json();
     if (!data.ok) {
@@ -85,19 +100,211 @@
   });
 
   // ============ Finalizar separação — Bootstrap modal ============
-  document.getElementById('btn-finalizar')?.addEventListener('click', () => {
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-finalizar-sep')).show();
+  // Fluxo (Tasks #11/#12/#13 — 2026-05-12):
+  //   1. Click "Finalizar" -> chama analisarFinalizacao para ver cenario
+  //   2a. cenario=sem_saldo -> abre modal padrao (confirmacao simples)
+  //   2b. cenario=caso_a    -> abre modal-finalizar-caso-a (Voltar saldo / Manter)
+  //   2c. cenario=caso_b    -> abre modal-finalizar-caso-b (alocacao manual)
+  document.getElementById('btn-finalizar')?.addEventListener('click', async () => {
+    try {
+      const r = await fetch(cfg.endpoints.analisarFinalizacao, {
+        method: 'GET',
+        headers: {'X-CSRFToken': getCsrfToken()},
+      });
+      const data = await r.json();
+      if (!data.ok) {
+        showAlerta('danger', data.erro || 'Erro ao analisar finalizacao.');
+        return;
+      }
+      // H3: guardar saldo_version do GET para enviar no POST e detectar TOCTOU
+      window.__casoB_saldoVersion = data.saldo_version || null;
+      if (data.cenario === 'sem_saldo') {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-finalizar-sep')).show();
+        return;
+      }
+      if (data.cenario === 'caso_a') {
+        montarModalCasoA(data);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-finalizar-caso-a')).show();
+        return;
+      }
+      if (data.cenario === 'caso_b') {
+        montarModalCasoB(data);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-finalizar-caso-b')).show();
+        return;
+      }
+      showAlerta('danger', 'Cenario desconhecido: ' + data.cenario);
+    } catch (err) {
+      showAlerta('danger', 'Erro de rede: ' + err.message);
+    }
   });
 
-  document.getElementById('sep-btn-confirmar-finalizar')?.addEventListener('click', async () => {
-    bootstrap.Modal.getInstance(document.getElementById('modal-finalizar-sep'))?.hide();
+  async function postFinalizar(body) {
     const r = await fetch(cfg.endpoints.finalizar, {
       method: 'POST',
-      headers: {'X-CSRFToken': getCsrfToken()},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+      body: JSON.stringify(body || {}),
     });
     const data = await r.json();
-    if (data.ok) location.reload();
-    else showAlerta('danger', data.erro || 'Erro ao finalizar.');
+    if (r.ok && data.ok) {
+      location.reload();
+      return;
+    }
+    // H3: TOCTOU detectado — saldo mudou entre GET analisar e POST finalizar
+    if (r.status === 409 && data.requer_decisao) {
+      showAlerta('warning',
+        'O saldo mudou enquanto voce decidia (outro operador escaneou). '
+        + 'Re-abrindo modal com plano atualizado.');
+      // Re-renderiza modal apropriado
+      window.__casoB_saldoVersion = data.saldo_version || null;
+      // Fechar modais abertos
+      ['modal-finalizar-sep', 'modal-finalizar-caso-a', 'modal-finalizar-caso-b'].forEach(function(id) {
+        const inst = bootstrap.Modal.getInstance(document.getElementById(id));
+        if (inst) inst.hide();
+      });
+      setTimeout(function() {
+        if (data.cenario === 'caso_a') {
+          montarModalCasoA(data);
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-finalizar-caso-a')).show();
+        } else if (data.cenario === 'caso_b') {
+          montarModalCasoB(data);
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-finalizar-caso-b')).show();
+        }
+      }, 400);
+      return;
+    }
+    showAlerta('danger', data.erro || 'Erro ao finalizar.');
+  }
+
+  // Modal padrao (sem saldo) — comportamento original
+  document.getElementById('sep-btn-confirmar-finalizar')?.addEventListener('click', () => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-finalizar-sep'))?.hide();
+    postFinalizar({modo: 'auto'});
+  });
+
+  // ============ Caso A: 2 opcoes (voltar saldo / manter planejado) ============
+  function montarModalCasoA(data) {
+    const listaEl = document.getElementById('caso-a-lista-saldo');
+    if (!listaEl) return;
+    listaEl.innerHTML = '';
+    (data.modelos_info || []).forEach(function(m) {
+      const li = document.createElement('li');
+      li.innerHTML = '<strong>' + escapeHtml(m.codigo) + '</strong> — '
+                   + escapeHtml(m.nome) + ' · saldo: <strong>'
+                   + escapeHtml(m.qtd_nao_separada) + '</strong>';
+      listaEl.appendChild(li);
+    });
+  }
+
+  document.getElementById('caso-a-btn-voltar-saldo')?.addEventListener('click', () => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-finalizar-caso-a'))?.hide();
+    postFinalizar({modo: 'voltar_saldo'});
+  });
+
+  document.getElementById('caso-a-btn-manter-planejado')?.addEventListener('click', () => {
+    bootstrap.Modal.getInstance(document.getElementById('modal-finalizar-caso-a'))?.hide();
+    postFinalizar({modo: 'manter_planejado'});
+  });
+
+  // ============ Caso B: alocacao manual entre N seps ============
+  function montarModalCasoB(data) {
+    const tableBody = document.getElementById('caso-b-tbody');
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+    const thead = document.getElementById('caso-b-thead');
+    if (thead) {
+      // Header: modelo | qtd saldo | sep#1 | sep#2 | ... | voltar ao pedido
+      let html = '<tr><th>Modelo</th><th class="text-end">Saldo</th>';
+      (data.outras_seps || []).forEach(function(s) {
+        html += '<th class="text-end">Sep #' + escapeHtml(s.id)
+              + '<br><small class="text-muted">' + escapeHtml(s.iniciada_em || '') + '</small></th>';
+      });
+      html += '<th class="text-end">Voltar ao pedido</th></tr>';
+      thead.innerHTML = html;
+    }
+
+    (data.modelos_info || []).forEach(function(m) {
+      const tr = document.createElement('tr');
+      tr.dataset.modeloId = m.modelo_id;
+      tr.dataset.qtdSaldo = m.qtd_nao_separada;
+      const codSafe = escapeHtml(m.codigo);
+      const nomeSafe = escapeHtml(m.nome);
+      const qtdSafe = escapeHtml(m.qtd_nao_separada);
+      const modIdSafe = escapeHtml(m.modelo_id);
+      let html = '<td><strong>' + codSafe + '</strong> — ' + nomeSafe + '</td>'
+               + '<td class="text-end"><span class="badge bg-warning text-dark">' + qtdSafe + '</span></td>';
+      (data.outras_seps || []).forEach(function(s) {
+        const sepIdSafe = escapeHtml(s.id);
+        html += '<td><input type="number" min="0" max="' + qtdSafe + '" value="0"'
+             + ' class="form-control form-control-sm text-end caso-b-input"'
+             + ' data-modelo-id="' + modIdSafe + '" data-sep-destino="' + sepIdSafe + '"></td>';
+      });
+      // H5: coluna "voltar ao pedido" pre-fill 0 (operador escolhe explicitamente)
+      html += '<td><input type="number" min="0" max="' + qtdSafe + '" value="0"'
+           + ' class="form-control form-control-sm text-end caso-b-input"'
+           + ' data-modelo-id="' + modIdSafe + '" data-sep-destino="null"></td>';
+      tr.innerHTML = html;
+      tableBody.appendChild(tr);
+    });
+
+    // Validacao em tempo real
+    document.querySelectorAll('.caso-b-input').forEach(function(inp) {
+      inp.addEventListener('input', validarCasoB);
+    });
+    validarCasoB();
+  }
+
+  function validarCasoB() {
+    const erroEl = document.getElementById('caso-b-erro');
+    const btn = document.getElementById('caso-b-btn-confirmar');
+    let ok = true;
+    let msgs = [];
+    document.querySelectorAll('#caso-b-tbody tr').forEach(function(tr) {
+      const qtdSaldo = parseInt(tr.dataset.qtdSaldo, 10) || 0;
+      let soma = 0;
+      tr.querySelectorAll('.caso-b-input').forEach(function(inp) {
+        soma += parseInt(inp.value, 10) || 0;
+      });
+      const td = tr.querySelector('td:nth-child(2) .badge');
+      if (soma === qtdSaldo) {
+        if (td) { td.className = 'badge bg-success'; td.textContent = qtdSaldo + ' ✓'; }
+      } else {
+        ok = false;
+        if (td) { td.className = 'badge bg-danger'; td.textContent = soma + '/' + qtdSaldo; }
+        const cod = tr.querySelector('td:nth-child(1) strong').textContent;
+        msgs.push(cod + ': alocado ' + soma + ', precisa ' + qtdSaldo);
+      }
+    });
+    if (erroEl) {
+      if (ok) {
+        erroEl.className = 'alert alert-success mt-2';
+        erroEl.textContent = 'Alocacao completa. Pode confirmar.';
+      } else {
+        erroEl.className = 'alert alert-warning mt-2';
+        erroEl.textContent = msgs.join(' · ');
+      }
+    }
+    if (btn) btn.disabled = !ok;
+  }
+
+  document.getElementById('caso-b-btn-confirmar')?.addEventListener('click', () => {
+    const alocacoes = [];
+    document.querySelectorAll('.caso-b-input').forEach(function(inp) {
+      const qtd = parseInt(inp.value, 10) || 0;
+      if (qtd <= 0) return;
+      const modeloId = parseInt(inp.dataset.modeloId, 10);
+      const sepDest = inp.dataset.sepDestino;
+      alocacoes.push({
+        modelo_id: modeloId,
+        qtd: qtd,
+        sep_destino_id: (sepDest === 'null') ? null : parseInt(sepDest, 10),
+      });
+    });
+    bootstrap.Modal.getInstance(document.getElementById('modal-finalizar-caso-b'))?.hide();
+    postFinalizar({
+      modo: 'realocar',
+      alocacoes: alocacoes,
+      saldo_version: window.__casoB_saldoVersion || null,  // H3 TOCTOU
+    });
   });
 
   // ============ Cancelar separação — Bootstrap modal com input ============

@@ -45,16 +45,16 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_sessoes_valido_ate",
+      "name": "ix_portal_sessoes_portal",
       "columns": [
-        "valido_ate"
+        "portal"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_sessoes_portal",
+      "name": "ix_portal_sessoes_valido_ate",
       "columns": [
-        "portal"
+        "valido_ate"
       ],
       "unique": false
     }

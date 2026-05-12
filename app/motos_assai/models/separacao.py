@@ -25,8 +25,17 @@ class AssaiSeparacao(db.Model):
     solicitacao_excel_s3_key = db.Column(db.String(500))
     motivo_cancelamento = db.Column(db.Text)
 
+    # 4 campos override (Migration 11, 2026-05-12).
+    # NULL = herda do AssaiPedidoVendaLoja correspondente via (pedido_id, loja_id).
+    expedicao = db.Column(db.Date)
+    agendamento = db.Column(db.Date)
+    protocolo = db.Column(db.String(50))
+    agendamento_confirmado = db.Column(db.Boolean, default=False, nullable=False)
+
     itens = db.relationship('AssaiSeparacaoItem', backref='separacao',
                             cascade='all, delete-orphan', lazy='selectin')
+    saldos_modelo = db.relationship('AssaiSeparacaoSaldoModelo', backref='separacao',
+                                    cascade='all, delete-orphan', lazy='selectin')
     pedido = db.relationship('AssaiPedidoVenda', lazy='joined')
     loja = db.relationship('AssaiLoja', lazy='joined')
     fechada_por = db.relationship('Usuario', lazy='joined')
@@ -51,3 +60,36 @@ class AssaiSeparacaoItem(db.Model):
 
     def __repr__(self):
         return f'<AssaiSeparacaoItem separacao={self.separacao_id} chassi={self.chassi}>'
+
+
+class AssaiSeparacaoSaldoModelo(db.Model):
+    """Placeholder de qtd planejada por modelo na separacao.
+
+    Criado quando operador clica "Criar separacao" via checkbox+qtd na UI.
+    Apenas referencia — escaneio livre nao e bloqueado pela qtd_planejada
+    (decidido 2026-05-12: realidade prevalece — chassi efetivamente separado
+    pode divergir do plano por variacoes de carregamento).
+
+    Migration 12 (2026-05-12).
+    """
+    __tablename__ = 'assai_separacao_saldo_modelo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    separacao_id = db.Column(db.Integer,
+                             db.ForeignKey('assai_separacao.id', ondelete='CASCADE'),
+                             nullable=False, index=True)
+    modelo_id = db.Column(db.Integer, db.ForeignKey('assai_modelo.id'), nullable=False)
+    qtd_planejada = db.Column(db.Integer, nullable=False)
+    criado_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('separacao_id', 'modelo_id',
+                            name='uq_assai_separacao_saldo_modelo_sep_modelo'),
+        db.CheckConstraint('qtd_planejada > 0',
+                           name='ck_assai_separacao_saldo_modelo_qtd_pos'),
+    )
+
+    modelo = db.relationship('AssaiModelo', lazy='joined')
+
+    def __repr__(self):
+        return f'<AssaiSeparacaoSaldoModelo sep={self.separacao_id} modelo={self.modelo_id} qtd={self.qtd_planejada}>'

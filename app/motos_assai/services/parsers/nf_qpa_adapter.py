@@ -126,7 +126,69 @@ def importar_nf_qpa(
         ))
     db.session.flush()
 
-    # Match
+    # Ajuste pos-NF (regra 2026-05-12): NF e fonte de verdade. Se todos os
+    # chassis da NF existem em assai_moto e ha sep candidata na loja, ajusta
+    # a separacao para refletir a NF (move chassis necessarios, remove os
+    # que nao vieram). Apos ajuste, _calcular_match() detecta BATEU.
+    # Se ajuste falhar (chassis desconhecidos / sem loja / sem sep candidata),
+    # _calcular_match() segue fluxo normal (DIVERGENTE/NAO_RECONCILIADO).
+    sep_alvo_id_ajustada = None
+    try:
+        from app.motos_assai.services.separacao_service import ajustar_separacao_pela_nf
+        ajuste = ajustar_separacao_pela_nf(nf.id, importada_por_id)
+        if ajuste['ok']:
+            sep_alvo_id_ajustada = ajuste['sep_alvo_id']
+            import logging
+            logging.getLogger(__name__).info(
+                'ajustar_separacao_pela_nf: NF %s -> sep %s. %s',
+                nf.numero, sep_alvo_id_ajustada, ajuste['razao'],
+            )
+
+            # K5 (Plano 5): apos ajuste mexer em chassis, sincronizar espelho Nacom
+            # (delta entre AssaiSeparacaoItem atual e linhas em `separacao` Nacom).
+            # Sem isso, lista_pedidos.html mostra qtd defasada.
+            # Roda APENAS se sep ja foi mirrorada (lote tem linhas). Para EM_SEPARACAO,
+            # a primeira finalizacao via mirror_assai_to_separacao ja cria tudo correto.
+            try:
+                from app.motos_assai.services.separacao_mirror_service import (
+                    sincronizar_espelho_com_separacao,
+                )
+                sync_result = sincronizar_espelho_com_separacao(sep_alvo_id_ajustada)
+                if sync_result['criadas'] or sync_result['deletadas']:
+                    logging.getLogger(__name__).info(
+                        'sincronizar_espelho_com_separacao apos NF %s: '
+                        'criadas=%d deletadas=%d bloqueadas=%d',
+                        nf.numero, sync_result['criadas'],
+                        sync_result['deletadas'], len(sync_result['bloqueadas']),
+                    )
+                if sync_result['bloqueadas']:
+                    logging.getLogger(__name__).warning(
+                        'sincronizar_espelho_com_separacao NF %s: chassis bloqueados '
+                        '(tem NF preenchida) — espelho fica defasado: %s',
+                        nf.numero, sync_result['bloqueadas'],
+                    )
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    'sincronizar_espelho_com_separacao FALHOU NF %s: %s',
+                    nf.numero, e, exc_info=True,
+                )
+        else:
+            import logging
+            logging.getLogger(__name__).info(
+                'ajustar_separacao_pela_nf NAO aplicado para NF %s: %s '
+                '(seguindo match natural)',
+                nf.numero, ajuste['razao'],
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(
+            'ajustar_separacao_pela_nf FALHOU para NF %s: %s — '
+            'seguindo match natural',
+            nf.numero, e, exc_info=True,
+        )
+
+    # Match (apos eventual ajuste — se ajuste OK, todos chassis estao na sep alvo
+    # e _calcular_match retorna BATEU. Senao, fluxo original).
     _calcular_match(nf, importada_por_id)
     db.session.commit()
 

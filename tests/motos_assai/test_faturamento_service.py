@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 from app import db
 from app.motos_assai.models import (
-    AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiLoja, AssaiModelo,
+    AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
+    AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao,
     PEDIDO_STATUS_EM_PRODUCAO, SEPARACAO_STATUS_FECHADA,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
@@ -38,8 +39,10 @@ def _setup_separacao_fechada(app, admin):
     )
     db.session.add(p)
     db.session.flush()
+    pvl = AssaiPedidoVendaLoja(pedido_id=p.id, loja_id=loja.id)
+    db.session.add(pvl); db.session.flush()
     db.session.add(AssaiPedidoVendaItem(
-        pedido_id=p.id, loja_id=loja.id, modelo_id=modelo_dot.id,
+        pedido_id=p.id, pedido_loja_id=pvl.id, loja_id=loja.id, modelo_id=modelo_dot.id,
         qtd_pedida=1, valor_unitario=Decimal('6900'), valor_total=Decimal('6900'),
     ))
     db.session.flush()
@@ -104,8 +107,10 @@ def test_gerar_excel_separacao_nao_fechada_falha(app, admin_user):
         )
         db.session.add(p)
         db.session.flush()
+        pvl2 = AssaiPedidoVendaLoja(pedido_id=p.id, loja_id=loja.id)
+        db.session.add(pvl2); db.session.flush()
         db.session.add(AssaiPedidoVendaItem(
-            pedido_id=p.id, loja_id=loja.id, modelo_id=modelo_dot.id,
+            pedido_id=p.id, pedido_loja_id=pvl2.id, loja_id=loja.id, modelo_id=modelo_dot.id,
             qtd_pedida=1, valor_unitario=Decimal('6900'), valor_total=Decimal('6900'),
         ))
         db.session.flush()

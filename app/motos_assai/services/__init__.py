@@ -57,7 +57,18 @@ from .separacao_service import (
     desfazer_chassi, finalizar_separacao, cancelar_separacao,
     listar_pares_separaveis,
     SeparacaoConflictError, SeparacaoValidationError,
+    # Realocacao de saldo (Task #11) + Ajuste pos-NF (Task #9)
+    outras_seps_em_separacao, saldo_planejado_nao_separado,
+    analisar_finalizacao, realocar_saldo,
+    finalizar_separacao_com_decisao,
+    FINALIZAR_MODO_AUTO, FINALIZAR_MODO_VOLTAR_SALDO,
+    FINALIZAR_MODO_MANTER_PLANEJADO, FINALIZAR_MODO_REALOCAR,
+    SeparacaoSaldoPendenteError,
+    ajustar_separacao_pela_nf,
+    atualizar_agendamento_loja,
+    criar_separacao_com_saldos,
 )
+from .separacao_mirror_service import sincronizar_espelho_com_separacao
 from .faturamento_service import gerar_excel_qpa
 from .geocoding_service import geocodar_loja, geocodar_lote, GeocodingError
 
@@ -92,6 +103,16 @@ __all__ = [
     'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
     'listar_pares_separaveis',
     'SeparacaoConflictError', 'SeparacaoValidationError',
+    'outras_seps_em_separacao', 'saldo_planejado_nao_separado',
+    'analisar_finalizacao', 'realocar_saldo',
+    'finalizar_separacao_com_decisao',
+    'FINALIZAR_MODO_AUTO', 'FINALIZAR_MODO_VOLTAR_SALDO',
+    'FINALIZAR_MODO_MANTER_PLANEJADO', 'FINALIZAR_MODO_REALOCAR',
+    'SeparacaoSaldoPendenteError',
+    'ajustar_separacao_pela_nf',
+    'atualizar_agendamento_loja',
+    'criar_separacao_com_saldos',
+    'sincronizar_espelho_com_separacao',
     'gerar_excel_qpa',
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',
 ]

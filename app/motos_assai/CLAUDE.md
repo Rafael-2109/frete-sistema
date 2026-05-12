@@ -1,7 +1,7 @@
 # Módulo Motos Assaí
 
-**Data**: 2026-05-07
-**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) — TODOS implementados.
+**Data**: 2026-05-12
+**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) + **Integração lista_pedidos.html (Plano 5 — agendamento por loja + plano por modelo + realocação de saldo + ajuste pós-NF)** — TODOS implementados.
 **Propósito**: gerenciar a operação B2B Q.P.A. → Sendas/Assaí com motos elétricas, isolada de outros módulos.
 
 ---
@@ -21,7 +21,8 @@
 
 ### 1. Prefixo de tabela `assai_`
 
-Todas as tabelas começam com `assai_`. 16 tabelas no schema atual.
+Todas as tabelas começam com `assai_`. **18 tabelas** no schema atual
+(16 originais + `assai_pedido_venda_loja` e `assai_separacao_saldo_modelo` — Plano 5).
 
 ### 2. Blueprint isolado
 
@@ -74,14 +75,19 @@ Link em `app/templates/base.html` condicionado a
 
 ---
 
-## Modelo de dados (16 tabelas)
+## Modelo de dados (18 tabelas)
 
 Ver spec em `docs/superpowers/specs/2026-05-07-motos-assai-design.md` §4.
 
 Cadastros: `assai_cd`, `assai_loja`, `assai_modelo`, `assai_modelo_alias`.
 Identidade: `assai_moto`, `assai_moto_evento`.
-Pipeline: `assai_pedido_venda*`, `assai_compra_motochefe*`, `assai_recibo_motochefe*`.
-Saída: `assai_separacao*`, `assai_nf_qpa*`.
+Pipeline: `assai_pedido_venda*` (3 tabelas: `assai_pedido_venda`,
+`assai_pedido_venda_loja` ⭐, `assai_pedido_venda_item`),
+`assai_compra_motochefe*`, `assai_recibo_motochefe*`.
+Saída: `assai_separacao*` (3 tabelas: `assai_separacao`, `assai_separacao_item`,
+`assai_separacao_saldo_modelo` ⭐), `assai_nf_qpa*`.
+
+⭐ = adicionadas no Plano 5 (2026-05-12).
 
 ---
 
@@ -272,6 +278,118 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 **SOL no CarVia** (`scripts/migrations/motos_assai_06_carvia_modelo_sol.py`):
 - Seed idempotente que adiciona `CarviaModeloMoto(nome='SOL')` para o parser DANFE reconhecer modelo SOL
 
+---
+
+## Plano 5 implementado (2026-05-12) — Integração lista_pedidos.html
+
+Integra a Op. Assaí ao fluxo Nacom de pedidos (lista_pedidos → cotação → embarque → frete)
+via 4 campos de agendamento + planejamento de qtd por modelo + realocação de saldo.
+
+### Novos modelos (2 tabelas)
+
+**`AssaiPedidoVendaLoja`** (`models/pedido.py`) — cabeçalho por (pedido, loja):
+- `expedicao` (Date), `agendamento` (Date), `protocolo` (String 50),
+  `agendamento_confirmado` (Boolean default False).
+- UNIQUE (pedido_id, loja_id).
+- `AssaiPedidoVendaItem.pedido_loja_id` FK aponta para cá → propagação automática
+  dos 4 campos para todos os itens da mesma loja no pedido.
+- Migration 10 (`motos_assai_10_pedido_venda_loja.sql/py`) com backfill 1 cabeçalho
+  por (pedido_id, loja_id) distinto. Itens existentes recebem FK via backfill.
+
+**`AssaiSeparacaoSaldoModelo`** (`models/separacao.py`) — placeholder de qtd planejada:
+- `separacao_id`, `modelo_id`, `qtd_planejada` (Integer > 0).
+- UNIQUE (separacao_id, modelo_id).
+- Criado quando operador usa checkbox+qtd para "Criar separação". Não bloqueia
+  escaneio livre (decisão 2026-05-12: realidade prevalece — chassi efetivo pode
+  divergir do plano por variações de carregamento).
+- Migration 12 (`motos_assai_12_separacao_saldo_modelo.sql/py`).
+
+### `AssaiSeparacao` ganhou 4 campos override
+
+Mesmos 4 nomes do cabeçalho da loja: `expedicao/agendamento/protocolo/agendamento_confirmado`.
+NULL = herda do `AssaiPedidoVendaLoja` correspondente via (pedido_id, loja_id).
+Migration 11 (`motos_assai_11_separacao_4campos.sql/py`).
+
+### Mudança crítica: N separações por (pedido, loja)
+
+UNIQUE `ux_assai_separacao_pedido_loja_ativa` (Migration 01) bloqueava 2 separações
+ativas no mesmo (pedido, loja). Migration 13 (`motos_assai_13_drop_unique_em_separacao`)
+removeu esse UNIQUE — agora N separações EM_SEPARACAO simultâneas são permitidas
+(regra: "separações = veículos de carregamento; 2+ veículos podem carregar paralelamente").
+
+Concorrência de chassi continua protegida via:
+1. `with_for_update` em `AssaiMoto` (lock pessimista por chassi)
+2. Validação `status_atual(chassi) == DISPONIVEL` antes de SEPARADA
+
+Side effect: `get_ou_criar_separacao` pode retornar QUALQUER sep ativa (não há
+mais "a única"). Rota `/separar/<pid>/<lid>` aceita `?sep_id=N` para target
+explícito (links da UI passam sep_id).
+
+### Espelhamento Nacom — fallback dos 4 campos
+
+`separacao_mirror_service._resolver_4_campos(sep, pvl)`:
+1. `AssaiSeparacao.{campo}` (override por separação) se preenchido
+2. `AssaiPedidoVendaLoja.{campo}` (cabeçalho) se existe
+3. None / False (default)
+
+`agendamento_confirmado` usa semântica OR — confirmado em qualquer nível propaga True.
+
+`propagar_4_campos_para_espelho(assai_sep_id)` re-aplica nos espelhos quando os
+campos forem editados pós-FECHADA (operador altera agendamento depois da sep
+já estar refletida em `separacao` Nacom).
+
+### Fluxo de finalização com saldo planejado
+
+`separacao_service.analisar_finalizacao(sep_id)` classifica o cenário:
+- **`sem_saldo`**: qtd_escaneada == qtd_planejada por modelo. Finaliza direto.
+- **`caso_a`**: há saldo mas não há outra sep EM_SEPARACAO no (pedido, loja).
+- **`caso_b`**: há saldo E há 1+ outras seps EM_SEPARACAO no mesmo (pedido, loja).
+
+`finalizar_separacao_com_decisao(sep_id, operador_id, *, modo, alocacoes)` aceita modos:
+- `'auto'` (default): se sem_saldo, finaliza. Se há saldo, levanta `SeparacaoSaldoPendenteError(plano)`
+  — UI captura e mostra modal apropriado.
+- `'voltar_saldo'` (Caso A op1): `qtd_planejada` reduz para `qtd_escaneada`.
+  Saldo retorna a `saldo_pendente_por_modelo()` (disponível para nova sep).
+- `'manter_planejado'` (Caso A op2): `qtd_planejada` mantida. Sep fecha com
+  divergência. **NF Q.P.A. ajusta posteriormente.**
+- `'realocar'` (Caso B): `realocar_saldo(sep_origem_id, alocacoes, operador_id)`.
+  Cada alocação: `{sep_destino_id: int|None, modelo_id, qtd}`. `sep_destino_id=None`
+  = voltar ao pedido. Soma deve == saldo.
+
+### Ajuste pós-NF (NF é fonte de verdade)
+
+`separacao_service.ajustar_separacao_pela_nf(nf_id, operador_id)`:
+- Pré-condição: TODOS os chassis da NF devem existir em `assai_moto`. Se algum
+  não existe, retorna ok=False sem mutar estado.
+- Sep alvo: AssaiSeparacao com mais chassis em comum (mesma loja, status não-CANCELADA/FATURADA).
+- Para cada chassi da NF:
+  - Já está na sep alvo → OK
+  - Em outra sep ativa → MOVE (delete antiga, create na alvo)
+  - Em outro estado (DISPONIVEL/MONTADA/...) → ADD na sep alvo + emite SEPARADA
+- Para cada chassi na sep alvo que NÃO veio na NF → REMOVE + emite DISPONIVEL.
+
+`nf_qpa_adapter.importar_nf_qpa` chama `ajustar_separacao_pela_nf` ANTES de
+`_calcular_match`. Após ajuste, match natural detecta BATEU.
+
+### Novas rotas (blueprint `/motos-assai`)
+
+- `GET /pedidos/<pid>` — detalhe agora mostra agendamento por loja + tabela com
+  checkbox+qtd para criar separação + lista de seps ativas (acesso por `?sep_id=`)
+- `POST /pedidos/<pid>/loja/<lid>/agendamento` — atualiza 4 campos do cabeçalho.
+  Propaga para espelhos FECHADOS via `propagar_4_campos_para_espelho`.
+- `POST /pedidos/<pid>/loja/<lid>/separacao/criar` — cria nova `AssaiSeparacao`
+  EM_SEPARACAO + N `AssaiSeparacaoSaldoModelo`. Retorna sep_id + redirect.
+- `GET /separacao/<sep_id>/analisar-finalizacao` — retorna plano para UI (read-only).
+- `POST /separacao/<sep_id>/finalizar` (modificado) — aceita body `{modo, alocacoes}`.
+  Retorna 409 `requer_decisao=true` quando modo=auto e há saldo.
+
+### Endpoints retrocompatíveis (sem `?sep_id`)
+
+`/pedidos/<pid>/separar/<lid>` (tela de escaneio) sem `?sep_id` mantém comportamento
+antigo via `get_ou_criar_separacao` (cria nova se não houver, retorna a primeira ativa
+se houver — agora N possíveis, mas comportamento default razoável). Recomenda-se
+passar `?sep_id=N` explicitamente nos links da UI.
+
 ### Telas rápidas
 
 | Tela | URL | Descrição |
@@ -342,7 +460,7 @@ Plan: `docs/superpowers/plans/2026-05-08-motos-assai-skills-agents.md`
 
 ## Manutenção / Roadmap futuro
 
-Módulo encerrado em 2026-05-07 (Planos 1-4 completos). Evoluções futuras:
+Planos 1-5 completos (2026-05-12). Evoluções futuras:
 
 - `assai_avaria` — tabela para avarias detectadas pós-recebimento (acréscimo ao wizard)
 - Permissões granulares (`assai_user_permissao`) — atualmente toggle único
@@ -350,6 +468,7 @@ Módulo encerrado em 2026-05-07 (Planos 1-4 completos). Evoluções futuras:
 - Modelo MIA — atualmente fora do escopo
 - Automação envio Excel à Q.P.A. via SMTP
 - Resolver pendência via UI (atualmente só via service diretamente)
+- Skills atualizadas com novos campos (agendamento por loja + plano por modelo)
 
 ---
 

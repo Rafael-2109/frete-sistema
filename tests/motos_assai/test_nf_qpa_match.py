@@ -7,7 +7,8 @@ import pytest
 
 from app import db
 from app.motos_assai.models import (
-    AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiLoja, AssaiModelo,
+    AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
+    AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao, AssaiSeparacaoItem, AssaiNfQpa,
     PEDIDO_STATUS_EM_PRODUCAO,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
@@ -61,8 +62,10 @@ def _setup_separacao_com_chassi(admin, loja, chassi, valor=Decimal('6900')):
     )
     db.session.add(p)
     db.session.flush()
+    pvl = AssaiPedidoVendaLoja(pedido_id=p.id, loja_id=loja.id)
+    db.session.add(pvl); db.session.flush()
     db.session.add(AssaiPedidoVendaItem(
-        pedido_id=p.id, loja_id=loja.id, modelo_id=modelo_dot.id,
+        pedido_id=p.id, pedido_loja_id=pvl.id, loja_id=loja.id, modelo_id=modelo_dot.id,
         qtd_pedida=1, valor_unitario=valor, valor_total=valor,
     ))
     db.session.flush()

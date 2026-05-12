@@ -83,9 +83,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_pedido_loja_destino_id",
+      "name": "ix_hora_pedido_cnpj_destino",
       "columns": [
-        "loja_destino_id"
+        "cnpj_destino"
       ],
       "unique": false
     },
@@ -97,9 +97,9 @@
       "unique": true
     },
     {
-      "name": "ix_hora_pedido_cnpj_destino",
+      "name": "ix_hora_pedido_loja_destino_id",
       "columns": [
-        "cnpj_destino"
+        "loja_destino_id"
       ],
       "unique": false
     },

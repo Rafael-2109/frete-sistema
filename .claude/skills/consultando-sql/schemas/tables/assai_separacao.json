@@ -46,6 +46,24 @@
     {
       "name": "motivo_cancelamento",
       "type": "text"
+    },
+    {
+      "name": "expedicao",
+      "type": "date"
+    },
+    {
+      "name": "agendamento",
+      "type": "date"
+    },
+    {
+      "name": "protocolo",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "agendamento_confirmado",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
     }
   ],
   "foreign_keys": [
@@ -64,16 +82,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_separacao_loja_id",
+      "name": "ix_assai_separacao_pedido_id",
       "columns": [
-        "loja_id"
+        "pedido_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_separacao_pedido_id",
+      "name": "ix_assai_separacao_loja_id",
       "columns": [
-        "pedido_id"
+        "loja_id"
       ],
       "unique": false
     }

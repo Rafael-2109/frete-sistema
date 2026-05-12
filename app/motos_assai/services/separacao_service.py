@@ -36,14 +36,28 @@ class SeparacaoValidationError(Exception):
 
 
 def get_ou_criar_separacao(pedido_id: int, loja_id: int, operador_id: int) -> AssaiSeparacao:
-    """Retorna separação ativa ou cria. UNIQUE parcial garante 1 ativa por (pedido, loja)."""
+    """Retorna separação EM_SEPARACAO mais antiga ou cria uma nova.
+
+    NOTA (Migration 13, 2026-05-12): o UNIQUE parcial que limitava 1 sep ativa
+    por (pedido, loja) foi REMOVIDO. Agora N seps EM_SEPARACAO simultaneas sao
+    permitidas (fluxo 2+ veiculos). Esta funcao mantem retro-compatibilidade:
+    retorna a EM_SEPARACAO mais ANTIGA (ORDER BY id ASC) ou cria nova se nao ha.
+
+    Para fluxos novos com sep_id explicito (UI passa via ?sep_id=N), prefira
+    `AssaiSeparacao.query.get(sep_id)` direto. Esta funcao e fallback para
+    callers legados (`registrar_chassi` sem sep_id).
+
+    Apenas seps `EM_SEPARACAO` sao consideradas — FECHADA/FATURADA/CANCELADA
+    nao reabrem chassi.
+    """
     sep = (
         AssaiSeparacao.query
         .filter(
             AssaiSeparacao.pedido_id == pedido_id,
             AssaiSeparacao.loja_id == loja_id,
-            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+            AssaiSeparacao.status == SEPARACAO_STATUS_EM_SEPARACAO,
         )
+        .order_by(AssaiSeparacao.id.asc())
         .first()
     )
     if sep:
@@ -59,7 +73,14 @@ def get_ou_criar_separacao(pedido_id: int, loja_id: int, operador_id: int) -> As
 
 
 def saldo_pendente_por_modelo(pedido_id: int, loja_id: int) -> List[Dict[str, Any]]:
-    """Retorna [{modelo_id, codigo, nome, qtd_pedida, qtd_separada, qtd_pendente, valor_unitario}]."""
+    """Retorna [{modelo_id, codigo, nome, qtd_pedida, qtd_separada, qtd_pendente, valor_unitario}].
+
+    `qtd_separada` = SUM de chassis em TODAS as separacoes nao-canceladas (EM_SEPARACAO + FECHADA + FATURADA).
+    `qtd_pendente` = qtd_pedida - qtd_separada (pode haver N separacoes simultaneas).
+
+    Atualizado 2026-05-12: considera N separacoes ativas por (pedido, loja) — fluxo
+    de 2+ veiculos de carregamento (Migration 13 removeu UNIQUE que limitava a 1).
+    """
     rows = (
         db.session.query(
             AssaiPedidoVendaItem.modelo_id,
@@ -77,26 +98,23 @@ def saldo_pendente_por_modelo(pedido_id: int, loja_id: int) -> List[Dict[str, An
         .all()
     )
 
-    # SUM já separado por (modelo) nesta separação ativa
-    sep = (
-        AssaiSeparacao.query
+    # SUM total de chassis ja separados por modelo em TODAS as seps nao-canceladas
+    # do (pedido, loja). Com N seps ativas (Migration 13), agregar.
+    sums = (
+        db.session.query(
+            AssaiSeparacaoItem.modelo_id,
+            func.count(AssaiSeparacaoItem.id),
+        )
+        .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
         .filter(
             AssaiSeparacao.pedido_id == pedido_id,
             AssaiSeparacao.loja_id == loja_id,
             AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
-        ).first()
-    )
-
-    qtd_separada_por_modelo: Dict[int, int] = {}
-    if sep:
-        sums = (
-            db.session.query(
-                AssaiSeparacaoItem.modelo_id, func.count(AssaiSeparacaoItem.id)
-            )
-            .filter(AssaiSeparacaoItem.separacao_id == sep.id)
-            .group_by(AssaiSeparacaoItem.modelo_id).all()
         )
-        qtd_separada_por_modelo = {mid: int(n) for mid, n in sums}
+        .group_by(AssaiSeparacaoItem.modelo_id)
+        .all()
+    )
+    qtd_separada_por_modelo: Dict[int, int] = {mid: int(n) for mid, n in sums}
 
     result = []
     for r in rows:
@@ -115,12 +133,18 @@ def saldo_pendente_por_modelo(pedido_id: int, loja_id: int) -> List[Dict[str, An
 
 def registrar_chassi(
     pedido_id: int, loja_id: int, chassi: str, registrada_por_id: int,
+    separacao_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Vincula chassi à separação. Validações:
 
     1. Status da moto = DISPONIVEL
     2. Modelo da moto bate com algum saldo > 0 do pedido para essa loja
-    3. UNIQUE chassi via UNIQUE parcial — race retorna 409
+    3. Sep alvo (se passado) deve estar EM_SEPARACAO e pertencer a (pedido, loja)
+
+    Args:
+        separacao_id (opcional): alvo explicito. Necessario quando ha N seps
+            EM_SEPARACAO simultaneas no mesmo (pedido, loja) — apos Migration 13.
+            Se None, fallback para `get_ou_criar_separacao` (sep mais antiga ou nova).
     """
     chassi_norm = chassi.strip().upper()
 
@@ -146,7 +170,24 @@ def registrar_chassi(
             '(ou modelo não pertence ao pedido)'
         )
 
-    sep = get_ou_criar_separacao(pedido_id, loja_id, registrada_por_id)
+    # Sep alvo: explicito (Plano 5 — N seps simultaneas) ou fallback get_ou_criar
+    if separacao_id:
+        sep = AssaiSeparacao.query.get(separacao_id)
+        if not sep:
+            raise SeparacaoValidationError(
+                f'Separação {separacao_id} nao encontrada'
+            )
+        if sep.pedido_id != pedido_id or sep.loja_id != loja_id:
+            raise SeparacaoValidationError(
+                f'Separação {separacao_id} pertence a outro (pedido={sep.pedido_id}, loja={sep.loja_id}) '
+                f'— esperado (pedido={pedido_id}, loja={loja_id})'
+            )
+        if sep.status != SEPARACAO_STATUS_EM_SEPARACAO:
+            raise SeparacaoValidationError(
+                f'Separação {separacao_id} esta {sep.status} — apenas EM_SEPARACAO aceita chassi'
+            )
+    else:
+        sep = get_ou_criar_separacao(pedido_id, loja_id, registrada_por_id)
 
     try:
         item = AssaiSeparacaoItem(
@@ -390,9 +431,16 @@ def listar_pares_separaveis() -> List[Dict[str, Any]]:
                 SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
             ]),
         )
+        .order_by(AssaiSeparacao.iniciada_em.asc())
         .all()
     )
-    ativa_map = {(s.pedido_id, s.loja_id): s for s in sep_ativas}
+    # M1 (2026-05-12): apos Migration 13 ha N seps possiveis por (pedido, loja).
+    # Lista todas em vez de dict que perde N-1. UI usa a primeira EM_SEPARACAO
+    # para link compativel + count para badge.
+    from collections import defaultdict
+    ativa_map_lista: Dict[tuple, list] = defaultdict(list)
+    for s in sep_ativas:
+        ativa_map_lista[(s.pedido_id, s.loja_id)].append(s)
 
     lojas = AssaiLoja.query.all()
     loja_por_id = {l.id: l for l in lojas}
@@ -425,7 +473,11 @@ def listar_pares_separaveis() -> List[Dict[str, Any]]:
 
     result = []
     for (pid, lid), bucket in pares.items():
-        sep_ativa = ativa_map.get((pid, lid))
+        seps_par = ativa_map_lista.get((pid, lid), [])
+        # Para retrocompatibilidade da UI: separacao_ativa_id = primeira EM_SEPARACAO,
+        # ou primeira FECHADA se nenhuma EM_SEPARACAO. seps_ativas_count = total.
+        sep_em_separacao = next((s for s in seps_par if s.status == SEPARACAO_STATUS_EM_SEPARACAO), None)
+        sep_ativa = sep_em_separacao or (seps_par[0] if seps_par else None)
         if bucket['qtd_pendente_total'] <= 0 and not sep_ativa:
             continue
         pedido = pedido_por_id.get(pid)
@@ -440,6 +492,8 @@ def listar_pares_separaveis() -> List[Dict[str, Any]]:
             'loja_uf': (loja.uf if loja else None) or '-',
             'separacao_ativa_id': sep_ativa.id if sep_ativa else None,
             'separacao_ativa_status': sep_ativa.status if sep_ativa else None,
+            'seps_ativas_count': len(seps_par),  # M1: N seps possiveis
+            'seps_ativas_ids': [s.id for s in seps_par],  # M1: ids para deeplink
         })
 
     result.sort(key=lambda r: (
@@ -448,3 +502,893 @@ def listar_pares_separaveis() -> List[Dict[str, Any]]:
         r['loja_numero'],
     ))
     return result
+
+
+# =====================================================================
+# Realocacao de saldo ao finalizar separacao (Task #11 — 2026-05-12)
+# =====================================================================
+#
+# Regra de negocio: separacoes representam veiculos de carregamento. Ao
+# finalizar uma separacao com saldo nao-separado (qtd_planejada > qtd_escaneada),
+# o saldo deve ser realocado para outra separacao EM_SEPARACAO do mesmo
+# (pedido, loja). Cenarios:
+#
+# - Sem saldo: finaliza diretamente (fast-path).
+# - Caso A — zero outras seps EM_SEPARACAO: UI mostra modal binario.
+#     - Op1 "voltar_saldo": qtd_planejada da origem reduz para qtd_escaneada.
+#     - Op2 "manter_planejado": qtd_planejada mantida; sep fica FECHADA com
+#       diferenca registrada como divergencia. NF Q.P.A. ajusta posteriormente.
+# - Caso B — 1+ outras seps EM_SEPARACAO: UI mostra modal de alocacao manual.
+#     - Usuario aloca saldo entre N seps (ou parte volta ao pedido).
+#     - realocar_saldo() incrementa qtd_planejada dos destinos, reduz da origem.
+#
+# `AssaiSeparacaoSaldoModelo` armazena qtd_planejada por modelo. Origem reduz,
+# destinos incrementam. Soma das alocacoes deve == saldo.
+
+# Reuso de import existente no topo do arquivo
+from app.motos_assai.models import AssaiSeparacaoSaldoModelo  # noqa: E402
+
+
+def _qtd_planejada_por_modelo(sep_id: int) -> Dict[int, int]:
+    """Retorna {modelo_id: qtd_planejada} a partir de AssaiSeparacaoSaldoModelo."""
+    rows = (
+        db.session.query(
+            AssaiSeparacaoSaldoModelo.modelo_id,
+            AssaiSeparacaoSaldoModelo.qtd_planejada,
+        )
+        .filter(AssaiSeparacaoSaldoModelo.separacao_id == sep_id)
+        .all()
+    )
+    return {mid: int(qtd) for mid, qtd in rows}
+
+
+def _qtd_escaneada_por_modelo(sep_id: int) -> Dict[int, int]:
+    """Retorna {modelo_id: qtd_escaneada} contando AssaiSeparacaoItem."""
+    rows = (
+        db.session.query(
+            AssaiSeparacaoItem.modelo_id,
+            func.count(AssaiSeparacaoItem.id),
+        )
+        .filter(AssaiSeparacaoItem.separacao_id == sep_id)
+        .group_by(AssaiSeparacaoItem.modelo_id)
+        .all()
+    )
+    return {mid: int(n) for mid, n in rows}
+
+
+def saldo_planejado_nao_separado(sep_id: int) -> Dict[int, int]:
+    """Retorna {modelo_id: qtd_nao_separada} para uma separacao.
+
+    qtd_nao_separada = max(0, qtd_planejada - qtd_escaneada). Modelos com
+    qtd_nao_separada == 0 sao omitidos. Se nao ha planejamento para o modelo
+    (AssaiSeparacaoSaldoModelo ausente), considera-se 0 (escaneio livre sem
+    plano previo nao gera saldo a realocar).
+    """
+    planejada = _qtd_planejada_por_modelo(sep_id)
+    escaneada = _qtd_escaneada_por_modelo(sep_id)
+
+    saldo: Dict[int, int] = {}
+    for modelo_id, qtd_plan in planejada.items():
+        qtd_esc = escaneada.get(modelo_id, 0)
+        nao_sep = qtd_plan - qtd_esc
+        if nao_sep > 0:
+            saldo[modelo_id] = nao_sep
+    return saldo
+
+
+def outras_seps_em_separacao(pedido_id: int, loja_id: int, exceto_sep_id: int) -> List[AssaiSeparacao]:
+    """Lista outras AssaiSeparacao com status EM_SEPARACAO no mesmo (pedido, loja)."""
+    return (
+        AssaiSeparacao.query
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_id,
+            AssaiSeparacao.loja_id == loja_id,
+            AssaiSeparacao.status == SEPARACAO_STATUS_EM_SEPARACAO,
+            AssaiSeparacao.id != exceto_sep_id,
+        )
+        .order_by(AssaiSeparacao.iniciada_em.asc())
+        .all()
+    )
+
+
+def analisar_finalizacao(sep_id: int) -> Dict[str, Any]:
+    """Analisa o cenario antes de finalizar. Nao muta estado.
+
+    Retorna:
+        {
+            'cenario': 'sem_saldo' | 'caso_a' | 'caso_b',
+            'sep_id': int,
+            'saldo': {modelo_id: qtd},          # vazio se sem_saldo
+            'modelos_info': [{modelo_id, codigo, nome, qtd_nao_separada}],
+            'outras_seps': [{id, criada_em, qtd_escaneada_total}],  # vazio em caso_a
+        }
+    """
+    sep = AssaiSeparacao.query.get(sep_id)
+    if not sep:
+        raise SeparacaoValidationError(f'AssaiSeparacao {sep_id} nao encontrada')
+    if sep.status != SEPARACAO_STATUS_EM_SEPARACAO:
+        raise SeparacaoValidationError(
+            f'Apenas separacoes EM_SEPARACAO permitem analise. Atual: {sep.status}'
+        )
+
+    saldo = saldo_planejado_nao_separado(sep_id)
+
+    if not saldo:
+        return {
+            'cenario': 'sem_saldo',
+            'sep_id': sep_id,
+            'saldo': {},
+            'modelos_info': [],
+            'outras_seps': [],
+        }
+
+    # Enriquecer info dos modelos com saldo
+    modelos = AssaiModelo.query.filter(AssaiModelo.id.in_(saldo.keys())).all()
+    modelo_por_id = {m.id: m for m in modelos}
+    modelos_info = [
+        {
+            'modelo_id': mid,
+            'codigo': modelo_por_id[mid].codigo if mid in modelo_por_id else '?',
+            'nome': modelo_por_id[mid].nome if mid in modelo_por_id else '?',
+            'qtd_nao_separada': qtd,
+        }
+        for mid, qtd in sorted(saldo.items(), key=lambda x: modelo_por_id[x[0]].codigo if x[0] in modelo_por_id else '')
+    ]
+
+    outras = outras_seps_em_separacao(sep.pedido_id, sep.loja_id, sep_id)
+    cenario = 'caso_b' if outras else 'caso_a'
+
+    # H4: batch query — evita N+1 (1 query por sep)
+    outras_info = []
+    if outras:
+        outros_ids = [s.id for s in outras]
+        counts_por_sep = dict(
+            db.session.query(
+                AssaiSeparacaoItem.separacao_id,
+                func.count(AssaiSeparacaoItem.id),
+            )
+            .filter(AssaiSeparacaoItem.separacao_id.in_(outros_ids))
+            .group_by(AssaiSeparacaoItem.separacao_id)
+            .all()
+        )
+        for s in outras:
+            outras_info.append({
+                'id': s.id,
+                'iniciada_em': s.iniciada_em,
+                'qtd_escaneada_total': int(counts_por_sep.get(s.id, 0)),
+            })
+
+    return {
+        'cenario': cenario,
+        'sep_id': sep_id,
+        'saldo': saldo,
+        'saldo_version': _saldo_version(saldo),  # H3: TOCTOU detection
+        'modelos_info': modelos_info,
+        'outras_seps': outras_info,
+    }
+
+
+def _saldo_version(saldo: Dict[int, int]) -> str:
+    """Gera fingerprint deterministico do saldo para detectar TOCTOU.
+
+    H3 (2026-05-12): frontend recebe via analisar_finalizacao, envia de volta no
+    POST finalizar (modo='realocar'). Se saldo atual difere, service retorna 409
+    com novo plano (UI re-renderiza modal).
+    """
+    import hashlib
+    import json
+    # Ordenar por modelo_id para determinismo
+    canonico = json.dumps(sorted(saldo.items()), separators=(',', ':'))
+    return hashlib.sha256(canonico.encode()).hexdigest()[:16]
+
+
+def realocar_saldo(
+    sep_origem_id: int,
+    alocacoes: List[Dict[str, Any]],
+    operador_id: int,
+) -> None:
+    """Realoca o saldo nao-separado de `sep_origem` entre outras seps e/ou
+    devolve ao pedido.
+
+    Args:
+        sep_origem_id: id da AssaiSeparacao sendo finalizada.
+        alocacoes: lista de dicts com:
+            - sep_destino_id (int | None): None = voltar ao pedido (reduz qtd_planejada da origem)
+            - modelo_id (int)
+            - qtd (int): qtd a realocar
+        operador_id: para auditoria/log.
+
+    Validacoes:
+        - Soma das alocacoes por modelo == saldo do modelo na origem.
+        - Cada sep_destino_id (se != None) deve estar em EM_SEPARACAO no mesmo (pedido, loja).
+        - qtd > 0.
+
+    Efeitos:
+        - Origem: AssaiSeparacaoSaldoModelo.qtd_planejada reduz para qtd_escaneada (por modelo).
+        - Destinos: AssaiSeparacaoSaldoModelo.qtd_planejada incrementa.
+            - Se nao existe linha (modelo nunca planejado nesse destino), cria.
+        - "Voltar ao pedido": apenas reduz qtd_planejada da origem (sem destino).
+    """
+    sep_origem = AssaiSeparacao.query.get(sep_origem_id)
+    if not sep_origem:
+        raise SeparacaoValidationError(f'Sep origem {sep_origem_id} nao encontrada')
+
+    saldo = saldo_planejado_nao_separado(sep_origem_id)
+    if not saldo:
+        return  # nada a realocar
+
+    # Agregar alocacoes por modelo para validar somas
+    agregado_por_modelo: Dict[int, int] = {}
+    destinos_distintos: set = set()
+    for a in alocacoes:
+        modelo_id = int(a['modelo_id'])
+        qtd = int(a['qtd'])
+        sep_destino_id = a.get('sep_destino_id')
+        if qtd <= 0:
+            raise SeparacaoValidationError(
+                f'qtd deve ser > 0 (modelo {modelo_id}, qtd={qtd})'
+            )
+        if sep_destino_id is not None:
+            destinos_distintos.add(int(sep_destino_id))
+        agregado_por_modelo[modelo_id] = agregado_por_modelo.get(modelo_id, 0) + qtd
+
+    # Validar soma = saldo
+    for modelo_id, qtd_alocada in agregado_por_modelo.items():
+        qtd_saldo = saldo.get(modelo_id, 0)
+        if qtd_alocada != qtd_saldo:
+            raise SeparacaoValidationError(
+                f'Modelo {modelo_id}: alocacao soma {qtd_alocada} mas saldo e {qtd_saldo}. '
+                'Deve cobrir 100% do saldo (use sep_destino_id=None para voltar ao pedido).'
+            )
+
+    # Validar que todos modelos com saldo estao em alocacoes
+    for modelo_id in saldo:
+        if modelo_id not in agregado_por_modelo:
+            raise SeparacaoValidationError(
+                f'Modelo {modelo_id} tem saldo {saldo[modelo_id]} mas nao foi alocado. '
+                'Toda alocacao deve ser explicita.'
+            )
+
+    # Validar destinos — H1: lock pessimista em cada sep destino para impedir
+    # que outra transacao finalize/cancele entre validacao e execucao.
+    destinos_seps: Dict[int, AssaiSeparacao] = {}
+    if destinos_distintos:
+        # ORDER BY id para evitar deadlock entre transacoes lockando seps em ordens distintas
+        seps = (
+            AssaiSeparacao.query
+            .filter(AssaiSeparacao.id.in_(destinos_distintos))
+            .order_by(AssaiSeparacao.id.asc())
+            .with_for_update()
+            .all()
+        )
+        destinos_seps = {s.id: s for s in seps}
+        for did in destinos_distintos:
+            d = destinos_seps.get(did)
+            if not d:
+                raise SeparacaoValidationError(f'Sep destino {did} nao encontrada')
+            if d.status != SEPARACAO_STATUS_EM_SEPARACAO:
+                raise SeparacaoValidationError(
+                    f'Sep destino {did} esta {d.status} (precisa EM_SEPARACAO)'
+                )
+            if d.pedido_id != sep_origem.pedido_id or d.loja_id != sep_origem.loja_id:
+                raise SeparacaoValidationError(
+                    f'Sep destino {did} tem (pedido, loja) diferente da origem'
+                )
+            if did == sep_origem_id:
+                raise SeparacaoValidationError('Sep destino nao pode ser a propria origem')
+
+    # ====== Executar ======
+    # 1. Reduzir qtd_planejada da origem para qtd_escaneada por modelo com saldo
+    qtd_escaneada_orig = _qtd_escaneada_por_modelo(sep_origem_id)
+    for modelo_id in saldo:
+        sm = AssaiSeparacaoSaldoModelo.query.filter_by(
+            separacao_id=sep_origem_id, modelo_id=modelo_id,
+        ).first()
+        if sm:
+            nova_qtd = qtd_escaneada_orig.get(modelo_id, 0)
+            if nova_qtd <= 0:
+                # Sem chassis escaneados — remove placeholder (alternativa: deixar 0 viola CHECK qtd>0)
+                db.session.delete(sm)
+            else:
+                sm.qtd_planejada = nova_qtd
+
+    # 2. Incrementar qtd_planejada nos destinos
+    for a in alocacoes:
+        sep_destino_id = a.get('sep_destino_id')
+        modelo_id = int(a['modelo_id'])
+        qtd = int(a['qtd'])
+
+        if sep_destino_id is None:
+            continue  # voltar ao pedido: ja reduziu da origem; nada mais a fazer
+
+        sm = AssaiSeparacaoSaldoModelo.query.filter_by(
+            separacao_id=int(sep_destino_id), modelo_id=modelo_id,
+        ).first()
+        if sm:
+            sm.qtd_planejada = int(sm.qtd_planejada) + qtd
+        else:
+            sm = AssaiSeparacaoSaldoModelo(
+                separacao_id=int(sep_destino_id),
+                modelo_id=modelo_id,
+                qtd_planejada=qtd,
+            )
+            db.session.add(sm)
+
+    db.session.flush()
+
+    import logging
+    logging.getLogger(__name__).info(
+        'realocar_saldo: origem=%s alocacoes=%s operador=%s',
+        sep_origem_id, alocacoes, operador_id,
+    )
+
+
+# Modos de finalizacao com saldo
+FINALIZAR_MODO_AUTO = 'auto'              # finaliza direto se sem_saldo; senao erro com plano
+FINALIZAR_MODO_VOLTAR_SALDO = 'voltar_saldo'   # caso A op1: reduz qtd_planejada para qtd_escaneada
+FINALIZAR_MODO_MANTER_PLANEJADO = 'manter_planejado'  # caso A op2: mantem qtd_planejada (divergencia)
+FINALIZAR_MODO_REALOCAR = 'realocar'      # caso B: usa alocacoes
+
+
+class SeparacaoSaldoPendenteError(SeparacaoValidationError):
+    """Saldo nao-separado existe e modo='auto' — UI precisa decidir."""
+    def __init__(self, plano: Dict[str, Any]):
+        super().__init__(
+            f'Saldo nao-separado: cenario={plano["cenario"]}, '
+            f'modelos={len(plano["modelos_info"])} — UI precisa decidir'
+        )
+        self.plano = plano
+
+
+def finalizar_separacao_com_decisao(
+    sep_id: int,
+    operador_id: int,
+    *,
+    modo: str = FINALIZAR_MODO_AUTO,
+    alocacoes: Optional[List[Dict[str, Any]]] = None,
+    saldo_version: Optional[str] = None,
+) -> AssaiSeparacao:
+    """Finaliza separacao com tratamento de saldo nao-separado.
+
+    Modos:
+        - 'auto': se sem saldo, finaliza direto. Se ha saldo, levanta
+          SeparacaoSaldoPendenteError com o plano para UI decidir.
+        - 'voltar_saldo' (caso A op1): reduz qtd_planejada para qtd_escaneada
+          em cada modelo com saldo. Saldo retorna ao pedido (volta a
+          saldo_pendente_por_modelo). Finaliza.
+        - 'manter_planejado' (caso A op2): mantem qtd_planejada original.
+          Finaliza com divergencia registrada (qtd_escaneada < qtd_planejada).
+          NF Q.P.A. ajusta posteriormente (task #9).
+        - 'realocar' (caso B): chama realocar_saldo() com alocacoes. Finaliza.
+
+    Reaproveita finalizar_separacao() existente para o passo final (mirror + commit).
+    """
+    sep = AssaiSeparacao.query.get_or_404(sep_id)
+    if sep.status != SEPARACAO_STATUS_EM_SEPARACAO:
+        raise SeparacaoValidationError(
+            f'Apenas EM_SEPARACAO permite finalizar. Atual: {sep.status}'
+        )
+
+    plano = analisar_finalizacao(sep_id)
+    cenario = plano['cenario']
+
+    if cenario == 'sem_saldo':
+        # Fast-path — qualquer modo aceita
+        return finalizar_separacao(sep_id, operador_id)
+
+    # Ha saldo nao-separado
+    if modo == FINALIZAR_MODO_AUTO:
+        raise SeparacaoSaldoPendenteError(plano)
+
+    if modo == FINALIZAR_MODO_VOLTAR_SALDO:
+        # Caso A op1: reduz qtd_planejada para qtd_escaneada (saldo volta ao pedido).
+        # H2: se ZERO chassis escaneados em todos os modelos com saldo, NAO finaliza
+        # como FECHADA fantasma — cancela automaticamente (decisao usuario 2026-05-12).
+        qtd_esc = _qtd_escaneada_por_modelo(sep_id)
+        total_escaneado = sum(qtd_esc.values())
+        if total_escaneado == 0:
+            # Separacao sem chassis escaneados — cancelar
+            return cancelar_separacao(
+                sep_id,
+                motivo='Saldo voltado ao pedido sem escaneio (auto-cancelado)',
+                operador_id=operador_id,
+            )
+
+        # Tem algum chassi escaneado em algum modelo — reduzir qtd_planejada
+        for modelo_id in plano['saldo']:
+            sm = AssaiSeparacaoSaldoModelo.query.filter_by(
+                separacao_id=sep_id, modelo_id=modelo_id,
+            ).first()
+            if sm:
+                nova_qtd = qtd_esc.get(modelo_id, 0)
+                if nova_qtd <= 0:
+                    db.session.delete(sm)
+                else:
+                    sm.qtd_planejada = nova_qtd
+        db.session.flush()
+        return finalizar_separacao(sep_id, operador_id)
+
+    if modo == FINALIZAR_MODO_MANTER_PLANEJADO:
+        # Caso A op2: mantem qtd_planejada (sep fica FECHADA com divergencia).
+        # Nao mexe em AssaiSeparacaoSaldoModelo. Finaliza direto.
+        return finalizar_separacao(sep_id, operador_id)
+
+    if modo == FINALIZAR_MODO_REALOCAR:
+        # Caso B: realoca via alocacoes
+        if not alocacoes:
+            raise SeparacaoValidationError(
+                "modo='realocar' exige alocacoes (lista nao vazia)"
+            )
+        # H3 TOCTOU: validar saldo_version (checksum do saldo no momento do GET)
+        # contra saldo atual. Se diferente, outro operador alterou estado entre
+        # GET analisar e POST finalizar — UI precisa re-renderizar modal.
+        if saldo_version is not None:
+            saldo_atual = plano['saldo']
+            if _saldo_version(saldo_atual) != saldo_version:
+                raise SeparacaoSaldoPendenteError(plano)
+        realocar_saldo(sep_id, alocacoes, operador_id)
+        return finalizar_separacao(sep_id, operador_id)
+
+    raise SeparacaoValidationError(f'Modo desconhecido: {modo}')
+
+
+# =====================================================================
+# Ajuste pos-NF: NF Q.P.A. e fonte de verdade (Task #9 — 2026-05-12)
+# =====================================================================
+#
+# Regra de negocio (2026-05-12): quando NF Q.P.A. e importada e TODOS os
+# chassis existem em assai_moto, a separacao e AJUSTADA para refletir a NF:
+#   1. Chassi da NF nao estava na sep alvo? -> ADICIONAR (move de outra sep
+#      ativa ou registra novo evento SEPARADA se estava em outro estado).
+#   2. Chassi estava na sep alvo mas NAO veio na NF? -> REMOVER (emite
+#      DISPONIVEL para o chassi voltar ao estoque).
+#
+# Apos ajuste, _calcular_match() naturalmente detecta BATEU porque todos os
+# chassis da NF estao na sep alvo.
+#
+# Sep alvo: AssaiSeparacao com mais chassis em comum com a NF, no mesmo
+# loja_id, em estado EM_SEPARACAO ou FECHADA. Se NF nao tem loja ou nao ha
+# sep candidata, retorna ok=False (fallback para _calcular_match).
+
+
+def ajustar_separacao_pela_nf(nf_id: int, operador_id: int) -> Dict[str, Any]:
+    """Ajusta separacao(oes) para refletir a NF Q.P.A. (fonte de verdade).
+
+    Pre-condicao: TODOS os chassis da NF devem existir em assai_moto. Se
+    algum nao existe, retorna ok=False e nao muta estado.
+
+    Returns:
+        {
+            'ok': bool,
+            'chassis_desconhecidos': [str],  # chassis em NF nao cadastrados
+            'sep_alvo_id': int | None,
+            'chassis_adicionados': [str],
+            'chassis_removidos': [str],
+            'razao': str,                    # mensagem explicativa
+        }
+    """
+    from app.motos_assai.models import AssaiNfQpa, AssaiNfQpaItem
+
+    nf = AssaiNfQpa.query.get(nf_id)
+    if not nf:
+        return {
+            'ok': False, 'chassis_desconhecidos': [], 'sep_alvo_id': None,
+            'chassis_adicionados': [], 'chassis_removidos': [],
+            'razao': f'NF {nf_id} nao encontrada',
+        }
+
+    items_nf = AssaiNfQpaItem.query.filter_by(nf_id=nf_id).all()
+    chassis_nf = [it.chassi for it in items_nf if it.chassi]
+    chassis_nf_set = set(chassis_nf)
+
+    if not chassis_nf:
+        return {
+            'ok': False, 'chassis_desconhecidos': [], 'sep_alvo_id': None,
+            'chassis_adicionados': [], 'chassis_removidos': [],
+            'razao': 'NF sem chassis extraidos',
+        }
+
+    # 1. Verificar existencia de TODOS os chassis em assai_moto
+    motos = AssaiMoto.query.filter(AssaiMoto.chassi.in_(chassis_nf)).all()
+    chassis_existentes = {m.chassi for m in motos}
+    desconhecidos = [c for c in chassis_nf if c not in chassis_existentes]
+    if desconhecidos:
+        return {
+            'ok': False, 'chassis_desconhecidos': desconhecidos,
+            'sep_alvo_id': None, 'chassis_adicionados': [], 'chassis_removidos': [],
+            'razao': f'{len(desconhecidos)} chassi(s) da NF nao cadastrado(s) em assai_moto',
+        }
+
+    # 2. Determinar sep alvo: precisa de loja
+    if not nf.loja_id:
+        return {
+            'ok': False, 'chassis_desconhecidos': [],
+            'sep_alvo_id': None, 'chassis_adicionados': [], 'chassis_removidos': [],
+            'razao': 'NF sem loja_id — nao foi possivel escolher sep alvo',
+        }
+
+    # M2 (2026-05-12): derivar pedido_id provavel da NF a partir dos chassis.
+    # Filtrando candidatas APENAS dentro do pedido inferido evita parar NF na
+    # sep de OUTRO pedido da mesma loja.
+    pedidos_via_chassi = (
+        db.session.query(AssaiSeparacao.pedido_id, func.count(AssaiSeparacaoItem.id))
+        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+        .filter(
+            AssaiSeparacaoItem.chassi.in_(chassis_nf),
+            AssaiSeparacao.status.in_([SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA]),
+            AssaiSeparacao.loja_id == nf.loja_id,
+        )
+        .group_by(AssaiSeparacao.pedido_id)
+        .order_by(func.count(AssaiSeparacaoItem.id).desc())
+        .all()
+    )
+    if pedidos_via_chassi:
+        # Pedido com mais chassis em comum
+        pedido_inferido_id = pedidos_via_chassi[0][0]
+    else:
+        # Sem chassis ja separados — fallback: NAO restringir por pedido_id, mas
+        # exigir que apenas 1 pedido tenha sep ativa na loja para nao ficar ambiguo
+        pedidos_seps_loja = (
+            db.session.query(AssaiSeparacao.pedido_id)
+            .filter(
+                AssaiSeparacao.loja_id == nf.loja_id,
+                AssaiSeparacao.status.in_([SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA]),
+            )
+            .distinct().all()
+        )
+        if len(pedidos_seps_loja) != 1:
+            return {
+                'ok': False, 'chassis_desconhecidos': [],
+                'sep_alvo_id': None, 'chassis_adicionados': [], 'chassis_removidos': [],
+                'razao': (
+                    f'NF sem chassis em separacao ativa e loja {nf.loja_id} tem '
+                    f'{len(pedidos_seps_loja)} pedido(s) candidato(s) — ambiguidade'
+                ),
+            }
+        pedido_inferido_id = pedidos_seps_loja[0][0]
+
+    # Sep alvo = mais chassis em comum DENTRO do pedido inferido
+    seps_candidatas = (
+        AssaiSeparacao.query
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_inferido_id,
+            AssaiSeparacao.loja_id == nf.loja_id,
+            AssaiSeparacao.status.in_([SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA]),
+        )
+        .all()
+    )
+    if not seps_candidatas:
+        return {
+            'ok': False, 'chassis_desconhecidos': [],
+            'sep_alvo_id': None, 'chassis_adicionados': [], 'chassis_removidos': [],
+            'razao': f'Nenhuma separacao ativa no pedido {pedido_inferido_id} loja {nf.loja_id}',
+        }
+
+    melhor_sep = None
+    melhor_count = -1
+    for s in seps_candidatas:
+        items = AssaiSeparacaoItem.query.filter_by(separacao_id=s.id).all()
+        chassis_s = {it.chassi for it in items}
+        em_comum = len(chassis_s & chassis_nf_set)
+        if em_comum > melhor_count:
+            melhor_count = em_comum
+            melhor_sep = s
+    sep_alvo: AssaiSeparacao = melhor_sep  # type: ignore[assignment]
+
+    # 3. Adicionar chassis da NF que nao estao na sep_alvo
+    items_alvo = AssaiSeparacaoItem.query.filter_by(separacao_id=sep_alvo.id).all()
+    chassis_na_alvo = {it.chassi for it in items_alvo}
+
+    chassis_adicionados: List[str] = []
+    item_nf_por_chassi = {it.chassi: it for it in items_nf}
+    moto_por_chassi = {m.chassi: m for m in motos}
+
+    for chassi in chassis_nf:
+        if chassi in chassis_na_alvo:
+            continue  # ja esta
+
+        # K7: lock pessimista em AssaiMoto antes de mover/adicionar chassi.
+        # Sem isso, race com `registrar_chassi` concorrente pode causar chassi
+        # em 2 seps simultaneamente.
+        AssaiMoto.query.filter_by(chassi=chassi).with_for_update(of=AssaiMoto).first()
+
+        # Esta em outra sep ativa? (re-query apos lock para visao consistente)
+        outra_item = (
+            db.session.query(AssaiSeparacaoItem)
+            .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
+            .filter(
+                AssaiSeparacaoItem.chassi == chassi,
+                AssaiSeparacao.status.notin_([SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA]),
+                AssaiSeparacaoItem.separacao_id != sep_alvo.id,
+            )
+            .first()
+        )
+
+        moto = moto_por_chassi.get(chassi)
+        if not moto:
+            continue  # invariante quebrada — ja validamos acima, mas defensive
+
+        # Valor: priorizar valor do AssaiNfQpaItem (NF e SOT); fallback 0
+        nf_item = item_nf_por_chassi.get(chassi)
+        valor_unit = (nf_item.valor_extraido if nf_item and nf_item.valor_extraido is not None
+                      else Decimal('0'))
+
+        if outra_item:
+            # Mover: delete antiga, create nova na alvo. Nao emite evento DISPONIVEL/SEPARADA
+            # — o chassi continua SEPARADA, so muda de separacao.
+            db.session.delete(outra_item)
+            db.session.flush()
+            new_item = AssaiSeparacaoItem(
+                separacao_id=sep_alvo.id,
+                chassi=chassi,
+                modelo_id=moto.modelo_id,
+                valor_unitario_qpa=valor_unit,
+                registrada_por_id=operador_id,
+            )
+            db.session.add(new_item)
+        else:
+            # Adicionar: chassi esta DISPONIVEL/MONTADA/etc — registra SEPARADA
+            new_item = AssaiSeparacaoItem(
+                separacao_id=sep_alvo.id,
+                chassi=chassi,
+                modelo_id=moto.modelo_id,
+                valor_unitario_qpa=valor_unit,
+                registrada_por_id=operador_id,
+            )
+            db.session.add(new_item)
+            emitir_evento(
+                chassi, EVENTO_SEPARADA,
+                operador_id=operador_id,
+                observacao=f'ajustado pela NF {nf.numero}',
+                dados_extras={'nf_id': nf_id, 'separacao_id': sep_alvo.id, 'ajuste_pos_nf': True},
+            )
+
+        chassis_adicionados.append(chassi)
+
+    # 4. Remover chassis da sep_alvo que NAO vieram na NF
+    chassis_removidos: List[str] = []
+    for it in items_alvo:
+        if it.chassi not in chassis_nf_set:
+            chassi = it.chassi
+            db.session.delete(it)
+            emitir_evento(
+                chassi, EVENTO_DISPONIVEL,
+                operador_id=operador_id,
+                observacao=f'removido pela NF {nf.numero}',
+                dados_extras={'nf_id': nf_id, 'separacao_id': sep_alvo.id, 'ajuste_pos_nf': True},
+            )
+            chassis_removidos.append(chassi)
+
+    db.session.flush()
+
+    import logging
+    logging.getLogger(__name__).info(
+        'ajustar_separacao_pela_nf: nf=%s sep_alvo=%s adicionados=%s removidos=%s',
+        nf_id, sep_alvo.id, chassis_adicionados, chassis_removidos,
+    )
+
+    return {
+        'ok': True,
+        'chassis_desconhecidos': [],
+        'sep_alvo_id': sep_alvo.id,
+        'chassis_adicionados': chassis_adicionados,
+        'chassis_removidos': chassis_removidos,
+        'razao': f'sep_alvo={sep_alvo.id}, +{len(chassis_adicionados)} chassi(s), -{len(chassis_removidos)} chassi(s)',
+    }
+
+
+# =====================================================================
+# Agendamento por loja (Task #6 — 2026-05-12)
+# =====================================================================
+
+_PRESERVAR = object()  # Sentinela para distinguir "preservar" de "limpar (set NULL)"
+
+
+def atualizar_agendamento_loja(
+    pedido_id: int, loja_id: int,
+    expedicao=_PRESERVAR, agendamento=_PRESERVAR,
+    protocolo=_PRESERVAR,
+    agendamento_confirmado=_PRESERVAR,
+    operador_id: Optional[int] = None,
+):
+    """Cria ou atualiza AssaiPedidoVendaLoja com os 4 campos.
+
+    Cabecalho propaga automaticamente para items via FK (relationship).
+    Se ja existem separacoes FECHADAS para (pedido, loja), chama
+    `propagar_4_campos_para_espelho` para atualizar linhas espelho em
+    `separacao` Nacom — assim os campos chegam ao lista_pedidos.html.
+
+    K10 (2026-05-12): semantica explicita via sentinela `_PRESERVAR`:
+    - `_PRESERVAR` (default): nao mexe no campo (param omitido).
+    - `None`: SET NULL (limpar campo).
+    - valor concreto: SET valor.
+
+    Caller via JSON (route `pedidos_agendamento_loja`) DEVE normalizar:
+    - chave ausente no body -> passar `_PRESERVAR` (omitir kwarg).
+    - chave com valor `''`/`null` -> passar `None` (limpar).
+    - chave com valor concreto -> passar o valor.
+
+    Args:
+        pedido_id, loja_id: identifica o cabecalho.
+        expedicao, agendamento (date|None|_PRESERVAR).
+        protocolo (str|None|_PRESERVAR).
+        agendamento_confirmado (bool|None|_PRESERVAR) — Boolean, mas pode receber
+          None para limpar (campo no DB e NOT NULL DEFAULT FALSE; limpar = False).
+        operador_id: para auditoria.
+
+    Returns:
+        AssaiPedidoVendaLoja (criado ou atualizado).
+    """
+    from app.motos_assai.models import AssaiPedidoVendaLoja
+    from app.utils.timezone import agora_brasil_naive
+
+    pvl = AssaiPedidoVendaLoja.query.filter_by(
+        pedido_id=pedido_id, loja_id=loja_id,
+    ).first()
+
+    if not pvl:
+        # Criar — verificar que ha pedido/loja
+        ped = AssaiPedidoVenda.query.get(pedido_id)
+        if not ped:
+            raise SeparacaoValidationError(f'Pedido {pedido_id} nao encontrado')
+        from app.motos_assai.models import AssaiLoja
+        if not AssaiLoja.query.get(loja_id):
+            raise SeparacaoValidationError(f'Loja {loja_id} nao encontrada')
+        pvl = AssaiPedidoVendaLoja(
+            pedido_id=pedido_id, loja_id=loja_id,
+        )
+        db.session.add(pvl)
+
+    # K10: _PRESERVAR = nao mexer; None = limpar (SET NULL/False); valor = setar.
+    if expedicao is not _PRESERVAR:
+        pvl.expedicao = expedicao  # date ou None
+    if agendamento is not _PRESERVAR:
+        pvl.agendamento = agendamento  # date ou None
+    if protocolo is not _PRESERVAR:
+        # str vazia tambem trata como None (SET NULL)
+        pvl.protocolo = protocolo if protocolo else None
+    if agendamento_confirmado is not _PRESERVAR:
+        # Campo no DB e NOT NULL DEFAULT FALSE. None -> False (default).
+        pvl.agendamento_confirmado = bool(agendamento_confirmado) if agendamento_confirmado is not None else False
+    pvl.atualizado_em = agora_brasil_naive()
+
+    db.session.flush()
+
+    # Propagar para espelho em separacoes ja FECHADAS (lote ja criado em
+    # `separacao` Nacom). Separacoes EM_SEPARACAO ainda nao espelham — quando
+    # forem finalizadas, o mirror le os 4 campos via fallback.
+    seps_espelhadas = (
+        AssaiSeparacao.query
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_id,
+            AssaiSeparacao.loja_id == loja_id,
+            AssaiSeparacao.status.in_([SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA]),
+        )
+        .all()
+    )
+    if seps_espelhadas:
+        from app.motos_assai.services.separacao_mirror_service import propagar_4_campos_para_espelho
+        for sep in seps_espelhadas:
+            propagar_4_campos_para_espelho(sep.id)
+
+    db.session.commit()
+
+    import logging
+    logging.getLogger(__name__).info(
+        'atualizar_agendamento_loja: pedido=%s loja=%s exp=%s ag=%s '
+        'prot=%s conf=%s seps_propagadas=%d operador=%s',
+        pedido_id, loja_id, pvl.expedicao, pvl.agendamento,
+        pvl.protocolo, pvl.agendamento_confirmado, len(seps_espelhadas), operador_id,
+    )
+
+    return pvl
+
+
+# =====================================================================
+# Criacao de separacao com placeholder de qtd planejada (Task #7 — 2026-05-12)
+# =====================================================================
+
+def criar_separacao_com_saldos(
+    pedido_id: int, loja_id: int,
+    alocacoes: List[Dict[str, int]],
+    operador_id: int,
+) -> AssaiSeparacao:
+    """Cria nova separacao EM_SEPARACAO com qtd planejada por modelo.
+
+    Args:
+        pedido_id, loja_id: (pedido, loja) alvo.
+        alocacoes: [{modelo_id, qtd}] — pelo menos 1 modelo com qtd > 0.
+        operador_id: para auditoria.
+
+    Validacoes:
+        - Cada modelo_id pertence ao pedido (existe item em AssaiPedidoVendaItem).
+        - Cada qtd > 0.
+        - Sum(qtd por modelo) <= saldo_pendente do modelo (considerando outras seps).
+
+    Concorrencia (K6): serializa criacoes do mesmo pedido via `with_for_update`
+    no AssaiPedidoVenda. Sem isso, 2 ops concorrentes podem ambos passar a
+    validacao "qtd <= saldo" e gerar overplanning.
+
+    Returns:
+        AssaiSeparacao recem-criada.
+    """
+    if not alocacoes:
+        raise SeparacaoValidationError('alocacoes nao pode ser vazia')
+
+    # Lock pessimista no pedido — outras transacoes concorrentes que tentem
+    # criar/realocar saldos do mesmo pedido aguardam.
+    ped = (
+        AssaiPedidoVenda.query
+        .filter_by(id=pedido_id)
+        .with_for_update()
+        .first()
+    )
+    if not ped:
+        raise SeparacaoValidationError(f'Pedido {pedido_id} nao encontrado')
+
+    # Validar saldo pendente por modelo (apos lock, leitura consistente)
+    saldos = saldo_pendente_por_modelo(pedido_id, loja_id)
+    saldo_por_modelo = {s['modelo_id']: s['qtd_pendente'] for s in saldos}
+
+    # Agregar alocacoes por modelo (defender contra duplicatas)
+    alocacao_agregada: Dict[int, int] = {}
+    for a in alocacoes:
+        modelo_id = int(a['modelo_id'])
+        qtd = int(a['qtd'])
+        if qtd <= 0:
+            raise SeparacaoValidationError(
+                f'qtd deve ser > 0 (modelo {modelo_id}, qtd={qtd})'
+            )
+        alocacao_agregada[modelo_id] = alocacao_agregada.get(modelo_id, 0) + qtd
+
+    # Validar contra saldo
+    for modelo_id, qtd_total in alocacao_agregada.items():
+        saldo = saldo_por_modelo.get(modelo_id)
+        if saldo is None:
+            raise SeparacaoValidationError(
+                f'Modelo {modelo_id} nao pertence ao pedido {pedido_id} loja {loja_id}'
+            )
+        if qtd_total > saldo:
+            raise SeparacaoValidationError(
+                f'Modelo {modelo_id}: qtd {qtd_total} excede saldo pendente {saldo}'
+            )
+
+    # H8: copiar 4 campos do cabecalho AssaiPedidoVendaLoja como valor INICIAL
+    # da sep (operador pode alterar depois via UI). Padrao Nacom: sep tem valor.
+    from app.motos_assai.models import AssaiPedidoVendaLoja
+    pvl = AssaiPedidoVendaLoja.query.filter_by(
+        pedido_id=pedido_id, loja_id=loja_id,
+    ).first()
+
+    # Criar separacao + saldos
+    sep = AssaiSeparacao(
+        pedido_id=pedido_id, loja_id=loja_id,
+        status=SEPARACAO_STATUS_EM_SEPARACAO,
+        # Inicializa 4 campos da sep com referencia do cabecalho (se existe)
+        expedicao=pvl.expedicao if pvl else None,
+        agendamento=pvl.agendamento if pvl else None,
+        protocolo=pvl.protocolo if pvl else None,
+        agendamento_confirmado=bool(pvl.agendamento_confirmado) if pvl else False,
+    )
+    db.session.add(sep)
+    db.session.flush()  # garantir sep.id
+
+    for modelo_id, qtd in alocacao_agregada.items():
+        sm = AssaiSeparacaoSaldoModelo(
+            separacao_id=sep.id,
+            modelo_id=modelo_id,
+            qtd_planejada=qtd,
+        )
+        db.session.add(sm)
+
+    db.session.flush()
+    db.session.commit()
+
+    import logging
+    logging.getLogger(__name__).info(
+        'criar_separacao_com_saldos: pedido=%s loja=%s sep_id=%s '
+        'alocacoes=%s operador=%s',
+        pedido_id, loja_id, sep.id, alocacao_agregada, operador_id,
+    )
+
+    return sep

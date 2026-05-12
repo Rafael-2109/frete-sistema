@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 262,
+  "total_tabelas": 264,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -289,8 +289,17 @@
       "description": "Tabela assai_pedido_venda_item",
       "key_fields": [
         "pedido_id",
+        "pedido_loja_id",
+        "loja_id"
+      ]
+    },
+    {
+      "name": "assai_pedido_venda_loja",
+      "description": "Tabela assai_pedido_venda_loja",
+      "key_fields": [
+        "pedido_id",
         "loja_id",
-        "modelo_id"
+        "expedicao"
       ]
     },
     {
@@ -327,6 +336,15 @@
         "separacao_id",
         "chassi",
         "modelo_id"
+      ]
+    },
+    {
+      "name": "assai_separacao_saldo_modelo",
+      "description": "Tabela assai_separacao_saldo_modelo",
+      "key_fields": [
+        "separacao_id",
+        "modelo_id",
+        "qtd_planejada"
       ]
     },
     {

@@ -14,6 +14,12 @@
       "nullable": false
     },
     {
+      "name": "pedido_loja_id",
+      "type": "integer",
+      "description": "FK → assai_pedido_venda_loja.id",
+      "nullable": false
+    },
+    {
       "name": "loja_id",
       "type": "integer",
       "description": "FK → assai_loja.id",
@@ -47,6 +53,10 @@
       "references": "assai_pedido_venda.id"
     },
     {
+      "column": "pedido_loja_id",
+      "references": "assai_pedido_venda_loja.id"
+    },
+    {
       "column": "loja_id",
       "references": "assai_loja.id"
     },
@@ -64,16 +74,23 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_pedido_venda_item_modelo_id",
+      "name": "ix_assai_pedido_venda_item_loja_id",
       "columns": [
-        "modelo_id"
+        "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_pedido_venda_item_loja_id",
+      "name": "ix_assai_pedido_venda_item_pedido_loja_id",
       "columns": [
-        "loja_id"
+        "pedido_loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_pedido_venda_item_modelo_id",
+      "columns": [
+        "modelo_id"
       ],
       "unique": false
     }

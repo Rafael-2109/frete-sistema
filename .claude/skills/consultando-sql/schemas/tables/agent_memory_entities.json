@@ -52,10 +52,9 @@
   ],
   "indices": [
     {
-      "name": "idx_ame_user_type",
+      "name": "idx_ame_entity_key",
       "columns": [
-        "user_id",
-        "entity_type"
+        "entity_key"
       ],
       "unique": false
     },
@@ -67,9 +66,10 @@
       "unique": false
     },
     {
-      "name": "idx_ame_entity_key",
+      "name": "idx_ame_user_type",
       "columns": [
-        "entity_key"
+        "user_id",
+        "entity_type"
       ],
       "unique": false
     }

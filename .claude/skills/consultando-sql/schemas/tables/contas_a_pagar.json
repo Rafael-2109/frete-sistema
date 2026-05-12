@@ -228,9 +228,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_metodo_baixa",
+      "name": "idx_conta_pagar_vencimento",
       "columns": [
-        "metodo_baixa"
+        "vencimento"
       ],
       "unique": false
     },
@@ -242,9 +242,9 @@
       "unique": false
     },
     {
-      "name": "idx_conta_pagar_vencimento",
+      "name": "ix_contas_a_pagar_metodo_baixa",
       "columns": [
-        "vencimento"
+        "metodo_baixa"
       ],
       "unique": false
     },

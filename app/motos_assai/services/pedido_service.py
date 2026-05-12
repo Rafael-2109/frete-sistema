@@ -28,7 +28,8 @@ import pdfplumber
 from app import db
 from app.utils.file_storage import FileStorage
 from app.motos_assai.models import (
-    AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiLoja, AssaiModelo,
+    AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
+    AssaiLoja, AssaiModelo,
     PEDIDO_STATUS_ABERTO,
 )
 from app.motos_assai.services.parsers.qpa_pedido_extractor import QpaPedidoExtractor
@@ -138,6 +139,9 @@ def importar_pdf_voe(
         # Cache de lojas e modelos para não fazer N queries
         lojas_cache: Dict[str, AssaiLoja] = {}
         modelos_cache: Dict[str, Optional[AssaiModelo]] = {}
+        # Cache de cabecalhos AssaiPedidoVendaLoja por loja_id (Plano 5 — Migration 10):
+        # cada item DEVE apontar para um cabecalho via FK pedido_loja_id.
+        pedido_loja_cache: Dict[int, AssaiPedidoVendaLoja] = {}
 
         items_persistidos = 0
         items_pulados = []
@@ -180,8 +184,20 @@ def importar_pdf_voe(
                 existente.valor_total = (existente.valor_total or Decimal('0')) + Decimal(str(item['valor_total']))
                 continue
 
+            # Garantir cabecalho AssaiPedidoVendaLoja para esta loja (Plano 5).
+            # Criado on-demand no primeiro item da loja; reutilizado pelos demais
+            # via cache. INSERT ... ON CONFLICT teria sido mais seguro mas como
+            # estamos dentro de uma transacao unica (commit no final), basta cache.
+            if loja.id not in pedido_loja_cache:
+                pvl = AssaiPedidoVendaLoja(pedido_id=pedido.id, loja_id=loja.id)
+                db.session.add(pvl)
+                db.session.flush()  # garante pvl.id
+                pedido_loja_cache[loja.id] = pvl
+            pedido_loja = pedido_loja_cache[loja.id]
+
             db.session.add(AssaiPedidoVendaItem(
                 pedido_id=pedido.id,
+                pedido_loja_id=pedido_loja.id,
                 loja_id=loja.id,
                 modelo_id=modelo.id,
                 qtd_pedida=int(item['qtd']),

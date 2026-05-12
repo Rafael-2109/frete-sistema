@@ -160,37 +160,9 @@
   ],
   "indices": [
     {
-      "name": "idx_em_status_finalizacao",
+      "name": "idx_em_reagendar",
       "columns": [
-        "status_finalizacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_entregue",
-      "columns": [
-        "entregue"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_nf_cd",
-      "columns": [
-        "nf_cd"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_origem",
-      "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_data_embarque",
-      "columns": [
-        "data_embarque"
+        "reagendar"
       ],
       "unique": false
     },
@@ -198,20 +170,6 @@
       "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
         "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_data_agenda",
-      "columns": [
-        "data_agenda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_transportadora",
-      "columns": [
-        "transportadora"
       ],
       "unique": false
     },
@@ -230,16 +188,58 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_faturamento",
+      "name": "idx_em_status_finalizacao",
       "columns": [
-        "data_faturamento"
+        "status_finalizacao"
       ],
       "unique": false
     },
     {
-      "name": "idx_em_reagendar",
+      "name": "ix_entregas_monitoradas_origem",
       "columns": [
-        "reagendar"
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_entregue",
+      "columns": [
+        "entregue"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_nf_cd",
+      "columns": [
+        "nf_cd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_embarque",
+      "columns": [
+        "data_embarque"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_agenda",
+      "columns": [
+        "data_agenda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_transportadora",
+      "columns": [
+        "transportadora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_faturamento",
+      "columns": [
+        "data_faturamento"
       ],
       "unique": false
     }

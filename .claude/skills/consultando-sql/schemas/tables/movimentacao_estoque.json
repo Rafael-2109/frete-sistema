@@ -288,16 +288,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_tipo_movimentacao",
+      "name": "idx_movimentacao_nf_remessa_origem",
       "columns": [
-        "tipo_movimentacao"
+        "nf_remessa_origem"
       ],
       "unique": false
     },
     {
-      "name": "idx_movimentacao_nf_remessa_origem",
+      "name": "ix_movimentacao_estoque_tipo_movimentacao",
       "columns": [
-        "nf_remessa_origem"
+        "tipo_movimentacao"
       ],
       "unique": false
     },
@@ -323,16 +323,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_separacao_lote_id",
+      "name": "ix_movimentacao_estoque_nf_remessa_origem",
       "columns": [
-        "separacao_lote_id"
+        "nf_remessa_origem"
       ],
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_nf_remessa_origem",
+      "name": "ix_movimentacao_estoque_separacao_lote_id",
       "columns": [
-        "nf_remessa_origem"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -344,16 +344,16 @@
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_numero_nf",
+      "name": "ix_movimentacao_estoque_cnpj_responsavel",
       "columns": [
-        "numero_nf"
+        "cnpj_responsavel"
       ],
       "unique": false
     },
     {
-      "name": "ix_movimentacao_estoque_cnpj_responsavel",
+      "name": "ix_movimentacao_estoque_numero_nf",
       "columns": [
-        "cnpj_responsavel"
+        "numero_nf"
       ],
       "unique": false
     },

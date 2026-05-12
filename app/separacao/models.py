@@ -67,6 +67,13 @@ class Separacao(db.Model):
     falta_item = db.Column(db.Boolean, default=False, nullable=False)  # Indica se falta item no estoque
     falta_pagamento = db.Column(db.Boolean, default=False, nullable=False)  # Indica se pagamento está pendente
 
+    # 🏍️ Op. Assaí (Plano 5 — Migration 14, 2026-05-12): identifica o chassi
+    # quando esta linha espelha um AssaiSeparacaoItem (lotes 'ASSAI-SEP-%').
+    # Para lotes Nacom (LOTE_*) ou CarVia, fica NULL.
+    # UNIQUE parcial (separacao_lote_id, chassi_assai) garante 1 linha por chassi
+    # por lote Assai — granularidade real do mirror_assai_to_separacao.
+    chassi_assai = db.Column(db.String(50), nullable=True, index=True)
+
     # Relacionamento com cotação (para manter compatibilidade com Pedido)
     cotacao_id = db.Column(db.Integer, db.ForeignKey('cotacoes.id'), nullable=True)
 

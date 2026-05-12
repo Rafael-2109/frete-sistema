@@ -90,16 +90,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_modelo_pendente_origem",
+      "name": "ix_hora_modelo_pendente_status",
       "columns": [
-        "origem"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_modelo_pendente_status",
+      "name": "ix_hora_modelo_pendente_origem",
       "columns": [
-        "status"
+        "origem"
       ],
       "unique": false
     }
