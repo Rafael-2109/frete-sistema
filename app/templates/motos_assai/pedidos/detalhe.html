@@ -75,6 +75,45 @@
       <div id="loja-{{ loja.id }}" class="accordion-collapse collapse" data-bs-parent="#acc-lojas">
         <div class="accordion-body">
 
+          <!-- Item 2 (2026-05-12): 5 metricas por loja -->
+          {% set ml = metricas_loja.get(loja.id, {'total': 0, 'separado': 0, 'faturado': 0, 'entregue': 0, 'pendente': 0}) %}
+          <div class="row g-2 mb-3" id="resumo-loja-{{ loja.id }}">
+            <div class="col-auto">
+              <div class="card p-2 text-center" style="min-width: 90px;">
+                <small class="text-muted">Total</small>
+                <strong class="fs-5">{{ ml.total }}</strong>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="card p-2 text-center border-primary" style="min-width: 90px;">
+                <small class="text-muted">Separado</small>
+                <strong class="fs-5 text-primary">{{ ml.separado }}</strong>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="card p-2 text-center border-info" style="min-width: 90px;">
+                <small class="text-muted">Faturado</small>
+                <strong class="fs-5 text-info">{{ ml.faturado }}</strong>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="card p-2 text-center border-success" style="min-width: 90px;">
+                <small class="text-muted">Entregue</small>
+                <strong class="fs-5 text-success">{{ ml.entregue }}</strong>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="card p-2 text-center {% if ml.pendente > 0 %}border-warning{% endif %}" style="min-width: 90px;">
+                <small class="text-muted">Pendente</small>
+                {% if ml.pendente > 0 %}
+                  <strong class="fs-5 text-warning">{{ ml.pendente }}</strong>
+                {% else %}
+                  <strong class="fs-5 text-success">✓</strong>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
           <!-- Resumo agendamento + botao editar -->
           <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="small">

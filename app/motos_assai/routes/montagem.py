@@ -6,6 +6,9 @@ from app.motos_assai.services import (
     registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
     MontagemValidationError,
 )
+from app.motos_assai.services.resumo_service import (
+    listar_motos_montadas_agrupadas,
+)
 
 
 @motos_assai_bp.route('/montagem')
@@ -13,7 +16,14 @@ from app.motos_assai.services import (
 @require_motos_assai
 def montagem_tela():
     historico = historico_3_ultimas_montagens()
-    return render_template('motos_assai/montagem/quick.html', historico=historico)
+    # Item 1a (2026-05-12): exibir inventario atual de motos MONTADAS,
+    # agrupado por modelo. Inclui REVERTIDA_PARA_MONTADA (efetivo).
+    montadas = listar_motos_montadas_agrupadas()
+    return render_template(
+        'motos_assai/montagem/quick.html',
+        historico=historico,
+        montadas=montadas,
+    )
 
 
 @motos_assai_bp.route('/montagem/registrar', methods=['POST'])

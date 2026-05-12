@@ -8,6 +8,9 @@ from app.motos_assai.services import (
     historico_3_ultimas_disponibilizacoes,
     DisponibilizarValidationError,
 )
+from app.motos_assai.services.resumo_service import (
+    listar_motos_disponiveis_agrupadas,
+)
 
 
 @motos_assai_bp.route('/disponibilizar')
@@ -15,7 +18,14 @@ from app.motos_assai.services import (
 @require_motos_assai
 def disponibilizar_tela():
     historico = historico_3_ultimas_disponibilizacoes()
-    return render_template('motos_assai/disponibilizar/quick.html', historico=historico)
+    # Item 1b (2026-05-12): exibir inventario atual de motos DISPONIVEIS,
+    # agrupado por modelo (motos prontas para separacao).
+    disponiveis = listar_motos_disponiveis_agrupadas()
+    return render_template(
+        'motos_assai/disponibilizar/quick.html',
+        historico=historico,
+        disponiveis=disponiveis,
+    )
 
 
 @motos_assai_bp.route('/disponibilizar/registrar', methods=['POST'])

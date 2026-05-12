@@ -1,10 +1,12 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
-<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
   <div>
     <h2 class="mb-1">Faturamento</h2>
-    <p class="text-muted mb-0">Separações fechadas — gere Excel para Q.P.A. e suba a NF emitida.</p>
+    <p class="text-muted mb-0">
+      Separacoes fechadas + NFs Q.P.A. importadas (vinculadas e orfas).
+    </p>
   </div>
   <a id="btn-upload-nf-lote"
      href="{{ url_for('motos_assai.faturamento_upload_nf') }}"
@@ -14,35 +16,269 @@
   </a>
 </div>
 
-<div id="tabela-separacoes-fechadas" class="table-responsive">
-<table class="table table-hover">
-  <thead><tr><th>#</th><th>Pedido</th><th>Loja</th><th>Itens</th><th>Status</th><th>Excel</th><th>Ações</th></tr></thead>
-  <tbody>
-    {% set onboarding_fat = namespace(usou_id_excel=false, usou_id_upload=false) %}
-    {% for s in separacoes %}
-    <tr>
-      <td>{{ s.id }}</td>
-      <td>{{ s.pedido.numero }}</td>
-      <td>{{ s.loja.numero }} {{ s.loja.nome }}</td>
-      <td>{{ s.itens|length }}</td>
-      <td><span class="badge bg-secondary">{{ s.status }}</span></td>
-      <td>{% if s.solicitacao_excel_s3_key %}<i class="fas fa-check text-success"></i>{% else %}-{% endif %}</td>
-      <td>
-        {% set primeiro_excel = not onboarding_fat.usou_id_excel %}
-        {% if primeiro_excel %}{% set onboarding_fat.usou_id_excel = true %}{% endif %}
-        <a {% if primeiro_excel %}id="btn-gerar-excel"{% endif %}
-           href="{{ url_for('motos_assai.faturamento_solicitacao_excel', separacao_id=s.id) }}"
-           class="btn btn-sm btn-primary"><i class="fas fa-file-excel"></i> Excel</a>
-        {% set primeiro_upload = not onboarding_fat.usou_id_upload %}
-        {% if primeiro_upload %}{% set onboarding_fat.usou_id_upload = true %}{% endif %}
-        <a {% if primeiro_upload %}id="btn-upload-nf"{% endif %}
-           href="{{ url_for('motos_assai.faturamento_upload_nf', separacao_id=s.id) }}"
-           class="btn btn-sm btn-outline-primary"><i class="fas fa-upload"></i> Upload NF</a>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<!-- ============ Separacoes FECHADA / FATURADA ============ -->
+<div class="mb-4">
+  <h5 class="mb-2">
+    <i class="fas fa-boxes text-primary"></i>
+    Separacoes prontas para faturar
+    <span class="badge bg-primary ms-2">{{ separacoes|length }}</span>
+  </h5>
+
+  <div id="tabela-separacoes-fechadas" class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>#</th>
+        <th>Pedido</th>
+        <th>Loja</th>
+        <th>UF</th>
+        <th>Cidade</th>
+        <th>NF Q.P.A.</th>
+        <th class="text-center">Itens</th>
+        <th>Status sep.</th>
+        <th class="text-center">Excel</th>
+        <th class="text-end">Acoes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set onboarding_fat = namespace(usou_id_excel=false, usou_id_upload=false) %}
+      {% for row in separacoes %}
+        {% set sep = row.sep %}
+        {% set nf = row.nf %}
+        {% set loja = row.loja %}
+      <tr class="accordion-toggle-row"
+          data-bs-toggle="collapse"
+          data-bs-target="#sep-acc-{{ sep.id }}"
+          aria-expanded="false"
+          style="cursor: pointer;">
+        <td><strong>{{ sep.id }}</strong></td>
+        <td><code>{{ row.pedido_numero }}</code></td>
+        <td>
+          {% if loja %}
+            <strong>{{ loja.numero }}</strong> {{ loja.nome }}
+          {% else %}
+            -
+          {% endif %}
+        </td>
+        <td>{{ row.loja_uf }}</td>
+        <td>{{ row.loja_cidade }}</td>
+        <td>
+          {% if nf %}
+            <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}"
+               onclick="event.stopPropagation();"
+               class="text-decoration-none">
+              <code>{{ nf.numero or nf.chave_44[:8] ~ '...' }}</code>
+            </a>
+            <br>
+            {% if nf.status_match == 'BATEU' %}
+              <span class="badge bg-success">BATEU</span>
+            {% elif nf.status_match == 'DIVERGENTE' %}
+              <span class="badge bg-warning">DIVERGENTE</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ nf.status_match }}</span>
+            {% endif %}
+          {% else %}
+            <span class="text-muted small">— sem NF —</span>
+          {% endif %}
+        </td>
+        <td class="text-center">{{ row.qtd_items }}</td>
+        <td>
+          <span class="badge bg-{% if sep.status == 'FATURADA' %}info{% else %}success{% endif %}">
+            {{ sep.status }}
+          </span>
+        </td>
+        <td class="text-center">
+          {% if sep.solicitacao_excel_s3_key %}
+            <i class="fas fa-check text-success"
+               title="Excel ja gerado"></i>
+          {% else %}
+            -
+          {% endif %}
+        </td>
+        <td class="text-end">
+          {% set primeiro_excel = not onboarding_fat.usou_id_excel %}
+          {% if primeiro_excel %}{% set onboarding_fat.usou_id_excel = true %}{% endif %}
+          <a {% if primeiro_excel %}id="btn-gerar-excel"{% endif %}
+             href="{{ url_for('motos_assai.faturamento_solicitacao_excel', separacao_id=sep.id) }}"
+             onclick="event.stopPropagation();"
+             class="btn btn-sm btn-primary">
+            <i class="fas fa-file-excel"></i> Excel
+          </a>
+          {% set primeiro_upload = not onboarding_fat.usou_id_upload %}
+          {% if primeiro_upload %}{% set onboarding_fat.usou_id_upload = true %}{% endif %}
+          <a {% if primeiro_upload %}id="btn-upload-nf"{% endif %}
+             href="{{ url_for('motos_assai.faturamento_upload_nf', separacao_id=sep.id) }}"
+             onclick="event.stopPropagation();"
+             class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-upload"></i> NF
+          </a>
+        </td>
+      </tr>
+      <!-- Accordion expandivel com motos da separacao -->
+      <tr>
+        <td colspan="10" class="p-0 border-0">
+          <div id="sep-acc-{{ sep.id }}" class="collapse">
+            <div class="p-3 bg-light border-start border-end border-bottom">
+              <h6 class="mb-2">
+                <i class="fas fa-motorcycle"></i>
+                Motos da separacao #{{ sep.id }} ({{ row.qtd_items }})
+              </h6>
+              {% if row.items %}
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Chassi</th>
+                    <th>Modelo</th>
+                    <th>Cor</th>
+                    <th class="text-end">Valor unit.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for it in row.items %}
+                  <tr>
+                    <td><code>{{ it.chassi }}</code></td>
+                    <td>{{ it.modelo_codigo }} — {{ it.modelo_nome }}</td>
+                    <td>{{ it.cor }}</td>
+                    <td class="text-end">R$ {{ it.valor_unitario | numero_br(2) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <small class="text-muted">Sem motos vinculadas.</small>
+              {% endif %}
+            </div>{# /.p-3 #}
+          </div>{# /.collapse #}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="10" class="text-center text-muted py-3">
+          Nenhuma separacao fechada no momento.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ============ NFs orfas (sem BATEU ou sem separacao) ============ -->
+<div class="mb-4">
+  <h5 class="mb-2">
+    <i class="fas fa-file-invoice text-warning"></i>
+    NFs Q.P.A. importadas sem vinculacao com separacao
+    <span class="badge bg-warning ms-2">{{ nfs_orfas|length }}</span>
+    <small class="text-muted ms-2">
+      (status diferente de BATEU ou sem separacao associada)
+    </small>
+  </h5>
+
+  {% if nfs_orfas %}
+  <div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>#</th>
+        <th>Numero NF</th>
+        <th>Loja destinataria</th>
+        <th>UF</th>
+        <th>Cidade</th>
+        <th class="text-center">Itens</th>
+        <th>Match</th>
+        <th>Importada em</th>
+        <th class="text-end">Acoes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in nfs_orfas %}
+        {% set nf = row.nf %}
+      <tr class="accordion-toggle-row"
+          data-bs-toggle="collapse"
+          data-bs-target="#nf-acc-{{ nf.id }}"
+          aria-expanded="false"
+          style="cursor: pointer;">
+        <td><strong>{{ nf.id }}</strong></td>
+        <td>
+          <code>{{ nf.numero or nf.chave_44[:8] ~ '...' }}</code>
+          {% if nf.serie %}<small class="text-muted">/{{ nf.serie }}</small>{% endif %}
+        </td>
+        <td>{{ row.loja_label }}</td>
+        <td>{{ row.loja_uf }}</td>
+        <td>{{ row.loja_cidade }}</td>
+        <td class="text-center">{{ row.qtd_items }}</td>
+        <td>
+          {% if nf.status_match == 'DIVERGENTE' %}
+            <span class="badge bg-warning">DIVERGENTE</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ nf.status_match }}</span>
+          {% endif %}
+        </td>
+        <td class="small text-muted">
+          {{ nf.importada_em.strftime('%d/%m/%Y %H:%M') if nf.importada_em else '-' }}
+        </td>
+        <td class="text-end">
+          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}"
+             onclick="event.stopPropagation();"
+             class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-eye"></i> Detalhe
+          </a>
+        </td>
+      </tr>
+      <!-- Accordion expandivel com chassis da NF -->
+      <tr>
+        <td colspan="9" class="p-0 border-0">
+          <div id="nf-acc-{{ nf.id }}" class="collapse">
+            <div class="p-3 bg-light border-start border-end border-bottom">
+              <h6 class="mb-2">
+                <i class="fas fa-motorcycle"></i>
+                Chassis da NF {{ nf.numero }} ({{ row.qtd_items }})
+              </h6>
+              {% if row.items %}
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Chassi</th>
+                    <th>Modelo (extraido NF)</th>
+                    <th class="text-end">Valor unit.</th>
+                    <th>Divergencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for it in row.items %}
+                  <tr>
+                    <td><code>{{ it.chassi }}</code></td>
+                    <td>{{ it.modelo_extraido }}</td>
+                    <td class="text-end">R$ {{ it.valor_extraido | numero_br(2) }}</td>
+                    <td>
+                      {% if it.tipo_divergencia %}
+                        <span class="badge bg-warning">{{ it.tipo_divergencia }}</span>
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <small class="text-muted">NF sem chassis extraidos.</small>
+              {% endif %}
+            </div>{# /.p-3 #}
+          </div>{# /.collapse #}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="alert alert-light border small mb-0">
+    <i class="fas fa-check-circle text-success"></i>
+    Nenhuma NF orfa no momento — todas as NFs importadas estao vinculadas
+    a separacoes (BATEU).
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 

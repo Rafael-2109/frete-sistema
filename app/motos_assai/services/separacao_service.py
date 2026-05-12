@@ -72,6 +72,65 @@ def get_ou_criar_separacao(pedido_id: int, loja_id: int, operador_id: int) -> As
     return sep
 
 
+def saldo_pendente_por_pedido(pedido_id: int) -> Dict[int, List[Dict[str, Any]]]:
+    """Versao batch de `saldo_pendente_por_modelo` para TODAS as lojas do pedido.
+
+    Faz 2 queries (mesma quantidade da versao single-loja) e agrupa por loja
+    no Python. Usar em telas que listam todas as lojas do pedido (evita N+1
+    quando ha 38+ lojas como no layout canonico Q.P.A.).
+
+    Returns:
+        {loja_id: [{modelo_id, codigo, nome, qtd_pedida, qtd_separada,
+                    qtd_pendente, valor_unitario}]}.
+    """
+    rows = (
+        db.session.query(
+            AssaiPedidoVendaItem.loja_id,
+            AssaiPedidoVendaItem.modelo_id,
+            AssaiModelo.codigo,
+            AssaiModelo.nome,
+            AssaiPedidoVendaItem.qtd_pedida,
+            AssaiPedidoVendaItem.valor_unitario,
+        )
+        .join(AssaiModelo, AssaiModelo.id == AssaiPedidoVendaItem.modelo_id)
+        .filter(AssaiPedidoVendaItem.pedido_id == pedido_id)
+        .order_by(AssaiPedidoVendaItem.loja_id, AssaiModelo.codigo)
+        .all()
+    )
+
+    # SUM total de chassis ja separados por (loja_id, modelo_id) em TODAS as
+    # seps nao-canceladas do pedido. Com N seps ativas (Migration 13), agrega.
+    sums = (
+        db.session.query(
+            AssaiSeparacao.loja_id,
+            AssaiSeparacaoItem.modelo_id,
+            func.count(AssaiSeparacaoItem.id),
+        )
+        .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_id,
+            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+        )
+        .group_by(AssaiSeparacao.loja_id, AssaiSeparacaoItem.modelo_id)
+        .all()
+    )
+    qtd_separada: Dict[tuple, int] = {(lid, mid): int(n) for lid, mid, n in sums}
+
+    result: Dict[int, List[Dict[str, Any]]] = {}
+    for r in rows:
+        sep_qtd = qtd_separada.get((r.loja_id, r.modelo_id), 0)
+        result.setdefault(r.loja_id, []).append({
+            'modelo_id': r.modelo_id,
+            'codigo': r.codigo,
+            'nome': r.nome,
+            'qtd_pedida': r.qtd_pedida,
+            'qtd_separada': sep_qtd,
+            'qtd_pendente': max(0, r.qtd_pedida - sep_qtd),
+            'valor_unitario': r.valor_unitario,
+        })
+    return result
+
+
 def saldo_pendente_por_modelo(pedido_id: int, loja_id: int) -> List[Dict[str, Any]]:
     """Retorna [{modelo_id, codigo, nome, qtd_pedida, qtd_separada, qtd_pendente, valor_unitario}].
 

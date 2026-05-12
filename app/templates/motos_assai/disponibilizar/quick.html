@@ -35,6 +35,72 @@
   {% endwith %}
 </div>
 
+<!-- Item 1b (2026-05-12): inventario DISPONIVEIS agrupado por modelo -->
+<div class="mt-4" id="motos-disponiveis-block">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">
+      <i class="fas fa-check-circle text-success"></i>
+      Motos DISPONIVEIS atualmente
+      <span class="badge bg-success ms-2">{{ disponiveis.total }}</span>
+    </h5>
+    {% if disponiveis.total > 0 %}
+    <small class="text-muted">
+      Prontas para separacao (clique nas linhas para expandir)
+    </small>
+    {% endif %}
+  </div>
+
+  {% if disponiveis.modelos %}
+  <div class="accordion" id="acc-disponiveis">
+    {% for m in disponiveis.modelos %}
+    <div class="accordion-item">
+      <h6 class="accordion-header">
+        <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#disp-{{ m.modelo_id }}">
+          <strong class="me-2">{{ m.codigo }}</strong> {{ m.nome }}
+          <span class="badge bg-success ms-3">{{ m.qtd }}</span>
+        </button>
+      </h6>
+      <div id="disp-{{ m.modelo_id }}" class="accordion-collapse collapse"
+           data-bs-parent="#acc-disponiveis">
+        <div class="accordion-body p-2">
+          <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Chassi</th>
+                <th>Cor</th>
+                <th>Operador</th>
+                <th>Quando</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for moto in m.motos %}
+              <tr>
+                <td><code>{{ moto.chassi }}</code></td>
+                <td>{{ moto.cor }}</td>
+                <td class="small text-muted">{{ moto.operador_nome }}</td>
+                <td class="small text-muted">
+                  {{ moto.ocorrido_em.strftime('%d/%m/%Y %H:%M') if moto.ocorrido_em else '-' }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="alert alert-light border small mb-0">
+    <i class="fas fa-info-circle text-muted"></i>
+    Nenhuma moto em status DISPONIVEL no momento.
+  </div>
+  {% endif %}
+</div>
+
 <!-- Modal reverter -->
 <div class="modal fade" id="modal-reverter" tabindex="-1"
      data-endpoint-reverter="{{ url_for('motos_assai.disponibilizar_reverter') }}">

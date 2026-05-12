@@ -16,7 +16,13 @@ from app.motos_assai.models import (
 from app.motos_assai.services import (
     importar_pdf_voe, PedidoVoeJaExisteError, PedidoVoeParserError,
     atualizar_agendamento_loja, criar_separacao_com_saldos,
-    saldo_pendente_por_modelo, SeparacaoValidationError,
+    SeparacaoValidationError,
+)
+from app.motos_assai.services.separacao_service import (
+    saldo_pendente_por_pedido,
+)
+from app.motos_assai.services.resumo_service import (
+    metricas_por_pedido, metricas_por_pedido_loja,
 )
 
 
@@ -83,11 +89,14 @@ def pedidos_detalhe(pedido_id):
     pvls = AssaiPedidoVendaLoja.query.filter_by(pedido_id=pedido_id).all()
     pvl_por_loja = {p.loja_id: p for p in pvls}
 
-    # Saldo pendente por (loja, modelo) — qtd ja em separacoes nao-canceladas
+    # Saldo pendente por (loja, modelo) — qtd ja em separacoes nao-canceladas.
+    # Code review fix (2026-05-12): batch query (2 queries totais) em vez de
+    # N+1 (saldo_pendente_por_modelo chamado em loop por loja, geraria 2×38=76 queries).
+    saldo_por_loja = saldo_pendente_por_pedido(pedido_id)
     saldo_por_loja_modelo: dict = {}
-    for loja_obj in {it[0] for it in lojas_items}:
-        for s in saldo_pendente_por_modelo(pedido_id, loja_obj.id):
-            saldo_por_loja_modelo[(loja_obj.id, s['modelo_id'])] = s
+    for loja_id, saldos in saldo_por_loja.items():
+        for s in saldos:
+            saldo_por_loja_modelo[(loja_id, s['modelo_id'])] = s
 
     # Separacoes EM_SEPARACAO ativas por loja (para indicar checkbox/criar nova)
     seps_ativas = (
@@ -119,11 +128,16 @@ def pedidos_detalhe(pedido_id):
             'qtd_pendente': saldo.get('qtd_pendente', item.qtd_pedida),
         })
 
+    # Item 2 (2026-05-12): 5 metricas (total/separado/faturado/entregue/pendente)
+    # por loja, para exibir no header de cada accordion.
+    metricas_loja = metricas_por_pedido_loja(pedido_id)
+
     return render_template(
         'motos_assai/pedidos/detalhe.html',
         pedido=pedido,
         totais_por_modelo=totais_por_modelo,
         por_loja=list(por_loja.values()),
+        metricas_loja=metricas_loja,
     )
 
 
@@ -265,9 +279,14 @@ def pedidos_lista():
 
     pedidos = q.order_by(AssaiPedidoVenda.criado_em.desc()).limit(250).all()
 
+    # Item 2 (2026-05-12): 5 metricas (total/separado/faturado/entregue/pendente)
+    # por pedido. Em batch (1 query por metrica) para evitar N+1.
+    metricas = metricas_por_pedido([p.id for p in pedidos])
+
     return render_template(
         'motos_assai/pedidos/lista.html',
         pedidos=pedidos,
         status_filtro=status,
         statuses=['ABERTO', 'EM_PRODUCAO', 'SEPARANDO', 'FATURADO_PARCIAL', 'FATURADO', 'CANCELADO'],
+        metricas=metricas,
     )

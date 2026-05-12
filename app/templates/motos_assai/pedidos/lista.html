@@ -23,26 +23,70 @@
 </form>
 
 <div id="tabela-pedidos-voe" class="table-responsive">
-<table class="table table-hover">
+<table class="table table-hover align-middle">
   <thead>
     <tr>
-      <th>Número</th><th>Data emissão</th><th>Previsão</th>
-      <th>Parser</th><th class="text-end">Confiança</th><th>Status</th><th>Importado em</th>
+      <th>Número</th>
+      <th>Data emissão</th>
+      <th>Previsão</th>
+      <th>Status</th>
+      <th class="text-end" title="Soma de qtd_pedida do pedido">Total</th>
+      <th class="text-end" title="Chassis ja em separacao (nao cancelada)">Separado</th>
+      <th class="text-end" title="Chassis em separacao FATURADA">Faturado</th>
+      <th class="text-end" title="Chassis em entregas confirmadas (EntregaMonitorada OP_ASSAI)">Entregue</th>
+      <th class="text-end" title="Total - Separado">Pendente</th>
+      <th>Importado em</th>
     </tr>
   </thead>
   <tbody>
     {% for p in pedidos %}
+      {% set m = metricas.get(p.id, {'total': 0, 'separado': 0, 'faturado': 0, 'entregue': 0, 'pendente': 0}) %}
     <tr>
-      <td><a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=p.id) }}">{{ p.numero }}</a></td>
+      <td>
+        <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=p.id) }}">
+          {{ p.numero }}
+        </a>
+      </td>
       <td>{{ p.data_emissao.strftime('%d/%m/%Y') if p.data_emissao else '-' }}</td>
       <td>{{ p.previsao_entrega.strftime('%d/%m/%Y') if p.previsao_entrega else '-' }}</td>
-      <td><code class="small">{{ p.parser_usado or '-' }}</code></td>
-      <td class="text-end">{{ '%.0f%%' | format(p.parsing_confianca * 100) if p.parsing_confianca else '-' }}</td>
-      <td><span class="badge bg-secondary">{{ p.status }}</span></td>
+      <td>
+        <span class="badge bg-{% if p.status == 'FATURADO' %}info{% elif p.status == 'CANCELADO' %}danger{% elif p.status == 'SEPARANDO' %}primary{% elif p.status == 'EM_PRODUCAO' %}warning{% else %}secondary{% endif %}">
+          {{ p.status }}
+        </span>
+      </td>
+      <td class="text-end"><strong>{{ m.total }}</strong></td>
+      <td class="text-end">
+        {% if m.separado > 0 %}
+          <span class="badge bg-primary">{{ m.separado }}</span>
+        {% else %}
+          <span class="text-muted">0</span>
+        {% endif %}
+      </td>
+      <td class="text-end">
+        {% if m.faturado > 0 %}
+          <span class="badge bg-info">{{ m.faturado }}</span>
+        {% else %}
+          <span class="text-muted">0</span>
+        {% endif %}
+      </td>
+      <td class="text-end">
+        {% if m.entregue > 0 %}
+          <span class="badge bg-success">{{ m.entregue }}</span>
+        {% else %}
+          <span class="text-muted">0</span>
+        {% endif %}
+      </td>
+      <td class="text-end">
+        {% if m.pendente > 0 %}
+          <strong class="text-warning">{{ m.pendente }}</strong>
+        {% else %}
+          <span class="text-success">✓</span>
+        {% endif %}
+      </td>
       <td class="small text-muted">{{ p.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="text-center text-muted">Nenhum pedido importado.</td></tr>
+    <tr><td colspan="10" class="text-center text-muted">Nenhum pedido importado.</td></tr>
     {% endfor %}
   </tbody>
 </table>

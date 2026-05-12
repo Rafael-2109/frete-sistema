@@ -1,11 +1,15 @@
 from flask import render_template, redirect, url_for, flash, Response, current_app
 from flask_login import login_required, current_user
+from app import db
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import gerar_excel_qpa
 from app.motos_assai.models import (
-    AssaiSeparacao, AssaiNfQpa, AssaiNfQpaItem,
+    AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
+    AssaiNfQpa, AssaiNfQpaItem,
+    AssaiModelo,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
+    NF_STATUS_BATEU,
 )
 from app.motos_assai.forms import UploadNfQpaForm
 from app.motos_assai.services.parsers.nf_qpa_adapter import (
@@ -17,14 +21,113 @@ from app.motos_assai.services.parsers.nf_qpa_adapter import (
 @login_required
 @require_motos_assai
 def faturamento_lista():
-    seps = (
-        AssaiSeparacao.query
+    """Lista de SEPARACOES fechadas/faturadas + NFs Q.P.A. (vinculadas E orfas).
+
+    Item 1c (2026-05-12): unifica a visao de faturamento mostrando:
+      - Separacoes FECHADA/FATURADA com UF/cidade/pedido + NF vinculada (se houver)
+        + accordion com motos da separacao
+      - NFs Q.P.A. importadas que NAO bateram com separacao (orfas: sem
+        separacao_id OU status_match != BATEU) com accordion dos chassis
+    """
+    # === Separacoes FECHADA/FATURADA com NF vinculada via outerjoin ===
+    sep_rows = (
+        db.session.query(AssaiSeparacao, AssaiNfQpa)
+        .outerjoin(AssaiNfQpa, AssaiNfQpa.separacao_id == AssaiSeparacao.id)
         .filter(AssaiSeparacao.status.in_([SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA]))
-        .order_by(AssaiSeparacao.fechada_em.desc())
+        .order_by(AssaiSeparacao.fechada_em.desc().nullslast(),
+                  AssaiSeparacao.iniciada_em.desc())
         .limit(250)
         .all()
     )
-    return render_template('motos_assai/faturamento/lista_separacoes.html', separacoes=seps)
+
+    # Itens de TODAS as separacoes em batch (evita N+1 ao montar accordion)
+    sep_ids = [s.id for s, _nf in sep_rows]
+    items_por_sep: dict = {}
+    if sep_ids:
+        items_rows = (
+            db.session.query(AssaiSeparacaoItem, AssaiMoto, AssaiModelo)
+            .join(AssaiMoto, AssaiMoto.chassi == AssaiSeparacaoItem.chassi)
+            .join(AssaiModelo, AssaiModelo.id == AssaiSeparacaoItem.modelo_id)
+            .filter(AssaiSeparacaoItem.separacao_id.in_(sep_ids))
+            .order_by(AssaiSeparacaoItem.separacao_id, AssaiSeparacaoItem.id)
+            .all()
+        )
+        for item, moto, modelo in items_rows:
+            items_por_sep.setdefault(item.separacao_id, []).append({
+                'chassi': item.chassi,
+                'modelo_codigo': modelo.codigo,
+                'modelo_nome': modelo.nome,
+                'cor': moto.cor or '-',
+                'valor_unitario': float(item.valor_unitario_qpa or 0),
+            })
+
+    separacoes = []
+    for sep, nf in sep_rows:
+        loja = sep.loja
+        separacoes.append({
+            'sep': sep,
+            'nf': nf,
+            'loja': loja,
+            'loja_uf': (loja.uf if loja else '') or '-',
+            'loja_cidade': (loja.cidade if loja else '') or '-',
+            'pedido_numero': sep.pedido.numero if sep.pedido else '-',
+            'items': items_por_sep.get(sep.id, []),
+            'qtd_items': len(items_por_sep.get(sep.id, [])),
+        })
+
+    # === NFs orfas: status_match != BATEU OU separacao_id NULL ===
+    nfs_orfas_rows = (
+        AssaiNfQpa.query
+        .filter(
+            db.or_(
+                AssaiNfQpa.separacao_id.is_(None),
+                AssaiNfQpa.status_match != NF_STATUS_BATEU,
+            )
+        )
+        .order_by(AssaiNfQpa.importada_em.desc())
+        .limit(250)
+        .all()
+    )
+
+    # Items das NFs orfas em batch
+    nf_orfa_ids = [n.id for n in nfs_orfas_rows]
+    items_por_nf: dict = {}
+    if nf_orfa_ids:
+        nf_items = (
+            AssaiNfQpaItem.query
+            .filter(AssaiNfQpaItem.nf_id.in_(nf_orfa_ids))
+            .order_by(AssaiNfQpaItem.nf_id, AssaiNfQpaItem.id)
+            .all()
+        )
+        for it in nf_items:
+            items_por_nf.setdefault(it.nf_id, []).append({
+                'chassi': it.chassi,
+                'modelo_extraido': it.modelo_extraido or '-',
+                'valor_extraido': float(it.valor_extraido or 0),
+                'tipo_divergencia': it.tipo_divergencia,
+            })
+
+    nfs_orfas = []
+    for nf in nfs_orfas_rows:
+        loja = nf.loja
+        nfs_orfas.append({
+            'nf': nf,
+            'loja': loja,
+            'loja_uf': (loja.uf if loja else '') or '-',
+            'loja_cidade': (loja.cidade if loja else '') or '-',
+            'loja_label': (
+                f'{loja.numero} {loja.nome}' if loja
+                else (nf.destinatario_nome or '— sem loja identificada —')
+            ),
+            'items': items_por_nf.get(nf.id, []),
+            'qtd_items': len(items_por_nf.get(nf.id, [])),
+        })
+
+    return render_template(
+        'motos_assai/faturamento/lista_separacoes.html',
+        separacoes=separacoes,
+        nfs_orfas=nfs_orfas,
+    )
 
 
 @motos_assai_bp.route('/faturamento/separacao/<int:separacao_id>/excel')

@@ -430,3 +430,352 @@ def detalhe_em_pedido(modelo_id: int) -> List[Dict[str, Any]]:
             'qtd_pendente': pend,
         })
     return result
+
+
+# =====================================================================
+# Listagens agrupadas por modelo (Item 1 - exibições por tela)
+# =====================================================================
+# Diferentemente de detalhe_*(modelo_id), estas funcoes trazem TODAS as
+# motos de TODOS os modelos cujo ultimo evento esta em `tipos`, em UMA
+# unica query (evita N+1 quando o template lista varios modelos).
+#
+# Cada moto inclui: chassi, cor, ocorrido_em (timestamp), operador_nome, tipo.
+# O caller decide se quer agrupar por modelo no template (ex.: dict.items()).
+
+
+def _listar_motos_por_tipos(tipos) -> List[Dict[str, Any]]:
+    """Lista motos cujo ULTIMO evento.tipo esta em `tipos`, com dados do
+    evento (data, operador, tipo). UMA unica query — agrupa no caller.
+
+    Args:
+        tipos: tipo (str) ou iteravel de tipos de evento.
+
+    Returns:
+        [{'modelo_id', 'modelo_codigo', 'modelo_nome', 'chassi', 'cor',
+          'ocorrido_em' (datetime), 'operador_nome', 'tipo'}]
+        Ordenado por modelo_codigo, ocorrido_em DESC.
+    """
+    if isinstance(tipos, str):
+        tipos = (tipos,)
+    tipos = list(tipos)
+
+    sub = _ultimo_evento_subquery()
+
+    # Importacao tardia para evitar circular (Usuario fora deste modulo).
+    # Tabela 'usuarios' (Usuario) e importada onde necessario nos services
+    # via app.auth.models — segue padrao do MontagemEvento etc.
+    from app.auth.models import Usuario
+
+    rows = (
+        db.session.query(
+            AssaiMoto.modelo_id.label('modelo_id'),
+            AssaiModelo.codigo.label('modelo_codigo'),
+            AssaiModelo.nome.label('modelo_nome'),
+            AssaiMoto.chassi.label('chassi'),
+            AssaiMoto.cor.label('cor'),
+            AssaiMotoEvento.tipo.label('tipo'),
+            AssaiMotoEvento.ocorrido_em.label('ocorrido_em'),
+            Usuario.nome.label('operador_nome'),
+        )
+        .select_from(AssaiMoto)
+        .join(AssaiModelo, AssaiModelo.id == AssaiMoto.modelo_id)
+        .join(sub, sub.c.chassi == AssaiMoto.chassi)
+        .join(AssaiMotoEvento, AssaiMotoEvento.id == sub.c.ultimo_id)
+        .outerjoin(Usuario, Usuario.id == AssaiMotoEvento.operador_id)
+        .filter(AssaiMotoEvento.tipo.in_(tipos))
+        .order_by(AssaiModelo.codigo, AssaiMotoEvento.ocorrido_em.desc())
+        .all()
+    )
+
+    return [
+        {
+            'modelo_id': r.modelo_id,
+            'modelo_codigo': r.modelo_codigo,
+            'modelo_nome': r.modelo_nome,
+            'chassi': r.chassi,
+            'cor': r.cor or '-',
+            'ocorrido_em': r.ocorrido_em,
+            'operador_nome': r.operador_nome or '-',
+            'tipo': r.tipo,
+        }
+        for r in rows
+    ]
+
+
+def _agrupar_por_modelo(motos: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Agrupa lista de motos por modelo. Retorna {'total', 'modelos': [...]}.
+
+    Estrutura retornada:
+        {
+            'total': int,
+            'modelos': [
+                {
+                    'modelo_id', 'codigo', 'nome', 'qtd',
+                    'motos': [{chassi, cor, ocorrido_em, operador_nome, tipo}, ...],
+                },
+                ...
+            ]
+        }
+    Ordenado por modelo_codigo.
+    """
+    por_modelo: Dict[int, Dict[str, Any]] = {}
+    for m in motos:
+        bucket = por_modelo.setdefault(m['modelo_id'], {
+            'modelo_id': m['modelo_id'],
+            'codigo': m['modelo_codigo'],
+            'nome': m['modelo_nome'],
+            'qtd': 0,
+            'motos': [],
+        })
+        bucket['qtd'] += 1
+        bucket['motos'].append({
+            'chassi': m['chassi'],
+            'cor': m['cor'],
+            'ocorrido_em': m['ocorrido_em'],
+            'operador_nome': m['operador_nome'],
+            'tipo': m['tipo'],
+        })
+    modelos = sorted(por_modelo.values(), key=lambda b: b['codigo'])
+    total = sum(b['qtd'] for b in modelos)
+    return {'total': total, 'modelos': modelos}
+
+
+def listar_motos_montadas_agrupadas() -> Dict[str, Any]:
+    """Motos em status MONTADA efetivo (MONTADA ou REVERTIDA_PARA_MONTADA)
+    agrupadas por modelo. Usado pela tela /motos-assai/montagem.
+    """
+    motos = _listar_motos_por_tipos(STATUS_MONTADA_EFETIVO)
+    return _agrupar_por_modelo(motos)
+
+
+def listar_motos_disponiveis_agrupadas() -> Dict[str, Any]:
+    """Motos em status DISPONIVEL agrupadas por modelo.
+    Usado pela tela /motos-assai/disponibilizar.
+    """
+    motos = _listar_motos_por_tipos(EVENTO_DISPONIVEL)
+    return _agrupar_por_modelo(motos)
+
+
+# =====================================================================
+# Metricas por pedido / pedido x loja (Item 2 - resumos nas linhas)
+# =====================================================================
+# Cinco metricas por entidade:
+#   - total:     SUM(qtd_pedida) do(s) item(ns)
+#   - separado:  COUNT(AssaiSeparacaoItem) em seps != CANCELADA
+#   - faturado:  COUNT(AssaiSeparacaoItem) em seps FATURADA
+#   - entregue:  COUNT de chassis cujas NFs Q.P.A. estao em EntregaMonitorada
+#                origem='OP_ASSAI' com entregue=True
+#   - pendente:  total - separado
+#
+# Implementacao batch (uma query por metrica) para evitar N+1 quando a UI
+# precisa de varios pedidos (lista de pedidos).
+
+
+def metricas_por_pedido(pedido_ids: List[int]) -> Dict[int, Dict[str, int]]:
+    """Calcula 5 metricas (total/separado/faturado/entregue/pendente) por pedido.
+
+    Args:
+        pedido_ids: lista de ids de AssaiPedidoVenda.
+
+    Returns:
+        {pedido_id: {'total', 'separado', 'faturado', 'entregue', 'pendente'}}.
+        Pedidos sem itens vem com zero em tudo.
+    """
+    from app.motos_assai.models import (
+        AssaiNfQpa, AssaiNfQpaItem, NF_STATUS_BATEU,
+        SEPARACAO_STATUS_FATURADA,
+    )
+    from app.monitoramento.models import EntregaMonitorada
+
+    if not pedido_ids:
+        return {}
+
+    # Total: SUM qtd_pedida por pedido
+    totais = dict(
+        db.session.query(
+            AssaiPedidoVendaItem.pedido_id,
+            func.sum(AssaiPedidoVendaItem.qtd_pedida),
+        )
+        .filter(AssaiPedidoVendaItem.pedido_id.in_(pedido_ids))
+        .group_by(AssaiPedidoVendaItem.pedido_id)
+        .all()
+    )
+    totais = {pid: int(v or 0) for pid, v in totais.items()}
+
+    # Separado: COUNT items em seps != CANCELADA por pedido
+    separados = dict(
+        db.session.query(
+            AssaiSeparacao.pedido_id,
+            func.count(AssaiSeparacaoItem.id),
+        )
+        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+        .filter(
+            AssaiSeparacao.pedido_id.in_(pedido_ids),
+            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+        )
+        .group_by(AssaiSeparacao.pedido_id)
+        .all()
+    )
+    separados = {pid: int(v or 0) for pid, v in separados.items()}
+
+    # Faturado: COUNT items em seps FATURADA por pedido
+    faturados = dict(
+        db.session.query(
+            AssaiSeparacao.pedido_id,
+            func.count(AssaiSeparacaoItem.id),
+        )
+        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+        .filter(
+            AssaiSeparacao.pedido_id.in_(pedido_ids),
+            AssaiSeparacao.status == SEPARACAO_STATUS_FATURADA,
+        )
+        .group_by(AssaiSeparacao.pedido_id)
+        .all()
+    )
+    faturados = {pid: int(v or 0) for pid, v in faturados.items()}
+
+    # Entregue: COUNT DISTINCT de chassis de seps FATURADA cujos NFs estao em
+    # EntregaMonitorada(OP_ASSAI, entregue=True). Cada AssaiSeparacao->1 NF
+    # via assai_nf_qpa.separacao_id. Cada NF tem N items (chassis).
+    # Conta NfQpaItem da NF cuja entrega esta entregue=True.
+    #
+    # DISTINCT (code review fix 2026-05-12): EntregaMonitorada.numero_nf NAO
+    # tem UNIQUE constraint — duplicatas (mesmo numero_nf + origem='OP_ASSAI'
+    # + entregue=True) duplicariam a contagem via JOIN. DISTINCT em
+    # AssaiNfQpaItem.id garante 1 chassi = 1 contagem.
+    entregues_rows = (
+        db.session.query(
+            AssaiSeparacao.pedido_id,
+            func.count(AssaiNfQpaItem.id.distinct()),
+        )
+        .join(AssaiNfQpa, AssaiNfQpa.separacao_id == AssaiSeparacao.id)
+        .join(AssaiNfQpaItem, AssaiNfQpaItem.nf_id == AssaiNfQpa.id)
+        .join(
+            EntregaMonitorada,
+            db.and_(
+                EntregaMonitorada.numero_nf == AssaiNfQpa.numero,
+                EntregaMonitorada.origem == 'OP_ASSAI',
+                EntregaMonitorada.entregue == True,  # noqa: E712
+            ),
+        )
+        .filter(
+            AssaiSeparacao.pedido_id.in_(pedido_ids),
+            AssaiNfQpa.status_match == NF_STATUS_BATEU,
+        )
+        .group_by(AssaiSeparacao.pedido_id)
+        .all()
+    )
+    entregues = {pid: int(v or 0) for pid, v in entregues_rows}
+
+    # Monta resultado
+    result: Dict[int, Dict[str, int]] = {}
+    for pid in pedido_ids:
+        total = totais.get(pid, 0)
+        separado = separados.get(pid, 0)
+        result[pid] = {
+            'total': total,
+            'separado': separado,
+            'faturado': faturados.get(pid, 0),
+            'entregue': entregues.get(pid, 0),
+            'pendente': max(0, total - separado),
+        }
+    return result
+
+
+def metricas_por_pedido_loja(pedido_id: int) -> Dict[int, Dict[str, int]]:
+    """5 metricas por (pedido_id, loja_id). Igual a metricas_por_pedido mas
+    granularidade por loja. Usado em pedidos/detalhe.html (header accordion).
+
+    Returns:
+        {loja_id: {'total', 'separado', 'faturado', 'entregue', 'pendente'}}.
+    """
+    from app.motos_assai.models import (
+        AssaiNfQpa, AssaiNfQpaItem, NF_STATUS_BATEU,
+        SEPARACAO_STATUS_FATURADA,
+    )
+    from app.monitoramento.models import EntregaMonitorada
+
+    # Total por loja
+    totais = dict(
+        db.session.query(
+            AssaiPedidoVendaItem.loja_id,
+            func.sum(AssaiPedidoVendaItem.qtd_pedida),
+        )
+        .filter(AssaiPedidoVendaItem.pedido_id == pedido_id)
+        .group_by(AssaiPedidoVendaItem.loja_id)
+        .all()
+    )
+    totais = {lid: int(v or 0) for lid, v in totais.items()}
+
+    # Separado por loja
+    separados = dict(
+        db.session.query(
+            AssaiSeparacao.loja_id,
+            func.count(AssaiSeparacaoItem.id),
+        )
+        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_id,
+            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+        )
+        .group_by(AssaiSeparacao.loja_id)
+        .all()
+    )
+    separados = {lid: int(v or 0) for lid, v in separados.items()}
+
+    # Faturado por loja
+    faturados = dict(
+        db.session.query(
+            AssaiSeparacao.loja_id,
+            func.count(AssaiSeparacaoItem.id),
+        )
+        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_id,
+            AssaiSeparacao.status == SEPARACAO_STATUS_FATURADA,
+        )
+        .group_by(AssaiSeparacao.loja_id)
+        .all()
+    )
+    faturados = {lid: int(v or 0) for lid, v in faturados.items()}
+
+    # Entregue por loja
+    entregues_rows = (
+        db.session.query(
+            AssaiSeparacao.loja_id,
+            func.count(AssaiNfQpaItem.id),
+        )
+        .join(AssaiNfQpa, AssaiNfQpa.separacao_id == AssaiSeparacao.id)
+        .join(AssaiNfQpaItem, AssaiNfQpaItem.nf_id == AssaiNfQpa.id)
+        .join(
+            EntregaMonitorada,
+            db.and_(
+                EntregaMonitorada.numero_nf == AssaiNfQpa.numero,
+                EntregaMonitorada.origem == 'OP_ASSAI',
+                EntregaMonitorada.entregue == True,  # noqa: E712
+            ),
+        )
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_id,
+            AssaiNfQpa.status_match == NF_STATUS_BATEU,
+        )
+        .group_by(AssaiSeparacao.loja_id)
+        .all()
+    )
+    entregues = {lid: int(v or 0) for lid, v in entregues_rows}
+
+    # Lojas: union de todas que aparecem em qualquer metrica (garante presenca
+    # mesmo de lojas com 0 separado e total > 0)
+    todas_lojas = set(totais.keys()) | set(separados.keys()) | set(faturados.keys()) | set(entregues.keys())
+    result: Dict[int, Dict[str, int]] = {}
+    for lid in todas_lojas:
+        total = totais.get(lid, 0)
+        separado = separados.get(lid, 0)
+        result[lid] = {
+            'total': total,
+            'separado': separado,
+            'faturado': faturados.get(lid, 0),
+            'entregue': entregues.get(lid, 0),
+            'pendente': max(0, total - separado),
+        }
+    return result
