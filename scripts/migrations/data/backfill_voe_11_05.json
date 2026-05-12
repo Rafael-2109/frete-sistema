@@ -1,0 +1,5839 @@
+{
+  "origem": "VOE - FATURADO ATE 11.05.xlsx",
+  "gerado_em": "2026-05-11",
+  "total": 729,
+  "registros": [
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007354",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007355",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007357",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007359",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007362",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007363",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007364",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007365",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007366",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007368",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007369",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007371",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007372",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007373",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007374",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007375",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007377",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007378",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007370",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007379",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007380",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007382",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007385",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007386",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007388",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007393",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007395",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007396",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007397",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000587",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000589",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "FIAÇÃO DA PISCA TA INVERTIDA"
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000594",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000595",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000596",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000597",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000599",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000600",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000601",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000604",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000605",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000609",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000610",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000612",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000613",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000619",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000626",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000627",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000808",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000810",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000812",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000814",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PENE ELETRICA"
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000819",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000820",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000824",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000825",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000835",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000848",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006917",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006925",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006943",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007310",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007311",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007317",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007320",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007322",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007324",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007326",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007329",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007330",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007334",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007339",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007344",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007345",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007347",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110007352",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000545",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000550",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000795",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000796",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA120000804",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006873",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006876",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006877",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006880",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006881",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006882",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006887",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006888",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006890",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006892",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006894",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006895",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006897",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006901",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006902",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006904",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006907",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006908",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006910",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "SEM FREIO"
+    },
+    {
+      "data_chegada": "2026-05-07",
+      "chassi": "LA2025SA110006913",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009488",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009444",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110008981",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009059",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004626",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110008979",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "FIO DO USB QUEBRADO"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004707",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110008978",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009534",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009014",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "SEM PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004672",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004763",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "COR DO PARALAMA DIANTEIRO DIFERENTE"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009493",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009428",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "COR DO PARALAMA DIANTEIRO DIFERENTE"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009473",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004740",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009505",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "MCBRDOT2603110005",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009507",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "SEM PLACA, PARALAMA COR DIFERENTE"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009563",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009422",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "COR DO PARALAMA DIANTEIRO DIFERENTE, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009496",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009410",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004733",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "PARALAMA VEIO CINZA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009556",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009477",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009560",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009441",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009554",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009442",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009516",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "PARAFUSO DO PARACHOQUE TRASEIRO, PARALAMA DIANTEIRO CINZA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009513",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009506",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA, PARALAMA DIFERENTE, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009508",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA25860V1000W2863",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009497",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA, PARALAMA DIFERENTE, PCT DE PARSFUSO"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009413",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "COR DO PARALAMA DIANTEIRO DIFERENTE, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009520",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA, PARALAMA DIFERENTE, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009485",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "COR DO PARALAMA DIANTEIRO DIFERENTE"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009412",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "SEM PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009544",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004670",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009070",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004746",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004695",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004669",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004627",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004768",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004712",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BOTÃO DE MUDAR VELOCIDADE QUEBRADO, FALTA PAR DE RETROVISOR"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009011",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004665",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009009",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110008988",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009016",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004636",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004709",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA, PARALAMA DIFERENTE, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009037",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004671",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009057",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009007",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004616",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009041",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110001736",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004772",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004632",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004767",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "PARALAMA VEIO CINZA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004663",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004713",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009002",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004728",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004755",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "MCBRDOT2603110001",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009049",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009058",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "SEM PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009031",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004667",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009486",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009048",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "FALTA PCT DE PARAFUSO"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009418",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004635",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009068",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009004",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009006",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009017",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009538",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009015",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004771",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009051",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009073",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009003",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004615",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009056",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004623",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110008994",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA, PARALAMA D"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004682",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009008",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004766",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PLACA"
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004759",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110004697",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-30",
+      "chassi": "LA2025SA110009561",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "LA2025SA110006720",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672590",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672201",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672221",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672284",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672320",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672321",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672358",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672435",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "DISPONIVEL",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672439",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672457",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672468",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672484",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672490",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": "TRAVA NO BANCO"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672494",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672500",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672554",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672557",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672558",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672586",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672616",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "DISPONIVEL",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672640",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672648",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672757",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672781",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672783",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672786",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672811",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672814",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672817",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672845",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672850",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672887",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673316",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673319",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673324",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673326",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673407",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673431",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BAU QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673468",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170060",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": "BAU QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672888",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "FIAÇÃO QUEBRADA, PARALAMA TRA. QUEBRADO"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672241",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672291",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672350",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672382",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672396",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672424",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672430",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672472",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672479",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672509",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672523",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672566",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672568",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672583",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672612",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "PARALAMA TRA. QUEBRADO, PUNHO DE LUZ,SETA,BUZINA,FAROL QUEBRADO, MANETE DE FREIO QUEBRADO"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672654",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "SUPORTE DE PLACA QUEBRADO"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672669",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672699",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672717",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "PAINEL VEIO QUEBRADO"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672765",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672770",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672799",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672818",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672824",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672849",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672863",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672878",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672884",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672894",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672916",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673335",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "ESTOQUE",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504673415",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504678646",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672259",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672366",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672458",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA, FATA OS PÉZINHOS"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672660",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672676",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672692",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672892",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922504672902",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170001",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170002",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170007",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170009",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170010",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170016",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170018",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170022",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "DISPONIVEL",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170028",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170030",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170031",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170034",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170046",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170049",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170050",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170051",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170053",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-28",
+      "chassi": "172922512170054",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "BAÚ QUEBRADA"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M250825051",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106047",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106064",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106070",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104233",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104248",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106046",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106048",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106059",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106075",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103138",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104253",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106051",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106065",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103141",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104227",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104230",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104250",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251105066",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106057",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103131",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103148",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104240",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104254",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251105050",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103136",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103142",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104238",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "PENDENTE",
+      "problema": "FALTA PARALAMA DIANTEIRO E TRASEIRO, FALTA OLHO DE GATO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251105046",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106068",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104234",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104239",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104243",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104247",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251105044",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106052",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103145",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104242",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104251",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106053",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106043",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103150",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103156",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103159",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103144",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103147",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103153",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103157",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103154",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103160",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107043",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107064",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107080",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107088",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103149",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107065",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107072",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103139",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107066",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107069",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107077",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107090",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103135",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107047",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107067",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107082",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107093",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107041",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107071",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": "FALTA PARAFUSO DO EIXO GUIDÃO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107049",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107059",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107062",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107051",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107091",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107068",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "PENDENTE",
+      "problema": "AMORTECEDOR QUEBRADO, FALTA BUZINA, LANTERNA, SETA LADO ESQUERDO, RELÉ"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107070",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107087",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103151",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670492",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670504",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PROBLEMA NO MODULO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670497",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670728",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670493",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670495",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "RODA  TRASEIRA AMASSADA"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670625",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670484",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670577",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": "TRAVA DO BANCO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671773",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PANE, ENCOSTO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671965",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672131",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672414",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673255",
+      "modelo": "SOL",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671497",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671889",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672083",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672097",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672725",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672912",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673365",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673389",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PANE, FALTA PEZINHO, SUPORTE DE PLACA QUEBRADA, ENCOSTO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673411",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671659",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671808",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672006",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672020",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672224",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672442",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672709",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673395",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672189",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672501",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672584",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672745",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672869",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PANE, ENCONTO, MANETE DE FREIO QUEBRADO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672909",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673259",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673362",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671571",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672425",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672752",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PROBLEMA NO MOTOR"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672840",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671902",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671926",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672101",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672535",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672599",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672806",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671680",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672777",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671505",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671668",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671819",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "BUCHA DO GUIDÃO, ENCOSTO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671847",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "FALTA PEZINHO, ENCOSTO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671989",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "FALTA PEZINHO, ENCOSTO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670198",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671707",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106062",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251105058",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106066",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104252",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106050",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251106067",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104245",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251105065",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": "FALTA PEZINHO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103134",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251104228",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107076",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107081",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107084",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": "PÉZINHO C DEFEITO, FALTA PARALAMA"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251103074",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107054",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107085",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107061",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107040",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107074",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107092",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107050",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107056",
+      "modelo": "X11 NAC",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671518",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671580",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671721",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672150",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504670425",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671849",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504677001",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672519",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671914",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672310",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672349",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671686",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671803",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671894",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672113",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672830",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673474",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504671709",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672313",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "MCBRX11M251107079",
+      "modelo": "X11 NAC",
+      "cor": "AZUL",
+      "status": "FATURADAS",
+      "problema": "PANE NO PAINEL"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504672168",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "EM CURTO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673366",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "EM CURTO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673353",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "EM CURTO, PAINEL VEIO QUEBRADO"
+    },
+    {
+      "data_chegada": "2026-04-25",
+      "chassi": "172922504673409",
+      "modelo": "SOL",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PEZINHO, PARALAMA, LANTERNA TRASEIRA, ENCAIXE DO DO CESTO, PARACHOQUE TRASEIRO QUEBRADO, CAVALETE, MANETE DE FREIO, ENCOSTO"
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0535",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0573",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004197",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110009261",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0580",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0632",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0565",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0522",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110008064",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110009195",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0563",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0635",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0581",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0496",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0577",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0521",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0596",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0517",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0552",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0498",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0506",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0511",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0553",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0551",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0532",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0554",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0544",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0583",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0556",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0518",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0566",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0571",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W2885",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004215",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004151",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0650",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": "PAINEL C MAL CONTATO"
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0770",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004224",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110008894",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110008085",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110008071",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004217",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0579",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0749",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004295",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W2766",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "FREIO TRASEIRO NÃO ESTA PEGANDO"
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0779",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004389",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004236",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004273",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W2836",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110008889",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0588",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004378",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0529",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W2912",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110008111",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004178",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0680",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0637",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W0576",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110009286",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110004285",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA25860V1000W2777",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110008939",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-22",
+      "chassi": "LA2025SA110009321",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009269",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009294",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009379",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004403",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009276",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004427",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009291",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009375",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004370",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "MCBRDOT2603170001",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004390",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009378",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009385",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009339",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004359",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009275",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2810",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "PENDENTE",
+      "problema": "PARALAMA DIANTEIRO CINZA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004379",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": "CARENAGEM DA IGNIÇÃO"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004207",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009293",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009108",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2851",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009180",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009270",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009151",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0756",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009098",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "PENDENTE",
+      "problema": "ENCOSTO TRASEIRO, SEM PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004342",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004302",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008833",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004212",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PLACA, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008169",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PLACA, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0530",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PLACA, PÇ AJ CARENAGEM"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004247",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004448",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004165",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004196",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004272",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004277",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004324",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008095",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008121",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008201",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009115",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009124",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009316",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0512",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0525",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0537",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0561",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0598",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "MCBRDOT2603180002",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009403",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004190",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004371",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004341",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004431",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009258",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004387",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009313",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004330",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009274",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004411",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004420",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009283",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009394",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004412",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009352",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004377",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008918",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009349",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009147",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009338",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009259",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008831",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004297",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009125",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004383",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004357",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009289",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009100",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004329",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008837",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0760",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0750",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004137",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004145",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004154",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004173",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004180",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004181",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004182",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004195",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004238",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004275",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004283",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004319",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004365",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004367",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004369",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004398",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004413",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004422",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004436",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004451",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004452",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008086",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008099",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008102",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008146",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008150",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008828",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008862",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008867",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008888",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009095",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009228",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009233",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009243",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009297",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009319",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009320",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009357",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009362",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009406",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0505",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0513",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0519",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0520",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0524",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0531",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0533",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0536",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0541",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0548",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0550",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0558",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0578",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0585",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0601",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0636",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0660",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0662",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0699",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0742",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0785",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0797",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2812",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2849",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2879",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2882",
+      "modelo": "DOT",
+      "cor": "PRETO",
+      "status": "FATURADAS",
+      "problema": null
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0670",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "LATERAL C/ NOME ERRADO, ENCOSTO, SEM PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004150",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "SETAS DIANTEIRAS,PARALAMA DIANTEIRO, DOIS ACABAMENTOS TRASEIROS DOS AMORTECEDORES, ENCOSTO DA MOTO, RETOVISOR DIREITO E FALTA  PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008204",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0788",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009234",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0804",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004206",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008820",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004310",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004305",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008809",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, FALTA RETROVISOR, DISCO DO FREIO EMPENADO, FALTA PARAFUSO DO GUIDÃO, FALTA CARREGADOR, PASTILHA DIANTEIRA, ENCOSTO TRASEIRO, CARENAGEM DE IGNIÇÃO"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009111",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2869",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009171",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008830",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0768",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004225",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0664",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W0781",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA25860V1000W2890",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009186",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008139",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, RETOVISOR ESQUERDO, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008143",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, FALTA CARREGADOR, FALTA CARENAGEM TRASEIRA, ESCOSTO TRASEIRO, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004429",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110009345",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008795",
+      "modelo": "DOT",
+      "cor": "CINZA",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004163",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "PENDENTE",
+      "problema": "PÇ AJUSTE CARENAGEM, PLACA"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110004276",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "PENDENTE",
+      "problema": "LATERAL ESQUERDA TRINCADA, PÇ AJUSTE CARENAGEM, RETROVISOR ESQUERDO, FALTA PLACA, ENCOSTO TRASEIRO"
+    },
+    {
+      "data_chegada": "2026-04-15",
+      "chassi": "LA2025SA110008860",
+      "modelo": "DOT",
+      "cor": "BRANCO",
+      "status": "PENDENTE",
+      "problema": "FALTA PEZINHO, ENCOSTO, PLACA, PÇ AJ CARENAGEM"
+    }
+  ]
+}

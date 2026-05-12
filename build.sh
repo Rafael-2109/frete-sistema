@@ -199,6 +199,18 @@ echo "Pedido Compras: backfill cnpj_fornecedor NULL via Odoo..."
 python scripts/migrations/backfill_cnpj_pedido_compras_via_odoo.py --aplicar --max-pos 500 \
     || echo "⚠️ Backfill cnpj pedido_compras falhou, continuando deploy..."
 
+# 15. Motos Assai (2026-05-11): backfill 729 motos VOE "FATURADO ATE 11.05".
+# Le scripts/migrations/data/backfill_voe_11_05.json (134KB) e cria 1 compra
+# guarda-chuva (MA-BACKFILL-VOE-2026-05-11) + 6 recibos (1 por DATA DE CHEGADA)
+# + 729 AssaiReciboItem + 729 AssaiMoto + cadeia de eventos por chassi.
+# Mapeamento: FATURADAS -> DISPONIVEL (NF chega depois), PENDENTE -> PENDENTE,
+# PROBLEMA NO CHASSI registra evento PENDENTE para historico mesmo quando
+# status final nao e PENDENTE (PENDENTE -> PENDENCIA_RESOLVIDA).
+# Totalmente idempotente — sai com exit 0 se a compra ja existe.
+echo "Motos Assai: backfill VOE FATURADO ATE 11.05 (idempotente)..."
+python scripts/migrations/backfill_motos_assai_voe_11_05.py --executar \
+    || echo "⚠️ Backfill motos_assai VOE falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
