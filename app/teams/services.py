@@ -58,6 +58,14 @@ class StreamResult:
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
     resposta_card: Optional[Dict[str, Any]] = None
+    # Fix code-reviewer (R-CLI-CRASH 2026-05-12): flag explicita propagada
+    # quando o CLI subprocess crashou tentando --resume sessao ausente do
+    # session_store (client.py:2238 CASO 1). Antes, o retry funcionava por
+    # acidente (texto vazio + falta de event 'error' → check `not resposta_texto`
+    # disparava retry). Agora a flag torna o caso auditavel e protege contra
+    # regressao futura: se algum handler entre client.py e services.py
+    # adicionar texto sintetico, o retry continua sendo forcado.
+    recoverable_resume_failure: bool = False
 
     def __iter__(self):
         # Backward compat: permite unpacking posicional antigo de 6 campos.
@@ -1089,6 +1097,7 @@ def _obter_resposta_agente_streaming(
             cost_usd = 0.0
             cache_read_tokens = 0
             cache_creation_tokens = 0
+            recoverable_resume_failure = False  # R-CLI-CRASH 2026-05-12
             last_flush_time = time.monotonic()
             last_activity = time.monotonic()  # Renewal: atualizado a cada chunk
             stream_start = time.monotonic()   # Para log de elapsed time
@@ -1228,9 +1237,23 @@ def _obter_resposta_agente_streaming(
                     # Fase 4 (2026-04-21): cache tokens para observabilidade
                     cache_read_tokens = event.content.get('cache_read_tokens', 0) or 0
                     cache_creation_tokens = event.content.get('cache_creation_tokens', 0) or 0
+                    # Fix code-reviewer (R-CLI-CRASH 2026-05-12): capturar flag
+                    # explicita de recuperacao. Quando CLI crashou tentando
+                    # --resume sessao ausente, client.py emite done com
+                    # recoverable_resume_failure=True (sem event 'error').
+                    # Caller forca retry na proxima iteracao.
+                    if event.content.get('recoverable_resume_failure'):
+                        recoverable_resume_failure = True
+                        logger.warning(
+                            f"[TEAMS-STREAM] recoverable_resume_failure detectado — "
+                            f"forcando retry sem --resume na proxima tentativa"
+                        )
 
             # Se full_text vazio mas houve errors, montar texto sintetico
-            if not full_text and errors:
+            # EXCETO se o crash foi resume-related (caso 1 de client.py:2238) —
+            # nesse caso o retry sem --resume eh esperado funcionar; texto sintetico
+            # bypassaria o retry com mensagem confusa ao usuario.
+            if not full_text and errors and not recoverable_resume_failure:
                 full_text = (
                     "Desculpe, ocorreu um erro ao processar sua mensagem. "
                     "Tente novamente."
@@ -1249,6 +1272,7 @@ def _obter_resposta_agente_streaming(
                 cost_usd=cost_usd,
                 cache_read_tokens=cache_read_tokens,
                 cache_creation_tokens=cache_creation_tokens,
+                recoverable_resume_failure=recoverable_resume_failure,
             )
 
         # Deadline renewal integrado em _stream_with_flush (per-chunk timeout).

@@ -223,13 +223,43 @@ NUNCA remover o `yield None` no `finally` do generator — frontend trava espera
 
 **REGRA**: Ao adicionar NOVO error handler em `_stream_response()`, o `finally` block e a rede de seguranca definitiva — NAO precisa chamar `.set()` no novo handler (mas e boa pratica como defense-in-depth).
 
-### R4: AskUserQuestion — blocking cross-arquivo
+### R4: AskUserQuestion — blocking cross-arquivo + cross-worker (Redis)
 Fluxo cruza 3 arquivos: `pending_questions.py` → `permissions.py` → `routes/chat.py`
 - Web: event_queue SSE → frontend responde → POST `/api/user-answer` → Event.set()
 - Teams: TeamsTask.status='awaiting_user_input' → Adaptive Card → POST resposta → Event.set()
 - Timeout web: 55s. Timeout Teams: 120s (`TEAMS_ASK_USER_TIMEOUT`)
 
 Alterar um arquivo sem verificar os outros 2 quebra o fluxo silenciosamente.
+
+**R-CLI-CRASH (2026-05-12)**: `client.py:1957` respeita `resume_state['failed']`
+setado pelo probe ao session_store. Antes, codigo ignorava a flag e fazia
+`--resume X` mesmo com sessao confirmadamente ausente do PostgresSessionStore,
+causando CLI exit code 1 + `CLIConnectionError "Failed to write to process stdin"`
+em ~0.8s, com 2 retries automaticos do Teams services falhando identicamente
+(observado em ~22 ocorrencias/2h em prod). Fix:
+- `client.py:1957` (R1): se `probe_failed=True`, pular `_with_resume` e usar fallback
+  XML via hook `UserPromptSubmit` (`hooks.py:1036` injeta `resume_state['fallback']`
+  no `additionalContext`).
+- `client.py:2238` (R2): handler `CLIConnectionError` agora detecta resume-related
+  (elapsed < 5s + sem partial_text + resume_id) e emite `done` com
+  `recoverable_resume_failure=True` em vez de error visivel. Caller (Teams services
+  v2/v3) retenta — segunda tentativa entra com `resume_state['failed']=True`
+  novamente e o fix R1 evita o crash.
+- Defesa em profundidade: R1 evita 95% dos casos upstream; R2 captura edge cases
+  (ex: probe nao executou por excecao, mas CLI ainda crashou).
+
+**R-MULTIWORKER (2026-05-12)**: `pending_questions.py` usa Redis SETEX + pub/sub
+para sincronizar entre os 4 workers gunicorn. Antes, `_pending` era dict
+process-local → POST `/api/user-answer` caia em worker ≠ do registro em 75%
+das tentativas → 404 silencioso + timeout 55s. Solucao:
+- `register_question`: marca Redis `agent:pq:{sid}` (TTL 130s) + spawna subscriber
+  daemon thread que escuta `agent:pq:answer:{sid}` e `agent:pq:cancel:{sid}`.
+- `submit_answer` (qualquer worker): tenta local; se nao encontrar, valida Redis
+  EXISTS e faz PUBLISH. Subscriber no worker dono recebe e sinaliza Event LOCAL.
+- `get_pending_tool_input` tem fallback cross-worker via Redis GET.
+- Feature flag: `AGENT_REDIS_PENDING_QUESTIONS=false` faz rollback p/ memory-only.
+- Sem Redis: degrada para legacy (funciona dentro do mesmo worker, falha cross).
+- API publica 100% preservada — callsites em `permissions.py`, `chat.py`, `bot_routes.py` nao mudaram.
 
 ### R5: MCP tools — NAO callable
 Tools em `tools/` sao registros MCP (ToolAnnotations). O agente usa `mcp__X__Y` diretamente.

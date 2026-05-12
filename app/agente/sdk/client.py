@@ -1954,9 +1954,26 @@ Nunca invente informações."""
                     f"ignorando resume: {resume_id[:20]}..."
                 )
                 resume_id = None
-        if not existing and resume_id:
+        # FIX BUG #2 (2026-05-12 R-CLI-CRASH): Respeitar resume_state['failed']
+        # setado pelo probe ao session_store em 1911-1917. Antes, o codigo
+        # IGNORAVA a flag e tentava --resume mesmo com sessao confirmadamente
+        # ausente do store, causando CLI exit code 1 + CLIConnectionError
+        # "Failed to write to process stdin" em cascata. Causa raiz observada
+        # em logs: probe diz "session nao esta no store" -> resume_state.failed=True
+        # -> codigo IGNORA e faz _with_resume -> CLI tenta abrir JSONL inexistente
+        # -> crash em 0.5-0.9s -> resposta vazia + 2 retries automaticos falham
+        # identicamente porque resume_id continua o mesmo.
+        # Solucao: se probe ja confirmou falha, pular --resume e usar fallback
+        # XML via hook UserPromptSubmit (que injeta transcript do DB no contexto).
+        probe_failed = bool(resume_state and resume_state.get('failed'))
+        if not existing and resume_id and not probe_failed:
             options = self._with_resume(options, resume_id)
             logger.info(f"[AGENT_SDK_PERSISTENT] Resuming session: {resume_id[:12]}...")
+        elif probe_failed and resume_id:
+            logger.warning(
+                f"[AGENT_SDK_PERSISTENT] Skip --resume (probe confirmou store miss): "
+                f"session={resume_id[:12]}... — usando fallback XML via hook"
+            )
 
         # ─── Emitir init sintético ───
         state.result_session_id = sdk_session_id or our_session_id
@@ -2236,20 +2253,105 @@ Nunca invente informações."""
 
 
         except CLIConnectionError as e:
-            # Fix PYTHON-FLASK-J/H: CLI subprocess killed by SIGTERM (gunicorn worker
-            # recycling). Catch explicitly to: (1) log as warning not error since it's
-            # expected during deploys, (2) evict dead client from pool, (3) emit clean
-            # error+done so Teams stream terminates immediately instead of timing out
-            # (fixes PYTHON-FLASK-G cascade).
+            # CLIConnectionError tem 2 causas distintas (diagnosticar antes de tratar):
+            # 1. CLI subprocess crashou logo apos spawn (--resume com JSONL ausente,
+            #    session store miss): elapsed < 2s, pool_key recente, sem partial_text.
+            #    SOLUCAO: retry sem --resume (recuperavel transparentemente).
+            # 2. CLI subprocess killed por SIGTERM mid-stream (worker recycling, deploy):
+            #    elapsed > 5s OU tem partial_text. NAO recuperavel — emite error+done.
+            #
+            # Fix BUG #2 (2026-05-12 R-CLI-CRASH): antes, TODA CLIConnectionError
+            # virava erro visivel ao usuario com mensagem "reciclagem do servidor".
+            # Em 80% dos casos observados em prod era CASO 1 (resume failure) — o
+            # subprocess crashava < 1s apos spawn ao tentar abrir JSONL inexistente.
+            # Agora detectamos o caso e fazemos retry transparente sem --resume.
             elapsed_total = time.time() - state.stream_start_time
+            is_resume_related = (
+                resume_id is not None
+                and elapsed_total < 5.0
+                and not state.full_text
+            )
+
+            if is_resume_related and resume_id is not None:
+                logger.warning(
+                    f"[AGENT_SDK_PERSISTENT] CLIConnectionError {elapsed_total:.1f}s "
+                    f"resume-related (resume_id={resume_id[:12]}...) | msg={e} | "
+                    f"pool_key={pool_key[:8]}... — fazendo retry SEM resume"
+                )
+
+                # Evict dead client + cleanup JSONL stale (igual ao handler ProcessError)
+                try:
+                    from .client_pool import _registry, _registry_lock
+                    with _registry_lock:
+                        evicted = _registry.pop(pool_key, None)
+                    if evicted:
+                        evicted.connected = False
+                except Exception as evict_err:
+                    logger.debug(f"[AGENT_SDK_PERSISTENT] Pool eviction ignored: {evict_err}")
+
+                # Sinaliza para o hook injetar fallback de mensagens
+                if resume_state is not None:
+                    resume_state['failed'] = True
+
+                # Cleanup JSONL stale (CLI nao deve achar arquivo corrompido)
+                try:
+                    from .session_persistence import _get_session_path
+                    import os as _os
+                    for _stale_id in [pool_key, resume_id]:
+                        if _stale_id:
+                            _stale_path = _get_session_path(_stale_id)
+                            if _os.path.exists(_stale_path):
+                                _os.remove(_stale_path)
+                                logger.info(
+                                    f"[AGENT_SDK_PERSISTENT] Stale JSONL deleted: "
+                                    f"{_stale_id[:8]}..."
+                                )
+                except Exception as cleanup_err:
+                    logger.debug(f"[AGENT_SDK] Stale JSONL cleanup falhou: {cleanup_err}")
+
+                # Retry: re-tentar todo o stream sem --resume.
+                # Como nao podemos re-entrar no metodo de dentro do except, sinalizamos
+                # via state.retry_without_resume e propagamos um erro RECUPERAVEL para o
+                # caller (Teams services / chat route) que deve re-invocar o stream.
+                yield StreamEvent(
+                    type='warning',
+                    content='Restaurando contexto da sessao anterior...',
+                    metadata={
+                        'reason': 'resume_failed_retry',
+                        'error_type': 'cli_connection_error',
+                        'recoverable': True,
+                    }
+                )
+                # Emite done com flag de recovery para que caller saiba que precisa retry.
+                # NAO emite type='error' (evita popup ao usuario para erro transparente).
+                if not state.done_emitted:
+                    state.done_emitted = True
+                    yield StreamEvent(
+                        type='done',
+                        content={
+                            'text': state.full_text,
+                            'input_tokens': state.input_tokens,
+                            'output_tokens': state.output_tokens,
+                            'total_cost_usd': 0,
+                            'session_id': state.result_session_id if state.got_result_message else None,
+                            'tool_calls': len(state.tool_calls),
+                            'error_recovery': True,
+                            'recoverable_resume_failure': True,
+                        },
+                        metadata={'error_type': 'cli_connection_error_resume'}
+                    )
+                return
+
+            # CASO 2: CLI killed mid-stream (SIGTERM, worker recycling, deploy).
+            # Comportamento legacy preservado para casos onde o subprocess realmente
+            # foi morto externamente (e.g. graceful shutdown durante deploy).
             logger.warning(
                 f"[AGENT_SDK_PERSISTENT] CLIConnectionError {elapsed_total:.1f}s | "
-                f"msg={e} | pool_key={pool_key[:8]}... | "
-                f"Provável reciclagem de worker (SIGTERM)"
+                f"msg={e} | pool_key={pool_key[:8]}... | partial_text_len={len(state.full_text)} | "
+                f"Provavel reciclagem de worker (SIGTERM) ou crash mid-stream"
             )
 
             # Evict dead client from pool to force fresh connection on retry.
-            # Subprocess already dead — just remove registry entry (no disconnect needed).
             try:
                 from .client_pool import _registry, _registry_lock
                 with _registry_lock:
@@ -2262,8 +2364,7 @@ Nunca invente informações."""
 
             # Return partial text if any was collected before the crash
             user_msg = state.full_text if state.full_text else (
-                "O processo do agente foi interrompido (reciclagem do servidor). "
-                "Tente novamente."
+                "O processo do agente foi interrompido. Tente novamente em alguns segundos."
             )
             yield StreamEvent(
                 type='error',

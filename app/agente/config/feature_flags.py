@@ -428,6 +428,20 @@ PERSISTENT_CLIENT_IDLE_TIMEOUT = int(os.getenv("AGENT_CLIENT_IDLE_TIMEOUT", "900
 PERSISTENT_CLIENT_CLEANUP_INTERVAL = int(os.getenv("AGENT_CLIENT_CLEANUP_INTERVAL", "60"))  # 1 min
 
 # ====================================================================
+# AskUserQuestion cross-worker (Redis-backed)
+# ====================================================================
+# Habilita backing Redis para pending_questions (registry + pub/sub wakeup).
+# Resolve bug R-MULTIWORKER (2026-05-12): com 4 workers gunicorn, POST
+# /api/user-answer pode cair em worker diferente do que registrou a pergunta.
+# Sem Redis, ~75% das respostas viravam 404 e o agente esperava ate timeout.
+# Quando true: usa Redis SETEX + PUBLISH/SUBSCRIBE para sincronizar workers.
+# Quando false: comportamento legacy (memory-only, falha cross-worker).
+# Rollback instantaneo: AGENT_REDIS_PENDING_QUESTIONS=false + restart.
+USE_REDIS_PENDING_QUESTIONS = os.getenv(
+    "AGENT_REDIS_PENDING_QUESTIONS", "true"
+).lower() == "true"
+
+# ====================================================================
 # Custom System Prompt (Prompt Architecture v2)
 # ====================================================================
 
