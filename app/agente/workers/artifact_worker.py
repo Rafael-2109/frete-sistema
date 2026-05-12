@@ -163,7 +163,9 @@ def build_artifact_job(artifact_id: int) -> dict:
             }
 
         except Exception as e:
-            err_msg = str(e)[:1000]
+            # 2000 chars alinhado com truncamento do RuntimeError em _run_bundle.
+            # Coluna error_message no BD e TEXT sem limite — custo zero.
+            err_msg = str(e)[:2000]
             logger.error(
                 f"[ARTIFACT_WORKER] FALHA uuid={artifact.uuid[:8]}: {err_msg}",
                 exc_info=True,
@@ -287,8 +289,17 @@ def _run_bundle(project_dir: Path, bundle_path: Path) -> None:
         env=env,
     )
     if result.returncode != 0:
+        # Logar stdout completo em ERROR para diagnostico (npm install output
+        # critico fica no stdout, nao no stderr). RuntimeError leva trim maior.
+        logger.error(
+            f"[ARTIFACT_WORKER] bundle FAIL exit={result.returncode} "
+            f"stdout_tail=\n{result.stdout[-3000:]}"
+        )
+        logger.error(
+            f"[ARTIFACT_WORKER] bundle FAIL stderr_tail=\n{result.stderr[-3000:]}"
+        )
         raise RuntimeError(
             f"bundle-artifact.sh falhou (exit {result.returncode}): "
-            f"stderr={result.stderr[-500:]}"
+            f"stderr={result.stderr[-2000:]}"
         )
     logger.debug(f"[ARTIFACT_WORKER] bundle stdout={result.stdout[-300:]}")
