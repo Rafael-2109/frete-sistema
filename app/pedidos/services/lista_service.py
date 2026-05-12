@@ -94,9 +94,9 @@ class ListaPedidosService:
             'sub_rota': args.get('sub_rota', '').strip(),
         }
 
-        # Escopo: NACOM / CARVIA / GERAL (vazio)
+        # Escopo: NACOM / CARVIA / ASSAI / GERAL (vazio)
         origem = (args.get('origem', '') or '').strip().upper()
-        if origem not in ('NACOM', 'CARVIA'):
+        if origem not in ('NACOM', 'CARVIA', 'ASSAI'):
             origem = ''
 
         # Toggle "Apenas Pendentes" — pre-filtra universo
@@ -119,14 +119,24 @@ class ListaPedidosService:
     # ---------------------------------------------------------------
     @staticmethod
     def _apply_origem(query, origem):
-        """Aplica filtro de escopo NACOM/CARVIA via prefixo separacao_lote_id."""
+        """Aplica filtro de escopo NACOM/CARVIA/ASSAI via prefixo separacao_lote_id.
+
+        - CARVIA: lote `CARVIA-%`
+        - ASSAI: lote `ASSAI-%` (Op. Assai espelhada em `separacao` Nacom)
+        - NACOM: lote diferente de CARVIA-% e ASSAI-% (ou NULL)
+        """
         if origem == 'CARVIA':
             query = query.filter(Pedido.separacao_lote_id.like('CARVIA-%'))
+        elif origem == 'ASSAI':
+            query = query.filter(Pedido.separacao_lote_id.like('ASSAI-%'))
         elif origem == 'NACOM':
             query = query.filter(
                 db.or_(
                     Pedido.separacao_lote_id.is_(None),
-                    ~Pedido.separacao_lote_id.like('CARVIA-%')
+                    db.and_(
+                        ~Pedido.separacao_lote_id.like('CARVIA-%'),
+                        ~Pedido.separacao_lote_id.like('ASSAI-%'),
+                    )
                 )
             )
         return query

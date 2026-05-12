@@ -1,7 +1,7 @@
 import re
 from flask_wtf import FlaskForm
-from wtforms import StringField, BooleanField
-from wtforms.validators import DataRequired, Length, Optional, ValidationError
+from wtforms import StringField, BooleanField, DecimalField
+from wtforms.validators import DataRequired, Length, Optional, ValidationError, NumberRange
 
 
 def validar_regex_python(form, field):
@@ -24,6 +24,16 @@ class ModeloForm(FlaskForm):
     regex_chassi = StringField('Regex de validação de chassi (Python re)', validators=[
         Optional(), Length(max=120), validar_regex_python,
     ])
+    peso_kg = DecimalField(
+        'Peso físico (kg)', places=2,
+        validators=[Optional(), NumberRange(min=0, max=999999.99)],
+        description='Peso real da moto (usado em relatórios e portaria).',
+    )
+    peso_cubado_kg = DecimalField(
+        'Peso cubado (kg)', places=2,
+        validators=[Optional(), NumberRange(min=0, max=999999.99)],
+        description='Peso cubado usado no CÁLCULO DO FRETE (motos vão montadas → ocupam muito espaço).',
+    )
     ativo = BooleanField('Ativo', default=True)
 
 

@@ -129,6 +129,25 @@ def importar_nf_qpa(
     # Match
     _calcular_match(nf, importada_por_id)
     db.session.commit()
+
+    # Sincronizar EntregaMonitorada APOS commit — garante que a NF ja esta
+    # persistida com status_match=BATEU (lookup posterior nao depende de
+    # identity map). Nao-bloqueante: se sync falhar, NF e match permanecem.
+    if nf.status_match == NF_STATUS_BATEU and nf.numero:
+        try:
+            from app.utils.sincronizar_entregas_op_assai import (
+                sincronizar_entrega_op_assai_por_nf,
+            )
+            sincronizar_entrega_op_assai_por_nf(str(nf.numero))
+            db.session.commit()  # commit do EntregaMonitorada criada/atualizada
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                'sincronizar_entrega_op_assai_por_nf (pos-commit) NF %s: %s',
+                nf.numero, e,
+            )
+            db.session.rollback()
+
     return nf
 
 
@@ -209,3 +228,42 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
                     operador_id=operador_id,
                     dados_extras={'nf_id': nf.id, 'chave_44': nf.chave_44},
                 )
+
+        # Propagar numero_nf para o espelho em separacao Nacom — listener
+        # `atualizar_status_automatico` recalcula status -> FATURADO.
+        # Tambem propaga para EmbarqueItem.nota_fiscal (busca por
+        # separacao_lote_id) se houver embarque ativo. Decisao do usuario
+        # (2026-05-11): NFs Q.P.A. permitem sincronizado_nf=True (NF
+        # Q.P.A. e propria da operacao, fora do fluxo Odoo Nacom).
+        if nf.numero:
+            try:
+                from app.motos_assai.services.separacao_mirror_service import (
+                    atualizar_nf_no_espelho, lote_id_de,
+                )
+                from app.embarques.models import EmbarqueItem
+                for sep_id in separacoes_atualizar:
+                    atualizar_nf_no_espelho(sep_id, str(nf.numero))
+                    # Propagar para EmbarqueItem ativo do lote (se houver)
+                    lote = lote_id_de(sep_id)
+                    items_emb = EmbarqueItem.query.filter_by(
+                        separacao_lote_id=lote, status='ativo',
+                    ).all()
+                    for ei in items_emb:
+                        if not ei.nota_fiscal:
+                            ei.nota_fiscal = str(nf.numero)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(
+                    'Falha ao propagar NF %s (assai_nf_qpa=%s) para espelho '
+                    'em separacao Nacom: %s',
+                    nf.numero, nf.id, e, exc_info=True,
+                )
+
+            # Sincronizacao EntregaMonitorada (origem='OP_ASSAI') foi movida
+            # para APOS o commit em `importar_nf_qpa` (code review 2026-05-11):
+            # `sincronizar_entrega_op_assai_por_nf` requery AssaiNfQpa por
+            # status_match=BATEU, mas dentro de `_calcular_match` o status
+            # so esta setado em memoria (ainda nao commitado). Identity map
+            # do SQLAlchemy mascarava o problema em request-context mas
+            # falharia silenciosamente em workers/background jobs.
+            # Ver `importar_nf_qpa` no final do arquivo.

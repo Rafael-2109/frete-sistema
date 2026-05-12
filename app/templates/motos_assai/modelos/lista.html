@@ -13,7 +13,10 @@
   <thead>
     <tr>
       <th>Código</th><th>Nome</th><th>Descrição Q.P.A.</th><th>Código Q.P.A.</th>
-      <th>Regex chassi</th><th>Aliases</th><th>Status</th>
+      <th>Regex chassi</th>
+      <th class="text-end">Peso (kg)</th>
+      <th class="text-end">Cubado (kg)</th>
+      <th>Aliases</th><th>Status</th>
     </tr>
   </thead>
   <tbody>
@@ -29,6 +32,12 @@
         {% else %}
           <span class="text-warning">não configurado</span>
         {% endif %}
+      </td>
+      <td class="text-end">
+        {% if m.peso_kg is not none %}{{ m.peso_kg|numero_br(2) }}{% else %}<span class="text-warning">-</span>{% endif %}
+      </td>
+      <td class="text-end">
+        {% if m.peso_cubado_kg is not none %}{{ m.peso_cubado_kg|numero_br(2) }}{% else %}<span class="text-warning">-</span>{% endif %}
       </td>
       <td>{{ m.aliases|length }}</td>
       <td>

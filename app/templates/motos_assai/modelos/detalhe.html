@@ -19,6 +19,19 @@
     {% if modelo.regex_chassi %}<code>{{ modelo.regex_chassi }}</code>
     {% else %}<span class="text-warning">não configurado</span>{% endif %}
   </dd>
+  <dt class="col-sm-3">Peso físico (kg)</dt>
+  <dd class="col-sm-9">
+    {% if modelo.peso_kg is not none %}{{ modelo.peso_kg|numero_br(2) }} kg{% else %}<span class="text-warning">não cadastrado</span>{% endif %}
+  </dd>
+  <dt class="col-sm-3">Peso cubado (kg)</dt>
+  <dd class="col-sm-9">
+    {% if modelo.peso_cubado_kg is not none %}
+      {{ modelo.peso_cubado_kg|numero_br(2) }} kg
+      <small class="text-muted">(usado no cálculo do frete)</small>
+    {% else %}
+      <span class="text-warning">não cadastrado</span>
+    {% endif %}
+  </dd>
 </dl>
 
 <h4>Aliases ({{ modelo.aliases|length }})</h4>

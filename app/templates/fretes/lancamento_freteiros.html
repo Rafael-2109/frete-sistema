@@ -248,9 +248,12 @@
                                                            data-valor-cotado="{{ valor_cotado_frete }}"
                                                            data-valor-considerado="{{ valor_considerado_frete }}">
                                                 </td>
-                                                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                                                <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
                                                     title="{{ frete.nome_cliente }}">
                                                     {{ frete.nome_cliente }}
+                                                    {% if frete.origem == 'OP_ASSAI' %}
+                                                        <span class="badge bg-warning text-dark ms-1" style="font-size: 0.65rem;">OP. ASSAÍ</span>
+                                                    {% endif %}
                                                 </td>
                                                 <td style="text-align: center;">
                                                     <small title="{{ frete.numeros_nfs }}">
@@ -336,6 +339,9 @@
                                                             <br><span class="badge bg-info" title="Transportadora diferente do frete original ({{ despesa.frete.transportadora.razao_social }})">
                                                                 <i class="fas fa-exchange-alt"></i> Transp. alternativa
                                                             </span>
+                                                            {% endif %}
+                                                            {% if despesa.origem == 'OP_ASSAI' %}
+                                                            <br><span class="badge bg-warning text-dark" style="font-size: 0.65rem;">OP. ASSAÍ</span>
                                                             {% endif %}
                                                         </td>
                                                         <td>

@@ -13,7 +13,7 @@
     </div>
     <div class="card-body py-2">
 
-        {# ═══ LINHA 0: Escopo GERAL / NACOM / CARVIA + Toggle Apenas Pendentes ═══ #}
+        {# ═══ LINHA 0: Escopo GERAL / NACOM / CARVIA / OP. ASSAÍ + Toggle Apenas Pendentes ═══ #}
         <div class="col-12 mb-2 d-flex align-items-end flex-wrap gap-3">
             <div>
                 <label class="form-label fw-bold mb-1 d-block">Escopo</label>
@@ -29,6 +29,10 @@
                     <input type="radio" class="btn-check" name="origem" id="origem-carvia" value="CARVIA"
                            {{ 'checked' if filtro_args.get('origem') == 'CARVIA' }} autocomplete="off">
                     <label class="btn btn-outline-warning px-4" for="origem-carvia">CARVIA</label>
+
+                    <input type="radio" class="btn-check" name="origem" id="origem-assai" value="ASSAI"
+                           {{ 'checked' if filtro_args.get('origem') == 'ASSAI' }} autocomplete="off">
+                    <label class="btn btn-outline-success px-4" for="origem-assai">OP. ASSAÍ</label>
                 </div>
             </div>
 

@@ -217,6 +217,51 @@ def finalizar_separacao(separacao_id: int, operador_id: int) -> AssaiSeparacao:
     sep.status = SEPARACAO_STATUS_FECHADA
     sep.fechada_em = agora_brasil_naive()
     sep.fechada_por_id = operador_id
+
+    # Espelhar para `separacao` Nacom — aparece em lista_pedidos.html via
+    # VIEW pedidos Parte 1, permite Cotacao + Embarque + Frete (origem=OP_ASSAI).
+    # Idempotente: skip se ja espelhada.
+    #
+    # CRITICAL (code review 2026-05-11):
+    # - MirrorRaceError: outra transacao venceu — espelho ja existe.
+    #   Tratamos como sucesso (idempotencia) e re-aplicamos o status FECHADA
+    #   em transacao nova.
+    # - Demais excecoes: rollback + re-raise como SeparacaoValidationError
+    #   para o operador. Sem isso, FECHADA persistiria sem espelho e a
+    #   separacao sumiria de lista_pedidos.html.
+    try:
+        from app.motos_assai.services.separacao_mirror_service import (
+            mirror_assai_to_separacao, MirrorRaceError,
+        )
+        mirror_assai_to_separacao(sep.id)
+    except MirrorRaceError:
+        # Espelho ja criado por concorrencia — re-buscar a separacao
+        # (sessao foi rollbackada) e re-aplicar status FECHADA.
+        import logging
+        logging.getLogger(__name__).info(
+            'finalizar_separacao: race detectada para AssaiSeparacao %s — '
+            'espelho ja existe, re-aplicando FECHADA', sep.id,
+        )
+        sep = AssaiSeparacao.query.get_or_404(separacao_id)
+        if sep.status == SEPARACAO_STATUS_EM_SEPARACAO:
+            sep.status = SEPARACAO_STATUS_FECHADA
+            sep.fechada_em = agora_brasil_naive()
+            sep.fechada_por_id = operador_id
+        # else: outra transacao ja persistiu — idempotencia OK
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.getLogger(__name__).error(
+            'mirror_assai_to_separacao FALHOU para AssaiSeparacao %s: %s '
+            '— transacao revertida',
+            sep.id, e, exc_info=True,
+        )
+        raise SeparacaoValidationError(
+            f'Falha ao espelhar separacao em Nacom: {e}. '
+            'Status nao foi alterado — tente novamente. Se persistir, '
+            'verifique cadastro de peso dos modelos.'
+        )
+
     db.session.commit()
     return sep
 
@@ -252,6 +297,28 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
 
     sep.status = SEPARACAO_STATUS_CANCELADA
     sep.motivo_cancelamento = motivo.strip()
+
+    # Remover espelho em separacao Nacom (se existir). Se ja tem NF no
+    # espelho (raro — separacao FATURADA ja foi bloqueada acima), o
+    # service nega e cancelar_separacao falha — operador deve cancelar
+    # a NF primeiro.
+    try:
+        from app.motos_assai.services.separacao_mirror_service import (
+            unmirror_assai_separacao,
+        )
+        unmirror_assai_separacao(sep.id)
+    except ValueError as e:
+        # Bloqueio explicito (NF preenchida no espelho) — propaga como
+        # erro de validacao para o operador
+        raise SeparacaoValidationError(str(e))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(
+            'Falha ao remover espelho de AssaiSeparacao %s: %s',
+            sep.id, e, exc_info=True,
+        )
+        # Nao bloqueia o cancelamento — limpeza manual via SQL se necessario
+
     db.session.commit()
     return sep
 

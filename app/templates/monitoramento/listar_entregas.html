@@ -28,6 +28,10 @@
         <input type="radio" class="btn-check" name="origem" id="origem-carvia" value="CARVIA"
                {{ 'checked' if request.args.get('origem') == 'CARVIA' }} autocomplete="off">
         <label class="btn btn-outline-warning px-4" for="origem-carvia">CARVIA</label>
+
+        <input type="radio" class="btn-check" name="origem" id="origem-op-assai" value="OP_ASSAI"
+               {{ 'checked' if request.args.get('origem') == 'OP_ASSAI' }} autocomplete="off">
+        <label class="btn btn-outline-success px-4" for="origem-op-assai">OP. ASSAÍ</label>
       </div>
     </div>
     <div class="col-md-2">
@@ -501,7 +505,7 @@
             {% else %}
               <small class="text-muted" {% if e.observ_ped_1 %}title="{{ e.observ_ped_1 }}" style="cursor: help; text-decoration: underline dotted;"{% endif %}>{{ e.num_pedido or 'N/A' }}</small><br>
             {% endif %}
-            {{ e.numero_nf }}{% if e.origem == 'CARVIA' %} <span class="badge bg-warning" title="Frete subcontratado CarVia"><i class="fas fa-truck"></i></span>{% if e._carvia_tipo_material == 'MOTO' %} <span class="badge bg-primary" title="NF de motos (carga por chassi)"><i class="fas fa-motorcycle"></i> Moto</span>{% elif e._carvia_tipo_material == 'CARGA_GERAL' %} <span class="badge bg-secondary" title="NF de carga geral"><i class="fas fa-boxes"></i> Carga Geral</span>{% endif %}{% endif %}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
+            {{ e.numero_nf }}{% if e.origem == 'CARVIA' %} <span class="badge bg-warning" title="Frete subcontratado CarVia"><i class="fas fa-truck"></i></span>{% if e._carvia_tipo_material == 'MOTO' %} <span class="badge bg-primary" title="NF de motos (carga por chassi)"><i class="fas fa-motorcycle"></i> Moto</span>{% elif e._carvia_tipo_material == 'CARGA_GERAL' %} <span class="badge bg-secondary" title="NF de carga geral"><i class="fas fa-boxes"></i> Carga Geral</span>{% endif %}{% endif %}{% if e.origem == 'OP_ASSAI' %} <span class="badge bg-warning text-dark" title="Operacao Assai — B2B Q.P.A. Sendas">OP. ASSAÍ</span>{% endif %}{% if e.nf_cancelada %} <span class="badge bg-dark ">Canc.</span>{% endif %}<br>
             <small class="text-muted">{{ 'R$ {:,.2f}'.format(e.valor_nf).replace(',', 'X').replace('.', ',').replace('X', '.') if e.valor_nf else 'N/A' }}</small>
           </td>
           <td class="sticky-col-2">

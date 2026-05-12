@@ -1521,7 +1521,7 @@ def fechar_frete():
             else:
                 print(f"[DEBUG] ⚠️ Rastreamento GPS NÃO criado - embarque é FRACIONADA")
 
-            # Cria EmbarqueItems — separando Nacom de CarVia
+            # Cria EmbarqueItems — separando Nacom de CarVia / Op. Assai
             for pedido_data in pedidos_data:
                 lote_id = pedido_data.get('id')
                 pedido = Pedido.query.filter_by(separacao_lote_id=lote_id).first()
@@ -1529,6 +1529,7 @@ def fechar_frete():
                     continue
 
                 eh_carvia = str(lote_id or '').startswith('CARVIA-')
+                eh_op_assai = str(lote_id or '').startswith('ASSAI-SEP-')
 
                 if eh_carvia:
                     # --- CarVia: EmbarqueItem PROVISORIO ---
@@ -1605,6 +1606,93 @@ def fechar_frete():
                         print(f"[DEBUG] ✅ CarVia REAL: {pedido.num_pedido} NF={_nota_fiscal_unica} → {cidade_cv}/{uf_cv}")
                     else:
                         print(f"[DEBUG] ✅ CarVia PROVISORIO: {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
+
+                elif eh_op_assai:
+                    # --- Op. Assai: EmbarqueItem definitivo ---
+                    # AssaiSeparacao ja foi espelhada em `separacao` Nacom no
+                    # finalizar_separacao -> mirror_assai_to_separacao. As
+                    # linhas espelho geram o Pedido VIEW. Agora apenas criamos
+                    # o EmbarqueItem com peso_cubado correto (motos vao
+                    # montadas — cubagem >> peso real).
+                    from app.motos_assai.services.separacao_mirror_service import (
+                        assai_sep_id_de_lote,
+                    )
+                    from app.motos_assai.models import (
+                        AssaiSeparacao, AssaiSeparacaoItem, AssaiModelo, AssaiNfQpa,
+                        NF_STATUS_BATEU,
+                    )
+
+                    assai_sep_id = assai_sep_id_de_lote(lote_id)
+                    if not assai_sep_id:
+                        print(f"[DEBUG] ⚠️ Op. Assai: lote_id invalido {lote_id} — skip")
+                        continue
+
+                    assai_sep = db.session.get(AssaiSeparacao, assai_sep_id)
+                    if not assai_sep:
+                        print(f"[DEBUG] ⚠️ Op. Assai: AssaiSeparacao {assai_sep_id} nao encontrada — skip")
+                        continue
+
+                    # Agregar peso_cubado_kg via AssaiSeparacaoItem -> AssaiModelo
+                    # (peso fisico ja vem em pedido.peso_total via VIEW)
+                    cubado_agg = (
+                        db.session.query(
+                            db.func.coalesce(db.func.sum(AssaiModelo.peso_cubado_kg), 0),
+                            db.func.count(AssaiSeparacaoItem.id),
+                        )
+                        .join(AssaiModelo, AssaiModelo.id == AssaiSeparacaoItem.modelo_id)
+                        .filter(AssaiSeparacaoItem.separacao_id == assai_sep_id)
+                        .first()
+                    )
+                    peso_cubado_total = float(cubado_agg[0] or 0) if cubado_agg else 0
+                    qtd_chassis = int(cubado_agg[1] or 0) if cubado_agg else 0
+
+                    if not peso_cubado_total:
+                        print(
+                            f"[DEBUG] ⚠️ Op. Assai sep {assai_sep_id}: peso_cubado_kg "
+                            "soma zero (modelos sem cadastro de peso) — frete "
+                            "usara peso fisico via fallback"
+                        )
+
+                    # NF Q.P.A. ja importada e BATEU? Preenche EmbarqueItem.nota_fiscal
+                    nf_qpa = (
+                        AssaiNfQpa.query
+                        .filter_by(separacao_id=assai_sep_id, status_match=NF_STATUS_BATEU)
+                        .first()
+                    )
+                    nota_fiscal_assai = nf_qpa.numero if nf_qpa else None
+
+                    cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
+                    protocolo_formatado = formatar_protocolo(pedido.protocolo)
+                    data_formatada = formatar_data_brasileira(pedido.agendamento)
+
+                    item = EmbarqueItem(
+                        embarque_id=embarque.id,
+                        separacao_lote_id=pedido.separacao_lote_id,
+                        cnpj_cliente=pedido.cnpj_cpf,
+                        cliente=pedido.raz_social_red,
+                        pedido=pedido.num_pedido,  # ja vem '{ped}-{loja}' da VIEW (mirror)
+                        nota_fiscal=nota_fiscal_assai,
+                        peso=pedido.peso_total or 0,
+                        peso_cubado=peso_cubado_total,
+                        valor=pedido.valor_saldo_total or 0,
+                        pallets=0,  # motos nao palletizam
+                        uf_destino=uf_correto,
+                        cidade_destino=cidade_formatada,
+                        volumes=qtd_chassis,
+                        protocolo_agendamento=protocolo_formatado,
+                        data_agenda=data_formatada,
+                        provisorio=False,
+                    )
+                    if tipo == 'FRACIONADA':
+                        TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                        item.icms_destino = dados_tabela.get('icms_destino')
+                    db.session.add(item)
+                    print(
+                        f"[DEBUG] ✅ Op. Assai: {pedido.num_pedido} "
+                        f"chassis={qtd_chassis} peso={pedido.peso_total or 0:.2f}kg "
+                        f"cubado={peso_cubado_total:.2f}kg valor={pedido.valor_saldo_total or 0:.2f} "
+                        f"→ {cidade_formatada}/{uf_correto}"
+                    )
 
                 else:
                     # --- Nacom: fluxo existente ---
@@ -1941,9 +2029,10 @@ def fechar_frete_grupo():
             print(f"[DEBUG] ⚠️ Erro ao criar rastreamento GPS: {str(e)}")
             # Não falha a criação do embarque se rastreamento falhar
 
-        # Cria EmbarqueItems — separando Nacom de CarVia
+        # Cria EmbarqueItems — separando Nacom de CarVia / Op. Assai
         for pedido in todos_pedidos:
             eh_carvia = str(pedido.separacao_lote_id or '').startswith('CARVIA-')
+            eh_op_assai = str(pedido.separacao_lote_id or '').startswith('ASSAI-SEP-')
 
             if eh_carvia:
                 # --- CarVia: EmbarqueItem PROVISORIO ---
@@ -2006,6 +2095,74 @@ def fechar_frete_grupo():
                     print(f"[DEBUG] CarVia REAL (grupo): {pedido.num_pedido} NF={_nota_fiscal_unica} → {cidade_cv}/{uf_cv}")
                 else:
                     print(f"[DEBUG] CarVia PROVISORIO (grupo): {pedido.num_pedido} → {cidade_cv}/{uf_cv}")
+
+            elif eh_op_assai:
+                # --- Op. Assai (fluxo grupo): EmbarqueItem definitivo ---
+                from app.motos_assai.services.separacao_mirror_service import (
+                    assai_sep_id_de_lote,
+                )
+                from app.motos_assai.models import (
+                    AssaiSeparacao, AssaiSeparacaoItem, AssaiModelo, AssaiNfQpa,
+                    NF_STATUS_BATEU,
+                )
+
+                assai_sep_id = assai_sep_id_de_lote(pedido.separacao_lote_id)
+                if not assai_sep_id:
+                    print(f"[DEBUG] ⚠️ Op. Assai grupo: lote {pedido.separacao_lote_id} invalido — skip")
+                    continue
+                if not db.session.get(AssaiSeparacao, assai_sep_id):
+                    print(f"[DEBUG] ⚠️ Op. Assai grupo: AssaiSeparacao {assai_sep_id} nao encontrada — skip")
+                    continue
+
+                cubado_agg = (
+                    db.session.query(
+                        db.func.coalesce(db.func.sum(AssaiModelo.peso_cubado_kg), 0),
+                        db.func.count(AssaiSeparacaoItem.id),
+                    )
+                    .join(AssaiModelo, AssaiModelo.id == AssaiSeparacaoItem.modelo_id)
+                    .filter(AssaiSeparacaoItem.separacao_id == assai_sep_id)
+                    .first()
+                )
+                peso_cubado_total = float(cubado_agg[0] or 0) if cubado_agg else 0
+                qtd_chassis = int(cubado_agg[1] or 0) if cubado_agg else 0
+
+                nf_qpa = (
+                    AssaiNfQpa.query
+                    .filter_by(separacao_id=assai_sep_id, status_match=NF_STATUS_BATEU)
+                    .first()
+                )
+                nota_fiscal_assai = nf_qpa.numero if nf_qpa else None
+
+                cidade_formatada, uf_correto = LocalizacaoService.obter_cidade_destino_embarque(pedido)
+
+                item = EmbarqueItem(
+                    embarque_id=embarque.id,
+                    separacao_lote_id=pedido.separacao_lote_id,
+                    cnpj_cliente=pedido.cnpj_cpf,
+                    cliente=pedido.raz_social_red,
+                    pedido=pedido.num_pedido,
+                    nota_fiscal=nota_fiscal_assai,
+                    peso=pedido.peso_total or 0,
+                    peso_cubado=peso_cubado_total,
+                    valor=pedido.valor_saldo_total or 0,
+                    pallets=0,
+                    uf_destino=uf_correto,
+                    cidade_destino=cidade_formatada,
+                    volumes=qtd_chassis,
+                    protocolo_agendamento=formatar_protocolo(pedido.protocolo),
+                    data_agenda=formatar_data_brasileira(pedido.agendamento),
+                    provisorio=False,
+                )
+                if tipo == 'FRACIONADA' and pedido.cnpj_cpf in dados_tabela_por_cnpj:
+                    dados_tabela = dados_tabela_por_cnpj[pedido.cnpj_cpf]
+                    TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)
+                    item.icms_destino = dados_tabela.get('icms_destino', 0)
+                db.session.add(item)
+                print(
+                    f"[DEBUG] ✅ Op. Assai grupo: {pedido.num_pedido} "
+                    f"chassis={qtd_chassis} cubado={peso_cubado_total:.2f}kg → "
+                    f"{cidade_formatada}/{uf_correto}"
+                )
 
             else:
                 # --- Nacom: fluxo existente ---

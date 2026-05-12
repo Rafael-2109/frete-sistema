@@ -33,6 +33,8 @@ def modelos_novo():
                 'descricao_qpa': form.descricao_qpa.data.strip() if form.descricao_qpa.data else None,
                 'codigo_qpa': form.codigo_qpa.data.strip() if form.codigo_qpa.data else None,
                 'regex_chassi': form.regex_chassi.data.strip() if form.regex_chassi.data else None,
+                'peso_kg': form.peso_kg.data,
+                'peso_cubado_kg': form.peso_cubado_kg.data,
                 'ativo': form.ativo.data,
             })
             flash(f'Modelo {m.codigo} criado.', 'success')
@@ -65,6 +67,8 @@ def modelos_editar(modelo_id):
             'descricao_qpa': form.descricao_qpa.data.strip() if form.descricao_qpa.data else None,
             'codigo_qpa': form.codigo_qpa.data.strip() if form.codigo_qpa.data else None,
             'regex_chassi': form.regex_chassi.data.strip() if form.regex_chassi.data else None,
+            'peso_kg': form.peso_kg.data,
+            'peso_cubado_kg': form.peso_cubado_kg.data,
             'ativo': form.ativo.data,
         })
         flash(f'Modelo {modelo.codigo} atualizado.', 'success')

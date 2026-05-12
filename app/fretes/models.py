@@ -9,6 +9,13 @@ from app.utils.timezone import agora_utc_naive
 # Fonte única de verdade usada em: routes.py (conferir_fatura, aprovar_conferencia_fatura)
 FRETE_STATUS_BLOQUEANTES = ("EM_TRATATIVA", "REJEITADO")
 
+# Origem do Frete (flag visivel em Lancamento Freteiros + Exportacao + Relatorios).
+# NACOM    — Fluxo principal (default). NFs em RelatorioFaturamentoImportado, fluxo Odoo.
+# OP_ASSAI — Op. Assai (B2B Q.P.A. Sendas). NFs em AssaiNfQpa, isolado do Odoo.
+FRETE_ORIGEM_NACOM = 'NACOM'
+FRETE_ORIGEM_OP_ASSAI = 'OP_ASSAI'
+FRETE_ORIGENS_VALIDAS = (FRETE_ORIGEM_NACOM, FRETE_ORIGEM_OP_ASSAI)
+
 
 class Frete(db.Model):
     """
@@ -98,7 +105,15 @@ class Frete(db.Model):
     criado_por = db.Column(db.String(100), nullable=False)
     lancado_em = db.Column(db.DateTime)
     lancado_por = db.Column(db.String(100))
-    
+
+    # Origem do frete: NACOM (default) | OP_ASSAI (Op. Assai Q.P.A. Sendas)
+    # Ver constantes FRETE_ORIGEM_* no topo do arquivo.
+    origem = db.Column(
+        db.String(20), nullable=False,
+        default=FRETE_ORIGEM_NACOM, server_default=FRETE_ORIGEM_NACOM,
+        index=True,
+    )
+
     # Relacionamentos
     embarque = db.relationship('Embarque', backref='fretes')
     transportadora = db.relationship('Transportadora', backref='fretes')
@@ -257,6 +272,16 @@ class Frete(db.Model):
                 ctes_validos.append(cte)
 
         return ctes_validos
+
+    @property
+    def eh_op_assai(self) -> bool:
+        """True se o frete e da Op. Assai (Q.P.A. Sendas)."""
+        return self.origem == FRETE_ORIGEM_OP_ASSAI
+
+    @property
+    def eh_nacom(self) -> bool:
+        """True se o frete e Nacom (fluxo principal)."""
+        return self.origem == FRETE_ORIGEM_NACOM
 
     def __repr__(self):
         return f'<Frete {self.id} - {self.nome_cliente} - CTe: {self.numero_cte}>'
@@ -474,6 +499,21 @@ class DespesaExtra(db.Model):
     def usa_transportadora_alternativa(self):
         """Indica se a despesa usa transportadora diferente do frete"""
         return self.transportadora_id is not None and self.transportadora_id != self.frete.transportadora_id
+
+    @property
+    def origem(self) -> str:
+        """Origem derivada do Frete vinculado (NACOM | OP_ASSAI).
+
+        DespesaExtra nao tem coluna `origem` propria — sempre segue o Frete pai
+        para garantir consistencia (flag visivel em Lancamento Freteiros etc.).
+        """
+        if self.frete and self.frete.origem:
+            return self.frete.origem
+        return FRETE_ORIGEM_NACOM
+
+    @property
+    def eh_op_assai(self) -> bool:
+        return self.origem == FRETE_ORIGEM_OP_ASSAI
 
 
 class ContaCorrenteTransportadora(db.Model):

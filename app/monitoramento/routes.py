@@ -1020,10 +1020,11 @@ def listar_entregas():
             EntregaMonitorada.status_finalizacao.is_(None)  # Não finalizada
         )
 
-    # Filtro por origem (NACOM / CARVIA / Todas)
+    # Filtro por origem (NACOM / CARVIA / OP_ASSAI / Todas)
     # Permite segregar NFs do fluxo principal das do subsistema CarVia
+    # e da operacao Op. Assai (B2B Q.P.A. Sendas).
     origem_filtro = (request.args.get('origem') or '').strip().upper()
-    if origem_filtro in ('NACOM', 'CARVIA'):
+    if origem_filtro in ('NACOM', 'CARVIA', 'OP_ASSAI'):
         query = query.filter(EntregaMonitorada.origem == origem_filtro)
 
     # R18 NF Triangular: esconder EntregaMonitorada de NFs que sao

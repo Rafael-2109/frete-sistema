@@ -32,6 +32,19 @@
     <small class="text-muted">Use anchors `^` e `$` para validação completa.</small>
   </div>
 
+  <div class="col-md-6">
+    {{ form.peso_kg.label(class="form-label") }}
+    {{ form.peso_kg(class="form-control", placeholder="Ex: 95.50", step="0.01") }}
+    {% for e in form.peso_kg.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <small class="text-muted">{{ form.peso_kg.description }}</small>
+  </div>
+  <div class="col-md-6">
+    {{ form.peso_cubado_kg.label(class="form-label") }}
+    {{ form.peso_cubado_kg(class="form-control", placeholder="Ex: 450.00", step="0.01") }}
+    {% for e in form.peso_cubado_kg.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    <small class="text-muted">{{ form.peso_cubado_kg.description }}</small>
+  </div>
+
   <div class="col-12 form-check ms-3">
     {{ form.ativo(class="form-check-input") }}
     {{ form.ativo.label(class="form-check-label") }}

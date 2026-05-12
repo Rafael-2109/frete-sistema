@@ -3541,17 +3541,34 @@ def verificar_cte_existente_para_embarque(embarque_id, cnpj_cliente=None):
 
 
 def _is_nacom_item(item):
-    """True se EmbarqueItem e Nacom (nao CarVia).
+    """True se EmbarqueItem e Nacom (nao CarVia, nao Op. Assai).
 
     CarVia items identificados por:
     1. carvia_cotacao_id IS NOT NULL (marcador canonico)
     2. separacao_lote_id LIKE 'CARVIA-%' (marcador legado/fallback)
+
+    Op. Assai items identificados por:
+    3. separacao_lote_id LIKE 'ASSAI-SEP-%' (prefix unico)
     """
     if item.carvia_cotacao_id:
         return False
-    if item.separacao_lote_id and str(item.separacao_lote_id).startswith('CARVIA-'):
+    lote = item.separacao_lote_id and str(item.separacao_lote_id)
+    if lote and lote.startswith('CARVIA-'):
+        return False
+    if lote and lote.startswith('ASSAI-'):
         return False
     return True
+
+
+def _is_op_assai_item(item) -> bool:
+    """True se EmbarqueItem e Op. Assai (prefix `ASSAI-SEP-` em separacao_lote_id).
+
+    Linhas espelhadas em `separacao` Nacom via
+    `app.motos_assai.services.separacao_mirror_service.mirror_assai_to_separacao`
+    (chamado em `finalizar_separacao` quando AssaiSeparacao vai para FECHADA).
+    """
+    lote = item.separacao_lote_id and str(item.separacao_lote_id)
+    return bool(lote and lote.startswith('ASSAI-SEP-'))
 
 
 def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
@@ -3577,14 +3594,18 @@ def verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente):
     if frete_existente:
         return False, f"Já existe frete para CNPJ {cnpj_cliente} no embarque {embarque_id}"
 
-    # Busca APENAS itens ATIVOS Nacom do embarque (exclui CarVia)
+    # Busca APENAS itens ATIVOS Nacom do embarque (exclui CarVia E Op. Assai
+    # — paridade com helper `_is_nacom_item`).
     itens_embarque = EmbarqueItem.query.filter(
         EmbarqueItem.embarque_id == embarque_id,
         EmbarqueItem.status == "ativo",
         EmbarqueItem.carvia_cotacao_id.is_(None),
         db.or_(
             EmbarqueItem.separacao_lote_id.is_(None),
-            ~EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+            db.and_(
+                ~EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+                ~EmbarqueItem.separacao_lote_id.ilike('ASSAI-%'),
+            ),
         ),
     ).all()
 
@@ -3829,6 +3850,205 @@ def lancar_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
     except Exception as e:
         db.session.rollback()
         return False, f"Erro ao lançar frete: {str(e)}"
+
+
+# ============================================================================
+# OP. ASSAI — fluxo de Frete paralelo (NFs Q.P.A. nao estao em
+# RelatorioFaturamentoImportado, portanto bypass das validacoes Nacom)
+# ============================================================================
+
+def verificar_requisitos_op_assai(embarque_id, cnpj_cliente):
+    """Valida requisitos para lancar Frete Op. Assai.
+
+    Diferencas vs Nacom:
+    - NFs em `AssaiNfQpa` (status_match='BATEU'), nao em RelatorioFaturamentoImportado
+    - cnpj_cliente = AssaiLoja.cnpj (destinatario)
+    - peso/valor ja agregados no EmbarqueItem pelo fluxo de cotacao
+    """
+    embarque = db.session.get(Embarque, embarque_id)
+    if not embarque or not embarque.data_embarque:
+        return False, "Aguardando saida da portaria para lancamento de frete"
+
+    # Idempotencia
+    frete_existente = Frete.query.filter(
+        and_(Frete.embarque_id == embarque_id, Frete.cnpj_cliente == cnpj_cliente)
+    ).first()
+    if frete_existente:
+        return False, f"Ja existe frete para CNPJ {cnpj_cliente} no embarque {embarque_id}"
+
+    # Itens Op. Assai ativos com NF preenchida (NF Q.P.A. importada e BATEU)
+    itens_assai = [
+        item for item in embarque.itens
+        if item.status == 'ativo' and _is_op_assai_item(item)
+        and item.cnpj_cliente == cnpj_cliente
+    ]
+    if not itens_assai:
+        return False, f"Nenhum item Op. Assai ativo para CNPJ {cnpj_cliente}"
+
+    sem_nf = [it for it in itens_assai if not it.nota_fiscal or not it.nota_fiscal.strip()]
+    if sem_nf:
+        return False, (
+            f"Existem {len(sem_nf)} item(ns) Op. Assai sem NF Q.P.A. importada "
+            "(aguardando BATEU em AssaiNfQpa)"
+        )
+
+    return True, f"Todos os requisitos atendidos (Op. Assai, {len(itens_assai)} itens)"
+
+
+def lancar_frete_op_assai(embarque_id, cnpj_cliente, usuario="Sistema"):
+    """Lanca Frete origem='OP_ASSAI' para um embarque + CNPJ Loja Assai.
+
+    Diferencas vs `lancar_frete_automatico` Nacom:
+    - peso/valor totais vem do EmbarqueItem (ja agregados pelo mirror), nao
+      de RelatorioFaturamentoImportado
+    - `peso_total` do Frete e em peso_cubado (motos vao montadas — cubagem
+      domina o calculo). EmbarqueItem.peso continua o peso fisico real.
+    - origem = 'OP_ASSAI'
+    - Mesmas tabelas TabelaFreteManager e regras DIRETA/FRACIONADA/FOB
+    """
+    try:
+        from app.utils.tabela_frete_manager import TabelaFreteManager
+        from app.fretes.models import FRETE_ORIGEM_OP_ASSAI
+
+        pode_lancar, motivo = verificar_requisitos_op_assai(embarque_id, cnpj_cliente)
+        if not pode_lancar:
+            return False, motivo
+
+        embarque = db.session.get(Embarque, embarque_id)
+        transportadora = db.session.get(Transportadora, embarque.transportadora_id) if embarque.transportadora_id else None
+
+        itens_cnpj = [
+            item for item in embarque.itens
+            if item.status == 'ativo' and _is_op_assai_item(item)
+            and item.cnpj_cliente == cnpj_cliente and item.nota_fiscal
+        ]
+        if not itens_cnpj:
+            return False, "Nenhum item Op. Assai elegivel"
+
+        # Agregar totais a partir do EmbarqueItem (peso fisico + cubado).
+        # peso_calc usa cubado quando disponivel (motos), fallback fisico.
+        peso_fisico_cnpj = sum(float(it.peso or 0) for it in itens_cnpj)
+        peso_cubado_cnpj = sum(float(it.peso_cubado or 0) for it in itens_cnpj)
+        valor_total_cnpj = sum(float(it.valor or 0) for it in itens_cnpj)
+        peso_calc_cnpj = peso_cubado_cnpj or peso_fisico_cnpj
+        nome_cliente = itens_cnpj[0].cliente or f'Loja {cnpj_cliente}'
+        numeros_nfs = ",".join(sorted({it.nota_fiscal for it in itens_cnpj if it.nota_fiscal}))
+
+        # FOB: frete zerado
+        if transportadora and transportadora.razao_social == "FOB - COLETA":
+            tabela_dados_fob = TabelaFreteManager.preparar_cotacao_fob()
+            novo_frete = Frete(
+                embarque_id=embarque_id,
+                cnpj_cliente=cnpj_cliente,
+                nome_cliente=nome_cliente,
+                transportadora_id=embarque.transportadora_id,
+                tipo_carga=embarque.tipo_carga or 'DIRETA',
+                modalidade='FOB',
+                uf_destino=itens_cnpj[0].uf_destino,
+                cidade_destino=itens_cnpj[0].cidade_destino,
+                peso_total=peso_calc_cnpj,
+                valor_total_nfs=valor_total_cnpj,
+                quantidade_nfs=len(itens_cnpj),
+                numeros_nfs=numeros_nfs,
+                valor_cotado=0,
+                valor_considerado=0,
+                fatura_frete_id=None,
+                criado_por=usuario,
+                lancado_em=agora_utc_naive(),
+                lancado_por=usuario,
+                origem=FRETE_ORIGEM_OP_ASSAI,
+            )
+            TabelaFreteManager.atribuir_campos_objeto(novo_frete, tabela_dados_fob)
+            novo_frete.tabela_icms_destino = 0
+            db.session.add(novo_frete)
+            db.session.commit()
+            return True, f"Frete OP_ASSAI FOB lancado (R$ 0,00) - ID: {novo_frete.id}"
+
+        # DIRETA: rateio por peso_cubado proporcional ao embarque inteiro
+        # (todos itens do embarque ja sao Op. Assai — invariante embarque
+        # nao-misto confirmada pelo usuario em 2026-05-11).
+        if embarque.tipo_carga == 'DIRETA':
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(embarque)
+            tabela_dados['icms_destino'] = embarque.icms_destino or 0
+
+            itens_todos_assai = [
+                it for it in embarque.itens
+                if it.status == 'ativo' and _is_op_assai_item(it)
+            ]
+            peso_cubado_embarque = sum(float(it.peso_cubado or 0) for it in itens_todos_assai)
+            peso_fisico_embarque = sum(float(it.peso or 0) for it in itens_todos_assai)
+            valor_embarque = sum(float(it.valor or 0) for it in itens_todos_assai)
+            peso_calc_embarque = peso_cubado_embarque or peso_fisico_embarque
+
+            # Alerta de inconsistencia: alguns itens tem peso_cubado e
+            # outros nao (modelos sem cadastro). O rateio fica distorcido
+            # (sum parcial cubado vs sum parcial fisico). Operador deve
+            # cadastrar peso_cubado_kg em todos os modelos.
+            itens_sem_cubado = [
+                it for it in itens_todos_assai if not it.peso_cubado
+            ]
+            if itens_sem_cubado and peso_cubado_embarque > 0:
+                import logging
+                logging.getLogger(__name__).warning(
+                    'lancar_frete_op_assai DIRETA: embarque %s tem %d/%d '
+                    'itens SEM peso_cubado — rateio com soma parcial pode '
+                    'distorcer valor_cotado. Cadastre peso_cubado_kg em '
+                    'AssaiModelo para todos os modelos.',
+                    embarque_id, len(itens_sem_cubado), len(itens_todos_assai),
+                )
+
+            valor_frete_total = calcular_valor_frete_pela_tabela(
+                tabela_dados, peso_calc_embarque, valor_embarque
+            )
+            if peso_calc_embarque > 0:
+                valor_cotado = valor_frete_total * (peso_calc_cnpj / peso_calc_embarque)
+            else:
+                valor_cotado = 0
+        else:
+            # FRACIONADA: tabela do item
+            item_ref = itens_cnpj[0]
+            tabela_dados = TabelaFreteManager.preparar_dados_tabela(item_ref)
+            tabela_dados['icms_destino'] = item_ref.icms_destino or 0
+            valor_cotado = calcular_valor_frete_pela_tabela(
+                tabela_dados, peso_calc_cnpj, valor_total_cnpj
+            )
+
+        novo_frete = Frete(
+            embarque_id=embarque_id,
+            cnpj_cliente=cnpj_cliente,
+            nome_cliente=nome_cliente,
+            transportadora_id=embarque.transportadora_id,
+            tipo_carga=embarque.tipo_carga or 'DIRETA',
+            modalidade=tabela_dados.get('modalidade') or '',
+            uf_destino=itens_cnpj[0].uf_destino,
+            cidade_destino=itens_cnpj[0].cidade_destino,
+            peso_total=peso_calc_cnpj,
+            valor_total_nfs=valor_total_cnpj,
+            quantidade_nfs=len(itens_cnpj),
+            numeros_nfs=numeros_nfs,
+            valor_cotado=valor_cotado,
+            valor_considerado=valor_cotado,
+            fatura_frete_id=None,
+            criado_por=usuario,
+            lancado_em=agora_utc_naive(),
+            lancado_por=usuario,
+            origem=FRETE_ORIGEM_OP_ASSAI,
+        )
+        TabelaFreteManager.atribuir_campos_objeto(novo_frete, tabela_dados)
+        novo_frete.tabela_icms_destino = tabela_dados.get('icms_destino') or 0
+
+        db.session.add(novo_frete)
+        db.session.commit()
+
+        metodo = "DIRETA (proporcional ao peso_cubado)" if embarque.tipo_carga == 'DIRETA' else "FRACIONADA"
+        return True, (
+            f"Frete OP_ASSAI lancado - ID: {novo_frete.id} ({metodo}) - "
+            f"R$ {valor_cotado:.2f}"
+        )
+
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Erro ao lancar frete Op. Assai: {str(e)}"
 
 
 def cancelar_frete_por_embarque(embarque_id, cnpj_cliente=None, usuario="Sistema"):
@@ -4095,16 +4315,22 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
             if not embarque.data_embarque:
                 return True, "Aguardando saída da portaria para lançamento de frete"
 
-            # VALIDAÇÃO RIGOROSA: Todas as NFs devem estar validadas
-            sucesso_validacao, resultado_validacao = validar_cnpj_embarque_faturamento(embarque_id)
+            # Detectar embarque Op. Assai (invariante: embarque NAO-misto).
+            # NFs Op. Assai estao em AssaiNfQpa, nao em RelatorioFaturamentoImportado,
+            # por isso `validar_cnpj_embarque_faturamento` NACOM seria falso negativo.
+            primeiro_ativo = next(
+                (it for it in embarque.itens if it.status == 'ativo'), None
+            )
+            eh_embarque_op_assai = bool(primeiro_ativo and _is_op_assai_item(primeiro_ativo))
 
-            if not sucesso_validacao:
-                # Se há erros, não lança fretes
-                return True, resultado_validacao
+            if not eh_embarque_op_assai:
+                # Caminho Nacom: validacao rigorosa via RelatorioFaturamentoImportado
+                sucesso_validacao, resultado_validacao = validar_cnpj_embarque_faturamento(embarque_id)
+                if not sucesso_validacao:
+                    return True, resultado_validacao
 
-            # ✅ Todas as NFs estão validadas - procede com lançamento
-            # Busca todos os CNPJs únicos deste embarque
-            # ✅ CORREÇÃO: Busca CNPJs únicos deste embarque (apenas itens ATIVOS)
+            # Busca CNPJs unicos (apenas itens ATIVOS). Para Op. Assai,
+            # erro_validacao sempre eh NULL (sem fluxo Odoo).
             cnpjs_embarque = (
                 db.session.query(EmbarqueItem.cnpj_cliente)
                 .filter(EmbarqueItem.embarque_id == embarque_id)
@@ -4140,7 +4366,22 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
                 if not embarque_obj or not embarque_obj.data_embarque:
                     continue  # Portaria não deu saída ainda
 
-                # VALIDAÇÃO RIGOROSA para cada embarque
+                # Detectar Op. Assai (paridade com Cenario 1): NFs Q.P.A.
+                # nao estao em RelatorioFaturamentoImportado, entao validacao
+                # Nacom rigorosa sempre falharia. tentar_lancamento_frete_automatico
+                # ja faz roteamento interno baseado em _is_op_assai_item.
+                primeiro_ativo_c2 = next(
+                    (it for it in embarque_obj.itens if it.status == 'ativo'), None
+                )
+                if primeiro_ativo_c2 and _is_op_assai_item(primeiro_ativo_c2):
+                    sucesso, resultado = tentar_lancamento_frete_automatico(
+                        embarque_id_encontrado, cnpj_cliente, usuario
+                    )
+                    if sucesso:
+                        fretes_lancados.append(resultado)
+                    continue
+
+                # VALIDAÇÃO RIGOROSA Nacom para cada embarque
                 sucesso_validacao, _ = validar_cnpj_embarque_faturamento(embarque_id_encontrado)
 
                 # Só lança se TODOS os requisitos estiverem atendidos
@@ -4165,7 +4406,11 @@ def processar_lancamento_automatico_fretes(embarque_id=None, cnpj_cliente=None, 
 
 def tentar_lancamento_frete_automatico(embarque_id, cnpj_cliente, usuario="Sistema"):
     """
-    Tenta lançar um frete específico para um embarque + CNPJ
+    Tenta lançar um frete específico para um embarque + CNPJ.
+
+    Detecta automaticamente se o embarque e Op. Assai (todos os itens
+    sao prefix `ASSAI-SEP-`) e roteia para `lancar_frete_op_assai`.
+    Invariante: embarque NAO e misto (Nacom + Assai ou CarVia + Assai).
     """
     try:
         # Verifica se já existe frete para esta combinação
@@ -4176,12 +4421,23 @@ def tentar_lancamento_frete_automatico(embarque_id, cnpj_cliente, usuario="Siste
         if frete_existente:
             return False, f"Frete já existe: #{frete_existente.id}"
 
-        # Verifica se pode lançar (requisitos atendidos)
+        # Detectar Op. Assai: se primeiro item ativo for ASSAI-, todos sao.
+        embarque = db.session.get(Embarque, embarque_id)
+        if embarque:
+            primeiro_ativo = next(
+                (it for it in embarque.itens if it.status == 'ativo'), None
+            )
+            if primeiro_ativo and _is_op_assai_item(primeiro_ativo):
+                pode, motivo = verificar_requisitos_op_assai(embarque_id, cnpj_cliente)
+                if not pode:
+                    return False, motivo
+                return lancar_frete_op_assai(embarque_id, cnpj_cliente, usuario)
+
+        # Caminho Nacom (default)
         pode_lancar, motivo = verificar_requisitos_para_lancamento_frete(embarque_id, cnpj_cliente)
         if not pode_lancar:
             return False, motivo
 
-        # Lança o frete automaticamente
         sucesso, resultado = lancar_frete_automatico(embarque_id, cnpj_cliente, usuario)
         return sucesso, resultado
 
@@ -6342,6 +6598,10 @@ def exportar_fechamento_freteiros():
     transportadora_id = request.args.get("transportadora_id", "")
     data_criacao_de = request.args.get("data_criacao_de", "")
     data_criacao_ate = request.args.get("data_criacao_ate", "")
+    # Filtro de origem (NACOM | OP_ASSAI | vazio=tudo)
+    origem_filtro = (request.args.get("origem", "") or "").strip().upper()
+    if origem_filtro not in ("NACOM", "OP_ASSAI"):
+        origem_filtro = ""
 
     # Montar query base - apenas transportadoras que são freteiros
     query = FaturaFrete.query.join(Transportadora).filter(
@@ -6385,11 +6645,21 @@ def exportar_fechamento_freteiros():
     for fatura in faturas:
         transportadora = fatura.transportadora
 
+        # Helper de mapeamento origem → rótulo amigável
+        def _label_origem(origem_raw):
+            if origem_raw == 'OP_ASSAI':
+                return 'OP. ASSAÍ'
+            return 'NACOM'
+
         # Processar FRETES da fatura
         for frete in fatura.fretes:
+            # Filtro de origem (se aplicado via querystring)
+            if origem_filtro and frete.origem != origem_filtro:
+                continue
             dados_detalhamento.append({
                 "CNPJ Transportadora": transportadora.cnpj if transportadora else "",
                 "Transportadora": transportadora.razao_social if transportadora else "",
+                "Operação": _label_origem(frete.origem),
                 "Tipo": "Frete",
                 "Fatura": fatura.numero_fatura,
                 "CTE": frete.numero_cte or "",
@@ -6410,6 +6680,11 @@ def exportar_fechamento_freteiros():
             valor_nfs_despesa = float(frete_despesa.valor_total_nfs or 0) if frete_despesa else 0
             peso_nfs_despesa = float(frete_despesa.peso_total or 0) if frete_despesa else 0
 
+            # Origem deriva do Frete vinculado via property
+            origem_despesa = despesa.origem
+            if origem_filtro and origem_despesa != origem_filtro:
+                continue
+
             # ✅ NOVO: Indicar quando despesa usa transportadora alternativa
             transportadora_frete = ""
             if despesa.usa_transportadora_alternativa and frete_despesa:
@@ -6418,6 +6693,7 @@ def exportar_fechamento_freteiros():
             dados_detalhamento.append({
                 "CNPJ Transportadora": transportadora.cnpj if transportadora else "",
                 "Transportadora": transportadora.razao_social if transportadora else "",
+                "Operação": _label_origem(origem_despesa),
                 "Tipo": despesa.tipo_despesa or "Despesa Extra",
                 "Fatura": fatura.numero_fatura,
                 "CTE": despesa.numero_documento or "",
@@ -6448,12 +6724,16 @@ def exportar_fechamento_freteiros():
             transportadoras_info[transp_id] = transportadora
             resumo_transportadoras[transp_id] = 0
 
-        # Somar fretes
+        # Somar fretes (respeitando filtro de origem — paridade com Detalhamento)
         for frete in fatura.fretes:
+            if origem_filtro and frete.origem != origem_filtro:
+                continue
             resumo_transportadoras[transp_id] += float(frete.valor_cte or frete.valor_cotado or 0)
 
-        # Somar despesas extras
+        # Somar despesas extras (respeitando filtro de origem via property)
         for despesa in fatura.todas_despesas_extras():
+            if origem_filtro and despesa.origem != origem_filtro:
+                continue
             resumo_transportadoras[transp_id] += float(despesa.valor_despesa or 0)
 
     # Montar dados do resumo

@@ -22,6 +22,11 @@ class AssaiModelo(db.Model):
     descricao_qpa = db.Column(db.String(200))
     codigo_qpa = db.Column(db.String(20), index=True)
     regex_chassi = db.Column(db.String(120))
+    # Peso fisico (kg) — usado em relatorios e portaria
+    peso_kg = db.Column(db.Numeric(8, 2), nullable=True)
+    # Peso cubado (kg) — usado no calculo de frete (motos vao MONTADAS:
+    # ocupam muito mais espaco que peso real). Quando ausente, frete usa peso_kg.
+    peso_cubado_kg = db.Column(db.Numeric(8, 2), nullable=True)
     ativo = db.Column(db.Boolean, default=True, nullable=False)
     criado_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)
 

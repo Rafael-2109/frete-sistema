@@ -84,25 +84,40 @@ class Pedido(db.Model):
         return lote.startswith('CARVIA-')
 
     @property
+    def eh_op_assai(self):
+        """Detecta item Op. Assai pelo prefixo `ASSAI-SEP-` do separacao_lote_id.
+
+        Linhas em `separacao` espelhadas via mirror_assai_to_separacao
+        (`app.motos_assai.services.separacao_mirror_service`) sao agregadas
+        pela VIEW pedidos Parte 1 e aparecem em lista_pedidos.html.
+
+        Prefix exato `ASSAI-SEP-` (nao apenas `ASSAI-`) para alinhar com
+        `fechar_frete` (cotacao/routes.py) e helpers `_is_op_assai_item`
+        (fretes/routes.py). Previne falso-positivo em prefixes futuros
+        que comecem com `ASSAI-` (ex: `ASSAI-DEV-`, `ASSAI-LOJA-`).
+        """
+        lote = getattr(self, 'separacao_lote_id', None) or ''
+        return lote.startswith('ASSAI-SEP-')
+
+    @property
     def status_calculado(self):
         """
         Calcula o status do pedido baseado no estado atual.
 
-        Fluxo unificado Nacom + CarVia (P12, 2026-04-24):
-            ABERTO -> COTADO -> FATURADO
-            (+ NF no CD como estado especial para Nacom)
+        Fluxo unificado Nacom + CarVia + Op. Assai:
+            ABERTO -> COTADO -> FATURADO  (+ NF no CD para Nacom/Assai)
 
         EMBARCADO deixou de ser status — virou badge visual independente via
         `badge_embarcado` (data_embarque preenchida E NF nao voltou ao CD).
-        Isso reflete que EMBARCADO e um evento fisico ortogonal ao ciclo
-        fiscal do pedido (FATURADO = NF ativa; EMBARCADO = saiu da portaria).
 
         Status retornados:
-        - NF no CD: Nacom com flag nf_cd=True
+        - NF no CD: Nacom/Op. Assai com flag nf_cd=True
         - FATURADO: NF preenchida e ativa
         - COTADO: em embarque ativo (sem NF ainda)
         - CANCELADO: explicitamente cancelado
         - CARVIA_COTADO / CARVIA: fallbacks CarVia sem embarque/sem NF
+        - ASSAI_COTADO / ASSAI: fallbacks Op. Assai (espelhada em separacao
+          mas ainda sem embarque)
         - ABERTO: sem cotacao
         """
         # CarVia: detectado pelo prefixo CARVIA- no separacao_lote_id
@@ -112,15 +127,29 @@ class Pedido(db.Model):
                 return 'FATURADO'
             if status_view in ('CANCELADO',):
                 return 'CANCELADO'
-            # CarVia em embarque ativo — atributo injetado por
-            # ListaPedidosService.enriquecer_pedidos (lista_service.py:691).
-            # EMBARCADO deixou de ser status: pedido com data_embarque ganha
-            # badge separado via `badge_embarcado`. Aqui so distingue "em
-            # embarque" (CARVIA_COTADO) de "sem embarque" (CARVIA).
             ultimo_embarque = getattr(self, 'ultimo_embarque', None)
             if ultimo_embarque is not None:
                 return 'CARVIA_COTADO'
             return 'CARVIA'
+
+        # Op. Assai: detectado pelo prefixo ASSAI- no separacao_lote_id.
+        # Linhas espelhadas em `separacao` Nacom — mesma logica que Nacom
+        # se aplica (flags concretas + cotacao_id), com badge visual proprio.
+        # As linhas espelhadas NAO tem cotacao_id ate serem cotadas.
+        if self.eh_op_assai:
+            if getattr(self, 'nf_cd', False):
+                return 'NF no CD'
+            if self.nf and self.nf.strip():
+                return 'FATURADO'
+            status_real = getattr(self, 'status', '') or ''
+            if status_real == 'CANCELADO':
+                return 'CANCELADO'
+            if self.cotacao_id:
+                return 'ASSAI_COTADO'
+            ultimo_embarque = getattr(self, 'ultimo_embarque', None)
+            if ultimo_embarque is not None:
+                return 'ASSAI_COTADO'
+            return 'ASSAI'
 
         # Nacom: flags concretas têm prioridade (NF existe de fato)
         if getattr(self, 'nf_cd', False):

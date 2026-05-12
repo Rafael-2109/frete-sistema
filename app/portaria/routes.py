@@ -302,21 +302,27 @@ def registrar_movimento():
                                         flash(f'⚠️ Lote {item.separacao_lote_id} não encontrado na tabela Separação!', 'warning')
                             
                             # Sincroniza com sistema de entregas para cada item do embarque
+                            # Skip CarVia (hook proprio abaixo) e Op. Assai (hook proprio abaixo) —
+                            # ambos tem service dedicado (NFs nao estao em RelatorioFaturamentoImportado).
                             if embarque.itens:
                                 print(f"[DEBUG] Sincronizando {len(embarque.itens)} itens com sistema de entregas...")
-                                
+
                                 for item in embarque.itens:
-                                    if item.nota_fiscal:
-                                        try:
-                                            sincronizar_entrega_por_nf(item.nota_fiscal)
-                                            # 🔒 NOVO: Reseta flag de NF no CD diretamente em Separacao
-                                            Separacao.query.filter_by(numero_nf=item.nota_fiscal).update({'nf_cd': False})
-                                            print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
-                                        except Exception as e:
-                                            print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
-                                            print(f"[DEBUG] Tipo do erro: {type(e)}")
-                                            # Não interrompe o processo por erro de sincronização
-                                
+                                    if not item.nota_fiscal:
+                                        continue
+                                    lote = str(item.separacao_lote_id or '')
+                                    if lote.startswith('CARVIA-') or lote.startswith('ASSAI-'):
+                                        continue  # CarVia/Op. Assai tem hook proprio
+                                    try:
+                                        sincronizar_entrega_por_nf(item.nota_fiscal)
+                                        # 🔒 NOVO: Reseta flag de NF no CD diretamente em Separacao
+                                        Separacao.query.filter_by(numero_nf=item.nota_fiscal).update({'nf_cd': False})
+                                        print(f"[DEBUG] NF {item.nota_fiscal} sincronizada com entregas")
+                                    except Exception as e:
+                                        print(f"[DEBUG] Erro ao sincronizar NF {item.nota_fiscal}: {str(e)}")
+                                        print(f"[DEBUG] Tipo do erro: {type(e)}")
+                                        # Não interrompe o processo por erro de sincronização
+
                                 flash(f'Sistema de entregas sincronizado para {len(embarque.itens)} nota(s) fiscal(is)!', 'success')
 
                         # ⚠️ ALERTA DE PALLETS PENDENTES
@@ -428,7 +434,31 @@ def registrar_movimento():
                         except Exception as e_sync:
                             print(f"[AVISO] Hook monitoramento CarVia falhou: {e_sync}")
 
-                    # Hook Nacom: gerar fretes (mesma lógica do embarque save)
+                    # Hook Monitoramento Op. Assai: sincronizar EntregaMonitorada
+                    # com origem='OP_ASSAI'. Espelha o hook CarVia acima — NFs
+                    # Q.P.A. nao estao em RelatorioFaturamentoImportado, por
+                    # isso tem service dedicado.
+                    if registro.embarque_id:
+                        try:
+                            from app.utils.sincronizar_entregas_op_assai import (
+                                sincronizar_entregas_op_assai_por_embarque,
+                            )
+                            qtd_assai = sincronizar_entregas_op_assai_por_embarque(
+                                registro.embarque_id
+                            )
+                            if qtd_assai:
+                                flash(
+                                    f'{qtd_assai} NF(s) Op. Assai sincronizada(s) '
+                                    f'com monitoramento.',
+                                    'info',
+                                )
+                        except Exception as e_assai:
+                            print(f"[AVISO] Hook monitoramento Op. Assai falhou: {e_assai}")
+
+                    # Hook Nacom: gerar fretes (mesma lógica do embarque save).
+                    # processar_lancamento_automatico_fretes detecta embarques
+                    # Op. Assai automaticamente e roteia para lancar_frete_op_assai
+                    # (invariante: embarque NAO-misto).
                     if registro.embarque_id:
                         try:
                             from app.fretes.routes import processar_lancamento_automatico_fretes

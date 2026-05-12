@@ -223,7 +223,13 @@ class CarviaFreteService:
 
                     if existente.status == 'PENDENTE' and (nfs_novas or nfs_removidas):
                         # Substituir CSV + recalcular totais a partir dos itens
-                        peso_total = sum(float(it.peso or 0) for it in itens_grupo)
+                        # FIX peso_cubado (2026-05-11): preferir cubado quando
+                        # disponivel — motos tem peso_cubado >> peso real e o
+                        # calculo do frete deve refletir cubagem real.
+                        peso_total = sum(
+                            float(it.peso_cubado or it.peso or 0)
+                            for it in itens_grupo
+                        )
                         valor_total = sum(float(it.valor or 0) for it in itens_grupo)
                         nfs_csv = ','.join(sorted(nfs_atuais))
                         logger.info(
@@ -331,7 +337,12 @@ class CarviaFreteService:
 
         try:
             # --- Agregar totais do grupo ---
-            peso_total = sum(float(item.peso or 0) for item in itens)
+            # FIX peso_cubado (2026-05-11): preferir cubado quando disponivel.
+            # Motos tem peso_cubado >> peso real e calculo do frete deve usar
+            # cubagem efetiva. Fallback para peso fisico se cubado nulo.
+            peso_total = sum(
+                float(item.peso_cubado or item.peso or 0) for item in itens
+            )
             valor_total_nfs = sum(float(item.valor or 0) for item in itens)
             nfs = [item.nota_fiscal for item in itens if item.nota_fiscal]
             uf_destino = itens[0].uf_destino or ''
@@ -530,13 +541,30 @@ class CarviaFreteService:
         try:
             from app.utils.calculadora_frete import CalculadoraFrete
             from app.utils.tabela_frete_manager import TabelaFreteManager
+            from app.embarques.models import EmbarqueItem
+            from sqlalchemy import func
 
             tabela_dados = TabelaFreteManager.preparar_dados_tabela(embarque)
             if not tabela_dados.get('nome_tabela'):
                 return None
 
-            # Peso/valor do embarque inteiro para o calculo do frete total
-            peso_embarque_real = float(embarque.peso_total or 0)
+            # FIX peso_cubado (2026-05-11): para CarVia (motos), o denominador
+            # do rateio DEVE usar peso_cubado para ser coerente com o
+            # numerador (peso_grupo, ja convertido para cubado em
+            # _criar_frete_completo). `embarque.peso_total` reflete peso
+            # FISICO (agregado por listener de Separacao Nacom), o que
+            # subestima o frete em ate ~10x para motos.
+            peso_cubado_embarque = float(
+                db.session.query(
+                    func.coalesce(func.sum(EmbarqueItem.peso_cubado), 0)
+                ).filter(
+                    EmbarqueItem.embarque_id == embarque.id,
+                    EmbarqueItem.status == 'ativo',
+                    EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+                ).scalar() or 0
+            )
+            # Fallback: se nenhum item tem peso_cubado, usar agregado fisico
+            peso_embarque_real = peso_cubado_embarque or float(embarque.peso_total or 0)
             valor_embarque_real = float(embarque.valor_total or 0)
 
             # Fallback: se embarque sem peso/valor agregado, usar do grupo
