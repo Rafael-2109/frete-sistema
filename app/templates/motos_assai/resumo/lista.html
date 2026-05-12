@@ -1,0 +1,120 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="fas fa-motorcycle"></i> Resumo por Modelo
+  </h2>
+  <small class="text-muted">Status efetivo = ultimo evento de cada chassi</small>
+</header>
+
+<div class="alert alert-light border small mb-3">
+  <strong>Como usar:</strong> clique em um numero (badge) para abrir o modal com os chassis daquele status para o modelo.
+</div>
+
+<div class="table-responsive">
+<table class="table table-hover align-middle" id="resumo-table">
+  <thead class="table-light">
+    <tr>
+      <th>Modelo</th>
+      <th class="text-center">
+        <i class="fas fa-warehouse text-info"></i> Estoque
+        <small class="text-muted d-block">recebido no CD</small>
+      </th>
+      <th class="text-center">
+        <i class="fas fa-exclamation-triangle text-warning"></i> Pendente
+        <small class="text-muted d-block">com defeito</small>
+      </th>
+      <th class="text-center">
+        <i class="fas fa-tools text-primary"></i> Montada
+        <small class="text-muted d-block">pronta p/ disponibilizar</small>
+      </th>
+      <th class="text-center">
+        <i class="fas fa-check-circle text-success"></i> Disponivel
+        <small class="text-muted d-block">tag + manual</small>
+      </th>
+      <th class="text-center">
+        <i class="fas fa-file-invoice text-secondary"></i> Pedidos
+        <small class="text-muted d-block">a faturar</small>
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in linhas %}
+    <tr>
+      <td>
+        <strong>{{ l.codigo }}</strong>
+        <small class="text-muted d-block">{{ l.nome }}</small>
+      </td>
+      <td class="text-center">
+        <button type="button"
+                class="btn btn-sm {% if l.estoque %}btn-info{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="estoque"
+                data-status-label="Estoque"
+                {% if not l.estoque %}disabled{% endif %}>
+          {{ l.estoque }}
+        </button>
+      </td>
+      <td class="text-center">
+        <button type="button"
+                class="btn btn-sm {% if l.pendente %}btn-warning{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="pendente"
+                data-status-label="Pendente"
+                {% if not l.pendente %}disabled{% endif %}>
+          {{ l.pendente }}
+        </button>
+      </td>
+      <td class="text-center">
+        <button type="button"
+                class="btn btn-sm {% if l.montada %}btn-primary{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="montada"
+                data-status-label="Montada"
+                {% if not l.montada %}disabled{% endif %}>
+          {{ l.montada }}
+        </button>
+      </td>
+      <td class="text-center">
+        <button type="button"
+                class="btn btn-sm {% if l.disponivel %}btn-success{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="disponivel"
+                data-status-label="Disponivel"
+                {% if not l.disponivel %}disabled{% endif %}>
+          {{ l.disponivel }}
+        </button>
+      </td>
+      <td class="text-center">
+        <button type="button"
+                class="btn btn-sm {% if l.em_pedido %}btn-secondary{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="em_pedido"
+                data-status-label="Pedidos"
+                {% if not l.em_pedido %}disabled{% endif %}>
+          {{ l.em_pedido }}
+        </button>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="text-center text-muted py-4">Nenhum modelo cadastrado.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% include 'motos_assai/resumo/_modais.html' %}
+
+<script>
+  window.MOTOS_ASSAI_RESUMO = {
+    detalheUrlBase: '{{ url_for("motos_assai.resumo_detalhe", modelo_id=0, status="estoque")|replace("/0/estoque", "/") }}',
+  };
+</script>
+<script src="{{ url_for('static', filename='motos_assai/js/resumo_modais.js') }}" defer></script>
+{% endblock %}

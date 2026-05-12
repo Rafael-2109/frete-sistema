@@ -55,6 +55,7 @@ from .disponibilizar_service import (
 from .separacao_service import (
     get_ou_criar_separacao, saldo_pendente_por_modelo, registrar_chassi,
     desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    listar_pares_separaveis,
     SeparacaoConflictError, SeparacaoValidationError,
 )
 from .faturamento_service import gerar_excel_qpa
@@ -89,6 +90,7 @@ __all__ = [
     'DisponibilizarValidationError',
     'get_ou_criar_separacao', 'saldo_pendente_por_modelo', 'registrar_chassi',
     'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
+    'listar_pares_separaveis',
     'SeparacaoConflictError', 'SeparacaoValidationError',
     'gerar_excel_qpa',
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',

@@ -1,0 +1,101 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="fas fa-clock text-warning"></i> Pendências Abertas
+    <span class="badge bg-warning text-dark">{{ abertas|length }}</span>
+  </h2>
+  <a href="{{ url_for('motos_assai.pendencias_landing') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar
+  </a>
+</header>
+
+{% if abertas %}
+<div class="table-responsive">
+<table class="table table-hover align-middle">
+  <thead class="table-light">
+    <tr>
+      <th>#</th>
+      <th>Chassi</th>
+      <th>Modelo</th>
+      <th>Cor</th>
+      <th>Pendência</th>
+      <th>Operador</th>
+      <th>Quando</th>
+      <th class="text-end">Ação</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in abertas %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td><code>{{ p.chassi }}</code></td>
+      <td><strong>{{ p.modelo_codigo }}</strong><br><small class="text-muted">{{ p.modelo_nome }}</small></td>
+      <td>{{ p.cor }}</td>
+      <td>
+        {{ p.observacao }}
+        {% if p.chassi_doador %}
+          <br><small class="text-muted">Doador: <code>{{ p.chassi_doador }}</code></small>
+        {% endif %}
+      </td>
+      <td>{{ p.operador }}</td>
+      <td><small>{{ p.ocorrido_em.strftime('%d/%m/%Y %H:%M') if p.ocorrido_em else '-' }}</small></td>
+      <td class="text-end">
+        <button type="button"
+                class="btn btn-sm btn-success btn-resolver-pendencia"
+                data-chassi="{{ p.chassi }}"
+                data-observacao='{{ p.observacao|tojson }}'>
+          <i class="fas fa-check"></i> Resolver
+        </button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="alert alert-success">
+  <i class="fas fa-check-circle"></i> Nenhuma pendência aberta. Tudo OK!
+</div>
+{% endif %}
+
+<!-- Modal Resolver Pendencia -->
+<div class="modal fade" id="modal-resolver-pendencia" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-check text-success"></i> Resolver Pendência
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Chassi <code id="resolver-chassi"></code></p>
+        <div class="alert alert-light border small mb-3">
+          <strong>Pendência original:</strong>
+          <span id="resolver-observacao-original" class="text-muted"></span>
+        </div>
+        <label class="form-label">Descrição da resolução (≥3 chars, obrigatório)</label>
+        <textarea id="resolver-descricao" class="form-control" rows="3"
+                  placeholder="Ex: troca de bateria realizada, retrovisor instalado..."
+                  autocapitalize="sentences"></textarea>
+        <div id="resolver-erro" class="text-danger small mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="btn-confirmar-resolver">
+          <i class="fas fa-check"></i> Confirmar resolução
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.MOTOS_ASSAI_PENDENCIAS = {
+  endpointResolver: '{{ url_for("motos_assai.pendencias_resolver") }}',
+};
+</script>
+<script src="{{ url_for('static', filename='motos_assai/js/pendencias_resolver.js') }}" defer></script>
+{% endblock %}

@@ -19,6 +19,7 @@ motos_assai_bp = Blueprint(
 
 # Importar sub-rotas (registra handlers no blueprint)
 from app.motos_assai.routes import dashboard  # noqa: E402,F401
+from app.motos_assai.routes import resumo  # noqa: E402,F401
 from app.motos_assai.routes import lojas  # noqa: E402,F401
 from app.motos_assai.routes import modelos  # noqa: E402,F401
 from app.motos_assai.routes import cd  # noqa: E402,F401
@@ -28,6 +29,7 @@ from app.motos_assai.routes import recibos  # noqa: E402,F401
 from app.motos_assai.routes import recebimento  # noqa: E402,F401
 from app.motos_assai.routes import montagem  # noqa: E402,F401
 from app.motos_assai.routes import disponibilizar  # noqa: E402,F401
+from app.motos_assai.routes import pendencias  # noqa: E402,F401
 from app.motos_assai.routes import separacao  # noqa: E402,F401
 from app.motos_assai.routes import faturamento  # noqa: E402,F401
 from app.motos_assai.routes import api  # noqa: E402,F401

@@ -254,3 +254,130 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
     sep.motivo_cancelamento = motivo.strip()
     db.session.commit()
     return sep
+
+
+def listar_pares_separaveis() -> List[Dict[str, Any]]:
+    """Lista pares (pedido, loja) com saldo pendente de chassis a separar.
+
+    Retorna: [{pedido_id, pedido_numero, pedido_status,
+               loja_id, loja_numero, loja_nome, loja_cidade, loja_uf,
+               qtd_pedida_total, qtd_separada_total, qtd_pendente_total,
+               separacao_ativa_id, separacao_ativa_status,
+               modelos: [{codigo, nome, qtd_pedida, qtd_separada, qtd_pendente}]}]
+
+    Considera apenas pedidos NAO FATURADOS / NAO CANCELADOS.
+    Mostra pares que tem AO MENOS 1 modelo com qtd_pendente > 0,
+    ou que ja tem separacao ATIVA (EM_SEPARACAO ou FECHADA mas nao FATURADA).
+    """
+    from app.motos_assai.models import AssaiLoja
+    pedidos = (
+        AssaiPedidoVenda.query
+        .filter(AssaiPedidoVenda.status.notin_([
+            'FATURADO', 'CANCELADO',
+        ]))
+        .order_by(AssaiPedidoVenda.criado_em.desc())
+        .all()
+    )
+    if not pedidos:
+        return []
+    pedido_ids = [p.id for p in pedidos]
+
+    itens = (
+        db.session.query(
+            AssaiPedidoVendaItem.pedido_id,
+            AssaiPedidoVendaItem.loja_id,
+            AssaiPedidoVendaItem.modelo_id,
+            AssaiPedidoVendaItem.qtd_pedida,
+            AssaiModelo.codigo,
+            AssaiModelo.nome,
+        )
+        .join(AssaiModelo, AssaiModelo.id == AssaiPedidoVendaItem.modelo_id)
+        .filter(AssaiPedidoVendaItem.pedido_id.in_(pedido_ids))
+        .order_by(AssaiModelo.codigo)
+        .all()
+    )
+
+    # Qtd ja em separacao (qualquer status != CANCELADA - CANCELADA devolve chassi)
+    sep_items = (
+        db.session.query(
+            AssaiSeparacao.pedido_id,
+            AssaiSeparacao.loja_id,
+            AssaiSeparacaoItem.modelo_id,
+            func.count(AssaiSeparacaoItem.id).label('qtd'),
+        )
+        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+        .filter(
+            AssaiSeparacao.pedido_id.in_(pedido_ids),
+            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+        )
+        .group_by(AssaiSeparacao.pedido_id, AssaiSeparacao.loja_id, AssaiSeparacaoItem.modelo_id)
+        .all()
+    )
+    sep_map = {(r.pedido_id, r.loja_id, r.modelo_id): int(r.qtd) for r in sep_items}
+
+    sep_ativas = (
+        AssaiSeparacao.query
+        .filter(
+            AssaiSeparacao.pedido_id.in_(pedido_ids),
+            AssaiSeparacao.status.in_([
+                SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
+            ]),
+        )
+        .all()
+    )
+    ativa_map = {(s.pedido_id, s.loja_id): s for s in sep_ativas}
+
+    lojas = AssaiLoja.query.all()
+    loja_por_id = {l.id: l for l in lojas}
+    pedido_por_id = {p.id: p for p in pedidos}
+
+    pares: Dict[tuple, Dict[str, Any]] = {}
+    for it in itens:
+        key = (it.pedido_id, it.loja_id)
+        qtd_pedida = int(it.qtd_pedida)
+        qtd_sep = sep_map.get((it.pedido_id, it.loja_id, it.modelo_id), 0)
+        qtd_pend = max(0, qtd_pedida - qtd_sep)
+        bucket = pares.setdefault(key, {
+            'pedido_id': it.pedido_id,
+            'loja_id': it.loja_id,
+            'qtd_pedida_total': 0,
+            'qtd_separada_total': 0,
+            'qtd_pendente_total': 0,
+            'modelos': [],
+        })
+        bucket['qtd_pedida_total'] += qtd_pedida
+        bucket['qtd_separada_total'] += qtd_sep
+        bucket['qtd_pendente_total'] += qtd_pend
+        bucket['modelos'].append({
+            'codigo': it.codigo,
+            'nome': it.nome,
+            'qtd_pedida': qtd_pedida,
+            'qtd_separada': qtd_sep,
+            'qtd_pendente': qtd_pend,
+        })
+
+    result = []
+    for (pid, lid), bucket in pares.items():
+        sep_ativa = ativa_map.get((pid, lid))
+        if bucket['qtd_pendente_total'] <= 0 and not sep_ativa:
+            continue
+        pedido = pedido_por_id.get(pid)
+        loja = loja_por_id.get(lid)
+        result.append({
+            **bucket,
+            'pedido_numero': pedido.numero if pedido else '-',
+            'pedido_status': pedido.status if pedido else '-',
+            'loja_numero': loja.numero if loja else '-',
+            'loja_nome': loja.nome if loja else '-',
+            'loja_cidade': (loja.cidade if loja else None) or '-',
+            'loja_uf': (loja.uf if loja else None) or '-',
+            'separacao_ativa_id': sep_ativa.id if sep_ativa else None,
+            'separacao_ativa_status': sep_ativa.status if sep_ativa else None,
+        })
+
+    result.sort(key=lambda r: (
+        0 if r['separacao_ativa_id'] else 1,
+        r['pedido_numero'],
+        r['loja_numero'],
+    ))
+    return result

@@ -5,6 +5,7 @@ from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import (
     get_ou_criar_separacao, saldo_pendente_por_modelo,
     registrar_chassi, desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    listar_pares_separaveis,
     SeparacaoConflictError, SeparacaoValidationError,
 )
 from app.motos_assai.models import (
@@ -22,6 +23,19 @@ def separacao_lista():
         .limit(250).all()
     )
     return render_template('motos_assai/separacao/lista.html', separacoes=seps)
+
+
+@motos_assai_bp.route('/separacao/nova')
+@login_required
+@require_motos_assai
+def separacao_nova():
+    """Tela com pares (pedido, loja) com saldo pendente para iniciar separacao.
+
+    Cada par tem botao "Iniciar separacao" que abre a tela operacional
+    (/pedidos/<pid>/separar/<lid>) - se ja houver separacao ativa, abre ela.
+    """
+    pares = listar_pares_separaveis()
+    return render_template('motos_assai/separacao/nova.html', pares=pares)
 
 
 @motos_assai_bp.route('/pedidos/<int:pedido_id>/separar/<int:loja_id>')

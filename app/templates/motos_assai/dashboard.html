@@ -3,10 +3,31 @@
 {% block motos_assai_content %}
 <div class="motos-assai-dashboard">
   <header class="dashboard-header">
-    <h2>Operação VOE
-      {% if cd %}<small class="text-muted"> · CD: {{ cd.nome }}</small>{% endif %}
-    </h2>
+    <h2>Operação VOE</h2>
   </header>
+
+  {% if cd %}
+  <section class="mb-3">
+    <div class="card border-light shadow-sm">
+      <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center gap-3">
+        <div>
+          <i class="fas fa-warehouse text-primary"></i>
+          <strong>CD: {{ cd.nome }}</strong>
+          {% if cd.ativo %}<span class="badge bg-success ms-1">ATIVO</span>{% endif %}
+        </div>
+        <span class="text-muted small">
+          {% if cd.cnpj %}CNPJ {{ cd.cnpj }}{% endif %}
+          {% if cd.endereco %} · {{ cd.endereco }}{% endif %}
+          {% if cd.cidade %} · {{ cd.cidade }}/{{ cd.uf or '-' }}{% endif %}
+          {% if cd.cep %} · CEP {{ cd.cep }}{% endif %}
+        </span>
+        <a href="{{ url_for('motos_assai.cd_detalhe') }}" class="btn btn-sm btn-outline-secondary ms-auto">
+          <i class="fas fa-edit"></i> Detalhes / Editar
+        </a>
+      </div>
+    </div>
+  </section>
+  {% endif %}
 
   <section class="dashboard-cards row g-3">
     <div class="col-md-3">
@@ -74,7 +95,13 @@
   <section class="dashboard-links mt-4">
     <h5>Atalhos rápidos</h5>
     <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('motos_assai.resumo_lista') }}" class="btn btn-outline-primary">
+        <i class="fas fa-motorcycle"></i> Resumo
+      </a>
       <a href="{{ url_for('motos_assai.montagem_tela') }}" class="btn btn-outline-secondary">Montagem</a>
+      <a href="{{ url_for('motos_assai.pendencias_landing') }}" class="btn btn-outline-warning">
+        <i class="fas fa-exclamation-triangle"></i> Pendências
+      </a>
       <a href="{{ url_for('motos_assai.disponibilizar_tela') }}" class="btn btn-outline-secondary">Disponibilizar</a>
       <a href="{{ url_for('motos_assai.separacao_lista') }}" class="btn btn-outline-secondary">Separação</a>
       <a href="{{ url_for('motos_assai.faturamento_lista') }}" class="btn btn-outline-secondary">Faturamento</a>

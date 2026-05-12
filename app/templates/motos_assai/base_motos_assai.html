@@ -21,14 +21,14 @@
     <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.dashboard') }}">
       <i class="fas fa-tachometer-alt"></i> Dashboard
     </a>
+    <a id="menu-resumo" class="motos-assai-nav-link" href="{{ url_for('motos_assai.resumo_lista') }}">
+      <i class="fas fa-motorcycle"></i> Resumo
+    </a>
     <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.lojas_lista') }}">
       <i class="fas fa-store"></i> Lojas
     </a>
     <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.modelos_lista') }}">
       <i class="fas fa-tags"></i> Modelos
-    </a>
-    <a class="motos-assai-nav-link" href="{{ url_for('motos_assai.cd_detalhe') }}">
-      <i class="fas fa-warehouse"></i> CD
     </a>
     <a id="menu-pedidos-voe" class="motos-assai-nav-link" href="{{ url_for('motos_assai.pedidos_lista') }}">
       <i class="fas fa-file-invoice"></i> Pedidos VOE
@@ -41,6 +41,9 @@
     </a>
     <a id="menu-montagem" class="motos-assai-nav-link" href="{{ url_for('motos_assai.montagem_tela') }}">
       <i class="fas fa-tools"></i> Montagem
+    </a>
+    <a id="menu-pendencias" class="motos-assai-nav-link" href="{{ url_for('motos_assai.pendencias_landing') }}">
+      <i class="fas fa-exclamation-triangle"></i> Pendências
     </a>
     <a id="menu-disponibilizar" class="motos-assai-nav-link" href="{{ url_for('motos_assai.disponibilizar_tela') }}">
       <i class="fas fa-check-circle"></i> Disponibilizar

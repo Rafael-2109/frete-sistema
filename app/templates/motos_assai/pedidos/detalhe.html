@@ -78,6 +78,14 @@
             </tbody>
           </table>
           </div>
+          {% if pedido.status in ['EM_PRODUCAO', 'SEPARANDO', 'FATURADO_PARCIAL'] %}
+          <div class="mt-2">
+            <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=pedido.id, loja_id=loja.id) }}"
+               class="btn btn-sm btn-primary">
+              <i class="fas fa-truck"></i> Iniciar / Continuar separação desta loja
+            </a>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>

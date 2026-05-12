@@ -1,0 +1,125 @@
+{#
+  Modais lazy-load para detalhe por (modelo, status).
+  Cada modal tem um <tbody> que e populado via JS conforme o status clicado.
+  Todos compartilham o id #modal-resumo-detalhe e o JS escolhe a estrutura de tabela
+  correta com base em data-status.
+#}
+<div class="modal fade" id="modal-resumo-detalhe" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-motorcycle"></i>
+          <span id="resumo-modal-titulo">Detalhe</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="resumo-modal-loading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+        </div>
+
+        <div id="resumo-modal-empty" class="alert alert-info d-none">
+          Nenhum chassi neste status para o modelo selecionado.
+        </div>
+
+        {# Tabela ESTOQUE #}
+        <div id="resumo-modal-table-estoque" class="d-none">
+          <table class="table table-sm table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Chassi</th>
+                <th>Cor</th>
+                <th>Data Recebimento</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        {# Tabela PENDENTE #}
+        <div id="resumo-modal-table-pendente" class="d-none">
+          <table class="table table-sm table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Chassi</th>
+                <th>Cor</th>
+                <th>Data Pendencia</th>
+                <th>Operador</th>
+                <th>Observacao</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        {# Tabela MONTADA #}
+        <div id="resumo-modal-table-montada" class="d-none">
+          <p class="small text-muted mb-2">
+            <strong>Tipo</strong>: MONTADA = montagem original; REVERTIDA_PARA_MONTADA = devolvida do estado Disponivel.
+          </p>
+          <table class="table table-sm table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Chassi</th>
+                <th>Cor</th>
+                <th>Tipo</th>
+                <th>Operador</th>
+                <th>Data + Hora</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        {# Tabela DISPONIVEL #}
+        <div id="resumo-modal-table-disponivel" class="d-none">
+          <table class="table table-sm table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Chassi</th>
+                <th>Cor</th>
+                <th>Operador Montagem</th>
+                <th>Data Montagem</th>
+                <th>Operador Disp.</th>
+                <th>Data Disp.</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        {# Tabela EM PEDIDO #}
+        <div id="resumo-modal-table-em_pedido" class="d-none">
+          <p class="small text-muted mb-2">
+            <strong>Pendente</strong> = qtd ainda nao vinculada a nenhuma separacao
+            (EM_SEPARACAO / FECHADA / FATURADA ja sao subtraidas).
+          </p>
+          <table class="table table-sm table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>Loja</th>
+                <th>Cidade/UF</th>
+                <th>Pedido</th>
+                <th>Status</th>
+                <th class="text-end">Pedida</th>
+                <th class="text-end">Já em separação</th>
+                <th class="text-end">Pendente</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
