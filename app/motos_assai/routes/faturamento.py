@@ -54,22 +54,79 @@ def faturamento_solicitacao_excel(separacao_id):
 @login_required
 @require_motos_assai
 def faturamento_upload_nf(separacao_id):
+    """Upload de 1 ou N PDFs de NF Q.P.A.
+
+    - 1 PDF + sucesso → redirect para detalhe (UX antiga preservada).
+    - 1 PDF + erro/duplicada → flash + render upload novamente.
+    - N PDFs (qualquer combinação de sucesso/erro) → render relatório batch.
+    """
     form = UploadNfQpaForm()
     if form.validate_on_submit():
-        f = form.pdf.data
-        try:
-            nf = importar_nf_qpa(
-                pdf_bytes=f.read(),
-                nome_arquivo=f.filename,
-                importada_por_id=current_user.id,
-            )
-            flash(f'NF {nf.numero} importada — status: {nf.status_match}', 'success')
-            return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id))
-        except NfQpaJaImportadaError as e:
-            flash(str(e), 'warning')
-        except NfQpaParseError as e:
-            flash(f'Erro ao parsear NF: {e}', 'danger')
-    return render_template('motos_assai/faturamento/upload_nf.html', form=form)
+        arquivos = form.pdfs.data or []
+        # MultipleFileField pode entregar lista com 1 FileStorage vazio em alguns edge cases
+        arquivos = [f for f in arquivos if f and getattr(f, 'filename', '')]
+        resultados = []  # cada item: dict(filename, status, nf, erro)
+        for f in arquivos:
+            try:
+                nf = importar_nf_qpa(
+                    pdf_bytes=f.read(),
+                    nome_arquivo=f.filename,
+                    importada_por_id=current_user.id,
+                )
+                resultados.append({
+                    'filename': f.filename,
+                    'status': 'ok',
+                    'status_match': nf.status_match,
+                    'nf_id': nf.id,
+                    'nf_numero': nf.numero,
+                    'erro': None,
+                })
+            except NfQpaJaImportadaError as e:
+                resultados.append({
+                    'filename': f.filename,
+                    'status': 'duplicada',
+                    'status_match': None,
+                    'nf_id': None,
+                    'nf_numero': None,
+                    'erro': str(e),
+                })
+            except NfQpaParseError as e:
+                resultados.append({
+                    'filename': f.filename,
+                    'status': 'erro_parse',
+                    'status_match': None,
+                    'nf_id': None,
+                    'nf_numero': None,
+                    'erro': str(e),
+                })
+
+        # 1 arquivo + sucesso → preserva UX antiga
+        if len(resultados) == 1 and resultados[0]['status'] == 'ok':
+            r = resultados[0]
+            flash(f'NF {r["nf_numero"]} importada — status: {r["status_match"]}', 'success')
+            return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=r['nf_id']))
+
+        # 1 arquivo + erro → flash e re-render upload
+        if len(resultados) == 1 and resultados[0]['status'] != 'ok':
+            r = resultados[0]
+            categoria = 'warning' if r['status'] == 'duplicada' else 'danger'
+            prefix = '' if r['status'] == 'duplicada' else 'Erro ao parsear NF: '
+            flash(f'{prefix}{r["erro"]}', categoria)
+            return render_template('motos_assai/faturamento/upload_nf.html', form=form, separacao_id=separacao_id)
+
+        # N arquivos → relatório batch
+        resumo = {
+            'total': len(resultados),
+            'ok': sum(1 for r in resultados if r['status'] == 'ok'),
+            'duplicada': sum(1 for r in resultados if r['status'] == 'duplicada'),
+            'erro_parse': sum(1 for r in resultados if r['status'] == 'erro_parse'),
+        }
+        return render_template(
+            'motos_assai/faturamento/upload_nf_resultado.html',
+            resultados=resultados, resumo=resumo, separacao_id=separacao_id,
+        )
+
+    return render_template('motos_assai/faturamento/upload_nf.html', form=form, separacao_id=separacao_id)
 
 
 @motos_assai_bp.route('/faturamento/nfs/<int:nf_id>')

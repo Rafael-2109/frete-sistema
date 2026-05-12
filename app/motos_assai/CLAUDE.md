@@ -275,6 +275,14 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
 - Match BATEU / DIVERGENTE / NAO_RECONCILIADO com tolerância 1% no valor unitário
 - Quando BATEU: separação → status FATURADA; cada chassi emite evento FATURADA
 
+**Upload em lote (2026-05-12)** — `UploadNfQpaForm.pdfs` (`MultipleFileField`):
+- Variante global `/motos-assai/faturamento/upload-nf` aceita 1 ou N PDFs.
+- 1 PDF + sucesso → redirect detalhe (UX antiga preservada).
+- 1 PDF + erro → flash + re-render upload.
+- N PDFs → `upload_nf_resultado.html` com tabela arquivo|status|NF|match|erro + resumo (total/ok/duplicada/erro_parse).
+- Acesso: botão "Importar NFs em lote" no header de `lista_separacoes.html` (tela Faturamento).
+- Botão "Upload NF" por-linha (variante per-separação) também continua aceitando N PDFs.
+
 **SOL no CarVia** (`scripts/migrations/motos_assai_06_carvia_modelo_sol.py`):
 - Seed idempotente que adiciona `CarviaModeloMoto(nome='SOL')` para o parser DANFE reconhecer modelo SOL
 

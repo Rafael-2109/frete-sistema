@@ -1,8 +1,18 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
-<h2>Faturamento</h2>
-<p class="text-muted">Separações fechadas — gere Excel para Q.P.A. e suba a NF emitida.</p>
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <div>
+    <h2 class="mb-1">Faturamento</h2>
+    <p class="text-muted mb-0">Separações fechadas — gere Excel para Q.P.A. e suba a NF emitida.</p>
+  </div>
+  <a id="btn-upload-nf-lote"
+     href="{{ url_for('motos_assai.faturamento_upload_nf') }}"
+     class="btn btn-primary"
+     title="Importar 1 ou mais PDFs de NF Q.P.A. de uma vez">
+    <i class="fas fa-file-upload"></i> Importar NFs em lote
+  </a>
+</div>
 
 <div id="tabela-separacoes-fechadas" class="table-responsive">
 <table class="table table-hover">

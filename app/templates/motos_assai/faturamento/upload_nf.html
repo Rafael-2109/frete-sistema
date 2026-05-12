@@ -1,16 +1,35 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
-<h2>Importar NF Q.P.A.</h2>
-<form method="POST" enctype="multipart/form-data" class="card p-4 col-md-6">
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>
+    <i class="fas fa-file-upload"></i>
+    {% if separacao_id %}
+      Importar NF Q.P.A. — Separação #{{ separacao_id }}
+    {% else %}
+      Importar NFs Q.P.A. em lote
+    {% endif %}
+  </h2>
+  <a href="{{ url_for('motos_assai.faturamento_lista') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar
+  </a>
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="card p-4 col-md-8">
   {{ form.hidden_tag() }}
   <div class="mb-3">
-    {{ form.pdf.label(class="form-label") }}
-    {{ form.pdf(class="form-control", accept="application/pdf") }}
-    {% if form.pdf.errors %}
-      {% for e in form.pdf.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    {{ form.pdfs.label(class="form-label fw-bold") }}
+    {{ form.pdfs(class="form-control", accept="application/pdf", multiple=true) }}
+    <div class="form-text">
+      Selecione <strong>1 ou mais PDFs</strong> de NF Q.P.A. para importar de uma só vez (segure
+      <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> para selecionar vários).
+    </div>
+    {% if form.pdfs.errors %}
+      {% for e in form.pdfs.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
     {% endif %}
   </div>
-  <button type="submit" class="btn btn-primary"><i class="fas fa-upload"></i> Importar</button>
+  <button type="submit" class="btn btn-primary">
+    <i class="fas fa-upload"></i> Importar
+  </button>
 </form>
 {% endblock %}

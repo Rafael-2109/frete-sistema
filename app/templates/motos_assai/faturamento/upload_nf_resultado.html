@@ -1,0 +1,106 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="fas fa-clipboard-check"></i> Resultado da importação em lote</h2>
+  <div>
+    <a href="{{ url_for('motos_assai.faturamento_upload_nf', separacao_id=separacao_id) if separacao_id else url_for('motos_assai.faturamento_upload_nf') }}"
+       class="btn btn-sm btn-outline-primary">
+      <i class="fas fa-upload"></i> Importar mais
+    </a>
+    <a href="{{ url_for('motos_assai.faturamento_lista') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar ao Faturamento
+    </a>
+  </div>
+</div>
+
+<section class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2">
+        <h6 class="card-subtitle text-muted small">Total enviado</h6>
+        <p class="h4 mb-0">{{ resumo.total }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2">
+        <h6 class="card-subtitle text-muted small">Importadas</h6>
+        <p class="h4 mb-0 text-success">{{ resumo.ok }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2">
+        <h6 class="card-subtitle text-muted small">Já existiam</h6>
+        <p class="h4 mb-0 text-warning">{{ resumo.duplicada }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2">
+        <h6 class="card-subtitle text-muted small">Erros de parser</h6>
+        <p class="h4 mb-0 text-danger">{{ resumo.erro_parse }}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle">
+  <thead>
+    <tr>
+      <th style="width: 32%;">Arquivo</th>
+      <th>Status</th>
+      <th>NF</th>
+      <th>Match</th>
+      <th>Detalhe / erro</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in resultados %}
+    <tr>
+      <td class="text-truncate" style="max-width: 320px;" title="{{ r.filename }}">
+        <i class="fas fa-file-pdf text-danger"></i> {{ r.filename }}
+      </td>
+      <td>
+        {% if r.status == 'ok' %}
+          <span class="badge bg-success">Importada</span>
+        {% elif r.status == 'duplicada' %}
+          <span class="badge bg-warning text-dark">Já existia</span>
+        {% else %}
+          <span class="badge bg-danger">Erro</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if r.nf_numero %}{{ r.nf_numero }}{% else %}-{% endif %}
+      </td>
+      <td>
+        {% if r.status_match == 'BATEU' %}
+          <span class="badge bg-success">BATEU</span>
+        {% elif r.status_match == 'DIVERGENTE' %}
+          <span class="badge bg-warning text-dark">DIVERGENTE</span>
+        {% elif r.status_match %}
+          <span class="badge bg-secondary">{{ r.status_match }}</span>
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>
+        {% if r.status == 'ok' %}
+          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=r.nf_id) }}" class="small">
+            <i class="fas fa-external-link-alt"></i> abrir detalhe
+          </a>
+        {% else %}
+          <span class="small text-muted">{{ r.erro }}</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
