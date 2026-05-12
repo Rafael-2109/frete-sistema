@@ -98,18 +98,9 @@
   ],
   "indices": [
     {
-      "name": "uq_previnculo_linha_cotacao_ativo",
+      "name": "ix_carvia_previnculos_extrato_cotacao_status",
       "columns": [
-        "extrato_linha_id",
-        "cotacao_id"
-      ],
-      "unique": true
-    },
-    {
-      "name": "ix_previnculo_resolvido",
-      "columns": [
-        "status",
-        "resolvido_em"
+        "status"
       ],
       "unique": false
     },
@@ -122,9 +113,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_previnculos_extrato_cotacao_status",
+      "name": "ix_carvia_previnculos_extrato_cotacao_extrato_linha_id",
       "columns": [
-        "status"
+        "extrato_linha_id"
       ],
       "unique": false
     },
@@ -136,11 +127,20 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_previnculos_extrato_cotacao_extrato_linha_id",
+      "name": "ix_previnculo_resolvido",
       "columns": [
-        "extrato_linha_id"
+        "status",
+        "resolvido_em"
       ],
       "unique": false
+    },
+    {
+      "name": "uq_previnculo_linha_cotacao_ativo",
+      "columns": [
+        "extrato_linha_id",
+        "cotacao_id"
+      ],
+      "unique": true
     }
   ]
 }

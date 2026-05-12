@@ -135,16 +135,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tagplus_backfill_job_rq_job_id",
+      "name": "ix_hora_tagplus_backfill_job_status",
       "columns": [
-        "rq_job_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_tagplus_backfill_job_status",
+      "name": "ix_hora_tagplus_backfill_job_rq_job_id",
       "columns": [
-        "status"
+        "rq_job_id"
       ],
       "unique": false
     },

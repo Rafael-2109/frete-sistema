@@ -115,9 +115,9 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_linha_nf_devolucao_id",
+      "name": "ix_nf_devolucao_linha_codigo_produto_interno",
       "columns": [
-        "nf_devolucao_id"
+        "codigo_produto_interno"
       ],
       "unique": false
     },
@@ -129,16 +129,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_devolucao_linha_codigo_produto_interno",
+      "name": "idx_nfd_linha_resolvido",
       "columns": [
-        "codigo_produto_interno"
+        "produto_resolvido"
       ],
       "unique": false
     },
     {
-      "name": "idx_nfd_linha_resolvido",
+      "name": "ix_nf_devolucao_linha_nf_devolucao_id",
       "columns": [
-        "produto_resolvido"
+        "nf_devolucao_id"
       ],
       "unique": false
     },

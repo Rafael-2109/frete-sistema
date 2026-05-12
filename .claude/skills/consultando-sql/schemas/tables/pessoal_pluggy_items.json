@@ -70,16 +70,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pessoal_pluggy_items_client_user_id",
+      "name": "ix_pessoal_pluggy_items_status",
       "columns": [
-        "client_user_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_pessoal_pluggy_items_status",
+      "name": "ix_pessoal_pluggy_items_client_user_id",
       "columns": [
-        "status"
+        "client_user_id"
       ],
       "unique": false
     }

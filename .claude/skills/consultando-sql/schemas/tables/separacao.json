@@ -229,29 +229,6 @@
   ],
   "indices": [
     {
-      "name": "ix_separacao_separacao_lote_id",
-      "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_produto_qtd_sync",
-      "columns": [
-        "cod_produto",
-        "qtd_saldo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_estoque_projetado",
-      "columns": [
-        "cod_produto",
-        "expedicao"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_expedicao_produto",
       "columns": [
         "expedicao",
@@ -364,6 +341,29 @@
       "name": "ix_separacao_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_produto_qtd_sync",
+      "columns": [
+        "cod_produto",
+        "qtd_saldo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_estoque_projetado",
+      "columns": [
+        "cod_produto",
+        "expedicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
       ],
       "unique": false
     }

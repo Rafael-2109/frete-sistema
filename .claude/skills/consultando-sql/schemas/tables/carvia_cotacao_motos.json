@@ -44,6 +44,12 @@
     {
       "name": "valor_total",
       "type": "numeric(15,2)"
+    },
+    {
+      "name": "placeholder",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
     }
   ],
   "foreign_keys": [

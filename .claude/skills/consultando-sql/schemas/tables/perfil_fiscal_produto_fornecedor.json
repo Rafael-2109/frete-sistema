@@ -140,16 +140,16 @@
       "unique": false
     },
     {
-      "name": "ix_perfil_fiscal_produto_fornecedor_cnpj_empresa_compradora",
+      "name": "ix_perfil_fiscal_produto_fornecedor_cod_produto",
       "columns": [
-        "cnpj_empresa_compradora"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_perfil_fiscal_produto_fornecedor_cod_produto",
+      "name": "ix_perfil_fiscal_produto_fornecedor_cnpj_empresa_compradora",
       "columns": [
-        "cod_produto"
+        "cnpj_empresa_compradora"
       ],
       "unique": false
     }

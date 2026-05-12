@@ -67,17 +67,9 @@
       "unique": false
     },
     {
-      "name": "idx_audit_custeio_entidade_id",
+      "name": "ix_audit_log_custeio_timestamp",
       "columns": [
-        "entidade",
-        "entidade_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_audit_log_custeio_entidade",
-      "columns": [
-        "entidade"
+        "timestamp"
       ],
       "unique": false
     },
@@ -89,6 +81,13 @@
       "unique": false
     },
     {
+      "name": "ix_audit_log_custeio_entidade",
+      "columns": [
+        "entidade"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_audit_log_custeio_entidade_id",
       "columns": [
         "entidade_id"
@@ -96,9 +95,10 @@
       "unique": false
     },
     {
-      "name": "ix_audit_log_custeio_timestamp",
+      "name": "idx_audit_custeio_entidade_id",
       "columns": [
-        "timestamp"
+        "entidade",
+        "entidade_id"
       ],
       "unique": false
     },

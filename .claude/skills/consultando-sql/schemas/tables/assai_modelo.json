@@ -30,6 +30,14 @@
       "type": "varchar(120)"
     },
     {
+      "name": "peso_kg",
+      "type": "numeric(8,2)"
+    },
+    {
+      "name": "peso_cubado_kg",
+      "type": "numeric(8,2)"
+    },
+    {
       "name": "ativo",
       "type": "boolean",
       "description": "True = registro ativo",

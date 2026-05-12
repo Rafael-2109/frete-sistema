@@ -268,6 +268,12 @@
     {
       "name": "lancado_por",
       "type": "varchar(100)"
+    },
+    {
+      "name": "origem",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "NACOM"
     }
   ],
   "foreign_keys": [
@@ -289,20 +295,6 @@
     }
   ],
   "indices": [
-    {
-      "name": "ix_fretes_odoo_dfe_id",
-      "columns": [
-        "odoo_dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_fretes_odoo_purchase_order_id",
-      "columns": [
-        "odoo_purchase_order_id"
-      ],
-      "unique": false
-    },
     {
       "name": "ix_fretes_frete_cte_id",
       "columns": [
@@ -328,6 +320,27 @@
       "name": "ix_fretes_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_odoo_dfe_id",
+      "columns": [
+        "odoo_dfe_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_fretes_odoo_purchase_order_id",
+      "columns": [
+        "odoo_purchase_order_id"
       ],
       "unique": false
     }

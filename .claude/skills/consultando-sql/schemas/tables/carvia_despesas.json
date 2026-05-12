@@ -103,13 +103,6 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_despesas_frete_id",
-      "columns": [
-        "frete_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_despesas_operacao_id",
       "columns": [
         "operacao_id"
@@ -120,6 +113,13 @@
       "name": "ix_carvia_despesas_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_despesas_frete_id",
+      "columns": [
+        "frete_id"
       ],
       "unique": false
     }
