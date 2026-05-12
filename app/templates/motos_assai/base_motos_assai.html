@@ -54,6 +54,9 @@
     <a id="menu-faturamento" class="motos-assai-nav-link" href="{{ url_for('motos_assai.faturamento_lista') }}">
       <i class="fas fa-file-invoice-dollar"></i> Faturamento
     </a>
+    <a id="menu-pos-venda" class="motos-assai-nav-link" href="{{ url_for('motos_assai.pos_venda_lista') }}">
+      <i class="fas fa-headset"></i> Pós-Venda
+    </a>
     {% if current_user.is_authenticated %}
     <button id="help-button" class="btn btn-link btn-sm ms-auto" title="Ajuda" type="button" style="font-size: 1.1rem;">
       <i class="fas fa-question-circle"></i> Ajuda

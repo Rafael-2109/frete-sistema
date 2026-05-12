@@ -1,0 +1,163 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <div>
+    <h2 class="mb-1"><i class="fas fa-headset me-2"></i>Pós-Venda</h2>
+    <p class="text-muted mb-0">
+      Motos vendidas via NF Q.P.A. — registre ocorrências da loja ou do cliente final.
+    </p>
+  </div>
+</div>
+
+<form method="get" action="{{ url_for('motos_assai.pos_venda_lista') }}"
+      class="card card-body mb-3"
+      id="pos-venda-filtros">
+  <div class="row g-2">
+    <div class="col-sm-6 col-md-3 col-lg-2">
+      <label class="form-label small mb-1">NF de venda</label>
+      <input type="text" name="nf" value="{{ filtros.nf }}"
+             class="form-control form-control-sm"
+             placeholder="número da NF" autocomplete="off">
+    </div>
+    <div class="col-sm-6 col-md-3 col-lg-3">
+      <label class="form-label small mb-1">Loja Assaí</label>
+      <select name="loja_id" class="form-select form-select-sm">
+        <option value="">— Todas —</option>
+        {% for l in lojas %}
+        <option value="{{ l.id }}" {% if filtros.loja_id == l.id %}selected{% endif %}>
+          {{ l.numero }} {{ l.nome }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-6 col-md-3 col-lg-2">
+      <label class="form-label small mb-1">Modelo</label>
+      <select name="modelo_id" class="form-select form-select-sm">
+        <option value="">— Todos —</option>
+        {% for m in modelos %}
+        <option value="{{ m.id }}" {% if filtros.modelo_id == m.id %}selected{% endif %}>
+          {{ m.codigo }} — {{ m.nome }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-6 col-md-3 col-lg-2">
+      <label class="form-label small mb-1">Cor</label>
+      <input type="text" name="cor" value="{{ filtros.cor }}"
+             class="form-control form-control-sm"
+             placeholder="ex: PRETO" autocomplete="off">
+    </div>
+    <div class="col-sm-6 col-md-3 col-lg-2">
+      <label class="form-label small mb-1">Chassi</label>
+      <input type="text" name="chassi" value="{{ filtros.chassi }}"
+             class="form-control form-control-sm"
+             placeholder="parcial OK" autocomplete="off">
+    </div>
+    <div class="col-sm-6 col-md-3 col-lg-1 d-flex align-items-end gap-1">
+      <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+        <i class="fas fa-search"></i>
+      </button>
+      <a href="{{ url_for('motos_assai.pos_venda_lista') }}"
+         class="btn btn-outline-secondary btn-sm"
+         title="Limpar filtros">
+        <i class="fas fa-times"></i>
+      </a>
+    </div>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Chassi</th>
+        <th>Modelo</th>
+        <th>Cor</th>
+        <th>NF</th>
+        <th>Data emissão</th>
+        <th>Loja</th>
+        <th class="text-end">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for linha in linhas %}
+      <tr>
+        <td><code>{{ linha.chassi }}</code></td>
+        <td>
+          {% if linha.modelo_codigo %}
+            <strong>{{ linha.modelo_codigo }}</strong>
+            <span class="text-muted small d-block">{{ linha.modelo_nome }}</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>{{ linha.cor or '—' }}</td>
+        <td>
+          {% if linha.nf_numero %}
+            <strong>{{ linha.nf_numero }}</strong>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if linha.nf_data_emissao %}
+            {{ linha.nf_data_emissao.strftime('%d/%m/%Y') }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if linha.loja_numero %}
+            <strong>{{ linha.loja_numero }}</strong>
+            <span class="text-muted small d-block">{{ linha.loja_nome }}</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          <button type="button"
+                  class="btn btn-sm btn-outline-primary btn-ocorrencias"
+                  data-chassi="{{ linha.chassi }}"
+                  data-qtd="{{ linha.qtd_ocorrencias }}">
+            <i class="fas fa-comment-alt"></i>
+            Ocorrências (<span class="qtd-ocorrencias">{{ linha.qtd_ocorrencias }}</span>)
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="text-center text-muted py-4">
+          Nenhuma moto vendida encontrada com os filtros aplicados.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Modal de ocorrências (conteúdo carregado via AJAX) -->
+<div class="modal fade" id="modalOcorrencias" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-comment-alt me-2"></i>Ocorrências
+          <small class="text-muted ms-2" id="modal-ocorrencias-subtitulo"></small>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="modal-ocorrencias-body">
+        <div class="text-center py-4">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='motos_assai/js/pos_venda.js') }}"></script>
+{% endblock %}

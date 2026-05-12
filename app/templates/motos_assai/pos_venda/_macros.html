@@ -1,0 +1,124 @@
+{# Macros do modulo Pos-Venda.
+
+   secao_ocorrencias(ocorrencias, categoria, categoria_label, chassi)
+   -- Renderiza 1 secao (Loja OU Cliente) do modal de ocorrencias:
+      formulario de criacao + N cards de ocorrencia com anexos.
+#}
+
+{% macro secao_ocorrencias(ocorrencias, categoria, categoria_label, chassi) %}
+<form class="form-nova-ocorrencia mb-3 p-2 rounded border bg-white"
+      data-categoria="{{ categoria }}"
+      data-chassi="{{ chassi }}">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-9">
+      <label class="form-label small mb-1 text-muted">
+        Nova ocorrência ({{ categoria_label }})
+      </label>
+      <textarea class="form-control form-control-sm" rows="2"
+                name="descricao" required maxlength="4000"
+                placeholder="Descreva o problema reportado..."></textarea>
+    </div>
+    <div class="col-md-3">
+      <button type="submit" class="btn btn-sm btn-primary w-100">
+        <i class="fas fa-plus me-1"></i>Adicionar
+      </button>
+    </div>
+  </div>
+</form>
+
+<div class="lista-ocorrencias"
+     data-categoria="{{ categoria }}">
+  {% for oc in ocorrencias %}
+    {{ render_ocorrencia(oc) }}
+  {% else %}
+  <div class="text-center text-muted py-3 empty-msg">
+    Nenhuma ocorrência registrada nesta seção.
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+
+{% macro render_ocorrencia(oc) %}
+<article class="ocorrencia-card pos-venda-ocorrencia-card border rounded"
+         data-ocorrencia-id="{{ oc.id }}"
+         data-categoria="{{ oc.categoria }}">
+  <header class="pos-venda-ocorrencia-header">
+    <span>
+      <i class="far fa-clock me-1"></i>
+      {{ oc.criado_em.strftime('%d/%m/%Y %H:%M') if oc.criado_em else '—' }}
+      <span class="mx-1">•</span>
+      <i class="far fa-user me-1"></i>
+      {{ oc.criado_por.nome if oc.criado_por else '—' }}
+      {% if oc.atualizado_em %}
+      <span class="mx-1">•</span>
+      <span title="Editado em {{ oc.atualizado_em.strftime('%d/%m/%Y %H:%M') }}">
+        <i class="fas fa-pen ms-1"></i> editada
+      </span>
+      {% endif %}
+    </span>
+    <span>
+      <button type="button" class="btn btn-link btn-sm p-0 ms-2 btn-excluir-ocorrencia text-danger"
+              title="Excluir ocorrência">
+        <i class="fas fa-trash-alt"></i>
+      </button>
+    </span>
+  </header>
+
+  <div class="pos-venda-ocorrencia-body">
+    <p class="descricao-texto pos-venda-descricao">{{ oc.descricao }}</p>
+
+    <div class="anexos-wrapper">
+      <div class="anexos-grid d-flex flex-wrap gap-2 mb-2">
+        {% for a in oc.anexos %}
+        {{ render_anexo(a) }}
+        {% endfor %}
+      </div>
+
+      <form class="form-upload-anexo d-flex align-items-center gap-2"
+            data-ocorrencia-id="{{ oc.id }}">
+        <input type="file" name="arquivos" class="form-control form-control-sm" multiple
+               accept="image/*,video/*,audio/*">
+        <button type="submit" class="btn btn-sm btn-outline-primary flex-shrink-0">
+          <i class="fas fa-paperclip me-1"></i>Anexar
+        </button>
+      </form>
+    </div>
+  </div>
+</article>
+{% endmacro %}
+
+
+{% macro render_anexo(a) %}
+<div class="anexo-item pos-venda-anexo-item"
+     data-anexo-id="{{ a.id }}">
+  <a href="{{ url_for('motos_assai.pos_venda_anexo_visualizar', anexo_id=a.id) }}"
+     target="_blank" class="d-block text-center text-decoration-none"
+     title="{{ a.nome_original }}">
+    {% if a.tipo == 'FOTO' %}
+      <img src="{{ url_for('motos_assai.pos_venda_anexo_visualizar', anexo_id=a.id) }}"
+           alt="{{ a.nome_original }}"
+           class="pos-venda-anexo-thumb"
+           loading="lazy">
+    {% elif a.tipo == 'VIDEO' %}
+      <div class="pos-venda-anexo-placeholder bg-dark text-white">
+        <i class="fas fa-film fa-2x"></i>
+      </div>
+    {% elif a.tipo == 'AUDIO' %}
+      <div class="pos-venda-anexo-placeholder bg-info text-white">
+        <i class="fas fa-microphone fa-2x"></i>
+      </div>
+    {% else %}
+      <div class="pos-venda-anexo-placeholder bg-secondary text-white">
+        <i class="fas fa-file fa-2x"></i>
+      </div>
+    {% endif %}
+    <span class="d-block text-truncate small pos-venda-anexo-nome">{{ a.nome_original }}</span>
+  </a>
+  <button type="button"
+          class="btn-excluir-anexo pos-venda-anexo-excluir btn btn-sm btn-danger"
+          title="Excluir anexo">
+    <i class="fas fa-times"></i>
+  </button>
+</div>
+{% endmacro %}

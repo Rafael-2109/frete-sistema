@@ -71,6 +71,14 @@ from .separacao_service import (
 from .separacao_mirror_service import sincronizar_espelho_com_separacao
 from .faturamento_service import gerar_excel_qpa
 from .geocoding_service import geocodar_loja, geocodar_lote, GeocodingError
+from .pos_venda_service import (
+    listar_motos_vendidas, contexto_moto_por_chassi, chassi_foi_vendido,
+    listar_ocorrencias, criar_ocorrencia, atualizar_ocorrencia, excluir_ocorrencia,
+    adicionar_anexo, excluir_anexo,
+    url_visualizacao_anexo, url_download_anexo,
+    detectar_tipo_anexo, EXTENSOES_PERMITIDAS,
+    PosVendaValidationError, LinhaPosVenda,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -115,4 +123,10 @@ __all__ = [
     'sincronizar_espelho_com_separacao',
     'gerar_excel_qpa',
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',
+    'listar_motos_vendidas', 'contexto_moto_por_chassi', 'chassi_foi_vendido',
+    'listar_ocorrencias', 'criar_ocorrencia', 'atualizar_ocorrencia', 'excluir_ocorrencia',
+    'adicionar_anexo', 'excluir_anexo',
+    'url_visualizacao_anexo', 'url_download_anexo',
+    'detectar_tipo_anexo', 'EXTENSOES_PERMITIDAS',
+    'PosVendaValidationError', 'LinhaPosVenda',
 ]
