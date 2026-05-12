@@ -329,9 +329,17 @@ Concorrência de chassi continua protegida via:
 1. `with_for_update` em `AssaiMoto` (lock pessimista por chassi)
 2. Validação `status_atual(chassi) == DISPONIVEL` antes de SEPARADA
 
-Side effect: `get_ou_criar_separacao` pode retornar QUALQUER sep ativa (não há
-mais "a única"). Rota `/separar/<pid>/<lid>` aceita `?sep_id=N` para target
+Side effect: `get_separacao_ativa` pode retornar QUALQUER sep EM_SEPARACAO (não
+há mais "a única"). Rota `/separar/<pid>/<lid>` aceita `?sep_id=N` para target
 explícito (links da UI passam sep_id).
+
+**Atualizado 2026-05-12 (Migration 17 / item 3 corretivo)**: a função antiga
+`get_ou_criar_separacao` foi renomeada para `get_separacao_ativa` e perdeu o
+side effect de criar separação implicitamente quando não havia nenhuma. Bug
+reportado em prod: cada navegação para `/pedidos/<pid>/separar/<lid>` sem
+`?sep_id` criava sep fantasma no banco. Agora, quando não há sep ativa,
+`separacao_tela` redireciona para `pedidos_detalhe` com flash orientativo —
+operador deve criar via checkbox+qtd (que chama `criar_separacao_com_saldos`).
 
 ### Espelhamento Nacom — fallback dos 4 campos
 
@@ -393,10 +401,18 @@ já estar refletida em `separacao` Nacom).
 
 ### Endpoints retrocompatíveis (sem `?sep_id`)
 
-`/pedidos/<pid>/separar/<lid>` (tela de escaneio) sem `?sep_id` mantém comportamento
-antigo via `get_ou_criar_separacao` (cria nova se não houver, retorna a primeira ativa
-se houver — agora N possíveis, mas comportamento default razoável). Recomenda-se
-passar `?sep_id=N` explicitamente nos links da UI.
+`/pedidos/<pid>/separar/<lid>` (tela de escaneio) sem `?sep_id` busca a primeira
+EM_SEPARACAO via `get_separacao_ativa`. **Se NÃO houver nenhuma sep ativa,
+redireciona para `pedidos_detalhe` com flash orientativo** (antes criava sep
+fantasma — bug corrigido em 2026-05-12, ver Migration 17).
+
+UI deve passar `?sep_id=N` explicitamente:
+- `separacao/lista.html`: linha com sep EM_SEPARACAO → `?sep_id={{ s.id }}`;
+  outras (FECHADA/CANCELADA/FATURADA) → link para `pedidos_detalhe` (sem tela
+  de escaneio).
+- `separacao/nova.html`: "Continuar" → `?sep_id={{ p.separacao_ativa_id }}`;
+  "Iniciar" → `pedidos_detalhe#loja-{{ p.loja_id }}` (fluxo via checkbox+qtd).
+- `pedidos/detalhe.html`: sempre `?sep_id={{ s.id }}` em cada sep ativa listada.
 
 ### Telas rápidas
 

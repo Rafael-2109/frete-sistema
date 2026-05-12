@@ -53,7 +53,7 @@ from .disponibilizar_service import (
     DisponibilizarValidationError,
 )
 from .separacao_service import (
-    get_ou_criar_separacao, saldo_pendente_por_modelo, registrar_chassi,
+    get_separacao_ativa, saldo_pendente_por_modelo, registrar_chassi,
     desfazer_chassi, finalizar_separacao, cancelar_separacao,
     listar_pares_separaveis,
     SeparacaoConflictError, SeparacaoValidationError,
@@ -107,7 +107,7 @@ __all__ = [
     'MontagemValidationError',
     'disponibilizar', 'reverter_para_montada', 'historico_3_ultimas_disponibilizacoes',
     'DisponibilizarValidationError',
-    'get_ou_criar_separacao', 'saldo_pendente_por_modelo', 'registrar_chassi',
+    'get_separacao_ativa', 'saldo_pendente_por_modelo', 'registrar_chassi',
     'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
     'listar_pares_separaveis',
     'SeparacaoConflictError', 'SeparacaoValidationError',

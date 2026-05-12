@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import (
-    get_ou_criar_separacao, saldo_pendente_por_modelo,
+    get_separacao_ativa, saldo_pendente_por_modelo,
     registrar_chassi, desfazer_chassi, finalizar_separacao, cancelar_separacao,
     listar_pares_separaveis,
     SeparacaoConflictError, SeparacaoValidationError,
@@ -53,8 +53,16 @@ def separacao_tela(pedido_id, loja_id):
 
     Aceita `?sep_id=N` para selecionar uma separacao especifica (necessario
     quando ha N separacoes EM_SEPARACAO simultaneas — fluxo de 2+ veiculos).
-    Sem `sep_id`: fallback para `get_ou_criar_separacao` (compativel com fluxo
-    antigo de 1 sep ativa).
+
+    Sem `?sep_id`: busca a EM_SEPARACAO mais antiga do par. Se NAO houver
+    nenhuma, redireciona para pedidos_detalhe com flash orientativo —
+    operador deve criar via checkbox+qtd (criar_separacao_com_saldos).
+
+    HIST 2026-05-12 (item 3 corretivo): antes esta rota chamava
+    `get_ou_criar_separacao` que CRIAVA sep implicitamente quando nao havia
+    nenhuma ativa. Cada navegacao gerava registro fantasma no banco. Bug
+    confirmado em prod (pedido 21439695/L loja 112 com Sep 1 CANCELADA +
+    Sep 2 EM_SEPARACAO vazia).
     """
     pedido = AssaiPedidoVenda.query.get_or_404(pedido_id)
     loja = AssaiLoja.query.get_or_404(loja_id)
@@ -65,7 +73,15 @@ def separacao_tela(pedido_id, loja_id):
             id=sep_id_param, pedido_id=pedido_id, loja_id=loja_id,
         ).first_or_404()
     else:
-        sep = get_ou_criar_separacao(pedido_id, loja_id, current_user.id)
+        sep = get_separacao_ativa(pedido_id, loja_id)
+        if not sep:
+            flash(
+                f'Nenhuma separacao ativa para pedido {pedido.numero} loja '
+                f'{loja.numero}. Crie via "Criar separacao com itens selecionados" '
+                'no detalhe do pedido (checkbox + qtd a separar).',
+                'info',
+            )
+            return redirect(url_for('motos_assai.pedidos_detalhe', pedido_id=pedido_id))
 
     saldos = saldo_pendente_por_modelo(pedido_id, loja_id)
     items = AssaiSeparacaoItem.query.filter_by(separacao_id=sep.id).all()

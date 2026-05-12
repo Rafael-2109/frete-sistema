@@ -35,22 +35,24 @@ class SeparacaoValidationError(Exception):
     pass
 
 
-def get_ou_criar_separacao(pedido_id: int, loja_id: int, operador_id: int) -> AssaiSeparacao:
-    """Retorna separação EM_SEPARACAO mais antiga ou cria uma nova.
+def get_separacao_ativa(pedido_id: int, loja_id: int) -> Optional[AssaiSeparacao]:
+    """Retorna a AssaiSeparacao EM_SEPARACAO mais ANTIGA do par (pedido, loja).
 
-    NOTA (Migration 13, 2026-05-12): o UNIQUE parcial que limitava 1 sep ativa
-    por (pedido, loja) foi REMOVIDO. Agora N seps EM_SEPARACAO simultaneas sao
-    permitidas (fluxo 2+ veiculos). Esta funcao mantem retro-compatibilidade:
-    retorna a EM_SEPARACAO mais ANTIGA (ORDER BY id ASC) ou cria nova se nao ha.
+    Retorna None se nao houver nenhuma. Esta funcao NUNCA cria registro —
+    criacao explicita e responsabilidade de `criar_separacao_com_saldos`
+    (chamado quando operador usa checkbox+qtd em pedidos_detalhe).
 
-    Para fluxos novos com sep_id explicito (UI passa via ?sep_id=N), prefira
-    `AssaiSeparacao.query.get(sep_id)` direto. Esta funcao e fallback para
-    callers legados (`registrar_chassi` sem sep_id).
+    Hist (2026-05-12): antiga `get_ou_criar_separacao` criava sep
+    implicitamente quando a UI navegava para a tela de escaneio sem `?sep_id`.
+    Resultado: cada visita à tela gerava sep fantasma no banco. Bug reportado
+    em produção (pedido 21439695/L loja 112 ficou com 1 CANCELADA + 1
+    EM_SEPARACAO vazia). Esta funcao substitui aquela — caller deve tratar
+    None redirecionando para fluxo explicito de criacao.
 
-    Apenas seps `EM_SEPARACAO` sao consideradas — FECHADA/FATURADA/CANCELADA
+    Apenas seps EM_SEPARACAO sao consideradas — FECHADA/FATURADA/CANCELADA
     nao reabrem chassi.
     """
-    sep = (
+    return (
         AssaiSeparacao.query
         .filter(
             AssaiSeparacao.pedido_id == pedido_id,
@@ -60,16 +62,6 @@ def get_ou_criar_separacao(pedido_id: int, loja_id: int, operador_id: int) -> As
         .order_by(AssaiSeparacao.id.asc())
         .first()
     )
-    if sep:
-        return sep
-
-    sep = AssaiSeparacao(
-        pedido_id=pedido_id, loja_id=loja_id,
-        status=SEPARACAO_STATUS_EM_SEPARACAO,
-    )
-    db.session.add(sep)
-    db.session.flush()
-    return sep
 
 
 def saldo_pendente_por_pedido(pedido_id: int) -> Dict[int, List[Dict[str, Any]]]:
@@ -203,7 +195,9 @@ def registrar_chassi(
     Args:
         separacao_id (opcional): alvo explicito. Necessario quando ha N seps
             EM_SEPARACAO simultaneas no mesmo (pedido, loja) — apos Migration 13.
-            Se None, fallback para `get_ou_criar_separacao` (sep mais antiga ou nova).
+            Se None, usa `get_separacao_ativa` (sep mais antiga). Se nao houver
+            nenhuma sep ativa, levanta erro orientando o operador a criar via
+            checkbox+qtd em pedidos_detalhe (criar_separacao_com_saldos).
     """
     chassi_norm = chassi.strip().upper()
 
@@ -246,7 +240,16 @@ def registrar_chassi(
                 f'Separação {separacao_id} esta {sep.status} — apenas EM_SEPARACAO aceita chassi'
             )
     else:
-        sep = get_ou_criar_separacao(pedido_id, loja_id, registrada_por_id)
+        # Sem sep_id explicito — busca a EM_SEPARACAO mais antiga.
+        # NAO cria mais implicitamente (regressao 2026-05-12: criava sep
+        # fantasma a cada navegacao). Operador deve criar via checkbox+qtd
+        # em pedidos_detalhe.
+        sep = get_separacao_ativa(pedido_id, loja_id)
+        if not sep:
+            raise SeparacaoValidationError(
+                f'Nenhuma separacao ativa para pedido {pedido_id} loja {loja_id}. '
+                'Crie uma via tela do pedido (checkbox + qtd a separar).'
+            )
 
     try:
         item = AssaiSeparacaoItem(
@@ -395,6 +398,20 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
             dados_extras={'separacao_id': sep.id, 'motivo': motivo.strip()},
         )
 
+    # Item 3 corretivo (2026-05-12): deletar AssaiSeparacaoSaldoModelo orfaos.
+    # Antes, placeholders de qtd_planejada ficavam ligados a sep CANCELADA
+    # como lixo arquitetural. Como sep esta sendo cancelada, o plano deixou
+    # de existir conceitualmente — deletar tambem da tabela.
+    saldos_deletados = AssaiSeparacaoSaldoModelo.query.filter_by(
+        separacao_id=sep.id
+    ).delete(synchronize_session=False)
+    if saldos_deletados:
+        import logging
+        logging.getLogger(__name__).info(
+            'cancelar_separacao: deletados %d AssaiSeparacaoSaldoModelo '
+            'orfaos de sep %s', saldos_deletados, sep.id,
+        )
+
     sep.status = SEPARACAO_STATUS_CANCELADA
     sep.motivo_cancelamento = motivo.strip()
 
@@ -418,6 +435,30 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
             sep.id, e, exc_info=True,
         )
         # Nao bloqueia o cancelamento — limpeza manual via SQL se necessario
+
+    # Item 3 corretivo (2026-05-12): reverter pedido.status se ESTA era a
+    # ultima sep nao-cancelada do pedido. Sem isso, `registrar_chassi` deixa
+    # o pedido como SEPARANDO mesmo apos cancelar todas as seps — status
+    # inconsistente que confunde a UI (lista_pedidos mostra "em separacao"
+    # sem nenhuma sep ativa).
+    outras_seps_count = (
+        AssaiSeparacao.query
+        .filter(
+            AssaiSeparacao.pedido_id == sep.pedido_id,
+            AssaiSeparacao.id != sep.id,
+            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+        )
+        .count()
+    )
+    if outras_seps_count == 0:
+        pedido = AssaiPedidoVenda.query.get(sep.pedido_id)
+        if pedido and pedido.status == PEDIDO_STATUS_SEPARANDO:
+            pedido.status = PEDIDO_STATUS_EM_PRODUCAO
+            import logging
+            logging.getLogger(__name__).info(
+                'cancelar_separacao: pedido %s revertido SEPARANDO -> EM_PRODUCAO '
+                '(ultima sep cancelada)', sep.pedido_id,
+            )
 
     db.session.commit()
     return sep

@@ -70,14 +70,18 @@
         {% endif %}
       </td>
       <td class="text-end">
-        <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=p.pedido_id, loja_id=p.loja_id) }}"
-           class="btn btn-sm btn-primary">
-          {% if p.separacao_ativa_id %}
+        {% if p.separacao_ativa_id %}
+          <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=p.pedido_id, loja_id=p.loja_id, sep_id=p.separacao_ativa_id) }}"
+             class="btn btn-sm btn-primary">
             <i class="fas fa-arrow-right"></i> Continuar
-          {% else %}
+          </a>
+        {% else %}
+          <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=p.pedido_id) }}#loja-{{ p.loja_id }}"
+             class="btn btn-sm btn-primary"
+             title="Iniciar nova separacao via checkbox+qtd no detalhe do pedido">
             <i class="fas fa-play"></i> Iniciar
-          {% endif %}
-        </a>
+          </a>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

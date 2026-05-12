@@ -47,10 +47,18 @@
       <td><small>{{ s.iniciada_em.strftime('%d/%m %H:%M') }}</small></td>
       <td>{{ s.itens|length }}</td>
       <td class="text-end">
-        <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=s.pedido_id, loja_id=s.loja_id) }}"
+        {% if s.status == 'EM_SEPARACAO' %}
+        <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=s.pedido_id, loja_id=s.loja_id, sep_id=s.id) }}"
            class="btn btn-sm btn-outline-primary">
           <i class="fas fa-eye"></i> Abrir
         </a>
+        {% else %}
+        <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=s.pedido_id) }}"
+           class="btn btn-sm btn-outline-secondary"
+           title="Sep nao esta EM_SEPARACAO. Ver detalhes no pedido.">
+          <i class="fas fa-info-circle"></i> Detalhes
+        </a>
+        {% endif %}
       </td>
     </tr>
     {% else %}
