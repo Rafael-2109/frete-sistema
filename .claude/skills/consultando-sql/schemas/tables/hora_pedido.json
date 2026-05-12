@@ -90,16 +90,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_cnpj_destino",
+      "name": "ix_hora_pedido_status",
       "columns": [
-        "cnpj_destino"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_status",
+      "name": "ix_hora_pedido_cnpj_destino",
       "columns": [
-        "status"
+        "cnpj_destino"
       ],
       "unique": false
     },

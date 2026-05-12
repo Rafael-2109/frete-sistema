@@ -65,16 +65,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_avaria_loja_id",
+      "name": "ix_hora_avaria_criado_em",
       "columns": [
-        "loja_id"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_criado_em",
+      "name": "ix_hora_avaria_status",
       "columns": [
-        "criado_em"
+        "status"
       ],
       "unique": false
     },
@@ -86,9 +86,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_status",
+      "name": "ix_hora_avaria_loja_id",
       "columns": [
-        "status"
+        "loja_id"
       ],
       "unique": false
     }

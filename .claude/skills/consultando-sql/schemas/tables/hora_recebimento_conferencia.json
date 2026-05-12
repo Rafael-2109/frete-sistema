@@ -107,19 +107,19 @@
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_numero_chassi",
-      "columns": [
-        "numero_chassi"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_conferencia_ordem_ativa",
       "columns": [
         "recebimento_id",
         "ordem"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_recebimento_conferencia_numero_chassi",
+      "columns": [
+        "numero_chassi"
+      ],
+      "unique": false
     },
     {
       "name": "ix_hora_conferencia_ativa",

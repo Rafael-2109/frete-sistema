@@ -68,16 +68,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_divergencia_numero_chassi",
+      "name": "ix_hora_venda_divergencia_tipo",
       "columns": [
-        "numero_chassi"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_divergencia_tipo",
+      "name": "ix_hora_venda_divergencia_numero_chassi",
       "columns": [
-        "tipo"
+        "numero_chassi"
       ],
       "unique": false
     },

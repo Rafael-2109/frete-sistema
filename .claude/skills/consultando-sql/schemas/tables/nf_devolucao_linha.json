@@ -115,9 +115,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_linha_produto_interno",
+      "name": "idx_nfd_linha_resolvido",
       "columns": [
-        "codigo_produto_interno"
+        "produto_resolvido"
       ],
       "unique": false
     },
@@ -143,9 +143,9 @@
       "unique": false
     },
     {
-      "name": "idx_nfd_linha_resolvido",
+      "name": "idx_nfd_linha_produto_interno",
       "columns": [
-        "produto_resolvido"
+        "codigo_produto_interno"
       ],
       "unique": false
     }

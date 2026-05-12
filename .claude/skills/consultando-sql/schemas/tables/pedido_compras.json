@@ -190,9 +190,10 @@
   ],
   "indices": [
     {
-      "name": "ix_pedido_compras_nf_chave_acesso",
+      "name": "idx_pedido_empresa",
       "columns": [
-        "nf_chave_acesso"
+        "company_id",
+        "num_pedido"
       ],
       "unique": false
     },
@@ -211,10 +212,9 @@
       "unique": false
     },
     {
-      "name": "idx_pedido_empresa",
+      "name": "idx_pedido_dfe",
       "columns": [
-        "company_id",
-        "num_pedido"
+        "dfe_id"
       ],
       "unique": false
     },
@@ -233,16 +233,9 @@
       "unique": false
     },
     {
-      "name": "idx_pedido_dfe",
+      "name": "ix_pedido_compras_nf_chave_acesso",
       "columns": [
-        "dfe_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_company_id",
-      "columns": [
-        "company_id"
+        "nf_chave_acesso"
       ],
       "unique": false
     },
@@ -250,6 +243,13 @@
       "name": "idx_pedido_chave_acesso",
       "columns": [
         "nf_chave_acesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pedido_compras_company_id",
+      "columns": [
+        "company_id"
       ],
       "unique": false
     },

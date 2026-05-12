@@ -64,11 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_peca_mov_saldo_idx",
+      "name": "ix_hora_peca_movimento_loja_id",
       "columns": [
-        "peca_id",
-        "loja_id",
-        "criado_em"
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_peca_movimento_peca_id",
+      "columns": [
+        "peca_id"
       ],
       "unique": false
     },
@@ -81,16 +86,11 @@
       "unique": false
     },
     {
-      "name": "ix_hora_peca_movimento_peca_id",
+      "name": "ix_hora_peca_mov_saldo_idx",
       "columns": [
-        "peca_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_peca_movimento_loja_id",
-      "columns": [
-        "loja_id"
+        "peca_id",
+        "loja_id",
+        "criado_em"
       ],
       "unique": false
     }

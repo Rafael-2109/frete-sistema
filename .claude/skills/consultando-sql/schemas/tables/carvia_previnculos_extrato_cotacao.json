@@ -98,14 +98,6 @@
   ],
   "indices": [
     {
-      "name": "ix_previnculo_ativo",
-      "columns": [
-        "cotacao_id",
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_previnculos_extrato_cotacao_status",
       "columns": [
         "status"
@@ -139,6 +131,14 @@
       "columns": [
         "status",
         "resolvido_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_previnculo_ativo",
+      "columns": [
+        "cotacao_id",
+        "status"
       ],
       "unique": false
     }

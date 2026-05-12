@@ -142,9 +142,9 @@
   ],
   "indices": [
     {
-      "name": "ix_faturamento_produto_data_fatura",
+      "name": "ix_faturamento_produto_revertida",
       "columns": [
-        "data_fatura"
+        "revertida"
       ],
       "unique": false
     },
@@ -164,16 +164,16 @@
       "unique": false
     },
     {
-      "name": "ix_faturamento_produto_origem",
+      "name": "ix_faturamento_produto_data_fatura",
       "columns": [
-        "origem"
+        "data_fatura"
       ],
       "unique": false
     },
     {
-      "name": "ix_faturamento_produto_numero_nf",
+      "name": "ix_faturamento_produto_origem",
       "columns": [
-        "numero_nf"
+        "origem"
       ],
       "unique": false
     },
@@ -192,17 +192,17 @@
       "unique": false
     },
     {
-      "name": "ix_faturamento_produto_revertida",
-      "columns": [
-        "revertida"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_faturamento_nf_produto",
       "columns": [
         "numero_nf",
         "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_faturamento_produto_numero_nf",
+      "columns": [
+        "numero_nf"
       ],
       "unique": false
     }
