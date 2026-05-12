@@ -238,6 +238,14 @@ echo "Motos Assai 15: HOTFIX DEFAULT agendamento_confirmado + rerodar backfill..
 python scripts/migrations/motos_assai_15_fix_default_agendamento_confirmado.py \
     || echo "⚠️ Migration motos_assai_15 falhou, continuando deploy..."
 
+# 16. Remessa VORTX Conversor/Validador (2026-05-12): tabela remessa_vortx_conversao.
+# Auditoria de operacoes de conversao (BMP/274 -> VORTX/310) e validacao read-only
+# de arquivos CNAB 400 externos via UI em /remessa-vortx/converter e /validar.
+# Idempotente (CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT EXISTS).
+echo "Remessa VORTX 16: auditoria conversor/validador externo..."
+python scripts/migrations/2026_05_12_add_remessa_vortx_conversao.py \
+    || echo "⚠️ Migration remessa_vortx_conversao falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

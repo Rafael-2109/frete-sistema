@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Conversor CNAB400 -> VORTX{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>
+            <i class="fas fa-exchange-alt text-primary"></i>
+            Conversor CNAB 400 &rarr; VORTX (310)
+        </h4>
+        <div>
+            <a href="{{ url_for('financeiro.remessa_vortx_validar') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-check-double"></i> Validador
+            </a>
+            <a href="{{ url_for('financeiro.remessa_vortx_historico') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-history"></i> Historico
+            </a>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        Converte arquivo CNAB 400 externo (gerado pela plataforma Grafeno em padrao BMP/274,
+        ou VORTX/310 com erros) para o padrao VORTX/310 correto. Aplica 6 ajustes byte-a-byte
+        validados em producao + recalcula o DAC do Nosso Numero via algoritmo proprietario da
+        Vortx (carteira 21).
+    </div>
+
+    {# ============================================================ #}
+    {#  FORM UPLOAD                                                  #}
+    {# ============================================================ #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <i class="fas fa-upload"></i> Enviar arquivo .rem
+        </div>
+        <div class="card-body">
+            <form method="post"
+                  action="{{ url_for('financeiro.remessa_vortx_converter') }}"
+                  enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6">
+                        <label for="arquivo" class="form-label">Arquivo CNAB 400 (.rem)</label>
+                        <input type="file"
+                               class="form-control"
+                               id="arquivo"
+                               name="arquivo"
+                               accept=".rem,.txt,application/octet-stream"
+                               required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="multa_codigo" class="form-label">
+                            Codigo de Multa (pos 066)
+                            <i class="fas fa-question-circle text-muted"
+                               title="VORTX rejeita '1' (BMP). Use '0' (sem multa) ou '2' (percentual).">
+                            </i>
+                        </label>
+                        <select class="form-select" id="multa_codigo" name="multa_codigo">
+                            <option value="2" selected>2 - Considera percentual da remessa</option>
+                            <option value="0">0 - Sem multa (config plataforma)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-cogs"></i> Converter
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# ============================================================ #}
+    {#  RESULTADO DA CONVERSAO                                       #}
+    {# ============================================================ #}
+    {% if resultado and registro %}
+    <div class="card mb-3 border-success">
+        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-check-circle"></i>
+                Conversao concluida — registro #{{ registro.id }}
+            </div>
+            <a href="{{ url_for('financeiro.remessa_vortx_converter_download', registro_id=registro.id) }}"
+               class="btn btn-light btn-sm">
+                <i class="fas fa-download"></i> Baixar arquivo convertido
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <small class="text-muted">Banco origem</small>
+                    <div>
+                        <code>{{ resultado.banco_origem }}</code>
+                        {% if resultado.banco_origem == '274' %}
+                        <span class="badge bg-warning">BMP MoneyPlus</span>
+                        {% elif resultado.banco_origem == '310' %}
+                        <span class="badge bg-info">VORTX (revalidar)</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Outro</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Titulos processados</small>
+                    <div><strong>{{ resultado.qtd_titulos }}</strong></div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Alteracoes aplicadas</small>
+                    <div><strong>{{ resultado.qtd_alteracoes }}</strong></div>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Avisos</small>
+                    <div><strong>{{ resultado.avisos|length }}</strong></div>
+                </div>
+            </div>
+
+            {# Resumo por campo #}
+            {% if resultado.alteracoes_por_campo %}
+            <h6 class="mt-3">Alteracoes por campo</h6>
+            <ul class="list-inline">
+                {% for campo, qtd in resultado.alteracoes_por_campo.items() %}
+                <li class="list-inline-item">
+                    <span class="badge bg-primary">{{ campo }}</span>
+                    <small class="text-muted">{{ qtd }}x</small>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {# Avisos #}
+            {% if resultado.avisos %}
+            <h6 class="mt-3 text-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                Avisos ({{ resultado.avisos|length }})
+            </h6>
+            <div class="alert alert-warning">
+                <ul class="mb-0">
+                    {% for aviso in resultado.avisos %}
+                    <li>{{ aviso }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {# Tabela completa de alteracoes #}
+            {% if resultado.alteracoes %}
+            <h6 class="mt-3">Detalhe das alteracoes</h6>
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-sm table-hover">
+                    <thead class="sticky-top bg-light">
+                        <tr>
+                            <th>Linha</th>
+                            <th>Tipo</th>
+                            <th>Campo</th>
+                            <th>Posicao</th>
+                            <th>De</th>
+                            <th>Para</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in resultado.alteracoes %}
+                        <tr>
+                            <td>{{ a.linha }}</td>
+                            <td>
+                                {% if a.tipo_linha == 'header' %}
+                                <span class="badge bg-secondary">header</span>
+                                {% else %}
+                                <span class="badge bg-info">detalhe</span>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ a.campo }}</code></td>
+                            <td><code>{{ a.posicao }}</code></td>
+                            <td><code class="text-danger">{{ a.de|trim or '(vazio)' }}</code></td>
+                            <td><code class="text-success">{{ a.para|trim or '(vazio)' }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+                <i class="fas fa-info-circle"></i>
+                Nenhuma alteracao necessaria — arquivo ja esta no padrao VORTX/310.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ============================================================ #}
+    {#  HISTORICO                                                    #}
+    {# ============================================================ #}
+    {% if historico %}
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-history"></i> Conversoes recentes
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Arquivo</th>
+                            <th>Banco origem</th>
+                            <th class="text-center">Titulos</th>
+                            <th class="text-center">Alteracoes</th>
+                            <th class="text-center">Status</th>
+                            <th>Quando</th>
+                            <th class="text-center">Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in historico %}
+                        <tr>
+                            <td>{{ r.id }}</td>
+                            <td><code>{{ r.nome_arquivo_original }}</code></td>
+                            <td>
+                                {% if r.banco_origem %}
+                                <code>{{ r.banco_origem }}</code>
+                                {% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">{{ r.qtd_titulos or 0 }}</td>
+                            <td class="text-center">{{ r.qtd_alteracoes or 0 }}</td>
+                            <td class="text-center">
+                                {% if r.sucesso %}
+                                <span class="badge bg-success">OK</span>
+                                {% else %}
+                                <span class="badge bg-danger" title="{{ r.erro or '' }}">FALHA</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if r.criado_em %}
+                                {{ r.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if r.tem_arquivo_convertido %}
+                                <a href="{{ url_for('financeiro.remessa_vortx_converter_download', registro_id=r.id) }}"
+                                   class="btn btn-sm btn-outline-primary"
+                                   title="Baixar arquivo convertido">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

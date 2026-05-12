@@ -7,11 +7,14 @@ Geracao de remessa de cobranca escritural para banco VORTX (310).
 Fluxo: buscar titulos no Odoo -> selecionar -> gerar CNAB 400 -> injetar no Odoo.
 
 Rotas:
-- /remessa-vortx              -> Historico de remessas
-- /remessa-vortx/titulos      -> Lista titulos pendentes (Odoo)
-- /remessa-vortx/gerar        -> Gerar remessa (POST)
-- /remessa-vortx/<id>/retomar -> Retomar injecao em falha (POST)
-- /remessa-vortx/<id>/download -> Download arquivo .rem
+- /remessa-vortx                          -> Historico de remessas
+- /remessa-vortx/titulos                  -> Lista titulos pendentes (Odoo)
+- /remessa-vortx/gerar                    -> Gerar remessa (POST)
+- /remessa-vortx/<id>/retomar             -> Retomar injecao em falha (POST)
+- /remessa-vortx/<id>/download            -> Download arquivo .rem
+- /remessa-vortx/converter                -> Conversor BMP/274 -> VORTX/310 (GET form, POST upload)
+- /remessa-vortx/converter/<id>/download  -> Download arquivo convertido
+- /remessa-vortx/validar                  -> Validador read-only (GET form, POST upload)
 """
 
 import logging
@@ -289,4 +292,233 @@ def remessa_vortx_download(cache_id):
         mimetype='application/octet-stream',
         as_attachment=True,
         download_name=cache.nome_arquivo or f'remessa_vortx_{cache_id}.rem',
+    )
+
+
+# =============================================================================
+# CONVERSOR BMP/274 -> VORTX/310
+# =============================================================================
+
+@financeiro_bp.route('/remessa-vortx/converter', methods=['GET', 'POST'])
+@login_required
+@require_remessa_vortx()
+def remessa_vortx_converter():
+    """Converte arquivo CNAB 400 externo (BMP/274 ou VORTX/310 com erros)
+    para padrao VORTX/310 correto via patch byte-a-byte.
+
+    Aplica protocolo armazenado em memoria do Agente
+    (/memories/empresa/protocolos/remessa_cnab400_vortx_310.md).
+    """
+    from app.financeiro.models import RemessaVortxConversao
+    from app.financeiro.services.remessa_vortx.conversor_externo import converter
+
+    if request.method == 'GET':
+        # Lista as ultimas 20 conversoes do usuario corrente
+        historico = (
+            RemessaVortxConversao.query
+            .filter_by(tipo='CONVERSAO')
+            .order_by(RemessaVortxConversao.id.desc())
+            .limit(20)
+            .all()
+        )
+        return render_template(
+            'financeiro/remessa_vortx/converter.html',
+            resultado=None,
+            registro=None,
+            historico=historico,
+        )
+
+    arquivo = request.files.get('arquivo')
+    multa = request.form.get('multa_codigo', '2')
+
+    if not arquivo or not arquivo.filename:
+        flash('Selecione um arquivo .rem para converter.', 'warning')
+        return redirect(url_for('financeiro.remessa_vortx_converter'))
+
+    if multa not in ('0', '2'):
+        flash("Codigo de multa invalido. Use '0' (sem multa) ou '2' (percentual).", 'danger')
+        return redirect(url_for('financeiro.remessa_vortx_converter'))
+
+    arquivo_bytes = arquivo.read()
+    nome_original = arquivo.filename
+
+    registro = RemessaVortxConversao(
+        tipo='CONVERSAO',
+        nome_arquivo_original=nome_original,
+        arquivo_original=arquivo_bytes,
+        multa_codigo=multa,
+        criado_por_id=current_user.id,
+    )
+
+    try:
+        resultado = converter(arquivo_bytes, multa_codigo=multa)
+    except ValueError as e:
+        registro.sucesso = False
+        registro.erro = str(e)
+        db.session.add(registro)
+        db.session.commit()
+        flash(f'Arquivo invalido: {str(e)[:300]}', 'danger')
+        return redirect(url_for('financeiro.remessa_vortx_converter'))
+    except Exception as e:
+        registro.sucesso = False
+        registro.erro = str(e)[:1000]
+        db.session.add(registro)
+        db.session.commit()
+        logger.error(f'Erro ao converter remessa VORTX: {e}', exc_info=True)
+        flash(f'Erro ao converter arquivo: {str(e)[:300]}', 'danger')
+        return redirect(url_for('financeiro.remessa_vortx_converter'))
+
+    registro.banco_origem = resultado.banco_origem
+    registro.qtd_titulos = resultado.qtd_titulos
+    registro.qtd_alteracoes = resultado.qtd_alteracoes
+    registro.qtd_avisos = len(resultado.avisos)
+    registro.arquivo_convertido = resultado.arquivo_bytes
+    registro.resultado = {
+        'alteracoes': [a.to_dict() for a in resultado.alteracoes],
+        'avisos': resultado.avisos,
+        'resumo': resultado.to_dict_resumo(),
+    }
+    registro.sucesso = True
+
+    db.session.add(registro)
+    db.session.commit()
+
+    flash(
+        f'Conversao concluida: {resultado.qtd_alteracoes} alteracao(oes) em '
+        f'{resultado.qtd_titulos} titulo(s). Clique em "Baixar arquivo convertido".',
+        'success',
+    )
+
+    historico = (
+        RemessaVortxConversao.query
+        .filter_by(tipo='CONVERSAO')
+        .order_by(RemessaVortxConversao.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    return render_template(
+        'financeiro/remessa_vortx/converter.html',
+        resultado=resultado,
+        registro=registro,
+        historico=historico,
+    )
+
+
+@financeiro_bp.route('/remessa-vortx/converter/<int:registro_id>/download')
+@login_required
+@require_remessa_vortx()
+def remessa_vortx_converter_download(registro_id):
+    """Download do arquivo convertido."""
+    from app.financeiro.models import RemessaVortxConversao
+
+    registro = RemessaVortxConversao.query.get_or_404(registro_id)
+
+    if registro.tipo != 'CONVERSAO':
+        flash('Registro nao e uma conversao.', 'warning')
+        return redirect(url_for('financeiro.remessa_vortx_converter'))
+
+    if not registro.arquivo_convertido:
+        flash('Arquivo convertido nao disponivel para este registro.', 'warning')
+        return redirect(url_for('financeiro.remessa_vortx_converter'))
+
+    return send_file(
+        BytesIO(registro.arquivo_convertido),
+        mimetype='application/octet-stream',
+        as_attachment=True,
+        download_name=registro.nome_arquivo_convertido,
+    )
+
+
+# =============================================================================
+# VALIDADOR (READ-ONLY)
+# =============================================================================
+
+@financeiro_bp.route('/remessa-vortx/validar', methods=['GET', 'POST'])
+@login_required
+@require_remessa_vortx()
+def remessa_vortx_validar():
+    """Valida arquivo CNAB 400 contra padrao VORTX/310 sem alterar.
+
+    Executa o checklist completo do protocolo e retorna resultado item-a-item.
+    """
+    from app.financeiro.models import RemessaVortxConversao
+    from app.financeiro.services.remessa_vortx.validador import validar
+
+    if request.method == 'GET':
+        historico = (
+            RemessaVortxConversao.query
+            .filter_by(tipo='VALIDACAO')
+            .order_by(RemessaVortxConversao.id.desc())
+            .limit(20)
+            .all()
+        )
+        return render_template(
+            'financeiro/remessa_vortx/validar.html',
+            resultado=None,
+            registro=None,
+            historico=historico,
+        )
+
+    arquivo = request.files.get('arquivo')
+    if not arquivo or not arquivo.filename:
+        flash('Selecione um arquivo .rem para validar.', 'warning')
+        return redirect(url_for('financeiro.remessa_vortx_validar'))
+
+    arquivo_bytes = arquivo.read()
+    nome_original = arquivo.filename
+
+    registro = RemessaVortxConversao(
+        tipo='VALIDACAO',
+        nome_arquivo_original=nome_original,
+        arquivo_original=arquivo_bytes,
+        criado_por_id=current_user.id,
+    )
+
+    try:
+        resultado = validar(arquivo_bytes)
+    except Exception as e:
+        registro.sucesso = False
+        registro.erro = str(e)[:1000]
+        db.session.add(registro)
+        db.session.commit()
+        logger.error(f'Erro ao validar remessa VORTX: {e}', exc_info=True)
+        flash(f'Erro ao validar arquivo: {str(e)[:300]}', 'danger')
+        return redirect(url_for('financeiro.remessa_vortx_validar'))
+
+    registro.banco_origem = resultado.banco_origem
+    registro.qtd_titulos = resultado.qtd_titulos
+    registro.qtd_checks_falha = resultado.qtd_checks_falha
+    registro.resultado = resultado.to_dict()
+    registro.sucesso = resultado.todos_ok and not resultado.erros
+
+    db.session.add(registro)
+    db.session.commit()
+
+    if resultado.todos_ok:
+        flash(
+            f'Validacao OK: {resultado.qtd_titulos_ok}/{resultado.qtd_titulos} '
+            f'titulos passaram em todos os checks.',
+            'success',
+        )
+    else:
+        flash(
+            f'Validacao falhou: {resultado.qtd_checks_falha} check(s) com erro. '
+            f'{resultado.qtd_titulos_ok}/{resultado.qtd_titulos} titulo(s) OK.',
+            'warning',
+        )
+
+    historico = (
+        RemessaVortxConversao.query
+        .filter_by(tipo='VALIDACAO')
+        .order_by(RemessaVortxConversao.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    return render_template(
+        'financeiro/remessa_vortx/validar.html',
+        resultado=resultado,
+        registro=registro,
+        historico=historico,
     )

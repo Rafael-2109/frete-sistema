@@ -1,0 +1,122 @@
+{
+  "name": "remessa_vortx_conversao",
+  "description": "Auditoria de operacoes de conversao e validacao de arquivos CNAB 400 externos.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "tipo",
+      "type": "varchar(20)",
+      "nullable": false
+    },
+    {
+      "name": "nome_arquivo_original",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "arquivo_original",
+      "type": "bytea"
+    },
+    {
+      "name": "arquivo_convertido",
+      "type": "bytea"
+    },
+    {
+      "name": "banco_origem",
+      "type": "varchar(3)"
+    },
+    {
+      "name": "qtd_titulos",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "qtd_alteracoes",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "qtd_avisos",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "qtd_checks_falha",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "multa_codigo",
+      "type": "varchar(1)"
+    },
+    {
+      "name": "resultado",
+      "type": "json"
+    },
+    {
+      "name": "sucesso",
+      "type": "boolean",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "erro",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_remessa_vortx_conversao_tipo",
+      "columns": [
+        "tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_remessa_vortx_conversao_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_remessa_vortx_conversao_sucesso",
+      "columns": [
+        "sucesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_remessa_vortx_conversao_banco_origem",
+      "columns": [
+        "banco_origem"
+      ],
+      "unique": false
+    }
+  ]
+}

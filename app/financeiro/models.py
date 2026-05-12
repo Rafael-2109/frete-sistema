@@ -2825,3 +2825,75 @@ class RemessaVortxCache(db.Model):
 
     def __repr__(self):
         return f'<RemessaVortxCache id={self.id} etapa={self.etapa} arquivo={self.nome_arquivo}>'
+
+
+# =============================================================================
+# REMESSA VORTX — Conversor / Validador externo (auditoria + storage temporario)
+# =============================================================================
+
+class RemessaVortxConversao(db.Model):
+    """
+    Auditoria de operacoes de conversao e validacao de arquivos CNAB 400 externos.
+
+    Persiste cada execucao do Conversor (BMP/274 → VORTX/310) e Validador
+    (read-only) feita via UI. Mantem o arquivo convertido para download
+    posterior sem precisar reenviar o original.
+
+    tipo:
+        CONVERSAO — patch byte-a-byte aplicado, arquivo_convertido populado
+        VALIDACAO — apenas relatorio, arquivo_convertido NULL
+    """
+    __tablename__ = 'remessa_vortx_conversao'
+
+    TIPOS_VALIDOS = ('CONVERSAO', 'VALIDACAO')
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    tipo = db.Column(db.String(20), nullable=False, index=True)
+    nome_arquivo_original = db.Column(db.String(255), nullable=False)
+    arquivo_original = db.Column(db.LargeBinary, nullable=True)
+    arquivo_convertido = db.Column(db.LargeBinary, nullable=True)
+
+    banco_origem = db.Column(db.String(3), nullable=True, index=True)
+    qtd_titulos = db.Column(db.Integer, nullable=False, default=0)
+    qtd_alteracoes = db.Column(db.Integer, nullable=False, default=0)
+    qtd_avisos = db.Column(db.Integer, nullable=False, default=0)
+    qtd_checks_falha = db.Column(db.Integer, nullable=False, default=0)
+    multa_codigo = db.Column(db.String(1), nullable=True)
+
+    # JSON com lista de alteracoes (conversao) ou checks (validacao)
+    resultado = db.Column(db.JSON, nullable=True)
+
+    sucesso = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    erro = db.Column(db.Text, nullable=True)
+
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive, index=True)
+    criado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+
+    criado_por = db.relationship('Usuario', foreign_keys=[criado_por_id], lazy='select')
+
+    @property
+    def is_conversao(self) -> bool:
+        return self.tipo == 'CONVERSAO'
+
+    @property
+    def is_validacao(self) -> bool:
+        return self.tipo == 'VALIDACAO'
+
+    @property
+    def tem_arquivo_convertido(self) -> bool:
+        return bool(self.arquivo_convertido)
+
+    @property
+    def nome_arquivo_convertido(self) -> str:
+        """Nome sugerido para download do arquivo convertido."""
+        nome = self.nome_arquivo_original or 'REMESSA.rem'
+        if nome.lower().endswith('.rem'):
+            return nome[:-4] + '_VORTX.rem'
+        return nome + '_VORTX.rem'
+
+    def __repr__(self):
+        return (
+            f'<RemessaVortxConversao id={self.id} tipo={self.tipo} '
+            f'titulos={self.qtd_titulos} sucesso={self.sucesso}>'
+        )
