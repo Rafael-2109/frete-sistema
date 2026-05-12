@@ -24,25 +24,42 @@ from sqlalchemy import text
 def run():
     app = create_app()
     with app.app_context():
-        # BEFORE: diagnostico
-        nulls_loja = db.session.execute(text(
-            "SELECT COUNT(*) FROM assai_pedido_venda_loja "
-            "WHERE agendamento_confirmado IS NULL"
-        )).scalar() or 0
-        nulls_sep = db.session.execute(text(
-            "SELECT COUNT(*) FROM assai_separacao "
-            "WHERE agendamento_confirmado IS NULL"
-        )).scalar() or 0
-        items_sem_fk = db.session.execute(text(
-            "SELECT COUNT(*) FROM assai_pedido_venda_item "
-            "WHERE pedido_loja_id IS NULL"
-        )).scalar() or 0
+        # BEFORE: diagnostico — checa existencia de colunas ANTES de consultar
+        # (Migration 10 pode ter abortado em prod, deixando colunas faltando).
         col_pedido_loja_id = db.session.execute(text(
             "SELECT COUNT(*) FROM information_schema.columns "
             "WHERE table_name='assai_pedido_venda_item' AND column_name='pedido_loja_id'"
         )).scalar() or 0
-        print(f'BEFORE: pvl_nulls={nulls_loja}, sep_nulls={nulls_sep}, '
-              f'items_sem_fk={items_sem_fk}, col_pedido_loja_id_existe={bool(col_pedido_loja_id)}')
+        col_ag_conf_loja = db.session.execute(text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_name='assai_pedido_venda_loja' AND column_name='agendamento_confirmado'"
+        )).scalar() or 0
+        col_ag_conf_sep = db.session.execute(text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_name='assai_separacao' AND column_name='agendamento_confirmado'"
+        )).scalar() or 0
+
+        nulls_loja = 0
+        nulls_sep = 0
+        items_sem_fk = 0
+
+        if col_ag_conf_loja:
+            nulls_loja = db.session.execute(text(
+                "SELECT COUNT(*) FROM assai_pedido_venda_loja "
+                "WHERE agendamento_confirmado IS NULL"
+            )).scalar() or 0
+        if col_ag_conf_sep:
+            nulls_sep = db.session.execute(text(
+                "SELECT COUNT(*) FROM assai_separacao "
+                "WHERE agendamento_confirmado IS NULL"
+            )).scalar() or 0
+        if col_pedido_loja_id:
+            items_sem_fk = db.session.execute(text(
+                "SELECT COUNT(*) FROM assai_pedido_venda_item "
+                "WHERE pedido_loja_id IS NULL"
+            )).scalar() or 0
+        print(f'BEFORE: col_pedido_loja_id_existe={bool(col_pedido_loja_id)}, '
+              f'pvl_nulls={nulls_loja}, sep_nulls={nulls_sep}, items_sem_fk={items_sem_fk}')
 
         # Executar SQL
         sql_path = os.path.join(
