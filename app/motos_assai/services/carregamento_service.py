@@ -24,6 +24,7 @@ from app.motos_assai.models import (
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
 from app.motos_assai.services.faturamento_service import gerar_excel_qpa
+from app.motos_assai.services.pedido_status_service import recalcular_status_pedido
 from app.motos_assai.services.separacao_mirror_service import sincronizar_espelho_com_separacao
 from app.utils.timezone import agora_brasil_naive
 
@@ -615,5 +616,11 @@ def finalizar_carregamento(carregamento_id, operador_id):
         if houve_divergencia:
             nf.status_match = NF_STATUS_DIVERGENTE
 
-    # === FASE 8: implementada em Task 12 ===
+    # === FASE 8: recalcular status pedido (A13 — defensivo) ===
+    # Carregamento por si nao muda qtd_faturada (so NF muda).
+    # Mas se logica futura mudar (ex: sep nasce FATURADA via A11), pode precisar.
+    # Custo zero (idempotente), beneficio: cobertura defensiva.
+    recalcular_status_pedido(car.pedido_id)
+
+    db.session.flush()
     return sep_alvo

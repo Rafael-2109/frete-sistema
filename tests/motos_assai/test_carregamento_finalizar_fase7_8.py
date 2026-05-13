@@ -206,3 +206,44 @@ def test_fase7_a3_filtra_nf_cancelada(app, admin_user):
         divs = AssaiDivergencia.query.filter_by(separacao_id=sep_id).all()
         assert len(divs) == 0
         db.session.rollback()
+
+
+# ============================================================
+# Fase 8 - recalcular_status_pedido (A13 defensivo)
+# ============================================================
+
+def test_fase8_recalcular_status_pedido_chamado(app, admin_user, monkeypatch):
+    """A13: finalizar_carregamento chama recalcular_status_pedido defensivamente."""
+    with app.app_context():
+        from app.motos_assai.services import pedido_status_service
+        chamadas = []
+
+        original = pedido_status_service.recalcular_status_pedido
+
+        def spy(pid):
+            chamadas.append(pid)
+            return original(pid)
+
+        monkeypatch.setattr(pedido_status_service, 'recalcular_status_pedido', spy)
+        # Patch tambem no namespace de carregamento_service (que importou
+        # `recalcular_status_pedido` no topo). Sem isso o patch nao tem efeito.
+        monkeypatch.setattr(
+            'app.motos_assai.services.carregamento_service.recalcular_status_pedido',
+            spy,
+        )
+
+        pedido, loja, modelo = _setup_pedido(admin_user)
+        chassi = f'TST_F8_{_uid()}'
+        _criar_chassi(modelo, chassi, admin_user)
+        db.session.commit()
+
+        car = criar_carregamento(pedido.id, loja.id, operador_id=admin_user.id)
+        db.session.flush()
+        escanear_carregamento_item(car.id, chassi, operador_id=admin_user.id)
+        db.session.commit()
+
+        finalizar_carregamento(car.id, operador_id=admin_user.id)
+        db.session.commit()
+
+        assert pedido.id in chamadas
+        db.session.rollback()
