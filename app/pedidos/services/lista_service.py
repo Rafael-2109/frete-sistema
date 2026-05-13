@@ -500,10 +500,12 @@ class ListaPedidosService:
         """Retorna clausula WHERE para um status individual.
 
         Semantica unificada NACOM + CarVia (definicao baseada em embarque):
-          - aberto    = SEM embarque ativo
+          - aberto    = SEM embarque ativo (NACOM inclui nf_cd=True — NF
+                        voltou ao CD volta para a fila de tratamento)
           - cotado    = EM embarque ativo, sem data_embarque
           - faturado  = APENAS NACOM (nf preenchida e nao no CD)
-          - nf_cd     = nf_cd=True (NACOM)
+          - nf_cd     = nf_cd=True (NACOM) — filtro isolado, mantido para
+                        permitir visualizacao especifica do retorno ao CD
 
         CarVia EMBARCADO (com data_embarque) nao cai em nenhum dos 3 filtros
         de status: aparece apenas na lista "Todos" e nos filtros de condicao.
@@ -524,8 +526,13 @@ class ListaPedidosService:
         nao_carvia = ~carvia_prefix
 
         if status_key == 'aberto':
-            # NACOM: status=ABERTO E nao e CarVia
-            nacom = db.and_(nao_carvia, model.status == 'ABERTO')
+            # NACOM: status=ABERTO OU nf_cd=True (NF voltou ao CD = pedido
+            # volta para a fila de tratamento, alinhado com a semantica do
+            # contador "Abertos da data" em counter_service.py:184-188)
+            nacom = db.and_(
+                nao_carvia,
+                db.or_(model.status == 'ABERTO', model.nf_cd == True),
+            )
             # CarVia: lote NAO esta em set cotado nem embarcado
             carvia = db.and_(
                 carvia_prefix,
