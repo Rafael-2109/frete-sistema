@@ -371,6 +371,81 @@
     </div>
   </div>
   {% endif %}
+
+  {# Embarques com Cotacao Manual Compativeis #}
+  {% if embarques_compativeis_manual %}
+  <div class="card mb-4 shadow-sm border-warning">
+    <div class="card-header bg-warning bg-opacity-10">
+      <h5 class="mb-0">
+        <i class="fas fa-edit text-warning"></i> Embarques com Cotação Manual Compatíveis
+        <span class="badge bg-warning text-dark ms-2">{{ embarques_compativeis_manual|length }}</span>
+      </h5>
+      <small class="text-muted">
+        Filtros: UF dos pedidos cotados contida nas UFs do embarque
+        + (se modalidade = veículo) cabe no peso máximo.
+      </small>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Embarque</th>
+              <th>Transportadora</th>
+              <th>Modalidade</th>
+              <th>Cidade</th>
+              <th>UFs</th>
+              <th class="text-end">Peso Atual</th>
+              <th class="text-end">Capacidade</th>
+              <th>CNPJs</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for emb_info in embarques_compativeis_manual %}
+            <tr>
+              <td>
+                <a href="{{ url_for('embarques.visualizar_embarque', id=emb_info.embarque.id) }}" target="_blank">
+                  #{{ emb_info.embarque.numero }}
+                </a>
+              </td>
+              <td>{{ emb_info.embarque.transportadora.razao_social if emb_info.embarque.transportadora else '-' }}</td>
+              <td>{{ emb_info.embarque.modalidade or '-' }}</td>
+              <td>
+                <span title="{{ emb_info.cidades_tooltip }}">
+                  {{ emb_info.cidade_vitrine }}
+                  {% if emb_info.mais_de_uma_cidade %}
+                  <i class="fas fa-info-circle text-muted ms-1" title="{{ emb_info.cidades_tooltip }}"></i>
+                  {% endif %}
+                </span>
+              </td>
+              <td>{{ emb_info.ufs_embarque | join(', ') }}</td>
+              <td class="text-end">{{ "%.0f"|format(emb_info.peso_atual) }} kg</td>
+              <td class="text-end">
+                {% if emb_info.peso_maximo %}
+                  <span class="text-success" title="Máximo {{ '%.0f'|format(emb_info.peso_maximo) }}kg, atual {{ '%.0f'|format(emb_info.peso_atual) }}kg">
+                    {{ "%.0f"|format(emb_info.capacidade_restante) }} kg restante
+                  </span>
+                {% else %}
+                  <span class="text-muted" title="Modalidade '{{ emb_info.embarque.modalidade or '-' }}' sem veículo cadastrado — sem limite de peso veicular">Sem limite</span>
+                {% endif %}
+              </td>
+              <td>{{ emb_info.qtd_cnpjs }}</td>
+              <td>
+                {% set _tipo_carga = emb_info.embarque.tipo_carga or 'DIRETA' %}
+                <button class="btn btn-warning btn-sm"
+                        onclick="incluirEmEmbarque({{ emb_info.embarque.id }}, {{ _tipo_carga | tojson }})">
+                  <i class="fas fa-plus"></i> Incluir
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {# Modal de escolha por CNPJ #}
@@ -505,11 +580,11 @@
         <div class="mb-3">
           <label for="manualModalidade" class="form-label">Modalidade</label>
           <select class="form-select" id="manualModalidade" required>
-            <option value="CIF">CIF</option>
-            <option value="FOB">FOB</option>
-            <option value="PESO">PESO</option>
-            <option value="VALOR">VALOR</option>
-            <option value="VAN">VAN</option>
+            <option value="">Selecione...</option>
+            {% for v in veiculos %}
+            <option value="{{ v.nome }}">{{ v.nome }}</option>
+            {% endfor %}
+            <option value="FRETE PESO">FRETE PESO</option>
           </select>
         </div>
         <div class="mb-3">

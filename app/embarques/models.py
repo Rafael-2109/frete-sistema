@@ -190,6 +190,21 @@ class Embarque(db.Model):
         return True
 
     @property
+    def modalidade_display(self):
+        """
+        Modalidade para exibicao em listagens.
+        DIRETA  -> Embarque.modalidade (nome do veiculo, ex: 'TOCO', 'TRUCK', 'VAN')
+        FRACIONADA -> primeiro EmbarqueItem.modalidade ativo (geralmente 'FRETE PESO')
+        Reusa cache _itens_cache (povoado por status_nfs/status_fretes) — sem N+1 extra.
+        """
+        if self.modalidade:
+            return self.modalidade
+        itens_ativos = self.itens_ativos
+        if itens_ativos:
+            return itens_ativos[0].modalidade or ''
+        return ''
+
+    @property
     def saldo_pallets_pendentes(self):
         """
         Calcula saldo de pallets pendentes de faturamento.

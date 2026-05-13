@@ -778,6 +778,7 @@ def tela_cotacao():
     # ✅ BUSCAR EMBARQUES COMPATÍVEIS
     embarques_compativeis_direta = []
     embarques_compativeis_fracionada = []
+    embarques_compativeis_manual = []
 
     print(f"[DEBUG EMBARQUES] ============== INICIANDO BUSCA DE EMBARQUES ==============")
     print(f"[DEBUG EMBARQUES] todos_mesmo_uf: {todos_mesmo_uf}")
@@ -919,9 +920,83 @@ def tela_cotacao():
                 else:
                     print(f"[DEBUG EMBARQUES] ❌ Embarque FRACIONADA #{embarque.numero} - SEM itens ativos")
 
+        # ✅ EMBARQUES COM COTACAO MANUAL COMPATIVEIS
+        # Regra: UFs dos pedidos cotados subset das UFs ja existentes no embarque
+        # E (se modalidade = veiculo cadastrado) cabe no peso maximo
+        print(f"[DEBUG EMBARQUES] 🔍 Iniciando busca de embarques MANUAL")
+
+        ufs_cotacao = set(ufs_normalizados or [])
+
+        embarques_manual_query = Embarque.query.options(
+            joinedload(Embarque.transportadora)
+        ).filter(
+            Embarque.status == 'ativo',
+            Embarque.tipo_cotacao == 'Manual',
+            Embarque.data_embarque.is_(None)
+        ).limit(200)
+
+        for embarque in embarques_manual_query:
+            if not embarque.itens_ativos:
+                continue
+
+            # Coleta UFs, cidades unicas e CNPJs do embarque
+            ufs_embarque = set()
+            cidades_set = set()
+            cnpjs_embarque = set()
+            for item in embarque.itens_ativos:
+                if item.uf_destino:
+                    ufs_embarque.add(item.uf_destino)
+                if item.cidade_destino and item.uf_destino:
+                    cidades_set.add(f"{item.cidade_destino}/{item.uf_destino}")
+                if item.cnpj_cliente:
+                    cnpjs_embarque.add(item.cnpj_cliente)
+
+            # VALIDACAO 1: UFs cotadas ⊆ UFs do embarque
+            # Se ufs_cotacao for vazio (pedidos sem UF reconhecida pelo LocalizacaoService),
+            # NAO exibir embarques — set vazio seria subset trivial mas semanticamente nao
+            # representa "zero restricoes", e sim "nao sabemos a UF".
+            if not ufs_cotacao:
+                print(f"[DEBUG EMBARQUES] ❌ MANUAL #{embarque.numero} - sem UFs cotadas (LocalizacaoService nao normalizou)")
+                continue
+            if not ufs_cotacao.issubset(ufs_embarque):
+                print(f"[DEBUG EMBARQUES] ❌ MANUAL #{embarque.numero} - UF cotada {ufs_cotacao} nao subset de {ufs_embarque}")
+                continue
+
+            # VALIDACAO 2: cabe no veiculo (se modalidade tem veiculo cadastrado)
+            peso_atual = embarque.total_peso_pedidos() or 0
+            peso_maximo = None
+            capacidade_restante = None
+
+            if embarque.modalidade:
+                veiculo = Veiculo.query.filter_by(nome=embarque.modalidade).first()
+                if veiculo and veiculo.peso_maximo:
+                    peso_maximo = veiculo.peso_maximo
+                    capacidade_restante = peso_maximo - peso_atual
+                    if capacidade_restante < peso_total:
+                        print(f"[DEBUG EMBARQUES] ❌ MANUAL #{embarque.numero} - Sem capacidade ({capacidade_restante}kg < {peso_total}kg)")
+                        continue
+
+            cidades_lista = sorted(cidades_set)
+            cidade_vitrine = cidades_lista[0] if cidades_lista else '-'
+            mais_de_uma_cidade = len(cidades_lista) > 1
+
+            embarques_compativeis_manual.append({
+                'embarque': embarque,
+                'cidade_vitrine': cidade_vitrine,
+                'cidades_tooltip': ', '.join(cidades_lista),
+                'mais_de_uma_cidade': mais_de_uma_cidade,
+                'ufs_embarque': sorted(ufs_embarque),
+                'peso_atual': peso_atual,
+                'peso_maximo': peso_maximo,
+                'capacidade_restante': capacidade_restante,
+                'qtd_cnpjs': len(cnpjs_embarque),
+            })
+            print(f"[DEBUG EMBARQUES] ✅ MANUAL #{embarque.numero} - compativel")
+
         print(f"[DEBUG EMBARQUES] ============== RESULTADO FINAL ==============")
         print(f"[DEBUG EMBARQUES] 🚛 Embarques compatíveis DIRETA: {len(embarques_compativeis_direta)}")
         print(f"[DEBUG EMBARQUES] 🚛 Embarques compatíveis FRACIONADA: {len(embarques_compativeis_fracionada)}")
+        print(f"[DEBUG EMBARQUES] 🚛 Embarques compatíveis MANUAL: {len(embarques_compativeis_manual)}")
 
     except Exception as e:
         print(f"[DEBUG EMBARQUES] ❌ ERRO ao buscar embarques compatíveis: {str(e)}")
@@ -945,8 +1020,10 @@ def tela_cotacao():
         todos_mesmo_uf=todos_mesmo_uf,
         embarques_compativeis_direta=embarques_compativeis_direta,
         embarques_compativeis_fracionada=embarques_compativeis_fracionada,
+        embarques_compativeis_manual=embarques_compativeis_manual,
         alterando_embarque_info=session.get('alterando_embarque'),
         transportadoras=Transportadora.query.filter(Transportadora.razao_social != 'FOB - COLETA').order_by(Transportadora.razao_social).all(),
+        veiculos=Veiculo.query.order_by(Veiculo.nome).all(),
     )
 
 @cotacao_bp.route("/excluir_pedido", methods=["POST"])
@@ -3842,16 +3919,21 @@ def incluir_em_embarque():
             return redirect(url_for('cotacao.tela_cotacao'))
         
         # Verificar compatibilidade por tipo de carga
-        if tipo_carga == 'DIRETA':
-            # Para carga direta, verificar capacidade do veículo
+        # Re-valida peso quando:
+        #  (a) tipo_carga == 'DIRETA' (regra original Nacom), OU
+        #  (b) embarque.tipo_cotacao == 'Manual' e modalidade casa com Veiculo cadastrado
+        # Server-side e ULTIMA linha de defesa contra race condition (2 usuarios incluindo
+        # pedidos no mesmo embarque entre o snapshot da tela e o submit).
+        precisa_validar_peso = (tipo_carga == 'DIRETA') or (embarque.tipo_cotacao == 'Manual')
+        if precisa_validar_peso:
             from app.veiculos.models import Veiculo
-            
+
             if embarque.modalidade:
                 veiculo = Veiculo.query.filter_by(nome=embarque.modalidade).first()
                 if veiculo and veiculo.peso_maximo:
-                    peso_atual = embarque.total_peso_pedidos()
+                    peso_atual = embarque.total_peso_pedidos() or 0
                     peso_novos_pedidos = sum(p.peso_total or 0 for p in pedidos)
-                    
+
                     if (peso_atual + peso_novos_pedidos) > veiculo.peso_maximo:
                         flash(f'❌ Capacidade do veículo excedida. Capacidade: {veiculo.peso_maximo}kg, Atual: {peso_atual}kg, Tentando adicionar: {peso_novos_pedidos}kg', 'danger')
                         return redirect(url_for('cotacao.tela_cotacao'))
