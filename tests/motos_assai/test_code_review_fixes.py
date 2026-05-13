@@ -104,7 +104,8 @@ def _adicionar_chassis(cenario, n=2):
     """Adiciona n chassis na sep (status SEPARADA via evento)."""
     chassis = []
     for i in range(n):
-        chassi = f'CHASSI_{cenario["s"]}_{i}'
+        # Uppercase: aplicar_correcao_cce faz .upper() em chassis recebidos
+        chassi = f'CHASSI_{cenario["s"]}_{i}'.upper()
         moto = AssaiMoto(chassi=chassi, modelo_id=cenario['modelo'].id, cor='AZUL')
         db.session.add(moto)
         item = AssaiSeparacaoItem(
@@ -459,5 +460,215 @@ def test_a8_criar_divergencia_modelo_divergente(app):
             assert div.tipo == DIVERGENCIA_TIPO_MODELO_DIVERGENTE
             assert div.detalhes.get('modelo_esperado') == 'SOL'
             assert div.detalhes.get('modelo_extraido') == 'X11_MINI'
+        finally:
+            db.session.rollback()
+
+
+# ============================================================
+# S15: cancelar_nf_qpa limpa EmbarqueItem.nota_fiscal
+# (gap identificado pelo code review final 2026-05-13)
+# ============================================================
+
+def test_s15_cancelar_nf_limpa_embarque_item_nota_fiscal(app):
+    """Apos cancelar NF, EmbarqueItem.nota_fiscal deve virar None."""
+    with app.app_context():
+        try:
+            from app.embarques.models import Embarque, EmbarqueItem
+            from app.utils.timezone import agora_brasil_naive
+            cenario = _setup_cenario_basico('s15')
+            chassis = _adicionar_chassis(cenario, n=1)
+
+            cenario['sep'].status = SEPARACAO_STATUS_FATURADA
+            emitir_evento(chassis[0], EVENTO_FATURADA, operador_id=None)
+
+            numero_nf = f'NF_{cenario["s"]}'
+            nf = AssaiNfQpa(
+                chave_44='6' * 44, numero=numero_nf,
+                valor_total=Decimal('1000.00'),
+                separacao_id=cenario['sep'].id, loja_id=cenario['loja'].id,
+                status_match=NF_STATUS_BATEU, importada_por_id=None,
+            )
+            db.session.add(nf)
+            db.session.flush()
+            db.session.add(AssaiNfQpaItem(
+                nf_id=nf.id, chassi=chassis[0], valor_extraido=Decimal('1000.00'),
+            ))
+
+            # Criar Embarque + EmbarqueItem com nota_fiscal=numero_nf
+            import random
+            embarque = Embarque(
+                numero=random.randint(100000, 999999),  # numero unico aleatorio
+                criado_em=agora_brasil_naive(),
+                status='ativo',
+            )
+            db.session.add(embarque)
+            db.session.flush()
+            ei = EmbarqueItem(
+                embarque_id=embarque.id,
+                cliente=cenario['loja'].nome,
+                pedido=cenario['pedido'].numero,
+                nota_fiscal=numero_nf,
+                status='ativo',
+                uf_destino='SP', cidade_destino='SAO PAULO',
+            )
+            db.session.add(ei)
+            db.session.flush()
+            assert ei.nota_fiscal == numero_nf  # sanity check
+
+            cancelar_nf_qpa(nf.id, motivo='teste S15', operador_id=None)
+            db.session.flush()
+
+            db.session.refresh(ei)
+            assert ei.nota_fiscal is None, (
+                f'S15: EmbarqueItem.nota_fiscal deveria virar None apos cancelar NF, '
+                f'veio {ei.nota_fiscal}'
+            )
+        finally:
+            db.session.rollback()
+
+
+# ============================================================
+# S21 (profundidade): resolver_divergencia re-roda _calcular_match
+# (gap identificado pelo code review final 2026-05-13)
+# ============================================================
+
+def test_s21_resolver_divergencia_invoca_calcular_match(app):
+    """resolver_divergencia deve invocar _calcular_match na NF associada (S21=a).
+
+    Verifica via spy/monkeypatch que `_calcular_match` foi chamado com a NF certa.
+    """
+    with app.app_context():
+        try:
+            cenario = _setup_cenario_basico('s21b')
+            chassis = _adicionar_chassis(cenario, n=1)
+
+            nf = AssaiNfQpa(
+                chave_44='7' * 44, numero=f'NF_{cenario["s"]}',
+                valor_total=Decimal('1000.00'),
+                separacao_id=cenario['sep'].id, loja_id=cenario['loja'].id,
+                status_match=NF_STATUS_DIVERGENTE, importada_por_id=None,
+            )
+            db.session.add(nf)
+            db.session.flush()
+
+            div = criar_divergencia(
+                tipo=DIVERGENCIA_TIPO_NF_CHASSI_FORA_CARREGAMENTO,
+                chassi=chassis[0], nf_id=nf.id, sep_id=cenario['sep'].id,
+                operador_id=None,
+            )
+            db.session.flush()
+
+            # Monkey-patch _calcular_match para spy
+            from app.motos_assai.services.parsers import nf_qpa_adapter
+            chamadas = []
+            original = nf_qpa_adapter._calcular_match
+            def spy(nf_param, operador_id):
+                chamadas.append({'nf_id': nf_param.id, 'operador_id': operador_id})
+                return original(nf_param, operador_id)
+            nf_qpa_adapter._calcular_match = spy
+            try:
+                # Importar resolver_divergencia DEPOIS do monkey-patch porque o
+                # service importa _calcular_match lazy (dentro da funcao)
+                resolver_divergencia(
+                    div.id, tipo_resolucao=DIVERGENCIA_RESOLUCAO_IGNORAR,
+                    observacao='teste S21 profundidade', operador_id=None,
+                )
+                db.session.flush()
+            finally:
+                nf_qpa_adapter._calcular_match = original
+
+            # S21=a: _calcular_match deve ter sido chamado com a NF da divergencia
+            assert len(chamadas) >= 1, (
+                f'S21=a: _calcular_match nao foi chamado em resolver_divergencia. '
+                f'Chamadas: {chamadas}'
+            )
+            assert chamadas[0]['nf_id'] == nf.id, (
+                f'_calcular_match chamado com NF errada: {chamadas[0]}'
+            )
+        finally:
+            db.session.rollback()
+
+
+# ============================================================
+# Q13: aplicar_correcao_cce end-to-end
+# (gap identificado pelo code review final 2026-05-13)
+# ============================================================
+
+def test_q13_aplicar_correcao_cce_substitui_chassi_e_registra_historico(app):
+    """E2E: aplicar_correcao_cce substitui chassi na NF + registra vinculo_historico
+    com motivo CCE_ALTEROU_CHASSI + emite evento DISPONIVEL para chassi_antigo
+    FATURADA."""
+    with app.app_context():
+        try:
+            from app.motos_assai.services.cancelamento_nf_service import aplicar_correcao_cce
+            cenario = _setup_cenario_basico('q13')
+            chassis = _adicionar_chassis(cenario, n=1)
+            chassi_antigo = chassis[0]
+            # aplicar_correcao_cce normaliza para uppercase — usar uppercase aqui
+            chassi_novo = f'CHASSI_NOVO_{cenario["s"]}'.upper()
+
+            # Criar moto para chassi_novo
+            db.session.add(AssaiMoto(
+                chassi=chassi_novo, modelo_id=cenario['modelo'].id, cor='AZUL',
+            ))
+            db.session.flush()
+
+            # NF batida com chassi_antigo
+            cenario['sep'].status = SEPARACAO_STATUS_FATURADA
+            emitir_evento(chassi_antigo, EVENTO_FATURADA, operador_id=None)
+            sep_item = AssaiSeparacaoItem.query.filter_by(
+                separacao_id=cenario['sep'].id, chassi=chassi_antigo,
+            ).first()
+            nf = AssaiNfQpa(
+                chave_44='8' * 44, numero=f'NF_{cenario["s"]}',
+                valor_total=Decimal('1000.00'),
+                separacao_id=cenario['sep'].id, loja_id=cenario['loja'].id,
+                status_match=NF_STATUS_BATEU, importada_por_id=None,
+            )
+            db.session.add(nf)
+            db.session.flush()
+            nf_item = AssaiNfQpaItem(
+                nf_id=nf.id, chassi=chassi_antigo, valor_extraido=Decimal('1000.00'),
+                separacao_item_id=sep_item.id,
+            )
+            db.session.add(nf_item)
+            db.session.flush()
+
+            # Aplicar CCe: chassi_antigo -> chassi_novo
+            aplicar_correcao_cce(
+                nf_id=nf.id,
+                chassis_corrigidos=[(chassi_antigo, chassi_novo)],
+                numero_cce=f'CCE_{cenario["s"]}',
+                operador_id=None,
+            )
+            db.session.flush()
+
+            # 1. chassi no AssaiNfQpaItem foi substituido
+            db.session.refresh(nf_item)
+            assert nf_item.chassi == chassi_novo, (
+                f'Q13: chassi do NfQpaItem deveria ser {chassi_novo}, '
+                f'veio {nf_item.chassi}'
+            )
+
+            # 2. AssaiNfQpaItemVinculoHistorico criado com motivo CCE_ALTEROU_CHASSI
+            vinculos = AssaiNfQpaItemVinculoHistorico.query.filter_by(
+                nf_qpa_item_id=nf_item.id, motivo='CCE_ALTEROU_CHASSI',
+            ).all()
+            assert len(vinculos) == 1, (
+                f'Q13: esperado 1 vinculo historico CCE_ALTEROU_CHASSI, '
+                f'veio {len(vinculos)}'
+            )
+            assert vinculos[0].chassi_no_momento == chassi_antigo
+            # detalhes JSONB armazena chassi_novo + numero_cce
+            assert vinculos[0].detalhes.get('chassi_novo') == chassi_novo
+
+            # 3. chassi_antigo (que estava FATURADA) recebeu evento de reversao
+            # (DISPONIVEL/SEPARADA/CARREGADA — depende do contexto Sep)
+            status_antigo = status_efetivo(chassi_antigo)
+            assert status_antigo != EVENTO_FATURADA, (
+                f'Q13: chassi_antigo {chassi_antigo} ainda FATURADA — '
+                f'aplicar_correcao_cce deveria ter revertido evento. '
+                f'Status atual: {status_antigo}'
+            )
         finally:
             db.session.rollback()

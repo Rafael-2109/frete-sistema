@@ -15,6 +15,7 @@ from app import create_app, db  # noqa: E402
 from app.motos_assai.models import (  # noqa: E402
     AssaiNfQpaItem, AssaiSeparacaoItem, AssaiDivergencia, DIVERGENCIA_TIPOS_VALIDOS,
 )
+from app.utils.json_helpers import sanitize_for_json  # noqa: E402
 from sqlalchemy import and_  # noqa: E402
 
 
@@ -64,7 +65,7 @@ def main():
             # "SEMPRE usar sanitize_for_json em queries SQLAlchemy com
             # colunas Numeric/DECIMAL". Embora float() funcione hoje, sanitize
             # protege contra adicao futura de campos Decimal/datetime/UUID.
-            from app.utils.json_helpers import sanitize_for_json
+            # Import movido para topo do arquivo (style fix code review final).
             div = AssaiDivergencia(
                 tipo=tipo,
                 chassi=item.chassi,
