@@ -507,13 +507,22 @@ def finalizar_carregamento(carregamento_id, operador_id):
             emitir_evento(chassi, EVENTO_DISPONIVEL, operador_id=operador_id,
                           observacao=f'removido por excedente pedido (LIFO) - Carregamento {car.id}')
 
-    # === FASES 4-8: implementadas em Tasks 8-12 ===
-    # Por ora, marcar sep como CARREGADA + finalizar carregamento (esqueleto)
+    # === FASE 4: Sep alvo CARREGADA + emitir evento CARREGADA ===
     sep_alvo.status = SEPARACAO_STATUS_CARREGADA
     car.separacao_id = sep_alvo.id
     car.status = CARREGAMENTO_STATUS_FINALIZADO
     car.finalizado_em = agora_brasil_naive()
     car.finalizado_por_id = operador_id
+
+    # Emite CARREGADA para TODOS chassis do carregamento (chassis adicionados na Fase 2
+    # ja receberam SEPARADA antes — agora pegam CARREGADA. Chassis que ja estavam na sep
+    # pegam apenas CARREGADA.)
+    for chassi in chassis_car:
+        emitir_evento(chassi, EVENTO_CARREGADA, operador_id=operador_id,
+                      observacao=f'Carregamento {car.id} finalizado',
+                      dados_extras={'carregamento_id': car.id, 'sep_id': sep_alvo.id})
+
     db.session.flush()
 
+    # === FASES 5-8: implementadas em Tasks 9-12 ===
     return sep_alvo
