@@ -116,6 +116,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_emprestimo_moto_data_emprestimo",
+      "columns": [
+        "data_emprestimo"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_emprestimo_moto_modelo_id",
       "columns": [
         "modelo_id"
@@ -140,13 +147,6 @@
       "name": "ix_hora_emprestimo_moto_chassi_saida",
       "columns": [
         "chassi_saida"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_emprestimo_moto_data_emprestimo",
-      "columns": [
-        "data_emprestimo"
       ],
       "unique": false
     }

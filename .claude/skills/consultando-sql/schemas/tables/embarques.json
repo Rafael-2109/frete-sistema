@@ -295,17 +295,17 @@
       "unique": false
     },
     {
-      "name": "idx_emb_transportadora_status",
+      "name": "idx_emb_tipo_carga",
       "columns": [
-        "transportadora_id",
-        "status"
+        "tipo_carga"
       ],
       "unique": false
     },
     {
-      "name": "idx_emb_tipo_carga",
+      "name": "idx_emb_transportadora_status",
       "columns": [
-        "tipo_carga"
+        "transportadora_id",
+        "status"
       ],
       "unique": false
     },

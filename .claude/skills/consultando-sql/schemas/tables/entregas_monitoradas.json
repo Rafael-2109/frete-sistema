@@ -160,9 +160,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_origem",
+      "name": "idx_em_status_finalizacao",
       "columns": [
-        "origem"
+        "status_finalizacao"
       ],
       "unique": false
     },
@@ -181,13 +181,6 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_embarque",
-      "columns": [
-        "data_embarque"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
         "separacao_lote_id"
@@ -195,9 +188,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_agenda",
+      "name": "idx_em_data_embarque",
       "columns": [
-        "data_agenda"
+        "data_embarque"
       ],
       "unique": false
     },
@@ -212,6 +205,13 @@
       "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_agenda",
+      "columns": [
+        "data_agenda"
       ],
       "unique": false
     },
@@ -237,9 +237,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_status_finalizacao",
+      "name": "ix_entregas_monitoradas_origem",
       "columns": [
-        "status_finalizacao"
+        "origem"
       ],
       "unique": false
     }

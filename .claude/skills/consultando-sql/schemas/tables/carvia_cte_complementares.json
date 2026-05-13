@@ -157,16 +157,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_ctrc_numero",
+      "name": "ix_carvia_cte_complementares_fatura_cliente_id",
       "columns": [
-        "ctrc_numero"
+        "fatura_cliente_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_fatura_cliente_id",
+      "name": "ix_carvia_cte_complementares_ctrc_numero",
       "columns": [
-        "fatura_cliente_id"
+        "ctrc_numero"
       ],
       "unique": false
     }

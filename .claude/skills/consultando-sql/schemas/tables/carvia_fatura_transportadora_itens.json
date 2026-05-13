@@ -94,9 +94,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_fatura_transportadora_itens_fatura_transportadora_id",
+      "name": "ix_carvia_fatura_transportadora_itens_nf_id",
       "columns": [
-        "fatura_transportadora_id"
+        "nf_id"
       ],
       "unique": false
     },
@@ -108,9 +108,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_transportadora_itens_nf_id",
+      "name": "ix_carvia_fatura_transportadora_itens_fatura_transportadora_id",
       "columns": [
-        "nf_id"
+        "fatura_transportadora_id"
       ],
       "unique": false
     },

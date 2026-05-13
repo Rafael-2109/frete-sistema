@@ -56,16 +56,16 @@
       "unique": false
     },
     {
-      "name": "ix_cadastro_sub_rota_nome_cidade",
+      "name": "idx_sub_rota_uf_cidade",
       "columns": [
+        "cod_uf",
         "nome_cidade"
       ],
       "unique": false
     },
     {
-      "name": "idx_sub_rota_uf_cidade",
+      "name": "ix_cadastro_sub_rota_nome_cidade",
       "columns": [
-        "cod_uf",
         "nome_cidade"
       ],
       "unique": false

@@ -36,6 +36,12 @@
       "type": "numeric(15,2)"
     },
     {
+      "name": "autopropelido",
+      "type": "boolean",
+      "nullable": false,
+      "default": true
+    },
+    {
       "name": "merged_em_id",
       "type": "integer",
       "description": "FK → hora_modelo.id"
@@ -68,18 +74,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_modelo_merged_em_id",
-      "columns": [
-        "merged_em_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_modelo_nome_modelo",
       "columns": [
         "nome_modelo"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_modelo_merged_em_id",
+      "columns": [
+        "merged_em_id"
+      ],
+      "unique": false
     }
   ]
 }
