@@ -11,12 +11,16 @@ from app.motos_assai.models import (
     AssaiSeparacaoSaldoModelo,
     AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiLoja, AssaiMoto,
     AssaiPedidoExcel,
+    AssaiNfQpa,
     CARREGAMENTO_STATUS_EM_CARREGAMENTO,
     CARREGAMENTO_STATUS_FINALIZADO, CARREGAMENTO_STATUS_CANCELADO,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
     SEPARACAO_STATUS_CARREGADA, SEPARACAO_STATUS_FATURADA,
     SEPARACAO_STATUS_CANCELADA,
     EVENTO_SEPARADA, EVENTO_DISPONIVEL, EVENTO_CARREGADA,
+    NF_STATUS_BATEU, NF_STATUS_DIVERGENTE, NF_STATUS_CANCELADA,
+    DIVERGENCIA_TIPO_NF_CHASSI_FORA_CARREGAMENTO,
+    DIVERGENCIA_TIPO_CARREGAMENTO_CHASSI_FORA_NF,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
 from app.motos_assai.services.faturamento_service import gerar_excel_qpa
@@ -573,5 +577,43 @@ def finalizar_carregamento(carregamento_id, operador_id):
     # (atualizado em Task 15 — separacao_mirror_service.py).
     sincronizar_espelho_com_separacao(sep_alvo.id)
 
-    # === FASES 7-8: implementadas em Tasks 11-12 ===
+    # === FASE 7: detectar divergencia se NF ja existe e bateu ===
+    # A3: filtra status_match != CANCELADA
+    # S22=a: ignora NFs nao-BATEU
+    # N-B3 fix: lazy import — divergencia_service so e criado no Plano 3 (Fase 4).
+    # No Plano 2, criamos um stub minimo do divergencia_service.py para Fase 7
+    # funcionar antes do Plano 3 estar completo.
+    from app.motos_assai.services.divergencia_service import criar_divergencia
+
+    nf = (AssaiNfQpa.query
+          .filter_by(separacao_id=sep_alvo.id)
+          .filter(AssaiNfQpa.status_match != NF_STATUS_CANCELADA)
+          .first())
+    if nf and nf.status_match == NF_STATUS_BATEU:
+        chassis_nf = {it.chassi for it in nf.itens}
+        chassis_so_car = set(chassis_car) - chassis_nf
+        chassis_so_nf = chassis_nf - set(chassis_car)
+        houve_divergencia = False
+
+        for c in chassis_so_car:
+            criar_divergencia(
+                tipo=DIVERGENCIA_TIPO_CARREGAMENTO_CHASSI_FORA_NF,
+                chassi=c, sep_id=sep_alvo.id, car_id=car.id, nf_id=nf.id,
+                detalhes={'origem': 'finalizar_carregamento_fase7'},
+            )
+            houve_divergencia = True
+
+        for c in chassis_so_nf:
+            criar_divergencia(
+                tipo=DIVERGENCIA_TIPO_NF_CHASSI_FORA_CARREGAMENTO,
+                chassi=c, sep_id=sep_alvo.id, car_id=car.id, nf_id=nf.id,
+                detalhes={'origem': 'finalizar_carregamento_fase7'},
+            )
+            houve_divergencia = True
+
+        # A4: NF.status_match volta de BATEU -> DIVERGENTE quando Carregamento gera divergencia
+        if houve_divergencia:
+            nf.status_match = NF_STATUS_DIVERGENTE
+
+    # === FASE 8: implementada em Task 12 ===
     return sep_alvo
