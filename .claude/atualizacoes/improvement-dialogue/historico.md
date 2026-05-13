@@ -22,6 +22,28 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 16 | 2026-05-08 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 17 | 2026-05-11 | 3 | 3 | 0 | 0 | OK |
 | 18 | 2026-05-12 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 19 | 2026-05-13 | 10 | 10 | 0 | 0 | OK (4 clusters: evaluator SQL, artifact bundle, baseline UX, system_prompt) |
+
+## 2026-05-13
+- 10 sugestoes avaliadas (4 critical + 6 warning), todas validas e auto-implementadas
+- **Cluster 1 — evaluator SQL (4 sugestoes, 2 patches)**:
+  - IMP-004 + IMP-007 (mesma session_id eb1ad77d): evaluator bloqueava UPDATE mesmo apos aprovar INSERT na mesma sessao. Causa: `SQLEvaluator.evaluate()` nao recebia `admin_mode` e regra 9 do prompt fixava "apenas SELECT". Fix: kwarg `admin_mode` + safety_rule contextual + chamada na linha 1225 atualizada.
+  - IMP-003 + IMP-008 (mesma session_id): falso positivo de formato DD/MM/YYYY em campo VARCHAR(10) (`embarque_itens.data_agenda`). Fix: rule 4 do prompt reescrita para SEMPRE consultar tipo REAL antes de validar formato; varchar/text com data DD/MM/YYYY agora aceito.
+- **Cluster 2 — artifact bundle (2 sugestoes, 1 patch)**:
+  - IMP-005: `@parcel/config-default` ausente apos npm install. Causa raiz coberta por IMP-006.
+  - IMP-006: Vite 7 + Rolldown/OXC quebra peer-deps do Parcel 2.12 — `npm --legacy-peer-deps` suprime erro e nao linka tarballs. Fix: pinar Vite 5.4.11 SEMPRE em `init-artifact.sh:42-47` + remover branch condicional por NODE_VERSION + sempre rodar `npm install -D vite@5.4.11`. Tech debt registrado: migrar para `vite-plugin-singlefile`.
+- **Cluster 3 — baseline UX (2 sugestoes, SKILL.md)**:
+  - IMP-001: agente nao reexecutava baseline em solicitacao repetida (cache cego). Fix: secao "Revalidacao em Solicitacoes Repetidas" — `<60s` reaproveita, `>=60s` SEMPRE revalida com linha "Revalidado as HH:MM — delta...".
+  - IMP-002: baseline nao incluia tabela D-0 quando data_referencia==hoje. Fix: secao "Aba/Tabela D-0" exige inclusao automatica + comportamento quando vazio.
+- **Cluster 4 — system_prompt (2 sugestoes)**:
+  - IMP-009: diagnostico contraditorio (recomenda pinar Vite, depois contradisse). Fix: L2 ETICA amplia regra para etiquetar "Hipotese:" vs "Confirmado:" e anunciar revisao proativamente.
+  - IMP-010: separacao inserida com qtd_saldo=0 sem registro de justificativa. Fix: R3.1 dentro de R3 (Confirmacao Obrigatoria) — confirmacao TIPADA A/B/C + motivo registrado em `embarque_item.observacao`.
+- Sessoes-evidencia: `eb1ad77d-61d6-4869-9577-660f8a16f0ef` (evaluator + qtd_saldo), `f5c40a86-7928-493b-913f-271bd1dc81fd` (artifact + diagnostico), `227aecd0-fce7-49aa-9f44-7efbe8af0295` (baseline UX).
+- Arquivos modificados: `text_to_sql.py`, `init-artifact.sh`, `gerando-baseline-conciliacao/SKILL.md`, `system_prompt.md`, relatorio + historico.
+- Sintaxe validada: `py_compile` (text_to_sql.py) + `bash -n` (init-artifact.sh).
+- Persistencia DB: 10/10 OK (IDs 95-104).
+- **Commit**: direto em main (sem branch dedicada — feedback 2026-04-14).
+- Follow-up: estender `gerar_baseline.py` para emitir tabelas D-0 e D-1 separadas no JSON.
 
 ## 2026-05-12
 - **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).

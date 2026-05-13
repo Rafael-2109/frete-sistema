@@ -57,13 +57,16 @@ if ! command -v pnpm &> /dev/null; then
 fi
 echo "[init] pnpm version: $(pnpm -v 2>&1)"
 
-# Vite version baseado em Node (Node 18 precisa Vite 5.x)
-if [ "$NODE_VERSION" -ge 20 ]; then
-  VITE_VERSION="latest"
-else
-  VITE_VERSION="5.4.11"
-fi
-echo "[init] Vite: $VITE_VERSION"
+# Vite version: SEMPRE pinar em 5.4.11.
+# Historico (IMP-2026-05-13-005/-006, 13/05/2026):
+#   - Vite 6+/7+ (vite@latest no Render) puxa Rolldown/OXC/@swc como deps.
+#   - Conflito de peer-deps com Parcel 2.12 faz pnpm/npm com --legacy-peer-deps
+#     suprimir o erro e SILENCIOSAMENTE nao linkar tarballs em node_modules/@parcel/.
+#   - Resultado: node_modules/@parcel/ existe mas VAZIO, parcel falha com
+#     "Cannot find extended parcel config" via @parcel/core require interno.
+# Fix: pinar 5.x ate migrar bundling para vite-plugin-singlefile (elimina Parcel).
+VITE_VERSION="5.4.11"
+echo "[init] Vite: $VITE_VERSION (pin obrigatorio — Vite 6+/7+ quebra Parcel 2.12)"
 
 # Detectar sed (macOS vs Linux)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -111,11 +114,11 @@ rm -f public/vite.svg public/favicon.svg 2>/dev/null || true
 echo "[init] Instalando dependencies baseline..."
 pnpm install
 
-# Pin Vite version para Node 18
-if [ "$NODE_VERSION" -lt 20 ]; then
-  echo "[init] Pinando Vite a $VITE_VERSION para Node 18 compat..."
-  pnpm add -D "vite@$VITE_VERSION"
-fi
+# Pin Vite SEMPRE (compat Parcel 2.12, ver bloco de comentario no inicio).
+# Mesmo em Node 20+: create-vite puxa Vite latest por padrao, e e necessario
+# sobrescrever para 5.4.11 antes de qualquer outra dep ser resolvida.
+echo "[init] Pinando Vite a $VITE_VERSION (sempre, compat Parcel)..."
+pnpm add -D "vite@$VITE_VERSION"
 
 # ===== Tailwind + utils =====
 echo "[init] Instalando Tailwind + utils..."

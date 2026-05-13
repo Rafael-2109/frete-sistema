@@ -670,7 +670,7 @@ class SQLEvaluator:
     Recebe apenas os schemas das tabelas referenciadas no SQL.
     """
 
-    def evaluate(self, question: str, sql: str, schema_text: str) -> dict:
+    def evaluate(self, question: str, sql: str, schema_text: str, admin_mode: bool = False) -> dict:
         """
         Avalia SQL gerada contra schema detalhado.
 
@@ -678,6 +678,12 @@ class SQLEvaluator:
             question: Pergunta original
             sql: SQL gerada pelo Generator
             schema_text: Schema detalhado das tabelas usadas
+            admin_mode: Se True, INSERT/UPDATE/DELETE estao autorizados (bypass na
+                        validacao de "apenas SELECT"). Regra 9 aplica criterio uniforme:
+                        em admin_mode todos os verbos DML sao permitidos; fora, apenas
+                        SELECT/CTE. Bug historico (IMP-2026-05-13-004/-007): evaluator
+                        aprovava INSERT mas rejeitava UPDATE pelo Haiku ser nondeterministic,
+                        e a propria chamada nao informava admin_mode.
 
         Returns:
             {"approved": bool, "improved_sql": str|None, "reason": str}
@@ -685,6 +691,18 @@ class SQLEvaluator:
         import anthropic
 
         client = anthropic.Anthropic()
+
+        # Modo de seguranca (regra 9) depende de admin_mode
+        if admin_mode:
+            safety_rule = (
+                "9. A SQL e segura? Em ADMIN_MODE: SELECT, INSERT, UPDATE, DELETE estao\n"
+                "   AUTORIZADOS — aplicar criterio UNIFORME entre todos os verbos DML.\n"
+                "   NUNCA reprovar UPDATE/DELETE/INSERT alegando 'apenas SELECT permitido'.\n"
+                "   Continuam BLOQUEADOS: DROP, ALTER, TRUNCATE, GRANT, REVOKE, CREATE,\n"
+                "   funcoes perigosas (pg_sleep, dblink, pg_read_file, pg_write_file)."
+            )
+        else:
+            safety_rule = "9. A SQL e segura? (apenas SELECT, sem funcoes perigosas)"
 
         prompt = f"""Voce e um revisor de SQL PostgreSQL para um sistema de frete brasileiro.
 
@@ -709,17 +727,25 @@ VERIFIQUE COM RIGOR (todos os itens sao obrigatorios):
 3. Os campos corretos estao sendo usados? (ex: qtd_saldo_produto_pedido na carteira_principal,
    qtd_saldo na separacao — NUNCA trocar)
 
-4. VALIDACAO DE TIPOS (CRITICO): Em CADA clausula WHERE, ON, HAVING, verifique que o tipo do
-   campo e compativel com o valor comparado:
+4. VALIDACAO DE TIPOS (CRITICO): Em CADA clausula WHERE, ON, HAVING, INSERT, UPDATE, verifique
+   que o tipo do campo e compativel com o valor comparado/atribuido. SEMPRE consulte o tipo REAL
+   da coluna no schema acima ANTES de validar formato — NUNCA assumir tipo pelo nome do campo:
    - Campos varchar/text: comparar SOMENTE com strings entre aspas simples ('valor'),
-     NUNCA com numeros sem aspas.
+     NUNCA com numeros sem aspas. Para campos varchar/text que armazenam DATAS (ex:
+     data_agenda VARCHAR(10) que usa DD/MM/YYYY no sistema), ACEITAR qualquer string
+     consistente com o padrao ja presente nos registros — NAO impor formato ISO se o
+     tipo declarado e VARCHAR/TEXT.
    - Campos integer/numeric/float: comparar com numeros (com ou sem aspas, PostgreSQL aceita).
    - Campos boolean: comparar com true/false (sem aspas).
-   - Campos date/timestamp: comparar com strings de data entre aspas ('2024-01-01').
+   - Campos date/timestamp REAIS (tipo DATE ou TIMESTAMP no schema): comparar com strings
+     de data ISO entre aspas ('2024-01-01').
    Exemplos de ERRO que voce DEVE corrigir:
      WHERE cnpj_cliente = 123           -> WHERE cnpj_cliente = '123'
      WHERE cod_uf = 35                  -> WHERE cod_uf = '35'
      WHERE numero_nf = 12345           -> WHERE numero_nf = '12345'
+   Exemplo de FALSO POSITIVO a EVITAR (IMP-2026-05-13-003/-008):
+     campo data_agenda DECLARADO COMO VARCHAR(10) com valor '12/05/2026' -> ACEITAR,
+     NUNCA reescrever para '2026-05-12'.
 
 5. ANTI-PATTERN "OR defensivo": Se a SQL contem um padrao como:
      WHERE campo = 'valor' OR campo = valor_sem_aspas
@@ -733,9 +759,9 @@ VERIFIQUE COM RIGOR (todos os itens sao obrigatorios):
 
 7. JOINs usam os campos de FK corretos conforme os relacionamentos?
 
-8. Tem LIMIT? (maximo 500)
+8. Tem LIMIT? (maximo 500) — Nao aplicavel a INSERT/UPDATE/DELETE.
 
-9. A SQL e segura? (apenas SELECT, sem funcoes perigosas)
+{safety_rule}
 
 10. VALIDACAO UNION (CRITICO): Se a SQL contem UNION ou UNION ALL:
    a) Todos os SELECTs DEVEM ter o mesmo numero de colunas — conte e corrija se divergir.
@@ -1222,7 +1248,7 @@ class TextToSQLPipeline:
             MAX_EVAL_RETRIES = 2
 
             for eval_attempt in range(1, MAX_EVAL_RETRIES + 1):
-                evaluation = self.evaluator.evaluate(question, sql, schema_text)
+                evaluation = self.evaluator.evaluate(question, sql, schema_text, admin_mode=admin_mode)
 
                 if evaluation["approved"]:
                     logger.info(f"[TEXT_TO_SQL] Evaluator aprovou (tentativa {eval_attempt})")

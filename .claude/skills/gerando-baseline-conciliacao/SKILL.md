@@ -152,6 +152,55 @@ de contrato.
 combinado" ou "verificar a solicitacao anterior" APOS o baseline ja ter sido entregue, isso
 indica que esta secao foi pulada — registrar como pitfall via `log_system_pitfall`.
 
+## Revalidacao em Solicitacoes Repetidas (IMP-2026-05-13-001)
+
+Quando o usuario solicitar "atualizar baseline" / "foto das conciliacoes" pela SEGUNDA ou
+TERCEIRA vez no MESMO dia, o agente DEVE **revalidar** os dados no Odoo em vez de devolver
+cache da execucao anterior. Dados de conciliacao mudam em tempo real (Marcus + analistas
+conciliando enquanto a conversa acontece) e responder "essa solicitacao foi processada ha N
+minutos" e ANTI-PADRAO documentado.
+
+**Regra**:
+
+| Tempo desde a ultima execucao | Acao |
+|-------------------------------|------|
+| < 60 segundos | Reaproveitar resposta anterior (defesa contra duplo-clique) |
+| >= 60 segundos | **Reexecutar** `gerar_baseline.py`, comparar com baseline anterior, reportar delta |
+
+**Output obrigatorio quando revalida**: incluir no inicio da resposta a linha:
+
+```
+Revalidado as HH:MM — delta vs execucao anterior: <DELTA> linhas
+```
+
+Onde:
+- `HH:MM` = hora atual (timezone Brasilia, formato 24h)
+- `DELTA` = diferenca em valor absoluto vs total da ultima execucao do dia
+- Se DELTA=0: exibir `delta = 0 (estado nao mudou — confirmacao via Odoo direto)`
+
+**Anti-padrao proibido** (sessao `227aecd0-fce7-49aa-9f44-7efbe8af0295`, 13/05/2026): agente
+respondeu "Essa solicitacao foi processada ha 2 min" e truncou a resposta. Resultado: usuario
+ficou sem saber se o dado estava atualizado e teve que repetir a pergunta.
+
+**Padrao correto**: SEMPRE reexecutar quando delta >= 60s, com a linha "Revalidado as..."
+no topo do output, mesmo que delta seja zero.
+
+## Aba/Tabela D-0 — Conciliacoes do Dia Atual (IMP-2026-05-13-002)
+
+Quando a `data_referencia` for **HOJE** (D-0), o agente DEVE incluir AUTOMATICAMENTE no chat
+e no Excel uma tabela adicional com as conciliacoes ja realizadas no dia, alem da tabela D-1.
+
+**Comportamento**:
+- Sempre que data_ref == hoje: gerar tabela D-0 (conciliacoes ja realizadas no dia, por usuario).
+- Se nao houver conciliacoes em D-0: exibir explicitamente "Nenhuma conciliacao registrada hoje
+  ate <HH:MM>" — NAO omitir a secao.
+- Aplicar a mesma estrutura `Usuario | Linhas | Pgtos | Rec` ordenado por linhas DESC.
+- No Excel, a aba "Conciliacoes Dia Anterior" passa a renomear-se contextualmente conforme
+  data_referencia: para D-0 incluir tambem subsecao "Hoje (D-0)" abaixo da subsecao "Ontem (D-1)".
+
+**Anti-padrao** (sessao `227aecd0-fce7-49aa-9f44-7efbe8af0295`, 13/05/2026): baseline gerado
+sem tabela D-0, usuario teve que perguntar separadamente "QUAL FOI AS Conciliacoes em D-0".
+
 ## Apresentacao Pos-Geracao Obrigatoria
 
 APOS gerar o Excel e ANTES de encerrar a resposta, o agente DEVE apresentar AUTOMATICAMENTE
