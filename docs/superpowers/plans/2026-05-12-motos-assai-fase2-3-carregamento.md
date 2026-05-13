@@ -1525,7 +1525,8 @@ No `finalizar_carregamento`, adicionar APÓS a Fase 2:
                     AssaiSeparacao.status.in_([SEPARACAO_STATUS_CARREGADA, SEPARACAO_STATUS_FATURADA]),
                 ).all()
             ]
-            db.session.rollback()
+            # N-B5 fix: NAO chamar db.session.rollback() — caller (route) faz isso ao capturar a excecao.
+            # Rollback aqui invalida transacao multi-fase, perdendo Fases 1-2.
             raise CarregamentoExcedenteError(
                 f'Pedido excedido em {excedente} chassis mas apenas {len(candidatos)} '
                 f'podem ser removidos automaticamente. Seps CARREGADA/FATURADA bloqueando: {seps_bloqueadas}',
@@ -1838,18 +1839,18 @@ E inserir Fase 5 entre Fase 4 e o `return`:
     # gerar_excel_qpa retorna (bytes, s3_key) — service existente em faturamento_service
     bytes_xlsx, s3_key = gerar_excel_qpa(sep_alvo.id, operador_id)
 
-    # CR-9: retry defensivo se IntegrityError no UNIQUE (separacao_id, versao)
+    # CR-9 + N-B6 fix: retry defensivo via SAVEPOINT (begin_nested) em vez de rollback completo.
+    # Rollback completo desfaz Fases 1-4 inteiras. Savepoint isola apenas o INSERT do Excel.
     try:
-        db.session.add(AssaiPedidoExcel(
-            pedido_id=car.pedido_id, separacao_id=sep_alvo.id,
-            s3_key=s3_key, versao=nova_versao, ativo=True,
-            motivo_regeneracao=f'Carregamento {car.id} finalizado',
-            gerado_por_id=operador_id,
-        ))
-        db.session.flush()
+        with db.session.begin_nested():
+            db.session.add(AssaiPedidoExcel(
+                pedido_id=car.pedido_id, separacao_id=sep_alvo.id,
+                s3_key=s3_key, versao=nova_versao, ativo=True,
+                motivo_regeneracao=f'Carregamento {car.id} finalizado',
+                gerado_por_id=operador_id,
+            ))
     except IntegrityError:
-        db.session.rollback()
-        # Recalcula MAX e tenta de novo
+        # Savepoint reverteu o INSERT. Recalcula MAX e tenta de novo.
         max_versao = (db.session.query(db.func.coalesce(db.func.max(AssaiPedidoExcel.versao), 0))
                       .filter_by(separacao_id=sep_alvo.id)
                       .scalar() or 0)
@@ -2146,6 +2147,9 @@ Inserir Fase 7 antes do `return`:
     # === FASE 7: detectar divergencia se NF ja existe e bateu ===
     # A3: filtra status_match != CANCELADA
     # S22=a: ignora NFs nao-BATEU
+    # N-B3 fix: lazy import — divergencia_service so e criado no Plano 3 (Fase 4)
+    from app.motos_assai.services.divergencia_service import criar_divergencia
+
     nf = (AssaiNfQpa.query
           .filter_by(separacao_id=sep_alvo.id)
           .filter(AssaiNfQpa.status_match != 'CANCELADA')
@@ -2157,19 +2161,19 @@ Inserir Fase 7 antes do `return`:
         houve_divergencia = False
 
         for c in chassis_so_car:
-            db.session.add(AssaiDivergencia(
+            criar_divergencia(
                 tipo=DIVERGENCIA_TIPO_CARREGAMENTO_CHASSI_FORA_NF,
-                chassi=c, separacao_id=sep_alvo.id, carregamento_id=car.id, nf_id=nf.id,
+                chassi=c, sep_id=sep_alvo.id, car_id=car.id, nf_id=nf.id,
                 detalhes={'origem': 'finalizar_carregamento_fase7'},
-            ))
+            )
             houve_divergencia = True
 
         for c in chassis_so_nf:
-            db.session.add(AssaiDivergencia(
+            criar_divergencia(
                 tipo=DIVERGENCIA_TIPO_NF_CHASSI_FORA_CARREGAMENTO,
-                chassi=c, separacao_id=sep_alvo.id, carregamento_id=car.id, nf_id=nf.id,
+                chassi=c, sep_id=sep_alvo.id, car_id=car.id, nf_id=nf.id,
                 detalhes={'origem': 'finalizar_carregamento_fase7'},
-            ))
+            )
             houve_divergencia = True
 
         # A4: NF.status_match volta de BATEU → DIVERGENTE quando Carregamento gera divergencia

@@ -1296,7 +1296,9 @@ class AssaiNfQpaItemVinculoHistorico(db.Model):
     chassi_no_momento = db.Column(db.String(50), nullable=False)
     registrado_em = db.Column(db.DateTime, nullable=False, default=agora_brasil_naive)
     registrado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
-    detalhes = db.Column(db.JSON, default=dict)
+    # N-H2 fix: JSONB
+    from sqlalchemy.dialects.postgresql import JSONB
+    detalhes = db.Column(JSONB, default=dict)
 
     nf_qpa_item = db.relationship('AssaiNfQpaItem')
     separacao_item = db.relationship('AssaiSeparacaoItem')
