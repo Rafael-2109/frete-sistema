@@ -47,11 +47,28 @@ from app import db
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiLoja, AssaiModelo,
     AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiMoto,
+    SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_CARREGADA,
+    SEPARACAO_STATUS_FATURADA,
 )
 from app.separacao.models import Separacao
 from app.utils.timezone import agora_brasil_naive
 
 logger = logging.getLogger(__name__)
+
+
+# S12=a (Plano 2 Task 15): mirror agora espelha tres estados terminais (FECHADA,
+# CARREGADA, FATURADA). EM_SEPARACAO continua nao espelhando — sep ainda esta
+# sendo montada e nao deve aparecer em lista_pedidos Nacom como separacao pronta.
+ESTADOS_ESPELHAVEIS = {
+    SEPARACAO_STATUS_FECHADA,
+    SEPARACAO_STATUS_CARREGADA,
+    SEPARACAO_STATUS_FATURADA,
+}
+
+
+class MirrorValidationError(Exception):
+    """Sep em status nao espelhavel (EM_SEPARACAO ou CANCELADA) — caller deve
+    tratar como erro de validacao (retornar 400 / fluxo)."""
 
 
 class MirrorRaceError(Exception):
@@ -128,6 +145,16 @@ def mirror_assai_to_separacao(assai_sep_id: int) -> int:
     sep = AssaiSeparacao.query.get(assai_sep_id)
     if not sep:
         raise ValueError(f'AssaiSeparacao {assai_sep_id} nao encontrada')
+
+    # S12=a (Plano 2 Task 15): mirror so espelha sep em estado terminal
+    # (FECHADA, CARREGADA, FATURADA). EM_SEPARACAO continua bloqueando
+    # — sep ainda esta sendo montada. CANCELADA nao espelha (espelho
+    # foi removido via unmirror_assai_separacao).
+    if sep.status not in ESTADOS_ESPELHAVEIS:
+        raise MirrorValidationError(
+            f'Sep {assai_sep_id} status={sep.status} — mirror so espelha '
+            f'{sorted(ESTADOS_ESPELHAVEIS)}'
+        )
 
     lote_id = lote_id_de(assai_sep_id)
     pedido = sep.pedido
