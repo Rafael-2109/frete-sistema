@@ -13,26 +13,111 @@
   </div>
 </header>
 
-<form method="get" class="row g-2 mb-3 align-items-end">
-  <div class="col-auto">
-    <label class="form-label small mb-1">Status</label>
-    <select name="status" class="form-select form-select-sm">
-      <option value="pendentes" {% if status_filtro == 'pendentes' %}selected{% endif %}>Pendentes</option>
-      <option value="resolvidas" {% if status_filtro == 'resolvidas' %}selected{% endif %}>Resolvidas</option>
-      <option value="todas" {% if status_filtro == 'todas' %}selected{% endif %}>Todas</option>
-    </select>
-  </div>
-  <div class="col-auto">
-    <label class="form-label small mb-1">Tipo</label>
-    <select name="tipo" class="form-select form-select-sm">
-      <option value="">Todos</option>
-      {% for t in DIVERGENCIA_TIPOS_VALIDOS %}
-        <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ t }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-auto">
-    <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+{# 2026-05-13: filtros expandidos — chassi, NF, loja, data, resolvedor #}
+<form method="get" class="card p-3 mb-3 bg-light border" id="form-filtros-divergencias">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fd-status">Status</label>
+      <select name="status" id="fd-status" class="form-select form-select-sm">
+        <option value="pendentes" {% if status_filtro == 'pendentes' %}selected{% endif %}>Pendentes</option>
+        <option value="resolvidas" {% if status_filtro == 'resolvidas' %}selected{% endif %}>Resolvidas</option>
+        <option value="todas" {% if status_filtro == 'todas' %}selected{% endif %}>Todas</option>
+      </select>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label small mb-1" for="fd-tipo">Tipo</label>
+      <select name="tipo" id="fd-tipo" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for t in DIVERGENCIA_TIPOS_VALIDOS %}
+          <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fd-chassi">Chassi</label>
+      <input type="text" name="chassi" id="fd-chassi"
+             class="form-control form-control-sm"
+             value="{{ filtros_aplicados.chassi or '' }}"
+             placeholder="parcial — ilike %"
+             autocapitalize="characters" maxlength="50">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fd-nf">Número NF</label>
+      <input type="text" name="numero_nf" id="fd-nf"
+             class="form-control form-control-sm"
+             value="{{ filtros_aplicados.numero_nf or '' }}"
+             placeholder="parcial — ilike %"
+             maxlength="20">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label small mb-1" for="fd-loja">
+        Loja Sendas/Assaí
+        <small class="text-muted">(sep ou NF)</small>
+      </label>
+      <select name="loja_id" id="fd-loja" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        {% for l in lojas_disponiveis %}
+          <option value="{{ l.id }}"
+                  {% if filtros_aplicados.loja_id == l.id %}selected{% endif %}>
+            <strong>{{ l.numero }}</strong> — {{ l.nome }}{% if l.cidade %} ({{ l.cidade }}/{{ l.uf }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fd-data-inicio">De (criação)</label>
+      <input type="date" name="data_inicio" id="fd-data-inicio"
+             class="form-control form-control-sm"
+             value="{{ filtros_aplicados.data_inicio.isoformat() if filtros_aplicados.data_inicio else '' }}">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fd-data-fim">Até (criação)</label>
+      <input type="date" name="data_fim" id="fd-data-fim"
+             class="form-control form-control-sm"
+             value="{{ filtros_aplicados.data_fim.isoformat() if filtros_aplicados.data_fim else '' }}">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label small mb-1" for="fd-resolvido">
+        Resolvida por
+        <small class="text-muted">(operador)</small>
+      </label>
+      <select name="resolvida_por_id" id="fd-resolvido" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for op in operadores_resolvedores %}
+          <option value="{{ op.id }}"
+                  {% if filtros_aplicados.resolvida_por_id == op.id %}selected{% endif %}>
+            {{ op.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-12 d-flex gap-2 mt-2">
+      <button type="submit" class="btn btn-sm btn-primary">
+        <i class="fas fa-filter"></i> Filtrar
+      </button>
+      <a href="{{ url_for('motos_assai.divergencias_lista') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-times"></i> Limpar
+      </a>
+      {% set num_filtros = filtros_aplicados.chassi or filtros_aplicados.numero_nf or
+                           filtros_aplicados.loja_id or filtros_aplicados.data_inicio or
+                           filtros_aplicados.data_fim or filtros_aplicados.resolvida_por_id or
+                           tipo_filtro %}
+      {% if num_filtros %}
+        <small class="text-muted ms-auto align-self-center">
+          <i class="fas fa-info-circle"></i>
+          Filtros adicionais aplicados — exibindo {{ divergencias|length }} resultado(s)
+          {% if divergencias|length == 500 %}(limite atingido — refine os filtros){% endif %}.
+        </small>
+      {% endif %}
+    </div>
   </div>
 </form>
 

@@ -5,6 +5,7 @@ from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import (
     get_separacao_ativa, saldo_pendente_por_modelo,
     registrar_chassi, desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    reabrir_separacao,
     listar_pares_separaveis,
     SeparacaoConflictError, SeparacaoValidationError, SeparacaoCrossLojaError,
     # Realocacao de saldo (Tasks #11/#12/#13)
@@ -317,3 +318,50 @@ def separacao_cancelar(separacao_id):
     except SeparacaoValidationError as e:
         return jsonify({'ok': False, 'erro': str(e)}), 400
     return jsonify({'ok': True, 'status': sep.status})
+
+
+@motos_assai_bp.route('/separacao/<int:separacao_id>/reabrir', methods=['POST'])
+@login_required
+@require_motos_assai
+def separacao_reabrir(separacao_id):
+    """Reabre sep FECHADA -> EM_SEPARACAO ("Alterar Separacao").
+
+    Validacoes (no service):
+    - Sep deve estar FECHADA (nao EM_SEPARACAO ja, nao CARREGADA, nao FATURADA, nao CANCELADA)
+    - Sem Carregamento ativo vinculado
+    - Sem NF preenchida no espelho Nacom
+
+    Body JSON:
+        {} (sem parametros — operador_id vem do current_user)
+
+    Retorna 200 {ok, status, separacao_id} | 400 {ok=false, erro}.
+
+    Aceita request via formulario tradicional tambem (returna redirect com flash).
+    """
+    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
+
+    try:
+        sep = reabrir_separacao(separacao_id, current_user.id)
+    except SeparacaoValidationError as e:
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': str(e)}), 400
+        flash(f'Nao foi possivel reabrir a separacao: {e}', 'warning')
+        return redirect(request.referrer or url_for('motos_assai.separacao_lista'))
+
+    if is_ajax:
+        return jsonify({
+            'ok': True, 'status': sep.status, 'separacao_id': sep.id,
+            'redirect_url': url_for(
+                'motos_assai.separacao_tela',
+                pedido_id=sep.pedido_id, loja_id=sep.loja_id, sep_id=sep.id,
+            ),
+        })
+    flash(
+        f'Separacao #{sep.id} reaberta — agora EM_SEPARACAO. '
+        'Edite os chassis conforme necessario e finalize novamente.',
+        'success',
+    )
+    return redirect(url_for(
+        'motos_assai.separacao_tela',
+        pedido_id=sep.pedido_id, loja_id=sep.loja_id, sep_id=sep.id,
+    ))

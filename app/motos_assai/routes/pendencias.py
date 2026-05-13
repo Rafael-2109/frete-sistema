@@ -3,18 +3,47 @@
 Pendencia aberta: chassi com ultimo evento PENDENTE.
 Resolucao: chama montagem_service.resolver_pendencia() ja existente.
 Historico: lista append-only de eventos PENDENCIA_RESOLVIDA.
+
+2026-05-13: filtros chassi/modelo/data/operador adicionados as duas telas
+(abertas e historico). Operadores e modelos populados via servicos auxiliares
+para autocomplete (datalist HTML5 + select).
 """
+
+from datetime import date, datetime
 
 from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
+from app.motos_assai.models import EVENTO_PENDENTE, EVENTO_PENDENCIA_RESOLVIDA
 from app.motos_assai.services.pendencia_service import (
     listar_abertas, listar_historico_resolvidas, contar_pendencias_abertas,
+    operadores_que_registraram_pendencia, modelos_com_pendencias,
 )
 from app.motos_assai.services.montagem_service import (
     resolver_pendencia, MontagemValidationError,
 )
+
+
+def _parse_date(s: str | None) -> date | None:
+    """Aceita 'YYYY-MM-DD' (formato HTML5 input type=date)."""
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s.strip(), '%Y-%m-%d').date()
+    except (ValueError, AttributeError):
+        return None
+
+
+def _coletar_filtros() -> dict:
+    """Le filtros da query string e devolve dict normalizado para o service."""
+    return {
+        'chassi': (request.args.get('chassi') or '').strip() or None,
+        'modelo_id': request.args.get('modelo_id', type=int) or None,
+        'data_inicio': _parse_date(request.args.get('data_inicio')),
+        'data_fim': _parse_date(request.args.get('data_fim')),
+        'operador_id': request.args.get('operador_id', type=int) or None,
+    }
 
 
 @motos_assai_bp.route('/pendencias')
@@ -34,10 +63,16 @@ def pendencias_landing():
 @require_motos_assai
 def pendencias_abertas():
     """Lista chassis em PENDENTE com botao para resolver."""
-    abertas = listar_abertas()
+    filtros = _coletar_filtros()
+    abertas = listar_abertas(filtros=filtros)
+    operadores = operadores_que_registraram_pendencia(tipos=[EVENTO_PENDENTE])
+    modelos = modelos_com_pendencias(tipos=[EVENTO_PENDENTE])
     return render_template(
         'motos_assai/pendencias/abertas.html',
         abertas=abertas,
+        filtros_aplicados=filtros,
+        operadores=operadores,
+        modelos=modelos,
     )
 
 
@@ -46,10 +81,20 @@ def pendencias_abertas():
 @require_motos_assai
 def pendencias_historico():
     """Lista append-only de PENDENCIA_RESOLVIDA com observacao original."""
-    historico = listar_historico_resolvidas(limit=300)
+    filtros = _coletar_filtros()
+    historico = listar_historico_resolvidas(limit=300, filtros=filtros)
+    operadores = operadores_que_registraram_pendencia(
+        tipos=[EVENTO_PENDENCIA_RESOLVIDA],
+    )
+    modelos = modelos_com_pendencias(
+        tipos=[EVENTO_PENDENTE, EVENTO_PENDENCIA_RESOLVIDA],
+    )
     return render_template(
         'motos_assai/pendencias/historico.html',
         historico=historico,
+        filtros_aplicados=filtros,
+        operadores=operadores,
+        modelos=modelos,
     )
 
 

@@ -49,8 +49,24 @@
       <td class="text-end">
         {% if s.status == 'EM_SEPARACAO' %}
         <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=s.pedido_id, loja_id=s.loja_id, sep_id=s.id) }}"
-           class="btn btn-sm btn-outline-primary">
-          <i class="fas fa-eye"></i> Abrir
+           class="btn btn-sm btn-primary">
+          <i class="fas fa-play"></i> Continuar Separação
+        </a>
+        {% elif s.status == 'FECHADA' %}
+        <form method="POST"
+              action="{{ url_for('motos_assai.separacao_reabrir', separacao_id=s.id) }}"
+              class="d-inline form-alterar-separacao"
+              data-sep-id="{{ s.id }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-warning"
+                  title="Reabre a separação para edição (volta para EM_SEPARACAO)">
+            <i class="fas fa-undo"></i> Alterar Separação
+          </button>
+        </form>
+        <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=s.pedido_id) }}"
+           class="btn btn-sm btn-outline-secondary ms-1"
+           title="Detalhes do pedido">
+          <i class="fas fa-info-circle"></i>
         </a>
         {% else %}
         <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=s.pedido_id) }}"
@@ -67,6 +83,26 @@
   </tbody>
 </table>
 </div>{# /#tabela-separacao #}
+
+<script>
+// Confirmacao para "Alterar Separacao" (reabrir FECHADA -> EM_SEPARACAO).
+// Volta a separacao para edicao + remove espelho Nacom.
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('.form-alterar-separacao').forEach(function (form) {
+    form.addEventListener('submit', function (ev) {
+      var sepId = form.dataset.sepId;
+      if (!confirm(
+        'Reabrir Separacao #' + sepId + '?\n\n' +
+        'A separacao voltara para EM_SEPARACAO e o espelho em ' +
+        'lista_pedidos.html sera removido.\n\n' +
+        'Bloqueado se houver Carregamento ativo ou NF preenchida.'
+      )) {
+        ev.preventDefault();
+      }
+    });
+  });
+});
+</script>
 {% endblock %}
 
 {% block onboarding_tours %}

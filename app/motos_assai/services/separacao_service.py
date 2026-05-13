@@ -520,6 +520,104 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
     return sep
 
 
+def reabrir_separacao(separacao_id: int, operador_id: int) -> AssaiSeparacao:
+    """Reabre uma sep FECHADA -> EM_SEPARACAO para permitir alteracao.
+
+    Equivalente operacional ao botao "Alterar Separacao" da UI (decisao
+    2026-05-13: separacoes FECHADAS precisam poder ser editadas quando o
+    operador detecta erro pos-fechamento e antes de carregamento/NF).
+
+    Validacoes:
+    - Status atual deve ser FECHADA (EM_SEPARACAO ja editavel; CARREGADA
+      ja foi para o caminhao; FATURADA tem NF emitida; CANCELADA nao volta).
+    - Sep nao pode estar vinculada a Carregamento ATIVO (EM_CARREGAMENTO ou
+      FINALIZADO) — operador deve cancelar/alterar Carregamento primeiro.
+    - Espelho Nacom nao pode ter NF preenchida — operador deve cancelar a NF
+      primeiro (`cancelar_nf_qpa`).
+
+    Acoes:
+    - Remove espelho Nacom (`unmirror_assai_separacao`) — separacao deixa de
+      aparecer em lista_pedidos.html ate ser refinalizada.
+    - status = EM_SEPARACAO; fechada_em / fechada_por_id zerados.
+    - recalcular_status_pedido (defensivo).
+
+    Returns:
+        AssaiSeparacao: a sep com status atualizado.
+
+    Raises:
+        SeparacaoValidationError: status invalido / Carregamento ativo /
+            NF preenchida no espelho.
+    """
+    sep = AssaiSeparacao.query.get_or_404(separacao_id)
+
+    # 1. Status deve ser FECHADA
+    if sep.status != SEPARACAO_STATUS_FECHADA:
+        raise SeparacaoValidationError(
+            f'Sep {separacao_id} esta {sep.status} — apenas FECHADA pode ser reaberta. '
+            'EM_SEPARACAO ja e editavel; CARREGADA/FATURADA/CANCELADA nao podem voltar.'
+        )
+
+    # 2. Validar que NAO ha Carregamento ATIVO vinculado
+    from app.motos_assai.models import (
+        AssaiCarregamento,
+        CARREGAMENTO_STATUS_EM_CARREGAMENTO, CARREGAMENTO_STATUS_FINALIZADO,
+    )
+    car_ativo = (
+        AssaiCarregamento.query
+        .filter_by(separacao_id=sep.id)
+        .filter(AssaiCarregamento.status.in_([
+            CARREGAMENTO_STATUS_EM_CARREGAMENTO,
+            CARREGAMENTO_STATUS_FINALIZADO,
+        ]))
+        .first()
+    )
+    if car_ativo:
+        raise SeparacaoValidationError(
+            f'Sep {separacao_id} esta vinculada ao Carregamento #{car_ativo.id} '
+            f'({car_ativo.status}). Cancele ou altere o Carregamento antes de '
+            'reabrir a separacao.'
+        )
+
+    # 3. Remover espelho Nacom (bloqueia se NF preenchida)
+    try:
+        from app.motos_assai.services.separacao_mirror_service import (
+            unmirror_assai_separacao,
+        )
+        unmirror_assai_separacao(sep.id)
+    except ValueError as e:
+        # NF preenchida no espelho — operador deve cancelar NF primeiro
+        raise SeparacaoValidationError(str(e))
+
+    # 4. FECHADA -> EM_SEPARACAO + limpar campos de fechamento
+    sep.status = SEPARACAO_STATUS_EM_SEPARACAO
+    sep.fechada_em = None
+    sep.fechada_por_id = None
+
+    import logging
+    logging.getLogger(__name__).info(
+        'reabrir_separacao: AssaiSeparacao %s revertida FECHADA -> EM_SEPARACAO '
+        'pelo operador %s', sep.id, operador_id,
+    )
+
+    # 5. Recalcular status do pedido (defensivo) — sep volta a contar como
+    # "em andamento" em vez de "fechada", pode regredir status do pedido
+    # (FATURADO_PARCIAL -> PARCIALMENTE_FATURADO, etc.).
+    try:
+        from app.motos_assai.services.pedido_status_service import (
+            recalcular_status_pedido,
+        )
+        recalcular_status_pedido(sep.pedido_id)
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            'reabrir_separacao: recalcular_status_pedido falhou pedido=%s: %s '
+            '— segue (nao bloqueia reabertura)',
+            sep.pedido_id, e,
+        )
+
+    db.session.commit()
+    return sep
+
+
 def listar_pares_separaveis() -> List[Dict[str, Any]]:
     """Lista pares (pedido, loja) com saldo pendente de chassis a separar.
 

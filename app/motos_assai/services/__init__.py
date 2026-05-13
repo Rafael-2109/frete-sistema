@@ -55,6 +55,7 @@ from .disponibilizar_service import (
 from .separacao_service import (
     get_separacao_ativa, saldo_pendente_por_modelo, registrar_chassi,
     desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    reabrir_separacao,
     listar_pares_separaveis,
     SeparacaoError, SeparacaoConflictError, SeparacaoValidationError,
     SeparacaoCrossLojaError,

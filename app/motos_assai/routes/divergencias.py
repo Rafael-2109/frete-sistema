@@ -9,17 +9,24 @@ Rotas:
 
 N-B1 fix: decorators (login_required + require_motos_assai) APENAS na rota
 GET de tela. Rotas AJAX validam sessao via Flask-Login automaticamente.
+
+2026-05-13: filtros expandidos — status, tipo, chassi, numero_nf, loja_id,
+data_inicio, data_fim, resolvida_por_id. Lojas + operadores resolvedores
+populados para autocomplete (select).
 """
 from __future__ import annotations
+
+from datetime import date, datetime, time
 
 from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
 
 from app import db
+from app.auth.models import Usuario
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.models import (
-    AssaiDivergencia, AssaiNfQpa, AssaiSeparacao, AssaiCarregamento,
+    AssaiDivergencia, AssaiNfQpa, AssaiSeparacao, AssaiCarregamento, AssaiLoja,
     DIVERGENCIA_TIPOS_VALIDOS, DIVERGENCIA_RESOLUCAO_VALIDAS,
     DIVERGENCIA_RESOLUCAO_CANCELAR_NF,
     DIVERGENCIA_RESOLUCAO_CCE,
@@ -32,27 +39,90 @@ from app.motos_assai.services.divergencia_service import (
 )
 
 
+def _parse_date(s: str | None) -> date | None:
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s.strip(), '%Y-%m-%d').date()
+    except (ValueError, AttributeError):
+        return None
+
+
 @motos_assai_bp.route('/divergencias')
 @login_required
 @require_motos_assai
 def divergencias_lista():
-    """Lista divergencias com filtros (status / tipo).
+    """Lista divergencias com filtros amplos.
 
     Filtros via query string:
     - status: pendentes (default) | resolvidas | todas
     - tipo: DIVERGENCIA_TIPO_* (opcional)
+    - chassi: ilike %chassi% em AssaiDivergencia.chassi
+    - numero_nf: ilike %numero% em AssaiNfQpa.numero (JOIN via div.nf_id)
+    - loja_id: filtra por loja em sep.loja_id OU nf.loja_id (qualquer um)
+    - data_inicio / data_fim: AssaiDivergencia.criada_em
+    - resolvida_por_id: usuario que resolveu (apenas resolvidas)
     """
     status_filtro = (request.args.get('status') or 'pendentes').lower()
     tipo_filtro = request.args.get('tipo') or ''
+    chassi_filtro = (request.args.get('chassi') or '').strip()
+    numero_nf_filtro = (request.args.get('numero_nf') or '').strip()
+    loja_id_filtro = request.args.get('loja_id', type=int)
+    data_inicio_filtro = _parse_date(request.args.get('data_inicio'))
+    data_fim_filtro = _parse_date(request.args.get('data_fim'))
+    resolvida_por_filtro = request.args.get('resolvida_por_id', type=int)
 
     q = AssaiDivergencia.query
+
+    # Status
     if status_filtro == 'pendentes':
         q = q.filter(AssaiDivergencia.resolvida_em.is_(None))
     elif status_filtro == 'resolvidas':
         q = q.filter(AssaiDivergencia.resolvida_em.isnot(None))
 
+    # Tipo
     if tipo_filtro and tipo_filtro in DIVERGENCIA_TIPOS_VALIDOS:
         q = q.filter(AssaiDivergencia.tipo == tipo_filtro)
+
+    # Chassi (ilike)
+    if chassi_filtro:
+        q = q.filter(AssaiDivergencia.chassi.ilike(f'%{chassi_filtro.upper()}%'))
+
+    # Datas (criada_em)
+    if data_inicio_filtro:
+        q = q.filter(
+            AssaiDivergencia.criada_em >= datetime.combine(data_inicio_filtro, time.min)
+        )
+    if data_fim_filtro:
+        q = q.filter(
+            AssaiDivergencia.criada_em <= datetime.combine(data_fim_filtro, time.max)
+        )
+
+    # Resolvido por (apenas para resolvidas)
+    if resolvida_por_filtro:
+        q = q.filter(AssaiDivergencia.resolvida_por_id == resolvida_por_filtro)
+
+    # NF (numero) e Loja: JOINs opcionais
+    if numero_nf_filtro:
+        q = (
+            q.join(AssaiNfQpa, AssaiDivergencia.nf_id == AssaiNfQpa.id)
+            .filter(AssaiNfQpa.numero.ilike(f'%{numero_nf_filtro}%'))
+        )
+
+    if loja_id_filtro:
+        # Loja pode estar em sep.loja_id OU nf.loja_id — match qualquer um
+        sep_ids_da_loja = db.session.query(AssaiSeparacao.id).filter(
+            AssaiSeparacao.loja_id == loja_id_filtro,
+        ).subquery()
+        nf_ids_da_loja = db.session.query(AssaiNfQpa.id).filter(
+            AssaiNfQpa.loja_id == loja_id_filtro,
+        ).subquery()
+        q = q.filter(
+            db.or_(
+                AssaiDivergencia.separacao_id.in_(db.session.query(sep_ids_da_loja.c.id)),
+                AssaiDivergencia.nf_id.in_(db.session.query(nf_ids_da_loja.c.id)),
+            )
+        )
 
     divergencias = q.order_by(AssaiDivergencia.criada_em.desc()).limit(500).all()
 
@@ -71,6 +141,41 @@ def divergencias_lista():
         c.id: c for c in AssaiCarregamento.query.filter(AssaiCarregamento.id.in_(car_ids)).all()
     } if car_ids else {}
 
+    # Lojas para o filtro: todas as ativas + qualquer uma referenciada por sep/nf
+    # (caso loja tenha sido desativada mas tenha divergencias historicas)
+    lojas_referenciadas_ids = set()
+    for s in seps_por_id.values():
+        if getattr(s, 'loja_id', None):
+            lojas_referenciadas_ids.add(s.loja_id)
+    for n in nfs_por_id.values():
+        if getattr(n, 'loja_id', None):
+            lojas_referenciadas_ids.add(n.loja_id)
+    lojas_q = AssaiLoja.query
+    if lojas_referenciadas_ids:
+        lojas_q = lojas_q.filter(
+            db.or_(AssaiLoja.ativo == True, AssaiLoja.id.in_(lojas_referenciadas_ids))  # noqa: E712
+        )
+    else:
+        lojas_q = lojas_q.filter(AssaiLoja.ativo == True)  # noqa: E712
+    lojas_disponiveis = lojas_q.order_by(AssaiLoja.numero).all()
+
+    # Operadores que JA resolveram divergencias (para autocomplete do filtro)
+    operadores_ids = (
+        db.session.query(AssaiDivergencia.resolvida_por_id)
+        .filter(AssaiDivergencia.resolvida_por_id.isnot(None))
+        .distinct()
+        .all()
+    )
+    op_ids = [oid for (oid,) in operadores_ids]
+    operadores_resolvedores = []
+    if op_ids:
+        operadores_resolvedores = (
+            Usuario.query
+            .filter(Usuario.id.in_(op_ids))
+            .order_by(Usuario.nome)
+            .all()
+        )
+
     contadores = {
         'pendentes': AssaiDivergencia.query.filter(
             AssaiDivergencia.resolvida_em.is_(None)
@@ -80,14 +185,30 @@ def divergencias_lista():
         ).count(),
     }
 
+    filtros_aplicados = {
+        'status': status_filtro,
+        'tipo': tipo_filtro,
+        'chassi': chassi_filtro,
+        'numero_nf': numero_nf_filtro,
+        'loja_id': loja_id_filtro,
+        'data_inicio': data_inicio_filtro,
+        'data_fim': data_fim_filtro,
+        'resolvida_por_id': resolvida_por_filtro,
+    }
+
     return render_template(
         'motos_assai/divergencias/lista.html',
         divergencias=divergencias,
         nfs_por_id=nfs_por_id,
         seps_por_id=seps_por_id,
         cars_por_id=cars_por_id,
+        # Backwards-compat para template: campos individuais usados antes
         status_filtro=status_filtro,
         tipo_filtro=tipo_filtro,
+        # Novos filtros
+        filtros_aplicados=filtros_aplicados,
+        lojas_disponiveis=lojas_disponiveis,
+        operadores_resolvedores=operadores_resolvedores,
         contadores=contadores,
         DIVERGENCIA_TIPOS_VALIDOS=sorted(DIVERGENCIA_TIPOS_VALIDOS),
         DIVERGENCIA_RESOLUCAO_VALIDAS=sorted(DIVERGENCIA_RESOLUCAO_VALIDAS),
