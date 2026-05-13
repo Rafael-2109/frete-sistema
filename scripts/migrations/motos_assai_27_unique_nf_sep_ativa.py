@@ -26,7 +26,7 @@ def main():
             "SELECT COUNT(*) FROM (SELECT separacao_id FROM assai_nf_qpa "
             "WHERE separacao_id IS NOT NULL AND status_match != 'CANCELADA' "
             "GROUP BY separacao_id HAVING COUNT(*) > 1) sub"
-        )).scalar()
+        )).scalar() or 0
         if violacoes > 0:
             print(f'[ABORT] {violacoes} seps com >1 NF ativa. Resolver antes.')
             sys.exit(1)

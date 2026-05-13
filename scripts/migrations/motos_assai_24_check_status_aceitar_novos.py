@@ -26,7 +26,7 @@ def main():
         legados = db.session.execute(text(
             "SELECT COUNT(*) FROM assai_pedido_venda "
             "WHERE status IN ('EM_PRODUCAO', 'SEPARANDO', 'FATURADO_PARCIAL')"
-        )).scalar()
+        )).scalar() or 0
         if legados > 0:
             print(f'[ABORT] {legados} pedidos com status legado. Rodar Migration 21 antes.')
             sys.exit(1)
