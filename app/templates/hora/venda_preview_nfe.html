@@ -1,0 +1,227 @@
+{% extends "hora/base.html" %}
+
+{# Preview read-only da NFe pre-emissao.
+   Mostra totais (Venda, Frete, Custo Moto, Venda Liquida, Margem Bruta, %)
+   e botao "Confirmar emissao" que POSTa para venda_nfe_emitir. #}
+
+{% block hora_content %}
+{% set pode_emitir = current_user.tem_perm_hora('vendas', 'criar') %}
+{% set is_confirmado = venda.status == 'CONFIRMADO' %}
+{% set ja_tem_chave = venda.nf_saida_chave_44 is not none %}
+{% set tem_div_aberta = venda.tem_divergencia_aberta %}
+{% set bloqueado = (not is_confirmado) or ja_tem_chave or tem_div_aberta %}
+
+{# -------------------------------------------------------------
+   Cabecalho
+   ------------------------------------------------------------- #}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0">
+      <i class="fas fa-eye"></i> Preview da NFe
+      <small class="text-muted">— Pedido #{{ venda.id }}</small>
+    </h2>
+    <small class="text-muted">
+      Confira os valores antes de enviar a NFe para a SEFAZ.
+      Esta tela e somente leitura.
+    </small>
+  </div>
+  <div>
+    <a href="{{ url_for('hora.vendas_detalhe', venda_id=venda.id) }}"
+       class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar ao pedido
+    </a>
+  </div>
+</div>
+
+{# -------------------------------------------------------------
+   Alertas (bloqueios e atencoes)
+   ------------------------------------------------------------- #}
+{% if not is_confirmado %}
+  <div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i>
+    Pedido em status <strong>{{ venda.status }}</strong>. Apenas pedidos
+    <strong>CONFIRMADO</strong> podem emitir NFe.
+  </div>
+{% endif %}
+
+{% if ja_tem_chave %}
+  <div class="alert alert-info">
+    <i class="fas fa-info-circle"></i>
+    Este pedido ja tem NF emitida (chave
+    <code class="small">{{ venda.nf_saida_chave_44 }}</code>).
+    Para reemissao, cancele a existente primeiro.
+  </div>
+{% endif %}
+
+{% if tem_div_aberta %}
+  <div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i>
+    Este pedido tem
+    <strong>{{ venda.divergencias_abertas|length }} divergencia(s) aberta(s)</strong>.
+    Resolva no <a href="{{ url_for('hora.vendas_detalhe', venda_id=venda.id) }}">detalhe do pedido</a>
+    antes de emitir.
+  </div>
+{% endif %}
+
+{% if preview.tem_custo_faltante %}
+  <div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i>
+    Um ou mais chassis nao tem <strong>preco de compra</strong> registrado em
+    pedido de compra. A margem mostrada abaixo esta <strong>distorcida</strong>
+    (subestima o custo). Para corrigir, cadastre o pedido de compra na entrada
+    da moto.
+  </div>
+{% endif %}
+
+{# -------------------------------------------------------------
+   Resumo do cliente / venda
+   ------------------------------------------------------------- #}
+<div class="card mb-3">
+  <div class="card-header py-2">
+    <strong><i class="fas fa-user"></i> Cliente e venda</strong>
+  </div>
+  <div class="card-body py-2">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="small text-muted">Cliente</div>
+        <div><strong>{{ venda.nome_cliente }}</strong></div>
+        <div class="small text-muted">{{ venda.cpf_cliente }}</div>
+      </div>
+      <div class="col-md-3">
+        <div class="small text-muted">Data da venda</div>
+        <div>{{ venda.data_venda.strftime('%d/%m/%Y') if venda.data_venda else '—' }}</div>
+      </div>
+      <div class="col-md-3">
+        <div class="small text-muted">Forma de pagamento</div>
+        <div>{{ venda.forma_pagamento or '—' }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# -------------------------------------------------------------
+   Itens (chassi · modelo · cor · venda · custo)
+   ------------------------------------------------------------- #}
+<div class="card mb-3">
+  <div class="card-header py-2">
+    <strong><i class="fas fa-motorcycle"></i> Itens do pedido</strong>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Chassi</th>
+          <th>Modelo</th>
+          <th>Cor</th>
+          <th class="text-end">Preco de venda</th>
+          <th class="text-end">Custo (pedido de compra)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in preview.itens %}
+          <tr>
+            <td><code class="small">{{ item.numero_chassi }}</code></td>
+            <td>{{ item.modelo }}</td>
+            <td>{{ item.cor }}</td>
+            <td class="text-end">{{ item.preco_venda|valor_br }}</td>
+            <td class="text-end">
+              {% if item.sem_custo %}
+                <span class="text-warning" title="Chassi sem pedido de compra cadastrado">
+                  <i class="fas fa-exclamation-triangle"></i> —
+                </span>
+              {% else %}
+                {{ item.custo_moto|valor_br }}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light">
+        <tr>
+          <th colspan="3" class="text-end">Totais</th>
+          <th class="text-end">{{ preview.venda_total|valor_br }}</th>
+          <th class="text-end">{{ preview.custo_moto_total|valor_br }}</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+{# -------------------------------------------------------------
+   Margem (Venda - Frete - Custo Moto = Liquido; Margem = Venda - Liquido)
+   ------------------------------------------------------------- #}
+<div class="card mb-3 border-primary">
+  <div class="card-header bg-primary text-white py-2">
+    <strong><i class="fas fa-percentage"></i> Margem da venda</strong>
+  </div>
+  <div class="card-body">
+    <div class="row g-3 mb-3">
+      <div class="col-md-3">
+        <div class="small text-muted">Venda</div>
+        <div class="fs-5"><strong>{{ preview.venda_total|valor_br }}</strong></div>
+      </div>
+      <div class="col-md-3">
+        <div class="small text-muted">(-) Frete</div>
+        <div class="fs-5 text-danger">{{ preview.frete|valor_br }}</div>
+      </div>
+      <div class="col-md-3">
+        <div class="small text-muted">(-) Custo Moto</div>
+        <div class="fs-5 text-danger">{{ preview.custo_moto_total|valor_br }}</div>
+      </div>
+      <div class="col-md-3">
+        <div class="small text-muted">(=) Venda Liquida</div>
+        <div class="fs-5"><strong>{{ preview.liquido|valor_br }}</strong></div>
+      </div>
+    </div>
+    <hr>
+    <div class="row g-3 align-items-end">
+      <div class="col-md-6">
+        <div class="small text-muted">Margem Bruta (Venda - Venda Liquida)</div>
+        <div class="fs-3"><strong>{{ preview.margem_bruta|valor_br }}</strong></div>
+      </div>
+      <div class="col-md-6 text-md-end">
+        <div class="small text-muted">% Margem Bruta</div>
+        <div class="fs-3">
+          <strong>{{ preview.margem_pct|numero_br(2) }}%</strong>
+        </div>
+      </div>
+    </div>
+    <div class="small text-muted mt-3">
+      <strong>Formula:</strong>
+      Venda Liquida = Venda - Frete - Custo Moto
+      &nbsp;·&nbsp;
+      Margem Bruta = Venda - Venda Liquida
+      &nbsp;·&nbsp;
+      % Margem = Margem / Venda x 100
+    </div>
+  </div>
+</div>
+
+{# -------------------------------------------------------------
+   Acoes (Confirmar emissao / Voltar)
+   ------------------------------------------------------------- #}
+<div class="card mb-3">
+  <div class="card-body d-flex flex-wrap gap-2 justify-content-end">
+    <a href="{{ url_for('hora.vendas_detalhe', venda_id=venda.id) }}"
+       class="btn btn-outline-secondary">
+      <i class="fas fa-times"></i> Cancelar
+    </a>
+    {% if pode_emitir and not bloqueado %}
+      <form method="post"
+            action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
+            onsubmit="return confirm('Confirma emissao da NFe para o pedido #{{ venda.id }}? A NFe sera enviada para a SEFAZ.');"
+            class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-paper-plane"></i> Confirmar emissao da NFe
+        </button>
+      </form>
+    {% else %}
+      <button type="button" class="btn btn-success" disabled
+              title="{% if not pode_emitir %}Sem permissao 'vendas/criar'{% elif not is_confirmado %}Pedido nao esta CONFIRMADO{% elif ja_tem_chave %}NFe ja foi emitida{% elif tem_div_aberta %}Existem divergencias abertas{% endif %}">
+        <i class="fas fa-paper-plane"></i> Confirmar emissao da NFe
+      </button>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

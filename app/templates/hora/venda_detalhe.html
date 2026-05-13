@@ -116,14 +116,12 @@
     {% endif %}
     {% if is_confirmado and pode_criar %}
       <div id="btn-emitir-nfe">
-      <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
-            onsubmit="return confirm('Confirma emissao da NFe para o pedido #{{ venda.id }}? A NFe sera enviada para a SEFAZ.');"
-            class="d-inline">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-success">
-          <i class="fas fa-paper-plane"></i> Emitir NFe
-        </button>
-      </form>
+      {# Botao agora leva para preview read-only com totais e margem antes
+         de POSTar para venda_nfe_emitir. Confirmacao real esta no preview. #}
+      <a href="{{ url_for('hora.venda_nfe_preview', venda_id=venda.id) }}"
+         class="btn btn-success">
+        <i class="fas fa-paper-plane"></i> Emitir NFe
+      </a>
       </div>
     {% endif %}
     {# Voltar para cotacao: apenas gerente (perm 'aprovar') desde 2026-05-13.

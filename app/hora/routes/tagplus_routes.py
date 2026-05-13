@@ -1341,6 +1341,32 @@ def venda_nfe_status(venda_id: int):
     )
 
 
+@hora_bp.route('/vendas/<int:venda_id>/nfe/preview', methods=['GET'])
+@require_hora_perm('vendas', 'criar')
+def venda_nfe_preview(venda_id: int):
+    """Tela read-only com totais, custos e margem antes de emitir a NFe.
+
+    Mostra:
+      - Itens da venda (chassi, modelo, cor, preco_venda, custo_moto)
+      - Totais: Venda, Frete, Custo Moto, Liquido, Margem Bruta, % Margem
+      - Botao "Confirmar emissao" que POSTa para venda_nfe_emitir.
+
+    O custo da moto vem do `preco_compra_esperado` no pedido de compra
+    (HoraPedidoItem) buscado pelo chassi. Quando o chassi nao tem pedido
+    associado, a linha aparece como "—" e o flag `tem_custo_faltante`
+    sinaliza que a margem fica distorcida.
+    """
+    from app.hora.services.venda_preview_service import montar_preview
+
+    venda = HoraVenda.query.get_or_404(venda_id)
+    preview = montar_preview(venda)
+    return render_template(
+        'hora/venda_preview_nfe.html',
+        venda=venda,
+        preview=preview,
+    )
+
+
 @hora_bp.route('/vendas/<int:venda_id>/nfe/emitir', methods=['POST'])
 @require_hora_perm('vendas', 'criar')
 def venda_nfe_emitir(venda_id: int):

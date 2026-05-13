@@ -43,14 +43,12 @@
       <h4 class="mb-3"><i class="fas fa-paper-plane"></i> NFe ainda nao emitida</h4>
       {% if venda.status == 'CONFIRMADO' and not venda.nf_saida_chave_44 %}
         <p class="text-muted">O pedido esta CONFIRMADO e pronto para emitir a NFe.</p>
-        <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
-              onsubmit="return confirm('Confirma emissao da NFe para o pedido #{{ venda.id }}? A NFe sera enviada para a SEFAZ.');"
-              class="d-inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-success">
-            <i class="fas fa-paper-plane"></i> Emitir NFe agora
-          </button>
-        </form>
+        {# Botao agora leva para preview read-only com totais e margem antes
+           de POSTar para venda_nfe_emitir. #}
+        <a href="{{ url_for('hora.venda_nfe_preview', venda_id=venda.id) }}"
+           class="btn btn-success">
+          <i class="fas fa-paper-plane"></i> Emitir NFe agora
+        </a>
       {% elif venda.nf_saida_chave_44 %}
         <p class="text-muted mb-0">
           Este pedido ja tem NF emitida
@@ -276,14 +274,12 @@
              class="btn btn-outline-secondary">
             <i class="fas fa-edit"></i> Editar pedido primeiro
           </a>
-          <form method="post" action="{{ url_for('hora.venda_nfe_emitir', venda_id=venda.id) }}"
-                onsubmit="return confirm('Confirma nova tentativa de emissao da NFe?');"
-                class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-warning">
-              <i class="fas fa-paper-plane"></i> Re-emitir agora
-            </button>
-          </form>
+          {# Botao agora leva para preview read-only com totais e margem antes
+             de POSTar para venda_nfe_emitir. #}
+          <a href="{{ url_for('hora.venda_nfe_preview', venda_id=venda.id) }}"
+             class="btn btn-warning">
+            <i class="fas fa-paper-plane"></i> Re-emitir agora
+          </a>
         </div>
       </div>
     </div>
