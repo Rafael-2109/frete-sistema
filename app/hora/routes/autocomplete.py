@@ -12,6 +12,7 @@ Endpoints:
 - /hora/autocomplete/loja-externa
 - /hora/autocomplete/modelo
 - /hora/autocomplete/loja
+- /hora/autocomplete/peca
 """
 from __future__ import annotations
 
@@ -114,6 +115,29 @@ def autocomplete_loja():
     return jsonify(autocomplete_service.lojas(
         q=request.args.get('q') or '',
         lojas_permitidas_ids=lojas_permitidas_ids(),
+        apenas_ativas=apenas_ativas,
+        limit=_limit_arg(),
+    ))
+
+
+@hora_bp.route('/autocomplete/peca')
+@require_hora_perm('pecas_estoque', 'ver')
+def autocomplete_peca():
+    """Catalogo global de pecas (sem filtro de loja).
+
+    Usado em telas de pedido de compra e pedido de venda para selecionar
+    a peca. O backend que recebe `peca_id` revalida saldo por loja antes
+    de gravar (ver `venda_service.adicionar_item_peca`).
+
+    Permissao `pecas_estoque/ver`: qualquer operador que mexe com peca em
+    pedido de compra ou de venda costuma ter essa permissao (vendedor para
+    venda, comprador para pedido de compra). `pecas_cadastro/ver` seria
+    restrito demais (so admin/cadastrador teria), fazendo o autocomplete
+    falhar silenciosamente para vendedores.
+    """
+    apenas_ativas = (request.args.get('ativas') or '1') == '1'
+    return jsonify(autocomplete_service.pecas(
+        q=request.args.get('q') or '',
         apenas_ativas=apenas_ativas,
         limit=_limit_arg(),
     ))

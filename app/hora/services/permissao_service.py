@@ -13,7 +13,13 @@ from typing import Iterable
 
 from app import db
 from app.auth.models import Usuario
-from app.hora.models import HoraUserPermissao, MODULOS_HORA, ACOES_HORA, MODULOS_SO_VER
+from app.hora.models import (
+    HoraUserPermissao,
+    MODULOS_HORA,
+    ACOES_HORA,
+    MODULOS_SO_VER,
+    MODULOS_COM_APROVAR,
+)
 
 
 # Helpers ---------------------------------------------------------------
@@ -46,6 +52,18 @@ def modulos_so_ver() -> set[str]:
     Demais acoes (criar/editar/apagar/aprovar) ficam N/A na matriz.
     """
     return set(MODULOS_SO_VER)
+
+
+def modulos_com_aprovar() -> set[str]:
+    """Slugs dos modulos onde a acao 'aprovar' tem decorator real e
+    semantica de negocio. Em outros modulos a coluna "Aprovar" no
+    gerenciador de permissoes aparece como "—" (N/A).
+
+    Fonte de verdade: `MODULOS_COM_APROVAR` em `app/hora/models/permissao.py`.
+    Atualizar essa constante sempre que adicionar `require_hora_perm(<X>, 'aprovar')`
+    em uma rota nova.
+    """
+    return set(MODULOS_COM_APROVAR)
 
 
 def is_admin(usuario: Usuario | None) -> bool:

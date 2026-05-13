@@ -98,6 +98,7 @@ from app.hora.models.permissao import (
     MODULOS_HORA,
     ACOES_HORA,
     MODULOS_SO_VER,
+    MODULOS_COM_APROVAR,
 )
 from app.hora.models.transferencia import (
     HoraTransferencia,
@@ -235,6 +236,7 @@ __all__ = [
     'MODULOS_HORA',
     'ACOES_HORA',
     'MODULOS_SO_VER',
+    'MODULOS_COM_APROVAR',
     'HoraTransferencia',
     'HoraTransferenciaItem',
     'HoraTransferenciaAuditoria',

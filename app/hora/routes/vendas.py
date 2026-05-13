@@ -247,11 +247,18 @@ def vendas_detalhe(venda_id: int):
         .all()
     )
 
+    # Vendedores habilitados — mesma fonte usada no formulario de novo pedido
+    # (tagplus_pedido_venda_novo). Permite SELECT com defesa em profundidade
+    # contra manipulacao de POST e mantem o nome canonico.
+    from app.hora.services import permissao_service
+    vendedores_disponiveis = permissao_service.listar_usuarios_habilitados()
+
     return render_template(
         'hora/venda_detalhe.html',
         venda=venda,
         lojas_ativas=lojas_ativas,
         formas_pagamento=formas_pagamento,
+        vendedores_disponiveis=vendedores_disponiveis,
     )
 
 
@@ -421,8 +428,12 @@ def vendas_pagamentos_editar(venda_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/vendas/<int:venda_id>/confirmar', methods=['POST'])
-@require_hora_perm('vendas', 'aprovar')
+@require_hora_perm('vendas', 'editar')
 def vendas_confirmar(venda_id: int):
+    # Decisao 2026-05-13: vendedor confirma o pedido (perm 'editar'); apenas
+    # gerente reabre (perm 'aprovar') via vendas_voltar_cotacao. Anteriormente
+    # confirmar exigia 'aprovar' — mudou para alinhar com fluxo solicitado
+    # pelo dono do modulo HORA.
     venda = HoraVenda.query.get_or_404(venda_id)
     if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
         flash('Acesso negado.', 'danger')
@@ -449,8 +460,11 @@ def vendas_confirmar(venda_id: int):
 # ------------------------------------------------------------------------
 
 @hora_bp.route('/vendas/<int:venda_id>/voltar-cotacao', methods=['POST'])
-@require_hora_perm('vendas', 'editar')
+@require_hora_perm('vendas', 'aprovar')
 def vendas_voltar_cotacao(venda_id: int):
+    # Reabrir pedido CONFIRMADO eh privilegio de gerente — usa permissao
+    # 'aprovar' (mesma de confirmar_venda). Decisao 2026-05-13: apos
+    # confirmacao, apenas gerente pode voltar a pedido para edicao.
     venda = HoraVenda.query.get_or_404(venda_id)
     if venda.loja_id and not usuario_tem_acesso_a_loja(venda.loja_id):
         flash('Acesso negado.', 'danger')

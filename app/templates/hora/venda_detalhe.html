@@ -100,10 +100,13 @@
    --------------------------------------------------------------- #}
 <div class="card mb-3">
   <div class="card-body d-flex flex-wrap gap-2">
-    {% if is_cotacao and pode_aprovar %}
+    {# Confirmar pedido: vendedor padrao (perm 'editar') desde 2026-05-13.
+       Apos confirmar, apenas gerente (perm 'aprovar') reabre via "Voltar
+       para cotacao" abaixo. #}
+    {% if is_cotacao and pode_editar %}
       <div id="btn-confirmar">
       <form method="post" action="{{ url_for('hora.vendas_confirmar', venda_id=venda.id) }}"
-            onsubmit="return confirm('Confirmar pedido #{{ venda.id }}? Apos confirmar, edicao de itens nao sera mais permitida.');">
+            onsubmit="return confirm('Confirmar pedido #{{ venda.id }}? Apos confirmar, apenas o gerente podera reabri-lo para edicao.');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary">
           <i class="fas fa-check-circle"></i> Confirmar pedido
@@ -123,12 +126,15 @@
       </form>
       </div>
     {% endif %}
-    {% if is_confirmado and pode_editar %}
+    {# Voltar para cotacao: apenas gerente (perm 'aprovar') desde 2026-05-13.
+       Vendedor comum nao reabre pedido CONFIRMADO. #}
+    {% if is_confirmado and pode_aprovar %}
       <form method="post" action="{{ url_for('hora.vendas_voltar_cotacao', venda_id=venda.id) }}"
             onsubmit="return confirm('Voltar pedido #{{ venda.id }} para COTACAO? Voce podera editar itens e cliente.');"
             class="d-inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline-secondary">
+        <button type="submit" class="btn btn-outline-secondary"
+                title="Permissao de gerente — somente quem tem 'aprovar' em vendas reabre pedidos.">
           <i class="fas fa-undo"></i> Voltar para cotacao
         </button>
       </form>
@@ -278,54 +284,100 @@
   </div></div>
 </div>
 
-{# Definir / trocar loja do pedido.
-   Loja NAO sai na NFe (regra fiscal: emitente eh sempre a matriz HORA),
-   entao operador precisa indicar a loja fisica real onde a venda aconteceu.
-   - venda.loja_id IS NULL: campo de definicao inicial (border warning).
-   - venda.loja_id JA preenchido: dropdown de troca (border light). #}
-{% if lojas_ativas and pode_editar and not is_cancelado %}
-<form method="post" action="{{ url_for('hora.vendas_definir_loja', venda_id=venda.id) }}"
-      class="card p-3 mb-3 {% if not venda.loja_id %}border-warning{% endif %}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <h5>
-    {% if not venda.loja_id %}
-      <i class="fas fa-exclamation-circle text-warning"></i> Definir loja física
-    {% else %}
-      <i class="fas fa-store"></i> Loja física da venda
-    {% endif %}
-  </h5>
-  <small class="text-muted d-block mb-2">
-    {% if not venda.loja_id %}
-      A NFe não sai com a loja física (sai sempre com CNPJ da matriz HORA).
-      Indique abaixo onde a venda foi feita.
-    {% else %}
-      Loja atual: <strong>{{ venda.loja.rotulo_display if venda.loja else 'desconhecida' }}</strong>.
-      Pode trocar caso o operador tenha registrado errado ou se foi backfill via API.
-    {% endif %}
-  </small>
-  <div class="row g-2 align-items-center">
-    <div class="col-md-8">
-      <select name="loja_id" class="form-select" required>
+{# Loja física + Vendedor (lado a lado).
+   - Loja NAO sai na NFe (regra fiscal: emitente eh sempre a matriz HORA),
+     entao operador precisa indicar a loja fisica real onde a venda aconteceu.
+     - venda.loja_id IS NULL: campo de definicao inicial (border warning).
+     - venda.loja_id JA preenchido: dropdown de troca (border light).
+   - Vendedor: mini-form independente que POSTa para vendas_editar enviando
+     APENAS o campo `vendedor` (service ignora demais kwargs None). SELECT
+     usa a mesma fonte do formulario de novo pedido (vendedores_disponiveis). #}
+<div class="row g-3 mb-3">
+  {% set permite_editar_vendedor = pode_editar and not is_cancelado and not is_faturado %}
+  {% if lojas_ativas and pode_editar and not is_cancelado %}
+  <div class="col-md-6">
+    <form method="post" action="{{ url_for('hora.vendas_definir_loja', venda_id=venda.id) }}"
+          class="card p-3 h-100 {% if not venda.loja_id %}border-warning{% endif %}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h5>
         {% if not venda.loja_id %}
-          <option value="">— Selecione —</option>
+          <i class="fas fa-exclamation-circle text-warning"></i> Definir loja física
+        {% else %}
+          <i class="fas fa-store"></i> Loja física da venda
         {% endif %}
-        {% for loja in lojas_ativas %}
-          <option value="{{ loja.id }}"
-                  {% if venda.loja_id == loja.id %}selected{% endif %}>
-            {{ loja.rotulo_display }}{% if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-4">
-      <button type="submit"
-              class="btn {% if not venda.loja_id %}btn-warning{% else %}btn-outline-primary{% endif %}">
-        {% if not venda.loja_id %}Definir loja{% else %}Trocar loja{% endif %}
-      </button>
-    </div>
+      </h5>
+      <small class="text-muted d-block mb-2">
+        {% if not venda.loja_id %}
+          A NFe não sai com a loja física (sai sempre com CNPJ da matriz HORA).
+          Indique abaixo onde a venda foi feita.
+        {% else %}
+          Loja atual: <strong>{{ venda.loja.rotulo_display if venda.loja else 'desconhecida' }}</strong>.
+          Pode trocar caso o operador tenha registrado errado ou se foi backfill via API.
+        {% endif %}
+      </small>
+      <div class="row g-2 align-items-center">
+        <div class="col-md-8">
+          <select name="loja_id" class="form-select" required>
+            {% if not venda.loja_id %}
+              <option value="">— Selecione —</option>
+            {% endif %}
+            {% for loja in lojas_ativas %}
+              <option value="{{ loja.id }}"
+                      {% if venda.loja_id == loja.id %}selected{% endif %}>
+                {{ loja.rotulo_display }}{% if loja.cnpj %} · CNPJ {{ loja.cnpj }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <button type="submit"
+                  class="btn {% if not venda.loja_id %}btn-warning{% else %}btn-outline-primary{% endif %}">
+            {% if not venda.loja_id %}Definir loja{% else %}Trocar loja{% endif %}
+          </button>
+        </div>
+      </div>
+    </form>
   </div>
-</form>
-{% endif %}
+  {% endif %}
+
+  {# Mini-form Vendedor: posta no mesmo endpoint do header edit, mas envia
+     apenas o campo `vendedor`. Service so atualiza esse campo. #}
+  <div class="col-md-{% if lojas_ativas and pode_editar and not is_cancelado %}6{% else %}12{% endif %}">
+    <form method="post" action="{{ url_for('hora.vendas_editar', venda_id=venda.id) }}"
+          class="card p-3 h-100">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <h5><i class="fas fa-user-tie"></i> Vendedor</h5>
+      <small class="text-muted d-block mb-2">
+        Responsável pela venda. Aparece na auditoria e em relatórios.
+      </small>
+      <div class="row g-2 align-items-center">
+        <div class="col-md-8">
+          {% set vendedor_atual = venda.vendedor or '' %}
+          {% set nomes_vendedores = vendedores_disponiveis|map(attribute='nome')|list %}
+          <select name="vendedor" class="form-select"
+                  {% if not permite_editar_vendedor %}disabled{% endif %}>
+            <option value="" {% if not vendedor_atual %}selected{% endif %}>— sem vendedor —</option>
+            {% for u in vendedores_disponiveis %}
+              <option value="{{ u.nome }}"
+                      {% if u.nome == vendedor_atual %}selected{% endif %}>
+                {{ u.nome }}{% if u.id == current_user.id %} (você){% endif %}
+              </option>
+            {% endfor %}
+            {% if vendedor_atual and vendedor_atual not in nomes_vendedores %}
+              <option value="{{ vendedor_atual }}" selected>{{ vendedor_atual }} · (não habilitado)</option>
+            {% endif %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <button type="submit" class="btn btn-outline-primary"
+                  {% if not permite_editar_vendedor %}disabled{% endif %}>
+            <i class="fas fa-save"></i> Salvar vendedor
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 
 {# ---------------------------------------------------------------
    Cliente + endereco + dados editaveis
@@ -408,27 +460,17 @@
 
   <div class="col-md-6">
     <div class="card p-3">
-      <h5 class="mb-3">Operacional</h5>
-      <div class="mb-2">
-        <label class="form-label small mb-1">Vendedor</label>
-        <input type="text" name="vendedor" maxlength="100" class="form-control form-control-sm"
-               value="{{ venda.vendedor or '' }}" {% if bloqueia_oper %}readonly{% endif %}>
-      </div>
-      <div class="mb-2">
-        <label class="form-label small mb-1">Forma de pagamento</label>
+      <h5 class="mb-3"><i class="fas fa-truck"></i> Parcelamento e Frete</h5>
+      {# Forma de pagamento NAO eh editavel aqui — eh derivada da tabela
+         multi-formas abaixo (MISTO se >1, ou nome unico, ou NAO_INFORMADO).
+         Mostramos so como rotulo informativo + ponteiro para a tabela. #}
+      <div class="mb-2 small">
         {% set atual = venda.forma_pagamento or 'NAO_INFORMADO' %}
-        {% set nomes_mapeados = formas_pagamento|map(attribute='forma_pagamento_hora')|list %}
-        <select name="forma_pagamento" class="form-select form-select-sm" {% if bloqueia_oper %}disabled{% endif %}>
-          <option value="NAO_INFORMADO" {% if atual == 'NAO_INFORMADO' %}selected{% endif %}>Nao informado</option>
-          {% for f in formas_pagamento %}
-            <option value="{{ f.forma_pagamento_hora }}" {% if atual == f.forma_pagamento_hora %}selected{% endif %}>
-              {{ f.forma_pagamento_hora }}{% if f.descricao %} · {{ f.descricao }}{% endif %}
-            </option>
-          {% endfor %}
-          {% if atual != 'NAO_INFORMADO' and atual not in nomes_mapeados %}
-            <option value="{{ atual }}" selected>{{ atual }} · (nao mapeada)</option>
-          {% endif %}
-        </select>
+        <span class="text-muted">Forma de pagamento (derivada):</span>
+        <span class="badge bg-secondary ms-1">{{ atual }}</span>
+        <a href="#forma-pagamento-multi" class="ms-2">
+          <i class="fas fa-arrow-down"></i> editar formas abaixo
+        </a>
       </div>
       <div class="row g-2 mb-2">
         <div class="col-6">
@@ -473,26 +515,42 @@
           {% endif %}
         </select>
       </div>
-      {# Frete CIF (hora_38) — visivel apenas com modalidade='0'. JS no fim
-         do template controla visibilidade e atualiza o preview de rateio. #}
-      <div id="d-bloco-frete" class="row g-2 mb-2"
-           style="{% if mf != '0' %}display:none;{% endif %}">
+      {# Frete CIF (hora_38) — sempre visivel para que o operador veja o
+         valor atual do frete mesmo em pedidos FATURADO/CANCELADO. JS no
+         fim do template controla habilitacao dos inputs (so editavel com
+         modalidade='0' CIF) e mostra o preview de rateio.
+         IMPORTANTE: inputs usam `disabled` (NAO `readonly`) em FOB/cancelado.
+         Form NAO submete inputs disabled — assim preserva-se `valor_frete`
+         historico em pedidos FOB legados quando operador salva header
+         (caso contrario o service zeraria via `_normalizar_frete` quando
+         `tipo_frete_calc` chega None mas `valor_frete` chega preenchido). #}
+      <div id="d-bloco-frete" class="row g-2 mb-2">
         <div class="col-7">
           <label class="form-label small mb-1">Valor do frete (R$)</label>
           <input type="text" name="valor_frete" id="d-valor-frete"
                  class="form-control form-control-sm" inputmode="decimal"
                  placeholder="0,00"
                  value="{% if venda.valor_frete %}{{ venda.valor_frete|valor_br }}{% endif %}"
-                 {% if bloqueia_oper %}readonly{% endif %}>
+                 {% if bloqueia_oper or mf != '0' %}disabled{% endif %}>
         </div>
         <div class="col-5">
           <label class="form-label small mb-1">Tipo</label>
           <select name="tipo_frete_calc" id="d-tipo-frete-calc" class="form-select form-select-sm"
-                  {% if bloqueia_oper %}disabled{% endif %}>
+                  {% if bloqueia_oper or mf != '0' %}disabled{% endif %}>
             <option value="">—</option>
             <option value="ADICIONAR" {% if venda.tipo_frete_calc == 'ADICIONAR' %}selected{% endif %}>Adicionar valor frete</option>
             <option value="INCLUSO"   {% if venda.tipo_frete_calc == 'INCLUSO'   %}selected{% endif %}>Valor frete incluso</option>
           </select>
+        </div>
+        <div class="col-12">
+          <small id="d-frete-info" class="text-muted">
+            {% if mf == '0' %}
+              Aplicável quando frete é por conta do remetente (CIF).
+            {% else %}
+              <i class="fas fa-info-circle"></i>
+              Frete por conta do destinatário (FOB) — campos somente leitura.
+            {% endif %}
+          </small>
         </div>
       </div>
     </div>
@@ -523,7 +581,7 @@
 {# ---------------------------------------------------------------
    Formas de pagamento (multi-formas — hora_34)
    --------------------------------------------------------------- #}
-<div class="card mb-4">
+<div id="forma-pagamento-multi" class="card mb-4">
   <div class="card-header d-flex justify-content-between align-items-center">
     <strong><i class="fas fa-money-bill-wave"></i> Formas de pagamento</strong>
     {% if is_incompleto %}
@@ -1065,11 +1123,26 @@
 
   function atualizarVisibilidadeBloco() {
     if (!elBlocoFrete) return;
+    // Bloco SEMPRE visivel — operador precisa ver o valor de frete atual
+    // mesmo em pedidos FATURADO/CANCELADO ou com modalidade != CIF.
+    elBlocoFrete.style.display = '';
     const cif = elModFrete && elModFrete.value === '0';
-    elBlocoFrete.style.display = cif ? '' : 'none';
-    if (!cif) {
-      if (elValorFrete) elValorFrete.value = '';
-      if (elTipoFrete) elTipoFrete.value = '';
+    // Usa `disabled` (NAO `readOnly`) para que inputs em FOB nao sejam
+    // submetidos pelo form. Caso contrario o service zera `valor_frete`
+    // historico via `_normalizar_frete` (regra: tipo=None -> valor=None).
+    if (elValorFrete) elValorFrete.disabled = !cif;
+    if (elTipoFrete) elTipoFrete.disabled = !cif;
+    // Quando muda para nao-CIF: nao apaga valor ja preenchido (operador
+    // pode estar so consultando). Service zera no save se modalidade != '0'.
+    const elInfo = document.getElementById('d-frete-info');
+    if (elInfo) {
+      if (cif) {
+        elInfo.innerHTML = 'Aplicável quando frete é por conta do remetente (CIF).';
+      } else {
+        elInfo.innerHTML =
+          '<i class="fas fa-info-circle"></i> Frete por conta do destinatário (FOB)'
+          + ' — campos somente leitura.';
+      }
     }
     atualizarAlerta();
   }

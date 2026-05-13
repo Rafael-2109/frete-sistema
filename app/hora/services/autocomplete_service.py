@@ -24,6 +24,7 @@ from app.hora.models import (
     HoraMoto,
     HoraMotoEvento,
     HoraNfEntrada,
+    HoraPeca,
     HoraPedido,
     HoraVenda,
 )
@@ -379,4 +380,45 @@ def lojas(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
             'label': l.rotulo_display + (f' ({l.cidade}/{l.uf})' if l.cidade and l.uf else ''),
         }
         for l in base.all()
+    ]
+
+
+# ============================================================
+# Pecas (catalogo)
+# ============================================================
+
+def pecas(q: str, apenas_ativas: bool = True,
+          limit: int = _DEFAULT_LIMIT) -> List[dict]:
+    """Busca pecas por descricao ou codigo_interno (substring).
+
+    Catalogo global — peca nao tem loja (saldo eh por loja em
+    hora_peca_movimento, mas o catalogo eh unico). Por isso nao filtra
+    por `lojas_permitidas_ids`.
+    """
+    q_norm = (q or '').strip()
+    if len(q_norm) < _MIN_CHARS:
+        return []
+
+    cond = or_(
+        HoraPeca.descricao.ilike(f'%{q_norm}%'),
+        HoraPeca.codigo_interno.ilike(f'%{q_norm}%'),
+    )
+    base = HoraPeca.query.filter(cond)
+    if apenas_ativas:
+        base = base.filter(HoraPeca.ativo.is_(True))
+    base = base.order_by(HoraPeca.descricao).limit(limit)
+    return [
+        {
+            'id': p.id,
+            'codigo_interno': p.codigo_interno,
+            'descricao': p.descricao,
+            'unidade': p.unidade,
+            'preco_venda_padrao': float(p.preco_venda_padrao or 0),
+            'ativo': p.ativo,
+            'label': (
+                f'{p.codigo_interno} — {p.descricao} ({p.unidade})'
+                + ('' if p.ativo else ' [inativa]')
+            ),
+        }
+        for p in base.all()
     ]

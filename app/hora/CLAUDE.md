@@ -243,7 +243,8 @@ Segue o plano aprovado em 2026-04-18:
 
    **Transições**:
    - **(novo) → COTACAO**: `criar_venda_manual` (pedido manual via TagPlus) — emite evento `RESERVADA` com lock `SELECT FOR UPDATE` no `hora_moto`.
-   - **COTACAO → CONFIRMADO**: `confirmar_venda` (rota `POST /vendas/<id>/confirmar`, perm `vendas/aprovar`).
+   - **COTACAO → CONFIRMADO**: `confirmar_venda` (rota `POST /vendas/<id>/confirmar`, perm `vendas/editar` desde 2026-05-13 — antes era `vendas/aprovar`; mudou para vendedor padrao poder confirmar).
+   - **CONFIRMADO → COTACAO** (reabrir): `voltar_para_cotacao` (rota `POST /vendas/<id>/voltar-cotacao`, perm `vendas/aprovar` desde 2026-05-13 — antes era `vendas/editar`; agora exclusivo de gerente).
    - **CONFIRMADO → FATURADO**: webhook `nfe_aprovada` do TagPlus (em `webhook_handler._handle_aprovada`).
    - **FATURADO → CONFIRMADO**: webhook `nfe_cancelada` (NFe cancelada SEFAZ; pedido volta a confirmado, decisão de re-emitir ou cancelar fica com operador).
    - **\* → CANCELADO**: `cancelar_venda` — bloqueia se NFe em-voo; FATURADO exige NFe já cancelada SEFAZ. Emite `DEVOLVIDA` em todos os chassis.
@@ -285,7 +286,10 @@ Segue o plano aprovado em 2026-04-18:
    - `nfe_status.html`: countdown 24h e bloqueio do botão de cancelamento após janela.
    - `estoque_lista.html` + `estoque_chassi_detalhe.html`: badge "Reservado em Pedido #X (status)".
 
-   **Permissão `aprovar` em `vendas`**: já estava em `MODULOS_HORA × ACOES_HORA`; agora consumida via `require_hora_perm('vendas', 'aprovar')` em `vendas_confirmar`.
+   **Permissões `vendas/editar` vs `vendas/aprovar`** (atualizado 2026-05-13):
+   - `vendas/editar`: vendedor padrao — cria pedido, edita itens em COTACAO, confirma (`vendas_confirmar`).
+   - `vendas/aprovar`: gerente — reabre pedido CONFIRMADO via `vendas_voltar_cotacao` (vendedor comum nao pode).
+   - Whitelist `MODULOS_COM_APROVAR` em `app/hora/models/permissao.py` controla quais modulos exibem o checkbox "Aprovar" no gerenciador `/hora/permissoes`. Atualmente: `{'usuarios', 'modelos', 'vendas'}`. Adicionar slug ao adicionar `require_hora_perm(<X>, 'aprovar')` em rota nova.
 
    **Testes**: `tests/hora/test_pedido_workflow.py` — 15 testes cobrindo criação, confirmação, cancelamento, edição (matriz por status), adicionar/remover/editar itens, lock pessimista (chassi indisponível bloqueia 2ª reserva), auditoria.
 

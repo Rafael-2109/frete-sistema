@@ -156,11 +156,12 @@
                   <td><strong>{{ mod_label }}</strong> <small class="text-muted">({{ mod_slug }})</small></td>
                   {% for acao_slug, _ in acoes %}
                     {# Regras de N/A:
-                       - Aprovar so tem efeito real no modulo 'usuarios'.
+                       - 'aprovar' so aparece para modulos em MODULOS_COM_APROVAR
+                         (usuarios, modelos, vendas) — onde existe decorator real.
                        - Modulos virtuais em MODULOS_SO_VER (ex.: 'recebimento_resumo',
                          'recebimento_motos_nf') so usam a acao 'ver'. #}
-                    {% if acao_slug == 'aprovar' and mod_slug != 'usuarios' %}
-                      <td class="text-center text-muted" title="Acao 'Aprovar' so se aplica a Usuarios">—</td>
+                    {% if acao_slug == 'aprovar' and mod_slug not in modulos_com_aprovar %}
+                      <td class="text-center text-muted" title="Acao 'Aprovar' nao se aplica a este modulo">—</td>
                     {% elif mod_slug in modulos_so_ver and acao_slug != 'ver' %}
                       <td class="text-center text-muted" title="Este modulo so usa a acao 'Ver'">—</td>
                     {% else %}

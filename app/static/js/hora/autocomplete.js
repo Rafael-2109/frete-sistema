@@ -33,6 +33,7 @@
     'loja-externa':   '/hora/autocomplete/loja-externa',
     'modelo':         '/hora/autocomplete/modelo',
     'loja':           '/hora/autocomplete/loja',
+    'peca':           '/hora/autocomplete/peca',
   };
 
   // Chave default por tipo, usada quando o usuario nao especifica
@@ -46,6 +47,7 @@
     'loja-externa': 'nome',
     'modelo':       'nome_modelo',
     'loja':         'rotulo_display',
+    'peca':         'descricao',
   };
 
   function debounce(fn, ms) {

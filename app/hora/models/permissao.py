@@ -51,6 +51,21 @@ MODULOS_SO_VER: set[str] = {
     'recebimento_motos_nf',
 }
 
+# Modulos onde a acao 'aprovar' tem semantica REAL (decorator existe e e
+# checado por uma rota). Em outros modulos a coluna "Aprovar" aparece como
+# "—" (N/A) no gerenciador de permissoes para evitar confusao. Manter
+# sincronizado com os `require_hora_perm(<modulo>, 'aprovar')` reais:
+#   usuarios -> permissoes_aprovar / permissoes_rejeitar
+#   modelos  -> modelos_unificacao (merge fisico) + pendencias
+#   vendas   -> vendas_voltar_cotacao (reabrir CONFIRMADO; gerente)
+# Decisao 2026-05-13: 'vendas/aprovar' habilitado no gerenciador para que
+# gerentes possam ser configurados (era inacessivel antes deste commit).
+MODULOS_COM_APROVAR: set[str] = {
+    'usuarios',
+    'modelos',
+    'vendas',
+}
+
 ACOES_HORA: list[tuple[str, str]] = [
     ('ver', 'Ver'),
     ('criar', 'Criar'),
