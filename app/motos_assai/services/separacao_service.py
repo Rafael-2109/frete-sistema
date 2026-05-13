@@ -1160,6 +1160,7 @@ def ajustar_separacao_pela_nf(nf_id: int, operador_id: int) -> Dict[str, Any]:
             melhor_sep = s
     if melhor_sep is None:
         return {'ok': False, 'razao': 'Sem sep candidata identificada'}
+    assert melhor_sep is not None
     sep_alvo: AssaiSeparacao = melhor_sep
 
     # 3. Adicionar chassis da NF que nao estao na sep_alvo
