@@ -19,20 +19,44 @@ from app import db
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiPedidoVenda, AssaiPedidoVendaItem,
     AssaiMoto, AssaiModelo,
+    AssaiNfQpa, AssaiPedidoExcel,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
     SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
     SEPARACAO_STATUS_CARREGADA,
     EVENTO_DISPONIVEL, EVENTO_SEPARADA, EVENTO_FATURADA,
+    NF_STATUS_CANCELADA,
+    DIVERGENCIA_TIPO_CHASSI_OUTRA_LOJA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
 
 
-class SeparacaoConflictError(Exception):
+class SeparacaoError(Exception):
+    """Erro base de separacao_service."""
+
+
+class SeparacaoConflictError(SeparacaoError):
     """Race ao reservar chassi (UNIQUE parcial)."""
 
 
-class SeparacaoValidationError(Exception):
+class SeparacaoValidationError(SeparacaoError):
     pass
+
+
+class SeparacaoCrossLojaError(SeparacaoError):
+    """Chassi esta em sep ativa de outra loja — operador deve confirmar substituicao.
+
+    Levantada por `registrar_chassi` quando detecta que o chassi escaneado ja
+    pertence a uma sep EM_SEPARACAO/FECHADA/CARREGADA/FATURADA de outra loja.
+    Route AJAX deve traduzir para HTTP 409 com cenario=cross_loja.
+    """
+    def __init__(self, msg, *, sep_origem_id, loja_origem_id,
+                 sep_destino_id, loja_destino_id, chassi):
+        super().__init__(msg)
+        self.sep_origem_id = sep_origem_id
+        self.loja_origem_id = loja_origem_id
+        self.sep_destino_id = sep_destino_id
+        self.loja_destino_id = loja_destino_id
+        self.chassi = chassi
 
 
 def get_separacao_ativa(pedido_id: int, loja_id: int) -> Optional[AssaiSeparacao]:
@@ -207,6 +231,35 @@ def registrar_chassi(
 
     status = status_efetivo(chassi_norm)
     if status != EVENTO_DISPONIVEL:
+        # Detectar CHASSI_OUTRA_LOJA: chassi esta em sep ativa de outra loja.
+        # Permite que o operador confirme substituicao via modal (Plano 4 Task 2).
+        # Se estiver em outra sep da MESMA loja, fluxo normal (erro abaixo).
+        sep_outra_loja = (
+            AssaiSeparacao.query
+            .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+            .filter(
+                AssaiSeparacaoItem.chassi == chassi_norm,
+                AssaiSeparacao.status.in_([
+                    SEPARACAO_STATUS_EM_SEPARACAO,
+                    SEPARACAO_STATUS_FECHADA,
+                    SEPARACAO_STATUS_CARREGADA,
+                    SEPARACAO_STATUS_FATURADA,
+                ]),
+                AssaiSeparacao.loja_id != loja_id,
+            )
+            .first()
+        )
+        if sep_outra_loja:
+            raise SeparacaoCrossLojaError(
+                f'Chassi {chassi_norm} esta em Sep #{sep_outra_loja.id} '
+                f'(Loja {sep_outra_loja.loja_id}). '
+                f'Confirme substituicao para Loja {loja_id}.',
+                sep_origem_id=sep_outra_loja.id,
+                loja_origem_id=sep_outra_loja.loja_id,
+                sep_destino_id=separacao_id,  # pode ser None — UI escolhe alvo
+                loja_destino_id=loja_id,
+                chassi=chassi_norm,
+            )
         raise SeparacaoValidationError(
             f'Chassi {chassi_norm} está em {status}, esperado DISPONIVEL'
         )
