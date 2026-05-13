@@ -331,6 +331,36 @@
     return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  // Debounce: posterga `fn` ate `ms` apos a ultima chamada. Expoe `.flush()`
+  // (executa pendente agora) e `.cancel()` (descarta pendente). Usado para
+  // evitar que recalculos disparem a cada keystroke e reformatem o campo
+  // enquanto o operador ainda digita (cursor pulando, calculo intermediario).
+  function debounce(fn, ms) {
+    let timer = null;
+    let lastArgs = null;
+    let lastThis = null;
+    const debounced = function(...args) {
+      lastArgs = args;
+      lastThis = this;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        fn.apply(lastThis, lastArgs);
+      }, ms);
+    };
+    debounced.flush = function() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+        fn.apply(lastThis, lastArgs || []);
+      }
+    };
+    debounced.cancel = function() {
+      if (timer) { clearTimeout(timer); timer = null; }
+    };
+    return debounced;
+  }
+
   const elModelo = document.getElementById('f-modelo');
   const elCor = document.getElementById('f-cor');
   const elChassi = document.getElementById('f-chassi');
@@ -771,9 +801,32 @@
     atualizarPrecosRef();
   });
   elCor.addEventListener('change', carregarChassis);
-  elDescontoPct.addEventListener('input', () => recalcular('pct'));
-  elDescontoRs.addEventListener('input', () => recalcular('rs'));
-  elValor.addEventListener('input', () => {
+
+  // Debounce de 1500ms: evita que `recalcular()` reformate os outros campos
+  // (via setBR) a cada keystroke — operador via cursor pulando e desconto
+  // sendo recalculado em valores intermediarios (ex: digitando "1500" o
+  // sistema calculava em 1, 15, 150, 1500). O evento `change` (Tab/blur/Enter)
+  // dispara IMEDIATO e cancela o debounce pendente, garantindo que ao sair
+  // do campo o calculo esta atualizado mesmo se o operador clicar Salvar
+  // antes dos 1.5s expirarem.
+  const RECALC_DEBOUNCE_MS = 1500;
+  const recalcPctDeb = debounce(() => recalcular('pct'), RECALC_DEBOUNCE_MS);
+  const recalcRsDeb = debounce(() => recalcular('rs'), RECALC_DEBOUNCE_MS);
+  const recalcValorDeb = debounce(() => {
+    recalcular('valor');
+    atualizarSomaPagamentos();
+    atualizarAlertaFrete();
+  }, RECALC_DEBOUNCE_MS);
+
+  elDescontoPct.addEventListener('input', recalcPctDeb);
+  elDescontoPct.addEventListener('change', () => { recalcPctDeb.cancel(); recalcular('pct'); });
+
+  elDescontoRs.addEventListener('input', recalcRsDeb);
+  elDescontoRs.addEventListener('change', () => { recalcRsDeb.cancel(); recalcular('rs'); });
+
+  elValor.addEventListener('input', recalcValorDeb);
+  elValor.addEventListener('change', () => {
+    recalcValorDeb.cancel();
     recalcular('valor');
     atualizarSomaPagamentos();
     atualizarAlertaFrete();
@@ -854,6 +907,12 @@
 
   // ----------------- Validacao no submit -----------------------------------
   document.getElementById('form-pedido-venda').addEventListener('submit', (e) => {
+    // Garante que qualquer recalculo pendente (debounce 1.5s) foi aplicado
+    // antes de validar, caso o operador clique Salvar logo apos digitar.
+    recalcPctDeb.flush();
+    recalcRsDeb.flush();
+    recalcValorDeb.flush();
+
     const cpf = (document.getElementById('f-cpf').value || '').replace(/\D/g, '');
     if (cpf.length !== 11) {
       e.preventDefault();
