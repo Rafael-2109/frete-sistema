@@ -51,7 +51,7 @@ from claude_agent_sdk import (
 # SDK 0.1.66 (atual) sempre cai no try; o fallback so existiria em downgrade.
 try:
     from claude_agent_sdk import MirrorErrorMessage as _MirrorErrorMessageClass
-    MirrorErrorMessage = _MirrorErrorMessageClass
+    MirrorErrorMessage = _MirrorErrorMessageClass # type: ignore
 except ImportError:
     # SDK < 0.1.64: sentinel inerte. isinstance() contra classe sem instancias
     # reais sempre retorna False — handler abaixo fica inerte sem quebrar.
@@ -94,7 +94,7 @@ def _check_strict_mcp_config_field() -> bool:
 _SDK_HAS_STRICT_MCP_CONFIG = _check_strict_mcp_config_field()
 
 # Fallback para API direta (health check)
-import anthropic
+import anthropic # noqa: E402
 logger = logging.getLogger('sistema_fretes')
 
 
@@ -111,7 +111,7 @@ _CACHE_MIN_PREFIX_SONNET = 2048
 # H1 fix (2026-05-09): Lock previne race condition em multi-thread.
 # Gunicorn gthread (4 workers x 2 threads) sem lock pode emitir N alertas
 # simultaneos para a mesma chave — duplo Sentry spam.
-import threading as _threading
+import threading as _threading # noqa: E402
 _cache_miss_cooldown: Dict[tuple, float] = {}
 _cache_miss_cooldown_lock = _threading.Lock()
 _CACHE_MISS_COOLDOWN_SEC = 300
@@ -236,7 +236,7 @@ from .stream_parser import (  # noqa: E402 — re-exports para tests (patch.mult
 )
 
 
-def _emit_subagent_summary(session_id, summary_dict: dict) -> None:
+def _emit_subagent_summary(session_id, summary_dict: dict) -> None: # type: ignore
     """
     Emite evento 'subagent_summary' via Redis pubsub + buffer FIFO.
 
@@ -2143,7 +2143,7 @@ Nunca invente informações."""
                     if debug_mode:
                         yield StreamEvent(type='stderr', content=line)
                 except queue.Empty:
-                        break
+                    break # noqa: E701
 
             # ─── Fallback done (sem ResultMessage) ───
             if not state.done_emitted:

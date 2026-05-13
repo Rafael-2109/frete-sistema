@@ -113,6 +113,40 @@ def test_smoke_separacao_tela_inexistente(login_admin):
     assert r.status_code == 404
 
 
+def test_smoke_separacao_reabrir_inexistente(login_admin):
+    """P2 fix 14: POST /reabrir para sep inexistente -> 400 com erro.
+
+    Service `reabrir_separacao` levanta SeparacaoValidationError quando sep
+    nao existe; rota traduz para 400 (AJAX) ou redirect+flash (HTML).
+    """
+    r = login_admin.post('/motos-assai/separacao/999999/reabrir',
+                         headers={'Accept': 'application/json'})
+    assert r.status_code in (400, 404)
+
+
+# ---------------------------------------------------------------------------
+# Carregamento (Plano Fase 2-3 — P2 fix 7 2026-05-13)
+# ---------------------------------------------------------------------------
+
+def test_smoke_carregamento_lista(login_admin):
+    r = login_admin.get('/motos-assai/carregamento')
+    assert r.status_code == 200
+
+
+def test_smoke_carregamento_detalhe_inexistente(login_admin):
+    r = login_admin.get('/motos-assai/carregamento/999999')
+    assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Divergências (Plano Fase 4 — P2 fix 7 2026-05-13)
+# ---------------------------------------------------------------------------
+
+def test_smoke_divergencias_lista(login_admin):
+    r = login_admin.get('/motos-assai/divergencias')
+    assert r.status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # Faturamento
 # ---------------------------------------------------------------------------

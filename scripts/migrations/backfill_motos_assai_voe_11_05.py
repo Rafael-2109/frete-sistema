@@ -43,9 +43,9 @@ from pathlib import Path
 # sys.path para rodar tanto local quanto Render Shell
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app import create_app, db  # noqa: E402
-from app.auth.models import Usuario  # noqa: E402
-from app.motos_assai.models import (  # noqa: E402
+from app import create_app, db  # noqa: E402 # type: ignore
+from app.auth.models import Usuario  # noqa: E402 # type: ignore
+from app.motos_assai.models import (  # noqa: E402 # type: ignore
     AssaiCompraMotochefe,
     AssaiMoto,
     AssaiMotoEvento,
@@ -59,7 +59,7 @@ from app.motos_assai.models import (  # noqa: E402
     EVENTO_PENDENTE,
     RECIBO_STATUS_CONCLUIDO,
 )
-from app.motos_assai.services.modelo_resolver import resolver_modelo  # noqa: E402
+from app.motos_assai.services.modelo_resolver import resolver_modelo  # noqa: E402 # type: ignore
 
 NUMERO_COMPRA = 'MA-BACKFILL-VOE-2026-05-11'
 JSON_PATH_DEFAULT = Path(__file__).parent / 'data' / 'backfill_voe_11_05.json'

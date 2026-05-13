@@ -145,10 +145,14 @@ def escanear_carregamento_item(carregamento_id, chassi, operador_id):
             f'(esperado EM_CARREGAMENTO)'
         )
 
-    # Lock pessimista no chassi (S3=c)
+    # Lock pessimista no chassi (S3=c).
+    # IMPORTANTE: AssaiMoto tem `modelo` lazy='joined' (LEFT OUTER JOIN com
+    # assai_modelo) — incompativel com FOR UPDATE no PG. Escopar lock com
+    # `of=AssaiMoto` para evitar erro "FOR UPDATE cannot be applied to the
+    # nullable side of an outer join".
     moto = (AssaiMoto.query
             .filter_by(chassi=chassi)
-            .with_for_update()
+            .with_for_update(of=AssaiMoto)
             .first())
     if not moto:
         raise CarregamentoValidationError(f'Chassi {chassi} nao cadastrado em assai_moto')
@@ -598,7 +602,13 @@ def finalizar_carregamento(carregamento_id, operador_id):
 
     # === FASE 5: regenerar Excel Q.P.A. (D-C + S13=a + CR-9/CR-12 race fix) ===
     # CR-12: lock pessimista na sep para serializar regeneracoes concorrentes.
-    AssaiSeparacao.query.filter_by(id=sep_alvo.id).with_for_update().first()
+    # IMPORTANTE: AssaiSeparacao tem 3 relacionamentos lazy='joined' (pedido,
+    # loja, fechada_por) — incompativel com FOR UPDATE no PG. Escopar lock +
+    # desabilitar eager loads.
+    (AssaiSeparacao.query.filter_by(id=sep_alvo.id)
+     .enable_eagerloads(False)
+     .with_for_update(of=AssaiSeparacao)
+     .first())
 
     excel_anterior = AssaiPedidoExcel.query.filter_by(
         separacao_id=sep_alvo.id, ativo=True,

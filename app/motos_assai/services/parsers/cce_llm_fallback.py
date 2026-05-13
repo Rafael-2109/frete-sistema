@@ -17,7 +17,13 @@ from typing import Dict, Any, List, Tuple
 
 logger = logging.getLogger(__name__)
 
-CONFIANCA_LIMIAR = 0.80  # mesmo do extractor deterministico
+# P2 fix 12 (2026-05-13): single source of truth — importa do extractor para
+# evitar drift de versoes. Antes ambos arquivos definiam CONFIANCA_LIMIAR = 0.80
+# independentemente.
+from app.motos_assai.services.parsers.cce_pdf_extractor import (  # noqa: E402
+    CONFIANCA_LIMIAR,
+)
+
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 SONNET_MODEL = 'claude-sonnet-4-6'
 

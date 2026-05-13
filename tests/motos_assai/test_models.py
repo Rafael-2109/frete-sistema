@@ -45,4 +45,8 @@ def test_modelo_alias_relationship(app):
 
 def test_eventos_validos_completos():
     assert EVENTO_ESTOQUE in EVENTOS_VALIDOS
-    assert len(EVENTOS_VALIDOS) == 10
+    # 11 eventos apos Plano Fase 1 (2026-05-12): adicionado EVENTO_CARREGADA.
+    # Originais: ESTOQUE, MONTADA, PENDENTE, PENDENCIA_RESOLVIDA, DISPONIVEL,
+    # REVERTIDA_PARA_MONTADA, SEPARADA, FATURADA, CANCELADA, MOTO_FALTANDO (10).
+    # Novo: CARREGADA (11).
+    assert len(EVENTOS_VALIDOS) == 11

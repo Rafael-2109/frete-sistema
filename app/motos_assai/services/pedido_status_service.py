@@ -13,6 +13,8 @@ S10: chamar de TODOS callsites que afetam qtd_faturada.
 A13: chamar defensivamente em finalizar_carregamento (nao muda nada por si, mas defensivo).
 A14: nao re-calcula em pedido CANCELADO (estado terminal manual).
 """
+import logging
+
 from sqlalchemy import func
 from app import db
 from app.motos_assai.models import (
@@ -22,6 +24,9 @@ from app.motos_assai.models import (
     PEDIDO_STATUS_FATURADO, PEDIDO_STATUS_CANCELADO,
     SEPARACAO_STATUS_FATURADA,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def recalcular_status_pedido(pedido_id):
@@ -70,8 +75,8 @@ def recalcular_status_pedido(pedido_id):
         # Spec §2.2 define `qtd_faturada == qtd_pedida -> FATURADO` (igualdade
         # estrita). Acima disso e anomalia que merece visibilidade — operador
         # precisa investigar. Status FATURADO mas log warning para alerta.
-        import logging
-        logging.getLogger(__name__).warning(
+        # P2 fix 11 (2026-05-13): logger no topo do modulo (era inline).
+        logger.warning(
             'recalcular_status_pedido: OVERDELIVERY detectado pedido=%s '
             'qtd_faturada=%s > qtd_pedida=%s. Status definido como FATURADO '
             'mas excesso indica bug (verifique seps FATURADA do pedido).',

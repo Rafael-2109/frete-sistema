@@ -1,6 +1,14 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
 {% block motos_assai_content %}
+{# GAP-1 fix Plano Fase 4 S7=a: auto-abrir Modal Expedicao quando sep foi
+   criada via NF importada (sep_criada_via_nf=True). Atributo data-sep-criada-via-nf
+   e detectado por upload_nf_modal_expedicao.js. #}
+{% if sep_criada_via_nf and nf.separacao_id and nf.status_match != 'CANCELADA' %}
+<script>
+  document.body.setAttribute('data-sep-criada-via-nf', '{{ nf.separacao_id }}');
+</script>
+{% endif %}
 <header class="d-flex justify-content-between mb-3">
   <h2>NF Q.P.A. — {{ nf.numero }}/{{ nf.serie or '-' }}
     <span class="badge bg-{% if nf.status_match == 'BATEU' %}success{% elif nf.status_match == 'DIVERGENTE' %}warning{% elif nf.status_match == 'CANCELADA' %}dark{% else %}danger{% endif %}">
@@ -42,10 +50,18 @@
     <dt class="col-sm-3">Separação vinculada</dt>
     <dd class="col-sm-9">
       #{{ nf.separacao_id }}
-      {% if nf.status_match != 'CANCELADA' %}
+      {% if nf.status_match != 'CANCELADA' and nf.separacao %}
+        {# P1-1 fix: modal compartilhado #modal-editar-agendamento via data-sep-id.
+           Antes: data-bs-target="#modal-editar-agendamento-{id}" — modal nunca existiu. #}
         <button type="button" class="btn btn-sm btn-outline-info ms-2"
-                data-bs-toggle="modal" data-bs-target="#modal-editar-agendamento-{{ nf.separacao_id }}">
-          <i class="fas fa-calendar-edit"></i> Editar agendamento
+                data-bs-toggle="modal"
+                data-bs-target="#modal-editar-agendamento"
+                data-sep-id="{{ nf.separacao_id }}"
+                data-expedicao="{{ nf.separacao.expedicao.strftime('%Y-%m-%d') if nf.separacao.expedicao else '' }}"
+                data-agendamento="{{ nf.separacao.agendamento.strftime('%Y-%m-%d') if nf.separacao.agendamento else '' }}"
+                data-protocolo="{{ nf.separacao.protocolo or '' }}"
+                data-confirmado="{{ '1' if nf.separacao.agendamento_confirmado else '0' }}">
+          <i class="fas fa-calendar-alt"></i> Editar agendamento
         </button>
       {% endif %}
     </dd>
@@ -143,5 +159,17 @@ async function cancelarNfQpa(nfId) {
   }
 }
 </script>
+{% endif %}
+
+{# GAP-1 fix Plano Fase 4 S7=a: incluir Modal Expedicao + JS para sep criada via NF.
+   Modal so auto-dispara se body tiver data-sep-criada-via-nf (set acima). #}
+{% if sep_criada_via_nf and nf.separacao_id and nf.status_match != 'CANCELADA' %}
+{% include 'motos_assai/faturamento/_modal_expedicao.html' %}
+<script src="{{ url_for('static', filename='motos_assai/js/upload_nf_modal_expedicao.js') }}"></script>
+{% endif %}
+
+{# P1-1 fix: modal compartilhado "Editar agendamento" (disponivel quando ha sep) #}
+{% if nf.separacao_id and nf.status_match != 'CANCELADA' %}
+{% include 'motos_assai/faturamento/_modal_editar_agendamento.html' %}
 {% endif %}
 {% endblock %}

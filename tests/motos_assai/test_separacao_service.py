@@ -11,11 +11,16 @@ from app.motos_assai.models import (
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
 )
 from app.motos_assai.services import (
-    get_ou_criar_separacao, saldo_pendente_por_modelo, registrar_chassi,
+    # get_ou_criar_separacao foi renomeada para get_separacao_ativa
+    # e perdeu o side-effect de criar implicitamente (Migration 17 corretivo).
+    # Criacao explicita agora via criar_separacao_com_saldos.
+    saldo_pendente_por_modelo, registrar_chassi,
     desfazer_chassi, finalizar_separacao, cancelar_separacao,
     emitir_evento, status_efetivo,
+    criar_separacao_com_saldos,
     SeparacaoValidationError,
 )
+from app.motos_assai.services.separacao_service import get_separacao_ativa
 
 
 def _uid():
@@ -23,7 +28,11 @@ def _uid():
 
 
 def _setup(app, admin):
-    """Cria pedido + 1 loja + 2 chassis disponíveis (DOT)."""
+    """Cria pedido + 1 loja + 2 chassis disponíveis (DOT) + separacao EM_SEPARACAO.
+
+    Importante (Migration 17 corretivo, 2026-05-12): registrar_chassi nao cria
+    mais sep implicitamente. Criacao explicita via criar_separacao_com_saldos.
+    """
     modelo_dot = AssaiModelo.query.filter_by(codigo='DOT').first()
     loja = AssaiLoja.query.first()  # qualquer loja seeded
 
@@ -48,6 +57,15 @@ def _setup(app, admin):
         emitir_evento(ch, EVENTO_ESTOQUE, admin.id)
         emitir_evento(ch, EVENTO_MONTADA, admin.id)
         emitir_evento(ch, EVENTO_DISPONIVEL, admin.id)
+    db.session.commit()
+
+    # Cria sep EM_SEPARACAO com plano 2 DOT (substitui criacao implicita
+    # que `registrar_chassi` fazia ate 2026-05-12).
+    criar_separacao_com_saldos(
+        pedido_id=p.id, loja_id=loja.id,
+        alocacoes=[{'modelo_id': modelo_dot.id, 'qtd': 2}],
+        operador_id=admin.id,
+    )
     db.session.commit()
     return p, loja, modelo_dot, ch_a, ch_b
 
@@ -116,12 +134,34 @@ def test_finalizar_fechada(app, admin_user):
         db.session.rollback()
 
 
-def test_idempotencia_get_ou_criar(app, admin_user):
-    """get_ou_criar_separacao deve retornar a mesma separação se já existe ativa."""
+def test_get_separacao_ativa_retorna_a_mais_antiga(app, admin_user):
+    """get_separacao_ativa retorna sempre a sep EM_SEPARACAO mais antiga (menor id).
+
+    Migration 17 corretivo (2026-05-12): get_ou_criar_separacao foi removida.
+    Esta funcao apenas LE — criacao explicita via criar_separacao_com_saldos.
+    """
     with app.app_context():
-        p, loja, _, ch_a, ch_b = _setup(app, admin_user)
-        sep1 = get_ou_criar_separacao(p.id, loja.id, admin_user.id)
-        db.session.flush()
-        sep2 = get_ou_criar_separacao(p.id, loja.id, admin_user.id)
+        p, loja, modelo_dot, _, _ = _setup(app, admin_user)
+        sep1 = get_separacao_ativa(p.id, loja.id)
+        assert sep1 is not None, 'Sep criada em _setup deve existir'
+        # Verifica que chamada repetida retorna o mesmo objeto (read-only)
+        sep2 = get_separacao_ativa(p.id, loja.id)
         assert sep1.id == sep2.id
+        db.session.rollback()
+
+
+def test_get_separacao_ativa_sem_sep_retorna_none(app, admin_user):
+    """Quando nao ha sep EM_SEPARACAO, retorna None — caller deve criar via
+    criar_separacao_com_saldos (regressao 2026-05-12).
+    """
+    with app.app_context():
+        modelo_dot = AssaiModelo.query.filter_by(codigo='DOT').first()
+        loja = AssaiLoja.query.first()
+        uid = _uid()
+        p = AssaiPedidoVenda(numero=f'TST-VAZIO-{uid}', status=PEDIDO_STATUS_ABERTO,
+                             criado_por_id=admin_user.id)
+        db.session.add(p); db.session.flush()
+        # Nao cria PVL nem sep — apenas pedido cru
+        sep = get_separacao_ativa(p.id, loja.id)
+        assert sep is None
         db.session.rollback()

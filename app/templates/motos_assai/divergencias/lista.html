@@ -267,3 +267,8 @@
 
 <script src="{{ url_for('static', filename='motos_assai/js/divergencias_modais.js') }}"></script>
 {% endblock %}
+
+{# P2 fix 9 (2026-05-13): tour da tela divergencias (era gap — feature sem onboarding) #}
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/divergencias_lista.js') }}"></script>
+{% endblock %}

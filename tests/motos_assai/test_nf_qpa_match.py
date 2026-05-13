@@ -16,7 +16,10 @@ from app.motos_assai.models import (
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
 )
 from app.motos_assai.services import (
-    get_ou_criar_separacao, registrar_chassi, finalizar_separacao, emitir_evento,
+    # get_ou_criar_separacao foi renomeada para get_separacao_ativa
+    # e perdeu o side-effect de criar implicitamente (Migration 17 corretivo).
+    registrar_chassi, finalizar_separacao, emitir_evento,
+    criar_separacao_com_saldos,
 )
 from app.motos_assai.services.parsers.nf_qpa_adapter import (
     importar_nf_qpa, NfQpaParseError, NfQpaJaImportadaError,
@@ -78,6 +81,15 @@ def _setup_separacao_com_chassi(admin, loja, chassi, valor=Decimal('6900')):
     emitir_evento(chassi, EVENTO_ESTOQUE, admin.id)
     emitir_evento(chassi, EVENTO_MONTADA, admin.id)
     emitir_evento(chassi, EVENTO_DISPONIVEL, admin.id)
+    db.session.commit()
+
+    # Cria sep EM_SEPARACAO explicitamente (registrar_chassi nao cria mais —
+    # Migration 17 corretivo 2026-05-12).
+    criar_separacao_com_saldos(
+        pedido_id=p.id, loja_id=loja.id,
+        alocacoes=[{'modelo_id': modelo_dot.id, 'qtd': 1}],
+        operador_id=admin.id,
+    )
     db.session.commit()
 
     registrar_chassi(p.id, loja.id, chassi, admin.id)
@@ -147,8 +159,17 @@ def test_match_bateu_todos_chassis_batem(app, admin_user):
 
 # ─── Cenário DIVERGENTE ───────────────────────────────────────────────────────
 
-def test_match_divergente_chassi_extra_na_nf(app, admin_user):
-    """DIVERGENTE: NF tem 2 chassis mas só 1 está na separação."""
+def test_match_bateu_chassi_extra_adicionado_pela_nf(app, admin_user):
+    """BATEU: NF tem 2 chassis e ajustar_separacao_pela_nf v2 adiciona o extra
+    a sep antes do match.
+
+    Mudanca de comportamento (Plano Fase 4 — 2026-05-12):
+    `ajustar_separacao_pela_nf` v2 roda ANTES do `_calcular_match` em
+    `importar_nf_qpa`. NF passa a ser fonte de verdade — chassis extras sao
+    incorporados na sep alvo automaticamente (commit eaf6564a).
+
+    Antes (pre-Fase 4): cenario seria DIVERGENTE com CHASSI_SEM_SEPARACAO.
+    """
     with app.app_context():
         loja = AssaiLoja.query.first()
         chassi_ok = f'TST_NF_DO_{_uid()}'
@@ -156,12 +177,15 @@ def test_match_divergente_chassi_extra_na_nf(app, admin_user):
 
         _setup_separacao_com_chassi(admin_user, loja, chassi_ok, Decimal('6900'))
 
-        # chassi_extra não tem separação
+        # chassi_extra existe no estoque (DISPONIVEL) mas nao esta em sep.
+        # ajustar_separacao_pela_nf vai movimentar para SEPARADA e adicionar a sep.
         modelo_dot = AssaiModelo.query.filter_by(codigo='DOT').first()
         m = AssaiMoto(chassi=chassi_extra, modelo_id=modelo_dot.id, cor='AZUL')
         db.session.add(m)
         db.session.flush()
         emitir_evento(chassi_extra, EVENTO_ESTOQUE, admin_user.id)
+        emitir_evento(chassi_extra, EVENTO_MONTADA, admin_user.id)
+        emitir_evento(chassi_extra, EVENTO_DISPONIVEL, admin_user.id)
         db.session.commit()
 
         chave = _chave_fake()
@@ -174,12 +198,20 @@ def test_match_divergente_chassi_extra_na_nf(app, admin_user):
         nf = _call_importar(resultado, chave=chave, nome_dest=f'ASSAI LJ{loja.numero}',
                             admin_id=admin_user.id)
 
-        assert nf.status_match == NF_STATUS_DIVERGENTE, f"Esperava DIVERGENTE, veio {nf.status_match}"
+        # Apos Fase 4: ajustar_separacao_pela_nf adiciona chassi_extra a sep,
+        # depois _calcular_match detecta match natural -> BATEU.
+        assert nf.status_match == NF_STATUS_BATEU, \
+            f"Esperava BATEU (sep ajustada pela NF), veio {nf.status_match}"
 
         itens = nf.itens
         chassis_match = {it.chassi: it for it in itens}
+        # Ambos chassis devem estar vinculados a separacao_item agora
         assert chassis_match[chassi_ok].separacao_item_id is not None
-        assert chassis_match[chassi_extra].tipo_divergencia == 'CHASSI_SEM_SEPARACAO'
+        assert chassis_match[chassi_extra].separacao_item_id is not None, \
+            'chassi_extra foi adicionado a sep pelo ajustar_separacao_pela_nf'
+        # Sem divergencia — match natural BATEU
+        assert chassis_match[chassi_ok].tipo_divergencia is None
+        assert chassis_match[chassi_extra].tipo_divergencia is None
 
         db.session.rollback()
 

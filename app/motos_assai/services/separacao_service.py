@@ -1007,12 +1007,16 @@ def realocar_saldo(
     # que outra transacao finalize/cancele entre validacao e execucao.
     destinos_seps: Dict[int, AssaiSeparacao] = {}
     if destinos_distintos:
-        # ORDER BY id para evitar deadlock entre transacoes lockando seps em ordens distintas
+        # ORDER BY id para evitar deadlock entre transacoes lockando seps em ordens distintas.
+        # IMPORTANTE: AssaiSeparacao tem 3 relacionamentos lazy='joined' (pedido, loja,
+        # fechada_por) que geram LEFT OUTER JOIN — incompativel com FOR UPDATE no PG.
+        # Escopar lock + desabilitar eager loads.
         seps = (
             AssaiSeparacao.query
             .filter(AssaiSeparacao.id.in_(destinos_distintos))
+            .enable_eagerloads(False)
             .order_by(AssaiSeparacao.id.asc())
-            .with_for_update()
+            .with_for_update(of=AssaiSeparacao)
             .all()
         )
         destinos_seps = {s.id: s for s in seps}
@@ -1777,10 +1781,14 @@ def criar_separacao_com_saldos(
 
     # Lock pessimista no pedido — outras transacoes concorrentes que tentem
     # criar/realocar saldos do mesmo pedido aguardam.
+    # IMPORTANTE: AssaiPedidoVenda.criado_por usa lazy='joined' (LEFT OUTER JOIN
+    # com usuarios), incompativel com FOR UPDATE no PG. Escopar lock com
+    # `of=AssaiPedidoVenda` (PG aceita) e desabilitar eager load.
     ped = (
         AssaiPedidoVenda.query
         .filter_by(id=pedido_id)
-        .with_for_update()
+        .enable_eagerloads(False)
+        .with_for_update(of=AssaiPedidoVenda)
         .first()
     )
     if not ped:

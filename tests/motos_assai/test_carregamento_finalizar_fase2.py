@@ -83,9 +83,10 @@ def test_fase2_chassis_adicionados_emitem_separada(app, admin_user):
         ).first()
         assert item is not None
 
-        # Apos Fase 2: status efetivo = SEPARADA (Fase 4 emitira CARREGADA depois)
-        # Aqui Fase 4 ainda nao foi implementada, entao chassi fica em SEPARADA.
-        assert status_efetivo(chassi_new) == EVENTO_SEPARADA
+        # Apos Fase 4 implementada (commit 5de8d89a 2026-05-13): sep_alvo vai
+        # CARREGADA + emite EVENTO_CARREGADA por chassi (substitui SEPARADA que
+        # era status anterior).
+        assert status_efetivo(chassi_new) == EVENTO_CARREGADA
         db.session.rollback()
 
 
@@ -124,8 +125,8 @@ def test_fase2_chassis_removidos_voltam_disponivel(app, admin_user):
         # OLD1 e OLD2 expulsos (nao ha outra sep ativa para realocar)
         assert status_efetivo(chassi_old1) == EVENTO_DISPONIVEL  # R1.1 fallback
         assert status_efetivo(chassi_old2) == EVENTO_DISPONIVEL
-        # NEW vai para SEPARADA (Fase 4 emite CARREGADA depois)
-        assert status_efetivo(chassi_new) == EVENTO_SEPARADA
+        # Apos Fase 4 implementada: NEW vai CARREGADA (era SEPARADA pre-Fase 4)
+        assert status_efetivo(chassi_new) == EVENTO_CARREGADA
 
         # Sep alvo agora so tem NEW
         items = AssaiSeparacaoItem.query.filter_by(separacao_id=sep_alvo.id).all()

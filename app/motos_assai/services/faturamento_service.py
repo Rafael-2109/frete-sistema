@@ -208,8 +208,17 @@ def regenerar_excel_qpa(separacao_id: int, operador_id: int, motivo: str) -> Ass
     Raises:
         ValueError: status invalido (gerar_excel_qpa).
     """
-    # CR-12: lock pessimista na sep para serializar regeneracoes
-    sep_locked = AssaiSeparacao.query.filter_by(id=separacao_id).with_for_update().first()
+    # CR-12: lock pessimista na sep para serializar regeneracoes.
+    # IMPORTANTE: AssaiSeparacao tem 3 relacionamentos lazy='joined' (pedido,
+    # loja, fechada_por) que geram LEFT OUTER JOIN — incompativel com FOR UPDATE
+    # no PG. Escopar lock + desabilitar eager loads.
+    sep_locked = (
+        AssaiSeparacao.query
+        .filter_by(id=separacao_id)
+        .enable_eagerloads(False)
+        .with_for_update(of=AssaiSeparacao)
+        .first()
+    )
     if not sep_locked:
         raise FaturamentoError(f'Separação {separacao_id} não encontrada')
 

@@ -126,6 +126,23 @@
             </button>
           </form>
           {% endif %}
+          {# Plano Fase 4 A10: botao "Editar agendamento" (P1-1 fix).
+             Disponivel para qualquer sep ativa (nao CANCELADA). #}
+          {% if sep.status != 'CANCELADA' %}
+          <button type="button"
+                  class="btn btn-sm btn-outline-info"
+                  data-bs-toggle="modal"
+                  data-bs-target="#modal-editar-agendamento"
+                  data-sep-id="{{ sep.id }}"
+                  data-expedicao="{{ sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else '' }}"
+                  data-agendamento="{{ sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else '' }}"
+                  data-protocolo="{{ sep.protocolo or '' }}"
+                  data-confirmado="{{ '1' if sep.agendamento_confirmado else '0' }}"
+                  onclick="event.stopPropagation();"
+                  title="Editar expedicao, agendamento e protocolo">
+            <i class="fas fa-calendar-alt"></i> Agendar
+          </button>
+          {% endif %}
         </td>
       </tr>
       <!-- Accordion expandivel com motos da separacao -->
@@ -308,6 +325,9 @@
 
 {# Plano 4 Task 7: modal vincular NF manualmente #}
 {% include 'motos_assai/faturamento/_modal_vincular_nf.html' %}
+
+{# Plano Fase 4 A10 (P1-1 fix): modal editar agendamento — compartilhado com nf_detalhe.html #}
+{% include 'motos_assai/faturamento/_modal_editar_agendamento.html' %}
 
 <script>
 window.MOTOS_ASSAI_FAT = {

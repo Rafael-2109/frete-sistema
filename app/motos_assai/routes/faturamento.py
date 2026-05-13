@@ -264,7 +264,28 @@ def faturamento_upload_nf(separacao_id):
 def faturamento_nf_detalhe(nf_id):
     nf = AssaiNfQpa.query.get_or_404(nf_id)
     items = AssaiNfQpaItem.query.filter_by(nf_id=nf_id).all()
-    return render_template('motos_assai/faturamento/nf_detalhe.html', nf=nf, items=items)
+
+    # GAP-1 fix (Plano Fase 4 S7=a): detectar sep criada via NF para auto-abrir
+    # Modal Expedição. Heuristica: AssaiPedidoExcel da sep com versao=1 e
+    # motivo_regeneracao='criada_via_nf_importada' (gravado em separacao_service
+    # quando ajustar_separacao_pela_nf cria sep em FATURADA — linha 1481).
+    sep_criada_via_nf = False
+    if nf.separacao_id:
+        from app.motos_assai.models import AssaiPedidoExcel
+        excel_v1 = (
+            AssaiPedidoExcel.query
+            .filter_by(separacao_id=nf.separacao_id, versao=1)
+            .first()
+        )
+        sep_criada_via_nf = bool(
+            excel_v1 and excel_v1.motivo_regeneracao == 'criada_via_nf_importada'
+        )
+
+    return render_template(
+        'motos_assai/faturamento/nf_detalhe.html',
+        nf=nf, items=items,
+        sep_criada_via_nf=sep_criada_via_nf,
+    )
 
 
 @motos_assai_bp.route('/faturamento/nfs/<int:nf_id>/cancelar', methods=['POST'])
