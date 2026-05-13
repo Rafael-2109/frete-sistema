@@ -70,18 +70,18 @@
   ],
   "indices": [
     {
-      "name": "ix_agente_artifacts_session_id",
-      "columns": [
-        "session_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_agente_artifacts_uuid",
       "columns": [
         "uuid"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_agente_artifacts_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
     },
     {
       "name": "ix_agente_artifacts_user_id",

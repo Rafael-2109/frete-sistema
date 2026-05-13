@@ -81,16 +81,16 @@
       "unique": false
     },
     {
-      "name": "ix_assai_pedido_venda_item_pedido_loja_id",
+      "name": "ix_assai_pedido_venda_item_loja_id",
       "columns": [
-        "pedido_loja_id"
+        "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_pedido_venda_item_loja_id",
+      "name": "ix_assai_pedido_venda_item_pedido_loja_id",
       "columns": [
-        "loja_id"
+        "pedido_loja_id"
       ],
       "unique": false
     }
