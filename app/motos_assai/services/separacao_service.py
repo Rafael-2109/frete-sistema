@@ -1158,7 +1158,9 @@ def ajustar_separacao_pela_nf(nf_id: int, operador_id: int) -> Dict[str, Any]:
         if em_comum > melhor_count:
             melhor_count = em_comum
             melhor_sep = s
-    sep_alvo: AssaiSeparacao = melhor_sep  # type: ignore[assignment]
+    if melhor_sep is None:
+        return {'ok': False, 'razao': 'Sem sep candidata identificada'}
+    sep_alvo: AssaiSeparacao = melhor_sep
 
     # 3. Adicionar chassis da NF que nao estao na sep_alvo
     items_alvo = AssaiSeparacaoItem.query.filter_by(separacao_id=sep_alvo.id).all()
