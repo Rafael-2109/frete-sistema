@@ -12,12 +12,46 @@ from app import db
 from app.motos_assai.models import (
     AssaiMoto, AssaiMotoEvento,
     EVENTO_MONTADA, EVENTO_DISPONIVEL, EVENTO_REVERTIDA_PARA_MONTADA,
+    EVENTO_SEPARADA, EVENTO_CARREGADA, EVENTO_FATURADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
 
 
 class DisponibilizarValidationError(Exception):
     pass
+
+
+# Alias publico (mantido para callers internos / docstrings de skill).
+DisponibilizarError = DisponibilizarValidationError
+
+
+def _msg_a6_por_status(chassi_norm: str, status: Optional[str]) -> str:
+    """A6: dispatch de mensagens especificas quando o chassi nao esta em
+    MONTADA/REVERTIDA_PARA_MONTADA.
+
+    Mantem mensagem generica como fallback para estados nao mapeados (ex:
+    ESTOQUE, PENDENTE) — caller continua orientado pelo motivo original.
+    """
+    msgs = {
+        EVENTO_DISPONIVEL: f'Chassi {chassi_norm} ja esta DISPONIVEL.',
+        EVENTO_SEPARADA: (
+            f'Chassi {chassi_norm} esta SEPARADA. '
+            'Para reverter, cancele a Sep ou desfaca o item.'
+        ),
+        EVENTO_CARREGADA: (
+            f'Chassi {chassi_norm} esta CARREGADA. '
+            'Para reverter, cancele o Carregamento ou substitua o chassi (cross-loja).'
+        ),
+        EVENTO_FATURADA: (
+            f'Chassi {chassi_norm} esta FATURADA. '
+            'Para reverter, cancele a NF (cancelar_nf_qpa).'
+        ),
+    }
+    return msgs.get(
+        status,
+        f'Chassi {chassi_norm} está em {status}, esperado MONTADA ou REVERTIDA_PARA_MONTADA. '
+        'Resolva pendência se houver.',
+    )
 
 
 def disponibilizar(chassi: str, operador_id: int) -> Dict[str, Any]:
@@ -32,10 +66,8 @@ def disponibilizar(chassi: str, operador_id: int) -> Dict[str, Any]:
 
     status = status_efetivo(chassi_norm)
     if status not in (EVENTO_MONTADA, EVENTO_REVERTIDA_PARA_MONTADA):
-        raise DisponibilizarValidationError(
-            f'Chassi {chassi_norm} está em {status}, esperado MONTADA ou REVERTIDA_PARA_MONTADA. '
-            'Resolva pendência se houver.'
-        )
+        # A6: mensagem especifica por status (CARREGADA/SEPARADA/FATURADA/DISPONIVEL)
+        raise DisponibilizarValidationError(_msg_a6_por_status(chassi_norm, status))
 
     ev = emitir_evento(chassi_norm, EVENTO_DISPONIVEL, operador_id=operador_id)
     db.session.commit()
