@@ -3,25 +3,33 @@
 {% block hora_content %}
 <h2 class="mb-3">Novo Recebimento</h2>
 
-<form method="post" class="card p-3" style="max-width: 700px;">
+<form method="post" class="card p-3" style="max-width: 700px;" id="form-novo-recebimento" novalidate>
   <div class="mb-3" id="nf-upload-area">
-    <label class="form-label">NF de entrada <span class="text-danger">*</span></label>
-    <select id="tabela-itens-extraidos" name="nf_id" class="form-select" required>
-      <option value="">— Selecione —</option>
-      {% for nf in nfs %}
-        <option value="{{ nf.id }}">
-          NF {{ nf.numero_nf }} — {{ nf.nome_emitente or nf.cnpj_emitente }}
-          — {{ nf.data_emissao.strftime('%d/%m/%Y') }} ({{ nf.itens|length }} chassis)
-        </option>
-      {% endfor %}
-    </select>
+    <label class="form-label" for="tabela-itens-extraidos">
+      NF de entrada <span class="text-danger">*</span>
+    </label>
+    <input type="text" id="tabela-itens-extraidos"
+           class="form-control"
+           placeholder="Digite o número da NF (mínimo 2 caracteres)"
+           autocomplete="off"
+           data-hora-autocomplete="nf-entrada"
+           data-hora-target-id="nf_id"
+           data-hora-target-key="id"
+           data-hora-extra-params="sem_recebimento=1"
+           required>
+    <input type="hidden" name="nf_id" id="nf_id" value="">
     <small class="form-text text-muted">
-      A NF precisa ter sido importada antes (PDF parseado em <a href="{{ url_for('hora.nfs_upload') }}">Importar DANFE</a>).
+      Apenas NFs sem recebimento iniciado aparecem na lista. A NF precisa ter sido importada antes (PDF parseado em <a href="{{ url_for('hora.nfs_upload') }}">Importar DANFE</a>).
     </small>
+    <div id="nf-erro" class="invalid-feedback d-block" style="display:none !important;">
+      Selecione uma NF da lista de sugestões.
+    </div>
   </div>
 
   <div class="mb-3">
-    <label class="form-label">Loja receptora <span class="text-danger">*</span></label>
+    <label class="form-label" for="campo-loja-destino">
+      Loja receptora <span class="text-danger">*</span>
+    </label>
     <select id="campo-loja-destino" name="loja_id" class="form-select" required>
       <option value="">— Selecione —</option>
       {% for l in lojas %}
@@ -37,6 +45,39 @@
     <a href="{{ url_for('hora.recebimentos_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
+
+<script>
+(function() {
+  // Validacao do submit: o widget de autocomplete preenche o hidden #nf_id
+  // com o ID canonico da NF apos o usuario clicar numa sugestao. Se o operador
+  // digitar texto e nao clicar em nenhuma sugestao, #nf_id fica vazio e o
+  // backend (recebimentos_novo POST) lancaria KeyError em request.form['nf_id'].
+  // Validacao client-side da feedback imediato com referencia ao input visivel.
+  const form = document.getElementById('form-novo-recebimento');
+  const inputVisivel = document.getElementById('tabela-itens-extraidos');
+  const hiddenNfId = document.getElementById('nf_id');
+  const erroEl = document.getElementById('nf-erro');
+
+  // Se o operador editar o texto apos selecionar, esquece o id selecionado
+  // (evita submeter id de uma NF que ja nao corresponde ao texto digitado).
+  inputVisivel.addEventListener('input', () => {
+    if (hiddenNfId.value) {
+      hiddenNfId.value = '';
+    }
+    inputVisivel.classList.remove('is-invalid');
+    erroEl.style.display = 'none';
+  });
+
+  form.addEventListener('submit', (ev) => {
+    if (!hiddenNfId.value) {
+      ev.preventDefault();
+      inputVisivel.classList.add('is-invalid');
+      erroEl.style.display = 'block';
+      inputVisivel.focus();
+    }
+  });
+})();
+</script>
 {% endblock %}
 
 {% block onboarding_tours %}

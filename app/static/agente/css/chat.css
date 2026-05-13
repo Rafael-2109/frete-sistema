@@ -2569,15 +2569,27 @@
     z-index: 110;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 0.72rem;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    /* Default (mostrar): visibility:visible imediato p/ permitir fade-in. */
+    transition: transform 0.3s ease, opacity 0.3s ease, visibility 0s linear 0s;
     display: flex;
     flex-direction: column;
 }
 
 .debug-panel-container.hidden {
-    transform: translateY(350px);
+    /* IMPORTANTE: translateY grande (>painel.height) em position:absolute
+       escapava do overflow:hidden do .chat-fullscreen-wrapper em Chromium,
+       estendendo documentElement.scrollHeight ~270px e causando scrollbar
+       global na pagina /agente/ (sintoma: pagina mais alta que o viewport,
+       ultrapassando a sidebar). Solucao em camadas:
+       - translateY pequeno (10px): preserva animacao slide sem escapar do clip.
+       - visibility: hidden: defensa em profundidade caso translateY escape.
+       - opacity: 0 + pointer-events: none: comportamento original. */
+    transform: translateY(10px);
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
+    /* Esconder: visibility:hidden vira efetivo SO depois do fade (delay 0.3s). */
+    transition: transform 0.3s ease, opacity 0.3s ease, visibility 0s linear 0.3s;
 }
 
 .debug-panel-header {

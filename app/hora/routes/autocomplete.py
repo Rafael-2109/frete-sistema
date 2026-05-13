@@ -55,10 +55,15 @@ def autocomplete_pedido():
 @hora_bp.route('/autocomplete/nf-entrada')
 @require_hora_perm('nfs', 'ver')
 def autocomplete_nf_entrada():
+    # `sem_recebimento=1` (usado em /hora/recebimentos/novo): retorna apenas
+    # NFs que ainda nao tem recebimento iniciado. Default `False` mantem
+    # comportamento legado para outros callers (listagem de recebimentos etc.).
+    sem_rec = (request.args.get('sem_recebimento') or '0').strip() == '1'
     return jsonify(autocomplete_service.nfs_entrada(
         q=request.args.get('q') or '',
         lojas_permitidas_ids=lojas_permitidas_ids(),
         limit=_limit_arg(),
+        sem_recebimento=sem_rec,
     ))
 
 

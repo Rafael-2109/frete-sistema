@@ -15,6 +15,8 @@
  *                         tipo: id para pedido/modelo/loja/venda; chassi para
  *                         chassi; numero_nf para nf-entrada; nome_cliente para
  *                         cliente; nome para loja-externa).
+ *   data-hora-extra-params: query string adicional (ex.: "sem_recebimento=1&ativo=1").
+ *                           Concatenado a "?q=...".
  *
  * O dropdown segue o input. Sem dependencias externas (vanilla JS, Bootstrap
  * apenas para classes visuais).
@@ -84,6 +86,9 @@
     const targetId = input.dataset.horaTargetId || null;
     const targetKey = input.dataset.horaTargetKey || DEFAULT_KEYS[tipo] || 'id';
     const targetEl = targetId ? document.getElementById(targetId) : null;
+    // Query string extra (ex.: "sem_recebimento=1&ativo=1"). Permite que telas
+    // especificas restrinjam o conjunto sem precisar de endpoint novo.
+    const extraParams = (input.dataset.horaExtraParams || '').replace(/^[?&]+/, '');
 
     const { dd, position } = buildDropdown(input);
 
@@ -129,7 +134,9 @@
         return;
       }
       try {
-        const resp = await fetch(`${url}?q=${encodeURIComponent(q)}`, {
+        let qs = `?q=${encodeURIComponent(q)}`;
+        if (extraParams) qs += '&' + extraParams;
+        const resp = await fetch(`${url}${qs}`, {
           credentials: 'same-origin',
           headers: { 'Accept': 'application/json' },
         });

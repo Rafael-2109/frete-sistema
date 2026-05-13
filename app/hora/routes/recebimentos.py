@@ -19,7 +19,6 @@ from app.hora.decorators import require_hora_perm
 
 from app.hora.models import (
     HoraLoja,
-    HoraNfEntrada,
     HoraModelo,
     HoraRecebimento,
     HoraRecebimentoConferencia,
@@ -111,24 +110,18 @@ def recebimentos_novo():
         except (ValueError, KeyError) as exc:
             flash(f'Erro: {exc}', 'danger')
 
-    # Somente NFs que AINDA nao tem recebimento aberto: evita que operador
-    # inicie outra conferencia para uma NF ja processada.
-    # `HoraRecebimento.nf_id` tem UNIQUE(nf_id, loja_id), mas para a tela de
-    # "Novo Recebimento" consideramos qualquer recebimento existente como
-    # motivo suficiente para ocultar a NF.
-    nfs = (
-        HoraNfEntrada.query
-        .filter(~HoraNfEntrada.recebimentos.any())
-        .order_by(HoraNfEntrada.data_emissao.desc())
-        .limit(200)
-        .all()
-    )
+    # NFs pesquisadas via autocomplete on-demand
+    # (endpoint /hora/autocomplete/nf-entrada?sem_recebimento=1, ver
+    # `app/hora/services/autocomplete_service.nfs_entrada`). O filtro
+    # `~HoraNfEntrada.recebimentos.any()` (evitar abrir 2 conferencias
+    # para a mesma NF) e aplicado no service via o parametro
+    # `sem_recebimento=True`, garantindo paridade com o select legado.
     permitidas = lojas_permitidas_ids()
     lojas_q = HoraLoja.query.filter_by(ativa=True)
     if permitidas is not None:
         lojas_q = lojas_q.filter(HoraLoja.id.in_(permitidas))
     lojas = lojas_q.order_by(HoraLoja.nome).all()
-    return render_template('hora/recebimento_novo.html', nfs=nfs, lojas=lojas)
+    return render_template('hora/recebimento_novo.html', lojas=lojas)
 
 
 # ------------------------------------------------------------------------

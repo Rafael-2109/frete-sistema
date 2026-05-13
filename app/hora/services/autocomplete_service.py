@@ -132,8 +132,17 @@ def pedidos_compra(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
 # ============================================================
 
 def nfs_entrada(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
-                limit: int = _DEFAULT_LIMIT) -> List[dict]:
-    """Busca NFs entrada por numero (substring)."""
+                limit: int = _DEFAULT_LIMIT,
+                sem_recebimento: bool = False) -> List[dict]:
+    """Busca NFs entrada por numero (substring).
+
+    Parametros:
+      sem_recebimento: se True, filtra apenas NFs que AINDA nao tem
+        recebimento criado (mesmo predicado do select original em
+        /hora/recebimentos/novo — `~HoraNfEntrada.recebimentos.any()`).
+        Usado no autocomplete da tela "Novo Recebimento" para impedir
+        operador de iniciar outra conferencia para uma NF ja processada.
+    """
     q_norm = (q or '').strip()
     if len(q_norm) < _MIN_CHARS:
         return []
@@ -141,6 +150,8 @@ def nfs_entrada(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
     base = HoraNfEntrada.query.filter(
         HoraNfEntrada.numero_nf.ilike(f'%{q_norm}%')
     )
+    if sem_recebimento:
+        base = base.filter(~HoraNfEntrada.recebimentos.any())
     if lojas_permitidas_ids is not None:
         if not lojas_permitidas_ids:
             return []
@@ -155,10 +166,12 @@ def nfs_entrada(q: str, lojas_permitidas_ids: Optional[List[int]] = None,
             'emitente': nf.nome_emitente or nf.cnpj_emitente,
             'data_emissao': nf.data_emissao.isoformat() if nf.data_emissao else None,
             'loja_destino': nf.loja_destino.rotulo_display if nf.loja_destino else None,
+            'qtd_itens': len(nf.itens) if nf.itens is not None else 0,
             'label': (
                 f'NF {nf.numero_nf} — '
                 f'{nf.data_emissao.strftime("%d/%m/%Y") if nf.data_emissao else "?"} '
                 f'· {nf.nome_emitente or nf.cnpj_emitente or "sem emissor"}'
+                f' ({len(nf.itens) if nf.itens is not None else 0} chassis)'
             ),
         }
         for nf in base.all()

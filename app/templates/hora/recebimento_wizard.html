@@ -476,13 +476,24 @@
   });
   document.getElementById('btn-voltar-A').addEventListener('click', () => showStep('A'));
   // Modal "criar modelo" (Bootstrap, funciona em iOS PWA — prompt() nao funciona).
-  const modalNovoModelo = new bootstrap.Modal(document.getElementById('modalNovoModelo'));
+  // Lazy init: bootstrap.bundle.min.js carrega DEPOIS do bloco "content" do
+  // base.html (ver base.html:1077 vs 1095), entao instanciar bootstrap.Modal
+  // aqui no top-level lancaria ReferenceError e abortaria a IIFE — quebrando
+  // todos os handlers seguintes (btn-avancar-C, btn-voltar-B, btn-confirmar,
+  // etc.). Por isso so criamos quando o usuario interage (bootstrap ja carregado).
+  let _modalNovoModelo = null;
+  function getModalNovoModelo() {
+    if (!_modalNovoModelo) {
+      _modalNovoModelo = new bootstrap.Modal(document.getElementById('modalNovoModelo'));
+    }
+    return _modalNovoModelo;
+  }
   const inputNovoModelo = document.getElementById('input-novo-modelo');
   const btnSalvarModelo = document.getElementById('btn-salvar-modelo');
 
   document.getElementById('btn-novo-modelo').addEventListener('click', () => {
     inputNovoModelo.value = '';
-    modalNovoModelo.show();
+    getModalNovoModelo().show();
     setTimeout(() => inputNovoModelo.focus(), 300);
   });
   inputNovoModelo.addEventListener('keydown', (e) => {
@@ -502,7 +513,7 @@
       const opt = new Option(data.nome_modelo, data.modelo_id, true, true);
       sel.add(opt);
       sel.value = data.modelo_id;
-      modalNovoModelo.hide();
+      getModalNovoModelo().hide();
     } finally {
       btnSalvarModelo.disabled = false;
     }
@@ -510,13 +521,21 @@
 
   // ---------- Passo C (cor via select + modal "nova cor") ----------
   const selectCor = document.getElementById('select-cor');
-  const modalNovaCor = new bootstrap.Modal(document.getElementById('modalNovaCor'));
+  // Lazy init (mesmo motivo do modalNovoModelo acima — bootstrap so carrega
+  // depois do bloco content).
+  let _modalNovaCor = null;
+  function getModalNovaCor() {
+    if (!_modalNovaCor) {
+      _modalNovaCor = new bootstrap.Modal(document.getElementById('modalNovaCor'));
+    }
+    return _modalNovaCor;
+  }
   const inputNovaCor = document.getElementById('input-nova-cor');
   const btnSalvarCor = document.getElementById('btn-salvar-cor');
 
   document.getElementById('btn-nova-cor').addEventListener('click', () => {
     inputNovaCor.value = '';
-    modalNovaCor.show();
+    getModalNovaCor().show();
     setTimeout(() => inputNovaCor.focus(), 300);
   });
   inputNovaCor.addEventListener('keydown', (e) => {
@@ -530,7 +549,7 @@
     // hora_nf_entrada_item.cor_texto_original. Aqui so adicionamos a option
     // local para uso nesta sessao.
     adicionarOuSelecionarCor(nome);
-    modalNovaCor.hide();
+    getModalNovaCor().hide();
   });
 
   document.getElementById('btn-avancar-C').addEventListener('click', () => {
