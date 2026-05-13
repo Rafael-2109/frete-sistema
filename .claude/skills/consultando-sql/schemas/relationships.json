@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 400,
+  "total_relationships": 412,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -51,6 +51,36 @@
       "to_column": "id"
     },
     {
+      "from_table": "assai_carregamento",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_carregamento",
+      "from_column": "loja_id",
+      "to_table": "assai_loja",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_carregamento",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_carregamento_item",
+      "from_column": "carregamento_id",
+      "to_table": "assai_carregamento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_carregamento_item",
+      "from_column": "modelo_id",
+      "to_table": "assai_modelo",
+      "to_column": "id"
+    },
+    {
       "from_table": "assai_compra_motochefe_pedido",
       "from_column": "compra_id",
       "to_table": "assai_compra_motochefe",
@@ -60,6 +90,24 @@
       "from_table": "assai_compra_motochefe_pedido",
       "from_column": "pedido_id",
       "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_divergencia",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_divergencia",
+      "from_column": "carregamento_id",
+      "to_table": "assai_carregamento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_divergencia",
+      "from_column": "nf_id",
+      "to_table": "assai_nf_qpa",
       "to_column": "id"
     },
     {
@@ -96,6 +144,30 @@
       "from_table": "assai_nf_qpa_item",
       "from_column": "separacao_item_id",
       "to_table": "assai_separacao_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa_item_vinculo_historico",
+      "from_column": "nf_qpa_item_id",
+      "to_table": "assai_nf_qpa_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa_item_vinculo_historico",
+      "from_column": "separacao_item_id",
+      "to_table": "assai_separacao_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_excel",
+      "from_column": "pedido_id",
+      "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_pedido_excel",
+      "from_column": "separacao_id",
+      "to_table": "assai_separacao",
       "to_column": "id"
     },
     {

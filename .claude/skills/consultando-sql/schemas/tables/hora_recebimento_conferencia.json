@@ -100,16 +100,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_conferencia_recebimento_id",
+      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
       "columns": [
-        "recebimento_id"
+        "tipo_divergencia"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_recebimento_conferencia_substituida",
+      "name": "ix_hora_recebimento_conferencia_recebimento_id",
       "columns": [
-        "substituida"
+        "recebimento_id"
       ],
       "unique": false
     },
@@ -120,6 +120,13 @@
         "numero_chassi"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_recebimento_conferencia_substituida",
+      "columns": [
+        "substituida"
+      ],
+      "unique": false
     },
     {
       "name": "ix_hora_recebimento_conferencia_numero_chassi",
@@ -135,13 +142,6 @@
         "ordem"
       ],
       "unique": true
-    },
-    {
-      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
-      "columns": [
-        "tipo_divergencia"
-      ],
-      "unique": false
     }
   ]
 }

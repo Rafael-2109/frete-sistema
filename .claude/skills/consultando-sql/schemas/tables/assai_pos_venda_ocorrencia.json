@@ -63,16 +63,16 @@
       "unique": false
     },
     {
-      "name": "ix_assai_pos_venda_ocorrencia_chassi",
+      "name": "ix_assai_pos_venda_ocorrencia_categoria",
       "columns": [
-        "chassi"
+        "categoria"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_pos_venda_ocorrencia_categoria",
+      "name": "ix_assai_pos_venda_ocorrencia_chassi",
       "columns": [
-        "categoria"
+        "chassi"
       ],
       "unique": false
     }

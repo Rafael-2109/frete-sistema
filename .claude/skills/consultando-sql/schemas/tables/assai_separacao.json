@@ -82,16 +82,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_separacao_loja_id",
+      "name": "ix_assai_separacao_pedido_id",
       "columns": [
-        "loja_id"
+        "pedido_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_separacao_pedido_id",
+      "name": "ix_assai_separacao_loja_id",
       "columns": [
-        "pedido_id"
+        "loja_id"
       ],
       "unique": false
     }

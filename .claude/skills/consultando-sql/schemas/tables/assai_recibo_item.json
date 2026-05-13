@@ -75,16 +75,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_recibo_item_recibo_id",
+      "name": "ix_assai_recibo_item_chassi",
       "columns": [
-        "recibo_id"
+        "chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_recibo_item_chassi",
+      "name": "ix_assai_recibo_item_recibo_id",
       "columns": [
-        "chassi"
+        "recibo_id"
       ],
       "unique": false
     }

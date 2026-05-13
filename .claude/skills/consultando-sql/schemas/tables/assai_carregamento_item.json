@@ -1,6 +1,6 @@
 {
-  "name": "assai_separacao_item",
-  "description": "Tabela assai_separacao_item",
+  "name": "assai_carregamento_item",
+  "description": "Tabela assai_carregamento_item",
   "fields": [
     {
       "name": "id",
@@ -8,9 +8,9 @@
       "description": "Primary key"
     },
     {
-      "name": "separacao_id",
+      "name": "carregamento_id",
       "type": "integer",
-      "description": "FK → assai_separacao.id",
+      "description": "FK → assai_carregamento.id",
       "nullable": false
     },
     {
@@ -25,47 +25,42 @@
       "nullable": false
     },
     {
-      "name": "valor_unitario_qpa",
-      "type": "numeric(12,2)",
-      "nullable": false
-    },
-    {
-      "name": "registrada_em",
+      "name": "escaneado_em",
       "type": "timestamp",
       "nullable": false
     },
     {
-      "name": "registrada_por_id",
+      "name": "escaneado_por_id",
       "type": "integer",
       "description": "FK → usuarios.id"
     }
   ],
   "foreign_keys": [
     {
-      "column": "separacao_id",
-      "references": "assai_separacao.id"
+      "column": "carregamento_id",
+      "references": "assai_carregamento.id"
     },
     {
       "column": "modelo_id",
       "references": "assai_modelo.id"
     },
     {
-      "column": "registrada_por_id",
+      "column": "escaneado_por_id",
       "references": "usuarios.id"
     }
   ],
   "indices": [
     {
-      "name": "ix_assai_separacao_item_chassi",
+      "name": "ix_assai_carregamento_item_carregamento_id",
       "columns": [
-        "chassi"
+        "carregamento_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_separacao_item_separacao_id",
+      "name": "ix_assai_carregamento_item_chassi",
       "columns": [
-        "separacao_id"
+        "chassi"
       ],
       "unique": false
     }

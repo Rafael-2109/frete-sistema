@@ -207,20 +207,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_tagplus_pedido_id",
-      "columns": [
-        "tagplus_pedido_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_loja_id",
-      "columns": [
-        "loja_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_venda_tagplus_departamento",
       "columns": [
         "tagplus_departamento"
@@ -256,6 +242,13 @@
       "unique": false
     },
     {
+      "name": "ix_hora_venda_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_venda_status",
       "columns": [
         "status"
@@ -266,6 +259,13 @@
       "name": "ix_hora_venda_cpf_cliente",
       "columns": [
         "cpf_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_tagplus_pedido_id",
+      "columns": [
+        "tagplus_pedido_id"
       ],
       "unique": false
     }

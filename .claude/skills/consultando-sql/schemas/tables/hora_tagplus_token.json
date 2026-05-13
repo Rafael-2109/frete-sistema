@@ -56,18 +56,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tagplus_token_expires_at",
-      "columns": [
-        "expires_at"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_tagplus_token_conta_id",
       "columns": [
         "conta_id"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_tagplus_token_expires_at",
+      "columns": [
+        "expires_at"
+      ],
+      "unique": false
     }
   ]
 }

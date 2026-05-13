@@ -69,6 +69,19 @@
       "name": "importada_por_id",
       "type": "integer",
       "description": "FK → usuarios.id"
+    },
+    {
+      "name": "cancelada_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelada_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "motivo_cancelamento",
+      "type": "text"
     }
   ],
   "foreign_keys": [
@@ -82,6 +95,10 @@
     },
     {
       "column": "importada_por_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "cancelada_por_id",
       "references": "usuarios.id"
     }
   ],
