@@ -802,19 +802,47 @@ def register_cotacao_v2_routes(bp):
                     cliente.id, cliente.nome_comercial,
                 )
             else:
-                # Guard: verificar se cliente ja existe pelo CNPJ do emitente
+                # Guard: verificar se cliente ja existe — busca em ORDEM:
+                #   1. CNPJ ORIGEM (emitente da NF)
+                #   2. CNPJ DESTINO (destinatario — canonico para identificar
+                #      o cliente comercial, regra R19 SOT)
+                #   3. Nome comercial (case-insensitive) — ultima linha de
+                #      defesa antes de cair na constraint UNIQUE do nome
+                import re as _re
+                from app.carvia.models import CarviaCliente
+
                 cliente_existente = None
+
+                # 1. CNPJ ORIGEM
                 orig_data_guard = data.get('origem', {})
                 cnpj_orig = orig_data_guard.get('cnpj', '')
                 if cnpj_orig:
-                    import re as _re
-                    cnpj_limpo = _re.sub(r'\D', '', cnpj_orig)
-                    enderecos_existentes = CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_limpo)
-                    for end in enderecos_existentes:
-                        if end.cliente_id:
-                            from app.carvia.models import CarviaCliente
-                            cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
-                            break
+                    cnpj_orig_limpo = _re.sub(r'\D', '', cnpj_orig)
+                    if cnpj_orig_limpo:
+                        for end in CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_orig_limpo):
+                            if end.cliente_id:
+                                cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
+                                if cliente_existente:
+                                    break
+
+                # 2. CNPJ DESTINO (canonico)
+                if not cliente_existente:
+                    dest_data_guard = data.get('destino', {})
+                    cnpj_dest = dest_data_guard.get('cnpj', '')
+                    if cnpj_dest:
+                        cnpj_dest_limpo = _re.sub(r'\D', '', cnpj_dest)
+                        if cnpj_dest_limpo:
+                            for end in CarviaClienteService.buscar_enderecos_por_cnpj(cnpj_dest_limpo):
+                                if end.cliente_id:
+                                    cliente_existente = db.session.get(CarviaCliente, end.cliente_id)
+                                    if cliente_existente:
+                                        break
+
+                # 3. Nome comercial (defense in depth contra UNIQUE)
+                if not cliente_existente:
+                    cliente_existente = CarviaCliente.query.filter(
+                        db.func.lower(CarviaCliente.nome_comercial) == nome.lower(),
+                    ).first()
 
                 if cliente_existente:
                     # Ajuste 1: retornar cliente existente sem criar novo ou sobrescrever nome

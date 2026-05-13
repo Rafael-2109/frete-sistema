@@ -224,6 +224,13 @@ function iniciarSetupNF() {
 
         _setupData = d;
 
+        // Propagar ID do cliente existente detectado pelo setup. Sem isso,
+        // se o passo 1 nao for incluido no wizard (cliente ja encontrado
+        // por CNPJ destinatario, mas falta origem/destino), o wizConcluir
+        // cairia no fluxo de "criar novo" e bateria na constraint UNIQUE
+        // de nome_comercial — bloqueando a cotacao.
+        _wizClienteExistenteId = (d.cliente && d.cliente.existe && d.cliente.id) ? d.cliente.id : null;
+
         // Determinar quais passos do wizard sao necessarios
         _wizSteps = [];
         if (!d.cliente.existe) _wizSteps.push(1);
@@ -363,8 +370,18 @@ function wizAvancar() {
 function wizConcluir() {
     // Se cliente existente selecionado, usar diretamente sem criar novo
     if (_wizClienteExistenteId) {
+        // Resolver nome: preferir o option selecionado no select (caso o
+        // usuario tenha escolhido no passo 1); senao usar o nome ja conhecido
+        // em _setupData (caso o cliente tenha sido detectado pelo setup e o
+        // passo 1 nao tenha sido exibido — o select esta vazio ou com o
+        // placeholder "-- Criar novo cliente --").
         const sel = document.getElementById('wizClienteExistente');
-        const nomeExistente = sel.options[sel.selectedIndex].textContent;
+        let nomeExistente = '';
+        if (sel && sel.value) {
+            nomeExistente = sel.options[sel.selectedIndex].textContent;
+        } else if (_setupData && _setupData.cliente && _setupData.cliente.nome) {
+            nomeExistente = _setupData.cliente.nome;
+        }
 
         _setupData.cliente.id = _wizClienteExistenteId;
         _setupData.cliente.nome = nomeExistente;
@@ -837,6 +854,12 @@ document.getElementById('formCotacao').addEventListener('submit', async function
         }
 
         _setupData = d;
+
+        // Propagar ID do cliente existente detectado pelo setup. Mesma logica
+        // do fluxo iniciarSetupNF — necessario porque _wizSteps pode pular o
+        // passo 1, deixando _wizClienteExistenteId null e roteando o
+        // wizConcluir para o caminho de criacao (que falha por UNIQUE de nome).
+        _wizClienteExistenteId = (d.cliente && d.cliente.existe && d.cliente.id) ? d.cliente.id : null;
 
         // Determinar quais passos do wizard sao necessarios
         _wizSteps = [];
