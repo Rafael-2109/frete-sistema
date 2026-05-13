@@ -3,30 +3,41 @@
  *
  * Historia: originalmente SSE (EventSource em /api/chat/stream). Migrado em
  * 2026-04-24 para polling em /api/chat/poll — SSE mantinha 1 slot de worker
- * gunicorn aberto por user permanentemente (C5 auditoria P0). Com polling,
- * slot e liberado entre pulses (~50ms ocupado a cada 4s).
+ * gunicorn aberto por user permanentemente (C5 auditoria P0). Cadencia inicial
+ * 4s/15s foi relaxada para 12s/45s em 2026-04-26 (feedback de travamento).
  *
- * Pulse: 12s quando aba focada; 45s quando visivel sem foco; pausado quando
- * document.hidden. Pulse e agendado dentro de requestIdleCallback (timeout 2s)
- * para nao competir com paint/scroll em paginas pesadas (monitoramento etc).
- * Cadencia anterior (4s/15s) gerava percepcao de travamento — relaxado em
- * 2026-04-26.
+ * 2026-05-13: introduzido lazy bootstrap (S1) + adaptive backoff (S2). Adocao
+ * real medida: 3 de 74 users (4%). Sem essa mudanca, 96% dos users pollavam
+ * a 12s/45s sem nunca trocar mensagem. Reducao esperada ~85% no HTTP do chat.
+ *
+ *   Bootstrap (S1):
+ *     Boot faz 1 GET /api/chat/bootstrap. Se user nao tem threads + zero unread:
+ *     entra em modo 'dormant' (heartbeat 5min em foco apenas). Qualquer evento
+ *     ou wake() promove pra 'active' (cadencia normal).
+ *
+ *   Adaptive backoff (S2):
+ *     Apos 3 polls vazios consecutivos em modo 'active', dobra o intervalo ate
+ *     teto 5min. Reset a 1× ao receber qualquer evento, markRead ou wake().
+ *
+ * Pulse e agendado dentro de requestIdleCallback (timeout 2s) para nao competir
+ * com paint/scroll em paginas pesadas. document.hidden = pausa total.
  *
  * API publica (contrato mantido — chat_ui.js nao muda):
  *   window.ChatClient.onEvent(cb)   -- registra callback (eventType, data)
  *   window.ChatClient.markRead(kind, thread_id)
  *   window.ChatClient.counters()
  *   window.ChatClient.reconnect()   -- forca poll imediato + reinicia timer
+ *   window.ChatClient.wake()        -- sai de dormant + reseta backoff
  */
 (function () {
   'use strict';
 
-  // 2026-04-26: cadencia relaxada + requestIdleCallback (feedback do usuario:
-  // pulse anterior de 4s travava UI). Pulse agora roda em janela de idle do
-  // browser, nao competindo com paint/scroll.
-  const POLL_INTERVAL_FOCUSED_MS = 12000;  // aba com foco: 12s
-  const POLL_INTERVAL_VISIBLE_MS = 45000;  // aba visivel sem foco: 45s
-  // document.hidden = pausa total.
+  const POLL_INTERVAL_FOCUSED_MS = 12000;   // active, aba com foco
+  const POLL_INTERVAL_VISIBLE_MS = 45000;   // active, aba visivel sem foco
+  const HEARTBEAT_DORMANT_MS = 5 * 60 * 1000; // dormant: 5min em foco apenas
+  const BACKOFF_CAP_MS = 5 * 60 * 1000;     // teto absoluto em active+backoff
+  const BACKOFF_EMPTY_THRESHOLD = 3;        // polls vazios antes de comecar a dobrar
+  // document.hidden = pausa total em ambos os modos.
 
   // Fallback para browsers sem requestIdleCallback (Safari < 16.4).
   const ric = window.requestIdleCallback
@@ -45,6 +56,9 @@
     timer: null,
     inFlight: false,
     listeners: new Set(),
+    mode: 'init',          // 'init' | 'dormant' | 'active'
+    emptyStreak: 0,        // polls consecutivos sem eventos (S2)
+    backoffFactor: 1,      // multiplicador de intervalo em active (S2)
   };
 
   function updateBadge(kind) {
@@ -66,6 +80,11 @@
     });
   }
 
+  function resetBackoff() {
+    State.emptyStreak = 0;
+    State.backoffFactor = 1;
+  }
+
   async function pollOnce() {
     if (State.inFlight) return;
     State.inFlight = true;
@@ -84,6 +103,11 @@
       if (typeof data.last_id === 'number') State.lastId = data.last_id;
       if (data.server_ts) State.lastTs = data.server_ts;
 
+      const newCount = (data.new || []).length;
+      const editedCount = (data.edited || []).length;
+      const deletedCount = (data.deleted || []).length;
+      const hadEvents = newCount > 0 || editedCount > 0 || deletedCount > 0;
+
       // Dispatch: mantem contrato dos eventos SSE (chat_ui.js recebe igual).
       (data.new || []).forEach((m) => dispatch('message_new', m));
       (data.edited || []).forEach((m) => dispatch('message_edit', m));
@@ -99,6 +123,21 @@
           system: State.counters.system, user: State.counters.user,
         });
       }
+
+      // S2: ajusta backoff. Qualquer evento => modo active + reset.
+      // Vazio em active => incrementa streak; passou do threshold, dobra factor.
+      if (hadEvents) {
+        State.mode = 'active';
+        resetBackoff();
+      } else if (State.mode === 'active') {
+        State.emptyStreak++;
+        if (State.emptyStreak >= BACKOFF_EMPTY_THRESHOLD) {
+          const next = State.backoffFactor * 2;
+          // Cap: max factor de modo que base * factor <= BACKOFF_CAP_MS
+          const maxFactor = Math.floor(BACKOFF_CAP_MS / POLL_INTERVAL_FOCUSED_MS);
+          State.backoffFactor = Math.min(next, maxFactor);
+        }
+      }
     } catch (e) {
       // Network flake / logout / 500 — nao poluir console em prod.
       console.debug('[chat] poll error', e);
@@ -107,14 +146,23 @@
     }
   }
 
+  function computeInterval() {
+    if (State.mode === 'dormant') {
+      // Dormant so polla em foco (heartbeat). Sem foco mas visivel = pausa.
+      return document.hasFocus() ? HEARTBEAT_DORMANT_MS : null;
+    }
+    // active: respeita foco + backoff factor, com cap absoluto.
+    const base = document.hasFocus() ? POLL_INTERVAL_FOCUSED_MS : POLL_INTERVAL_VISIBLE_MS;
+    return Math.min(base * State.backoffFactor, BACKOFF_CAP_MS);
+  }
+
   function scheduleNext() {
     if (State.timer) { clearTimeout(State.timer); State.timer = null; }
     if (document.hidden) return;
-    const interval = document.hasFocus() ? POLL_INTERVAL_FOCUSED_MS : POLL_INTERVAL_VISIBLE_MS;
+    const interval = computeInterval();
+    if (interval == null) return;  // dormant sem foco = nao agendar
     State.timer = setTimeout(() => {
-      // Espera o browser estar ocioso para nao competir com paint/scroll.
-      // Timeout 2s em ric: garante que nao trave indefinidamente em paginas
-      // CPU-bound (ex.: tabelas grandes do monitoramento).
+      // requestIdleCallback evita competir com paint/scroll.
       ric(async () => {
         await pollOnce();
         scheduleNext();
@@ -122,10 +170,47 @@
     }, interval);
   }
 
+  async function bootstrap() {
+    // 1 GET inicial decide o modo. Se falhar, cai pra modo 'active' classico.
+    try {
+      const resp = await fetch('/api/chat/bootstrap', { credentials: 'same-origin' });
+      if (!resp.ok) {
+        State.mode = 'active';
+        return scheduleNext();
+      }
+      const data = await resp.json();
+      if (typeof data.last_id === 'number') State.lastId = data.last_id;
+      if (data.server_ts) State.lastTs = data.server_ts;
+      if (data.unread) {
+        State.counters.system = data.unread.system || 0;
+        State.counters.user = data.unread.user || 0;
+        updateBadge('system');
+        updateBadge('user');
+      }
+      const dormantEligible = !data.has_threads
+        && State.counters.system === 0
+        && State.counters.user === 0;
+      State.mode = dormantEligible ? 'dormant' : 'active';
+      scheduleNext();
+    } catch (e) {
+      console.debug('[chat] bootstrap error, falling back to active', e);
+      State.mode = 'active';
+      scheduleNext();
+    }
+  }
+
   async function restart() {
     // Poll imediato + reagenda. Usado em voltar-do-background e reconnect().
     await pollOnce();
     scheduleNext();
+  }
+
+  function wake() {
+    // Sai de dormant + reset backoff. Chamado em markRead, click no chat-toggle,
+    // ou reconnect. Util quando algo no UI sugere que o user voltou a interagir.
+    State.mode = 'active';
+    resetBackoff();
+    restart();
   }
 
   function markRead(kind, thread_id) {
@@ -140,6 +225,10 @@
         credentials: 'same-origin',
       }).catch((e) => console.warn('[chat] markRead failed', e));
     }
+    // Qualquer markRead indica engajamento — wake do dormant + reset backoff.
+    if (State.mode === 'dormant' || State.backoffFactor > 1) {
+      wake();
+    }
   }
 
   window.ChatClient = {
@@ -149,7 +238,8 @@
     },
     counters() { return { ...State.counters }; },
     markRead,
-    reconnect() { restart(); },
+    reconnect() { wake(); },
+    wake,
   };
 
   // Visibility API — para de pollar em background, retoma ao voltar.
@@ -157,17 +247,26 @@
     if (document.hidden) {
       if (State.timer) { clearTimeout(State.timer); State.timer = null; }
     } else {
+      // Voltar do background reseta backoff (user provavelmente vai interagir).
+      resetBackoff();
       restart();
     }
   });
 
-  // Foco/blur ajusta cadencia (4s focado, 15s visivel sem foco). Nao pausa.
+  // Foco/blur reajusta cadencia (active: 12s focado, 45s visivel).
+  // Em dormant: foco habilita heartbeat 5min, blur o desliga.
   window.addEventListener('focus', scheduleNext);
   window.addEventListener('blur', scheduleNext);
 
   document.addEventListener('DOMContentLoaded', () => {
     // So inicia se navbar do chat foi renderizada (usuario autenticado).
-    if (!document.getElementById('chat-toggle')) return;
-    restart();
+    const toggle = document.getElementById('chat-toggle');
+    if (!toggle) return;
+    // Click no botao do chat = wake (caso esteja dormente, ja ativa polling antes
+    // do drawer abrir; quando chat_ui.js carregar mensagens, ja tem state fresh).
+    toggle.addEventListener('click', () => {
+      if (State.mode === 'dormant' || State.backoffFactor > 1) wake();
+    });
+    bootstrap();
   });
 })();

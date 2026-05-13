@@ -1,6 +1,6 @@
 # Chat — Guia de Desenvolvimento
 
-**LOC**: ~2.0K | **Arquivos**: 22 py/html + 2 JS + 1 CSS | **Atualizado**: 2026-04-24
+**LOC**: ~2.0K | **Arquivos**: 22 py/html + 2 JS + 1 CSS | **Atualizado**: 2026-05-13
 
 Modulo de chat in-app + alertas do sistema unificados. Implementado na
 branch `feature/chat-inapp` (plano 25 tasks, Fase F1 MVP).
@@ -22,7 +22,7 @@ app/chat/
   routes/
     thread_routes.py           # GET/POST /threads + /dm + /group + /members + /entity/<t>/<id>/thread
     message_routes.py          # send / edit / delete / list / reactions / forward
-    stream_routes.py           # /poll (realtime!) + /unread + /search FTS + /read + /ui/drawer + /stream (SSE legado)
+    stream_routes.py           # /bootstrap + /poll (realtime!) + /unread + /search FTS + /read + /ui/drawer + /stream (SSE legado)
     share_routes.py            # /share/screen + /entity/<t>/<id>/message
   services/
     permission_checker.py      # sistemas() + pode_adicionar() + pode_ver_thread()
@@ -60,21 +60,42 @@ scripts/migrations/
 `publisher.publish()` NAO lanca excecao se Redis down. Mensagem persiste
 no DB; client reconnecta e pega via catch-up (`Last-Event-ID` -> query DB).
 
-### R2: Realtime via POLLING (nao SSE)
+### R2: Realtime via POLLING ADAPTATIVO (nao SSE)
 Desde 2026-04-24 (fix/chat-audit-p0), `chat_client.js` usa polling em
-`GET /api/chat/poll` a cada 12s (aba focada) / 45s (visivel sem foco) /
-pausado (document.hidden). Cadencia original 4s/15s gerava percepcao de
-travamento em telas pesadas (relatado 2026-04-26) — relaxada para 12s/45s
-e cada pulse executa dentro de `requestIdleCallback` (timeout 2s) para
-nao competir com paint/scroll.
+`GET /api/chat/poll`. Cada pulse executa dentro de `requestIdleCallback`
+(timeout 2s) para nao competir com paint/scroll.
 
-Motivo: SSE mantinha 1 slot de worker gunicorn (`worker_class='gthread'`,
-4 workers × 2 threads = 8 slots) aberto por user permanentemente. Com
-agente web TAMBEM usando SSE, 4 users ativos = 8 slots consumidos =
-sistema trava para requests normais.
+Motivo da migracao de SSE: 1 slot de worker gunicorn (`worker_class='gthread'`,
+4 workers × 2 threads = 8 slots) aberto por user permanentemente. Com agente
+web TAMBEM usando SSE, 4 users ativos = 8 slots consumidos = sistema trava.
+
+**Lazy bootstrap + adaptive backoff (2026-05-13)** — adocao real medida foi
+3 de 74 users (4%), entao 96% pollavam sem nunca trocar msg. Estado do client:
+
+| Modo | Quando | Cadencia |
+|------|--------|----------|
+| `dormant` | Boot retorna `has_threads=false` + unread=0 | Heartbeat 5min, **so em foco**. Sem foco/hidden = pausado. |
+| `active` (steady) | Tem thread OU unread, ultimos polls com eventos | 12s focado / 45s visivel sem foco |
+| `active` (backoff) | 3+ polls vazios consecutivos | Intervalo dobra ate cap 5min. Reset a 1× ao chegar evento, `markRead` ou `wake()` |
+
+Transicoes promovem `dormant -> active`:
+- Click no botao do chat-toggle
+- `markRead()` (drawer abriu thread)
+- `reconnect()` / `wake()` chamados externamente
+- Qualquer evento no poll (msg nova, edit, delete)
 
 Poll endpoint retorna `{new, edited, deleted, unread, last_id, server_ts}`.
-Client mantem `since_id` + `since_ts` para query incremental.
+Bootstrap endpoint retorna `{has_threads, unread, last_id, server_ts}` — 1
+request inicial decide o modo. Client mantem `since_id` + `since_ts` para
+query incremental.
+
+**Trade-off**: user sem thread que recebe DM nova vai esperar ate proximo
+heartbeat (max 5min) para o badge aparecer. Aceitavel pra DM; para alertas
+criticos de sistema (DFE, CTe, recebimento), o SystemNotifier cria thread
+system_dm na hora do alerta, mas o badge so atualiza no proximo bootstrap
+do user (proximo refresh de pagina) OU no proximo heartbeat. Se urgencia
+matter, considerar segundo canal (email/Teams) — historicamente, alertas
+criticos ja tem.
 
 **Rota `/stream` (SSE) permanece registrada** — codigo nao foi removido porque
 o padrao pode ser util se algum futuro endpoint precisar push real. Nenhum

@@ -71,6 +71,56 @@ def _compute_unread(user_id: int) -> dict:
     return {'system': counts.get('system', 0), 'user': counts.get('user', 0)}
 
 
+@chat_bp.route('/bootstrap', methods=['GET'])
+@login_required
+def bootstrap():
+    """
+    Boot do chat_client.js — retorna estado inicial em 1 request.
+
+    Permite que o client decida se vale iniciar o timer de polling 12s/45s.
+    Users sem threads ativas + sem unread NAO precisam pollar nessa cadencia;
+    o client usa heartbeat lento (ate 5min) e so ativa polling normal quando
+    algo chega ou o user clica no botao do chat.
+
+    Reduz HTTP do chat em ~85% pra users sem adocao (adocao real medida em
+    2026-05-13: 3 de 74 users = 4%). Ver `app/chat/CLAUDE.md` secao "Realtime".
+
+    Response:
+      {
+        has_threads: bool,     # tem qualquer membership ativo
+        unread: {system, user},
+        last_id: int,          # maior message.id em threads do user (cursor inicial)
+        server_ts: ISO,
+      }
+    """
+    user_id = current_user.id
+
+    has_threads = (db.session.execute(
+        select(func.count(ChatMember.id)).where(
+            ChatMember.user_id == user_id,
+            ChatMember.removido_em.is_(None),
+        )
+    ).scalar() or 0) > 0
+
+    last_id = 0
+    if has_threads:
+        thread_ids_subq = select(ChatMember.thread_id).where(
+            ChatMember.user_id == user_id,
+            ChatMember.removido_em.is_(None),
+        ).scalar_subquery()
+        last_id = db.session.execute(
+            select(func.coalesce(func.max(ChatMessage.id), 0))
+            .where(ChatMessage.thread_id.in_(thread_ids_subq))
+        ).scalar() or 0
+
+    return jsonify({
+        'has_threads': has_threads,
+        'unread': _compute_unread(user_id),
+        'last_id': last_id,
+        'server_ts': agora_utc_naive().isoformat(),
+    })
+
+
 @chat_bp.route('/poll', methods=['GET'])
 @login_required
 def poll():
