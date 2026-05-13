@@ -3,10 +3,22 @@
 {% block motos_assai_content %}
 <header class="d-flex justify-content-between mb-3">
   <h2>NF Q.P.A. — {{ nf.numero }}/{{ nf.serie or '-' }}
-    <span class="badge bg-{% if nf.status_match == 'BATEU' %}success{% elif nf.status_match == 'DIVERGENTE' %}warning{% else %}danger{% endif %}">
+    <span class="badge bg-{% if nf.status_match == 'BATEU' %}success{% elif nf.status_match == 'DIVERGENTE' %}warning{% elif nf.status_match == 'CANCELADA' %}dark{% else %}danger{% endif %}">
       {{ nf.status_match }}
     </span>
   </h2>
+  <div class="btn-group">
+    {% if nf.status_match != 'CANCELADA' %}
+      <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modal-cancelar-nf-detalhe">
+        <i class="fas fa-ban"></i> Cancelar NF
+      </button>
+    {% endif %}
+    {% if nf.separacao_id %}
+      <a href="{{ url_for('motos_assai.faturamento_lista') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Voltar
+      </a>
+    {% endif %}
+  </div>
 </header>
 
 <dl class="row small">
@@ -17,6 +29,27 @@
   <dd class="col-sm-9">{% if nf.loja %}{{ nf.loja.numero }} {{ nf.loja.nome }}{% else %}<span class="text-warning">não resolvida</span>{% endif %}</dd>
   <dt class="col-sm-3">Valor total</dt><dd class="col-sm-9">R$ {{ nf.valor_total | numero_br(2) }}</dd>
   <dt class="col-sm-3">Data</dt><dd class="col-sm-9">{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '-' }}</dd>
+  {% if nf.status_match == 'CANCELADA' %}
+    <dt class="col-sm-3">Cancelada em</dt>
+    <dd class="col-sm-9">
+      {{ nf.cancelada_em.strftime('%d/%m/%Y %H:%M') if nf.cancelada_em else '-' }}
+      {% if nf.motivo_cancelamento %}
+        <br><small class="text-muted">Motivo: {{ nf.motivo_cancelamento }}</small>
+      {% endif %}
+    </dd>
+  {% endif %}
+  {% if nf.separacao_id %}
+    <dt class="col-sm-3">Separação vinculada</dt>
+    <dd class="col-sm-9">
+      #{{ nf.separacao_id }}
+      {% if nf.status_match != 'CANCELADA' %}
+        <button type="button" class="btn btn-sm btn-outline-info ms-2"
+                data-bs-toggle="modal" data-bs-target="#modal-editar-agendamento-{{ nf.separacao_id }}">
+          <i class="fas fa-calendar-edit"></i> Editar agendamento
+        </button>
+      {% endif %}
+    </dd>
+  {% endif %}
 </dl>
 
 <h4>Itens ({{ items|length }})</h4>
@@ -36,4 +69,79 @@
   </tbody>
 </table>
 </div>
+
+{# Modal Cancelar NF #}
+{% if nf.status_match != 'CANCELADA' %}
+<div class="modal fade" id="modal-cancelar-nf-detalhe" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-ban"></i> Cancelar NF Q.P.A. {{ nf.numero }}
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <strong>Atenção:</strong> esta ação:
+          <ul class="mb-0">
+            <li>Reverte status FATURADA → CARREGADA / SEPARADA por chassi</li>
+            <li>Marca a NF como CANCELADA (irreversível)</li>
+            <li>Limpa <code>EmbarqueItem.nota_fiscal</code></li>
+            <li>Remove a NF do espelho Nacom</li>
+            <li>Recalcula status do pedido</li>
+          </ul>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Motivo do cancelamento (≥ 3 caracteres)</label>
+          <textarea class="form-control" id="motivo-cancelar-nf-{{ nf.id }}" rows="3" required minlength="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-danger" id="btn-cancelar-nf-detalhe-{{ nf.id }}"
+                onclick="cancelarNfQpa({{ nf.id }})">
+          <i class="fas fa-ban"></i> Confirmar Cancelamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function getCsrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  return meta ? meta.getAttribute('content') : '';
+}
+
+async function cancelarNfQpa(nfId) {
+  const motivoEl = document.getElementById('motivo-cancelar-nf-' + nfId);
+  const motivo = motivoEl.value.trim();
+  if (motivo.length < 3) {
+    alert('Motivo obrigatorio (>= 3 caracteres).');
+    return;
+  }
+  try {
+    const res = await fetch(`/motos-assai/faturamento/nfs/${nfId}/cancelar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ motivo: motivo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      alert('NF cancelada com sucesso.');
+      window.location.reload();
+    } else {
+      alert('Erro: ' + (data.erro || data.error || `HTTP ${res.status}`));
+    }
+  } catch (err) {
+    alert('Erro de rede: ' + err.message);
+  }
+}
+</script>
+{% endif %}
 {% endblock %}
