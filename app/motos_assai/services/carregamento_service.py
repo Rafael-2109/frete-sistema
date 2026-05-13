@@ -222,3 +222,113 @@ def alterar_carregamento(carregamento_id, operador_id):
             # (ja estao com evento CARREGADA — proximo finalize pode mudar).
 
     db.session.flush()
+
+
+# ============================================================
+# Helpers para finalize
+# ============================================================
+
+def _calcular_count_em_comum(sep, chassis):
+    """Helper: conta chassis em comum entre uma sep e lista de chassis."""
+    chassis_sep = {it.chassi for it in sep.itens}
+    return len(chassis_sep & set(chassis))
+
+
+def _saldo_pendente_modelo(sep_id, modelo_id):
+    """Helper: qtd_planejada - qtd_separada para um modelo na sep.
+
+    Retorna 0 se nao ha saldo planejado para o modelo.
+    """
+    saldo_obj = (db.session.query(AssaiSeparacaoSaldoModelo)
+                 .filter_by(separacao_id=sep_id, modelo_id=modelo_id)
+                 .first())
+    if not saldo_obj:
+        return 0
+
+    qtd_separada = (db.session.query(db.func.count(AssaiSeparacaoItem.id))
+                    .filter_by(separacao_id=sep_id, modelo_id=modelo_id)
+                    .scalar() or 0)
+    return max(0, saldo_obj.qtd_planejada - qtd_separada)
+
+
+def _resolver_valor_unitario(car, modelo_id):
+    """Helper: pega valor_unitario do AssaiPedidoVendaItem para esse modelo no pedido."""
+    item_pedido = (AssaiPedidoVendaItem.query
+                   .filter_by(pedido_id=car.pedido_id, loja_id=car.loja_id, modelo_id=modelo_id)
+                   .first())
+    return float(item_pedido.valor_unitario) if item_pedido else 0.0
+
+
+# ============================================================
+# Algoritmo finalizar_carregamento (8 fases)
+# ============================================================
+
+def finalizar_carregamento(carregamento_id, operador_id):
+    """Finaliza Carregamento - algoritmo §6 (8 fases).
+
+    Tasks 5-12 implementam fases 1-8 incrementalmente.
+    Esta versao (Task 5) implementa apenas Fase 1.
+
+    Args:
+        carregamento_id: ID do carregamento (deve estar EM_CARREGAMENTO)
+        operador_id: usuario que finalizou
+
+    Returns:
+        AssaiSeparacao alvo (criada ou ajustada).
+
+    Raises:
+        CarregamentoValidationError: carregamento nao existe
+        CarregamentoStateError: carregamento nao esta EM_CARREGAMENTO
+        CarregamentoExcedenteError: Fase 3 - excederia pedido (Task 7)
+    """
+    car = AssaiCarregamento.query.get(carregamento_id)
+    if not car:
+        raise CarregamentoValidationError(f'Carregamento {carregamento_id} nao encontrado')
+    if car.status != CARREGAMENTO_STATUS_EM_CARREGAMENTO:
+        raise CarregamentoStateError(
+            f'Carregamento {carregamento_id} esta {car.status} (esperado EM_CARREGAMENTO)'
+        )
+
+    chassis_car = [item.chassi for item in car.itens]
+    if not chassis_car:
+        raise CarregamentoValidationError(
+            f'Carregamento {carregamento_id} esta vazio - nao pode ser finalizado'
+        )
+
+    # === FASE 1: identificar ou criar Sep alvo ===
+    # S18=b/A2: Sep CARREGADA/FATURADA NAO entra no match (1:1).
+    seps_ativas = (AssaiSeparacao.query
+                   .filter_by(pedido_id=car.pedido_id, loja_id=car.loja_id)
+                   .filter(AssaiSeparacao.status.in_([
+                       SEPARACAO_STATUS_EM_SEPARACAO,
+                       SEPARACAO_STATUS_FECHADA,
+                   ]))
+                   .all())
+
+    if not seps_ativas:
+        # Q4/Q6: criar Sep automaticamente em CARREGADA
+        # A9: fechada_em + fechada_por_id usam operador_id
+        sep_alvo = AssaiSeparacao(
+            pedido_id=car.pedido_id, loja_id=car.loja_id,
+            status=SEPARACAO_STATUS_CARREGADA,  # pula EM_SEPARACAO + FECHADA
+            iniciada_em=agora_brasil_naive(),
+            fechada_em=agora_brasil_naive(),
+            fechada_por_id=operador_id,  # A9
+        )
+        db.session.add(sep_alvo)
+        db.session.flush()
+    else:
+        # Q5: match por chassis em comum (mais matches = sep alvo)
+        sep_alvo = max(seps_ativas, key=lambda s: _calcular_count_em_comum(s, chassis_car))
+        # NOTA: status final atribuido na Fase 4
+
+    # === FASES 2-8: implementadas em Tasks 6-12 ===
+    # Por ora, marcar sep como CARREGADA + finalizar carregamento (esqueleto)
+    sep_alvo.status = SEPARACAO_STATUS_CARREGADA
+    car.separacao_id = sep_alvo.id
+    car.status = CARREGAMENTO_STATUS_FINALIZADO
+    car.finalizado_em = agora_brasil_naive()
+    car.finalizado_por_id = operador_id
+    db.session.flush()
+
+    return sep_alvo
