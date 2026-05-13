@@ -3,11 +3,14 @@
 Spec: docs/superpowers/specs/2026-05-12-motos-assai-carregamento-divergencia-design.md
 Plano: docs/superpowers/plans/2026-05-12-motos-assai-fase2-3-carregamento.md
 """
+from sqlalchemy.exc import IntegrityError
+
 from app import db
 from app.motos_assai.models import (
     AssaiCarregamento, AssaiCarregamentoItem, AssaiSeparacao, AssaiSeparacaoItem,
     AssaiSeparacaoSaldoModelo,
     AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiLoja, AssaiMoto,
+    AssaiPedidoExcel,
     CARREGAMENTO_STATUS_EM_CARREGAMENTO,
     CARREGAMENTO_STATUS_FINALIZADO, CARREGAMENTO_STATUS_CANCELADO,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
@@ -16,6 +19,7 @@ from app.motos_assai.models import (
     EVENTO_SEPARADA, EVENTO_DISPONIVEL, EVENTO_CARREGADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
+from app.motos_assai.services.faturamento_service import gerar_excel_qpa
 from app.utils.timezone import agora_brasil_naive
 
 
@@ -524,5 +528,44 @@ def finalizar_carregamento(carregamento_id, operador_id):
 
     db.session.flush()
 
-    # === FASES 5-8: implementadas em Tasks 9-12 ===
+    # === FASE 5: regenerar Excel Q.P.A. (D-C + S13=a + CR-9/CR-12 race fix) ===
+    # CR-12: lock pessimista na sep para serializar regeneracoes concorrentes.
+    AssaiSeparacao.query.filter_by(id=sep_alvo.id).with_for_update().first()
+
+    excel_anterior = AssaiPedidoExcel.query.filter_by(
+        separacao_id=sep_alvo.id, ativo=True,
+    ).first()
+    if excel_anterior:
+        excel_anterior.ativo = False  # mantem historico
+
+    nova_versao = (excel_anterior.versao + 1) if excel_anterior else 1
+
+    # gerar_excel_qpa retorna (bytes, s3_key) - service existente em faturamento_service
+    bytes_xlsx, s3_key = gerar_excel_qpa(sep_alvo.id, operador_id)
+
+    # CR-9 + N-B6 fix: retry defensivo via SAVEPOINT (begin_nested) em vez de rollback completo.
+    # Rollback completo desfaz Fases 1-4 inteiras. Savepoint isola apenas o INSERT do Excel.
+    try:
+        with db.session.begin_nested():
+            db.session.add(AssaiPedidoExcel(
+                pedido_id=car.pedido_id, separacao_id=sep_alvo.id,
+                s3_key=s3_key, versao=nova_versao, ativo=True,
+                motivo_regeneracao=f'Carregamento {car.id} finalizado',
+                gerado_por_id=operador_id,
+            ))
+    except IntegrityError:
+        # Savepoint reverteu o INSERT. Recalcula MAX e tenta de novo.
+        max_versao = (db.session.query(db.func.coalesce(db.func.max(AssaiPedidoExcel.versao), 0))
+                      .filter_by(separacao_id=sep_alvo.id)
+                      .scalar() or 0)
+        nova_versao = max_versao + 1
+        db.session.add(AssaiPedidoExcel(
+            pedido_id=car.pedido_id, separacao_id=sep_alvo.id,
+            s3_key=s3_key, versao=nova_versao, ativo=True,
+            motivo_regeneracao=f'Carregamento {car.id} finalizado (retry)',
+            gerado_por_id=operador_id,
+        ))
+        db.session.flush()
+
+    # === FASES 6-8: implementadas em Tasks 10-12 ===
     return sep_alvo
