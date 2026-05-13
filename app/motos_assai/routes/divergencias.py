@@ -292,8 +292,39 @@ def divergencias_resolver(div_id):
                     return jsonify({'ok': False, 'erro': str(e)}), 400
 
         elif tipo_resolucao == DIVERGENCIA_RESOLUCAO_SUBSTITUIR_CHASSI:
-            # Placeholder Plano 4 — apenas marca como resolvida
-            pass
+            # Pacote C (2026-05-13): impl. real — chama substituir_chassi_entre_seps
+            # com via_divergencia=True (permite origem FATURADA/CARREGADA, que e o
+            # caso de uso principal desta resolucao).
+            sep_origem_id = extras.get('sep_origem_id')
+            sep_destino_id = extras.get('sep_destino_id')
+            chassi_alvo = (extras.get('chassi') or '').strip()
+            if not sep_origem_id or not sep_destino_id:
+                return jsonify({
+                    'ok': False,
+                    'erro': 'sep_origem_id e sep_destino_id obrigatorios em extras',
+                }), 400
+            if not chassi_alvo:
+                # Fallback: usa chassi da propria divergencia
+                div_obj = AssaiDivergencia.query.get_or_404(div_id)
+                chassi_alvo = (div_obj.chassi or '').strip()
+                if not chassi_alvo:
+                    return jsonify({
+                        'ok': False,
+                        'erro': 'Divergencia sem chassi — substituicao requer chassi',
+                    }), 400
+            from app.motos_assai.services.separacao_service import (
+                substituir_chassi_entre_seps, SeparacaoValidationError,
+            )
+            try:
+                substituir_chassi_entre_seps(
+                    chassi=chassi_alvo,
+                    sep_origem_id=int(sep_origem_id),
+                    sep_destino_id=int(sep_destino_id),
+                    operador_id=current_user.id,
+                    via_divergencia=True,
+                )
+            except SeparacaoValidationError as e:
+                return jsonify({'ok': False, 'erro': str(e)}), 400
 
         # Comum a todos: marcar divergencia resolvida + S21 re-roda match (se aplicavel)
         resolver_divergencia(

@@ -390,10 +390,21 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.disabled = false;
         return;
       }
-      alert('NF vinculada com sucesso. Sep: ' + (data.sep_alvo_id || '?')
-            + '. Razao: ' + (data.razao || ''));
+      // #18 fix (2026-05-13): se sep foi criada via NF (S1=b), redirecionar
+      // direto para nf_detalhe — la o Modal Expedicao auto-abre via
+      // upload_nf_modal_expedicao.js (depende de sep_criada_via_nf gravado
+      // pelo separacao_service.py:1481).
+      // Antes era reload em lista_separacoes, e o operador precisava clicar
+      // no link da NF para chegar no nf_detalhe que dispara o modal.
       bootstrap.Modal.getInstance(modal)?.hide();
-      setTimeout(function () { location.reload(); }, 800);
+      if (data.sep_criada_via_nf) {
+        alert('NF vinculada — separacao criada via NF. Configure a expedicao agora.');
+        window.location.href = '/motos-assai/faturamento/nfs/' + nfId;
+      } else {
+        alert('NF vinculada com sucesso. Sep: ' + (data.sep_alvo_id || '?')
+              + '. Razao: ' + (data.razao || ''));
+        setTimeout(function () { location.reload(); }, 800);
+      }
     } catch (err) {
       alert('Erro de rede: ' + err.message);
       btn.disabled = false;

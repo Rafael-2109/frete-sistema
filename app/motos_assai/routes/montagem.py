@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import (
-    registrar_montagem, resolver_pendencia, historico_3_ultimas_montagens,
+    registrar_montagem, historico_3_ultimas_montagens,
     MontagemValidationError,
 )
 from app.motos_assai.services.resumo_service import (
@@ -48,24 +48,10 @@ def montagem_registrar():
     ]})
 
 
-@motos_assai_bp.route('/montagem/resolver-pendencia', methods=['POST'])
-@login_required
-@require_motos_assai
-def montagem_resolver_pendencia():
-    """Resolve pendência de montagem via chassi + descrição de resolução."""
-    data = request.get_json(silent=True) or {}
-    chassi = (data.get('chassi') or '').strip().upper()
-    descricao = (data.get('descricao_resolucao') or '').strip()
-    if not chassi:
-        return jsonify({'ok': False, 'erro': 'Chassi obrigatório'}), 400
-    try:
-        result = resolver_pendencia(
-            chassi=chassi,
-            descricao_resolucao=descricao,
-            operador_id=current_user.id,
-        )
-    except MontagemValidationError as e:
-        return jsonify({'ok': False, 'erro': str(e)}), 400
-    except Exception as e:
-        return jsonify({'ok': False, 'erro': f'Erro: {e}'}), 500
-    return jsonify({'ok': True, **(result if isinstance(result, dict) else {})})
+#
+# 2026-05-13 (#12 fix): rota POST /montagem/resolver-pendencia REMOVIDA por
+# ser duplicata exata de POST /pendencias/resolver (mesmo body, mesmo service
+# `resolver_pendencia`, mesma exception). Toda UI consome /pendencias/resolver
+# via pendencias_resolver.js. Mantida apenas pendencias_resolver como
+# endpoint canonico (single source of truth).
+#

@@ -115,6 +115,14 @@
     {% endif %}
     <span class="d-block text-truncate small pos-venda-anexo-nome">{{ a.nome_original }}</span>
   </a>
+  {# #12 fix (2026-05-13): bot&atilde;o Download (rota pos_venda_anexo_download era orfa).
+     Visualizar abre inline em nova aba; download forca attachment via header. #}
+  <a href="{{ url_for('motos_assai.pos_venda_anexo_download', anexo_id=a.id) }}"
+     class="pos-venda-anexo-download btn btn-sm btn-outline-secondary"
+     title="Baixar anexo {{ a.nome_original }}"
+     download>
+    <i class="fas fa-download"></i>
+  </a>
   <button type="button"
           class="btn-excluir-anexo pos-venda-anexo-excluir btn btn-sm btn-danger"
           title="Excluir anexo">

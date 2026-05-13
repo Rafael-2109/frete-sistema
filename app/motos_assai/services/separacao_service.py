@@ -718,6 +718,7 @@ def listar_pares_separaveis() -> List[Dict[str, Any]]:
         bucket['qtd_separada_total'] += qtd_sep
         bucket['qtd_pendente_total'] += qtd_pend
         bucket['modelos'].append({
+            'modelo_id': it.modelo_id,  # Pacote A (2026-05-13): modal Iniciar precisa
             'codigo': it.codigo,
             'nome': it.nome,
             'qtd_pedida': qtd_pedida,
@@ -1887,6 +1888,7 @@ def criar_separacao_com_saldos(
 
 def substituir_chassi_entre_seps(
     chassi: str, sep_origem_id: int, sep_destino_id: int, operador_id: int,
+    via_divergencia: bool = False,
 ) -> Dict[str, Any]:
     """Move chassi entre seps com regenerar Excel + mirror Nacom + recalcular pedido.
 
@@ -1896,6 +1898,11 @@ def substituir_chassi_entre_seps(
     CR-10: usa query AssaiNfQpa.query.filter_by (nao usa relationship reverse).
     S10: chama recalcular_status_pedido em ambos pedidos.
 
+    Pacote C (2026-05-13): bloqueia sep_origem FATURADA/CARREGADA quando chamada
+    direta (tela sep/carregamento). Para alterar chassi de NF emitida ou carga
+    em transito, operador DEVE passar pelo fluxo de Divergencias — caller passa
+    via_divergencia=True.
+
     NAO commita — caller commita.
 
     Args:
@@ -1903,6 +1910,9 @@ def substituir_chassi_entre_seps(
         sep_origem_id: sep onde chassi esta hoje.
         sep_destino_id: sep para onde mover.
         operador_id: usuario que solicitou.
+        via_divergencia: True quando chamada vem do modulo Divergencias
+            (permite origem FATURADA/CARREGADA). False (default) bloqueia
+            esses statuses — operador deve usar fluxo de divergencia.
 
     Returns:
         {
@@ -1914,7 +1924,8 @@ def substituir_chassi_entre_seps(
 
     Raises:
         SeparacaoValidationError: chassi nao esta na sep origem, sep destino
-            invalida (FATURADA, ou nao existe), seps iguais, etc.
+            invalida (FATURADA, ou nao existe), seps iguais, ou origem
+            FATURADA/CARREGADA sem via_divergencia=True.
     """
     chassi_norm = chassi.strip().upper()
 
@@ -1935,6 +1946,17 @@ def substituir_chassi_entre_seps(
     sep_destino = AssaiSeparacao.query.get(sep_destino_id)
     if not sep_destino:
         raise SeparacaoValidationError(f'Sep destino {sep_destino_id} nao encontrada')
+
+    # Pacote C (2026-05-13): bloquear substituicao direta de sep origem
+    # FATURADA/CARREGADA — operador deve criar divergencia.
+    if not via_divergencia and sep_origem.status in (
+        SEPARACAO_STATUS_FATURADA, SEPARACAO_STATUS_CARREGADA,
+    ):
+        raise SeparacaoValidationError(
+            f'Sep origem {sep_origem_id} esta {sep_origem.status} — '
+            'substituicao direta bloqueada. Use o modulo Divergencias para '
+            'alterar chassi de NF emitida ou carga em transito.'
+        )
 
     # CR-11: pre-condicoes do destino
     if sep_destino.status not in (

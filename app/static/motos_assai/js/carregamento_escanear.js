@@ -413,7 +413,7 @@
       showAlerta('danger', 'Erro ao carregar seps: ' + escapeHtml(err.message));
     }
 
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-substituir-chassi')).show();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-substituir-chassi-car')).show();
   }
 
   document.getElementById('btn-confirmar-substituir-chassi-car')?.addEventListener('click', async function () {
@@ -445,7 +445,7 @@
         return;
       }
 
-      bootstrap.Modal.getInstance(document.getElementById('modal-substituir-chassi'))?.hide();
+      bootstrap.Modal.getInstance(document.getElementById('modal-substituir-chassi-car'))?.hide();
       var msgExtra = dataS.divergencia_id
         ? ' (divergencia #' + dataS.divergencia_id + ' criada — sep origem FATURADA)'
         : '';

@@ -66,21 +66,51 @@
     const data = await r.json();
 
     // Plano 4 Task 4: cenario=cross_loja => abre modal de substituicao
+    // Pacote B (2026-05-13): popula dropdown de seps destino (paridade com carregamento).
     if (r.status === 409 && data.cenario === 'cross_loja') {
       _pendingCrossLoja = {
         chassi: data.chassi,
         sep_origem_id: data.sep_origem_id,
         loja_origem_id: data.loja_origem_id,
-        sep_destino_id: data.sep_destino_id || cfg.separacaoId,
+        sep_destino_id_default: data.sep_destino_id || cfg.separacaoId,
         loja_destino_id: data.loja_destino_id,
       };
-      const modal = document.getElementById('modal-substituir-chassi');
       document.getElementById('cross-chassi').textContent = _pendingCrossLoja.chassi;
       document.getElementById('cross-sep-origem-id').textContent = _pendingCrossLoja.sep_origem_id;
       document.getElementById('cross-loja-origem').textContent = _pendingCrossLoja.loja_origem_id;
-      document.getElementById('cross-sep-destino-id').textContent = _pendingCrossLoja.sep_destino_id;
       document.getElementById('cross-loja-destino').textContent = _pendingCrossLoja.loja_destino_id;
-      bootstrap.Modal.getOrCreateInstance(modal).show();
+
+      // Carregar seps ativas do (pedido, loja) atuais para popular dropdown
+      const sel = document.getElementById('cross-sep-destino-select');
+      sel.innerHTML = '<option value="">— Carregando... —</option>';
+      sel.disabled = true;
+      try {
+        const sepsUrl = (cfg.endpoints.sepsAtivas || '/motos-assai/api/seps-ativas')
+                      + '?pedido_id=' + cfg.pedidoId + '&loja_id=' + cfg.lojaId;
+        const sepsR = await fetch(sepsUrl, {headers: {'X-CSRFToken': getCsrfToken()}});
+        const sepsResp = await sepsR.json();
+        if (!sepsResp.ok || !sepsResp.seps || sepsResp.seps.length === 0) {
+          sel.innerHTML = '<option value="">— Nenhuma sep ativa nesta loja —</option>';
+          showAlerta('warning', 'Nao ha sep ativa nesta loja. Crie uma sep antes.');
+        } else {
+          sel.innerHTML = '<option value="">— Selecione —</option>';
+          sepsResp.seps.forEach(function (s) {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = 'Sep #' + s.id + ' — ' + s.status
+                            + (s.iniciada_em ? ' (' + s.iniciada_em + ')' : '');
+            // Pre-selecionar a sep da tela atual (caso comum: 1 sep ativa)
+            if (s.id === _pendingCrossLoja.sep_destino_id_default) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          sel.disabled = false;
+        }
+      } catch (err) {
+        sel.innerHTML = '<option value="">— Erro ao carregar seps —</option>';
+        showAlerta('danger', 'Erro ao carregar seps: ' + err.message);
+      }
+
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-substituir-chassi-sep')).show();
       return;
     }
 
@@ -98,6 +128,13 @@
   let _pendingCrossLoja = null;
   document.getElementById('btn-confirmar-substituir-chassi-sep')?.addEventListener('click', async () => {
     if (!_pendingCrossLoja) return;
+    // Pacote B: ler sep destino do dropdown (multipla escolha possivel)
+    const sel = document.getElementById('cross-sep-destino-select');
+    const sepDestinoId = sel ? sel.value : null;
+    if (!sepDestinoId) {
+      showAlerta('warning', 'Selecione a sep destino.');
+      return;
+    }
     const btn = document.getElementById('btn-confirmar-substituir-chassi-sep');
     btn.disabled = true;
     try {
@@ -107,20 +144,30 @@
         body: JSON.stringify({
           chassi: _pendingCrossLoja.chassi,
           sep_origem_id: _pendingCrossLoja.sep_origem_id,
-          sep_destino_id: _pendingCrossLoja.sep_destino_id,
+          sep_destino_id: parseInt(sepDestinoId, 10),
         }),
       });
       const data = await r.json();
       if (!data.ok) {
-        showAlerta('danger', data.erro || 'Erro ao substituir chassi');
+        // Pacote C (Bug 6): backend bloqueia se origem FATURADA/CARREGADA.
+        // Mostrar link explicito para Divergencias.
+        const ehBloqueio = r.status === 403 || (data.erro || '').toLowerCase().indexOf('faturad') >= 0
+                         || (data.erro || '').toLowerCase().indexOf('carregad') >= 0;
+        if (ehBloqueio) {
+          showAlerta('danger',
+            (data.erro || 'Sep origem em status que bloqueia substituicao direta.') +
+            ' <a href="/motos-assai/divergencias" class="alert-link">Ir para Divergencias</a>');
+        } else {
+          showAlerta('danger', data.erro || 'Erro ao substituir chassi');
+        }
         btn.disabled = false;
         return;
       }
       const msgExtra = data.divergencia_id
-        ? ` (divergencia #${data.divergencia_id} criada — sep origem FATURADA)`
+        ? ` (divergencia #${data.divergencia_id} criada)`
         : '';
-      showAlerta('success', `Chassi ${data.chassi} movido para esta sep${msgExtra}.`);
-      bootstrap.Modal.getInstance(document.getElementById('modal-substituir-chassi'))?.hide();
+      showAlerta('success', `Chassi ${data.chassi} movido${msgExtra}.`);
+      bootstrap.Modal.getInstance(document.getElementById('modal-substituir-chassi-sep'))?.hide();
       setTimeout(() => location.reload(), 1000);
     } catch (err) {
       showAlerta('danger', 'Erro de rede: ' + err.message);

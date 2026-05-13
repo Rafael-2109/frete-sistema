@@ -4,23 +4,21 @@ from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import (
     get_separacao_ativa, saldo_pendente_por_modelo,
-    registrar_chassi, desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    registrar_chassi, desfazer_chassi, cancelar_separacao,
     reabrir_separacao,
     listar_pares_separaveis,
     SeparacaoConflictError, SeparacaoValidationError, SeparacaoCrossLojaError,
     # Realocacao de saldo (Tasks #11/#12/#13)
     analisar_finalizacao, finalizar_separacao_com_decisao,
     SeparacaoSaldoPendenteError,
-    FINALIZAR_MODO_AUTO, FINALIZAR_MODO_VOLTAR_SALDO,
-    FINALIZAR_MODO_MANTER_PLANEJADO, FINALIZAR_MODO_REALOCAR,
+    FINALIZAR_MODO_AUTO,
     # Plano 4 Task 1
     substituir_chassi_entre_seps,
 )
 from app import db
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiPedidoVenda, AssaiLoja,
-    AssaiSeparacaoSaldoModelo, AssaiModelo,
-    SEPARACAO_STATUS_EM_SEPARACAO,
+    AssaiSeparacaoSaldoModelo,
 )
 
 
@@ -40,13 +38,29 @@ def separacao_lista():
 @login_required
 @require_motos_assai
 def separacao_nova():
-    """Tela com pares (pedido, loja) com saldo pendente para iniciar separacao.
+    """DEPRECATED 2026-05-13: redirecionado para separacao_lista.
 
-    Cada par tem botao "Iniciar separacao" que abre a tela operacional
-    (/pedidos/<pid>/separar/<lid>) - se ja houver separacao ativa, abre ela.
+    O fluxo "Iniciar nova separacao" agora abre um modal dentro da propria
+    lista (Pacote A — revisao UI motos_assai). Esta rota e mantida para
+    backwards compat (links externos / bookmarks). Para iniciar separacao,
+    use o botao "Iniciar separacao" no header de /motos-assai/separacao
+    que abre #modal-iniciar-separacao.
+    """
+    return redirect(url_for('motos_assai.separacao_lista'))
+
+
+@motos_assai_bp.route('/separacao/api/pares')
+@login_required
+@require_motos_assai
+def separacao_api_pares():
+    """API: lista pares (pedido, loja) com saldo pendente em JSON.
+
+    Usado pelo #modal-iniciar-separacao para popular tabela + autocomplete
+    de loja/cidade/pedido. Retorno identico ao service listar_pares_separaveis,
+    mas em JSON serializavel.
     """
     pares = listar_pares_separaveis()
-    return render_template('motos_assai/separacao/nova.html', pares=pares)
+    return jsonify({'ok': True, 'pares': pares})
 
 
 @motos_assai_bp.route('/pedidos/<int:pedido_id>/separar/<int:loja_id>')

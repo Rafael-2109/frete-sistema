@@ -3,7 +3,8 @@ window.OnboardingEngine.register({
   titulo: 'Separacoes em andamento',
   autoStartRoute: '/motos-assai/separacao',
   steps: [
-    { element: '#filtros-separacao', title: 'Filtros', description: 'Status (aberta/fechada), pedido, loja Sendas.' },
-    { element: '#tabela-separacao', title: 'Lista de separacoes', description: 'Cada linha = pedido + loja sendo separado. Clique para abrir e escanear chassis.' }
+    // 2026-05-13: removido step '#filtros-separacao' — feature de filtros nunca foi implementada
+    // (id era esperancoso/antecipado pelo autor original do tour, sem callsite no template).
+    { element: '#tabela-separacao', title: 'Lista de separacoes', description: 'Cada linha = pedido + loja sendo separado. Use os botoes (Visualizar / Datas / Alterar / Cancelar) para gerenciar a separacao. Clique em "Iniciar nova separacao" no topo para abrir o modal de criacao.' }
   ]
 });

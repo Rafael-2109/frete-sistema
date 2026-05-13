@@ -195,8 +195,30 @@
       </td>
       <td class="text-end">
         {% if not d.resolvida_em %}
+          {# Pacote D (2026-05-13): bot&otilde;es contextuais por tipo de diverg&ecirc;ncia.
+             Antes mostrava todos baseado em presen&ccedil;a de nf_ref/car_ref/sep_ref;
+             agora cruza com tipo da diverg&ecirc;ncia (CCe s&oacute; em tipos que CCe resolve, etc).
+             Backend faz a valida&ccedil;&atilde;o real (defesa em profundidade). #}
+          {% set tipos_cancelar_nf = ['CHASSI_NAO_CADASTRADO', 'CHASSI_OUTRA_LOJA',
+                                       'CHASSI_SEM_SEPARACAO', 'MODELO_DIVERGENTE',
+                                       'LOJA_DIVERGENTE', 'VALOR_DIVERGENTE',
+                                       'NF_CHASSI_FORA_CARREGAMENTO'] %}
+          {% set tipos_cce = ['NF_CHASSI_FORA_CARREGAMENTO', 'CHASSI_OUTRA_LOJA',
+                              'MODELO_DIVERGENTE', 'VALOR_DIVERGENTE'] %}
+          {% set tipos_alterar_car = ['NF_CHASSI_FORA_CARREGAMENTO', 'CARREGAMENTO_CHASSI_FORA_NF'] %}
+          {% set tipos_substituir = ['CHASSI_NAO_CADASTRADO', 'CHASSI_OUTRA_LOJA',
+                                      'CHASSI_SEM_SEPARACAO', 'MODELO_DIVERGENTE',
+                                      'LOJA_DIVERGENTE',
+                                      'NF_CHASSI_FORA_CARREGAMENTO',
+                                      'CARREGAMENTO_CHASSI_FORA_NF'] %}
+
+          {% set show_cancelar_nf = nf_ref and nf_ref.status_match != 'CANCELADA' and d.tipo in tipos_cancelar_nf %}
+          {% set show_cce = nf_ref and nf_ref.status_match != 'CANCELADA' and d.tipo in tipos_cce %}
+          {% set show_alterar_car = car_ref and d.tipo in tipos_alterar_car %}
+          {% set show_substituir = sep_ref and d.tipo in tipos_substituir %}
+
           <div class="btn-group btn-group-sm" role="group">
-            {% if nf_ref and nf_ref.status_match != 'CANCELADA' %}
+            {% if show_cancelar_nf %}
               <button type="button" class="btn btn-outline-danger btn-sm btn-resolver"
                       data-div-id="{{ d.id }}"
                       data-tipo="CANCELAR_NF"
@@ -204,6 +226,8 @@
                       data-bs-toggle="modal" data-bs-target="#modal-cancelar-nf">
                 Cancelar NF
               </button>
+            {% endif %}
+            {% if show_cce %}
               <button type="button" class="btn btn-outline-info btn-sm btn-resolver"
                       data-div-id="{{ d.id }}"
                       data-tipo="CCE"
@@ -212,7 +236,7 @@
                 CCe
               </button>
             {% endif %}
-            {% if car_ref %}
+            {% if show_alterar_car %}
               <button type="button" class="btn btn-outline-warning btn-sm btn-resolver"
                       data-div-id="{{ d.id }}"
                       data-tipo="ALTERAR_CARREGAMENTO"
@@ -221,12 +245,19 @@
                 Alterar Carregamento
               </button>
             {% endif %}
-            <button type="button" class="btn btn-outline-secondary btn-sm btn-resolver"
-                    data-div-id="{{ d.id }}"
-                    data-tipo="SUBSTITUIR_CHASSI"
-                    data-bs-toggle="modal" data-bs-target="#modal-substituir-chassi">
-              Substituir
-            </button>
+            {% if show_substituir %}
+              <button type="button" class="btn btn-outline-secondary btn-sm btn-resolver"
+                      data-div-id="{{ d.id }}"
+                      data-tipo="SUBSTITUIR_CHASSI"
+                      data-chassi="{{ d.chassi or '' }}"
+                      data-sep-origem-id="{{ sep_ref.id }}"
+                      data-pedido-id="{{ sep_ref.pedido_id }}"
+                      data-loja-id="{{ sep_ref.loja_id }}"
+                      data-bs-toggle="modal" data-bs-target="#modal-substituir-chassi-div">
+                Substituir
+              </button>
+            {% endif %}
+            {# Ignorar — sempre dispon&iacute;vel. #}
             <button type="button" class="btn btn-outline-dark btn-sm btn-resolver"
                     data-div-id="{{ d.id }}"
                     data-tipo="IGNORAR"

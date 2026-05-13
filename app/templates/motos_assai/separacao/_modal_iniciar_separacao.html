@@ -1,0 +1,384 @@
+{# Modal "Iniciar Separacao" — Pacote A (2026-05-13).
+
+   Fluxo 1-passo:
+   1. Filtros (loja, cidade, pedido) filtram tabela client-side
+   2. Operador clica numa linha (radio) para selecionar par pedido x loja
+   3. Linha expande mostrando checkbox + qtd inline por modelo pendente
+   4. Botao "Criar separacao" submete POST /pedidos/<pid>/loja/<lid>/separacao/criar
+      com alocacoes selecionadas. Redireciona para a tela de escaneio.
+
+   Reusa endpoint AJAX `motos_assai.separacao_api_pares` para popular tabela.
+   Reusa rota AJAX `motos_assai.pedidos_separacao_criar` para criar a sep
+   (mesma usada hoje pelo detalhe do pedido — checkbox+qtd inline).
+#}
+<div class="modal fade" id="modal-iniciar-separacao" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-truck"></i> Iniciar Separa&ccedil;&atilde;o
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Filtros -->
+        <div class="row g-2 mb-3">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Loja (n&uacute;mero ou nome)</label>
+            <input type="text" id="iniciar-filtro-loja" class="form-control form-control-sm"
+                   placeholder="Ex: 112 ou Centro" autocomplete="off">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Cidade / UF</label>
+            <input type="text" id="iniciar-filtro-cidade" class="form-control form-control-sm"
+                   placeholder="Ex: S&atilde;o Paulo ou SP" autocomplete="off">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">N&uacute;mero do pedido</label>
+            <input type="text" id="iniciar-filtro-pedido" class="form-control form-control-sm"
+                   placeholder="Ex: 21439695" autocomplete="off">
+          </div>
+        </div>
+
+        <!-- Status do carregamento -->
+        <div id="iniciar-status" class="alert alert-info small mb-2 d-none"></div>
+
+        <!-- Tabela -->
+        <div class="table-responsive" style="max-height: 50vh; overflow-y: auto;">
+          <table class="table table-sm table-hover align-middle" id="iniciar-tabela-pares">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width: 36px"></th>
+                <th>Pedido</th>
+                <th>Loja</th>
+                <th>Cidade/UF</th>
+                <th class="text-center">Modelos pendentes</th>
+                <th class="text-center">Pend.</th>
+                <th class="text-center">Sep ativa?</th>
+              </tr>
+            </thead>
+            <tbody id="iniciar-tbody">
+              <tr><td colspan="7" class="text-center text-muted small py-3">Carregando pares...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Area de selecao (aparece quando linha selecionada) -->
+        <div id="iniciar-selecionado-area" class="border rounded p-3 mt-2 bg-light d-none">
+          <h6 class="mb-2">
+            <i class="fas fa-check-circle text-success"></i>
+            Par selecionado:
+            <span id="iniciar-sel-resumo" class="fw-bold"></span>
+          </h6>
+          <p class="small text-muted mb-2">
+            Marque os modelos e ajuste a quantidade a separar (m&aacute;ximo = pendente).
+          </p>
+          <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th style="width: 40px"></th>
+                <th>Modelo</th>
+                <th class="text-end">Pedido</th>
+                <th class="text-end">Separado</th>
+                <th class="text-end">Pendente</th>
+                <th class="text-end" style="width: 130px">Qtd a separar</th>
+              </tr>
+            </thead>
+            <tbody id="iniciar-modelos-tbody"></tbody>
+          </table>
+          </div>
+          <div id="iniciar-erro-criar" class="alert alert-danger small mt-2 d-none"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success" id="iniciar-btn-criar" disabled>
+          <i class="fas fa-plus"></i> Criar separa&ccedil;&atilde;o
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  function norm(s) {
+    return (s || '').toString().trim().toLowerCase();
+  }
+
+  var modalEl = document.getElementById('modal-iniciar-separacao');
+  if (!modalEl) return;
+
+  var paresCache = [];        // [{pedido_id, pedido_numero, loja_id, loja_numero, ...}, ...]
+  var parSelecionado = null;  // objeto par escolhido
+
+  var statusEl = document.getElementById('iniciar-status');
+  var tbodyEl = document.getElementById('iniciar-tbody');
+  var areaSel = document.getElementById('iniciar-selecionado-area');
+  var resumoEl = document.getElementById('iniciar-sel-resumo');
+  var modelosTbody = document.getElementById('iniciar-modelos-tbody');
+  var btnCriar = document.getElementById('iniciar-btn-criar');
+  var erroCriarEl = document.getElementById('iniciar-erro-criar');
+
+  function setStatus(msg, tipo) {
+    if (!msg) {
+      statusEl.className = 'alert alert-info small mb-2 d-none';
+      statusEl.textContent = '';
+      return;
+    }
+    statusEl.className = 'alert alert-' + (tipo || 'info') + ' small mb-2';
+    statusEl.textContent = msg;
+  }
+
+  function renderTabela() {
+    var fLoja = norm(document.getElementById('iniciar-filtro-loja').value);
+    var fCidade = norm(document.getElementById('iniciar-filtro-cidade').value);
+    var fPedido = norm(document.getElementById('iniciar-filtro-pedido').value);
+
+    var visiveis = paresCache.filter(function(p) {
+      if (fLoja) {
+        var lojaStr = String(p.loja_numero) + ' ' + norm(p.loja_nome);
+        if (lojaStr.indexOf(fLoja) === -1) return false;
+      }
+      if (fCidade) {
+        var cidadeStr = norm(p.loja_cidade) + ' ' + norm(p.loja_uf);
+        if (cidadeStr.indexOf(fCidade) === -1) return false;
+      }
+      if (fPedido && norm(p.pedido_numero).indexOf(fPedido) === -1) return false;
+      return true;
+    });
+
+    if (!visiveis.length) {
+      tbodyEl.innerHTML = '<tr><td colspan="7" class="text-center text-muted small py-3">Nenhum par encontrado com os filtros aplicados.</td></tr>';
+      return;
+    }
+
+    var html = '';
+    visiveis.forEach(function(p) {
+      var modelosTxt = (p.modelos || [])
+        .filter(function(m) { return m.qtd_pendente > 0; })
+        .map(function(m) {
+          return '<span class="badge bg-light text-dark border me-1">' +
+                 '<strong>' + m.codigo + '</strong> ' + m.qtd_pendente + '/' + m.qtd_pedida +
+                 '</span>';
+        })
+        .join('');
+      if (!modelosTxt) modelosTxt = '<span class="text-muted small">sem pendente</span>';
+
+      var sepBadge = '';
+      if (p.separacao_ativa_id) {
+        var cls = p.separacao_ativa_status === 'EM_SEPARACAO' ? 'bg-primary' : 'bg-success';
+        sepBadge = '<span class="badge ' + cls + '">#' + p.separacao_ativa_id + ' ' + p.separacao_ativa_status + '</span>';
+        if (p.seps_ativas_count > 1) {
+          sepBadge += ' <span class="badge bg-warning text-dark">+' + (p.seps_ativas_count - 1) + '</span>';
+        }
+      } else {
+        sepBadge = '<span class="text-muted small">n&atilde;o iniciada</span>';
+      }
+
+      var key = p.pedido_id + ':' + p.loja_id;
+      var checked = parSelecionado && parSelecionado.pedido_id === p.pedido_id && parSelecionado.loja_id === p.loja_id;
+      html += '<tr class="iniciar-par-row" data-par-key="' + key + '" style="cursor: pointer;">' +
+        '<td><input type="radio" name="iniciar-par-radio" value="' + key + '"' + (checked ? ' checked' : '') + '></td>' +
+        '<td><code>' + (p.pedido_numero || '-') + '</code><br><small class="text-muted">' + (p.pedido_status || '-') + '</small></td>' +
+        '<td><strong>' + (p.loja_numero || '-') + '</strong> ' + (p.loja_nome || '') + '</td>' +
+        '<td class="small">' + (p.loja_cidade || '-') + '/' + (p.loja_uf || '-') + '</td>' +
+        '<td>' + modelosTxt + '</td>' +
+        '<td class="text-center"><strong class="' + (p.qtd_pendente_total > 0 ? 'text-warning' : 'text-success') + '">' + p.qtd_pendente_total + '</strong></td>' +
+        '<td class="text-center">' + sepBadge + '</td>' +
+        '</tr>';
+    });
+    tbodyEl.innerHTML = html;
+  }
+
+  function selecionarPar(par) {
+    parSelecionado = par;
+    if (!par) {
+      areaSel.classList.add('d-none');
+      btnCriar.disabled = true;
+      return;
+    }
+    resumoEl.textContent = par.pedido_numero + ' / Loja ' + par.loja_numero + ' ' + par.loja_nome +
+                           ' (' + par.loja_cidade + '/' + par.loja_uf + ')';
+
+    var modelosComPendente = (par.modelos || []).filter(function(m) { return m.qtd_pendente > 0; });
+
+    if (!modelosComPendente.length) {
+      modelosTbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-2">Nenhum modelo com saldo pendente. Selecione outro par.</td></tr>';
+      btnCriar.disabled = true;
+      areaSel.classList.remove('d-none');
+      return;
+    }
+
+    var html = '';
+    modelosComPendente.forEach(function(m, idx) {
+      html += '<tr>' +
+        '<td><input type="checkbox" class="form-check-input iniciar-chk-modelo"' +
+        ' data-modelo-codigo="' + m.codigo + '" data-qtd-pendente="' + m.qtd_pendente + '"></td>' +
+        '<td>' + m.codigo + ' &mdash; ' + m.nome + '</td>' +
+        '<td class="text-end">' + m.qtd_pedida + '</td>' +
+        '<td class="text-end text-success">' + m.qtd_separada + '</td>' +
+        '<td class="text-end"><strong>' + m.qtd_pendente + '</strong></td>' +
+        '<td class="text-end">' +
+          '<input type="number" min="0" max="' + m.qtd_pendente + '" value="0"' +
+          ' class="form-control form-control-sm text-end iniciar-input-qtd"' +
+          ' data-modelo-codigo="' + m.codigo + '" disabled>' +
+        '</td></tr>';
+    });
+    modelosTbody.innerHTML = html;
+    areaSel.classList.remove('d-none');
+    btnCriar.disabled = true;
+    atualizarEstadoBtnCriar();
+  }
+
+  function atualizarEstadoBtnCriar() {
+    var algum = false;
+    modelosTbody.querySelectorAll('.iniciar-chk-modelo').forEach(function(chk) {
+      var inp = modelosTbody.querySelector('.iniciar-input-qtd[data-modelo-codigo="' + chk.dataset.modeloCodigo + '"]');
+      if (!inp) return;
+      if (chk.checked) {
+        inp.disabled = false;
+        if (parseInt(inp.value, 10) <= 0) inp.value = chk.dataset.qtdPendente;
+        if (parseInt(inp.value, 10) > 0) algum = true;
+      } else {
+        inp.disabled = true;
+        inp.value = 0;
+      }
+    });
+    btnCriar.disabled = !algum;
+  }
+
+  // === Init ao abrir modal: fetch pares ===
+  modalEl.addEventListener('show.bs.modal', function() {
+    parSelecionado = null;
+    areaSel.classList.add('d-none');
+    btnCriar.disabled = true;
+    erroCriarEl.classList.add('d-none');
+    document.getElementById('iniciar-filtro-loja').value = '';
+    document.getElementById('iniciar-filtro-cidade').value = '';
+    document.getElementById('iniciar-filtro-pedido').value = '';
+    setStatus('Carregando pares...', 'info');
+    tbodyEl.innerHTML = '<tr><td colspan="7" class="text-center text-muted small py-3">Carregando pares...</td></tr>';
+
+    fetch('{{ url_for("motos_assai.separacao_api_pares") }}', {
+      headers: {'Accept': 'application/json'},
+      credentials: 'same-origin',
+    }).then(function(r) {
+      return r.json().then(function(data) { return {ok: r.ok, data: data}; });
+    }).then(function(res) {
+      if (!res.ok || !res.data.ok) {
+        setStatus('Erro ao carregar pares: ' + (res.data.erro || res.data.error || 'falha'), 'danger');
+        tbodyEl.innerHTML = '<tr><td colspan="7" class="text-center text-danger small py-3">Erro ao carregar.</td></tr>';
+        return;
+      }
+      paresCache = res.data.pares || [];
+      if (!paresCache.length) {
+        setStatus('Nenhum pedido com saldo pendente. Importe um Pedido VOE primeiro.', 'warning');
+        tbodyEl.innerHTML = '<tr><td colspan="7" class="text-center text-muted small py-3">Sem pares.</td></tr>';
+        return;
+      }
+      setStatus(paresCache.length + ' par(es) carregado(s). Use os filtros para localizar e clique numa linha para selecionar.', 'info');
+      renderTabela();
+    }).catch(function(err) {
+      setStatus('Erro de rede: ' + err.message, 'danger');
+    });
+  });
+
+  // === Filtros ===
+  ['iniciar-filtro-loja', 'iniciar-filtro-cidade', 'iniciar-filtro-pedido'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', renderTabela);
+  });
+
+  // === Selecao de linha (delegacao) ===
+  tbodyEl.addEventListener('click', function(ev) {
+    var tr = ev.target.closest('tr.iniciar-par-row');
+    if (!tr) return;
+    var key = tr.dataset.parKey;
+    if (!key) return;
+    var par = paresCache.find(function(p) { return p.pedido_id + ':' + p.loja_id === key; });
+    if (!par) return;
+    tbodyEl.querySelectorAll('input[name="iniciar-par-radio"]').forEach(function(r) {
+      r.checked = r.value === key;
+    });
+    selecionarPar(par);
+  });
+
+  // === Mudanca em checkbox/qtd dentro da area de selecao ===
+  modelosTbody.addEventListener('change', function(ev) {
+    if (ev.target.classList.contains('iniciar-chk-modelo')) atualizarEstadoBtnCriar();
+  });
+  modelosTbody.addEventListener('input', function(ev) {
+    if (ev.target.classList.contains('iniciar-input-qtd')) atualizarEstadoBtnCriar();
+  });
+
+  // === Submit: criar separacao ===
+  btnCriar.addEventListener('click', function() {
+    if (!parSelecionado) return;
+    var alocacoes = [];
+    var modelosOriginal = (parSelecionado.modelos || []);
+    modelosTbody.querySelectorAll('.iniciar-chk-modelo').forEach(function(chk) {
+      if (!chk.checked) return;
+      var codigo = chk.dataset.modeloCodigo;
+      var inp = modelosTbody.querySelector('.iniciar-input-qtd[data-modelo-codigo="' + codigo + '"]');
+      if (!inp) return;
+      var qtd = parseInt(inp.value, 10);
+      if (qtd <= 0) return;
+      // Resolver modelo_id pelo codigo no payload do par
+      var m = modelosOriginal.find(function(x) { return x.codigo === codigo; });
+      if (!m || !m.modelo_id) {
+        // Fallback (deveria sempre vir): vai falhar no backend mas avisa
+        alocacoes.push({modelo_codigo: codigo, qtd: qtd});
+      } else {
+        alocacoes.push({modelo_id: m.modelo_id, qtd: qtd});
+      }
+    });
+    if (!alocacoes.length) {
+      erroCriarEl.textContent = 'Selecione ao menos 1 modelo com qtd > 0.';
+      erroCriarEl.classList.remove('d-none');
+      return;
+    }
+    erroCriarEl.classList.add('d-none');
+    btnCriar.disabled = true;
+
+    var url = '/motos-assai/pedidos/' + parSelecionado.pedido_id + '/loja/' + parSelecionado.loja_id + '/separacao/criar';
+    fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+      credentials: 'same-origin',
+      body: JSON.stringify({alocacoes: alocacoes}),
+    }).then(function(r) {
+      return r.json().then(function(data) { return {ok: r.ok, data: data}; });
+    }).then(function(res) {
+      if (!res.ok || !res.data.ok) {
+        erroCriarEl.textContent = res.data.erro || res.data.error || 'Erro ao criar separa&ccedil;&atilde;o.';
+        erroCriarEl.classList.remove('d-none');
+        btnCriar.disabled = false;
+        return;
+      }
+      // Redirecionar para a tela de escaneio
+      var redirectUrl = res.data.redirect;
+      if (res.data.separacao_id && redirectUrl) {
+        redirectUrl += (redirectUrl.indexOf('?') >= 0 ? '&' : '?') + 'sep_id=' + res.data.separacao_id;
+      }
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
+      } else {
+        window.location.reload();
+      }
+    }).catch(function(err) {
+      erroCriarEl.textContent = 'Erro de rede: ' + err.message;
+      erroCriarEl.classList.remove('d-none');
+      btnCriar.disabled = false;
+    });
+  });
+})();
+</script>

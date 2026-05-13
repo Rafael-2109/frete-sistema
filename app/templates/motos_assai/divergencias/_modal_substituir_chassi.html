@@ -1,31 +1,66 @@
-<div class="modal fade" id="modal-substituir-chassi" tabindex="-1" aria-hidden="true">
+{# Modal "Substituir Chassi" via Divergencia — Pacote C (2026-05-13).
+
+   Substitui o placeholder anterior. Agora chama de verdade
+   `substituir_chassi_entre_seps(via_divergencia=True)` no backend, permitindo
+   substituicao mesmo quando sep origem esta FATURADA ou CARREGADA (caso de
+   uso principal: alterar chassi de NF emitida apos divergencia detectada).
+
+   Trigger: botao "Substituir" da lista.html passa data-* attrs:
+     - data-div-id
+     - data-chassi
+     - data-sep-origem-id (de d.separacao_id)
+     - data-pedido-id, data-loja-id (resolvidos via sep_ref no lista.html)
+   #}
+<div class="modal fade" id="modal-substituir-chassi-div" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header bg-secondary text-white">
+      <div class="modal-header bg-warning text-dark">
         <h5 class="modal-title">
           <i class="fas fa-exchange-alt"></i> Substituir Chassi
         </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <div class="alert alert-info">
-          <strong>Placeholder Plano 4:</strong> implementação completa de substituição cross-loja
-          virá no próximo plano. Por enquanto, marca a divergência como resolvida.
-        </div>
         <input type="hidden" id="subst-div-id" />
-        <div class="mb-3">
-          <label class="form-label">Chassi novo (substitui o atual)</label>
-          <input type="text" class="form-control" id="subst-chassi-novo" placeholder="MZX..." />
+        <input type="hidden" id="subst-pedido-id" />
+        <input type="hidden" id="subst-loja-id" />
+
+        <p class="mb-2">
+          Chassi <strong id="subst-chassi-label" class="font-monospace">—</strong>
+          atualmente em <strong>Sep #<span id="subst-sep-origem-id">—</span></strong>.
+        </p>
+
+        <div class="alert alert-info small mb-3">
+          <i class="fas fa-info-circle"></i>
+          Esta opera&ccedil;&atilde;o move o chassi para outra separa&ccedil;&atilde;o.
+          Funciona mesmo se a sep origem estiver <strong>FATURADA</strong> ou
+          <strong>CARREGADA</strong> (caso&iacute;stica espec&iacute;fica de diverg&ecirc;ncia).
         </div>
+
+        <input type="hidden" id="subst-sep-origem-id-value" />
+
         <div class="mb-3">
-          <label class="form-label">Observação</label>
-          <textarea class="form-control" id="subst-observacao" rows="2"></textarea>
+          <label class="form-label">Separa&ccedil;&atilde;o destino:</label>
+          <select class="form-select" id="subst-sep-destino-select" required>
+            <option value="">— Carregando... —</option>
+          </select>
+          <div class="form-text">
+            Seps EM_SEPARACAO/FECHADA/CARREGADA da mesma loja.
+          </div>
         </div>
+
+        <div class="mb-3">
+          <label class="form-label">Observa&ccedil;&atilde;o</label>
+          <textarea class="form-control" id="subst-observacao" rows="2"
+                    placeholder="Motivo da substitui&ccedil;&atilde;o (opcional)"></textarea>
+        </div>
+
+        <div id="subst-erro" class="alert alert-danger small d-none"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
-        <button type="button" class="btn btn-primary" id="btn-confirmar-substituir-chassi">
-          <i class="fas fa-check"></i> Marcar Resolvida
+        <button type="button" class="btn btn-warning" id="btn-confirmar-substituir-chassi">
+          <i class="fas fa-check"></i> Substituir e resolver
         </button>
       </div>
     </div>

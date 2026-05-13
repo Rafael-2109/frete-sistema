@@ -2,7 +2,7 @@
    Acionado quando POST /separacao/registrar-chassi retorna 409 com cenario=cross_loja.
    Operador confirma -> chama POST /separacao/substituir-chassi com sep_origem_id + sep_destino_id.
 #}
-<div class="modal fade" id="modal-substituir-chassi" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modal-substituir-chassi-sep" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header bg-warning text-dark">
@@ -19,17 +19,31 @@
           <div class="card-body py-2 small">
             <div><strong>Origem:</strong> Sep #<span id="cross-sep-origem-id">—</span>
               (Loja <span id="cross-loja-origem">—</span>)</div>
-            <div><strong>Destino:</strong> Sep #<span id="cross-sep-destino-id">—</span>
-              (Loja <span id="cross-loja-destino">—</span>)</div>
+            <div><strong>Loja atual:</strong> <span id="cross-loja-destino">—</span></div>
+          </div>
+        </div>
+
+        {# Pacote B (2026-05-13): dropdown de seps destino — paridade com carregamento.
+           Quando ha N seps EM_SEPARACAO simultaneas, operador escolhe explicitamente.
+           Quando ha 1 sep ativa, dropdown auto-preenche com a sep atual da tela. #}
+        <div class="mb-3">
+          <label for="cross-sep-destino-select" class="form-label">
+            Separa&ccedil;&atilde;o destino (desta loja):
+          </label>
+          <select class="form-select" id="cross-sep-destino-select" required>
+            <option value="">— Carregando... —</option>
+          </select>
+          <div class="form-text">
+            Apenas seps EM_SEPARACAO/FECHADA/CARREGADA do mesmo (pedido, loja).
           </div>
         </div>
 
         <div class="alert alert-warning small">
           <i class="fas fa-exclamation-triangle"></i>
           Substituir vai <strong>remover o chassi da Sep origem</strong> e
-          <strong>adicionar a esta Sep</strong>. Se a Sep origem ja estiver
-          FATURADA, sera criada divergencia automaticamente (cancele a NF antes
-          se necessario).
+          <strong>adicionar a Sep selecionada</strong>. Se a Sep origem ja estiver
+          FATURADA ou CARREGADA, a substitui&ccedil;&atilde;o &eacute; bloqueada — use o
+          m&oacute;dulo Diverg&ecirc;ncias para alterar chassi de NF emitida.
         </div>
       </div>
       <div class="modal-footer">

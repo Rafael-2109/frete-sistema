@@ -2,21 +2,24 @@
 
 {% block motos_assai_content %}
 <header class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0"><i class="fas fa-truck text-primary"></i> Separações</h2>
+  <h2 class="mb-0"><i class="fas fa-truck text-primary"></i> Separa&ccedil;&otilde;es</h2>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('motos_assai.separacao_nova') }}" class="btn btn-success">
-      <i class="fas fa-plus"></i> Iniciar nova separação
-    </a>
+    {# Pacote A (2026-05-13): bot&atilde;o Iniciar abre modal (n&atilde;o redireciona mais). #}
+    <button type="button" class="btn btn-success"
+            data-bs-toggle="modal"
+            data-bs-target="#modal-iniciar-separacao">
+      <i class="fas fa-plus"></i> Iniciar nova separa&ccedil;&atilde;o
+    </button>
   </div>
 </header>
 
 <div class="alert alert-light border small mb-3">
-  <strong><i class="fas fa-info-circle text-primary"></i> Como gerar separação de uma moto:</strong>
+  <strong><i class="fas fa-info-circle text-primary"></i> Como gerar separa&ccedil;&atilde;o de uma moto:</strong>
   <ol class="mb-0 mt-1 ps-3">
-    <li>Clique em <strong>"Iniciar nova separação"</strong> acima — ou abra um pedido em <em>Pedidos VOE</em> e use o botão por loja.</li>
-    <li>Escolha o par <em>pedido × loja</em> e clique <strong>"Iniciar"</strong>.</li>
-    <li>Na tela operacional, leia o chassi (QR / código de barras / digitar) — qualquer chassi <code>DISPONIVEL</code> do modelo certo é aceito.</li>
-    <li>Clique <strong>"Finalizar separação"</strong> quando todos os chassis estiverem registrados (saldo zero ou parcial).</li>
+    <li>Clique em <strong>"Iniciar nova separa&ccedil;&atilde;o"</strong> &mdash; o modal mostra os pedidos com saldo pendente.</li>
+    <li>Filtre por loja, cidade ou pedido. Selecione um par <em>pedido &times; loja</em> e marque os modelos+qtds.</li>
+    <li>Na tela operacional, leia o chassi (QR / c&oacute;digo de barras / digitar) &mdash; qualquer chassi <code>DISPONIVEL</code> do modelo certo &eacute; aceito.</li>
+    <li>Clique <strong>"Finalizar separa&ccedil;&atilde;o"</strong> quando todos os chassis estiverem registrados (saldo zero ou parcial).</li>
   </ol>
 </div>
 
@@ -29,64 +32,96 @@
       <th>Loja</th>
       <th>Status</th>
       <th>Iniciada em</th>
-      <th>Itens</th>
-      <th class="text-end">Ação</th>
+      <th class="text-center">Itens</th>
+      <th class="text-end">A&ccedil;&otilde;es</th>
     </tr>
   </thead>
   <tbody>
     {% for s in separacoes %}
+      {% set sep_label = s.pedido.numero ~ ' / Loja ' ~ s.loja.numero %}
     <tr>
-      <td>{{ s.id }}</td>
+      <td><strong>#{{ s.id }}</strong></td>
       <td><code>{{ s.pedido.numero }}</code></td>
       <td><strong>{{ s.loja.numero }}</strong> {{ s.loja.nome }}</td>
       <td>
-        <span class="badge bg-{% if s.status == 'EM_SEPARACAO' %}primary{% elif s.status == 'FECHADA' %}success{% elif s.status == 'FATURADA' %}info{% elif s.status == 'CANCELADA' %}danger{% else %}secondary{% endif %}">
+        <span class="badge bg-{% if s.status == 'EM_SEPARACAO' %}primary{% elif s.status == 'FECHADA' %}success{% elif s.status == 'CARREGADA' %}info{% elif s.status == 'FATURADA' %}info{% elif s.status == 'CANCELADA' %}danger{% else %}secondary{% endif %}">
           {{ s.status }}
         </span>
       </td>
-      <td><small>{{ s.iniciada_em.strftime('%d/%m %H:%M') }}</small></td>
-      <td>{{ s.itens|length }}</td>
+      <td><small>{{ s.iniciada_em.strftime('%d/%m %H:%M') if s.iniciada_em else '-' }}</small></td>
+      <td class="text-center">{{ s.itens|length }}</td>
       <td class="text-end">
-        {% if s.status == 'EM_SEPARACAO' %}
+        {# === Visualizar/abrir tela ===
+           Sempre dispon&iacute;vel (a tela de escaneio funciona como detalhe para FECHADA/FATURADA/etc).
+           Para EM_SEPARACAO o bot&atilde;o vira "Continuar" (cont&iacute;nuo no fluxo). #}
         <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=s.pedido_id, loja_id=s.loja_id, sep_id=s.id) }}"
-           class="btn btn-sm btn-primary">
-          <i class="fas fa-play"></i> Continuar Separação
+           class="btn btn-sm btn-{% if s.status == 'EM_SEPARACAO' %}primary{% else %}outline-secondary{% endif %}"
+           title="{% if s.status == 'EM_SEPARACAO' %}Continuar separa&ccedil;&atilde;o{% else %}Visualizar separa&ccedil;&atilde;o{% endif %}">
+          <i class="fas fa-{% if s.status == 'EM_SEPARACAO' %}play{% else %}eye{% endif %}"></i>
+          {% if s.status == 'EM_SEPARACAO' %}Continuar{% else %}Visualizar{% endif %}
         </a>
-        {% elif s.status == 'FECHADA' %}
+
+        {# === Datas (editar agendamento) ===
+           Dispon&iacute;vel para qualquer status n&atilde;o-CANCELADA. Reusa modal de faturamento. #}
+        {% if s.status != 'CANCELADA' %}
+        <button type="button"
+                class="btn btn-sm btn-outline-info"
+                data-bs-toggle="modal"
+                data-bs-target="#modal-editar-agendamento"
+                data-sep-id="{{ s.id }}"
+                data-expedicao="{{ s.expedicao.strftime('%Y-%m-%d') if s.expedicao else '' }}"
+                data-agendamento="{{ s.agendamento.strftime('%Y-%m-%d') if s.agendamento else '' }}"
+                data-protocolo="{{ s.protocolo or '' }}"
+                data-confirmado="{{ '1' if s.agendamento_confirmado else '0' }}"
+                title="Editar expedi&ccedil;&atilde;o, agendamento e protocolo">
+          <i class="fas fa-calendar-alt"></i> Datas
+        </button>
+        {% endif %}
+
+        {# === Alterar separa&ccedil;&atilde;o (reabrir FECHADA -> EM_SEPARACAO) ===
+           Bloqueado se tem NF preenchida ou Carregamento ativo (service decide). #}
+        {% if s.status == 'FECHADA' %}
         <form method="POST"
               action="{{ url_for('motos_assai.separacao_reabrir', separacao_id=s.id) }}"
               class="d-inline form-alterar-separacao"
               data-sep-id="{{ s.id }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-sm btn-warning"
-                  title="Reabre a separação para edição (volta para EM_SEPARACAO)">
-            <i class="fas fa-undo"></i> Alterar Separação
+          <button type="submit" class="btn btn-sm btn-outline-warning"
+                  title="Reabre a separa&ccedil;&atilde;o para edi&ccedil;&atilde;o (volta para EM_SEPARACAO). Bloqueado se houver Carregamento ativo ou NF.">
+            <i class="fas fa-undo"></i> Alterar
           </button>
         </form>
-        <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=s.pedido_id) }}"
-           class="btn btn-sm btn-outline-secondary ms-1"
-           title="Detalhes do pedido">
-          <i class="fas fa-info-circle"></i>
-        </a>
-        {% else %}
-        <a href="{{ url_for('motos_assai.pedidos_detalhe', pedido_id=s.pedido_id) }}"
-           class="btn btn-sm btn-outline-secondary"
-           title="Sep nao esta EM_SEPARACAO. Ver detalhes no pedido.">
-          <i class="fas fa-info-circle"></i> Detalhes
-        </a>
+        {% endif %}
+
+        {# === Cancelar ===
+           S&oacute; permitido em EM_SEPARACAO ou FECHADA. FATURADA/CARREGADA/CANCELADA n&atilde;o. #}
+        {% if s.status in ['EM_SEPARACAO', 'FECHADA'] %}
+        <button type="button"
+                class="btn btn-sm btn-outline-danger"
+                data-bs-toggle="modal"
+                data-bs-target="#modal-cancelar-separacao"
+                data-sep-id="{{ s.id }}"
+                data-sep-label="{{ sep_label }}"
+                title="Cancelar separa&ccedil;&atilde;o (motivo obrigat&oacute;rio)">
+          <i class="fas fa-ban"></i> Cancelar
+        </button>
         {% endif %}
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="text-center text-muted py-3">Nenhuma separação registrada ainda.</td></tr>
+    <tr><td colspan="7" class="text-center text-muted py-3">Nenhuma separa&ccedil;&atilde;o registrada ainda.</td></tr>
     {% endfor %}
   </tbody>
 </table>
 </div>{# /#tabela-separacao #}
 
+{# Modais reutiliz&aacute;veis #}
+{% include 'motos_assai/separacao/_modal_iniciar_separacao.html' %}
+{% include 'motos_assai/separacao/_modal_cancelar_sep.html' %}
+{% include 'motos_assai/faturamento/_modal_editar_agendamento.html' %}
+
 <script>
 // Confirmacao para "Alterar Separacao" (reabrir FECHADA -> EM_SEPARACAO).
-// Volta a separacao para edicao + remove espelho Nacom.
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('.form-alterar-separacao').forEach(function (form) {
     form.addEventListener('submit', function (ev) {

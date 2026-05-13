@@ -1,0 +1,112 @@
+{# Modal "Cancelar Separacao" compartilhavel — Pacote A (2026-05-13).
+
+   Reutilizavel em separacao/lista.html, separacao/tela.html e
+   faturamento/lista_separacoes.html. Trigger:
+       <button data-bs-toggle="modal" data-bs-target="#modal-cancelar-separacao"
+               data-sep-id="N" data-sep-label="..."></button>
+
+   Endpoint: POST /motos-assai/separacao/<sep_id>/cancelar
+   Body: {motivo: str (>=3 chars)}
+#}
+<div class="modal fade" id="modal-cancelar-separacao" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-ban"></i> Cancelar Separa&ccedil;&atilde;o
+          <span id="cancel-sep-label" class="ms-1"></span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning small mb-3">
+          <i class="fas fa-exclamation-triangle"></i>
+          Cancelar a separa&ccedil;&atilde;o devolve todos os chassis para
+          <code>DISPONIVEL</code>. A separa&ccedil;&atilde;o n&atilde;o pode
+          ser reaberta depois de cancelada.
+        </div>
+        <input type="hidden" id="cancel-sep-id" value="">
+        <label class="form-label">Motivo do cancelamento <span class="text-danger">*</span> (m&iacute;n. 3 caracteres)</label>
+        <input type="text" id="cancel-sep-motivo" class="form-control"
+               placeholder="Informe o motivo..." autocapitalize="sentences" maxlength="200">
+        <div id="cancel-sep-erro" class="alert alert-danger small mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-danger" id="cancel-sep-confirmar">
+          <i class="fas fa-ban"></i> Confirmar cancelamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  function getCsrf() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  var modal = document.getElementById('modal-cancelar-separacao');
+  if (!modal) return;
+
+  var inputId = document.getElementById('cancel-sep-id');
+  var inputMotivo = document.getElementById('cancel-sep-motivo');
+  var labelEl = document.getElementById('cancel-sep-label');
+  var erroEl = document.getElementById('cancel-sep-erro');
+  var btn = document.getElementById('cancel-sep-confirmar');
+
+  modal.addEventListener('show.bs.modal', function(ev) {
+    var trigger = ev.relatedTarget;
+    if (!trigger) return;
+    inputId.value = trigger.dataset.sepId || '';
+    labelEl.textContent = trigger.dataset.sepLabel ? '— ' + trigger.dataset.sepLabel : '#' + (trigger.dataset.sepId || '');
+    inputMotivo.value = '';
+    erroEl.classList.add('d-none');
+  });
+
+  modal.addEventListener('shown.bs.modal', function() {
+    inputMotivo.focus();
+  });
+
+  btn.addEventListener('click', function() {
+    var sepId = inputId.value;
+    var motivo = (inputMotivo.value || '').trim();
+    if (motivo.length < 3) {
+      erroEl.textContent = 'Motivo deve ter ao menos 3 caracteres.';
+      erroEl.classList.remove('d-none');
+      inputMotivo.focus();
+      return;
+    }
+    erroEl.classList.add('d-none');
+    btn.disabled = true;
+
+    fetch('/motos-assai/separacao/' + sepId + '/cancelar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+      credentials: 'same-origin',
+      body: JSON.stringify({motivo: motivo}),
+    }).then(function(r) {
+      return r.json().then(function(data) { return {ok: r.ok, data: data}; });
+    }).then(function(res) {
+      if (!res.ok || !res.data.ok) {
+        erroEl.textContent = res.data.erro || 'Erro ao cancelar separa&ccedil;&atilde;o.';
+        erroEl.classList.remove('d-none');
+        btn.disabled = false;
+        return;
+      }
+      // Sucesso: fecha modal + reload
+      var bsModal = bootstrap.Modal.getInstance(modal);
+      if (bsModal) bsModal.hide();
+      setTimeout(function() { window.location.reload(); }, 300);
+    }).catch(function(err) {
+      erroEl.textContent = 'Erro de rede: ' + err.message;
+      erroEl.classList.remove('d-none');
+      btn.disabled = false;
+    });
+  });
+})();
+</script>
