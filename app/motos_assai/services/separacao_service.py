@@ -1736,3 +1736,237 @@ def criar_separacao_com_saldos(
     )
 
     return sep
+
+
+# =====================================================================
+# Substituir chassi entre seps (Plano 4 Task 1 — 2026-05-13)
+# =====================================================================
+#
+# Spec: §11.3 (S20=a + CR-2 + CR-10 + CR-11)
+# Plano: docs/superpowers/plans/2026-05-12-motos-assai-fase5-auxiliares.md Task 1
+#
+# Move chassi entre 2 separacoes (cross-loja ou mesma loja). Usado quando
+# operador escaneia chassi que ja esta em sep de outra loja:
+#   1. Sep_origem perde o chassi (item deletado)
+#   2. Sep_destino recebe (novo item)
+#   3. Eventos: <atual> -> DISPONIVEL -> SEPARADA (S20=a, sequencia uniforme)
+#   4. Excel sep_origem regenerado SEMPRE (chassi a menos)
+#   5. Excel sep_destino regenerado se ja tinha
+#   6. Mirror Nacom em ambas (delta)
+#   7. Pedido recalculado em ambos lados
+#
+# CR-11: sep_destino aceita EM_SEPARACAO/FECHADA/CARREGADA. FATURADA bloqueada
+#        (cancele NF antes via cancelar_nf_qpa).
+# CR-2:  sep_origem FATURADA gera divergencia tipo CHASSI_OUTRA_LOJA.
+# CR-10: usa AssaiNfQpa.query.filter_by (nao usa relationship reverse).
+
+
+def substituir_chassi_entre_seps(
+    chassi: str, sep_origem_id: int, sep_destino_id: int, operador_id: int,
+) -> Dict[str, Any]:
+    """Move chassi entre seps com regenerar Excel + mirror Nacom + recalcular pedido.
+
+    S20=a: eventos <atual> -> DISPONIVEL -> SEPARADA (sempre 2 novos eventos).
+    CR-11: sep_destino aceita EM_SEPARACAO, FECHADA, CARREGADA. FATURADA bloqueada.
+    CR-2: sep_origem FATURADA gera divergencia tipo CHASSI_OUTRA_LOJA.
+    CR-10: usa query AssaiNfQpa.query.filter_by (nao usa relationship reverse).
+    S10: chama recalcular_status_pedido em ambos pedidos.
+
+    NAO commita — caller commita.
+
+    Args:
+        chassi: chassi a mover.
+        sep_origem_id: sep onde chassi esta hoje.
+        sep_destino_id: sep para onde mover.
+        operador_id: usuario que solicitou.
+
+    Returns:
+        {
+            'chassi': str,
+            'sep_origem_id': int,
+            'sep_destino_id': int,
+            'divergencia_id': int | None,  # se sep_origem FATURADA
+        }
+
+    Raises:
+        SeparacaoValidationError: chassi nao esta na sep origem, sep destino
+            invalida (FATURADA, ou nao existe), seps iguais, etc.
+    """
+    chassi_norm = chassi.strip().upper()
+
+    if sep_origem_id == sep_destino_id:
+        raise SeparacaoValidationError(
+            'sep_origem_id e sep_destino_id sao iguais — nada a substituir'
+        )
+
+    # Lock pessimista no chassi (impede race com registrar_chassi/escanear concorrentes)
+    moto = AssaiMoto.query.filter_by(chassi=chassi_norm).with_for_update(of=AssaiMoto).first()
+    if not moto:
+        raise SeparacaoValidationError(f'Chassi {chassi_norm} nao cadastrado')
+
+    sep_origem = AssaiSeparacao.query.get(sep_origem_id)
+    if not sep_origem:
+        raise SeparacaoValidationError(f'Sep origem {sep_origem_id} nao encontrada')
+
+    sep_destino = AssaiSeparacao.query.get(sep_destino_id)
+    if not sep_destino:
+        raise SeparacaoValidationError(f'Sep destino {sep_destino_id} nao encontrada')
+
+    # CR-11: pre-condicoes do destino
+    if sep_destino.status not in (
+        SEPARACAO_STATUS_EM_SEPARACAO,
+        SEPARACAO_STATUS_FECHADA,
+        SEPARACAO_STATUS_CARREGADA,
+    ):
+        raise SeparacaoValidationError(
+            f'Sep destino {sep_destino_id} esta {sep_destino.status} — invalida. '
+            'Esperado: EM_SEPARACAO, FECHADA ou CARREGADA. '
+            'Para FATURADA, cancele a NF (cancelar_nf_qpa) primeiro.'
+        )
+
+    item_origem = AssaiSeparacaoItem.query.filter_by(
+        separacao_id=sep_origem_id, chassi=chassi_norm,
+    ).first()
+    if not item_origem:
+        raise SeparacaoValidationError(
+            f'Chassi {chassi_norm} nao esta na sep {sep_origem_id}'
+        )
+
+    valor_unit_origem = item_origem.valor_unitario_qpa
+    db.session.delete(item_origem)
+    db.session.flush()
+
+    # S20=a: eventos <atual> -> DISPONIVEL -> SEPARADA (sequencia uniforme)
+    estado_atual = status_efetivo(chassi_norm)
+    emitir_evento(
+        chassi_norm, EVENTO_DISPONIVEL, operador_id=operador_id,
+        observacao=(
+            f'substituicao cross-loja sep {sep_origem_id} -> sep {sep_destino_id}'
+        ),
+        dados_extras={
+            'sep_origem_id': sep_origem_id,
+            'estado_anterior': estado_atual,
+        },
+    )
+
+    # Adicionar item na sep destino + emitir SEPARADA
+    novo_item = AssaiSeparacaoItem(
+        separacao_id=sep_destino_id, chassi=chassi_norm,
+        modelo_id=moto.modelo_id,
+        valor_unitario_qpa=valor_unit_origem,
+        registrada_por_id=operador_id,
+    )
+    db.session.add(novo_item)
+    db.session.flush()
+
+    emitir_evento(
+        chassi_norm, EVENTO_SEPARADA, operador_id=operador_id,
+        observacao=f'substituicao cross-loja vindo de sep {sep_origem_id}',
+        dados_extras={'sep_destino_id': sep_destino_id},
+    )
+
+    # CR-2 + CR-10: sep_origem FATURADA -> divergencia CHASSI_OUTRA_LOJA
+    divergencia_id = None
+    if sep_origem.status == SEPARACAO_STATUS_FATURADA:
+        # CR-10: usa query direta (nao relationship reverse) + filter status_match
+        nf_origem = (
+            AssaiNfQpa.query
+            .filter_by(separacao_id=sep_origem_id)
+            .filter(AssaiNfQpa.status_match != NF_STATUS_CANCELADA)
+            .first()
+        )
+        from app.motos_assai.services.divergencia_service import criar_divergencia
+        div = criar_divergencia(
+            tipo=DIVERGENCIA_TIPO_CHASSI_OUTRA_LOJA,
+            chassi=chassi_norm,
+            sep_id=sep_origem_id,
+            nf_id=nf_origem.id if nf_origem else None,
+            detalhes={
+                'motivo': 'chassi removido de NF FATURADA por substituicao cross-loja',
+                'sep_destino_id': sep_destino_id,
+                'loja_origem': sep_origem.loja_id,
+                'loja_destino': sep_destino.loja_id,
+            },
+        )
+        divergencia_id = div.id
+
+    # S20: regenerar Excel sep_origem SEMPRE (chassi a menos).
+    # Skip se sep_origem ainda EM_SEPARACAO sem Excel ativo (nada a regenerar).
+    excel_origem_ativo = AssaiPedidoExcel.query.filter_by(
+        separacao_id=sep_origem_id, ativo=True,
+    ).first()
+    if excel_origem_ativo or sep_origem.status != SEPARACAO_STATUS_EM_SEPARACAO:
+        from app.motos_assai.services.faturamento_service import regenerar_excel_qpa
+        try:
+            regenerar_excel_qpa(
+                sep_origem_id, operador_id,
+                motivo='substituicao cross-loja: chassi removido',
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(
+                'regenerar_excel_qpa origem sep %s FALHOU: %s — continuando',
+                sep_origem_id, e, exc_info=True,
+            )
+
+    # Regenerar Excel sep_destino se ja tinha
+    excel_destino_ativo = AssaiPedidoExcel.query.filter_by(
+        separacao_id=sep_destino_id, ativo=True,
+    ).first()
+    if excel_destino_ativo:
+        from app.motos_assai.services.faturamento_service import regenerar_excel_qpa
+        try:
+            regenerar_excel_qpa(
+                sep_destino_id, operador_id,
+                motivo='substituicao cross-loja: chassi adicionado',
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(
+                'regenerar_excel_qpa destino sep %s FALHOU: %s — continuando',
+                sep_destino_id, e, exc_info=True,
+            )
+
+    # Atualizar mirror Nacom em ambos
+    try:
+        from app.motos_assai.services.separacao_mirror_service import (
+            sincronizar_espelho_com_separacao,
+        )
+        sincronizar_espelho_com_separacao(sep_origem_id)
+        sincronizar_espelho_com_separacao(sep_destino_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(
+            'sincronizar_espelho_com_separacao FALHOU em substituicao: %s',
+            e, exc_info=True,
+        )
+
+    # S10: recalcular pedido em ambos lados
+    try:
+        from app.motos_assai.services.pedido_status_service import recalcular_status_pedido
+        recalcular_status_pedido(sep_origem.pedido_id)
+        if sep_destino.pedido_id != sep_origem.pedido_id:
+            recalcular_status_pedido(sep_destino.pedido_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(
+            'recalcular_status_pedido FALHOU em substituicao: %s', e, exc_info=True,
+        )
+
+    db.session.flush()
+
+    import logging
+    logging.getLogger(__name__).info(
+        'substituir_chassi_entre_seps: chassi=%s origem=%s destino=%s '
+        'estado_anterior=%s divergencia=%s operador=%s',
+        chassi_norm, sep_origem_id, sep_destino_id,
+        estado_atual, divergencia_id, operador_id,
+    )
+
+    return {
+        'chassi': chassi_norm,
+        'sep_origem_id': sep_origem_id,
+        'sep_destino_id': sep_destino_id,
+        'divergencia_id': divergencia_id,
+        'estado_anterior': estado_atual,
+    }

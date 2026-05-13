@@ -56,7 +56,8 @@ from .separacao_service import (
     get_separacao_ativa, saldo_pendente_por_modelo, registrar_chassi,
     desfazer_chassi, finalizar_separacao, cancelar_separacao,
     listar_pares_separaveis,
-    SeparacaoConflictError, SeparacaoValidationError,
+    SeparacaoError, SeparacaoConflictError, SeparacaoValidationError,
+    SeparacaoCrossLojaError,
     # Realocacao de saldo (Task #11) + Ajuste pos-NF (Task #9)
     outras_seps_em_separacao, saldo_planejado_nao_separado,
     analisar_finalizacao, realocar_saldo,
@@ -67,6 +68,8 @@ from .separacao_service import (
     ajustar_separacao_pela_nf,
     atualizar_agendamento_loja,
     criar_separacao_com_saldos,
+    # Plano 4 Task 1
+    substituir_chassi_entre_seps,
 )
 from .separacao_mirror_service import sincronizar_espelho_com_separacao
 from .faturamento_service import gerar_excel_qpa, regenerar_excel_qpa, FaturamentoError
@@ -110,7 +113,8 @@ __all__ = [
     'get_separacao_ativa', 'saldo_pendente_por_modelo', 'registrar_chassi',
     'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
     'listar_pares_separaveis',
-    'SeparacaoConflictError', 'SeparacaoValidationError',
+    'SeparacaoError', 'SeparacaoConflictError', 'SeparacaoValidationError',
+    'SeparacaoCrossLojaError',
     'outras_seps_em_separacao', 'saldo_planejado_nao_separado',
     'analisar_finalizacao', 'realocar_saldo',
     'finalizar_separacao_com_decisao',
@@ -120,6 +124,7 @@ __all__ = [
     'ajustar_separacao_pela_nf',
     'atualizar_agendamento_loja',
     'criar_separacao_com_saldos',
+    'substituir_chassi_entre_seps',
     'sincronizar_espelho_com_separacao',
     'gerar_excel_qpa', 'regenerar_excel_qpa', 'FaturamentoError',
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',
