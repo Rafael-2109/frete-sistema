@@ -158,11 +158,11 @@ class PayloadBuilder:
             # TagPlus exige string ('0'-'4', '9') conforme doc:258-272.
             # venda.modalidade_frete tem default '9' (sem ocorrencia).
             'modalidade_frete': str(venda.modalidade_frete or '9'),
-            # indicador_forma_pagamento (doc:3201-3205):
-            #   0 = a vista (1 parcela), 1 = a prazo (>= 2 parcelas), 2 = outros.
-            # Sem isso, TagPlus assume default 0 mesmo com parcelado, causando
-            # divergencia na NFe (<pag><detPag><indPag> da SEFAZ).
-            'indicador_forma_pagamento': 1 if (venda.numero_parcelas or 1) > 1 else 0,
+            # NOTA: campo `indicador_forma_pagamento` no root foi REMOVIDO em
+            # 2026-05-13 — TagPlus rejeita com HTTP 422 ("Campo adicional nao
+            # e permitido", schemaKey /additionalProperties). A info a vista
+            # vs a prazo e inferida pelo TagPlus a partir do numero de
+            # entradas em `faturas[].parcelas[]` (1 -> a vista, 2+ -> a prazo).
             'data_emissao': agora_utc_naive().isoformat(timespec='seconds'),
             'data_entrada_saida': date.today().isoformat(),
             'cfop': cfop,                       # mascara 9.999 obrigatoria.
