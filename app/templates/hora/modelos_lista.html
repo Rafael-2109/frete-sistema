@@ -78,7 +78,22 @@
         <tr>
           <td><strong>{{ m.nome_modelo }}</strong></td>
           <td>{{ m.potencia_motor or '—' }}</td>
-          <td><small>{{ m.descricao or '' }}</small></td>
+          <td>
+            <small>{{ m.descricao or '' }}</small>
+            <div class="mt-1">
+              {% if m.autopropelido %}
+                <span class="badge bg-success"
+                      title="Bicicleta elétrica (Res. CONTRAN 996/2023) — dispensa CNH e licenciamento">
+                  Autopropelido
+                </span>
+              {% else %}
+                <span class="badge bg-warning"
+                      title="Ciclomotor — exige CNH e emplacamento">
+                  Ciclomotor
+                </span>
+              {% endif %}
+            </div>
+          </td>
           <td class="text-end">
             {% if m.preco_a_vista is not none %}
               R$ {{ m.preco_a_vista|valor_br }}
