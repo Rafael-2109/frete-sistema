@@ -7,13 +7,15 @@ from app.motos_assai.services import gerar_excel_qpa
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
     AssaiNfQpa, AssaiNfQpaItem,
-    AssaiModelo,
+    AssaiModelo, AssaiPedidoVenda, AssaiLoja,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
-    NF_STATUS_BATEU,
+    NF_STATUS_BATEU, NF_STATUS_NAO_RECONCILIADO,
+    PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_PARCIALMENTE_FATURADO,
 )
 from app.motos_assai.forms import UploadNfQpaForm
 from app.motos_assai.services.parsers.nf_qpa_adapter import (
     importar_nf_qpa, NfQpaParseError, NfQpaJaImportadaError,
+    vincular_nf_manualmente, VincularNfError,
 )
 from app.motos_assai.services.cancelamento_nf_service import (
     cancelar_nf_qpa, CancelamentoValidationError,
@@ -126,10 +128,31 @@ def faturamento_lista():
             'qtd_items': len(items_por_nf.get(nf.id, [])),
         })
 
+    # Plano 4 Task 7: pedidos abertos + lojas para modal "Vincular NF manualmente"
+    # (mostra apenas se existirem NFs orfas NAO_RECONCILIADO).
+    tem_nao_reconciliado = any(
+        row['nf'].status_match == NF_STATUS_NAO_RECONCILIADO for row in nfs_orfas
+    )
+    pedidos_abertos_p4 = []
+    lojas_p4 = []
+    if tem_nao_reconciliado:
+        pedidos_abertos_p4 = (
+            AssaiPedidoVenda.query
+            .filter(AssaiPedidoVenda.status.in_([
+                PEDIDO_STATUS_ABERTO,
+                PEDIDO_STATUS_PARCIALMENTE_FATURADO,
+            ]))
+            .order_by(AssaiPedidoVenda.numero)
+            .all()
+        )
+        lojas_p4 = AssaiLoja.query.order_by(AssaiLoja.numero).all()
+
     return render_template(
         'motos_assai/faturamento/lista_separacoes.html',
         separacoes=separacoes,
         nfs_orfas=nfs_orfas,
+        pedidos_abertos_p4=pedidos_abertos_p4,
+        lojas_p4=lojas_p4,
     )
 
 
@@ -335,4 +358,50 @@ def faturamento_definir_expedicao(sep_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception('Erro ao setar expedicao sep %s', sep_id)
+        return jsonify({'ok': False, 'erro': f'Erro interno: {e}'}), 500
+
+
+@motos_assai_bp.route('/faturamento/nfs/<int:nf_id>/vincular-manual', methods=['POST'])
+def faturamento_vincular_nf_manual_ajax(nf_id):
+    """Plano 4 Task 7 — AJAX: vincular NF NAO_RECONCILIADO manualmente.
+
+    Body JSON:
+        {pedido_id: int, loja_id: int}
+
+    N-B1 fix: sem decorator de tela; valida sessao manualmente.
+    """
+    if not current_user.is_authenticated:
+        return jsonify({'ok': False, 'erro': 'Sessao expirada'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        pedido_id = int(payload['pedido_id'])
+        loja_id = int(payload['loja_id'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({
+            'ok': False, 'erro': 'pedido_id e loja_id obrigatorios',
+        }), 400
+
+    try:
+        resultado = vincular_nf_manualmente(
+            nf_id, pedido_id, loja_id, operador_id=current_user.id,
+        )
+        db.session.commit()
+        return jsonify({
+            'ok': resultado.get('ok', False),
+            'sep_alvo_id': resultado.get('sep_alvo_id'),
+            'sep_criada_via_nf': resultado.get('sep_criada_via_nf', False),
+            'razao': resultado.get('razao', ''),
+            'chassis_adicionados': resultado.get('chassis_adicionados', []),
+            'chassis_removidos': resultado.get('chassis_removidos', []),
+            'chassis_desconhecidos': resultado.get('chassis_desconhecidos', []),
+        })
+    except VincularNfError as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao vincular NF %s manualmente', nf_id)
         return jsonify({'ok': False, 'erro': f'Erro interno: {e}'}), 500

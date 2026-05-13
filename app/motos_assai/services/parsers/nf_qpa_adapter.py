@@ -402,4 +402,110 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
             # so esta setado em memoria (ainda nao commitado). Identity map
             # do SQLAlchemy mascarava o problema em request-context mas
             # falharia silenciosamente em workers/background jobs.
+
+
+# =====================================================================
+# Vincular NF manualmente (Plano 4 Task 6 — 2026-05-13)
+# =====================================================================
+#
+# Spec: §15.6 (ferramenta excepcional apos backfill Migration 23)
+# Plano: docs/superpowers/plans/2026-05-12-motos-assai-fase5-auxiliares.md Task 6
+#
+# Atalho de ajustar_separacao_pela_nf v2 que aceita pedido_id e loja_id explicitos.
+# Usado quando NF NAO_RECONCILIADO precisa ser vinculada manualmente —
+# casos onde Migration 23 backfill nao cobriu (ex: chassi nao existe em
+# assai_moto + operador escolhe pedido+loja diretamente).
+
+
+class VincularNfError(Exception):
+    """Erro ao vincular NF manualmente."""
+
+
+def vincular_nf_manualmente(nf_id: int, pedido_id: int, loja_id: int, operador_id: int):
+    """Vincula NF NAO_RECONCILIADO manualmente a um pedido+loja explicitos.
+
+    Atalho de ajustar_separacao_pela_nf v2:
+    - Atualiza nf.loja_id se nao tiver (caso regex automatico nao detectou)
+    - Reusa logica completa de ajustar_separacao_pela_nf (que cria sep em FATURADA
+      se necessario via S1=b)
+    - Apos ajuste, _calcular_match detecta BATEU naturalmente
+
+    NAO commita — caller commita.
+
+    Args:
+        nf_id: ID da AssaiNfQpa NAO_RECONCILIADO.
+        pedido_id: pedido alvo (usado para validar/forcar).
+        loja_id: loja alvo (set em nf.loja_id se vazio).
+        operador_id: usuario que solicitou.
+
+    Returns:
+        Resultado de ajustar_separacao_pela_nf:
+        {
+            'ok': bool,
+            'sep_alvo_id': int | None,
+            'sep_criada_via_nf': bool,
+            'chassis_adicionados': [str],
+            'chassis_removidos': [str],
+            'razao': str,
+            ...
+        }
+
+    Raises:
+        VincularNfError: NF nao encontrada / nao esta NAO_RECONCILIADO / pedido invalido.
+    """
+    from app.motos_assai.models import AssaiPedidoVenda, AssaiLoja
+    from app.motos_assai.services.separacao_service import ajustar_separacao_pela_nf
+
+    nf = AssaiNfQpa.query.get(nf_id)
+    if not nf:
+        raise VincularNfError(f'NF {nf_id} nao encontrada')
+    if nf.status_match != NF_STATUS_NAO_RECONCILIADO:
+        raise VincularNfError(
+            f'NF {nf_id} esta {nf.status_match} — apenas NAO_RECONCILIADO permite '
+            'vincular manualmente. Para BATEU/DIVERGENTE/CANCELADA, use cancelar_nf_qpa '
+            'antes se precisar re-vincular.'
+        )
+
+    # Validar pedido + loja existem
+    if not AssaiPedidoVenda.query.get(pedido_id):
+        raise VincularNfError(f'Pedido {pedido_id} nao encontrado')
+    if not AssaiLoja.query.get(loja_id):
+        raise VincularNfError(f'Loja {loja_id} nao encontrada')
+
+    # Forcar loja_id da NF (caso nao tenha sido detectado pelo regex automatico)
+    if not nf.loja_id:
+        nf.loja_id = loja_id
+        db.session.flush()
+    elif nf.loja_id != loja_id:
+        # Operador escolheu loja diferente da que o regex detectou — atualiza
+        # com aviso (caso de conflito raro: regex extraiu LJ12 mas operador
+        # confirma que e LJ34).
+        import logging
+        logging.getLogger(__name__).warning(
+            'vincular_nf_manualmente: NF %s tinha loja_id=%s mas operador %s '
+            'forcou loja_id=%s', nf_id, nf.loja_id, operador_id, loja_id,
+        )
+        nf.loja_id = loja_id
+        db.session.flush()
+
+    # Reusa logica completa de ajustar_separacao_pela_nf v2:
+    # - S1=b cria sep em FATURADA se nao ha sep candidata
+    # - A11 gera Excel versao 1
+    # - Match natural detecta BATEU apos ajuste
+    resultado = ajustar_separacao_pela_nf(nf.id, operador_id)
+
+    # Se ajuste OK, re-roda _calcular_match para fechar status=BATEU
+    if resultado.get('ok'):
+        _calcular_match(nf, operador_id)
+        db.session.flush()
+
+    import logging
+    logging.getLogger(__name__).info(
+        'vincular_nf_manualmente: nf=%s pedido=%s loja=%s ok=%s sep=%s '
+        'operador=%s',
+        nf_id, pedido_id, loja_id, resultado.get('ok'),
+        resultado.get('sep_alvo_id'), operador_id,
+    )
+
+    return resultado
             # Ver `importar_nf_qpa` no final do arquivo.

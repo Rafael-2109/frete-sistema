@@ -1,0 +1,69 @@
+{# Plano 4 Task 7 - Modal "Vincular NF manualmente" no painel de NFs orfas.
+   Usado quando NF NAO_RECONCILIADO precisa ser vinculada manualmente
+   (ex: chassi nao existe em assai_moto e operador escolhe pedido+loja).
+#}
+<div class="modal fade" id="modal-vincular-nf" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title">
+          <i class="fas fa-link"></i> Vincular NF manualmente
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small">
+          <i class="fas fa-info-circle"></i>
+          Vincular manualmente forca a NF a usar pedido + loja escolhidos.
+          Ferramenta excepcional — apenas para NFs que nao foram reconciliadas
+          automaticamente apos o backfill.
+        </div>
+
+        <input type="hidden" id="vinc-nf-id" />
+        <div class="mb-3">
+          <label class="form-label small text-muted">NF:</label>
+          <div class="font-monospace" id="vinc-nf-numero">—</div>
+        </div>
+
+        <div class="mb-3">
+          <label for="vinc-pedido-select" class="form-label">
+            Pedido <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="vinc-pedido-select" required>
+            <option value="">— Selecione —</option>
+            {% for ped in pedidos_abertos_p4 or [] %}
+              <option value="{{ ped.id }}">{{ ped.numero }} ({{ ped.status }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label for="vinc-loja-select" class="form-label">
+            Loja <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="vinc-loja-select" required>
+            <option value="">— Selecione —</option>
+            {% for loja in lojas_p4 or [] %}
+              <option value="{{ loja.id }}">{{ loja.numero }} {{ loja.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="alert alert-warning small">
+          <i class="fas fa-exclamation-triangle"></i>
+          Apos vincular, o sistema tentara criar/ajustar separacao automaticamente.
+          Se algum chassi da NF nao existir em assai_moto, ainda assim a sep sera
+          criada com os chassis cadastrados (NF parcial).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-warning" id="btn-confirmar-vincular-nf">
+          <i class="fas fa-link"></i> Vincular
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -223,6 +223,17 @@
              class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-eye"></i> Detalhe
           </a>
+          {% if nf.status_match == 'NAO_RECONCILIADO' %}
+          <button type="button"
+                  class="btn btn-sm btn-warning ms-1"
+                  data-bs-toggle="modal"
+                  data-bs-target="#modal-vincular-nf"
+                  data-nf-id="{{ nf.id }}"
+                  data-nf-numero="{{ nf.numero or 'NF#' ~ nf.id }}"
+                  onclick="event.stopPropagation();">
+            <i class="fas fa-link"></i> Vincular
+          </button>
+          {% endif %}
         </td>
       </tr>
       <!-- Accordion expandivel com chassis da NF -->
@@ -280,6 +291,67 @@
   </div>
   {% endif %}
 </div>
+
+{# Plano 4 Task 7: modal vincular NF manualmente #}
+{% include 'motos_assai/faturamento/_modal_vincular_nf.html' %}
+
+<script>
+window.MOTOS_ASSAI_FAT = {
+  endpoints: {
+    vincularNfBase: '{{ url_for("motos_assai.faturamento_vincular_nf_manual_ajax", nf_id=999999999)|replace("/999999999", "/") }}',
+  },
+};
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Plano 4 Task 7: handler para preencher modal vincular NF
+  var modal = document.getElementById('modal-vincular-nf');
+  if (modal) {
+    modal.addEventListener('show.bs.modal', function (e) {
+      var btn = e.relatedTarget;
+      var nfId = btn.dataset.nfId;
+      var nfNumero = btn.dataset.nfNumero;
+      document.getElementById('vinc-nf-id').value = nfId;
+      document.getElementById('vinc-nf-numero').textContent = nfNumero;
+    });
+  }
+
+  document.getElementById('btn-confirmar-vincular-nf')?.addEventListener('click', async function () {
+    var nfId = document.getElementById('vinc-nf-id').value;
+    var pedidoId = document.getElementById('vinc-pedido-select').value;
+    var lojaId = document.getElementById('vinc-loja-select').value;
+    if (!nfId || !pedidoId || !lojaId) {
+      alert('Selecione pedido e loja.');
+      return;
+    }
+    var btn = document.getElementById('btn-confirmar-vincular-nf');
+    btn.disabled = true;
+
+    try {
+      var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      var csrf = csrfMeta ? csrfMeta.content : '';
+      var url = window.MOTOS_ASSAI_FAT.endpoints.vincularNfBase + nfId;
+      var r = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+        body: JSON.stringify({pedido_id: parseInt(pedidoId, 10), loja_id: parseInt(lojaId, 10)}),
+      });
+      var data = await r.json();
+      if (!data.ok) {
+        alert('Erro: ' + (data.erro || 'falha desconhecida'));
+        btn.disabled = false;
+        return;
+      }
+      alert('NF vinculada com sucesso. Sep: ' + (data.sep_alvo_id || '?')
+            + '. Razao: ' + (data.razao || ''));
+      bootstrap.Modal.getInstance(modal)?.hide();
+      setTimeout(function () { location.reload(); }, 800);
+    } catch (err) {
+      alert('Erro de rede: ' + err.message);
+      btn.disabled = false;
+    }
+  });
+});
+</script>
 {% endblock %}
 
 {% block onboarding_tours %}
