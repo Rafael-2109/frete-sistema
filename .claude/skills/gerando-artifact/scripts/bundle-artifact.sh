@@ -2,8 +2,12 @@
 #
 # bundle-artifact.sh — Empacota projeto Vite/React em bundle.html auto-contido.
 #
-# Adaptado de anthropics/skills/web-artifacts-builder/scripts/bundle-artifact.sh
-# Diferenca: npm em vez de pnpm; output path absoluto opcional via $BUNDLE_OUT.
+# Migrado para pnpm em 2026-05-13 (skill oficial Anthropic web-artifacts-builder).
+# Diferenca vs npm: pnpm usa CAS store (content-addressable) com hash validation
+# e hoisting deterministico via .pnpm/<pkg>@<ver>/node_modules/<pkg> symlinks.
+# Resolve bug Render onde `npm install` retornava exit 0 mas
+# node_modules/@parcel/config-default ficava AUSENTE (3 retries falhavam
+# identicamente — ver logs srv-d2muidggjchc73d4segg 2026-05-13).
 #
 # Uso (rodar do raiz do projeto):
 #   bash bundle-artifact.sh
@@ -26,139 +30,62 @@ if [ ! -f "index.html" ]; then
   exit 2
 fi
 
-echo "[bundle] Output destino: $OUTPUT_PATH"
+# ===== Garantir pnpm =====
+# Node 20+ vem com corepack built-in. Se pnpm nao esta no PATH, ativar via
+# corepack (start_worker_render.sh ja faz isso, mas defesa em profundidade).
+if ! command -v pnpm &> /dev/null; then
+  echo "[bundle] pnpm nao encontrado — tentando corepack enable..."
+  if command -v corepack &> /dev/null; then
+    corepack enable 2>&1 | tail -5
+    corepack prepare pnpm@latest --activate 2>&1 | tail -5
+  else
+    echo "ERRO: pnpm e corepack ausentes. Adicionar 'corepack enable' ao start." >&2
+    exit 2
+  fi
+fi
 
 # ===== Diagnostico de ambiente =====
-# Capturar info que ajuda a debugar falhas Render-especificas (where node, npm
-# version, cwd, disk free, npm cache config). Custa <100ms e e essencial para
-# triagem quando o install falha silenciosamente.
 echo "[bundle] === DIAGNOSTICO ==="
-echo "[bundle] PWD: $PWD"
-echo "[bundle] Node: $(command -v node 2>/dev/null || echo 'NAO ENCONTRADO') ($(node -v 2>&1))"
-echo "[bundle] npm:  $(command -v npm 2>/dev/null || echo 'NAO ENCONTRADO') ($(npm -v 2>&1))"
-echo "[bundle] disk: $(df -h . 2>&1 | tail -1 | awk '{print $4" free of "$2}')"
-echo "[bundle] npm cache: $(npm config get cache 2>&1)"
+echo "[bundle] PWD:    $PWD"
+echo "[bundle] Output: $OUTPUT_PATH"
+echo "[bundle] Node:   $(command -v node 2>/dev/null || echo 'NAO ENCONTRADO') ($(node -v 2>&1))"
+echo "[bundle] pnpm:   $(command -v pnpm 2>/dev/null || echo 'NAO ENCONTRADO') ($(pnpm -v 2>&1))"
+echo "[bundle] disk:   $(df -h . 2>&1 | tail -1 | awk '{print $4" free of "$2}')"
+echo "[bundle] pnpm store: $(pnpm store path 2>&1 | tail -1)"
 echo "[bundle] === FIM DIAGNOSTICO ==="
 
-# ===== Instalar deps de bundling =====
-# Pin de versao deliberado:
+# ===== Instalar deps de bundling (Parcel + plugins) =====
+# Pinning de versao deliberado (evita variacao entre builds):
 #   - parcel + @parcel/config-default DEVEM bater EXATAMENTE (Parcel resolve
-#     @parcel/config-default via require interno do @parcel/core; se npm faz
-#     hoisting estranho com latest, parcel acha um stub e falha com
-#     "Cannot find extended parcel config" mesmo apos npm install OK).
-#   - --legacy-peer-deps evita falhas silenciosas de peer dep com Vite/TS recente.
-#   - --no-audit --no-fund encurta o install em alguns segundos (acumula em prod).
+#     @parcel/config-default via require interno; descasamento → "Cannot find
+#     extended parcel config").
+#   - parcel-resolver-tspaths + html-inline sao pacotes inativos — pinar evita
+#     surpresa se autor publicar versao quebrada ou registry deprecar.
 PARCEL_VERSION="2.12.0"
-# parcel-resolver-tspaths e html-inline pinados em ultima versao publicada
-# (ambos sao pacotes inativos — pinar elimina variacao futura se autor publicar
-# versao quebrada ou registry deprecar).
 RESOLVER_TSPATHS_VERSION="0.0.9"
 HTML_INLINE_VERSION="1.2.0"
 
-# Cache npm DEDICADO por build (evita corrupcao cross-job no Render, onde
-# multiplos workers podem rodar `npm install` paralelo no mesmo cache global e
-# corromper o tarball cache → install retorna 0 mas escreve dir vazio).
-NPM_CACHE_DIR="$(mktemp -d -t npm-cache-XXXXXX)"
-trap 'rm -rf "$NPM_CACHE_DIR" 2>/dev/null || true' EXIT
-echo "[bundle] npm cache dedicado: $NPM_CACHE_DIR"
-
-# Helper: install + valida. $1=descricao curta, $2=pkg-alvo, $@(3+)=args de npm install.
-# Retorna 0 se OK, > 0 se falhou.
-# CUIDADO: usa PIPESTATUS para pegar exit code do `npm install`, NAO do `tail`
-# (pipeline retorna exit do ultimo comando por padrao). `set +e` local porque
-# o script tem `set -e` global e a funcao precisa retornar codigo de erro
-# para o caller fazer fallback.
-_npm_install_and_validate() {
-  local desc="$1"; shift
-  local target_pkg="$1"; shift
-  echo "[bundle] ($desc) npm install $*"
-  set +e
-  npm install --cache "$NPM_CACHE_DIR" "$@" 2>&1 | tail -25
-  local rc=${PIPESTATUS[0]}
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    echo "[bundle] ($desc) npm install exit=$rc" >&2
-    return 1
-  fi
-  if [ ! -d "node_modules/$target_pkg" ]; then
-    echo "[bundle] ($desc) node_modules/$target_pkg AUSENTE apos install" >&2
-    return 2
-  fi
-  echo "[bundle] ($desc) OK: node_modules/$target_pkg presente"
-  return 0
-}
-
-# ===== ETAPA 1: parcel + @parcel/config-default (CRITICOS) =====
-# Instalar isoladamente os dois pacotes que JA falharam em prod, sem misturar
-# com plugins inativos (resolver-tspaths/html-inline) que podem causar
-# resolucao estranha.
-echo "[bundle] [1/3] Instalando parcel + @parcel/config-default..."
-_npm_install_and_validate \
-  "parcel-core" \
-  "@parcel/config-default" \
-  -D --legacy-peer-deps --no-audit --no-fund \
+echo "[bundle] Instalando Parcel + plugins via pnpm..."
+pnpm add -D \
   "parcel@$PARCEL_VERSION" \
   "@parcel/config-default@$PARCEL_VERSION" \
-  || {
-    # ===== FALLBACK A: limpar cache npm + retry =====
-    # Cache npm corrompido e a hipotese #1 do bug Render. Limpar + reinstalar.
-    echo "[bundle] Fallback A: limpar npm cache + retry" >&2
-    npm cache clean --force --cache "$NPM_CACHE_DIR" 2>&1 | tail -5 >&2 || true
-    rm -rf node_modules/@parcel node_modules/parcel 2>/dev/null || true
-    _npm_install_and_validate \
-      "parcel-core-retry" \
-      "@parcel/config-default" \
-      -D --legacy-peer-deps --no-audit --no-fund --force \
-      "parcel@$PARCEL_VERSION" \
-      "@parcel/config-default@$PARCEL_VERSION" \
-      || {
-        # ===== FALLBACK B: install isolado SEM package-lock =====
-        # Hipotese: package-lock.json do Vite causa hoisting estranho com Parcel.
-        # `--no-package-lock --no-save` faz npm puro: baixa tarball, extrai em
-        # node_modules/, sem tocar package.json/lock.
-        echo "[bundle] Fallback B: install sem package-lock + sem save" >&2
-        _npm_install_and_validate \
-          "parcel-isolated" \
-          "@parcel/config-default" \
-          --no-package-lock --no-save --no-audit --no-fund --legacy-peer-deps \
-          "parcel@$PARCEL_VERSION" \
-          "@parcel/config-default@$PARCEL_VERSION" \
-          || {
-            # ===== DIAGNOSTICO FINAL ANTES DE FALHAR =====
-            echo "ERRO: node_modules/@parcel/config-default ausente apos 3 tentativas." >&2
-            echo "[bundle] === DIAGNOSTICO POS-FALHA ===" >&2
-            echo "[bundle] node_modules/@parcel/:" >&2
-            ls -la node_modules/@parcel/ >&2 2>/dev/null || echo "(nao existe)" >&2
-            echo "[bundle] node_modules/parcel/node_modules/@parcel/:" >&2
-            ls -la node_modules/parcel/node_modules/@parcel/ >&2 2>/dev/null || echo "(nao existe)" >&2
-            echo "[bundle] node_modules/ entries (primeiras 30):" >&2
-            ls node_modules/ 2>&1 | head -30 >&2
-            echo "[bundle] npm ls @parcel/config-default:" >&2
-            npm ls @parcel/config-default 2>&1 | head -10 >&2
-            echo "[bundle] disk apos install: $(df -h . | tail -1)" >&2
-            exit 4
-          }
-      }
-  }
-
-# ===== ETAPA 2: plugins (resolver-tspaths + html-inline) =====
-echo "[bundle] [2/3] Instalando plugins Parcel..."
-_npm_install_and_validate \
-  "parcel-plugins" \
-  "parcel-resolver-tspaths" \
-  -D --legacy-peer-deps --no-audit --no-fund \
   "parcel-resolver-tspaths@$RESOLVER_TSPATHS_VERSION" \
-  "html-inline@$HTML_INLINE_VERSION" \
-  || {
-    echo "ERRO: falha instalando parcel-resolver-tspaths/html-inline." >&2
-    exit 6
-  }
+  "html-inline@$HTML_INLINE_VERSION"
 
-# ===== ETAPA 3: validacao final consolidada =====
-echo "[bundle] [3/3] Validando install final..."
+# ===== Sanity check: deps criticas presentes =====
+# pnpm cria estrutura .pnpm/<pkg>@<ver>/node_modules/<pkg> com symlinks no
+# top-level node_modules/<pkg>. Validar via `-e` aceita symlink + dir.
 for pkg in "@parcel/config-default" "@parcel/core" "parcel" "parcel-resolver-tspaths" "html-inline"; do
-  if [ ! -d "node_modules/$pkg" ]; then
-    echo "ERRO: node_modules/$pkg ausente apos install completo." >&2
+  if [ ! -e "node_modules/$pkg" ]; then
+    echo "ERRO: node_modules/$pkg AUSENTE apos pnpm install." >&2
+    echo "[bundle] === DIAGNOSTICO POS-FALHA ===" >&2
+    echo "[bundle] node_modules/@parcel/ (top-level):" >&2
+    ls -la node_modules/@parcel/ >&2 2>/dev/null || echo "(nao existe)" >&2
+    echo "[bundle] node_modules/.pnpm/ entries (primeiras 20):" >&2
+    ls node_modules/.pnpm/ 2>&1 | head -20 >&2 || echo "(.pnpm/ nao existe)" >&2
+    echo "[bundle] pnpm list parcel deps:" >&2
+    pnpm list parcel @parcel/config-default 2>&1 | head -15 >&2
+    echo "[bundle] disk apos install: $(df -h . | tail -1)" >&2
     exit 4
   fi
 done
@@ -181,11 +108,11 @@ rm -rf dist bundle.html
 
 # ===== Build com Parcel =====
 echo "[bundle] Buildando com Parcel..."
-npx parcel build index.html --dist-dir dist --no-source-maps
+pnpm exec parcel build index.html --dist-dir dist --no-source-maps
 
 # ===== Inline tudo =====
 echo "[bundle] Inlining assets em HTML unico..."
-npx html-inline dist/index.html > "$OUTPUT_PATH"
+pnpm exec html-inline dist/index.html > "$OUTPUT_PATH"
 
 # ===== Validar =====
 if [ ! -f "$OUTPUT_PATH" ]; then

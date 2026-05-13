@@ -30,17 +30,20 @@ logger = logging.getLogger('sistema_fretes')
 
 def _ensure_node_in_path(env: dict) -> dict:
     """
-    Garante que Node/npm estao no PATH do subprocess.
+    Garante que Node + pnpm estao no PATH do subprocess.
 
     Worker pode ter sido iniciado por start_worker_render.sh (Render) que ja
-    exporta PATH com Node. Mas se nao tem (ex: gunicorn herdou env limpo, dev
-    local em venv sem Node global), tenta descobrir bin do Node via NVM dir
-    ou paths comuns.
+    exporta PATH com Node + pnpm. Mas se nao tem (ex: gunicorn herdou env
+    limpo, dev local em venv sem Node global), tenta descobrir bin do Node
+    via NVM dir ou paths comuns.
+
+    pnpm e checado em adicao a npm (skill gerando-artifact migrou para pnpm
+    em 2026-05-13 — bug npm Render com @parcel/config-default).
 
     Returns env dict possivelmente com PATH atualizado.
     """
     # 1. Se ja resolve via PATH atual, nada a fazer
-    if shutil.which('node') and shutil.which('npm'):
+    if shutil.which('node') and shutil.which('npm') and shutil.which('pnpm'):
         return env
 
     candidates = []
@@ -55,10 +58,17 @@ def _ensure_node_in_path(env: dict) -> dict:
     candidates.extend(['/usr/local/bin', '/usr/bin'])
 
     for path in candidates:
+        # Aceita path se tem node + npm (pnpm pode estar em path proprio via corepack)
         if os.path.exists(os.path.join(path, 'node')) and os.path.exists(os.path.join(path, 'npm')):
             existing = env.get('PATH', '')
             env['PATH'] = f"{path}:{existing}" if existing else path
             logger.info(f"[ARTIFACT_WORKER] Node bin prependado ao PATH: {path}")
+            # pnpm pode estar no mesmo path (corepack symlink) ou em path proprio
+            if not shutil.which('pnpm', path=env['PATH']):
+                logger.warning(
+                    f"[ARTIFACT_WORKER] pnpm ausente em {path} — bundle pode "
+                    f"falhar se corepack nao ativar pnpm dinamicamente"
+                )
             return env
 
     logger.warning(
@@ -242,7 +252,11 @@ def _apply_components(project_dir: Path, components: list) -> None:
 
 
 def _install_extra_deps(project_dir: Path, deps: dict) -> None:
-    """npm install para dependencies extras solicitadas pela spec."""
+    """pnpm install para dependencies extras solicitadas pela spec.
+
+    Migrado de npm para pnpm em 2026-05-13 (consistente com init/bundle scripts
+    que usam pnpm — manter o mesmo PM em todo o pipeline evita lockfile drift).
+    """
     # Validacao basica de nomes (anti-injection)
     safe_args = []
     for name, version in deps.items():
@@ -255,10 +269,10 @@ def _install_extra_deps(project_dir: Path, deps: dict) -> None:
             raise RuntimeError(f"dependency version invalida: {version}")
         safe_args.append(f"{name}@{version}")
 
-    logger.info(f"[ARTIFACT_WORKER] npm install extra: {safe_args}")
+    logger.info(f"[ARTIFACT_WORKER] pnpm install extra: {safe_args}")
     env = _ensure_node_in_path(os.environ.copy())
     result = subprocess.run(
-        ['npm', 'install', *safe_args],
+        ['pnpm', 'install', *safe_args],
         capture_output=True,
         text=True,
         timeout=SUBPROCESS_TIMEOUT,
@@ -267,7 +281,7 @@ def _install_extra_deps(project_dir: Path, deps: dict) -> None:
     )
     if result.returncode != 0:
         raise RuntimeError(
-            f"npm install (extras) falhou: stderr={result.stderr[-500:]}"
+            f"pnpm install (extras) falhou: stderr={result.stderr[-500:]}"
         )
 
 

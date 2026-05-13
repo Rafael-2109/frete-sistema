@@ -6,8 +6,8 @@
 # V2 (futuro): pre-buildar templates/base/ com shadcn/ui + Radix tarball.
 #
 # Adaptado de anthropics/skills/web-artifacts-builder/scripts/init-artifact.sh
-# Diferencas: npm em vez de pnpm; sem tarball shadcn; sem dependencias extras
-# (form, dialog, dropdown — adicionar se a spec do agente solicitar).
+# Migrado para pnpm em 2026-05-13 (resolve bug npm Render onde
+# node_modules/@parcel/config-default ficava AUSENTE — ver bundle-artifact.sh).
 #
 # Uso:
 #   bash init-artifact.sh <project-dir>
@@ -39,6 +39,21 @@ if [ "$NODE_VERSION" -lt 18 ]; then
   exit 3
 fi
 
+# Garantir pnpm (skill oficial Anthropic usa pnpm — CAS store + hoisting
+# deterministico resolvem bugs npm em ambientes peculiares como Render).
+# Node 16.10+ traz corepack built-in que gerencia pnpm/yarn.
+if ! command -v pnpm &> /dev/null; then
+  echo "[init] pnpm nao encontrado — tentando corepack enable..."
+  if command -v corepack &> /dev/null; then
+    corepack enable 2>&1 | tail -5
+    corepack prepare pnpm@latest --activate 2>&1 | tail -5
+  else
+    echo "[init] corepack indisponivel — instalando pnpm via npm -g..."
+    npm install -g pnpm
+  fi
+fi
+echo "[init] pnpm version: $(pnpm -v 2>&1)"
+
 # Vite version baseado em Node (Node 18 precisa Vite 5.x)
 if [ "$NODE_VERSION" -ge 20 ]; then
   VITE_VERSION="latest"
@@ -57,7 +72,7 @@ fi
 # ===== Criar projeto =====
 echo "[init] Criando projeto Vite em $PROJECT_DIR..."
 
-# `npm create vite` NAO respeita path absoluto em todas as versoes.
+# `pnpm create vite` NAO respeita path absoluto em todas as versoes.
 # Workaround: separar parent + basename, rodar com basename relativo
 # a partir do parent dir.
 PARENT_DIR="$(dirname "$PROJECT_DIR")"
@@ -67,11 +82,12 @@ mkdir -p "$PARENT_DIR"
 cd "$PARENT_DIR"
 
 # create-vite cria pasta com nome BASENAME no cwd ($PARENT_DIR).
-npm create vite@latest "$BASENAME" -- --template react-ts --yes
+# pnpm create vite usa sintaxe direta: pnpm create vite <name> --template <tpl>
+pnpm create vite "$BASENAME" --template react-ts
 
 # Sanity: pasta foi criada?
 if [ ! -d "$PROJECT_DIR" ]; then
-    echo "ERRO: npm create vite nao criou $PROJECT_DIR" >&2
+    echo "ERRO: pnpm create vite nao criou $PROJECT_DIR" >&2
     exit 4
 fi
 
@@ -90,18 +106,18 @@ rm -f public/vite.svg public/favicon.svg 2>/dev/null || true
 
 # ===== Instalar baseline =====
 echo "[init] Instalando dependencies baseline..."
-npm install
+pnpm install
 
 # Pin Vite version para Node 18
 if [ "$NODE_VERSION" -lt 20 ]; then
   echo "[init] Pinando Vite a $VITE_VERSION para Node 18 compat..."
-  npm install -D "vite@$VITE_VERSION"
+  pnpm add -D "vite@$VITE_VERSION"
 fi
 
 # ===== Tailwind + utils =====
 echo "[init] Instalando Tailwind + utils..."
-npm install -D tailwindcss@3.4.1 postcss autoprefixer @types/node tailwindcss-animate
-npm install class-variance-authority clsx tailwind-merge lucide-react
+pnpm add -D tailwindcss@3.4.1 postcss autoprefixer @types/node tailwindcss-animate
+pnpm install class-variance-authority clsx tailwind-merge lucide-react
 
 # ===== shadcn/ui — 40+ componentes (tarball oficial Anthropic) =====
 # Caminho do tarball relativo ao script (SCRIPT_DIR resolvido via BASH_SOURCE)
@@ -110,7 +126,7 @@ COMPONENTS_TARBALL="$SCRIPT_DIR/shadcn-components.tar.gz"
 
 if [ -f "$COMPONENTS_TARBALL" ]; then
     echo "[init] Instalando Radix UI deps (shadcn)..."
-    npm install \
+    pnpm install \
       @radix-ui/react-accordion @radix-ui/react-aspect-ratio @radix-ui/react-avatar \
       @radix-ui/react-checkbox @radix-ui/react-collapsible @radix-ui/react-context-menu \
       @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-hover-card \
@@ -120,7 +136,7 @@ if [ -f "$COMPONENTS_TARBALL" ]; then
       @radix-ui/react-slider @radix-ui/react-slot @radix-ui/react-switch \
       @radix-ui/react-tabs @radix-ui/react-toast @radix-ui/react-toggle \
       @radix-ui/react-toggle-group @radix-ui/react-tooltip
-    npm install \
+    pnpm install \
       sonner cmdk vaul embla-carousel-react react-day-picker \
       react-resizable-panels date-fns react-hook-form @hookform/resolvers zod next-themes
 else

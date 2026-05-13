@@ -228,8 +228,24 @@ if [ "$INSTALL_NODE" = "1" ]; then
     echo "🟢 Node instalado: $(node -v) / npm $(npm -v)"
 fi
 
+# Ativar pnpm via corepack (Node 16.10+ built-in package manager manager).
+# pnpm e necessario para o build de artifacts — npm falha no Render com
+# node_modules/@parcel/config-default AUSENTE apos exit 0 (ver logs 2026-05-13
+# srv-d2muidggjchc73d4segg). pnpm tem CAS store + hoisting deterministico.
+if command -v corepack &> /dev/null; then
+    corepack enable 2>&1 | tail -3
+    corepack prepare pnpm@latest --activate 2>&1 | tail -3
+    echo "🟢 pnpm ativado via corepack: $(pnpm -v 2>&1)"
+elif ! command -v pnpm &> /dev/null; then
+    echo "📦 Corepack indisponivel — instalando pnpm via npm -g..."
+    npm install -g pnpm 2>&1 | tail -5
+    echo "🟢 pnpm instalado: $(pnpm -v 2>&1)"
+else
+    echo "🟢 pnpm ja disponivel: $(pnpm -v 2>&1)"
+fi
+
 # CRITICAL: exportar PATH do Node para subprocess via `exec python worker_render.py`.
-# Sem isso, RQ jobs chamando `node`/`npm` via subprocess.run() recebem PATH herdado
+# Sem isso, RQ jobs chamando `node`/`pnpm` via subprocess.run() recebem PATH herdado
 # do gunicorn (sem Node) e falham com "command not found". Detectar bin atual do
 # Node e prepender ao PATH antes do exec.
 NODE_BIN_PATH=$(dirname "$(command -v node 2>/dev/null)" 2>/dev/null || true)
@@ -238,6 +254,14 @@ if [ -n "$NODE_BIN_PATH" ]; then
     echo "🔧 Node bin exportado para PATH: $NODE_BIN_PATH"
 else
     echo "⚠️  Node bin nao localizado — builds de artifacts podem falhar"
+fi
+
+# pnpm via corepack/global pode ter shim em path diferente do node bin.
+# Prepender o bin do pnpm se diferente, para garantir PATH herdado pelo subprocess.
+PNPM_BIN_PATH=$(dirname "$(command -v pnpm 2>/dev/null)" 2>/dev/null || true)
+if [ -n "$PNPM_BIN_PATH" ] && [ "$PNPM_BIN_PATH" != "$NODE_BIN_PATH" ]; then
+    export PATH="$PNPM_BIN_PATH:$PATH"
+    echo "🔧 pnpm bin exportado para PATH: $PNPM_BIN_PATH"
 fi
 
 echo ""
