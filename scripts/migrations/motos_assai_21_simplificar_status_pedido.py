@@ -26,7 +26,7 @@ def main():
         print(f'[start] {total} pedidos no banco')
 
         pedidos = AssaiPedidoVenda.query.all()
-        contadores = {'mudou': 0, 'manteve': 0, 'cancelado_skip': 0}
+        contadores = {'mudou': 0, 'manteve': 0, 'cancelado_skip': 0, 'erro': 0}
 
         for pedido in pedidos:
             status_antes = pedido.status
@@ -34,12 +34,26 @@ def main():
                 contadores['cancelado_skip'] += 1
                 continue
 
-            novo_status = recalcular_status_pedido(pedido.id)
+            # Code review fix M5 (2026-05-13): try/except por pedido — falha
+            # isolada nao aborta migration inteira sem indicacao. Rollback
+            # restaura sessao para proxima iteracao.
+            try:
+                novo_status = recalcular_status_pedido(pedido.id)
+            except Exception as e:
+                db.session.rollback()
+                print(f'  [ERROR] pedido #{pedido.id} ({status_antes}): {e}')
+                contadores['erro'] += 1
+                continue
+
             if novo_status != status_antes:
                 contadores['mudou'] += 1
                 print(f'  pedido #{pedido.id}: {status_antes} -> {novo_status}')
             else:
                 contadores['manteve'] += 1
+
+        if contadores['erro'] > 0:
+            print(f'[ERROR] {contadores["erro"]} pedidos falharam — abortando antes do commit')
+            sys.exit(1)
 
         db.session.commit()
 

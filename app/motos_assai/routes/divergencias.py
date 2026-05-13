@@ -111,14 +111,23 @@ def divergencias_resolver(div_id):
         403 {error: "..."}
     """
     if not current_user.is_authenticated:
-        return jsonify({'error': 'Sessao expirada'}), 401
+        return jsonify({'ok': False, 'erro': 'Sessao expirada'}), 401
     if not current_user.pode_acessar_motos_assai():
-        return jsonify({'error': 'Acesso negado'}), 403
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     payload = request.get_json(silent=True) or {}
     tipo_resolucao = (payload.get('tipo_resolucao') or '').strip()
     observacao = (payload.get('observacao') or '').strip()
     extras = payload.get('extras') or {}
+
+    # Code review fix H9 (2026-05-13): validar tipo_resolucao contra set permitido
+    # antes de qualquer logica de negocio (defesa em profundidade — service tambem valida).
+    if tipo_resolucao not in DIVERGENCIA_RESOLUCAO_VALIDAS:
+        return jsonify({
+            'ok': False,
+            'erro': f'tipo_resolucao invalido: {tipo_resolucao!r}. '
+                    f'Validos: {sorted(DIVERGENCIA_RESOLUCAO_VALIDAS)}',
+        }), 400
 
     try:
         # Operacoes especificas por tipo de resolucao
@@ -265,8 +274,12 @@ def divergencias_upload_cce(div_id):
             )
             dados = {'confianca': 0.0, 'chassis_corrigidos': []}
 
-        # 2. Fallback LLM se confianca baixa
-        if dados.get('confianca', 0.0) < CONFIANCA_LIMIAR:
+        # 2. Fallback LLM se confianca baixa.
+        # Code review fix M2 (2026-05-13): `<` exclui o limite exato (0.80),
+        # mas confianca EXATAMENTE no limiar (heuristica deu pontuacao maxima
+        # via fallback) deve acionar LLM tambem — borderline e arriscado.
+        # Tornado inclusive (`<=`).
+        if dados.get('confianca', 0.0) <= CONFIANCA_LIMIAR:
             try:
                 from app.motos_assai.services.parsers.cce_llm_fallback import (
                     extrair_cce_via_llm, CceLlmFallbackError,

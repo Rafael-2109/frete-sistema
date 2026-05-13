@@ -351,10 +351,12 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
             nf.separacao_id = next(iter(separacoes_atualizar))
 
         # Atualiza separações para FATURADA + emite eventos FATURADA (M3)
+        pedidos_para_recalcular = set()
         for sep_id in separacoes_atualizar:
             sep = AssaiSeparacao.query.get(sep_id)
             if sep:
                 sep.status = SEPARACAO_STATUS_FATURADA
+                pedidos_para_recalcular.add(sep.pedido_id)
 
         # M3 fix: emite evento FATURADA por chassi (preserva comportamento legado)
         for it_ok in items_nf:
@@ -364,6 +366,24 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
                     operador_id=operador_id,
                     dados_extras={'nf_id': nf.id, 'chave_44': nf.chave_44},
                 )
+
+        # Code review fix C6 / S10 (2026-05-13): recalcular_status_pedido apos
+        # BATEU. Spec §14.2: "_calcular_match BATEU eh o UNICO caminho que pode
+        # SUBIR para FATURADO". Sem este callsite, pedido fica defasado em
+        # PARCIALMENTE_FATURADO ate algum outro evento acionar a funcao.
+        try:
+            from app.motos_assai.services.pedido_status_service import (
+                recalcular_status_pedido,
+            )
+            for pedido_id in pedidos_para_recalcular:
+                recalcular_status_pedido(pedido_id)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(
+                '_calcular_match BATEU: falha em recalcular_status_pedido '
+                'pedidos=%s nf=%s: %s — segue (nao bloqueia BATEU)',
+                pedidos_para_recalcular, nf.id, e, exc_info=True,
+            )
 
         # Propagar numero_nf para o espelho em separacao Nacom — listener
         # `atualizar_status_automatico` recalcula status -> FATURADO.

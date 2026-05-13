@@ -281,9 +281,9 @@ def faturamento_cancelar_nf(nf_id):
         400 {ok: false, erro: "..."}
     """
     if not current_user.is_authenticated:
-        return jsonify({'error': 'Sessao expirada'}), 401
+        return jsonify({'ok': False, 'erro': 'Sessao expirada'}), 401
     if not current_user.pode_acessar_motos_assai():
-        return jsonify({'error': 'Acesso negado'}), 403
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     payload = request.get_json(silent=True) or {}
     motivo = (payload.get('motivo') or '').strip()
@@ -316,9 +316,9 @@ def faturamento_definir_expedicao(sep_id):
         }
     """
     if not current_user.is_authenticated:
-        return jsonify({'error': 'Sessao expirada'}), 401
+        return jsonify({'ok': False, 'erro': 'Sessao expirada'}), 401
     if not current_user.pode_acessar_motos_assai():
-        return jsonify({'error': 'Acesso negado'}), 403
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     sep = AssaiSeparacao.query.get_or_404(sep_id)
 

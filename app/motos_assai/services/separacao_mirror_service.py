@@ -514,11 +514,11 @@ def sincronizar_espelho_com_separacao(assai_sep_id: int) -> dict:
     lote_id = lote_id_de(assai_sep_id)
     linhas_atuais = Separacao.query.filter_by(separacao_lote_id=lote_id).all()
     if not linhas_atuais:
-        # Lote nao espelhado ainda. sincronizacao = mirror inicial. Mas mirror so
-        # roda em FECHADA — se sep esta EM_SEPARACAO, nao espelhar.
-        if sep.status == AssaiSeparacao.status.type.python_type.__class__.__name__:  # noqa
-            pass
-        # Mais simples: apenas retornar 0 (caller decide se chama mirror_assai_to_separacao)
+        # Lote nao espelhado ainda — caller decide se chama
+        # `mirror_assai_to_separacao` para criar o espelho inicial. Aqui apenas
+        # retornamos noop. Code review fix (2026-05-13): removida comparacao
+        # morta `sep.status == AssaiSeparacao.status.type.python_type.__class__.__name__`
+        # que era sempre falsa (comparava status com string 'str'/'type').
         logger.info(
             'sincronizar_espelho_com_separacao: lote %s nao tem linhas — '
             'mirror inicial ainda nao rodou (sep status=%s)',

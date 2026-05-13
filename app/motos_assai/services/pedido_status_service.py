@@ -63,7 +63,20 @@ def recalcular_status_pedido(pedido_id):
         novo_status = PEDIDO_STATUS_ABERTO
     elif qtd_faturada < qtd_pedida:
         novo_status = PEDIDO_STATUS_PARCIALMENTE_FATURADO
+    elif qtd_faturada == qtd_pedida:
+        novo_status = PEDIDO_STATUS_FATURADO
     else:
+        # Code review fix H4 (2026-05-13): overdelivery (qtd_faturada > qtd_pedida).
+        # Spec §2.2 define `qtd_faturada == qtd_pedida -> FATURADO` (igualdade
+        # estrita). Acima disso e anomalia que merece visibilidade — operador
+        # precisa investigar. Status FATURADO mas log warning para alerta.
+        import logging
+        logging.getLogger(__name__).warning(
+            'recalcular_status_pedido: OVERDELIVERY detectado pedido=%s '
+            'qtd_faturada=%s > qtd_pedida=%s. Status definido como FATURADO '
+            'mas excesso indica bug (verifique seps FATURADA do pedido).',
+            pedido_id, qtd_faturada, qtd_pedida,
+        )
         novo_status = PEDIDO_STATUS_FATURADO
 
     if pedido.status != novo_status:

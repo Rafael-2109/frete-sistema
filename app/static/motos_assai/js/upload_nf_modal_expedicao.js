@@ -60,6 +60,16 @@
           }),
         });
         const data = await res.json().catch(() => ({}));
+        // Code review fix H11 (2026-05-13): branch explicita HTTP 401 sessao
+        // expirada (CLAUDE.md memoria: wizards mobile devem ter handler dedicado).
+        if (res.status === 401) {
+          alert('Sessão expirada. Recarregue a página e tente novamente.');
+          return;
+        }
+        if (res.status === 403) {
+          alert('Acesso negado a este recurso.');
+          return;
+        }
         if (res.ok && data.ok) {
           // Fechar modal e dar feedback
           const modalEl = document.getElementById('modal-expedicao');

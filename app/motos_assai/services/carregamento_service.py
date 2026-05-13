@@ -535,7 +535,13 @@ def finalizar_carregamento(carregamento_id, operador_id):
                           AssaiSeparacao.id != sep_alvo.id,
                           AssaiSeparacao.status.in_([SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA]),
                       )
-                      .order_by(AssaiSeparacaoItem.id.desc())  # LIFO (mais recentes primeiro)
+                      # Code review fix H2 (2026-05-13): LIFO por registrada_em.
+                      # Spec §6 pseudocode usa `registrada_em.desc()` (timestamp
+                      # do escaneio). `id.desc()` quase sempre coincide, mas
+                      # diverge se items foram inseridos via backfill ou bulk
+                      # com timestamps explicitos. Fallback para id em empate.
+                      .order_by(AssaiSeparacaoItem.registrada_em.desc(),
+                                AssaiSeparacaoItem.id.desc())
                       .limit(excedente)
                       .all())
 
@@ -571,10 +577,19 @@ def finalizar_carregamento(carregamento_id, operador_id):
     car.finalizado_em = agora_brasil_naive()
     car.finalizado_por_id = operador_id
 
-    # Emite CARREGADA para TODOS chassis do carregamento (chassis adicionados na Fase 2
-    # ja receberam SEPARADA antes — agora pegam CARREGADA. Chassis que ja estavam na sep
-    # pegam apenas CARREGADA.)
-    for chassi in chassis_car:
+    # Code review fix C4 (2026-05-13): emitir CARREGADA APENAS para chassis
+    # presentes em sep_alvo APOS Fases 2+3 (defesa em profundidade).
+    # Cenario raro mas possivel: chassi do carregamento estava duplicado em
+    # outra sep da mesma loja (escanear_carregamento_item nao bloqueia same-loja);
+    # Fase 2 adicionou em sep_alvo, Fase 3 LIFO removeu o duplicado de outra sep
+    # (emitiu DISPONIVEL). Sem este fix, Fase 4 emitiria CARREGADA mesmo para
+    # chassis que foram para DISPONIVEL, deixando sequencia [...DISPONIVEL, CARREGADA]
+    # confusa. Re-buscar chassis efetivos da sep_alvo elimina ambiguidade.
+    chassis_finais_sep_alvo = {
+        it.chassi for it in
+        AssaiSeparacaoItem.query.filter_by(separacao_id=sep_alvo.id).all()
+    }
+    for chassi in chassis_finais_sep_alvo:
         emitir_evento(chassi, EVENTO_CARREGADA, operador_id=operador_id,
                       observacao=f'Carregamento {car.id} finalizado',
                       dados_extras={'carregamento_id': car.id, 'sep_id': sep_alvo.id})
@@ -607,18 +622,36 @@ def finalizar_carregamento(carregamento_id, operador_id):
                 gerado_por_id=operador_id,
             ))
     except IntegrityError:
-        # Savepoint reverteu o INSERT. Recalcula MAX e tenta de novo.
+        # Savepoint reverteu o INSERT. Recalcula MAX e tenta de novo —
+        # tambem dentro de savepoint (code review fix C3 2026-05-13): segunda
+        # race extremamente rara mas plausivel; sem savepoint, falha aborta
+        # transacao inteira (Fases 1-4 + Excel desativado ja em memoria).
         max_versao = (db.session.query(db.func.coalesce(db.func.max(AssaiPedidoExcel.versao), 0))
                       .filter_by(separacao_id=sep_alvo.id)
                       .scalar() or 0)
         nova_versao = max_versao + 1
-        db.session.add(AssaiPedidoExcel(
-            pedido_id=car.pedido_id, separacao_id=sep_alvo.id,
-            s3_key=s3_key, versao=nova_versao, ativo=True,
-            motivo_regeneracao=f'Carregamento {car.id} finalizado (retry)',
-            gerado_por_id=operador_id,
-        ))
-        db.session.flush()
+        try:
+            with db.session.begin_nested():
+                db.session.add(AssaiPedidoExcel(
+                    pedido_id=car.pedido_id, separacao_id=sep_alvo.id,
+                    s3_key=s3_key, versao=nova_versao, ativo=True,
+                    motivo_regeneracao=f'Carregamento {car.id} finalizado (retry)',
+                    gerado_por_id=operador_id,
+                ))
+        except IntegrityError as e:
+            # Terceira tentativa nao vale a pena — escalonar para operador.
+            # Sep + car ja estao em estado consistente em memoria; transacao
+            # principal pode commitar sem Excel se necessario, mas eh anomalo.
+            import logging
+            logging.getLogger(__name__).error(
+                'finalizar_carregamento: 2 races consecutivas em AssaiPedidoExcel '
+                'sep=%s versao=%s — abortando finalize',
+                sep_alvo.id, nova_versao, exc_info=True,
+            )
+            raise CarregamentoError(
+                f'Race condition persistente ao gravar Excel da sep {sep_alvo.id}. '
+                'Tente finalizar o carregamento novamente.'
+            ) from e
 
     # === FASE 6: atualizar mirror Nacom (D-B + S12=a) ===
     # S12=a: mirror agora aceita FECHADA + CARREGADA + FATURADA na guarda

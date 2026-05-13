@@ -159,7 +159,7 @@
       <td></td>
       <td colspan="8" class="small">
         <strong>Detalhes:</strong>
-        {% for k, v in d.detalhes.items() %}
+        {% for k, v in (d.detalhes or {}).items() %}
           <code>{{ k }}={{ v }}</code>
         {% endfor %}
         {% if d.observacao_resolucao %}

@@ -102,6 +102,19 @@ def carregamento_iniciar():
         db.session.rollback()
         flash(str(e), 'danger')
         return redirect(url_for('motos_assai.carregamento_lista'))
+    except Exception:
+        # Code review fix H10 (2026-05-13): catch generico evita sessao suja
+        # (ex: IntegrityError de race ao criar carregamento paralelo). Sem este
+        # bloco, qualquer excecao inesperada deixa db.session em estado "needs
+        # rollback" e quebra o request seguinte.
+        db.session.rollback()
+        import logging
+        logging.getLogger(__name__).exception(
+            'Erro inesperado em carregamento_iniciar pedido=%s loja=%s',
+            pedido_id, loja_id,
+        )
+        flash('Erro inesperado ao iniciar carregamento. Tente novamente.', 'danger')
+        return redirect(url_for('motos_assai.carregamento_lista'))
 
 
 @motos_assai_bp.route('/carregamento/<int:carregamento_id>', methods=['GET'])
@@ -149,6 +162,8 @@ def carregamento_escanear_ajax(carregamento_id):
     """
     if not current_user.is_authenticated:
         return jsonify({'ok': False, 'erro': 'Sessao expirada. Recarregue a pagina.'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     data = request.get_json(silent=True) or {}
     chassi = (data.get('chassi') or '').strip().upper()
@@ -204,6 +219,8 @@ def carregamento_item_cancelar_ajax(item_id):
     """
     if not current_user.is_authenticated:
         return jsonify({'ok': False, 'erro': 'Sessao expirada. Recarregue a pagina.'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     try:
         cancelar_carregamento_item(item_id, operador_id=current_user.id)
@@ -229,6 +246,8 @@ def carregamento_finalizar_ajax(carregamento_id):
     """
     if not current_user.is_authenticated:
         return jsonify({'ok': False, 'erro': 'Sessao expirada. Recarregue a pagina.'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     try:
         sep = finalizar_carregamento(carregamento_id, operador_id=current_user.id)
@@ -268,6 +287,8 @@ def carregamento_cancelar_ajax(carregamento_id):
     """
     if not current_user.is_authenticated:
         return jsonify({'ok': False, 'erro': 'Sessao expirada. Recarregue a pagina.'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     data = request.get_json(silent=True) or {}
     motivo = (data.get('motivo') or '').strip()
@@ -300,6 +321,8 @@ def carregamento_alterar_ajax(carregamento_id):
     """
     if not current_user.is_authenticated:
         return jsonify({'ok': False, 'erro': 'Sessao expirada. Recarregue a pagina.'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
 
     try:
         alterar_carregamento(carregamento_id, operador_id=current_user.id)

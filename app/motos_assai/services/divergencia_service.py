@@ -24,7 +24,8 @@ class DivergenciaError(Exception):
     """Erro base de divergencia_service."""
 
 
-def criar_divergencia(tipo, chassi, nf_id=None, sep_id=None, car_id=None, detalhes=None):
+def criar_divergencia(tipo, chassi, nf_id=None, sep_id=None, car_id=None,
+                      detalhes=None, operador_id=None):
     """Cria uma divergencia centralizada (AssaiDivergencia).
 
     Args:
@@ -34,6 +35,9 @@ def criar_divergencia(tipo, chassi, nf_id=None, sep_id=None, car_id=None, detalh
         sep_id: int | None - id da separacao (AssaiSeparacao) associada.
         car_id: int | None - id do carregamento (AssaiCarregamento) associado.
         detalhes: dict | None - JSON com detalhes adicionais (origem, fluxo, etc).
+        operador_id: int | None - usuario que detectou a divergencia. Armazenado
+            em detalhes['criada_por_id'] (code review fix M1: model nao tem
+            coluna dedicada, JSONB carrega rastreabilidade sem migration nova).
 
     Returns:
         AssaiDivergencia criada (NAO commitada - caller commita).
@@ -50,13 +54,18 @@ def criar_divergencia(tipo, chassi, nf_id=None, sep_id=None, car_id=None, detalh
             f'tipo invalido: {tipo}. Validos: {sorted(DIVERGENCIA_TIPOS_VALIDOS)}'
         )
 
+    # Code review fix M1 (2026-05-13): rastreabilidade em detalhes JSONB.
+    detalhes_completo = dict(detalhes or {})
+    if operador_id is not None:
+        detalhes_completo['criada_por_id'] = operador_id
+
     div = AssaiDivergencia(
         tipo=tipo,
         chassi=chassi,
         nf_id=nf_id,
         separacao_id=sep_id,
         carregamento_id=car_id,
-        detalhes=sanitize_for_json(detalhes or {}),
+        detalhes=sanitize_for_json(detalhes_completo),
         criada_em=agora_brasil_naive(),
     )
     db.session.add(div)

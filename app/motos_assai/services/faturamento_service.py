@@ -238,19 +238,33 @@ def regenerar_excel_qpa(separacao_id: int, operador_id: int, motivo: str) -> Ass
             )
             db.session.add(excel_novo)
     except IntegrityError:
-        # Savepoint reverteu o INSERT. Recalcula MAX e tenta de novo.
+        # Savepoint reverteu o INSERT. Recalcula MAX e tenta de novo — tambem
+        # com savepoint (code review fix C3 2026-05-13): segundo race extremamente
+        # raro mas plausivel; sem savepoint, falha aborta transacao inteira.
         max_versao = (db.session.query(db.func.coalesce(db.func.max(AssaiPedidoExcel.versao), 0))
                       .filter_by(separacao_id=separacao_id)
                       .scalar() or 0)
         nova_versao = max_versao + 1
-        excel_novo = AssaiPedidoExcel(
-            pedido_id=sep_locked.pedido_id,
-            separacao_id=separacao_id,
-            s3_key=s3_key, versao=nova_versao, ativo=True,
-            motivo_regeneracao=f'{motivo} (retry)',
-            gerado_por_id=operador_id,
-        )
-        db.session.add(excel_novo)
-        db.session.flush()
+        try:
+            with db.session.begin_nested():
+                excel_novo = AssaiPedidoExcel(
+                    pedido_id=sep_locked.pedido_id,
+                    separacao_id=separacao_id,
+                    s3_key=s3_key, versao=nova_versao, ativo=True,
+                    motivo_regeneracao=f'{motivo} (retry)',
+                    gerado_por_id=operador_id,
+                )
+                db.session.add(excel_novo)
+        except IntegrityError as e:
+            import logging
+            logging.getLogger(__name__).error(
+                'regenerar_excel_qpa: 2 races consecutivas em AssaiPedidoExcel '
+                'sep=%s versao=%s — abortando',
+                separacao_id, nova_versao, exc_info=True,
+            )
+            raise FaturamentoError(
+                f'Race condition persistente ao gravar Excel da sep {separacao_id}. '
+                'Tente regenerar novamente.'
+            ) from e
 
     return excel_novo

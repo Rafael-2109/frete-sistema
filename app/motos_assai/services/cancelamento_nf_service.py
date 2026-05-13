@@ -73,6 +73,15 @@ def cancelar_nf_qpa(nf_id: int, motivo: str, operador_id: int) -> AssaiNfQpa:
     sep = nf.separacao  # via assai_nf_qpa.separacao_id
     motivo_norm = motivo.strip()
 
+    # Code review fix H1 (2026-05-13): query unica de Carregamento FINALIZADO
+    # antes do loop, evita TOCTOU (passo 1 + passo 2 viam estados potencialmente
+    # divergentes em concorrencia). Variavel reutilizada em ambos passos.
+    tem_carregamento_finalizado = bool(
+        sep and AssaiCarregamento.query.filter_by(
+            separacao_id=sep.id, status=CARREGAMENTO_STATUS_FINALIZADO,
+        ).first()
+    )
+
     # 1. Reverter eventos FATURADA -> CARREGADA/SEPARADA/DISPONIVEL
     for item in nf.itens:
         chassi = item.chassi
@@ -80,11 +89,7 @@ def cancelar_nf_qpa(nf_id: int, motivo: str, operador_id: int) -> AssaiNfQpa:
         if status_atual == EVENTO_FATURADA:
             # R5.1: respeita CARREGADA se Sep esta FATURADA (Carregamento existe)
             if sep and sep.status == SEPARACAO_STATUS_FATURADA:
-                # Verificar se ha Carregamento FINALIZADO
-                tem_carregamento = AssaiCarregamento.query.filter_by(
-                    separacao_id=sep.id, status=CARREGAMENTO_STATUS_FINALIZADO,
-                ).first()
-                if tem_carregamento:
+                if tem_carregamento_finalizado:
                     novo_evento = EVENTO_CARREGADA
                 else:
                     novo_evento = EVENTO_SEPARADA  # R5.2
@@ -97,13 +102,9 @@ def cancelar_nf_qpa(nf_id: int, motivo: str, operador_id: int) -> AssaiNfQpa:
                 dados_extras={'nf_id': nf.id, 'origem': 'cancelar_nf_qpa'},
             )
 
-    # 2. Reverter Sep status
+    # 2. Reverter Sep status (usa mesmo valor cacheado — H1)
     if sep and sep.status == SEPARACAO_STATUS_FATURADA:
-        # R5.1: Se Sep tem Carregamento FINALIZADO -> CARREGADA. Senao -> FECHADA.
-        tem_carregamento = AssaiCarregamento.query.filter_by(
-            separacao_id=sep.id, status=CARREGAMENTO_STATUS_FINALIZADO,
-        ).first()
-        if tem_carregamento:
+        if tem_carregamento_finalizado:
             sep.status = SEPARACAO_STATUS_CARREGADA  # R5.1
         else:
             sep.status = SEPARACAO_STATUS_FECHADA  # R5.2
@@ -154,6 +155,10 @@ def cancelar_nf_qpa(nf_id: int, motivo: str, operador_id: int) -> AssaiNfQpa:
             item.separacao_item_id = None  # FK limpa apos auditoria
 
     # 7. Recalcular status do pedido
+    # Code review nota H7 (2026-05-13): se sep=None, NF nunca bateu (status_match
+    # NAO_RECONCILIADO). Nessas NFs, nenhum chassi tem evento FATURADA — entao
+    # qtd_faturada nao muda e pedido associado e desconhecido (sem path para
+    # encontrar pedido via FK). Skip e intencional.
     if sep:
         try:
             from app.motos_assai.services.pedido_status_service import recalcular_status_pedido
@@ -236,6 +241,32 @@ def aplicar_correcao_cce(
         item.chassi = chassi_novo
         item.tipo_divergencia = None  # zera divergencia legacy (sera recalculada)
         chassis_aplicados.append((chassi_antigo, chassi_novo))
+
+        # Code review fix M3 (2026-05-13): chassi_antigo pode estar com evento
+        # FATURADA (de quando NF original bateu). Apos CCe, NF aponta para
+        # chassi_novo. Sem reverter, chassi_antigo fica "marooned" — status
+        # FATURADA mas sem NF ativa apontando. Reverter para SEPARADA/CARREGADA/
+        # DISPONIVEL conforme contexto.
+        status_antigo = status_efetivo(chassi_antigo)
+        if status_antigo == EVENTO_FATURADA:
+            # Determinar destino do antigo: se sep tem Carregamento FINALIZADO,
+            # vai CARREGADA. Se sep apenas FECHADA, vai SEPARADA. Sem sep, DISPONIVEL.
+            sep_antiga = nf.separacao if nf.separacao_id else None
+            if sep_antiga:
+                tem_car_finalizado = AssaiCarregamento.query.filter_by(
+                    separacao_id=sep_antiga.id,
+                    status=CARREGAMENTO_STATUS_FINALIZADO,
+                ).first()
+                novo_evento_antigo = EVENTO_CARREGADA if tem_car_finalizado else EVENTO_SEPARADA
+            else:
+                from app.motos_assai.models import EVENTO_DISPONIVEL
+                novo_evento_antigo = EVENTO_DISPONIVEL
+            emitir_evento(
+                chassi_antigo, novo_evento_antigo, operador_id=operador_id,
+                observacao=f'CCe {numero_cce}: substituido por {chassi_novo}',
+                dados_extras={'nf_id': nf_id, 'origem': 'aplicar_correcao_cce',
+                              'chassi_novo': chassi_novo},
+            )
 
     db.session.flush()
 

@@ -73,6 +73,23 @@ from .separacao_service import (
 )
 from .separacao_mirror_service import sincronizar_espelho_com_separacao
 from .faturamento_service import gerar_excel_qpa, regenerar_excel_qpa, FaturamentoError
+# Code review fix M7 (2026-05-13): exportar services novos via __init__.py
+# para consistencia com padrao do modulo (antes routes importavam diretamente
+# dos arquivos, inconsistente com restante).
+from .carregamento_service import (
+    criar_carregamento, escanear_carregamento_item, cancelar_carregamento_item,
+    cancelar_carregamento, alterar_carregamento, finalizar_carregamento,
+    CarregamentoError, CarregamentoValidationError, CarregamentoConflictError,
+    CarregamentoStateError, CarregamentoExcedenteError, CarregamentoCrossLojaError,
+)
+from .cancelamento_nf_service import (
+    cancelar_nf_qpa, aplicar_correcao_cce,
+    CancelamentoError, CancelamentoValidationError,
+)
+from .divergencia_service import (
+    criar_divergencia, resolver_divergencia, DivergenciaError,
+)
+from .pedido_status_service import recalcular_status_pedido
 from .geocoding_service import geocodar_loja, geocodar_lote, GeocodingError
 from .pos_venda_service import (
     listar_motos_vendidas, contexto_moto_por_chassi, chassi_foi_vendido,

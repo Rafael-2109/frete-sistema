@@ -59,17 +59,23 @@ def main():
 
             sep_id = sep_id_map.get(item.separacao_item_id) if item.separacao_item_id else None
 
+            # Code review fix M6 (2026-05-13): usar sanitize_for_json em vez
+            # de float() manual. Regra global CLAUDE.md JSON SANITIZATION:
+            # "SEMPRE usar sanitize_for_json em queries SQLAlchemy com
+            # colunas Numeric/DECIMAL". Embora float() funcione hoje, sanitize
+            # protege contra adicao futura de campos Decimal/datetime/UUID.
+            from app.utils.json_helpers import sanitize_for_json
             div = AssaiDivergencia(
                 tipo=tipo,
                 chassi=item.chassi,
                 nf_id=item.nf_id,
                 separacao_id=sep_id,
-                detalhes={
+                detalhes=sanitize_for_json({
                     'origem': 'backfill_migration_25',
                     'nf_qpa_item_id': item.id,
                     'modelo_extraido': item.modelo_extraido,
-                    'valor_extraido': float(item.valor_extraido) if item.valor_extraido else None,
-                },
+                    'valor_extraido': item.valor_extraido,
+                }),
             )
             db.session.add(div)
             criadas += 1

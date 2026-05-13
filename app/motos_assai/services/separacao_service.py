@@ -304,18 +304,21 @@ def registrar_chassi(
                 'Crie uma via tela do pedido (checkbox + qtd a separar).'
             )
 
+    # Code review fix M4 (2026-05-13): savepoint isolado em vez de
+    # `db.session.rollback()` global. Rollback total destruia trabalho
+    # acumulado do caller (transacoes multi-step de routes).
     try:
-        item = AssaiSeparacaoItem(
-            separacao_id=sep.id,
-            chassi=chassi_norm,
-            modelo_id=moto.modelo_id,
-            valor_unitario_qpa=Decimal(str(saldo_modelo['valor_unitario'])),
-            registrada_por_id=registrada_por_id,
-        )
-        db.session.add(item)
-        db.session.flush()
+        with db.session.begin_nested():
+            item = AssaiSeparacaoItem(
+                separacao_id=sep.id,
+                chassi=chassi_norm,
+                modelo_id=moto.modelo_id,
+                valor_unitario_qpa=Decimal(str(saldo_modelo['valor_unitario'])),
+                registrada_por_id=registrada_por_id,
+            )
+            db.session.add(item)
     except IntegrityError:
-        db.session.rollback()
+        # Savepoint reverteu apenas o INSERT — sessao continua valida
         raise SeparacaoConflictError(
             f'Chassi {chassi_norm} já em outra separação ativa'
         )
@@ -492,11 +495,26 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
         )
         # Nao bloqueia o cancelamento — limpeza manual via SQL se necessario
 
-    # R4.2 (Big Bang Task 20): pedido fica ABERTO ate primeira NF FATURADA.
-    # Como cancelamento de sep nao afeta chassis FATURADA por definicao,
-    # nao ha necessidade de tocar pedido.status aqui — ja esta no valor
-    # correto calculado por `recalcular_status_pedido`. Antes da Task 19,
-    # este bloco revertia SEPARANDO -> EM_PRODUCAO (ambos status removidos).
+    # Code review fix C6 / S10 (2026-05-13): chamar recalcular_status_pedido
+    # defensivamente apos cancelar sep. Spec §14.2 lista cancelar_separacao
+    # como callsite para "sep com chassis FATURADA cancelada (rara)".
+    #
+    # Cenario: sep tem chassis com evento FATURADA marooned (de outras NFs ou
+    # bugs anteriores). Skip no loop linha 447-448 mantem o evento. Mas
+    # recalcular_status_pedido conta items em sep com status FATURADA — sep
+    # agora e CANCELADA, entao qtd_faturada pode cair, regredindo o pedido.
+    try:
+        from app.motos_assai.services.pedido_status_service import (
+            recalcular_status_pedido,
+        )
+        recalcular_status_pedido(sep.pedido_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            'cancelar_separacao: recalcular_status_pedido falhou pedido=%s: %s '
+            '— segue (nao bloqueia cancelamento)',
+            sep.pedido_id, e,
+        )
 
     db.session.commit()
     return sep
@@ -1833,11 +1851,18 @@ def substituir_chassi_entre_seps(
         )
 
     valor_unit_origem = item_origem.valor_unitario_qpa
+
+    # Code review fix H5 (2026-05-13): capturar estado_atual ANTES do delete
+    # para auditoria precisa. Antes era capturado APOS delete+flush, refletindo
+    # estado intermediario inconsistente (sem item ativo mas com evento ainda
+    # SEPARADA/CARREGADA/FATURADA). Agora dados_extras.estado_anterior reflete
+    # o estado real antes da operacao.
+    estado_atual = status_efetivo(chassi_norm)
+
     db.session.delete(item_origem)
     db.session.flush()
 
     # S20=a: eventos <atual> -> DISPONIVEL -> SEPARADA (sequencia uniforme)
-    estado_atual = status_efetivo(chassi_norm)
     emitir_evento(
         chassi_norm, EVENTO_DISPONIVEL, operador_id=operador_id,
         observacao=(
