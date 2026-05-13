@@ -45,16 +45,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_danfe_parser_append_ativo",
+      "name": "ix_hora_danfe_parser_append_criado_em",
       "columns": [
-        "ativo"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_danfe_parser_append_criado_em",
+      "name": "ix_hora_danfe_parser_append_ativo",
       "columns": [
-        "criado_em"
+        "ativo"
       ],
       "unique": false
     }

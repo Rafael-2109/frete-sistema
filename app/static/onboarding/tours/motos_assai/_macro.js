@@ -37,9 +37,20 @@ window.OnboardingEngine.register({
       description: 'Vincula chassis DISPONIVEL aos pedidos. <strong>Fungivel:</strong> qualquer chassi do mesmo modelo serve.'
     },
     {
+      element: '#menu-carregamento',
+      title: 'Carregamento',
+      description: 'Etapa entre Separacao e Faturamento: operador escaneia chassis efetivamente carregados no caminhao. Pode sobrescrever a separacao planejada (realidade prevalece) e gera Excel atualizado.'
+    },
+    {
       element: '#menu-faturamento',
       title: 'Faturamento',
       description: 'Gera Excel Q.P.A. da separacao concluida. Depois suba a NF Q.P.A. emitida para fazer o match BATEU/DIVERGENTE.',
+      adminOnly: true
+    },
+    {
+      element: '#menu-divergencias',
+      title: 'Divergencias',
+      description: 'Lista centralizada de divergencias entre NF Q.P.A. e estoque/separacao: chassi nao cadastrado, modelo divergente, chassi em outra loja, NF fora de carregamento, etc. Resolva via modais (CCe, substituir chassi, vincular NF, ignorar).',
       adminOnly: true
     },
     {

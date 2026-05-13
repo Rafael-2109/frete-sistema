@@ -3,7 +3,10 @@
 Regras:
 - Pedidos devem estar em status ABERTO
 - Numero do PO Motochefe: auto MA-AAAA-NNNN (sequencial por ano)
-- Após consolidação: pedidos passam a EM_PRODUCAO; PO em ABERTA
+- Após consolidação: PO em ABERTA. Pedido permanece ABERTO ate primeira
+  NF Q.P.A. ser importada (R4.2 — Big Bang Task 20). A transicao
+  ABERTO -> PARCIALMENTE_FATURADO -> FATURADO e calculada por
+  `recalcular_status_pedido` quando chassis viram FATURADA.
 - N:N via assai_compra_motochefe_pedido
 """
 
@@ -22,7 +25,7 @@ from app.utils.timezone import agora_brasil_naive
 from app.motos_assai.models import (
     AssaiCompraMotochefe, AssaiCompraMotochefePedido,
     AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiModelo,
-    PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_EM_PRODUCAO,
+    PEDIDO_STATUS_ABERTO,
     COMPRA_STATUS_ABERTA,
 )
 
@@ -116,10 +119,9 @@ def criar_consolidado(
     db.session.add(compra)
     db.session.flush()
 
-    # N:N + transição de status
+    # N:N (sem transicao de status — pedido fica ABERTO ate primeira NF, R4.2)
     for p in pedidos:
         db.session.add(AssaiCompraMotochefePedido(compra_id=compra.id, pedido_id=p.id))
-        p.status = PEDIDO_STATUS_EM_PRODUCAO
 
     db.session.commit()
     return compra

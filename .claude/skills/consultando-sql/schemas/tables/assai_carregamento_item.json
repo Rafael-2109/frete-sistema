@@ -1,0 +1,68 @@
+{
+  "name": "assai_carregamento_item",
+  "description": "Tabela assai_carregamento_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "carregamento_id",
+      "type": "integer",
+      "description": "FK → assai_carregamento.id",
+      "nullable": false
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "modelo_id",
+      "type": "integer",
+      "description": "FK → assai_modelo.id",
+      "nullable": false
+    },
+    {
+      "name": "escaneado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "escaneado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "carregamento_id",
+      "references": "assai_carregamento.id"
+    },
+    {
+      "column": "modelo_id",
+      "references": "assai_modelo.id"
+    },
+    {
+      "column": "escaneado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_carregamento_item_chassi",
+      "columns": [
+        "chassi"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_carregamento_item_carregamento_id",
+      "columns": [
+        "carregamento_id"
+      ],
+      "unique": false
+    }
+  ]
+}

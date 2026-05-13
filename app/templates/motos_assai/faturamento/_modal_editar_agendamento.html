@@ -1,0 +1,132 @@
+{# Modal Editar Agendamento — Plano Fase 4 A10.
+   Inclusao: nf_detalhe.html e lista_separacoes.html.
+   Endpoint reaproveitado: POST /motos-assai/faturamento/sep/<id>/expedicao
+   (mesmo de Modal Expedicao S7=a) — payload identico.
+
+   Uso: trigger via `data-bs-toggle="modal" data-bs-target="#modal-editar-agendamento"`
+   passando `data-sep-id="<id>"` e (opcionais) `data-expedicao`, `data-agendamento`,
+   `data-protocolo`, `data-confirmado` no botao para pre-popular. #}
+<div class="modal fade" id="modal-editar-agendamento" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-calendar-alt"></i> Editar Agendamento — Sep <span id="edit-agend-sep-id-label">#</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-agend-sep-id" />
+        <div class="mb-3">
+          <label class="form-label">Data de Expedição <span class="text-danger">*</span></label>
+          <input type="date" class="form-control" id="edit-agend-data" required />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Data de Agendamento (opcional)</label>
+          <input type="date" class="form-control" id="edit-agend-agendamento" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Protocolo (opcional)</label>
+          <input type="text" class="form-control" id="edit-agend-protocolo" placeholder="ex: 12345" />
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="edit-agend-confirmado" />
+          <label class="form-check-label" for="edit-agend-confirmado">
+            Agendamento já confirmado pela loja
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-salvar-edit-agend">
+          <i class="fas fa-save"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  function getCsrfToken() {
+    const m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  // Pre-popula modal quando aberto via data-* attributes do botao trigger
+  const modal = document.getElementById('modal-editar-agendamento');
+  if (modal) {
+    modal.addEventListener('show.bs.modal', function(event) {
+      const btn = event.relatedTarget;
+      if (!btn) return;
+      const sepId = btn.dataset.sepId;
+      const expedicao = btn.dataset.expedicao || '';
+      const agendamento = btn.dataset.agendamento || '';
+      const protocolo = btn.dataset.protocolo || '';
+      const confirmado = btn.dataset.confirmado === '1' || btn.dataset.confirmado === 'true';
+
+      document.getElementById('edit-agend-sep-id').value = sepId;
+      document.getElementById('edit-agend-sep-id-label').textContent = '#' + sepId;
+      document.getElementById('edit-agend-data').value = expedicao;
+      document.getElementById('edit-agend-agendamento').value = agendamento;
+      document.getElementById('edit-agend-protocolo').value = protocolo;
+      document.getElementById('edit-agend-confirmado').checked = confirmado;
+    });
+  }
+
+  const btnSalvar = document.getElementById('btn-salvar-edit-agend');
+  if (btnSalvar) {
+    btnSalvar.addEventListener('click', async function() {
+      const sepId = document.getElementById('edit-agend-sep-id').value;
+      const expedicao = document.getElementById('edit-agend-data').value;
+      const agendamento = document.getElementById('edit-agend-agendamento').value;
+      const protocolo = document.getElementById('edit-agend-protocolo').value.trim();
+      const confirmado = document.getElementById('edit-agend-confirmado').checked;
+
+      if (!sepId || !expedicao) {
+        alert('Data de expedição é obrigatória.');
+        return;
+      }
+
+      btnSalvar.disabled = true;
+      try {
+        const res = await fetch(`/motos-assai/faturamento/sep/${sepId}/expedicao`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            expedicao: expedicao,
+            agendamento: agendamento || null,
+            protocolo: protocolo || null,
+            agendamento_confirmado: confirmado,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          alert('Sessão expirada. Recarregue a página e tente novamente.');
+          return;
+        }
+        if (res.status === 403) {
+          alert('Acesso negado.');
+          return;
+        }
+        if (res.ok && data.ok) {
+          alert('Agendamento atualizado com sucesso.');
+          window.location.reload();
+        } else {
+          alert('Erro: ' + (data.erro || data.error || `HTTP ${res.status}`));
+        }
+      } catch (err) {
+        alert('Erro de rede: ' + err.message);
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    });
+  }
+})();
+</script>

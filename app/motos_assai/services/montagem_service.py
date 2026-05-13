@@ -13,6 +13,7 @@ from app import db
 from app.motos_assai.models import (
     AssaiMoto, EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_PENDENTE,
     EVENTO_PENDENCIA_RESOLVIDA,
+    EVENTO_DISPONIVEL, EVENTO_SEPARADA, EVENTO_CARREGADA, EVENTO_FATURADA,
 )
 from app.motos_assai.services.moto_evento_service import (
     emitir_evento, status_efetivo, ultimo_evento,
@@ -21,6 +22,38 @@ from app.motos_assai.services.moto_evento_service import (
 
 class MontagemValidationError(Exception):
     pass
+
+
+# Alias publico (mantido para callers internos / docstrings de skill).
+MontagemError = MontagemValidationError
+
+
+def _msg_a6_por_status_montagem(chassi_norm: str, status: Optional[str], esperado: str) -> str:
+    """A6: dispatch de mensagens especificas para registrar_montagem/resolver_pendencia.
+
+    Retorna orientacao especifica para DISPONIVEL/SEPARADA/CARREGADA/FATURADA;
+    fallback generico para estados nao mapeados (ex: MONTADA, ESTOQUE quando
+    esperado PENDENTE) preserva o motivo original.
+    """
+    msgs = {
+        EVENTO_DISPONIVEL: f'Chassi {chassi_norm} ja esta DISPONIVEL.',
+        EVENTO_SEPARADA: (
+            f'Chassi {chassi_norm} esta SEPARADA. '
+            'Para reverter, cancele a Sep ou desfaca o item.'
+        ),
+        EVENTO_CARREGADA: (
+            f'Chassi {chassi_norm} esta CARREGADA. '
+            'Para reverter, cancele o Carregamento ou substitua o chassi (cross-loja).'
+        ),
+        EVENTO_FATURADA: (
+            f'Chassi {chassi_norm} esta FATURADA. '
+            'Para reverter, cancele a NF (cancelar_nf_qpa).'
+        ),
+    }
+    return msgs.get(
+        status,
+        f'Chassi {chassi_norm} está em status {status}, esperado {esperado}',
+    )
 
 
 def registrar_montagem(
@@ -47,8 +80,9 @@ def registrar_montagem(
 
     status = status_efetivo(chassi_norm)
     if status != EVENTO_ESTOQUE:
+        # A6: dispatch de mensagens especificas (CARREGADA/SEPARADA/FATURADA/DISPONIVEL)
         raise MontagemValidationError(
-            f'Chassi {chassi_norm} está em status {status}, esperado ESTOQUE'
+            _msg_a6_por_status_montagem(chassi_norm, status, esperado='ESTOQUE')
         )
 
     if pendencia:
@@ -86,8 +120,9 @@ def resolver_pendencia(
     chassi_norm = chassi.strip().upper()
     status = status_efetivo(chassi_norm)
     if status != EVENTO_PENDENTE:
+        # A6: dispatch de mensagens especificas (CARREGADA/SEPARADA/FATURADA/DISPONIVEL)
         raise MontagemValidationError(
-            f'Chassi {chassi_norm} não está PENDENTE (está {status})'
+            _msg_a6_por_status_montagem(chassi_norm, status, esperado='PENDENTE')
         )
 
     if not descricao_resolucao or len(descricao_resolucao.strip()) < 3:

@@ -233,6 +233,13 @@
   ],
   "indices": [
     {
+      "name": "idx_sep_nf_cd",
+      "columns": [
+        "nf_cd"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_separacao_status",
       "columns": [
         "status"
@@ -296,17 +303,17 @@
       "unique": false
     },
     {
-      "name": "idx_sep_estoque_projetado",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "cod_produto",
-        "expedicao"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "idx_sep_estoque_projetado",
       "columns": [
-        "separacao_lote_id"
+        "cod_produto",
+        "expedicao"
       ],
       "unique": false
     },
@@ -319,16 +326,16 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_chassi_assai",
+      "name": "idx_sep_status",
       "columns": [
-        "chassi_assai"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_sep_status",
+      "name": "ix_separacao_chassi_assai",
       "columns": [
-        "status"
+        "chassi_assai"
       ],
       "unique": false
     },
@@ -368,13 +375,6 @@
       "columns": [
         "falta_pagamento",
         "sincronizado_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_nf_cd",
-      "columns": [
-        "nf_cd"
       ],
       "unique": false
     }

@@ -116,16 +116,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_emprestimo_moto_chassi_saida",
+      "name": "ix_hora_emprestimo_moto_modelo_id",
       "columns": [
-        "chassi_saida"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_emprestimo_moto_data_emprestimo",
-      "columns": [
-        "data_emprestimo"
+        "modelo_id"
       ],
       "unique": false
     },
@@ -137,16 +130,23 @@
       "unique": false
     },
     {
-      "name": "ix_hora_emprestimo_moto_modelo_id",
+      "name": "ix_hora_emprestimo_moto_chassi_entrada",
       "columns": [
-        "modelo_id"
+        "chassi_entrada"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_emprestimo_moto_chassi_entrada",
+      "name": "ix_hora_emprestimo_moto_chassi_saida",
       "columns": [
-        "chassi_entrada"
+        "chassi_saida"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_emprestimo_moto_data_emprestimo",
+      "columns": [
+        "data_emprestimo"
       ],
       "unique": false
     }

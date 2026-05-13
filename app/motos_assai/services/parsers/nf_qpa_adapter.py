@@ -21,10 +21,19 @@ from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_brasil_naive
 from app.motos_assai.models import (
     AssaiNfQpa, AssaiNfQpaItem, AssaiLoja,
-    AssaiSeparacao, AssaiSeparacaoItem,
+    AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
     SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
+    SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
+    SEPARACAO_STATUS_CARREGADA,
     NF_STATUS_BATEU, NF_STATUS_DIVERGENTE, NF_STATUS_NAO_RECONCILIADO,
-    EVENTO_FATURADA,
+    NF_STATUS_CANCELADA,
+    EVENTO_FATURADA, EVENTO_SEPARADA,
+    DIVERGENCIA_TIPO_LOJA_DIVERGENTE,
+    DIVERGENCIA_TIPO_VALOR_DIVERGENTE,
+    DIVERGENCIA_TIPO_MODELO_DIVERGENTE,
+    DIVERGENCIA_TIPO_CHASSI_SEM_SEPARACAO,
+    DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO,
+    DIVERGENCIA_TIPO_CHASSI_OUTRA_LOJA,
 )
 from app.motos_assai.services.modelo_resolver import resolver_modelo
 from app.motos_assai.services.moto_evento_service import emitir_evento
@@ -214,14 +223,29 @@ def importar_nf_qpa(
 
 
 def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
-    """Tenta amarrar cada item da NF a uma AssaiSeparacaoItem ativo.
+    """Tenta amarrar cada item da NF a uma AssaiSeparacaoItem ativo (v2).
 
-    Critérios de BATEU:
-    - chassi existe em AssaiSeparacaoItem ativa
-    - separacao.loja_id == nf.loja_id (se NF tem loja)
-    - separacao_item.modelo_id resolvido bate com modelo extraído
-    - valor com tolerância de 1%
+    Plano 3 Tasks 3-5:
+    - D5: ignora seps FATURADAS no JOIN (evita dupla vinculacao G7)
+    - S8=a: grava divergencias em assai_divergencia centralizada (NAO em tipo_divergencia do item)
+    - A8: valida modelo (cria MODELO_DIVERGENTE)
+    - A14: idempotente — early return se NF CANCELADA
+    - N-M6: distingue CHASSI_NAO_CADASTRADO vs CHASSI_SEM_SEPARACAO
+    - M3: emite evento FATURADA por chassi quando BATEU (preserva comportamento legado)
+
+    Atualiza:
+        - nf.status_match (BATEU / DIVERGENTE / NAO_RECONCILIADO)
+        - cria divergencias em assai_divergencia
+        - vincula sep_item ao item da NF (separacao_item_id)
+
+    NAO commita.
     """
+    # A14: NF cancelada nao bate mais nada
+    if nf.status_match == NF_STATUS_CANCELADA:
+        return
+
+    from app.motos_assai.services.divergencia_service import criar_divergencia
+
     items_nf = AssaiNfQpaItem.query.filter_by(nf_id=nf.id).all()
     matches_ok = 0
     matches_falha = 0
@@ -229,37 +253,85 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
     separacoes_atualizar = set()
 
     for it in items_nf:
+        # D5: ignora FATURADA + CANCELADA no JOIN (evita dupla vinculacao)
         sep_item = (
             db.session.query(AssaiSeparacaoItem)
             .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
             .filter(
                 AssaiSeparacaoItem.chassi == it.chassi,
-                AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+                AssaiSeparacao.status.notin_([
+                    SEPARACAO_STATUS_FATURADA, SEPARACAO_STATUS_CANCELADA,
+                ]),
             )
             .first()
         )
 
         if not sep_item:
-            it.tipo_divergencia = 'CHASSI_SEM_SEPARACAO'
+            # N-M6 fix: distinguir CHASSI_NAO_CADASTRADO (moto inexistente em assai_moto)
+            # de CHASSI_SEM_SEPARACAO (moto existe mas sem sep candidata)
+            moto_check = AssaiMoto.query.filter_by(chassi=it.chassi).first()
+            tipo_div = (
+                DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO if not moto_check
+                else DIVERGENCIA_TIPO_CHASSI_SEM_SEPARACAO
+            )
+            criar_divergencia(
+                tipo=tipo_div,
+                chassi=it.chassi, nf_id=nf.id,
+                detalhes={'modelo_extraido': it.modelo_extraido},
+            )
+            # S8=a: legado tipo_divergencia mantido para retrocompat (ate UI migrar)
+            it.tipo_divergencia = tipo_div
             matches_falha += 1
             continue
 
         sep = AssaiSeparacao.query.get(sep_item.separacao_id)
 
-        # Loja
+        # 1. Loja (S8=a)
         loja_ok = (not nf.loja_id) or (sep.loja_id == nf.loja_id)
         if not loja_ok:
+            criar_divergencia(
+                tipo=DIVERGENCIA_TIPO_LOJA_DIVERGENTE,
+                chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
+                detalhes={'loja_sep': sep.loja_id, 'loja_nf': nf.loja_id},
+            )
             it.tipo_divergencia = 'LOJA_DIVERGENTE'
             matches_falha += 1
             continue
 
-        # Valor com tolerância 1%
+        # 2. Valor com tolerância 1% (S8=a)
         v_sep = sep_item.valor_unitario_qpa
         v_nf = it.valor_extraido or Decimal('0')
         if v_sep > 0:
             diff_pct = abs(v_sep - v_nf) / v_sep
             if diff_pct > TOLERANCIA_VALOR_PCT:
+                criar_divergencia(
+                    tipo=DIVERGENCIA_TIPO_VALOR_DIVERGENTE,
+                    chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
+                    detalhes={
+                        'valor_sep': float(v_sep),
+                        'valor_nf': float(v_nf),
+                        'pct': float(diff_pct),
+                    },
+                )
                 it.tipo_divergencia = 'VALOR_DIVERGENTE'
+                matches_falha += 1
+                continue
+
+        # 3. A8 — Modelo (chassi cadastrado em assai_moto X modelo extraido da NF)
+        moto = AssaiMoto.query.filter_by(chassi=it.chassi).first()
+        if moto and it.modelo_extraido:
+            modelo_resolvido = resolver_modelo(it.modelo_extraido, origem='NF_QPA')
+            if modelo_resolvido and moto.modelo_id != modelo_resolvido.id:
+                criar_divergencia(
+                    tipo=DIVERGENCIA_TIPO_MODELO_DIVERGENTE,
+                    chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
+                    detalhes={
+                        'modelo_assai_moto_id': moto.modelo_id,
+                        'modelo_extraido_nf': it.modelo_extraido,
+                        'modelo_resolvido_id': modelo_resolvido.id,
+                    },
+                )
+                it.tipo_divergencia = 'MODELO_DIVERGENTE'
                 matches_falha += 1
                 continue
 
@@ -278,11 +350,15 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
         if separacoes_atualizar:
             nf.separacao_id = next(iter(separacoes_atualizar))
 
-        # Atualiza separações para FATURADA + emite eventos FATURADA
+        # Atualiza separações para FATURADA + emite eventos FATURADA (M3)
+        pedidos_para_recalcular = set()
         for sep_id in separacoes_atualizar:
             sep = AssaiSeparacao.query.get(sep_id)
-            sep.status = SEPARACAO_STATUS_FATURADA
+            if sep:
+                sep.status = SEPARACAO_STATUS_FATURADA
+                pedidos_para_recalcular.add(sep.pedido_id)
 
+        # M3 fix: emite evento FATURADA por chassi (preserva comportamento legado)
         for it_ok in items_nf:
             if it_ok.separacao_item_id:
                 emitir_evento(
@@ -290,6 +366,24 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
                     operador_id=operador_id,
                     dados_extras={'nf_id': nf.id, 'chave_44': nf.chave_44},
                 )
+
+        # Code review fix C6 / S10 (2026-05-13): recalcular_status_pedido apos
+        # BATEU. Spec §14.2: "_calcular_match BATEU eh o UNICO caminho que pode
+        # SUBIR para FATURADO". Sem este callsite, pedido fica defasado em
+        # PARCIALMENTE_FATURADO ate algum outro evento acionar a funcao.
+        try:
+            from app.motos_assai.services.pedido_status_service import (
+                recalcular_status_pedido,
+            )
+            for pedido_id in pedidos_para_recalcular:
+                recalcular_status_pedido(pedido_id)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(
+                '_calcular_match BATEU: falha em recalcular_status_pedido '
+                'pedidos=%s nf=%s: %s — segue (nao bloqueia BATEU)',
+                pedidos_para_recalcular, nf.id, e, exc_info=True,
+            )
 
         # Propagar numero_nf para o espelho em separacao Nacom — listener
         # `atualizar_status_automatico` recalcula status -> FATURADO.
@@ -328,4 +422,110 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
             # so esta setado em memoria (ainda nao commitado). Identity map
             # do SQLAlchemy mascarava o problema em request-context mas
             # falharia silenciosamente em workers/background jobs.
+
+
+# =====================================================================
+# Vincular NF manualmente (Plano 4 Task 6 — 2026-05-13)
+# =====================================================================
+#
+# Spec: §15.6 (ferramenta excepcional apos backfill Migration 23)
+# Plano: docs/superpowers/plans/2026-05-12-motos-assai-fase5-auxiliares.md Task 6
+#
+# Atalho de ajustar_separacao_pela_nf v2 que aceita pedido_id e loja_id explicitos.
+# Usado quando NF NAO_RECONCILIADO precisa ser vinculada manualmente —
+# casos onde Migration 23 backfill nao cobriu (ex: chassi nao existe em
+# assai_moto + operador escolhe pedido+loja diretamente).
+
+
+class VincularNfError(Exception):
+    """Erro ao vincular NF manualmente."""
+
+
+def vincular_nf_manualmente(nf_id: int, pedido_id: int, loja_id: int, operador_id: int):
+    """Vincula NF NAO_RECONCILIADO manualmente a um pedido+loja explicitos.
+
+    Atalho de ajustar_separacao_pela_nf v2:
+    - Atualiza nf.loja_id se nao tiver (caso regex automatico nao detectou)
+    - Reusa logica completa de ajustar_separacao_pela_nf (que cria sep em FATURADA
+      se necessario via S1=b)
+    - Apos ajuste, _calcular_match detecta BATEU naturalmente
+
+    NAO commita — caller commita.
+
+    Args:
+        nf_id: ID da AssaiNfQpa NAO_RECONCILIADO.
+        pedido_id: pedido alvo (usado para validar/forcar).
+        loja_id: loja alvo (set em nf.loja_id se vazio).
+        operador_id: usuario que solicitou.
+
+    Returns:
+        Resultado de ajustar_separacao_pela_nf:
+        {
+            'ok': bool,
+            'sep_alvo_id': int | None,
+            'sep_criada_via_nf': bool,
+            'chassis_adicionados': [str],
+            'chassis_removidos': [str],
+            'razao': str,
+            ...
+        }
+
+    Raises:
+        VincularNfError: NF nao encontrada / nao esta NAO_RECONCILIADO / pedido invalido.
+    """
+    from app.motos_assai.models import AssaiPedidoVenda, AssaiLoja
+    from app.motos_assai.services.separacao_service import ajustar_separacao_pela_nf
+
+    nf = AssaiNfQpa.query.get(nf_id)
+    if not nf:
+        raise VincularNfError(f'NF {nf_id} nao encontrada')
+    if nf.status_match != NF_STATUS_NAO_RECONCILIADO:
+        raise VincularNfError(
+            f'NF {nf_id} esta {nf.status_match} — apenas NAO_RECONCILIADO permite '
+            'vincular manualmente. Para BATEU/DIVERGENTE/CANCELADA, use cancelar_nf_qpa '
+            'antes se precisar re-vincular.'
+        )
+
+    # Validar pedido + loja existem
+    if not AssaiPedidoVenda.query.get(pedido_id):
+        raise VincularNfError(f'Pedido {pedido_id} nao encontrado')
+    if not AssaiLoja.query.get(loja_id):
+        raise VincularNfError(f'Loja {loja_id} nao encontrada')
+
+    # Forcar loja_id da NF (caso nao tenha sido detectado pelo regex automatico)
+    if not nf.loja_id:
+        nf.loja_id = loja_id
+        db.session.flush()
+    elif nf.loja_id != loja_id:
+        # Operador escolheu loja diferente da que o regex detectou — atualiza
+        # com aviso (caso de conflito raro: regex extraiu LJ12 mas operador
+        # confirma que e LJ34).
+        import logging
+        logging.getLogger(__name__).warning(
+            'vincular_nf_manualmente: NF %s tinha loja_id=%s mas operador %s '
+            'forcou loja_id=%s', nf_id, nf.loja_id, operador_id, loja_id,
+        )
+        nf.loja_id = loja_id
+        db.session.flush()
+
+    # Reusa logica completa de ajustar_separacao_pela_nf v2:
+    # - S1=b cria sep em FATURADA se nao ha sep candidata
+    # - A11 gera Excel versao 1
+    # - Match natural detecta BATEU apos ajuste
+    resultado = ajustar_separacao_pela_nf(nf.id, operador_id)
+
+    # Se ajuste OK, re-roda _calcular_match para fechar status=BATEU
+    if resultado.get('ok'):
+        _calcular_match(nf, operador_id)
+        db.session.flush()
+
+    import logging
+    logging.getLogger(__name__).info(
+        'vincular_nf_manualmente: nf=%s pedido=%s loja=%s ok=%s sep=%s '
+        'operador=%s',
+        nf_id, pedido_id, loja_id, resultado.get('ok'),
+        resultado.get('sep_alvo_id'), operador_id,
+    )
+
+    return resultado
             # Ver `importar_nf_qpa` no final do arquivo.

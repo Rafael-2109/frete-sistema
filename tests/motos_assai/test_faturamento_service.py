@@ -12,13 +12,16 @@ from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
     AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao,
-    PEDIDO_STATUS_EM_PRODUCAO, SEPARACAO_STATUS_FECHADA,
+    PEDIDO_STATUS_ABERTO, SEPARACAO_STATUS_FECHADA,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
 )
 from app.motos_assai.services import (
+    # get_ou_criar_separacao foi renomeada para get_separacao_ativa
+    # e perdeu o side-effect de criar implicitamente (Migration 17 corretivo).
     gerar_excel_qpa,
-    get_ou_criar_separacao, registrar_chassi, finalizar_separacao,
+    registrar_chassi, finalizar_separacao,
     emitir_evento,
+    criar_separacao_com_saldos,
 )
 
 
@@ -34,7 +37,8 @@ def _setup_separacao_fechada(app, admin):
     uid = _uid()
     p = AssaiPedidoVenda(
         numero=f'TST-FAT-{uid}',
-        status=PEDIDO_STATUS_EM_PRODUCAO,
+        # R4.2 (Big Bang Task 20): pedido fica ABERTO ate primeira NF.
+        status=PEDIDO_STATUS_ABERTO,
         criado_por_id=admin.id,
     )
     db.session.add(p)
@@ -54,6 +58,15 @@ def _setup_separacao_fechada(app, admin):
     emitir_evento(chassi, EVENTO_ESTOQUE, admin.id)
     emitir_evento(chassi, EVENTO_MONTADA, admin.id)
     emitir_evento(chassi, EVENTO_DISPONIVEL, admin.id)
+    db.session.commit()
+
+    # Cria sep EM_SEPARACAO explicitamente (registrar_chassi nao cria mais —
+    # Migration 17 corretivo 2026-05-12).
+    criar_separacao_com_saldos(
+        pedido_id=p.id, loja_id=loja.id,
+        alocacoes=[{'modelo_id': modelo_dot.id, 'qtd': 1}],
+        operador_id=admin.id,
+    )
     db.session.commit()
 
     registrar_chassi(p.id, loja.id, chassi, admin.id)
@@ -93,16 +106,23 @@ def test_gerar_excel_estrutura_basica(app, admin_user):
         db.session.rollback()
 
 
-def test_gerar_excel_separacao_nao_fechada_falha(app, admin_user):
-    """gerar_excel_qpa com separação EM_SEPARACAO deve levantar ValueError (H3)."""
-    # H3: service valida status antes de gerar — EM_SEPARACAO não permitido.
+def test_gerar_excel_separacao_cancelada_falha(app, admin_user):
+    """gerar_excel_qpa com separação CANCELADA deve levantar ValueError (H3).
+
+    Mudanca (Plano Fase 2-3): EM_SEPARACAO agora e aceita para regeneracao
+    apos substituicao cross-loja. Statuses validos: EM_SEPARACAO, FECHADA,
+    CARREGADA, FATURADA. Apenas CANCELADA falha.
+    """
+    from app.motos_assai.models import SEPARACAO_STATUS_CANCELADA
+    from app.motos_assai.services import cancelar_separacao
+
     with app.app_context():
         modelo_dot = AssaiModelo.query.filter_by(codigo='DOT').first()
         loja = AssaiLoja.query.first()
         uid = _uid()
         p = AssaiPedidoVenda(
             numero=f'TST-FAT2-{uid}',
-            status=PEDIDO_STATUS_EM_PRODUCAO,
+            status=PEDIDO_STATUS_ABERTO,
             criado_por_id=admin_user.id,
         )
         db.session.add(p)
@@ -115,23 +135,22 @@ def test_gerar_excel_separacao_nao_fechada_falha(app, admin_user):
         ))
         db.session.flush()
 
-        chassi = f'TST_F2_{_uid()}'
-        m = AssaiMoto(chassi=chassi, modelo_id=modelo_dot.id, cor='BRANCO')
-        db.session.add(m)
-        db.session.flush()
-        emitir_evento(chassi, EVENTO_ESTOQUE, admin_user.id)
-        emitir_evento(chassi, EVENTO_MONTADA, admin_user.id)
-        emitir_evento(chassi, EVENTO_DISPONIVEL, admin_user.id)
+        # Cria sep EM_SEPARACAO + cancela
+        criar_separacao_com_saldos(
+            pedido_id=p.id, loja_id=loja.id,
+            alocacoes=[{'modelo_id': modelo_dot.id, 'qtd': 1}],
+            operador_id=admin_user.id,
+        )
         db.session.commit()
-
-        registrar_chassi(p.id, loja.id, chassi, admin_user.id)
         sep = AssaiSeparacao.query.filter_by(pedido_id=p.id, loja_id=loja.id).first()
-        sep_id = sep.id
+        cancelar_separacao(sep.id, 'teste — sep cancelada', admin_user.id)
         db.session.commit()
+        assert sep.status == SEPARACAO_STATUS_CANCELADA
+        sep_id = sep.id
 
-        # EM_SEPARACAO: service deve levantar ValueError (status inválido)
+        # CANCELADA: service deve levantar ValueError
         import pytest as _pytest
-        with _pytest.raises(ValueError, match='EM_SEPARACAO'):
+        with _pytest.raises(ValueError, match='CANCELADA'):
             gerar_excel_qpa(sep_id, admin_user.id)
 
         db.session.rollback()

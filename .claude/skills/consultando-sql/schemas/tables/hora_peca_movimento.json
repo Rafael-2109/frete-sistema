@@ -81,16 +81,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_peca_movimento_peca_id",
+      "name": "ix_hora_peca_movimento_loja_id",
       "columns": [
-        "peca_id"
+        "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_peca_movimento_loja_id",
+      "name": "ix_hora_peca_movimento_peca_id",
       "columns": [
-        "loja_id"
+        "peca_id"
       ],
       "unique": false
     }

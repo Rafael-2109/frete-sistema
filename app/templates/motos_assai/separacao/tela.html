@@ -91,6 +91,13 @@
 
 {% if separacao.status == 'EM_SEPARACAO' %}
 <div class="d-flex gap-2 mt-3" id="btn-finalizar-separacao">
+  {# 2026-05-13: botao "Pausar" — sai da tela mantendo status EM_SEPARACAO. #}
+  {# Operador pode retomar via "Continuar Separacao" na lista de separacoes. #}
+  <a href="{{ url_for('motos_assai.separacao_lista') }}"
+     class="btn btn-outline-secondary btn-lg" id="btn-pausar"
+     title="Pausa o trabalho — separação fica EM_SEPARACAO. Retome em /motos-assai/separacao via 'Continuar Separação'.">
+    <i class="fas fa-pause"></i> Pausar
+  </a>
   <button type="button" class="btn btn-success btn-lg" id="btn-finalizar">
     <i class="fas fa-check-double"></i> Finalizar separação
   </button>
@@ -240,6 +247,8 @@
   </div>
 </div>
 
+{% include 'motos_assai/separacao/_modal_substituir_chassi.html' %}
+
 <script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}" defer></script>
 <script>
 window.MOTOS_ASSAI_SEP = {
@@ -252,6 +261,7 @@ window.MOTOS_ASSAI_SEP = {
     finalizar: '{{ url_for("motos_assai.separacao_finalizar", separacao_id=separacao.id) }}',
     analisarFinalizacao: '{{ url_for("motos_assai.separacao_analisar_finalizacao", separacao_id=separacao.id) }}',
     cancelar: '{{ url_for("motos_assai.separacao_cancelar", separacao_id=separacao.id) }}',
+    substituirChassi: '{{ url_for("motos_assai.separacao_substituir_chassi") }}',
   },
 };
 </script>

@@ -226,7 +226,8 @@ Função de conveniência: `resolver_por_codigo_qpa(codigo_str)` para lookup dir
                                            ↓  (consolidação N→1)
                               assai_compra_motochefe (status ABERTA, nº MA-AAAA-NNNN)
                               assai_compra_motochefe_pedido (N:N)
-                              pedidos → status EM_PRODUCAO
+                              pedidos → status ABERTO (mantido — Big Bang Task 19 2026-05-13
+                                          removeu EM_PRODUCAO; status muda apenas com NF Q.P.A.)
                                            ↓
                               PDF do PO gerado via WeasyPrint
                               (template: templates/motos_assai/compras/pdf_template.html)

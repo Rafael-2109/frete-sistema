@@ -18,8 +18,8 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from app import create_app, db
-from sqlalchemy import text
+from app import create_app, db # noqa: E402 # type: ignore
+from sqlalchemy import text # noqa: E402 # type: ignore
 
 
 def check_before(conn):

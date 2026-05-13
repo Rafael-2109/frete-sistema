@@ -1,0 +1,45 @@
+{# Plano 4 Task 4 - Modal "Substituir chassi" cross-loja na tela de separacao.
+   Acionado quando POST /separacao/registrar-chassi retorna 409 com cenario=cross_loja.
+   Operador confirma -> chama POST /separacao/substituir-chassi com sep_origem_id + sep_destino_id.
+#}
+<div class="modal fade" id="modal-substituir-chassi" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title">
+          <i class="fas fa-exchange-alt"></i> Chassi em outra loja
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p>O chassi <strong id="cross-chassi" class="font-monospace">—</strong> ja
+        esta vinculado a uma separacao de outra loja.</p>
+
+        <div class="card mb-3">
+          <div class="card-body py-2 small">
+            <div><strong>Origem:</strong> Sep #<span id="cross-sep-origem-id">—</span>
+              (Loja <span id="cross-loja-origem">—</span>)</div>
+            <div><strong>Destino:</strong> Sep #<span id="cross-sep-destino-id">—</span>
+              (Loja <span id="cross-loja-destino">—</span>)</div>
+          </div>
+        </div>
+
+        <div class="alert alert-warning small">
+          <i class="fas fa-exclamation-triangle"></i>
+          Substituir vai <strong>remover o chassi da Sep origem</strong> e
+          <strong>adicionar a esta Sep</strong>. Se a Sep origem ja estiver
+          FATURADA, sera criada divergencia automaticamente (cancele a NF antes
+          se necessario).
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-warning" id="btn-confirmar-substituir-chassi-sep">
+          <i class="fas fa-check"></i> Substituir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

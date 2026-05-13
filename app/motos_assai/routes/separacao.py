@@ -5,14 +5,18 @@ from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.services import (
     get_separacao_ativa, saldo_pendente_por_modelo,
     registrar_chassi, desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    reabrir_separacao,
     listar_pares_separaveis,
-    SeparacaoConflictError, SeparacaoValidationError,
+    SeparacaoConflictError, SeparacaoValidationError, SeparacaoCrossLojaError,
     # Realocacao de saldo (Tasks #11/#12/#13)
     analisar_finalizacao, finalizar_separacao_com_decisao,
     SeparacaoSaldoPendenteError,
     FINALIZAR_MODO_AUTO, FINALIZAR_MODO_VOLTAR_SALDO,
     FINALIZAR_MODO_MANTER_PLANEJADO, FINALIZAR_MODO_REALOCAR,
+    # Plano 4 Task 1
+    substituir_chassi_entre_seps,
 )
+from app import db
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiPedidoVenda, AssaiLoja,
     AssaiSeparacaoSaldoModelo, AssaiModelo,
@@ -117,6 +121,19 @@ def separacao_registrar_chassi():
             registrada_por_id=current_user.id,
             separacao_id=int(sep_id) if sep_id else None,
         )
+    except SeparacaoCrossLojaError as e:
+        # Plano 4 Task 2: chassi em sep ativa de outra loja —
+        # operador deve confirmar substituicao via modal (HTTP 409 cenario=cross_loja).
+        return jsonify({
+            'ok': False,
+            'cenario': 'cross_loja',
+            'erro': str(e),
+            'chassi': e.chassi,
+            'sep_origem_id': e.sep_origem_id,
+            'loja_origem_id': e.loja_origem_id,
+            'sep_destino_id': e.sep_destino_id,  # pode ser None — UI escolhe
+            'loja_destino_id': e.loja_destino_id,
+        }), 409
     except SeparacaoConflictError as e:
         return jsonify({'ok': False, 'erro': str(e), 'retry': True}), 409
     except SeparacaoValidationError as e:
@@ -126,6 +143,57 @@ def separacao_registrar_chassi():
     return jsonify({'ok': True, **result, 'saldos': [
         {**s, 'valor_unitario': float(s['valor_unitario'])} for s in saldos
     ]})
+
+
+@motos_assai_bp.route('/separacao/substituir-chassi', methods=['POST'])
+def separacao_substituir_chassi():
+    """AJAX: substitui chassi entre 2 separacoes (cross-loja ou mesma loja).
+
+    Body JSON:
+        {
+            chassi: str,
+            sep_origem_id: int,
+            sep_destino_id: int,
+        }
+
+    N-B1 fix: sem decorators de tela; valida sessao manualmente.
+    """
+    if not current_user.is_authenticated:
+        return jsonify({'ok': False, 'erro': 'Sessao expirada'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        chassi = (data.get('chassi') or '').strip().upper()
+        sep_origem_id = int(data.get('sep_origem_id'))
+        sep_destino_id = int(data.get('sep_destino_id'))
+    except (TypeError, ValueError):
+        return jsonify({
+            'ok': False,
+            'erro': 'Parametros invalidos: chassi, sep_origem_id, sep_destino_id obrigatorios',
+        }), 400
+
+    try:
+        result = substituir_chassi_entre_seps(
+            chassi=chassi,
+            sep_origem_id=sep_origem_id,
+            sep_destino_id=sep_destino_id,
+            operador_id=current_user.id,
+        )
+        db.session.commit()
+        return jsonify({'ok': True, **result})
+    except SeparacaoValidationError as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.getLogger(__name__).exception(
+            'substituir_chassi_entre_seps falhou: chassi=%s origem=%s destino=%s',
+            chassi, sep_origem_id, sep_destino_id,
+        )
+        return jsonify({'ok': False, 'erro': f'Erro interno: {e}'}), 500
 
 
 @motos_assai_bp.route('/separacao/desfazer/<int:item_id>', methods=['POST'])
@@ -250,3 +318,50 @@ def separacao_cancelar(separacao_id):
     except SeparacaoValidationError as e:
         return jsonify({'ok': False, 'erro': str(e)}), 400
     return jsonify({'ok': True, 'status': sep.status})
+
+
+@motos_assai_bp.route('/separacao/<int:separacao_id>/reabrir', methods=['POST'])
+@login_required
+@require_motos_assai
+def separacao_reabrir(separacao_id):
+    """Reabre sep FECHADA -> EM_SEPARACAO ("Alterar Separacao").
+
+    Validacoes (no service):
+    - Sep deve estar FECHADA (nao EM_SEPARACAO ja, nao CARREGADA, nao FATURADA, nao CANCELADA)
+    - Sem Carregamento ativo vinculado
+    - Sem NF preenchida no espelho Nacom
+
+    Body JSON:
+        {} (sem parametros — operador_id vem do current_user)
+
+    Retorna 200 {ok, status, separacao_id} | 400 {ok=false, erro}.
+
+    Aceita request via formulario tradicional tambem (returna redirect com flash).
+    """
+    is_ajax = request.is_json or request.headers.get('Accept') == 'application/json'
+
+    try:
+        sep = reabrir_separacao(separacao_id, current_user.id)
+    except SeparacaoValidationError as e:
+        if is_ajax:
+            return jsonify({'ok': False, 'erro': str(e)}), 400
+        flash(f'Nao foi possivel reabrir a separacao: {e}', 'warning')
+        return redirect(request.referrer or url_for('motos_assai.separacao_lista'))
+
+    if is_ajax:
+        return jsonify({
+            'ok': True, 'status': sep.status, 'separacao_id': sep.id,
+            'redirect_url': url_for(
+                'motos_assai.separacao_tela',
+                pedido_id=sep.pedido_id, loja_id=sep.loja_id, sep_id=sep.id,
+            ),
+        })
+    flash(
+        f'Separacao #{sep.id} reaberta — agora EM_SEPARACAO. '
+        'Edite os chassis conforme necessario e finalize novamente.',
+        'success',
+    )
+    return redirect(url_for(
+        'motos_assai.separacao_tela',
+        pedido_id=sep.pedido_id, loja_id=sep.loja_id, sep_id=sep.id,
+    ))

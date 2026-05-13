@@ -50,7 +50,7 @@
       <td>{{ p.data_emissao.strftime('%d/%m/%Y') if p.data_emissao else '-' }}</td>
       <td>{{ p.previsao_entrega.strftime('%d/%m/%Y') if p.previsao_entrega else '-' }}</td>
       <td>
-        <span class="badge bg-{% if p.status == 'FATURADO' %}info{% elif p.status == 'CANCELADO' %}danger{% elif p.status == 'SEPARANDO' %}primary{% elif p.status == 'EM_PRODUCAO' %}warning{% else %}secondary{% endif %}">
+        <span class="badge bg-{% if p.status == 'FATURADO' %}info{% elif p.status == 'CANCELADO' %}danger{% elif p.status == 'PARCIALMENTE_FATURADO' %}warning{% else %}secondary{% endif %}">
           {{ p.status }}
         </span>
       </td>

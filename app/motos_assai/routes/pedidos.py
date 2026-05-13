@@ -287,6 +287,6 @@ def pedidos_lista():
         'motos_assai/pedidos/lista.html',
         pedidos=pedidos,
         status_filtro=status,
-        statuses=['ABERTO', 'EM_PRODUCAO', 'SEPARANDO', 'FATURADO_PARCIAL', 'FATURADO', 'CANCELADO'],
+        statuses=['ABERTO', 'PARCIALMENTE_FATURADO', 'FATURADO', 'CANCELADO'],
         metricas=metricas,
     )

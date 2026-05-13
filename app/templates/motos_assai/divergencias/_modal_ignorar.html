@@ -1,0 +1,29 @@
+<div class="modal fade" id="modal-ignorar" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-eye-slash"></i> Ignorar Divergência
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <strong>Operador aceita:</strong> esta divergência será marcada como resolvida sem ação corretiva.
+          Use quando a divergência é falso-positivo, esperada ou irrelevante para o fluxo.
+        </div>
+        <input type="hidden" id="ignorar-div-id" />
+        <div class="mb-3">
+          <label class="form-label">Observação (obrigatória)</label>
+          <textarea class="form-control" id="ignorar-observacao" rows="3" required></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-dark" id="btn-confirmar-ignorar">
+          <i class="fas fa-check"></i> Ignorar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

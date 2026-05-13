@@ -160,9 +160,9 @@
   ],
   "indices": [
     {
-      "name": "idx_em_transportadora",
+      "name": "ix_entregas_monitoradas_origem",
       "columns": [
-        "transportadora"
+        "origem"
       ],
       "unique": false
     },
@@ -181,27 +181,6 @@
       "unique": false
     },
     {
-      "name": "idx_em_status_finalizacao",
-      "columns": [
-        "status_finalizacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_origem",
-      "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
-      "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_em_data_embarque",
       "columns": [
         "data_embarque"
@@ -209,9 +188,9 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "cnpj_cliente"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -230,9 +209,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_reagendar",
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
-        "reagendar"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -240,6 +219,27 @@
       "name": "idx_em_data_faturamento",
       "columns": [
         "data_faturamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_reagendar",
+      "columns": [
+        "reagendar"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_transportadora",
+      "columns": [
+        "transportadora"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_status_finalizacao",
+      "columns": [
+        "status_finalizacao"
       ],
       "unique": false
     }

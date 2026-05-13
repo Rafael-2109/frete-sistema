@@ -1,0 +1,43 @@
+{# Modal: Carregamento excedente (S14=a) — finalize ultrapassaria qtd do pedido #}
+<div class="modal fade" id="modal-excedente-car" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle"></i>
+          Carregamento Excedente — Não pode finalizar
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger" role="alert">
+          <strong>S14=a:</strong> Este carregamento ultrapassaria a quantidade total do pedido.
+        </div>
+        <p id="excedente-mensagem" class="mb-3 small"></p>
+
+        <p><strong>Quantidade excedente:</strong>
+          <span id="excedente-qtd" class="badge bg-danger fs-6">—</span>
+        </p>
+
+        <div id="excedente-seps-bloqueadas-container" class="d-none">
+          <p><strong>Separações já carregadas/faturadas (bloqueiam o limite):</strong></p>
+          <ul id="excedente-seps-bloqueadas" class="small text-muted"></ul>
+        </div>
+
+        <div class="alert alert-info small mb-0 mt-3">
+          <strong>Como resolver:</strong>
+          <ol class="mb-0 mt-1 ps-3">
+            <li>Volte ao carregamento e <strong>remova chassis em excesso</strong>; ou</li>
+            <li>Cancele uma das separações <code>CARREGADA</code>/<code>FATURADA</code> que estão bloqueando o limite (se permitido); ou</li>
+            <li>Cancele este carregamento e inicie outro com escopo correto.</li>
+          </ol>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">
+          <i class="fas fa-arrow-left"></i> Voltar para o carregamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

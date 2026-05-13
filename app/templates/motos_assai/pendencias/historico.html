@@ -18,6 +18,77 @@
   Exibindo até 300 registros mais recentes.
 </div>
 
+{# 2026-05-13: filtros chassi/modelo/data/operador #}
+<form method="GET" class="card p-3 mb-3 bg-light border" id="form-filtros-historico">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small mb-1" for="fh-chassi">Chassi</label>
+      <input type="text" name="chassi" id="fh-chassi"
+             class="form-control form-control-sm"
+             value="{{ filtros_aplicados.chassi or '' }}"
+             placeholder="parcial — ilike %"
+             autocapitalize="characters" maxlength="50">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fh-modelo">Modelo</label>
+      <select name="modelo_id" id="fh-modelo" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for m in modelos %}
+          <option value="{{ m.id }}"
+                  {% if filtros_aplicados.modelo_id == m.id %}selected{% endif %}>
+            {{ m.codigo }} — {{ m.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fh-data-inicio">De (resolução)</label>
+      <input type="date" name="data_inicio" id="fh-data-inicio"
+             class="form-control form-control-sm"
+             value="{{ filtros_aplicados.data_inicio.isoformat() if filtros_aplicados.data_inicio else '' }}">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small mb-1" for="fh-data-fim">Até (resolução)</label>
+      <input type="date" name="data_fim" id="fh-data-fim"
+             class="form-control form-control-sm"
+             value="{{ filtros_aplicados.data_fim.isoformat() if filtros_aplicados.data_fim else '' }}">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label small mb-1" for="fh-operador">Operador (resolveu)</label>
+      <select name="operador_id" id="fh-operador" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for op in operadores %}
+          <option value="{{ op.id }}"
+                  {% if filtros_aplicados.operador_id == op.id %}selected{% endif %}>
+            {{ op.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-12 d-flex gap-2 mt-2">
+      <button type="submit" class="btn btn-sm btn-primary">
+        <i class="fas fa-filter"></i> Filtrar
+      </button>
+      <a href="{{ url_for('motos_assai.pendencias_historico') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-times"></i> Limpar
+      </a>
+      {% set num_filtros = (filtros_aplicados.chassi or filtros_aplicados.modelo_id or
+                            filtros_aplicados.data_inicio or filtros_aplicados.data_fim or
+                            filtros_aplicados.operador_id) %}
+      {% if num_filtros %}
+        <small class="text-muted ms-auto align-self-center">
+          <i class="fas fa-info-circle"></i> Filtros aplicados — exibindo {{ historico|length }} resultado(s).
+        </small>
+      {% endif %}
+    </div>
+  </div>
+</form>
+
 {% if historico %}
 <div class="table-responsive">
 <table class="table table-sm table-hover align-middle">
@@ -55,7 +126,11 @@
 </div>
 {% else %}
 <div class="alert alert-info">
-  Nenhuma pendência resolvida no histórico.
+  {% if num_filtros %}
+    Nenhuma resolução corresponde aos filtros aplicados.
+  {% else %}
+    Nenhuma pendência resolvida no histórico.
+  {% endif %}
 </div>
 {% endif %}
 {% endblock %}

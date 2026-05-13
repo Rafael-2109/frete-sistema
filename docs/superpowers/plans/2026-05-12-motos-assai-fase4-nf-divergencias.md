@@ -208,13 +208,15 @@ def criar_divergencia(tipo, chassi, nf_id=None, sep_id=None, car_id=None, detalh
             f'tipo invalido: {tipo}. Validos: {sorted(DIVERGENCIA_TIPOS_VALIDOS)}'
         )
 
+    # N-B2 fix: sanitize_for_json — detalhes pode conter Decimal de valor_unitario_qpa
+    from app.utils.json_helpers import sanitize_for_json
     div = AssaiDivergencia(
         tipo=tipo,
         chassi=chassi,
         nf_id=nf_id,
         separacao_id=sep_id,
         carregamento_id=car_id,
-        detalhes=detalhes or {},
+        detalhes=sanitize_for_json(detalhes or {}),
         criada_em=agora_brasil_naive(),
     )
     db.session.add(div)
@@ -618,8 +620,15 @@ def _calcular_match(nf, operador_id):
                     .first())
 
         if not sep_item:
+            # N-M6 fix: distinguir CHASSI_NAO_CADASTRADO (moto inexistente em assai_moto)
+            # de CHASSI_SEM_SEPARACAO (moto existe mas sem sep candidata)
+            moto_check = AssaiMoto.query.filter_by(chassi=chassi).first()
+            tipo_div = (
+                DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO if not moto_check
+                else DIVERGENCIA_TIPO_CHASSI_SEM_SEPARACAO
+            )
             criar_divergencia(
-                tipo=DIVERGENCIA_TIPO_CHASSI_SEM_SEPARACAO,
+                tipo=tipo_div,
                 chassi=chassi, nf_id=nf.id,
                 detalhes={'modelo_extraido': it.modelo_extraido},
             )
@@ -701,7 +710,7 @@ def _calcular_match(nf, operador_id):
         for it in nf.itens:
             if it.separacao_item_id:
                 emitir_evento(
-                    it.chassi, EVENTO_FATURADA, operador_id=importada_por_id,
+                    it.chassi, EVENTO_FATURADA, operador_id=operador_id,  # N-H1 fix
                     observacao=f'NF {nf.numero} importada (BATEU)',
                     dados_extras={'nf_id': nf.id, 'chave_44': nf.chave_44},
                 )
@@ -1169,14 +1178,16 @@ for item in nf.itens:
         item.separacao_item_id = None
 ```
 
-#### Task 11: `cancelar_nf_qpa` — recalcular_status_pedido + commit final
+#### Task 11: `cancelar_nf_qpa` — recalcular_status_pedido (caller commita)
 
 ```python
 # M1 fix: guard
 if sep:
     recalcular_status_pedido(sep.pedido_id)
 # Se NF orfa, nao ha pedido para recalcular (sep nao existe)
-db.session.commit()
+db.session.flush()
+# N-H6 fix: NAO commit interno — caller (route AJAX) commita.
+# Service apenas faz flush para garantir IDs/sequences.
 ```
 
 #### Task 12: Modal Expedição UI (S7=a X=Pular)
@@ -1238,10 +1249,15 @@ def main():
         nfs_orfas = AssaiNfQpa.query.filter_by(status_match=NF_STATUS_NAO_RECONCILIADO).all()
         print(f'[start] {len(nfs_orfas)} NFs orfas')
 
-        contadores = {'sucesso': 0, 'falhou': 0, 'sem_chassi_cadastrado': 0}
+        contadores = {'sucesso': 0, 'falhou': 0, 'sem_chassi_cadastrado': 0, 'ja_processada': 0}
         log = []
 
         for nf in nfs_orfas:
+            # N-M5 fix: idempotencia — se NF ja tem sep (parcialmente processada antes), skip
+            if nf.separacao_id:
+                contadores['ja_processada'] += 1
+                log.append(f'  skip nf={nf.numero} — ja tem sep_id={nf.separacao_id}')
+                continue
             try:
                 result = ajustar_separacao_pela_nf(nf.id, operador_id=1)  # operador admin
                 db.session.commit()

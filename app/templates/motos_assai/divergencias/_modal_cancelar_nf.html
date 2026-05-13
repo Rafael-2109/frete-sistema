@@ -1,0 +1,30 @@
+<div class="modal fade" id="modal-cancelar-nf" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-ban"></i> Cancelar NF Q.P.A.
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <strong>Atenção:</strong> esta ação reverte FATURADA → CARREGADA/SEPARADA por chassi,
+          marca a NF como CANCELADA, limpa EmbarqueItem.nota_fiscal e remove a NF do espelho Nacom.
+        </div>
+        <input type="hidden" id="cancelar-div-id" />
+        <input type="hidden" id="cancelar-nf-id" />
+        <div class="mb-3">
+          <label class="form-label">Motivo do cancelamento (≥ 3 caracteres)</label>
+          <textarea class="form-control" id="cancelar-motivo" rows="3" required minlength="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-danger" id="btn-confirmar-cancelar-nf">
+          <i class="fas fa-ban"></i> Cancelar NF
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

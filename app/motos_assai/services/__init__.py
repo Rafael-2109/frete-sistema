@@ -55,8 +55,10 @@ from .disponibilizar_service import (
 from .separacao_service import (
     get_separacao_ativa, saldo_pendente_por_modelo, registrar_chassi,
     desfazer_chassi, finalizar_separacao, cancelar_separacao,
+    reabrir_separacao,
     listar_pares_separaveis,
-    SeparacaoConflictError, SeparacaoValidationError,
+    SeparacaoError, SeparacaoConflictError, SeparacaoValidationError,
+    SeparacaoCrossLojaError,
     # Realocacao de saldo (Task #11) + Ajuste pos-NF (Task #9)
     outras_seps_em_separacao, saldo_planejado_nao_separado,
     analisar_finalizacao, realocar_saldo,
@@ -67,9 +69,28 @@ from .separacao_service import (
     ajustar_separacao_pela_nf,
     atualizar_agendamento_loja,
     criar_separacao_com_saldos,
+    # Plano 4 Task 1
+    substituir_chassi_entre_seps,
 )
 from .separacao_mirror_service import sincronizar_espelho_com_separacao
-from .faturamento_service import gerar_excel_qpa
+from .faturamento_service import gerar_excel_qpa, regenerar_excel_qpa, FaturamentoError
+# Code review fix M7 (2026-05-13): exportar services novos via __init__.py
+# para consistencia com padrao do modulo (antes routes importavam diretamente
+# dos arquivos, inconsistente com restante).
+from .carregamento_service import (
+    criar_carregamento, escanear_carregamento_item, cancelar_carregamento_item,
+    cancelar_carregamento, alterar_carregamento, finalizar_carregamento,
+    CarregamentoError, CarregamentoValidationError, CarregamentoConflictError,
+    CarregamentoStateError, CarregamentoExcedenteError, CarregamentoCrossLojaError,
+)
+from .cancelamento_nf_service import (
+    cancelar_nf_qpa, aplicar_correcao_cce,
+    CancelamentoError, CancelamentoValidationError,
+)
+from .divergencia_service import (
+    criar_divergencia, resolver_divergencia, DivergenciaError,
+)
+from .pedido_status_service import recalcular_status_pedido
 from .geocoding_service import geocodar_loja, geocodar_lote, GeocodingError
 from .pos_venda_service import (
     listar_motos_vendidas, contexto_moto_por_chassi, chassi_foi_vendido,
@@ -110,7 +131,8 @@ __all__ = [
     'get_separacao_ativa', 'saldo_pendente_por_modelo', 'registrar_chassi',
     'desfazer_chassi', 'finalizar_separacao', 'cancelar_separacao',
     'listar_pares_separaveis',
-    'SeparacaoConflictError', 'SeparacaoValidationError',
+    'SeparacaoError', 'SeparacaoConflictError', 'SeparacaoValidationError',
+    'SeparacaoCrossLojaError',
     'outras_seps_em_separacao', 'saldo_planejado_nao_separado',
     'analisar_finalizacao', 'realocar_saldo',
     'finalizar_separacao_com_decisao',
@@ -120,8 +142,9 @@ __all__ = [
     'ajustar_separacao_pela_nf',
     'atualizar_agendamento_loja',
     'criar_separacao_com_saldos',
+    'substituir_chassi_entre_seps',
     'sincronizar_espelho_com_separacao',
-    'gerar_excel_qpa',
+    'gerar_excel_qpa', 'regenerar_excel_qpa', 'FaturamentoError',
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',
     'listar_motos_vendidas', 'contexto_moto_por_chassi', 'chassi_foi_vendido',
     'listar_ocorrencias', 'criar_ocorrencia', 'atualizar_ocorrencia', 'excluir_ocorrencia',

@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 268,
+  "total_tabelas": 273,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -196,6 +196,24 @@
       ]
     },
     {
+      "name": "assai_carregamento",
+      "description": "Tabela assai_carregamento",
+      "key_fields": [
+        "pedido_id",
+        "loja_id",
+        "separacao_id"
+      ]
+    },
+    {
+      "name": "assai_carregamento_item",
+      "description": "Tabela assai_carregamento_item",
+      "key_fields": [
+        "carregamento_id",
+        "chassi",
+        "modelo_id"
+      ]
+    },
+    {
       "name": "assai_cd",
       "description": "Tabela assai_cd",
       "key_fields": [
@@ -219,6 +237,15 @@
       "key_fields": [
         "compra_id",
         "pedido_id"
+      ]
+    },
+    {
+      "name": "assai_divergencia",
+      "description": "Tabela assai_divergencia",
+      "key_fields": [
+        "tipo",
+        "chassi",
+        "separacao_id"
       ]
     },
     {
@@ -282,6 +309,24 @@
         "nf_id",
         "chassi",
         "modelo_extraido"
+      ]
+    },
+    {
+      "name": "assai_nf_qpa_item_vinculo_historico",
+      "description": "Tabela assai_nf_qpa_item_vinculo_historico",
+      "key_fields": [
+        "nf_qpa_item_id",
+        "separacao_item_id",
+        "motivo"
+      ]
+    },
+    {
+      "name": "assai_pedido_excel",
+      "description": "Tabela assai_pedido_excel",
+      "key_fields": [
+        "pedido_id",
+        "separacao_id",
+        "s3_key"
       ]
     },
     {

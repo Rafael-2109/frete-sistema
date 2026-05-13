@@ -1,0 +1,122 @@
+{
+  "name": "assai_carregamento",
+  "description": "Tabela assai_carregamento",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "pedido_id",
+      "type": "integer",
+      "description": "FK → assai_pedido_venda.id",
+      "nullable": false
+    },
+    {
+      "name": "loja_id",
+      "type": "integer",
+      "description": "FK → assai_loja.id",
+      "nullable": false
+    },
+    {
+      "name": "separacao_id",
+      "type": "integer",
+      "description": "FK → assai_separacao.id"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "EM_CARREGAMENTO"
+    },
+    {
+      "name": "iniciado_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "iniciado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "finalizado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "finalizado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "cancelado_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "cancelado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    },
+    {
+      "name": "motivo_cancelamento",
+      "type": "text"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "pedido_id",
+      "references": "assai_pedido_venda.id"
+    },
+    {
+      "column": "loja_id",
+      "references": "assai_loja.id"
+    },
+    {
+      "column": "separacao_id",
+      "references": "assai_separacao.id"
+    },
+    {
+      "column": "iniciado_por_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "finalizado_por_id",
+      "references": "usuarios.id"
+    },
+    {
+      "column": "cancelado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_carregamento_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_carregamento_separacao_id",
+      "columns": [
+        "separacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_carregamento_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_carregamento_pedido_id",
+      "columns": [
+        "pedido_id"
+      ],
+      "unique": false
+    }
+  ]
+}

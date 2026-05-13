@@ -26,8 +26,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app import create_app, db
-from sqlalchemy import text
+from app import create_app, db # noqa: E402 # type: ignore
+from sqlalchemy import text # noqa: E402 # type: ignore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -82,10 +82,10 @@ def main():
             return
 
         # Importação lazy (precisa do app context)
-        from app.agente.services.knowledge_graph_service import (
+        from app.agente.services.knowledge_graph_service import ( # noqa: E402 # type: ignore
             extract_and_link_entities,
         )
-        from app.agente.models import AgentMemory
+        from app.agente.models import AgentMemory # noqa: E402 # type: ignore
 
         ok_count = 0
         empty_count = 0
