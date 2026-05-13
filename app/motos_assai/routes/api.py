@@ -16,6 +16,63 @@ from app.motos_assai.services.chassi_autocomplete_service import (
 )
 
 
+@motos_assai_bp.route('/api/seps-ativas', methods=['GET'])
+def api_seps_ativas_pedido_loja():
+    """GET /motos-assai/api/seps-ativas?pedido_id=N&loja_id=M
+
+    Lista seps ativas (EM_SEPARACAO/FECHADA/CARREGADA) do par (pedido, loja).
+    Usado pelo modal de substituir chassi (carregamento) para escolher destino.
+
+    N-B1: sem decorator de tela; valida sessao manualmente.
+    """
+    from flask_login import current_user
+    from app.motos_assai.models import (
+        AssaiSeparacao,
+        SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
+        SEPARACAO_STATUS_CARREGADA,
+    )
+
+    if not current_user.is_authenticated:
+        return jsonify({'ok': False, 'erro': 'Sessao expirada'}), 401
+    if not current_user.pode_acessar_motos_assai():
+        return jsonify({'ok': False, 'erro': 'Acesso negado'}), 403
+
+    try:
+        pedido_id = int(request.args.get('pedido_id'))
+        loja_id = int(request.args.get('loja_id'))
+    except (TypeError, ValueError):
+        return jsonify({
+            'ok': False,
+            'erro': 'pedido_id e loja_id obrigatorios',
+        }), 400
+
+    seps = (
+        AssaiSeparacao.query
+        .filter(
+            AssaiSeparacao.pedido_id == pedido_id,
+            AssaiSeparacao.loja_id == loja_id,
+            AssaiSeparacao.status.in_([
+                SEPARACAO_STATUS_EM_SEPARACAO,
+                SEPARACAO_STATUS_FECHADA,
+                SEPARACAO_STATUS_CARREGADA,
+            ]),
+        )
+        .order_by(AssaiSeparacao.iniciada_em.asc())
+        .all()
+    )
+    return jsonify({
+        'ok': True,
+        'seps': [
+            {
+                'id': s.id,
+                'status': s.status,
+                'iniciada_em': s.iniciada_em.strftime('%d/%m %H:%M') if s.iniciada_em else None,
+            }
+            for s in seps
+        ],
+    })
+
+
 @motos_assai_bp.route('/api/chassi/autocomplete', methods=['GET'])
 @login_required
 @require_motos_assai

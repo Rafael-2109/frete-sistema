@@ -101,6 +101,11 @@
         return;
       }
       var data = await r.json();
+      // Plano 4 Task 5: cenario=cross_loja => abre modal de substituicao
+      if (r.status === 409 && data.cenario === 'cross_loja') {
+        await abrirModalCrossLoja(data);
+        return;
+      }
       if (!data.ok) {
         showAlerta('danger', escapeHtml(data.erro || 'Erro ao escanear.'));
         return;
@@ -357,4 +362,104 @@
       }
     });
   }
+
+  // ==========================================================
+  // Plano 4 Task 5: modal "Substituir chassi" cross-loja
+  // ==========================================================
+  var _pendingCrossLoja = null;
+
+  async function abrirModalCrossLoja(data) {
+    _pendingCrossLoja = {
+      chassi: data.chassi,
+      sep_origem_id: data.sep_origem_id,
+      loja_origem_id: data.loja_origem_id,
+      carregamento_id: data.carregamento_id,
+      loja_destino_id: data.loja_destino_id,
+    };
+    document.getElementById('cross-chassi').textContent = _pendingCrossLoja.chassi;
+    document.getElementById('cross-sep-origem-id').textContent = _pendingCrossLoja.sep_origem_id;
+    document.getElementById('cross-loja-origem').textContent = _pendingCrossLoja.loja_origem_id;
+    document.getElementById('cross-car-id').textContent = _pendingCrossLoja.carregamento_id;
+    document.getElementById('cross-loja-destino').textContent = _pendingCrossLoja.loja_destino_id;
+
+    // Carregar seps ativas do (pedido, loja) deste carregamento
+    var sel = document.getElementById('cross-sep-destino-select');
+    sel.innerHTML = '<option value="">— Carregando... —</option>';
+    sel.disabled = true;
+    try {
+      var url = cfg.endpoints.sepsAtivas + '?pedido_id=' + cfg.pedidoId
+                + '&loja_id=' + cfg.lojaId;
+      var r = await fetch(url, {
+        headers: {'X-CSRFToken': getCsrfToken()},
+      });
+      var resp = await r.json();
+      if (!resp.ok || !resp.seps || resp.seps.length === 0) {
+        sel.innerHTML = '<option value="">— Nenhuma sep ativa nesta loja —</option>';
+        showAlerta('danger',
+          'Nao ha sep ativa nesta loja para o pedido. Crie uma sep antes.');
+      } else {
+        sel.innerHTML = '<option value="">— Selecione —</option>';
+        resp.seps.forEach(function (s) {
+          var opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = 'Sep #' + s.id + ' — ' + s.status
+                          + (s.iniciada_em ? ' (' + s.iniciada_em + ')' : '');
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+      }
+    } catch (err) {
+      sel.innerHTML = '<option value="">— Erro ao carregar seps —</option>';
+      showAlerta('danger', 'Erro ao carregar seps: ' + escapeHtml(err.message));
+    }
+
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-substituir-chassi')).show();
+  }
+
+  document.getElementById('btn-confirmar-substituir-chassi-car')?.addEventListener('click', async function () {
+    if (!_pendingCrossLoja) return;
+    var sel = document.getElementById('cross-sep-destino-select');
+    var sepDestinoId = sel.value;
+    if (!sepDestinoId) {
+      showAlerta('warning', 'Selecione a sep destino.');
+      return;
+    }
+    var btn = document.getElementById('btn-confirmar-substituir-chassi-car');
+    btn.disabled = true;
+
+    try {
+      // 1. Substituir chassi entre seps
+      var rs = await fetch(cfg.endpoints.substituirChassi, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+        body: JSON.stringify({
+          chassi: _pendingCrossLoja.chassi,
+          sep_origem_id: _pendingCrossLoja.sep_origem_id,
+          sep_destino_id: parseInt(sepDestinoId, 10),
+        }),
+      });
+      var dataS = await rs.json();
+      if (!dataS.ok) {
+        showAlerta('danger', escapeHtml(dataS.erro || 'Erro ao substituir chassi'));
+        btn.disabled = false;
+        return;
+      }
+
+      bootstrap.Modal.getInstance(document.getElementById('modal-substituir-chassi'))?.hide();
+      var msgExtra = dataS.divergencia_id
+        ? ' (divergencia #' + dataS.divergencia_id + ' criada — sep origem FATURADA)'
+        : '';
+      showAlerta('success',
+        'Chassi <code>' + escapeHtml(dataS.chassi) + '</code> substituido'
+        + escapeHtml(msgExtra) + '. Re-tentando escanear no carregamento...');
+
+      // 2. Re-tentar escanear no carregamento (chassi agora em SEPARADA na loja certa)
+      inputChassi.value = _pendingCrossLoja.chassi;
+      _pendingCrossLoja = null;
+      setTimeout(escanear, 500);
+    } catch (err) {
+      showAlerta('danger', 'Erro de rede: ' + escapeHtml(err.message));
+      btn.disabled = false;
+    }
+  });
 })();

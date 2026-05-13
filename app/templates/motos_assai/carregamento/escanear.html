@@ -129,11 +129,14 @@
 {% include 'motos_assai/carregamento/_modal_cancelar.html' %}
 {% include 'motos_assai/carregamento/_modal_alterar.html' %}
 {% include 'motos_assai/carregamento/_modal_excedente.html' %}
+{% include 'motos_assai/carregamento/_modal_substituir_chassi.html' %}
 
 <script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}" defer></script>
 <script>
 window.MOTOS_ASSAI_CAR = {
   carregamentoId: {{ carregamento.id }},
+  pedidoId: {{ carregamento.pedido_id }},
+  lojaId: {{ carregamento.loja_id }},
   status: '{{ carregamento.status }}',
   endpoints: {
     escanear:    '{{ url_for("motos_assai.carregamento_escanear_ajax", carregamento_id=carregamento.id) }}',
@@ -141,6 +144,8 @@ window.MOTOS_ASSAI_CAR = {
     finalizar:   '{{ url_for("motos_assai.carregamento_finalizar_ajax", carregamento_id=carregamento.id) }}',
     cancelar:    '{{ url_for("motos_assai.carregamento_cancelar_ajax", carregamento_id=carregamento.id) }}',
     alterar:     '{{ url_for("motos_assai.carregamento_alterar_ajax", carregamento_id=carregamento.id) }}',
+    substituirChassi: '{{ url_for("motos_assai.separacao_substituir_chassi") }}',
+    sepsAtivas:  '{{ url_for("motos_assai.api_seps_ativas_pedido_loja") }}',
   },
 };
 </script>

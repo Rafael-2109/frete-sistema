@@ -64,6 +64,26 @@
       }),
     });
     const data = await r.json();
+
+    // Plano 4 Task 4: cenario=cross_loja => abre modal de substituicao
+    if (r.status === 409 && data.cenario === 'cross_loja') {
+      _pendingCrossLoja = {
+        chassi: data.chassi,
+        sep_origem_id: data.sep_origem_id,
+        loja_origem_id: data.loja_origem_id,
+        sep_destino_id: data.sep_destino_id || cfg.separacaoId,
+        loja_destino_id: data.loja_destino_id,
+      };
+      const modal = document.getElementById('modal-substituir-chassi');
+      document.getElementById('cross-chassi').textContent = _pendingCrossLoja.chassi;
+      document.getElementById('cross-sep-origem-id').textContent = _pendingCrossLoja.sep_origem_id;
+      document.getElementById('cross-loja-origem').textContent = _pendingCrossLoja.loja_origem_id;
+      document.getElementById('cross-sep-destino-id').textContent = _pendingCrossLoja.sep_destino_id;
+      document.getElementById('cross-loja-destino').textContent = _pendingCrossLoja.loja_destino_id;
+      bootstrap.Modal.getOrCreateInstance(modal).show();
+      return;
+    }
+
     if (!data.ok) {
       showAlerta('danger', data.erro);
       return;
@@ -73,6 +93,40 @@
     inputChassi.focus();
     setTimeout(() => location.reload(), 800);  // recarrega para atualizar saldo + lista
   }
+
+  // Plano 4 Task 4: estado e handler para modal "Substituir chassi" cross-loja
+  let _pendingCrossLoja = null;
+  document.getElementById('btn-confirmar-substituir-chassi-sep')?.addEventListener('click', async () => {
+    if (!_pendingCrossLoja) return;
+    const btn = document.getElementById('btn-confirmar-substituir-chassi-sep');
+    btn.disabled = true;
+    try {
+      const r = await fetch(cfg.endpoints.substituirChassi, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+        body: JSON.stringify({
+          chassi: _pendingCrossLoja.chassi,
+          sep_origem_id: _pendingCrossLoja.sep_origem_id,
+          sep_destino_id: _pendingCrossLoja.sep_destino_id,
+        }),
+      });
+      const data = await r.json();
+      if (!data.ok) {
+        showAlerta('danger', data.erro || 'Erro ao substituir chassi');
+        btn.disabled = false;
+        return;
+      }
+      const msgExtra = data.divergencia_id
+        ? ` (divergencia #${data.divergencia_id} criada — sep origem FATURADA)`
+        : '';
+      showAlerta('success', `Chassi ${data.chassi} movido para esta sep${msgExtra}.`);
+      bootstrap.Modal.getInstance(document.getElementById('modal-substituir-chassi'))?.hide();
+      setTimeout(() => location.reload(), 1000);
+    } catch (err) {
+      showAlerta('danger', 'Erro de rede: ' + err.message);
+      btn.disabled = false;
+    }
+  });
 
   // ============ Desfazer chassi — Bootstrap modal ============
   let _pendingDesfazerItemId = null;
