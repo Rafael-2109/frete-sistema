@@ -110,6 +110,32 @@ $SED_INPLACE 's/<title>.*<\/title>/<title>Artifact<\/title>/' index.html
 # (Parcel ainda tenta processar arquivos do public/ — limpar evita surpresas).
 rm -f public/vite.svg public/favicon.svg 2>/dev/null || true
 
+# ===== Pre-aprovar postinstall scripts (pnpm 10+) =====
+# pnpm 10+ bloqueia postinstall scripts por seguranca (supply-chain defense).
+# Sem aprovacao, `pnpm install` emite `[ERR_PNPM_IGNORED_BUILDS]` (warning, exit 0),
+# mas `pnpm exec parcel build` chama `runDepsStatusCheck` interno que considera
+# ignored builds um ERRO FATAL — retorna exit 1 sem stderr util.
+#
+# Forma canonica em pnpm 11+: `allowBuilds: pkg: true` em pnpm-workspace.yaml.
+# pnpm.onlyBuiltDependencies (legacy v10) em package.json NAO funciona em v11
+# para sub-deps transitivas. Ref: pnpm.io/blog/releases/11.0.md (allowBuilds).
+#
+# Pacotes listados:
+#   - @parcel/watcher: bindings nativos C++ para file watching (Parcel)
+#   - @swc/core: compilador Rust (Parcel transitive)
+#   - esbuild: bundler Go (Vite transitive)
+#   - lmdb: DB chave-valor nativo (Parcel cache)
+#   - msgpackr-extract: serializacao binaria nativa (Parcel cache)
+echo "[init] Criando pnpm-workspace.yaml com allowBuilds (pnpm 11+ approve-builds)..."
+cat > pnpm-workspace.yaml << 'EOF'
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  esbuild: true
+  lmdb: true
+  msgpackr-extract: true
+EOF
+
 # ===== Instalar baseline =====
 echo "[init] Instalando dependencies baseline..."
 pnpm install

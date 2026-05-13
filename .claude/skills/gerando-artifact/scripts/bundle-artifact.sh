@@ -83,9 +83,12 @@ pnpm add -D \
   "html-inline@$HTML_INLINE_VERSION"
 
 # ===== Sanity check: deps criticas presentes =====
-# pnpm cria estrutura .pnpm/<pkg>@<ver>/node_modules/<pkg> com symlinks no
-# top-level node_modules/<pkg>. Validar via `-e` aceita symlink + dir.
-for pkg in "@parcel/config-default" "@parcel/core" "parcel" "parcel-resolver-tspaths" "html-inline"; do
+# IMPORTANTE: pnpm hoista apenas deps DIRETAS no top-level node_modules/.
+# Transitivas (ex: @parcel/core, dep de @parcel/config-default) ficam APENAS
+# em .pnpm/<pkg>@<ver>/node_modules/<pkg>/ — NAO ha symlink top-level.
+# Validar transitivas via `node -e require.resolve(...)` (resolution Node real).
+echo "[bundle] Validando deps diretas no top-level node_modules/..."
+for pkg in "@parcel/config-default" "parcel" "parcel-resolver-tspaths" "html-inline"; do
   if [ ! -e "node_modules/$pkg" ]; then
     echo "ERRO: node_modules/$pkg AUSENTE apos pnpm install." >&2
     echo "[bundle] === DIAGNOSTICO POS-FALHA ===" >&2
@@ -99,7 +102,18 @@ for pkg in "@parcel/config-default" "@parcel/core" "parcel" "parcel-resolver-tsp
     exit 4
   fi
 done
-echo "[bundle] OK: todas as 5 deps de bundling presentes em node_modules/"
+
+# @parcel/core e dep transitive de @parcel/config-default — NAO valida via
+# `node -e require.resolve()` porque pnpm strict mode nao hoista transitivas
+# para o top-level. Confirma via pnpm list (le pnpm-lock.yaml + .pnpm/).
+echo "[bundle] Validando @parcel/core via pnpm list..."
+if ! pnpm list --depth=Infinity @parcel/core 2>/dev/null | grep -q '@parcel/core'; then
+  echo "ERRO: @parcel/core nao instalado — Parcel vai falhar em build." >&2
+  echo "[bundle] node_modules/.pnpm/@parcel+core* entries:" >&2
+  ls node_modules/.pnpm/ 2>&1 | grep -i 'parcel.core' >&2 || echo "(nenhum)" >&2
+  exit 4
+fi
+echo "[bundle] OK: deps diretas + @parcel/core presentes."
 
 # ===== Parcel config com path alias =====
 if [ ! -f ".parcelrc" ]; then

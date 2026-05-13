@@ -280,8 +280,10 @@ def _install_extra_deps(project_dir: Path, deps: dict) -> None:
         env=env,
     )
     if result.returncode != 0:
+        # pnpm joga warnings + errors no stdout. Incluir ambos no RuntimeError.
         raise RuntimeError(
-            f"pnpm install (extras) falhou: stderr={result.stderr[-500:]}"
+            f"pnpm install (extras) falhou: "
+            f"stderr={result.stderr[-500:]} | stdout_tail={result.stdout[-1500:]}"
         )
 
 
@@ -303,7 +305,7 @@ def _run_bundle(project_dir: Path, bundle_path: Path) -> None:
         env=env,
     )
     if result.returncode != 0:
-        # Logar stdout completo em ERROR para diagnostico (npm install output
+        # Logar stdout completo em ERROR para diagnostico (pnpm/npm output
         # critico fica no stdout, nao no stderr). RuntimeError leva trim maior.
         logger.error(
             f"[ARTIFACT_WORKER] bundle FAIL exit={result.returncode} "
@@ -312,8 +314,12 @@ def _run_bundle(project_dir: Path, bundle_path: Path) -> None:
         logger.error(
             f"[ARTIFACT_WORKER] bundle FAIL stderr_tail=\n{result.stderr[-3000:]}"
         )
+        # IMPORTANTE: incluir stdout NA RuntimeError tambem. pnpm 10+ joga
+        # tudo (warnings, ERR_PNPM_IGNORED_BUILDS, exit reason) no stdout —
+        # se RuntimeError mostrar so stderr, fica VAZIO e usuario nao consegue
+        # diagnosticar. Trim por canal para nao explodir error_message (TEXT).
         raise RuntimeError(
             f"bundle-artifact.sh falhou (exit {result.returncode}): "
-            f"stderr={result.stderr[-2000:]}"
+            f"stderr={result.stderr[-1000:]} | stdout_tail={result.stdout[-2000:]}"
         )
     logger.debug(f"[ARTIFACT_WORKER] bundle stdout={result.stdout[-300:]}")
