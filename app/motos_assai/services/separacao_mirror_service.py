@@ -204,6 +204,19 @@ def mirror_assai_to_separacao(assai_sep_id: int) -> int:
     pvl = buscar_pvl(pedido.id, loja.id)
     expedicao_, agendamento_, protocolo_, agendamento_confirmado_ = _resolver_4_campos(sep, pvl)
 
+    # Resolver rota/sub_rota a partir da cidade da loja Assai.
+    # Usa o mesmo padrao accent-safe dos pontos de criacao Nacom para que
+    # a Op. Assai apareca com sub_rota correta em lista_pedidos.html
+    # (caso contrario as linhas espelho ficavam com sub_rota NULL).
+    from app.carteira.utils.separacao_utils import (
+        buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+    )
+    rota_calc = buscar_rota_por_uf(cod_uf) if cod_uf else None
+    sub_rota_calc = (
+        buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade)
+        if cod_uf and nome_cidade else None
+    )
+
     criadas = 0
     for item, _moto, modelo in items:
         peso_kg = float(modelo.peso_kg or 0)
@@ -230,8 +243,8 @@ def mirror_assai_to_separacao(assai_sep_id: int) -> int:
             valor_saldo=float(item.valor_unitario_qpa or 0),
             pallet=0.0,
             peso=peso_kg,
-            rota=None,
-            sub_rota=None,
+            rota=rota_calc,
+            sub_rota=sub_rota_calc,
             observ_ped_1=None,
             roteirizacao=None,
             expedicao=expedicao_,
@@ -570,6 +583,19 @@ def sincronizar_espelho_com_separacao(assai_sep_id: int) -> dict:
     expedicao_, agendamento_, protocolo_, agendamento_confirmado_ = _resolver_4_campos(sep, pvl)
     num_pedido = template.num_pedido  # ja resolvido como '{numero}-{loja.numero}'
 
+    # Resolver rota/sub_rota usando template (cidade/UF da loja Assai espelhada).
+    # Padrao accent-safe identico ao usado em mirror_assai_to_separacao —
+    # garante sub_rota preenchida em lista_pedidos.html mesmo para chassis
+    # sincronizados depois (caso contrario ficam com sub_rota NULL).
+    from app.carteira.utils.separacao_utils import (
+        buscar_rota_por_uf, buscar_sub_rota_por_uf_cidade
+    )
+    rota_calc = buscar_rota_por_uf(template.cod_uf) if template.cod_uf else None
+    sub_rota_calc = (
+        buscar_sub_rota_por_uf_cidade(template.cod_uf, template.nome_cidade)
+        if template.cod_uf and template.nome_cidade else None
+    )
+
     criadas = 0
     for chassi in a_criar:
         it, modelo = chassis_atuais[chassi]
@@ -597,7 +623,7 @@ def sincronizar_espelho_com_separacao(assai_sep_id: int) -> dict:
             valor_saldo=float(it.valor_unitario_qpa or 0),
             pallet=0.0,
             peso=peso_kg,
-            rota=None, sub_rota=None,
+            rota=rota_calc, sub_rota=sub_rota_calc,
             observ_ped_1=None, roteirizacao=None,
             expedicao=expedicao_,
             agendamento=agendamento_,

@@ -239,7 +239,12 @@ def analise_por_subrota(data_inicio=None, data_fim=None, transportadora_id=None,
         CadastroSubRota,
         db.and_(
             Frete.uf_destino == CadastroSubRota.cod_uf,
-            Frete.cidade_destino == CadastroSubRota.nome_cidade,
+            # Match accent+case-insensitive: cidade_destino do Frete pode vir
+            # de varias fontes (Embarque/EmbarqueItem/Odoo) e nao tem padrao
+            # de caixa/acento — usamos f_unaccent + lower para alinhar com
+            # CadastroSubRota.nome_cidade (nome canonico do cadastro).
+            func.lower(func.f_unaccent(Frete.cidade_destino))
+                == func.lower(func.f_unaccent(CadastroSubRota.nome_cidade)),
             CadastroSubRota.ativa == True
         )
     ).filter(
@@ -696,7 +701,9 @@ def analise_dinamica(filtros=None, group_by='uf', incluir_transportadora=True, i
             CadastroSubRota,
             db.and_(
                 Frete.uf_destino == CadastroSubRota.cod_uf,
-                Frete.cidade_destino == CadastroSubRota.nome_cidade,
+                # Match accent+case-insensitive (mesmo padrao do JOIN principal)
+                func.lower(func.f_unaccent(Frete.cidade_destino))
+                    == func.lower(func.f_unaccent(CadastroSubRota.nome_cidade)),
                 CadastroSubRota.ativa == True
             )
         )
@@ -767,7 +774,9 @@ def analise_dinamica(filtros=None, group_by='uf', incluir_transportadora=True, i
                         CadastroSubRota,
                         db.and_(
                             Frete.uf_destino == CadastroSubRota.cod_uf,
-                            Frete.cidade_destino == CadastroSubRota.nome_cidade,
+                            # Match accent+case-insensitive
+                            func.lower(func.f_unaccent(Frete.cidade_destino))
+                                == func.lower(func.f_unaccent(CadastroSubRota.nome_cidade)),
                             CadastroSubRota.ativa == True
                         )
                     )

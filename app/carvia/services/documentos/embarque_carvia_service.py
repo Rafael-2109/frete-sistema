@@ -892,15 +892,20 @@ class EmbarqueCarViaService:
                 if cr:
                     rota = cr.rota
             if uf_lookup and cidade_lookup:
-                cidade_upper = cidade_lookup.upper()
-                # Match com LIKE substring (mesma logica da VIEW pedidos)
+                # Match accent+case-insensitive: alinhado com a busca canonica
+                # `buscar_sub_rota_por_uf_cidade` (app/carteira/utils/separacao_utils.py)
+                # e com a VIEW pedidos atualizada (f_unaccent). CarVia recebe
+                # cidades de varias fontes (endereco destino do cliente, embarque
+                # item) sem padrao de acento/caixa.
+                from app.utils.string_utils import remover_acentos
+                cidade_norm = remover_acentos(cidade_lookup)
                 candidatas = CadastroSubRota.query.filter(
                     CadastroSubRota.cod_uf == uf_lookup,
                     CadastroSubRota.ativa == True,  # noqa: E712
                 ).all()
                 for csr in candidatas:
-                    nome_csr = (csr.nome_cidade or '').upper()
-                    if nome_csr and nome_csr in cidade_upper:
+                    nome_csr = remover_acentos(csr.nome_cidade or '')
+                    if nome_csr and nome_csr in cidade_norm:
                         sub_rota = csr.sub_rota
                         break
 

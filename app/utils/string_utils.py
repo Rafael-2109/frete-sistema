@@ -92,6 +92,21 @@ def normalizar_nome_cidade(nome, rota=None):
     2. Se cidade SP -> SAO PAULO
     3. Se cidade RJ -> RIO DE JANEIRO
     4. Outros casos -> Remove acentos e converte para maiúsculo
+
+    ATENCAO: Esta funcao retorna UPPER sem acento ('SAO PAULO').
+    Para PADRONIZAR `Separacao.cidade_normalizada` com regras de negocio
+    (RED -> 'Guarulhos', mantendo acentos), use:
+        from app.utils.localizacao import LocalizacaoService
+        LocalizacaoService.normalizar_nome_cidade_com_regras(nome, rota)
+
+    Para BUSCAR sub_rota em CadastroSubRota (match accent/case-insensitive),
+    use a funcao canonica:
+        from app.carteira.utils.separacao_utils import buscar_sub_rota_por_uf_cidade
+        buscar_sub_rota_por_uf_cidade(cod_uf, nome_cidade)
+
+    Esta funcao continua usada por `frete_simulador.py` para casar com
+    `Cidade.nome` no banco (que esta em UPPER sem acento) — nao alterar
+    semantica sem migrar o consumidor.
     """
     if not nome:
         return None

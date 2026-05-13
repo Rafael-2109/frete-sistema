@@ -263,6 +263,14 @@ echo "Agente Artifacts 17: tabela agente_artifacts..."
 python scripts/migrations/2026_05_12_agente_artifacts.py \
     || echo "⚠️ Migration agente_artifacts falhou, continuando deploy..."
 
+# 18. VIEW pedidos v5 (2026-05-13): JOIN cidade x sub_rota CarVia (Parte 2A/2B)
+# passa a usar lower(f_unaccent(...)) — antes era apenas UPPER LIKE, que nao
+# tratava acento. Corrige pedidos CarVia ficando com sub_rota NULL em
+# lista_pedidos.html. Idempotente (DROP VIEW IF EXISTS + CREATE VIEW).
+echo "VIEW pedidos v5: f_unaccent no JOIN cidade x sub_rota CarVia..."
+python scripts/migrations/alterar_view_pedidos_union_carvia_v5.py \
+    || echo "⚠️ Migration alterar_view_pedidos_union_carvia_v5 falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

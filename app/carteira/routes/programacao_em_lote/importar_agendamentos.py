@@ -28,7 +28,11 @@ import traceback
 from app import db
 from app.carteira.models import CarteiraPrincipal
 from app.separacao.models import Separacao
-from app.carteira.utils.separacao_utils import calcular_peso_pallet_produto
+from app.carteira.utils.separacao_utils import (
+    calcular_peso_pallet_produto,
+    buscar_rota_por_uf,
+    buscar_sub_rota_por_uf_cidade,
+)
 from app.utils.lote_utils import gerar_lote_id
 from app.utils.text_utils import truncar_observacao
 from . import programacao_em_lote_bp
@@ -488,6 +492,20 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                 tipo_envio_correto = determinar_tipo_envio(num_pedido, produtos_lote, produtos_carteira)
                 logger.info(f"✅ tipo_envio determinado: {tipo_envio_correto} para pedido {num_pedido} (importação)")
 
+                # Resolver rota/sub_rota uma vez por pedido (mesma cidade/UF para todos
+                # os produtos do pedido). Mesmo padrao accent-safe usado nos outros
+                # pontos de criacao Nacom — garante que lista_pedidos.html nao exiba
+                # sub_rota vazia para agendamentos importados via Excel.
+                # Importacao Assai e sempre SP (cod_uf hardcoded em cod_uf='SP' abaixo).
+                # Cidade vem explicitamente do primeiro produto do pedido (todas as
+                # linhas da carteira do mesmo num_pedido tem a mesma cidade — evita
+                # depender de `item` herdado do loop de produtos_carteira acima).
+                primeiro_item = produtos_com_saldo[0]['item']
+                rota_calc = buscar_rota_por_uf('SP')
+                sub_rota_calc = buscar_sub_rota_por_uf_cidade(
+                    'SP', primeiro_item.nome_cidade or ''
+                )
+
                 # Criar uma Separacao para cada produto com saldo
                 for produto_info in produtos_com_saldo:
                     item = produto_info['item']
@@ -511,6 +529,8 @@ def _processar_registro_agendamento(cnpj, protocolo, confirmado, data_agendament
                         agendamento_confirmado=confirmado,
                         agendamento=data_agendamento if confirmado else None,
                         expedicao=data_expedicao if confirmado else None,
+                        rota=rota_calc,
+                        sub_rota=sub_rota_calc,
                         tipo_envio=tipo_envio_correto,  # 🔧 CORRIGIDO: Usa determinar_tipo_envio()
                         status='ABERTO',  # Status para agendamentos importados
                         sincronizado_nf=False,

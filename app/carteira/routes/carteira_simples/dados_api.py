@@ -92,7 +92,13 @@ def obter_dados():
             CadastroSubRota,
             and_(
                 CarteiraPrincipal.estado == CadastroSubRota.cod_uf,
-                CarteiraPrincipal.municipio == CadastroSubRota.nome_cidade
+                # Match accent+case-insensitive: nome_cidade em Separacao/CarteiraPrincipal
+                # vem despadronizado do Odoo/CSV ("São Paulo", "SAO PAULO", "sao paulo"),
+                # enquanto CadastroSubRota.nome_cidade tem o nome canonico do cadastro.
+                # f_unaccent (funcao SQL pura em scripts/migrations/remover_extensao_unaccent.sql)
+                # + lower() garantem match independente de acento/caixa.
+                func.lower(func.f_unaccent(CarteiraPrincipal.municipio))
+                    == func.lower(func.f_unaccent(CadastroSubRota.nome_cidade))
             )
         ).filter(
             CarteiraPrincipal.ativo == True,
@@ -312,7 +318,9 @@ def obter_dados():
             CadastroSubRota,
             and_(
                 Separacao.cod_uf == CadastroSubRota.cod_uf,
-                Separacao.nome_cidade == CadastroSubRota.nome_cidade
+                # Match accent+case-insensitive (ver comentario no JOIN de CarteiraPrincipal)
+                func.lower(func.f_unaccent(Separacao.nome_cidade))
+                    == func.lower(func.f_unaccent(CadastroSubRota.nome_cidade))
             )
         ).filter(
             and_(
