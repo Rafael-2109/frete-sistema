@@ -7,11 +7,15 @@ import pytest
 from app import create_app, db
 from app.motos_assai.models import (
     AssaiCd, AssaiLoja, AssaiModelo, AssaiPedidoVenda, AssaiCarregamento,
-    CARREGAMENTO_STATUS_EM_CARREGAMENTO,
+    AssaiMoto,
+    CARREGAMENTO_STATUS_EM_CARREGAMENTO, CARREGAMENTO_STATUS_FINALIZADO,
     PEDIDO_STATUS_ABERTO,
+    EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
 )
+from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
 from app.motos_assai.services.carregamento_service import (
-    criar_carregamento, CarregamentoValidationError,
+    criar_carregamento, escanear_carregamento_item,
+    CarregamentoValidationError, CarregamentoConflictError, CarregamentoStateError,
 )
 
 
@@ -83,3 +87,69 @@ def test_criar_carregamento_dois_paralelos_mesma_loja_OK(setup_pedido_loja):
 
     assert car1.id != car2.id
     assert car1.status == car2.status == CARREGAMENTO_STATUS_EM_CARREGAMENTO
+
+
+# ============================================================
+# Task 2: escanear_carregamento_item (lock pessimista S3=c)
+# ============================================================
+
+@pytest.fixture
+def chassi_disponivel(setup_pedido_loja):
+    pedido, loja, modelo = setup_pedido_loja
+    moto = AssaiMoto(chassi='TESTC001', modelo_id=modelo.id, cor='Preto')
+    db.session.add(moto)
+    db.session.flush()
+    emitir_evento('TESTC001', EVENTO_ESTOQUE, operador_id=1)
+    emitir_evento('TESTC001', EVENTO_MONTADA, operador_id=1)
+    emitir_evento('TESTC001', EVENTO_DISPONIVEL, operador_id=1)
+    db.session.commit()
+    return moto
+
+
+def test_escanear_chassi_disponivel_sucesso(setup_pedido_loja, chassi_disponivel):
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.flush()
+
+    item = escanear_carregamento_item(car.id, 'TESTC001', operador_id=1)
+    db.session.commit()
+
+    assert item.id is not None
+    assert item.carregamento_id == car.id
+    assert item.chassi == 'TESTC001'
+    assert item.escaneado_por_id == 1
+    # A1: NAO emite evento durante escaneio (apenas no finalize)
+    assert status_efetivo('TESTC001') == EVENTO_DISPONIVEL
+
+
+def test_escanear_chassi_inexistente_falha(setup_pedido_loja):
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.flush()
+
+    with pytest.raises(CarregamentoValidationError, match='Chassi'):
+        escanear_carregamento_item(car.id, 'INEXISTENTE', operador_id=1)
+
+
+def test_escanear_chassi_em_outro_carregamento_ativo_falha(setup_pedido_loja, chassi_disponivel):
+    """S3=c: chassi nao pode estar em 2 carregamentos ativos."""
+    pedido, loja, _ = setup_pedido_loja
+    car1 = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.flush()
+    escanear_carregamento_item(car1.id, 'TESTC001', operador_id=1)
+    db.session.commit()
+
+    car2 = criar_carregamento(pedido.id, loja.id, operador_id=2)
+    db.session.flush()
+    with pytest.raises(CarregamentoConflictError, match='outro carregamento'):
+        escanear_carregamento_item(car2.id, 'TESTC001', operador_id=2)
+
+
+def test_escanear_carregamento_finalizado_falha(setup_pedido_loja, chassi_disponivel):
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    car.status = CARREGAMENTO_STATUS_FINALIZADO
+    db.session.commit()
+
+    with pytest.raises(CarregamentoStateError, match='FINALIZADO'):
+        escanear_carregamento_item(car.id, 'TESTC001', operador_id=1)
