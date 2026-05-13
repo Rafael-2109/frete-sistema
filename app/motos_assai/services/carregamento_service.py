@@ -12,6 +12,7 @@ from app.motos_assai.models import (
     CARREGAMENTO_STATUS_FINALIZADO, CARREGAMENTO_STATUS_CANCELADO,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
     SEPARACAO_STATUS_CARREGADA,
+    EVENTO_SEPARADA, EVENTO_DISPONIVEL, EVENTO_CARREGADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
 from app.utils.timezone import agora_brasil_naive
@@ -159,6 +160,77 @@ def escanear_carregamento_item(carregamento_id, chassi, operador_id):
     db.session.add(item)
     db.session.flush()
     return item
+
+
+def cancelar_carregamento_item(item_id, operador_id):
+    """Remove item do carregamento (apenas durante EM_CARREGAMENTO).
+
+    A1: NAO emite evento (estado nunca mudou).
+
+    Args:
+        item_id: ID do AssaiCarregamentoItem
+        operador_id: usuario que cancelou (para audit log futuro)
+
+    Raises:
+        CarregamentoValidationError: item nao existe
+        CarregamentoStateError: carregamento ja FINALIZADO ou CANCELADO
+    """
+    item = AssaiCarregamentoItem.query.get(item_id)
+    if not item:
+        raise CarregamentoValidationError(f'Item {item_id} nao encontrado')
+
+    car = item.carregamento
+    if car.status != CARREGAMENTO_STATUS_EM_CARREGAMENTO:
+        raise CarregamentoStateError(
+            f'Carregamento {car.id} esta {car.status} — nao e possivel cancelar item. '
+            f'Use alterar_carregamento (S6=a) para reabrir.'
+        )
+
+    db.session.delete(item)
+    db.session.flush()
+
+
+def cancelar_carregamento(carregamento_id, motivo, operador_id):
+    """Cancela carregamento. Comportamento DEPENDE do status (S5).
+
+    - EM_CARREGAMENTO: items deletam (cascata FK), chassis voltam ao estado anterior
+      (sem mudanca de evento — A1).
+    - FINALIZADO: chassis mantem SEPARADA na sep alvo (S5=b — nao desfaz adicoes).
+      Apenas marca carregamento como CANCELADO. Sep pode ser cancelada separadamente.
+
+    Args:
+        carregamento_id: ID do carregamento
+        motivo: justificativa (obrigatorio, min 3 chars)
+        operador_id: usuario que cancelou
+
+    Raises:
+        CarregamentoValidationError: carregamento nao existe ou motivo vazio
+        CarregamentoStateError: ja CANCELADO
+    """
+    if not motivo or len(motivo.strip()) < 3:
+        raise CarregamentoValidationError('Motivo obrigatorio (min 3 chars)')
+
+    car = AssaiCarregamento.query.get(carregamento_id)
+    if not car:
+        raise CarregamentoValidationError(f'Carregamento {carregamento_id} nao encontrado')
+    if car.status == CARREGAMENTO_STATUS_CANCELADO:
+        raise CarregamentoStateError(f'Carregamento {carregamento_id} ja CANCELADO')
+
+    # S5: comportamento depende do status atual
+    if car.status == CARREGAMENTO_STATUS_EM_CARREGAMENTO:
+        # Cascata FK ON DELETE CASCADE remove items automaticamente.
+        # A1: nenhum evento foi emitido durante escaneio, entao nao ha o que reverter.
+        AssaiCarregamentoItem.query.filter_by(carregamento_id=car.id).delete()
+    elif car.status == CARREGAMENTO_STATUS_FINALIZADO:
+        # S5=b: chassis MANTEM SEPARADA na sep alvo. Nao desfaz adicoes.
+        # Sep nao e tocada (pode ser cancelada separadamente via cancelar_separacao).
+        pass
+
+    car.status = CARREGAMENTO_STATUS_CANCELADO
+    car.cancelado_em = agora_brasil_naive()
+    car.cancelado_por_id = operador_id
+    car.motivo_cancelamento = motivo
+    db.session.flush()
 
 
 # ============================================================
@@ -322,7 +394,65 @@ def finalizar_carregamento(carregamento_id, operador_id):
         sep_alvo = max(seps_ativas, key=lambda s: _calcular_count_em_comum(s, chassis_car))
         # NOTA: status final atribuido na Fase 4
 
-    # === FASES 2-8: implementadas em Tasks 6-12 ===
+    # === FASE 2: sobrescrever sep alvo (Q10) ===
+    items_atuais = AssaiSeparacaoItem.query.filter_by(separacao_id=sep_alvo.id).all()
+    chassis_atuais = {it.chassi for it in items_atuais}
+    chassis_novos = set(chassis_car)
+
+    # 2A — Chassis a remover (na sep mas nao no carregamento)
+    chassis_remover = chassis_atuais - chassis_novos
+    for chassi in chassis_remover:
+        item = next(it for it in items_atuais if it.chassi == chassi)
+        valor_unit_remover = item.valor_unitario_qpa
+        db.session.delete(item)
+
+        # S2=b: tentar realocar em outra sep com saldo
+        moto = AssaiMoto.query.filter_by(chassi=chassi).first()
+        outras_seps = (AssaiSeparacao.query
+                       .filter(
+                           AssaiSeparacao.pedido_id == car.pedido_id,
+                           AssaiSeparacao.loja_id == car.loja_id,
+                           AssaiSeparacao.id != sep_alvo.id,
+                           AssaiSeparacao.status.in_([SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA]),
+                       )
+                       .all())
+
+        sep_destino = None
+        for sep_cand in outras_seps:
+            saldo = _saldo_pendente_modelo(sep_cand.id, moto.modelo_id)
+            if saldo > 0:
+                sep_destino = sep_cand
+                break
+
+        if sep_destino:
+            db.session.add(AssaiSeparacaoItem(
+                separacao_id=sep_destino.id, chassi=chassi,
+                modelo_id=moto.modelo_id,
+                valor_unitario_qpa=valor_unit_remover,
+            ))
+            emitir_evento(chassi, EVENTO_SEPARADA, operador_id=operador_id,
+                          observacao=f'realocado pelo Carregamento {car.id} (S2=b)')
+        else:
+            # R1.1 fallback: vai DISPONIVEL
+            emitir_evento(chassi, EVENTO_DISPONIVEL, operador_id=operador_id,
+                          observacao=f'expulso pelo Carregamento {car.id} (sem sep destino)')
+
+    # 2B — Chassis a adicionar (no carregamento mas nao na sep)
+    chassis_adicionar = chassis_novos - chassis_atuais
+    for chassi in chassis_adicionar:
+        moto = AssaiMoto.query.filter_by(chassi=chassi).first()
+        # CR-6: emite SEPARADA agora; CARREGADA emitido na Fase 4 (loop unico).
+        # Resultado: chassis adicionados pegam (SEPARADA, CARREGADA);
+        # chassis que ja estavam na sep pegam apenas CARREGADA.
+        db.session.add(AssaiSeparacaoItem(
+            separacao_id=sep_alvo.id, chassi=chassi,
+            modelo_id=moto.modelo_id,
+            valor_unitario_qpa=_resolver_valor_unitario(car, modelo_id=moto.modelo_id),
+        ))
+        emitir_evento(chassi, EVENTO_SEPARADA, operador_id=operador_id,
+                      observacao=f'adicionado pelo Carregamento {car.id}')
+
+    # === FASES 3-8: implementadas em Tasks 7-12 ===
     # Por ora, marcar sep como CARREGADA + finalizar carregamento (esqueleto)
     sep_alvo.status = SEPARACAO_STATUS_CARREGADA
     car.separacao_id = sep_alvo.id
