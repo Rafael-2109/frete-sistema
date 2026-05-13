@@ -199,6 +199,31 @@ def importar_nf_qpa(
     # Match (apos eventual ajuste — se ajuste OK, todos chassis estao na sep alvo
     # e _calcular_match retorna BATEU. Senao, fluxo original).
     _calcular_match(nf, importada_por_id)
+
+    # Match reverso CCe (2026-05-13): aplicar CCes que chegaram antes desta NF.
+    # Se houver alteracao de chassis pelas CCes, _calcular_match re-roda dentro
+    # de aplicar_correcao_cce para atualizar status_match.
+    try:
+        from app.motos_assai.services.cce_service import (
+            aplicar_cce_pendentes_para_nf,
+        )
+        resultados_cce = aplicar_cce_pendentes_para_nf(nf, importada_por_id)
+        if resultados_cce:
+            import logging as _log
+            _log.getLogger(__name__).info(
+                'NF %s: %d CCe(s) pendentes aplicadas via match reverso: %s',
+                nf.numero, len(resultados_cce),
+                [(r['cce_id'], r['status_final']) for r in resultados_cce],
+            )
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).exception(
+            'aplicar_cce_pendentes_para_nf FALHOU para NF %s: %s — '
+            'NF importada normalmente, CCes ficam PENDENTE para acao manual',
+            nf.numero, e,
+        )
+        # Nao bloqueia importacao da NF — CCes seguem como PENDENTE.
+
     db.session.commit()
 
     # Sincronizar EntregaMonitorada APOS commit — garante que a NF ja esta

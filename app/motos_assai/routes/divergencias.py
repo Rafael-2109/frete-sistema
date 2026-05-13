@@ -363,7 +363,6 @@ def divergencias_upload_cce(div_id):
         AssaiDivergencia,
         DIVERGENCIA_TIPO_NF_CHASSI_FORA_CARREGAMENTO,
         DIVERGENCIA_TIPO_CHASSI_OUTRA_LOJA,
-        DIVERGENCIA_RESOLUCAO_CCE,
     )
 
     if not current_user.is_authenticated:
@@ -411,100 +410,61 @@ def divergencias_upload_cce(div_id):
         if not pdf_bytes:
             return jsonify({'ok': False, 'erro': 'PDF vazio'}), 400
 
-        # 1. Parser deterministico
-        from app.motos_assai.services.parsers.cce_pdf_extractor import (
-            extrair_cce, CceParseError, CONFIANCA_LIMIAR,
+        # Delega para cce_service — fluxo unificado entre upload via divergencia
+        # e upload avulso (2026-05-13).
+        # - Registra AssaiCce (idempotente via UNIQUE protocolo_cce)
+        # - Resolve NF (chave_44 ou numero), aplica chassis se tipo=CHASSI
+        # - Fecha divergencia (tipo=CCE) ao final
+        from app.motos_assai.services.cce_service import (
+            registrar_cce, CceServiceError,
         )
-        parser_usado = 'DETERMINISTICO'
+
         try:
-            dados = extrair_cce(pdf_bytes)
-        except CceParseError as e:
-            # Parser falhou criticamente — pular para LLM
-            import logging
-            logging.getLogger(__name__).info(
-                'cce_pdf_extractor falhou (%s) — escalando para LLM', e,
+            resultado = registrar_cce(
+                pdf_bytes=pdf_bytes,
+                nome_arquivo=pdf_file.filename or 'cce.pdf',
+                operador_id=current_user.id,
+                divergencia_id=div_id,
             )
-            dados = {'confianca': 0.0, 'chassis_corrigidos': []}
+        except CceServiceError as e:
+            return jsonify({'ok': False, 'erro': str(e)}), 400
 
-        # 2. Fallback LLM se confianca baixa.
-        # Code review fix M2 (2026-05-13): `<` exclui o limite exato (0.80),
-        # mas confianca EXATAMENTE no limiar (heuristica deu pontuacao maxima
-        # via fallback) deve acionar LLM tambem — borderline e arriscado.
-        # Tornado inclusive (`<=`).
-        if dados.get('confianca', 0.0) <= CONFIANCA_LIMIAR:
-            try:
-                from app.motos_assai.services.parsers.cce_llm_fallback import (
-                    extrair_cce_via_llm, CceLlmFallbackError,
+        # Status APLICADA = chassis trocados E divergencia fechada com sucesso
+        if resultado['status'] != 'APLICADA':
+            tipo = resultado.get('tipo_correcao') or 'OUTRO'
+            # Tipos IGNORADA (DUPLICATAS/ENDERECO) — registrado mas nao resolve divergencia
+            if tipo in ('DUPLICATAS', 'ENDERECO'):
+                erro = (
+                    f'CCe e de tipo {tipo} — nao altera chassis. '
+                    f'A divergencia continua aberta. '
+                    f'{"Aplique manualmente no financeiro." if tipo == "DUPLICATAS" else "Atualize o endereco manualmente."}'
                 )
-                dados_llm = extrair_cce_via_llm(pdf_bytes)
-                # LLM ganhou confianca?
-                if dados_llm.get('confianca', 0) >= dados.get('confianca', 0):
-                    dados = dados_llm
-                    parser_usado = dados_llm.get('parser_usado', 'LLM')
-            except CceLlmFallbackError as e:
-                import logging
-                logging.getLogger(__name__).warning(
-                    'cce_llm_fallback falhou: %s — usando dados deterministicos parciais', e,
+            elif resultado['status'] == 'PENDENTE':
+                erro = (
+                    'CCe registrada mas a NF referenciada nao corresponde a esta '
+                    'divergencia. Verifique se PDF e da NF correta.'
                 )
-
-        # 3. Validar chassis_corrigidos
-        chassis_corrigidos = dados.get('chassis_corrigidos') or []
-        if not chassis_corrigidos:
+            else:
+                erro = resultado.get('mensagem') or 'CCe nao aplicada.'
             return jsonify({
                 'ok': False,
-                'erro': (
-                    'CCe nao tem chassis corrigidos identificados. '
-                    f'Confianca parser: {dados.get("confianca", 0):.2f}. '
-                    'Verifique o PDF ou aplique manualmente.'
-                ),
-                'confianca': dados.get('confianca', 0),
+                'erro': erro,
+                'cce_id': resultado['cce_id'],
+                'status': resultado['status'],
+                'tipo_correcao': tipo,
+                'confianca': resultado.get('confianca', 0),
             }), 400
-
-        # 4. Aplicar correcao na NF (S16: registra vinculo historico antes; S21+A14: re-roda match)
-        from app.motos_assai.services.cancelamento_nf_service import (
-            aplicar_correcao_cce, CancelamentoValidationError,
-        )
-        from app.motos_assai.services.divergencia_service import (
-            resolver_divergencia, DivergenciaError,
-        )
-
-        try:
-            aplicar_correcao_cce(
-                nf_id=div.nf_id,
-                chassis_corrigidos=chassis_corrigidos,
-                numero_cce=dados.get('numero_cce') or 'CCE-SEM-NUMERO',
-                operador_id=current_user.id,
-            )
-        except CancelamentoValidationError as e:
-            db.session.rollback()
-            return jsonify({'ok': False, 'erro': str(e)}), 400
-
-        # 5. Marca divergencia como resolvida tipo=CCE (re-roda _calcular_match via S21)
-        try:
-            resolver_divergencia(
-                div_id=div_id,
-                tipo_resolucao=DIVERGENCIA_RESOLUCAO_CCE,
-                observacao=(
-                    f'CCe {dados.get("numero_cce") or "(sem numero)"} aplicada — '
-                    f'{len(chassis_corrigidos)} chassis trocados (parser={parser_usado})'
-                ),
-                operador_id=current_user.id,
-            )
-        except DivergenciaError as e:
-            db.session.rollback()
-            return jsonify({'ok': False, 'erro': str(e)}), 400
-
-        db.session.commit()
 
         return jsonify({
             'ok': True,
-            'numero_cce': dados.get('numero_cce'),
-            'numero_nf_referenciada': dados.get('numero_nf_referenciada'),
-            'chassis_trocados': len(chassis_corrigidos),
-            'chassis_corrigidos_aplicados': chassis_corrigidos,
-            'confianca': dados.get('confianca', 0),
-            'parser_usado': parser_usado,
+            'cce_id': resultado['cce_id'],
+            'status': resultado['status'],
+            'chassis_trocados': len(resultado.get('chassis_aplicados') or []),
+            'chassis_corrigidos_aplicados': resultado.get('chassis_aplicados') or [],
+            'confianca': resultado.get('confianca', 0),
+            'parser_usado': resultado.get('parser_usado'),
             'divergencia_id': div_id,
+            'duplicada': resultado.get('duplicada', False),
         })
 
     except Exception as e:

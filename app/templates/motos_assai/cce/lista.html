@@ -1,0 +1,156 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="fas fa-edit"></i> Cartas de Correção (CCe)</h2>
+  <a href="{{ url_for('motos_assai.cce_upload') }}" class="btn btn-primary">
+    <i class="fas fa-upload"></i> Importar CCe
+  </a>
+</div>
+
+<section class="row g-3 mb-3">
+  <div class="col-md-2"><div class="card border-0 shadow-sm"><div class="card-body py-2">
+    <h6 class="card-subtitle text-muted small">Total</h6>
+    <p class="h4 mb-0">{{ stats.total }}</p>
+  </div></div></div>
+  <div class="col-md-2"><div class="card border-0 shadow-sm"><div class="card-body py-2">
+    <h6 class="card-subtitle text-muted small">Aplicadas</h6>
+    <p class="h4 mb-0 text-success">{{ stats.aplicadas }}</p>
+  </div></div></div>
+  <div class="col-md-2"><div class="card border-0 shadow-sm"><div class="card-body py-2">
+    <h6 class="card-subtitle text-muted small">Pendentes</h6>
+    <p class="h4 mb-0 text-info">{{ stats.pendentes }}</p>
+  </div></div></div>
+  <div class="col-md-2"><div class="card border-0 shadow-sm"><div class="card-body py-2">
+    <h6 class="card-subtitle text-muted small">Ignoradas</h6>
+    <p class="h4 mb-0 text-secondary">{{ stats.ignoradas }}</p>
+  </div></div></div>
+  <div class="col-md-2"><div class="card border-0 shadow-sm"><div class="card-body py-2">
+    <h6 class="card-subtitle text-muted small">Erros</h6>
+    <p class="h4 mb-0 text-danger">{{ stats.erros }}</p>
+  </div></div></div>
+</section>
+
+<form method="GET" class="card p-3 mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Status</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        <option value="PENDENTE" {% if status_filtro == 'PENDENTE' %}selected{% endif %}>PENDENTE</option>
+        <option value="APLICADA" {% if status_filtro == 'APLICADA' %}selected{% endif %}>APLICADA</option>
+        <option value="IGNORADA" {% if status_filtro == 'IGNORADA' %}selected{% endif %}>IGNORADA</option>
+        <option value="ERRO" {% if status_filtro == 'ERRO' %}selected{% endif %}>ERRO</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Tipo</label>
+      <select name="tipo" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        <option value="CHASSI" {% if tipo_filtro == 'CHASSI' %}selected{% endif %}>CHASSI</option>
+        <option value="DUPLICATAS" {% if tipo_filtro == 'DUPLICATAS' %}selected{% endif %}>DUPLICATAS</option>
+        <option value="ENDERECO" {% if tipo_filtro == 'ENDERECO' %}selected{% endif %}>ENDERECO</option>
+        <option value="OUTRO" {% if tipo_filtro == 'OUTRO' %}selected{% endif %}>OUTRO</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small mb-1">Tem NF?</label>
+      <select name="tem_nf" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        <option value="sim" {% if tem_nf_filtro in ['sim','true','1'] %}selected{% endif %}>Sim</option>
+        <option value="nao" {% if tem_nf_filtro in ['nao','false','0'] %}selected{% endif %}>Não</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small mb-1">Buscar</label>
+      <input type="text" name="q" value="{{ busca }}" class="form-control form-control-sm"
+             placeholder="protocolo / chave / nº NF" />
+    </div>
+    <div class="col-md-1">
+      <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+        <i class="fas fa-search"></i>
+      </button>
+    </div>
+  </div>
+</form>
+
+<div class="table-responsive">
+<table class="table table-sm table-hover align-middle">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Protocolo</th>
+      <th>Tipo</th>
+      <th>NF Ref.</th>
+      <th>Status</th>
+      <th>Tem NF?</th>
+      <th>Chassis</th>
+      <th>Origem</th>
+      <th>Criada em</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in cces %}
+    <tr>
+      <td>{{ c.id }}</td>
+      <td class="font-monospace small text-truncate" style="max-width: 200px;" title="{{ c.protocolo_cce }}">
+        {{ c.protocolo_cce }}
+      </td>
+      <td>
+        {% if c.tipo_correcao == 'CHASSI' %}
+          <span class="badge bg-primary">CHASSI</span>
+        {% elif c.tipo_correcao == 'DUPLICATAS' %}
+          <span class="badge bg-warning text-dark">DUPLICATAS</span>
+        {% elif c.tipo_correcao == 'ENDERECO' %}
+          <span class="badge bg-info">ENDERECO</span>
+        {% else %}
+          <span class="badge bg-secondary">OUTRO</span>
+        {% endif %}
+      </td>
+      <td>{{ c.numero_nf_referenciada }}</td>
+      <td>
+        {% if c.status == 'APLICADA' %}
+          <span class="badge bg-success">APLICADA</span>
+        {% elif c.status == 'PENDENTE' %}
+          <span class="badge bg-info">PENDENTE</span>
+        {% elif c.status == 'IGNORADA' %}
+          <span class="badge bg-secondary">IGNORADA</span>
+        {% else %}
+          <span class="badge bg-danger">ERRO</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if c.tem_nf %}
+          <i class="fas fa-check text-success"></i>
+        {% else %}
+          <i class="fas fa-clock text-muted" title="Aguardando NF chegar"></i>
+        {% endif %}
+      </td>
+      <td>
+        {% if c.chassis_aplicados %}
+          <span class="badge bg-light text-dark">{{ c.chassis_aplicados|length }}</span>
+        {% else %}-{% endif %}
+      </td>
+      <td class="small">
+        {% if c.divergencia_origem_id %}
+          <span title="Veio do botão CCe em uma divergência">div #{{ c.divergencia_origem_id }}</span>
+        {% else %}
+          <span class="text-muted">avulsa</span>
+        {% endif %}
+      </td>
+      <td class="small">{{ c.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td>
+        <a href="{{ url_for('motos_assai.cce_detalhe', cce_id=c.id) }}"
+           class="btn btn-sm btn-outline-secondary">
+          <i class="fas fa-eye"></i>
+        </a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="10" class="text-center text-muted py-4">Nenhuma CCe encontrada com esses filtros.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

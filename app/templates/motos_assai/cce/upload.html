@@ -1,0 +1,40 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>
+    <i class="fas fa-edit"></i> Importar Carta(s) de Correção (CCe)
+  </h2>
+  <a href="{{ url_for('motos_assai.cce_lista') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar à lista
+  </a>
+</div>
+
+<div class="alert alert-info">
+  <strong><i class="fas fa-info-circle"></i> Como funciona:</strong>
+  <ul class="mb-0 small">
+    <li>Você pode importar a CCe <strong>antes ou depois</strong> da NF correspondente.</li>
+    <li>Se a NF já está no sistema, a CCe é aplicada na hora (chassis trocados, divergências fechadas).</li>
+    <li>Se a NF <strong>ainda não chegou</strong>, a CCe fica como <span class="badge bg-secondary">PENDENTE</span>. Quando a NF for importada, ela é aplicada automaticamente.</li>
+    <li>CCe de <strong>duplicatas</strong> ou <strong>endereço</strong> é registrada como <span class="badge bg-secondary">IGNORADA</span> (não altera chassis — ação manual necessária).</li>
+  </ul>
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="card p-4 col-md-8">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.pdfs.label(class="form-label fw-bold") }}
+    {{ form.pdfs(class="form-control", accept="application/pdf", multiple=true) }}
+    <div class="form-text">
+      Selecione <strong>1 ou mais PDFs</strong> de Carta de Correção
+      (segure <kbd>Ctrl</kbd> / <kbd>Cmd</kbd> para selecionar vários).
+    </div>
+    {% if form.pdfs.errors %}
+      {% for e in form.pdfs.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    {% endif %}
+  </div>
+  <button type="submit" class="btn btn-primary">
+    <i class="fas fa-upload"></i> Importar CCe(s)
+  </button>
+</form>
+{% endblock %}

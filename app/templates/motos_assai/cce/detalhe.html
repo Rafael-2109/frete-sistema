@@ -1,0 +1,239 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="fas fa-edit"></i> CCe #{{ cce.id }}</h2>
+  <a href="{{ url_for('motos_assai.cce_lista') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="fas fa-arrow-left"></i> Voltar à lista
+  </a>
+</div>
+
+<div class="row g-3">
+  <!-- Card status principal -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted">Status</h6>
+        <p class="h3 mt-1">
+          {% if cce.status == 'APLICADA' %}
+            <span class="badge bg-success">APLICADA</span>
+          {% elif cce.status == 'PENDENTE' %}
+            <span class="badge bg-info">PENDENTE</span>
+          {% elif cce.status == 'IGNORADA' %}
+            <span class="badge bg-secondary">IGNORADA</span>
+          {% else %}
+            <span class="badge bg-danger">ERRO</span>
+          {% endif %}
+        </p>
+        <p class="mb-0 small text-muted">
+          Tipo: <strong>{{ cce.tipo_correcao }}</strong><br>
+          Tem NF: {% if cce.tem_nf %}<i class="fas fa-check text-success"></i> Sim{% else %}<i class="fas fa-times text-muted"></i> Não{% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card identidade -->
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted mb-2">Identidade SEFAZ</h6>
+        <dl class="row mb-0 small">
+          <dt class="col-sm-3">Protocolo</dt>
+          <dd class="col-sm-9 font-monospace">{{ cce.protocolo_cce }}</dd>
+          <dt class="col-sm-3">Chave NFe</dt>
+          <dd class="col-sm-9 font-monospace">{{ cce.chave_nfe }}</dd>
+          <dt class="col-sm-3">NF referenciada</dt>
+          <dd class="col-sm-9">{{ cce.numero_nf_referenciada }} (sequência {{ cce.sequencia_cce }})</dd>
+          <dt class="col-sm-3">Número CCe</dt>
+          <dd class="col-sm-9">{{ cce.numero_cce or '-' }}</dd>
+          <dt class="col-sm-3">Data emissão</dt>
+          <dd class="col-sm-9">{{ cce.data_emissao_cce.strftime('%d/%m/%Y') if cce.data_emissao_cce else '-' }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- NF vinculada -->
+  <div class="col-md-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted mb-2">
+          <i class="fas fa-file-invoice"></i> NF Q.P.A. vinculada
+        </h6>
+        {% if cce.nf %}
+          <p class="mb-1">
+            NF <strong>{{ cce.nf.numero }}</strong> — série {{ cce.nf.serie }} —
+            <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=cce.nf.id) }}">
+              abrir detalhe <i class="fas fa-external-link-alt small"></i>
+            </a>
+          </p>
+          <p class="mb-0 small">
+            Status match: <strong>{{ cce.nf.status_match }}</strong>
+            {% if cce.aplicada_em %}
+              · Aplicada em {{ cce.aplicada_em.strftime('%d/%m/%Y %H:%M') }}
+            {% endif %}
+          </p>
+        {% elif nf_atual %}
+          <div class="alert alert-warning mb-0">
+            <strong>NF encontrada agora:</strong>
+            <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf_atual.id) }}">
+              NF {{ nf_atual.numero }}
+            </a> existe mas a CCe ainda não foi aplicada.
+            <form method="POST" action="{{ url_for('motos_assai.cce_tentar_aplicar', cce_id=cce.id) }}"
+                  class="d-inline-block ms-2">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-warning" type="submit">
+                <i class="fas fa-play"></i> Aplicar agora
+              </button>
+            </form>
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">
+            <i class="fas fa-clock"></i> NF ainda não foi importada no sistema.
+            A CCe será aplicada automaticamente quando ela chegar.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Conteúdo da correção -->
+  {% if cce.tipo_correcao == 'CHASSI' %}
+  <div class="col-md-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted mb-2">
+          <i class="fas fa-exchange-alt"></i> Chassis trocados
+        </h6>
+        {% set detalhes = (cce.dados_parsed.get('chassis_detalhes') or []) if cce.dados_parsed else [] %}
+        {% if detalhes %}
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Modelo</th>
+                <th>Chassi antigo</th>
+                <th>→</th>
+                <th>Chassi novo</th>
+                <th>Cor antiga</th>
+                <th>Cor nova</th>
+                <th>Aplicado?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set aplicados = cce.chassis_aplicados or [] %}
+              {% set aplicados_set = aplicados | map('first') | list %}
+              {% for d in detalhes %}
+              <tr>
+                <td><strong>{{ d.modelo }}</strong></td>
+                <td class="font-monospace">{{ d.chassi_antigo }}</td>
+                <td class="text-muted">→</td>
+                <td class="font-monospace">{{ d.chassi_novo }}</td>
+                <td>{{ d.cor_antiga or '-' }}</td>
+                <td>{{ d.cor_nova or '-' }}</td>
+                <td>
+                  {% if d.chassi_antigo in aplicados_set %}
+                    <i class="fas fa-check text-success"></i>
+                  {% else %}
+                    <i class="fas fa-minus text-muted"></i>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted mb-0">Sem detalhes de chassi disponíveis.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% elif cce.tipo_correcao == 'DUPLICATAS' %}
+  <div class="col-md-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted mb-2"><i class="fas fa-money-bill"></i> Duplicatas corrigidas</h6>
+        {% set duplicatas = (cce.dados_parsed.get('duplicatas') or []) if cce.dados_parsed else [] %}
+        {% if duplicatas %}
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr><th>Número</th><th>Vencimento</th><th>Valor</th></tr>
+            </thead>
+            <tbody>
+              {% for d in duplicatas %}
+              <tr>
+                <td>{{ d.numero }}</td>
+                <td>{{ d.vencimento }}</td>
+                <td>R$ {{ d.valor }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+        <div class="alert alert-warning mt-2 mb-0 small">
+          <i class="fas fa-exclamation-triangle"></i> CCe de duplicatas <strong>não altera chassis</strong>.
+          Aplique a correção manualmente no financeiro.
+        </div>
+      </div>
+    </div>
+  </div>
+  {% elif cce.tipo_correcao == 'ENDERECO' %}
+  <div class="col-md-12">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted mb-2"><i class="fas fa-map-marker-alt"></i> Endereço corrigido</h6>
+        <p class="mb-2">{{ (cce.dados_parsed.get('endereco_corrigido') if cce.dados_parsed else '') or '-' }}</p>
+        <div class="alert alert-warning mb-0 small">
+          <i class="fas fa-exclamation-triangle"></i> CCe de endereço <strong>não altera chassis</strong>.
+          Atualize o endereço do destinatário manualmente.
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Metadados parser + observação -->
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted mb-2">Parser</h6>
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4">Usado</dt>
+          <dd class="col-sm-8">{{ cce.parser_usado or '-' }}</dd>
+          <dt class="col-sm-4">Formato</dt>
+          <dd class="col-sm-8">{{ cce.formato_detectado or '-' }}</dd>
+          <dt class="col-sm-4">Confiança</dt>
+          <dd class="col-sm-8">
+            {% if cce.confianca_parser %}{{ '%.2f' % cce.confianca_parser }}{% else %}-{% endif %}
+          </dd>
+          <dt class="col-sm-4">Arquivo</dt>
+          <dd class="col-sm-8 small">{{ cce.nome_arquivo_original or '-' }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="card-subtitle text-muted mb-2">Auditoria</h6>
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4">Criada em</dt>
+          <dd class="col-sm-8">{{ cce.criado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% if cce.aplicada_em %}
+          <dt class="col-sm-4">Aplicada em</dt>
+          <dd class="col-sm-8">{{ cce.aplicada_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+          {% endif %}
+          {% if cce.divergencia_origem_id %}
+          <dt class="col-sm-4">Origem</dt>
+          <dd class="col-sm-8">Divergência #{{ cce.divergencia_origem_id }}</dd>
+          {% endif %}
+          {% if cce.observacao %}
+          <dt class="col-sm-4">Observação</dt>
+          <dd class="col-sm-8 text-muted">{{ cce.observacao }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

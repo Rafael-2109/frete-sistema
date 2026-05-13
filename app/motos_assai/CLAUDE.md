@@ -1,7 +1,7 @@
 # Módulo Motos Assaí
 
-**Data**: 2026-05-12
-**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) + **Integração lista_pedidos.html (Plano 5 — agendamento por loja + plano por modelo + realocação de saldo + ajuste pós-NF)** — TODOS implementados.
+**Data**: 2026-05-13
+**Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) + **Integração lista_pedidos.html (Plano 5)** + **CCe como entidade com match reverso (2026-05-13)** — TODOS implementados.
 **Propósito**: gerenciar a operação B2B Q.P.A. → Sendas/Assaí com motos elétricas, isolada de outros módulos.
 
 ---
@@ -494,6 +494,128 @@ Planos 1-5 completos (2026-05-12). Evoluções futuras:
 - Automação envio Excel à Q.P.A. via SMTP
 - Resolver pendência via UI (atualmente só via service diretamente)
 - Skills atualizadas com novos campos (agendamento por loja + plano por modelo)
+
+---
+
+## CCe como entidade (2026-05-13)
+
+A Carta de Correção Eletrônica agora é uma entidade própria (tabela `assai_cce`)
+com ciclo de vida, em vez de apenas trigger de mutação numa divergência.
+
+### Por que esse design
+
+**Cenário motivador**: a CCe pode chegar ANTES da NF correspondente (ex: operador
+recebeu CCe por e-mail antes do XML/PDF da NF ser importado). O modelo antigo
+exigia divergência aberta → bloqueava importação fora de ordem.
+
+### Modelo `AssaiCce` (Migration 28)
+
+| Campo | Tipo | Função |
+|-------|------|--------|
+| `protocolo_cce` | str UNIQUE | Identidade SEFAZ — idempotência |
+| `chave_nfe` | str(44) | Match preferencial com `AssaiNfQpa.chave_44` |
+| `numero_nf_referenciada` | str | Match fallback com `AssaiNfQpa.numero` |
+| `sequencia_cce` | int | Sequência (uma NF pode ter N CCes) |
+| `tipo_correcao` | str | `CHASSI` / `DUPLICATAS` / `ENDERECO` / `OUTRO` |
+| `dados_parsed` | JSONB | Dump completo do parser (chassis_detalhes, duplicatas...) |
+| `tem_nf` | bool | False = NF ainda não chegou (query de match reverso) |
+| `nf_id` | FK NULLABLE | NF vinculada (preenchido quando aplica) |
+| `status` | str | `PENDENTE` / `APLICADA` / `IGNORADA` / `ERRO` |
+| `pdf_s3_key` | str | PDF original em S3 |
+| `divergencia_origem_id` | FK NULLABLE | Se veio do botão CCe em divergência |
+| `chassis_aplicados` | JSONB | Auditoria do que foi efetivamente trocado |
+
+### Cenários cobertos (3 entradas)
+
+1. **CCe avulsa sem NF** (`POST /motos-assai/cce/upload` + NF não existe)
+   → Status `PENDENTE`, `tem_nf=False`. Aguarda NF chegar.
+
+2. **CCe avulsa com NF presente** (`POST /motos-assai/cce/upload` + NF já importada)
+   → Aplica imediato. Status `APLICADA`, `tem_nf=True`, chassis trocados.
+
+3. **CCe via divergência** (`POST /motos-assai/divergencias/<div_id>/upload-cce`)
+   → Aplica + fecha divergência (tipo=CCE). Mesmo `cce_service.registrar_cce`,
+   só passa `divergencia_id=div_id`.
+
+### Match reverso ao importar NF
+
+`nf_qpa_adapter.importar_nf_qpa()` chama `aplicar_cce_pendentes_para_nf(nf, operador_id)`
+APÓS `_calcular_match` e ANTES do commit final. Query:
+
+```sql
+SELECT * FROM assai_cce
+WHERE tem_nf = false
+  AND status = 'PENDENTE'
+  AND (chave_nfe = :chave_44
+       OR numero_nf_referenciada IN (:numero, :numero_lstripped))
+```
+
+Para cada CCe casada, chama `_tentar_aplicar_cce` → `aplicar_correcao_cce` →
+re-roda `_calcular_match`. Side effect: divergências podem ser criadas
+naturalmente se troca de chassi não bater com separação atual.
+
+### Tipo `IGNORADA` (DUPLICATAS / ENDERECO)
+
+CCes de duplicatas ou endereço **são registradas para auditoria** mas:
+- Não alteram chassis (não há chassis nelas)
+- Status = `IGNORADA`
+- Mensagem orienta operador a fazer correção manual no financeiro / cadastro
+
+### Idempotência
+
+UNIQUE em `protocolo_cce`. Re-upload do mesmo PDF retorna o registro existente
+(`duplicada=True` no resultado). Garante que job/operador pode re-tentar sem
+duplicar dados.
+
+### Rotas (`/motos-assai/cce/*`)
+
+- `GET /cce` — lista com filtros (status, tipo, tem_nf, busca textual)
+- `GET /cce/upload` — formulário
+- `POST /cce/upload` — processa 1+ PDFs em lote
+- `GET /cce/<id>` — detalhe (com painel "aplicar agora" se NF chegou depois)
+- `POST /cce/<id>/tentar-aplicar` — re-tenta CCe em status PENDENTE/ERRO
+
+### Arquivos
+
+- `app/motos_assai/models/cce.py` — `AssaiCce` + constantes `CCE_STATUS_*`
+- `app/motos_assai/services/cce_service.py` — orquestrador: `registrar_cce`,
+  `aplicar_cce_pendentes_para_nf`, `_tentar_aplicar_cce`, `_resolver_nf_da_cce`
+- `app/motos_assai/services/parsers/cce_pdf_extractor.py` — parser determinístico
+  (formatos Q.P.A. RELATÓRIO + MOTOCHEFE Dados, 4 subtipos)
+- `app/motos_assai/services/parsers/cce_llm_fallback.py` — Haiku → Sonnet
+- `app/motos_assai/routes/cce.py` — 4 rotas
+- `app/templates/motos_assai/cce/{lista,upload,upload_resultado,detalhe}.html`
+- `scripts/migrations/motos_assai_28_cce_entidade.{sql,py}`
+- `tests/motos_assai/test_cce_service.py` — 5 cenários cobertos
+- `tests/motos_assai/test_parser_cce.py` — 12 testes (formatos Q.P.A. + Motochefe + edge cases)
+
+### Gotchas
+
+- **Match por número da NF**: AssaiNfQpa.numero é salvo SEM zeros à esquerda
+  (lstrip). O parser também normaliza. Match testa ambas formas.
+- **MOTOCHEFE não tem protocolo SEFAZ**: `cce_service.registrar_cce` gera
+  pseudo-protocolo `PSEUDO-<chave>-<seq>` para manter idempotência.
+- **DUPLICATAS/ENDERECO ficam IGNORADA mesmo com NF presente**: vincula nf_id
+  para auditoria, mas não tenta trocar chassis (não há).
+- **Re-importação após NF cancelada**: CCe não aplica em NF status `CANCELADA`
+  (fica status `ERRO` com observação clara).
+- **Double `_calcular_match` no match reverso**: `importar_nf_qpa` chama
+  `_calcular_match` antes de `aplicar_cce_pendentes_para_nf`. Para cada CCe
+  pendente, `aplicar_correcao_cce` re-roda `_calcular_match` após trocar
+  chassis. Isto NÃO duplica `FATURADA` no mesmo chassi (são chassis diferentes
+  — antigo e novo) e `aplicar_correcao_cce` reverte explicitamente o antigo.
+  Side effect: divergências criadas na primeira passagem para chassis que
+  serão corrigidos pela CCe ficam abertas (já apontam para chassi antigo que
+  saiu da NF). Re-rodar match não as fecha — operador resolve manualmente
+  ou ignora.
+- **Race condition em `registrar_cce`**: tratada via `IntegrityError`
+  fallback (busca registro existente). PDF S3 órfão é deletado (fix C1).
+- **Retry de CCe APLICADA com status resetado manualmente**: bloqueado
+  via guard `cce.chassis_aplicados` no route `/cce/<id>/tentar-aplicar`
+  (fix H3). Evita double-swap de chassis.
+- **Falha de uma CCe não contamina match reverso**: `aplicar_cce_pendentes_para_nf`
+  usa savepoint por CCe (fix H4). Erro em uma CCe específica não impede a NF
+  principal de commitar nem outras CCes pendentes de serem aplicadas.
 
 ---
 

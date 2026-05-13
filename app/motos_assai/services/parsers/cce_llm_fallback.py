@@ -22,35 +22,64 @@ logger = logging.getLogger(__name__)
 # independentemente.
 from app.motos_assai.services.parsers.cce_pdf_extractor import (  # noqa: E402
     CONFIANCA_LIMIAR,
+    TIPO_CHASSI,
+    TIPO_DUPLICATAS,
+    TIPO_ENDERECO,
+    TIPO_OUTRO,
 )
 
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 SONNET_MODEL = 'claude-sonnet-4-6'
 
+_TIPOS_VALIDOS = {TIPO_CHASSI, TIPO_DUPLICATAS, TIPO_ENDERECO, TIPO_OUTRO}
+
 
 PROMPT_SYSTEM = """Voce e um parser de PDFs de Carta de Correcao Eletronica (CCe) de NF-e.
 
-Uma CCe corrige dados de uma NF-e ja emitida — frequentemente substituindo chassis
-de motos quando houve erro de digitacao no momento da emissao da NF original.
+Uma CCe corrige dados de uma NF-e ja emitida. Existem 3 subtipos de correcao
+observados em PDFs brasileiros (formato Q.P.A. Distribuicao e formato Motochefe):
+
+1) CHASSI: erro de digitacao no chassi de moto na NF original. Layout tem
+   linhas "SAINDO: MODELO CHASSI COR" e "ENTRANDO: MODELO CHASSI COR".
+   Chassis brasileiros tem 13 a 17 caracteres alfanumericos (NAO assuma 17 fixo).
+2) DUPLICATAS: ajuste em duplicatas (numero, vencimento, valor).
+3) ENDERECO: correcao de endereco de entrega.
 
 Retorne JSON puro (sem markdown fence, sem comentarios) seguindo o schema:
 
 {
-  "numero_cce": "CCe-001-2026",
-  "numero_nf_referenciada": "12345",
+  "numero_cce": "CCe-1-NF1729",
+  "numero_nf_referenciada": "1729",
+  "chave_nfe": "35260453780554000115550010000017291644542738",
+  "protocolo_cce": "135261639015279",
+  "tipo_correcao": "CHASSI",
   "chassis_corrigidos": [
-    ["CHASSI_ANTIGO_17_CHARS", "CHASSI_NOVO_17_CHARS"]
+    ["CHASSI_ANTIGO", "CHASSI_NOVO"]
   ],
-  "justificativa": "Erro de digitacao do chassi no momento da emissao da NF original.",
-  "data_emissao": "DD/MM/AAAA",
+  "chassis_detalhes": [
+    {
+      "modelo": "DOT",
+      "chassi_antigo": "LA2025SA110004195",
+      "chassi_novo": "LA2025SA110004319",
+      "cor_antiga": "BRANCO",
+      "cor_nova": "BRANCO"
+    }
+  ],
+  "duplicatas": [],
+  "endereco_corrigido": "",
+  "data_emissao": "30/04/2026",
   "confianca": 0.95
 }
 
 REGRAS:
-- Chassis VIN tem 17 caracteres alfanumericos (sem I, O, Q).
-- chassis_corrigidos e LISTA DE PARES (lista de listas), cada par [antigo, novo].
-- Se nao houver chassis sendo trocados, retorne lista vazia [].
-- Se um campo nao existir no PDF, omita-o (nao use null).
+- tipo_correcao DEVE ser exatamente um destes: "CHASSI", "DUPLICATAS", "ENDERECO", "OUTRO".
+- Se tipo_correcao = "CHASSI": preencha chassis_corrigidos E chassis_detalhes.
+  chassis_corrigidos e lista de pares [antigo, novo]. chassis_detalhes inclui modelo+cores.
+- Se tipo_correcao = "DUPLICATAS": preencha duplicatas com [{numero, vencimento, valor}].
+- Se tipo_correcao = "ENDERECO": preencha endereco_corrigido com texto livre.
+- Se um campo nao se aplica ao tipo, retorne lista vazia [] ou string vazia "".
+- Chassis: 13-17 caracteres alfanumericos (SOL pode ter 15 chars so digitos).
+- numero_nf_referenciada SEM zeros a esquerda ("1729" e nao "001729").
 - confianca 0.0-1.0: quao certo voce esta da extracao.
 - Nao inclua qualquer texto antes ou depois do JSON.
 """
@@ -88,9 +117,15 @@ def extrair_cce_via_llm(pdf_bytes: bytes) -> Dict[str, Any]:
     try:
         data = _chamar_llm(client, pdf_b64, HAIKU_MODEL)
         normalizado = _normalizar_resposta(data, modelo='HAIKU')
-        if normalizado.get('chassis_corrigidos') or normalizado.get('numero_nf_referenciada'):
-            return normalizado
-        logger.info('Haiku CCe retornou vazio — escalando para Sonnet')
+        if normalizado.get('numero_nf_referenciada'):
+            # Se tipo CHASSI mas sem chassis ou tipo desconhecido — escalar
+            tipo = normalizado.get('tipo_correcao')
+            if tipo == TIPO_CHASSI and not normalizado.get('chassis_corrigidos'):
+                logger.info('Haiku CCe retornou CHASSI sem chassis — escalando para Sonnet')
+            else:
+                return normalizado
+        else:
+            logger.info('Haiku CCe retornou sem numero_nf — escalando para Sonnet')
     except Exception as e:
         logger.warning(f'Haiku CCe fallback falhou: {e}')
 
@@ -166,25 +201,98 @@ def _extrair_json(raw: str) -> str:
 
 def _normalizar_resposta(data: Dict[str, Any], modelo: str) -> Dict[str, Any]:
     """Normaliza resposta LLM para o schema canonico do parser deterministico."""
+    # tipo_correcao — sanitizar
+    tipo_raw = (data.get('tipo_correcao') or '').strip().upper()
+    if tipo_raw not in _TIPOS_VALIDOS:
+        # Inferir a partir do conteudo
+        if data.get('chassis_corrigidos') or data.get('chassis_detalhes'):
+            tipo_correcao = TIPO_CHASSI
+        elif data.get('duplicatas'):
+            tipo_correcao = TIPO_DUPLICATAS
+        elif data.get('endereco_corrigido'):
+            tipo_correcao = TIPO_ENDERECO
+        else:
+            tipo_correcao = TIPO_OUTRO
+    else:
+        tipo_correcao = tipo_raw
+
+    # chassis_corrigidos — aceita lista de tuplas, lista de listas ou de dicts
     chassis_raw = data.get('chassis_corrigidos') or []
     chassis_corrigidos: List[Tuple[str, str]] = []
     for par in chassis_raw:
         if isinstance(par, (list, tuple)) and len(par) == 2:
             antigo, novo = par
             if antigo and novo:
-                chassis_corrigidos.append((str(antigo).strip().upper(), str(novo).strip().upper()))
+                chassis_corrigidos.append(
+                    (str(antigo).strip().upper(), str(novo).strip().upper())
+                )
         elif isinstance(par, dict):
             antigo = par.get('antigo') or par.get('chassi_antigo')
             novo = par.get('novo') or par.get('chassi_novo')
             if antigo and novo:
-                chassis_corrigidos.append((str(antigo).strip().upper(), str(novo).strip().upper()))
+                chassis_corrigidos.append(
+                    (str(antigo).strip().upper(), str(novo).strip().upper())
+                )
+
+    # chassis_detalhes — pode vir do LLM ou ser derivado de chassis_corrigidos
+    detalhes_raw = data.get('chassis_detalhes') or []
+    chassis_detalhes: List[Dict[str, Any]] = []
+    for d in detalhes_raw:
+        if not isinstance(d, dict):
+            continue
+        chassis_detalhes.append({
+            'modelo': (d.get('modelo') or '').upper() or None,
+            'chassi_antigo': (d.get('chassi_antigo') or '').upper() or None,
+            'chassi_novo': (d.get('chassi_novo') or '').upper() or None,
+            'cor_antiga': (d.get('cor_antiga') or '').upper() or None,
+            'cor_nova': (d.get('cor_nova') or '').upper() or None,
+        })
+    if not chassis_detalhes and chassis_corrigidos:
+        # LLM nao retornou detalhes, mas retornou pares — preencher minimo
+        for antigo, novo in chassis_corrigidos:
+            chassis_detalhes.append({
+                'modelo': None,
+                'chassi_antigo': antigo,
+                'chassi_novo': novo,
+                'cor_antiga': None,
+                'cor_nova': None,
+            })
+
+    # duplicatas
+    duplicatas_raw = data.get('duplicatas') or []
+    duplicatas: List[Dict[str, Any]] = []
+    for d in duplicatas_raw:
+        if not isinstance(d, dict):
+            continue
+        duplicatas.append({
+            'numero': d.get('numero'),
+            'vencimento': d.get('vencimento'),
+            'valor': d.get('valor'),
+        })
+
+    # numero_nf_referenciada — strip de zeros a esquerda
+    numero_nf = data.get('numero_nf_referenciada')
+    if numero_nf:
+        numero_nf = str(numero_nf).lstrip('0') or '0'
 
     return {
         'numero_cce': data.get('numero_cce'),
-        'numero_nf_referenciada': data.get('numero_nf_referenciada'),
+        'numero_nf_referenciada': numero_nf,
+        'chave_nfe': data.get('chave_nfe'),
+        'protocolo_cce': data.get('protocolo_cce'),
+        'tipo_correcao': tipo_correcao,
         'chassis_corrigidos': chassis_corrigidos,
+        'chassis_detalhes': chassis_detalhes,
+        'duplicatas': duplicatas,
+        'endereco_corrigido': (data.get('endereco_corrigido') or '')[:500],
+        'texto_correcao_bruto': (data.get('texto_correcao_bruto') or '')[:2000],
         'justificativa': data.get('justificativa', '') or '',
         'data_emissao': data.get('data_emissao'),
-        'confianca': float(data.get('confianca', 0.85)),  # LLM = alta confianca por default
+        # LLM = alta confianca por default; usa o valor retornado se for razoavel
+        'confianca': max(
+            CONFIANCA_LIMIAR + 0.05,  # acima do limiar para nao re-disparar fallback
+            float(data.get('confianca') or 0.85),
+        ),
         'parser_usado': f'LLM_{modelo}',
+        'formato_detectado': data.get('formato_detectado'),
     }
