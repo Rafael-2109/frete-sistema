@@ -11,7 +11,8 @@ from app.motos_assai.models import (
     CARREGAMENTO_STATUS_EM_CARREGAMENTO,
     CARREGAMENTO_STATUS_FINALIZADO, CARREGAMENTO_STATUS_CANCELADO,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
-    SEPARACAO_STATUS_CARREGADA,
+    SEPARACAO_STATUS_CARREGADA, SEPARACAO_STATUS_FATURADA,
+    SEPARACAO_STATUS_CANCELADA,
     EVENTO_SEPARADA, EVENTO_DISPONIVEL, EVENTO_CARREGADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
@@ -452,7 +453,61 @@ def finalizar_carregamento(carregamento_id, operador_id):
         emitir_evento(chassi, EVENTO_SEPARADA, operador_id=operador_id,
                       observacao=f'adicionado pelo Carregamento {car.id}')
 
-    # === FASES 3-8: implementadas em Tasks 7-12 ===
+    # === FASE 3: respeitar limite do pedido (R1.2 + S14=a) ===
+    qtd_pedida_total = (db.session.query(db.func.coalesce(db.func.sum(AssaiPedidoVendaItem.qtd_pedida), 0))
+                        .filter(AssaiPedidoVendaItem.pedido_id == car.pedido_id)
+                        .scalar() or 0)
+
+    qtd_separada_total = (db.session.query(db.func.count(AssaiSeparacaoItem.id))
+                          .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
+                          .filter(
+                              AssaiSeparacao.pedido_id == car.pedido_id,
+                              AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+                          )
+                          .scalar() or 0)
+
+    if qtd_separada_total > qtd_pedida_total:
+        excedente = qtd_separada_total - qtd_pedida_total
+
+        # S14=a: restringir a (EM_SEPARACAO, FECHADA). NAO mexer em CARREGADA/FATURADA.
+        candidatos = (AssaiSeparacaoItem.query
+                      .join(AssaiSeparacao)
+                      .filter(
+                          AssaiSeparacao.pedido_id == car.pedido_id,
+                          AssaiSeparacao.loja_id == car.loja_id,
+                          AssaiSeparacao.id != sep_alvo.id,
+                          AssaiSeparacao.status.in_([SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA]),
+                      )
+                      .order_by(AssaiSeparacaoItem.id.desc())  # LIFO (mais recentes primeiro)
+                      .limit(excedente)
+                      .all())
+
+        if len(candidatos) < excedente:
+            # Escalar: nao tem candidatos suficientes em (EM_SEPARACAO, FECHADA)
+            seps_bloqueadas = [
+                s.id for s in AssaiSeparacao.query.filter(
+                    AssaiSeparacao.pedido_id == car.pedido_id,
+                    AssaiSeparacao.loja_id == car.loja_id,
+                    AssaiSeparacao.id != sep_alvo.id,
+                    AssaiSeparacao.status.in_([SEPARACAO_STATUS_CARREGADA, SEPARACAO_STATUS_FATURADA]),
+                ).all()
+            ]
+            # N-B5 fix: NAO chamar db.session.rollback() — caller (route) faz isso ao capturar a excecao.
+            # Rollback aqui invalida transacao multi-fase, perdendo Fases 1-2.
+            raise CarregamentoExcedenteError(
+                f'Pedido excedido em {excedente} chassis mas apenas {len(candidatos)} '
+                f'podem ser removidos automaticamente. Seps CARREGADA/FATURADA bloqueando: {seps_bloqueadas}',
+                qtd_excedente=excedente,
+                seps_bloqueadas=seps_bloqueadas,
+            )
+
+        for it in candidatos:
+            chassi = it.chassi
+            db.session.delete(it)
+            emitir_evento(chassi, EVENTO_DISPONIVEL, operador_id=operador_id,
+                          observacao=f'removido por excedente pedido (LIFO) - Carregamento {car.id}')
+
+    # === FASES 4-8: implementadas em Tasks 8-12 ===
     # Por ora, marcar sep como CARREGADA + finalizar carregamento (esqueleto)
     sep_alvo.status = SEPARACAO_STATUS_CARREGADA
     car.separacao_id = sep_alvo.id
