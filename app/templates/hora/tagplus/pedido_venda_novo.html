@@ -913,10 +913,13 @@
     recalcRsDeb.flush();
     recalcValorDeb.flush();
 
-    const cpf = (document.getElementById('f-cpf').value || '').replace(/\D/g, '');
-    if (cpf.length !== 11) {
+    // Aceita CPF (11) ou CNPJ (14). Backend normaliza para apenas digitos
+    // (venda_service._normalizar_documento) e grava em String(14). UI deixa
+    // o operador digitar com mascara "00.000.000/0000-00".
+    const doc = (document.getElementById('f-cpf').value || '').replace(/\D/g, '');
+    if (doc.length !== 11 && doc.length !== 14) {
       e.preventDefault();
-      alert('CPF deve ter 11 dígitos.');
+      alert('Documento deve ter 11 dígitos (CPF) ou 14 dígitos (CNPJ).');
       return;
     }
     const cep = (elCep.value || '').replace(/\D/g, '');
