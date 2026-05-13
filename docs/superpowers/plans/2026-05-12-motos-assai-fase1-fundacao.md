@@ -24,7 +24,7 @@
 | # | Arquivo .py | Arquivo .sql | O que faz |
 |---|---|---|---|
 | 18 | `motos_assai_18_carregamento.py` | `motos_assai_18_carregamento.sql` | Cria `assai_carregamento` + `assai_carregamento_item` |
-| 19 | `motos_assai_19_divergencia.py` | `motos_assai_19_divergencia.sql` | Cria `assai_divergencia` (9 tipos no CHECK) |
+| 19 | `motos_assai_19_divergencia.py` | `motos_assai_19_divergencia.sql` | Cria `assai_divergencia` (8 tipos no CHECK: 4 novos + 4 legados) |
 | 20 | `motos_assai_20_pedido_excel.py` | `motos_assai_20_pedido_excel.sql` | Cria `assai_pedido_excel` |
 | 21 | `motos_assai_21_simplificar_status_pedido.py` | (sem .sql — apenas backfill Python) | Backfill status pedido via `recalcular_status_pedido` |
 | 22 | `motos_assai_22_nf_cancelamento_campos.py` | `motos_assai_22_nf_cancelamento_campos.sql` | Adiciona 3 campos cancelamento em `assai_nf_qpa` |
@@ -278,8 +278,8 @@ paralelos. Enforcement de chassi unico via lock pessimista em service."
 
 ```sql
 -- Migration 19: Cria assai_divergencia (centraliza todas divergencias).
--- 9 tipos no CHECK: 4 novos (Carregamento×NF + cross-loja) + 4 legados de _calcular_match
--- + 1 CHASSI_SEM_SEPARACAO.
+-- 8 tipos no CHECK: 4 novos (Carregamento×NF + cross-loja) + 4 legados de _calcular_match
+-- (LOJA_DIVERGENTE, VALOR_DIVERGENTE, MODELO_DIVERGENTE, CHASSI_SEM_SEPARACAO).
 -- 5 tipos de resolucao.
 
 BEGIN;
@@ -389,7 +389,7 @@ if __name__ == '__main__':
 python scripts/migrations/motos_assai_19_divergencia.py
 psql $DATABASE_URL -c "\d assai_divergencia"
 git add scripts/migrations/motos_assai_19_divergencia.{py,sql}
-git commit -m "feat(motos-assai): Migration 19 — assai_divergencia (9 tipos centralizados)"
+git commit -m "feat(motos-assai): Migration 19 — assai_divergencia (8 tipos centralizados: 4 novos + 4 legados)"
 ```
 
 ---
@@ -484,6 +484,14 @@ def main():
 
         db.session.execute(text(sql))
         db.session.commit()
+
+        # M2 fix: validar que tabela foi criada
+        result_after = db.session.execute(text(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'assai_pedido_excel'"
+        )).scalar()
+        if result_after != 1:
+            print('[ERROR] Migration 20 nao criou a tabela')
+            sys.exit(1)
 
         backfill_count = db.session.execute(text(
             "SELECT COUNT(*) FROM assai_pedido_excel WHERE motivo_regeneracao LIKE 'Backfill Migration 20%'"
@@ -952,7 +960,7 @@ Spec: docs/superpowers/specs/2026-05-12-motos-assai-carregamento-divergencia-des
 Plano: docs/superpowers/plans/2026-05-12-motos-assai-fase1-fundacao.md Task 9
 """
 from app import db
-from datetime import datetime
+from app.utils.timezone import agora_brasil_naive
 
 
 CARREGAMENTO_STATUS_EM_CARREGAMENTO = 'EM_CARREGAMENTO'
@@ -974,7 +982,7 @@ class AssaiCarregamento(db.Model):
     loja_id = db.Column(db.Integer, db.ForeignKey('assai_loja.id'), nullable=False, index=True)
     separacao_id = db.Column(db.Integer, db.ForeignKey('assai_separacao.id'), index=True)
     status = db.Column(db.String(20), nullable=False, default=CARREGAMENTO_STATUS_EM_CARREGAMENTO, index=True)
-    iniciado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    iniciado_em = db.Column(db.DateTime, nullable=False, default=agora_brasil_naive)
     iniciado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
     finalizado_em = db.Column(db.DateTime)
     finalizado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
@@ -999,7 +1007,7 @@ class AssaiCarregamentoItem(db.Model):
                                 nullable=False, index=True)
     chassi = db.Column(db.String(50), nullable=False, index=True)
     modelo_id = db.Column(db.Integer, db.ForeignKey('assai_modelo.id'), nullable=False)
-    escaneado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    escaneado_em = db.Column(db.DateTime, nullable=False, default=agora_brasil_naive)
     escaneado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
 
     modelo = db.relationship('AssaiModelo')
@@ -1076,10 +1084,10 @@ git commit -m "feat(motos-assai): models AssaiCarregamento + AssaiCarregamentoIt
 Spec: §2.1, §7
 Plano: Task 10
 
-9 tipos de divergencia + 5 tipos de resolucao.
+8 tipos de divergencia (4 novos + 4 legados) + 5 tipos de resolucao.
 """
 from app import db
-from datetime import datetime
+from app.utils.timezone import agora_brasil_naive
 
 
 # Tipos novos (Carregamento × NF + cross-loja)
@@ -1131,7 +1139,7 @@ class AssaiDivergencia(db.Model):
     carregamento_id = db.Column(db.Integer, db.ForeignKey('assai_carregamento.id'))
     nf_id = db.Column(db.Integer, db.ForeignKey('assai_nf_qpa.id'), index=True)
     detalhes = db.Column(db.JSON, default=dict)
-    criada_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    criada_em = db.Column(db.DateTime, nullable=False, default=agora_brasil_naive)
     resolvida_em = db.Column(db.DateTime)
     resolvida_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
     tipo_resolucao = db.Column(db.String(40))
@@ -1189,7 +1197,7 @@ Expected: 8 tipos listados.
 
 ```bash
 git add app/motos_assai/models/divergencia.py app/motos_assai/models/__init__.py
-git commit -m "feat(motos-assai): model AssaiDivergencia (9 tipos centralizados, 5 resolucoes)"
+git commit -m "feat(motos-assai): model AssaiDivergencia (8 tipos centralizados, 5 resolucoes)"
 ```
 
 ---
@@ -1209,7 +1217,7 @@ Spec: §2.1, §12
 Plano: Task 11
 """
 from app import db
-from datetime import datetime
+from app.utils.timezone import agora_brasil_naive
 
 
 class AssaiPedidoExcel(db.Model):
@@ -1221,7 +1229,7 @@ class AssaiPedidoExcel(db.Model):
     s3_key = db.Column(db.String(500), nullable=False)
     versao = db.Column(db.Integer, nullable=False)
     ativo = db.Column(db.Boolean, nullable=False, default=True)
-    gerado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    gerado_em = db.Column(db.DateTime, nullable=False, default=agora_brasil_naive)
     gerado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
     motivo_regeneracao = db.Column(db.Text)
 
@@ -1264,7 +1272,7 @@ Spec: §2.1 (S16=c)
 Plano: Task 12
 """
 from app import db
-from datetime import datetime
+from app.utils.timezone import agora_brasil_naive
 
 
 VINCULO_MOTIVO_NF_CANCELADA = 'NF_CANCELADA'
@@ -1286,7 +1294,7 @@ class AssaiNfQpaItemVinculoHistorico(db.Model):
     separacao_item_id = db.Column(db.Integer, db.ForeignKey('assai_separacao_item.id', ondelete='SET NULL'))
     motivo = db.Column(db.String(40), nullable=False)
     chassi_no_momento = db.Column(db.String(50), nullable=False)
-    registrado_em = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    registrado_em = db.Column(db.DateTime, nullable=False, default=agora_brasil_naive)
     registrado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
     detalhes = db.Column(db.JSON, default=dict)
 
@@ -1631,7 +1639,7 @@ from app import create_app, db
 from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiPedidoVendaLoja,
     AssaiSeparacao, AssaiSeparacaoItem,
-    AssaiCD, AssaiLoja, AssaiModelo, AssaiMoto,
+    AssaiCd, AssaiLoja, AssaiModelo, AssaiMoto,
     PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_PARCIALMENTE_FATURADO,
     PEDIDO_STATUS_FATURADO, PEDIDO_STATUS_CANCELADO,
     SEPARACAO_STATUS_FATURADA, SEPARACAO_STATUS_FECHADA,
@@ -1652,7 +1660,7 @@ def app():
 @pytest.fixture
 def setup_pedido(app):
     """Cria pedido com 10 motos pedidas, 2 seps."""
-    cd = AssaiCD(nome='CD Teste', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD Teste', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja Teste')
     modelo = AssaiModelo(codigo='SOL', regex_chassi=r'^TEST\d+$')
     db.session.add_all([cd, loja, modelo])
@@ -2161,7 +2169,7 @@ Criar `tests/motos_assai/test_disponibilizar_service_carregada.py`:
 import pytest
 from app import create_app, db
 from app.motos_assai.models import (
-    AssaiCD, AssaiLoja, AssaiModelo, AssaiMoto,
+    AssaiCd, AssaiLoja, AssaiModelo, AssaiMoto,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL, EVENTO_CARREGADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
@@ -2181,7 +2189,7 @@ def app():
 @pytest.fixture
 def chassi_carregado(app):
     """Cria chassi com status CARREGADA."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, modelo])
     db.session.flush()
@@ -2281,7 +2289,7 @@ git commit -m "feat(motos-assai): A6 guards em disponibilizar_service (mensagens
 """Testes A6: montagem_service deve bloquear chassi CARREGADA."""
 import pytest
 from app import create_app, db
-from app.motos_assai.models import AssaiCD, AssaiModelo, AssaiMoto, EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL, EVENTO_CARREGADA
+from app.motos_assai.models import AssaiCd, AssaiModelo, AssaiMoto, EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL, EVENTO_CARREGADA
 from app.motos_assai.services.moto_evento_service import emitir_evento
 from app.motos_assai.services.montagem_service import registrar_montagem, MontagemError
 
@@ -2297,7 +2305,7 @@ def app():
 
 
 def test_registrar_montagem_chassi_carregada_levanta_erro(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, modelo])
     db.session.flush()

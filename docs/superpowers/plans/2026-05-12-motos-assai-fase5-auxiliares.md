@@ -82,7 +82,7 @@ def app():
 
 @pytest.fixture
 def setup_2_lojas(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja_a = AssaiLoja(numero=1, cnpj='1', nome='LA')
     loja_b = AssaiLoja(numero=2, cnpj='2', nome='LB')
     modelo = AssaiModelo(codigo='SOL')

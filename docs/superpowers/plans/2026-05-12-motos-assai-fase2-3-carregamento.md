@@ -110,7 +110,7 @@ Plano: Tasks 1-4
 import pytest
 from app import create_app, db
 from app.motos_assai.models import (
-    AssaiCD, AssaiLoja, AssaiModelo, AssaiPedidoVenda, AssaiCarregamento,
+    AssaiCd, AssaiLoja, AssaiModelo, AssaiPedidoVenda, AssaiCarregamento,
     CARREGAMENTO_STATUS_EM_CARREGAMENTO, CARREGAMENTO_STATUS_CANCELADO,
     PEDIDO_STATUS_ABERTO,
 )
@@ -131,7 +131,7 @@ def app():
 
 @pytest.fixture
 def setup_pedido_loja(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja Teste')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -766,7 +766,7 @@ Plano: Task 5
 import pytest
 from app import create_app, db
 from app.motos_assai.models import (
-    AssaiCD, AssaiLoja, AssaiModelo, AssaiPedidoVenda, AssaiPedidoVendaLoja,
+    AssaiCd, AssaiLoja, AssaiModelo, AssaiPedidoVenda, AssaiPedidoVendaLoja,
     AssaiPedidoVendaItem, AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
     AssaiCarregamento, AssaiCarregamentoItem,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
@@ -793,7 +793,7 @@ def app():
 
 @pytest.fixture
 def setup_completo(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -1073,7 +1073,7 @@ def app():
 
 @pytest.fixture
 def setup(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -1272,6 +1272,11 @@ No `carregamento_service.py`, localizar o bloco `# === FASES 2-8: implementadas 
 E adicionar helpers no topo do `carregamento_service.py`:
 
 ```python
+# Imports adicionais necessarios (H2 fix — colocar com os outros imports do topo do arquivo)
+from app.motos_assai.models import AssaiSeparacaoSaldoModelo, AssaiPedidoVendaItem
+# (imports ja existentes da Task 1: AssaiCarregamento, AssaiSeparacao, etc — manter)
+
+
 def _saldo_pendente_modelo(sep_id, modelo_id):
     """Helper: qtd_planejada - qtd_separada para um modelo na sep.
 
@@ -1297,11 +1302,7 @@ def _resolver_valor_unitario(car, modelo_id):
     return float(item_pedido.valor_unitario) if item_pedido else 0.0
 ```
 
-Adicionar imports no topo:
-```python
-from app.motos_assai.models import AssaiSeparacaoSaldoModelo, AssaiPedidoVendaItem
-from app.motos_assai.services.moto_evento_service import emitir_evento
-```
+**H2 fix**: os imports `AssaiSeparacaoSaldoModelo`, `AssaiPedidoVendaItem` e `emitir_evento` ja estao no bloco de codigo Python acima — incluidos como parte integral do snippet. Adicionar no topo do arquivo `carregamento_service.py` junto com os imports da Task 1.
 
 - [ ] **Step 4: Rodar testes Fase 2 — devem passar**
 
@@ -1353,7 +1354,7 @@ def app():
 @pytest.fixture
 def setup_pedido_3(app):
     """Pedido com qtd_pedida=3."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -1587,7 +1588,7 @@ def app():
 
 @pytest.fixture
 def setup(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -1980,7 +1981,7 @@ def app():
 
 @pytest.fixture
 def setup(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -2307,7 +2308,7 @@ def app():
 
 @pytest.fixture
 def setup_carregamento_finalizado(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -2370,6 +2371,30 @@ def test_alterar_carregamento_cancelado_falha(setup_carregamento_finalizado):
 
     with pytest.raises(CarregamentoStateError, match='CANCELADO'):
         alterar_carregamento(car.id, operador_id=2)
+
+
+def test_alterar_carregamento_regrede_sep_carregada_para_fechada(setup_carregamento_finalizado):
+    """H3 fix: Sep vinculada CARREGADA regrede para FECHADA quando Carregamento reabre.
+
+    Mantem invariante "Sep CARREGADA ↔ Carregamento FINALIZADO".
+    """
+    car, _, _, _ = setup_carregamento_finalizado
+    sep_id = car.separacao_id
+    assert sep_id is not None
+
+    sep_antes = AssaiSeparacao.query.get(sep_id)
+    assert sep_antes.status == SEPARACAO_STATUS_CARREGADA
+
+    alterar_carregamento(car.id, operador_id=2)
+    db.session.commit()
+
+    # H3: Sep regrediu para FECHADA
+    sep_depois = AssaiSeparacao.query.get(sep_id)
+    assert sep_depois.status == SEPARACAO_STATUS_FECHADA
+    # Carregamento esta EM_CARREGAMENTO
+    assert AssaiCarregamento.query.get(car.id).status == CARREGAMENTO_STATUS_EM_CARREGAMENTO
+    # Vinculo FK preservado (separacao_id continua apontando para mesma sep)
+    assert AssaiCarregamento.query.get(car.id).separacao_id == sep_id
 ```
 
 - [ ] **Step 2: Rodar — devem falhar**
@@ -2418,7 +2443,18 @@ def alterar_carregamento(carregamento_id, operador_id):
     car.status = CARREGAMENTO_STATUS_EM_CARREGAMENTO
     car.finalizado_em = None
     car.finalizado_por_id = None
-    # Mantem car.separacao_id (sep ja existe; pode ser re-ajustada no proximo finalize)
+
+    # H3 fix — regredir Sep vinculada (CARREGADA → FECHADA) para manter invariante
+    # "Sep CARREGADA ↔ Carregamento FINALIZADO". Sep mantem chassis (re-finalizar
+    # vai re-ajustar via algoritmo §6 Fase 2). Mantem car.separacao_id (vinculo
+    # FK preservado para que finalize re-use a mesma sep).
+    if car.separacao_id:
+        sep = AssaiSeparacao.query.get(car.separacao_id)
+        if sep and sep.status == SEPARACAO_STATUS_CARREGADA:
+            sep.status = SEPARACAO_STATUS_FECHADA
+            # Sep volta a estado "pronta para Carregamento". Chassis nao mudam de evento
+            # (ja estao com evento CARREGADA — proximo finalize pode mudar).
+
     db.session.flush()
 ```
 
@@ -2465,7 +2501,7 @@ def app():
 
 
 def test_cancelar_separacao_carregada_aceita(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -2499,7 +2535,7 @@ def test_cancelar_separacao_carregada_aceita(app):
 
 def test_cancelar_separacao_faturada_continua_bloqueada(app):
     """FATURADA continua nao podendo ser cancelada (precisa cancelar NF antes)."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     db.session.add_all([cd, loja])
     db.session.flush()
@@ -2590,7 +2626,7 @@ def app():
 
 
 def test_mirror_aceita_status_carregada(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -2616,7 +2652,7 @@ def test_mirror_aceita_status_carregada(app):
 
 def test_mirror_aceita_status_faturada(app):
     """S1=b: sep nasce FATURADA via NF — mirror deve aceitar."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -2642,7 +2678,7 @@ def test_mirror_aceita_status_faturada(app):
 
 def test_mirror_rejeita_em_separacao(app):
     """EM_SEPARACAO continua nao espelhando (sep nao finalizada)."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=999, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])

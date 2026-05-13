@@ -85,7 +85,7 @@
 import pytest
 from app import create_app, db
 from app.motos_assai.models import (
-    AssaiCD, AssaiLoja, AssaiPedidoVenda, AssaiSeparacao, AssaiNfQpa,
+    AssaiCd, AssaiLoja, AssaiPedidoVenda, AssaiSeparacao, AssaiNfQpa,
     AssaiDivergencia,
     DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO,
     DIVERGENCIA_TIPO_CHASSI_OUTRA_LOJA,
@@ -130,7 +130,7 @@ def test_criar_divergencia_tipo_invalido_falha(app):
 
 def test_criar_divergencia_persiste_relacionamentos(app):
     """FK separacao_id, nf_id, carregamento_id sao salvas corretamente."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=1, cnpj='98765432000100', nome='Loja')
     db.session.add_all([cd, loja])
     db.session.flush()
@@ -149,7 +149,7 @@ def test_criar_divergencia_persiste_relacionamentos(app):
     )
     db.session.commit()
 
-    assert div.sep_id == sep.id
+    assert div.separacao_id == sep.id
     assert div.nf_id == nf.id
     assert div.separacao.id == sep.id
     assert div.nf.id == nf.id
@@ -279,7 +279,7 @@ def test_resolver_divergencia_ja_resolvida_falha(app):
 
 def test_resolver_divergencia_re_roda_match_nf_ativa(app, monkeypatch):
     """S21=a: ao resolver divergencia, re-roda _calcular_match na NF."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=1, cnpj='98765432000100', nome='Loja')
     db.session.add_all([cd, loja])
     db.session.flush()
@@ -306,7 +306,7 @@ def test_resolver_divergencia_re_roda_match_nf_ativa(app, monkeypatch):
 
 def test_resolver_divergencia_NAO_re_roda_match_nf_cancelada(app, monkeypatch):
     """A14: NF CANCELADA nao deve ter match re-rodado (idempotencia)."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=1, cnpj='98765432000100', nome='Loja')
     db.session.add_all([cd, loja])
     db.session.flush()
@@ -444,7 +444,7 @@ def app():
 
 @pytest.fixture
 def setup_basico(app):
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=1, cnpj='98765432000100', nome='Loja')
     modelo = AssaiModelo(codigo='SOL', descricao_qpa='SOL ELETRICA')
     db.session.add_all([cd, loja, modelo])
@@ -691,10 +691,50 @@ def _calcular_match(nf, operador_id):
             if sep:
                 sep.status = SEPARACAO_STATUS_FATURADA
 
+        # M3 fix: emitir evento FATURADA por chassi (comportamento legado preservado)
+        # Sem isso, status_efetivo do chassi nao reflete FATURADA — quebra:
+        # - rastrear_chassi (mostra SEPARADA em vez de FATURADA)
+        # - consultando-estoque-assai (chassi continua "fora estoque" mas como SEPARADA)
+        # - audit log incompleto
+        from app.motos_assai.services.moto_evento_service import emitir_evento
+        from app.motos_assai.models import EVENTO_FATURADA
+        for it in nf.itens:
+            if it.separacao_item_id:
+                emitir_evento(
+                    it.chassi, EVENTO_FATURADA, operador_id=importada_por_id,
+                    observacao=f'NF {nf.numero} importada (BATEU)',
+                    dados_extras={'nf_id': nf.id, 'chave_44': nf.chave_44},
+                )
+
     db.session.flush()
 ```
 
-NOTA: este código substitui o `_calcular_match` legado. Comportamento de "atualizar EmbarqueItem.nota_fiscal" e "emitir evento FATURADA por chassi" — verificar se está em `importar_nf_qpa` ou aqui. Manter conforme codigo original.
+**M3 fix aplicado**: emite evento FATURADA por chassi quando NF bate (preserva comportamento legado documentado em `app/motos_assai/CLAUDE.md`: "Quando BATEU: separação → status FATURADA; cada chassi emite evento FATURADA"). Adicionar teste:
+
+```python
+def test_m3_bateu_emite_evento_faturada_por_chassi(setup_basico):
+    """M3 fix: chassi recebe evento FATURADA quando NF inteira bate."""
+    cd, loja, modelo, pedido = setup_basico
+    sep, _, _ = _criar_sep_com_chassi(pedido, loja, modelo, 'CFAT001', SEPARACAO_STATUS_FECHADA)
+    db.session.commit()
+
+    nf = AssaiNfQpa(chave_44='F'*44, numero='NF999', loja_id=loja.id, status_match=NF_STATUS_NAO_RECONCILIADO)
+    db.session.add(nf)
+    db.session.flush()
+    db.session.add(AssaiNfQpaItem(nf_id=nf.id, chassi='CFAT001', modelo_extraido='SOL', valor_extraido=1000.0))
+    db.session.commit()
+
+    _calcular_match(nf, operador_id=1)
+    db.session.commit()
+
+    assert nf.status_match == NF_STATUS_BATEU
+    assert sep.status == SEPARACAO_STATUS_FATURADA
+    # M3: chassi recebeu evento FATURADA
+    from app.motos_assai.services.moto_evento_service import status_efetivo
+    assert status_efetivo('CFAT001') == EVENTO_FATURADA
+```
+
+NOTA: `EmbarqueItem.nota_fiscal` propagation continua em `importar_nf_qpa` (logica original — separada de `_calcular_match`). Verificar arquivo `nf_qpa_adapter.py` original para detalhes.
 
 - [ ] **Step 4: Rodar testes**
 
@@ -744,7 +784,7 @@ def app():
 
 def test_a7_detecta_chassi_outra_loja_antes_do_match(app):
     """A7: chassi em sep ativa de OUTRA loja gera divergencia CHASSI_OUTRA_LOJA."""
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja_a = AssaiLoja(numero=1, cnpj='1', nome='LA')
     loja_b = AssaiLoja(numero=2, cnpj='2', nome='LB')
     modelo = AssaiModelo(codigo='SOL')
@@ -863,7 +903,7 @@ git commit -m "refactor(motos-assai): ajustar_separacao_pela_nf detecta CHASSI_O
 def test_s1_cria_sep_em_faturada_quando_nao_ha_sep(app):
     """S1=b: NF antes da sep cria sep automaticamente em FATURADA."""
     # Setup com chassi cadastrado mas sem sep
-    cd = AssaiCD(nome='CD', cnpj='12345678000100')
+    cd = AssaiCd(nome='CD', cnpj='12345678000100')
     loja = AssaiLoja(numero=1, cnpj='1', nome='L')
     modelo = AssaiModelo(codigo='SOL')
     db.session.add_all([cd, loja, modelo])
@@ -1061,13 +1101,53 @@ Teste: criar sep + linhas com numero_nf, chamar service, verificar NULL.
 
 Implementação base seguindo §9.1 da spec — apenas marcar NF como CANCELADA + reverter eventos básicos.
 
+**M1 fix CRITICO** — `sep` pode ser `None` (NF NAO_RECONCILIADO sem separacao_id, como as 30 NFs órfãs em prod).
+**TODOS os usos de `sep.X` devem ser guardados com `if sep:`** ou capturados em variavel intermediaria com early return:
+
+```python
+def cancelar_nf_qpa(nf_id, motivo, operador_id):
+    nf = AssaiNfQpa.query.get_or_404(nf_id)
+    if nf.status_match == NF_STATUS_CANCELADA:
+        raise ValidationError('NF ja cancelada')
+
+    sep = nf.separacao  # pode ser None (NF orfa)
+
+    # ... reverter eventos por chassi (loop nf.itens — nao depende de sep) ...
+
+    nf.status_match = NF_STATUS_CANCELADA
+    nf.cancelada_em = agora_brasil_naive()
+    nf.cancelada_por_id = operador_id
+    nf.motivo_cancelamento = motivo
+
+    # M1 fix: guard sep is None em TODOS os usos
+    if sep:
+        # Tasks 8-11 cobertas pelos blocos abaixo, todos guardados
+        pass
+
+    return nf
+```
+
+**Teste obrigatorio**: `test_cancelar_nf_orfa_sem_sep_nao_quebra`. Cria NF NAO_RECONCILIADO sem separacao_id, chama cancelar_nf_qpa, verifica que retorna sem AttributeError. Status vira CANCELADA.
+
 #### Task 8: `cancelar_nf_qpa` — reverter sep status (R5.1 + R5.3)
 
 Sep volta a CARREGADA (se tem Carregamento) ou FECHADA (se não tem).
 
+```python
+# M1 fix: guard
+if sep:
+    if sep.status == SEPARACAO_STATUS_FATURADA:
+        tem_carregamento = AssaiCarregamento.query.filter_by(
+            separacao_id=sep.id, status=CARREGAMENTO_STATUS_FINALIZADO,
+        ).first()
+        sep.status = SEPARACAO_STATUS_CARREGADA if tem_carregamento else SEPARACAO_STATUS_FECHADA
+```
+
 #### Task 9: `cancelar_nf_qpa` — limpar EmbarqueItem.nota_fiscal (S15)
 
 ```python
+# Nao depende de sep — sempre executa (NFs orfas tambem podem ter EmbarqueItem
+# vinculado se foram parcialmente processadas)
 from app.fretes.models import EmbarqueItem
 EmbarqueItem.query.filter_by(nota_fiscal=nf.numero).update({'nota_fiscal': None})
 ```
@@ -1075,8 +1155,9 @@ EmbarqueItem.query.filter_by(nota_fiscal=nf.numero).update({'nota_fiscal': None}
 #### Task 10: `cancelar_nf_qpa` — vinculo_historico (S16)
 
 ```python
+# Nao depende de sep — loop nas itens da NF
 for item in nf.itens:
-    if item.separacao_item_id:
+    if item.separacao_item_id:  # so se tinha vinculo
         db.session.add(AssaiNfQpaItemVinculoHistorico(
             nf_qpa_item_id=item.id,
             separacao_item_id=item.separacao_item_id,
@@ -1091,7 +1172,10 @@ for item in nf.itens:
 #### Task 11: `cancelar_nf_qpa` — recalcular_status_pedido + commit final
 
 ```python
-recalcular_status_pedido(sep.pedido_id)
+# M1 fix: guard
+if sep:
+    recalcular_status_pedido(sep.pedido_id)
+# Se NF orfa, nao ha pedido para recalcular (sep nao existe)
 db.session.commit()
 ```
 
