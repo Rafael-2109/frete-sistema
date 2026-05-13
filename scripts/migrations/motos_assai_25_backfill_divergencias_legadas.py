@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from app import create_app, db  # noqa: E402
 from app.motos_assai.models import (  # noqa: E402
-    AssaiNfQpaItem, AssaiDivergencia, DIVERGENCIA_TIPOS_VALIDOS,
+    AssaiNfQpaItem, AssaiSeparacaoItem, AssaiDivergencia, DIVERGENCIA_TIPOS_VALIDOS,
 )
 from sqlalchemy import and_  # noqa: E402
 
@@ -29,6 +29,13 @@ def main():
 
         criadas = 0
         skipadas = 0
+
+        # Pre-cache: separacao_id por separacao_item_id (evita N+1)
+        sep_item_ids = [i.separacao_item_id for i in items_legados if i.separacao_item_id]
+        sep_id_map = {}
+        if sep_item_ids:
+            for si in AssaiSeparacaoItem.query.filter(AssaiSeparacaoItem.id.in_(sep_item_ids)).all():
+                sep_id_map[si.id] = si.separacao_id
 
         for item in items_legados:
             tipo = item.tipo_divergencia
@@ -50,11 +57,13 @@ def main():
                 skipadas += 1
                 continue
 
+            sep_id = sep_id_map.get(item.separacao_item_id) if item.separacao_item_id else None
+
             div = AssaiDivergencia(
                 tipo=tipo,
                 chassi=item.chassi,
                 nf_id=item.nf_id,
-                separacao_id=item.separacao_item.separacao_id if item.separacao_item else None,
+                separacao_id=sep_id,
                 detalhes={
                     'origem': 'backfill_migration_25',
                     'nf_qpa_item_id': item.id,
