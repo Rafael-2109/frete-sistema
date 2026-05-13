@@ -7,16 +7,22 @@ import pytest
 from app import create_app, db
 from app.motos_assai.models import (
     AssaiCd, AssaiLoja, AssaiModelo, AssaiPedidoVenda, AssaiCarregamento,
-    AssaiMoto,
+    AssaiCarregamentoItem, AssaiMoto,
+    AssaiSeparacao, AssaiSeparacaoItem,
     CARREGAMENTO_STATUS_EM_CARREGAMENTO, CARREGAMENTO_STATUS_FINALIZADO,
+    CARREGAMENTO_STATUS_CANCELADO,
+    SEPARACAO_STATUS_CARREGADA,
     PEDIDO_STATUS_ABERTO,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
+    EVENTO_SEPARADA, EVENTO_CARREGADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
 from app.motos_assai.services.carregamento_service import (
     criar_carregamento, escanear_carregamento_item,
+    cancelar_carregamento_item, cancelar_carregamento,
     CarregamentoValidationError, CarregamentoConflictError, CarregamentoStateError,
 )
+from app.utils.timezone import agora_brasil_naive
 
 
 @pytest.fixture
@@ -153,3 +159,125 @@ def test_escanear_carregamento_finalizado_falha(setup_pedido_loja, chassi_dispon
 
     with pytest.raises(CarregamentoStateError, match='FINALIZADO'):
         escanear_carregamento_item(car.id, 'TESTC001', operador_id=1)
+
+
+# ============================================================
+# Task 3: cancelar_carregamento_item
+# ============================================================
+
+def test_cancelar_item_sucesso(setup_pedido_loja, chassi_disponivel):
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.flush()
+    item = escanear_carregamento_item(car.id, 'TESTC001', operador_id=1)
+    db.session.commit()
+
+    cancelar_carregamento_item(item.id, operador_id=1)
+    db.session.commit()
+
+    # Item deletado
+    assert AssaiCarregamentoItem.query.get(item.id) is None
+
+    # A1: chassi nunca mudou de evento — continua DISPONIVEL
+    assert status_efetivo('TESTC001') == EVENTO_DISPONIVEL
+
+
+def test_cancelar_item_carregamento_finalizado_falha(setup_pedido_loja, chassi_disponivel):
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.flush()
+    item = escanear_carregamento_item(car.id, 'TESTC001', operador_id=1)
+    car.status = CARREGAMENTO_STATUS_FINALIZADO
+    db.session.commit()
+
+    with pytest.raises(CarregamentoStateError, match='FINALIZADO'):
+        cancelar_carregamento_item(item.id, operador_id=1)
+
+
+# ============================================================
+# Task 4: cancelar_carregamento (S5 distincao EM_CARREGAMENTO vs FINALIZADO)
+# ============================================================
+
+def test_cancelar_carregamento_em_carregamento_chassi_volta_anterior(setup_pedido_loja, chassi_disponivel):
+    """S5: Cancelar Carregamento EM_CARREGAMENTO — chassi volta ao estado anterior (DISPONIVEL)."""
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.flush()
+    escanear_carregamento_item(car.id, 'TESTC001', operador_id=1)
+    db.session.commit()
+
+    cancelar_carregamento(car.id, motivo='Teste cancel', operador_id=2)
+    db.session.commit()
+
+    car_ref = AssaiCarregamento.query.get(car.id)
+    assert car_ref.status == CARREGAMENTO_STATUS_CANCELADO
+    assert car_ref.motivo_cancelamento == 'Teste cancel'
+    assert car_ref.cancelado_por_id == 2
+    assert car_ref.cancelado_em is not None
+
+    # Chassi volta DISPONIVEL (era DISPONIVEL antes do escaneio — A1 sem evento)
+    assert status_efetivo('TESTC001') == EVENTO_DISPONIVEL
+
+
+def test_cancelar_carregamento_finalizado_chassis_mantem_separada(setup_pedido_loja, chassi_disponivel):
+    """S5=b: Cancelar Carregamento FINALIZADO — chassis MANTEM SEPARADA (nao desfaz adicoes)."""
+    pedido, loja, modelo = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.flush()
+    escanear_carregamento_item(car.id, 'TESTC001', operador_id=1)
+    db.session.commit()
+
+    # Simular finalizacao manual (sem rodar finalize completo): emitir SEPARADA + CARREGADA
+    sep = AssaiSeparacao(
+        pedido_id=pedido.id, loja_id=loja.id,
+        status=SEPARACAO_STATUS_CARREGADA,
+        iniciada_em=agora_brasil_naive(), fechada_em=agora_brasil_naive(),
+        fechada_por_id=1,
+    )
+    db.session.add(sep)
+    db.session.flush()
+    db.session.add(AssaiSeparacaoItem(
+        separacao_id=sep.id, chassi='TESTC001', modelo_id=modelo.id,
+        valor_unitario_qpa=1000.0,
+    ))
+    emitir_evento('TESTC001', EVENTO_SEPARADA, operador_id=1)
+    emitir_evento('TESTC001', EVENTO_CARREGADA, operador_id=1)
+    car.separacao_id = sep.id
+    car.status = CARREGAMENTO_STATUS_FINALIZADO
+    car.finalizado_em = agora_brasil_naive()
+    db.session.commit()
+
+    cancelar_carregamento(car.id, motivo='Erro de carregamento', operador_id=2)
+    db.session.commit()
+
+    car_ref = AssaiCarregamento.query.get(car.id)
+    assert car_ref.status == CARREGAMENTO_STATUS_CANCELADO
+
+    # Chassi DEVE manter SEPARADA (S5=b — nao desfaz adicoes na sep)
+    assert status_efetivo('TESTC001') == EVENTO_CARREGADA
+
+    # Sep NAO foi cancelada (so o carregamento)
+    sep_ref = AssaiSeparacao.query.get(sep.id)
+    assert sep_ref.status == SEPARACAO_STATUS_CARREGADA  # mantem
+
+
+def test_cancelar_carregamento_motivo_obrigatorio(setup_pedido_loja):
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.commit()
+
+    with pytest.raises(CarregamentoValidationError, match='motivo'):
+        cancelar_carregamento(car.id, motivo='', operador_id=1)
+
+
+def test_cancelar_carregamento_ja_cancelado_nao_idempotente(setup_pedido_loja):
+    pedido, loja, _ = setup_pedido_loja
+    car = criar_carregamento(pedido.id, loja.id, operador_id=1)
+    db.session.commit()
+
+    cancelar_carregamento(car.id, motivo='primeiro', operador_id=1)
+    db.session.commit()
+
+    # Segunda chamada deve raise (nao e idempotente — ver plano)
+    with pytest.raises(CarregamentoStateError, match='ja CANCELADO'):
+        cancelar_carregamento(car.id, motivo='segundo', operador_id=1)
