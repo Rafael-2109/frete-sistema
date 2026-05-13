@@ -17,9 +17,10 @@ from decimal import Decimal
 # NÃO sobrescrever DATABASE_URL - usar o PostgreSQL local
 os.environ['TESTING'] = 'true'
 
-# pytest_plugins precisa estar no conftest top-level (pytest 8.4+).
-# Compartilha fixtures de tests/motos_assai com tests/skills/motos_assai.
-pytest_plugins = ['tests.motos_assai.conftest']
+# Code review fix (2026-05-13): removido `pytest_plugins = ['tests.motos_assai.conftest']`
+# que causava "Plugin already registered under a different name" em pytest 8.4+.
+# Pytest carrega o conftest local automaticamente quando coleta testes da subpasta.
+# Tests/skills/motos_assai tem seu proprio conftest.py — sem dependencia cruzada.
 
 from app import create_app, db as _db
 
