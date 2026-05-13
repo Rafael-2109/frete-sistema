@@ -10,7 +10,7 @@ from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
     AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao, AssaiSeparacaoItem, AssaiNfQpa,
-    PEDIDO_STATUS_EM_PRODUCAO,
+    PEDIDO_STATUS_ABERTO,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
     NF_STATUS_BATEU, NF_STATUS_DIVERGENTE, NF_STATUS_NAO_RECONCILIADO,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
@@ -57,7 +57,8 @@ def _setup_separacao_com_chassi(admin, loja, chassi, valor=Decimal('6900')):
 
     p = AssaiPedidoVenda(
         numero=f'TST-NF-{uid}',
-        status=PEDIDO_STATUS_EM_PRODUCAO,
+        # R4.2 (Big Bang Task 20): pedido fica ABERTO ate primeira NF.
+        status=PEDIDO_STATUS_ABERTO,
         criado_por_id=admin.id,
     )
     db.session.add(p)

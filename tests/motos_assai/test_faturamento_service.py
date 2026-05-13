@@ -12,7 +12,7 @@ from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
     AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao,
-    PEDIDO_STATUS_EM_PRODUCAO, SEPARACAO_STATUS_FECHADA,
+    PEDIDO_STATUS_ABERTO, SEPARACAO_STATUS_FECHADA,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
 )
 from app.motos_assai.services import (
@@ -34,7 +34,8 @@ def _setup_separacao_fechada(app, admin):
     uid = _uid()
     p = AssaiPedidoVenda(
         numero=f'TST-FAT-{uid}',
-        status=PEDIDO_STATUS_EM_PRODUCAO,
+        # R4.2 (Big Bang Task 20): pedido fica ABERTO ate primeira NF.
+        status=PEDIDO_STATUS_ABERTO,
         criado_por_id=admin.id,
     )
     db.session.add(p)
@@ -102,7 +103,8 @@ def test_gerar_excel_separacao_nao_fechada_falha(app, admin_user):
         uid = _uid()
         p = AssaiPedidoVenda(
             numero=f'TST-FAT2-{uid}',
-            status=PEDIDO_STATUS_EM_PRODUCAO,
+            # R4.2 (Big Bang Task 20): pedido fica ABERTO ate primeira NF.
+            status=PEDIDO_STATUS_ABERTO,
             criado_por_id=admin_user.id,
         )
         db.session.add(p)

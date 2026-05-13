@@ -8,7 +8,8 @@ from app.motos_assai.services import (
 )
 from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaItem, AssaiCompraMotochefe,
-    AssaiCompraMotochefePedido, PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_EM_PRODUCAO,
+    AssaiCompraMotochefePedido,
+    PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_PARCIALMENTE_FATURADO,
 )
 
 
@@ -55,9 +56,10 @@ def test_criar_consolidado_sucesso(app, admin_user):
         assert compra.numero.startswith('MA-')
         assert compra.status == 'ABERTA'
 
-        # Pedido transicionou para EM_PRODUCAO
+        # R4.2 (Big Bang Task 20): pedido permanece ABERTO ate primeira NF.
+        # Antes: transicionava para EM_PRODUCAO automaticamente.
         p_after = AssaiPedidoVenda.query.get(p.id)
-        assert p_after.status == PEDIDO_STATUS_EM_PRODUCAO
+        assert p_after.status == PEDIDO_STATUS_ABERTO
 
         # Link N:N existe
         link = AssaiCompraMotochefePedido.query.filter_by(
@@ -71,7 +73,9 @@ def test_criar_consolidado_sucesso(app, admin_user):
 def test_consolidar_pedido_nao_aberto_falha(app, admin_user):
     with app.app_context():
         p = _criar_pedido_minimo('TEST-CONSOL-002', admin_user)
-        p.status = PEDIDO_STATUS_EM_PRODUCAO
+        # R4.2 (Big Bang Task 20): EM_PRODUCAO removido. Usar PARCIALMENTE_FATURADO
+        # como exemplo de status nao-ABERTO para validar a guarda.
+        p.status = PEDIDO_STATUS_PARCIALMENTE_FATURADO
         db.session.flush()
         with pytest.raises(CompraValidationError, match='não estão em ABERTO'):
             criar_consolidado([p.id], None, admin_user.id)

@@ -6,7 +6,7 @@ from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
     AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao, AssaiSeparacaoItem,
-    PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_EM_PRODUCAO,
+    PEDIDO_STATUS_ABERTO,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_CANCELADA,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_DISPONIVEL,
 )
@@ -28,7 +28,8 @@ def _setup(app, admin):
     loja = AssaiLoja.query.first()  # qualquer loja seeded
 
     uid = _uid()
-    p = AssaiPedidoVenda(numero=f'TST-SEP-{uid}', status=PEDIDO_STATUS_EM_PRODUCAO,
+    # R4.2 (Big Bang Task 20): pedido fica ABERTO durante a separacao.
+    p = AssaiPedidoVenda(numero=f'TST-SEP-{uid}', status=PEDIDO_STATUS_ABERTO,
                          criado_por_id=admin.id)
     db.session.add(p); db.session.flush()
     pvl = AssaiPedidoVendaLoja(pedido_id=p.id, loja_id=loja.id)
