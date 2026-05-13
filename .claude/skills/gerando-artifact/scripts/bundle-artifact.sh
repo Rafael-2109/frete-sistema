@@ -3,11 +3,21 @@
 # bundle-artifact.sh — Empacota projeto Vite/React em bundle.html auto-contido.
 #
 # Migrado para pnpm em 2026-05-13 (skill oficial Anthropic web-artifacts-builder).
+#
+# Pista diagnostica que motivou a migracao:
+#   * funcionava em DEV local com npm
+#   * falhava SO em prod (Render) com npm
+# A simetria "dev OK / prod fail" revela que a causa raiz e AMBIENTE,
+# nao codigo — npm hoisting heuristico + cache de tarball mutavel em FS
+# peculiar do Render causavam exit 0 com node_modules/@parcel/ vazio.
+#
 # Diferenca vs npm: pnpm usa CAS store (content-addressable) com hash validation
 # e hoisting deterministico via .pnpm/<pkg>@<ver>/node_modules/<pkg> symlinks.
-# Resolve bug Render onde `npm install` retornava exit 0 mas
+# Mesmo layout em qualquer ambiente — elimina a divergencia dev/prod.
+#
+# Resolve bug onde `npm install` retornava exit 0 mas
 # node_modules/@parcel/config-default ficava AUSENTE (3 retries falhavam
-# identicamente — ver logs srv-d2muidggjchc73d4segg 2026-05-13).
+# identicamente — ver logs srv-d2muidggjchc73d4segg 2026-05-13 11:36:44).
 #
 # Uso (rodar do raiz do projeto):
 #   bash bundle-artifact.sh

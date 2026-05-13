@@ -6,8 +6,11 @@
 # V2 (futuro): pre-buildar templates/base/ com shadcn/ui + Radix tarball.
 #
 # Adaptado de anthropics/skills/web-artifacts-builder/scripts/init-artifact.sh
-# Migrado para pnpm em 2026-05-13 (resolve bug npm Render onde
-# node_modules/@parcel/config-default ficava AUSENTE — ver bundle-artifact.sh).
+# Migrado para pnpm em 2026-05-13 — sintoma assimetrico revelador:
+# `npm install` funcionava em DEV local mas falhava SO em prod (Render),
+# deixando node_modules/@parcel/config-default AUSENTE apos exit 0.
+# Causa: ambiente (npm hoisting heuristico + cache mutavel em FS Render),
+# nao codigo. pnpm tem CAS store + hoisting deterministico — ver bundle-artifact.sh.
 #
 # Uso:
 #   bash init-artifact.sh <project-dir>
