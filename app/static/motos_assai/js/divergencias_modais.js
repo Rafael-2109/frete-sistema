@@ -81,18 +81,81 @@
     });
   }
 
-  // CCe (placeholder)
+  // Plano 4 Task 10: CCe via upload PDF (parser deterministico + LLM fallback)
   const btnCCe = document.getElementById('btn-confirmar-cce');
   if (btnCCe) {
-    btnCCe.addEventListener('click', () => {
+    btnCCe.addEventListener('click', async () => {
       const divId = document.getElementById('cce-div-id').value;
-      const numero = document.getElementById('cce-numero').value.trim();
-      const obs = document.getElementById('cce-observacao').value.trim();
-      resolverDivergencia(divId, {
-        tipo_resolucao: 'CCE',
-        observacao: obs || `CCe ${numero}`,
-        extras: { numero_cce: numero },
-      });
+      const fileInput = document.getElementById('cce-pdf-input');
+      const erroDiv = document.getElementById('cce-erro');
+      const previewCard = document.getElementById('cce-preview');
+
+      erroDiv?.classList.add('d-none');
+      if (!divId) {
+        if (erroDiv) {
+          erroDiv.textContent = 'Divergencia sem ID — fechar e reabrir modal';
+          erroDiv.classList.remove('d-none');
+        }
+        return;
+      }
+      if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+        if (erroDiv) {
+          erroDiv.textContent = 'Selecione o PDF da CCe';
+          erroDiv.classList.remove('d-none');
+        }
+        return;
+      }
+
+      btnCCe.disabled = true;
+      try {
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrf = csrfMeta ? csrfMeta.content : '';
+        const formData = new FormData();
+        formData.append('cce_pdf', fileInput.files[0]);
+
+        const url = '/motos-assai/divergencias/' + divId + '/upload-cce';
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {'X-CSRFToken': csrf},
+          body: formData,
+        });
+        const data = await r.json();
+        if (!data.ok) {
+          if (erroDiv) {
+            erroDiv.textContent = data.erro || 'Erro ao processar CCe';
+            erroDiv.classList.remove('d-none');
+          }
+          btnCCe.disabled = false;
+          return;
+        }
+
+        // Sucesso — mostrar preview brevemente e recarregar
+        if (previewCard) {
+          previewCard.classList.remove('d-none');
+          document.getElementById('cce-prev-numero').textContent = data.numero_cce || '—';
+          document.getElementById('cce-prev-nf').textContent = data.numero_nf_referenciada || '—';
+          document.getElementById('cce-prev-confianca').textContent
+            = (data.confianca !== undefined ? data.confianca.toFixed(2) : '—')
+            + (data.parser_usado ? ' (' + data.parser_usado + ')' : '');
+          document.getElementById('cce-prev-count').textContent = (data.chassis_trocados || 0);
+          const ul = document.getElementById('cce-prev-chassis');
+          ul.innerHTML = '';
+          (data.chassis_corrigidos_aplicados || []).forEach(par => {
+            const li = document.createElement('li');
+            li.textContent = par[0] + ' → ' + par[1];
+            ul.appendChild(li);
+          });
+        }
+        alert('CCe ' + (data.numero_cce || '') + ' aplicada — '
+              + (data.chassis_trocados || 0) + ' chassis trocados');
+        setTimeout(() => location.reload(), 800);
+      } catch (err) {
+        if (erroDiv) {
+          erroDiv.textContent = 'Erro de rede: ' + err.message;
+          erroDiv.classList.remove('d-none');
+        }
+        btnCCe.disabled = false;
+      }
     });
   }
 

@@ -1,5 +1,9 @@
+{# Plano 4 Task 10 - Modal "Aplicar CCe" via upload PDF.
+   Parser deterministico extrai chassis_corrigidos, fallback LLM se confianca baixa,
+   chama aplicar_correcao_cce + marca divergencia como resolvida (tipo=CCE).
+#}
 <div class="modal fade" id="modal-cce" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header bg-info text-white">
         <h5 class="modal-title">
@@ -8,25 +12,44 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <div class="alert alert-info">
-          <strong>Placeholder Plano 4:</strong> implementação completa de CCe (substituição de chassis na NF)
-          virá no próximo plano. Por enquanto, marca a divergência como resolvida.
-        </div>
         <input type="hidden" id="cce-div-id" />
         <input type="hidden" id="cce-nf-id" />
-        <div class="mb-3">
-          <label class="form-label">Número da CCe (para auditoria)</label>
-          <input type="text" class="form-control" id="cce-numero" placeholder="ex: 1" />
+
+        <div class="alert alert-info small">
+          <i class="fas fa-info-circle"></i>
+          Faça upload do PDF da Carta de Correcao Eletronica. O sistema extrai
+          os chassis corrigidos automaticamente (com fallback LLM se necessario)
+          e atualiza a NF.
         </div>
+
         <div class="mb-3">
-          <label class="form-label">Observação</label>
-          <textarea class="form-control" id="cce-observacao" rows="2"></textarea>
+          <label for="cce-pdf-input" class="form-label">
+            PDF da CCe <span class="text-danger">*</span>
+          </label>
+          <input type="file" class="form-control" id="cce-pdf-input"
+                 accept="application/pdf,.pdf" required />
+          <div class="form-text">Apenas PDFs de Carta de Correcao Eletronica.</div>
         </div>
+
+        <div id="cce-preview" class="card d-none mb-2">
+          <div class="card-header bg-light small">
+            <i class="fas fa-eye"></i> Pre-visualizacao da extracao
+          </div>
+          <div class="card-body small p-2">
+            <div><strong>Numero CCe:</strong> <span id="cce-prev-numero">—</span></div>
+            <div><strong>NF referenciada:</strong> <span id="cce-prev-nf">—</span></div>
+            <div><strong>Confianca parser:</strong> <span id="cce-prev-confianca">—</span></div>
+            <div><strong>Chassis a substituir (<span id="cce-prev-count">0</span>):</strong></div>
+            <ul class="mb-0 small font-monospace" id="cce-prev-chassis"></ul>
+          </div>
+        </div>
+
+        <div id="cce-erro" class="alert alert-danger small d-none"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
         <button type="button" class="btn btn-info" id="btn-confirmar-cce">
-          <i class="fas fa-check"></i> Marcar Resolvida
+          <i class="fas fa-upload"></i> Processar e aplicar CCe
         </button>
       </div>
     </div>
