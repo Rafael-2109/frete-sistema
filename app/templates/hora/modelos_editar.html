@@ -21,6 +21,22 @@
     <textarea name="descricao" class="form-control" rows="3">{{ modelo.descricao or '' }}</textarea>
   </div>
 
+  <div class="mb-3">
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox"
+             id="autopropelido" name="autopropelido" value="1"
+             {% if modelo.autopropelido %}checked{% endif %}>
+      <label class="form-check-label" for="autopropelido">
+        <strong>Autopropelido</strong> <span class="text-muted small">— desmarque para Ciclomotor</span>
+      </label>
+    </div>
+    <small class="text-muted">
+      <strong>Autopropelido</strong>: bicicleta elétrica (Res. CONTRAN 996/2023) — dispensa CNH e licenciamento; garantia 6m + 6m motor/bateria.<br>
+      <strong>Ciclomotor</strong>: exige CNH e emplacamento; garantia 3m + 9m motor/bateria; ATPV em até 15 dias úteis.<br>
+      Os textos correspondentes são impressos automaticamente nas Informações Complementares da NF-e.
+    </small>
+  </div>
+
   <hr>
   <h5 class="mb-3"><i class="fas fa-tags"></i> Preço de tabela</h5>
   <div class="row g-3 mb-3">

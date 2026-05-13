@@ -171,13 +171,118 @@ class PayloadBuilder:
             'faturas': faturas,
             'valor_desconto': self._round2_float(valor_desconto),
             'valor_nota': self._round2_float(valor_nota),
-            'inf_contribuinte': (
-                f'Venda #{venda.id} | Loja: {loja_label} | '
-                f'Vendedor: {venda.vendedor or "-"}'
-            ),
+            'inf_contribuinte': self._montar_inf_contribuinte(venda, loja_label),
             'numero_pedido': str(venda.id),
         }
         return payload
+
+    # --------------------------------------------------------------
+    # Informacoes complementares (inf_contribuinte)
+    # --------------------------------------------------------------
+    def _montar_inf_contribuinte(self, venda: 'HoraVenda', loja_label: str) -> str:
+        """Monta o texto de `inf_contribuinte` (Informacoes Complementares).
+
+        Estrutura (definida pelo dono fiscal HORA em 2026-05-13):
+
+            Modelo: <nome> - <Autopropelido|Ciclomotor>
+            Cor: <cor>
+            Chassi: <chassi>
+
+            (uma vez por item moto, na ordem do pedido)
+
+            AUTOPROPELIDO:
+            <bloco fixo de garantia e CONTRAN 996/2023>
+            (exibido 1x se ha qualquer moto autopropelido=True)
+
+            CICLOMOTOR:
+            <bloco fixo de garantia, CNH e ATPV>
+            (exibido 1x se ha qualquer moto autopropelido=False)
+
+            Venda #<id> | Loja: <label> | Vendedor: <nome>
+            (rastreio interno — mantido para auditoria gerencial)
+
+        Pecas (HoraVendaItem peca, `venda.itens_peca`) NAO entram aqui — a
+        spec cobre exclusivamente os itens-moto.
+
+        Limite SEFAZ para `inf_contribuinte`: 5000 caracteres
+        (TNFe v4.0 — `xCorpo` do `infCpl`). Loga warning se exceder.
+        """
+        partes: list[str] = []
+
+        # 1) Lista de motos (Modelo / Cor / Chassi) — itera apenas itens-moto.
+        tem_autopropelido = False
+        tem_ciclomotor = False
+        for vi in venda.itens:
+            moto = vi.moto
+            modelo_obj = moto.modelo if moto else None
+            nome_modelo = (
+                (modelo_obj.nome_modelo if modelo_obj else None)
+                or '-'
+            )
+            # Default seguro: assume Autopropelido se o atributo nao existir
+            # (modelos antigos antes da migration hora_41). Apos a migration
+            # o campo e NOT NULL com DEFAULT TRUE.
+            autop = bool(getattr(modelo_obj, 'autopropelido', True)) if modelo_obj else True
+            rotulo_tipo = 'Autopropelido' if autop else 'Ciclomotor'
+            if autop:
+                tem_autopropelido = True
+            else:
+                tem_ciclomotor = True
+
+            cor = (moto.cor if moto else None) or '-'
+            chassi = vi.numero_chassi or '-'
+
+            partes.append(f'Modelo: {nome_modelo} - {rotulo_tipo}')
+            partes.append(f'Cor: {cor}')
+            partes.append(f'Chassi: {chassi}')
+            partes.append('')  # linha em branco entre motos
+
+        # 2) Avisos por categoria — exibidos UMA vez cada, na ordem.
+        if tem_autopropelido:
+            partes.append('AUTOPROPELIDO:')
+            partes.append('')
+            partes.append(
+                'GARANTIA CONTRA DEFEITOS DE FABRICACAO DE 6 MESES E 6 MESES '
+                'DE GARANTIA ADICIONAL NO MOTOR, BATERIA E MODULO ELETRICO.'
+            )
+            partes.append('')
+            partes.append(
+                'VEICULO AUTOPROPELIDO/BICICLETA ELETRICA, CONFORME RESOLUCAO '
+                '996/2023 CONTRAN, DISPENSA USO DE CNH E LICENCIAMENTO.'
+            )
+            partes.append('')
+
+        if tem_ciclomotor:
+            partes.append('CICLOMOTOR:')
+            partes.append('')
+            partes.append(
+                'GARANTIA CONTRA DEFEITOS DE FABRICACAO DE 3 MESES E 9 MESES '
+                'DE GARANTIA ADICIONAL NO MOTOR, BATERIA E MODULO ELETRICO'
+            )
+            partes.append('')
+            partes.append('VEICULO CICLOMOTOR REQUER CNH E EMPLACAMENTO')
+            partes.append('ATPV a ser emitido em ate 15 dias uteis da emissao da NF')
+            partes.append('')
+
+        # 3) Rastreio interno — sempre por ultimo, para nao atrapalhar a leitura
+        #    fiscal do cliente. Mantem auditoria gerencial existente.
+        partes.append(
+            f'Venda #{venda.id} | Loja: {loja_label} | '
+            f'Vendedor: {venda.vendedor or "-"}'
+        )
+
+        texto = '\n'.join(partes).rstrip()
+
+        # Defesa-em-profundidade: SEFAZ aceita ate 5000 chars em xCorpo do infCpl.
+        # Truncar e perigoso (corta texto fiscal) — preferimos log de warning
+        # para detectar antes que vire problema em producao.
+        if len(texto) > 5000:
+            logger.warning(
+                'inf_contribuinte da venda %s tem %d caracteres (>5000) — '
+                'SEFAZ pode rejeitar. Revisar itens da venda.',
+                venda.id, len(texto),
+            )
+        return texto
 
     # --------------------------------------------------------------
     # Destinatario (cliente TagPlus)

@@ -102,6 +102,21 @@ class HoraModelo(db.Model):
     preco_a_vista = db.Column(db.Numeric(15, 2), nullable=True)
     preco_a_prazo = db.Column(db.Numeric(15, 2), nullable=True)
 
+    # Classificacao fiscal/regulatoria (migration hora_41). Controla os
+    # textos exibidos em `inf_contribuinte` na NF-e:
+    #   True  -> "Autopropelido" / bicicleta eletrica (Res. CONTRAN 996/2023)
+    #            dispensa CNH e licenciamento; garantia 6m + 6m motor/bateria.
+    #   False -> "Ciclomotor" — exige CNH e emplacamento; garantia 3m + 9m
+    #            motor/bateria; ATPV emitido em ate 15 dias uteis.
+    # Default True (HORA comercializa predominantemente bicicletas eletricas);
+    # operador ajusta caso a caso pelos formularios de modelo.
+    autopropelido = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default=db.text('true'),
+    )
+
     # Auditoria de merge (migration hora_29). Quando este modelo e
     # absorvido em outro, ativo=False + merged_em_id=canonico.id.
     merged_em_id = db.Column(

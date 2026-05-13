@@ -101,7 +101,16 @@ echo "HORA 36: campo consumidor_final em hora_venda..."
 python scripts/migrations/hora_36_consumidor_final.py \
     || echo "⚠️ Migration hora_36 falhou, continuando deploy..."
 
-# 10e. WhatsApp module: usuarios.whatsapp_autorizado + index parcial +
+# 10e. HORA 41: campo autopropelido em hora_modelo (classificacao Autopropelido
+# vs Ciclomotor). Controla os textos exibidos em `inf_contribuinte` da NF-e
+# (garantia, CNH, ATPV — Res. CONTRAN 996/2023). NOT NULL DEFAULT TRUE
+# (HORA vende predominantemente bicicletas eletricas); operador ajusta
+# ciclomotores caso a caso em /hora/modelos. Idempotente.
+echo "HORA 41: campo autopropelido em hora_modelo..."
+python scripts/migrations/hora_41_modelo_autopropelido.py \
+    || echo "⚠️ Migration hora_41 falhou, continuando deploy..."
+
+# 10f. WhatsApp module: usuarios.whatsapp_autorizado + index parcial +
 # tabela whatsapp_tasks. Idempotente (ADD COLUMN IF NOT EXISTS,
 # CREATE INDEX IF NOT EXISTS, CREATE TABLE IF NOT EXISTS).
 # Backend: app/whatsapp/. Plugin OpenClaw em ~/.openclaw/plugins/nacom-bridge/.

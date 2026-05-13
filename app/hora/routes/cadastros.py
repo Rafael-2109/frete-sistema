@@ -304,6 +304,8 @@ def modelos_novo():
                 descricao=request.form.get('descricao') or None,
                 preco_a_vista=request.form.get('preco_a_vista') or None,
                 preco_a_prazo=request.form.get('preco_a_prazo') or None,
+                # Checkbox: ausente do form quando desmarcado -> False.
+                autopropelido=bool(request.form.get('autopropelido')),
             )
             # Cria mapeamento TagPlus se o usuario tem permissao e preencheu
             # o ID TagPlus (chave para emissao). tagplus_codigo sozinho nao
@@ -358,6 +360,8 @@ def modelos_editar(modelo_id: int):
                 descricao=request.form.get('descricao') or None,
                 preco_a_vista=request.form.get('preco_a_vista') or None,
                 preco_a_prazo=request.form.get('preco_a_prazo') or None,
+                # Checkbox: ausente do form quando desmarcado -> False.
+                autopropelido=bool(request.form.get('autopropelido')),
             )
             # Atualiza mapeamento TagPlus se o usuario tem permissao.
             if pode_editar_tagplus:

@@ -168,12 +168,34 @@ def _normalizar_preco(valor) -> Optional[Decimal]:
     return dec if dec > 0 else None
 
 
+def _normalizar_bool(valor, *, default: bool = True) -> bool:
+    """Converte form-input em bool. Aceita: True/False (passa direto),
+    "on"/"true"/"1"/"sim"/"yes" -> True, "off"/"false"/"0"/"nao"/"no"/""/None
+    -> False. None aplica `default` (para retroatividade quando o caller
+    nao informa o campo).
+    """
+    if valor is None:
+        return default
+    if isinstance(valor, bool):
+        return valor
+    s = str(valor).strip().lower()
+    if not s:
+        return False
+    if s in ('on', 'true', '1', 'sim', 'yes', 's', 'y'):
+        return True
+    if s in ('off', 'false', '0', 'nao', 'não', 'no', 'n'):
+        return False
+    # Valor inesperado — default para evitar quebrar fluxos legados.
+    return default
+
+
 def criar_modelo(
     nome_modelo: str,
     potencia_motor: Optional[str] = None,
     descricao: Optional[str] = None,
     preco_a_vista=None,
     preco_a_prazo=None,
+    autopropelido=True,
 ) -> HoraModelo:
     nome_norm = nome_modelo.strip()
     if not nome_norm:
@@ -189,6 +211,7 @@ def criar_modelo(
         descricao=descricao,
         preco_a_vista=_normalizar_preco(preco_a_vista),
         preco_a_prazo=_normalizar_preco(preco_a_prazo),
+        autopropelido=_normalizar_bool(autopropelido, default=True),
         ativo=True,
     )
     db.session.add(modelo)
@@ -270,11 +293,15 @@ def atualizar_modelo(
     descricao: Optional[str] = None,
     preco_a_vista=None,
     preco_a_prazo=None,
+    autopropelido=None,
 ) -> HoraModelo:
     """Atualiza atributos descritivos do modelo. Não altera `ativo` (use `toggle_ativo_modelo`).
 
     Preços (preco_a_vista, preco_a_prazo): aceitar None/'' grava NULL (limpa).
     Strings sao parseadas via _normalizar_preco (aceita formato BR ou ingles).
+
+    autopropelido: aceita True/False, "on"/"true"/"1" -> True, "off"/"false"/"0"/""
+    -> False, None preserva valor atual (retroatividade — caller nao mexeu).
     """
     modelo = HoraModelo.query.get(modelo_id)
     if modelo is None:
@@ -298,6 +325,8 @@ def atualizar_modelo(
     modelo.descricao = (descricao or '').strip() or None
     modelo.preco_a_vista = _normalizar_preco(preco_a_vista)
     modelo.preco_a_prazo = _normalizar_preco(preco_a_prazo)
+    if autopropelido is not None:
+        modelo.autopropelido = _normalizar_bool(autopropelido, default=modelo.autopropelido)
     db.session.commit()
     return modelo
 
