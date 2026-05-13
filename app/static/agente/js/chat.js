@@ -5449,6 +5449,9 @@ function renderArtifactsList(artifacts) {
     const list = document.getElementById('artifacts-list');
     if (!list) return;
 
+    // Atualiza badge mobile (sincronizado com cada render do drawer)
+    updateMobileArtifactsBadge(artifacts.length);
+
     if (!artifacts.length) {
         list.innerHTML = '<div class="artifacts-empty">'
             + 'Nenhum artifact ainda. Peca ao agente: "monte um dashboard interativo de..."'
@@ -5519,7 +5522,48 @@ function openArtifactByUuid(uuidEncoded) {
         });
 }
 
+// =====================================================
+// Mobile artifacts badge — contador no header (<=768px)
+// =====================================================
+// Atualiza o badge do botao `.btn-mobile-artifacts` com a quantidade total
+// de artifacts do usuario. Acionado em 3 momentos:
+//   1) `renderArtifactsList()` (quando drawer abre — fonte de verdade)
+//   2) `refreshMobileArtifactsBadge()` (load inicial em mobile)
+//   3) Toda vez que novo artifact e criado (event `artifact:created`, opcional)
+function updateMobileArtifactsBadge(count) {
+    const badge = document.getElementById('mobile-artifacts-badge');
+    if (!badge) return;
+    const n = Number(count) || 0;
+    if (n > 0) {
+        badge.textContent = n > 99 ? '99+' : String(n);
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function refreshMobileArtifactsBadge() {
+    const badge = document.getElementById('mobile-artifacts-badge');
+    if (!badge) return;
+    fetch('/agente/api/artifacts?limit=100', { credentials: 'same-origin' })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+            if (!data) return;
+            updateMobileArtifactsBadge((data.artifacts || []).length);
+        })
+        .catch(function() { /* silent: badge stays hidden */ });
+}
+
+// Carrega contagem inicial apenas em mobile (evita request desnecessario em desktop)
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth <= 768) {
+        refreshMobileArtifactsBadge();
+    }
+});
+
 window.openArtifactsDrawer = openArtifactsDrawer;
 window.closeArtifactsDrawer = closeArtifactsDrawer;
 window.openArtifactByUuid = openArtifactByUuid;
+window.updateMobileArtifactsBadge = updateMobileArtifactsBadge;
+window.refreshMobileArtifactsBadge = refreshMobileArtifactsBadge;
 

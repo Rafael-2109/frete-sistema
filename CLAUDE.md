@@ -1,9 +1,32 @@
 # Sistema de Fretes — Referencia Compartilhada
 
-**Ultima Atualizacao**: 11/05/2026
+**Ultima Atualizacao**: 13/05/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
 > Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.
+
+---
+
+## TECH STACK
+
+> Verificado em 13/05/2026 (local Python 3.12.3 / Node 22.17 + Render workspace `tea-d01amimuk2gs73dhlup0`).
+> Versoes exatas: `requirements.txt`, `package.json`. Detalhes infra: `.claude/references/INFRAESTRUTURA.md`.
+
+| Camada | Stack |
+|--------|-------|
+| **Infra (Render, Oregon)** | Web `sistema-fretes` (Pro Plus) · Worker `sistema-fretes-worker-atacadao` (Standard, RQ) · Postgres 18 `sistema-fretes-db` (Basic 4GB) · Redis 8.1 `sistema-fretes-redis` (Starter, `allkeys_lru`) |
+| **Backend** | Python 3.12 · **Flask 3.1.2** · Flask-SQLAlchemy 3.1 · Flask-Login 0.6 · Flask-Migrate 4.1 · Flask-WTF 1.2 · SQLAlchemy 2.0 · Gunicorn 25 + gevent · psycopg2 + asyncpg (pool async SessionStore) · Pydantic 2.12 · FastAPI 0.129 (endpoints isolados) |
+| **Workers / Async** | RQ 2.6 · Redis 7.2 (client) · APScheduler · 3 perfis de worker (light-reserved / full / general — anti-starvation) |
+| **AI / Agente** | Anthropic SDK 0.98.1 · Claude Agent SDK 0.1.80 (CLI 2.1.138) · MCP 1.26 · Voyage AI + pgvector (embeddings) |
+| **Frontend** | **HTML5 + Jinja2** (templates) · **Bootstrap 5.3.3** (CSS self-hosted via `@layer bootstrap`, JS bundle CDN) · **jQuery 3.6** + jQuery Mask 1.14 (legado) · **HTMX 1.9.11** · Vanilla JS · CSS `@layer` proprio (tokens → base → components → modules → utilities) · **FontAwesome 6.4.0** (CDN) |
+| **Artifacts (chat web)** | React 18 + TS + Tailwind + Parcel via Node 20 (NVM lazy install no worker) · bundle.html servido em iframe sandboxed |
+| **Mobile App (GPS)** | Capacitor 6 (Android/iOS) — modulo rastreamento de motoristas |
+| **Browser Automation** | Playwright 1.58 (Chromium — SSW, Atacadao Hodie Booking) · Selenium 4.40 (legado) |
+| **Storage** | AWS S3 via boto3 1.42 — screenshots, archives sessao, artifacts, anexos devolucao |
+| **Observability** | Sentry SDK 2.54 (errors + APM) · structlog · colorlog |
+| **Data / Files** | pandas 3.0 · openpyxl · xlsxwriter · pdfplumber + pypdf · weasyprint · python-docx · tesserocr (OCR PT) |
+| **Integracoes externas** | Odoo XML-RPC (ERP CIEL IT) · Microsoft Teams Bot Framework · WhatsApp via OpenClaw (Baileys) · Pluggy Open Finance (Bradesco) |
+| **Build / Deploy** | `build.sh` + `start_render.sh` (web) · `start_worker_render.sh` (worker) · auto-deploy via `main` branch GitHub |
 
 ---
 
