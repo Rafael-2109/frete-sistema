@@ -15,14 +15,21 @@ from typing import Tuple, Optional
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+from sqlalchemy.exc import IntegrityError
 
 from app import db
 from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_brasil_naive
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiLoja, AssaiMoto, AssaiModelo,
-    SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
+    AssaiPedidoExcel,
+    SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
+    SEPARACAO_STATUS_CARREGADA, SEPARACAO_STATUS_FATURADA,
 )
+
+
+class FaturamentoError(Exception):
+    """Erro base do faturamento_service."""
 
 
 def gerar_excel_qpa(separacao_id: int, gerada_por_id: int) -> Tuple[bytes, Optional[str]]:
@@ -35,11 +42,19 @@ def gerar_excel_qpa(separacao_id: int, gerada_por_id: int) -> Tuple[bytes, Optio
         ValueError: se separação não está em status FECHADA ou FATURADA.
     """
     sep = AssaiSeparacao.query.get_or_404(separacao_id)
-    # H3: validar status antes de gerar — apenas separações fechadas/faturadas
-    if sep.status not in (SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA):
+    # H3: validar status antes de gerar.
+    # Aceita: FECHADA, CARREGADA, FATURADA + EM_SEPARACAO (para regeneracao
+    # apos substituicao cross-loja durante separacao em andamento).
+    statuses_validos = (
+        SEPARACAO_STATUS_EM_SEPARACAO,
+        SEPARACAO_STATUS_FECHADA,
+        SEPARACAO_STATUS_CARREGADA,
+        SEPARACAO_STATUS_FATURADA,
+    )
+    if sep.status not in statuses_validos:
         raise ValueError(
             f'Separação {separacao_id} está {sep.status}, '
-            f'esperado {SEPARACAO_STATUS_FECHADA} ou {SEPARACAO_STATUS_FATURADA}'
+            f'esperado um de: {", ".join(statuses_validos)}'
         )
     loja = AssaiLoja.query.get(sep.loja_id)
 
@@ -164,3 +179,78 @@ def gerar_excel_qpa(separacao_id: int, gerada_por_id: int) -> Tuple[bytes, Optio
     db.session.commit()
 
     return bytes_xlsx, s3_key
+
+
+def regenerar_excel_qpa(separacao_id: int, operador_id: int, motivo: str) -> AssaiPedidoExcel:
+    """Regenera Excel Q.P.A. de uma separação (D-C + S13=a + CR-9/CR-12).
+
+    Wrapper sobre `gerar_excel_qpa` que aplica a regra D-C:
+    - Desativa Excel anterior (versao--, ativo=False)
+    - Cria nova versao (com lock CR-12 + retry CR-9 via SAVEPOINT)
+    - Persiste em AssaiPedidoExcel (historico versionado)
+
+    Concorrencia (CR-12): lock pessimista na sep para serializar regeneracoes
+    concorrentes do mesmo Excel. Sem isso, 2 transacoes podem criar 2 Excels
+    com mesma versao = IntegrityError.
+
+    Retry (CR-9): IntegrityError ao inserir AssaiPedidoExcel (race entre
+    SELECT MAX(versao) e INSERT) trata via SAVEPOINT — recalcula MAX e
+    tenta novamente. Sem savepoint, rollback total perderia operacao caller.
+
+    Args:
+        separacao_id: id da AssaiSeparacao a regenerar Excel.
+        operador_id: usuario que solicitou (auditoria).
+        motivo: explicacao para historico (mostrado em /faturamento e auditoria).
+
+    Returns:
+        AssaiPedidoExcel ativo recem-criado (commit fica para o caller).
+
+    Raises:
+        ValueError: status invalido (gerar_excel_qpa).
+    """
+    # CR-12: lock pessimista na sep para serializar regeneracoes
+    sep_locked = AssaiSeparacao.query.filter_by(id=separacao_id).with_for_update().first()
+    if not sep_locked:
+        raise FaturamentoError(f'Separação {separacao_id} não encontrada')
+
+    excel_anterior = AssaiPedidoExcel.query.filter_by(
+        separacao_id=separacao_id, ativo=True,
+    ).first()
+    if excel_anterior:
+        excel_anterior.ativo = False  # mantem historico
+
+    nova_versao = (excel_anterior.versao + 1) if excel_anterior else 1
+
+    # gerar_excel_qpa retorna (bytes, s3_key) — internamente faz commit do
+    # sep.solicitacao_excel_s3_key, mas isso é compatível com nosso flow.
+    bytes_xlsx, s3_key = gerar_excel_qpa(separacao_id, operador_id)
+
+    # CR-9 retry: SAVEPOINT isola o INSERT. Se falhar (race no MAX(versao)),
+    # recalcula MAX e tenta novamente.
+    try:
+        with db.session.begin_nested():
+            excel_novo = AssaiPedidoExcel(
+                pedido_id=sep_locked.pedido_id,
+                separacao_id=separacao_id,
+                s3_key=s3_key, versao=nova_versao, ativo=True,
+                motivo_regeneracao=motivo,
+                gerado_por_id=operador_id,
+            )
+            db.session.add(excel_novo)
+    except IntegrityError:
+        # Savepoint reverteu o INSERT. Recalcula MAX e tenta de novo.
+        max_versao = (db.session.query(db.func.coalesce(db.func.max(AssaiPedidoExcel.versao), 0))
+                      .filter_by(separacao_id=separacao_id)
+                      .scalar() or 0)
+        nova_versao = max_versao + 1
+        excel_novo = AssaiPedidoExcel(
+            pedido_id=sep_locked.pedido_id,
+            separacao_id=separacao_id,
+            s3_key=s3_key, versao=nova_versao, ativo=True,
+            motivo_regeneracao=f'{motivo} (retry)',
+            gerado_por_id=operador_id,
+        )
+        db.session.add(excel_novo)
+        db.session.flush()
+
+    return excel_novo

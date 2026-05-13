@@ -69,7 +69,7 @@ from .separacao_service import (
     criar_separacao_com_saldos,
 )
 from .separacao_mirror_service import sincronizar_espelho_com_separacao
-from .faturamento_service import gerar_excel_qpa
+from .faturamento_service import gerar_excel_qpa, regenerar_excel_qpa, FaturamentoError
 from .geocoding_service import geocodar_loja, geocodar_lote, GeocodingError
 from .pos_venda_service import (
     listar_motos_vendidas, contexto_moto_por_chassi, chassi_foi_vendido,
@@ -121,7 +121,7 @@ __all__ = [
     'atualizar_agendamento_loja',
     'criar_separacao_com_saldos',
     'sincronizar_espelho_com_separacao',
-    'gerar_excel_qpa',
+    'gerar_excel_qpa', 'regenerar_excel_qpa', 'FaturamentoError',
     'geocodar_loja', 'geocodar_lote', 'GeocodingError',
     'listar_motos_vendidas', 'contexto_moto_por_chassi', 'chassi_foi_vendido',
     'listar_ocorrencias', 'criar_ocorrencia', 'atualizar_ocorrencia', 'excluir_ocorrencia',

@@ -1,0 +1,31 @@
+{# Modal: Confirmar finalizar carregamento (algoritmo §6 com 8 fases) #}
+<div class="modal fade" id="modal-finalizar-car" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-check-double text-success"></i> Finalizar Carregamento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p>Finalizar este carregamento? Ao confirmar, o sistema executa as 8 fases do algoritmo:</p>
+        <ol class="small text-muted">
+          <li>Identifica/cria a separação alvo</li>
+          <li>Sobrescreve chassis (cancela divergentes, adiciona faltantes)</li>
+          <li>Valida limite do pedido (S14=a)</li>
+          <li>Atualiza Sep status -> CARREGADA + emite evento <code>CARREGADA</code></li>
+          <li>Regenera Excel Q.P.A.</li>
+          <li>Sincroniza espelho Nacom (Separacao)</li>
+          <li>Cria divergências se NF Q.P.A. já BATEU (vira DIVERGENTE)</li>
+          <li>Recalcula status do pedido</li>
+        </ol>
+        <p class="mb-0"><strong>Após finalizar, a separação fica pronta para faturamento.</strong></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-success btn-lg" id="car-btn-confirmar-finalizar">
+          <i class="fas fa-check-double"></i> Confirmar finalização
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

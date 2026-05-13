@@ -1,0 +1,33 @@
+{# Modal: Alterar carregamento — reabre FINALIZADO -> EM_CARREGAMENTO (S6=a) #}
+<div class="modal fade" id="modal-alterar-car" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-undo text-warning"></i> Alterar Carregamento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning small mb-3">
+          <strong>S6=a:</strong> Esta ação reabre o carregamento (status FINALIZADO -> EM_CARREGAMENTO)
+          para você adicionar/remover chassis.
+        </div>
+        <p><strong>Efeitos:</strong></p>
+        <ul class="small">
+          <li>Carregamento volta para <code>EM_CARREGAMENTO</code>.</li>
+          <li>Items existentes são <strong>preservados</strong> (não são apagados).</li>
+          <li><strong>H3 fix:</strong> Sep vinculada regredí de <code>CARREGADA</code> para <code>FECHADA</code>
+              (mantém invariante "Sep CARREGADA &lt;-&gt; Carregamento FINALIZADO"). A sep mantém os chassis.</li>
+          <li>Ao re-finalizar, as 8 fases do algoritmo §6 rodam novamente
+              (sep alvo pode mudar, chassis recalculados, Excel regenerado).</li>
+        </ul>
+        <p class="mb-0">Continuar?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-warning btn-lg" id="car-btn-confirmar-alterar">
+          <i class="fas fa-undo"></i> Confirmar — reabrir carregamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

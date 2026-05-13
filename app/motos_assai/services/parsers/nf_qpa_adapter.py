@@ -21,10 +21,19 @@ from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_brasil_naive
 from app.motos_assai.models import (
     AssaiNfQpa, AssaiNfQpaItem, AssaiLoja,
-    AssaiSeparacao, AssaiSeparacaoItem,
+    AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
     SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
+    SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
+    SEPARACAO_STATUS_CARREGADA,
     NF_STATUS_BATEU, NF_STATUS_DIVERGENTE, NF_STATUS_NAO_RECONCILIADO,
-    EVENTO_FATURADA,
+    NF_STATUS_CANCELADA,
+    EVENTO_FATURADA, EVENTO_SEPARADA,
+    DIVERGENCIA_TIPO_LOJA_DIVERGENTE,
+    DIVERGENCIA_TIPO_VALOR_DIVERGENTE,
+    DIVERGENCIA_TIPO_MODELO_DIVERGENTE,
+    DIVERGENCIA_TIPO_CHASSI_SEM_SEPARACAO,
+    DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO,
+    DIVERGENCIA_TIPO_CHASSI_OUTRA_LOJA,
 )
 from app.motos_assai.services.modelo_resolver import resolver_modelo
 from app.motos_assai.services.moto_evento_service import emitir_evento
@@ -214,14 +223,29 @@ def importar_nf_qpa(
 
 
 def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
-    """Tenta amarrar cada item da NF a uma AssaiSeparacaoItem ativo.
+    """Tenta amarrar cada item da NF a uma AssaiSeparacaoItem ativo (v2).
 
-    Critérios de BATEU:
-    - chassi existe em AssaiSeparacaoItem ativa
-    - separacao.loja_id == nf.loja_id (se NF tem loja)
-    - separacao_item.modelo_id resolvido bate com modelo extraído
-    - valor com tolerância de 1%
+    Plano 3 Tasks 3-5:
+    - D5: ignora seps FATURADAS no JOIN (evita dupla vinculacao G7)
+    - S8=a: grava divergencias em assai_divergencia centralizada (NAO em tipo_divergencia do item)
+    - A8: valida modelo (cria MODELO_DIVERGENTE)
+    - A14: idempotente — early return se NF CANCELADA
+    - N-M6: distingue CHASSI_NAO_CADASTRADO vs CHASSI_SEM_SEPARACAO
+    - M3: emite evento FATURADA por chassi quando BATEU (preserva comportamento legado)
+
+    Atualiza:
+        - nf.status_match (BATEU / DIVERGENTE / NAO_RECONCILIADO)
+        - cria divergencias em assai_divergencia
+        - vincula sep_item ao item da NF (separacao_item_id)
+
+    NAO commita.
     """
+    # A14: NF cancelada nao bate mais nada
+    if nf.status_match == NF_STATUS_CANCELADA:
+        return
+
+    from app.motos_assai.services.divergencia_service import criar_divergencia
+
     items_nf = AssaiNfQpaItem.query.filter_by(nf_id=nf.id).all()
     matches_ok = 0
     matches_falha = 0
@@ -229,37 +253,85 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
     separacoes_atualizar = set()
 
     for it in items_nf:
+        # D5: ignora FATURADA + CANCELADA no JOIN (evita dupla vinculacao)
         sep_item = (
             db.session.query(AssaiSeparacaoItem)
             .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
             .filter(
                 AssaiSeparacaoItem.chassi == it.chassi,
-                AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+                AssaiSeparacao.status.notin_([
+                    SEPARACAO_STATUS_FATURADA, SEPARACAO_STATUS_CANCELADA,
+                ]),
             )
             .first()
         )
 
         if not sep_item:
-            it.tipo_divergencia = 'CHASSI_SEM_SEPARACAO'
+            # N-M6 fix: distinguir CHASSI_NAO_CADASTRADO (moto inexistente em assai_moto)
+            # de CHASSI_SEM_SEPARACAO (moto existe mas sem sep candidata)
+            moto_check = AssaiMoto.query.filter_by(chassi=it.chassi).first()
+            tipo_div = (
+                DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO if not moto_check
+                else DIVERGENCIA_TIPO_CHASSI_SEM_SEPARACAO
+            )
+            criar_divergencia(
+                tipo=tipo_div,
+                chassi=it.chassi, nf_id=nf.id,
+                detalhes={'modelo_extraido': it.modelo_extraido},
+            )
+            # S8=a: legado tipo_divergencia mantido para retrocompat (ate UI migrar)
+            it.tipo_divergencia = tipo_div
             matches_falha += 1
             continue
 
         sep = AssaiSeparacao.query.get(sep_item.separacao_id)
 
-        # Loja
+        # 1. Loja (S8=a)
         loja_ok = (not nf.loja_id) or (sep.loja_id == nf.loja_id)
         if not loja_ok:
+            criar_divergencia(
+                tipo=DIVERGENCIA_TIPO_LOJA_DIVERGENTE,
+                chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
+                detalhes={'loja_sep': sep.loja_id, 'loja_nf': nf.loja_id},
+            )
             it.tipo_divergencia = 'LOJA_DIVERGENTE'
             matches_falha += 1
             continue
 
-        # Valor com tolerância 1%
+        # 2. Valor com tolerância 1% (S8=a)
         v_sep = sep_item.valor_unitario_qpa
         v_nf = it.valor_extraido or Decimal('0')
         if v_sep > 0:
             diff_pct = abs(v_sep - v_nf) / v_sep
             if diff_pct > TOLERANCIA_VALOR_PCT:
+                criar_divergencia(
+                    tipo=DIVERGENCIA_TIPO_VALOR_DIVERGENTE,
+                    chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
+                    detalhes={
+                        'valor_sep': float(v_sep),
+                        'valor_nf': float(v_nf),
+                        'pct': float(diff_pct),
+                    },
+                )
                 it.tipo_divergencia = 'VALOR_DIVERGENTE'
+                matches_falha += 1
+                continue
+
+        # 3. A8 — Modelo (chassi cadastrado em assai_moto X modelo extraido da NF)
+        moto = AssaiMoto.query.filter_by(chassi=it.chassi).first()
+        if moto and it.modelo_extraido:
+            modelo_resolvido = resolver_modelo(it.modelo_extraido, origem='NF_QPA')
+            if modelo_resolvido and moto.modelo_id != modelo_resolvido.id:
+                criar_divergencia(
+                    tipo=DIVERGENCIA_TIPO_MODELO_DIVERGENTE,
+                    chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
+                    detalhes={
+                        'modelo_assai_moto_id': moto.modelo_id,
+                        'modelo_extraido_nf': it.modelo_extraido,
+                        'modelo_resolvido_id': modelo_resolvido.id,
+                    },
+                )
+                it.tipo_divergencia = 'MODELO_DIVERGENTE'
                 matches_falha += 1
                 continue
 
@@ -278,11 +350,13 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
         if separacoes_atualizar:
             nf.separacao_id = next(iter(separacoes_atualizar))
 
-        # Atualiza separações para FATURADA + emite eventos FATURADA
+        # Atualiza separações para FATURADA + emite eventos FATURADA (M3)
         for sep_id in separacoes_atualizar:
             sep = AssaiSeparacao.query.get(sep_id)
-            sep.status = SEPARACAO_STATUS_FATURADA
+            if sep:
+                sep.status = SEPARACAO_STATUS_FATURADA
 
+        # M3 fix: emite evento FATURADA por chassi (preserva comportamento legado)
         for it_ok in items_nf:
             if it_ok.separacao_item_id:
                 emitir_evento(

@@ -1,0 +1,153 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block title %}Carregamento #{{ carregamento.id }} — Motos Assaí{% endblock %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2"
+        id="header-carregamento">
+  <div>
+    <h2 class="mb-0">
+      <a href="{{ url_for('motos_assai.carregamento_lista') }}"
+         class="btn btn-link p-0 text-decoration-none">
+        <i class="fas fa-arrow-left"></i>
+      </a>
+      Carregamento #{{ carregamento.id }}
+      <span class="badge bg-{% if carregamento.status == 'EM_CARREGAMENTO' %}primary{% elif carregamento.status == 'FINALIZADO' %}success{% elif carregamento.status == 'CANCELADO' %}danger{% else %}secondary{% endif %} ms-2">
+        {{ carregamento.status }}
+      </span>
+    </h2>
+    <p class="text-muted mb-0 small">
+      Pedido <code>{{ carregamento.pedido.numero }}</code>
+      · Loja <strong>{{ carregamento.loja.numero }}</strong> {{ carregamento.loja.nome }}
+      · Iniciado em {{ carregamento.iniciado_em.strftime('%d/%m/%Y %H:%M') }}
+    </p>
+  </div>
+  {% if carregamento.separacao_id %}
+  <div>
+    <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=carregamento.pedido_id, loja_id=carregamento.loja_id, sep_id=carregamento.separacao_id) }}"
+       class="btn btn-sm btn-outline-info">
+      <i class="fas fa-link"></i> Sep #{{ carregamento.separacao_id }}
+    </a>
+  </div>
+  {% endif %}
+</header>
+
+{% if carregamento.status == 'CANCELADO' %}
+<div class="alert alert-danger" role="alert">
+  <strong><i class="fas fa-ban"></i> Carregamento cancelado</strong>
+  {% if carregamento.motivo_cancelamento %}<br><small>{{ carregamento.motivo_cancelamento }}</small>{% endif %}
+  {% if carregamento.cancelado_em %}<br><small>Em {{ carregamento.cancelado_em.strftime('%d/%m/%Y %H:%M') }}</small>{% endif %}
+</div>
+{% elif carregamento.status == 'FINALIZADO' %}
+<div class="alert alert-success" role="alert">
+  <strong><i class="fas fa-check-circle"></i> Carregamento finalizado</strong>
+  {% if carregamento.finalizado_em %}<br><small>Em {{ carregamento.finalizado_em.strftime('%d/%m/%Y %H:%M') }}</small>{% endif %}
+  <br><small>Para adicionar/remover chassis, clique em <strong>Alterar</strong> abaixo (S6=a — reabre o carregamento e regredi a Sep para FECHADA).</small>
+</div>
+{% endif %}
+
+{% if carregamento.status == 'EM_CARREGAMENTO' %}
+<div class="card p-3 mb-3" style="max-width: 600px;" id="scan-input-card">
+  <label class="form-label fw-bold">Chassi</label>
+  <div class="input-group">
+    <input type="text" id="input-chassi" class="form-control form-control-lg"
+           autofocus placeholder="QR / Código de barras / digitar (Enter)" maxlength="50"
+           autocapitalize="characters" enterkeyhint="search"
+           autocomplete="off"
+           data-chassi-autocomplete='{"contexto":"carregamento"}'>
+    <button type="button" id="btn-camera" class="btn btn-outline-secondary"
+            title="Abrir câmera">
+      <i class="fas fa-camera"></i>
+    </button>
+  </div>
+  <div id="qr-reader" class="mt-2 d-none" style="max-width:300px;"></div>
+  <div id="alerta-carregamento" class="mt-2 d-none"></div>
+</div>
+{% endif %}
+
+<h4 class="mt-4">
+  <i class="fas fa-list-ul"></i>
+  Chassis escaneados <span class="badge bg-secondary">{{ items|length }}</span>
+</h4>
+<div class="table-responsive">
+<table class="table table-sm align-middle" id="items-table">
+  <thead class="table-light">
+    <tr>
+      <th>Chassi</th>
+      <th>Modelo</th>
+      <th>Escaneado em</th>
+      <th class="text-end">Ação</th>
+    </tr>
+  </thead>
+  <tbody id="items-tbody">
+    {% for it in items %}
+    <tr data-item-id="{{ it.id }}">
+      <td><code>{{ it.chassi }}</code></td>
+      <td><strong>{{ it.modelo.codigo if it.modelo else '—' }}</strong>
+          {% if it.modelo and it.modelo.nome %}<br><small class="text-muted">{{ it.modelo.nome }}</small>{% endif %}</td>
+      <td><small class="text-muted">{{ it.escaneado_em.strftime('%d/%m %H:%M') if it.escaneado_em else '—' }}</small></td>
+      <td class="text-end">
+        {% if carregamento.status == 'EM_CARREGAMENTO' %}
+        <button type="button" class="btn btn-sm btn-outline-warning"
+                data-action="cancelar-item" data-item-id="{{ it.id }}"
+                data-chassi="{{ it.chassi }}">
+          <i class="fas fa-times"></i> Remover
+        </button>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr id="row-vazio"><td colspan="4" class="text-center text-muted py-3">
+      Nenhum chassi escaneado ainda.
+    </td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="d-flex gap-2 mt-3 flex-wrap" id="botoes-acao">
+  {% if carregamento.status == 'EM_CARREGAMENTO' %}
+  <button type="button" class="btn btn-success btn-lg" id="btn-finalizar"
+          {% if not items %}disabled title="Escaneie pelo menos 1 chassi"{% endif %}>
+    <i class="fas fa-check-double"></i> Finalizar Carregamento
+  </button>
+  <button type="button" class="btn btn-outline-danger btn-lg ms-auto" id="btn-cancelar">
+    <i class="fas fa-ban"></i> Cancelar Carregamento
+  </button>
+  {% elif carregamento.status == 'FINALIZADO' %}
+  <button type="button" class="btn btn-warning btn-lg" id="btn-alterar">
+    <i class="fas fa-undo"></i> Alterar (reabrir)
+  </button>
+  <button type="button" class="btn btn-outline-danger btn-lg ms-auto" id="btn-cancelar">
+    <i class="fas fa-ban"></i> Cancelar Carregamento
+  </button>
+  {% endif %}
+</div>
+
+{# ============ Modais ============ #}
+{% include 'motos_assai/carregamento/_modal_finalizar.html' %}
+{% include 'motos_assai/carregamento/_modal_cancelar.html' %}
+{% include 'motos_assai/carregamento/_modal_alterar.html' %}
+{% include 'motos_assai/carregamento/_modal_excedente.html' %}
+
+<script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}" defer></script>
+<script>
+window.MOTOS_ASSAI_CAR = {
+  carregamentoId: {{ carregamento.id }},
+  status: '{{ carregamento.status }}',
+  endpoints: {
+    escanear:    '{{ url_for("motos_assai.carregamento_escanear_ajax", carregamento_id=carregamento.id) }}',
+    cancelarItemBase: '{{ url_for("motos_assai.carregamento_item_cancelar_ajax", item_id=999999999)|replace("/999999999", "/") }}',
+    finalizar:   '{{ url_for("motos_assai.carregamento_finalizar_ajax", carregamento_id=carregamento.id) }}',
+    cancelar:    '{{ url_for("motos_assai.carregamento_cancelar_ajax", carregamento_id=carregamento.id) }}',
+    alterar:     '{{ url_for("motos_assai.carregamento_alterar_ajax", carregamento_id=carregamento.id) }}',
+  },
+};
+</script>
+<script src="{{ url_for('static', filename='motos_assai/js/chassi_autocomplete.js') }}" defer></script>
+<script src="{{ url_for('static', filename='motos_assai/js/carregamento_escanear.js') }}" defer></script>
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/carregamento_escanear.js') }}"></script>
+{% endblock %}
