@@ -1,0 +1,159 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block title %}Carregamentos — Motos Assaí{% endblock %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0"><i class="fas fa-truck-loading text-primary"></i> Carregamentos</h2>
+  <button type="button" class="btn btn-success" data-bs-toggle="modal"
+          data-bs-target="#modal-iniciar-carregamento" id="btn-iniciar-carregamento">
+    <i class="fas fa-plus-circle"></i> Iniciar Carregamento
+  </button>
+</header>
+
+<div class="alert alert-light border small mb-3">
+  <strong><i class="fas fa-info-circle text-primary"></i> Como funciona o carregamento:</strong>
+  <ol class="mb-0 mt-1 ps-3">
+    <li>Clique em <strong>"Iniciar Carregamento"</strong> e escolha o pedido + loja Sendas (A2: vários veículos podem carregar em paralelo).</li>
+    <li>Escaneie cada chassi pelo leitor / câmera / digitação. Não emite evento — só ao finalizar (A1).</li>
+    <li>Clique <strong>"Finalizar"</strong> quando todos os chassis estiverem escaneados — sistema cria/atualiza a separação alvo, emite evento <code>CARREGADA</code> e libera para faturamento.</li>
+  </ol>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, msg in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+      {{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+  {% endfor %}
+{% endwith %}
+
+{# ================== Em andamento ================== #}
+<h4 class="mt-4">
+  <i class="fas fa-play-circle text-primary"></i>
+  Em andamento <span class="badge bg-primary">{{ em_andamento|length }}</span>
+</h4>
+{% if em_andamento %}
+<div class="table-responsive" id="tabela-em-andamento">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>#</th>
+        <th>Pedido</th>
+        <th>Loja</th>
+        <th>Iniciado em</th>
+        <th class="text-end">Itens</th>
+        <th class="text-end">Ação</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in em_andamento %}
+      <tr>
+        <td><strong>{{ c.id }}</strong></td>
+        <td><code>{{ c.pedido.numero }}</code></td>
+        <td><strong>{{ c.loja.numero }}</strong> {{ c.loja.nome }}</td>
+        <td><small>{{ c.iniciado_em.strftime('%d/%m/%Y %H:%M') }}</small></td>
+        <td class="text-end">{{ c.itens|length }}</td>
+        <td class="text-end">
+          <a href="{{ url_for('motos_assai.carregamento_detalhe', carregamento_id=c.id) }}"
+             class="btn btn-sm btn-primary">
+            <i class="fas fa-arrow-right"></i> Continuar
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted small mb-3">Nenhum carregamento em andamento.</p>
+{% endif %}
+
+{# ================== Finalizados recentes ================== #}
+<h4 class="mt-4">
+  <i class="fas fa-check-circle text-success"></i>
+  Finalizados recentes
+</h4>
+{% if finalizados_recentes %}
+<div class="table-responsive" id="tabela-finalizados">
+  <table class="table table-sm align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>#</th>
+        <th>Pedido</th>
+        <th>Loja</th>
+        <th>Sep #</th>
+        <th>Finalizado em</th>
+        <th class="text-end">Itens</th>
+        <th class="text-end">Ação</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in finalizados_recentes %}
+      <tr>
+        <td>{{ c.id }}</td>
+        <td><code>{{ c.pedido.numero }}</code></td>
+        <td><strong>{{ c.loja.numero }}</strong> {{ c.loja.nome }}</td>
+        <td>
+          {% if c.separacao_id %}
+            <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=c.pedido_id, loja_id=c.loja_id, sep_id=c.separacao_id) }}">
+              {{ c.separacao_id }}
+            </a>
+          {% else %}—{% endif %}
+        </td>
+        <td><small>{{ c.finalizado_em.strftime('%d/%m %H:%M') if c.finalizado_em else '—' }}</small></td>
+        <td class="text-end">{{ c.itens|length }}</td>
+        <td class="text-end">
+          <a href="{{ url_for('motos_assai.carregamento_detalhe', carregamento_id=c.id) }}"
+             class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-eye"></i> Ver
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted small mb-3">Nenhum carregamento finalizado recentemente.</p>
+{% endif %}
+
+{# ================== Cancelados recentes ================== #}
+{% if cancelados_recentes %}
+<h4 class="mt-4">
+  <i class="fas fa-ban text-danger"></i>
+  Cancelados recentes
+</h4>
+<div class="table-responsive" id="tabela-cancelados">
+  <table class="table table-sm align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>#</th>
+        <th>Pedido</th>
+        <th>Loja</th>
+        <th>Cancelado em</th>
+        <th>Motivo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cancelados_recentes %}
+      <tr>
+        <td>{{ c.id }}</td>
+        <td><code>{{ c.pedido.numero }}</code></td>
+        <td><strong>{{ c.loja.numero }}</strong> {{ c.loja.nome }}</td>
+        <td><small>{{ c.cancelado_em.strftime('%d/%m %H:%M') if c.cancelado_em else '—' }}</small></td>
+        <td><small class="text-muted">{{ c.motivo_cancelamento or '—' }}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% include 'motos_assai/carregamento/_modal_iniciar.html' %}
+{% endblock %}
+
+{% block onboarding_tours %}
+<script src="{{ url_for('static', filename='onboarding/tours/motos_assai/carregamento_lista.js') }}"></script>
+{% endblock %}

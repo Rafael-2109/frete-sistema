@@ -1,0 +1,52 @@
+{# Modal: Iniciar Carregamento (form pedido + loja) — A2: N carregamentos paralelos #}
+<div class="modal fade" id="modal-iniciar-carregamento" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('motos_assai.carregamento_iniciar') }}">
+        {# CSRF token (gerado por Flask-WTF para forms HTML) #}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-plus-circle text-success"></i> Iniciar Carregamento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="modal-iniciar-pedido" class="form-label">
+              Pedido <span class="text-danger">*</span>
+            </label>
+            <select id="modal-iniciar-pedido" name="pedido_id"
+                    class="form-select form-select-lg" required>
+              <option value="">Selecione um pedido...</option>
+              {% for p in pedidos_abertos %}
+              <option value="{{ p.id }}">{{ p.numero }} ({{ p.status }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="modal-iniciar-loja" class="form-label">
+              Loja Sendas <span class="text-danger">*</span>
+            </label>
+            <select id="modal-iniciar-loja" name="loja_id"
+                    class="form-select form-select-lg" required>
+              <option value="">Selecione uma loja...</option>
+              {% for l in lojas %}
+              <option value="{{ l.id }}">{{ l.numero }} — {{ l.nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="alert alert-info small mb-0">
+            <i class="fas fa-info-circle"></i>
+            <strong>A2:</strong> N carregamentos paralelos podem existir para o mesmo (pedido, loja).
+            Cada um vira um veículo de carga independente.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-play"></i> Iniciar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
