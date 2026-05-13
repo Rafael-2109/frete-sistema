@@ -1,0 +1,184 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block title %}Divergências — Motos Assaí{% endblock %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-0">Divergências Q.P.A.</h2>
+    <small class="text-muted">
+      Pendentes: <strong>{{ contadores.pendentes }}</strong> ·
+      Resolvidas: <strong>{{ contadores.resolvidas }}</strong>
+    </small>
+  </div>
+</header>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-auto">
+    <label class="form-label small mb-1">Status</label>
+    <select name="status" class="form-select form-select-sm">
+      <option value="pendentes" {% if status_filtro == 'pendentes' %}selected{% endif %}>Pendentes</option>
+      <option value="resolvidas" {% if status_filtro == 'resolvidas' %}selected{% endif %}>Resolvidas</option>
+      <option value="todas" {% if status_filtro == 'todas' %}selected{% endif %}>Todas</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-1">Tipo</label>
+    <select name="tipo" class="form-select form-select-sm">
+      <option value="">Todos</option>
+      {% for t in DIVERGENCIA_TIPOS_VALIDOS %}
+        <option value="{{ t }}" {% if tipo_filtro == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+  </div>
+</form>
+
+{% if not divergencias %}
+  <div class="alert alert-success">
+    <i class="fas fa-check-circle"></i> Nenhuma divergência encontrada com os filtros atuais.
+  </div>
+{% else %}
+<div class="table-responsive">
+<table class="table table-sm table-hover" id="tabela-divergencias">
+  <thead class="table-light">
+    <tr>
+      <th>#</th>
+      <th>Tipo</th>
+      <th>Chassi</th>
+      <th>NF</th>
+      <th>Sep</th>
+      <th>Carregamento</th>
+      <th>Criada em</th>
+      <th>Resolução</th>
+      <th class="text-end">Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in divergencias %}
+    {% set nf_ref = nfs_por_id.get(d.nf_id) if d.nf_id else None %}
+    {% set sep_ref = seps_por_id.get(d.separacao_id) if d.separacao_id else None %}
+    {% set car_ref = cars_por_id.get(d.carregamento_id) if d.carregamento_id else None %}
+    <tr data-div-id="{{ d.id }}">
+      <td><code>{{ d.id }}</code></td>
+      <td>
+        <span class="badge bg-{% if d.resolvida_em %}secondary{% else %}warning text-dark{% endif %}">
+          {{ d.tipo }}
+        </span>
+      </td>
+      <td><code>{{ d.chassi or '-' }}</code></td>
+      <td>
+        {% if nf_ref %}
+          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf_ref.id) }}">
+            {{ nf_ref.numero }}
+          </a>
+          <small class="text-muted d-block">{{ nf_ref.status_match }}</small>
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>
+        {% if sep_ref %}
+          #{{ sep_ref.id }}
+          <small class="text-muted d-block">{{ sep_ref.status }}</small>
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>
+        {% if car_ref %}
+          #{{ car_ref.id }}
+          <small class="text-muted d-block">{{ car_ref.status }}</small>
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>
+        <small>{{ d.criada_em.strftime('%d/%m %H:%M') if d.criada_em else '-' }}</small>
+      </td>
+      <td>
+        {% if d.resolvida_em %}
+          <span class="badge bg-success">{{ d.tipo_resolucao }}</span>
+          <small class="text-muted d-block">
+            {{ d.resolvida_em.strftime('%d/%m %H:%M') }}
+          </small>
+        {% else %}
+          <span class="text-muted small">pendente</span>
+        {% endif %}
+      </td>
+      <td class="text-end">
+        {% if not d.resolvida_em %}
+          <div class="btn-group btn-group-sm" role="group">
+            {% if nf_ref and nf_ref.status_match != 'CANCELADA' %}
+              <button type="button" class="btn btn-outline-danger btn-sm btn-resolver"
+                      data-div-id="{{ d.id }}"
+                      data-tipo="CANCELAR_NF"
+                      data-nf-id="{{ nf_ref.id }}"
+                      data-bs-toggle="modal" data-bs-target="#modal-cancelar-nf">
+                Cancelar NF
+              </button>
+              <button type="button" class="btn btn-outline-info btn-sm btn-resolver"
+                      data-div-id="{{ d.id }}"
+                      data-tipo="CCE"
+                      data-nf-id="{{ nf_ref.id }}"
+                      data-bs-toggle="modal" data-bs-target="#modal-cce">
+                CCe
+              </button>
+            {% endif %}
+            {% if car_ref %}
+              <button type="button" class="btn btn-outline-warning btn-sm btn-resolver"
+                      data-div-id="{{ d.id }}"
+                      data-tipo="ALTERAR_CARREGAMENTO"
+                      data-car-id="{{ car_ref.id }}"
+                      data-bs-toggle="modal" data-bs-target="#modal-alterar-carregamento">
+                Alterar Carregamento
+              </button>
+            {% endif %}
+            <button type="button" class="btn btn-outline-secondary btn-sm btn-resolver"
+                    data-div-id="{{ d.id }}"
+                    data-tipo="SUBSTITUIR_CHASSI"
+                    data-bs-toggle="modal" data-bs-target="#modal-substituir-chassi">
+              Substituir
+            </button>
+            <button type="button" class="btn btn-outline-dark btn-sm btn-resolver"
+                    data-div-id="{{ d.id }}"
+                    data-tipo="IGNORAR"
+                    data-bs-toggle="modal" data-bs-target="#modal-ignorar">
+              Ignorar
+            </button>
+          </div>
+        {% else %}
+          <span class="text-muted small">resolvida</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% if d.detalhes %}
+    <tr class="table-light">
+      <td></td>
+      <td colspan="8" class="small">
+        <strong>Detalhes:</strong>
+        {% for k, v in d.detalhes.items() %}
+          <code>{{ k }}={{ v }}</code>
+        {% endfor %}
+        {% if d.observacao_resolucao %}
+          <br><strong>Observação:</strong> {{ d.observacao_resolucao }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% include 'motos_assai/divergencias/_modal_cancelar_nf.html' %}
+{% include 'motos_assai/divergencias/_modal_resolver_cce.html' %}
+{% include 'motos_assai/divergencias/_modal_alterar_carregamento.html' %}
+{% include 'motos_assai/divergencias/_modal_substituir_chassi.html' %}
+{% include 'motos_assai/divergencias/_modal_ignorar.html' %}
+
+<script src="{{ url_for('static', filename='motos_assai/js/divergencias_modais.js') }}"></script>
+{% endblock %}

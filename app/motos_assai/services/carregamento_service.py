@@ -58,6 +58,22 @@ class CarregamentoExcedenteError(CarregamentoError):
         self.seps_bloqueadas = seps_bloqueadas or []  # lista de sep_ids CARREGADA/FATURADA
 
 
+class CarregamentoCrossLojaError(CarregamentoError):
+    """Chassi escaneado esta em sep ativa de outra loja — operador deve confirmar
+    substituicao via modal (Plano 4 Task 3).
+
+    Route AJAX deve traduzir para HTTP 409 com cenario=cross_loja.
+    """
+    def __init__(self, msg, *, sep_origem_id, loja_origem_id,
+                 carregamento_id, loja_destino_id, chassi):
+        super().__init__(msg)
+        self.sep_origem_id = sep_origem_id
+        self.loja_origem_id = loja_origem_id
+        self.carregamento_id = carregamento_id
+        self.loja_destino_id = loja_destino_id
+        self.chassi = chassi
+
+
 # ============================================================
 # CRUD basico
 # ============================================================
@@ -136,6 +152,37 @@ def escanear_carregamento_item(carregamento_id, chassi, operador_id):
             .first())
     if not moto:
         raise CarregamentoValidationError(f'Chassi {chassi} nao cadastrado em assai_moto')
+
+    # Plano 4 Task 3: detectar CHASSI_OUTRA_LOJA antes de validar conflitos.
+    # Se chassi esta em sep ativa de OUTRA loja, levanta CarregamentoCrossLojaError
+    # para UI confirmar substituicao via modal. Sep ativa = EM_SEPARACAO/FECHADA/
+    # CARREGADA/FATURADA.
+    sep_outra_loja = (
+        AssaiSeparacao.query
+        .join(AssaiSeparacaoItem, AssaiSeparacaoItem.separacao_id == AssaiSeparacao.id)
+        .filter(
+            AssaiSeparacaoItem.chassi == chassi,
+            AssaiSeparacao.status.in_([
+                SEPARACAO_STATUS_EM_SEPARACAO,
+                SEPARACAO_STATUS_FECHADA,
+                SEPARACAO_STATUS_CARREGADA,
+                SEPARACAO_STATUS_FATURADA,
+            ]),
+            AssaiSeparacao.loja_id != car.loja_id,
+        )
+        .first()
+    )
+    if sep_outra_loja:
+        raise CarregamentoCrossLojaError(
+            f'Chassi {chassi} esta em Sep #{sep_outra_loja.id} '
+            f'(Loja {sep_outra_loja.loja_id}). '
+            f'Confirme substituicao para Loja {car.loja_id}.',
+            sep_origem_id=sep_outra_loja.id,
+            loja_origem_id=sep_outra_loja.loja_id,
+            carregamento_id=carregamento_id,
+            loja_destino_id=car.loja_id,
+            chassi=chassi,
+        )
 
     # Validar chassi NAO esta em outro carregamento ativo
     item_em_outro = (AssaiCarregamentoItem.query

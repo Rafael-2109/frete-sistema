@@ -27,6 +27,7 @@ from app.motos_assai.services.carregamento_service import (
     finalizar_carregamento, alterar_carregamento,
     CarregamentoValidationError, CarregamentoConflictError,
     CarregamentoStateError, CarregamentoExcedenteError,
+    CarregamentoCrossLojaError,
 )
 
 
@@ -167,6 +168,20 @@ def carregamento_escanear_ajax(carregamento_id):
                 'escaneado_em': item.escaneado_em.strftime('%d/%m %H:%M') if item.escaneado_em else None,
             },
         })
+    except CarregamentoCrossLojaError as e:
+        # Plano 4 Task 3: chassi em sep ativa de outra loja —
+        # operador deve confirmar substituicao via modal (HTTP 409 cenario=cross_loja).
+        db.session.rollback()
+        return jsonify({
+            'ok': False,
+            'cenario': 'cross_loja',
+            'erro': str(e),
+            'chassi': e.chassi,
+            'sep_origem_id': e.sep_origem_id,
+            'loja_origem_id': e.loja_origem_id,
+            'carregamento_id': e.carregamento_id,
+            'loja_destino_id': e.loja_destino_id,
+        }), 409
     except CarregamentoValidationError as e:
         db.session.rollback()
         return jsonify({'ok': False, 'erro': str(e)}), 400

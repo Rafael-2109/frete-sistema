@@ -1,0 +1,48 @@
+<div class="modal fade" id="modal-expedicao" tabindex="-1" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-truck"></i> Expedição da Separação criada via NF
+        </h5>
+        <button type="button" class="btn-close btn-close-white" id="btn-pular-expedicao"
+                data-bs-dismiss="modal" aria-label="Pular"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <strong>NF importada antes da Separação:</strong> a separação foi criada automaticamente
+          no status FATURADA. Defina a expedição agora para que o pedido siga o fluxo logístico.
+          (S7=a — clicar X = Pular, definir depois via "Editar agendamento")
+        </div>
+        <input type="hidden" id="expedicao-sep-id" />
+        <div class="mb-3">
+          <label class="form-label">Data de Expedição <span class="text-danger">*</span></label>
+          <input type="date" class="form-control" id="expedicao-data" required />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Data de Agendamento (opcional)</label>
+          <input type="date" class="form-control" id="expedicao-agendamento" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Protocolo (opcional)</label>
+          <input type="text" class="form-control" id="expedicao-protocolo" placeholder="ex: 12345" />
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="expedicao-confirmado" />
+          <label class="form-check-label" for="expedicao-confirmado">
+            Agendamento já confirmado pela loja
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-pular-expedicao-rodape" data-bs-dismiss="modal">
+          Pular
+        </button>
+        <button type="button" class="btn btn-primary" id="btn-confirmar-expedicao">
+          <i class="fas fa-check"></i> Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

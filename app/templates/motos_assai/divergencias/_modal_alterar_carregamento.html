@@ -1,0 +1,36 @@
+<div class="modal fade" id="modal-alterar-carregamento" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title">
+          <i class="fas fa-exchange-alt"></i> Alterar Carregamento
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning">
+          <strong>Atenção:</strong> esta ação altera os chassis vinculados ao carregamento.
+          Os chassis removidos voltam para SEPARADA; os novos chassis devem estar disponíveis.
+        </div>
+        <input type="hidden" id="alterar-div-id" />
+        <input type="hidden" id="alterar-car-id" />
+        <div class="mb-3">
+          <label class="form-label">Novos chassis (1 por linha)</label>
+          <textarea class="form-control" id="alterar-chassis" rows="5"
+                    placeholder="MZX12345AB&#10;MZX67890CD"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Motivo</label>
+          <input type="text" class="form-control" id="alterar-motivo"
+                 placeholder="ex: chassi 123 quebrado, substituido pelo 456" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-warning" id="btn-confirmar-alterar-carregamento">
+          <i class="fas fa-exchange-alt"></i> Alterar Carregamento
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

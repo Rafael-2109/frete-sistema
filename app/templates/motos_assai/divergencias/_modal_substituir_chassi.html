@@ -1,0 +1,33 @@
+<div class="modal fade" id="modal-substituir-chassi" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-secondary text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-exchange-alt"></i> Substituir Chassi
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <strong>Placeholder Plano 4:</strong> implementação completa de substituição cross-loja
+          virá no próximo plano. Por enquanto, marca a divergência como resolvida.
+        </div>
+        <input type="hidden" id="subst-div-id" />
+        <div class="mb-3">
+          <label class="form-label">Chassi novo (substitui o atual)</label>
+          <input type="text" class="form-control" id="subst-chassi-novo" placeholder="MZX..." />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Observação</label>
+          <textarea class="form-control" id="subst-observacao" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Voltar</button>
+        <button type="button" class="btn btn-primary" id="btn-confirmar-substituir-chassi">
+          <i class="fas fa-check"></i> Marcar Resolvida
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
