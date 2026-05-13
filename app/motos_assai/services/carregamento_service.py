@@ -20,6 +20,7 @@ from app.motos_assai.models import (
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento
 from app.motos_assai.services.faturamento_service import gerar_excel_qpa
+from app.motos_assai.services.separacao_mirror_service import sincronizar_espelho_com_separacao
 from app.utils.timezone import agora_brasil_naive
 
 
@@ -567,5 +568,10 @@ def finalizar_carregamento(carregamento_id, operador_id):
         ))
         db.session.flush()
 
-    # === FASES 6-8: implementadas em Tasks 10-12 ===
+    # === FASE 6: atualizar mirror Nacom (D-B + S12=a) ===
+    # S12=a: mirror agora aceita FECHADA + CARREGADA + FATURADA na guarda
+    # (atualizado em Task 15 — separacao_mirror_service.py).
+    sincronizar_espelho_com_separacao(sep_alvo.id)
+
+    # === FASES 7-8: implementadas em Tasks 11-12 ===
     return sep_alvo
