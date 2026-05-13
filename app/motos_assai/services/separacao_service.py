@@ -21,7 +21,6 @@ from app.motos_assai.models import (
     AssaiMoto, AssaiModelo,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
     SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
-    PEDIDO_STATUS_EM_PRODUCAO, PEDIDO_STATUS_SEPARANDO,
     EVENTO_DISPONIVEL, EVENTO_SEPARADA, EVENTO_FATURADA,
 )
 from app.motos_assai.services.moto_evento_service import emitir_evento, status_efetivo
@@ -275,10 +274,9 @@ def registrar_chassi(
         },
     )
 
-    # Pedido -> SEPARANDO
-    pedido = AssaiPedidoVenda.query.get(pedido_id)
-    if pedido and pedido.status == PEDIDO_STATUS_EM_PRODUCAO:
-        pedido.status = PEDIDO_STATUS_SEPARANDO
+    # R4.2 (Big Bang Task 20): pedido permanece ABERTO ate primeira NF Q.P.A.
+    # ser importada. A transicao para PARCIALMENTE_FATURADO/FATURADO e
+    # calculada por `recalcular_status_pedido` quando chassis viram FATURADA.
 
     db.session.commit()
     return {
@@ -436,29 +434,11 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
         )
         # Nao bloqueia o cancelamento — limpeza manual via SQL se necessario
 
-    # Item 3 corretivo (2026-05-12): reverter pedido.status se ESTA era a
-    # ultima sep nao-cancelada do pedido. Sem isso, `registrar_chassi` deixa
-    # o pedido como SEPARANDO mesmo apos cancelar todas as seps — status
-    # inconsistente que confunde a UI (lista_pedidos mostra "em separacao"
-    # sem nenhuma sep ativa).
-    outras_seps_count = (
-        AssaiSeparacao.query
-        .filter(
-            AssaiSeparacao.pedido_id == sep.pedido_id,
-            AssaiSeparacao.id != sep.id,
-            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
-        )
-        .count()
-    )
-    if outras_seps_count == 0:
-        pedido = AssaiPedidoVenda.query.get(sep.pedido_id)
-        if pedido and pedido.status == PEDIDO_STATUS_SEPARANDO:
-            pedido.status = PEDIDO_STATUS_EM_PRODUCAO
-            import logging
-            logging.getLogger(__name__).info(
-                'cancelar_separacao: pedido %s revertido SEPARANDO -> EM_PRODUCAO '
-                '(ultima sep cancelada)', sep.pedido_id,
-            )
+    # R4.2 (Big Bang Task 20): pedido fica ABERTO ate primeira NF FATURADA.
+    # Como cancelamento de sep nao afeta chassis FATURADA por definicao,
+    # nao ha necessidade de tocar pedido.status aqui — ja esta no valor
+    # correto calculado por `recalcular_status_pedido`. Antes da Task 19,
+    # este bloco revertia SEPARANDO -> EM_PRODUCAO (ambos status removidos).
 
     db.session.commit()
     return sep
