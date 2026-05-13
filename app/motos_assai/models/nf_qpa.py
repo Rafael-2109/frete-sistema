@@ -5,7 +5,14 @@ from app.utils.timezone import agora_brasil_naive
 NF_STATUS_BATEU = 'BATEU'
 NF_STATUS_DIVERGENTE = 'DIVERGENTE'
 NF_STATUS_NAO_RECONCILIADO = 'NAO_RECONCILIADO'
-NF_STATUS_VALIDOS = {NF_STATUS_BATEU, NF_STATUS_DIVERGENTE, NF_STATUS_NAO_RECONCILIADO}
+NF_STATUS_CANCELADA = 'CANCELADA'  # NOVO Fase 1 (D3 + R5): NF cancelada via cancelar_nf_qpa
+
+NF_STATUS_VALIDOS = {
+    NF_STATUS_BATEU,
+    NF_STATUS_DIVERGENTE,
+    NF_STATUS_NAO_RECONCILIADO,
+    NF_STATUS_CANCELADA,
+}
 
 
 class AssaiNfQpa(db.Model):
@@ -26,6 +33,11 @@ class AssaiNfQpa(db.Model):
     status_match = db.Column(db.String(20), default=NF_STATUS_NAO_RECONCILIADO, nullable=False)
     importada_em = db.Column(db.DateTime, default=agora_brasil_naive, nullable=False)
     importada_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
+
+    # Cancelamento (Fase 1 — Migration 22 + R5)
+    cancelada_em = db.Column(db.DateTime)
+    cancelada_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'))
+    motivo_cancelamento = db.Column(db.Text)
 
     itens = db.relationship('AssaiNfQpaItem', backref='nf',
                             cascade='all, delete-orphan', lazy='selectin')
