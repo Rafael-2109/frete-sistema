@@ -1590,6 +1590,175 @@ function _updatePIIToggleButton(includePii) {
     }
 })();
 
+
+// ═════════════════════════════════════════════════════════════════════
+// MODAL ACOES — Rename, Tag, Download (Fase 2, P1.2 + P1.3 — 2026-05-14)
+// ═════════════════════════════════════════════════════════════════════
+
+async function renameSubagent(agentId, newName) {
+    if (!sessionId) return false;
+    try {
+        const resp = await fetch(
+            `/agente/api/sessions/${sessionId}/subagents/${agentId}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                },
+                body: JSON.stringify({name: newName}),
+            }
+        );
+        if (resp.status === 400) {
+            const p = await resp.json().catch(() => ({}));
+            alert(p.error || 'Nome invalido.');
+            return false;
+        }
+        if (!resp.ok) {
+            alert('Nao foi possivel renomear.');
+            return false;
+        }
+        // Atualiza UI: header do modal + linha inline
+        const modal = document.getElementById('subagent-transcript-modal');
+        if (modal) {
+            const title = modal.querySelector('[data-field="title"]');
+            if (title) title.textContent = newName;
+        }
+        const line = subagentLines.get(agentId);
+        if (line) {
+            try {
+                const summary = JSON.parse(line.dataset.summary || '{}');
+                summary.name = newName;
+                line.dataset.summary = JSON.stringify(summary);
+            } catch (_) { /* ignore */ }
+        }
+        return true;
+    } catch (err) {
+        console.error('[renameSubagent] falhou:', err);
+        alert('Conexao falhou.');
+        return false;
+    }
+}
+
+async function setSubagentTags(agentId, tags) {
+    if (!sessionId) return false;
+    try {
+        const resp = await fetch(
+            `/agente/api/sessions/${sessionId}/subagents/${agentId}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                },
+                body: JSON.stringify({tags: tags}),
+            }
+        );
+        if (resp.status === 400) {
+            const p = await resp.json().catch(() => ({}));
+            alert(p.error || 'Tags invalidas.');
+            return false;
+        }
+        if (!resp.ok) {
+            alert('Nao foi possivel salvar tags.');
+            return false;
+        }
+        return true;
+    } catch (err) {
+        console.error('[setSubagentTags] falhou:', err);
+        return false;
+    }
+}
+
+function downloadSubagentJsonl(agentId) {
+    if (!sessionId || !agentId) return;
+    const url = `/agente/api/sessions/${sessionId}/subagents/${agentId}/output_file`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${agentId.slice(0, 12)}.jsonl`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Inicializacao Fase 2: adiciona listeners dos botoes quando flags ON
+(function _initSubagentModalActionsFase2() {
+    const setup = () => {
+        if (!window.AGENT_FEATURES) return;
+        const modal = document.getElementById('subagent-transcript-modal');
+        if (!modal) return;
+
+        // Botao download visivel se flag ON
+        const dlBtn = modal.querySelector('[data-action="download-jsonl"]');
+        if (dlBtn && window.AGENT_FEATURES.subagent_output_download) {
+            dlBtn.hidden = false;
+            dlBtn.addEventListener('click', () => {
+                if (_currentModalAgentId) downloadSubagentJsonl(_currentModalAgentId);
+            });
+        }
+
+        // Botoes rename/tag (admin only + flag ON): inject dinamicamente
+        if (window.AGENT_FEATURES.subagent_rename_tag
+            && window.AGENT_DEBUG && window.AGENT_DEBUG.is_admin) {
+            const actions = modal.querySelector('.subagent-modal-actions');
+            if (!actions) return;
+            // Evitar inject duplicado em hot reload
+            if (actions.querySelector('[data-action="rename"]')) return;
+
+            const renameBtn = document.createElement('button');
+            renameBtn.type = 'button';
+            renameBtn.dataset.action = 'rename';
+            renameBtn.textContent = 'Renomear';
+            renameBtn.title = 'Definir nome do subagent (max 80 chars)';
+            renameBtn.addEventListener('click', async () => {
+                if (!_currentModalAgentId) return;
+                const name = prompt('Nome (max 80 chars):');
+                if (name === null) return;
+                if (name.length > 80) {
+                    alert('Nome muito longo (max 80).');
+                    return;
+                }
+                await renameSubagent(_currentModalAgentId, name);
+            });
+
+            const tagBtn = document.createElement('button');
+            tagBtn.type = 'button';
+            tagBtn.dataset.action = 'tag';
+            tagBtn.textContent = 'Tags';
+            tagBtn.title = 'Tags separadas por virgula (max 10, cada max 30 chars)';
+            tagBtn.addEventListener('click', async () => {
+                if (!_currentModalAgentId) return;
+                const raw = prompt('Tags separadas por virgula:');
+                if (raw === null) return;
+                const tags = raw.split(',').map(t => t.trim()).filter(t => t.length > 0);
+                if (tags.length > 10) {
+                    alert('Maximo 10 tags.');
+                    return;
+                }
+                if (tags.some(t => t.length > 30)) {
+                    alert('Cada tag pode ter no maximo 30 chars.');
+                    return;
+                }
+                await setSubagentTags(_currentModalAgentId, tags);
+            });
+
+            const closeBtn = actions.querySelector('.btn-close');
+            if (closeBtn) {
+                actions.insertBefore(renameBtn, closeBtn);
+                actions.insertBefore(tagBtn, closeBtn);
+            } else {
+                actions.appendChild(renameBtn);
+                actions.appendChild(tagBtn);
+            }
+        }
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
+    } else {
+        setup();
+    }
+})();
+
 // ─────────────────────────────────────────────────────────────────────
 
 // Processa evento SSE com estado compartilhado
