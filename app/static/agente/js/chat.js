@@ -1119,6 +1119,8 @@ function renderSubagentLineStart(data) {
     const line = document.createElement('div');
     line.className = 'subagent-inline running';
     line.dataset.agentId = agentId;
+    // P1.1 (2026-05-14): captura parent_tool_use_id para correlacao visual via CSS
+    line.dataset.parentToolUseId = data.parent_tool_use_id || '';
     line.innerHTML = `
         <span class="subagent-dot"></span>
         <span class="subagent-badge">${_subagentEscapeHtml(agentType)}</span>
@@ -1132,7 +1134,7 @@ function renderSubagentLineStart(data) {
         agent_id: agentId,
         agent_type: agentType,
     });
-    line.addEventListener('click', () => toggleSubagentExpand(agentId));
+    line.addEventListener('click', () => openOrToggleSubagent(agentId));
     messagesContainer.appendChild(line);
     subagentLines.set(agentId, line);
 }
@@ -1142,8 +1144,23 @@ function renderSubagentLineProgress(data) {
     const line = subagentLines.get(agentId);
     if (!line) return;
     const meta = line.querySelector('.subagent-meta');
+    if (!meta) return;
+
+    // P0.3 (2026-05-14): enriquece meta com tokens + duracao se disponiveis
     const tool = data.last_tool_name || 'processando';
-    if (meta) meta.textContent = `usando ${tool}\u2026`;
+    const usage = data.usage || {};
+    const parts = [`${tool}\u2026`];
+
+    if (usage && usage.total_tokens) {
+        const tt = usage.total_tokens;
+        const tokStr = tt >= 1000 ? (tt / 1000).toFixed(1) + 'K' : String(tt);
+        parts.push(`${tokStr} tok`);
+    }
+    if (usage && usage.duration_ms) {
+        parts.push(`${(usage.duration_ms / 1000).toFixed(1)}s`);
+    }
+
+    meta.textContent = parts.join(' \u00b7 ');
 }
 
 function renderSubagentLineSummary(data) {
@@ -1164,11 +1181,17 @@ function renderSubagentLineSummary(data) {
         line.dataset.agentId = agentId;
         messagesContainer.appendChild(line);
         subagentLines.set(agentId, line);
-        line.addEventListener('click', () => toggleSubagentExpand(agentId));
+        line.addEventListener('click', () => openOrToggleSubagent(agentId));
     }
 
-    line.classList.remove('running');
-    line.classList.add('done');
+    // P0.2 (2026-05-14): mapeia data.status para classes CSS distintas
+    line.classList.remove('running', 'done', 'failed', 'stopped', 'error');
+    const cssState =
+        data.status === 'failed'  ? 'failed'  :
+        data.status === 'stopped' ? 'stopped' :
+        data.status === 'error'   ? 'error'   :
+                                    'done';
+    line.classList.add(cssState);
 
     const numTools = (data.tools_used || []).length;
     const durationSec = Math.round((data.duration_ms || 0) / 100) / 10;
@@ -1283,6 +1306,286 @@ async function toggleSubagentExpand(agentId) {
         details.textContent = `Erro: ${err.message}`;
     }
 }
+
+// ═════════════════════════════════════════════════════════════════════
+// MODAL DE TRANSCRIPT (P0.1, P0.3, P1.1 — 2026-05-14)
+// ═════════════════════════════════════════════════════════════════════
+
+let _currentModalAgentId = null;
+
+// Dispatcher: se flag MODAL ON e fn definida, abre modal. Senao, fallback legacy.
+// Code-review #6: guard typeof previne TypeError se chamado antes da fn ser definida.
+function openOrToggleSubagent(agentId) {
+    const modalOn = window.AGENT_FEATURES && window.AGENT_FEATURES.subagent_modal;
+    if (modalOn && typeof openSubagentModal === 'function') {
+        openSubagentModal(agentId);
+    } else {
+        toggleSubagentExpand(agentId);  // fallback legacy
+    }
+}
+
+async function openSubagentModal(agentId) {
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) {
+        console.warn('[subagent-modal] markup nao encontrado');
+        return;
+    }
+    _currentModalAgentId = agentId;
+
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+    _setSubagentModalLoading();
+
+    // Header com dados da linha (se existir)
+    const line = subagentLines.get(agentId);
+    if (line) {
+        try {
+            const summary = JSON.parse(line.dataset.summary || '{}');
+            _setSubagentModalHeader(summary);
+        } catch (_) { /* ignore */ }
+    }
+
+    const sid = sessionId;
+    if (!sid) {
+        _setSubagentModalError('Sessao nao identificada.');
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/agente/api/sessions/${sid}/subagents/${agentId}/transcript`);
+        if (resp.status === 404) {
+            const p = await resp.json().catch(() => ({}));
+            if ((p.error || '').toLowerCase().includes('arquivada')) {
+                _setSubagentModalEmpty('Transcript nao encontrado. A sessao pode ter sido arquivada.', true);
+            } else {
+                _setSubagentModalError('Visualizacao detalhada indisponivel no momento.');
+            }
+            return;
+        }
+        if (resp.status === 403) {
+            _setSubagentModalError('Voce nao tem acesso a esta sessao.');
+            return;
+        }
+        if (!resp.ok) {
+            _setSubagentModalError(`Nao foi possivel carregar o transcript. (HTTP ${resp.status})`);
+            return;
+        }
+        const payload = await resp.json();
+        _renderSubagentTranscript(payload);
+    } catch (err) {
+        console.error('[subagent-modal] fetch falhou:', err);
+        _setSubagentModalError('Conexao lenta. Verifique sua rede e tente novamente.');
+    }
+}
+
+function closeSubagentModal() {
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    _currentModalAgentId = null;
+}
+
+function _setSubagentModalHeader(summary) {
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) return;
+    const badge = modal.querySelector('[data-field="agent_type"]');
+    const title = modal.querySelector('[data-field="title"]');
+    const meta = modal.querySelector('[data-field="meta"]');
+    if (badge) badge.textContent = summary.agent_type || 'subagente';
+    if (title) title.textContent = summary.name || (summary.agent_id || '').slice(0, 12) || 'subagent';
+
+    if (meta) {
+        const numTools = (summary.tools_used || []).length;
+        const durSec = ((summary.duration_ms || 0) / 1000).toFixed(1);
+        const costStr = summary.cost_usd != null
+            ? ` · $${Number(summary.cost_usd).toFixed(4)}`
+            : '';
+        meta.textContent = `${numTools} tools · ${durSec}s${costStr}`;
+    }
+}
+
+function _setSubagentModalLoading() {
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) return;
+    modal.querySelectorAll('.subagent-modal-section').forEach(sec => {
+        sec.classList.add('is-loading');
+        const c = sec.querySelector('[data-field]');
+        if (c) c.innerHTML = '<div class="skeleton"></div>';
+    });
+}
+
+function _setSubagentModalError(message) {
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) return;
+    // Fix code-review #2: querySelectorAll com forEach direto, sem currying
+    modal.querySelectorAll('.subagent-modal-section').forEach(sec => {
+        sec.classList.remove('is-loading');
+    });
+    const timeline = modal.querySelector('[data-field="timeline"]');
+    if (timeline) {
+        timeline.innerHTML = `
+            <div class="subagent-modal-error">
+                <span class="icon">⚠</span>
+                <div>${_subagentEscapeHtml(message)}</div>
+                <button type="button" onclick="openSubagentModal('${_subagentEscapeHtml(_currentModalAgentId || '')}')">Tentar novamente</button>
+            </div>`;
+    }
+    // Limpa prompt e findings tambem
+    const prompt = modal.querySelector('[data-field="prompt"]');
+    if (prompt) prompt.textContent = '';
+    const findings = modal.querySelector('[data-field="findings"]');
+    if (findings) findings.textContent = '';
+}
+
+function _setSubagentModalEmpty(message, showRestoreBtn) {
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) return;
+    modal.querySelectorAll('.subagent-modal-section').forEach(sec => {
+        sec.classList.remove('is-loading');
+    });
+    const timeline = modal.querySelector('[data-field="timeline"]');
+    if (timeline) {
+        timeline.innerHTML = `
+            <div class="subagent-modal-empty">
+                <div>${_subagentEscapeHtml(message)}</div>
+                ${showRestoreBtn ? '<button type="button" disabled title="Restore S3 (em breve)">Tentar restaurar do arquivo</button>' : ''}
+            </div>`;
+    }
+}
+
+function _renderSubagentTranscript(payload) {
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) return;
+
+    const transcript = payload.transcript || [];
+
+    modal.querySelectorAll('.subagent-modal-section').forEach(sec => {
+        sec.classList.remove('is-loading');
+    });
+
+    const userPrompt = transcript.find(e => e.kind === 'user_prompt');
+    const promptEl = modal.querySelector('[data-field="prompt"]');
+    if (promptEl) {
+        promptEl.textContent = userPrompt
+            ? (typeof userPrompt.content === 'string' ? userPrompt.content : JSON.stringify(userPrompt.content))
+            : '(prompt nao encontrado no transcript)';
+    }
+
+    // Timeline = todas entries excluindo o prompt e o ultimo assistant_text (vira findings)
+    const lastAssistantText = [...transcript].reverse().find(e => e.kind === 'assistant_text');
+    const timelineEntries = transcript.filter(e =>
+        e !== userPrompt && e !== lastAssistantText
+    );
+
+    const timelineEl = modal.querySelector('[data-field="timeline"]');
+    if (timelineEl) {
+        if (timelineEntries.length === 0) {
+            timelineEl.innerHTML = '<li class="entry-empty">(sem tool calls intermediarios)</li>';
+        } else {
+            timelineEl.innerHTML = timelineEntries.map(entry => {
+                let c;
+                if (typeof entry.content === 'object' && entry.content !== null) {
+                    const name = entry.content.name || '';
+                    const input = entry.content.input || {};
+                    c = `<strong>${_subagentEscapeHtml(name)}</strong>(${_subagentEscapeHtml(JSON.stringify(input).slice(0, 200))})`;
+                } else {
+                    c = _subagentEscapeHtml(String(entry.content || '').slice(0, 500));
+                }
+                return `
+                    <li class="kind-${_subagentEscapeHtml(entry.kind)}">
+                        <span class="entry-kind">${_subagentEscapeHtml(entry.kind)}</span>
+                        <div class="entry-content">${c}</div>
+                    </li>`;
+            }).join('');
+        }
+    }
+
+    const findingsEl = modal.querySelector('[data-field="findings"]');
+    if (findingsEl) {
+        findingsEl.textContent = lastAssistantText
+            ? (typeof lastAssistantText.content === 'string' ? lastAssistantText.content : JSON.stringify(lastAssistantText.content))
+            : '(nenhum findings retornado)';
+    }
+
+    _updatePIIToggleButton(payload.include_pii);
+}
+
+async function _togglePIIInModal() {
+    if (!_currentModalAgentId) return;
+    const btn = document.querySelector('#subagent-transcript-modal [data-action="toggle-pii"]');
+    if (!btn) return;
+    btn.disabled = true;
+
+    const isActive = btn.classList.contains('active');
+    const newEnabled = !isActive;
+    try {
+        const resp = await fetch(
+            `/agente/api/sessions/${sessionId}/subagents/${_currentModalAgentId}/pii-toggle`,
+            {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: newEnabled}),
+            }
+        );
+        if (resp.status === 429) {
+            alert('Muitas trocas em sequencia. Aguarde 1 minuto.');
+            setTimeout(() => { btn.disabled = false; }, 60000);
+            return;
+        }
+        if (!resp.ok) {
+            alert('Nao foi possivel alternar PII. Tente novamente.');
+            btn.disabled = false;
+            return;
+        }
+        await openSubagentModal(_currentModalAgentId);
+    } catch (err) {
+        console.error('[pii-toggle] falhou:', err);
+        alert('Recurso temporariamente indisponivel.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function _updatePIIToggleButton(includePii) {
+    const btn = document.querySelector('#subagent-transcript-modal [data-action="toggle-pii"]');
+    if (!btn) return;
+    if (includePii) {
+        btn.classList.add('active');
+        btn.textContent = 'Ocultar PII';
+    } else {
+        btn.classList.remove('active');
+        btn.textContent = 'Mostrar PII';
+    }
+}
+
+// Event listeners do modal (registrados quando DOM carrega)
+(function _initSubagentModalListeners() {
+    const setup = () => {
+        const modal = document.getElementById('subagent-transcript-modal');
+        if (!modal) return;
+
+        modal.querySelectorAll('[data-close="modal"]').forEach(el => {
+            el.addEventListener('click', closeSubagentModal);
+        });
+
+        const piiBtn = modal.querySelector('[data-action="toggle-pii"]');
+        if (piiBtn) {
+            piiBtn.addEventListener('click', _togglePIIInModal);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.hidden) {
+                closeSubagentModal();
+            }
+        });
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
+    } else {
+        setup();
+    }
+})();
 
 // ─────────────────────────────────────────────────────────────────────
 
