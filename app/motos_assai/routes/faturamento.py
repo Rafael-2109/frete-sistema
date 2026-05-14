@@ -282,14 +282,23 @@ def faturamento_nf_detalhe(nf_id):
         )
 
     # Migration 29: devolucoes vinculadas a esta NF (NFds).
-    from app.motos_assai.services import listar_devolucoes_da_nf
+    from app.motos_assai.services import listar_devolucoes_da_nf, itens_da_nf_para_tela
+    from app.motos_assai.forms import DevolucaoNfForm
     devolucoes_da_nf = listar_devolucoes_da_nf(nf_id)
+    # Form + itens carregados para popular o modal de devolucao embutido na propria tela.
+    # Modal so e renderizado se nf.status_match != 'CANCELADA' (template controla).
+    form_devolucao = DevolucaoNfForm() if nf.status_match != 'CANCELADA' else None
+    itens_devolucao = (
+        itens_da_nf_para_tela(nf_id) if nf.status_match != 'CANCELADA' else []
+    )
 
     return render_template(
         'motos_assai/faturamento/nf_detalhe.html',
         nf=nf, items=items,
         sep_criada_via_nf=sep_criada_via_nf,
         devolucoes_da_nf=devolucoes_da_nf,
+        form_devolucao=form_devolucao,
+        itens_devolucao=itens_devolucao,
     )
 
 

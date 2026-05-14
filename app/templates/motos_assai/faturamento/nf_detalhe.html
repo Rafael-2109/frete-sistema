@@ -17,11 +17,11 @@
   </h2>
   <div class="btn-group">
     {% if nf.status_match != 'CANCELADA' %}
-      <a href="{{ url_for('motos_assai.devolucao_form', nf_id=nf.id) }}"
-         class="btn btn-sm btn-outline-warning"
-         title="Registrar devolucao por NF de devolucao (NFd)">
+      <button type="button" class="btn btn-sm btn-outline-warning"
+              data-bs-toggle="modal" data-bs-target="#modal-devolucao-nfd"
+              title="Registrar devolucao por NF de devolucao (NFd)">
         <i class="fas fa-undo-alt"></i> Devolução
-      </a>
+      </button>
       <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modal-cancelar-nf-detalhe">
         <i class="fas fa-ban"></i> Cancelar NF
       </button>
@@ -130,6 +130,167 @@
     </tbody>
   </table>
 </div>
+{% endif %}
+
+{# ==============================================================================
+   Modal Devolução pela NFd (Migration 29)
+   Form completo dentro do modal: cabecalho (data, NFd, motivo, anexos) +
+   tabela chassis com checkbox + botao Pendencias(qtd) por linha (abre sub-modal)
+   + botao Devolver. Submit -> POST /faturamento/nfs/<id>/devolucao (redirect).
+   ============================================================================== #}
+{% if nf.status_match != 'CANCELADA' and form_devolucao is defined and form_devolucao %}
+<div class="modal fade" id="modal-devolucao-nfd" tabindex="-1" aria-hidden="true"
+     aria-labelledby="modal-devolucao-nfd-title">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="POST" enctype="multipart/form-data" id="form-devolucao"
+            action="{{ url_for('motos_assai.devolucao_form', nf_id=nf.id) }}"
+            novalidate>
+        {{ form_devolucao.hidden_tag() }}
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title" id="modal-devolucao-nfd-title">
+            <i class="fas fa-undo-alt"></i>
+            Devolução pela NF {{ nf.numero }}/{{ nf.serie or '-' }}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body">
+          {# Cabecalho: Data + NFd + Motivo + Anexar #}
+          <div class="row g-3 mb-3">
+            <div class="col-md-3">
+              <label for="data_devolucao" class="form-label">
+                Data <span class="text-danger">*</span>
+              </label>
+              {{ form_devolucao.data_devolucao(
+                  class="form-control", id="data_devolucao", required=true,
+                  max=now_max_date if now_max_date is defined else None
+              ) }}
+            </div>
+            <div class="col-md-3">
+              <label for="numero_nfd" class="form-label">
+                NFd <span class="text-danger">*</span>
+              </label>
+              {{ form_devolucao.numero_nfd(
+                  class="form-control", id="numero_nfd",
+                  placeholder="Nº da NF de devolução", required=true, maxlength=40
+              ) }}
+            </div>
+            <div class="col-md-6">
+              <label for="motivo" class="form-label">
+                Motivo <span class="text-danger">*</span>
+              </label>
+              {{ form_devolucao.motivo(
+                  class="form-control", id="motivo", rows=2,
+                  placeholder="Ex: avaria no transporte; cliente desistiu; etc",
+                  required=true, minlength=3
+              ) }}
+            </div>
+            <div class="col-12">
+              <label for="anexos" class="form-label">Anexar (PDF, XML, PNG, JPG — múltiplos)</label>
+              {{ form_devolucao.anexos(
+                  class="form-control", id="anexos", multiple=true,
+                  accept=".pdf,.xml,.png,.jpg,.jpeg"
+              ) }}
+              <small class="form-text text-muted">Você pode selecionar vários arquivos de uma vez.</small>
+            </div>
+          </div>
+
+          {# Listagem dos chassis #}
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>Chassis desta NF ({{ itens_devolucao|length }})</strong>
+            <div>
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      id="btn-selecionar-todos">
+                <i class="fas fa-check-double"></i> Marcar todos elegíveis
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary"
+                      id="btn-limpar-selecao">
+                <i class="fas fa-times"></i> Limpar
+              </button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" id="tabela-chassis-devolucao">
+              <thead>
+                <tr>
+                  <th style="width: 40px;"><i class="fas fa-square"></i></th>
+                  <th>Chassi</th>
+                  <th>Modelo</th>
+                  <th>Cor</th>
+                  <th class="text-end">Valor</th>
+                  <th>Status atual</th>
+                  <th class="text-center">Pendências</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in itens_devolucao %}
+                <tr class="{% if not it.pode_devolver %}table-secondary{% endif %}">
+                  <td>
+                    <input type="checkbox" name="chassis_selecionados"
+                           value="{{ it.chassi }}"
+                           class="form-check-input chassi-checkbox"
+                           {% if not it.pode_devolver %}disabled{% endif %}
+                           aria-label="Selecionar {{ it.chassi }}">
+                  </td>
+                  <td><code>{{ it.chassi }}</code></td>
+                  <td>
+                    <strong>{{ it.modelo_codigo }}</strong>
+                    <small class="text-muted d-block">{{ it.modelo_nome }}</small>
+                  </td>
+                  <td>{{ it.cor }}</td>
+                  <td class="text-end">R$ {{ it.valor_unitario | numero_br(2) }}</td>
+                  <td>
+                    {% if it.ja_devolvido %}
+                      <span class="badge bg-dark">JÁ DEVOLVIDO</span>
+                    {% elif it.status_atual == 'FATURADA' %}
+                      <span class="badge bg-success">FATURADA</span>
+                    {% else %}
+                      <span class="badge bg-secondary">{{ it.status_atual }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-info btn-pendencias"
+                            data-chassi="{{ it.chassi }}"
+                            title="Ver histórico de pendências deste chassi">
+                      Pendências({{ it.qtd_pendencias }})
+                    </button>
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-3">Nenhum chassi nesta NF.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <small class="form-text text-muted d-block mt-2">
+            <i class="fas fa-info-circle"></i>
+            Apenas chassis <strong>FATURADA</strong> e ainda não devolvidos podem ser selecionados.
+            Cada chassi devolvido gera pendência <code>Moto devolvida - {motivo}</code> e
+            retorna 1 unidade do modelo ao saldo do pedido.
+          </small>
+        </div>
+
+        <div class="modal-footer justify-content-between">
+          <span class="text-muted small">
+            <span id="contador-selecionados">0</span> chassi(s) selecionado(s)
+          </span>
+          <div>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-danger" id="btn-devolver" disabled>
+              <i class="fas fa-undo-alt"></i> Devolver
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Sub-modal: Pendencias historicas do chassi (aberto via btn-pendencias) #}
+{% include 'motos_assai/devolucao/_modal_pendencias.html' %}
+<script src="{{ url_for('static', filename='motos_assai/js/devolucao_form.js') }}"></script>
 {% endif %}
 
 {# Modal Cancelar NF #}
