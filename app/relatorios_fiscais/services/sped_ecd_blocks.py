@@ -542,13 +542,17 @@ def construir_I200_I250(lancamentos_iter: Iterable[dict], _plano_consolidado: Li
         if vl_lcto == 0:
             continue  # pula lancamento zerado (sem efeito)
 
-        # I200 — cabecalho do lancamento
+        # I200 — cabecalho do lancamento (6 campos conforme Manual ECD Leiaute 9)
+        # Bug historico: emitia 5 campos -> PVA rejeitava com "quantidade de campos
+        # diferente do especificado no layout". Adicionado DT_LCTO_EXT (campo 6,
+        # nao-obrigatorio — usado apenas para lancamentos extemporaneos IND_LCTO='X').
         yield contador.emit(formatar_registro([
             'I200',                                            # 1 REG
             str(lcto['num']),                                  # 2 NUM_LCTO (sequencial)
             formatar_data(lcto['date']),                       # 3 DT_LCTO
             formatar_valor(vl_lcto),                           # 4 VL_LCTO
             'N',                                               # 5 IND_LCTO (N=Normal)
+            '',                                                # 6 DT_LCTO_EXT (vazio — so se IND_LCTO=X)
         ]))
 
         # I250 — partidas do lancamento
@@ -569,16 +573,19 @@ def construir_I200_I250(lancamentos_iter: Iterable[dict], _plano_consolidado: Li
             # V1.2: SPLIT de CCUS — emitir N I250s proporcionais
             distribuicao = ln.get('ccus_distribuicao') or []
 
+            # I250 — Partidas (9 campos conforme Manual ECD Leiaute 9):
+            # REG | COD_CTA | COD_CCUS | VL_DC | IND_DC | NUM_ARQ | COD_HIST_PAD | HIST | COD_PART
+            # Bug historico: emitia 8 campos (faltava COD_HIST_PAD entre NUM_ARQ e HIST).
             if not distribuicao:
                 # Sem CCUS — emitir 1 I250 unico sem COD_CCUS
                 yield contador.emit(formatar_registro([
-                    'I250', code, '', formatar_valor(valor), indicador, '', hist, cod_part,
+                    'I250', code, '', formatar_valor(valor), indicador, '', '', hist, cod_part,
                 ]))
             elif len(distribuicao) == 1:
                 # 1 CCUS (100%) — emitir 1 I250 com COD_CCUS direto (sem rateio)
                 cod_ccus = distribuicao[0][0]
                 yield contador.emit(formatar_registro([
-                    'I250', code, cod_ccus, formatar_valor(valor), indicador, '', hist, cod_part,
+                    'I250', code, cod_ccus, formatar_valor(valor), indicador, '', '', hist, cod_part,
                 ]))
             else:
                 # SPLIT: emitir N I250s com VALORES PROPORCIONAIS
@@ -597,7 +604,7 @@ def construir_I200_I250(lancamentos_iter: Iterable[dict], _plano_consolidado: Li
                     # Todos centavos seriam < 0.01 — emitir 1 I250 unico com primeiro CCUS
                     yield contador.emit(formatar_registro([
                         'I250', code, distribuicao[0][0], formatar_valor(valor),
-                        indicador, '', hist, cod_part,
+                        indicador, '', '', hist, cod_part,
                     ]))
                 else:
                     # Re-alocar centavos restantes (valor - soma_pre) ao ULTIMO partida emitida
@@ -609,7 +616,7 @@ def construir_I200_I250(lancamentos_iter: Iterable[dict], _plano_consolidado: Li
                     for cod_ccus, v_partida in valores_pre:
                         yield contador.emit(formatar_registro([
                             'I250', code, cod_ccus, formatar_valor(v_partida), indicador, '',
-                            hist, cod_part,
+                            '', hist, cod_part,
                         ]))
 
 
