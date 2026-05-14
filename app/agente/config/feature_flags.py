@@ -526,6 +526,28 @@ SUBAGENT_UI_RAW_FOR_ADMIN = os.getenv(
 ).lower() == "true"
 
 # ====================================================================
+# Subagent UI Enrichment (2026-05-14)
+# ====================================================================
+# Big-bang em prod: todos default true. Manter como circuit breakers.
+# Rollback emergencial via env var no Render (sem redeploy).
+
+# P0.1 Modal de transcript (prompt + timeline + findings)
+USE_SUBAGENT_MODAL = os.getenv("USE_SUBAGENT_MODAL", "true").lower() == "true"
+
+# P0.2 Estados visuais ricos (failed/stopped/validation_warning) +
+# P1.1 Correlacao parent_tool_use_id
+USE_SUBAGENT_RICH_STATES = os.getenv("USE_SUBAGENT_RICH_STATES", "true").lower() == "true"
+
+# P0.3 Progresso ao vivo: tokens/duracao/last_tool no meta da linha
+USE_SUBAGENT_LIVE_PROGRESS = os.getenv("USE_SUBAGENT_LIVE_PROGRESS", "true").lower() == "true"
+
+# P1.2 Rename/tag de subagent (Fase 2)
+USE_SUBAGENT_RENAME_TAG = os.getenv("USE_SUBAGENT_RENAME_TAG", "true").lower() == "true"
+
+# P1.3 Download output_file JSONL (Fase 2)
+USE_SUBAGENT_OUTPUT_DOWNLOAD = os.getenv("USE_SUBAGENT_OUTPUT_DOWNLOAD", "true").lower() == "true"
+
+# ====================================================================
 # SDK 0.1.64 — SessionStore (Fase B cutover: flag ON default)
 # ====================================================================
 #

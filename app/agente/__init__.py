@@ -26,6 +26,16 @@ def init_app(app):
     # Registra blueprint
     app.register_blueprint(agente_bp)
 
+    # Expor feature flags subagent UI em app.config (2026-05-14)
+    # Necessario para templates jinja2 usarem {{ config.get('USE_SUBAGENT_*') }}
+    # Sem isso, rollback frontend via env var nao funciona (template usa default literal).
+    from .config import feature_flags as _ff
+    app.config['USE_SUBAGENT_MODAL'] = _ff.USE_SUBAGENT_MODAL
+    app.config['USE_SUBAGENT_RICH_STATES'] = _ff.USE_SUBAGENT_RICH_STATES
+    app.config['USE_SUBAGENT_LIVE_PROGRESS'] = _ff.USE_SUBAGENT_LIVE_PROGRESS
+    app.config['USE_SUBAGENT_RENAME_TAG'] = _ff.USE_SUBAGENT_RENAME_TAG
+    app.config['USE_SUBAGENT_OUTPUT_DOWNLOAD'] = _ff.USE_SUBAGENT_OUTPUT_DOWNLOAD
+
     # Atexit hook — suprime Sentry capture durante shutdown do interpretador
     # (resolve PYTHON-FLASK-PP/PN/PM: race "cannot schedule new futures after shutdown")
     from .sdk import register_shutdown_handler
