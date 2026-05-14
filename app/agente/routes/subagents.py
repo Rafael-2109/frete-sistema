@@ -17,8 +17,9 @@ Padrao de resposta:
 - GET /api/sessions/<sid>/subagents/<aid>/output_file (Fase 2 — download)
 """
 import logging
+import os
 
-from flask import jsonify, request
+from flask import jsonify, request, Response, stream_with_context
 from flask_login import current_user, login_required
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -30,9 +31,11 @@ from app.agente.routes import agente_bp
 from app.agente.routes.chat import _sanitize_subagent_summary_for_user
 from app.agente.sdk.subagent_reader import (
     _is_safe_id,
+    _resolve_transcript_path,
     get_subagent_summary,
     get_subagent_transcript,
 )
+from app.agente.utils.pii_masker import mask_pii
 from app.utils.timezone import agora_brasil_naive
 
 logger = logging.getLogger('sistema_fretes')
@@ -265,3 +268,182 @@ def api_subagent_pii_toggle(session_id: str, agent_id: str):
         f"session={session_id[:16]} agent={agent_id[:12]} enabled={enabled}"
     )
     return jsonify({'success': True, 'enabled': enabled, 'expires_in': 300})
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-05-14: Fase 2 — PATCH /subagents/<aid> (P1.2 rename/tag)
+# ═══════════════════════════════════════════════════════════════════════════
+
+import bleach  # noqa: E402 — usado em api_subagent_patch
+
+
+@agente_bp.route(
+    '/api/sessions/<session_id>/subagents/<agent_id>',
+    methods=['PATCH'],
+)
+@login_required
+def api_subagent_patch(session_id: str, agent_id: str):
+    """Renomeia e/ou adiciona tags a um subagent (Fase 2, P1.2).
+
+    Persiste em agent_sessions.data['subagent_metadata'][agent_id].
+    Autorizacao: dono OU admin. Sanitizacao HTML via bleach (XSS prevention).
+    Validacoes: name max 80 chars; tags max 10, cada max 30 chars.
+    """
+    from app.agente.config.feature_flags import USE_SUBAGENT_RENAME_TAG
+
+    if not USE_SUBAGENT_RENAME_TAG:
+        return jsonify({'success': False, 'error': 'Feature desabilitada'}), 404
+
+    if not _is_safe_id(session_id) or not _is_safe_id(agent_id):
+        return jsonify({'success': False, 'error': 'IDs invalidos'}), 404
+
+    sess = AgentSession.query.filter_by(session_id=session_id).first()
+    if sess is None:
+        return jsonify({'success': False, 'error': 'Sessao nao encontrada'}), 404
+
+    is_admin = getattr(current_user, 'perfil', None) == 'administrador'
+    if not is_admin and sess.user_id != current_user.id:
+        return jsonify({
+            'success': False,
+            'error': 'Acesso restrito ao dono da sessao ou administrador',
+        }), 403
+
+    body = request.get_json(silent=True) or {}
+    name = body.get('name')
+    tags = body.get('tags')
+
+    # Validacoes
+    if name is not None:
+        if not isinstance(name, str):
+            return jsonify({'success': False, 'error': 'name deve ser string'}), 400
+        if len(name) > 80:
+            return jsonify({
+                'success': False,
+                'error': 'Nome deve ter no maximo 80 caracteres.',
+            }), 400
+        name = bleach.clean(name, tags=[], strip=True).strip()
+
+    if tags is not None:
+        if not isinstance(tags, list):
+            return jsonify({'success': False, 'error': 'tags deve ser lista'}), 400
+        if len(tags) > 10:
+            return jsonify({
+                'success': False,
+                'error': 'Maximo 10 tags permitidas.',
+            }), 400
+        clean_tags = []
+        for t in tags:
+            if not isinstance(t, str):
+                return jsonify({'success': False, 'error': 'tag deve ser string'}), 400
+            if len(t) > 30:
+                return jsonify({
+                    'success': False,
+                    'error': 'Tag deve ter no maximo 30 caracteres.',
+                }), 400
+            clean_tags.append(bleach.clean(t, tags=[], strip=True).strip())
+        tags = clean_tags
+
+    metadata = sess.data.setdefault('subagent_metadata', {})
+    entry = metadata.setdefault(agent_id, {})
+    if name is not None:
+        entry['name'] = name
+    if tags is not None:
+        entry['tags'] = tags
+    entry['updated_at'] = agora_brasil_naive().isoformat()
+    entry['updated_by'] = current_user.id
+
+    flag_modified(sess, 'data')
+    db.session.commit()
+
+    logger.info(
+        f"[subagent_patch] user_id={current_user.id} "
+        f"session={session_id[:16]} agent={agent_id[:12]} "
+        f"name={'<set>' if name else '<unchanged>'} "
+        f"tags={'<set>' if tags else '<unchanged>'}"
+    )
+
+    return jsonify({
+        'success': True,
+        'metadata': entry,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-05-14: Fase 2 — GET /output_file (P1.3 download JSONL)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@agente_bp.route(
+    '/api/sessions/<session_id>/subagents/<agent_id>/output_file',
+    methods=['GET'],
+)
+@login_required
+def api_subagent_output_file(session_id: str, agent_id: str):
+    """Download do JSONL bruto do subagent (Fase 2, P1.3).
+
+    Admin: arquivo raw.
+    Dono non-admin: cada linha passada por mask_pii antes de stream.
+    Sanity check: > 50MB retorna 413.
+    """
+    from app.agente.config.feature_flags import USE_SUBAGENT_OUTPUT_DOWNLOAD
+
+    if not USE_SUBAGENT_OUTPUT_DOWNLOAD:
+        return jsonify({'success': False, 'error': 'Feature desabilitada'}), 404
+
+    if not _is_safe_id(session_id) or not _is_safe_id(agent_id):
+        return jsonify({'success': False, 'error': 'IDs invalidos'}), 404
+
+    sess = AgentSession.query.filter_by(session_id=session_id).first()
+    if sess is None:
+        return jsonify({'success': False, 'error': 'Sessao nao encontrada'}), 404
+
+    is_admin = getattr(current_user, 'perfil', None) == 'administrador'
+    if not is_admin and sess.user_id != current_user.id:
+        return jsonify({'success': False, 'error': 'Acesso restrito'}), 403
+
+    path = _resolve_transcript_path(session_id, agent_id)
+    if not path or not os.path.exists(path):
+        return jsonify({
+            'success': False,
+            'error': 'Arquivo nao disponivel para download.',
+        }), 404
+
+    # Sanity check tamanho (50MB cap)
+    try:
+        size = os.path.getsize(path)
+        if size > 50 * 1024 * 1024:
+            return jsonify({
+                'success': False,
+                'error': 'Arquivo muito grande para download direto.',
+            }), 413
+    except OSError:
+        return jsonify({'success': False, 'error': 'Arquivo inacessivel'}), 404
+
+    def generate():
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if is_admin:
+                        yield line
+                    else:
+                        try:
+                            yield mask_pii(line)
+                        except Exception:
+                            # Mask falhou em uma linha — log + skip dela (privacy first)
+                            logger.warning(
+                                f"[output_file] mask_pii falhou em linha; "
+                                f"agent={agent_id[:12]} (linha skipada)"
+                            )
+        except (OSError, IOError) as e:
+            logger.error(f"[output_file] read failed: {e}")
+            yield ''
+
+    filename = f"{agent_id[:12]}.jsonl"
+    headers = {
+        'Content-Type': 'application/jsonl',
+        'Content-Disposition': f'attachment; filename="{filename}"',
+    }
+    logger.info(
+        f"[output_file] user_id={current_user.id} session={session_id[:16]} "
+        f"agent={agent_id[:12]} size={size} is_admin={is_admin}"
+    )
+    return Response(stream_with_context(generate()), headers=headers)

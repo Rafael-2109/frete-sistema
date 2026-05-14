@@ -271,3 +271,135 @@ def test_transcript_404_se_vazio(client, as_user, session_owned_by_normal, monke
     )
     assert r.status_code == 404
     assert 'arquivada' in r.get_data(as_text=True).lower() or 'transcript' in r.get_data(as_text=True).lower()
+
+
+# ============================================================
+# PATCH /subagents/<aid> — Fase 2 (P1.2 rename/tag)
+# ============================================================
+
+def test_patch_subagent_404_flag_off(client, as_user, session_owned_by_normal, monkeypatch):
+    monkeypatch.setattr('app.agente.config.feature_flags.USE_SUBAGENT_RENAME_TAG', False)
+    r = client.patch(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{"b"*32}',
+        json={'name': 'Test'},
+    )
+    assert r.status_code == 404
+
+
+def test_patch_subagent_persiste_em_jsonb(client, as_user, session_owned_by_normal, app):
+    """name + tags persistem em agent_sessions.data['subagent_metadata'][agent_id]."""
+    aid = 'b' * 32
+    r = client.patch(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{aid}',
+        json={'name': 'Analise pedido VCD123', 'tags': ['p3', 'urgente']},
+    )
+    assert r.status_code == 200, r.get_data(as_text=True)
+
+    with app.app_context():
+        sess = AgentSession.query.filter_by(session_id=session_owned_by_normal.session_id).first()
+        meta = sess.data.get('subagent_metadata', {}).get(aid)
+        assert meta is not None
+        assert meta['name'] == 'Analise pedido VCD123'
+        assert meta['tags'] == ['p3', 'urgente']
+        assert meta['updated_by'] == as_user.id
+
+
+def test_patch_subagent_sanitiza_html_xss(client, as_user, session_owned_by_normal, app):
+    """XSS payload eh sanitizado via bleach."""
+    aid = 'b' * 32
+    r = client.patch(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{aid}',
+        json={'name': '<script>alert(1)</script>'},
+    )
+    assert r.status_code == 200
+
+    with app.app_context():
+        sess = AgentSession.query.filter_by(session_id=session_owned_by_normal.session_id).first()
+        meta = sess.data.get('subagent_metadata', {}).get(aid)
+        assert '<script>' not in meta['name']
+        # Bleach strip remove tags, mantem texto interno
+        assert 'alert(1)' in meta['name'] or 'alert' in meta['name']
+
+
+def test_patch_subagent_400_nome_muito_longo(client, as_user, session_owned_by_normal):
+    """Nome > 80 chars rejeitado."""
+    r = client.patch(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{"b"*32}',
+        json={'name': 'x' * 100},
+    )
+    assert r.status_code == 400
+
+
+def test_patch_subagent_400_muitas_tags(client, as_user, session_owned_by_normal):
+    """Mais de 10 tags rejeitado."""
+    r = client.patch(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{"b"*32}',
+        json={'tags': [f'tag{i}' for i in range(11)]},
+    )
+    assert r.status_code == 400
+
+
+def test_patch_subagent_403_cross_user(client, as_user, session_owned_by_admin):
+    """User normal nao pode renomear subagent de sessao de outro user."""
+    r = client.patch(
+        f'/agente/api/sessions/{session_owned_by_admin.session_id}/subagents/{"b"*32}',
+        json={'name': 'Test'},
+    )
+    assert r.status_code == 403
+
+
+# ============================================================
+# GET /output_file — Fase 2 (P1.3 download JSONL)
+# ============================================================
+
+def test_output_file_404_flag_off(client, as_user, session_owned_by_normal, monkeypatch):
+    monkeypatch.setattr('app.agente.config.feature_flags.USE_SUBAGENT_OUTPUT_DOWNLOAD', False)
+    r = client.get(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{"b"*32}/output_file'
+    )
+    assert r.status_code == 404
+
+
+def test_output_file_admin_recebe_raw(client, as_admin, session_owned_by_admin, tmp_path, monkeypatch):
+    """Admin recebe JSONL raw."""
+    jsonl = tmp_path / 'fake.jsonl'
+    jsonl.write_text('{"x":1,"cpf":"123.456.789-00"}\n')
+    monkeypatch.setattr(
+        'app.agente.routes.subagents._resolve_transcript_path',
+        lambda sid, aid: str(jsonl)
+    )
+    r = client.get(
+        f'/agente/api/sessions/{session_owned_by_admin.session_id}/subagents/{"b"*32}/output_file'
+    )
+    assert r.status_code == 200, r.get_data(as_text=True)
+    assert r.headers['Content-Type'] == 'application/jsonl'
+    body = r.get_data(as_text=True)
+    assert '123.456.789-00' in body
+
+
+def test_output_file_non_admin_recebe_mask(client, as_user, session_owned_by_normal, tmp_path, monkeypatch):
+    """User normal recebe JSONL com PII mascarada."""
+    jsonl = tmp_path / 'fake.jsonl'
+    jsonl.write_text('{"x":1,"cpf":"123.456.789-00"}\n')
+    monkeypatch.setattr(
+        'app.agente.routes.subagents._resolve_transcript_path',
+        lambda sid, aid: str(jsonl)
+    )
+    r = client.get(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{"b"*32}/output_file'
+    )
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert '123.456.789-00' not in body  # mascarado
+
+
+def test_output_file_404_path_ausente(client, as_user, session_owned_by_normal, monkeypatch):
+    """Path nao existente retorna 404."""
+    monkeypatch.setattr(
+        'app.agente.routes.subagents._resolve_transcript_path',
+        lambda sid, aid: None
+    )
+    r = client.get(
+        f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{"b"*32}/output_file'
+    )
+    assert r.status_code == 404
