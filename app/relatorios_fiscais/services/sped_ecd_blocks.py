@@ -276,19 +276,24 @@ def construir_bloco_I_abertura(params: dict, matriz_data: dict, contador: Contad
         LEIAUTE_VERSAO,                                        # 3 COD_VER_LC (9.00)
     ])))
 
-    # I030 — Termo de Abertura do Livro
-    # Numero do livro = numero sequencial do livro Diario na empresa
+    # I030 — Termo de Abertura do Livro (12 campos conforme Manual ECD Leiaute 9)
+    # Ref: http://sped.rfb.gov.br/estatico/2D/.../Manual_ECD_Leiaute9.pdf
+    # Bug historico: emitia 10 campos -> PVA rejeitava com "quantidade de campos
+    # diferente do especificado no layout". Adicionados DT_ARQ_CONV (10),
+    # DESC_MUN (11) e DT_EX_SOCIAL (12, obrigatorio).
     linhas.append(contador.emit(formatar_registro([
-        'I030',                                                # 1 REG
-        'TERMO DE ABERTURA',                                   # 2 IDENT_NOM_LIV (literal)
-        '1',                                                   # 3 NUM_ORD (1o livro do exercicio)
+        'I030',                                                # 1  REG
+        'TERMO DE ABERTURA',                                   # 2  DNRC_ABERT (literal)
+        '1',                                                   # 3  NUM_ORD (sequencial do livro, >0)
         remover_acentos('Livro Diario (Completo, sem escrituracao auxiliar).'),  # 4 NAT_LIVR
-        '1',                                                   # 5 QTD_LIN (linhas escrituradas — 1 placeholder)
-        remover_acentos(matriz_data.get('razao_social', '')),  # 6 NOME
-        matriz_data.get('nire', ''),                           # 7 NIRE
-        matriz_data.get('cnpj', CNPJ_MATRIZ),                  # 8 CNPJ
-        formatar_data(params.get('date_arq_reg')),             # 9 DT_ARQ (data registro junta - opcional)
-        '',                                                    # 10 DT_EX_SOCIAL (vazio = mesmo do periodo)
+        '1',                                                   # 5  QTD_LIN (placeholder — atualizado no encerramento)
+        remover_acentos(matriz_data.get('razao_social', '')),  # 6  NOME
+        matriz_data.get('nire', ''),                           # 7  NIRE (opcional)
+        matriz_data.get('cnpj', CNPJ_MATRIZ),                  # 8  CNPJ
+        formatar_data(params.get('date_arq_reg')),             # 9  DT_ARQ (opcional)
+        '',                                                    # 10 DT_ARQ_CONV (conversao S/S -> empresaria - vazio)
+        remover_acentos(matriz_data.get('nome_municipio', '')),# 11 DESC_MUN (municipio - opcional)
+        formatar_data(params.get('date_fim')),                 # 12 DT_EX_SOCIAL (data fim exercicio - OBRIGATORIO)
     ])))
 
     return linhas
@@ -324,7 +329,14 @@ def construir_0150(participantes: List[dict], contador: ContadorRegistros) -> Li
 
 def construir_I050(plano_consolidado: List[dict], params: dict, contador: ContadorRegistros) -> List[str]:
     """
-    Plano de Contas (I050).
+    Plano de Contas (I050) — APENAS I050, sem I051.
+
+    DEPRECATED para uso direto no service: prefira construir_I050_com_I051()
+    que intercala I051 logo apos cada I050 analitico (sequencia exigida pelo PVA,
+    ja que o I051 nao carrega COD_CTA — vinculo e por posicao).
+
+    Mantida para retrocompatibilidade / testes que isolam o I050.
+
     plano_consolidado: lista de dicts {code, nivel, nat, tipo (S/A), name, cod_sup, dt_alt}
     Espera-se que ja venha com hierarquia sintetica + analiticas, ordenado por code.
     """
@@ -347,6 +359,52 @@ def construir_I050(plano_consolidado: List[dict], params: dict, contador: Contad
     return linhas
 
 
+def construir_I050_com_I051(
+    plano_consolidado: List[dict],
+    params: dict,
+    contador: ContadorRegistros,
+) -> List[str]:
+    """
+    Plano de Contas (I050) + Plano Referencial Receita (I051) INTERCALADOS.
+
+    O PVA exige que o I051 venha LOGO APOS o I050 da conta analitica
+    correspondente — pois o I051 nao carrega COD_CTA (so REG | COD_CCUS |
+    COD_CTA_REF, 3 campos). O vinculo e implicito pela sequencia.
+
+    Bug historico: o service emitia TODOS os I050 e depois TODOS os I051 em
+    blocos separados. Mesmo com a quantidade de campos correta, o PVA nao
+    conseguiria mapear o I051 a uma conta. Esta funcao corrige isso emitindo
+    I050 + (opcional) I051 para cada conta em sequencia.
+    """
+    linhas = []
+
+    for c in plano_consolidado:
+        # I050 — sempre emitido (sintetica ou analitica)
+        nat = c.get('cod_nat_odoo') or ACCOUNT_TYPE_TO_NAT.get(c.get('account_type', ''), '99')
+        linhas.append(contador.emit(formatar_registro([
+            'I050',                                            # 1 REG
+            c.get('dt_alt') or formatar_dt_alt(c.get('create_date'), params['date_ini']),  # 2 DT_ALT
+            nat,                                               # 3 COD_NAT
+            c['tipo'],                                         # 4 IND_CTA (S/A)
+            str(c['nivel']),                                   # 5 NIVEL
+            c['code'],                                         # 6 COD_CTA
+            c.get('cod_sup', ''),                              # 7 COD_CTA_SUP
+            remover_acentos(c.get('name', '')),                # 8 CTA
+        ])))
+
+        # I051 — apenas se for conta analitica com mapeamento referencial
+        if c.get('tipo') == 'A':
+            cod_ref = c.get('conta_referencial_odoo') or PLANO_REFERENCIAL.get(c.get('account_type', ''), '')
+            if cod_ref:
+                linhas.append(contador.emit(formatar_registro([
+                    'I051',                                    # 1 REG
+                    '',                                        # 2 COD_CCUS (vazio)
+                    cod_ref,                                   # 3 COD_CTA_REF
+                ])))
+
+    return linhas
+
+
 def construir_I051(plano_consolidado: List[dict], contador: ContadorRegistros) -> List[str]:
     """
     Plano Referencial Receita (I051) — apenas para contas analiticas.
@@ -363,11 +421,15 @@ def construir_I051(plano_consolidado: List[dict], contador: ContadorRegistros) -
         cod_ref = c.get('conta_referencial_odoo') or PLANO_REFERENCIAL.get(c.get('account_type', ''), '')
         if not cod_ref:
             continue  # sem mapeamento — pular (Receita aceita parcial)
+        # I051 — Layout 9 do Manual ECD tem 3 campos (REG | COD_CCUS | COD_CTA_REF).
+        # Bug historico: emitia 4 campos com COD_CTA extra, causando rejeicao PVA
+        # ("quantidade de campos diferente do especificado no layout"). O vinculo
+        # do I051 com a conta e dado pela SEQUENCIA: deve vir logo apos o I050 da
+        # conta a que se refere (vide service.py — emissao intercalada I050+I051).
         linhas.append(contador.emit(formatar_registro([
             'I051',                                            # 1 REG
-            cod_ref,                                           # 2 COD_ENT_REF (Receita)
-            '',                                                # 3 COD_CCUS (vazio)
-            c['code'],                                         # 4 COD_CTA
+            '',                                                # 2 COD_CCUS (vazio — mapeamento sem CC)
+            cod_ref,                                           # 3 COD_CTA_REF (codigo do plano referencial RFB)
         ])))
 
     return linhas

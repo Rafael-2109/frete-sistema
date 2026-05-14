@@ -24,8 +24,7 @@ from app.relatorios_fiscais.services.sped_ecd_blocks import (
     construir_0150,
     construir_bloco_0,
     construir_bloco_9,
-    construir_I050,
-    construir_I051,
+    construir_I050_com_I051,
     construir_I100,
     construir_I150_I155,
     construir_I200_I250,
@@ -140,10 +139,11 @@ def gerar_sped_ecd_centralizado(
     for linha in construir_bloco_I_abertura(params, matriz_data, contador):
         _write_linha(output, linha)
 
-    _emit_progresso(progresso_callback, etapa='bloco_I_plano', mensagem='Bloco I: plano de contas (I050+I051)')
-    for linha in construir_I050(plano_consolidado, params, contador):
-        _write_linha(output, linha)
-    for linha in construir_I051(plano_consolidado, contador):
+    _emit_progresso(progresso_callback, etapa='bloco_I_plano', mensagem='Bloco I: plano de contas (I050+I051 intercalados)')
+    # I050 + I051 intercalados: o PVA exige que I051 venha logo apos o I050
+    # da conta analitica correspondente (vinculo posicional, pois I051 nao
+    # carrega COD_CTA no leiaute 9).
+    for linha in construir_I050_com_I051(plano_consolidado, params, contador):
         _write_linha(output, linha)
 
     # I100 — Cadastro CCUS (V1.1)
