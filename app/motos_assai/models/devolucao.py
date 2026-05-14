@@ -103,7 +103,18 @@ class AssaiDevolucaoItem(db.Model):
         ),
     )
 
-    nf_item = db.relationship('AssaiNfQpaItem', lazy='joined')
+    # Fix 2026-05-14: foreign_keys=[nf_qpa_item_id] obrigatorio porque ha 2 FKs
+    # entre assai_devolucao_item e assai_nf_qpa_item (cruzados para auditoria
+    # bidirecional): devolucao_item.nf_qpa_item_id -> nf_qpa_item.id E
+    # nf_qpa_item.devolucao_item_id -> devolucao_item.id. Sem foreign_keys=
+    # explicito SQLAlchemy levanta AmbiguousForeignKeysError no init do
+    # mapper, propagando para TODOS os mappers via "One or more mappers
+    # failed to initialize" — derrubava o app inteiro.
+    nf_item = db.relationship(
+        'AssaiNfQpaItem',
+        foreign_keys=[nf_qpa_item_id],
+        lazy='joined',
+    )
     evento_pendencia = db.relationship('AssaiMotoEvento', lazy='joined')
 
     def __repr__(self):
