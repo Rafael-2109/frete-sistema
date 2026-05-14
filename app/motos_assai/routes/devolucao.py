@@ -37,19 +37,22 @@ from app.motos_assai.services.devolucao_service import (
 
 
 # ============================================================================
-# Form de devolucao (acessivel pela tela detalhe da NF)
+# Submit da devolucao (modal embutido na tela detalhe da NF)
 # ============================================================================
 
 @motos_assai_bp.route(
-    '/faturamento/nfs/<int:nf_id>/devolucao', methods=['GET', 'POST'],
+    '/faturamento/nfs/<int:nf_id>/devolucao', methods=['POST'],
 )
 @login_required
 @require_motos_assai
 def devolucao_form(nf_id):
-    """Tela e submit do registro de devolucao pela NF de venda."""
+    """Submit da devolucao via modal embutido em faturamento_nf_detalhe.html.
+
+    NAO renderiza tela propria — sempre retorna redirect (sucesso ->
+    devolucao_detalhe, erro/validacao -> faturamento_nf_detalhe).
+    """
     nf = AssaiNfQpa.query.get_or_404(nf_id)
 
-    # Bloqueio: NF CANCELADA nao aceita devolucao
     if nf.status_match == 'CANCELADA':
         flash(
             f'NF {nf.numero} esta CANCELADA — devolucao nao permitida.',
@@ -58,49 +61,41 @@ def devolucao_form(nf_id):
         return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf_id))
 
     form = DevolucaoNfForm()
-    itens = itens_da_nf_para_tela(nf_id)
+    if not form.validate_on_submit():
+        # CSRF invalido ou campos obrigatorios — flash + volta para NF
+        for field, errors in form.errors.items():
+            for err in errors:
+                flash(f'{field}: {err}', 'danger')
+        return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf_id))
 
-    if request.method == 'POST' and form.validate_on_submit():
-        chassis_selecionados = request.form.getlist('chassis_selecionados')
-        try:
-            devolucao = criar_devolucao(
-                nf_id=nf_id,
-                numero_nfd=form.numero_nfd.data,
-                data_devolucao=form.data_devolucao.data,
-                motivo=form.motivo.data,
-                chassis=chassis_selecionados,
-                anexos=form.anexos.data or [],
-                operador_id=current_user.id,
-            )
-            flash(
-                f'Devolucao NFd {devolucao.numero_nfd} registrada '
-                f'({len(devolucao.itens)} chassis).',
-                'success',
-            )
-            return redirect(url_for(
-                'motos_assai.devolucao_detalhe', devolucao_id=devolucao.id,
-            ))
-        except DevolucaoValidationError as e:
-            flash(str(e), 'danger')
-        except Exception as e:
-            current_app.logger.exception(
-                'Erro ao criar devolucao da NF %s', nf_id,
-            )
-            flash(f'Erro interno: {e}', 'danger')
+    chassis_selecionados = request.form.getlist('chassis_selecionados')
+    try:
+        devolucao = criar_devolucao(
+            nf_id=nf_id,
+            numero_nfd=form.numero_nfd.data,
+            data_devolucao=form.data_devolucao.data,
+            motivo=form.motivo.data,
+            chassis=chassis_selecionados,
+            anexos=form.anexos.data or [],
+            operador_id=current_user.id,
+        )
+        flash(
+            f'Devolucao NFd {devolucao.numero_nfd} registrada '
+            f'({len(devolucao.itens)} chassis).',
+            'success',
+        )
+        return redirect(url_for(
+            'motos_assai.devolucao_detalhe', devolucao_id=devolucao.id,
+        ))
+    except DevolucaoValidationError as e:
+        flash(str(e), 'danger')
+    except Exception as e:
+        current_app.logger.exception(
+            'Erro ao criar devolucao da NF %s', nf_id,
+        )
+        flash(f'Erro interno: {e}', 'danger')
 
-    # Re-carrega itens se POST falhou (para refletir mudancas concorrentes)
-    if request.method == 'POST':
-        itens = itens_da_nf_para_tela(nf_id)
-
-    devolucoes_existentes = listar_devolucoes_da_nf(nf_id)
-
-    return render_template(
-        'motos_assai/devolucao/form.html',
-        nf=nf,
-        form=form,
-        itens=itens,
-        devolucoes_existentes=devolucoes_existentes,
-    )
+    return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf_id))
 
 
 # ============================================================================
