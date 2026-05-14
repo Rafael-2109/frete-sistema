@@ -41,6 +41,21 @@ from app.utils.timezone import agora_brasil_naive
 logger = logging.getLogger('sistema_fretes')
 
 
+def _check_output_file_available(session_id: str, agent_id: str) -> bool:
+    """Indica se o JSONL do subagent esta acessivel localmente para download.
+
+    Usado por /summary e /transcript para o frontend esconder botao 'Download JSONL'
+    quando arquivo nao existe (ex: Render reseta /tmp entre deploys).
+    """
+    try:
+        if not _is_safe_id(session_id) or not _is_safe_id(agent_id):
+            return False
+        path = _resolve_transcript_path(session_id, agent_id)
+        return bool(path and os.path.exists(path))
+    except Exception:
+        return False
+
+
 def _get_session(session_id: str):
     """Wrapper testavel para AgentSession.query.filter_by().first()."""
     return AgentSession.query.filter_by(session_id=session_id).first()
@@ -91,6 +106,10 @@ def api_user_subagent_summary(session_id: str, agent_id: str):
     payload = _sanitize_subagent_summary_for_user(
         summary.to_dict(), current_user
     )
+    # P1.3 (2026-05-14 fase 3): indica se o JSONL existe no disco
+    # para o frontend esconder botao Download quando ausente
+    payload['has_output_file'] = _check_output_file_available(session_id, agent_id)
+
     return jsonify({
         'success': True,
         'session_id': session_id,

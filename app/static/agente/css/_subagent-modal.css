@@ -149,8 +149,6 @@
   padding: 10px 12px;
   border-radius: 6px;
   margin: 0;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .subagent-modal-section .timeline-list {
@@ -200,8 +198,6 @@
   color: var(--agent-text-primary, #e2e8f0);
   white-space: pre-wrap;
   word-wrap: break-word;
-  max-height: 120px;
-  overflow-y: auto;
 }
 
 .subagent-modal-section .findings-content {

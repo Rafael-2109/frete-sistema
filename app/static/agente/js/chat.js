@@ -1219,6 +1219,35 @@ function renderSubagentLineSummary(data) {
     line.dataset.summary = JSON.stringify({ ...data, agent_type: badgeText });
 }
 
+// Bug 1 fix (2026-05-14 fase 3): _emit_subagent_summary publica em Redis pubsub
+// no hook SubagentStop. Em prod observamos `subscribers=0` em 3 de 4 invocacoes
+// recentes — o SSE generator fechou ANTES do hook disparar. O buffer Redis
+// (TTL 5min) so e drenado quando o usuario abre NOVO SSE (nova mensagem) — se
+// o usuario apenas le e nao envia outra pergunta, o subagent_summary expira.
+//
+// Garantia complementar: ao receber `task_notification` (status=completed) via
+// SSE principal, fazemos fetch direto ao /summary endpoint (que ja existe e
+// le do mesmo JSONL via get_subagent_summary) e atualizamos a linha inline.
+async function _fetchAndUpdateSubagentLine(agentId) {
+    if (!sessionId || !agentId) return;
+    try {
+        // Delay 500ms para dar tempo do hook SubagentStop terminar
+        // (persistir cost granular + montar summary). Sem isso, /summary
+        // pode retornar status=error porque o JSONL ainda nao foi flushado.
+        await new Promise(res => setTimeout(res, 500));
+        const resp = await fetch(
+            `/agente/api/sessions/${sessionId}/subagents/${agentId}/summary`
+        );
+        if (!resp.ok) return;
+        const payload = await resp.json();
+        if (payload && payload.subagent) {
+            renderSubagentLineSummary(payload.subagent);
+        }
+    } catch (err) {
+        console.debug('[subagent-ui] fetch summary fallback falhou:', err);
+    }
+}
+
 function renderSubagentValidationWarning(data) {
     // data: {agent_id, agent_type, score, reason, flagged_claims}
     const line = subagentLines.get(data.agent_id);
@@ -1336,7 +1365,7 @@ async function openSubagentModal(agentId) {
     document.body.style.overflow = 'hidden';
     _setSubagentModalLoading();
 
-    // Header com dados da linha (se existir)
+    // Header preliminar com dados da linha (preview imediato — pode ser parcial)
     const line = subagentLines.get(agentId);
     if (line) {
         try {
@@ -1348,8 +1377,32 @@ async function openSubagentModal(agentId) {
     const sid = sessionId;
     if (!sid) {
         _setSubagentModalError('Sessao nao identificada.');
+        _updateSubagentDownloadButton(false);
         return;
     }
+
+    // Default: esconde botao download ate /summary confirmar existencia do JSONL
+    _updateSubagentDownloadButton(false);
+
+    // Bug 2+3+5 fix (2026-05-14 fase 3): busca /summary em paralelo para:
+    // - Atualizar header com dados frescos (tools_used, duration_ms, cost_usd)
+    // - Decidir se botao Download JSONL fica visivel (has_output_file)
+    // Nao bloqueia render do transcript — promessa independente.
+    fetch(`/agente/api/sessions/${sid}/subagents/${agentId}/summary`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(p => {
+            const s = p && p.subagent;
+            if (s) {
+                _setSubagentModalHeader(s);
+                _updateSubagentDownloadButton(!!s.has_output_file);
+                // Persiste no dataset.summary para proximas aberturas
+                if (line) {
+                    try { line.dataset.summary = JSON.stringify(s); }
+                    catch (_) { /* ignore quota */ }
+                }
+            }
+        })
+        .catch(err => console.warn('[subagent-modal] /summary fetch falhou:', err));
 
     try {
         const resp = await fetch(`/agente/api/sessions/${sid}/subagents/${agentId}/transcript`);
@@ -1376,6 +1429,24 @@ async function openSubagentModal(agentId) {
         console.error('[subagent-modal] fetch falhou:', err);
         _setSubagentModalError('Conexao lenta. Verifique sua rede e tente novamente.');
     }
+}
+
+function _updateSubagentDownloadButton(hasFile) {
+    // Bug 5 fix (2026-05-14 fase 3): controla visibilidade do botao Download JSONL.
+    // Sem essa funcao, o botao ficava sempre visivel; clicar baixava 404 como arquivo.
+    const modal = document.getElementById('subagent-transcript-modal');
+    if (!modal) return;
+    const btn = modal.querySelector('[data-action="download-jsonl"]');
+    if (!btn) return;
+    const flagOn = window.AGENT_FEATURES && window.AGENT_FEATURES.subagent_output_download;
+    if (!flagOn) {
+        btn.hidden = true;
+        return;
+    }
+    btn.hidden = !hasFile;
+    btn.title = hasFile
+        ? 'Download JSONL'
+        : 'Arquivo nao disponivel para download';
 }
 
 function closeSubagentModal() {
@@ -1688,10 +1759,11 @@ function downloadSubagentJsonl(agentId) {
         const modal = document.getElementById('subagent-transcript-modal');
         if (!modal) return;
 
-        // Botao download visivel se flag ON
+        // Botao download: handler sempre registrado quando flag ON.
+        // Visibilidade controlada por _updateSubagentDownloadButton(hasFile)
+        // ao abrir modal — esconde quando JSONL nao existe (Bug 5 fix 2026-05-14).
         const dlBtn = modal.querySelector('[data-action="download-jsonl"]');
         if (dlBtn && window.AGENT_FEATURES.subagent_output_download) {
-            dlBtn.hidden = false;
             dlBtn.addEventListener('click', () => {
                 if (_currentModalAgentId) downloadSubagentJsonl(_currentModalAgentId);
             });
@@ -1977,6 +2049,17 @@ function processSSEEvent(eventType, data, state) {
                 } else {
                     showTyping(`⚠️ Subagente finalizou: ${notifStatus}`);
                 }
+
+                // Bug 1 fix (2026-05-14 fase 3): fetch /summary como fallback do
+                // pubsub. Garante linha inline atualizada mesmo quando
+                // subagent_summary event nao chega (subscribers=0 em prod).
+                if (isSuccess) {
+                    const agentId = data.task_id || data.agent_id;
+                    if (agentId) {
+                        _fetchAndUpdateSubagentLine(agentId);
+                    }
+                }
+
                 console.log(`[SSE] Subagente concluiu: status=${notifStatus} summary=${notifSummary.substring(0, 80)}`);
                 break;
             }
