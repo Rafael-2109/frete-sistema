@@ -1524,7 +1524,10 @@ async function _togglePIIInModal() {
             `/agente/api/sessions/${sessionId}/subagents/${_currentModalAgentId}/pii-toggle`,
             {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                },
                 body: JSON.stringify({enabled: newEnabled}),
             }
         );

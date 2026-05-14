@@ -137,10 +137,6 @@ def api_subagent_transcript(session_id: str, agent_id: str):
     if is_admin:
         try:
             rc = redis_cache.client
-            if rc is None:
-                # fallback get_redis_client
-                
-                rc = redis_cache.client
             tk = f'agent:pii_unmask:{current_user.id}:{session_id}:{agent_id}'
             include_pii = bool(rc.exists(tk))
         except Exception as e:
@@ -170,9 +166,6 @@ def api_subagent_transcript(session_id: str, agent_id: str):
     try:
         from datetime import date
         rc = redis_cache.client
-        if rc is None:
-            
-            rc = redis_cache.client
         if rc is not None:
             rc.hincrby('agent:metrics:subagent_modal:daily', date.today().isoformat(), 1)
     except Exception:
@@ -227,9 +220,6 @@ def api_subagent_pii_toggle(session_id: str, agent_id: str):
     # Rate limit Redis: 10/min/user
     try:
         rc = redis_cache.client
-        if rc is None:
-            
-            rc = redis_cache.client
         if rc is not None:
             rk = f'agent:pii_toggle_rate:{current_user.id}'
             count = rc.incr(rk)
@@ -260,9 +250,6 @@ def api_subagent_pii_toggle(session_id: str, agent_id: str):
     # Redis token TTL 5min
     try:
         rc = redis_cache.client
-        if rc is None:
-            
-            rc = redis_cache.client
         if rc is not None:
             tk = f'agent:pii_unmask:{current_user.id}:{session_id}:{agent_id}'
             if enabled:

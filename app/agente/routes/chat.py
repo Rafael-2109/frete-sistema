@@ -859,10 +859,19 @@ def _stream_chat_response(
 
                 elif event.type == 'task_notification':
                     # SDK 0.1.46+: Subagente concluiu
+                    # 2026-05-14: +usage (Code-review #3 — R8 contract)
+                    _n_usage = event.metadata.get('usage')
+                    if _n_usage is not None and not isinstance(_n_usage, dict):
+                        _n_usage = {
+                            'total_tokens': getattr(_n_usage, 'total_tokens', None),
+                            'tool_uses': getattr(_n_usage, 'tool_uses', None),
+                            'duration_ms': getattr(_n_usage, 'duration_ms', None),
+                        }
                     event_queue.put(_sse_event('task_notification', {
                         'summary': event.content or '',
                         'task_id': event.metadata.get('task_id', ''),
                         'status': event.metadata.get('status', ''),
+                        'usage': _n_usage,
                     }))
 
                 elif event.type == 'rate_limit':
