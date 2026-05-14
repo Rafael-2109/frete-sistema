@@ -403,3 +403,17 @@ def test_output_file_404_path_ausente(client, as_user, session_owned_by_normal, 
         f'/agente/api/sessions/{session_owned_by_normal.session_id}/subagents/{"b"*32}/output_file'
     )
     assert r.status_code == 404
+
+
+def test_output_file_403_cross_user(client, as_user, session_owned_by_admin, tmp_path, monkeypatch):
+    """User normal nao pode baixar JSONL de sessao de outro user (Code-review #1)."""
+    jsonl = tmp_path / 'fake.jsonl'
+    jsonl.write_text('{"x":1}\n')
+    monkeypatch.setattr(
+        'app.agente.routes.subagents._resolve_transcript_path',
+        lambda sid, aid: str(jsonl)
+    )
+    r = client.get(
+        f'/agente/api/sessions/{session_owned_by_admin.session_id}/subagents/{"b"*32}/output_file'
+    )
+    assert r.status_code == 403
