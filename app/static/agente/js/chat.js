@@ -1507,12 +1507,23 @@ function _setSubagentModalError(message) {
     });
     const timeline = modal.querySelector('[data-field="timeline"]');
     if (timeline) {
+        // Code-review H2 fix (2026-05-14 fase 3): substituido onclick string
+        // injection por addEventListener. onclick capturava _currentModalAgentId
+        // no momento da string build — se modal reaberto para outro agent,
+        // o botao "Tentar novamente" hard-coded o agentId anterior.
+        // Listener delegado le _currentModalAgentId no momento do click.
         timeline.innerHTML = `
             <div class="subagent-modal-error">
                 <span class="icon">⚠</span>
                 <div>${_subagentEscapeHtml(message)}</div>
-                <button type="button" onclick="openSubagentModal('${_subagentEscapeHtml(_currentModalAgentId || '')}')">Tentar novamente</button>
+                <button type="button" data-action="retry-modal">Tentar novamente</button>
             </div>`;
+        const retryBtn = timeline.querySelector('[data-action="retry-modal"]');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+                if (_currentModalAgentId) openSubagentModal(_currentModalAgentId);
+            });
+        }
     }
     // Limpa prompt e findings tambem
     const prompt = modal.querySelector('[data-field="prompt"]');

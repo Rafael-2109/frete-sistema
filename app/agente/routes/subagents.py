@@ -447,14 +447,20 @@ def api_subagent_output_file(session_id: str, agent_id: str):
                         try:
                             yield mask_pii(line)
                         except Exception:
-                            # Mask falhou em uma linha — log + skip dela (privacy first)
+                            # Code-review M1 fix (2026-05-14 fase 3): em vez de
+                            # silent skip que produz JSONL truncado sem aviso
+                            # ao consumer, emitir marcador JSONL valido com
+                            # flag _skipped=true. Privacy preservada (raw nao
+                            # vazada) E consumer detecta linhas perdidas.
                             logger.warning(
                                 f"[output_file] mask_pii falhou em linha; "
-                                f"agent={agent_id[:12]} (linha skipada)"
+                                f"agent={agent_id[:12]} (marcador emitido)"
                             )
+                            yield '{"_skipped": true, "reason": "mask_pii_failure"}\n'
         except (OSError, IOError) as e:
             logger.error(f"[output_file] read failed: {e}")
-            yield ''
+            # Marcador para read error — substitui yield '' silencioso
+            yield '{"_skipped": true, "reason": "read_error"}\n'
 
     filename = f"{agent_id[:12]}.jsonl"
     headers = {
