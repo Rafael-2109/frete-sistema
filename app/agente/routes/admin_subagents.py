@@ -359,11 +359,27 @@ def api_admin_subagent_smoketest():
         report['cost_usd'] = round(summary.cost_usd, 6)
         report['num_turns'] = summary.num_turns
 
-        # Healthy se: summary bem formado + cost calculado
+        # 2026-05-14: tambem verificar get_subagent_transcript (P0.1 — modal)
+        # Esse check detecta regressao em deploys: se transcript_entries=0 ou
+        # has_user_prompt=False, o modal de transcript estara quebrado mesmo
+        # com o restante do pipeline OK.
+        from app.agente.sdk.subagent_reader import get_subagent_transcript
+        try:
+            transcript = get_subagent_transcript(row.session_id, agent_ids[0], include_pii=True)
+            report['transcript_entries'] = len(transcript)
+            report['has_user_prompt'] = any(e.kind == 'user_prompt' for e in transcript)
+        except Exception as te:
+            report['transcript_entries'] = 0
+            report['has_user_prompt'] = False
+            report['transcript_error'] = str(te)[:200]
+
+        # Healthy se: summary bem formado + cost calculado + transcript OK
         report['healthy'] = (
             summary.status == 'done'
             and (summary.num_turns > 0 or summary.cost_usd > 0)
             and (len(summary.tools_used) > 0 or len(summary.findings_text or '') > 0)
+            and report.get('transcript_entries', 0) > 0
+            and report.get('has_user_prompt', False)
         )
 
     except Exception as e:
