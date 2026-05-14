@@ -1042,6 +1042,53 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </aside>
 
+<!-- Subagent Transcript Modal (2026-05-14, P0.1) — timeline cronologica + PII toggle admin -->
+<div id="subagent-transcript-modal" class="subagent-modal" hidden>
+  <div class="subagent-modal-backdrop" data-close="modal"></div>
+  <div class="subagent-modal-panel" role="dialog" aria-labelledby="subagent-modal-title" aria-modal="true">
+    <header class="subagent-modal-header">
+      <span class="subagent-modal-badge" data-field="agent_type">subagente</span>
+      <h2 id="subagent-modal-title" data-field="title">Carregando…</h2>
+      <span class="subagent-modal-meta" data-field="meta"></span>
+      <div class="subagent-modal-actions">
+        {% if current_user.is_authenticated and current_user.perfil == 'administrador' %}
+        <button type="button" class="btn-pii-toggle" data-action="toggle-pii"
+                title="Mostrar/ocultar PII (5 min)">Mostrar PII</button>
+        {% endif %}
+        <button type="button" class="btn-download-jsonl" data-action="download-jsonl"
+                title="Download JSONL" hidden>JSONL</button>
+        <button type="button" class="btn-close" data-close="modal"
+                aria-label="Fechar">&times;</button>
+      </div>
+    </header>
+    <section class="subagent-modal-section" data-section="prompt">
+      <h3>Prompt do agente principal</h3>
+      <pre class="prompt-content" data-field="prompt"></pre>
+    </section>
+    <section class="subagent-modal-section" data-section="timeline">
+      <h3>Timeline</h3>
+      <ol class="timeline-list" data-field="timeline"></ol>
+    </section>
+    <section class="subagent-modal-section" data-section="findings">
+      <h3>Findings</h3>
+      <div class="findings-content" data-field="findings"></div>
+    </section>
+  </div>
+</div>
+
+<!-- AGENT_FEATURES + AGENT_DEBUG (2026-05-14, P0.1+) — flags expostas ao frontend -->
+<script>
+window.AGENT_FEATURES = {
+    subagent_modal: {{ 'true' if config.get('USE_SUBAGENT_MODAL', True) else 'false' }},
+    subagent_rich_states: {{ 'true' if config.get('USE_SUBAGENT_RICH_STATES', True) else 'false' }},
+    subagent_live_progress: {{ 'true' if config.get('USE_SUBAGENT_LIVE_PROGRESS', True) else 'false' }},
+    subagent_rename_tag: {{ 'true' if config.get('USE_SUBAGENT_RENAME_TAG', True) else 'false' }},
+    subagent_output_download: {{ 'true' if config.get('USE_SUBAGENT_OUTPUT_DOWNLOAD', True) else 'false' }},
+};
+window.AGENT_DEBUG = window.AGENT_DEBUG || {};
+window.AGENT_DEBUG.is_admin = {{ 'true' if current_user.is_authenticated and current_user.perfil == 'administrador' else 'false' }};
+</script>
+
 <!-- Artifact Modal (2026-05-12) — renderiza bundle.html em iframe sandboxed -->
 <div id="artifact-modal" class="artifact-modal" style="display: none;" role="dialog" aria-label="Visualizacao de artifact">
   <div class="artifact-modal-backdrop" onclick="closeArtifactModal()"></div>
