@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from claude_agent_sdk import get_subagent_messages, list_subagents
 
@@ -617,3 +617,215 @@ def get_subagent_findings(
     # Mais recente primeiro (ended_at desc)
     matching.sort(key=lambda s: s.ended_at or agora_brasil_naive(), reverse=True)
     return matching[0].findings_text
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Transcript completo (P0.1 — modal de transcript, 2026-05-14)
+# ═══════════════════════════════════════════════════════════════════════════
+
+TranscriptKind = Literal['user_prompt', 'assistant_text', 'tool_use',
+                          'tool_result', 'thinking']
+
+
+@dataclass
+class SubagentTranscriptEntry:
+    """Uma entrada da timeline cronologica do subagent.
+
+    Diferenca para SubagentSummary.tools_used:
+    - Inclui user_prompt (primeira UserMessage do JSONL — o que o parent
+      enviou ao subagent)
+    - Inclui thinking blocks separadamente
+    - Ordem cronologica do JSONL (sequence crescente)
+    - max_content_chars maior (4000 vs 500) — modal mostra mais
+    """
+    sequence: int                       # ordem no JSONL (1, 2, 3, ...)
+    kind: TranscriptKind
+    timestamp: Optional[datetime]
+    content: Any                        # str para text/prompt/thinking;
+                                         # dict para tool_use {name, input};
+                                         # str para tool_result content
+    tool_use_id: Optional[str] = None   # correlaciona tool_use <-> tool_result
+
+    def to_dict(self) -> dict:
+        return {
+            'sequence': self.sequence,
+            'kind': self.kind,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'content': self.content,
+            'tool_use_id': self.tool_use_id,
+        }
+
+
+def get_subagent_transcript(
+    session_id: str,
+    agent_id: str,
+    directory: Optional[str] = None,
+    include_pii: bool = False,
+    max_content_chars: int = 4000,
+) -> list[SubagentTranscriptEntry]:
+    """Le transcript COMPLETO do subagent em ordem cronologica.
+
+    Diferente de get_subagent_summary (que retorna tools_used resumido),
+    este retorna timeline com:
+      1. user_prompt — primeira UserMessage (prompt do parent ao subagent)
+      2. assistant_text / tool_use / tool_result / thinking em ordem
+
+    Args:
+        session_id: UUID-like da sessao
+        agent_id: UUID-like do agent (subagent_id)
+        directory: opcional, override do diretorio do SDK
+        include_pii: se False, aplica mask_pii em todo content
+        max_content_chars: cap por entry (truncado com ellipsis se exceder)
+
+    Returns:
+        Lista de SubagentTranscriptEntry em ordem cronologica.
+        Lista vazia se transcript nao existe ou ids invalidos (anti-path-traversal).
+    """
+    if not _is_safe_id(session_id) or not _is_safe_id(agent_id):
+        logger.debug(
+            f"[subagent_reader] transcript rejected — unsafe id: "
+            f"session={session_id!r} agent={agent_id!r}"
+        )
+        return []
+
+    # Mesma estrategia de get_subagent_summary — tenta candidates
+    messages = []
+    for candidate in _candidate_directories(directory):
+        try:
+            kwargs = {'directory': candidate} if candidate else {}
+            messages = list(get_subagent_messages(
+                session_id, agent_id, **kwargs
+            ))
+            if messages:
+                break
+        except Exception as e:
+            logger.debug(
+                f"[subagent_reader] transcript get_subagent_messages "
+                f"dir={candidate}: {e}"
+            )
+
+    if not messages:
+        return []
+
+    def _truncate(text: Any) -> Any:
+        if not isinstance(text, str):
+            return text
+        if len(text) > max_content_chars:
+            return text[:max_content_chars] + '…[truncado]'
+        return text
+
+    def _maybe_mask(content: Any) -> Any:
+        if include_pii:
+            return content
+        if isinstance(content, str):
+            return mask_pii(content)
+        if isinstance(content, dict):
+            return {k: _maybe_mask(v) for k, v in content.items()}
+        if isinstance(content, list):
+            return [_maybe_mask(item) for item in content]
+        return content
+
+    def _extract_content_list(msg) -> list:
+        """Espelha get_subagent_summary._extract_content_list."""
+        msg_dict = getattr(msg, 'message', None)
+        if isinstance(msg_dict, dict):
+            content = msg_dict.get('content')
+        else:
+            content = getattr(msg, 'content', None)
+        if isinstance(content, list):
+            return content
+        if isinstance(content, str):
+            return [{'type': 'text', 'text': content}]
+        return []
+
+    def _msg_role(msg) -> Optional[str]:
+        msg_dict = getattr(msg, 'message', None)
+        if isinstance(msg_dict, dict):
+            return msg_dict.get('role')
+        return getattr(msg, 'role', None)
+
+    entries: list[SubagentTranscriptEntry] = []
+    sequence = 0
+    first_user_seen = False
+
+    for msg in messages:
+        role = _msg_role(msg)
+        blocks = _extract_content_list(msg)
+
+        if role == 'user':
+            # Primeira UserMessage = prompt do parent ao subagent
+            if not first_user_seen:
+                prompt_text = ''
+                for b in blocks:
+                    if isinstance(b, dict) and b.get('type') == 'text':
+                        prompt_text += b.get('text', '')
+                if not prompt_text and blocks:
+                    # fallback: pode ser string direto
+                    msg_dict = getattr(msg, 'message', None)
+                    if isinstance(msg_dict, dict):
+                        c = msg_dict.get('content', '')
+                        if isinstance(c, str):
+                            prompt_text = c
+                sequence += 1
+                entries.append(SubagentTranscriptEntry(
+                    sequence=sequence,
+                    kind='user_prompt',
+                    timestamp=None,
+                    content=_maybe_mask(_truncate(prompt_text)),
+                ))
+                first_user_seen = True
+
+            # tool_results vem em UserMessage subsequentes (ou na mesma se for blocks)
+            for b in blocks:
+                if isinstance(b, dict) and b.get('type') == 'tool_result':
+                    result_content = b.get('content', '')
+                    if isinstance(result_content, list):
+                        result_content = ' '.join(
+                            r.get('text', '') for r in result_content
+                            if isinstance(r, dict)
+                        )
+                    sequence += 1
+                    entries.append(SubagentTranscriptEntry(
+                        sequence=sequence,
+                        kind='tool_result',
+                        timestamp=None,
+                        content=_maybe_mask(_truncate(str(result_content))),
+                        tool_use_id=b.get('tool_use_id'),
+                    ))
+
+        elif role == 'assistant':
+            for b in blocks:
+                if not isinstance(b, dict):
+                    continue
+                btype = b.get('type')
+                if btype == 'text':
+                    sequence += 1
+                    entries.append(SubagentTranscriptEntry(
+                        sequence=sequence,
+                        kind='assistant_text',
+                        timestamp=None,
+                        content=_maybe_mask(_truncate(b.get('text', ''))),
+                    ))
+                elif btype == 'tool_use':
+                    sequence += 1
+                    args = b.get('input', {})
+                    entries.append(SubagentTranscriptEntry(
+                        sequence=sequence,
+                        kind='tool_use',
+                        timestamp=None,
+                        content=_maybe_mask({
+                            'name': b.get('name', ''),
+                            'input': args,
+                        }),
+                        tool_use_id=b.get('id'),
+                    ))
+                elif btype == 'thinking':
+                    sequence += 1
+                    entries.append(SubagentTranscriptEntry(
+                        sequence=sequence,
+                        kind='thinking',
+                        timestamp=None,
+                        content=_maybe_mask(_truncate(b.get('thinking', ''))),
+                    ))
+
+    return entries
