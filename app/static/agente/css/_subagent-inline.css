@@ -45,6 +45,34 @@
   background: var(--agent-danger, #ef4444);
 }
 
+/* Novos estados visuais ricos (2026-05-14, P0.2) */
+.subagent-inline.failed .subagent-dot {
+  background: var(--agent-danger, #ef4444);
+}
+
+.subagent-inline.stopped .subagent-dot {
+  background: var(--agent-text-muted, #64748b);
+}
+
+.subagent-inline.failed .subagent-meta::before {
+  content: "⚠ ";
+  color: var(--agent-danger, #ef4444);
+  font-weight: 700;
+}
+
+.subagent-inline.stopped .subagent-meta::before {
+  content: "⏸ ";
+  color: var(--agent-text-muted, #64748b);
+}
+
+/* Correlacao parent_tool_use_id (P1.1) — marcador "↳" sutil */
+.subagent-inline[data-parent-tool-use-id]:not([data-parent-tool-use-id=""]) .subagent-badge::before {
+  content: "↳ ";
+  color: var(--agent-text-muted, #64748b);
+  margin-right: 2px;
+  font-weight: 400;
+}
+
 @keyframes subagent-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }

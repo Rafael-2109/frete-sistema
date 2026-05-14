@@ -1,0 +1,260 @@
+/*
+ * Modal de transcript de subagent (P0.1, 2026-05-14).
+ * Padrao similar ao #artifact-modal: overlay custom, NAO Bootstrap modal.
+ * Design tokens via var(--agent-*) — light/dark mode automatico.
+ */
+
+.subagent-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subagent-modal[hidden] {
+  display: none;
+}
+
+.subagent-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+
+.subagent-modal-panel {
+  position: relative;
+  width: min(900px, 92vw);
+  max-height: 88vh;
+  background: var(--agent-bg-primary, #1e293b);
+  border: 1px solid var(--agent-border, rgba(148, 163, 184, 0.2));
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+[data-bs-theme="light"] .subagent-modal-panel {
+  background: var(--agent-bg-primary, #ffffff);
+}
+
+.subagent-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--agent-border, rgba(148, 163, 184, 0.2));
+  background: var(--agent-bg-secondary, rgba(148, 163, 184, 0.05));
+}
+
+.subagent-modal-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--agent-text-primary, #e2e8f0);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subagent-modal-badge {
+  background: rgba(0, 212, 170, 0.15);
+  color: var(--agent-accent-primary, #00d4aa);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.subagent-modal-meta {
+  color: var(--agent-text-secondary, #94a3b8);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.subagent-modal-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.subagent-modal-actions button {
+  background: transparent;
+  border: 1px solid var(--agent-border, rgba(148, 163, 184, 0.2));
+  color: var(--agent-text-secondary, #94a3b8);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.subagent-modal-actions button:hover:not(:disabled) {
+  background: var(--agent-bg-tertiary, rgba(148, 163, 184, 0.12));
+  color: var(--agent-text-primary, #e2e8f0);
+}
+
+.subagent-modal-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.subagent-modal-actions .btn-pii-toggle.active {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--agent-warning, #f59e0b);
+  border-color: var(--agent-warning, #f59e0b);
+}
+
+.subagent-modal-actions .btn-close {
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 10px;
+}
+
+.subagent-modal-section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--agent-border, rgba(148, 163, 184, 0.1));
+  overflow-y: auto;
+}
+
+.subagent-modal-section:last-child {
+  border-bottom: none;
+  flex: 1;
+  min-height: 0;
+}
+
+.subagent-modal-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--agent-text-muted, #64748b);
+}
+
+.subagent-modal-section .prompt-content {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--agent-text-primary, #e2e8f0);
+  background: var(--agent-bg-secondary, rgba(148, 163, 184, 0.05));
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.subagent-modal-section .timeline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+
+.subagent-modal-section .timeline-list li {
+  padding: 6px 10px;
+  margin: 3px 0;
+  border-left: 3px solid var(--agent-border, rgba(148, 163, 184, 0.2));
+  background: var(--agent-bg-secondary, rgba(148, 163, 184, 0.04));
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subagent-modal-section .timeline-list li.kind-user_prompt {
+  border-left-color: var(--agent-accent-primary, #00d4aa);
+}
+.subagent-modal-section .timeline-list li.kind-tool_use {
+  border-left-color: var(--agent-warning, #f59e0b);
+}
+.subagent-modal-section .timeline-list li.kind-tool_result {
+  border-left-color: var(--agent-text-muted, #64748b);
+}
+.subagent-modal-section .timeline-list li.kind-assistant_text {
+  border-left-color: #8b5cf6;
+}
+.subagent-modal-section .timeline-list li.kind-thinking {
+  border-left-color: #f472b6;
+  opacity: 0.7;
+}
+
+.subagent-modal-section .timeline-list .entry-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--agent-text-muted, #64748b);
+  letter-spacing: 0.5px;
+}
+
+.subagent-modal-section .timeline-list .entry-content {
+  color: var(--agent-text-primary, #e2e8f0);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.subagent-modal-section .findings-content {
+  color: var(--agent-text-primary, #e2e8f0);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Loading / empty / error states */
+.subagent-modal-section.is-loading .skeleton {
+  background: linear-gradient(90deg,
+    var(--agent-bg-secondary, rgba(148, 163, 184, 0.05)) 0%,
+    var(--agent-bg-tertiary, rgba(148, 163, 184, 0.15)) 50%,
+    var(--agent-bg-secondary, rgba(148, 163, 184, 0.05)) 100%);
+  background-size: 200% 100%;
+  animation: subagent-shimmer 1.5s infinite;
+  height: 60px;
+  border-radius: 6px;
+}
+
+@keyframes subagent-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.subagent-modal-error,
+.subagent-modal-empty {
+  text-align: center;
+  padding: 30px;
+  color: var(--agent-text-secondary, #94a3b8);
+}
+
+.subagent-modal-error .icon {
+  font-size: 32px;
+  color: var(--agent-warning, #f59e0b);
+  display: block;
+  margin-bottom: 10px;
+}
+
+.subagent-modal-error button,
+.subagent-modal-empty button {
+  margin-top: 12px;
+  background: var(--agent-bg-tertiary, rgba(148, 163, 184, 0.12));
+  border: 1px solid var(--agent-border, rgba(148, 163, 184, 0.3));
+  color: var(--agent-text-primary, #e2e8f0);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.subagent-modal-error button:hover,
+.subagent-modal-empty button:hover {
+  background: var(--agent-bg-secondary, rgba(148, 163, 184, 0.2));
+}
