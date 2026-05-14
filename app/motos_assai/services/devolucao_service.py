@@ -4,9 +4,10 @@ Cliente (Sendas/Assai) emite NF de devolucao (NFd) para 1+ chassis de uma NF
 Q.P.A. de venda ja FATURADA. Cada chassi devolvido:
   1. Recebe novo evento PENDENTE (volta ao estoque para conserto)
   2. Observacao do evento: "Moto devolvida - {motivo}"
-  3. AssaiSeparacaoItem.devolvido_em / devolucao_item_id sao preenchidos
-     (a contagem em recalcular_status_pedido EXCLUI essa linha, restituindo
-     o saldo do MODELO ao pedido de vendas).
+  3. AssaiNfQpaItem.devolvido=True (+ devolvido_em/devolucao_item_id).
+     recalcular_status_pedido EXCLUI o AssaiSeparacaoItem.id ligado
+     (via nf_item.separacao_item_id) da contagem qtd_faturada, restituindo
+     o saldo do MODELO ao pedido de vendas.
   4. NF original NAO e cancelada (devolucao parcial e legitima).
 
 Idempotencia: UNIQUE (nf_qpa_origem_id, numero_nfd).
