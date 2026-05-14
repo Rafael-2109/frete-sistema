@@ -17,6 +17,11 @@
   </h2>
   <div class="btn-group">
     {% if nf.status_match != 'CANCELADA' %}
+      <a href="{{ url_for('motos_assai.devolucao_form', nf_id=nf.id) }}"
+         class="btn btn-sm btn-outline-warning"
+         title="Registrar devolucao por NF de devolucao (NFd)">
+        <i class="fas fa-undo-alt"></i> Devolução
+      </a>
       <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modal-cancelar-nf-detalhe">
         <i class="fas fa-ban"></i> Cancelar NF
       </button>
@@ -85,6 +90,47 @@
   </tbody>
 </table>
 </div>
+
+{# Devolucoes desta NF (Migration 29) — injetado pelo route faturamento_nf_detalhe #}
+{% if devolucoes_da_nf is defined and devolucoes_da_nf %}
+<h4 class="mt-4">
+  <i class="fas fa-undo-alt text-danger"></i>
+  Devoluções desta NF ({{ devolucoes_da_nf|length }})
+</h4>
+<div class="table-responsive">
+  <table class="table table-sm table-hover">
+    <thead>
+      <tr>
+        <th>NFd</th>
+        <th>Data</th>
+        <th>Motivo</th>
+        <th class="text-center">Chassis</th>
+        <th class="text-center">Anexos</th>
+        <th>Registrada por</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in devolucoes_da_nf %}
+      <tr>
+        <td><strong>{{ d.numero_nfd }}</strong></td>
+        <td>{{ d.data_devolucao.strftime('%d/%m/%Y') }}</td>
+        <td class="text-truncate" style="max-width: 320px;" title="{{ d.motivo }}">{{ d.motivo }}</td>
+        <td class="text-center">{{ d.itens|length }}</td>
+        <td class="text-center">{{ d.anexos|length }}</td>
+        <td>{{ d.criado_por.nome if d.criado_por else '-' }}</td>
+        <td>
+          <a href="{{ url_for('motos_assai.devolucao_detalhe', devolucao_id=d.id) }}"
+             class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-eye"></i> Ver
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 {# Modal Cancelar NF #}
 {% if nf.status_match != 'CANCELADA' %}

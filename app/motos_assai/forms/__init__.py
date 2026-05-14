@@ -7,9 +7,11 @@ from .recibo_forms import UploadReciboForm
 from .disponibilizar_forms import ReverterForm
 from .faturamento_forms import UploadNfQpaForm
 from .cce_forms import UploadCceForm
+from .devolucao_forms import DevolucaoNfForm
 
 __all__ = [
     'LojaForm', 'ModeloForm', 'TestarRegexForm', 'CdForm',
     'UploadPedidoVoeForm', 'NovaCompraForm', 'UploadReciboForm',
     'ReverterForm', 'UploadNfQpaForm', 'UploadCceForm',
+    'DevolucaoNfForm',
 ]

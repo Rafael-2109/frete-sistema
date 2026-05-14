@@ -20,6 +20,7 @@ from app import db
 from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaItem,
     AssaiSeparacao, AssaiSeparacaoItem,
+    AssaiNfQpaItem,
     PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_PARCIALMENTE_FATURADO,
     PEDIDO_STATUS_FATURADO, PEDIDO_STATUS_CANCELADO,
     SEPARACAO_STATUS_FATURADA,
@@ -54,12 +55,25 @@ def recalcular_status_pedido(pedido_id):
         .scalar() or 0
     )
 
+    # Migration 29 (devolucao): a flag fica em AssaiNfQpaItem.devolvido.
+    # Excluimos da contagem todo SeparacaoItem.id referenciado por algum
+    # AssaiNfQpaItem.devolvido = TRUE (ligacao via separacao_item_id).
+    # Regra de negocio: saldo do MODELO retorna ao pedido de vendas.
+    sub_devolvidos = (
+        db.session.query(AssaiNfQpaItem.separacao_item_id)
+        .filter(
+            AssaiNfQpaItem.devolvido.is_(True),
+            AssaiNfQpaItem.separacao_item_id.isnot(None),
+        )
+        .subquery()
+    )
     qtd_faturada = (
         db.session.query(func.count(AssaiSeparacaoItem.id))
         .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
         .filter(
             AssaiSeparacao.pedido_id == pedido_id,
             AssaiSeparacao.status == SEPARACAO_STATUS_FATURADA,
+            ~AssaiSeparacaoItem.id.in_(db.session.query(sub_devolvidos)),
         )
         .scalar() or 0
     )

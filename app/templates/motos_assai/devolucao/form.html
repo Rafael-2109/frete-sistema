@@ -1,0 +1,209 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-1">
+      <i class="fas fa-undo-alt text-danger"></i> Devolução pela NF
+      <span class="badge bg-secondary">{{ nf.numero }}/{{ nf.serie or '-' }}</span>
+    </h2>
+    <small class="text-muted">
+      Destinatário: {{ nf.destinatario_nome or '-' }}
+      {% if nf.loja %} — Loja {{ nf.loja.numero }} {{ nf.loja.nome }}{% endif %}
+    </small>
+  </div>
+  <div>
+    <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar para NF
+    </a>
+  </div>
+</header>
+
+<form method="POST" enctype="multipart/form-data" id="form-devolucao" novalidate>
+  {{ form.hidden_tag() }}
+
+  <!-- Cabeçalho da devolução -->
+  <div class="card mb-3">
+    <div class="card-header bg-light">
+      <strong>Cabeçalho da NFd</strong>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label for="data_devolucao" class="form-label">Data <span class="text-danger">*</span></label>
+          {{ form.data_devolucao(class="form-control", id="data_devolucao", required=true) }}
+          {% for err in form.data_devolucao.errors %}
+            <div class="form-text text-danger">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <div class="col-md-3">
+          <label for="numero_nfd" class="form-label">NFd <span class="text-danger">*</span></label>
+          {{ form.numero_nfd(class="form-control", id="numero_nfd",
+                             placeholder="Nº da NF de devolução", required=true,
+                             maxlength=40) }}
+          {% for err in form.numero_nfd.errors %}
+            <div class="form-text text-danger">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <div class="col-md-6">
+          <label for="motivo" class="form-label">Motivo <span class="text-danger">*</span></label>
+          {{ form.motivo(class="form-control", id="motivo", rows=2,
+                          placeholder="Ex: avaria no transporte; cliente desistiu; etc",
+                          required=true, minlength=3) }}
+          {% for err in form.motivo.errors %}
+            <div class="form-text text-danger">{{ err }}</div>
+          {% endfor %}
+        </div>
+        <div class="col-12">
+          <label for="anexos" class="form-label">Anexos (PDF, XML, PNG, JPG — múltiplos)</label>
+          {{ form.anexos(class="form-control", id="anexos", multiple=true,
+                          accept=".pdf,.xml,.png,.jpg,.jpeg") }}
+          <small class="form-text text-muted">Você pode selecionar vários arquivos de uma vez.</small>
+          {% for err in form.anexos.errors %}
+            <div class="form-text text-danger">{{ err }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chassis da NF -->
+  <div class="card mb-3">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+      <strong>Chassis desta NF ({{ itens|length }})</strong>
+      <div>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                id="btn-selecionar-todos">
+          <i class="fas fa-check-double"></i> Marcar todos elegíveis
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                id="btn-limpar-selecao">
+          <i class="fas fa-times"></i> Limpar
+        </button>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" id="tabela-chassis-devolucao">
+          <thead>
+            <tr>
+              <th style="width: 40px;"><i class="fas fa-square"></i></th>
+              <th>Chassi</th>
+              <th>Modelo</th>
+              <th>Cor</th>
+              <th class="text-end">Valor</th>
+              <th>Status atual</th>
+              <th class="text-center">Pendências</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in itens %}
+            <tr class="{% if not it.pode_devolver %}table-secondary{% endif %}">
+              <td>
+                <input type="checkbox" name="chassis_selecionados"
+                       value="{{ it.chassi }}"
+                       class="form-check-input chassi-checkbox"
+                       {% if not it.pode_devolver %}disabled{% endif %}
+                       aria-label="Selecionar {{ it.chassi }}">
+              </td>
+              <td><code>{{ it.chassi }}</code></td>
+              <td>
+                <strong>{{ it.modelo_codigo }}</strong>
+                <small class="text-muted d-block">{{ it.modelo_nome }}</small>
+              </td>
+              <td>{{ it.cor }}</td>
+              <td class="text-end">R$ {{ it.valor_unitario | numero_br(2) }}</td>
+              <td>
+                {% if it.ja_devolvido %}
+                  <span class="badge bg-dark">JÁ DEVOLVIDO</span>
+                {% elif it.status_atual == 'FATURADA' %}
+                  <span class="badge bg-success">FATURADA</span>
+                {% else %}
+                  <span class="badge bg-secondary">{{ it.status_atual }}</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <button type="button"
+                        class="btn btn-sm btn-outline-info btn-pendencias"
+                        data-chassi="{{ it.chassi }}"
+                        title="Ver histórico de pendências deste chassi">
+                  Pendências({{ it.qtd_pendencias }})
+                </button>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-center text-muted py-3">Nenhum chassi nesta NF.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer text-muted small">
+      <i class="fas fa-info-circle"></i>
+      Apenas chassis com status <strong>FATURADA</strong> e ainda não devolvidos podem ser selecionados.
+      Cada chassi devolvido gera uma pendência <code>Moto devolvida - {motivo}</code> e
+      retorna 1 unidade do modelo ao saldo do pedido.
+    </div>
+  </div>
+
+  <!-- Ações -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <span class="text-muted">
+      <span id="contador-selecionados">0</span> chassi(s) selecionado(s)
+    </span>
+    <div>
+      <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}"
+         class="btn btn-outline-secondary">Cancelar</a>
+      <button type="submit" class="btn btn-danger" id="btn-devolver" disabled>
+        <i class="fas fa-undo-alt"></i> Devolver
+      </button>
+    </div>
+  </div>
+</form>
+
+{% if devolucoes_existentes %}
+<div class="card mb-3">
+  <div class="card-header bg-light">
+    <strong>Devoluções existentes desta NF ({{ devolucoes_existentes|length }})</strong>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>NFd</th>
+            <th>Data</th>
+            <th>Motivo</th>
+            <th class="text-center">Chassis</th>
+            <th class="text-center">Anexos</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in devolucoes_existentes %}
+          <tr>
+            <td>{{ d.numero_nfd }}</td>
+            <td>{{ d.data_devolucao.strftime('%d/%m/%Y') }}</td>
+            <td class="text-truncate" style="max-width: 320px;" title="{{ d.motivo }}">{{ d.motivo }}</td>
+            <td class="text-center">{{ d.itens|length }}</td>
+            <td class="text-center">{{ d.anexos|length }}</td>
+            <td>
+              <a href="{{ url_for('motos_assai.devolucao_detalhe', devolucao_id=d.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-eye"></i> Ver
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% include 'motos_assai/devolucao/_modal_pendencias.html' %}
+
+<script src="{{ url_for('static', filename='motos_assai/js/devolucao_form.js') }}"></script>
+{% endblock %}

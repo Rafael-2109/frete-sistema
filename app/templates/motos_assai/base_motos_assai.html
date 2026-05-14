@@ -66,6 +66,9 @@
     <a id="menu-pos-venda" class="motos-assai-nav-link" href="{{ url_for('motos_assai.pos_venda_lista') }}">
       <i class="fas fa-headset"></i> Pós-Venda
     </a>
+    <a id="menu-devolucoes" class="motos-assai-nav-link" href="{{ url_for('motos_assai.devolucoes_lista') }}">
+      <i class="fas fa-undo-alt"></i> Devoluções
+    </a>
     {% if current_user.is_authenticated %}
     <button id="help-button" class="btn btn-link btn-sm ms-auto" title="Ajuda" type="button" style="font-size: 1.1rem;">
       <i class="fas fa-question-circle"></i> Ajuda
