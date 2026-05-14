@@ -1,20 +1,24 @@
 #!/bin/bash
 # =====================================================
 # BUILD SCRIPT DO WORKER NO RENDER
-# Inclui retry agressivo para downloads PyPI.
 # =====================================================
 #
-# Por que existe: o build do worker falhou consistentemente
-# em 2026-05-14 por timeout no download do playwright (46.2 MB)
-# do PyPI mirror — sempre interrompia em ~9.7 MB.
+# CAUSA RAIZ (descoberta 2026-05-14): web (sistema-fretes) tem
+# `serviceDetails.cache.profile: no-cache` que limpa cache do build a cada
+# deploy; worker NAO tem essa config, entao cache de pip persiste.
 #
-# Solucao: pip --retries 10 --timeout 300 + pre-download do
-# playwright antes do install completo, garantindo cache local.
+# Em ~14/05 01:21 UTC o cache do worker corrompeu com wheel PARCIAL
+# do playwright-1.58.0 (9.7 MB de 46.2 MB). Builds subsequentes
+# encontravam o arquivo no cache e falhavam com 'incomplete-download'
+# em LOOP — 12+ builds falhadas seguidas com mesmo tamanho exato.
 #
-# Para usar este script: configurar buildCommand do worker no
-# Dashboard Render para `bash build_worker_render.sh` (substitui
-# o command inline anterior `pip install -r requirements.txt &&
-# python -m playwright install chromium && bash install_libreoffice_render.sh`).
+# Solucao via codigo: --no-cache-dir em todos pip install. Garante que
+# pip nao usa nem grava cache local — sempre baixa fresh do PyPI.
+#
+# Solucao alternativa (sem editar este script): no Dashboard, fazer
+# Manual Deploy -> "Clear build cache & deploy" para limpar cache 1x.
+# Mas se nao adicionar cache.profile=no-cache na config do servico,
+# o problema pode reincidir no futuro.
 
 set -e
 
@@ -22,33 +26,19 @@ echo "=========================================="
 echo "BUILD WORKER ATACADAO/SENDAS"
 echo "=========================================="
 
-# 1. Atualizar pip (resume-retries esta em 25.3+)
+# 1. Atualizar pip
 echo "Atualizando pip..."
-pip install --upgrade pip
+pip install --no-cache-dir --upgrade pip
 
-# 2. Pre-download do playwright (que falha frequente — baixar isolado)
-# Se falhar AQUI nao quebra o build inteiro, retry mais agressivo abaixo.
-echo "Pre-baixando playwright (com retry agressivo)..."
-for i in 1 2 3 4 5; do
-    if pip download --retries 10 --timeout 300 --no-deps --dest /tmp/wheels playwright==1.58.0; then
-        echo "Playwright pre-baixado na tentativa $i"
-        break
-    fi
-    echo "Tentativa $i falhou, aguardando 10s..."
-    sleep 10
-done
+# 2. Install requirements SEM cache (evita corrupcao por wheels parciais)
+echo "Instalando requirements.txt (--no-cache-dir)..."
+pip install --no-cache-dir --retries 5 --timeout 180 -r requirements.txt
 
-# 3. Install full requirements (usa cache do pre-download se OK)
-echo "Instalando requirements.txt..."
-pip install --retries 10 --timeout 300 \
-    --find-links /tmp/wheels \
-    -r requirements.txt
-
-# 4. Playwright Chromium
+# 3. Playwright Chromium (usa cache do binario, nao do wheel pip)
 echo "Instalando Playwright Chromium..."
 python -m playwright install chromium
 
-# 5. LibreOffice (para conversao docx/xlsx em portal atacadao)
+# 4. LibreOffice (para conversao docx/xlsx em portal atacadao)
 echo "Instalando LibreOffice..."
 bash install_libreoffice_render.sh
 
