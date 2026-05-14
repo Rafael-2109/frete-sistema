@@ -38,7 +38,10 @@ LEIAUTE_VERSAO = '9.00'                  # Leiaute 9 vigente desde Dez/2021
 COD_PLAN_REF = '1'                       # 1=PJ Lucro Real (decisao usuario)
 IND_ESC = 'G'                            # G=Diario Completo (decisao usuario)
 IND_CENTRALIZADA = '0'                   # 0=Centralizada (decisao critica do projeto)
-IDENT_MF = 'M'                           # M=Matriz (FB e a matriz)
+IDENT_MF = 'N'                           # IDENT_MF = Identificacao de MOEDA FUNCIONAL (S/N).
+                                         # NACOM nao usa moeda funcional (real e a moeda principal) -> 'N'.
+                                         # BUG HISTORICO: estava 'M' (M=Matriz) confundindo com IND_CENTRALIZADA.
+                                         # PVA reprovava: "campo com valor diferente dos valores validos (S/N)".
 TIP_ECD = '0'                            # 0=ECD Regular (nao substituicao)
 IND_FIN_ESC = '0'                        # 0=Original (nao substituicao)
 IND_GRANDE_PORTE = '0'                   # 0=Nao (NACOM nao e grande porte)

@@ -98,11 +98,15 @@ def gerar_sped_ecd_centralizado(
     plano_ccus, id_to_code_ccus = buscar_centros_custo_consolidados(connection)
     logger.info(f'[SPED ECD V1.1] Centros de custo: {len(plano_ccus)} codes unicos')
 
-    _emit_progresso(progresso_callback, etapa='participantes', mensagem='Buscando participantes do periodo (V1.1)')
-    participantes = buscar_participantes_periodo(connection, params['date_ini'], params['date_fim'])
-    # Mapa partner_id -> cod_part (CNPJ/CPF) para resolver em I250
-    partner_id_to_cod_part = {p['id']: p['cod_part'] for p in participantes}
-    logger.info(f'[SPED ECD V1.1] Participantes: {len(participantes)} cadastrados')
+    # OPCAO A (V1.5): NAO emitir 0150 nem COD_PART em I250.
+    # Manual ECD: registros 0150/0180 sao APENAS para participantes com
+    # relacionamento SOCIETARIO (matriz exterior, controladora, controlada,
+    # coligada, EPE, etc — COD_REL_PART 01-11). Clientes/fornecedores normais
+    # nao se enquadram. PVA reprovava 3470 partidas por falta de 0180 quando o
+    # correto e nao referenciar COD_PART para esses partners.
+    participantes = []
+    partner_id_to_cod_part = {}
+    logger.info('[SPED ECD V1.5] Opcao A: 0150/COD_PART desativados (so societarios)')
 
     _emit_progresso(progresso_callback, etapa='saldos_mensais', mensagem='Calculando saldos mensais (I150/I155)')
     saldos_mensais = calcular_saldos_periodicos_mensais(
@@ -130,7 +134,9 @@ def gerar_sped_ecd_centralizado(
     for linha in construir_bloco_0(matriz_data, params, contador):
         _write_linha(output, linha)
 
-    # 0150 — Cadastro de Participantes (V1.1)
+    # 0150 — Cadastro de Participantes
+    # V1.5 (Opcao A): so emitir se houver participantes societarios filtrados.
+    # Hoje participantes esta sempre vazio (ver bloco buscar_participantes acima).
     if participantes:
         for linha in construir_0150(participantes, contador):
             _write_linha(output, linha)

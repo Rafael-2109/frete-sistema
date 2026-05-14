@@ -239,8 +239,19 @@ def construir_bloco_0(matriz_data: dict, params: dict, contador: ContadorRegistr
     ])))
 
     # ------------------------------------------------------------
-    # 0007 — OPCIONAL: outras inscricoes (omitido na V1)
+    # 0007 — Outras Inscricoes Cadastrais (OBRIGATORIO no Leiaute 9)
     # ------------------------------------------------------------
+    # Manual ECD: PVA exige ao menos 1 registro 0007. Emitimos a Inscricao
+    # Estadual da matriz (Fazenda do estado da matriz como instituicao).
+    # COD_ENT_REF aceita UF (Fazenda Estadual) ou codigos 00-04 (BC/SUSEP/CVM/ANTT).
+    ie_matriz = matriz_data.get('ie', '').strip()
+    if ie_matriz:
+        linhas.append(contador.emit(formatar_registro([
+            '0007',                                            # 1 REG
+            matriz_data.get('uf', 'SP'),                       # 2 COD_ENT_REF (UF = Fazenda Estadual)
+            ie_matriz,                                         # 3 COD_INSCR (Inscricao Estadual)
+        ])))
+
     # Modalidade centralizada NAO usa 0020 (omitido propositalmente)
 
     # ------------------------------------------------------------
@@ -565,9 +576,12 @@ def construir_I200_I250(lancamentos_iter: Iterable[dict], _plano_consolidado: Li
             valor = debit if debit > 0 else credit
             indicador = 'D' if debit > 0 else 'C'
             code = ln.get('code') or '999'
-            hist = remover_acentos(
-                (ln.get('name') or ln.get('ref') or '')[:600]  # HIST max ~600 chars
-            )
+            # HIST: o PVA exige HIST ou COD_HIST_PAD preenchido em cada partida.
+            # Se name e ref vierem vazios do Odoo, usar placeholder com a conta.
+            hist_raw = (ln.get('name') or ln.get('ref') or '').strip()
+            if not hist_raw:
+                hist_raw = f'LANCAMENTO CONTA {code}'  # placeholder anti-reprovacao PVA
+            hist = remover_acentos(hist_raw[:600])    # HIST max ~600 chars
             cod_part = ln.get('cod_part', '')
 
             # V1.2: SPLIT de CCUS — emitir N I250s proporcionais
