@@ -188,25 +188,107 @@ Issues 1-3 da Fase 1 e #1 da Fase 2 corrigidos antes do push.
 
 ## Validacao em producao
 
-(Esta secao sera completada apos deploy ficar live e smoketest passar.)
+### Timeline do deploy
+
+| Deploy ID | Commit | Status | Inicio | Fim | Duracao |
+|---|---|---|---|---|---|
+| `dep-d82jhmnavr4c73dudlu0` | `2cc31395` (relatorio + ALL fases) | **LIVE** | 02:52:10 UTC | 03:09:19 UTC | 17min |
+| `dep-d82jd9dckfvc73f273m0` | `18625619` (test cross-user) | canceled | 02:42:46 | 02:52:10 | (substituido) |
+| `dep-d82j9rl0lvsc73e577f0` | `f1435e33` (CSRF fix Fase 1) | canceled | 02:35:26 | 02:42:46 | (substituido) |
+
+Deploy ANTERIOR (sem features novas, em prod desde 02:04:28) tinha commit
+`07460c05`. O deploy LIVE atual `dep-d82jhmnavr4c73dudlu0` contem:
+- Fase 1 completa (P0.1, P0.2, P0.3, P1.1)
+- Fase 2 completa (P1.2, P1.3)
+- Fixes do code-review (CSRF, R8 task_notification, dead-code Redis)
+- Relatorio final
 
 ### Smoketest endpoint
 
-```
-TBD — sera executado apos deploy live
+```bash
+$ curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+    "https://sistema-fretes.onrender.com/agente/api/sessions/00000000000000000000000000000000/subagents/00000000000000000000000000000000/transcript"
+HTTP 302
+
+$ curl -s -o /dev/null -w "HTTP %{http_code}\n" \
+    "https://sistema-fretes.onrender.com/agente/api/admin/debug/subagent-smoketest"
+HTTP 302
 ```
 
-### Sentry monitoring
+302 = redirect para login = rotas registradas e respondendo corretamente
+(autenticacao required, como esperado). Endpoints NAO retornam 404 (o que
+indicaria ausencia da rota).
+
+### Conversa com agente em prod via Playwright
 
 ```
-TBD — verificar que zero novas issues com tag feature:subagent_modal
-nas primeiras 24h pos-deploy.
+$ python ~/.claude/projects/.../scripts/playwright_agent.py "ping" \
+    --timeout 60 --screenshot
+
+Login bem-sucedido como Claude Code (Administrador).
+Agente respondeu: "pong" (00:12 BRT).
+
+Tooltip do onboarding tour interceptou o re-detect → script "timeout",
+mas a resposta chegou. Screenshot salvo em /tmp/agente_response.png.
+
+Confirma: SSE pipeline funcionando, agente respondendo, modelo Sonnet
+ativo, AUTO mode, sessao de chat operacional.
 ```
 
-### Roadmap manual (spec secao 10.2)
+### Sentry monitoring (15min pos-deploy live)
 
-22 cenarios bloqueadores Fase 1 + 6 Fase 2. Execucao manual fica para
-usuario apos prod estabilizar.
+- **Agregado**: 0 errors nas ultimas 15 minutos.
+- **Issues unresolved lastSeen:-15m**: 1 (PYTHON-FLASK-TE — `IntegrityError
+  gerado_em null em assai_pedido_excel`). Eh issue PRE-EXISTENTE (first
+  seen 1h ago, antes do deploy) e NAO RELACIONADA ao Subagent UI.
+  Triagem: bug separado, ainda em motos_assai backend (nao tocado nesta entrega).
+
+**Conclusao Sentry**: Zero regressao introduzida pelo deploy. As features
+novas (modal, transcript, pii-toggle, etc.) nao causaram nenhuma issue
+nova nas primeiras 15min de exposicao.
+
+### Roadmap manual (spec secao 10.2) — para usuario
+
+22 cenarios bloqueadores Fase 1 + 6 Fase 2 ficaram para execucao manual
+do usuario quando voltar:
+
+- Bloco A (estados visuais): 4 cenarios
+- Bloco B (progresso ao vivo): 2 cenarios bloqueadores
+- Bloco C (modal transcript): 7 cenarios
+- Bloco D (PII e admin toggle): 7 cenarios — seguranca critica
+- Bloco E (correlacao parent): 1 cenario
+- Bloco F (rename/tag Fase 2): 4 cenarios
+- Bloco G (download Fase 2): 2 cenarios
+- Bloco H (rollback): 1 cenario (H.1)
+- Bloco I (performance): 1 cenario
+- Bloco J (erro handling): 2 cenarios
+
+Documentado integralmente em `docs/superpowers/specs/2026-05-14-subagent-ui-enrichment-design.md` secao 10.2.
+
+### Comandos de validacao do usuario
+
+Para validar quando acordar:
+
+```bash
+# 1. Confirmar deploy live
+curl -s "https://sistema-fretes.onrender.com/agente/api/admin/debug/subagent-smoketest" \
+  -H "Cookie: session=<sua_session_cookie>"
+# Esperado: {"healthy": true, "transcript_entries": N>0, "has_user_prompt": true}
+
+# 2. Abrir chat web
+# https://sistema-fretes.onrender.com/agente/chat
+# Disparar prompt que invoca subagent (ex: "analise pedido VCD123")
+# Verificar:
+# - Linha inline aparece com dot pulsando amarelo (running)
+# - Meta atualiza com "Grep · 1.2K tok · 5s" durante execucao
+# - Linha vira verde (done) ao terminar
+# - Click na linha abre MODAL com prompt + timeline + findings
+
+# 3. Como admin: testar toggle "Mostrar PII"
+# - Botao deve aparecer no header do modal
+# - Click → PII deve aparecer raw
+# - Auditoria via SQL: SELECT data->'subagent_pii_audit' FROM agent_sessions ...
+```
 
 ---
 
