@@ -96,6 +96,12 @@ from .cce import (
     CCE_STATUS_IGNORADA, CCE_STATUS_ERRO,
     CCE_STATUS_VALIDOS,
 )
+from .devolucao import (
+    AssaiDevolucaoNfd, AssaiDevolucaoItem, AssaiDevolucaoAnexo,
+    DEVOLUCAO_ANEXO_TIPO_PDF, DEVOLUCAO_ANEXO_TIPO_XML,
+    DEVOLUCAO_ANEXO_TIPO_IMAGEM, DEVOLUCAO_ANEXO_TIPO_OUTRO,
+    DEVOLUCAO_ANEXO_TIPOS_VALIDOS,
+)
 
 __all__ = [
     'AssaiCd', 'AssaiLoja',
@@ -166,4 +172,8 @@ __all__ = [
     'CCE_STATUS_PENDENTE', 'CCE_STATUS_APLICADA',
     'CCE_STATUS_IGNORADA', 'CCE_STATUS_ERRO',
     'CCE_STATUS_VALIDOS',
+    'AssaiDevolucaoNfd', 'AssaiDevolucaoItem', 'AssaiDevolucaoAnexo',
+    'DEVOLUCAO_ANEXO_TIPO_PDF', 'DEVOLUCAO_ANEXO_TIPO_XML',
+    'DEVOLUCAO_ANEXO_TIPO_IMAGEM', 'DEVOLUCAO_ANEXO_TIPO_OUTRO',
+    'DEVOLUCAO_ANEXO_TIPOS_VALIDOS',
 ]

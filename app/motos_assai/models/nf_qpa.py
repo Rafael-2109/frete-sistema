@@ -59,5 +59,18 @@ class AssaiNfQpaItem(db.Model):
     separacao_item_id = db.Column(db.Integer, db.ForeignKey('assai_separacao_item.id', ondelete='SET NULL'))
     tipo_divergencia = db.Column(db.String(30))
 
+    # Migration 29: marcacao de devolucao via NFd. Quando devolvido=True, o
+    # `recalcular_status_pedido()` EXCLUI o assai_separacao_item.id ligado
+    # (separacao_item_id) da contagem de qtd_faturada — restituindo o saldo
+    # do MODELO ao pedido de vendas.
+    devolvido = db.Column(
+        db.Boolean, default=False, server_default='false', nullable=False,
+    )
+    devolvido_em = db.Column(db.DateTime)
+    devolucao_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey('assai_devolucao_item.id', ondelete='SET NULL'),
+    )
+
     def __repr__(self):
         return f'<AssaiNfQpaItem nf={self.nf_id} chassi={self.chassi}>'

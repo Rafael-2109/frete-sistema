@@ -100,6 +100,11 @@ from .pos_venda_service import (
     detectar_tipo_anexo, EXTENSOES_PERMITIDAS,
     PosVendaValidationError, LinhaPosVenda,
 )
+from .devolucao_service import (
+    criar_devolucao, listar_devolucoes, listar_devolucoes_da_nf,
+    get_devolucao, pendencias_do_chassi, itens_da_nf_para_tela,
+    DevolucaoValidationError,
+)
 
 __all__ = [
     'listar_lojas', 'criar_loja', 'atualizar_loja', 'get_loja', 'LojaJaExisteError',
@@ -152,4 +157,7 @@ __all__ = [
     'url_visualizacao_anexo', 'url_download_anexo',
     'detectar_tipo_anexo', 'EXTENSOES_PERMITIDAS',
     'PosVendaValidationError', 'LinhaPosVenda',
+    'criar_devolucao', 'listar_devolucoes', 'listar_devolucoes_da_nf',
+    'get_devolucao', 'pendencias_do_chassi', 'itens_da_nf_para_tela',
+    'DevolucaoValidationError',
 ]

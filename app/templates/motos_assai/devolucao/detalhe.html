@@ -1,0 +1,142 @@
+{% extends "motos_assai/base_motos_assai.html" %}
+
+{% block motos_assai_content %}
+<header class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="fas fa-undo-alt text-danger"></i>
+    Devolução NFd <span class="badge bg-dark">{{ devolucao.numero_nfd }}</span>
+  </h2>
+  <div class="btn-group">
+    {% if devolucao.nf_origem %}
+    <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=devolucao.nf_origem.id) }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-file-invoice"></i> Ver NF de origem
+    </a>
+    {% endif %}
+    <a href="{{ url_for('motos_assai.devolucoes_lista') }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+</header>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <dl class="row mb-0 small">
+      <dt class="col-sm-3">NF de venda origem</dt>
+      <dd class="col-sm-9">
+        {% if devolucao.nf_origem %}
+          {{ devolucao.nf_origem.numero }}/{{ devolucao.nf_origem.serie or '-' }}
+          <small class="text-muted ms-2">
+            ({{ devolucao.nf_origem.data_emissao.strftime('%d/%m/%Y') if devolucao.nf_origem.data_emissao else '-' }})
+          </small>
+        {% else %}-{% endif %}
+      </dd>
+      <dt class="col-sm-3">Loja</dt>
+      <dd class="col-sm-9">
+        {% if devolucao.nf_origem and devolucao.nf_origem.loja %}
+          {{ devolucao.nf_origem.loja.numero }} {{ devolucao.nf_origem.loja.nome }}
+        {% else %}-{% endif %}
+      </dd>
+      <dt class="col-sm-3">Data devolução</dt>
+      <dd class="col-sm-9">{{ devolucao.data_devolucao.strftime('%d/%m/%Y') }}</dd>
+      <dt class="col-sm-3">Motivo</dt>
+      <dd class="col-sm-9">{{ devolucao.motivo }}</dd>
+      <dt class="col-sm-3">Registrada em</dt>
+      <dd class="col-sm-9">
+        {{ devolucao.criado_em.strftime('%d/%m/%Y %H:%M') if devolucao.criado_em else '-' }}
+        {% if devolucao.criado_por %} por {{ devolucao.criado_por.nome }}{% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header bg-light">
+    <strong>Chassis devolvidos ({{ devolucao.itens|length }})</strong>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Chassi</th>
+            <th>NF item</th>
+            <th>Evento gerado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in devolucao.itens %}
+          <tr>
+            <td><code>{{ it.chassi }}</code></td>
+            <td>
+              {% if it.nf_item %}
+                #{{ it.nf_item.id }}
+                <small class="text-muted">{{ it.nf_item.modelo_extraido or '' }}</small>
+              {% else %}-{% endif %}
+            </td>
+            <td>
+              {% if it.evento_pendencia %}
+                <span class="badge bg-warning text-dark">PENDENTE</span>
+                <small class="text-muted">
+                  {{ it.evento_pendencia.ocorrido_em.strftime('%d/%m/%Y %H:%M') if it.evento_pendencia.ocorrido_em else '-' }}
+                </small>
+              {% else %}-{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header bg-light">
+    <strong>Anexos ({{ devolucao.anexos|length }})</strong>
+  </div>
+  <div class="card-body p-0">
+    {% if devolucao.anexos %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Arquivo</th>
+            <th>Tamanho</th>
+            <th>Quando</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in devolucao.anexos %}
+          <tr>
+            <td><span class="badge bg-secondary">{{ a.tipo }}</span></td>
+            <td>{{ a.nome_original }}</td>
+            <td>
+              {% if a.tamanho_bytes %}
+                {{ (a.tamanho_bytes / 1024) | numero_br(1) }} KB
+              {% else %}-{% endif %}
+            </td>
+            <td>{{ a.criado_em.strftime('%d/%m/%Y %H:%M') if a.criado_em else '-' }}</td>
+            <td>
+              <a href="{{ url_for('motos_assai.devolucao_anexo_view', anexo_id=a.id) }}"
+                 target="_blank" class="btn btn-sm btn-outline-info">
+                <i class="fas fa-eye"></i> Ver
+              </a>
+              <a href="{{ url_for('motos_assai.devolucao_anexo_download', anexo_id=a.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-download"></i> Baixar
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-3">Nenhum anexo registrado.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

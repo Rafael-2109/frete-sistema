@@ -281,10 +281,15 @@ def faturamento_nf_detalhe(nf_id):
             excel_v1 and excel_v1.motivo_regeneracao == 'criada_via_nf_importada'
         )
 
+    # Migration 29: devolucoes vinculadas a esta NF (NFds).
+    from app.motos_assai.services import listar_devolucoes_da_nf
+    devolucoes_da_nf = listar_devolucoes_da_nf(nf_id)
+
     return render_template(
         'motos_assai/faturamento/nf_detalhe.html',
         nf=nf, items=items,
         sep_criada_via_nf=sep_criada_via_nf,
+        devolucoes_da_nf=devolucoes_da_nf,
     )
 
 

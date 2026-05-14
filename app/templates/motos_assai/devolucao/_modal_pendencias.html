@@ -1,0 +1,46 @@
+{# Modal compartilhado: lista historico de pendencias de UM chassi.
+   Populado via JS (devolucao_form.js) ao clicar no botao Pendencias(qtd). #}
+<div class="modal fade" id="modal-pendencias-chassi" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-history"></i> Pendências do chassi
+          <code id="modal-pendencias-chassi-codigo" class="text-white">-</code>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-pendencias-loading" class="text-center text-muted py-3" style="display:none;">
+          <i class="fas fa-spinner fa-spin"></i> Carregando...
+        </div>
+        <div id="modal-pendencias-vazio" class="text-center text-muted py-3" style="display:none;">
+          Nenhuma pendência registrada para este chassi.
+        </div>
+        <div id="modal-pendencias-erro" class="alert alert-danger" style="display:none;"></div>
+        <div id="modal-pendencias-conteudo" style="display:none;">
+          <div class="alert alert-info py-2 small mb-2">
+            Total de aberturas (PENDENTE):
+            <strong id="modal-pendencias-total">0</strong>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Tipo</th>
+                  <th>Operador</th>
+                  <th>Descrição</th>
+                </tr>
+              </thead>
+              <tbody id="modal-pendencias-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
