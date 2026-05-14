@@ -175,7 +175,23 @@ def gerar_sped_ecd_async(
                 connection, params, progresso_callback=cb_progresso
             )
 
-            # Upload S3
+            # V1.4: validacao pre-PVA
+            progresso['etapa'] = 'validacao'
+            progresso['mensagem'] = 'Validando arquivo (regras PVA Receita)...'
+            _atualizar_progresso(job_id, progresso)
+
+            from app.relatorios_fiscais.services.sped_ecd_service import validar_arquivo_gerado
+            resultado_validacao = validar_arquivo_gerado(sped_buffer)
+            n_erros = len(resultado_validacao['erros'])
+            n_warnings = len(resultado_validacao['warnings'])
+
+            logger.info(
+                f'[SPED ECD] Validacao: '
+                f'valido={resultado_validacao["valido"]} | '
+                f'erros={n_erros} | warnings={n_warnings}'
+            )
+
+            # Upload S3 (mesmo se invalido — usuario pode querer baixar para investigar)
             progresso['etapa'] = 'upload_s3'
             progresso['mensagem'] = 'Enviando arquivo para S3...'
             _atualizar_progresso(job_id, progresso)
@@ -192,14 +208,30 @@ def gerar_sped_ecd_async(
             resultado['s3_key'] = s3_key
             resultado['tamanho_bytes'] = tamanho
             resultado['duracao_segundos'] = round(duracao, 1)
+            # V1.4: incluir resultado da validacao no resultado do job
+            resultado['validacao'] = resultado_validacao
 
-            progresso['status'] = 'concluido'
+            # Status final reflete validacao
+            if resultado_validacao['valido']:
+                status_final = 'concluido'
+                msg_final = f'Arquivo gerado e VALIDADO ({tamanho / 1024 / 1024:.2f} MB)'
+                if n_warnings > 0:
+                    msg_final += f' — {n_warnings} warning(s) nao-bloqueante(s)'
+            else:
+                status_final = 'concluido_com_erros'
+                msg_final = (
+                    f'Arquivo gerado mas REPROVADO em {n_erros} validacao(oes). '
+                    f'Veja erros para correcao no Odoo.'
+                )
+
+            progresso['status'] = status_final
             progresso['etapa'] = 'finalizado'
-            progresso['mensagem'] = f'Arquivo gerado com sucesso ({tamanho / 1024 / 1024:.2f} MB)'
+            progresso['mensagem'] = msg_final
             progresso['s3_key'] = s3_key
             progresso['tamanho_bytes'] = tamanho
             progresso['duracao_segundos'] = duracao
             progresso['fim'] = agora_utc_naive().isoformat()
+            progresso['validacao'] = resultado_validacao
             _atualizar_progresso(job_id, progresso)
 
             logger.info(

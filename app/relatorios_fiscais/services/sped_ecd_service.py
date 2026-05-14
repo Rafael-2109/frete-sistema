@@ -237,6 +237,23 @@ def gerar_sped_ecd_centralizado(
     return output
 
 
+def validar_arquivo_gerado(buffer, contexto_odoo: Optional[dict] = None) -> dict:
+    """
+    Valida o arquivo SPED ECD gerado (V1.4).
+
+    Returns:
+        dict do SpedEcdValidator com {valido, erros, warnings, estatisticas}
+    """
+    from app.relatorios_fiscais.services.sped_ecd_validator import SpedEcdValidator
+
+    buffer.seek(0)
+    conteudo_bytes = buffer.read()
+    buffer.seek(0)
+
+    validator = SpedEcdValidator()
+    return validator.validar(conteudo_bytes, contexto_odoo=contexto_odoo)
+
+
 def _write_linha(output: BytesIO, linha: str):
     """
     Escreve linha SPED no buffer com encoding latin-1 + CRLF.

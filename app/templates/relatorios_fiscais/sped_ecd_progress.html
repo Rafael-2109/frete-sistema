@@ -91,6 +91,39 @@
                 </div>
             </div>
 
+            <!-- V1.4: Validacao — bloco de erros para correcao do contador -->
+            <div id="bloco-validacao" class="mt-3" style="display: none;">
+                <div class="card shadow border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Validacao Pre-PVA — Arquivo precisa de correcoes</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="small mb-3">
+                            <strong>O arquivo foi gerado mas o validador interno detectou problemas.</strong>
+                            Esses problemas serao reprovados pelo PVA da Receita.
+                            Corrija os items abaixo no Odoo e re-gere o arquivo.
+                        </p>
+                        <div id="lista-erros" class="accordion" id="accordion-erros"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="bloco-warnings" class="mt-3" style="display: none;">
+                <div class="card shadow border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Avisos (nao-bloqueantes)</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="small mb-3">
+                            Esses avisos NAO impedem o uso do arquivo, mas merecem analise.
+                        </p>
+                        <div id="lista-warnings" class="accordion" id="accordion-warnings"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Avisos -->
             <div class="alert alert-info small">
                 <i class="fas fa-info-circle"></i>
@@ -169,16 +202,32 @@ function atualizarUI(progresso) {
     document.getElementById('info-tempo').textContent = `${min}m ${seg}s`;
 
     // Estado final
-    if (status === 'concluido') {
+    if (status === 'concluido' || status === 'concluido_com_erros') {
         clearInterval(pollingInterval);
-        bar.className = 'progress-bar bg-success';
         bar.style.width = '100%';
         document.getElementById('progress-label').textContent = '100%';
-        document.getElementById('spinner-area').innerHTML =
-            '<i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>';
-        document.getElementById('status-titulo').textContent = 'SPED ECD Gerado com Sucesso!';
-        document.getElementById('status-mensagem').innerHTML =
-            '<i class="fas fa-check"></i> Arquivo pronto para download. Valide no PVA antes de transmitir.';
+
+        if (status === 'concluido') {
+            bar.className = 'progress-bar bg-success';
+            document.getElementById('spinner-area').innerHTML =
+                '<i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>';
+            document.getElementById('status-titulo').textContent = 'SPED ECD Gerado e Validado!';
+            document.getElementById('status-mensagem').innerHTML =
+                '<i class="fas fa-check"></i> Arquivo passou pre-validacao. Pode validar no PVA antes de transmitir.';
+        } else {
+            // concluido_com_erros
+            bar.className = 'progress-bar bg-warning';
+            document.getElementById('spinner-area').innerHTML =
+                '<i class="fas fa-exclamation-triangle text-warning" style="font-size: 4rem;"></i>';
+            document.getElementById('status-titulo').textContent = 'Arquivo Gerado COM ERROS de Validacao';
+            document.getElementById('status-mensagem').innerHTML =
+                '<i class="fas fa-info-circle"></i> ' + (mensagem || 'Veja correcoes necessarias abaixo.');
+        }
+
+        // V1.4: renderizar erros + warnings
+        if (progresso.validacao) {
+            renderValidacao(progresso.validacao);
+        }
 
         if (progresso.download_url) {
             document.getElementById('btn-download').href = progresso.download_url;
@@ -200,6 +249,119 @@ function atualizarUI(progresso) {
             confirmButtonText: 'OK'
         });
     }
+}
+
+// V1.4: Renderizar erros agrupados por categoria
+const CATEGORIA_LABELS = {
+    'estrutura': {nome: 'Estrutura do Arquivo', icone: 'fa-file-code', cor: 'danger'},
+    'mapeamento_ref': {nome: 'Mapeamento Receita Federal', icone: 'fa-link', cor: 'danger'},
+    'cadastro_partner': {nome: 'Cadastro de Participantes', icone: 'fa-address-book', cor: 'warning'},
+    'batimento': {nome: 'Batimento Contabil (CRITICO)', icone: 'fa-balance-scale', cor: 'danger'},
+    'ccus': {nome: 'Centros de Custo', icone: 'fa-sitemap', cor: 'warning'},
+    'hierarquia': {nome: 'Hierarquia do Plano de Contas', icone: 'fa-tree', cor: 'danger'},
+    'signatario': {nome: 'Signatarios (J930)', icone: 'fa-user-tie', cor: 'danger'},
+    'cross_ref': {nome: 'Referencias Cruzadas', icone: 'fa-project-diagram', cor: 'danger'},
+};
+
+function renderValidacao(validacao) {
+    // Erros (bloqueantes)
+    const erros = validacao.erros || [];
+    if (erros.length > 0) {
+        document.getElementById('bloco-validacao').style.display = 'block';
+        renderListaItens('lista-erros', erros, 'accordion-erros');
+    }
+
+    // Warnings (nao-bloqueantes)
+    const warnings = validacao.warnings || [];
+    if (warnings.length > 0) {
+        document.getElementById('bloco-warnings').style.display = 'block';
+        renderListaItens('lista-warnings', warnings, 'accordion-warnings');
+    }
+
+    // Estatisticas (mostrar mesmo sem erros)
+    if (validacao.estatisticas) {
+        const stats = validacao.estatisticas;
+        document.getElementById('info-lancamentos').textContent =
+            (stats.total_linhas || 0).toLocaleString('pt-BR');
+        document.getElementById('info-tamanho').textContent =
+            (stats.tamanho_mb || 0).toFixed(2) + ' MB';
+    }
+}
+
+function renderListaItens(containerId, itens, accordionId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    // Agrupar por categoria
+    const porCategoria = {};
+    for (const item of itens) {
+        const cat = item.categoria || 'outros';
+        if (!porCategoria[cat]) porCategoria[cat] = [];
+        porCategoria[cat].push(item);
+    }
+
+    let idx = 0;
+    for (const [cat, lista] of Object.entries(porCategoria)) {
+        const meta = CATEGORIA_LABELS[cat] || {nome: cat, icone: 'fa-circle', cor: 'secondary'};
+        idx++;
+
+        const card = document.createElement('div');
+        card.className = 'accordion-item';
+        card.innerHTML = `
+            <h2 class="accordion-header" id="heading-${accordionId}-${idx}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapse-${accordionId}-${idx}">
+                    <i class="fas ${meta.icone} text-${meta.cor} me-2"></i>
+                    <strong>${meta.nome}</strong>
+                    <span class="badge bg-${meta.cor} ms-2">${lista.length}</span>
+                </button>
+            </h2>
+            <div id="collapse-${accordionId}-${idx}" class="accordion-collapse collapse"
+                 data-bs-parent="#${accordionId}">
+                <div class="accordion-body p-2">
+                    ${lista.map(item => renderItem(item)).join('')}
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    }
+}
+
+function renderItem(item) {
+    const odooLink = item.odoo_url
+        ? `<a href="${item.odoo_url}" target="_blank" class="btn btn-sm btn-outline-primary">
+             <i class="fas fa-external-link-alt"></i> Abrir no Odoo
+           </a>`
+        : '';
+    const contextoStr = item.contexto && Object.keys(item.contexto).length > 0
+        ? `<details class="small text-muted mt-1">
+             <summary>Detalhes tecnicos</summary>
+             <pre class="mb-0">${JSON.stringify(item.contexto, null, 2)}</pre>
+           </details>`
+        : '';
+    return `
+        <div class="border-start border-3 border-${item.severidade === 'BLOQUEANTE' ? 'danger' : 'warning'} ps-2 mb-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <strong>${item.titulo}</strong>
+                    ${item.registro ? `<span class="badge bg-secondary ms-1">${item.registro}</span>` : ''}
+                    ${item.linha_arquivo ? `<small class="text-muted">linha ${item.linha_arquivo}</small>` : ''}
+                </div>
+                ${odooLink}
+            </div>
+            <p class="small mb-1 mt-1" style="white-space: pre-wrap;">${item.descricao}</p>
+            ${item.acao_sugerida
+                ? `<div class="alert alert-light p-2 mb-1 small">
+                     <strong><i class="fas fa-tools"></i> Como resolver:</strong>
+                     <span style="white-space: pre-wrap;">${item.acao_sugerida}</span>
+                   </div>`
+                : ''}
+            ${item.quem_resolve
+                ? `<small class="badge bg-info">Resolve: ${item.quem_resolve}</small>`
+                : ''}
+            ${contextoStr}
+        </div>
+    `;
 }
 
 function poll() {
