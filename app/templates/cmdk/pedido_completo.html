@@ -155,6 +155,29 @@
     </div>
   </div>
 
+  {# ─────────────────── Abas: Resumo | Historico ─────────────────── #}
+  <ul class="nav nav-tabs raio-x-tabs" id="raio-x-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="raio-x-tab-resumo-btn" data-bs-toggle="tab"
+              data-bs-target="#raio-x-tab-resumo" type="button" role="tab"
+              aria-controls="raio-x-tab-resumo" aria-selected="true">
+        <i class="fas fa-clipboard-list"></i> Resumo
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="raio-x-tab-historico-btn" data-bs-toggle="tab"
+              data-bs-target="#raio-x-tab-historico" type="button" role="tab"
+              aria-controls="raio-x-tab-historico" aria-selected="false">
+        <i class="fas fa-history"></i> Histórico
+        <span class="raio-x-tabs__badge" id="raio-x-historico-badge" hidden></span>
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content raio-x-tab-content" id="raio-x-tabs-content">
+    <div class="tab-pane fade show active" id="raio-x-tab-resumo" role="tabpanel"
+         aria-labelledby="raio-x-tab-resumo-btn">
+
   {# ─────────────────── Card "Criar Separação" (oculto até modal datas confirmar) ─────────────────── #}
   <div id="raio-x-criar-sep-card" class="raio-x-criar-sep-card" hidden>
     <div class="raio-x-criar-sep-card__header">
@@ -587,11 +610,142 @@
   </div>
   {% endif %}
 
+    </div> {# /tab-pane resumo #}
+
+    {# ─────────────────── Aba Historico (lazy via JS) ─────────────────── #}
+    <div class="tab-pane fade" id="raio-x-tab-historico" role="tabpanel"
+         aria-labelledby="raio-x-tab-historico-btn">
+      <div class="raio-x-historico" data-num-pedido="{{ pedido.num_pedido }}">
+
+        {# Estado inicial: skeleton + mensagem de carregando #}
+        <div class="raio-x-historico__loading" id="raio-x-historico-loading">
+          <i class="fas fa-spinner fa-spin"></i> Carregando histórico de alterações…
+        </div>
+
+        {# Erro #}
+        <div class="raio-x-historico__error raio-x-empty" id="raio-x-historico-error" hidden>
+          <i class="fas fa-exclamation-triangle"></i>
+          <span data-msg>Erro ao carregar histórico.</span>
+        </div>
+
+        {# Vazio #}
+        <div class="raio-x-historico__vazio raio-x-empty" id="raio-x-historico-vazio" hidden>
+          <i class="fas fa-info-circle"></i>
+          Nenhum evento de alteração registrado para este pedido.
+        </div>
+
+        {# Conteudo: sumario + timeline #}
+        <div class="raio-x-historico__content" id="raio-x-historico-content" hidden>
+
+          {# Sumario #}
+          <div class="raio-x-historico__sumario">
+            <div class="raio-x-historico-card">
+              <div class="raio-x-historico-card__label">Total de eventos</div>
+              <div class="raio-x-historico-card__value" id="raio-x-hist-total">—</div>
+            </div>
+            <div class="raio-x-historico-card">
+              <div class="raio-x-historico-card__label">Período</div>
+              <div class="raio-x-historico-card__value" id="raio-x-hist-periodo">—</div>
+            </div>
+            <div class="raio-x-historico-card">
+              <div class="raio-x-historico-card__label">Produtos</div>
+              <div class="raio-x-historico-card__value" id="raio-x-hist-produtos">—</div>
+            </div>
+            <div class="raio-x-historico-card">
+              <div class="raio-x-historico-card__label">NFs</div>
+              <div class="raio-x-historico-card__value" id="raio-x-hist-nfs">—</div>
+            </div>
+            <div class="raio-x-historico-card">
+              <div class="raio-x-historico-card__label">Lotes separação</div>
+              <div class="raio-x-historico-card__value" id="raio-x-hist-lotes">—</div>
+            </div>
+            <div class="raio-x-historico-card">
+              <div class="raio-x-historico-card__label">Usuários</div>
+              <div class="raio-x-historico-card__value" id="raio-x-hist-usuarios">—</div>
+            </div>
+          </div>
+
+          {# Filtros #}
+          <div class="raio-x-historico__filtros" role="search" aria-label="Filtros do histórico">
+            <div class="raio-x-hist-filtro">
+              <label for="raio-x-hist-f-entidade">Entidade</label>
+              <select id="raio-x-hist-f-entidade" class="form-select form-select-sm">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <div class="raio-x-hist-filtro">
+              <label for="raio-x-hist-f-tipo">Tipo</label>
+              <select id="raio-x-hist-f-tipo" class="form-select form-select-sm">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="raio-x-hist-filtro">
+              <label for="raio-x-hist-f-origem">Origem</label>
+              <select id="raio-x-hist-f-origem" class="form-select form-select-sm">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <div class="raio-x-hist-filtro">
+              <label for="raio-x-hist-f-usuario">Usuário</label>
+              <select id="raio-x-hist-f-usuario" class="form-select form-select-sm">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <div class="raio-x-hist-filtro">
+              <label for="raio-x-hist-f-data-de">De</label>
+              <input type="date" id="raio-x-hist-f-data-de" class="form-control form-control-sm">
+            </div>
+            <div class="raio-x-hist-filtro">
+              <label for="raio-x-hist-f-data-ate">Até</label>
+              <input type="date" id="raio-x-hist-f-data-ate" class="form-control form-control-sm">
+            </div>
+            <div class="raio-x-hist-filtro raio-x-hist-filtro--acoes">
+              <button type="button" class="btn btn-outline-secondary btn-sm"
+                      id="raio-x-hist-btn-limpar">
+                <i class="fas fa-times"></i> Limpar
+              </button>
+              <button type="button" class="btn btn-outline-primary btn-sm"
+                      id="raio-x-hist-btn-export"
+                      title="Exporta os momentos filtrados em CSV">
+                <i class="fas fa-file-csv"></i> CSV
+              </button>
+            </div>
+          </div>
+
+          {# Contador de momentos visiveis #}
+          <div class="raio-x-historico__contador" id="raio-x-hist-contador" aria-live="polite">
+            —
+          </div>
+
+          {# Timeline #}
+          <div class="raio-x-historico__timeline" id="raio-x-hist-timeline" role="list">
+            {# Linhas inseridas via JS — ver cmdk-historico-pedido.js #}
+          </div>
+
+          {# Mensagem quando filtros nao casam nenhum momento #}
+          <div class="raio-x-historico__sem-resultado raio-x-empty"
+               id="raio-x-hist-sem-resultado" hidden>
+            <i class="fas fa-filter"></i>
+            Nenhum momento corresponde aos filtros aplicados.
+          </div>
+
+          <p class="raio-x-historico__footnote">
+            Dados de <code>evento_supply_chain</code> (event sourcing append-only).
+            Eventos do mesmo minuto/entidade/origem/usuário são agrupados em um momento.
+          </p>
+        </div>
+
+      </div>
+    </div> {# /tab-pane historico #}
+
+  </div> {# /tab-content #}
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/modal-projecao-linha.js') }}"></script>
+<script src="{{ url_for('static', filename='js/cmdk-historico-pedido.js') }}"></script>
 <script>
 (function () {
   'use strict';

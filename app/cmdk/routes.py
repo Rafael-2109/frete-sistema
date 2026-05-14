@@ -26,6 +26,7 @@ from app.cmdk.services import (
     buscar_nfs,
     buscar_pedidos,
     comandos,
+    historico_pedido,
     pedido_completo,
     projecao_pedido,
 )
@@ -285,3 +286,49 @@ def api_codigos_canonicos_pedido(num_pedido: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
     return jsonify({'success': True, 'num_pedido': num_pedido, 'codigos': cods})
+
+
+# =============================================================================
+# /api/cmdk/pedido/<num>/historico
+# (aba "Historico" da tela rica — le evento_supply_chain, append-only,
+#  populada por trigger PostgreSQL audit_supply_chain_trigger())
+# =============================================================================
+
+@cmdk_bp.route('/api/cmdk/pedido/<num_pedido>/historico', methods=['GET'])
+@login_required
+def api_historico_pedido(num_pedido: str):
+    """
+    Historico de alteracoes do pedido (event sourcing).
+
+    Retorna sumario + lista cronologica de "momentos" (eventos agregados
+    por entidade+tipo+origem+usuario+minuto), com diff dos campos mais
+    relevantes (status, expedicao, data_embarque, NF, etc).
+
+    LAZY no client: chamada apenas ao abrir a aba "Historico" da tela rica.
+    """
+    num_pedido = (num_pedido or '').strip()
+    if not num_pedido or not NUM_PEDIDO_RE.match(num_pedido):
+        return jsonify({'success': False, 'error': 'num_pedido invalido'}), 400
+
+    try:
+        data = historico_pedido.montar_historico(num_pedido)
+    except Exception as e:
+        logger.exception(
+            f"[cmdk.api_historico_pedido] erro num_pedido={num_pedido}"
+        )
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    if data is None:
+        return jsonify({
+            'success': True,
+            'num_pedido': num_pedido,
+            'sumario': None,
+            'momentos': [],
+            'vazio': True,
+        })
+
+    return jsonify({
+        'success': True,
+        **data,
+        'vazio': False,
+    })
