@@ -107,8 +107,48 @@ else:
 | `button_validate` retorna `None` | stock.picking | **SUCESSO!** `if 'cannot marshal None' in str(e): pass` |
 | PO criado com operacao fiscal ERRADA | Tomador FB mas PO vai para CD | Mapeamento de-para `OPERACAO_DE_PARA[op_atual][company_destino]` |
 | Impostos ZERADOS apos write no header | account.move | Re-buscar valor do DFe; chamar `onchange_l10n_br_calcular_imposto` |
+| **`action_update_taxes` zera tax_id/amount_tax** | `sale.order` com `fiscal_position` que mapeia impostos para vazio (ex.: ID 49 "SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS") | **NUNCA usar `action_update_taxes` em SOs BR.** Usar `onchange_l10n_br_calcular_imposto` (worker `app/pedidos/workers/impostos_jobs.py`) |
 | Lote duplicado | stock.lot | Verificar existencia antes de `lot_name`, usar `lot_id` se existir |
 | Quality checks pendentes | button_validate falha | Processar TODOS checks (`do_pass`/`do_fail`/`do_measure`) ANTES |
+
+### Recalcular Impostos em `sale.order` (BR): NUNCA `action_update_taxes`
+
+**Incidente (IMP-2026-05-14-001, SO 72921 VCD2669702, 14/05/2026):**
+Agente executou `action_update_taxes` em pedido com `fiscal_position` ID 49
+(`SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS`) → reaplicou mapeamento da posicao
+fiscal que mapeia TODOS os impostos para vazio → `tax_id=[]` e
+`amount_tax=0` em 30 linhas. SO ja tinha picking `done` e NF-e `posted`.
+
+**Por que `action_update_taxes` e perigoso em SOs brasileiros:**
+- O metodo nativo aplica `fiscal_position.map_tax()` sobre `account.tax` originais
+- Quando a posicao fiscal mapeia para `[]` (vazio) — comportamento valido para
+  transferencia entre filiais e outras operacoes sem imposto destacado — todas
+  as linhas perdem `tax_id`
+- Nao ha rollback automatico; o write e persistido imediatamente
+
+**Metodo CORRETO no contexto Nacom Goya:**
+Usar `onchange_l10n_br_calcular_imposto` (modulo l10n_br_ciel_it). E o mesmo
+metodo usado pelo worker da fila `impostos` em
+`app/pedidos/workers/impostos_jobs.py` apos criacao de SO via XML-RPC.
+
+```python
+# CERTO — equivalente ao worker da fila 'impostos'
+odoo.execute_kw('sale.order', 'onchange_l10n_br_calcular_imposto', [[order_id]])
+# Pode levantar 'cannot marshal None' — sucesso (l10n_br retorna None)
+
+# ERRADO — zera impostos em SOs com fiscal_position que mapeia para vazio
+odoo.execute_kw('sale.order', 'action_update_taxes', [[order_id]])
+```
+
+**Antes de qualquer recalculo de imposto em SO:**
+1. Verificar `fiscal_position_id` do SO
+2. Se posicao fiscal mapeia impostos para vazio (transferencias, regimes
+   especiais): NUNCA invocar `action_update_taxes`
+3. Se SO ja tem picking `done` ou faturas `posted`: o impacto e maior
+   (NF original imutavel, possivel necessidade de NF complementar) — confirmar
+   risco com o usuario antes de tocar
+4. Preferir reenfileirar via worker (fila `impostos`) quando possivel — usa
+   Fire-and-Poll e cooldown para Odoo respirar
 
 ### Integer 0 vs False no ORM Odoo
 

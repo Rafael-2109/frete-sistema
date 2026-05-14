@@ -61,6 +61,24 @@ def _fmt_mes_ano(data_str):
     return f'{m}/{y}'
 
 
+def _mes_ano_sort_key(mes_ano):
+    """Converte 'MM/YYYY' para (YYYY, MM) para ordenacao cronologica.
+
+    IMP-2026-05-14-004: sort lexicografico em string 'MM/YYYY' inverte meses
+    entre anos (ex.: '01/2026' < '04/2025' lexicografico, mas '04/2025' vem
+    ANTES cronologicamente). Heuristica documentada em
+    /memories/empresa/heuristicas/financeiro/baseline-de-extratos-formato-fixo.xml
+    item 6 do <do>.
+    """
+    if not mes_ano or '/' not in mes_ano:
+        return (0, 0)  # entradas vazias no inicio
+    try:
+        m, y = mes_ano.split('/')
+        return (int(y), int(m))
+    except (ValueError, AttributeError):
+        return (0, 0)
+
+
 def _fmt_data_ref(d):
     """date(2026,4,17) -> '17Abr2026'"""
     return f'{d.day:02d}{MES_PT[d.month]}{d.year}'
@@ -289,7 +307,9 @@ def montar_excel(agg, pendentes, d1, _journal_map, data_ref, output_path):
         cell.fill = fill_header
 
     total = {'linhas': 0, 'pgtos': 0, 'vl_deb': 0.0, 'recebs': 0, 'vl_cred': 0.0}
-    sorted_keys = sorted(agg.keys(), key=lambda k: (k[0], k[1]))
+    # Ordenacao cronologica (YYYY,MM) + journal alfabetico. Sort lexicografico
+    # em 'MM/YYYY' inverte meses entre anos — ver _mes_ano_sort_key.
+    sorted_keys = sorted(agg.keys(), key=lambda k: (_mes_ano_sort_key(k[0]), k[1]))
     for (mes, journal) in sorted_keys:
         d = agg[(mes, journal)]
         ws1.append([mes, journal, d['linhas'], d['pgtos'], d['vl_deb'], d['recebs'], d['vl_cred']])
@@ -398,7 +418,8 @@ def montar_excel(agg, pendentes, d1, _journal_map, data_ref, output_path):
 
     total_pgtos = 0
     total_recebs = 0
-    for mes in sorted(pivot.keys()):
+    # Aba 4 (Resumo): mesma regra cronologica da Aba 1.
+    for mes in sorted(pivot.keys(), key=_mes_ano_sort_key):
         # Subtotal do mes (verde claro)
         tot_mes_p = sum(j['pgtos'] for j in pivot[mes].values())
         tot_mes_r = sum(j['recebs'] for j in pivot[mes].values())

@@ -23,6 +23,17 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 17 | 2026-05-11 | 3 | 3 | 0 | 0 | OK |
 | 18 | 2026-05-12 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 19 | 2026-05-13 | 10 | 10 | 0 | 0 | OK (4 clusters: evaluator SQL, artifact bundle, baseline UX, system_prompt) |
+| 20 | 2026-05-14 | 4 | 4 | 0 | 0 | OK (1 cluster Odoo SO 3 sugestoes + 1 fix sort baseline) |
+
+## 2026-05-14
+- 4 sugestoes avaliadas (2 critical + 2 warning), todas validas e auto-implementadas
+- **Cluster 1 — Odoo SO faturado (3 sugestoes da mesma sessao 4722693c)**:
+  - IMP-001 (critical, gotcha_report) + IMP-002 (critical, instruction_request): `action_update_taxes` em sale.order com fiscal_position 49 (SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS) zerou `tax_id` de 30 linhas. Metodo correto e `onchange_l10n_br_calcular_imposto` usado pelo worker `app/pedidos/workers/impostos_jobs.py`. Fix: nova entrada em `.claude/references/odoo/GOTCHAS.md` (tabela "Comportamentos Inesperados" + secao "Recalcular Impostos em sale.order (BR): NUNCA action_update_taxes" com codigo CERTO/ERRADO).
+  - IMP-003 (warning, instruction_request): SO com picking done + NF-e posted aceitou confirmacao agregada "Sim para as 3". Fix: nova sub-regra R3.2 em `app/agente/prompts/system_prompt.md` exigindo confirmacao TIPADA SEPARADA por risco ("Confirmo NF imutavel" / "Confirmo backlog complementar" / "Confirmo novo picking"), analoga a R3.1.
+- **Cluster 2 — Baseline ordenacao (1 sugestao)**:
+  - IMP-004 (warning, skill_bug): `gerar_baseline.py` ordenava chave `MM/YYYY` lexicograficamente — `01/2026` aparecia antes de `04/2025`. Fix: helper `_mes_ano_sort_key` parseia para tupla `(YYYY, MM)`, aplicado em DOIS pontos (Aba 1 linha 292 + Aba 4 linha 401 — segundo ponto detectado na revisao, nao mencionado na sugestao).
+- **Persistencia DB**: 4 respostas via POST `/agente/api/improvement-dialogue` com X-Cron-Key
+- **Commit em main** (sem branch dedicada — preferencia do usuario)
 
 ## 2026-05-13
 - 10 sugestoes avaliadas (4 critical + 6 warning), todas validas e auto-implementadas

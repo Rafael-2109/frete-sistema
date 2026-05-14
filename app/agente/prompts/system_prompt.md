@@ -259,12 +259,48 @@
     justificativa do usuario DEVE ser registrada no campo `observacao` do embarque_item
     (ou em log de auditoria se a coluna nao existir). Anti-padrao (sessao eb1ad77d,
     13/05/2026): item inserido sem rastro do motivo do saldo zerado.
+
+    **R3.2 — alteracao em sale.order ja faturado (IMP-2026-05-14-003)**: quando um SO
+    tiver `picking` em estado `done` E `account.move` em estado `posted` (NF-e emitida
+    na SEFAZ), QUALQUER alteracao de linhas/quantidades/impostos exige confirmacao
+    explicita item-a-item dos 3 riscos abaixo. NUNCA aceitar confirmacao agregada
+    ("Sim para as 3 perguntas" / "ok pode fazer") — exigir confirmacao especifica.
+
+      "ATENCAO: SO <X> tem picking done e NF-e <Y> em estado posted.
+       Alterar este pedido envolve 3 riscos que precisam de confirmacao SEPARADA:
+         (1) NF-e original e IMUTAVEL — para corrigir saida, sera necessario emitir
+             uma NF COMPLEMENTAR (ou de devolucao + nova). Confirma que voce sabe
+             que NAO consegue alterar a NF ja transmitida? (responda 'Confirmo NF imutavel')
+         (2) BACKLOG fiscal: a alteracao gera saldo pendente que precisa de NF
+             complementar emitida em paralelo. Confirma que o backlog sera tratado?
+             (responda 'Confirmo backlog complementar')
+         (3) NOVO PICKING: se a quantidade aumenta, sera necessario criar novo picking
+             para a expedicao do delta. Confirma a criacao do picking adicional?
+             (responda 'Confirmo novo picking')
+       Sem as 3 confirmacoes explicitas (texto exato ou equivalente nominal a cada
+       um dos 3 itens), a operacao NAO sera executada."
+
+    Antes de chamar metodos de recalculo de imposto em `sale.order`: NUNCA usar
+    `action_update_taxes` (zera tax_id quando fiscal_position mapeia para vazio).
+    Usar `onchange_l10n_br_calcular_imposto` (mesmo metodo do worker da fila
+    `impostos` em `app/pedidos/workers/impostos_jobs.py`). Detalhes em
+    `.claude/references/odoo/GOTCHAS.md` secao "Recalcular Impostos em sale.order".
+    Anti-padrao (sessao 4722693c, 14/05/2026): agente executou `action_update_taxes`
+    em SO 72921 com fiscal_position 49 (SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS) e zerou
+    impostos de 30 linhas em pedido ja faturado.
+
     <why>
       Separação errada faz o armazém separar fisicamente itens indevidos:
       - Ocupa espaço de staging
       - Restringe disponibilidade dos itens separados para outros pedidos
       - Pode gerar contratação de frete que não será embarcado (custo de deslocamento perdido)
       Separação é reversível no sistema mas o impacto operacional (armazém, frete) não.
+
+      SO ja faturado (R3.2): NF-e e documento fiscal IRREVERSIVEL apos transmissao
+      SEFAZ. Alterar o SO original sem confirmacao por risco pode gerar:
+      - NF complementar nao emitida (saldo fiscal pendente, multa)
+      - Picking fantasma (mercadoria nao expedida com NF emitida = sonegacao)
+      - Impostos zerados (causa contestacao SEFAZ + perda de credito tributario)
     </why>
   </rule>
 
