@@ -247,7 +247,62 @@ echo "Motos Assai 15: HOTFIX DEFAULT agendamento_confirmado + rerodar backfill..
 python scripts/migrations/motos_assai_15_fix_default_agendamento_confirmado.py \
     || echo "⚠️ Migration motos_assai_15 falhou, continuando deploy..."
 
-# 15d. Motos Assai 29 (2026-05-14): devolucao por NF de venda Q.P.A. (NFd).
+# 15d. Motos Assai 16-28 (2026-05-14 reconciliacao): migrations 16-28 nunca
+# foram para o build.sh; algumas foram aplicadas manualmente via Render Shell
+# em prod, outras (22/24/27) ficaram fora — esta secao alinha o deploy.
+# 23 e 25 ficam de fora porque sao backfills explicitamente manuais por
+# docstring (rodar 1x apos deploy, nao a cada build).
+# Todas idempotentes: IF NOT EXISTS / DO $$ ... IF EXISTS guards.
+
+echo "Motos Assai 16: pos_venda_ocorrencia + anexo..."
+python scripts/migrations/motos_assai_16_pos_venda_ocorrencia.py \
+    || echo "⚠️ Migration motos_assai_16 falhou, continuando deploy..."
+
+echo "Motos Assai 17: cleanup separacoes orfas..."
+python scripts/migrations/motos_assai_17_cleanup_sep_2_orfa.py \
+    || echo "⚠️ Migration motos_assai_17 falhou, continuando deploy..."
+
+echo "Motos Assai 18: assai_carregamento + item..."
+python scripts/migrations/motos_assai_18_carregamento.py \
+    || echo "⚠️ Migration motos_assai_18 falhou, continuando deploy..."
+
+echo "Motos Assai 19: assai_divergencia (8 tipos centralizados)..."
+python scripts/migrations/motos_assai_19_divergencia.py \
+    || echo "⚠️ Migration motos_assai_19 falhou, continuando deploy..."
+
+echo "Motos Assai 20: assai_pedido_excel (parser/confianca)..."
+python scripts/migrations/motos_assai_20_pedido_excel.py \
+    || echo "⚠️ Migration motos_assai_20 falhou, continuando deploy..."
+
+echo "Motos Assai 21: backfill status pedido (4 status novos)..."
+python scripts/migrations/motos_assai_21_simplificar_status_pedido.py \
+    || echo "⚠️ Migration motos_assai_21 falhou, continuando deploy..."
+
+echo "Motos Assai 22: cancelada_em + cancelada_por_id em assai_nf_qpa..."
+python scripts/migrations/motos_assai_22_nf_cancelamento_campos.py \
+    || echo "⚠️ Migration motos_assai_22 falhou, continuando deploy..."
+
+# 23 (backfill NFs orfas) — RODAR MANUAL: docstring exige.
+
+echo "Motos Assai 24: CHECK constraints aceitam novos status..."
+python scripts/migrations/motos_assai_24_check_status_aceitar_novos.py \
+    || echo "⚠️ Migration motos_assai_24 falhou, continuando deploy..."
+
+# 25 (backfill divergencias legadas) — RODAR MANUAL.
+
+echo "Motos Assai 26: assai_nf_qpa_item_vinculo_historico..."
+python scripts/migrations/motos_assai_26_vinculo_historico.py \
+    || echo "⚠️ Migration motos_assai_26 falhou, continuando deploy..."
+
+echo "Motos Assai 27: UNIQUE parcial NF ativa por separacao..."
+python scripts/migrations/motos_assai_27_unique_nf_sep_ativa.py \
+    || echo "⚠️ Migration motos_assai_27 falhou, continuando deploy..."
+
+echo "Motos Assai 28: CCe como entidade (match reverso)..."
+python scripts/migrations/motos_assai_28_cce_entidade.py \
+    || echo "⚠️ Migration motos_assai_28 falhou, continuando deploy..."
+
+# 15e. Motos Assai 29 (2026-05-14): devolucao por NF de venda Q.P.A. (NFd).
 # Cria 3 tabelas (assai_devolucao_nfd / _item / _anexo) + flag devolvido em
 # assai_nf_qpa_item. recalcular_status_pedido EXCLUI SeparacaoItem ligado a
 # NfQpaItem.devolvido=TRUE da contagem qtd_faturada (saldo do MODELO retorna
