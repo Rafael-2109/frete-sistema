@@ -181,9 +181,14 @@ def query_odoo_pendentes(odoo_conn, data_ref):
         if len(linhas) < batch_size:
             break
 
-    # Top N por valor absoluto
+    # Top N por valor absoluto (criterio de selecao)
     todas_linhas.sort(key=lambda x: abs(x['amount']), reverse=True)
     pendentes_top = todas_linhas[:TOP_N_PENDENTES]
+
+    # Reordenar TOP N cronologicamente (mes ano, depois data exata, depois valor desc).
+    # 'date' vem em ISO YYYY-MM-DD — sort lexicografico ja e cronologico para ISO.
+    # 'mes' formatado MM/YYYY exige _mes_ano_sort_key (mesma regra das Abas 1 e 4).
+    pendentes_top.sort(key=lambda x: (_mes_ano_sort_key(x['mes']), x['date'], -abs(x['amount'])))
 
     return dict(agg), pendentes_top, journal_map
 
