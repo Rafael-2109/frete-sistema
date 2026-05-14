@@ -419,8 +419,11 @@ def sped_ecd_status(job_id):
                 'error': 'Job nao encontrado ou expirado'
             }), 404
 
-        # Se concluido com sucesso, gerar URL de download
-        if progresso.get('status') == 'concluido' and progresso.get('s3_key'):
+        # Se concluido (com ou sem erros de validacao), gerar URL de download.
+        # 'concluido_com_erros' indica que o arquivo foi gerado e uploadado para S3 mas
+        # falhou validacao pre-PVA — usuario ainda precisa baixar para investigar/corrigir.
+        status_atual = progresso.get('status')
+        if status_atual in ('concluido', 'concluido_com_erros') and progresso.get('s3_key'):
             progresso['download_url'] = url_for(
                 'relatorios_fiscais.sped_ecd_download', job_id=job_id
             )
@@ -446,7 +449,9 @@ def sped_ecd_download(job_id):
         from app.relatorios_fiscais.services.sped_ecd_service import gerar_presigned_url_sped
 
         progresso = obter_progresso_sped(job_id)
-        if not progresso or progresso.get('status') != 'concluido':
+        # Aceitar tambem 'concluido_com_erros' — arquivo foi gerado e uploadado mesmo
+        # reprovando validacao pre-PVA; usuario precisa baixar para investigar/corrigir.
+        if not progresso or progresso.get('status') not in ('concluido', 'concluido_com_erros'):
             flash('Arquivo ainda nao disponivel ou job expirado', 'warning')
             return redirect(url_for('relatorios_fiscais.sped_ecd'))
 

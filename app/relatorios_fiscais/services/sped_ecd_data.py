@@ -681,34 +681,30 @@ def buscar_participantes_periodo(
         Lista de dicts {id, name, cnpj_cpf, cod_pais, ie, im, suframa,
                        endereco, num, complemento, bairro, municipio, uf}
     """
-    # 1. Buscar partner_ids que tem lines no periodo
-    ids_set = set()
-    last_id = 0
-    BATCH = 5000
-
-    while True:
-        domain = [
-            ['date', '>=', date_ini.strftime('%Y-%m-%d')],
-            ['date', '<=', date_fim.strftime('%Y-%m-%d')],
-            ['parent_state', '=', 'posted'],
-            ['company_id', 'in', COMPANIES_ECD],
-            ['partner_id', '!=', False],
-            ['id', '>', last_id],
-        ]
-        lote = connection.execute_kw(
-            'account.move.line', 'search_read', [domain],
-            {'fields': ['id', 'partner_id'], 'limit': BATCH, 'order': 'id asc'},
-            timeout_override=TIMEOUT_QUERY_PESADA,
-        )
-        if not lote:
-            break
-        for ln in lote:
-            pid = ln['partner_id']
-            if pid and isinstance(pid, (list, tuple)) and pid[0]:
-                ids_set.add(pid[0])
-            last_id = ln['id']
-        if len(lote) < BATCH:
-            break
+    # 1. Buscar partner_ids distintos que tem lines no periodo via read_group.
+    # OTIMIZACAO: substitui search_read paginado (que trafegava centenas de milhares
+    # de linhas via XML-RPC so para extrair partner_ids unicos) por UMA chamada
+    # read_group que agrupa direto no PostgreSQL do Odoo.
+    # Antes: ~213s para 6 meses (~82% do tempo total do job).
+    # Depois esperado: ~3-10s.
+    domain = [
+        ['date', '>=', date_ini.strftime('%Y-%m-%d')],
+        ['date', '<=', date_fim.strftime('%Y-%m-%d')],
+        ['parent_state', '=', 'posted'],
+        ['company_id', 'in', COMPANIES_ECD],
+        ['partner_id', '!=', False],
+    ]
+    grupos = connection.execute_kw(
+        'account.move.line', 'read_group',
+        [domain],
+        {'fields': ['partner_id'], 'groupby': ['partner_id'], 'lazy': False},
+        timeout_override=TIMEOUT_QUERY_PESADA,
+    )
+    ids_set = {
+        g['partner_id'][0]
+        for g in grupos
+        if g.get('partner_id') and isinstance(g['partner_id'], (list, tuple)) and g['partner_id'][0]
+    }
 
     if not ids_set:
         logger.info('[SPED ECD] Nenhum partner com lancamentos no periodo')
