@@ -104,26 +104,35 @@ def buscar_dados_matriz(connection) -> dict:
     # Buscar municipio (codigo IBGE) e UF
     cod_mun = ''
     uf = 'SP'  # default NACOM
+    nome_municipio = ''
     municipio_field = co.get('l10n_br_municipio_id')
     if municipio_field and isinstance(municipio_field, (list, tuple)) and municipio_field[0]:
+        # Many2one retorna [id, "Nome (UF)"] — extrair direto, sem read separado.
+        # Ex: [5570, "Sao Paulo (SP)"]. Modelo l10n_br_base.municipio nao existe
+        # no Odoo CIEL IT — IBGE vem de outro caminho.
+        if len(municipio_field) > 1 and municipio_field[1]:
+            display = municipio_field[1] or ''
+            # Separar "Nome" de "(UF)"
+            if '(' in display:
+                nome_municipio = display.split('(')[0].strip()
+                uf_extraida = display.split('(')[-1].rstrip(')')[:2].strip()
+                if uf_extraida:
+                    uf = uf_extraida
+            else:
+                nome_municipio = display.strip()
+
+        # Tentar IBGE (modelo nao existe na CIEL IT — falha silenciosamente)
         try:
             mun_list = connection.execute_kw(
                 'l10n_br_base.municipio', 'read',
                 [[municipio_field[0]]],
-                {'fields': ['name', 'l10n_br_ibge_code', 'state_id']},
+                {'fields': ['l10n_br_ibge_code']},
                 timeout_override=TIMEOUT_QUERY_SIMPLES,
             )
             if mun_list:
-                mun = mun_list[0]
-                cod_mun = mun.get('l10n_br_ibge_code', '') or ''
-                state_field = mun.get('state_id')
-                if state_field and isinstance(state_field, (list, tuple)):
-                    # state_id retorna [id, "Sao Paulo (SP)"] — extrair UF
-                    nome_estado = state_field[1] or ''
-                    if '(' in nome_estado:
-                        uf = nome_estado.split('(')[-1].rstrip(')')[:2]
+                cod_mun = mun_list[0].get('l10n_br_ibge_code', '') or ''
         except Exception as e:
-            logger.warning(f'Erro ao buscar municipio matriz: {e}')
+            logger.warning(f'Erro ao buscar IBGE matriz (modelo pode nao existir): {e}')
 
     # CNPJ sem mascara
     cnpj_raw = co.get('l10n_br_cnpj') or ''
@@ -137,6 +146,7 @@ def buscar_dados_matriz(connection) -> dict:
         'im': co.get('l10n_br_im') or '',
         'nire': co.get('l10n_br_nire') or '',
         'cod_mun': cod_mun,
+        'nome_municipio': nome_municipio,
         'uf': uf,
     }
 
