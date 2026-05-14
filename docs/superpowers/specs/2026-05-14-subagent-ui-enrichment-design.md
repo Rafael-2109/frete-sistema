@@ -136,15 +136,17 @@ Persistência            │ agent_sessions.data         │
 
 Adicionar em `app/agente/config/feature_flags.py`:
 
-| Flag | Default dev | Default prod inicial | Cobre |
+| Flag | Default dev | Default prod (big-bang) | Cobre |
 |---|---|---|---|
-| `USE_SUBAGENT_MODAL` | `true` | `false` (habilitar gradualmente) | P0.1 modal transcript |
+| `USE_SUBAGENT_MODAL` | `true` | `true` | P0.1 modal transcript |
 | `USE_SUBAGENT_RICH_STATES` | `true` | `true` | P0.2 estados visuais + P1.1 parent link |
 | `USE_SUBAGENT_LIVE_PROGRESS` | `true` | `true` | P0.3 tokens/duration no meta |
-| `USE_SUBAGENT_RENAME_TAG` | `false` | `false` (Fase 2) | P1.2 rename/tag |
-| `USE_SUBAGENT_OUTPUT_DOWNLOAD` | `false` | `false` (Fase 2) | P1.3 download |
+| `USE_SUBAGENT_RENAME_TAG` | `true` (Fase 2) | `true` (no merge Fase 2) | P1.2 rename/tag |
+| `USE_SUBAGENT_OUTPUT_DOWNLOAD` | `true` (Fase 2) | `true` (no merge Fase 2) | P1.3 download |
 
-Pattern já estabelecido: `USE_SUBAGENT_UI`, `USE_SUBAGENT_DEBUG_ENDPOINT`. Rollback instantâneo via env var no Render.
+**Estratégia big-bang**: todas as flags da Fase 1 sobem `true` simultaneamente no merge da PR-A; todas as flags da Fase 2 sobem `true` no merge da PR-B. Flags são mantidas **apenas como circuit breakers** para rollback rápido (env var no Render).
+
+Pattern já estabelecido: `USE_SUBAGENT_UI`, `USE_SUBAGENT_DEBUG_ENDPOINT`.
 
 ---
 
@@ -863,31 +865,33 @@ Listagem rápida de testes que vou tocar transversalmente (precisa não-regredir
 
 ---
 
-## 10. Plano de rollout em prod
+## 10. Plano de rollout em prod (big-bang)
+
+**Estratégia escolhida pelo dono do produto**: big-bang. Todas as features da Fase 1 ativadas simultaneamente no merge da PR-A; idem Fase 2 no merge da PR-B. Sem habilitação gradual de flags. Feature flags permanecem como **circuit breakers** apenas para rollback em emergência.
 
 ```
 [FASE 1 deploy]
    │
-   1. Merge PR-A → auto-deploy disparado
+   1. Merge PR-A → auto-deploy Render disparado
+      Defaults em config/feature_flags.py:
+        USE_SUBAGENT_MODAL=true
+        USE_SUBAGENT_RICH_STATES=true
+        USE_SUBAGENT_LIVE_PROGRESS=true
    │
-   2. PRIMEIRA HORA: feature flags OFF em prod
-      USE_SUBAGENT_MODAL=false
-      USE_SUBAGENT_RICH_STATES=false
-      USE_SUBAGENT_LIVE_PROGRESS=false
-      → Smoketest validado em prod (zero impacto visual)
+   2. Deploy completa (~13 min observado em deploys recentes)
    │
-   3. SEGUNDA HORA: habilitar flags AUXILIARES (baixo risco)
-      USE_SUBAGENT_RICH_STATES=true   ← só CSS + classe
-      USE_SUBAGENT_LIVE_PROGRESS=true ← só meta da linha
-      → Monitorar Sentry 30min
+   3. Smoketest pós-deploy:
+      curl /agente/api/admin/debug/subagent-smoketest
+      → Esperado: healthy=true, has_user_prompt=true
    │
-   4. Se OK: habilitar MODAL
-      USE_SUBAGENT_MODAL=true
-      → Monitorar Sentry + Render logs 1h
+   4. Usuario executa Roadmap de Testes (secao 10.2)
+      → Confirma todos blocos A-J passando
    │
-   5. Smoketest pós-deploy automático (cron: a cada 6h)
-      → se healthy=false por 3 ciclos: rollback automático sugerido
+   5. Monitoramento Sentry: query "feature:subagent_modal" + "agent_id_prefix:*"
+      → Esperado: zero novas issues nas primeiras 24h
 ```
+
+Mesma sequência para Fase 2 ao mergear PR-B (com blocos F e G do roadmap).
 
 ### 10.1 Rollback atômico
 
@@ -905,25 +909,230 @@ Cada flag é independente:
 
 **Garantia chave**: zero migration DDL → rollback = mudar env var + restart Render worker. Sem risco de schema inconsistente entre deploys.
 
+### 10.2 Roadmap de testes do usuário (E2E pós-deploy)
+
+**Pré-requisitos**:
+- 1 conta admin (`perfil='administrador'`)
+- 1 conta user normal (dono de sessão, perfil padrão)
+- Chat web aberto em https://sistema-fretes.onrender.com/agente/chat
+- DevTools aberto (aba Network + Console)
+- Acesso ao Sentry (https://nacom.sentry.io)
+
+**Tempo estimado total**: 30-45min para Fase 1 (blocos A-E + H-J), +10-15min para Fase 2 (blocos F-G).
+
+---
+
+#### Bloco A — Estados visuais (P0.2)
+
+Cada estado tem cor + ícone distintos. Verificar visualmente.
+
+| # | Cenário | Como reproduzir | Resultado esperado |
+|---|---|---|---|
+| A.1 | Estado `running` | Pedir "analise pedido VCD123 com analista-carteira" | Dot amarelo pulsando + badge `analista-carteira` + meta "executando..." |
+| A.2 | Estado `done` | Aguardar conclusão de A.1 | Dot verde fixo + meta `N tools · Xs · $Y` |
+| A.3 | Estado `failed` | Pedir "usar analista-carteira para algo invalido que falhe" (ou matar SDK no meio) | Dot vermelho + meta com `status=failed` |
+| A.4 | Estado `stopped` | Iniciar subagent, clicar botão Interromper no chat | Dot cinza + meta com `status=stopped` |
+| A.5 | Estado `validation_warning` | (depende do worker Haiku detectar inconsistência) — opcional, pode pular se não reproduzir | Ícone ⚠ amarelo sobreposto à linha |
+
+**Bloqueador**: A.1 a A.4 obrigatórios. A.5 best-effort.
+
+---
+
+#### Bloco B — Progresso ao vivo (P0.3)
+
+Durante execução de A.1, observar a linha:
+
+| # | Cenário | Resultado esperado |
+|---|---|---|
+| B.1 | Meta inicial | `executando...` |
+| B.2 | Meta com tool em uso | `Bash...` ou `Grep...` (último tool chamado pelo subagent) |
+| B.3 | Meta com tokens | `Grep · 1.2K tok · 5s` (atualiza periodicamente) |
+| B.4 | Meta final | `5 tools · 12s · $0.04` (após conclusão) |
+
+**DevTools verificação**: aba Network → eventos `task_progress` SSE devem ter `metadata.usage` populado.
+
+**Bloqueador**: B.1 e B.4 obrigatórios. B.2 e B.3 confirmam metadata SDK chegando.
+
+---
+
+#### Bloco C — Modal transcript (P0.1)
+
+| # | Cenário | Resultado esperado |
+|---|---|---|
+| C.1 | Click na linha | Modal full-screen abre, backdrop escurece chat |
+| C.2 | Seção "Prompt do agente principal" | Não vazia, mostra texto enviado pelo agente principal ao subagent (ex: "Analise pedido VCD123 com regras P1-P7") |
+| C.3 | Seção "Timeline" | Lista cronológica: user_prompt → assistant_text → tool_use → tool_result → ... |
+| C.4 | Seção "Findings" | Texto final do subagent (resposta retornada ao parent) |
+| C.5 | ESC | Modal fecha |
+| C.6 | Click no backdrop | Modal fecha |
+| C.7 | Botão X | Modal fecha |
+
+**DevTools verificação**: aba Network → GET `/agente/api/sessions/<sid>/subagents/<aid>/transcript` retorna 200, payload tem 3 seções (`prompt`, `timeline`, `findings`).
+
+**Bloqueador**: TODOS obrigatórios. C.2 é a feature principal — sem ele, modal é só decoração.
+
+---
+
+#### Bloco D — PII e admin toggle (segurança crítica)
+
+Pré-requisito: subagent executado tem CPFs/CNPJs nos tools (ex: consulta de cliente Atacadão).
+
+| # | Cenário | Como reproduzir | Resultado esperado |
+|---|---|---|---|
+| D.1 | User normal vê PII mascarada | Login como user normal, abrir modal de subagent que consultou cliente | CPFs aparecem como `***.***.***-**`, CNPJs como `**.***.***/****-**` |
+| D.2 | Admin sem toggle vê PII mascarada | Login como admin, abrir modal SEM clicar "Mostrar PII" | Mesma máscara de D.1 |
+| D.3 | Admin com toggle vê PII raw | Click no botão "Mostrar PII" no modal | CPFs/CNPJs aparecem em texto bruto. Reload do modal já mostra raw (Redis token válido) |
+| D.4 | Audit log incrementado | Após D.3, verificar via SQL: `SELECT data->'subagent_pii_audit' FROM agent_sessions WHERE session_id='<sid>'` | Entry com `{agent_id, user_id, enabled:true, timestamp}` |
+| D.5 | Toggle expira em 5min | Após D.3, aguardar 5min, reabrir modal | PII volta a mascarar |
+| D.6 | Rate limit 10/min | Click 11x consecutivos no botão "Mostrar PII" | 11ª tentativa retorna 429 com mensagem "Muitas trocas em sequência. Aguarde 1 minuto." |
+| D.7 | User normal NÃO vê botão | Login como user normal, abrir modal | Botão "Mostrar PII" não renderizado no DOM |
+
+**Bloqueador**: TODOS obrigatórios — falha de qualquer um é vazamento de PII.
+
+---
+
+#### Bloco E — Correlação parent (P1.1)
+
+| # | Cenário | Resultado esperado |
+|---|---|---|
+| E.1 | Linha inline tem marcador `↳` | Próximo à badge do subagent, visível |
+| E.2 | Linha está visualmente alinhada com mensagem do parent | CSS conector mostra qual mensagem disparou o subagent |
+| E.3 | Click no marcador `↳` | (Fase 1 opcional) Scroll do chat para a mensagem do parent + highlight temporário |
+
+**Bloqueador**: E.1 obrigatório (correlação visual). E.2 e E.3 best-effort.
+
+---
+
+#### Bloco F — Rename/tag (Fase 2, P1.2)
+
+Pré-requisito: PR-B mergeada. Flag `USE_SUBAGENT_RENAME_TAG=true`.
+
+| # | Cenário | Como reproduzir | Resultado esperado |
+|---|---|---|---|
+| F.1 | Admin renomeia subagent | Modal → ícone ✎ → digita "Analise pedido VCD123" → Salvar | Header do modal mostra novo nome. Linha inline no chat também atualiza |
+| F.2 | Admin adiciona tag | Modal → ícone 🏷️ → adiciona "p3" e "urgente" → Salvar | Badges de tag aparecem no modal e na linha |
+| F.3 | Admin remove tag | Modal → click no X de uma tag | Tag desaparece |
+| F.4 | Persistência | Recarregar a página, reabrir mesmo subagent | Nome e tags persistem |
+| F.5 | XSS payload sanitizado | Renomear para `<script>alert(1)</script>` | Salva como string escapada; sem alert disparado |
+| F.6 | Nome > 80 chars rejeitado | Tentar salvar nome com 100 chars | HTTP 400 + mensagem "Nome deve ter no máximo 80 caracteres." |
+| F.7 | Tags > 10 rejeitadas | Tentar adicionar 11ª tag | HTTP 400 + mensagem clara |
+
+**SQL para verificação**: `SELECT data->'subagent_metadata' FROM agent_sessions WHERE session_id='<sid>'` → deve mostrar entry para o `<agent_id>`.
+
+**Bloqueador**: F.1, F.2, F.5 (XSS), F.6 obrigatórios.
+
+---
+
+#### Bloco G — Download output_file (Fase 2, P1.3)
+
+Pré-requisito: Flag `USE_SUBAGENT_OUTPUT_DOWNLOAD=true`.
+
+| # | Cenário | Como reproduzir | Resultado esperado |
+|---|---|---|---|
+| G.1 | Admin baixa JSONL raw | Modal → botão "JSONL" | Download de `<agent_id>.jsonl` com Content-Type `application/jsonl`. Arquivo tem dados raw sem mask |
+| G.2 | User normal baixa JSONL com mask | Login user normal → mesmo modal → "JSONL" | Download com CPFs/CNPJs mascarados linha a linha |
+| G.3 | JSONL ausente (sessão arquivada) | Tentar baixar de sessão > 30 dias | Sistema tenta restore S3; se falhar: 404 + botão escondido |
+| G.4 | Arquivo > 50MB | (raro; simulação manual) | HTTP 413 + mensagem "Arquivo muito grande para download direto." |
+
+**Bloqueador**: G.1 e G.2 obrigatórios.
+
+---
+
+#### Bloco H — Backward-compat e rollback
+
+Testar que rollback via env var funciona instantaneamente.
+
+| # | Cenário | Como reproduzir | Resultado esperado |
+|---|---|---|---|
+| H.1 | Flag MODAL off | No Render dashboard, env var `USE_SUBAGENT_MODAL=false` + restart worker | Click na linha não abre modal; fallback inline expand antigo aparece |
+| H.2 | Flag RICH_STATES off | Env var `USE_SUBAGENT_RICH_STATES=false` + restart | Linha volta aos 3 estados antigos (running/done/error). Sem failed/stopped distintos |
+| H.3 | Flag LIVE_PROGRESS off | Env var `USE_SUBAGENT_LIVE_PROGRESS=false` + restart | Meta volta a `usando Grep...` simples, sem tokens/duração |
+| H.4 | Subagent antigo (JSONL pré-modificação) | Abrir modal de sessão arquivada antes do deploy | Modal renderiza sem `parent_tool_use_id` (campo opcional); sem crash |
+
+**Bloqueador**: H.1 obrigatório (circuit breaker mais importante).
+
+Após teste, restaurar flags = `true` antes de prosseguir.
+
+---
+
+#### Bloco I — Performance
+
+| # | Cenário | Resultado esperado | Como medir |
+|---|---|---|---|
+| I.1 | Modal abre rápido | < 1s para transcript médio (50 entries) | DevTools → Network → tempo de `/transcript` |
+| I.2 | Sem flicker no SSE | Linha não pisca entre `task_progress` consecutivos | Observação visual + Performance recording |
+| I.3 | SSE não floods | Eventos por minuto < 60 durante subagent ativo | DevTools → Network → count eventos `task_progress` |
+
+**Bloqueador**: I.1 obrigatório. Se > 5s para transcripts pequenos, há regressão.
+
+---
+
+#### Bloco J — Erro handling
+
+| # | Cenário | Como reproduzir | Resultado esperado |
+|---|---|---|---|
+| J.1 | Sessão arquivada (JSONL ausente) | Abrir modal de sessão > 30 dias antiga | Mensagem clara "Transcript não encontrado. A sessão pode ter sido arquivada." + botão "Tentar restaurar do arquivo" |
+| J.2 | Rate limit PII | Já testado em D.6 | Botão desabilita por 60s, mensagem clara |
+| J.3 | Network timeout | Throttling DevTools → "Offline" → click modal | Após 30s: "Conexão lenta. Verifique sua rede e tente novamente." + retry button |
+| J.4 | 500 backend | (raro; simulação manual via DB lock) | Mensagem genérica clara + Sentry registra com tag `feature:subagent_modal` |
+| J.5 | 403 cross-user | User A tenta abrir modal de sessão do User B | Mensagem "Você não tem acesso a esta sessão." |
+
+**Bloqueador**: J.1 e J.5 obrigatórios.
+
+---
+
+#### Resumo de cobertura por fase
+
+| Fase | Blocos obrigatórios | Total de cenários |
+|---|---|---|
+| **Fase 1** | A (1-4) + B (1, 4) + C (1-7) + D (1-7) + E (1) + H (1) + I (1) + J (1, 5) | **22 cenários** |
+| **Fase 2** | F (1, 2, 5, 6) + G (1, 2) | **6 cenários adicionais** |
+
+**Critério de aceitação para promoção em prod**: todos os cenários **Bloqueador** passando. Cenários best-effort podem falhar isoladamente sem bloquear.
+
+### 10.3 Validação automatizada complementar
+
+Em paralelo aos testes manuais, rodar smoketest:
+
+```bash
+# Espera healthy=true, transcript_entries>0, has_user_prompt=true
+curl https://sistema-fretes.onrender.com/agente/api/admin/debug/subagent-smoketest \
+  -H "Cookie: session=$ADMIN_SESSION_COOKIE"
+```
+
+E monitorar Sentry com filtro:
+
+```
+project:python-flask
+environment:production
+firstSeen:-1h
+tags[feature]:subagent_modal
+```
+
+→ Esperado: zero issues novas durante o roadmap de testes.
+
 ---
 
 ## 11. Timeline estimado
 
-| Etapa | Esforço |
-|---|---|
-| Escrever plano detalhado (writing-plans skill) | 30-60min |
-| Implementar Fase 1 backend (com TDD) | 4-6h |
-| Implementar Fase 1 frontend | 3-5h |
-| Testes Fase 1 | 2-3h |
-| Code review (você) | 30-60min |
-| Deploy Fase 1 + monitoring | 1-2h |
-| **Total Fase 1** | **~14-22h trabalho ativo** |
-| Implementar Fase 2 | 3-5h |
-| Testes Fase 2 | 1-2h |
-| Deploy Fase 2 | 30min |
-| **Total Fase 2** | **~5-8h trabalho ativo** |
+| Etapa | Esforço | Quem |
+|---|---|---|
+| Escrever plano detalhado (writing-plans skill) | 30-60min | eu |
+| Implementar Fase 1 backend (com TDD) | 4-6h | eu |
+| Implementar Fase 1 frontend | 3-5h | eu |
+| Testes pytest Fase 1 | 2-3h | eu |
+| Code review (você) | 30-60min | você |
+| Deploy Fase 1 (big-bang) | < 15min | auto-deploy Render |
+| **Roadmap de testes Fase 1 (seção 10.2 blocos A-E + H-J)** | **30-45min** | **você** |
+| Monitoramento Sentry pós-roadmap | 24h passive | você |
+| **Total Fase 1** | **~15-22h trabalho ativo + 24h monitoring** | |
+| Implementar Fase 2 | 3-5h | eu |
+| Testes pytest Fase 2 | 1-2h | eu |
+| Deploy Fase 2 | < 15min | auto-deploy |
+| **Roadmap de testes Fase 2 (blocos F + G)** | **10-15min** | **você** |
+| **Total Fase 2** | **~5-8h trabalho ativo + 24h monitoring** | |
 
-Fases podem ser separadas por dias ou semanas — não há acoplamento entre elas.
+Fases podem ser separadas por dias ou semanas — não há acoplamento entre elas. Roadmap de testes (seção 10.2) é critério **bloqueador** para considerar a fase entregue.
 
 ---
 
@@ -963,3 +1172,4 @@ Fases podem ser separadas por dias ou semanas — não há acoplamento entre ela
 | Q5: Persistência rename/tag | Coluna JSONB custom em `agent_sessions.data` | Padrão já usado; sobrevive a qualquer mudança SDK; robusto |
 | Q6: Delivery shape | 1 spec coeso, 2 fases sequenciais | Evita re-design entre PRs; Fase 1 maior valor primeiro |
 | Q7: Arquitetura interna | Stateful em `chat.js` existente | `chat.js` é monolítico estável; padrão `#artifact-modal`; estado compartilhado |
+| Q8: Rollout em prod | **Big-bang** (todas flags `true` no merge) + Roadmap de testes manual obrigatório | Usuário prefere validar tudo de uma vez via roadmap estruturado (seção 10.2) em vez de habilitar incrementalmente. Flags mantidas como circuit breakers para rollback emergencial |
