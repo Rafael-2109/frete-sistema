@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% set active_page = "relatorios_fiscais" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-cogs text-primary me-2"></i>
+                {{ titulo }}
+            </h1>
+            <p class="text-muted">
+                Job ID: <code>{{ job_id }}</code>
+            </p>
+        </div>
+        <div>
+            <a href="{{ url_for('relatorios_fiscais.sped_ecd') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Card de Progresso -->
+            <div class="card shadow mb-4">
+                <div class="card-body">
+                    <!-- Status -->
+                    <div class="text-center mb-4">
+                        <div id="spinner-area" class="my-3">
+                            <div class="spinner-border text-primary" style="width: 4rem; height: 4rem;" role="status">
+                                <span class="visually-hidden">Processando...</span>
+                            </div>
+                        </div>
+                        <h5 id="status-titulo" class="mb-1">Processando...</h5>
+                        <p id="status-mensagem" class="text-muted">
+                            <i class="fas fa-info-circle"></i>
+                            Aguardando inicio do worker...
+                        </p>
+                    </div>
+
+                    <!-- Etapa atual -->
+                    <div class="mb-3">
+                        <small class="text-uppercase text-muted">Etapa Atual</small>
+                        <div id="etapa-atual" class="fw-bold">--</div>
+                    </div>
+
+                    <!-- Barra de Progresso -->
+                    <div class="mb-3">
+                        <small class="text-uppercase text-muted">Progresso</small>
+                        <div class="progress" style="height: 25px;">
+                            <div id="progress-bar"
+                                 class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
+                                 role="progressbar"
+                                 style="width: 5%;">
+                                <span id="progress-label">5%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detalhes -->
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <div class="text-muted small">Lancamentos</div>
+                            <div id="info-lancamentos" class="h6 mb-0">--</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-muted small">Tempo decorrido</div>
+                            <div id="info-tempo" class="h6 mb-0">--</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-muted small">Tamanho</div>
+                            <div id="info-tamanho" class="h6 mb-0">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Botoes (escondidos ate concluir) -->
+                    <div id="acoes-final" class="text-center mt-4" style="display: none;">
+                        <a id="btn-download" href="#" class="btn btn-success btn-lg me-2">
+                            <i class="fas fa-download me-2"></i>
+                            Baixar Arquivo SPED ECD
+                        </a>
+                        <a href="{{ url_for('relatorios_fiscais.sped_ecd') }}" class="btn btn-outline-primary btn-lg">
+                            <i class="fas fa-plus-circle"></i>
+                            Gerar Novo
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Avisos -->
+            <div class="alert alert-info small">
+                <i class="fas fa-info-circle"></i>
+                <strong>Tempo estimado:</strong>
+                Pequeno periodo (1 mes): 1-3 min. Ano completo: 15-30 min.
+                A pagina atualiza automaticamente.
+                Voce pode fechar esta aba — o job continua rodando e voce pode
+                voltar aqui depois.
+            </div>
+
+            <div class="alert alert-warning small">
+                <i class="fas fa-exclamation-triangle"></i>
+                <strong>Apos baixar o arquivo:</strong>
+                Valide no <strong>PVA da Receita Federal</strong> antes de transmitir.
+                Em caso de erros do PVA, anote-os e abra ticket para correcao.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+const JOB_ID = "{{ job_id }}";
+const STATUS_URL = "{{ url_for('relatorios_fiscais.sped_ecd_status', job_id=job_id) }}";
+const POLL_INTERVAL = 4000; // 4 segundos
+
+let inicioPolling = Date.now();
+let pollingInterval = null;
+
+const ETAPAS_PROGRESSO = {
+    'iniciando': 5,
+    'matriz': 10,
+    'plano_contas': 20,
+    'saldos_mensais': 30,
+    'balanco': 35,
+    'dre': 40,
+    'montar_bloco_0': 45,
+    'bloco_I_abertura': 50,
+    'bloco_I_plano': 55,
+    'bloco_I_saldos': 60,
+    'bloco_I_lancamentos': 75,
+    'bloco_I_encerramento': 88,
+    'bloco_J': 92,
+    'bloco_9': 96,
+    'upload_s3': 98,
+    'finalizado': 100,
+};
+
+function atualizarUI(progresso) {
+    const status = progresso.status;
+    const etapa = progresso.etapa || '';
+    const mensagem = progresso.mensagem || progresso.item_atual || '';
+
+    // Etapa
+    document.getElementById('etapa-atual').textContent = etapa.toUpperCase().replace(/_/g, ' ') || '--';
+    document.getElementById('status-mensagem').innerHTML = '<i class="fas fa-info-circle"></i> ' + mensagem;
+
+    // Progress bar
+    let pct = ETAPAS_PROGRESSO[etapa] || 5;
+    const bar = document.getElementById('progress-bar');
+    bar.style.width = pct + '%';
+    document.getElementById('progress-label').textContent = pct + '%';
+
+    // Info
+    if (progresso.lines_processadas !== undefined) {
+        document.getElementById('info-lancamentos').textContent = progresso.lines_processadas.toLocaleString('pt-BR');
+    }
+    if (progresso.tamanho_bytes !== undefined) {
+        document.getElementById('info-tamanho').textContent = (progresso.tamanho_bytes / 1024 / 1024).toFixed(2) + ' MB';
+    }
+    const tempoSegundos = Math.floor((Date.now() - inicioPolling) / 1000);
+    const min = Math.floor(tempoSegundos / 60);
+    const seg = tempoSegundos % 60;
+    document.getElementById('info-tempo').textContent = `${min}m ${seg}s`;
+
+    // Estado final
+    if (status === 'concluido') {
+        clearInterval(pollingInterval);
+        bar.className = 'progress-bar bg-success';
+        bar.style.width = '100%';
+        document.getElementById('progress-label').textContent = '100%';
+        document.getElementById('spinner-area').innerHTML =
+            '<i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>';
+        document.getElementById('status-titulo').textContent = 'SPED ECD Gerado com Sucesso!';
+        document.getElementById('status-mensagem').innerHTML =
+            '<i class="fas fa-check"></i> Arquivo pronto para download. Valide no PVA antes de transmitir.';
+
+        if (progresso.download_url) {
+            document.getElementById('btn-download').href = progresso.download_url;
+            document.getElementById('acoes-final').style.display = 'block';
+        }
+    } else if (status === 'erro') {
+        clearInterval(pollingInterval);
+        bar.className = 'progress-bar bg-danger';
+        document.getElementById('spinner-area').innerHTML =
+            '<i class="fas fa-times-circle text-danger" style="font-size: 4rem;"></i>';
+        document.getElementById('status-titulo').textContent = 'Erro na Geracao';
+        document.getElementById('status-mensagem').innerHTML =
+            '<i class="fas fa-exclamation-triangle"></i> ' + (mensagem || 'Falha desconhecida');
+
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro ao gerar SPED ECD',
+            html: mensagem + '<br><br><small class="text-muted">Veja os logs do worker para detalhes.</small>',
+            confirmButtonText: 'OK'
+        });
+    }
+}
+
+function poll() {
+    fetch(STATUS_URL)
+        .then(r => {
+            if (r.status === 404) {
+                clearInterval(pollingInterval);
+                document.getElementById('status-titulo').textContent = 'Job nao encontrado';
+                document.getElementById('status-mensagem').innerHTML =
+                    '<i class="fas fa-times"></i> Job expirado ou nao encontrado no Redis.';
+                return null;
+            }
+            return r.json();
+        })
+        .then(d => {
+            if (!d) return;
+            if (d.success && d.progresso) {
+                atualizarUI(d.progresso);
+            }
+        })
+        .catch(err => {
+            console.error('Erro polling:', err);
+        });
+}
+
+// Iniciar polling imediatamente
+poll();
+pollingInterval = setInterval(poll, POLL_INTERVAL);
+</script>
+{% endblock %}

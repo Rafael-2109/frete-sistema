@@ -13,6 +13,7 @@ from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import logging
 from app.utils.timezone import agora_utc_naive
+from app.financeiro.routes.dashboard import requires_financeiro
 
 from . import relatorios_fiscais_bp
 
@@ -286,3 +287,288 @@ def gerar_razao_geral():
         logger.error(f"Erro ao gerar Razão Geral: {e}")
         flash(f'Erro ao gerar relatório: {str(e)}', 'error')
         return redirect(url_for('relatorios_fiscais.razao_geral'))
+
+
+# ================================================================
+# SPED ECD CENTRALIZADO (NACOM GOYA — 3 filiais consolidadas)
+# ================================================================
+
+@relatorios_fiscais_bp.route('/sped-ecd')
+@login_required
+@requires_financeiro
+def sped_ecd():
+    """
+    Pagina principal do SPED ECD Centralizado.
+    Form com filtros: periodo (datas livres) + dados signatarios.
+    """
+    from app.relatorios_fiscais.services.sped_ecd_constantes import (
+        CONTADOR_NOME, CONTADOR_CPF, CONTADOR_EMAIL, CONTADOR_CRC, CONTADOR_NUM_SEQ_CRC,
+        SOCIO_NOME, SOCIO_CPF, QUALIFICACOES_J930,
+    )
+
+    # Datas padrao: ano calendario corrente
+    hoje = agora_utc_naive().date()
+    data_fim = hoje
+    data_ini = hoje.replace(month=1, day=1)
+
+    return render_template(
+        'relatorios_fiscais/sped_ecd.html',
+        data_ini=data_ini.strftime('%Y-%m-%d'),
+        data_fim=data_fim.strftime('%Y-%m-%d'),
+        contador_nome=CONTADOR_NOME,
+        contador_cpf=CONTADOR_CPF,                           # V1.2: fixo
+        contador_email=CONTADOR_EMAIL,                       # V1.2: fixo
+        contador_crc=CONTADOR_CRC,
+        contador_num_seq=CONTADOR_NUM_SEQ_CRC,
+        socio_nome=SOCIO_NOME,
+        socio_cpf=SOCIO_CPF,
+        qualificacoes=QUALIFICACOES_J930,
+        titulo='SPED ECD Centralizado (NACOM GOYA — 3 filiais)'
+    )
+
+
+@relatorios_fiscais_bp.route('/sped-ecd/gerar', methods=['POST'])
+@login_required
+@requires_financeiro
+def gerar_sped_ecd():
+    """
+    Enfileira job RQ para geracao assincrona do SPED ECD.
+    Retorna JSON com job_id para o frontend fazer polling.
+    """
+    try:
+        from app.portal.workers import enqueue_job
+        from app.relatorios_fiscais.workers.sped_ecd_worker import gerar_sped_ecd_async
+        from app.relatorios_fiscais.services.sped_ecd_constantes import (
+            QUEUE_NAME, JOB_TIMEOUT,
+        )
+
+        # Obter parametros do form (V1.2: CPF e email vem das constantes, nao do form)
+        data_ini_str = (request.form.get('data_ini') or '').strip()
+        data_fim_str = (request.form.get('data_fim') or '').strip()
+        qualif_socio = (request.form.get('qualif_socio') or '').strip()
+        notas_explicativas = (request.form.get('notas_explicativas') or '').strip()
+
+        # Validacoes
+        if not data_ini_str or not data_fim_str:
+            return jsonify({'success': False, 'error': 'Datas inicial e final sao obrigatorias'}), 400
+
+        if not qualif_socio:
+            return jsonify({'success': False, 'error': 'Qualificacao do socio e obrigatoria'}), 400
+
+        # Validar datas
+        try:
+            data_ini = datetime.strptime(data_ini_str, '%Y-%m-%d').date()
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Formato de data invalido (YYYY-MM-DD)'}), 400
+
+        if data_ini > data_fim:
+            return jsonify({'success': False, 'error': 'Data inicial nao pode ser maior que data final'}), 400
+
+        # Limite Receita: ECD a partir de 2010
+        if data_ini.year < 2010:
+            return jsonify({'success': False, 'error': 'ECD valido apenas a partir de 2010'}), 400
+
+        logger.info(
+            f'[SPED ECD] Enfileirando job: {data_ini} a {data_fim} | '
+            f'Usuario: {current_user.nome}'
+        )
+
+        # Enfileirar job RQ (mitigacao R4 — assincrono, sem timeout HTTP)
+        # V1.2: cpf_contador e email_contato vem das constantes (sped_ecd_constantes.py)
+        job = enqueue_job(
+            gerar_sped_ecd_async,
+            data_ini.strftime('%Y-%m-%d'),
+            data_fim.strftime('%Y-%m-%d'),
+            qualif_socio,
+            current_user.id,
+            current_user.nome,
+            notas_explicativas,
+            queue_name=QUEUE_NAME,
+            timeout=JOB_TIMEOUT,
+        )
+
+        return jsonify({
+            'success': True,
+            'job_id': job.id,
+            'status_url': url_for('relatorios_fiscais.sped_ecd_status', job_id=job.id),
+            'progress_url': url_for('relatorios_fiscais.sped_ecd_progress', job_id=job.id),
+        })
+
+    except Exception as e:
+        logger.error(f'[SPED ECD] Erro ao enfileirar job: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': f'Erro: {str(e)[:200]}'}), 500
+
+
+@relatorios_fiscais_bp.route('/sped-ecd/status/<job_id>')
+@login_required
+@requires_financeiro
+def sped_ecd_status(job_id):
+    """
+    Endpoint AJAX de polling — retorna progresso do job.
+    Frontend chama a cada 3-5s ate status='concluido' ou 'erro'.
+    """
+    try:
+        from app.relatorios_fiscais.workers.sped_ecd_worker import obter_progresso_sped
+
+        progresso = obter_progresso_sped(job_id)
+        if not progresso:
+            return jsonify({
+                'success': False,
+                'status': 'unknown',
+                'error': 'Job nao encontrado ou expirado'
+            }), 404
+
+        # Se concluido com sucesso, gerar URL de download
+        if progresso.get('status') == 'concluido' and progresso.get('s3_key'):
+            progresso['download_url'] = url_for(
+                'relatorios_fiscais.sped_ecd_download', job_id=job_id
+            )
+
+        return jsonify({'success': True, 'progresso': progresso})
+
+    except Exception as e:
+        logger.error(f'[SPED ECD] Erro ao obter status {job_id}: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@relatorios_fiscais_bp.route('/sped-ecd/download/<job_id>')
+@login_required
+@requires_financeiro
+def sped_ecd_download(job_id):
+    """
+    Faz download do arquivo SPED gerado.
+    - Se S3 ativo: redireciona para presigned URL
+    - Se local: send_file direto
+    """
+    try:
+        from app.relatorios_fiscais.workers.sped_ecd_worker import obter_progresso_sped
+        from app.relatorios_fiscais.services.sped_ecd_service import gerar_presigned_url_sped
+
+        progresso = obter_progresso_sped(job_id)
+        if not progresso or progresso.get('status') != 'concluido':
+            flash('Arquivo ainda nao disponivel ou job expirado', 'warning')
+            return redirect(url_for('relatorios_fiscais.sped_ecd'))
+
+        s3_key = progresso.get('s3_key')
+        if not s3_key:
+            flash('Arquivo nao encontrado', 'error')
+            return redirect(url_for('relatorios_fiscais.sped_ecd'))
+
+        # Tentar presigned URL (S3)
+        presigned = gerar_presigned_url_sped(s3_key, expires_in=3600)
+        if presigned:
+            return redirect(presigned)
+
+        # Fallback: arquivo local
+        import os
+        if os.path.exists(s3_key):
+            return send_file(
+                s3_key,
+                as_attachment=True,
+                download_name=os.path.basename(s3_key),
+                mimetype='application/octet-stream',
+            )
+
+        flash('Arquivo nao encontrado em storage', 'error')
+        return redirect(url_for('relatorios_fiscais.sped_ecd'))
+
+    except Exception as e:
+        logger.error(f'[SPED ECD] Erro ao baixar {job_id}: {e}', exc_info=True)
+        flash(f'Erro ao baixar arquivo: {str(e)[:200]}', 'error')
+        return redirect(url_for('relatorios_fiscais.sped_ecd'))
+
+
+@relatorios_fiscais_bp.route('/sped-ecd/progress/<job_id>')
+@login_required
+@requires_financeiro
+def sped_ecd_progress(job_id):
+    """
+    Pagina de progresso — usuario eh redirecionado aqui apos enfileirar job.
+    Faz polling em /status/<job_id> e exibe progresso visual.
+    """
+    return render_template(
+        'relatorios_fiscais/sped_ecd_progress.html',
+        job_id=job_id,
+        titulo='Gerando SPED ECD Centralizado'
+    )
+
+
+@relatorios_fiscais_bp.route('/sped-ecd/historico')
+@login_required
+@requires_financeiro
+def sped_ecd_historico():
+    """
+    Lista historico de SPED ECDs gerados pelo usuario (S3).
+    Permite re-download de arquivos antigos.
+    """
+    try:
+        from app.relatorios_fiscais.services.sped_ecd_service import listar_historico_sped
+        arquivos = listar_historico_sped(current_user.id, limite=50)
+        return render_template(
+            'relatorios_fiscais/sped_ecd_historico.html',
+            arquivos=arquivos,
+            titulo='Historico de SPED ECD Gerados'
+        )
+    except Exception as e:
+        logger.error(f'[SPED ECD] Erro listar historico: {e}', exc_info=True)
+        flash(f'Erro ao listar historico: {str(e)[:200]}', 'error')
+        return redirect(url_for('relatorios_fiscais.sped_ecd'))
+
+
+@relatorios_fiscais_bp.route('/sped-ecd/download-direto')
+@login_required
+@requires_financeiro
+def sped_ecd_download_direto():
+    """
+    Download direto de arquivo SPED por s3_key (querystring ?s3_key=...).
+    Usado pela tela de historico.
+    """
+    s3_key = (request.args.get('s3_key') or '').strip()
+    if not s3_key:
+        flash('S3 key nao informado', 'error')
+        return redirect(url_for('relatorios_fiscais.sped_ecd_historico'))
+
+    # Validar que s3_key pertence ao usuario logado (seguranca)
+    # Mitigacao code-review HIGH #7: bloquear path traversal local
+    expected_prefix = f'sped_ecd/user_{current_user.id}/'
+    is_s3 = s3_key.startswith(expected_prefix)
+    is_local = s3_key.startswith('/tmp/sped_ecd_')
+
+    if is_local:
+        # Validar realpath para evitar /tmp/sped_ecd_../../etc/passwd
+        import os
+        real = os.path.realpath(s3_key)
+        if not real.startswith('/tmp/') or '..' in s3_key:
+            logger.warning(f'[SPED ECD] Path traversal blocked user {current_user.id}: {s3_key}')
+            flash('Path invalido', 'error')
+            return redirect(url_for('relatorios_fiscais.sped_ecd_historico'))
+
+    if not (is_s3 or is_local):
+        logger.warning(f'[SPED ECD] Tentativa download nao autorizado por user {current_user.id}: {s3_key}')
+        flash('Arquivo nao pertence ao seu usuario', 'error')
+        return redirect(url_for('relatorios_fiscais.sped_ecd_historico'))
+
+    try:
+        from app.relatorios_fiscais.services.sped_ecd_service import gerar_presigned_url_sped
+        presigned = gerar_presigned_url_sped(s3_key, expires_in=3600)
+        if presigned:
+            return redirect(presigned)
+
+        # Fallback local
+        import os
+        if os.path.exists(s3_key):
+            return send_file(
+                s3_key,
+                as_attachment=True,
+                download_name=os.path.basename(s3_key),
+                mimetype='application/octet-stream',
+            )
+
+        flash('Arquivo nao encontrado em storage', 'error')
+        return redirect(url_for('relatorios_fiscais.sped_ecd_historico'))
+
+    except Exception as e:
+        logger.error(f'[SPED ECD] Erro download direto: {e}', exc_info=True)
+        flash(f'Erro: {str(e)[:200]}', 'error')
+        return redirect(url_for('relatorios_fiscais.sped_ecd_historico'))
