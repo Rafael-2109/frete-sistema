@@ -202,8 +202,8 @@ def gerar_sped_ecd_centralizado(
         for linha in construir_J800(notas_exp, contador):
             _write_linha(output, linha)
 
-    # J900 - termo encerramento
-    _write_linha(output, construir_J900(contador))
+    # J900 - termo encerramento (V1.5: agora recebe matriz_data + params)
+    _write_linha(output, construir_J900(matriz_data, params, contador))
 
     # J930 - signatarios
     for linha in construir_J930(params, contador):

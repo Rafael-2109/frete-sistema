@@ -856,36 +856,46 @@ def construir_J005_J150(dre_consolidado: dict, params: dict,
     despesa_total = custo_direto + despesa_geral + despesa_deprec
     resultado_liquido = receita_total - despesa_total
 
-    # J150 — em ordem funcional DRE
+    # J150 — em ordem funcional DRE (13 campos conforme Manual ECD Leiaute 9)
+    # Layout: REG | NU_ORDEM | COD_AGL | IND_COD_AGL | NIVEL_AGL | COD_AGL_SUP |
+    #         DESCR_COD_AGL | VL_CTA_INI | IND_DC_CTA_INI | VL_CTA_FIN |
+    #         IND_DC_CTA_FIN | IND_GRP_DRE | NOTA_EXP_REF
+    # Bug historico: emitia 10 campos com ordem ERRADA (COD_AGL como NU_ORDEM,
+    # 'P'/'A' como IND_GRP_DRE — oficial e 'D'/'R'). PVA reprovava o bloco J inteiro.
     nu_ordem = 1
+    # Tupla: (cod_agl, descr, valor, ind_dc, ind_grp_dre)
+    # IND_GRP_DRE: R=Receita, D=Despesa (oficial Leiaute 9)
     grupos_dre = [
-        ('DRE_REC_BRUTA', 'RECEITA OPERACIONAL BRUTA', receita_bruta, 'C'),
-        ('DRE_REC_OUTRAS', 'OUTRAS RECEITAS', receita_outras, 'C'),
-        ('DRE_REC_TOTAL', 'RECEITA TOTAL', receita_total, 'C'),
-        ('DRE_CUSTO_DIR', 'CUSTO DIRETO DAS VENDAS', custo_direto, 'D'),
-        ('DRE_DESP_GERAL', 'DESPESAS OPERACIONAIS', despesa_geral, 'D'),
-        ('DRE_DESP_DEPREC', 'DEPRECIACAO E AMORTIZACAO', despesa_deprec, 'D'),
-        ('DRE_DESP_TOTAL', 'CUSTOS E DESPESAS TOTAIS', despesa_total, 'D'),
+        ('DRE_REC_BRUTA', 'RECEITA OPERACIONAL BRUTA', receita_bruta, 'C', 'R'),
+        ('DRE_REC_OUTRAS', 'OUTRAS RECEITAS', receita_outras, 'C', 'R'),
+        ('DRE_REC_TOTAL', 'RECEITA TOTAL', receita_total, 'C', 'R'),
+        ('DRE_CUSTO_DIR', 'CUSTO DIRETO DAS VENDAS', custo_direto, 'D', 'D'),
+        ('DRE_DESP_GERAL', 'DESPESAS OPERACIONAIS', despesa_geral, 'D', 'D'),
+        ('DRE_DESP_DEPREC', 'DEPRECIACAO E AMORTIZACAO', despesa_deprec, 'D', 'D'),
+        ('DRE_DESP_TOTAL', 'CUSTOS E DESPESAS TOTAIS', despesa_total, 'D', 'D'),
         ('DRE_RESULT_LIQ', 'RESULTADO LIQUIDO DO EXERCICIO',
-         abs(resultado_liquido), 'C' if resultado_liquido >= 0 else 'D'),
+         abs(resultado_liquido), 'C' if resultado_liquido >= 0 else 'D',
+         'R' if resultado_liquido >= 0 else 'D'),
     ]
 
-    for cod_agl, descr, valor, ind_dc in grupos_dre:
+    for cod_agl, descr, valor, ind_dc, ind_grp_dre in grupos_dre:
         if abs(valor) < 0.01:
             continue
-        # IND_GRP_DRE: 'A' (Auxiliar) ou 'P' (Principal) — usar A para detalhe, P para totais
-        # Para SPED ECD layout 9, este e um campo de classificacao
+        is_total = 'TOTAL' in descr or 'LIQ' in descr
         linhas.append(contador.emit(formatar_registro([
-            'J150',                                            # 1 REG
-            cod_agl,                                           # 2 COD_AGL
-            IND_COD_AGL_TOTAL if 'TOTAL' in descr or 'LIQ' in descr else IND_COD_AGL_DETALHE,  # 3 IND_COD_AGL
-            '1' if 'TOTAL' in descr or 'LIQ' in descr else '2',  # 4 NIVEL_AGL
-            '',                                                # 5 COD_AGL_SUP
-            'P' if 'TOTAL' in descr or 'LIQ' in descr else 'A',  # 6 IND_GRP_DRE
-            remover_acentos(descr),                            # 7 DESCR_COD_AGL
-            formatar_valor(valor),                             # 8 VL_CTA
-            ind_dc,                                            # 9 IND_VL_CTA
-            str(nu_ordem),                                     # 10 NU_ORDEM
+            'J150',                                            # 1  REG
+            str(nu_ordem),                                     # 2  NU_ORDEM (numero!)
+            cod_agl,                                           # 3  COD_AGL
+            IND_COD_AGL_TOTAL if is_total else IND_COD_AGL_DETALHE,  # 4 IND_COD_AGL (T/D)
+            '1' if is_total else '2',                          # 5  NIVEL_AGL
+            '',                                                # 6  COD_AGL_SUP
+            remover_acentos(descr),                            # 7  DESCR_COD_AGL
+            '',                                                # 8  VL_CTA_INI (vazio — sem saldo anterior)
+            '',                                                # 9  IND_DC_CTA_INI (vazio)
+            formatar_valor(valor),                             # 10 VL_CTA_FIN (valor do periodo)
+            ind_dc,                                            # 11 IND_DC_CTA_FIN
+            ind_grp_dre,                                       # 12 IND_GRP_DRE (R=Receita, D=Despesa)
+            '',                                                # 13 NOTA_EXP_REF (vazio)
         ])))
         nu_ordem += 1
 
@@ -924,14 +934,25 @@ def construir_J800(notas_explicativas: str, contador: ContadorRegistros) -> List
     return linhas
 
 
-def construir_J900(contador: ContadorRegistros) -> str:
-    """J900 — Termo de Encerramento do Livro."""
+def construir_J900(matriz_data: dict, params: dict, contador: ContadorRegistros) -> str:
+    """
+    J900 — Termo de Encerramento do Livro (8 campos conforme Manual ECD Leiaute 9).
+
+    Layout: REG | DNRC_ENCER | NUM_ORD | NAT_LIVRO | NOME | QTD_LIN |
+            DT_INI_ESCR | DT_FIN_ESCR
+
+    Bug historico: emitia 5 campos (faltavam NOME, DT_INI_ESCR, DT_FIN_ESCR) —
+    PVA reprovava o bloco J. Dados devem estar em sincronia com o I030.
+    """
     return contador.emit(formatar_registro([
         'J900',                                                # 1 REG
-        'TERMO DE ENCERRAMENTO',                               # 2 IDENT_NOM_LIV
-        '1',                                                   # 3 NUM_ORD
-        remover_acentos('Livro Diario (Completo, sem escrituracao auxiliar).'),  # 4 NAT_LIVR
-        '999999',                                              # 5 NAT_LIVR codigo
+        'TERMO DE ENCERRAMENTO',                               # 2 DNRC_ENCER (literal)
+        '1',                                                   # 3 NUM_ORD (sincronizado com I030)
+        remover_acentos('Livro Diario (Completo, sem escrituracao auxiliar).'),  # 4 NAT_LIVRO
+        remover_acentos(matriz_data.get('razao_social', '')),  # 5 NOME (sincronizado com I030)
+        '999999',                                              # 6 QTD_LIN (placeholder — total linhas)
+        formatar_data(params.get('date_ini')),                 # 7 DT_INI_ESCR
+        formatar_data(params.get('date_fim')),                 # 8 DT_FIN_ESCR
     ]))
 
 
