@@ -247,6 +247,16 @@ echo "Motos Assai 15: HOTFIX DEFAULT agendamento_confirmado + rerodar backfill..
 python scripts/migrations/motos_assai_15_fix_default_agendamento_confirmado.py \
     || echo "⚠️ Migration motos_assai_15 falhou, continuando deploy..."
 
+# 15d. Motos Assai 29 (2026-05-14): devolucao por NF de venda Q.P.A. (NFd).
+# Cria 3 tabelas (assai_devolucao_nfd / _item / _anexo) + flag devolvido em
+# assai_nf_qpa_item. recalcular_status_pedido EXCLUI SeparacaoItem ligado a
+# NfQpaItem.devolvido=TRUE da contagem qtd_faturada (saldo do MODELO retorna
+# ao pedido de vendas). Idempotente (CREATE TABLE/INDEX IF NOT EXISTS,
+# ADD COLUMN IF NOT EXISTS).
+echo "Motos Assai 29: devolucao por NF de venda Q.P.A. (NFd)..."
+python scripts/migrations/motos_assai_29_devolucao.py \
+    || echo "⚠️ Migration motos_assai_29 falhou, continuando deploy..."
+
 # 16. Remessa VORTX Conversor/Validador (2026-05-12): tabela remessa_vortx_conversao.
 # Auditoria de operacoes de conversao (BMP/274 -> VORTX/310) e validacao read-only
 # de arquivos CNAB 400 externos via UI em /remessa-vortx/converter e /validar.
