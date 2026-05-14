@@ -466,42 +466,55 @@ class VincularNfError(Exception):
     """Erro ao vincular NF manualmente."""
 
 
-def vincular_nf_manualmente(nf_id: int, pedido_id: int, loja_id: int, operador_id: int):
-    """Vincula NF NAO_RECONCILIADO manualmente a um pedido+loja explicitos.
+def vincular_nf_manualmente(
+    nf_id: int,
+    pedido_id: int,
+    operador_id: int,
+):
+    """Vincula NF NAO_RECONCILIADO manualmente a um pedido.
 
-    Atalho de ajustar_separacao_pela_nf v2:
-    - Atualiza nf.loja_id se nao tiver (caso regex automatico nao detectou)
-    - Reusa logica completa de ajustar_separacao_pela_nf (que cria sep em FATURADA
-      se necessario via S1=b)
-    - Apos ajuste, _calcular_match detecta BATEU naturalmente
+    Regra de negocio (2026-05-14): o match e por **CNPJ destinatario** da NF.
+    A NF nao traz o numero da loja explicitamente — apenas o CNPJ. O CNPJ e
+    deterministico e e a chave usada para amarrar NF <-> Pedido:
+
+        NF.destinatario_cnpj  ==  AssaiLoja.cnpj  ==  loja do pedido
+
+    O pedido deve ter cabecalho (`AssaiPedidoVendaLoja`) cuja loja tenha o
+    mesmo CNPJ do destinatario da NF.
+
+    `loja_id` na NF e apenas uma derivacao do CNPJ — preenchemos se ainda
+    estiver vazio (operacoes posteriores podem usar para evitar re-lookup).
 
     NAO commita — caller commita.
 
     Args:
         nf_id: ID da AssaiNfQpa NAO_RECONCILIADO.
-        pedido_id: pedido alvo (usado para validar/forcar).
-        loja_id: loja alvo (set em nf.loja_id se vazio).
+        pedido_id: pedido alvo (deve ter AssaiPedidoVendaLoja em loja com mesmo CNPJ).
         operador_id: usuario que solicitou.
 
     Returns:
-        Resultado de ajustar_separacao_pela_nf:
-        {
-            'ok': bool,
-            'sep_alvo_id': int | None,
-            'sep_criada_via_nf': bool,
-            'chassis_adicionados': [str],
-            'chassis_removidos': [str],
-            'razao': str,
-            ...
-        }
+        Resultado de ajustar_separacao_pela_nf.
 
     Raises:
-        VincularNfError: NF nao encontrada / nao esta NAO_RECONCILIADO / pedido invalido.
+        VincularNfError: NF nao encontrada / NF nao NAO_RECONCILIADO /
+            NF sem CNPJ destinatario / nenhuma loja com esse CNPJ /
+            pedido nao tem cabecalho com esse CNPJ.
     """
-    from app.motos_assai.models import AssaiPedidoVenda, AssaiLoja
+    import re as _re
+    from app.motos_assai.models import (
+        AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiLoja,
+    )
     from app.motos_assai.services.separacao_service import ajustar_separacao_pela_nf
 
-    nf = AssaiNfQpa.query.get(nf_id)
+    # Lock pessimista (code review #2): impede 2 operadores vinculando a mesma
+    # NF em paralelo. Segue o padrao "Lock pessimista e invariantes de
+    # concorrencia" ja estabelecido no modulo (CLAUDE.md Plano 3).
+    nf = (
+        db.session.query(AssaiNfQpa)
+        .filter(AssaiNfQpa.id == nf_id)
+        .with_for_update()
+        .first()
+    )
     if not nf:
         raise VincularNfError(f'NF {nf_id} nao encontrada')
     if nf.status_match != NF_STATUS_NAO_RECONCILIADO:
@@ -511,26 +524,65 @@ def vincular_nf_manualmente(nf_id: int, pedido_id: int, loja_id: int, operador_i
             'antes se precisar re-vincular.'
         )
 
-    # Validar pedido + loja existem
+    # === Match por CNPJ destinatario (chave deterministica) ===
+    cnpj_destinatario = _re.sub(r'\D', '', nf.destinatario_cnpj or '')
+    if not cnpj_destinatario:
+        raise VincularNfError(
+            f'NF {nf_id} sem CNPJ destinatario — nao da pra vincular automaticamente. '
+            'Reimporte a NF apos garantir que o PDF traz o CNPJ.'
+        )
+
+    # Buscar AssaiLoja com mesmo CNPJ (normalizado).
+    # AssaiLoja.cnpj pode estar com mascara ('12.345.678/0001-90') ou sem.
+    # Como a tabela de lojas e pequena (cadastro Sendas/Assai), normaliza
+    # in-memory — evita SQL com regexp_replace que e dependente de dialeto.
+    todas_lojas = AssaiLoja.query.all()
+    lojas_match = [
+        ll for ll in todas_lojas
+        if _re.sub(r'\D', '', ll.cnpj or '') == cnpj_destinatario
+    ]
+    # Code review #3: AssaiLoja.cnpj nao tem UNIQUE no schema. Se houver
+    # duplicacao no cadastro, levantar erro explicito em vez de pegar a
+    # primeira loja silenciosamente (que dependeria do plano do Postgres).
+    if len(lojas_match) > 1:
+        raise VincularNfError(
+            f'CNPJ {nf.destinatario_cnpj} ambiguo: {len(lojas_match)} lojas '
+            f'cadastradas com esse CNPJ (ids: {[ll.id for ll in lojas_match]}). '
+            'Corrija o cadastro em /motos-assai/lojas antes de vincular.'
+        )
+    loja = lojas_match[0] if lojas_match else None
+    if not loja:
+        raise VincularNfError(
+            f'Nenhuma loja cadastrada com CNPJ {nf.destinatario_cnpj}. '
+            'Cadastre a loja em /motos-assai/lojas antes de vincular esta NF.'
+        )
+
+    # Validar pedido existe
     if not AssaiPedidoVenda.query.get(pedido_id):
         raise VincularNfError(f'Pedido {pedido_id} nao encontrado')
-    if not AssaiLoja.query.get(loja_id):
-        raise VincularNfError(f'Loja {loja_id} nao encontrada')
 
-    # Forcar loja_id da NF (caso nao tenha sido detectado pelo regex automatico)
-    if not nf.loja_id:
-        nf.loja_id = loja_id
-        db.session.flush()
-    elif nf.loja_id != loja_id:
-        # Operador escolheu loja diferente da que o regex detectou — atualiza
-        # com aviso (caso de conflito raro: regex extraiu LJ12 mas operador
-        # confirma que e LJ34).
-        import logging
-        logging.getLogger(__name__).warning(
-            'vincular_nf_manualmente: NF %s tinha loja_id=%s mas operador %s '
-            'forcou loja_id=%s', nf_id, nf.loja_id, operador_id, loja_id,
+    # Regra: o pedido deve ter cabecalho (AssaiPedidoVendaLoja) na loja resolvida via CNPJ
+    pvl = AssaiPedidoVendaLoja.query.filter_by(
+        pedido_id=pedido_id, loja_id=loja.id,
+    ).first()
+    if not pvl:
+        raise VincularNfError(
+            f'Pedido {pedido_id} nao possui cabecalho para CNPJ {nf.destinatario_cnpj} '
+            f'(loja {loja.numero} {loja.nome}). '
+            'Escolha um pedido que inclua esse CNPJ.'
         )
-        nf.loja_id = loja_id
+
+    # Sincroniza nf.loja_id (derivado do CNPJ) — preenche se ainda NULL
+    # ou corrige se ficou divergente (cenario: regex LJ\d+ pegou loja errada).
+    if nf.loja_id != loja.id:
+        if nf.loja_id is not None:
+            import logging
+            logging.getLogger(__name__).warning(
+                'vincular_nf_manualmente: NF %s tinha loja_id=%s mas CNPJ %s '
+                'aponta para loja_id=%s — corrigindo via operador %s',
+                nf_id, nf.loja_id, nf.destinatario_cnpj, loja.id, operador_id,
+            )
+        nf.loja_id = loja.id
         db.session.flush()
 
     # Reusa logica completa de ajustar_separacao_pela_nf v2:
@@ -546,11 +598,10 @@ def vincular_nf_manualmente(nf_id: int, pedido_id: int, loja_id: int, operador_i
 
     import logging
     logging.getLogger(__name__).info(
-        'vincular_nf_manualmente: nf=%s pedido=%s loja=%s ok=%s sep=%s '
+        'vincular_nf_manualmente: nf=%s pedido=%s cnpj=%s loja=%s ok=%s sep=%s '
         'operador=%s',
-        nf_id, pedido_id, loja_id, resultado.get('ok'),
+        nf_id, pedido_id, cnpj_destinatario, loja.id, resultado.get('ok'),
         resultado.get('sep_alvo_id'), operador_id,
     )
 
     return resultado
-            # Ver `importar_nf_qpa` no final do arquivo.

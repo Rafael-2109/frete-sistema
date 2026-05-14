@@ -1,3 +1,5 @@
+import re
+
 from flask import render_template, redirect, url_for, flash, Response, current_app, request, jsonify
 from flask_login import login_required, current_user
 from app import db
@@ -7,9 +9,10 @@ from app.motos_assai.services import gerar_excel_qpa
 from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
     AssaiNfQpa, AssaiNfQpaItem,
-    AssaiModelo, AssaiPedidoVenda, AssaiLoja,
+    AssaiModelo, AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiLoja,
+    AssaiCce,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
-    NF_STATUS_BATEU, NF_STATUS_NAO_RECONCILIADO,
+    NF_STATUS_BATEU,
     PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_PARCIALMENTE_FATURADO,
 )
 from app.motos_assai.forms import UploadNfQpaForm
@@ -66,19 +69,10 @@ def faturamento_lista():
                 'valor_unitario': float(item.valor_unitario_qpa or 0),
             })
 
-    separacoes = []
-    for sep, nf in sep_rows:
-        loja = sep.loja
-        separacoes.append({
-            'sep': sep,
-            'nf': nf,
-            'loja': loja,
-            'loja_uf': (loja.uf if loja else '') or '-',
-            'loja_cidade': (loja.cidade if loja else '') or '-',
-            'pedido_numero': sep.pedido.numero if sep.pedido else '-',
-            'items': items_por_sep.get(sep.id, []),
-            'qtd_items': len(items_por_sep.get(sep.id, [])),
-        })
+    # === CCes vinculadas em batch (cobre separacoes COM NF + NFs orfas) ===
+    # Coleta TODOS os nf_ids que aparecem na tela (separacoes com NF + NFs orfas
+    # que ainda nao foram carregadas — populadas abaixo).
+    sep_nf_ids = [nf.id for _sep, nf in sep_rows if nf is not None]
 
     # === NFs orfas: status_match != BATEU OU separacao_id NULL ===
     nfs_orfas_rows = (
@@ -93,6 +87,66 @@ def faturamento_lista():
         .limit(250)
         .all()
     )
+
+    # Batch CCe (1 query cobre separacoes + orfas)
+    todos_nf_ids = sep_nf_ids + [n.id for n in nfs_orfas_rows]
+    cces_por_nf: dict = {}
+    if todos_nf_ids:
+        cces_rows = (
+            AssaiCce.query
+            .filter(AssaiCce.nf_id.in_(todos_nf_ids))
+            .order_by(AssaiCce.nf_id, AssaiCce.sequencia_cce)
+            .all()
+        )
+        for c in cces_rows:
+            cces_por_nf.setdefault(c.nf_id, []).append({
+                'id': c.id,
+                'protocolo': c.protocolo_cce,
+                'sequencia': c.sequencia_cce,
+                'tipo': c.tipo_correcao,
+                'status': c.status,
+            })
+
+    # Fallback CNPJ → AssaiLoja: pre-carrega para NFs orfas sem loja_id.
+    # Evita exibir UF/cidade "-" quando o regex LJ\d+ falhou mas existe AssaiLoja
+    # com o mesmo CNPJ destinatario.
+    cnpjs_sem_loja = list({
+        re.sub(r'\D', '', nf.destinatario_cnpj or '')
+        for nf in nfs_orfas_rows
+        if not nf.loja_id and nf.destinatario_cnpj
+    })
+    loja_por_cnpj: dict = {}
+    if cnpjs_sem_loja:
+        lojas_fallback = (
+            AssaiLoja.query
+            .filter(AssaiLoja.cnpj.in_(cnpjs_sem_loja))
+            .all()
+        )
+        loja_por_cnpj = {
+            re.sub(r'\D', '', loja.cnpj): loja for loja in lojas_fallback
+        }
+
+    def _loja_efetiva(nf_obj):
+        """Loja resolvida diretamente OU via fallback CNPJ."""
+        if nf_obj.loja_id and nf_obj.loja:
+            return nf_obj.loja
+        cnpj_clean = re.sub(r'\D', '', nf_obj.destinatario_cnpj or '')
+        return loja_por_cnpj.get(cnpj_clean)
+
+    separacoes = []
+    for sep, nf in sep_rows:
+        loja = sep.loja
+        separacoes.append({
+            'sep': sep,
+            'nf': nf,
+            'loja': loja,
+            'loja_uf': (loja.uf if loja else '') or '-',
+            'loja_cidade': (loja.cidade if loja else '') or '-',
+            'pedido_numero': sep.pedido.numero if sep.pedido else '-',
+            'items': items_por_sep.get(sep.id, []),
+            'qtd_items': len(items_por_sep.get(sep.id, [])),
+            'cces': cces_por_nf.get(nf.id, []) if nf else [],
+        })
 
     # Items das NFs orfas em batch
     nf_orfa_ids = [n.id for n in nfs_orfas_rows]
@@ -114,45 +168,30 @@ def faturamento_lista():
 
     nfs_orfas = []
     for nf in nfs_orfas_rows:
-        loja = nf.loja
+        # Loja resolvida via fallback CNPJ (display). O CNPJ destinatario da NF
+        # eh a chave de match — o modal vincular usa nf.destinatario_cnpj direto.
+        loja_eff = _loja_efetiva(nf)
         nfs_orfas.append({
             'nf': nf,
-            'loja': loja,
-            'loja_uf': (loja.uf if loja else '') or '-',
-            'loja_cidade': (loja.cidade if loja else '') or '-',
+            'loja': loja_eff,
+            'loja_uf': (loja_eff.uf if loja_eff else '') or '-',
+            'loja_cidade': (loja_eff.cidade if loja_eff else '') or '-',
+            # Loja SEM razao social — apenas "numero nome".
+            # Quando NF nao tem loja resolvida nem via fallback CNPJ, mostra
+            # marcador discreto (NAO mostra razao social do destinatario_nome).
             'loja_label': (
-                f'{loja.numero} {loja.nome}' if loja
-                else (nf.destinatario_nome or '— sem loja identificada —')
+                f'{loja_eff.numero} {loja_eff.nome}' if loja_eff
+                else '— sem loja identificada —'
             ),
             'items': items_por_nf.get(nf.id, []),
             'qtd_items': len(items_por_nf.get(nf.id, [])),
+            'cces': cces_por_nf.get(nf.id, []),
         })
-
-    # Plano 4 Task 7: pedidos abertos + lojas para modal "Vincular NF manualmente"
-    # (mostra apenas se existirem NFs orfas NAO_RECONCILIADO).
-    tem_nao_reconciliado = any(
-        row['nf'].status_match == NF_STATUS_NAO_RECONCILIADO for row in nfs_orfas
-    )
-    pedidos_abertos_p4 = []
-    lojas_p4 = []
-    if tem_nao_reconciliado:
-        pedidos_abertos_p4 = (
-            AssaiPedidoVenda.query
-            .filter(AssaiPedidoVenda.status.in_([
-                PEDIDO_STATUS_ABERTO,
-                PEDIDO_STATUS_PARCIALMENTE_FATURADO,
-            ]))
-            .order_by(AssaiPedidoVenda.numero)
-            .all()
-        )
-        lojas_p4 = AssaiLoja.query.order_by(AssaiLoja.numero).all()
 
     return render_template(
         'motos_assai/faturamento/lista_separacoes.html',
         separacoes=separacoes,
         nfs_orfas=nfs_orfas,
-        pedidos_abertos_p4=pedidos_abertos_p4,
-        lojas_p4=lojas_p4,
     )
 
 
@@ -398,10 +437,15 @@ def faturamento_definir_expedicao(sep_id):
 
 @motos_assai_bp.route('/faturamento/nfs/<int:nf_id>/vincular-manual', methods=['POST'])
 def faturamento_vincular_nf_manual_ajax(nf_id):
-    """Plano 4 Task 7 — AJAX: vincular NF NAO_RECONCILIADO manualmente.
+    """AJAX: vincular NF NAO_RECONCILIADO manualmente a um pedido.
+
+    Regra (2026-05-14): match por **CNPJ destinatario** da NF — chave
+    deterministica entre NF (`destinatario_cnpj`) e Pedido (via `AssaiLoja.cnpj`
+    da `AssaiPedidoVendaLoja`). O frontend envia apenas `pedido_id`; o backend
+    deriva tudo a partir de `nf.destinatario_cnpj`.
 
     Body JSON:
-        {pedido_id: int, loja_id: int}
+        {pedido_id: int}
 
     N-B1 fix: sem decorator de tela; valida sessao manualmente.
     """
@@ -413,15 +457,14 @@ def faturamento_vincular_nf_manual_ajax(nf_id):
     payload = request.get_json(silent=True) or {}
     try:
         pedido_id = int(payload['pedido_id'])
-        loja_id = int(payload['loja_id'])
     except (KeyError, TypeError, ValueError):
         return jsonify({
-            'ok': False, 'erro': 'pedido_id e loja_id obrigatorios',
+            'ok': False, 'erro': 'pedido_id obrigatorio',
         }), 400
 
     try:
         resultado = vincular_nf_manualmente(
-            nf_id, pedido_id, loja_id, operador_id=current_user.id,
+            nf_id, pedido_id, operador_id=current_user.id,
         )
         db.session.commit()
         return jsonify({
@@ -440,3 +483,78 @@ def faturamento_vincular_nf_manual_ajax(nf_id):
         db.session.rollback()
         current_app.logger.exception('Erro ao vincular NF %s manualmente', nf_id)
         return jsonify({'ok': False, 'erro': f'Erro interno: {e}'}), 500
+
+
+@motos_assai_bp.route('/faturamento/api/pedidos-por-cnpj/<string:cnpj>')
+@login_required
+@require_motos_assai
+def faturamento_pedidos_por_cnpj_ajax(cnpj):
+    """AJAX: lista pedidos ABERTO/PARCIALMENTE_FATURADO cuja loja (via
+    `AssaiPedidoVendaLoja`) tenha o mesmo CNPJ informado.
+
+    CNPJ e a chave deterministica de match NF <-> Pedido — a NF traz
+    `destinatario_cnpj`, o pedido traz CNPJ via cabecalho da loja.
+
+    Consumido pelo modal "Vincular NF manualmente" — quando o operador abre
+    o modal, JS chama este endpoint passando `nf.destinatario_cnpj` (sanitizado
+    em ambos os lados via re.sub(r'\\D', '', ...)).
+
+    Retorna tambem a loja resolvida (numero + nome) para o modal exibir.
+    """
+    cnpj_normalizado = re.sub(r'\D', '', cnpj or '')
+    if not cnpj_normalizado:
+        return jsonify({
+            'ok': False, 'erro': 'CNPJ vazio ou invalido',
+        }), 400
+
+    # Normaliza in-memory — a tabela AssaiLoja eh pequena (cadastros Sendas/Assai)
+    todas_lojas = AssaiLoja.query.all()
+    lojas_match = [
+        ll for ll in todas_lojas
+        if re.sub(r'\D', '', ll.cnpj or '') == cnpj_normalizado
+    ]
+    # Code review #3: AssaiLoja.cnpj sem UNIQUE — se houver duplicacao,
+    # retorna erro explicito em vez de escolher silenciosamente.
+    if len(lojas_match) > 1:
+        return jsonify({
+            'ok': False,
+            'erro': f'CNPJ {cnpj} ambiguo: {len(lojas_match)} lojas cadastradas '
+                    f'com esse CNPJ (ids: {[ll.id for ll in lojas_match]}). '
+                    'Corrija o cadastro em /motos-assai/lojas.',
+        }), 409
+    loja = lojas_match[0] if lojas_match else None
+    if not loja:
+        return jsonify({
+            'ok': False,
+            'erro': f'Nenhuma loja cadastrada com CNPJ {cnpj}. '
+                    'Cadastre em /motos-assai/lojas antes de vincular.',
+        }), 404
+
+    pedidos = (
+        db.session.query(AssaiPedidoVenda)
+        .join(
+            AssaiPedidoVendaLoja,
+            AssaiPedidoVendaLoja.pedido_id == AssaiPedidoVenda.id,
+        )
+        .filter(
+            AssaiPedidoVendaLoja.loja_id == loja.id,
+            AssaiPedidoVenda.status.in_([
+                PEDIDO_STATUS_ABERTO,
+                PEDIDO_STATUS_PARCIALMENTE_FATURADO,
+            ]),
+        )
+        .order_by(AssaiPedidoVenda.numero)
+        .all()
+    )
+    return jsonify({
+        'ok': True,
+        'cnpj': cnpj_normalizado,
+        'loja': {
+            'id': loja.id, 'numero': loja.numero, 'nome': loja.nome,
+            'cnpj': loja.cnpj,
+        },
+        'pedidos': [
+            {'id': p.id, 'numero': p.numero, 'status': p.status}
+            for p in pedidos
+        ],
+    })

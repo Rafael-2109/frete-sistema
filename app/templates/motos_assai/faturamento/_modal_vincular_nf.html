@@ -1,6 +1,10 @@
-{# Plano 4 Task 7 - Modal "Vincular NF manualmente" no painel de NFs orfas.
-   Usado quando NF NAO_RECONCILIADO precisa ser vinculada manualmente
-   (ex: chassi nao existe em assai_moto e operador escolhe pedido+loja).
+{# Modal "Vincular NF manualmente" no painel de NFs orfas.
+   Usado quando NF NAO_RECONCILIADO precisa ser vinculada manualmente.
+
+   2026-05-14: match por CNPJ destinatario (chave deterministica). NF traz
+   `destinatario_cnpj`, pedido traz CNPJ via `AssaiPedidoVendaLoja.loja.cnpj`.
+   Front exibe o CNPJ e a loja resolvida via CNPJ; lista apenas pedidos com
+   cabecalho na mesma loja (mesmo CNPJ).
 #}
 <div class="modal fade" id="modal-vincular-nf" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -14,42 +18,36 @@
       <div class="modal-body">
         <div class="alert alert-info small">
           <i class="fas fa-info-circle"></i>
-          Vincular manualmente forca a NF a usar pedido + loja escolhidos.
-          Ferramenta excepcional — apenas para NFs que nao foram reconciliadas
-          automaticamente apos o backfill.
+          Match deterministico: o <strong>CNPJ destinatario</strong> da NF
+          define a loja. So aparecem pedidos cujo cabecalho aponta para uma
+          loja com o mesmo CNPJ.
         </div>
 
         <input type="hidden" id="vinc-nf-id" />
+
         <div class="mb-3">
           <label class="form-label small text-muted">NF:</label>
           <div class="font-monospace" id="vinc-nf-numero">—</div>
         </div>
 
         <div class="mb-3">
-          <label for="vinc-pedido-select" class="form-label">
-            Pedido <span class="text-danger">*</span>
-          </label>
-          <select class="form-select" id="vinc-pedido-select" required>
-            <option value="">— Selecione —</option>
-            {% for ped in pedidos_abertos_p4 or [] %}
-              <option value="{{ ped.id }}">{{ ped.numero }} ({{ ped.status }})</option>
-            {% endfor %}
-          </select>
+          <label class="form-label small text-muted">CNPJ destinatario (fixo):</label>
+          <div id="vinc-loja-display" class="fw-semibold">—</div>
         </div>
 
         <div class="mb-3">
-          <label for="vinc-loja-select" class="form-label">
-            Loja <span class="text-danger">*</span>
+          <label for="vinc-pedido-select" class="form-label">
+            Pedido <span class="text-danger">*</span>
           </label>
-          <select class="form-select" id="vinc-loja-select" required>
-            <option value="">— Selecione —</option>
-            {% for loja in lojas_p4 or [] %}
-              <option value="{{ loja.id }}">{{ loja.numero }} {{ loja.nome }}</option>
-            {% endfor %}
+          <select class="form-select" id="vinc-pedido-select" required disabled>
+            <option value="">— Carregando pedidos do CNPJ… —</option>
           </select>
+          <small class="form-text text-muted" id="vinc-pedido-helper">
+            Apenas pedidos ABERTO / PARCIALMENTE_FATURADO com cabecalho nesse CNPJ.
+          </small>
         </div>
 
-        <div class="alert alert-warning small">
+        <div class="alert alert-warning small mb-0">
           <i class="fas fa-exclamation-triangle"></i>
           Apos vincular, o sistema tentara criar/ajustar separacao automaticamente.
           Se algum chassi da NF nao existir em assai_moto, ainda assim a sep sera
@@ -60,7 +58,7 @@
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
           Cancelar
         </button>
-        <button type="button" class="btn btn-warning" id="btn-confirmar-vincular-nf">
+        <button type="button" class="btn btn-warning" id="btn-confirmar-vincular-nf" disabled>
           <i class="fas fa-link"></i> Vincular
         </button>
       </div>

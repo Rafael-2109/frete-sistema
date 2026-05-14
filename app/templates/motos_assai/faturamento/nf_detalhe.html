@@ -379,4 +379,23 @@ async function cancelarNfQpa(nfId) {
 {% if nf.separacao_id and nf.status_match != 'CANCELADA' %}
 {% include 'motos_assai/faturamento/_modal_editar_agendamento.html' %}
 {% endif %}
+
+{# 2026-05-14: auto-abrir modal devolucao via querystring ?open=devolucao
+   (acionado pelo botao "Devolução" na lista_separacoes.html). #}
+{% if nf.status_match != 'CANCELADA' and form_devolucao is defined and form_devolucao %}
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('open') === 'devolucao') {
+    document.addEventListener('DOMContentLoaded', function () {
+      var modalEl = document.getElementById('modal-devolucao-nfd');
+      if (modalEl && window.bootstrap && window.bootstrap.Modal) {
+        var modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+      }
+    });
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

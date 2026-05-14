@@ -34,7 +34,9 @@
         <th>UF</th>
         <th>Cidade</th>
         <th>NF Q.P.A.</th>
+        <th>Data NF</th>
         <th class="text-center">Itens</th>
+        <th class="text-center" title="Cartas de Correcao Eletronica vinculadas">CCe</th>
         <th>Status sep.</th>
         <th class="text-center">Excel</th>
         <th class="text-end">Acoes</th>
@@ -81,7 +83,27 @@
             <span class="text-muted small">— sem NF —</span>
           {% endif %}
         </td>
+        <td class="small">
+          {% if nf and nf.data_emissao %}
+            {{ nf.data_emissao.strftime('%d/%m/%Y') }}
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </td>
         <td class="text-center">{{ row.qtd_items }}</td>
+        <td class="text-center">
+          {% if row.cces %}
+            {% set _tipos = row.cces|map(attribute='tipo')|list|join(', ') %}
+            <a href="{{ url_for('motos_assai.cce_detalhe', cce_id=row.cces[0].id) }}"
+               onclick="event.stopPropagation();"
+               class="badge bg-info text-decoration-none"
+               title="{{ row.cces|length }} CCe(s) — tipos: {{ _tipos }}">
+              <i class="fas fa-file-medical-alt"></i> {{ row.cces|length }}
+            </a>
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </td>
         <td>
           <span class="badge bg-{% if sep.status == 'FATURADA' %}info{% else %}success{% endif %}">
             {{ sep.status }}
@@ -143,11 +165,21 @@
             <i class="fas fa-calendar-alt"></i> Agendar
           </button>
           {% endif %}
+          {# Botao Devolucao: so quando ha NF ativa (nao CANCELADA).
+             Linka para nf_detalhe com ?open=devolucao — JS la abre o modal. #}
+          {% if nf and nf.status_match != 'CANCELADA' %}
+          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}?open=devolucao"
+             onclick="event.stopPropagation();"
+             class="btn btn-sm btn-outline-warning"
+             title="Registrar devolucao por NFd">
+            <i class="fas fa-undo-alt"></i> Devolução
+          </a>
+          {% endif %}
         </td>
       </tr>
       <!-- Accordion expandivel com motos da separacao -->
       <tr>
-        <td colspan="10" class="p-0 border-0">
+        <td colspan="12" class="p-0 border-0">
           <div id="sep-acc-{{ sep.id }}" class="collapse">
             <div class="p-3 bg-light border-start border-end border-bottom">
               <h6 class="mb-2">
@@ -184,7 +216,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="10" class="text-center text-muted py-3">
+        <td colspan="12" class="text-center text-muted py-3">
           Nenhuma separacao fechada no momento.
         </td>
       </tr>
@@ -212,10 +244,12 @@
       <tr>
         <th>#</th>
         <th>Numero NF</th>
+        <th>Data NF</th>
         <th>Loja destinataria</th>
         <th>UF</th>
         <th>Cidade</th>
         <th class="text-center">Itens</th>
+        <th class="text-center" title="Cartas de Correcao Eletronica vinculadas">CCe</th>
         <th>Match</th>
         <th>Importada em</th>
         <th class="text-end">Acoes</th>
@@ -232,12 +266,31 @@
         <td><strong>{{ nf.id }}</strong></td>
         <td>
           <code>{{ nf.numero or nf.chave_44[:8] ~ '...' }}</code>
-          {% if nf.serie %}<small class="text-muted">/{{ nf.serie }}</small>{% endif %}
+        </td>
+        <td class="small">
+          {% if nf.data_emissao %}
+            {{ nf.data_emissao.strftime('%d/%m/%Y') }}
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
         </td>
         <td>{{ row.loja_label }}</td>
         <td>{{ row.loja_uf }}</td>
         <td>{{ row.loja_cidade }}</td>
         <td class="text-center">{{ row.qtd_items }}</td>
+        <td class="text-center">
+          {% if row.cces %}
+            {% set _tipos = row.cces|map(attribute='tipo')|list|join(', ') %}
+            <a href="{{ url_for('motos_assai.cce_detalhe', cce_id=row.cces[0].id) }}"
+               onclick="event.stopPropagation();"
+               class="badge bg-info text-decoration-none"
+               title="{{ row.cces|length }} CCe(s) — tipos: {{ _tipos }}">
+              <i class="fas fa-file-medical-alt"></i> {{ row.cces|length }}
+            </a>
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </td>
         <td>
           {% if nf.status_match == 'DIVERGENTE' %}
             <span class="badge bg-warning">DIVERGENTE</span>
@@ -261,15 +314,24 @@
                   data-bs-target="#modal-vincular-nf"
                   data-nf-id="{{ nf.id }}"
                   data-nf-numero="{{ nf.numero or 'NF#' ~ nf.id }}"
+                  data-cnpj="{{ nf.destinatario_cnpj or '' }}"
                   onclick="event.stopPropagation();">
             <i class="fas fa-link"></i> Vincular
           </button>
+          {% endif %}
+          {% if nf.status_match != 'CANCELADA' %}
+          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}?open=devolucao"
+             onclick="event.stopPropagation();"
+             class="btn btn-sm btn-outline-warning ms-1"
+             title="Registrar devolucao por NFd">
+            <i class="fas fa-undo-alt"></i> Devolução
+          </a>
           {% endif %}
         </td>
       </tr>
       <!-- Accordion expandivel com chassis da NF -->
       <tr>
-        <td colspan="9" class="p-0 border-0">
+        <td colspan="11" class="p-0 border-0">
           <div id="nf-acc-{{ nf.id }}" class="collapse">
             <div class="p-3 bg-light border-start border-end border-bottom">
               <h6 class="mb-2">
@@ -333,6 +395,9 @@
 window.MOTOS_ASSAI_FAT = {
   endpoints: {
     vincularNfBase: '{{ url_for("motos_assai.faturamento_vincular_nf_manual_ajax", nf_id=999999999)|replace("/999999999", "/") }}',
+    // Endpoint AJAX: pedidos cujos cabecalhos (AssaiPedidoVendaLoja) estao em
+    // loja com CNPJ informado. CNPJ e a chave deterministica de match.
+    pedidosPorCnpjBase: '{{ url_for("motos_assai.faturamento_pedidos_por_cnpj_ajax", cnpj="__CNPJ__") }}',
   },
 };
 
@@ -352,64 +417,159 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // Plano 4 Task 7: handler para preencher modal vincular NF
+  // Modal vincular NF — match por CNPJ destinatario (chave deterministica).
+  // Carrega pedidos cuja loja tem o mesmo CNPJ da NF via AJAX e envia
+  // apenas pedido_id (backend deriva loja do CNPJ).
   var modal = document.getElementById('modal-vincular-nf');
+  var pedidoSelect = document.getElementById('vinc-pedido-select');
+  var btnConfirmar = document.getElementById('btn-confirmar-vincular-nf');
+
+  // Sanitiza CNPJ removendo mascara (mantem so digitos)
+  function _sanitizeCnpj(cnpj) {
+    return (cnpj || '').replace(/\D/g, '');
+  }
+  // Formata 14 digitos como 12.345.678/0001-90 (para display)
+  function _formatCnpj(cnpj) {
+    var d = _sanitizeCnpj(cnpj);
+    if (d.length !== 14) return cnpj || '';
+    return d.substr(0,2) + '.' + d.substr(2,3) + '.' + d.substr(5,3) +
+           '/' + d.substr(8,4) + '-' + d.substr(12,2);
+  }
+
   if (modal) {
-    modal.addEventListener('show.bs.modal', function (e) {
+    modal.addEventListener('show.bs.modal', async function (e) {
       var btn = e.relatedTarget;
       var nfId = btn.dataset.nfId;
       var nfNumero = btn.dataset.nfNumero;
+      var cnpjRaw = btn.dataset.cnpj || '';
+      var cnpjSan = _sanitizeCnpj(cnpjRaw);
+
       document.getElementById('vinc-nf-id').value = nfId;
       document.getElementById('vinc-nf-numero').textContent = nfNumero;
+      // Display: CNPJ formatado (chave de match)
+      var displayEl = document.getElementById('vinc-loja-display');
+      displayEl.textContent = cnpjSan ? _formatCnpj(cnpjRaw) : '— sem CNPJ destinatario —';
+
+      // Helpers seguros: nunca usar innerHTML com dados de API (XSS).
+      function _placeholderOption(label) {
+        // Limpa todas as options e adiciona uma de placeholder via textContent.
+        while (pedidoSelect.firstChild) {
+          pedidoSelect.removeChild(pedidoSelect.firstChild);
+        }
+        var opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = label;
+        pedidoSelect.appendChild(opt);
+      }
+
+      // Reset select e botao
+      pedidoSelect.disabled = true;
+      _placeholderOption('— Carregando… —');
+      btnConfirmar.disabled = true;
+
+      if (!cnpjSan) {
+        _placeholderOption('— NF sem CNPJ destinatario —');
+        return;
+      }
+
+      try {
+        var url = window.MOTOS_ASSAI_FAT.endpoints.pedidosPorCnpjBase.replace('__CNPJ__', cnpjSan);
+        var r = await fetch(url, {headers: {'Accept': 'application/json'}});
+        var data = await r.json();
+        if (!data.ok) {
+          _placeholderOption('— ' + (data.erro || 'falha') + ' —');
+          return;
+        }
+        // Enriquece display com loja resolvida via CNPJ (referencia humana).
+        // Constroi DOM via createElement + textContent — evita XSS via nome de loja.
+        if (data.loja) {
+          while (displayEl.firstChild) displayEl.removeChild(displayEl.firstChild);
+          var cnpjSpan = document.createElement('span');
+          cnpjSpan.className = 'font-monospace';
+          cnpjSpan.textContent = _formatCnpj(cnpjRaw);
+          displayEl.appendChild(cnpjSpan);
+          var small = document.createElement('small');
+          small.className = 'text-muted ms-2';
+          small.textContent =
+            '— ' + (data.loja.numero || '') + ' ' + (data.loja.nome || '');
+          displayEl.appendChild(small);
+        }
+        if (!data.pedidos || data.pedidos.length === 0) {
+          _placeholderOption('— Nenhum pedido aberto para esse CNPJ —');
+          return;
+        }
+        // Popula options via createElement (sem innerHTML).
+        while (pedidoSelect.firstChild) {
+          pedidoSelect.removeChild(pedidoSelect.firstChild);
+        }
+        var optDefault = document.createElement('option');
+        optDefault.value = '';
+        optDefault.textContent = '— Selecione —';
+        pedidoSelect.appendChild(optDefault);
+        data.pedidos.forEach(function (p) {
+          var opt = document.createElement('option');
+          opt.value = String(p.id);
+          opt.textContent = (p.numero || '') + ' (' + (p.status || '') + ')';
+          pedidoSelect.appendChild(opt);
+        });
+        pedidoSelect.disabled = false;
+      } catch (err) {
+        _placeholderOption('— Erro de rede: ' + err.message + ' —');
+      }
     });
   }
 
-  document.getElementById('btn-confirmar-vincular-nf')?.addEventListener('click', async function () {
-    var nfId = document.getElementById('vinc-nf-id').value;
-    var pedidoId = document.getElementById('vinc-pedido-select').value;
-    var lojaId = document.getElementById('vinc-loja-select').value;
-    if (!nfId || !pedidoId || !lojaId) {
-      alert('Selecione pedido e loja.');
-      return;
-    }
-    var btn = document.getElementById('btn-confirmar-vincular-nf');
-    btn.disabled = true;
+  // Habilita botao confirmar apenas quando ha pedido selecionado.
+  if (pedidoSelect) {
+    pedidoSelect.addEventListener('change', function () {
+      btnConfirmar.disabled = !pedidoSelect.value;
+    });
+  }
 
-    try {
-      var csrfMeta = document.querySelector('meta[name="csrf-token"]');
-      var csrf = csrfMeta ? csrfMeta.content : '';
-      var url = window.MOTOS_ASSAI_FAT.endpoints.vincularNfBase + nfId;
-      var r = await fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
-        body: JSON.stringify({pedido_id: parseInt(pedidoId, 10), loja_id: parseInt(lojaId, 10)}),
-      });
-      var data = await r.json();
-      if (!data.ok) {
-        alert('Erro: ' + (data.erro || 'falha desconhecida'));
-        btn.disabled = false;
+  if (btnConfirmar) {
+    btnConfirmar.addEventListener('click', async function () {
+      var nfId = document.getElementById('vinc-nf-id').value;
+      var pedidoId = pedidoSelect.value;
+      if (!nfId || !pedidoId) {
+        alert('Selecione um pedido.');
         return;
       }
-      // #18 fix (2026-05-13): se sep foi criada via NF (S1=b), redirecionar
-      // direto para nf_detalhe — la o Modal Expedicao auto-abre via
-      // upload_nf_modal_expedicao.js (depende de sep_criada_via_nf gravado
-      // pelo separacao_service.py:1481).
-      // Antes era reload em lista_separacoes, e o operador precisava clicar
-      // no link da NF para chegar no nf_detalhe que dispara o modal.
-      bootstrap.Modal.getInstance(modal)?.hide();
-      if (data.sep_criada_via_nf) {
-        alert('NF vinculada — separacao criada via NF. Configure a expedicao agora.');
-        window.location.href = '/motos-assai/faturamento/nfs/' + nfId;
-      } else {
-        alert('NF vinculada com sucesso. Sep: ' + (data.sep_alvo_id || '?')
-              + '. Razao: ' + (data.razao || ''));
-        setTimeout(function () { location.reload(); }, 800);
+      btnConfirmar.disabled = true;
+
+      try {
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrf = csrfMeta ? csrfMeta.content : '';
+        var url = window.MOTOS_ASSAI_FAT.endpoints.vincularNfBase + nfId;
+        // Backend deriva tudo de nf.destinatario_cnpj — JS so envia pedido_id.
+        var payload = {pedido_id: parseInt(pedidoId, 10)};
+        var r = await fetch(url, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+          body: JSON.stringify(payload),
+        });
+        var data = await r.json();
+        if (!data.ok) {
+          alert('Erro: ' + (data.erro || 'falha desconhecida'));
+          btnConfirmar.disabled = false;
+          return;
+        }
+        // Se sep foi criada via NF (S1=b), redirecionar para nf_detalhe — la
+        // o Modal Expedicao auto-abre via upload_nf_modal_expedicao.js.
+        bootstrap.Modal.getInstance(modal)?.hide();
+        if (data.sep_criada_via_nf) {
+          alert('NF vinculada — separacao criada via NF. Configure a expedicao agora.');
+          window.location.href = '/motos-assai/faturamento/nfs/' + nfId;
+        } else {
+          alert('NF vinculada com sucesso. Sep: ' + (data.sep_alvo_id || '?')
+                + '. Razao: ' + (data.razao || ''));
+          setTimeout(function () { location.reload(); }, 800);
+        }
+      } catch (err) {
+        alert('Erro de rede: ' + err.message);
+        btnConfirmar.disabled = false;
       }
-    } catch (err) {
-      alert('Erro de rede: ' + err.message);
-      btn.disabled = false;
-    }
-  });
+    });
+  }
 });
 </script>
 {% endblock %}
