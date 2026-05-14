@@ -1229,14 +1229,20 @@ function renderSubagentLineSummary(data) {
 // SSE principal, fazemos fetch direto ao /summary endpoint (que ja existe e
 // le do mesmo JSONL via get_subagent_summary) e atualizamos a linha inline.
 async function _fetchAndUpdateSubagentLine(agentId) {
-    if (!sessionId || !agentId) return;
+    // Code-review M2 fix: capturar sessionId antes do delay (mudanca de sessao
+    // durante 500ms causaria fetch numa sessao mas update na outra).
+    const capturedSessionId = sessionId;
+    if (!capturedSessionId || !agentId) return;
     try {
         // Delay 500ms para dar tempo do hook SubagentStop terminar
         // (persistir cost granular + montar summary). Sem isso, /summary
         // pode retornar status=error porque o JSONL ainda nao foi flushado.
         await new Promise(res => setTimeout(res, 500));
+        // Bail out se usuario mudou de sessao durante o delay
+        if (sessionId !== capturedSessionId) return;
         const resp = await fetch(
-            `/agente/api/sessions/${sessionId}/subagents/${agentId}/summary`
+            `/agente/api/sessions/${capturedSessionId}/subagents/${agentId}/summary`,
+            { headers: _csrfHeader() }
         );
         if (!resp.ok) return;
         const payload = await resp.json();
@@ -1388,9 +1394,15 @@ async function openSubagentModal(agentId) {
     // - Atualizar header com dados frescos (tools_used, duration_ms, cost_usd)
     // - Decidir se botao Download JSONL fica visivel (has_output_file)
     // Nao bloqueia render do transcript — promessa independente.
-    fetch(`/agente/api/sessions/${sid}/subagents/${agentId}/summary`)
+    //
+    // Code-review C1 fix: guard contra modal fechado/reaberto para outro agent
+    // durante o round-trip (~100-500ms). Sem o guard, header pode flashar
+    // dados stale de agent anterior. H1 fix: _csrfHeader() para consistencia.
+    fetch(`/agente/api/sessions/${sid}/subagents/${agentId}/summary`,
+          { headers: _csrfHeader() })
         .then(r => (r.ok ? r.json() : null))
         .then(p => {
+            if (_currentModalAgentId !== agentId) return;  // C1 guard
             const s = p && p.subagent;
             if (s) {
                 _setSubagentModalHeader(s);
