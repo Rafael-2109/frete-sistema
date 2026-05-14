@@ -830,18 +830,31 @@ def _stream_chat_response(
 
                 elif event.type == 'task_started':
                     # SDK 0.1.46+: Subagente iniciou — notificar frontend
+                    # 2026-05-14: +parent_tool_use_id para correlacao visual P1.1
                     event_queue.put(_sse_event('task_started', {
                         'description': event.content or '',
                         'task_id': event.metadata.get('task_id', ''),
                         'task_type': event.metadata.get('task_type', ''),
+                        'parent_tool_use_id': event.metadata.get('parent_tool_use_id'),
                     }))
 
                 elif event.type == 'task_progress':
                     # SDK 0.1.46+: Progresso de subagente
+                    # 2026-05-14: +usage (P0.3) +parent_tool_use_id (P1.1)
+                    _usage = event.metadata.get('usage')
+                    # Serializar TaskUsage (TypedDict ou dataclass) para JSON-safe dict
+                    if _usage is not None and not isinstance(_usage, dict):
+                        _usage = {
+                            'total_tokens': getattr(_usage, 'total_tokens', None),
+                            'tool_uses': getattr(_usage, 'tool_uses', None),
+                            'duration_ms': getattr(_usage, 'duration_ms', None),
+                        }
                     event_queue.put(_sse_event('task_progress', {
                         'description': event.content or '',
                         'task_id': event.metadata.get('task_id', ''),
                         'last_tool_name': event.metadata.get('last_tool_name', ''),
+                        'usage': _usage,
+                        'parent_tool_use_id': event.metadata.get('parent_tool_use_id'),
                     }))
 
                 elif event.type == 'task_notification':

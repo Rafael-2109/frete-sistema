@@ -814,23 +814,21 @@ Nunca invente informações."""
                 )
             return events
 
-        # ─── SystemMessage (init do SDK) ───
-        if isinstance(message, SystemMessage):
-            sdk_sid = message.data.get('session_id') if hasattr(message, 'data') else None
-            if sdk_sid:
-                state.result_session_id = sdk_sid
-                state.got_result_message = True
-                logger.info(f"[AGENT_SDK] SDK session_id from init: {sdk_sid[:12]}...")
-            return events
-
         # ─── Task messages (subagentes) ───
+        # IMPORTANTE: TaskStartedMessage/Progress/Notification HERDAM de SystemMessage
+        # (claude_agent_sdk.types). Devem ser checados ANTES do branch generico
+        # SystemMessage abaixo, ou seriam capturados por ele e o early return
+        # impede emissao de eventos task_*.
+        # Bug latente fixado em 2026-05-14 (P0.3 + P1.1 implementation).
         if isinstance(message, TaskStartedMessage):
             task_desc = getattr(message, 'description', '') or ''
             task_id = getattr(message, 'task_id', '') or ''
             task_type = getattr(message, 'task_type', '') or ''
+            parent_tu_id = getattr(message, 'tool_use_id', None)  # P1.1
             logger.info(
                 f"[AGENT_SDK] TaskStarted: {task_desc[:80]} | "
-                f"task_id={task_id[:12]} | task_type={task_type}"
+                f"task_id={task_id[:12]} | task_type={task_type} | "
+                f"parent_tool_use_id={(parent_tu_id or '')[:12]}"
             )
             events.append(StreamEvent(
                 type='task_started',
@@ -838,6 +836,7 @@ Nunca invente informações."""
                 metadata={
                     'task_id': task_id,
                     'task_type': task_type,
+                    'parent_tool_use_id': parent_tu_id,  # P1.1
                 }
             ))
             return events
@@ -846,9 +845,12 @@ Nunca invente informações."""
             task_desc = getattr(message, 'description', '') or ''
             task_id = getattr(message, 'task_id', '') or ''
             last_tool = getattr(message, 'last_tool_name', '') or ''
+            usage = getattr(message, 'usage', None)  # P0.3 (TaskUsage TypedDict)
+            parent_tu_id = getattr(message, 'parent_tool_use_id', None)  # P1.1
             logger.debug(
                 f"[AGENT_SDK] TaskProgress: {task_desc[:80]} | "
-                f"task_id={task_id[:12]} | last_tool={last_tool}"
+                f"task_id={task_id[:12]} | last_tool={last_tool} | "
+                f"tokens={getattr(usage, 'total_tokens', None) if usage else None}"
             )
             events.append(StreamEvent(
                 type='task_progress',
@@ -856,6 +858,8 @@ Nunca invente informações."""
                 metadata={
                     'task_id': task_id,
                     'last_tool_name': last_tool,
+                    'usage': usage,  # P0.3 — TaskUsage ou None
+                    'parent_tool_use_id': parent_tu_id,  # P1.1
                 }
             ))
             return events
@@ -879,6 +883,16 @@ Nunca invente informações."""
                     'usage': usage if isinstance(usage, dict) else None,
                 }
             ))
+            return events
+
+        # ─── SystemMessage (init do SDK) ───
+        # Generic SystemMessage check — DEVE vir DEPOIS dos subclass checks acima.
+        if isinstance(message, SystemMessage):
+            sdk_sid = message.data.get('session_id') if hasattr(message, 'data') else None
+            if sdk_sid:
+                state.result_session_id = sdk_sid
+                state.got_result_message = True
+                logger.info(f"[AGENT_SDK] SDK session_id from init: {sdk_sid[:12]}...")
             return events
 
         # ─── RateLimitEvent (SDK 0.1.50) ───
