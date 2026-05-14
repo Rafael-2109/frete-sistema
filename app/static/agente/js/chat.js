@@ -1102,6 +1102,21 @@ function _subagentEscapeHtml(str) {
 }
 
 function renderSubagentLineStart(data) {
+    // Bug 6 fix (2026-05-14 fase 3): SDK 0.1.80 envia TaskStartedMessage para
+    // DOIS tipos distintos:
+    //   - task_type='local_agent' -> subagent REAL (analista-carteira, etc),
+    //     com JSONL proprio em ~/.claude/projects/.../subagents/<id>.jsonl,
+    //     hook SubagentStop dispara, get_subagent_summary funciona.
+    //   - task_type='local_bash' -> Bash interno DISPATCHED como Task
+    //     (rodando paralelo ao agente principal), SEM JSONL proprio,
+    //     SEM hook SubagentStop. Cria linha inline que fica eternamente em
+    //     "executando..." e ao abrir modal mostra "Visualizacao indisponivel".
+    // Decisao: renderizar linha inline APENAS para subagents reais.
+    const taskType = data.task_type || data.agent_type || '';
+    if (taskType && taskType !== 'local_agent') {
+        return;
+    }
+
     // data: {task_id, task_type, description} ou {agent_id, agent_type}
     const agentId = data.agent_id || data.task_id;
     const agentType = data.agent_type || data.task_type || data.description || 'subagente';
@@ -2076,9 +2091,13 @@ function processSSEEvent(eventType, data, state) {
                 // Bug 1 fix (2026-05-14 fase 3): fetch /summary como fallback do
                 // pubsub. Garante linha inline atualizada mesmo quando
                 // subagent_summary event nao chega (subscribers=0 em prod).
+                //
+                // Bug 6 fix (2026-05-14 fase 3): skip fetch se linha nao foi
+                // criada (task_type=local_bash filtrado em renderSubagentLineStart).
+                // local_bash nao tem /summary endpoint valido — request retornaria 404.
                 if (isSuccess) {
                     const agentId = data.task_id || data.agent_id;
-                    if (agentId) {
+                    if (agentId && subagentLines.has(agentId)) {
                         _fetchAndUpdateSubagentLine(agentId);
                     }
                 }
