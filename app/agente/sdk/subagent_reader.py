@@ -624,7 +624,7 @@ def get_subagent_findings(
 # ═══════════════════════════════════════════════════════════════════════════
 
 TranscriptKind = Literal['user_prompt', 'assistant_text', 'tool_use',
-                          'tool_result', 'thinking']
+                        'tool_result', 'thinking']
 
 
 @dataclass
