@@ -245,12 +245,15 @@ class OdooCircuitBreaker:
             self._total_calls += 1
 
             # Auto-reset de contadores se passou tempo sem erros
-            if self._should_auto_reset_counters():
+            # Só executa se há contador para resetar — evita loop de logs (0 → 0)
+            if self._failure_count > 0 and self._should_auto_reset_counters():
                 logger.info(
                     f"🔄 Auto-reset: {self.auto_reset_after}s sem erros. "
                     f"Resetando contador ({self._failure_count} → 0)"
                 )
                 self._failure_count = 0
+                # Zera last_failure_time para impedir reentrada do auto-reset
+                self._last_failure_time = None
 
             # Verificar se deve tentar resetar
             if self._should_attempt_reset():
