@@ -265,14 +265,17 @@ class SpedEcdValidator:
                 registro='0000', linha_arquivo=r['linha'],
                 acao='Verificar constante CNPJ_MATRIZ em sped_ecd_constantes.py')
 
-        # Regra: IDENT_MF deve ser M (Matriz) para centralizada
+        # Regra: IDENT_MF (campo 19 do leiaute 0-indexed = 18) e "Identificacao de Moeda
+        # Funcional" — aceita S ou N. NACOM nao usa moeda funcional -> 'N'.
+        # Bug historico: validator antigo esperava 'M' (confundindo com Matriz) — corrigido
+        # apos descoberta no PVA real.
         ident_mf = campos[18]
-        if ident_mf != 'M':
+        if ident_mf not in ('S', 'N'):
             self._add_erro('estrutura', 'BLOQUEANTE',
-                f'IDENT_MF = "{ident_mf}" (esperado "M" — Matriz)',
-                'ECD centralizada exige IDENT_MF=M no 0000',
+                f'IDENT_MF = "{ident_mf}" (esperado "S" ou "N")',
+                'IDENT_MF e Identificacao de Moeda Funcional. Valores validos: S (Sim) ou N (Nao)',
                 registro='0000', linha_arquivo=r['linha'],
-                acao='Verificar constante IDENT_MF')
+                acao='Verificar constante IDENT_MF em sped_ecd_constantes.py')
 
         # Regra: IND_CENTRALIZADA deve ser 0
         ind_cent = campos[20]

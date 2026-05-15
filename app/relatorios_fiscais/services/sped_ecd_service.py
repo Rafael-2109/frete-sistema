@@ -21,6 +21,7 @@ from typing import Optional
 
 from app.relatorios_fiscais.services.sped_ecd_blocks import (
     ContadorRegistros,
+    calcular_saldos_hierarquicos,
     construir_0150,
     construir_bloco_0,
     construir_bloco_9,
@@ -83,19 +84,26 @@ def gerar_sped_ecd_centralizado(
     contador = ContadorRegistros()
     output = BytesIO()
 
+    # V1.6: parametro 'companies' permite gerar so FB (validacao) ou todas (centralizada).
+    # Default = None -> usa COMPANIES_ECD (3 companies, padrao ECD centralizada).
+    companies = params.get('companies')
+
     # ============================================================
     # ETAPA 1: Extrair dados Odoo
     # ============================================================
     _emit_progresso(progresso_callback, etapa='matriz', mensagem='Buscando dados da matriz FB')
     matriz_data = buscar_dados_matriz(connection)
-    logger.info(f'[SPED ECD] Matriz: {matriz_data["razao_social"]} (CNPJ {matriz_data["cnpj"]})')
+    logger.info(
+        f'[SPED ECD] Matriz: {matriz_data["razao_social"]} (CNPJ {matriz_data["cnpj"]}) '
+        f'| Escopo companies: {companies or "ALL_ECD"}'
+    )
 
-    _emit_progresso(progresso_callback, etapa='plano_contas', mensagem='Consolidando plano de contas das 3 companies')
-    plano_consolidado, id_to_code = buscar_plano_contas_consolidado(connection)
+    _emit_progresso(progresso_callback, etapa='plano_contas', mensagem='Consolidando plano de contas')
+    plano_consolidado, id_to_code = buscar_plano_contas_consolidado(connection, companies=companies)
     logger.info(f'[SPED ECD] Plano: {len(plano_consolidado)} entradas (sinteticas+analiticas)')
 
     _emit_progresso(progresso_callback, etapa='ccus', mensagem='Buscando centros de custo (V1.1)')
-    plano_ccus, id_to_code_ccus = buscar_centros_custo_consolidados(connection)
+    plano_ccus, id_to_code_ccus = buscar_centros_custo_consolidados(connection, companies=companies)
     logger.info(f'[SPED ECD V1.1] Centros de custo: {len(plano_ccus)} codes unicos')
 
     # OPCAO A (V1.5): NAO emitir 0150 nem COD_PART em I250.
@@ -110,21 +118,26 @@ def gerar_sped_ecd_centralizado(
 
     _emit_progresso(progresso_callback, etapa='saldos_mensais', mensagem='Calculando saldos mensais (I150/I155)')
     saldos_mensais = calcular_saldos_periodicos_mensais(
-        connection, params['date_ini'], params['date_fim'], id_to_code
+        connection, params['date_ini'], params['date_fim'], id_to_code,
+        companies=companies,
     )
 
     _emit_progresso(progresso_callback, etapa='balanco', mensagem='Calculando Balanco Patrimonial (J100)')
     balanco = calcular_balanco_consolidado(
-        connection, params['date_fim'], plano_consolidado, id_to_code
+        connection, params['date_fim'], plano_consolidado, id_to_code,
+        companies=companies,
+        date_ini=params['date_ini'],  # V1.6: saldo inicial preenchido
     )
 
     _emit_progresso(progresso_callback, etapa='dre', mensagem='Calculando DRE (J150)')
     dre = calcular_dre_consolidado(
-        connection, params['date_ini'], params['date_fim'], plano_consolidado, id_to_code
+        connection, params['date_ini'], params['date_fim'], plano_consolidado, id_to_code,
+        companies=companies,
     )
 
     saldos_encerramento = calcular_saldos_resultado_encerramento(
-        connection, params['date_fim'], plano_consolidado, id_to_code
+        connection, params['date_fim'], plano_consolidado, id_to_code,
+        companies=companies,
     )
 
     # ============================================================
@@ -145,11 +158,20 @@ def gerar_sped_ecd_centralizado(
     for linha in construir_bloco_I_abertura(params, matriz_data, contador):
         _write_linha(output, linha)
 
-    _emit_progresso(progresso_callback, etapa='bloco_I_plano', mensagem='Bloco I: plano de contas (I050+I051 intercalados)')
-    # I050 + I051 intercalados: o PVA exige que I051 venha logo apos o I050
-    # da conta analitica correspondente (vinculo posicional, pois I051 nao
-    # carrega COD_CTA no leiaute 9).
-    for linha in construir_I050_com_I051(plano_consolidado, params, contador):
+    # V1.6: calcular saldos hierarquicos UMA vez para reaproveitar em J100 e I052
+    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco, plano_consolidado)
+    # Codes que serao COD_AGL no J100 (patrimoniais com saldo > 0.01)
+    codes_aglutinacao = {
+        code for code, s in saldos_hierarquicos.items()
+        if abs(s.get('saldo_inicial', 0)) >= 0.01 or abs(s.get('saldo_final', 0)) >= 0.01
+    }
+    logger.info(f'[SPED ECD V1.6] {len(codes_aglutinacao)} codes em J100 -> I052 emitido para cada')
+
+    _emit_progresso(progresso_callback, etapa='bloco_I_plano', mensagem='Bloco I: plano de contas (I050+I051+I052 intercalados)')
+    # I050 + I051 + I052 intercalados: PVA exige I051/I052 logo apos I050
+    # da conta correspondente (vinculo posicional).
+    for linha in construir_I050_com_I051(plano_consolidado, params, contador,
+                                          codes_aglutinacao=codes_aglutinacao):
         _write_linha(output, linha)
 
     # I100 — Cadastro CCUS (V1.1)
@@ -169,6 +191,7 @@ def gerar_sped_ecd_centralizado(
         connection, params['date_ini'], params['date_fim'], id_to_code,
         id_to_code_ccus, partner_id_to_cod_part,
         progresso_callback=progresso_callback,
+        company_ids=companies,
     )
     for linha in construir_I200_I250(lancamentos_iter, plano_consolidado, contador):
         _write_linha(output, linha)
@@ -194,8 +217,8 @@ def gerar_sped_ecd_centralizado(
     _emit_progresso(progresso_callback, etapa='bloco_J', mensagem='Bloco J: BP (J100), DRE (J150), signatarios (J930)')
     _write_linha(output, construir_J001(contador))
 
-    # J005 + J100 (Balanco)
-    for linha in construir_J005_J100(balanco, params, contador):
+    # J005 + J100 (Balanco) — V1.6: passa plano_consolidado para usar codes reais
+    for linha in construir_J005_J100(balanco, plano_consolidado, params, contador):
         _write_linha(output, linha)
 
     # J005 + J150 (DRE)

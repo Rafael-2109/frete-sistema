@@ -25,7 +25,7 @@ Referencias: Manual ECD Leiaute 9 (Receita Federal), VRI Consulting (verificacao
 import logging
 import unicodedata
 from datetime import date
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 from app.relatorios_fiscais.services.sped_ecd_constantes import (
     ACCOUNT_TYPE_TO_NAT,
@@ -374,9 +374,19 @@ def construir_I050_com_I051(
     plano_consolidado: List[dict],
     params: dict,
     contador: ContadorRegistros,
+    codes_aglutinacao: set = None,
 ) -> List[str]:
     """
-    Plano de Contas (I050) + Plano Referencial Receita (I051) INTERCALADOS.
+    Plano de Contas (I050) + Plano Referencial Receita (I051) + I052 INTERCALADOS.
+
+    V1.6: emite tambem I052 (mapeamento de aglutinacao) apos I050 sintetica
+    que aparece em J100/J150 como COD_AGL. PVA exige: "codigo de aglutinacao
+    detalhe da demonstracao contabil deve estar em pelo menos um registro I052".
+
+    Args:
+        codes_aglutinacao: set de codes do plano que serao usados como COD_AGL
+                           em J100/J150. Para cada I050 com code nesta lista,
+                           emite I052 apos I051 (ou apos I050 se sem I051).
 
     O PVA exige que o I051 venha LOGO APOS o I050 da conta analitica
     correspondente — pois o I051 nao carrega COD_CTA (so REG | COD_CCUS |
@@ -385,9 +395,10 @@ def construir_I050_com_I051(
     Bug historico: o service emitia TODOS os I050 e depois TODOS os I051 em
     blocos separados. Mesmo com a quantidade de campos correta, o PVA nao
     conseguiria mapear o I051 a uma conta. Esta funcao corrige isso emitindo
-    I050 + (opcional) I051 para cada conta em sequencia.
+    I050 + I051 + I052 para cada conta em sequencia.
     """
     linhas = []
+    codes_agl = codes_aglutinacao or set()
 
     for c in plano_consolidado:
         # I050 — sempre emitido (sintetica ou analitica)
@@ -412,6 +423,14 @@ def construir_I050_com_I051(
                     '',                                        # 2 COD_CCUS (vazio)
                     cod_ref,                                   # 3 COD_CTA_REF
                 ])))
+
+        # V1.6 — I052 para conta usada como COD_AGL no J100/J150
+        if c['code'] in codes_agl:
+            linhas.append(contador.emit(formatar_registro([
+                'I052',                                        # 1 REG
+                '',                                            # 2 COD_CCUS (vazio)
+                c['code'],                                     # 3 COD_CTA (a propria conta)
+            ])))
 
     return linhas
 
@@ -576,11 +595,19 @@ def construir_I200_I250(lancamentos_iter: Iterable[dict], _plano_consolidado: Li
             valor = debit if debit > 0 else credit
             indicador = 'D' if debit > 0 else 'C'
             code = ln.get('code') or '999'
-            # HIST: o PVA exige HIST ou COD_HIST_PAD preenchido em cada partida.
-            # Se name e ref vierem vazios do Odoo, usar placeholder com a conta.
-            hist_raw = (ln.get('name') or ln.get('ref') or '').strip()
-            if not hist_raw:
-                hist_raw = f'LANCAMENTO CONTA {code}'  # placeholder anti-reprovacao PVA
+            # V1.6: HIST com move_name no prefixo (padrao Odoo: "SIC/2024/04571: descricao").
+            # Se name e ref vierem vazios, usar move_name como hist. Se nem isso,
+            # placeholder anti-reprovacao PVA.
+            move_name = (ln.get('move_name') or '').strip()
+            name_part = (ln.get('name') or ln.get('ref') or '').strip()
+            if move_name and name_part:
+                hist_raw = f'{move_name}: {name_part}'
+            elif move_name:
+                hist_raw = move_name
+            elif name_part:
+                hist_raw = name_part
+            else:
+                hist_raw = f'LANCAMENTO CONTA {code}'  # placeholder ultimo recurso
             hist = remover_acentos(hist_raw[:600])    # HIST max ~600 chars
             cod_part = ln.get('cod_part', '')
 
@@ -694,15 +721,89 @@ def construir_J001(contador: ContadorRegistros) -> str:
     ]))
 
 
-def construir_J005_J100(balanco_consolidado: dict, params: dict,
-                        contador: ContadorRegistros) -> List[str]:
+def calcular_saldos_hierarquicos(
+    balanco_analiticas: dict,
+    plano_consolidado: List[dict],
+) -> Dict[str, dict]:
+    """
+    V1.6: a partir do balanco das contas ANALITICAS, calcula saldos das
+    SINTETICAS somando as analiticas descendentes (propagacao por cod_sup).
+
+    Args:
+        balanco_analiticas: dict {code: {'saldo_inicial', 'saldo_final', ...}}
+                            so contem analiticas (vem de calcular_balanco_consolidado).
+        plano_consolidado: lista com sinteticas+analiticas (cada uma com cod_sup).
+
+    Returns:
+        dict {code: {'saldo_inicial', 'saldo_final', 'name', 'account_type', 'tipo', 'nivel', 'cod_sup'}}
+        Inclui TODOS os codes do plano (sintet+anal) com saldos calculados.
+    """
+    # Index do plano por code
+    plano_by_code = {c['code']: c for c in plano_consolidado}
+
+    saldos = {}
+
+    # 1. Inicializar saldos das analiticas (sao folhas)
+    for c in plano_consolidado:
+        saldos[c['code']] = {
+            'saldo_inicial': 0.0,
+            'saldo_final': 0.0,
+            'code': c['code'],
+            'name': c.get('name', ''),
+            'account_type': c.get('account_type', ''),
+            'tipo': c.get('tipo', 'A'),
+            'nivel': c.get('nivel', 1),
+            'cod_sup': c.get('cod_sup', ''),
+        }
+
+    # 2. Saldos das analiticas vem do balanco_analiticas
+    for code, bal in balanco_analiticas.items():
+        if code in saldos:
+            saldos[code]['saldo_inicial'] = float(bal.get('saldo_inicial', 0) or 0)
+            saldos[code]['saldo_final'] = float(bal.get('saldo_final', 0) or 0)
+
+    # 3. Propagar para ancestrais (todos os cod_sup ate raiz)
+    for c in plano_consolidado:
+        if c.get('tipo') != 'A':
+            continue
+        s_anal = saldos.get(c['code'])
+        if not s_anal:
+            continue
+        if abs(s_anal['saldo_inicial']) < 0.01 and abs(s_anal['saldo_final']) < 0.01:
+            continue
+        # Subir pela arvore via cod_sup
+        cur_sup = c.get('cod_sup', '')
+        visitados = set()
+        while cur_sup and cur_sup not in visitados:
+            visitados.add(cur_sup)
+            slot = saldos.get(cur_sup)
+            if slot is None:
+                break
+            slot['saldo_inicial'] += s_anal['saldo_inicial']
+            slot['saldo_final'] += s_anal['saldo_final']
+            sup_conta = plano_by_code.get(cur_sup)
+            cur_sup = sup_conta.get('cod_sup', '') if sup_conta else ''
+
+    return saldos
+
+
+def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict],
+                        params: dict, contador: ContadorRegistros) -> List[str]:
     """
     Balanco Patrimonial: J005 (cabecalho BP) + J100 (linhas).
 
-    Mitigacao R8: IND_GRP_BAL=A/P, IND_COD_AGL=T/D, exatos 2 niveis 1, validacao Ativo=Passivo+PL.
-    Mitigacao R15: J005 com ID_DEM='1' (BP).
+    V1.6: refatorado para usar CODES REAIS do plano de contas (1, 11, 111, 11101...)
+    em vez de codes inventados (BP_ATIVO, BP_ATIVO_01). Resolve erros PVA:
+    - "código de aglutinação detalhe deve estar em pelo menos um I052"
+    - "código de aglutinação superior nao existe"
+    - "saldo final ≠ inicial + débitos - créditos"
 
-    balanco_consolidado: dict {code: {'saldo': X, 'account_type': Y, 'name': Z}}
+    Saldos INICIAIS agora preenchidos (vinha 0,00).
+
+    Args:
+        balanco_consolidado: dict {code: {'saldo_inicial', 'saldo_final', 'account_type'}}
+                             ja com saldo inicial calculado (calcular_balanco_consolidado).
+        plano_consolidado: lista com sinteticas+analiticas com hierarquia (cod_sup, nivel).
     """
     linhas = []
 
@@ -715,110 +816,95 @@ def construir_J005_J100(balanco_consolidado: dict, params: dict,
         remover_acentos('BALANCO PATRIMONIAL'),                # 5 CAB_DEM
     ])))
 
-    # Calcular totais
-    total_ativo = sum(
-        s['saldo'] for s in balanco_consolidado.values()
-        if s.get('account_type', '').startswith('asset')
-    )
-    total_passivo = sum(
-        s['saldo'] for s in balanco_consolidado.values()
-        if s.get('account_type', '').startswith('liability')
-    )
-    total_pl = sum(
-        s['saldo'] for s in balanco_consolidado.values()
-        if s.get('account_type', '').startswith('equity')
-    )
-    total_passivo_pl = total_passivo + total_pl
+    # V1.6: calcular saldos hierarquicos (sintetica = soma das analiticas filhas)
+    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco_consolidado, plano_consolidado)
 
-    # Validacao Ativo = Passivo + PL (mitigacao R8 / oportunidade O2)
-    diff = abs(total_ativo - abs(total_passivo_pl))
+    # Heuristica de classificacao por code (para sinteticas sem account_type)
+    def _classe_pelo_code(code: str) -> str:
+        """Retorna 'asset' ou 'liability_or_equity' baseado no primeiro digito do code."""
+        if not code:
+            return ''
+        if code.startswith('1'):
+            return 'asset'
+        if code.startswith('2'):
+            return 'liability_or_equity'  # passivo + PL (codes 2x no plano NACOM)
+        return ''
+
+    # Determinar classe patrimonial de cada code (asset / liability+equity / nao-patrimonial)
+    def _classe_da_conta(conta) -> str:
+        """Retorna 'asset', 'liability_or_equity' ou '' (nao patrimonial)."""
+        at = (conta.get('account_type') or '').strip()
+        if at.startswith('asset'):
+            return 'asset'
+        if at.startswith(('liability', 'equity')):
+            return 'liability_or_equity'
+        if not at:
+            # Sintetica gerada — usa o primeiro digito do code
+            return _classe_pelo_code(conta.get('code', ''))
+        return ''  # resultado, ignorar
+
+    # Filtrar plano so patrimoniais (asset_*, liability_*, equity_*, + sinteticas 1x/2x)
+    # E ordenar por code asc para hierarquia visual no PVA
+    plano_patrimonial = sorted(
+        [c for c in plano_consolidado if _classe_da_conta(c)],
+        key=lambda c: c['code']
+    )
+
+    # Validacao Ativo = Passivo + PL
+    total_ativo = saldos_hierarquicos.get('1', {}).get('saldo_final', 0)
+    total_passivo_pl = saldos_hierarquicos.get('2', {}).get('saldo_final', 0)
+    diff = abs(abs(total_ativo) - abs(total_passivo_pl))
     if diff > 0.01:
         logger.warning(
             f'BALANCO NAO BATE: Ativo={total_ativo:.2f} vs Passivo+PL={abs(total_passivo_pl):.2f} '
             f'(diff={diff:.2f}). Verificar consolidacao das companies.'
         )
 
-    # J100 — Nivel 1 ATIVO (totalizador)
-    linhas.append(contador.emit(formatar_registro([
-        'J100',                                                # 1 REG
-        'BP_ATIVO',                                            # 2 COD_AGL
-        IND_COD_AGL_TOTAL,                                     # 3 IND_COD_AGL (T=Totalizador)
-        '1',                                                   # 4 NIVEL_AGL
-        '',                                                    # 5 COD_AGL_SUP (vazio = nivel raiz)
-        IND_GRP_BAL_ATIVO,                                     # 6 IND_GRP_BAL (A=Ativo)
-        remover_acentos('ATIVO'),                              # 7 DESCR_COD_AGL
-        '0,00',                                                # 8 VL_CTA_INI (saldo inicial)
-        'D',                                                   # 9 IND_DC_CTA_INI
-        formatar_valor(abs(total_ativo)),                      # 10 VL_CTA_FIN (saldo final)
-        'D',                                                   # 11 IND_DC_CTA_FIN
-        '',                                                    # 12 NOTA_EXP_REF (opcional)
-    ])))
-
-    # J100 — Nivel 2 sub-grupos do ATIVO (Circulante, Nao Circulante)
-    grupos_ativo = {
-        'asset_cash': 'DISPONIBILIDADES',
-        'asset_receivable': 'CLIENTES',
-        'asset_current': 'ATIVO CIRCULANTE',
-        'asset_prepayments': 'DESPESAS ANTECIPADAS',
-        'asset_non_current': 'ATIVO NAO CIRCULANTE',
-        'asset_fixed': 'IMOBILIZADO',
-    }
-    ordem = 1
-    for at_type, descr in grupos_ativo.items():
-        saldo_grupo = sum(
-            s['saldo'] for s in balanco_consolidado.values()
-            if s.get('account_type') == at_type
-        )
-        if abs(saldo_grupo) < 0.01:
+    # Emitir J100 para cada conta patrimonial com saldo
+    for conta in plano_patrimonial:
+        code = conta['code']
+        s = saldos_hierarquicos.get(code)
+        if not s:
             continue
-        linhas.append(contador.emit(formatar_registro([
-            'J100', f'BP_ATIVO_{ordem:02d}', IND_COD_AGL_DETALHE, '2', 'BP_ATIVO',
-            IND_GRP_BAL_ATIVO, remover_acentos(descr),
-            '0,00', 'D',
-            formatar_valor(abs(saldo_grupo)), 'D',
-            '',
-        ])))
-        ordem += 1
-
-    # J100 — Nivel 1 PASSIVO + PL (totalizador)
-    linhas.append(contador.emit(formatar_registro([
-        'J100',
-        'BP_PASSIVO_PL',                                       # 2 COD_AGL
-        IND_COD_AGL_TOTAL,                                     # 3 IND_COD_AGL (T)
-        '1',                                                   # 4 NIVEL_AGL
-        '',                                                    # 5 COD_AGL_SUP
-        IND_GRP_BAL_PASSIVO,                                   # 6 IND_GRP_BAL (P)
-        remover_acentos('PASSIVO E PATRIMONIO LIQUIDO'),       # 7 DESCR_COD_AGL
-        '0,00', 'C',                                           # 8/9 inicial
-        formatar_valor(abs(total_passivo_pl)), 'C',            # 10/11 final
-        '',
-    ])))
-
-    # J100 — Nivel 2 sub-grupos do PASSIVO + PL
-    grupos_passivo = {
-        'liability_payable': 'FORNECEDORES',
-        'liability_credit_card': 'EMPRESTIMOS',
-        'liability_current': 'PASSIVO CIRCULANTE',
-        'liability_non_current': 'PASSIVO NAO CIRCULANTE',
-        'equity': 'PATRIMONIO LIQUIDO',
-        'equity_unaffected': 'LUCROS ACUMULADOS',
-    }
-    ordem = 1
-    for at_type, descr in grupos_passivo.items():
-        saldo_grupo = sum(
-            s['saldo'] for s in balanco_consolidado.values()
-            if s.get('account_type') == at_type
-        )
-        if abs(saldo_grupo) < 0.01:
+        # Pular contas sem movimento E sem saldo
+        if abs(s['saldo_inicial']) < 0.01 and abs(s['saldo_final']) < 0.01:
             continue
+
+        # Determinar IND_GRP_BAL (A=Ativo, P=Passivo+PL)
+        classe = _classe_da_conta(conta)
+        if classe == 'asset':
+            ind_grp = IND_GRP_BAL_ATIVO
+            ind_dc_natural = 'D'
+        else:
+            ind_grp = IND_GRP_BAL_PASSIVO
+            ind_dc_natural = 'C'
+
+        # IND_COD_AGL: T se sintetica, D se analitica
+        ind_cod_agl = IND_COD_AGL_TOTAL if conta.get('tipo') == 'S' else IND_COD_AGL_DETALHE
+
+        # IND_DC baseado em sinal (saldo negativo inverte natureza)
+        def _ind_dc(saldo, natural):
+            if saldo >= 0:
+                return natural
+            return 'C' if natural == 'D' else 'D'
+
+        ind_dc_ini = _ind_dc(s['saldo_inicial'], ind_dc_natural)
+        ind_dc_fin = _ind_dc(s['saldo_final'], ind_dc_natural)
+
         linhas.append(contador.emit(formatar_registro([
-            'J100', f'BP_PASSIVO_PL_{ordem:02d}', IND_COD_AGL_DETALHE, '2', 'BP_PASSIVO_PL',
-            IND_GRP_BAL_PASSIVO, remover_acentos(descr),
-            '0,00', 'C',
-            formatar_valor(abs(saldo_grupo)), 'C',
-            '',
+            'J100',                                            # 1 REG
+            code,                                              # 2 COD_AGL (codigo do plano)
+            ind_cod_agl,                                       # 3 IND_COD_AGL (T/D)
+            str(conta.get('nivel', 1)),                        # 4 NIVEL_AGL
+            conta.get('cod_sup', ''),                          # 5 COD_AGL_SUP
+            ind_grp,                                           # 6 IND_GRP_BAL
+            remover_acentos(conta.get('name', '')),            # 7 DESCR_COD_AGL
+            formatar_valor(abs(s['saldo_inicial'])),           # 8 VL_CTA_INI (V1.6: REAL)
+            ind_dc_ini,                                        # 9 IND_DC_CTA_INI
+            formatar_valor(abs(s['saldo_final'])),             # 10 VL_CTA_FIN
+            ind_dc_fin,                                        # 11 IND_DC_CTA_FIN
+            '',                                                # 12 NOTA_EXP_REF
         ])))
-        ordem += 1
 
     return linhas
 

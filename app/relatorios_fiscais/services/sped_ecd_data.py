@@ -155,19 +155,26 @@ def buscar_dados_matriz(connection) -> dict:
 # PLANO DE CONTAS CONSOLIDADO (R12 + R5)
 # ============================================================
 
-def buscar_plano_contas_consolidado(connection) -> Tuple[List[dict], Dict[int, str]]:
+def buscar_plano_contas_consolidado(
+    connection, companies: List[int] = None
+) -> Tuple[List[dict], Dict[int, str]]:
     """
-    Busca plano de contas das 3 companies, deduplica por code, gera hierarquia
-    sintetica e mapa id_to_code para consolidacao.
+    Busca plano de contas das companies passadas (default = COMPANIES_ECD),
+    deduplica por code, gera hierarquia sintetica e mapa id_to_code para consolidacao.
 
     Mitigacao R12: busca FB primeiro (autoritativo para nomes), completa com SC/CD.
-    Mitigacao R5: id_to_code mapeia TODOS os account_ids das 3 companies para 1 code.
+    Mitigacao R5: id_to_code mapeia TODOS os account_ids das companies passadas para 1 code.
+
+    Args:
+        companies: lista de company_ids; default = COMPANIES_ECD.
 
     Returns:
         (plano_consolidado, id_to_code)
         - plano_consolidado: lista ordenada por code, com sinteticas + analiticas
         - id_to_code: dict {account_id: code} para consolidacao
     """
+    comps = companies if companies is not None else COMPANIES_ECD
+
     plano_dedupe = {}  # code -> dados conta
     id_to_code = {}    # account_id -> code (consolidacao R5)
 
@@ -179,32 +186,36 @@ def buscar_plano_contas_consolidado(connection) -> Tuple[List[dict], Dict[int, s
         'l10n_br_conta_referencial', 'l10n_br_cod_nat',
     ]
 
-    # 1. Buscar FB primeiro (matriz, autoritativo para nomes)
+    # 1. Buscar FB (matriz) primeiro SE estiver nas companies passadas.
     # Mitigacao code-review BLOCKER #4: paginacao ID-cursor (sem limite truncar)
-    contas_fb = _buscar_paginado(
-        connection, 'account.account',
-        [['company_id', '=', COMPANY_MATRIZ_ID]],
-        CAMPOS_PLANO,
-    )
+    matriz_in_scope = COMPANY_MATRIZ_ID in comps
+    if matriz_in_scope:
+        contas_fb = _buscar_paginado(
+            connection, 'account.account',
+            [['company_id', '=', COMPANY_MATRIZ_ID]],
+            CAMPOS_PLANO,
+        )
 
-    for c in contas_fb:
-        code = c.get('code')
-        if not code:
-            continue
-        plano_dedupe[code] = {
-            'code': code,
-            'name': c.get('name', ''),
-            'account_type': c.get('account_type', ''),
-            'create_date': (c.get('create_date') or '2010-01-01')[:10],
-            'company_id_origem': c.get('company_id', [None])[0] if isinstance(c.get('company_id'), (list, tuple)) else c.get('company_id'),
-            # V1.1 — mapeamento direto Odoo CIEL IT
-            'conta_referencial_odoo': (c.get('l10n_br_conta_referencial') or '').strip(),
-            'cod_nat_odoo': (c.get('l10n_br_cod_nat') or '').strip(),
-        }
-        id_to_code[c['id']] = code
+        for c in contas_fb:
+            code = c.get('code')
+            if not code:
+                continue
+            plano_dedupe[code] = {
+                'code': code,
+                'name': c.get('name', ''),
+                'account_type': c.get('account_type', ''),
+                'create_date': (c.get('create_date') or '2010-01-01')[:10],
+                'company_id_origem': c.get('company_id', [None])[0] if isinstance(c.get('company_id'), (list, tuple)) else c.get('company_id'),
+                # V1.1 — mapeamento direto Odoo CIEL IT
+                'conta_referencial_odoo': (c.get('l10n_br_conta_referencial') or '').strip(),
+                'cod_nat_odoo': (c.get('l10n_br_cod_nat') or '').strip(),
+            }
+            id_to_code[c['id']] = code
 
-    # 2. Completar com SC e CD (apenas codes que NAO existem em FB)
-    for cid in (3, 4):
+    # 2. Completar com demais companies (apenas codes que NAO existem em FB ou
+    # quando FB nao esta no escopo)
+    demais = [cid for cid in comps if cid != COMPANY_MATRIZ_ID]
+    for cid in demais:
         contas_extras = _buscar_paginado(
             connection, 'account.account',
             [['company_id', '=', cid]],
@@ -326,9 +337,13 @@ def calcular_saldos_periodicos_mensais(
     date_ini: date,
     date_fim: date,
     id_to_code: Dict[int, str],
+    companies: List[int] = None,
 ) -> Dict[str, dict]:
     """
     Calcula saldos mensais (I150/I155) para o periodo, consolidando POR CODE.
+
+    Args:
+        companies: lista de company_ids; default = COMPANIES_ECD.
 
     Returns:
         {
@@ -355,6 +370,7 @@ def calcular_saldos_periodicos_mensais(
         saldos_iniciais_por_acc = _read_group_balance(
             connection,
             domain_extra=[['date', '<', cursor_mes.strftime('%Y-%m-%d')]],
+            companies=companies,
         )
 
         # Movimento do mes (entre cursor e ult_dia_mes)
@@ -365,6 +381,7 @@ def calcular_saldos_periodicos_mensais(
                 ['date', '<=', ult_dia_mes.strftime('%Y-%m-%d')],
             ],
             with_debit_credit=True,
+            companies=companies,
         )
 
         # Consolidar por code (R5)
@@ -423,18 +440,23 @@ def _read_group_balance(
     connection,
     domain_extra: List = None,
     with_debit_credit: bool = False,
+    companies: List[int] = None,
 ) -> Union[dict, list]:
     """
     Helper: read_group de account.move.line agrupado por account_id, com filtro
-    multi-company COMPANIES_ECD.
+    multi-company.
+
+    Args:
+        companies: lista de company_ids; default = COMPANIES_ECD (3 companies).
 
     Returns:
         Se with_debit_credit=False: dict {account_id: balance_sum}
         Se with_debit_credit=True: list de tuplas (account_id, debit, credit, balance)
     """
+    comps = companies if companies is not None else COMPANIES_ECD
     domain = [
         ['parent_state', '=', 'posted'],
-        ['company_id', 'in', COMPANIES_ECD],
+        ['company_id', 'in', comps],
     ]
     if domain_extra:
         domain.extend(domain_extra)
@@ -484,18 +506,40 @@ def calcular_balanco_consolidado(
     date_fim: date,
     plano_consolidado: List[dict],
     id_to_code: Dict[int, str],
+    companies: List[int] = None,
+    date_ini: date = None,
 ) -> Dict[str, dict]:
     """
-    Balanco Patrimonial consolidado das 3 companies.
+    Balanco Patrimonial consolidado das companies passadas (default = 3 companies).
     Soma POR CODE (mitigacao R5).
 
-    Returns: {code: {'code', 'name', 'account_type', 'saldo'}}
+    V1.6: agora retorna SALDO INICIAL e FINAL.
+        - saldo_inicial: acumulado ate date_ini - 1 (saldo de abertura do periodo)
+        - saldo: acumulado ate date_fim (saldo de encerramento — mantido para compat)
+        - saldo_final: alias de saldo
+
+    Args:
+        date_ini: data inicio do periodo. Se omitida, saldo_inicial sera 0
+                  (comportamento legado).
+
+    Returns: {code: {'code', 'name', 'account_type', 'saldo', 'saldo_inicial', 'saldo_final'}}
     """
-    # Acumulado ate date_fim para contas patrimoniais
-    saldos_por_acc = _read_group_balance(
+    # Acumulado ate date_fim (saldo final do periodo)
+    saldos_final_por_acc = _read_group_balance(
         connection,
         domain_extra=[['date', '<=', date_fim.strftime('%Y-%m-%d')]],
+        companies=companies,
     )
+
+    # V1.6: Acumulado ate date_ini - 1 (saldo inicial do periodo)
+    saldos_inicial_por_acc = {}
+    if date_ini is not None:
+        date_anterior = date_ini - timedelta(days=1)
+        saldos_inicial_por_acc = _read_group_balance(
+            connection,
+            domain_extra=[['date', '<=', date_anterior.strftime('%Y-%m-%d')]],
+            companies=companies,
+        )
 
     # Mapa code -> dados (filtrar so patrimoniais)
     code_to_dados = {
@@ -505,7 +549,8 @@ def calcular_balanco_consolidado(
 
     # Consolidar por code
     balanco = {}
-    for acc_id, balance in saldos_por_acc.items():
+    # 1. Saldo final
+    for acc_id, balance in saldos_final_por_acc.items():
         code = id_to_code.get(acc_id)
         if not code or code not in code_to_dados:
             continue
@@ -515,8 +560,27 @@ def calcular_balanco_consolidado(
             'name': dados['name'],
             'account_type': dados['account_type'],
             'saldo': 0,
+            'saldo_inicial': 0,
+            'saldo_final': 0,
         })
         slot['saldo'] += balance
+        slot['saldo_final'] += balance
+
+    # 2. Saldo inicial (V1.6)
+    for acc_id, balance in saldos_inicial_por_acc.items():
+        code = id_to_code.get(acc_id)
+        if not code or code not in code_to_dados:
+            continue
+        dados = code_to_dados[code]
+        slot = balanco.setdefault(code, {
+            'code': code,
+            'name': dados['name'],
+            'account_type': dados['account_type'],
+            'saldo': 0,
+            'saldo_inicial': 0,
+            'saldo_final': 0,
+        })
+        slot['saldo_inicial'] += balance
 
     return balanco
 
@@ -527,9 +591,10 @@ def calcular_dre_consolidado(
     date_fim: date,
     plano_consolidado: List[dict],
     id_to_code: Dict[int, str],
+    companies: List[int] = None,
 ) -> Dict[str, dict]:
     """
-    DRE consolidado das 3 companies para o periodo.
+    DRE consolidado das companies passadas (default = 3 companies) para o periodo.
     Soma POR CODE (mitigacao R5).
     """
     # Movimento do periodo para contas de resultado
@@ -540,6 +605,7 @@ def calcular_dre_consolidado(
             ['date', '<=', date_fim.strftime('%Y-%m-%d')],
         ],
         with_debit_credit=True,
+        companies=companies,
     )
 
     code_to_dados = {
@@ -570,6 +636,7 @@ def calcular_saldos_resultado_encerramento(
     date_fim: date,
     plano_consolidado: List[dict],
     id_to_code: Dict[int, str],
+    companies: List[int] = None,
 ) -> Dict[str, dict]:
     """
     Saldos das contas de resultado ANTES do encerramento (I355).
@@ -581,7 +648,8 @@ def calcular_saldos_resultado_encerramento(
     # Acumulado do exercicio (1/1 a 31/12) para contas de resultado
     date_ini_exercicio = date(date_fim.year, 1, 1)
     return calcular_dre_consolidado(connection, date_ini_exercicio, date_fim,
-                                     plano_consolidado, id_to_code)
+                                     plano_consolidado, id_to_code,
+                                     companies=companies)
 
 
 # ============================================================
@@ -631,7 +699,9 @@ def _extrair_distribuicao_ccus(analytic_distribution, id_to_code_ccus: Dict[int,
 # CENTROS DE CUSTO CONSOLIDADOS (V1.1 — mitigacao limitacao)
 # ============================================================
 
-def buscar_centros_custo_consolidados(connection) -> Tuple[List[dict], Dict[int, str]]:
+def buscar_centros_custo_consolidados(
+    connection, companies: List[int] = None
+) -> Tuple[List[dict], Dict[int, str]]:
     """
     Busca centros de custo (account.analytic.account) das 3 companies, deduplica
     por code, gera mapa id_to_code para consolidacao.
@@ -641,10 +711,11 @@ def buscar_centros_custo_consolidados(connection) -> Tuple[List[dict], Dict[int,
         - plano_ccus: lista de dicts {code, name, plan_name, dt_alt}
         - id_to_code_ccus: dict {analytic_id: code}
     """
+    comps = companies if companies is not None else COMPANIES_ECD
     # Mitigacao code-review BLOCKER #4: paginado
     todos = _buscar_paginado(
         connection, 'account.analytic.account',
-        [['company_id', 'in', COMPANIES_ECD]],
+        [['company_id', 'in', comps]],
         ['id', 'code', 'name', 'plan_id', 'company_id', 'create_date'],
     )
 
@@ -812,90 +883,112 @@ def stream_lancamentos_consolidados_v11(
     id_to_code_ccus: Dict[int, str],
     partner_id_to_cod_part: Dict[int, str],
     progresso_callback=None,
+    company_ids: List[int] = None,
 ) -> Generator[dict, None, None]:
     """
-    Generator V1.1: produz lancamentos com CCUS + partner_id resolvido para COD_PART.
+    Generator V1.6: produz lancamentos INDIVIDUAIS (1 yield por account.move)
+    com CCUS + partner_id resolvido para COD_PART.
 
-    Inclui campo `analytic_distribution` na busca para extrair CCUS por linha.
+    BUG HISTORICO CORRIGIDO (2026-05-14):
+    A versao anterior usava cursor 'id > last_id' com ORDER BY 'move_id asc, id asc'.
+    Como o id da line NAO e crescente quando ordenado por move_id, batches subsequentes
+    PULAVAM lines com id baixo mas move_id alto. Resultado: ~98% dos lancamentos eram
+    perdidos (gerava 2049 I200 quando deveria gerar 60000+).
+
+    Nova estrategia:
+    1. Listar TODOS os move_ids do periodo (1 query search com order='id asc')
+    2. Iterar em chunks de N moves
+    3. Para cada chunk, ler todas as account.move.line dos moves (em 1 query)
+    4. Agrupar por move_id e emitir 1 lancamento por move (mantem ordem cronologica)
+
+    Sem cursor problematico — paginacao por chunks de move_ids garante completude.
+
+    Args:
+        company_ids: lista de company_ids; default = COMPANIES_ECD (3 companies).
+                     Para gerar so FB use [1]; para SC use [3]; para CD use [4].
     """
-    domain = [
-        ['date', '>=', date_ini.strftime('%Y-%m-%d')],
-        ['date', '<=', date_fim.strftime('%Y-%m-%d')],
-        ['parent_state', '=', 'posted'],
-        ['company_id', 'in', COMPANIES_ECD],
-    ]
+    companies = company_ids if company_ids is not None else COMPANIES_ECD
 
     fields = [
         'id', 'date', 'move_id', 'move_name', 'account_id',
         'partner_id', 'debit', 'credit', 'name', 'ref',
-        'analytic_distribution',  # V1.1: campo CCUS
+        'analytic_distribution',
     ]
 
-    last_id = 0
-    move_atual = None
-    lines_acumulando = []
+    # ============================================================
+    # Step 1: listar TODOS os move_ids no periodo (1 query search)
+    # ============================================================
+    domain_moves = [
+        ['date', '>=', date_ini.strftime('%Y-%m-%d')],
+        ['date', '<=', date_fim.strftime('%Y-%m-%d')],
+        ['state', '=', 'posted'],
+        ['company_id', 'in', companies],
+    ]
+    move_ids = connection.execute_kw(
+        'account.move', 'search',
+        [domain_moves],
+        {'order': 'id asc'},
+        timeout_override=TIMEOUT_QUERY_PESADA,
+    )
+    total_moves = len(move_ids)
+    logger.info(f'[SPED ECD V1.6] {total_moves} account.move no periodo (companies={companies})')
+
+    if not move_ids:
+        return
+
+    # ============================================================
+    # Step 2: iterar em chunks de moves
+    # ============================================================
+    CHUNK_MOVES = 500  # ~2500 lines avg por chunk
     num_lcto = 0
     total_lines = 0
 
-    while True:
-        domain_cursor = domain + [['id', '>', last_id]]
+    for i in range(0, total_moves, CHUNK_MOVES):
+        chunk_move_ids = move_ids[i:i + CHUNK_MOVES]
 
+        # Buscar TODAS as lines dos moves do chunk de uma vez
         lote = connection.execute_kw(
             'account.move.line', 'search_read',
-            [domain_cursor],
+            [[['move_id', 'in', chunk_move_ids],
+              ['parent_state', '=', 'posted']]],
             {
                 'fields': fields,
-                'limit': BATCH_SIZE_LANCAMENTOS,
                 'order': 'move_id asc, id asc',
             },
             timeout_override=TIMEOUT_QUERY_PESADA,
         )
 
-        if not lote:
-            break
-
+        # Agrupar por move_id (preserva ordem dos moves)
+        from collections import defaultdict
+        lines_por_move = defaultdict(list)
         for line in lote:
-            move_field = line.get('move_id')
-            mid = move_field[0] if isinstance(move_field, (list, tuple)) else move_field
-            if not mid:
+            mf = line.get('move_id')
+            mid = mf[0] if isinstance(mf, (list, tuple)) else mf
+            if mid:
+                lines_por_move[mid].append(line)
+
+        # Emitir 1 lancamento por move (mantem ordem cronologica de move_ids)
+        for mid in chunk_move_ids:
+            lines_do_move = lines_por_move.get(mid, [])
+            if not lines_do_move:
                 continue
+            num_lcto += 1
+            total_lines += len(lines_do_move)
+            yield _construir_lancamento_v11(
+                num_lcto, lines_do_move, id_to_code,
+                id_to_code_ccus, partner_id_to_cod_part
+            )
 
-            if move_atual is None:
-                move_atual = mid
-
-            if mid != move_atual:
-                if lines_acumulando:
-                    num_lcto += 1
-                    yield _construir_lancamento_v11(
-                        num_lcto, lines_acumulando, id_to_code,
-                        id_to_code_ccus, partner_id_to_cod_part
-                    )
-                lines_acumulando = []
-                move_atual = mid
-
-            lines_acumulando.append(line)
-            last_id = line['id']
-            total_lines += 1
-
-        if progresso_callback and total_lines % 5000 == 0:
+        if progresso_callback:
             progresso_callback({
                 'lines_processadas': total_lines,
                 'num_lcto_atual': num_lcto,
+                'progresso_chunk': f'{i + len(chunk_move_ids)}/{total_moves} moves',
             })
 
-        if len(lote) < BATCH_SIZE_LANCAMENTOS:
-            break
-
-    if lines_acumulando:
-        num_lcto += 1
-        yield _construir_lancamento_v11(
-            num_lcto, lines_acumulando, id_to_code,
-            id_to_code_ccus, partner_id_to_cod_part
-        )
-
     logger.info(
-        f'[SPED ECD V1.1] Stream lancamentos completo: {total_lines} lines, '
-        f'{num_lcto} lancamentos consolidados'
+        f'[SPED ECD V1.6] Stream completo: {total_lines} lines, '
+        f'{num_lcto} lancamentos (esperado ~{total_moves})'
     )
 
 
@@ -907,23 +1000,35 @@ def _construir_lancamento_v11(
     partner_id_to_cod_part: Dict[int, str],
 ) -> dict:
     """
-    Versao V1.2: inclui ccus_distribuicao COMPLETA (lista) + cod_part.
+    Versao V1.6: usa account.move.id REAL como NUM_LCTO (rastreavel no Odoo).
+    Inclui move_name no inicio do HIST de cada partida (padrao do Odoo CIEL IT).
 
     Cada line traz `ccus_distribuicao` como lista de tuplas (cod_ccus, percentual).
     construir_I200_I250 ira gerar N partidas I250 conforme split.
+
+    Mudancas V1.6:
+    - num agora e o account.move.id real (ex: 440234) em vez de sequencial.
+    - Cada line.name e prefixada por move_name (ex: "SIC/2024/04571: ...").
     """
     primeira = lines[0]
+    # Extrair move_id real (rastreavel no Odoo)
+    move_field = primeira.get('move_id')
+    move_id_real = (
+        move_field[0] if isinstance(move_field, (list, tuple)) else move_field
+    ) or num_lcto  # fallback ao sequencial
+    move_name = primeira.get('move_name', '') or ''
+
     return {
-        'num': num_lcto,
+        'num': move_id_real,                    # V1.6: account.move.id real
+        '_num_seq': num_lcto,                   # mantem sequencial p/ debug
         'date': primeira.get('date'),
-        'move_name': primeira.get('move_name', ''),
+        'move_name': move_name,
         'lines': [
             {
                 'code': id_to_code.get(
                     ln['account_id'][0] if isinstance(ln.get('account_id'), (list, tuple)) else ln.get('account_id'),
                     '999'
                 ),
-                # V1.2: distribuicao COMPLETA (lista de tuplas)
                 'ccus_distribuicao': _extrair_distribuicao_ccus(
                     ln.get('analytic_distribution'), id_to_code_ccus
                 ),
@@ -933,8 +1038,10 @@ def _construir_lancamento_v11(
                 ) if ln.get('partner_id') else '',
                 'debit': float(ln.get('debit') or 0),
                 'credit': float(ln.get('credit') or 0),
+                # V1.6: HIST com move_name no prefixo (padrao Odoo)
                 'name': ln.get('name') or '',
                 'ref': ln.get('ref') or '',
+                'move_name': move_name,
                 'partner_name': (
                     ln['partner_id'][1] if ln.get('partner_id') and isinstance(ln['partner_id'], (list, tuple))
                     else ''
