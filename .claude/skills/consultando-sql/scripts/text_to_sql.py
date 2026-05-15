@@ -80,7 +80,8 @@ FORBIDDEN_FUNCTIONS = {
 
 def _call_api_with_retry(
     client, model: str, max_tokens: int, messages: list,
-    max_retries: int = 3, fallback_model: str = None
+    max_retries: int = 3, fallback_model: str = None,
+    temperature: float = None,
 ):
     """
     Chama client.messages.create() com retry, backoff exponencial e fallback de modelo.
@@ -98,6 +99,9 @@ def _call_api_with_retry(
         messages: Lista de mensagens para a API
         max_retries: Numero maximo de tentativas com modelo primario (default: 3)
         fallback_model: ID do modelo de fallback (ex: SONNET_MODEL). None = sem fallback.
+        temperature: Temperatura da amostragem (0.0 = deterministico). Se None, usa default
+            do modelo (1.0). Generator e Evaluator passam temperature=0 para reduzir
+            falsos positivos do Haiku (IMP-2026-05-13-003/-004).
 
     Returns:
         Response da API Anthropic
@@ -108,14 +112,20 @@ def _call_api_with_retry(
     """
     from anthropic import InternalServerError
 
+    def _build_kwargs(model_name: str) -> dict:
+        kwargs = {
+            "model": model_name,
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        return kwargs
+
     last_error = None
     for attempt in range(1, max_retries + 1):
         try:
-            return client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                messages=messages
-            )
+            return client.messages.create(**_build_kwargs(model))
         except InternalServerError as e:
             last_error = e
             request_id = getattr(e, 'request_id', 'N/A')
@@ -139,11 +149,7 @@ def _call_api_with_retry(
             f"(modelo primario {model} indisponivel)"
         )
         try:
-            return client.messages.create(
-                model=fallback_model,
-                max_tokens=max_tokens,
-                messages=messages
-            )
+            return client.messages.create(**_build_kwargs(fallback_model))
         except InternalServerError as e:
             request_id = getattr(e, 'request_id', 'N/A')
             logger.error(
@@ -158,6 +164,30 @@ def _call_api_with_retry(
 # =====================================================================
 # UTILITÁRIOS
 # =====================================================================
+
+def _run_in_app_context(callable_fn):
+    """Executa callable_fn() reusando Flask app_context ativo ou criando um novo.
+
+    Motivacao: `create_app()` aninhado a context ja ativo causou problemas
+    historicos (race conditions, duplicacao de pool, sessao DB confusa).
+    `text_to_sql_tool.py:170-181` ja usa este pattern — centralizamos aqui.
+
+    Uso (sempre wrap em try/except do chamador para preservar best-effort):
+        _run_in_app_context(lambda: save_successful_query(q, sql, tables))
+    """
+    try:
+        from flask import current_app
+        # Testa se context esta ativo (RuntimeError se nao)
+        _ = current_app.name
+        # Ja dentro de app_context — executar direto
+        return callable_fn()
+    except RuntimeError:
+        # Fora de app_context — criar um
+        from app import create_app  # pyright: ignore[reportMissingImports]
+        _app = create_app()
+        with _app.app_context():
+            return callable_fn()
+
 
 def extract_tables_from_sql(sql: str) -> list:
     """
@@ -644,7 +674,8 @@ SQL:"""
         response = _call_api_with_retry(
             client, HAIKU_MODEL, 500,
             messages=[{"role": "user", "content": prompt}],
-            fallback_model=SONNET_MODEL
+            fallback_model=SONNET_MODEL,
+            temperature=float(os.getenv("TEXT_TO_SQL_GEN_TEMP", "0")),
         )
 
         sql = response.content[0].text.strip()
@@ -661,6 +692,280 @@ SQL:"""
 
 
 # =====================================================================
+# SQL DETERMINISTIC VALIDATOR (Regex + Schema, sem LLM)
+# =====================================================================
+
+# Tipos VARCHAR/TEXT — esperam valor entre aspas simples
+_VARCHAR_TYPE_TOKENS = ("varchar", "text", "char", "citext")
+# Tipos numericos — aceitam valor com OU sem aspas (PostgreSQL converte)
+_INTEGER_TYPE_TOKENS = (
+    "bigint", "integer", "smallint", "int4", "int8", "int2", "serial",
+    "bigserial", "smallserial",
+)
+_NUMERIC_FLOAT_TOKENS = ("numeric", "decimal", "real", "double", "float", "money")
+# Tipos DATE/TIMESTAMP REAIS (nao VARCHAR-que-guarda-data)
+_DATE_TYPE_TOKENS = ("date", "timestamp", "time")
+# Tipos boolean
+_BOOLEAN_TYPE_TOKENS = ("boolean", "bool")
+
+# Padrao DD/MM/YYYY (formato usado em VARCHAR(10) do sistema — anti IMP-003)
+_DDMMYYYY_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
+# Padrao YYYY-MM-DD (ISO)
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?$")
+
+
+def _classify_field_type(type_str: str) -> str:
+    """Classifica tipo declarado em categoria abstrata.
+
+    Retorna: 'varchar' | 'integer' | 'float' | 'date' | 'boolean' | 'other'
+    """
+    t = (type_str or "").lower().strip()
+    if not t:
+        return "other"
+    if any(tok in t for tok in _VARCHAR_TYPE_TOKENS):
+        return "varchar"
+    if any(tok in t for tok in _INTEGER_TYPE_TOKENS):
+        return "integer"
+    if any(tok in t for tok in _NUMERIC_FLOAT_TOKENS):
+        return "float"
+    if any(tok in t for tok in _DATE_TYPE_TOKENS):
+        return "date"
+    if any(tok in t for tok in _BOOLEAN_TYPE_TOKENS):
+        return "boolean"
+    return "other"
+
+
+class SQLDeterministicValidator:
+    """Valida SQL via regex + schema JSON, sem LLM.
+
+    Motivacao: Haiku evaluator e nao-deterministico — alucina falsos positivos
+    em casos triviais (campo existe?, varchar com aspas?, data DD/MM/YYYY em
+    VARCHAR(10)?). Esta classe roda ANTES do Haiku:
+    - Se TUDO determinismo OK e SQL e SELECT/WITH puro: skip_haiku=True
+    - Se algum issue: retorna motivo EXATO (regex-based), Haiku continua sendo
+      chamado para casos complexos (joins, lógica)
+
+    Padrao: copiado de `_sanitize_type_mismatches` e `_detect_uuid_in_numeric_field`.
+
+    Reportes que motivaram (sessao eb1ad77d, 13/05/2026):
+    - IMP-2026-05-13-003 (warning): evaluator rejeitou DD/MM/YYYY em VARCHAR(10)
+    - IMP-2026-05-13-004 (critical): evaluator bloqueou UPDATE pos-INSERT na sessao
+    """
+
+    def __init__(self, schema_provider: "SchemaProvider"):
+        self.schema_provider = schema_provider
+
+    def validate(self, sql: str, tables_used: list, admin_mode: bool) -> dict:
+        """Valida SQL via checks determinísticos.
+
+        Args:
+            sql: SQL a validar.
+            tables_used: Lista de tabelas extraidas via extract_tables_from_sql().
+            admin_mode: Se True, NAO marca skip_haiku (admin mantem Haiku ativo,
+                mas T3 admin-override usa o resultado para decidir override).
+
+        Returns:
+            {
+              "deterministic_approved": bool,  # Tudo OK?
+              "skip_haiku": bool,              # Pode pular evaluator Haiku?
+              "issues": list[str],             # Motivos especificos (regex match)
+              "warnings": list[str],           # Casos ambiguos (nao bloqueia)
+            }
+        """
+        issues: list[str] = []
+        warnings: list[str] = []
+
+        if not sql or not tables_used:
+            # Sem contexto suficiente — deixar Haiku decidir
+            return {
+                "deterministic_approved": False,
+                "skip_haiku": False,
+                "issues": [],
+                "warnings": ["sem_tabelas_para_validar"],
+            }
+
+        # Build dict: tabela_lower -> {campo_lower -> type_lower}
+        # Concentra todos os schemas em estrutura unica para lookup O(1)
+        field_map: dict = {}
+        for tname in tables_used:
+            schema = self.schema_provider.get_table_schema(tname)
+            if not schema:
+                warnings.append(f"schema_nao_encontrado:{tname}")
+                continue
+            field_map[tname.lower()] = {
+                (f.get("name") or "").lower(): (f.get("type") or "").lower()
+                for f in schema.get("fields", [])
+                if f.get("name")
+            }
+
+        # Se nao conseguiu carregar nenhum schema — deixar Haiku decidir
+        if not field_map:
+            return {
+                "deterministic_approved": False,
+                "skip_haiku": False,
+                "issues": [],
+                "warnings": warnings,
+            }
+
+        # Check 1: Campos qualificados (tabela.campo) existem?
+        unknown_fields = self._check_qualified_fields(sql, field_map)
+        issues.extend(unknown_fields)
+
+        # Check 2: Tipos batem com literais?
+        type_issues = self._check_type_matches(sql, field_map)
+        issues.extend(type_issues)
+
+        approved = len(issues) == 0
+        sql_upper = sql.upper().lstrip()
+        is_read_only = sql_upper.startswith("SELECT") or sql_upper.startswith("WITH")
+
+        # Skip Haiku APENAS se:
+        # - Determinismo aprovou
+        # - SQL e read-only (Haiku ainda valida lógica de negócio em DML)
+        # - NAO admin_mode (admin mantem Haiku ativo, T3 decide override)
+        skip_haiku = approved and is_read_only and not admin_mode
+
+        return {
+            "deterministic_approved": approved,
+            "skip_haiku": skip_haiku,
+            "issues": issues,
+            "warnings": warnings,
+        }
+
+    def _check_qualified_fields(self, sql: str, field_map: dict) -> list:
+        """Detecta `tabela.campo` ou `alias.campo` onde campo nao existe.
+
+        IMPORTANTE: aliases (em, cp, s) sao comuns no SQL gerado. Nao temos
+        como resolver alias -> tabela sem parser AST. Estrategia conservadora:
+        - Se `prefix.campo` e prefix e nome de tabela conhecida: validar
+        - Se prefix nao e tabela conhecida: assumir alias e pular (Haiku valida)
+        """
+        issues = []
+        seen = set()
+        # Pattern: \b(palavra).(palavra) — captura tabela.campo
+        for prefix, field in re.findall(r"\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b", sql):
+            prefix_lower = prefix.lower()
+            field_lower = field.lower()
+
+            # Se prefix nao e tabela conhecida — assumir alias (skip)
+            if prefix_lower not in field_map:
+                continue
+
+            # Tabela conhecida: campo deve existir
+            key = (prefix_lower, field_lower)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            if field_lower not in field_map[prefix_lower]:
+                issues.append(
+                    f"campo_inexistente:{prefix_lower}.{field_lower} "
+                    f"(nao consta em fields[] de '{prefix_lower}')"
+                )
+
+        return issues
+
+    def _check_type_matches(self, sql: str, field_map: dict) -> list:
+        """Detecta WHERE/SET com type mismatch entre campo e literal.
+
+        Regras:
+        - varchar/text + 'valor' (entre aspas) -> OK
+        - varchar/text + valor sem aspas       -> MISMATCH (exceto numero puro)
+        - integer/numeric + valor              -> OK (PG aceita ambos)
+        - boolean + true/false                 -> OK
+        - varchar(10) + 'DD/MM/YYYY'           -> OK (anti IMP-003)
+        - date/timestamp real + 'YYYY-MM-DD'   -> OK
+        - date real + 'DD/MM/YYYY'             -> MISMATCH (formato errado)
+
+        Estrategia: extrair `campo OP literal` via regex (sem qualificacao),
+        cruzar com field_map (primeira tabela onde campo aparece).
+        """
+        issues = []
+        seen = set()
+
+        # Build flat map: campo_lower -> type (primeira ocorrencia)
+        flat_map: dict = {}
+        for _, fields in field_map.items():
+            for fname, ftype in fields.items():
+                flat_map.setdefault(fname, ftype)
+
+        # Pattern 1: campo = 'valor_string' (com aspas)
+        # Pattern 2: campo = valor_numerico (sem aspas)
+        # Cobre =, <>, !=, <, >, <=, >=, LIKE, ILIKE
+        pat_string = re.compile(
+            r"([A-Za-z_][\w\.]*)\s*(?:=|<>|!=|<=|>=|<|>|(?:I)?LIKE)\s*'([^']*)'",
+            re.IGNORECASE,
+        )
+        pat_number = re.compile(
+            r"([A-Za-z_][\w\.]*)\s*(?:=|<>|!=|<=|>=|<|>)\s*(-?\d+(?:\.\d+)?)\b(?!\s*\.\d)",
+            re.IGNORECASE,
+        )
+
+        # Check string literals
+        for raw_field, value in pat_string.findall(sql):
+            field = raw_field.split(".")[-1].lower()
+            ftype = flat_map.get(field)
+            if not ftype:
+                continue
+            category = _classify_field_type(ftype)
+            key = ("str", field, value[:50])
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # varchar + 'valor' -> OK (sempre, mesmo se valor parece data)
+            if category in ("varchar", "integer", "float"):
+                # PG aceita aspas em numero, varchar aceita qualquer string
+                continue
+            # date/timestamp REAL: precisa ser ISO
+            if category == "date":
+                v = value.strip()
+                if _ISO_DATE_RE.match(v):
+                    continue
+                if _DDMMYYYY_RE.match(v):
+                    issues.append(
+                        f"date_format:{field} e {ftype} (DATE/TIMESTAMP real), "
+                        f"valor '{v}' deve ser ISO 'YYYY-MM-DD'"
+                    )
+                continue
+            if category == "boolean":
+                if value.lower() in ("true", "false", "t", "f", "1", "0", "yes", "no"):
+                    continue
+                issues.append(
+                    f"boolean_value:{field} e {ftype}, valor '{value}' nao e boolean"
+                )
+
+        # Check numeric literals (sem aspas)
+        for raw_field, value in pat_number.findall(sql):
+            field = raw_field.split(".")[-1].lower()
+            ftype = flat_map.get(field)
+            if not ftype:
+                continue
+            category = _classify_field_type(ftype)
+            key = ("num", field, value)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # varchar + 123 (sem aspas) -> MISMATCH
+            if category == "varchar":
+                issues.append(
+                    f"type_mismatch:{field} e {ftype} (varchar/text), valor "
+                    f"numerico {value} sem aspas — use '{value}'"
+                )
+            # integer/float + 123 -> OK
+            # boolean + 1/0 -> tolerar (PG aceita)
+            # date + numero -> MISMATCH
+            elif category == "date":
+                issues.append(
+                    f"type_mismatch:{field} e {ftype} (date/timestamp), "
+                    f"valor numerico {value} nao e data valida"
+                )
+
+        return issues
+
+
+# =====================================================================
 # SQL EVALUATOR (Haiku + Schema Detalhado)
 # =====================================================================
 
@@ -670,7 +975,14 @@ class SQLEvaluator:
     Recebe apenas os schemas das tabelas referenciadas no SQL.
     """
 
-    def evaluate(self, question: str, sql: str, schema_text: str, admin_mode: bool = False) -> dict:
+    def evaluate(
+        self,
+        question: str,
+        sql: str,
+        schema_text: str,
+        admin_mode: bool = False,
+        session_dml_context: dict = None,
+    ) -> dict:
         """
         Avalia SQL gerada contra schema detalhado.
 
@@ -684,6 +996,9 @@ class SQLEvaluator:
                         SELECT/CTE. Bug historico (IMP-2026-05-13-004/-007): evaluator
                         aprovava INSERT mas rejeitava UPDATE pelo Haiku ser nondeterministic,
                         e a propria chamada nao informava admin_mode.
+            session_dml_context: Contexto T4 — dict {last_dml_type, last_table, age_seconds}
+                vindo de get_recent_dml_context() ou None. Quando presente, injetado no
+                prompt para Haiku aplicar criterio uniforme entre verbos DML na sessao.
 
         Returns:
             {"approved": bool, "improved_sql": str|None, "reason": str}
@@ -704,9 +1019,49 @@ class SQLEvaluator:
         else:
             safety_rule = "9. A SQL e segura? (apenas SELECT, sem funcoes perigosas)"
 
+        # T4: contexto de DML recente da sessao (resolve IMP-2026-05-13-004)
+        session_context_hint = ""
+        if session_dml_context and admin_mode:
+            dml = session_dml_context.get("last_dml_type", "?")
+            tbl = session_dml_context.get("last_table", "?")
+            age = session_dml_context.get("age_seconds", 0)
+            session_context_hint = (
+                f"\n\nCONTEXTO DA SESSAO ADMIN: Esta sessao ja teve `{dml}` em "
+                f"`{tbl}` aprovado e executado ha {age}s. APLIQUE CRITERIO UNIFORME — "
+                f"se {dml} passou em modo admin, INSERT/UPDATE/DELETE com regras "
+                f"equivalentes DEVEM passar tambem (sem 'apenas SELECT permitido').\n"
+            )
+
+        # T7: buscar falsos positivos similares (auto few-shot). Best-effort —
+        # se Voyage indisponivel ou tabela vazia, retorna lista vazia (no-op).
+        fewshot_hint = ""
+        fewshot_referenced_ids = []
+        try:
+            from app.agente.services.sql_evaluator_falses_service import (  # pyright: ignore[reportMissingImports]
+                search_similar_false_positives,
+                increment_reference,
+            )
+            similar_falses = search_similar_false_positives(sql)
+            if similar_falses:
+                examples_lines = ["\n\nCASOS HISTORICOS DE FALSO POSITIVO (NAO repita o erro):"]
+                for fp in similar_falses:
+                    examples_lines.append(
+                        f"  - SQL: {fp['sql_text'][:200]}... | "
+                        f"Motivo REJEITADO equivocadamente: '{fp['rejection_reason'][:150]}' "
+                        f"(similarity={fp['similarity']:.2f}, ref={fp.get('improvement_key', '?')})"
+                    )
+                examples_lines.append(
+                    "  → Se a SQL atual e semelhante a estes casos, NAO rejeite pela mesma razao. "
+                    "Foram confirmados falsos positivos via revisao humana.\n"
+                )
+                fewshot_hint = "\n".join(examples_lines)
+                fewshot_referenced_ids = [fp["id"] for fp in similar_falses]
+        except Exception as e:
+            logger.debug(f"[TEXT_TO_SQL] T7 few-shot busca falhou (ok): {e}")
+
         prompt = f"""Voce e um revisor de SQL PostgreSQL para um sistema de frete brasileiro.
 
-{schema_text}
+{schema_text}{session_context_hint}{fewshot_hint}
 
 PERGUNTA ORIGINAL: {question}
 
@@ -784,7 +1139,8 @@ JSON:"""
         response = _call_api_with_retry(
             client, HAIKU_MODEL, 800,
             messages=[{"role": "user", "content": prompt}],
-            fallback_model=SONNET_MODEL
+            fallback_model=SONNET_MODEL,
+            temperature=float(os.getenv("TEXT_TO_SQL_EVAL_TEMP", "0")),
         )
 
         result_text = response.content[0].text.strip()
@@ -803,6 +1159,15 @@ JSON:"""
                     result = {"approved": False, "improved_sql": None, "reason": "Evaluator retornou JSON invalido"}
             else:
                 result = {"approved": False, "improved_sql": None, "reason": "Evaluator nao retornou JSON"}
+
+        # T7: incrementar tracking dos falsos positivos efetivamente injetados.
+        # Best-effort: se Voyage off ou tabela inacessivel, no-op (nunca quebra).
+        if fewshot_referenced_ids:
+            try:
+                for fp_id in fewshot_referenced_ids:
+                    increment_reference(fp_id)
+            except Exception as e:
+                logger.debug(f"[TEXT_TO_SQL] T7 increment_reference falhou: {e}")
 
         return {
             "approved": result.get("approved", False),
@@ -834,64 +1199,70 @@ class SQLExecutor:
         Returns:
             (dados: list[dict], colunas: list[str])
         """
-        from app import create_app, db
-        from sqlalchemy import text
-
         # Garantir LIMIT (apenas para SELECTs)
         sql_upper = sql.upper().strip()
         if 'LIMIT' not in sql_upper and (sql_upper.startswith('SELECT') or sql_upper.startswith('WITH')):
             sql = f"{sql.rstrip(';')} LIMIT {self.max_rows}"
 
-        app = create_app()
-        with app.app_context():
-            try:
-                # Transacao com timeout
-                if not read_write:
-                    db.session.execute(text("SET TRANSACTION READ ONLY"))
-                db.session.execute(
-                    text(f"SET LOCAL statement_timeout = '{self.timeout_seconds * 1000}'")
-                )
+        # Reusa app_context ativo (evita create_app() aninhado — bug historico)
+        return _run_in_app_context(lambda: self._execute_in_context(sql, read_write))
 
-                result = db.session.execute(text(sql))
+    def _execute_in_context(self, sql: str, read_write: bool) -> tuple:
+        """Logica interna de execucao — assume app_context ja ativo.
 
-                # Extrair nomes de colunas
-                columns = list(result.keys())
+        Separada de execute() para permitir wrap via _run_in_app_context.
+        """
+        from app import db  # pyright: ignore[reportMissingImports]
+        from sqlalchemy import text
 
-                # Converter rows para dicts
-                rows = []
-                for row in result.fetchall():
-                    row_dict = {}
-                    for i, col in enumerate(columns):
-                        val = row[i]
-                        if isinstance(val, Decimal):
-                            val = float(val)
-                        elif isinstance(val, (date, datetime)):
-                            val = val.isoformat()
-                        row_dict[col] = val
-                    rows.append(row_dict)
+        try:
+            # Transacao com timeout
+            if not read_write:
+                db.session.execute(text("SET TRANSACTION READ ONLY"))
+            db.session.execute(
+                text(f"SET LOCAL statement_timeout = '{self.timeout_seconds * 1000}'")
+            )
 
-                if read_write:
-                    db.session.commit()
-                else:
-                    db.session.rollback()
+            result = db.session.execute(text(sql))
 
-                return rows, columns
+            # Extrair nomes de colunas
+            columns = list(result.keys())
 
-            except Exception as e:
+            # Converter rows para dicts
+            rows = []
+            for row in result.fetchall():
+                row_dict = {}
+                for i, col in enumerate(columns):
+                    val = row[i]
+                    if isinstance(val, Decimal):
+                        val = float(val)
+                    elif isinstance(val, (date, datetime)):
+                        val = val.isoformat()
+                    row_dict[col] = val
+                rows.append(row_dict)
+
+            if read_write:
+                db.session.commit()
+            else:
                 db.session.rollback()
-                error_msg = str(e)
 
-                if 'statement timeout' in error_msg.lower() or 'canceling statement' in error_msg.lower():
-                    raise RuntimeError(
-                        f"Query excedeu timeout de {self.timeout_seconds}s. "
-                        "Tente uma consulta mais simples ou com filtros mais restritivos."
-                    )
-                elif 'read-only transaction' in error_msg.lower():
-                    raise RuntimeError("Tentativa de escrita bloqueada. Apenas SELECT e permitido.")
-                elif 'does not exist' in error_msg.lower():
-                    raise RuntimeError(f"Tabela ou campo nao existe: {error_msg}")
-                else:
-                    raise RuntimeError(f"Erro na execucao: {error_msg}")
+            return rows, columns
+
+        except Exception as e:
+            db.session.rollback()
+            error_msg = str(e)
+
+            if 'statement timeout' in error_msg.lower() or 'canceling statement' in error_msg.lower():
+                raise RuntimeError(
+                    f"Query excedeu timeout de {self.timeout_seconds}s. "
+                    "Tente uma consulta mais simples ou com filtros mais restritivos."
+                )
+            elif 'read-only transaction' in error_msg.lower():
+                raise RuntimeError("Tentativa de escrita bloqueada. Apenas SELECT e permitido.")
+            elif 'does not exist' in error_msg.lower():
+                raise RuntimeError(f"Tabela ou campo nao existe: {error_msg}")
+            else:
+                raise RuntimeError(f"Erro na execucao: {error_msg}")
 
 
 # =====================================================================
@@ -1065,6 +1436,57 @@ def _detect_uuid_in_numeric_field(
 
 
 # =====================================================================
+# OBSERVABILIDADE — Classificacao de rejeicoes do evaluator (T6)
+# =====================================================================
+
+def _classify_evaluator_rejection(reason: str) -> str:
+    """Categoriza motivo de rejeicao do Haiku evaluator para metricas Sentry.
+
+    Categorias:
+    - 'date_format': falsos positivos VARCHAR/data (IMP-2026-05-13-003)
+    - 'missing_field': campo nao existe / nao documentado
+    - 'dml_blocked': UPDATE/DELETE/INSERT bloqueado (IMP-2026-05-13-004)
+    - 'value_correction': evaluator quer corrigir valor (ex: Lancado→Lancado)
+    - 'type_mismatch': tipo incompativel
+    - 'other': nao classificado
+    """
+    if not reason:
+        return "other"
+    r = reason.lower()
+    # Ordem importa: termos mais especificos primeiro
+    if "update" in r or "delete" in r or "insert" in r or "apenas select" in r or "read-only" in r or "dml" in r:
+        return "dml_blocked"
+    if "data" in r and ("formato" in r or "format" in r or "iso" in r or "yyyy" in r or "dd/mm" in r):
+        return "date_format"
+    if ("campo" in r or "column" in r) and ("nao existe" in r or "inexistente" in r or "documentado" in r or "not exist" in r):
+        return "missing_field"
+    if "tipo" in r and ("incompat" in r or "mismatch" in r):
+        return "type_mismatch"
+    if "corrigi" in r or "valor" in r:
+        return "value_correction"
+    return "other"
+
+
+def _sentry_tag_evaluator_outcome(outcome: str, reason: str, sql: str, admin_mode: bool):
+    """Emite tags Sentry para outcome do evaluator (best-effort).
+
+    Sem dependencia rigida: se sentry_sdk nao disponivel, no-op.
+    """
+    try:
+        import sentry_sdk  # pyright: ignore[reportMissingImports]
+        sentry_sdk.set_tag("evaluator_outcome", outcome)
+        sentry_sdk.set_tag("evaluator_rejection_category", _classify_evaluator_rejection(reason))
+        sentry_sdk.set_tag("evaluator_admin_mode", "true" if admin_mode else "false")
+        sentry_sdk.set_context("evaluator_sql", {
+            "sql": (sql or "")[:500],
+            "reason": (reason or "")[:300],
+            "admin_mode": admin_mode,
+        })
+    except Exception:
+        pass  # observability nunca quebra pipeline
+
+
+# =====================================================================
 # TEXT-TO-SQL PIPELINE (Arquitetura B)
 # =====================================================================
 
@@ -1102,6 +1524,7 @@ class TextToSQLPipeline:
         debug_unblock_tables: set = None,
         debug_schemas: dict = None,
         admin_mode: bool = False,
+        session_id: str = None,
     ) -> dict:
         """
         Executa pipeline completo.
@@ -1112,6 +1535,10 @@ class TextToSQLPipeline:
                 Usado para bloqueio condicional (ex: pessoal_* para usuários não autorizados).
             debug_unblock_tables: Tabelas a desbloquear (debug mode admin).
             debug_schemas: Schemas das tabelas debug (dict nome -> schema JSON).
+            session_id: UUID da sessao do agente (T4 SQLSessionContext). Quando admin_mode
+                E session_id presentes, busca DMLs aprovados recentes para injetar no
+                prompt do Evaluator (resolve IMP-2026-05-13-004). Apos DML executado com
+                sucesso, grava no Redis para a proxima query da sessao.
             admin_mode: Se True, bypass safety validator e permite escrita.
 
         Returns:
@@ -1188,9 +1615,9 @@ class TextToSQLPipeline:
                 try:
                     from app.embeddings.indexers.sql_template_indexer import save_successful_query
                     tables_in_sql = extract_tables_from_sql(sql)
-                    _app = create_app()
-                    with _app.app_context():
-                        save_successful_query(question, sql, tables_in_sql)
+                    _run_in_app_context(
+                        lambda: save_successful_query(question, sql, tables_in_sql)
+                    )
                 except Exception:
                     pass
 
@@ -1242,13 +1669,76 @@ class TextToSQLPipeline:
             )
 
             # =====================================================
+            # ETAPA 1c: DETERMINISTIC VALIDATOR — Pre-check sem LLM
+            # =====================================================
+            # Validacao regex+schema antes do Haiku evaluator. Se aprovar:
+            # - SELECT puro: skip Haiku (economia ~200ms + zero falso positivo)
+            # - DML/admin: marca para T3 admin-override decidir se Haiku rejeitar
+            # Reportes que motivaram: IMP-2026-05-13-003 (date format VARCHAR(10))
+            # e IMP-2026-05-13-004 (UPDATE bloqueado pos-INSERT aprovado).
+            deterministic_enabled = os.getenv(
+                "TEXT_TO_SQL_DETERMINISTIC_VALIDATOR", "true"
+            ).lower() == "true"
+
+            det_result = {"deterministic_approved": False, "skip_haiku": False, "issues": [], "warnings": []}
+            if deterministic_enabled:
+                det_validator = SQLDeterministicValidator(self.schema_provider)
+                det_result = det_validator.validate(sql, tables_in_sql, admin_mode)
+                result["etapas"]["deterministic"] = det_result
+                if det_result["issues"]:
+                    logger.info(
+                        f"[TEXT_TO_SQL] Deterministic issues: {det_result['issues'][:3]}"
+                    )
+                if det_result["skip_haiku"]:
+                    logger.info(
+                        "[TEXT_TO_SQL] Deterministic aprovou — skip Haiku evaluator"
+                    )
+
+            # =====================================================
             # ETAPA 2: EVALUATOR — Validar com schema detalhado
             # =====================================================
             t2 = time.time()
             MAX_EVAL_RETRIES = 2
 
+            # T4: buscar contexto DML da sessao admin (resolve IMP-2026-05-13-004)
+            session_dml_context = None
+            if admin_mode and session_id:
+                try:
+                    from app.agente.tools.sql_session_context import get_recent_dml_context  # pyright: ignore[reportMissingImports]
+                    session_dml_context = get_recent_dml_context(session_id)
+                    if session_dml_context:
+                        result["etapas"]["session_dml_context"] = {
+                            "last_dml_type": session_dml_context.get("last_dml_type"),
+                            "last_table": session_dml_context.get("last_table"),
+                            "age_seconds": session_dml_context.get("age_seconds"),
+                        }
+                        logger.info(
+                            f"[TEXT_TO_SQL] Contexto DML recente: "
+                            f"{session_dml_context.get('last_dml_type')} "
+                            f"em {session_dml_context.get('last_table')} "
+                            f"({session_dml_context.get('age_seconds')}s atras)"
+                        )
+                except Exception as e:
+                    logger.debug(f"[TEXT_TO_SQL] Sem session_context (ok): {e}")
+
+            # Skip Haiku se determinismo aprovou (read-only nao-admin)
+            skip_haiku_evaluator = det_result.get("skip_haiku", False)
+            if skip_haiku_evaluator:
+                result["etapas"]["evaluator_skipped"] = "deterministic_approved"
+                evaluation = {
+                    "approved": True,
+                    "improved_sql": None,
+                    "reason": "deterministic_approved",
+                }
+
             for eval_attempt in range(1, MAX_EVAL_RETRIES + 1):
-                evaluation = self.evaluator.evaluate(question, sql, schema_text, admin_mode=admin_mode)
+                if skip_haiku_evaluator:
+                    break  # ja aprovado deterministicamente
+                evaluation = self.evaluator.evaluate(
+                    question, sql, schema_text,
+                    admin_mode=admin_mode,
+                    session_dml_context=session_dml_context,
+                )
 
                 if evaluation["approved"]:
                     logger.info(f"[TEXT_TO_SQL] Evaluator aprovou (tentativa {eval_attempt})")
@@ -1301,18 +1791,57 @@ class TextToSQLPipeline:
                         tables_in_sql, omit_blocked=admin_mode
                     )
                 else:
-                    # MAX RETRIES EXCEEDED — NÃO continuar com SQL possivelmente quebrada
-                    result["sucesso"] = False
-                    result["aviso"] = (
-                        f"Evaluator reprovou apos {MAX_EVAL_RETRIES} tentativas: "
-                        f"{evaluation['reason']}"
-                    )
-                    result["etapas"]["evaluator_ms"] = int((time.time() - t2) * 1000)
-                    logger.warning(
-                        f"[TEXT_TO_SQL] Evaluator reprovou apos {MAX_EVAL_RETRIES} "
-                        f"tentativas — pipeline INTERROMPIDO: {evaluation['reason']}"
-                    )
-                    return result
+                    # MAX RETRIES EXCEEDED — verificar admin override (T3)
+                    admin_override_enabled = os.getenv(
+                        "TEXT_TO_SQL_ADMIN_OVERRIDE", "true"
+                    ).lower() == "true"
+                    deterministic_approved = det_result.get("deterministic_approved", False)
+
+                    if admin_mode and admin_override_enabled and deterministic_approved:
+                        # Admin + determinismo aprovou — prosseguir com aviso
+                        # Resolve IMP-2026-05-13-004 (UPDATE bloqueado pos-INSERT
+                        # quando Haiku alucina apesar de admin_mode no prompt).
+                        result["aviso"] = (
+                            f"ADMIN OVERRIDE: Evaluator Haiku rejeitou apos "
+                            f"{MAX_EVAL_RETRIES} tentativas (motivo: "
+                            f"{evaluation['reason'][:200]}), mas validador "
+                            f"deterministico aprovou. Query executada em modo admin."
+                        )
+                        logger.warning(
+                            f"[TEXT_TO_SQL] ADMIN OVERRIDE acionado: Haiku rejeitou, "
+                            f"deterministic aprovou — prosseguindo. "
+                            f"Reason Haiku: {evaluation['reason'][:200]}"
+                        )
+                        # T6: tag Sentry — override e degradado mas executado
+                        _sentry_tag_evaluator_outcome(
+                            outcome="admin_override",
+                            reason=evaluation['reason'],
+                            sql=sql,
+                            admin_mode=admin_mode,
+                        )
+                        result["etapas"]["admin_override"] = True
+                        result["etapas"]["evaluator_ms"] = int((time.time() - t2) * 1000)
+                        break  # sair do for de retries — prosseguir para ETAPA 2b
+                    else:
+                        # NAO admin OU determinismo NAO aprovou: abortar (comportamento atual)
+                        result["sucesso"] = False
+                        result["aviso"] = (
+                            f"Evaluator reprovou apos {MAX_EVAL_RETRIES} tentativas: "
+                            f"{evaluation['reason']}"
+                        )
+                        result["etapas"]["evaluator_ms"] = int((time.time() - t2) * 1000)
+                        logger.warning(
+                            f"[TEXT_TO_SQL] Evaluator reprovou apos {MAX_EVAL_RETRIES} "
+                            f"tentativas — pipeline INTERROMPIDO: {evaluation['reason']}"
+                        )
+                        # T6: tag Sentry — falha real
+                        _sentry_tag_evaluator_outcome(
+                            outcome="rejected_after_retries",
+                            reason=evaluation['reason'],
+                            sql=sql,
+                            admin_mode=admin_mode,
+                        )
+                        return result
 
             result["etapas"]["evaluator_ms"] = int((time.time() - t2) * 1000)
 
@@ -1399,12 +1928,32 @@ class TextToSQLPipeline:
                 f"{int((time.time() - start_time) * 1000)}ms"
             )
 
+            # T4: gravar contexto DML se foi escrita em admin_mode
+            if admin_mode and session_id:
+                try:
+                    sql_upper = sql.upper().lstrip()
+                    dml_type = None
+                    if sql_upper.startswith("INSERT"):
+                        dml_type = "INSERT"
+                    elif sql_upper.startswith("UPDATE"):
+                        dml_type = "UPDATE"
+                    elif sql_upper.startswith("DELETE"):
+                        dml_type = "DELETE"
+
+                    if dml_type:
+                        from app.agente.tools.sql_session_context import record_dml_approved  # pyright: ignore[reportMissingImports]
+                        # Pegar primeira tabela como target (heuristica simples)
+                        target_table = tables_in_sql[0] if tables_in_sql else "unknown"
+                        record_dml_approved(session_id, dml_type, target_table)
+                except Exception as e:
+                    logger.debug(f"[TEXT_TO_SQL] Falha ao gravar session_context (ok): {e}")
+
             # Best-effort: salvar query bem-sucedida como template para few-shot
             try:
                 from app.embeddings.indexers.sql_template_indexer import save_successful_query
-                _app = create_app()
-                with _app.app_context():
-                    save_successful_query(question, sql, tables_in_sql)
+                _run_in_app_context(
+                    lambda: save_successful_query(question, sql, tables_in_sql)
+                )
             except Exception:
                 pass  # Nao bloquear pipeline
 

@@ -261,6 +261,163 @@ def _get_app_context():
         return app.app_context()
 
 
+# =====================================================================
+# T7 — Auto few-shot hook (register_improvement → falsos positivos)
+# =====================================================================
+
+# Marcadores que indicam improvement relacionado ao evaluator SQL
+_EVALUATOR_HINTS = (
+    "evaluator", "sql_evaluator", "haiku evaluator",
+    "consultar_sql", "text_to_sql", "validacao sql",
+    "imp-2026-05-13", "imp-evaluator",
+)
+
+
+def _classify_evaluator_reason_heuristic(reason: str) -> str:
+    """Categoriza motivo de rejeicao (espelha _classify_evaluator_rejection
+    do text_to_sql.py — duplicacao minima porque skill nao e importavel).
+
+    Categorias: dml_blocked | date_format | missing_field |
+                type_mismatch | value_correction | other
+    """
+    if not reason:
+        return "other"
+    r = reason.lower()
+    if any(t in r for t in ("update", "delete", "insert", "apenas select", "read-only", "dml")):
+        return "dml_blocked"
+    if "data" in r and any(t in r for t in ("formato", "format", "iso", "yyyy", "dd/mm")):
+        return "date_format"
+    if ("campo" in r or "column" in r) and any(
+        t in r for t in ("nao existe", "inexistente", "documentado", "not exist")
+    ):
+        return "missing_field"
+    if "tipo" in r and any(t in r for t in ("incompat", "mismatch")):
+        return "type_mismatch"
+    if "corrigi" in r or "valor" in r:
+        return "value_correction"
+    return "other"
+
+# Extrai bloco SQL de description/evidence (markdown ```sql ``` ou apos "SQL:")
+_RE_SQL_BLOCK_MD = re.compile(
+    r"```sql\s*\n?(.*?)\n?```",
+    re.IGNORECASE | re.DOTALL,
+)
+_RE_SQL_BLOCK_LABEL = re.compile(
+    r"(?:SQL|Query)\s*[:=]\s*(?:\n)?\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b[^`\n]*(?:\n[^`\n]+)*",
+    re.IGNORECASE,
+)
+# Extrai motivo apos label
+_RE_REASON_LABEL = re.compile(
+    r"(?:Motivo|Reason|Rejeicao|Rejection|Why|Erro)\s*[:=]\s*(.+?)(?:\n\n|\n[A-Z]|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _is_evaluator_improvement(category: str, title: str, description: str, evidence: str) -> bool:
+    """Detecta se improvement e sobre evaluator SQL.
+
+    Criterios (AND):
+    - category == 'skill_bug'
+    - title/description/evidence menciona evaluator-related keyword
+    """
+    if category != "skill_bug":
+        return False
+    combined = f"{title}\n{description}\n{evidence}".lower()
+    return any(hint in combined for hint in _EVALUATOR_HINTS)
+
+
+def _extract_sql_and_reason(description: str, evidence: str) -> tuple[Optional[str], Optional[str]]:
+    """Extrai (sql, reason) de description+evidence via regex.
+
+    Returns:
+        (sql, reason) ou (None, None) se nao encontrar SQL clara.
+    """
+    combined = f"{description}\n{evidence}"
+
+    # Tentar bloco SQL em markdown primeiro
+    sql_match = _RE_SQL_BLOCK_MD.search(combined)
+    sql = sql_match.group(1).strip() if sql_match else None
+
+    # Fallback: label "SQL:" + verbo SQL
+    if not sql:
+        sql_match = _RE_SQL_BLOCK_LABEL.search(combined)
+        if sql_match:
+            # Reconstroi: precisa pegar SQL ate fim de linha ou bloco
+            start = sql_match.start(1)
+            # Heuristica: pegar ate proxima linha em branco ou final de paragrafo
+            rest = combined[start:].split("\n\n")[0].strip()
+            # Limita a 1500 chars para evitar lixo
+            sql = rest[:1500] if rest else None
+
+    if not sql or len(sql) < 10:
+        return None, None
+
+    # Extrair motivo
+    reason_match = _RE_REASON_LABEL.search(combined)
+    reason = reason_match.group(1).strip()[:500] if reason_match else None
+    if not reason:
+        # Fallback: usar primeiros 300 chars de description
+        reason = (description or "").strip()[:300] or None
+
+    return sql, reason
+
+
+def _maybe_record_evaluator_false_positive(
+    category: str,
+    title: str,
+    description: str,
+    evidence: str,
+    suggestion_key: Optional[str],
+    user_id: Optional[int],
+) -> None:
+    """Hook T7: detecta improvement sobre evaluator e indexa em background.
+
+    Best-effort: nunca bloqueia register_improvement. Usa daemon thread para
+    chamada Voyage (~200-500ms). Falha silenciosa.
+
+    Status sempre 'pending_review' — aguarda promocao manual via D8/admin.
+    """
+    if not _is_evaluator_improvement(category, title, description, evidence):
+        return
+
+    sql, reason = _extract_sql_and_reason(description, evidence)
+    if not sql or not reason:
+        logger.debug(
+            f"[MEMORY_MCP] T7 hook: detectou evaluator improvement mas "
+            f"nao extraiu SQL/reason. key={suggestion_key}"
+        )
+        return
+
+    # Categoria de rejeicao para correlacao com T6
+    rejection_category = _classify_evaluator_reason_heuristic(reason)
+
+    def _record_in_background():
+        try:
+            from app.agente.services.sql_evaluator_falses_service import (  # pyright: ignore[reportMissingImports]
+                record_false_positive,
+            )
+            # Reusa _execute_with_context para reaproveitar app_context ativo
+            # ou criar um novo (mesmo padrao de outras tools async)
+            _execute_with_context(
+                lambda: record_false_positive(
+                    sql=sql,
+                    reason=reason,
+                    rejection_category=rejection_category,
+                    improvement_key=suggestion_key,
+                    confirmed_by_user_id=user_id if user_id and user_id > 0 else None,
+                )
+            )
+        except Exception as e:
+            logger.debug(f"[MEMORY_MCP] T7 record background falhou: {e}")
+
+    t = threading.Thread(target=_record_in_background, daemon=True, name="t7-fp-record")
+    t.start()
+    logger.info(
+        f"[MEMORY_MCP] T7 hook disparado: key={suggestion_key} "
+        f"category={rejection_category} sql_preview='{sql[:60]}...'"
+    )
+
+
 def _execute_with_context(func):
     """
     Executa função dentro de Flask app context (se necessário).
@@ -3143,6 +3300,21 @@ try:
                 f"[MEMORY_MCP] register_improvement: {key} "
                 f"category={category} severity={severity} title='{title[:60]}'"
             )
+
+            # T7 hook: se improvement for sobre evaluator SQL, indexar como
+            # falso positivo (status=pending_review — aguarda aprovacao humana).
+            # Daemon thread para nao bloquear response (Voyage API ~200-500ms).
+            try:
+                _maybe_record_evaluator_false_positive(
+                    category=category,
+                    title=title,
+                    description=description,
+                    evidence=evidence,
+                    suggestion_key=key,
+                    user_id=_resolve_user_id(args),
+                )
+            except Exception as e:
+                logger.debug(f"[MEMORY_MCP] T7 hook falhou (best-effort): {e}")
             return {
                 "content": [{
                     "type": "text",

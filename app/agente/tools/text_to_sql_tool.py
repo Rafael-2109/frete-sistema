@@ -145,6 +145,7 @@ def _execute_in_app_context(
     debug_unblock_tables: set = None,
     debug_schemas: dict = None,
     admin_mode: bool = False,
+    session_id: str = None,
 ) -> dict:
     """
     Executa pipeline garantindo Flask app context.
@@ -160,12 +161,15 @@ def _execute_in_app_context(
         debug_unblock_tables: Tabelas a desbloquear (debug mode admin)
         debug_schemas: Schemas das tabelas debug (dict nome -> schema JSON)
         admin_mode: Bypass seguranca SQL (keywords, tabelas, read-only)
+        session_id: UUID da sessao do agente (T4 SQLSessionContext) — propagado
+            para o pipeline para contexto DML cross-call em modo admin.
     """
     kwargs = {
         'extra_blocked_tables': extra_blocked_tables,
         'debug_unblock_tables': debug_unblock_tables,
         'debug_schemas': debug_schemas,
         'admin_mode': admin_mode,
+        'session_id': session_id,
     }
     try:
         from flask import current_app
@@ -479,6 +483,14 @@ try:
                 logger.warning(f"[SQL_TOOL] DEBUG MODE: desbloqueando {len(debug_unblock)} tabelas")
                 extra_blocked = None  # Em debug, desbloqueia TUDO (inclusive pessoal_*)
 
+            # T4: pegar session_id do ContextVar do agente para SQLSessionContext
+            session_id = None
+            try:
+                from ..config.permissions import get_current_session_id
+                session_id = get_current_session_id()
+            except Exception:
+                pass  # ContextVar nao disponivel — degrada para sem session_context
+
             # Executar com app context garantido
             result = _execute_in_app_context(
                 pipeline, pergunta,
@@ -486,6 +498,7 @@ try:
                 debug_unblock_tables=debug_unblock,
                 debug_schemas=debug_schemas,
                 admin_mode=admin_mode or debug_active,
+                session_id=session_id,
             )
 
             # Formatar resultado legível (TextContent — backward compat)

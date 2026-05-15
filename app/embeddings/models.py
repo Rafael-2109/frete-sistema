@@ -524,3 +524,100 @@ class CarrierEmbedding(db.Model):
             'cnpj': self.cnpj,
             'aliases': self.aliases,
         }
+
+
+class SqlEvaluatorFalsePositive(db.Model):
+    """
+    Falso positivo confirmado do Haiku evaluator do text_to_sql pipeline (T7).
+
+    Quando o agente identifica que o evaluator rejeitou indevidamente uma SQL
+    (via register_improvement com category=skill_bug + area evaluator), o par
+    (sql_text, rejection_reason) e indexado aqui com embedding. Em queries
+    futuras, busca semantica por cosine_similarity > 0.85 injeta como
+    contra-exemplo no prompt do evaluator.
+
+    Status:
+    - pending_review: aguardando revisao humana (D8 ou admin). NAO injeta.
+    - active: aprovado para injecao no prompt. Hot path.
+    - rejected: revisor descartou. Mantido para auditoria, nao injeta.
+
+    Cria via app.agente.services.sql_evaluator_falses_service.
+    """
+    __tablename__ = 'sql_evaluator_false_positives'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Conteudo do falso positivo
+    sql_text = db.Column(db.Text, nullable=False)
+    rejection_reason = db.Column(db.Text, nullable=False)
+    rejection_category = db.Column(db.String(50), nullable=True)
+
+    # Embedding (gerado de sql_text + rejection_reason)
+    texto_embedado = db.Column(db.Text, nullable=False)
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=True)
+    model_used = db.Column(db.String(50), nullable=True)
+    content_hash = db.Column(db.String(64), nullable=False)
+
+    # Linkage com agent_improvement_dialogue (sem FK fisica para evitar acoplamento)
+    improvement_key = db.Column(db.String(100), nullable=True)
+
+    # Status de revisao
+    status = db.Column(db.String(20), nullable=False, default='pending_review')
+
+    # Auditoria de criacao e revisao
+    confirmed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True
+    )
+    confirmed_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), nullable=False)
+    reviewed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey('usuarios.id', ondelete='SET NULL'), nullable=True
+    )
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    # Metricas de uso (incrementado quando injetado como contra-exemplo)
+    times_referenced = db.Column(db.Integer, nullable=False, default=0)
+    last_referenced_at = db.Column(db.DateTime, nullable=True)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=lambda: agora_utc_naive(), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: agora_utc_naive(),
+        onupdate=lambda: agora_utc_naive(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        db.CheckConstraint(
+            "status IN ('pending_review', 'active', 'rejected')",
+            name='sql_eval_falses_status_chk',
+        ),
+        db.Index(
+            'idx_sql_eval_falses_content_hash_unique',
+            'content_hash',
+            unique=True,
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f'<SqlEvaluatorFalsePositive id={self.id} '
+            f'status={self.status} reason="{(self.rejection_reason or "")[:40]}">'
+        )
+
+    def to_dict(self):
+        """Serializa para resposta (sem embedding)."""
+        return {
+            'id': self.id,
+            'sql_text': self.sql_text,
+            'rejection_reason': self.rejection_reason,
+            'rejection_category': self.rejection_category,
+            'improvement_key': self.improvement_key,
+            'status': self.status,
+            'confirmed_at': self.confirmed_at.isoformat() if self.confirmed_at else None,
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'times_referenced': self.times_referenced,
+            'last_referenced_at': (
+                self.last_referenced_at.isoformat() if self.last_referenced_at else None
+            ),
+        }
