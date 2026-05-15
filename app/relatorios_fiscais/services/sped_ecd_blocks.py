@@ -67,17 +67,48 @@ logger = logging.getLogger(__name__)
 def remover_acentos(texto: Optional[str]) -> str:
     """
     Normaliza texto para SPED: remove acentos, normaliza Unicode, tudo MAIUSCULO.
-    Mitigacao R10: garante que caracteres serao Latin-1 puros sem `?`.
+    V1.7: garante que caracteres SAO Latin-1 puros sem `?`.
+
+    Mapeamento extras para caracteres Unicode comuns nao-Latin-1:
+    - smart quotes -> ASCII quotes
+    - em-dash, en-dash -> -
+    - bullets -> *
+    - setas (->, →, ←) -> -
+    - copyright, registered, trademark -> (C), (R), (TM)
+    - aspas/apostrofes Unicode -> '
+    - outros chars Unicode -> espaco
     """
     if not texto:
         return ''
+    # Substituicoes explicitas (mais comum -> ASCII)
+    substituicoes = {
+        '‘': "'", '’': "'", '‚': "'", '‛': "'",  # smart single quotes
+        '“': '"', '”': '"', '„': '"', '‟': '"',  # smart double quotes
+        '–': '-', '—': '-', '―': '-',                  # en-dash, em-dash, horizontal bar
+        '•': '*', '‣': '*', '◦': '*',                  # bullets
+        '…': '...',                                              # ellipsis
+        ' ': ' ',                                                # nbsp
+        '←': '<-', '→': '->', '↑': '^', '↓': 'v', # setas
+        '©': '(C)', '®': '(R)', '™': '(TM)',           # marcas
+        '°': 'o', '±': '+/-', '¼': '1/4', '½': '1/2', '¾': '3/4',
+    }
+    for k, v in substituicoes.items():
+        texto = texto.replace(k, v)
     # NFKD decompoe acentos (e -> e + combinador)
     nfkd = unicodedata.normalize('NFKD', texto)
     # Remove combinadores (categoria Mn = Mark, Nonspacing)
     sem_acentos = ''.join(c for c in nfkd if unicodedata.category(c) != 'Mn')
-    # Mantem apenas printaveis (ascii basico + latin-1 essenciais)
-    limpo = ''.join(c for c in sem_acentos if c.isprintable() or c == ' ')
-    return limpo.upper().strip()
+    # Filtrar para Latin-1 puro: cada char deve caber em 1 byte Latin-1
+    # Substitui chars fora do Latin-1 por espaco (em vez de '?')
+    limpo_latin1 = []
+    for c in sem_acentos:
+        if c == ' ' or c.isprintable():
+            try:
+                c.encode('latin-1')
+                limpo_latin1.append(c)
+            except UnicodeEncodeError:
+                limpo_latin1.append(' ')  # substitui por espaco (nao por ?)
+    return ''.join(limpo_latin1).upper().strip()
 
 
 def formatar_registro(campos: List) -> str:
@@ -414,9 +445,18 @@ def construir_I050_com_I051(
             remover_acentos(c.get('name', '')),                # 8 CTA
         ])))
 
-        # I051 — apenas se for conta analitica com mapeamento referencial
+        # I051 — apenas se for conta analitica com mapeamento referencial VALIDO
         if c.get('tipo') == 'A':
             cod_ref = c.get('conta_referencial_odoo') or PLANO_REFERENCIAL.get(c.get('account_type', ''), '')
+            # V1.7: filtrar referenciais invalidos (mais de 5 niveis nao existem
+            # no plano oficial RFB; codigos com '99.99' sao placeholders).
+            # No Odoo CIEL IT, 923 das 1770 contas com referencial estao com
+            # >5 niveis (invalido). Sem este filtro, PVA reprova 923 vezes.
+            if cod_ref:
+                niveis = cod_ref.count('.')
+                tem_placeholder = '99.99' in cod_ref
+                if niveis > 4 or tem_placeholder:
+                    cod_ref = ''  # invalida -> nao emite I051
             if cod_ref:
                 linhas.append(contador.emit(formatar_registro([
                     'I051',                                    # 1 REG
@@ -821,18 +861,29 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
 
     # Heuristica de classificacao por code (para sinteticas sem account_type)
     def _classe_pelo_code(code: str) -> str:
-        """Retorna 'asset' ou 'liability_or_equity' baseado no primeiro digito do code."""
+        """Retorna 'asset' ou 'liability_or_equity' baseado no primeiro digito do code.
+        V1.7: ignora codes 3, 4, 5+ (resultado, custos, compensacao) — nao vao para BP."""
         if not code:
             return ''
         if code.startswith('1'):
             return 'asset'
         if code.startswith('2'):
             return 'liability_or_equity'  # passivo + PL (codes 2x no plano NACOM)
+        # 3, 4, 5+: resultado/custos/compensacao — fora do balanco patrimonial
         return ''
 
     # Determinar classe patrimonial de cada code (asset / liability+equity / nao-patrimonial)
     def _classe_da_conta(conta) -> str:
-        """Retorna 'asset', 'liability_or_equity' ou '' (nao patrimonial)."""
+        """Retorna 'asset', 'liability_or_equity' ou '' (nao patrimonial).
+
+        V1.7: codes 5+ (contas de compensacao no plano NACOM, ex: REMESSA
+        INDUSTRIALIZACAO, BONIFICACAO etc.) sao excluidos do balanco mesmo
+        que account_type seja 'asset_current' ou 'liability_current'.
+        Odoo CIEL IT classifica mal essas contas; o Manual ECD diz que
+        compensacao tem natureza propria (COD_NAT=09) e fica fora do BP."""
+        code = (conta.get('code') or '').strip()
+        if code.startswith(('5', '6', '7', '8', '9')):
+            return ''  # compensacao ou contas extra-balanco
         at = (conta.get('account_type') or '').strip()
         if at.startswith('asset'):
             return 'asset'
@@ -840,7 +891,7 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
             return 'liability_or_equity'
         if not at:
             # Sintetica gerada — usa o primeiro digito do code
-            return _classe_pelo_code(conta.get('code', ''))
+            return _classe_pelo_code(code)
         return ''  # resultado, ignorar
 
     # Filtrar plano so patrimoniais (asset_*, liability_*, equity_*, + sinteticas 1x/2x)

@@ -553,12 +553,16 @@ class SpedEcdValidator:
                 acao='Verificar buscar_centros_custo_consolidados — pode ter sido deletado no Odoo')
 
         # COD_PART em I250 devem existir em 0150
+        # V1.7: corrigido offset. Layout I250 Leiaute 9 (9 campos):
+        # campos[0]=REG, [1]=COD_CTA, [2]=COD_CCUS, [3]=VL_DC, [4]=IND_DC,
+        # [5]=NUM_ARQ, [6]=COD_HIST_PAD, [7]=HIST, [8]=COD_PART
+        # Validator antigo lia [7] (HIST) como COD_PART — falso positivo.
         cod_parts_0150 = {r['campos'][1] for r in self._registros_de_tipo('0150')
                           if len(r['campos']) >= 2}
         partners_orfaos = set()
         for r in self._registros_de_tipo('I250'):
-            if len(r['campos']) >= 8 and r['campos'][7]:
-                cod_part = r['campos'][7]
+            if len(r['campos']) >= 9 and r['campos'][8]:
+                cod_part = r['campos'][8]
                 if cod_part not in cod_parts_0150:
                     partners_orfaos.add(cod_part)
 
