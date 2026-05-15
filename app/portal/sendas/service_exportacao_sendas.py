@@ -433,6 +433,11 @@ class ExportacaoSendasService:
         """
         Marca itens exportados como pendentes para reprocessamento
 
+        🆕 FIX BUG 6b: status correto e 'processado' (era 'exportado', que nunca
+        eh gravado — exportar_planilha marca os itens como 'processado' apos exportacao).
+        Sem este fix, o botao "Reprocessar" da tela de Exportacao Sendas nao
+        encontrava nenhum item e nao reabilitava a exportacao.
+
         Args:
             protocolo: Protocolo do agendamento
 
@@ -442,7 +447,7 @@ class ExportacaoSendasService:
         try:
             itens = FilaAgendamentoSendas.query.filter_by(
                 protocolo=protocolo,
-                status='exportado'
+                status='processado'
             ).all()
 
             for item in itens:

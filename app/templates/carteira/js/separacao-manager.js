@@ -211,6 +211,13 @@ class SeparacaoManager {
                     }
                 }
 
+                // 🆕 FIX BUG 5: Aplicar cores semanticas na linha do pedido apos criar separacao completa
+                // - "Gerar Separacao Completa" sempre cobre 100% do saldo (tipo_envio="total")
+                //   entao o pedido fica "totalmente_separado" e a linha recebe table-success.
+                // - Status do pedido passa a "completo".
+                // - Badge da coluna Saldo passa a "Completo".
+                this._aplicarCoresSeparacaoCompleta(numPedido);
+
                 // Atualizar contadores globais
                 if (data.contadores) {
                     this.atualizarContadores(data.contadores);
@@ -342,64 +349,12 @@ class SeparacaoManager {
     }
 
     /**
-     * 🗑️ EXCLUIR SEPARAÇÃO
+     * 🗑️ EXCLUIR SEPARAÇÃO (UNIFICADO)
+     * 🧹 TASK 7: Removida a primeira definicao duplicada que apontava para
+     * `/api/separacao/{separacaoId}/excluir`. JS sobrescrevia a primeira pelo
+     * "ultimo wins" — todas as chamadas usavam a segunda assinatura (loteId).
+     * Mantida a versao por lote_id (rota correta `<string:lote_id>/excluir`).
      */
-    async excluirSeparacao(separacaoId, numPedido) {
-        if (!await this.confirmarAcao('Excluir Separação', 'Esta ação não pode ser desfeita.')) {
-            return;
-        }
-
-        console.log(`🗑️ Excluindo separação ${separacaoId} do pedido ${numPedido}`);
-
-        const card = document.querySelector(`[data-separacao-id="${separacaoId}"]`);
-
-        try {
-            // Adicionar classe de exclusão
-            if (card) {
-                card.classList.add('deleting');
-            }
-
-            const response = await fetch(`/carteira/api/separacao/${separacaoId}/excluir`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'text/html',  // Solicitar parciais HTML
-                    'X-CSRFToken': this.getCSRFToken()
-                }
-            });
-
-            const data = await response.json();
-
-            if (data.ok || data.success) {
-                // Aplicar parciais (servidor retorna HTML atualizado)
-                await this.applyTargets(data);
-
-                // Atualizar contadores
-                if (data.contadores) {
-                    this.atualizarContadores(data.contadores);
-                }
-
-                this.mostrarSucesso('Separação excluída');
-            } else {
-                // Remover classe de exclusão em caso de erro
-                if (card) {
-                    card.classList.remove('deleting');
-                }
-                this.mostrarErro(data.error || 'Erro ao excluir');
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            if (card) {
-                card.classList.remove('deleting');
-            }
-            this.mostrarErro('Erro de comunicação');
-        }
-    }
-
-    /**
-     * 🗑️ EXCLUIR PRÉ-SEPARAÇÃO
-     */
-    // Método unificado para excluir separações (qualquer status)
     async excluirSeparacao(loteId, numPedido) {
         if (!await this.confirmarAcao('Excluir Separação', 'Esta ação não pode ser desfeita.')) {
             return { success: false };
@@ -457,6 +412,55 @@ class SeparacaoManager {
         }
     }
 
+
+    /**
+     * 🆕 FIX BUG 5: Aplicar cores semanticas na pedido-row apos criar separacao completa.
+     * Espelha a logica server-side de agrupamento_service.py (totalmente_separado=true).
+     * Atualiza:
+     *  - classe `table-success` na <tr>
+     *  - data-status="completo"
+     *  - badge da coluna "Saldo" para "Completo" (bg-success)
+     */
+    _aplicarCoresSeparacaoCompleta(numPedido) {
+        try {
+            const linha = document.querySelector(`.pedido-row[data-pedido="${numPedido}"]`);
+            if (!linha) return;
+
+            // 1. Adicionar classe de sucesso na linha
+            linha.classList.add('table-success');
+
+            // 2. Atualizar atributos de status
+            linha.dataset.status = 'completo';
+
+            // 3. Atualizar badge de status na coluna "Saldo"
+            const container = linha.querySelector('.separacoes-container');
+            if (container) {
+                // Remover badges antigos de status (Pendente/Parcial/Completo)
+                container.querySelectorAll('.badge.bg-success.mt-1, .badge.bg-warning.mt-1, .badge.bg-secondary.mt-1').forEach(b => {
+                    // Apenas remover badges que sao indicadores de status (texto curto), nao o contador
+                    const txt = (b.textContent || '').trim();
+                    if (/^(Completo|Parcial|Pendente)/i.test(txt)) {
+                        // Remover este badge e o <br> imediatamente anterior se houver
+                        const prev = b.previousSibling;
+                        if (prev && prev.nodeName === 'BR') {
+                            prev.remove();
+                        }
+                        b.remove();
+                    }
+                });
+
+                // Adicionar novo badge "Completo"
+                const br = document.createElement('br');
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-success mt-1';
+                badge.textContent = 'Completo';
+                container.appendChild(br);
+                container.appendChild(badge);
+            }
+        } catch (err) {
+            console.warn('⚠️ Falha ao aplicar cores semânticas pos-separacao:', err);
+        }
+    }
 
     /**
      * 📊 ATUALIZAR CONTADORES (valores do servidor)

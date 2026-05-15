@@ -3,7 +3,7 @@ API para buscar separações completas com informações de embarque
 """
 
 from flask import jsonify, request
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.separacao.models import Separacao
 from app.embarques.models import Embarque, EmbarqueItem
@@ -94,7 +94,11 @@ def obter_separacoes_completas(num_pedido):
                 }
             
             # Adicionar produto
+            # 🆕 FIX BUG 3: Incluir id da Separacao para permitir
+            # remocao/atualizacao de qtd via /api/separacao/<id>/remover e
+            # /api/atualizar-qtd-separacao no workspace
             separacoes_por_lote[lote_id]['produtos'].append({
+                'id': sep.id,
                 'cod_produto': sep.cod_produto,
                 'nome_produto': sep.nome_produto,
                 'qtd_saldo': float(sep.qtd_saldo or 0),
@@ -252,7 +256,7 @@ def obter_separacoes_compactas_lote():
         pedidos = pedidos[:limite]
         
         logger.info(f"Buscando separações em lote para {len(pedidos)} pedidos")
-        
+
         # Query otimizada: buscar todas as separações de uma vez
         # Filtrar apenas não faturadas (sincronizado_nf=False)
         separacoes = db.session.query(
@@ -272,6 +276,30 @@ def obter_separacoes_compactas_lote():
             Separacao.num_pedido.in_(pedidos),
             Separacao.sincronizado_nf == False  # Apenas não faturadas
         ).all()
+
+        # 🆕 FEAT 4: Buscar embarques (numero + id) para lotes ATIVOS em uma unica query
+        # Permite exibir link para o embarque na linha da separacao compacta.
+        lotes_unicos = list({s.separacao_lote_id for s in separacoes if s.separacao_lote_id})
+        embarques_por_lote = {}
+        if lotes_unicos:
+            embarque_rows = db.session.query(
+                EmbarqueItem.separacao_lote_id,
+                Embarque.id.label('embarque_id'),
+                Embarque.numero.label('embarque_numero')
+            ).join(
+                Embarque, EmbarqueItem.embarque_id == Embarque.id
+            ).filter(
+                EmbarqueItem.separacao_lote_id.in_(lotes_unicos),
+                EmbarqueItem.status == 'ativo',
+                Embarque.status == 'ativo'
+            ).all()
+            for row in embarque_rows:
+                # Manter apenas o primeiro encontrado (1 lote tipicamente vai em 1 embarque)
+                if row.separacao_lote_id not in embarques_por_lote:
+                    embarques_por_lote[row.separacao_lote_id] = {
+                        'embarque_id': row.embarque_id,
+                        'numero': row.embarque_numero
+                    }
         
         # Agrupar por pedido E por lote_id (para mostrar apenas um registro por lote)
         separacoes_por_pedido = {}
@@ -294,6 +322,7 @@ def obter_separacoes_compactas_lote():
                 lotes_processados[chave_lote]['pallet'] += float(sep.pallet or 0)
             else:
                 # Criar novo registro para o lote
+                embarque_info = embarques_por_lote.get(lote_id)
                 lote_data = {
                     'tipo': 'separacao',
                     'lote_id': lote_id,
@@ -306,7 +335,10 @@ def obter_separacoes_compactas_lote():
                     'valor': float(sep.valor_saldo or 0),
                     'peso': float(sep.peso or 0),
                     'pallet': float(sep.pallet or 0),
-                    'obs_separacao': sep.obs_separacao  # Observação da separação
+                    'obs_separacao': sep.obs_separacao,  # Observação da separação
+                    # 🆕 FEAT 4: Dados do embarque (None se nao houver embarque ativo)
+                    'embarque_id': embarque_info['embarque_id'] if embarque_info else None,
+                    'embarque_numero': embarque_info['numero'] if embarque_info else None
                 }
                 lotes_processados[chave_lote] = lote_data
                 separacoes_por_pedido[num_pedido].append(lote_data)

@@ -927,13 +927,21 @@ class CarteiraAgrupada {
 
                         window.separacoesCompactasCache[numPedido] = separacoes;
 
-                        // SEMPRE renderizar e tornar visível se houver separações
+                        // 🆕 FIX BUG 1: Renderizar e tornar visivel APENAS se o pedido esta visivel apos filtros
+                        // Evita que carregamentos assincronos pos-filtro forcem reaparicao de linhas filtradas
                         if (separacoes && separacoes.length > 0) {
                             const separacoesRow = document.getElementById(`separacoes-compactas-${numPedido}`);
-                            if (separacoesRow) {
+                            const pedidoRow = document.querySelector(`.pedido-row[data-pedido="${numPedido}"]`);
+                            const pedidoVisivel = pedidoRow && pedidoRow.style.display !== 'none';
+                            if (separacoesRow && pedidoVisivel) {
                                 // Tornar a linha visível
                                 separacoesRow.style.display = 'table-row';
                                 // Renderizar o conteúdo
+                                this.renderizarSeparacaoDoCache(numPedido);
+                            } else if (separacoesRow && !pedidoVisivel) {
+                                // Pedido filtrado: garantir que a linha de separacoes tambem nao aparece
+                                separacoesRow.style.display = 'none';
+                                // Mas ainda renderizar o conteudo no cache para nao perder dados ao reexibir
                                 this.renderizarSeparacaoDoCache(numPedido);
                             }
                         }
@@ -980,7 +988,10 @@ class CarteiraAgrupada {
                     agendamento: sep.agendamento,
                     protocolo: sep.protocolo,
                     agendamento_confirmado: sep.agendamento_confirmado,
-                    obs_separacao: sep.obs_separacao  // Observação da separação
+                    obs_separacao: sep.obs_separacao,  // Observação da separação
+                    // 🆕 FEAT 4: Repassar dados do embarque
+                    embarque_id: sep.embarque_id,
+                    embarque_numero: sep.embarque_numero
                 };
             })
         };
@@ -1078,13 +1089,19 @@ class CarteiraAgrupada {
 
                             window.separacoesCompactasCache[numPedido] = separacoes;
 
-                            // RENDERIZAR se houver separações
+                            // 🆕 FIX BUG 1: RENDERIZAR apenas se o pedido esta visivel apos filtros
                             if (separacoes && separacoes.length > 0) {
                                 const separacoesRow = document.getElementById(`separacoes-compactas-${numPedido}`);
-                                if (separacoesRow) {
+                                const pedidoRow = document.querySelector(`.pedido-row[data-pedido="${numPedido}"]`);
+                                const pedidoVisivel = pedidoRow && pedidoRow.style.display !== 'none';
+                                if (separacoesRow && pedidoVisivel) {
                                     // Tornar visível
                                     separacoesRow.style.display = 'table-row';
                                     // Renderizar conteúdo
+                                    this.renderizarSeparacaoDoCache(numPedido);
+                                } else if (separacoesRow && !pedidoVisivel) {
+                                    // Garantir que linha esteja oculta junto com o pedido filtrado
+                                    separacoesRow.style.display = 'none';
                                     this.renderizarSeparacaoDoCache(numPedido);
                                 }
                             }
@@ -1131,6 +1148,9 @@ class CarteiraAgrupada {
                     protocolo: sep.protocolo,
                     agendamento_confirmado: sep.agendamento_confirmado,
                     obs_separacao: sep.obs_separacao,  // Observação da separação
+                    // 🆕 FEAT 4: Repassar dados do embarque
+                    embarque_id: sep.embarque_id,
+                    embarque_numero: sep.embarque_numero,
                     isSeparacao: true
                 });
             });
@@ -1143,6 +1163,7 @@ class CarteiraAgrupada {
         }
 
         // Renderizar tabela compacta
+        // 🆕 FEAT 4: Coluna "Embarque" adicionada (link para a tela do embarque quando ativo)
         return `
             <div class="separacoes-compactas-container p-2 border-bottom">
                 <div class="table-responsive">
@@ -1151,6 +1172,7 @@ class CarteiraAgrupada {
                             <tr>
                                 <th width="80">Tipo</th>
                                 <th width="70">Status</th>
+                                <th width="80">Embarque</th>
                                 <th width="90" class="text-end">Valor</th>
                                 <th width="70" class="text-end">Peso</th>
                                 <th width="60" class="text-end">Pallet</th>
@@ -1196,10 +1218,18 @@ class CarteiraAgrupada {
                 <i class="fas fa-comment-alt text-muted me-1"></i>${item.obs_separacao}
              </span>` : '-';
 
+        // 🆕 FEAT 4: Coluna de embarque com link quando houver embarque ativo
+        const embarqueHtml = item.embarque_id
+            ? `<a href="/embarques/${item.embarque_id}" target="_blank" class="text-decoration-none" title="Abrir embarque #${item.embarque_numero}">
+                   <i class="fas fa-truck me-1"></i>#${item.embarque_numero}
+               </a>`
+            : '-';
+
         return `
             <tr data-lote-id="${item.loteId}" id="separacao-compacta-${item.loteId}">
                 <td><strong class="${tipoClass}">${item.tipo}</strong></td>
                 <td>${statusBadge}</td>
+                <td data-field="embarque">${embarqueHtml}</td>
                 <td class="text-end text-success">${this.formatarMoeda(item.valor)}</td>
                 <td class="text-end">${this.formatarPeso(item.peso)}</td>
                 <td class="text-end">${this.formatarPallet(item.pallet)}</td>

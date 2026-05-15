@@ -363,6 +363,8 @@ class LoteManager {
             const valor = parseFloat(produto.valor_saldo || produto.valor || 0);
             const peso = parseFloat(produto.peso || 0);
             const pallet = parseFloat(produto.pallet || 0);
+            // 🆕 FIX BUG 3: Capturar id da Separacao (varias origens possiveis)
+            const separacaoId = produto.id || produto.separacaoId || produto.preSeparacaoId || '';
 
             // Formatar valores
             const qtdFormatada = Math.floor(quantidade).toLocaleString('pt-BR');
@@ -379,8 +381,25 @@ class LoteManager {
                 maximumFractionDigits: 2
             }) : '0,00';
 
+            // 🆕 FIX BUG 3: Quando podeRemover (PREVISAO/ABERTO) e ha separacaoId,
+            // renderizar input editavel de qtd que persiste via /api/atualizar-qtd-separacao
+            const qtdHtml = (podeRemover && separacaoId)
+                ? `<div class="input-group input-group-sm me-2" style="max-width: 100px;">
+                       <input type="number" class="form-control form-control-sm text-end qtd-produto-card"
+                              value="${Math.floor(quantidade)}"
+                              min="0" step="1"
+                              data-separacao-id="${separacaoId}"
+                              data-cod-produto="${codProduto}"
+                              data-lote-id="${loteId}"
+                              data-qtd-original="${Math.floor(quantidade)}"
+                              onchange="workspace.loteManager.atualizarQtdProdutoCard(this)"
+                              title="Editar quantidade (0 = remover)">
+                       <span class="input-group-text text-xs" style="font-size: 0.7rem;">un</span>
+                   </div>`
+                : `<span class="small me-2"><strong>${qtdFormatada}</strong>un</span>`;
+
             return `
-                <div class="produto-lote d-flex align-items-center justify-content-between py-1 border-bottom">
+                <div class="produto-lote d-flex align-items-center justify-content-between py-1 border-bottom" data-cod-produto="${codProduto}">
                     <div class="produto-info d-flex align-items-center flex-grow-1" style="min-width: 0;">
                         <strong class="me-2 text-nowrap">${codProduto}</strong>
                         <span class="text-truncate small text-muted me-2" style="max-width: 200px;" title="${nomeProduto}">
@@ -388,9 +407,7 @@ class LoteManager {
                         </span>
                     </div>
                     <div class="produto-valores d-flex align-items-center text-nowrap">
-                        <span class="small me-2">
-                            <strong>${qtdFormatada}</strong>un
-                        </span>
+                        ${qtdHtml}
                         ${valor > 0 ? `
                             <span class="small me-2">
                                 R$ <strong>${valorFormatado}</strong>
@@ -407,7 +424,7 @@ class LoteManager {
                             </span>
                         ` : ''}
                         ${podeRemover ? `
-                            <button class="btn btn-sm btn-link text-danger p-0 ms-2" 
+                            <button class="btn btn-sm btn-link text-danger p-0 ms-2"
                                     onclick="workspace.loteManager.removerProdutoDoLote('${loteId}', '${codProduto}')"
                                     title="Remover produto">
                                 <i class="fas fa-times"></i>
@@ -417,6 +434,101 @@ class LoteManager {
                 </div>
             `;
         }).join('') + `</div>`;
+    }
+
+    /**
+     * 🆕 FIX BUG 3: Atualizar quantidade de produto direto no card de separacao
+     * Persiste via /api/atualizar-qtd-separacao. Se qtd=0, o backend deleta a Separacao.
+     */
+    async atualizarQtdProdutoCard(inputEl) {
+        const separacaoId = inputEl.dataset.separacaoId;
+        const codProduto = inputEl.dataset.codProduto;
+        const loteId = inputEl.dataset.loteId;
+        const novaQtd = parseFloat(inputEl.value) || 0;
+        const qtdOriginal = parseFloat(inputEl.dataset.qtdOriginal) || 0;
+
+        if (!separacaoId) {
+            console.warn('⚠️ atualizarQtdProdutoCard sem separacaoId');
+            return;
+        }
+
+        if (novaQtd < 0) {
+            inputEl.value = qtdOriginal;
+            return;
+        }
+
+        if (novaQtd === qtdOriginal) {
+            return; // Sem mudança
+        }
+
+        inputEl.disabled = true;
+
+        try {
+            const response = await fetch('/carteira/simples/api/atualizar-qtd-separacao', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.getCSRFToken()
+                },
+                body: JSON.stringify({
+                    separacao_id: parseInt(separacaoId),
+                    nova_qtd: novaQtd
+                })
+            });
+
+            const data = await response.json();
+
+            if (!data.success) {
+                inputEl.value = qtdOriginal;
+                this.workspace.mostrarFeedback(data.error || 'Erro ao atualizar quantidade', 'error');
+                return;
+            }
+
+            // Se qtd=0 -> backend deletou separacao -> remover linha local
+            if (data.deletado) {
+                const loteData = this.workspace.preSeparacoes.get(loteId);
+                if (loteData) {
+                    loteData.produtos = loteData.produtos.filter(p =>
+                        (p.cod_produto || p.codProduto) !== codProduto
+                    );
+                    this.recalcularTotaisLote(loteId);
+                    this.atualizarCardLote(loteId);
+                }
+                this.workspace.mostrarFeedback(`Produto ${codProduto} removido (qtd 0)`, 'success');
+            } else {
+                // Atualizar dados locais com os novos valores
+                const loteData = this.workspace.preSeparacoes.get(loteId);
+                if (loteData) {
+                    const produtoLocal = loteData.produtos.find(p =>
+                        (p.cod_produto || p.codProduto) === codProduto
+                    );
+                    if (produtoLocal) {
+                        produtoLocal.qtd_saldo = novaQtd;
+                        if (data.separacao) {
+                            produtoLocal.valor_saldo = data.separacao.valor_saldo || produtoLocal.valor_saldo;
+                            produtoLocal.peso = data.separacao.peso || produtoLocal.peso;
+                            produtoLocal.pallet = data.separacao.pallet || produtoLocal.pallet;
+                        }
+                    }
+                    this.recalcularTotaisLote(loteId);
+                    this.atualizarCardLote(loteId);
+                }
+                inputEl.dataset.qtdOriginal = novaQtd;
+                this.workspace.mostrarFeedback('Quantidade atualizada', 'success');
+            }
+
+            // Atualizar saldo na tabela de origem do workspace
+            if (window.workspaceQuantidades) {
+                window.workspaceQuantidades.atualizarSaldoAposAdicao(codProduto, novaQtd - qtdOriginal);
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao atualizar qtd:', error);
+            inputEl.value = qtdOriginal;
+            this.workspace.mostrarFeedback(`Erro ao atualizar: ${error.message}`, 'error');
+        } finally {
+            inputEl.disabled = false;
+        }
     }
 
     async adicionarProdutoNoLote(loteId, dadosProduto) {
@@ -580,7 +692,11 @@ class LoteManager {
     }
 
     atualizarCardLote(loteId) {
-        const cardElement = document.querySelector(`[data-lote-id="${loteId}"]`);
+        // 🆕 FIX BUG 2: Usar seletor especifico para o card do workspace,
+        // evitando substituir TR.separacao-compacta-${loteId} (que tambem tem data-lote-id)
+        // pelo HTML do DIV.card — bug que materializava o card "acima do pedido"
+        // mesmo com o workspace fechado.
+        const cardElement = document.querySelector(`.workspace-montagem .lote-card[data-lote-id="${loteId}"]`);
         if (cardElement) {
             cardElement.outerHTML = this.renderizarCardLote(loteId);
         }
@@ -596,9 +712,12 @@ class LoteManager {
             const produto = loteData.produtos.find(p =>
                 p.codProduto === codProduto || p.cod_produto === codProduto
             );
-            const separacaoId = produto?.separacaoId || produto?.preSeparacaoId;
+            // 🆕 FIX BUG 3: Aceitar tambem produto.id (vindo do backend /separacoes-completas)
+            // alem de separacaoId/preSeparacaoId (vindos do fluxo de adicao via salvarSeparacaoAPI)
+            const separacaoId = produto?.separacaoId || produto?.preSeparacaoId || produto?.id;
             if (!produto || !separacaoId) {
                 console.warn(`⚠️ Produto ${codProduto} não tem ID de separação`);
+                this.workspace.mostrarFeedback('Não foi possível remover: produto sem ID de separação', 'error');
                 return;
             }
 

@@ -86,7 +86,9 @@
                                                 <th>Protocolo</th>
                                                 <th>ID Sendas</th>
                                                 <th>CNPJ</th>
-                                                <th>Cliente</th>
+                                                <th>Razão Social</th>
+                                                <th>Cidade</th>
+                                                <th>UF</th>
                                                 <th>Tipo</th>
                                                 <th>Documento</th>
                                                 <th>Data Confirmada</th>
@@ -112,7 +114,9 @@
                                                 <th><input type="checkbox" id="checkAllNaoEncontrados"></th>
                                                 <th>Protocolo</th>
                                                 <th>CNPJ</th>
-                                                <th>Cliente</th>
+                                                <th>Razão Social</th>
+                                                <th>Cidade</th>
+                                                <th>UF</th>
                                                 <th>Tipo</th>
                                                 <th>Documento</th>
                                                 <th>Status</th>
@@ -143,7 +147,9 @@
                                                 <th><input type="checkbox" id="checkAllDivergencias"></th>
                                                 <th>Protocolo</th>
                                                 <th>CNPJ</th>
-                                                <th>Cliente</th>
+                                                <th>Razão Social</th>
+                                                <th>Cidade</th>
+                                                <th>UF</th>
                                                 <th>Data que Solicitamos ao Sendas</th>
                                                 <th>Data Registrada no Sistema</th>
                                                 <th>Ação</th>
@@ -333,17 +339,30 @@ function exibirResumo(resultado) {
     `;
 }
 
+// 🆕 FIX BUG 6a: Helpers para exibir Razao Social/Cidade/UF
+function _truncarTexto(texto, max) {
+    if (!texto) return '-';
+    return texto.length > max ? `${texto.substring(0, max)}...` : texto;
+}
+
+function _razSocial(item) {
+    return item.raz_social || item.cliente || '-';
+}
+
 function preencherConfirmados(confirmados) {
     const tbody = document.getElementById('tbodyConfirmados');
     tbody.innerHTML = '';
 
     confirmados.forEach(item => {
+        const razSocial = _razSocial(item);
         tbody.innerHTML += `
             <tr>
                 <td>${item.protocolo_nosso}</td>
                 <td>${item.id_sendas || '-'}</td>
                 <td>${item.cnpj || '-'}</td>
-                <td title="${item.cliente || '-'}">${(item.cliente || '-').substring(0, 30)}${(item.cliente && item.cliente.length > 30) ? '...' : ''}</td>
+                <td title="${razSocial}">${_truncarTexto(razSocial, 30)}</td>
+                <td>${item.nome_cidade || '-'}</td>
+                <td>${item.cod_uf || '-'}</td>
                 <td>${item.tipo_origem || '-'}</td>
                 <td>${item.documento_origem || '-'}</td>
                 <td>${item.data_confirmada || '-'}</td>
@@ -358,12 +377,15 @@ function preencherNaoEncontrados(naoEncontrados) {
     tbody.innerHTML = '';
 
     naoEncontrados.forEach(item => {
+        const razSocial = _razSocial(item);
         tbody.innerHTML += `
             <tr>
                 <td><input type="checkbox" class="check-nao-encontrado" data-protocolo="${item.protocolo_nosso}"></td>
                 <td>${item.protocolo_nosso}</td>
                 <td>${item.cnpj || '-'}</td>
-                <td title="${item.cliente || '-'}">${(item.cliente || '-').substring(0, 30)}${(item.cliente && item.cliente.length > 30) ? '...' : ''}</td>
+                <td title="${razSocial}">${_truncarTexto(razSocial, 30)}</td>
+                <td>${item.nome_cidade || '-'}</td>
+                <td>${item.cod_uf || '-'}</td>
                 <td>${item.tipo_origem || '-'}</td>
                 <td>${item.documento_origem || '-'}</td>
                 <td><span class="status-badge status-nao-encontrado">Não Encontrado na Planilha</span></td>
@@ -382,6 +404,7 @@ function preencherDivergencias(divergencias) {
     tbody.innerHTML = '';
 
     divergencias.forEach(item => {
+        const razSocial = _razSocial(item);
         tbody.innerHTML += `
             <tr>
                 <td><input type="checkbox" class="check-divergencia"
@@ -390,7 +413,9 @@ function preencherDivergencias(divergencias) {
                     data-data="${item.data_sugerida}"></td>
                 <td>${item.protocolo_nosso}</td>
                 <td>${item.cnpj || '-'}</td>
-                <td title="${item.cliente || '-'}">${(item.cliente || '-').substring(0, 30)}${(item.cliente && item.cliente.length > 30) ? '...' : ''}</td>
+                <td title="${razSocial}">${_truncarTexto(razSocial, 30)}</td>
+                <td>${item.nome_cidade || '-'}</td>
+                <td>${item.cod_uf || '-'}</td>
                 <td>${item.data_sugerida || '-'}</td>
                 <td>${item.data_solicitada || '-'}</td>
                 <td>

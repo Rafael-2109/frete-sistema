@@ -1361,36 +1361,9 @@ class WorkspaceMontagem {
         window.open(`/carteira/separacao/${loteId}/imprimir`, '_blank');
     }
 
-    // Função duplicada removida - usar a primeira implementação acima
-
-    async reverterAgendamentoLote(loteId, tipo) {
-        try {
-            console.log(`🔄 Revertendo confirmação do lote ${loteId} (${tipo})`);
-
-            // Usar sempre o endpoint unificado por lote_id
-            const endpoint = `/carteira/api/separacao/${loteId}/reverter-agendamento`;
-
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': this.getCSRFToken()
-                }
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.mostrarToast('Confirmação de agendamento revertida!', 'success');
-                // Recarregar dados
-                location.reload();
-            } else {
-                this.mostrarToast('Erro ao reverter confirmação: ' + result.error, 'error');
-            }
-        } catch (error) {
-            console.error('Erro ao reverter confirmação:', error);
-            this.mostrarToast('Erro ao reverter confirmação', 'error');
-        }
-    }
+    // 🧹 TASK 7: Funcao reverterAgendamentoLote duplicada removida
+    // (havia 2 definicoes, a 2a sobrescrevia a 1a; mantida apenas a versao
+    // completa em ~linha 801 que atualiza preSeparacoes e card sem reload).
 
     // Funções do Portal
     async agendarNoPortal(loteId, dataAgendamento) {
@@ -1736,14 +1709,16 @@ class WorkspaceMontagem {
             const celulas = linhaCompacta.querySelectorAll('td');
 
             // Usar seletores data-field para melhor confiabilidade
+            // 🆕 FEAT 4: Indices de fallback ajustados pela insercao da coluna "Embarque" (idx 2):
+            // 0=Tipo, 1=Status, 2=Embarque, 3=Valor, 4=Peso, 5=Pallet,
+            // 6=Expedicao, 7=Agendamento, 8=Protocolo, 9=Confirmacao
             // Atualizar coluna Expedição
             const celulaExpedicao = linhaCompacta.querySelector('td[data-field="expedicao"]');
             if (celulaExpedicao) {
                 console.log(`📅 Atualizando expedição`);
                 celulaExpedicao.innerHTML = expedicao ? this.formatarData(expedicao) : '-';
-            } else if (celulas[5]) {
-                // Fallback para índice se não encontrar pelo atributo
-                celulas[5].innerHTML = expedicao ? this.formatarData(expedicao) : '-';
+            } else if (celulas[6]) {
+                celulas[6].innerHTML = expedicao ? this.formatarData(expedicao) : '-';
             }
 
             // Atualizar coluna Agendamento
@@ -1751,9 +1726,8 @@ class WorkspaceMontagem {
             if (celulaAgendamento) {
                 console.log(`📅 Atualizando agendamento`);
                 celulaAgendamento.innerHTML = agendamento ? this.formatarData(agendamento) : '-';
-            } else if (celulas[6]) {
-                // Fallback para índice
-                celulas[6].innerHTML = agendamento ? this.formatarData(agendamento) : '-';
+            } else if (celulas[7]) {
+                celulas[7].innerHTML = agendamento ? this.formatarData(agendamento) : '-';
             }
 
             // Atualizar coluna Protocolo
@@ -1761,9 +1735,8 @@ class WorkspaceMontagem {
             if (celulaProtocolo) {
                 console.log(`🔢 Atualizando protocolo`);
                 celulaProtocolo.innerHTML = `<small>${protocolo || '-'}</small>`;
-            } else if (celulas[7]) {
-                // Fallback para índice
-                celulas[7].innerHTML = `<small>${protocolo || '-'}</small>`;
+            } else if (celulas[8]) {
+                celulas[8].innerHTML = `<small>${protocolo || '-'}</small>`;
             }
 
             // Atualizar coluna Confirmação
@@ -1777,14 +1750,13 @@ class WorkspaceMontagem {
                 } else {
                     celulaConfirmacao.innerHTML = '-';
                 }
-            } else if (celulas[8]) {
-                // Fallback para índice
+            } else if (celulas[9]) {
                 if (agendamentoConfirmado) {
-                    celulas[8].innerHTML = '<span class="badge bg-success">Confirmado</span>';
+                    celulas[9].innerHTML = '<span class="badge bg-success">Confirmado</span>';
                 } else if (protocolo) {
-                    celulas[8].innerHTML = '<span class="badge bg-warning">Aguardando</span>';
+                    celulas[9].innerHTML = '<span class="badge bg-warning">Aguardando</span>';
                 } else {
-                    celulas[8].innerHTML = '<span class="badge bg-secondary">-</span>';
+                    celulas[9].innerHTML = '<span class="badge bg-secondary">-</span>';
                 }
             }
 

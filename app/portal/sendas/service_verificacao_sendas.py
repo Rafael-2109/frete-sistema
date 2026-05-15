@@ -101,10 +101,16 @@ class VerificacaoSendasService:
 
                     if row_planilha is None:
                         # NÃO ENCONTRADO na planilha
+                        # 🆕 FIX BUG 6a: Inclui CNPJ/cliente/cidade/UF nos resultados de nao encontrados
                         resultados['nao_encontrados'].append({
                             'protocolo_nosso': protocolo,
                             'tipo_origem': tipo_origem,
                             'documento_origem': documento_origem,
+                            'cnpj': protocolo_info.get('cnpj'),
+                            'cliente': protocolo_info.get('cliente'),
+                            'raz_social': protocolo_info.get('raz_social') or protocolo_info.get('cliente'),
+                            'nome_cidade': protocolo_info.get('nome_cidade'),
+                            'cod_uf': protocolo_info.get('cod_uf'),
                             'mensagem': 'Protocolo não encontrado na planilha do Sendas'
                         })
                         continue
@@ -145,12 +151,21 @@ class VerificacaoSendasService:
         """
         Busca todos os protocolos não confirmados do SISTEMA
         Retorna lista com informações dos protocolos pendentes de confirmação
+
+        🆕 FIX BUG 6a: Inclui raz_social, nome_cidade e cod_uf em todos os fluxos
+            (necessario para exibir Razao Social/Cidade/UF/CNPJ na tabela de verificacao).
+        🆕 FIX BUG 6b: status correto da FilaAgendamentoSendas eh 'processado'
+            (era 'exportado', que nao existe — modelo so tem pendente/processado/erro).
+        🆕 FIX BUG 6c: Filtrar EntregaMonitorada.entregue=False alem de
+            status_finalizacao!='Entregue', e para Fluxo 2 (Separacao com numero_nf)
+            tambem excluir separacoes cuja NF ja foi entregue.
         """
         protocolos = []
 
         # 1. Buscar em Separacao (protocolos não confirmados)
         # Como um protocolo pode ter múltiplos produtos, pegar o primeiro de cada protocolo
         from app.separacao.models import Separacao
+        from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
         from sqlalchemy import distinct
 
         # Buscar protocolos distintos primeiro
@@ -164,6 +179,19 @@ class VerificacaoSendasService:
             Separacao.sincronizado_nf == False  # ✅ CRÍTICO: Apenas não faturados
         ).all()
 
+        # 🆕 FIX BUG 6c: Pre-carregar set de NFs ja entregues para excluir do resultado
+        nfs_entregues = set()
+        try:
+            entregues_rows = db.session.query(EntregaMonitorada.numero_nf).filter(
+                db.or_(
+                    EntregaMonitorada.entregue == True,
+                    EntregaMonitorada.status_finalizacao == 'Entregue'
+                )
+            ).all()
+            nfs_entregues = {row.numero_nf for row in entregues_rows if row.numero_nf}
+        except Exception as e:
+            logger.warning(f"Falha ao carregar NFs entregues: {e}")
+
         # Para cada protocolo, buscar os dados do primeiro registro
         for (protocolo_valor,) in protocolos_distintos:
             sep = Separacao.query.filter_by(
@@ -173,26 +201,35 @@ class VerificacaoSendasService:
             ).first()
 
             if sep:
+                # 🆕 FIX BUG 6c: Se a Separacao tem NF associada e a NF ja foi entregue,
+                # nao adicionar (nao precisa mais verificar agenda).
+                if sep.numero_nf and sep.numero_nf in nfs_entregues:
+                    continue
+
                 protocolos.append({
                     'protocolo': sep.protocolo,
                     'tipo_origem': 'separacao',
                     'documento_origem': sep.separacao_lote_id,
                     'cnpj': sep.cnpj_cpf,
                     'cliente': sep.raz_social_red or sep.cnpj_cpf,
+                    # 🆕 FIX BUG 6a: dados de endereco
+                    'raz_social': sep.raz_social_red,
+                    'nome_cidade': sep.nome_cidade,
+                    'cod_uf': sep.cod_uf,
                     'data_agendamento': sep.agendamento,
-                    'cod_uf': sep.cod_uf
                 })
 
         # 2. Buscar em AgendamentoEntrega (status != 'confirmado')
-        # ✅ FILTRO: Excluir NFs com status_finalizacao='Entregue'
-        from app.monitoramento.models import AgendamentoEntrega, EntregaMonitorada
+        # ✅ FILTRO: Excluir NFs com status_finalizacao='Entregue' OU entregue=True
         agendamentos = db.session.query(
             AgendamentoEntrega.protocolo_agendamento,
             AgendamentoEntrega.entrega_id,
             AgendamentoEntrega.data_agendada,
             EntregaMonitorada.numero_nf,
             EntregaMonitorada.cnpj_cliente,
-            EntregaMonitorada.cliente  # Campo correto é 'cliente'
+            EntregaMonitorada.cliente,
+            EntregaMonitorada.municipio,
+            EntregaMonitorada.uf
         ).join(
             EntregaMonitorada,
             EntregaMonitorada.id == AgendamentoEntrega.entrega_id
@@ -200,7 +237,8 @@ class VerificacaoSendasService:
             AgendamentoEntrega.protocolo_agendamento.isnot(None),
             AgendamentoEntrega.protocolo_agendamento != '',
             AgendamentoEntrega.status != 'confirmado',
-            EntregaMonitorada.status_finalizacao != 'Entregue'  # ✅ EXCLUIR entregas finalizadas
+            EntregaMonitorada.status_finalizacao != 'Entregue',  # ✅ EXCLUIR finalizadas
+            EntregaMonitorada.entregue == False                  # 🆕 FIX BUG 6c
         ).all()
 
         for agend in agendamentos:
@@ -210,30 +248,42 @@ class VerificacaoSendasService:
                 'documento_origem': agend.numero_nf,
                 'entrega_id': agend.entrega_id,
                 'cnpj': agend.cnpj_cliente,
-                'cliente': agend.cliente or agend.cnpj_cliente,  # Campo correto
+                'cliente': agend.cliente or agend.cnpj_cliente,
+                # 🆕 FIX BUG 6a: dados de endereco
+                'raz_social': agend.cliente,
+                'nome_cidade': agend.municipio,
+                'cod_uf': agend.uf,
                 'data_agendamento': agend.data_agendada,
-                'cod_uf': None  # NF não tem cod_uf
             })
 
-        # 3. Buscar em FilaAgendamentoSendas (status = 'exportado')
+        # 3. Buscar em FilaAgendamentoSendas (status='processado')
+        # 🆕 FIX BUG 6b: status correto e 'processado' (modelo so suporta pendente/processado/erro)
         # Como garantia adicional, caso não esteja nas tabelas acima
         fila_items = FilaAgendamentoSendas.query.filter(
-            FilaAgendamentoSendas.status == 'exportado'
+            FilaAgendamentoSendas.status == 'processado'
         ).all()
 
         # Adicionar apenas se não estiver já na lista
         protocolos_existentes = {p['protocolo'] for p in protocolos}
         for fila in fila_items:
             if fila.protocolo not in protocolos_existentes:
-                # Buscar cliente baseado no tipo_origem
+                # Buscar cliente/cidade/uf baseado no tipo_origem
                 cliente = None
+                nome_cidade = None
+                cod_uf = None
                 if fila.tipo_origem in ['lote', 'separacao'] and fila.documento_origem:
-                    # Tentar buscar cliente da Separacao
-                    sep_cliente = db.session.query(Separacao.raz_social_red).filter(
+                    # Tentar buscar dados da Separacao
+                    sep_info = db.session.query(
+                        Separacao.raz_social_red,
+                        Separacao.nome_cidade,
+                        Separacao.cod_uf
+                    ).filter(
                         Separacao.separacao_lote_id == fila.documento_origem
                     ).first()
-                    if sep_cliente:
-                        cliente = sep_cliente.raz_social_red
+                    if sep_info:
+                        cliente = sep_info.raz_social_red
+                        nome_cidade = sep_info.nome_cidade
+                        cod_uf = sep_info.cod_uf
 
                 protocolos.append({
                     'protocolo': fila.protocolo,
@@ -241,8 +291,11 @@ class VerificacaoSendasService:
                     'documento_origem': fila.documento_origem,
                     'cnpj': fila.cnpj,
                     'cliente': cliente or fila.cnpj,
+                    # 🆕 FIX BUG 6a: dados de endereco (podem ser None se nao encontrar)
+                    'raz_social': cliente,
+                    'nome_cidade': nome_cidade,
+                    'cod_uf': cod_uf,
                     'data_agendamento': fila.data_agendamento,
-                    'cod_uf': None
                 })
 
         logger.info(f"Total de protocolos não confirmados: {len(protocolos)}")
@@ -281,6 +334,10 @@ class VerificacaoSendasService:
             'documento_origem': documento_origem,
             'cnpj': protocolo_info.get('cnpj'),
             'cliente': protocolo_info.get('cliente'),
+            # 🆕 FIX BUG 6a: Propagar dados de endereco para a UI
+            'raz_social': protocolo_info.get('raz_social') or protocolo_info.get('cliente'),
+            'nome_cidade': protocolo_info.get('nome_cidade'),
+            'cod_uf': protocolo_info.get('cod_uf'),
             'confirmado': False,
             'atualizado': False,
             'divergencia': False,
@@ -466,15 +523,16 @@ class VerificacaoSendasService:
         """
         Marca agendamentos não encontrados para reprocessamento
         Implementa A.1.2.1 da especificação
+        🆕 FIX BUG 6b: status correto eh 'processado' (era 'exportado', que nao existe).
         """
         try:
             contador = 0
 
             for protocolo in protocolos:
-                # Alterar status de 'exportado' para 'pendente'
+                # Alterar status de 'processado' para 'pendente'
                 resultado = FilaAgendamentoSendas.query.filter_by(
                     protocolo=protocolo,
-                    status='exportado'
+                    status='processado'
                 ).update({
                     'status': 'pendente',
                     'processado_em': None
