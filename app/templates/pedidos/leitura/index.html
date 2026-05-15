@@ -28,7 +28,7 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form id="uploadForm" enctype="multipart/form-data">
+                    <form id="uploadForm" method="POST" action="{{ url_for('leitura_pedidos.upload') }}" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="fileInput" class="form-label">Selecione o arquivo PDF</label>
@@ -447,6 +447,14 @@
     </div>
 </div>
 
+{% endblock %}
+
+{# Scripts movidos para bloco `scripts` (renderizado APOS jQuery em base.html).
+   Antes ficavam dentro de {% block content %} (linha 1083 do base.html), mas
+   jQuery so e carregado na linha 1099 — `$(document).ready(...)` falhava com
+   ReferenceError e o handler do uploadForm nunca era registrado, causando
+   submit nativo GET (arquivo "some" e pagina recarrega). #}
+{% block scripts %}
 <script>
 $(document).ready(function() {
     let currentSessionKey = null;
@@ -2080,5 +2088,4 @@ $(document).ready(function() {
     // ============================================================================
 });
 </script>
-
 {% endblock %}
