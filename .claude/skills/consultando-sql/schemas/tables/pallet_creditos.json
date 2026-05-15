@@ -116,17 +116,17 @@
       "unique": false
     },
     {
-      "name": "idx_credito_responsavel_status",
+      "name": "ix_pallet_creditos_nf_remessa_id",
       "columns": [
-        "cnpj_responsavel",
-        "status"
+        "nf_remessa_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_creditos_nf_remessa_id",
+      "name": "idx_credito_responsavel_status",
       "columns": [
-        "nf_remessa_id"
+        "cnpj_responsavel",
+        "status"
       ],
       "unique": false
     },

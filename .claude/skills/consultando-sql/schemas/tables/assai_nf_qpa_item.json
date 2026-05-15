@@ -34,6 +34,21 @@
     {
       "name": "tipo_divergencia",
       "type": "varchar(30)"
+    },
+    {
+      "name": "devolvido",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "devolvido_em",
+      "type": "timestamp"
+    },
+    {
+      "name": "devolucao_item_id",
+      "type": "integer",
+      "description": "FK → assai_devolucao_item.id"
     }
   ],
   "foreign_keys": [
@@ -44,6 +59,10 @@
     {
       "column": "separacao_item_id",
       "references": "assai_separacao_item.id"
+    },
+    {
+      "column": "devolucao_item_id",
+      "references": "assai_devolucao_item.id"
     }
   ],
   "indices": [

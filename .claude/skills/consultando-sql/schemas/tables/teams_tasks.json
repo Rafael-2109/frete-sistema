@@ -1,0 +1,96 @@
+{
+  "name": "teams_tasks",
+  "description": "Tarefas async do Teams bot (estado, streaming progressivo, AskUserQuestion via Adaptive Card).",
+  "fields": [
+    {
+      "name": "id",
+      "type": "varchar(36)",
+      "description": "Primary key"
+    },
+    {
+      "name": "conversation_id",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "user_name",
+      "type": "varchar(200)",
+      "nullable": false
+    },
+    {
+      "name": "user_id",
+      "type": "integer"
+    },
+    {
+      "name": "status",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "mensagem",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "resposta",
+      "type": "text"
+    },
+    {
+      "name": "pending_questions",
+      "type": "json"
+    },
+    {
+      "name": "pending_question_session_id",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "completed_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "resposta_card",
+      "type": "jsonb"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_teams_tasks_conv_status",
+      "columns": [
+        "conversation_id",
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_teams_tasks_conversation_id",
+      "columns": [
+        "conversation_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_teams_tasks_created_at",
+      "columns": [
+        "created_at"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_teams_tasks_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

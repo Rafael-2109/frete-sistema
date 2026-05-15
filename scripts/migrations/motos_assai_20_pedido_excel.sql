@@ -27,15 +27,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_assai_pedido_excel_sep_ativo
 CREATE UNIQUE INDEX IF NOT EXISTS uq_assai_pedido_excel_sep_versao
     ON assai_pedido_excel(separacao_id, versao);
 
+-- Garantir DEFAULT em gerado_em (caso tabela tenha sido criada sem DEFAULT em ambiente legado).
+-- IDEMPOTENTE: ALTER COLUMN SET DEFAULT pode rodar varias vezes sem erro.
+ALTER TABLE assai_pedido_excel
+    ALTER COLUMN gerado_em SET DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo');
+
 -- Backfill: copiar valor existente de assai_separacao.solicitacao_excel_s3_key
 -- para novas linhas com versao=1, ativo=TRUE.
-INSERT INTO assai_pedido_excel (pedido_id, separacao_id, s3_key, versao, ativo, motivo_regeneracao)
+-- gerado_em incluido explicitamente como defesa-em-profundidade (caso o DEFAULT
+-- nao tenha sido aplicado por algum motivo em prod legado).
+INSERT INTO assai_pedido_excel (pedido_id, separacao_id, s3_key, versao, ativo, gerado_em, motivo_regeneracao)
 SELECT
     s.pedido_id,
     s.id,
     s.solicitacao_excel_s3_key,
     1,
     TRUE,
+    (NOW() AT TIME ZONE 'America/Sao_Paulo'),
     'Backfill Migration 20 (legado solicitacao_excel_s3_key)'
 FROM assai_separacao s
 WHERE s.solicitacao_excel_s3_key IS NOT NULL

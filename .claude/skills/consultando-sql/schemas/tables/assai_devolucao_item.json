@@ -1,0 +1,74 @@
+{
+  "name": "assai_devolucao_item",
+  "description": "Tabela assai_devolucao_item",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "devolucao_id",
+      "type": "integer",
+      "description": "FK → assai_devolucao_nfd.id",
+      "nullable": false
+    },
+    {
+      "name": "chassi",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nf_qpa_item_id",
+      "type": "integer",
+      "description": "FK → assai_nf_qpa_item.id"
+    },
+    {
+      "name": "evento_pendencia_id",
+      "type": "integer",
+      "description": "FK → assai_moto_evento.id"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "devolucao_id",
+      "references": "assai_devolucao_nfd.id"
+    },
+    {
+      "column": "nf_qpa_item_id",
+      "references": "assai_nf_qpa_item.id"
+    },
+    {
+      "column": "evento_pendencia_id",
+      "references": "assai_moto_evento.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "devolucao_id",
+      "chassi"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_devolucao_item_chassi",
+      "columns": [
+        "chassi"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_devolucao_item_devolucao_id",
+      "columns": [
+        "devolucao_id"
+      ],
+      "unique": false
+    }
+  ]
+}

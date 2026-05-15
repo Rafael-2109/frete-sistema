@@ -101,16 +101,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pessoal_pluggy_accounts_pluggy_item_pk",
+      "name": "ix_pessoal_pluggy_accounts_type",
       "columns": [
-        "pluggy_item_pk"
+        "type"
       ],
       "unique": false
     },
     {
-      "name": "ix_pessoal_pluggy_accounts_type",
+      "name": "ix_pessoal_pluggy_accounts_pluggy_item_pk",
       "columns": [
-        "type"
+        "pluggy_item_pk"
       ],
       "unique": false
     }

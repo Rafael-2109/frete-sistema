@@ -1,0 +1,75 @@
+{
+  "name": "assai_devolucao_nfd",
+  "description": "Tabela assai_devolucao_nfd",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "nf_qpa_origem_id",
+      "type": "integer",
+      "description": "FK → assai_nf_qpa.id",
+      "nullable": false
+    },
+    {
+      "name": "numero_nfd",
+      "type": "varchar(40)",
+      "nullable": false
+    },
+    {
+      "name": "data_devolucao",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "motivo",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por_id",
+      "type": "integer",
+      "description": "FK → usuarios.id"
+    }
+  ],
+  "foreign_keys": [
+    {
+      "column": "nf_qpa_origem_id",
+      "references": "assai_nf_qpa.id"
+    },
+    {
+      "column": "criado_por_id",
+      "references": "usuarios.id"
+    }
+  ],
+  "unique_constraints": [
+    [
+      "nf_qpa_origem_id",
+      "numero_nfd"
+    ]
+  ],
+  "indices": [
+    {
+      "name": "ix_assai_devolucao_nfd_nf_qpa_origem_id",
+      "columns": [
+        "nf_qpa_origem_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_devolucao_nfd_criado_em",
+      "columns": [
+        "criado_em"
+      ],
+      "unique": false
+    }
+  ]
+}

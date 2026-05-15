@@ -13,6 +13,7 @@
     "agent_memory_embeddings",
     "agent_memory_versions",
     "agent_sessions",
+    "agente_artifacts",
     "alembic_version",
     "alerta_notificacoes",
     "alertas_separacao_cotada",
@@ -27,6 +28,7 @@
     "bi_performance_transportadora",
     "cadastro_cliente",
     "carteira_copia",
+    "claude_session_store",
     "cliente_moto",
     "cnab_retorno_lote",
     "comissao_vendedor",
@@ -88,6 +90,7 @@
     "tabela_preco_crossdocking",
     "tabela_preco_equipe",
     "tagplus_oauth_token",
+    "teams_tasks",
     "tipo_carga",
     "titulo_a_pagar",
     "titulo_financeiro",
@@ -2621,6 +2624,36 @@
         "nome",
         "email",
         "senha_hash"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "teams_tasks",
+      "description": "Tarefas async do Teams bot (estado, streaming progressivo, AskUserQuestion via Adaptive Card).",
+      "key_fields": [
+        "conversation_id",
+        "user_id",
+        "status"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "claude_session_store",
+      "description": "PostgresSessionStore: transcripts SDK do agente (Fase B cutover 2026-04-21). Source-of-truth de conteudo de sessao.",
+      "key_fields": [
+        "project_key",
+        "session_id",
+        "subpath"
+      ],
+      "admin_only": true
+    },
+    {
+      "name": "agente_artifacts",
+      "description": "Artifact (bundle.html auto-contido) gerado pelo agente via skill gerando-artifact.",
+      "key_fields": [
+        "uuid",
+        "user_id",
+        "status"
       ],
       "admin_only": true
     }

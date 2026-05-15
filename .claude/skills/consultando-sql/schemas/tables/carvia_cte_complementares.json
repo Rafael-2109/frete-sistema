@@ -136,13 +136,6 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_operacao_id",
-      "columns": [
-        "operacao_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_cte_complementares_frete_id",
       "columns": [
         "frete_id"
@@ -167,6 +160,13 @@
       "name": "ix_carvia_cte_complementares_ctrc_numero",
       "columns": [
         "ctrc_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cte_complementares_operacao_id",
+      "columns": [
+        "operacao_id"
       ],
       "unique": false
     }

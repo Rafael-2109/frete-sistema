@@ -1,0 +1,46 @@
+{
+  "name": "claude_session_store",
+  "description": "PostgresSessionStore: transcripts SDK do agente (Fase B cutover 2026-04-21). Source-of-truth do conteudo de sessao.",
+  "fields": [
+    {
+      "name": "project_key",
+      "type": "text",
+      "description": "Primary key"
+    },
+    {
+      "name": "session_id",
+      "type": "text",
+      "description": "Primary key"
+    },
+    {
+      "name": "subpath",
+      "type": "text",
+      "description": "Primary key"
+    },
+    {
+      "name": "seq",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "entry",
+      "type": "jsonb",
+      "nullable": false
+    },
+    {
+      "name": "mtime",
+      "type": "bigint",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "claude_session_store_list_idx",
+      "columns": [
+        "project_key",
+        "session_id"
+      ],
+      "unique": false
+    }
+  ]
+}

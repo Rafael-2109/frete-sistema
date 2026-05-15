@@ -259,6 +259,13 @@
   ],
   "indices": [
     {
+      "name": "idx_extrato_item_lote",
+      "columns": [
+        "lote_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_extrato_item_statement_line_id",
       "columns": [
         "statement_line_id"
@@ -332,13 +339,6 @@
       "name": "idx_extrato_item_odoo_partner",
       "columns": [
         "odoo_partner_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_extrato_item_lote",
-      "columns": [
-        "lote_id"
       ],
       "unique": false
     }
