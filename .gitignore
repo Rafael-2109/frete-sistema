@@ -136,3 +136,10 @@ app/mcp_sistema/.env.production
 # Fixture PDFs/Excel para testes (arquivos binários reais, não versionar)
 tests/motos_assai/fixtures/*.pdf
 tests/motos_assai/fixtures/*.xlsx
+
+# E-commerce migration artifacts (XEROX + tema extraido + catalogo CSV)
+# Origem: scripts/ecommerce/xerox_site.sh + extract_theme.py + export_tray_to_bagy.py
+# Tudo regeneravel — nao versionar
+scripts/ecommerce/mirror/
+scripts/ecommerce/tema_referencia/
+scripts/ecommerce/output/
