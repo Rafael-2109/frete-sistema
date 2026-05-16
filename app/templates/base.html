@@ -1024,10 +1024,8 @@
                   title="Observability SessionStore (SDK 0.1.64 Fase A dual-run)">
                   <i class="fas fa-database text-secondary"></i> SessionStore
                 </a></li>
-              <li><a class="dropdown-item" href="{{ url_for('agente.admin_metrics_page') }}"
-                  title="Dashboard Metricas IA — telemetria per-subagent (T1+T2+T3)">
-                  <i class="fas fa-chart-line text-success"></i> Dashboard Metricas
-                </a></li>
+              {# Dashboard Metricas: link movido para _sidebar.html (sidebar atual);
+                 navbar antiga aqui dentro de {% if false %} esta em codigo morto. #}
               {% endif %}
             </ul>
           </li>
