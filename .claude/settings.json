@@ -71,6 +71,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/agent_metrics_dev_hook.py"
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {

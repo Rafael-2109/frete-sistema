@@ -854,6 +854,127 @@ def build_hooks(
                         f"[HOOK:SubagentStop] validacao enqueue falhou: {val_err}"
                     )
 
+            # A1 (2026-05-16) — telemetria per-invocacao em agent_invocation_metrics
+            # Distinta de USE_SUBAGENT_COST_GRANULAR (que persiste em JSONB
+            # da AgentSession). Aqui UMA linha por spawn->stop em tabela
+            # dedicada — permite dashboard e analise de regressao cross-deploy.
+            # Best-effort: falha NAO quebra stream do agente.
+            from ..config.feature_flags import USE_INVOCATION_METRICS_PERSIST
+
+            if USE_INVOCATION_METRICS_PERSIST and agent_id and agent_type:
+                try:
+                    from contextlib import nullcontext
+                    from app import db
+                    from ..models import AgentInvocationMetric
+
+                    # Extrair tokens. Preferencia: last_result.usage (compat
+                    # SDK <0.1.60 + paths que ainda emitem ResultMessage em
+                    # subagent). Fallback: _compute_subagent_metadata_from_jsonl
+                    # (mesma logica do bloco JSONB acima, SDK 0.1.60+).
+                    metric_input_tokens = 0
+                    metric_output_tokens = 0
+                    metric_cache_read = 0
+                    metric_cache_create = 0
+                    metric_started_at = None
+
+                    if last_result:
+                        usage = last_result.get('usage', {}) or {}
+                        metric_input_tokens = int(usage.get('input_tokens') or 0)
+                        metric_output_tokens = int(usage.get('output_tokens') or 0)
+                        metric_cache_read = int(
+                            usage.get('cache_read_input_tokens') or 0
+                        )
+                        metric_cache_create = int(
+                            usage.get('cache_creation_input_tokens') or 0
+                        )
+                    elif transcript_path:
+                        try:
+                            from .subagent_reader import (
+                                _compute_subagent_metadata_from_jsonl
+                            )
+                            meta = _compute_subagent_metadata_from_jsonl(
+                                transcript_path
+                            )
+                            metric_input_tokens = int(meta.get('input_tokens') or 0)
+                            metric_output_tokens = int(meta.get('output_tokens') or 0)
+                            metric_cache_read = int(
+                                meta.get('cache_read_tokens') or 0
+                            )
+                            metric_cache_create = int(
+                                meta.get('cache_creation_tokens') or 0
+                            )
+                            # started_at do JSONL (timestamp do 1o turn)
+                            metric_started_at = meta.get('started_at')
+                        except Exception as _meta_err:
+                            logger.debug(
+                                f"[HOOK:SubagentStop] A1 metadata extract: "
+                                f"{_meta_err}"
+                            )
+
+                    # Flask app context: hook async roda FORA do contexto.
+                    # Mesmo padrao usado no bloco JSONB acima e em
+                    # memory_injection.py:620-630.
+                    try:
+                        from flask import current_app as _app_probe_a1
+                        _ = _app_probe_a1.name
+                        _a1_app_ctx = nullcontext()
+                    except RuntimeError:
+                        from app import create_app as _create_app_a1
+                        _a1_hook_app = _create_app_a1()
+                        _a1_app_ctx = _a1_hook_app.app_context()
+
+                    with _a1_app_ctx:
+                        try:
+                            metric = AgentInvocationMetric.insert_metric(
+                                agent_id=agent_id,
+                                agent_type=agent_type,
+                                session_id=session_id or None,
+                                user_id=user_id if user_id else None,
+                                started_at=metric_started_at,
+                                duration_ms=duration_ms,
+                                num_turns=num_turns,
+                                stop_reason=stop_reason or 'end_turn',
+                                cost_usd=float(cost_usd) if cost_usd else None,
+                                input_tokens=metric_input_tokens,
+                                output_tokens=metric_output_tokens,
+                                cache_read_tokens=metric_cache_read,
+                                cache_creation_tokens=metric_cache_create,
+                                source=AgentInvocationMetric.SOURCE_PRODUCTION,
+                            )
+                            # Commit explicito: insert_metric usa begin_nested
+                            # (SAVEPOINT) — precisa commit da transacao pai.
+                            # Best-effort: se falhar nao impacta o stream.
+                            db.session.commit()
+                            if metric is None:
+                                logger.debug(
+                                    f"[HOOK:SubagentStop] A1 metric duplicada "
+                                    f"(agent_id={agent_id[:12]}) — ignorado"
+                                )
+                            else:
+                                logger.info(
+                                    f"[HOOK:SubagentStop] A1 metric persistida "
+                                    f"agent_type={agent_type} "
+                                    f"duration={duration_ms}ms "
+                                    f"turns={num_turns} "
+                                    f"cost=${cost_usd or 0:.4f} "
+                                    f"tokens={metric_input_tokens}/"
+                                    f"{metric_output_tokens}"
+                                )
+                        except Exception as _ins_err:
+                            try:
+                                db.session.rollback()
+                            except Exception:
+                                pass
+                            logger.warning(
+                                f"[HOOK:SubagentStop] A1 metric insert falhou "
+                                f"(best-effort): {_ins_err}"
+                            )
+                except Exception as a1_err:
+                    logger.debug(
+                        f"[HOOK:SubagentStop] A1 metric outer suppressed: "
+                        f"{a1_err}"
+                    )
+
             return {}
         except Exception as e:
             logger.debug(f"[HOOK:SubagentStop] Suppressed: {e}")
