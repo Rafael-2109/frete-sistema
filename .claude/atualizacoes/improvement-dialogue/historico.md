@@ -24,6 +24,13 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 18 | 2026-05-12 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 19 | 2026-05-13 | 10 | 10 | 0 | 0 | OK (4 clusters: evaluator SQL, artifact bundle, baseline UX, system_prompt) |
 | 20 | 2026-05-14 | 4 | 4 | 0 | 0 | OK (1 cluster Odoo SO 3 sugestoes + 1 fix sort baseline) |
+| 21 | 2026-05-16 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+
+## 2026-05-16
+- **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
+- Filtros: `status='proposed'`, `author='agent_sdk'`, `version=1`, sem v2 correspondente.
+- Estatisticas atuais: 112 totais (80 responded, 18 rejected, 6 verified, 8 needs_revision, 0 proposed). Ultima criacao: 2026-05-14 11:09 UTC.
+- Nenhum commit alem do relatorio e historico.
 
 ## 2026-05-14
 - 4 sugestoes avaliadas (2 critical + 2 warning), todas validas e auto-implementadas
