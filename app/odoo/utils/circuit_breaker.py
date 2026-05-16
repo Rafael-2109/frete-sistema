@@ -15,11 +15,10 @@ Autor: Sistema de Fretes
 Data: 2025-11-05
 """
 
-import time
 import logging
 from enum import Enum
 from typing import Optional, Callable, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import wraps
 import threading
 from app.utils.timezone import agora_utc_naive
@@ -261,9 +260,7 @@ class OdooCircuitBreaker:
 
             # Bloquear se circuit estiver aberto
             if self._state == CircuitState.OPEN:
-                time_remaining = self.timeout_duration - (
-                    agora_utc_naive() - self._opened_at
-                ).total_seconds()
+                time_remaining = self.timeout_duration - (agora_utc_naive() - self._opened_at).total_seconds() # type: ignore
 
                 raise Exception(
                     f"Circuit Breaker ABERTO: Odoo indisponível. "

@@ -642,8 +642,8 @@ class SubagentTranscriptEntry:
     kind: TranscriptKind
     timestamp: Optional[datetime]
     content: Any                        # str para text/prompt/thinking;
-                                         # dict para tool_use {name, input};
-                                         # str para tool_result content
+                                        # dict para tool_use {name, input};
+                                        # str para tool_result content
     tool_use_id: Optional[str] = None   # correlaciona tool_use <-> tool_result
 
     def to_dict(self) -> dict:
