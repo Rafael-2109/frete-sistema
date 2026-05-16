@@ -867,15 +867,23 @@ def build_hooks(
                     from app import db
                     from ..models import AgentInvocationMetric
 
-                    # Extrair tokens. Preferencia: last_result.usage (compat
-                    # SDK <0.1.60 + paths que ainda emitem ResultMessage em
-                    # subagent). Fallback: _compute_subagent_metadata_from_jsonl
-                    # (mesma logica do bloco JSONB acima, SDK 0.1.60+).
+                    # Extrair tokens + duration/cost/turns. Preferencia:
+                    # last_result.usage (compat SDK <0.1.60 + paths que ainda
+                    # emitem ResultMessage em subagent). Fallback:
+                    # _compute_subagent_metadata_from_jsonl (SDK 0.1.60+ — onde
+                    # subagent NAO emite type:'result' no transcript JSONL).
                     metric_input_tokens = 0
                     metric_output_tokens = 0
                     metric_cache_read = 0
                     metric_cache_create = 0
                     metric_started_at = None
+                    # Snapshot dos campos extraidos do last_result (linha 518+).
+                    # Quando last_result e None, ficam None — bridge abaixo
+                    # sobrescreve com meta[*] do JSONL para evitar NULL no INSERT.
+                    metric_duration_ms = duration_ms
+                    metric_num_turns = num_turns
+                    metric_cost_usd = cost_usd
+                    metric_stop_reason = stop_reason
 
                     if last_result:
                         usage = last_result.get('usage', {}) or {}
@@ -905,6 +913,30 @@ def build_hooks(
                             )
                             # started_at do JSONL (timestamp do 1o turn)
                             metric_started_at = meta.get('started_at')
+                            # BRIDGE FIX (2026-05-16): em SDK 0.1.60+ subagent
+                            # nao emite ResultMessage, entao duration/cost/turns
+                            # ficam None pelo path inicial (linhas 518-520).
+                            # Sobrescrever com valores computados do JSONL via
+                            # _compute_subagent_metadata_from_jsonl, que ja faz
+                            # soma de usage e diff de timestamps. Sem isso,
+                            # dashboard A3 zera KPIs e anomaly detection nao
+                            # funciona. Resolve gap reportado em PROD 2026-05-16.
+                            if metric_duration_ms is None:
+                                _m_dur = meta.get('duration_ms')
+                                if _m_dur is not None:
+                                    metric_duration_ms = int(_m_dur)
+                            if metric_num_turns is None:
+                                _m_turns = meta.get('num_turns')
+                                if _m_turns is not None:
+                                    metric_num_turns = int(_m_turns)
+                            if metric_cost_usd is None:
+                                _m_cost = meta.get('cost_usd')
+                                if _m_cost is not None:
+                                    metric_cost_usd = float(_m_cost)
+                            if not metric_stop_reason:
+                                metric_stop_reason = (
+                                    meta.get('stop_reason') or 'end_turn'
+                                )
                         except Exception as _meta_err:
                             logger.debug(
                                 f"[HOOK:SubagentStop] A1 metadata extract: "
@@ -914,6 +946,13 @@ def build_hooks(
                     # Flask app context: hook async roda FORA do contexto.
                     # Mesmo padrao usado no bloco JSONB acima e em
                     # memory_injection.py:620-630.
+                    # COMMIT GUARD (2026-05-16): flag para saber se criamos
+                    # context novo. So comitar quando criamos o context — se
+                    # estiver em nullcontext (dentro de request Flask), commit
+                    # explicito flusharia writes pendentes do request inteiro
+                    # (mesmo motivo do SAVEPOINT pattern documentado em
+                    # AgentInvocationMetric.insert_metric:1683-1693).
+                    _a1_owns_ctx = False
                     try:
                         from flask import current_app as _app_probe_a1
                         _ = _app_probe_a1.name
@@ -922,6 +961,7 @@ def build_hooks(
                         from app import create_app as _create_app_a1
                         _a1_hook_app = _create_app_a1()
                         _a1_app_ctx = _a1_hook_app.app_context()
+                        _a1_owns_ctx = True
 
                     with _a1_app_ctx:
                         try:
@@ -931,20 +971,29 @@ def build_hooks(
                                 session_id=session_id or None,
                                 user_id=user_id if user_id else None,
                                 started_at=metric_started_at,
-                                duration_ms=duration_ms,
-                                num_turns=num_turns,
-                                stop_reason=stop_reason or 'end_turn',
-                                cost_usd=float(cost_usd) if cost_usd else None,
+                                duration_ms=metric_duration_ms,
+                                num_turns=metric_num_turns,
+                                stop_reason=metric_stop_reason or 'end_turn',
+                                cost_usd=(
+                                    float(metric_cost_usd)
+                                    if metric_cost_usd is not None else None
+                                ),
                                 input_tokens=metric_input_tokens,
                                 output_tokens=metric_output_tokens,
                                 cache_read_tokens=metric_cache_read,
                                 cache_creation_tokens=metric_cache_create,
                                 source=AgentInvocationMetric.SOURCE_PRODUCTION,
                             )
-                            # Commit explicito: insert_metric usa begin_nested
-                            # (SAVEPOINT) — precisa commit da transacao pai.
-                            # Best-effort: se falhar nao impacta o stream.
-                            db.session.commit()
+                            # Commit GUARD: insert_metric usa begin_nested
+                            # (SAVEPOINT). Comitar SO se criamos o app_context
+                            # neste hook (path comum, async fora de request).
+                            # Em request Flask (nullcontext), o SAVEPOINT
+                            # consolida no commit final do request — comitar
+                            # aqui faria flush prematuro de outros writes
+                            # pendentes (race condition documentada em
+                            # AgentInvocationMetric.insert_metric).
+                            if _a1_owns_ctx:
+                                db.session.commit()
                             if metric is None:
                                 logger.debug(
                                     f"[HOOK:SubagentStop] A1 metric duplicada "
@@ -954,17 +1003,21 @@ def build_hooks(
                                 logger.info(
                                     f"[HOOK:SubagentStop] A1 metric persistida "
                                     f"agent_type={agent_type} "
-                                    f"duration={duration_ms}ms "
-                                    f"turns={num_turns} "
-                                    f"cost=${cost_usd or 0:.4f} "
+                                    f"duration={metric_duration_ms}ms "
+                                    f"turns={metric_num_turns} "
+                                    f"cost=${metric_cost_usd or 0:.4f} "
                                     f"tokens={metric_input_tokens}/"
-                                    f"{metric_output_tokens}"
+                                    f"{metric_output_tokens} "
+                                    f"owns_ctx={_a1_owns_ctx}"
                                 )
                         except Exception as _ins_err:
-                            try:
-                                db.session.rollback()
-                            except Exception:
-                                pass
+                            # Rollback so se for nosso context — caso contrario
+                            # poderia abortar transacao do request em curso.
+                            if _a1_owns_ctx:
+                                try:
+                                    db.session.rollback()
+                                except Exception:
+                                    pass
                             logger.warning(
                                 f"[HOOK:SubagentStop] A1 metric insert falhou "
                                 f"(best-effort): {_ins_err}"

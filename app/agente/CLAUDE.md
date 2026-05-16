@@ -492,6 +492,91 @@ prioridade logo apos `hora_nfe`).
 
 ---
 
+## Telemetria per-invocacao de subagent (A1+A2+A3, 2026-05-16)
+
+Roadmap **Fase A — Instrumentacao**: baseline numerico per-agent antes de
+qualquer otimizacao (B/C/D). UMA linha por spawn->stop em tabela dedicada,
+distinta de `agent_session_costs` (per-message do CostTracker).
+
+### Componentes
+
+| Camada | Arquivo |
+|---|---|
+| Modelo | `app/agente/models.py:AgentInvocationMetric` |
+| Migration | `scripts/migrations/2026_05_16_agent_invocation_metrics.{py,sql}` |
+| Hook prod (Web + Teams) | `app/agente/sdk/hooks.py:_subagent_stop_hook` (bloco A1, linha ~864) |
+| Hook dev (Claude Code CLI) | `.claude/hooks/agent_metrics_dev_hook.py` (PostToolUse matcher=Agent) |
+| Ingestor dev -> tabela | `scripts/migrations/2026_05_16_agent_invocation_metrics_dev_ingestor.py` |
+| Service dashboard | `app/agente/services/metrics_dashboard_service.py` |
+| Routes | `app/agente/routes/admin_metrics.py` (10 endpoints) |
+| Template | `app/agente/templates/agente/admin_metrics.html` (Chart.js 3.9.1) |
+| Link menu | `app/templates/base.html` -> `agente.admin_metrics_page` (admin only) |
+
+### Fluxo
+
+```
+Web/Teams subagent stop
+  -> SubagentStop hook (mesmo factory build_hooks(), get_client() singleton)
+  -> A1: extrai cost/duration/tokens via last_result.usage OU
+         _compute_subagent_metadata_from_jsonl(transcript_path)
+  -> AgentInvocationMetric.insert_metric(...) SAVEPOINT pattern
+  -> persiste source='production'
+
+Claude Code CLI Agent tool stop
+  -> .claude/hooks/agent_metrics_dev_hook.py (PostToolUse stdin payload)
+  -> append /tmp/agent_invocation_metrics_dev/{YYYY-MM-DD}.jsonl
+  -> manual: python scripts/migrations/2026_05_16_..._dev_ingestor.py
+  -> persiste source='dev' (agent_id determinstico via SHA256)
+
+Dashboard
+  -> GET /agente/admin/metrics (admin only)
+  -> 10 endpoints JSON com filtros (period, source, agent_types, user_ids)
+```
+
+### Feature flags
+
+| Flag | Default | Efeito |
+|---|---|---|
+| `AGENT_INVOCATION_METRICS_PERSIST` | `true` | Hook A1 persiste em `agent_invocation_metrics` |
+| `USE_SUBAGENT_COST_GRANULAR` | (separado) | Persiste em `AgentSession.data->subagent_costs` (JSONB) — paralelo, NAO substitui A1 |
+
+### Gotchas
+
+- **BRIDGE FIX (2026-05-16)**: subagent SDK 0.1.60+ NAO emite `type:'result'` no transcript JSONL.
+  Path original do hook (`hooks.py:518-522`) deixa `cost_usd=None`, `duration_ms=None`,
+  `num_turns=None`. O bloco A1 (linha ~890+) AGORA sobrescreve essas variaveis com valores
+  computados via `_compute_subagent_metadata_from_jsonl` quando `last_result` ausente.
+  **Sem esse bridge, dashboard zera KPIs e anomaly detection nao funciona** (observado em PROD).
+- **COMMIT GUARD (2026-05-16)**: `db.session.commit()` em A1 so executa quando hook criou
+  app_context novo (`_a1_owns_ctx=True`). Em request Flask (`nullcontext`), commit explicito
+  flusharia writes pendentes — SAVEPOINT do `insert_metric` ja garante isolamento, o request
+  final consolida. Mesma logica documentada em `AgentInvocationMetric.insert_metric:1683-1693`.
+- **Hook dev sem transcript**: Claude Code CLI nao expoe `agent_transcript_path` via
+  PostToolUse, entao `cache_read/cache_create` ficam 0 e `num_turns` NULL nas linhas dev.
+  Tokens (`input_tokens`/`output_tokens`) vem do `tool_response.usage` do payload do hook.
+- **agent_id determinstico (dev)**: ingestor gera `dev_<sha256[:24]>` de `(timestamp, session_id,
+  agent_type, tokens)` — mesma linha JSONL gera mesmo agent_id. Permite reingestao sem dup.
+- **Teams + Web compartilham hook**: `get_client()` singleton -> `build_hooks()` factory unica.
+  Bug ou feature em `_subagent_stop_hook` afeta os dois canais.
+- **Backfill Fase D**: `escalated_to_human` (default false) e `user_correction_received`
+  (default NULL) ficam para D (loop fechado). NAO usar em queries antes da Fase D.
+- **source=`dev`|`production`**: separa uso real (Rafael+equipe via web/Teams) de
+  desenvolvimento (Rafael em Claude Code CLI). Dashboard tem toggle (T2).
+
+### Roadmap (Fase A em curso)
+
+| Item | Status |
+|---|---|
+| A1 — Migration + model | ✅ aplicada PROD 2026-05-16 |
+| A2 — Hook prod + dev | ✅ ativo (flag default ON) |
+| A3 — Dashboard admin | ✅ funcional, requer fix bridge para nao-zerar |
+| A3+ — Ingestor dev | ✅ manual (Fase A nao exige cron) |
+| A4/A5 — Coleta 14d + baseline | em coleta |
+
+Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
+
+---
+
 ## Memoria Compartilhada (PRD v2.1)
 
 ### Conceito
