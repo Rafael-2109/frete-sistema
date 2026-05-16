@@ -1,9 +1,119 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.1.80)
+# Agente Web — SDK Changelog (0.1.49 → 0.2.82)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-05-09 (SDK 0.1.80 + anthropic 0.98.1)
+> **Atualizado**: 2026-05-16 (SDK 0.2.82 + anthropic 0.98.1)
+
+---
+
+## SDK 0.2.82 (atualizado 2026-05-16) — stderr callback isolation + EffortLevel + CVE mcp
+
+**Versao**: `claude-agent-sdk==0.2.82` (CLI bundled 2.1.142) + `anthropic==0.98.1`
+**Bumps intermediarios**: 0.1.81 (CLI 2.1.139)
+
+> **Sobre o salto 0.1.81 → 0.2.82**: bump cosmetico (sem breaking changes). Numero
+> minor pulou de `.1` para `.2`, e patch pulou de `.81` para `.82` aparentemente para
+> alinhar com a serie CLI 2.1.x. Changelog oficial NAO lista nenhuma incompatibilidade
+> de API entre 0.1.81 e 0.2.82.
+
+### Bug fixes gratuitos via upgrade
+
+#### BF1: Stderr callback isolation (#932) — BENEFICIO direto ao projeto
+
+**Mecanica antes do 0.2.82**: se um `stderr` callback (passado via
+`ClaudeAgentOptions(stderr=...)`) lancasse exception ao processar uma linha,
+o stderr reader loop morria silenciosamente, derrubando TODA a captura de
+stderr pelo resto da sessao SDK.
+
+**Mecanica depois**: cada linha eh tratada em try/except isolado. Exception
+em uma linha NAO afeta entrega das proximas.
+
+**Impacto no projeto**: o projeto usa stderr callback em:
+- `app/agente_lojas/sdk/client.py:264-269` — `_stderr_callback` empurra para `queue.SimpleQueue`
+- `app/agente/sdk/client.py:1294` — gated por `USE_STDERR_CALLBACK` feature flag
+
+Os callbacks ja tinham try/except defensivo interno (`put_nowait` raise se queue
+cheia), mas agora o SDK tambem isola — defesa em profundidade.
+
+#### BF2: CancelledError em eager-flush done callback (#931)
+
+Reduz noise de logs `Exception in callback` durante shutdown quando tasks
+de eager-flush pendentes sao canceladas. Sem impacto funcional, apenas
+limpeza de log.
+
+#### BF3: `permission_suggestions` type tighter (#955) — sem impacto
+
+`SDKControlPermissionRequest.permission_suggestions` mudou de `list[Any] | None`
+para `list[dict[str, Any]] | None`. Projeto NAO constroi esse campo manualmente
+(verificado: apenas SDK interno em `_internal/query.py` o le, via
+`permission_request.get(...)`). Type stricter, zero adaptacao necessaria.
+
+### Feature documentada mas NAO adotada
+
+#### F12: `EffortLevel` type alias (SDK 0.2.82, #951)
+
+Type publico exportado de `claude_agent_sdk`:
+```python
+from claude_agent_sdk import EffortLevel
+EffortLevel = Literal["low", "medium", "high", "max", "xhigh"]
+```
+
+**Status**: NAO adotado. Projeto ja usa strings literais via `effort=` em
+`ClaudeAgentOptions` (ex: `effort="xhigh"` para subagentes em `client.py`).
+Adocao seria apenas cosmetica (type hint em wrappers proprios). Documentado
+como possibilidade futura ao refatorar `agent_loader.py` ou `permissions.py`.
+
+### Doc clarification (sem impacto)
+
+#### D1: Hooks dispatch concorrente (#956)
+
+Doc oficial clarificou que multiplos `HookMatcher` registrados para o MESMO
+evento (ex: dois matchers em `PreToolUse`) sao executados em PARALELO, nao
+sequencial. Hooks ordering-dependent (rate limiters, gates) precisam ser
+combinados em UM matcher.
+
+**Auditoria do projeto** (`app/agente/sdk/hooks.py:1078-1117`): cada evento
+tem APENAS UM matcher registrado (`PreToolUse`, `PostToolUse`, `PreCompact`,
+`Stop`, `UserPromptSubmit`, `SubagentStart`, `SubagentStop`,
+`PostToolUseFailure`). Zero dependencia de ordem entre matchers — clarificacao
+nao afeta projeto.
+
+### Security update (sem impacto — ja satisfeito)
+
+#### S1: CVE-2025-66416 / GHSA-9h52-p55h-vw2f (#927)
+
+`mcp` dependency lower bound subiu para `>=1.23.0`. Versoes antigas desabilitavam
+DNS rebinding protection por default. Projeto ja roda `mcp>=1.26.0` no
+`requirements.txt:72` — sem ajuste necessario.
+
+### CLI bundled bumps
+
+- **0.1.81**: CLI 2.1.138 → 2.1.139
+- **0.2.82**: CLI 2.1.139 → 2.1.142
+
+Bumps consecutivos sem mudancas API Python. Cadence sugere estabilidade.
+
+### Status pos-upgrade
+
+| Item | Antes (0.1.80) | Depois (0.2.82) |
+|------|----------------|-----------------|
+| `requirements.txt` | `claude-agent-sdk==0.1.80` | `claude-agent-sdk==0.2.82` |
+| CLI bundled | 2.1.138 | 2.1.142 |
+| Stderr callback robustness | Exception derrubava reader loop | Isolado por linha |
+| `EffortLevel` type | n/a (string literal) | Disponivel mas nao adotado |
+| `permission_suggestions` type | `list[Any]` | `list[dict[str, Any]]` (sem uso direto) |
+| Hooks ordering | Sem matchers concorrentes | Sem matchers concorrentes (auditado) |
+| `mcp` lower bound | satisfeito (>=1.26.0) | satisfeito (>=1.26.0) |
+
+### Validacao recomendada (pos-deploy)
+
+1. **Restart workers** apos `pip install -r requirements.txt`
+2. **Sanity check**: invocar agente e verificar log `[SDK]` sem warnings novos
+3. **Sentry**: monitorar nova janela de 24h para erros relacionados a
+   `stderr`/`permission_suggestions` (esperado: zero)
+4. **Local dev**: rodar `.venv/bin/pip install --upgrade claude-agent-sdk==0.2.82`
+   para sincronizar com producao
 
 ---
 
