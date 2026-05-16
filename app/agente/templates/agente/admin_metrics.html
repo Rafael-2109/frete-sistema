@@ -1,0 +1,774 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard Metricas IA{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<style>
+  .metric-card { border-left: 3px solid var(--bs-primary); }
+  .metric-card .metric-value { font-size: 1.6rem; font-weight: 600; }
+  .metric-card .metric-label { font-size: 0.78rem; color: var(--bs-secondary); text-transform: uppercase; }
+  .metric-card .metric-sub { font-size: 0.72rem; color: var(--bs-secondary); }
+  .sparkline { width: 80px; height: 22px; vertical-align: middle; }
+  .heatmap-cell { width: 22px; height: 22px; display: inline-block; border: 1px solid rgba(0,0,0,0.05); }
+  .cooccur-cell { width: 28px; height: 28px; text-align: center; font-size: 0.6rem; color: #fff; }
+  .cooccur-cell.empty { background: #f3f4f6; color: #9ca3af; }
+  .agent-link { cursor: pointer; color: var(--bs-link-color); }
+  .agent-link:hover { text-decoration: underline; }
+  .badge-downgrade { background: #fbbf24; color: #78350f; }
+  .anomaly-row td { background: #fef2f2 !important; }
+  .table-sm-padded td, .table-sm-padded th { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+  .empty-state { text-align: center; padding: 3rem 1rem; color: var(--bs-secondary); }
+  .filter-bar .form-select-sm, .filter-bar .form-control-sm { font-size: 0.8rem; }
+  .source-pill { font-size: 0.65rem; padding: 0.15rem 0.35rem; }
+  .ms-multiselect {
+    max-height: 140px; overflow-y: auto; border: 1px solid var(--bs-border-color);
+    border-radius: 0.25rem; padding: 0.3rem; font-size: 0.78rem; background: var(--bs-body-bg);
+  }
+  .ms-multiselect label { display: block; cursor: pointer; padding: 0.1rem 0; margin: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if forbidden %}
+<div class="container mt-5">
+  <div class="alert alert-danger">
+    <i class="fas fa-lock"></i> Acesso restrito a administradores.
+  </div>
+</div>
+{% else %}
+
+<div class="container-fluid py-3">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-0">
+        <i class="fas fa-chart-line text-primary"></i> Dashboard Metricas IA
+      </h4>
+      <small class="text-muted" id="status-line">Carregando status...</small>
+    </div>
+    <div>
+      <button class="btn btn-sm btn-outline-secondary" id="btn-refresh">
+        <i class="fas fa-sync-alt"></i> Atualizar
+      </button>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card filter-bar mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Periodo</label>
+          <select class="form-select form-select-sm" id="filter-period">
+            <option value="24h">Ultimas 24h</option>
+            <option value="7d" selected>Ultimos 7 dias</option>
+            <option value="30d">Ultimos 30 dias</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Fonte</label>
+          <select class="form-select form-select-sm" id="filter-source">
+            <option value="all" selected>Tudo</option>
+            <option value="production">Producao (web)</option>
+            <option value="dev">Dev (Claude Code)</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Agents (multi-select)</label>
+          <div class="ms-multiselect" id="filter-agent-types">
+            <small class="text-muted">Carregando...</small>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Usuarios (top 50)</label>
+          <div class="ms-multiselect" id="filter-users">
+            <small class="text-muted">Carregando...</small>
+          </div>
+        </div>
+        <div class="col-md-1">
+          <button class="btn btn-primary btn-sm w-100" id="btn-apply-filters">
+            <i class="fas fa-filter"></i> Aplicar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado Vazio -->
+  <div id="empty-state" class="card empty-state d-none">
+    <div>
+      <i class="fas fa-database fa-3x text-muted mb-3"></i>
+      <h5>Nenhuma metrica coletada ainda</h5>
+      <p class="text-muted">
+        A tabela <code>agent_invocation_metrics</code> esta vazia.
+      </p>
+      <p>
+        Para comecar a coletar, ative a flag no ambiente:<br>
+        <code>export AGENT_INVOCATION_METRICS_PERSIST=true</code>
+      </p>
+      <p class="small text-muted">
+        Apos ativar, invoque qualquer subagent (ex: pelo chat). A primeira linha
+        aparece em segundos.
+      </p>
+    </div>
+  </div>
+
+  <!-- Conteudo principal (escondido em empty state) -->
+  <div id="dashboard-content">
+
+    <!-- KPI Cards -->
+    <div class="row g-2 mb-3" id="kpi-cards">
+      <!-- preenchido por JS -->
+    </div>
+
+    <!-- Row: Time Series + Stop Reasons -->
+    <div class="row g-3 mb-3">
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header py-2">
+            <strong>Invocacoes por dia</strong> <small class="text-muted">(stack por agent)</small>
+          </div>
+          <div class="card-body" style="min-height: 280px;">
+            <canvas id="chart-timeseries"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card mb-3">
+          <div class="card-header py-2"><strong>Stop reason</strong></div>
+          <div class="card-body" style="min-height: 200px;">
+            <canvas id="chart-stop-reasons"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header py-2"><strong>Top usuarios</strong></div>
+          <div class="card-body p-0">
+            <table class="table table-sm-padded mb-0">
+              <thead>
+                <tr><th>Usuario</th><th class="text-end">Invocacoes</th><th class="text-end">Custo</th></tr>
+              </thead>
+              <tbody id="top-users-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela por agent_type -->
+    <div class="card mb-3">
+      <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <strong>Metricas por agent_type</strong>
+        <small class="text-muted">
+          <span class="badge bg-warning text-dark">Downgrade?</span> = candidato a Opus->Sonnet
+          ($/inv &gt; 0.05 + turns &lt; 5 + cache &gt; 60%)
+        </small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm-padded table-hover mb-0" id="agents-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th class="text-end">Inv.</th>
+                <th class="text-end">Avg dur</th>
+                <th class="text-end">P95 dur</th>
+                <th class="text-end">Avg turns</th>
+                <th class="text-end">Custo $</th>
+                <th class="text-end">$/inv</th>
+                <th class="text-end">Tokens (in+cache)</th>
+                <th class="text-end">Cache %</th>
+                <th class="text-end">Erros %</th>
+                <th>Tendencia 30d</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="agents-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Anomalias -->
+    <div class="card mb-3">
+      <div class="card-header py-2">
+        <strong><i class="fas fa-exclamation-triangle text-warning"></i> Anomalias 24h</strong>
+        <small class="text-muted">(duration &gt; P95(7d) x 2)</small>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm-padded mb-0">
+          <thead>
+            <tr>
+              <th>Quando</th>
+              <th>Agent</th>
+              <th>Sessao</th>
+              <th class="text-end">Duration</th>
+              <th class="text-end">Baseline P95</th>
+              <th class="text-end">Multiplier</th>
+              <th>Stop reason</th>
+              <th class="text-end">Custo</th>
+            </tr>
+          </thead>
+          <tbody id="anomalies-body">
+            <tr><td colspan="8" class="text-center text-muted">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Heatmaps row -->
+    <div class="row g-3 mb-3">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header py-2">
+            <strong>Co-ocorrencia</strong>
+            <small class="text-muted">(sessoes onde 2 agents foram invocados)</small>
+          </div>
+          <div class="card-body" id="cooccurrence-container">
+            <div class="text-center text-muted py-3">Carregando...</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header py-2">
+            <strong>Heatmap dia x hora</strong>
+            <small class="text-muted">(invocacoes por dia da semana x hora UTC)</small>
+          </div>
+          <div class="card-body" id="hourly-container">
+            <div class="text-center text-muted py-3">Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /dashboard-content -->
+</div>
+
+<!-- Drilldown Modal -->
+<div class="modal fade" id="drilldown-modal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Drilldown: <span id="drilldown-agent-type"></span></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+          <table class="table table-sm-padded">
+            <thead>
+              <tr>
+                <th>Quando</th>
+                <th>Sessao</th>
+                <th>User</th>
+                <th>Source</th>
+                <th class="text-end">Dur</th>
+                <th class="text-end">Turns</th>
+                <th>Stop</th>
+                <th class="text-end">Custo</th>
+                <th class="text-end">In/Out</th>
+                <th class="text-end">Cache R/C</th>
+              </tr>
+            </thead>
+            <tbody id="drilldown-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JS -->
+<script>
+(function() {
+  'use strict';
+
+  const API_BASE = "{{ url_for('agente.admin_metrics_page').rsplit('/', 1)[0] }}/api/admin/metrics";
+  // url_for resolves to /agente/admin/metrics, we use it as anchor for /agente
+  // Actually safer: hard-coded relative
+  const URLS = {
+    status: '/agente/api/admin/metrics/status',
+    filters: '/agente/api/admin/metrics/filters',
+    overview: '/agente/api/admin/metrics/overview',
+    byAgent: '/agente/api/admin/metrics/by-agent',
+    timeseries: '/agente/api/admin/metrics/timeseries',
+    anomalies: '/agente/api/admin/metrics/anomalies',
+    cooccurrence: '/agente/api/admin/metrics/cooccurrence',
+    hourly: '/agente/api/admin/metrics/hourly',
+    sparklines: '/agente/api/admin/metrics/sparklines',
+    drilldown: (at) => `/agente/api/admin/metrics/drilldown/${encodeURIComponent(at)}`,
+  };
+
+  const PALETTE = [
+    '#0d6efd', '#dc3545', '#198754', '#ffc107', '#6f42c1',
+    '#fd7e14', '#20c997', '#0dcaf0', '#d63384', '#6610f2',
+    '#e83e8c', '#17a2b8', '#28a745', '#343a40', '#adb5bd'
+  ];
+
+  let charts = { timeseries: null, stopReasons: null };
+
+  // ---- helpers ----
+  function fmtNumber(n) {
+    if (n === null || n === undefined) return '-';
+    return new Intl.NumberFormat('pt-BR').format(n);
+  }
+  function fmtCurrency(n) {
+    if (n === null || n === undefined) return '-';
+    return '$' + Number(n).toFixed(4);
+  }
+  function fmtMs(n) {
+    if (!n) return '-';
+    if (n < 1000) return n + 'ms';
+    return (n / 1000).toFixed(1) + 's';
+  }
+  function fmtPct(n) {
+    if (n === null || n === undefined) return '-';
+    return Number(n).toFixed(1) + '%';
+  }
+  function fmtPctRatio(n) {
+    // n e ratio 0..1
+    return (Number(n) * 100).toFixed(1) + '%';
+  }
+  function fmtDate(iso) {
+    if (!iso) return '-';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString('pt-BR');
+    } catch { return iso; }
+  }
+  function shortSession(s) {
+    return s ? s.substring(0, 8) : '-';
+  }
+  function colorFor(i) { return PALETTE[i % PALETTE.length]; }
+
+  function getFilters() {
+    const period = document.getElementById('filter-period').value;
+    const source = document.getElementById('filter-source').value;
+    const ats = Array.from(document.querySelectorAll('#filter-agent-types input:checked'))
+      .map(el => el.value);
+    const uids = Array.from(document.querySelectorAll('#filter-users input:checked'))
+      .map(el => el.value);
+    return { period, source, agent_types: ats.join(','), user_ids: uids.join(',') };
+  }
+
+  function buildQS(f) {
+    const params = new URLSearchParams();
+    Object.entries(f).forEach(([k, v]) => { if (v) params.set(k, v); });
+    return params.toString();
+  }
+
+  async function fetchJSON(url) {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j = await res.json();
+    if (!j.success) throw new Error(j.error || 'unknown error');
+    return j.data;
+  }
+
+  // ---- status + empty state ----
+  async function loadStatus() {
+    try {
+      const s = await fetchJSON(URLS.status);
+      const total = s.total_rows || 0;
+      const last = s.last_recorded_at ? fmtDate(s.last_recorded_at) : 'nunca';
+      document.getElementById('status-line').textContent =
+        `${fmtNumber(total)} linhas em agent_invocation_metrics — ultima coleta: ${last}`;
+
+      if (total === 0) {
+        document.getElementById('empty-state').classList.remove('d-none');
+        document.getElementById('dashboard-content').classList.add('d-none');
+        return false;
+      } else {
+        document.getElementById('empty-state').classList.add('d-none');
+        document.getElementById('dashboard-content').classList.remove('d-none');
+        return true;
+      }
+    } catch (e) {
+      document.getElementById('status-line').textContent = 'Erro ao consultar status: ' + e.message;
+      return false;
+    }
+  }
+
+  // ---- filtros (popula multi-select) ----
+  async function loadFilterOptions() {
+    try {
+      const d = await fetchJSON(URLS.filters + '?period=30d');
+      const atContainer = document.getElementById('filter-agent-types');
+      if ((d.agent_types || []).length === 0) {
+        atContainer.innerHTML = '<small class="text-muted">Sem dados</small>';
+      } else {
+        atContainer.innerHTML = d.agent_types.map(at =>
+          `<label><input type="checkbox" value="${at}"> ${at}</label>`
+        ).join('');
+      }
+
+      const uContainer = document.getElementById('filter-users');
+      if ((d.users || []).length === 0) {
+        uContainer.innerHTML = '<small class="text-muted">Sem dados</small>';
+      } else {
+        uContainer.innerHTML = d.users.map(u =>
+          `<label><input type="checkbox" value="${u.user_id}">
+            ${u.name} <small class="text-muted">(${u.invocations})</small></label>`
+        ).join('');
+      }
+    } catch (e) {
+      console.warn('loadFilterOptions falhou', e);
+    }
+  }
+
+  // ---- overview (KPIs + stop reasons + top users) ----
+  async function loadOverview(qs) {
+    const d = await fetchJSON(URLS.overview + '?' + qs);
+    const k = d.kpis;
+
+    const kpis = [
+      { label: 'Invocacoes', value: fmtNumber(k.total_invocations), sub: `${k.distinct_sessions} sessoes` },
+      { label: 'Custo total', value: '$' + Number(k.total_cost_usd).toFixed(2), sub: `${fmtNumber(k.distinct_users)} usuarios` },
+      { label: 'Latencia avg', value: fmtMs(k.avg_duration_ms), sub: `P95: ${fmtMs(k.p95_duration_ms)}` },
+      { label: 'Erro/max_turns', value: fmtPct(k.error_rate_pct), sub: 'stop_reason != end_turn' },
+      { label: 'Tokens in', value: fmtNumber(k.total_tokens_in), sub: `cache: ${fmtNumber(k.total_cache_read)}` },
+      { label: 'Tokens out', value: fmtNumber(k.total_tokens_out), sub: `cache create: ${fmtNumber(k.total_cache_create)}` },
+    ];
+    document.getElementById('kpi-cards').innerHTML = kpis.map(c => `
+      <div class="col-md-2 col-sm-4 col-6">
+        <div class="card metric-card h-100">
+          <div class="card-body py-2 px-3">
+            <div class="metric-label">${c.label}</div>
+            <div class="metric-value">${c.value}</div>
+            <div class="metric-sub">${c.sub}</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Stop reasons donut
+    if (charts.stopReasons) charts.stopReasons.destroy();
+    const ctxSr = document.getElementById('chart-stop-reasons').getContext('2d');
+    charts.stopReasons = new Chart(ctxSr, {
+      type: 'doughnut',
+      data: {
+        labels: d.stop_reasons.map(r => r.reason),
+        datasets: [{
+          data: d.stop_reasons.map(r => r.count),
+          backgroundColor: d.stop_reasons.map((_, i) => colorFor(i)),
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const sr = d.stop_reasons[ctx.dataIndex];
+                return `${sr.reason}: ${sr.count} (${sr.pct}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Top users
+    const tu = d.top_users;
+    document.getElementById('top-users-body').innerHTML = tu.length === 0
+      ? '<tr><td colspan="3" class="text-center text-muted">Sem dados</td></tr>'
+      : tu.map(u => `
+        <tr>
+          <td><small>${u.name}</small></td>
+          <td class="text-end">${fmtNumber(u.invocations)}</td>
+          <td class="text-end"><small>${fmtCurrency(u.cost_usd)}</small></td>
+        </tr>
+      `).join('');
+  }
+
+  // ---- by-agent (tabela + sparklines) ----
+  async function loadByAgent(qs) {
+    const [d, sl] = await Promise.all([
+      fetchJSON(URLS.byAgent + '?' + qs),
+      fetchJSON(URLS.sparklines + '?' + qs.replace(/period=\w+/, 'period=30d')),
+    ]);
+
+    const tbody = document.getElementById('agents-table-body');
+    if (d.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Sem dados no periodo</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = d.map((r, i) => {
+      const downgrade = r.downgrade_candidate
+        ? '<span class="badge badge-downgrade ms-1" title="Candidato a downgrade (custo alto, turns baixos, cache OK)">Downgrade?</span>'
+        : '';
+      const cacheBadge = r.cache_hit_ratio >= 0.6
+        ? `<span class="badge bg-success">${fmtPctRatio(r.cache_hit_ratio)}</span>`
+        : r.cache_hit_ratio >= 0.3
+          ? `<span class="badge bg-warning text-dark">${fmtPctRatio(r.cache_hit_ratio)}</span>`
+          : `<span class="badge bg-danger">${fmtPctRatio(r.cache_hit_ratio)}</span>`;
+      const errBadge = r.error_rate_pct > 10
+        ? `<span class="badge bg-danger">${r.error_rate_pct}%</span>`
+        : r.error_rate_pct > 5
+          ? `<span class="badge bg-warning text-dark">${r.error_rate_pct}%</span>`
+          : `<span class="badge bg-success">${r.error_rate_pct}%</span>`;
+
+      const sparkData = sl[r.agent_type] || [];
+      const sparkId = `spark-${i}`;
+
+      return `
+        <tr>
+          <td>
+            <a class="agent-link" data-agent="${r.agent_type}">${r.agent_type}</a>
+            ${downgrade}
+          </td>
+          <td class="text-end">${fmtNumber(r.invocations)}</td>
+          <td class="text-end">${fmtMs(r.avg_duration_ms)}</td>
+          <td class="text-end">${fmtMs(r.p95_duration_ms)}</td>
+          <td class="text-end">${r.avg_num_turns}</td>
+          <td class="text-end">$${r.sum_cost_usd.toFixed(2)}</td>
+          <td class="text-end"><small>${fmtCurrency(r.avg_cost_usd)}</small></td>
+          <td class="text-end"><small>${fmtNumber(r.sum_input_tokens + r.sum_cache_read)}</small></td>
+          <td class="text-end">${cacheBadge}</td>
+          <td class="text-end">${errBadge}</td>
+          <td><canvas id="${sparkId}" class="sparkline"></canvas></td>
+          <td>
+            <button class="btn btn-outline-secondary btn-sm py-0 px-1" data-drill="${r.agent_type}" title="Drilldown">
+              <i class="fas fa-search"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Render sparklines + bind drill clicks
+    d.forEach((r, i) => {
+      const sparkData = sl[r.agent_type] || [];
+      const canvas = document.getElementById(`spark-${i}`);
+      if (canvas) {
+        new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: sparkData.map((_, j) => j),
+            datasets: [{
+              data: sparkData,
+              borderColor: colorFor(i),
+              backgroundColor: 'transparent',
+              borderWidth: 1.5,
+              pointRadius: 0,
+              tension: 0.3,
+            }],
+          },
+          options: {
+            responsive: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: { x: { display: false }, y: { display: false } },
+          },
+        });
+      }
+    });
+
+    // Drill bindings
+    tbody.querySelectorAll('[data-drill]').forEach(el => {
+      el.addEventListener('click', () => openDrilldown(el.dataset.drill));
+    });
+    tbody.querySelectorAll('.agent-link').forEach(el => {
+      el.addEventListener('click', () => openDrilldown(el.dataset.agent));
+    });
+  }
+
+  // ---- time series ----
+  async function loadTimeseries(qs) {
+    const d = await fetchJSON(URLS.timeseries + '?' + qs);
+    if (charts.timeseries) charts.timeseries.destroy();
+    const ctx = document.getElementById('chart-timeseries').getContext('2d');
+    charts.timeseries = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: d.labels,
+        datasets: d.series.map((s, i) => ({
+          label: s.agent_type,
+          data: s.data,
+          backgroundColor: colorFor(i),
+          stack: 'all',
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+        },
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 10 } } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+        },
+      },
+    });
+  }
+
+  // ---- anomalies ----
+  async function loadAnomalies(qs) {
+    const d = await fetchJSON(URLS.anomalies + '?' + qs);
+    const tbody = document.getElementById('anomalies-body');
+    if (d.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhuma anomalia detectada nas ultimas 24h</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.map(a => `
+      <tr class="anomaly-row">
+        <td><small>${fmtDate(a.recorded_at)}</small></td>
+        <td><strong>${a.agent_type}</strong></td>
+        <td><code>${shortSession(a.session_id)}</code></td>
+        <td class="text-end">${fmtMs(a.duration_ms)}</td>
+        <td class="text-end"><small>${fmtMs(a.baseline_p95_ms)}</small></td>
+        <td class="text-end"><span class="badge bg-danger">${a.multiplier}x</span></td>
+        <td><small>${a.stop_reason || '-'}</small></td>
+        <td class="text-end"><small>${fmtCurrency(a.cost_usd)}</small></td>
+      </tr>
+    `).join('');
+  }
+
+  // ---- co-occurrence ----
+  async function loadCooccurrence(qs) {
+    const d = await fetchJSON(URLS.cooccurrence + '?' + qs);
+    const container = document.getElementById('cooccurrence-container');
+    const agents = d.agent_types || [];
+    if (agents.length === 0) {
+      container.innerHTML = '<div class="text-center text-muted py-3">Sem dados de co-ocorrencia</div>';
+      return;
+    }
+
+    // Find max for color scaling (excluding diagonal)
+    let maxOff = 0;
+    for (let i = 0; i < agents.length; i++) {
+      for (let j = 0; j < agents.length; j++) {
+        if (i !== j && d.matrix[i][j] > maxOff) maxOff = d.matrix[i][j];
+      }
+    }
+
+    let html = '<div style="overflow-x: auto;"><table class="table table-bordered table-sm-padded mb-0" style="width: auto;"><thead><tr><th></th>';
+    agents.forEach(a => {
+      html += `<th style="writing-mode: vertical-rl; transform: rotate(180deg); height: 90px; font-size: 0.7rem;">${a}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    for (let i = 0; i < agents.length; i++) {
+      html += `<tr><th style="font-size: 0.75rem;">${agents[i]}</th>`;
+      for (let j = 0; j < agents.length; j++) {
+        const v = d.matrix[i][j];
+        if (i === j) {
+          html += `<td class="cooccur-cell" style="background: #1e293b;">${v}</td>`;
+        } else if (v === 0) {
+          html += `<td class="cooccur-cell empty">-</td>`;
+        } else {
+          const intensity = maxOff > 0 ? v / maxOff : 0;
+          // Heat color: light to dark blue
+          const r = Math.round(255 - intensity * 180);
+          const g = Math.round(255 - intensity * 120);
+          const b = 255;
+          html += `<td class="cooccur-cell" style="background: rgb(${r},${g},${b}); color: ${intensity > 0.5 ? '#fff' : '#000'};">${v}</td>`;
+        }
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  }
+
+  // ---- hourly heatmap ----
+  async function loadHourly(qs) {
+    const d = await fetchJSON(URLS.hourly + '?' + qs);
+    const container = document.getElementById('hourly-container');
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+    const max = d.max_value || 1;
+
+    let html = '<div style="overflow-x: auto;"><table class="mb-0"><thead><tr><th></th>';
+    for (let h = 0; h < 24; h++) {
+      html += `<th style="font-size: 0.6rem; text-align: center; padding: 0 2px;">${h}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+    for (let dow = 0; dow < 7; dow++) {
+      html += `<tr><th style="font-size: 0.7rem; padding-right: 4px;">${dayNames[dow]}</th>`;
+      for (let h = 0; h < 24; h++) {
+        const v = d.matrix[dow][h];
+        const intensity = v / max;
+        const r = Math.round(255 - intensity * 200);
+        const g = Math.round(255 - intensity * 100);
+        const b = Math.round(255 - intensity * 50);
+        html += `<td class="heatmap-cell" style="background: rgb(${r},${g},${b});" title="${dayNames[dow]} ${h}:00 - ${v} invocacoes"></td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    html += `<div class="mt-2 small text-muted">Max: ${max} invocacoes/hora (UTC)</div>`;
+    container.innerHTML = html;
+  }
+
+  // ---- drilldown ----
+  async function openDrilldown(agent_type) {
+    const qs = buildQS(getFilters());
+    document.getElementById('drilldown-agent-type').textContent = agent_type;
+    document.getElementById('drilldown-body').innerHTML = '<tr><td colspan="10" class="text-center text-muted">Carregando...</td></tr>';
+    const modal = new bootstrap.Modal(document.getElementById('drilldown-modal'));
+    modal.show();
+
+    try {
+      const d = await fetchJSON(URLS.drilldown(agent_type) + '?' + qs + '&limit=30');
+      const tbody = document.getElementById('drilldown-body');
+      if (d.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Sem invocacoes no periodo</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.map(r => `
+        <tr>
+          <td><small>${fmtDate(r.recorded_at)}</small></td>
+          <td><code>${shortSession(r.session_id)}</code></td>
+          <td>${r.user_id || '-'}</td>
+          <td><span class="badge source-pill bg-${r.source === 'production' ? 'primary' : 'secondary'}">${r.source}</span></td>
+          <td class="text-end">${fmtMs(r.duration_ms)}</td>
+          <td class="text-end">${r.num_turns ?? '-'}</td>
+          <td><small>${r.stop_reason || '-'}</small></td>
+          <td class="text-end"><small>${fmtCurrency(r.cost_usd)}</small></td>
+          <td class="text-end"><small>${fmtNumber(r.input_tokens)}/${fmtNumber(r.output_tokens)}</small></td>
+          <td class="text-end"><small>${fmtNumber(r.cache_read_tokens)}/${fmtNumber(r.cache_creation_tokens)}</small></td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      document.getElementById('drilldown-body').innerHTML =
+        `<tr><td colspan="10" class="text-center text-danger">Erro: ${e.message}</td></tr>`;
+    }
+  }
+
+  // ---- main loader ----
+  async function loadAll() {
+    const hasData = await loadStatus();
+    if (!hasData) return;
+
+    const qs = buildQS(getFilters());
+    // Load all in parallel — Promise.all
+    try {
+      await Promise.all([
+        loadOverview(qs),
+        loadByAgent(qs),
+        loadTimeseries(qs),
+        loadAnomalies(qs),
+        loadCooccurrence(qs),
+        loadHourly(qs),
+      ]);
+    } catch (e) {
+      console.error('loadAll falhou', e);
+    }
+  }
+
+  // ---- bootstrap ----
+  document.addEventListener('DOMContentLoaded', async () => {
+    await loadFilterOptions();
+    await loadAll();
+
+    document.getElementById('btn-apply-filters').addEventListener('click', loadAll);
+    document.getElementById('btn-refresh').addEventListener('click', loadAll);
+    document.getElementById('filter-period').addEventListener('change', loadAll);
+    document.getElementById('filter-source').addEventListener('change', loadAll);
+  });
+})();
+</script>
+
+{% endif %}
+{% endblock %}
