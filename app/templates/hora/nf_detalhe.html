@@ -12,7 +12,18 @@
       </a>
     {% endif %}
     {% if nf.pedido_id %}
-      <span class="badge bg-success">Vinculada ao pedido {{ nf.pedido.numero_pedido }}</span>
+      <a href="{{ url_for('hora.pedidos_detalhe', pedido_id=nf.pedido_id) }}"
+         class="badge bg-success text-decoration-none"
+         title="Abrir pedido {{ nf.pedido.numero_pedido }}">
+        Vinculada ao pedido {{ nf.pedido.numero_pedido }}
+      </a>
+      {% if current_user.tem_perm_hora('nfs', 'editar') %}
+        <button type="button" class="btn btn-sm btn-outline-warning"
+                data-bs-toggle="modal" data-bs-target="#desvincularPedidoModal"
+                title="Desvincular esta NF do pedido (NF e itens permanecem)">
+          <i class="fas fa-unlink"></i> Desvincular pedido
+        </button>
+      {% endif %}
     {% else %}
       <span class="badge bg-warning">Sem pedido</span>
       {% if nf.loja_destino_id %}
@@ -560,6 +571,45 @@
   });
 })();
 </script>
+{% endif %}
+
+{% if nf.pedido_id and current_user.tem_perm_hora('nfs', 'editar') %}
+<!-- Modal: confirmar desvinculo NF -> Pedido -->
+<div class="modal fade" id="desvincularPedidoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('hora.nfs_desvincular_pedido', nf_id=nf.id) }}" class="modal-content">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-header bg-warning-subtle text-warning-emphasis">
+        <h5 class="modal-title">
+          <i class="fas fa-unlink"></i> Desvincular NF do pedido {{ nf.pedido.numero_pedido }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          A NF <strong>{{ nf.numero_nf }}</strong> deixara de estar vinculada ao
+          pedido <strong>{{ nf.pedido.numero_pedido }}</strong>.
+        </p>
+        <ul class="small text-muted mb-3">
+          <li>A NF e seus <strong>{{ nf.itens|length }} item(ns)</strong> permanecem intactos.</li>
+          <li>Recebimentos fisicos e devolucoes <strong>nao</strong> sao afetados.</li>
+          <li>Status do pedido sera recalculado (pode cair de FATURADO para ABERTO/PARCIAL).</li>
+          <li>Apos desvincular, voce pode vincular a outro pedido (atalho rapido ou match).</li>
+        </ul>
+        <div class="alert alert-info small mb-0">
+          <i class="fas fa-info-circle"></i>
+          Operacao reversivel: basta vincular novamente ao pedido correto.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-warning">
+          <i class="fas fa-unlink"></i> Confirmar desvinculo
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 {% endif %}
 
 {% if current_user.tem_perm_hora('nfs', 'apagar') %}

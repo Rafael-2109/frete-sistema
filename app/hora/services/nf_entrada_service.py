@@ -206,6 +206,63 @@ def vincular_nf_a_pedido(nf_id: int, pedido_id: int) -> None:
     atualizar_status_pedido_por_faturamento(pedido_id)
 
 
+def desvincular_nf_de_pedido(nf_id: int, operador: Optional[str] = None) -> dict:
+    """Remove o vinculo NF -> Pedido (zera `nf.pedido_id`).
+
+    Operacao inversa de `vincular_nf_a_pedido`. A NF, seus itens, recebimentos
+    e devolucoes permanecem intactos — somente o ponteiro para o pedido
+    e zerado. Status do pedido ex-vinculado e recalculado em seguida (pode
+    descer de FATURADO -> PARCIALMENTE_FATURADO / ABERTO conforme outras NFs).
+
+    Args:
+        nf_id: NF a desvincular.
+        operador: nome do usuario (para log de auditoria).
+
+    Raises:
+        ValueError: NF nao encontrada ou NF nao esta vinculada a pedido algum.
+
+    Returns:
+        dict com `ok`, `nf_id`, `pedido_id` (ex-pedido), `status_pedido` (novo
+        status apos recalculo).
+    """
+    nf = HoraNfEntrada.query.get(nf_id)
+    if not nf:
+        raise ValueError(f'NF {nf_id} nao encontrada')
+    if not nf.pedido_id:
+        raise ValueError('Esta NF nao esta vinculada a nenhum pedido.')
+
+    pedido_id_antigo = nf.pedido_id
+    nf.pedido_id = None
+    db.session.commit()
+
+    # Recalcula status do ex-pedido (pode cair de FATURADO -> PARCIAL / ABERTO).
+    # Falha aqui nao deve propagar — o desvinculo ja foi commitado.
+    try:
+        atualizar_status_pedido_por_faturamento(pedido_id_antigo)
+    except Exception as exc:  # pragma: no cover
+        current_app.logger.error(
+            f'hora: NF {nf.numero_nf} (id={nf_id}) desvinculada com sucesso, '
+            f'mas falha ao revalidar status do pedido {pedido_id_antigo}: '
+            f'{exc}. Revalidar manualmente.'
+        )
+
+    pedido_atualizado = HoraPedido.query.get(pedido_id_antigo)
+    status_pedido = pedido_atualizado.status if pedido_atualizado else None
+
+    current_app.logger.info(
+        f'hora: NF {nf.numero_nf} (id={nf_id}) desvinculada do pedido '
+        f'{pedido_id_antigo} por {operador or "?"} — status do pedido: '
+        f'{status_pedido}'
+    )
+
+    return {
+        'ok': True,
+        'nf_id': nf_id,
+        'pedido_id': pedido_id_antigo,
+        'status_pedido': status_pedido,
+    }
+
+
 def editar_nf_item_manual(
     nf_id: int,
     nf_item_id: int,

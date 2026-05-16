@@ -684,6 +684,68 @@ def nfs_vincular_pedido(nf_id: int):
 
 
 # ------------------------------------------------------------------------
+# Desvincular pedido da NF
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/nfs/<int:nf_id>/desvincular-pedido', methods=['POST'])
+@require_hora_perm('nfs', 'editar')
+def nfs_desvincular_pedido(nf_id: int):
+    """Remove o vinculo NF -> Pedido. NF e itens permanecem intactos.
+
+    O status do pedido ex-vinculado e recalculado automaticamente
+    (pode cair de FATURADO -> PARCIALMENTE_FATURADO / ABERTO).
+    """
+    nf = HoraNfEntrada.query.get_or_404(nf_id)
+
+    # Escopo da loja da NF
+    if nf.loja_destino_id and not usuario_tem_acesso_a_loja(nf.loja_destino_id):
+        flash('Acesso negado: NF de loja fora do seu escopo.', 'danger')
+        return redirect(url_for('hora.nfs_lista'))
+    if not nf.loja_destino_id and lojas_permitidas_ids() is not None:
+        flash(
+            'NF sem loja atribuida; apenas usuario com escopo total pode desvincular.',
+            'warning',
+        )
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    if not nf.pedido_id:
+        flash('Esta NF nao esta vinculada a nenhum pedido.', 'warning')
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    # Escopo do pedido atualmente vinculado (espelha bloqueio do nfs_remover):
+    # desvincular muda o status do pedido, entao precisa de acesso a ele.
+    pedido_vinc = HoraPedido.query.get(nf.pedido_id)
+    if (
+        pedido_vinc
+        and pedido_vinc.loja_destino_id
+        and not usuario_tem_acesso_a_loja(pedido_vinc.loja_destino_id)
+    ):
+        flash(
+            'NF vinculada a pedido de loja fora do seu escopo — '
+            'desvincular alteraria status do pedido. Operacao bloqueada.',
+            'danger',
+        )
+        return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+    try:
+        res = nf_entrada_service.desvincular_nf_de_pedido(
+            nf_id=nf.id,
+            operador=current_user.nome if hasattr(current_user, 'nome') else None,
+        )
+        numero_pedido = pedido_vinc.numero_pedido if pedido_vinc else f'#{res["pedido_id"]}'
+        status_msg = f' (novo status: {res["status_pedido"]})' if res.get('status_pedido') else ''
+        flash(
+            f'NF desvinculada do pedido {numero_pedido}{status_msg}.',
+            'success',
+        )
+    except ValueError as exc:
+        flash(f'Erro: {exc}', 'danger')
+    except Exception as exc:  # pragma: no cover
+        flash(f'Erro inesperado: {exc}', 'danger')
+    return redirect(url_for('hora.nfs_detalhe', nf_id=nf.id))
+
+
+# ------------------------------------------------------------------------
 # Modal de match NF x Pedido
 # ------------------------------------------------------------------------
 
