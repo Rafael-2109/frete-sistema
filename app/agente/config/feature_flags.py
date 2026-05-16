@@ -689,8 +689,8 @@ USE_BROWSER_TOOL = os.getenv("AGENT_BROWSER_ENABLED", "false").lower() == "true"
 # Persistencia eh best-effort: falha de DB nao quebra stream do agente.
 # Routes/insights le da tabela quando flag ON, fallback para in-memory quando OFF.
 #
-# Default false (opt-in). Ativacao: AGENT_COST_TRACKER_PERSIST=true.
-USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "false").lower() == "true"
+# Default true (ativado em 2026-05-16). Desativar: AGENT_COST_TRACKER_PERSIST=false.
+USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "true").lower() == "true"
 
 
 # A1 (2026-05-16) — Telemetria per-invocacao de subagent
@@ -705,7 +705,7 @@ USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "false").lowe
 # Persistencia via AgentInvocationMetric.insert_metric (SAVEPOINT pattern).
 # Falha de DB nao quebra stream do agente (best-effort).
 #
-# Default false (opt-in). Ativacao: AGENT_INVOCATION_METRICS_PERSIST=true.
+# Default true (ativado em 2026-05-16). Desativar: AGENT_INVOCATION_METRICS_PERSIST=false.
 USE_INVOCATION_METRICS_PERSIST = os.getenv(
-    "AGENT_INVOCATION_METRICS_PERSIST", "false"
+    "AGENT_INVOCATION_METRICS_PERSIST", "true"
 ).lower() == "true"
