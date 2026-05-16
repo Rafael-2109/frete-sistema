@@ -2,23 +2,34 @@
 
 {% block title %}Dashboard Metricas IA{% endblock %}
 
-{% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+{# BUG FIX (2026-05-16): bloco extra_head NAO existe em base.html — usar
+   extra_css (linha 72) para style e block scripts (linha 1325) para JS.
+   Sem isso o script Chart.js era silenciosamente descartado e todos os
+   graficos quebravam com "Chart is not defined", o que tambem impedia
+   top_users de renderizar (chart errava antes da tabela). #}
+{% block extra_css %}
 <style>
   .metric-card { border-left: 3px solid var(--bs-primary); }
   .metric-card .metric-value { font-size: 1.6rem; font-weight: 600; }
   .metric-card .metric-label { font-size: 0.78rem; color: var(--bs-secondary); text-transform: uppercase; }
   .metric-card .metric-sub { font-size: 0.72rem; color: var(--bs-secondary); }
+  .metric-card .metric-warn { color: #b45309; font-size: 0.7rem; font-style: italic; }
   .sparkline { width: 80px; height: 22px; vertical-align: middle; }
   .heatmap-cell { width: 22px; height: 22px; display: inline-block; border: 1px solid rgba(0,0,0,0.05); }
-  .cooccur-cell { width: 28px; height: 28px; text-align: center; font-size: 0.6rem; color: #fff; }
+  .cooccur-cell { width: 28px; height: 28px; text-align: center; font-size: 0.7rem; color: #fff; }
   .cooccur-cell.empty { background: #f3f4f6; color: #9ca3af; }
+  .cooccur-cell.diag { background: #e5e7eb; color: #6b7280; font-style: italic; }
   .agent-link { cursor: pointer; color: var(--bs-link-color); }
   .agent-link:hover { text-decoration: underline; }
   .badge-downgrade { background: #fbbf24; color: #78350f; }
   .anomaly-row td { background: #fef2f2 !important; }
   .table-sm-padded td, .table-sm-padded th { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
   .empty-state { text-align: center; padding: 3rem 1rem; color: var(--bs-secondary); }
+  .chart-empty {
+    display: flex; align-items: center; justify-content: center;
+    height: 100%; min-height: 200px; color: var(--bs-secondary);
+    font-size: 0.85rem; text-align: center; padding: 1rem;
+  }
   .filter-bar .form-select-sm, .filter-bar .form-control-sm { font-size: 0.8rem; }
   .source-pill { font-size: 0.65rem; padding: 0.15rem 0.35rem; }
   .ms-multiselect {
@@ -129,7 +140,7 @@
           <div class="card-header py-2">
             <strong>Invocacoes por dia</strong> <small class="text-muted">(stack por agent)</small>
           </div>
-          <div class="card-body" style="min-height: 280px;">
+          <div class="card-body" style="min-height: 280px;" data-canvas-host="chart-timeseries">
             <canvas id="chart-timeseries"></canvas>
           </div>
         </div>
@@ -137,7 +148,7 @@
       <div class="col-lg-4">
         <div class="card mb-3">
           <div class="card-header py-2"><strong>Stop reason</strong></div>
-          <div class="card-body" style="min-height: 200px;">
+          <div class="card-body" style="min-height: 200px;" data-canvas-host="chart-stop-reasons">
             <canvas id="chart-stop-reasons"></canvas>
           </div>
         </div>
@@ -277,14 +288,18 @@
   </div>
 </div>
 
-<!-- JS -->
+<!-- JS movido para block scripts (final do template) — preserva ordem
+     de carregamento + permite Chart.js CDN ser injetado pelo base.html. -->
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not forbidden %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 (function() {
   'use strict';
 
-  const API_BASE = "{{ url_for('agente.admin_metrics_page').rsplit('/', 1)[0] }}/api/admin/metrics";
-  // url_for resolves to /agente/admin/metrics, we use it as anchor for /agente
-  // Actually safer: hard-coded relative
   const URLS = {
     status: '/agente/api/admin/metrics/status',
     filters: '/agente/api/admin/metrics/filters',
@@ -340,6 +355,122 @@
   }
   function colorFor(i) { return PALETTE[i % PALETTE.length]; }
 
+  // Substitui canvas por mensagem de empty state quando nao ha dados.
+  // Necessario porque Chart.js renderiza area vazia silenciosamente.
+  function showChartEmpty(canvasId, msg) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    // Limpar chart existente
+    const existing = charts[canvasId];
+    if (existing && typeof existing.destroy === 'function') {
+      existing.destroy();
+      charts[canvasId] = null;
+    }
+    parent.innerHTML = `<div class="chart-empty">
+      <div>
+        <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i><br>
+        ${msg}
+      </div>
+    </div>`;
+  }
+
+  // Renderiza donut OU mostra empty state.
+  // chartKey identifica o chart no dict `charts` para destroy() futuro.
+  function renderDonutOrEmpty(canvasId, chartKey, items) {
+    if (!items || items.length === 0 ||
+        items.every(r => (r.count || 0) === 0)) {
+      showChartEmpty(canvasId, 'Sem dados de stop_reason no periodo');
+      return;
+    }
+    // Garantir que o parent tem canvas (pode ter sido substituido por empty)
+    let canvas = document.getElementById(canvasId);
+    if (!canvas) {
+      // Re-criar canvas se foi removido por showChartEmpty anterior
+      const wrapper = document.querySelector(`[data-canvas-host="${canvasId}"]`);
+      if (wrapper) {
+        wrapper.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+        canvas = document.getElementById(canvasId);
+      }
+    }
+    if (!canvas) return;
+    if (charts[chartKey]) charts[chartKey].destroy();
+    const ctx = canvas.getContext('2d');
+    charts[chartKey] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: items.map(r => r.reason),
+        datasets: [{
+          data: items.map(r => r.count),
+          backgroundColor: items.map((_, i) => colorFor(i)),
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx2) => {
+                const sr = items[ctx2.dataIndex];
+                return `${sr.reason}: ${sr.count} (${sr.pct}%)`;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  // Renderiza bar chart OU empty state.
+  function renderBarOrEmpty(canvasId, chartKey, labels, series, opts) {
+    const totalPoints = (series || []).reduce(
+      (acc, s) => acc + (s.data || []).reduce((a, b) => a + (b || 0), 0), 0
+    );
+    if (!labels || labels.length === 0 || totalPoints === 0) {
+      const msg = opts && opts.emptyMsg
+        ? opts.emptyMsg
+        : 'Sem dados no periodo selecionado';
+      showChartEmpty(canvasId, msg);
+      return;
+    }
+    let canvas = document.getElementById(canvasId);
+    if (!canvas) {
+      const wrapper = document.querySelector(`[data-canvas-host="${canvasId}"]`);
+      if (wrapper) {
+        wrapper.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+        canvas = document.getElementById(canvasId);
+      }
+    }
+    if (!canvas) return;
+    if (charts[chartKey]) charts[chartKey].destroy();
+    const ctx = canvas.getContext('2d');
+    charts[chartKey] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: series.map((s, i) => ({
+          label: s.agent_type,
+          data: s.data,
+          backgroundColor: colorFor(i),
+          stack: 'all',
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+        },
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 10 } } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+        },
+      },
+    });
+  }
+
   function getFilters() {
     const period = document.getElementById('filter-period').value;
     const source = document.getElementById('filter-source').value;
@@ -371,7 +502,7 @@
       const total = s.total_rows || 0;
       const last = s.last_recorded_at ? fmtDate(s.last_recorded_at) : 'nunca';
       document.getElementById('status-line').textContent =
-        `${fmtNumber(total)} linhas em agent_invocation_metrics — ultima coleta: ${last}`;
+        `Total na tabela: ${fmtNumber(total)} linhas — ultima coleta: ${last}. Filtros abaixo aplicam recorte temporal e segmentacao.`;
 
       if (total === 0) {
         document.getElementById('empty-state').classList.remove('d-none');
@@ -420,13 +551,39 @@
     const d = await fetchJSON(URLS.overview + '?' + qs);
     const k = d.kpis;
 
+    // KPIs com mensagem prescritiva, nao descritiva.
+    // Tokens processados = input + cache_read (volume real de leitura ao LLM)
+    const totalTokensProcessed = (k.total_tokens_in || 0) + (k.total_cache_read || 0);
+    const cachePct = totalTokensProcessed > 0
+      ? ((k.total_cache_read || 0) / totalTokensProcessed * 100).toFixed(1)
+      : '0.0';
+    // P95 valido so com amostra >= 5
+    const p95Reliable = (k.total_invocations || 0) >= 5;
+    const p95Sub = p95Reliable
+      ? `P95: ${fmtMs(k.p95_duration_ms)}`
+      : `<span class="metric-warn">P95 indisponivel (n=${k.total_invocations})</span>`;
+
     const kpis = [
-      { label: 'Invocacoes', value: fmtNumber(k.total_invocations), sub: `${k.distinct_sessions} sessoes` },
-      { label: 'Custo total', value: '$' + Number(k.total_cost_usd).toFixed(2), sub: `${fmtNumber(k.distinct_users)} usuarios` },
-      { label: 'Latencia avg', value: fmtMs(k.avg_duration_ms), sub: `P95: ${fmtMs(k.p95_duration_ms)}` },
-      { label: 'Erro/max_turns', value: fmtPct(k.error_rate_pct), sub: 'stop_reason != end_turn' },
-      { label: 'Tokens in', value: fmtNumber(k.total_tokens_in), sub: `cache: ${fmtNumber(k.total_cache_read)}` },
-      { label: 'Tokens out', value: fmtNumber(k.total_tokens_out), sub: `cache create: ${fmtNumber(k.total_cache_create)}` },
+      { label: 'Invocacoes',
+        value: fmtNumber(k.total_invocations),
+        sub: `${k.distinct_sessions} sessoes / ${fmtNumber(k.distinct_users)} usuarios` },
+      { label: 'Custo total',
+        value: '$' + Number(k.total_cost_usd || 0).toFixed(2),
+        sub: k.total_invocations > 0
+          ? `$${(k.total_cost_usd / k.total_invocations).toFixed(4)} por invocacao`
+          : '-' },
+      { label: 'Latencia avg',
+        value: fmtMs(k.avg_duration_ms),
+        sub: p95Sub },
+      { label: 'Taxa de falha',
+        value: fmtPct(k.error_rate_pct),
+        sub: 'error + max_turns' },
+      { label: 'Tokens processados',
+        value: fmtNumber(totalTokensProcessed),
+        sub: `cache ${cachePct}% (${fmtNumber(k.total_cache_read)})` },
+      { label: 'Tokens gerados',
+        value: fmtNumber(k.total_tokens_out),
+        sub: `cache create: ${fmtNumber(k.total_cache_create)}` },
     ];
     document.getElementById('kpi-cards').innerHTML = kpis.map(c => `
       <div class="col-md-2 col-sm-4 col-6">
@@ -440,34 +597,8 @@
       </div>
     `).join('');
 
-    // Stop reasons donut
-    if (charts.stopReasons) charts.stopReasons.destroy();
-    const ctxSr = document.getElementById('chart-stop-reasons').getContext('2d');
-    charts.stopReasons = new Chart(ctxSr, {
-      type: 'doughnut',
-      data: {
-        labels: d.stop_reasons.map(r => r.reason),
-        datasets: [{
-          data: d.stop_reasons.map(r => r.count),
-          backgroundColor: d.stop_reasons.map((_, i) => colorFor(i)),
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 10 } } },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const sr = d.stop_reasons[ctx.dataIndex];
-                return `${sr.reason}: ${sr.count} (${sr.pct}%)`;
-              },
-            },
-          },
-        },
-      },
-    });
+    // Stop reasons donut — placeholder visivel quando vazio
+    renderDonutOrEmpty('chart-stop-reasons', 'stopReasons', d.stop_reasons);
 
     // Top users
     const tu = d.top_users;
@@ -577,31 +708,12 @@
   // ---- time series ----
   async function loadTimeseries(qs) {
     const d = await fetchJSON(URLS.timeseries + '?' + qs);
-    if (charts.timeseries) charts.timeseries.destroy();
-    const ctx = document.getElementById('chart-timeseries').getContext('2d');
-    charts.timeseries = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: d.labels,
-        datasets: d.series.map((s, i) => ({
-          label: s.agent_type,
-          data: s.data,
-          backgroundColor: colorFor(i),
-          stack: 'all',
-        })),
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
-        },
-        scales: {
-          x: { stacked: true, ticks: { font: { size: 10 } } },
-          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
-        },
-      },
-    });
+    // Mostrar empty state quando 0 invocacoes ou apenas 1 dia (bar chart
+    // sem comparativo perde sentido). Apenas 1 dia: ainda mostramos —
+    // helper so esconde se totalPoints === 0.
+    renderBarOrEmpty('chart-timeseries', 'timeseries',
+      d.labels, d.series,
+      { emptyMsg: 'Sem invocacoes no periodo' });
   }
 
   // ---- anomalies ----
@@ -627,43 +739,72 @@
   }
 
   // ---- co-occurrence ----
+  // Matriz simetrica: celula [i][j] = qtd de sessoes em que ambos agents
+  // i e j foram invocados juntos. Diagonal e auto-join (trivialmente
+  // verdadeiro: agent X co-ocorre consigo mesmo) — info inutil, ocultamos.
+  // So mostramos triangulo superior porque a matriz e simetrica.
   async function loadCooccurrence(qs) {
     const d = await fetchJSON(URLS.cooccurrence + '?' + qs);
     const container = document.getElementById('cooccurrence-container');
     const agents = d.agent_types || [];
+
     if (agents.length === 0) {
-      container.innerHTML = '<div class="text-center text-muted py-3">Sem dados de co-ocorrencia</div>';
+      container.innerHTML = '<div class="chart-empty">'
+        + '<div><i class="fas fa-project-diagram fa-2x text-muted mb-2"></i><br>'
+        + 'Sem dados de co-ocorrencia no periodo</div></div>';
       return;
     }
 
-    // Find max for color scaling (excluding diagonal)
+    // Calcular max OFF-DIAGONAL para escala de cor. Se TUDO off-diagonal
+    // for zero, mostrar mensagem em vez de matriz vazia (agents nunca
+    // foram invocados juntos na mesma sessao).
     let maxOff = 0;
+    let totalOff = 0;
     for (let i = 0; i < agents.length; i++) {
-      for (let j = 0; j < agents.length; j++) {
-        if (i !== j && d.matrix[i][j] > maxOff) maxOff = d.matrix[i][j];
+      for (let j = i + 1; j < agents.length; j++) {
+        const v = d.matrix[i][j];
+        totalOff += v;
+        if (v > maxOff) maxOff = v;
       }
     }
 
-    let html = '<div style="overflow-x: auto;"><table class="table table-bordered table-sm-padded mb-0" style="width: auto;"><thead><tr><th></th>';
-    agents.forEach(a => {
-      html += `<th style="writing-mode: vertical-rl; transform: rotate(180deg); height: 90px; font-size: 0.7rem;">${a}</th>`;
-    });
+    if (agents.length < 2 || totalOff === 0) {
+      container.innerHTML = '<div class="chart-empty">'
+        + '<div><i class="fas fa-project-diagram fa-2x text-muted mb-2"></i><br>'
+        + (agents.length < 2
+            ? `Apenas 1 agent invocado no periodo (${agents[0] || ''})`
+            : 'Nenhuma sessao invocou 2 agents diferentes ainda.<br>'
+              + '<small>Co-ocorrencia aparece quando 2+ agents sao usados na mesma sessao.</small>')
+        + '</div></div>';
+      return;
+    }
+
+    // Renderiza apenas TRIANGULO SUPERIOR (i < j) com pares unicos.
+    // Linhas = "agent A", colunas = "agent B" onde B > A.
+    let html = '<div style="overflow-x:auto;">'
+      + '<table class="table table-bordered table-sm-padded mb-0" style="width:auto;">'
+      + '<thead><tr><th class="text-muted small">A \\ B</th>';
+    for (let j = 1; j < agents.length; j++) {
+      html += `<th style="font-size:0.75rem;">${agents[j]}</th>`;
+    }
     html += '</tr></thead><tbody>';
-    for (let i = 0; i < agents.length; i++) {
-      html += `<tr><th style="font-size: 0.75rem;">${agents[i]}</th>`;
-      for (let j = 0; j < agents.length; j++) {
-        const v = d.matrix[i][j];
-        if (i === j) {
-          html += `<td class="cooccur-cell" style="background: #1e293b;">${v}</td>`;
-        } else if (v === 0) {
-          html += `<td class="cooccur-cell empty">-</td>`;
+    for (let i = 0; i < agents.length - 1; i++) {
+      html += `<tr><th style="font-size:0.75rem;">${agents[i]}</th>`;
+      for (let j = 1; j < agents.length; j++) {
+        if (j <= i) {
+          html += `<td class="cooccur-cell diag">-</td>`;
         } else {
-          const intensity = maxOff > 0 ? v / maxOff : 0;
-          // Heat color: light to dark blue
-          const r = Math.round(255 - intensity * 180);
-          const g = Math.round(255 - intensity * 120);
-          const b = 255;
-          html += `<td class="cooccur-cell" style="background: rgb(${r},${g},${b}); color: ${intensity > 0.5 ? '#fff' : '#000'};">${v}</td>`;
+          const v = d.matrix[i][j];
+          if (v === 0) {
+            html += `<td class="cooccur-cell empty">0</td>`;
+          } else {
+            const intensity = maxOff > 0 ? v / maxOff : 0;
+            const r = Math.round(255 - intensity * 180);
+            const g = Math.round(255 - intensity * 120);
+            const b = 255;
+            const fg = intensity > 0.5 ? '#fff' : '#000';
+            html += `<td class="cooccur-cell" style="background:rgb(${r},${g},${b});color:${fg};">${v}</td>`;
+          }
         }
       }
       html += '</tr>';
@@ -676,9 +817,17 @@
   async function loadHourly(qs) {
     const d = await fetchJSON(URLS.hourly + '?' + qs);
     const container = document.getElementById('hourly-container');
-    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
-    const max = d.max_value || 1;
 
+    // Empty: matriz sem nenhuma celula > 0 ou max=0
+    const max = d.max_value || 0;
+    if (max === 0) {
+      container.innerHTML = '<div class="chart-empty">'
+        + '<div><i class="fas fa-clock fa-2x text-muted mb-2"></i><br>'
+        + 'Sem invocacoes registradas neste periodo</div></div>';
+      return;
+    }
+
+    const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
     let html = '<div style="overflow-x: auto;"><table class="mb-0"><thead><tr><th></th>';
     for (let h = 0; h < 24; h++) {
       html += `<th style="font-size: 0.6rem; text-align: center; padding: 0 2px;">${h}</th>`;
@@ -769,6 +918,5 @@
   });
 })();
 </script>
-
 {% endif %}
 {% endblock %}
