@@ -10,7 +10,9 @@
       <div class="input-group">
         <input type="text" name="numero_chassi" id="f-chassi" required minlength="5"
                class="form-control chassi-mono text-uppercase"
-               placeholder="Digite, cole ou escaneie o chassi" autocomplete="off">
+               placeholder="Digite, cole ou escaneie o chassi" autocomplete="off"
+               data-hora-autocomplete="chassi"
+               data-hora-min-chars="2">
         <button type="button" class="btn btn-outline-primary" id="btn-qr"
                 data-bs-toggle="modal" data-bs-target="#modal-qr"
                 title="Escanear chassi via QR code (camera)">
@@ -175,6 +177,10 @@
   if (elBtnBuscar) elBtnBuscar.addEventListener('click', buscarInfoChassi);
   if (elChassi) {
     elChassi.addEventListener('blur', buscarInfoChassi);
+    // change e disparado pelo widget de autocomplete apos selecao do dropdown
+    // (mousedown -> seta input.value -> dispatch change). Sem este listener, a
+    // selecao via autocomplete nao pre-preenche modelo/cor/loja.
+    elChassi.addEventListener('change', buscarInfoChassi);
     elChassi.addEventListener('input', () => {
       // Maiusculiza ao digitar; nao busca automaticamente para evitar
       // chamadas excessivas — busca acontece em blur ou click.

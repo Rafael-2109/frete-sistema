@@ -1,13 +1,15 @@
 """Rotas de devolucao ao fornecedor (HORA -> Motochefe)."""
 from __future__ import annotations
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 from app.hora.decorators import require_hora_perm
 from app.hora.models import (
     HoraDevolucaoFornecedor,
+    HoraDevolucaoFornecedorItem,
     HoraLoja,
+    HoraMoto,
     HoraNfEntrada,
 )
 from app.hora.routes import hora_bp
@@ -115,6 +117,7 @@ def devolucoes_novo():
             nf_str = (request.form.get('nf_entrada_id') or '').strip()
             nf_id = int(nf_str) if nf_str.isdigit() else None
             obs = (request.form.get('observacoes') or '').strip() or None
+            chassi = (request.form.get('numero_chassi') or '').strip().upper() or None
 
             if not usuario_tem_acesso_a_loja(loja_id):
                 flash('Acesso negado a essa loja.', 'danger')
@@ -123,14 +126,34 @@ def devolucoes_novo():
                     lojas=lojas, nfs=nfs_entrada,
                 )
 
-            dev = devolucao_service.criar_devolucao(
-                loja_id=loja_id,
-                motivo=motivo,
-                nf_entrada_id=nf_id,
-                observacoes=obs,
-                criado_por=current_user.nome if hasattr(current_user, 'nome') else None,
-            )
-            flash(f'Devolucao #{dev.id} criada.', 'success')
+            criado_por = current_user.nome if hasattr(current_user, 'nome') else None
+
+            if chassi:
+                # Caminho atomico: cria header + 1 item em UM commit.
+                # Reusa criar_devolucao_com_itens (mesma rota usada por
+                # resolucao_service para split atomico em multi-itens).
+                dev = devolucao_service.criar_devolucao_com_itens(
+                    loja_id=loja_id,
+                    motivo=motivo,
+                    itens=[{'numero_chassi': chassi}],
+                    nf_entrada_id=nf_id,
+                    observacoes=obs,
+                    criado_por=criado_por,
+                )
+                flash(
+                    f'Devolucao #{dev.id} criada com chassi {chassi}. '
+                    f'Adicione outros chassis ou envie a devolucao.',
+                    'success',
+                )
+            else:
+                dev = devolucao_service.criar_devolucao(
+                    loja_id=loja_id,
+                    motivo=motivo,
+                    nf_entrada_id=nf_id,
+                    observacoes=obs,
+                    criado_por=criado_por,
+                )
+                flash(f'Devolucao #{dev.id} criada.', 'success')
             return redirect(url_for('hora.devolucoes_detalhe', devolucao_id=dev.id))
         except (ValueError, KeyError) as exc:
             flash(f'Erro: {exc}', 'danger')
@@ -140,6 +163,75 @@ def devolucoes_novo():
         lojas=lojas,
         nfs=nfs_entrada,
     )
+
+
+@hora_bp.route('/devolucoes/api/nf-chassis')
+@require_hora_perm('devolucoes', 'criar')
+def devolucoes_api_nf_chassis():
+    """JSON com chassis (e modelo/cor) de uma NF de entrada.
+
+    Usada pelo template devolucao_novo para popular o select "Moto a devolver"
+    quando o operador escolhe uma NF. Respeita escopo de loja: se a NF nao
+    pertence a loja permitida do operador, retorna `ok=False`.
+
+    Tambem marca chassis ja incluidos em outra devolucao (qualquer status
+    diferente de CANCELADA) para que o operador veja o estado e nao tente
+    duplicar a devolucao.
+    """
+    nf_id_str = (request.args.get('nf_id') or '').strip()
+    if not nf_id_str.isdigit():
+        return jsonify({'ok': False, 'error': 'nf_id invalido'}), 200
+    nf = HoraNfEntrada.query.get(int(nf_id_str))
+    if not nf:
+        return jsonify({'ok': False, 'error': 'NF nao encontrada'}), 200
+
+    permitidas = lojas_permitidas_ids()
+    if permitidas is not None:
+        if nf.loja_destino_id is None or nf.loja_destino_id not in permitidas:
+            return jsonify({
+                'ok': False,
+                'error': 'NF fora do seu escopo de loja',
+            }), 200
+
+    # Conjunto de chassis ja amarrados a uma devolucao nao-cancelada
+    # (impede duplicacao). Inclui ABERTA/ENVIADA/CONFIRMADA — para nao
+    # bloquear chassi que ja foi recolocado em estoque via cancelamento.
+    chassis_nf = [it.numero_chassi for it in nf.itens]
+    em_devolucao_set: set[str] = set()
+    if chassis_nf:
+        rows = (
+            HoraDevolucaoFornecedorItem.query
+            .join(HoraDevolucaoFornecedor)
+            .filter(
+                HoraDevolucaoFornecedorItem.numero_chassi.in_(chassis_nf),
+                HoraDevolucaoFornecedor.status.in_(('ABERTA', 'ENVIADA', 'CONFIRMADA')),
+            )
+            .with_entities(HoraDevolucaoFornecedorItem.numero_chassi)
+            .all()
+        )
+        em_devolucao_set = {r[0] for r in rows}
+
+    itens_payload = []
+    for it in nf.itens:
+        moto = HoraMoto.query.get(it.numero_chassi)
+        modelo_nome = (
+            moto.modelo.nome_modelo if moto and getattr(moto, 'modelo', None) else None
+        ) or (it.modelo_texto_original or None)
+        cor = (moto.cor if moto else None) or (it.cor_texto_original or None)
+        itens_payload.append({
+            'numero_chassi': it.numero_chassi,
+            'modelo_nome': modelo_nome,
+            'cor': cor,
+            'ja_em_devolucao': it.numero_chassi in em_devolucao_set,
+        })
+
+    return jsonify({
+        'ok': True,
+        'nf_id': nf.id,
+        'numero_nf': nf.numero_nf,
+        'loja_destino_id': nf.loja_destino_id,
+        'itens': itens_payload,
+    })
 
 
 @hora_bp.route('/devolucoes/<int:devolucao_id>')

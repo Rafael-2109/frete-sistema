@@ -3,10 +3,10 @@
 {% block hora_content %}
 <h2 class="mb-3">Nova devolução ao fornecedor</h2>
 
-<form method="post" class="card p-3" style="max-width: 700px;">
+<form method="post" class="card p-3" id="form-devolucao-novo" style="max-width: 760px;">
   <div class="mb-3">
     <label class="form-label">Loja <span class="text-danger">*</span></label>
-    <select name="loja_id" class="form-select" required>
+    <select name="loja_id" id="f-loja" class="form-select" required>
       <option value="">— Selecione —</option>
       {% for l in lojas %}
         <option value="{{ l.id }}">{{ l.rotulo_display }}</option>
@@ -29,15 +29,34 @@
 
   <div class="mb-3">
     <label class="form-label">NF de entrada de referência (opcional)</label>
-    <select name="nf_entrada_id" class="form-select">
+    <select name="nf_entrada_id" id="f-nf-entrada" class="form-select">
       <option value="">— Nenhuma —</option>
       {% for n in nfs %}
-        <option value="{{ n.id }}">
+        <option value="{{ n.id }}"
+                data-loja-id="{{ n.loja_destino_id or '' }}">
           NF {{ n.numero_nf }} — {{ n.data_emissao.strftime('%d/%m/%Y') }}
           {% if n.loja_destino %}({{ n.loja_destino.rotulo_display }}){% endif %}
         </option>
       {% endfor %}
     </select>
+    <small class="text-muted">
+      Ao selecionar uma NF, os chassis dela aparecem abaixo para escolha
+      direta.
+    </small>
+  </div>
+
+  <div class="mb-3" id="bloco-chassi-da-nf">
+    <label class="form-label">
+      Moto a devolver desta NF
+      <small class="text-muted">(opcional — devolve 1 chassi ja na criacao)</small>
+    </label>
+    <select name="numero_chassi" id="f-chassi-nf" class="form-select" disabled>
+      <option value="">— Selecione uma NF acima primeiro —</option>
+    </select>
+    <small class="text-muted" id="hint-chassi-nf">
+      Se nenhum chassi for selecionado, a devolucao e criada vazia e voce
+      adiciona os chassis na tela de detalhe.
+    </small>
   </div>
 
   <div class="mb-3">
@@ -50,4 +69,77 @@
     <a href="{{ url_for('hora.devolucoes_lista') }}" class="btn btn-secondary">Cancelar</a>
   </div>
 </form>
+
+<script>
+(function() {
+  const elNf      = document.getElementById('f-nf-entrada');
+  const elLoja    = document.getElementById('f-loja');
+  const elChassi  = document.getElementById('f-chassi-nf');
+  const elHint    = document.getElementById('hint-chassi-nf');
+
+  function resetChassis(msg) {
+    elChassi.innerHTML = '';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = msg || '— Selecione uma NF acima primeiro —';
+    elChassi.appendChild(opt);
+    elChassi.disabled = true;
+  }
+
+  async function carregarChassisDaNf(nfId) {
+    if (!nfId) {
+      resetChassis();
+      return;
+    }
+    elChassi.disabled = true;
+    elChassi.innerHTML = '<option value="">Carregando...</option>';
+    try {
+      const url = '{{ url_for("hora.devolucoes_api_nf_chassis") }}?nf_id=' + encodeURIComponent(nfId);
+      const r = await fetch(url, { credentials: 'same-origin' });
+      const data = await r.json();
+      if (!data.ok) {
+        resetChassis('Erro: ' + (data.error || 'falha ao carregar chassis'));
+        return;
+      }
+      elChassi.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '— Nenhum (criar devolucao vazia) —';
+      elChassi.appendChild(placeholder);
+      (data.itens || []).forEach(it => {
+        const opt = document.createElement('option');
+        opt.value = it.numero_chassi;
+        let label = it.numero_chassi;
+        const extras = [];
+        if (it.modelo_nome) extras.push(it.modelo_nome);
+        if (it.cor) extras.push(it.cor);
+        if (extras.length) label += ' — ' + extras.join(' · ');
+        if (it.ja_em_devolucao) label += ' [JA EM DEVOLUCAO]';
+        opt.textContent = label;
+        if (it.ja_em_devolucao) {
+          opt.disabled = true;
+        }
+        elChassi.appendChild(opt);
+      });
+      elChassi.disabled = false;
+
+      // Pre-seleciona a loja_destino_id da NF se nenhuma loja foi escolhida.
+      const selected = elNf.options[elNf.selectedIndex];
+      const nfLojaId = selected ? selected.getAttribute('data-loja-id') : '';
+      if (nfLojaId && elLoja && !elLoja.value) {
+        const opt = elLoja.querySelector(`option[value="${nfLojaId}"]`);
+        if (opt) elLoja.value = String(nfLojaId);
+      }
+    } catch (exc) {
+      resetChassis('Erro: ' + exc.message);
+    }
+  }
+
+  if (elNf) {
+    elNf.addEventListener('change', () => carregarChassisDaNf(elNf.value));
+    // Estado inicial (NF pode vir pre-selecionada apos erro de validacao)
+    if (elNf.value) carregarChassisDaNf(elNf.value);
+  }
+})();
+</script>
 {% endblock %}
