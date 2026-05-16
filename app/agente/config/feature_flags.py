@@ -691,3 +691,21 @@ USE_BROWSER_TOOL = os.getenv("AGENT_BROWSER_ENABLED", "false").lower() == "true"
 #
 # Default false (opt-in). Ativacao: AGENT_COST_TRACKER_PERSIST=true.
 USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "false").lower() == "true"
+
+
+# A1 (2026-05-16) — Telemetria per-invocacao de subagent
+# ---------------------------------------------------------------------------
+# Quando ON: hook SubagentStop persiste UMA linha por spawn->stop em
+# `agent_invocation_metrics`. Distinta de USE_COST_TRACKER_PERSIST (per-message).
+#
+# Granularidade nova: tokens, duracao, num_turns, stop_reason, cost por
+# invocacao. Permite analise de regressao cross-deploy + per-agent dashboard
+# (roadmap Fase A — Instrumentacao).
+#
+# Persistencia via AgentInvocationMetric.insert_metric (SAVEPOINT pattern).
+# Falha de DB nao quebra stream do agente (best-effort).
+#
+# Default false (opt-in). Ativacao: AGENT_INVOCATION_METRICS_PERSIST=true.
+USE_INVOCATION_METRICS_PERSIST = os.getenv(
+    "AGENT_INVOCATION_METRICS_PERSIST", "false"
+).lower() == "true"

@@ -1587,6 +1587,139 @@ class AgentSessionCost(db.Model):
 
 
 # =========================================================================
+# AgentInvocationMetric — Telemetria per-invocacao de subagent (A1 roadmap).
+# Distinta de AgentSessionCost: aqui UMA linha por spawn->stop, com tokens,
+# duracao, num_turns, escalation, e correcao de usuario (backfill Fase D).
+# Habilitada via flag AGENT_INVOCATION_METRICS_PERSIST.
+# Migration: scripts/migrations/2026_05_16_agent_invocation_metrics.{py,sql}
+# =========================================================================
+
+class AgentInvocationMetric(db.Model):
+    """
+    A1 (2026-05-16) — telemetria per-invocacao de subagent.
+
+    Granularidade: UMA linha por spawn->stop de subagent. Distinta de
+    AgentSessionCost (per-message do CostTracker).
+
+    Habilitada via flag AGENT_INVOCATION_METRICS_PERSIST. Quando off, hook
+    continua extraindo dados mas NAO persiste (rollback trivial).
+
+    Sem FK para agent_sessions.session_id — mesmo padrao de AgentSessionCost
+    para preservar historico apos cascade delete.
+
+    Campos `escalated_to_human` e `user_correction_received` ficam com default
+    ate Fase D do roadmap (loop de feedback fechado).
+
+    Schema completo: scripts/migrations/2026_05_16_agent_invocation_metrics.sql
+    """
+    __tablename__ = 'agent_invocation_metrics'
+
+    SOURCE_PRODUCTION = 'production'  # agente web (app/agente/sdk/hooks.py)
+    SOURCE_DEV = 'dev'                # Claude Code CLI (.claude/hooks/)
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    # Identificacao do subagent
+    agent_id = db.Column(db.Text, nullable=False, unique=True)
+    agent_type = db.Column(db.Text, nullable=False, index=True)
+
+    # Vinculos (sem FK — preserva historico apos cascade)
+    session_id = db.Column(db.Text, nullable=True, index=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=False, default=lambda: agora_utc_naive())
+
+    # Performance
+    duration_ms = db.Column(db.Integer, nullable=True)
+    num_turns = db.Column(db.Integer, nullable=True)
+    stop_reason = db.Column(db.Text, nullable=True)
+
+    # Custo + tokens (breakdown cache para analise de eficiencia)
+    cost_usd = db.Column(db.Numeric(10, 6), nullable=True)
+    input_tokens = db.Column(db.Integer, nullable=False, default=0)
+    output_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_read_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cache_creation_tokens = db.Column(db.Integer, nullable=False, default=0)
+
+    # Backfill posterior (Fase D do roadmap)
+    escalated_to_human = db.Column(db.Boolean, nullable=False, default=False)
+    user_correction_received = db.Column(db.Boolean, nullable=True)
+
+    # Origem: 'production' (agente web SDK hooks) | 'dev' (Claude Code CLI)
+    source = db.Column(db.Text, nullable=False, default=SOURCE_PRODUCTION)
+
+    recorded_at = db.Column(
+        db.DateTime, nullable=False, default=lambda: agora_utc_naive(), index=True
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentInvocationMetric {self.agent_type} '
+            f'duration={self.duration_ms}ms turns={self.num_turns} '
+            f'cost=${self.cost_usd or 0} source={self.source}>'
+        )
+
+    @classmethod
+    def insert_metric(
+        cls,
+        agent_id: str,
+        agent_type: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        started_at=None,
+        duration_ms: Optional[int] = None,
+        num_turns: Optional[int] = None,
+        stop_reason: Optional[str] = None,
+        cost_usd: Optional[float] = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cache_read_tokens: int = 0,
+        cache_creation_tokens: int = 0,
+        source: str = SOURCE_PRODUCTION,
+    ) -> Optional['AgentInvocationMetric']:
+        """
+        Insere metrica de invocacao. Retorna None se duplicado (UNIQUE agent_id).
+
+        SAVEPOINT pattern (mesma logica de AgentSessionCost.insert_entry):
+        usa `begin_nested()` em vez de `commit()` direto. Hook SubagentStop
+        roda DENTRO do stream do agente onde JA EXISTE transacao do request
+        Flask em curso. `commit()` aqui faria flush prematuro de tudo
+        pendente; IntegrityError faria rollback do request inteiro.
+
+        Solucao: savepoint. begin_nested() cria SAVEPOINT na transacao pai,
+        commit do request final consolida o entry. IntegrityError rollba
+        apenas o SAVEPOINT, preservando o resto.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        entry = cls(
+            agent_id=agent_id,
+            agent_type=agent_type,
+            session_id=session_id,
+            user_id=user_id,
+            started_at=started_at,
+            duration_ms=duration_ms,
+            num_turns=num_turns,
+            stop_reason=stop_reason,
+            cost_usd=cost_usd,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
+            source=source,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(entry)
+                db.session.flush()
+            return entry
+        except IntegrityError:
+            return None
+
+
+# =========================================================================
 # AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact
 # Build async via worker RQ (queue 'artifacts'). Bundle no S3.
 # Migration: scripts/migrations/2026_05_12_agente_artifacts.{py,sql}
