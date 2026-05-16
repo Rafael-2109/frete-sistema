@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from sqlalchemy import func as sa_func
 from sqlalchemy.orm import selectinload
 
 from app import db
@@ -48,12 +49,6 @@ TIPOS_DIVERGENCIA = {
 # ========================================================================
 
 def _normalizar_cor(v: Optional[str]) -> Optional[str]:
-    if v is None:
-        return None
-    return v.strip().upper() or None
-
-
-def _normalizar_modelo_nome(v: Optional[str]) -> Optional[str]:
     if v is None:
         return None
     return v.strip().upper() or None
@@ -758,6 +753,448 @@ def chassis_conferidos_nao_na_nf(recebimento_id: int) -> List[str]:
 
 
 # ========================================================================
+# Recebimento automatico de NF inteira (Item 1 — 2026-05-16)
+# ========================================================================
+
+def listar_nfs_para_recebimento_automatico(
+    lojas_permitidas_ids: Optional[List[int]] = None,
+    *,
+    limit: int = 100,
+) -> List[dict]:
+    """Lista NFs SEM recebimento + agregados para o modal admin.
+
+    Filtros:
+      - nf.loja_destino_id NOT NULL (sem loja nao da pra criar recebimento).
+      - sem `hora_recebimento` para esta NF (LEFT JOIN com NULL).
+      - se `lojas_permitidas_ids` passado: restringe a essas lojas.
+
+    Retorna lista de dicts ordenada por data_emissao DESC com:
+      {
+        nf_id, numero_nf, data_emissao, cnpj_emitente, nome_emitente,
+        loja_id, loja_nome,
+        pedido_id, pedido_numero,
+        qtd_motos_nf, qtd_motos_pedido_motos_only, qtd_motos_pedido_ja_faturadas,
+        chassis: [{numero_chassi, modelo_canonico_nome, cor}, ...]
+      }
+    """
+    from app.hora.models import HoraPedido, HoraPedidoItem
+    from app.hora.services.modelo_resolver_service import resolver_modelo
+    from app.hora.models import ALIAS_TIPO_NOME_NF
+
+    q = (
+        HoraNfEntrada.query
+        .options(
+            selectinload(HoraNfEntrada.itens),
+            selectinload(HoraNfEntrada.loja_destino),
+        )
+        .filter(HoraNfEntrada.loja_destino_id.isnot(None))
+        .filter(~HoraNfEntrada.recebimentos.any())
+        .order_by(HoraNfEntrada.data_emissao.desc(), HoraNfEntrada.id.desc())
+    )
+    if lojas_permitidas_ids is not None:
+        if not lojas_permitidas_ids:
+            return []
+        q = q.filter(HoraNfEntrada.loja_destino_id.in_(list(lojas_permitidas_ids)))
+
+    nfs = q.limit(limit).all()
+    if not nfs:
+        return []
+
+    # Pre-carrega pedidos e contagens
+    pedido_ids = [nf.pedido_id for nf in nfs if nf.pedido_id]
+    pedido_por_id = {}
+    pedidos_qtd_motos = {}
+    pedidos_chassis_faturados = {}
+    if pedido_ids:
+        for p in HoraPedido.query.filter(HoraPedido.id.in_(pedido_ids)).all():
+            pedido_por_id[p.id] = p
+        # Qtd de itens motos (peca_id IS NULL) por pedido
+        rows_qtd = (
+            db.session.query(
+                HoraPedidoItem.pedido_id,
+                sa_func.count(HoraPedidoItem.id),
+            )
+            .filter(HoraPedidoItem.pedido_id.in_(pedido_ids))
+            .filter(HoraPedidoItem.peca_id.is_(None))
+            .group_by(HoraPedidoItem.pedido_id)
+            .all()
+        )
+        pedidos_qtd_motos = {pid: cnt for pid, cnt in rows_qtd}
+        # Chassis ja faturados em qualquer NF do mesmo pedido
+        rows_fat = (
+            db.session.query(
+                HoraNfEntrada.pedido_id,
+                HoraNfEntradaItem.numero_chassi,
+            )
+            .join(HoraNfEntradaItem, HoraNfEntradaItem.nf_id == HoraNfEntrada.id)
+            .filter(HoraNfEntrada.pedido_id.in_(pedido_ids))
+            .all()
+        )
+        for pid, chassi in rows_fat:
+            pedidos_chassis_faturados.setdefault(pid, set()).add(chassi)
+
+    saida = []
+    for nf in nfs:
+        chassis = []
+        for it in nf.itens:
+            canonico_nome = None
+            if it.modelo_texto_original:
+                mc = (
+                    resolver_modelo(it.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
+                    or resolver_modelo(it.modelo_texto_original)
+                )
+                if mc:
+                    canonico_nome = mc.nome_modelo
+            chassis.append({
+                'numero_chassi': it.numero_chassi,
+                'modelo_canonico': canonico_nome,
+                'modelo_texto_nf': it.modelo_texto_original,
+                'cor': it.cor_texto_original,
+            })
+        pedido = pedido_por_id.get(nf.pedido_id) if nf.pedido_id else None
+        qtd_motos_pedido = pedidos_qtd_motos.get(nf.pedido_id, 0) if nf.pedido_id else 0
+        qtd_motos_pedido_ja_faturadas = len(
+            pedidos_chassis_faturados.get(nf.pedido_id, set())
+        ) if nf.pedido_id else 0
+        saida.append({
+            'nf_id': nf.id,
+            'numero_nf': nf.numero_nf,
+            'data_emissao': nf.data_emissao.isoformat() if nf.data_emissao else None,
+            'cnpj_emitente': nf.cnpj_emitente,
+            'nome_emitente': nf.nome_emitente,
+            'loja_id': nf.loja_destino_id,
+            'loja_nome': nf.loja_destino.nome.strip() if nf.loja_destino else None,
+            'pedido_id': nf.pedido_id,
+            'pedido_numero': pedido.numero_pedido if pedido else None,
+            'qtd_motos_nf': len(nf.itens),
+            'qtd_motos_pedido': qtd_motos_pedido,
+            'qtd_motos_pedido_ja_faturadas': qtd_motos_pedido_ja_faturadas,
+            'chassis': chassis,
+        })
+    return saida
+
+
+def criar_recebimento_automatico_da_nf(
+    nf_id: int,
+    operador: Optional[str] = None,
+) -> dict:
+    """Cria recebimento + conferencias confirmadas com dados da NF.
+
+    Equivale a um operador rodando o wizard de A-D para CADA chassi da NF
+    confirmando o que esta declarado. Diferenca: ao inves de scan manual,
+    usa dados da NF (chassi, modelo via resolver canonico, cor).
+
+    Eh DESTINADO ao admin que recebe NF "no papel" sem conferencia fisica
+    real (ex.: lojas que recebem motos antes de cadastrar no sistema).
+
+    Fluxo:
+      1. Valida NF: existe, loja_destino_id presente, sem recebimento aberto.
+      2. iniciar_recebimento -> AGUARDANDO_QTD
+      3. definir_qtd_declarada(qtd = len(nf.itens)) -> EM_CONFERENCIA
+      4. Para cada item NF:
+         a. resolve modelo canonico (None se nao resolver)
+         b. registra conferencia confirmada via registrar_conferencia_cega
+            (reusa toda a logica: _redefinir_divergencias, _aplicar_correcao_moto,
+             registrar_evento RECEBIDA, auditoria CONFERIU_MOTO).
+      5. finalizar_recebimento -> CONCLUIDO ou COM_DIVERGENCIA.
+      6. Auditoria adicional RECEBIMENTO_AUTOMATICO no header.
+
+    Retorna dict com totais.
+    """
+    from app.hora.services.modelo_resolver_service import resolver_modelo
+    from app.hora.models import ALIAS_TIPO_NOME_NF
+
+    nf = HoraNfEntrada.query.get(nf_id)
+    if not nf:
+        raise ValueError(f'NF {nf_id} nao encontrada')
+    if not nf.loja_destino_id:
+        raise ValueError(
+            f'NF {nf.numero_nf} (#{nf.id}) sem loja_destino_id. '
+            f'Preencha a loja antes de criar recebimento automatico.'
+        )
+    if not nf.itens:
+        raise ValueError(f'NF {nf.numero_nf} sem itens.')
+
+    rec_existente = HoraRecebimento.query.filter_by(
+        nf_id=nf.id, loja_id=nf.loja_destino_id,
+    ).first()
+    if rec_existente:
+        raise ValueError(
+            f'Ja existe recebimento #{rec_existente.id} para NF {nf.numero_nf} '
+            f'(status={rec_existente.status}). Exclua o existente antes.'
+        )
+
+    # 1. Inicia (faz commit interno)
+    rec = iniciar_recebimento(
+        nf_id=nf.id, loja_id=nf.loja_destino_id, operador=operador,
+    )
+
+    # 2. Define qtd_declarada (faz commit interno)
+    qtd_nf = len(nf.itens)
+    definir_qtd_declarada(recebimento_id=rec.id, qtd=qtd_nf, usuario=operador)
+
+    # 3. Registra cada conferencia (cada call faz commit interno)
+    conf_ids: List[int] = []
+    chassis_sem_modelo_canonico: List[str] = []
+    for ordem, item in enumerate(nf.itens, start=1):
+        modelo_canonico = None
+        if item.modelo_texto_original:
+            modelo_canonico = (
+                resolver_modelo(item.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
+                or resolver_modelo(item.modelo_texto_original)
+            )
+        if modelo_canonico is None:
+            chassis_sem_modelo_canonico.append(item.numero_chassi)
+        cor_norm = (item.cor_texto_original or '').strip().upper() or None
+        conf = registrar_conferencia_cega(
+            recebimento_id=rec.id,
+            numero_chassi=item.numero_chassi,
+            modelo_id_conferido=modelo_canonico.id if modelo_canonico else None,
+            cor_conferida=cor_norm,
+            avaria_fisica=False,
+            qr_code_lido=False,
+            ordem=ordem,
+            operador=operador,
+        )
+        conf_ids.append(conf.id)
+
+    # 4. Finaliza (faz commit interno; trata MOTO_FALTANDO se sobrarem)
+    rec = finalizar_recebimento(recebimento_id=rec.id, operador=operador)
+
+    # 5. Auditoria explicita marcando origem AUTOMATICA
+    recebimento_audit.registrar(
+        recebimento_id=rec.id,
+        acao='RECEBIMENTO_AUTOMATICO',
+        usuario=operador,
+        detalhe=(
+            f'NF {nf.numero_nf} processada automaticamente: '
+            f'{qtd_nf} chassi(s), {len(chassis_sem_modelo_canonico)} sem modelo canonico. '
+            f'Status final: {rec.status}.'
+        ),
+    )
+    db.session.commit()
+
+    return {
+        'ok': True,
+        'recebimento_id': rec.id,
+        'nf_id': nf.id,
+        'numero_nf': nf.numero_nf,
+        'loja_id': rec.loja_id,
+        'qtd_itens_nf': qtd_nf,
+        'conferencias_criadas': len(conf_ids),
+        'chassis_sem_modelo_canonico': chassis_sem_modelo_canonico,
+        'status_final': rec.status,
+    }
+
+
+# ========================================================================
+# Exclusao admin-only (Item 2 — 2026-05-16)
+# ========================================================================
+
+def verificar_bloqueios_exclusao(recebimento_id: int) -> dict:
+    """Mapeia conexoes pos-recebimento que bloqueiam (ou nao) a exclusao.
+
+    Retorna dict com:
+      - existe: bool — recebimento existe
+      - bloqueios: list[str] — motivos que IMPEDEM exclusao
+      - efeitos_colaterais: list[str] — o que sera deletado (avisos)
+      - resumo: {qtd_confs, qtd_eventos, qtd_auditorias, qtd_divergencias,
+                  pecas_faltando_abertas, devolucoes_abertas}
+    """
+    from app.hora.models import (
+        HoraPecaFaltando,
+        HoraDevolucaoFornecedorItem,
+        HoraDevolucaoFornecedor,
+        HoraMotoEvento,
+        HoraConferenciaAuditoria,
+        HoraConferenciaDivergencia,
+    )
+
+    rec = HoraRecebimento.query.get(recebimento_id)
+    if not rec:
+        return {'existe': False, 'bloqueios': [], 'efeitos_colaterais': [], 'resumo': {}}
+
+    conf_ids = [c.id for c in rec.conferencias]
+    bloqueios: list[str] = []
+    efeitos: list[str] = []
+
+    # Peca faltando ABERTA originada por conferencia do recebimento — bloqueia
+    pecas_abertas = []
+    if conf_ids:
+        pecas_abertas = (
+            HoraPecaFaltando.query
+            .filter(HoraPecaFaltando.recebimento_conferencia_id.in_(conf_ids))
+            .filter(HoraPecaFaltando.status == 'ABERTA')
+            .all()
+        )
+    if pecas_abertas:
+        chassis_p = ', '.join(sorted({p.numero_chassi for p in pecas_abertas}))
+        bloqueios.append(
+            f'{len(pecas_abertas)} peca(s) faltando ABERTA(s) vinculada(s) a '
+            f'conferencias deste recebimento (chassis: {chassis_p}). '
+            f'Resolva ou cancele as pecas antes de excluir.'
+        )
+
+    # Devolucao ao fornecedor com item vinculado a conferencia — bloqueia
+    # se devolucao estiver ABERTA/ENVIADA (nao confirmada). CONFIRMADA: bloqueia
+    # tambem (e historico fiscal).
+    devs = []
+    if conf_ids:
+        devs = (
+            db.session.query(HoraDevolucaoFornecedor, HoraDevolucaoFornecedorItem)
+            .join(
+                HoraDevolucaoFornecedorItem,
+                HoraDevolucaoFornecedorItem.devolucao_id == HoraDevolucaoFornecedor.id,
+            )
+            .filter(HoraDevolucaoFornecedorItem.recebimento_conferencia_id.in_(conf_ids))
+            .all()
+        )
+    if devs:
+        ids_dev = sorted({d.id for d, _ in devs})
+        bloqueios.append(
+            f'{len(devs)} item(ns) de devolucao ao fornecedor vinculado(s) a '
+            f'conferencias deste recebimento (devolucoes #{ids_dev}). '
+            f'Cancele/exclua a devolucao antes (ou desvincule recebimento_conferencia_id).'
+        )
+
+    # Efeitos colaterais (deletes em cascata):
+    qtd_eventos = 0
+    if conf_ids:
+        qtd_eventos = (
+            HoraMotoEvento.query
+            .filter(HoraMotoEvento.origem_tabela == 'hora_recebimento_conferencia')
+            .filter(HoraMotoEvento.origem_id.in_(conf_ids))
+            .count()
+        )
+    qtd_auditorias = (
+        HoraConferenciaAuditoria.query
+        .filter_by(recebimento_id=rec.id)
+        .count()
+    )
+    qtd_divergencias = 0
+    if conf_ids:
+        qtd_divergencias = (
+            HoraConferenciaDivergencia.query
+            .filter(HoraConferenciaDivergencia.conferencia_id.in_(conf_ids))
+            .count()
+        )
+
+    if rec.conferencias:
+        efeitos.append(f'{len(rec.conferencias)} conferencia(s) sera(o) deletada(s) (cascade).')
+    if qtd_divergencias:
+        efeitos.append(f'{qtd_divergencias} divergencia(s) sera(o) deletada(s) (cascade).')
+    if qtd_auditorias:
+        efeitos.append(f'{qtd_auditorias} linha(s) de auditoria sera(o) deletada(s) (cascade).')
+    if qtd_eventos:
+        efeitos.append(
+            f'{qtd_eventos} evento(s) hora_moto_evento (RECEBIDA/CONFERIDA/MOTO_FALTANDO) '
+            f'sera(o) deletado(s) manualmente.'
+        )
+    efeitos.append(
+        'Atualizacoes em hora_moto (cor/modelo_id) feitas pela conferencia '
+        'NAO sao revertidas — sem historico para restaurar valor anterior. '
+        'Edicao manual em hora_moto se necessario.'
+    )
+
+    return {
+        'existe': True,
+        'bloqueios': bloqueios,
+        'efeitos_colaterais': efeitos,
+        'resumo': {
+            'qtd_confs': len(rec.conferencias),
+            'qtd_eventos': qtd_eventos,
+            'qtd_auditorias': qtd_auditorias,
+            'qtd_divergencias': qtd_divergencias,
+            'pecas_faltando_abertas': len(pecas_abertas),
+            'devolucoes_vinculadas': len(devs),
+            'nf_numero': rec.nf.numero_nf if rec.nf else None,
+            'loja_nome': rec.loja.nome if rec.loja else None,
+            'status': rec.status,
+        },
+    }
+
+
+def excluir_recebimento(
+    recebimento_id: int,
+    operador: Optional[str] = None,
+) -> dict:
+    """Exclui recebimento + conferencias + auditoria + divergencias + eventos.
+
+    Pre-condicoes:
+      - Sem peca faltando ABERTA vinculada a conferencias do recebimento.
+      - Sem item de devolucao_fornecedor vinculado a conferencias.
+
+    Cascades automaticos (cascade='all, delete-orphan' nos relationships):
+      - hora_recebimento_conferencia
+      - hora_conferencia_auditoria (preservada nao adianta — FK CASCADE)
+      - hora_conferencia_divergencia (cascade via conferencia)
+
+    Deletes manuais (sem FK declarada):
+      - hora_moto_evento WHERE origem_tabela='hora_recebimento_conferencia'
+        AND origem_id IN [confs.id]
+
+    Nao reverte: hora_moto.cor / modelo_id (sem historico).
+
+    Retorna dict com totais deletados.
+    """
+    from app.hora.models import HoraMotoEvento
+
+    bloqueio_info = verificar_bloqueios_exclusao(recebimento_id)
+    if not bloqueio_info['existe']:
+        raise ValueError(f'Recebimento {recebimento_id} nao encontrado')
+    if bloqueio_info['bloqueios']:
+        raise ValueError(
+            'Nao e possivel excluir: ' + ' | '.join(bloqueio_info['bloqueios'])
+        )
+
+    rec = HoraRecebimento.query.get_or_404(recebimento_id)
+    conf_ids = [c.id for c in rec.conferencias]
+
+    eventos_deletados = 0
+    if conf_ids:
+        eventos_deletados = (
+            HoraMotoEvento.query
+            .filter(HoraMotoEvento.origem_tabela == 'hora_recebimento_conferencia')
+            .filter(HoraMotoEvento.origem_id.in_(conf_ids))
+            .delete(synchronize_session=False)
+        )
+        db.session.flush()
+
+    # Snapshot do recebimento para log (apos delete, o objeto some)
+    snap_nf = rec.nf.numero_nf if rec.nf else None
+    snap_loja = rec.loja.nome if rec.loja else None
+    snap_status = rec.status
+    snap_qtd_confs = len(rec.conferencias)
+    snap_qtd_divs = bloqueio_info['resumo']['qtd_divergencias']
+
+    # Auditoria nao podera ser registrada via recebimento_audit.registrar
+    # porque a FK aponta para hora_recebimento (que sera deletado em sequencia).
+    # Em vez disso, log estruturado.
+    import logging
+    logging.getLogger(__name__).warning(
+        'EXCLUIU_RECEBIMENTO id=%s nf=%s loja=%s status=%s '
+        'confs=%s eventos=%s divs=%s operador=%s',
+        rec.id, snap_nf, snap_loja, snap_status,
+        snap_qtd_confs, eventos_deletados, snap_qtd_divs, operador,
+    )
+
+    db.session.delete(rec)
+    db.session.commit()
+
+    return {
+        'ok': True,
+        'recebimento_id': recebimento_id,
+        'eventos_deletados': eventos_deletados,
+        'confs_deletadas': snap_qtd_confs,
+        'divs_deletadas': snap_qtd_divs,
+        'nf_numero': snap_nf,
+        'loja_nome': snap_loja,
+        'status_antes': snap_status,
+        'operador': operador,
+    }
+
+
+# ========================================================================
 # Privados
 # ========================================================================
 
@@ -848,50 +1285,64 @@ def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimen
         ))
         snapshot = 'CHASSI_EXTRA'
     else:
-        # Compara modelo via modelo_id CANONICO resolvido — evita falso
-        # positivo MODELO_DIFERENTE quando NF traz nome livre ('BOB AM') que
-        # eh alias do canonico conferido ('BOB'). Se o texto da NF nao
-        # resolver para nenhum canonico (pendencia ainda nao decidida), cai
-        # no comparativo textual antigo (preserva sinal).
-        from app.hora.services.modelo_resolver_service import resolver_modelo
+        # Comparacao via modelo CANONICO. A NF JA RESOLVE o modelo canonico
+        # no momento do import: `nf_entrada_service.criar_nf_com_itens` chama
+        # `get_or_create_moto(fallback_sentinela=True)` que cria HoraMoto com
+        # FK `modelo_id` apontando para o canonico (ou para sentinela
+        # DESCONHECIDO se ainda nao resolveu — retroatividade corrige depois).
+        # Logo, a fonte de verdade do canonico do item da NF e
+        # `item_nf.moto.modelo`, NAO `item_nf.modelo_texto_original`.
+        # Bug 2026-05-16 — antes comparavamos texto cru no fallback e
+        # marcavamos MODELO_DIFERENTE quando, de fato, ambos os lados ja
+        # apontavam para o mesmo canonico. Confirmado em PROD (confs 39, 40).
+        # Decisao 2026-05-16 (usuario): NAO criar alias auto aqui. So compara.
+        # Quando NF nao resolve, pendencia ja existe (criada pelo import) e
+        # operador resolve via /hora/modelos/pendencias (item 12 CLAUDE.md).
+        from app.hora.services.modelo_resolver_service import resolver_modelo, _seguir_canonico
         from app.hora.models import ALIAS_TIPO_NOME_NF
 
         modelo_conf = (
             HoraModelo.query.get(conf.modelo_id_conferido)
             if conf.modelo_id_conferido else None
         )
-        modelo_conf_nome = (
-            _normalizar_modelo_nome(modelo_conf.nome_modelo) if modelo_conf else None
-        )
+        # Segue cadeia merged_em_id ate canonico ativo (defesa contra modelos
+        # absorvidos).
+        modelo_conf_canonico = _seguir_canonico(modelo_conf) if modelo_conf else None
 
+        # FONTE DE VERDADE: FK da NF -> HoraMoto -> HoraModelo. JA e canonico
+        # (com seguir_canonico defensivo para cobrir merges pos-creation).
         modelo_nf_canonico = None
-        if item_nf.modelo_texto_original:
+        if item_nf.moto and item_nf.moto.modelo:
+            modelo_nf_canonico = _seguir_canonico(item_nf.moto.modelo)
+            # Se a moto da NF aponta para sentinela DESCONHECIDO (modelo nao
+            # resolveu no import), trata como "nao resolvido" para nao gerar
+            # divergencia falsa.
+            if modelo_nf_canonico and modelo_nf_canonico.nome_modelo == 'DESCONHECIDO':
+                modelo_nf_canonico = None
+
+        # Fallback: se a moto ainda nao tem FK canonica boa (edge case raro,
+        # ex. moto criada antes de hora_29 sem retroatividade), tenta resolver
+        # pelo texto NF via aliases.
+        if modelo_nf_canonico is None and item_nf.modelo_texto_original:
             modelo_nf_canonico = (
                 resolver_modelo(item_nf.modelo_texto_original, tipo=ALIAS_TIPO_NOME_NF)
                 or resolver_modelo(item_nf.modelo_texto_original)
             )
 
-        if modelo_conf and modelo_nf_canonico:
-            # Caminho preferencial: ambos canonicos disponiveis. Compara IDs.
-            if modelo_conf.id != modelo_nf_canonico.id:
+        if modelo_conf_canonico and modelo_nf_canonico:
+            # Ambos resolveram canonico — compara IDs.
+            if modelo_conf_canonico.id != modelo_nf_canonico.id:
                 db.session.add(HoraConferenciaDivergencia(
                     conferencia_id=conf.id,
                     tipo='MODELO_DIFERENTE',
                     valor_esperado=modelo_nf_canonico.nome_modelo,
-                    valor_conferido=modelo_conf.nome_modelo,
+                    valor_conferido=modelo_conf_canonico.nome_modelo,
                 ))
                 snapshot = snapshot or 'MODELO_DIFERENTE'
-        else:
-            # Fallback textual (compat): NF nao resolveu canonico ainda.
-            modelo_nf_txt = _normalizar_modelo_nome(item_nf.modelo_texto_original)
-            if modelo_nf_txt and modelo_conf_nome and modelo_nf_txt != modelo_conf_nome:
-                db.session.add(HoraConferenciaDivergencia(
-                    conferencia_id=conf.id,
-                    tipo='MODELO_DIFERENTE',
-                    valor_esperado=item_nf.modelo_texto_original,
-                    valor_conferido=modelo_conf_nome,
-                ))
-                snapshot = snapshot or 'MODELO_DIFERENTE'
+        # Casos restantes (sem divergencia marcada):
+        #   - NF nao resolve canonico (operador resolve via /hora/modelos/pendencias)
+        #   - operador nao conferiu modelo (modelo_conf_canonico is None)
+        # Em qualquer um deles, sem evidencia confiavel para divergir.
 
         cor_nf = _normalizar_cor(item_nf.cor_texto_original)
         cor_conf = _normalizar_cor(conf.cor_conferida)

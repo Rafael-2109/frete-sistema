@@ -32,6 +32,15 @@
             data-bs-toggle="modal" data-bs-target="#modalAjustar">
       <i class="fas fa-sliders"></i> Ajustar conferência
     </button>
+    {# Botao excluir — somente admin (perm recebimentos/apagar + perfil
+       'administrador'). Defesa em profundidade replicada no backend. #}
+    {% if current_user.perfil == 'administrador' and current_user.tem_perm_hora('recebimentos', 'apagar') %}
+      <button type="button" class="btn btn-sm btn-outline-danger"
+              data-bs-toggle="modal" data-bs-target="#modalExcluir"
+              onclick="carregarPreCheckExclusao()">
+        <i class="fas fa-trash"></i> Excluir recebimento
+      </button>
+    {% endif %}
   </div>
 </div>
 
@@ -334,6 +343,113 @@
     </div>
   </div>
 </div>
+
+{# ==================================================================== #}
+{# Modal Excluir recebimento (admin) #}
+{# ==================================================================== #}
+{% if current_user.perfil == 'administrador' and current_user.tem_perm_hora('recebimentos', 'apagar') %}
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-trash"></i> Excluir recebimento #{{ recebimento.id }}
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="excluir-loading" class="text-center text-muted">
+          <i class="fas fa-spinner fa-spin"></i> Verificando impactos...
+        </div>
+        <div id="excluir-conteudo" class="d-none">
+          <div id="excluir-bloqueios" class="d-none">
+            <div class="alert alert-danger">
+              <strong><i class="fas fa-ban"></i> Exclusao bloqueada</strong>
+              <ul id="lista-bloqueios" class="mb-0 mt-2"></ul>
+            </div>
+          </div>
+          <div id="excluir-efeitos">
+            <div class="alert alert-warning">
+              <strong><i class="fas fa-triangle-exclamation"></i> Efeitos colaterais</strong>
+              <ul id="lista-efeitos" class="mb-0 mt-2"></ul>
+            </div>
+            <div class="alert alert-info small mb-0">
+              <strong>Resumo:</strong>
+              <span id="resumo-nf"></span> ·
+              <span id="resumo-loja"></span> ·
+              status <span id="resumo-status"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" id="form-excluir-recebimento"
+              action="{{ url_for('hora.recebimentos_excluir', recebimento_id=recebimento.id) }}"
+              class="d-none">
+          <input type="hidden" name="confirm" value="1">
+          <button type="submit" class="btn btn-danger">
+            <i class="fas fa-trash"></i> Confirmar exclusao definitiva
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function carregarPreCheckExclusao() {
+  const loading = document.getElementById('excluir-loading');
+  const conteudo = document.getElementById('excluir-conteudo');
+  const bloqueios = document.getElementById('excluir-bloqueios');
+  const efeitos = document.getElementById('excluir-efeitos');
+  const form = document.getElementById('form-excluir-recebimento');
+  loading.classList.remove('d-none');
+  conteudo.classList.add('d-none');
+  bloqueios.classList.add('d-none');
+  form.classList.add('d-none');
+  try {
+    const resp = await fetch('{{ url_for("hora.recebimentos_pre_check_exclusao", recebimento_id=recebimento.id) }}', {
+      headers: {'Accept': 'application/json'}
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+      loading.innerHTML = '<div class="alert alert-danger">' + (data.erro || 'Erro') + '</div>';
+      return;
+    }
+    loading.classList.add('d-none');
+    conteudo.classList.remove('d-none');
+    // Bloqueios
+    if (data.bloqueios && data.bloqueios.length > 0) {
+      bloqueios.classList.remove('d-none');
+      efeitos.classList.add('d-none');
+      const ul = document.getElementById('lista-bloqueios');
+      ul.innerHTML = '';
+      data.bloqueios.forEach(b => {
+        const li = document.createElement('li');
+        li.textContent = b;
+        ul.appendChild(li);
+      });
+    } else {
+      // Efeitos colaterais + botao confirmar
+      const ul = document.getElementById('lista-efeitos');
+      ul.innerHTML = '';
+      (data.efeitos_colaterais || []).forEach(e => {
+        const li = document.createElement('li');
+        li.textContent = e;
+        ul.appendChild(li);
+      });
+      document.getElementById('resumo-nf').textContent = 'NF ' + (data.resumo.nf_numero || '?');
+      document.getElementById('resumo-loja').textContent = data.resumo.loja_nome || '?';
+      document.getElementById('resumo-status').textContent = data.resumo.status || '?';
+      form.classList.remove('d-none');
+    }
+  } catch (e) {
+    loading.innerHTML = '<div class="alert alert-danger">Erro de rede: ' + e + '</div>';
+  }
+}
+</script>
+{% endif %}
 
 <script>
 (function() {

@@ -460,6 +460,132 @@ def recebimentos_finalizar(recebimento_id: int):
 
 
 # ------------------------------------------------------------------------
+# Recebimento automatico de NF inteira (Item 1 — 2026-05-16)
+# ------------------------------------------------------------------------
+
+@hora_bp.route('/recebimentos/automatico/nfs-pendentes')
+@require_hora_perm('recebimentos', 'criar')
+def recebimentos_automatico_listar_nfs():
+    """JSON: NFs sem recebimento + agregados (alimenta o modal admin)."""
+    if not _exige_admin():
+        return jsonify({'ok': False, 'erro': 'apenas administradores'}), 403
+    permitidas = lojas_permitidas_ids()
+    nfs = recebimento_service.listar_nfs_para_recebimento_automatico(
+        lojas_permitidas_ids=permitidas, limit=200,
+    )
+    return jsonify({'ok': True, 'nfs': nfs, 'total': len(nfs)})
+
+
+@hora_bp.route('/recebimentos/automatico/criar', methods=['POST'])
+@require_hora_perm('recebimentos', 'criar')
+def recebimentos_automatico_criar():
+    """Cria recebimento automatico para 1..N NFs selecionadas."""
+    if not _exige_admin():
+        return jsonify({'ok': False, 'erro': 'apenas administradores'}), 403
+
+    data = request.get_json(silent=True) or request.form
+    nf_ids_raw = data.get('nf_ids') or data.getlist('nf_ids[]') if hasattr(data, 'getlist') else (data.get('nf_ids') or [])
+    if isinstance(nf_ids_raw, str):
+        nf_ids_raw = [nf_ids_raw]
+    try:
+        nf_ids = [int(x) for x in nf_ids_raw if str(x).strip().isdigit()]
+    except (TypeError, ValueError):
+        nf_ids = []
+    if not nf_ids:
+        return jsonify({'ok': False, 'erro': 'nenhuma NF selecionada'}), 400
+
+    from app.hora.models import HoraNfEntrada as _HoraNfEntrada
+    resultados = []
+    erros = []
+    for nf_id in nf_ids:
+        # Verifica permissao de loja antes de chamar o service
+        nf_obj = _HoraNfEntrada.query.get(nf_id)
+        if nf_obj and nf_obj.loja_destino_id and not usuario_tem_acesso_a_loja(nf_obj.loja_destino_id):
+            erros.append({'nf_id': nf_id, 'erro': 'acesso negado a essa loja'})
+            continue
+        try:
+            res = recebimento_service.criar_recebimento_automatico_da_nf(
+                nf_id=nf_id, operador=_op_name(),
+            )
+            resultados.append(res)
+        except ValueError as exc:
+            erros.append({'nf_id': nf_id, 'erro': str(exc)})
+
+    return jsonify({
+        'ok': len(erros) == 0,
+        'criados': resultados,
+        'erros': erros,
+        'total_pedidos': len(nf_ids),
+        'total_criados': len(resultados),
+        'total_erros': len(erros),
+    })
+
+
+# ------------------------------------------------------------------------
+# Exclusao admin-only (Item 2 — 2026-05-16)
+# ------------------------------------------------------------------------
+
+def _exige_admin() -> bool:
+    """Defesa em profundidade: alem da perm recebimentos/apagar, exige admin."""
+    return getattr(current_user, 'perfil', None) == 'administrador'
+
+
+@hora_bp.route('/recebimentos/<int:recebimento_id>/pre-check-exclusao')
+@require_hora_perm('recebimentos', 'apagar')
+def recebimentos_pre_check_exclusao(recebimento_id: int):
+    """Endpoint JSON para alimentar o modal de confirmacao de exclusao.
+
+    Retorna bloqueios + efeitos colaterais sem mutar nada.
+    """
+    if not _exige_admin():
+        return jsonify({'ok': False, 'erro': 'apenas administradores podem excluir'}), 403
+    info = recebimento_service.verificar_bloqueios_exclusao(recebimento_id)
+    if not info['existe']:
+        return jsonify({'ok': False, 'erro': 'recebimento nao encontrado'}), 404
+    return jsonify({'ok': True, **info})
+
+
+@hora_bp.route('/recebimentos/<int:recebimento_id>/excluir', methods=['POST'])
+@require_hora_perm('recebimentos', 'apagar')
+def recebimentos_excluir(recebimento_id: int):
+    """Exclui recebimento e suas conexoes pos-recebimento (admin-only).
+
+    Bloqueia se houver:
+      - peca faltando ABERTA vinculada a conferencias do recebimento;
+      - item de devolucao ao fornecedor vinculado a conferencias.
+    """
+    if not _exige_admin():
+        flash('Apenas administradores podem excluir recebimentos.', 'danger')
+        return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=recebimento_id))
+
+    rec = HoraRecebimento.query.get_or_404(recebimento_id)
+    if not usuario_tem_acesso_a_loja(rec.loja_id):
+        flash('Acesso negado a essa loja.', 'danger')
+        return redirect(url_for('hora.recebimentos_lista'))
+
+    confirm = request.form.get('confirm') == '1'
+    if not confirm:
+        flash('Exclusao nao confirmada.', 'warning')
+        return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
+
+    try:
+        resultado = recebimento_service.excluir_recebimento(
+            recebimento_id=rec.id, operador=_op_name(),
+        )
+        flash(
+            f'Recebimento #{resultado["recebimento_id"]} excluido. '
+            f'NF={resultado["nf_numero"]} loja={resultado["loja_nome"]} '
+            f'(eventos_deletados={resultado["eventos_deletados"]}, '
+            f'confs={resultado["confs_deletadas"]}, divs={resultado["divs_deletadas"]}).',
+            'success',
+        )
+        return redirect(url_for('hora.recebimentos_lista'))
+    except ValueError as exc:
+        flash(f'Erro ao excluir: {exc}', 'danger')
+        return redirect(url_for('hora.recebimentos_detalhe', recebimento_id=rec.id))
+
+
+# ------------------------------------------------------------------------
 # Resolucao pos-recebimento (mantido)
 # ------------------------------------------------------------------------
 

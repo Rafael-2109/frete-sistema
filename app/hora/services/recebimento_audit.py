@@ -21,6 +21,11 @@ ACOES_VALIDAS = {
     'SUBSTITUIU_CONFERENCIA',
     'FINALIZOU',
     'AJUSTOU_CAMPO',
+    'DESCARTOU_PARCIAL',
+    # 2026-05-16: novas acoes para Item 1 (recebimento automatico NF inteira)
+    # e Item 2 (exclusao admin-only).
+    'RECEBIMENTO_AUTOMATICO',
+    'EXCLUIU_RECEBIMENTO',
 }
 
 

@@ -4,9 +4,21 @@
 {% block hora_content %}
 <div class="d-flex align-items-center justify-content-between mb-3">
   <h2>Recebimentos</h2>
-  <a id="btn-novo-recebimento" href="{{ url_for('hora.recebimentos_novo') }}" class="btn btn-primary">
-    <i class="fas fa-plus"></i> Novo recebimento
-  </a>
+  <div class="d-flex gap-2">
+    {# Botao admin: recebimento automatico de NF inteira (sem conferencia fisica).
+       Visivel apenas para admin com perm recebimentos/criar. #}
+    {% if current_user.perfil == 'administrador' and current_user.tem_perm_hora('recebimentos', 'criar') %}
+      <button type="button" id="btn-recebimento-automatico"
+              class="btn btn-outline-warning"
+              data-bs-toggle="modal" data-bs-target="#modalRecebimentoAutomatico"
+              onclick="carregarNfsParaRecebimentoAutomatico()">
+        <i class="fas fa-bolt"></i> Recebimento automatico
+      </button>
+    {% endif %}
+    <a id="btn-novo-recebimento" href="{{ url_for('hora.recebimentos_novo') }}" class="btn btn-primary">
+      <i class="fas fa-plus"></i> Novo recebimento
+    </a>
+  </div>
 </div>
 
 <div id="filtros-recebimentos">
@@ -64,6 +76,263 @@
   </table>
 </div>{# /#tabela-recebimentos #}
 {% endblock %}
+
+{# ==================================================================== #}
+{# Modal Recebimento Automatico (admin) — Item 1 2026-05-16 #}
+{# Mostra accordion de NFs sem recebimento + checkbox + qtd NF X qtd #}
+{# pedido. Submit cria recebimentos preenchidos automaticamente. #}
+{# ==================================================================== #}
+{% if current_user.perfil == 'administrador' and current_user.tem_perm_hora('recebimentos', 'criar') %}
+<div class="modal fade" id="modalRecebimentoAutomatico" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title">
+          <i class="fas fa-bolt"></i> Recebimento automatico de NF (admin)
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small">
+          <strong>Atencao:</strong> esta operacao cria o recebimento ja
+          confirmado para CADA chassi da NF selecionada, usando os dados da
+          propria NF (chassi, modelo canonico via aliases, cor). Equivale a
+          um operador conferindo tudo cego e confirmando. <br>
+          Use APENAS quando a conferencia fisica nao for necessaria (ex.: NF
+          de fechamento mensal, regularizacao retroativa).
+        </div>
+        <div id="rec-auto-loading" class="text-center text-muted py-4">
+          <i class="fas fa-spinner fa-spin fa-2x"></i><br>
+          Carregando NFs sem recebimento...
+        </div>
+        <div id="rec-auto-empty" class="d-none alert alert-success">
+          <i class="fas fa-check"></i> Nenhuma NF pendente de recebimento.
+        </div>
+        <div id="rec-auto-erro" class="d-none alert alert-danger"></div>
+        <div id="rec-auto-conteudo" class="d-none">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div>
+              <span class="badge bg-secondary">
+                Total: <span id="rec-auto-total">0</span> NF(s)
+              </span>
+              <span class="badge bg-primary ms-2">
+                Selecionadas: <span id="rec-auto-selec">0</span>
+              </span>
+            </div>
+            <div>
+              <button type="button" class="btn btn-sm btn-link"
+                      id="btn-selec-todas">Selecionar todas</button>
+              <button type="button" class="btn btn-sm btn-link"
+                      id="btn-desmarcar-todas">Desmarcar</button>
+            </div>
+          </div>
+          <div class="accordion" id="acc-nfs-pendentes"></div>
+        </div>
+        <div id="rec-auto-resultado" class="d-none mt-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        <button type="button" id="btn-criar-rec-auto"
+                class="btn btn-warning" disabled
+                onclick="criarRecebimentoAutomatico()">
+          <i class="fas fa-bolt"></i> Criar recebimento(s) selecionado(s)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const URL_NFS_AUTO = '{{ url_for("hora.recebimentos_automatico_listar_nfs") }}';
+const URL_CRIAR_AUTO = '{{ url_for("hora.recebimentos_automatico_criar") }}';
+
+async function carregarNfsParaRecebimentoAutomatico() {
+  const loading = document.getElementById('rec-auto-loading');
+  const empty = document.getElementById('rec-auto-empty');
+  const erro = document.getElementById('rec-auto-erro');
+  const conteudo = document.getElementById('rec-auto-conteudo');
+  const resultado = document.getElementById('rec-auto-resultado');
+  loading.classList.remove('d-none');
+  empty.classList.add('d-none');
+  erro.classList.add('d-none');
+  conteudo.classList.add('d-none');
+  resultado.classList.add('d-none');
+  try {
+    const resp = await fetch(URL_NFS_AUTO, {headers: {'Accept': 'application/json'}});
+    const data = await resp.json();
+    if (!data.ok) {
+      erro.textContent = data.erro || 'Erro';
+      erro.classList.remove('d-none');
+      loading.classList.add('d-none');
+      return;
+    }
+    loading.classList.add('d-none');
+    if (!data.nfs || data.nfs.length === 0) {
+      empty.classList.remove('d-none');
+      return;
+    }
+    document.getElementById('rec-auto-total').textContent = data.total;
+    renderizarNfs(data.nfs);
+    conteudo.classList.remove('d-none');
+  } catch (e) {
+    loading.classList.add('d-none');
+    erro.textContent = 'Erro de rede: ' + e;
+    erro.classList.remove('d-none');
+  }
+}
+
+function renderizarNfs(nfs) {
+  const acc = document.getElementById('acc-nfs-pendentes');
+  acc.innerHTML = '';
+  nfs.forEach((nf, idx) => {
+    const item = document.createElement('div');
+    item.className = 'accordion-item';
+    const headerId = 'head-nf-' + nf.nf_id;
+    const collapseId = 'coll-nf-' + nf.nf_id;
+    const motoBadge =
+      'NF ' + nf.qtd_motos_nf + ' × Pedido ' + nf.qtd_motos_pedido +
+      (nf.qtd_motos_pedido_ja_faturadas > 0
+        ? ' (' + nf.qtd_motos_pedido_ja_faturadas + ' ja em NFs)' : '');
+    const pedidoText = nf.pedido_numero
+      ? ('Pedido: ' + nf.pedido_numero)
+      : '<span class="text-warning">sem pedido vinculado</span>';
+    const chassisHtml = nf.chassis.map(c => {
+      const modelo = c.modelo_canonico
+        ? '<span class="badge bg-success">' + escapeHtml(c.modelo_canonico) + '</span>'
+        : '<span class="badge bg-warning" title="Sem canonico resolvido. Conferencia ficara sem modelo">' +
+          escapeHtml(c.modelo_texto_nf || '?') + '</span>';
+      return '<tr>' +
+        '<td><code>' + escapeHtml(c.numero_chassi) + '</code></td>' +
+        '<td>' + modelo + '</td>' +
+        '<td>' + escapeHtml(c.cor || '—') + '</td>' +
+        '</tr>';
+    }).join('');
+    item.innerHTML =
+      '<h2 class="accordion-header" id="' + headerId + '">' +
+        '<div class="d-flex align-items-center w-100 px-2">' +
+          '<input type="checkbox" class="form-check-input nf-check me-3" ' +
+                 'value="' + nf.nf_id + '" onchange="atualizarSelecao()">' +
+          '<button class="accordion-button collapsed flex-grow-1" type="button" ' +
+                  'data-bs-toggle="collapse" data-bs-target="#' + collapseId + '">' +
+            '<div class="d-flex flex-column align-items-start w-100">' +
+              '<div class="d-flex align-items-center gap-2 w-100">' +
+                '<strong>NF ' + escapeHtml(nf.numero_nf) + '</strong>' +
+                '<span class="badge bg-info">' + escapeHtml(nf.loja_nome || '?') + '</span>' +
+                '<span class="badge bg-secondary">' + motoBadge + '</span>' +
+              '</div>' +
+              '<small class="text-muted">' +
+                escapeHtml(nf.data_emissao || '?') + ' · ' +
+                escapeHtml(nf.nome_emitente || nf.cnpj_emitente || '?') + ' · ' +
+                pedidoText +
+              '</small>' +
+            '</div>' +
+          '</button>' +
+        '</div>' +
+      '</h2>' +
+      '<div id="' + collapseId + '" class="accordion-collapse collapse" ' +
+           'data-bs-parent="#acc-nfs-pendentes">' +
+        '<div class="accordion-body">' +
+          '<table class="table table-sm table-striped">' +
+            '<thead><tr><th>Chassi</th><th>Modelo canonico</th><th>Cor</th></tr></thead>' +
+            '<tbody>' + chassisHtml + '</tbody>' +
+          '</table>' +
+        '</div>' +
+      '</div>';
+    acc.appendChild(item);
+  });
+}
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, (c) => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+
+function atualizarSelecao() {
+  const n = document.querySelectorAll('.nf-check:checked').length;
+  document.getElementById('rec-auto-selec').textContent = n;
+  document.getElementById('btn-criar-rec-auto').disabled = (n === 0);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btnTodas = document.getElementById('btn-selec-todas');
+  const btnDesm = document.getElementById('btn-desmarcar-todas');
+  if (btnTodas) {
+    btnTodas.addEventListener('click', () => {
+      document.querySelectorAll('.nf-check').forEach(c => c.checked = true);
+      atualizarSelecao();
+    });
+  }
+  if (btnDesm) {
+    btnDesm.addEventListener('click', () => {
+      document.querySelectorAll('.nf-check').forEach(c => c.checked = false);
+      atualizarSelecao();
+    });
+  }
+});
+
+async function criarRecebimentoAutomatico() {
+  const selecionadas = Array.from(document.querySelectorAll('.nf-check:checked'))
+    .map(c => parseInt(c.value, 10));
+  if (!selecionadas.length) {
+    alert('Selecione ao menos uma NF.');
+    return;
+  }
+  if (!confirm(
+    'Criar recebimento automatico para ' + selecionadas.length + ' NF(s)?\n\n' +
+    'Cada chassi sera confirmado com os dados da NF (sem conferencia fisica).')) {
+    return;
+  }
+  const btn = document.getElementById('btn-criar-rec-auto');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+  const resultado = document.getElementById('rec-auto-resultado');
+  resultado.classList.add('d-none');
+  resultado.innerHTML = '';
+  try {
+    const resp = await fetch(URL_CRIAR_AUTO, {
+      method: 'POST',
+      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+      body: JSON.stringify({nf_ids: selecionadas}),
+    });
+    const data = await resp.json();
+    const html = [];
+    html.push('<div class="alert alert-' + (data.ok ? 'success' : 'warning') + '">');
+    html.push('<strong>' + data.total_criados + ' de ' + data.total_pedidos +
+              ' recebimento(s) criado(s).</strong>');
+    html.push('</div>');
+    if (data.criados && data.criados.length) {
+      html.push('<h6>Criados:</h6><ul>');
+      data.criados.forEach(c => {
+        html.push('<li>Recebimento #' + c.recebimento_id + ' (NF ' + c.numero_nf +
+                  ', ' + c.conferencias_criadas + ' conferencia(s), status ' +
+                  c.status_final + ')</li>');
+      });
+      html.push('</ul>');
+    }
+    if (data.erros && data.erros.length) {
+      html.push('<h6 class="text-danger">Erros:</h6><ul>');
+      data.erros.forEach(e => {
+        html.push('<li>NF #' + e.nf_id + ': ' + escapeHtml(e.erro) + '</li>');
+      });
+      html.push('</ul>');
+    }
+    html.push('<div class="text-end mt-3">' +
+              '<button class="btn btn-sm btn-primary" onclick="window.location.reload()">' +
+              '<i class="fas fa-sync"></i> Atualizar listagem</button></div>');
+    resultado.innerHTML = html.join('');
+    resultado.classList.remove('d-none');
+  } catch (e) {
+    resultado.innerHTML = '<div class="alert alert-danger">Erro de rede: ' + e + '</div>';
+    resultado.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-bolt"></i> Criar recebimento(s) selecionado(s)';
+  }
+}
+</script>
+{% endif %}
 
 {% block onboarding_tours %}
 <script src="{{ url_for('static', filename='onboarding/tours/hora/recebimentos_lista.js') }}"></script>
