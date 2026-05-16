@@ -34,6 +34,12 @@ COMPANY_LF_ID = 5                        # LA FAMIGLIA - LF (raiz 18.467.441) �
 # Layout SPED ECD versao
 # ============================================================
 
+# Versao iterativa interna do gerador (NAO confundir com LEIAUTE_VERSAO).
+# Usada para nomear o arquivo SPED gerado e logs do script standalone.
+# BUMP a cada iteracao de correcao + atualizar HISTORICO em SPED_ECD_PLANO.md.
+# Fonte unica da verdade — gerar_sped.py e demais scripts leem daqui.
+VERSAO_SPED = 'V29'
+
 LEIAUTE_VERSAO = '9.00'                  # Leiaute 9 vigente desde Dez/2021
 COD_PLAN_REF = '1'                       # 1=PJ Lucro Real (decisao usuario)
 IND_ESC = 'G'                            # G=Diario Completo (decisao usuario)
@@ -50,6 +56,25 @@ IND_MUDANC_PC = '0'                      # 0=Sem mudanca PC
 
 # Limite Receita Federal: ECD a partir de 2010-01-01
 DATA_LIMITE_INFERIOR = '2010-01-01'
+
+# ============================================================
+# Centro de custo (CCUS) — NAO emitido no SPED (decisao 2026-05-15)
+# ============================================================
+# Decisao do usuario (Rafael, 2026-05-15) apos analise PVA V17:
+# "No SPED nao vai centro de custo".
+#
+# Causa raiz do bug V17 (13 erros bloqueantes em I250): a NACOM tem 1 plano
+# analitico POR FILIAL, e Odoo retorna analytic_distribution achatado contendo
+# IDs de TODOS os planos. Quando lancamento e marcado em N analytics, a soma
+# de percentuais ultrapassa 100% e a logica de split em construir_I200_I250
+# multiplicava o valor e reajustava no ultimo CCUS gerando VL_DC negativo.
+#
+# Como CCUS nao e obrigatorio no SPED ECD (apenas opcional para detalhar
+# alocacao), a solucao definitiva e nao emitir CCUS:
+#   - I100 (cadastro CCUS): nao emite
+#   - I250 (lancamentos): emite com COD_CCUS vazio
+#   - I155/I355: ja emitiam com COD_CCUS vazio
+EMITIR_CCUS_SPED = False
 
 # ============================================================
 # Mapeamento account_type Odoo -> COD_NAT (Natureza da conta — I050 campo 3)
@@ -157,12 +182,16 @@ def saldo_natural_dc(account_type: str) -> str:
 CONTADOR_NOME = 'TAMIRIS SALLES CORDEIRO'
 CONTADOR_CPF = '41832597890'                     # CPF do contador (sem mascara)
 CONTADOR_EMAIL = 'tamiris.cordeiro@conservascampobelo.com.br'  # Email contato ECD
-CONTADOR_CRC = '1SP041472'                       # IND_CRC: numero inscricao formato XSP123456
+CONTADOR_CRC = 'SP-1303041/O-9'                  # IND_CRC: formato original CRC (V1.9: SPED da contadora usa esse formato)
 CONTADOR_NUM_SEQ_CRC = 'SP/2026/041472'          # NUM_SEQ_CRC: formato UF/AAAA/seq
 CONTADOR_UF_CRC = 'SP'
+CONTADOR_FONE = '1147059494'                     # J930 campo 8 — fone DDD+numero (sem mascara). V1.9: extraido SPED contadora.
+CONTADOR_DT_CRC = '06072026'                     # J930 campo 11 — DT_CRC DDMMAAAA. V1.9: extraido SPED contadora (06/07/2026).
 
-# Sequencial extraido do CRC original 'SP-1303041/O-9' fornecido pelo usuario
-# IND_CRC formato: <classe><UF><numero> -> '1SP041472' (1=titular, SP=UF, 041472=seq)
+# BUG HISTORICO V1.x — antes V1.9 usavamos CONTADOR_CRC='1SP041472' (formato IND_CRC
+# inferido do CRC original 'SP-1303041/O-9'). Mas o SPED da contadora original
+# (referencia/ground truth) usa o formato literal 'SP-1303041/O-9'. PVA aceita ambos
+# mas mantemos formato igual ao da contadora para consistencia.
 
 SOCIO_NOME = 'AIRTON ALVES NASCIMENTO'
 SOCIO_CPF = '27428710804'

@@ -1,0 +1,377 @@
+code;name;account_type;companies;cod_nat_odoo_atual;cod_nat_odoo_atual_label;cod_nat_esperado;cod_nat_esperado_label;acao_solicitada
+1130600001;ADIANTAMENTOS A FORNECEDORES NACIONAIS;liability_payable;FB,SC,CD;01;Ativo;02;Passivo;Corrigir l10n_br_cod_nat de 01 para 02
+1130600002;ADIANTAMENTOS A FORNECEDORES EXTERIOR;liability_payable;FB,SC,CD;01;Ativo;02;Passivo;Corrigir l10n_br_cod_nat de 01 para 02
+1130700001;ADIANTAMENTO DE SALARIOS;expense;FB,SC,CD;01;Ativo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 01 para 05
+1130700002;ADIANTAMENTO DE FERIAS;expense;FB,SC,CD;01;Ativo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 01 para 05
+1210200003;EMPRESTIMOS A SOCIOS;liability_payable;FB,SC,CD;01;Ativo;02;Passivo;Corrigir l10n_br_cod_nat de 01 para 02
+2110100001;SALARIOS E ORDENADOS A PAGAR;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2110100002;PRO LABORE A PAGAR;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2110100003;PENSAO ALIMENTICIA;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2110100008;RESCISOES;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2110200001;INSS A RECOLHER;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2110200008;IRRF - SALARIOS A RECOLHER;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2110200015;FGTS A RECOLHER;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2110200030;CONTRIBUICAO SINDICAL  A RECOLHER;expense;FB,SC,CD;02;Passivo;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 02 para 05
+2130500001;ALUGUEL A PAGAR;income;FB,SC,CD;02;Passivo;04;Receita;Corrigir l10n_br_cod_nat de 02 para 04
+2140100005;DESC. DUPL. ATACADAO;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100015;DESC.DUPL. BARCELONA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100016;DESC.DUPL. PAO ACUCAR;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100022;SRM ADM.RECURSOS E FINANCAS;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100024;DESC.DUPL. ROLDAO;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100028;DESC. DUPL. WMS;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100029;DESC.DUPL. ATAKAREJO;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100035;ANTECIPACOES - TENDA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100038;ANTECIPACOES - MUFFATO;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100039;ANTECIPACOES - ZARAGOZA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100040;ANTECIPACOES - CENCOSUD/ MERCANTIL RODRIGUES;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100043;ANTECIPACOES - FORT ATAC GR PEREIRA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100044;ANTECIPACOES - MERCADAO ATACADISTA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100046;ANTECIPACOES - STO ATAC DE ALIM EIRELI;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100048;ANTECIPACOES - RICOY SUP;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100049;ANTECIPACOES - REDE DIA A DIA (DVA/B2M);asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100050;ANTECIPACOES - GIGA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100051;OVERMIND - FUNDO DE INVESTIMENTO;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100052;ANTECIPACOES - REDE TONIN ATACADISTA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100053;ANTECIPACOES - REDE CONFIANCA;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100056;EMPRESTIMOS NACIONAIS;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100060;ANTECIPACOES - ARMAZEM MATEUS;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100061;ANTECIPACOES - MATEUS SUP;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100064;ANTECIPACOES - OESA;asset_cash;FB;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140100065;ANTECIPACOES - WMB;asset_cash;FB;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2140200001;EMPRESTIMOS / FINANCIAMENTOS;asset_cash;FB,SC,CD;02;Passivo;01;Ativo;Corrigir l10n_br_cod_nat de 02 para 01
+2310100001;CAPITAL SOCIAL;equity;FB,SC,CD;02;Passivo;03;PL;Corrigir l10n_br_cod_nat de 02 para 03
+2330100001;RESERVA DE CAPITAL;equity;FB,SC,CD;02;Passivo;03;PL;Corrigir l10n_br_cod_nat de 02 para 03
+2330200001;RESERVA DE LUCRO;equity;FB,SC,CD;02;Passivo;03;PL;Corrigir l10n_br_cod_nat de 02 para 03
+2330300001;RESERVA DE INCENTIVOS FISCAIS;equity;FB,SC,CD;02;Passivo;03;PL;Corrigir l10n_br_cod_nat de 02 para 03
+2340100001;LUCROS ACUMULADOS;equity;FB,SC,CD;02;Passivo;03;PL;Corrigir l10n_br_cod_nat de 02 para 03
+2340100002;(-) PREJUIZOS ACUMULADOS;equity;FB,SC,CD;02;Passivo;03;PL;Corrigir l10n_br_cod_nat de 02 para 03
+2370100001;APURACAO RESULTADO DO EXERCICIO;equity_unaffected;FB,SC,CD;02;Passivo;03;PL;Corrigir l10n_br_cod_nat de 02 para 03
+3102010001;( - ) DEVOLUCAO PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102010002;ICMS NORMAL S/DEVOL PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102010003;PIS S/DEVOL - PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102010004;COFINS S/DEVOL PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102020001;( - ) DEVOLUCAO REVENDA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102020002;ICMS NORMAL S/DEVOL MERCADORIA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102020003;PIS S/DEVOL - MERCADORIA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102020004;COFINS S/DEVOL MERCADORIA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102030001;( - ) CANCELAMENTO SERVICO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102030002;ISS S/CANC SERVICO PRESTADO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102030003;PIS S/CANC SERVICO PRESTADO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3102030004;COFINS S/CANC SERVICO PRESTADO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3103010001;( - ) DESCONTO PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3103020001;( - ) DESCONTO REVENDA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3103030001;( - ) DESCONTO SERVICO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104010001;( - ) ICMS NORMAL S/VENDAS PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104010002;( - ) PIS S/VENDAS - PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104010003;( - ) COFINS S/VENDAS PRODUCAO;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104010004;( - ) ICMS ST/ FECP S/VENDAS PRODUCAO;liability_current;FB,SC,CD;04;Receita;02;Passivo;Corrigir l10n_br_cod_nat de 04 para 02
+3104020001;( - ) ICMS NORMAL S/VENDAS MERCADORIA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104020002;( - ) PIS S/VENDAS - MERCADORIA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104020003;( - ) COFINS S/VENDAS MERCADORIA;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104030001;( - ) ISS S/ SERVICOS PRESTADOS;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104030002;( - ) PIS S/ SERVICOS PRESTADOS;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3104030003;( - ) COFINS S/ SERVICOS PRESTADOS;expense_direct_cost;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201000001;CUSTO DOS PRODUTOS VENDIDOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201000002;VARIAÇÕES POSITIVAS DE ESTOQUE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201000003;VARIAÇÕES NEGATIVAS DE ESTOQUE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201010007;CONSUMO MATERIA-PRIMA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201010008;CONSUMO DE EMBALAGEM;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201010009;CONSUMO SEMI-ACABADO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201010010;CONSUMO PRODUTO-ACABADO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201010011;CONSUMO PRODUTOS PARA REVENDA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201010016;CONSUMO MATERIAL DE TERCEIROS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201010050;OUTROS MATERIAS APLICADOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020001;SALARIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020002;HORAS EXTRAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020003;DSR;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020004;BANCO DE HORAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020005;FÉRIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020006;13o. SALÁRIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020007;ADICIONAIS DE SALARIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020008;GRATIFICACOES E PREMIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020009;PROVISAO DE FERIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020010;PROVISAO 13o. SALARIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020011;AVISO PREVIO E INDENIZACOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020012;PRO LABORE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020013;BOLSA ESTAGIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201020014;PARTICIPACAO NOS RESULTADOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201030001;INSS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201030002;FGTS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201030003;INSS S/ PROVISAO DE FERIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201030004;FGTS S/ PROVISAO DE FERIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201030005;INSS S/ PROVISAO DE 13O;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201030006;FGTS S/ PROVISAO DE 13O;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201030007;FGTS RESCISAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040001;REFEIÇÕES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040002;CESTA BASICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040003;VALE TRANSPORTE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040004;ASSISTENCIA MEDICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040005;SEGURO DE VIDA EM GRUPO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040006;AUXILIO CRECHE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040007;AUXILIO EDUCACAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201040008;ESTACIONAMENTO P/ FUNCIONARIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201050001;TREINAMENTO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201050002;MEDICINA OCUPACIONAL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201060001;EMBALAGENS INDIRETAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201060002;PALLETS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201070001;ALUGUEIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201070002;CONDOMINIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201070003;ARREDAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201070004;ENERGIA ELETRICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201070005;AGUA E ESGOTO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201070006;GAS NATURAL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201080001;CONSUMO MATERIAL MANUTENÇÃO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201080002;MANUTENCAO DE VEICULOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201080003;MANUTENCAO PREDIAL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201080004;MANUTENCAO EQUIPAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201080007;MATERIAL SEGURANÇA EPIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090001;MATERIAL DE LIMPEZA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090002;MATERIAL DE HIGIENE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090003;MATERIAL DE COPA E COZINHA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090004;BENS DE PEQUENO VALOR;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090005;FERRAMENTAS PEQUENAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090006;UNIFORMES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090007;SERVICOS DE USINAGEM;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201090008;MATERIAL LABORATÓRIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201100001;MAO DE OBRA TEMPORARIA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201100002;ARMAZENAGEM;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201100003;LIMPEZA E CONSERVACAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201100004;ANALISES BIOLOGICAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201100005;SERVICOS DE MANUTENCAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201100006;COLETA DE RESIDUOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201110001;SEGURO DE OBRAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201110002;SEGURO INCENDIO, ENCHENTES, DESASTRES E AFINS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201110003;SEGURO DE RESPONSABILIDADE CIVIL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201110004;SEGURO VEICULOS PROPRIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201120001;LOCACOES DE EQUIPAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201120002;LOCACOES DE MOVEIS E UTENSILIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201120003;LOCACOES DE VEICULOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130001;DEPREC EDIFICACOES E CONSTRUCOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130002;DEPREC INSTALACOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130003;DEPREC MAQUINAS E EQUIPAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130004;DEPREC MOLDES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130005;DEPREC MOVEIS E UTENSILIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130006;DEPREC VEICULOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130007;DEPREC COMPUTADORES E PERIFERICOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130008;DEPREC FERRAMENTAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130009;DEPREC BENFEITORIAS EM TERCEIROS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130010;AMORTIZ SOFTWARES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201130011;AMORTIZ LICENSAS DE USO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201140001;PERDAS NO PROCESSO DE PRODUCAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3201990099;TRANSF. GASTOS GERAIS DE FABRICAÇÃO;expense;FB;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3202010001;CUSTOS DAS MERCADORIAS VENDIDAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3202010002;VARIAÇÃO DE ESTOQUES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3203010001;CUSTOS DOS SERVICOS PRESTADOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3401010001;RECEITA DE SUCATA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3401010002;(-) PIS SOBRE VENDA DE SUCATA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3401010003;(-) COFINS SOBRE VENDA DE SUCATA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3401090001;CREDITO ICMS PRESUMIDO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3401090002;(-) PIS SOBRE CREDITO FISCAIS PRESUMIDO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3401090003;(-) COFINS SOBRE FISCAIS PRESUMIDO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010001;SALARIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010002;HORAS EXTRAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010003;DSR;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010004;BANCO DE HORAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010005;FÉRIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010006;13o. SALÁRIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010007;ADICIONAIS DE SALARIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010008;GRATIFICACOES E PREMIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010009;PROVISAO DE FERIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010010;PROVISAO 13o. SALARIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010011;AVISO PREVIO E INDENIZACOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010012;PRO LABORE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010013;BOLSA ESTAGIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501010014;PARTICIPACAO NOS RESULTADOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501020001;INSS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501020002;FGTS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501020003;INSS S/ PROVISAO DE FERIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501020004;FGTS S/ PROVISAO DE FERIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501020005;INSS S/ PROVISAO DE 13O;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501020006;FGTS S/ PROVISAO DE 13O;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501020007;FGTS RESCISAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030001;REFEIÇÕES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030002;CESTA BASICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030003;VALE TRANSPORTE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030004;ASSISTENCIA MEDICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030005;SEGURO DE VIDA EM GRUPO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030006;AUXILIO CRECHE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030007;AUXILIO EDUCACAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501030008;DESPESAS COM SEGURANCA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501040001;TREINAMENTO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501040002;MEDICINA OCUPACIONAL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501040003;FESTAS E CONFRATERNIZACOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3501040004;CURSOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010001;FRETES S/ VENDAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010002;FRETES S/ DEVOLUCOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010003;FROTA PRÓPRIA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010004;COMISSOES S/ VENDAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010005;BONIFICACOES DE PRODUTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010006;SEGURO DE CARGAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010007;AJUDA DE CUSTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010008;AMOSTRAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010009;DESPESAS COM EXPORTACAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502010010;PROMOCOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502020001;AGENCIAS DE MARKETING;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502020002;PUBLICACOES EM MIDIAS SOCIAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502020003;DEGUSTACAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502020004;FEIRAS E EXPOSICOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502020005;EVENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502020006;CARTÃO DE FIDELIDADE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030001;PASSAGEM AEREA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030002;HOSPEDAGEM;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030003;REFEICOES E LANCHES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030004;CONDUCAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030005;TAXI, UBER, E AFINS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030006;ESTACIONAMENTO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030007;PEDAGIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030008;QUILOMETRAGEM;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502030009;COMBUSTIVEIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502040001;ALUGUEIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502040002;CONDOMINIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502040003;ARREDAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502040005;ENERGIA ELETRICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502040006;AGUA E ESGOTO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502050001;TELEFONE FIXO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502050002;TELEFONE MOVEL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502050003;LINKS DE INTERNET;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502050004;DATA CENTER, PROVEDORES, SERVIDORES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502060001;MANUTENCAO DE VEICULOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502060002;MANUTENCAO PREDIAL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502060003;MANUTENCAO EQUIPAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070001;CONSUMO MATERIAL DE LOJA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070002;COMSUMO MATERIAL DE COPA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070003;CONSUMO MATERIAL DE ESCRITORIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070004;MATERIAL DE LIMPEZA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070005;MATERIAL DE HIGIENE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070006;MATERIAIS DE ESCRITORIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070007;MATERIAIS DE INFORMATICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070008;MATERIAL DE COPA E COZINHA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070009;BENS DE PEQUENO VALOR;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070010;FERRAMENTAS PEQUENAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070011;LIVROS, JORNAIS E REVISTAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070012;PLANTAS E JARDINAGEM;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502070013;UNIFORMES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080001;ADVOGADOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080002;AUDITORIA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080003;CONTABILIDADE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080004;ENGENHARIA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080005;INFORMATICA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080006;ADMINISTRATIVOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080007;RECRUTAMENTO E SELEÇOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080008;MAO DE OBRA TEMPORARIA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080009;TRADUCOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080010;ARMAZENAGEM;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080011;LIMPEZA E CONSERVACAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080012;ANALISES BIOLOGICAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080013;COLETA DE RESIDUOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080014;DESPACHANTES ADUANEIRO S/ VENDAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502080015;MANUTENCAO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502090001;DESPESAS COM CARTORIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502090002;DESPESAS COM CUSTAS E PROTESTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502090003;DESPESAS COM MOTOBOY;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502090004;DESPESAS COM CORREIO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502090005;DESPESAS COM COPIAS E SCANNERS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502090006;DESPESAS COM ASSINATURAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502090007;DESPESAS COM CUSTAS PROCESSUAIS ;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502100001;SEGURO DE OBRAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502100002;SEGURO INCENDIO, ENCHENTES, DESASTRES E AFINS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502100003;SEGURO VEICULOS PROPRIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502100004;SEGUROS DE RESPONSAB CIVIL;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502110001;LOCACOES DE EQUIPAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502110002;LOCACAO DE MOVEIS E UTENSILIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502110003;LOCACAO DE VEICULOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502110004;LOCACAO DE SALAS E AUDITORIOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120001;ICMS OUTRAS OPERACOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120002;IPVA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120003;IPTU;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120004;CONTRIBUICOES SINDICAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120005;ENTIDADES DE CLASSE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120006;TAXAS DE SERVICOS FEDERAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120007;TAXAS DE SERVICOS ESTADUAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120008;TAXAS DE SERVICOS MUNICIPAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120009;IPTR;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120010;IMPOSTOS E TAXAS DE IMPORTAÇÃO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120020;IMPOSTOS E TAXAS DE IMPORTAÇÃO (cópia);expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502120030;IMPOSTOS E TAXAS DE IMPORTAÇÃO (cópia);expense;SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130001;DEPREC EDIFICACOES E CONSTRUCOES;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130002;DEPREC INSTALACOES;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130003;DEPREC MAQUINAS E EQUIPAMENTOS;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130004;DEPREC MOLDES;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130005;DEPREC MOVEIS E UTENSILIOS;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130006;DEPREC VEICULOS;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130007;DEPREC COMPUTADORES E PERIFERICOS;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130008;DEPREC FERRAMENTAS;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130009;DEPREC BENFEITORIAS EM TERCEIROS;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130010;DEPREC TELEFONIA;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130011;DEPREC DEEMED COST;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130012;AMORTIZ SOFTWARES;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130013;AMORTIZ LICENSAS DE USO;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502130014;AMORTIZ LUVAS COMERCIAIS;expense_depreciation;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140001;BRINDES, PRESENTES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140002;DESPESAS NAO DEDUTIVEIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140003;MULTAS DE TRANSITO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140004;INDENIZACOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140005;PERDAS NO RECEBIMENTO (INDEDUTIVEL);expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140006;MATERIAL PRODUÇÃO SUCATEADO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140007;MULTAS FISCAIS DEDUTIVEIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140008;MULTAS FISCAIS NAO DEDUTIVEIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140009;DOAÇÃO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502140010;PERDAS FURTOS OU ROUBOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502160001;BAIXA DE RECEBIVEIS (DEDUTIVEL);expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502160002;FRETES DE OUTRAS OPERACOES;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3502160003;AVARIA DE CARGAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010001;DESPESAS BANCARIAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010002;ENCARGOS DE EMPRESTIMOS E FINANCIAMENTOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010003;JUROS DE PAGAMENTOS EM ATRASO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010004;MULTAS PAGAMENTOS EM ATRASO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010005;IOF;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010006;DESCONTOS CONCEDIDOS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010007;VARIACAO CAMBIAL PASSIVA LIQUIDADA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010008;IRRF S/ EMPRESTIMO OU APLICACAO FINANCEIRA;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010009;VERBAS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3701010010;ACORDOS COMERCIAIS E FINANCEIROS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3702010009;DESAGIO RECUPERACAO JUDICIAL;asset_cash;FB,SC,CD;04;Receita;01;Ativo;Corrigir l10n_br_cod_nat de 04 para 01
+3901010001;IRPJ CORRENTE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3901010002;IRPJ DIFERIDO S/ VARIACOES TEMPORAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3901010003;IRPJ DIFERIDO S/ PREJUIZOS FISCAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3901020001;CSLL CORRENTE;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3901020002;CSLL DIFERIDO S/ VARIACOES TEMPORAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3901020003;CSLL DIFERIDO S/ PREJUIZOS FISCAIS;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+3901020004;CSLL DIFERIDO S/ PREJUIZOS FISCAIS (cópia);expense;SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+4901010001;LUCRO OU (PREJUIZO) NO PERIODO;expense;FB,SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+4901010011;LUCRO OU (PREJUIZO) NO PERIODO (cópia);expense;SC,CD;04;Receita;05;Custo/Despesa;Corrigir l10n_br_cod_nat de 04 para 05
+5101010001;REMESSA INDUSTRIALIZAÇÃO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010002;RETORNO INDUSTRIALIZAÇÃO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010003;BONIFICAÇÃO DE PRODUTOS (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010004;BENS EM COMODATO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010005;REMESSAS PARA CONSERTO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010006;REMESSA PARA EXPOSICAO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010007;DEMONSTRACAO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010008;CONSIGNACAO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010009;SIMPLES REMESSA (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010010;BENS EM GARANTIA (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010011;REMESSA PARA INDSUTRIALIZACAO (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010012;BENS EM GARANTIA (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010013;REMESSA PARA ARMAZENAGEM (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010014;TRANSF. MERCADORIA ENTRE EMPRESAS (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010015;REGISTRO DE IMPOSTOS (ATIVA);asset_current;FB,SC,CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010016;REMESSA PARA RETRABALHO (ATIVA);asset_current;FB;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010026;REMESSA PARA RETRABALHO (ATIVA) (cópia);asset_current;SC;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101010036;REMESSA PARA RETRABALHO (ATIVA) (cópia);asset_current;CD;05;Custo/Despesa;01;Ativo;Corrigir l10n_br_cod_nat de 05 para 01
+5101020001;REMESSA INDUSTRIALIZAÇÃO (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020002;RETORNO INDUSTRIALIZAÇÃO (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020003;BONIFICAÇÃO DE PRODUTOS (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020004;BENS EM COMODATO (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020005;REMESSAS PARA CONSERTO (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020006;REMESSA PARA EXPOSICAO (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020007;DEMONSTRACAO (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020008;CONSIGNACAO (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020009;SIMPLES REMESSA (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020010;BENS EM GARANTIA (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020012;REMESSA PARA ARMAZENAGEM (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020013;RETORNO DE ARMAZENAGEM  (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020014;TRANSF. MERCADORIA ENTRE EMPRESAS (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020015;REGISTRO DE IMPOSTOS (PASSIVA);liability_current;FB,SC,CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020016;REMESSA DE RETRABALHO (PASSIVA);liability_current;FB;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020026;REMESSA DE RETRABALHO (PASSIVA) (cópia);liability_current;SC;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02
+5101020036;REMESSA DE RETRABALHO (PASSIVA) (cópia) (cópia);liability_current;CD;05;Custo/Despesa;02;Passivo;Corrigir l10n_br_cod_nat de 05 para 02

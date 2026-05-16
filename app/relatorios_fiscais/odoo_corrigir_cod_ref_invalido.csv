@@ -1,0 +1,5 @@
+code;name;cod_ref_atual;niveis_atuais;acao_solicitada
+1210700002;CSLL DIFERIDO PREJUIZO FISCAIS - LP;3.2.8.9.4.20.20;7;Reduzir l10n_br_conta_referencial para max 6 niveis (5 pontos) conforme Manual ECD Leiaute 9
+3901010003;IRPJ DIFERIDO S/ PREJUIZOS FISCAIS;3.2.8.9.4.10.20;7;Reduzir l10n_br_conta_referencial para max 6 niveis (5 pontos) conforme Manual ECD Leiaute 9
+3901020003;CSLL DIFERIDO S/ PREJUIZOS FISCAIS;3.2.8.9.4.20.20;7;Reduzir l10n_br_conta_referencial para max 6 niveis (5 pontos) conforme Manual ECD Leiaute 9
+3901020004;CSLL DIFERIDO S/ PREJUIZOS FISCAIS (cópia);3.2.8.9.4.20.20;7;Reduzir l10n_br_conta_referencial para max 6 niveis (5 pontos) conforme Manual ECD Leiaute 9

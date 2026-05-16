@@ -31,9 +31,11 @@ from app.relatorios_fiscais.services.sped_ecd_constantes import (
     ACCOUNT_TYPE_TO_NAT,
     CNPJ_MATRIZ,
     CONTADOR_CPF,
+    CONTADOR_DT_CRC,
     CONTADOR_EMAIL,
     COD_PLAN_REF,
     CONTADOR_CRC,
+    CONTADOR_FONE,
     CONTADOR_NOME,
     CONTADOR_NUM_SEQ_CRC,
     CONTADOR_UF_CRC,
@@ -406,6 +408,7 @@ def construir_I050_com_I051(
     params: dict,
     contador: ContadorRegistros,
     codes_aglutinacao: set = None,
+    mapa_aglutinacao_dre: Dict[str, str] = None,
 ) -> List[str]:
     """
     Plano de Contas (I050) + Plano Referencial Receita (I051) + I052 INTERCALADOS.
@@ -416,8 +419,15 @@ def construir_I050_com_I051(
 
     Args:
         codes_aglutinacao: set de codes do plano que serao usados como COD_AGL
-                           em J100/J150. Para cada I050 com code nesta lista,
-                           emite I052 apos I051 (ou apos I050 se sem I051).
+                           em J100 (BP — autorreferencia: COD_AGL = code da
+                           propria conta). Para cada I050 com code nesta lista,
+                           emite I052 com COD_AGL = code.
+        mapa_aglutinacao_dre: V28 (2026-05-16) — dict {code_analitica: cod_agl_dre}
+                              vinculando contas analiticas de resultado aos codes
+                              detalhe do J150 (ex: '9.1.1', '9.2.2'). Para cada
+                              conta com code neste mapa, emite I052 adicional com
+                              COD_AGL = cod_agl_dre. PVA exige que codes detalhe
+                              do J150 estejam em pelo menos 1 I052.
 
     O PVA exige que o I051 venha LOGO APOS o I050 da conta analitica
     correspondente — pois o I051 nao carrega COD_CTA (so REG | COD_CCUS |
@@ -430,6 +440,7 @@ def construir_I050_com_I051(
     """
     linhas = []
     codes_agl = codes_aglutinacao or set()
+    mapa_dre = mapa_aglutinacao_dre or {}
 
     for c in plano_consolidado:
         # I050 — sempre emitido (sintetica ou analitica)
@@ -448,14 +459,16 @@ def construir_I050_com_I051(
         # I051 — apenas se for conta analitica com mapeamento referencial VALIDO
         if c.get('tipo') == 'A':
             cod_ref = c.get('conta_referencial_odoo') or PLANO_REFERENCIAL.get(c.get('account_type', ''), '')
-            # V1.7: filtrar referenciais invalidos (mais de 5 niveis nao existem
-            # no plano oficial RFB; codigos com '99.99' sao placeholders).
-            # No Odoo CIEL IT, 923 das 1770 contas com referencial estao com
-            # >5 niveis (invalido). Sem este filtro, PVA reprova 923 vezes.
+            # V1.7 (revisado em V22 2026-05-15): filtrar referenciais invalidos.
+            # Manual ECD Leiaute 9 + ground truth (SPED contadora aceito RFB) confirma
+            # codes com ATE 6 niveis hierarquicos (5 pontos), ex: '3.01.01.01.02.05'.
+            # Filtro original (>4 pontos) invalidava 923 codes validos.
+            # Novo limite: pontos > 5 (= 7+ niveis = invalido RFB). Ver INCONSISTENCIAS_ODOO.md CAT 21.
+            # '99.99' continua excluido (placeholders sem code real na Tabela 11 RFB).
             if cod_ref:
-                niveis = cod_ref.count('.')
+                pontos = cod_ref.count('.')
                 tem_placeholder = '99.99' in cod_ref
-                if niveis > 4 or tem_placeholder:
+                if pontos > 5 or tem_placeholder:
                     cod_ref = ''  # invalida -> nao emite I051
             if cod_ref:
                 linhas.append(contador.emit(formatar_registro([
@@ -464,12 +477,30 @@ def construir_I050_com_I051(
                     cod_ref,                                   # 3 COD_CTA_REF
                 ])))
 
-        # V1.6 — I052 para conta usada como COD_AGL no J100/J150
-        if c['code'] in codes_agl:
+        # V1.6 — I052 para conta usada como COD_AGL no J100 (BP)
+        # V1.9 (2026-05-15): SO emite I052 para analitica detalhe (tipo='A').
+        # Bug V18: emitia I052 para sinteticas tambem porque codes_agl recebia
+        # codes de sinteticas que aparecem em J100 como totalizadores (T).
+        # PVA reprovou 552 erros "I052 em sintetica" + 236 "code agl. e totalizador".
+        # Manual ECD: I052 vincula contas DETALHE da escrituracao ao codigo de
+        # aglutinacao das demonstracoes. Sinteticas ja SAO o totalizador.
+        # Ver SPED_ECD_PLANO.md CATEGORIA 1 + CATEGORIA 4.
+        if c['code'] in codes_agl and c.get('tipo') == 'A':
             linhas.append(contador.emit(formatar_registro([
                 'I052',                                        # 1 REG
                 '',                                            # 2 COD_CCUS (vazio)
-                c['code'],                                     # 3 COD_CTA (a propria conta)
+                c['code'],                                     # 3 COD_AGL (autorreferencia BP)
+            ])))
+
+        # V28 (CAT 5/20 fix 2026-05-16) — I052 para conta de resultado vinculada
+        # a code DRE detalhe (J150). PVA exige que codes detalhe da DRE estejam
+        # em pelo menos 1 I052 — caso contrario reclama 5 erros "code agl detalhe
+        # deve estar em pelo menos um I052" + warnings de hierarquia incompleta.
+        if c.get('tipo') == 'A' and c['code'] in mapa_dre:
+            linhas.append(contador.emit(formatar_registro([
+                'I052',                                        # 1 REG
+                '',                                            # 2 COD_CCUS (vazio)
+                mapa_dre[c['code']],                           # 3 COD_AGL (code DRE detalhe ex: 9.1.1)
             ])))
 
     return linhas
@@ -524,7 +555,7 @@ def construir_I100(plano_ccus: List[dict], params: dict, contador: ContadorRegis
     return linhas
 
 
-def construir_I150_I155(saldos_mensais: dict, plano_consolidado: List[dict],
+def construir_I150_I155(saldos_mensais: dict, _plano_consolidado: List[dict],
                         contador: ContadorRegistros) -> List[str]:
     """
     Saldos Periodicos (mensais) — I150 cabecalho + I155 detalhe por conta.
@@ -541,9 +572,6 @@ def construir_I150_I155(saldos_mensais: dict, plano_consolidado: List[dict],
     """
     linhas = []
 
-    # Mapa code -> account_type para indicador D/C correto (R5 mitigacao)
-    code_to_type = {c['code']: c['account_type'] for c in plano_consolidado}
-
     for mes_key in sorted(saldos_mensais.keys()):
         mes_dados = saldos_mensais[mes_key]
 
@@ -558,15 +586,32 @@ def construir_I150_I155(saldos_mensais: dict, plano_consolidado: List[dict],
         por_code = mes_dados.get('por_code', {})
         for code in sorted(por_code.keys()):
             sd = por_code[code]
-            account_type = code_to_type.get(code, '')
-            ind_natural = saldo_natural_dc(account_type)
 
-            # Indicador D/C do saldo: depende do sinal vs natureza
+            # V26 (2026-05-16): skip codes zerados (consistencia com filtro CAT 25
+            # aplicado ao I050). Sem isso, I155 emite linhas para codes que foram
+            # excluidos do plano (ex: conta `2.1.03.001.099` "Implantacao Contas a
+            # Pagar" — existe no Odoo mas tem todos os meses zerados), e PVA reclama
+            # "Conta informada deve existir no plano de contas e ser analitica" (5
+            # erros V25 PVA).
+            if (abs(sd.get('saldo_inicial', 0) or 0) < 0.01 and
+                abs(sd.get('debit', 0) or 0) < 0.01 and
+                abs(sd.get('credit', 0) or 0) < 0.01 and
+                abs(sd.get('saldo_final', 0) or 0) < 0.01):
+                continue
+
+            # V22 (2026-05-15): IND_DC derivado do SINAL do balance Odoo, nao do account_type.
+            # Manual ECD Leiaute 9 (validado contra PVA V21): VL_SLD_INI/FIN sempre positivo,
+            # IND_DC indica D (devedor: balance>0) ou C (credor: balance<0). PVA calcula
+            # saldo_fin_assinalado = (+/-)VL_SLD_INI + DEB - CRED e compara com VL_SLD_FIN.
+            # Logica antiga (V1.0..V21) usava ACCOUNT_TYPE_TO_NAT para inverter sinal —
+            # bugava 188 contas onde saldo Odoo era anormal vs natural (ex: 1130600001
+            # 'ADIANTAMENTOS A FORNECEDORES' com account_type=liability_payable mas
+            # balance Odoo positivo +R$3.3M). Ver SPED_ECD_PLANO.md CATEGORIA 3.
             saldo_ini = sd.get('saldo_inicial', 0) or 0
             saldo_fin = sd.get('saldo_final', 0) or 0
 
-            ind_dc_ini = ind_natural if saldo_ini >= 0 else ('C' if ind_natural == 'D' else 'D')
-            ind_dc_fin = ind_natural if saldo_fin >= 0 else ('C' if ind_natural == 'D' else 'D')
+            ind_dc_ini = 'D' if saldo_ini > 0 else ('C' if saldo_ini < 0 else '')
+            ind_dc_fin = 'D' if saldo_fin > 0 else ('C' if saldo_fin < 0 else '')
 
             linhas.append(contador.emit(formatar_registro([
                 'I155',                                        # 1 REG
@@ -651,54 +696,25 @@ def construir_I200_I250(lancamentos_iter: Iterable[dict], _plano_consolidado: Li
             hist = remover_acentos(hist_raw[:600])    # HIST max ~600 chars
             cod_part = ln.get('cod_part', '')
 
-            # V1.2: SPLIT de CCUS — emitir N I250s proporcionais
-            distribuicao = ln.get('ccus_distribuicao') or []
-
             # I250 — Partidas (9 campos conforme Manual ECD Leiaute 9):
             # REG | COD_CTA | COD_CCUS | VL_DC | IND_DC | NUM_ARQ | COD_HIST_PAD | HIST | COD_PART
-            # Bug historico: emitia 8 campos (faltava COD_HIST_PAD entre NUM_ARQ e HIST).
-            if not distribuicao:
-                # Sem CCUS — emitir 1 I250 unico sem COD_CCUS
-                yield contador.emit(formatar_registro([
-                    'I250', code, '', formatar_valor(valor), indicador, '', '', hist, cod_part,
-                ]))
-            elif len(distribuicao) == 1:
-                # 1 CCUS (100%) — emitir 1 I250 com COD_CCUS direto (sem rateio)
-                cod_ccus = distribuicao[0][0]
-                yield contador.emit(formatar_registro([
-                    'I250', code, cod_ccus, formatar_valor(valor), indicador, '', '', hist, cod_part,
-                ]))
-            else:
-                # SPLIT: emitir N I250s com VALORES PROPORCIONAIS
-                # Mitigacao code-review BLOCKER #2: pre-calcula valores e soma == valor.
-                # Pula partidas < 0.01 ANTES de alocar centavos (evita desbalanceio).
-                valores_pre = []
-                soma_pre = 0.0
-                for cod_ccus, pct in distribuicao:
-                    v = round(valor * (pct / 100.0), 2)
-                    if abs(v) < 0.01:
-                        continue  # pula partida insignificante
-                    valores_pre.append((cod_ccus, v))
-                    soma_pre += v
-
-                if not valores_pre:
-                    # Todos centavos seriam < 0.01 — emitir 1 I250 unico com primeiro CCUS
-                    yield contador.emit(formatar_registro([
-                        'I250', code, distribuicao[0][0], formatar_valor(valor),
-                        indicador, '', '', hist, cod_part,
-                    ]))
-                else:
-                    # Re-alocar centavos restantes (valor - soma_pre) ao ULTIMO partida emitida
-                    diff = round(valor - soma_pre, 2)
-                    if abs(diff) >= 0.01:
-                        ult_cod, ult_v = valores_pre[-1]
-                        valores_pre[-1] = (ult_cod, round(ult_v + diff, 2))
-
-                    for cod_ccus, v_partida in valores_pre:
-                        yield contador.emit(formatar_registro([
-                            'I250', code, cod_ccus, formatar_valor(v_partida), indicador, '',
-                            '', hist, cod_part,
-                        ]))
+            #
+            # V1.8 (2026-05-15): SEMPRE emitir 1 I250 SEM COD_CCUS por partida.
+            # Decisao do usuario apos analise PVA V17:
+            #   "No SPED nao vai centro de custo".
+            # Causa raiz V17: NACOM tem 1 plano analitico por filial; o Odoo retorna
+            # analytic_distribution achatado de TODOS os planos. Como cada plano soma
+            # 100%, o achatado somava >100% (ate 500-600%), o split proporcional
+            # multiplicava o valor e o reajuste no ultimo CCUS gerava VL_DC negativo
+            # gigante (Manual ECD: VL_DC deve ser SEMPRE positivo, sinal vem do IND_DC).
+            # PVA rejeitou 13 partidas com erro "Conteudo do campo invalido".
+            #
+            # ccus_distribuicao da line ainda e calculada (sem custo extra) mas
+            # ignorada aqui. Se EMITIR_CCUS_SPED for ligada no futuro, restaurar
+            # logica de split conforme git history (commit anterior a V1.8).
+            yield contador.emit(formatar_registro([
+                'I250', code, '', formatar_valor(valor), indicador, '', '', hist, cod_part,
+            ]))
 
 
 def construir_I350_I355(saldos_resultado: dict, plano_consolidado: List[dict],
@@ -827,8 +843,76 @@ def calcular_saldos_hierarquicos(
     return saldos
 
 
+def _balanco_a_partir_de_saldos_mensais(saldos_mensais: dict,
+                                          plano_consolidado: List[dict]) -> dict:
+    """
+    V23 (CAT 23) — Deriva balanco analiticas a partir de `saldos_mensais` do I155.
+
+    Garante que J100 (Balanco Patrimonial) use exatamente os mesmos saldos do
+    I155 (Saldos Periodicos), conforme exigido pelo PVA.
+
+    Returns:
+        dict {code: {'saldo_inicial', 'saldo_final', 'account_type', 'name'}}
+            saldo_inicial = saldo_inicial do PRIMEIRO mes do periodo (cronologico)
+            saldo_final   = saldo_final do ULTIMO mes do periodo (cronologico)
+    """
+    if not saldos_mensais:
+        return {}
+
+    meses_ordenados = sorted(saldos_mensais.keys())
+    primeiro_mes = saldos_mensais[meses_ordenados[0]]
+    ultimo_mes = saldos_mensais[meses_ordenados[-1]]
+
+    por_code_ini = primeiro_mes.get('por_code', {})
+    por_code_fin = ultimo_mes.get('por_code', {})
+
+    code_to_at = {c['code']: c.get('account_type', '') for c in plano_consolidado}
+    code_to_name = {c['code']: c.get('name', '') for c in plano_consolidado}
+
+    # Conjunto de codes que aparecem em qualquer um dos dois meses
+    all_codes = set(por_code_ini.keys()) | set(por_code_fin.keys())
+
+    balanco = {}
+    for code in all_codes:
+        saldo_ini = (por_code_ini.get(code, {}) or {}).get('saldo_inicial', 0) or 0
+        saldo_fin = (por_code_fin.get(code, {}) or {}).get('saldo_final', 0) or 0
+        balanco[code] = {
+            'saldo_inicial': saldo_ini,
+            'saldo_final': saldo_fin,
+            'account_type': code_to_at.get(code, ''),
+            'name': code_to_name.get(code, ''),
+        }
+
+    return balanco
+
+
+def construir_J005_unico(params: dict, contador: ContadorRegistros) -> str:
+    """
+    V29 (2026-05-16) — fix CAT 22 (J005 sem par J100+J150):
+
+    Emite 1 unico J005 com ID_DEM=1 e CAB_DEM vazio, cobrindo BP+DRE juntos.
+    Padrao confirmado no SPED da contadora (ground truth aceito pela RFB):
+        |J005|01012024|31122024|1||
+
+    Bug V28 e anteriores: emitia 2 J005 separados (ID_DEM=1 BP + ID_DEM=2 DRE).
+    PVA reclamava "Deve existir pelo menos 1 J100 (Balanco) e 1 J150 (DRE)
+    para cada J005" — porque cada J005 separado nao tinha o outro tipo.
+
+    Layout J005 5 campos (Manual ECD Leiaute 9):
+        REG | DT_INI | DT_FIN | ID_DEM | CAB_DEM
+    """
+    return contador.emit(formatar_registro([
+        'J005',                                                # 1 REG
+        formatar_data(params['date_ini']),                     # 2 DT_INI
+        formatar_data(params['date_fim']),                     # 3 DT_FIN
+        '1',                                                   # 4 ID_DEM (1 — cobre BP+DRE como contadora)
+        '',                                                    # 5 CAB_DEM (vazio — padrao contadora)
+    ]))
+
+
 def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict],
-                        params: dict, contador: ContadorRegistros) -> List[str]:
+                        params: dict, contador: ContadorRegistros,
+                        saldos_mensais: dict = None) -> List[str]:
     """
     Balanco Patrimonial: J005 (cabecalho BP) + J100 (linhas).
 
@@ -840,24 +924,45 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
 
     Saldos INICIAIS agora preenchidos (vinha 0,00).
 
+    V23 (2026-05-16) — fix CAT 23 (J100 saldos != I155):
+    Quando `saldos_mensais` e passado, deriva o balanco do I155 em vez de usar
+    `balanco_consolidado`. PVA exige consistencia interna entre J100 e I155 — se
+    saldos diferem, reporta "J100.VL_CTA_FIN/INI != saldo calculado I155".
+    Apos fix CAT 3 (V22), I155 ficou correto (IND_DC pelo sinal do balance),
+    mas J100 continuava com saldo legado divergente. Esta correcao alinha as
+    duas fontes: saldo_inicial = primeiro mes (1o.07) saldo_inicial,
+    saldo_final = ultimo mes (12/2024) saldo_final.
+
     Args:
-        balanco_consolidado: dict {code: {'saldo_inicial', 'saldo_final', 'account_type'}}
-                             ja com saldo inicial calculado (calcular_balanco_consolidado).
+        balanco_consolidado: dict legado {code: {'saldo_inicial', 'saldo_final', 'account_type'}}.
+                             Usado apenas se `saldos_mensais` for None.
         plano_consolidado: lista com sinteticas+analiticas com hierarquia (cod_sup, nivel).
+        saldos_mensais: dict {YYYY-MM: {por_code: {code: {saldo_inicial, saldo_final, ...}}}}
+                        Se passado, sobrescreve balanco_consolidado.
     """
     linhas = []
 
-    # J005 — Cabecalho da Demonstracao (1 = BP)
-    linhas.append(contador.emit(formatar_registro([
-        'J005',                                                # 1 REG
-        formatar_data(params['date_ini']),                     # 2 DT_INI
-        formatar_data(params['date_fim']),                     # 3 DT_FIN
-        '1',                                                   # 4 ID_DEM (1=BP)
-        remover_acentos('BALANCO PATRIMONIAL'),                # 5 CAB_DEM
-    ])))
+    # V29 (2026-05-16): J005 NAO mais emitido aqui. Emitido em service.py via
+    # construir_J005_unico (1 J005 ID_DEM=1 cobre BP+DRE — padrao contadora aceito RFB).
+    # Bug V28 PVA: "Deve existir 1 J100 e 1 J150 para cada J005" quando emitia 2 J005.
+
+    # V23: derivar balanco analiticas dos saldos mensais (consistencia com I155)
+    balanco_fonte = balanco_consolidado
+    if saldos_mensais:
+        balanco_fonte = _balanco_a_partir_de_saldos_mensais(saldos_mensais, plano_consolidado)
+        # Log diff para diagnostico (so contas com diferenca relevante)
+        if balanco_consolidado:
+            diffs = 0
+            for code, novo in balanco_fonte.items():
+                antigo = balanco_consolidado.get(code, {})
+                d_ini = abs(float(novo.get('saldo_inicial', 0) or 0) - float(antigo.get('saldo_inicial', 0) or 0))
+                d_fin = abs(float(novo.get('saldo_final', 0) or 0) - float(antigo.get('saldo_final', 0) or 0))
+                if d_ini > 0.01 or d_fin > 0.01:
+                    diffs += 1
+            logger.info(f'[J100 V23] Balanco derivado de I155 substitui balanco_consolidado em {diffs} codes (consistencia PVA).')
 
     # V1.6: calcular saldos hierarquicos (sintetica = soma das analiticas filhas)
-    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco_consolidado, plano_consolidado)
+    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco_fonte, plano_consolidado)
 
     # Heuristica de classificacao por code (para sinteticas sem account_type)
     def _classe_pelo_code(code: str) -> str:
@@ -921,7 +1026,7 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
         if abs(s['saldo_inicial']) < 0.01 and abs(s['saldo_final']) < 0.01:
             continue
 
-        # Determinar IND_GRP_BAL (A=Ativo, P=Passivo+PL)
+        # Determinar IND_GRP_BAL (A=Ativo, P=Passivo+PL) + natural fallback p/ saldo=0
         classe = _classe_da_conta(conta)
         if classe == 'asset':
             ind_grp = IND_GRP_BAL_ATIVO
@@ -933,14 +1038,21 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
         # IND_COD_AGL: T se sintetica, D se analitica
         ind_cod_agl = IND_COD_AGL_TOTAL if conta.get('tipo') == 'S' else IND_COD_AGL_DETALHE
 
-        # IND_DC baseado em sinal (saldo negativo inverte natureza)
-        def _ind_dc(saldo, natural):
-            if saldo >= 0:
-                return natural
-            return 'C' if natural == 'D' else 'D'
+        # V23 (CAT 23): IND_DC pelo SINAL do balance (consistente com I155 fix CAT 3 V22).
+        # V24 (2026-05-16) fix: quando saldo == 0, usar natureza (D para Ativo, C para
+        # Passivo/PL). PVA rejeita IND_DC vazio em J100 ("Campo obrigatorio nao preenchido"
+        # IND_DC_BAL_I/F) — 35 erros V23 vieram de contas com saldo inicial 0 ou final 0.
+        # Antes V22 a logica antiga (natural com inversao) sempre retornava D ou C,
+        # protegendo implicitamente esse caso.
+        def _ind_dc_v24(saldo, natural):
+            if saldo > 0:
+                return 'D'
+            if saldo < 0:
+                return 'C'
+            return natural
 
-        ind_dc_ini = _ind_dc(s['saldo_inicial'], ind_dc_natural)
-        ind_dc_fin = _ind_dc(s['saldo_final'], ind_dc_natural)
+        ind_dc_ini = _ind_dc_v24(s['saldo_inicial'], ind_dc_natural)
+        ind_dc_fin = _ind_dc_v24(s['saldo_final'], ind_dc_natural)
 
         linhas.append(contador.emit(formatar_registro([
             'J100',                                            # 1 REG
@@ -960,28 +1072,46 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
     return linhas
 
 
-def construir_J005_J150(dre_consolidado: dict, params: dict,
-                         contador: ContadorRegistros) -> List[str]:
+# V28 (CAT 5/20 fix 2026-05-16): Mapeamento account_type Odoo -> COD_AGL detalhe DRE
+# (codes numericos hierarquicos no formato N.N.N — Manual ECD Leiaute 9 J150).
+# Cada conta analitica de resultado e mapeada para um COD_AGL detalhe (nivel 3),
+# que e o COD_AGL_SUP do nivel 2 (T), que por sua vez tem COD_AGL_SUP='9' (raiz nivel 1).
+# Ref: SPED da contadora (ground truth aceito RFB) usa estrutura semelhante (codes
+# hierarquicos 9.x.y.z com COD_AGL_SUP populado).
+DRE_ACCOUNT_TYPE_TO_COD_AGL = {
+    'income':              '9.1.1',  # RECEITA OPERACIONAL BRUTA
+    'income_other':        '9.1.2',  # OUTRAS RECEITAS
+    'expense_direct_cost': '9.2.1',  # CUSTO DIRETO DAS VENDAS
+    'expense':             '9.2.2',  # DESPESAS OPERACIONAIS
+    'expense_depreciation':'9.2.3',  # DEPRECIACAO E AMORTIZACAO
+}
+
+
+def _calcular_grupos_dre_hierarquicos(dre_consolidado: dict):
     """
-    DRE: J005 (cabecalho DRE) + J150 (linhas).
+    V28 (CAT 5/20 fix 2026-05-16): calcula grupos DRE em hierarquia explicita
+    e mapa de I052 (cada conta analitica de resultado -> COD_AGL detalhe DRE).
 
-    Mitigacao R9: ordem dos campos correta + NU_ORDEM funcional (Receitas, Custos, Despesas).
-    Mitigacao R15: J005 com ID_DEM='2' (DRE).
+    Estrutura (Manual ECD Leiaute 9 J150 — codes numericos hierarquicos):
 
-    dre_consolidado: dict {code: {'saldo': X, 'account_type': Y, 'name': Z}}
+        9       T  1   -      RESULTADO DO EXERCICIO   (raiz unica - resultado liquido)
+        9.1     T  2   9      RECEITAS
+        9.1.1   D  3   9.1    RECEITA OPERACIONAL BRUTA       <- I052 vincula `income`
+        9.1.2   D  3   9.1    OUTRAS RECEITAS                  <- I052 vincula `income_other`
+        9.2     T  2   9      CUSTOS E DESPESAS
+        9.2.1   D  3   9.2    CUSTO DIRETO DAS VENDAS         <- I052 vincula `expense_direct_cost`
+        9.2.2   D  3   9.2    DESPESAS OPERACIONAIS           <- I052 vincula `expense`
+        9.2.3   D  3   9.2    DEPRECIACAO E AMORTIZACAO       <- I052 vincula `expense_depreciation`
+
+    Soma com sinal: nivel 1 = +9.1 (C) + 9.2 (D, computa negativo) = resultado_liquido.
+
+    Returns:
+        (grupos, mapa_i052):
+            grupos: List[Tuple[cod_agl, descr, valor, ind_dc, ind_grp_dre, nivel, cod_sup, is_total]]
+            mapa_i052: Dict[code_conta_analitica, cod_agl_detalhe_dre]
+                       (cada conta analitica de resultado mapeada para 1 code DRE detalhe)
     """
-    linhas = []
-
-    # J005 — Cabecalho DRE
-    linhas.append(contador.emit(formatar_registro([
-        'J005',                                                # 1 REG
-        formatar_data(params['date_ini']),                     # 2 DT_INI
-        formatar_data(params['date_fim']),                     # 3 DT_FIN
-        '2',                                                   # 4 ID_DEM (2=DRE)
-        remover_acentos('DEMONSTRACAO DO RESULTADO DO EXERCICIO'),  # 5 CAB_DEM
-    ])))
-
-    # Calcular agrupamentos por funcao DRE
+    # Agrupamentos por account_type
     receita_bruta = sum(
         abs(s['saldo']) for s in dre_consolidado.values()
         if s.get('account_type') == 'income'
@@ -1007,39 +1137,82 @@ def construir_J005_J150(dre_consolidado: dict, params: dict,
     despesa_total = custo_direto + despesa_geral + despesa_deprec
     resultado_liquido = receita_total - despesa_total
 
-    # J150 — em ordem funcional DRE (13 campos conforme Manual ECD Leiaute 9)
-    # Layout: REG | NU_ORDEM | COD_AGL | IND_COD_AGL | NIVEL_AGL | COD_AGL_SUP |
-    #         DESCR_COD_AGL | VL_CTA_INI | IND_DC_CTA_INI | VL_CTA_FIN |
-    #         IND_DC_CTA_FIN | IND_GRP_DRE | NOTA_EXP_REF
-    # Bug historico: emitia 10 campos com ordem ERRADA (COD_AGL como NU_ORDEM,
-    # 'P'/'A' como IND_GRP_DRE — oficial e 'D'/'R'). PVA reprovava o bloco J inteiro.
-    nu_ordem = 1
-    # Tupla: (cod_agl, descr, valor, ind_dc, ind_grp_dre)
-    # IND_GRP_DRE: R=Receita, D=Despesa (oficial Leiaute 9)
-    grupos_dre = [
-        ('DRE_REC_BRUTA', 'RECEITA OPERACIONAL BRUTA', receita_bruta, 'C', 'R'),
-        ('DRE_REC_OUTRAS', 'OUTRAS RECEITAS', receita_outras, 'C', 'R'),
-        ('DRE_REC_TOTAL', 'RECEITA TOTAL', receita_total, 'C', 'R'),
-        ('DRE_CUSTO_DIR', 'CUSTO DIRETO DAS VENDAS', custo_direto, 'D', 'D'),
-        ('DRE_DESP_GERAL', 'DESPESAS OPERACIONAIS', despesa_geral, 'D', 'D'),
-        ('DRE_DESP_DEPREC', 'DEPRECIACAO E AMORTIZACAO', despesa_deprec, 'D', 'D'),
-        ('DRE_DESP_TOTAL', 'CUSTOS E DESPESAS TOTAIS', despesa_total, 'D', 'D'),
-        ('DRE_RESULT_LIQ', 'RESULTADO LIQUIDO DO EXERCICIO',
-         abs(resultado_liquido), 'C' if resultado_liquido >= 0 else 'D',
-         'R' if resultado_liquido >= 0 else 'D'),
+    # (cod_agl, descr, valor, ind_dc, ind_grp_dre, nivel, cod_sup, is_total)
+    grupos = [
+        # Nivel 1 (T) — raiz unica, resultado liquido
+        ('9', 'RESULTADO DO EXERCICIO',
+         abs(resultado_liquido),
+         'C' if resultado_liquido >= 0 else 'D',
+         'R' if resultado_liquido >= 0 else 'D',
+         1, '', True),
+        # Nivel 2 (T) — Receitas
+        ('9.1', 'RECEITAS', receita_total, 'C', 'R', 2, '9', True),
+        # Nivel 3 (D) — Receitas detalhe
+        ('9.1.1', 'RECEITA OPERACIONAL BRUTA', receita_bruta, 'C', 'R', 3, '9.1', False),
+        ('9.1.2', 'OUTRAS RECEITAS', receita_outras, 'C', 'R', 3, '9.1', False),
+        # Nivel 2 (T) — Custos e Despesas
+        ('9.2', 'CUSTOS E DESPESAS', despesa_total, 'D', 'D', 2, '9', True),
+        # Nivel 3 (D) — Custos e Despesas detalhe
+        ('9.2.1', 'CUSTO DIRETO DAS VENDAS', custo_direto, 'D', 'D', 3, '9.2', False),
+        ('9.2.2', 'DESPESAS OPERACIONAIS', despesa_geral, 'D', 'D', 3, '9.2', False),
+        ('9.2.3', 'DEPRECIACAO E AMORTIZACAO', despesa_deprec, 'D', 'D', 3, '9.2', False),
     ]
 
-    for cod_agl, descr, valor, ind_dc, ind_grp_dre in grupos_dre:
-        if abs(valor) < 0.01:
+    # Mapa I052: cada conta analitica de resultado -> COD_AGL detalhe DRE
+    mapa_i052 = {
+        code: DRE_ACCOUNT_TYPE_TO_COD_AGL[s.get('account_type')]
+        for code, s in dre_consolidado.items()
+        if s.get('account_type') in DRE_ACCOUNT_TYPE_TO_COD_AGL
+    }
+
+    return grupos, mapa_i052
+
+
+def construir_J005_J150(dre_consolidado: dict, params: dict,
+                         contador: ContadorRegistros) -> List[str]:
+    """
+    DRE: J005 (cabecalho DRE) + J150 (linhas).
+
+    V28 (CAT 5/20 fix 2026-05-16): hierarquia explicita 3 niveis com COD_AGL_SUP
+    populado. 1 raiz nivel 1 ('9' RESULTADO DO EXERCICIO). Codes detalhe (D) sao
+    vinculados via I052 em `construir_I050_com_I051` (parametro `mapa_aglutinacao_dre`).
+
+    Bug historico V27 e anteriores:
+    - 2 linhas NIVEL_AGL=1 (PVA reclama "Nao deve existir mais de uma linha nivel 1")
+    - COD_AGL_SUP vazio em TODAS as linhas (PVA reclama "Nao existe registro
+      com cod_agl=cod_agl_sup", "So totalizadora pode ser sup")
+    - is_total via string match BUGADO: `'TOTAL' in 'CUSTOS E DESPESAS TOTAIS'`
+      retorna False (substring 'TOTAL' nao bate em 'TOTAIS')
+    - Codes detalhe sem I052 (PVA reclama "code detalhe deve estar em pelo menos
+      1 I052")
+
+    Layout J150 13 campos (Manual ECD Leiaute 9):
+        REG | NU_ORDEM | COD_AGL | IND_COD_AGL | NIVEL_AGL | COD_AGL_SUP |
+        DESCR_COD_AGL | VL_CTA_INI | IND_DC_CTA_INI | VL_CTA_FIN |
+        IND_DC_CTA_FIN | IND_GRP_DRE | NOTA_EXP_REF
+
+    dre_consolidado: dict {code: {'saldo': X, 'account_type': Y, 'name': Z}}
+    """
+    linhas = []
+
+    # V29 (2026-05-16): J005 NAO mais emitido aqui. Emitido em service.py via
+    # construir_J005_unico (1 J005 ID_DEM=1 cobre BP+DRE — padrao contadora aceito RFB).
+
+    grupos, _mapa = _calcular_grupos_dre_hierarquicos(dre_consolidado)
+
+    nu_ordem = 1
+    for cod_agl, descr, valor, ind_dc, ind_grp_dre, nivel, cod_sup, is_total in grupos:
+        # Skip grupos com valor zero (mas SEMPRE emitir raiz nivel 1 mesmo zerada
+        # para PVA validar estrutura: "deve existir linha nivel 1")
+        if abs(valor) < 0.01 and nivel != 1:
             continue
-        is_total = 'TOTAL' in descr or 'LIQ' in descr
         linhas.append(contador.emit(formatar_registro([
             'J150',                                            # 1  REG
             str(nu_ordem),                                     # 2  NU_ORDEM (numero!)
             cod_agl,                                           # 3  COD_AGL
             IND_COD_AGL_TOTAL if is_total else IND_COD_AGL_DETALHE,  # 4 IND_COD_AGL (T/D)
-            '1' if is_total else '2',                          # 5  NIVEL_AGL
-            '',                                                # 6  COD_AGL_SUP
+            str(nivel),                                        # 5  NIVEL_AGL
+            cod_sup,                                           # 6  COD_AGL_SUP (V28: hierarquia explicita)
             remover_acentos(descr),                            # 7  DESCR_COD_AGL
             '',                                                # 8  VL_CTA_INI (vazio — sem saldo anterior)
             '',                                                # 9  IND_DC_CTA_INI (vazio)
@@ -1128,12 +1301,12 @@ def construir_J930(params: dict, contador: ContadorRegistros) -> List[str]:
         CONTADOR_CPF,                                          # 3 IDENT_CPF_CNPJ (CPF fixo - 41832597890)
         'CONTADOR',                                            # 4 IDENT_QUALIF (texto)
         QUALIFICACAO_CONTADOR,                                 # 5 COD_ASSIN (900=Contabilista, 3 digits)
-        CONTADOR_CRC,                                          # 6 IND_CRC (1SP041472)
+        CONTADOR_CRC,                                          # 6 IND_CRC (SP-1303041/O-9)
         CONTADOR_EMAIL,                                        # 7 EMAIL (fixo)
-        '',                                                    # 8 FONE (opcional)
+        CONTADOR_FONE,                                         # 8 FONE (V1.9: 1147059494 — obrigatorio para COD_ASSIN=900)
         CONTADOR_UF_CRC,                                       # 9 UF_CRC (SP)
         CONTADOR_NUM_SEQ_CRC,                                  # 10 NUM_SEQ_CRC (SP/2026/041472 COMPLETO)
-        '',                                                    # 11 DT_CRC (DDMMAAAA - opcional)
+        CONTADOR_DT_CRC,                                       # 11 DT_CRC (V1.9: 06072026 — obrigatorio para COD_ASSIN=900)
         'N',                                                   # 12 IND_RESP_LEGAL (N = Contador NAO e resp. legal)
     ])))
 

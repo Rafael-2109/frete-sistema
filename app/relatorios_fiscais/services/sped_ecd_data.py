@@ -121,18 +121,18 @@ def buscar_dados_matriz(connection) -> dict:
             else:
                 nome_municipio = display.strip()
 
-        # Tentar IBGE (modelo nao existe na CIEL IT — falha silenciosamente)
+        # Buscar codigo IBGE no modelo CIEL IT (l10n_br_ciel_it_account.res.municipio)
         try:
             mun_list = connection.execute_kw(
-                'l10n_br_base.municipio', 'read',
+                'l10n_br_ciel_it_account.res.municipio', 'read',
                 [[municipio_field[0]]],
-                {'fields': ['l10n_br_ibge_code']},
+                {'fields': ['codigo_ibge']},
                 timeout_override=TIMEOUT_QUERY_SIMPLES,
             )
             if mun_list:
-                cod_mun = mun_list[0].get('l10n_br_ibge_code', '') or ''
+                cod_mun = str(mun_list[0].get('codigo_ibge', '') or '')
         except Exception as e:
-            logger.warning(f'Erro ao buscar IBGE matriz (modelo pode nao existir): {e}')
+            logger.warning(f'Erro ao buscar IBGE matriz: {e}')
 
     # CNPJ sem mascara
     cnpj_raw = co.get('l10n_br_cnpj') or ''
@@ -248,6 +248,85 @@ def buscar_plano_contas_consolidado(
     plano_completo = _gerar_hierarquia_sintetica(plano_dedupe)
 
     return plano_completo, id_to_code
+
+
+def filtrar_plano_por_movimento(plano_consolidado: List[dict],
+                                  saldos_mensais: dict) -> List[dict]:
+    """
+    V25 (CAT 25) — Filtra o plano para emitir SO contas utilizadas no periodo.
+
+    Manual ECD Leiaute 9 (Registro I050): "Devem ser informadas as contas
+    analiticas UTILIZADAS pela escrituracao no periodo."
+
+    Utilizada = em algum mes do periodo:
+        - saldo_inicial != 0, OU
+        - debit > 0, OU
+        - credit > 0, OU
+        - saldo_final != 0
+
+    Sinteticas: mantidas SO se tiverem alguma analitica descendente utilizada
+    (propagacao via cod_sup ate raiz).
+
+    Reduz ruido PVA: contas zeradas/inativas com cadastro Odoo errado (cod_ref,
+    cod_nat conflitante) deixam de gerar erros CAT 2, 19, 21, 22.
+
+    Comparativo (Odoo NACOM 2024 Jul-Dez):
+        Total codes plano: 692
+        Codes COM movimento: 293 (similar ao SPED da contadora: 291 analiticas)
+        Codes SEM movimento (filtrados): 399
+
+    Args:
+        plano_consolidado: plano completo (analiticas + sinteticas geradas)
+        saldos_mensais: dict {YYYY-MM: {'por_code': {code: {saldo_inicial, debit, credit, saldo_final}}}}
+
+    Returns:
+        plano filtrado (mesma estrutura, com analiticas utilizadas + sinteticas necessarias)
+    """
+    if not saldos_mensais:
+        return plano_consolidado
+
+    # 1. Identificar codes ANALITICOS utilizados
+    codes_utilizados = set()
+    for mes in saldos_mensais.values():
+        for code, sd in (mes.get('por_code') or {}).items():
+            if (abs(sd.get('saldo_inicial', 0) or 0) > 0.01 or
+                abs(sd.get('debit', 0) or 0) > 0.01 or
+                abs(sd.get('credit', 0) or 0) > 0.01 or
+                abs(sd.get('saldo_final', 0) or 0) > 0.01):
+                codes_utilizados.add(code)
+
+    plano_by_code = {c['code']: c for c in plano_consolidado}
+
+    # 2. Propagar para sinteticas ancestrais (qualquer code ancestral de analitica utilizada)
+    sinteticas_validas = set()
+    for code in codes_utilizados:
+        c = plano_by_code.get(code, {})
+        cur = c.get('cod_sup', '')
+        visitados = set()
+        while cur and cur not in visitados:
+            visitados.add(cur)
+            sinteticas_validas.add(cur)
+            sup = plano_by_code.get(cur, {})
+            cur = sup.get('cod_sup', '')
+
+    # 3. Filtrar plano: analiticas utilizadas + sinteticas com filhas utilizadas
+    plano_filtrado = [
+        c for c in plano_consolidado
+        if (c.get('tipo') == 'A' and c['code'] in codes_utilizados) or
+           (c.get('tipo') == 'S' and c['code'] in sinteticas_validas)
+    ]
+
+    n_anal_total = sum(1 for c in plano_consolidado if c.get('tipo') == 'A')
+    n_anal_filtrado = sum(1 for c in plano_filtrado if c.get('tipo') == 'A')
+    n_sint_total = sum(1 for c in plano_consolidado if c.get('tipo') == 'S')
+    n_sint_filtrado = sum(1 for c in plano_filtrado if c.get('tipo') == 'S')
+    logger.info(
+        f'[SPED ECD V25] Plano filtrado por movimento: '
+        f'analiticas {n_anal_total} -> {n_anal_filtrado} (-{n_anal_total - n_anal_filtrado}), '
+        f'sinteticas {n_sint_total} -> {n_sint_filtrado} (-{n_sint_total - n_sint_filtrado})'
+    )
+
+    return plano_filtrado
 
 
 def _gerar_hierarquia_sintetica(plano_analiticas: Dict[str, dict]) -> List[dict]:
@@ -641,15 +720,68 @@ def calcular_saldos_resultado_encerramento(
     """
     Saldos das contas de resultado ANTES do encerramento (I355).
     Apenas se date_fim = 31/12 (encerramento). Mitigacao R7.
+
+    V27 (CAT 17 fix 2026-05-16): filtrar por `l10n_br_cod_nat` (Odoo) em
+    {'04', '05', '07'} — natureza Resultado conforme Manual ECD Leiaute 9 I050
+    campo 3 (COD_NAT). Isso garante consistencia entre COD_NAT emitido no I050
+    e contas elegiveis para I355: PVA exige que toda conta em I355 tenha
+    natureza de Resultado declarada no I050.
+
+    Antes V26 usava `account_type in ACCOUNT_TYPES_RESULTADO` (via `calcular_dre_consolidado`)
+    — esse filtro nao alinha com o COD_NAT emitido (que usa `cod_nat_odoo`), gerando
+    9 contas patrimoniais (codes 1xxx/2xxx com account_type=expense/liability_payable)
+    sendo emitidas no I355 indevidamente — PVA reclamava 9x "saldo zero" + 9x
+    "saldo antes encerramento != lancamentos" (18 erros total).
+
+    Nao usa fallback — apenas o campo Odoo `l10n_br_cod_nat`. Contas com
+    `cod_nat_odoo` vazio nao entram em I355 (problema cadastral Odoo, nao do gerador).
     """
     if not (date_fim.month == 12 and date_fim.day == 31):
         return {}
 
-    # Acumulado do exercicio (1/1 a 31/12) para contas de resultado
     date_ini_exercicio = date(date_fim.year, 1, 1)
-    return calcular_dre_consolidado(connection, date_ini_exercicio, date_fim,
-                                     plano_consolidado, id_to_code,
-                                     companies=companies)
+
+    # Movimentos do exercicio (1/1 a 31/12) — apenas contas com natureza Resultado
+    movs = _read_group_balance(
+        connection,
+        domain_extra=[
+            ['date', '>=', date_ini_exercicio.strftime('%Y-%m-%d')],
+            ['date', '<=', date_fim.strftime('%Y-%m-%d')],
+        ],
+        with_debit_credit=True,
+        companies=companies,
+    )
+
+    # V27: filtrar plano por cod_nat_odoo (consistencia com I050 COD_NAT)
+    # 04=Receita, 05=Custo/Despesa, 07=Resultado (Manual ECD Leiaute 9)
+    CODES_NAT_RESULTADO = {'04', '05', '07'}
+    code_to_dados = {
+        c['code']: c for c in plano_consolidado
+        if c.get('tipo') == 'A'
+        and (c.get('cod_nat_odoo') or '').strip() in CODES_NAT_RESULTADO
+    }
+
+    saldos = {}
+    for tupla in movs:
+        acc_id, _debit, _credit, balance_val = tupla
+        code = id_to_code.get(acc_id)
+        if not code or code not in code_to_dados:
+            continue
+        dados = code_to_dados[code]
+        slot = saldos.setdefault(code, {
+            'code': code,
+            'name': dados['name'],
+            'account_type': dados['account_type'],
+            'cod_nat_odoo': dados.get('cod_nat_odoo', ''),
+            'saldo': 0,
+        })
+        slot['saldo'] += balance_val
+
+    logger.info(
+        f'[SPED ECD V27] I355: {len(code_to_dados)} codes elegiveis (cod_nat in 04/05/07), '
+        f'{len(saldos)} com movimento no exercicio'
+    )
+    return saldos
 
 
 # ============================================================
@@ -822,11 +954,11 @@ def buscar_participantes_periodo(
     if mun_ids_set:
         try:
             mun_lote = connection.execute_kw(
-                'l10n_br_base.municipio', 'read', [list(mun_ids_set)],
-                {'fields': ['id', 'l10n_br_ibge_code']},
+                'l10n_br_ciel_it_account.res.municipio', 'read', [list(mun_ids_set)],
+                {'fields': ['id', 'codigo_ibge']},
                 timeout_override=TIMEOUT_QUERY_SIMPLES,
             )
-            cod_mun_cache = {m['id']: (m.get('l10n_br_ibge_code') or '') for m in mun_lote}
+            cod_mun_cache = {m['id']: str(m.get('codigo_ibge') or '') for m in mun_lote}
         except Exception as e:
             logger.warning(f'[SPED ECD] Erro batch read municipios: {e}')
 

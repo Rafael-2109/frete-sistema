@@ -355,14 +355,42 @@ class SpedEcdValidator:
 
             codes_emitidos.add(cod_cta)
 
-        # Regra: I250 IND_DC ∈ {D, C}
+        # Regras I250 (estrutura e dominio)
+        # Layout: REG | COD_CTA | COD_CCUS | VL_DC | IND_DC | NUM_ARQ | COD_HIST_PAD | HIST | COD_PART
         for r in self._registros_de_tipo('I250'):
             campos = r['campos']
+
+            # Regra: IND_DC ∈ {D, C}
             if len(campos) >= 5 and campos[4] not in self.IND_DC_VALIDOS:
                 self._add_erro('estrutura', 'BLOQUEANTE',
                     f'I250 IND_DC "{campos[4]}" invalido',
                     'Validos: D (Debito) ou C (Credito)',
                     registro='I250', linha_arquivo=r['linha'])
+
+            # Regra V1.8: VL_DC deve ser SEMPRE positivo (Manual ECD Leiaute 9).
+            # Sinal vem do IND_DC, NUNCA do valor. PVA reprova com "Conteudo do
+            # campo invalido" — bug historico V17 (13 erros bloqueantes).
+            # Causa raiz: split CCUS sobre distribuicao analitica com soma > 100%.
+            # Esta regra trava regressao antes do PVA.
+            if len(campos) >= 4:
+                try:
+                    vl_dc = float(campos[3].replace(',', '.'))
+                    if vl_dc < 0:
+                        self._add_erro('estrutura', 'BLOQUEANTE',
+                            f'I250 VL_DC negativo: "{campos[3]}"',
+                            'Manual ECD: VL_DC deve ser SEMPRE positivo. '
+                            'Sinal vem do campo IND_DC (D/C), nunca do valor.',
+                            registro='I250', linha_arquivo=r['linha'],
+                            contexto={
+                                'cod_cta': campos[1] if len(campos) > 1 else '',
+                                'cod_ccus': campos[2] if len(campos) > 2 else '',
+                                'vl_dc_raw': campos[3],
+                                'hist': campos[7][:80] if len(campos) > 7 else '',
+                            },
+                            acao='Verificar logica de emissao em construir_I200_I250. '
+                                 'V1.8 emite I250 sem CCUS por padrao para evitar split com soma >100%.')
+                except (ValueError, AttributeError):
+                    pass  # Formato invalido sera capturado por outras regras
 
     # ============================================================
     # BLOCO J
@@ -374,18 +402,15 @@ class SpedEcdValidator:
         regs_j150 = self._registros_de_tipo('J150')
         regs_j930 = self._registros_de_tipo('J930')
 
-        # Regra: pelo menos 2 J005 (BP + DRE) — campo 4 (idx 3) e ID_DEM
+        # V29 (2026-05-16): regra revisada — 1 unico J005 com ID_DEM=1 cobre BP+DRE
+        # juntos (padrao contadora aceito RFB). Antes V28 emitia 2 J005 separados,
+        # mas PVA reclamava "Deve existir 1 J100 e 1 J150 para cada J005".
         ids_dem = {r['campos'][3] for r in regs_j005 if len(r['campos']) >= 4}
         if '1' not in ids_dem:
             self._add_erro('estrutura', 'BLOQUEANTE',
-                'J005 com ID_DEM=1 (Balanco Patrimonial) ausente',
-                'Cada arquivo SPED ECD deve ter J005 para BP (ID_DEM=1) seguido de J100s',
-                acao='Verificar construir_J005_J100 em blocks.py')
-        if '2' not in ids_dem:
-            self._add_erro('estrutura', 'BLOQUEANTE',
-                'J005 com ID_DEM=2 (DRE) ausente',
-                'Cada arquivo SPED ECD deve ter J005 para DRE (ID_DEM=2) seguido de J150s',
-                acao='Verificar construir_J005_J150 em blocks.py')
+                'J005 com ID_DEM=1 (Balanco+DRE) ausente',
+                'Arquivo SPED ECD deve ter 1 J005 com ID_DEM=1 cobrindo BP+DRE (padrao contadora)',
+                acao='Verificar construir_J005_unico em blocks.py')
 
         # Regra: J100 IND_GRP_BAL ∈ {A, P}
         ativo_total_fin = 0.0

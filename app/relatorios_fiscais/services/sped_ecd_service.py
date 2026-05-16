@@ -25,7 +25,9 @@ from app.relatorios_fiscais.services.sped_ecd_blocks import (
     construir_0150,
     construir_bloco_0,
     construir_bloco_9,
+    _calcular_grupos_dre_hierarquicos,
     construir_I050_com_I051,
+    construir_J005_unico,
     construir_I100,
     construir_I150_I155,
     construir_I200_I250,
@@ -41,6 +43,7 @@ from app.relatorios_fiscais.services.sped_ecd_blocks import (
     construir_bloco_I_abertura,
 )
 from app.relatorios_fiscais.services.sped_ecd_constantes import (
+    EMITIR_CCUS_SPED,
     S3_PREFIX_ECD,
 )
 from app.relatorios_fiscais.services.sped_ecd_data import (
@@ -52,6 +55,7 @@ from app.relatorios_fiscais.services.sped_ecd_data import (
     calcular_dre_consolidado,
     calcular_saldos_periodicos_mensais,
     calcular_saldos_resultado_encerramento,
+    filtrar_plano_por_movimento,
     stream_lancamentos_consolidados_v11,
 )
 
@@ -122,6 +126,15 @@ def gerar_sped_ecd_centralizado(
         companies=companies,
     )
 
+    # V25 (CAT 25 2026-05-16): filtrar plano para emitir SO contas utilizadas no
+    # periodo. Manual ECD I050 exige contas "utilizadas pela escrituracao no
+    # periodo" — emitir contas zeradas/inativas com cadastro Odoo errado gera
+    # ruido PVA (CAT 2, 19, 21, 22). Mantemos `plano_consolidado` original para
+    # outras funcoes (calcular_balanco_consolidado etc), e usamos filtrado em
+    # construir_I050_com_I051 + construir_J005_J100.
+    _emit_progresso(progresso_callback, etapa='filtrar_plano', mensagem='Filtrando plano por movimento (CAT 25)')
+    plano_consolidado_utilizado = filtrar_plano_por_movimento(plano_consolidado, saldos_mensais)
+
     _emit_progresso(progresso_callback, etapa='balanco', mensagem='Calculando Balanco Patrimonial (J100)')
     balanco = calcular_balanco_consolidado(
         connection, params['date_fim'], plano_consolidado, id_to_code,
@@ -159,7 +172,9 @@ def gerar_sped_ecd_centralizado(
         _write_linha(output, linha)
 
     # V1.6: calcular saldos hierarquicos UMA vez para reaproveitar em J100 e I052
-    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco, plano_consolidado)
+    # V25: usa plano filtrado por movimento para que codes_aglutinacao referencie
+    # apenas codes que serao emitidos no I050.
+    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco, plano_consolidado_utilizado)
     # Codes que serao COD_AGL no J100 (patrimoniais com saldo > 0.01)
     codes_aglutinacao = {
         code for code, s in saldos_hierarquicos.items()
@@ -167,15 +182,26 @@ def gerar_sped_ecd_centralizado(
     }
     logger.info(f'[SPED ECD V1.6] {len(codes_aglutinacao)} codes em J100 -> I052 emitido para cada')
 
+    # V28 (CAT 5/20 fix 2026-05-16): mapa I052 da DRE — cada conta analitica de
+    # resultado vinculada a code DRE detalhe (9.1.1, 9.1.2, 9.2.1, 9.2.2, 9.2.3).
+    # PVA exige que codes detalhe do J150 estejam em pelo menos 1 I052.
+    _grupos_dre, mapa_aglutinacao_dre = _calcular_grupos_dre_hierarquicos(dre)
+    logger.info(f'[SPED ECD V28] {len(mapa_aglutinacao_dre)} contas resultado -> I052 DRE')
+
     _emit_progresso(progresso_callback, etapa='bloco_I_plano', mensagem='Bloco I: plano de contas (I050+I051+I052 intercalados)')
     # I050 + I051 + I052 intercalados: PVA exige I051/I052 logo apos I050
     # da conta correspondente (vinculo posicional).
-    for linha in construir_I050_com_I051(plano_consolidado, params, contador,
-                                          codes_aglutinacao=codes_aglutinacao):
+    # V25: usa `plano_consolidado_utilizado` (filtrado por movimento) para emitir
+    # apenas contas com movimento/saldo no periodo (Manual ECD I050).
+    for linha in construir_I050_com_I051(plano_consolidado_utilizado, params, contador,
+                                          codes_aglutinacao=codes_aglutinacao,
+                                          mapa_aglutinacao_dre=mapa_aglutinacao_dre):
         _write_linha(output, linha)
 
     # I100 — Cadastro CCUS (V1.1)
-    if plano_ccus:
+    # V1.8 (2026-05-15): condicional em EMITIR_CCUS_SPED (default False).
+    # SPED NACOM nao usa CCUS — ver constante para contexto.
+    if EMITIR_CCUS_SPED and plano_ccus:
         _emit_progresso(progresso_callback, etapa='bloco_I_ccus', mensagem='Bloco I: centros de custo (I100)')
         for linha in construir_I100(plano_ccus, params, contador):
             _write_linha(output, linha)
@@ -217,11 +243,20 @@ def gerar_sped_ecd_centralizado(
     _emit_progresso(progresso_callback, etapa='bloco_J', mensagem='Bloco J: BP (J100), DRE (J150), signatarios (J930)')
     _write_linha(output, construir_J001(contador))
 
-    # J005 + J100 (Balanco) — V1.6: passa plano_consolidado para usar codes reais
-    for linha in construir_J005_J100(balanco, plano_consolidado, params, contador):
+    # V29 (CAT 22 fix 2026-05-16): 1 J005 unico cobre BP+DRE (padrao contadora).
+    # Antes V28: 2 J005 separados (ID_DEM=1 BP + ID_DEM=2 DRE) — PVA reclamava
+    # "Deve existir 1 J100 e 1 J150 para cada J005".
+    _write_linha(output, construir_J005_unico(params, contador))
+
+    # J100 (Balanco) — V1.6: passa plano_consolidado para usar codes reais
+    # V23 (CAT 23): passa saldos_mensais para garantir J100 = I155 (consistencia PVA)
+    # V25 (CAT 25): usa plano filtrado por movimento (consistencia com I050)
+    # V29: nao emite mais J005 internamente (extraido para construir_J005_unico).
+    for linha in construir_J005_J100(balanco, plano_consolidado_utilizado, params, contador,
+                                       saldos_mensais=saldos_mensais):
         _write_linha(output, linha)
 
-    # J005 + J150 (DRE)
+    # J150 (DRE) — V29: nao emite mais J005 internamente.
     for linha in construir_J005_J150(dre, params, contador):
         _write_linha(output, linha)
 
