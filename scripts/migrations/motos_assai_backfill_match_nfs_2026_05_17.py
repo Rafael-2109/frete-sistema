@@ -75,7 +75,7 @@ from app.utils.cnpj_utils import normalizar_cnpj  # noqa: E402
 from app.utils.timezone import agora_brasil_naive  # noqa: E402
 
 
-SCRIPT_VERSION = '2026-05-17-v1'
+SCRIPT_VERSION = '2026-05-17-v1.1'
 MOTIVO = 'BACKFILL_2026_05_17'
 PEDIDO_PLACEHOLDER_NUMERO = 'BACKFILL-2026-05-17'
 
@@ -177,12 +177,13 @@ def parte2_delete_chassis_lixo() -> int:
         # Soft-delete dos AssaiReciboItem desse chassi (mantem audit trail).
         # Sem isso, parte4 tentaria re-conferir um chassi invalido (4 digitos)
         # que nao bate regex algum -> ficaria em loop pendente.
+        # tipo_divergencia eh VARCHAR(30) — string precisa caber.
         recibo_items_soft = AssaiReciboItem.query.filter_by(
             chassi=chassi_esperado,
         ).update(
             {
                 'ativo': False,
-                'tipo_divergencia': f'INVALIDO_LIMPO_{MOTIVO}',
+                'tipo_divergencia': 'LIMPO_BACKFILL_2026_05_17',  # 25 chars
             },
             synchronize_session=False,
         )
@@ -662,25 +663,46 @@ def main():
     with app.app_context():
         logger.info('=== motos_assai backfill match NFs (%s) ===', SCRIPT_VERSION)
 
+        # Isolamento por parte (2026-05-17 v1.1 fix): cada parte tem try/except
+        # proprio para que falha em uma NAO interrompa as demais. O auto-deploy
+        # do Render captura erro do script inteiro com `|| echo ...` no build.sh,
+        # mas isso e granularidade boa demais — perdemos parte3/4 se parte2
+        # explode. Isolamento aqui garante que cada parte tenta independente.
         if not args.skip_parte1:
-            parte1_update_loja_id()
+            try:
+                parte1_update_loja_id()
+            except Exception:
+                logger.exception('parte1 falhou — seguindo para proximas partes')
+                db.session.rollback()
 
         if not args.skip_parte2:
-            parte2_delete_chassis_lixo()
+            try:
+                parte2_delete_chassis_lixo()
+            except Exception:
+                logger.exception('parte2 falhou — seguindo para proximas partes')
+                db.session.rollback()
 
         # parte4 ANTES de parte3: finaliza recibos -> cadastra AssaiMoto
         # -> chassis das NFs ficam disponiveis para sep sintetica.
         if not args.skip_parte4 and not args.dry_run:
-            stats_p4 = parte4_finalizar_recibos_pendentes()
-            logger.info('[parte4 stats] %s', json.dumps(stats_p4))
+            try:
+                stats_p4 = parte4_finalizar_recibos_pendentes()
+                logger.info('[parte4 stats] %s', json.dumps(stats_p4))
+            except Exception:
+                logger.exception('parte4 falhou — seguindo para parte3')
+                db.session.rollback()
         elif args.dry_run and not args.skip_parte4:
             logger.info('[parte4] SKIP em --dry-run (parte4 nao tem modo dry).')
 
         if not args.skip_parte3:
-            stats = parte3_criar_separacoes_sinteticas(
-                dry_run=args.dry_run, nf_id=args.nf_id,
-            )
-            logger.info('[parte3 stats] %s', json.dumps(stats))
+            try:
+                stats = parte3_criar_separacoes_sinteticas(
+                    dry_run=args.dry_run, nf_id=args.nf_id,
+                )
+                logger.info('[parte3 stats] %s', json.dumps(stats))
+            except Exception:
+                logger.exception('parte3 falhou')
+                db.session.rollback()
 
         logger.info('=== backfill concluido ===')
 
