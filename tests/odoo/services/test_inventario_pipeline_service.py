@@ -102,3 +102,74 @@ def test_acao_para_direcao_mapping_completo():
         'DEV_FB_LF', 'DEV_LF_FB', 'DEV_CD_LF', 'DEV_LF_CD',
     }
     assert set(ACAO_PARA_DIRECAO.keys()) == esperadas
+
+
+# ============================================================
+# f5b_validar_pickings (Task 4.2)
+# ============================================================
+
+def test_f5b_valida_em_paralelo(db):
+    """f5b confirma + reserva + valida cada picking. Atualiza fase."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    ajustes = [
+        AjusteEstoqueInventario(
+            ciclo='TEST_F5B', cod_produto='101001001', tipo_produto=1,
+            company_id=5, qtd_inventario=Decimal('5'),
+            qtd_odoo=Decimal('10'), qtd_ajuste=Decimal('-5'),
+            acao_decidida='PERDA_LF_FB',
+            status='APROVADO', criado_por='pytest',
+            picking_id_odoo=1001, fase_pipeline='F5a_PICKING_CRIADO',
+        ),
+        AjusteEstoqueInventario(
+            ciclo='TEST_F5B', cod_produto='101001002', tipo_produto=1,
+            company_id=5, qtd_inventario=Decimal('3'),
+            qtd_odoo=Decimal('5'), qtd_ajuste=Decimal('-2'),
+            acao_decidida='PERDA_LF_FB',
+            status='APROVADO', criado_por='pytest',
+            picking_id_odoo=1002, fase_pipeline='F5a_PICKING_CRIADO',
+        ),
+    ]
+    db.session.add_all(ajustes)
+    db.session.flush()
+
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    picking_svc.validar.return_value = True
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    result = svc.f5b_validar_pickings([1001, 1002])
+
+    assert result == {1001: True, 1002: True}
+    assert picking_svc.confirmar_e_reservar.call_count == 2
+    assert picking_svc.validar.call_count == 2
+    # Ajustes atualizados
+    assert ajustes[0].fase_pipeline == 'F5b_VALIDADO'
+    assert ajustes[1].fase_pipeline == 'F5b_VALIDADO'
+
+
+def test_f5b_falha_marca_F5b_FALHA(db):
+    """Se picking_svc.validar lanca, ajuste marcado como F5b_FALHA."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5B_FAIL', cod_produto='101001001', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('5'),
+        qtd_odoo=Decimal('10'), qtd_ajuste=Decimal('-5'),
+        acao_decidida='PERDA_LF_FB',
+        status='APROVADO', criado_por='pytest',
+        picking_id_odoo=2001, fase_pipeline='F5a_PICKING_CRIADO',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    picking_svc.validar.side_effect = Exception('Quality checks pending')
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    result = svc.f5b_validar_pickings([2001])
+
+    assert result == {2001: False}
+    assert aj.fase_pipeline == 'F5b_FALHA'
+    assert 'Quality checks' in aj.erro_msg

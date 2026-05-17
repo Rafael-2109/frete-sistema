@@ -216,3 +216,60 @@ class InventarioPipelineService:
                         f'F5a falhou para ajuste {snap["id"]}: {e}'
                     )
         return result
+
+    # ============================================================
+    # F5b — validar_pickings
+    # ============================================================
+
+    def f5b_validar_pickings(
+        self, picking_ids: List[int]
+    ) -> Dict[int, bool]:
+        """Para cada picking: confirmar_e_reservar + validar.
+
+        Odoo I/O paralelo (custo dominante), DB writes serial no main
+        thread. Atualiza ajuste.fase_pipeline='F5b_VALIDADO' (ou
+        'F5b_FALHA' + erro_msg) via lookup pelo picking_id_odoo.
+
+        Args:
+            picking_ids: lista de stock.picking.id ja criados em F5a.
+
+        Returns:
+            {picking_id: True (sucesso) | False (falha)}.
+        """
+        from app.odoo.models import AjusteEstoqueInventario
+
+        result: Dict[int, bool] = {}
+
+        def _io(pid):
+            with self.semaphore:
+                self.picking_svc.confirmar_e_reservar(pid)
+                # Nota: nao chamamos preencher_qty_done aqui — Odoo ja
+                # preenche via action_assign. Caso preciso de override
+                # (ex.: lote especifico), expandir em iteracao futura.
+                self.picking_svc.validar(pid)
+                return pid
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(_io, pid): pid for pid in picking_ids}
+            for fut in as_completed(futures):
+                pid = futures[fut]
+                aj = AjusteEstoqueInventario.query.filter_by(
+                    picking_id_odoo=pid
+                ).first()
+                try:
+                    fut.result()
+                    result[pid] = True
+                    if aj is not None:
+                        aj.fase_pipeline = 'F5b_VALIDADO'
+                        db.session.commit()
+                        logger.info(
+                            f'F5b picking {pid} validado (ajuste {aj.id})'
+                        )
+                except Exception as e:
+                    result[pid] = False
+                    if aj is not None:
+                        aj.fase_pipeline = 'F5b_FALHA'
+                        aj.erro_msg = str(e)
+                        db.session.commit()
+                    logger.error(f'F5b picking {pid} falhou: {e}')
+        return result
