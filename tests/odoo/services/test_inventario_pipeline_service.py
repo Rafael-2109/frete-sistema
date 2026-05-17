@@ -138,7 +138,7 @@ def test_f5b_valida_em_paralelo(db):
     picking_svc.validar.return_value = True
 
     svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
-    result = svc.f5b_validar_pickings([1001, 1002])
+    result = svc.f5b_validar_pickings(ajustes)
 
     assert result == {1001: True, 1002: True}
     assert picking_svc.confirmar_e_reservar.call_count == 2
@@ -168,8 +168,65 @@ def test_f5b_falha_marca_F5b_FALHA(db):
     picking_svc.validar.side_effect = Exception('Quality checks pending')
 
     svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
-    result = svc.f5b_validar_pickings([2001])
+    result = svc.f5b_validar_pickings([aj])
 
     assert result == {2001: False}
     assert aj.fase_pipeline == 'F5b_FALHA'
     assert 'Quality checks' in aj.erro_msg
+
+
+# ============================================================
+# f5c_liberar_faturamento (Task 4.3)
+# ============================================================
+
+def test_f5c_libera_em_paralelo(db):
+    """f5c dispara liberar_faturamento em todos pickings + atualiza fase."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    ajustes = [
+        AjusteEstoqueInventario(
+            ciclo='TEST_F5C', cod_produto='X1', tipo_produto=1,
+            company_id=5, qtd_inventario=Decimal('1'),
+            qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+            acao_decidida='PERDA_LF_FB', status='APROVADO',
+            criado_por='pytest',
+            picking_id_odoo=pid, fase_pipeline='F5b_VALIDADO',
+        )
+        for pid in (3001, 3002)
+    ]
+    db.session.add_all(ajustes)
+    db.session.flush()
+
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    svc.f5c_liberar_faturamento(ajustes)
+
+    assert picking_svc.liberar_faturamento.call_count == 2
+    assert all(a.fase_pipeline == 'F5c_LIBERADO' for a in ajustes)
+
+
+def test_f5c_falha_marca_F5c_FALHA(db):
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5C_FAIL', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='APROVADO',
+        criado_por='pytest',
+        picking_id_odoo=3500, fase_pipeline='F5b_VALIDADO',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    picking_svc.liberar_faturamento.side_effect = Exception(
+        'Picking nao validado'
+    )
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    svc.f5c_liberar_faturamento([aj])
+
+    assert aj.fase_pipeline == 'F5c_FALHA'
+    assert 'nao validado' in aj.erro_msg

@@ -222,23 +222,29 @@ class InventarioPipelineService:
     # ============================================================
 
     def f5b_validar_pickings(
-        self, picking_ids: List[int]
+        self, ajustes: List
     ) -> Dict[int, bool]:
-        """Para cada picking: confirmar_e_reservar + validar.
+        """Para cada picking de cada ajuste: confirmar_e_reservar + validar.
 
-        Odoo I/O paralelo (custo dominante), DB writes serial no main
-        thread. Atualiza ajuste.fase_pipeline='F5b_VALIDADO' (ou
-        'F5b_FALHA' + erro_msg) via lookup pelo picking_id_odoo.
+        Recebe AjusteEstoqueInventario (com picking_id_odoo populado em
+        F5a) em vez de picking_ids puros. Evita lookup por
+        picking_id_odoo (que pode colidir em multiplos ciclos / re-runs).
+
+        Odoo I/O paralelo, DB writes serial no main thread.
 
         Args:
-            picking_ids: lista de stock.picking.id ja criados em F5a.
+            ajustes: lista de AjusteEstoqueInventario com picking_id_odoo
+                populado (fase_pipeline >= F5a_PICKING_CRIADO).
 
         Returns:
             {picking_id: True (sucesso) | False (falha)}.
         """
-        from app.odoo.models import AjusteEstoqueInventario
-
         result: Dict[int, bool] = {}
+        # Pre-indexar ajustes por picking_id e snapshot picking_ids
+        ajuste_por_pid: Dict[int, object] = {
+            a.picking_id_odoo: a for a in ajustes if a.picking_id_odoo
+        }
+        picking_ids = list(ajuste_por_pid.keys())
 
         def _io(pid):
             with self.semaphore:
@@ -253,23 +259,69 @@ class InventarioPipelineService:
             futures = {executor.submit(_io, pid): pid for pid in picking_ids}
             for fut in as_completed(futures):
                 pid = futures[fut]
-                aj = AjusteEstoqueInventario.query.filter_by(
-                    picking_id_odoo=pid
-                ).first()
+                aj = ajuste_por_pid[pid]
                 try:
                     fut.result()
                     result[pid] = True
-                    if aj is not None:
-                        aj.fase_pipeline = 'F5b_VALIDADO'
-                        db.session.commit()
-                        logger.info(
-                            f'F5b picking {pid} validado (ajuste {aj.id})'
-                        )
+                    aj.fase_pipeline = 'F5b_VALIDADO'
+                    db.session.commit()
+                    logger.info(
+                        f'F5b picking {pid} validado (ajuste {aj.id})'
+                    )
                 except Exception as e:
                     result[pid] = False
-                    if aj is not None:
-                        aj.fase_pipeline = 'F5b_FALHA'
-                        aj.erro_msg = str(e)
-                        db.session.commit()
+                    aj.fase_pipeline = 'F5b_FALHA'
+                    aj.erro_msg = str(e)
+                    db.session.commit()
                     logger.error(f'F5b picking {pid} falhou: {e}')
+        return result
+
+    # ============================================================
+    # F5c — liberar_faturamento
+    # ============================================================
+
+    def f5c_liberar_faturamento(
+        self, ajustes: List
+    ) -> Dict[int, bool]:
+        """Dispara action_liberar_faturamento em todos pickings (paralelo).
+
+        Apos esta etapa, robo CIEL IT comeca a criar invoices (F5d aguarda).
+
+        Args:
+            ajustes: lista de AjusteEstoqueInventario com picking_id_odoo
+                populado (fase_pipeline >= F5b_VALIDADO).
+
+        Returns:
+            {picking_id: True | False}.
+        """
+        result: Dict[int, bool] = {}
+        ajuste_por_pid: Dict[int, object] = {
+            a.picking_id_odoo: a for a in ajustes if a.picking_id_odoo
+        }
+        picking_ids = list(ajuste_por_pid.keys())
+
+        def _io(pid):
+            with self.semaphore:
+                self.picking_svc.liberar_faturamento(pid)
+                return pid
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(_io, pid): pid for pid in picking_ids}
+            for fut in as_completed(futures):
+                pid = futures[fut]
+                aj = ajuste_por_pid[pid]
+                try:
+                    fut.result()
+                    result[pid] = True
+                    aj.fase_pipeline = 'F5c_LIBERADO'
+                    db.session.commit()
+                    logger.info(
+                        f'F5c picking {pid} liberado (ajuste {aj.id})'
+                    )
+                except Exception as e:
+                    result[pid] = False
+                    aj.fase_pipeline = 'F5c_FALHA'
+                    aj.erro_msg = str(e)
+                    db.session.commit()
+                    logger.error(f'F5c picking {pid} falhou: {e}')
         return result
