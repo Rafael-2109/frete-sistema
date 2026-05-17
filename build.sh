@@ -312,6 +312,23 @@ echo "Motos Assai 29: devolucao por NF de venda Q.P.A. (NFd)..."
 python scripts/migrations/motos_assai_29_devolucao.py \
     || echo "⚠️ Migration motos_assai_29 falhou, continuando deploy..."
 
+# 15f. Motos Assai backfill match NFs (2026-05-17): resolve 189+ divergencias
+# em 44 NFs Q.P.A. com 3 causas raiz (loja_id NULL apos regex falhar, separacoes
+# de teste, conferencia do Recibo 4 abandonada em 2026-05-09 com 5/107).
+# Auto-cicatrizante: conforme novos recibos Motochefe chegam, NFs do backlog
+# viram BATEU em deploys subsequentes. 4 partes idempotentes:
+#   parte1: UPDATE retroativo loja_id via CNPJ (no-op se ja resolvido pelo P0)
+#   parte2: DELETE 2 AssaiMoto de teste com chassi 4 digitos (id=1,5)
+#           e soft-delete dos respectivos AssaiReciboItem (ativo=False)
+#   parte4: finaliza recibos pendentes (Recibo 4 prioritariamente) — valida
+#           regex_chassi, cria AssaiMoto, emite EVENTO_ESTOQUE, marca conferido
+#   parte3: cria separacao sintetica FATURADA por NF, espelho 1:1, SKIP NFs
+#           com chassis ainda fora de assai_moto (depende de parte4)
+# Pos commit 848b992a (P0 match CNPJ + tolerancia R$1,00 absoluta).
+echo "Motos Assai backfill: finalizar recibos + match NFs (sep sintetica)..."
+python scripts/migrations/motos_assai_backfill_match_nfs_2026_05_17.py \
+    || echo "⚠️ Backfill motos_assai falhou, continuando deploy..."
+
 # 16. Remessa VORTX Conversor/Validador (2026-05-12): tabela remessa_vortx_conversao.
 # Auditoria de operacoes de conversao (BMP/274 -> VORTX/310) e validacao read-only
 # de arquivos CNAB 400 externos via UI em /remessa-vortx/converter e /validar.
