@@ -3,7 +3,7 @@
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
 **Última atualização:** 2026-05-17
-**Status global:** Foundation + F3 + F4 + F5 completas. Services 100% prontos. F6 CANCELADA (redundante — ver §6.1). Próximos: F7 (scripts) + F8 (docs) + F9 (execução).
+**Status global:** Foundation + F3 + F4 + F5 completas. F6 CANCELADA. F7 4/10 (preparação: extrair/carregar/confrontar/propor — sem WRITE no Odoo). Próximos: F7.5-7.10 (canaries + execução + reconciliação) + F8 (docs) + F9 (execução real).
 
 ---
 
@@ -59,7 +59,7 @@ Leitura: `✅ feito` / `⏳ pendente` / `⚠️ parcial` / `🚫 bloqueado` / `�
 | Fase | Status | Próximo passo | Bloqueio? |
 |------|--------|---------------|-----------|
 | **F6** Hooks determinísticos | 🚫 **CANCELADA** | — | Decisão usuário 2026-05-17 — ver §6.1 |
-| **F7** Scripts datados (10 scripts) | 📝 7.1 já tem template completo no plano, 7.2-7.10 expandidos | Implementar 7.1 → 7.10 sequencialmente | Liberado — F3+F4+F5 ✅ |
+| **F7** Scripts datados (10 scripts) | ⚠️ 4/10 (preparação) | Decisão usuário: parou após 7.4. Próximo bloco 7.5-7.10 (canaries + execução) quando houver planilha real | Liberado — F3+F4+F5 ✅ |
 | **F8** Documentação (2 playbooks + estrutura) | ⏳ 4 tasks | Task 8.1 (estrutura pastas — JÁ PARCIAL) | Não |
 | **F9** Execução operacional | 🚫 bloqueada | Aguardar F7 | Bloqueio: precisa scripts |
 
@@ -226,7 +226,11 @@ scripts/
     00c_investigar_g003.py
     00d_investigar_variacoes.py
     00e_investigar_pickings.py
-    hooks/                  # placeholder vazio (F6 pendente)
+    01_extrair_estoque_odoo.py        # F7.1 — stock.quant → Excel + JSON
+    02_carregar_inventario_xlsx.py    # F7.2 — planilha → JSON validado
+    03_confrontar_inv_vs_odoo.py      # F7.3 — diff com P6/P9
+    04_propor_ajustes.py              # F7.4 — propor/listar/aprovar com hash da onda
+    hooks/                  # placeholder vazio (F6 CANCELADA — ver §6.1)
 
 tests/odoo/                 # 90 tests passing
   __init__.py
@@ -277,10 +281,7 @@ build.sh    # items 19/20/21 adicionados
 
 ```
 scripts/inventario_2026_05/
-  01_extrair_estoque_odoo.py          # F7 — script de operação
-  02_carregar_inventario_xlsx.py
-  03_confrontar_inv_vs_odoo.py
-  04_propor_ajustes.py
+  # 01-04 ja em main (preparacao — F7.1-7.4)
   05_canary_estoque_staging.py
   06_canary_nfs_referencia.py
   07_executar_onda1_lf_fb.py          # incluir validacao inline: custo >20%, teto onda
