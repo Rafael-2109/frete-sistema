@@ -1,0 +1,134 @@
+registro: J100
+descricao: Balanco Patrimonial
+hierarquia: 3
+pai: J005
+ocorrencia: "1:N"
+chave: "[COD_AGL]"
+fonte: manual_ecd/bloco_J_demonstracoes.md#registro-j100
+
+
+campos:
+  - pos: 1
+    nome: REG
+    tipo: C
+    tamanho: 4
+    obrigatorio: S
+    valores: ["J100"]
+  - pos: 2
+    nome: COD_AGL
+    tipo: C
+    tamanho: null
+    obrigatorio: S
+    descricao: "Codigo aglutinacao (em I052 se IND_COD_AGL=D; criado se T)"
+  - pos: 3
+    nome: IND_COD_AGL
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["T", "D"]
+    descricao: T-Totalizador, D-Detalhe
+  - pos: 4
+    nome: NIVEL_AGL
+    tipo: N
+    tamanho: null
+    obrigatorio: S
+    descricao: Nivel hierarquico (1 = raiz)
+  - pos: 5
+    nome: COD_AGL_SUP
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: "Codigo aglutinacao superior (obrigatorio se NIVEL>1)"
+  - pos: 6
+    nome: IND_GRP_BAL
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["A", "P"]
+    descricao: A-Ativo, P-Passivo e PL
+  - pos: 7
+    nome: DESCR_COD_AGL
+    tipo: C
+    tamanho: null
+    obrigatorio: S
+    descricao: Descricao da aglutinacao
+  - pos: 8
+    nome: VL_CTA_INI
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: Valor inicial periodo
+  - pos: 9
+    nome: IND_DC_CTA_INI
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["D", "C"]
+    descricao: D/C inicial
+  - pos: 10
+    nome: VL_CTA_FIN
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: Valor final periodo
+  - pos: 11
+    nome: IND_DC_CTA_FIN
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["D", "C"]
+    descricao: D/C final
+  - pos: 12
+    nome: NOTA_EXP_REF
+    tipo: C
+    tamanho: 12
+    obrigatorio: N
+    descricao: "Referencia a nota explicativa (deve existir J800 com TIPO_DOC in [010,011,012,999])"
+
+regras_extras:
+  - nome: REGRA_VALIDA_ATIVO_PASSIVO_INI
+    descricao: "Total Ativo (NIVEL=1, A) = Total Passivo+PL (NIVEL=1, P) — VL_CTA_INI"
+    severidade: BLOQUEANTE
+    cobertura: sped_ecd_validator.py
+  - nome: REGRA_VALIDA_ATIVO_PASSIVO_FIN
+    descricao: "Total Ativo (NIVEL=1, A) = Total Passivo+PL (NIVEL=1, P) — VL_CTA_FIN"
+    severidade: BLOQUEANTE
+    cobertura: sped_ecd_validator.py
+  - nome: REGRA_SOMA_DAS_PARCELAS_BALANCO_INI
+    descricao: "Linhas T: VL_CTA_INI = soma das filhas com mesmo COD_AGL_SUP (considerando D/C)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_SOMA_DAS_PARCELAS_BALANCO_FIN
+    descricao: "Linhas T: VL_CTA_FIN = soma das filhas com mesmo COD_AGL_SUP (considerando D/C)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VALIDA_BALANCO_SALDO_INI
+    descricao: "Linhas D: VL_CTA_INI = soma I155 saldos iniciais (via COD_AGL no I052)"
+    severidade: WARNING
+  - nome: REGRA_VALIDA_BALANCO_SALDO_FIN
+    descricao: "Linhas D: VL_CTA_FIN = soma I155 saldos finais (via COD_AGL no I052)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_COD_AGL_DUPLICIDADE
+    descricao: "COD_AGL unico no J100"
+    severidade: BLOQUEANTE
+  - nome: REGRA_OBRIGATORIO_I052
+    descricao: "Se IND_COD_AGL=D, deve existir I052 com mesmo COD_AGL apontando para conta I050.IND_CTA=A"
+    severidade: BLOQUEANTE
+  - nome: REGRA_OBRIGATORIO_I052_MESMO_GRUPO
+    descricao: "I050.COD_NAT da conta vinculada via I052 deve corresponder ao IND_GRP_BAL (A=01 Ativo, P=02/03 Passivo+PL)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_EXISTEM_2_NIVEIS_1
+    descricao: "Exatamente 2 linhas NIVEL=1: uma A e uma P"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VALIDA_NIVEL_AGL
+    descricao: "NIVEL=1 deve ter IND_COD_AGL=T"
+    severidade: BLOQUEANTE
+  - nome: REGRA_COD_AGL_IGUAL_COD_AGL_SUPERIOR
+    descricao: "COD_AGL != COD_AGL_SUP"
+    severidade: BLOQUEANTE
+  - nome: REGRA_CODIGO_AGL_NIVEL_SUPERIOR_INVALIDO
+    descricao: "COD_AGL_SUP referenciado deve ser IND_COD_AGL=T"
+    severidade: BLOQUEANTE
+  - nome: REGRA_EXISTE_NOTA_EXPLICATIVA
+    descricao: "Se NOTA_EXP_REF preenchido, J800 com TIPO_DOC in [010,011,012,999]"
+    severidade: BLOQUEANTE

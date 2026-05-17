@@ -1,0 +1,103 @@
+registro: I250
+descricao: Partidas do Lancamento
+hierarquia: 4
+pai: I200
+ocorrencia: "1:N"
+obrigatoriedade: "S em G/R/A"
+fonte: manual_ecd/bloco_I_lancamentos.md#registro-i250
+
+campos:
+  - pos: 1
+    nome: REG
+    tipo: C
+    tamanho: 4
+    obrigatorio: S
+    valores: ["I250"]
+  - pos: 2
+    nome: COD_CTA
+    tipo: C
+    tamanho: null
+    obrigatorio: S
+    descricao: Conta debitada/creditada (deve ser analitica I050.IND_CTA=A)
+  - pos: 3
+    nome: COD_CCUS
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: Centro de custos
+  - pos: 4
+    nome: VL_DC
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: "Valor da partida (SEMPRE positivo; sinal vem do IND_DC)"
+  - pos: 5
+    nome: IND_DC
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["D", "C"]
+    descricao: D-Debito, C-Credito
+  - pos: 6
+    nome: NUM_ARQ
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: Numero/codigo do documento arquivado
+  - pos: 7
+    nome: COD_HIST_PAD
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: "Historico padronizado (deve existir em I075). XOR com HIST: ao menos um dos dois preenchido (REGRA_HISTORICO_OBRIGATORIO)"
+  - pos: 8
+    nome: HIST
+    tipo: C
+    tamanho: 65535
+    obrigatorio: N
+    descricao: "Historico completo (ou complementar ao COD_HIST_PAD). XOR com COD_HIST_PAD"
+  - pos: 9
+    nome: COD_PART
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: "Participante (em 0150). Se preenchido exige relacionamento 0180 ativo"
+  - pos: 10
+    nome: VL_DC_MF
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: N
+    descricao: "Valor moeda funcional (apenas se 0000.IDENT_MF=S)"
+  - pos: 11
+    nome: IND_DC_MF
+    tipo: C
+    tamanho: 1
+    obrigatorio: N
+    valores: ["D", "C"]
+    descricao: "D/C MF (apenas se IDENT_MF=S)"
+
+regras_extras:
+  - nome: REGRA_HISTORICO_OBRIGATORIO
+    descricao: "HIST OU COD_HIST_PAD deve estar preenchido (XOR). DSL atual nao expressa XOR — cobertura futura via auditando-sped-contabil"
+    severidade: BLOQUEANTE
+    cobertura: parcial
+  - nome: REGRA_LANC_EXT_CONTA_RESULTADO
+    descricao: "Se I200.IND_LCTO=X (extemporaneo), I050.COD_NAT da conta NAO pode ser 04 (resultado)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VALIDACAO_VALOR_DEB
+    descricao: "Soma I250 (IND_DC=D) por conta+periodo = I155.VL_DEB"
+    severidade: BLOQUEANTE
+    cobertura: auditando-sped-contabil.audit_balance
+  - nome: REGRA_VALIDACAO_VALOR_CRED
+    descricao: "Soma I250 (IND_DC=C) por conta+periodo = I155.VL_CRED"
+    severidade: BLOQUEANTE
+    cobertura: auditando-sped-contabil.audit_balance
+  - nome: REGRA_SOMA_DC_LANCAMENTO
+    descricao: "Por I200: soma D = soma C = I200.VL_LCTO"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VL_DC_NAO_NEGATIVO
+    descricao: "VL_DC sempre >= 0 (sinal vem do IND_DC). Validator interno V1.8 bloqueia"
+    severidade: BLOQUEANTE
+    cobertura: sped_ecd_validator.py

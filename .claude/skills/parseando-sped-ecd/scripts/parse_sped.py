@@ -27,16 +27,23 @@ from typing import Any, Iterator
 # Lista posicional EXCLUI o primeiro campo REG (que e a chave do dict externo).
 # Fonte: app/relatorios_fiscais/manual_ecd/bloco_*.md
 REGISTRO_CAMPOS: dict[str, list[str]] = {
-    "0000": ["LECD", "DT_INI", "DT_FIN", "NOME", "CNPJ", "UF", "COD_MUN",
-             "NIRE", "IND_SIT_ESP", "IND_SIT_INI_PER", "IND_NIRE", "IND_FIN_ESC",
+    # 0000 (FIX 2026-05-17): IE + IM ausentes deslocavam campos 8-22; IDENT_HASH
+    # inventado; IND_MUDANCA_PC corrigido para IND_MUDANC_PC (Manual literal).
+    "0000": ["LECD", "DT_INI", "DT_FIN", "NOME", "CNPJ", "UF", "IE", "COD_MUN",
+             "IM", "IND_SIT_ESP", "IND_SIT_INI_PER", "IND_NIRE", "IND_FIN_ESC",
              "COD_HASH_SUB", "IND_GRANDE_PORTE", "TIP_ECD", "COD_SCP",
-             "IDENT_MF", "IND_ESC_CONS", "IDENT_HASH", "IND_CENTRALIZADA",
-             "IND_MUDANCA_PC", "COD_PLAN_REF"],
+             "IDENT_MF", "IND_ESC_CONS", "IND_CENTRALIZADA", "IND_MUDANC_PC",
+             "COD_PLAN_REF"],
     "0001": ["IND_DAD"],
     "0007": ["COD_ENT_REF", "COD_INSCR"],
-    "0020": ["COD_CTA_REF_DESC"],
+    # 0020 (FIX 2026-05-17): tinha apenas 1 campo inventado COD_CTA_REF_DESC.
+    # Manual tem 7 campos para escrituracao descentralizada.
+    "0020": ["IND_DEC", "CNPJ", "UF", "IE", "COD_MUN", "IM", "NIRE"],
     "0035": ["COD_SCP", "NOME_SCP"],
-    "0150": ["COD_PART", "NOME", "COD_PAIS", "CNPJ", "CPF", "IE", "COD_MUN", "IM", "SUFRAMA", "ENDERECO", "NUM", "COMPL", "BAIRRO"],
+    # 0150 (FIX 2026-05-17): NIT, UF, IE_ST ausentes no meio deslocavam tudo;
+    # ENDERECO/NUM/COMPL/BAIRRO sao campos inventados (nao existem no 0150).
+    "0150": ["COD_PART", "NOME", "COD_PAIS", "CNPJ", "CPF", "NIT", "UF", "IE",
+             "IE_ST", "COD_MUN", "IM", "SUFRAMA"],
     "0180": ["COD_REL", "DT_INI_REL", "DT_FIN_REL"],
     "0990": ["QTD_LIN_0"],
     "I001": ["IND_DAD"],
@@ -50,34 +57,53 @@ REGISTRO_CAMPOS: dict[str, list[str]] = {
     "I051": ["COD_CCUS", "COD_CTA_REF"],
     "I052": ["COD_CCUS", "COD_AGL"],
     "I053": ["COD_IDT", "COD_CNT_CORR", "NAT_SUB_CNT"],
-    "I075": ["COD_HIST_PAD", "DESCR_HIST_PAD"],
-    "I100": ["COD_CCUS", "CCUS"],
+    # I075 (FIX 2026-05-17): Manual usa COD_HIST/DESCR_HIST (sem sufixo _PAD).
+    "I075": ["COD_HIST", "DESCR_HIST"],
+    # I100 (FIX 2026-05-17): DT_ALT ausente na pos 1; lia DT_ALT como COD_CCUS.
+    "I100": ["DT_ALT", "COD_CCUS", "CCUS"],
     "I150": ["DT_INI", "DT_FIN"],
+    # I155: 8 campos base (Manual tem +6 MF que so aparecem se IDENT_MF=S).
     "I155": ["COD_CTA", "COD_CCUS", "VL_SLD_INI", "IND_DC_INI", "VL_DEB",
              "VL_CRED", "VL_SLD_FIN", "IND_DC_FIN"],
-    "I157": ["COD_CTA_REF_TRANSF", "VL_SLD_INI", "IND_DC_INI", "COD_CTA_CORR"],
+    # I157 (FIX 2026-05-17): COD_CCUS ausente; COD_CTA_REF_TRANSF e COD_CTA_CORR
+    # eram nomes inventados; Manual usa COD_CTA + COD_CCUS + VL_SLD_INI + IND_DC_INI.
+    "I157": ["COD_CTA", "COD_CCUS", "VL_SLD_INI", "IND_DC_INI"],
     "I200": ["NUM_LCTO", "DT_LCTO", "VL_LCTO", "IND_LCTO"],
     "I250": ["COD_CTA", "COD_CCUS", "VL_DC", "IND_DC", "NUM_ARQ", "COD_HIST_PAD",
              "HIST", "COD_PART"],
-    "I300": ["DT_BCT", "VL_BCT"],
-    "I310": ["NUM_ORD_BCT", "COD_CTA_BCT", "VAL_DEB_BCT", "VAL_CRED_BCT"],
+    # I300 (FIX 2026-05-17): DT_BCT -> DT_BCTE (grafema Manual); VL_BCT inventado.
+    "I300": ["DT_BCTE"],
+    # I310 (FIX 2026-05-17): todos os nomes errados; COD_CCUS ausente.
+    "I310": ["COD_CTA", "COD_CCUS", "VAL_DEBD", "VAL_CREDD"],
     "I350": ["DT_RES"],
     "I355": ["COD_CTA", "COD_CCUS", "VL_CTA", "IND_DC"],
     "I990": ["QTD_LIN_I"],
     "J001": ["IND_DAD"],
     "J005": ["DT_INI", "DT_FIN", "ID_DEM", "CAB_DEM"],
-    "J100": ["COD_AGL", "IND_COD_AGL", "COD_AGL_SUP", "IND_GRP_BAL", "DESCR_COD_AGL",
-             "VL_CTA", "IND_DC_BAL", "VL_CTA_INI", "IND_DC_INI_BAL", "NIVEL_AGL"],
-    "J150": ["NUM_ORD", "COD_AGL", "NIVEL_AGL", "COD_AGL_SUP", "IND_GRP_DRE",
-             "DESCR_COD_AGL", "VL_CTA_DRE", "IND_VL_CTA_DRE", "VL_CTA_DRE_INI",
-             "IND_VL_CTA_DRE_INI", "IND_GRP_DRE_INI", "DESCR_COD_AGL_INI", "NIVEL_AGL_INI"],
-    "J800": ["ARQ_RTF"],
-    "J900": ["DNRC_ENCER", "IDENT_NOM", "IDENT_CPF_CNPJ", "IDENT_QUALIF", "ID_DEM",
-             "DT_EX_SOCIAL", "NAT_LIVRO", "NUM_ORD", "QTD_LIN"],
+    # J100 (FIX 2026-05-17): NIVEL_AGL estava em pos 10, Manual diz pos 3;
+    # VL_CTA, IND_DC_BAL, IND_DC_INI_BAL eram campos inventados;
+    # VL_CTA_FIN, IND_DC_CTA_INI, IND_DC_CTA_FIN, NOTA_EXP_REF ausentes.
+    "J100": ["COD_AGL", "IND_COD_AGL", "NIVEL_AGL", "COD_AGL_SUP", "IND_GRP_BAL",
+             "DESCR_COD_AGL", "VL_CTA_INI", "IND_DC_CTA_INI", "VL_CTA_FIN",
+             "IND_DC_CTA_FIN", "NOTA_EXP_REF"],
+    # J150 (FIX 2026-05-17): IND_COD_AGL ausente; 7 campos inventados (sufixo _DRE
+    # e _INI nao existem no Manual); NU_ORDEM (Manual literal, nao NUM_ORD).
+    "J150": ["NU_ORDEM", "COD_AGL", "IND_COD_AGL", "NIVEL_AGL", "COD_AGL_SUP",
+             "DESCR_COD_AGL", "VL_CTA_INI", "IND_DC_CTA_INI", "VL_CTA_FIN",
+             "IND_DC_CTA_FIN", "IND_GRP_DRE", "NOTA_EXP_REF"],
+    # J800 (FIX 2026-05-17): 4 campos ausentes (TIPO_DOC, DESC_RTF, HASH_RTF, IND_FIM_RTF).
+    "J800": ["TIPO_DOC", "DESC_RTF", "HASH_RTF", "ARQ_RTF", "IND_FIM_RTF"],
+    # J900 (FIX 2026-05-17): tinha 5 campos do J930 misturados; Manual tem 7 reais.
+    "J900": ["DNRC_ENCER", "NUM_ORD", "NAT_LIVRO", "NOME", "QTD_LIN",
+             "DT_INI_ESCR", "DT_FIN_ESCR"],
+    # J930 (FIX 2026-05-17 - P0 CRITICO): CRC_PROF era campo inventado;
+    # Manual usa IND_RESP_LEGAL (S/N) - obrigatorio para validar responsavel
+    # pela assinatura da escrituracao.
     "J930": ["IDENT_NOM", "IDENT_CPF_CNPJ", "IDENT_QUALIF", "COD_ASSIN", "IND_CRC",
-             "EMAIL", "FONE", "UF_CRC", "NUM_SEQ_CRC", "DT_CRC", "CRC_PROF"],
+             "EMAIL", "FONE", "UF_CRC", "NUM_SEQ_CRC", "DT_CRC", "IND_RESP_LEGAL"],
     "J990": ["QTD_LIN_J"],
-    "9001": ["IND_MOV"],
+    # 9001 (FIX 2026-05-17): Manual usa IND_DAD (nao IND_MOV).
+    "9001": ["IND_DAD"],
     "9900": ["REG_BLC", "QTD_REG_BLC"],
     "9990": ["QTD_LIN_9"],
     "9999": ["QTD_LIN"],

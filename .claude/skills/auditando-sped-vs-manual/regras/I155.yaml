@@ -1,0 +1,134 @@
+registro: I155
+descricao: Detalhe dos Saldos Periodicos (FILHO DE I150)
+hierarquia: 4
+pai: I150
+ocorrencia: "0:N"
+obrigatoriedade: "S se existe I150"
+chave: "[COD_CTA]+[COD_CCUS]"
+fonte: manual_ecd/bloco_I_lancamentos.md#registro-i155
+
+campos:
+  - pos: 1
+    nome: REG
+    tipo: C
+    tamanho: 4
+    obrigatorio: S
+    valores: ["I155"]
+  - pos: 2
+    nome: COD_CTA
+    tipo: C
+    tamanho: null
+    obrigatorio: S
+    descricao: Conta analitica (deve ser I050.IND_CTA=A)
+  - pos: 3
+    nome: COD_CCUS
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: Centro de custos
+  - pos: 4
+    nome: VL_SLD_INI
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: Saldo inicial periodo (0 se zero, NUNCA vazio)
+  - pos: 5
+    nome: IND_DC_INI
+    tipo: C
+    tamanho: 1
+    obrigatorio: N
+    valores: ["D", "C"]
+    descricao: "D-Devedor, C-Credor. Manual literal: opcional. Comportamento PVA: NUNCA vazio mesmo se VL_SLD_INI=0 (REGRA_VALIDA_SLD_INI_*)"
+  - pos: 6
+    nome: VL_DEB
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: Total debitos do periodo
+  - pos: 7
+    nome: VL_CRED
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: Total creditos do periodo
+  - pos: 8
+    nome: VL_SLD_FIN
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: Saldo final periodo
+  - pos: 9
+    nome: IND_DC_FIN
+    tipo: C
+    tamanho: 1
+    obrigatorio: N
+    valores: ["D", "C"]
+    descricao: "D/C saldo final. Manual literal: opcional. Comportamento PVA: NUNCA vazio"
+  - pos: 10
+    nome: VL_SLD_INI_MF
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: N
+    descricao: "Saldo inicial em moeda funcional (apenas se 0000.IDENT_MF=S)"
+  - pos: 11
+    nome: IND_DC_INI_MF
+    tipo: C
+    tamanho: 1
+    obrigatorio: N
+    valores: ["D", "C"]
+    descricao: "D/C inicial MF (apenas se IDENT_MF=S)"
+  - pos: 12
+    nome: VL_DEB_MF
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: N
+    descricao: "Total debitos MF (apenas se IDENT_MF=S)"
+  - pos: 13
+    nome: VL_CRED_MF
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: N
+    descricao: "Total creditos MF (apenas se IDENT_MF=S)"
+  - pos: 14
+    nome: VL_SLD_FIN_MF
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: N
+    descricao: "Saldo final MF (apenas se IDENT_MF=S)"
+  - pos: 15
+    nome: IND_DC_FIN_MF
+    tipo: C
+    tamanho: 1
+    obrigatorio: N
+    valores: ["D", "C"]
+    descricao: "D/C final MF (apenas se IDENT_MF=S)"
+
+regras_extras:
+  - nome: REGRA_VALIDACAO_SALDO_FINAL
+    descricao: "VL_SLD_FIN = VL_SLD_INI +/- VL_DEB +/- VL_CRED considerando D/C inicial e final (audit_balance.py cobre)"
+    severidade: BLOQUEANTE
+    cobertura: auditando-sped-contabil.audit_balance
+  - nome: REGRA_VALIDACAO_SALDO_INI_DIF_FIN
+    descricao: "A partir do 2o mes: VL_SLD_INI(N) = VL_SLD_FIN(N-1) - continuidade entre periodos"
+    severidade: BLOQUEANTE
+    cobertura: auditando-sped-contabil.audit_balance
+  - nome: REGRA_VALIDACAO_VALOR_DEB
+    descricao: "Soma debitos I250 da conta no periodo = VL_DEB (apenas G/R/A)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VALIDACAO_VALOR_CRED
+    descricao: "Soma creditos I250 da conta no periodo = VL_CRED (apenas G/R/A)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_DUPLICIDADE_CONTA_SALDO_PERIODICO
+    descricao: "Chave (COD_CTA+COD_CCUS) unica por I150"
+    severidade: BLOQUEANTE
+  - nome: REGRA_CAMPOS_SALDOS_PERIODICOS_DIFERENTE_ZERO
+    descricao: "Sem I157 filho, pelo menos 1 valor != 0 (aviso)"
+    severidade: WARNING

@@ -78,9 +78,55 @@ Sempre estruturar em:
    `app/relatorios_fiscais/SPED_ECD_PLANO.md`.
 3. **NUNCA mascarar dado faltante** — se campo X esta vazio no SPED, reportar.
 4. **SPED da contadora EH ground truth** — divergencia favorece contadora.
-5. **Apos consolidar relatorio**, **salvar findings em
-   `/tmp/subagent-findings/audit-sped-{timestamp}.md`** — referenciado em
-   `CLAUDE.md` (raiz) secao "Confiabilidade de Output".
+5. **Apos consolidar relatorio**, **salvar DUAS saidas**:
+   - `/tmp/subagent-findings/audit-sped-{timestamp}.md` — relatorio humano
+     (referenciado em `CLAUDE.md` raiz secao "Confiabilidade de Output")
+   - `/tmp/subagent-findings/audit-sped-{timestamp}.json` — findings
+     estruturados para consumo programatico futuro (dashboard, alertas,
+     auditoria cross-versao). Schema obrigatorio abaixo.
+
+## Schema do JSON consolidado
+
+```json
+{
+  "sped_version": "V21",
+  "sped_path": "/caminho/SPED.txt",
+  "audited_at": "2026-05-17T09:30:00",
+  "total_findings": 23,
+  "by_severity": {"BLOQUEANTE": 5, "WARNING": 12, "INFO": 6},
+  "by_category": {
+    "compliance_manual": 8,
+    "saldo_contabil": 3,
+    "hierarquia": 2,
+    "diff_ground_truth": 10
+  },
+  "findings": [
+    {
+      "id": "audit-v21-001",
+      "categoria": "compliance_manual|saldo_contabil|hierarquia|diff_ground_truth|busca_semantica",
+      "severidade": "BLOQUEANTE|WARNING|INFO",
+      "registro": "I050|I155|I250|J100|J150|...",
+      "linha_sped": 4523,
+      "campo": "VL_DC",
+      "descricao": "Texto humano",
+      "evidencia": "I250 linha 4523: VL_DC=-1.234,56 negativo",
+      "acao_sugerida": "Verificar lancamento no Odoo move_id=8765",
+      "deep_link_odoo": "https://odoo.../web#id=8765&model=account.move.line",
+      "quem_resolve": "contador|ti|operacional",
+      "regra_violada": "REGRA_VL_DC_NAO_NEGATIVO"
+    }
+  ],
+  "pendencias": ["Pendencia 1", "Pendencia 2"]
+}
+```
+
+**Por que JSON paralelo (e nao output_format SDK)**:
+SDK 0.1.80 expoe `output_format` apenas em `ClaudeAgentOptions` (root
+invocation). `AgentDefinition` NAO aceita `output_format` — entao subagentes
+via Task tool herdam o orquestrador, nao definem o proprio. Salvar JSON em
+`/tmp/subagent-findings/` contorna isso sem mudar arquitetura. Quando houver
+endpoint dedicado de auditoria (futuro), passar `output_format=schema` em
+`ClaudeAgentOptions` direto.
 
 ## Reuso de Validator existente
 

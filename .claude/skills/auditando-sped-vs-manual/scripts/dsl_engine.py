@@ -154,6 +154,11 @@ def audit_registro_compliance(
     Itera todos os *.yaml na pasta de regras, carrega o schema de cada
     registro e valida cada ocorrencia encontrada no parsed SPED.
     Adicionar suporte a novo registro = criar novo YAML, zero codigo Python.
+
+    YAMLs com `parser_status: misaligned_blocked` sao PULADOS e geram
+    finding informativo (parser local diverge do Manual; rodar DSL contra
+    parser bugado produz falso positivo massivo). Ver `parser_fix_required`
+    no YAML para localizacao do fix.
     """
     findings: list[ComplianceFinding] = []
 
@@ -163,6 +168,21 @@ def audit_registro_compliance(
     for yaml_file in sorted(regras_dir.glob("*.yaml")):
         regras = load_regras_yaml(yaml_file)
         registro = regras["registro"]
+
+        if regras.get("parser_status") == "misaligned_blocked":
+            findings.append(ComplianceFinding(
+                tipo="yaml_skipped_parser_misaligned",
+                registro=registro,
+                campo="(YAML inteiro)",
+                severidade="INFO",
+                descricao=(
+                    f"YAML {registro} pulado: parser local diverge do Manual. "
+                    f"Fix: {regras.get('parser_fix_required', '(nao informado)')}"
+                ),
+                contexto={"yaml_file": yaml_file.name},
+            ))
+            continue
+
         records = parsed_sped.get("registros", {}).get(registro, [])
 
         for record in records:

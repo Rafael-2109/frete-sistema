@@ -1,0 +1,126 @@
+registro: J150
+descricao: Demonstracao do Resultado do Exercicio (DRE)
+hierarquia: 3
+pai: J005
+ocorrencia: "1:N"
+chave: "[COD_AGL]"
+fonte: manual_ecd/bloco_J_demonstracoes.md#registro-j150
+
+
+campos:
+  - pos: 1
+    nome: REG
+    tipo: C
+    tamanho: 4
+    obrigatorio: S
+    valores: ["J150"]
+  - pos: 2
+    nome: NU_ORDEM
+    tipo: N
+    tamanho: 19
+    obrigatorio: S
+    descricao: Ordem de visualizacao (unico)
+  - pos: 3
+    nome: COD_AGL
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: Codigo aglutinacao
+  - pos: 4
+    nome: IND_COD_AGL
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["T", "D"]
+    descricao: T-Totalizador, D-Detalhe
+  - pos: 5
+    nome: NIVEL_AGL
+    tipo: N
+    tamanho: null
+    obrigatorio: S
+    descricao: Nivel hierarquico (1 = raiz)
+  - pos: 6
+    nome: COD_AGL_SUP
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: Codigo aglutinacao superior
+  - pos: 7
+    nome: DESCR_COD_AGL
+    tipo: C
+    tamanho: null
+    obrigatorio: S
+    descricao: Descricao
+  - pos: 8
+    nome: VL_CTA_INI
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: N
+    descricao: Saldo do periodo IMEDIATAMENTE ANTERIOR
+  - pos: 9
+    nome: IND_DC_CTA_INI
+    tipo: C
+    tamanho: 1
+    obrigatorio: N
+    valores: ["D", "C"]
+    descricao: D/C anterior
+  - pos: 10
+    nome: VL_CTA_FIN
+    tipo: N
+    tamanho: 19
+    decimal: 2
+    obrigatorio: S
+    descricao: Valor final antes do encerramento
+  - pos: 11
+    nome: IND_DC_CTA_FIN
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["D", "C"]
+    descricao: D/C final
+  - pos: 12
+    nome: IND_GRP_DRE
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["D", "R"]
+    descricao: D-Despesa (reduz lucro), R-Receita (incrementa lucro)
+  - pos: 13
+    nome: NOTA_EXP_REF
+    tipo: C
+    tamanho: 12
+    obrigatorio: N
+    descricao: "Referencia a nota explicativa (J800 com TIPO_DOC in [010,011,012,999])"
+
+regras_extras:
+  - nome: REGRA_SOMA_NIVEIS_DRE
+    descricao: "Linhas T: VL_CTA_FIN = soma das filhas com mesmo COD_AGL_SUP (considerando D/C)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VALIDA_SALDO_COM_DRE
+    descricao: "Linhas D: VL_CTA_FIN = soma I355 calculada via COD_AGL no I052"
+    severidade: BLOQUEANTE
+  - nome: REGRA_COD_AGL_DUPLICIDADE
+    descricao: "COD_AGL unico no J150"
+    severidade: BLOQUEANTE
+  - nome: REGRA_OBRIGATORIO_I052
+    descricao: "Se IND_COD_AGL=D, deve existir I052 com mesmo COD_AGL apontando conta I050.IND_CTA=A"
+    severidade: BLOQUEANTE
+  - nome: REGRA_OBRIGATORIO_I052_MESMO_GRUPO
+    descricao: "I050.COD_NAT=04 (resultado) para contas vinculadas via I052 no J150"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VALIDA_SALDO_INI_DRE
+    descricao: "Se ID_DEM=1 e periodo dentro da ECD: VL_CTA_INI = C650.VL_CTA_FIN (DRE recuperada)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_NU_ORDEM_DUPLICADO
+    descricao: "NU_ORDEM unico no J150"
+    severidade: BLOQUEANTE
+  - nome: REGRA_NIVEL_1_UNICO
+    descricao: "Exatamente 1 linha NIVEL=1 (Resultado do Periodo / Lucro Liquido)"
+    severidade: BLOQUEANTE
+  - nome: REGRA_VALIDA_NIVEL_AGL
+    descricao: "NIVEL=1 deve ter IND_COD_AGL=T"
+    severidade: BLOQUEANTE
+  - nome: REGRA_EXISTE_NOTA_EXPLICATIVA
+    descricao: "Se NOTA_EXP_REF preenchido, J800 com TIPO_DOC in [010,011,012,999]"
+    severidade: BLOQUEANTE

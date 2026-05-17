@@ -115,3 +115,48 @@ def test_compliance_finding_to_dict():
     assert d["categoria"] == "compliance_manual"
     assert d["tipo"] == "campo_obrigatorio_ausente"
     assert isinstance(d, dict)
+
+
+def test_load_todos_yamls_validos():
+    """Smoke: todos os YAMLs em regras/ carregam sem erro e tem campos."""
+    yamls = sorted(REGRAS_DIR.glob("*.yaml"))
+    assert len(yamls) >= 5, (
+        f"Esperado >=5 YAMLs (I050, I155, I250, J100, J150). "
+        f"Encontrado {len(yamls)}: {[y.name for y in yamls]}"
+    )
+    for yaml_file in yamls:
+        regras = load_regras_yaml(yaml_file)
+        assert "registro" in regras, f"{yaml_file.name} sem campo 'registro'"
+        assert "campos" in regras, f"{yaml_file.name} sem campo 'campos'"
+        assert len(regras["campos"]) > 0, f"{yaml_file.name} com lista campos vazia"
+        # REG sempre como campo 1 (sanity)
+        reg_campo = next((c for c in regras["campos"] if c["nome"] == "REG"), None)
+        assert reg_campo is not None, f"{yaml_file.name} sem campo REG"
+        assert reg_campo["valores"] == [regras["registro"]], (
+            f"{yaml_file.name}: REG.valores={reg_campo['valores']} != "
+            f"['{regras['registro']}']"
+        )
+
+
+def test_parser_status_misaligned_pula_yaml(tmp_path):
+    """Mecanismo de skip via parser_status continua funcional para YAMLs
+    bloqueados — testa contra YAML sintetico (J100/J150 reais foram
+    desbloqueados em 2026-05-17 apos fix do parser)."""
+    yaml_blocked = tmp_path / "FAKE.yaml"
+    yaml_blocked.write_text(
+        "registro: FAKE\n"
+        "descricao: registro fake para testar skip\n"
+        "parser_status: misaligned_blocked\n"
+        "parser_fix_required: \"path/to/fix\"\n"
+        "campos:\n"
+        "  - {pos: 1, nome: REG, tipo: C, tamanho: 4, obrigatorio: S, valores: [FAKE]}\n",
+        encoding="utf-8",
+    )
+    parsed = {"registros": {"FAKE": [{"REG": "FAKE"}]}}
+    findings = audit_registro_compliance(parsed, tmp_path)
+    misaligned = [f for f in findings
+                  if f.tipo == "yaml_skipped_parser_misaligned"]
+    assert len(misaligned) == 1
+    assert misaligned[0].registro == "FAKE"
+    assert misaligned[0].severidade == "INFO"
+    assert "path/to/fix" in misaligned[0].descricao
