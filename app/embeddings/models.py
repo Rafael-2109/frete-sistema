@@ -621,3 +621,43 @@ class SqlEvaluatorFalsePositive(db.Model):
                 self.last_referenced_at.isoformat() if self.last_referenced_at else None
             ),
         }
+
+
+class SpedEcdRuleEmbedding(db.Model):
+    """Embedding de chunk normativo do Manual ECD Leiaute 9.
+
+    Tipos de chunk:
+    - 'registro': descricao completa de um registro (ex: I050)
+    - 'regra': uma REGRA_X nomeada
+    - 'campo': descricao de um campo critico (COD_NAT, IND_DC, etc.)
+    - 'plano_iteracao': uma iteracao do SPED_ECD_PLANO.md
+
+    Indexado em sped_ecd_rules_indexer (Fase 3 T3.2).
+    Consumido pelo subagente auditor-sped-ecd via app/embeddings/sped_rules_search.py.
+    """
+    __tablename__ = "sped_ecd_rule_embeddings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    chunk_id = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    chunk_type = db.Column(db.String(20), nullable=False, index=True)
+
+    bloco = db.Column(db.String(2), nullable=True, index=True)
+    registro = db.Column(db.String(8), nullable=True, index=True)
+    regra_name = db.Column(db.String(120), nullable=True, index=True)
+    severidade = db.Column(db.String(20), nullable=True)
+
+    content = db.Column(db.Text, nullable=False)
+    content_hash = db.Column(db.String(64), nullable=False, index=True)
+
+    embedding = db.Column(EMBEDDING_VECTOR_TYPE, nullable=False)
+    model = db.Column(db.String(40), nullable=False, default="voyage-4-lite")
+
+    source_file = db.Column(db.String(200), nullable=True)
+    source_anchor = db.Column(db.String(120), nullable=True)
+
+    created_at = db.Column(db.DateTime(timezone=False), default=lambda: agora_utc_naive())
+    updated_at = db.Column(db.DateTime(timezone=False), default=lambda: agora_utc_naive(),
+                           onupdate=lambda: agora_utc_naive())
+
+    def __repr__(self):
+        return f"<SpedEcdRuleEmbedding {self.chunk_id} {self.chunk_type}>"
