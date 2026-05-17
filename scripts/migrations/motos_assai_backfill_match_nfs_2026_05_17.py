@@ -75,7 +75,7 @@ from app.utils.cnpj_utils import normalizar_cnpj  # noqa: E402
 from app.utils.timezone import agora_brasil_naive  # noqa: E402
 
 
-SCRIPT_VERSION = '2026-05-17-v2'
+SCRIPT_VERSION = '2026-05-17-v2.1'
 MOTIVO = 'BACKFILL_2026_05_17'
 PEDIDO_PLACEHOLDER_NUMERO = 'BACKFILL-2026-05-17'
 
@@ -484,7 +484,7 @@ def parte5_cadastrar_chassis_via_regex() -> dict:
     """
     import re
     from app.motos_assai.models import (
-        AssaiNfQpaItem, AssaiNfQpa, AssaiMoto,
+        AssaiNfQpaItem, AssaiNfQpa, AssaiMoto, AssaiModelo,
         NF_STATUS_BATEU, NF_STATUS_CANCELADA, EVENTO_ESTOQUE,
         DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO,
     )
@@ -495,7 +495,9 @@ def parte5_cadastrar_chassis_via_regex() -> dict:
     stats = {
         'total_items': 0, 'criados': 0,
         'skip_ja_em_moto': 0, 'skip_modelo_nao_resolvido': 0,
-        'skip_regex_nao_bate': 0, 'erro': 0,
+        'skip_regex_nao_bate': 0,
+        'resolvido_por_regex': 0,  # v2.1: contador de fallback
+        'erro': 0,
     }
 
     items = (
@@ -512,6 +514,34 @@ def parte5_cadastrar_chassis_via_regex() -> dict:
         logger.info('[parte5] no-op — nenhum item com CHASSI_NAO_CADASTRADO.')
         return stats
 
+    # v2.1 fix: cache de modelos ativos com regex_chassi compilado.
+    # Fallback usado quando resolver_modelo (substring de descricao_qpa)
+    # falha para textos com marca/sufixo como "DOT MOTO CHEFE".
+    # O regex_chassi e a fonte de verdade do que e um chassi de cada modelo.
+    modelos_compilados: list[tuple[AssaiModelo, "re.Pattern[str]"]] = []
+    for m in AssaiModelo.query.filter_by(ativo=True).all():
+        if not m.regex_chassi:
+            continue
+        try:
+            pat = m.regex_chassi
+            if not pat.startswith('^'): pat = '^' + pat
+            if not pat.endswith('$'): pat = pat + '$'
+            modelos_compilados.append((m, re.compile(pat)))
+        except re.error:
+            logger.warning('[parte5] modelo %s tem regex invalido — skip cache', m.codigo)
+
+    def _resolver_via_regex(chassi_in: str):
+        """Retorna AssaiModelo se exatamente 1 regex bate, None senao."""
+        matches = [mm for mm, pat in modelos_compilados if pat.match(chassi_in)]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            logger.warning(
+                '[parte5] chassi=%r bate %d regex (ambiguo: %s) — SKIP',
+                chassi_in, len(matches), [mm.codigo for mm in matches],
+            )
+        return None
+
     chassis_processados: set[str] = set()
     for item in items:
         chassi = (item.chassi or '').strip().upper()
@@ -524,16 +554,35 @@ def parte5_cadastrar_chassis_via_regex() -> dict:
             stats['skip_ja_em_moto'] += 1
             continue
 
+        # 1a tentativa: resolver_modelo por texto (codigo/alias/substring)
         modelo = resolver_modelo(item.modelo_extraido or '', origem='NF_QPA')
+
+        # 2a tentativa (v2.1 fix): fallback por regex_chassi.
+        # Cobre caso "DOT MOTO CHEFE" da NF — texto nao casa descricao_qpa
+        # cadastrada ("AUTOPROPELIDO DOT 1000W 60V 20AH"), mas o chassi
+        # bate o regex unico do modelo DOT.
+        if not modelo:
+            modelo = _resolver_via_regex(chassi)
+            if modelo:
+                stats['resolvido_por_regex'] += 1
+                logger.info(
+                    '[parte5] chassi=%r resolvido VIA REGEX para %s '
+                    '(modelo_extraido=%r nao bateu resolver_modelo)',
+                    chassi, modelo.codigo, item.modelo_extraido,
+                )
+
         if not modelo:
             logger.warning(
-                '[parte5] SKIP chassi=%r — modelo nao resolvido para %r',
+                '[parte5] SKIP chassi=%r — modelo nao resolvido (texto=%r, regex tb falhou)',
                 chassi, item.modelo_extraido,
             )
             stats['skip_modelo_nao_resolvido'] += 1
             continue
 
-        # Valida regex (defesa — se nao bater, NAO criar moto invalida)
+        # Valida regex (defesa — se nao bater, NAO criar moto invalida).
+        # Se modelo veio do fallback regex, ja bateu — mas validamos de novo
+        # por consistencia (custa pouco, evita criar moto invalida se o
+        # `resolver_modelo` por texto tiver retornado o modelo errado).
         regex = modelo.regex_chassi
         if regex:
             pattern = regex if regex.startswith('^') else '^' + regex
