@@ -32,3 +32,16 @@ Em `company_id=5` (LF), audit listou 3 picking types `code='incoming'`:
 1. Buscar `stock.picking.type` com `id=16` para confirmar qual é
 2. Atualizar `.claude/references/odoo/IDS_FIXOS.md` com o ID correto (19 ou outro confirmado)
 3. Atualizar `app/recebimento/services/recebimento_lf_odoo_service.py` se referenciar 16 diretamente
+
+---
+## Resultado da investigação
+
+- `stock.picking.type id=16` existe e tem características:
+  - `id`: 16
+  - `name`: Conferência (CD)
+  - `code`: internal
+  - `company_id`: [4, 'NACOM GOYA - CD']
+  - `sequence_code`: CD/PACK
+  - `default_location_src_id`: [36, 'CD/Pré-separação']
+  - `default_location_dest_id`: [36, 'CD/Pré-separação']
+  - `active`: False

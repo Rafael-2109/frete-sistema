@@ -53,3 +53,27 @@ A busca por `l10n_br_numero_nota_fiscal` retorna registros em `account.move` com
 - NF 13075/147772/94410 → `False` (vazio)
 
 Confirma que `l10n_br_tipo_pedido` é setado nas SAÍDAS, não nas entradas. Reforça a tese acima.
+
+---
+## Resultado da investigação (audit 00b)
+
+### NF 94457
+- **1 NF(s) de saída encontrada(s)** com mesmo número.
+  - `account.move.id=607443` company=[1, 'NACOM GOYA - FB'] cfop_linha=5901 l10n_br_tipo_pedido='industrializacao'
+
+### NF 13075
+- **6 NF(s) de saída encontrada(s)** com mesmo número.
+  - `account.move.id=588209` company=[5, 'LA FAMIGLIA - LF'] cfop_linha=5903 l10n_br_tipo_pedido='perda'
+  - `account.move.id=169098` company=[4, 'NACOM GOYA - CD'] cfop_linha=5101 l10n_br_tipo_pedido='venda'
+  - `account.move.id=169096` company=[4, 'NACOM GOYA - CD'] cfop_linha=5401 l10n_br_tipo_pedido='venda'
+  - `account.move.id=169097` company=[4, 'NACOM GOYA - CD'] cfop_linha=5151 l10n_br_tipo_pedido='transf-filial'
+  - `account.move.id=169058` company=[4, 'NACOM GOYA - CD'] cfop_linha=5102 l10n_br_tipo_pedido='venda'
+  - `account.move.id=169060` company=[4, 'NACOM GOYA - CD'] cfop_linha=5920 l10n_br_tipo_pedido='vasilhame'
+
+### NF 147772
+- **1 NF(s) de saída encontrada(s)** com mesmo número.
+  - `account.move.id=590839` company=[4, 'NACOM GOYA - CD'] cfop_linha=5949 l10n_br_tipo_pedido='dev-industrializacao'
+
+### NF 94410
+- **1 NF(s) de saída encontrada(s)** com mesmo número.
+  - `account.move.id=604472` company=[1, 'NACOM GOYA - FB'] cfop_linha=5152 l10n_br_tipo_pedido='transf-filial'

@@ -28,12 +28,15 @@ CNPJS_GRUPO = [
 
 ## Picking Types por Company
 
-| Company | picking_type_id | Nome |
-|---------|-----------------|------|
-| FB (1) | 1 | Recebimento (FB) | ✅ Configurado em CONFIG_POR_EMPRESA |
-| SC (3) | 8 | Recebimento (SC) | ⚠️ ID correto mas NAO configurado em CONFIG_POR_EMPRESA |
-| CD (4) | 13 | Recebimento (CD) | ✅ Configurado em CONFIG_POR_EMPRESA |
-| LF (5) | 16 | Recebimento (LF) | ⚠️ ID correto mas NAO configurado em CONFIG_POR_EMPRESA |
+> **Atualizado 2026-05-17** apos audit (`scripts/inventario_2026_05/00b_investigar_gotchas.py`).
+> Anterior afirmava LF=16, mas id=16 e' "Conferencia (CD)" inativo da CD, nao LF.
+
+| Company | picking_type_id (Recebimento principal) | Outros incoming |
+|---------|----------------------------------------|------------------|
+| FB (1) | **1** Recebimento (FB) | 52 Recebimentos Industrializacao; 54 Recebimentos Entre Filiais; 6 Devolucoes |
+| SC (3) | **8** Recebimento (SC) | (nao auditado nesta fase) |
+| CD (4) | **13** Recebimento (CD) | 50 Recebimentos Entre Filiais; 18 Devolucoes |
+| LF (5) | **19** Recebimento (LF) | 64 Recebimentos Industrializacao; 24 Devolucoes |
 
 ---
 

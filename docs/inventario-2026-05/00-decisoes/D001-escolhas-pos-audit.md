@@ -1,0 +1,136 @@
+# D001 — Escolhas pós-audit: MATRIZ_INTERCOMPANY final
+
+**Data:** 2026-05-17
+**Origem:** F0 Task 0.1 + investigação G001/G002 (`00b_investigar_gotchas.py`)
+**Resolve:** L1, L3 (parcial), L8 do spec; G001, G002
+
+## COMPANY_LOCATIONS final
+
+Para `app/odoo/constants/locations.py`:
+
+```python
+COMPANY_LOCATIONS = {
+    1: 8,    # FB — FB/Estoque
+    4: 32,   # CD — CD/Estoque
+    5: 42,   # LF — LF/Estoque
+}
+```
+
+Confirmado em audit F0. SC (`company_id=3`) fora de escopo.
+
+## PICKING_TYPES finais
+
+Substituindo o que está em `.claude/references/odoo/IDS_FIXOS.md` (que tem `LF=16` errado):
+
+| Company | Recebimento (principal) | Industrialização | Devoluções | Entre Filiais |
+|---------|------------------------|------------------|------------|---------------|
+| FB (1) | **1** | 52 | 6 | 54 |
+| CD (4) | **13** | — | 18 | 50 |
+| LF (5) | **19** | 64 | 24 | — |
+
+**G002 resolvido**: `stock.picking.type id=16` é `Conferência (CD)`, code=`internal`, `active=False`. **Não tem nada a ver com LF**. Corrigir `IDS_FIXOS.md`.
+
+## MATRIZ_INTERCOMPANY final
+
+Para `app/odoo/constants/operacoes_fiscais.py`:
+
+```python
+MATRIZ_INTERCOMPANY = {
+    'industrializacao': {
+        'cfop': '5901',
+        'l10n_br_tipo_pedido': 'industrializacao',
+        'move_type': 'out_invoice',
+        'direcao': ('FB', 'LF'),  # uni-direcional confirmado
+        'tipo_produto': [1, 2, 3],
+        'nf_referencia': 94457,
+        'account_move_id_referencia': 607443,  # template direto
+        'fiscal_position_id': {
+            1: 25,  # FB: 'REMESSA PARA INDUSTRIALIZAÇÃO'
+        },
+        'partner_id_destino': {
+            'LF': 35,  # res.partner.id de LA FAMIGLIA - LF
+        },
+    },
+    'perda': {
+        'cfop': '5903',
+        'l10n_br_tipo_pedido': 'perda',
+        'move_type': 'out_invoice',
+        'direcao': ('LF', 'FB'),
+        'tipo_produto': [1, 2, 3],
+        'nf_referencia': 13075,
+        'account_move_id_referencia': 588209,
+        'fiscal_position_id': {
+            5: 91,  # LF: 'SAÍDA - PERDAS'
+        },
+        'partner_id_destino': {
+            'FB': 1,  # res.partner.id de NACOM GOYA - FB
+        },
+    },
+    'dev-industrializacao': {
+        'cfop': '5949',
+        'l10n_br_tipo_pedido': 'dev-industrializacao',
+        'move_type': 'out_invoice',
+        'direcao': 'BIDIRECIONAL',  # CD↔LF na NF ref (surpresa!), mas pode ser FB↔LF
+        'tipo_produto': [4],
+        'nf_referencia': 147772,
+        'account_move_id_referencia': 590839,
+        'fiscal_position_id': {
+            4: 74,  # CD: 'SAÍDA - REMESSA PARA RETRABALHO'
+            # 1: ?  — FB precisa investigar (G003)
+            # 5: ?  — LF precisa investigar (G003)
+        },
+        'partner_id_destino': {
+            'LF': 35,
+            # 'FB': 1, 'CD': 34 — direcoes inversas, ver G003
+        },
+    },
+    'transf-filial': {
+        'cfop': '5152',
+        'l10n_br_tipo_pedido': 'transf-filial',
+        'move_type': 'out_invoice',
+        'direcao': 'BIDIRECIONAL_FB_CD',
+        'tipo_produto': [1, 2, 3, 4],
+        'nf_referencia': 94410,
+        'account_move_id_referencia': 604472,
+        'fiscal_position_id': {
+            1: 20,  # FB: 'SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS'
+            # 4: ?  — CD precisa investigar (G003)
+        },
+        'partner_id_destino': {
+            'CD': 34,
+            # 'FB': 1 — direcao inversa, ver G003
+        },
+    },
+}
+```
+
+## Surpresa importante: NF 147772 vem do CD, não da FB
+
+O prompt do usuário (`prompt_inventario.md:106`) descreveu:
+> `"dev-industrializacao"` - Saída entre **[FB,LF]** de produto [4] CFOP [5949]
+
+Mas o audit revelou que a NF 147772 (ref) sai de **CD para LF**, não FB para LF.
+
+**Implicação**: a operação dev-industrializacao pode ocorrer em **3 direções**, não 2:
+- FB → LF (devolver retrabalho de produto da FB)
+- CD → LF (devolver retrabalho de produto do CD)
+- LF → FB ou LF → CD (devolução do retrabalho de volta)
+
+Para o inventário 05/2026: vamos precisar mapear, para cada produto tipo 4 com ajuste na LF, **qual é a origem real do produto** (FB ou CD) antes de emitir a NF dev-industrializacao.
+
+## Itens em aberto (G003 — investigar)
+
+- [ ] `fiscal_position_id` de **dev-industrializacao** em FB (1) e LF (5) — direções inversas
+- [ ] `fiscal_position_id` de **transf-filial** em CD (4) — direção CD→FB
+- [ ] `partner_id_destino` completo (todos os caminhos)
+- [ ] Confirmar regras de origem (FB×CD) para produtos tipo 4 em dev-industrializacao
+
+Estes não bloqueiam a implementação dos services (`stock_lot_service`, `stock_picking_service`, `account_move_intercompany_service` base), mas bloqueiam a execução real das NFs nessas direções.
+
+## Decisões a propagar
+
+1. Atualizar `MATRIZ_INTERCOMPANY` em `app/odoo/constants/operacoes_fiscais.py` (Fase 1) com os valores acima
+2. Atualizar `COMPANY_LOCATIONS` em `app/odoo/constants/locations.py` (Fase 1) com FB=8, CD=32, LF=42
+3. Corrigir `.claude/references/odoo/IDS_FIXOS.md` (LF picking_type = 19, não 16) — fora desta branch, em main
+4. Investigar G003 (fiscal_position_ids faltantes) antes da Fase 5 (execução)
+5. Considerar premissa P11: dev-industrializacao tem 3+ direções possíveis (FB→LF, CD→LF, LF→origem)
