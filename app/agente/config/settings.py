@@ -33,6 +33,16 @@ class AgentSettings:
     model: str = "claude-opus-4-7"
     api_key: Optional[str] = None
 
+    # Skills exclusivas do subagente auditor-sped-ecd.
+    # Filtradas via `skills=list[str]` no SDK 0.1.77+ — invisíveis no listing do
+    # principal E rejeitadas pelo Skill tool (SDK_CHANGELOG.md:160-167).
+    SPED_SKILLS_RESERVED: frozenset = frozenset({
+        "parseando-sped-ecd",
+        "auditando-sped-vs-manual",
+        "auditando-sped-contabil",
+        "comparando-sped-ground-truth",
+    })
+
     # Tools do SDK (ferramentas padrão permitidas)
     # NOTA: Funcionalidades são implementadas via SKILLS, não Custom Tools MCP
     # Skills estão em: .claude/skills/ (gerindo-expedicao, memoria-usuario, etc.)
@@ -40,9 +50,9 @@ class AgentSettings:
     #
     # 'Skill' NÃO está listada aqui (SDK 0.1.77+ deprecou "Skill" em
     # allowed_tools em favor da option `skills=` em ClaudeAgentOptions).
-    # client.py:_build_options() injeta `skills="all"` quando SDK >= 0.1.77
-    # (auto-config de "Skill" em allowed_tools) ou injeta 'Skill' aqui
-    # como fallback para SDK < 0.1.77. Ver _SDK_HAS_OPTIONS_SKILLS.
+    # client.py:_build_options() injeta `skills=_discover_skills_from_project()`
+    # quando SDK >= 0.1.77 (exclui SPED_SKILLS_RESERVED do listing do principal)
+    # ou injeta 'Skill' aqui como fallback para SDK < 0.1.77. Ver _SDK_HAS_OPTIONS_SKILLS.
     tools_enabled: List[str] = field(default_factory=lambda: [
         # Core — operações de arquivo e busca
         'Bash',             # OBRIGATÓRIO - executa scripts das Skills

@@ -77,6 +77,42 @@ def _check_options_skills_field() -> bool:
 _SDK_HAS_OPTIONS_SKILLS = _check_options_skills_field()
 
 
+def _discover_skills_from_project() -> list:
+    """Descobre skills em .claude/skills/ filtrando SPED_SKILLS_RESERVED.
+
+    Retorna lista ordenada de skill names (basename de diretórios que têm SKILL.md),
+    excluindo skills reservadas ao subagente auditor-sped-ecd.
+
+    Esta função é o input para `skills=list[str]` em ClaudeAgentOptions
+    (SDK 0.1.77+, ver SDK_CHANGELOG.md:160-167). Skills não listadas aqui:
+    1. Não aparecem no listing do agente principal (economia ~1K tokens).
+    2. São rejeitadas se o principal tentar invocar via Skill tool.
+
+    Returns:
+        Lista ordenada de skill names.
+    """
+    from pathlib import Path
+    from app.agente.config.settings import AgentSettings
+
+    # Path do .claude/skills/ relativo ao root do projeto
+    # __file__ = app/agente/sdk/client.py → 4 parents = root
+    skills_dir = Path(__file__).resolve().parent.parent.parent.parent / ".claude" / "skills"
+    if not skills_dir.is_dir():
+        return []
+
+    discovered: list = []
+    for entry in skills_dir.iterdir():
+        if not entry.is_dir():
+            continue
+        if not (entry / "SKILL.md").is_file():
+            continue
+        if entry.name in AgentSettings.SPED_SKILLS_RESERVED:
+            continue
+        discovered.append(entry.name)
+
+    return sorted(discovered)
+
+
 # SDK 0.1.74+: option `strict_mcp_config` em ClaudeAgentOptions. Quando True,
 # CLI usa APENAS mcp_servers passados em options, ignorando project/user/global
 # config (.mcp.json). Util para determinismo DEV vs PROD. Detectado uma vez no
@@ -1454,7 +1490,11 @@ Nunca invente informações."""
         # acessiveis via Read/Bash; o filtro complementa can_use_tool.
         # Fallback (SDK < 0.1.77): 'Skill' adicionado em allowed_tools manualmente.
         if _SDK_HAS_OPTIONS_SKILLS:
-            options_dict["skills"] = "all"
+            options_dict["skills"] = _discover_skills_from_project()
+            logger.debug(
+                f"[AGENT_CLIENT] skills filtradas: {len(options_dict['skills'])} skills "
+                f"(SPED_SKILLS_RESERVED excluídas)"
+            )
         else:
             options_dict["allowed_tools"].append("Skill")
             logger.debug(
