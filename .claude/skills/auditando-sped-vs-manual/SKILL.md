@@ -40,14 +40,21 @@ alterar codigo Python.
 - `tamanho_invalido` — BLOQUEANTE
 - `valor_nao_listado` — BLOQUEANTE
 
-## Modo 2: Busca Hibrida (Exato + Semantico)
+## Modo 2: Busca Hibrida (Exato + Semantico + Rerank)
 
-`buscar_regras_semantico()` faz busca em **2 camadas**:
+`buscar_regras_semantico()` faz busca em **3 camadas**:
 
 1. **Exato** — se a query contem `REGRA_X` ou codigo de registro (`I050`, `J930` etc),
    busca por `regra_name = X` direto. Resultados com `similarity=1.0` + `match_type="exact"`.
-2. **Semantico** — vector cosine para o restante (descricao em linguagem natural).
-   Exclui chunks ja retornados pelo exato.
+2. **Semantico (cosine)** — bi-encoder vector search. Rapido (~30ms), impreciso para
+   queries em linguagem natural ambigua. `match_type="semantic"`.
+3. **Reranking (cross-encoder)** — `rerank-2.5-lite` re-pontua os top-50 do cosine
+   com atencao completa sobre o par `(query, chunk)`. Mais preciso, +500-1500ms,
+   ~$0.001/query. `match_type="rerank"`.
+
+**Camada 3 e ativada quando**: `RERANK_SPED_RULES=true` (default) E query nao contem
+`REGRA_X` (P1-3 ja cobriu) E cosine retornou >=5 candidatos. Fallback graceful para
+cosine puro se Voyage rerank falhar.
 
 ### Exemplos de uso
 

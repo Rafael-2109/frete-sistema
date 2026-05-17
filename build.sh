@@ -328,6 +328,23 @@ echo "Agente Artifacts 17: tabela agente_artifacts..."
 python scripts/migrations/2026_05_12_agente_artifacts.py \
     || echo "⚠️ Migration agente_artifacts falhou, continuando deploy..."
 
+# 18a. SPED ECD Embeddings (2026-05-16): tabela sped_ecd_rule_embeddings.
+# Manual ECD Leiaute 9 + iteracoes PLANO + gotchas CLAUDE.md -> pgvector HNSW.
+# Consumido pela skill auditando-sped-vs-manual (subagente auditor-sped-ecd).
+# Idempotente (CREATE TABLE IF NOT EXISTS + pgvector hnsw cosine).
+echo "SPED ECD 18a: tabela sped_ecd_rule_embeddings..."
+python scripts/migrations/2026_05_16_sped_ecd_rule_embeddings.py \
+    || echo "⚠️ Migration sped_ecd_rule_embeddings falhou, continuando deploy..."
+
+# 18b. SPED ECD Embeddings: indexer idempotente.
+# Roda a cada deploy. content_hash skip quando nada mudou (custo ~$0 e ~5s).
+# Quando algum manual/PLANO/CLAUDE.md foi editado, re-embeda so os chunks
+# afetados via Voyage AI (~$0.0005-$0.01) e roda cleanup de orfaos.
+# Requer VOYAGE_API_KEY no env — sem ela, falha graceful (deploy continua).
+echo "SPED ECD 18b: re-indexar regras (idempotente)..."
+python -m app.embeddings.indexers.sped_ecd_rules_indexer \
+    || echo "⚠️ Indexer sped_ecd_rules falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

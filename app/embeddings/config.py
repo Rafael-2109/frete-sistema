@@ -68,9 +68,17 @@ THRESHOLD_DEVOLUCAO = float(os.environ.get("THRESHOLD_DEVOLUCAO", "0.60"))
 THRESHOLD_CARRIER = float(os.environ.get("THRESHOLD_CARRIER", "0.40"))
 # Rotas e templates: busca por tela/funcionalidade
 THRESHOLD_ROUTE_TEMPLATE = float(os.environ.get("THRESHOLD_ROUTE_TEMPLATE", "0.40"))
-# Regras normativas do Manual ECD Leiaute 9: 230-345 chunks
-# Precisao alta (lookup de regra especifica REGRA_X)
+# Regras normativas do Manual ECD Leiaute 9: ~450 chunks (apos splits P1-1).
+# Precisao alta (lookup de regra especifica REGRA_X).
 THRESHOLD_SPED_RULES = float(os.environ.get("THRESHOLD_SPED_RULES", "0.45"))
+
+# Reranking dedicado para SPED rules (independente de RERANKING_ENABLED global).
+# Usado pelo subagente auditor-sped-ecd — offline, custo trivial (~$0.001/query),
+# latencia aceitavel (+500-1500ms). Skip quando query tem REGRA_X exato (P1-3
+# ja resolveu) ou candidatos < 5 (nada para reordenar).
+RERANK_SPED_RULES = os.environ.get("RERANK_SPED_RULES", "true").lower() == "true"
+# Quantos candidatos cosine alimentam o reranker antes de cortar para `limit`.
+SPED_RULES_RERANK_CANDIDATES = int(os.environ.get("SPED_RULES_RERANK_CANDIDATES", "50"))
 
 # Top-K para reranking (candidatos antes do rerank)
 RERANK_CANDIDATES = int(os.environ.get("RERANK_CANDIDATES", "50"))
