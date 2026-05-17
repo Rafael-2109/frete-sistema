@@ -15,6 +15,7 @@ ARQUITETURA (v3 — ClaudeSDKClient persistente):
 import logging
 import queue
 import time
+from functools import lru_cache
 from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
 from app.utils.timezone import agora_utc_naive
 
@@ -77,7 +78,8 @@ def _check_options_skills_field() -> bool:
 _SDK_HAS_OPTIONS_SKILLS = _check_options_skills_field()
 
 
-def _discover_skills_from_project() -> list:
+@lru_cache(maxsize=1)
+def _discover_skills_from_project() -> list[str]:
     """Descobre skills em .claude/skills/ filtrando SPED_SKILLS_RESERVED.
 
     Retorna lista ordenada de skill names (basename de diretórios que têm SKILL.md),
@@ -100,7 +102,7 @@ def _discover_skills_from_project() -> list:
     if not skills_dir.is_dir():
         return []
 
-    discovered: list = []
+    discovered: list[str] = []
     for entry in skills_dir.iterdir():
         if not entry.is_dir():
             continue

@@ -10,7 +10,7 @@ O SDK gerencia sessions automaticamente. Não é necessário configurar Redis/TT
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from functools import lru_cache
 
 
@@ -36,7 +36,7 @@ class AgentSettings:
     # Skills exclusivas do subagente auditor-sped-ecd.
     # Filtradas via `skills=list[str]` no SDK 0.1.77+ — invisíveis no listing do
     # principal E rejeitadas pelo Skill tool (SDK_CHANGELOG.md:160-167).
-    SPED_SKILLS_RESERVED: frozenset = frozenset({
+    SPED_SKILLS_RESERVED: ClassVar[frozenset] = frozenset({
         "parseando-sped-ecd",
         "auditando-sped-vs-manual",
         "auditando-sped-contabil",
