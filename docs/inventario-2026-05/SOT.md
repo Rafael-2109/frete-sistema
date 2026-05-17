@@ -3,7 +3,7 @@
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
 **Última atualização:** 2026-05-17
-**Status global:** Foundation + F3 + F4 + F5 completas. Services 100% prontos. Próximos: F6-F9 (hooks + scripts + docs + execução).
+**Status global:** Foundation + F3 + F4 + F5 completas. Services 100% prontos. F6 CANCELADA (redundante — ver §6.1). Próximos: F7 (scripts) + F8 (docs) + F9 (execução).
 
 ---
 
@@ -58,10 +58,31 @@ Leitura: `✅ feito` / `⏳ pendente` / `⚠️ parcial` / `🚫 bloqueado` / `�
 
 | Fase | Status | Próximo passo | Bloqueio? |
 |------|--------|---------------|-----------|
-| **F6** Hooks determinísticos | ⏳ 3 tasks | Task 6.1 (pre_execute_nf.py) | Liberado — F1 (constants) ✅ |
+| **F6** Hooks determinísticos | 🚫 **CANCELADA** | — | Decisão usuário 2026-05-17 — ver §6.1 |
 | **F7** Scripts datados (10 scripts) | 📝 7.1 já tem template completo no plano, 7.2-7.10 expandidos | Implementar 7.1 → 7.10 sequencialmente | Liberado — F3+F4+F5 ✅ |
 | **F8** Documentação (2 playbooks + estrutura) | ⏳ 4 tasks | Task 8.1 (estrutura pastas — JÁ PARCIAL) | Não |
-| **F9** Execução operacional | 🚫 bloqueada | Aguardar F6+F7 | Bloqueio: precisa hooks + scripts |
+| **F9** Execução operacional | 🚫 bloqueada | Aguardar F7 | Bloqueio: precisa scripts |
+
+### §6.1 — Justificativa do cancelamento de F6
+
+**4 dos 5 hooks são redundantes** — proteção já está nos services:
+
+| Hook proposto | Equivalente existente |
+|---------------|----------------------|
+| `pre_execute_nf` regras 1-2 (status=APROVADO, aprovado_em) | Caller filtra `AjusteEstoqueInventario.query.filter_by(status='APROVADO')` antes de chamar f5a |
+| `pre_lote_rename` | `StockLotService.renomear()` (F2) — mesma regra idêntica |
+| `pre_execute_indisponibilizacao` | `IndisponibilizacaoEstoqueService.indisponibilizar_lote/local` raise se `canary_passou=False` |
+| `pos_execute_nf` → `db.session.commit()` | F4 já commita em cada fase do pipeline |
+
+**`pos_execute_nf` → gera `.md` em `04-movimentacoes/`**: não funciona em Render (filesystem efêmero, deploys reescrevem). Auditoria real já tem 2 caminhos: tabela `OperacaoOdooAuditoria` (polimórfica) + `AjusteEstoqueInventario.fase_pipeline/erro_msg/chave_nfe/picking_id_odoo/invoice_id_odoo` (granular).
+
+**`pre_commit_docs.sh`**: só faria sentido se houvesse os `.md` (cancelados acima).
+
+**Únicas 2 regras NÃO cobertas em código**:
+- Divergência custo médio inv vs Odoo > 20% (sinal de produto errado)
+- Teto financeiro da onda (limite de exposição por execução)
+
+Decisão: operador valida custo/teto on-the-fly em F7 (inline no script de execução, não como hook separado).
 
 ### Tarefas técnicas pendentes ao final (G003 sugestão de refator)
 
@@ -256,22 +277,17 @@ build.sh    # items 19/20/21 adicionados
 
 ```
 scripts/inventario_2026_05/
-  01_extrair_estoque_odoo.py          # F1 — script de operação
+  01_extrair_estoque_odoo.py          # F7 — script de operação
   02_carregar_inventario_xlsx.py
   03_confrontar_inv_vs_odoo.py
   04_propor_ajustes.py
   05_canary_estoque_staging.py
   06_canary_nfs_referencia.py
-  07_executar_onda1_lf_fb.py
+  07_executar_onda1_lf_fb.py          # incluir validacao inline: custo >20%, teto onda
   08_executar_onda2_cd_fb.py
   09_executar_onda3_indisponibilizacao.py
   10_reconciliar_pos_ajuste.py
-  hooks/
-    pre_execute_nf.py
-    pos_execute_nf.py
-    pre_lote_rename.py
-    pre_execute_indisponibilizacao.py
-    pre_commit_docs.sh
+  # F6 hooks/ CANCELADA — ver §6.1
 
 .claude/references/odoo/
   OPERACOES_FISCAIS_NACOM_LF.md       # F8 playbook
