@@ -79,3 +79,52 @@ def test_balance_multiple_accounts():
     findings = audit_balance_equations(parsed)
     assert len(findings) == 1
     assert findings[0].cod_cta == "11102"
+
+
+def test_balance_malformed_record_missing_field():
+    """Registro sem campo obrigatorio gera WARNING com malformed=True."""
+    parsed = make_parsed_sped([
+        {"COD_CTA": "11101", "COD_CCUS": "",
+         # VL_SLD_INI faltando
+         "IND_DC_INI": "D", "VL_DEB": "50,00", "VL_CRED": "30,00",
+         "VL_SLD_FIN": "120,00", "IND_DC_FIN": "D"},
+    ])
+    findings = audit_balance_equations(parsed)
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.severidade == "WARNING"
+    assert f.malformed is True
+    assert "malformado" in f.descricao.lower()
+
+
+def test_balance_malformed_record_invalid_decimal():
+    """Valor decimal invalido gera WARNING com malformed=True."""
+    parsed = make_parsed_sped([
+        {"COD_CTA": "11101", "COD_CCUS": "", "VL_SLD_INI": "abc",
+         "IND_DC_INI": "D", "VL_DEB": "50,00", "VL_CRED": "30,00",
+         "VL_SLD_FIN": "120,00", "IND_DC_FIN": "D"},
+    ])
+    findings = audit_balance_equations(parsed)
+    assert len(findings) == 1
+    assert findings[0].malformed is True
+
+
+def test_balance_tolerance_zero_strict_mode():
+    """tolerance=0: equacao perfeita passa, diff de 0,01 quebra."""
+    # Equacao perfeita: deve passar
+    parsed_perfect = make_parsed_sped([
+        {"COD_CTA": "11101", "COD_CCUS": "", "VL_SLD_INI": "100,00",
+         "IND_DC_INI": "D", "VL_DEB": "50,00", "VL_CRED": "30,00",
+         "VL_SLD_FIN": "120,00", "IND_DC_FIN": "D"},
+    ])
+    assert audit_balance_equations(parsed_perfect, tolerance=0) == []
+
+    # Diff de 0,01 com tolerance=0: deve quebrar
+    parsed_diff = make_parsed_sped([
+        {"COD_CTA": "11101", "COD_CCUS": "", "VL_SLD_INI": "100,00",
+         "IND_DC_INI": "D", "VL_DEB": "50,00", "VL_CRED": "30,00",
+         "VL_SLD_FIN": "120,01", "IND_DC_FIN": "D"},
+    ])
+    findings = audit_balance_equations(parsed_diff, tolerance=0)
+    assert len(findings) == 1
+    assert findings[0].severidade == "BLOQUEANTE"

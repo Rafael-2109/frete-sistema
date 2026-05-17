@@ -27,11 +27,12 @@ class BalanceFinding:
     diff: Decimal
     severidade: str  # 'BLOQUEANTE' | 'WARNING'
     descricao: str
+    malformed: bool = False  # True quando equacao nao pode ser computada (parse error)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "categoria": "batimento_contabil",
-            "tipo": "equacionalidade_saldo",
+            "tipo": "equacionalidade_saldo" if not self.malformed else "registro_malformado",
             "cod_cta": self.cod_cta,
             "cod_ccus": self.cod_ccus,
             "saldo_ini_signed": str(self.saldo_ini_signed),
@@ -42,6 +43,7 @@ class BalanceFinding:
             "diff": str(self.diff),
             "severidade": self.severidade,
             "descricao": self.descricao,
+            "malformed": self.malformed,
         }
 
 
@@ -129,6 +131,7 @@ def audit_balance_equations(
                 diff=Decimal("0"),
                 severidade="WARNING",
                 descricao=f"I155 malformado: {e}",
+                malformed=True,
             ))
 
     return findings
