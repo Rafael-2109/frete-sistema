@@ -1476,6 +1476,8 @@ git commit -am "feat(odoo): StockLotService.{inativar,reativar,atualizar_validad
 
 ## Fase 3 — Service `stock_picking_service`
 
+> **REVISADO 2026-05-17 após G004**: além das tasks originais (criar/confirmar/validar/cancelar), service ganha 2 métodos para integrar com robô CIEL IT: `liberar_faturamento` e `aguardar_invoice_do_robo`. Total: **4 tasks** nesta fase (3.1, 3.2, 3.3, 3.4).
+
 ### Task 3.1: Esqueleto + `criar_transferencia`
 
 **Files:**
@@ -1749,13 +1751,154 @@ Expected: 6 PASSED.
 git commit -am "feat(odoo): StockPickingService — confirmar/preencher/validar/cancelar"
 ```
 
+### Task 3.3: `liberar_faturamento` (action_liberar_faturamento → robô CIEL IT)
+
+**Files:**
+- Modify: `app/odoo/services/stock_picking_service.py`
+- Modify: `tests/odoo/services/test_stock_picking_service.py`
+
+- [ ] **Step 1: Test**
+
+```python
+def test_liberar_faturamento_chama_action():
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    svc.liberar_faturamento(picking_id=9999)
+    odoo.execute_kw.assert_called_with(
+        'stock.picking', 'action_liberar_faturamento', [[9999]]
+    )
+
+
+def test_liberar_faturamento_propaga_erro_negocio():
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = Exception('Picking nao validado')
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(Exception, match='nao validado'):
+        svc.liberar_faturamento(picking_id=9999)
+```
+
+- [ ] **Step 2: Implementar**
+
+```python
+    def liberar_faturamento(self, picking_id: int) -> None:
+        """action_liberar_faturamento — sinaliza para robo CIEL IT criar a invoice.
+
+        Apos esta chamada, o robo CIEL IT da NACOM cria automaticamente o
+        account.move correspondente (pode levar ate 30 min). Use
+        `aguardar_invoice_do_robo()` para fire-and-poll do resultado.
+
+        Reuso: recebimento_lf_odoo_service.py (etapa 21, sem nome explicito).
+        """
+        self.odoo.execute_kw('stock.picking', 'action_liberar_faturamento',
+                             [[picking_id]])
+```
+
+- [ ] **Step 3: Run + commit**
+
+```bash
+pytest tests/odoo/services/test_stock_picking_service.py -v
+git commit -am "feat(odoo): StockPickingService.liberar_faturamento (robo CIEL IT)"
+```
+
+### Task 3.4: `aguardar_invoice_do_robo` (fire-and-poll batch-friendly)
+
+**Files:**
+- Modify: `app/odoo/services/stock_picking_service.py`
+- Modify: `tests/odoo/services/test_stock_picking_service.py`
+
+Pollings batch (`InventarioPipelineService.f5d`) usam este método.
+
+- [ ] **Step 1: Test**
+
+```python
+def test_aguardar_invoice_acha_imediatamente():
+    """Se invoice ja existe na 1a tentativa, retorna sem esperar."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{'name': 'PICK-001', 'company_id': [1]}]
+    odoo.search_read.return_value = [{'id': 555, 'name': 'INV-001', 'state': 'draft'}]
+    svc = StockPickingService(odoo=odoo)
+    invoice_id = svc.aguardar_invoice_do_robo(picking_id=9999, timeout=5, poll_interval=1)
+    assert invoice_id == 555
+
+
+def test_aguardar_invoice_timeout():
+    """Se invoice nao aparece em timeout, retorna None."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{'name': 'PICK-002', 'company_id': [1]}]
+    odoo.search_read.return_value = []
+    svc = StockPickingService(odoo=odoo)
+    invoice_id = svc.aguardar_invoice_do_robo(picking_id=9999, timeout=2, poll_interval=1)
+    assert invoice_id is None
+```
+
+- [ ] **Step 2: Implementar**
+
+```python
+    def aguardar_invoice_do_robo(
+        self, picking_id: int, timeout: int = 1800, poll_interval: int = 40
+    ) -> Optional[int]:
+        """Fire-and-poll: aguarda robo CIEL IT criar a invoice apos liberar_faturamento.
+
+        O robo CIEL IT cria account.move com `ref=picking_name`. Buscamos
+        ate timeout segundos (default 30 min, intervalo 40s).
+
+        Returns: invoice_id (account.move.id) ou None se timeout.
+
+        Padrao: recebimento_lf_odoo_service.py:2572-2611
+        """
+        import time
+        picking = self.odoo.read('stock.picking', [picking_id], ['name', 'company_id'])
+        if not picking:
+            raise ValueError(f'Picking {picking_id} nao encontrado')
+        picking_name = picking[0]['name']
+        company_id = picking[0]['company_id'][0]
+
+        start = time.time()
+        while time.time() - start < timeout:
+            # Metodo 1: ref = picking_name (robo CIEL IT)
+            invoices = self.odoo.search_read('account.move', [
+                ['company_id', '=', company_id],
+                ['ref', '=', picking_name],
+                ['state', '!=', 'cancel'],
+            ], ['id'], limit=1)
+            if invoices:
+                return invoices[0]['id']
+
+            # Metodo 2: invoice_origin como fallback
+            invoices = self.odoo.search_read('account.move', [
+                ['company_id', '=', company_id],
+                ['invoice_origin', 'ilike', picking_name],
+                ['state', '!=', 'cancel'],
+            ], ['id'], limit=1)
+            if invoices:
+                return invoices[0]['id']
+
+            time.sleep(poll_interval)
+        return None
+```
+
+- [ ] **Step 3: Run + commit**
+
+```bash
+pytest tests/odoo/services/test_stock_picking_service.py -v
+git commit -am "feat(odoo): StockPickingService.aguardar_invoice_do_robo (fire-and-poll)"
+```
+
 ---
 
-## Fase 4 — Service `account_move_intercompany_service` (o núcleo)
+## Fase 4 — Service `inventario_pipeline_service` (orquestrador batch)
 
-Esta fase implementa o service genérico parametrizado. **Trabalho maior** — quebrado em sub-tasks.
+> **REESCRITA 2026-05-17 após G004/D003**: substitui o antigo `account_move_intercompany_service` (que assumia criação direta de `account.move` via XML-RPC — incompatível com padrão NACOM). Novo desenho: **5 métodos batch** que processam coleções de ajustes em pipeline.
 
-### Task 4.1: Esqueleto + `preview()`
+Esta fase implementa o **núcleo** do pipeline. Cada método opera sobre lista de ajustes/pickings/invoices, com paralelismo controlado por semaphore.
+
+### Task 4.0: REVOGADA — Fase 4 anterior (AccountMoveIntercompanyService.preview/executar/cancelar)
+
+> **As 3 sub-tasks abaixo (4.1, 4.2, 4.3) foram REVOGADAS após G004** que revelou que o padrão NACOM não cria `account.move` diretamente via XML-RPC. Substituídas pelas Tasks 4.1-4.5 do **NOVO** `InventarioPipelineService` (após a seção revogada).
+>
+> **NÃO EXECUTAR** as Tasks 4.1, 4.2, 4.3 originais abaixo. Pular para "### Task 4.1 (NOVA): `f5a_criar_pickings()`" mais adiante.
+
+### Task 4.1 REVOGADA: Esqueleto + `preview()`
 
 **Files:**
 - Create: `app/odoo/services/account_move_intercompany_service.py`
@@ -1912,7 +2055,7 @@ git add app/odoo/services/account_move_intercompany_service.py tests/odoo/servic
 git commit -m "feat(odoo): AccountMoveIntercompanyService.preview com leitura NF ref"
 ```
 
-### Task 4.2: `executar()` — criar account.move + post
+### Task 4.2 REVOGADA: `executar()` — criar account.move + post
 
 - [ ] **Step 1: Tests**
 
@@ -2111,7 +2254,7 @@ Expected: 4 PASSED.
 git commit -am "feat(odoo): AccountMoveIntercompanyService.executar — idempotente, recalc impostos correto, audit"
 ```
 
-### Task 4.3: `cancelar()` + integração com `stock_picking_service`
+### Task 4.3 REVOGADA: `cancelar()` + integração com `stock_picking_service`
 
 - [ ] **Step 1: Test cancelar**
 
@@ -2169,6 +2312,454 @@ Expected: 5 PASSED.
 ```bash
 git commit -am "feat(odoo): AccountMoveIntercompanyService.cancelar com auditoria"
 ```
+
+---
+
+## Fase 4 (NOVA) — Service `InventarioPipelineService` (orquestrador pipeline)
+
+> **Reescrita após G004/D003**. Substitui o `account_move_intercompany_service` revogado.
+> Service único `app/odoo/services/inventario_pipeline_service.py` com **5 métodos batch** que processam coleções de ajustes em 5 etapas paralelas/serial conforme natureza.
+
+### Task 4.1 (NOVA): Esqueleto + `f5a_criar_pickings()`
+
+**Files:**
+- Create: `app/odoo/services/inventario_pipeline_service.py`
+- Create: `tests/odoo/services/test_inventario_pipeline_service.py`
+
+- [ ] **Step 1: Test (com mocks)**
+
+```python
+import pytest
+from unittest.mock import MagicMock
+from app.odoo.services.inventario_pipeline_service import InventarioPipelineService
+
+
+def test_f5a_criar_pickings_para_lista_de_ajustes(app_ctx):
+    """f5a recebe lista de ajustes e cria 1 picking por ajuste."""
+    from app.odoo.models import AjusteEstoqueInventario
+    from app import db
+    from decimal import Decimal
+
+    ajustes = [
+        AjusteEstoqueInventario(
+            ciclo='TEST', cod_produto='101001001', tipo_produto=1,
+            company_id=5, qtd_inventario=Decimal('5'), qtd_odoo=Decimal('10'),
+            qtd_ajuste=Decimal('-5'), acao_decidida='PERDA_LF_FB',
+            status='APROVADO', criado_por='pytest',
+        )
+    ]
+    db.session.add_all(ajustes)
+    db.session.flush()
+
+    odoo = MagicMock()
+    odoo.create.return_value = 99999
+    odoo.search_read.return_value = [{'id': 1, 'name': 'COGUMELO', 'default_code': '101001001'}]
+    odoo.read.return_value = [{'id': 1, 'uom_id': [1, 'un']}]
+
+    picking_svc = MagicMock()
+    picking_svc.criar_transferencia.return_value = 99999
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    result = svc.f5a_criar_pickings(ajustes, executado_por='pytest')
+
+    assert ajustes[0].id in result
+    assert result[ajustes[0].id] == 99999
+    # ajuste atualizado
+    assert ajustes[0].fase_pipeline == 'F5a_PICKING_CRIADO'
+    assert ajustes[0].picking_id_odoo == 99999
+    db.session.rollback()
+```
+
+- [ ] **Step 2: Implementar `f5a_criar_pickings`**
+
+```python
+"""InventarioPipelineService — orquestrador pipeline batch.
+
+5 metodos batch: f5a_criar_pickings, f5b_validar_pickings,
+f5c_liberar_faturamento, f5d_aguardar_invoices, f5e_transmitir_sefaz.
+
+Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md §6.2 + §8.1.1
+Decisao: docs/inventario-2026-05/00-decisoes/D003-arquitetura-pipeline-batches.md
+"""
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Semaphore
+from typing import List, Dict, Optional
+from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.services.stock_picking_service import StockPickingService
+from app.odoo.constants.operacoes_fiscais import (
+    MATRIZ_INTERCOMPANY,
+    COMPANY_PARTNER_ID,
+    resolver_fiscal_position,
+)
+from app.odoo.constants.locations import COMPANY_LOCATIONS
+from app import db
+
+logger = logging.getLogger(__name__)
+
+
+# Mapeia acao_decidida -> (tipo_operacao, company_origem, company_destino)
+ACAO_PARA_DIRECAO = {
+    'TRANSFERIR_CD_FB':         ('transf-filial',         4, 1),
+    'TRANSFERIR_FB_CD':         ('transf-filial',         1, 4),
+    'INDUSTRIALIZACAO_FB_LF':   ('industrializacao',      1, 5),
+    'PERDA_LF_FB':              ('perda',                 5, 1),
+    'DEV_FB_LF':                ('dev-industrializacao',  1, 5),
+    'DEV_LF_FB':                ('dev-industrializacao',  5, 1),
+    'DEV_CD_LF':                ('dev-industrializacao',  4, 5),
+    'DEV_LF_CD':                ('dev-industrializacao',  5, 4),
+}
+
+
+class InventarioPipelineService:
+    def __init__(self, odoo=None, picking_svc=None, max_concurrent: int = 5):
+        self.odoo = odoo or get_odoo_connection()
+        self.picking_svc = picking_svc or StockPickingService(odoo=self.odoo)
+        self.semaphore = Semaphore(max_concurrent)
+
+    def f5a_criar_pickings(self, ajustes: List, executado_por: str) -> Dict[int, int]:
+        """Cria pickings em paralelo (1 por ajuste). Retorna {ajuste_id: picking_id}.
+
+        Idempotente: se ajuste.picking_id_odoo ja existe, skip.
+        Paralelismo: ThreadPoolExecutor + semaphore.
+        """
+        result: Dict[int, int] = {}
+
+        def _criar_um(ajuste):
+            with self.semaphore:
+                if ajuste.picking_id_odoo:
+                    logger.info(f'F5a skip ajuste {ajuste.id} (ja tem picking_id)')
+                    return ajuste.id, ajuste.picking_id_odoo
+
+                if ajuste.acao_decidida not in ACAO_PARA_DIRECAO:
+                    raise ValueError(f'acao_decidida={ajuste.acao_decidida} sem direcao mapeada')
+                tipo_op, origem, destino = ACAO_PARA_DIRECAO[ajuste.acao_decidida]
+
+                # Resolver product_id no Odoo
+                products = self.odoo.search_read('product.product',
+                    [['default_code', '=', ajuste.cod_produto]],
+                    ['id'], limit=1)
+                if not products:
+                    raise RuntimeError(f'product.default_code={ajuste.cod_produto} nao encontrado')
+                product_id = products[0]['id']
+
+                # Resolver picking_type_id e location_dest_id por direcao
+                # NOTE: mapeamento abaixo precisa ser configurado em constants/picking_types.py
+                # (a criar em fase futura — por enquanto hardcoded conforme audit 00e)
+                picking_type_id = self._resolver_picking_type(origem, tipo_op)
+                location_origem = COMPANY_LOCATIONS[origem]
+                location_destino = 5  # Parceiros/Clientes (virtual, descoberto em audit 00e)
+                partner_id = COMPANY_PARTNER_ID[destino]
+
+                linhas = [{
+                    'product_id': product_id,
+                    'quantity': float(abs(ajuste.qtd_ajuste)),
+                    'lot_name': ajuste.lote_inventariado or ajuste.lote_odoo,
+                }]
+
+                picking_id = self.picking_svc.criar_transferencia(
+                    company_origem_id=origem,
+                    company_destino_id=destino,
+                    location_origem_id=location_origem,
+                    location_destino_id=location_destino,
+                    linhas=linhas,
+                    picking_type_id=picking_type_id,
+                    partner_id=partner_id,
+                    origin=f'INV-{ajuste.ciclo}-A{ajuste.id:06d}',
+                )
+
+                ajuste.picking_id_odoo = picking_id
+                ajuste.fase_pipeline = 'F5a_PICKING_CRIADO'
+                db.session.commit()
+                return ajuste.id, picking_id
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(_criar_um, a): a for a in ajustes}
+            for fut in as_completed(futures):
+                try:
+                    ajuste_id, picking_id = fut.result()
+                    result[ajuste_id] = picking_id
+                except Exception as e:
+                    a = futures[fut]
+                    a.fase_pipeline = 'F5a_FALHA'
+                    a.erro_msg = str(e)
+                    db.session.commit()
+                    logger.error(f'F5a falhou para ajuste {a.id}: {e}')
+        return result
+
+    def _resolver_picking_type(self, company_origem: int, tipo_op: str) -> int:
+        """Hardcoded por enquanto. Auditoria 00e descobriu:
+        FB outgoing: 51 (entre filiais) | 53 (industrializacao) | 88 (industria copia)
+        CD outgoing: 55 (entre filiais) | 96 (retrabalho)
+        LF outgoing: 66 (industrializacao) | 94 (n. aplicado)
+
+        Mapping pragmatico: usar 'entre filiais' para transf-filial e o
+        'industrializacao' equivalente para os outros.
+        """
+        # Tabela (origem, tipo) -> picking_type_id
+        mapping = {
+            (1, 'transf-filial'):         51,  # FB: Expedicao Entre Filiais
+            (4, 'transf-filial'):         55,  # CD: Expedicao Entre Filiais
+            (1, 'industrializacao'):      53,  # FB: Expedicao Industrializacao
+            (5, 'perda'):                 94,  # LF: Expedicao N Aplicado
+            (4, 'dev-industrializacao'):  96,  # CD: Retrabalho
+            (5, 'dev-industrializacao'):  66,  # LF: Expedicao Industrializacao
+            (1, 'dev-industrializacao'):  53,  # FB: idem industrializacao (sem precedente)
+        }
+        key = (company_origem, tipo_op)
+        if key not in mapping:
+            raise ValueError(f'picking_type sem mapeamento para {key}')
+        return mapping[key]
+```
+
+- [ ] **Step 3: Run + commit**
+
+```bash
+pytest tests/odoo/services/test_inventario_pipeline_service.py -v
+git add app/odoo/services/inventario_pipeline_service.py tests/odoo/services/test_inventario_pipeline_service.py
+git commit -m "feat(odoo): InventarioPipelineService.f5a_criar_pickings — batch paralelo"
+```
+
+### Task 4.2 (NOVA): `f5b_validar_pickings()`
+
+- [ ] **Step 1: Test**
+
+```python
+def test_f5b_valida_em_paralelo():
+    """f5b confirma + reserva + preenche qty_done + valida cada picking."""
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    picking_svc.validar.return_value = True
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    result = svc.f5b_validar_pickings([1001, 1002, 1003])
+    assert result == {1001: True, 1002: True, 1003: True}
+    assert picking_svc.confirmar_e_reservar.call_count == 3
+    assert picking_svc.validar.call_count == 3
+```
+
+- [ ] **Step 2: Implementar**
+
+```python
+    def f5b_validar_pickings(self, picking_ids: List[int]) -> Dict[int, bool]:
+        """Para cada picking: confirmar_e_reservar + preencher_qty_done + validar.
+
+        Paralelo via ThreadPoolExecutor.
+        Atualiza ajuste_estoque_inventario.fase_pipeline = 'F5b_VALIDADO' por pid.
+        """
+        from app.odoo.models import AjusteEstoqueInventario
+        result: Dict[int, bool] = {}
+
+        def _validar_um(picking_id):
+            with self.semaphore:
+                try:
+                    self.picking_svc.confirmar_e_reservar(picking_id)
+                    # Para preencher qty_done precisamos das linhas originais.
+                    # Vamos ler de stock.move.line do picking e considerar quantidade
+                    # reservada (Odoo ja preencheu via action_assign).
+                    self.picking_svc.validar(picking_id)
+                    # Atualizar ajuste
+                    aj = AjusteEstoqueInventario.query.filter_by(
+                        picking_id_odoo=picking_id
+                    ).first()
+                    if aj:
+                        aj.fase_pipeline = 'F5b_VALIDADO'
+                        db.session.commit()
+                    return picking_id, True
+                except Exception as e:
+                    logger.error(f'F5b falhou picking {picking_id}: {e}')
+                    aj = AjusteEstoqueInventario.query.filter_by(
+                        picking_id_odoo=picking_id
+                    ).first()
+                    if aj:
+                        aj.fase_pipeline = 'F5b_FALHA'
+                        aj.erro_msg = str(e)
+                        db.session.commit()
+                    return picking_id, False
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(_validar_um, pid) for pid in picking_ids]
+            for fut in as_completed(futures):
+                pid, ok = fut.result()
+                result[pid] = ok
+        return result
+```
+
+- [ ] **Step 3: Run + commit**
+
+```bash
+pytest tests/odoo/services/test_inventario_pipeline_service.py -v
+git commit -am "feat(odoo): InventarioPipelineService.f5b_validar_pickings — batch paralelo"
+```
+
+### Task 4.3 (NOVA): `f5c_liberar_faturamento()`
+
+- [ ] **Step 1: Test**
+
+```python
+def test_f5c_libera_em_paralelo():
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    svc.f5c_liberar_faturamento([2001, 2002])
+    assert picking_svc.liberar_faturamento.call_count == 2
+```
+
+- [ ] **Step 2: Implementar**
+
+```python
+    def f5c_liberar_faturamento(self, picking_ids: List[int]) -> None:
+        """Dispara action_liberar_faturamento em todos os pickings (paralelo).
+
+        Apos esta etapa, robo CIEL IT comeca a criar invoices (F5d aguarda).
+        """
+        from app.odoo.models import AjusteEstoqueInventario
+
+        def _liberar(picking_id):
+            with self.semaphore:
+                try:
+                    self.picking_svc.liberar_faturamento(picking_id)
+                    aj = AjusteEstoqueInventario.query.filter_by(
+                        picking_id_odoo=picking_id
+                    ).first()
+                    if aj:
+                        aj.fase_pipeline = 'F5c_LIBERADO'
+                        db.session.commit()
+                except Exception as e:
+                    logger.error(f'F5c falhou picking {picking_id}: {e}')
+                    raise
+
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(_liberar, pid) for pid in picking_ids]
+            for fut in as_completed(futures):
+                fut.result()  # propaga excecoes
+```
+
+- [ ] **Step 3: Run + commit**
+
+### Task 4.4 (NOVA): `f5d_aguardar_invoices()` (1 polling longo)
+
+- [ ] **Step 1: Test**
+
+```python
+def test_f5d_polling_acha_todos_em_uma_passada():
+    """f5d aguarda invoices serem criadas pelo robo. Mock retorna invoice imediata."""
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    picking_svc.aguardar_invoice_do_robo.return_value = 999
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    result = svc.f5d_aguardar_invoices([3001, 3002], timeout=10)
+    assert result[3001] == 999
+    assert result[3002] == 999
+```
+
+- [ ] **Step 2: Implementar**
+
+```python
+    def f5d_aguardar_invoices(
+        self, picking_ids: List[int], timeout: int = 1800, poll_interval: int = 40
+    ) -> Dict[int, Optional[int]]:
+        """Aguarda robo CIEL IT criar invoices para cada picking.
+
+        Estrategia: 1 polling longo. Em cada iteracao, para cada picking
+        ainda sem invoice, busca account.move com ref=picking_name. Mais
+        eficiente que N polling independentes.
+
+        Returns: {picking_id: invoice_id ou None se timeout}.
+        """
+        import time
+        from app.odoo.models import AjusteEstoqueInventario
+
+        pendentes = set(picking_ids)
+        resolved: Dict[int, Optional[int]] = {pid: None for pid in picking_ids}
+
+        start = time.time()
+        while pendentes and time.time() - start < timeout:
+            for pid in list(pendentes):
+                # Reusa stock_picking_service mas com timeout curto (so 1 iteracao)
+                invoice_id = self.picking_svc.aguardar_invoice_do_robo(
+                    pid, timeout=poll_interval, poll_interval=poll_interval
+                )
+                if invoice_id:
+                    resolved[pid] = invoice_id
+                    pendentes.discard(pid)
+                    aj = AjusteEstoqueInventario.query.filter_by(
+                        picking_id_odoo=pid
+                    ).first()
+                    if aj:
+                        aj.fase_pipeline = 'F5d_INVOICE_GERADA'
+                        aj.invoice_id_odoo = invoice_id
+                        db.session.commit()
+            if pendentes:
+                time.sleep(poll_interval)
+        return resolved
+```
+
+- [ ] **Step 3: Run + commit**
+
+### Task 4.5 (NOVA): `f5e_transmitir_sefaz()` (serial via Playwright)
+
+- [ ] **Step 1: Implementar usando service existente Playwright**
+
+```python
+    def f5e_transmitir_sefaz(self, invoice_ids: List[int]) -> Dict[int, Optional[str]]:
+        """Transmite NF-e para SEFAZ via Playwright (serial, 1 browser).
+
+        Reusa app/recebimento/services/playwright_nfe_transmissao.py.
+        """
+        from app.recebimento.services.playwright_nfe_transmissao import (
+            transmitir_nfe_playwright,
+        )
+        from app.odoo.models import AjusteEstoqueInventario
+
+        result: Dict[int, Optional[str]] = {}
+        for inv_id in invoice_ids:
+            try:
+                chave_nfe = transmitir_nfe_playwright(inv_id)
+                result[inv_id] = chave_nfe
+                aj = AjusteEstoqueInventario.query.filter_by(
+                    invoice_id_odoo=inv_id
+                ).first()
+                if aj:
+                    aj.fase_pipeline = 'F5e_SEFAZ_OK'
+                    aj.chave_nfe = chave_nfe
+                    aj.status = 'EXECUTADO'
+                    db.session.commit()
+            except Exception as e:
+                logger.error(f'F5e SEFAZ falhou invoice {inv_id}: {e}')
+                result[inv_id] = None
+                aj = AjusteEstoqueInventario.query.filter_by(
+                    invoice_id_odoo=inv_id
+                ).first()
+                if aj:
+                    aj.fase_pipeline = 'F5e_FALHA'
+                    aj.erro_msg = str(e)
+                    db.session.commit()
+        return result
+```
+
+- [ ] **Step 2: Test (estrutural)**
+
+```python
+def test_f5e_chama_playwright_para_cada_invoice():
+    """f5e usa Playwright service existente."""
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.recebimento.services.playwright_nfe_transmissao.transmitir_nfe_playwright'
+    ) as mock_tx:
+        mock_tx.return_value = '35260512345678901234567890123456789012345678'
+        result = svc.f5e_transmitir_sefaz([4001, 4002])
+        assert mock_tx.call_count == 2
+        assert all(v.startswith('35') for v in result.values())
+```
+
+- [ ] **Step 3: Run + commit**
+
+```bash
+git commit -am "feat(odoo): InventarioPipelineService completo (5 metodos batch)"
+```
+
+> **NOTA importante sobre Task 4.5**: depende da existencia de `transmitir_nfe_playwright()` exportavel em `app/recebimento/services/playwright_nfe_transmissao.py`. Se esse helper nao for exportavel hoje, criar uma fachada (`from .playwright_nfe_transmissao import PlaywrightNFETransmissao` etc) — investigar antes de implementar 4.5.
 
 ---
 

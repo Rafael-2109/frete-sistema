@@ -362,6 +362,35 @@ echo "SPED ECD 18b: re-indexar regras (idempotente)..."
 python -m app.embeddings.indexers.sped_ecd_rules_indexer \
     || echo "⚠️ Indexer sped_ecd_rules falhou, continuando deploy..."
 
+# 19. Inventario 2026-05 (2026-05-18): operacao_odoo_auditoria.
+# Tabela POLIMORFICA de auditoria de operacoes Odoo (account.move, stock.picking,
+# stock.lot, etc.) com external_id UNIQUE para idempotencia. Substitui o padrao
+# fretes-especifico (LancamentoFreteOdooAuditoria em app/fretes/models.py:1047-1134).
+# Consumida pelo InventarioPipelineService + futuras operacoes diarias.
+# Idempotente (CREATE TABLE IF NOT EXISTS + 3 indexes).
+# Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md §7.1
+echo "Inventario 19: tabela operacao_odoo_auditoria (polimorfica)..."
+python scripts/migrations/2026_05_18_operacao_odoo_auditoria.py \
+    || echo "⚠️ Migration operacao_odoo_auditoria falhou, continuando deploy..."
+
+# 20. Inventario 2026-05 (2026-05-18): ajuste_estoque_inventario.
+# Tabela enxuta que controla ciclos de inventario fisico (suporta multiplos
+# ciclos via campo `ciclo`). Uma linha por divergencia (produto, company, lote)
+# detectada. Idempotente.
+echo "Inventario 20: tabela ajuste_estoque_inventario..."
+python scripts/migrations/2026_05_18_ajuste_estoque_inventario.py \
+    || echo "⚠️ Migration ajuste_estoque_inventario falhou, continuando deploy..."
+
+# 21. Inventario 2026-05 (2026-05-19): pipeline batch ALTER.
+# Adiciona fase_pipeline + picking_id_odoo + invoice_id_odoo + chave_nfe em
+# ajuste_estoque_inventario, e pipeline_etapa em operacao_odoo_auditoria.
+# Origem da decisao: D003 (pipeline em batches) apos G004 (padrao real eh
+# picking+robo CIEL IT+Playwright, nao account.move direto).
+# Idempotente (ADD COLUMN IF NOT EXISTS).
+echo "Inventario 21: ALTER pipeline batch (fase_pipeline + 4 colunas)..."
+python scripts/migrations/2026_05_19_add_fase_pipeline.py \
+    || echo "⚠️ Migration add_fase_pipeline falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
