@@ -156,3 +156,19 @@ Estes não bloqueiam a implementação dos services (`stock_lot_service`, `stock
 `fiscal_position_id` candidatos:
 - `[89, 'SAÍDA - RETRABALHO']` (exemplo: account.move.id=606403)
 
+
+---
+## G003 — Variacoes confirmadas (audit 00d)
+
+Filtro partner_id restrito (companies em Santana de Parnaiba/SP):
+
+| Direcao | CFOPs distribuidos | fiscal_position_id distintos |
+|---|---|---|
+| industrializacao FB → LF | 5901:10 | id=25 (REMESSA PARA INDUSTRIALIZAÇÃO) |
+| perda LF → FB | 5903:10 | id=91 (SAÍDA - PERDAS) |
+| dev-industrializacao FB → LF | — | — |
+| dev-industrializacao CD → LF | 5949:10 | id=74 (SAÍDA - REMESSA PARA RETRABALHO) |
+| dev-industrializacao LF → FB | — | — |
+| dev-industrializacao LF → CD | 5949:10 | id=89 (SAÍDA - RETRABALHO); id=64 (REMESSA DE VASILHAME) |
+| transf-filial FB → CD | 5152:10 | id=20 (SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS) |
+| transf-filial CD → FB | 5151:10 | id=49 (SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS) |
