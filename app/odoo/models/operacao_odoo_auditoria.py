@@ -32,6 +32,7 @@ class OperacaoOdooAuditoria(db.Model):
     tempo_execucao_ms = db.Column(db.Integer)
     contexto_origem = db.Column(db.String(40))
     contexto_ref = db.Column(db.String(80))
+    pipeline_etapa = db.Column(db.String(20))  # F5a..F5e — pos-G004/D003
     screenshot_s3_key = db.Column(db.String(255))
     executado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     executado_por = db.Column(db.String(80), nullable=False)

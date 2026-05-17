@@ -109,68 +109,65 @@ Após audit, ficou claro que **90% do que preciso já existe** no codebase, espa
 - **NÃO refatorar** os services existentes — eles seguem operando como estão
 - Wrappers novos chamam ou imitam padrões dos services existentes
 
-### 6.2 Serviços novos (apenas 4)
+### 6.2 Serviços novos (4 services — REVISADO 2026-05-17 após G004/D003)
+
+> **REVISÃO crítica 2026-05-17**: G004 (`docs/inventario-2026-05/02-gotchas/G004-padrao-real-eh-picking-robo-CIEL-IT.md`) revelou que o padrão NACOM **NÃO cria `account.move` via XML-RPC**. Padrão real: `picking outgoing → action_liberar_faturamento → robô CIEL IT cria invoice → Playwright transmite SEFAZ`. D003 decidiu reescrever para **pipeline em batches**.
 
 ```
 app/odoo/services/
 
   stock_lot_service.py
-      # Wrapper sobre helpers existentes em recebimento_fisico_odoo_service.py
-      #   _resolver_lote()             (linha 324-378)
-      #   _criar_stock_lot_com_fallback()  (linha 416-482)
-      # API publica:
-      #   criar(nome, product_id, company_id, expiration_date=None) -> lot_id
-      #   renomear(lot_id, novo_nome) -> bool  (com guard: bloqueia se ha stock.move em picking nao-done)
-      #   atualizar_validade(lot_id, expiration_date) -> bool
-      #   inativar(lot_id) -> bool  (write active=False; usado por indisponibilizacao por lote)
-      #   buscar_por_nome(nome, product_id, company_id) -> Optional[lot_id]  (usa operador 'in', NUNCA '=')
+      # Wrapper sobre helpers existentes em recebimento_fisico_odoo_service.py:
+      #   _resolver_lote() (324-378), _criar_stock_lot_com_fallback() (416-482)
+      # API: criar / renomear (com guard de move pendente) / atualizar_validade /
+      #      inativar / reativar / buscar_por_nome (workaround operador '=')
+      # IMPLEMENTADO Fase 2 — 15 tests passed (commit 260ce053)
 
   stock_picking_service.py
-      # Generalizacao do padrao em:
-      #   emissao_nf_pallet.py:130-177           (picking expedicao simples)
-      #   recebimento_lf_odoo_service.py:2122-2481  (step 20 picking saida FB)
-      # API publica:
-      #   criar_transferencia(company_origem_id, company_destino_id, linhas,
-      #                       location_origem_id=None, location_destino_id=None,
-      #                       incoterm='CIF', date=None) -> picking_id
-      #   preencher_qty_done(picking_id, linhas)  (suporta lot_id ou lot_name por linha)
-      #   validar(picking_id)  (fire_and_poll, trata 'cannot marshal None')
+      # Generalizacao de recebimento_lf_odoo_service.py:2122-2700.
+      # API:
+      #   criar_transferencia(company_origem, company_destino, linhas,
+      #                       picking_type_id, location_origem, location_destino,
+      #                       partner_id, incoterm_id=CIF, carrier_id=996,
+      #                       scheduled_date=None, origin=None) -> picking_id
+      #   confirmar_e_reservar(picking_id)
+      #   preencher_qty_done(picking_id, linhas)
+      #   validar(picking_id) -> bool (fire_and_poll, trata 'cannot marshal None')
+      #   liberar_faturamento(picking_id)   # NOVO F3.3 — action_liberar_faturamento
+      #   aguardar_invoice_do_robo(picking_id, timeout=1800) -> invoice_id?  # NOVO F3.4
       #   cancelar(picking_id, motivo)
-      # Reutiliza: timeout_override do connection.py, OdooConnection singleton
 
-  account_move_intercompany_service.py
-      # Service generico parametrizado por `tipo_operacao` (str) que mapeia para a
-      # entrada correspondente em constants/operacoes_fiscais.py:MATRIZ_INTERCOMPANY.
-      # NAO 1 service por CFOP — apenas 1 service que conhece a matriz.
+  inventario_pipeline_service.py
+      # Orquestrador pipeline-batch. SUBSTITUI o anterior `account_move_intercompany_service.py`
+      # (que assumia 1 NF por chamada — incompativel com padrao NACOM).
       #
-      # API publica:
-      #   preview(payload) -> dict
-      #       Le NF de referencia via XML-RPC, gera template, retorna diff campo-a-campo
-      #       SEM CRIAR nada no Odoo. Resultado salvo em operacao_odoo_auditoria status=PREVIEW.
+      # API publica (5 metodos batch):
+      #   f5a_criar_pickings(ajustes) -> Dict[ajuste_id, picking_id]
+      #       # Paralelo via ThreadPoolExecutor + semaphore=5. Idempotente
+      #       # por external_id. Persiste fase_pipeline=F5a_PICKING_CRIADO.
       #
-      #   executar(payload, confirmar=True) -> external_id
-      #       Cria account.move (move_type, l10n_br_tipo_pedido, partner_id, company_id,
-      #       fiscal_position_id, invoice_line_ids), chama onchange_l10n_br_calcular_imposto,
-      #       action_post via fire_and_poll. Idempotente via external_id.
-      #       Pre-execucao chama hook pre_execute_nf. Pos-execucao chama pos_execute_nf.
+      #   f5b_validar_pickings(picking_ids) -> Dict[picking_id, bool]
+      #       # Paralelo. Para cada: confirmar_e_reservar + preencher_qty_done +
+      #       # validar. Hooks pre_execute_nf antes de validar.
       #
-      #   cancelar(invoice_id, motivo) -> bool
-      #       Cancela NF se dentro de janela SEFAZ.
+      #   f5c_liberar_faturamento(picking_ids) -> None
+      #       # Paralelo. action_liberar_faturamento em todos.
       #
-      # Internamente usa:
-      #   stock_picking_service.criar_transferencia() quando a operacao exige picking
-      #   stock_lot_service para lotes
-      #   constants/operacoes_fiscais para mapeamento
+      #   f5d_aguardar_invoices(picking_ids, timeout=1800)
+      #       -> Dict[picking_id, Optional[invoice_id]]
+      #       # 1 polling longo. Para cada picking: search account.move com
+      #       # ref=picking_name. Retorna quando todos resolvidos OU timeout.
+      #
+      #   f5e_transmitir_sefaz(invoice_ids) -> Dict[invoice_id, chave_nfe]
+      #       # SERIAL (1 browser Playwright). Reusa
+      #       # app/recebimento/services/playwright_nfe_transmissao.py.
+      #
+      # Cada metodo: persiste fase_pipeline, registra OperacaoOdooAuditoria,
+      # lock Redis por (company_origem, cod_produto, lote).
 
   indisponibilizacao_estoque_service.py
-      # API publica:
-      #   canary_lote(lot_id) -> bool   (testa hipotese C1: stock.lot.active=False bloqueia faturamento)
-      #   canary_local(location_id) -> bool  (C2: stock.location.active=False)
-      #   canary_tag(lot_id, tag_id) -> bool  (C3 fallback)
-      #   indisponibilizar_lote(lot_id) -> bool  (so executa se canary_lote ja passou)
-      #   indisponibilizar_local(location_id) -> bool
-      #   reverter_lote(lot_id) -> bool   (active=True)
-      #   reverter_local(location_id) -> bool
+      # API: canary_lote / canary_local / canary_tag / indisponibilizar_* / reverter_*
+      # NAO afetado por G004 — mantem desenho original.
 ```
 
 ### 6.3 Constantes consolidadas (1 arquivo novo)
@@ -275,11 +272,15 @@ Substitui o padrão fretes-específico (`LancamentoFreteOdooAuditoria`). Pode se
 | `aprovado_em` | timestamp | |
 | `aprovado_por` | varchar(80) | |
 | `status` | varchar(20) DEFAULT 'PROPOSTO' | PROPOSTO/APROVADO/EXECUTADO/FALHA/CANCELADO |
+| `fase_pipeline` | varchar(20) | F5a_PICKING_CRIADO / F5b_VALIDADO / F5c_LIBERADO / F5d_INVOICE_GERADA / F5e_SEFAZ_OK / FINALIZADO (adicionado pos-G004) |
+| `picking_id_odoo` | int | id do stock.picking criado em F5a |
+| `invoice_id_odoo` | int | id do account.move gerado pelo robô em F5d |
+| `chave_nfe` | varchar(44) | chave NF-e após F5e |
 | `erro_msg` | text | |
 | `criado_em` | timestamp | |
 | `criado_por` | varchar(80) | |
 
-Índices: `(ciclo, company_id, cod_produto, lote_odoo)`, `status`, `acao_decidida`.
+Índices: `(ciclo, company_id, cod_produto, lote_odoo)`, `status`, `acao_decidida`, `fase_pipeline`.
 
 ### 7.3 Migrations
 
@@ -304,19 +305,42 @@ Padrão DDL idempotente + Python conforme `~/.claude/CLAUDE.md`.
 | **F3** — Proposta | Calcula `acao_decidida` (matriz tipo×company×sinal→ação), INSERT em `ajuste_estoque_inventario` status=PROPOSTO | 4-5 | `constants/operacoes_fiscais.py` |
 | **F3.5** — Aprovação | Operador roda `04_propor_ajustes.py --aprovar-onda=N --hash=<sha>` | 6 | — |
 | **F4a** — Canary técnico ordem=3 | C1/C2/C3 em **staging** ou company-cobaia. Decisão sobre via (lote/local/tag) registrada | (pre-requisito de O3) | `indisponibilizacao_estoque_service` |
-| **F4b** — Canary fiscal por CFOP | Para cada CFOP: lê NF ref, gera template via `preview()`, executa 1 NF real menor, valida campos + SEFAZ | 7-9 | `account_move_intercompany_service.preview` |
-| **F5** — Bulk supervisionado | Executa ondas O1/O2/O3/O4. Lock Redis por `(company, produto, lote)`. Hooks. | 10 | todos os 4 services novos |
+| **F4b** — Canary fiscal por CFOP | Para cada tipo_operacao: 1 NF real menor via pipeline completo F5a-F5e, valida campos + SEFAZ | 7-9 | `inventario_pipeline_service` |
+| **F5** — Pipeline batch supervisionado | Executa ondas O1/O2/O3/O4 em 5 etapas paralelas (F5a..F5e). Lock Redis por `(company, produto, lote)`. Hooks. | 10 | todos os 4 services novos |
 | **F6** — Reconciliação | Re-extrai estoque Odoo, compara com inventário, gera relatório residual | (pós) | F1 |
+
+### 8.1.1 F5 — Pipeline em batches (revisado 2026-05-17 após G004/D003)
+
+Cada onda processa N ajustes em **5 etapas batch sequenciais**. Dentro de cada etapa, máximo paralelismo controlado por semaphore. **Não é "1 NF do início ao fim"** — todas as NFs avançam juntas etapa por etapa.
+
+| Etapa | Método | Paralelo? | Tempo estimado N=50 |
+|-------|--------|-----------|---------------------|
+| **F5a** | `f5a_criar_pickings(ajustes)` | ✅ sim (semaphore=5-10) | ~5 min |
+| **F5b** | `f5b_validar_pickings(picking_ids)` | ✅ sim | ~10 min |
+| **F5c** | `f5c_liberar_faturamento(picking_ids)` | ✅ sim | ~1 min |
+| **F5d** | `f5d_aguardar_invoices(picking_ids, timeout=1800)` | ⚠️ depende robô CIEL IT | 30 min - 25h |
+| **F5e** | `f5e_transmitir_sefaz(invoice_ids)` | ❌ serial (1 browser) | ~50 min |
+
+Ganho total estimado: **~1-2h por onda** (vs ~25h serial completo).
+
+Cada etapa:
+- Persiste `fase_pipeline` em `ajuste_estoque_inventario`
+- Idempotente (skip se já executou)
+- Hooks pre/pos
+- Audit em `operacao_odoo_auditoria.pipeline_etapa`
+- Reentrante (retoma onde parou em caso de falha)
+
+**Risco aberto (G005):** robô CIEL IT pode ser serial em F5d (ainda precisa medir via canary de 5 pickings simultâneos).
 
 ### 8.2 Ondas
 
-| Onda | Conteúdo | Service usado |
-|------|----------|---------------|
-| O0 | Canary técnico (C1/C2/C3) | `indisponibilizacao_estoque_service` |
-| O1 | NFs CFOP 5901 / 5903 / 5949 (LF↔FB) | `account_move_intercompany_service` (3 `tipo_operacao` diferentes, mesmo service) |
-| O2 | NFs CFOP 5152 (CD↔FB) | idem (`tipo_operacao='transf-filial'`) |
-| O3 | Indisponibilizações | `indisponibilizacao_estoque_service` (`lote` ou `local` conforme O0) |
-| O4 | Rename de lote (P9) | `stock_lot_service.renomear` |
+| Onda | Conteúdo | Pipeline aplicado |
+|------|----------|-------------------|
+| O0 | Canary técnico (C1/C2/C3) | `indisponibilizacao_estoque_service` (não usa pipeline) |
+| O1 | NFs CFOP 5901 / 5903 / 5949 (LF↔FB) | F5a-F5e via `inventario_pipeline_service` |
+| O2 | NFs CFOP 5152 / 5151 (FB↔CD) | F5a-F5e via `inventario_pipeline_service` |
+| O3 | Indisponibilizações | `indisponibilizacao_estoque_service` (não usa pipeline) |
+| O4 | Rename de lote (P9) | `stock_lot_service.renomear` (não usa pipeline) |
 | O5 | Reconciliação | F6 |
 
 ## 9. Hooks determinísticos

@@ -47,6 +47,11 @@ class AjusteEstoqueInventario(db.Model):
     aprovado_em = db.Column(db.DateTime)
     aprovado_por = db.Column(db.String(80))
     status = db.Column(db.String(20), nullable=False, default='PROPOSTO')
+    # Campos adicionados pos-G004/D003 (pipeline em batches):
+    fase_pipeline = db.Column(db.String(20))  # F5a..F5e ou FINALIZADO
+    picking_id_odoo = db.Column(db.Integer)
+    invoice_id_odoo = db.Column(db.Integer)
+    chave_nfe = db.Column(db.String(44))
     erro_msg = db.Column(db.Text)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     criado_por = db.Column(db.String(80), nullable=False)
