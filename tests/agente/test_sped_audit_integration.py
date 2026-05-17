@@ -93,3 +93,74 @@ def test_principal_does_not_see_sped_skills():
         assert sped_skill not in skills, (
             f"Vazamento: {sped_skill} apareceu no listing do principal"
         )
+
+
+# =====================================================================
+# E2E tests (Fase 3 — full pipeline)
+# =====================================================================
+
+import json as _json
+import subprocess as _subprocess
+
+SPED_FOR_TESTING = (
+    "/home/rafaelnascimento/SPED_ECD_NACOM_GOYA_01072024_31122024_V21_3COMPANIES.txt"
+)
+
+
+@pytest.mark.skipif(
+    not Path(SPED_FOR_TESTING).exists(),
+    reason=f"SPED V21 nao disponivel em {SPED_FOR_TESTING}"
+)
+def test_e2e_parse_v21(tmp_path):
+    """E2E: parse SPED V21 real."""
+    out_path = tmp_path / "parsed.json"
+    result = _subprocess.run(
+        ["python", ".claude/skills/parseando-sped-ecd/scripts/parse_sped.py",
+         SPED_FOR_TESTING, str(out_path)],
+        capture_output=True, text=True, timeout=120
+    )
+    assert result.returncode == 0, f"parser falhou: {result.stderr}"
+
+    with open(out_path) as f:
+        parsed = _json.load(f)
+
+    # SPED V21 tem registros esperados
+    assert "0000" in parsed["registros"]
+    assert "I050" in parsed["registros"]
+    assert parsed["metadata"]["total_lines"] > 1000
+
+
+@pytest.mark.skipif(
+    not Path(SPED_FOR_TESTING).exists(),
+    reason="SPED V21 nao disponivel"
+)
+def test_e2e_audit_balance_v21(tmp_path):
+    """E2E: parse + audit_balance no V21 real."""
+    out_path = tmp_path / "parsed.json"
+    _subprocess.run(
+        ["python", ".claude/skills/parseando-sped-ecd/scripts/parse_sped.py",
+         SPED_FOR_TESTING, str(out_path)],
+        check=True, timeout=120
+    )
+
+    result = _subprocess.run(
+        ["python", ".claude/skills/auditando-sped-contabil/scripts/audit_balance.py",
+         str(out_path)],
+        capture_output=True, text=True, timeout=60
+    )
+    assert result.returncode == 0
+    audit_result = _json.loads(result.stdout)
+    assert "findings_count" in audit_result
+    assert audit_result["total_i155"] >= 0  # pode ser 0 se SPED V21 nao tem I155
+
+
+def test_e2e_search_semantic_cnpj_rule():
+    """E2E: busca semantica de regra de CNPJ — Voyage + pgvector."""
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        from app.embeddings.sped_rules_search import buscar_regras_semantico
+        results = buscar_regras_semantico("regra que valida CNPJ", limit=3)
+        assert len(results) > 0
+        # Deve retornar pelo menos uma regra com 'CNPJ' no content
+        assert any("CNPJ" in r["content"].upper() for r in results)

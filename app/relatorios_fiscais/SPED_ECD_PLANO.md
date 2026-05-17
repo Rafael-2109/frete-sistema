@@ -7,6 +7,39 @@
 
 ---
 
+## Auditoria Automatizada (a partir de 2026-05-16)
+
+Subagente `auditor-sped-ecd` (4 skills SPED + 2 reusadas) executa auditoria
+multidimensional do SPED gerado:
+
+1. **Parser** (`parseando-sped-ecd`) -> `/tmp/sped-parsed-VXX.json`
+   - 42 registros mapeados, streaming Latin-1, BOM detection.
+
+2. **Auditoria contabil** (`auditando-sped-contabil`)
+   - `audit_balance.py`: equacionalidade saldo I155 (signed(saldo_fin) = signed(saldo_ini) + deb - cred)
+   - `audit_hierarchy.py`: hierarquia I050 + cross-ref I250 (orfao_cod_sup, ciclo, cod_nat_divergente, conta_inexistente, conta_sintetica)
+
+3. **Ground truth** (`comparando-sped-ground-truth`)
+   - Diff vs SPED da contadora aprovado pela RFB
+   - Categorias: registro_ausente, registro_extra, campo_vazio
+   - Severidade adapta a obrigatoriedade (21 OBRIGATORIOS + 6 CONDICIONAIS)
+
+4. **Manual ECD** (`auditando-sped-vs-manual`)
+   - DSL formal via YAML por registro (I050.yaml inicial)
+   - Tipos: campo_obrigatorio_ausente, tipo_invalido, tamanho_invalido, valor_nao_listado
+   - Busca semantica via Voyage AI + pgvector (181 chunks indexados)
+
+**Invocacao**: via chat: "audita o SPED V21"
+**Output**: `/tmp/subagent-findings/audit-sped-VXX-{timestamp}.md`
+
+**Isolamento**: skills SPED filtradas do agente principal via
+`SPED_SKILLS_RESERVED` em `app/agente/config/settings.py`. SDK 0.1.77+
+rejeita Skill(name) nao listado.
+
+**Plano de implementacao**: `docs/superpowers/plans/2026-05-16-auditor-sped-ecd.md`.
+
+---
+
 ## STATUS RESUMIDO PARA RETOMADA EM NOVA SESSAO
 
 > **Se voce esta abrindo esta sessao do zero, leia esta secao primeiro.**
@@ -479,6 +512,9 @@ Isso e parcialmente a CATEGORIA 5. Adicional: trocar para codes numericos hierar
 
 ### CATEGORIA 17 — Encerramento I355 (18 erros — BLOQ — descoberta V21)
 
+**STATUS V31 PVA 2026-05-16 20:50: VERIFIED_FIXED** — 36 → 0 erros (zerada completa). Manual ECD oficial pag 159 REGRA_CONTA_RESULTADO: COD_NAT='04' exclusivo. V27 interpretava errado (`{04,05,07}`). V31 restringe para '04' → 12 contas 5101* compensacao saem do I355.
+
+
 - **Sintomas PDF V21**:
   - "As contas de resultado, nos meses em que houver encerramento, devem ter saldo zero." (9)
   - "Saldo da conta antes do encerramento nao corresponde ao total dos lancamentos de encerramento." (9)
@@ -709,6 +745,7 @@ awk -F'|' '/^\|J150\|/&&$6=="1"' "$SPED" | wc -l
 | Versao SPED | Data | Erros validador | Warnings | Tamanho | Mudancas |
 |-------------|------|-----------------|----------|---------|----------|
 | **V21** | 2026-05-15 17:11 | **1** (so balanco nao bate) | 0 | 66.84 MB / 918699 linhas | mesmo codigo funcional de V20 + refactor docs (versao unica via `VERSAO_SPED`, script renomeado `gerar_sped.py`, PLANO sem versao no nome) |
+| **V31 PVA** | 2026-05-16 20:50 | **19** | 527 | — | **-36 vs V30 (-65%)** — CAT 17 ZERADA por completo (36 erros: 12 contas 5101* x 3 mensagens). Manual ECD oficial venceu interpretacao errada do V27. Estimativa cravou exato. Total V18-2→V31: **-98.7%** (1450→19). Restantes 19: 4 CAT 26 (codigo Fix 2 pendente), 10 CAT 6 BP residual (INCONSIST. 5 cadastral), 4 cadastrais Odoo INCONSIST 1/2/3, 1 IDENT_MF FP. |
 | **V31** | 2026-05-16 20:17 | 1 (so balanco) | 0 | 66.80 MB / 918041 linhas | V31 — fix CAT 17 reverter V27. Manual ECD pag 159 REGRA_CONTA_RESULTADO: COD_NAT='04' exclusivamente (Tabela COD_NAT pag 118 — nao existe 07). V27 usava `{04,05,07}` baseado em interpretacao errada da CIEL IT. Resultado: 12 contas 5101* compensacao (REMESSA INDUSTRIALIZACAO, BONIFICACAO, TRANSF MERCADORIA) saem do I355. I355: 166→154 codes. Esperado -36 erros CAT 17. Tempo: 303s. |
 | **V30 PVA** | 2026-05-16 18:31 | **55** | 527 | — | -9 vs V29 (-14%) — CAT 6 BP estrutural parcial (varios subcats zeraram: "nivel 1 ausente" 1→0, "2 niveis 1" 1→0, "ind_cod_agl=D" 2→0, "cod_agl_sup nao existe" 5→2, "so totalizadora sup" 5→2). MAS apareceu CAT 26 nova: J150 detalhe != soma I155+I355 (4 erros) — efeito colateral do I052 DRE adicionado V28 que permite essa validacao cruzada. Investigacao via Manual ECD oficial revelou: (a) tabela COD_NAT correta=04 exclusivo (nosso V27 errado); (b) I355 das contas reais 3xxx esta zerado (root cause separado — `calcular_saldos_resultado_encerramento` ler balance total Odoo). Total V18-2→V30: **-96%** (1450→55). |
 | **V30** | 2026-05-16 17:57 | 1 (so balanco) | 0 | 66.80 MB / 918053 linhas | V30 — fix CAT 6 subcat "totalizador != soma filhas" (4 erros) + colateral "cod_agl_sup nao mesmo grupo" (4 erros). Dois fixes complementares: (a) `construir_J005_J100` filtra plano por classe patrimonial ANTES de propagar saldos via `calcular_saldos_hierarquicos` — sinteticas so recebem saldos de analiticas patrimoniais que serao emitidas; (b) `_classe_da_conta` para SINTETICAS sempre usa `_classe_pelo_code` (codes 1=Ativo, 2=Passivo) — sinteticas herdam account_type errado da 1a filha (INCONSIST. 5) e ficavam orfas. Resultado: 11307+11306 e descendentes (antes ausentes/erradas) voltaram. 350 J100 (era 345). Sintetica 1130 = soma filhas exatamente (32144611,82). Tempo: 273s. |
