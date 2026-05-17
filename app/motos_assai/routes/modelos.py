@@ -1,5 +1,5 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.forms import ModeloForm, TestarRegexForm
@@ -70,7 +70,7 @@ def modelos_editar(modelo_id):
             'peso_kg': form.peso_kg.data,
             'peso_cubado_kg': form.peso_cubado_kg.data,
             'ativo': form.ativo.data,
-        })
+        }, operador_id=current_user.id)
         flash(f'Modelo {modelo.codigo} atualizado.', 'success')
         return redirect(url_for('motos_assai.modelos_detalhe', modelo_id=modelo_id))
     return render_template('motos_assai/modelos/form.html',

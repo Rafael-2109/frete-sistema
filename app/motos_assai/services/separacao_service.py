@@ -59,6 +59,82 @@ class SeparacaoCrossLojaError(SeparacaoError):
         self.chassi = chassi
 
 
+# ─── helpers de hook reprocessar_match ────────────────────────────────────────
+# Padrao: lazy import + try/except. Hook NAO pode quebrar operacao principal
+# (commit ja aconteceu). Falha do hook = warning no log, segue normal.
+
+def _hook_reprocessar_match_chassi(
+    chassi: str, operador_id: int, motivo_hook: str,
+) -> None:
+    """Hook: reprocessa NFs que mencionam este chassi."""
+    if not chassi:
+        return
+    try:
+        from app.motos_assai.services.reprocessar_match_service import (
+            reprocessar_match_nfs, nfs_afetadas_por_chassi,
+        )
+        nf_ids = nfs_afetadas_por_chassi(chassi)
+        if nf_ids:
+            reprocessar_match_nfs(
+                nf_ids, motivo=motivo_hook, operador_id=operador_id,
+            )
+    except Exception:
+        import logging as _log
+        _log.getLogger(__name__).exception(
+            'hook reprocessar_match (chassi=%s motivo=%s) falhou — '
+            'operacao principal ja commitada',
+            chassi, motivo_hook,
+        )
+
+
+def _hook_reprocessar_match_separacao(
+    sep_id: int, operador_id: int, motivo_hook: str,
+) -> None:
+    """Hook: reprocessa NFs vinculadas a uma separacao."""
+    if not sep_id:
+        return
+    try:
+        from app.motos_assai.services.reprocessar_match_service import (
+            reprocessar_match_nfs, nfs_afetadas_por_separacao,
+        )
+        nf_ids = nfs_afetadas_por_separacao(sep_id)
+        if nf_ids:
+            reprocessar_match_nfs(
+                nf_ids, motivo=motivo_hook, operador_id=operador_id,
+            )
+    except Exception:
+        import logging as _log
+        _log.getLogger(__name__).exception(
+            'hook reprocessar_match (sep=%s motivo=%s) falhou — '
+            'operacao principal ja commitada',
+            sep_id, motivo_hook,
+        )
+
+
+def _hook_reprocessar_match_chassis_em_lote(
+    chassis: list, operador_id: int, motivo_hook: str,
+) -> None:
+    """Hook: reprocessa NFs que mencionam qualquer chassi do lote (1 query)."""
+    if not chassis:
+        return
+    try:
+        from app.motos_assai.services.reprocessar_match_service import (
+            reprocessar_match_nfs, nfs_afetadas_por_chassis,
+        )
+        nf_ids = nfs_afetadas_por_chassis(chassis)
+        if nf_ids:
+            reprocessar_match_nfs(
+                nf_ids, motivo=motivo_hook, operador_id=operador_id,
+            )
+    except Exception:
+        import logging as _log
+        _log.getLogger(__name__).exception(
+            'hook reprocessar_match (chassis=%d motivo=%s) falhou — '
+            'operacao principal ja commitada',
+            len(chassis), motivo_hook,
+        )
+
+
 def get_separacao_ativa(pedido_id: int, loja_id: int) -> Optional[AssaiSeparacao]:
     """Retorna a AssaiSeparacao EM_SEPARACAO mais ANTIGA do par (pedido, loja).
 
@@ -363,6 +439,15 @@ def desfazer_chassi(separacao_item_id: int, operador_id: int) -> Dict[str, Any]:
         dados_extras={'separacao_id': sep.id if sep else None},
     )
     db.session.commit()
+
+    # Hook B4 (2026-05-17): chassi removido da sep. NFs com `separacao_item_id`
+    # apontando para o item deletado ficam com FK orfa — reprocesso resolve.
+    # (defensivo — sep aqui esta em EM_SEPARACAO, baixa probabilidade de ter NF
+    # vinculada, mas garante consistencia).
+    _hook_reprocessar_match_chassi(
+        chassi, operador_id, motivo_hook='HOOK_SEP_ITEM_REMOVIDO',
+    )
+
     return {'chassi': chassi}
 
 
@@ -517,6 +602,15 @@ def cancelar_separacao(separacao_id: int, motivo: str, operador_id: int) -> Assa
         )
 
     db.session.commit()
+
+    # Hook B2 (2026-05-17): NFs vinculadas a sep cancelada perdem a referencia.
+    # Reprocesso identifica NFs com separacao_id == sep.id OU itens em
+    # SeparacaoItem dessa sep, e re-roda match (ficarao NAO_RECONCILIADO ou
+    # DIVERGENTE conforme cenario).
+    _hook_reprocessar_match_separacao(
+        sep.id, operador_id, motivo_hook='HOOK_SEP_CANCELADA',
+    )
+
     return sep
 
 
@@ -615,6 +709,15 @@ def reabrir_separacao(separacao_id: int, operador_id: int) -> AssaiSeparacao:
         )
 
     db.session.commit()
+
+    # Hook B3 (2026-05-17): sep regredida FECHADA -> EM_SEPARACAO. NFs que
+    # haviam batido com essa sep continuam BATEU mas a sep voltou a ser
+    # mutavel — reprocesso garante consistencia caso UI/operador altere itens
+    # apos reabertura sem cancelar a NF antes.
+    _hook_reprocessar_match_separacao(
+        sep.id, operador_id, motivo_hook='HOOK_SEP_REABERTA',
+    )
+
     return sep
 
 

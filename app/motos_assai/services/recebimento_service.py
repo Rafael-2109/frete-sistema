@@ -240,6 +240,30 @@ def registrar_conferencia(
     except Exception:
         db.session.rollback()
         raise
+
+    # Hook C1 (2026-05-17): chassi recem cadastrado em assai_moto pode
+    # resolver NFs Q.P.A. que estavam com tipo_divergencia CHASSI_NAO_CADASTRADO
+    # ou MODELO_DIVERGENTE para esse chassi. Reprocesso sincrono, batch helper
+    # commita por NF (resiliente a erro pontual).
+    try:
+        from app.motos_assai.services.reprocessar_match_service import (
+            reprocessar_match_nfs, nfs_afetadas_por_chassi,
+            MOTIVO_HOOK_CHASSI_CADASTRADO,
+        )
+        nf_ids = nfs_afetadas_por_chassi(chassi_norm)
+        if nf_ids:
+            reprocessar_match_nfs(
+                nf_ids, motivo=MOTIVO_HOOK_CHASSI_CADASTRADO,
+                operador_id=operador_id,
+            )
+    except Exception:
+        import logging as _log
+        _log.getLogger(__name__).exception(
+            'hook reprocessar_match_nfs falhou para chassi %s (sem efeito '
+            'na conferencia — apenas re-match nao executou)',
+            chassi_norm,
+        )
+
     return item
 
 

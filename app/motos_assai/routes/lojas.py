@@ -1,7 +1,7 @@
 import os
 
 from flask import jsonify, render_template, request, redirect, url_for, flash
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
@@ -44,7 +44,7 @@ def lojas_nova():
                 'uf': form.uf.data,
                 'regional': form.regional.data.strip() if form.regional.data else None,
                 'ativo': form.ativo.data,
-            })
+            }, operador_id=current_user.id)
             flash(f'Loja {loja.numero} criada.', 'success')
             return redirect(url_for('motos_assai.lojas_detalhe', loja_id=loja.id))
         except LojaJaExisteError as e:
@@ -79,7 +79,7 @@ def lojas_editar(loja_id):
             'uf': form.uf.data,
             'regional': form.regional.data.strip() if form.regional.data else None,
             'ativo': form.ativo.data,
-        })
+        }, operador_id=current_user.id)
         flash(f'Loja {loja.numero} atualizada.', 'success')
         return redirect(url_for('motos_assai.lojas_detalhe', loja_id=loja_id))
     return render_template('motos_assai/lojas/form.html', form=form, loja=loja, modo='editar')
