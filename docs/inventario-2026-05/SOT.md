@@ -3,7 +3,7 @@
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
 **Última atualização:** 2026-05-17
-**Status global:** Foundation completa (Fases 0-2). Implementação dos services pendente (Fases 3-9).
+**Status global:** Foundation + F3 completas. Implementação dos services F4-F5 pendente (depois F6-F9).
 
 ---
 
@@ -50,13 +50,13 @@ Leitura: `✅ feito` / `⏳ pendente` / `⚠️ parcial` / `🚫 bloqueado` / `�
 | **F1.x** ALTER pipeline | ✅ | `scripts/migrations/2026_05_19_add_fase_pipeline.{py,sql}` (D003) | — (verificação no script) |
 | **F1.x** `build.sh` | ✅ | Items 19/20/21 adicionados (commit `6737d907`) | bash -n OK |
 | **F2** `stock_lot_service.py` | ✅ | `app/odoo/services/stock_lot_service.py` (criar/renomear/inativar/reativar/atualizar_validade/buscar_por_nome) | 15 ✅ |
+| **F3** `stock_picking_service.py` | ✅ | `app/odoo/services/stock_picking_service.py` (criar_transferencia/confirmar_e_reservar/preencher_qty_done/validar/cancelar/liberar_faturamento/aguardar_invoice_do_robo) | 13 ✅ |
 
 ### Implementação (pendente)
 
 | Fase | Status | Próximo passo | Bloqueio? |
 |------|--------|---------------|-----------|
-| **F3** `stock_picking_service.py` | ⏳ 4 tasks pendentes | Task 3.1 (esqueleto + criar_transferencia) | Não |
-| **F4** `inventario_pipeline_service.py` | ⏳ 5 tasks pendentes (4.1-4.5 NOVAS) | Task 4.1 (f5a_criar_pickings) | Depende de F3 |
+| **F4** `inventario_pipeline_service.py` | ⏳ 5 tasks pendentes (4.1-4.5 NOVAS) | Task 4.1 (f5a_criar_pickings) | Liberado — F3 ✅ |
 | **F5** `indisponibilizacao_estoque_service.py` | ⏳ 1 task | Task 5.1 (canaries + indispo/reverter) | Não — pode paralelo com F3 |
 | **F6** Hooks determinísticos | ⏳ 3 tasks | Task 6.1 (pre_execute_nf.py) | Depende de F1 (constants) — ok |
 | **F7** Scripts datados (10 scripts) | 📝 7.1 já tem template completo no plano, 7.2-7.10 expandidos | Implementar 7.1 → 7.10 sequencialmente | Depende de F3-F5 |
@@ -157,7 +157,8 @@ app/odoo/
     operacao_odoo_auditoria.py
     ajuste_estoque_inventario.py
   services/
-    stock_lot_service.py    # ÚNICO service novo implementado até agora
+    stock_lot_service.py    # F2 (15 tests)
+    stock_picking_service.py # F3 (13 tests) — criar_transferencia + confirmar/preencher/validar/cancelar + liberar_faturamento + aguardar_invoice_do_robo
 
 scripts/
   migrations/
@@ -173,7 +174,7 @@ scripts/
     00e_investigar_pickings.py
     hooks/                  # placeholder vazio (F6 pendente)
 
-tests/odoo/                 # 40 tests passing
+tests/odoo/                 # 53 tests passing
   __init__.py
   constants/__init__.py
   constants/test_operacoes_fiscais.py  # 17 tests
@@ -182,6 +183,7 @@ tests/odoo/                 # 40 tests passing
   models/test_ajuste_estoque_inventario.py  # 4 tests
   services/__init__.py
   services/test_stock_lot_service.py  # 15 tests
+  services/test_stock_picking_service.py  # 13 tests (F3)
 
 docs/
   inventario-2026-05/
@@ -219,7 +221,6 @@ build.sh    # items 19/20/21 adicionados
 
 ```
 app/odoo/services/
-  stock_picking_service.py            # F3
   inventario_pipeline_service.py      # F4
   indisponibilizacao_estoque_service.py  # F5
 
