@@ -1,0 +1,66 @@
+registro: I050
+descricao: Plano de Contas
+hierarquia: 3
+ocorrencia: "1:N"
+obrigatoriedade: "S"
+fonte: manual_ecd/bloco_I_lancamentos.md#registro-i050
+
+campos:
+  - pos: 1
+    nome: REG
+    tipo: C
+    tamanho: 4
+    obrigatorio: S
+    valores: ["I050"]
+  - pos: 2
+    nome: DT_ALT
+    tipo: N
+    tamanho: 8
+    obrigatorio: S
+    descricao: Data de alteracao/inclusao da conta no plano de contas
+  - pos: 3
+    nome: COD_NAT
+    tipo: C
+    tamanho: 2
+    obrigatorio: S
+    valores: ["01", "02", "03", "04", "05", "07", "09"]
+    descricao: "Natureza da conta: 01-Ativo, 02-Passivo, 03-PL, 04-Receita, 05-Custos/Despesas, 07-Compensacao, 09-Outras"
+  - pos: 4
+    nome: IND_CTA
+    tipo: C
+    tamanho: 1
+    obrigatorio: S
+    valores: ["S", "A"]
+    descricao: S=sintetica, A=analitica
+  - pos: 5
+    nome: NIVEL
+    tipo: N
+    tamanho: null
+    obrigatorio: S
+    descricao: Nivel hierarquico (1 = raiz)
+  - pos: 6
+    nome: COD_CTA
+    tipo: C
+    tamanho: null
+    obrigatorio: S
+    descricao: Codigo da conta no plano
+  - pos: 7
+    nome: COD_CTA_SUP
+    tipo: C
+    tamanho: null
+    obrigatorio: N
+    descricao: Codigo da conta superior (vazio para nivel 1)
+  - pos: 8
+    nome: CTA
+    tipo: C
+    tamanho: 60
+    obrigatorio: S
+    descricao: Nome da conta
+
+regras_extras:
+  - nome: REGRA_HIERARQUIA_COD_SUP
+    descricao: COD_CTA_SUP deve existir como I050 anterior se NIVEL>1
+    severidade: BLOQUEANTE
+  - nome: REGRA_DT_ALT_LIMITE
+    descricao: DT_ALT <= DT_INI do periodo
+    severidade: BLOQUEANTE
