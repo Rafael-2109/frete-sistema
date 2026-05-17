@@ -189,3 +189,29 @@ class StockPickingService:
             + (f' (motivo: {motivo})' if motivo else '')
         )
         return True
+
+    def liberar_faturamento(self, picking_id: int) -> None:
+        """action_liberar_faturamento — sinaliza para o robo CIEL IT criar
+        a invoice (account.move).
+
+        Apos esta chamada, o robo da NACOM cria automaticamente o
+        account.move correspondente (pode levar ate 30 min). Use
+        `aguardar_invoice_do_robo()` para fire-and-poll do resultado.
+
+        Pre-condicao: picking em state='done' e
+        liberacao_para_faturamento configurada no picking_type.
+
+        Reuso: recebimento_lf_odoo_service.py:2526-2531 (etapa 21,
+        sem nome explicito).
+
+        Raises:
+            Exception: propaga qualquer erro de negocio (ex.: 'Picking
+                nao validado') para o caller decidir.
+        """
+        self.odoo.execute_kw(
+            'stock.picking', 'action_liberar_faturamento', [[picking_id]]
+        )
+        logger.info(
+            f'Picking {picking_id}: action_liberar_faturamento disparado '
+            '(aguardando robo CIEL IT criar invoice)'
+        )

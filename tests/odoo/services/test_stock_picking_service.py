@@ -106,3 +106,24 @@ def test_cancelar():
     odoo.execute_kw.assert_called_with(
         'stock.picking', 'action_cancel', [[9999]]
     )
+
+
+# ============================================================
+# liberar_faturamento (Task 3.3)
+# ============================================================
+
+def test_liberar_faturamento_chama_action():
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    svc.liberar_faturamento(picking_id=9999)
+    odoo.execute_kw.assert_called_with(
+        'stock.picking', 'action_liberar_faturamento', [[9999]]
+    )
+
+
+def test_liberar_faturamento_propaga_erro_negocio():
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = Exception('Picking nao validado')
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(Exception, match='nao validado'):
+        svc.liberar_faturamento(picking_id=9999)
