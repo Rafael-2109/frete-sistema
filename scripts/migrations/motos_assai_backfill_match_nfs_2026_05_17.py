@@ -75,7 +75,7 @@ from app.utils.cnpj_utils import normalizar_cnpj  # noqa: E402
 from app.utils.timezone import agora_brasil_naive  # noqa: E402
 
 
-SCRIPT_VERSION = '2026-05-17-v1.1'
+SCRIPT_VERSION = '2026-05-17-v2'
 MOTIVO = 'BACKFILL_2026_05_17'
 PEDIDO_PLACEHOLDER_NUMERO = 'BACKFILL-2026-05-17'
 
@@ -83,6 +83,12 @@ CHASSIS_LIXO_PARA_REMOVER = [
     (1, '2622'),
     (5, '2465'),
 ]
+
+# Seps de teste a remover ANTES do backfill (Rafael pediu na sessao
+# de 2026-05-17). Cancelar emite DISPONIVEL nos chassis, liberando-os
+# para parte3 criar sep sintetica. Idempotente — se sep ja CANCELADA
+# ou ja FATURADA com NF emitida, skip.
+SEPS_TESTE_PARA_CANCELAR = [2, 3]
 
 
 logger = logging.getLogger('backfill_match_nfs')
@@ -201,6 +207,92 @@ def parte2_delete_chassis_lixo() -> int:
         logger.info('[parte2] commit: %d AssaiMoto removidas', removidos)
 
     return removidos
+
+
+# ─── parte0 — cancelar seps de teste ──────────────────────────────────────────
+
+def parte0_cancelar_seps_teste() -> int:
+    """Cancela separacoes de teste explicitamente listadas em
+    SEPS_TESTE_PARA_CANCELAR. Idempotente — skip se ja CANCELADA ou se
+    FATURADA com NF emitida (intocavel).
+
+    Para cada chassi vinculado a sep teste, emite EVENTO_DISPONIVEL —
+    chassi volta para o pool e fica elegivel a entrar em sep sintetica
+    criada pela parte3.
+
+    Rafael pediu na sessao de 2026-05-17: separacoes 2 (loja 10) e 3
+    (loja 37) eram apenas de teste e bloqueavam parte3 por causa do
+    skip CHASSI_EM_OUTRA_SEP.
+    """
+    from app.motos_assai.models import (
+        AssaiSeparacao, AssaiSeparacaoItem, AssaiNfQpa,
+        SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
+        NF_STATUS_CANCELADA, EVENTO_DISPONIVEL,
+    )
+    from app.motos_assai.services.moto_evento_service import emitir_evento
+
+    operador_id = _get_admin_id()
+    canceladas = 0
+
+    for sep_id in SEPS_TESTE_PARA_CANCELAR:
+        sep = AssaiSeparacao.query.get(sep_id)
+        if not sep:
+            logger.info(
+                '[parte0] no-op — sep %s nao existe', sep_id,
+            )
+            continue
+        if sep.status == SEPARACAO_STATUS_CANCELADA:
+            logger.info(
+                '[parte0] no-op — sep %s ja CANCELADA', sep_id,
+            )
+            continue
+
+        # FATURADA com NF nao-CANCELADA: intocavel (sep ja produziu valor)
+        nf_ativa = (
+            AssaiNfQpa.query
+            .filter_by(separacao_id=sep_id)
+            .filter(AssaiNfQpa.status_match != NF_STATUS_CANCELADA)
+            .first()
+        )
+        if sep.status == SEPARACAO_STATUS_FATURADA and nf_ativa:
+            logger.warning(
+                '[parte0] SKIP sep %s FATURADA com NF %s ativa — '
+                'cancelar exige cancelar a NF antes',
+                sep_id, nf_ativa.id,
+            )
+            continue
+
+        # Cancelar: status + emitir DISPONIVEL para cada chassi da sep
+        chassis_sep = [
+            it.chassi for it in
+            AssaiSeparacaoItem.query.filter_by(separacao_id=sep_id).all()
+        ]
+        sep.status = SEPARACAO_STATUS_CANCELADA
+        sep.motivo_cancelamento = (
+            f'{MOTIVO}: separacao de teste removida via backfill'
+        )
+        for chassi in chassis_sep:
+            emitir_evento(
+                chassi, EVENTO_DISPONIVEL,
+                operador_id=operador_id,
+                observacao=f'{MOTIVO} sep teste {sep_id} cancelada',
+                dados_extras={
+                    'origem': MOTIVO,
+                    'sep_cancelada': sep_id,
+                    'script_version': SCRIPT_VERSION,
+                },
+            )
+        canceladas += 1
+        logger.info(
+            '[parte0] sep %s CANCELADA (%d chassis -> DISPONIVEL)',
+            sep_id, len(chassis_sep),
+        )
+
+    if canceladas:
+        db.session.commit()
+        logger.info('[parte0] commit: %d seps canceladas', canceladas)
+
+    return canceladas
 
 
 # ─── parte4 — finalizar recibos pendentes ─────────────────────────────────────
@@ -368,6 +460,164 @@ def parte4_finalizar_recibos_pendentes() -> dict:
             )
             stats['erro'] += 1
 
+    return stats
+
+
+# ─── parte5 — cadastrar chassis via regex de modelo ──────────────────────────
+
+def parte5_cadastrar_chassis_via_regex() -> dict:
+    """Para AssaiNfQpaItem com tipo_divergencia=CHASSI_NAO_CADASTRADO,
+    tenta cadastrar AssaiMoto usando modelo_extraido + regex do AssaiModelo.
+
+    Fluxo por item:
+      1. Skip se chassi ja em assai_moto (entao tipo_divergencia eh stale —
+         reprocess final limpa).
+      2. resolver_modelo(modelo_extraido) -> modelo
+      3. Se modelo encontrado E regex_chassi do modelo casa: cria AssaiMoto +
+         emite EVENTO_ESTOQUE com origem=BACKFILL.
+      4. Senao: SKIP (verdadeira divergencia, operador resolve).
+
+    Rafael (2026-05-17): "DOT-2026 = DOT, está cadastrada no sistema, erro
+    de match apenas". Modelo DOT existe; chassis LA2026SA0100xxxxx (DOT)
+    e LA250960V1000Wxxxx (X11-MINI) batem regex mas nao foram cadastrados
+    porque a Motochefe ainda nao declarou compra deles (sem recibo).
+    """
+    import re
+    from app.motos_assai.models import (
+        AssaiNfQpaItem, AssaiNfQpa, AssaiMoto,
+        NF_STATUS_BATEU, NF_STATUS_CANCELADA, EVENTO_ESTOQUE,
+        DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO,
+    )
+    from app.motos_assai.services.modelo_resolver import resolver_modelo
+    from app.motos_assai.services.moto_evento_service import emitir_evento
+
+    operador_id = _get_admin_id()
+    stats = {
+        'total_items': 0, 'criados': 0,
+        'skip_ja_em_moto': 0, 'skip_modelo_nao_resolvido': 0,
+        'skip_regex_nao_bate': 0, 'erro': 0,
+    }
+
+    items = (
+        AssaiNfQpaItem.query
+        .join(AssaiNfQpa, AssaiNfQpa.id == AssaiNfQpaItem.nf_id)
+        .filter(
+            AssaiNfQpaItem.tipo_divergencia == DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO,
+            AssaiNfQpa.status_match.notin_([NF_STATUS_BATEU, NF_STATUS_CANCELADA]),
+        )
+        .all()
+    )
+    stats['total_items'] = len(items)
+    if not items:
+        logger.info('[parte5] no-op — nenhum item com CHASSI_NAO_CADASTRADO.')
+        return stats
+
+    chassis_processados: set[str] = set()
+    for item in items:
+        chassi = (item.chassi or '').strip().upper()
+        if not chassi or chassi in chassis_processados:
+            continue
+        chassis_processados.add(chassi)
+
+        # Skip se ja em assai_moto (caso comum apos parte4)
+        if AssaiMoto.query.filter_by(chassi=chassi).first():
+            stats['skip_ja_em_moto'] += 1
+            continue
+
+        modelo = resolver_modelo(item.modelo_extraido or '', origem='NF_QPA')
+        if not modelo:
+            logger.warning(
+                '[parte5] SKIP chassi=%r — modelo nao resolvido para %r',
+                chassi, item.modelo_extraido,
+            )
+            stats['skip_modelo_nao_resolvido'] += 1
+            continue
+
+        # Valida regex (defesa — se nao bater, NAO criar moto invalida)
+        regex = modelo.regex_chassi
+        if regex:
+            pattern = regex if regex.startswith('^') else '^' + regex
+            pattern = pattern if pattern.endswith('$') else pattern + '$'
+            try:
+                if not re.match(pattern, chassi):
+                    logger.warning(
+                        '[parte5] SKIP chassi=%r — nao bate regex de %s (%r)',
+                        chassi, modelo.codigo, regex,
+                    )
+                    stats['skip_regex_nao_bate'] += 1
+                    continue
+            except re.error:
+                logger.warning(
+                    '[parte5] SKIP chassi=%r — regex invalido em modelo %s',
+                    chassi, modelo.codigo,
+                )
+                stats['erro'] += 1
+                continue
+
+        try:
+            moto = AssaiMoto(chassi=chassi, modelo_id=modelo.id)
+            db.session.add(moto)
+            db.session.flush()
+            emitir_evento(
+                chassi, EVENTO_ESTOQUE,
+                operador_id=operador_id,
+                observacao=f'{MOTIVO} cadastro via regex modelo {modelo.codigo}',
+                dados_extras={
+                    'origem': MOTIVO,
+                    'modelo_codigo': modelo.codigo,
+                    'modelo_extraido_nf': item.modelo_extraido,
+                    'script_version': SCRIPT_VERSION,
+                },
+            )
+            stats['criados'] += 1
+            logger.info(
+                '[parte5] AssaiMoto criada chassi=%s modelo=%s (via NF %s)',
+                chassi, modelo.codigo, item.nf_id,
+            )
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                '[parte5] ERRO criar moto chassi=%r: %s', chassi, e,
+            )
+            stats['erro'] += 1
+
+    if stats['criados']:
+        db.session.commit()
+
+    return stats
+
+
+# ─── parte_final — reprocessar NFs nao-BATEU ──────────────────────────────────
+
+def parte_final_reprocessar_nfs_nao_bateu() -> dict:
+    """Apos partes 0/1/2/4/5 modificarem o estado (chassis cadastrados, seps
+    canceladas, etc.), as NFs com tipo_divergencia stale precisam de reset.
+
+    Chama reprocessar_match_nf para todas NFs status != BATEU. O service
+    limpa tipo_divergencia, regride sep FATURADA->FECHADA se aplicavel,
+    e re-roda _calcular_match com o estado atual.
+    """
+    from app.motos_assai.models import AssaiNfQpa, NF_STATUS_BATEU, NF_STATUS_CANCELADA
+    from app.motos_assai.services.reprocessar_match_service import (
+        reprocessar_match_nfs,
+    )
+
+    nfs = (
+        AssaiNfQpa.query
+        .filter(AssaiNfQpa.status_match.notin_([NF_STATUS_BATEU, NF_STATUS_CANCELADA]))
+        .order_by(AssaiNfQpa.id.asc())
+        .all()
+    )
+    if not nfs:
+        logger.info('[parte_final] no-op — nenhuma NF nao-BATEU.')
+        return {'total': 0}
+
+    nf_ids = [n.id for n in nfs]
+    operador_id = _get_admin_id()
+    stats = reprocessar_match_nfs(
+        nf_ids, motivo=f'{MOTIVO}_FINAL', operador_id=operador_id,
+    )
+    logger.info('[parte_final] reprocessou %d NFs', len(nf_ids))
     return stats
 
 
@@ -652,6 +902,18 @@ def main():
         '--skip-parte4', action='store_true',
         help='Pula finalizar recibos pendentes.',
     )
+    parser.add_argument(
+        '--skip-parte0', action='store_true',
+        help='Pula cancelar seps de teste.',
+    )
+    parser.add_argument(
+        '--skip-parte5', action='store_true',
+        help='Pula cadastrar chassis via regex de modelo.',
+    )
+    parser.add_argument(
+        '--skip-parte-final', action='store_true',
+        help='Pula reprocessamento final das NFs nao-BATEU.',
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -663,11 +925,25 @@ def main():
     with app.app_context():
         logger.info('=== motos_assai backfill match NFs (%s) ===', SCRIPT_VERSION)
 
-        # Isolamento por parte (2026-05-17 v1.1 fix): cada parte tem try/except
-        # proprio para que falha em uma NAO interrompa as demais. O auto-deploy
-        # do Render captura erro do script inteiro com `|| echo ...` no build.sh,
-        # mas isso e granularidade boa demais — perdemos parte3/4 se parte2
-        # explode. Isolamento aqui garante que cada parte tenta independente.
+        # ORDEM v2 (2026-05-17 Rafael):
+        #   parte0: cancela seps de teste (libera chassis)
+        #   parte1: resolve loja_id NFs antigas
+        #   parte2: remove AssaiMoto lixo
+        #   parte4: finaliza recibos pendentes (cadastra X11 pendentes)
+        #   parte5: cadastra DOT/X11 nao em recibo via regex de modelo
+        #   parte3: cria sep sintetica FATURADA por NF
+        #   parte_final: reprocessa NFs nao-BATEU (limpa tipo_divergencia stale)
+        # Cada parte isolada em try/except — falha em uma nao interrompe demais.
+
+        if not args.skip_parte0 and not args.dry_run:
+            try:
+                parte0_cancelar_seps_teste()
+            except Exception:
+                logger.exception('parte0 falhou — seguindo para proximas partes')
+                db.session.rollback()
+        elif args.dry_run and not args.skip_parte0:
+            logger.info('[parte0] SKIP em --dry-run.')
+
         if not args.skip_parte1:
             try:
                 parte1_update_loja_id()
@@ -682,17 +958,25 @@ def main():
                 logger.exception('parte2 falhou — seguindo para proximas partes')
                 db.session.rollback()
 
-        # parte4 ANTES de parte3: finaliza recibos -> cadastra AssaiMoto
-        # -> chassis das NFs ficam disponiveis para sep sintetica.
         if not args.skip_parte4 and not args.dry_run:
             try:
                 stats_p4 = parte4_finalizar_recibos_pendentes()
                 logger.info('[parte4 stats] %s', json.dumps(stats_p4))
             except Exception:
-                logger.exception('parte4 falhou — seguindo para parte3')
+                logger.exception('parte4 falhou — seguindo para proximas partes')
                 db.session.rollback()
         elif args.dry_run and not args.skip_parte4:
             logger.info('[parte4] SKIP em --dry-run (parte4 nao tem modo dry).')
+
+        if not args.skip_parte5 and not args.dry_run:
+            try:
+                stats_p5 = parte5_cadastrar_chassis_via_regex()
+                logger.info('[parte5 stats] %s', json.dumps(stats_p5))
+            except Exception:
+                logger.exception('parte5 falhou — seguindo para proximas partes')
+                db.session.rollback()
+        elif args.dry_run and not args.skip_parte5:
+            logger.info('[parte5] SKIP em --dry-run.')
 
         if not args.skip_parte3:
             try:
@@ -701,8 +985,18 @@ def main():
                 )
                 logger.info('[parte3 stats] %s', json.dumps(stats))
             except Exception:
-                logger.exception('parte3 falhou')
+                logger.exception('parte3 falhou — seguindo para reprocess final')
                 db.session.rollback()
+
+        if not args.skip_parte_final and not args.dry_run:
+            try:
+                stats_pf = parte_final_reprocessar_nfs_nao_bateu()
+                logger.info('[parte_final stats] %s', json.dumps(stats_pf))
+            except Exception:
+                logger.exception('parte_final falhou')
+                db.session.rollback()
+        elif args.dry_run and not args.skip_parte_final:
+            logger.info('[parte_final] SKIP em --dry-run.')
 
         logger.info('=== backfill concluido ===')
 
