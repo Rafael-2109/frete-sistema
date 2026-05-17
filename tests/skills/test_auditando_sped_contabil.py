@@ -128,3 +128,89 @@ def test_balance_tolerance_zero_strict_mode():
     findings = audit_balance_equations(parsed_diff, tolerance=0)
     assert len(findings) == 1
     assert findings[0].severidade == "BLOQUEANTE"
+
+
+# =====================================================================
+# audit_hierarchy tests
+# =====================================================================
+
+from audit_hierarchy import audit_i050_hierarchy, HierarchyFinding
+
+
+def make_parsed_i050(i050_records: list[dict], i250_records: list[dict] | None = None) -> dict:
+    return {
+        "metadata": {"total_lines": len(i050_records)},
+        "registros": {
+            "I050": i050_records,
+            "I250": i250_records or [],
+        },
+    }
+
+
+def test_hierarchy_valid():
+    """Plano sintetica raiz 1 -> analitica 11 -> 111 valido."""
+    parsed = make_parsed_i050([
+        {"COD_CTA": "1", "COD_CTA_SUP": "", "NIVEL": "1", "COD_NAT": "01", "IND_CTA": "S", "CTA": "ATIVO"},
+        {"COD_CTA": "11", "COD_CTA_SUP": "1", "NIVEL": "2", "COD_NAT": "01", "IND_CTA": "S", "CTA": "CIRCULANTE"},
+        {"COD_CTA": "111", "COD_CTA_SUP": "11", "NIVEL": "3", "COD_NAT": "01", "IND_CTA": "A", "CTA": "CAIXA"},
+    ])
+    findings = audit_i050_hierarchy(parsed)
+    assert findings == [], f"unexpected: {findings}"
+
+
+def test_hierarchy_orphan_cod_sup():
+    """COD_CTA_SUP=99 nao existe — orfao."""
+    parsed = make_parsed_i050([
+        {"COD_CTA": "111", "COD_CTA_SUP": "99", "NIVEL": "3", "COD_NAT": "01", "IND_CTA": "A", "CTA": "CAIXA"},
+    ])
+    findings = audit_i050_hierarchy(parsed)
+    assert any(f.tipo == "orfao_cod_sup" for f in findings)
+
+
+def test_hierarchy_cod_nat_inconsistent():
+    """Filha tem COD_NAT diferente do pai — inconsistencia."""
+    parsed = make_parsed_i050([
+        {"COD_CTA": "1", "COD_CTA_SUP": "", "NIVEL": "1", "COD_NAT": "01", "IND_CTA": "S", "CTA": "ATIVO"},
+        {"COD_CTA": "11", "COD_CTA_SUP": "1", "NIVEL": "2", "COD_NAT": "02", "IND_CTA": "A", "CTA": "ERRO"},
+    ])
+    findings = audit_i050_hierarchy(parsed)
+    assert any(f.tipo == "cod_nat_divergente" for f in findings)
+
+
+def test_hierarchy_i250_account_not_in_i050():
+    """Conta movimentada em I250 mas nao declarada em I050."""
+    parsed = make_parsed_i050(
+        i050_records=[
+            {"COD_CTA": "111", "COD_CTA_SUP": "", "NIVEL": "1", "COD_NAT": "01", "IND_CTA": "A", "CTA": "CAIXA"},
+        ],
+        i250_records=[
+            {"COD_CTA": "FANTASMA", "VL_DC": "100,00", "IND_DC": "D"},
+        ],
+    )
+    findings = audit_i050_hierarchy(parsed)
+    assert any(f.tipo == "i250_conta_inexistente" for f in findings)
+
+
+def test_hierarchy_i250_synthetic_account():
+    """Lancamento I250 em conta SINTETICA — erro (so analiticas movimentam)."""
+    parsed = make_parsed_i050(
+        i050_records=[
+            {"COD_CTA": "1", "COD_CTA_SUP": "", "NIVEL": "1", "COD_NAT": "01", "IND_CTA": "S", "CTA": "ATIVO"},
+        ],
+        i250_records=[
+            {"COD_CTA": "1", "VL_DC": "100,00", "IND_DC": "D"},
+        ],
+    )
+    findings = audit_i050_hierarchy(parsed)
+    assert any(f.tipo == "i250_conta_sintetica" for f in findings)
+
+
+def test_hierarchy_no_cycles_detected():
+    """Sem ciclos quando hierarquia eh acyclica."""
+    parsed = make_parsed_i050([
+        {"COD_CTA": "1", "COD_CTA_SUP": "", "NIVEL": "1", "COD_NAT": "01", "IND_CTA": "S", "CTA": "ATIVO"},
+        {"COD_CTA": "11", "COD_CTA_SUP": "1", "NIVEL": "2", "COD_NAT": "01", "IND_CTA": "S", "CTA": "X"},
+    ])
+    findings = audit_i050_hierarchy(parsed)
+    cycle_findings = [f for f in findings if f.tipo == "ciclo_hierarquia"]
+    assert not cycle_findings
