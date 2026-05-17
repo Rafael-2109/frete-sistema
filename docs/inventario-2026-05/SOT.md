@@ -3,7 +3,7 @@
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
 **Última atualização:** 2026-05-17
-**Status global:** Foundation + F3 + F4 completas. Implementação dos services F5 pendente (depois F6-F9).
+**Status global:** Foundation + F3 + F4 + F5 completas. Services 100% prontos. Próximos: F6-F9 (hooks + scripts + docs + execução).
 
 ---
 
@@ -52,16 +52,16 @@ Leitura: `✅ feito` / `⏳ pendente` / `⚠️ parcial` / `🚫 bloqueado` / `�
 | **F2** `stock_lot_service.py` | ✅ | `app/odoo/services/stock_lot_service.py` (criar/renomear/inativar/reativar/atualizar_validade/buscar_por_nome) | 15 ✅ |
 | **F3** `stock_picking_service.py` | ✅ | `app/odoo/services/stock_picking_service.py` (criar_transferencia/confirmar_e_reservar/preencher_qty_done/validar/cancelar/liberar_faturamento/aguardar_invoice_do_robo) | 13 ✅ |
 | **F4** `inventario_pipeline_service.py` | ✅ | `app/odoo/services/inventario_pipeline_service.py` (f5a_criar_pickings/f5b_validar_pickings/f5c_liberar_faturamento/f5d_aguardar_invoices/f5e_transmitir_sefaz) + helper resolver_location_destino | 25 ✅ |
+| **F5** `indisponibilizacao_estoque_service.py` | ✅ | `app/odoo/services/indisponibilizacao_estoque_service.py` (canary_lote/canary_local com try/finally + indisponibilizar_lote/reverter_lote/indisponibilizar_local/reverter_local com canary_passou guard) | 12 ✅ |
 
 ### Implementação (pendente)
 
 | Fase | Status | Próximo passo | Bloqueio? |
 |------|--------|---------------|-----------|
-| **F5** `indisponibilizacao_estoque_service.py` | ⏳ 1 task | Task 5.1 (canaries + indispo/reverter) | Liberado — pode paralelo |
-| **F6** Hooks determinísticos | ⏳ 3 tasks | Task 6.1 (pre_execute_nf.py) | Depende de F1 (constants) — ok |
-| **F7** Scripts datados (10 scripts) | 📝 7.1 já tem template completo no plano, 7.2-7.10 expandidos | Implementar 7.1 → 7.10 sequencialmente | Depende de F3-F5 |
+| **F6** Hooks determinísticos | ⏳ 3 tasks | Task 6.1 (pre_execute_nf.py) | Liberado — F1 (constants) ✅ |
+| **F7** Scripts datados (10 scripts) | 📝 7.1 já tem template completo no plano, 7.2-7.10 expandidos | Implementar 7.1 → 7.10 sequencialmente | Liberado — F3+F4+F5 ✅ |
 | **F8** Documentação (2 playbooks + estrutura) | ⏳ 4 tasks | Task 8.1 (estrutura pastas — JÁ PARCIAL) | Não |
-| **F9** Execução operacional | 🚫 bloqueada | Aguardar F3-F7 | Bloqueio total |
+| **F9** Execução operacional | 🚫 bloqueada | Aguardar F6+F7 | Bloqueio: precisa hooks + scripts |
 
 ### Tarefas técnicas pendentes ao final (G003 sugestão de refator)
 
@@ -191,6 +191,7 @@ app/odoo/
     stock_lot_service.py    # F2 (15 tests)
     stock_picking_service.py # F3 (13 tests)
     inventario_pipeline_service.py # F4 (25 tests) — f5a..f5e orquestrador batch (recebe List[Ajuste], DESVIO do plano: plano usava List[int] + lookup por picking_id_odoo, refatorado por bug de pool de conexao em tests). Bugs HIGH post-review (BUG-1 location_destino, BUG-2 idempotency F5e, BUG-3 abort config) e MEDIUMs corrigidos (cstat/xmotivo persistido, situacao_nf audit, WARNING em skip silencioso).
+    indisponibilizacao_estoque_service.py # F5 (12 tests) — canary_lote/canary_local com try/finally (SEMPRE reverte) + indisponibilizar_lote/local com canary_passou guard + reverter_lote/local. OPORTUNIDADE refactor: usar StockLotService.inativar/reativar (F2) em vez de odoo.write direto.
 
 scripts/
   migrations/
@@ -206,7 +207,7 @@ scripts/
     00e_investigar_pickings.py
     hooks/                  # placeholder vazio (F6 pendente)
 
-tests/odoo/                 # 78 tests passing
+tests/odoo/                 # 90 tests passing
   __init__.py
   constants/__init__.py
   constants/test_operacoes_fiscais.py  # 17 tests
@@ -217,6 +218,7 @@ tests/odoo/                 # 78 tests passing
   services/test_stock_lot_service.py  # 15 tests
   services/test_stock_picking_service.py  # 13 tests (F3)
   services/test_inventario_pipeline_service.py  # 25 tests (F4 + post-review fixes)
+  services/test_indisponibilizacao_estoque_service.py  # 12 tests (F5)
 
 docs/
   inventario-2026-05/
@@ -253,9 +255,6 @@ build.sh    # items 19/20/21 adicionados
 ### Pendente de criar
 
 ```
-app/odoo/services/
-  indisponibilizacao_estoque_service.py  # F5
-
 scripts/inventario_2026_05/
   01_extrair_estoque_odoo.py          # F1 — script de operação
   02_carregar_inventario_xlsx.py
