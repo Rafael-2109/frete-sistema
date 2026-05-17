@@ -1,6 +1,6 @@
 """Testa InventarioPipelineService — orquestrador batch (5 metodos)."""
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.odoo.services.inventario_pipeline_service import (
     ACAO_PARA_DIRECAO,
@@ -296,3 +296,110 @@ def test_f5d_timeout_marca_None(db):
     # Ajuste mantem F5c_LIBERADO (nao mudou para F5d_INVOICE_GERADA)
     assert aj.fase_pipeline == 'F5c_LIBERADO'
     assert aj.invoice_id_odoo is None
+
+
+# ============================================================
+# f5e_transmitir_sefaz (Task 4.5 — adaptado p/ transmitir_nfe_via_playwright)
+# ============================================================
+
+def test_f5e_chama_playwright_para_cada_invoice(db):
+    """f5e usa transmitir_nfe_via_playwright (assinatura real)."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    ajustes = [
+        AjusteEstoqueInventario(
+            ciclo='TEST_F5E', cod_produto='X1', tipo_produto=1,
+            company_id=5, qtd_inventario=Decimal('1'),
+            qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+            acao_decidida='PERDA_LF_FB', status='APROVADO',
+            criado_por='pytest',
+            picking_id_odoo=pid, invoice_id_odoo=inv,
+            fase_pipeline='F5d_INVOICE_GERADA',
+        )
+        for pid, inv in [(5001, 8001), (5002, 8002)]
+    ]
+    db.session.add_all(ajustes)
+    db.session.flush()
+
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        mock_tx.side_effect = [
+            {'sucesso': True, 'chave_nf': '35260112345678000112550010000000018001',
+             'situacao_nf': 'autorizado'},
+            {'sucesso': True, 'chave_nf': '35260112345678000112550010000000018002',
+             'situacao_nf': 'autorizado'},
+        ]
+        result = svc.f5e_transmitir_sefaz(ajustes)
+
+    assert mock_tx.call_count == 2
+    assert all(v and v.startswith('35') for v in result.values())
+    # Ajustes atualizados
+    for aj in ajustes:
+        assert aj.fase_pipeline == 'F5e_SEFAZ_OK'
+        assert aj.status == 'EXECUTADO'
+        assert aj.chave_nfe and aj.chave_nfe.startswith('35')
+
+
+def test_f5e_falha_marca_F5e_FALHA(db):
+    """Se Playwright retorna sucesso=False, ajuste fica F5e_FALHA."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5E_FAIL', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='APROVADO',
+        criado_por='pytest',
+        picking_id_odoo=5500, invoice_id_odoo=8500,
+        fase_pipeline='F5d_INVOICE_GERADA',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        mock_tx.return_value = {
+            'sucesso': False, 'erro': 'login_falhou', 'tentativas': 1
+        }
+        result = svc.f5e_transmitir_sefaz([aj])
+
+    assert result == {8500: None}
+    assert aj.fase_pipeline == 'F5e_FALHA'
+    assert 'login_falhou' in aj.erro_msg
+
+
+def test_f5e_skip_ajuste_sem_invoice_id(db):
+    """Ajuste sem invoice_id_odoo eh pulado."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5E_SKIP', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='APROVADO',
+        criado_por='pytest',
+        picking_id_odoo=5800, invoice_id_odoo=None,  # sem invoice
+        fase_pipeline='F5c_LIBERADO',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        result = svc.f5e_transmitir_sefaz([aj])
+
+    assert result == {}
+    mock_tx.assert_not_called()
+    assert aj.fase_pipeline == 'F5c_LIBERADO'  # nao muda

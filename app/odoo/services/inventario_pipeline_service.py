@@ -25,6 +25,9 @@ from app.odoo.constants.locations import COMPANY_LOCATIONS
 from app.odoo.constants.operacoes_fiscais import COMPANY_PARTNER_ID
 from app.odoo.services.stock_picking_service import StockPickingService
 from app.odoo.utils.connection import get_odoo_connection
+from app.recebimento.services.playwright_nfe_transmissao import (
+    transmitir_nfe_via_playwright,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -392,3 +395,73 @@ class InventarioPipelineService:
                 f'sem invoice: {sorted(pendentes)}'
             )
         return resolved
+
+    # ============================================================
+    # F5e — transmitir_sefaz (serial via Playwright)
+    # ============================================================
+
+    def f5e_transmitir_sefaz(
+        self, ajustes: List
+    ) -> Dict[int, Optional[str]]:
+        """Transmite NF-e para SEFAZ via Playwright (serial, 1 browser).
+
+        Reusa app/recebimento/services/playwright_nfe_transmissao
+        .transmitir_nfe_via_playwright(invoice_id, odoo, logger).
+
+        Itera APENAS ajustes que ja tem invoice_id_odoo populado
+        (chegaram a F5d). Ajustes sem invoice sao skip.
+
+        Args:
+            ajustes: lista de AjusteEstoqueInventario com
+                invoice_id_odoo populado (fase_pipeline >= F5d_INVOICE_GERADA).
+
+        Returns:
+            {invoice_id: chave_nf (sucesso) | None (falha)}.
+        """
+        result: Dict[int, Optional[str]] = {}
+
+        for aj in ajustes:
+            inv_id = aj.invoice_id_odoo
+            if not inv_id:
+                logger.info(
+                    f'F5e skip ajuste {aj.id} (sem invoice_id_odoo)'
+                )
+                continue
+
+            try:
+                resultado = transmitir_nfe_via_playwright(
+                    inv_id, self.odoo, logger
+                )
+                if resultado.get('sucesso'):
+                    chave_nfe = resultado.get('chave_nf')
+                    result[inv_id] = chave_nfe
+                    aj.fase_pipeline = 'F5e_SEFAZ_OK'
+                    aj.chave_nfe = chave_nfe
+                    aj.status = 'EXECUTADO'
+                    db.session.commit()
+                    logger.info(
+                        f'F5e invoice {inv_id} → SEFAZ OK (chave='
+                        f'{chave_nfe}, ajuste {aj.id})'
+                    )
+                else:
+                    erro = resultado.get('erro', 'erro_desconhecido')
+                    result[inv_id] = None
+                    aj.fase_pipeline = 'F5e_FALHA'
+                    aj.erro_msg = (
+                        f"SEFAZ falhou: {erro} "
+                        f"(tentativas={resultado.get('tentativas', '?')})"
+                    )
+                    db.session.commit()
+                    logger.error(
+                        f'F5e invoice {inv_id} falhou: {erro}'
+                    )
+            except Exception as e:
+                result[inv_id] = None
+                aj.fase_pipeline = 'F5e_FALHA'
+                aj.erro_msg = str(e)
+                db.session.commit()
+                logger.error(
+                    f'F5e excecao na invoice {inv_id}: {e}',
+                    exc_info=True,
+                )
+        return result
