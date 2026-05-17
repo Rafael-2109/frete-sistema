@@ -39,8 +39,12 @@ def buscar_regras_semantico(
 
     client = get_voyage_client()
     response = client.embed([query], model="voyage-4-lite", input_type="query")
-    embeddings = response.embeddings if hasattr(response, "embeddings") else response
-    query_emb = embeddings[0]
+    # voyage-ai retorna EmbeddingsObject com .embeddings (lista de listas)
+    if hasattr(response, "embeddings"):
+        embeddings_list: list = response.embeddings
+    else:
+        embeddings_list = list(response)  # type: ignore[arg-type]
+    query_emb = embeddings_list[0]
 
     conds = []
     params: dict[str, Any] = {"qemb": str(query_emb), "limit": limit}
