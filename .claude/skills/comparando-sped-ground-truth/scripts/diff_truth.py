@@ -126,14 +126,19 @@ def diff_campos_preenchidos(
     for campo, valor_ground in ground_rec.items():
         valor_nosso = nosso_rec.get(campo, "")
         # Ground preenchido + nosso vazio = finding
-        if valor_ground and not valor_nosso:
+        # Checagem explicita: falsy-but-valid (0, False) nao deve ser ignorado
+        ground_vazio = valor_ground is None or valor_ground == ""
+        nosso_vazio = valor_nosso is None or valor_nosso == ""
+        if not ground_vazio and nosso_vazio:
+            raw = str(valor_ground)
+            preview = (raw[:40] + "...") if len(raw) > 40 else raw
             findings.append(DiffFinding(
                 tipo="campo_vazio_nosso",
                 registro=registro,
                 severidade="WARNING",
                 descricao=(
                     f"{registro}.{campo} preenchido no SPED contadora "
-                    f"('{str(valor_ground)[:40]}...') mas vazio no nosso. "
+                    f"('{preview}') mas vazio no nosso. "
                     f"Verificar mapeamento Odoo."
                 ),
                 contexto={

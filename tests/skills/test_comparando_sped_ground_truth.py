@@ -24,8 +24,10 @@ def test_diff_registros_ausentes_no_nosso():
     nosso = _make({"0000": [{"CNPJ": "..."}]})
 
     findings = diff_registros_presentes(nosso, ground)
-    assert any(f.tipo == "registro_ausente_nosso" and f.registro == "J932"
-               for f in findings)
+    j932 = [f for f in findings if f.registro == "J932"]
+    assert len(j932) == 1
+    assert isinstance(j932[0], DiffFinding)  # usa o import
+    assert j932[0].tipo == "registro_ausente_nosso"
 
 
 def test_diff_registros_extras_no_nosso():
@@ -93,3 +95,24 @@ def test_diff_registro_condicional_warning():
     j932_findings = [f for f in findings if f.registro == "J932"]
     assert len(j932_findings) == 1
     assert j932_findings[0].severidade == "WARNING"
+
+
+def test_diff_campos_zero_numerico_nao_ignorado():
+    """Campo com valor 0 no ground e vazio no nosso deve gerar finding.
+
+    Regressao do bug onde `if valor_ground` short-circuitava em 0 / False /
+    outros falsy non-empty.
+    """
+    # Ground tem IND_ESC=0 (valor numerico valido), nosso esta vazio
+    ground = _make({"I010": [{"IND_ESC": 0, "CNPJ": "61724241000178"}]})
+    nosso = _make({"I010": [{"IND_ESC": "", "CNPJ": "61724241000178"}]})
+    findings = diff_campos_preenchidos(nosso, ground, registro="I010")
+    assert any(f.contexto.get("campo") == "IND_ESC" for f in findings), (
+        "Finding deve ser gerado para valor 0 no ground vs vazio no nosso"
+    )
+
+    # Caso bool False
+    ground_bool = _make({"X": [{"FLAG": False, "OUTRO": "y"}]})
+    nosso_bool = _make({"X": [{"FLAG": "", "OUTRO": "y"}]})
+    findings_bool = diff_campos_preenchidos(nosso_bool, ground_bool, registro="X")
+    assert any(f.contexto.get("campo") == "FLAG" for f in findings_bool)
