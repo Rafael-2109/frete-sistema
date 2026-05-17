@@ -37,3 +37,72 @@ def test_criar_transferencia_validacoes():
     svc = StockPickingService(odoo=odoo)
     with pytest.raises(ValueError, match='linhas'):
         svc.criar_transferencia(1, 4, 8, 32, linhas=[], picking_type_id=99)
+
+
+# ============================================================
+# confirmar_e_reservar / preencher_qty_done / validar / cancelar (Task 3.2)
+# ============================================================
+
+def test_confirmar_e_reservar():
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    svc.confirmar_e_reservar(picking_id=9999)
+    odoo.execute_kw.assert_any_call('stock.picking', 'action_confirm', [[9999]])
+    odoo.execute_kw.assert_any_call('stock.picking', 'action_assign', [[9999]])
+
+
+def test_validar_trata_cannot_marshal_none():
+    """button_validate retorna None que XML-RPC nao consegue serializar — sucesso."""
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = Exception('cannot marshal None')
+    svc = StockPickingService(odoo=odoo)
+    assert svc.validar(picking_id=9999) is True
+
+
+def test_validar_propaga_outras_excecoes():
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = Exception('Quality checks pending')
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(Exception, match='Quality checks'):
+        svc.validar(picking_id=9999)
+
+
+def test_preencher_qty_done_por_linha():
+    """Preenche qty_done em cada move_line. Suporta lot_id ou lot_name."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 5001, 'product_id': [1001, 'P1']},
+        {'id': 5002, 'product_id': [1002, 'P2']},
+    ]
+    svc = StockPickingService(odoo=odoo)
+    linhas = [
+        {'product_id': 1001, 'quantity': 5.0, 'lot_name': 'LOT_A'},
+        {'product_id': 1002, 'quantity': 10.0, 'lot_id': 777},
+    ]
+    svc.preencher_qty_done(picking_id=9999, linhas=linhas)
+    odoo.write.assert_any_call(
+        'stock.move.line', [5001], {'qty_done': 5.0, 'lot_name': 'LOT_A'}
+    )
+    odoo.write.assert_any_call(
+        'stock.move.line', [5002], {'qty_done': 10.0, 'lot_id': 777}
+    )
+
+
+def test_preencher_qty_done_sem_move_line_raises():
+    odoo = MagicMock()
+    odoo.search_read.return_value = []  # picking sem move_lines
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(RuntimeError, match='sem move_line'):
+        svc.preencher_qty_done(
+            picking_id=9999,
+            linhas=[{'product_id': 1001, 'quantity': 5.0}],
+        )
+
+
+def test_cancelar():
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    assert svc.cancelar(picking_id=9999, motivo='teste') is True
+    odoo.execute_kw.assert_called_with(
+        'stock.picking', 'action_cancel', [[9999]]
+    )

@@ -98,3 +98,94 @@ class StockPickingService:
             f'destino_company={company_destino_id} linhas={len(linhas)}'
         )
         return picking_id
+
+    def confirmar_e_reservar(self, picking_id: int) -> None:
+        """Confirma o picking e tenta reservar estoque.
+
+        Sequencia padrao:
+            1. action_confirm (draft -> confirmed)
+            2. action_assign (reserva estoque + cria stock.move.line)
+
+        Reuso: recebimento_lf_odoo_service.py:2317-2334.
+        """
+        self.odoo.execute_kw('stock.picking', 'action_confirm', [[picking_id]])
+        self.odoo.execute_kw('stock.picking', 'action_assign', [[picking_id]])
+        logger.info(f'Picking {picking_id}: confirmado + reservado')
+
+    def preencher_qty_done(
+        self, picking_id: int, linhas: List[Dict[str, Any]]
+    ) -> None:
+        """Preenche qty_done nas move_lines do picking.
+
+        Match por product_id (primeira move_line por produto). Cada linha
+        pode informar lot_id OU lot_name (mutuamente exclusivos — lot_id
+        prevalece se ambos vierem).
+
+        Args:
+            picking_id: stock.picking.id.
+            linhas: [{'product_id': int, 'quantity': float,
+                      'lot_id': int|None, 'lot_name': str|None}, ...]
+
+        Raises:
+            RuntimeError: se algum product_id da entrada nao tem move_line
+                no picking (estoque insuficiente ou produto errado).
+        """
+        move_lines = self.odoo.search_read(
+            'stock.move.line',
+            [['picking_id', '=', picking_id]],
+            ['id', 'product_id'],
+        )
+
+        produto_para_line: Dict[int, int] = {}
+        for ml in move_lines:
+            pid = ml['product_id'][0] if ml.get('product_id') else None
+            if pid and pid not in produto_para_line:
+                produto_para_line[pid] = ml['id']
+
+        for linha in linhas:
+            pid = linha['product_id']
+            if pid not in produto_para_line:
+                raise RuntimeError(
+                    f'product_id={pid} sem move_line no picking={picking_id}'
+                )
+            line_id = produto_para_line[pid]
+            update: Dict[str, Any] = {'qty_done': float(linha['quantity'])}
+            if linha.get('lot_id'):
+                update['lot_id'] = linha['lot_id']
+            elif linha.get('lot_name'):
+                update['lot_name'] = linha['lot_name']
+            self.odoo.write('stock.move.line', [line_id], update)
+
+    def validar(self, picking_id: int) -> bool:
+        """button_validate. Trata 'cannot marshal None' como sucesso.
+
+        XML-RPC nao consegue serializar `None` que o Odoo retorna em
+        button_validate quando nao ha wizard intermediario. Tratamos como
+        sucesso (gotcha documentado em GOTCHAS.md:179 e
+        recebimento_lf_odoo_service.py:2400-2418).
+
+        Raises:
+            Exception: qualquer outra exceção (ex.: 'Quality checks
+                pending') eh propagada — o caller decide retry ou abort.
+        """
+        try:
+            self.odoo.execute_kw(
+                'stock.picking', 'button_validate', [[picking_id]]
+            )
+            return True
+        except Exception as e:
+            if 'cannot marshal None' in str(e):
+                logger.info(
+                    f'Picking {picking_id}: button_validate retornou None (sucesso)'
+                )
+                return True
+            raise
+
+    def cancelar(self, picking_id: int, motivo: str = '') -> bool:
+        """Cancela picking via action_cancel. Motivo apenas para log."""
+        self.odoo.execute_kw('stock.picking', 'action_cancel', [[picking_id]])
+        logger.info(
+            f'Picking {picking_id} cancelado'
+            + (f' (motivo: {motivo})' if motivo else '')
+        )
+        return True
