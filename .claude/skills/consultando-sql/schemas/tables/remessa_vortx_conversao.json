@@ -91,16 +91,16 @@
   ],
   "indices": [
     {
-      "name": "ix_remessa_vortx_conversao_sucesso",
+      "name": "ix_remessa_vortx_conversao_tipo",
       "columns": [
-        "sucesso"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_remessa_vortx_conversao_criado_em",
+      "name": "ix_remessa_vortx_conversao_sucesso",
       "columns": [
-        "criado_em"
+        "sucesso"
       ],
       "unique": false
     },
@@ -112,9 +112,9 @@
       "unique": false
     },
     {
-      "name": "ix_remessa_vortx_conversao_tipo",
+      "name": "ix_remessa_vortx_conversao_criado_em",
       "columns": [
-        "tipo"
+        "criado_em"
       ],
       "unique": false
     }

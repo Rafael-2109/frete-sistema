@@ -135,9 +135,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tagplus_backfill_job_status",
+      "name": "ix_hora_tagplus_backfill_job_tipo",
       "columns": [
-        "status"
+        "tipo"
       ],
       "unique": false
     },
@@ -149,9 +149,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_tagplus_backfill_job_tipo",
+      "name": "ix_hora_tagplus_backfill_job_status",
       "columns": [
-        "tipo"
+        "status"
       ],
       "unique": false
     },

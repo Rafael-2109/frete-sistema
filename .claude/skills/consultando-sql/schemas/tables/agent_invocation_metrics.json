@@ -1,0 +1,129 @@
+{
+  "name": "agent_invocation_metrics",
+  "description": "A1 (2026-05-16) — telemetria per-invocacao de subagent.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "agent_id",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "agent_type",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "session_id",
+      "type": "text"
+    },
+    {
+      "name": "user_id",
+      "type": "integer"
+    },
+    {
+      "name": "started_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "finished_at",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "duration_ms",
+      "type": "integer"
+    },
+    {
+      "name": "num_turns",
+      "type": "integer"
+    },
+    {
+      "name": "stop_reason",
+      "type": "text"
+    },
+    {
+      "name": "cost_usd",
+      "type": "numeric(10,6)"
+    },
+    {
+      "name": "input_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "output_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "cache_read_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "cache_creation_tokens",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "escalated_to_human",
+      "type": "boolean",
+      "nullable": false,
+      "default": false
+    },
+    {
+      "name": "user_correction_received",
+      "type": "boolean"
+    },
+    {
+      "name": "source",
+      "type": "text",
+      "nullable": false,
+      "default": "production"
+    },
+    {
+      "name": "recorded_at",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_invocation_metrics_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_invocation_metrics_session_id",
+      "columns": [
+        "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_invocation_metrics_agent_type",
+      "columns": [
+        "agent_type"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_invocation_metrics_recorded_at",
+      "columns": [
+        "recorded_at"
+      ],
+      "unique": false
+    }
+  ]
+}

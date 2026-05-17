@@ -56,13 +56,6 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_pos_venda_ocorrencia_categoria",
-      "columns": [
-        "categoria"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_assai_pos_venda_ocorrencia_chassi",
       "columns": [
         "chassi"
@@ -73,6 +66,13 @@
       "name": "ix_assai_pos_venda_ocorrencia_criado_em",
       "columns": [
         "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_pos_venda_ocorrencia_categoria",
+      "columns": [
+        "categoria"
       ],
       "unique": false
     }

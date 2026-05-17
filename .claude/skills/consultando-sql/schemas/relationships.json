@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 412,
+  "total_relationships": 420,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -81,6 +81,18 @@
       "to_column": "id"
     },
     {
+      "from_table": "assai_cce",
+      "from_column": "nf_id",
+      "to_table": "assai_nf_qpa",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_cce",
+      "from_column": "divergencia_origem_id",
+      "to_table": "assai_divergencia",
+      "to_column": "id"
+    },
+    {
       "from_table": "assai_compra_motochefe_pedido",
       "from_column": "compra_id",
       "to_table": "assai_compra_motochefe",
@@ -90,6 +102,36 @@
       "from_table": "assai_compra_motochefe_pedido",
       "from_column": "pedido_id",
       "to_table": "assai_pedido_venda",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_devolucao_anexo",
+      "from_column": "devolucao_id",
+      "to_table": "assai_devolucao_nfd",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_devolucao_item",
+      "from_column": "devolucao_id",
+      "to_table": "assai_devolucao_nfd",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_devolucao_item",
+      "from_column": "nf_qpa_item_id",
+      "to_table": "assai_nf_qpa_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_devolucao_item",
+      "from_column": "evento_pendencia_id",
+      "to_table": "assai_moto_evento",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_devolucao_nfd",
+      "from_column": "nf_qpa_origem_id",
+      "to_table": "assai_nf_qpa",
       "to_column": "id"
     },
     {
@@ -144,6 +186,12 @@
       "from_table": "assai_nf_qpa_item",
       "from_column": "separacao_item_id",
       "to_table": "assai_separacao_item",
+      "to_column": "id"
+    },
+    {
+      "from_table": "assai_nf_qpa_item",
+      "from_column": "devolucao_item_id",
+      "to_table": "assai_devolucao_item",
       "to_column": "id"
     },
     {

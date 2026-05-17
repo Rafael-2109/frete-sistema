@@ -81,17 +81,17 @@
   ],
   "indices": [
     {
-      "name": "ix_lista_materiais_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_lista_materiais_status_data",
       "columns": [
         "status",
         "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_lista_materiais_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },

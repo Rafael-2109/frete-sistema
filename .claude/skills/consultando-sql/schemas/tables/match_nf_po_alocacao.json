@@ -66,16 +66,16 @@
       "unique": false
     },
     {
-      "name": "ix_match_nf_po_alocacao_odoo_po_line_id",
+      "name": "ix_match_nf_po_alocacao_match_item_id",
       "columns": [
-        "odoo_po_line_id"
+        "match_item_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_match_nf_po_alocacao_match_item_id",
+      "name": "ix_match_nf_po_alocacao_odoo_po_line_id",
       "columns": [
-        "match_item_id"
+        "odoo_po_line_id"
       ],
       "unique": false
     }

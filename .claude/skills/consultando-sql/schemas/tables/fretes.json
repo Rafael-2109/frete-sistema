@@ -324,16 +324,16 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_odoo_dfe_id",
+      "name": "ix_fretes_origem",
       "columns": [
-        "odoo_dfe_id"
+        "origem"
       ],
       "unique": false
     },
     {
-      "name": "ix_fretes_origem",
+      "name": "ix_fretes_odoo_dfe_id",
       "columns": [
-        "origem"
+        "odoo_dfe_id"
       ],
       "unique": false
     },

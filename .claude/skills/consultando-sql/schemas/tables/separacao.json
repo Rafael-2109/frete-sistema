@@ -233,13 +233,6 @@
   ],
   "indices": [
     {
-      "name": "idx_sep_nf_cd",
-      "columns": [
-        "nf_cd"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_separacao_status",
       "columns": [
         "status"
@@ -295,17 +288,17 @@
       "unique": false
     },
     {
-      "name": "idx_sep_produto_qtd_sync",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "cod_produto",
-        "qtd_saldo"
+        "separacao_lote_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "idx_sep_produto_qtd_sync",
       "columns": [
-        "separacao_lote_id"
+        "cod_produto",
+        "qtd_saldo"
       ],
       "unique": false
     },
@@ -326,16 +319,16 @@
       "unique": false
     },
     {
-      "name": "idx_sep_status",
+      "name": "ix_separacao_chassi_assai",
       "columns": [
-        "status"
+        "chassi_assai"
       ],
       "unique": false
     },
     {
-      "name": "ix_separacao_chassi_assai",
+      "name": "idx_sep_status",
       "columns": [
-        "chassi_assai"
+        "status"
       ],
       "unique": false
     },
@@ -375,6 +368,13 @@
       "columns": [
         "falta_pagamento",
         "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_nf_cd",
+      "columns": [
+        "nf_cd"
       ],
       "unique": false
     }

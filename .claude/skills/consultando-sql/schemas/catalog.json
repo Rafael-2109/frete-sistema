@@ -13,7 +13,6 @@
     "agent_memory_embeddings",
     "agent_memory_versions",
     "agent_sessions",
-    "agente_artifacts",
     "alembic_version",
     "alerta_notificacoes",
     "alertas_separacao_cotada",
@@ -28,7 +27,6 @@
     "bi_performance_transportadora",
     "cadastro_cliente",
     "carteira_copia",
-    "claude_session_store",
     "cliente_moto",
     "cnab_retorno_lote",
     "comissao_vendedor",
@@ -90,7 +88,6 @@
     "tabela_preco_crossdocking",
     "tabela_preco_equipe",
     "tagplus_oauth_token",
-    "teams_tasks",
     "tipo_carga",
     "titulo_a_pagar",
     "titulo_financeiro",
@@ -106,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 273,
+  "total_tabelas": 278,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -133,6 +130,15 @@
         "report_date",
         "health_score",
         "friction_score"
+      ]
+    },
+    {
+      "name": "agent_invocation_metrics",
+      "description": "A1 (2026-05-16) — telemetria per-invocacao de subagent.",
+      "key_fields": [
+        "agent_id",
+        "agent_type",
+        "session_id"
       ]
     },
     {
@@ -217,6 +223,15 @@
       ]
     },
     {
+      "name": "assai_cce",
+      "description": "Tabela assai_cce",
+      "key_fields": [
+        "protocolo_cce",
+        "chave_nfe",
+        "numero_nf_referenciada"
+      ]
+    },
+    {
       "name": "assai_cd",
       "description": "Tabela assai_cd",
       "key_fields": [
@@ -240,6 +255,33 @@
       "key_fields": [
         "compra_id",
         "pedido_id"
+      ]
+    },
+    {
+      "name": "assai_devolucao_anexo",
+      "description": "Tabela assai_devolucao_anexo",
+      "key_fields": [
+        "devolucao_id",
+        "tipo",
+        "nome_original"
+      ]
+    },
+    {
+      "name": "assai_devolucao_item",
+      "description": "Tabela assai_devolucao_item",
+      "key_fields": [
+        "devolucao_id",
+        "chassi",
+        "nf_qpa_item_id"
+      ]
+    },
+    {
+      "name": "assai_devolucao_nfd",
+      "description": "Tabela assai_devolucao_nfd",
+      "key_fields": [
+        "nf_qpa_origem_id",
+        "numero_nfd",
+        "data_devolucao"
       ]
     },
     {
@@ -2624,36 +2666,6 @@
         "nome",
         "email",
         "senha_hash"
-      ],
-      "admin_only": true
-    },
-    {
-      "name": "teams_tasks",
-      "description": "Tarefas async do Teams bot (estado, streaming progressivo, AskUserQuestion via Adaptive Card).",
-      "key_fields": [
-        "conversation_id",
-        "user_id",
-        "status"
-      ],
-      "admin_only": true
-    },
-    {
-      "name": "claude_session_store",
-      "description": "PostgresSessionStore: transcripts SDK do agente (Fase B cutover 2026-04-21). Source-of-truth de conteudo de sessao.",
-      "key_fields": [
-        "project_key",
-        "session_id",
-        "subpath"
-      ],
-      "admin_only": true
-    },
-    {
-      "name": "agente_artifacts",
-      "description": "Artifact (bundle.html auto-contido) gerado pelo agente via skill gerando-artifact.",
-      "key_fields": [
-        "uuid",
-        "user_id",
-        "status"
       ],
       "admin_only": true
     }

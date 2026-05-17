@@ -56,16 +56,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_separacao_item_separacao_id",
+      "name": "ix_assai_separacao_item_chassi",
       "columns": [
-        "separacao_id"
+        "chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_separacao_item_chassi",
+      "name": "ix_assai_separacao_item_separacao_id",
       "columns": [
-        "chassi"
+        "separacao_id"
       ],
       "unique": false
     }

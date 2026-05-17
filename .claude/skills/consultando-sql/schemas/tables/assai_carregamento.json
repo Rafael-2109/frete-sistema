@@ -98,16 +98,16 @@
       "unique": false
     },
     {
-      "name": "ix_assai_carregamento_status",
+      "name": "ix_assai_carregamento_loja_id",
       "columns": [
-        "status"
+        "loja_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_carregamento_loja_id",
+      "name": "ix_assai_carregamento_status",
       "columns": [
-        "loja_id"
+        "status"
       ],
       "unique": false
     },

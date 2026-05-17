@@ -59,16 +59,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_transferencia_item_numero_chassi",
+      "name": "ix_hora_transferencia_item_transferencia_id",
       "columns": [
-        "numero_chassi"
+        "transferencia_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_transferencia_item_transferencia_id",
+      "name": "ix_hora_transferencia_item_numero_chassi",
       "columns": [
-        "transferencia_id"
+        "numero_chassi"
       ],
       "unique": false
     }
