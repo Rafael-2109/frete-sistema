@@ -3,7 +3,7 @@
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
 **Última atualização:** 2026-05-17
-**Status global:** Foundation + F3 completas. Implementação dos services F4-F5 pendente (depois F6-F9).
+**Status global:** Foundation + F3 + F4 completas. Implementação dos services F5 pendente (depois F6-F9).
 
 ---
 
@@ -51,13 +51,13 @@ Leitura: `✅ feito` / `⏳ pendente` / `⚠️ parcial` / `🚫 bloqueado` / `�
 | **F1.x** `build.sh` | ✅ | Items 19/20/21 adicionados (commit `6737d907`) | bash -n OK |
 | **F2** `stock_lot_service.py` | ✅ | `app/odoo/services/stock_lot_service.py` (criar/renomear/inativar/reativar/atualizar_validade/buscar_por_nome) | 15 ✅ |
 | **F3** `stock_picking_service.py` | ✅ | `app/odoo/services/stock_picking_service.py` (criar_transferencia/confirmar_e_reservar/preencher_qty_done/validar/cancelar/liberar_faturamento/aguardar_invoice_do_robo) | 13 ✅ |
+| **F4** `inventario_pipeline_service.py` | ✅ | `app/odoo/services/inventario_pipeline_service.py` (f5a_criar_pickings/f5b_validar_pickings/f5c_liberar_faturamento/f5d_aguardar_invoices/f5e_transmitir_sefaz) | 13 ✅ |
 
 ### Implementação (pendente)
 
 | Fase | Status | Próximo passo | Bloqueio? |
 |------|--------|---------------|-----------|
-| **F4** `inventario_pipeline_service.py` | ⏳ 5 tasks pendentes (4.1-4.5 NOVAS) | Task 4.1 (f5a_criar_pickings) | Liberado — F3 ✅ |
-| **F5** `indisponibilizacao_estoque_service.py` | ⏳ 1 task | Task 5.1 (canaries + indispo/reverter) | Não — pode paralelo com F3 |
+| **F5** `indisponibilizacao_estoque_service.py` | ⏳ 1 task | Task 5.1 (canaries + indispo/reverter) | Liberado — pode paralelo |
 | **F6** Hooks determinísticos | ⏳ 3 tasks | Task 6.1 (pre_execute_nf.py) | Depende de F1 (constants) — ok |
 | **F7** Scripts datados (10 scripts) | 📝 7.1 já tem template completo no plano, 7.2-7.10 expandidos | Implementar 7.1 → 7.10 sequencialmente | Depende de F3-F5 |
 | **F8** Documentação (2 playbooks + estrutura) | ⏳ 4 tasks | Task 8.1 (estrutura pastas — JÁ PARCIAL) | Não |
@@ -140,6 +140,16 @@ O prompt foi **revisado e aprimorado** durante a sessão (v2 inclui ajustes feit
 | `dev-industrializacao FB↔LF` sem precedente histórico | P011 assume fiscal_position por simetria com CD↔LF (74 e 89); validar com canary fiscal antes de bulk |
 | `nfe_infnfe_*` stale via XML-RPC → SEFAZ 225 | Playwright UI obrigatório em F5e (já documentado e existe em `playwright_nfe_transmissao.py`) |
 
+### Desvios do plano aplicados em F4 (necessários, não opcionais)
+
+| Desvio | Onde | Motivo |
+|--------|------|--------|
+| Fixture `app_ctx` → `db` | tests F4 | `app_ctx` não existe em `tests/conftest.py`; `db` fornece `app_context+begin_nested+rollback` |
+| `f5b/f5c/f5d/f5e` recebem `List[Ajuste]` (plano: `List[int]`) | service F4 | Plano fazia `AjusteEstoqueInventario.query.filter_by(picking_id_odoo=pid)` — `db.session.commit()` no service vaza dados do savepoint do test para o DB persistente; colisões por `picking_id_odoo` em re-runs |
+| F5a refactor: Odoo I/O paralelo + DB write serial no main thread (plano: thread filha commita) | service F4 | `ThreadPoolExecutor` cria threads sem Flask `app_context`; `db.session.commit()` em thread filha falha (`Working outside of application context`); pool de conexão diferente do savepoint |
+| `transmitir_nfe_via_playwright(invoice_id, odoo, logger)` retorna `dict` (plano: `transmitir_nfe_playwright(invoice_id)` retorna string) | service F4 / Task 4.5 | Plano alertou: *"investigar antes de implementar 4.5"* — função real tem 3 args e retorna `dict` |
+| `PICKING_TYPE_POR_DIRECAO` módulo-level dict (plano: hardcoded em método) | service F4 | Facilita futuro refactor G003 (mover para `constants/picking_types.py`) |
+
 ---
 
 ## 8. ARTEFATOS PERSISTIDOS
@@ -158,7 +168,8 @@ app/odoo/
     ajuste_estoque_inventario.py
   services/
     stock_lot_service.py    # F2 (15 tests)
-    stock_picking_service.py # F3 (13 tests) — criar_transferencia + confirmar/preencher/validar/cancelar + liberar_faturamento + aguardar_invoice_do_robo
+    stock_picking_service.py # F3 (13 tests)
+    inventario_pipeline_service.py # F4 (13 tests) — f5a..f5e orquestrador batch (recebe List[Ajuste], DESVIO do plano: plano usava List[int] + lookup por picking_id_odoo, refatorado por bug de pool de conexao em tests)
 
 scripts/
   migrations/
@@ -174,7 +185,7 @@ scripts/
     00e_investigar_pickings.py
     hooks/                  # placeholder vazio (F6 pendente)
 
-tests/odoo/                 # 53 tests passing
+tests/odoo/                 # 66 tests passing
   __init__.py
   constants/__init__.py
   constants/test_operacoes_fiscais.py  # 17 tests
@@ -184,6 +195,7 @@ tests/odoo/                 # 53 tests passing
   services/__init__.py
   services/test_stock_lot_service.py  # 15 tests
   services/test_stock_picking_service.py  # 13 tests (F3)
+  services/test_inventario_pipeline_service.py  # 13 tests (F4)
 
 docs/
   inventario-2026-05/
@@ -221,7 +233,6 @@ build.sh    # items 19/20/21 adicionados
 
 ```
 app/odoo/services/
-  inventario_pipeline_service.py      # F4
   indisponibilizacao_estoque_service.py  # F5
 
 scripts/inventario_2026_05/
