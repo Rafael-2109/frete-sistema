@@ -154,3 +154,57 @@ Após este audit, atualizar:
 - [ ] Confirmar com Rafael qual `location_id` interno usar quando há múltiplos (escolher principal)
 - [ ] Confirmar com Rafael se NFs com estado ≠ `posted` são válidas como referência
 - [ ] Confirmar `fiscal_position_id` por company para cada CFOP (FB e LF para 5901/5903/5949; FB e CD para 5152)
+---
+## Audit 00e — Pickings inter-company
+
+### Picking types OUTGOING por company
+
+**FB (company_id=1):**
+
+- id=2 'Expedição (FB)' src=[8, 'FB/Estoque'] dest=False
+- id=51 'Expedição Entre Filiais (FB)' src=[8, 'FB/Estoque'] dest=[6, 'Estoque Virtual/Em Transito (Filiais)']
+- id=53 'Expedição Industrialização (FB)' src=[8, 'FB/Estoque'] dest=[26489, 'Estoque Virtual/Em Transito (Industrialização)']
+- id=88 'Expedição Industrialização (FB) (cópia)' src=[8, 'FB/Estoque'] dest=[5, 'Parceiros/Clientes']
+- id=89 'Perda Industrialização (FB) (cópia)' src=[8, 'FB/Estoque'] dest=[5, 'Parceiros/Clientes']
+- id=93 'Expedição Vasilhame (FB)' src=[8, 'FB/Estoque'] dest=[6, 'Estoque Virtual/Em Transito (Filiais)']
+- id=95 'REMESSA TERCEIRO (FB)' src=[8, 'FB/Estoque'] dest=[5, 'Parceiros/Clientes']
+- id=91 'Devoluções Compra (FB)' src=[8, 'FB/Estoque'] dest=[5, 'Parceiros/Clientes']
+- id=75 'Reposição para subcontratação' src=[8, 'FB/Estoque'] dest=[30713, 'Locais Fisicos/Local de subcontratação']
+
+**CD (company_id=4):**
+
+- id=14 'Expedição (CD)' src=[32, 'CD/Estoque'] dest=False
+- id=55 'Expedição Entre Filiais (CD)' src=[32, 'CD/Estoque'] dest=[6, 'Estoque Virtual/Em Transito (Filiais)']
+- id=84 'Expedição Pallet (CD)' src=[32, 'CD/Estoque'] dest=False
+- id=96 'Retrabalho (CD)' src=[32, 'CD/Estoque'] dest=[6, 'Estoque Virtual/Em Transito (Filiais)']
+
+**LF (company_id=5):**
+
+- id=94 'Expedição Ñ Aplicado (LF)' src=[42, 'LF/Estoque'] dest=[5, 'Parceiros/Clientes']
+- id=20 'Ordens de Entrega (LF)' src=[42, 'LF/Estoque'] dest=False
+- id=66 'Expedição Industrialização (LF)' src=[42, 'LF/Estoque'] dest=[5, 'Parceiros/Clientes']
+
+### Pickings vinculados as NFs ref
+
+#### RPI/2026/00200 (account.move.id=607443)
+
+
+#### RETNA/2026/00025 (account.move.id=588209)
+
+- id=270530 'CD/IN/05208' picking_type=[13, 'CD: Recebimento (CD)'] location_id=[4, 'Parceiros/Fornecedores'] location_dest=[32, 'CD/Estoque']
+- id=292904 'FB/IN/10804' picking_type=[1, 'FB: Recebimento (FB)'] location_id=[26451, 'Parceiros/Estoque LF'] location_dest=[8, 'FB/Estoque']
+- id=292914 'FB/INT/04584' picking_type=[5, 'FB: Transferências Internas (FB)'] location_id=[8, 'FB/Estoque'] location_dest=[15, 'Estoque Virtual/Produção']
+- id=292913 'FB/INT/04583' picking_type=[5, 'FB: Transferências Internas (FB)'] location_id=[30720, 'Parceiros/Estoques em poder de terceiros/18.467.441/0001-63 - LA FAMIGLIA - LF'] location_dest=[5, 'Parceiros/Clientes']
+
+#### RRET/2026/00008 (account.move.id=590839)
+
+
+#### SARET/2026/00002 (account.move.id=606403)
+
+
+#### SDTRA/2026/00832 (account.move.id=604472)
+
+
+#### SDTRA/2026/00334 (account.move.id=607334)
+
+
