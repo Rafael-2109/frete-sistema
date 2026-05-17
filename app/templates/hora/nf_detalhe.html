@@ -182,6 +182,84 @@
 {% endif %}
 {% endif %}
 
+{# ===================== Recebimento físico (enriquecimento) ===================== #}
+{% if recebimentos_da_nf %}
+{% for linha in recebimentos_da_nf %}
+{% set r = linha.rec %}
+{% set m = linha.metricas %}
+<div class="card mb-4 border-{{ 'success' if r.status == 'CONCLUIDO' else ('warning' if r.status == 'COM_DIVERGENCIA' else 'info') }}">
+  <div class="card-header bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <strong>
+      <i class="fas fa-truck-loading"></i>
+      Recebimento físico #{{ r.id }}
+      <span class="text-muted">— {{ r.loja.nome }} · {{ r.data_recebimento.strftime('%d/%m/%Y') }}</span>
+    </strong>
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge badge-status-{{ r.status|lower }}">{{ r.status }}</span>
+      <a href="{{ url_for('hora.recebimentos_detalhe', recebimento_id=r.id) }}"
+         class="btn btn-sm btn-outline-primary">
+        <i class="fas fa-eye"></i> Abrir recebimento
+      </a>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="hora-kpi">
+          <div class="hora-kpi-label">Motos na NF</div>
+          <div class="fs-4"><strong>{{ m.qtd_nf }}</strong></div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="hora-kpi">
+          <div class="hora-kpi-label">Recebidas</div>
+          <div class="fs-4">
+            <strong class="text-{{ 'success' if m.qtd_recebidas == m.qtd_nf and m.qtd_extra == 0 else 'primary' }}">
+              {{ m.qtd_recebidas }}
+            </strong>
+            <small class="text-muted">/ {{ m.qtd_nf }}</small>
+          </div>
+          <small class="text-muted">conferências reais</small>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="hora-kpi">
+          <div class="hora-kpi-label">Divergências</div>
+          <div class="fs-4">
+            <strong class="text-{{ 'success' if m.qtd_divergencias == 0 else 'warning' }}">
+              {{ m.qtd_divergencias }}
+            </strong>
+          </div>
+          {% if m.qtd_divergencias > 0 %}
+          <small class="text-muted">
+            {% if m.qtd_faltando %}<span class="text-danger">{{ m.qtd_faltando }} faltando</span>{% endif %}
+            {% if m.qtd_faltando and m.qtd_extra %} · {% endif %}
+            {% if m.qtd_extra %}<span class="text-info">{{ m.qtd_extra }} extra</span>{% endif %}
+            {% set outros = m.qtd_divergencias - m.qtd_faltando - m.qtd_extra %}
+            {% if outros %}{% if m.qtd_faltando or m.qtd_extra %} · {% endif %}{{ outros }} outros{% endif %}
+          </small>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="hora-kpi">
+          <div class="hora-kpi-label">OK</div>
+          <div class="fs-4"><strong class="text-success">{{ m.qtd_ok }}</strong></div>
+          <small class="text-muted">sem divergência</small>
+        </div>
+      </div>
+    </div>
+    {% if r.finalizado_em %}
+    <div class="text-muted small mt-2">
+      <i class="fas fa-clock"></i> Finalizado em {{ r.finalizado_em.strftime('%d/%m/%Y %H:%M') }}
+      {% if r.operador %} por {{ r.operador }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
 {% if not nf.loja_destino_id %}
 <form method="post" action="{{ url_for('hora.nfs_definir_loja', nf_id=nf.id) }}" class="card p-3 mb-3 border-warning">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -338,6 +338,21 @@ def editar_nf_item_manual(
 
     db.session.flush()
 
+    # Reprocessa recebimentos vinculados a NF ANTES da limpeza de motos
+    # orfas — o reprocessamento pode deletar conferencias batch sinteticas
+    # MOTO_FALTANDO + eventos associados, liberando o chassi_antigo para ser
+    # eventualmente removido pelo `_limpar_motos_orfas`. Idempotente.
+    if chassi_antigo and chassi_antigo != chassi_norm:
+        from app.hora.services.recebimento_service import (
+            reprocessar_recebimentos_para_nf,
+        )
+        reprocessar_recebimentos_para_nf(
+            nf_id=nf.id,
+            chassi_antigo=chassi_antigo,
+            chassi_novo=chassi_norm,
+            operador=operador,
+        )
+
     # Se o chassi antigo ficou orfao, remove a hora_moto dele.
     # Reusa fonte unica de verdade `_limpar_motos_orfas` (cobre todas as FKs
     # incluindo HoraEmprestimoMoto.chassi_saida/chassi_entrada).

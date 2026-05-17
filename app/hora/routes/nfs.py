@@ -181,6 +181,15 @@ def nfs_detalhe(nf_id: int):
     # Comparativo de valores (NF vs pedido vinculado, match/sem-match por chassi).
     comparativo_valores = matching_service.comparativo_valores_nf(nf)
 
+    # Recebimentos vinculados a NF (enriquecidos com metricas para exibicao).
+    # Tipicamente 0 ou 1 (UNIQUE nf_id + loja_id) — mas suporta multiplos caso
+    # a NF chegue em mais de uma loja no futuro.
+    from app.hora.services import recebimento_service
+    recebimentos_da_nf = [
+        {'rec': r, 'metricas': recebimento_service.metricas_recebimento(r)}
+        for r in nf.recebimentos
+    ]
+
     return render_template(
         'hora/nf_detalhe.html',
         nf=nf,
@@ -188,6 +197,7 @@ def nfs_detalhe(nf_id: int):
         lojas_ativas=lojas_ativas,
         vinculos_por_chassi=vinculos,
         comparativo_valores=comparativo_valores,
+        recebimentos_da_nf=recebimentos_da_nf,
     )
 
 

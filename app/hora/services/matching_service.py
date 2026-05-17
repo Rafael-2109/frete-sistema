@@ -345,6 +345,9 @@ def aplicar_correcao_nf_item(
             'chassi do pedido a partir da NF.'
         )
 
+    # Captura chassi antigo para reprocessamento de recebimentos abaixo.
+    chassi_antigo = nf_item.numero_chassi
+
     # Unicidade na mesma NF
     duplicado = (
         HoraNfEntradaItem.query
@@ -373,6 +376,22 @@ def aplicar_correcao_nf_item(
     )
 
     nf_item.numero_chassi = novo_chassi
+    db.session.flush()
+
+    # Reprocessa recebimentos vinculados a NF (reavalia conferencias
+    # MOTO_FALTANDO/CHASSI_EXTRA + recalcula status). Idempotente. Skipa se
+    # nao houve troca real de chassi.
+    if chassi_antigo and chassi_antigo != novo_chassi:
+        from app.hora.services.recebimento_service import (
+            reprocessar_recebimentos_para_nf,
+        )
+        reprocessar_recebimentos_para_nf(
+            nf_id=nf.id,
+            chassi_antigo=chassi_antigo,
+            chassi_novo=novo_chassi,
+            operador=operador,
+        )
+
     db.session.commit()
 
     if nf.pedido_id == pedido.id:

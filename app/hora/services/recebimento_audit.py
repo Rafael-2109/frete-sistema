@@ -26,6 +26,10 @@ ACOES_VALIDAS = {
     # e Item 2 (exclusao admin-only).
     'RECEBIMENTO_AUTOMATICO',
     'EXCLUIU_RECEBIMENTO',
+    # 2026-05-16: reprocessamento automatico apos edicao de chassi em item de
+    # NF (rotas /nfs/<id>/itens/<id>/editar e /nfs/<id>/match/corrigir-nf).
+    # Reavalia conferencias MOTO_FALTANDO/CHASSI_EXTRA + recalcula status.
+    'REPROCESSOU_POS_EDICAO_NF',
 }
 
 

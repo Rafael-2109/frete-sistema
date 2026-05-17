@@ -73,13 +73,19 @@ def recebimentos_lista():
         data_inicio=data_inicio,
         data_fim=data_fim,
     )
+    # Pre-calcula metricas (qtd_nf, qtd_recebidas, qtd_divergencias, ...) para
+    # cada recebimento — evita logica complexa no template.
+    linhas = [
+        {'rec': r, 'metricas': recebimento_service.metricas_recebimento(r)}
+        for r in recebimentos
+    ]
     lojas_query = HoraLoja.query.filter_by(ativa=True)
     if permitidas is not None:
         lojas_query = lojas_query.filter(HoraLoja.id.in_(permitidas))
     lojas = lojas_query.order_by(HoraLoja.nome).all()
     return render_template(
         'hora/recebimentos_lista.html',
-        recebimentos=recebimentos,
+        linhas=linhas,
         lojas=lojas,
         filtro_loja_id=loja_id,
         filtro_status=status,

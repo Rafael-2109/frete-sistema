@@ -573,6 +573,411 @@ def finalizar_recebimento(
 
 
 # ========================================================================
+# Reprocessamento pos-edicao de chassi em item de NF (2026-05-16)
+# ========================================================================
+
+def reprocessar_recebimentos_para_nf(
+    nf_id: int,
+    chassi_antigo: Optional[str],
+    chassi_novo: str,
+    operador: Optional[str] = None,
+) -> dict:
+    """Reavalia recebimentos vinculados a uma NF apos edicao do chassi de um
+    item da NF (chassi_antigo -> chassi_novo).
+
+    Use case: NF tinha chassi "1", operador conferiu fisicamente o chassi "2"
+    (registrado como CHASSI_EXTRA). Apos finalizar, o sistema criou conferencia
+    batch sintetica para "1" com MOTO_FALTANDO. Operador percebe o engano e
+    corrige a NF (chassi "1" -> "2"). Esta funcao reflete a nova realidade
+    nos recebimentos ja finalizados:
+
+      - Conferencia ATIVA de `chassi_antigo`:
+        * Se for batch sintetica MOTO_FALTANDO (criada por finalizar_recebimento
+          sem nenhum dado real conferido pelo operador): DELETA conferencia,
+          divergencias 1-N e evento hora_moto_evento(MOTO_FALTANDO) associado.
+          O chassi nao esta mais na NF entao a marcacao "faltante" perde sentido.
+        * Se for conferencia REAL (operador escaneou e completou wizard): mantem
+          a linha e recalcula divergencias 1-N (chassi nao esta mais na NF =>
+          vira CHASSI_EXTRA).
+
+      - Conferencia ATIVA de `chassi_novo`:
+        * Se existe: recalcula divergencias 1-N. Deixa de ser CHASSI_EXTRA porque
+          agora esta na NF; pode passar a OK ou ter divergencia de MODELO/COR.
+        * Se NAO existe E o recebimento ja foi finalizado: cria conferencia
+          batch sintetica MOTO_FALTANDO para `chassi_novo` (mesmo padrao do
+          finalizar_recebimento), pois agora ele esta declarado na NF mas nao
+          foi conferido.
+
+      - Recalcula `status` apenas para recebimentos finalizados
+        (CONCLUIDO/COM_DIVERGENCIA). Recebimentos em AGUARDANDO_QTD ou
+        EM_CONFERENCIA mantem status — operador ainda finalizara via wizard.
+
+    Idempotente: chamar 2x produz o mesmo estado final.
+
+    Args:
+        nf_id: id de HoraNfEntrada.
+        chassi_antigo: chassi anterior do item NF (pode ser None se nao
+            houve troca real, p.ex. correcao so de motor — neste caso a
+            funcao e no-op em relacao a divergencias por chassi).
+        chassi_novo: chassi atual do item NF (obrigatorio, normalizado UPPER).
+        operador: rotulo do operador para auditoria.
+
+    Returns:
+        dict com estatisticas:
+          - recebimentos_processados, recebimentos_afetados
+          - confs_batch_removidas, eventos_removidos
+          - confs_batch_criadas
+          - confs_reavaliadas
+          - status_changes: [{recebimento_id, antes, depois}]
+    """
+    if chassi_antigo is not None:
+        chassi_antigo = (chassi_antigo or '').strip().upper() or None
+    chassi_novo = (chassi_novo or '').strip().upper()
+    if not chassi_novo:
+        raise ValueError('chassi_novo obrigatorio.')
+
+    resultado = {
+        'nf_id': nf_id,
+        'chassi_antigo': chassi_antigo,
+        'chassi_novo': chassi_novo,
+        'recebimentos_processados': 0,
+        'recebimentos_afetados': 0,
+        'confs_batch_removidas': 0,
+        'eventos_removidos': 0,
+        'confs_batch_criadas': 0,
+        'confs_reavaliadas': 0,
+        'status_changes': [],
+    }
+
+    # Short-circuit: edicao sem troca real de chassi (so motor, p.ex.).
+    if chassi_antigo is None or chassi_antigo == chassi_novo:
+        return resultado
+
+    nf = HoraNfEntrada.query.get(nf_id)
+    if not nf:
+        raise ValueError(f'NF {nf_id} nao encontrada')
+
+    recebimentos = HoraRecebimento.query.filter_by(nf_id=nf.id).all()
+    if not recebimentos:
+        return resultado
+
+    chassis_nf_atual = {i.numero_chassi for i in nf.itens}
+
+    for rec in recebimentos:
+        resultado['recebimentos_processados'] += 1
+        status_antes = rec.status
+        afetou = False
+
+        # ----------------------------------------------------------------
+        # 1) Conferencia ATIVA do chassi ANTIGO
+        # ----------------------------------------------------------------
+        conf_antigo = (
+            HoraRecebimentoConferencia.query
+            .filter_by(
+                recebimento_id=rec.id,
+                numero_chassi=chassi_antigo,
+                substituida=False,
+            )
+            .first()
+        )
+        if conf_antigo is not None:
+            if _eh_conferencia_batch_faltante(conf_antigo):
+                # Batch sintetica -> seguro deletar (chassi nao esta mais na NF).
+                eventos_del = _deletar_conferencia_batch_faltante(conf_antigo)
+                resultado['confs_batch_removidas'] += 1
+                resultado['eventos_removidos'] += eventos_del
+                afetou = True
+                recebimento_audit.registrar(
+                    recebimento_id=rec.id,
+                    conferencia_id=None,
+                    acao='REPROCESSOU_POS_EDICAO_NF',
+                    usuario=operador,
+                    detalhe=(
+                        f'Removida conferencia batch MOTO_FALTANDO de chassi '
+                        f'{chassi_antigo} (chassi nao consta mais na NF apos edicao '
+                        f'{chassi_antigo} -> {chassi_novo}). Eventos removidos: '
+                        f'{eventos_del}.'
+                    ),
+                )
+            else:
+                # Conferencia REAL: mantem, mas reavalia (X agora vira CHASSI_EXTRA).
+                _redefinir_divergencias(conf_antigo, rec)
+                resultado['confs_reavaliadas'] += 1
+                afetou = True
+                recebimento_audit.registrar(
+                    recebimento_id=rec.id,
+                    conferencia_id=conf_antigo.id,
+                    acao='REPROCESSOU_POS_EDICAO_NF',
+                    usuario=operador,
+                    detalhe=(
+                        f'Reavaliada conferencia REAL de chassi {chassi_antigo} '
+                        f'apos edicao NF ({chassi_antigo} -> {chassi_novo}).'
+                    ),
+                )
+
+        # ----------------------------------------------------------------
+        # 2) Conferencia ATIVA do chassi NOVO
+        # ----------------------------------------------------------------
+        conf_novo = (
+            HoraRecebimentoConferencia.query
+            .filter_by(
+                recebimento_id=rec.id,
+                numero_chassi=chassi_novo,
+                substituida=False,
+            )
+            .first()
+        )
+        if conf_novo is not None:
+            # Reavalia (deixa de ser CHASSI_EXTRA porque agora esta na NF).
+            _redefinir_divergencias(conf_novo, rec)
+            resultado['confs_reavaliadas'] += 1
+            afetou = True
+            recebimento_audit.registrar(
+                recebimento_id=rec.id,
+                conferencia_id=conf_novo.id,
+                acao='REPROCESSOU_POS_EDICAO_NF',
+                usuario=operador,
+                detalhe=(
+                    f'Reavaliada conferencia de chassi {chassi_novo} apos edicao '
+                    f'NF ({chassi_antigo} -> {chassi_novo}). Esperado: deixa de '
+                    f'ser CHASSI_EXTRA.'
+                ),
+            )
+        elif rec.status in ('CONCLUIDO', 'COM_DIVERGENCIA') and chassi_novo in chassis_nf_atual:
+            # Recebimento finalizado + chassi novo agora na NF mas sem conferencia
+            # = novo MOTO_FALTANDO sintetico (mesmo padrao de finalizar_recebimento).
+            _criar_conferencia_batch_faltante(rec, chassi_novo, operador)
+            resultado['confs_batch_criadas'] += 1
+            afetou = True
+            recebimento_audit.registrar(
+                recebimento_id=rec.id,
+                conferencia_id=None,
+                acao='REPROCESSOU_POS_EDICAO_NF',
+                usuario=operador,
+                detalhe=(
+                    f'Criada conferencia batch MOTO_FALTANDO para chassi {chassi_novo} '
+                    f'(agora declarado na NF apos edicao {chassi_antigo} -> '
+                    f'{chassi_novo}, sem conferencia fisica).'
+                ),
+            )
+
+        # ----------------------------------------------------------------
+        # 3) Recalcula status para recebimentos finalizados
+        # ----------------------------------------------------------------
+        if afetou and rec.status in ('CONCLUIDO', 'COM_DIVERGENCIA'):
+            db.session.flush()
+            # _recalcular_status_recebimento_finalizado faz expire(rec, ['conferencias'])
+            # e expire(conf, ['divergencias']) internamente.
+            _recalcular_status_recebimento_finalizado(rec)
+            if rec.status != status_antes:
+                resultado['status_changes'].append({
+                    'recebimento_id': rec.id,
+                    'antes': status_antes,
+                    'depois': rec.status,
+                })
+                recebimento_audit.registrar(
+                    recebimento_id=rec.id,
+                    acao='REPROCESSOU_POS_EDICAO_NF',
+                    usuario=operador,
+                    detalhe=f'Status: {status_antes} -> {rec.status}',
+                )
+
+        if afetou:
+            resultado['recebimentos_afetados'] += 1
+
+    db.session.commit()
+    return resultado
+
+
+def _eh_conferencia_batch_faltante(conf: HoraRecebimentoConferencia) -> bool:
+    """Detecta se uma conferencia foi criada como batch sintetica de
+    MOTO_FALTANDO por `finalizar_recebimento`, sem nenhum dado real conferido.
+
+    Sinais (TODOS verdadeiros):
+      - tipo_divergencia == 'MOTO_FALTANDO' OU possui divergencia 1-N MOTO_FALTANDO
+      - modelo_id_conferido IS NULL
+      - cor_conferida IS NULL
+      - foto_s3_key IS NULL
+      - qr_code_lido == False
+      - avaria_fisica == False
+
+    Se algum campo "real" foi setado, a linha NAO eh batch sintetica — eh
+    conferencia que o operador iniciou (possivelmente reconferida ou ajustada)
+    e nao pode ser deletada sem perder evidencia.
+    """
+    tem_faltante = bool(
+        conf.tipo_divergencia == 'MOTO_FALTANDO'
+        or any(d.tipo == 'MOTO_FALTANDO' for d in conf.divergencias)
+    )
+    if not tem_faltante:
+        return False
+    return (
+        conf.modelo_id_conferido is None
+        and conf.cor_conferida is None
+        and conf.foto_s3_key is None
+        and not conf.qr_code_lido
+        and not conf.avaria_fisica
+    )
+
+
+def _deletar_conferencia_batch_faltante(conf: HoraRecebimentoConferencia) -> int:
+    """Deleta uma conferencia batch sintetica + divergencias 1-N (cascade) +
+    evento hora_moto_evento(MOTO_FALTANDO) associado.
+
+    Retorna a quantidade de eventos `MOTO_FALTANDO` deletados (esperado: 1).
+
+    NAO toca em hora_moto (a moto pode estar referenciada em outras tabelas;
+    a limpeza de orfas eh feita pelo caller via `_limpar_motos_orfas`).
+    """
+    from app.hora.models import HoraMotoEvento
+
+    eventos_del = (
+        HoraMotoEvento.query
+        .filter(HoraMotoEvento.origem_tabela == 'hora_recebimento_conferencia')
+        .filter(HoraMotoEvento.origem_id == conf.id)
+        .filter(HoraMotoEvento.tipo == 'MOTO_FALTANDO')
+        .delete(synchronize_session=False)
+    )
+    # Limpa substituida_por_id de antecessoras (FK seguro).
+    HoraRecebimentoConferencia.query.filter_by(
+        substituida_por_id=conf.id
+    ).update({'substituida_por_id': None}, synchronize_session=False)
+    db.session.delete(conf)
+    db.session.flush()
+    return eventos_del or 0
+
+
+def _criar_conferencia_batch_faltante(
+    rec: HoraRecebimento,
+    chassi: str,
+    operador: Optional[str],
+) -> HoraRecebimentoConferencia:
+    """Cria conferencia batch sintetica MOTO_FALTANDO para um chassi.
+
+    Mesma logica do `finalizar_recebimento` (linhas 511-550):
+      - HoraRecebimentoConferencia com tipo_divergencia=MOTO_FALTANDO,
+        confirmado_em=now, sem dados reais.
+      - HoraConferenciaDivergencia(tipo=MOTO_FALTANDO).
+      - HoraMotoEvento(tipo=MOTO_FALTANDO).
+    """
+    _garantir_moto(chassi, None, operador)
+    ordem = proxima_ordem(rec.id)
+    agora = agora_utc_naive()
+    conf = HoraRecebimentoConferencia(
+        recebimento_id=rec.id,
+        numero_chassi=chassi,
+        ordem=ordem,
+        qr_code_lido=False,
+        avaria_fisica=False,
+        tipo_divergencia='MOTO_FALTANDO',
+        detalhe_divergencia='Faltante apos edicao NF',
+        operador=operador,
+        confirmado_em=agora,
+    )
+    db.session.add(conf)
+    db.session.flush()
+    db.session.add(HoraConferenciaDivergencia(
+        conferencia_id=conf.id,
+        tipo='MOTO_FALTANDO',
+        detalhe='Faltante apos edicao NF',
+    ))
+    registrar_evento(
+        numero_chassi=chassi,
+        tipo='MOTO_FALTANDO',
+        origem_tabela='hora_recebimento_conferencia',
+        origem_id=conf.id,
+        loja_id=rec.loja_id,
+        operador=operador,
+        detalhe='Faltante apos edicao NF (batch reprocessamento)',
+    )
+    return conf
+
+
+def metricas_recebimento(rec: HoraRecebimento) -> dict:
+    """Computa metricas amigaveis para exibicao do recebimento (UI).
+
+    Substitui a leitura confusa "conferidas/NF" — onde "conferidas" somava
+    MOTO_FALTANDO sintetico (chassis declarados na NF mas nao escaneados) com
+    CHASSI_EXTRA (escaneados mas nao na NF) — por:
+
+      - qtd_nf: chassis declarados na NF (motos; pecas ficam separadas).
+      - qtd_recebidas: conferencias REAIS confirmadas (operador escaneou e
+        confirmou no wizard). EXCLUI batch sintetico MOTO_FALTANDO criado pelo
+        finalizar_recebimento. INCLUI CHASSI_EXTRA (foi recebido fisicamente,
+        ainda que nao esteja na NF).
+      - qtd_divergencias: chassis com qualquer divergencia ativa
+        (MOTO_FALTANDO + CHASSI_EXTRA + MODELO_DIFERENTE + COR_DIFERENTE +
+        AVARIA_FISICA).
+      - qtd_faltando: subset — chassis declarados na NF mas nao recebidos
+        (batch MOTO_FALTANDO).
+      - qtd_extra: subset — chassis recebidos sem estar na NF (CHASSI_EXTRA).
+      - qtd_ok: chassis recebidos e sem divergencias (qtd_recebidas - extras
+        com divergencia - recebidos com modelo/cor/avaria divergente).
+
+    Considera apenas conferencias ATIVAS (substituida=False).
+    """
+    confs_ativas = [c for c in rec.conferencias if not c.substituida]
+    qtd_nf = sum(1 for _ in rec.nf.itens) if rec.nf else 0
+    qtd_faltando = 0
+    qtd_extra = 0
+    qtd_recebidas = 0
+    qtd_divergencias = 0
+    qtd_ok = 0
+    for c in confs_ativas:
+        eh_batch = _eh_conferencia_batch_faltante(c)
+        tem_divergencia = bool(c.divergencias) or bool(c.tipo_divergencia)
+        # Recebidas: conferencia REAL (operador escaneou).
+        if not eh_batch:
+            qtd_recebidas += 1
+        # Faltando vs Extra (categorias mutuamente exclusivas)
+        if eh_batch:
+            qtd_faltando += 1
+        else:
+            # Detecta CHASSI_EXTRA por divergencia 1-N OU snapshot
+            tem_extra = (
+                c.tipo_divergencia == 'CHASSI_EXTRA'
+                or any(d.tipo == 'CHASSI_EXTRA' for d in c.divergencias)
+            )
+            if tem_extra:
+                qtd_extra += 1
+        if tem_divergencia:
+            qtd_divergencias += 1
+        elif not eh_batch:
+            qtd_ok += 1
+    return {
+        'qtd_nf': qtd_nf,
+        'qtd_recebidas': qtd_recebidas,
+        'qtd_divergencias': qtd_divergencias,
+        'qtd_faltando': qtd_faltando,
+        'qtd_extra': qtd_extra,
+        'qtd_ok': qtd_ok,
+    }
+
+
+def _recalcular_status_recebimento_finalizado(rec: HoraRecebimento) -> None:
+    """Recalcula `status` de um recebimento ja finalizado (CONCLUIDO ou
+    COM_DIVERGENCIA) apos modificacao nas conferencias.
+
+    Mesma logica de `finalizar_recebimento` linhas 555-562. Usa apenas
+    conferencias ATIVAS (nao substituidas) confirmadas.
+
+    Expira o cache ORM de `conferencias` e `divergencias` para garantir leitura
+    fresca do DB (sem isso, `_redefinir_divergencias` que deletou e recriou
+    divergencias 1-N nao reflete via `c.divergencias` cached).
+    """
+    if rec.status not in ('CONCLUIDO', 'COM_DIVERGENCIA'):
+        return
+    db.session.expire(rec, ['conferencias'])
+    confs_ativas = [c for c in rec.conferencias if not c.substituida]
+    for c in confs_ativas:
+        db.session.expire(c, ['divergencias'])
+    houve_divergencia = any(
+        c.divergencias or c.tipo_divergencia for c in confs_ativas
+    )
+    rec.status = 'COM_DIVERGENCIA' if houve_divergencia else 'CONCLUIDO'
+
+
+# ========================================================================
 # Comparativo lado-a-lado (tela T4)
 # ========================================================================
 
@@ -704,11 +1109,13 @@ def listar_recebimentos(
     data_inicio=None,
     data_fim=None,
 ) -> List[HoraRecebimento]:
-    # selectinload em conferencias e nf.itens: o template `recebimentos_lista`
-    # usa `r.conferencias|rejectattr('substituida')` e `r.nf.itens|length`
-    # para cada linha. Sem eager-load vira N+1 (200 queries extras).
+    # selectinload em conferencias, divergencias e nf.itens: o template
+    # `recebimentos_lista` chama `metricas_recebimento` para cada linha, que
+    # itera `conferencias`, `conferencia.divergencias` e `nf.itens`. Sem
+    # eager-load vira N+1 (centenas de queries extras).
     query = HoraRecebimento.query.options(
-        selectinload(HoraRecebimento.conferencias),
+        selectinload(HoraRecebimento.conferencias)
+            .selectinload(HoraRecebimentoConferencia.divergencias),
         selectinload(HoraRecebimento.nf).selectinload(HoraNfEntrada.itens),
     ).order_by(
         HoraRecebimento.data_recebimento.desc(),
