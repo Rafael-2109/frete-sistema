@@ -134,3 +134,25 @@ Estes não bloqueiam a implementação dos services (`stock_lot_service`, `stock
 3. Corrigir `.claude/references/odoo/IDS_FIXOS.md` (LF picking_type = 19, não 16) — fora desta branch, em main
 4. Investigar G003 (fiscal_position_ids faltantes) antes da Fase 5 (execução)
 5. Considerar premissa P11: dev-industrializacao tem 3+ direções possíveis (FB→LF, CD→LF, LF→origem)
+
+---
+## G003 — Resultado da investigação (2026-05-17)
+
+### transf-filial CD → FB
+
+- Nenhuma NF de SAÍDA com CFOP 5152 confirmada na company 4 ainda. Direcao pode nao ter precedente no Odoo — investigar manualmente.
+
+### dev-industrializacao FB → LF
+
+- Nenhuma NF de SAÍDA com CFOP 5949 confirmada na company 1 ainda. Direcao pode nao ter precedente no Odoo — investigar manualmente.
+
+### dev-industrializacao LF → FB
+
+`fiscal_position_id` candidatos:
+- `[89, 'SAÍDA - RETRABALHO']` (exemplo: account.move.id=606403)
+
+### dev-industrializacao LF → CD
+
+`fiscal_position_id` candidatos:
+- `[89, 'SAÍDA - RETRABALHO']` (exemplo: account.move.id=606403)
+
