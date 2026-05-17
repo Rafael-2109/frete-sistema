@@ -127,3 +127,42 @@ def test_liberar_faturamento_propaga_erro_negocio():
     svc = StockPickingService(odoo=odoo)
     with pytest.raises(Exception, match='nao validado'):
         svc.liberar_faturamento(picking_id=9999)
+
+
+# ============================================================
+# aguardar_invoice_do_robo (Task 3.4)
+# ============================================================
+
+def test_aguardar_invoice_acha_imediatamente():
+    """Se invoice ja existe na 1a tentativa, retorna sem esperar."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{'name': 'PICK-001', 'company_id': [1, 'NACOM']}]
+    odoo.search_read.return_value = [
+        {'id': 555, 'name': 'INV-001', 'state': 'draft'}
+    ]
+    svc = StockPickingService(odoo=odoo)
+    invoice_id = svc.aguardar_invoice_do_robo(
+        picking_id=9999, timeout=5, poll_interval=1
+    )
+    assert invoice_id == 555
+
+
+def test_aguardar_invoice_timeout():
+    """Se invoice nao aparece em timeout, retorna None."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{'name': 'PICK-002', 'company_id': [1, 'NACOM']}]
+    odoo.search_read.return_value = []
+    svc = StockPickingService(odoo=odoo)
+    invoice_id = svc.aguardar_invoice_do_robo(
+        picking_id=9999, timeout=2, poll_interval=1
+    )
+    assert invoice_id is None
+
+
+def test_aguardar_invoice_picking_inexistente_raises():
+    """Se picking_id nao existe (read retorna vazio), raises ValueError."""
+    odoo = MagicMock()
+    odoo.read.return_value = []
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='nao encontrado'):
+        svc.aguardar_invoice_do_robo(picking_id=9999, timeout=1, poll_interval=1)

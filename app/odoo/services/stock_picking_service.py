@@ -11,6 +11,7 @@ button_validate -> action_liberar_faturamento -> aguardar invoice do robo CIEL I
 Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md §6.2
 """
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from app.odoo.utils.connection import get_odoo_connection
@@ -215,3 +216,86 @@ class StockPickingService:
             f'Picking {picking_id}: action_liberar_faturamento disparado '
             '(aguardando robo CIEL IT criar invoice)'
         )
+
+    def aguardar_invoice_do_robo(
+        self,
+        picking_id: int,
+        timeout: int = 1800,
+        poll_interval: int = 40,
+    ) -> Optional[int]:
+        """Fire-and-poll: aguarda robo CIEL IT criar invoice apos
+        liberar_faturamento().
+
+        O robo CIEL IT cria account.move com `ref=picking_name` (Metodo
+        1). Como fallback (versoes futuras), tenta tambem
+        `invoice_origin ilike picking_name` (Metodo 2).
+
+        Args:
+            picking_id: stock.picking.id ja com liberar_faturamento()
+                disparado.
+            timeout: segundos totais ate desistir (default 30 min).
+            poll_interval: segundos entre tentativas (default 40s).
+
+        Returns:
+            invoice_id (account.move.id) ou None se nao encontrar dentro
+            do timeout.
+
+        Raises:
+            ValueError: se picking_id nao existe (read vazio).
+
+        Reuso: recebimento_lf_odoo_service.py:2560-2611
+        """
+        picking = self.odoo.read(
+            'stock.picking', [picking_id], ['name', 'company_id']
+        )
+        if not picking:
+            raise ValueError(f'Picking {picking_id} nao encontrado')
+
+        picking_name = picking[0]['name']
+        company_id = picking[0]['company_id'][0]
+
+        start = time.time()
+        while time.time() - start < timeout:
+            # Metodo 1: ref = picking_name (padrao robo CIEL IT atual)
+            invoices = self.odoo.search_read(
+                'account.move',
+                [
+                    ['company_id', '=', company_id],
+                    ['ref', '=', picking_name],
+                    ['state', '!=', 'cancel'],
+                ],
+                ['id'],
+                limit=1,
+            )
+            if invoices:
+                logger.info(
+                    f'Picking {picking_id} ({picking_name}): invoice '
+                    f'encontrada via ref → id={invoices[0]["id"]}'
+                )
+                return invoices[0]['id']
+
+            # Metodo 2: invoice_origin ilike (fallback)
+            invoices = self.odoo.search_read(
+                'account.move',
+                [
+                    ['company_id', '=', company_id],
+                    ['invoice_origin', 'ilike', picking_name],
+                    ['state', '!=', 'cancel'],
+                ],
+                ['id'],
+                limit=1,
+            )
+            if invoices:
+                logger.info(
+                    f'Picking {picking_id} ({picking_name}): invoice '
+                    f'encontrada via invoice_origin → id={invoices[0]["id"]}'
+                )
+                return invoices[0]['id']
+
+            time.sleep(poll_interval)
+
+        logger.warning(
+            f'Picking {picking_id} ({picking_name}): timeout {timeout}s '
+            'sem invoice do robo CIEL IT'
+        )
+        return None
