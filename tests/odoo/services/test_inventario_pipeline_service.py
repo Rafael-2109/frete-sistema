@@ -499,3 +499,186 @@ def test_f5e_skip_ajuste_sem_invoice_id(db):
     assert result == {}
     mock_tx.assert_not_called()
     assert aj.fase_pipeline == 'F5c_LIBERADO'  # nao muda
+
+
+# ============================================================
+# F5e BUG-2 + BUG-3 + MEDIUM fixes (post-review)
+# ============================================================
+
+def test_f5e_idempotency_skip_se_ja_SEFAZ_OK(db):
+    """BUG-2: ajuste em F5e_SEFAZ_OK NAO chama Playwright novamente."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5E_IDEMP', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='EXECUTADO',
+        criado_por='pytest',
+        picking_id_odoo=6001, invoice_id_odoo=9001,
+        fase_pipeline='F5e_SEFAZ_OK',
+        chave_nfe='35260112345678000112550010000000019001',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        result = svc.f5e_transmitir_sefaz([aj])
+
+    mock_tx.assert_not_called()  # CRITICAL: nao abriu Playwright
+    assert result == {9001: '35260112345678000112550010000000019001'}
+    assert aj.fase_pipeline == 'F5e_SEFAZ_OK'  # mantem
+
+
+def test_f5e_abort_batch_em_playwright_indisponivel(db):
+    """BUG-3: erro de config aborta batch via RuntimeError."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    ajustes = [
+        AjusteEstoqueInventario(
+            ciclo='TEST_F5E_ABORT', cod_produto='X1', tipo_produto=1,
+            company_id=5, qtd_inventario=Decimal('1'),
+            qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+            acao_decidida='PERDA_LF_FB', status='APROVADO',
+            criado_por='pytest',
+            picking_id_odoo=pid, invoice_id_odoo=inv,
+            fase_pipeline='F5d_INVOICE_GERADA',
+        )
+        for pid, inv in [(7001, 9101), (7002, 9102), (7003, 9103)]
+    ]
+    db.session.add_all(ajustes)
+    db.session.flush()
+
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        mock_tx.return_value = {
+            'sucesso': False, 'erro': 'playwright_indisponivel', 'tentativas': 0
+        }
+        with pytest.raises(RuntimeError, match='configuracao invalida'):
+            svc.f5e_transmitir_sefaz(ajustes)
+
+    # Apenas o 1o ajuste foi marcado como F5e_FALHA (abort batch)
+    assert mock_tx.call_count == 1
+    assert ajustes[0].fase_pipeline == 'F5e_FALHA'
+    assert 'playwright_indisponivel' in ajustes[0].erro_msg
+    # Os outros 2 nao foram processados
+    assert ajustes[1].fase_pipeline == 'F5d_INVOICE_GERADA'
+    assert ajustes[2].fase_pipeline == 'F5d_INVOICE_GERADA'
+
+
+def test_f5e_falha_persiste_cstat_xmotivo(db):
+    """MED C-2: erro_msg inclui cstat/xmotivo do ultimo_estado."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5E_CSTAT', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='APROVADO',
+        criado_por='pytest',
+        picking_id_odoo=8001, invoice_id_odoo=9201,
+        fase_pipeline='F5d_INVOICE_GERADA',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        mock_tx.return_value = {
+            'sucesso': False,
+            'erro': 'nao_autorizada_apos_15_tentativas',
+            'tentativas': 15,
+            'ultimo_estado': {
+                'situacao_nf': 'rejeitado',
+                'cstat': '225',
+                'xmotivo': 'Falha no Schema XML',
+            },
+        }
+        svc.f5e_transmitir_sefaz([aj])
+
+    assert aj.fase_pipeline == 'F5e_FALHA'
+    assert 'cstat=225' in aj.erro_msg
+    assert 'Falha no Schema XML' in aj.erro_msg
+
+
+def test_f5e_sucesso_excecao_autorizado_registra_audit(db):
+    """MED C-1: situacao_nf=excecao_autorizado vai para erro_msg (audit)."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5E_EXC', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='APROVADO',
+        criado_por='pytest',
+        picking_id_odoo=8501, invoice_id_odoo=9301,
+        fase_pipeline='F5d_INVOICE_GERADA',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo)
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        mock_tx.return_value = {
+            'sucesso': True,
+            'chave_nf': '35260112345678000112550010000000019301',
+            'situacao_nf': 'excecao_autorizado',
+            'tentativa': 3,
+            'inv_name': 'INV-X',
+        }
+        svc.f5e_transmitir_sefaz([aj])
+
+    assert aj.fase_pipeline == 'F5e_SEFAZ_OK'
+    assert aj.status == 'EXECUTADO'
+    assert aj.chave_nfe == '35260112345678000112550010000000019301'
+    # MED C-1: audit registra excecao
+    assert 'excecao_autorizado' in aj.erro_msg
+    assert 'tentativa=3' in aj.erro_msg
+
+
+def test_f5b_warning_em_ajuste_sem_picking_id(db, caplog):
+    """B-MED-2: skip silencioso virou WARNING."""
+    import logging
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5B_NOPID', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='APROVADO',
+        criado_por='pytest',
+        picking_id_odoo=None,  # sem picking_id
+        fase_pipeline='F5a_FALHA',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    with caplog.at_level(logging.WARNING):
+        result = svc.f5b_validar_pickings([aj])
+
+    assert result == {}
+    picking_svc.confirmar_e_reservar.assert_not_called()
+    assert any(
+        'F5b skip ajuste' in r.message and 'sem picking_id_odoo' in r.message
+        for r in caplog.records
+    )

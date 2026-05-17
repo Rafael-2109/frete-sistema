@@ -279,10 +279,16 @@ class InventarioPipelineService:
             {picking_id: True (sucesso) | False (falha)}.
         """
         result: Dict[int, bool] = {}
-        # Pre-indexar ajustes por picking_id e snapshot picking_ids
-        ajuste_por_pid: Dict[int, object] = {
-            a.picking_id_odoo: a for a in ajustes if a.picking_id_odoo
-        }
+        # Pre-indexar ajustes por picking_id + WARNING em skip silencioso
+        ajuste_por_pid: Dict[int, object] = {}
+        for a in ajustes:
+            if a.picking_id_odoo:
+                ajuste_por_pid[a.picking_id_odoo] = a
+            else:
+                logger.warning(
+                    f'F5b skip ajuste {a.id} sem picking_id_odoo '
+                    f'(fase={a.fase_pipeline}) — provavelmente falha em F5a'
+                )
         picking_ids = list(ajuste_por_pid.keys())
 
         def _io(pid):
@@ -334,9 +340,15 @@ class InventarioPipelineService:
             {picking_id: True | False}.
         """
         result: Dict[int, bool] = {}
-        ajuste_por_pid: Dict[int, object] = {
-            a.picking_id_odoo: a for a in ajustes if a.picking_id_odoo
-        }
+        ajuste_por_pid: Dict[int, object] = {}
+        for a in ajustes:
+            if a.picking_id_odoo:
+                ajuste_por_pid[a.picking_id_odoo] = a
+            else:
+                logger.warning(
+                    f'F5c skip ajuste {a.id} sem picking_id_odoo '
+                    f'(fase={a.fase_pipeline}) — provavelmente falha anterior'
+                )
         picking_ids = list(ajuste_por_pid.keys())
 
         def _io(pid):
@@ -392,9 +404,15 @@ class InventarioPipelineService:
         Returns:
             {picking_id: invoice_id ou None se timeout}.
         """
-        ajuste_por_pid: Dict[int, object] = {
-            a.picking_id_odoo: a for a in ajustes if a.picking_id_odoo
-        }
+        ajuste_por_pid: Dict[int, object] = {}
+        for a in ajustes:
+            if a.picking_id_odoo:
+                ajuste_por_pid[a.picking_id_odoo] = a
+            else:
+                logger.warning(
+                    f'F5d skip ajuste {a.id} sem picking_id_odoo '
+                    f'(fase={a.fase_pipeline}) — provavelmente falha anterior'
+                )
         pendentes = set(ajuste_por_pid.keys())
         resolved: Dict[int, Optional[int]] = {
             pid: None for pid in ajuste_por_pid
@@ -435,16 +453,33 @@ class InventarioPipelineService:
     # F5e — transmitir_sefaz (serial via Playwright)
     # ============================================================
 
+    # Erros de configuracao que devem abortar o batch inteiro
+    # (nao adianta tentar a proxima invoice — o ambiente esta quebrado)
+    HARD_FAIL_CONFIG_ERRORS = {
+        'playwright_indisponivel',
+        'odoo_password_ausente',
+        'odoo_username_ausente',
+    }
+
     def f5e_transmitir_sefaz(
         self, ajustes: List
     ) -> Dict[int, Optional[str]]:
         """Transmite NF-e para SEFAZ via Playwright (serial, 1 browser).
 
         Reusa app/recebimento/services/playwright_nfe_transmissao
-        .transmitir_nfe_via_playwright(invoice_id, odoo, logger).
+        .transmitir_nfe_via_playwright(invoice_id, odoo, logger) que
+        retorna dict (vide assinatura completa naquele modulo).
 
-        Itera APENAS ajustes que ja tem invoice_id_odoo populado
-        (chegaram a F5d). Ajustes sem invoice sao skip.
+        Idempotente: skip se ajuste ja em F5e_SEFAZ_OK ou
+        status=EXECUTADO (NF-e ja transmitida — reprocessar abre
+        Playwright sem necessidade).
+
+        Iteracao serial — uma NF-e por vez (1 browser Playwright).
+        Worst case: 100 ajustes × 15 tentativas × 120s = ~45h.
+
+        Abort batch: se Playwright/Odoo indisponivel (config errors
+        com tentativas=0), lanca RuntimeError para sinalizar ao
+        operador que o ambiente esta quebrado.
 
         Args:
             ajustes: lista de AjusteEstoqueInventario com
@@ -452,44 +487,96 @@ class InventarioPipelineService:
 
         Returns:
             {invoice_id: chave_nf (sucesso) | None (falha)}.
+
+        Raises:
+            RuntimeError: se erro de config detectado (abort batch).
         """
         result: Dict[int, Optional[str]] = {}
 
         for aj in ajustes:
             inv_id = aj.invoice_id_odoo
+
+            # MED B-2: skip silencioso virou WARNING (sinal de F5d timeout)
             if not inv_id:
-                logger.info(
-                    f'F5e skip ajuste {aj.id} (sem invoice_id_odoo)'
+                logger.warning(
+                    f'F5e skip ajuste {aj.id} sem invoice_id_odoo '
+                    f'(fase={aj.fase_pipeline}). Provavelmente timeout '
+                    'em F5d.'
                 )
+                continue
+
+            # BUG-2: idempotency guard — NF-e ja transmitida nao precisa Playwright
+            if aj.fase_pipeline == 'F5e_SEFAZ_OK' or aj.status == 'EXECUTADO':
+                logger.info(
+                    f'F5e skip ajuste {aj.id} (ja SEFAZ_OK, '
+                    f'chave={aj.chave_nfe})'
+                )
+                if aj.chave_nfe:
+                    result[inv_id] = aj.chave_nfe
                 continue
 
             try:
                 resultado = transmitir_nfe_via_playwright(
                     inv_id, self.odoo, logger
                 )
+
+                # BUG-3: detectar erros de config e abortar batch
+                if (
+                    not resultado.get('sucesso')
+                    and resultado.get('tentativas') == 0
+                    and resultado.get('erro') in self.HARD_FAIL_CONFIG_ERRORS
+                ):
+                    erro = resultado['erro']
+                    aj.fase_pipeline = 'F5e_FALHA'
+                    aj.erro_msg = f'Config invalida: {erro}'
+                    db.session.commit()
+                    raise RuntimeError(
+                        f'F5e abortado: configuracao invalida — {erro}. '
+                        f'{len(ajustes) - len(result) - 1} ajustes nao '
+                        'processados.'
+                    )
+
                 if resultado.get('sucesso'):
                     chave_nfe = resultado.get('chave_nf')
                     result[inv_id] = chave_nfe
                     aj.fase_pipeline = 'F5e_SEFAZ_OK'
                     aj.chave_nfe = chave_nfe
                     aj.status = 'EXECUTADO'
+                    # MED C-1: registrar excecao_autorizado para audit fiscal
+                    situacao = resultado.get('situacao_nf')
+                    if situacao and situacao != 'autorizado':
+                        aj.erro_msg = (
+                            f'{situacao} tentativa='
+                            f'{resultado.get("tentativa", "?")}'
+                        )
                     db.session.commit()
                     logger.info(
-                        f'F5e invoice {inv_id} → SEFAZ OK (chave='
-                        f'{chave_nfe}, ajuste {aj.id})'
+                        f'F5e invoice {inv_id} → SEFAZ OK '
+                        f'(chave={chave_nfe}, situacao={situacao}, '
+                        f'ajuste {aj.id})'
                     )
                 else:
                     erro = resultado.get('erro', 'erro_desconhecido')
                     result[inv_id] = None
                     aj.fase_pipeline = 'F5e_FALHA'
+                    # MED C-2: persistir cstat/xmotivo de ultimo_estado
+                    # (rejeicao SEFAZ — campo mais acionavel)
+                    ultimo = resultado.get('ultimo_estado') or {}
                     aj.erro_msg = (
                         f"SEFAZ falhou: {erro} "
-                        f"(tentativas={resultado.get('tentativas', '?')})"
+                        f"(tentativas={resultado.get('tentativas', '?')}, "
+                        f"cstat={ultimo.get('cstat')}, "
+                        f"xmotivo={ultimo.get('xmotivo')})"
                     )
                     db.session.commit()
                     logger.error(
-                        f'F5e invoice {inv_id} falhou: {erro}'
+                        f'F5e invoice {inv_id} falhou: {erro} '
+                        f'(cstat={ultimo.get("cstat")}, '
+                        f'xmotivo={ultimo.get("xmotivo")})'
                     )
+            except RuntimeError:
+                # Re-raise para o caller decidir (abort batch acima)
+                raise
             except Exception as e:
                 result[inv_id] = None
                 aj.fase_pipeline = 'F5e_FALHA'
