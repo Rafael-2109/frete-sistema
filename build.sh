@@ -328,6 +328,15 @@ echo "Agente Artifacts 17: tabela agente_artifacts..."
 python scripts/migrations/2026_05_12_agente_artifacts.py \
     || echo "⚠️ Migration agente_artifacts falhou, continuando deploy..."
 
+# 18. Backfill HORA (2026-05-16): substitui os 5 recebimentos existentes por
+# recebimentos automaticos gerados das NFs (chassi/modelo/cor da NF).
+# Cria aliases NOME_NF majoritarios primeiro para reduzir chassis_sem_canonico.
+# Idempotente (operador=BACKFILL_2026_05_16; pula se ja executado).
+# REMOVER esta entrada no commit seguinte (one-shot post-deploy).
+echo "HORA backfill: recebimentos automaticos + aliases NOME_NF..."
+python scripts/hora/backfill_recebimentos.py --confirmar \
+    || echo "⚠️ Backfill HORA falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
