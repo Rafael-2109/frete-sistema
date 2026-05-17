@@ -15,9 +15,10 @@ Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md
       §6.2 + §8.1.1
 """
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app import db
 from app.odoo.constants.locations import COMPANY_LOCATIONS
@@ -325,3 +326,69 @@ class InventarioPipelineService:
                     db.session.commit()
                     logger.error(f'F5c picking {pid} falhou: {e}')
         return result
+
+    # ============================================================
+    # F5d — aguardar_invoices (1 polling longo)
+    # ============================================================
+
+    def f5d_aguardar_invoices(
+        self,
+        ajustes: List,
+        timeout: int = 1800,
+        poll_interval: int = 40,
+    ) -> Dict[int, Optional[int]]:
+        """Aguarda robo CIEL IT criar invoices apos F5c.
+
+        Estrategia: 1 polling longo (mais eficiente que N pollings
+        independentes). Em cada iteracao, para cada picking ainda sem
+        invoice, faz uma busca via aguardar_invoice_do_robo() com
+        timeout curto (=poll_interval). Pickings ja resolvidos saem
+        do conjunto de pendentes.
+
+        Args:
+            ajustes: lista de AjusteEstoqueInventario com
+                picking_id_odoo populado (fase_pipeline >= F5c_LIBERADO).
+            timeout: segundos totais ate desistir (default 30 min).
+            poll_interval: segundos entre iteracoes (default 40s).
+
+        Returns:
+            {picking_id: invoice_id ou None se timeout}.
+        """
+        ajuste_por_pid: Dict[int, object] = {
+            a.picking_id_odoo: a for a in ajustes if a.picking_id_odoo
+        }
+        pendentes = set(ajuste_por_pid.keys())
+        resolved: Dict[int, Optional[int]] = {
+            pid: None for pid in ajuste_por_pid
+        }
+
+        start = time.time()
+        while pendentes and time.time() - start < timeout:
+            for pid in list(pendentes):
+                invoice_id = self.picking_svc.aguardar_invoice_do_robo(
+                    pid, timeout=poll_interval, poll_interval=poll_interval
+                )
+                if invoice_id:
+                    resolved[pid] = invoice_id
+                    pendentes.discard(pid)
+                    aj = ajuste_por_pid[pid]
+                    aj.fase_pipeline = 'F5d_INVOICE_GERADA'
+                    aj.invoice_id_odoo = invoice_id
+                    db.session.commit()
+                    logger.info(
+                        f'F5d picking {pid} → invoice {invoice_id} '
+                        f'(ajuste {aj.id})'
+                    )
+            if pendentes:
+                logger.info(
+                    f'F5d aguardando {len(pendentes)} pickings ainda '
+                    f'(elapsed={int(time.time() - start)}s/{timeout}s)'
+                )
+                time.sleep(poll_interval)
+
+        if pendentes:
+            logger.warning(
+                f'F5d timeout {timeout}s — {len(pendentes)} pickings '
+                f'sem invoice: {sorted(pendentes)}'
+            )
+        return resolved

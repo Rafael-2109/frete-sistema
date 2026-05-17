@@ -230,3 +230,69 @@ def test_f5c_falha_marca_F5c_FALHA(db):
 
     assert aj.fase_pipeline == 'F5c_FALHA'
     assert 'nao validado' in aj.erro_msg
+
+
+# ============================================================
+# f5d_aguardar_invoices (Task 4.4)
+# ============================================================
+
+def test_f5d_polling_acha_todos_em_uma_passada(db):
+    """f5d aguarda invoices serem criadas pelo robo (mock retorna invoice)."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    ajustes = [
+        AjusteEstoqueInventario(
+            ciclo='TEST_F5D', cod_produto='X1', tipo_produto=1,
+            company_id=5, qtd_inventario=Decimal('1'),
+            qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+            acao_decidida='PERDA_LF_FB', status='APROVADO',
+            criado_por='pytest',
+            picking_id_odoo=pid, fase_pipeline='F5c_LIBERADO',
+        )
+        for pid in (4001, 4002)
+    ]
+    db.session.add_all(ajustes)
+    db.session.flush()
+
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    # Cada chamada de aguardar_invoice_do_robo retorna um invoice diferente
+    picking_svc.aguardar_invoice_do_robo.side_effect = [999, 1000]
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    result = svc.f5d_aguardar_invoices(ajustes, timeout=10, poll_interval=1)
+
+    assert result == {4001: 999, 4002: 1000}
+    # Ajustes atualizados
+    assert ajustes[0].fase_pipeline == 'F5d_INVOICE_GERADA'
+    assert ajustes[0].invoice_id_odoo == 999
+    assert ajustes[1].fase_pipeline == 'F5d_INVOICE_GERADA'
+    assert ajustes[1].invoice_id_odoo == 1000
+
+
+def test_f5d_timeout_marca_None(db):
+    """Se aguardar_invoice retorna None ate timeout, ajuste fica como F5c_LIBERADO."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_F5D_TIMEOUT', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'),
+        qtd_odoo=Decimal('2'), qtd_ajuste=Decimal('-1'),
+        acao_decidida='PERDA_LF_FB', status='APROVADO',
+        criado_por='pytest',
+        picking_id_odoo=4500, fase_pipeline='F5c_LIBERADO',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    picking_svc = MagicMock()
+    picking_svc.aguardar_invoice_do_robo.return_value = None
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    result = svc.f5d_aguardar_invoices([aj], timeout=2, poll_interval=1)
+
+    assert result == {4500: None}
+    # Ajuste mantem F5c_LIBERADO (nao mudou para F5d_INVOICE_GERADA)
+    assert aj.fase_pipeline == 'F5c_LIBERADO'
+    assert aj.invoice_id_odoo is None
