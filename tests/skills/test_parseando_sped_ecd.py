@@ -1,9 +1,6 @@
 """Testa parser SPED ECD — streaming Latin-1, output indexado por registro."""
-import json
 import sys
 from pathlib import Path
-
-import pytest
 
 # Path do script da skill (nao eh modulo Python instalado)
 SKILL_SCRIPT = Path(__file__).parent.parent.parent / ".claude" / "skills" / \
@@ -85,8 +82,13 @@ def test_parse_sped_file_handles_latin1_chars(tmp_path):
     assert "GOIÁS" in nome
 
 
-def test_parse_sped_file_streaming_doesnt_load_all_lines_in_memory(tmp_path):
-    """Verificar via generator que nao carrega arquivo inteiro."""
+def test_parse_sped_file_handles_large_sped_correctly(tmp_path):
+    """Parser processa corretamente SPED com muitas linhas (1000 lancamentos I250).
+
+    O comportamento de streaming (linha a linha sem carregar o arquivo inteiro)
+    eh garantido pelo file iterator do Python em iter_sped_records() — nao testado
+    diretamente aqui, mas documentado no corpo da funcao.
+    """
     # SPED grande sintetico (1000 lancamentos I250)
     big_sped = SPED_MINIMAL
     for i in range(1000):

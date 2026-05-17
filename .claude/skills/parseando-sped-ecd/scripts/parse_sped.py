@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 from typing import Any, Iterator
 
 
@@ -108,11 +107,23 @@ def iter_sped_records(path: str) -> Iterator[tuple[str, dict[str, str]]]:
     Nao carrega arquivo inteiro em memoria — line-by-line.
     """
     with open(path, "rb") as f:
-        for raw_line in f:
+        for line_num, raw_line in enumerate(f, start=1):
             try:
                 line = raw_line.decode("latin-1")
             except UnicodeDecodeError as e:
                 raise ValueError(f"Encoding nao Latin-1 em linha: {e}")
+
+            # BOM detection — UTF-8 BOM (\xef\xbb\xbf) lido como Latin-1 vira "\xef\xbb\xbf"
+            # BOM UTF-16 (\xff\xfe ou \xfe\xff) tambem indica encoding incorreto.
+            if line_num == 1 and (
+                line.startswith("\xef\xbb\xbf")  # UTF-8 BOM como Latin-1
+                or line.startswith("\xff\xfe")    # UTF-16 LE BOM
+                or line.startswith("\xfe\xff")    # UTF-16 BE BOM
+            ):
+                raise ValueError(
+                    f"BOM detectado na primeira linha — arquivo nao eh Latin-1 puro. "
+                    f"Conferir geracao do SPED (deve ser ISO-8859-1 sem BOM)."
+                )
 
             line = line.rstrip("\r\n")
             if not line:

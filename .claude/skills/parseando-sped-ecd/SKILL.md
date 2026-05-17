@@ -49,7 +49,11 @@ Output: JSON com `metadata` (total_lines, stats por registro) + `registros`
 
 ## Campos mapeados
 
-51 registros do Manual ECD Leiaute 9 (Bloco 0 + I + J + 9 completo).
+42 registros do Manual ECD Leiaute 9 (Bloco 0 + I + J + 9 completos).
+**Bloco C ausente** — eh preenchido pelo PGE durante recuperacao de ECD
+anterior, NAO gerado pelo nosso sistema. **Bloco K ausente** — consolidacao
+de conglomerados, nao aplicavel a Nacom Goya.
+
 Schemas em `scripts/parse_sped.py:REGISTRO_CAMPOS`.
 
 Registros nao mapeados: campos preservados como `campo_1`, `campo_2`, etc.
