@@ -2,9 +2,12 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.odoo.services.inventario_pipeline_service import (
     ACAO_PARA_DIRECAO,
     InventarioPipelineService,
+    resolver_location_destino,
 )
 
 
@@ -102,6 +105,99 @@ def test_acao_para_direcao_mapping_completo():
         'DEV_FB_LF', 'DEV_LF_FB', 'DEV_CD_LF', 'DEV_LF_CD',
     }
     assert set(ACAO_PARA_DIRECAO.keys()) == esperadas
+
+
+# ============================================================
+# resolver_location_destino — fix BUG-1 (reviewer-A HIGH-1)
+# ============================================================
+
+def test_resolver_location_destino_perda_usa_virtual():
+    """perda: location_destino = 5 (virtual Parceiros/Clientes)."""
+    assert resolver_location_destino('perda', company_destino=1) == 5
+
+
+def test_resolver_location_destino_transf_filial_usa_interna():
+    """transf-filial: location_destino = COMPANY_LOCATIONS[destino]."""
+    # FB -> CD: destino=4, COMPANY_LOCATIONS[4]=32
+    assert resolver_location_destino('transf-filial', company_destino=4) == 32
+    # CD -> FB: destino=1, COMPANY_LOCATIONS[1]=8
+    assert resolver_location_destino('transf-filial', company_destino=1) == 8
+
+
+def test_resolver_location_destino_industrializacao_usa_interna():
+    """industrializacao: location_destino = COMPANY_LOCATIONS[5] = 42 (LF)."""
+    assert resolver_location_destino('industrializacao', company_destino=5) == 42
+
+
+def test_resolver_location_destino_dev_industrializacao_usa_interna():
+    """dev-industrializacao: location_destino = COMPANY_LOCATIONS[destino]."""
+    assert resolver_location_destino('dev-industrializacao', company_destino=5) == 42
+    assert resolver_location_destino('dev-industrializacao', company_destino=1) == 8
+    assert resolver_location_destino('dev-industrializacao', company_destino=4) == 32
+
+
+def test_resolver_location_destino_company_invalida_raises():
+    with pytest.raises(ValueError, match='company_destino=99'):
+        resolver_location_destino('transf-filial', company_destino=99)
+
+
+def test_f5a_passa_location_destino_correto_para_transferir(db):
+    """BUG-1 fix: TRANSFERIR_CD_FB usa COMPANY_LOCATIONS[1]=8, nao 5."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_BUG1', cod_produto='X1', tipo_produto=1, company_id=4,
+        qtd_inventario=Decimal('5'), qtd_odoo=Decimal('10'),
+        qtd_ajuste=Decimal('-5'), acao_decidida='TRANSFERIR_CD_FB',
+        status='APROVADO', criado_por='pytest',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{'id': 1}]
+    picking_svc = MagicMock()
+    picking_svc.criar_transferencia.return_value = 99999
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    svc.f5a_criar_pickings([aj], executado_por='pytest')
+
+    # Confirma que criar_transferencia foi chamado com location_destino_id=8
+    # (FB interna), NAO 5 (Parceiros virtual)
+    call_kwargs = picking_svc.criar_transferencia.call_args.kwargs
+    assert call_kwargs['location_destino_id'] == 8, (
+        f"BUG-1 regressao: esperado 8 (COMPANY_LOCATIONS[1] FB), "
+        f"got {call_kwargs['location_destino_id']}"
+    )
+    # Origem CD: COMPANY_LOCATIONS[4]=32
+    assert call_kwargs['location_origem_id'] == 32
+
+
+def test_f5a_passa_location_destino_5_para_perda(db):
+    """perda mantem location_destino=5 (Parceiros virtual)."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_PERDA', cod_produto='X1', tipo_produto=1, company_id=5,
+        qtd_inventario=Decimal('5'), qtd_odoo=Decimal('10'),
+        qtd_ajuste=Decimal('-5'), acao_decidida='PERDA_LF_FB',
+        status='APROVADO', criado_por='pytest',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{'id': 1}]
+    picking_svc = MagicMock()
+    picking_svc.criar_transferencia.return_value = 88888
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    svc.f5a_criar_pickings([aj], executado_por='pytest')
+
+    call_kwargs = picking_svc.criar_transferencia.call_args.kwargs
+    assert call_kwargs['location_destino_id'] == 5
+    # Origem LF: COMPANY_LOCATIONS[5]=42
+    assert call_kwargs['location_origem_id'] == 42
 
 
 # ============================================================

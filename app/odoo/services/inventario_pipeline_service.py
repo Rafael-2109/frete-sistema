@@ -63,6 +63,42 @@ PICKING_TYPE_POR_DIRECAO: Dict[tuple, int] = {
 }
 
 
+# Location destino virtual "Parceiros/Clientes" (id=5), descoberto em
+# audit 00e como destino real do tipo_op='perda' (LF perde estoque
+# emitindo NF para parceiro virtual). Para outros tipo_op, o destino
+# eh a location interna da company destino.
+LOCATION_DESTINO_VIRTUAL_PARCEIROS = 5
+
+
+def resolver_location_destino(tipo_op: str, company_destino: int) -> int:
+    """Resolve stock.location.id destino do picking conforme tipo_op.
+
+    - 'perda': location virtual "Parceiros/Clientes" (id=5). Audit 00e
+      confirmou que LF emite NF de perda contra location virtual.
+    - Demais (transf-filial / industrializacao / dev-industrializacao):
+      location interna principal da company_destino (COMPANY_LOCATIONS).
+
+    Args:
+        tipo_op: chave de MATRIZ_INTERCOMPANY.
+        company_destino: company_id destino.
+
+    Returns:
+        stock.location.id.
+
+    Raises:
+        ValueError: se company_destino sem entrada em COMPANY_LOCATIONS.
+    """
+    if tipo_op == 'perda':
+        return LOCATION_DESTINO_VIRTUAL_PARCEIROS
+    loc = COMPANY_LOCATIONS.get(company_destino)
+    if loc is None:
+        raise ValueError(
+            f'COMPANY_LOCATIONS sem entrada para company_destino='
+            f'{company_destino}; tipo_op={tipo_op!r}'
+        )
+    return loc
+
+
 class InventarioPipelineService:
     """Orquestrador batch do pipeline de ajuste de inventario."""
 
@@ -172,8 +208,7 @@ class InventarioPipelineService:
 
                 picking_type_id = self._resolver_picking_type(origem, tipo_op)
                 location_origem = COMPANY_LOCATIONS[origem]
-                # Location virtual "Parceiros/Clientes" descoberto audit 00e
-                location_destino = 5
+                location_destino = resolver_location_destino(tipo_op, destino)
                 partner_id = COMPANY_PARTNER_ID[destino]
 
                 linhas = [{
