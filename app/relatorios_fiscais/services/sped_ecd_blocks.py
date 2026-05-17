@@ -961,9 +961,6 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
                     diffs += 1
             logger.info(f'[J100 V23] Balanco derivado de I155 substitui balanco_consolidado em {diffs} codes (consistencia PVA).')
 
-    # V1.6: calcular saldos hierarquicos (sintetica = soma das analiticas filhas)
-    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco_fonte, plano_consolidado)
-
     # Heuristica de classificacao por code (para sinteticas sem account_type)
     def _classe_pelo_code(code: str) -> str:
         """Retorna 'asset' ou 'liability_or_equity' baseado no primeiro digito do code.
@@ -985,19 +982,52 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
         INDUSTRIALIZACAO, BONIFICACAO etc.) sao excluidos do balanco mesmo
         que account_type seja 'asset_current' ou 'liability_current'.
         Odoo CIEL IT classifica mal essas contas; o Manual ECD diz que
-        compensacao tem natureza propria (COD_NAT=09) e fica fora do BP."""
+        compensacao tem natureza propria (COD_NAT=09) e fica fora do BP.
+
+        V30 (CAT 6 fix 2026-05-16): SINTETICAS sempre classificadas via
+        `_classe_pelo_code` (hierarquia do code) — NUNCA via account_type.
+        Razao: sinteticas geradas em data.py herdam account_type da PRIMEIRA
+        filha encontrada (`_gerar_hierarquia_sintetica`). Quando a filha tem
+        cadastro Odoo incompativel (ex: 1130700001 ADIANT SALARIOS classificada
+        como `expense` por bug de cadastro — INCONSIST. 5), a sintetica
+        herdava 'expense' e era excluida do BP, deixando outras analiticas
+        patrimoniais da mesma sub-arvore orfas no J100 (cod_sup nao existe).
+        Para sinteticas, code prefix e dado puro do Odoo e nao ambiguo.
+        Analiticas continuam usando account_type (autoritativo — proprio da conta)."""
         code = (conta.get('code') or '').strip()
         if code.startswith(('5', '6', '7', '8', '9')):
             return ''  # compensacao ou contas extra-balanco
+        # V30: sinteticas SEMPRE pelo code (herdam account_type errado da filha)
+        if conta.get('tipo') == 'S':
+            return _classe_pelo_code(code)
         at = (conta.get('account_type') or '').strip()
         if at.startswith('asset'):
             return 'asset'
         if at.startswith(('liability', 'equity')):
             return 'liability_or_equity'
         if not at:
-            # Sintetica gerada — usa o primeiro digito do code
+            # Analitica sem account_type (raro) — fallback pelo code
             return _classe_pelo_code(code)
         return ''  # resultado, ignorar
+
+    # V30 (CAT 6 fix 2026-05-16): consistencia interna J100 sintetica T == soma filhas D.
+    # ANTES: `calcular_saldos_hierarquicos` recebia plano_consolidado COMPLETO e propagava
+    # saldos de TODAS as analiticas para as sinteticas, INCLUSIVE analiticas com
+    # account_type=expense/income (excluidas do J100 por `_classe_da_conta`). Resultado:
+    # sintetica T mostrava saldo > soma das filhas D emitidas. PVA reclamava
+    # "totalizador != soma" e "cod_agl_sup nao existe" (analiticas orfas apontando
+    # para sintetica nao emitida).
+    # AGORA: filtrar plano por classe patrimonial ANTES de propagar — sinteticas
+    # so recebem saldos de analiticas patrimoniais (que serao emitidas no J100).
+    # Sinteticas continuam todas para preservar a arvore de cod_sup.
+    plano_para_propagacao = [
+        c for c in plano_consolidado
+        if c.get('tipo') == 'S' or _classe_da_conta(c) != ''
+    ]
+
+    # V1.6: calcular saldos hierarquicos (sintetica = soma das analiticas filhas)
+    # V30: usa plano filtrado para que sinteticas batam com filhas emitidas
+    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco_fonte, plano_para_propagacao)
 
     # Filtrar plano so patrimoniais (asset_*, liability_*, equity_*, + sinteticas 1x/2x)
     # E ordenar por code asc para hierarquia visual no PVA

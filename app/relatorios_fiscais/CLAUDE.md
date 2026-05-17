@@ -16,6 +16,7 @@
 2. **NUNCA leia os 5 services completos de uma vez** (3653 linhas total) — usar offsets `Read(offset=N, limit=M)`.
 3. **PROD usa fila `sped_ecd` no worker** — adicionar fila a worker_render.py + start_worker_render.sh (regra `~/.claude/CLAUDE.md`). JA REGISTRADA — bug historico SPED ECD V1.3 (commit `9d4e11d2`).
 4. **Modo dev iterativo**: usar `scripts/sped_ecd/gerar_sped.py` (standalone, sem RQ).
+5. **Manual ECD em PDF NAO precisa ser lido inteiro** — usar `manual_ecd/INDEX.md` e abrir so o bloco/registro relevante.
 
 ---
 
@@ -23,8 +24,9 @@
 
 | Item | Detalhe |
 |------|---------|
-| Layout SPED | ECD Leiaute 9 (vigente desde 2021-12) |
-| Manual oficial | http://sped.rfb.gov.br/pasta/show/1569 |
+| Layout SPED | ECD Leiaute 9 (vigente desde 2021-12, AC 2020+) |
+| Manual local refatorado | `manual_ecd/INDEX.md` (10 MDs indexados, ~160KB vs 2.9MB PDF) |
+| Manual oficial (PDF online) | http://sped.rfb.gov.br/pasta/show/1569 |
 | Encoding | Latin-1 puro (linha termina com `\r\n`) |
 | Modalidade | Centralizada (`IND_CENTRALIZADA=0`) — 1 arquivo unico |
 | Companies consolidadas | `[1, 3, 4]` = FB matriz + SC + CD (CNPJ raiz 61.724.241) |
@@ -359,7 +361,8 @@ python scripts/sped_ecd/gerar_sped.py
 | Preciso de... | Documento |
 |---------------|-----------|
 | Plano de fix em curso | `SPED_ECD_PLANO.md` (este diretorio) |
-| Manual ECD | http://sped.rfb.gov.br/pasta/show/1569 |
+| **Manual ECD Leiaute 9 (refatorado, indexado)** | **`manual_ecd/INDEX.md` — leitura barata por bloco/registro** |
+| Manual ECD oficial (PDF online) | http://sped.rfb.gov.br/pasta/show/1569 |
 | IDs Odoo fixos | `.claude/references/odoo/IDS_FIXOS.md` |
 | Boilerplate Odoo (REGRA ZERO) | `.claude/references/odoo/AGENT_BOILERPLATE.md` |
 | Workers RQ — adicionar fila | `~/.claude/CLAUDE.md` secao "WORKER RQ — DEV vs PROD" |

@@ -38,7 +38,7 @@ COMPANY_LF_ID = 5                        # LA FAMIGLIA - LF (raiz 18.467.441) â€
 # Usada para nomear o arquivo SPED gerado e logs do script standalone.
 # BUMP a cada iteracao de correcao + atualizar HISTORICO em SPED_ECD_PLANO.md.
 # Fonte unica da verdade â€” gerar_sped.py e demais scripts leem daqui.
-VERSAO_SPED = 'V29'
+VERSAO_SPED = 'V31'
 
 LEIAUTE_VERSAO = '9.00'                  # Leiaute 9 vigente desde Dez/2021
 COD_PLAN_REF = '1'                       # 1=PJ Lucro Real (decisao usuario)

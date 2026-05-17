@@ -721,20 +721,34 @@ def calcular_saldos_resultado_encerramento(
     Saldos das contas de resultado ANTES do encerramento (I355).
     Apenas se date_fim = 31/12 (encerramento). Mitigacao R7.
 
-    V27 (CAT 17 fix 2026-05-16): filtrar por `l10n_br_cod_nat` (Odoo) em
-    {'04', '05', '07'} — natureza Resultado conforme Manual ECD Leiaute 9 I050
-    campo 3 (COD_NAT). Isso garante consistencia entre COD_NAT emitido no I050
-    e contas elegiveis para I355: PVA exige que toda conta em I355 tenha
-    natureza de Resultado declarada no I050.
+    V31 (CAT 17 fix 2026-05-16) — Manual ECD Leiaute 9 oficial (pag 159):
+    REGRA_CONTA_RESULTADO: COD_CTA do I355 deve ter I050.COD_NAT = "04"
+    (Contas de Resultado). EXCLUSIVAMENTE — nao aceita outros valores.
 
-    Antes V26 usava `account_type in ACCOUNT_TYPES_RESULTADO` (via `calcular_dre_consolidado`)
-    — esse filtro nao alinha com o COD_NAT emitido (que usa `cod_nat_odoo`), gerando
-    9 contas patrimoniais (codes 1xxx/2xxx com account_type=expense/liability_payable)
-    sendo emitidas no I355 indevidamente — PVA reclamava 9x "saldo zero" + 9x
-    "saldo antes encerramento != lancamentos" (18 erros total).
+    Tabela COD_NAT oficial (Manual pag 118):
+        01 Contas de Ativo
+        02 Contas de Passivo
+        03 Patrimonio Liquido
+        04 Contas de Resultado       <-- UNICO valido para I355
+        05 Contas de Compensacao
+        09 Outras
+
+    HISTORICO de erros nesta funcao:
+    - V26 e anteriores: usava `account_type in ACCOUNT_TYPES_RESULTADO` (Odoo),
+      gerava 9 contas patrimoniais (codes 1xxx/2xxx mal classificadas) no I355.
+    - V27: ampliou para `cod_nat_odoo in {04, 05, 07}` baseado em interpretacao
+      ERRADA da tabela CIEL IT (04=Receita, 05=Custo/Despesa, 07=Resultado).
+      Manual oficial NAO TEM cod_nat 07. Resultou: 12 contas compensacao 5101*
+      (REMESSA INDUSTRIALIZACAO, BONIFICACAO, TRANSF MERCADORIA) entraram no
+      I355 indevidamente, gerando 36 erros PVA (12x "nao e conta de resultado"
+      + 12x "saldo zero" + 12x "saldo antes encerr != lancamentos").
+    - V31: restringe para EXCLUSIVAMENTE cod_nat_odoo='04', alinhando com
+      Manual oficial. Ground truth contadora confirma: contas 5101* sao
+      cod_nat=05 e NAO emitidas no I355. Contas reais de Receita/Despesa
+      Nacom estao com cod_nat=04 no Odoo (mantem elegibilidade I355).
 
     Nao usa fallback — apenas o campo Odoo `l10n_br_cod_nat`. Contas com
-    `cod_nat_odoo` vazio nao entram em I355 (problema cadastral Odoo, nao do gerador).
+    `cod_nat_odoo` vazio ou diferente de '04' nao entram em I355 (cadastral).
     """
     if not (date_fim.month == 12 and date_fim.day == 31):
         return {}
@@ -752,13 +766,12 @@ def calcular_saldos_resultado_encerramento(
         companies=companies,
     )
 
-    # V27: filtrar plano por cod_nat_odoo (consistencia com I050 COD_NAT)
-    # 04=Receita, 05=Custo/Despesa, 07=Resultado (Manual ECD Leiaute 9)
-    CODES_NAT_RESULTADO = {'04', '05', '07'}
+    # V31: filtrar plano por cod_nat_odoo='04' (Manual ECD pag 159
+    # REGRA_CONTA_RESULTADO — exclusivo 04 = Contas de Resultado)
     code_to_dados = {
         c['code']: c for c in plano_consolidado
         if c.get('tipo') == 'A'
-        and (c.get('cod_nat_odoo') or '').strip() in CODES_NAT_RESULTADO
+        and (c.get('cod_nat_odoo') or '').strip() == '04'
     }
 
     saldos = {}
@@ -778,7 +791,7 @@ def calcular_saldos_resultado_encerramento(
         slot['saldo'] += balance_val
 
     logger.info(
-        f'[SPED ECD V27] I355: {len(code_to_dados)} codes elegiveis (cod_nat in 04/05/07), '
+        f'[SPED ECD V31] I355: {len(code_to_dados)} codes elegiveis (cod_nat=04 Manual ECD), '
         f'{len(saldos)} com movimento no exercicio'
     )
     return saldos
