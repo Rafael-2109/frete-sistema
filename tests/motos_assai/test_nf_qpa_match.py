@@ -217,13 +217,18 @@ def test_match_bateu_chassi_extra_adicionado_pela_nf(app, admin_user):
 
 
 def test_match_divergente_valor_acima_tolerancia(app, admin_user):
-    """DIVERGENTE: chassi existe na separação mas valor diverge > 1%."""
+    """DIVERGENTE: chassi existe na separação mas valor diverge > R$ 1,00 (absoluto).
+
+    Mudanca 2026-05-17: regra de tolerancia migrou de 1% relativo para R$ 1,00
+    absoluto. Diff de R$ 345 (5%) continua sendo divergencia legitima sob ambos
+    os criterios — teste mantido para garantir comportamento end-to-end.
+    """
     with app.app_context():
         loja = AssaiLoja.query.first()
         chassi = f'TST_NF_DV_{_uid()}'
         _setup_separacao_com_chassi(admin_user, loja, chassi, Decimal('6900'))
 
-        # Valor na NF: 6900 + 5% de diferença = 7245
+        # Valor na NF: 6900 + R$ 345 de diferenca = 7245 (>> R$ 1,00 → DIVERGENTE)
         chave = _chave_fake()
         resultado = _make_resultado_parser(
             chave=chave,
@@ -364,3 +369,175 @@ def test_parse_error_chave_invalida(app, admin_user):
             with pytest.raises(NfQpaParseError, match='chave_acesso_nf inválida'):
                 importar_nf_qpa(pdf_bytes=b'%PDF-fake', nome_arquivo='bad.pdf',
                                 importada_por_id=admin_user.id)
+
+
+# ─── Resolucao de loja_id (P0 2026-05-17) ─────────────────────────────────────
+#
+# Cobertura dos 3 caminhos da nova logica em nf_qpa_adapter.py:72-125:
+#   1) matched-by-cnpj    — CNPJ destinatario casa com AssaiLoja.cnpj
+#   2) matched-by-name-regex — fallback regex LJ\d+ (compat com NFs antigas)
+#   3) no-match           — nem CNPJ nem regex resolvem
+#
+# Bug raiz: 2026-05-17 Rafael importou 14 NFs com destinatario_nome="SENDAS
+# DISTRIBUIDORA S/A" (sem "LJ<n>") — regex falhou em 100% e loja_id ficou
+# NULL. P0 adiciona match por CNPJ ANTES do regex.
+
+def test_resolver_loja_por_cnpj_destinatario(app, admin_user):
+    """matched-by-cnpj: CNPJ destinatario casa com AssaiLoja mesmo sem 'LJ' no nome."""
+    with app.app_context():
+        loja = AssaiLoja.query.filter(AssaiLoja.cnpj.isnot(None)).first()
+        assert loja is not None and loja.cnpj, 'fixture de loja com CNPJ ausente'
+        chassi = f'TST_CNPJ_{_uid()}'
+        _setup_separacao_com_chassi(admin_user, loja, chassi, Decimal('6900'))
+
+        chave = _chave_fake()
+        resultado = _make_resultado_parser(
+            chave=chave,
+            nome_dest='SENDAS DISTRIBUIDORA S/A',  # sem 'LJ<n>'
+            chassis=[chassi],
+            valor_total=Decimal('6900'),
+        )
+        # Sobrescreve cnpj_destinatario para o CNPJ real da loja
+        resultado['cnpj_destinatario'] = loja.cnpj
+
+        nf = _call_importar(resultado, chave=chave,
+                            nome_dest='SENDAS DISTRIBUIDORA S/A',
+                            admin_id=admin_user.id)
+
+        # loja_id resolvido via CNPJ -> match natural BATEU
+        assert nf.loja_id == loja.id, (
+            f'Esperava loja_id={loja.id} (matched-by-cnpj), '
+            f'veio {nf.loja_id}'
+        )
+        # Como chassi bate na sep da mesma loja, status_match deve ser BATEU
+        assert nf.status_match == NF_STATUS_BATEU
+        db.session.rollback()
+
+
+def test_resolver_loja_por_regex_fallback_quando_cnpj_nao_existe(app, admin_user):
+    """matched-by-name-regex: CNPJ nao casa, mas 'LJ<n>' no nome resolve (fallback compat)."""
+    with app.app_context():
+        loja = AssaiLoja.query.first()
+        chassi = f'TST_REGEX_{_uid()}'
+        _setup_separacao_com_chassi(admin_user, loja, chassi, Decimal('6900'))
+
+        chave = _chave_fake()
+        resultado = _make_resultado_parser(
+            chave=chave,
+            nome_dest=f'ASSAI LJ{loja.numero}',
+            chassis=[chassi],
+            valor_total=Decimal('6900'),
+        )
+        # CNPJ que NAO existe em assai_loja
+        resultado['cnpj_destinatario'] = '99999999000199'
+
+        nf = _call_importar(resultado, chave=chave,
+                            nome_dest=f'ASSAI LJ{loja.numero}',
+                            admin_id=admin_user.id)
+
+        # CNPJ nao casou -> caiu no regex -> loja resolvida
+        assert nf.loja_id == loja.id
+        assert nf.status_match == NF_STATUS_BATEU
+        db.session.rollback()
+
+
+def test_resolver_loja_no_match_quando_cnpj_e_regex_falham(app, admin_user):
+    """no-match: nem CNPJ nem regex resolvem loja_id. NF fica NAO_RECONCILIADO."""
+    with app.app_context():
+        chave = _chave_fake()
+        resultado = _make_resultado_parser(
+            chave=chave,
+            nome_dest='SUPERMERCADOS SEM NUMERO LTDA',  # sem 'LJ<n>'
+            chassis=[f'TST_NM_{_uid()}'],
+            valor_total=Decimal('6900'),
+        )
+        # CNPJ que NAO existe em assai_loja
+        resultado['cnpj_destinatario'] = '88888888000188'
+
+        nf = _call_importar(resultado, chave=chave,
+                            nome_dest='SUPERMERCADOS SEM NUMERO LTDA',
+                            admin_id=admin_user.id)
+
+        # Nenhum caminho resolveu -> loja_id segue NULL
+        assert nf.loja_id is None
+        assert nf.status_match == NF_STATUS_NAO_RECONCILIADO
+        db.session.rollback()
+
+
+def test_tolerancia_valor_borda_um_real(app, admin_user):
+    """Borda R$ 1,00: diff de R$ 1,00 EXATO bate (<=); diff de R$ 1,01 diverge.
+
+    Regra: TOLERANCIA_VALOR_ABS = Decimal('1.00'), comparacao `diff_abs > TOL`
+    (estritamente maior). Logo R$ 1,00 ainda eh aceito como match.
+    """
+    with app.app_context():
+        loja = AssaiLoja.query.first()
+
+        # Caso 1: diff exatamente R$ 1,00 -> BATEU (limiar inclusivo)
+        chassi_ok = f'TST_BORDA_OK_{_uid()}'
+        _setup_separacao_com_chassi(admin_user, loja, chassi_ok, Decimal('6900'))
+        chave1 = _chave_fake()
+        resultado1 = _make_resultado_parser(
+            chave=chave1,
+            nome_dest=f'ASSAI LJ{loja.numero}',
+            chassis=[chassi_ok],
+            valor_total=Decimal('6901'),  # diff R$ 1,00
+        )
+        nf1 = _call_importar(resultado1, chave=chave1,
+                             nome_dest=f'ASSAI LJ{loja.numero}',
+                             admin_id=admin_user.id)
+        assert nf1.status_match == NF_STATUS_BATEU, (
+            f'diff R$ 1,00 deveria BATER (tol inclusiva), veio {nf1.status_match}'
+        )
+        assert nf1.itens[0].tipo_divergencia is None
+
+        # Caso 2: diff R$ 1,01 -> DIVERGENTE
+        chassi_div = f'TST_BORDA_DV_{_uid()}'
+        _setup_separacao_com_chassi(admin_user, loja, chassi_div, Decimal('6900'))
+        chave2 = _chave_fake()
+        resultado2 = _make_resultado_parser(
+            chave=chave2,
+            nome_dest=f'ASSAI LJ{loja.numero}',
+            chassis=[chassi_div],
+            valor_total=Decimal('6901.01'),  # diff R$ 1,01
+        )
+        nf2 = _call_importar(resultado2, chave=chave2,
+                             nome_dest=f'ASSAI LJ{loja.numero}',
+                             admin_id=admin_user.id)
+        assert nf2.itens[0].tipo_divergencia == 'VALOR_DIVERGENTE', (
+            f'diff R$ 1,01 deveria divergir, veio tipo={nf2.itens[0].tipo_divergencia}'
+        )
+        db.session.rollback()
+
+
+def test_resolver_loja_cnpj_tem_prioridade_sobre_regex(app, admin_user):
+    """Quando CNPJ e regex apontam para LOJAS DIFERENTES, CNPJ vence."""
+    with app.app_context():
+        lojas_com_cnpj = AssaiLoja.query.filter(AssaiLoja.cnpj.isnot(None)).limit(2).all()
+        if len(lojas_com_cnpj) < 2:
+            pytest.skip('precisa de 2 lojas com CNPJ na fixture')
+        loja_via_cnpj, loja_via_regex = lojas_com_cnpj[0], lojas_com_cnpj[1]
+
+        chassi = f'TST_PRIO_{_uid()}'
+        # Setup separacao na loja do CNPJ (BATEU final esperado)
+        _setup_separacao_com_chassi(admin_user, loja_via_cnpj, chassi, Decimal('6900'))
+
+        chave = _chave_fake()
+        resultado = _make_resultado_parser(
+            chave=chave,
+            nome_dest=f'ASSAI LJ{loja_via_regex.numero}',  # regex aponta para loja errada
+            chassis=[chassi],
+            valor_total=Decimal('6900'),
+        )
+        resultado['cnpj_destinatario'] = loja_via_cnpj.cnpj  # CNPJ aponta para correta
+
+        nf = _call_importar(resultado, chave=chave,
+                            nome_dest=f'ASSAI LJ{loja_via_regex.numero}',
+                            admin_id=admin_user.id)
+
+        # CNPJ teve prioridade -> loja_id = loja_via_cnpj
+        assert nf.loja_id == loja_via_cnpj.id, (
+            f'CNPJ ({loja_via_cnpj.id}) deveria ter prioridade sobre '
+            f'regex ({loja_via_regex.id}), veio {nf.loja_id}'
+        )
+        db.session.rollback()

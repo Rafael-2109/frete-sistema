@@ -19,6 +19,7 @@ from typing import Optional, Dict, Any, List
 from app import db
 from app.utils.file_storage import FileStorage
 from app.utils.timezone import agora_brasil_naive
+from app.utils.cnpj_utils import normalizar_cnpj
 from app.motos_assai.models import (
     AssaiNfQpa, AssaiNfQpaItem, AssaiLoja,
     AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
@@ -39,7 +40,16 @@ from app.motos_assai.services.modelo_resolver import resolver_modelo
 from app.motos_assai.services.moto_evento_service import emitir_evento
 
 
-TOLERANCIA_VALOR_PCT = Decimal('0.01')
+# Toleranciade match em valor: limite ABSOLUTO de R$ 1,00 entre valor da separacao
+# (AssaiSeparacaoItem.valor_unitario_qpa) e valor extraido da NF Q.P.A.
+# (AssaiNfQpaItem.valor_extraido).
+#
+# Mudanca em 2026-05-17 (Rafael): tolerancia anterior era 1% relativo
+# (TOLERANCIA_VALOR_PCT), que em moto de R$ 6.900 dava janela de R$ 69 — frouxo
+# demais para a regra de negocio "venda TEM que bater com pedido".
+# R$ 1,00 absoluto preserva o critério: venda = pedido, com margem só para
+# arredondamento de centavos.
+TOLERANCIA_VALOR_ABS = Decimal('1.00')
 
 
 class NfQpaParseError(Exception):
@@ -69,12 +79,59 @@ def importar_nf_qpa(
     if AssaiNfQpa.query.filter_by(chave_44=chave).first():
         raise NfQpaJaImportadaError(f'NF {chave} já importada')
 
-    # Loja: extrair de nome_destinatario via "LJ\d+"
+    # Loja: resolver via 2 caminhos em ordem de prioridade.
+    # P0 (2026-05-17): CNPJ destinatario primeiro (deterministico) — fallback
+    # para regex "LJ\d+" no nome (compat com NFs antigas).
+    #
+    # Motivo: em 2026-05-17 Rafael importou 14 NFs Q.P.A. com
+    # destinatario_nome="SENDAS DISTRIBUIDORA S/A" (sem "LJ<n>"). Regex
+    # falhou em 100%, mas TODOS os 14 CNPJs casavam com loja cadastrada.
+    # Match por CNPJ (mesma logica de vincular_nf_manualmente:528-552)
+    # resolve esse cenario sem precisar tocar no parser DANFE upstream.
+    import logging as _log
+    _logger = _log.getLogger(__name__)
     nome_dest = resultado.get('nome_destinatario') or ''
-    loja_match = re.search(r'LJ\s*(\d+)', nome_dest)
+    cnpj_dest_raw = resultado.get('cnpj_destinatario') or ''
     loja = None
-    if loja_match:
-        loja = AssaiLoja.query.filter_by(numero=loja_match.group(1)).first()
+    match_caminho = 'no-match'
+
+    # Tentativa 1: CNPJ destinatario (normalizado). Read-only — apenas SELECT
+    # in-memory contra AssaiLoja (cadastro pequeno, sem regex SQL).
+    if cnpj_dest_raw:
+        cnpj_dest_norm = normalizar_cnpj(cnpj_dest_raw)
+        if cnpj_dest_norm:
+            todas_lojas = AssaiLoja.query.filter_by(ativo=True).all()
+            lojas_match = [
+                ll for ll in todas_lojas
+                if normalizar_cnpj(ll.cnpj) == cnpj_dest_norm
+            ]
+            if len(lojas_match) == 1:
+                loja = lojas_match[0]
+                match_caminho = 'matched-by-cnpj'
+            elif len(lojas_match) > 1:
+                # Ambiguidade no cadastro — log warning, segue para fallback
+                _logger.warning(
+                    'importar_nf_qpa: CNPJ %s ambiguo no cadastro AssaiLoja '
+                    '(%d lojas: %s) — usando fallback regex',
+                    cnpj_dest_raw, len(lojas_match),
+                    [ll.id for ll in lojas_match],
+                )
+
+    # Tentativa 2 (fallback): regex "LJ\d+" no nome (compat com NFs antigas
+    # que traziam o numero da loja explicitamente)
+    if not loja:
+        loja_match = re.search(r'LJ\s*(\d+)', nome_dest)
+        if loja_match:
+            loja = AssaiLoja.query.filter_by(numero=loja_match.group(1)).first()
+            if loja:
+                match_caminho = 'matched-by-name-regex'
+
+    _logger.info(
+        'importar_nf_qpa: loja resolvida via %s (chave=%s, cnpj_dest=%s, '
+        'nome_dest=%r, loja_id=%s)',
+        match_caminho, chave, cnpj_dest_raw, nome_dest,
+        loja.id if loja else None,
+    )
 
     # S3
     buf = io.BytesIO(pdf_bytes); buf.name = nome_arquivo
@@ -323,19 +380,23 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
             matches_falha += 1
             continue
 
-        # 2. Valor com tolerância 1% (S8=a)
+        # 2. Valor — tolerancia ABSOLUTA de R$ 1,00 (ver constante no topo do
+        # modulo). "Venda TEM que bater com pedido" — diferencas acima de R$ 1,00
+        # caem em DIVERGENCIA legitima e devem ser tratadas via correcao do preco
+        # no pedido + reprocessamento, NAO mascaradas pelo limiar.
         v_sep = sep_item.valor_unitario_qpa
         v_nf = it.valor_extraido or Decimal('0')
         if v_sep > 0:
-            diff_pct = abs(v_sep - v_nf) / v_sep
-            if diff_pct > TOLERANCIA_VALOR_PCT:
+            diff_abs = abs(v_sep - v_nf)
+            if diff_abs > TOLERANCIA_VALOR_ABS:
                 criar_divergencia(
                     tipo=DIVERGENCIA_TIPO_VALOR_DIVERGENTE,
                     chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
                     detalhes={
                         'valor_sep': float(v_sep),
                         'valor_nf': float(v_nf),
-                        'pct': float(diff_pct),
+                        'diff_abs': float(diff_abs),
+                        'tolerancia_abs': float(TOLERANCIA_VALOR_ABS),
                     },
                 )
                 it.tipo_divergencia = 'VALOR_DIVERGENTE'
