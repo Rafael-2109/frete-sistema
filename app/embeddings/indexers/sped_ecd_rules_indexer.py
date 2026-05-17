@@ -172,6 +172,194 @@ def collect_plano_iteracoes() -> list[dict[str, Any]]:
 
 
 # ============================================================
+# COLETA — Manual ECD capitulos (NAO blocos)
+# ============================================================
+
+# Pattern para capturar sections ## ou ### dentro de capitulos do manual
+SECTION_HEADER_RE = re.compile(r"^(##+) (.+?)$", re.MULTILINE)
+
+
+def _split_by_sections(content: str, min_chunk_len: int = 80) -> list[tuple[str, str]]:
+    """Split markdown content por headers ## ou ###.
+
+    Retorna lista de (titulo_section, conteudo). Chunks menores que
+    min_chunk_len sao mergeados com proximo (evita fragmentacao excessiva).
+    """
+    positions = [(m.group(2), m.start()) for m in SECTION_HEADER_RE.finditer(content)]
+    if not positions:
+        return [("__full__", content)] if content.strip() else []
+
+    positions.append(("__END__", len(content)))
+    sections: list[tuple[str, str]] = []
+    for i in range(len(positions) - 1):
+        titulo, start = positions[i]
+        _, end = positions[i + 1]
+        section_text = content[start:end].strip()
+        if len(section_text) >= min_chunk_len:
+            sections.append((titulo, section_text))
+    return sections
+
+
+def collect_manual_capitulos() -> list[dict[str, Any]]:
+    """Varre manual_ecd/0*.md e INDEX.md.
+
+    Cada section ## eh um chunk separado.
+    Chunks de 04_regras_validacao com REGRA_X ganham metadata regra_name.
+    """
+    chunks: list[dict[str, Any]] = []
+
+    capitulos = [
+        ("01_informacoes_gerais.md", "informacoes_gerais"),
+        ("02_dados_tecnicos.md", "dados_tecnicos"),
+        ("04_regras_validacao.md", "regras_validacao"),
+        ("INDEX.md", "index_manual"),
+    ]
+
+    REGRA_NAME_RE = re.compile(r"\b(REGRA_[A-Z_0-9]+)\b")
+
+    for filename, slug in capitulos:
+        filepath = MANUAL_ECD_DIR / filename
+        if not filepath.is_file():
+            logger.warning(f"Capitulo nao encontrado: {filepath}")
+            continue
+
+        content = filepath.read_text(encoding="utf-8")
+        sections = _split_by_sections(content)
+
+        for idx, (titulo, section_content) in enumerate(sections):
+            titulo_slug = re.sub(r"[^a-z0-9]+", "_", titulo.lower()).strip("_")[:40] or f"section_{idx}"
+
+            # Detectar REGRA_X dentro do section (especialmente em 04_regras_validacao)
+            regra_match = REGRA_NAME_RE.search(section_content)
+            regra_name = regra_match.group(1) if regra_match else None
+            chunk_type = "regra_pva" if regra_name and slug == "regras_validacao" else "manual_capitulo"
+
+            chunk_content = f"Capitulo Manual ECD: {filename}\nSecao: {titulo}\n\n{section_content}"
+
+            chunks.append({
+                "chunk_id": f"manual_ecd:{slug}:{titulo_slug}:{idx}",
+                "chunk_type": chunk_type,
+                "bloco": None,
+                "registro": None,
+                "regra_name": regra_name,
+                "severidade": None,
+                "content": chunk_content,
+                "content_hash": _content_hash(chunk_content),
+                "source_file": f"manual_ecd/{filename}",
+                "source_anchor": f"#{titulo_slug}",
+            })
+
+    return chunks
+
+
+# ============================================================
+# COLETA — Categorias de erro do PLANO.md
+# ============================================================
+
+CATEGORIA_HEADER_RE = re.compile(r"^### (CATEGORIA[S]? [^\n]+?)$", re.MULTILINE)
+
+
+def collect_plano_categorias() -> list[dict[str, Any]]:
+    """Varre SPED_ECD_PLANO.md secao 'INVENTARIO DE CATEGORIAS DE ERRO'.
+
+    Cada `### CATEGORIA N — ...` eh um chunk.
+    """
+    chunks: list[dict[str, Any]] = []
+
+    if not PLANO_FILE.is_file():
+        logger.warning(f"PLANO_FILE nao encontrado: {PLANO_FILE}")
+        return chunks
+
+    content = PLANO_FILE.read_text(encoding="utf-8")
+
+    positions = [(m.group(1), m.start()) for m in CATEGORIA_HEADER_RE.finditer(content)]
+    if not positions:
+        return chunks
+
+    positions.append(("__END__", len(content)))
+
+    for i in range(len(positions) - 1):
+        titulo, start = positions[i]
+        _, end = positions[i + 1]
+        cat_text = content[start:end].strip()
+
+        if len(cat_text) < 100:
+            continue  # Skip categorias muito curtas (provavel ruido)
+
+        # Extrair numero da categoria (CATEGORIA 1, CATEGORIA 17, CATEGORIAS 12-16)
+        cat_match = re.match(r"CATEGORIA[S]? (\d+(?:-\d+)?)", titulo)
+        cat_num = cat_match.group(1) if cat_match else "?"
+
+        # Severidade: BLOQ ou WARN no titulo
+        severidade = None
+        if "BLOQ" in titulo:
+            severidade = "BLOQUEANTE"
+        elif "WARN" in titulo:
+            severidade = "WARNING"
+
+        chunk_content = f"Categoria de erro SPED ECD: {titulo}\n\n{cat_text}"
+
+        chunks.append({
+            "chunk_id": f"plano:categoria:{cat_num}",
+            "chunk_type": "categoria_erro",
+            "bloco": None,
+            "registro": None,
+            "regra_name": None,
+            "severidade": severidade,
+            "content": chunk_content,
+            "content_hash": _content_hash(chunk_content),
+            "source_file": "app/relatorios_fiscais/SPED_ECD_PLANO.md",
+            "source_anchor": "#inventario-de-categorias-de-erro",
+        })
+
+    return chunks
+
+
+# ============================================================
+# COLETA — Gotchas e decisoes do CLAUDE.md do modulo
+# ============================================================
+
+CLAUDE_MD_FILE = Path(__file__).parent.parent.parent.parent / \
+    "app" / "relatorios_fiscais" / "CLAUDE.md"
+
+
+def collect_claude_md_gotchas() -> list[dict[str, Any]]:
+    """Varre app/relatorios_fiscais/CLAUDE.md.
+
+    Cada `## SECTION` ou `### SECTION` eh um chunk (gotchas, decisoes,
+    historico de versoes).
+    """
+    chunks: list[dict[str, Any]] = []
+
+    if not CLAUDE_MD_FILE.is_file():
+        logger.warning(f"CLAUDE_MD_FILE nao encontrado: {CLAUDE_MD_FILE}")
+        return chunks
+
+    content = CLAUDE_MD_FILE.read_text(encoding="utf-8")
+    sections = _split_by_sections(content)
+
+    for idx, (titulo, section_text) in enumerate(sections):
+        titulo_slug = re.sub(r"[^a-z0-9]+", "_", titulo.lower()).strip("_")[:40] or f"section_{idx}"
+
+        chunk_content = f"CLAUDE.md modulo relatorios_fiscais: {titulo}\n\n{section_text}"
+
+        chunks.append({
+            "chunk_id": f"claudemd:relatorios_fiscais:{titulo_slug}:{idx}",
+            "chunk_type": "gotcha",
+            "bloco": None,
+            "registro": None,
+            "regra_name": None,
+            "severidade": None,
+            "content": chunk_content,
+            "content_hash": _content_hash(chunk_content),
+            "source_file": "app/relatorios_fiscais/CLAUDE.md",
+            "source_anchor": f"#{titulo_slug}",
+        })
+
+    return chunks
+
+
+# ============================================================
 # EMBED + STORE
 # ============================================================
 
@@ -304,7 +492,13 @@ def main():
             return
 
         start = time.time()
-        chunks = collect_manual_ecd_chunks() + collect_plano_iteracoes()
+        chunks = (
+            collect_manual_ecd_chunks()
+            + collect_plano_iteracoes()
+            + collect_manual_capitulos()
+            + collect_plano_categorias()
+            + collect_claude_md_gotchas()
+        )
         logger.info(f"Coletados {len(chunks)} chunks em {time.time() - start:.1f}s")
 
         stats = embed_and_store(chunks, dry_run=args.dry_run)
