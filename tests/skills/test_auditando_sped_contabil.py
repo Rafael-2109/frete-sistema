@@ -164,7 +164,10 @@ def test_hierarchy_orphan_cod_sup():
         {"COD_CTA": "111", "COD_CTA_SUP": "99", "NIVEL": "3", "COD_NAT": "01", "IND_CTA": "A", "CTA": "CAIXA"},
     ])
     findings = audit_i050_hierarchy(parsed)
-    assert any(f.tipo == "orfao_cod_sup" for f in findings)
+    orfaos = [f for f in findings if f.tipo == "orfao_cod_sup"]
+    assert len(orfaos) == 1
+    assert isinstance(orfaos[0], HierarchyFinding)  # usa o import
+    assert orfaos[0].severidade == "BLOQUEANTE"
 
 
 def test_hierarchy_cod_nat_inconsistent():
@@ -214,3 +217,19 @@ def test_hierarchy_no_cycles_detected():
     findings = audit_i050_hierarchy(parsed)
     cycle_findings = [f for f in findings if f.tipo == "ciclo_hierarquia"]
     assert not cycle_findings
+
+
+def test_hierarchy_cycle_detected_dedup():
+    """Ciclo A->B->A detectado EXATAMENTE 1 vez (testa fix do dedup)."""
+    parsed = make_parsed_i050([
+        {"COD_CTA": "A", "COD_CTA_SUP": "B", "NIVEL": "1", "COD_NAT": "01", "IND_CTA": "S", "CTA": "X"},
+        {"COD_CTA": "B", "COD_CTA_SUP": "A", "NIVEL": "2", "COD_NAT": "01", "IND_CTA": "S", "CTA": "Y"},
+    ])
+    findings = audit_i050_hierarchy(parsed)
+    cycle_findings = [f for f in findings if f.tipo == "ciclo_hierarquia"]
+    assert len(cycle_findings) == 1, (
+        f"Ciclo deve ser reportado 1 vez (nao {len(cycle_findings)}). "
+        f"Findings: {[f.descricao for f in cycle_findings]}"
+    )
+    assert "A" in cycle_findings[0].descricao
+    assert "B" in cycle_findings[0].descricao

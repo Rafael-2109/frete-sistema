@@ -61,14 +61,16 @@ def audit_i050_hierarchy(parsed_sped: dict[str, Any]) -> list[HierarchyFinding]:
     def detect_cycle_from(start: str) -> list[str] | None:
         visited: set[str] = set()
         path: list[str] = []
+        path_set: set[str] = set()  # membership O(1)
         node = start
         while node:
-            if node in path:
+            if node in path_set:  # O(1) em vez de O(N)
                 return path[path.index(node):] + [node]
             if node in visited:
                 return None
             visited.add(node)
             path.append(node)
+            path_set.add(node)
             conta = contas_map.get(node)
             if not conta:
                 return None
@@ -79,7 +81,7 @@ def audit_i050_hierarchy(parsed_sped: dict[str, Any]) -> list[HierarchyFinding]:
     for conta in i050:
         cycle = detect_cycle_from(conta["COD_CTA"])
         if cycle:
-            key = tuple(sorted(cycle))
+            key = tuple(sorted(set(cycle)))  # set() descarta no repetido do fim
             if key not in seen_cycles:
                 seen_cycles.add(key)
                 findings.append(HierarchyFinding(
