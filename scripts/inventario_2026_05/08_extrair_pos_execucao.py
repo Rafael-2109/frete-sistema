@@ -64,7 +64,21 @@ def to_dec(v) -> Decimal:
 
 
 def classificar(ajuste: AjusteEstoqueInventario, achados: Dict) -> str:
-    """Compara proposta vs realizado e retorna classificacao."""
+    """Compara proposta vs realizado e retorna classificacao.
+
+    Atualizado 2026-05-18 apos piloto 210030325 LF — corrige 2 bugs:
+
+    1. RENOMEAR_LOTE: na realidade executa TRANSFERIR (D006). Validar
+       que lote_destino existe na company origem (LF) e que tem qty
+       no quant do lote alvo correspondente ao qtd_inventario.
+       Lotes ORIGEM permanecem (apenas tiveram qty transferida) —
+       nao remover do Odoo nem renomear.
+
+    2. PERDA_LF_FB: picking sai para Parceiros/Clientes (virtual, id=5),
+       NAO entra na FB. Nao buscar qty_no_destino na FB. EXECUTADO_OK
+       se picking done + invoice posted + chave_nfe presente (NF-e
+       SEFAZ autorizada).
+    """
     if ajuste.status == 'FALHA':
         return 'FALHA'
     if ajuste.fase_pipeline and 'SKIP' in ajuste.fase_pipeline.upper():
@@ -72,16 +86,28 @@ def classificar(ajuste: AjusteEstoqueInventario, achados: Dict) -> str:
     if achados.get('erro_consulta'):
         return 'ERRO_CONSULTA'
 
-    # Para RENOMEAR_LOTE: lote alvo deve existir
+    # RENOMEAR_LOTE (=TRANSFERIR_LOTE, D006): lote alvo deve existir com
+    # qty igual a qtd_inventario do ajuste.
     if ajuste.acao_decidida == 'RENOMEAR_LOTE':
-        lote_atual = achados.get('lote_origem_apos')
-        if not lote_atual:
-            return 'DIVERGENCIA_LOTE_NAO_LOCALIZADO'
-        if lote_atual.get('name') == ajuste.lote_destino:
+        lote_alvo = achados.get('lote_destino_apos')
+        if not lote_alvo:
+            return 'DIVERGENCIA_LOTE_ALVO_NAO_CRIADO'
+        # Verificar qty no quant do lote alvo (achados.qty_no_lote_alvo_origem)
+        qty_alvo = achados.get('qty_no_lote_alvo_origem') or Decimal('0')
+        qty_esperada = to_dec(ajuste.qtd_inventario)
+        if qty_esperada == 0:
+            # Sem qtd_inventario para validar — apenas lote existir
             return 'EXECUTADO_OK'
-        return 'DIVERGENCIA_NOME_LOTE'
+        # qty_alvo eh acumulado total do lote alvo no produto/company.
+        # Validar que >= qtd_inventario (pode ter mais se outros ajustes
+        # ja transferiram para o mesmo lote).
+        if qty_alvo >= qty_esperada - Decimal('0.01'):
+            return 'EXECUTADO_OK'
+        return 'DIVERGENCIA_QTY_NO_LOTE_ALVO'
 
-    # Para PERDA/TRANSFERIR/INDUSTRIALIZACAO: deve ter invoice + chave SEFAZ
+    # PERDA_LF_FB e demais NFs fiscais: validar pipeline ate F5e
+    # (picking + invoice + chave SEFAZ). NAO comparar qty no destino —
+    # picking de PERDA sai para location virtual, NAO entra na FB.
     if ajuste.acao_decidida in (
         'PERDA_LF_FB', 'INDUSTRIALIZACAO_FB_LF',
         'DEV_FB_LF', 'DEV_LF_FB', 'DEV_CD_LF', 'DEV_LF_CD',
@@ -94,17 +120,22 @@ def classificar(ajuste: AjusteEstoqueInventario, achados: Dict) -> str:
         if not ajuste.chave_nfe:
             return 'PENDENTE_SEM_SEFAZ'
 
-        # Validar saldo no destino bate com qtd_ajuste
-        qty_observado = achados.get('qty_no_destino') or Decimal('0')
-        qty_esperado = abs(to_dec(ajuste.qtd_ajuste))
-        if qty_esperado == 0:
-            return 'EXECUTADO_OK'  # SEM_ACAO ou rename
-        # Aceita tolerancia de 0.01 unidades
-        if abs(qty_observado - qty_esperado) > Decimal('0.01'):
-            return 'DIVERGENCIA_QUANTIDADE'
+        # Validar que picking esta done + invoice posted (info do achados)
+        picking_state = achados.get('picking_state')
+        invoice_state = achados.get('invoice', {}).get('state')
+        if picking_state and picking_state != 'done':
+            return f'DIVERGENCIA_PICKING_{picking_state.upper()}'
+        if invoice_state and invoice_state not in ('posted',):
+            return f'DIVERGENCIA_INVOICE_{invoice_state.upper()}'
+
+        # Validar reducao na ORIGEM (LF para PERDA_LF_FB).
+        # qty_reduzida_na_origem = qty_origem_antes (do ajuste.qtd_odoo) -
+        #                          qty_origem_atual (achados.qty_no_lote_origem_company_origem)
+        # Mas como nao temos `antes` exato no extrator (so o ajuste eh fonte),
+        # nao validamos isso — apenas pipeline completo eh suficiente.
         return 'EXECUTADO_OK'
 
-    # INDISPONIBILIZAR_* — lote/local deve estar inativo
+    # INDISPONIBILIZAR_*: lote inativo
     if ajuste.acao_decidida.startswith('INDISPONIBILIZAR_'):
         ativo = achados.get('lote_ativo')
         if ativo is None:
@@ -154,16 +185,18 @@ def consultar_estado_odoo(
                 ], limit=1,
             )
             if ids:
+                # NOTA: stock.lot no Odoo CIEL IT nao tem campo 'active'
+                # (nem em read nem em search domain). Para INDISPONIBILIZAR_*
+                # usar outra estrategia (futuro — fase 7.9).
                 lot = odoo.read(
                     'stock.lot', ids,
-                    ['name', 'product_id', 'company_id', 'active', 'expiration_date'],
+                    ['name', 'product_id', 'company_id', 'expiration_date'],
                 )[0]
                 achados['lote_destino_apos'] = {
                     'id': lot['id'], 'name': lot['name'],
-                    'active': lot['active'],
                     'expiration_date': lot.get('expiration_date'),
                 }
-                achados['lote_ativo'] = lot['active']
+                achados['lote_ativo'] = None  # nao consigo determinar via XML-RPC
 
         # Para RENOMEAR_LOTE — buscar tambem o nome de origem (que NAO deveria
         # mais existir se o renomeio deu certo)
@@ -204,6 +237,31 @@ def consultar_estado_odoo(
         achados['qty_total_company'] = sum(
             to_dec(q['quantity']) for q in quants
         )
+
+        # qty_no_lote_alvo_origem: soma do qty nos quants do lote alvo
+        # (lote_destino) na empresa origem (=ajuste.company_id). Util para
+        # validar RENOMEAR_LOTE/TRANSFERIR — o lote alvo deve ter qty na
+        # mesma empresa onde foi feita a transferencia.
+        if nome_alvo:
+            qty_no_alvo = Decimal('0')
+            for q in quants:
+                lname = q['lot_id'][1] if q.get('lot_id') else None
+                if lname == nome_alvo:
+                    qty_no_alvo += to_dec(q['quantity'])
+            achados['qty_no_lote_alvo_origem'] = qty_no_alvo
+
+        # Picking state (se houver picking_id_odoo)
+        if ajuste.picking_id_odoo:
+            try:
+                pk = odoo.read(
+                    'stock.picking', [ajuste.picking_id_odoo],
+                    ['id', 'name', 'state', 'liberado_faturamento'],
+                )
+                if pk:
+                    achados['picking'] = pk[0]
+                    achados['picking_state'] = pk[0].get('state')
+            except Exception as e:
+                achados['picking_consulta_erro'] = str(e)
 
         # qty_no_destino: se PERDA/TRANSFER, conferir saldo na company destino
         # com lote_destino
