@@ -1,11 +1,13 @@
 # Quick Start — Próxima sessão (pós-piloto)
 
-**Data do checkpoint:** 2026-05-18 fim do dia (piloto OK + D004 generalizada FB+CD)
-**Branch:** `main` (commit `a8e0d0bb` + 995f856e + commit pendente desta sessao)
-**Estado:** piloto end-to-end EXECUTADO em PROD com sucesso.
-NF-e SEFAZ autorizada (chave 44 dig). D004 generalizada para FB+CD —
-ondas 2-3 podem precisar regerar diffs/ajustes.
-Pronto para bulk onda 1 (ou regerar ondas 2-3 primeiro, decisao usuario).
+**Data do checkpoint:** 2026-05-18 ~02:15 (regeneracao ondas 1-4 concluida)
+**Branch:** `main` (commits a8e0d0bb + 995f856e + 5682bec9 + commit pendente)
+**Estado:** piloto end-to-end EXECUTADO em PROD (NF-e SEFAZ autorizada).
+D004 GENERALIZADA para FB+CD e ajustes REGENERADOS:
+- 23.207 PROPOSTO (era 23.633, -426)
+- 6 EXECUTADO (piloto preservado)
+- 3.338 NFs SEFAZ a emitir (era 3.627, -289 = -8%, ~16h economizadas)
+Pronto para construir bulk onda 1.
 
 > **Leitura primeira**:
 > 1. `CHECKPOINT_2026_05_18_PILOTO_COMPLETO.md` — snapshot atual
@@ -39,23 +41,8 @@ VALIDAR baseline antes (no automatico):
 - Piloto: 6 ajustes (ids 139003-139008) status=EXECUTADO no DB
 - Estado quants: LF lote 26014 com 82.300 un consolidado
 
-DECIDIR PRIMEIRO:
-A. **Regerar diffs/ajustes onda 2-3 com D004 generalizada** (2026-05-18):
-   antes do bulk, vale comparar `qtd` de ajustes onda 2 (2.558 antigos)
-   antes vs depois. Logica D004 (rename+diferenca liquida) so era LF;
-   agora se aplica em FB e CD tambem — pode reduzir N de NFs.
-   ```bash
-   # Snapshot atual
-   psql -c "SELECT acao_decidida, status, COUNT(*) FROM ajuste_estoque_inventario
-            WHERE ciclo='INVENTARIO_2026_05' GROUP BY 1,2 ORDER BY 1,2;"
-   # Backup
-   pg_dump --table=ajuste_estoque_inventario > /tmp/backup_pre_regen.sql
-   # Regerar (idempotente — so insere novos)
-   python scripts/inventario_2026_05/03_confrontar_inv_vs_odoo.py
-   python scripts/inventario_2026_05/04_propor_ajustes.py --propor
-   # Comparar
-   ```
-B. **Manter ajustes onda 2-3 atuais e seguir direto para bulk onda 1**.
+REGENERACAO JA FEITA (2026-05-18 ~02:10): ondas 1-4 regeradas com D004
+generalizada. 23.207 PROPOSTO + 6 EXECUTADO. Pular para construir bulk.
 
 CONSTRUIR (nesta ordem):
 1. Listar onda 1 + capturar hash:

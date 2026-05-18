@@ -2,8 +2,8 @@
 
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
-**Última atualização:** 2026-05-18 fim do dia (D004 generalizada para FB+CD apos piloto OK)
-**Status global:** Foundation + F3 + F4 + F5 completas + **PILOTO END-TO-END EXECUTADO** + D006 (TRANSFERIR lote em vez de RENOMEAR) + 5 fixes generalizados (commit a8e0d0bb) + **D004 GENERALIZADA para FB+CD** (commit pendente). NF-e SEFAZ chave 35260518467441000163550010000131491006086070, cstat=100. **Pronto para bulk da onda 1 (1.065 ajustes LF restantes) + onda 2 (FB↔CD)**. Ver `CHECKPOINT_2026_05_18_PILOTO_COMPLETO.md` e `QUICK_START_NEXT_SESSION.md`. F6 CANCELADA. Bloqueado por: 1) wrapper `09_executar_onda1_bulk.py` (a construir), 2) aprovação onda 1+2 via hash, 3) decisao do usuario se regenera diffs/ajustes onda 2-3 com D004 generalizada.
+**Última atualização:** 2026-05-18 ~02:15 (regeneração ondas 1-4 com D004 generalizada concluida)
+**Status global:** Foundation + F3 + F4 + F5 completas + **PILOTO END-TO-END EXECUTADO** + D006 (TRANSFERIR lote em vez de RENOMEAR) + 5 fixes generalizados (a8e0d0bb) + **D004 GENERALIZADA para FB+CD** (5682bec9) + **ajustes REGENERADOS** (23.207 PROPOSTO, -426 vs antes, -289 NFs). NF-e SEFAZ chave 35260518467441000163550010000131491006086070, cstat=100. **Pronto para bulk** (onda 1: 1.069 ajustes LF + ondas 2-3-4). Ver `CHECKPOINT_2026_05_18_PILOTO_COMPLETO.md` e `QUICK_START_NEXT_SESSION.md`. F6 CANCELADA. Bloqueado por: 1) wrapper `09_executar_onda1_bulk.py` (a construir), 2) aprovação onda 1+2 via hash.
 
 ---
 

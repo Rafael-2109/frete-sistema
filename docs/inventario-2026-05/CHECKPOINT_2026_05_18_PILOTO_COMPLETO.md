@@ -72,16 +72,30 @@ ORDER BY id;
 | 139007 | PERDA_LF_FB | EXECUTADO | F5e_SEFAZ_OK | 317290 | 608607 | 352605... |
 | 139008 | PERDA_LF_FB | EXECUTADO | F5e_SEFAZ_OK | 317290 | 608607 | 352605... |
 
-Onda 1: ainda **1.065 ajustes em status=PROPOSTO** (excluindo os 6 do
-piloto).
+**APOS REGENERAR com D004 generalizada (2026-05-18 ~02:10)**:
 
 ```sql
 SELECT COUNT(*) FILTER (WHERE status='PROPOSTO') proposto,
        COUNT(*) FILTER (WHERE status='EXECUTADO') executado,
        COUNT(*) total
 FROM ajuste_estoque_inventario WHERE ciclo='INVENTARIO_2026_05';
--- Esperado: PROPOSTO=23633, EXECUTADO=6, total=23639
+-- Atual: PROPOSTO=23207, EXECUTADO=6, total=23213
 ```
+
+**Comparativo antes (23.633 PROPOSTO) vs depois (23.207 PROPOSTO)**:
+
+| acao_decidida | ANTES | DEPOIS | DIFF |
+|---|---|---|---|
+| INDISPONIBILIZAR_LOCAL | 948 | 402 | -546 |
+| INDISPONIBILIZAR_LOTE | 18.418 | 17.668 | -750 |
+| RENOMEAR_LOTE | 640 | **1.799** | +1.159 (D006 em FB+CD) |
+| TRANSFERIR_CD_FB | 471 | 362 | -109 |
+| TRANSFERIR_FB_CD | 2.087 | 1.907 | -180 |
+| DEV_LF_FB / INDUSTRIALIZACAO / PERDA | inalterado (onda 1 LF) | | 0 |
+| **TOTAL** | **23.633** | **23.207** | **-426 (-1.8%)** |
+
+**NFs SEFAZ economizadas**: 289 NFs (-8.0%) — ~16h economizadas no bulk.
+Backup: `/tmp/backup_inventario_2026_05/ajustes_pre_regen_20260518_020850.sql`.
 
 ---
 
@@ -164,11 +178,10 @@ python scripts/inventario_2026_05/debug_sefaz_608607.py \
    - Lide com timeouts/erros parciais
 2. **Aprovar onda 1**: rodar `--aprovar-onda=1 --hash=<sha>` para
    marcar 1.065 ajustes restantes APROVADO.
-3. **Decidir sobre regerar onda 2-3 com D004 generalizada**: a logica
-   D004 (rename+diferenca liquida) agora se aplica a FB+CD (alem de LF).
-   Onda 2 (2.558) + onda 3 (19.366) foram geradas com fluxo antigo —
-   regerar pode reduzir numero de NFs/ajustes ou descartar duplicados.
-   Comando: `03_confrontar_inv_vs_odoo.py` + `04_propor_ajustes.py --propor`.
+3. ~~Decidir sobre regerar onda 2-3 com D004 generalizada~~ ✅ FEITO
+   2026-05-18 ~02:10. Resultado: -426 ajustes total, -289 NFs (-8%).
+   Ondas 1-4 todas regeradas com D004 generalizada. 6 EXECUTADO do
+   piloto preservados.
 
 ### Recomendado antes do bulk
 
