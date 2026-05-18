@@ -143,16 +143,30 @@ Distribuicao:
 
 ---
 
-### Bloco B: motos_assai — SQLite Compiler vs ARRAY (14 errors)
+### Bloco B: motos_assai — SQLite Compiler vs JSONB (14 errors)
 
-Todos os tests em `tests/motos_assai/test_carregamento_service_crud.py` falham com:
+Todos os tests em `tests/motos_assai/test_carregamento_service_crud.py` falham no setup (`db.create_all()`) com:
 
 ```
-sqlalchemy.exc.CompileError: (in table 'agent_improvement_dialogue', column 'affected_files'):
-Compiler <sqlalchemy.dialects.sqlite.base.SQLiteTypeCompiler> can't render element of type ARRAY
+AttributeError: 'SQLiteTypeCompiler' object has no attribute 'visit_JSONB'.
+Did you mean: 'visit_JSON'?
+column = Column('preferences', JSONB(astext_type=Text()), table=<usuarios>, ...)
 ```
 
-**Causa**: Fixture do test usa SQLite in-memory mas o registry SQLAlchemy ja mapeou `agent_improvement_dialogue.affected_files` (tipo Postgres ARRAY). SQLite nao consegue compilar `db.create_all()` para essa tabela. Erro de cross-modulo: conftest do motos_assai esta puxando models do agente.
+Compilador SQLAlchemy gera `CompileError`: `(in table 'usuarios', column 'preferences'):
+Compiler SQLiteTypeCompiler can't render element of type JSONB`.
+
+**Causa**: Tests usam `DATABASE_URL=sqlite:///:memory:` (pytest.ini) mas `usuarios.preferences` esta declarado como `JSONB` (Postgres-only) em vez de `db.JSON` neutro. SQLite nao tem `visit_JSONB`. Mesmo padrao se aplicaria a hora/* se o setup nao falhasse antes em `hora_loja_cnpj_key` (state pollution).
+
+Distribuicao: 14 errors, todos em `test_carregamento_service_crud.py`:
+test_criar_carregamento_sucesso, test_criar_carregamento_pedido_inexistente,
+test_criar_carregamento_loja_inexistente, test_criar_carregamento_dois_paralelos_mesma_loja_OK,
+test_escanear_chassi_disponivel_sucesso, test_escanear_chassi_inexistente_falha,
+test_escanear_chassi_em_outro_carregamento_ativo_falha, test_escanear_carregamento_finalizado_falha,
+test_cancelar_item_sucesso, test_cancelar_item_carregamento_finalizado_falha,
+test_cancelar_carregamento_em_carregamento_chassi_volta_anterior,
+test_cancelar_carregamento_finalizado_chassis_mantem_separada,
+test_cancelar_carregamento_motivo_obrigatorio, test_cancelar_carregamento_ja_cancelado_nao_idempotente.
 
 **Correlacao D4**: Nao.
 
@@ -213,7 +227,7 @@ D4 status (`/tmp/manutencao-2026-05-18/dominio-4-status.json`):
 
 1. **Cleanup state pollution `hora_loja_cnpj_key`** (urgente — bloqueia 34 testes): fixture deve usar CNPJ randomico ou `tearDown` agressivo. Prioridade ALTA.
 2. **Cleanup `custeio.TEST_C2_010`**: mesma raiz — fixture nao limpa.
-3. **Conftest motos_assai isolar agent_improvement_dialogue**: usar `db.metadata.tables` filter ou separar registries para evitar SQLite ARRAY compile error.
+3. **`usuarios.preferences` JSONB->JSON**: trocar `JSONB` por `db.JSON` (neutro) no modelo `usuarios` ou condicionar tipo por dialect; quebra `db.create_all()` em SQLite e bloqueia 14 tests motos_assai/test_carregamento_service_crud.py.
 4. **Fixtures PDF/XLSX motos_assai**: commitar `pedido_voe_exemplo.pdf`, `recibo_motochefe_exemplo.pdf`, `recibo_motochefe_exemplo.xlsx` em `tests/motos_assai/fixtures/` (verificar .gitignore).
 5. **Race async_event** (reincidente 3 ciclos): investigar `app/agente/sdk/pending_questions.py` — `async_event.set()` precisa ser agendado via `loop.call_soon_threadsafe`.
 6. **`listar_fretes_divergentes`** (reincidente 3 ciclos): implementar metodo no `ConferenciaService` ou atualizar test para nome atual.
