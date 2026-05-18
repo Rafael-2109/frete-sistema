@@ -148,9 +148,12 @@ def gerar_sped_ecd_centralizado(
         companies=companies,
     )
 
+    # V32 (CAT 26 fix 2026-05-16): refatorada para derivar I355 do saldos_mensais
+    # (I155 ja calculado) em vez de _read_group_balance do exercicio inteiro.
+    # Razao: read_group inclui lcto encerramento Odoo que zera contas resultado
+    # → I355 ficava VL_CTA=0 → PVA REGRA_VALIDA_SALDO_COM_DRE reclamava.
     saldos_encerramento = calcular_saldos_resultado_encerramento(
-        connection, params['date_fim'], plano_consolidado, id_to_code,
-        companies=companies,
+        params['date_fim'], plano_consolidado, saldos_mensais,
     )
 
     # ============================================================

@@ -29,6 +29,7 @@ from app.relatorios_fiscais.services.sped_ecd_constantes import (
     COMPANY_MATRIZ_ID,
     TIMEOUT_QUERY_PESADA,
     TIMEOUT_QUERY_SIMPLES,
+    saldo_natural_dc,
 )
 
 logger = logging.getLogger(__name__)
@@ -711,63 +712,75 @@ def calcular_dre_consolidado(
 
 
 def calcular_saldos_resultado_encerramento(
-    connection,
     date_fim: date,
     plano_consolidado: List[dict],
-    id_to_code: Dict[int, str],
-    companies: List[int] = None,
+    saldos_mensais: Dict,
 ) -> Dict[str, dict]:
     """
     Saldos das contas de resultado ANTES do encerramento (I355).
     Apenas se date_fim = 31/12 (encerramento). Mitigacao R7.
 
-    V31 (CAT 17 fix 2026-05-16) — Manual ECD Leiaute 9 oficial (pag 159):
-    REGRA_CONTA_RESULTADO: COD_CTA do I355 deve ter I050.COD_NAT = "04"
-    (Contas de Resultado). EXCLUSIVAMENTE — nao aceita outros valores.
+    V32 (CAT 26 fix 2026-05-16) — Manual ECD Leiaute 9 oficial (pag 157):
+    "O registro I355 traz os detalhes das contas de resultado antes do
+    encerramento, isto e, o valor do saldo final de cada conta ANTES dos
+    lancamentos de encerramento."
 
-    Tabela COD_NAT oficial (Manual pag 118):
-        01 Contas de Ativo
-        02 Contas de Passivo
-        03 Patrimonio Liquido
-        04 Contas de Resultado       <-- UNICO valido para I355
-        05 Contas de Compensacao
-        09 Outras
+    PVA REGRA_VALIDA_SALDO_COM_DRE (J150): "Linhas D: VL_CTA_FIN = soma I355
+    calculada via COD_AGL no I052" — exige I355 com saldo real ANTES do
+    encerramento (e nao zero pos-encerramento).
 
     HISTORICO de erros nesta funcao:
-    - V26 e anteriores: usava `account_type in ACCOUNT_TYPES_RESULTADO` (Odoo),
-      gerava 9 contas patrimoniais (codes 1xxx/2xxx mal classificadas) no I355.
-    - V27: ampliou para `cod_nat_odoo in {04, 05, 07}` baseado em interpretacao
-      ERRADA da tabela CIEL IT (04=Receita, 05=Custo/Despesa, 07=Resultado).
-      Manual oficial NAO TEM cod_nat 07. Resultou: 12 contas compensacao 5101*
-      (REMESSA INDUSTRIALIZACAO, BONIFICACAO, TRANSF MERCADORIA) entraram no
-      I355 indevidamente, gerando 36 erros PVA (12x "nao e conta de resultado"
-      + 12x "saldo zero" + 12x "saldo antes encerr != lancamentos").
-    - V31: restringe para EXCLUSIVAMENTE cod_nat_odoo='04', alinhando com
-      Manual oficial. Ground truth contadora confirma: contas 5101* sao
-      cod_nat=05 e NAO emitidas no I355. Contas reais de Receita/Despesa
-      Nacom estao com cod_nat=04 no Odoo (mantem elegibilidade I355).
+    - V31: filtro cod_nat='04' (Manual oficial) — 12 contas 5101* sairam OK.
+      MAS contas reais 3xxx Receita/Despesa ficaram com VL_CTA=0 porque
+      `_read_group_balance` retornava balance_val do exercicio inteiro,
+      que JA INCLUI lancamento de encerramento Odoo (zerando a conta).
+      PVA V31 reportou 4 erros CAT 26 (J150|9.1.1, 9.1.2, 9.2.1, 9.2.2
+      != soma I355).
 
-    Nao usa fallback — apenas o campo Odoo `l10n_br_cod_nat`. Contas com
-    `cod_nat_odoo` vazio ou diferente de '04' nao entram em I355 (cadastral).
+    - V32: refatora para derivar I355 do `saldos_mensais` (I155 ja calculado).
+      Premissa observada na NACOM: encerramento Odoo e lancamento UNICO em
+      31/12 no lado OPOSTO ao saldo natural da conta. Logo:
+          Receita (natural C): encerramento e DEB.
+              saldo_antes_enc = saldo_inicial(mes12) + credito(mes12)
+          Despesa (natural D): encerramento e CRED.
+              saldo_antes_enc = saldo_inicial(mes12) + debito(mes12)
+
+    Validado contra contadora (ground truth aceito RFB) e contra I155:
+      - 3101010001 VENDA (C): 175.910.143,40 + 17.949.846,03 = 193.859.989,43
+        (contadora I355: 193.859.989,43 C — exato)
+      - 3201000001 CMV (D):     49.602.366,61 +  1.268.021,32 =  50.870.387,93
+        (I155 cred dez = 50.870.387,93 que e o valor do lcto encerramento)
+      - 3102010001 DEVOL (D):  10.232.785,93 +  1.293.057,19 =  11.525.843,12
+        (I155 cred dez = 11.525.843,12 que e o lcto encerramento)
+
+    Filtro Manual ECD pag 159 REGRA_CONTA_RESULTADO: cod_nat='04' exclusivo.
+
+    Args:
+        date_fim: data fim do periodo. Deve ser 31/12 para emitir I355.
+        plano_consolidado: plano de contas consolidado (3 companies).
+        saldos_mensais: dict {YYYY-MM: {por_code: {code: {saldo_inicial, debit,
+                        credit, saldo_final}}}} ja calculado em
+                        `calcular_saldos_periodicos_mensais`.
+
+    Returns:
+        dict {code: {'code', 'name', 'account_type', 'cod_nat_odoo', 'saldo'}}
+        onde 'saldo' e sempre POSITIVO (sinal vem do account_type via
+        construir_I350_I355 → saldo_natural_dc).
     """
     if not (date_fim.month == 12 and date_fim.day == 31):
         return {}
 
-    date_ini_exercicio = date(date_fim.year, 1, 1)
+    mes12_key = date_fim.strftime('%Y-%m')
+    if mes12_key not in saldos_mensais:
+        logger.warning(
+            f'[SPED ECD V32] I355: mes {mes12_key} ausente em saldos_mensais — '
+            f'I355 nao sera emitido (esperado saldos_mensais do mes 12).'
+        )
+        return {}
 
-    # Movimentos do exercicio (1/1 a 31/12) — apenas contas com natureza Resultado
-    movs = _read_group_balance(
-        connection,
-        domain_extra=[
-            ['date', '>=', date_ini_exercicio.strftime('%Y-%m-%d')],
-            ['date', '<=', date_fim.strftime('%Y-%m-%d')],
-        ],
-        with_debit_credit=True,
-        companies=companies,
-    )
+    por_code_dez = saldos_mensais[mes12_key].get('por_code', {})
 
-    # V31: filtrar plano por cod_nat_odoo='04' (Manual ECD pag 159
-    # REGRA_CONTA_RESULTADO — exclusivo 04 = Contas de Resultado)
+    # Filtro Manual ECD pag 159 REGRA_CONTA_RESULTADO: cod_nat='04' exclusivo
     code_to_dados = {
         c['code']: c for c in plano_consolidado
         if c.get('tipo') == 'A'
@@ -775,24 +788,37 @@ def calcular_saldos_resultado_encerramento(
     }
 
     saldos = {}
-    for tupla in movs:
-        acc_id, _debit, _credit, balance_val = tupla
-        code = id_to_code.get(acc_id)
-        if not code or code not in code_to_dados:
+    for code, dados in code_to_dados.items():
+        sd_dez = por_code_dez.get(code, {})
+        saldo_ini = float(sd_dez.get('saldo_inicial', 0) or 0)
+        deb = float(sd_dez.get('debit', 0) or 0)
+        cred = float(sd_dez.get('credit', 0) or 0)
+
+        # V32: saldo ANTES encerramento via I155 mes 12 (Manual ECD pag 157)
+        # Premissa: encerramento Odoo em 31/12 sempre no lado OPOSTO ao natural.
+        # Para receita (natural C): encerramento e DEB. saldo_antes = saldo_ini + cred.
+        # Para despesa (natural D): encerramento e CRED. saldo_antes = saldo_ini + deb.
+        natural = saldo_natural_dc(dados.get('account_type', ''))
+        if natural == 'C':
+            saldo_antes_enc = abs(saldo_ini) + cred
+        else:
+            saldo_antes_enc = abs(saldo_ini) + deb
+
+        # Pular contas com saldo zero (sem movimento no exercicio)
+        if abs(saldo_antes_enc) < 0.01:
             continue
-        dados = code_to_dados[code]
-        slot = saldos.setdefault(code, {
+
+        saldos[code] = {
             'code': code,
             'name': dados['name'],
             'account_type': dados['account_type'],
             'cod_nat_odoo': dados.get('cod_nat_odoo', ''),
-            'saldo': 0,
-        })
-        slot['saldo'] += balance_val
+            'saldo': saldo_antes_enc,  # sempre positivo (sinal via construir_I350_I355)
+        }
 
     logger.info(
-        f'[SPED ECD V31] I355: {len(code_to_dados)} codes elegiveis (cod_nat=04 Manual ECD), '
-        f'{len(saldos)} com movimento no exercicio'
+        f'[SPED ECD V32] I355: {len(code_to_dados)} codes elegiveis (cod_nat=04), '
+        f'{len(saldos)} com saldo > 0 ANTES encerramento (derivado de I155 mes 12)'
     )
     return saldos
 
