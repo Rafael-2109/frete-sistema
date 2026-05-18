@@ -3,7 +3,7 @@
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
 **Última atualização:** 2026-05-17
-**Status global:** Foundation + F3 + F4 + F5 completas. F6 CANCELADA. F7 4/10 (preparação: extrair/carregar/confrontar/propor — sem WRITE no Odoo). F7.2/F7.3 ajustados após inspeção da planilha real (parser por header, P6 mais novo para inv sem lote, cross-check validade). Planilha real `COMPILADO INV. 16.05.2026.xlsx` processada com sucesso: 2087 linhas (FB:276 / CD:1373 / LF:438). Próximos: F7.5-7.10 (canaries + execução + reconciliação) + F8 (docs) + F9 (execução real).
+**Status global:** Foundation + F3 + F4 + F5 completas + **AUDITORIA F4/F5 INSTRUMENTADA**. F6 CANCELADA. F7 4/10 (preparação: extrair/carregar/confrontar/propor — sem WRITE no Odoo). F7.2/F7.3 ajustados após inspeção da planilha real (parser por header, P6 mais novo para inv sem lote, cross-check validade). Planilha real `COMPILADO INV. 16.05.2026.xlsx` processada com sucesso: 2087 linhas (FB:276 / CD:1373 / LF:438). Próximos: F7.5-7.10 (canaries + execução + reconciliação) + F8 (docs) + F9 (execução real).
 
 ---
 
@@ -51,8 +51,8 @@ Leitura: `✅ feito` / `⏳ pendente` / `⚠️ parcial` / `🚫 bloqueado` / `�
 | **F1.x** `build.sh` | ✅ | Items 19/20/21 adicionados (commit `6737d907`) | bash -n OK |
 | **F2** `stock_lot_service.py` | ✅ | `app/odoo/services/stock_lot_service.py` (criar/renomear/inativar/reativar/atualizar_validade/buscar_por_nome) | 15 ✅ |
 | **F3** `stock_picking_service.py` | ✅ | `app/odoo/services/stock_picking_service.py` (criar_transferencia/confirmar_e_reservar/preencher_qty_done/validar/cancelar/liberar_faturamento/aguardar_invoice_do_robo) | 13 ✅ |
-| **F4** `inventario_pipeline_service.py` | ✅ | `app/odoo/services/inventario_pipeline_service.py` (f5a_criar_pickings/f5b_validar_pickings/f5c_liberar_faturamento/f5d_aguardar_invoices/f5e_transmitir_sefaz) + helper resolver_location_destino | 25 ✅ |
-| **F5** `indisponibilizacao_estoque_service.py` | ✅ | `app/odoo/services/indisponibilizacao_estoque_service.py` (canary_lote/canary_local com try/finally + indisponibilizar_lote/reverter_lote/indisponibilizar_local/reverter_local com canary_passou guard) | 12 ✅ |
+| **F4** `inventario_pipeline_service.py` | ✅ | `app/odoo/services/inventario_pipeline_service.py` (f5a..f5e + helper resolver_location_destino + helper _registrar_op) — auditoria granular via OperacaoOdooAuditoria | 29 ✅ |
+| **F5** `indisponibilizacao_estoque_service.py` | ✅ | `app/odoo/services/indisponibilizacao_estoque_service.py` (canary_lote/_local + indispor/reverter_lote/_local + helper _registrar_op) — auditoria granular | 15 ✅ |
 
 ### Implementação (pendente)
 
@@ -103,6 +103,51 @@ Planilha `COMPILADO INV. 16.05.2026.xlsx` (84KB, 3 abas FB/CD/LF, 2091 linhas) r
 2. `python 02_carregar_inventario_xlsx.py --xlsx 'COMPILADO INV. 16.05.2026.xlsx'` → `/tmp/inventario_fisico_2026_05.json` ✅ **rodado, 2087 linhas válidas**
 3. `python 03_confrontar_inv_vs_odoo.py` → `/tmp/diff_inventario_2026_05.json` + 3 Excels diff (com colunas `lote_inferido`, `validade_divergente`, `validade_msg`)
 4. `python 04_propor_ajustes.py --propor` → `AjusteEstoqueInventario` (status=PROPOSTO)
+
+### §7.3 — Auditoria habilitada em F4/F5 (decisão usuário 2026-05-17)
+
+**Gap original**: `operacao_odoo_auditoria` foi criada em F1.2 com helper `.registrar()` mas nenhum service F3/F4/F5 a usava. Ficaria vazia em prod.
+
+**Correção**: helper `_registrar_op()` em ambos services F4 e F5, chamado após cada operação Odoo (granularidade "1 operação lógica = 1 row").
+
+**O que cada tabela contém após ajuste executado:**
+
+| Tabela | Granularidade | Conteúdo |
+|--------|---------------|----------|
+| `ajuste_estoque_inventario` | 1 row por divergência | Ciclo de vida do ponto de vista de negócio: PROPOSTO → APROVADO → fase_pipeline F5a→F5e → EXECUTADO/FALHA. Campos: qtd_inventario, qtd_odoo, qtd_ajuste, custo_medio, acao_decidida, picking_id_odoo, invoice_id_odoo, **chave_nfe** (44 dígitos SEFAZ), erro_msg |
+| `operacao_odoo_auditoria` | 1 row por chamada Odoo lógica | Trilha técnica: payload, resposta_json, tempo_execucao_ms, modelo_odoo, acao (create/button_validate/liberar_faturamento/aguardar_invoice/transmitir_nfe/canary_lote/etc.), status (SUCESSO/FALHA/SKIPPED/TIMEOUT/EXCECAO/PASSOU/NAO_PASSOU), pipeline_etapa (F5a..F5e), executado_por, contexto_origem ('inventario' ou 'indisponibilizacao'), contexto_ref (ciclo ou ajuste_id) |
+
+**Exemplo: 1 ajuste executado com sucesso deixa:**
+
+```
+ajuste_estoque_inventario:
+  id=42, ciclo='INVENTARIO_2026_05', cod_produto='4320147',
+  qtd_ajuste=-5, status='EXECUTADO',
+  picking_id_odoo=99999, invoice_id_odoo=200000,
+  chave_nfe='35260112345...', fase_pipeline='F5e_SEFAZ_OK'
+
+operacao_odoo_auditoria (5 rows com registro_id=42, contexto_ref='INVENTARIO_2026_05'):
+  - pipeline_etapa='F5a' acao='create' modelo_odoo='stock.picking'
+    status='SUCESSO' odoo_id=99999 tempo_ms=2300
+  - pipeline_etapa='F5b' acao='button_validate' modelo_odoo='stock.picking'
+    status='SUCESSO' odoo_id=99999 tempo_ms=4500
+  - pipeline_etapa='F5c' acao='liberar_faturamento' modelo_odoo='stock.picking'
+    status='SUCESSO' odoo_id=99999 tempo_ms=1200
+  - pipeline_etapa='F5d' acao='aguardar_invoice' modelo_odoo='account.move'
+    status='SUCESSO' odoo_id=200000 tempo_ms=180000  (3min — robo CIEL IT)
+  - pipeline_etapa='F5e' acao='transmitir_nfe' modelo_odoo='account.move'
+    status='SUCESSO' odoo_id=200000 tempo_ms=45000   (45s — Playwright + SEFAZ)
+```
+
+**Query forensics típica** (algum ajuste falhou):
+```sql
+SELECT pipeline_etapa, status, erro_msg, tempo_execucao_ms
+FROM operacao_odoo_auditoria
+WHERE registro_id = <ajuste_id> AND contexto_origem = 'inventario'
+ORDER BY id;
+```
+
+**Falha de auditoria NÃO bloqueia pipeline** (try/except + logger.error em `_registrar_op`).
 
 ### Tarefas técnicas pendentes ao final (G003 sugestão de refator)
 
@@ -252,7 +297,7 @@ scripts/
     04_propor_ajustes.py              # F7.4 — propor/listar/aprovar com hash da onda
     hooks/                  # placeholder vazio (F6 CANCELADA — ver §6.1)
 
-tests/odoo/                 # 90 tests passing
+tests/odoo/                 # 97 tests passing
   __init__.py
   constants/__init__.py
   constants/test_operacoes_fiscais.py  # 17 tests
@@ -262,8 +307,8 @@ tests/odoo/                 # 90 tests passing
   services/__init__.py
   services/test_stock_lot_service.py  # 15 tests
   services/test_stock_picking_service.py  # 13 tests (F3)
-  services/test_inventario_pipeline_service.py  # 25 tests (F4 + post-review fixes)
-  services/test_indisponibilizacao_estoque_service.py  # 12 tests (F5)
+  services/test_inventario_pipeline_service.py  # 29 tests (F4 + post-review fixes + auditoria)
+  services/test_indisponibilizacao_estoque_service.py  # 15 tests (F5 + auditoria)
 
 docs/
   inventario-2026-05/
