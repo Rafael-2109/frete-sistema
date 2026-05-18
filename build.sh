@@ -329,6 +329,16 @@ echo "Motos Assai backfill: finalizar recibos + match NFs (sep sintetica)..."
 python scripts/migrations/motos_assai_backfill_match_nfs_2026_05_17.py \
     || echo "⚠️ Backfill motos_assai falhou, continuando deploy..."
 
+# 15g. Motos Assai 31 (2026-05-17): novo tipo de divergencia
+# CHASSI_FATURADO_SEM_RECIBO no CHECK constraint. _calcular_match agora exige
+# AssaiReciboItem(conferido=True, ativo=True) — bloqueia NF de virar BATEU se
+# chassi nao tem origem em recibo Motochefe (defesa contra parser PDF errado,
+# digitacao errada na conferencia, faturamento sem recebimento fisico).
+# Idempotente (DROP IF EXISTS + recriar CHECK).
+echo "Motos Assai 31: CHECK constraint CHASSI_FATURADO_SEM_RECIBO..."
+python scripts/migrations/motos_assai_31_divergencia_tipo_faturado_sem_recibo.py \
+    || echo "⚠️ Migration motos_assai_31 falhou, continuando deploy..."
+
 # 16. Remessa VORTX Conversor/Validador (2026-05-12): tabela remessa_vortx_conversao.
 # Auditoria de operacoes de conversao (BMP/274 -> VORTX/310) e validacao read-only
 # de arquivos CNAB 400 externos via UI em /remessa-vortx/converter e /validar.

@@ -23,6 +23,7 @@ from app.utils.cnpj_utils import normalizar_cnpj
 from app.motos_assai.models import (
     AssaiNfQpa, AssaiNfQpaItem, AssaiLoja,
     AssaiSeparacao, AssaiSeparacaoItem, AssaiMoto,
+    AssaiReciboItem,
     SEPARACAO_STATUS_CANCELADA, SEPARACAO_STATUS_FATURADA,
     SEPARACAO_STATUS_EM_SEPARACAO, SEPARACAO_STATUS_FECHADA,
     SEPARACAO_STATUS_CARREGADA,
@@ -35,6 +36,7 @@ from app.motos_assai.models import (
     DIVERGENCIA_TIPO_CHASSI_SEM_SEPARACAO,
     DIVERGENCIA_TIPO_CHASSI_NAO_CADASTRADO,
     DIVERGENCIA_TIPO_CHASSI_OUTRA_LOJA,
+    DIVERGENCIA_TIPO_CHASSI_FATURADO_SEM_RECIBO,
 )
 from app.motos_assai.services.modelo_resolver import resolver_modelo
 from app.motos_assai.services.moto_evento_service import emitir_evento
@@ -420,6 +422,36 @@ def _calcular_match(nf: AssaiNfQpa, operador_id: int) -> None:
                 it.tipo_divergencia = 'MODELO_DIVERGENTE'
                 matches_falha += 1
                 continue
+
+        # 4. CHASSI_FATURADO_SEM_RECIBO (2026-05-17): chassi precisa ter sido
+        # conferido em recibo Motochefe (AssaiReciboItem.conferido=True).
+        # Sem isso, o chassi pode ter sido cadastrado errado (parser PDF da NF,
+        # digitacao manual) ou faturado sem chegada fisica. Resolver via:
+        #   - CCe (se o chassi correto esta em recibo mas a NF errou)
+        #   - SUBSTITUIR_CHASSI (se o recibo Motochefe foi digitado errado)
+        # Bloqueia BATEU ate operador resolver.
+        tem_recibo_conferido = (
+            db.session.query(AssaiReciboItem.id)
+            .filter(
+                AssaiReciboItem.chassi == it.chassi,
+                AssaiReciboItem.conferido.is_(True),
+                AssaiReciboItem.ativo.is_(True),
+            )
+            .first()
+        )
+        if not tem_recibo_conferido:
+            criar_divergencia(
+                tipo=DIVERGENCIA_TIPO_CHASSI_FATURADO_SEM_RECIBO,
+                chassi=it.chassi, sep_id=sep.id, nf_id=nf.id,
+                detalhes={
+                    'motivo': 'chassi em assai_moto mas sem AssaiReciboItem '
+                              'conferido em recibo Motochefe',
+                    'modelo_extraido_nf': it.modelo_extraido,
+                },
+            )
+            it.tipo_divergencia = 'CHASSI_FATURADO_SEM_RECIBO'
+            matches_falha += 1
+            continue
 
         # OK
         it.separacao_item_id = sep_item.id

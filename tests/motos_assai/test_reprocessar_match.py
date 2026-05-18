@@ -16,6 +16,7 @@ from app.motos_assai.models import (
     AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao, AssaiNfQpa, AssaiNfQpaItem,
     AssaiDivergencia,
+    AssaiCompraMotochefe, AssaiReciboMotochefe, AssaiReciboItem,
     PEDIDO_STATUS_ABERTO,
     NF_STATUS_BATEU, NF_STATUS_DIVERGENTE, NF_STATUS_NAO_RECONCILIADO,
     NF_STATUS_CANCELADA,
@@ -100,6 +101,25 @@ def _criar_moto_e_sep_para_chassi(admin, loja, modelo, chassi, valor=Decimal('69
     m = AssaiMoto(chassi=chassi, modelo_id=modelo.id, cor='CINZA')
     db.session.add(m)
     db.session.flush()
+
+    # 2026-05-17: _calcular_match exige AssaiReciboItem conferido
+    compra = AssaiCompraMotochefe(
+        numero=f'COMP-TST-RP-{_uid()}', criada_por_id=admin.id,
+    )
+    db.session.add(compra)
+    db.session.flush()
+    recibo = AssaiReciboMotochefe(
+        compra_id=compra.id, total_motos_declarado=1, status='CONCLUIDO',
+        criado_por_id=admin.id,
+    )
+    db.session.add(recibo)
+    db.session.flush()
+    db.session.add(AssaiReciboItem(
+        recibo_id=recibo.id, chassi=chassi, modelo_id=modelo.id,
+        cor_texto='CINZA', conferido=True, ativo=True,
+    ))
+    db.session.flush()
+
     emitir_evento(chassi, EVENTO_ESTOQUE, admin.id)
     emitir_evento(chassi, EVENTO_MONTADA, admin.id)
     emitir_evento(chassi, EVENTO_DISPONIVEL, admin.id)

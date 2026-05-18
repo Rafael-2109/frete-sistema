@@ -10,6 +10,7 @@ from app.motos_assai.models import (
     AssaiPedidoVenda, AssaiPedidoVendaLoja, AssaiPedidoVendaItem,
     AssaiLoja, AssaiModelo,
     AssaiMoto, AssaiSeparacao, AssaiSeparacaoItem, AssaiNfQpa,
+    AssaiCompraMotochefe, AssaiReciboMotochefe, AssaiReciboItem,
     PEDIDO_STATUS_ABERTO,
     SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA,
     NF_STATUS_BATEU, NF_STATUS_DIVERGENTE, NF_STATUS_NAO_RECONCILIADO,
@@ -28,6 +29,35 @@ from app.motos_assai.services.parsers.nf_qpa_adapter import (
 
 def _uid():
     return uuid.uuid4().hex[:8].upper()
+
+
+def _criar_recibo_conferido(chassi, modelo, admin):
+    """Helper 2026-05-17: cria recibo Motochefe CONCLUIDO com chassi conferido.
+
+    _calcular_match exige AssaiReciboItem(conferido=True, ativo=True) — sem
+    isso, vira divergencia CHASSI_FATURADO_SEM_RECIBO.
+    """
+    uid = _uid()
+    compra = AssaiCompraMotochefe(
+        numero=f'COMP-TST-HELPER-{uid}', criada_por_id=admin.id,
+    )
+    db.session.add(compra)
+    db.session.flush()
+    recibo = AssaiReciboMotochefe(
+        compra_id=compra.id, total_motos_declarado=1,
+        status='CONCLUIDO',
+        criado_por_id=admin.id,
+    )
+    db.session.add(recibo)
+    db.session.flush()
+    item = AssaiReciboItem(
+        recibo_id=recibo.id, chassi=chassi,
+        modelo_id=modelo.id, cor_texto='CINZA',
+        conferido=True, ativo=True,
+    )
+    db.session.add(item)
+    db.session.flush()
+    return item
 
 
 def _chave_fake():
@@ -76,6 +106,28 @@ def _setup_separacao_com_chassi(admin, loja, chassi, valor=Decimal('6900')):
 
     m = AssaiMoto(chassi=chassi, modelo_id=modelo_dot.id, cor='CINZA')
     db.session.add(m)
+    db.session.flush()
+
+    # 2026-05-17 update: _calcular_match agora exige AssaiReciboItem conferido
+    # (DIVERGENCIA_TIPO_CHASSI_FATURADO_SEM_RECIBO). Criar recibo+item de teste.
+    compra = AssaiCompraMotochefe(
+        numero=f'COMP-TST-{uid}', criada_por_id=admin.id,
+    )
+    db.session.add(compra)
+    db.session.flush()
+    recibo = AssaiReciboMotochefe(
+        compra_id=compra.id, total_motos_declarado=1,
+        status='CONCLUIDO',
+        criado_por_id=admin.id,
+    )
+    db.session.add(recibo)
+    db.session.flush()
+    recibo_item = AssaiReciboItem(
+        recibo_id=recibo.id, chassi=chassi,
+        modelo_id=modelo_dot.id, cor_texto='CINZA',
+        conferido=True, ativo=True,
+    )
+    db.session.add(recibo_item)
     db.session.flush()
 
     emitir_evento(chassi, EVENTO_ESTOQUE, admin.id)
@@ -183,6 +235,8 @@ def test_match_bateu_chassi_extra_adicionado_pela_nf(app, admin_user):
         m = AssaiMoto(chassi=chassi_extra, modelo_id=modelo_dot.id, cor='AZUL')
         db.session.add(m)
         db.session.flush()
+        _criar_recibo_conferido(chassi_extra, modelo_dot, admin_user)
+        db.session.flush()
         emitir_evento(chassi_extra, EVENTO_ESTOQUE, admin_user.id)
         emitir_evento(chassi_extra, EVENTO_MONTADA, admin_user.id)
         emitir_evento(chassi_extra, EVENTO_DISPONIVEL, admin_user.id)
@@ -243,6 +297,68 @@ def test_match_divergente_valor_acima_tolerancia(app, admin_user):
             f"Esperava NAO_RECONCILIADO ou DIVERGENTE, veio {nf.status_match}"
         nf_item = nf.itens[0]
         assert nf_item.tipo_divergencia == 'VALOR_DIVERGENTE'
+
+        db.session.rollback()
+
+
+def test_match_chassi_faturado_sem_recibo(app, admin_user):
+    """DIVERGENCIA: chassi em assai_moto + sep ativa, MAS sem AssaiReciboItem
+    conferido. Indica chassi cadastrado errado ou faturado sem recebimento
+    fisico — bloqueia BATEU e cria divergencia CHASSI_FATURADO_SEM_RECIBO.
+    """
+    with app.app_context():
+        loja = AssaiLoja.query.first()
+        modelo_dot = AssaiModelo.query.filter_by(codigo='DOT').first()
+        chassi = f'TST_NF_SR_{_uid()}'
+
+        # Setup parcial: cria moto + sep mas NAO cria AssaiReciboItem
+        p = AssaiPedidoVenda(
+            numero=f'TST-SR-{_uid()}', status=PEDIDO_STATUS_ABERTO,
+            criado_por_id=admin_user.id,
+        )
+        db.session.add(p)
+        db.session.flush()
+        pvl = AssaiPedidoVendaLoja(pedido_id=p.id, loja_id=loja.id)
+        db.session.add(pvl); db.session.flush()
+        db.session.add(AssaiPedidoVendaItem(
+            pedido_id=p.id, pedido_loja_id=pvl.id, loja_id=loja.id,
+            modelo_id=modelo_dot.id, qtd_pedida=1,
+            valor_unitario=Decimal('6900'), valor_total=Decimal('6900'),
+        ))
+        m = AssaiMoto(chassi=chassi, modelo_id=modelo_dot.id, cor='CINZA')
+        db.session.add(m); db.session.flush()
+        # NAO chamamos _criar_recibo_conferido — esse e o ponto do teste!
+        emitir_evento(chassi, EVENTO_ESTOQUE, admin_user.id)
+        emitir_evento(chassi, EVENTO_MONTADA, admin_user.id)
+        emitir_evento(chassi, EVENTO_DISPONIVEL, admin_user.id)
+        db.session.commit()
+
+        criar_separacao_com_saldos(
+            pedido_id=p.id, loja_id=loja.id,
+            alocacoes=[{'modelo_id': modelo_dot.id, 'qtd': 1}],
+            operador_id=admin_user.id,
+        )
+        db.session.commit()
+        registrar_chassi(p.id, loja.id, chassi, admin_user.id)
+        sep = AssaiSeparacao.query.filter_by(pedido_id=p.id, loja_id=loja.id).first()
+        finalizar_separacao(sep.id, admin_user.id)
+        db.session.commit()
+
+        chave = _chave_fake()
+        resultado = _make_resultado_parser(
+            chave=chave, nome_dest=f'ASSAI LJ{loja.numero}',
+            chassis=[chassi], valor_total=Decimal('6900'),
+        )
+        nf = _call_importar(resultado, chave=chave,
+                            nome_dest=f'ASSAI LJ{loja.numero}',
+                            admin_id=admin_user.id)
+
+        # Deve virar DIVERGENTE com CHASSI_FATURADO_SEM_RECIBO no item
+        assert nf.status_match in (NF_STATUS_DIVERGENTE, NF_STATUS_NAO_RECONCILIADO), \
+            f"Esperava DIVERGENTE, veio {nf.status_match}"
+        nf_item = nf.itens[0]
+        assert nf_item.tipo_divergencia == 'CHASSI_FATURADO_SEM_RECIBO', \
+            f"Esperava CHASSI_FATURADO_SEM_RECIBO, veio {nf_item.tipo_divergencia}"
 
         db.session.rollback()
 
