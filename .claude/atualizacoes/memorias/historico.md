@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-05-18-1](atualizacao-2026-05-18-1.md) — Oitava auditoria. Sistema saudavel estruturalmente. 3 correcoes factuais (drift): skills 35->40 invocaveis (+5 SPED ECD + baseline conciliacao); SDK 0.1.80->0.2.82 (migracao minor); 1 orfao detectado e registrado (`feedback_rastrear_acesso_ui_completo.md` existia desde 2026-05-12). 49 memorias (cresceu +17), MEMORY.md 90 linhas. Frontmatter OK em 49/49.
+
 - [2026-05-11-1](atualizacao-2026-05-11-1.md) — Setima auditoria. Sistema saudavel. 3 correcoes factuais: skills 29->35 invocaveis em MEMORY.md + `skills_inventario.md` (6 novas skills motos_assai); SDK 0.1.66->0.1.80 em MEMORY.md + `sdk_0160_subagent_bugs.md` (alinhamento com `requirements.txt`). 32 memorias, MEMORY.md 73 linhas. Frontmatter OK em 32/32.
 
 - [2026-05-05-1](atualizacao-2026-05-05-1.md) — Sexta auditoria. Sistema saudavel em steady-state. 1 correcao factual: `skills_inventario.md` linha `operando-ssw` 18->22 scripts (alinhamento com `ssw_operacoes.md` e MEMORY.md ja em 22). 29 memorias, MEMORY.md 70 linhas. Frontmatter OK em 29/29. 0 memorias `type:project`.
