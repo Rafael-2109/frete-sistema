@@ -145,10 +145,25 @@ python scripts/inventario_2026_05/04_propor_ajustes.py \
 ## 📚 ARQUIVOS DE REFERÊNCIA (em ordem de leitura)
 
 1. **Este arquivo** — kickstart
-2. `docs/inventario-2026-05/SOT.md` — estado completo + decisões
-3. `docs/superpowers/plans/2026-05-17-ajuste-inventario-nacom-lf.md` — plano detalhado por task
-4. `docs/inventario-2026-05/00-decisoes/D000-D003.md` + `01-premissas/` + `02-gotchas/` — contexto fiscal/técnico
-5. `memory/inventario_2026_05.md` — memória persistente (auto-carregada via `MEMORY.md`)
+2. `app/agente/prompts/prompt_inventario.md` — **INTENÇÃO ORIGINAL** do Rafael (regras de negócio, ordem das operações, workflow, regras invioláveis). Não é SOT operacional mas é o "porquê" de tudo
+3. `docs/inventario-2026-05/SOT.md` — estado completo + decisões
+4. `docs/superpowers/plans/2026-05-17-ajuste-inventario-nacom-lf.md` — plano detalhado por task
+5. `docs/inventario-2026-05/00-decisoes/D000-D003.md` + `01-premissas/` + `02-gotchas/` — contexto fiscal/técnico
+6. `memory/inventario_2026_05.md` — memória persistente (auto-carregada via `MEMORY.md`)
+
+### Cobertura prompt original × implementação atual
+
+| Item do prompt | Status |
+|---|---|
+| `<regra inviolável>` linha 135: renomear lote (estoque L1, inv L2) | ✅ P9 + `RENOMEAR_LOTE` em F7.3+F7.4 |
+| `<estado_desejado>` linha 144: indisponibilização contábil (opção 1 lote, opção 2 local) | ✅ F5 `IndisponibilizacaoEstoqueService` |
+| `<workflow>` linha 119: relatório/sequenciamento movimentações | ✅ F7.3 Excel + F7.4 hash da onda |
+| `<workflow>` linha 120: aprovação humana das movimentações | ✅ F7.4 `--aprovar-onda --hash=<sha>` |
+| `<workflow>` linha 121: 1 NF referência por tipo de movimentação | ⚠️ MATRIZ_INTERCOMPANY tem NFs ref (94457/13075/147772/94410) mas **F7.6 canary fiscal ainda pendente** |
+| `<workflow>` linha 122: verificar campos NF emissão × NF ref | ⚠️ pendente F7.6 |
+| `<workflow>` linha 123: 1 movimentação pequena (canary) antes do bulk | ⚠️ pendente F7.7 (precisa canary fiscal por CFOP antes do bulk) |
+| `<workflow>` linha 124: operações sem rollback exigem aprovação | ✅ F4 idempotency + abort em config + audit granular |
+| `<regras inviolaveis>` linha 132: hooks determinísticos | 🚫 CANCELADA (decisão usuário — services já protegem) |
 
 ---
 
