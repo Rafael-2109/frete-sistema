@@ -2,8 +2,8 @@
 
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
-**Última atualização:** 2026-05-18 ~01:45 (piloto 210030325 LF EXECUTADO em PROD com SEFAZ autorizada)
-**Status global:** Foundation + F3 + F4 + F5 completas + **PILOTO END-TO-END EXECUTADO** + D006 (TRANSFERIR lote em vez de RENOMEAR) + 5 fixes generalizados commitados (a8e0d0bb). NF-e SEFAZ chave 35260518467441000163550010000131491006086070, cstat=100. **Pronto para bulk da onda 1 (1.065 ajustes LF restantes)**. Ver `CHECKPOINT_2026_05_18_PILOTO_COMPLETO.md` e `QUICK_START_NEXT_SESSION.md`. F6 CANCELADA. Bloqueado por: 1) wrapper `09_executar_onda1_bulk.py` (a construir), 2) aprovação onda 1 via hash, 3) opcional generalizar D004 para FB↔CD.
+**Última atualização:** 2026-05-18 fim do dia (D004 generalizada para FB+CD apos piloto OK)
+**Status global:** Foundation + F3 + F4 + F5 completas + **PILOTO END-TO-END EXECUTADO** + D006 (TRANSFERIR lote em vez de RENOMEAR) + 5 fixes generalizados (commit a8e0d0bb) + **D004 GENERALIZADA para FB+CD** (commit pendente). NF-e SEFAZ chave 35260518467441000163550010000131491006086070, cstat=100. **Pronto para bulk da onda 1 (1.065 ajustes LF restantes) + onda 2 (FB↔CD)**. Ver `CHECKPOINT_2026_05_18_PILOTO_COMPLETO.md` e `QUICK_START_NEXT_SESSION.md`. F6 CANCELADA. Bloqueado por: 1) wrapper `09_executar_onda1_bulk.py` (a construir), 2) aprovação onda 1+2 via hash, 3) decisao do usuario se regenera diffs/ajustes onda 2-3 com D004 generalizada.
 
 ---
 
@@ -149,6 +149,37 @@ posted + chave_nfe).
 **Proximo bloqueio**: construir `09_executar_onda1_bulk.py` que itera
 por (cod_produto, company_id) para os 1.065 ajustes restantes. Padrao
 estabelecido pelo `teste_210030325_lf.py`.
+
+### §7.4.3 — D004 GENERALIZADA para FB+CD (2026-05-18 fim do dia)
+
+Apos piloto LF OK, a logica D004 (rename+diferenca liquida) foi
+generalizada para TODAS as 3 companies em escopo:
+
+**Mudanca no script 03 `confrontar_inv_vs_odoo.py`**:
+- Removido filtro `if cid == 5` no bloco D004 (~linha 295).
+- Logica de agregacao + transferencia de lotes + diferenca liquida
+  aplicada a LF (cid=5), FB (cid=1) e CD (cid=4).
+
+**Mudanca no script 04 `propor_ajustes.py:cmd_propor()`**:
+- `lote_destino` agora e' RECALCULADO baseado em `acao_decidida`
+  (mais autoritativo que default 'MIGRACAO' do script 03).
+- Tabela de defaults por acao (ver D004 secao "Generalizacao
+  2026-05-18").
+
+**Impacto pratico**:
+- Ondas 2 (FB↔CD transferencia, 2.558 ajustes) e 3 (sem ajuste fiscal,
+  19.366 ajustes) ainda foram geradas com fluxo antigo "1 diff por
+  quant Odoo" (pre-D004). Decisao usuario: regerar ou manter?
+- Onda 1 (LF, 1.071 ajustes) ja tinha D004 aplicada — sem impacto.
+
+**Comando para regerar** (idempotente — so insere novos):
+```bash
+python scripts/inventario_2026_05/03_confrontar_inv_vs_odoo.py
+python scripts/inventario_2026_05/04_propor_ajustes.py --propor
+# Comparar contadores antes/depois para decidir
+```
+
+Ver D004 e D006 para detalhes.
 
 ### §7.4.1 — REFINAMENTO 2026-05-18: TRANSFERIR quantidade entre lotes (sem renomear)
 

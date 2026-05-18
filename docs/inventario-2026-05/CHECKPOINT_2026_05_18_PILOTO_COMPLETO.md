@@ -164,14 +164,17 @@ python scripts/inventario_2026_05/debug_sefaz_608607.py \
    - Lide com timeouts/erros parciais
 2. **Aprovar onda 1**: rodar `--aprovar-onda=1 --hash=<sha>` para
    marcar 1.065 ajustes restantes APROVADO.
+3. **Decidir sobre regerar onda 2-3 com D004 generalizada**: a logica
+   D004 (rename+diferenca liquida) agora se aplica a FB+CD (alem de LF).
+   Onda 2 (2.558) + onda 3 (19.366) foram geradas com fluxo antigo —
+   regerar pode reduzir numero de NFs/ajustes ou descartar duplicados.
+   Comando: `03_confrontar_inv_vs_odoo.py` + `04_propor_ajustes.py --propor`.
 
 ### Recomendado antes do bulk
 
-3. **Validar onda 1 RENOMEAR_LOTE em outros produtos**: 644 ajustes
+4. **Validar onda 1 RENOMEAR_LOTE em outros produtos**: 644 ajustes
    `RENOMEAR_LOTE` na onda 4 — verificar se todos sao casos de
    transferencia (D006) ou se algum e' rename puro.
-4. **Generalizar D004 para FB↔CD**: atualmente apenas LF (`cid=5`).
-   Para onda 2 (FB↔CD) precisa estender `03_confrontar_inv_vs_odoo.py`.
 
 ### Opcional (nao bloqueia bulk)
 
@@ -184,6 +187,9 @@ python scripts/inventario_2026_05/debug_sefaz_608607.py \
 
 - ✅ `build.sh` item 22 com migration `2026_05_17_add_lote_destino_ajuste`
   (rodado em prod pelo usuario)
+- ✅ D004 generalizada para FB (cid=1) + CD (cid=4) — alem de LF —
+  removido `if cid == 5` no script 03 + recalculo de `lote_destino`
+  por acao no script 04. **Pendente**: regerar diffs/ajustes ondas 2-3.
 
 ---
 

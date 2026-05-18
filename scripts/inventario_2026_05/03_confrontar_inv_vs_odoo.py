@@ -279,12 +279,26 @@ def confrontar_company(
                 continue  # sem divergencia
 
         # ============================================================
-        # D004: LF com saldo nos DOIS lados e lotes disjuntos
-        # Renomear lotes Odoo (FIFO) ate cobrir saldo inv + diferenca
-        # liquida vai como PERDA (sobra) ou INDUSTRIALIZACAO (falta).
-        # Lote destino na FB para fantasmas = MIGRACAO (D005).
-        # Custo medio dos lotes (D004): usado quando lote inv nao existe
-        # no Odoo (custo zero local) ou diferenca liquida sem origem.
+        # D004 (generalizado 2026-05-18 — todas as companies):
+        # Quando saldo bate no AGREGADO mas lotes Odoo e Inv sao
+        # disjuntos, o usuario quer:
+        #   1) Transferir quantidade de cada lote Odoo para o lote
+        #      alvo do inv (FIFO ate cobrir min(odoo, inv)) — D006
+        #      executa via inventory adjustment (sem renomear).
+        #   2) Diferenca liquida vira NF fiscal:
+        #      - Sobra (Odoo > Inv): saida para FB lote MIGRACAO (D005)
+        #        - LF: PERDA_LF_FB
+        #        - CD: TRANSFERIR_CD_FB
+        #        - FB: depende do tipo_produto — pode ser
+        #          INDUSTRIALIZACAO_FB_LF, TRANSFERIR_FB_CD ou
+        #          INDISPONIBILIZAR (script 04 resolve via ORDEM 1/2/3)
+        #      - Falta (Inv > Odoo): entrada do lote MIGRACAO outra cia
+        #        - LF: INDUSTRIALIZACAO_FB_LF
+        #        - CD: TRANSFERIR_FB_CD
+        #        - FB: TRANSFERIR_CD_FB ou DEV_*
+        # Custo medio dos lotes Odoo (D004) usado quando lote alvo nao
+        # tem custo local (lote novo). Script 04 (calcular_acao_decidida)
+        # decide a acao_decidida final a partir de (tipo, cid, sinal).
         # ============================================================
         lotes_odoo_set = {(q.get('lote_nome') or '') for q in quants}
         lotes_inv_set = {
@@ -292,8 +306,7 @@ def confrontar_company(
         }
         custo_medio_cod = _custo_medio_cod(quants)
         if (
-            cid == 5  # LF apenas por enquanto
-            and total_odoo > 0
+            total_odoo > 0
             and total_inv > 0
             and not lotes_odoo_set.intersection(lotes_inv_set)
             and not inv_sem_lote  # inv sem lote tratado abaixo
@@ -341,14 +354,19 @@ def confrontar_company(
             # 2. Diferenca liquida
             diferenca = total_inv - total_odoo
             if diferenca > 0:
-                # Falta na LF: vem da FB (INDUSTRIALIZACAO_FB_LF)
+                # Falta na empresa: vem de outra cia.
+                # - LF: INDUSTRIALIZACAO_FB_LF (lote_destino=lote_inv)
+                # - CD: TRANSFERIR_FB_CD (lote_destino=lote_inv)
+                # - FB: TRANSFERIR_CD_FB ou DEV_FB_LF (script 04 resolve)
+                # lote_origem='MIGRACAO' = marcador de "vem do
+                # consolidador da empresa parceira" (D005).
                 diffs.append({
                     'cod_produto': cod,
                     'tipo_produto': int(cod[0]),
                     'company_id': cid,
                     'lote_inventariado': lote_inv_alvo,
                     'lote_odoo': '',
-                    'lote_origem': 'MIGRACAO',  # vem do MIGRACAO da FB
+                    'lote_origem': 'MIGRACAO',
                     'lote_destino': lote_inv_alvo,
                     'qtd_inventario': str(diferenca),
                     'qtd_odoo': '0',
@@ -357,9 +375,12 @@ def confrontar_company(
                     'tipo_divergencia': 'INVENTARIO_SEM_ODOO',
                 })
             elif diferenca < 0:
-                # Sobra na LF: vai para FB (PERDA_LF_FB) com lote_destino=MIGRACAO
+                # Sobra na empresa: vai para FB lote MIGRACAO (D005)
+                # Para FB sobrando (cid=1): script 04 sobrescreve
+                # lote_destino conforme acao (TRANSFERIR_FB_CD vai para
+                # CD lote_inv; INDUSTRIALIZACAO_FB_LF vai para LF lote_inv).
                 # Gera 1 diff por lote residual (preserva rastreio fiscal +
-                # respeita limite VARCHAR(60) em lote_odoo/lote_origem)
+                # respeita limite VARCHAR(60) em lote_odoo/lote_origem).
                 lotes_restantes = [
                     (q.get('lote_nome') or '', qty_r, q)
                     for (q, qty_r) in qty_restante_por_lote.values()
@@ -378,7 +399,7 @@ def confrontar_company(
                         'lote_inventariado': '',
                         'lote_odoo': lote_o[:60],
                         'lote_origem': lote_o[:60],
-                        'lote_destino': 'MIGRACAO',  # FB
+                        'lote_destino': 'MIGRACAO',  # padrao FB (D005)
                         'qtd_inventario': '0',
                         'qtd_odoo': str(qty_r),
                         'qtd_ajuste': str(-qty_r),

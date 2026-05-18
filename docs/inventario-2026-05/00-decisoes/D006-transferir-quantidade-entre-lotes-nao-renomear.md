@@ -259,11 +259,14 @@ exigem esse valor.
 
 ---
 
-## Pendencias para bulk (onda 1 — 1.071 ajustes LF)
+## Pendencias para bulk
 
-1. **Generalizar D004 para FB↔CD**: a logica `_custo_medio_cod` +
-   "rename+diferenca liquida" so foi aplicada em `cid=5` (LF) no script
-   03. Generalizar para FB (cid=1) e CD (cid=4) quando rodar ondas 2.
+1. **~~Generalizar D004 para FB↔CD~~** ✅ FEITO 2026-05-18 fim do dia.
+   Logica aplicada em TODAS as companies (LF/FB/CD). Removido
+   `if cid == 5` no script 03. `lote_destino` recalculado por acao em
+   script 04. **Regerar diffs+ajustes para aplicar D004 generalizado
+   em onda 2/3** (decisao usuario — pode invalidar ajustes existentes
+   das ondas 2/3 que foram gerados na logica anterior).
 2. **Bulk parallel safe**: o piloto rodou sequencial. Para 1.071
    ajustes, validar concorrencia (`InventarioPipelineService` usa
    `ThreadPoolExecutor` com Semaphore=5).
@@ -273,3 +276,41 @@ exigem esse valor.
 4. **Stock.lot sem campo `active`**: detectar inativos nao funciona via
    read nem search domain. Para ordem 3 (INDISPONIBILIZAR_*) precisa
    estrategia alternativa (canary manual no Odoo UI conforme D005).
+
+---
+
+## Generalizacao D004 para FB+CD (2026-05-18 fim do dia)
+
+Apos piloto LF OK, generalizado para todas as companies:
+
+**Comportamento por (cid, sobra/falta)**:
+
+| Cid | Sobra (Odoo>Inv) → | Falta (Inv>Odoo) → |
+|---|---|---|
+| LF (5) | PERDA_LF_FB → MIGRACAO (FB) | INDUSTRIALIZACAO_FB_LF → lote_inv (LF) |
+| FB (1) | TRANSFERIR_FB_CD → lote_inv (CD) ou INDISPONIBILIZAR | TRANSFERIR_CD_FB → MIGRACAO ou DEV_LF_FB |
+| CD (4) | TRANSFERIR_CD_FB → MIGRACAO (FB) | TRANSFERIR_FB_CD → lote_inv (CD) |
+
+(Decisao final via `calcular_acao_decidida` em `04_propor_ajustes.py`
+considera tipo_produto + arquivado + ordem 1/2/3 do prompt.)
+
+**Por que generalizar**: ondas 2 (FB↔CD transferencia) e 3 (sem ajuste
+fiscal direto, so indisponibilizacao) precisam da MESMA logica de
+agregacao + diferenca liquida que LF — antes, os 2.558 ajustes da
+onda 2 e 19.366 da onda 3 estavam sendo gerados pelo fluxo "1 diff por
+quant Odoo" (antigo, pre-D004), o que pode ter inflado o numero de NFs
+ou criado divergencias artificiais.
+
+**Acao recomendada para usuario**: regerar diffs + ajustes da onda 2
+(e talvez 3) com a logica generalizada antes de aprovar/executar bulk.
+Comando:
+```bash
+# 1. Limpar ajustes PROPOSTO das ondas 2-3 (mantem onda 1 ja revisada)
+# (preferencia: usuario decide se faz)
+
+# 2. Regerar (idempotente — so insere novos)
+python scripts/inventario_2026_05/03_confrontar_inv_vs_odoo.py
+python scripts/inventario_2026_05/04_propor_ajustes.py --propor
+
+# 3. Comparar: 2558 ajustes onda 2 antigos vs novos
+```

@@ -229,32 +229,36 @@ def cmd_propor(usuario: str, dry_run: bool) -> None:
             contador['ja_existe'] += 1
             continue
 
-        # D004/D005: lote_origem/destino — preferir do diff; senao
-        # default por acao (PERDA/TRANSF para FB usa MIGRACAO).
+        # D004/D005: lote_origem/destino
+        # 2026-05-18: lote_destino e' RECALCULADO baseado na acao (mais
+        # autoritativo que o default 'MIGRACAO' do script 03 para sobras).
+        # Excecao: para RENOMEAR_LOTE, respeita o lote_destino do diff
+        # (que ja vem como lote_inv_alvo, correto).
         lote_origem = d.get('lote_origem') or d.get('lote_odoo') or None
-        lote_destino = d.get('lote_destino')
-        if not lote_destino:
-            # Defaults conforme acao
-            if acao in ('PERDA_LF_FB', 'TRANSFERIR_CD_FB', 'TRANSFERIR_FB_CD'):
-                # Sai/entra na FB? Para PERDA_LF_FB destino=FB.
-                # Para TRANSFERIR_FB_CD destino=CD (sem MIGRACAO).
-                # Para TRANSFERIR_CD_FB destino=FB (MIGRACAO).
-                if acao in ('PERDA_LF_FB', 'TRANSFERIR_CD_FB'):
-                    lote_destino = 'MIGRACAO'
-                else:
-                    lote_destino = (
-                        d.get('lote_inventariado') or d.get('lote_odoo') or None
-                    )
-            elif acao == 'INDUSTRIALIZACAO_FB_LF':
-                lote_destino = (
-                    d.get('lote_inventariado') or d.get('lote_odoo') or None
-                )
-            elif acao in ('DEV_FB_LF', 'DEV_LF_FB'):
-                lote_destino = (
-                    d.get('lote_inventariado') or d.get('lote_odoo') or None
-                )
-            elif acao == 'RENOMEAR_LOTE':
-                lote_destino = d.get('lote_inventariado') or None
+        lote_inv_diff = d.get('lote_inventariado') or d.get('lote_odoo') or None
+        diff_lote_destino = d.get('lote_destino')
+
+        if acao == 'RENOMEAR_LOTE':
+            # Sempre lote_inventariado (lote alvo)
+            lote_destino = d.get('lote_inventariado') or None
+        elif acao in ('PERDA_LF_FB', 'TRANSFERIR_CD_FB'):
+            # Saida para FB: destino sempre MIGRACAO (D005 consolidador)
+            lote_destino = 'MIGRACAO'
+        elif acao == 'TRANSFERIR_FB_CD':
+            # FB → CD: destino = lote inv (na CD nao usa MIGRACAO)
+            lote_destino = lote_inv_diff
+        elif acao == 'INDUSTRIALIZACAO_FB_LF':
+            # FB → LF: destino = lote inv na LF
+            lote_destino = lote_inv_diff
+        elif acao in ('DEV_FB_LF', 'DEV_LF_FB', 'DEV_CD_LF', 'DEV_LF_CD'):
+            # Devolucoes: destino = lote inv (do destino fiscal)
+            lote_destino = lote_inv_diff
+        elif acao.startswith('INDISPONIBILIZAR_'):
+            # Sem destino fiscal — fica o lote_odoo (informacional)
+            lote_destino = d.get('lote_odoo') or None
+        else:
+            # Fallback: usa o diff
+            lote_destino = diff_lote_destino
 
         rec = AjusteEstoqueInventario(
             ciclo=CICLO,

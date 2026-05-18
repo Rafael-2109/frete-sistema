@@ -1,8 +1,14 @@
 # D004 — Renomear lote + transferir apenas a diferença líquida
 
 **Data**: 2026-05-17
-**Status**: parcialmente superseded por D006 (2026-05-18) — item "Renomear lote" reinterpretado como TRANSFERIR quantidade entre lotes via inventory adjustment (sem renomeio). Demais conceitos (consolidacao + diferenca liquida + custo medio) seguem validos.
-**Fonte**: instrucao usuario apos analise caso 210030325 LF
+**Status**:
+- Item 1 (renomeio): superseded por D006 (2026-05-18) — substituido por TRANSFERIR quantidade via inventory adjustment.
+- Item 2 (diferenca liquida) + Item 3 (custo medio): validos.
+- **2026-05-18 fim do dia: GENERALIZADO** — logica aplicada em TODAS as
+  companies (LF cid=5, FB cid=1, CD cid=4). Antes restrito a LF.
+
+**Fonte**: instrucao usuario apos analise caso 210030325 LF +
+generalizacao apos piloto OK.
 
 > **VEJA TAMBEM**: `D006-transferir-quantidade-entre-lotes-nao-renomear.md` — substitui o item 1 desta decisao (renomeio → transferencia).
 
@@ -53,18 +59,33 @@ Total RENAME: 82.300 (= saldo inv). Diferenca: 32.032 = `114.332 - 82.300`. 1 NF
 
 ---
 
-## Generalizacao (a aplicar progressivamente)
+## Generalizacao 2026-05-18 (apos piloto OK)
 
-Mesma logica para:
-- **FB tipo[4] vs CD tipo[4]**: rename interno + transferencia da diferenca
-- **CD tipo[1,2,3] vs FB tipo[1,2,3]**: idem
-- Quando lote alvo nao existe no destino, usar lote MIGRACAO (ver D005)
+**Aplicada para todas as 3 companies em escopo do INVENTARIO_2026_05**:
+- **LF (cid=5)**: industrializacao (entrada FB→LF), perda (saida LF→FB),
+  dev-industrializacao (FB↔LF)
+- **FB (cid=1)**: transf-filial (FB↔CD), industrializacao saida (FB→LF),
+  dev-industrializacao (FB↔LF)
+- **CD (cid=4)**: transf-filial (CD↔FB), dev-industrializacao (CD↔LF)
+
+**Regra de `lote_destino` por acao** (recalculada em `04_propor_ajustes.py:cmd_propor`
+a partir da acao final, mais autoritativa que o default do script 03):
+
+| Acao | lote_destino |
+|---|---|
+| `RENOMEAR_LOTE` (=TRANSFERIR D006) | `lote_inventariado` (lote alvo) |
+| `PERDA_LF_FB` | `MIGRACAO` (D005, consolidador FB) |
+| `TRANSFERIR_CD_FB` | `MIGRACAO` (D005, consolidador FB) |
+| `TRANSFERIR_FB_CD` | `lote_inventariado` (lote inv na CD) |
+| `INDUSTRIALIZACAO_FB_LF` | `lote_inventariado` (lote inv na LF) |
+| `DEV_*` (qualquer direcao) | `lote_inventariado` (lote inv no destino) |
+| `INDISPONIBILIZAR_*` | `lote_odoo` (informacional) |
 
 ---
 
 ## Impacto no codigo
 
-- `scripts/inventario_2026_05/03_confrontar_inv_vs_odoo.py:confrontar_company()` — refatorar logica de agregacao para LF (cid=5) inicialmente; depois generalizar
-- `app/odoo/models/ajuste_estoque_inventario.py` — adicionar coluna `lote_destino`
-- `scripts/inventario_2026_05/04_propor_ajustes.py:cmd_propor()` — preencher `lote_destino` no insert
-- Migration: `scripts/migrations/2026_05_17_add_lote_destino_ajuste.{py,sql}`
+- `scripts/inventario_2026_05/03_confrontar_inv_vs_odoo.py:confrontar_company()` — bloco D004 aplicado a TODAS as companies (removido `if cid == 5`)
+- `scripts/inventario_2026_05/04_propor_ajustes.py:cmd_propor()` — `lote_destino` recalculado por acao (override do diff)
+- `app/odoo/models/ajuste_estoque_inventario.py` — colunas `lote_origem` + `lote_destino` (ja existem)
+- Migration: `scripts/migrations/2026_05_17_add_lote_destino_ajuste.{py,sql}` (ja em build.sh item 22, aplicada em prod)
