@@ -1,11 +1,47 @@
 {% extends "motos_assai/base_motos_assai.html" %}
 
+{#
+  Tela Faturamento (2026-05-18 — refactor):
+
+    3 secoes:
+      1. PRONTAS PARA FATURAR  → AssaiSeparacao status=FECHADA (sem NF ativa)
+      2. FATURADAS             → AssaiSeparacao status=FATURADA com NF BATEU
+      3. NFs ORFAS             → AssaiNfQpa sem separacao ou status != BATEU
+
+    Mudanca importante: a <tr> NAO eh mais accordion-toggle. Em vez disso, a
+    primeira coluna tem um botao chevron explicito (data-bs-toggle="collapse").
+    Isso evita o bug onde clicar nos botoes Excel/NF/CCe (na mesma <tr>) abria
+    o accordion alem de executar a acao — `event.stopPropagation()` no <a>
+    nao impedia o handler delegado do Bootstrap no document de capturar o
+    click via bubble que vinha de outros caminhos do DOM em mobile.
+
+    Acoes (botoes da coluna):
+      - Excel    : separacao_tela (visualiza separacao com chassi/modelo)
+      - NF       : faturamento_nf_pdf (presigned URL S3 do PDF) OU upload se vazio
+      - CCe (n)  : badge -> botao que abre PDF da CCe (cce_pdf)
+      - Agendar  : modal editar agendamento
+      - Alterar  : reabrir FECHADA -> EM_SEPARACAO (so se sem NF e sem Carregamento)
+      - Devolucao: registrar NFd
+#}
+
+{% macro chevron_btn(target_id) -%}
+<button type="button"
+        class="btn btn-link btn-sm p-0 text-secondary chevron-accordion"
+        data-bs-toggle="collapse"
+        data-bs-target="#{{ target_id }}"
+        aria-expanded="false"
+        aria-controls="{{ target_id }}"
+        title="Expandir/recolher detalhes">
+  <i class="fas fa-chevron-right"></i>
+</button>
+{%- endmacro %}
+
 {% block motos_assai_content %}
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
   <div>
     <h2 class="mb-1">Faturamento</h2>
     <p class="text-muted mb-0">
-      Separacoes fechadas + NFs Q.P.A. importadas (vinculadas e orfas).
+      Separacoes prontas para faturar, separacoes ja faturadas e NFs Q.P.A. orfas.
     </p>
   </div>
   <a id="btn-upload-nf-lote"
@@ -16,43 +52,38 @@
   </a>
 </div>
 
-<!-- ============ Separacoes FECHADA / FATURADA ============ -->
+<!-- ============ 1) Prontas para faturar (FECHADA) ============ -->
 <div class="mb-4">
   <h5 class="mb-2">
     <i class="fas fa-boxes text-primary"></i>
     Separacoes prontas para faturar
-    <span class="badge bg-primary ms-2">{{ separacoes|length }}</span>
+    <span class="badge bg-primary ms-2">{{ separacoes_prontas|length }}</span>
+    <small class="text-muted ms-2">(FECHADA — aguardando upload de NF Q.P.A.)</small>
   </h5>
 
-  <div id="tabela-separacoes-fechadas" class="table-responsive">
+  <div id="tabela-separacoes-prontas" class="table-responsive">
   <table class="table table-hover align-middle">
     <thead class="table-light">
       <tr>
+        <th style="width: 32px;"></th>
         <th>#</th>
         <th>Pedido</th>
         <th>Loja</th>
         <th>UF</th>
         <th>Cidade</th>
-        <th>NF Q.P.A.</th>
-        <th>Data NF</th>
         <th class="text-center">Itens</th>
-        <th class="text-center" title="Cartas de Correcao Eletronica vinculadas">CCe</th>
-        <th>Status sep.</th>
-        <th class="text-center">Excel</th>
+        <th>Fechada em</th>
         <th class="text-end">Acoes</th>
       </tr>
     </thead>
     <tbody>
       {% set onboarding_fat = namespace(usou_id_excel=false, usou_id_upload=false) %}
-      {% for row in separacoes %}
+      {% for row in separacoes_prontas %}
         {% set sep = row.sep %}
-        {% set nf = row.nf %}
         {% set loja = row.loja %}
-      <tr class="accordion-toggle-row"
-          data-bs-toggle="collapse"
-          data-bs-target="#sep-acc-{{ sep.id }}"
-          aria-expanded="false"
-          style="cursor: pointer;">
+        {% set acc_id = 'sep-pronta-acc-' ~ sep.id %}
+      <tr>
+        <td>{{ chevron_btn(acc_id) }}</td>
         <td><strong>{{ sep.id }}</strong></td>
         <td><code>{{ row.pedido_numero }}</code></td>
         <td>
@@ -64,93 +95,41 @@
         </td>
         <td>{{ row.loja_uf }}</td>
         <td>{{ row.loja_cidade }}</td>
-        <td>
-          {% if nf %}
-            <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}"
-               onclick="event.stopPropagation();"
-               class="text-decoration-none">
-              <code>{{ nf.numero or nf.chave_44[:8] ~ '...' }}</code>
-            </a>
-            <br>
-            {% if nf.status_match == 'BATEU' %}
-              <span class="badge bg-success">BATEU</span>
-            {% elif nf.status_match == 'DIVERGENTE' %}
-              <span class="badge bg-warning">DIVERGENTE</span>
-            {% else %}
-              <span class="badge bg-secondary">{{ nf.status_match }}</span>
-            {% endif %}
-          {% else %}
-            <span class="text-muted small">— sem NF —</span>
-          {% endif %}
-        </td>
-        <td class="small">
-          {% if nf and nf.data_emissao %}
-            {{ nf.data_emissao.strftime('%d/%m/%Y') }}
-          {% else %}
-            <span class="text-muted">-</span>
-          {% endif %}
-        </td>
         <td class="text-center">{{ row.qtd_items }}</td>
-        <td class="text-center">
-          {% if row.cces %}
-            {% set _tipos = row.cces|map(attribute='tipo')|list|join(', ') %}
-            <a href="{{ url_for('motos_assai.cce_detalhe', cce_id=row.cces[0].id) }}"
-               onclick="event.stopPropagation();"
-               class="badge bg-info text-decoration-none"
-               title="{{ row.cces|length }} CCe(s) — tipos: {{ _tipos }}">
-              <i class="fas fa-file-medical-alt"></i> {{ row.cces|length }}
-            </a>
-          {% else %}
-            <span class="text-muted">-</span>
-          {% endif %}
-        </td>
-        <td>
-          <span class="badge bg-{% if sep.status == 'FATURADA' %}info{% else %}success{% endif %}">
-            {{ sep.status }}
-          </span>
-        </td>
-        <td class="text-center">
-          {% if sep.solicitacao_excel_s3_key %}
-            <i class="fas fa-check text-success"
-               title="Excel ja gerado"></i>
-          {% else %}
-            -
-          {% endif %}
+        <td class="small">
+          {{ sep.fechada_em.strftime('%d/%m %H:%M') if sep.fechada_em else '-' }}
         </td>
         <td class="text-end">
+          {# === Excel: abre tela de Separacao (visualiza chassis + modelo) === #}
           {% set primeiro_excel = not onboarding_fat.usou_id_excel %}
           {% if primeiro_excel %}{% set onboarding_fat.usou_id_excel = true %}{% endif %}
           <a {% if primeiro_excel %}id="btn-gerar-excel"{% endif %}
-             href="{{ url_for('motos_assai.faturamento_solicitacao_excel', separacao_id=sep.id) }}"
-             onclick="event.stopPropagation();"
-             class="btn btn-sm btn-primary">
+             href="{{ url_for('motos_assai.separacao_tela', pedido_id=sep.pedido_id, loja_id=sep.loja_id, sep_id=sep.id) }}"
+             class="btn btn-sm btn-outline-primary"
+             title="Ver dados da separacao (chassis + modelos). Use o botao 'Excel' la para gerar a solicitacao Q.P.A.">
             <i class="fas fa-file-excel"></i> Excel
           </a>
+          {# === Upload NF === #}
           {% set primeiro_upload = not onboarding_fat.usou_id_upload %}
           {% if primeiro_upload %}{% set onboarding_fat.usou_id_upload = true %}{% endif %}
           <a {% if primeiro_upload %}id="btn-upload-nf"{% endif %}
              href="{{ url_for('motos_assai.faturamento_upload_nf', separacao_id=sep.id) }}"
-             onclick="event.stopPropagation();"
-             class="btn btn-sm btn-outline-primary">
+             class="btn btn-sm btn-primary"
+             title="Importar PDF da NF Q.P.A. emitida">
             <i class="fas fa-upload"></i> NF
           </a>
-          {# 2026-05-13: botao "Alterar Separacao" — apenas para FECHADA (sem NF, sem Carregamento ativo). #}
-          {% if sep.status == 'FECHADA' and not nf %}
+          {# === Alterar separacao (reabrir FECHADA -> EM_SEPARACAO) === #}
           <form method="POST"
                 action="{{ url_for('motos_assai.separacao_reabrir', separacao_id=sep.id) }}"
                 class="d-inline form-alterar-separacao-fat"
-                data-sep-id="{{ sep.id }}"
-                onclick="event.stopPropagation();">
+                data-sep-id="{{ sep.id }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-warning"
-                    title="Reabrir a separacao para edicao (volta para EM_SEPARACAO). Bloqueado se houver Carregamento ativo.">
+                    title="Reabrir a separacao para edicao (volta para EM_SEPARACAO).">
               <i class="fas fa-undo"></i> Alterar
             </button>
           </form>
-          {% endif %}
-          {# Plano Fase 4 A10: botao "Editar agendamento" (P1-1 fix).
-             Disponivel para qualquer sep ativa (nao CANCELADA). #}
-          {% if sep.status != 'CANCELADA' %}
+          {# === Agendar === #}
           <button type="button"
                   class="btn btn-sm btn-outline-info"
                   data-bs-toggle="modal"
@@ -160,27 +139,15 @@
                   data-agendamento="{{ sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else '' }}"
                   data-protocolo="{{ sep.protocolo or '' }}"
                   data-confirmado="{{ '1' if sep.agendamento_confirmado else '0' }}"
-                  onclick="event.stopPropagation();"
                   title="Editar expedicao, agendamento e protocolo">
             <i class="fas fa-calendar-alt"></i> Agendar
           </button>
-          {% endif %}
-          {# Botao Devolucao: so quando ha NF ativa (nao CANCELADA).
-             Linka para nf_detalhe com ?open=devolucao — JS la abre o modal. #}
-          {% if nf and nf.status_match != 'CANCELADA' %}
-          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}?open=devolucao"
-             onclick="event.stopPropagation();"
-             class="btn btn-sm btn-outline-warning"
-             title="Registrar devolucao por NFd">
-            <i class="fas fa-undo-alt"></i> Devolução
-          </a>
-          {% endif %}
         </td>
       </tr>
       <!-- Accordion expandivel com motos da separacao -->
       <tr>
-        <td colspan="12" class="p-0 border-0">
-          <div id="sep-acc-{{ sep.id }}" class="collapse">
+        <td colspan="9" class="p-0 border-0">
+          <div id="{{ acc_id }}" class="collapse">
             <div class="p-3 bg-light border-start border-end border-bottom">
               <h6 class="mb-2">
                 <i class="fas fa-motorcycle"></i>
@@ -210,14 +177,14 @@
               {% else %}
               <small class="text-muted">Sem motos vinculadas.</small>
               {% endif %}
-            </div>{# /.p-3 #}
-          </div>{# /.collapse #}
+            </div>
+          </div>
         </td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="12" class="text-center text-muted py-3">
-          Nenhuma separacao fechada no momento.
+        <td colspan="9" class="text-center text-muted py-3">
+          Nenhuma separacao pronta para faturar no momento.
         </td>
       </tr>
       {% endfor %}
@@ -226,7 +193,190 @@
   </div>
 </div>
 
-<!-- ============ NFs orfas (sem BATEU ou sem separacao) ============ -->
+<!-- ============ 2) Faturadas (FATURADA + NF BATEU) ============ -->
+<div class="mb-4">
+  <h5 class="mb-2">
+    <i class="fas fa-check-double text-success"></i>
+    Separacoes faturadas
+    <span class="badge bg-success ms-2">{{ separacoes_faturadas|length }}</span>
+    <small class="text-muted ms-2">(NF Q.P.A. importada e bateu com a separacao)</small>
+  </h5>
+
+  <div id="tabela-separacoes-faturadas" class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th style="width: 32px;"></th>
+        <th>#</th>
+        <th>Pedido</th>
+        <th>Loja</th>
+        <th>UF</th>
+        <th>Cidade</th>
+        <th>NF Q.P.A.</th>
+        <th>Data NF</th>
+        <th class="text-center">Itens</th>
+        <th class="text-center" title="Cartas de Correcao Eletronica vinculadas">CCe</th>
+        <th class="text-end">Acoes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in separacoes_faturadas %}
+        {% set sep = row.sep %}
+        {% set nf = row.nf %}
+        {% set loja = row.loja %}
+        {% set acc_id = 'sep-fat-acc-' ~ sep.id %}
+      <tr>
+        <td>{{ chevron_btn(acc_id) }}</td>
+        <td><strong>{{ sep.id }}</strong></td>
+        <td><code>{{ row.pedido_numero }}</code></td>
+        <td>
+          {% if loja %}
+            <strong>{{ loja.numero }}</strong> {{ loja.nome }}
+          {% else %}
+            -
+          {% endif %}
+        </td>
+        <td>{{ row.loja_uf }}</td>
+        <td>{{ row.loja_cidade }}</td>
+        <td>
+          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}"
+             class="text-decoration-none">
+            <code>{{ nf.numero or nf.chave_44[:8] ~ '...' }}</code>
+          </a>
+          <br>
+          {% if nf.status_match == 'BATEU' %}
+            <span class="badge bg-success">BATEU</span>
+          {% elif nf.status_match == 'DIVERGENTE' %}
+            <span class="badge bg-warning">DIVERGENTE</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ nf.status_match }}</span>
+          {% endif %}
+        </td>
+        <td class="small">
+          {% if nf.data_emissao %}
+            {{ nf.data_emissao.strftime('%d/%m/%Y') }}
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </td>
+        <td class="text-center">{{ row.qtd_items }}</td>
+        <td class="text-center">
+          {% if row.cces %}
+            {% set _tipos = row.cces|map(attribute='tipo')|list|join(', ') %}
+            {# Badge CCe vira botao que abre o PDF (presigned URL S3) #}
+            <a href="{{ url_for('motos_assai.cce_pdf', cce_id=row.cces[0].id) }}"
+               target="_blank"
+               rel="noopener"
+               class="badge bg-info text-decoration-none"
+               title="{{ row.cces|length }} CCe(s) — tipos: {{ _tipos }}. Clique para abrir PDF.">
+              <i class="fas fa-file-medical-alt"></i> {{ row.cces|length }}
+            </a>
+            {% if row.cces|length > 1 %}
+              <a href="{{ url_for('motos_assai.cce_detalhe', cce_id=row.cces[0].id) }}"
+                 class="small ms-1"
+                 title="Ver detalhe de todas as CCes">
+                <i class="fas fa-list"></i>
+              </a>
+            {% endif %}
+          {% else %}
+            <span class="text-muted">-</span>
+          {% endif %}
+        </td>
+        <td class="text-end">
+          {# === Excel: abre tela de Separacao === #}
+          <a href="{{ url_for('motos_assai.separacao_tela', pedido_id=sep.pedido_id, loja_id=sep.loja_id, sep_id=sep.id) }}"
+             class="btn btn-sm btn-outline-primary"
+             title="Ver dados da separacao (chassis + modelos)">
+            <i class="fas fa-file-excel"></i> Excel
+          </a>
+          {# === Ver PDF NF === #}
+          {% if nf.pdf_s3_key %}
+          <a href="{{ url_for('motos_assai.faturamento_nf_pdf', nf_id=nf.id) }}"
+             target="_blank"
+             rel="noopener"
+             class="btn btn-sm btn-primary"
+             title="Abrir PDF original da NF">
+            <i class="fas fa-file-pdf"></i> NF
+          </a>
+          {% else %}
+          <span class="btn btn-sm btn-outline-secondary disabled"
+                title="NF sem PDF armazenado (importada antes do campo existir)">
+            <i class="fas fa-file-pdf"></i> NF
+          </span>
+          {% endif %}
+          {# === Agendar === #}
+          <button type="button"
+                  class="btn btn-sm btn-outline-info"
+                  data-bs-toggle="modal"
+                  data-bs-target="#modal-editar-agendamento"
+                  data-sep-id="{{ sep.id }}"
+                  data-expedicao="{{ sep.expedicao.strftime('%Y-%m-%d') if sep.expedicao else '' }}"
+                  data-agendamento="{{ sep.agendamento.strftime('%Y-%m-%d') if sep.agendamento else '' }}"
+                  data-protocolo="{{ sep.protocolo or '' }}"
+                  data-confirmado="{{ '1' if sep.agendamento_confirmado else '0' }}"
+                  title="Editar expedicao, agendamento e protocolo">
+            <i class="fas fa-calendar-alt"></i> Agendar
+          </button>
+          {# === Devolucao === #}
+          {% if nf and nf.status_match != 'CANCELADA' %}
+          <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}?open=devolucao"
+             class="btn btn-sm btn-outline-warning"
+             title="Registrar devolucao por NFd">
+            <i class="fas fa-undo-alt"></i> Devolucao
+          </a>
+          {% endif %}
+        </td>
+      </tr>
+      <!-- Accordion expandivel com motos da separacao -->
+      <tr>
+        <td colspan="11" class="p-0 border-0">
+          <div id="{{ acc_id }}" class="collapse">
+            <div class="p-3 bg-light border-start border-end border-bottom">
+              <h6 class="mb-2">
+                <i class="fas fa-motorcycle"></i>
+                Motos da separacao #{{ sep.id }} ({{ row.qtd_items }})
+              </h6>
+              {% if row['items'] %}
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Chassi</th>
+                    <th>Modelo</th>
+                    <th>Cor</th>
+                    <th class="text-end">Valor unit.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for it in row['items'] %}
+                  <tr>
+                    <td><code>{{ it.chassi }}</code></td>
+                    <td>{{ it.modelo_codigo }} — {{ it.modelo_nome }}</td>
+                    <td>{{ it.cor }}</td>
+                    <td class="text-end">R$ {{ it.valor_unitario | numero_br(2) }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <small class="text-muted">Sem motos vinculadas.</small>
+              {% endif %}
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="11" class="text-center text-muted py-3">
+          Nenhuma separacao faturada no momento.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ============ 3) NFs orfas (sem BATEU ou sem separacao) ============ -->
 <div class="mb-4">
   <h5 class="mb-2">
     <i class="fas fa-file-invoice text-warning"></i>
@@ -242,6 +392,7 @@
   <table class="table table-hover align-middle">
     <thead class="table-light">
       <tr>
+        <th style="width: 32px;"></th>
         <th>#</th>
         <th>Numero NF</th>
         <th>Data NF</th>
@@ -258,11 +409,9 @@
     <tbody>
       {% for row in nfs_orfas %}
         {% set nf = row.nf %}
-      <tr class="accordion-toggle-row"
-          data-bs-toggle="collapse"
-          data-bs-target="#nf-acc-{{ nf.id }}"
-          aria-expanded="false"
-          style="cursor: pointer;">
+        {% set acc_id = 'nf-orfa-acc-' ~ nf.id %}
+      <tr>
+        <td>{{ chevron_btn(acc_id) }}</td>
         <td><strong>{{ nf.id }}</strong></td>
         <td>
           <code>{{ nf.numero or nf.chave_44[:8] ~ '...' }}</code>
@@ -281,10 +430,11 @@
         <td class="text-center">
           {% if row.cces %}
             {% set _tipos = row.cces|map(attribute='tipo')|list|join(', ') %}
-            <a href="{{ url_for('motos_assai.cce_detalhe', cce_id=row.cces[0].id) }}"
-               onclick="event.stopPropagation();"
+            <a href="{{ url_for('motos_assai.cce_pdf', cce_id=row.cces[0].id) }}"
+               target="_blank"
+               rel="noopener"
                class="badge bg-info text-decoration-none"
-               title="{{ row.cces|length }} CCe(s) — tipos: {{ _tipos }}">
+               title="{{ row.cces|length }} CCe(s) — tipos: {{ _tipos }}. Clique para abrir PDF.">
               <i class="fas fa-file-medical-alt"></i> {{ row.cces|length }}
             </a>
           {% else %}
@@ -302,37 +452,44 @@
           {{ nf.importada_em.strftime('%d/%m/%Y %H:%M') if nf.importada_em else '-' }}
         </td>
         <td class="text-end">
+          {# === Ver PDF NF === #}
+          {% if nf.pdf_s3_key %}
+          <a href="{{ url_for('motos_assai.faturamento_nf_pdf', nf_id=nf.id) }}"
+             target="_blank"
+             rel="noopener"
+             class="btn btn-sm btn-outline-primary"
+             title="Abrir PDF original da NF">
+            <i class="fas fa-file-pdf"></i> NF
+          </a>
+          {% endif %}
           <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}"
-             onclick="event.stopPropagation();"
              class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-eye"></i> Detalhe
           </a>
           {% if nf.status_match == 'NAO_RECONCILIADO' %}
           <button type="button"
-                  class="btn btn-sm btn-warning ms-1"
+                  class="btn btn-sm btn-warning"
                   data-bs-toggle="modal"
                   data-bs-target="#modal-vincular-nf"
                   data-nf-id="{{ nf.id }}"
                   data-nf-numero="{{ nf.numero or 'NF#' ~ nf.id }}"
-                  data-cnpj="{{ nf.destinatario_cnpj or '' }}"
-                  onclick="event.stopPropagation();">
+                  data-cnpj="{{ nf.destinatario_cnpj or '' }}">
             <i class="fas fa-link"></i> Vincular
           </button>
           {% endif %}
           {% if nf.status_match != 'CANCELADA' %}
           <a href="{{ url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf.id) }}?open=devolucao"
-             onclick="event.stopPropagation();"
-             class="btn btn-sm btn-outline-warning ms-1"
+             class="btn btn-sm btn-outline-warning"
              title="Registrar devolucao por NFd">
-            <i class="fas fa-undo-alt"></i> Devolução
+            <i class="fas fa-undo-alt"></i> Devolucao
           </a>
           {% endif %}
         </td>
       </tr>
       <!-- Accordion expandivel com chassis da NF -->
       <tr>
-        <td colspan="11" class="p-0 border-0">
-          <div id="nf-acc-{{ nf.id }}" class="collapse">
+        <td colspan="12" class="p-0 border-0">
+          <div id="{{ acc_id }}" class="collapse">
             <div class="p-3 bg-light border-start border-end border-bottom">
               <h6 class="mb-2">
                 <i class="fas fa-motorcycle"></i>
@@ -368,8 +525,8 @@
               {% else %}
               <small class="text-muted">NF sem chassis extraidos.</small>
               {% endif %}
-            </div>{# /.p-3 #}
-          </div>{# /.collapse #}
+            </div>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -391,12 +548,16 @@
 {# Plano Fase 4 A10 (P1-1 fix): modal editar agendamento — compartilhado com nf_detalhe.html #}
 {% include 'motos_assai/faturamento/_modal_editar_agendamento.html' %}
 
+<style>
+  /* Rotaciona chevron quando o accordion esta aberto */
+  .chevron-accordion .fa-chevron-right { transition: transform 120ms ease; }
+  .chevron-accordion[aria-expanded="true"] .fa-chevron-right { transform: rotate(90deg); }
+</style>
+
 <script>
 window.MOTOS_ASSAI_FAT = {
   endpoints: {
     vincularNfBase: '{{ url_for("motos_assai.faturamento_vincular_nf_manual_ajax", nf_id=999999999)|replace("/999999999", "/") }}',
-    // Endpoint AJAX: pedidos cujos cabecalhos (AssaiPedidoVendaLoja) estao em
-    // loja com CNPJ informado. CNPJ e a chave deterministica de match.
     pedidosPorCnpjBase: '{{ url_for("motos_assai.faturamento_pedidos_por_cnpj_ajax", cnpj="__CNPJ__") }}',
   },
 };
@@ -418,17 +579,13 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Modal vincular NF — match por CNPJ destinatario (chave deterministica).
-  // Carrega pedidos cuja loja tem o mesmo CNPJ da NF via AJAX e envia
-  // apenas pedido_id (backend deriva loja do CNPJ).
   var modal = document.getElementById('modal-vincular-nf');
   var pedidoSelect = document.getElementById('vinc-pedido-select');
   var btnConfirmar = document.getElementById('btn-confirmar-vincular-nf');
 
-  // Sanitiza CNPJ removendo mascara (mantem so digitos)
   function _sanitizeCnpj(cnpj) {
     return (cnpj || '').replace(/\D/g, '');
   }
-  // Formata 14 digitos como 12.345.678/0001-90 (para display)
   function _formatCnpj(cnpj) {
     var d = _sanitizeCnpj(cnpj);
     if (d.length !== 14) return cnpj || '';
@@ -446,13 +603,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
       document.getElementById('vinc-nf-id').value = nfId;
       document.getElementById('vinc-nf-numero').textContent = nfNumero;
-      // Display: CNPJ formatado (chave de match)
       var displayEl = document.getElementById('vinc-loja-display');
       displayEl.textContent = cnpjSan ? _formatCnpj(cnpjRaw) : '— sem CNPJ destinatario —';
 
-      // Helpers seguros: nunca usar innerHTML com dados de API (XSS).
       function _placeholderOption(label) {
-        // Limpa todas as options e adiciona uma de placeholder via textContent.
         while (pedidoSelect.firstChild) {
           pedidoSelect.removeChild(pedidoSelect.firstChild);
         }
@@ -462,7 +616,6 @@ document.addEventListener('DOMContentLoaded', function () {
         pedidoSelect.appendChild(opt);
       }
 
-      // Reset select e botao
       pedidoSelect.disabled = true;
       _placeholderOption('— Carregando… —');
       btnConfirmar.disabled = true;
@@ -480,8 +633,6 @@ document.addEventListener('DOMContentLoaded', function () {
           _placeholderOption('— ' + (data.erro || 'falha') + ' —');
           return;
         }
-        // Enriquece display com loja resolvida via CNPJ (referencia humana).
-        // Constroi DOM via createElement + textContent — evita XSS via nome de loja.
         if (data.loja) {
           while (displayEl.firstChild) displayEl.removeChild(displayEl.firstChild);
           var cnpjSpan = document.createElement('span');
@@ -498,7 +649,6 @@ document.addEventListener('DOMContentLoaded', function () {
           _placeholderOption('— Nenhum pedido aberto para esse CNPJ —');
           return;
         }
-        // Popula options via createElement (sem innerHTML).
         while (pedidoSelect.firstChild) {
           pedidoSelect.removeChild(pedidoSelect.firstChild);
         }
@@ -519,7 +669,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Habilita botao confirmar apenas quando ha pedido selecionado.
   if (pedidoSelect) {
     pedidoSelect.addEventListener('change', function () {
       btnConfirmar.disabled = !pedidoSelect.value;
@@ -540,7 +689,6 @@ document.addEventListener('DOMContentLoaded', function () {
         var csrfMeta = document.querySelector('meta[name="csrf-token"]');
         var csrf = csrfMeta ? csrfMeta.content : '';
         var url = window.MOTOS_ASSAI_FAT.endpoints.vincularNfBase + nfId;
-        // Backend deriva tudo de nf.destinatario_cnpj — JS so envia pedido_id.
         var payload = {pedido_id: parseInt(pedidoId, 10)};
         var r = await fetch(url, {
           method: 'POST',
@@ -553,8 +701,6 @@ document.addEventListener('DOMContentLoaded', function () {
           btnConfirmar.disabled = false;
           return;
         }
-        // Se sep foi criada via NF (S1=b), redirecionar para nf_detalhe — la
-        // o Modal Expedicao auto-abre via upload_nf_modal_expedicao.js.
         bootstrap.Modal.getInstance(modal)?.hide();
         if (data.sep_criada_via_nf) {
           alert('NF vinculada — separacao criada via NF. Configure a expedicao agora.');

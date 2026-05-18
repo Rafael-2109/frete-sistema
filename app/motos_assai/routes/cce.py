@@ -11,7 +11,10 @@ Endpoints:
 - POST /motos-assai/cce/upload      — processa upload de 1+ PDFs
 - GET  /motos-assai/cce/<id>        — detalhe
 """
-from flask import render_template, request, redirect, url_for, flash, jsonify
+from flask import (
+    render_template, request, redirect, url_for, flash, jsonify,
+    current_app, abort,
+)
 from flask_login import login_required, current_user
 
 from app.motos_assai.routes import motos_assai_bp
@@ -26,6 +29,7 @@ from app.motos_assai.models import (
 from app.motos_assai.services.cce_service import (
     registrar_cce, CceServiceError,
 )
+from app.utils.file_storage import FileStorage
 
 
 @motos_assai_bp.route('/cce')
@@ -178,6 +182,43 @@ def cce_detalhe(cce_id):
         cce=cce,
         nf_atual=nf_atual,
     )
+
+
+@motos_assai_bp.route('/cce/<int:cce_id>/pdf')
+@login_required
+@require_motos_assai
+def cce_pdf(cce_id):
+    """Redireciona para presigned URL S3 (ou serve local) do PDF original da CCe.
+
+    Bloqueia se a CCe nao tem `pdf_s3_key` (upload S3 falhou no registro).
+    """
+    cce = AssaiCce.query.get_or_404(cce_id)
+    if not cce.pdf_s3_key:
+        flash(
+            f'CCe {cce.protocolo_cce} nao tem PDF armazenado '
+            '(upload S3 falhou no registro).',
+            'warning',
+        )
+        return redirect(url_for('motos_assai.cce_detalhe', cce_id=cce_id))
+
+    storage = FileStorage()
+    if not storage.file_exists(cce.pdf_s3_key):
+        current_app.logger.warning(
+            'pdf_s3_key da CCe %s sumiu do storage: %s', cce_id, cce.pdf_s3_key,
+        )
+        flash('Arquivo PDF nao encontrado no storage.', 'danger')
+        return redirect(url_for('motos_assai.cce_detalhe', cce_id=cce_id))
+
+    if storage.use_s3 and not cce.pdf_s3_key.startswith('uploads/'):
+        url = storage.get_presigned_url(cce.pdf_s3_key, expires_in=300)
+        if not url:
+            abort(500)
+        return redirect(url)
+
+    url = storage.get_file_url(cce.pdf_s3_key)
+    if not url:
+        abort(500)
+    return redirect(url)
 
 
 @motos_assai_bp.route('/cce/<int:cce_id>/tentar-aplicar', methods=['POST'])

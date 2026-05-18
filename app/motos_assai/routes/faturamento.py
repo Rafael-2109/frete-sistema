@@ -1,6 +1,9 @@
 import re
 
-from flask import render_template, redirect, url_for, flash, Response, current_app, request, jsonify
+from flask import (
+    render_template, redirect, url_for, flash, Response,
+    current_app, request, jsonify, abort,
+)
 from flask_login import login_required, current_user
 from app import db
 from app.motos_assai.routes import motos_assai_bp
@@ -15,6 +18,7 @@ from app.motos_assai.models import (
     NF_STATUS_BATEU,
     PEDIDO_STATUS_ABERTO, PEDIDO_STATUS_PARCIALMENTE_FATURADO,
 )
+from app.utils.file_storage import FileStorage
 from app.motos_assai.forms import UploadNfQpaForm
 from app.motos_assai.services.parsers.nf_qpa_adapter import (
     importar_nf_qpa, NfQpaParseError, NfQpaJaImportadaError,
@@ -31,11 +35,10 @@ from app.motos_assai.services.cancelamento_nf_service import (
 def faturamento_lista():
     """Lista de SEPARACOES fechadas/faturadas + NFs Q.P.A. (vinculadas E orfas).
 
-    Item 1c (2026-05-12): unifica a visao de faturamento mostrando:
-      - Separacoes FECHADA/FATURADA com UF/cidade/pedido + NF vinculada (se houver)
-        + accordion com motos da separacao
-      - NFs Q.P.A. importadas que NAO bateram com separacao (orfas: sem
-        separacao_id OU status_match != BATEU) com accordion dos chassis
+    Atualizado 2026-05-18 (Rafael):
+      - Separa em 2 secoes: PRONTAS PARA FATURAR (FECHADA, sem NF ativa) e
+        FATURADAS (FATURADA com NF BATEU). A mistura antiga confundia operador.
+      - NFs orfas (sem BATEU ou sem separacao) permanece como 3a secao.
     """
     # === Separacoes FECHADA/FATURADA com NF vinculada via outerjoin ===
     sep_rows = (
@@ -133,10 +136,12 @@ def faturamento_lista():
         cnpj_clean = re.sub(r'\D', '', nf_obj.destinatario_cnpj or '')
         return loja_por_cnpj.get(cnpj_clean)
 
-    separacoes = []
+    # Particionar: prontas (FECHADA sem NF ativa) vs faturadas (FATURADA + NF)
+    separacoes_prontas = []
+    separacoes_faturadas = []
     for sep, nf in sep_rows:
         loja = sep.loja
-        separacoes.append({
+        row = {
             'sep': sep,
             'nf': nf,
             'loja': loja,
@@ -146,7 +151,12 @@ def faturamento_lista():
             'items': items_por_sep.get(sep.id, []),
             'qtd_items': len(items_por_sep.get(sep.id, [])),
             'cces': cces_por_nf.get(nf.id, []) if nf else [],
-        })
+        }
+        if sep.status == SEPARACAO_STATUS_FATURADA and nf is not None:
+            separacoes_faturadas.append(row)
+        else:
+            # FECHADA, ou FATURADA sem NF (edge raro). Vai para "prontas".
+            separacoes_prontas.append(row)
 
     # Items das NFs orfas em batch
     nf_orfa_ids = [n.id for n in nfs_orfas_rows]
@@ -190,9 +200,52 @@ def faturamento_lista():
 
     return render_template(
         'motos_assai/faturamento/lista_separacoes.html',
-        separacoes=separacoes,
+        separacoes_prontas=separacoes_prontas,
+        separacoes_faturadas=separacoes_faturadas,
         nfs_orfas=nfs_orfas,
+        # Mantido para retrocompatibilidade caso outro lugar leia `separacoes`
+        separacoes=separacoes_prontas + separacoes_faturadas,
     )
+
+
+@motos_assai_bp.route('/faturamento/nfs/<int:nf_id>/pdf')
+@login_required
+@require_motos_assai
+def faturamento_nf_pdf(nf_id):
+    """Redireciona para presigned URL S3 (ou serve local) do PDF original da NF Q.P.A.
+
+    Bloqueia se a NF nao tem `pdf_s3_key` (NF importada antes do campo existir
+    ou upload S3 falhou na importacao).
+    """
+    nf = AssaiNfQpa.query.get_or_404(nf_id)
+    if not nf.pdf_s3_key:
+        flash(
+            f'NF {nf.numero or nf.id} nao tem PDF armazenado '
+            '(importada antes do campo existir ou upload S3 falhou).',
+            'warning',
+        )
+        return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf_id))
+
+    storage = FileStorage()
+    if not storage.file_exists(nf.pdf_s3_key):
+        current_app.logger.warning(
+            'pdf_s3_key sumiu do storage: %s (nf %s)', nf.pdf_s3_key, nf_id,
+        )
+        flash('Arquivo PDF nao encontrado no storage.', 'danger')
+        return redirect(url_for('motos_assai.faturamento_nf_detalhe', nf_id=nf_id))
+
+    # S3 presigned (visualizacao inline)
+    if storage.use_s3 and not nf.pdf_s3_key.startswith('uploads/'):
+        url = storage.get_presigned_url(nf.pdf_s3_key, expires_in=300)
+        if not url:
+            abort(500)
+        return redirect(url)
+
+    # Local
+    url = storage.get_file_url(nf.pdf_s3_key)
+    if not url:
+        abort(500)
+    return redirect(url)
 
 
 @motos_assai_bp.route('/faturamento/separacao/<int:separacao_id>/excel')

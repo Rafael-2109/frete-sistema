@@ -90,9 +90,12 @@ python scripts/migrations/hora_34_pagamento_multiformas.py \
     || echo "⚠️ Migration hora_34 falhou, continuando deploy..."
 
 # 10c. HORA 35: cleanup de motos vinculadas a aliases mergidos.
-echo "HORA 35: cleanup motos em aliases mergidos..."
-python scripts/migrations/hora_35_cleanup_alias_motos.py \
-    || echo "⚠️ Migration hora_35 falhou, continuando deploy..."
+# DESATIVADO 2026-05-18: cleanup one-shot ja aplicado em prod. Para re-rodar
+# manualmente (apos novo merge de aliases): Render Shell ->
+#   python scripts/migrations/hora_35_cleanup_alias_motos.py
+# echo "HORA 35: cleanup motos em aliases mergidos..."
+# python scripts/migrations/hora_35_cleanup_alias_motos.py \
+#     || echo "⚠️ Migration hora_35 falhou, continuando deploy..."
 
 # 10d. HORA 36: campo consumidor_final em hora_venda (NF-e TagPlus).
 # Boolean nullable: NULL=infere via doc, TRUE/FALSE=explicito do operador.
@@ -145,25 +148,23 @@ python scripts/migrations/hora_30_seed_aliases_atuais.py \
 # DDLs primeiro; depois 03, 04, 05, 06 seeds).
 
 # 12. Pessoal (2026-05-10): corrige bugs do dedup de pessoal_transacoes.
-# Causa: hash usava `documento` cru (sensivel a zero-a-esquerda) e `valor`
-# Decimal sem precisao canonica (50 vs 50.00 -> hashes distintos). Re-importacoes
-# do mesmo extrato criavam duplicatas. Ordem importante:
-#   12a. Limpa duplicatas remanescentes detectadas pelo algoritmo NOVO.
-#   12b. Regenera todos os hash_transacao com algoritmo NOVO.
-#   12c. Reaplica heuristica L4 (PAGTO POR DEB EM C/C, etc) em transacoes que
-#        ficaram com excluir_relatorio=False por bug em propagar_para_pendentes.
-# Todos idempotentes (rodar 2x = nada faz).
-echo "Pessoal: limpar duplicatas detectadas pelo dedup v2..."
-python scripts/migrations/limpar_duplicatas_dedup_v2.py --aplicar \
-    || echo "⚠️ limpar_duplicatas_dedup_v2 falhou, continuando deploy..."
-
-echo "Pessoal: regenerar hash_transacao com algoritmo novo..."
-python scripts/migrations/recalcular_hash_transacao_pessoal.py --aplicar \
-    || echo "⚠️ recalcular_hash_transacao_pessoal falhou, continuando deploy..."
-
-echo "Pessoal: re-aplicar heuristica L4 em transacoes orfas..."
-python scripts/migrations/recategorizar_pendentes_pessoal.py --aplicar \
-    || echo "⚠️ recategorizar_pendentes_pessoal falhou, continuando deploy..."
+# DESATIVADO 2026-05-18: os 3 scripts ja foram aplicados em prod e sao
+# idempotentes mas custosos (varrem pessoal_transacoes inteiro a cada deploy).
+# Para re-rodar manualmente (apos nova queda de qualidade do hash): Render Shell:
+#   python scripts/migrations/limpar_duplicatas_dedup_v2.py --aplicar
+#   python scripts/migrations/recalcular_hash_transacao_pessoal.py --aplicar
+#   python scripts/migrations/recategorizar_pendentes_pessoal.py --aplicar
+# echo "Pessoal: limpar duplicatas detectadas pelo dedup v2..."
+# python scripts/migrations/limpar_duplicatas_dedup_v2.py --aplicar \
+#     || echo "⚠️ limpar_duplicatas_dedup_v2 falhou, continuando deploy..."
+#
+# echo "Pessoal: regenerar hash_transacao com algoritmo novo..."
+# python scripts/migrations/recalcular_hash_transacao_pessoal.py --aplicar \
+#     || echo "⚠️ recalcular_hash_transacao_pessoal falhou, continuando deploy..."
+#
+# echo "Pessoal: re-aplicar heuristica L4 em transacoes orfas..."
+# python scripts/migrations/recategorizar_pendentes_pessoal.py --aplicar \
+#     || echo "⚠️ recategorizar_pendentes_pessoal falhou, continuando deploy..."
 
 # 13. Custeio (2026-05-10): auditoria + Sprint 1+2+3 — 4 migrations DDL.
 # Aplicacao em ordem: partial UNIQUE (C8) -> CHECK constraints (C12)
@@ -312,22 +313,24 @@ echo "Motos Assai 29: devolucao por NF de venda Q.P.A. (NFd)..."
 python scripts/migrations/motos_assai_29_devolucao.py \
     || echo "⚠️ Migration motos_assai_29 falhou, continuando deploy..."
 
-# 15f. Motos Assai backfill match NFs (2026-05-17): resolve 189+ divergencias
-# em 44 NFs Q.P.A. com 3 causas raiz (loja_id NULL apos regex falhar, separacoes
-# de teste, conferencia do Recibo 4 abandonada em 2026-05-09 com 5/107).
-# Auto-cicatrizante: conforme novos recibos Motochefe chegam, NFs do backlog
-# viram BATEU em deploys subsequentes. 4 partes idempotentes:
-#   parte1: UPDATE retroativo loja_id via CNPJ (no-op se ja resolvido pelo P0)
-#   parte2: DELETE 2 AssaiMoto de teste com chassi 4 digitos (id=1,5)
-#           e soft-delete dos respectivos AssaiReciboItem (ativo=False)
-#   parte4: finaliza recibos pendentes (Recibo 4 prioritariamente) — valida
-#           regex_chassi, cria AssaiMoto, emite EVENTO_ESTOQUE, marca conferido
-#   parte3: cria separacao sintetica FATURADA por NF, espelho 1:1, SKIP NFs
-#           com chassis ainda fora de assai_moto (depende de parte4)
-# Pos commit 848b992a (P0 match CNPJ + tolerancia R$1,00 absoluta).
-echo "Motos Assai backfill: finalizar recibos + match NFs (sep sintetica)..."
-python scripts/migrations/motos_assai_backfill_match_nfs_2026_05_17.py \
-    || echo "⚠️ Backfill motos_assai falhou, continuando deploy..."
+# 15f. Motos Assai backfill match NFs (2026-05-17): REMOVIDO DO BUILD (2026-05-18).
+# Motivo: a parte3 cria pedido PLACEHOLDER `BACKFILL-2026-05-17` quando a loja
+# da NF nao tem AssaiPedidoVendaLoja real cadastrada — e RECRIA o pedido +
+# separacao a cada deploy (re-emitindo eventos SEPARADA/FATURADA nos chassis).
+# Confirmado em prod 2026-05-17: NF 1737 ficou vinculada ao pedido placeholder
+# id=3 numero='BACKFILL-2026-05-17' loja Aricanduva — eventos rodaram 2x em
+# deploys consecutivos. Para re-rodar manualmente (apos novos recibos / NFs
+# importadas), use Render Shell:
+#   python scripts/migrations/motos_assai_backfill_match_nfs_2026_05_17.py
+# python scripts/migrations/motos_assai_backfill_match_nfs_2026_05_17.py \
+#     || echo "⚠️ Backfill motos_assai falhou, continuando deploy..."
+
+# 15f.b Cleanup do pedido placeholder BACKFILL + desvinculacao da NF 1737.
+# Idempotente: skip total se pedido `BACKFILL-2026-05-17` nao existe (ja rodou).
+# Apos primeira execucao, pode permanecer no build sem efeito colateral.
+echo "Motos Assai cleanup: remover pedido BACKFILL + desvincular NF 1737..."
+python scripts/migrations/remover_pedido_backfill_e_desvincular_nf_1737.py \
+    || echo "⚠️ Cleanup BACKFILL falhou, continuando deploy..."
 
 # 15g. Motos Assai 31 (2026-05-17): novo tipo de divergencia
 # CHASSI_FATURADO_SEM_RECIBO no CHECK constraint. _calcular_match agora exige
@@ -404,5 +407,7 @@ python scripts/migrations/2026_05_19_add_fase_pipeline.py \
 echo "Build concluído com sucesso!"
 
 
-# Linha antiga mantida por compatibilidade (pode ser removida depois)
-python aplicar_migracao_render.py || echo "Migration already applied"
+# DESATIVADO 2026-05-18: linha legacy ja consolidada via flask db upgrade.
+# Migrations sao gerenciadas via secao 3 (flask db upgrade) e scripts
+# explicitos no build.sh — aplicar_migracao_render.py era helper antigo.
+# python aplicar_migracao_render.py || echo "Migration already applied"
