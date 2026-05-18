@@ -116,33 +116,64 @@ def test_resolver_location_destino_perda_usa_virtual():
     assert resolver_location_destino('perda', company_destino=1) == 5
 
 
-def test_resolver_location_destino_transf_filial_usa_interna():
-    """transf-filial: location_destino = COMPANY_LOCATIONS[destino]."""
-    # FB -> CD: destino=4, COMPANY_LOCATIONS[4]=32
-    assert resolver_location_destino('transf-filial', company_destino=4) == 32
-    # CD -> FB: destino=1, COMPANY_LOCATIONS[1]=8
-    assert resolver_location_destino('transf-filial', company_destino=1) == 8
+def test_resolver_location_destino_transf_filial_usa_virtual_em_transito():
+    """G006: transf-filial sempre virtual Em Transito Filiais (6)."""
+    # FB -> CD: origem=1, destino=4 -> 6 (Em Transito Filiais)
+    assert resolver_location_destino(
+        'transf-filial', company_destino=4, company_origem=1
+    ) == 6
+    # CD -> FB: origem=4, destino=1 -> 6 (Em Transito Filiais)
+    assert resolver_location_destino(
+        'transf-filial', company_destino=1, company_origem=4
+    ) == 6
+    # Backward compat (sem company_origem): sempre 6
+    assert resolver_location_destino('transf-filial', company_destino=4) == 6
 
 
-def test_resolver_location_destino_industrializacao_usa_interna():
-    """industrializacao: location_destino = COMPANY_LOCATIONS[5] = 42 (LF)."""
-    assert resolver_location_destino('industrializacao', company_destino=5) == 42
+def test_resolver_location_destino_industrializacao_usa_virtual_em_transito():
+    """G006: industrializacao usa virtual conforme origem (pt 53/66)."""
+    # FB -> LF industrializacao: origem=1 -> 26489 (Em Transito Industr, pt 53)
+    assert resolver_location_destino(
+        'industrializacao', company_destino=5, company_origem=1
+    ) == 26489
+    # LF -> FB industrializacao retorno: origem=5 -> 5 (Parceiros, pt 66)
+    assert resolver_location_destino(
+        'industrializacao', company_destino=1, company_origem=5
+    ) == 5
+    # Backward compat (sem origem): 26489
+    assert resolver_location_destino(
+        'industrializacao', company_destino=5
+    ) == 26489
 
 
-def test_resolver_location_destino_dev_industrializacao_usa_interna():
-    """dev-industrializacao: location_destino = COMPANY_LOCATIONS[destino]."""
-    assert resolver_location_destino('dev-industrializacao', company_destino=5) == 42
-    assert resolver_location_destino('dev-industrializacao', company_destino=1) == 8
-    assert resolver_location_destino('dev-industrializacao', company_destino=4) == 32
+def test_resolver_location_destino_dev_industrializacao_usa_virtual():
+    """G006: dev-industrializacao usa virtual (pt 53/66/96)."""
+    # LF retorno industr (pt 66): origem=5 -> 5 (Parceiros)
+    assert resolver_location_destino(
+        'dev-industrializacao', company_destino=1, company_origem=5
+    ) == 5
+    # FB dev industr (pt 53): origem=1 -> 26489
+    assert resolver_location_destino(
+        'dev-industrializacao', company_destino=4, company_origem=1
+    ) == 26489
+    # CD retrabalho (pt 96): origem=4 -> 26489
+    assert resolver_location_destino(
+        'dev-industrializacao', company_destino=1, company_origem=4
+    ) == 26489
+    # Backward compat (sem origem): 26489
+    assert resolver_location_destino(
+        'dev-industrializacao', company_destino=5
+    ) == 26489
 
 
-def test_resolver_location_destino_company_invalida_raises():
-    with pytest.raises(ValueError, match='company_destino=99'):
-        resolver_location_destino('transf-filial', company_destino=99)
+def test_resolver_location_destino_tipo_op_invalido_raises():
+    """G006: tipo_op desconhecido raises ValueError (independente de companies)."""
+    with pytest.raises(ValueError, match='tipo_op='):
+        resolver_location_destino('tipo_inexistente', company_destino=99)
 
 
-def test_f5a_passa_location_destino_correto_para_transferir(db):
-    """BUG-1 fix: TRANSFERIR_CD_FB usa COMPANY_LOCATIONS[1]=8, nao 5."""
+def test_f5a_passa_location_destino_virtual_em_transito_para_transferir(db):
+    """G006: TRANSFERIR_CD_FB usa 6 (Em Transito Filiais virtual), nao 8 (FB interna)."""
     from app.odoo.models import AjusteEstoqueInventario
 
     aj = AjusteEstoqueInventario(
@@ -162,14 +193,15 @@ def test_f5a_passa_location_destino_correto_para_transferir(db):
     svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
     svc.f5a_criar_pickings([aj], executado_por='pytest')
 
-    # Confirma que criar_transferencia foi chamado com location_destino_id=8
-    # (FB interna), NAO 5 (Parceiros virtual)
+    # G006: TRANSFERIR_CD_FB (origem=4, destino=1) -> location_destino=6
+    # (Em Transito Filiais virtual). Antes do fix G006 era 8 (FB interna)
+    # mas Odoo recusa picking inter-company com location interna.
     call_kwargs = picking_svc.criar_transferencia.call_args.kwargs
-    assert call_kwargs['location_destino_id'] == 8, (
-        f"BUG-1 regressao: esperado 8 (COMPANY_LOCATIONS[1] FB), "
+    assert call_kwargs['location_destino_id'] == 6, (
+        f"G006 regressao: esperado 6 (Em Transito Filiais virtual), "
         f"got {call_kwargs['location_destino_id']}"
     )
-    # Origem CD: COMPANY_LOCATIONS[4]=32
+    # Origem CD: COMPANY_LOCATIONS[4]=32 (interna — origem sempre interna)
     assert call_kwargs['location_origem_id'] == 32
 
 
@@ -829,6 +861,6 @@ def test_f5b_warning_em_ajuste_sem_picking_id(db, caplog):
     assert result == {}
     picking_svc.confirmar_e_reservar.assert_not_called()
     assert any(
-        'F5b skip ajuste' in r.message and 'sem picking_id_odoo' in r.message
+        'Skip ajuste' in r.message and 'sem picking_id_odoo' in r.message
         for r in caplog.records
     )

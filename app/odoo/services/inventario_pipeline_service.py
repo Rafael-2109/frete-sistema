@@ -21,10 +21,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy.exc import OperationalError
+
 from app import db
 from app.odoo.constants.locations import COMPANY_LOCATIONS
 from app.odoo.constants.operacoes_fiscais import COMPANY_PARTNER_ID
-from app.odoo.models import OperacaoOdooAuditoria
+from app.odoo.models import AjusteEstoqueInventario, OperacaoOdooAuditoria
 from app.odoo.services.stock_picking_service import StockPickingService
 from app.odoo.utils.connection import get_odoo_connection
 from app.recebimento.services.playwright_nfe_transmissao import (
@@ -157,6 +159,45 @@ class InventarioPipelineService:
     # Helpers
     # ============================================================
 
+    def _commit_with_retry(self, max_attempts: int = 2) -> bool:
+        """Commit resiliente a SSL disconnect (G016 Opcao B).
+
+        Em OperationalError ('SSL connection has been closed unexpectedly'),
+        faz rollback + session.close() e tenta novamente. Util durante
+        f5e_transmitir_sefaz onde Playwright pode demorar 5-10min e PgBouncer
+        SSL pode dar timeout no meio da operacao.
+
+        Args:
+            max_attempts: numero maximo de tentativas (default 2).
+
+        Returns:
+            True se commit OK (na primeira ou apos retry), False se falhou.
+        """
+        last_err: Optional[Exception] = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                db.session.commit()
+                return True
+            except OperationalError as e:
+                last_err = e
+                logger.warning(
+                    f'G016 commit attempt {attempt}/{max_attempts} '
+                    f'OperationalError: {str(e)[:200]}. Rollback+retry.'
+                )
+                try:
+                    db.session.rollback()
+                except Exception as e_rb:
+                    logger.warning(f'G016 rollback falhou (continuando): {e_rb}')
+                try:
+                    db.session.close()
+                except Exception as e_cl:
+                    logger.warning(f'G016 close falhou (continuando): {e_cl}')
+        logger.error(
+            f'G016 commit FAILED apos {max_attempts} tentativas. '
+            f'Ultimo erro: {last_err}'
+        )
+        return False
+
     def _garantir_payment_provider(
         self, invoice_id: int, aj, executado_por: str,
     ) -> bool:
@@ -245,6 +286,113 @@ class InventarioPipelineService:
                     odoo_id=invoice_id, erro_msg=str(e2),
                 )
                 return False
+
+    def _corrigir_price_zero_em_invoice(
+        self, invoice_id: int, aj, executado_por: str,
+    ) -> int:
+        """G007: corrige linhas com price_unit=0 buscando standard_price do produto.
+
+        Robo CIEL IT as vezes nao popula price_unit na invoice_line (gera
+        zero). Se transmitir SEFAZ assim, vUnCom=0 viola schema NFe e SEFAZ
+        rejeita com "Falha no Schema XML do lote de NFe".
+
+        Estrategia (G007):
+        1. Ler invoice_line_ids e identificar linhas com price_unit<=0
+        2. Para cada linha zerada: buscar product.standard_price
+        3. Reset invoice to draft, write price_unit=abs(std_price) ou 0.01
+        4. Re-post invoice
+
+        Idempotente: se nao ha linhas zeradas, no-op.
+
+        Returns:
+            int: numero de linhas corrigidas (0 se nada feito).
+        """
+        try:
+            inv = self.odoo.read(
+                'account.move', [invoice_id],
+                ['invoice_line_ids', 'state'],
+            )
+            if not inv:
+                logger.warning(f'F5d.6 invoice {invoice_id} sumiu, skip')
+                return 0
+            line_ids = inv[0].get('invoice_line_ids') or []
+            if not line_ids:
+                return 0
+            lines = self.odoo.read(
+                'account.move.line', line_ids,
+                ['id', 'product_id', 'price_unit'],
+            )
+            lines_zero = [
+                l for l in lines
+                if l.get('product_id') and (l.get('price_unit') or 0) <= 0
+            ]
+            if not lines_zero:
+                return 0
+
+            logger.warning(
+                f'F5d.6 invoice {invoice_id}: {len(lines_zero)} linhas '
+                f'price_unit<=0. Corrigindo via standard_price (G007).'
+            )
+
+            # Buscar standard_price dos produtos
+            prod_ids = list({l['product_id'][0] for l in lines_zero})
+            prods = self.odoo.read(
+                'product.product', prod_ids,
+                ['default_code', 'standard_price'],
+            )
+            std_cache = {
+                p['id']: abs(float(p.get('standard_price') or 0)) or 0.01
+                for p in prods
+            }
+
+            # Reset to draft
+            self.odoo.execute_kw(
+                'account.move', 'button_draft', [[invoice_id]],
+            )
+
+            # Atualizar cada linha
+            corrigidas = []
+            for l in lines_zero:
+                pid = l['product_id'][0]
+                novo_preco = std_cache.get(pid, 0.01)
+                self.odoo.write(
+                    'account.move.line', [l['id']],
+                    {'price_unit': novo_preco},
+                )
+                corrigidas.append({
+                    'line_id': l['id'],
+                    'product_id': pid,
+                    'price_novo': novo_preco,
+                })
+
+            # Re-post
+            self.odoo.execute_kw(
+                'account.move', 'action_post', [[invoice_id]],
+            )
+
+            self._registrar_op(
+                ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5d.6',
+                acao='corrigir_price_zero',
+                modelo_odoo='account.move',
+                status='SUCESSO', executado_por=executado_por,
+                odoo_id=invoice_id,
+                payload={'linhas_corrigidas': len(corrigidas)},
+                resposta={'corrigidas': corrigidas},
+            )
+            logger.info(
+                f'F5d.6 invoice {invoice_id}: {len(corrigidas)} linhas '
+                f'price_unit corrigidas via standard_price.'
+            )
+            return len(corrigidas)
+        except Exception as e:
+            self._registrar_op(
+                ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5d.6',
+                acao='corrigir_price_zero',
+                modelo_odoo='account.move',
+                status='FALHA', executado_por=executado_por,
+                odoo_id=invoice_id, erro_msg=str(e),
+            )
+            raise
 
     def _resolver_picking_type(self, company_origem: int, tipo_op: str) -> int:
         """Retorna picking_type_id Odoo para uma direcao.
@@ -513,9 +661,10 @@ class InventarioPipelineService:
         return grupo
 
     def f5b_validar_pickings(
-        self, ajustes: List, executado_por: str = 'sistema'
+        self, ajustes: List, executado_por: str = 'sistema',
+        linhas_por_picking: Optional[Dict[int, List[Dict]]] = None,
     ) -> Dict[int, bool]:
-        """Para cada picking distinto: confirmar_e_reservar + validar.
+        """Para cada picking distinto: confirmar_e_reservar + preencher + validar.
 
         Suporta multiplos ajustes por picking (1 picking com N produtos).
         Marca fase em TODOS os ajustes do mesmo picking.
@@ -523,18 +672,42 @@ class InventarioPipelineService:
         Args:
             ajustes: lista de AjusteEstoqueInventario com picking_id_odoo
                 populado (fase_pipeline >= F5a_PICKING_CRIADO).
+            executado_por: usuario para auditoria.
+            linhas_por_picking: {pid: [{'product_id', 'quantity', 'lot_name',
+                'lot_id'}, ...]} — usado para preencher_qty_done apos
+                action_assign. Se None, mantem comportamento antigo
+                (apenas ajustar_qty_done_pelo_disponivel — pode falhar L19/L20/L21).
 
         Returns:
             {picking_id: True (sucesso) | False (falha)}.
+
+        Bug L19 (2026-05-18): sem preencher_qty_done, action_assign deixa
+        move_lines com qty_done=0. ajustar_qty_done_pelo_disponivel entao
+        reduz `demand` para 0, cascateia em L20 (peso_liquido=0) e L21
+        (volumes=0). Solucao: chamar preencher_qty_done ENTRE action_assign
+        e ajustar_qty_done.
         """
         result: Dict[int, bool] = {}
         ajustes_por_pid = self._agrupar_por_picking(ajustes)
         picking_ids = list(ajustes_por_pid.keys())
+        linhas_por_picking = linhas_por_picking or {}
 
         def _io(pid):
             inicio = time.time()
             with self.semaphore:
                 self.picking_svc.confirmar_e_reservar(pid)
+                # L19 fix: popular qty_done DEPOIS de action_assign
+                # (senao move_lines ficam com qty_done=0 -> peso/volumes
+                # nao computam -> F5c falha em action_liberar_faturamento)
+                linhas = linhas_por_picking.get(pid)
+                if linhas:
+                    try:
+                        self.picking_svc.preencher_qty_done(pid, linhas)
+                    except Exception as e:
+                        logger.warning(
+                            f'preencher_qty_done falhou para picking {pid}: {e}. '
+                            'Tentando ajustar pelo disponivel.'
+                        )
                 # Ajusta demand=qty_done quando ha divergencia (NAO infla
                 # qty_done — apenas reduz demand). Pendencias retornadas
                 # serao usadas pelo caller para gerar ajustes complementares.
@@ -726,6 +899,18 @@ class InventarioPipelineService:
                             f'F5d.5 payment_provider write falhou para '
                             f'invoice {invoice_id}: {e}'
                         )
+                    # F5d.6 (G007): corrigir linhas com price_unit=0
+                    # (robo CIEL IT as vezes nao pega standard_price).
+                    # Sem isso SEFAZ rejeita XML schema (vUnCom=0).
+                    try:
+                        self._corrigir_price_zero_em_invoice(
+                            invoice_id, ajustes_grupo[0], executado_por,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f'F5d.6 corrigir price_unit=0 falhou para '
+                            f'invoice {invoice_id}: {e}'
+                        )
             if pendentes:
                 logger.info(
                     f'F5d aguardando {len(pendentes)} pickings ainda '
@@ -865,11 +1050,29 @@ class InventarioPipelineService:
                 continue
 
             inicio = time.time()
+            # G016 Opcao A: commit antes do Playwright (libera conexao DB
+            # durante operacao longa 5-10min, evita SSL idle timeout no
+            # PgBouncer/postgres durante a transmissao).
+            # Salvar ID local — sessao pode expirar durante Playwright.
+            ajuste_id_local = aj.id
+            self._commit_with_retry()
             try:
                 resultado = transmitir_nfe_via_playwright(
                     inv_id, self.odoo, logger
                 )
                 tempo_ms = int((time.time() - inicio) * 1000)
+
+                # G016 Opcao B: re-buscar ajuste por ID (sessao pode ter
+                # expirado durante Playwright). Se sumiu (deletado por outra
+                # sessao), abortar atualizacao desse ajuste.
+                aj_fresh = db.session.get(AjusteEstoqueInventario, ajuste_id_local)
+                if aj_fresh is None:
+                    logger.error(
+                        f'G016 F5e ajuste {ajuste_id_local} sumiu apos '
+                        f'Playwright inv={inv_id}. Resultado nao persistido.'
+                    )
+                    continue
+                aj = aj_fresh
 
                 # BUG-3: detectar erros de config e abortar batch
                 if (
@@ -887,7 +1090,7 @@ class InventarioPipelineService:
                         odoo_id=inv_id, resposta=resultado, erro_msg=erro,
                         tempo_ms=tempo_ms,
                     )
-                    db.session.commit()
+                    self._commit_with_retry()  # G016
                     raise RuntimeError(
                         f'F5e abortado: configuracao invalida — {erro}. '
                         f'{len(ajustes) - len(result) - 1} ajustes nao '
@@ -915,7 +1118,7 @@ class InventarioPipelineService:
                         odoo_id=inv_id, resposta=resultado,
                         tempo_ms=tempo_ms,
                     )
-                    db.session.commit()
+                    self._commit_with_retry()  # G016
                     logger.info(
                         f'F5e invoice {inv_id} → SEFAZ OK '
                         f'(chave={chave_nfe}, situacao={situacao}, '
@@ -942,7 +1145,7 @@ class InventarioPipelineService:
                         odoo_id=inv_id, resposta=resultado,
                         erro_msg=aj.erro_msg, tempo_ms=tempo_ms,
                     )
-                    db.session.commit()
+                    self._commit_with_retry()  # G016
                     logger.error(
                         f'F5e invoice {inv_id} falhou: {erro} '
                         f'(cstat={ultimo.get("cstat")}, '
@@ -954,6 +1157,17 @@ class InventarioPipelineService:
             except Exception as e:
                 tempo_ms = int((time.time() - inicio) * 1000)
                 result[inv_id] = None
+                # G016: re-buscar ajuste por ID (sessao pode ter expirado
+                # durante Playwright que crashou). Atualizar via instancia
+                # fresca para evitar DetachedInstanceError.
+                try:
+                    aj_fresh = db.session.get(
+                        AjusteEstoqueInventario, ajuste_id_local,
+                    )
+                    if aj_fresh is not None:
+                        aj = aj_fresh
+                except Exception:
+                    pass  # se re-fetch falhar, usa instancia original
                 aj.fase_pipeline = 'F5e_FALHA'
                 aj.erro_msg = str(e)
                 self._registrar_op(
@@ -962,7 +1176,7 @@ class InventarioPipelineService:
                     status='EXCECAO', executado_por=executado_por,
                     odoo_id=inv_id, erro_msg=str(e), tempo_ms=tempo_ms,
                 )
-                db.session.commit()
+                self._commit_with_retry()  # G016
                 logger.error(
                     f'F5e excecao na invoice {inv_id}: {e}',
                     exc_info=True,

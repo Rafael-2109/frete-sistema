@@ -162,11 +162,23 @@ class StockInternalTransferService:
         qty_origem_antes = float(quant_origem['quantity'])
         reservada = float(quant_origem.get('reserved_quantity', 0) or 0)
 
-        if qty_origem_antes < qty:
-            raise RuntimeError(
-                f'Quant origem {quant_origem["id"]} tem {qty_origem_antes} un '
-                f'mas pedido transferir {qty} un'
-            )
+        # Tolerancia 0.001 un para arredondamento (banco local guarda
+        # quantity em 4 casas decimais; Odoo guarda em 6 — frações 1/3,
+        # 2/3, 1/6 etc divergem). Se qty pedida > qty real por menos
+        # que 1 milesimo de unidade, clamp para a qty real disponivel.
+        TOL_ARREDONDAMENTO = 0.001
+        if qty > qty_origem_antes:
+            if qty - qty_origem_antes <= TOL_ARREDONDAMENTO:
+                logger.info(
+                    f'Clamp qty {qty} → {qty_origem_antes} '
+                    f'(diff {qty - qty_origem_antes:.6f} ≤ tolerancia)'
+                )
+                qty = qty_origem_antes
+            else:
+                raise RuntimeError(
+                    f'Quant origem {quant_origem["id"]} tem {qty_origem_antes} un '
+                    f'mas pedido transferir {qty} un'
+                )
         # Bloquear se ha reserva que ultrapassaria saldo restante.
         # Saldo apos = qty_origem_antes - qty; deve ser >= reservada.
         if (qty_origem_antes - qty) < reservada:

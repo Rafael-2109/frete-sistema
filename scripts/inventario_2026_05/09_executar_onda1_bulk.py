@@ -136,6 +136,194 @@ def resolver_product_id(odoo, cod_produto: str) -> Optional[int]:
     return res[0]['id'] if res else None
 
 
+def validar_cadastro_fiscal(
+    odoo, pids_map: Dict[str, Optional[int]], modo: str = 'strict',
+) -> Dict[str, List[str]]:
+    """Valida campos fiscais obrigatorios para SEFAZ + F5c.
+
+    Cobertura:
+        - G017: l10n_br_ncm_id ausente -> cstat=225 SEFAZ (NCM=False no XML)
+        - G012/G013: weight=0 -> peso_liquido/volumes=0 -> F5c rejeita
+
+    Args:
+        pids_map: {cod_produto: product_id}. Cods com pid=None sao ignorados
+            aqui (script ja' pula via skip_pid em outro ponto).
+        modo: 'strict' raise RuntimeError com lista detalhada se houver
+            problemas. 'warn' apenas imprime aviso e segue.
+
+    Returns:
+        {'sem_ncm': [...], 'sem_weight': [...]} com '{cod} ({nome[:40]})'.
+
+    Raises:
+        RuntimeError se modo='strict' e houver produtos faltando NCM ou weight.
+    """
+    pids_validos = [pid for pid in pids_map.values() if pid]
+    if not pids_validos:
+        return {'sem_ncm': [], 'sem_weight': []}
+
+    prods = odoo.read(
+        'product.product', pids_validos,
+        ['default_code', 'name', 'l10n_br_ncm_id', 'weight'],
+    )
+
+    sem_ncm: List[str] = []
+    sem_weight: List[str] = []
+    for p in prods:
+        cod = p.get('default_code') or '?'
+        nome = (p.get('name') or '')[:40]
+        if not p.get('l10n_br_ncm_id'):
+            sem_ncm.append(f"{cod} ({nome})")
+        w = float(p.get('weight') or 0)
+        if w <= 0:
+            sem_weight.append(f"{cod} ({nome}) weight={w}")
+
+    # G018 v2: weight=0 NAO bloqueia mais (fix aplicado no picking via
+    # aplicar_peso_volumes_fallback_picking entre F5b e F5c). Apenas NCM
+    # ainda bloqueia em strict.
+    if sem_weight:
+        head = sem_weight[:10]
+        extra = (
+            f" ... +{len(sem_weight)-10} mais" if len(sem_weight) > 10 else ""
+        )
+        print(
+            f"  G018 [{len(sem_weight)} sem weight no Odoo (fallback no "
+            f"picking sera' aplicado em F5b->F5c)]: {head}{extra}"
+        )
+
+    if sem_ncm:
+        head = sem_ncm[:30]
+        extra = f" ... +{len(sem_ncm)-30} mais" if len(sem_ncm) > 30 else ""
+        msg = (
+            f"VALIDACAO FISCAL G017 [{len(sem_ncm)} sem NCM => "
+            f"cstat=225 SEFAZ]: {head}{extra}"
+        )
+        if modo == 'strict':
+            raise RuntimeError(msg)
+        else:
+            print(f"  AVISO (modo=warn): {msg}")
+
+    return {'sem_ncm': sem_ncm, 'sem_weight': sem_weight}
+
+
+def corrigir_weight_zero(
+    odoo, pids_map: Dict[str, Optional[int]], peso_fallback: float = 0.001,
+) -> List[Dict[str, Any]]:
+    """G018 v2: DETECTA produtos com weight=0 (NAO modifica master data).
+
+    Tentativa anterior (write em product.product/template) NAO PERSISTE no
+    Odoo CIEL IT (write_date atualiza mas valor mantem 0.0 — algum hook
+    silencioso reseta). Decisao: aplicar fallback no PICKING (writable),
+    nao no produto.
+
+    Esta funcao agora apenas detecta e loga. O fix real e' aplicado em
+    `aplicar_peso_volumes_fallback_picking` entre F5b e F5c.
+
+    Args:
+        pids_map: {cod_produto: product_id}. Cods com pid=None ignorados.
+        peso_fallback: ignorado (mantido para compatibilidade CLI).
+
+    Returns:
+        Lista de produtos com weight=0 (apenas info, sem alteracao).
+    """
+    pids_validos = [pid for pid in pids_map.values() if pid]
+    if not pids_validos:
+        return []
+
+    prods = odoo.read(
+        'product.product', pids_validos,
+        ['default_code', 'name', 'weight'],
+    )
+    com_weight_zero = [
+        p for p in prods if float(p.get('weight') or 0) <= 0
+    ]
+    if not com_weight_zero:
+        return []
+
+    print(f"  G018 v2: {len(com_weight_zero)} produto(s) com weight=0 "
+          f"detectado(s) (fallback sera' aplicado no picking F5b->F5c)")
+    for p in com_weight_zero[:10]:
+        cod = p['default_code']
+        nome = (p.get('name') or '')[:40]
+        print(f"    {cod:>12} ({nome})")
+    if len(com_weight_zero) > 10:
+        print(f"    ... +{len(com_weight_zero)-10} mais")
+    return [
+        {'cod': p['default_code'], 'pid': p['id'],
+         'nome': (p.get('name') or '')[:40], 'weight_atual': 0.0}
+        for p in com_weight_zero
+    ]
+
+
+def aplicar_peso_volumes_fallback_picking(
+    odoo, picking_id: int,
+    peso_unitario_fallback: float = 0.001,
+    volumes_fallback: int = 1,
+) -> Dict[str, Any]:
+    """G018 v2: aplica peso_liquido/volumes fallback no stock.picking.
+
+    Necessario porque:
+    - `l10n_br_peso_liquido` e' computed @api.depends('move_ids.qty_done')
+      como SUM(qty_done * product.weight). Se product.weight=0 (e CIEL IT
+      nao deixa modificar via XML-RPC), peso_liquido=0 e action_liberar_faturamento
+      falha (G012).
+    - `l10n_br_volumes` idem (G013).
+    - `l10n_br_peso_liquido`, `l10n_br_peso_bruto`, `l10n_br_volumes` SAO
+      writable em stock.picking (verificado via fields_get).
+
+    Chamar ENTRE f5b_validar_pickings (qty_done preenchido) e f5c_liberar_faturamento.
+
+    Args:
+        picking_id: stock.picking.id.
+        peso_unitario_fallback: peso/un se nao tiver. Default 0.001 kg.
+        volumes_fallback: volumes minimo se 0. Default 1.
+
+    Returns:
+        {'peso_liquido_antes': float, 'peso_liquido_depois': float,
+         'volumes_antes': int, 'volumes_depois': int, 'aplicado': bool}.
+    """
+    p = odoo.read('stock.picking', [picking_id],
+        ['l10n_br_peso_liquido', 'l10n_br_peso_bruto', 'l10n_br_volumes', 'state'])
+    if not p:
+        return {'aplicado': False, 'erro': 'picking nao encontrado'}
+    peso_atual = float(p[0].get('l10n_br_peso_liquido') or 0)
+    peso_bruto_atual = float(p[0].get('l10n_br_peso_bruto') or 0)
+    volumes_atual = int(p[0].get('l10n_br_volumes') or 0)
+
+    updates = {}
+    if peso_atual <= 0 or peso_bruto_atual <= 0:
+        # Calcular peso fallback = SUM(qty_done) * peso_unitario_fallback
+        moves = odoo.search_read('stock.move', [['picking_id', '=', picking_id]],
+            ['quantity'])
+        qty_total = sum(float(m.get('quantity') or 0) for m in moves)
+        peso_calc = max(qty_total * peso_unitario_fallback, peso_unitario_fallback)
+        if peso_atual <= 0:
+            updates['l10n_br_peso_liquido'] = peso_calc
+        if peso_bruto_atual <= 0:
+            updates['l10n_br_peso_bruto'] = peso_calc
+    if volumes_atual <= 0:
+        updates['l10n_br_volumes'] = volumes_fallback
+
+    if not updates:
+        return {
+            'aplicado': False,
+            'peso_liquido_antes': peso_atual,
+            'volumes_antes': volumes_atual,
+        }
+
+    odoo.write('stock.picking', [picking_id], updates)
+    print(f'    G018 picking {picking_id}: peso_liquido {peso_atual} -> '
+          f'{updates.get("l10n_br_peso_liquido", peso_atual)}, '
+          f'volumes {volumes_atual} -> '
+          f'{updates.get("l10n_br_volumes", volumes_atual)}')
+    return {
+        'aplicado': True,
+        'peso_liquido_antes': peso_atual,
+        'peso_liquido_depois': updates.get('l10n_br_peso_liquido', peso_atual),
+        'volumes_antes': volumes_atual,
+        'volumes_depois': updates.get('l10n_br_volumes', volumes_atual),
+    }
+
+
 def carregar_ajustes(
     company_id: int, onda: int,
     status_filtro: Tuple[str, ...] = ('APROVADO', 'PROPOSTO', 'EXECUTADO'),
@@ -347,6 +535,8 @@ def _chunk(lst: List[Any], size: int) -> List[List[Any]]:
 def etapa_b_pickings(
     odoo, ajustes: List[AjusteEstoqueInventario],
     dry_run: bool, executado_por: str, max_produtos_por_picking: int = 30,
+    modo_validacao_fiscal: str = 'strict',
+    auto_fix_weight: float = 0.001,
 ) -> Dict[str, Any]:
     """Agrupa ajustes PERDA/INDUS/DEV por (company_origem, tipo_op).
 
@@ -428,6 +618,30 @@ def etapa_b_pickings(
         db.session.commit()
         print(f'  Corrigidos {ajustes_corrigidos} ajustes com custo_medio<=0')
 
+    # G018: ANTES da validacao fiscal, corrigir weight=0 (fallback automatico
+    # via product.write). Evita que validar_cadastro_fiscal aborte por
+    # weight=0 em produtos onde 0.001 e' aceitavel (rotulos/embalagens).
+    # auto_fix_weight=0 desabilita (validacao fiscal vai bloquear).
+    if auto_fix_weight > 0:
+        corrigir_weight_zero(
+            odoo, prod_cache, peso_fallback=auto_fix_weight,
+        )
+
+    # G017 + G012/G013: validar cadastro fiscal ANTES de criar pickings.
+    # Aborta etapa B (modo=strict) ou avisa (modo=warn) se houver produtos
+    # sem NCM/weight no Odoo. Cods orfaos (pid=None) sao filtrados aqui;
+    # picking_svc.criar_transferencia ja' pula esses ajustes naturalmente.
+    if modo_validacao_fiscal == 'skip':
+        print('  Validacao fiscal: PULADA (modo=skip)')
+    else:
+        n_pids = sum(1 for pid in prod_cache.values() if pid)
+        print(f'  Validacao fiscal (modo={modo_validacao_fiscal}) sobre '
+              f'{n_pids} produtos com pid...')
+        validar_cadastro_fiscal(
+            odoo, prod_cache, modo=modo_validacao_fiscal,
+        )
+        print('  Validacao fiscal: OK (NCM e weight presentes em todos os pids)')
+
     picking_svc = StockPickingService(odoo=odoo)
     pipeline_svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
 
@@ -488,14 +702,135 @@ def etapa_b_pickings(
                     ['id', 'lot_id', 'quantity', 'reserved_quantity', 'create_date'],
                     order='create_date asc',
                 )
-                qty_disponivel = sum(
+
+                # G014 PROTECTION: separar quants em VALIDOS (lote nao vencido)
+                # e VENCIDOS (lote expirado). Odoo CIEL IT bloqueia auto-reserva
+                # de lotes vencidos via action_assign.
+                # Se livre_validos < demand: transferir qty necessaria de lotes
+                # vencidos -> lote NOVO valido (criado on-the-fly).
+                from datetime import datetime as _dt, timedelta as _td
+                HOJE = _dt.utcnow()
+                EXP_NOVO_LOTE = (HOJE + _td(days=365)).strftime('%Y-%m-%d %H:%M:%S')
+
+                lot_ids_consultar = [q['lot_id'][0] for q in quants if q.get('lot_id')]
+                lot_exp_cache: Dict[int, Optional[str]] = {}
+                if lot_ids_consultar:
+                    lots_info = odoo.read(
+                        'stock.lot', lot_ids_consultar, ['expiration_date'],
+                    )
+                    lot_exp_cache = {
+                        l['id']: l.get('expiration_date') for l in lots_info
+                    }
+
+                def _is_lot_vencido(q):
+                    if not q.get('lot_id'):
+                        return False  # quant sem lote = nao vencido
+                    exp = lot_exp_cache.get(q['lot_id'][0])
+                    if not exp:
+                        return False
+                    try:
+                        exp_dt = _dt.strptime(exp.split(' ')[0], '%Y-%m-%d')
+                        return exp_dt < HOJE
+                    except Exception:
+                        return False
+
+                quants_validos = [q for q in quants if not _is_lot_vencido(q)]
+                quants_vencidos = [q for q in quants if _is_lot_vencido(q)]
+                livre_validos = sum(
                     float(q['quantity']) - float(q.get('reserved_quantity') or 0)
-                    for q in quants
+                    for q in quants_validos
                 )
+                livre_vencidos = sum(
+                    float(q['quantity']) - float(q.get('reserved_quantity') or 0)
+                    for q in quants_vencidos
+                )
+                qty_disponivel = livre_validos + livre_vencidos
+
+                # G014: se livre_validos < demand e ha vencidos livres,
+                # transferir qty necessaria para lote novo valido.
+                if livre_validos < demand_total and livre_vencidos > 0:
+                    qty_a_migrar = min(
+                        demand_total - livre_validos, livre_vencidos,
+                    )
+                    nome_lote_novo = f'INV-{cod}-{HOJE.strftime("%Y%m%d")}'
+                    logger.warning(
+                        f'    G014 {cod}: livre_validos={livre_validos:.3f} < '
+                        f'demand={demand_total:.3f}. Transferindo '
+                        f'{qty_a_migrar:.3f} de lotes vencidos -> lote novo '
+                        f'{nome_lote_novo} (exp={EXP_NOVO_LOTE[:10]}).'
+                    )
+                    try:
+                        from app.odoo.services.stock_internal_transfer_service import (
+                            StockInternalTransferService,
+                        )
+                        transfer_svc = StockInternalTransferService(odoo=odoo)
+                        qty_restante_migrar = qty_a_migrar
+                        for qv in quants_vencidos:
+                            if qty_restante_migrar <= 0.001:
+                                break
+                            livre_qv = (
+                                float(qv['quantity'])
+                                - float(qv.get('reserved_quantity') or 0)
+                            )
+                            if livre_qv <= 0:
+                                continue
+                            take = min(livre_qv, qty_restante_migrar)
+                            transfer_svc.transferir_quantidade_para_lote(
+                                product_id=pid,
+                                company_id=company_origem,
+                                location_id=location_origem,
+                                qty=take,
+                                lot_id_origem=(
+                                    qv['lot_id'][0] if qv.get('lot_id') else None
+                                ),
+                                nome_lote_destino=nome_lote_novo,
+                                expiration_date_destino=EXP_NOVO_LOTE,
+                            )
+                            qty_restante_migrar -= take
+                            logger.info(
+                                f'    G014 migrou {take:.3f} do lote '
+                                f'{qv["lot_id"][1] if qv.get("lot_id") else "sem-lote"} '
+                                f'-> {nome_lote_novo}'
+                            )
+                        # Re-consultar quants apos transferencia
+                        quants = odoo.search_read(
+                            'stock.quant',
+                            [
+                                ['product_id', '=', pid],
+                                ['company_id', '=', company_origem],
+                                ['location_id', '=', location_origem],
+                                ['quantity', '>', 0],
+                            ],
+                            ['id', 'lot_id', 'quantity',
+                             'reserved_quantity', 'create_date'],
+                            order='create_date asc',
+                        )
+                        # Re-cache expiration dos lotes (lote novo agora aparece)
+                        lot_ids_consultar = [
+                            q['lot_id'][0] for q in quants if q.get('lot_id')
+                        ]
+                        if lot_ids_consultar:
+                            lots_info = odoo.read(
+                                'stock.lot', lot_ids_consultar,
+                                ['expiration_date'],
+                            )
+                            lot_exp_cache = {
+                                l['id']: l.get('expiration_date')
+                                for l in lots_info
+                            }
+                        # Refazer split validos/vencidos
+                        quants_validos = [
+                            q for q in quants if not _is_lot_vencido(q)
+                        ]
+                    except Exception as e:
+                        logger.error(
+                            f'    G014 falha ao transferir vencidos: {e}'
+                        )
 
                 qty_restante = demand_total
-                # Distribui FIFO entre lotes disponiveis (subtraindo reservado)
-                for q in quants:
+                # G014: priorizar quants VALIDOS (FIFO entre eles). Quants
+                # vencidos remanescentes NAO entram no picking (Odoo bloqueia).
+                for q in quants_validos:
                     if qty_restante <= 0.001:
                         break
                     livre = float(q['quantity']) - float(q.get('reserved_quantity') or 0)
@@ -538,7 +873,9 @@ def etapa_b_pickings(
                             'custo_medio': custo_ref,
                             'lote_origem': None,
                             'lote_destino': 'MIGRAÇÃO',  # alvo intermediario na LF
-                            'tipo_divergencia': 'COMPENSATORIO_FALTA_ESTOQUE',
+                            # Nota: modelo AjusteEstoqueInventario nao tem
+                            # `tipo_divergencia` — encodado no `erro_msg` abaixo
+                            'tipo_divergencia_marker': 'COMPENSATORIO_FALTA_ESTOQUE',
                             'status': 'PROPOSTO',
                             'origem_ajuste_id': ajustes_produto[0].id,
                         })
@@ -585,9 +922,13 @@ def etapa_b_pickings(
                             custo_medio=payload_comp['custo_medio'],
                             lote_origem=payload_comp['lote_origem'],
                             lote_destino=payload_comp['lote_destino'],
-                            tipo_divergencia=payload_comp['tipo_divergencia'],
                             status=payload_comp['status'],
-                            erro_msg=f'Compensatorio origem_ajuste={payload_comp["origem_ajuste_id"]}',
+                            criado_por=executado_por,
+                            erro_msg=(
+                                f'[{payload_comp["tipo_divergencia_marker"]}] '
+                                f'Compensatorio origem_ajuste='
+                                f'{payload_comp["origem_ajuste_id"]}'
+                            ),
                         )
                         db.session.add(novo)
                 db.session.commit()
@@ -604,11 +945,32 @@ def etapa_b_pickings(
                 continue
 
             # Validar + liberar (bulk via pipeline svc)
+            # L19 fix: passar linhas para preencher_qty_done apos action_assign
+            # (senao move_lines ficam qty_done=0 -> peso/volumes=0 -> F5c falha)
             try:
-                pipeline_svc.f5b_validar_pickings(ajustes_chunk, executado_por=executado_por)
+                pipeline_svc.f5b_validar_pickings(
+                    ajustes_chunk, executado_por=executado_por,
+                    linhas_por_picking={picking_id: linhas},
+                )
                 total_validados += 1
             except Exception as e:
                 logger.error(f'    chunk {idx}: f5b falhou: {e}')
+
+            # G018 v2: peso_liquido/volumes fallback no picking (entre F5b e F5c).
+            # product.write({weight: X}) NAO PERSISTE em CIEL IT (hook reseta para 0),
+            # mas l10n_br_peso_liquido + l10n_br_volumes EM stock.picking SAO writable.
+            # Aplicar fallback evita F5c rejeitar por peso=0/volumes=0.
+            try:
+                aplicar_peso_volumes_fallback_picking(
+                    odoo, picking_id,
+                    peso_unitario_fallback=0.001,
+                    volumes_fallback=max(1, len(linhas)),
+                )
+            except Exception as e:
+                logger.warning(
+                    f'    chunk {idx}: G018 fallback peso/volumes '
+                    f'falhou (nao bloqueante): {e}'
+                )
 
             try:
                 pipeline_svc.f5c_liberar_faturamento(ajustes_chunk, executado_por=executado_por)
@@ -732,21 +1094,45 @@ def etapa_e_entrada_fb(
         RecebimentoLfOdooService,
     )
 
+    # L17 (G006/D006): Filtrar acoes que geram ENTRADA na FB.
+    # Acoes incluidas: PERDA_LF_FB, TRANSFERIR_CD_FB, DEV_LF_FB, DEV_CD_LF
+    # (sentidos {LF,CD}->FB — FB recebe NF).
+    # Acoes excluidas: INDUSTRIALIZACAO_FB_LF, DEV_FB_LF, TRANSFERIR_FB_CD
+    # (sentido FB->{LF,CD} — FB emite, nao recebe; entrada destino e' manual).
+    ACOES_ENTRADA_FB = {
+        'PERDA_LF_FB', 'TRANSFERIR_CD_FB', 'DEV_LF_FB', 'DEV_CD_LF',
+    }
     autorizados = [
         a for a in ajustes
         if a.invoice_id_odoo and a.chave_nfe
         and a.fase_pipeline == 'F5e_SEFAZ_OK'
+        and a.acao_decidida in ACOES_ENTRADA_FB
     ]
     if not autorizados:
-        print('  Sem ajustes SEFAZ-autorizados. Etapa pulada.')
+        print('  Sem ajustes SEFAZ-autorizados com acao de entrada FB. '
+              'Etapa pulada.')
         return {'total': 0}
+
+    # Log dos descartados (sentido FB->X, entrada manual no destino)
+    descartados = [
+        a for a in ajustes
+        if a.invoice_id_odoo and a.chave_nfe
+        and a.fase_pipeline == 'F5e_SEFAZ_OK'
+        and a.acao_decidida not in ACOES_ENTRADA_FB
+    ]
+    if descartados:
+        cods_desc = sorted({a.cod_produto for a in descartados})
+        print(
+            f'  [L17] {len(descartados)} ajustes pulados (sentido FB->X, '
+            f'entrada destino e manual): {len(cods_desc)} produtos, '
+            f'acoes={sorted({a.acao_decidida for a in descartados})}'
+        )
 
     # Agrupar por invoice_id (1 NF = 1 RecebimentoLf)
     por_invoice: Dict[int, List[AjusteEstoqueInventario]] = defaultdict(list)
     for a in autorizados:
         por_invoice[a.invoice_id_odoo].append(a)
 
-    # Filtrar acoes que vao para FB (PERDA_LF_FB, DEV_LF_FB, etc.)
     # CFOPs 5901/5903/5949 -> retorno -> entrada FB sem transferencia CD
     print(f'  {len(por_invoice)} invoices distintas para entrada FB')
 
@@ -870,6 +1256,17 @@ def main() -> None:
                         help='libera ETAPA D (SEFAZ Playwright — irreversivel)')
     parser.add_argument('--usuario', default='bulk_onda')
     parser.add_argument('--max-workers', type=int, default=5)
+    parser.add_argument('--validacao-fiscal', default='strict',
+                        choices=['strict', 'warn', 'skip'],
+                        help='G017+G012/G013 validacao pre-pickings. '
+                        'strict aborta etapa B se houver produtos sem '
+                        'NCM/weight; warn apenas avisa; skip nao valida.')
+    parser.add_argument('--auto-fix-weight', type=float, default=0.001,
+                        help='G018: peso fallback (kg) para produtos com '
+                        'weight=0. Default 0.001 (1g). Usar 0 desabilita o '
+                        'fix automatico (validacao fiscal vai bloquear se '
+                        'modo=strict). Aceitavel para rotulos/embalagens; '
+                        'cadastro correto recomendado para ingredientes.')
     args = parser.parse_args()
 
     dry_run = not args.confirmar
@@ -932,6 +1329,8 @@ def main() -> None:
             etapa_b_pickings(
                 odoo, ajustes, dry_run=dry_run, executado_por=args.usuario,
                 max_produtos_por_picking=args.max_produtos_picking,
+                modo_validacao_fiscal=args.validacao_fiscal,
+                auto_fix_weight=args.auto_fix_weight,
             )
             db.session.expire_all()
             ajustes = carregar_ajustes(

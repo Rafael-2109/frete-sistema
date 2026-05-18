@@ -489,9 +489,240 @@ Validado no caso real (picking 317306, 103000037 ALHO GRANULADO 10.389 kg).
 | L14 | XML-RPC nao thread-safe | 09_executar_onda1_bulk.py |
 | L15 | carregar_ajustes inclui EXECUTADO | 09_executar_onda1_bulk.py |
 | L16 | excecao_autorizado + XML vazio | DOC (sem fix automatico) |
-| L17 | Filtrar etapa_e_entrada_fb FB→LF | 09_executar_onda1_bulk.py (pendente) |
+| L17 | Filtrar etapa_e_entrada_fb FB→LF | 09_executar_onda1_bulk.py |
 
 Detalhes completos em `docs/inventario-2026-05/CHECKPOINT_2026_05_18_SUBPILOTO_FINAL.md`.
+
+---
+
+## Licoes aprendidas — sub-piloto bulk RE-EXECUCAO (2026-05-18 madrugada apos checkpoint)
+
+Apos cleanup do checkpoint FINAL, retomei o sub-piloto. Descobertos mais 4 bugs
+estruturais (L18-L21) que mostraram que o pipeline NUNCA tinha sido validado
+end-to-end em condicoes reais para MULTIPLOS produtos com lote distribuido.
+
+### L18. AjusteEstoqueInventario nao tem campo `tipo_divergencia` (G010)
+
+**Sintoma**: `'tipo_divergencia' is an invalid keyword argument for AjusteEstoqueInventario`
+
+**Causa raiz**: Script 09 (logica L12/G009 compensatorio FIFO) inventou um campo
+que nao existe no modelo. Modelo so tem: ciclo, cod_produto, tipo_produto,
+company_id, lote_*, qtd_*, custo_medio, acao_decidida, status, fase_pipeline,
+picking_id_odoo, invoice_id_odoo, chave_nfe, erro_msg, criado_em, criado_por.
+
+**Fix**: Substituir por marker em `erro_msg`:
+```python
+erro_msg=f'[COMPENSATORIO_FALTA_ESTOQUE] Compensatorio origem_ajuste={origem_id}'
+```
+
+Localizacao: `scripts/inventario_2026_05/09_executar_onda1_bulk.py:541, 590-598`
+
+### L19. preencher_qty_done faltando no pipeline (RAIZ CRITICA — G011)
+
+**Sintoma**: action_assign OK, mas move_lines com `qty_done=0`. Consequencias:
+- `ajustar_qty_done_pelo_disponivel` reduz `demand` para 0
+- button_validate: "Nao e possivel validar sem quantidades reservadas"
+- action_liberar_faturamento: "Peso Liquido" ou "Quantidade de Volumes" (L20/L21)
+
+**Causa raiz**: Fluxo `f5b_validar_pickings` faltava etapa entre `action_assign`
+e `ajustar_qty_done`:
+
+```
+1. criar_transferencia (sem lot_name)
+2. action_confirm
+3. action_assign      -> cria move_lines com qty_done=0
+4. ⚠️ MISSING: preencher_qty_done -> qty_done = quantity reservada
+5. ajustar_qty_done   -> reduz demand para sum(qty_done)=0 (BUG)
+6. button_validate    -> falha
+```
+
+`action_assign` cria move_line com `quantity` mas `qty_done=0`. O `qty_done` deve
+ser preenchido para Odoo computar peso/volumes via `@api.depends`.
+
+**Fix**: `f5b_validar_pickings(linhas_por_picking=...)` chama
+`preencher_qty_done(pid, linhas)` entre `confirmar_e_reservar` e `ajustar_qty_done`.
+
+Localizacao: `app/odoo/services/inventario_pipeline_service.py:539+` e
+`scripts/inventario_2026_05/09_executar_onda1_bulk.py:614-618`
+
+### L20. peso_liquido=0 (consequencia de L19 — G012)
+
+**Sintoma**: `Voce deve informar o Peso Liquido para liberar o faturamento`
+em action_liberar_faturamento de pickings LF.
+
+**Causa raiz**: `l10n_br_peso_liquido` (CIEL IT) computado via
+`@api.depends('move_ids.qty_done')` × `product.weight`. Se qty_done=0 → peso=0.
+
+**Fix**: resolvido pela cadeia L19 (preencher_qty_done apos action_assign).
+
+### L21. quantidade_volumes=0 (consequencia de L19 — G013)
+
+**Sintoma**: `Voce deve informar a Quantidade de Volumes para liberar o faturamento`
+em pickings FB (industrializacao FB→LF).
+
+**Causa raiz**: `l10n_br_volumes` (CIEL IT) computado similar a peso_liquido.
+qty_done=0 → volumes=0.
+
+**Fix**: resolvido pela cadeia L19.
+
+### Resumo dos 4 novos fixes L18-L21
+
+| # | Categoria | Localizacao | Gotcha |
+|---|---|---|---|
+| L18 | tipo_divergencia inexistente | 09_executar_onda1_bulk.py | G010 |
+| L19 | preencher_qty_done no pipeline (RAIZ) | inventario_pipeline_service.py f5b + script | G011 |
+| L20 | peso_liquido vazio (consequencia L19) | (resolvido por L19) | G012 |
+| L21 | volumes vazios (consequencia L19) | (resolvido por L19) | G013 |
+
+### Estado pos-L18-L21 fixes
+
+- Pickings 317307, 317308, 317309, 317310 cancelados (sem invoice/SEFAZ)
+- 11 ajustes resetados PROPOSTO sem picking_id (status original do checkpoint)
+- Tests: 130 passing
+- Pronto para re-executar sub-piloto bulk com fixes aplicados
+
+---
+
+## Licoes aprendidas — sub-piloto bulk (continuacao L22-L23, 2026-05-18)
+
+Apos L18-L21 fixes, re-rodada do sub-piloto bulk descobriu mais 2 bugs estruturais:
+
+### L22. Lotes vencidos bloqueiam auto-reserva (G014)
+
+**Sintoma**: PEPINO IND tem 72k livres em FB/Estoque, mas action_assign reserva 0.
+Picking continua confirmed (sem move_lines).
+
+**Causa raiz**: Odoo CIEL IT segue FEFO — bloqueia auto-reserva de quants em
+lotes VENCIDOS (`expiration_date < hoje`). Estoque agregado parece abundante
+mas todo o livre esta em lotes ja expirados (alguns desde 2025-08).
+
+**Fix**: Em `etapa_b_pickings`, antes de criar picking:
+1. Ler `expiration_date` de cada lote dos quants livres
+2. Separar `quants_validos` vs `quants_vencidos`
+3. Se `livre_validos < demand` e `livre_vencidos > 0`:
+   - Criar lote novo `INV-{cod}-{YYYYMMDD}` com `expiration_date = hoje + 365 dias`
+   - Transferir qty necessaria de lote vencido FIFO → lote novo via
+     `StockInternalTransferService.transferir_quantidade_para_lote`
+   - Re-consultar quants (lote novo aparece como valido)
+4. Distribuir FIFO apenas entre `quants_validos`
+
+Localizacao: `09_executar_onda1_bulk.py:497-595`
+
+**Validacao**: Picking 317313 (PEPINO industr 168 kg) — anterior bloqueava,
+agora cria lote `INV-103000011-20260518` (exp=2027-05-18), transfere 168.108
+do lote `0110/24` (vencido) → novo, picking reserva e valida OK.
+
+### L23. price_unit=0 em invoice criada pelo robo CIEL IT (G015)
+
+**Sintoma**: Invoice 626032 criada com 2 linhas `price_unit=0` (101001001 e
+102020600) apesar de standard_price > 0 no Odoo. SEFAZ rejeita `Falha no
+Schema XML` (vUnCom=0).
+
+**Causa raiz**: Robo CIEL IT as vezes nao popula price_unit em certas linhas
+(intermitente — outras linhas da MESMA invoice vieram OK).
+
+**Fix**: Novo metodo `_corrigir_price_zero_em_invoice` em pipeline_service,
+chamado em `f5d_aguardar_invoices` apos detectar invoice criada (F5d.6):
+1. Identificar linhas com price_unit<=0
+2. Buscar `product.standard_price` (abs ou 0.01 fallback)
+3. button_draft + write price_unit + action_post
+4. Audit em OperacaoOdooAuditoria fase='F5d.6'
+
+Localizacao: `app/odoo/services/inventario_pipeline_service.py:249+` e
+chamada em `f5d_aguardar_invoices:754-764`
+
+**Validacao manual**: Invoice 626032 — 2 linhas corrigidas
+(101001001 0 → 12.232, 102020600 0 → 14.154). Re-post OK.
+
+### Resumo L18-L23 (6 novos fixes)
+
+| # | Categoria | Localizacao | Gotcha |
+|---|---|---|---|
+| L18 | tipo_divergencia inexistente | 09_executar_onda1_bulk.py | G010 |
+| L19 | preencher_qty_done no pipeline (RAIZ) | inventario_pipeline_service.py f5b | G011 |
+| L20 | peso_liquido vazio (consequencia L19) | (resolvido por L19) | G012 |
+| L21 | volumes vazios (consequencia L19) | (resolvido por L19) | G013 |
+| L22 | Lote vencido bloqueia reserva | 09_executar_onda1_bulk.py etapa_b | G014 |
+| L23 | price_unit=0 auto-fix em invoice | inventario_pipeline_service.py f5d.6 | G015 |
+
+---
+
+## Licoes aprendidas — root cause NF 626032 (2026-05-18 manha)
+
+Apos sub-piloto bulk executar, identificou-se que a NF 626032 (LF perda
+10 ajustes) tinha caido em `excecao_autorizado` com XML autorizado vazio
+(G008). Investigacao do XML preview (baixado via Playwright "Pre Visualizar
+XML NF-e") revelou root cause final:
+
+### L24. SSL crash no f5e perde commits DB (G016)
+
+**Sintoma**: Durante `f5e_transmitir_sefaz`, conexao SQL SSL fechada
+inesperadamente apos 1ª invoice processada. `PendingRollbackError` em
+session.flush(). 627348 nao chega a ser transmitida.
+
+**Causa raiz**: Etapa D demora minutos por invoice. SQLAlchemy session
+mantem aberta durante longo Playwright. PostgreSQL SSL timeout.
+
+**Fix proposto** (NAO implementado nesta sessao):
+- TCP keepalive em SQLALCHEMY_DATABASE_URI (`?keepalives=1&keepalives_idle=30`)
+- Commit antes de cada Playwright + re-busca por ID
+- Try/except + rollback + retry
+
+Doc: `docs/inventario-2026-05/02-gotchas/G016-ssl-crash-no-loop-f5e-perde-commits.md`
+
+**Bloqueante para LF completo** (660 produtos) — sem isso, qualquer SSL
+drop deixa DB inconsistente com Odoo.
+
+### L25. NCM=False em produto causa cstat 225 (G017 — RAIZ DEFINITIVA)
+
+**Sintoma**: NF 626032 rejeitada SEFAZ 4x consecutivas com cstat 225
+"Falha no Schema XML do lote de NFe" APOS o fix G015 manual de price_unit.
+
+**Investigacao**: Baixei XML preview via Playwright (script
+`baixar_xml_preview_626032.py`) e analisei. Encontrei:
+
+```xml
+<NCM>07115100</NCM>  <!-- linha 1 COGUMELO OK -->
+<NCM>20057000</NCM>  <!-- linha 2 AZEITONA OK -->
+<NCM>20057000</NCM>  <!-- linha 3 AZEITONA TRIT OK -->
+<NCM>07114000</NCM>  <!-- linha 4 PEPINO OK -->
+<NCM>False</NCM>     <!-- linha 5 ❌ ALHO EM PO sem NCM -->
+```
+
+**Causa raiz**: Produto 103000020 ALHO EM PO tem `l10n_br_ncm_id = False`
+no Odoo. XMLRPC retorna boolean False, CIEL IT serializa como string
+'False' no XML — viola schema NFe (NCM obrigatorio 8 digitos).
+
+NF 627348 (FB industr PEPINO) passou na 1ª tentativa porque PEPINO tem
+NCM cadastrado.
+
+**Fix proposto** (em G017):
+- `etapa_b_pickings`: validar `l10n_br_ncm_id != False` para todos os
+  produtos do batch ANTES de criar pickings. Raise se houver produtos sem NCM.
+- Audit SQL pre-execucao LF completo: identificar TODOS produtos sem NCM
+  para cadastrar em massa antes do bulk.
+
+Doc: `docs/inventario-2026-05/02-gotchas/G017-ncm-false-bloqueia-sefaz.md`
+
+### Resumo L24-L25 (mais 2 fixes pos-sub-piloto)
+
+| # | Categoria | Localizacao | Gotcha |
+|---|---|---|---|
+| L24 | SSL crash no loop f5e (RAIZ secundaria) | inventario_pipeline_service.py | G016 |
+| L25 | NCM=False bloqueia SEFAZ (RAIZ PRIMARIA cstat 225) | 09_executar_onda1_bulk.py | G017 |
+
+### Recovery NF 626032 (pos-investigacao)
+
+1. **XML preview baixado** via `baixar_xml_preview_626032.py` (10059 chars)
+2. **XML inserido** em `l10n_br_xml_aut_nfe` (13412 chars b64)
+3. **Cancelamento manual** pela UI Odoo necessario (justificativa 15+ chars)
+4. **NCM ALHO 103000020 a cadastrar** (manual ou XML-RPC)
+5. **Picking 317311 devolvido** via `stock.return.picking` → picking 317315
+   validado (state=done). Estoque LF restaurado.
+6. **10 ajustes mantidos em F5e_SEFAZ_OK** com `erro_msg` explicativo
+   ("G008+G017 ... NF 626032 a cancelar manual + cadastrar NCM antes de
+   reset+refazer. Picking 317311 ja devolvido via 317315.")
+7. **Reset DB + refazer pipeline** = proxima sessao (apos cancel + NCM)
 
 ---
 
