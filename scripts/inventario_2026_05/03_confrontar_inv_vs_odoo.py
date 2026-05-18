@@ -71,7 +71,8 @@ def escolher_lote_alvo(
                 return q
 
     for q in quants_produto:
-        if (q.get('lote_nome') or '').upper() == 'MIGRACAO':
+        nome_upper = (q.get('lote_nome') or '').upper()
+        if nome_upper in ('MIGRACAO', 'MIGRAÇÃO'):
             return q
 
     # Regra 3: mais antigo (default) ou mais novo (path inventario sem lote)
@@ -358,15 +359,15 @@ def confrontar_company(
                 # - LF: INDUSTRIALIZACAO_FB_LF (lote_destino=lote_inv)
                 # - CD: TRANSFERIR_FB_CD (lote_destino=lote_inv)
                 # - FB: TRANSFERIR_CD_FB ou DEV_FB_LF (script 04 resolve)
-                # lote_origem='MIGRACAO' = marcador de "vem do
-                # consolidador da empresa parceira" (D005).
+                # lote_origem='MIGRAÇÃO' = marcador de "vem do
+                # consolidador da empresa parceira" (D005, padronizado 2026-05-18).
                 diffs.append({
                     'cod_produto': cod,
                     'tipo_produto': int(cod[0]),
                     'company_id': cid,
                     'lote_inventariado': lote_inv_alvo,
                     'lote_odoo': '',
-                    'lote_origem': 'MIGRACAO',
+                    'lote_origem': 'MIGRAÇÃO',
                     'lote_destino': lote_inv_alvo,
                     'qtd_inventario': str(diferenca),
                     'qtd_odoo': '0',
@@ -375,7 +376,7 @@ def confrontar_company(
                     'tipo_divergencia': 'INVENTARIO_SEM_ODOO',
                 })
             elif diferenca < 0:
-                # Sobra na empresa: vai para FB lote MIGRACAO (D005)
+                # Sobra na empresa: vai para FB lote MIGRAÇÃO (D005, padronizado 2026-05-18)
                 # Para FB sobrando (cid=1): script 04 sobrescreve
                 # lote_destino conforme acao (TRANSFERIR_FB_CD vai para
                 # CD lote_inv; INDUSTRIALIZACAO_FB_LF vai para LF lote_inv).
@@ -399,7 +400,7 @@ def confrontar_company(
                         'lote_inventariado': '',
                         'lote_odoo': lote_o[:60],
                         'lote_origem': lote_o[:60],
-                        'lote_destino': 'MIGRACAO',  # padrao FB (D005)
+                        'lote_destino': 'MIGRAÇÃO',  # padrao FB (D005, padronizado 2026-05-18)
                         'qtd_inventario': '0',
                         'qtd_odoo': str(qty_r),
                         'qtd_ajuste': str(-qty_r),

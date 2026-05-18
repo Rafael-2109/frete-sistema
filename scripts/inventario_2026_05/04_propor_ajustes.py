@@ -231,7 +231,7 @@ def cmd_propor(usuario: str, dry_run: bool) -> None:
 
         # D004/D005: lote_origem/destino
         # 2026-05-18: lote_destino e' RECALCULADO baseado na acao (mais
-        # autoritativo que o default 'MIGRACAO' do script 03 para sobras).
+        # autoritativo que o default 'MIGRAÇÃO' do script 03 para sobras).
         # Excecao: para RENOMEAR_LOTE, respeita o lote_destino do diff
         # (que ja vem como lote_inv_alvo, correto).
         lote_origem = d.get('lote_origem') or d.get('lote_odoo') or None
@@ -242,10 +242,10 @@ def cmd_propor(usuario: str, dry_run: bool) -> None:
             # Sempre lote_inventariado (lote alvo)
             lote_destino = d.get('lote_inventariado') or None
         elif acao in ('PERDA_LF_FB', 'TRANSFERIR_CD_FB'):
-            # Saida para FB: destino sempre MIGRACAO (D005 consolidador)
-            lote_destino = 'MIGRACAO'
+            # Saida para FB: destino sempre MIGRAÇÃO (D005 consolidador, com Ç)
+            lote_destino = 'MIGRAÇÃO'
         elif acao == 'TRANSFERIR_FB_CD':
-            # FB → CD: destino = lote inv (na CD nao usa MIGRACAO)
+            # FB → CD: destino = lote inv (na CD nao usa MIGRAÇÃO)
             lote_destino = lote_inv_diff
         elif acao == 'INDUSTRIALIZACAO_FB_LF':
             # FB → LF: destino = lote inv na LF

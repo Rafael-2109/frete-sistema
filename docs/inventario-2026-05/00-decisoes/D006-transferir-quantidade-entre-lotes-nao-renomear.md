@@ -225,6 +225,276 @@ exigem esse valor.
 
 ---
 
+## Licoes aprendidas — sub-piloto bulk 10 produtos (2026-05-18 madrugada)
+
+Sub-piloto executado com 21 ajustes de 10 produtos (max 5 produtos/picking).
+Resultado: 1 NF end-to-end OK (608631 entrada FB 608645), 1 NF fiscal OK
+mas sem entrada FB automatica (608629 FB→LF), 1 NF cancelada localmente
+(608630 NF 13150). Descobertos e corrigidos os erros L6-L15 abaixo.
+
+### L6. Picking outgoing exige location virtual destino (Empresas incompativeis)
+
+**Sintoma**: `<Fault 2: "Empresas incompativeis nos registros: 'FB/SAI/IND/01553'
+pertence a NACOM GOYA - FB e 'Destination Location' (LF/Estoque) pertence a
+outra empresa">`
+
+**Causa raiz**: `resolver_location_destino(tipo_op, company_destino)` retornava
+`COMPANY_LOCATIONS[destino]` (location interna da empresa destino), mas
+pickings inter-company exigem location virtual com `company_id=False`.
+
+**Fix**: `resolver_location_destino(tipo_op, company_destino, company_origem)`
+mapeia (origem, tipo_op) → location virtual correta:
+- LF→FB perda → 5 (Parceiros/Clientes)
+- FB→LF industrializacao → 26489 (Em Transito Industrializacao)
+- FB↔CD transf-filial → 6 (Em Transito Filiais)
+- CD retrabalho → 26489
+
+Validado contra `default_location_dest_id` dos picking_types:
+```
+pt 53 FB Expedicao Industrializacao: dest=26489
+pt 51 FB Expedicao Entre Filiais:    dest=6
+pt 55 CD Expedicao Entre Filiais:    dest=6
+pt 66 LF Expedicao Industrializacao: dest=5
+pt 94 LF Expedicao N Aplicado:       dest=5
+pt 96 CD Retrabalho:                 dest=26489
+```
+
+Localizacao: `app/odoo/services/inventario_pipeline_service.py:74-148`
+
+### L7. button_validate sem skip_backorder deixa picking em assigned
+
+**Sintoma**: `picking_svc.validar(pid)` retorna OK mas state continua
+`assigned` (deveria virar `done`).
+
+**Causa raiz**: Diferenca entre `product_uom_qty` (demand) e qty reservada
+pelo `action_assign` faz Odoo abrir wizard de backorder. XML-RPC nao
+serializa o wizard (cannot marshal None) e mesmo quando aceita, o picking
+fica em pending.
+
+**Fix**: `StockPickingService.validar()` agora passa
+```python
+context={
+    'skip_backorder': True,
+    'picking_ids_not_to_backorder': [picking_id],
+}
+```
+
+Padrao usado em `recebimento_lf_odoo_service.py:1548-1558` (recebimento LF).
+
+Localizacao: `app/odoo/services/stock_picking_service.py:182-211`
+
+### L8. f5b/f5c/f5d so marcavam 1 ajuste por picking (multi-ajuste perdido)
+
+**Sintoma**: Picking com 10 ajustes (1 picking = N produtos) → so 1 ajuste
+marca F5b/F5c/F5d. Os outros 9 ficam em fase anterior (F5a_PICKING_CRIADO).
+
+**Causa raiz**: `ajuste_por_pid: Dict[int, object] = {}` indexa por
+`picking_id_odoo` — quando ha multiplos ajustes para o mesmo picking,
+o ultimo SOBREESCREVE o anterior no dict.
+
+**Fix**: Helper `_agrupar_por_picking(ajustes) -> Dict[int, List]`. Apos
+sucesso/falha, itera TODOS ajustes do mesmo picking ao marcar fase +
+registrar auditoria.
+
+Localizacao: `app/odoo/services/inventario_pipeline_service.py:500-540`
+
+### L9. f5e re-transmitia mesma NF para cada ajuste do picking
+
+**Sintoma**: Picking com 10 ajustes → Playwright transmitia SEFAZ 10 vezes
+para a mesma invoice. Apos 1 sucesso, as outras 9 transmissoes geravam
+problemas (rate limit, double-charge, wizard de confirmacao).
+
+**Causa raiz**: `f5e_transmitir_sefaz` itera por ajuste. Idempotencia via
+`aj.fase_pipeline == 'F5e_SEFAZ_OK'` so funciona apos commit explicito —
+mas como objetos Python ja carregados ANTES do commit, o filtro nao pega.
+
+**Fix**: Adicionado `invoices_processadas: Dict[int, str]` dentro de
+`f5e_transmitir_sefaz`. Apos transmitir 1 invoice, marca todos os outros
+ajustes da mesma invoice como `SKIP_INV_PROC` (sem chamar Playwright,
+replicando chave/status no DB).
+
+Localizacao: `app/odoo/services/inventario_pipeline_service.py:778-870`
+
+### L10. status auditoria excedeu VARCHAR(20)
+
+**Sintoma**: `psycopg2.errors.StringDataRightTruncation: value too long for
+type character varying(20)` ao gravar
+`status='SKIPPED_INVOICE_JA_PROCESSADA'` (30 chars).
+
+**Fix**: status reduzido para `'SKIP_INV_PROC'` (13 chars).
+
+Localizacao: `app/odoo/services/inventario_pipeline_service.py:826`
+
+### L11. forcar_qty_done inflando alem do disponivel (saldo negativo)
+
+**Sintoma**: tentativa de "forcar qty_done = product_uom_qty" gerava
+escalonamento `qty_done = qty_atual * (demand / soma_qty)`, podendo
+exceder o saldo real do lote. Causaria estoque negativo no Odoo.
+
+**Fix**: Substituido por `ajustar_qty_done_pelo_disponivel(picking_id)` que
+NUNCA infla qty_done. Em vez disso, REDUZ o `product_uom_qty` da move
+para igualar ao que `action_assign` efetivamente reservou. Retorna
+`pendencias` com a diferenca para gerar ajustes complementares.
+
+Localizacao: `app/odoo/services/stock_picking_service.py:213-280`
+
+### L12. Distribuir demanda entre lotes reais (script 03 vs realidade)
+
+**Sintoma**: Ajuste 161385 (103000117 PERDA_LF_FB) com
+`lote_origem=MIGRAÇÃO qtd_ajuste=-672.32`. Mas no Odoo, o lote MIGRAÇÃO
+deste produto so tinha 52 un. `qty_done` final = 52 (resto perdido).
+
+**Causa raiz**: Script 03 (`03_confrontar_inv_vs_odoo.py`) agrega TOTAL_ODOO
+por produto e gera 1 ajuste PERDA com `qtd_ajuste = total - inv` apontando
+1 unico `lote_origem`. Mas o estoque real esta distribuido entre N lotes.
+
+**Fix**: `etapa_b_pickings` agora consulta `stock.quant` real na ORIGEM e
+distribui demanda total entre lotes disponiveis (FIFO por `create_date`).
+1 linha por lote disponivel ate cobrir a demanda. Se sobrar
+`qty_restante > 0`, cria automaticamente ajuste compensatorio
+`INDUSTRIALIZACAO_FB_LF` (FB → LF +delta) para a proxima onda.
+
+Localizacao: `scripts/inventario_2026_05/09_executar_onda1_bulk.py:435-540`
+
+**Conceito chave**: nao se deve confiar em `lote_origem` do DB; sempre
+**RECONCILIAR contra `stock.quant` real** antes de criar pickings.
+
+### L13. price_unit=0 nas linhas (custo_medio zero — SEFAZ rejeita)
+
+**Sintoma**: NF 13150 (608630) saiu com 2 linhas `price_unit=0`. SEFAZ
+rejeitou com "Falha no Schema XML do lote de NFe" (vUnCom=0 viola schema
+NFe). Robo Playwright re-transmitia 15 vezes sem sucesso.
+
+**Causa raiz**: 2 ajustes (101001001 e 102020600) tinham `custo_medio=0`
+no DB. Robo CIEL IT lia o custo de algum campo (provavelmente
+`stock.move.price_unit` ou `product.standard_price`) e gerava invoice com
+unit=0.
+
+Mas tem variante: produto 102020600 tinha `standard_price=-14.15` (custo
+negativo no cadastro Odoo CIEL IT — erro comum de inventario inicial).
+SEFAZ tambem rejeita valores negativos.
+
+**Fix**:
+1. `etapa_b_pickings` ANTES de criar pickings busca `product.standard_price`
+   no Odoo para cada produto e atualiza `custo_medio` se for `<= 0`.
+2. Para valores negativos, usa `abs(standard_price)` (assume que e' erro
+   de cadastro). Default 0.01 se ambos forem zero.
+3. Apos pos-correcao: se `Etapa C` detectar `price_unit=0` em alguma
+   invoice_line, deve fazer `button_draft + write price_unit = standard_price
+   + action_post` para corrigir antes de transmitir SEFAZ.
+
+Localizacao: `scripts/inventario_2026_05/09_executar_onda1_bulk.py:400-432`
+
+**Conceito chave**: SEFAZ nao aceita `vUnCom=0` (viola schema NFe).
+Sempre validar `custo_medio > 0` ANTES de criar pickings; corrigir
+invoice manualmente se robo CIEL IT criar linha com price_unit=0.
+
+### L14. Conexao Odoo XML-RPC nao e thread-safe
+
+**Sintoma**: `http.client.CannotSendRequest: Request-sent` ao usar
+`ThreadPoolExecutor` em ETAPA A (transferencias paralelas).
+
+**Causa raiz**: `xmlrpc.client.Transport` mantem estado de socket. Multiplas
+threads compartilhando a mesma conexao geram conflict.
+
+**Fix**: ETAPA A convertida para sequencial (1 thread). Performance: 5
+transferencias em ~5s e' aceitavel.
+
+Para paralelismo real, cada thread teria que criar sua propria conexao
+Odoo. Refinamento futuro: pool de conexoes Odoo separadas por thread.
+
+Localizacao: `scripts/inventario_2026_05/09_executar_onda1_bulk.py:255-330`
+
+### L15. carregar_ajustes precisa incluir EXECUTADO
+
+**Sintoma**: Apos ETAPA D marcar ajustes como `status=EXECUTADO`, ETAPA E
+nao encontrava nenhum ajuste SEFAZ-autorizado para criar entrada FB.
+
+**Causa raiz**: `carregar_ajustes` default `status_filtro=('APROVADO',
+'PROPOSTO')`. Ajustes em `EXECUTADO` ficavam fora.
+
+**Fix**: `status_filtro=('APROVADO', 'PROPOSTO', 'EXECUTADO')` por default.
+
+Localizacao: `scripts/inventario_2026_05/09_executar_onda1_bulk.py:122-150`
+
+### L16. excecao_autorizado vs autorizado normal (XML autorizado vazio)
+
+**Sintoma**: NF 13150 (608630) retornou SEFAZ `situacao=excecao_autorizado`
+(autorizada com ressalva). Chave SEFAZ presente, mas
+`l10n_br_xml_aut_nfe = 0 bytes` (XML autorizado completo vazio).
+
+**Causa raiz**: SEFAZ retorna `excecao_autorizado` quando o `numero_nf` ja
+foi "consumido" em tentativas anteriores rejeitadas. CIEL IT NAO baixa
+o XML completo (`nfeProc` = NFe + protNFe) nesses casos. Sem XML, nao
+da para criar DFe na FB → entrada FB falha com "XML Nota Fiscal
+Eletronica nao esta completa!".
+
+**Fix conhecido**: nao automatizado via XML-RPC. Usuario precisa:
+1. Acessar UI Odoo > invoice > botao "Consultar Documento" / "Re-consultar SEFAZ"
+2. Aguardar CIEL IT baixar `nfeProc`
+3. Re-processar entrada FB
+
+Mitigacao: evitar `excecao_autorizado` corrigindo as causas dos erros
+SEFAZ antes de re-transmitir (custo_medio=0, campos faltando, etc).
+
+### L17. Sentido invertido FB→LF: entrada FB nao se aplica
+
+**Sintoma**: RecLf 6 (entrada FB) tentou processar NF 608629
+(RPI/2026/00201, FB→LF industrializacao). DFe FB criado, PO C2619223
+criado, picking entrada FB criado (FB/IN/13151), mas etapa 11 falhou:
+"Picking 317299 nao esta 'assigned' (state=confirmed)".
+
+**Causa raiz**: A NF 608629 e' FB EMITINDO para LF. Logo, a FB nao deve
+RECEBER essa NF (ela emitiu, nao recebeu). A LF deveria criar entrada.
+Mas o sistema NACOM nao tem fluxo automatizado para LF receber NFs
+emitidas pela FB.
+
+**Fix necessario**: `etapa_e_entrada_fb` deve filtrar
+`acao_decidida` que vai para a FB (PERDA_LF_FB, TRANSFERIR_CD_FB) e
+pular `INDUSTRIALIZACAO_FB_LF`, `DEV_FB_LF`, `DEV_CD_LF` (sentido
+FB→LF). Para essas, a entrada deve ser manual na LF/CD.
+
+**Workaround manual**: criar picking interno na empresa destino
+movendo de "Em Transito Industrializacao" para "{Empresa}/Estoque":
+```python
+odoo.create('stock.picking', {
+    'location_id': 26489,  # Em Transito Industrializacao
+    'location_dest_id': 42,  # LF/Estoque
+    'picking_type_id': 19,  # LF Recebimento
+    'company_id': 5,
+    'move_ids': [(0, 0, {
+        'product_id': pid,
+        'product_uom_qty': qty,
+        'location_id': 26489,
+        'location_dest_id': 42,
+        'company_id': 5,
+    })],
+})
+```
+
+Validado no caso real (picking 317306, 103000037 ALHO GRANULADO 10.389 kg).
+
+### Resumo do refinamento (10 fixes L6-L17)
+
+| # | Categoria | Localizacao |
+|---|---|---|
+| L6 | Location virtual destino | inventario_pipeline_service.py |
+| L7 | skip_backorder | stock_picking_service.py |
+| L8 | Multi-ajuste por picking (f5b/c/d) | inventario_pipeline_service.py |
+| L9 | Idempotencia f5e por invoice_id | inventario_pipeline_service.py |
+| L10 | status VARCHAR(20) | inventario_pipeline_service.py |
+| L11 | ajustar_qty_done_pelo_disponivel | stock_picking_service.py |
+| L12 | Distribuir demanda multi-lote FIFO | 09_executar_onda1_bulk.py |
+| L13 | Validar custo_medio (price_unit=0) | 09_executar_onda1_bulk.py |
+| L14 | XML-RPC nao thread-safe | 09_executar_onda1_bulk.py |
+| L15 | carregar_ajustes inclui EXECUTADO | 09_executar_onda1_bulk.py |
+| L16 | excecao_autorizado + XML vazio | DOC (sem fix automatico) |
+| L17 | Filtrar etapa_e_entrada_fb FB→LF | 09_executar_onda1_bulk.py (pendente) |
+
+Detalhes completos em `docs/inventario-2026-05/CHECKPOINT_2026_05_18_SUBPILOTO_FINAL.md`.
+
+---
+
 ## Arquivos modificados (commit `a8e0d0bb`)
 
 **Novos services atomicos**:

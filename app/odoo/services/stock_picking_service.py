@@ -178,13 +178,84 @@ class StockPickingService:
                 update['lot_name'] = linha['lot_name']
             self.odoo.write('stock.move.line', [line_id], update)
 
-    def validar(self, picking_id: int) -> bool:
-        """button_validate. Trata 'cannot marshal None' como sucesso.
+    def ajustar_qty_done_pelo_disponivel(self, picking_id: int) -> Dict[str, Any]:
+        """Ajusta product_uom_qty (demand) = sum(qty_done) das move_lines.
 
-        XML-RPC nao consegue serializar `None` que o Odoo retorna em
-        button_validate quando nao ha wizard intermediario. Tratamos como
-        sucesso (gotcha documentado em GOTCHAS.md:179 e
-        recebimento_lf_odoo_service.py:2400-2418).
+        Estrategia segura: NUNCA infla qty_done alem do disponivel no
+        lote. Em vez disso, REDUZ a demanda da move para igualar ao que
+        action_assign efetivamente reservou nos lotes. Isso permite
+        button_validate sem backorder e sem saldo negativo.
+
+        A diferenca (demand original - qty_done) e' reportada para o
+        caller decidir gerar ajuste complementar.
+
+        Returns:
+            dict com:
+                ajustadas: int — moves cuja demand foi reduzida
+                pendencias: list — [{move_id, product_id, demand_orig, qty_done, falta}]
+        """
+        moves = self.odoo.search_read(
+            'stock.move', [['picking_id', '=', picking_id]],
+            ['id', 'product_id', 'product_uom_qty', 'state', 'move_line_ids'],
+        )
+        ajustadas = 0
+        pendencias = []
+        for mv in moves:
+            if mv.get('state') == 'cancel':
+                continue
+            demand = float(mv.get('product_uom_qty') or 0)
+            ml_ids = mv.get('move_line_ids') or []
+            if not ml_ids or demand <= 0:
+                continue
+            mls = self.odoo.read(
+                'stock.move.line', ml_ids,
+                ['id', 'qty_done', 'quantity'],
+            )
+            soma_qty_done = sum(float(ml.get('qty_done') or 0) for ml in mls)
+            # Caso 1: qty_done bate demanda — nada a fazer
+            if abs(soma_qty_done - demand) < 0.001:
+                continue
+            # Caso 2: qty_done < demand — REDUZIR demand (nao inflar qty_done)
+            if soma_qty_done < demand:
+                falta = demand - soma_qty_done
+                pendencias.append({
+                    'move_id': mv['id'],
+                    'product_id': mv['product_id'][0] if mv.get('product_id') else None,
+                    'product_name': mv['product_id'][1] if mv.get('product_id') else None,
+                    'demand_orig': demand,
+                    'qty_done': soma_qty_done,
+                    'falta': falta,
+                })
+                # Reduzir a demanda do move para igualar ao que esta disponivel
+                self.odoo.write(
+                    'stock.move', [mv['id']],
+                    {'product_uom_qty': soma_qty_done},
+                )
+                ajustadas += 1
+                logger.warning(
+                    f"Picking {picking_id} move {mv['id']}: demand "
+                    f'{demand} reduzida para {soma_qty_done} '
+                    f'(falta {falta}). Gerar ajuste complementar.'
+                )
+            # Caso 3: qty_done > demand (raro) — manter qty_done
+            else:
+                self.odoo.write(
+                    'stock.move', [mv['id']],
+                    {'product_uom_qty': soma_qty_done},
+                )
+                ajustadas += 1
+        return {'ajustadas': ajustadas, 'pendencias': pendencias}
+
+    def validar(self, picking_id: int) -> bool:
+        """button_validate com context skip_backorder.
+
+        Trata 'cannot marshal None' como sucesso (XML-RPC nao serializa
+        None retornado por Odoo quando nao ha wizard intermediario).
+
+        Context `skip_backorder=True` + `picking_ids_not_to_backorder`
+        evita o wizard de backorder (que deixaria o picking em 'assigned'
+        ao inves de 'done' quando ha diferenca entre qty_done e demand).
+        Padrao usado em recebimento_lf_odoo_service.py:1548-1558.
 
         Raises:
             Exception: qualquer outra exceção (ex.: 'Quality checks
@@ -192,7 +263,11 @@ class StockPickingService:
         """
         try:
             self.odoo.execute_kw(
-                'stock.picking', 'button_validate', [[picking_id]]
+                'stock.picking', 'button_validate', [[picking_id]],
+                {'context': {
+                    'skip_backorder': True,
+                    'picking_ids_not_to_backorder': [picking_id],
+                }},
             )
             return True
         except Exception as e:

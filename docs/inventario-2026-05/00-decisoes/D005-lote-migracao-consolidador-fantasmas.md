@@ -1,8 +1,17 @@
-# D005 — Lote `MIGRACAO` na FB consolida estoque fantasma
+# D005 — Lote `MIGRAÇÃO` na FB consolida estoque fantasma
 
-**Data**: 2026-05-17
+**Data**: 2026-05-17 (criado); 2026-05-18 (padronizado nome com cedilha)
 **Status**: aprovado, em implementacao
 **Fonte**: instrucao usuario (mesma sessao da D004)
+
+> **Padronizacao 2026-05-18**: o nome canonico do lote consolidador
+> e' `MIGRAÇÃO` (com cedilha + til), nao `MIGRACAO`. Motivo: bater com o
+> lote historico ja existente no Odoo CIEL IT (lot_id=30400, criado
+> 2025-03-12). Apos piloto 210030325 LF criar um lote `MIGRACAO`
+> divergente, foi feita consolidacao via `transferir_entre_lotes`
+> (66.532 un -> lot_id=30400). Todos os scripts/constantes/DB atualizados
+> para usar `MIGRAÇÃO`. Quants resultantes na FB para cod 210030325:
+> lot_id=30400 'MIGRAÇÃO' = 229.351 un.
 
 ---
 
