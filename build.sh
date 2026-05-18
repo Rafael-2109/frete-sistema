@@ -406,6 +406,16 @@ echo "Inventario 21: ALTER pipeline batch (fase_pipeline + 4 colunas)..."
 python scripts/migrations/2026_05_19_add_fase_pipeline.py \
     || echo "⚠️ Migration add_fase_pipeline falhou, continuando deploy..."
 
+# 22. Inventario 2026-05 (2026-05-18): audit log ajuste_estoque_inventario.
+# Cria tabela ajuste_estoque_inventario_audit (append-only) + trigger AFTER
+# INSERT/UPDATE/DELETE que captura toda alteracao em ajuste_estoque_inventario
+# independente da origem (ORM, SQL direto, MCP, psql, scripts).
+# Foco: forense de cancelamentos/reset EXECUTADO->PROPOSTO durante ciclo
+# inventario 2026-05. Idempotente.
+echo "Inventario 22: audit log ajuste_estoque_inventario..."
+python scripts/migrations/2026_05_18_audit_ajuste_estoque_inventario.py \
+    || echo "⚠️ Migration audit_ajuste_estoque_inventario falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
