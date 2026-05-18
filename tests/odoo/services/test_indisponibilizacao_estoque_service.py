@@ -181,3 +181,78 @@ def test_canary_local_reverte_mesmo_se_excecao_no_meio():
     write_calls = [c.args for c in odoo.write.call_args_list]
     assert ('stock.location', [99], {'active': False}) in write_calls
     assert ('stock.location', [99], {'active': True}) in write_calls
+
+
+# ============================================================
+# OperacaoOdooAuditoria — F5 audit (tasks 5.2+)
+# ============================================================
+
+def _query_audit(db, **filters):
+    """Helper: SQL bruto para evitar mapper init issues em test isolado.
+
+    `.query.filter_by()` triggera configure_mappers() global, que falha
+    pela primeira vez (Mapper[Embarque] expressao 'Cotacao' nao localiza).
+    SQL bruto via db.session.execute(text(...)) evita o pathway ORM.
+    """
+    from sqlalchemy import text
+    clauses = ' AND '.join(f'{k} = :{k}' for k in filters)
+    sql = (
+        'SELECT id, modelo_odoo, tabela_origem, status, executado_por, '
+        'contexto_origem, contexto_ref, payload_json '
+        f'FROM operacao_odoo_auditoria WHERE {clauses}'
+    )
+    return db.session.execute(text(sql), filters).mappings().all()
+
+
+def test_indisponibilizar_lote_registra_audit(db):
+    """indisponibilizar_lote → 1 row OperacaoOdooAuditoria SUCESSO."""
+    svc = IndisponibilizacaoEstoqueService(odoo=MagicMock())
+    svc.indisponibilizar_lote(
+        lot_id=8888, canary_passou=True, executado_por='rafael',
+        ajuste_id=42,
+    )
+
+    rows = _query_audit(db, registro_id=8888, acao='indispor_lote')
+    assert len(rows) == 1
+    r = rows[0]
+    assert r['modelo_odoo'] == 'stock.lot'
+    assert r['tabela_origem'] == 'stock.lot'
+    assert r['status'] == 'SUCESSO'
+    assert r['executado_por'] == 'rafael'
+    assert r['contexto_origem'] == 'indisponibilizacao'
+    assert 'ajuste=42' in (r['contexto_ref'] or '')
+
+
+def test_canary_lote_registra_audit_PASSOU(db):
+    """canary_lote PASSOU → audit row com status=PASSOU."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        [{'id': 1, 'quantity': 5.0, 'location_id': [42, 'LF/Estoque']}],
+        [{'id': 7700, 'move_line_ids': []}],
+    ]
+    odoo.create.return_value = 8800
+    svc = IndisponibilizacaoEstoqueService(odoo=odoo)
+
+    res = svc.canary_lote(
+        lot_id=7777, product_id=42, partner_id=1, executado_por='rafael',
+    )
+    assert res['passou'] is True
+
+    rows = _query_audit(db, registro_id=7777, acao='canary_lote')
+    assert len(rows) == 1
+    assert rows[0]['status'] == 'PASSOU'
+
+
+def test_reverter_local_registra_audit(db):
+    """reverter_local → audit SUCESSO + payload {active:True}."""
+    svc = IndisponibilizacaoEstoqueService(odoo=MagicMock())
+    svc.reverter_local(
+        location_id=999, executado_por='rafael', ajuste_id=99,
+    )
+
+    rows = _query_audit(db, registro_id=999, acao='reverter_local')
+    assert len(rows) == 1
+    r = rows[0]
+    assert r['modelo_odoo'] == 'stock.location'
+    assert r['status'] == 'SUCESSO'
+    assert (r['payload_json'] or {}).get('active') is True

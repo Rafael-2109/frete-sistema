@@ -16,13 +16,15 @@ Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md
 """
 import logging
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app import db
 from app.odoo.constants.locations import COMPANY_LOCATIONS
 from app.odoo.constants.operacoes_fiscais import COMPANY_PARTNER_ID
+from app.odoo.models import OperacaoOdooAuditoria
 from app.odoo.services.stock_picking_service import StockPickingService
 from app.odoo.utils.connection import get_odoo_connection
 from app.recebimento.services.playwright_nfe_transmissao import (
@@ -133,6 +135,60 @@ class InventarioPipelineService:
             )
         return pt
 
+    def _registrar_op(
+        self,
+        *,
+        ciclo: str,
+        ajuste_id: int,
+        fase: str,
+        acao: str,
+        modelo_odoo: str,
+        status: str,
+        executado_por: str,
+        odoo_id: Optional[int] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        resposta: Optional[Dict[str, Any]] = None,
+        erro_msg: Optional[str] = None,
+        tempo_ms: Optional[int] = None,
+        screenshot_s3_key: Optional[str] = None,
+    ) -> None:
+        """Registra 1 row em operacao_odoo_auditoria para auditoria granular.
+
+        external_id: f'INV-{ciclo}-A{ajuste_id:06d}-{fase}-{uuid8}' (unique).
+        Caller decide commit (helper apenas flush).
+        """
+        try:
+            OperacaoOdooAuditoria.registrar(
+                external_id=(
+                    f'INV-{ciclo}-A{ajuste_id:06d}-{fase}-'
+                    f'{uuid.uuid4().hex[:8]}'
+                ),
+                tabela_origem='ajuste_estoque_inventario',
+                registro_id=ajuste_id,
+                acao=acao,
+                modelo_odoo=modelo_odoo,
+                odoo_id=odoo_id,
+                etapa=5,  # F5 (pipeline batch)
+                etapa_descricao=f'{fase} — {acao} {modelo_odoo}',
+                status=status,
+                payload_json=payload,
+                resposta_json=resposta,
+                erro_msg=erro_msg,
+                tempo_execucao_ms=tempo_ms,
+                pipeline_etapa=fase,
+                screenshot_s3_key=screenshot_s3_key,
+                contexto_origem='inventario',
+                contexto_ref=ciclo,
+                executado_por=executado_por,
+            )
+        except Exception as e:
+            # Falha de auditoria nao deve quebrar o pipeline real
+            logger.error(
+                f'_registrar_op falhou (ajuste={ajuste_id}, fase={fase}): '
+                f'{e}',
+                exc_info=True,
+            )
+
     # ============================================================
     # F5a — criar_pickings
     # ============================================================
@@ -175,14 +231,25 @@ class InventarioPipelineService:
         ]
 
         def _odoo_io(snap):
-            """Trabalho Odoo I/O paralelo, SEM tocar DB local."""
+            """Trabalho Odoo I/O paralelo, SEM tocar DB local.
+
+            Retorna dict com keys: ajuste_id, picking_id, skipped,
+            payload, tempo_ms (para auditoria no main thread).
+            """
+            inicio = time.time()
             with self.semaphore:
                 if snap['picking_id_existente']:
                     logger.info(
                         f"F5a skip ajuste {snap['id']} (picking_id_odoo"
                         f"={snap['picking_id_existente']} ja existe)"
                     )
-                    return snap['id'], snap['picking_id_existente'], True
+                    return {
+                        'ajuste_id': snap['id'],
+                        'picking_id': snap['picking_id_existente'],
+                        'skipped': True,
+                        'payload': None,
+                        'tempo_ms': int((time.time() - inicio) * 1000),
+                    }
 
                 acao = snap['acao_decidida']
                 if acao not in ACAO_PARA_DIRECAO:
@@ -219,6 +286,18 @@ class InventarioPipelineService:
                     ),
                 }]
 
+                payload = {
+                    'company_origem_id': origem,
+                    'company_destino_id': destino,
+                    'location_origem_id': location_origem,
+                    'location_destino_id': location_destino,
+                    'picking_type_id': picking_type_id,
+                    'partner_id': partner_id,
+                    'linhas': linhas,
+                    'origin': f"INV-{snap['ciclo']}-A{snap['id']:06d}",
+                    'acao_decidida': acao,
+                }
+
                 picking_id = self.picking_svc.criar_transferencia(
                     company_origem_id=origem,
                     company_destino_id=destino,
@@ -227,9 +306,15 @@ class InventarioPipelineService:
                     linhas=linhas,
                     picking_type_id=picking_type_id,
                     partner_id=partner_id,
-                    origin=f"INV-{snap['ciclo']}-A{snap['id']:06d}",
+                    origin=payload['origin'],
                 )
-                return snap['id'], picking_id, False
+                return {
+                    'ajuste_id': snap['id'],
+                    'picking_id': picking_id,
+                    'skipped': False,
+                    'payload': payload,
+                    'tempo_ms': int((time.time() - inicio) * 1000),
+                }
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {executor.submit(_odoo_io, s): s for s in snapshots}
@@ -237,19 +322,44 @@ class InventarioPipelineService:
                 snap = futures[fut]
                 ajuste = ajuste_index[snap['id']]
                 try:
-                    ajuste_id, picking_id, skipped = fut.result()
-                    result[ajuste_id] = picking_id
-                    if not skipped:
-                        ajuste.picking_id_odoo = picking_id
+                    res = fut.result()
+                    result[res['ajuste_id']] = res['picking_id']
+                    if not res['skipped']:
+                        ajuste.picking_id_odoo = res['picking_id']
                         ajuste.fase_pipeline = 'F5a_PICKING_CRIADO'
+                        self._registrar_op(
+                            ciclo=snap['ciclo'],
+                            ajuste_id=res['ajuste_id'],
+                            fase='F5a',
+                            acao='create',
+                            modelo_odoo='stock.picking',
+                            status='SUCESSO',
+                            executado_por=executado_por,
+                            odoo_id=res['picking_id'],
+                            payload=res['payload'],
+                            resposta={'picking_id': res['picking_id']},
+                            tempo_ms=res['tempo_ms'],
+                        )
                         db.session.commit()
                         logger.info(
-                            f'F5a ajuste {ajuste_id} ({snap["acao_decidida"]}) '
-                            f'→ picking {picking_id} (por {executado_por})'
+                            f'F5a ajuste {res["ajuste_id"]} '
+                            f'({snap["acao_decidida"]}) '
+                            f'→ picking {res["picking_id"]} '
+                            f'(por {executado_por})'
                         )
                 except Exception as e:
                     ajuste.fase_pipeline = 'F5a_FALHA'
                     ajuste.erro_msg = str(e)
+                    self._registrar_op(
+                        ciclo=snap['ciclo'],
+                        ajuste_id=snap['id'],
+                        fase='F5a',
+                        acao='create',
+                        modelo_odoo='stock.picking',
+                        status='FALHA',
+                        executado_por=executado_por,
+                        erro_msg=str(e),
+                    )
                     db.session.commit()
                     logger.error(
                         f'F5a falhou para ajuste {snap["id"]}: {e}'
@@ -261,7 +371,7 @@ class InventarioPipelineService:
     # ============================================================
 
     def f5b_validar_pickings(
-        self, ajustes: List
+        self, ajustes: List, executado_por: str = 'sistema'
     ) -> Dict[int, bool]:
         """Para cada picking de cada ajuste: confirmar_e_reservar + validar.
 
@@ -292,13 +402,14 @@ class InventarioPipelineService:
         picking_ids = list(ajuste_por_pid.keys())
 
         def _io(pid):
+            inicio = time.time()
             with self.semaphore:
                 self.picking_svc.confirmar_e_reservar(pid)
                 # Nota: nao chamamos preencher_qty_done aqui — Odoo ja
                 # preenche via action_assign. Caso preciso de override
                 # (ex.: lote especifico), expandir em iteracao futura.
                 self.picking_svc.validar(pid)
-                return pid
+                return pid, int((time.time() - inicio) * 1000)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {executor.submit(_io, pid): pid for pid in picking_ids}
@@ -306,9 +417,20 @@ class InventarioPipelineService:
                 pid = futures[fut]
                 aj = ajuste_por_pid[pid]
                 try:
-                    fut.result()
+                    pid_ret, tempo_ms = fut.result()
                     result[pid] = True
                     aj.fase_pipeline = 'F5b_VALIDADO'
+                    self._registrar_op(
+                        ciclo=aj.ciclo,
+                        ajuste_id=aj.id,
+                        fase='F5b',
+                        acao='button_validate',
+                        modelo_odoo='stock.picking',
+                        status='SUCESSO',
+                        executado_por=executado_por,
+                        odoo_id=pid,
+                        tempo_ms=tempo_ms,
+                    )
                     db.session.commit()
                     logger.info(
                         f'F5b picking {pid} validado (ajuste {aj.id})'
@@ -317,6 +439,17 @@ class InventarioPipelineService:
                     result[pid] = False
                     aj.fase_pipeline = 'F5b_FALHA'
                     aj.erro_msg = str(e)
+                    self._registrar_op(
+                        ciclo=aj.ciclo,
+                        ajuste_id=aj.id,
+                        fase='F5b',
+                        acao='button_validate',
+                        modelo_odoo='stock.picking',
+                        status='FALHA',
+                        executado_por=executado_por,
+                        odoo_id=pid,
+                        erro_msg=str(e),
+                    )
                     db.session.commit()
                     logger.error(f'F5b picking {pid} falhou: {e}')
         return result
@@ -326,7 +459,7 @@ class InventarioPipelineService:
     # ============================================================
 
     def f5c_liberar_faturamento(
-        self, ajustes: List
+        self, ajustes: List, executado_por: str = 'sistema'
     ) -> Dict[int, bool]:
         """Dispara action_liberar_faturamento em todos pickings (paralelo).
 
@@ -352,9 +485,10 @@ class InventarioPipelineService:
         picking_ids = list(ajuste_por_pid.keys())
 
         def _io(pid):
+            inicio = time.time()
             with self.semaphore:
                 self.picking_svc.liberar_faturamento(pid)
-                return pid
+                return pid, int((time.time() - inicio) * 1000)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {executor.submit(_io, pid): pid for pid in picking_ids}
@@ -362,9 +496,20 @@ class InventarioPipelineService:
                 pid = futures[fut]
                 aj = ajuste_por_pid[pid]
                 try:
-                    fut.result()
+                    pid_ret, tempo_ms = fut.result()
                     result[pid] = True
                     aj.fase_pipeline = 'F5c_LIBERADO'
+                    self._registrar_op(
+                        ciclo=aj.ciclo,
+                        ajuste_id=aj.id,
+                        fase='F5c',
+                        acao='liberar_faturamento',
+                        modelo_odoo='stock.picking',
+                        status='SUCESSO',
+                        executado_por=executado_por,
+                        odoo_id=pid,
+                        tempo_ms=tempo_ms,
+                    )
                     db.session.commit()
                     logger.info(
                         f'F5c picking {pid} liberado (ajuste {aj.id})'
@@ -373,6 +518,17 @@ class InventarioPipelineService:
                     result[pid] = False
                     aj.fase_pipeline = 'F5c_FALHA'
                     aj.erro_msg = str(e)
+                    self._registrar_op(
+                        ciclo=aj.ciclo,
+                        ajuste_id=aj.id,
+                        fase='F5c',
+                        acao='liberar_faturamento',
+                        modelo_odoo='stock.picking',
+                        status='FALHA',
+                        executado_por=executado_por,
+                        odoo_id=pid,
+                        erro_msg=str(e),
+                    )
                     db.session.commit()
                     logger.error(f'F5c picking {pid} falhou: {e}')
         return result
@@ -386,6 +542,7 @@ class InventarioPipelineService:
         ajustes: List,
         timeout: int = 1800,
         poll_interval: int = 40,
+        executado_por: str = 'sistema',
     ) -> Dict[int, Optional[int]]:
         """Aguarda robo CIEL IT criar invoices apos F5c.
 
@@ -419,6 +576,9 @@ class InventarioPipelineService:
         }
 
         start = time.time()
+        # Tempos de inicio de cada picking (para registrar tempo_ms ao
+        # achar a invoice)
+        inicio_por_pid = {pid: time.time() for pid in pendentes}
         while pendentes and time.time() - start < timeout:
             for pid in list(pendentes):
                 invoice_id = self.picking_svc.aguardar_invoice_do_robo(
@@ -430,6 +590,23 @@ class InventarioPipelineService:
                     aj = ajuste_por_pid[pid]
                     aj.fase_pipeline = 'F5d_INVOICE_GERADA'
                     aj.invoice_id_odoo = invoice_id
+                    tempo_ms = int(
+                        (time.time() - inicio_por_pid[pid]) * 1000
+                    )
+                    self._registrar_op(
+                        ciclo=aj.ciclo,
+                        ajuste_id=aj.id,
+                        fase='F5d',
+                        acao='aguardar_invoice',
+                        modelo_odoo='account.move',
+                        status='SUCESSO',
+                        executado_por=executado_por,
+                        odoo_id=invoice_id,
+                        resposta={
+                            'invoice_id': invoice_id, 'picking_id': pid,
+                        },
+                        tempo_ms=tempo_ms,
+                    )
                     db.session.commit()
                     logger.info(
                         f'F5d picking {pid} → invoice {invoice_id} '
@@ -447,6 +624,24 @@ class InventarioPipelineService:
                 f'F5d timeout {timeout}s — {len(pendentes)} pickings '
                 f'sem invoice: {sorted(pendentes)}'
             )
+            # Registrar timeout para auditoria
+            for pid in pendentes:
+                aj = ajuste_por_pid[pid]
+                tempo_ms = int(
+                    (time.time() - inicio_por_pid[pid]) * 1000
+                )
+                self._registrar_op(
+                    ciclo=aj.ciclo,
+                    ajuste_id=aj.id,
+                    fase='F5d',
+                    acao='aguardar_invoice',
+                    modelo_odoo='account.move',
+                    status='TIMEOUT',
+                    executado_por=executado_por,
+                    erro_msg=f'timeout {timeout}s — robo CIEL IT nao criou invoice',
+                    tempo_ms=tempo_ms,
+                )
+                db.session.commit()
         return resolved
 
     # ============================================================
@@ -462,7 +657,7 @@ class InventarioPipelineService:
     }
 
     def f5e_transmitir_sefaz(
-        self, ajustes: List
+        self, ajustes: List, executado_por: str = 'sistema'
     ) -> Dict[int, Optional[str]]:
         """Transmite NF-e para SEFAZ via Playwright (serial, 1 browser).
 
@@ -503,6 +698,13 @@ class InventarioPipelineService:
                     f'(fase={aj.fase_pipeline}). Provavelmente timeout '
                     'em F5d.'
                 )
+                self._registrar_op(
+                    ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5e',
+                    acao='transmitir_nfe', modelo_odoo='account.move',
+                    status='SKIPPED', executado_por=executado_por,
+                    erro_msg='sem invoice_id_odoo (provavelmente F5d timeout)',
+                )
+                db.session.commit()
                 continue
 
             # BUG-2: idempotency guard — NF-e ja transmitida nao precisa Playwright
@@ -513,12 +715,22 @@ class InventarioPipelineService:
                 )
                 if aj.chave_nfe:
                     result[inv_id] = aj.chave_nfe
+                self._registrar_op(
+                    ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5e',
+                    acao='transmitir_nfe', modelo_odoo='account.move',
+                    status='SKIPPED_IDEMPOTENT', executado_por=executado_por,
+                    odoo_id=inv_id,
+                    resposta={'chave_nfe': aj.chave_nfe},
+                )
+                db.session.commit()
                 continue
 
+            inicio = time.time()
             try:
                 resultado = transmitir_nfe_via_playwright(
                     inv_id, self.odoo, logger
                 )
+                tempo_ms = int((time.time() - inicio) * 1000)
 
                 # BUG-3: detectar erros de config e abortar batch
                 if (
@@ -529,6 +741,13 @@ class InventarioPipelineService:
                     erro = resultado['erro']
                     aj.fase_pipeline = 'F5e_FALHA'
                     aj.erro_msg = f'Config invalida: {erro}'
+                    self._registrar_op(
+                        ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5e',
+                        acao='transmitir_nfe', modelo_odoo='account.move',
+                        status='FALHA_CONFIG', executado_por=executado_por,
+                        odoo_id=inv_id, resposta=resultado, erro_msg=erro,
+                        tempo_ms=tempo_ms,
+                    )
                     db.session.commit()
                     raise RuntimeError(
                         f'F5e abortado: configuracao invalida — {erro}. '
@@ -549,6 +768,13 @@ class InventarioPipelineService:
                             f'{situacao} tentativa='
                             f'{resultado.get("tentativa", "?")}'
                         )
+                    self._registrar_op(
+                        ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5e',
+                        acao='transmitir_nfe', modelo_odoo='account.move',
+                        status='SUCESSO', executado_por=executado_por,
+                        odoo_id=inv_id, resposta=resultado,
+                        tempo_ms=tempo_ms,
+                    )
                     db.session.commit()
                     logger.info(
                         f'F5e invoice {inv_id} → SEFAZ OK '
@@ -568,6 +794,13 @@ class InventarioPipelineService:
                         f"cstat={ultimo.get('cstat')}, "
                         f"xmotivo={ultimo.get('xmotivo')})"
                     )
+                    self._registrar_op(
+                        ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5e',
+                        acao='transmitir_nfe', modelo_odoo='account.move',
+                        status='FALHA', executado_por=executado_por,
+                        odoo_id=inv_id, resposta=resultado,
+                        erro_msg=aj.erro_msg, tempo_ms=tempo_ms,
+                    )
                     db.session.commit()
                     logger.error(
                         f'F5e invoice {inv_id} falhou: {erro} '
@@ -578,9 +811,16 @@ class InventarioPipelineService:
                 # Re-raise para o caller decidir (abort batch acima)
                 raise
             except Exception as e:
+                tempo_ms = int((time.time() - inicio) * 1000)
                 result[inv_id] = None
                 aj.fase_pipeline = 'F5e_FALHA'
                 aj.erro_msg = str(e)
+                self._registrar_op(
+                    ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5e',
+                    acao='transmitir_nfe', modelo_odoo='account.move',
+                    status='EXCECAO', executado_por=executado_por,
+                    odoo_id=inv_id, erro_msg=str(e), tempo_ms=tempo_ms,
+                )
                 db.session.commit()
                 logger.error(
                     f'F5e excecao na invoice {inv_id}: {e}',

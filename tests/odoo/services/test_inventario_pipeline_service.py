@@ -502,6 +502,156 @@ def test_f5e_skip_ajuste_sem_invoice_id(db):
 
 
 # ============================================================
+# OperacaoOdooAuditoria — registro granular em F4 (tasks 4.6+)
+# ============================================================
+
+def _query_audit(db, **filters):
+    """Helper: SQL bruto (ver explicacao em test_indisponibilizacao)."""
+    from sqlalchemy import text
+    clauses = ' AND '.join(f'{k} = :{k}' for k in filters)
+    sql = (
+        'SELECT id, acao, modelo_odoo, status, odoo_id, executado_por, '
+        'contexto_origem, contexto_ref, pipeline_etapa, '
+        'tempo_execucao_ms, erro_msg '
+        f'FROM operacao_odoo_auditoria WHERE {clauses} '
+        'ORDER BY id'
+    )
+    return db.session.execute(text(sql), filters).mappings().all()
+
+
+def test_f5a_registra_OperacaoOdooAuditoria_em_sucesso(db):
+    """F5a sucesso → 1 row OperacaoOdooAuditoria com pipeline_etapa=F5a."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_AUDIT_F5A', cod_produto='X1', tipo_produto=1, company_id=5,
+        qtd_inventario=Decimal('1'), qtd_odoo=Decimal('2'),
+        qtd_ajuste=Decimal('-1'), acao_decidida='PERDA_LF_FB',
+        status='APROVADO', criado_por='pytest',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{'id': 1}]
+    picking_svc = MagicMock()
+    picking_svc.criar_transferencia.return_value = 77777
+
+    svc = InventarioPipelineService(odoo=odoo, picking_svc=picking_svc)
+    svc.f5a_criar_pickings([aj], executado_por='pytest')
+
+    rows = _query_audit(db, registro_id=aj.id, pipeline_etapa='F5a')
+    assert len(rows) == 1, f'esperava 1 audit row, got {len(rows)}'
+    r = rows[0]
+    assert r['acao'] == 'create'
+    assert r['modelo_odoo'] == 'stock.picking'
+    assert r['status'] == 'SUCESSO'
+    assert r['odoo_id'] == 77777
+    assert r['executado_por'] == 'pytest'
+    assert r['contexto_origem'] == 'inventario'
+    assert r['contexto_ref'] == 'TEST_AUDIT_F5A'
+    assert r['tempo_execucao_ms'] is not None and r['tempo_execucao_ms'] >= 0
+
+
+def test_f5a_registra_OperacaoOdooAuditoria_em_falha(db):
+    """F5a falha → 1 row com status=FALHA + erro_msg."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_AUDIT_F5A_FAIL', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'), qtd_odoo=Decimal('2'),
+        qtd_ajuste=Decimal('-1'), acao_decidida='SEM_ACAO',  # invalido
+        status='APROVADO', criado_por='pytest',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    svc = InventarioPipelineService(odoo=MagicMock(), picking_svc=MagicMock())
+    svc.f5a_criar_pickings([aj], executado_por='pytest')
+
+    rows = _query_audit(db, registro_id=aj.id, pipeline_etapa='F5a')
+    assert len(rows) == 1
+    assert rows[0]['status'] == 'FALHA'
+    assert 'SEM_ACAO' in (rows[0]['erro_msg'] or '')
+
+
+def test_f5e_registra_OperacaoOdooAuditoria_sucesso_e_skip(db):
+    """F5e cria audit row para skip (sem invoice + idempotency) + sucesso."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj_skip_sem_inv = AjusteEstoqueInventario(
+        ciclo='TEST_AUDIT_F5E_S1', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'), qtd_odoo=Decimal('2'),
+        qtd_ajuste=Decimal('-1'), acao_decidida='PERDA_LF_FB',
+        status='APROVADO', criado_por='pytest',
+        picking_id_odoo=999, fase_pipeline='F5c_LIBERADO',
+        invoice_id_odoo=None,  # SEM invoice
+    )
+    aj_ok = AjusteEstoqueInventario(
+        ciclo='TEST_AUDIT_F5E_S2', cod_produto='X2', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'), qtd_odoo=Decimal('2'),
+        qtd_ajuste=Decimal('-1'), acao_decidida='PERDA_LF_FB',
+        status='APROVADO', criado_por='pytest',
+        picking_id_odoo=1000, invoice_id_odoo=2000,
+        fase_pipeline='F5d_INVOICE_GERADA',
+    )
+    db.session.add_all([aj_skip_sem_inv, aj_ok])
+    db.session.flush()
+
+    svc = InventarioPipelineService(odoo=MagicMock())
+    with patch(
+        'app.odoo.services.inventario_pipeline_service'
+        '.transmitir_nfe_via_playwright'
+    ) as mock_tx:
+        mock_tx.return_value = {
+            'sucesso': True,
+            'chave_nf': '35260112345678000112550010000000012000',
+            'situacao_nf': 'autorizado',
+        }
+        svc.f5e_transmitir_sefaz([aj_skip_sem_inv, aj_ok])
+
+    rows_skip = _query_audit(
+        db, registro_id=aj_skip_sem_inv.id, pipeline_etapa='F5e'
+    )
+    assert len(rows_skip) == 1
+    assert rows_skip[0]['status'] == 'SKIPPED'
+
+    rows_ok = _query_audit(db, registro_id=aj_ok.id, pipeline_etapa='F5e')
+    assert len(rows_ok) == 1
+    assert rows_ok[0]['status'] == 'SUCESSO'
+    assert rows_ok[0]['odoo_id'] == 2000
+
+
+def test_f5b_e_f5c_registram_audit_por_picking(db):
+    """F5b+F5c criam rows OperacaoOdooAuditoria com pipeline_etapa correto."""
+    from app.odoo.models import AjusteEstoqueInventario
+
+    aj = AjusteEstoqueInventario(
+        ciclo='TEST_AUDIT_F5BC', cod_produto='X1', tipo_produto=1,
+        company_id=5, qtd_inventario=Decimal('1'), qtd_odoo=Decimal('2'),
+        qtd_ajuste=Decimal('-1'), acao_decidida='PERDA_LF_FB',
+        status='APROVADO', criado_por='pytest',
+        picking_id_odoo=5500, fase_pipeline='F5a_PICKING_CRIADO',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    picking_svc = MagicMock()
+    picking_svc.validar.return_value = True
+    svc = InventarioPipelineService(odoo=MagicMock(), picking_svc=picking_svc)
+
+    svc.f5b_validar_pickings([aj], executado_por='pytest')
+    svc.f5c_liberar_faturamento([aj], executado_por='pytest')
+
+    rows = _query_audit(db, registro_id=aj.id)
+    fases = [r['pipeline_etapa'] for r in rows]
+    assert 'F5b' in fases and 'F5c' in fases, fases
+    assert all(r['status'] == 'SUCESSO' for r in rows), [
+        r['status'] for r in rows
+    ]
+
+
+# ============================================================
 # F5e BUG-2 + BUG-3 + MEDIUM fixes (post-review)
 # ============================================================
 

@@ -16,8 +16,11 @@ Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md
       §6.2 + §10.1
 """
 import logging
-from typing import Any, Dict
+import time
+import uuid
+from typing import Any, Dict, Optional
 
+from app.odoo.models import OperacaoOdooAuditoria
 from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
@@ -30,11 +33,75 @@ class IndisponibilizacaoEstoqueService:
         self.odoo = odoo or get_odoo_connection()
 
     # ============================================================
+    # Auditoria
+    # ============================================================
+
+    def _registrar_op(
+        self,
+        *,
+        tabela_origem: str,
+        registro_id: int,
+        acao: str,
+        modelo_odoo: str,
+        status: str,
+        executado_por: str,
+        ajuste_id: Optional[int] = None,
+        odoo_id: Optional[int] = None,
+        payload: Optional[Dict[str, Any]] = None,
+        resposta: Optional[Dict[str, Any]] = None,
+        erro_msg: Optional[str] = None,
+        tempo_ms: Optional[int] = None,
+        contexto_ref: Optional[str] = None,
+    ) -> None:
+        """Registra 1 row em operacao_odoo_auditoria.
+
+        F5 (indisponibilizacao/canary) chama Odoo direto, sem
+        contexto de inventario obrigatorio. ajuste_id eh opcional;
+        se informado, vai como contexto_ref tambem.
+        """
+        try:
+            OperacaoOdooAuditoria.registrar(
+                external_id=f'INDISPO-{acao}-{registro_id}-{uuid.uuid4().hex[:8]}',
+                tabela_origem=tabela_origem,
+                registro_id=registro_id,
+                acao=acao,
+                modelo_odoo=modelo_odoo,
+                odoo_id=odoo_id,
+                etapa=None,
+                etapa_descricao=f'{acao} {modelo_odoo}',
+                status=status,
+                payload_json=payload,
+                resposta_json=resposta,
+                erro_msg=erro_msg,
+                tempo_execucao_ms=tempo_ms,
+                pipeline_etapa=None,
+                contexto_origem='indisponibilizacao',
+                contexto_ref=(
+                    contexto_ref
+                    if contexto_ref is not None
+                    else (f'ajuste={ajuste_id}' if ajuste_id else None)
+                ),
+                executado_por=executado_por,
+            )
+            # Flush apenas — caller decide commit (consistente com F4).
+            # OperacaoOdooAuditoria.registrar() ja chama flush().
+        except Exception as e:
+            logger.error(
+                f'_registrar_op falhou ({acao} {modelo_odoo}={registro_id}): {e}',
+                exc_info=True,
+            )
+
+    # ============================================================
     # Canaries (testes de hipotese — SEMPRE revertem)
     # ============================================================
 
     def canary_lote(
-        self, lot_id: int, product_id: int, partner_id: int
+        self,
+        lot_id: int,
+        product_id: int,
+        partner_id: int,
+        executado_por: str = 'sistema',
+        ajuste_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """C1: testa se `stock.lot.active=False` bloqueia faturamento.
 
@@ -54,6 +121,7 @@ class IndisponibilizacaoEstoqueService:
         rascunho). Usar APENAS em ambiente de staging ou ciclo
         controlado — em prod polui historico.
         """
+        inicio = time.time()
         # 1. Saldo antes
         quants_antes = self.odoo.search_read(
             'stock.quant',
@@ -61,7 +129,7 @@ class IndisponibilizacaoEstoqueService:
             ['id', 'quantity', 'location_id'],
         )
         if not quants_antes:
-            return {
+            res = {
                 'passou': False,
                 'detalhes': (
                     f'Lote {lot_id} sem saldo positivo — escolha outro '
@@ -69,6 +137,15 @@ class IndisponibilizacaoEstoqueService:
                 ),
                 'sale_order_id': None,
             }
+            self._registrar_op(
+                tabela_origem='stock.lot', registro_id=lot_id,
+                acao='canary_lote', modelo_odoo='stock.lot',
+                status='SKIPPED', executado_por=executado_por,
+                ajuste_id=ajuste_id, odoo_id=lot_id, resposta=res,
+                erro_msg='sem saldo positivo',
+                tempo_ms=int((time.time() - inicio) * 1000),
+            )
+            return res
 
         so_id = None
         try:
@@ -126,7 +203,7 @@ class IndisponibilizacaoEstoqueService:
                     f'{cleanup_e}'
                 )
 
-            return {
+            res = {
                 'passou': passou,
                 'detalhes': (
                     f'SO={so_id} move_lines={move_line_ids_total} '
@@ -134,6 +211,24 @@ class IndisponibilizacaoEstoqueService:
                 ),
                 'sale_order_id': so_id,
             }
+            self._registrar_op(
+                tabela_origem='stock.lot', registro_id=lot_id,
+                acao='canary_lote', modelo_odoo='stock.lot',
+                status='PASSOU' if passou else 'NAO_PASSOU',
+                executado_por=executado_por,
+                ajuste_id=ajuste_id, odoo_id=lot_id, resposta=res,
+                tempo_ms=int((time.time() - inicio) * 1000),
+            )
+            return res
+        except Exception as e:
+            self._registrar_op(
+                tabela_origem='stock.lot', registro_id=lot_id,
+                acao='canary_lote', modelo_odoo='stock.lot',
+                status='EXCECAO', executado_por=executado_por,
+                ajuste_id=ajuste_id, odoo_id=lot_id, erro_msg=str(e),
+                tempo_ms=int((time.time() - inicio) * 1000),
+            )
+            raise
         finally:
             # 6. SEMPRE reverter (canary nao pode deixar lote inativo)
             try:
@@ -149,13 +244,19 @@ class IndisponibilizacaoEstoqueService:
                 )
 
     def canary_local(
-        self, location_id: int, product_id: int, partner_id: int
+        self,
+        location_id: int,
+        product_id: int,
+        partner_id: int,
+        executado_por: str = 'sistema',
+        ajuste_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """C2: testa se `stock.location.active=False` bloqueia faturamento.
 
         Mesma estrutura de `canary_lote`. Returns dict {'passou': bool,
         'sale_order_id': int|None}.
         """
+        inicio = time.time()
         so_id = None
         try:
             self.odoo.write(
@@ -210,7 +311,25 @@ class IndisponibilizacaoEstoqueService:
                     f'falhou: {cleanup_e}'
                 )
 
-            return {'passou': passou, 'sale_order_id': so_id}
+            res = {'passou': passou, 'sale_order_id': so_id}
+            self._registrar_op(
+                tabela_origem='stock.location', registro_id=location_id,
+                acao='canary_local', modelo_odoo='stock.location',
+                status='PASSOU' if passou else 'NAO_PASSOU',
+                executado_por=executado_por,
+                ajuste_id=ajuste_id, odoo_id=location_id, resposta=res,
+                tempo_ms=int((time.time() - inicio) * 1000),
+            )
+            return res
+        except Exception as e:
+            self._registrar_op(
+                tabela_origem='stock.location', registro_id=location_id,
+                acao='canary_local', modelo_odoo='stock.location',
+                status='EXCECAO', executado_por=executado_por,
+                ajuste_id=ajuste_id, odoo_id=location_id, erro_msg=str(e),
+                tempo_ms=int((time.time() - inicio) * 1000),
+            )
+            raise
         finally:
             try:
                 self.odoo.write(
@@ -232,7 +351,11 @@ class IndisponibilizacaoEstoqueService:
     # ============================================================
 
     def indisponibilizar_lote(
-        self, lot_id: int, canary_passou: bool
+        self,
+        lot_id: int,
+        canary_passou: bool,
+        executado_por: str = 'sistema',
+        ajuste_id: Optional[int] = None,
     ) -> bool:
         """Inativa lote no Odoo. EXIGE canary previamente validado.
 
@@ -249,18 +372,45 @@ class IndisponibilizacaoEstoqueService:
                 'canary_lote nao foi validado (canary_passou=False). '
                 'Execute canary_lote() em staging primeiro.'
             )
+        inicio = time.time()
         self.odoo.write('stock.lot', [lot_id], {'active': False})
+        self._registrar_op(
+            tabela_origem='stock.lot', registro_id=lot_id,
+            acao='indispor_lote', modelo_odoo='stock.lot',
+            status='SUCESSO', executado_por=executado_por,
+            ajuste_id=ajuste_id, odoo_id=lot_id,
+            payload={'active': False},
+            tempo_ms=int((time.time() - inicio) * 1000),
+        )
         logger.info(f'indisponibilizar_lote {lot_id}: active=False')
         return True
 
-    def reverter_lote(self, lot_id: int) -> bool:
+    def reverter_lote(
+        self,
+        lot_id: int,
+        executado_por: str = 'sistema',
+        ajuste_id: Optional[int] = None,
+    ) -> bool:
         """Reativa lote (rollback de `indisponibilizar_lote`)."""
+        inicio = time.time()
         self.odoo.write('stock.lot', [lot_id], {'active': True})
+        self._registrar_op(
+            tabela_origem='stock.lot', registro_id=lot_id,
+            acao='reverter_lote', modelo_odoo='stock.lot',
+            status='SUCESSO', executado_por=executado_por,
+            ajuste_id=ajuste_id, odoo_id=lot_id,
+            payload={'active': True},
+            tempo_ms=int((time.time() - inicio) * 1000),
+        )
         logger.info(f'reverter_lote {lot_id}: active=True')
         return True
 
     def indisponibilizar_local(
-        self, location_id: int, canary_passou: bool
+        self,
+        location_id: int,
+        canary_passou: bool,
+        executado_por: str = 'sistema',
+        ajuste_id: Optional[int] = None,
     ) -> bool:
         """Inativa stock.location. EXIGE canary previamente validado.
 
@@ -273,18 +423,41 @@ class IndisponibilizacaoEstoqueService:
                 '(canary_passou=False). Execute canary_local() em '
                 'staging primeiro.'
             )
+        inicio = time.time()
         self.odoo.write(
             'stock.location', [location_id], {'active': False}
+        )
+        self._registrar_op(
+            tabela_origem='stock.location', registro_id=location_id,
+            acao='indispor_local', modelo_odoo='stock.location',
+            status='SUCESSO', executado_por=executado_por,
+            ajuste_id=ajuste_id, odoo_id=location_id,
+            payload={'active': False},
+            tempo_ms=int((time.time() - inicio) * 1000),
         )
         logger.info(
             f'indisponibilizar_local {location_id}: active=False'
         )
         return True
 
-    def reverter_local(self, location_id: int) -> bool:
+    def reverter_local(
+        self,
+        location_id: int,
+        executado_por: str = 'sistema',
+        ajuste_id: Optional[int] = None,
+    ) -> bool:
         """Reativa location (rollback de `indisponibilizar_local`)."""
+        inicio = time.time()
         self.odoo.write(
             'stock.location', [location_id], {'active': True}
+        )
+        self._registrar_op(
+            tabela_origem='stock.location', registro_id=location_id,
+            acao='reverter_local', modelo_odoo='stock.location',
+            status='SUCESSO', executado_por=executado_por,
+            ajuste_id=ajuste_id, odoo_id=location_id,
+            payload={'active': True},
+            tempo_ms=int((time.time() - inicio) * 1000),
         )
         logger.info(f'reverter_local {location_id}: active=True')
         return True
