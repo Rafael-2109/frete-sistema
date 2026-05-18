@@ -326,11 +326,13 @@ python scripts/migrations/motos_assai_29_devolucao.py \
 #     || echo "⚠️ Backfill motos_assai falhou, continuando deploy..."
 
 # 15f.b Cleanup do pedido placeholder BACKFILL + desvinculacao da NF 1737.
-# Idempotente: skip total se pedido `BACKFILL-2026-05-17` nao existe (ja rodou).
-# Apos primeira execucao, pode permanecer no build sem efeito colateral.
-echo "Motos Assai cleanup: remover pedido BACKFILL + desvincular NF 1737..."
-python scripts/migrations/remover_pedido_backfill_e_desvincular_nf_1737.py \
-    || echo "⚠️ Cleanup BACKFILL falhou, continuando deploy..."
+# REMOVIDO do build apos primeira execucao em prod (commit f837adce 2026-05-18).
+# Script permanece em scripts/migrations/ — idempotente, pode ser re-executado
+# manualmente via Render Shell se o placeholder reaparecer:
+#   python scripts/migrations/remover_pedido_backfill_e_desvincular_nf_1737.py
+# echo "Motos Assai cleanup: remover pedido BACKFILL + desvincular NF 1737..."
+# python scripts/migrations/remover_pedido_backfill_e_desvincular_nf_1737.py \
+#     || echo "⚠️ Cleanup BACKFILL falhou, continuando deploy..."
 
 # 15g. Motos Assai 31 (2026-05-17): novo tipo de divergencia
 # CHASSI_FATURADO_SEM_RECIBO no CHECK constraint. _calcular_match agora exige
