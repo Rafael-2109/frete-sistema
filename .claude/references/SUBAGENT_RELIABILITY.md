@@ -1,6 +1,6 @@
 # Confiabilidade de Subagentes — Protocolo Operacional
 
-**Ultima Atualizacao**: 13/02/2026
+**Ultima Atualizacao**: 18/05/2026 (notas historicas Abr/2026 + caso 2026-05-11 max_turns loader fix; contagem atualizada para 14 Nacom Goya com `auditor-sped-ecd` adicionado em 2026-05-16)
 
 ---
 
@@ -199,8 +199,8 @@ if max_turns_raw is not None:
         max_turns = int(max_turns_raw)
 ```
 
-Apos o fix, os 14 agents Nacom Goya carregam corretamente. **Os 18 SKIPs em 7 dias foram
-eliminados.**
+Apos o fix, os 13 agents Nacom Goya da epoca (hoje 14 com `auditor-sped-ecd` adicionado em
+2026-05-16) carregam corretamente. **Os 18 SKIPs em 7 dias foram eliminados.**
 
 ### Licao para investigacoes futuras
 

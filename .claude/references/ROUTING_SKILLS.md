@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 11/05/2026 (36 skills invocaveis — adicionadas: motos_assai 6 skills, conferindo-recibo-assai)
+**Ultima Atualizacao**: 18/05/2026 (41 skills invocaveis — adicionadas em 2026-05-16: `parseando-sped-ecd`, `auditando-sped-contabil`, `auditando-sped-vs-manual`, `comparando-sped-ground-truth` — pipeline de auditoria SPED ECD usado exclusivamente pelo subagent `auditor-sped-ecd`)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -136,7 +136,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (36 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (41 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -182,5 +182,12 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 ### Skills motos_assai (6)
 `consultando-estoque-assai`, `rastreando-chassi-assai`, `acompanhando-pedido-compra-assai`,
 `acompanhando-saida-assai`, `conferindo-recibo-assai`, `registrando-evento-moto-assai`
+
+### Skills SPED ECD audit (4) — USO EXCLUSIVO do subagent `auditor-sped-ecd`
+`parseando-sped-ecd` (parse Leiaute 9 streaming -> dict JSON em /tmp/),
+`auditando-sped-vs-manual` (DSL YAML + busca semantica vs Manual ECD oficial),
+`auditando-sped-contabil` (equacionalidade I155 + hierarquia I050 + cross-ref I250),
+`comparando-sped-ground-truth` (diff estrutural vs SPED da contadora aprovado pela RFB).
+NAO invocar do agente principal — fluxo orquestrado dentro do subagent.
 
 > Skills dev (`frontend-design`, `skill-creator`, `ralph-wiggum`, `prd-generator`, `resolvendo-problemas`, `integracao-odoo`) NAO existem em `.claude/skills/` — sao invocaveis apenas via Claude Code global (fora do escopo deste inventario).

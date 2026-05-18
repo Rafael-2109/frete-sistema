@@ -1,6 +1,6 @@
 # Best Practices Anthropic 2026 — Plano de Otimizacao (SDK features)
 
-**Atualizado**: 11/05/2026
+**Atualizado**: 18/05/2026
 
 > **Escopo deste doc**: SDK features (prompt caching, structured outputs, pgvector, MCP servers, versoes).
 > Para **prompt engineering conceitual Claude 4.6** (overtriggering, adaptive thinking, prefill deprecation, XML tags, pre-mortem, red team) ver [STUDY_PROMPT_ENGINEERING_2026.md](STUDY_PROMPT_ENGINEERING_2026.md) + [ROADMAP_PROMPT_ENGINEERING_2026.md](ROADMAP_PROMPT_ENGINEERING_2026.md).
@@ -12,7 +12,7 @@
 | Componente | Versao | Notas |
 |-----------|--------|-------|
 | `anthropic` SDK | **0.98.1** | Atualizado de 0.84.0 em 2026-05-09. Historico completo (0.85→0.98.1) em `app/agente/SDK_CHANGELOG.md` |
-| `claude-agent-sdk` | **0.1.80** | CLI 2.1.138 (bundled). Atualizado de 0.1.66 em 2026-05-09. 0.1.77: `skills` option em `ClaudeAgentOptions` (auto-config `"Skill"` em allowed_tools + setting_sources). 0.1.78/0.1.79: CLI bumps + actionable errors. 0.1.80: atual. Historico completo (0.1.67→0.1.80) em `app/agente/SDK_CHANGELOG.md` |
+| `claude-agent-sdk` | **0.2.82** | CLI 2.1.142 (bundled). Atualizado de 0.1.80 em 2026-05-16. Salto 0.1.81 → 0.2.82 e cosmetico (sem breaking changes — bumps de alinhamento com serie CLI 2.1.x). Bug fixes gratuitos: stderr callback isolation (#932), CancelledError em eager-flush (#931), `permission_suggestions` typing stricter (#955). 0.1.77: `skills` option em `ClaudeAgentOptions`. Historico completo (0.1.67→0.2.82) em `app/agente/SDK_CHANGELOG.md` |
 | `mcp` | >=1.26.0 | 7 servers, 35 tools |
 | pgvector | **0.8.1** (confirmado prod) | iterative_scan SUPORTADO, halfvec disponivel |
 
@@ -20,13 +20,14 @@
 
 ## IMPLEMENTADO (Fase 1 — Quick Wins)
 
-### 0.1 SDK anthropic 0.79.0 → 0.84.0 → 0.98.1 (2026-05-09)
-- **Arquivo**: `requirements.txt:64`
+### 0.1 SDK anthropic 0.79.0 → 0.84.0 → 0.98.1 (2026-05-09) + claude-agent-sdk 0.1.80 → 0.2.82 (2026-05-16)
+- **Arquivo**: `requirements.txt:64-65`
 - **Beneficio**: count_tokens, batches, cache_control, Structured Outputs, bug fixes. **0.87.0**: `APIStatusError.type` (classificacao granular de erros). **0.88.0 + 0.98.0 fix**: `stop_details` estruturado em streaming.
 - **OutputConfig**: DISPONIVEL — `OutputConfigParam` com `JSONOutputFormatParam` (json_schema)
 - **parse()**: Aceita `output_format=PydanticModel` para Structured Outputs tipados
+- **claude-agent-sdk 0.2.82** (2026-05-16): salto 0.1.81 → 0.2.82 cosmetico (zero breaking changes), traz BF1 stderr callback isolation (#932), BF2 CancelledError eager-flush (#931), BF3 permission_suggestions typing stricter (#955). CLI bundled 2.1.142.
 - **Risco**: ZERO — claude-agent-sdk NAO depende de anthropic (verificado)
-- **Historico completo**: `app/agente/SDK_CHANGELOG.md` (entradas SDK 0.1.73 + anthropic 0.98.1)
+- **Historico completo**: `app/agente/SDK_CHANGELOG.md` (SDK 0.1.49 → 0.2.82 + anthropic 0.98.1)
 
 ### 0.2 Prompt Caching nas chamadas diretas
 - **O que**: Separacao system/user em todos `messages.create()` com `cache_control: {"type": "ephemeral"}`

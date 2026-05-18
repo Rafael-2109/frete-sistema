@@ -1,6 +1,6 @@
 # GOTCHAS Criticos - Integracao Odoo
 
-**Ultima verificacao:** Marco/2026
+**Ultima verificacao:** 18/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/`)
 
 ---
 

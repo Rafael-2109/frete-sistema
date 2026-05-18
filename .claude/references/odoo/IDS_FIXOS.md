@@ -160,11 +160,13 @@ Sempre usar `wait_until='domcontentloaded'` + `wait_for_selector('.o_form_view')
 
 ```python
 # Buscar picking_type_id pela company
+# CORRECAO 2026-05-17: LF e' 19, NAO 16 (id=16 e' "Conferencia (CD)" inativo da CD).
+# Audit em scripts/inventario_2026_05/00b_investigar_gotchas.py. Ver tabela "Picking Types por Company" acima.
 PICKING_TYPES = {
     1: 1,   # FB
     3: 8,   # SC
     4: 13,  # CD
-    5: 16,  # LF
+    5: 19,  # LF (era 16, corrigido em 2026-05-17)
 }
 picking_type_id = PICKING_TYPES.get(company_id)
 

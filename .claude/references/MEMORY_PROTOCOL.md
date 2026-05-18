@@ -70,7 +70,7 @@ NAO salvar: resultados pontuais, status temporarios, informacao disponivel no si
 ## Protecoes
 
 - `user.xml` e `preferences.xml` sao **IMUNES** a consolidacao e remocao
-  - FONTE: `memory_consolidator.py:49-52`
+  - FONTE: `memory_consolidator.py:62-65` (PROTECTED_PATHS set)
 - Memorias `category='permanent'` com `importance >= 0.7` protegidas de consolidacao
 - Extracao pos-sessao: dedup via busca semantica (threshold 0.80) antes de salvar
   - FONTE: `pattern_analyzer.py:_find_similar_empresa_memory()`

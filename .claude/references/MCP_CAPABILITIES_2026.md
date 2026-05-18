@@ -1,6 +1,6 @@
 # MCP Capabilities — Estado do Sistema (Mai/2026)
 
-**Atualizado**: 2026-05-11
+**Atualizado**: 2026-05-18
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Package | Versao | Nota |
 |---|---|---|
-| `claude-agent-sdk` | 0.1.80 | CLI 2.1.138 (bundled). Atualizado de 0.1.66 em 2026-05-09. 0.1.77: `skills` option em `ClaudeAgentOptions` (auto-config `"Skill"` + setting_sources). 0.1.78/0.1.79/0.1.80: actionable errors + CLI bumps. Historico completo (0.1.49->0.1.80) em `app/agente/SDK_CHANGELOG.md` |
+| `claude-agent-sdk` | 0.2.82 | CLI 2.1.142 (bundled). Atualizado de 0.1.80 em 2026-05-16. Salto 0.1.81 → 0.2.82 cosmetico (zero breaking changes — bumps de alinhamento com serie CLI 2.1.x). Bug fixes gratuitos: stderr callback isolation (#932), CancelledError eager-flush (#931), `permission_suggestions` typing stricter (#955). 0.1.77: `skills` option em `ClaudeAgentOptions`. Historico completo (0.1.49->0.2.82) em `app/agente/SDK_CHANGELOG.md` |
 | `anthropic` | 0.98.1 | Atualizado de 0.84.0 em 2026-05-09 |
 | `mcp` | >=1.26.0 | MCP Python SDK (spec 2025-11-25). Pin atual em requirements.txt |
 

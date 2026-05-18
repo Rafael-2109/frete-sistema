@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 11/05/2026
+**Ultima atualizacao**: 18/05/2026
 
 ---
 
@@ -132,3 +132,7 @@
 | `acompanhando-saida-assai` | `app/motos_assai/CLAUDE.md` |
 | `conferindo-recibo-assai` | `app/motos_assai/CLAUDE.md` |
 | `registrando-evento-moto-assai` | `app/motos_assai/CLAUDE.md` |
+| `parseando-sped-ecd` | `app/relatorios_fiscais/CLAUDE.md`, `app/relatorios_fiscais/SPED_ECD_PLANO.md` |
+| `auditando-sped-vs-manual` | `app/relatorios_fiscais/manual_ecd/` (Leiaute 9 oficial), `app/relatorios_fiscais/CLAUDE.md` |
+| `auditando-sped-contabil` | `app/relatorios_fiscais/CLAUDE.md` |
+| `comparando-sped-ground-truth` | `app/relatorios_fiscais/CLAUDE.md` |
