@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-05-18-1](atualizacao-2026-05-18-1.md) — 9 auditados, 8 modificados. Mudancas estruturais: odoo +6 services inventario 2026-05 (12 -> 18, 18.8K -> 22.2K LOC); agente +2 routes (admin_metrics + artifacts), +2 tools (artifact_tool + sql_session_context), +1 worker (artifact_worker), +2 templates (admin_metrics + artifact) -> 72 -> 80 arquivos; agente/services +3 (artifact + metrics_dashboard + sql_evaluator_falses, 14 -> 17). Financeiro: arvore root corrigida + remessa_vortx (5 -> 8 services). Carteira: JS corrigido (23 -> 22 — interface_enhancements.js nao existe). CarVia: LOC + 1 template (107 -> 108). Datas em todos atualizadas.
+
 - [2026-05-11-1](atualizacao-2026-05-11-1.md) — 9 auditados, 9 modificados. Sem novos arquivos estruturais. Crescimento organico: agente +1.4K LOC (35.4K -> 36.8K), carvia +1.3K (63.3K -> 64.6K). CarVia services: financeiro/ +1 (custo_entrega_autolink), root +1 (cte_complementar_service) -> 41 services total. Carteira: contagem JS corrigida (22 -> 23, inclui interface_enhancements.js no root de templates/carteira/). Datas atualizadas.
 
 - [2026-05-05-1](atualizacao-2026-05-05-1.md) — 9 auditados, 9 modificados (datas). Unica mudanca estrutural: agente/sdk/ +1 arquivo (`shutdown_state.py` — flag atexit suprime Sentry de RuntimeError shutdown no worker Teams). CarVia subiu 600 LOC sem novos arquivos (62.7K -> 63.3K). Demais modulos sem variacao estrutural.

@@ -1,6 +1,6 @@
 # Financeiro — Guia de Desenvolvimento
 
-**77 arquivos** | **~45.1K LOC** | **Atualizado**: 11/05/2026
+**80 arquivos** | **~46.1K LOC** | **Atualizado**: 18/05/2026
 
 Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprovantes e baixas.
 
@@ -14,14 +14,17 @@ Contas a receber/pagar, extratos bancarios, conciliacao Odoo, CNAB 400, comprova
 ```
 app/financeiro/
   ├── routes/       # 18 arquivos de rotas + __init__.py (financeiro_bp + cnab400_bp)
-  ├── services/     # 27 services root + subpacote remessa_vortx/ (5 services)
+  ├── services/     # 27 services root + subpacote remessa_vortx/ (8 services)
   ├── workers/      # 8 RQ job files + utils.py (batch processing via Redis)
   ├── parsers/      # 4 parsers (dispatcher, pix_sicoob, models)
   ├── models.py     # 40+ models (~2.8K linhas — MAIOR models.py do projeto)
   ├── models_comprovante.py        # ~300 linhas — comprovantes de pagamento
   ├── models_correcao_datas.py     # ~90 linhas — correcao de datas
   ├── constants.py  # Contas contabeis, journals, mapeamentos Odoo
-  └── parcela_utils.py  # parcela_to_int/str/odoo (VARCHAR↔INTEGER)
+  ├── parcela_utils.py              # parcela_to_int/str/odoo (VARCHAR↔INTEGER)
+  ├── forms.py                      # WTForms do modulo
+  ├── leitor_comprovantes_sicoob.py # Leitor PIX Sicoob (legado, em uso)
+  └── remover_pagamentos_*.py       # Scripts util de remocao (legado, manter para historico)
 ```
 
 ### Workers locais

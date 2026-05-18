@@ -1,6 +1,6 @@
 # Odoo — Guia de Desenvolvimento
 
-**32 arquivos** | **~18.8K LOC** | **Atualizado**: 11/05/2026
+**44 arquivos** | **~22.2K LOC** | **Atualizado**: 18/05/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
@@ -14,9 +14,15 @@ app/odoo/
   ├── routes_circuit_breaker.py # Blueprint p/ status do circuit breaker
   ├── config/
   │   └── odoo_config.py       # 1 config (constantes Odoo: URL, DB, UID)
+  ├── constants/               # 2 modulos de constantes-dado
+  │   ├── locations.py             # COMPANY_LOCATIONS (FB=8, CD=32, LF=42)
+  │   └── operacoes_fiscais.py     # MATRIZ_INTERCOMPANY (D002 — operacoes NACOM)
+  ├── models/                  # 2 models SQLAlchemy (excecao a regra "sem models proprios")
+  │   ├── ajuste_estoque_inventario.py  # Ciclo de inventario (1 linha por divergencia)
+  │   └── operacao_odoo_auditoria.py    # Auditoria polimorfica de operacoes Odoo
   ├── routes/
   │   └── sincronizacao_integrada.py  # 1 rota (sync manual + fallback + pedido individual)
-  ├── services/                # 12 services
+  ├── services/                # 18 services
   │   ├── carteira_service.py              # Sync sale.order → CarteiraPrincipal/Separacao (~142K)
   │   ├── faturamento_service.py           # Sync account.move → FaturamentoProduto (~90K)
   │   ├── importacao_fallback_service.py   # Fallback quando sync principal falha (~69K)
@@ -28,7 +34,13 @@ app/odoo/
   │   ├── entrada_material_service.py      # Sync stock.picking → MovimentacaoEstoque (~27K)
   │   ├── alocacao_compras_service.py      # Sync purchase.request.allocation (~23K)
   │   ├── sincronizacao_integrada_service.py # Orquestra sync completa (fat→cart) (~19K)
-  │   └── pedido_sync_service.py           # Sync individual de pedido (~19K)
+  │   ├── pedido_sync_service.py           # Sync individual de pedido (~19K)
+  │   ├── inventario_pipeline_service.py   # Pipeline inventario 2026-05 (F0-F5, ondas LF/FB/CD)
+  │   ├── stock_picking_service.py         # Operacoes stock.picking (criar/validar/cancelar)
+  │   ├── stock_lot_service.py             # Operacoes stock.lot (criar/buscar com fallback like)
+  │   ├── stock_internal_transfer_service.py # Transferencias internas FB <-> CD (pre-etapa)
+  │   ├── pre_etapa_estoque_service.py     # Pre-etapa CD/FB para minimizar NF (D007)
+  │   └── indisponibilizacao_estoque_service.py # Bloqueio temporario de lotes em ajuste
   ├── utils/                   # 11 utils
   │   ├── cached_lookups.py        # Cache de lookups frequentes (metodos entrega, etc.) (~267 LOC)
   │   ├── carteira_mapper.py       # Mapeia sale.order → dict CarteiraPrincipal (~21K)
@@ -160,7 +172,7 @@ cache_produtos = {p['id']: p for p in produtos}
 | Incoterm RED muda endereco | Se incoterm = `[RED]` ou ID 16 → endereco vem de `carrier_id/l10n_br_partner_id`, NAO do `partner_shipping_id` | `carteira_mapper.py:321-406` |
 | Prefixos Odoo hardcoded | `is_pedido_odoo()` verifica `VSC`, `VCD`, `VFB`. Nova empresa = atualizar `carteira_service.py:64` | `carteira_service.py:40-65` |
 | Socket timeout e GLOBAL | `setdefaulttimeout()` afeta TODAS conexoes do processo (nao so Odoo) | `connection.py:60,78,191` |
-| Sem models proprios | Este modulo ESCREVE em 8+ models de outros modulos. NUNCA adicionar model aqui | Todos os services |
+| Quase sem models proprios | Modulo ESCREVE em 8+ models de outros modulos. Excecao em `models/`: `AjusteEstoqueInventario` e `OperacaoOdooAuditoria` (inventario 2026-05) | Todos os services |
 | Imports LAZY obrigatorios | Models de outros modulos importados DENTRO dos metodos (evita circular import) | Todos os services |
 | Ordem de sync | SEMPRE faturamento primeiro, carteira depois. Inverter perde saldos | `sincronizacao_integrada_service.py:70-106` |
 | l10n_br _compute stale via XML-RPC | Campos `nfe_infnfe_*` NAO recomputados quando invoice criada via robo → SEFAZ 225. Somente UI (Playwright) forca recomputacao | `app/recebimento/services/playwright_nfe_transmissao.py`, GOTCHAS.md |

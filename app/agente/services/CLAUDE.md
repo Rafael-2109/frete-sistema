@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~8.9K | **Arquivos**: 14 | **Atualizado**: 2026-05-11
+**LOC**: ~10.5K | **Arquivos**: 17 | **Atualizado**: 2026-05-18
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -10,19 +10,22 @@ Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX
 
 ```
 app/agente/services/
-  ├── _utils.py                  #    57 LOC — Helpers compartilhados (parse_llm_json_response)
-  ├── pattern_analyzer.py        # 2,216 LOC — Patterns prescritivos + perfil + extracao (P1-3)
-  ├── insights_service.py        # 1,605 LOC — Dashboard admin: metricas + health_score (P2)
-  ├── knowledge_graph_service.py # 1,082 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
-  ├── memory_consolidator.py     #   736 LOC — Consolidacao + tier frio (P0)
-  ├── improvement_suggester.py   #   602 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
-  ├── intersession_briefing.py   #   571 LOC — Briefing entre sessoes, zero LLM (P0)
-  ├── friction_analyzer.py       #   490 LOC — Deteccao de friccao heuristica (P2-4)
-  ├── session_summarizer.py      #   475 LOC — Resumos M1 estruturados via Sonnet (P0-2)
-  ├── tool_skill_mapper.py       #   337 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
-  ├── recommendations_engine.py  #   279 LOC — Recomendacoes rule-based para dashboard
-  ├── suggestion_generator.py    #   223 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
-  └── sentiment_detector.py      #   214 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
+  ├── _utils.py                       #    57 LOC — Helpers compartilhados (parse_llm_json_response)
+  ├── pattern_analyzer.py             # 2,247 LOC — Patterns prescritivos + perfil + extracao (P1-3)
+  ├── insights_service.py             # 1,605 LOC — Dashboard admin: metricas + health_score (P2)
+  ├── knowledge_graph_service.py      # 1,082 LOC — KG 3 layers: regex/Voyage/Sonnet (T3-3)
+  ├── memory_consolidator.py          #   736 LOC — Consolidacao + tier frio (P0)
+  ├── metrics_dashboard_service.py    #   690 LOC — Dashboard telemetria subagent (Fase A1+A3)
+  ├── improvement_suggester.py        #   602 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
+  ├── intersession_briefing.py        #   576 LOC — Briefing entre sessoes, zero LLM (P0)
+  ├── artifact_service.py             #   491 LOC — Rate limit + spec validation + S3 upload (artifacts)
+  ├── friction_analyzer.py            #   490 LOC — Deteccao de friccao heuristica (P2-4)
+  ├── session_summarizer.py           #   480 LOC — Resumos M1 estruturados via Sonnet (P0-2)
+  ├── sql_evaluator_falses_service.py #   387 LOC — Detector de falsos negativos no SQL evaluator
+  ├── tool_skill_mapper.py            #   337 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
+  ├── recommendations_engine.py       #   279 LOC — Recomendacoes rule-based para dashboard
+  ├── suggestion_generator.py         #   223 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
+  └── sentiment_detector.py           #   214 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)
 ```
 
 ## Regras Criticas

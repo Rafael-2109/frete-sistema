@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~36.8K | **Arquivos**: 72 | **Atualizado**: 11/05/2026
+**LOC**: ~41.7K | **Arquivos**: 80 | **Atualizado**: 18/05/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -18,16 +18,18 @@ app/agente/                          # Root — 6 arquivos
 ├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
-├── routes/                          # Flask routes modularizadas — 18 arquivos
+├── routes/                          # Flask routes modularizadas — 20 arquivos
 │   ├── __init__.py                  # agente_bp + imports sub-modulos + re-exports Teams
 │   ├── _constants.py                # Constantes (timeouts, thresholds, upload)
 │   ├── _helpers.py                  # Helpers compartilhados (Teams + cross-module)
 │   ├── chat.py                      # Core SSE: api_chat, streaming, interrupt, user_answer
 │   ├── sessions.py                  # CRUD sessoes: list, messages, delete, rename, summaries
 │   ├── admin_learning.py            # Admin: session messages, generate/save correction
+│   ├── admin_metrics.py             # Dashboard admin telemetria subagent (Fase A — 10 endpoints)
 │   ├── admin_session_store.py       # Admin: PostgresSessionStore introspection (Fase B)
 │   ├── admin_subagents.py           # Admin forense: list/messages + smoketest (SDK 0.1.60 fase 2)
 │   ├── subagents.py                 # API UI-inline: summary/messages lazy-fetch
+│   ├── artifacts.py                 # 5 rotas: 3 publicas (page/bundle/status) + API list/by-uuid/url
 │   ├── files.py                     # Upload/download/list/delete + helpers arquivo
 │   ├── health.py                    # api_health com cache
 │   ├── feedback.py                  # api_feedback 4 tipos
@@ -47,9 +49,10 @@ app/agente/                          # Root — 6 arquivos
 ├── hooks/                           # Hooks do Agent SDK — 2 arquivos
 │   ├── __init__.py
 │   └── README.md
-├── prompts/                         # Prompts do agente web — 3 arquivos
+├── prompts/                         # Prompts do agente web — 4 arquivos
 │   ├── __init__.py
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
+│   ├── prompt_inventario.md         # Prompt operacional inventario 2026-05 (NACOM/LF)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
 ├── sdk/                             # Integracao com Claude Agent SDK — 17 arquivos
 │   ├── __init__.py
@@ -69,40 +72,49 @@ app/agente/                          # Root — 6 arquivos
 │   ├── shutdown_state.py            # Flag global atexit (suprime Sentry de RuntimeError shutdown)
 │   ├── stream_parser.py             # Dataclasses + classificacao de erros de tool
 │   └── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
-├── services/                        # Servicos de inteligencia — 14 arquivos (ver services/CLAUDE.md)
+├── services/                        # Servicos de inteligencia — 17 arquivos (ver services/CLAUDE.md)
 │   ├── __init__.py
 │   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
 │   ├── _utils.py                    # Helpers compartilhados (parse_llm_json_response)
+│   ├── artifact_service.py          # Service de artifacts (rate limit, spec validation, S3)
 │   ├── friction_analyzer.py         # Analise de friccao de uso
 │   ├── improvement_suggester.py     # Dialogo D8 melhoria (batch + real-time)
 │   ├── insights_service.py          # Gerador de insights pos-sessao
 │   ├── intersession_briefing.py     # Briefing entre sessoes
 │   ├── knowledge_graph_service.py   # Grafo de conhecimento (memorias)
 │   ├── memory_consolidator.py       # Consolidacao de memorias redundantes
+│   ├── metrics_dashboard_service.py # Dashboard telemetria subagent (Fase A1+A3)
 │   ├── pattern_analyzer.py          # Extracao de padroes e conhecimento
 │   ├── recommendations_engine.py    # Motor de recomendacoes
 │   ├── sentiment_detector.py        # Deteccao de sentimento
 │   ├── session_summarizer.py        # Resumo automatico de sessoes
+│   ├── sql_evaluator_falses_service.py # Detector de falsos negativos em SQL evaluator
 │   ├── suggestion_generator.py      # Gerador de sugestoes proativas
 │   └── tool_skill_mapper.py         # Mapeamento tool → skill
-├── templates/agente/                # Templates Jinja2 — 3 arquivos
+├── templates/agente/                # Templates Jinja2 — 5 arquivos
+│   ├── admin_metrics.html           # Dashboard telemetria subagent (Chart.js 3.9.1, admin)
 │   ├── admin_session_store.html     # Dashboard admin SessionStore (R6 observability)
+│   ├── artifact.html                # Pagina render bundle artifact (sandboxed iframe)
 │   ├── chat.html                    # Interface de chat web
 │   └── insights.html                # Dashboard de insights
-├── tools/                           # MCP tools (NAO callables) — 10 arquivos
+├── tools/                           # MCP tools (NAO callables) — 12 arquivos
 │   ├── __init__.py
 │   ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
+│   ├── artifact_tool.py             # build_artifact MCP tool (Enhanced v1.0)
 │   ├── memory_mcp_tool.py           # 12 operacoes de memoria (Enhanced v2.1.0)
 │   ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
 │   ├── render_logs_tool.py          # Consulta logs Render
 │   ├── routes_search_tool.py        # Busca em rotas Flask
 │   ├── schema_mcp_tool.py           # Consulta schemas de tabelas
 │   ├── session_search_tool.py       # 4 operacoes de busca em sessoes (Enhanced v4.0.0)
+│   ├── sql_session_context.py       # Helpers de contexto SQL por sessao
 │   ├── teams_card_tool.py           # Adaptive Cards para Teams (rich responses)
 │   └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
 ├── utils/                           # Helpers de modulo — 2 arquivos
 │   └── pii_masker.py                # Mascaramento regex CPF/CNPJ/email (SDK 0.1.60 fase 2)
-└── workers/                         # Workers RQ locais — 2 arquivos
+└── workers/                         # Workers RQ locais — 3 arquivos
+    ├── __init__.py
+    ├── artifact_worker.py           # build_artifact_job (Vite+React+TS+Tailwind, queue artifacts)
     └── subagent_validator.py        # Haiku anti-alucinacao (SDK 0.1.60 fase 4, queue agent_validation)
 ```
 
@@ -328,7 +340,7 @@ Screenshots Playwright (`playwright-screenshots/{YYYY-MM}/`) e archive de sessoe
 |---------|--------|
 | `historia.md` (76K) | Apenas referencia historica |
 
-### Services (14 arquivos, ~8.6K LOC)
+### Services (17 arquivos, ~10.5K LOC)
 Guia completo de regras, gotchas e interdependencias: **`services/CLAUDE.md`**
 Todos controlados por feature flags em `config/feature_flags.py`.
 

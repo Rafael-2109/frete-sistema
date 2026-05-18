@@ -1,6 +1,6 @@
 # Carteira — Guia de Desenvolvimento
 
-**LOC**: ~18.1K | **Arquivos**: 50 | **23 JS** (22 templates + 1 static) | **Atualizado**: 11/05/2026
+**LOC**: ~18.4K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 18/05/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -14,9 +14,9 @@ analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
 
 ```
 app/carteira/
-  ├── routes/                    # 26 APIs + agrupados.py
-  │   ├── carteira_simples/      # 4 arquivos (dados, separacoes, helpers)
-  │   └── programacao_em_lote/   # 4 arquivos (Atacadao/Sendas)
+  ├── routes/                    # 25 APIs (root)
+  │   ├── carteira_simples/      # 4 arquivos (dados, separacoes, helpers, __init__)
+  │   └── programacao_em_lote/   # 5 arquivos (Atacadao/Sendas: busca, importar, routes, ruptura, __init__)
   ├── services/                  # 4 services (agrupamento, mapa, importacao, atualizacao)
   ├── utils/                     # 3 helpers (separacao, workspace, formatters)
   ├── models.py                  # 7 models (657 linhas)
@@ -26,7 +26,7 @@ app/carteira/
 ```
 
 **Templates**: 13 HTML em `app/templates/carteira/` (10 root + 3 em `partials/`)
-**JavaScript**: 22 arquivos em `app/templates/carteira/` (21 em `js/` + 1 root `interface_enhancements.js`) + 1 em `app/static/carteira/js/` (modal-relatorios)
+**JavaScript**: 21 arquivos em `app/templates/carteira/js/` (incluindo `utils/` e `workspace/`) + 1 em `app/static/carteira/js/` (modal-relatorios)
 **CSS**: `app/static/css/modules/_carteira.css` + `carteira/carteira-simples.css`
 
 ---
@@ -129,7 +129,7 @@ Adicionar novo campo: incluir na query base, no batch loading se necessario, e n
 
 | Exporta para | O que | Cuidado |
 |-------------|-------|---------|
-| `app/templates/carteira/` | Templates Jinja2 | 13 telas + 21 JS files |
+| `app/templates/carteira/` | Templates Jinja2 | 13 telas + 21 JS files (templates) + 1 (static) |
 | `app/odoo/jobs/` | CarteiraPrincipal model | Sincronizacao incremental importa model |
 
 ---
