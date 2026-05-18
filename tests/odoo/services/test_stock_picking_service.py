@@ -30,6 +30,9 @@ def test_criar_transferencia_basico():
     assert payload['picking_type_id'] == 99
     assert payload['company_id'] == 1
     assert len(payload['move_ids']) == 2
+    # Defaults inter-company NACOM (G004): incoterm CIF + carrier 996
+    assert payload['incoterm'] == 6
+    assert payload['carrier_id'] == 996
 
 
 def test_criar_transferencia_validacoes():
@@ -37,6 +40,38 @@ def test_criar_transferencia_validacoes():
     svc = StockPickingService(odoo=odoo)
     with pytest.raises(ValueError, match='linhas'):
         svc.criar_transferencia(1, 4, 8, 32, linhas=[], picking_type_id=99)
+
+
+def test_criar_transferencia_incoterm_carrier_custom():
+    """Aceita incoterm_id e carrier_id customizados."""
+    odoo = MagicMock()
+    odoo.create.return_value = 8888
+    svc = StockPickingService(odoo=odoo)
+    svc.criar_transferencia(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1, 'quantity': 1.0}], picking_type_id=94,
+        incoterm_id=17, carrier_id=12345,
+    )
+    payload = odoo.create.call_args[0][1]
+    assert payload['incoterm'] == 17
+    assert payload['carrier_id'] == 12345
+
+
+def test_criar_transferencia_incoterm_carrier_none_nao_seta():
+    """incoterm_id=None ou carrier_id=None NAO incluem no payload."""
+    odoo = MagicMock()
+    odoo.create.return_value = 7777
+    svc = StockPickingService(odoo=odoo)
+    svc.criar_transferencia(
+        company_origem_id=1, company_destino_id=4,
+        location_origem_id=8, location_destino_id=32,
+        linhas=[{'product_id': 1, 'quantity': 1.0}], picking_type_id=51,
+        incoterm_id=None, carrier_id=None,
+    )
+    payload = odoo.create.call_args[0][1]
+    assert 'incoterm' not in payload
+    assert 'carrier_id' not in payload
 
 
 # ============================================================

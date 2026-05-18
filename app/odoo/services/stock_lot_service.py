@@ -97,6 +97,40 @@ class StockLotService:
                     return existente
             raise
 
+    def criar_se_nao_existe(
+        self, nome: str, product_id: int, company_id: int,
+        expiration_date: Optional[str] = None,
+    ) -> tuple[int, bool]:
+        """Retorna lot_id, criando o lote se nao existir.
+
+        Idempotente. Wrapper claro sobre buscar_por_nome + criar.
+
+        Args:
+            nome: nome do lote (obrigatorio).
+            product_id: produto Odoo.
+            company_id: empresa Odoo.
+            expiration_date: validade 'YYYY-MM-DD HH:MM:SS' (opcional).
+
+        Returns:
+            (lot_id, criado_agora). criado_agora=True se foi criado nesta
+            chamada, False se ja existia.
+
+        Raises:
+            ValueError: se nome vazio.
+        """
+        if not nome:
+            raise ValueError('Nome do lote obrigatorio')
+        existente = self.buscar_por_nome(nome, product_id, company_id)
+        if existente:
+            if expiration_date:
+                self.odoo.write(
+                    'stock.lot', [existente],
+                    {'expiration_date': expiration_date},
+                )
+            return existente, False
+        novo = self.criar(nome, product_id, company_id, expiration_date)
+        return novo, True
+
     def renomear(self, lot_id: int, novo_nome: str) -> bool:
         """Renomeia lote (regra P9 do spec — divergencia apenas de lote).
 

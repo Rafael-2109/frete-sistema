@@ -116,9 +116,104 @@ class InventarioPipelineService:
         self.semaphore = Semaphore(max_concurrent)
         self.max_workers = max_workers
 
+    # Lessons learned 2026-05-18 piloto 210030325 LF:
+    # - Robo CIEL IT cria invoice sem payment_provider_id (Forma Pagamento)
+    # - Sem isso, SEFAZ falha "Meio de pagamento nao configurado"
+    # - NF historica 588209 usa payment_provider_id=38 (SEM PAGAMENTO)
+    PAYMENT_PROVIDER_SEM_PAGAMENTO = 38
+
     # ============================================================
     # Helpers
     # ============================================================
+
+    def _garantir_payment_provider(
+        self, invoice_id: int, aj, executado_por: str,
+    ) -> bool:
+        """Garante que invoice tem payment_provider_id populado (idempotente).
+
+        Setado para PAYMENT_PROVIDER_SEM_PAGAMENTO=38 ('SEM PAGAMENTO') —
+        valor compativel com NFs de transferencia/perda inter-company
+        (sem cobranca financeira). Necessario para SEFAZ Playwright.
+
+        Args:
+            invoice_id: account.move.id criada pelo robo CIEL IT
+            aj: AjusteEstoqueInventario (para auditoria)
+            executado_por: usuario
+
+        Returns:
+            True se setou (ou ja estava setado), False se falhou.
+        """
+        # Idempotencia: se ja tem payment_provider, skip
+        try:
+            current = self.odoo.read(
+                'account.move', [invoice_id], ['payment_provider_id'],
+            )
+            if current and current[0].get('payment_provider_id'):
+                logger.info(
+                    f'payment_provider_id ja setado em invoice {invoice_id}: '
+                    f'{current[0]["payment_provider_id"]} — skip.'
+                )
+                return True
+        except Exception as e:
+            logger.warning(f'check payment_provider_id falhou: {e}')
+
+        # Setar via write (mesmo em state=posted — testado no piloto)
+        try:
+            self.odoo.write(
+                'account.move', [invoice_id],
+                {'payment_provider_id': self.PAYMENT_PROVIDER_SEM_PAGAMENTO},
+            )
+            logger.info(
+                f'payment_provider_id={self.PAYMENT_PROVIDER_SEM_PAGAMENTO} '
+                f'setado em invoice {invoice_id}'
+            )
+            self._registrar_op(
+                ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5d.5',
+                acao='set_payment_provider', modelo_odoo='account.move',
+                status='SUCESSO', executado_por=executado_por,
+                odoo_id=invoice_id,
+                payload={'payment_provider_id': self.PAYMENT_PROVIDER_SEM_PAGAMENTO},
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f'write payment_provider_id em posted falhou: {e}. '
+                'Tentando reset_to_draft + write + post...'
+            )
+            try:
+                self.odoo.execute_kw(
+                    'account.move', 'button_draft', [[invoice_id]],
+                )
+                self.odoo.write(
+                    'account.move', [invoice_id],
+                    {'payment_provider_id': self.PAYMENT_PROVIDER_SEM_PAGAMENTO},
+                )
+                self.odoo.execute_kw(
+                    'account.move', 'action_post', [[invoice_id]],
+                )
+                logger.info(
+                    f'payment_provider_id setado via reset_to_draft+post '
+                    f'em invoice {invoice_id}'
+                )
+                self._registrar_op(
+                    ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5d.5',
+                    acao='set_payment_provider', modelo_odoo='account.move',
+                    status='SUCESSO', executado_por=executado_por,
+                    odoo_id=invoice_id,
+                    payload={
+                        'payment_provider_id': self.PAYMENT_PROVIDER_SEM_PAGAMENTO,
+                        'metodo': 'reset_to_draft+write+post',
+                    },
+                )
+                return True
+            except Exception as e2:
+                self._registrar_op(
+                    ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5d.5',
+                    acao='set_payment_provider', modelo_odoo='account.move',
+                    status='FALHA', executado_por=executado_por,
+                    odoo_id=invoice_id, erro_msg=str(e2),
+                )
+                return False
 
     def _resolver_picking_type(self, company_origem: int, tipo_op: str) -> int:
         """Retorna picking_type_id Odoo para uma direcao.
@@ -612,6 +707,21 @@ class InventarioPipelineService:
                         f'F5d picking {pid} → invoice {invoice_id} '
                         f'(ajuste {aj.id})'
                     )
+                    # F5d.5 (lessons learned 2026-05-18 piloto 210030325 LF):
+                    # Robo CIEL IT cria invoice sem `payment_provider_id`
+                    # populado. Sem isso, Playwright SEFAZ falha com:
+                    # "Operação inválida — Meio de pagamento não configurado".
+                    # Setar para 38 = "SEM PAGAMENTO" (mesmo valor da NF
+                    # ref 588209 historica).
+                    try:
+                        self._garantir_payment_provider(
+                            invoice_id, aj, executado_por,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f'F5d.5 payment_provider write falhou para '
+                            f'invoice {invoice_id}: {e}'
+                        )
             if pendentes:
                 logger.info(
                     f'F5d aguardando {len(pendentes)} pickings ainda '

@@ -106,19 +106,46 @@ def transmitir_nfe_via_playwright(
             if not _login_odoo(page, context, logger):
                 return {'sucesso': False, 'erro': 'login_falhou', 'tentativas': 0}
 
-        # Ler nome da invoice antes do loop (para verificar que a pagina certa carregou)
+        # Ler nome + company_id da invoice antes do loop (para verificar pagina e
+        # resolver cids/menu_id por CNPJ — LF=5 usa cids=5,menu_id=217; NACOM 1-3-4,124)
         inv_name_esperado = None
+        company_id_invoice = None
         try:
             inv_pre = odoo.execute_kw(
                 'account.move', 'read',
                 [[invoice_id]],
-                {'fields': ['name']}
+                {'fields': ['name', 'company_id']}
             )
             if inv_pre:
                 inv_name_esperado = inv_pre[0].get('name')
-                logger.info(f"  [playwright] Invoice alvo: {inv_name_esperado} (id={invoice_id})")
+                cid_raw = inv_pre[0].get('company_id')
+                if isinstance(cid_raw, (list, tuple)) and cid_raw:
+                    company_id_invoice = cid_raw[0]
+                logger.info(
+                    f"  [playwright] Invoice alvo: {inv_name_esperado} "
+                    f"(id={invoice_id}, company_id={company_id_invoice})"
+                )
         except Exception as e:
             logger.warning(f"  [playwright] Nao conseguiu ler nome da invoice: {e}")
+
+        # Forcar mudanca de allowed_company_ids na sessao se a invoice eh de
+        # outra empresa do grupo (ex: LF=5 quando user default e' FB=1).
+        # Sem isso, a regra global "Account Entry" (ir.rule 71) filtra a
+        # invoice e UI mostra "Erro de acesso a Faturas".
+        if company_id_invoice:
+            cids_alvo, _ = _resolver_cids_e_menu(company_id_invoice)
+            try:
+                logger.info(
+                    f"  [playwright] Forcando allowed_company_ids=cids={cids_alvo} "
+                    f"(invoice company_id={company_id_invoice})"
+                )
+                page.goto(
+                    f"{ODOO_URL}/web?cids={cids_alvo}",
+                    wait_until='domcontentloaded', timeout=60000,
+                )
+                page.wait_for_timeout(3000)
+            except Exception as e:
+                logger.warning(f"  [playwright] Falha ao forcar cids: {e}")
 
         ultimo_estado = {}
         for tentativa in range(1, max_tentativas + 1):
@@ -136,7 +163,7 @@ def transmitir_nfe_via_playwright(
 
             try:
                 # 1. Navegar para invoice (verifica que a correta carregou)
-                _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado)
+                _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado, company_id=company_id_invoice)
 
                 # 2. Clicar "Pre Visualizar XML NF-e" (forca recomputacao)
                 if redis_callback:
@@ -161,7 +188,7 @@ def transmitir_nfe_via_playwright(
                             extra_page.close()
 
                     # Voltar ao form view (verifica que a correta carregou)
-                    _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado)
+                    _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado, company_id=company_id_invoice)
                 else:
                     logger.warning(
                         "  [playwright] Botao preview XML nao encontrado. "
@@ -177,8 +204,24 @@ def transmitir_nfe_via_playwright(
 
                 clicou_transmitir = _clicar_botao_transmitir(page, logger)
                 if clicou_transmitir:
+                    # Screenshot logo apos click (pode aparecer wizard de confirmacao)
+                    try:
+                        _shot1 = f'/tmp/sefaz_debug/pos_click_transmitir_inv{invoice_id}_t{tentativa}.png'
+                        page.screenshot(path=_shot1)
+                        logger.info(f"  [playwright] Screenshot pos-click: {_shot1}")
+                    except Exception:
+                        pass
+                    # Detectar e tratar wizard de confirmacao (se aparecer)
+                    page.wait_for_timeout(2000)
+                    _tratar_wizard_confirmacao(page, logger)
                     logger.info("  [playwright] Aguardando 25s para SEFAZ processar...")
                     page.wait_for_timeout(25000)
+                    try:
+                        _shot2 = f'/tmp/sefaz_debug/pos_sefaz_inv{invoice_id}_t{tentativa}.png'
+                        page.screenshot(path=_shot2)
+                        logger.info(f"  [playwright] Screenshot pos-SEFAZ: {_shot2}")
+                    except Exception:
+                        pass
                 else:
                     logger.warning(
                         "  [playwright] Botao transmitir nao encontrado. "
@@ -447,15 +490,34 @@ def _login_odoo(page, context, logger):
         return False
 
 
-def _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado=None):
+def _resolver_cids_e_menu(company_id):
+    """Resolve (cids, menu_id) por CNPJ do grupo.
+
+    NACOM GOYA (CNPJ 61.724.241/000X-XX) — FB=1, SC=3, CD=4: mesmo CNPJ,
+        compartilham menu_id=124. cids='1-3-4'.
+    LA FAMIGLIA (CNPJ 18.467.441/0001-63) — LF=5: CNPJ separado,
+        menu_id=217. cids='5'.
+
+    Validado por URL real do usuario 2026-05-18:
+        https://odoo.nacomgoya.com.br/web?debug=1#id=608607&cids=5&menu_id=217&model=account.move&view_type=form
+    """
+    if company_id == 5:
+        return '5', 217
+    return '1-3-4', 124
+
+
+def _navegar_para_invoice(
+    page, invoice_id, logger, inv_name_esperado=None,
+    company_id=None,
+):
     """
     Navega para o form view da invoice no Odoo.
 
     Estrategia de URL (em ordem):
       1. URL minima sem menu_id/action (nao depende de IDs que mudam)
-      2. Fallback: URL completa com menu_id=124, action=243 (Faturamento)
+      2. Fallback: URL completa com menu_id+action conforme empresa
 
-    Apos carregar, verifica se a invoice correta foi aberta (pelo titulo).
+    cids e menu_id sao resolvidos dinamicamente por company_id (G_LF/NACOM).
 
     Args:
         page: Playwright page
@@ -463,24 +525,25 @@ def _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado=None):
         logger: Logger
         inv_name_esperado: Nome da invoice para verificar (ex: "NACOM/2026/0001").
                            Se None, pula verificacao de conteudo.
+        company_id: company da invoice (1=FB, 3=SC, 4=CD, 5=LF).
+            Se None, default NACOM (cids='1-3-4', menu_id=124).
     """
-    # URL minima — Odoo 17 resolve model+view_type sem menu_id/action
-    # cids=1-3-4 necessario para multi-company (FB=1, LF=3, CD=4)
+    cids, menu_id = _resolver_cids_e_menu(company_id)
+    # NAO usar ?debug=1 — abre modal tecnico que bloqueia clicks no Playwright.
+    # URL minima (sem menu_id) primeiro; fallback com menu_id por CNPJ.
     url_minima = (
-        f"{ODOO_URL}/web#id={invoice_id}&cids=1-3-4"
+        f"{ODOO_URL}/web#id={invoice_id}&cids={cids}"
         f"&model=account.move&view_type=form"
     )
-    # Fallback: URL completa com IDs de menu/action do Faturamento
-    # Estes IDs sao da instancia Nacom Goya (podem mudar se Odoo for reinstalado)
     url_completa = (
-        f"{ODOO_URL}/web#id={invoice_id}&cids=1-3-4&menu_id=124"
-        f"&action=243&model=account.move&view_type=form"
+        f"{ODOO_URL}/web#id={invoice_id}&cids={cids}&menu_id={menu_id}"
+        f"&model=account.move&view_type=form"
     )
 
     for tentativa_nav, url in enumerate([url_minima, url_completa], 1):
         logger.info(
             f"  [playwright] Navegando para invoice {invoice_id} "
-            f"(estrategia {tentativa_nav}/2)..."
+            f"(estrategia {tentativa_nav}/2): {url}"
         )
         # NOTA: Odoo SPA mantem long-polling → networkidle NUNCA resolve
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
@@ -489,6 +552,13 @@ def _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado=None):
         try:
             page.wait_for_selector('.o_form_view', timeout=30000)
         except Exception:
+            # Screenshot diagnostico
+            try:
+                _shot = f'/tmp/sefaz_debug/nav_falhou_inv{invoice_id}_est{tentativa_nav}.png'
+                page.screenshot(path=_shot)
+                logger.warning(f"  [playwright] Screenshot: {_shot}")
+            except Exception:
+                pass
             logger.warning(
                 f"  [playwright] Form view nao carregou com estrategia "
                 f"{tentativa_nav}. {'Tentando fallback...' if tentativa_nav == 1 else 'Continuando mesmo assim...'}"
@@ -528,13 +598,110 @@ def _navegar_para_invoice(page, invoice_id, logger, inv_name_esperado=None):
         return
 
 
+def _tratar_wizard_confirmacao(page, logger):
+    """Se aparecer wizard/dialog de confirmacao apos clicar 'Transmitir NF-e',
+    clica no botao de OK/Confirm/Sim para prosseguir.
+
+    Odoo l10n_br pode mostrar wizard 'Confirmar transmissao para SEFAZ?'
+    com botoes 'Confirmar' / 'Cancelar'.
+    """
+    # Procurar wizards comuns (NAO sao os o_technical_modal — sao .modal padrao)
+    dialog = page.locator('.modal.show:not(.o_technical_modal), .o_dialog:visible')
+    if dialog.count() == 0:
+        return False
+    logger.info(f"  [playwright] Wizard de confirmacao detectado ({dialog.count()})")
+    # Capturar texto para diagnostico
+    try:
+        texto = dialog.first.text_content() or ''
+        logger.info(f"  [playwright] Texto wizard: {texto[:200]}")
+    except Exception:
+        pass
+    for seletor in [
+        '.modal.show button.btn-primary:has-text("Confirmar")',
+        '.modal.show button.btn-primary:has-text("Confirm")',
+        '.modal.show button.btn-primary:has-text("Sim")',
+        '.modal.show button.btn-primary:has-text("Yes")',
+        '.modal.show button.btn-primary:has-text("OK")',
+        '.modal.show button.btn-primary:has-text("Ok")',
+        '.modal.show .modal-footer button.btn-primary',
+        '.o_dialog button.btn-primary',
+    ]:
+        btn = page.locator(seletor)
+        if btn.count() > 0:
+            try:
+                btn.first.click(timeout=5000)
+                page.wait_for_timeout(1000)
+                logger.info(f"  [playwright] Wizard confirmado via '{seletor}'")
+                return True
+            except Exception:
+                continue
+    logger.warning("  [playwright] Wizard detectado mas botao confirmar nao achado")
+    return False
+
+
+def _fechar_modais_tecnicos(page, logger):
+    """Fecha modais .o_technical_modal que interceptam clicks.
+
+    Em Odoo 17, modais tecnicos (avisos sistema, alertas) podem aparecer
+    sobre o form view e bloquear clicks em botoes. Tenta fechar via:
+    1. Botao com text 'Fechar'/'Close'/'Ok' dentro do modal
+    2. Botao close (.btn-close ou .o_form_button_cancel)
+    3. Pressionar Escape
+    """
+    modal = page.locator('.o_technical_modal:visible')
+    if modal.count() == 0:
+        return False
+    logger.info(f"  [playwright] Modal tecnico detectado ({modal.count()}). Fechando...")
+    for seletor in [
+        '.o_technical_modal button.btn-close',
+        '.o_technical_modal .btn-close',
+        '.o_technical_modal button:has-text("Fechar")',
+        '.o_technical_modal button:has-text("Close")',
+        '.o_technical_modal button:has-text("Ok")',
+        '.o_technical_modal button:has-text("OK")',
+        '.o_technical_modal .modal-header button',
+    ]:
+        btn_close = page.locator(seletor)
+        if btn_close.count() > 0:
+            try:
+                btn_close.first.click(timeout=5000)
+                page.wait_for_timeout(500)
+                logger.info(f"  [playwright] Modal fechado via '{seletor}'")
+                return True
+            except Exception:
+                continue
+    # Fallback: Escape
+    try:
+        page.keyboard.press('Escape')
+        page.wait_for_timeout(500)
+        if page.locator('.o_technical_modal:visible').count() == 0:
+            logger.info("  [playwright] Modal fechado via Escape")
+            return True
+    except Exception:
+        pass
+    logger.warning("  [playwright] Nao consegui fechar modal tecnico!")
+    return False
+
+
 def _clicar_botao(page, texto_botao, logger):
     """Clica em botao pelo texto visivel. Tenta 3 estrategias."""
+    # Fechar modais tecnicos que possam estar bloqueando clicks
+    _fechar_modais_tecnicos(page, logger)
     # Estrategia 1: botao com texto exato
     btn = page.locator(f'button:has-text("{texto_botao}")')
     if btn.count() > 0:
         logger.info(f'  [playwright] Botao "{texto_botao}" encontrado. Clicando...')
-        btn.first.click()
+        try:
+            btn.first.click(timeout=10000)
+        except Exception as e:
+            # Modal pode ter reaparecido — tentar fechar e re-clicar com force
+            logger.warning(f"  [playwright] Click bloqueado ({e}). Tentando force=True...")
+            _fechar_modais_tecnicos(page, logger)
+            try:
+                btn.first.click(force=True, timeout=10000)
+            except Exception as e2:
+                logger.error(f"  [playwright] Click force tambem falhou: {e2}")
+                return False
         return True
 
     # Estrategia 2: botao dentro de dropdown "..." (Odoo 17)

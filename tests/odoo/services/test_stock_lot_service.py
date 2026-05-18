@@ -94,6 +94,55 @@ def test_criar_propaga_outras_excecoes():
         svc.criar(nome='L006', product_id=42, company_id=5)
 
 
+def test_criar_se_nao_existe_lote_ja_existe_nao_cria():
+    odoo = MagicMock()
+    odoo.search.return_value = [777]  # ja existe
+    svc = StockLotService(odoo=odoo)
+    lot_id, criado = svc.criar_se_nao_existe('L007', product_id=10, company_id=5)
+    assert lot_id == 777
+    assert criado is False
+    odoo.create.assert_not_called()
+
+
+def test_criar_se_nao_existe_lote_novo_cria():
+    odoo = MagicMock()
+    odoo.search.return_value = []  # nao existe
+    odoo.create.return_value = 888
+    svc = StockLotService(odoo=odoo)
+    lot_id, criado = svc.criar_se_nao_existe(
+        'L008', product_id=10, company_id=5,
+        expiration_date='2027-01-01 00:00:00',
+    )
+    assert lot_id == 888
+    assert criado is True
+    odoo.create.assert_called_once_with('stock.lot', {
+        'name': 'L008', 'product_id': 10, 'company_id': 5,
+        'expiration_date': '2027-01-01 00:00:00',
+    })
+
+
+def test_criar_se_nao_existe_atualiza_validade_em_lote_existente():
+    odoo = MagicMock()
+    odoo.search.return_value = [555]
+    svc = StockLotService(odoo=odoo)
+    lot_id, criado = svc.criar_se_nao_existe(
+        'L009', product_id=10, company_id=5,
+        expiration_date='2028-06-15 00:00:00',
+    )
+    assert lot_id == 555
+    assert criado is False
+    odoo.write.assert_called_once_with(
+        'stock.lot', [555], {'expiration_date': '2028-06-15 00:00:00'},
+    )
+
+
+def test_criar_se_nao_existe_sem_nome_raises():
+    odoo = MagicMock()
+    svc = StockLotService(odoo=odoo)
+    with pytest.raises(ValueError, match='obrigatorio'):
+        svc.criar_se_nao_existe('', product_id=10, company_id=5)
+
+
 def test_criar_sem_nome_raises():
     odoo = MagicMock()
     svc = StockLotService(odoo=odoo)

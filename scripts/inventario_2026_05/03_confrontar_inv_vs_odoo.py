@@ -81,6 +81,22 @@ def escolher_lote_alvo(
     return ordered[0]
 
 
+def _custo_medio_cod(quants: list) -> Decimal:
+    """Custo medio ponderado (D004): usado quando lote alvo nao tem
+    custo no Odoo (lote novo). Soma value/quantity dos quants com qty>0
+    e value != 0.
+    """
+    total_val = Decimal('0')
+    total_qty = Decimal('0')
+    for q in quants:
+        qty = Decimal(str(q.get('quantity', 0) or 0))
+        val = Decimal(str(q.get('value', 0) or 0))
+        if qty > 0 and val != 0:
+            total_val += val
+            total_qty += qty
+    return total_val / total_qty if total_qty > 0 else Decimal('0')
+
+
 def _checar_validade(
     validade_inv: str | None,
     lote_odoo_dict: dict,
@@ -106,8 +122,8 @@ def _checar_validade(
 
 def confrontar_company(
     quants_odoo: list, linhas_inv: list, cid: int
-) -> list:
-    """Retorna lista de diffs por (cod_produto, lote).
+) -> tuple:
+    """Retorna tupla (diffs, outliers) por (cod_produto, lote).
 
     Refator 2026-05-17 (planilha real):
     - Separa linhas_inv em (com lote) e (sem lote).
@@ -115,6 +131,12 @@ def confrontar_company(
       (P6.regra3 com usar_mais_novo=True).
     - Cross-check validade_inv vs Odoo expiration_date — flag
       validade_divergente=True quando ambas existem e diferem.
+
+    Outliers (2026-05-17): cods nao-digito (ex: X105000022 produtos
+    arquivados, COMP-ICMS-ENTRADA produtos fiscais) sao skipados do diff
+    porque o pipeline fiscal depende de tipo_produto=int(cod[0]) para
+    determinar CFOP/fiscal_position. Sao retornados em lista separada
+    para revisao manual (mesma decisao F7.2 com 'C'/'S' em CD).
     """
     odoo_por_cod = defaultdict(list)
     for q in quants_odoo:
@@ -130,7 +152,37 @@ def confrontar_company(
         else:
             inv_sem_lote_por_cod[cod].append(linha)
 
+    # FIX 2026-05-17: agregar inv_com_lote por (cod, lote_inventariado).
+    # Planilha real tem multiplas linhas mesmo cod+lote (ex: 23 pallets
+    # cod=201030011 lote=160100-26 em CD). Sem agregacao, F7.3 gerava 23
+    # diffs duplicados e F7.4 dedup descartava 22 (perda de 1895 ajustes).
+    for cod_k, linhas_raw in list(inv_com_lote_por_cod.items()):
+        agg_por_lote = {}
+        for linha in linhas_raw:
+            li = linha.get('lote_inventariado', '') or ''
+            if li not in agg_por_lote:
+                agg_por_lote[li] = {
+                    'cod_produto': cod_k,
+                    'lote_inventariado': li,
+                    'qtd_inventario': Decimal('0'),
+                    'tipo_produto': linha.get('tipo_produto'),
+                    'validade_inv': None,
+                    'linha_origem': [],
+                }
+            agg_por_lote[li]['qtd_inventario'] += Decimal(
+                str(linha['qtd_inventario'])
+            )
+            lo = linha.get('linha_origem')
+            if lo is not None:
+                agg_por_lote[li]['linha_origem'].append(lo)
+            if linha.get('validade_inv') and not agg_por_lote[li]['validade_inv']:
+                agg_por_lote[li]['validade_inv'] = linha['validade_inv']
+        for li, a in agg_por_lote.items():
+            a['qtd_inventario'] = str(a['qtd_inventario'])
+        inv_com_lote_por_cod[cod_k] = list(agg_por_lote.values())
+
     diffs = []
+    outliers = []
     cods_processados = set()
     cods_todos = (
         set(inv_com_lote_por_cod.keys())
@@ -142,6 +194,45 @@ def confrontar_company(
         if cod in cods_processados:
             continue
         cods_processados.add(cod)
+
+        # Skip outliers: cod nao-digito (arquivados X* ou fiscais
+        # COMP-ICMS-*) e tipo_produto fora de (1,2,3,4) (sem mapeamento
+        # fiscal em operacoes_fiscais.py). Registra para revisao manual.
+        motivo_outlier = None
+        if not cod or not cod[0].isdigit():
+            motivo_outlier = (
+                'cod_nao_digito (produto arquivado X* ou fiscal)'
+            )
+        elif int(cod[0]) not in (1, 2, 3, 4):
+            motivo_outlier = (
+                f'tipo_produto={cod[0]} fora de (1,2,3,4) — sem '
+                'mapeamento fiscal'
+            )
+        if motivo_outlier:
+            quants_out = odoo_por_cod.get(cod, [])
+            inv_out = (
+                inv_com_lote_por_cod.get(cod, [])
+                + inv_sem_lote_por_cod.get(cod, [])
+            )
+            total_odoo_out = sum(
+                Decimal(str(q['quantity'])) for q in quants_out
+            )
+            total_inv_out = sum(
+                Decimal(r['qtd_inventario']) for r in inv_out
+            )
+            total_val_out = sum(
+                Decimal(str(q.get('value', 0) or 0)) for q in quants_out
+            )
+            outliers.append({
+                'cod_produto': cod,
+                'company_id': cid,
+                'qtd_odoo': str(total_odoo_out),
+                'valor_odoo': str(total_val_out),
+                'qtd_inventario': str(total_inv_out),
+                'em_inventario': bool(inv_out),
+                'motivo': motivo_outlier,
+            })
+            continue
 
         quants = odoo_por_cod.get(cod, [])
         inv_com_lote = inv_com_lote_por_cod.get(cod, [])
@@ -176,6 +267,8 @@ def confrontar_company(
                     'company_id': cid,
                     'lote_inventariado': ','.join(sorted(lotes_inv)),
                     'lote_odoo': ','.join(sorted(lotes_odoo)),
+                    'lote_origem': ','.join(sorted(lotes_odoo)),
+                    'lote_destino': ','.join(sorted(lotes_inv)),
                     'qtd_inventario': str(total_inv),
                     'qtd_odoo': str(total_odoo),
                     'qtd_ajuste': '0',
@@ -184,6 +277,115 @@ def confrontar_company(
                 continue
             else:
                 continue  # sem divergencia
+
+        # ============================================================
+        # D004: LF com saldo nos DOIS lados e lotes disjuntos
+        # Renomear lotes Odoo (FIFO) ate cobrir saldo inv + diferenca
+        # liquida vai como PERDA (sobra) ou INDUSTRIALIZACAO (falta).
+        # Lote destino na FB para fantasmas = MIGRACAO (D005).
+        # Custo medio dos lotes (D004): usado quando lote inv nao existe
+        # no Odoo (custo zero local) ou diferenca liquida sem origem.
+        # ============================================================
+        lotes_odoo_set = {(q.get('lote_nome') or '') for q in quants}
+        lotes_inv_set = {
+            (l.get('lote_inventariado') or '') for l in inv_com_lote
+        }
+        custo_medio_cod = _custo_medio_cod(quants)
+        if (
+            cid == 5  # LF apenas por enquanto
+            and total_odoo > 0
+            and total_inv > 0
+            and not lotes_odoo_set.intersection(lotes_inv_set)
+            and not inv_sem_lote  # inv sem lote tratado abaixo
+        ):
+            # 1. Renomear FIFO ate cobrir min(odoo, inv)
+            target_rename = min(total_odoo, total_inv)
+            qty_renomeada = Decimal('0')
+            lote_inv_alvo = next(iter(lotes_inv_set))
+            # Estado: quants_restantes[i] = qty residual apos rename
+            quants_sorted = sorted(quants, key=lambda x: x['quant_id'])
+            qty_restante_por_lote = {}
+            for q in quants_sorted:
+                if qty_renomeada >= target_rename:
+                    qty_restante_por_lote[id(q)] = (
+                        q, Decimal(str(q['quantity']))
+                    )
+                    continue
+                lote_o = q.get('lote_nome') or ''
+                qty_q = Decimal(str(q['quantity']))
+                if qty_q <= 0:
+                    qty_restante_por_lote[id(q)] = (q, qty_q)
+                    continue
+                qty_take = min(qty_q, target_rename - qty_renomeada)
+                custo_q = (
+                    Decimal(str(q.get('value', 0) or 0)) / qty_q
+                    if qty_q else custo_medio_cod
+                )
+                diffs.append({
+                    'cod_produto': cod,
+                    'tipo_produto': int(cod[0]),
+                    'company_id': cid,
+                    'lote_inventariado': lote_inv_alvo,
+                    'lote_odoo': lote_o,
+                    'lote_origem': lote_o,
+                    'lote_destino': lote_inv_alvo,
+                    'qtd_inventario': str(qty_take),
+                    'qtd_odoo': str(qty_take),
+                    'qtd_ajuste': '0',
+                    'custo_medio': str(custo_q),
+                    'tipo_divergencia': 'RENOMEAR_LOTE_PARCIAL',
+                })
+                qty_renomeada += qty_take
+                qty_restante_por_lote[id(q)] = (q, qty_q - qty_take)
+
+            # 2. Diferenca liquida
+            diferenca = total_inv - total_odoo
+            if diferenca > 0:
+                # Falta na LF: vem da FB (INDUSTRIALIZACAO_FB_LF)
+                diffs.append({
+                    'cod_produto': cod,
+                    'tipo_produto': int(cod[0]),
+                    'company_id': cid,
+                    'lote_inventariado': lote_inv_alvo,
+                    'lote_odoo': '',
+                    'lote_origem': 'MIGRACAO',  # vem do MIGRACAO da FB
+                    'lote_destino': lote_inv_alvo,
+                    'qtd_inventario': str(diferenca),
+                    'qtd_odoo': '0',
+                    'qtd_ajuste': str(diferenca),
+                    'custo_medio': str(custo_medio_cod),
+                    'tipo_divergencia': 'INVENTARIO_SEM_ODOO',
+                })
+            elif diferenca < 0:
+                # Sobra na LF: vai para FB (PERDA_LF_FB) com lote_destino=MIGRACAO
+                # Gera 1 diff por lote residual (preserva rastreio fiscal +
+                # respeita limite VARCHAR(60) em lote_odoo/lote_origem)
+                lotes_restantes = [
+                    (q.get('lote_nome') or '', qty_r, q)
+                    for (q, qty_r) in qty_restante_por_lote.values()
+                    if qty_r > 0
+                ]
+                for lote_o, qty_r, q_origem in lotes_restantes:
+                    custo_q = (
+                        Decimal(str(q_origem.get('value', 0) or 0))
+                        / Decimal(str(q_origem['quantity']))
+                        if q_origem.get('quantity') else custo_medio_cod
+                    )
+                    diffs.append({
+                        'cod_produto': cod,
+                        'tipo_produto': int(cod[0]),
+                        'company_id': cid,
+                        'lote_inventariado': '',
+                        'lote_odoo': lote_o[:60],
+                        'lote_origem': lote_o[:60],
+                        'lote_destino': 'MIGRACAO',  # FB
+                        'qtd_inventario': '0',
+                        'qtd_odoo': str(qty_r),
+                        'qtd_ajuste': str(-qty_r),
+                        'custo_medio': str(custo_q),
+                        'tipo_divergencia': 'QUANTIDADE',
+                    })
+            continue  # nao cair no fluxo geral abaixo
 
         # ============================================================
         # Inv COM lote: 1 linha por lote_odoo (matching exato)
@@ -314,7 +516,7 @@ def confrontar_company(
                     ],
                 })
 
-    return diffs
+    return diffs, outliers
 
 
 def main(dry_run: bool) -> None:
@@ -335,6 +537,8 @@ def main(dry_run: bool) -> None:
 
         odoo = get_odoo_connection()
         total_diffs = []
+        total_outliers = []
+        cod_to_name: dict = {}  # populado dentro do loop
 
         for cid_str, c_estoque in estoque['companies'].items():
             cid = int(cid_str)
@@ -351,10 +555,16 @@ def main(dry_run: bool) -> None:
             })
             produtos = (
                 {p['id']: p for p in odoo.read(
-                    'product.product', product_ids, ['default_code']
+                    'product.product', product_ids, ['default_code', 'name']
                 )}
                 if product_ids else {}
             )
+            # Mapear cod -> nome (consolidado entre companies; codigo eh unico)
+            cod_to_name.update({
+                (p.get('default_code') or '').strip(): p.get('name') or ''
+                for p in produtos.values()
+                if p.get('default_code')
+            })
             lotes = (
                 {lo['id']: lo for lo in odoo.read(
                     'stock.lot', lot_ids, ['name', 'expiration_date']
@@ -381,59 +591,132 @@ def main(dry_run: bool) -> None:
             linhas_inv = inv['companies'].get(
                 str(cid), {}
             ).get('linhas', [])
-            diffs = confrontar_company(quants_odoo, linhas_inv, cid)
+            diffs, outliers = confrontar_company(quants_odoo, linhas_inv, cid)
             codigo = COMPANIES.get(cid, str(cid))
             print(
                 f'\n{codigo} (company_id={cid}): {len(diffs)} divergencias'
             )
+            if outliers:
+                print(
+                    f'  [AVISO] {len(outliers)} outliers cod nao-digito '
+                    f'(skipados, ver outliers-cod-nao-digito.xlsx): '
+                    f'{[o["cod_produto"] for o in outliers]}'
+                )
             total_diffs.extend(diffs)
+            total_outliers.extend(outliers)
 
             # Excel — colunas adicionadas em 2026-05-17:
             # lote_inferido (P6 mais novo), validade_divergente +
-            # validade_msg (cross-check Odoo)
+            # validade_msg (cross-check Odoo) + valor_movimentacao.
+            # Numeros gravados como float; number_format pt-BR aplicado
+            # (Excel BR exibe `,` como decimal e `.` como milhar).
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = codigo
             ws.append([
-                'cod_produto', 'tipo_produto', 'company_id',
+                'cod_produto', 'nome_produto', 'tipo_produto', 'company_id',
                 'lote_inventariado', 'lote_odoo',
+                'lote_origem', 'lote_destino',
                 'qtd_inventario', 'qtd_odoo', 'qtd_ajuste',
-                'custo_medio', 'tipo_divergencia',
+                'custo_medio', 'valor_movimentacao', 'tipo_divergencia',
                 'lote_inferido', 'validade_divergente', 'validade_msg',
             ])
+
+            def _f(v, default=0.0):
+                try:
+                    return float(v) if v not in ('', None) else default
+                except (ValueError, TypeError):
+                    return default
+
             for d in diffs:
+                qty_inv = _f(d.get('qtd_inventario'))
+                qty_odoo = _f(d.get('qtd_odoo'))
+                qty_aj = _f(d.get('qtd_ajuste'))
+                custo = _f(d.get('custo_medio'))
+                valor_mov = abs(qty_aj * custo)
+                nome = cod_to_name.get(d['cod_produto'], '')
                 ws.append([
-                    d['cod_produto'], d['tipo_produto'], d['company_id'],
+                    d['cod_produto'], nome,
+                    d['tipo_produto'], d['company_id'],
                     d['lote_inventariado'], d['lote_odoo'],
-                    d['qtd_inventario'], d['qtd_odoo'], d['qtd_ajuste'],
-                    d.get('custo_medio', ''), d['tipo_divergencia'],
+                    d.get('lote_origem', ''), d.get('lote_destino', ''),
+                    qty_inv, qty_odoo, qty_aj,
+                    custo, valor_mov, d['tipo_divergencia'],
                     'SIM' if d.get('lote_inferido') else '',
                     'SIM' if d.get('validade_divergente') else '',
                     d.get('validade_msg', ''),
                 ])
+
+            # number_format pt-BR — exibe virgula como decimal em Excel BR
+            fmt_qty = '#,##0.0000'
+            fmt_money = '#,##0.00'
+            n_rows = ws.max_row
+            for row in range(2, n_rows + 1):
+                # nome_produto deslocou as colunas:
+                # qty_inv, qty_odoo, qty_ajuste, custo (cols 9,10,11,12)
+                for col in (9, 10, 11, 12):
+                    ws.cell(row=row, column=col).number_format = fmt_qty
+                ws.cell(row=row, column=13).number_format = fmt_money
+
             xlsx_path = os.path.join(
                 OUTPUT_DIR, f'diff-inv-vs-odoo-{codigo}.xlsx'
             )
             wb.save(xlsx_path)
             print(f'  {xlsx_path}')
 
+        # Excel separado para outliers (cod nao-digito skipados — produtos
+        # arquivados X* ou fiscais COMP-ICMS-*). Revisao manual.
+        if total_outliers:
+            wb_out = openpyxl.Workbook()
+            ws_out = wb_out.active
+            ws_out.title = 'Outliers'
+            ws_out.append([
+                'cod_produto', 'nome_produto', 'company_id',
+                'qtd_odoo', 'valor_odoo', 'qtd_inventario',
+                'em_inventario', 'motivo',
+            ])
+            for o in total_outliers:
+                nome = cod_to_name.get(o['cod_produto'], '')
+                ws_out.append([
+                    o['cod_produto'], nome, o['company_id'],
+                    _f(o['qtd_odoo']), _f(o['valor_odoo']),
+                    _f(o['qtd_inventario']),
+                    'SIM' if o['em_inventario'] else 'NAO',
+                    o['motivo'],
+                ])
+            n_out = ws_out.max_row
+            for row in range(2, n_out + 1):
+                ws_out.cell(row=row, column=4).number_format = '#,##0.0000'
+                ws_out.cell(row=row, column=5).number_format = '#,##0.00'
+                ws_out.cell(row=row, column=6).number_format = '#,##0.0000'
+            outliers_path = os.path.join(
+                OUTPUT_DIR, 'outliers-cod-nao-digito.xlsx'
+            )
+            wb_out.save(outliers_path)
+            print(
+                f'\n[OUTLIERS] {len(total_outliers)} cods nao-digito '
+                f'salvos em {outliers_path}'
+            )
+
         if not dry_run:
             with open(OUTPUT_JSON, 'w') as f:
                 json.dump(
                     {
                         'diffs': total_diffs,
+                        'outliers': total_outliers,
                         'timestamp': agora_utc_naive().isoformat(),
                     },
                     f, default=str, indent=2,
                 )
             print(
                 f'\nTotal: {len(total_diffs)} divergencias salvas em '
-                f'{OUTPUT_JSON}'
+                f'{OUTPUT_JSON} (+ {len(total_outliers)} outliers)'
             )
         else:
             print(
                 f'\n[DRY RUN] nao gravou {OUTPUT_JSON} '
-                f'(total: {len(total_diffs)} divergencias)'
+                f'(total: {len(total_diffs)} divergencias, '
+                f'{len(total_outliers)} outliers)'
             )
 
 

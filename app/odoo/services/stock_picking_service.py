@@ -25,6 +25,13 @@ class StockPickingService:
     def __init__(self, odoo=None):
         self.odoo = odoo or get_odoo_connection()
 
+    # Defaults inter-company NACOM (G004 / aprendizado caso piloto 2026-05-18):
+    # picking outgoing exige 'incoterm' + 'carrier_id' para action_liberar_faturamento
+    # disparar. Sem isso: 'Voce deve informar o Tipo de Frete para liberar
+    # o faturamento.'.
+    INCOTERM_CIF = 6     # account.incoterms code=CIF
+    CARRIER_NACOM = 996  # delivery.carrier "(61.724.241/0001-78) NACOM GOYA ..."
+
     def criar_transferencia(
         self,
         company_origem_id: int,
@@ -36,6 +43,8 @@ class StockPickingService:
         partner_id: Optional[int] = None,
         scheduled_date: Optional[str] = None,
         origin: Optional[str] = None,
+        incoterm_id: Optional[int] = INCOTERM_CIF,
+        carrier_id: Optional[int] = CARRIER_NACOM,
     ) -> int:
         """Cria picking de transferencia (saida).
 
@@ -53,6 +62,13 @@ class StockPickingService:
                 operacoes fiscais).
             scheduled_date: 'YYYY-MM-DD HH:MM:SS' (Odoo espera UTC).
             origin: campo origin do picking (rastreabilidade).
+            incoterm_id: campo `incoterm` no stock.picking ("Tipo de Frete").
+                Default `INCOTERM_CIF` (id 6 — CIF). G004: NACOM exige
+                preenchido para `action_liberar_faturamento`. Passe None
+                para nao setar.
+            carrier_id: delivery.carrier ("Carrier"). Default `CARRIER_NACOM`
+                (996 — NACOM GOYA transportadora propria). Passe None
+                para nao setar.
 
         Returns:
             picking_id (int).
@@ -92,11 +108,16 @@ class StockPickingService:
             picking_payload['scheduled_date'] = scheduled_date
         if origin:
             picking_payload['origin'] = origin
+        if incoterm_id is not None:
+            picking_payload['incoterm'] = incoterm_id
+        if carrier_id is not None:
+            picking_payload['carrier_id'] = carrier_id
 
         picking_id = self.odoo.create('stock.picking', picking_payload)
         logger.info(
             f'Picking criado: id={picking_id} origem_company={company_origem_id} '
-            f'destino_company={company_destino_id} linhas={len(linhas)}'
+            f'destino_company={company_destino_id} linhas={len(linhas)} '
+            f'incoterm={incoterm_id} carrier={carrier_id}'
         )
         return picking_id
 

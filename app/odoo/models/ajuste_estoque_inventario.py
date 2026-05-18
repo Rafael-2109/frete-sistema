@@ -37,6 +37,9 @@ class AjusteEstoqueInventario(db.Model):
     company_id = db.Column(db.Integer, nullable=False)
     lote_inventariado = db.Column(db.String(60))
     lote_odoo = db.Column(db.String(60))
+    # D004/D005: rastreio explicito de origem/destino do lote no Odoo
+    lote_origem = db.Column(db.String(60))   # lote no Odoo de origem
+    lote_destino = db.Column(db.String(60))  # lote alvo (ex: lote inv, MIGRACAO)
     qtd_inventario = db.Column(db.Numeric(15, 4), nullable=False)
     qtd_odoo = db.Column(db.Numeric(15, 4), nullable=False)
     qtd_ajuste = db.Column(db.Numeric(15, 4), nullable=False)

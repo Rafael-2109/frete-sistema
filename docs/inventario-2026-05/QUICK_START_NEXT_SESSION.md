@@ -1,203 +1,230 @@
-# QUICK START — Nova Sessão Inventário 2026-05
+# QUICK START — Nova Sessao Inventario 2026-05 (TESTE PILOTO)
 
-**Data do checkpoint:** 2026-05-17 (fim de dia)
-**Branch:** `main` (tudo commitado e mergeado)
+**Data do checkpoint:** 2026-05-17 fim do dia
+**Branch:** `main`
+**Estado anterior:** F7.1-7.4 concluidos + refator D004/D005 aplicado. 23.639 ajustes PROPOSTO.
 
 ---
 
-## 🎯 PROMPT PRONTO PARA COLAR NA NOVA SESSÃO
+## 🎯 PROMPT PRONTO PARA COLAR NA NOVA SESSAO
 
 ```
-Continuo trabalho de Inventário 2026-05. Status checkpoint em
-docs/inventario-2026-05/QUICK_START_NEXT_SESSION.md.
+Retomando inventario 2026-05. Estado completo em
+docs/inventario-2026-05/CHECKPOINT_2026_05_17_FIM_DIA.md.
 
-Próximo passo: rodar F7.1 (extrair estoque do Odoo prod via XML-RPC,
-~2-5min, gera 3 Excels + /tmp/estoque_odoo_2026_05.json). Em seguida
-F7.3 (confronto, gera diff JSON + 3 Excels com colunas lote_inferido +
-validade_divergente) e F7.4 --propor (popular ajuste_estoque_inventario
-status=PROPOSTO).
+OBJETIVO DESTA SESSAO: executar teste piloto end-to-end com produto
+210030325 LF (6 ajustes ja propostos no DB, ids 139003-139008):
+- 4 RENOMEAR_LOTE consolidando 82.300 un em lote 26014 na LF
+- 2 PERDA_LF_FB (1 NF CFOP 5903 LF -> FB lote MIGRACAO, 66.532 un, R$ 42.806,69)
+- Depois extrair estado pos-execucao do Odoo para validar.
+- Extrator deve ser REPLICAVEL para todos os outros produtos da LF.
 
-Antes de rodar:
-1. git pull origin main
-2. pytest tests/odoo/ -p no:randomly  (deve retornar 97 passed)
-3. Verificar se /tmp/inventario_fisico_2026_05.json existe (483KB)
-   — se sumiu (reboot WSL), re-rodar F7.2 com planilha:
-   python scripts/inventario_2026_05/02_carregar_inventario_xlsx.py \
-     --xlsx "/mnt/c/Users/rafael.nascimento/Downloads/COMPILADO INV. 16.05.2026.xlsx"
-4. Ler docs/inventario-2026-05/SOT.md (estado atual)
-5. Ler docs/inventario-2026-05/QUICK_START_NEXT_SESSION.md (este arquivo)
+Antes de qualquer execucao REAL no Odoo, validar:
+1. pytest tests/odoo/ -p no:randomly  (deve retornar 97 passed)
+2. Estado DB conforme checkpoint (6 ajustes para 210030325 LF)
+3. Ler CHECKPOINT_2026_05_17_FIM_DIA.md (estado completo)
+4. Ler 00-decisoes/D004 e D005 (logica nova)
+5. Ler prompt_inventario.md (intencao original) e SOT §7.4 (refator)
 
-Autorizado a rodar F7.1 → F7.3 → F7.4 --propor em sequência. Pausar
-APENAS quando F7.4 --propor estiver pronto, para revisar via --listar-onda
-antes de aprovar.
+CONSTRUIR (nesta ordem):
+1. Script teste piloto `scripts/inventario_2026_05/teste_210030325_lf.py`
+   - Flag --dry-run OBRIGATORIA na primeira execucao
+   - Orquestra: aprovacao onda → 4x StockLotService.renomear → 1x criar_picking
+     LF->FB 2 linhas → f5b validar → f5c liberar → f5d aguardar invoice CIEL IT
+     (~3min) → f5e Playwright SEFAZ
+   - Persiste a cada etapa em ajuste_estoque_inventario.fase_pipeline + chave_nfe
+
+2. Script extrator `scripts/inventario_2026_05/08_extrair_pos_execucao.py`
+   - Input: ciclo + company_id (filial)
+   - Para cada ajuste EXECUTADO, consulta Odoo (lotes renomeados,
+     stock.quant atual, account.move emitido, chave SEFAZ) e gera Excel:
+     antes/depois/status + diff vs proposta.
+   - REPLICAVEL: aceita --company-id=N para rodar em qualquer filial.
+
+3. Antes de executar REAL: rodar canary (F7.6 conceitual) com 1 NF de
+   referencia historica (NF 13075 PERDA LF->FB) — comparar campos da
+   nossa NF proposta vs essa NF aprovada para confirmar
+   fiscal_position/CFOP.
+
+4. Aprovacao formal: --aprovar-onda=1 --hash=<sha> --usuario=rafael
+   (apos canary OK e validacao do usuario)
+
+5. Execucao DRY-RUN do wrapper teste piloto.
+6. Apos confirmacao do usuario: execucao REAL.
+7. Rodar extrator e apresentar comparativo proposto vs realizado.
+
+ATENCAO CRITICA — operacao parcialmente IRREVERSIVEL:
+- RENAME: reversivel
+- Picking + invoice CIEL IT: cancelavel ate validacao
+- TRANSMISSAO SEFAZ via Playwright: irreversivel apos autorizacao
+  (precisa NF cancelamento em ate 24h, ou Carta de Correcao)
+
+PAUSE antes da etapa 6 (execucao real) para confirmacao explicita do
+usuario, mesmo apos dry-run OK.
 ```
 
 ---
 
-## ✅ O que está PRONTO
+## ✅ Estado atual (snapshot completo em CHECKPOINT_2026_05_17_FIM_DIA.md)
 
-### Services (97 tests/odoo passing)
-- **F3** `StockPickingService` — criar/confirmar/validar/cancelar picking + liberar_faturamento + aguardar_invoice_do_robo (13 tests)
-- **F4** `InventarioPipelineService` — 5 métodos batch f5a..f5e + auditoria granular via `OperacaoOdooAuditoria` (29 tests)
-- **F5** `IndisponibilizacaoEstoqueService` — canary_lote/_local + indispor/reverter + auditoria (15 tests)
+### Services prontos
+- F2 `StockLotService` (renomear, inativar, reativar)
+- F3 `StockPickingService` (criar/validar picking + liberar_faturamento)
+- F4 `InventarioPipelineService` (f5a..f5e batch)
+- F5 `IndisponibilizacaoEstoqueService` (canary + indispor)
+- 97 tests passing
 
-### Scripts F7.1-7.4 (preparação)
-- `01_extrair_estoque_odoo.py` — extrai stock.quant FB/CD/LF
-- `02_carregar_inventario_xlsx.py` — parser robusto (headers por nome, lote/validade tipos misturados, outliers)
-- `03_confrontar_inv_vs_odoo.py` — diff com P6 (mais novo se inv sem lote) + cross-check validade
-- `04_propor_ajustes.py` — popular `AjusteEstoqueInventario` (status=PROPOSTO) + listar/aprovar com hash da onda
+### Logica F7.3/F7.4 (D004/D005 aplicada)
+- D004 rename + diferenca liquida + custo medio dos outros lotes (so LF ainda)
+- D005 lote MIGRACAO consolida fantasmas na FB
+- Migration aplicada local — pendente build.sh item 22
 
-### Planilha real já processada
-- Path: `/mnt/c/Users/rafael.nascimento/Downloads/COMPILADO INV. 16.05.2026.xlsx`
-- 2087 linhas válidas (FB:276 / CD:1373 / LF:438), 113 sem lote (5.4%), 1297 com validade (62%)
-- JSON intermediário: `/tmp/inventario_fisico_2026_05.json` (483KB — **EFÊMERO**, pode sumir em reboot)
-
-### Auditoria habilitada
-- Tabela `ajuste_estoque_inventario` (negócio — fase_pipeline, chave_nfe)
-- Tabela `operacao_odoo_auditoria` (técnica — 1 row por chamada Odoo lógica, payload/resposta/tempo_ms/erro)
+### DB
+- 23.639 ajustes PROPOSTO (Ondas 1: 1071, 2: 2558, 3: 19366, 4: 644)
+- Caso piloto 210030325 LF: 6 ajustes ids 139003-139008
 
 ---
 
-## ⏸️ O que está PENDENTE
+## 🆕 O que ESTA SESSAO precisa CONSTRUIR
 
-### F7.5-7.10 (canaries + execução + reconciliação)
-- 7.5 `05_canary_estoque_staging.py` — testa indisponibilizar em staging
-- 7.6 `06_canary_nfs_referencia.py` — testa fiscal_position correto
-- 7.7-7.9 `07/08/09_executar_onda*.py` — wrappers que chamam `InventarioPipelineService`
-- 7.10 `10_reconciliar_pos_ajuste.py` — re-extrai estoque + valida diff zerou
+### 1. Script wrapper teste piloto: `teste_210030325_lf.py`
+Orquestrador especifico para o caso 210030325 LF. Encadeia F2 (rename)
++ F3 (picking) + F4 (batch f5a-f5e) com checkpoints e --dry-run.
 
-### F8 docs (2 playbooks)
-- `OPERACOES_FISCAIS_NACOM_LF.md`
-- `OPERACOES_LOTE_E_INDISPONIBILIZACAO.md`
+**Pontos de atencao**:
+- F4 `InventarioPipelineService.f5a_*` recebe `List[AjusteEstoqueInventario]`
+  (desvio do plano original que esperava `List[int]` — ver SOT §desvios F4).
+- Lotes a renomear precisam existir no Odoo. Verificar via
+  `StockLotService.buscar_por_nome()` antes.
+- Lote `26014` NAO existe no Odoo — sera criado pelos renames.
+- Onda 1 do AjusteEstoqueInventario precisa ter `status='APROVADO'`
+  ANTES de chamar F4. Aprovar via 04_propor_ajustes.py.
+- Caso piloto = 6 registros. Filtrar com `AjusteEstoqueInventario.query.filter_by(cod_produto='210030325', company_id=5, status='APROVADO')`.
+- `picking_type_id` para LF→FB perda: consultar `IDS_FIXOS.md` ou usar
+  `constants/picking_types.py` (G002 — picking_type LF divergente,
+  validar antes).
 
-### F9 execução operacional (bloqueada por F7.5-7.10)
+### 2. Script extrator pos-execucao: `08_extrair_pos_execucao.py`
+**Replicavel por filial** (`--company-id=N`). Deve:
 
-### F6 hooks (🚫 CANCELADA — redundante. Ver SOT §6.1)
+- Buscar ajustes `status IN ('EXECUTADO', 'FALHA')` da onda dada
+- Para cada ajuste:
+  - Consultar `stock.lot` atual no Odoo (foi renomeado? ativo?)
+  - Consultar `stock.quant` atual (saldo pos-ajuste bate com proposta?)
+  - Buscar `account.move` via `picking_id_odoo` (NF emitida? chave SEFAZ?)
+- Comparar proposto vs realizado e gerar Excel:
+  - Status (EXECUTADO/FALHA/DIVERGENCIA)
+  - Antes (qty_odoo da proposta)
+  - Depois (qty_odoo atual)
+  - Diferenca esperada vs observada
+  - chave_nfe + link Odoo
+- Reusar pattern do `01_extrair_estoque_odoo.py` (paginacao, batch read).
 
----
-
-## 🔧 PIPELINE OPERACIONAL — Comandos para rodar (em ordem)
-
-```bash
-# 1. Extrair estoque do Odoo prod (XML-RPC, ~2-5min)
-python scripts/inventario_2026_05/01_extrair_estoque_odoo.py
-# → docs/inventario-2026-05/07-relatorios/estoque-odoo-{FB,CD,LF}.xlsx
-# → /tmp/estoque_odoo_2026_05.json
-
-# 2. (Se /tmp sumiu) re-carregar planilha do inventário
-python scripts/inventario_2026_05/02_carregar_inventario_xlsx.py \
-    --xlsx "/mnt/c/Users/rafael.nascimento/Downloads/COMPILADO INV. 16.05.2026.xlsx"
-# → /tmp/inventario_fisico_2026_05.json
-
-# 3. Confrontar (gera diff JSON + 3 Excels com lote_inferido + validade_divergente)
-python scripts/inventario_2026_05/03_confrontar_inv_vs_odoo.py
-# → docs/inventario-2026-05/07-relatorios/diff-inv-vs-odoo-{FB,CD,LF}.xlsx
-# → /tmp/diff_inventario_2026_05.json
-
-# === PAUSAR AQUI — REVISAR Excels diff antes de popular DB ===
-
-# 4. Propor ajustes (popular ajuste_estoque_inventario com status=PROPOSTO)
-python scripts/inventario_2026_05/04_propor_ajustes.py --propor
-
-# 5. Listar onda + ver hash
-python scripts/inventario_2026_05/04_propor_ajustes.py --listar-onda=1
-# (anotar hash impresso)
-
-# 6. Aprovar onda travando conjunto via hash
-python scripts/inventario_2026_05/04_propor_ajustes.py \
-    --aprovar-onda=1 --hash=<sha> --usuario=rafael
-# → status='APROVADO', aprovado_em=now, aprovado_por=rafael
-```
-
-**Ondas:**
-- 1: industrializacao/perda/dev (LF↔FB e LF↔CD)
-- 2: transferencias filiais (CD↔FB)
-- 3: indisponibilização (requer F7.9 — pendente)
-- 4: renomear lote
+### 3. Canary F7.6 (conceitual — pode ser inline no teste piloto)
+- Buscar NF historica de referencia: PERDA LF→FB = `NF 13075`
+  (`account_move_id_referencia=...` em MATRIZ_INTERCOMPANY)
+- Comparar campos relevantes (fiscal_position_id, l10n_br_tipo_pedido,
+  CFOP nas linhas) entre NF 13075 e a NF que seria gerada para 210030325
+- Apenas relatorio — sem executar nada se divergir
 
 ---
 
-## 📋 DECISÕES IMPORTANTES DESTA SESSÃO
+## ⚠️ Pre-requisitos manuais antes de operacao REAL
 
-| Decisão | Justificativa |
-|---------|---------------|
-| F6 CANCELADA | 4 dos 5 hooks redundantes com services já implementados; .md efêmero em prod Render |
-| F7 escopo: 7.1-7.4 só | Preparação (sem WRITE Odoo). 7.5-7.10 quando planilha for ser executada de fato |
-| P6 regra 3 = "mais novo" para inv sem lote | Apenas no caminho específico (inv vazio); preserva regra original para outros usos |
-| VALIDADE_DIVERGENTE: log + aviso | Não bloqueia ajuste, operador decide caso a caso |
-| Outliers cod nao-digito ('C','S' em CD): skip | Erros de digitação da planilha |
-| Auditoria F4+F5 instrumentada | Gap original — tabela `operacao_odoo_auditoria` ficaria vazia sem isso |
-| Lote string sempre | Planilha LF tem 271 lotes como int — converter |
-| `"S/INF"/"S/ INF"` = validade vazia | Casos LF — não tentar parsear como data |
-
----
-
-## 🐛 GOTCHAS para SEMPRE LEMBRAR (já em memória persistente)
-
-- **[`gotcha_query_mapper_init_test.md`]**: em tests, `Model.query.filter_by()` pode disparar `configure_mappers()` que falha por `Mapper[Embarque]`. Usar SQL bruto via `db.session.execute(text(SQL))` em tests novos.
-- **[`gotcha_commit_service_vaza_savepoint.md`]**: `db.session.commit()` em service vaza dados do savepoint do fixture `db` para o DB persistente. Usar `flush()` em service; caller commita. OU receber objetos direto, não buscar por query interna.
-- **Campo `acao` em `OperacaoOdooAuditoria` é `String(20)`**: abreviar (`liberar_faturamento`, não `action_liberar_faturamento`).
-- **Falha de auditoria NÃO deve quebrar pipeline real**: `_registrar_op` envolve em `try/except + logger.error` (non-blocking).
-- **Padrão F4 "Odoo I/O paralelo + DB serial main thread"**: `ThreadPoolExecutor` sem `app_context` falha em `db.session.commit()` na thread filha. Workers retornam dict; DB writes ficam no main thread.
-
----
-
-## 📚 ARQUIVOS DE REFERÊNCIA (em ordem de leitura)
-
-1. **Este arquivo** — kickstart
-2. `app/agente/prompts/prompt_inventario.md` — **INTENÇÃO ORIGINAL** do Rafael (regras de negócio, ordem das operações, workflow, regras invioláveis). Não é SOT operacional mas é o "porquê" de tudo
-3. `docs/inventario-2026-05/SOT.md` — estado completo + decisões
-4. `docs/superpowers/plans/2026-05-17-ajuste-inventario-nacom-lf.md` — plano detalhado por task
-5. `docs/inventario-2026-05/00-decisoes/D000-D003.md` + `01-premissas/` + `02-gotchas/` — contexto fiscal/técnico
-6. `memory/inventario_2026_05.md` — memória persistente (auto-carregada via `MEMORY.md`)
-
-### Cobertura prompt original × implementação atual
-
-| Item do prompt | Status |
+| Item | Como verificar |
 |---|---|
-| `<regra inviolável>` linha 135: renomear lote (estoque L1, inv L2) | ✅ P9 + `RENOMEAR_LOTE` em F7.3+F7.4 |
-| `<estado_desejado>` linha 144: indisponibilização contábil (opção 1 lote, opção 2 local) | ✅ F5 `IndisponibilizacaoEstoqueService` |
-| `<workflow>` linha 119: relatório/sequenciamento movimentações | ✅ F7.3 Excel + F7.4 hash da onda |
-| `<workflow>` linha 120: aprovação humana das movimentações | ✅ F7.4 `--aprovar-onda --hash=<sha>` |
-| `<workflow>` linha 121: 1 NF referência por tipo de movimentação | ⚠️ MATRIZ_INTERCOMPANY tem NFs ref (94457/13075/147772/94410) mas **F7.6 canary fiscal ainda pendente** |
-| `<workflow>` linha 122: verificar campos NF emissão × NF ref | ⚠️ pendente F7.6 |
-| `<workflow>` linha 123: 1 movimentação pequena (canary) antes do bulk | ⚠️ pendente F7.7 (precisa canary fiscal por CFOP antes do bulk) |
-| `<workflow>` linha 124: operações sem rollback exigem aprovação | ✅ F4 idempotency + abort em config + audit granular |
-| `<regras inviolaveis>` linha 132: hooks determinísticos | 🚫 CANCELADA (decisão usuário — services já protegem) |
+| Conexao XML-RPC Odoo | `python -c "from app.odoo.utils.connection import get_odoo_connection; from app import create_app; c=create_app(); c.app_context().push(); o=get_odoo_connection(); print(o.uid)"` deve printar `42` |
+| Playwright + Chromium | `playwright install chromium` (se necessario) |
+| Credenciais Playwright | env vars `ODOO_USER`, `ODOO_PASSWORD` populadas |
+| Certificado SEFAZ valido | confirmar com Tamiris/contadora antes de transmitir |
+| Robo CIEL IT online | Verificar Odoo modulo `l10n_br_ciel_it_account` |
+| Backup do estado atual | Recomendado: `pg_dump --table=ajuste_estoque_inventario --table=operacao_odoo_auditoria` antes do teste |
 
 ---
 
-## 🚨 SE ALGO DER ERRADO
+## 🚨 Pontos de irreversibilidade (PAUSE OBRIGATORIO antes)
 
-### `/tmp/inventario_fisico_2026_05.json` sumiu (reboot WSL)
-```bash
-python scripts/inventario_2026_05/02_carregar_inventario_xlsx.py \
-    --xlsx "/mnt/c/Users/rafael.nascimento/Downloads/COMPILADO INV. 16.05.2026.xlsx"
-```
+| Etapa | Reversivel? | Como reverter |
+|---|---|---|
+| StockLotService.renomear | Sim | renomear de volta |
+| Criar picking | Sim | `cancelar()` do F3 |
+| Validar picking | Sim com restricoes | desfazer movimentacoes manualmente no Odoo UI |
+| Liberar para faturamento | Sim antes invoice criado | desfazer no Odoo UI |
+| Invoice criada por CIEL IT | Sim antes SEFAZ | cancelar invoice no Odoo |
+| **Transmissao SEFAZ autorizada** | **NAO** (apos retorno 100) | NF de cancelamento em <24h OU Carta de Correcao |
 
-### Tests falhando após mudanças em service (poluição de DB)
+**Workflow item 10 do prompt**: "Operacoes sem possibilidade de rollback deverao ser aprovadas."
+
+---
+
+## 📚 Leitura ordenada para nova sessao
+
+1. **Este arquivo** — entender objetivo da sessao
+2. `CHECKPOINT_2026_05_17_FIM_DIA.md` — snapshot exato do estado
+3. `00-decisoes/D004-rename-lote-diferenca-liquida.md` — logica rename
+4. `00-decisoes/D005-lote-migracao-consolidador-fantasmas.md` — MIGRACAO
+5. `app/agente/prompts/prompt_inventario.md` — intencao do usuario, workflow itens 7-10
+6. `SOT.md` §7.4 — resumo do refator
+7. `.claude/references/odoo/IDS_FIXOS.md` — picking types, journals
+8. `02-gotchas/G002-picking-type-LF-divergente.md` — picking_type LF
+9. `02-gotchas/G004-padrao-real-eh-picking-robo-CIEL-IT.md` — padrao NACOM
+
+---
+
+## 📂 Comandos prontos (em ordem)
+
 ```bash
-python -c "
-import os; os.environ['TESTING']='true'
-from app import create_app, db
-with create_app().app_context():
-    db.session.execute(db.text(\"DELETE FROM ajuste_estoque_inventario WHERE ciclo LIKE 'TEST_%'\"))
-    db.session.execute(db.text(\"DELETE FROM operacao_odoo_auditoria WHERE contexto_ref LIKE 'TEST_%' OR external_id LIKE '%TEST%'\"))
-    db.session.commit()
+cd /home/rafaelnascimento/projetos/frete_sistema
+source .venv/bin/activate
+
+# 1. Validar baseline (deve retornar 97 passed)
+pytest tests/odoo/ -p no:randomly -q
+
+# 2. Validar DB (deve retornar 23639 PROPOSTO + 6 do caso piloto)
+PGPASSWORD=frete_senha_2024 psql -h localhost -U frete_user -d frete_sistema \
+  -c "SELECT COUNT(*) FROM ajuste_estoque_inventario WHERE ciclo='INVENTARIO_2026_05';"
+
+# 3. Confirmar caso piloto
+PGPASSWORD=frete_senha_2024 psql -h localhost -U frete_user -d frete_sistema -c "
+SELECT id, acao_decidida, lote_origem, lote_destino, qtd_ajuste, custo_medio
+FROM ajuste_estoque_inventario
+WHERE ciclo='INVENTARIO_2026_05' AND cod_produto='210030325' AND company_id=5
+ORDER BY id;
 "
+
+# 4. CONSTRUIR scripts (teste piloto + extrator) — TAREFA DA SESSAO
+
+# 5. Listar onda 1 atual + capturar hash
+python scripts/inventario_2026_05/04_propor_ajustes.py --listar-onda=1 | head -5
+
+# 6. Apos canary OK + revisao usuario: aprovar onda 1
+# python scripts/inventario_2026_05/04_propor_ajustes.py \
+#     --aprovar-onda=1 --hash=<sha> --usuario=rafael
+
+# 7. Dry-run teste piloto (NAO ainda construido)
+# python scripts/inventario_2026_05/teste_210030325_lf.py --dry-run
+
+# 8. EXECUCAO REAL — PAUSAR para confirmacao explicita do usuario
+# python scripts/inventario_2026_05/teste_210030325_lf.py --confirmar
+
+# 9. Extrair resultado
+# python scripts/inventario_2026_05/08_extrair_pos_execucao.py \
+#     --ciclo=INVENTARIO_2026_05 --company-id=5
 ```
 
-### Odoo XML-RPC timeout no F7.1
-- F7.1 lê stock.quant com paginação (limit=500). Para 3 companies pode levar 2-5min em prod.
-- Se passar de 10min: investigar conectividade Odoo + circuit breaker (`app/odoo/utils/circuit_breaker.py`)
+---
 
-### Diff F7.3 tem QUANTIDADE_LOTE_INFERIDO em produto inesperado
-- Significa que inventário não trouxe lote para esse produto + Odoo tem múltiplos lotes
-- F7.3 escolheu o mais novo (P6.regra3 com `usar_mais_novo=True`)
-- Revisar manualmente no Excel diff: coluna `lote_inferido=SIM` + `lote_odoo=<o que foi escolhido>`
-- Se errado, corrigir planilha (informar lote correto) e re-rodar F7.2 + F7.3
+## 🔚 Pos-teste piloto (criterio de sucesso)
 
-### Validade divergente em massa
-- Coluna `validade_divergente=SIM` no Excel diff
-- Não bloqueia ajuste (decisão usuário 2026-05-17)
-- Investigar caso a caso: pode ser data errada no inventário OU lote diferente fisicamente
+Considera teste piloto OK se:
+1. 4 lotes na LF foram renomeados para `26014` (`stock.lot.name` mudou)
+2. `stock.quant` na LF mostra cod 210030325 com 82.300 un em lote `26014`
+3. Picking LF→FB validado, com 2 move.lines (-32.032 MIGRAÇÃO, -34.500 24715)
+4. `account.move` emitida no Odoo (CFOP 5903, valor R$ 42.806,69)
+5. Chave SEFAZ retornada (44 digitos) — registrada em `ajuste.chave_nfe`
+6. FB tem cod 210030325 com +66.532 un em lote `MIGRACAO`
+7. `operacao_odoo_auditoria` tem ~12 rows (4 rename + 5 F5a-e + 3 outros)
+8. Extrator gera Excel com tudo isso comparado lado a lado (proposto vs realizado)
+
+Se OK → generalizar para resto da LF (1.071 ajustes da onda 1).
+Se nao OK → analise + ajuste antes de outros casos.
