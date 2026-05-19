@@ -1,12 +1,18 @@
 """SCRIPT 2: Baixa movimentacoes (stock.move.line) desde DATA_INICIO_INV.
 
-Exclui APENAS os pickings do recebimento_lf no Render que NAO foram tambem
-criados pelo pipeline INVENTARIO (overlap eh mantido como inventario).
+Classifica cada movimentacao em 3 categorias (sem deducao):
+
+  RAFAEL_UID42:           create_uid == 42 (Rafael) E picking NAO esta no Render
+                          -> tudo que o Rafael fez localmente (ajustes + recebimento_lf local)
+  RECEBIMENTO_LF_RENDER:  picking_id presente em recebimento_lf no banco do RENDER
+                          -> recebimentos LF executados pelo worker Render
+  NAO_RAFAEL:             create_uid != 42 (outros usuarios Odoo)
+                          -> vendas, transferencias normais, etc.
+
+Lista do Render vem via psycopg2 + env var DATABASE_URL_RENDER. Se nao configurada,
+lista vem vazia (nao deduz nada).
 
 Output: <cache>/movimentacoes.csv
-
-Uso:
-    python 2_baixar_movimentacoes.py [--cache-dir <path>] [--data-inicio YYYY-MM-DD]
 """
 import argparse
 import os
@@ -17,41 +23,14 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _comum import (
-    COMPANIES, COMPANY_NAME, ODOO_BATCH_SIZE, DATA_INICIO_INV,
+    COMPANIES, COMPANY_NAME, ODOO_BATCH_SIZE, DATA_INICIO_INV, RAFAEL_ODOO_UID,
     norm_cod, norm_lote, m2o_id, m2o_name,
     garantir_cache_dir, is_location_interna,
+    consultar_pickings_recebimento_lf_render,
 )
 
 
-def coletar_pickings_excluir():
-    """Pickings de recebimento_lf Render desde DATA_INICIO_INV (excluindo os do inventario).
-
-    Retorna set de odoo_picking_id.
-    """
-    from app import create_app, db
-    app = create_app()
-    with app.app_context():
-        rec = db.session.execute(db.text("""
-            SELECT odoo_picking_id, odoo_transfer_out_picking_id, odoo_transfer_in_picking_id
-            FROM recebimento_lf WHERE criado_em >= '2026-05-16'
-        """)).fetchall()
-        pickings_rec = set()
-        for r in rec:
-            for pid in r:
-                if pid:
-                    pickings_rec.add(int(pid))
-
-        inv = db.session.execute(db.text("""
-            SELECT DISTINCT picking_id_odoo FROM ajuste_estoque_inventario
-            WHERE ciclo='INVENTARIO_2026_05' AND picking_id_odoo IS NOT NULL
-        """)).scalars().all()
-        pickings_inv = set(int(p) for p in inv if p)
-
-    pickings_excluir = pickings_rec - pickings_inv  # overlap fica como inventario
-    return pickings_excluir, pickings_inv
-
-
-def baixar_movimentacoes(odoo, data_inicio, pickings_inv, pickings_excluir):
+def baixar_movimentacoes(odoo, data_inicio, pickings_render):
     """Busca stock.move.line desde data_inicio e classifica."""
     print(f'Buscando stock.move.line >= {data_inicio} em companies {COMPANIES}...')
     domain = [('date', '>=', data_inicio),
@@ -86,6 +65,7 @@ def baixar_movimentacoes(odoo, data_inicio, pickings_inv, pickings_excluir):
     df['loc_dst_name'] = df['location_dest_id'].apply(m2o_name)
     df['picking_id_n'] = df['picking_id'].apply(m2o_id)
     df['picking_name'] = df['picking_id'].apply(m2o_name)
+    df['create_uid_id'] = df['create_uid'].apply(m2o_id)
     df['create_uid_name'] = df['create_uid'].apply(m2o_name)
     df['qty_done'] = pd.to_numeric(df['qty_done'], errors='coerce').fillna(0)
 
@@ -101,26 +81,23 @@ def baixar_movimentacoes(odoo, data_inicio, pickings_inv, pickings_excluir):
     df['cod'] = df['product_id_n'].map(lambda x: pmap.get(x, ''))
     df['cod'] = df['cod'].apply(norm_cod)
 
-    # Classificar e filtrar
-    def cls(pid):
-        if pid is None or pd.isna(pid):
-            return 'INVENTORY_ADJUST'
-        pid = int(pid)
-        if pid in pickings_inv:
-            return 'INVENTARIO_PICKING'
-        if pid in pickings_excluir:
+    # Classificar: prioridade Render > UID42 > outros
+    def cls(row):
+        pid = row['picking_id_n']
+        uid = row['create_uid_id']
+        if pid is not None and not pd.isna(pid) and int(pid) in pickings_render:
             return 'RECEBIMENTO_LF_RENDER'
-        return 'OUTROS_PICKING'
+        if uid == RAFAEL_ODOO_UID:
+            return 'RAFAEL_UID42'
+        return 'NAO_RAFAEL'
 
-    df['origem_classificada'] = df['picking_id_n'].apply(cls)
+    df['origem_classificada'] = df.apply(cls, axis=1)
 
     # Marcar locations internas (uteis para script 3)
     df['src_interna'] = df['loc_src_name'].apply(is_location_interna)
     df['dst_interna'] = df['loc_dst_name'].apply(is_location_interna)
 
-    # Nao filtrar aqui — script 3 aplica apenas RECEBIMENTO_LF_RENDER (nao-ajuste).
-    # Salva tudo com origem_classificada para auditoria.
-    return df, df
+    return df
 
 
 def main():
@@ -132,33 +109,31 @@ def main():
 
     cache_dir = garantir_cache_dir(args.cache_dir) if args.cache_dir else garantir_cache_dir()
 
-    pickings_excluir, pickings_inv = coletar_pickings_excluir()
-    print(f'Pickings excluir (recebimento_lf puro): {sorted(pickings_excluir)}')
-    print(f'Pickings inventario (mantem): {sorted(pickings_inv)}')
+    # Pickings do recebimento_lf NO RENDER (producao)
+    pickings_render = consultar_pickings_recebimento_lf_render(args.data_inicio[:10])
+    print(f'Pickings recebimento_lf Render: {len(pickings_render)} ({sorted(pickings_render)})')
 
     from app import create_app
     app = create_app()
     with app.app_context():
         from app.odoo.utils.connection import get_odoo_connection
         odoo = get_odoo_connection()
-        df_incluido, df_total = baixar_movimentacoes(
-            odoo, args.data_inicio, pickings_inv, pickings_excluir
-        )
+        df = baixar_movimentacoes(odoo, args.data_inicio, pickings_render)
 
     cols_out = ['id', 'date', 'filial', 'company_id_n', 'cod',
                 'product_id_n', 'lot_id_n', 'lote',
                 'loc_src_id', 'loc_src_name', 'loc_dst_id', 'loc_dst_name',
                 'qty_done',
                 'picking_id_n', 'picking_name', 'reference', 'origin',
-                'create_uid_name', 'state',
+                'create_uid_id', 'create_uid_name', 'state',
                 'origem_classificada', 'src_interna', 'dst_interna']
-    cols_out = [c for c in cols_out if c in df_incluido.columns]
+    cols_out = [c for c in cols_out if c in df.columns]
     out_path = os.path.join(cache_dir, 'movimentacoes.csv')
-    df_incluido[cols_out].to_csv(out_path, index=False)
-    print(f'\nOK. {len(df_incluido)} movs salvas em {out_path} (todas, com classificacao)')
+    df[cols_out].to_csv(out_path, index=False)
+    print(f'\nOK. {len(df)} movs salvas em {out_path}')
 
     print('\n=== Por classificacao ===')
-    print(df_incluido.groupby(['filial', 'origem_classificada'], as_index=False).agg(
+    print(df.groupby(['filial', 'origem_classificada'], as_index=False).agg(
         n=('id', 'count'), qtd_total=('qty_done', 'sum')
     ).to_string(index=False, float_format=lambda x: f'{x:>12,.2f}'))
 

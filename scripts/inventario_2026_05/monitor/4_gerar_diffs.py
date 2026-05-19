@@ -74,8 +74,10 @@ def gerar_diff(odoo, teorico):
               'qtd_odoo_atual', 'custo_unit']:
         if c in j.columns:
             j[c] = j[c].fillna(0)
-    j['diff_qtd'] = j['qtd_teorica'] - j['qtd_odoo_atual']
-    j['diff_valor'] = j['diff_qtd'] * j['custo_unit']
+    j['diff_qtd'] = (j['qtd_teorica'] - j['qtd_odoo_atual']).round(4)
+    j['qtd_teorica'] = j['qtd_teorica'].round(4)
+    j['qtd_odoo_atual'] = j['qtd_odoo_atual'].round(4)
+    j['diff_valor'] = (j['diff_qtd'] * j['custo_unit']).round(2)
     j['cobertura'] = np.where(
         (j['qtd_teorica'].abs() > 0.01) & (j['qtd_odoo_atual'].abs() > 0.01), 'AMBOS',
         np.where(j['qtd_teorica'].abs() > 0.01, 'SO_TEORICO', 'SO_ODOO')

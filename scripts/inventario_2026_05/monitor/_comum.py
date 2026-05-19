@@ -20,6 +20,12 @@ COMPANY_NAME = {1: 'FB', 4: 'CD', 5: 'LF'}
 
 ODOO_BATCH_SIZE = 200
 
+# Usuario Odoo Rafael (descoberto via res.users) — mesmo UID do XML-RPC
+RAFAEL_ODOO_UID = 42
+
+# Env var com External Database URL do Render Postgres
+ENV_RENDER_DB_URL = 'DATABASE_URL_PROD'
+
 # Lotes considerados MIGRACAO (variantes encoding)
 LOTES_MIGRACAO = {'MIGRACAO', 'MIGRAÇÃO', 'MIGRACÃO', 'MIGRAÇAO', 'MIG'}
 
@@ -115,3 +121,56 @@ def garantir_cache_dir(path=CACHE_DIR_DEFAULT):
 def garantir_relatorios_dir():
     os.makedirs(RELATORIOS_DIR, exist_ok=True)
     return RELATORIOS_DIR
+
+
+def consultar_pickings_recebimento_lf_render(data_inicio='2026-05-16'):
+    """Consulta tabela recebimento_lf NO RENDER (producao) via psycopg2.
+
+    Requer env var DATABASE_URL_PROD (External Database URL do Render).
+    Carrega .env automaticamente se python-dotenv disponivel.
+    Se nao configurada, retorna set vazio + warning (nao deduz).
+
+    Retorna set de odoo_picking_id (incluindo transfer_out e transfer_in).
+    """
+    # Carregar .env
+    try:
+        from dotenv import load_dotenv
+        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '.env'))
+        load_dotenv(env_path)
+    except ImportError:
+        pass
+    url = os.environ.get(ENV_RENDER_DB_URL)
+    if not url:
+        print(f'AVISO: env var {ENV_RENDER_DB_URL} nao configurada — pickings Render = []')
+        print('         (sem deducao: External Database URL do Render precisa estar em .env)')
+        return set()
+
+    try:
+        import psycopg2
+    except ImportError:
+        print('AVISO: psycopg2 nao instalado — pickings Render = []')
+        return set()
+
+    pickings = set()
+    try:
+        conn = psycopg2.connect(url, connect_timeout=10)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT odoo_picking_id, odoo_transfer_out_picking_id, odoo_transfer_in_picking_id
+            FROM recebimento_lf
+            WHERE criado_em >= %s
+            """,
+            (data_inicio,)
+        )
+        for row in cur.fetchall():
+            for pid in row:
+                if pid:
+                    pickings.add(int(pid))
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f'ERRO ao consultar Render: {e}')
+        print('  pickings Render = [] (nao deduz)')
+        return set()
+    return pickings

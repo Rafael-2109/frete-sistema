@@ -95,8 +95,8 @@ def main():
     ap.add_argument('--cache-dir', default=None)
     ap.add_argument('--inv-path', default=os.path.join(INVENTARIO_DIR_DEFAULT,
                                                        'COMPILADO INV. 16.05.2026.xlsx'))
-    ap.add_argument('--apenas', default='RECEBIMENTO_LF_RENDER',
-                    help='Filtra movs por origem_classificada (CSV). Default: RECEBIMENTO_LF_RENDER')
+    ap.add_argument('--apenas', default='NAO_RAFAEL,RECEBIMENTO_LF_RENDER',
+                    help='Filtra movs por origem_classificada (CSV). Default: NAO_RAFAEL,RECEBIMENTO_LF_RENDER')
     args = ap.parse_args()
 
     cache_dir = garantir_cache_dir(args.cache_dir) if args.cache_dir else garantir_cache_dir()
