@@ -1,6 +1,6 @@
 """Entrada FB do produto 210030325 — fecha o piloto via Recebimento LF.
 
-A NF emitida pela LF (account.move id=608607, RETNA/2026/00029, CFOP 5903,
+A NF emitida pela LF (account.move id=608607, RETNA/2026/00029, CFOP de SAIDA 5903,
 chave 35260518...086070) precisa virar entrada na FB pelo padrao XML
 (igual recebimento de retorno de industrializacao normal):
 
@@ -11,7 +11,11 @@ O fluxo ja existe: RecebimentoLfOdooService.processar_recebimento(rec_id)
 executa 37 etapas. Para o piloto:
   - Fases 1-5 (etapas 0-18): cria DFe FB + PO + picking entrada + invoice in
   - Fases 6-7 (etapas 19-37): PULADAS automaticamente porque o lote tem
-    cfop='5903' (em CFOPS_RETORNO), `transfer_status='sem_transferencia'`
+    cfop='1903' (em CFOPS_RETORNO), `transfer_status='sem_transferencia'`
+
+CFOP do RecebimentoLfLote = 1903 (entrada). A NF emitida pela LF carrega
+CFOP 5903 (saida), mas o RecebimentoLf modela a ENTRADA na FB — o cadastro
+fiscal do Odoo da FB so tem fiscal_position para CFOPs 1xxx.
 
 Resultado esperado pos-execucao:
   - FB: 66.532 un de 210030325 lote `MIGRACAO` (lot_id=30400, ja existe)
@@ -56,7 +60,7 @@ PRODUCT_NAME = '[210030325] ROTULO - MOLHO DE ALHO PET 150 ML - CAMPO BELO'
 QTY_ENTRADA = 66532.0
 LOTE_DESTINO = 'MIGRAÇÃO'  # Padronizado 2026-05-18 — com cedilha + til, lot_id=30400 FB
 LOTE_DESTINO_ID = 30400
-CFOP_RETORNO = '5903'
+CFOP_RETORNO = '1903'  # CFOP de ENTRADA do recebimento (NF da LF sai com 5903)
 NUMERO_NF = '13149'  # nfe_infnfe_ide_nnf real no Odoo (name=RETNA/2026/00029)
 CNPJ_LF = '18.467.441/0001-63'
 COMPANY_FB = 1
@@ -160,7 +164,7 @@ def verificar_recebimento_existente():
 
 
 def imprimir_plano() -> None:
-    banner('PLANO — Entrada FB invoice 608607 (NF retorno CFOP 5903)', '-')
+    banner('PLANO — Entrada FB invoice 608607 (NF saida LF CFOP 5903 -> recebimento FB CFOP 1903)', '-')
     print(f'  1. Criar RecebimentoLf:')
     print(f'       odoo_lf_invoice_id = {LF_INVOICE_ID}')
     print(f'       numero_nf          = {NUMERO_NF!r}')
@@ -277,7 +281,7 @@ def main() -> None:
 
         # 6. Processar sincrono
         banner(f'6. Processando recebimento {rec_id} (SINCRONO)', '-')
-        print('  Etapas 0-18 vao executar (Fase 1-5). Fase 6-7 pula (CFOP 5903 retorno).')
+        print('  Etapas 0-18 vao executar (Fase 1-5). Fase 6-7 pula (CFOP 1903 = retorno).')
         print('  Etapa 13-15 (criar invoice in) pode demorar com robo CIEL IT...')
 
         from app.recebimento.services.recebimento_lf_odoo_service import (  # noqa: E402

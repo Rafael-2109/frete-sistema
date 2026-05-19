@@ -336,10 +336,24 @@ def _gerar_hierarquia_sintetica(plano_analiticas: Dict[str, dict]) -> List[dict]
     niveis intermediarios (1 a N-1), garantindo cadeia hierarquica completa.
 
     Mitigacao R2: hierarquia monotonicamente crescente (NIVEL=1, 2, 3, ..., N).
+
+    V32 (2026-05-18): se o prefix da sintetica intermediaria ja existe em
+    `plano_analiticas` (ou seja, conta totalizadora cadastrada no Odoo CIEL IT
+    com aquele code), usa o NOME REAL do Odoo em vez do generico 'GRUPO {prefix}'.
+    Tambem deduplica: code emitido como sintetica NAO repete como analitica.
+    Resolve TODO `V2` antigo (linha legada `nome = f'GRUPO {prefix}'`).
+
+    Casos:
+    - Odoo NACOM tipico (so analiticas de 10 digitos): fallback "GRUPO X" continua
+      (compatibilidade com SPED V31 e anteriores).
+    - Apos cadastro de totalizadoras no Odoo: SPED automaticamente passa a usar
+      nomes reais (DISPONIBILIDADES, BANCOS etc.), sem alterar codigo.
     """
     sinteticas = {}  # code -> dados sintetica
+    n_origem_odoo = 0       # V32: telemetria
+    n_origem_fallback = 0   # V32: telemetria
 
-    # Nomes default por classe nivel 1
+    # Nomes default por classe nivel 1 (fallback quando o code nao esta no Odoo)
     NOMES_CLASSE_NIVEL_1 = {
         '1': 'ATIVO',
         '2': 'PASSIVO E PATRIMONIO LIQUIDO',
@@ -362,19 +376,42 @@ def _gerar_hierarquia_sintetica(plano_analiticas: Dict[str, dict]) -> List[dict]
             if prefix in sinteticas:
                 continue
             cod_sup = code[:nivel - 1] if nivel > 1 else ''
-            if nivel == 1:
-                nome = NOMES_CLASSE_NIVEL_1.get(prefix, f'GRUPO {prefix}')
+
+            # V32: se conta com o prefix esta cadastrada no Odoo, usa nome real.
+            conta_real_odoo = plano_analiticas.get(prefix)
+            nome_real = (conta_real_odoo.get('name') or '').strip() if conta_real_odoo else ''
+            if nome_real:
+                # mypy/pyright safe: conta_real_odoo nao e None pois nome_real foi extraido dele
+                assert conta_real_odoo is not None
+                nome = nome_real
+                acc_type = conta_real_odoo.get('account_type', '') or dados.get('account_type', '')
+                cdate = (conta_real_odoo.get('create_date') or '2010-01-01')[:10]
+                n_origem_odoo += 1
             else:
-                nome = f'GRUPO {prefix}'  # nome generico — pode ser ajustado V2
+                if nivel == 1:
+                    nome = NOMES_CLASSE_NIVEL_1.get(prefix, f'GRUPO {prefix}')
+                else:
+                    nome = f'GRUPO {prefix}'  # fallback generico
+                acc_type = dados.get('account_type', '')
+                cdate = '2010-01-01'
+                n_origem_fallback += 1
+
             sinteticas[prefix] = {
                 'code': prefix,
                 'nivel': nivel,
                 'name': nome,
                 'tipo': 'S',  # Sintetica
                 'cod_sup': cod_sup,
-                'account_type': dados.get('account_type', ''),  # herda do filho
-                'create_date': '2010-01-01',
+                'account_type': acc_type,
+                'create_date': cdate,
             }
+
+    # V32: telemetria — quanto da hierarquia vem do Odoo vs fallback
+    logger.info(
+        f'[SPED ECD V32] Sinteticas geradas: {len(sinteticas)} total | '
+        f'nome do Odoo CIEL IT: {n_origem_odoo} | '
+        f'fallback generico "GRUPO X": {n_origem_fallback}'
+    )
 
     # Combinar sinteticas + analiticas
     todas = []
@@ -383,12 +420,16 @@ def _gerar_hierarquia_sintetica(plano_analiticas: Dict[str, dict]) -> List[dict]
         todas.append(sinteticas[code])
 
     # Analiticas (nivel = N do code)
+    # V32: deduplicacao — se code ja foi emitido como sintetica (pq e prefix
+    # estrito de outras), NAO emitir tambem como analitica (evita IND_CTA
+    # ambiguo no I050 e potencial erro PVA "code duplicado").
     for code, dados in plano_analiticas.items():
         if not code or not code[0].isdigit():
             continue
+        if code in sinteticas:
+            continue  # V32: ja virou sintetica
         n = len(code)
         cod_sup = code[:n - 1] if n > 1 else ''
-        # Garantir cod_sup esta nas sinteticas (deveria estar)
         todas.append({
             'code': code,
             'nivel': n,

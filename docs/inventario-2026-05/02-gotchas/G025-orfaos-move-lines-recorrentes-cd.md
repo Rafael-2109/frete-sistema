@@ -1,4 +1,9 @@
-# G007 — Orfaos de `stock.move.line` recorrentes no CD
+# G025 — Orfaos de `stock.move.line` recorrentes no CD
+
+> **Renumerado 2026-05-18**: antes era G007. Renomeado para G025 porque o nome
+> original G007 ja era ocupado por `G007-custo-zero-rejeita-sefaz.md` (descoberto
+> antes, no sub-piloto da madrugada). Este gotcha foi descoberto mais tarde,
+> durante a execucao da pre-etapa CD (D007).
 
 **Data**: 2026-05-18
 **Descoberto durante**: execucao pre-etapa CD (D007)
@@ -73,7 +78,7 @@ odoo.execute_kw('stock.move.line', 'unlink', [ids])
 ```
 
 **ATENCAO**: somente unlink nao basta — recompute manual de
-`reserved_quantity` e' obrigatorio. Ver **G006**.
+`reserved_quantity` e' obrigatorio. Ver **G024** (antes era G006).
 
 ---
 
@@ -107,6 +112,6 @@ Ver scripts em `/tmp/` (sessao 2026-05-18). Os 3 funcionam em conjunto.
 ## Referencias
 
 - D007: `00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md`
-- G006: `02-gotchas/G006-reserved-quantity-nao-recompute-apos-unlink.md`
+- G024: `02-gotchas/G024-reserved-quantity-nao-recompute-apos-unlink.md`
 - Backup orfaos limpos: `/tmp/backup_inventario_2026_05/orfaos_b_min_cd_20260518_060842.json`
 - Relatorio execucao: `EXECUCAO_PRE_ETAPA_CD_2026_05_18.md`

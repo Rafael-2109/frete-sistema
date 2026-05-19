@@ -25,9 +25,16 @@ PIPELINE:
   ETAPA D — SEFAZ (Playwright serial)
     f5e_transmitir_sefaz para TODAS invoices de C
 
-  ETAPA E — ENTRADA FB (para cada NF SEFAZ-autorizada)
+  ETAPA E — ENTRADA FB (para cada NF SEFAZ-autorizada com sentido X→FB)
     Cria RecebimentoLf + processa pipeline 0-18 (recebimento LF)
     Resultado: lote alvo na FB com qty correspondente
+
+  ETAPA F — ENTRADA DESTINO MANUAL (para cada NF SEFAZ-autorizada com sentido FB→X)
+    Padrao L17: NFs FB→{LF,CD} nao tem entrada automatica via robo CIEL IT.
+    Cria picking interno Em Transito Industrializ. (26489) -> destino interno
+    (LF/Estoque=42 ou CD/Estoque=32) replicando padrao 317306/317316.
+    Idempotente via origin `INV-INVENTARIO_2026_05-ENTRADA-{LABEL}-NF{nf}`.
+    Resultado: ajustes avancam para `F5f_ENTRADA_OK`.
 
 USO TIPICO (sub-piloto 10 produtos):
 
@@ -75,6 +82,8 @@ from typing import Any, Dict, List, Optional, Tuple
 _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[2]))
 
+from sqlalchemy.exc import OperationalError  # noqa: E402  # type: ignore
+
 from app import create_app, db  # noqa: E402  # type: ignore
 from app.odoo.constants.locations import COMPANY_LOCATIONS  # noqa: E402  # type: ignore
 from app.odoo.constants.operacoes_fiscais import (  # noqa: E402  # type: ignore
@@ -111,7 +120,32 @@ ACOES_PICKING = {
 # Acao apenas de lote (intra-empresa, sem NF)
 ACOES_LOTE = {'RENOMEAR_LOTE', 'TRANSFERIR_LOTE'}
 
-ETAPAS_VALIDAS = ('A', 'B', 'C', 'D', 'E')
+# ETAPA F (L17): Acoes sentido FB→{LF,CD} precisam de entrada MANUAL no destino.
+# Robo CIEL IT nao cria entrada automatica em industrializacao interna.
+# Padrao replicavel: pickings 317306 (NF 608629) e 317316 (NF 627348).
+ACOES_ENTRADA_DESTINO_MANUAL = {
+    'INDUSTRIALIZACAO_FB_LF',  # FB→LF — validado (317306, 317316)
+    # 'DEV_FB_LF',             # FB→LF — nao testado
+    # 'TRANSFERIR_FB_CD',      # FB→CD — nao testado
+}
+# Picking type que CRIA entrada na empresa destino (Recebimento).
+# Origin Em Trânsito (26489) -> Destino interno (COMPANY_LOCATIONS).
+PICKING_TYPE_ENTRADA_DESTINO_MANUAL: Dict[int, int] = {
+    5: 19,  # LF: Recebimento (validado 317306, 317316)
+    # 4: ?,  # CD: Recebimento — descobrir via audit picking_types
+}
+# Label da company destino para usar em origin (rastreabilidade)
+COMPANY_LABEL_ENTRADA: Dict[int, str] = {
+    5: 'LF',
+    4: 'CD',
+    1: 'FB',
+}
+# Em Transito (Industrializacao) — location virtual de saida (FB) que vira
+# entrada na LF/CD. Mesma constante de LOCATION_DESTINO_TRANSITO_INDUSTR
+# em inventario_pipeline_service.py.
+LOCATION_ORIGEM_ENTRADA_INDUSTR = 26489
+
+ETAPAS_VALIDAS = ('A', 'B', 'C', 'D', 'E', 'F')
 
 
 def banner(titulo: str, char: str = '=') -> None:
@@ -119,6 +153,61 @@ def banner(titulo: str, char: str = '=') -> None:
     print(char * 78)
     print(f'  {titulo}')
     print(char * 78)
+
+
+def _commit_resilient(max_attempts: int = 3, backoff_s: float = 2.0) -> bool:
+    """Commit resiliente a SSL disconnect do PostgreSQL local.
+
+    Em `OperationalError` ('SSL connection has been closed unexpectedly',
+    'connection reset', etc.), faz rollback + close + engine.dispose() +
+    nova tentativa com backoff exponencial.
+
+    Origem do problema: PostgreSQL servidor dropa conexao SSL apos N min de
+    idle (especialmente PgBouncer). Operacoes Odoo longas (Playwright SEFAZ
+    5-10min, polling invoice 30min) mantem conexao DB ociosa.
+
+    Usar nos commits APOS operacoes Odoo longas (B/C/D/E/F).
+
+    Returns:
+        True se commit OK (mesmo apos retry), False se falhou todas as
+        tentativas (caller deve abortar a etapa).
+    """
+    last_err: Optional[Exception] = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            db.session.commit()
+            return True
+        except OperationalError as e:
+            last_err = e
+            msg = str(e).lower()
+            is_ssl = any(k in msg for k in ('ssl', 'connection', 'closed', 'timeout'))
+            logger.warning(
+                f'  _commit_resilient attempt {attempt}/{max_attempts} '
+                f'OperationalError{"" if is_ssl else " (nao-SSL)"}: '
+                f'{str(e)[:200]}'
+            )
+            try:
+                db.session.rollback()
+            except Exception as e_rb:
+                logger.warning(f'  _commit_resilient rollback falhou: {e_rb}')
+            try:
+                db.session.close()
+            except Exception as e_cl:
+                logger.warning(f'  _commit_resilient close falhou: {e_cl}')
+            if is_ssl:
+                # Forcar recriacao do pool de conexoes
+                try:
+                    db.engine.dispose()
+                    logger.info('  _commit_resilient engine.dispose() OK')
+                except Exception as e_dp:
+                    logger.warning(f'  _commit_resilient dispose falhou: {e_dp}')
+            if attempt < max_attempts:
+                time.sleep(backoff_s * attempt)
+    logger.error(
+        f'  _commit_resilient FAILED apos {max_attempts} tentativas. '
+        f'Ultimo erro: {last_err}'
+    )
+    return False
 
 
 # ============================================================
@@ -827,24 +916,79 @@ def etapa_b_pickings(
                             f'    G014 falha ao transferir vencidos: {e}'
                         )
 
-                qty_restante = demand_total
-                # G014: priorizar quants VALIDOS (FIFO entre eles). Quants
-                # vencidos remanescentes NAO entram no picking (Odoo bloqueia).
-                for q in quants_validos:
-                    if qty_restante <= 0.001:
-                        break
-                    livre = float(q['quantity']) - float(q.get('reserved_quantity') or 0)
-                    if livre <= 0:
+                # G023 (2026-05-18 tarde): respeitar lote_origem dos AJUSTES
+                # em vez de FIFO automatico de quants. Cada ajuste tem
+                # `lote_origem` (do inventario fisico contado). Usar esse
+                # lote+qtd exatos garante que o picking corresponde ao que
+                # foi planejado, evitando reservas em lotes nao previstos
+                # (que causariam over-reservation em action_assign).
+                #
+                # Para ajustes SEM lote_origem (raro mas acontece com
+                # produtos vindos de MIGRAÇÃO): resolver via FIFO de
+                # quants_validos, respeitando o que ja foi alocado pelos
+                # ajustes com lote_origem.
+                ajustes_com_lote: List[Tuple[Any, str, float]] = []
+                ajustes_sem_lote: List[Tuple[Any, float]] = []
+                for aj in ajustes_produto:
+                    qty_aj = float(abs(aj.qtd_ajuste or 0))
+                    if qty_aj <= 0:
                         continue
-                    take = min(livre, qty_restante)
-                    lot_name = q['lot_id'][1] if q.get('lot_id') else False
+                    lote_aj = (aj.lote_origem or '').strip()
+                    if lote_aj:
+                        ajustes_com_lote.append((aj, lote_aj, qty_aj))
+                    else:
+                        ajustes_sem_lote.append((aj, qty_aj))
+
+                qty_alocado_por_lote: Dict[str, float] = defaultdict(float)
+                qty_restante = demand_total
+
+                # Etapa 1: linhas para ajustes COM lote_origem (1:1)
+                for aj, lote_aj, qty_aj in ajustes_com_lote:
                     linhas.append({
                         'product_id': pid,
-                        'quantity': take,
-                        'lot_name': lot_name,
-                        'name': f'Inv {CICLO} cod={cod} lote={lot_name}',
+                        'quantity': qty_aj,
+                        'lot_name': lote_aj,
+                        'name': f'Inv {CICLO} cod={cod} lote={lote_aj}',
                     })
-                    qty_restante -= take
+                    qty_alocado_por_lote[lote_aj] += qty_aj
+                    qty_restante -= qty_aj
+
+                # Etapa 2: resolver ajustes SEM lote_origem via FIFO de
+                # quants_validos, descontando o que ja' foi alocado nos
+                # mesmos lotes (evitar duplicar reserva).
+                if ajustes_sem_lote:
+                    qty_sem_lote = sum(q for (_, q) in ajustes_sem_lote)
+                    qty_a_distribuir = qty_sem_lote
+                    for q in quants_validos:  # FIFO por create_date
+                        if qty_a_distribuir <= 0.001:
+                            break
+                        if not q.get('lot_id'):
+                            continue
+                        lot_name = q['lot_id'][1]
+                        livre_orig = float(q['quantity']) - float(q.get('reserved_quantity') or 0)
+                        ja_nesse = qty_alocado_por_lote.get(lot_name, 0)
+                        livre_real = livre_orig - ja_nesse
+                        if livre_real <= 0:
+                            continue
+                        take = min(livre_real, qty_a_distribuir)
+                        linhas.append({
+                            'product_id': pid,
+                            'quantity': take,
+                            'lot_name': lot_name,
+                            'name': f'Inv {CICLO} cod={cod} lote={lot_name} (resolvido)',
+                        })
+                        qty_alocado_por_lote[lot_name] += take
+                        qty_a_distribuir -= take
+                        qty_restante -= take
+                        logger.info(
+                            f'    G023 cod={cod}: ajuste sem lote_origem '
+                            f'resolveu {take:.4f} no lote {lot_name}'
+                        )
+                    if qty_a_distribuir > 0.001:
+                        logger.warning(
+                            f'    G023 cod={cod}: {qty_a_distribuir:.4f} sem lote_origem '
+                            f'sem saldo livre para resolver (gerara compensatorio)'
+                        )
 
                 # Se sobrou qty_restante: criar ajuste compensatorio
                 # Regra do usuario (2026-05-18): "se qty_restante>0 criar
@@ -931,16 +1075,23 @@ def etapa_b_pickings(
                             ),
                         )
                         db.session.add(novo)
-                db.session.commit()
+                if not _commit_resilient():
+                    logger.error(f'    chunk {idx}: commit pos-picking falhou apos retries')
+                    falhas += len(ajustes_chunk)
+                    continue
                 print(f'    [{idx}/{len(chunks)}] picking {picking_id} criado '
                       f'({len(ajustes_chunk)} ajustes, {len(linhas)} linhas, '
                       f'{len(ajustes_compensatorios_a_criar)} compensatorios)')
             except Exception as e:
                 logger.error(f'    chunk {idx}: criar_transferencia falhou: {e}')
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
                 for aj in ajustes_chunk:
                     aj.fase_pipeline = 'F5a_FALHA'
                     aj.erro_msg = str(e)[:500]
-                db.session.commit()
+                _commit_resilient()
                 falhas += len(ajustes_chunk)
                 continue
 
@@ -977,6 +1128,14 @@ def etapa_b_pickings(
                 total_liberados += 1
             except Exception as e:
                 logger.error(f'    chunk {idx}: f5c falhou: {e}')
+
+            # G022 mitigation: aguardar Odoo flushar action_apply_inventory
+            # da ETAPA A pendentes (~5s) ANTES de criar proximo picking. Reduz
+            # over-reservation por reservas orfas em lote velho pos-renomeacao.
+            # Tambem da tempo do PgBouncer SSL/keepalive renovar conexao.
+            if idx < len(chunks):
+                logger.info(f'    sleep 5s antes do proximo picking (G022)')
+                time.sleep(5)
 
     print(f'\n  ETAPA B: pickings criados={total_pickings} '
           f'validados={total_validados} liberados={total_liberados} '
@@ -1133,7 +1292,17 @@ def etapa_e_entrada_fb(
     for a in autorizados:
         por_invoice[a.invoice_id_odoo].append(a)
 
-    # CFOPs 5901/5903/5949 -> retorno -> entrada FB sem transferencia CD
+    # CFOPs de SAIDA da NF emitida (5xxx) -> CFOP de ENTRADA do recebimento (1xxx).
+    # O RecebimentoLfLote.cfop modela a entrada FB, entao deve ser 1xxx — o
+    # Odoo/CIEL IT da FB so tem cadastro fiscal para CFOPs de entrada. Gravar
+    # 5903/5949/5152 (CFOP de saida) no recebimento causa "CFOP nao cadastrado".
+    # Map: acao_decidida -> CFOP de entrada da contrapartida fiscal.
+    ACAO_PARA_CFOP_ENTRADA = {
+        'PERDA_LF_FB':      '1903',  # entrada retorno N. Aplicado (saida LF 5903)
+        'TRANSFERIR_CD_FB': '1152',  # entrada transferencia entre filiais (saida CD 5152)
+        'DEV_LF_FB':        '1949',  # entrada devolucao industrializacao (saida LF 5949)
+        'DEV_CD_LF':        '1949',  # entrada devolucao industrializacao (saida CD 5949)
+    }
     print(f'  {len(por_invoice)} invoices distintas para entrada FB')
 
     if dry_run:
@@ -1143,7 +1312,22 @@ def etapa_e_entrada_fb(
     ok = 0
     falha = 0
     skip = 0
-    for invoice_id, ajs in por_invoice.items():
+    # G016: lista de invoice_ids para re-fetch a cada iteracao (evita
+    # DetachedInstanceError apos commits internos do processar_recebimento_lf
+    # que expiram objects)
+    invoice_ids_para_processar = list(por_invoice.keys())
+    for invoice_id in invoice_ids_para_processar:
+        # Re-fetch ajustes desta invoice (anti-DetachedInstanceError)
+        ajs = AjusteEstoqueInventario.query.filter_by(
+            invoice_id_odoo=invoice_id,
+            fase_pipeline='F5e_SEFAZ_OK',
+        ).filter(
+            AjusteEstoqueInventario.acao_decidida.in_(list(ACOES_ENTRADA_FB))
+        ).all()
+        if not ajs:
+            logger.warning(f'  invoice {invoice_id}: re-fetch vazio, pulando')
+            continue
+
         # Idempotencia: ja' existe RecebimentoLf para essa invoice?
         existente = RecebimentoLf.query.filter_by(
             odoo_lf_invoice_id=invoice_id,
@@ -1200,7 +1384,9 @@ def etapa_e_entrada_fb(
                     logger.warning(f'    sem product_id para {a.cod_produto}, pulando')
                     continue
                 lote_dest = (a.lote_destino or 'MIGRAÇÃO').strip()
-                cfop = '5903'  # default; refinar por tipo_op se necessario
+                # CFOP do recebimento (entrada FB) por acao — usar CFOP DE ENTRADA
+                # (1xxx). O Odoo da FB nao tem fiscal_position para CFOPs de saida.
+                cfop = ACAO_PARA_CFOP_ENTRADA.get(a.acao_decidida, '1903')
                 agg[(pid, lote_dest, cfop)] += float(abs(a.qtd_ajuste or 0))
             for (pid, lote_dest, cfop), qty in agg.items():
                 if qty <= 0:
@@ -1215,7 +1401,10 @@ def etapa_e_entrada_fb(
                     produto_tracking='lot',
                     processado=False,
                 ))
-            db.session.commit()
+            if not _commit_resilient():
+                raise RuntimeError(
+                    f'ETAPA E: commit do RecebimentoLf {rec.id} falhou (SSL).'
+                )
             print(f'  invoice {invoice_id}: RecebimentoLf {rec.id} criado ({len(agg)} lotes)')
 
         # Processar SINCRONO
@@ -1230,6 +1419,273 @@ def etapa_e_entrada_fb(
 
     print(f'  ETAPA E: OK={ok} SKIP={skip} FALHA={falha}')
     return {'total': len(por_invoice), 'ok': ok, 'skip': skip, 'falha': falha}
+
+
+# ============================================================
+# ETAPA F — Entrada manual destino (FB→{LF,CD})
+# ============================================================
+
+def etapa_f_entrada_destino_manual(
+    odoo, ajustes: List[AjusteEstoqueInventario],
+    dry_run: bool, executado_por: str,
+) -> Dict[str, Any]:
+    """ETAPA F — Entrada manual no destino para NFs FB→{LF,CD} SEFAZ-OK.
+
+    Padrao L17: NFs sentido FB→X precisam de entrada manual no destino.
+    Robo CIEL IT NAO cria entrada automatica em industrializacao interna
+    (nao ha DFe no sentido reverso). Replica padrao validado dos pickings:
+        - 317306 LF/IN/01733 (NF 608629)
+        - 317316 LF/IN/01734 (NF 627348)
+
+    Idempotencia: skip se ja existe stock.picking com origin
+    `INV-INVENTARIO_2026_05-ENTRADA-{LABEL}-NF{numero}`.
+
+    Suporta APENAS INDUSTRIALIZACAO_FB_LF hoje. DEV_FB_LF/TRANSFERIR_FB_CD
+    requerem teste + completar PICKING_TYPE_ENTRADA_DESTINO_MANUAL.
+
+    Args:
+        ajustes: lista carregada pelo carregar_ajustes (status pode ser
+            'EXECUTADO' apos F5e — incluir EXECUTADO no filtro de status).
+
+    Returns:
+        {'total': N, 'ok': K, 'skip': K, 'falha': K}
+    """
+    banner('ETAPA F — Entrada manual destino (FB->LF/CD)', '-')
+
+    elegiveis = [
+        a for a in ajustes
+        if a.invoice_id_odoo
+        and a.fase_pipeline == 'F5e_SEFAZ_OK'
+        and a.acao_decidida in ACOES_ENTRADA_DESTINO_MANUAL
+    ]
+    if not elegiveis:
+        print('  Sem ajustes elegiveis para entrada destino manual. Etapa pulada.')
+        return {'total': 0}
+
+    # Agrupar por invoice_id (1 NF = 1 picking de entrada)
+    por_invoice: Dict[int, List[AjusteEstoqueInventario]] = defaultdict(list)
+    for a in elegiveis:
+        por_invoice[a.invoice_id_odoo].append(a)
+
+    print(f'  {len(por_invoice)} invoices distintas para entrada destino')
+
+    if dry_run:
+        for inv_id, ajs in por_invoice.items():
+            cods = sorted({a.cod_produto for a in ajs})
+            qty_total = sum(float(abs(a.qtd_ajuste or 0)) for a in ajs)
+            acao = ajs[0].acao_decidida
+            _, _, co_dest = ACAO_PARA_DIRECAO[acao]
+            label = COMPANY_LABEL_ENTRADA.get(co_dest, str(co_dest))
+            print(f'  [DRY-RUN] invoice {inv_id} {acao} -> {label} '
+                  f'{len(ajs)} ajustes / {len(cods)} produtos / qty={qty_total:.2f}')
+        return {'total': len(por_invoice), 'dry_run': True}
+
+    ok = 0
+    skip = 0
+    falha = 0
+    for invoice_id, ajs in por_invoice.items():
+        try:
+            r = _f_criar_entrada_destino_para_invoice(
+                odoo, invoice_id, ajs, executado_por,
+            )
+            if r == 'skip':
+                skip += 1
+            elif r == 'ok':
+                ok += 1
+            else:
+                falha += 1
+        except Exception as e:
+            logger.error(f'  F invoice {invoice_id} falhou: {e}', exc_info=True)
+            for a in ajs:
+                a.erro_msg = (f'F entrada destino falhou: {e}')[:500]
+            db.session.commit()
+            falha += 1
+
+    print(f'  ETAPA F: OK={ok} SKIP={skip} FALHA={falha}')
+    return {'total': len(por_invoice), 'ok': ok, 'skip': skip, 'falha': falha}
+
+
+def _f_criar_entrada_destino_para_invoice(
+    odoo, invoice_id: int,
+    ajustes: List[AjusteEstoqueInventario],
+    executado_por: str,
+) -> str:
+    """Cria + valida picking de entrada destino para 1 invoice.
+
+    Returns: 'ok' | 'skip' | 'falha'
+    """
+    from datetime import datetime as _dt
+    acao = ajustes[0].acao_decidida
+    _, company_origem, company_destino = ACAO_PARA_DIRECAO[acao]
+
+    picking_type_id = PICKING_TYPE_ENTRADA_DESTINO_MANUAL.get(company_destino)
+    location_dest = COMPANY_LOCATIONS.get(company_destino)
+    location_origem = LOCATION_ORIGEM_ENTRADA_INDUSTR  # 26489
+    company_label = COMPANY_LABEL_ENTRADA.get(company_destino, str(company_destino))
+
+    if not picking_type_id or not location_dest:
+        raise NotImplementedError(
+            f'ETAPA F sem suporte para company_destino={company_destino} '
+            f'(acao={acao}). Adicione PICKING_TYPE_ENTRADA_DESTINO_MANUAL.'
+        )
+
+    # Ler invoice para validacao (state + situacao SEFAZ)
+    inv = odoo.read(
+        'account.move', [invoice_id],
+        ['name', 'l10n_br_numero_nf', 'state', 'l10n_br_situacao_nf'],
+    )[0]
+    if inv['state'] != 'posted':
+        logger.warning(
+            f'  invoice {invoice_id} state={inv["state"]} != posted. Skip F.'
+        )
+        return 'skip'
+
+    # Origin: usar invoice_id (account.move.id) — consistente com pickings
+    # manuais ja criados (317306=NF608629, 317316=NF627348). invoice_id e
+    # globalmente unico no Odoo; l10n_br_numero_nf pode colidir entre
+    # companies (mesma serie/numero em FB vs LF).
+    origin = (
+        f'INV-INVENTARIO_2026_05-ENTRADA-{company_label}-NF{invoice_id}'
+    )
+
+    # Idempotencia: skip se ja existe picking done com este origin
+    existentes = odoo.search_read(
+        'stock.picking',
+        [['origin', '=', origin]],
+        ['id', 'name', 'state'],
+    )
+    if existentes:
+        ex = existentes[0]
+        if ex['state'] == 'done':
+            print(
+                f'  invoice {invoice_id}: picking {ex["id"]} {ex["name"]} '
+                f'ja done (skip)'
+            )
+            # Avancar fase_pipeline ate' F5f para idempotencia em proxima rodada
+            for a in ajustes:
+                a.fase_pipeline = 'F5f_ENTRADA_OK'
+            if not _commit_resilient():
+                logger.warning(
+                    f'  ETAPA F: commit F5f skip falhou (SSL). Fase nao avancou — '
+                    f'idempotencia via origin do Odoo continua valida.'
+                )
+            return 'skip'
+        else:
+            logger.warning(
+                f'  invoice {invoice_id}: picking {ex["id"]} state='
+                f'{ex["state"]} != done. Mantendo para investigacao manual.'
+            )
+            return 'falha'
+
+    # Resolver product_id e agregar qty por (pid, lote_destino)
+    cods = sorted({a.cod_produto for a in ajustes})
+    prod_cache = {c: resolver_product_id(odoo, c) for c in cods}
+
+    HOJE = _dt.utcnow().strftime('%Y%m%d')
+    agg: Dict[Tuple[int, str], float] = defaultdict(float)
+    cod_to_pid_dict: Dict[int, str] = {}
+    for a in ajustes:
+        pid = prod_cache.get(a.cod_produto)
+        if not pid:
+            logger.warning(
+                f'    sem product_id para {a.cod_produto}, pulando ajuste {a.id}'
+            )
+            continue
+        cod_to_pid_dict[pid] = a.cod_produto
+        lote_dest_raw = (a.lote_destino or '').strip()
+        # Para entrada manual, lote MIGRAÇÃO/vazio vira lote padronizado
+        # consistente com 317316 (`INV-{cod}-{YYYYMMDD}`)
+        if not lote_dest_raw or lote_dest_raw == 'MIGRAÇÃO':
+            lote_dest = f'INV-{a.cod_produto}-{HOJE}'
+        else:
+            lote_dest = lote_dest_raw
+        agg[(pid, lote_dest)] += float(abs(a.qtd_ajuste or 0))
+
+    if not agg:
+        raise RuntimeError(
+            'Sem moves para criar — 0 produtos com pid+qty > 0'
+        )
+
+    # Criar picking com moves
+    moves_data = []
+    for (pid, lote_dest), qty in agg.items():
+        if qty <= 0:
+            continue
+        moves_data.append((0, 0, {
+            'product_id': pid,
+            'product_uom_qty': qty,
+            'name': f'{origin} - prod={pid}',
+            'location_id': location_origem,
+            'location_dest_id': location_dest,
+        }))
+
+    picking_data = {
+        'picking_type_id': picking_type_id,
+        'location_id': location_origem,
+        'location_dest_id': location_dest,
+        'company_id': company_destino,
+        'origin': origin,
+        'move_ids_without_package': moves_data,
+    }
+
+    picking_id = odoo.create('stock.picking', picking_data)
+    print(
+        f'  invoice {invoice_id}: picking {picking_id} criado '
+        f'(company={company_destino}, {len(moves_data)} moves)'
+    )
+
+    # GOTCHA G006/L17: forcar company_id no move (XML-RPC nao herda)
+    moves = odoo.search('stock.move', [['picking_id', '=', picking_id]])
+    if moves:
+        odoo.write('stock.move', moves, {'company_id': company_destino})
+
+    # action_confirm + action_assign
+    odoo.execute_kw('stock.picking', 'action_confirm', [[picking_id]])
+    odoo.execute_kw('stock.picking', 'action_assign', [[picking_id]])
+
+    # G011: preencher lot_name nos move_lines (auto-vazio apos action_assign)
+    mls = odoo.search_read(
+        'stock.move.line',
+        [['picking_id', '=', picking_id]],
+        ['id', 'product_id', 'quantity', 'lot_id', 'lot_name'],
+    )
+    for ml in mls:
+        pid_ml = ml['product_id'][0]
+        # Encontrar lote_dest do produto em agg
+        lote_dest = None
+        for (pid, lt), _ in agg.items():
+            if pid == pid_ml:
+                lote_dest = lt
+                break
+        # G011 (doc EXECUCAO_ENTRADA_LF_NF627348): re-escrever quantity
+        # como reforco apos action_assign + setar lot_name se faltar.
+        updates: Dict[str, Any] = {'quantity': ml['quantity']}
+        if not ml['lot_id'] and not ml['lot_name'] and lote_dest:
+            updates['lot_name'] = lote_dest
+        odoo.write('stock.move.line', [ml['id']], updates)
+
+    # button_validate
+    odoo.execute_kw('stock.picking', 'button_validate', [[picking_id]])
+
+    # G019/G020: verificar state=done
+    p_after = odoo.read('stock.picking', [picking_id], ['state'])[0]
+    if p_after['state'] != 'done':
+        raise RuntimeError(
+            f'Picking {picking_id} state={p_after["state"]} != done apos '
+            f'button_validate (provavel false-positive — invest manual)'
+        )
+    print(f'  invoice {invoice_id}: picking {picking_id} state=done ✓')
+
+    # Avancar fase_pipeline dos ajustes para F5f_ENTRADA_OK
+    for a in ajustes:
+        a.fase_pipeline = 'F5f_ENTRADA_OK'
+    if not _commit_resilient():
+        logger.warning(
+            f'  ETAPA F: commit F5f apos picking {picking_id} falhou (SSL). '
+            f'Fase nao avancou no DB — idempotencia via origin do Odoo continua valida.'
+        )
+
+    return 'ok'
 
 
 # ============================================================
@@ -1340,9 +1796,21 @@ def main() -> None:
             )
 
         if 'C' in etapas:
+            # G016: dispose pool antes de operacao longa (polling 1800s)
+            # forca recriar conexoes DB que poderiam estar idle/com SSL morto
+            try:
+                db.engine.dispose()
+                logger.info('  [pre-C] db.engine.dispose() OK (libera conexoes idle)')
+            except Exception as e:
+                logger.warning(f'  [pre-C] dispose falhou: {e}')
             etapa_c_aguardar_invoices(
                 odoo, ajustes, dry_run=dry_run, executado_por=args.usuario,
             )
+            try:
+                db.engine.dispose()
+                logger.info('  [pos-C] db.engine.dispose() OK')
+            except Exception as e:
+                logger.warning(f'  [pos-C] dispose falhou: {e}')
             db.session.expire_all()
             ajustes = carregar_ajustes(
                 company_id=args.company_id, onda=args.onda,
@@ -1354,9 +1822,20 @@ def main() -> None:
             if not args.confirmar_sefaz and not dry_run:
                 print('\n  ETAPA D requer --confirmar-sefaz (SEFAZ irreversivel). Pulando.')
             else:
+                # G016: dispose pool antes de Playwright (5-10min/invoice)
+                try:
+                    db.engine.dispose()
+                    logger.info('  [pre-D] db.engine.dispose() OK')
+                except Exception as e:
+                    logger.warning(f'  [pre-D] dispose falhou: {e}')
                 etapa_d_sefaz(
                     odoo, ajustes, dry_run=dry_run, executado_por=args.usuario,
                 )
+                try:
+                    db.engine.dispose()
+                    logger.info('  [pos-D] db.engine.dispose() OK')
+                except Exception as e:
+                    logger.warning(f'  [pos-D] dispose falhou: {e}')
                 db.session.expire_all()
                 ajustes = carregar_ajustes(
                     company_id=args.company_id, onda=args.onda,
@@ -1366,6 +1845,17 @@ def main() -> None:
 
         if 'E' in etapas:
             etapa_e_entrada_fb(
+                odoo, ajustes, dry_run=dry_run, executado_por=args.usuario,
+            )
+            db.session.expire_all()
+            ajustes = carregar_ajustes(
+                company_id=args.company_id, onda=args.onda,
+                limite_produtos=args.limite_produtos,
+                filtro_cod_produto=filtro_cods,
+            )
+
+        if 'F' in etapas:
+            etapa_f_entrada_destino_manual(
                 odoo, ajustes, dry_run=dry_run, executado_por=args.usuario,
             )
 

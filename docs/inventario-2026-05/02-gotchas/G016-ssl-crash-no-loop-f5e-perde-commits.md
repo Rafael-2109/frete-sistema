@@ -2,13 +2,25 @@
 
 **Descoberta**: 2026-05-18 sub-piloto etapa D (apos G015 fix)
 **Severidade**: HIGH (DB local desincroniza com Odoo — gera estado inconsistente)
-**Status**: ✅ **FIX IMPLEMENTADO** (2026-05-18 sessao 2 manha) em
-`app/odoo/services/inventario_pipeline_service.py`. Combinacao A+B+C:
-- **A** (commit antes Playwright): linha ~1014, libera SSL antes da operacao longa
-- **B** (try/except + retry + re-fetch): helper `_commit_with_retry()` linha ~161-200
-  + `db.session.get(AjusteEstoqueInventario, ajuste_id_local)` apos Playwright
+**Status**: ✅ **FIX IMPLEMENTADO** (2026-05-18 sessao 2 manha+tarde) em
+`app/odoo/services/inventario_pipeline_service.py`. Combinacao A+B+C
+em F5e + F5d:
+
+- **A** (commit antes operacao longa):
+  - F5e (Playwright SEFAZ): `_commit_with_retry()` antes
+    `transmitir_nfe_via_playwright`
+  - **F5d (polling invoice 1800s)**: `_commit_with_retry()` antes do `while`
+    loop (extensao implementada 2026-05-18 sessao 2 tarde apos teste 100 prods
+    revelar SSL closed durante F5d)
+- **B** (try/except + retry + re-fetch): helper `_commit_with_retry()`
+  linha ~161-200 + `db.session.get(AjusteEstoqueInventario, ajuste_id)` apos
+  operacao longa. Aplicado em F5e (cada iter) E F5d (apos polling completar
+  ou em cada match).
 - **C** (TCP keepalive): ja' configurado em `config.py:115-118`
   (keepalives=1, keepalives_idle=30s, keepalives_interval=10s, keepalives_count=5)
+
+Aplicado para AMBOS f5d_aguardar_invoices E f5e_transmitir_sefaz —
+ambos podem rodar 30+ minutos.
 
 ---
 
@@ -127,3 +139,39 @@ Combinar **Opcoes A + C**:
 - G015 (protecao G007 automatica)
 - D006 secao L24 (a ser adicionada)
 - Sub-piloto checkpoint final 2026-05-18
+
+## Update 2026-05-18 sessão 3 tarde — proteção no bulk script
+
+Extensão da proteção G016 aplicada em `09_executar_onda1_bulk.py`:
+
+- **`_commit_resilient()` helper** (linha ~162 do script): inspirado no
+  `InventarioPipelineService._commit_with_retry`, com extras:
+  - 3 tentativas (vs 2 do service)
+  - `db.engine.dispose()` em erros SSL — força recriar pool de conexões
+  - Backoff exponencial (2s, 4s, 6s)
+  - Aplicado nos commits APÓS operações longas: ETAPA E (após
+    `RecebimentoLfOdooService.processar_recebimento`, ~5-10min), ETAPA F
+    (após `button_validate`).
+- **`db.engine.dispose()` antes/depois de ETAPAS C e D** (main.py):
+  - ETAPA C: polling de invoice CIEL IT até 1800s — conexão DB pode morrer
+  - ETAPA D: SEFAZ via Playwright 1-5min/invoice — idem
+  - Dispose força pool a recriar TODAS as conexões; próximo
+    `db.session.commit()` pega conexão fresca via `pool_pre_ping`.
+
+Motivação: durante o batch de 30 prods, polling de C (1643s) crashou
+PostgreSQL SSL antes de chegar em ETAPA D:
+```
+psycopg2.OperationalError: SSL connection has been closed unexpectedly
+```
+Causa: `pool_recycle=180s` + conexão idle por 30 min com keepalives
+insuficientes contra PgBouncer dropando SSL.
+
+## Update 2026-05-18 sessão 3 tarde — sleep entre pickings (ETAPA B)
+
+Adicionado `time.sleep(5)` entre cada picking criado em
+`etapa_b_pickings`. Razão dupla:
+- **G022 mitigation**: dá tempo do `action_apply_inventory` da ETAPA A
+  (pendentes no Odoo ~10-30s) flushar antes do próximo picking consultar
+  quants. Reduz over-reservation.
+- **G016 mitigation**: pausa permite PgBouncer renovar conexão SSL antes
+  de longas sequências (ETAPA B com 6+ pickings = >60s sem dispose).

@@ -50,8 +50,8 @@
 ### Documentacao
 - `docs/inventario-2026-05/00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md` (decisao formal)
 - `docs/inventario-2026-05/00-decisoes/D007-PATCHES-PARA-DOCS-EXISTENTES.md` (patches sugeridos)
-- `docs/inventario-2026-05/02-gotchas/G006-reserved-quantity-nao-recompute-apos-unlink.md`
-- `docs/inventario-2026-05/02-gotchas/G007-orfaos-move-lines-recorrentes-cd.md`
+- `docs/inventario-2026-05/02-gotchas/G024-reserved-quantity-nao-recompute-apos-unlink.md` (renumerado de G006)
+- `docs/inventario-2026-05/02-gotchas/G025-orfaos-move-lines-recorrentes-cd.md` (renumerado de G007)
 - `docs/inventario-2026-05/EXECUCAO_PRE_ETAPA_CD_2026_05_18.md` (relatorio completo)
 - ESTE arquivo (checkpoint)
 

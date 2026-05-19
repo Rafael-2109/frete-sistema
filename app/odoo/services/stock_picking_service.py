@@ -12,7 +12,8 @@ Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md §6
 """
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.odoo.utils.connection import get_odoo_connection
 
@@ -128,11 +129,167 @@ class StockPickingService:
             1. action_confirm (draft -> confirmed)
             2. action_assign (reserva estoque + cria stock.move.line)
 
+        G023 nota: consolidar_move_lines NAO eh chamado aqui (cache
+        stale logo apos action_assign). Eh chamado em validar() — la
+        os campos computed ja' foram refrescados pelos writes de
+        preencher_qty_done + ajustar_qty_done_pelo_disponivel.
+
         Reuso: recebimento_lf_odoo_service.py:2317-2334.
         """
         self.odoo.execute_kw('stock.picking', 'action_confirm', [[picking_id]])
         self.odoo.execute_kw('stock.picking', 'action_assign', [[picking_id]])
         logger.info(f'Picking {picking_id}: confirmado + reservado')
+
+    def consolidar_move_lines(
+        self, picking_id: int,
+        linhas_esperadas: Optional[List[Dict[str, Any]]] = None,
+    ) -> int:
+        """G023: corrige over-reservation apos action_assign forcando os
+        lotes/qtds EXATOS solicitados pelo caller.
+
+        Problema: quando ETAPA A renomeia lote (action_apply_inventory),
+        reservas no lote velho podem permanecer orfas. O action_assign
+        subsequente em ETAPA B reserva tanto no lote velho QUANTO no lote
+        novo, causando over-reservation (caso real: 2x a 459x).
+
+        Solucao: ao inves de FIFO automatico, usar `linhas_esperadas`
+        (passadas pelo caller, ja' com `lot_name` + `quantity` exata
+        derivada dos AjusteEstoqueInventario). Para cada (produto, lote)
+        esperado: encontrar move_line correspondente e setar
+        quantity+qty_done exatos; ZERAR todas as outras move_lines do
+        mesmo produto (incluindo as auto-criadas pelo action_assign em
+        lotes errados).
+
+        Args:
+            picking_id: stock.picking.id
+            linhas_esperadas: [{'product_id': int, 'lot_name': str,
+                'quantity': float, ...}, ...]. Mesma estrutura passada
+                ao `preencher_qty_done`. Se None, NAO faz nada (no-op).
+
+        Returns:
+            int — produtos cuja alocacao foi ajustada
+        """
+        if not linhas_esperadas:
+            return 0
+
+        # Agrupar linhas esperadas por (product_id, lot_name)
+        # — cada chave -> sum(quantity) (caso mesmo produto+lote repita)
+        esperado: Dict[Tuple[int, str], float] = defaultdict(float)
+        produtos_esperados: set = set()
+        for ln in linhas_esperadas:
+            pid = ln['product_id']
+            lot_name = (ln.get('lot_name') or '').strip()
+            qty = float(ln.get('quantity') or 0)
+            if qty <= 0:
+                continue
+            esperado[(pid, lot_name)] += qty
+            produtos_esperados.add(pid)
+
+        if not esperado:
+            return 0
+
+        # Ler todas as move_lines do picking, agrupar por (product_id, lot_name)
+        mls = self.odoo.search_read(
+            'stock.move.line',
+            [['picking_id', '=', picking_id]],
+            ['id', 'product_id', 'quantity', 'qty_done', 'lot_id', 'lot_name'],
+        )
+
+        # Para cada move_line: identificar product_id e lot_name efetivo
+        mls_por_chave: Dict[Tuple[int, str], List[Dict]] = defaultdict(list)
+        mls_por_produto: Dict[int, List[Dict]] = defaultdict(list)
+        for ml in mls:
+            pid = ml['product_id'][0] if ml.get('product_id') else None
+            if not pid:
+                continue
+            lot_name = ''
+            if ml.get('lot_id'):
+                lot_name = ml['lot_id'][1] or ''
+            elif ml.get('lot_name'):
+                lot_name = ml['lot_name'] or ''
+            lot_name = lot_name.strip()
+            mls_por_chave[(pid, lot_name)].append(ml)
+            mls_por_produto[pid].append(ml)
+
+        ajustes = 0
+        mls_processadas: set = set()
+
+        # Etapa 1: para cada linha esperada, encontrar move_line do mesmo
+        # (produto, lote) e setar quantity+qty_done = qty esperada
+        for (pid, lot_name), qty_esperada in esperado.items():
+            mls_match = mls_por_chave.get((pid, lot_name), [])
+            if not mls_match:
+                logger.warning(
+                    f'  G023 picking {picking_id}: produto={pid} '
+                    f'lote={lot_name!r} esperado={qty_esperada:.4f} '
+                    f'mas NAO encontrou move_line correspondente. '
+                    f'(action_assign nao reservou nesse lote)'
+                )
+                continue
+            ml = mls_match[0]
+            mls_processadas.add(ml['id'])
+            old_qty = float(ml.get('quantity') or 0)
+            if abs(old_qty - qty_esperada) > 0.0001:
+                self.odoo.write(
+                    'stock.move.line', [ml['id']],
+                    {'quantity': qty_esperada, 'qty_done': qty_esperada},
+                )
+                logger.debug(
+                    f'  G023 picking {picking_id}: ml {ml["id"]} '
+                    f'prod={pid} lote={lot_name!r} '
+                    f'qty {old_qty:.4f} -> {qty_esperada:.4f}'
+                )
+            # Lidar com duplicatas (mais de uma ml com mesma chave)
+            for ml_dup in mls_match[1:]:
+                mls_processadas.add(ml_dup['id'])
+                if float(ml_dup.get('quantity') or 0) > 0 or \
+                   float(ml_dup.get('qty_done') or 0) > 0:
+                    self.odoo.write(
+                        'stock.move.line', [ml_dup['id']],
+                        {'quantity': 0, 'qty_done': 0},
+                    )
+                    logger.debug(
+                        f'  G023 picking {picking_id}: ml duplicada '
+                        f'{ml_dup["id"]} zerada (prod={pid} lote={lot_name!r})'
+                    )
+
+        # Etapa 2: para cada produto esperado, zerar TODAS as move_lines
+        # que nao foram processadas (= reservas em lotes "errados" criados
+        # pelo action_assign)
+        for pid in produtos_esperados:
+            for ml in mls_por_produto.get(pid, []):
+                if ml['id'] in mls_processadas:
+                    continue
+                old_qty = float(ml.get('quantity') or 0)
+                if old_qty > 0 or float(ml.get('qty_done') or 0) > 0:
+                    lot_efetivo = ml.get('lot_id') or ml.get('lot_name') or '(sem)'
+                    self.odoo.write(
+                        'stock.move.line', [ml['id']],
+                        {'quantity': 0, 'qty_done': 0},
+                    )
+                    logger.warning(
+                        f'  G023 picking {picking_id}: ml {ml["id"]} '
+                        f'prod={pid} lote={lot_efetivo} '
+                        f'qty {old_qty:.4f} -> 0 (lote nao esperado)'
+                    )
+
+        # Contar produtos cuja soma final difere de soma original
+        for pid in produtos_esperados:
+            soma_old = sum(
+                float(ml.get('quantity') or 0)
+                for ml in mls_por_produto.get(pid, [])
+            )
+            soma_esperada = sum(
+                qty for (p, _), qty in esperado.items() if p == pid
+            )
+            if abs(soma_old - soma_esperada) > 0.0001:
+                ajustes += 1
+                logger.warning(
+                    f'  G023 picking {picking_id} produto {pid}: '
+                    f'sum(ml.quantity) {soma_old:.4f} -> {soma_esperada:.4f}'
+                )
+
+        return ajustes
 
     def preencher_qty_done(
         self, picking_id: int, linhas: List[Dict[str, Any]]
@@ -246,11 +403,16 @@ class StockPickingService:
                 ajustadas += 1
         return {'ajustadas': ajustadas, 'pendencias': pendencias}
 
-    def validar(self, picking_id: int) -> bool:
+    def validar(
+        self, picking_id: int,
+        linhas_esperadas: Optional[List[Dict[str, Any]]] = None,
+    ) -> bool:
         """button_validate com context skip_backorder.
 
-        Trata 'cannot marshal None' como sucesso (XML-RPC nao serializa
-        None retornado por Odoo quando nao ha wizard intermediario).
+        G019 FIX: SEMPRE checa state=done apos chamada. Antes engolia
+        'cannot marshal None' como sucesso, mas Odoo pode retornar wizard
+        de estoque negativo (ou outro) que deixa picking em assigned —
+        false-positive cascateia em G020 e robo CIEL IT nunca cria invoice.
 
         Context `skip_backorder=True` + `picking_ids_not_to_backorder`
         evita o wizard de backorder (que deixaria o picking em 'assigned'
@@ -258,9 +420,33 @@ class StockPickingService:
         Padrao usado em recebimento_lf_odoo_service.py:1548-1558.
 
         Raises:
+            RuntimeError: picking apos button_validate NAO ficou em state=done
+                (provavelmente estoque negativo, wizard pendente, etc).
             Exception: qualquer outra exceção (ex.: 'Quality checks
                 pending') eh propagada — o caller decide retry ou abort.
         """
+        # G023: consolidar move_lines ANTES de button_validate.
+        # Usa `linhas_esperadas` (lote_origem + qtd_ajuste exatos vindos
+        # dos AjusteEstoqueInventario) para forcar move_lines a refletirem
+        # EXATAMENTE o que foi planejado, descartando reservas em lotes
+        # nao previstos (criadas por action_assign apos renomeacao de lote).
+        if linhas_esperadas:
+            try:
+                ajustes_g023 = self.consolidar_move_lines(
+                    picking_id, linhas_esperadas=linhas_esperadas,
+                )
+                if ajustes_g023 > 0:
+                    logger.warning(
+                        f'Picking {picking_id}: G023 corrigiu over-reservation '
+                        f'em {ajustes_g023} produtos antes de button_validate'
+                    )
+            except Exception as e:
+                logger.warning(
+                    f'Picking {picking_id}: G023 consolidar_move_lines falhou '
+                    f'(nao bloqueante): {e}'
+                )
+
+        marshal_none = False
         try:
             self.odoo.execute_kw(
                 'stock.picking', 'button_validate', [[picking_id]],
@@ -269,14 +455,29 @@ class StockPickingService:
                     'picking_ids_not_to_backorder': [picking_id],
                 }},
             )
-            return True
         except Exception as e:
             if 'cannot marshal None' in str(e):
+                marshal_none = True
+            else:
+                raise
+
+        # G019 FIX: SEMPRE verificar state real apos button_validate
+        p = self.odoo.read('stock.picking', [picking_id], ['state'])
+        state = p[0]['state'] if p else None
+        if state == 'done':
+            if marshal_none:
                 logger.info(
-                    f'Picking {picking_id}: button_validate retornou None (sucesso)'
+                    f'Picking {picking_id}: button_validate retornou None '
+                    '(state=done verificado — sucesso)'
                 )
-                return True
-            raise
+            return True
+        # state != 'done' — false-positive G019
+        raise RuntimeError(
+            f'Picking {picking_id} state={state!r} apos button_validate '
+            f'(esperado "done"). Provavelmente: estoque negativo, wizard '
+            f'pendente, ou outro impedimento. '
+            f'{"button_validate retornou marshal None mas state nao=done." if marshal_none else ""}'
+        )
 
     def cancelar(self, picking_id: int, motivo: str = '') -> bool:
         """Cancela picking via action_cancel. Motivo apenas para log."""
@@ -295,16 +496,29 @@ class StockPickingService:
         account.move correspondente (pode levar ate 30 min). Use
         `aguardar_invoice_do_robo()` para fire-and-poll do resultado.
 
-        Pre-condicao: picking em state='done' e
-        liberacao_para_faturamento configurada no picking_type.
+        G020 FIX: agora valida pre-condicao state=done em runtime.
+        Antes Odoo aceitava chamada em picking-nao-done sem erro mas robo
+        CIEL IT NUNCA criava invoice — gerando rabo silencioso.
 
         Reuso: recebimento_lf_odoo_service.py:2526-2531 (etapa 21,
         sem nome explicito).
 
         Raises:
+            RuntimeError: picking nao esta em state=done (pre-cond falhou).
             Exception: propaga qualquer erro de negocio (ex.: 'Picking
                 nao validado') para o caller decidir.
         """
+        # G020 FIX: validar pre-condicao state=done
+        p = self.odoo.read('stock.picking', [picking_id], ['state'])
+        if not p:
+            raise RuntimeError(f'Picking {picking_id} nao existe no Odoo')
+        if p[0]['state'] != 'done':
+            raise RuntimeError(
+                f'Picking {picking_id} state={p[0]["state"]!r} '
+                '(esperado "done" para liberar_faturamento). '
+                'F5b validar() pode ter tido false-positive (G019) — '
+                're-tentar validar antes de liberar.'
+            )
         self.odoo.execute_kw(
             'stock.picking', 'action_liberar_faturamento', [[picking_id]]
         )

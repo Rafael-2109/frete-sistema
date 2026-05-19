@@ -261,5 +261,5 @@ python scripts/inventario_2026_05/09b_executar_pre_etapa.py \
 - Decisao: `00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md`
 - Patches docs externas: `00-decisoes/D007-PATCHES-PARA-DOCS-EXISTENTES.md`
 - Execucao detalhada: `EXECUCAO_PRE_ETAPA_CD_2026_05_18.md`
-- Gotchas: `02-gotchas/G006-reserved-quantity-nao-recompute-apos-unlink.md`,
-  `02-gotchas/G007-orfaos-move-lines-recorrentes-cd.md`
+- Gotchas: `02-gotchas/G024-reserved-quantity-nao-recompute-apos-unlink.md` (renumerado de G006),
+  `02-gotchas/G025-orfaos-move-lines-recorrentes-cd.md` (renumerado de G007)

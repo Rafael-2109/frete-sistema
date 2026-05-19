@@ -86,12 +86,42 @@ def test_confirmar_e_reservar():
     odoo.execute_kw.assert_any_call('stock.picking', 'action_assign', [[9999]])
 
 
-def test_validar_trata_cannot_marshal_none():
-    """button_validate retorna None que XML-RPC nao consegue serializar — sucesso."""
+def test_validar_trata_cannot_marshal_none_com_state_done():
+    """G019 FIX: 'cannot marshal None' so e' sucesso se state=done apos."""
     odoo = MagicMock()
     odoo.execute_kw.side_effect = Exception('cannot marshal None')
+    odoo.read.return_value = [{'state': 'done'}]
     svc = StockPickingService(odoo=odoo)
     assert svc.validar(picking_id=9999) is True
+
+
+def test_validar_marshal_none_mas_state_assigned_raises():
+    """G019 FIX: marshal None + state=assigned NAO e' sucesso (raise)."""
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = Exception('cannot marshal None')
+    odoo.read.return_value = [{'state': 'assigned'}]
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(RuntimeError, match='button_validate retornou marshal None'):
+        svc.validar(picking_id=9999)
+
+
+def test_validar_state_done_apos_button_validate_sucesso():
+    """G019 FIX: button_validate sem erro + state=done."""
+    odoo = MagicMock()
+    odoo.execute_kw.return_value = True  # button_validate OK
+    odoo.read.return_value = [{'state': 'done'}]
+    svc = StockPickingService(odoo=odoo)
+    assert svc.validar(picking_id=9999) is True
+
+
+def test_validar_state_nao_done_raises():
+    """G019 FIX: button_validate sem erro mas state=assigned raises."""
+    odoo = MagicMock()
+    odoo.execute_kw.return_value = True
+    odoo.read.return_value = [{'state': 'assigned'}]
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(RuntimeError, match='apos button_validate'):
+        svc.validar(picking_id=9999)
 
 
 def test_validar_propaga_outras_excecoes():
@@ -148,7 +178,9 @@ def test_cancelar():
 # ============================================================
 
 def test_liberar_faturamento_chama_action():
+    """G020 FIX: pre-cond state=done verificada antes de chamar."""
     odoo = MagicMock()
+    odoo.read.return_value = [{'state': 'done'}]
     svc = StockPickingService(odoo=odoo)
     svc.liberar_faturamento(picking_id=9999)
     odoo.execute_kw.assert_called_with(
@@ -156,8 +188,22 @@ def test_liberar_faturamento_chama_action():
     )
 
 
-def test_liberar_faturamento_propaga_erro_negocio():
+def test_liberar_faturamento_state_nao_done_raises():
+    """G020 FIX: picking nao em done deve raise (false-positive G019 cascateia)."""
     odoo = MagicMock()
+    odoo.read.return_value = [{'state': 'assigned'}]
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(RuntimeError, match='esperado "done"'):
+        svc.liberar_faturamento(picking_id=9999)
+    # NAO deve ter chamado action_liberar_faturamento
+    for call in odoo.execute_kw.call_args_list:
+        assert call[0][1] != 'action_liberar_faturamento'
+
+
+def test_liberar_faturamento_propaga_erro_negocio():
+    """Erros de negocio do Odoo propagam apos pre-cond state=done."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{'state': 'done'}]
     odoo.execute_kw.side_effect = Exception('Picking nao validado')
     svc = StockPickingService(odoo=odoo)
     with pytest.raises(Exception, match='nao validado'):

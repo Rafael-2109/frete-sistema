@@ -304,8 +304,8 @@ Confirmado via `/tmp/verify_odoo_subpilot.py`:
 3. **Dry-run NUNCA deve modificar estado persistente** — guards `if not dry_run` em TODOS os `db.session.commit()`.
 4. **search_read no Odoo filtra `active=True` por default** — gotcha conhecida do Odoo, sempre validar.
 5. **Schema constraints validados em test e no service NÃO substituem validação cross-table** — o test do PreEtapaEstoqueService não pegou o erro de length da coluna `acao` porque é em OUTRO model.
-6. **DELETE de `stock.move.line` órfão NÃO recompute `reserved_quantity`** — campo é stored e o unlink sem `move_id` não dispara trigger. Precisa write direto via XML-RPC. Documentado em G006.
-7. **Odoo CIEL IT acumula orfãos recorrentes** — 825 órfãos detectados, 123 só de Abril/2026. Sugestão: cron de limpeza mensal. Documentado em G007.
+6. **DELETE de `stock.move.line` órfão NÃO recompute `reserved_quantity`** — campo é stored e o unlink sem `move_id` não dispara trigger. Precisa write direto via XML-RPC. Documentado em G024 (antes G006).
+7. **Odoo CIEL IT acumula orfãos recorrentes** — 825 órfãos detectados, 123 só de Abril/2026. Sugestão: cron de limpeza mensal. Documentado em G025 (antes G007).
 8. **Reservas legítimas (vendas/pickings ativos) bloqueiam pré-etapa** — 121 ajustes ficaram FALHA porque produto está sendo separado/vendido. Operacionalmente: rodar pré-etapa em janela calma (sem operação ativa) OU re-rodar depois das separações concluírem.
 9. **Paralelização limitada pelo Odoo XML-RPC** — speedup real ~2.7-3.1x com 5 threads (vs 5x teórico). Para FB futura, considerar batch via `action_apply_inventory([N quants])` que pode dar +2x adicional.
 10. **DELETE em batch de stock.move.line é extremamente rápido** — 526 unlinks em <1s. Bottleneck do bulk é o `action_apply_inventory` (1-2s/operação).

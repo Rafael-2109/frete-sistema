@@ -2,8 +2,8 @@
 
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
-**Última atualização:** 2026-05-18 ~02:15 (regeneração ondas 1-4 com D004 generalizada concluida)
-**Status global:** Foundation + F3 + F4 + F5 completas + **PILOTO END-TO-END EXECUTADO** + D006 (TRANSFERIR lote em vez de RENOMEAR) + 5 fixes generalizados (a8e0d0bb) + **D004 GENERALIZADA para FB+CD** (5682bec9) + **ajustes REGENERADOS** (23.207 PROPOSTO, -426 vs antes, -289 NFs). NF-e SEFAZ chave 35260518467441000163550010000131491006086070, cstat=100. **Pronto para bulk** (onda 1: 1.069 ajustes LF + ondas 2-3-4). Ver `CHECKPOINT_2026_05_18_PILOTO_COMPLETO.md` e `QUICK_START_NEXT_SESSION.md`. F6 CANCELADA. Bloqueado por: 1) wrapper `09_executar_onda1_bulk.py` (a construir), 2) aprovação onda 1+2 via hash.
+**Última atualização:** 2026-05-19 ~08:00 BRT (D010 — regra de direção MIGRAÇÃO por sinal de diff_qtd; ~11.762 transferências aplicadas via scripts 15+15r)
+**Status global:** Foundation + F3 + F4 + F5 completas + PILOTO END-TO-END + D006/D007 + **Pre-etapa CD CONCLUIDA** (6920 EXECUTADO, 97,98%) + **Onda 2 FB→CD operacionalizada via D009** (20 ajustes + 20 splits EXECUTADO em 3 batches / 3 NFs SEFAZ SDTRA/2026/0867-0869). Batch 3a (18 ajustes) travado por robô CIEL IT (ver G032). Restam 17 PROPOSTO insolúveis (saldo FB físico < pedido) + 10 FALHA Cat1 (admin Odoo) + 1 APROVADO drift pendente. **D010 (2026-05-19)**: regra inviolável `diff_qtd>0 → lote→MIGRAÇÃO`, `diff_qtd<0 → MIGRAÇÃO→lote` para qualquer planilha gerada pelo pipeline `monitor/`. Restam ~5.281 linhas na aba 5_Diff_Por_Lote do MONITOR_DIFF 2026-05-19_07-58 ainda divergentes.
 
 ---
 
@@ -34,6 +34,7 @@ Os ajustes saem por NF entre empresas (CFOPs 5901/5903/5949/5152/5151) seguindo 
 | `docs/superpowers/plans/2026-05-17-ajuste-inventario-nacom-lf.md` | Plano detalhado com código por task | Durante implementação (5164 linhas) |
 | `app/agente/prompts/prompt_inventario.md` | Prompt inicial do usuário (intenção/regras de negócio) | Para entender o "porquê" |
 | `docs/inventario-2026-05/00-decisoes/D000-D005.md` | Decisões formais com fontes (D004/D005 = rename + MIGRACAO) | Quando dúvida sobre estrutura |
+| **`docs/inventario-2026-05/00-decisoes/D010-direcao-transferencia-migracao-por-sinal-diff_qtd.md`** | **REGRA INVIOLÁVEL: direção MIGRAÇÃO depende do sinal de diff_qtd** (`>0` lote→MIGRAÇÃO, `<0` MIGRAÇÃO→lote) | **OBRIGATÓRIO antes de qualquer script de transferência MIGRAÇÃO** |
 | `docs/inventario-2026-05/01-premissas/P001-P011.md` | Premissas confirmadas com origem | Quando dúvida sobre regra |
 | `docs/inventario-2026-05/02-gotchas/G001-G004.md` | Armadilhas descobertas + solução | Antes de codar área afetada |
 

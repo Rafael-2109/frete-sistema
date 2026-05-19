@@ -61,9 +61,14 @@ PICKING_TYPE_POR_DIRECAO: Dict[tuple, int] = {
     (4, 'transf-filial'):        55,  # CD: Expedicao Entre Filiais
     (1, 'industrializacao'):     53,  # FB: Expedicao Industrializacao
     (5, 'perda'):                94,  # LF: Expedicao N Aplicado
-    (4, 'dev-industrializacao'): 96,  # CD: Retrabalho
-    (5, 'dev-industrializacao'): 66,  # LF: Expedicao Industrializacao
-    (1, 'dev-industrializacao'): 53,  # FB: idem industrializacao (P011 sem precedente)
+    (4, 'dev-industrializacao'): 96,  # CD: Retrabalho (CD/OUT/RET)
+    # G034 (2026-05-18): PT 97 'LF: Expedição Industrialização Retorno (LF)'
+    # criado via XML-RPC para ter l10n_br_tipo_pedido='dev-industrializacao'.
+    # Substitui PT 66 (que tinha tipo='venda-industrializacao' → journal VND →
+    # CFOP 5124 errado). PT 97 → journal SARET → CFOP 5949.
+    # Sequence: ir.sequence id=188 (prefix LF/LF/SAI/RETIND/).
+    (5, 'dev-industrializacao'): 97,  # LF: Saida Retrabalho (LF/SAI/RETIND)
+    (1, 'dev-industrializacao'): 88,  # FB: Saida Retorno Industrializacao (FB/SAI/RETIND, espelho)
 }
 
 
@@ -154,6 +159,40 @@ class InventarioPipelineService:
     # - Sem isso, SEFAZ falha "Meio de pagamento nao configurado"
     # - NF historica 588209 usa payment_provider_id=38 (SEM PAGAMENTO)
     PAYMENT_PROVIDER_SEM_PAGAMENTO = 38
+
+    # G034 (2026-05-18): Robo CIEL IT cria invoice para DEV_* acoes usando
+    # defaults do picking_type 66 LF Expedicao Industrializacao →
+    # journal VND (847), FP 111 'SAÍDA - SERVIÇO DE INDUSTRIALIZAÇÃO',
+    # tipo 'venda-industrializacao', CFOP 5124. ERRADO para devolucao
+    # de retrabalho — deveria ser CFOP 5949 (FP 89/74 + tipo
+    # 'dev-industrializacao').
+    # Fix: forcar setup correto via reset_to_draft + write + post antes
+    # de F5e_transmitir_sefaz. Idempotente.
+    # NF de referencia validada: 590839 RRET/2026/00008 (CD→LF).
+    #
+    # LIMITACAO: journal_id NAO pode ser alterado apos primeira postagem
+    # ("Você não pode editar o diário de uma movimentação de conta se ela
+    # foi lançada uma vez"). NF retera prefixo VND/AAAA/NNNN, mas com
+    # FP+tipo corretos as linhas terao CFOP 5949 (FP faz tax mapping).
+    # Para mudar prefixo para SARET/RRET, criar PT dedicado no Odoo com
+    # defaults corretos OU criar invoice manualmente do zero.
+    FISCAL_SETUP_POR_ACAO: Dict[str, Dict[str, Any]] = {
+        'DEV_LF_FB': {  # LF→FB (P011 sem precedente, simetria com LF→CD)
+            'fiscal_position_id': 89,    # SAÍDA - RETRABALHO (LF, company=5)
+            'l10n_br_tipo_pedido': 'dev-industrializacao',
+        },
+        'DEV_LF_CD': {  # LF→CD (sentido validado em historico)
+            'fiscal_position_id': 89,    # SAÍDA - RETRABALHO (LF)
+            'l10n_br_tipo_pedido': 'dev-industrializacao',
+        },
+        'DEV_CD_LF': {  # CD→LF (validado em NF historica 590839 RRET/2026/00008)
+            'fiscal_position_id': 74,    # SAÍDA - REMESSA P/ RETRABALHO (CD, company=4)
+            'l10n_br_tipo_pedido': 'dev-industrializacao',
+        },
+        # DEV_FB_LF: P011 — sem precedente historico. FP 74 esta em CD
+        # (company=4), nao em FB (company=1). Precisa cadastro contadora
+        # antes de habilitar.
+    }
 
     # ============================================================
     # Helpers
@@ -286,6 +325,114 @@ class InventarioPipelineService:
                     odoo_id=invoice_id, erro_msg=str(e2),
                 )
                 return False
+
+    def _garantir_fiscal_setup(
+        self, invoice_id: int, aj, executado_por: str,
+    ) -> bool:
+        """G034: garante FP/journal/tipo_pedido corretos para acoes DEV_*.
+
+        Robo CIEL IT usa defaults do picking_type, que para PT 66 LF
+        (Expedicao Industrializacao) sao venda-industrializacao (FP 111,
+        journal VND, CFOP 5124). ERRADO para devolucao de retrabalho.
+
+        Aplica reset_to_draft + write + action_post para corrigir.
+        Idempotente: se ja esta com setup correto, skip.
+
+        Args:
+            invoice_id: account.move criada pelo robo
+            aj: AjusteEstoqueInventario (para resolver acao_decidida)
+            executado_por: usuario
+
+        Returns:
+            True se setou (ou ja estava OK), False se falhou.
+        """
+        setup = self.FISCAL_SETUP_POR_ACAO.get(aj.acao_decidida)
+        if not setup:
+            return True  # Acao nao precisa de fix (PERDA, INDUSTRIALIZACAO, etc.)
+
+        # Idempotencia: ler estado atual
+        try:
+            current = self.odoo.read(
+                'account.move', [invoice_id],
+                ['fiscal_position_id', 'journal_id', 'l10n_br_tipo_pedido',
+                 'state', 'l10n_br_situacao_nf'],
+            )
+            if not current:
+                logger.warning(f'G034 invoice {invoice_id} sumiu, skip')
+                return False
+            inv = current[0]
+
+            # Ja SEFAZ-autorizado? Nao mexer (pode quebrar chave)
+            if inv.get('l10n_br_situacao_nf') in ('autorizado', 'excecao_autorizado'):
+                logger.warning(
+                    f'G034 invoice {invoice_id} situacao_nf={inv["l10n_br_situacao_nf"]} '
+                    f'— nao corrigir FP apos SEFAZ. Cancelar manualmente.'
+                )
+                return False
+
+            fp_atual = inv['fiscal_position_id'][0] if inv['fiscal_position_id'] else None
+            tipo_atual = inv.get('l10n_br_tipo_pedido')
+
+            if (
+                fp_atual == setup['fiscal_position_id']
+                and tipo_atual == setup['l10n_br_tipo_pedido']
+            ):
+                logger.info(
+                    f'G034 invoice {invoice_id} fiscal setup ja correto — skip.'
+                )
+                return True
+
+            logger.warning(
+                f'G034 invoice {invoice_id} setup divergente: '
+                f'fp={fp_atual}→{setup["fiscal_position_id"]}, '
+                f'tipo={tipo_atual}→{setup["l10n_br_tipo_pedido"]}. '
+                f'Aplicando reset_to_draft + write + post '
+                f'(journal_id NAO alteravel apos post inicial).'
+            )
+        except Exception as e:
+            logger.warning(f'G034 ler invoice {invoice_id} falhou: {e}')
+            return False
+
+        # Reset to draft + write + post
+        # journal_id removido do write — Odoo bloqueia troca apos primeira post
+        try:
+            self.odoo.execute_kw(
+                'account.move', 'button_draft', [[invoice_id]],
+            )
+            self.odoo.write(
+                'account.move', [invoice_id],
+                {
+                    'fiscal_position_id': setup['fiscal_position_id'],
+                    'l10n_br_tipo_pedido': setup['l10n_br_tipo_pedido'],
+                },
+            )
+            self.odoo.execute_kw(
+                'account.move', 'action_post', [[invoice_id]],
+            )
+            logger.info(
+                f'G034 invoice {invoice_id} fiscal setup corrigido '
+                f'(FP={setup["fiscal_position_id"]}, '
+                f'tipo={setup["l10n_br_tipo_pedido"]}; '
+                f'journal mantido — Odoo proibe troca)'
+            )
+            self._registrar_op(
+                ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5d.7',
+                acao='fix_fiscal_setup', modelo_odoo='account.move',
+                status='SUCESSO', executado_por=executado_por,
+                odoo_id=invoice_id,
+                payload=setup,
+            )
+            return True
+        except Exception as e:
+            logger.error(f'G034 reset+write+post falhou: {e}')
+            self._registrar_op(
+                ciclo=aj.ciclo, ajuste_id=aj.id, fase='F5d.7',
+                acao='fix_fiscal_setup', modelo_odoo='account.move',
+                status='FALHA', executado_por=executado_por,
+                odoo_id=invoice_id, erro_msg=str(e),
+                payload=setup,
+            )
+            return False
 
     def _corrigir_price_zero_em_invoice(
         self, invoice_id: int, aj, executado_por: str,
@@ -723,7 +870,10 @@ class InventarioPipelineService:
                         f'ajustar_qty_done falhou para picking {pid}: {e}. '
                         'Tentando validar mesmo assim.'
                     )
-                self.picking_svc.validar(pid)
+                # G023: passar linhas esperadas para validar() consolidar
+                # move_lines antes de button_validate (descarta reservas em
+                # lotes nao planejados pos-renomeacao via ETAPA A).
+                self.picking_svc.validar(pid, linhas_esperadas=linhas)
                 return pid, int((time.time() - inicio) * 1000)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -853,10 +1003,20 @@ class InventarioPipelineService:
             {picking_id: invoice_id ou None se timeout}.
         """
         ajustes_por_pid = self._agrupar_por_picking(ajustes)
+        # G016 fix F5d: extrair ids/ciclos antes do polling longo (sessao
+        # pode expirar em SSL idle timeout durante esperas de 30 min)
+        ajustes_meta_por_pid: Dict[int, List[Dict[str, Any]]] = {
+            pid: [{'id': a.id, 'ciclo': a.ciclo} for a in lista]
+            for pid, lista in ajustes_por_pid.items()
+        }
         pendentes = set(ajustes_por_pid.keys())
         resolved: Dict[int, Optional[int]] = {
             pid: None for pid in ajustes_por_pid
         }
+
+        # G016 Opcao A: commit antes do polling longo (libera SSL antes
+        # de operacao que pode durar ate `timeout`s)
+        self._commit_with_retry()
 
         start = time.time()
         inicio_por_pid = {pid: time.time() for pid in pendentes}
@@ -868,7 +1028,22 @@ class InventarioPipelineService:
                 if invoice_id:
                     resolved[pid] = invoice_id
                     pendentes.discard(pid)
-                    ajustes_grupo = ajustes_por_pid[pid]
+                    # G016 fix F5d: re-buscar ajustes do grupo por ID (sessao
+                    # pode ter expirado). Fallback para meta extraida no inicio.
+                    metas = ajustes_meta_por_pid[pid]
+                    ajustes_grupo = []
+                    for meta in metas:
+                        aj_fresh = db.session.get(
+                            AjusteEstoqueInventario, meta['id'],
+                        )
+                        if aj_fresh is not None:
+                            ajustes_grupo.append(aj_fresh)
+                    if not ajustes_grupo:
+                        logger.error(
+                            f'G016 F5d: nenhum ajuste re-fetched para '
+                            f'picking {pid} (todos sumiram?). Skipping.'
+                        )
+                        continue
                     tempo_ms = int(
                         (time.time() - inicio_por_pid[pid]) * 1000
                     )
@@ -884,7 +1059,7 @@ class InventarioPipelineService:
                             resposta={'invoice_id': invoice_id, 'picking_id': pid},
                             tempo_ms=tempo_ms,
                         )
-                    db.session.commit()
+                    self._commit_with_retry()  # G016 F5d
                     logger.info(
                         f'F5d picking {pid} → invoice {invoice_id} '
                         f'({len(ajustes_grupo)} ajustes)'
@@ -911,6 +1086,20 @@ class InventarioPipelineService:
                             f'F5d.6 corrigir price_unit=0 falhou para '
                             f'invoice {invoice_id}: {e}'
                         )
+                    # F5d.7 (G034): garantir fiscal setup correto para DEV_*
+                    # Robo CIEL IT usa defaults do PT 66 (venda-industrializacao,
+                    # FP 111, journal VND, CFOP 5124). Para devolucao de
+                    # retrabalho precisa FP 89/74 + journal SARET/RRET +
+                    # tipo dev-industrializacao (CFOP 5949).
+                    try:
+                        self._garantir_fiscal_setup(
+                            invoice_id, ajustes_grupo[0], executado_por,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f'F5d.7 garantir fiscal_setup falhou para '
+                            f'invoice {invoice_id}: {e}'
+                        )
             if pendentes:
                 logger.info(
                     f'F5d aguardando {len(pendentes)} pickings ainda '
@@ -924,7 +1113,16 @@ class InventarioPipelineService:
                 f'sem invoice: {sorted(pendentes)}'
             )
             for pid in pendentes:
-                ajustes_grupo = ajustes_por_pid[pid]
+                # G016 fix F5d: re-buscar ajustes (sessao expirada apos
+                # polling longo)
+                metas = ajustes_meta_por_pid[pid]
+                ajustes_grupo = []
+                for meta in metas:
+                    aj_fresh = db.session.get(
+                        AjusteEstoqueInventario, meta['id'],
+                    )
+                    if aj_fresh is not None:
+                        ajustes_grupo.append(aj_fresh)
                 tempo_ms = int(
                     (time.time() - inicio_por_pid[pid]) * 1000
                 )
@@ -936,7 +1134,7 @@ class InventarioPipelineService:
                         erro_msg=f'timeout {timeout}s — robo CIEL IT nao criou invoice',
                         tempo_ms=tempo_ms,
                     )
-                db.session.commit()
+                self._commit_with_retry()  # G016 F5d
         return resolved
 
     # ============================================================

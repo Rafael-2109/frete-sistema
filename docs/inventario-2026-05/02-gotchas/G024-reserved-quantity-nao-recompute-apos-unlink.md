@@ -1,4 +1,9 @@
-# G006 — `stock.quant.reserved_quantity` NAO recompute apos `unlink` de move_line orfa
+# G024 — `stock.quant.reserved_quantity` NAO recompute apos `unlink` de move_line orfa
+
+> **Renumerado 2026-05-18**: antes era G006. Renomeado para G024 porque o nome
+> original G006 ja era ocupado por `G006-picking-inter-company-location-virtual.md`
+> (descoberto antes, no sub-piloto da madrugada). Este gotcha foi descoberto
+> mais tarde, durante a execucao da pre-etapa CD (D007).
 
 **Data**: 2026-05-18
 **Descoberto durante**: execucao pre-etapa CD (D007), Opcao B-minimo
@@ -120,4 +125,4 @@ argumentar que e' "destrutivo" — mas:
 
 - Script: `/tmp/fix_reserved_quantity.py`
 - D007: `00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md`
-- Relacionado: G007 (orfaos recorrentes no CD)
+- Relacionado: G025 (orfaos recorrentes no CD — antes era G007)
