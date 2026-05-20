@@ -232,3 +232,27 @@
   font-size: 0.75rem;
 }
 
+/* =================================================================== */
+/* Rastreamento 360 do chassi — modal da tela Resumo                   */
+/* =================================================================== */
+
+.rastreio-moto-header {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+
+.rastreio-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Bootstrap .card define display:flex, que vence o atributo [hidden] da UA
+   stylesheet. Especificidade (0,2,0) > .card (0,1,0) reativa a ocultacao
+   sem elevar a prioridade da regra (respeita policy P8). JS alterna card.hidden. */
+.rastreio-secao[hidden] {
+  display: none;
+}
+

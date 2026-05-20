@@ -92,6 +92,62 @@
     tbody.innerHTML = html;
   }
 
+  function renderSeparada(tbody, itens) {
+    var html = '';
+    itens.forEach(function (it, idx) {
+      var loja = String(it.loja_numero || '-');
+      if (it.loja_nome && it.loja_nome !== '-') loja += ' ' + it.loja_nome;
+      html += '<tr>'
+        + '<td>' + (idx + 1) + '</td>'
+        + '<td><code>' + escapeHtml(it.chassi) + '</code></td>'
+        + '<td>' + escapeHtml(it.cor) + '</td>'
+        + '<td>' + (it.sep_id ? '#' + escapeHtml(it.sep_id) : '-') + '</td>'
+        + '<td><code>' + escapeHtml(it.pedido_numero) + '</code></td>'
+        + '<td>' + escapeHtml(loja) + '</td>'
+        + '<td>' + escapeHtml(it.operador) + '</td>'
+        + '<td>' + escapeHtml(it.data_hora) + '</td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  function renderCarregada(tbody, itens) {
+    var html = '';
+    itens.forEach(function (it, idx) {
+      var loja = String(it.loja_numero || '-');
+      if (it.loja_nome && it.loja_nome !== '-') loja += ' ' + it.loja_nome;
+      html += '<tr>'
+        + '<td>' + (idx + 1) + '</td>'
+        + '<td><code>' + escapeHtml(it.chassi) + '</code></td>'
+        + '<td>' + escapeHtml(it.cor) + '</td>'
+        + '<td>' + (it.carregamento_id ? '#' + escapeHtml(it.carregamento_id) : '-') + '</td>'
+        + '<td><code>' + escapeHtml(it.pedido_numero) + '</code></td>'
+        + '<td>' + escapeHtml(loja) + '</td>'
+        + '<td>' + escapeHtml(it.operador) + '</td>'
+        + '<td>' + escapeHtml(it.data_hora) + '</td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  function renderFaturada(tbody, itens) {
+    var html = '';
+    itens.forEach(function (it, idx) {
+      var loja = String(it.loja_numero || '-');
+      if (it.loja_nome && it.loja_nome !== '-') loja += ' ' + it.loja_nome;
+      html += '<tr>'
+        + '<td>' + (idx + 1) + '</td>'
+        + '<td><code>' + escapeHtml(it.chassi) + '</code></td>'
+        + '<td>' + escapeHtml(it.cor) + '</td>'
+        + '<td>' + escapeHtml(it.nf_numero) + '</td>'
+        + '<td>' + escapeHtml(loja) + '</td>'
+        + '<td>' + escapeHtml(it.data_emissao) + '</td>'
+        + '<td>' + escapeHtml(it.data_hora) + '</td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
   function renderEmPedido(tbody, itens) {
     var html = '';
     itens.forEach(function (it) {
@@ -113,6 +169,9 @@
     pendente: renderPendente,
     montada: renderMontada,
     disponivel: renderDisponivel,
+    separada: renderSeparada,
+    carregada: renderCarregada,
+    faturada: renderFaturada,
     em_pedido: renderEmPedido,
   };
 

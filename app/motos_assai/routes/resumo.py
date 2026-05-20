@@ -1,6 +1,6 @@
 """Aba Resumo: visao por modelo x status com modais de detalhamento."""
 
-from flask import render_template, jsonify, abort
+from flask import render_template, jsonify, abort, request
 from flask_login import login_required
 from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
@@ -10,8 +10,12 @@ from app.motos_assai.services.resumo_service import (
     detalhe_pendente,
     detalhe_montada,
     detalhe_disponivel,
+    detalhe_separada,
+    detalhe_carregada,
+    detalhe_faturada,
     detalhe_em_pedido,
 )
+from app.motos_assai.services.rastreamento_chassi_service import rastrear_chassi
 
 
 STATUS_HANDLERS = {
@@ -19,6 +23,9 @@ STATUS_HANDLERS = {
     'pendente': detalhe_pendente,
     'montada': detalhe_montada,
     'disponivel': detalhe_disponivel,
+    'separada': detalhe_separada,
+    'carregada': detalhe_carregada,
+    'faturada': detalhe_faturada,
     'em_pedido': detalhe_em_pedido,
 }
 
@@ -46,3 +53,20 @@ def resumo_detalhe(modelo_id, status):
         abort(404)
     itens = handler(modelo_id)
     return jsonify({'ok': True, 'status': status_norm, 'modelo_id': modelo_id, 'itens': itens})
+
+
+@motos_assai_bp.route('/resumo/rastrear-chassi')
+@login_required
+@require_motos_assai
+def resumo_rastrear_chassi():
+    """Visao 360 de um chassi: recibo, montagem, pendencia, separacao,
+    carregamento, NFe, CCe e divergencia. Consumido pelo modal via fetch."""
+    chassi = (request.args.get('chassi') or '').strip()
+    if not chassi:
+        return jsonify({
+            'ok': False,
+            'encontrado': False,
+            'erro': 'Informe um chassi para pesquisar.',
+        }), 400
+    resultado = rastrear_chassi(chassi)
+    return jsonify(resultado)

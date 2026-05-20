@@ -1,0 +1,278 @@
+{#
+  Modal de Rastreamento 360 de um chassi (tela Resumo).
+  Cabecalhos de tabela sao estaticos; o JS (rastreamento_chassi.js) popula
+  cada <tbody> e mostra/esconde cada secao (.rastreio-secao[hidden]) conforme
+  a contagem. O cabecalho da moto e os chips de resumo sao renderizados via JS.
+#}
+<div class="modal fade" id="modal-rastreio-chassi" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-magnifying-glass"></i>
+          Rastreamento do Chassi <code id="rastreio-chassi-titulo"></code>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+
+      <div class="modal-body">
+        {# Estado: carregando #}
+        <div id="rastreio-loading" class="text-center py-5 d-none">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+          <p class="text-muted mt-2 mb-0">Rastreando o chassi...</p>
+        </div>
+
+        {# Estado: nada encontrado #}
+        <div id="rastreio-empty" class="alert alert-warning d-none" role="alert"></div>
+
+        {# Estado: erro #}
+        <div id="rastreio-error" class="alert alert-danger d-none" role="alert"></div>
+
+        {# Conteudo #}
+        <div id="rastreio-conteudo" class="d-none">
+
+          {# Cabecalho da moto + status atual (render via JS) #}
+          <div id="rastreio-moto" class="rastreio-moto-header mb-3"></div>
+
+          {# Chips com contagem por secao (render via JS, navegacao por ancora) #}
+          <div id="rastreio-chips" class="d-flex flex-wrap gap-2 mb-3"></div>
+
+          {# ---------- RECIBO MOTOCHEFE ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-recibos" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-truck-loading text-info"></i> Recibo Motochefe</span>
+              <span class="badge bg-secondary" data-count-for="recibos">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Recibo</th>
+                      <th>Data</th>
+                      <th>Equipe</th>
+                      <th>Conferente</th>
+                      <th>Modelo (recibo)</th>
+                      <th>Cor</th>
+                      <th class="text-center">Conferido</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-recibos-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- MONTAGEM ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-montagem" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-tools text-primary"></i> Montagem</span>
+              <span class="badge bg-secondary" data-count-for="montagem">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Data + Hora</th>
+                      <th>Evento</th>
+                      <th>Operador</th>
+                      <th>Observação</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-montagem-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- PENDENCIA ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-pendencias" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-exclamation-triangle text-warning"></i> Pendência</span>
+              <span class="badge bg-secondary" data-count-for="pendencias">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Data + Hora</th>
+                      <th>Operador</th>
+                      <th>Descrição da pendência</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-pendencias-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- SEPARACAO ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-separacoes" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-dolly text-dark"></i> Separação</span>
+              <span class="badge bg-secondary" data-count-for="separacoes">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Sep</th>
+                      <th>Status</th>
+                      <th>Pedido</th>
+                      <th>Loja</th>
+                      <th>Registrada</th>
+                      <th>Operador</th>
+                      <th>Agendamento</th>
+                      <th>Protocolo</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-separacoes-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- CARREGAMENTO ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-carregamentos" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-truck text-info"></i> Carregamento</span>
+              <span class="badge bg-secondary" data-count-for="carregamentos">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Carreg.</th>
+                      <th>Status</th>
+                      <th>Pedido</th>
+                      <th>Loja</th>
+                      <th>Escaneado</th>
+                      <th>Operador</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-carregamentos-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- NFe Q.P.A. ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-nfs" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-file-invoice-dollar text-success"></i> NFe Q.P.A.</span>
+              <span class="badge bg-secondary" data-count-for="nfs">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>NF</th>
+                      <th>Série</th>
+                      <th>Loja</th>
+                      <th>Emissão</th>
+                      <th>Match</th>
+                      <th class="text-end">Valor item</th>
+                      <th class="text-center">Devolvido</th>
+                      <th>Cancelada</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-nfs-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- CARTA DE CORRECAO (CCe) ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-cces" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-edit text-primary"></i> Carta de Correção (CCe)</span>
+              <span class="badge bg-secondary" data-count-for="cces">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Protocolo</th>
+                      <th>Nº CCe</th>
+                      <th>Tipo</th>
+                      <th>Status</th>
+                      <th>Seq</th>
+                      <th>NF Ref.</th>
+                      <th>Chassis aplicados</th>
+                      <th>Criada</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-cces-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- DIVERGENCIA ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-divergencias" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-triangle-exclamation text-danger"></i> Divergência</span>
+              <span class="badge bg-secondary" data-count-for="divergencias">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>#</th>
+                      <th>Tipo</th>
+                      <th>Sep</th>
+                      <th>Carreg.</th>
+                      <th>NF</th>
+                      <th>Criada</th>
+                      <th>Status</th>
+                      <th>Resolução</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-divergencias-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# ---------- LINHA DO TEMPO COMPLETA ---------- #}
+          <div class="card mb-3 rastreio-secao" id="rastreio-sec-eventos" hidden>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span class="fw-semibold"><i class="fas fa-clock-rotate-left text-secondary"></i> Linha do tempo completa</span>
+              <span class="badge bg-secondary" data-count-for="eventos">0</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Data + Hora</th>
+                      <th>Evento</th>
+                      <th>Operador</th>
+                      <th>Observação</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rastreio-eventos-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>{# /rastreio-conteudo #}
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>

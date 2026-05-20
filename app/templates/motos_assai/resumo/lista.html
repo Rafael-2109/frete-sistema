@@ -8,6 +8,25 @@
   <small class="text-muted">Status efetivo = ultimo evento de cada chassi</small>
 </header>
 
+{# Pesquisar Chassi — rastreamento 360 (recibo, montagem, separacao, NFe, CCe, divergencia...) #}
+<form id="rastreio-chassi-form" class="mb-3" autocomplete="off">
+  <label for="rastreio-chassi-input" class="form-label fw-semibold mb-1">
+    <i class="fas fa-magnifying-glass"></i> Pesquisar Chassi
+  </label>
+  <div class="input-group">
+    <span class="input-group-text"><i class="fas fa-barcode"></i></span>
+    <input type="text" class="form-control" id="rastreio-chassi-input"
+           placeholder="Digite o chassi e pressione Enter"
+           aria-label="Chassi" maxlength="50">
+    <button class="btn btn-primary" type="submit" id="rastreio-chassi-btn">
+      <i class="fas fa-magnifying-glass"></i> Rastrear
+    </button>
+  </div>
+  <div class="form-text">
+    Rastreia tudo do chassi: recibo, montagem, pendência, separação, carregamento, NFe, CCe e divergência.
+  </div>
+</form>
+
 <div class="alert alert-light border small mb-3">
   <strong>Como usar:</strong> clique em um numero (badge) para abrir o modal com os chassis daquele status para o modelo.
 </div>
@@ -32,6 +51,18 @@
       <th class="text-center">
         <i class="fas fa-check-circle text-success"></i> Disponivel
         <small class="text-muted d-block">tag + manual</small>
+      </th>
+      <th class="text-center">
+        <i class="fas fa-dolly text-dark"></i> Separação
+        <small class="text-muted d-block">vinculada à sep</small>
+      </th>
+      <th class="text-center">
+        <i class="fas fa-truck text-info"></i> Carregada
+        <small class="text-muted d-block">no veículo</small>
+      </th>
+      <th class="text-center">
+        <i class="fas fa-file-invoice-dollar text-success"></i> Faturada
+        <small class="text-muted d-block">NF emitida</small>
       </th>
       <th class="text-center">
         <i class="fas fa-file-invoice text-secondary"></i> Pedidos
@@ -92,6 +123,39 @@
       </td>
       <td class="text-center">
         <button type="button"
+                class="btn btn-sm {% if l.separada %}btn-dark{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="separada"
+                data-status-label="Separação"
+                {% if not l.separada %}disabled{% endif %}>
+          {{ l.separada }}
+        </button>
+      </td>
+      <td class="text-center">
+        <button type="button"
+                class="btn btn-sm {% if l.carregada %}btn-info{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="carregada"
+                data-status-label="Carregada"
+                {% if not l.carregada %}disabled{% endif %}>
+          {{ l.carregada }}
+        </button>
+      </td>
+      <td class="text-center">
+        <button type="button"
+                class="btn btn-sm {% if l.faturada %}btn-success{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
+                data-modelo-id="{{ l.modelo_id }}"
+                data-modelo-codigo="{{ l.codigo }}"
+                data-status="faturada"
+                data-status-label="Faturada"
+                {% if not l.faturada %}disabled{% endif %}>
+          {{ l.faturada }}
+        </button>
+      </td>
+      <td class="text-center">
+        <button type="button"
                 class="btn btn-sm {% if l.em_pedido %}btn-secondary{% else %}btn-outline-secondary disabled{% endif %} resumo-btn"
                 data-modelo-id="{{ l.modelo_id }}"
                 data-modelo-codigo="{{ l.codigo }}"
@@ -103,18 +167,21 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="text-center text-muted py-4">Nenhum modelo cadastrado.</td></tr>
+    <tr><td colspan="9" class="text-center text-muted py-4">Nenhum modelo cadastrado.</td></tr>
     {% endfor %}
   </tbody>
 </table>
 </div>
 
 {% include 'motos_assai/resumo/_modais.html' %}
+{% include 'motos_assai/resumo/_modal_rastreamento.html' %}
 
 <script>
   window.MOTOS_ASSAI_RESUMO = {
     detalheUrlBase: '{{ url_for("motos_assai.resumo_detalhe", modelo_id=0, status="estoque")|replace("/0/estoque", "/") }}',
+    rastrearUrl: '{{ url_for("motos_assai.resumo_rastrear_chassi") }}',
   };
 </script>
 <script src="{{ url_for('static', filename='motos_assai/js/resumo_modais.js') }}" defer></script>
+<script src="{{ url_for('static', filename='motos_assai/js/rastreamento_chassi.js') }}" defer></script>
 {% endblock %}

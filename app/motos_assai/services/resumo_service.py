@@ -20,16 +20,22 @@ from __future__ import annotations
 from typing import List, Dict, Any
 
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.motos_assai.models import (
     AssaiMoto, AssaiMotoEvento, AssaiModelo, AssaiLoja,
     AssaiPedidoVenda, AssaiPedidoVendaItem,
     AssaiSeparacao, AssaiSeparacaoItem,
+    AssaiCarregamento, AssaiCarregamentoItem,
+    AssaiNfQpa, AssaiNfQpaItem,
     EVENTO_ESTOQUE, EVENTO_MONTADA, EVENTO_PENDENTE,
     EVENTO_DISPONIVEL, EVENTO_REVERTIDA_PARA_MONTADA,
+    EVENTO_SEPARADA, EVENTO_CARREGADA, EVENTO_FATURADA,
     PEDIDO_STATUS_FATURADO, PEDIDO_STATUS_CANCELADO,
     SEPARACAO_STATUS_CANCELADA,
+    CARREGAMENTO_STATUS_CANCELADO,
+    NF_STATUS_CANCELADA,
 )
 
 
@@ -87,6 +93,9 @@ def resumo_por_modelo() -> List[Dict[str, Any]]:
             'pendente': 0,
             'montada': 0,
             'disponivel': 0,
+            'separada': 0,
+            'carregada': 0,
+            'faturada': 0,
             'em_pedido': 0,
         })
         if r.tipo == EVENTO_ESTOQUE:
@@ -97,12 +106,19 @@ def resumo_por_modelo() -> List[Dict[str, Any]]:
             bucket['montada'] += int(r.qtd)
         elif r.tipo == EVENTO_DISPONIVEL:
             bucket['disponivel'] = int(r.qtd)
+        elif r.tipo == EVENTO_SEPARADA:
+            bucket['separada'] = int(r.qtd)
+        elif r.tipo == EVENTO_CARREGADA:
+            bucket['carregada'] = int(r.qtd)
+        elif r.tipo == EVENTO_FATURADA:
+            bucket['faturada'] = int(r.qtd)
 
     # Garante modelos sem nenhum chassi (ativos)
     for m in AssaiModelo.query.filter_by(ativo=True).all():
         por_modelo.setdefault(m.id, {
             'modelo_id': m.id, 'codigo': m.codigo, 'nome': m.nome,
             'estoque': 0, 'pendente': 0, 'montada': 0, 'disponivel': 0,
+            'separada': 0, 'carregada': 0, 'faturada': 0,
             'em_pedido': 0,
         })
 
@@ -432,6 +448,199 @@ def detalhe_em_pedido(modelo_id: int) -> List[Dict[str, Any]]:
     return result
 
 
+def detalhe_separada(modelo_id: int) -> List[Dict[str, Any]]:
+    """Chassis com status atual = SEPARADA.
+
+    Retorna: [{chassi, cor, sep_id, pedido_numero, loja_numero, loja_nome,
+               data_hora, operador}]
+    Enriquecido com a separacao NAO-cancelada que contem o chassi (pedido/loja).
+    """
+    chassis = _chassis_modelo_status(modelo_id, EVENTO_SEPARADA)
+    if not chassis:
+        return []
+
+    # Ultimo evento SEPARADA por chassi (data + operador)
+    eventos = (
+        AssaiMotoEvento.query
+        .options(joinedload(AssaiMotoEvento.operador))
+        .filter(
+            AssaiMotoEvento.chassi.in_(chassis),
+            AssaiMotoEvento.tipo == EVENTO_SEPARADA,
+        )
+        .order_by(AssaiMotoEvento.chassi, AssaiMotoEvento.id.desc())
+        .all()
+    )
+    ev_por_chassi: Dict[str, AssaiMotoEvento] = {}
+    for ev in eventos:
+        ev_por_chassi.setdefault(ev.chassi, ev)
+
+    # Separacao nao-cancelada que contem o chassi -> pedido/loja
+    sep_rows = (
+        db.session.query(
+            AssaiSeparacaoItem.chassi.label('chassi'),
+            AssaiSeparacao.id.label('sep_id'),
+            AssaiPedidoVenda.numero.label('pedido_numero'),
+            AssaiLoja.numero.label('loja_numero'),
+            AssaiLoja.nome.label('loja_nome'),
+        )
+        .join(AssaiSeparacao, AssaiSeparacao.id == AssaiSeparacaoItem.separacao_id)
+        .join(AssaiPedidoVenda, AssaiPedidoVenda.id == AssaiSeparacao.pedido_id)
+        .join(AssaiLoja, AssaiLoja.id == AssaiSeparacao.loja_id)
+        .filter(
+            AssaiSeparacaoItem.chassi.in_(chassis),
+            AssaiSeparacao.status != SEPARACAO_STATUS_CANCELADA,
+        )
+        .all()
+    )
+    sep_por_chassi: Dict[str, Any] = {}
+    for r in sep_rows:
+        sep_por_chassi.setdefault(r.chassi, r)
+
+    motos = AssaiMoto.query.filter(AssaiMoto.chassi.in_(chassis)).all()
+    result = []
+    for m in motos:
+        ev = ev_por_chassi.get(m.chassi)
+        sp = sep_por_chassi.get(m.chassi)
+        result.append({
+            'chassi': m.chassi,
+            'cor': m.cor or '-',
+            'sep_id': sp.sep_id if sp else None,
+            'pedido_numero': sp.pedido_numero if sp else '-',
+            'loja_numero': sp.loja_numero if sp else '-',
+            'loja_nome': sp.loja_nome if sp else '-',
+            'data_hora': ev.ocorrido_em.strftime('%d/%m/%Y %H:%M') if ev and ev.ocorrido_em else '-',
+            'operador': ev.operador.nome if ev and ev.operador else '-',
+        })
+    return sorted(result, key=lambda r: r['chassi'])
+
+
+def detalhe_carregada(modelo_id: int) -> List[Dict[str, Any]]:
+    """Chassis com status atual = CARREGADA.
+
+    Retorna: [{chassi, cor, carregamento_id, pedido_numero, loja_numero,
+               loja_nome, data_hora, operador}]
+    Enriquecido com o carregamento NAO-cancelado que contem o chassi.
+    """
+    chassis = _chassis_modelo_status(modelo_id, EVENTO_CARREGADA)
+    if not chassis:
+        return []
+
+    eventos = (
+        AssaiMotoEvento.query
+        .options(joinedload(AssaiMotoEvento.operador))
+        .filter(
+            AssaiMotoEvento.chassi.in_(chassis),
+            AssaiMotoEvento.tipo == EVENTO_CARREGADA,
+        )
+        .order_by(AssaiMotoEvento.chassi, AssaiMotoEvento.id.desc())
+        .all()
+    )
+    ev_por_chassi: Dict[str, AssaiMotoEvento] = {}
+    for ev in eventos:
+        ev_por_chassi.setdefault(ev.chassi, ev)
+
+    car_rows = (
+        db.session.query(
+            AssaiCarregamentoItem.chassi.label('chassi'),
+            AssaiCarregamento.id.label('carregamento_id'),
+            AssaiPedidoVenda.numero.label('pedido_numero'),
+            AssaiLoja.numero.label('loja_numero'),
+            AssaiLoja.nome.label('loja_nome'),
+        )
+        .join(AssaiCarregamento, AssaiCarregamento.id == AssaiCarregamentoItem.carregamento_id)
+        .join(AssaiPedidoVenda, AssaiPedidoVenda.id == AssaiCarregamento.pedido_id)
+        .join(AssaiLoja, AssaiLoja.id == AssaiCarregamento.loja_id)
+        .filter(
+            AssaiCarregamentoItem.chassi.in_(chassis),
+            AssaiCarregamento.status != CARREGAMENTO_STATUS_CANCELADO,
+        )
+        .all()
+    )
+    car_por_chassi: Dict[str, Any] = {}
+    for r in car_rows:
+        car_por_chassi.setdefault(r.chassi, r)
+
+    motos = AssaiMoto.query.filter(AssaiMoto.chassi.in_(chassis)).all()
+    result = []
+    for m in motos:
+        ev = ev_por_chassi.get(m.chassi)
+        cr = car_por_chassi.get(m.chassi)
+        result.append({
+            'chassi': m.chassi,
+            'cor': m.cor or '-',
+            'carregamento_id': cr.carregamento_id if cr else None,
+            'pedido_numero': cr.pedido_numero if cr else '-',
+            'loja_numero': cr.loja_numero if cr else '-',
+            'loja_nome': cr.loja_nome if cr else '-',
+            'data_hora': ev.ocorrido_em.strftime('%d/%m/%Y %H:%M') if ev and ev.ocorrido_em else '-',
+            'operador': ev.operador.nome if ev and ev.operador else '-',
+        })
+    return sorted(result, key=lambda r: r['chassi'])
+
+
+def detalhe_faturada(modelo_id: int) -> List[Dict[str, Any]]:
+    """Chassis com status atual = FATURADA.
+
+    Retorna: [{chassi, cor, nf_numero, loja_numero, loja_nome, data_emissao,
+               data_hora, operador}]
+    Enriquecido com a NF Q.P.A. NAO-cancelada que contem o chassi.
+    """
+    chassis = _chassis_modelo_status(modelo_id, EVENTO_FATURADA)
+    if not chassis:
+        return []
+
+    eventos = (
+        AssaiMotoEvento.query
+        .options(joinedload(AssaiMotoEvento.operador))
+        .filter(
+            AssaiMotoEvento.chassi.in_(chassis),
+            AssaiMotoEvento.tipo == EVENTO_FATURADA,
+        )
+        .order_by(AssaiMotoEvento.chassi, AssaiMotoEvento.id.desc())
+        .all()
+    )
+    ev_por_chassi: Dict[str, AssaiMotoEvento] = {}
+    for ev in eventos:
+        ev_por_chassi.setdefault(ev.chassi, ev)
+
+    nf_rows = (
+        db.session.query(
+            AssaiNfQpaItem.chassi.label('chassi'),
+            AssaiNfQpa.numero.label('nf_numero'),
+            AssaiNfQpa.data_emissao.label('data_emissao'),
+            AssaiLoja.numero.label('loja_numero'),
+            AssaiLoja.nome.label('loja_nome'),
+        )
+        .join(AssaiNfQpa, AssaiNfQpa.id == AssaiNfQpaItem.nf_id)
+        .outerjoin(AssaiLoja, AssaiLoja.id == AssaiNfQpa.loja_id)
+        .filter(
+            AssaiNfQpaItem.chassi.in_(chassis),
+            AssaiNfQpa.status_match != NF_STATUS_CANCELADA,
+        )
+        .all()
+    )
+    nf_por_chassi: Dict[str, Any] = {}
+    for r in nf_rows:
+        nf_por_chassi.setdefault(r.chassi, r)
+
+    motos = AssaiMoto.query.filter(AssaiMoto.chassi.in_(chassis)).all()
+    result = []
+    for m in motos:
+        ev = ev_por_chassi.get(m.chassi)
+        nf = nf_por_chassi.get(m.chassi)
+        result.append({
+            'chassi': m.chassi,
+            'cor': m.cor or '-',
+            'nf_numero': (nf.nf_numero if nf else None) or '-',
+            'loja_numero': nf.loja_numero if nf else '-',
+            'loja_nome': nf.loja_nome if nf else '-',
+            'data_emissao': nf.data_emissao.strftime('%d/%m/%Y') if nf and nf.data_emissao else '-',
+            'data_hora': ev.ocorrido_em.strftime('%d/%m/%Y %H:%M') if ev and ev.ocorrido_em else '-',
+            'operador': ev.operador.nome if ev and ev.operador else '-',
+        })
+    return sorted(result, key=lambda r: r['chassi'])
+
+
 # =====================================================================
 # Listagens agrupadas por modelo (Item 1 - exibições por tela)
 # =====================================================================
@@ -443,12 +652,13 @@ def detalhe_em_pedido(modelo_id: int) -> List[Dict[str, Any]]:
 # O caller decide se quer agrupar por modelo no template (ex.: dict.items()).
 
 
-def _listar_motos_por_tipos(tipos) -> List[Dict[str, Any]]:
+def _listar_motos_por_tipos(tipos, filtros=None) -> List[Dict[str, Any]]:
     """Lista motos cujo ULTIMO evento.tipo esta em `tipos`, com dados do
     evento (data, operador, tipo). UMA unica query — agrupa no caller.
 
     Args:
         tipos: tipo (str) ou iteravel de tipos de evento.
+        filtros: dict opcional com 'chassi' (ilike) e 'modelo_id' (==).
 
     Returns:
         [{'modelo_id', 'modelo_codigo', 'modelo_nome', 'chassi', 'cor',
@@ -466,7 +676,7 @@ def _listar_motos_por_tipos(tipos) -> List[Dict[str, Any]]:
     # via app.auth.models — segue padrao do MontagemEvento etc.
     from app.auth.models import Usuario
 
-    rows = (
+    q = (
         db.session.query(
             AssaiMoto.modelo_id.label('modelo_id'),
             AssaiModelo.codigo.label('modelo_codigo'),
@@ -483,7 +693,18 @@ def _listar_motos_por_tipos(tipos) -> List[Dict[str, Any]]:
         .join(AssaiMotoEvento, AssaiMotoEvento.id == sub.c.ultimo_id)
         .outerjoin(Usuario, Usuario.id == AssaiMotoEvento.operador_id)
         .filter(AssaiMotoEvento.tipo.in_(tipos))
-        .order_by(AssaiModelo.codigo, AssaiMotoEvento.ocorrido_em.desc())
+    )
+
+    if filtros:
+        chassi = (filtros.get('chassi') or '').strip().upper()
+        if chassi:
+            q = q.filter(AssaiMoto.chassi.ilike(f'%{chassi}%'))
+        modelo_id = filtros.get('modelo_id')
+        if modelo_id:
+            q = q.filter(AssaiMoto.modelo_id == modelo_id)
+
+    rows = (
+        q.order_by(AssaiModelo.codigo, AssaiMotoEvento.ocorrido_em.desc())
         .all()
     )
 
@@ -540,19 +761,23 @@ def _agrupar_por_modelo(motos: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {'total': total, 'modelos': modelos}
 
 
-def listar_motos_montadas_agrupadas() -> Dict[str, Any]:
+def listar_motos_montadas_agrupadas(filtros=None) -> Dict[str, Any]:
     """Motos em status MONTADA efetivo (MONTADA ou REVERTIDA_PARA_MONTADA)
     agrupadas por modelo. Usado pela tela /motos-assai/montagem.
+
+    filtros: dict opcional com 'chassi' (ilike) e 'modelo_id' (==).
     """
-    motos = _listar_motos_por_tipos(STATUS_MONTADA_EFETIVO)
+    motos = _listar_motos_por_tipos(STATUS_MONTADA_EFETIVO, filtros=filtros)
     return _agrupar_por_modelo(motos)
 
 
-def listar_motos_disponiveis_agrupadas() -> Dict[str, Any]:
+def listar_motos_disponiveis_agrupadas(filtros=None) -> Dict[str, Any]:
     """Motos em status DISPONIVEL agrupadas por modelo.
     Usado pela tela /motos-assai/disponibilizar.
+
+    filtros: dict opcional com 'chassi' (ilike) e 'modelo_id' (==).
     """
-    motos = _listar_motos_por_tipos(EVENTO_DISPONIVEL)
+    motos = _listar_motos_por_tipos(EVENTO_DISPONIVEL, filtros=filtros)
     return _agrupar_por_modelo(motos)
 
 
