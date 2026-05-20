@@ -26,6 +26,35 @@ CNPJS_GRUPO = [
 
 ---
 
+## Locais "Indisponivel" por Empresa
+
+> **Criados 2026-05-19** (sessao inventario). Filhos do `view_location_id` (FORA do `lot_stock_id`), `usage='internal'`, `active=True`.
+> Como nao sao descendentes de `WH/Estoque`, as `stock.rule` existentes (venda/producao/replenish) NAO os enxergam — saldo fica isolado de qualquer reserva automatica.
+
+| Company | location_id | complete_name | Parent (view_location_id) |
+|---------|-------------|---------------|---------------------------|
+| 1 (FB) | **31088** | `FB/Indisponivel` | 7 (FB) |
+| 3 (SC) | **31089** | `SC/Indisponivel` | 21 (SC) |
+| 4 (CD) | **31090** | `CD/Indisponivel` | 31 (CD) |
+| 5 (LF) | **31091** | `LF/Indisponivel` | 41 (LF) |
+
+```python
+LOCAIS_INDISPONIVEL = {
+    1: 31088,  # FB/Indisponivel
+    3: 31089,  # SC/Indisponivel
+    4: 31090,  # CD/Indisponivel
+    5: 31091,  # LF/Indisponivel
+}
+```
+
+**Uso (regra inventario 2026-05 — D011):**
+- **Ajuste negativo CD/FB**: estoque sai de `{emp}/Estoque` (lote real) → entra em `{emp}/Indisponivel` (lote `MIGRACAO`)
+- **Ajuste positivo**: estoque sai de `{emp}/Indisponivel` → entra em `{emp}/Estoque` no lote especificado
+
+Ver `docs/inventario-2026-05/00-decisoes/D011-locais-indisponivel-por-empresa.md`.
+
+---
+
 ## Picking Types por Company
 
 > **Atualizado 2026-05-17** apos audit (`scripts/inventario_2026_05/00b_investigar_gotchas.py`).

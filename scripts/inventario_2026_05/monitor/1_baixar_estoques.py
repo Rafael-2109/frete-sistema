@@ -74,6 +74,7 @@ def baixar_estoques(odoo):
         qtd=('qtd', 'sum'),
         valor=('valor', 'sum'),
         n_quants=('id', 'count'),
+        nome_produto=('product_name', 'first'),
     )
     out['custo_unit'] = np.where(out['qtd'] > 0, out['valor'] / out['qtd'], 0)
     return out

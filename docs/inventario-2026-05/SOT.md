@@ -2,7 +2,7 @@
 
 **Source of Truth macro do trabalho.** Lido por nova sessão Claude Code (ou subagentes) para retomar de onde parou.
 
-**Última atualização:** 2026-05-19 ~08:00 BRT (D010 — regra de direção MIGRAÇÃO por sinal de diff_qtd; ~11.762 transferências aplicadas via scripts 15+15r)
+**Última atualização:** 2026-05-19 tarde (D011 — locais `{emp}/Indisponivel` criados como contraparte de ajustes CD/FB; FB=31088, SC=31089, CD=31090, LF=31091; substitui `Estoque Virtual/Inventory adjustment` em novos scripts). Anterior: 2026-05-19 ~08:00 BRT (D010 — regra de direção MIGRAÇÃO por sinal de diff_qtd; ~11.762 transferências aplicadas via scripts 15+15r)
 **Status global:** Foundation + F3 + F4 + F5 completas + PILOTO END-TO-END + D006/D007 + **Pre-etapa CD CONCLUIDA** (6920 EXECUTADO, 97,98%) + **Onda 2 FB→CD operacionalizada via D009** (20 ajustes + 20 splits EXECUTADO em 3 batches / 3 NFs SEFAZ SDTRA/2026/0867-0869). Batch 3a (18 ajustes) travado por robô CIEL IT (ver G032). Restam 17 PROPOSTO insolúveis (saldo FB físico < pedido) + 10 FALHA Cat1 (admin Odoo) + 1 APROVADO drift pendente. **D010 (2026-05-19)**: regra inviolável `diff_qtd>0 → lote→MIGRAÇÃO`, `diff_qtd<0 → MIGRAÇÃO→lote` para qualquer planilha gerada pelo pipeline `monitor/`. Restam ~5.281 linhas na aba 5_Diff_Por_Lote do MONITOR_DIFF 2026-05-19_07-58 ainda divergentes.
 
 ---
@@ -35,6 +35,7 @@ Os ajustes saem por NF entre empresas (CFOPs 5901/5903/5949/5152/5151) seguindo 
 | `app/agente/prompts/prompt_inventario.md` | Prompt inicial do usuário (intenção/regras de negócio) | Para entender o "porquê" |
 | `docs/inventario-2026-05/00-decisoes/D000-D005.md` | Decisões formais com fontes (D004/D005 = rename + MIGRACAO) | Quando dúvida sobre estrutura |
 | **`docs/inventario-2026-05/00-decisoes/D010-direcao-transferencia-migracao-por-sinal-diff_qtd.md`** | **REGRA INVIOLÁVEL: direção MIGRAÇÃO depende do sinal de diff_qtd** (`>0` lote→MIGRAÇÃO, `<0` MIGRAÇÃO→lote) | **OBRIGATÓRIO antes de qualquer script de transferência MIGRAÇÃO** |
+| **`docs/inventario-2026-05/00-decisoes/D011-locais-indisponivel-por-empresa.md`** | **Locais `{emp}/Indisponivel` (FB=31088 / SC=31089 / CD=31090 / LF=31091) como contraparte de ajustes CD/FB** (negativo → Indisponivel/MIGRACAO; positivo → Indisponivel→Estoque/lote_real) | **OBRIGATÓRIO antes de qualquer NOVO script de ajuste CD/FB pós-2026-05-19** |
 | `docs/inventario-2026-05/01-premissas/P001-P011.md` | Premissas confirmadas com origem | Quando dúvida sobre regra |
 | `docs/inventario-2026-05/02-gotchas/G001-G004.md` | Armadilhas descobertas + solução | Antes de codar área afetada |
 

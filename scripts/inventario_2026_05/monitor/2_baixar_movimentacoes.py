@@ -80,6 +80,7 @@ def baixar_movimentacoes(odoo, data_inicio, pickings_render):
             pmap[p['id']] = p.get('default_code') or ''
     df['cod'] = df['product_id_n'].map(lambda x: pmap.get(x, ''))
     df['cod'] = df['cod'].apply(norm_cod)
+    df['nome_produto'] = df['product_id'].apply(m2o_name)
 
     # Classificar: prioridade Render > UID42 > outros
     def cls(row):
@@ -120,7 +121,7 @@ def main():
         odoo = get_odoo_connection()
         df = baixar_movimentacoes(odoo, args.data_inicio, pickings_render)
 
-    cols_out = ['id', 'date', 'filial', 'company_id_n', 'cod',
+    cols_out = ['id', 'date', 'filial', 'company_id_n', 'cod', 'nome_produto',
                 'product_id_n', 'lot_id_n', 'lote',
                 'loc_src_id', 'loc_src_name', 'loc_dst_id', 'loc_dst_name',
                 'qty_done',

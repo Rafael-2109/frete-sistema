@@ -5,9 +5,14 @@ REGRA: aplica APENAS as movs cuja origem_classificada == 'RECEBIMENTO_LF_RENDER'
 INVENTORY_ADJUST, OUTROS_PICKING) sao DESCARTADAS — sao os proprios ajustes
 que queremos monitorar.
 
-Estado inicial = inventario fisico (COMPILADO INV 16.05.2026.xlsx).
+Estado inicial = inventario fisico (COMPILADO INV. 16.05.2026 1.xlsx).
 Aplica movs filtradas: se loc_src eh interna da filial, subtrai;
 se loc_dst eh interna, soma.
+
+Coluna de QUANTIDADE por aba (planilha v1 oficial):
+  - CD: FINAL
+  - FB: QUANTIDADE
+  - LF: QUANTIDADE/UN
 
 Output: <cache>/inv_teorico.csv
 
@@ -24,24 +29,68 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _comum import (
-    COMPANY_NAME, INVENTARIO_DIR_DEFAULT,
+    INVENTARIO_DIR_DEFAULT,
     norm_cod, norm_lote, garantir_cache_dir,
 )
 
+# Nome do arquivo padrao do inventario fisico (atualizado para versao oficial v1)
+INV_FISICO_FILENAME = 'COMPILADO INV. 16.05.2026 1.xlsx'
+
+# Mapeamento da coluna de QUANTIDADE por aba (ordem = prioridade de busca).
+# Comporta planilha antiga (QTD) e nova (FINAL / QUANTIDADE / QUANTIDADE/UN).
+COL_QTD_POR_FILIAL = {
+    'FB': ['QUANTIDADE', 'QTD'],
+    'CD': ['FINAL', 'QTD', 'QUANTIDADE'],
+    'LF': ['QUANTIDADE/UN', 'QUANTIDADE', 'QTD'],
+}
+
+
+def _localizar_coluna(colunas, candidatos):
+    """Retorna o nome real da coluna (case-insensitive, ignora espacos) que bate com algum candidato.
+
+    `colunas` ja vem em UPPER e strip()-ed.
+    """
+    for cand in candidatos:
+        cand_norm = cand.strip().upper()
+        if cand_norm in colunas:
+            return cand_norm
+    return None
+
 
 def carregar_inv_fisico(path):
-    """Le COMPILADO INV em 3 abas (FB, LF, CD). Retorna DataFrame agregado."""
+    """Le COMPILADO INV em 3 abas (FB, LF, CD). Retorna DataFrame agregado.
+
+    Detecta coluna de quantidade por aba via COL_QTD_POR_FILIAL.
+    Falha com erro claro se coluna esperada nao encontrada.
+    """
     rows = []
     for filial in ['FB', 'LF', 'CD']:
         df = pd.read_excel(path, sheet_name=filial)
         df.columns = [c.strip().upper() for c in df.columns]
         df = df.rename(columns={c: 'LOTE' for c in df.columns if c.strip() == 'LOTE'})
+
+        if 'CODIGO' not in df.columns:
+            raise ValueError(
+                f"Aba '{filial}': coluna CODIGO nao encontrada. Colunas: {list(df.columns)}"
+            )
+
+        col_qtd = _localizar_coluna(set(df.columns), COL_QTD_POR_FILIAL[filial])
+        if col_qtd is None:
+            raise ValueError(
+                f"Aba '{filial}': nenhuma das colunas {COL_QTD_POR_FILIAL[filial]} "
+                f"encontrada. Colunas disponiveis: {list(df.columns)}"
+            )
+
         df['cod'] = df['CODIGO'].apply(norm_cod)
         df = df[df['cod'].str.isdigit()]
+        # LOTE pode nao existir em todos os rows; norm_lote aceita NaN
+        if 'LOTE' not in df.columns:
+            df['LOTE'] = ''
         df['lote'] = df['LOTE'].apply(norm_lote)
-        df['qtd'] = pd.to_numeric(df['QTD'], errors='coerce').fillna(0)
+        df['qtd'] = pd.to_numeric(df[col_qtd], errors='coerce').fillna(0)
         df['filial'] = filial
         rows.append(df[['filial', 'cod', 'lote', 'qtd']])
+        print(f"  {filial}: {len(df)} linhas, coluna_qtd='{col_qtd}', total_qtd={df['qtd'].sum():,.2f}")
     inv = pd.concat(rows, ignore_index=True)
     return inv.groupby(['filial', 'cod', 'lote'], as_index=False)['qtd'].sum()
 
@@ -94,7 +143,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--cache-dir', default=None)
     ap.add_argument('--inv-path', default=os.path.join(INVENTARIO_DIR_DEFAULT,
-                                                       'COMPILADO INV. 16.05.2026.xlsx'))
+                                                       INV_FISICO_FILENAME))
     ap.add_argument('--apenas', default='NAO_RAFAEL,RECEBIMENTO_LF_RENDER',
                     help='Filtra movs por origem_classificada (CSV). Default: NAO_RAFAEL,RECEBIMENTO_LF_RENDER')
     args = ap.parse_args()

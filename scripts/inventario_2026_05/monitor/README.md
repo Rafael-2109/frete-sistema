@@ -48,8 +48,24 @@ python scripts/inventario_2026_05/monitor/4_gerar_diffs.py
 |------|---------|------|
 | `--cache-dir` | `/tmp/inventario_monitor` | 1, 2, 3, 4, 0 |
 | `--data-inicio` | `2026-05-16 00:00:00` | 2 |
-| `--inv-path` | `/mnt/c/Users/rafael.nascimento/Downloads/INVENTARIO 16-05-26/COMPILADO INV. 16.05.2026.xlsx` | 3 |
+| `--inv-path` | `/mnt/c/Users/rafael.nascimento/Downloads/INVENTARIO 16-05-26/COMPILADO INV. 16.05.2026 1.xlsx` | 3 |
 | `--output-name` | `MONITOR_DIFF_<timestamp>.xlsx` | 4 |
+
+## Planilha do inventario fisico (script 3)
+
+Default: `COMPILADO INV. 16.05.2026 1.xlsx` (versao oficial v1).
+
+Coluna de QUANTIDADE detectada automaticamente por aba (ordem = prioridade):
+
+| Aba | Candidatos | Coluna na v1 |
+|-----|-----------|--------------|
+| FB  | `QUANTIDADE`, `QTD` | `QUANTIDADE` |
+| LF  | `QUANTIDADE/UN`, `QUANTIDADE`, `QTD` | `QUANTIDADE/UN` |
+| CD  | `FINAL`, `QTD`, `QUANTIDADE` | `FINAL` |
+
+Para usar outra planilha, passe `--inv-path <arquivo>.xlsx`. O carregador aceita
+variantes antigas com `QTD` (retrocompat). Se nenhuma coluna candidata existir,
+o script falha com erro claro listando as colunas disponiveis na aba.
 
 ## Logica de filtragem (script 2)
 

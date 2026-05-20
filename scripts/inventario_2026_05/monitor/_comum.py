@@ -17,6 +17,8 @@ RELATORIOS_DIR = '/home/rafaelnascimento/projetos/frete_sistema/docs/inventario-
 DATA_INICIO_INV = '2026-05-16 00:00:00'
 COMPANIES = [1, 4, 5]
 COMPANY_NAME = {1: 'FB', 4: 'CD', 5: 'LF'}
+COMPANY_FULL = {1: 'NACOM GOYA - FB', 4: 'NACOM GOYA - CD', 5: 'LA FAMIGLIA - LF'}
+FILIAL_TO_COMPANY = {'FB': 1, 'CD': 4, 'LF': 5}
 
 ODOO_BATCH_SIZE = 200
 
