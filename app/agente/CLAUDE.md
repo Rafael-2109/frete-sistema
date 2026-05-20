@@ -4,7 +4,7 @@
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
-> **Historico SDK** (changelog 0.1.49 → 0.1.80 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
+> **Historico SDK** (changelog 0.1.49 → 0.2.82 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
 
 ---
 
@@ -14,7 +14,7 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 app/agente/                          # Root — 6 arquivos
 ├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
-├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.1.76 (features, breaking, fixes)
+├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.2.82 (features, breaking, fixes)
 ├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
@@ -628,7 +628,7 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
 
 ## Versao SDK atual
 
-- **claude-agent-sdk**: `0.1.80` | **CLI bundled**: 2.1.138 | **anthropic**: `0.98.1`
+- **claude-agent-sdk**: `0.2.82` | **CLI bundled**: 2.1.138 | **anthropic**: `0.98.1`
 - **Floor**: `mcp>=1.19.0` (fix `CallToolResult` silenciosamente perdido em 0.1.70)
 - **Modelo default**: `claude-opus-4-7` (Opus 4.7, $5/$25 per MTok, adaptive thinking, 1M context)
 - **Rollback rapido**: `AGENT_MODEL=claude-opus-4-6` + `TEAMS_DEFAULT_MODEL=claude-opus-4-6`
@@ -664,7 +664,7 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
   Adocao gratis via upgrade.
 
 > **Historico completo de adocoes, breaking changes, bug fixes e features NAO adotadas**:
-> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.1.80 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
+> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.2.82 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
 
 ---
 

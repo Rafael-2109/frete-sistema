@@ -64,11 +64,10 @@ app/templates/devolucao/
   ocorrencias/_modal_cadastros.html     # Modal CRUD lookups
   ocorrencias/_modal_permissoes.html    # Modal permissoes
   depara/index.html                     # Tela gerenciamento De-Para
-  depara/resolver_nfd.html              # Resolver produtos de NFD (via Haiku)
   termo_descarte.html                   # PDF do termo de descarte
 ```
 
-**Menu**: `base.html:257` — `url_for('devolucao.devolucao_ocorrencia.index')`
+**Menu**: `base.html:509` — `url_for('devolucao.devolucao_ocorrencia.index')`
 
 ---
 
@@ -160,9 +159,9 @@ Acesso via `app.utils.file_storage.get_file_storage()` (lazy — requer app cont
 ## Scheduler (cron job)
 
 `app/scheduler/sincronizacao_incremental_definitiva.py` roda sincronizacoes incrementais:
-- **NFDs** (linha 1025-1062): `NFDService.importar_nfds(minutos_janela=N)`
-- **Reversoes** (linha 1163-1171): `ReversaoService.importar_reversoes(dias=N)`
-- **Monitoramento** (linha 1223-1248): `MonitoramentoSyncService.sincronizar_monitoramento()`
+- **NFDs**: `NFDService.importar_nfds(minutos_janela=N)`
+- **Reversoes**: `ReversaoService.importar_reversoes(dias=N)`
+- **Monitoramento**: `MonitoramentoSyncService.sincronizar_monitoramento()`
 
 Ao adicionar nova sync, seguir padrao: lazy import + try/except per-module + log `sucesso_X = True/False`.
 
@@ -243,6 +242,8 @@ Todas em `scripts/migrations/` (regra CLAUDE.md: DDL precisa de 2 artefatos `.py
 - `add_empresa_autorizada_descarte.py` / `.sql`, `add_local_coleta_frete_devolucao.py`
 - `add_nfd_despesa_extra.py` — FK `DespesaExtra.nfd_id`
 - `add_quantidade_convertida_nfd_linha.py` / `.sql`, `fix_nfd_linha_caixa_preco_unidade.py`
+- `expand_quantidade_convertida_precision.py` / `.sql` — `quantidade_convertida` NUMERIC(15,3)→(15,4) (roundtrip de divisoes como 1/6)
+- `fix_nfd_linha_campos.py` — `codigo_produto_cliente` VARCHAR(50)→(255) + `descricao_produto_cliente`→TEXT (cliente concatena lote/validade no codigo)
 - `backfill_conversao_devolucao.py` — preenche `quantidade_convertida`/`qtd_por_caixa`
 - `popular_endereco_emitente_nfd.py`, `add_endereco_emitente_nfd.py`
 - `sync_data_entrada_nfd.py`, `hora_08_devolucao_fornecedor.py` / `.sql`
@@ -282,6 +283,6 @@ Leitura obrigatoria antes de mexer em templates ou dashboard. Entre os pedidos:
 ## Quick References
 
 - Rotas: `app/__init__.py:822` (import) e `:884` (register)
-- Link no menu: `app/templates/base.html:257`
+- Link no menu: `app/templates/base.html:509`
 - Agent SDK: **nao ha skill dedicada** — usar `especialista-odoo` ou `raio-x-pedido` para fluxos que cruzam com Odoo
-- Scheduler: `app/scheduler/sincronizacao_incremental_definitiva.py` linhas 1025, 1163, 1223
+- Scheduler: `app/scheduler/sincronizacao_incremental_definitiva.py` (`NFDService.importar_nfds`, `ReversaoService.importar_reversoes`, `MonitoramentoSyncService.sincronizar_monitoramento`)

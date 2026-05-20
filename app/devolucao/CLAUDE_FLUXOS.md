@@ -36,7 +36,7 @@ Modal de registro NFD (numero_nfd, motivo, descricao, numero_nf_venda)
 ## Entrypoint 2: Importacao DFe do Odoo (NFDService)
 
 ```
-Scheduler (sincronizacao_incremental_definitiva.py:1025)
+Scheduler (sincronizacao_incremental_definitiva.py → NFDService.importar_nfds)
   ↓ NFDService.importar_nfds(minutos_janela=60)
   │
   ├── _buscar_nfds_odoo(data_inicio, limite, usar_write_date=True)
@@ -97,7 +97,7 @@ Scheduler (sincronizacao_incremental_definitiva.py:1025)
 ## Entrypoint 3: Reversao de NF de Venda (ReversaoService)
 
 ```
-Scheduler (sincronizacao_incremental_definitiva.py:1163)
+Scheduler (sincronizacao_incremental_definitiva.py → ReversaoService.importar_reversoes)
   ↓ ReversaoService.importar_reversoes(dias=30)
   │
   ├── _buscar_notas_credito(data_corte, limite)
@@ -161,7 +161,7 @@ Scheduler (sincronizacao_incremental_definitiva.py:1163)
 ## Entrypoint 4: Sync Monitoramento
 
 ```
-Scheduler (sincronizacao_incremental_definitiva.py:1223)
+Scheduler (sincronizacao_incremental_definitiva.py → MonitoramentoSyncService.sincronizar_monitoramento)
   ↓ MonitoramentoSyncService.sincronizar_monitoramento()
   │
   ├── _buscar_entregas_sem_nfd()
@@ -383,16 +383,16 @@ sincronizacao_incremental_definitiva.py (cron)
   ↓
 Para CADA modulo habilitado (sucesso_X flags):
   1. Faturamento, Carteira, ...
-  2. NFDs (linha 1025-1062):
+  2. NFDs (`NFDService.importar_nfds`):
      ↓ NFDService.importar_nfds(minutos_janela=60)
      → Log estatisticas
-  3. Reversoes (linha 1163-1171):
+  3. Reversoes (`ReversaoService.importar_reversoes`):
      ↓ ReversaoService.importar_reversoes(dias=N)
-  4. Monitoramento (linha 1223-1248):
+  4. Monitoramento (`MonitoramentoSyncService.sincronizar_monitoramento`):
      ↓ MonitoramentoSyncService.sincronizar_monitoramento()
   5. Pallets, Validacao recebimento, IBS/CBS, Pickings, ...
 
-Ao final (linha 1863):
+Ao final (consolidacao `modulos_sync`):
   modulos_sync = [sucesso_faturamento, sucesso_carteira, ..., sucesso_nfds, ..., sucesso_reversoes, sucesso_monitoramento, ...]
   if not all(modulos_sync):
       → Alerta / retry

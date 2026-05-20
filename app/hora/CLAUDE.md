@@ -1,6 +1,6 @@
 # Módulo HORA — Lojas Motochefe
 
-**Data**: 2026-04-22 (atualizado)
+**Data**: 2026-05-20 (atualizado)
 **Status**: em produção — modelos, migrations e fluxos pedido→NF→recebimento implementados; permissões granulares ativas.
 **Propósito**: controle de estoque unitário de motos elétricas nas lojas físicas da HORA (PJ distinta da Motochefe-distribuidora e CarVia).
 
@@ -64,7 +64,9 @@ Em 1 linha por invariante:
 
 ---
 
-## Modelo de dados planejado (13 tabelas)
+## Modelo de dados (46 tabelas — núcleo conceitual abaixo)
+
+> O módulo tem **46 tabelas** `hora_*` em produção (lista completa: `grep -rhoE "__tablename__\s*=\s*['\"]hora_[a-z0-9_]+" app/hora/`). A lista abaixo cobre o núcleo conceitual; as auxiliares (empréstimo, devolução fornecedor/venda, conferência/auditoria, parser DANFE, pagamentos) seguem o mesmo padrão.
 
 Documentação detalhada no plano `/home/rafaelnascimento/.claude/plans/toasty-snuggling-sunrise.md`. Resumo:
 
@@ -89,6 +91,66 @@ Documentação detalhada no plano `/home/rafaelnascimento/.claude/plans/toasty-s
 
 **Autorização (adicionada 2026-04-22)**:
 - `hora_user_permissao` — permissões granulares por (`user_id`, `modulo`) com flags `pode_ver/criar/editar/apagar/aprovar`. Sem FK para `usuarios` (mantém `app/hora` independente de `app/auth`). Migration: `scripts/migrations/hora_13_user_permissao.{py,sql}`.
+
+### Tabelas complementares (32)
+
+> Núcleo acima (14) + estas 32 = 46. Padrões recorrentes: header + itens; auditoria append-only (nunca UPDATE/DELETE); fotos/anexos em S3.
+
+**Avaria**:
+- `hora_avaria` — avaria física em moto (`numero_chassi`, `loja_id`, `status`); NÃO bloqueia venda, emite evento `AVARIADA`.
+- `hora_avaria_foto` — fotos S3 de uma avaria (header + N fotos).
+
+**Devolução fornecedor (HORA → Motochefe)**:
+- `hora_devolucao_fornecedor` — header de devolução de motos ao fornecedor (`motivo`, `status`, `nf_saida_chave_44`).
+- `hora_devolucao_fornecedor_item` — 1 chassi por linha (UNIQUE por devolução).
+
+**Devolução venda (cliente → HORA)**:
+- `hora_devolucao_venda` — header de devolução pelo consumidor (`venda_id`, `motivo`, `status`). NÃO confundir com devolução fornecedor.
+- `hora_devolucao_venda_item` — chassi devolvido, resolução individual (`resolucao_acao`: DISPONIVEL/AVARIA/PECA_FALTANDO).
+
+**Empréstimo**:
+- `hora_emprestimo_moto` — empréstimo entre loja HORA e externa (`tipo` SAIDA/ENTRADA); ressarcimento com outra moto do mesmo modelo.
+
+**Modelo / Alias**:
+- `hora_modelo_alias` — N nomes → 1 modelo canônico (`tipo`: TAGPLUS_*/NOME_NF/NOME_PEDIDO). UNIQUE `(tipo, nome_alias)`.
+- `hora_modelo_pendente` — fila de nomes não reconhecidos aguardando decisão do operador (`origem`, `status`, `qtd_ocorrencias`).
+
+**Peças (fungíveis, sem chassi)**:
+- `hora_peca` — catálogo de peças (`codigo_interno` UNIQUE, `ncm`, `cfop_default`). NÃO confundir com `hora_peca_faltando`.
+- `hora_tagplus_peca_map` — mapeamento opcional peça → TagPlus (UNIQUE `peca_id`).
+- `hora_peca_movimento` — log signed de entradas/saídas por loja; saldo via `SUM(qtd)` (sem materialização).
+- `hora_nf_entrada_item_peca` — linha de peça em NF de entrada com conferência 1:1 (`qtd_nf` vs `qtd_conferida`).
+- `hora_venda_item_peca` — linha de peça em venda (`preco_unitario_referencia` snapshot, `desconto_aplicado`).
+
+**Peças faltando em moto**:
+- `hora_peca_faltando` — peça ausente em moto (N por moto); canibalização via `chassi_doador` (emite `FALTANDO_PECA` na doadora).
+- `hora_peca_faltando_foto` — fotos S3 da pendência.
+
+**Conferência / Auditoria de recebimento**:
+- `hora_conferencia_divergencia` — divergências 1-N por conferência (`tipo`: MODELO/COR_DIFERENTE, MOTO_FALTANDO, CHASSI_EXTRA, AVARIA). UNIQUE `(conferencia_id, tipo)`.
+- `hora_conferencia_auditoria` — log append-only de ações no recebimento (imutável).
+
+**Transferência entre filiais**:
+- `hora_transferencia` — header (`loja_origem/destino`, `status`); emissão→EM_TRANSITO, confirmação→TRANSFERIDA.
+- `hora_transferencia_item` — chassi na transferência (`qr_code_lido`, `foto_s3_key`). UNIQUE `(transferencia_id, numero_chassi)`.
+- `hora_transferencia_auditoria` — log append-only de ações.
+
+**TagPlus (integração NFe)**:
+- `hora_tagplus_conta` — conta singleton (todas as lojas faturam pelo CNPJ matriz); secrets Fernet.
+- `hora_tagplus_token` — tokens OAuth2 (1 por conta, encriptados).
+- `hora_tagplus_produto_map` — de-para `HoraModelo` → produto TagPlus (UNIQUE `modelo_id`).
+- `hora_tagplus_forma_pagamento_map` — de-para forma de pagamento → ID TagPlus.
+- `hora_tagplus_nfe_emissao` — fila + fonte de verdade do status de emissão NFe (UNIQUE `venda_id`).
+- `hora_tagplus_backfill_job` — job de backfill em RQ (fila `hora_backfill`) com progresso/relatório.
+- `hora_tagplus_departamento_map` — de-para departamento TagPlus → `HoraLoja` (emitente é sempre a matriz).
+
+**Parser DANFE (aprendizado por feedback)**:
+- `hora_danfe_parser_append` — append-prompt versionado do extrator de chassi/motor; apenas 1 `ativo` (permite rollback).
+
+**Venda — auxiliares**:
+- `hora_venda_divergencia` — divergências do import de NF de saída (fluxo permissivo, não bloqueia).
+- `hora_venda_auditoria` — log append-only de transições/edições de `HoraVenda`.
+- `hora_venda_pagamento` — pagamento parcial 1:N; soma deve igualar `valor_total` para sair de INCOMPLETO.
 
 ---
 
@@ -172,7 +234,7 @@ Se um comportamento específico da HORA for necessário (ex.: validação adicio
 Segue o plano aprovado em 2026-04-18:
 
 1. **P1**: documentos contratuais — `docs/hora/INVARIANTES.md` e este `app/hora/CLAUDE.md`. **Concluído**.
-2. **P2**: migrations + modelos SQLAlchemy das 13 tabelas. **Concluído** (+ tabela 14 `hora_user_permissao` em 2026-04-22).
+2. **P2**: migrations + modelos SQLAlchemy das 13 tabelas iniciais. **Concluído** (+ `hora_user_permissao` em 2026-04-22; o módulo cresceu para 46 tabelas nas fases seguintes).
 3. **P3**: fluxo pedido → NF → recebimento → conferência (ingestão e confronto). **Concluído**.
 4. **P4**: fluxo venda com tabela de preço + desconto auditável. **Parcial — fluxo (a) concluído 2026-04-24**.
    - **Fluxo (a) — import NF saída (DANFE PDF)**: operador sobe PDF emitido pelo ERP externo em `/hora/vendas/upload`; service `venda_service.importar_nf_saida_pdf` parseia via `danfe_adapter` (reuso CarVia + extensão CPF/nome destinatário), cria `HoraVenda` + `HoraVendaItem` + emite evento `VENDIDA` nos chassis, persiste PDF em `hora/vendas/` S3, preenche `cnpj_emitente`, `parser_usado`, `parseada_em`.

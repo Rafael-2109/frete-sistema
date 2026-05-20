@@ -39,7 +39,7 @@ app/carteira/
 Usar `agrupamento_service.py` que enriquece via batch queries.
 
 ### R2: main_routes.py contem apenas dashboard index()
-189 linhas (limpo na Fase 3). NUNCA adicionar novas rotas em `main_routes.py`.
+227 linhas (limpo na Fase 3). NUNCA adicionar novas rotas em `main_routes.py`.
 Novas rotas: criar arquivo em `routes/` e registrar em `routes/__init__.py`.
 
 ### R3: PreSeparacaoItem e um Adapter

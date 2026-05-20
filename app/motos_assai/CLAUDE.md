@@ -21,8 +21,8 @@
 
 ### 1. Prefixo de tabela `assai_`
 
-Todas as tabelas começam com `assai_`. **18 tabelas** no schema atual
-(16 originais + `assai_pedido_venda_loja` e `assai_separacao_saldo_modelo` — Plano 5).
+Todas as tabelas começam com `assai_`. **29 tabelas** no schema atual
+(lista completa: `grep -rhoE "__tablename__\s*=\s*['\"]assai_[a-z0-9_]+" app/motos_assai/`).
 
 ### 2. Blueprint isolado
 
@@ -75,7 +75,7 @@ Link em `app/templates/base.html` condicionado a
 
 ---
 
-## Modelo de dados (18 tabelas)
+## Modelo de dados (29 tabelas)
 
 Ver spec em `docs/superpowers/specs/2026-05-07-motos-assai-design.md` §4.
 
@@ -85,7 +85,15 @@ Pipeline: `assai_pedido_venda*` (3 tabelas: `assai_pedido_venda`,
 `assai_pedido_venda_loja` ⭐, `assai_pedido_venda_item`),
 `assai_compra_motochefe*`, `assai_recibo_motochefe*`.
 Saída: `assai_separacao*` (3 tabelas: `assai_separacao`, `assai_separacao_item`,
-`assai_separacao_saldo_modelo` ⭐), `assai_nf_qpa*`.
+`assai_separacao_saldo_modelo` ⭐), `assai_nf_qpa*` (3 tabelas: `assai_nf_qpa`,
+`assai_nf_qpa_item`, `assai_nf_qpa_item_vinculo_historico`).
+CCe: `assai_cce` (Carta de Correção Eletrônica como entidade própria; pode chegar ANTES da NF — flag `tem_nf` + match reverso; status PENDENTE/APLICADA/IGNORADA/ERRO; `protocolo_cce` UNIQUE).
+Recibo (itens): `assai_recibo_item` (chassis declarados no recibo Motochefe; `assai_recibo_motochefe*` acima cobre só o cabeçalho).
+Carregamento: `assai_carregamento`, `assai_carregamento_item` (etapa física entre Separação e NF; escaneia chassi por chassi).
+Divergências: `assai_divergencia` (sistema centralizado: 8 tipos + 5 resoluções; `detalhes` JSONB).
+Excel Q.P.A.: `assai_pedido_excel` (histórico versionado do Excel por separação em S3; `versao`, `ativo`).
+Devolução NFd: `assai_devolucao_nfd` + `assai_devolucao_item` + `assai_devolucao_anexo` (cliente devolve chassi FATURADO → volta a PENDENTE; UNIQUE `(nf_qpa_origem_id, numero_nfd)`).
+Pós-venda: `assai_pos_venda_ocorrencia` + `assai_pos_venda_ocorrencia_anexo` (ocorrências LOJA/CLIENTE sobre chassi vendido; NÃO append-only — admite UPDATE/DELETE).
 
 ⭐ = adicionadas no Plano 5 (2026-05-12).
 
@@ -109,6 +117,24 @@ Saída: `assai_separacao*` (3 tabelas: `assai_separacao`, `assai_separacao_item`
 - `app/motos_assai/services/separacao_service.py`: `SeparacaoError`, `SeparacaoConflictError` (race condition → 409)
 - `app/motos_assai/services/faturamento_service.py`: `gerar_excel_qpa()`, `FaturamentoError`
 - `app/motos_assai/services/parsers/nf_qpa_adapter.py`: `NfQpaAdapter`, `extrair_nf_qpa()`, `match_nf_separacao()`
+
+---
+
+## Services complementares (responsabilidades)
+
+Não indexados na lista de constantes acima:
+- `carregamento_service` — ciclo de `AssaiCarregamento` (etapa física Sep→NF): criar, escanear chassi, cancelar item/carregamento, finalizar (integra `pedido_status` + `separacao_mirror`). Exc.: `Carregamento{Validation,Conflict,State,Excedente,CrossLoja}Error`.
+- `divergencia_service` — cria/resolve `AssaiDivergencia` (8 tipos, 5 resoluções); `criar_divergencia` NÃO commita (caller decide); `resolver_divergencia` re-roda `_calcular_match`.
+- `devolucao_service` — registra NFd do cliente p/ chassis FATURADOS → voltam a PENDENTE (`devolvido=True`); idempotência UNIQUE, rollback S3 se commit DB falhar.
+- `pos_venda_service` — CRUD de ocorrências pós-venda (LOJA/CLIENTE) + anexos S3; só chassis em `assai_nf_qpa_item` contam como vendidos.
+- `cancelamento_nf_service` — cancela NF Q.P.A. (FATURADA → CARREGADA/SEPARADA/DISPONIVEL) e aplica correção de chassi via CCe (`aplicar_correcao_cce` + re-match).
+- `geocoding_service` — geocodifica `AssaiLoja` (Google Geocoding API → fallback Nominatim 1 req/s); cacheia `latitude/longitude/geocoded_at`.
+- `resumo_service` — agrega pipeline por modelo × status efetivo (último evento); `resumo_por_modelo`, `metricas_por_pedido[_loja]`.
+- `pedido_status_service` — recalcula `AssaiPedidoVenda.status` (qtd_faturada vs qtd_pedida); não recalcula CANCELADO (estado terminal).
+- `pendencia_service` — consultas read-only de pendências de montagem (abertas, histórico resolvidas, contagens, por operador/modelo).
+- `reprocessar_match_service` — re-roda `_calcular_match` em NFs quando a fonte muda (cadastro de chassi, criação de loja, cancelamento de separação); helpers `nfs_afetadas_por_*`.
+- `chassi_autocomplete_service` — autocomplete read-only de chassi por contexto (recebimento/montagem/disponibilizar/separacao/montagem_doador); `buscar_chassis(q, contexto, ...)`.
+- `separacao_mirror_service` — espelha `AssaiSeparacao` FECHADA → `separacao` Nacom (`separacao_lote_id='ASSAI-SEP-{id}'`) p/ integrar ao fluxo Cotação/Embarque/Frete; resolve os 4 campos (expedicao/agendamento/protocolo/confirmado).
 
 ---
 

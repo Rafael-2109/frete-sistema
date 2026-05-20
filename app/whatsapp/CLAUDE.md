@@ -194,7 +194,7 @@ ou similar — formato confirmado no plugin).
 ### Plugin envia mas Flask rejeita 403 sender_not_authorized
 1. Verifique `usuarios.whatsapp_autorizado=True` para o telefone
 2. `Usuario.normalize_whatsapp_identifier(jid)` deve retornar variantes que
-   batem com `usuarios.telefone` (ver tests/test_whatsapp_normalize.py)
+   batem com `usuarios.telefone`
 3. Telefone no banco pode estar em formato BR (sem 55) — funcao trata,
    mas confirme com `SELECT telefone FROM usuarios WHERE id=N`
 

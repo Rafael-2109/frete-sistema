@@ -4,7 +4,7 @@
 **Versao atual**: V1.8 (em construcao — mudancas nao commitadas em `sped_ecd_*.py`)
 **Versao em PROD**: V1.7 (commit `dbfc5006`, 2026-05-14)
 
-> Este CLAUDE.md cobre o modulo `app/relatorios_fiscais/`. Apesar de ser pequeno em LOC (~21K), ele consome SPED ECD (fiscal critico) com ciclo iterativo de correcoes contra PVA. Cada iteracao estoura contexto se ler PDF/SPED inteiros.
+> Este CLAUDE.md cobre o modulo `app/relatorios_fiscais/`. Apesar de ser pequeno em LOC (~5K), ele consome SPED ECD (fiscal critico) com ciclo iterativo de correcoes contra PVA. Cada iteracao estoura contexto se ler PDF/SPED inteiros.
 
 ---
 
