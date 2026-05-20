@@ -28,6 +28,11 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 22 | 2026-05-17 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 23 | 2026-05-18 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 24 | 2026-05-19 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 25 | 2026-05-20 | 1 | 0 | 1 | 0 | OK (TDE ja existe no dropdown — premissa incorreta) |
+
+## 2026-05-20
+- **OK** — 1 sugestao avaliada e rejeitada.
+- **IMP-2026-05-19-001** (skill_suggestion, warning): "Incluir TDE no dropdown de tipos de despesa extra". **REJEITADA** — premissa factualmente incorreta. TDE ja esta em `DespesaExtra.TIPOS_DESPESA` (`app/fretes/models.py:411`) e os dropdowns de cadastro sao gerados dinamicamente dessa lista (`app/fretes/forms.py:91-92,139-140`), nao hardcoded. Templates inclusive listam TDE como tipo disponivel (`nova_despesa_extra.html:193`). A consulta DISTINCT do Agent SDK (11 tipos) reflete valores ja usados nos dados, nao as opcoes do dropdown (model define 12, incluindo `ESTACIONAMENTO` ainda nao usado). Nada a implementar. Resposta v2 persistida (id 114).
 
 ## 2026-05-19
 - **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
