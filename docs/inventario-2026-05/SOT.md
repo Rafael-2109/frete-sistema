@@ -36,8 +36,10 @@ Os ajustes saem por NF entre empresas (CFOPs 5901/5903/5949/5152/5151) seguindo 
 | `docs/inventario-2026-05/00-decisoes/D000-D005.md` | Decisões formais com fontes (D004/D005 = rename + MIGRACAO) | Quando dúvida sobre estrutura |
 | **`docs/inventario-2026-05/00-decisoes/D010-direcao-transferencia-migracao-por-sinal-diff_qtd.md`** | **REGRA INVIOLÁVEL: direção MIGRAÇÃO depende do sinal de diff_qtd** (`>0` lote→MIGRAÇÃO, `<0` MIGRAÇÃO→lote) | **OBRIGATÓRIO antes de qualquer script de transferência MIGRAÇÃO** |
 | **`docs/inventario-2026-05/00-decisoes/D011-locais-indisponivel-por-empresa.md`** | **Locais `{emp}/Indisponivel` (FB=31088 / SC=31089 / CD=31090 / LF=31091) como contraparte de ajustes CD/FB** (negativo → Indisponivel/MIGRACAO; positivo → Indisponivel→Estoque/lote_real) | **OBRIGATÓRIO antes de qualquer NOVO script de ajuste CD/FB pós-2026-05-19** |
+| **`docs/inventario-2026-05/00-decisoes/D012-ajuste-estoque-lf-via-planilha-direta.md`** | **Ajuste LF por planilha via inventory adjustment PURO** (criar saldo Pasta16 / realocação net-zero Pasta17). `P-15/05` muda de sentido por planilha; redução multi-local 42→53→(39/38); net-zero atômico | **OBRIGATÓRIO antes de ajuste LF por planilha direta (2026-05-20+)** |
 | `docs/inventario-2026-05/01-premissas/P001-P011.md` | Premissas confirmadas com origem | Quando dúvida sobre regra |
 | `docs/inventario-2026-05/02-gotchas/G001-G004.md` | Armadilhas descobertas + solução | Antes de codar área afetada |
+| **`docs/inventario-2026-05/02-gotchas/G036-lote-virgula-literal-e-duplicado-operador-igual.md`** | **Lote com vírgula = literal real (não split); lotes duplicados + bug operador `=` → resolver lot_id via `in`** | Antes de qualquer busca de saldo por nome de lote |
 
 ---
 

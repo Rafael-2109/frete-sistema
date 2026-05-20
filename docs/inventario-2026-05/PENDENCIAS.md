@@ -1,6 +1,6 @@
 # Pendências — INVENTARIO_2026_05
 
-**Última atualização**: 2026-05-18
+**Última atualização**: 2026-05-20
 
 Lista de itens pendentes (não executados) que precisam ser tratados antes do fechamento do ciclo.
 
@@ -314,6 +314,41 @@ Esta pendência convive com `Cat1_PRODUTO_ARQUIVADO` (8 ajustes, 4 produtos: 19,
 
 ---
 
+## P12 — 9 produtos LF do Pasta17 com lotes dessincronizados (realocação não aplicável)
+
+**Status**: PENDENTE — aguarda planilha regenerada
+**Empresa**: LF (`company_id=5`)
+**Descoberto em**: 2026-05-20 (realocação Pasta17 — ver [D012](00-decisoes/D012-ajuste-estoque-lf-via-planilha-direta.md))
+
+### Resumo
+
+Dos 147 produtos da Pasta17 (realocação net-zero), **138 foram aplicados**. Os 9 abaixo **não puderam** ser aplicados: a planilha pede reduzir lotes que, no estado atual do Odoo, têm **saldo líquido zero ou negativo** (já movidos/zerados por operação anterior — provavelmente a relotagem de madrugada ou operação paralela). Forçar a redução criaria saldo negativo.
+
+### Lista
+
+| cod | lote da planilha | situação no Odoo |
+|---|---|---|
+| 104000007 | `1401/25` ; `INV-104000007-20260518` | líquido 0 (par +340 Produção / −340 Ajuste) ; líquido −38,55 |
+| 105000017 | `ALE001,12757` | zerado (sem saldo em lugar nenhum) |
+| 105000025 | `3250616080` | líquido 0 (488 Estoque − 524 Ajuste + 35 Pré-Prod) |
+| 105000031 | `17025025` | líquido −43,42 |
+| 209000152 | `649,649/25` | zerado |
+| 209000410 | `5096116,11729` | zerado (componente em Produção, não físico) |
+| 210030105 | `80574,81002` | zerado |
+| 210030321 | `26121,26216` | zerado |
+| 210030328 | `25553,10/10/25` | zerado |
+
+### Caminho recomendado
+
+- Regenerar a planilha desses 9 a partir do **estado atual** do Odoo (saldos por lote/local) e reenviar — processa igual aos demais via `ajuste_estoque_lf_pasta17.py`.
+- OU confirmar que esses lotes já foram tratados (relotagem anterior) e descartar as linhas.
+
+### Alternativa: NÃO recomendada
+
+Forçar redução de locais virtuais (`--incluir-virtual`) — testado em dry-run: **não cobre** mesmo assim, pois o saldo líquido é zero/negativo. Consumir só os positivos (ignorando os pares negativos) criaria saldo líquido negativo do lote. Não fazer sem investigar a origem dos pares +/-.
+
+---
+
 ## Índice rápido
 
 | ID | Tema | Escopo | Bloqueia |
@@ -329,3 +364,4 @@ Esta pendência convive com `Cat1_PRODUTO_ARQUIVADO` (8 ajustes, 4 produtos: 19,
 | P9 | Ajuste contábil para entrada inventory adjustment E09 | FB | Fechamento financeiro |
 | P10 | 9 lotes emergenciais estão em FB/Estoque (loc 8) — não disponíveis para apontamento de produção sem transferência prévia para Linha de Pré-Produção | FB | Uso em produção |
 | P11 | 10 produtos sem cadastro Odoo no CD (FALHA `Cat1_SEM_CADASTRO_ODOO`) | CD | Faturamento desses cods + fechamento ciclo CD |
+| P12 | 9 produtos LF Pasta17 com lotes dessincronizados (saldo líquido 0/negativo) | LF | Realocação completa Pasta17 (138/147 feitos) |
