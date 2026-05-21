@@ -1,27 +1,32 @@
-"""15 - Transferir saldo MIGRACAO LIVRE Pre-Producao -> FB/Estoque (2026-05-18).
+"""15 - Transferir saldo LIVRE de Pre-Producao -> {emp}/Estoque.
 
-Apos cancelamento das 149 MOs antigas (script 14), as reservas em Pre-Prod
-foram liberadas. Este script transfere o saldo LIVRE de MIGRACAO de cada
-sub-location de Pre-Producao (Linha Balde/Vidro/Manual/Salmoura) para
-FB/Estoque (loc=8) via inventory adjustment, MANTENDO o lote MIGRACAO.
+Origem (2026-05-18): apos cancelar as 149 MOs antigas (script 14), transferir
+o saldo LIVRE de MIGRACAO das sub-locations de Pre-Producao FB -> FB/Estoque.
+GENERALIZADO (2026-05-20): aceita args para company, estoque destino e locais
+de origem; o filtro por lote (log do script 13) virou OPCIONAL. Sem
+--lot-source-log, processa TODOS os lotes dos locais (transfere todo o livre).
 
 Padrao: para cada quant em Pre-Prod com livre > 0:
 1. Reduzir quant origem (Pre-Prod): write inventory_quantity = qty - livre
    + action_apply_inventory (gera stock.move Pre-Prod -> Virtual/Ajuste)
-2. Aumentar/criar quant destino (FB/Estoque): write/create
+2. Aumentar/criar quant destino ({emp}/Estoque): write/create
    inventory_quantity = qty_atual + livre + action_apply_inventory
-   (gera stock.move Virtual/Ajuste -> FB/Estoque)
+   (gera stock.move Virtual/Ajuste -> {emp}/Estoque)
 
 Gera 2 stock.moves por quant transferido, ambos com origem 'Physical Inventory'.
-
-NUNCA mexe em quantidade reservada (147k un ainda reservadas pelas 70 MOs
-preservadas — 63 confirmed recentes + 7 em progress/to_close).
+NUNCA mexe em quantidade reservada (deixa exatamente o reservado na origem).
 
 Flags:
+    --company N           company_id (default 1=FB)
+    --estoque N           location destino (default 8=FB/Estoque)
+    --locs "a,b,c"        csv de location_ids de origem (sobrescreve default)
+    --lot-source-log PATH log do script 13 p/ filtrar lotes (opcional)
     --dry-run             (default) so simula
     --confirmar           executa real
     --limite N            limite N quants (canary)
     --log-json PATH
+
+Ex (transferir TODO livre FB): --locs 4068,4066,4067,27458,30718,48,20140 --confirmar
 """
 import argparse
 import json
@@ -53,10 +58,6 @@ PRE_PROD_LOCS = {
     27458: 'FB/Pre-Producao/Linha Salmoura',
 }
 CASAS_DECIMAIS = 6
-LOG_SCRIPT_13 = (
-    '/home/rafaelnascimento/projetos/frete_sistema/scripts/'
-    'inventario_2026_05/auditoria/log_13_transf_migr_fb_20260518_224352.json'
-)
 
 
 def banner(t: str, c: str = '=') -> None:
@@ -66,16 +67,22 @@ def banner(t: str, c: str = '=') -> None:
     print(c * 78)
 
 
-def listar_quants_pre_prod(odoo, lot_ids):
-    """Lista quants MIGRACAO em Pre-Prod com saldo livre > 0."""
+def listar_quants_pre_prod(odoo, lot_ids=None):
+    """Lista quants em Pre-Prod com saldo livre > 0.
+
+    Se lot_ids for None/vazio, NAO filtra por lote (processa TODOS os quants
+    dos PRE_PROD_LOCS). Se informado, filtra so' esses lotes (comportamento
+    historico via --lot-source-log).
+    """
+    domain = [
+        ['company_id', '=', COMPANY_ID],
+        ['location_id', 'in', list(PRE_PROD_LOCS.keys())],
+        ['quantity', '>', 0],
+    ]
+    if lot_ids:
+        domain.insert(0, ['lot_id', 'in', lot_ids])
     quants = odoo.search_read(
-        'stock.quant',
-        [
-            ['lot_id', 'in', lot_ids],
-            ['company_id', '=', COMPANY_ID],
-            ['location_id', 'in', list(PRE_PROD_LOCS.keys())],
-            ['quantity', '>', 0],
-        ],
+        'stock.quant', domain,
         ['id', 'quantity', 'reserved_quantity', 'location_id', 'lot_id', 'product_id'],
     )
     out = []
@@ -91,18 +98,18 @@ def listar_quants_pre_prod(odoo, lot_ids):
     return out
 
 
-def buscar_quant_destino(odoo, product_id: int, lot_id: int):
-    """Quant em FB/Estoque (loc=8) para o mesmo (product, lot, company=1)."""
-    quants = odoo.search_read(
-        'stock.quant',
-        [
-            ['product_id', '=', product_id],
-            ['company_id', '=', COMPANY_ID],
-            ['location_id', '=', LOC_ESTOQUE],
-            ['lot_id', '=', lot_id],
-        ],
-        ['id', 'quantity'], limit=1,
-    )
+def buscar_quant_destino(odoo, product_id: int, lot_id):
+    """Quant em {LOC_ESTOQUE} para o mesmo (product, lot, company).
+
+    Se lot_id for None/False, busca quant sem lote.
+    """
+    domain = [
+        ['product_id', '=', product_id],
+        ['company_id', '=', COMPANY_ID],
+        ['location_id', '=', LOC_ESTOQUE],
+    ]
+    domain.append(['lot_id', '=', lot_id] if lot_id else ['lot_id', '=', False])
+    quants = odoo.search_read('stock.quant', domain, ['id', 'quantity'], limit=1)
     return quants[0] if quants else None
 
 
@@ -130,12 +137,7 @@ def processar_quant(odoo, q: Dict, dry_run: bool) -> Dict:
         'inicio': datetime.now().isoformat(timespec='seconds'),
     }
 
-    if not lid:
-        r['status'] = 'FALHA'
-        r['erro'] = 'quant sem lot_id (inesperado)'
-        return r
-
-    # Buscar/preparar destino
+    # Buscar/preparar destino (mesmo lote — ou sem lote, se origem sem lote)
     dest = buscar_quant_destino(odoo, pid, lid)
     if dest:
         r['quant_destino_id'] = dest['id']
@@ -164,13 +166,15 @@ def processar_quant(odoo, q: Dict, dry_run: bool) -> Dict:
             odoo.write('stock.quant', [dest['id']], {'inventory_quantity': nova_dest})
             odoo.execute_kw('stock.quant', 'action_apply_inventory', [[dest['id']]])
         else:
-            novo_id = odoo.create('stock.quant', {
+            payload = {
                 'product_id': pid,
                 'company_id': COMPANY_ID,
                 'location_id': LOC_ESTOQUE,
-                'lot_id': lid,
                 'inventory_quantity': nova_dest,
-            })
+            }
+            if lid:
+                payload['lot_id'] = lid
+            novo_id = odoo.create('stock.quant', payload)
             r['quant_destino_id'] = novo_id
             odoo.execute_kw('stock.quant', 'action_apply_inventory', [[novo_id]])
         r['status'] = 'EXECUTADO'
@@ -184,7 +188,17 @@ def processar_quant(odoo, q: Dict, dry_run: bool) -> Dict:
 
 
 def main():
+    global COMPANY_ID, LOC_ESTOQUE, PRE_PROD_LOCS
     parser = argparse.ArgumentParser()
+    parser.add_argument('--company', type=int, default=COMPANY_ID,
+                        help='company_id (default 1=FB)')
+    parser.add_argument('--estoque', type=int, default=LOC_ESTOQUE,
+                        help='location destino (default 8=FB/Estoque)')
+    parser.add_argument('--locs', type=str, default='',
+                        help='csv de location_ids de origem (sobrescreve PRE_PROD_LOCS default)')
+    parser.add_argument('--lot-source-log', type=str, default='',
+                        help='log do script 13 p/ filtrar so lotes FALHA_SEM_SALDO '
+                             '(opcional; sem ele processa TODOS os lotes dos locais)')
     parser.add_argument('--dry-run', action='store_true', default=True)
     parser.add_argument('--confirmar', action='store_true', default=False)
     parser.add_argument('--limite', type=int, default=0)
@@ -193,21 +207,29 @@ def main():
     if args.confirmar:
         args.dry_run = False
 
+    COMPANY_ID = args.company
+    LOC_ESTOQUE = args.estoque
+    if args.locs:
+        PRE_PROD_LOCS = {int(x): f'loc_{int(x)}' for x in args.locs.split(',') if x.strip()}
+
     banner(
-        f'TRANSFERIR MIGRACAO Pre-Prod -> FB/Estoque — '
-        f'{"DRY-RUN" if args.dry_run else "EXECUCAO REAL"}'
+        f'TRANSFERIR Pre-Prod -> Estoque(loc={LOC_ESTOQUE}, company={COMPANY_ID}) — '
+        f'{"DRY-RUN" if args.dry_run else "EXECUCAO REAL"} | origens={list(PRE_PROD_LOCS.keys())}'
     )
 
     app = create_app()
     resultados = []
     with app.app_context():
         odoo = get_odoo_connection()
-        with open(LOG_SCRIPT_13) as f:
-            d_log = json.load(f)
-        lot_ids = list(set(
-            r['lot_id_origem'] for r in d_log['resultados']
-            if r['status'] == 'FALHA_SEM_SALDO' and r.get('lot_id_origem')
-        ))
+        lot_ids = None
+        if args.lot_source_log:
+            with open(args.lot_source_log) as f:
+                d_log = json.load(f)
+            lot_ids = list(set(
+                r['lot_id_origem'] for r in d_log['resultados']
+                if r['status'] == 'FALHA_SEM_SALDO' and r.get('lot_id_origem')
+            ))
+            logger.info(f'Filtro de lote ativo (--lot-source-log): {len(lot_ids)} lotes')
 
         quants = listar_quants_pre_prod(odoo, lot_ids)
         if args.limite > 0:

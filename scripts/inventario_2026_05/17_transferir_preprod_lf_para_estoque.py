@@ -1,25 +1,29 @@
-"""17 - Transferir saldo LF/Pre-Producao -> LF/Estoque (2026-05-19).
+"""17 - Transferir saldo LIVRE de Pre-Producao -> {emp}/Estoque (LF default).
 
-Adaptado do script 15 (FB) para LF. Necessario antes de faturar PERDA_LF_FB
-porque varios cods do Excel 'LF - FB MIGRAÇÃO' tem saldo distribuido entre
-LF/Estoque (42) e LF/Pré-Produção (53) + LF/Pré-Produção/Intermediário (30710).
-A NF de PERDA precisa partir do LF/Estoque.
+Origem (2026-05-19): adaptado do script 15 (FB) para LF, antes de faturar
+PERDA_LF_FB (saldo distribuido entre LF/Estoque 42 e LF/Pre-Producao 53/30710).
+GENERALIZADO (2026-05-20): aceita args para company, estoque destino e locais
+de origem; o filtro por planilha (--xlsx) virou OPCIONAL. Sem --xlsx, processa
+TODOS os produtos dos locais (transfere todo o saldo livre).
 
-Para cada cod do Excel (filtro --xlsx):
-1. Buscar quants em LF/Pre-Producao com quantity > 0
-2. Para cada quant com livre > 0: transferir livre para LF/Estoque mantendo
-   lote_id
+Para cada quant em Pre-Producao com livre > 0:
+1. Reduzir quant origem  -> gera move origem -> Virtual/Ajuste
+2. Aumentar/criar quant destino ({emp}/Estoque) mantendo o lote (ou sem lote).
 
 Mecanismo: inventory adjustment via stock.quant.write({inventory_quantity})
-+ action_apply_inventory. Gera stock.move Pre-Prod -> Virtual/Ajuste +
-Virtual/Ajuste -> LF/Estoque.
++ action_apply_inventory. Preserva a quantidade reservada na origem.
 
 Flags:
-    --xlsx PATH           planilha com cods a processar (col 'cod')
+    --company N           company_id (default 5=LF)
+    --estoque N           location destino (default 42=LF/Estoque)
+    --locs "a,b,c"        csv de location_ids de origem (sobrescreve default)
+    --xlsx PATH           planilha com cods p/ filtrar produtos (opcional)
     --dry-run             (default) so simula
     --confirmar           executa real
     --limite N            limite N quants (canary)
     --log-json PATH
+
+Ex (transferir TODO livre LF): --locs 53,54 --confirmar
 """
 import argparse
 import json
@@ -64,16 +68,21 @@ def carregar_cods(xlsx_path: str) -> List[str]:
     return [str(int(c)) if isinstance(c, (int, float)) else str(c) for c in df['cod'].tolist()]
 
 
-def listar_quants_pre_prod(odoo, product_ids: List[int]):
-    """Lista quants em Pre-Prod LF dos product_ids com saldo livre > 0."""
+def listar_quants_pre_prod(odoo, product_ids=None):
+    """Lista quants em Pre-Prod dos product_ids com saldo livre > 0.
+
+    Se product_ids for None, NAO filtra por produto (processa TODOS os quants
+    dos PRE_PROD_LOCS).
+    """
+    domain = [
+        ['company_id', '=', COMPANY_ID],
+        ['location_id', 'in', list(PRE_PROD_LOCS.keys())],
+        ['quantity', '>', 0],
+    ]
+    if product_ids is not None:
+        domain.insert(0, ['product_id', 'in', product_ids])
     quants = odoo.search_read(
-        'stock.quant',
-        [
-            ['product_id', 'in', product_ids],
-            ['company_id', '=', COMPANY_ID],
-            ['location_id', 'in', list(PRE_PROD_LOCS.keys())],
-            ['quantity', '>', 0],
-        ],
+        'stock.quant', domain,
         ['id', 'quantity', 'reserved_quantity', 'location_id', 'lot_id', 'product_id'],
     )
     out = []
@@ -182,9 +191,17 @@ def processar_quant(odoo, q: Dict, dry_run: bool) -> Dict:
 
 
 def main():
+    global COMPANY_ID, LOC_ESTOQUE, PRE_PROD_LOCS
     parser = argparse.ArgumentParser()
-    parser.add_argument('--xlsx', type=str, required=True,
-                        help='Planilha com coluna cod')
+    parser.add_argument('--company', type=int, default=COMPANY_ID,
+                        help='company_id (default 5=LF)')
+    parser.add_argument('--estoque', type=int, default=LOC_ESTOQUE,
+                        help='location destino (default 42=LF/Estoque)')
+    parser.add_argument('--locs', type=str, default='',
+                        help='csv de location_ids de origem (sobrescreve PRE_PROD_LOCS default)')
+    parser.add_argument('--xlsx', type=str, default='',
+                        help='Planilha com coluna cod p/ filtrar produtos '
+                             '(opcional; sem ela processa TODOS os produtos dos locais)')
     parser.add_argument('--dry-run', action='store_true', default=True)
     parser.add_argument('--confirmar', action='store_true', default=False)
     parser.add_argument('--limite', type=int, default=0)
@@ -193,23 +210,32 @@ def main():
     if args.confirmar:
         args.dry_run = False
 
-    banner(
-        f'TRANSFERIR LF Pre-Prod -> LF/Estoque — '
-        f'{"DRY-RUN" if args.dry_run else "EXECUCAO REAL"}'
-    )
+    COMPANY_ID = args.company
+    LOC_ESTOQUE = args.estoque
+    if args.locs:
+        PRE_PROD_LOCS = {int(x): f'loc_{int(x)}' for x in args.locs.split(',') if x.strip()}
 
-    cods = carregar_cods(args.xlsx)
-    print(f'Cods do Excel: {len(cods)}')
+    banner(
+        f'TRANSFERIR Pre-Prod -> Estoque(loc={LOC_ESTOQUE}, company={COMPANY_ID}) — '
+        f'{"DRY-RUN" if args.dry_run else "EXECUCAO REAL"} | origens={list(PRE_PROD_LOCS.keys())}'
+    )
 
     app = create_app()
     resultados = []
     with app.app_context():
         odoo = get_odoo_connection()
-        prods = odoo.search_read('product.product',
-            [['default_code', 'in', cods]], ['id', 'default_code'])
-        pid_to_cod = {p['id']: p['default_code'] for p in prods}
-        pids = list(pid_to_cod.keys())
-        print(f'Produtos resolvidos no Odoo: {len(pids)}/{len(cods)}')
+        if args.xlsx:
+            cods = carregar_cods(args.xlsx)
+            prods = odoo.search_read('product.product',
+                [['default_code', 'in', cods]], ['id', 'default_code'])
+            pid_to_cod = {p['id']: p['default_code'] for p in prods}
+            pids = list(pid_to_cod.keys())
+            print(f'Cods do Excel: {len(cods)} | Produtos resolvidos no Odoo: {len(pids)}')
+        else:
+            cods = []
+            pid_to_cod = {}
+            pids = None  # sem filtro de produto: processa todos
+            print('Sem --xlsx: processando TODOS os produtos dos locais de origem')
 
         quants = listar_quants_pre_prod(odoo, pids)
         if args.limite > 0:

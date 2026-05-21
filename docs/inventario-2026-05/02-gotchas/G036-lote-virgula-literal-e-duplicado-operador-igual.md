@@ -71,12 +71,28 @@ no `lot_id` 37661) e os 7 compostos com saldo passaram a ser encontrados.
 - Ao classificar "lote tem saldo?", somar quants de **todos** os `lot_id` com
   aquele nome (duplicados existem).
 
+## Variante correlata — lote de MESMO conceito com NOMES diferentes (`MIGRAÇÃO`/`MIGRACAO`)
+
+Descoberto na execução D013 (FB+CD, 2026-05-20). Além de duplicatas de mesmo nome (B),
+cada produto costuma ter o lote de migração em **duas grafias**: `MIGRAÇÃO` (com cedilha+til)
+e `MIGRACAO` (sem acento) — `stock.lot.id` **distintos**, e o saldo fica em **um** deles.
+
+Buscar com `limit=1` arbitrário pega a variante errada → `SEM_SALDO` falso. Na D013 isso
+causou 22 retornos CD (`Indisponivel/MIGRAÇÃO → Estoque`) reportando `SEM_SALDO` indevido —
+o saldo (4521, 3934, 7681 un…) estava na **outra** variante.
+
+**Fix**: ao resolver o lote MIGRAÇÃO, buscar TODAS as variantes
+(`['name','in',['MIGRAÇÃO','MIGRACAO','MIGRAÇAO']]`) e escolher o `lot_id` com **maior saldo
+NA LOCATION** em questão (origem do retorno = Indisponivel; destino da saída = consolidar onde
+já há saldo) — nunca um arbitrário. Implementado em
+`ajuste_fb_cd_indisponivel.melhor_lote_migracao_na_loc`.
+
 ## Why
 
 O CIEL IT permite nomes de lote arbitrários (incluindo vírgula) e não impede
-duplicação de nome por produto. O operador `=` do XML-RPC sobre campos
-relacionais (`lot_id.name`) tem comportamento intermitente documentado; `in`
-é estável.
+duplicação de nome por produto (mesmo nome OU variantes ortográficas do mesmo
+conceito). O operador `=` do XML-RPC sobre campos relacionais (`lot_id.name`) tem
+comportamento intermitente documentado; `in` é estável.
 
 ## Referências
 

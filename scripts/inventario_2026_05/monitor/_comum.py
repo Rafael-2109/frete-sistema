@@ -1,4 +1,5 @@
 """Helpers compartilhados pelos scripts 1-4 do monitor de inventario."""
+import json
 import os
 import sys
 
@@ -118,6 +119,37 @@ def m2o_name(x):
 def garantir_cache_dir(path=CACHE_DIR_DEFAULT):
     os.makedirs(path, exist_ok=True)
     return path
+
+
+# ============================================================
+# SNAPSHOT META (horario da extracao de estoque)
+# ============================================================
+SNAPSHOT_META_FILE = 'snapshot_meta.json'
+
+
+def salvar_snapshot_meta(cache_dir, snapshot_utc):
+    """Grava o horario UTC do snapshot de estoque (script 1).
+
+    `snapshot_utc`: string 'YYYY-MM-DD HH:MM:SS' em UTC (comparavel com
+    stock.move.line.date). O script 2 usa como TETO para excluir movs
+    posteriores ao snapshot — evita descasamento estoque x movimentacoes.
+    """
+    path = os.path.join(cache_dir, SNAPSHOT_META_FILE)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump({'snapshot_utc': snapshot_utc}, f)
+    return path
+
+
+def ler_snapshot_meta(cache_dir):
+    """Le o horario UTC do snapshot de estoque. Retorna str ou None se ausente."""
+    path = os.path.join(cache_dir, SNAPSHOT_META_FILE)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f).get('snapshot_utc')
+    except (ValueError, OSError):
+        return None
 
 
 def garantir_relatorios_dir():

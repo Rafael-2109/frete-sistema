@@ -25,17 +25,25 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _comum import (
     COMPANIES, COMPANY_NAME, ODOO_BATCH_SIZE, DATA_INICIO_INV, RAFAEL_ODOO_UID,
     norm_cod, norm_lote, m2o_id, m2o_name,
-    garantir_cache_dir, is_location_interna,
+    garantir_cache_dir, is_location_interna, ler_snapshot_meta,
     consultar_pickings_recebimento_lf_render,
 )
 
 
-def baixar_movimentacoes(odoo, data_inicio, pickings_render):
-    """Busca stock.move.line desde data_inicio e classifica."""
-    print(f'Buscando stock.move.line >= {data_inicio} em companies {COMPANIES}...')
+def baixar_movimentacoes(odoo, data_inicio, pickings_render, data_fim=None):
+    """Busca stock.move.line desde data_inicio (e ate data_fim) e classifica.
+
+    data_fim (UTC 'YYYY-MM-DD HH:MM:SS'): TETO = horario do snapshot de estoque.
+    Exclui movs posteriores ao snapshot, que ainda nao se refletem no quant lido —
+    evita diff fantasma (mov contada no teorico mas saldo nao no snapshot).
+    """
+    teto = f' e <= {data_fim}' if data_fim else ''
+    print(f'Buscando stock.move.line >= {data_inicio}{teto} em companies {COMPANIES}...')
     domain = [('date', '>=', data_inicio),
               ('company_id', 'in', COMPANIES),
               ('state', '=', 'done')]
+    if data_fim:
+        domain.append(('date', '<=', data_fim))
     mids = odoo.search('stock.move.line', domain)
     print(f'  {len(mids)} move_lines encontradas')
 
@@ -106,9 +114,19 @@ def main():
     ap.add_argument('--cache-dir', default=None)
     ap.add_argument('--data-inicio', default=DATA_INICIO_INV,
                     help=f'YYYY-MM-DD ou ISO (default: {DATA_INICIO_INV})')
+    ap.add_argument('--data-fim', default=None,
+                    help='Teto UTC YYYY-MM-DD HH:MM:SS (default: snapshot do script 1)')
     args = ap.parse_args()
 
     cache_dir = garantir_cache_dir(args.cache_dir) if args.cache_dir else garantir_cache_dir()
+
+    # Teto = horario do snapshot de estoque (script 1). Override manual via --data-fim.
+    data_fim = args.data_fim or ler_snapshot_meta(cache_dir)
+    if data_fim:
+        print(f'TETO de movimentacoes (snapshot de estoque, UTC): {data_fim}')
+    else:
+        print('AVISO: sem snapshot_meta.json — rode 1_baixar_estoques.py antes '
+              '(sem teto, pode haver descasamento estoque x movs)')
 
     # Pickings do recebimento_lf NO RENDER (producao)
     pickings_render = consultar_pickings_recebimento_lf_render(args.data_inicio[:10])
@@ -119,7 +137,7 @@ def main():
     with app.app_context():
         from app.odoo.utils.connection import get_odoo_connection
         odoo = get_odoo_connection()
-        df = baixar_movimentacoes(odoo, args.data_inicio, pickings_render)
+        df = baixar_movimentacoes(odoo, args.data_inicio, pickings_render, data_fim=data_fim)
 
     cols_out = ['id', 'date', 'filial', 'company_id_n', 'cod', 'nome_produto',
                 'product_id_n', 'lot_id_n', 'lote',

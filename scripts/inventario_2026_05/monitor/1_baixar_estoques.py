@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _comum import (
     COMPANIES, COMPANY_NAME, ODOO_BATCH_SIZE,
     norm_cod, norm_lote, m2o_id, m2o_name,
-    garantir_cache_dir,
+    garantir_cache_dir, salvar_snapshot_meta,
 )
 
 
@@ -92,12 +92,18 @@ def main():
     app = create_app()
     with app.app_context():
         from app.odoo.utils.connection import get_odoo_connection
+        from app.utils.timezone import agora_utc
         odoo = get_odoo_connection()
+        # Horario UTC do snapshot (capturado JUSTO ANTES da extracao). O script 2
+        # usa como teto para descartar movs posteriores -> evita descasamento.
+        snapshot_utc = agora_utc().strftime('%Y-%m-%d %H:%M:%S')
         df = baixar_estoques(odoo)
 
     out_path = os.path.join(cache_dir, 'estoques.csv')
     df.to_csv(out_path, index=False)
+    salvar_snapshot_meta(cache_dir, snapshot_utc)
     print(f'\nOK. {len(df)} linhas salvas em {out_path}')
+    print(f'Snapshot UTC (teto p/ movimentacoes): {snapshot_utc}')
 
     # resumo por filial
     print('\n=== Resumo ===')

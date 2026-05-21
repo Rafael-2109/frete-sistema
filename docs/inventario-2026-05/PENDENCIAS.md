@@ -349,6 +349,26 @@ Forçar redução de locais virtuais (`--incluir-virtual`) — testado em dry-ru
 
 ---
 
+## P13 — 108 exceções do ajuste FB+CD → Indisponível (D013, 2026-05-20)
+
+Linhas das planilhas `AJUSTE FB.xlsx` (105) + `TRANSF CD.xlsx` (3) **não executadas** pelo
+`ajuste_fb_cd_indisponivel.py`. Lista completa em `Downloads/EXCECOES_AJUSTE_FB_CD_2026_05_20.xlsx`.
+Nenhuma é falha — o script foi defensivo (saldo fresco + clamp).
+
+| Motivo | N | Caminho recomendado |
+|---|---|---|
+| Saldo consumido por **industrialização concorrente** (rótulos P-15/05 → LA FAMIGLIA durante a execução de 56 min) | 53 | **Decisão do Rafael**: o saldo foi p/ industrialização em vez de Indisponivel. Re-gerar planilha do estado atual OU aceitar. |
+| Linha sem lote, produto **sem `P-15/05`** | 29 | Confirmar de qual lote tirar (saldo está em lotes datados) e reenviar com lote explícito. |
+| Lote apontado existe mas com **saldo zero** | 17 | Saldo do produto está em outro lote — regenerar do estado atual. |
+| Código **não cadastrado no Odoo** (`103` PEPINO, `25` GLP, `45121452` COG OUTBACK) | 8 | Cadastrar no Odoo OU descartar as linhas. |
+| Duplicata na planilha (mesma origem já movida) | 1 | Correto não mover 2× — descartar. |
+
+**Notável — cod 109000100 OLEO**: planilha pede 40,4M kg (= valor do **monitor**, não saldo físico).
+Odoo tem 6,34M kg, 0 reservado, 99,9% já em Indisponivel; sobram 7.728 kg movíveis (lote 13194).
+Divergência **monitor × Odoo** a investigar. Detalhe: [EXECUCAO_AJUSTE_FB_CD_INDISPONIVEL_2026_05_20.md](08-execucoes/EXECUCAO_AJUSTE_FB_CD_INDISPONIVEL_2026_05_20.md).
+
+---
+
 ## Índice rápido
 
 | ID | Tema | Escopo | Bloqueia |
@@ -365,3 +385,4 @@ Forçar redução de locais virtuais (`--incluir-virtual`) — testado em dry-ru
 | P10 | 9 lotes emergenciais estão em FB/Estoque (loc 8) — não disponíveis para apontamento de produção sem transferência prévia para Linha de Pré-Produção | FB | Uso em produção |
 | P11 | 10 produtos sem cadastro Odoo no CD (FALHA `Cat1_SEM_CADASTRO_ODOO`) | CD | Faturamento desses cods + fechamento ciclo CD |
 | P12 | 9 produtos LF Pasta17 com lotes dessincronizados (saldo líquido 0/negativo) | LF | Realocação completa Pasta17 (138/147 feitos) |
+| P13 | 108 exceções ajuste FB+CD→Indisponível (53 industrialização concorrente, 29 sem-lote, 17 saldo zero, 8 cod inexistente, 1 dup) | FB+CD | Fechamento ajuste D013 (2252/2360 feitos) |
