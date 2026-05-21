@@ -78,13 +78,6 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_divergencia_separacao_id",
-      "columns": [
-        "separacao_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_assai_divergencia_chassi",
       "columns": [
         "chassi"
@@ -95,6 +88,13 @@
       "name": "ix_assai_divergencia_nf_id",
       "columns": [
         "nf_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_divergencia_separacao_id",
+      "columns": [
+        "separacao_id"
       ],
       "unique": false
     }

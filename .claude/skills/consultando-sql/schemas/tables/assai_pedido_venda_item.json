@@ -74,6 +74,13 @@
   ],
   "indices": [
     {
+      "name": "ix_assai_pedido_venda_item_loja_id",
+      "columns": [
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_assai_pedido_venda_item_modelo_id",
       "columns": [
         "modelo_id"
@@ -84,13 +91,6 @@
       "name": "ix_assai_pedido_venda_item_pedido_loja_id",
       "columns": [
         "pedido_loja_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_assai_pedido_venda_item_loja_id",
-      "columns": [
-        "loja_id"
       ],
       "unique": false
     }

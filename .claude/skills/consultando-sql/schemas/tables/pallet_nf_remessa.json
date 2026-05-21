@@ -160,17 +160,9 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_remessa_status",
+      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
       "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_remessa_empresa_status",
-      "columns": [
-        "empresa",
-        "status"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -183,16 +175,23 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_cnpj_destinatario",
+      "name": "idx_nf_remessa_data_status",
       "columns": [
-        "cnpj_destinatario"
+        "data_emissao",
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_nf_remessa_data_status",
+      "name": "ix_pallet_nf_remessa_odoo_account_move_id",
       "columns": [
-        "data_emissao",
+        "odoo_account_move_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_remessa_status",
+      "columns": [
         "status"
       ],
       "unique": false
@@ -205,9 +204,10 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_remessa_odoo_account_move_id",
+      "name": "idx_nf_remessa_empresa_status",
       "columns": [
-        "odoo_account_move_id"
+        "empresa",
+        "status"
       ],
       "unique": false
     }

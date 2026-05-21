@@ -74,9 +74,9 @@
   ],
   "indices": [
     {
-      "name": "ix_tabela_rede_precos_regiao",
+      "name": "ix_tabela_rede_precos_rede",
       "columns": [
-        "regiao"
+        "rede"
       ],
       "unique": false
     },
@@ -88,9 +88,9 @@
       "unique": false
     },
     {
-      "name": "ix_tabela_rede_precos_rede",
+      "name": "ix_tabela_rede_precos_regiao",
       "columns": [
-        "rede"
+        "regiao"
       ],
       "unique": false
     },

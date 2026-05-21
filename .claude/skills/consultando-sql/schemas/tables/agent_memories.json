@@ -130,13 +130,6 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_memories_category",
-      "columns": [
-        "category"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_agent_memories_agente",
       "columns": [
         "agente"
@@ -147,6 +140,13 @@
       "name": "ix_agent_memories_user_id",
       "columns": [
         "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_memories_category",
+      "columns": [
+        "category"
       ],
       "unique": false
     }

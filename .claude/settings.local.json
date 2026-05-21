@@ -210,7 +210,8 @@
       "mcp__sequential-thinking__sequentialthinking",
       "Skill(resolvendo-problemas)",
       "Bash(python /home/rafaelnascimento/projetos/frete_sistema/scripts/migrations/hora_*)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(.venv/bin/python scripts/inventario_2026_05/:*)"
     ],
     "deny": [],
     "defaultMode": "auto"

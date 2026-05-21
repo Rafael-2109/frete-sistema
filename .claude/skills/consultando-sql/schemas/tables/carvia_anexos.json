@@ -1,0 +1,113 @@
+{
+  "name": "carvia_anexos",
+  "description": "Tabela carvia_anexos",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "entidade_tipo",
+      "type": "varchar(30)",
+      "nullable": false
+    },
+    {
+      "name": "entidade_id",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "nome_original",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "nome_arquivo",
+      "type": "varchar(255)",
+      "nullable": false
+    },
+    {
+      "name": "caminho_s3",
+      "type": "varchar(500)",
+      "nullable": false
+    },
+    {
+      "name": "tamanho_bytes",
+      "type": "integer"
+    },
+    {
+      "name": "content_type",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "descricao",
+      "type": "text"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)",
+      "nullable": false
+    },
+    {
+      "name": "ativo",
+      "type": "boolean",
+      "description": "True = registro ativo",
+      "nullable": false,
+      "default": true
+    },
+    {
+      "name": "email_remetente",
+      "type": "varchar(255)"
+    },
+    {
+      "name": "email_assunto",
+      "type": "varchar(500)"
+    },
+    {
+      "name": "email_data_envio",
+      "type": "timestamp"
+    },
+    {
+      "name": "email_conteudo_preview",
+      "type": "varchar(500)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_carvia_anexos_entidade_tipo",
+      "columns": [
+        "entidade_tipo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_anexo_entidade",
+      "columns": [
+        "entidade_tipo",
+        "entidade_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_anexos_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_anexos_entidade_id",
+      "columns": [
+        "entidade_id"
+      ],
+      "unique": false
+    }
+  ]
+}

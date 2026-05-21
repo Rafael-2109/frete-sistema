@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 278,
+  "total_tabelas": 279,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -543,6 +543,15 @@
         "acao",
         "entidade_tipo",
         "entidade_id"
+      ]
+    },
+    {
+      "name": "carvia_anexos",
+      "description": "Tabela carvia_anexos",
+      "key_fields": [
+        "entidade_tipo",
+        "entidade_id",
+        "nome_original"
       ]
     },
     {

@@ -84,11 +84,11 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_sessions_user_id",
+      "name": "ix_agent_sessions_session_id",
       "columns": [
-        "user_id"
+        "session_id"
       ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_agent_sessions_agente",
@@ -98,11 +98,11 @@
       "unique": false
     },
     {
-      "name": "ix_agent_sessions_session_id",
+      "name": "ix_agent_sessions_user_id",
       "columns": [
-        "session_id"
+        "user_id"
       ],
-      "unique": true
+      "unique": false
     }
   ],
   "admin_only": true

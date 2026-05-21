@@ -111,16 +111,23 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_extrato_linhas_origem",
+      "name": "ix_carvia_extrato_linhas_linha_original_id",
       "columns": [
-        "origem"
+        "linha_original_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_data",
+      "name": "ix_carvia_extrato_linhas_arquivo_ofx",
       "columns": [
-        "data"
+        "arquivo_ofx"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_extrato_linhas_origem",
+      "columns": [
+        "origem"
       ],
       "unique": false
     },
@@ -132,16 +139,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_linha_original_id",
+      "name": "ix_carvia_extrato_linhas_data",
       "columns": [
-        "linha_original_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_extrato_linhas_arquivo_ofx",
-      "columns": [
-        "arquivo_ofx"
+        "data"
       ],
       "unique": false
     }
