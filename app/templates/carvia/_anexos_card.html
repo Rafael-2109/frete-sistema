@@ -1,0 +1,113 @@
+{# ============================================================================
+   Widget reutilizavel de anexos polimorficos (CarviaAnexo) — Frete + Subcontrato.
+
+   Uso (no topo do template):
+     {% from 'carvia/_anexos_card.html' import anexos_card with context %}
+
+   Render:
+     {{ anexos_card(
+          'Anexos do Frete',
+          anexos_frete,
+          url_for('carvia.upload_anexo_carvia', entidade_tipo='frete', entidade_id=frete.id),
+          pode_editar=True) }}
+
+   Requer (uma vez por pagina, no bloco scripts):
+     <script src="{{ url_for('static', filename='carvia/js/anexos_widget.js') }}"></script>
+
+   Download/exclusao usam endpoints fixos do CarviaAnexo (carvia.download_anexo_carvia
+   e /carvia/api/anexo/<id>/excluir).
+   ========================================================================== #}
+{% macro anexos_card(titulo, anexos, upload_url, pode_editar=True) %}
+<div class="card mt-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-paperclip"></i> {{ titulo }} ({{ anexos|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if anexos %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Arquivo</th>
+                        <th class="col-nowrap">Tamanho</th>
+                        <th>Tipo</th>
+                        <th class="col-nowrap">Enviado</th>
+                        <th>Por</th>
+                        <th class="text-end">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for anexo in anexos %}
+                    <tr>
+                        <td>
+                            <strong>{{ anexo.nome_original }}</strong>
+                            {% if anexo.email_assunto %}
+                            <div class="small text-muted"><i class="fas fa-envelope"></i> {{ anexo.email_assunto }}</div>
+                            {% endif %}
+                            {% if anexo.email_remetente %}
+                            <div class="small text-muted">De: {{ anexo.email_remetente }}</div>
+                            {% endif %}
+                            {% if anexo.descricao %}
+                            <div class="small text-muted">{{ anexo.descricao }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="col-nowrap">
+                            {% if anexo.tamanho_bytes %}
+                                {% if anexo.tamanho_bytes >= 1048576 %}
+                                    {{ '%.1f'|format(anexo.tamanho_bytes / 1048576) }} MB
+                                {% elif anexo.tamanho_bytes >= 1024 %}
+                                    {{ '%.1f'|format(anexo.tamanho_bytes / 1024) }} KB
+                                {% else %}
+                                    {{ anexo.tamanho_bytes }} B
+                                {% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td><small>{{ anexo.content_type or '-' }}</small></td>
+                        <td class="col-nowrap"><small>{{ anexo.criado_em.strftime('%d/%m/%Y %H:%M') if anexo.criado_em else '-' }}</small></td>
+                        <td><small>{{ anexo.criado_por or '-' }}</small></td>
+                        <td class="text-end col-nowrap">
+                            <a href="{{ url_for('carvia.download_anexo_carvia', anexo_id=anexo.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Baixar anexo">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            {% if pode_editar %}
+                            <button type="button" class="btn btn-sm btn-outline-danger carvia-anexo-excluir"
+                                    data-anexo-id="{{ anexo.id }}" title="Excluir anexo">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center mb-3">Nenhum anexo.</p>
+        {% endif %}
+
+        {% if pode_editar %}
+        <hr>
+        <form class="carvia-anexo-form" enctype="multipart/form-data" data-upload-url="{{ upload_url }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Adicionar Anexo</label>
+                    <input type="file" class="form-control form-control-sm" name="arquivo" required>
+                    <small class="text-muted">pdf, jpg, jpeg, png, doc, docx, xls, xlsx, msg, eml (max 10MB)</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Descricao</label>
+                    <input type="text" class="form-control form-control-sm" name="descricao" placeholder="Opcional">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-outline-success w-100">
+                        <i class="fas fa-upload"></i> Enviar
+                    </button>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

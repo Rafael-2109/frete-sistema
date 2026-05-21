@@ -434,6 +434,28 @@ class CarviaFaturaTransportadora(db.Model):
             )
         return True, ""
 
+    def pode_anexar_item(self):
+        """Verifica se NOVOS itens (subcontratos / despesas extras) podem ser
+        ANEXADOS (vinculados) a esta fatura.
+
+        Decisao 2026-05-20 (pedido operacional): CONFERENCIA, PAGAMENTO e
+        CONCILIACAO da fatura NAO bloqueiam a anexacao de novos itens. Documentos
+        atrasados (subcontrato/despesa) que pertencem a esta fatura precisam ser
+        vinculados mesmo apos o fechamento/pagamento.
+
+        IMPORTANTE: anexar um item NAO recalcula `valor_total` nem re-concilia
+        automaticamente — pode gerar divergencia (soma dos itens x total
+        conciliado), tratada manualmente pelo operador.
+
+        Diferente de pode_editar() / pode_desanexar_subcontrato(), que CONTINUAM
+        travando edicao e DESvinculo em faturas conferidas/pagas/conciliadas
+        (remover item ja pago e arriscado; adicionar nao).
+
+        Returns:
+            tuple[bool, str]: (pode_anexar, razao_se_nao)
+        """
+        return True, ""
+
     # ------------------------------------------------------------------ #
     #  Agregacoes de Custos de Entrega (padrao DespesaExtra/FaturaFrete)
     #

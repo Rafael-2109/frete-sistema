@@ -1568,11 +1568,13 @@ def register_fatura_routes(bp):
         if not fatura:
             return jsonify({'sucesso': False, 'erro': 'Fatura nao encontrada'}), 404
 
-        if fatura.status_conferencia == 'CONFERIDO':
-            return jsonify({
-                'sucesso': False,
-                'erro': 'Nao e possivel anexar subcontratos a fatura ja conferida.'
-            }), 400
+        # 2026-05-20: anexar e permitido mesmo CONFERIDA/PAGA/conciliada
+        # (pode_anexar_item). Documentos atrasados precisam ser vinculados; o
+        # vinculo NAO recalcula valor_total nem re-concilia. DESanexar continua
+        # bloqueado por pode_desanexar_subcontrato().
+        pode_anexar, razao_anexar = fatura.pode_anexar_item()
+        if not pode_anexar:
+            return jsonify({'sucesso': False, 'erro': razao_anexar}), 400
 
         data = request.get_json(silent=True) or {}
         subcontrato_ids = data.get('subcontrato_ids', [])

@@ -13,9 +13,9 @@ Regras de integridade:
 - CE nao pode estar CANCELADO ou PAGO ao vincular
 - CE nao pode estar conciliado diretamente ao vincular
 - CE nao pode ja estar vinculado a outra FT
-- FT deve existir e nao estar CONFERIDA (bloqueio via pode_editar())
-- Ao vincular com FT ja PAGA: auto-propaga status PAGO
-- Ao desvincular: se foi PAGO via auto-propagacao, reverte para PENDENTE
+- FT deve existir; vinculo PERMITIDO mesmo CONFERIDA/PAGA/conciliada
+  (pode_anexar_item — decisao 2026-05-20). O vinculo NAO recalcula valor_total
+  nem re-concilia; CE atrasado fica VINCULADO_FT (pagamento tratado a parte).
 - Ao desvincular: reset campos `numero_documento='PENDENTE_FATURA'`,
   `tipo_documento='PENDENTE_DOCUMENTO'`, `data_vencimento=None` (xerox Nacom).
 """
@@ -93,11 +93,11 @@ class CustoEntregaFaturaService:
                 f'Desvincule antes de vincular a outra.'
             )
 
-        # Validacao da fatura — pode_editar() ja bloqueia FT CONFERIDA ou PAGA.
-        # Isso garante que CEs so sao vinculados enquanto a fatura esta em
-        # construcao/conferencia. Alinhado com o filtro da `faturas_disponiveis()`.
-        pode_editar, razao = fatura.pode_editar()
-        if not pode_editar:
+        # Validacao da fatura — pode_anexar_item() permite vincular mesmo
+        # CONFERIDA/PAGA/conciliada (decisao 2026-05-20). Documentos atrasados
+        # podem ser anexados; o vinculo NAO recalcula valor_total nem re-concilia.
+        pode_anexar, razao = fatura.pode_anexar_item()
+        if not pode_anexar:
             raise ValueError(
                 f'Fatura {fatura.numero_fatura} nao pode receber novos vinculos: {razao}'
             )
@@ -126,8 +126,10 @@ class CustoEntregaFaturaService:
                 ce.data_vencimento = fatura.vencimento
 
         # Executar vinculo — status vai para VINCULADO_FT.
-        # Auto-propagacao para PAGO nao e necessaria aqui: se a FT pudesse estar
-        # PAGA, `pode_editar()` teria falhado acima.
+        # NOTA (2026-05-20): a FT pode agora estar PAGA/conciliada (pode_anexar_item
+        # permite). NAO auto-propagamos PAGO ao CE: o pagamento ja realizado nao
+        # cobriu este item atrasado. O CE fica VINCULADO_FT e seu pagamento e
+        # tratado a parte (conciliacao direta ou nova rodada da FT).
         ce.fatura_transportadora_id = fatura_id
         ce.status = 'VINCULADO_FT'
 
@@ -240,7 +242,9 @@ class CustoEntregaFaturaService:
         """Retorna CarviaFaturaTransportadora disponiveis para vincular este CE.
 
         Filtros:
-        - FT nao CONFERIDA e nao PAGA (consistente com vincular() que usa pode_editar)
+        - Todas as FTs sao elegiveis (CONFERIDA/PAGA/conciliada inclusive) —
+          consistente com vincular() que usa pode_anexar_item (2026-05-20).
+          O campo 'cabe_ce' do resultado sinaliza divergencia de soma para a UI.
         - Se restrito_por_transportadora=True (default) E CE tem frete_id,
           filtra por mesma transportadora via CarviaSubcontrato vinculado ao
           frete. Caso contrario, retorna todas elegiveis (paridade Nacom).
@@ -273,10 +277,9 @@ class CustoEntregaFaturaService:
                 subs = CarviaSubcontrato.query.filter_by(frete_id=frete.id).all()
                 transportadora_ids = {s.transportadora_id for s in subs if s.transportadora_id}
 
-        query = CarviaFaturaTransportadora.query.filter(
-            CarviaFaturaTransportadora.status_conferencia != 'CONFERIDO',
-            CarviaFaturaTransportadora.status_pagamento != 'PAGO',
-        )
+        # 2026-05-20: sem filtro de status — faturas CONFERIDAS/PAGAS/conciliadas
+        # tambem podem receber despesas atrasadas (pode_anexar_item).
+        query = CarviaFaturaTransportadora.query
         if transportadora_ids:
             query = query.filter(
                 CarviaFaturaTransportadora.transportadora_id.in_(transportadora_ids)
@@ -362,8 +365,8 @@ class CustoEntregaFaturaService:
           mesma transportadora da FT (navegacao ce.frete_id -> CarviaSubcontrato
           -> transportadora_id). CEs sem frete_id sao excluidos por seguranca
           (nao da para garantir que pertencem a essa transportadora).
-        - FT deve estar editavel (senao retorna lista vazia — defesa em
-          profundidade; a rota tambem valida `pode_editar()`).
+        - FT deve permitir anexacao (pode_anexar_item — 2026-05-20: aceita
+          CONFERIDA/PAGA/conciliada; despesas atrasadas podem ser vinculadas).
 
         Args:
             fatura_id: ID da CarviaFaturaTransportadora
@@ -382,8 +385,8 @@ class CustoEntregaFaturaService:
         if not fatura:
             return []
 
-        pode_editar, _ = fatura.pode_editar()
-        if not pode_editar:
+        pode_anexar, _ = fatura.pode_anexar_item()
+        if not pode_anexar:
             return []
 
         if not fatura.transportadora_id:

@@ -380,6 +380,13 @@ def register_subcontrato_routes(bp):
             )
             pode_excluir_orfao = not tem_vinculos
 
+        # Anexos (CarviaAnexo polimorfico) deste subcontrato — paridade Nacom.
+        from app.carvia.models import CarviaAnexo
+        from app.carvia.services.documentos.anexo_service import CarviaAnexoService
+        anexos_subcontrato = CarviaAnexoService.listar(
+            CarviaAnexo.ENTIDADE_SUBCONTRATO, sub.id
+        )
+
         return render_template(
             'carvia/subcontratos/detalhe.html',
             sub=sub,
@@ -393,6 +400,7 @@ def register_subcontrato_routes(bp):
             despesas_extras=despesas_extras,
             valor_conciliado_sub=valor_conciliado_sub,
             fatura_transportadora=fatura_transportadora,
+            anexos_subcontrato=anexos_subcontrato,
         )
 
     @bp.route('/subcontratos/<int:sub_id>/vincular-operacao', methods=['POST']) # type: ignore

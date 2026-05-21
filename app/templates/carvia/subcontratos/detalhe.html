@@ -5,6 +5,7 @@
    se o submit fosse rejeitado. #}
 {% from 'carvia/_macros.html' import carvia_ref %}
 {% from 'carvia/_modal_admin_excluir.html' import modal_admin_excluir with context %}
+{% from 'carvia/_anexos_card.html' import anexos_card with context %}
 {% set pode_excluir_orfao = pode_excluir_orfao|default(false) %}
 
 {% block content %}
@@ -423,6 +424,13 @@
 
     {# Card "Despesas Extras Vinculadas" — xerox readonly Nacom #}
     {% include 'carvia/_card_despesas_extras_readonly.html' %}
+
+    {# Anexos do Subcontrato (CarviaAnexo) — paridade Nacom #}
+    {{ anexos_card(
+        'Anexos do Subcontrato',
+        anexos_subcontrato,
+        url_for('carvia.upload_anexo_carvia', entidade_tipo='subcontrato', entidade_id=sub.id)
+    ) }}
 </div>
 
 <!-- Modal Unificado: Cotacao -->
@@ -511,6 +519,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='carvia/js/anexos_widget.js') }}"></script>
 <script>
 function formatBRL(valor) {
     return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(valor);

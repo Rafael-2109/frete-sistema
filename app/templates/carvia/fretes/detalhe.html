@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'carvia/_anexos_card.html' import anexos_card with context %}
 
 {# CarviaFrete nao tem `ctrc_numero` proprio — resolve via operacao (venda) → subcontrato (compra) #}
 {% set _frete_label = (operacao.ctrc_numero if operacao and operacao.ctrc_numero else (operacao.cte_numero if operacao and operacao.cte_numero else (subcontrato.cte_numero if subcontrato and subcontrato.cte_numero else None))) %}
@@ -60,12 +61,13 @@
                 <i class="fas fa-calculator"></i> Analise de Diferencas
             </a>
 
-            {% if not fatura_transportadora or fatura_transportadora.status_conferencia != 'CONFERIDO' %}
+            {# 2026-05-20: criar despesa liberado mesmo com fatura conferida/conciliada.
+               A despesa nasce PENDENTE; vincular a fatura e passo separado e tambem
+               liberado (pode_anexar_item) — nao recalcula nem re-concilia a fatura. #}
             <a href="{{ url_for('carvia.nova_despesa_do_frete_carvia', frete_id=frete.id) }}"
                class="btn btn-warning">
                 <i class="fas fa-plus"></i> Nova Despesa Extra
             </a>
-            {% endif %}
 
             {% if not frete.fatura_cliente_id and not frete.fatura_transportadora_id and frete.status != 'CANCELADO' %}
             <form method="POST" action="{{ url_for('carvia.cancelar_frete_carvia', id=frete.id) }}"
@@ -919,6 +921,28 @@
     {% endif %}
 
     {# ================================================================ #}
+    {# 8b. ANEXOS (Frete + Subcontratos) — paridade Nacom              #}
+    {#     Anexar comprovante/e-mail na propria tela do frete.         #}
+    {# ================================================================ #}
+    <div class="row mb-4">
+        <div class="col-12">
+            {{ anexos_card(
+                'Anexos do Frete',
+                anexos_frete,
+                url_for('carvia.upload_anexo_carvia', entidade_tipo='frete', entidade_id=frete.id)
+            ) }}
+
+            {% for sub in subcontratos %}
+            {{ anexos_card(
+                'Anexos do Subcontrato ' ~ (sub.cte_numero or ('#' ~ sub.id)),
+                anexos_por_subcontrato.get(sub.id, []),
+                url_for('carvia.upload_anexo_carvia', entidade_tipo='subcontrato', entidade_id=sub.id)
+            ) }}
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ================================================================ #}
     {# 9. CONCILIACOES BANCARIAS (via fatura transportadora pai)       #}
     {# ================================================================ #}
     {% if fatura_transportadora %}
@@ -937,6 +961,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='carvia/js/anexos_widget.js') }}"></script>
 <script>
 // Emissoes CTe Complementar 222 em progresso deste frete — entrega tracking
 // ao SswProgress (toast global bottom-right). Cada badge com

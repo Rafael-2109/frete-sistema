@@ -2085,13 +2085,13 @@ def register_custo_entrega_routes(bp):
             if custo.frete_id else None
         )
 
-        # Faturas disponiveis = nao CONFERIDAS e nao PAGAS — paridade Nacom
-        # (sem restringir por transportadora). Se quiser filtrar, usar a tela
-        # antiga `vincular_fatura.html` (deprecated) ou enriquecer este list.
-        faturas_disponiveis = CarviaFaturaTransportadora.query.filter(
-            CarviaFaturaTransportadora.status_conferencia != 'CONFERIDO',
-            CarviaFaturaTransportadora.status_pagamento != 'PAGO',
-        ).order_by(CarviaFaturaTransportadora.criado_em.desc()).all()
+        # 2026-05-20: faturas CONFERIDAS/PAGAS/conciliadas TAMBEM elegiveis para
+        # receber despesas atrasadas (pode_anexar_item). Sem restringir por
+        # status nem por transportadora (paridade Nacom). O vinculo NAO recalcula
+        # valor_total nem re-concilia — divergencia tratada manualmente.
+        faturas_disponiveis = CarviaFaturaTransportadora.query.order_by(
+            CarviaFaturaTransportadora.criado_em.desc()
+        ).all()
 
         if request.method == 'POST':
             fatura_id_str = (request.form.get('fatura_id') or '').strip()

@@ -142,6 +142,13 @@ echo "HORA 30: seed de aliases iniciais..."
 python scripts/migrations/hora_30_seed_aliases_atuais.py \
     || echo "⚠️ Seed hora_30 falhou, continuando deploy..."
 
+# 12. CarVia: tabela carvia_anexos (anexos polimorficos Frete + Subcontrato).
+# Paridade Nacom (comprovante + e-mail). Idempotente (CREATE TABLE IF NOT EXISTS
+# via metadata SQLAlchemy). Despesas mantem carvia_custo_entrega_anexos.
+echo "CarVia: tabela carvia_anexos (anexos Frete + Subcontrato)..."
+python scripts/migrations/criar_carvia_anexos.py \
+    || echo "⚠️ Migration criar_carvia_anexos falhou, continuando deploy..."
+
 # Migrations motos_assai (01-08): removidas do build apos deploy concluido em
 # 2026-05-08. Scripts permanecem em scripts/migrations/ como historico — rodar
 # manualmente apenas em fresh install / staging novo (ordem: 02, 01, 07, 08

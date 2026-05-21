@@ -292,6 +292,16 @@ def register_frete_routes(bp):
             CarviaCustoEntrega.status != 'CANCELADO',
         ).order_by(CarviaCustoEntrega.criado_em.desc()).all()
 
+        # Anexos (CarviaAnexo polimorfico) — do proprio frete e de cada subcontrato.
+        # Paridade Nacom: anexar comprovante/e-mail na propria tela do frete.
+        from app.carvia.models import CarviaAnexo
+        from app.carvia.services.documentos.anexo_service import CarviaAnexoService
+        anexos_frete = CarviaAnexoService.listar(CarviaAnexo.ENTIDADE_FRETE, frete.id)
+        anexos_por_subcontrato = {
+            sub.id: CarviaAnexoService.listar(CarviaAnexo.ENTIDADE_SUBCONTRATO, sub.id)
+            for sub in subcontratos_list
+        }
+
         return render_template(
             'carvia/fretes/detalhe.html',
             frete=frete,
@@ -304,6 +314,8 @@ def register_frete_routes(bp):
             cotacao_qtd_motos=cotacao_qtd_motos,
             frete_eh_moto=frete_eh_moto,
             despesas_extras=despesas_extras,
+            anexos_frete=anexos_frete,
+            anexos_por_subcontrato=anexos_por_subcontrato,
         )
 
     # ------------------------------------------------------------------
