@@ -23,7 +23,8 @@ estratificação dos scripts — muitos são de gerações anteriores, hoje supe
 | **G2** Pré-etapa interna consolidando em MIGRAÇÃO | transferência interna + residual, sem NF | D006, **D007** | Não | Ondas 5-6; `03b/04b/09b`, `PreEtapaEstoqueService` |
 | **G3** Inventory adjustment direto por planilha via locais "Indisponível" | `stock.quant` + `action_apply_inventory`, sem NF | D010, **D011**, D012, D013 | Não | **Atual**; `11-17`, `ajuste_*`, `mover_migracao`, `StockQuantAdjustmentService` |
 
-> Cadeias de supersessão (FONTE: `sa1`): D002 substitui D001 (matriz IC); D006 substitui renomeio de D004;
+> Cadeias de supersessão (FONTE: `sa1`): D002 substitui D001 (matriz IC); **D014 complementa/corrige D002**
+> (entradas 1xxx + regra CFOP por tipo de produto + corrige vasilhame fp 64); D006 substitui renomeio de D004;
 > D007 substitui abordagem fiscal de D004 + INDISPONIBILIZAR de D005 (p/ CD); D011 substitui virtual id=28
 > e relocaliza MIGRAÇÃO; D012 é override de D011 só p/ LF. **D009 não existe** (gap na numeração).
 
@@ -87,7 +88,7 @@ estratificação dos scripts — muitos são de gerações anteriores, hoje supe
 |-----------|-----------|------|
 | `COMPANY_LOCATIONS` (FB=8, CD=32, LF=42) | ✅ `constants/locations.py` | SC=22 **NÃO adicionado** (decisão 2026-05-20: SC fora de escopo, D011:95) |
 | `CODIGO_PARA_COMPANY_ID` / `COMPANY_PARTNER_ID` (FB=1, CD=34, LF=35) | ✅ `constants/operacoes_fiscais.py` | SC **NÃO adicionado** (mesma decisão) |
-| `MATRIZ_INTERCOMPANY` — fiscal_position + CFOP **saída** (5901/5903/5949/5152/5151) + campo **`entrada`** (1901/1903/1949 + `resolver_entrada()`, validado no Odoo 2026-05-21) | ✅ `operacoes_fiscais.py` | regra CFOP por tipo de produto LF documentada no módulo: 5901 insumo · **5902 insumo utilizado ≠ 5903 não-aplicado** · 5124/5902 = venda-industrializacao (fp 111, fora de escopo) · 5949 = retrabalho/ajuste tipo 4 (caso do inventário) |
+| `MATRIZ_INTERCOMPANY` (**6 ops**: 4 ajuste + 2 referência) — CFOP **saída** + campo **`entrada`** (1901/1903/1949/1151/1152/1124/1902 + `resolver_entrada()`); validado no Odoo 2026-05-21, **[D014](../00-decisoes/D014-cfop-entradas-e-operacoes-referencia.md)** | ✅ `operacoes_fiscais.py` | regra CFOP por tipo de produto: 5901 insumo · **5902 insumo utilizado (NUNCA produto acabado) ≠ 5903 não-aplicado** · 5124+5902 = venda-industrializacao (fp 111, ref) · **5921 = vasilhame (fp 64, ref)** · 5949 = retrabalho/ajuste tipo 4 (inventário). **SARET tipo 4 c/ 5902 = erro** |
 | `LOCAIS_INDISPONIVEL` (FB 31088, SC 31089, CD 31090, LF 31091) | ✅ **FEITO (Onda 1)** em `locations.py` + `get_local_indisponivel()` + testes | migrar consumidores (gradual, QUANDO-SUPERADO) |
 | `LOTES_MIGRACAO_POR_COMPANY` (FB id=30482, CD id=30856) | ✅ **FEITO (Onda 1)** em `locations.py` | migrar consumidores |
 | `PICKING_TYPE_POR_DIRECAO` / `LOCATION_DESTINO_POR_DIRECAO` | ✅ **FEITO** em `constants/picking_types.py` (G003 resolvido); pipeline importa + re-exporta (compat scripts) | — |

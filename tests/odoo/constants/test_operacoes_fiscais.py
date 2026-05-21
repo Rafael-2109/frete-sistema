@@ -2,11 +2,51 @@
 import pytest
 
 
-def test_matriz_intercompany_tem_4_tipos():
+def test_matriz_intercompany_tipos():
+    """4 operacoes de ajuste + 2 de referencia (venda-industrializacao, vasilhame)."""
     from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
     assert set(MATRIZ_INTERCOMPANY.keys()) == {
-        'industrializacao', 'perda', 'dev-industrializacao', 'transf-filial'
+        'industrializacao', 'perda', 'dev-industrializacao', 'transf-filial',
+        'venda-industrializacao', 'vasilhame',
     }
+
+
+def test_venda_industrializacao_nf_mista_5124_5902():
+    """venda-industrializacao (fp 111): NF mista — produto acabado 5124 + insumo 5902.
+    Entrada FB fp 88: 1124 (produto) + 1902 (insumo). Confirmado VND/2026/00308."""
+    from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
+    op = MATRIZ_INTERCOMPANY['venda-industrializacao']
+    assert op['l10n_br_tipo_pedido'] == 'venda-industrializacao'
+    assert op['fiscal_position_id'] == {(5, 1): 111}
+    assert op['cfop_esperado'][(5, 1)] == {'produto_acabado': '5124', 'insumo_utilizado': '5902'}
+    ent = op['entrada'][(5, 1)]
+    assert ent['fiscal_position_id'] == 88
+    assert ent['cfop'] == {'produto_acabado': '1124', 'insumo_utilizado': '1902'}
+    assert ent['l10n_br_tipo_pedido_entrada'] == 'serv-industrializacao'
+
+
+def test_vasilhame_5921_lf_fb():
+    """vasilhame (fp 64, tipo dev-vasilhame): LF→FB CFOP 5921. Entrada nao confirmada."""
+    from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
+    op = MATRIZ_INTERCOMPANY['vasilhame']
+    assert op['l10n_br_tipo_pedido'] == 'dev-vasilhame'
+    assert op['fiscal_position_id'] == {(5, 1): 64}
+    assert op['cfop_esperado'][(5, 1)] == '5921'
+    # entrada nao confirmada -> fiscal_position_id None
+    assert op['entrada'][(5, 1)]['fiscal_position_id'] is None
+
+
+def test_resolver_operacao_nunca_retorna_referencia():
+    """resolver_operacao_por_tipo_produto so retorna operacoes de AJUSTE, nunca as de referencia."""
+    from app.odoo.constants.operacoes_fiscais import resolver_operacao_por_tipo_produto
+    referencia = {'venda-industrializacao', 'vasilhame'}
+    for tipo in (1, 2, 3, 4):
+        for company in (1, 4, 5):
+            try:
+                op = resolver_operacao_por_tipo_produto(tipo=tipo, company_id=company, sinal=1)
+            except ValueError:
+                continue
+            assert op not in referencia
 
 
 def test_industrializacao_FB_para_LF():

@@ -2,6 +2,7 @@
 
 **Descoberto em:** 2026-05-17 (audit 00c)
 **Severidade:** ALTA — afeta a definição de `MATRIZ_INTERCOMPANY`
+**Resolvido por:** D002 (matriz) + [D014](../00-decisoes/D014-cfop-entradas-e-operacoes-referencia.md) (entradas 1xxx, regra CFOP por tipo de produto, vasilhame 5921, erro SARET tipo 4 c/ 5902).
 
 ## Contexto
 

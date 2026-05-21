@@ -4,6 +4,12 @@
 **Resolve:** G003 (com info correta sobre Santana de Parnaiba/SP)
 **Substitui:** seções da matriz em D001 (parcialmente errada por falso positivo)
 
+> **⚠️ COMPLEMENTADO/CORRIGIDO por [D014](D014-cfop-entradas-e-operacoes-referencia.md) (2026-05-21):**
+> entradas (CFOP 1xxx) e regra por tipo de produto confirmadas no Odoo. Correções: (1) a fp **64**
+> NÃO é variante de dev-industrializacao LF→CD/5949 — é operação própria `dev-vasilhame` **LF→FB CFOP 5921**;
+> (2) dev-industrializacao produto 4 = **5949** em todas as direções (**5902 NUNCA é produto acabado** —
+> é insumo; SARET tipo 4 com 5902 é erro). Ver D014 para a matriz saída↔entrada completa.
+
 ## Correção do falso positivo
 
 A NF `SPI/2026/00007` (id=559045) retornada em 00c como "FB→LF" era na verdade:
@@ -126,3 +132,7 @@ Ou seja: para ajustar produto 4 na LF que pertence a FB, **2 NFs** podem ser nec
 - 64 REMESSA DE VASILHAME (mais antigo, possivelmente para vasilhame específico)
 
 Default para inventário: usar **89**. Se ajuste envolver vasilhame, reavaliar.
+
+> **⚠️ CORRIGIDO por [D014](D014-cfop-entradas-e-operacoes-referencia.md):** a fp **64**
+> não é variante de `(5,4)` LF→CD. É operação **própria** `dev-vasilhame` em **LF→FB (5,1)**,
+> CFOP **5921** (série VAS) — confirmado VAS/2026/00160. `(5,4)` LF→CD usa **89/5949**.

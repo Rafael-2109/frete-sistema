@@ -4,6 +4,12 @@
 **Decidida por:** Rafael (resposta usuário 17/05)
 **Origem:** descoberta G003 (`docs/inventario-2026-05/02-gotchas/G003-cfop-real-divergente-do-prompt.md`)
 
+> **⚠️ ATUALIZADO por [D014](../00-decisoes/D014-cfop-entradas-e-operacoes-referencia.md) (2026-05-21):**
+> a simetria de **fiscal_position** (74 p/ FB→LF, 89 p/ LF→FB) está **correta**, e o CFOP é **5949**
+> (produto acabado tipo 4). LF→FB (5,1) tem NFs históricas, mas com **5902 — que é ERRO** (5902 é
+> CFOP de insumo, nunca de produto acabado), logo **sem precedente válido de 5949**. Ambas as direções
+> FB↔LF seguem exigindo **canary fiscal**. Ver D014.
+
 ## Premissa
 
 Direções `(1, 5)` (FB → LF) e `(5, 1)` (LF → FB) para `dev-industrializacao` **não têm precedente histórico** no Odoo. Decisão do dono do projeto: emitir LF→FB e FB→LF **diretamente como 1 NF** (sem cadeia LF→CD→FB), criando o primeiro registro histórico.

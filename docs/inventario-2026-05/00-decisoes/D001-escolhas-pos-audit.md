@@ -3,6 +3,7 @@
 **Data:** 2026-05-17
 **Origem:** F0 Task 0.1 + investigação G001/G002 (`00b_investigar_gotchas.py`)
 **Resolve:** L1, L3 (parcial), L8 do spec; G001, G002
+**Substituído por:** D002 (matriz final) e [D014](D014-cfop-entradas-e-operacoes-referencia.md) (entradas + CFOP por tipo de produto). A linha "dev-industrializacao LF→CD fp 64 REMESSA DE VASILHAME" desta página está **corrigida em D014** (fp 64 é `dev-vasilhame` LF→FB CFOP 5921).
 
 ## COMPANY_LOCATIONS final
 

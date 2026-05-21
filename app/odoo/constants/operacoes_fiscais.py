@@ -27,10 +27,16 @@ REGRA DE CFOP por TIPO DE PRODUTO na industrializacao por encomenda FB<->LF (Raf
   - 5903 (entrada 1903): LF->FB retorno de INSUMO (tipo 1,2,3) recebido e NAO aplicado.
   - 5949 (entrada 1949): retrabalho / retorno / AJUSTE DE ESTOQUE de produto (tipo 4).
                          E o caso do agente/inventario.
-  5124+5902 ocorrem na operacao 'venda-industrializacao' (fp 111, fluxo RecebimentoLF),
-  fora do escopo de ajuste de inventario -> nao modelada aqui (so documentada).
+  5124+5902 ocorrem na operacao 'venda-industrializacao' (fp 111, fluxo RecebimentoLF).
+
+OPERACOES (6 chaves):
+- AJUSTE DE INVENTARIO (usadas por resolver_operacao_por_tipo_produto):
+  industrializacao, perda, dev-industrializacao, transf-filial.
+- REFERENCIA (fluxo RecebimentoLF; documentadas, NAO retornadas pelo resolver de ajuste):
+  venda-industrializacao (5124+5902, fp 111), vasilhame (5921, fp 64).
 
 Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md §6.3
+Doc consolidada das entradas/CFOPs: docs/inventario-2026-05/00-decisoes/D014-cfop-entradas-e-operacoes-referencia.md
 """
 from typing import Dict, Any, Tuple
 
@@ -173,6 +179,56 @@ MATRIZ_INTERCOMPANY: Dict[str, Dict[str, Any]] = {
         'nf_referencia': 94410,
         'account_move_id_referencia': 604472,
     },
+    # ========================================================================
+    # OPERACOES DE REFERENCIA (fluxo RecebimentoLF / faturamento de industrializacao).
+    # NAO sao usadas pelo ajuste de inventario (resolver_operacao_por_tipo_produto NAO
+    # as retorna). Modeladas para documentar a regra fiscal completa (confirmado 2026-05-21).
+    # ========================================================================
+    'venda-industrializacao': {
+        # Industrializacao por encomenda COM cobranca. NF MISTA (2 CFOPs por tipo de produto):
+        #   produto acabado (tipo 4)   -> 5124 'Industrializacao efetuada p/ outra empresa' (entrada 1124)
+        #   insumos utilizados (1,2,3) -> 5902 'Retorno de mercadoria utilizada na industr.'  (entrada 1902)
+        # Confirmado: VND/2026/00308 (605869) -> ENTSI/2026/05/0034 (606765).
+        'l10n_br_tipo_pedido': 'venda-industrializacao',
+        'move_type': 'out_invoice',
+        'tipo_produto': [1, 2, 3, 4],   # NF mista
+        'uso': 'RecebimentoLF (faturamento industrializacao por encomenda) — NAO ajuste de inventario',
+        'fiscal_position_id': {
+            (5, 1): 111,  # LF → FB: 'SAÍDA - SERVIÇO DE INDUSTRIALIZAÇÃO'
+        },
+        'cfop_esperado': {
+            # NF mista: CFOP por classe de produto
+            (5, 1): {'produto_acabado': '5124', 'insumo_utilizado': '5902'},
+        },
+        'entrada': {
+            (5, 1): {'fiscal_position_id': 88,  # 'ENTRADA - SERVIÇO INDUSTRIALIZAÇÃO'
+                     'l10n_br_tipo_pedido_entrada': 'serv-industrializacao',
+                     'cfop': {'produto_acabado': '1124', 'insumo_utilizado': '1902'}},
+        },
+        'nf_referencia': 605869,                # VND/2026/00308 (saida)
+        'account_move_id_referencia': 606765,   # ENTSI/2026/05/0034 (entrada)
+    },
+    'vasilhame': {
+        # Remessa de vasilhame / sacaria / pallet (embalagem retornavel, tipo 2). Operacao
+        # PROPRIA — nao confundir com retorno de insumo (5902/5903) nem retrabalho (5949).
+        # Confirmado: VAS/2026/00160 (692147), fp 64, CFOP 5921, produto tipo 2, LF → FB.
+        'l10n_br_tipo_pedido': 'dev-vasilhame',
+        'move_type': 'out_invoice',
+        'tipo_produto': [2],            # embalagem (sacaria / vasilhame / pallet)
+        'uso': 'Remessa de vasilhame retornavel — NAO ajuste de inventario',
+        'fiscal_position_id': {
+            (5, 1): 64,  # LF → FB: 'REMESSA DE VASILHAME'
+        },
+        'cfop_esperado': {(5, 1): '5921'},
+        'entrada': {
+            # NAO CONFIRMADA: remessa de vasilhame nao gerou in_invoice por chave (a FB pode
+            # nao escriturar entrada, ou estava pendente). 1920 'Entrada de vasilhame ou sacaria'
+            # e o CFOP candidato (visto como LINHA em NF de retrabalho, ex. move 603226) — validar.
+            (5, 1): {'fiscal_position_id': None, 'cfop': '1920',
+                     'l10n_br_tipo_pedido_entrada': 'ent-vasilhame'},
+        },
+        'nf_referencia': 692147,  # VAS/2026/00160 (saida)
+    },
 }
 
 
@@ -201,7 +257,10 @@ def resolver_operacao_por_tipo_produto(*, tipo: int, company_id: int, sinal: int
                -1 se negativo (estoque deve diminuir)
 
     Returns:
-        chave de MATRIZ_INTERCOMPANY.
+        chave de MATRIZ_INTERCOMPANY. Apenas operacoes de AJUSTE de inventario:
+        industrializacao, perda, dev-industrializacao, transf-filial. Os tipos de
+        referencia 'venda-industrializacao' e 'vasilhame' NAO sao retornados aqui
+        (pertencem ao fluxo RecebimentoLF, nao ao ajuste de inventario).
 
     Raises:
         ValueError: se combinacao desconhecida.
@@ -262,6 +321,9 @@ def resolver_entrada(tipo_operacao: str, company_origem: int,
     Returns:
         dict {fiscal_position_id, cfop, l10n_br_tipo_pedido_entrada}.
         `fiscal_position_id` pode ser None quando o caso ainda nao tem precedente no Odoo.
+        `cfop` e str na maioria das operacoes; para NF MISTA (ex.: 'venda-industrializacao')
+        e um dict {classe_produto: cfop} (ex.: {'produto_acabado': '1124', 'insumo_utilizado': '1902'}).
+        Callers devem checar o tipo (str vs dict) antes de tratar como string.
 
     Raises:
         KeyError: se tipo_operacao nao existe.
