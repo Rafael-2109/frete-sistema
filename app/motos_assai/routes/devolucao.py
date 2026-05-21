@@ -34,6 +34,7 @@ from app.motos_assai.services.devolucao_service import (
     url_visualizacao_anexo as _url_view_devolucao,
     url_download_anexo as _url_dl_devolucao,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
 
 
 # ============================================================================
@@ -110,6 +111,7 @@ def devolucoes_lista():
     nf_numero = request.args.get('nf_numero', '').strip() or None
     numero_nfd = request.args.get('numero_nfd', '').strip() or None
     chassi = request.args.get('chassi', '').strip() or None
+    modelo_id = request.args.get('modelo_id', type=int) or None
     data_inicio_s = request.args.get('data_inicio', '').strip()
     data_fim_s = request.args.get('data_fim', '').strip()
 
@@ -127,6 +129,7 @@ def devolucoes_lista():
         nf_numero=nf_numero,
         numero_nfd=numero_nfd,
         chassi=chassi,
+        modelo_id=modelo_id,
         data_inicio=data_inicio,
         data_fim=data_fim,
     )
@@ -134,10 +137,12 @@ def devolucoes_lista():
     return render_template(
         'motos_assai/devolucao/lista.html',
         devolucoes=devolucoes,
+        modelos=listar_modelos(somente_ativos=True),
         filtros={
             'nf_numero': nf_numero or '',
             'numero_nfd': numero_nfd or '',
             'chassi': chassi or '',
+            'modelo_id': modelo_id,
             'data_inicio': data_inicio_s,
             'data_fim': data_fim_s,
         },

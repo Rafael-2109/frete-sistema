@@ -52,6 +52,11 @@
   </a>
 </div>
 
+{# Filtro chassi/modelo (2026-05-20) #}
+{% with filtros=filtros_aplicados, modelos=modelos, total_resultados=(separacoes_prontas|length + separacoes_faturadas|length + nfs_orfas|length) %}
+  {% include 'motos_assai/partials/_filtro_chassi_modelo.html' %}
+{% endwith %}
+
 <!-- ============ 1) Prontas para faturar (FECHADA) ============ -->
 <div class="mb-4">
   <h5 class="mb-2">

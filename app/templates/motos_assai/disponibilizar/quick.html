@@ -35,6 +35,11 @@
   {% endwith %}
 </div>
 
+<!-- Filtro chassi/modelo (2026-05-20) -->
+{% with filtros=filtros_aplicados, modelos=modelos, total_resultados=disponiveis.total %}
+  {% include 'motos_assai/partials/_filtro_chassi_modelo.html' %}
+{% endwith %}
+
 <!-- Item 1b (2026-05-12): inventario DISPONIVEIS agrupado por modelo -->
 <div class="mt-4" id="motos-disponiveis-block">
   <div class="d-flex justify-content-between align-items-center mb-2">
@@ -72,6 +77,7 @@
                 <th>Cor</th>
                 <th>Operador</th>
                 <th>Quando</th>
+                <th class="text-end">Ação</th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +88,13 @@
                 <td class="small text-muted">{{ moto.operador_nome }}</td>
                 <td class="small text-muted">
                   {{ moto.ocorrido_em.strftime('%d/%m/%Y %H:%M') if moto.ocorrido_em else '-' }}
+                </td>
+                <td class="text-end">
+                  <button type="button" class="btn btn-sm btn-outline-warning"
+                          data-action="enviar-pendencia" data-chassi="{{ moto.chassi }}"
+                          title="Enviar para Pendência (peça com defeito)">
+                    <i class="fas fa-exclamation-triangle"></i> Pendência
+                  </button>
                 </td>
               </tr>
               {% endfor %}
@@ -126,16 +139,20 @@
   </div>
 </div>
 
+{% include 'motos_assai/partials/_modal_enviar_pendencia.html' %}
+
 <script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}" defer></script>
 <script>
 window.MOTOS_ASSAI_OP_CONFIG = {
   endpoint: '{{ url_for("motos_assai.disponibilizar_registrar") }}',
   modo: 'disponibilizar',
 };
+window.MOTOS_ASSAI_PENDENCIA_ENDPOINT = '{{ url_for("motos_assai.pendencias_criar") }}';
 </script>
 <script src="{{ url_for('static', filename='motos_assai/js/chassi_autocomplete.js') }}" defer></script>
 <script src="{{ url_for('static', filename='motos_assai/js/operacao_quick.js') }}" defer></script>
 <script src="{{ url_for('static', filename='motos_assai/js/disponibilizar_modal.js') }}" defer></script>
+<script src="{{ url_for('static', filename='motos_assai/js/enviar_pendencia.js') }}" defer></script>
 {% endblock %}
 
 {% block onboarding_tours %}

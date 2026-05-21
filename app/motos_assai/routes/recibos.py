@@ -18,6 +18,8 @@ from app.motos_assai.models import (
     AssaiReciboItem, AssaiReciboMotochefe,
     RECIBO_STATUS_RESOLVENDO_DUPLICIDADE,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
+from app.motos_assai.routes._filtro_helpers import coletar_chassi_modelo
 from app.utils.file_storage import FileStorage
 
 
@@ -95,7 +97,11 @@ def recibos_detalhe(recibo_id):
 @login_required
 @require_motos_assai
 def recibos_lista():
-    recibos = listar_recibos()
+    # Filtro chassi/modelo (2026-05-20): recibos que contem o chassi/modelo.
+    filtros = coletar_chassi_modelo()
+    recibos = listar_recibos(
+        chassi=filtros.get('chassi'), modelo_id=filtros.get('modelo_id'),
+    )
     pode_excluir_map = {}
     if recibos:
         com_recebida = {
@@ -113,6 +119,8 @@ def recibos_lista():
         'motos_assai/recibos/lista.html',
         recibos=recibos,
         pode_excluir_map=pode_excluir_map,
+        filtros_aplicados=filtros,
+        modelos=listar_modelos(somente_ativos=True),
     )
 
 

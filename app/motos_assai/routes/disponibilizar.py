@@ -11,6 +11,8 @@ from app.motos_assai.services import (
 from app.motos_assai.services.resumo_service import (
     listar_motos_disponiveis_agrupadas,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
+from app.motos_assai.routes._filtro_helpers import coletar_chassi_modelo
 
 
 @motos_assai_bp.route('/disponibilizar')
@@ -20,11 +22,15 @@ def disponibilizar_tela():
     historico = historico_3_ultimas_disponibilizacoes()
     # Item 1b (2026-05-12): exibir inventario atual de motos DISPONIVEIS,
     # agrupado por modelo (motos prontas para separacao).
-    disponiveis = listar_motos_disponiveis_agrupadas()
+    # Filtro chassi/modelo (2026-05-20).
+    filtros = coletar_chassi_modelo()
+    disponiveis = listar_motos_disponiveis_agrupadas(filtros=filtros)
     return render_template(
         'motos_assai/disponibilizar/quick.html',
         historico=historico,
         disponiveis=disponiveis,
+        filtros_aplicados=filtros,
+        modelos=listar_modelos(somente_ativos=True),
     )
 
 

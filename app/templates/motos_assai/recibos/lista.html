@@ -2,6 +2,12 @@
 
 {% block motos_assai_content %}
 <h2>Recibos Motochefe</h2>
+
+{# Filtro chassi/modelo (2026-05-20) #}
+{% with filtros=filtros_aplicados, modelos=modelos, total_resultados=recibos|length %}
+  {% include 'motos_assai/partials/_filtro_chassi_modelo.html' %}
+{% endwith %}
+
 <div id="tabela-recibos-assai" class="table-responsive">
 <table class="table table-hover">
   <thead>

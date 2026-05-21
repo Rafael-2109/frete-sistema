@@ -26,6 +26,17 @@
                value="{{ filtros.chassi }}" placeholder="Parcial">
       </div>
       <div class="col-md-2">
+        <label class="form-label small mb-1">Modelo</label>
+        <select name="modelo_id" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for m in modelos %}
+            <option value="{{ m.id }}" {% if filtros.modelo_id == m.id %}selected{% endif %}>
+              {{ m.codigo }} — {{ m.nome }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
         <label class="form-label small mb-1">De</label>
         <input type="date" name="data_inicio" class="form-control form-control-sm"
                value="{{ filtros.data_inicio }}">

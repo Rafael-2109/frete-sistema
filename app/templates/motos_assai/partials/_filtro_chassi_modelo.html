@@ -1,0 +1,56 @@
+{#
+  Partial reutilizável: filtro por chassi (ilike) + modelo.
+  Form GET que submete para a própria URL (request.path), preservando os
+  demais parâmetros via reload de página. Espelha o padrão de
+  pendencias/abertas.html.
+
+  Parâmetros (via {% with %} no include):
+    - filtros: dict com .chassi (str) e .modelo_id (int) aplicados (default {})
+    - modelos: lista de modelos com .id, .codigo, .nome para o <select>
+    - total_resultados (opcional): int exibido no contador quando há filtro
+
+  Uso:
+    {% with filtros=filtros_aplicados, modelos=modelos, total_resultados=itens|length %}
+      {% include 'motos_assai/partials/_filtro_chassi_modelo.html' %}
+    {% endwith %}
+#}
+{% set _f = filtros or {} %}
+<form method="GET" action="{{ request.path }}"
+      class="card p-3 mb-3 bg-light border" id="form-filtro-chassi-modelo">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label small mb-1" for="fcm-chassi">Chassi</label>
+      <input type="text" name="chassi" id="fcm-chassi"
+             class="form-control form-control-sm"
+             value="{{ _f.chassi or '' }}"
+             placeholder="parcial — ilike %"
+             autocapitalize="characters" autocomplete="off" maxlength="50">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label small mb-1" for="fcm-modelo">Modelo</label>
+      <select name="modelo_id" id="fcm-modelo" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for m in (modelos or []) %}
+          <option value="{{ m.id }}" {% if _f.modelo_id == m.id %}selected{% endif %}>
+            {{ m.codigo }} — {{ m.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-5 d-flex gap-2 mt-2">
+      <button type="submit" class="btn btn-sm btn-primary">
+        <i class="fas fa-filter"></i> Filtrar
+      </button>
+      <a href="{{ request.path }}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-times"></i> Limpar
+      </a>
+      {% if _f.chassi or _f.modelo_id %}
+        <small class="text-muted ms-auto align-self-center">
+          <i class="fas fa-info-circle"></i> Filtros aplicados{% if total_resultados is defined and total_resultados is not none %} — {{ total_resultados }} resultado(s){% endif %}.
+        </small>
+      {% endif %}
+    </div>
+  </div>
+</form>

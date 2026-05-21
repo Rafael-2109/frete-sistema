@@ -27,6 +27,7 @@ from app.motos_assai.routes import motos_assai_bp
 from app.motos_assai.decorators import require_motos_assai
 from app.motos_assai.models import (
     AssaiDivergencia, AssaiNfQpa, AssaiSeparacao, AssaiCarregamento, AssaiLoja,
+    AssaiMoto,
     DIVERGENCIA_TIPOS_VALIDOS, DIVERGENCIA_RESOLUCAO_VALIDAS,
     DIVERGENCIA_RESOLUCAO_CANCELAR_NF,
     DIVERGENCIA_RESOLUCAO_CCE,
@@ -37,6 +38,7 @@ from app.motos_assai.models import (
 from app.motos_assai.services.divergencia_service import (
     resolver_divergencia, DivergenciaError,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
 
 
 def _parse_date(s: str | None) -> date | None:
@@ -71,6 +73,7 @@ def divergencias_lista():
     data_inicio_filtro = _parse_date(request.args.get('data_inicio'))
     data_fim_filtro = _parse_date(request.args.get('data_fim'))
     resolvida_por_filtro = request.args.get('resolvida_por_id', type=int)
+    modelo_id_filtro = request.args.get('modelo_id', type=int)
 
     q = AssaiDivergencia.query
 
@@ -87,6 +90,14 @@ def divergencias_lista():
     # Chassi (ilike)
     if chassi_filtro:
         q = q.filter(AssaiDivergencia.chassi.ilike(f'%{chassi_filtro.upper()}%'))
+
+    # Modelo (2026-05-20): resolve via chassi -> assai_moto. So pega
+    # divergencias cujo chassi esta cadastrado em AssaiMoto do modelo informado.
+    if modelo_id_filtro:
+        chassis_do_modelo = db.session.query(AssaiMoto.chassi).filter(
+            AssaiMoto.modelo_id == modelo_id_filtro
+        )
+        q = q.filter(AssaiDivergencia.chassi.in_(chassis_do_modelo))
 
     # Datas (criada_em)
     if data_inicio_filtro:
@@ -189,6 +200,7 @@ def divergencias_lista():
         'status': status_filtro,
         'tipo': tipo_filtro,
         'chassi': chassi_filtro,
+        'modelo_id': modelo_id_filtro,
         'numero_nf': numero_nf_filtro,
         'loja_id': loja_id_filtro,
         'data_inicio': data_inicio_filtro,
@@ -209,6 +221,7 @@ def divergencias_lista():
         filtros_aplicados=filtros_aplicados,
         lojas_disponiveis=lojas_disponiveis,
         operadores_resolvedores=operadores_resolvedores,
+        modelos=listar_modelos(somente_ativos=True),
         contadores=contadores,
         DIVERGENCIA_TIPOS_VALIDOS=sorted(DIVERGENCIA_TIPOS_VALIDOS),
         DIVERGENCIA_RESOLUCAO_VALIDAS=sorted(DIVERGENCIA_RESOLUCAO_VALIDAS),

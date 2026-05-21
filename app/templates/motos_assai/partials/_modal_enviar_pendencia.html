@@ -1,0 +1,40 @@
+{#
+  Modal reutilizável: "Enviar para Pendência" (MONTADA/DISPONIVEL/SEPARADA -> PENDENTE).
+  Usado por Montagem, Disponibilizar e Separação. Pareado com
+  js/enviar_pendencia.js — que espera window.MOTOS_ASSAI_PENDENCIA_ENDPOINT
+  e botões [data-action="enviar-pendencia"][data-chassi].
+#}
+<div class="modal fade" id="modal-enviar-pendencia" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle text-warning"></i> Enviar para Pendência
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          Marcar o chassi <code id="ep-chassi"></code> como
+          <strong>PENDENTE</strong> (peça com defeito a resolver).
+        </p>
+        <p class="small text-muted">
+          A moto sai do fluxo atual. Se estiver separada, é liberada da separação
+          (o saldo do pedido volta a ficar pendente). Resolva depois em
+          <em>Pendências</em>.
+        </p>
+        <label class="form-label">Descrição da pendência (≥3 chars, obrigatório)</label>
+        <textarea id="ep-descricao" class="form-control" rows="3"
+                  placeholder="Ex: bateria com defeito, retrovisor quebrado..."
+                  autocapitalize="sentences"></textarea>
+        <div id="ep-erro" class="text-danger small mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning" id="ep-btn-confirmar">
+          <i class="fas fa-exclamation-triangle"></i> Confirmar pendência
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

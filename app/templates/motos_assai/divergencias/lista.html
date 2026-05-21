@@ -45,6 +45,19 @@
     </div>
 
     <div class="col-md-2">
+      <label class="form-label small mb-1" for="fd-modelo">Modelo</label>
+      <select name="modelo_id" id="fd-modelo" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for m in modelos %}
+          <option value="{{ m.id }}"
+                  {% if filtros_aplicados.modelo_id == m.id %}selected{% endif %}>
+            {{ m.codigo }} — {{ m.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-2">
       <label class="form-label small mb-1" for="fd-nf">Número NF</label>
       <input type="text" name="numero_nf" id="fd-nf"
              class="form-control form-control-sm"

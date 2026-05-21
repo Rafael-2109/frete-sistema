@@ -29,6 +29,8 @@ from app.motos_assai.services.carregamento_service import (
     CarregamentoStateError, CarregamentoExcedenteError,
     CarregamentoCrossLojaError,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
+from app.motos_assai.routes._filtro_helpers import coletar_chassi_modelo
 
 
 # ============================================================
@@ -43,17 +45,35 @@ def carregamento_lista():
 
     Renderiza HTML com modal de "Iniciar Carregamento" (form pedido+loja).
     """
-    em_andamento = (AssaiCarregamento.query
-                    .filter_by(status=CARREGAMENTO_STATUS_EM_CARREGAMENTO)
+    # Filtro chassi/modelo (2026-05-20): aplica a cada secao, filtrando
+    # carregamentos que contem um AssaiCarregamentoItem com chassi/modelo.
+    filtros = coletar_chassi_modelo()
+    chassi = filtros.get('chassi')
+    modelo_id = filtros.get('modelo_id')
+
+    def _aplica_filtro(q):
+        if chassi or modelo_id:
+            sub = db.session.query(AssaiCarregamentoItem.carregamento_id)
+            if chassi:
+                sub = sub.filter(
+                    AssaiCarregamentoItem.chassi.ilike(f'%{chassi.upper()}%')
+                )
+            if modelo_id:
+                sub = sub.filter(AssaiCarregamentoItem.modelo_id == modelo_id)
+            q = q.filter(AssaiCarregamento.id.in_(sub))
+        return q
+
+    em_andamento = (_aplica_filtro(AssaiCarregamento.query
+                    .filter_by(status=CARREGAMENTO_STATUS_EM_CARREGAMENTO))
                     .order_by(AssaiCarregamento.iniciado_em.desc())
                     .all())
-    finalizados_recentes = (AssaiCarregamento.query
-                            .filter_by(status=CARREGAMENTO_STATUS_FINALIZADO)
+    finalizados_recentes = (_aplica_filtro(AssaiCarregamento.query
+                            .filter_by(status=CARREGAMENTO_STATUS_FINALIZADO))
                             .order_by(AssaiCarregamento.finalizado_em.desc())
                             .limit(20)
                             .all())
-    cancelados_recentes = (AssaiCarregamento.query
-                           .filter_by(status=CARREGAMENTO_STATUS_CANCELADO)
+    cancelados_recentes = (_aplica_filtro(AssaiCarregamento.query
+                           .filter_by(status=CARREGAMENTO_STATUS_CANCELADO))
                            .order_by(AssaiCarregamento.cancelado_em.desc())
                            .limit(10)
                            .all())
@@ -74,6 +94,8 @@ def carregamento_lista():
         cancelados_recentes=cancelados_recentes,
         pedidos_abertos=pedidos_abertos,
         lojas=lojas,
+        filtros_aplicados=filtros,
+        modelos=listar_modelos(somente_ativos=True),
     )
 
 

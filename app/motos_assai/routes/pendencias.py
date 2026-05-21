@@ -21,7 +21,7 @@ from app.motos_assai.services.pendencia_service import (
     operadores_que_registraram_pendencia, modelos_com_pendencias,
 )
 from app.motos_assai.services.montagem_service import (
-    resolver_pendencia, MontagemValidationError,
+    resolver_pendencia, enviar_para_pendencia, MontagemValidationError,
 )
 
 
@@ -120,3 +120,28 @@ def pendencias_resolver():
     except MontagemValidationError as e:
         return jsonify({'ok': False, 'erro': str(e)}), 400
     return jsonify({'ok': True, **(result if isinstance(result, dict) else {})})
+
+
+@motos_assai_bp.route('/pendencias/criar', methods=['POST'])
+@login_required
+@require_motos_assai
+def pendencias_criar():
+    """Envia uma moto já processada para PENDENTE (defeito descoberto depois).
+
+    Usado pelos botões "Enviar p/ Pendência" das telas Montagem, Disponibilizar
+    e Separação. Aceita MONTADA / REVERTIDA_PARA_MONTADA / DISPONIVEL / SEPARADA.
+    Para SEPARADA, libera o chassi da separação (só EM_SEPARACAO).
+
+    Espera JSON: {chassi, descricao_pendencia, chassi_doador?}
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        result = enviar_para_pendencia(
+            chassi=data.get('chassi', ''),
+            descricao_pendencia=data.get('descricao_pendencia'),
+            chassi_doador=data.get('chassi_doador'),
+            operador_id=current_user.id,
+        )
+    except MontagemValidationError as e:
+        return jsonify({'ok': False, 'erro': str(e)}), 400
+    return jsonify({'ok': True, **result})

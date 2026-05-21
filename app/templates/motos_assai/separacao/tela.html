@@ -81,6 +81,11 @@
                 data-action="desfazer" data-item-id="{{ it.id }}">
           <i class="fas fa-undo"></i> Desfazer
         </button>
+        <button type="button" class="btn btn-sm btn-outline-danger"
+                data-action="enviar-pendencia" data-chassi="{{ it.chassi }}"
+                title="Enviar para Pendência (peça com defeito) — libera da separação">
+          <i class="fas fa-exclamation-triangle"></i> Pendência
+        </button>
         {% endif %}
       </td>
     </tr>
@@ -248,6 +253,7 @@
 </div>
 
 {% include 'motos_assai/separacao/_modal_substituir_chassi.html' %}
+{% include 'motos_assai/partials/_modal_enviar_pendencia.html' %}
 
 <script src="{{ url_for('static', filename='js/vendor/html5-qrcode-2.3.8.min.js') }}" defer></script>
 <script>
@@ -265,9 +271,11 @@ window.MOTOS_ASSAI_SEP = {
     sepsAtivas: '{{ url_for("motos_assai.api_seps_ativas_pedido_loja") }}',
   },
 };
+window.MOTOS_ASSAI_PENDENCIA_ENDPOINT = '{{ url_for("motos_assai.pendencias_criar") }}';
 </script>
 <script src="{{ url_for('static', filename='motos_assai/js/chassi_autocomplete.js') }}" defer></script>
 <script src="{{ url_for('static', filename='motos_assai/js/separacao_chassi.js') }}" defer></script>
+<script src="{{ url_for('static', filename='motos_assai/js/enviar_pendencia.js') }}" defer></script>
 {% endblock %}
 
 {% block onboarding_tours %}

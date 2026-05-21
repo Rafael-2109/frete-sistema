@@ -20,18 +20,34 @@ from app.motos_assai.models import (
     AssaiSeparacao, AssaiSeparacaoItem, AssaiPedidoVenda, AssaiLoja,
     AssaiSeparacaoSaldoModelo,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
+from app.motos_assai.routes._filtro_helpers import coletar_chassi_modelo
 
 
 @motos_assai_bp.route('/separacao')
 @login_required
 @require_motos_assai
 def separacao_lista():
-    seps = (
-        AssaiSeparacao.query
-        .order_by(AssaiSeparacao.iniciada_em.desc())
-        .limit(250).all()
+    # Filtro chassi/modelo (2026-05-20): filtra separacoes que contem um
+    # AssaiSeparacaoItem com o chassi (ilike) e/ou modelo informado.
+    filtros = coletar_chassi_modelo()
+    q = AssaiSeparacao.query
+    chassi = filtros.get('chassi')
+    modelo_id = filtros.get('modelo_id')
+    if chassi or modelo_id:
+        sub = db.session.query(AssaiSeparacaoItem.separacao_id)
+        if chassi:
+            sub = sub.filter(AssaiSeparacaoItem.chassi.ilike(f'%{chassi.upper()}%'))
+        if modelo_id:
+            sub = sub.filter(AssaiSeparacaoItem.modelo_id == modelo_id)
+        q = q.filter(AssaiSeparacao.id.in_(sub))
+    seps = q.order_by(AssaiSeparacao.iniciada_em.desc()).limit(250).all()
+    return render_template(
+        'motos_assai/separacao/lista.html',
+        separacoes=seps,
+        filtros_aplicados=filtros,
+        modelos=listar_modelos(somente_ativos=True),
     )
-    return render_template('motos_assai/separacao/lista.html', separacoes=seps)
 
 
 @motos_assai_bp.route('/separacao/nova')

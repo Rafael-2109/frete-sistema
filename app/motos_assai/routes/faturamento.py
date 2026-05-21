@@ -27,6 +27,8 @@ from app.motos_assai.services.parsers.nf_qpa_adapter import (
 from app.motos_assai.services.cancelamento_nf_service import (
     cancelar_nf_qpa, CancelamentoValidationError,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
+from app.motos_assai.routes._filtro_helpers import coletar_chassi_modelo
 
 
 @motos_assai_bp.route('/faturamento')
@@ -40,11 +42,30 @@ def faturamento_lista():
         FATURADAS (FATURADA com NF BATEU). A mistura antiga confundia operador.
       - NFs orfas (sem BATEU ou sem separacao) permanece como 3a secao.
     """
+    # Filtro chassi/modelo (2026-05-20): aplicado as separacoes (via
+    # AssaiSeparacaoItem) e as NFs orfas (via AssaiNfQpaItem / AssaiMoto).
+    filtros = coletar_chassi_modelo()
+    f_chassi = filtros.get('chassi')
+    f_modelo_id = filtros.get('modelo_id')
+    tem_filtro = bool(f_chassi or f_modelo_id)
+
     # === Separacoes FECHADA/FATURADA com NF vinculada via outerjoin ===
-    sep_rows = (
+    sep_q = (
         db.session.query(AssaiSeparacao, AssaiNfQpa)
         .outerjoin(AssaiNfQpa, AssaiNfQpa.separacao_id == AssaiSeparacao.id)
         .filter(AssaiSeparacao.status.in_([SEPARACAO_STATUS_FECHADA, SEPARACAO_STATUS_FATURADA]))
+    )
+    if tem_filtro:
+        sep_sub = db.session.query(AssaiSeparacaoItem.separacao_id)
+        if f_chassi:
+            sep_sub = sep_sub.filter(
+                AssaiSeparacaoItem.chassi.ilike(f'%{f_chassi.upper()}%')
+            )
+        if f_modelo_id:
+            sep_sub = sep_sub.filter(AssaiSeparacaoItem.modelo_id == f_modelo_id)
+        sep_q = sep_q.filter(AssaiSeparacao.id.in_(sep_sub))
+    sep_rows = (
+        sep_q
         .order_by(AssaiSeparacao.fechada_em.desc().nullslast(),
                   AssaiSeparacao.iniciada_em.desc())
         .limit(250)
@@ -78,7 +99,7 @@ def faturamento_lista():
     sep_nf_ids = [nf.id for _sep, nf in sep_rows if nf is not None]
 
     # === NFs orfas: status_match != BATEU OU separacao_id NULL ===
-    nfs_orfas_rows = (
+    nf_orfa_q = (
         AssaiNfQpa.query
         .filter(
             db.or_(
@@ -86,6 +107,24 @@ def faturamento_lista():
                 AssaiNfQpa.status_match != NF_STATUS_BATEU,
             )
         )
+    )
+    if tem_filtro:
+        nf_sub = db.session.query(AssaiNfQpaItem.nf_id)
+        if f_chassi:
+            nf_sub = nf_sub.filter(
+                AssaiNfQpaItem.chassi.ilike(f'%{f_chassi.upper()}%')
+            )
+        if f_modelo_id:
+            # NfQpaItem nao tem modelo_id (so modelo_extraido texto). Resolve o
+            # modelo via AssaiMoto: chassis cadastrados com o modelo informado.
+            chassis_do_modelo = (
+                db.session.query(AssaiMoto.chassi)
+                .filter(AssaiMoto.modelo_id == f_modelo_id)
+            )
+            nf_sub = nf_sub.filter(AssaiNfQpaItem.chassi.in_(chassis_do_modelo))
+        nf_orfa_q = nf_orfa_q.filter(AssaiNfQpa.id.in_(nf_sub))
+    nfs_orfas_rows = (
+        nf_orfa_q
         .order_by(AssaiNfQpa.importada_em.desc())
         .limit(250)
         .all()
@@ -205,6 +244,8 @@ def faturamento_lista():
         nfs_orfas=nfs_orfas,
         # Mantido para retrocompatibilidade caso outro lugar leia `separacoes`
         separacoes=separacoes_prontas + separacoes_faturadas,
+        filtros_aplicados=filtros,
+        modelos=listar_modelos(somente_ativos=True),
     )
 
 

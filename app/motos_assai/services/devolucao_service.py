@@ -294,11 +294,16 @@ def listar_devolucoes(
     nf_numero: Optional[str] = None,
     numero_nfd: Optional[str] = None,
     chassi: Optional[str] = None,
+    modelo_id: Optional[int] = None,
     data_inicio: Optional[date] = None,
     data_fim: Optional[date] = None,
     limit: int = 250,
 ) -> List[AssaiDevolucaoNfd]:
-    """Lista devolucoes com filtros opcionais ordenadas por criado_em DESC."""
+    """Lista devolucoes com filtros opcionais ordenadas por criado_em DESC.
+
+    modelo_id (2026-05-20): resolve via chassi -> assai_moto. Filtra NFds que
+    contem um item cujo chassi pertence a um AssaiMoto do modelo informado.
+    """
     q = (
         AssaiDevolucaoNfd.query
         .options(
@@ -321,6 +326,16 @@ def listar_devolucoes(
                    AssaiDevolucaoItem.devolucao_id == AssaiDevolucaoNfd.id)
              .filter(AssaiDevolucaoItem.chassi.ilike(f'%{chassi.strip().upper()}%'))
         )
+    if modelo_id:
+        # Subquery (nao JOIN) para nao conflitar com o JOIN do filtro chassi.
+        from app.motos_assai.models import AssaiMoto
+        chassis_do_modelo = db.session.query(AssaiMoto.chassi).filter(
+            AssaiMoto.modelo_id == modelo_id
+        )
+        dev_ids_modelo = db.session.query(AssaiDevolucaoItem.devolucao_id).filter(
+            AssaiDevolucaoItem.chassi.in_(chassis_do_modelo)
+        )
+        q = q.filter(AssaiDevolucaoNfd.id.in_(dev_ids_modelo))
     if data_inicio:
         q = q.filter(AssaiDevolucaoNfd.data_devolucao >= data_inicio)
     if data_fim:

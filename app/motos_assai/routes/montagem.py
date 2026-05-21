@@ -9,6 +9,8 @@ from app.motos_assai.services import (
 from app.motos_assai.services.resumo_service import (
     listar_motos_montadas_agrupadas,
 )
+from app.motos_assai.services.modelo_service import listar_modelos
+from app.motos_assai.routes._filtro_helpers import coletar_chassi_modelo
 
 
 @motos_assai_bp.route('/montagem')
@@ -18,11 +20,15 @@ def montagem_tela():
     historico = historico_3_ultimas_montagens()
     # Item 1a (2026-05-12): exibir inventario atual de motos MONTADAS,
     # agrupado por modelo. Inclui REVERTIDA_PARA_MONTADA (efetivo).
-    montadas = listar_motos_montadas_agrupadas()
+    # Filtro chassi/modelo (2026-05-20).
+    filtros = coletar_chassi_modelo()
+    montadas = listar_motos_montadas_agrupadas(filtros=filtros)
     return render_template(
         'motos_assai/montagem/quick.html',
         historico=historico,
         montadas=montadas,
+        filtros_aplicados=filtros,
+        modelos=listar_modelos(somente_ativos=True),
     )
 
 

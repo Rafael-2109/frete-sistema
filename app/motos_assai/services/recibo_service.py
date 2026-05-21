@@ -259,10 +259,29 @@ def get_recibo(recibo_id: int) -> AssaiReciboMotochefe:
     return AssaiReciboMotochefe.query.get_or_404(recibo_id)
 
 
-def listar_recibos(compra_id: Optional[int] = None):
+def listar_recibos(
+    compra_id: Optional[int] = None,
+    chassi: Optional[str] = None,
+    modelo_id: Optional[int] = None,
+):
+    """Lista recibos Motochefe.
+
+    Filtros opcionais (2026-05-20):
+    - chassi: recibos que contem um AssaiReciboItem com chassi ilike %chassi%.
+    - modelo_id: recibos que contem um AssaiReciboItem do modelo informado.
+    """
     q = AssaiReciboMotochefe.query
     if compra_id:
         q = q.filter_by(compra_id=compra_id)
+    if chassi or modelo_id:
+        sub = db.session.query(AssaiReciboItem.recibo_id)
+        if chassi:
+            sub = sub.filter(
+                AssaiReciboItem.chassi.ilike(f'%{chassi.strip().upper()}%')
+            )
+        if modelo_id:
+            sub = sub.filter(AssaiReciboItem.modelo_id == modelo_id)
+        q = q.filter(AssaiReciboMotochefe.id.in_(sub))
     return q.order_by(AssaiReciboMotochefe.criado_em.desc()).all()
 
 

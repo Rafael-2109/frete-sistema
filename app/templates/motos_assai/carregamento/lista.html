@@ -29,6 +29,11 @@
   {% endfor %}
 {% endwith %}
 
+{# Filtro chassi/modelo (2026-05-20) #}
+{% with filtros=filtros_aplicados, modelos=modelos, total_resultados=(em_andamento|length + finalizados_recentes|length + cancelados_recentes|length) %}
+  {% include 'motos_assai/partials/_filtro_chassi_modelo.html' %}
+{% endwith %}
+
 {# ================== Em andamento ================== #}
 <h4 class="mt-4">
   <i class="fas fa-play-circle text-primary"></i>
