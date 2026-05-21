@@ -1663,6 +1663,22 @@ def analise_diferencas(frete_id):
     from app.vinculos.models import CidadeAtendida
     from app.utils.localizacao import LocalizacaoService
 
+    # FONTE 2 usa o ICMS da cidade de destino ATUAL (não o congelado em
+    # frete.tabela_icms_destino). A alíquota não existe em TabelaFrete (vem da
+    # Cidade) e o congelado fica 0 quando o frete foi lançado com
+    # icms_incluso=True — o que impediria embutir o ICMS ao recalcular com a
+    # tabela cadastrada em icms_incluso=False. Fallback: o congelado.
+    icms_destino_atual = frete.tabela_icms_destino or 0
+    try:
+        _cidade_icms = LocalizacaoService.buscar_cidade_por_nome(frete.cidade_destino, frete.uf_destino)
+        if _cidade_icms and _cidade_icms.icms:
+            icms_destino_atual = _cidade_icms.icms
+    except Exception as _e_icms_cidade:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Erro ao resolver ICMS atual da cidade para frete #{frete.id}: {_e_icms_cidade}"
+        )
+
     try:
         tabela_via_vinculo = None  # Tabela encontrada via reavaliação de vínculo
 
@@ -1772,7 +1788,7 @@ def analise_diferencas(frete_id):
 
                         dados_candidata = TabelaFreteManager.preparar_dados_tabela(tabela_obj)
                         dados_candidata["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
-                        dados_candidata["icms_destino"] = frete.tabela_icms_destino or 0
+                        dados_candidata["icms_destino"] = icms_destino_atual
 
                         resultado_calculo = CalculadoraFrete.calcular_frete_unificado(
                             peso=frete.peso_total,
@@ -1817,11 +1833,8 @@ def analise_diferencas(frete_id):
     if tabela_via_vinculo:
         tabela_cadastrada = tabela_via_vinculo
         tabela_dados_cadastrada = TabelaFreteManager.preparar_dados_tabela(tabela_cadastrada)
-        # Para FRACIONADA com cidade resolvida, usar ICMS da cidade atual
-        if reavaliacao_info and reavaliacao_info.get('icms_cidade'):
-            tabela_dados_cadastrada["icms_destino"] = reavaliacao_info['icms_cidade']
-        else:
-            tabela_dados_cadastrada["icms_destino"] = frete.tabela_icms_destino or 0
+        # ICMS da cidade de destino ATUAL (resolvido acima), não o congelado.
+        tabela_dados_cadastrada["icms_destino"] = icms_destino_atual
         tabela_dados_cadastrada["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
 
         componentes_cadastrada, resumo_cadastrada, _ = _calcular_componentes_analise(
@@ -1840,7 +1853,7 @@ def analise_diferencas(frete_id):
 
         if tabela_cadastrada:
             tabela_dados_cadastrada = TabelaFreteManager.preparar_dados_tabela(tabela_cadastrada)
-            tabela_dados_cadastrada["icms_destino"] = frete.tabela_icms_destino
+            tabela_dados_cadastrada["icms_destino"] = icms_destino_atual
             tabela_dados_cadastrada["transportadora_optante"] = frete.transportadora.optante if frete.transportadora else True
 
             componentes_cadastrada, resumo_cadastrada, _ = _calcular_componentes_analise(
