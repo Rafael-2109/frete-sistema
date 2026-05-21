@@ -71,8 +71,8 @@ docs/inventario-2026-05/consolidacao/
 
 | Recurso atual | Destino | Ação | Gatilho |
 |---------------|---------|------|---------|
-| `constants/locations.py` (COMPANY_LOCATIONS) | mesmo | + `LOCAIS_INDISPONIVEL`, + SC, + `LOTES_MIGRACAO_POR_COMPANY` (30482/30856) | AGORA-EXPANDIR |
-| `constants/operacoes_fiscais.py` | mesmo | + SC em `CODIGO_PARA_COMPANY_ID`/`COMPANY_PARTNER_ID` | AGORA-EXPANDIR |
+| `constants/locations.py` (COMPANY_LOCATIONS) | mesmo | ✅ **FEITO (Onda 1)**: `LOCAIS_INDISPONIVEL` + `LOTES_MIGRACAO_POR_COMPANY` (30482/30856) + helpers + testes. SC=22 **NÃO** adicionado (decisão 2026-05-20) | — |
+| `constants/operacoes_fiscais.py` | mesmo | SC **NÃO** adicionado a `CODIGO_PARA_COMPANY_ID`/`COMPANY_PARTNER_ID` (decisão 2026-05-20) | adiar até SC entrar em escopo |
 | `PICKING_TYPE_POR_DIRECAO` (em `inventario_pipeline_service.py:59`) | `constants/picking_types.py` (novo) | extrair | AO-CAPINAR (faturamento) |
 | `buscar_quant` (duplicado em quant + transfer) | `estoque/_utils.py` | unificar 1 cópia; quant/transfer passam a usar | AGORA-MOVER (junto com quant/transfer) |
 | `_registrar_op` (audit; repetido em indispon + pipeline) | `estoque/_utils.py` | unificar | AO-CAPINAR (indispon/pipeline) |

@@ -85,11 +85,11 @@ estratificação dos scripts — muitos são de gerações anteriores, hoje supe
 
 | Constante | Onde está | Ação |
 |-----------|-----------|------|
-| `COMPANY_LOCATIONS` (FB=8, CD=32, LF=42) | ✅ `constants/locations.py` | adicionar **SC=? (id 3)** |
-| `CODIGO_PARA_COMPANY_ID` / `COMPANY_PARTNER_ID` (FB=1, CD=34, LF=35) | ✅ `constants/operacoes_fiscais.py` | adicionar **SC** |
+| `COMPANY_LOCATIONS` (FB=8, CD=32, LF=42) | ✅ `constants/locations.py` | SC=22 **NÃO adicionado** (decisão 2026-05-20: SC fora de escopo, D011:95) |
+| `CODIGO_PARA_COMPANY_ID` / `COMPANY_PARTNER_ID` (FB=1, CD=34, LF=35) | ✅ `constants/operacoes_fiscais.py` | SC **NÃO adicionado** (mesma decisão) |
 | `MATRIZ_INTERCOMPANY` (fiscal_position + CFOP 5901/5903/5949/5152/5151) | ✅ `operacoes_fiscais.py` | — |
-| `LOCAIS_INDISPONIVEL` (FB 31088, SC 31089, CD 31090, LF 31091) | 🔴 **sem módulo central** (D011 define; redefinido solto em ≥4 scripts) | criar em `locations.py` |
-| `LOTES_MIGRACAO_POR_COMPANY` (FB id=30482, CD id=30856) | 🟡 em D011, hardcoded em scripts | centralizar |
+| `LOCAIS_INDISPONIVEL` (FB 31088, SC 31089, CD 31090, LF 31091) | ✅ **FEITO (Onda 1)** em `locations.py` + `get_local_indisponivel()` + testes | migrar consumidores (gradual, QUANDO-SUPERADO) |
+| `LOTES_MIGRACAO_POR_COMPANY` (FB id=30482, CD id=30856) | ✅ **FEITO (Onda 1)** em `locations.py` | migrar consumidores |
 | `PICKING_TYPE_POR_DIRECAO` / `LOCATION_DESTINO_POR_DIRECAO` | 🟡 hardcoded em `inventario_pipeline_service.py:59` (G003 admite mover) | mover p/ `constants/` |
 | Outros IDs: INCOTERM_CIF=6, CARRIER_NACOM=996, PAYMENT_PROVIDER_SEM_PAGAMENTO=38 | 🟡 hardcoded em services | avaliar centralizar |
 
