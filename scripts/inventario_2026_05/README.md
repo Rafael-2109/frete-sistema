@@ -20,6 +20,23 @@ Scripts datados consumidos pela operação de ajuste de inventário da NACOM Goy
 
 Cada script é idempotente e suporta `--dry-run`. Resultados em `docs/inventario-2026-05/07-relatorios/`.
 
+## Scripts genéricos (consolidação em andamento)
+
+Os scripts ad-hoc criados ao longo da operação estão sendo consolidados em
+genéricos parametrizados, sobre **primitivas reutilizáveis** em `app/odoo/services/`.
+Os scripts originais ficam preservados (operação ainda ativa); o genérico é a
+forma recomendada para novos ajustes.
+
+| Genérico | Substitui (Família) | Primitiva usada |
+|----------|---------------------|-----------------|
+| `ajuste_inventario.py` | `11_ajuste_negativo_cd`, `12_ajuste_positivo_cd`, `13_ajuste_positivo_fb`, `14_ajuste_positivo_cd_v2`, `criar_saldo_positivo_lf` | `StockQuantAdjustmentService.ajustar_quant` |
+
+Mapeamento (ver docstring do script): `--empresa {FB,CD,LF} --sinal {pos,neg,auto} --xlsx PATH --col-{emp,cod,lote,qtd}`.
+Constantes vêm dos módulos centrais (`COMPANY_LOCATIONS`, `CODIGO_PARA_COMPANY_ID`).
+Os 4 casos de lógica própria (`ajuste_estoque_lf_pasta17` net-zero, `zerar_negativos_fb`,
+`limpar_quants_ghost_*`, `corrigir_reserved_negativo_fb`) virarão orquestradores sobre
+a mesma primitiva (próximos temas).
+
 ## Hooks determinísticos
 
 `hooks/` contém regras invioláveis aplicadas pelos services novos em `app/odoo/services/`:

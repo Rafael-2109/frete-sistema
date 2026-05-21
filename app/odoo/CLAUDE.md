@@ -1,6 +1,6 @@
 # Odoo — Guia de Desenvolvimento
 
-**44 arquivos** | **~22.2K LOC** | **Atualizado**: 18/05/2026
+**46 arquivos** | **~23K LOC** | **Atualizado**: 20/05/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
@@ -22,7 +22,7 @@ app/odoo/
   │   └── operacao_odoo_auditoria.py    # Auditoria polimorfica de operacoes Odoo
   ├── routes/
   │   └── sincronizacao_integrada.py  # 1 rota (sync manual + fallback + pedido individual)
-  ├── services/                # 18 services
+  ├── services/                # 19 services
   │   ├── carteira_service.py              # Sync sale.order → CarteiraPrincipal/Separacao (~142K)
   │   ├── faturamento_service.py           # Sync account.move → FaturamentoProduto (~90K)
   │   ├── importacao_fallback_service.py   # Fallback quando sync principal falha (~69K)
@@ -38,10 +38,11 @@ app/odoo/
   │   ├── inventario_pipeline_service.py   # Pipeline inventario 2026-05 (F0-F5, ondas LF/FB/CD)
   │   ├── stock_picking_service.py         # Operacoes stock.picking (criar/validar/cancelar)
   │   ├── stock_lot_service.py             # Operacoes stock.lot (criar/buscar com fallback like)
-  │   ├── stock_internal_transfer_service.py # Transferencias internas FB <-> CD (pre-etapa)
+  │   ├── stock_internal_transfer_service.py # Transferencias internas FB <-> CD (= 2 ajustes de quant)
+  │   ├── stock_quant_adjustment_service.py # PRIMITIVA: ajuste atomico de 1 quant (inventory adjustment); base dos ajustes por planilha
   │   ├── pre_etapa_estoque_service.py     # Pre-etapa CD/FB para minimizar NF (D007)
   │   └── indisponibilizacao_estoque_service.py # Bloqueio temporario de lotes em ajuste
-  ├── utils/                   # 11 utils
+  ├── utils/                   # 12 utils
   │   ├── cached_lookups.py        # Cache de lookups frequentes (metodos entrega, etc.) (~267 LOC)
   │   ├── carteira_mapper.py       # Mapeia sale.order → dict CarteiraPrincipal (~21K)
   │   ├── connection.py            # OdooConnection XML-RPC + timeout adaptativo (~16K)
@@ -52,6 +53,7 @@ app/odoo/
   │   ├── circuit_breaker.py       # Circuit breaker para chamadas Odoo (~12K)
   │   ├── pedido_cliente_utils.py  # Busca pedido cliente no Odoo (~9K)
   │   ├── metodo_entrega_utils.py  # Busca metodo de entrega Odoo (~8K)
+  │   ├── gtin_validator.py        # Valida GTIN (cEAN) p/ SEFAZ NF-e; barcode invalido → cstat=225 (G035) (~116 LOC)
   │   └── sanitizacao_faturamento.py # Sanitiza dados de faturamento (~4K)
   ├── jobs/                    # 0 jobs (vazio — jobs ficam no scheduler)
   └── docs/                    # 3 docs internos
