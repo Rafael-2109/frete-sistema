@@ -1628,6 +1628,8 @@ def fechar_frete():
                     # Calcular volumes e peso cubado das motos da cotacao
                     carvia_volumes = None
                     carvia_peso_cubado = None
+                    carvia_agend_confirmado = False
+                    carvia_horario_agenda = None
                     if carvia_cot_id:
                         try:
                             from app.carvia.models import CarviaCotacaoMoto
@@ -1637,6 +1639,14 @@ def fechar_frete():
                             ).filter_by(cotacao_id=carvia_cot_id).first()
                             carvia_volumes = int(agg[0]) or None
                             carvia_peso_cubado = float(agg[1]) or None
+                        except Exception:
+                            pass
+                        try:
+                            # Forward: provisorio herda agendamento (confirmacao + horario) da cotacao
+                            from app.carvia.models import CarviaCotacao as _CCot
+                            _cot_obj = db.session.get(_CCot, carvia_cot_id)
+                            carvia_agend_confirmado = bool(_cot_obj.agendamento_confirmado) if _cot_obj else False
+                            carvia_horario_agenda = _cot_obj.horario_agenda if _cot_obj else None
                         except Exception:
                             pass
 
@@ -1665,6 +1675,8 @@ def fechar_frete():
                         volumes=carvia_volumes,
                         provisorio=(_nota_fiscal_unica is None),
                         carvia_cotacao_id=carvia_cot_id,
+                        agendamento_confirmado=carvia_agend_confirmado,
+                        hora_agendamento=carvia_horario_agenda,
                     )
                     if tipo == 'FRACIONADA':
                         TabelaFreteManager.atribuir_campos_objeto(item, dados_tabela)

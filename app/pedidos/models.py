@@ -39,6 +39,7 @@ class Pedido(db.Model):
     roteirizacao = db.Column(db.String(100)) #Vem de Separacao.roteirizacao
     expedicao = db.Column(db.Date) #Vem de Separacao.expedicao
     agendamento = db.Column(db.Date) #Vem de Separacao.agendamento
+    horario_agendamento = db.Column(db.Time) #Vem de CarviaCotacao.horario_agenda (NULL para Nacom — fluxo Nacom nao usa horario)
     protocolo = db.Column(db.String(50)) #Vem de Separacao.protocolo
     agendamento_confirmado = db.Column(db.Boolean, default=False) #Vem de Separacao.agendamento_confirmado
 

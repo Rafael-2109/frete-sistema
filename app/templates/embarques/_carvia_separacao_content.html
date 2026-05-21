@@ -134,7 +134,7 @@
         </div>
         <div class="info-row">
             <span class="info-label">Data Agendamento:</span>
-            {{ cotacao.data_agenda | formatar_data_segura if cotacao.data_agenda else 'N/A' }}
+            {{ cotacao.data_agenda | formatar_data_segura if cotacao.data_agenda else 'N/A' }}{% if cotacao.horario_agenda %} {{ cotacao.horario_agenda.strftime('%H:%M') }}{% endif %}
             {% if cotacao.agendamento_confirmado %}
                 <span style="font-size: 9px; color: #155724; background: #d4edda; padding: 1px 4px; border-radius: 2px; margin-left: 4px;">confirmado</span>
             {% endif %}

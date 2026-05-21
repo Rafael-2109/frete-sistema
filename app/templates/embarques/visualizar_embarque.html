@@ -388,10 +388,14 @@
                   {% endif %}
                 </td>
                 <td>
+                  {# Horario de agendamento — exclusivo CarVia (fluxo Nacom nao usa) #}
+                  {% set _eh_cv = item and (item.carvia_cotacao_id or (item.separacao_lote_id or '').startswith('CARVIA-')) %}
+                  {% set _hora = item.hora_agendamento.strftime('%H:%M') if (item and item.hora_agendamento) else '' %}
                   <div class="agendamento-cell">
                     <!-- Input de Data (80%) -->
                     <div class="agendamento-data">
                       {{ item_form.data_agenda(class="form-control form-control-sm", placeholder="DD/MM/AAAA") }}
+                      {% if _hora %}<small class="text-muted d-block" style="font-size:10px;"><i class="fas fa-clock"></i> {{ _hora }}</small>{% endif %}
                     </div>
 
                     <!-- Badge de Status com Click para Modal (20%) -->
@@ -403,21 +407,21 @@
                         {% if confirmado and tem_data %}
                           <!-- Estado: Confirmado (Azul) -->
                           <span class="badge bg-primary agendamento-badge"
-                                onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', true)"
+                                onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', true, {{ 'true' if _eh_cv else 'false' }}, '{{ _hora }}')"
                                 title="Clique para editar">
                             ✓
                           </span>
                         {% elif tem_data and not confirmado %}
                           <!-- Estado: Aguardando (Amarelo) -->
                           <span class="badge bg-warning agendamento-badge"
-                                onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', false)"
+                                onclick="abrirModalConfirmacao('{{ item.id }}', '{{ item.data_agenda or '' }}', false, {{ 'true' if _eh_cv else 'false' }}, '{{ _hora }}')"
                                 title="Clique para confirmar">
                             ⏳
                           </span>
                         {% else %}
                           <!-- Estado: Sem Data (Cinza) -->
                           <span class="badge bg-secondary agendamento-badge"
-                                onclick="abrirModalConfirmacao('{{ item.id }}', '', false)"
+                                onclick="abrirModalConfirmacao('{{ item.id }}', '', false, {{ 'true' if _eh_cv else 'false' }}, '{{ _hora }}')"
                                 title="Clique para agendar">
                             📅
                           </span>
@@ -902,11 +906,17 @@ function confirmarRemocaoItem(itemId, pedido, cliente) {
 }
 
 // ✅ NOVA FUNÇÃO: Abrir modal de confirmação de agendamento
-function abrirModalConfirmacao(itemId, dataAtual, confirmadoAtual) {
+function abrirModalConfirmacao(itemId, dataAtual, confirmadoAtual, ehCarvia, horaAtual) {
     // Preencher valores no modal
     document.getElementById('modal_item_id').value = itemId;
     document.getElementById('modal_data_agendamento').value = dataAtual;
     document.getElementById('modal_confirmado').checked = confirmadoAtual;
+
+    // Horario: campo exibido apenas para itens CarVia (Nacom nao usa horario)
+    const blocoHora = document.getElementById('modal_bloco_hora');
+    const inpHora = document.getElementById('modal_hora_agendamento');
+    if (blocoHora) blocoHora.style.display = ehCarvia ? '' : 'none';
+    if (inpHora) inpHora.value = horaAtual || '';
 
     // Mostrar modal
     const modal = new bootstrap.Modal(document.getElementById('modalConfirmarAgendamento'));
@@ -918,6 +928,9 @@ function salvarConfirmacaoAgendamento() {
     const itemId = document.getElementById('modal_item_id').value;
     const dataAgendamento = document.getElementById('modal_data_agendamento').value;
     const confirmado = document.getElementById('modal_confirmado').checked;
+    const blocoHora = document.getElementById('modal_bloco_hora');
+    const inpHora = document.getElementById('modal_hora_agendamento');
+    const ehCarviaHora = blocoHora && blocoHora.style.display !== 'none';
 
     // Validar data
     if (!dataAgendamento || dataAgendamento.trim() === '') {
@@ -938,10 +951,10 @@ function salvarConfirmacaoAgendamento() {
             'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
         },
-        body: JSON.stringify({
+        body: JSON.stringify(Object.assign({
             data_agenda: dataAgendamento,
             agendamento_confirmado: confirmado
-        })
+        }, ehCarviaHora ? { hora_agendamento: (inpHora ? inpHora.value : '') } : {}))
     })
     .then(response => response.json())
     .then(data => {
@@ -1103,6 +1116,15 @@ function copiarTextoManual() {
                            maxlength="10"
                            required>
                     <small class="text-muted">Formato: DD/MM/AAAA</small>
+                </div>
+
+                <!-- Horario de Agendamento (apenas CarVia) -->
+                <div class="mb-3" id="modal_bloco_hora" style="display:none;">
+                    <label for="modal_hora_agendamento" class="form-label">
+                        <i class="fas fa-clock"></i> Horario (CarVia)
+                    </label>
+                    <input type="time" class="form-control" id="modal_hora_agendamento">
+                    <small class="text-muted">Opcional — exclusivo do fluxo CarVia</small>
                 </div>
 
                 <!-- Checkbox Confirmação -->

@@ -187,3 +187,34 @@ function reverterConfirmacaoAgendamento(separacaoLoteId, numPedido) {
         alert('Erro ao reverter confirmacao');
     });
 }
+
+// Horario de agendamento — exclusivo CarVia (converge para a CarviaCotacao-fonte)
+function editarHorarioCarvia(separacaoLoteId, horaAtual) {
+    if (!separacaoLoteId) {
+        alert('Lote invalido para editar horario.');
+        return;
+    }
+    var nova = prompt('Horario de agendamento (HH:MM). Deixe vazio para limpar:', horaAtual || '');
+    if (nova === null) return;  // cancelado
+
+    fetch('/carteira/api/separacao/' + separacaoLoteId + '/horario-agenda', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+        },
+        body: JSON.stringify({ horario_agenda: (nova || '').trim() })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro ao salvar horario: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao salvar horario:', error);
+        alert('Erro ao salvar horario');
+    });
+}

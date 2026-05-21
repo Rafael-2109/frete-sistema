@@ -285,7 +285,7 @@
                     </div>
 
                     {# Datas + Obs #}
-                    <div class="row mb-3 mt-3">
+                    <div class="row mb-3 mt-3 align-items-end">
                         <div class="col-md-3">
                             <label class="form-label">Data Expedicao</label>
                             <input type="date" class="form-control" id="inpDataExp"
@@ -299,6 +299,28 @@
                                    value="{{ cotacao.data_agenda.strftime('%Y-%m-%d') if cotacao.data_agenda else '' }}"
                                    {% if pode_editar_geral %}onchange="salvarData('data_agenda', this.value)"{% endif %}
                                    {{ _dis }}>
+                        </div>
+                        {# Horario de agendamento (HH:MM) — exclusivo CarVia; editavel exceto CANCELADO #}
+                        <div class="col-md-2">
+                            <label class="form-label">Horario</label>
+                            <input type="time" class="form-control" id="inpHorarioAg"
+                                   value="{{ cotacao.horario_agenda.strftime('%H:%M') if cotacao.horario_agenda else '' }}"
+                                   {% if cotacao.status != 'CANCELADO' %}onchange="salvarHorarioAgenda(this.value)"{% endif %}
+                                   {% if cotacao.status == 'CANCELADO' %}disabled{% endif %}>
+                        </div>
+                        {# Confirmacao de Agendamento: editavel exceto CANCELADO (independe do _dis,
+                           pois a confirmacao costuma ocorrer apos APROVADO). Propaga p/ Pedido/EmbarqueItem/EntregaMonitorada. #}
+                        <div class="col-md-4">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="chkAgendamentoConfirmado"
+                                       {% if cotacao.agendamento_confirmado %}checked{% endif %}
+                                       {% if cotacao.status == 'CANCELADO' %}disabled{% endif %}
+                                       onchange="salvarAgendamentoConfirmado(this.checked)">
+                                <label class="form-check-label" for="chkAgendamentoConfirmado">
+                                    <i class="fas fa-calendar-check"></i> Confirmacao de Agendamento
+                                </label>
+                            </div>
                         </div>
                     </div>
                     {# Condicoes Comerciais #}

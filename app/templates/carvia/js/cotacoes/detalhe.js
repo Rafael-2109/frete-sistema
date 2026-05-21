@@ -479,6 +479,27 @@ function salvarData(campo, valor) {
     });
 }
 
+function salvarAgendamentoConfirmado(checked) {
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/agendamento-confirmado`, 'PUT', {
+        agendamento_confirmado: checked
+    }).then(d => {
+        if (!d.sucesso) {
+            alert(d.erro || 'Erro ao salvar confirmacao de agendamento.');
+            // Reverte o switch visualmente quando a gravacao falha
+            const chk = document.getElementById('chkAgendamentoConfirmado');
+            if (chk) chk.checked = !checked;
+        }
+    });
+}
+
+function salvarHorarioAgenda(valor) {
+    apiCall(`/carvia/api/cotacoes/${cotacaoId}/horario-agenda`, 'PUT', {
+        horario_agenda: valor || null
+    }).then(d => {
+        if (!d.sucesso) alert(d.erro || 'Erro ao salvar horario de agendamento.');
+    });
+}
+
 /* ===== Pricing ===== */
 async function calcularPreco() {
     // Auto-salvar endereco de entrega na COTACAO antes de calcular

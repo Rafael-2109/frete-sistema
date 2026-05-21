@@ -2830,6 +2830,39 @@ def confirmar_agendamento_item(item_id):
         item.data_agenda = data_agenda
         item.agendamento_confirmado = agendamento_confirmado
 
+        # CarVia: o agendamento (confirmacao + horario) converge para a
+        # CarviaCotacao (fonte) e re-propaga forward. O fluxo Nacom (abaixo)
+        # falha gracefully para itens CarVia (nao existe Separacao).
+        eh_carvia = bool(getattr(item, 'carvia_cotacao_id', None)) or \
+            str(item.separacao_lote_id or '').startswith('CARVIA-')
+        if eh_carvia:
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
+                from app.carvia.models import CarviaCotacao
+                from datetime import datetime as _dt_cv
+                _cot_id = EmbarqueCarViaService.resolver_cotacao_id(
+                    lote_id=item.separacao_lote_id, embarque_item=item, numero_nf=item.nota_fiscal
+                )
+                _cot = db.session.get(CarviaCotacao, _cot_id) if _cot_id else None
+                if _cot:
+                    _cot.agendamento_confirmado = bool(agendamento_confirmado)
+                    if 'hora_agendamento' in data:
+                        _h = (data.get('hora_agendamento') or '').strip()
+                        _hora_val = None
+                        if _h:
+                            for _fmt in ('%H:%M', '%H:%M:%S'):
+                                try:
+                                    _hora_val = _dt_cv.strptime(_h, _fmt).time()
+                                    break
+                                except ValueError:
+                                    continue
+                        _cot.horario_agenda = _hora_val
+                    db.session.commit()
+                    EmbarqueCarViaService.propagar_agendamento(_cot_id)
+            except Exception as _e_cv:
+                db.session.rollback()
+                print(f"[CONFIRMAÇÃO AGENDAMENTO] Erro convergencia CarVia: {_e_cv}")
+
         # ✅ SINCRONIZAÇÃO: Propagar para outras tabelas
         from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
 

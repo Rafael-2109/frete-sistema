@@ -4,7 +4,7 @@ Funciona para qualquer status
 ✅ ATUALIZADO: Sincroniza com EmbarqueItem (se existir) via SincronizadorAgendamentoService
 """
 
-from flask import jsonify
+from flask import jsonify, request
 from flask_login import login_required, current_user
 from app import db
 from app.separacao.models import Separacao
@@ -172,8 +172,61 @@ def _toggle_agendamento_carvia(lote_id, confirmar=True):
     acao = 'confirmado' if confirmar else 'revertido'
     logger.info(f"Agendamento CarVia {acao} para {lote_id} (cotação {cot.numero_cotacao}) por {current_user.nome}")
 
+    # Convergencia CarVia: propaga para EmbarqueItem + EntregaMonitorada (best-effort)
+    tabelas = []
+    try:
+        from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
+        prop = EmbarqueCarViaService.propagar_agendamento(cot.id)
+        if prop.get('itens_atualizados') or prop.get('nfs_sincronizadas'):
+            tabelas = ['EmbarqueItem', 'EntregaMonitorada']
+    except Exception as e:
+        logger.warning(f"Propagacao agendamento CarVia falhou (nao-bloqueante): {e}")
+
     return jsonify({
         'success': True,
         'message': f'Agendamento {acao} para cotação CarVia {cot.numero_cotacao}',
-        'tabelas_sincronizadas': []
+        'tabelas_sincronizadas': tabelas
     })
+
+
+@carteira_bp.route('/api/separacao/<string:lote_id>/horario-agenda', methods=['POST'])
+@login_required
+def definir_horario_agenda_separacao(lote_id):
+    """Define o horario de agendamento de uma linha de lista_pedidos.
+
+    EXCLUSIVO CarVia (o fluxo Nacom nao usa horario). Converge para
+    CarviaCotacao.horario_agenda (fonte) e propaga forward.
+    """
+    try:
+        if not str(lote_id).startswith('CARVIA-'):
+            return jsonify({
+                'success': False,
+                'error': 'Horario de agendamento disponivel apenas para o fluxo CarVia'
+            }), 400
+
+        from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
+        cot_id = EmbarqueCarViaService.resolver_cotacao_id(lote_id=lote_id)
+        if not cot_id:
+            return jsonify({
+                'success': False,
+                'error': f'Cotação CarVia não encontrada para o lote {lote_id}'
+            }), 404
+
+        data = request.get_json(silent=True) or {}
+        horario = data.get('horario_agenda')  # 'HH:MM' | '' | None
+
+        resultado = EmbarqueCarViaService.definir_horario_agenda(cot_id, horario)
+        if not resultado.get('sucesso'):
+            return jsonify({'success': False, 'error': resultado.get('erro', 'Erro ao salvar horario')}), 400
+
+        logger.info(f"Horario CarVia {resultado.get('horario') or '(vazio)'} salvo para {lote_id} por {current_user.nome}")
+        return jsonify({
+            'success': True,
+            'message': f"Horario {resultado.get('horario') or '(vazio)'} salvo para cotação CarVia",
+            'horario_agenda': resultado.get('horario'),
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao definir horario de agendamento do lote {lote_id}: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500

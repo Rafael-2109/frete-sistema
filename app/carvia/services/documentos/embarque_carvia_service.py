@@ -274,6 +274,9 @@ class EmbarqueCarViaService:
                 volumes=nf_volumes,
                 provisorio=False,
                 carvia_cotacao_id=carvia_cotacao_id,
+                # Forward: item real herda agendamento (confirmacao + horario) da cotacao
+                agendamento_confirmado=bool(cotacao.agendamento_confirmado),
+                hora_agendamento=cotacao.horario_agenda,
             )
 
             # Copiar dados de tabela do provisorio (FRACIONADA) se existirem
@@ -326,6 +329,9 @@ class EmbarqueCarViaService:
             item_alvo.valor = nf_valor
             item_alvo.volumes = nf_volumes
             item_alvo.carvia_cotacao_id = carvia_cotacao_id
+            # Forward: item legado herda agendamento (confirmacao + horario) da cotacao
+            item_alvo.agendamento_confirmado = bool(cotacao.agendamento_confirmado)
+            item_alvo.hora_agendamento = cotacao.horario_agenda
 
             # Fase B: se NF tem CNPJ destinatario diferente da cotacao,
             # propaga para o item (NF e fonte de verdade fiscal). Antes
@@ -400,6 +406,205 @@ class EmbarqueCarViaService:
             'embarque_id': embarque_id,
             'embarque_item_id': resultado_item_id,
         }
+
+    @staticmethod
+    def propagar_agendamento(carvia_cotacao_id: int, sincronizar_entregas: bool = True) -> Dict:
+        """Re-sincroniza o agendamento da cotacao (confirmado + horario) p/ destinos.
+
+        Chamado pelos toggles de "Confirmacao de Agendamento" e do horario na
+        cotacao comercial (forward+resync). A cotacao e a FONTE DE VERDADE.
+
+        `sincronizar_entregas=False` pula a etapa de EntregaMonitorada (usado pelo
+        monitoramento, que ja criou o AgendamentoEntrega manualmente — evita duplicar).
+
+        Propaga para:
+          1. EmbarqueItem ativos vinculados (via `carvia_cotacao_id`):
+             agendamento_confirmado + hora_agendamento.
+          2. EntregaMonitorada (via NFs dos pedidos da cotacao) — a
+             sincronizacao reflete status e hora em AgendamentoEntrega.
+
+        Nao-bloqueante por NF: erro em uma sincronizacao nao impede as demais.
+
+        Returns:
+            Dict com contadores: itens_atualizados, nfs_sincronizadas.
+        """
+        from app.embarques.models import EmbarqueItem
+        from app.carvia.models import CarviaCotacao, CarviaPedido
+
+        cotacao = db.session.get(CarviaCotacao, carvia_cotacao_id)
+        if not cotacao:
+            logger.warning(
+                "propagar_agendamento: cotacao %s nao encontrada",
+                carvia_cotacao_id,
+            )
+            return {'itens_atualizados': 0, 'nfs_sincronizadas': 0}
+
+        valor = bool(cotacao.agendamento_confirmado)
+        hora = cotacao.horario_agenda
+
+        # 1. EmbarqueItem ativos da cotacao (provisorio e real)
+        itens = EmbarqueItem.query.filter_by(
+            carvia_cotacao_id=carvia_cotacao_id,
+            status='ativo',
+        ).all()
+        for it in itens:
+            it.agendamento_confirmado = valor
+            it.hora_agendamento = hora
+        # Flush para a sincronizacao de monitoramento ler os valores atualizados
+        db.session.flush()
+
+        # 2. NFs dos pedidos -> EntregaMonitorada (AgendamentoEntrega)
+        nfs = set()
+        peds = (
+            CarviaPedido.query
+            .filter_by(cotacao_id=carvia_cotacao_id)
+            .filter(CarviaPedido.status != 'CANCELADO')
+            .all()
+        )
+        for p in peds:
+            for item in p.itens.all():
+                if item.numero_nf and str(item.numero_nf).strip():
+                    nfs.add(str(item.numero_nf).strip())
+
+        sincronizadas = 0
+        if sincronizar_entregas and nfs:
+            from app.utils.sincronizar_entregas_carvia import (
+                sincronizar_entrega_carvia_por_nf,
+            )
+            for nf in nfs:
+                try:
+                    sincronizar_entrega_carvia_por_nf(nf)
+                    sincronizadas += 1
+                except Exception as e_sync:
+                    logger.warning(
+                        "propagar_agendamento: erro ao sincronizar "
+                        "EntregaMonitorada CarVia NF=%s (nao-bloqueante): %s",
+                        nf, e_sync,
+                    )
+
+        # Commit final (cobre o caso sem NFs, onde nao houve commit interno)
+        db.session.commit()
+
+        logger.info(
+            "propagar_agendamento: cotacao=%s confirmado=%s hora=%s "
+            "itens=%s nfs=%s",
+            carvia_cotacao_id, valor, hora, len(itens), sincronizadas,
+        )
+        return {
+            'itens_atualizados': len(itens),
+            'nfs_sincronizadas': sincronizadas,
+        }
+
+    @staticmethod
+    def definir_horario_agenda(carvia_cotacao_id: int, horario) -> Dict:
+        """Define CarviaCotacao.horario_agenda (FONTE) e re-propaga (forward+resync).
+
+        Ponto de CONVERGENCIA: qualquer tela (cotacao, lista_pedidos, embarque,
+        monitoramento) edita o horario CarVia chamando esta funcao — garantindo
+        fonte unica e propagacao consistente.
+
+        Args:
+            carvia_cotacao_id: ID da cotacao CarVia.
+            horario: datetime.time, string 'HH:MM'/'HH:MM:SS', ou None/'' (limpa).
+
+        Returns:
+            Dict: {'sucesso': bool, 'horario': 'HH:MM'|None, 'propagacao': {...}} ou
+                  {'sucesso': False, 'erro': str}.
+        """
+        from datetime import time as _time, datetime as _dt
+        from app.carvia.models import CarviaCotacao
+
+        cotacao = db.session.get(CarviaCotacao, carvia_cotacao_id)
+        if not cotacao:
+            return {'sucesso': False, 'erro': 'Cotacao CarVia nao encontrada'}
+
+        # Normalizar entrada -> time | None
+        hora_val = None
+        if isinstance(horario, _time):
+            hora_val = horario
+        elif horario:
+            s = str(horario).strip()
+            if s:
+                parsed = None
+                for fmt in ('%H:%M', '%H:%M:%S'):
+                    try:
+                        parsed = _dt.strptime(s, fmt).time()
+                        break
+                    except ValueError:
+                        continue
+                if parsed is None:
+                    return {'sucesso': False, 'erro': f'Horario invalido: {s} (use HH:MM)'}
+                hora_val = parsed
+
+        cotacao.horario_agenda = hora_val
+        db.session.commit()
+
+        propagacao = {'itens_atualizados': 0, 'nfs_sincronizadas': 0}
+        try:
+            propagacao = EmbarqueCarViaService.propagar_agendamento(carvia_cotacao_id)
+        except Exception as e:
+            logger.warning(
+                "definir_horario_agenda: propagacao falhou (nao-bloqueante) cot=%s: %s",
+                carvia_cotacao_id, e,
+            )
+
+        return {
+            'sucesso': True,
+            'horario': hora_val.strftime('%H:%M') if hora_val else None,
+            'propagacao': propagacao,
+        }
+
+    @staticmethod
+    def resolver_cotacao_id(lote_id=None, embarque_item=None, numero_nf=None) -> Optional[int]:
+        """Resolve o carvia_cotacao_id a partir de diferentes contextos de tela.
+
+        Usado pela edicao convergente do agendamento/horario (lista_pedidos,
+        embarque, monitoramento) para encontrar a cotacao-fonte CarVia.
+
+        Prioridade: embarque_item.carvia_cotacao_id > lote_id (CARVIA-*) > NF.
+        Retorna None se nao for um contexto CarVia.
+        """
+        from app.embarques.models import EmbarqueItem
+        from app.carvia.models import CarviaPedido
+
+        # 1. EmbarqueItem direto
+        if embarque_item is not None and getattr(embarque_item, 'carvia_cotacao_id', None):
+            return embarque_item.carvia_cotacao_id
+
+        # 2. lote_id CARVIA-*
+        if lote_id and str(lote_id).startswith('CARVIA-'):
+            s = str(lote_id)
+            if s.startswith('CARVIA-PED-'):
+                try:
+                    ped = db.session.get(CarviaPedido, int(s.replace('CARVIA-PED-', '')))
+                    return ped.cotacao_id if ped else None
+                except (ValueError, TypeError):
+                    return None
+            if s.startswith('CARVIA-NF-'):
+                ei = EmbarqueItem.query.filter_by(
+                    separacao_lote_id=s, status='ativo'
+                ).first()
+                return ei.carvia_cotacao_id if ei else None
+            if s.startswith('CARVIA-COT-'):
+                try:
+                    return int(s.replace('CARVIA-COT-', ''))
+                except (ValueError, TypeError):
+                    return None
+            # CARVIA-{cot_id}
+            try:
+                return int(s.replace('CARVIA-', ''))
+            except (ValueError, TypeError):
+                return None
+
+        # 3. via NF -> EmbarqueItem CarVia
+        if numero_nf:
+            ei = EmbarqueItem.query.filter(
+                EmbarqueItem.nota_fiscal == str(numero_nf),
+                EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+            ).first()
+            return ei.carvia_cotacao_id if ei else None
+
+        return None
 
     @staticmethod
     def calcular_cubado_por_modelos(carvia_cotacao_id: int, modelos_veiculos: List[str]) -> float:

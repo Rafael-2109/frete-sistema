@@ -1649,6 +1649,112 @@ def register_cotacao_v2_routes(bp):
             logger.error("Erro ao atualizar cotacao #%s: %s", cotacao_id, e)
             return jsonify({'erro': f'Erro: {e}'}), 500
 
+    # ==================== API: AGENDAMENTO CONFIRMADO ====================
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/agendamento-confirmado', methods=['PUT']) # type: ignore
+    @login_required
+    def api_agendamento_confirmado(cotacao_id): # type: ignore
+        """Toggle do checkbox 'Confirmacao de Agendamento' da cotacao comercial.
+
+        Endpoint DEDICADO (separado de api_atualizar_cotacao) porque a
+        confirmacao de agendamento ocorre tardiamente — inclusive apos a
+        cotacao estar APROVADO. Editavel em qualquer status exceto CANCELADO.
+
+        Persiste em carvia_cotacoes.agendamento_confirmado e propaga
+        (forward+resync) para EmbarqueItem e EntregaMonitorada via
+        EmbarqueCarViaService.propagar_agendamento.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCotacao
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return jsonify({'erro': 'Cotacao nao encontrada.'}), 404
+
+        # Guard: editavel exceto CANCELADO (APROVADO e permitido — confirmacao tardia)
+        if cotacao.status == 'CANCELADO':
+            return jsonify({'erro': 'Cotacao cancelada nao pode ser editada.'}), 400
+
+        data = request.get_json(silent=True) or {}
+        if 'agendamento_confirmado' not in data:
+            return jsonify({'erro': 'Campo agendamento_confirmado obrigatorio.'}), 400
+
+        confirmado = bool(data['agendamento_confirmado'])
+
+        # 1. Salvar na cotacao (objetivo principal — commit imediato)
+        try:
+            cotacao.agendamento_confirmado = confirmado
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Erro ao salvar agendamento_confirmado cotacao #%s: %s",
+                cotacao_id, e,
+            )
+            return jsonify({'erro': f'Erro: {e}'}), 500
+
+        # 2. Propagar para EmbarqueItem + EntregaMonitorada (best-effort,
+        #    nao-bloqueante: a confirmacao da cotacao ja foi persistida acima).
+        propagacao = {'itens_atualizados': 0, 'nfs_sincronizadas': 0}
+        try:
+            from app.carvia.services.documentos.embarque_carvia_service import (
+                EmbarqueCarViaService,
+            )
+            propagacao = EmbarqueCarViaService.propagar_agendamento(cotacao_id)
+        except Exception as e:
+            logger.warning(
+                "Propagacao de agendamento_confirmado falhou (nao-bloqueante) "
+                "cotacao #%s: %s",
+                cotacao_id, e,
+            )
+
+        return jsonify({
+            'sucesso': True,
+            'agendamento_confirmado': confirmado,
+            'propagacao': propagacao,
+        })
+
+    # ==================== API: HORARIO DE AGENDAMENTO ====================
+
+    @bp.route('/api/cotacoes/<int:cotacao_id>/horario-agenda', methods=['PUT']) # type: ignore
+    @login_required
+    def api_horario_agenda(cotacao_id): # type: ignore
+        """Define o horario de agendamento (HH:MM) da cotacao comercial CarVia.
+
+        CONVERGENCIA: grava em CarviaCotacao.horario_agenda (FONTE) e propaga
+        forward para EmbarqueItem + EntregaMonitorada via
+        EmbarqueCarViaService.definir_horario_agenda. Editavel exceto CANCELADO.
+        Aceita 'HH:MM' ou vazio/None para limpar.
+        """
+        if not getattr(current_user, 'sistema_carvia', False):
+            return jsonify({'erro': 'Acesso negado.'}), 403
+
+        from app.carvia.models import CarviaCotacao
+
+        cotacao = db.session.get(CarviaCotacao, cotacao_id)
+        if not cotacao:
+            return jsonify({'erro': 'Cotacao nao encontrada.'}), 404
+        if cotacao.status == 'CANCELADO':
+            return jsonify({'erro': 'Cotacao cancelada nao pode ser editada.'}), 400
+
+        data = request.get_json(silent=True) or {}
+        horario = data.get('horario_agenda')  # 'HH:MM' | '' | None
+
+        from app.carvia.services.documentos.embarque_carvia_service import (
+            EmbarqueCarViaService,
+        )
+        resultado = EmbarqueCarViaService.definir_horario_agenda(cotacao_id, horario)
+        if not resultado.get('sucesso'):
+            return jsonify({'erro': resultado.get('erro', 'Erro ao salvar horario.')}), 400
+
+        return jsonify({
+            'sucesso': True,
+            'horario_agenda': resultado.get('horario'),
+            'propagacao': resultado.get('propagacao'),
+        })
+
     # ==================== API: SALVAR COMPLETO ====================
 
     @bp.route('/api/cotacoes/<int:cotacao_id>/salvar-completo', methods=['PUT']) # type: ignore

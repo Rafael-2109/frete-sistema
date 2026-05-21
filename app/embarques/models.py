@@ -391,6 +391,7 @@ class EmbarqueItem(db.Model):
     protocolo_agendamento = db.Column(db.String(50))
     data_agenda = db.Column(db.String(10))
     agendamento_confirmado = db.Column(db.Boolean, default=False)  # ✅ NOVO: Status de confirmação do agendamento
+    hora_agendamento = db.Column(db.Time, nullable=True)  # Horario do agendamento (HH:MM) — exclusivo CarVia (Nacom deixa NULL)
     nota_fiscal = db.Column(db.String(20))
     volumes = db.Column(db.Integer, nullable=True)
     peso = db.Column(db.Float)  # Peso bruto (fisico) do item

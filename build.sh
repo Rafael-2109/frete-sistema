@@ -423,6 +423,23 @@ echo "Inventario 22: audit log ajuste_estoque_inventario..."
 python scripts/migrations/2026_05_18_audit_ajuste_estoque_inventario.py \
     || echo "⚠️ Migration audit_ajuste_estoque_inventario falhou, continuando deploy..."
 
+# 23. CarVia agendamento (2026-05-21): horario de agendamento + VIEW pedidos v7.
+# Feature CarVia: campo de horario (HH:MM) na cotacao comercial, propagado para
+# EmbarqueItem + EntregaMonitorada (AgendamentoEntrega) e exibido em lista_pedidos
+# via VIEW. A v7 da VIEW TAMBEM corrige a regressao do agendamento_confirmado
+# (projetava FALSE para CarVia desde a v4/v5) — substitui a necessidade da v6.
+# ORDEM OBRIGATORIA: 23a (colunas) ANTES de 23b (VIEW) — a v7 referencia
+# carvia_cotacoes.horario_agenda. Ambas idempotentes.
+# MANUTENCAO: se uma v8 da VIEW pedidos for criada, ATUALIZAR 23b para a versao
+# mais recente — senao a v7 sobrescreve a v8 a cada deploy.
+echo "CarVia 23a: colunas horario_agenda (carvia_cotacoes) + hora_agendamento (embarque_itens)..."
+python scripts/migrations/add_horario_agendamento_carvia.py \
+    || echo "⚠️ Migration add_horario_agendamento_carvia falhou, continuando deploy..."
+
+echo "CarVia 23b: VIEW pedidos v7 (horario_agendamento + agendamento_confirmado CarVia)..."
+python scripts/migrations/alterar_view_pedidos_union_carvia_v7.py \
+    || echo "⚠️ Migration view_pedidos_v7 falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 

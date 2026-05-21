@@ -479,6 +479,26 @@ def adicionar_agendamento(id):
         entrega.data_entrega_prevista = data_agendada
         db.session.commit()
 
+        # CarVia: converge horario + confirmacao para a CarviaCotacao (fonte) e
+        # propaga para EmbarqueItem. NAO recria AgendamentoEntrega
+        # (sincronizar_entregas=False) — o operador acabou de criar um acima.
+        if (getattr(entrega, 'origem', '') or '') == 'CARVIA':
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import EmbarqueCarViaService
+                from app.carvia.models import CarviaCotacao
+                _cot_id = EmbarqueCarViaService.resolver_cotacao_id(
+                    lote_id=entrega.separacao_lote_id, numero_nf=entrega.numero_nf
+                )
+                _cot = db.session.get(CarviaCotacao, _cot_id) if _cot_id else None
+                if _cot:
+                    _cot.agendamento_confirmado = (status == 'confirmado')
+                    _cot.horario_agenda = form_agendamento.hora_agendada.data
+                    db.session.commit()
+                    EmbarqueCarViaService.propagar_agendamento(_cot_id, sincronizar_entregas=False)
+            except Exception as _e_cv:
+                db.session.rollback()
+                logger.warning(f"Convergencia CarVia (monitoramento) falhou: {_e_cv}")
+
         # ✅ SINCRONIZAÇÃO BIDIRECIONAL: Propagar para Separacao e EmbarqueItem
         from app.pedidos.services.sincronizacao_agendamento_service import SincronizadorAgendamentoService
 

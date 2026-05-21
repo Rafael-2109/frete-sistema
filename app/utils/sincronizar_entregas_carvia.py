@@ -33,7 +33,7 @@ from typing import Optional
 from sqlalchemy import func
 
 from app import db
-from app.monitoramento.models import EntregaMonitorada
+from app.monitoramento.models import EntregaMonitorada, AgendamentoEntrega
 from app.carvia.models import CarviaNf, CarviaFrete
 from app.embarques.models import Embarque, EmbarqueItem
 from app.vinculos.models import CidadeAtendida
@@ -175,6 +175,82 @@ def sincronizar_entrega_carvia_por_nf(
                     ).date()
                 except (ValueError, TypeError):
                     pass
+
+            # ------------------------------------------------------------ #
+            # AgendamentoEntrega: refletir EmbarqueItem.agendamento_confirmado
+            # (origem: checkbox da cotacao comercial CarVia).
+            #
+            # Espelha a logica Nacom (sincronizar_entregas.py): a tela de
+            # monitoramento deriva "agendamento confirmado" de
+            # AgendamentoEntrega.status == 'confirmado'. Sem um agendamento,
+            # o status nunca aparece confirmado.
+            #
+            #  - Forward: se nao ha agendamento automatico, cria um com o
+            #    status atual (confirmado/aguardando).
+            #  - Re-sync: se ja existe agendamento criado pelo sistema CarVia,
+            #    atualiza o status. NAO toca agendamentos manuais do operador
+            #    (autor != 'Sistema CarVia') — preserva controle manual.
+            # ------------------------------------------------------------ #
+            confirmado = bool(getattr(item_embarque, 'agendamento_confirmado', False))
+            status_ag = 'confirmado' if confirmado else 'aguardando'
+            hora_ag = getattr(item_embarque, 'hora_agendamento', None)
+
+            data_ag_embarque = None
+            if item_embarque.data_agenda:
+                try:
+                    data_ag_embarque = datetime.strptime(
+                        item_embarque.data_agenda, "%d/%m/%Y"
+                    ).date()
+                except (ValueError, TypeError):
+                    data_ag_embarque = None
+            data_ag = data_ag_embarque or entrega.data_agenda
+
+            if data_ag:
+                # Nao duplicar: so cria agendamento automatico se ainda nao
+                # houver NENHUM agendamento com data (espelha a guarda Nacom
+                # `ja_existe_data_agenda`). Agendamento automatico CarVia tem
+                # autor='Sistema CarVia' — usado para o re-sync sem tocar nos
+                # agendamentos manuais do operador.
+                tem_agendamento_com_data = any(
+                    a.data_agendada for a in entrega.agendamentos
+                )
+                ag_auto = None
+                for a in sorted(
+                    entrega.agendamentos,
+                    key=lambda x: (x.criado_em or datetime.min),
+                    reverse=True,
+                ):
+                    if (a.autor or '') == 'Sistema CarVia':
+                        ag_auto = a
+                        break
+
+                if not tem_agendamento_com_data:
+                    # Forward: cria agendamento automatico com status + horario atuais
+                    novo_ag = AgendamentoEntrega(
+                        entrega=entrega,
+                        data_agendada=data_ag,
+                        hora_agendada=hora_ag,
+                        forma_agendamento='Embarque Automatico (CarVia)',
+                        autor='Sistema CarVia',
+                        status=status_ag,
+                    )
+                    if confirmado:
+                        novo_ag.confirmado_por = 'Sistema CarVia'
+                        novo_ag.confirmado_em = agora_utc_naive()
+                    db.session.add(novo_ag)
+                elif ag_auto is not None:
+                    # Re-sync: atualiza apenas o agendamento automatico CarVia
+                    # (status + horario). Agendamentos manuais do operador intactos.
+                    if ag_auto.status != status_ag:
+                        ag_auto.status = status_ag
+                        if confirmado:
+                            ag_auto.confirmado_por = ag_auto.confirmado_por or 'Sistema CarVia'
+                            ag_auto.confirmado_em = ag_auto.confirmado_em or agora_utc_naive()
+                        else:
+                            ag_auto.confirmado_por = None
+                            ag_auto.confirmado_em = None
+                    if ag_auto.hora_agendada != hora_ag:
+                        ag_auto.hora_agendada = hora_ag
 
     # ------------------------------------------------------------------ #
     # data_entrega_prevista — lead_time via CidadeAtendida (mesma regra Nacom)

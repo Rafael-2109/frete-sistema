@@ -555,6 +555,9 @@ def register_pedido_routes(bp):
                         volumes=vol_devolver,
                         provisorio=True,
                         carvia_cotacao_id=cotacao_id,
+                        # Forward: provisorio herda agendamento (confirmacao + horario) da cotacao
+                        agendamento_confirmado=bool(cotacao.agendamento_confirmado) if cotacao else False,
+                        hora_agendamento=cotacao.horario_agenda if cotacao else None,
                     )
                     # F1 dedup B1: evita criar 2 CARVIA-COT-{cot_id} provisorios
                     from app.carvia.services.documentos.embarque_carvia_service import (
@@ -747,6 +750,9 @@ def register_pedido_routes(bp):
                         volumes=vol_devolver,
                         provisorio=True,
                         carvia_cotacao_id=cotacao_id,
+                        # Forward: provisorio herda agendamento (confirmacao + horario) da cotacao
+                        agendamento_confirmado=bool(cotacao.agendamento_confirmado) if cotacao else False,
+                        hora_agendamento=cotacao.horario_agenda if cotacao else None,
                     )
                     # F1 dedup B1: evita criar 2 CARVIA-COT-{cot_id} provisorios
                     from app.carvia.services.documentos.embarque_carvia_service import (

@@ -474,8 +474,10 @@
                 
                 <!-- ✨ NOVA COLUNA: Agenda -->
                 <td class="text-center">
+                  {% set _eh_cv = p.separacao_lote_id and p.separacao_lote_id.startswith('CARVIA-') %}
                   {% if p.agendamento %}
                     <strong>{{ p.agendamento | formatar_data_brasil }}</strong>
+                    {% if p.horario_agendamento %} <span class="text-primary fw-bold">{{ p.horario_agendamento.strftime('%H:%M') }}</span>{% endif %}
                     <br>
                     {% if p.agendamento_confirmado %}
                       <button type="button" class="btn btn-sm btn-success"
@@ -488,6 +490,13 @@
                               onclick="confirmarAgendamento('{{ p.separacao_lote_id }}', '{{ p.num_pedido }}'); return false;"
                               title="Clique para confirmar">
                         <i class="fas fa-hourglass-half"></i> Aguardando
+                      </button>
+                    {% endif %}
+                    {% if _eh_cv %}
+                      <button type="button" class="btn btn-sm btn-outline-primary"
+                              onclick="editarHorarioCarvia('{{ p.separacao_lote_id }}', '{{ p.horario_agendamento.strftime('%H:%M') if p.horario_agendamento else '' }}'); return false;"
+                              title="Editar horario de agendamento (CarVia)">
+                        <i class="fas fa-clock"></i>
                       </button>
                     {% endif %}
                   {% else %}

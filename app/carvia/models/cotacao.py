@@ -86,6 +86,7 @@ class CarviaCotacao(db.Model):
     data_cotacao = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     data_expedicao = db.Column(db.Date, nullable=True)
     data_agenda = db.Column(db.Date, nullable=True)
+    horario_agenda = db.Column(db.Time, nullable=True)  # Horario do agendamento (HH:MM) — exclusivo CarVia (Nacom nao usa)
 
     # Status flow
     status = db.Column(db.String(20), nullable=False, default='RASCUNHO', index=True)
