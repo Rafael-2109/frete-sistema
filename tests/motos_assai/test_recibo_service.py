@@ -186,6 +186,36 @@ def test_recibo_sem_chassis_levanta_erro(app, admin_user):
         db.session.rollback()
 
 
+def test_confianca_total_desconhecido_aciona_llm():
+    """IMP-2026-05-20-001: total ausente NAO pode devolver 0.85 (acima do limiar).
+
+    Antes do fix, total desconhecido devolvia 0.85 e o LLM nunca era acionado —
+    recibo importava 3 de 60 motos. Agora devolve < limiar para escalar ao LLM.
+    """
+    from app.motos_assai.services.recibo_service import (
+        _calcular_confianca, CONFIANCA_LIMIAR, CONFIANCA_TOTAL_DESCONHECIDO,
+    )
+    items_sem_total = [
+        {'chassi': 'LA2026SA030008284', 'total_motos_declarado': None},
+        {'chassi': 'LA2026SA030008353', 'total_motos_declarado': None},
+        {'chassi': 'LA2026SA030008383', 'total_motos_declarado': None},
+    ]
+    conf = _calcular_confianca(items_sem_total)
+    assert conf == CONFIANCA_TOTAL_DESCONHECIDO
+    assert conf < CONFIANCA_LIMIAR, 'confianca deve forcar fallback LLM'
+
+
+def test_confianca_proporcional_quando_total_presente():
+    """Com total declarado, confianca = extraidos / total."""
+    from app.motos_assai.services.recibo_service import _calcular_confianca
+    items = [
+        {'chassi': f'CH{i:03d}ABC0000', 'total_motos_declarado': 60}
+        for i in range(3)
+    ]
+    conf = _calcular_confianca(items)
+    assert abs(conf - (3 / 60)) < 1e-9  # 0.05, bem abaixo do limiar
+
+
 def test_chassis_duplicados_sao_deduplicados(app, admin_user):
     """Chassis duplicados no mesmo recibo são deduplicated (set chassis_vistos)."""
     with app.app_context():

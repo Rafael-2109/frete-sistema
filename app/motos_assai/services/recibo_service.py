@@ -48,6 +48,14 @@ logger = logging.getLogger(__name__)
 
 CONFIANCA_LIMIAR = 0.80
 
+# Quando o total de motos do recibo NAO foi extraido do header, nao ha como
+# verificar se a extracao deterministica esta completa. Retornar confianca ABAIXO
+# do limiar forca o fallback LLM (que le o documento inteiro). E mais seguro
+# escalar do que persistir uma extracao possivelmente parcial — recibo incompleto
+# = perda de moto no estoque. Incidente: recibo ID=16 importou 3 de 60 motos
+# porque total ausente devolvia 0.85 (acima do limiar) e o LLM nunca disparava.
+CONFIANCA_TOTAL_DESCONHECIDO = 0.50
+
 
 class ReciboParserError(Exception):
     pass
@@ -234,7 +242,8 @@ def _calcular_confianca(items: list) -> float:
         return 0.0
     total_declarado = items[0].get('total_motos_declarado')
     if not total_declarado:
-        return 0.85
+        # Total ausente => nao da para confirmar completude. Escala para LLM.
+        return CONFIANCA_TOTAL_DESCONHECIDO
     extraidos = len({i['chassi'] for i in items if i.get('chassi')})
     if total_declarado <= 0:
         return 0.0

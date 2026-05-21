@@ -29,6 +29,26 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 23 | 2026-05-18 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 24 | 2026-05-19 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 25 | 2026-05-20 | 1 | 0 | 1 | 0 | OK (TDE ja existe no dropdown — premissa incorreta) |
+| 26 | 2026-05-21 | 3 | 3 | 0 | 0 | OK (parser recibo Motochefe 2 causas-raiz + cluster R12 escrita/skill 2 sugestoes) |
+
+## 2026-05-21
+- **OK** — 3 sugestoes avaliadas, todas implementadas e persistidas (ids 118-120).
+- **IMP-2026-05-20-001** (skill_bug, critical): parser PDF recibo Motochefe importava
+  3 de 60 motos com colunas invertidas. **IMPLEMENTADO** — 2 causas-raiz confirmadas no
+  codigo: (1) `recibo_service._calcular_confianca` devolvia 0.85 hardcoded quando o total
+  estava ausente → bypassava o fallback LLM (fix: `CONFIANCA_TOTAL_DESCONHECIDO=0.50`);
+  (2) `_parse_tabela` falhava a deteccao de header no layout `[Produto|Chassi|Cor|PALETE|LOCAL]`
+  e caia em fallback posicional invertido (fix: deteccao por nome com CHASSI obrigatorio +
+  PRODUTO/DESCRI + guard `_parece_chassi` que recusa nomes de cor). 7 testes novos com
+  tabelas sinteticas (fixtures PDF sao gitignored).
+- **IMP-2026-05-21-001** (gotcha_report, critical) + **IMP-2026-05-21-002** (instruction_request,
+  warning): mesma sessao 26d43e5f — agente fez UPDATE em massa (1.674 registros) em tabelas
+  `assai_*` via SQL direto, sem salvaguarda de auditoria e sem usar a skill especializada.
+  **IMPLEMENTADO** numa unica regra **R12** no `system_prompt.md`: R12.1 (alertar + amostra +
+  confirmacao por quantidade antes de escrita em massa/historica) e R12.2 (preferir
+  `registrando-evento-moto-assai`/`gestor-motos-assai`; `assai_moto_evento` e append-only).
+  Confirmado que `mcp__sql` admin aceita DML (`text_to_sql_tool.py` destructiveHint=True).
+- **Core files**: nenhum (models.py/routes.py/client.py intactos).
 
 ## 2026-05-20
 - **OK** — 1 sugestao avaliada e rejeitada.
