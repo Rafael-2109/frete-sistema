@@ -71,3 +71,22 @@ LOTES_MIGRACAO_POR_COMPANY: Dict[int, int] = {
     1: 30482,  # FB — lote MIGRAÇÃO
     4: 30856,  # CD — lote MIGRAÇÃO
 }
+
+
+# ---------------------------------------------------------------------------
+# Sub-locais de Pré-Produção por company (default canonico — scripts 15/17).
+# Sao parametrizaveis nos scripts (--locs sobrescreve); este e o conjunto base.
+# {company_id: {location_id: nome}}
+# ---------------------------------------------------------------------------
+LOCAIS_PRE_PRODUCAO: Dict[int, Dict[int, str]] = {
+    1: {  # FB
+        4066: 'FB/Pré-Produção/Linha Vidro',
+        4067: 'FB/Pré-Produção/Linha Manual',
+        4068: 'FB/Pré-Produção/Linha Balde',
+        27458: 'FB/Pré-Produção/Linha Salmoura',
+    },
+    5: {  # LF
+        53: 'LF/Pré-Produção',
+        30710: 'LF/Pré-Produção/Intermediário',
+    },
+}

@@ -8,6 +8,7 @@ import pytest
 from app.odoo.constants.locations import (
     COMPANY_LOCATIONS,
     LOCAIS_INDISPONIVEL,
+    LOCAIS_PRE_PRODUCAO,
     LOTES_MIGRACAO_POR_COMPANY,
     get_local_indisponivel,
     get_location_id,
@@ -41,3 +42,10 @@ def test_get_local_indisponivel_ok_e_erro():
     assert get_local_indisponivel(3) == 31089  # SC tem local mesmo fora de escopo
     with pytest.raises(ValueError, match='company_id=99'):
         get_local_indisponivel(99)
+
+
+def test_locais_pre_producao():
+    # default canonico dos scripts 15 (FB) e 17 (LF)
+    assert set(LOCAIS_PRE_PRODUCAO[1]) == {4066, 4067, 4068, 27458}
+    assert set(LOCAIS_PRE_PRODUCAO[5]) == {53, 30710}
+    assert 4 not in LOCAIS_PRE_PRODUCAO  # CD nao tem pre-producao mapeada

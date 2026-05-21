@@ -26,6 +26,14 @@ from sqlalchemy.exc import OperationalError
 from app import db
 from app.odoo.constants.locations import COMPANY_LOCATIONS
 from app.odoo.constants.operacoes_fiscais import COMPANY_PARTNER_ID
+from app.odoo.constants.picking_types import (
+    LOCATION_DESTINO_POR_DIRECAO,
+    LOCATION_DESTINO_TRANSITO_FILIAIS,
+    LOCATION_DESTINO_TRANSITO_INDUSTR,
+    LOCATION_DESTINO_VIRTUAL_PARCEIROS,
+    PICKING_TYPE_POR_DIRECAO,
+)
+from app.odoo.constants import ids_diversos
 from app.odoo.models import AjusteEstoqueInventario, OperacaoOdooAuditoria
 from app.odoo.services.stock_picking_service import StockPickingService
 from app.odoo.utils.connection import get_odoo_connection
@@ -49,54 +57,10 @@ ACAO_PARA_DIRECAO: Dict[str, tuple] = {
 }
 
 
-# Mapping (company_origem, tipo_op) -> picking_type_id
-# Hardcoded por enquanto. Auditoria 00e (F0) descobriu:
-#   FB outgoing: 51 (entre filiais) | 53 (industrializacao) | 88 (copia)
-#   CD outgoing: 55 (entre filiais) | 96 (retrabalho)
-#   LF outgoing: 66 (industrializacao) | 94 (n. aplicado)
-# G003 (SOT.md §3): mover este mapping para app/odoo/constants/picking_types.py
-# se virar fonte de gotcha (Refinement futuro).
-PICKING_TYPE_POR_DIRECAO: Dict[tuple, int] = {
-    (1, 'transf-filial'):        51,  # FB: Expedicao Entre Filiais
-    (4, 'transf-filial'):        55,  # CD: Expedicao Entre Filiais
-    (1, 'industrializacao'):     53,  # FB: Expedicao Industrializacao
-    (5, 'perda'):                94,  # LF: Expedicao N Aplicado
-    (4, 'dev-industrializacao'): 96,  # CD: Retrabalho (CD/OUT/RET)
-    # G034 (2026-05-18): PT 97 'LF: Expedição Industrialização Retorno (LF)'
-    # criado via XML-RPC para ter l10n_br_tipo_pedido='dev-industrializacao'.
-    # Substitui PT 66 (que tinha tipo='venda-industrializacao' → journal VND →
-    # CFOP 5124 errado). PT 97 → journal SARET → CFOP 5949.
-    # Sequence: ir.sequence id=188 (prefix LF/LF/SAI/RETIND/).
-    (5, 'dev-industrializacao'): 97,  # LF: Saida Retrabalho (LF/SAI/RETIND)
-    (1, 'dev-industrializacao'): 88,  # FB: Saida Retorno Industrializacao (FB/SAI/RETIND, espelho)
-}
-
-
-# Locations virtuais usadas como destino de pickings inter-company.
-# Pickings outgoing exigem location_dest_id com company_id=False (shared).
-# Descobertos em audit dos picking_types.default_location_dest_id (2026-05-18):
-#   pt 53 FB Expedicao Industrializacao: dest=26489 (Em Transito Industrializacao)
-#   pt 51 FB Expedicao Entre Filiais:    dest=6     (Em Transito Filiais)
-#   pt 55 CD Expedicao Entre Filiais:    dest=6     (Em Transito Filiais)
-#   pt 66 LF Expedicao Industrializacao: dest=5     (Parceiros/Clientes)
-#   pt 94 LF Expedicao N Aplicado:       dest=5     (Parceiros/Clientes)
-#   pt 96 CD Retrabalho:                 dest=26489 (Em Transito Industrializacao)
-LOCATION_DESTINO_VIRTUAL_PARCEIROS = 5   # Parceiros/Clientes (perda LF→FB)
-LOCATION_DESTINO_TRANSITO_FILIAIS = 6    # Em Transito (Filiais) — TRANSF_FILIAL
-LOCATION_DESTINO_TRANSITO_INDUSTR = 26489  # Em Transito (Industrializacao)
-
-# Mapeamento canonico por (company_origem, tipo_op) -> location virtual
-# de destino. Validado contra default_location_dest_id de cada picking_type.
-LOCATION_DESTINO_POR_DIRECAO = {
-    (5, 'perda'):                5,      # LF→FB perda
-    (1, 'industrializacao'):     26489,  # FB→LF industrializacao
-    (5, 'industrializacao'):     5,      # LF retorno (pt 66 LF Exp Industr)
-    (1, 'transf-filial'):        6,      # FB→CD
-    (4, 'transf-filial'):        6,      # CD→FB
-    (5, 'dev-industrializacao'): 5,      # LF retorna industr (pt 66)
-    (4, 'dev-industrializacao'): 26489,  # CD retrabalho (pt 96)
-    (1, 'dev-industrializacao'): 26489,  # FB dev industr (pt 53)
-}
+# PICKING_TYPE_POR_DIRECAO + LOCATION_DESTINO_* (virtuais + por direcao) foram
+# movidos para app/odoo/constants/picking_types.py (importados acima — G003 resolvido).
+# Re-exportados aqui via import para compatibilidade dos scripts que os importam
+# de inventario_pipeline_service.
 
 
 def resolver_location_destino(
@@ -158,7 +122,7 @@ class InventarioPipelineService:
     # - Robo CIEL IT cria invoice sem payment_provider_id (Forma Pagamento)
     # - Sem isso, SEFAZ falha "Meio de pagamento nao configurado"
     # - NF historica 588209 usa payment_provider_id=38 (SEM PAGAMENTO)
-    PAYMENT_PROVIDER_SEM_PAGAMENTO = 38
+    PAYMENT_PROVIDER_SEM_PAGAMENTO = ids_diversos.PAYMENT_PROVIDER_SEM_PAGAMENTO
 
     # G034 (2026-05-18): Robo CIEL IT cria invoice para DEV_* acoes usando
     # defaults do picking_type 66 LF Expedicao Industrializacao →

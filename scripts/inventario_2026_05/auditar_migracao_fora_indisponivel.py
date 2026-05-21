@@ -33,13 +33,9 @@ from _comum import (  # type: ignore  # noqa: E402
     m2o_id, m2o_name, norm_cod, norm_lote,
 )
 
-# IDs fixos D011 (.claude/references/odoo/IDS_FIXOS.md)
-LOCAIS_INDISPONIVEL = {
-    1: 31088,  # FB/Indisponivel
-    3: 31089,  # SC/Indisponivel
-    4: 31090,  # CD/Indisponivel
-    5: 31091,  # LF/Indisponivel
-}
+from app.odoo.constants.locations import LOCAIS_INDISPONIVEL  # noqa: E402  # type: ignore
+
+# IDs fixos D011 — LOCAIS_INDISPONIVEL importado de app.odoo.constants.locations
 LOCAIS_INDISPONIVEL_IDS = list(LOCAIS_INDISPONIVEL.values())
 
 COMPANY_NAME = {1: 'FB', 3: 'SC', 4: 'CD', 5: 'LF'}

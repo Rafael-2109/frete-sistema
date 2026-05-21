@@ -15,6 +15,7 @@ import time
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.odoo.constants import ids_diversos
 from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,8 @@ class StockPickingService:
     # picking outgoing exige 'incoterm' + 'carrier_id' para action_liberar_faturamento
     # disparar. Sem isso: 'Voce deve informar o Tipo de Frete para liberar
     # o faturamento.'.
-    INCOTERM_CIF = 6     # account.incoterms code=CIF
-    CARRIER_NACOM = 996  # delivery.carrier "(61.724.241/0001-78) NACOM GOYA ..."
+    INCOTERM_CIF = ids_diversos.INCOTERM_CIF      # central: app/odoo/constants/ids_diversos.py
+    CARRIER_NACOM = ids_diversos.CARRIER_NACOM    # delivery.carrier NACOM GOYA
 
     def criar_transferencia(
         self,

@@ -3,14 +3,32 @@ MATRIZ_INTERCOMPANY — operacoes fiscais entre empresas do grupo NACOM.
 
 Dado, nao codigo. Adicionar nova operacao = adicionar entrada no dict.
 
-Origem dos valores: docs/inventario-2026-05/00-decisoes/D002-matriz-intercompany-final.md
+Origem dos valores:
+- SAIDA: docs/inventario-2026-05/00-decisoes/D002-matriz-intercompany-final.md (audit F0)
+- ENTRADA: validacao XML-RPC read-only no Odoo PROD em 2026-05-21 (faturas posted reais,
+  par saida<->entrada via chave SEFAZ).
+- Regra de negocio 5902/5903/5124/5949 confirmada por Rafael 2026-05-21 (ver bloco
+  dev-industrializacao).
 Premissas: P001-P011 em docs/inventario-2026-05/01-premissas/
 
 Estrutura:
-- `fiscal_position_id`: dict com chave tupla (company_origem, company_destino).
-  Service usa esta para setar fiscal_position no account.move; Odoo decide
-  CFOP automaticamente a partir disso. NAO setar CFOP no account.move.
-- `cfop_esperado`: informacional, apenas para humanos e logs.
+- `fiscal_position_id`: dict (company_origem, company_destino) -> fiscal_position da SAIDA.
+  Service seta isso no account.move; Odoo decide o CFOP. NAO setar CFOP no account.move.
+- `cfop_esperado`: CFOP da SAIDA (informacional/log). Real e decidido pelo Odoo.
+- `entrada`: dict (company_origem, company_destino) -> dados da NF de ENTRADA (in_invoice
+  escriturada no DESTINO a partir do DFe). Campos: fiscal_position_id, cfop,
+  l10n_br_tipo_pedido_entrada. Informacional/auditoria.
+
+REGRA DE CFOP por TIPO DE PRODUTO na industrializacao por encomenda FB<->LF (Rafael 2026-05-21):
+  - 5901 (entrada 1901): FB->LF remessa de INSUMO (tipo 1,2,3) p/ industrializar.
+  - 5124 (entrada 1124): LF->FB saida do PRODUTO ACABADO (tipo 4) industrializado + cobranca.
+  - 5902 (entrada 1902): LF->FB retorno dos INSUMOS (tipo 1,2,3) recebidos e UTILIZADOS.
+                         NUNCA produto acabado. Par interno de 5124 na mesma NF.
+  - 5903 (entrada 1903): LF->FB retorno de INSUMO (tipo 1,2,3) recebido e NAO aplicado.
+  - 5949 (entrada 1949): retrabalho / retorno / AJUSTE DE ESTOQUE de produto (tipo 4).
+                         E o caso do agente/inventario.
+  5124+5902 ocorrem na operacao 'venda-industrializacao' (fp 111, fluxo RecebimentoLF),
+  fora do escopo de ajuste de inventario -> nao modelada aqui (so documentada).
 
 Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md §6.3
 """
@@ -35,40 +53,99 @@ MATRIZ_INTERCOMPANY: Dict[str, Dict[str, Any]] = {
             (1, 5): 25,  # FB → LF: 'REMESSA PARA INDUSTRIALIZAÇÃO'
         },
         'cfop_esperado': {(1, 5): '5901'},
+        'entrada': {
+            # FB → LF: entrada escriturada na LF (ENTIN). Confirmado RPI/2026/00200 -> ENTIN/2026/05/0032.
+            (1, 5): {'fiscal_position_id': 131, 'cfop': '1901',
+                     'l10n_br_tipo_pedido_entrada': 'serv-industrializacao'},
+        },
         'nf_referencia': 94457,
         'account_move_id_referencia': 607443,
     },
     'perda': {
+        # ====================================================================
+        # 5903 (produto 1,2,3) = retorno de INSUMO recebido p/ industrializacao e NAO
+        # aplicado. NAO e "par obrigatorio" de 5902. Verificado no Odoo 2026-05-21: das
+        # 152 NFs de saida LF->FB, 96 sao SO 5902 (serie VND), 56 sao SO 5903 (serie RETNA),
+        # ZERO combinam os dois. O par de 5902 DENTRO da mesma NF e o 5124 (produto acabado),
+        # nao o 5903 — ver bloco dev-industrializacao. 5902 e 5903 sao retornos de insumo
+        # independentes (utilizado vs nao-aplicado), emitidos cada um quando aplicavel.
+        # ====================================================================
         'l10n_br_tipo_pedido': 'perda',
         'move_type': 'out_invoice',
         'tipo_produto': [1, 2, 3],
         'fiscal_position_id': {
-            (5, 1): 91,  # LF → FB: 'SAÍDA - PERDAS'
+            (5, 1): 91,  # LF → FB: 'SAÍDA - PERDAS' (fiscalmente: retorno NAO aplicado)
         },
         'cfop_esperado': {(5, 1): '5903'},
+        'entrada': {
+            # LF → FB: entrada na FB. fp 97 'ENTRADA: RETORNO NÃO APLICADO'.
+            # Confirmado RETNA/2026/00025 -> RETNA/2026/04/0008.
+            (5, 1): {'fiscal_position_id': 97, 'cfop': '1903',
+                     'l10n_br_tipo_pedido_entrada': 'retorno'},
+        },
         'nf_referencia': 13075,
         'account_move_id_referencia': 588209,
     },
     'dev-industrializacao': {
+        # ====================================================================
+        # PRODUTO TIPO 4 (ACABADO) entre LF e [FB, CD]. CFOP de SAIDA = 5949 em TODAS as
+        # direcoes (retrabalho / retorno / AJUSTE DE ESTOQUE — uso do agente). Entrada 1949.
+        #
+        #   CD → LF .. fp 74 (REMESSA P/ RETRABALHO) -> 5949   confirmado RRET/2026/00008
+        #   LF → CD .. fp 89 (RETRABALHO)            -> 5949   confirmado SARET/2026/00002
+        #   LF → FB .. fp 89 (RETRABALHO)            -> 5949   retorno/ajuste
+        #   FB → LF .. fp 74 (simetria P011)         -> 5949   SEM precedente
+        #
+        # 5902 NAO SE APLICA A PRODUTO ACABADO (regra Rafael 2026-05-21).
+        #   5902 ('retorno de mercadoria utilizada na industr. por encomenda') e EXCLUSIVO
+        #   dos INSUMOS/embalagens (tipo 1,2,3) que a FB remeteu (5901) e a LF aplicou.
+        #   Ocorre na operacao 'venda-industrializacao' (fp 111, fluxo RecebimentoLF), em NF
+        #   MISTA:  produto acabado tipo 4 -> 5124 (entrada 1124)
+        #           insumos tipo 1,2,3     -> 5902 (entrada 1902)
+        #           entrada FB: fp 88 'ENTRADA - SERVICO INDUSTRIALIZACAO' (serv-industrializacao).
+        #   Essa operacao e do faturamento de industrializacao (RecebimentoLF), NAO do ajuste
+        #   de inventario -> nao modelada como operacao aqui.
+        #
+        #   ERRO CONHECIDO: NFs de produto acabado (tipo 4) emitidas com 5902 — ex. SARET/
+        #   2026/00006-9 (LF->FB) — sao classificacao fiscal incorreta (deveriam ser 5949).
+        #   NAO usar como precedente.
+        #
+        # OBS.: Odoo decide o CFOP pela fiscal_position + natureza -> NAO hardcodar CFOP.
+        # ====================================================================
         'l10n_br_tipo_pedido': 'dev-industrializacao',
         'move_type': 'out_invoice',
         'tipo_produto': [4],
         'fiscal_position_id': {
-            # Direcoes COM precedente historico
             (4, 5): 74,   # CD → LF: 'SAÍDA - REMESSA PARA RETRABALHO'
             (5, 4): 89,   # LF → CD: 'SAÍDA - RETRABALHO'
-            # Direcoes SEM precedente — assumidas por simetria (P011)
-            (1, 5): 74,   # FB → LF: simetria com (4,5)
-            (5, 1): 89,   # LF → FB: simetria com (5,4)
+            (5, 1): 89,   # LF → FB: 'SAÍDA - RETRABALHO'
+            (1, 5): 74,   # FB → LF: simetria com (4,5) — SEM precedente (P011)
         },
         'cfop_esperado': {
-            (4, 5): '5949',
-            (5, 4): '5949',
-            (1, 5): '5949',  # P011
-            (5, 1): '5949',  # P011
+            (4, 5): '5949',  # CD → LF: confirmado RRET/2026/00008
+            (5, 4): '5949',  # LF → CD: confirmado SARET/2026/00002
+            (5, 1): '5949',  # LF → FB: retorno / ajuste de estoque (produto acabado)
+            (1, 5): '5949',  # FB → LF: ASSUMIDO (sem precedente, simetria com CD→LF)
+        },
+        'entrada': {
+            # CD → LF: entrada na LF (ENTRE). fp 86 'ENTRADA - RETRABALHO'. ENTRE/2026/05/0002.
+            (4, 5): {'fiscal_position_id': 86, 'cfop': '1949',
+                     'l10n_br_tipo_pedido_entrada': 'retorno'},
+            # LF → CD: entrada na CD (ENTRE). fp 87 'ENTRADA - RETRABALHO'. ENTRE/2026/05/0001.
+            (5, 4): {'fiscal_position_id': 87, 'cfop': '1949',
+                     'l10n_br_tipo_pedido_entrada': 'outro'},
+            # LF → FB (retorno/ajuste): entrada 1949 na FB. fp SEM precedente VALIDO
+            # (historico LF->FB de produto tipo 4 e todo 5902, que e erro) -> canary.
+            (5, 1): {'fiscal_position_id': None, 'cfop': '1949',
+                     'l10n_br_tipo_pedido_entrada': 'outro'},
+            # FB → LF: SEM precedente; entrada ASSUMIDA por simetria com (4,5). Canary fiscal pendente.
+            (1, 5): {'fiscal_position_id': 86, 'cfop': '1949',
+                     'l10n_br_tipo_pedido_entrada': 'retorno'},
         },
         'nf_referencia': 147772,
         'account_move_id_referencia': 590839,
+        # Sem precedente VALIDO de 5949 produto tipo 4 em LF->FB nem FB->LF.
+        # (5,1) tem NFs historicas, mas com 5902 (erro de classificacao) -> nao conta.
         'direcoes_sem_precedente_historico': [(1, 5), (5, 1)],
     },
     'transf-filial': {
@@ -80,8 +157,18 @@ MATRIZ_INTERCOMPANY: Dict[str, Dict[str, Any]] = {
             (4, 1): 49,  # CD → FB: 'SAÍDA - TRANSFERÊNCIA ENTRE FILIAIS'
         },
         'cfop_esperado': {
-            (1, 4): '5152',
-            (4, 1): '5151',
+            (1, 4): '5152',  # FB → CD: 'Transferência de mercadoria adquirida/recebida de terceiros'
+            (4, 1): '5151',  # CD → FB: 'Transferência de produção do estabelecimento'
+        },
+        'entrada': {
+            # FB → CD: entrada no CD. fp 50 'ENTRADA - TRANSFERÊNCIA ENTRE FILIAIS'.
+            # CFOP 1152 'Transferência p/ comercialização'. SDTRA/2026/00881 -> ENTTR/2026/05/0146.
+            (1, 4): {'fiscal_position_id': 50, 'cfop': '1152',
+                     'l10n_br_tipo_pedido_entrada': 'transf-filial'},
+            # CD → FB: entrada na FB. fp 22 'ENTRADA - TRANSFERÊNCIA ENTRE FILIAIS'.
+            # CFOP 1151 'Transferência p/ industrialização ou produção rural'. SDTRA/2026/00344 -> ENTTR/2026/05/0052.
+            (4, 1): {'fiscal_position_id': 22, 'cfop': '1151',
+                     'l10n_br_tipo_pedido_entrada': 'transf-filial'},
         },
         'nf_referencia': 94410,
         'account_move_id_referencia': 604472,
@@ -134,7 +221,7 @@ def resolver_operacao_por_tipo_produto(*, tipo: int, company_id: int, sinal: int
 
 def resolver_fiscal_position(tipo_operacao: str, company_origem: int,
                               company_destino: int) -> int:
-    """Resolve `fiscal_position_id` para uma direcao especifica.
+    """Resolve `fiscal_position_id` da SAIDA para uma direcao especifica.
 
     Args:
         tipo_operacao: chave de MATRIZ_INTERCOMPANY.
@@ -142,7 +229,7 @@ def resolver_fiscal_position(tipo_operacao: str, company_origem: int,
         company_destino: company_id destino.
 
     Returns:
-        fiscal_position_id Odoo.
+        fiscal_position_id Odoo (da SAIDA / out_invoice).
 
     Raises:
         KeyError: se tipo_operacao nao existe.
@@ -158,3 +245,40 @@ def resolver_fiscal_position(tipo_operacao: str, company_origem: int,
             f"Direcoes validas: {sorted(op['fiscal_position_id'].keys())}"
         )
     return fp
+
+
+def resolver_entrada(tipo_operacao: str, company_origem: int,
+                     company_destino: int) -> Dict[str, Any]:
+    """Resolve os dados da NF de ENTRADA (in_invoice no destino) para uma direcao.
+
+    A chave e a MESMA tupla da SAIDA (company_origem, company_destino): a entrada e
+    escriturada no `company_destino` a partir do DFe emitido pela `company_origem`.
+
+    Args:
+        tipo_operacao: chave de MATRIZ_INTERCOMPANY.
+        company_origem: company_id origem da SAIDA.
+        company_destino: company_id destino da SAIDA (onde a entrada e escriturada).
+
+    Returns:
+        dict {fiscal_position_id, cfop, l10n_br_tipo_pedido_entrada}.
+        `fiscal_position_id` pode ser None quando o caso ainda nao tem precedente no Odoo.
+
+    Raises:
+        KeyError: se tipo_operacao nao existe.
+        ValueError: se o tipo nao tem `entrada` auditada ou a direcao nao esta mapeada.
+    """
+    op = get_operacao(tipo_operacao)
+    entrada = op.get('entrada')
+    if not entrada:
+        raise ValueError(
+            f"tipo_operacao={tipo_operacao!r} nao possui dados de 'entrada' auditados."
+        )
+    key: Tuple[int, int] = (company_origem, company_destino)
+    dados = entrada.get(key)
+    if dados is None:
+        raise ValueError(
+            f"entrada nao mapeada para tipo={tipo_operacao!r} "
+            f"direcao=({company_origem}, {company_destino}). "
+            f"Direcoes validas: {sorted(entrada.keys())}"
+        )
+    return dados

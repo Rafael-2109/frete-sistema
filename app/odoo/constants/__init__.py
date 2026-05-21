@@ -9,5 +9,6 @@ from .operacoes_fiscais import (  # noqa: F401
     get_operacao,
     resolver_operacao_por_tipo_produto,
     resolver_fiscal_position,
+    resolver_entrada,
 )
 from .locations import COMPANY_LOCATIONS, get_location_id  # noqa: F401

@@ -42,9 +42,8 @@ sys.path.insert(0, str(_THIS.parents[2]))
 import openpyxl  # noqa: E402
 
 from app import create_app  # noqa: E402
+from app.odoo.constants.operacoes_fiscais import CODIGO_PARA_COMPANY_ID  # noqa: E402
 from app.utils.timezone import agora_utc_naive  # noqa: E402
-
-CODIGO_PARA_COMPANY_ID = {'FB': 1, 'CD': 4, 'LF': 5}
 TIPOS_ACEITOS = {'1', '2', '3', '4'}
 OUTPUT_JSON = '/tmp/inventario_fisico_2026_05.json'
 

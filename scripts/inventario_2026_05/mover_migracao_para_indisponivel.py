@@ -47,6 +47,7 @@ from _comum import (  # type: ignore  # noqa: E402
 )
 
 from app import create_app  # noqa: E402  # type: ignore
+from app.odoo.constants.locations import get_local_indisponivel  # noqa: E402  # type: ignore
 from app.odoo.services.stock_internal_transfer_service import (  # noqa: E402  # type: ignore
     StockInternalTransferService,
 )
@@ -58,12 +59,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger('mover_migracao')
 
-# IDs fixos D011 (.claude/references/odoo/IDS_FIXOS.md)
-LOCAIS_INDISPONIVEL = {
-    1: 31088,  # FB/Indisponivel
-    4: 31090,  # CD/Indisponivel
-    5: 31091,  # LF/Indisponivel (NAO usado neste script — LF muda lote, nao location)
-}
+# LOCAIS_INDISPONIVEL (D011) derivado do modulo central; subset {1,4,5} — SC fora de escopo
+LOCAIS_INDISPONIVEL = {c: get_local_indisponivel(c) for c in (1, 4, 5)}
 COMPANY_NAME = {1: 'FB', 4: 'CD', 5: 'LF'}
 LOTE_DESTINO_LF = 'P-15/05'
 

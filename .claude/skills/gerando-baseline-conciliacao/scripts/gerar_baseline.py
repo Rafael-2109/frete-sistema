@@ -42,8 +42,10 @@ _ROOT = _find_project_root()
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
+from app.odoo.constants.operacoes_fiscais import CODIGO_PARA_COMPANY_ID  # noqa: E402
+
 JOURNALS_MONITORADOS = ['SICOOB', 'GRAFENO', 'BRADESCO', 'AGIS GARANTIDA', 'VORTX GRAFENO']
-COMPANY_ID_FB = 1  # Nacom Goya / Conservas Campo Belo
+COMPANY_ID_FB = CODIGO_PARA_COMPANY_ID['FB']  # Nacom Goya / Conservas Campo Belo
 TOP_N_PENDENTES = 500
 
 MES_PT = {

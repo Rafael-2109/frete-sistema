@@ -132,3 +132,85 @@ def test_resolver_fiscal_position_direcao_invalida_raises():
     with pytest.raises(ValueError, match='fiscal_position'):
         # transf-filial nao tem direcao FB→LF
         resolver_fiscal_position('transf-filial', 1, 5)
+
+
+# --- ENTRADA (in_invoice no destino) — validado no Odoo PROD 2026-05-21 ---
+
+def test_entrada_industrializacao_FB_LF():
+    """FB→LF industrializacao: saida 5901 / entrada 1901 (fp 131, serv-industrializacao)."""
+    from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
+    op = MATRIZ_INTERCOMPANY['industrializacao']
+    assert op['entrada'][(1, 5)] == {
+        'fiscal_position_id': 131, 'cfop': '1901',
+        'l10n_br_tipo_pedido_entrada': 'serv-industrializacao',
+    }
+
+
+def test_entrada_perda_LF_FB():
+    """LF→FB perda: saida 5903 / entrada 1903 (fp 97, retorno nao aplicado)."""
+    from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
+    op = MATRIZ_INTERCOMPANY['perda']
+    assert op['entrada'][(5, 1)] == {
+        'fiscal_position_id': 97, 'cfop': '1903',
+        'l10n_br_tipo_pedido_entrada': 'retorno',
+    }
+
+
+def test_dev_industrializacao_produto4_sempre_5949():
+    """Regra de negocio (Rafael 2026-05-21): produto acabado (tipo 4) usa 5949 em TODAS as
+    direcoes (retrabalho/retorno/ajuste). 5902 NUNCA se aplica a produto acabado — e exclusivo
+    de insumos (tipo 1,2,3) na operacao venda-industrializacao (fp 111), par interno de 5124."""
+    from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
+    op = MATRIZ_INTERCOMPANY['dev-industrializacao']
+    assert op['tipo_produto'] == [4]
+    for direcao in [(4, 5), (5, 4), (5, 1), (1, 5)]:
+        assert op['cfop_esperado'][direcao] == '5949', direcao
+        assert op['entrada'][direcao]['cfop'] == '1949', direcao
+    # nenhuma variante 5902 deve existir (5902 nao e CFOP de produto acabado)
+    assert 'cfop_variantes' not in op
+
+
+def test_dev_industrializacao_sem_precedente_LF_FB_e_FB_LF():
+    """Sem precedente VALIDO de 5949 produto tipo 4 em LF->FB nem FB->LF.
+    (5,1) tem NFs historicas porem com 5902 (erro de classificacao) -> nao conta."""
+    from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
+    op = MATRIZ_INTERCOMPANY['dev-industrializacao']
+    assert op['direcoes_sem_precedente_historico'] == [(1, 5), (5, 1)]
+
+
+def test_resolver_cfop_variante_removido():
+    """resolver_cfop_variante foi removido (variante 5902 era classificacao incorreta)."""
+    import app.odoo.constants.operacoes_fiscais as mod
+    assert not hasattr(mod, 'resolver_cfop_variante')
+
+
+def test_entrada_transf_filial_ambas_direcoes():
+    """transf-filial entrada confirmada no Odoo 2026-05-21:
+    FB→CD entrada 1152 (fp 50); CD→FB entrada 1151 (fp 22). fps de entrada distintas."""
+    from app.odoo.constants.operacoes_fiscais import MATRIZ_INTERCOMPANY
+    op = MATRIZ_INTERCOMPANY['transf-filial']
+    assert op['entrada'][(1, 4)] == {
+        'fiscal_position_id': 50, 'cfop': '1152', 'l10n_br_tipo_pedido_entrada': 'transf-filial'}
+    assert op['entrada'][(4, 1)] == {
+        'fiscal_position_id': 22, 'cfop': '1151', 'l10n_br_tipo_pedido_entrada': 'transf-filial'}
+
+
+def test_resolver_entrada_direcoes_confirmadas():
+    from app.odoo.constants.operacoes_fiscais import resolver_entrada
+    assert resolver_entrada('industrializacao', 1, 5)['cfop'] == '1901'
+    assert resolver_entrada('perda', 5, 1)['cfop'] == '1903'
+    assert resolver_entrada('dev-industrializacao', 4, 5)['cfop'] == '1949'
+    assert resolver_entrada('dev-industrializacao', 5, 4)['cfop'] == '1949'
+    # produto tipo 4 LF→FB = retorno/ajuste -> 1949 (5902 NAO se aplica a produto acabado)
+    assert resolver_entrada('dev-industrializacao', 5, 1)['cfop'] == '1949'
+    assert resolver_entrada('transf-filial', 1, 4)['cfop'] == '1152'
+    assert resolver_entrada('transf-filial', 4, 1)['cfop'] == '1151'
+
+
+def test_resolver_entrada_direcao_invalida_raises():
+    from app.odoo.constants.operacoes_fiscais import resolver_entrada
+    with pytest.raises(ValueError, match='entrada nao mapeada'):
+        resolver_entrada('perda', 1, 4)
+    # transf-filial so tem (1,4) e (4,1); direcao com LF nao existe
+    with pytest.raises(ValueError, match='entrada nao mapeada'):
+        resolver_entrada('transf-filial', 1, 5)

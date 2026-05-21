@@ -41,6 +41,7 @@ _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[2]))
 
 from app import create_app  # noqa: E402
+from app.odoo.constants.locations import get_local_indisponivel, get_location_id  # noqa: E402
 from app.odoo.services.stock_lot_service import StockLotService  # noqa: E402
 from app.odoo.utils.connection import get_odoo_connection  # noqa: E402
 
@@ -51,8 +52,8 @@ logging.basicConfig(
 logger = logging.getLogger('transf_indisp_p15_cd')
 
 COMPANY_ID = 4              # CD
-LOC_INDISPONIVEL = 31090    # CD/Indisponivel (D011)
-LOC_ESTOQUE = 32            # CD/Estoque
+LOC_INDISPONIVEL = get_local_indisponivel(4)   # CD/Indisponivel (central)
+LOC_ESTOQUE = get_location_id(4)               # CD/Estoque (central)
 LOTE_DESTINO_NOME = 'P-15/05'
 
 ITENS = [

@@ -87,14 +87,17 @@ estratificação dos scripts — muitos são de gerações anteriores, hoje supe
 |-----------|-----------|------|
 | `COMPANY_LOCATIONS` (FB=8, CD=32, LF=42) | ✅ `constants/locations.py` | SC=22 **NÃO adicionado** (decisão 2026-05-20: SC fora de escopo, D011:95) |
 | `CODIGO_PARA_COMPANY_ID` / `COMPANY_PARTNER_ID` (FB=1, CD=34, LF=35) | ✅ `constants/operacoes_fiscais.py` | SC **NÃO adicionado** (mesma decisão) |
-| `MATRIZ_INTERCOMPANY` (fiscal_position + CFOP 5901/5903/5949/5152/5151) | ✅ `operacoes_fiscais.py` | — |
+| `MATRIZ_INTERCOMPANY` — fiscal_position + CFOP **saída** (5901/5903/5949/5152/5151) + campo **`entrada`** (1901/1903/1949 + `resolver_entrada()`, validado no Odoo 2026-05-21) | ✅ `operacoes_fiscais.py` | regra CFOP por tipo de produto LF documentada no módulo: 5901 insumo · **5902 insumo utilizado ≠ 5903 não-aplicado** · 5124/5902 = venda-industrializacao (fp 111, fora de escopo) · 5949 = retrabalho/ajuste tipo 4 (caso do inventário) |
 | `LOCAIS_INDISPONIVEL` (FB 31088, SC 31089, CD 31090, LF 31091) | ✅ **FEITO (Onda 1)** em `locations.py` + `get_local_indisponivel()` + testes | migrar consumidores (gradual, QUANDO-SUPERADO) |
 | `LOTES_MIGRACAO_POR_COMPANY` (FB id=30482, CD id=30856) | ✅ **FEITO (Onda 1)** em `locations.py` | migrar consumidores |
-| `PICKING_TYPE_POR_DIRECAO` / `LOCATION_DESTINO_POR_DIRECAO` | 🟡 hardcoded em `inventario_pipeline_service.py:59` (G003 admite mover) | mover p/ `constants/` |
-| Outros IDs: INCOTERM_CIF=6, CARRIER_NACOM=996, PAYMENT_PROVIDER_SEM_PAGAMENTO=38 | 🟡 hardcoded em services | avaliar centralizar |
+| `PICKING_TYPE_POR_DIRECAO` / `LOCATION_DESTINO_POR_DIRECAO` | ✅ **FEITO** em `constants/picking_types.py` (G003 resolvido); pipeline importa + re-exporta (compat scripts) | — |
+| INCOTERM_CIF=6, CARRIER_NACOM=996, PAYMENT_PROVIDER_SEM_PAGAMENTO=38 | ✅ **FEITO** em `constants/ids_diversos.py`; pipeline/stock_picking importam | `app/pedidos/integracao_odoo` tem INCOTERM_CIF próprio (outro módulo, fora de escopo) |
+| Sub-locais Pré-Produção FB/LF (4066/4067/4068/27458/53/30710) | ✅ **FEITO** em `locations.LOCAIS_PRE_PRODUCAO` (default canônico) | scripts 15/17 podem importar (são parametrizáveis) |
 
 **Bugs latentes:** (1) **SC (company_id=3)** ausente dos dicts → orquestradores "todas empresas" o ignoram em silêncio.
 (2) **`MIGRAÇÃO` (acento, canônico) vs `MIGRACAO`** coexistem (D005/D010 com acento; D011/D012 sem; ambos por D013) — hardcoded sem acento em `teste_210030325_lf.py:98`, `fat_lf_02_carregar.py:162`.
+
+**Auditoria de constantes (code-review 2026-05-21):** **SKILLS essencialmente LIMPAS** — matches em `.claude/skills/` são nomes de campo Odoo (strings em search_read/SQL), não IDs de domínio. Único caso menor: `gerando-baseline-conciliacao/scripts/gerar_baseline.py:46` (`COMPANY_ID_FB=1` local). `app/odoo/constants/` é fonte única correta; maioria dos scripts importa certo. **Duplicações — ✅ CORRIGIDO 2026-05-21:** `02_carregar` (CODIGO_PARA_COMPANY_ID) + 8 scripts de Indisponível (mover_migracao/auditar_migracao/ajuste_fb_cd/transferir_fluxo_c/executar_fluxo_b/relotar/pasta22/transferir_indisp) + skill `gerar_baseline` agora importam do central (derivando subset `{c for c in (1,4,5)}` p/ preservar escopo — SC fica fora). Pendente: `00d_investigar_variacoes.py` (script JÁ-MORTO de investigação F0 — não tocado, será arquivado).
 
 ---
 
