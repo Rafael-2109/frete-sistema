@@ -1433,4 +1433,12 @@ def create_app(config_name=None):
 
     from app.chat import models as _chat_models  # noqa: F401  # pyright: ignore[reportUnusedImport]  — registra modelos no metadata
 
+    # Observabilidade de memoria (Nivel 1 — diagnostico de leak OOM 2026-05-21).
+    # No-op total se MEMPROF_LIGHT/MEMORY_PROFILING off. Ativacao por env var no Render.
+    try:
+        from app.utils.memory_profiler import init_memory_profiling
+        init_memory_profiling(app)
+    except Exception as _memprof_e:
+        app.logger.warning(f"[MEMPROF] init falhou: {_memprof_e}")
+
     return app
