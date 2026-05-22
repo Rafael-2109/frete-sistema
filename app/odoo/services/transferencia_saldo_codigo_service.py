@@ -59,3 +59,27 @@ class TransferenciaSaldoCodigoService:
             'uom': p['uom_id'][1] if p.get('uom_id') else None,
             'use_expiration_date': bool(p.get('use_expiration_date')),
         }
+
+    def listar_lotes_cd_estoque(self, cod) -> List[Dict[str, Any]]:
+        """Lotes do código em CD/Estoque com qtd/reservado/disponível/migração."""
+        info = self.resolver_produto(cod)
+        quants = self.odoo.search_read(
+            'stock.quant',
+            [['product_id', '=', info['product_id']],
+             ['company_id', '=', self.CD_COMPANY_ID],
+             ['location_id', '=', self.CD_ESTOQUE_LOC]],
+            ['id', 'lot_id', 'quantity', 'reserved_quantity'], limit=0)
+        out: List[Dict[str, Any]] = []
+        for q in quants:
+            lot = q.get('lot_id')
+            lote_nome = lot[1] if lot else None
+            qty = round(float(q['quantity']), CASAS)
+            rsv = round(float(q.get('reserved_quantity') or 0), CASAS)
+            out.append({
+                'lote_nome': lote_nome,
+                'lot_id': lot[0] if lot else None,
+                'quantidade': qty, 'reservado': rsv,
+                'disponivel': round(qty - rsv, CASAS),
+                'is_migracao': bool(lote_nome and 'MIGRA' in lote_nome.upper()),
+            })
+        return out

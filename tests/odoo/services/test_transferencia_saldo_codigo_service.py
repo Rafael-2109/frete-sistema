@@ -68,3 +68,22 @@ def test_resolver_produto_ambiguo(service, odoo_mock):
     ]
     with pytest.raises(ValueError, match='ambiguo'):
         service.resolver_produto('4729198')
+
+
+def test_listar_lotes_cd_estoque(service, odoo_mock):
+    service.resolver_produto = MagicMock(return_value={'product_id': 27749})
+    odoo_mock.search_read.return_value = [
+        {'id': 1, 'lot_id': [56426, '135/26'], 'quantity': 290.0, 'reserved_quantity': 0.0},
+        {'id': 2, 'lot_id': [30856, 'MIGRAÇÃO'], 'quantity': 100.0, 'reserved_quantity': 40.0},
+        {'id': 3, 'lot_id': False, 'quantity': 5.0, 'reserved_quantity': 0.0},
+    ]
+    lotes = service.listar_lotes_cd_estoque('4729198')
+    assert lotes[0] == {'lote_nome': '135/26', 'lot_id': 56426, 'quantidade': 290.0,
+                        'reservado': 0.0, 'disponivel': 290.0, 'is_migracao': False}
+    assert lotes[1]['is_migracao'] is True
+    assert lotes[1]['disponivel'] == 60.0
+    assert lotes[2]['lote_nome'] is None and lotes[2]['lot_id'] is None
+    # domain filtra company 4 e loc 32
+    domain = odoo_mock.search_read.call_args[0][1]
+    assert ['company_id', '=', 4] in domain
+    assert ['location_id', '=', 32] in domain
