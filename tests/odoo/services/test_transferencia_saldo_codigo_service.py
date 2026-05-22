@@ -87,3 +87,20 @@ def test_listar_lotes_cd_estoque(service, odoo_mock):
     domain = odoo_mock.search_read.call_args[0][1]
     assert ['company_id', '=', 4] in domain
     assert ['location_id', '=', 32] in domain
+
+
+# fixture `app` (conftest, session scope) garante que app.estoque.models é importável
+def test_descobrir_destinos_bidirecional(service, app):
+    service.resolver_produto = MagicMock(side_effect=[
+        {'product_id': 27735, 'name': 'SOJA'},
+    ])
+    with patch('app.estoque.models.UnificacaoCodigos.get_todos_codigos_relacionados',
+               return_value=['4729198', '4759198']):
+        destinos = service.descobrir_destinos('4729198')
+    assert destinos == [{'codigo': '4759198', 'nome': 'SOJA'}]
+
+
+def test_descobrir_destinos_vazio(service, app):
+    with patch('app.estoque.models.UnificacaoCodigos.get_todos_codigos_relacionados',
+               return_value=['4729198']):
+        assert service.descobrir_destinos('4729198') == []

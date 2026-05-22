@@ -83,3 +83,20 @@ class TransferenciaSaldoCodigoService:
                 'is_migracao': bool(lote_nome and 'MIGRA' in lote_nome.upper()),
             })
         return out
+
+    def descobrir_destinos(self, cod) -> List[Dict[str, Any]]:
+        """Pares ativos relacionados (bidirecional), excluindo o próprio código."""
+        from app.estoque.models import UnificacaoCodigos
+        cod = str(cod).strip()
+        relacionados = UnificacaoCodigos.get_todos_codigos_relacionados(cod)
+        out: List[Dict[str, Any]] = []
+        for c in relacionados:
+            if str(c) == cod:
+                continue
+            try:
+                info = self.resolver_produto(c)
+                nome = info['name']
+            except ValueError:
+                nome = None
+            out.append({'codigo': str(c), 'nome': nome})
+        return out
