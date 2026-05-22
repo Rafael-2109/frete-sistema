@@ -115,3 +115,18 @@ class TestPesoFreteResolveViaCotacao:
                           nota_fiscal=None, separacao_lote_id='CARVIA-COT-84')
 
         assert CarviaFreteService._peso_frete_item(item) == 2119.39
+
+
+class TestPesoFreteItemNaoCarVia:
+    """Item nao-CarVia (carga Nacom) — usado no denominador do rateio DIRETA misto."""
+
+    def test_item_nacom_retorna_peso_fisico(self):
+        # Embarque DIRETA misto: moto CarVia + carga Nacom no mesmo caminhao.
+        # _peso_frete_item de um item Nacom (sem carvia_cotacao_id) retorna o
+        # peso fisico — garantindo que o denominador do rateio some a carga
+        # Nacom (e nao atribua o frete inteiro a CarVia). Sem cotacao, nao ha
+        # cubagem a resolver.
+        item = _fake_item(peso=3610.12, peso_cubado=None,
+                          carvia_cotacao_id=None,
+                          separacao_lote_id='LOTE_20260505_115532_495')
+        assert CarviaFreteService._peso_frete_item(item) == 3610.12

@@ -655,22 +655,23 @@ class CarviaFreteService:
             if not tabela_dados.get('nome_tabela'):
                 return None
 
-            # FIX peso_cubado (2026-05-21): denominador do rateio coerente com
-            # o numerador (peso_grupo = max(bruto, cubado) por item). Soma
-            # _peso_frete_item dos itens CarVia do embarque, resolvendo o
-            # cubado da fonte de verdade quando o snapshot esta vazio.
-            # `embarque.peso_total` reflete peso FISICO e subestima o frete
-            # em ate ~10x para motos.
-            itens_emb_carvia = EmbarqueItem.query.filter(
+            # FIX rateio DIRETA misto (2026-05-22): o denominador deve ser o
+            # peso de TODOS os itens do embarque (CarVia + carga Nacom). Embarques
+            # DIRETA sao frequentemente MISTOS — motos CarVia compartilham o
+            # caminhao com carga Nacom. Usar so os itens CarVia atribuiria o
+            # frete inteiro a CarVia (superestima). _peso_frete_item resolve
+            # cubado para itens CarVia e retorna peso fisico para itens
+            # nao-CarVia (sem cotacao). Exclui provisorios CarVia (placeholders)
+            # para nao duplicar. O numerador (peso_grupo) ja vem em cubado de
+            # _criar_frete_completo.
+            itens_emb = EmbarqueItem.query.filter(
                 EmbarqueItem.embarque_id == embarque.id,
                 EmbarqueItem.status == 'ativo',
-                EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+                EmbarqueItem.provisorio.isnot(True),
             ).all()
-            peso_cubado_embarque = sum(
-                CarviaFreteService._peso_frete_item(it) for it in itens_emb_carvia
-            )
-            # Fallback: se nenhum item tem cubado nem bruto, usar agregado fisico
-            peso_embarque_real = peso_cubado_embarque or float(embarque.peso_total or 0)
+            peso_embarque_real = sum(
+                CarviaFreteService._peso_frete_item(it) for it in itens_emb
+            ) or float(embarque.peso_total or 0)
             valor_embarque_real = float(embarque.valor_total or 0)
 
             # Fallback: se embarque sem peso/valor agregado, usar do grupo
