@@ -223,11 +223,11 @@ class CarviaFreteService:
 
                     if existente.status == 'PENDENTE' and (nfs_novas or nfs_removidas):
                         # Substituir CSV + recalcular totais a partir dos itens
-                        # FIX peso_cubado (2026-05-11): preferir cubado quando
-                        # disponivel — motos tem peso_cubado >> peso real e o
-                        # calculo do frete deve refletir cubagem real.
+                        # FIX peso_cubado (2026-05-21): max(bruto, cubado) (R3)
+                        # com cubado resolvido da fonte de verdade quando o
+                        # snapshot esta vazio. Ver _peso_frete_item.
                         peso_total = sum(
-                            float(it.peso_cubado or it.peso or 0)
+                            CarviaFreteService._peso_frete_item(it)
                             for it in itens_grupo
                         )
                         valor_total = sum(float(it.valor or 0) for it in itens_grupo)
@@ -337,11 +337,13 @@ class CarviaFreteService:
 
         try:
             # --- Agregar totais do grupo ---
-            # FIX peso_cubado (2026-05-11): preferir cubado quando disponivel.
-            # Motos tem peso_cubado >> peso real e calculo do frete deve usar
-            # cubagem efetiva. Fallback para peso fisico se cubado nulo.
+            # FIX peso_cubado (2026-05-21): usar max(bruto, cubado) (regra R3),
+            # resolvendo o cubado da FONTE DE VERDADE (CarviaCotacaoMoto) quando
+            # o snapshot do item esta vazio. Varios fluxos de criacao de
+            # EmbarqueItem nao propagam peso_cubado, fazendo o frete cair no
+            # peso bruto. Ver _peso_frete_item.
             peso_total = sum(
-                float(item.peso_cubado or item.peso or 0) for item in itens
+                CarviaFreteService._peso_frete_item(item) for item in itens
             )
             valor_total_nfs = sum(float(item.valor or 0) for item in itens)
             nfs = [item.nota_fiscal for item in itens if item.nota_fiscal]
@@ -492,6 +494,112 @@ class CarviaFreteService:
     # ------------------------------------------------------------------
 
     # ------------------------------------------------------------------
+    # Resolucao de peso para calculo do frete (cubado vs bruto)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _peso_cubado_resolvido(item) -> float:
+        """Resolve o peso cubado de um EmbarqueItem CarVia.
+
+        Prioriza o snapshot (`item.peso_cubado`). Quando ausente — varios
+        fluxos de criacao de EmbarqueItem nao propagam a cubagem (ver
+        cotacao/routes.py e carvia/models/cotacao.py), fazendo o frete
+        cair silenciosamente no peso bruto — resolve da FONTE DE VERDADE:
+
+          1. item.peso_cubado, se > 0
+          2. Item real (com NF): cubado proporcional aos veiculos DA NF,
+             via EmbarqueCarViaService.calcular_cubado_por_modelos. Se nao
+             resolver por modelos, retorna 0 (usa bruto) para NAO
+             superestimar em cenarios multi-NF.
+          3. Provisorio (sem NF): soma peso_cubado_total dos
+             CarviaCotacaoMoto da cotacao (representa o saldo inteiro).
+          4. 0.0 (sem cubagem -> caller usa peso bruto).
+
+        Imports lazy (regra R2 do modulo CarVia).
+        """
+        cubado_snapshot = float(item.peso_cubado or 0)
+        if cubado_snapshot > 0:
+            return cubado_snapshot
+
+        cot_id = getattr(item, 'carvia_cotacao_id', None)
+        if not cot_id:
+            return 0.0
+
+        from app.carvia.services.documentos.embarque_carvia_service import (
+            EmbarqueCarViaService,
+        )
+
+        nf_num = (item.nota_fiscal or '').strip() if item.nota_fiscal else ''
+
+        # 2. Item real (com NF): cubado dos veiculos DA NF
+        if nf_num:
+            try:
+                from app.carvia.models import CarviaNf
+                nf = CarviaNf.query.filter_by(
+                    numero_nf=nf_num, status='ATIVA',
+                ).order_by(CarviaNf.id.desc()).first()
+                if nf:
+                    modelos = [v.modelo for v in nf.veiculos.all() if v.modelo]
+                    if modelos:
+                        cubado = EmbarqueCarViaService.calcular_cubado_por_modelos(
+                            cot_id, modelos,
+                        )
+                        if cubado and cubado > 0:
+                            logger.info(
+                                "peso_cubado ausente no item (lote=%s NF=%s) — "
+                                "resolvido via veiculos da NF: %.2f kg",
+                                item.separacao_lote_id, nf_num, cubado,
+                            )
+                            return float(cubado)
+                logger.warning(
+                    "peso_cubado ausente no item real (lote=%s NF=%s) e nao "
+                    "resolvido por modelos — frete usara peso bruto.",
+                    item.separacao_lote_id, nf_num,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Falha ao resolver cubado via NF %s: %s", nf_num, e,
+                )
+            return 0.0
+
+        # 3. Provisorio (sem NF): total da cotacao
+        try:
+            from app.carvia.models import CarviaCotacaoMoto
+            from sqlalchemy import func as _func
+            total = float(
+                db.session.query(
+                    _func.coalesce(
+                        _func.sum(CarviaCotacaoMoto.peso_cubado_total), 0
+                    )
+                ).filter(CarviaCotacaoMoto.cotacao_id == cot_id).scalar() or 0
+            )
+            if total > 0:
+                logger.info(
+                    "peso_cubado ausente no provisorio (lote=%s) — resolvido "
+                    "via cotacao %s: %.2f kg",
+                    item.separacao_lote_id, cot_id, total,
+                )
+                return total
+        except Exception as e:
+            logger.warning(
+                "Falha ao resolver cubado via cotacao %s: %s", cot_id, e,
+            )
+
+        return 0.0
+
+    @staticmethod
+    def _peso_frete_item(item) -> float:
+        """Peso a usar no calculo do frete: max(bruto, cubado) — regra R3.
+
+        O cubado vem de `_peso_cubado_resolvido` (fonte de verdade, nao
+        apenas o snapshot do item). Para motos o cubado domina; para carga
+        sem cubagem cai no peso bruto.
+        """
+        bruto = float(item.peso or 0)
+        cubado = CarviaFreteService._peso_cubado_resolvido(item)
+        return max(bruto, cubado)
+
+    # ------------------------------------------------------------------
     # Calculos de custo e venda
     # ------------------------------------------------------------------
 
@@ -542,28 +650,26 @@ class CarviaFreteService:
             from app.utils.calculadora_frete import CalculadoraFrete
             from app.utils.tabela_frete_manager import TabelaFreteManager
             from app.embarques.models import EmbarqueItem
-            from sqlalchemy import func
 
             tabela_dados = TabelaFreteManager.preparar_dados_tabela(embarque)
             if not tabela_dados.get('nome_tabela'):
                 return None
 
-            # FIX peso_cubado (2026-05-11): para CarVia (motos), o denominador
-            # do rateio DEVE usar peso_cubado para ser coerente com o
-            # numerador (peso_grupo, ja convertido para cubado em
-            # _criar_frete_completo). `embarque.peso_total` reflete peso
-            # FISICO (agregado por listener de Separacao Nacom), o que
-            # subestima o frete em ate ~10x para motos.
-            peso_cubado_embarque = float(
-                db.session.query(
-                    func.coalesce(func.sum(EmbarqueItem.peso_cubado), 0)
-                ).filter(
-                    EmbarqueItem.embarque_id == embarque.id,
-                    EmbarqueItem.status == 'ativo',
-                    EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
-                ).scalar() or 0
+            # FIX peso_cubado (2026-05-21): denominador do rateio coerente com
+            # o numerador (peso_grupo = max(bruto, cubado) por item). Soma
+            # _peso_frete_item dos itens CarVia do embarque, resolvendo o
+            # cubado da fonte de verdade quando o snapshot esta vazio.
+            # `embarque.peso_total` reflete peso FISICO e subestima o frete
+            # em ate ~10x para motos.
+            itens_emb_carvia = EmbarqueItem.query.filter(
+                EmbarqueItem.embarque_id == embarque.id,
+                EmbarqueItem.status == 'ativo',
+                EmbarqueItem.separacao_lote_id.ilike('CARVIA-%'),
+            ).all()
+            peso_cubado_embarque = sum(
+                CarviaFreteService._peso_frete_item(it) for it in itens_emb_carvia
             )
-            # Fallback: se nenhum item tem peso_cubado, usar agregado fisico
+            # Fallback: se nenhum item tem cubado nem bruto, usar agregado fisico
             peso_embarque_real = peso_cubado_embarque or float(embarque.peso_total or 0)
             valor_embarque_real = float(embarque.valor_total or 0)
 
