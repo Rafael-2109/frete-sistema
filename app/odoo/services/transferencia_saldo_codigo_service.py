@@ -100,3 +100,97 @@ class TransferenciaSaldoCodigoService:
                 nome = None
             out.append({'codigo': str(c), 'nome': nome})
         return out
+
+    def transferir(self, cod_origem, cod_destino, lote_nome, qty,
+                   usuario) -> Dict[str, Any]:
+        """Transfere `qty` de cod_origem→cod_destino mantendo `lote_nome` em
+        CD/Estoque. Reduz origem → cria/aumenta destino (compensa se falhar).
+        Espelha em MovimentacaoEstoque. `lote_nome=None` => quant sem lote.
+        """
+        cod_origem, cod_destino = str(cod_origem).strip(), str(cod_destino).strip()
+        qty = round(float(qty), CASAS)
+        r: Dict[str, Any] = {
+            'cod_origem': cod_origem, 'cod_destino': cod_destino,
+            'lote_nome': lote_nome, 'qty': qty, 'usuario': usuario,
+            'lote_criado': False, 'status': None}
+        if qty <= 0:
+            raise ValueError(f'qty deve ser > 0 (recebido {qty})')
+
+        # 1. validar par bidirecional
+        destinos = {d['codigo'] for d in self.descobrir_destinos(cod_origem)}
+        if cod_destino not in destinos:
+            raise ValueError(
+                f'{cod_destino} nao e par de {cod_origem} em UnificacaoCodigos ativa')
+
+        # 2. resolver produtos
+        origem = self.resolver_produto(cod_origem)
+        destino = self.resolver_produto(cod_destino)
+        for info in (origem, destino):
+            if info['tracking'] != 'lot':
+                raise ValueError(
+                    f"produto {info['cod']} tracking={info['tracking']} (esperado lot)")
+        pid_o, pid_d = origem['product_id'], destino['product_id']
+
+        # 3. resolver lote origem + validade (replicar no destino)
+        lot_id_origem: Optional[int] = None
+        validade: Optional[str] = None
+        if lote_nome:
+            lot_id_origem = self.lot_svc.buscar_por_nome(
+                lote_nome, pid_o, self.CD_COMPANY_ID)
+            if not lot_id_origem:
+                raise ValueError(
+                    f'lote {lote_nome!r} nao encontrado no produto {cod_origem} (CD)')
+            lots = self.odoo.read('stock.lot', [lot_id_origem], ['expiration_date'])
+            validade = (lots[0].get('expiration_date') or None) if lots else None
+
+        # 4. reduzir origem
+        r_red = self.adjustment_svc.ajustar_quant(
+            product_id=pid_o, company_id=self.CD_COMPANY_ID,
+            location_id=self.CD_ESTOQUE_LOC, lot_id=lot_id_origem, delta=-qty,
+            validar_nao_negativar=True, validar_nao_abaixo_reserva=True)
+        r['reducao'] = r_red
+        if r_red['status'] != 'EXECUTADO':
+            r['status'] = 'FALHA_REDUCAO'
+            r['erro'] = r_red.get('erro')
+            return r
+        r['origem_antes'], r['origem_apos'] = r_red.get('qty_antes'), r_red.get('qty_apos')
+
+        # 5. garantir lote destino (validade do origem se produto usa validade)
+        lot_id_destino: Optional[int] = None
+        if lote_nome:
+            exp = validade if destino['use_expiration_date'] else None
+            lot_id_destino, criado = self.lot_svc.criar_se_nao_existe(
+                lote_nome, pid_d, self.CD_COMPANY_ID, expiration_date=exp)
+            r['lote_criado'] = criado
+
+        # 6. aumentar destino (compensar se falhar)
+        r_aum = self.adjustment_svc.ajustar_quant(
+            product_id=pid_d, company_id=self.CD_COMPANY_ID,
+            location_id=self.CD_ESTOQUE_LOC, lot_id=lot_id_destino, delta=qty,
+            criar_se_faltar=True, validar_nao_negativar=True,
+            validar_nao_abaixo_reserva=True)
+        r['aumento'] = r_aum
+        if r_aum['status'] != 'EXECUTADO':
+            comp = self.adjustment_svc.ajustar_quant(
+                product_id=pid_o, company_id=self.CD_COMPANY_ID,
+                location_id=self.CD_ESTOQUE_LOC, lot_id=lot_id_origem, delta=qty,
+                validar_nao_negativar=False, validar_nao_abaixo_reserva=False)
+            r['compensacao'] = comp
+            r['status'] = 'FALHA_AUMENTO_COMPENSADO'
+            r['erro'] = r_aum.get('erro')
+            logger.error(
+                f'Aumento falhou ({cod_origem}->{cod_destino} lote {lote_nome} '
+                f'qty {qty}): {r_aum.get("erro")}; compensacao={comp.get("status")}')
+            return r
+        r['destino_antes'], r['destino_apos'] = r_aum.get('qty_antes'), r_aum.get('qty_apos')
+
+        # 7. espelho local
+        self._registrar_movimentacao_local(
+            cod_origem, origem['name'], cod_destino, destino['name'],
+            lote_nome, qty, usuario)
+        r['status'] = 'EXECUTADO'
+        return r
+
+    def _registrar_movimentacao_local(self, *args, **kwargs):
+        # Stub temporário — implementado na Task 5 (espelho local).
+        pass

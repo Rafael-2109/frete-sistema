@@ -104,3 +104,68 @@ def test_descobrir_destinos_vazio(service, app):
     with patch('app.estoque.models.UnificacaoCodigos.get_todos_codigos_relacionados',
                return_value=['4729198']):
         assert service.descobrir_destinos('4729198') == []
+
+
+def _info(pid, cod, name, use_exp=True):
+    return {'product_id': pid, 'cod': cod, 'name': name,
+            'tracking': 'lot', 'uom': 'CAIXAS', 'use_expiration_date': use_exp}
+
+
+def test_transferir_feliz(service, odoo_mock, adj_mock, lot_mock):
+    service.descobrir_destinos = MagicMock(return_value=[{'codigo': '4759198', 'nome': 'SOJA'}])
+    service.resolver_produto = MagicMock(side_effect=[
+        _info(27749, '4729198', 'AZEITE'), _info(27735, '4759198', 'SOJA')])
+    service._registrar_movimentacao_local = MagicMock()
+    lot_mock.buscar_por_nome.return_value = 56426
+    odoo_mock.read.return_value = [{'expiration_date': '2028-05-15 00:00:00'}]
+    lot_mock.criar_se_nao_existe.return_value = (58503, False)
+    adj_mock.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'qty_antes': 290.0, 'qty_apos': 285.0},
+        {'status': 'EXECUTADO', 'qty_antes': 2.0, 'qty_apos': 7.0},
+    ]
+    r = service.transferir('4729198', '4759198', '135/26', 5.0, 'rafael')
+    assert r['status'] == 'EXECUTADO'
+    assert r['origem_apos'] == 285.0 and r['destino_apos'] == 7.0
+    # validade do origem replicada ao criar lote destino
+    assert lot_mock.criar_se_nao_existe.call_args.kwargs['expiration_date'] == '2028-05-15 00:00:00'
+    service._registrar_movimentacao_local.assert_called_once()
+
+
+def test_transferir_par_invalido(service):
+    service.descobrir_destinos = MagicMock(return_value=[{'codigo': '999', 'nome': 'X'}])
+    with pytest.raises(ValueError, match='nao e par'):
+        service.transferir('4729198', '4759198', '135/26', 5.0, 'rafael')
+
+
+def test_transferir_qty_invalida(service):
+    with pytest.raises(ValueError, match='qty deve ser > 0'):
+        service.transferir('4729198', '4759198', '135/26', 0, 'rafael')
+
+
+def test_transferir_reducao_falha_nao_aumenta(service, odoo_mock, adj_mock, lot_mock):
+    service.descobrir_destinos = MagicMock(return_value=[{'codigo': '4759198', 'nome': 'SOJA'}])
+    service.resolver_produto = MagicMock(side_effect=[
+        _info(27749, '4729198', 'AZEITE'), _info(27735, '4759198', 'SOJA')])
+    lot_mock.buscar_por_nome.return_value = 56426
+    odoo_mock.read.return_value = [{'expiration_date': False}]
+    adj_mock.ajustar_quant.return_value = {'status': 'FALHA_RESERVADO', 'erro': 'reservado'}
+    r = service.transferir('4729198', '4759198', '135/26', 5.0, 'rafael')
+    assert r['status'] == 'FALHA_REDUCAO'
+    assert adj_mock.ajustar_quant.call_count == 1  # não tentou aumentar
+
+
+def test_transferir_aumento_falha_compensa(service, odoo_mock, adj_mock, lot_mock):
+    service.descobrir_destinos = MagicMock(return_value=[{'codigo': '4759198', 'nome': 'SOJA'}])
+    service.resolver_produto = MagicMock(side_effect=[
+        _info(27749, '4729198', 'AZEITE'), _info(27735, '4759198', 'SOJA')])
+    lot_mock.buscar_por_nome.return_value = 56426
+    odoo_mock.read.return_value = [{'expiration_date': '2028-05-15 00:00:00'}]
+    lot_mock.criar_se_nao_existe.return_value = (58503, False)
+    adj_mock.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'qty_antes': 290.0, 'qty_apos': 285.0},  # reduz ok
+        {'status': 'FALHA_ODOO', 'erro': 'boom'},                        # aumento falha
+        {'status': 'EXECUTADO', 'qty_antes': 285.0, 'qty_apos': 290.0},  # compensa
+    ]
+    r = service.transferir('4729198', '4759198', '135/26', 5.0, 'rafael')
+    assert r['status'] == 'FALHA_AUMENTO_COMPENSADO'
+    assert adj_mock.ajustar_quant.call_count == 3  # reduz + aumenta + compensa
