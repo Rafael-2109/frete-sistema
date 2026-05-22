@@ -110,19 +110,23 @@ class ProdutoDeParaSendas(db.Model):
             else:
                 df = pd.read_csv(filepath, encoding='utf-8-sig')
             
+            # Pre-carga (elimina N+1: antes 1 query por linha). De-Para do mesmo
+            # cnpj_cliente indexado por (codigo_nosso, codigo_sendas); dict
+            # atualizado no loop p/ dedup intra-arquivo.
+            existentes = {
+                (d.codigo_nosso, d.codigo_sendas): d
+                for d in cls.query.filter_by(cnpj_cliente=cnpj_cliente).all()
+            }
+
             # Processar cada linha
             for index, row in df.iterrows():
                 try:
                     # Converter valores para string (evita erro de tipo no PostgreSQL)
                     codigo_nosso = str(row['codigo_nosso']) if pd.notna(row['codigo_nosso']) else ''
                     codigo_sendas = str(row['codigo_sendas']) if pd.notna(row['codigo_sendas']) else ''
-                    
-                    # Verificar se já existe
-                    depara = cls.query.filter_by(
-                        codigo_nosso=codigo_nosso,
-                        codigo_sendas=codigo_sendas,
-                        cnpj_cliente=cnpj_cliente
-                    ).first()
+
+                    # Verificar se já existe (lookup em memoria)
+                    depara = existentes.get((codigo_nosso, codigo_sendas))
                     
                     if depara:
                         # Atualizar existente
@@ -144,6 +148,7 @@ class ProdutoDeParaSendas(db.Model):
                             ativo=True
                         )
                         db.session.add(depara)
+                        existentes[(codigo_nosso, codigo_sendas)] = depara  # dedup intra-arquivo
                         registros_criados += 1
                             
                 except Exception as e:
@@ -442,6 +447,17 @@ class FilialDeParaSendas(db.Model):
             else:
                 df = pd.read_csv(filepath, encoding='utf-8-sig')
             
+            # Pre-carga (elimina N+1: antes 1 query por linha). O match original
+            # era (cnpj == input) OU (cnpj == limpo) OU (filial == codigo); replicado
+            # por dois indices. Dicts atualizados no loop p/ dedup intra-arquivo.
+            por_cnpj = {}
+            por_filial = {}
+            for _d in cls.query.all():
+                if _d.cnpj is not None:
+                    por_cnpj.setdefault(_d.cnpj, _d)
+                if _d.filial is not None:
+                    por_filial.setdefault(_d.filial, _d)
+
             # Processar cada linha
             for index, row in df.iterrows():
                 try:
@@ -449,13 +465,13 @@ class FilialDeParaSendas(db.Model):
                     cnpj_input = str(row['cnpj']) if pd.notna(row['cnpj']) else ''
                     cnpj_limpo = cls.limpar_cnpj(cnpj_input)
                     filial_codigo = str(row['filial']) if pd.notna(row['filial']) else ''
-                    
-                    # Verificar se já existe por CNPJ ou filial
-                    filial_depara = cls.query.filter(
-                        (cls.cnpj == cnpj_input) |
-                        (cls.cnpj == cnpj_limpo) |
-                        (cls.filial == filial_codigo)
-                    ).first()
+
+                    # Verificar se já existe por CNPJ ou filial (lookup em memoria)
+                    filial_depara = (
+                        por_cnpj.get(cnpj_input)
+                        or por_cnpj.get(cnpj_limpo)
+                        or por_filial.get(filial_codigo)
+                    )
                     
                     if filial_depara:
                         # Atualizar existente
@@ -479,6 +495,12 @@ class FilialDeParaSendas(db.Model):
                             ativo=True
                         )
                         db.session.add(filial_depara)
+                        # dedup intra-arquivo: indexa os DOIS formatos de CNPJ (input e limpo),
+                        # pois o match original era (cnpj==input) OU (cnpj==limpo) OU (filial==codigo)
+                        por_cnpj.setdefault(cnpj_input, filial_depara)
+                        if cnpj_limpo and cnpj_limpo != cnpj_input:
+                            por_cnpj.setdefault(cnpj_limpo, filial_depara)
+                        por_filial.setdefault(filial_codigo, filial_depara)
                         registros_criados += 1
                             
                 except Exception as e:

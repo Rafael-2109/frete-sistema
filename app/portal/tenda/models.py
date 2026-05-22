@@ -138,22 +138,25 @@ class ProdutoDeParaEAN(db.Model):
                 if col not in df.columns:
                     raise Exception(f"Coluna obrigatória '{col}' não encontrada no arquivo")
             
+            # Pre-carga (elimina N+1: antes 1 query por linha). De-Para EAN do
+            # mesmo cnpj_cliente por (codigo_nosso, ean); dict atualizado no loop.
+            existentes = {
+                (d.codigo_nosso, d.ean): d
+                for d in cls.query.filter_by(cnpj_cliente=cnpj_cliente).all()
+            }
+
             # Processar linha por linha
             for index, row in df.iterrows():
                 try:
                     codigo_nosso = str(row['codigo_nosso']).strip()
                     ean = str(row['ean']).strip()
-                    
+
                     # Pular linhas vazias
                     if pd.isna(codigo_nosso) or pd.isna(ean):
                         continue
-                    
-                    # Verificar se já existe
-                    depara = cls.query.filter_by(
-                        codigo_nosso=codigo_nosso,
-                        ean=ean,
-                        cnpj_cliente=cnpj_cliente
-                    ).first()
+
+                    # Verificar se já existe (lookup em memoria)
+                    depara = existentes.get((codigo_nosso, ean))
                     
                     if depara:
                         # Atualizar existente
@@ -178,6 +181,7 @@ class ProdutoDeParaEAN(db.Model):
                             ativo=True
                         )
                         db.session.add(depara)
+                        existentes[(codigo_nosso, ean)] = depara  # dedup intra-arquivo
                         registros_criados += 1
                         
                 except Exception as e:
@@ -288,19 +292,23 @@ class LocalEntregaDeParaTenda(db.Model):
                 if col not in df.columns:
                     raise Exception(f"Coluna obrigatória '{col}' não encontrada no arquivo")
             
+            # Pre-carga (elimina N+1: antes 1 query por linha). Locais por
+            # cnpj_cliente (limpo); dict atualizado no loop p/ dedup intra-arquivo.
+            existentes = {d.cnpj_cliente: d for d in cls.query.all()}
+
             # Processar linha por linha
             for index, row in df.iterrows():
                 try:
                     cnpj_cliente = str(row['cnpj_cliente']).strip()
-                    
+
                     # Pular linhas vazias
                     if pd.isna(cnpj_cliente):
                         continue
-                    
+
                     cnpj_limpo = GrupoEmpresarial.limpar_cnpj(cnpj_cliente)
-                    
-                    # Verificar se já existe
-                    local = cls.query.filter_by(cnpj_cliente=cnpj_limpo).first()
+
+                    # Verificar se já existe (lookup em memoria)
+                    local = existentes.get(cnpj_limpo)
                     
                     if local:
                         # Atualizar existente
@@ -321,6 +329,7 @@ class LocalEntregaDeParaTenda(db.Model):
                             ativo=True
                         )
                         db.session.add(local)
+                        existentes[cnpj_limpo] = local  # dedup intra-arquivo
                         registros_criados += 1
                         
                 except Exception as e:

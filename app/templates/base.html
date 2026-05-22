@@ -834,6 +834,9 @@
               <li><a class="dropdown-item" href="{{ url_for('estoque.listar_unificacao_codigos') }}">
                   <i class="fas fa-link text-warning"></i> Unificação de Códigos
                 </a></li>
+              <li><a class="dropdown-item" href="{{ url_for('estoque.transferir_saldo_codigo') }}">
+                  <i class="fas fa-right-left text-warning"></i> Transferir Saldo (Odoo)
+                </a></li>
 
               <li>
                 <hr class="dropdown-divider">
@@ -1154,8 +1157,8 @@
   <!-- Premium Effects - Animações e efeitos visuais -->
   <script src="{{ url_for('static', filename='js/financeiro/premium-effects.js') }}"></script>
 
-  <!-- ✅ Inclua claramente aqui o HTMX -->
-  <script src="https://unpkg.com/htmx.org@1.9.11"></script>
+  <!-- HTMX self-hosted (evita bloqueio por Tracking Prevention em CDN de terceiro) -->
+  <script src="{{ 'js/vendor/htmx-1.9.11.min.js'|asset_url }}"></script>
   <script>
     document.addEventListener("htmx:configRequest", function (event) {
       const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');

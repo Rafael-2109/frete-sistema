@@ -348,7 +348,14 @@ def processar_importacao_palletizacao():
         produtos_importados = 0
         produtos_atualizados = 0
         erros = []
-        
+
+        # Pre-carga (elimina N+1: antes 1 query CadastroPalletizacao por linha).
+        # dict por cod_produto, atualizado APOS o commit de cada linha nova para
+        # preservar dedup intra-arquivo sem registrar linhas que falharam (rollback).
+        palletizacoes_por_cod = {
+            p.cod_produto: p for p in CadastroPalletizacao.query.all()
+        }
+
         for index, row in df.iterrows():
             # ✅ CORREÇÃO: Usar savepoint para cada item do loop
             # Isso permite rollback individual sem perder itens já processados
@@ -362,8 +369,8 @@ def processar_importacao_palletizacao():
                     db.session.rollback()  # Libera savepoint vazio
                     continue
 
-                # Verificar se já existe
-                palletizacao_existente = CadastroPalletizacao.query.filter_by(cod_produto=cod_produto).first()
+                # Verificar se já existe (lookup em memoria — ver pre-carga acima)
+                palletizacao_existente = palletizacoes_por_cod.get(cod_produto)
 
                 # 📝 DADOS BÁSICOS
                 nome_produto = str(row.get('Descrição Produto', '')).strip()
@@ -461,6 +468,10 @@ def processar_importacao_palletizacao():
                     produtos_importados += 1
 
                 db.session.commit()  # Commit do savepoint (libera para o próximo item)
+
+                # Registra no cache so apos commit OK (dedup intra-arquivo seguro)
+                if palletizacao_existente is None:
+                    palletizacoes_por_cod[cod_produto] = nova_palletizacao
 
             except Exception as e:
                 db.session.rollback()  # ✅ CORREÇÃO: Rollback do savepoint individual

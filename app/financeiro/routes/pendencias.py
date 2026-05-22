@@ -35,10 +35,21 @@ def importar_pendencias():
         file.save(path)
 
         df = pd.read_excel(path)
+
+        # Pre-carga (elimina N+1: antes 1 query EntregaMonitorada por linha).
+        # Coleta as NFs do arquivo e busca as entregas em 1 query (IN).
+        nfs_arquivo = {str(row[0]) for _, row in df.iterrows() if not pd.isna(row[0])}
+        entregas_por_nf = {}
+        if nfs_arquivo:
+            for _ent in EntregaMonitorada.query.filter(
+                EntregaMonitorada.numero_nf.in_(list(nfs_arquivo))
+            ).all():
+                entregas_por_nf.setdefault(str(_ent.numero_nf), _ent)
+
         for _, row in df.iterrows():
             if not pd.isna(row[0]):
                 nf_numero = str(row[0])
-                entrega = EntregaMonitorada.query.filter_by(numero_nf=nf_numero).first()
+                entrega = entregas_por_nf.get(nf_numero)
                 pendencia = PendenciaFinanceiraNF(
                     numero_nf=nf_numero,
                     observacao=row[1] if len(row) > 1 else '',

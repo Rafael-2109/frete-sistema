@@ -198,28 +198,6 @@ def verificar_duplicidade_no_arquivo(itens_novos: list) -> dict:
     return duplicados #type: ignore
 
 
-def verificar_duplicidade_banco(nf: str, parcela: int) -> dict:
-    """
-    Verifica se existe item identico no banco (qualquer status ativo).
-    Retorna dict com info do existente ou None.
-    """
-    existente = BaixaTituloItem.query.filter(
-        BaixaTituloItem.nf_excel == nf,
-        BaixaTituloItem.parcela_excel == parcela,
-        BaixaTituloItem.ativo == True,
-        BaixaTituloItem.status.in_(['VALIDO', 'PENDENTE', 'PROCESSANDO', 'SUCESSO'])
-    ).first()
-
-    if existente:
-        return {
-            'id': existente.id,
-            'status': existente.status,
-            'lote_id': existente.lote_id,
-            'journal': existente.journal_excel
-        }
-    return None  # type: ignore
-
-
 # =============================================================================
 # HUB DE BAIXAS - LISTAGEM PRINCIPAL
 # =============================================================================
@@ -459,6 +437,23 @@ def baixas_upload():
         linhas_invalidas = 0
         duplicidades_total = 0
 
+        # Pre-carga (elimina N+1: antes 1 query verificar_duplicidade_banco por linha).
+        # Busca em 1 query (IN) os itens ativos ja existentes para as NFs do arquivo.
+        # O cache e atualizado no loop (com flush p/ obter id) replicando o autoflush
+        # que o codigo anterior usava, preservando a dedup tambem intra-arquivo.
+        nfs_arquivo = {it['nf'] for it in itens_parse if it['nf']}
+        dups_banco = {}
+        if nfs_arquivo:
+            for _bi in BaixaTituloItem.query.filter(
+                BaixaTituloItem.nf_excel.in_(list(nfs_arquivo)),
+                BaixaTituloItem.ativo == True,
+                BaixaTituloItem.status.in_(['VALIDO', 'PENDENTE', 'PROCESSANDO', 'SUCESSO'])
+            ).all():
+                dups_banco.setdefault((_bi.nf_excel, _bi.parcela_excel), {
+                    'id': _bi.id, 'status': _bi.status,
+                    'lote_id': _bi.lote_id, 'journal': _bi.journal_excel,
+                })
+
         for idx, row in df.iterrows():
             linha = idx + 2  #type: ignore # +2 porque Excel comeca em 1 e tem cabecalho
 
@@ -542,8 +537,8 @@ def baixas_upload():
             status = 'VALIDO' if not erros else 'INVALIDO'
             mensagem = '; '.join(erros) if erros else None
 
-            # Verificar duplicidade no banco (qualquer status ativo)
-            dup_info = verificar_duplicidade_banco(nf, parcela)
+            # Verificar duplicidade no banco (qualquer status ativo) — lookup em memoria
+            dup_info = dups_banco.get((nf, parcela))
             is_dup_arquivo = idx in duplicados_arquivo
 
             if dup_info:
@@ -584,6 +579,15 @@ def baixas_upload():
                 mensagem=mensagem
             )
             db.session.add(item)
+
+            # Mantem o cache de duplicidade coerente (replica o autoflush anterior):
+            # registra itens ativos+validos com id ja atribuido p/ dedup intra-arquivo.
+            if item_ativo and status in ('VALIDO', 'PENDENTE', 'PROCESSANDO', 'SUCESSO'):
+                db.session.flush()
+                dups_banco.setdefault((nf, parcela), {
+                    'id': item.id, 'status': item.status,
+                    'lote_id': item.lote_id, 'journal': item.journal_excel,
+                })
 
         # Atualizar estatisticas do lote
         lote.linhas_validas = linhas_validas

@@ -844,6 +844,17 @@ def register_lista_materiais_routes(bp):
             erros = []
             usuario = current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
 
+            # Pre-carga (elimina N+1: antes 3 queries por linha). Produtos ativos
+            # por cod_produto e BOM (ListaMateriais) por chave; dict de BOM
+            # atualizado no loop p/ dedup intra-arquivo.
+            produtos_ativos = {
+                p.cod_produto: p for p in CadastroPalletizacao.query.filter_by(ativo=True).all()
+            }
+            bom_por_chave = {
+                (m.cod_produto_produzido, m.cod_produto_componente, m.versao): m
+                for m in ListaMateriais.query.all()
+            }
+
             for index, row in df.iterrows():
                 try:
                     cod_produzido = str(row.get('cod_produto_produzido', '')).strip()
@@ -859,32 +870,22 @@ def register_lista_materiais_routes(bp):
 
                     versao = str(row.get('versao', 'v1')).strip() or 'v1'
 
-                    # Verificar se produto produzido existe
-                    produto = CadastroPalletizacao.query.filter_by(
-                        cod_produto=cod_produzido,
-                        ativo=True
-                    ).first()
+                    # Verificar se produto produzido existe (lookup em memoria)
+                    produto = produtos_ativos.get(cod_produzido)
 
                     if not produto:
                         erros.append(f"Linha {index + 1}: Produto {cod_produzido} não encontrado") # type: ignore
                         continue
 
-                    # Verificar se componente existe
-                    componente_cadastro = CadastroPalletizacao.query.filter_by(
-                        cod_produto=cod_componente,
-                        ativo=True
-                    ).first()
+                    # Verificar se componente existe (lookup em memoria)
+                    componente_cadastro = produtos_ativos.get(cod_componente)
 
                     if not componente_cadastro:
                         erros.append(f"Linha {index + 1}: Componente {cod_componente} não encontrado") # type: ignore
                         continue
 
-                    # Verificar se já existe
-                    existente = ListaMateriais.query.filter_by(
-                        cod_produto_produzido=cod_produzido,
-                        cod_produto_componente=cod_componente,
-                        versao=versao
-                    ).first()
+                    # Verificar se já existe (lookup em memoria)
+                    existente = bom_por_chave.get((cod_produzido, cod_componente, versao))
 
                     if existente:
                         # Atualizar
@@ -919,6 +920,7 @@ def register_lista_materiais_routes(bp):
 
                         db.session.add(novo)
                         db.session.flush()  # Para ter o ID
+                        bom_por_chave[(cod_produzido, cod_componente, versao)] = novo  # dedup intra-arquivo
 
                         # Registrar auditoria
                         ServicoAuditoria.registrar_criacao(

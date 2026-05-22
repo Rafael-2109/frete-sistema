@@ -129,6 +129,29 @@ def importar_tabela_frete():
                     flash(f'Coluna obrigatória ausente: {coluna}', 'danger')
                     return redirect(request.url)
 
+            # Pre-carga (elimina N+1: antes 3 queries por linha). Transportadoras
+            # por digitos do CNPJ; vinculos (transportadora, uf, nome_tabela) em set;
+            # tabelas de frete por chave composta (atualizada no loop p/ dedup).
+            transportadoras_por_cnpj = {}
+            for _t in Transportadora.query.all():
+                _dig = ''.join(filter(str.isdigit, _t.cnpj or ''))
+                if _dig:
+                    transportadoras_por_cnpj.setdefault(_dig, _t)
+            vinculos_existentes = {
+                (v.transportadora_id, v.uf, v.nome_tabela)
+                for v in db.session.query(
+                    CidadeAtendida.transportadora_id,
+                    CidadeAtendida.uf,
+                    CidadeAtendida.nome_tabela,
+                ).all()
+            }
+            tabelas_por_chave = {}
+            for _tf in TabelaFrete.query.all():
+                tabelas_por_chave[(
+                    _tf.transportadora_id, _tf.uf_origem, _tf.uf_destino,
+                    _tf.nome_tabela, _tf.modalidade,
+                )] = _tf
+
             for index, row in df.iterrows():
                 print(f"📊 Processando linha {index + 2}: {dict(row)}")    # type: ignore # +2 para começar do 1
                 
@@ -142,11 +165,9 @@ def importar_tabela_frete():
 
                 print(f"🔍 Dados extraídos - CNPJ: {cnpj}, UF: {uf_destino}, Tabela: '{nome_tabela}'")
 
-                # Match por digitos do CNPJ (tolerante a formatacao)
+                # Match por digitos do CNPJ (tolerante a formatacao) — lookup em memoria
                 digitos_cnpj_excel = ''.join(filter(str.isdigit, cnpj))
-                transportadora = Transportadora.query.filter(
-                    db.func.regexp_replace(Transportadora.cnpj, r'\D', '', 'g') == digitos_cnpj_excel
-                ).first()
+                transportadora = transportadoras_por_cnpj.get(digitos_cnpj_excel)
                 if not transportadora:
                     erros += 1
                     print(f"❌ Transportadora {cnpj} não encontrada (linha {index+2})") # type: ignore
@@ -158,11 +179,7 @@ def importar_tabela_frete():
                 # ✅ VALIDAÇÃO: Verifica vínculos apenas se NOME TABELA estiver preenchido
                 # Se NOME TABELA estiver vazio, permite importação (template)
                 if nome_tabela:  # Só valida vínculos se nome da tabela estiver preenchido
-                    vinculo_existente = CidadeAtendida.query.filter_by(
-                        transportadora_id=transportadora.id,
-                        uf=uf_destino,
-                        nome_tabela=nome_tabela
-                    ).first()
+                    vinculo_existente = (transportadora.id, uf_destino, nome_tabela) in vinculos_existentes
 
                     if not vinculo_existente:
                         # ❌ REJEITA: Tabela sem vínculo correspondente
@@ -229,13 +246,12 @@ def importar_tabela_frete():
                     except (ValueError, TypeError):
                         return 0
 
-                tabela_frete = TabelaFrete.query.filter_by(
-                    transportadora_id=transportadora.id,
-                    uf_origem=row['ORIGEM'],
-                    uf_destino=uf_destino,
-                    nome_tabela=nome_tabela,
-                    modalidade=modalidade
-                ).first()
+                # Lookup em memoria. uf_origem normalizado com strip (igual ao valor
+                # persistido na criacao) p/ garantir dedup intra-arquivo mesmo com
+                # espacos no Excel e casar com a chave pre-carregada do banco.
+                tabela_frete = tabelas_por_chave.get((
+                    transportadora.id, str(row['ORIGEM']).strip(), uf_destino, nome_tabela, modalidade
+                ))
 
                 from app.utils.tabela_frete_manager import TabelaFreteManager
                 
@@ -260,6 +276,11 @@ def importar_tabela_frete():
                     )
                     TabelaFreteManager.atribuir_campos_tabela(tabela_frete, dados_csv)
                     db.session.add(tabela_frete)
+                    # dedup intra-arquivo: indexa pela chave realmente persistida (uf_origem com strip)
+                    tabelas_por_chave[(
+                        transportadora.id, str(row['ORIGEM']).strip(), uf_destino,
+                        nome_tabela, modalidade,
+                    )] = tabela_frete
 
                 # Cria histórico
                 historico = HistoricoTabelaFrete(

@@ -474,6 +474,21 @@ def register_previsao_demanda_routes(bp):
             atualizados = 0
             erros = []
 
+            # Pre-carga (elimina N+1: antes 3 queries por linha). Nome de produto
+            # (ativos), grupos ativos e previsoes existentes por chave; dict de
+            # previsoes atualizado no loop p/ dedup intra-arquivo.
+            nome_por_produto = {
+                p.cod_produto: p.nome_produto
+                for p in CadastroPalletizacao.query.filter_by(ativo=True).all()
+            }
+            grupos_ativos = {
+                g.nome_grupo for g in GrupoEmpresarial.query.filter_by(ativo=True).all()
+            }
+            previsoes_por_chave = {
+                (p.data_mes, p.data_ano, p.cod_produto, p.nome_grupo): p
+                for p in PrevisaoDemanda.query.all()
+            }
+
             for idx, row in df.iterrows():
                 try:
                     cod_produto = str(row['cod_produto']).strip()
@@ -486,12 +501,8 @@ def register_previsao_demanda_routes(bp):
                     grupo_raw = str(row.get('grupo', '')).strip() if 'grupo' in row and pd.notna(row.get('grupo')) else ''
                     grupo = 'GERAL' if grupo_raw == '' else grupo_raw
 
-                    # ✅ BUSCAR NOME DO PRODUTO DE CadastroPalletizacao
-                    cadastro = CadastroPalletizacao.query.filter_by(
-                        cod_produto=cod_produto,
-                        ativo=True
-                    ).first()
-                    nome_produto = cadastro.nome_produto if cadastro else f'Produto {cod_produto}'
+                    # ✅ BUSCAR NOME DO PRODUTO DE CadastroPalletizacao (lookup em memoria)
+                    nome_produto = nome_por_produto.get(cod_produto, f'Produto {cod_produto}')
 
                     # Validações
                     if mes < 1 or mes > 12:
@@ -504,21 +515,13 @@ def register_previsao_demanda_routes(bp):
 
                     # ✅ VALIDAÇÃO: Grupo deve existir (exceto 'GERAL')
                     if grupo != 'GERAL':
-                        grupo_existe = GrupoEmpresarial.query.filter_by(
-                            nome_grupo=grupo,
-                            ativo=True
-                        ).first()
+                        grupo_existe = grupo in grupos_ativos
                         if not grupo_existe:
                             erros.append(f"Linha {idx+2}: Grupo '{grupo}' não está cadastrado. Use 'GERAL' ou cadastre o grupo primeiro.") # type: ignore
                             continue
 
-                    # Buscar existente
-                    previsao = PrevisaoDemanda.query.filter_by(
-                        data_mes=mes,
-                        data_ano=ano,
-                        cod_produto=cod_produto,
-                        nome_grupo=grupo
-                    ).first()
+                    # Buscar existente (lookup em memoria)
+                    previsao = previsoes_por_chave.get((mes, ano, cod_produto, grupo))
 
                     if previsao:
                         # Atualizar
@@ -540,6 +543,7 @@ def register_previsao_demanda_routes(bp):
                             criado_por=current_user.nome if current_user.is_authenticated else 'Sistema'
                         )
                         db.session.add(previsao)
+                        previsoes_por_chave[(mes, ano, cod_produto, grupo)] = previsao  # dedup intra-arquivo
                         inseridos += 1
 
                 except Exception as e:

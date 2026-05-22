@@ -358,6 +358,12 @@ def importar_xlsx():
         recursos_atualizados = 0
         erros = []
 
+        # Pre-carga (elimina N+1: antes 1 query RecursosProducao por linha).
+        # dict por (cod_produto, linha_producao), atualizado no loop p/ dedup.
+        recursos_por_chave = {
+            (r.cod_produto, r.linha_producao): r for r in RecursosProducao.query.all()
+        }
+
         for idx, row in df.iterrows():
             try:
                 # Validar campos obrigatórios
@@ -368,11 +374,8 @@ def importar_xlsx():
                 cod_produto = str(row['cod_produto']).strip().upper()
                 linha_producao = str(row['linha_producao']).strip()
 
-                # Buscar recurso existente
-                recurso = RecursosProducao.query.filter_by(
-                    cod_produto=cod_produto,
-                    linha_producao=linha_producao
-                ).first()
+                # Buscar recurso existente (lookup em memoria)
+                recurso = recursos_por_chave.get((cod_produto, linha_producao))
 
                 # Preparar dados
                 disponivel_str = str(row.get('disponivel', 'SIM')).strip().upper()
@@ -404,6 +407,7 @@ def importar_xlsx():
                         disponivel=disponivel
                     )
                     db.session.add(recurso)
+                    recursos_por_chave[(cod_produto, linha_producao)] = recurso  # dedup intra-arquivo
                     recursos_criados += 1
 
             except Exception as e:

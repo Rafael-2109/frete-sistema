@@ -19,6 +19,16 @@ def importar_transportadoras(caminho_arquivo):
     if 'Aceita NF Pallet' in df.columns:
         df['_aceita_nf_pallet'] = df['Aceita NF Pallet'].fillna('').astype(str).str.upper().map({'SIM': True, 'S': True, 'NÃO': False, 'NAO': False, 'N': False}).fillna(True)
 
+    # Pre-carrega transportadoras por digitos do CNPJ (elimina N+1: antes era
+    # 1 query regexp_replace/full-scan por linha). O dict e atualizado com as
+    # novas criadas no loop para preservar a dedup intra-arquivo (o codigo
+    # anterior dependia do autoflush do SQLAlchemy a cada query).
+    transportadoras_por_cnpj = {}
+    for _t in Transportadora.query.all():
+        _dig = ''.join(filter(str.isdigit, _t.cnpj or ''))
+        if _dig:
+            transportadoras_por_cnpj.setdefault(_dig, _t)
+
     # Itera pelas linhas e valida os dados
     for index, row in df.iterrows():
         linha_atual = index + 2  # +2 porque Excel começa em 1 e tem cabeçalho
@@ -44,9 +54,7 @@ def importar_transportadoras(caminho_arquivo):
             # Verifica se já existe uma transportadora com este CPF/CNPJ (compara pelos digitos)
             cnpj_excel = str(row['CNPJ']).strip()
             digitos_excel = ''.join(filter(str.isdigit, cnpj_excel))
-            transportadora_existente = Transportadora.query.filter(
-                db.func.regexp_replace(Transportadora.cnpj, r'\D', '', 'g') == digitos_excel
-            ).first()
+            transportadora_existente = transportadoras_por_cnpj.get(digitos_excel)
 
             condicao_raw = row.get('Condição de pgto', None)
             condicao_norm = (
@@ -100,6 +108,9 @@ def importar_transportadoras(caminho_arquivo):
                 # Cria nova transportadora
                 transportadora = Transportadora(**dados)
                 db.session.add(transportadora)
+                # Mantem o cache coerente p/ dedup intra-arquivo (mesmo CNPJ em 2 linhas)
+                if digitos_excel:
+                    transportadoras_por_cnpj.setdefault(digitos_excel, transportadora)
                 importadas.append(f"{dados['razao_social']} (CNPJ: {dados['cnpj']})")
                 
         except Exception as e:

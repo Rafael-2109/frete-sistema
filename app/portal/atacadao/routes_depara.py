@@ -258,6 +258,18 @@ def importar():
             contador_erro = 0
             erros = []
 
+            # Pre-carga (elimina N+1: antes ate 2 queries por linha — duplicidade
+            # do De-Para e descricao em CadastroPalletizacao). Dict de De-Para por
+            # (codigo_nosso, codigo_atacadao, cnpj_cliente) atualizado no loop.
+            deparas_existentes = {}
+            for _d in ProdutoDeParaAtacadao.query.all():
+                deparas_existentes.setdefault(
+                    (_d.codigo_nosso, _d.codigo_atacadao, _d.cnpj_cliente), _d
+                )
+            descricao_por_produto = {
+                p.cod_produto: p.nome_produto for p in CadastroPalletizacao.query.all()
+            }
+
             for index, row in df.iterrows():
                 try:
                     codigo_nosso = str(row['nosso cod']).strip()
@@ -298,17 +310,9 @@ def importar():
                         if obs_val != 'nan':
                             observacoes = obs_val
 
-                    # Verificar se já existe (considera CNPJ se informado)
-                    query = ProdutoDeParaAtacadao.query.filter_by(
-                        codigo_nosso=codigo_nosso,
-                        codigo_atacadao=codigo_atacadao
-                    )
-                    if cnpj_cliente:
-                        query = query.filter_by(cnpj_cliente=cnpj_cliente)
-                    else:
-                        query = query.filter(ProdutoDeParaAtacadao.cnpj_cliente.is_(None))
-
-                    existe = query.first()
+                    # Verificar se já existe (lookup em memoria; cnpj_cliente=None
+                    # quando nao informado, igual ao filtro is_(None) anterior)
+                    existe = deparas_existentes.get((codigo_nosso, codigo_atacadao, cnpj_cliente))
 
                     if existe:
                         # Atualizar existente - atualiza descrição e outros campos
@@ -321,11 +325,8 @@ def importar():
                         existe.atualizado_em = agora_utc_naive()
                         contador_atualizados += 1
                     else:
-                        # Buscar descrição do nosso produto
-                        descricao_nosso = ''
-                        produto = CadastroPalletizacao.query.filter_by(cod_produto=codigo_nosso).first()
-                        if produto:
-                            descricao_nosso = produto.nome_produto
+                        # Buscar descrição do nosso produto (lookup em memoria)
+                        descricao_nosso = descricao_por_produto.get(codigo_nosso, '')
 
                         # Criar novo
                         mapeamento = ProdutoDeParaAtacadao(
@@ -340,6 +341,7 @@ def importar():
                             criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
                         )
                         db.session.add(mapeamento)
+                        deparas_existentes[(codigo_nosso, codigo_atacadao, cnpj_cliente)] = mapeamento  # dedup intra-arquivo
                         contador_criados += 1
 
                 except Exception as e:

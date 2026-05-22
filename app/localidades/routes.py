@@ -328,7 +328,13 @@ def processar_importacao_rotas():
         rotas_importadas = 0
         rotas_atualizadas = 0
         erros = []
-        
+
+        # Pre-carga (elimina N+1: antes 2 queries por linha). UFs validas do
+        # cadastro de cidades + rotas indexadas por UF. O dict de rotas e
+        # atualizado no loop para preservar dedup intra-arquivo.
+        ufs_validas = {u[0] for u in db.session.query(Cidade.uf).distinct().all() if u[0]}
+        rotas_por_uf = {r.cod_uf: r for r in CadastroRota.query.all()}
+
         for index, row in df.iterrows():
             try:
                 # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
@@ -339,13 +345,12 @@ def processar_importacao_rotas():
                     continue
                 
                 # ✅ VALIDAR UF (deve existir no cadastro de cidades)
-                cidade_existe = Cidade.query.filter_by(uf=cod_uf).first()
-                if not cidade_existe:
+                if cod_uf not in ufs_validas:
                     erros.append(f"Linha {index + 1}: UF '{cod_uf}' não existe no cadastro de cidades") # type: ignore
                     continue
-                
-                # Verificar se já existe
-                rota_existente = CadastroRota.query.filter_by(cod_uf=cod_uf).first()
+
+                # Verificar se já existe (lookup em memoria — ver pre-carga acima)
+                rota_existente = rotas_por_uf.get(cod_uf)
                 
                 if rota_existente:
                     # ✏️ ATUALIZAR EXISTENTE (substitui rota)
@@ -358,8 +363,9 @@ def processar_importacao_rotas():
                     nova_rota.cod_uf = cod_uf
                     nova_rota.rota = rota
                     nova_rota.ativa = True
-                    
+
                     db.session.add(nova_rota)
+                    rotas_por_uf[cod_uf] = nova_rota  # dedup intra-arquivo
                     rotas_importadas += 1
                 
             except Exception as e:
@@ -453,7 +459,19 @@ def processar_importacao_sub_rotas():
         sub_rotas_importadas = 0
         sub_rotas_atualizadas = 0
         erros = []
-        
+
+        # Pre-carga (elimina N+1: antes 2 queries por linha). Cidades por
+        # (UF, nome em minusculas) -> nome real do banco. O match original era
+        # uf == cod_uf AND nome ILIKE nome_cidade (igualdade case-insensitive,
+        # SEM remover acento). Sub-rotas por (UF, nome_cidade), atualizada no loop.
+        cidades_por_uf_nome = {}
+        for _c_uf, _c_nome in db.session.query(Cidade.uf, Cidade.nome).all():
+            if _c_uf and _c_nome is not None:
+                cidades_por_uf_nome.setdefault((_c_uf, _c_nome.lower()), _c_nome)
+        sub_rotas_por_chave = {
+            (s.cod_uf, s.nome_cidade): s for s in CadastroSubRota.query.all()
+        }
+
         for index, row in df.iterrows():
             try:
                 # 📋 EXTRAIR DADOS usando nomes exatos das colunas Excel
@@ -464,20 +482,15 @@ def processar_importacao_sub_rotas():
                 if not cod_uf or cod_uf == 'NAN' or not nome_cidade or nome_cidade == 'NAN' or not sub_rota or sub_rota == 'NAN':
                     continue
                 
-                # ✅ VALIDAR COMBINAÇÃO CIDADE+UF com busca case-insensitive
-                cidade_existe = Cidade.query.filter(
-                    Cidade.uf == cod_uf,
-                    Cidade.nome.ilike(nome_cidade)
-                ).first()
-                if not cidade_existe:
+                # ✅ VALIDAR COMBINAÇÃO CIDADE+UF (case-insensitive, sem acento-fold,
+                # igual ao ILIKE anterior) e recuperar o nome real do banco.
+                nome_cidade_real = cidades_por_uf_nome.get((cod_uf, nome_cidade.lower()))
+                if not nome_cidade_real:
                     erros.append(f"Linha {index + 1}: Combinação '{nome_cidade}/{cod_uf}' não existe no cadastro de cidades") # type: ignore
                     continue
-                
-                # ✅ USAR O NOME REAL DA CIDADE DO BANCO para garantir consistência
-                nome_cidade_real = cidade_existe.nome
-                
-                # Verificar se já existe (chave única: UF + Cidade)
-                sub_rota_existente = CadastroSubRota.query.filter_by(cod_uf=cod_uf, nome_cidade=nome_cidade_real).first()
+
+                # Verificar se já existe (chave única: UF + Cidade) — lookup em memoria
+                sub_rota_existente = sub_rotas_por_chave.get((cod_uf, nome_cidade_real))
                 
                 if sub_rota_existente:
                     # ✏️ ATUALIZAR EXISTENTE (substitui sub rota)
@@ -491,8 +504,9 @@ def processar_importacao_sub_rotas():
                     nova_sub_rota.nome_cidade = nome_cidade_real  # ✅ USAR NOME REAL DO BANCO
                     nova_sub_rota.sub_rota = sub_rota
                     nova_sub_rota.ativa = True
-                    
+
                     db.session.add(nova_sub_rota)
+                    sub_rotas_por_chave[(cod_uf, nome_cidade_real)] = nova_sub_rota  # dedup intra-arquivo
                     sub_rotas_importadas += 1
                 
             except Exception as e:
