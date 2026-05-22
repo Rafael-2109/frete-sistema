@@ -169,3 +169,28 @@ def test_transferir_aumento_falha_compensa(service, odoo_mock, adj_mock, lot_moc
     r = service.transferir('4729198', '4759198', '135/26', 5.0, 'rafael')
     assert r['status'] == 'FALHA_AUMENTO_COMPENSADO'
     assert adj_mock.ajustar_quant.call_count == 3  # reduz + aumenta + compensa
+
+
+def test_registrar_movimentacao_local(service, app):
+    criados = []
+
+    class FakeMov:
+        def __init__(self):
+            criados.append(self)
+
+    fake_session = MagicMock()
+    with patch('app.estoque.models.MovimentacaoEstoque', FakeMov), \
+         patch('app.odoo.services.transferencia_saldo_codigo_service._get_db_session',
+               return_value=fake_session):
+        service._registrar_movimentacao_local(
+            '4729198', 'AZEITE', '4759198', 'SOJA', '135/26', 5.0, 'rafael')
+
+    assert len(criados) == 2
+    saida, entrada = criados
+    assert saida.tipo_movimentacao == 'SAIDA' and saida.cod_produto == '4729198'
+    assert entrada.tipo_movimentacao == 'ENTRADA' and entrada.cod_produto == '4759198'
+    assert saida.local_movimentacao == 'AJUSTE' and saida.tipo_origem == 'MANUAL'
+    assert saida.lote_nome == '135/26' and saida.qtd_movimentacao == 5.0
+    assert saida.criado_por == 'rafael'
+    assert fake_session.add.call_count == 2
+    fake_session.commit.assert_called_once()

@@ -100,13 +100,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
-      "columns": [
-        "tipo_divergencia"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_recebimento_conferencia_recebimento_id",
       "columns": [
         "recebimento_id"
@@ -142,6 +135,13 @@
         "ordem"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_recebimento_conferencia_tipo_divergencia",
+      "columns": [
+        "tipo_divergencia"
+      ],
+      "unique": false
     }
   ]
 }

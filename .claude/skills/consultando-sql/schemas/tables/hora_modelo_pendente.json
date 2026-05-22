@@ -90,16 +90,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_modelo_pendente_resolvido_modelo_id",
+      "name": "ix_hora_modelo_pendente_status",
       "columns": [
-        "resolvido_modelo_id"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_modelo_pendente_status",
+      "name": "ix_hora_modelo_pendente_resolvido_modelo_id",
       "columns": [
-        "status"
+        "resolvido_modelo_id"
       ],
       "unique": false
     }

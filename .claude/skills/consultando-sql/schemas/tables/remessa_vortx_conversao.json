@@ -98,16 +98,16 @@
       "unique": false
     },
     {
-      "name": "ix_remessa_vortx_conversao_criado_em",
+      "name": "ix_remessa_vortx_conversao_tipo",
       "columns": [
-        "criado_em"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_remessa_vortx_conversao_tipo",
+      "name": "ix_remessa_vortx_conversao_criado_em",
       "columns": [
-        "tipo"
+        "criado_em"
       ],
       "unique": false
     },

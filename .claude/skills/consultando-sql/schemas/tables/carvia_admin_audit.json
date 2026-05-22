@@ -53,13 +53,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_audit_executado_em",
-      "columns": [
-        "executado_em"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_audit_entidade",
       "columns": [
         "entidade_tipo",
@@ -68,16 +61,23 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_audit_executado_por",
+      "name": "ix_carvia_audit_acao",
       "columns": [
-        "executado_por"
+        "acao"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_audit_acao",
+      "name": "ix_carvia_audit_executado_em",
       "columns": [
-        "acao"
+        "executado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_audit_executado_por",
+      "columns": [
+        "executado_por"
       ],
       "unique": false
     }

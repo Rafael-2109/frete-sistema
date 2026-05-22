@@ -195,6 +195,13 @@
       "unique": false
     },
     {
+      "name": "ix_entregas_monitoradas_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_em_data_faturamento",
       "columns": [
         "data_faturamento"
@@ -233,13 +240,6 @@
       "name": "idx_em_status_finalizacao",
       "columns": [
         "status_finalizacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_origem",
-      "columns": [
-        "origem"
       ],
       "unique": false
     }

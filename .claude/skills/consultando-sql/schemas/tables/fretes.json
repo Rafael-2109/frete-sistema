@@ -296,6 +296,13 @@
   ],
   "indices": [
     {
+      "name": "ix_fretes_odoo_invoice_id",
+      "columns": [
+        "odoo_invoice_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_fretes_odoo_dfe_id",
       "columns": [
         "odoo_dfe_id"
@@ -334,13 +341,6 @@
       "name": "ix_fretes_cnpj_cliente",
       "columns": [
         "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_fretes_odoo_invoice_id",
-      "columns": [
-        "odoo_invoice_id"
       ],
       "unique": false
     }

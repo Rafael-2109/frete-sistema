@@ -233,24 +233,9 @@
   ],
   "indices": [
     {
-      "name": "idx_sep_cotacao",
+      "name": "ix_separacao_separacao_lote_id",
       "columns": [
-        "cotacao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_falta_pgto_sync",
-      "columns": [
-        "falta_pagamento",
-        "sincronizado_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_nf_cd",
-      "columns": [
-        "nf_cd"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -326,9 +311,9 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_separacao_lote_id",
+      "name": "ix_separacao_chassi_assai",
       "columns": [
-        "separacao_lote_id"
+        "chassi_assai"
       ],
       "unique": false
     },
@@ -337,13 +322,6 @@
       "columns": [
         "expedicao",
         "cod_produto"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_separacao_chassi_assai",
-      "columns": [
-        "chassi_assai"
       ],
       "unique": false
     },
@@ -375,6 +353,28 @@
       "columns": [
         "expedicao",
         "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_cotacao",
+      "columns": [
+        "cotacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_falta_pgto_sync",
+      "columns": [
+        "falta_pagamento",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_sep_nf_cd",
+      "columns": [
+        "nf_cd"
       ],
       "unique": false
     }

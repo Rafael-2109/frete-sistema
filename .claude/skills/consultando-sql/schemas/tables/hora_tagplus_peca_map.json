@@ -46,18 +46,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tagplus_peca_map_peca_id",
-      "columns": [
-        "peca_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_hora_tagplus_peca_map_tagplus_codigo",
       "columns": [
         "tagplus_codigo"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_peca_map_peca_id",
+      "columns": [
+        "peca_id"
+      ],
+      "unique": true
     }
   ]
 }

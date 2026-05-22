@@ -121,16 +121,17 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_documentos_cnpj_emissor",
+      "name": "idx_documento_tipo_recebido",
       "columns": [
-        "cnpj_emissor"
+        "tipo",
+        "recebido"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_documentos_credito_id",
+      "name": "ix_pallet_documentos_cnpj_emissor",
       "columns": [
-        "credito_id"
+        "cnpj_emissor"
       ],
       "unique": false
     },
@@ -142,18 +143,17 @@
       "unique": false
     },
     {
-      "name": "idx_documento_emissor",
+      "name": "ix_pallet_documentos_credito_id",
       "columns": [
-        "cnpj_emissor",
-        "tipo"
+        "credito_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_documento_tipo_recebido",
+      "name": "idx_documento_emissor",
       "columns": [
-        "tipo",
-        "recebido"
+        "cnpj_emissor",
+        "tipo"
       ],
       "unique": false
     }

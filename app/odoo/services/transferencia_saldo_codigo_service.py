@@ -26,6 +26,12 @@ logger = logging.getLogger(__name__)
 CASAS = 6
 
 
+def _get_db_session():
+    """Acesso lazy à sessão SQLAlchemy (evita import circular app.odoo→app)."""
+    from app import db
+    return db.session
+
+
 class TransferenciaSaldoCodigoService:
     """Transfere saldo entre códigos mantendo o lote, em CD/Estoque."""
 
@@ -191,6 +197,34 @@ class TransferenciaSaldoCodigoService:
         r['status'] = 'EXECUTADO'
         return r
 
-    def _registrar_movimentacao_local(self, *args, **kwargs):
-        # Stub temporário — implementado na Task 5 (espelho local).
-        pass
+    def _registrar_movimentacao_local(
+        self, cod_origem, nome_origem, cod_destino, nome_destino,
+        lote_nome, qty, usuario) -> None:
+        """Espelha a troca no estoque local: SAIDA(origem) + ENTRADA(destino).
+
+        AJUSTE/MANUAL — não duplica com o sync (entrada_material_service só
+        importa picking_type_code='incoming'; inventory adjustment não gera).
+        """
+        from app.estoque.models import MovimentacaoEstoque
+        from app.utils.timezone import agora_utc_naive
+        hoje = agora_utc_naive().date()
+        obs = (f'Transferencia saldo {cod_origem}->{cod_destino} '
+               f'lote {lote_nome or "(sem lote)"} qtd {qty} (CD/Estoque Odoo)')
+        session = _get_db_session()
+        for cod, nome, tipo in (
+            (cod_origem, nome_origem, 'SAIDA'),
+            (cod_destino, nome_destino, 'ENTRADA'),
+        ):
+            mov = MovimentacaoEstoque()
+            mov.cod_produto = cod
+            mov.nome_produto = nome
+            mov.tipo_movimentacao = tipo
+            mov.local_movimentacao = 'AJUSTE'
+            mov.qtd_movimentacao = qty
+            mov.data_movimentacao = hoje
+            mov.lote_nome = lote_nome
+            mov.tipo_origem = 'MANUAL'
+            mov.observacao = obs
+            mov.criado_por = usuario
+            session.add(mov)
+        session.commit()

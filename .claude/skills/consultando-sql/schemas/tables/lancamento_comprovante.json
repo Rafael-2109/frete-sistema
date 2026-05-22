@@ -185,16 +185,16 @@
   ],
   "indices": [
     {
-      "name": "ix_lancamento_comprovante_status",
+      "name": "ix_lancamento_comprovante_odoo_move_line_id",
       "columns": [
-        "status"
+        "odoo_move_line_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_lancamento_comprovante_odoo_move_line_id",
+      "name": "ix_lancamento_comprovante_status",
       "columns": [
-        "odoo_move_line_id"
+        "status"
       ],
       "unique": false
     },
@@ -207,16 +207,16 @@
       "unique": false
     },
     {
-      "name": "ix_lancamento_comprovante_comprovante_id",
+      "name": "idx_lanc_odoo_move_line",
       "columns": [
-        "comprovante_id"
+        "odoo_move_line_id"
       ],
       "unique": false
     },
     {
-      "name": "idx_lanc_odoo_move_line",
+      "name": "ix_lancamento_comprovante_comprovante_id",
       "columns": [
-        "odoo_move_line_id"
+        "comprovante_id"
       ],
       "unique": false
     },

@@ -145,13 +145,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pessoal_pluggy_transacoes_stg_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pessoal_pluggy_transacoes_stg_date",
       "columns": [
         "date"
@@ -176,6 +169,13 @@
       "name": "ix_pessoal_pluggy_transacoes_stg_status_processamento",
       "columns": [
         "status_processamento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pessoal_pluggy_transacoes_stg_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }
