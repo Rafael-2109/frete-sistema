@@ -1,5 +1,5 @@
 """
-Rotas do modulo de Auditoria de Produtos.
+Rotas do modulo de Auditoria de Produtos (CADASTROS MORTAIS).
 
 Acesso: link a partir de /producao/palletizacao -> botao "Auditoria".
 
@@ -7,13 +7,15 @@ Rotas:
     GET  /produtos/auditoria                            tela principal
     GET  /produtos/auditoria/exportar                   download Excel
     GET  /produtos/api/produto/<cod>                    detalhes para modal
-    POST /produtos/api/mestre                           cria registro no mestre (orfao puro)
-    PUT  /produtos/api/mestre/<cod>                     atualiza mestre (Editar/Reparar)
-    POST /produtos/api/bom-item                         cria item de BOM
-    POST /produtos/api/recurso                          cria recurso de producao
-    POST /produtos/api/perfil-fiscal                    cria perfil fiscal produto/fornecedor
-    POST /produtos/api/sincronizar-nome/<cod>           atualiza nome_produto no mestre
-    POST /produtos/api/atualizar-peso/<cod>             atualiza peso_bruto no mestre
+    POST /produtos/api/mestre                           cria registro no mestre (M1)
+    PUT  /produtos/api/mestre/<cod>                     atualiza mestre (M2-M4, V1-V3, P1, C1-C2)
+    POST /produtos/api/bom-item                         cria item de BOM (P2/P4)
+    POST /produtos/api/recurso                          cria recurso de producao (P3)
+    POST /produtos/api/custo-considerado                cria custo considerado (C3)
+
+Versao 2 (26/05/2026): regras M1-M4, V1-V3, P1-P4, C1-C3.
+Removidos endpoints obsoletos: api_criar_perfil_fiscal, api_sincronizar_nome,
+api_atualizar_peso.
 """
 
 from io import BytesIO
@@ -30,14 +32,9 @@ from app.produtos.services.matriz_obrigatoriedade import (
     SEVERIDADE_BLOQ,
     SEVERIDADE_ALERTA,
     SEVERIDADE_INFO,
-    FLAG_VENDIDO,
-    FLAG_PRODUZIDO,
-    FLAG_COMPRADO,
-    FLAG_UNIVERSAL,
     CATEGORIA_ORFAO_PURO,
     CATEGORIA_REPARAR_MESTRE,
     CATEGORIA_CADASTRO_FALTANTE,
-    CATEGORIA_DIVERGENCIA,
     CLASSE_BADGE,
     ICONE_CATEGORIA,
     ROTULO_CATEGORIA,
@@ -56,7 +53,7 @@ produtos_bp = Blueprint("produtos", __name__, url_prefix="/produtos")
 @produtos_bp.route("/auditoria")
 @login_required
 def auditoria():
-    """Tela principal de auditoria — agrupa por 4 categorias de acao."""
+    """Tela principal de auditoria — agrupa por 3 categorias de acao."""
     busca = request.args.get("busca", "").strip()
 
     try:
@@ -73,6 +70,21 @@ def auditoria():
                 if b in (p.get("cod_produto") or "").upper()
                 or b in (p.get("nome_produto") or "").upper()
             ]
+        # Recalcula totais para sincronizar cards com listas filtradas
+        resultado["totais"]["por_categoria"] = {
+            cat: len(lista) for cat, lista in resultado["por_categoria"].items()
+        }
+        # Recalcula contadores agregados que dependem das listas filtradas
+        produtos_filtrados = {
+            p["cod_produto"]
+            for cat, lista in resultado["por_categoria"].items()
+            if cat != CATEGORIA_ORFAO_PURO
+            for p in lista
+        }
+        resultado["totais"]["total_com_problemas"] = len(produtos_filtrados)
+        resultado["totais"]["total_orfaos_puros"] = len(
+            resultado["por_categoria"][CATEGORIA_ORFAO_PURO]
+        )
 
     return render_template(
         "produtos/auditoria.html",
@@ -84,18 +96,13 @@ def auditoria():
         rotulo_categoria=ROTULO_CATEGORIA,
         descricao_categoria=DESCRICAO_CATEGORIA,
         busca=busca,
-        # constantes
+        # constantes usadas no template
         SEVERIDADE_BLOQ=SEVERIDADE_BLOQ,
         SEVERIDADE_ALERTA=SEVERIDADE_ALERTA,
         SEVERIDADE_INFO=SEVERIDADE_INFO,
-        FLAG_VENDIDO=FLAG_VENDIDO,
-        FLAG_PRODUZIDO=FLAG_PRODUZIDO,
-        FLAG_COMPRADO=FLAG_COMPRADO,
-        FLAG_UNIVERSAL=FLAG_UNIVERSAL,
         CAT_ORFAO=CATEGORIA_ORFAO_PURO,
         CAT_MESTRE=CATEGORIA_REPARAR_MESTRE,
         CAT_FALTANTE=CATEGORIA_CADASTRO_FALTANTE,
-        CAT_DIV=CATEGORIA_DIVERGENCIA,
     )
 
 
@@ -118,9 +125,8 @@ def auditoria_exportar():
         {"Metrica": "Produtos ativos no mestre", "Valor": totais["total_mestre_ativo"]},
         {"Metrica": "Produtos com problemas", "Valor": totais["total_com_problemas"]},
         {"Metrica": "Orfaos puros", "Valor": totais["total_orfaos_puros"]},
-        {"Metrica": f"Reparar mestre", "Valor": totais["por_categoria"][CATEGORIA_REPARAR_MESTRE]},
-        {"Metrica": f"Cadastros faltantes", "Valor": totais["por_categoria"][CATEGORIA_CADASTRO_FALTANTE]},
-        {"Metrica": f"Divergencias", "Valor": totais["por_categoria"][CATEGORIA_DIVERGENCIA]},
+        {"Metrica": "Reparar mestre", "Valor": totais["por_categoria"][CATEGORIA_REPARAR_MESTRE]},
+        {"Metrica": "Cadastros faltantes", "Valor": totais["por_categoria"][CATEGORIA_CADASTRO_FALTANTE]},
         {"Metrica": "Data auditoria", "Valor": totais["data_auditoria"]},
     ])
 
@@ -128,8 +134,8 @@ def auditoria_exportar():
     df_orfaos = pd.DataFrame([
         {
             "cod_produto": o["cod_produto"],
-            "modulos": ", ".join(o["modulos"]),
-            "nomes_encontrados": " | ".join(o["nomes_encontrados"]),
+            "modulos": ", ".join(o.get("modulos") or []),
+            "nomes_encontrados": " | ".join(o.get("nomes_encontrados") or []),
         }
         for o in pc[CATEGORIA_ORFAO_PURO]
     ]) if pc[CATEGORIA_ORFAO_PURO] else pd.DataFrame(
@@ -156,7 +162,6 @@ def auditoria_exportar():
 
     df_mestre = pd.DataFrame(_flatten(pc[CATEGORIA_REPARAR_MESTRE]))
     df_faltante = pd.DataFrame(_flatten(pc[CATEGORIA_CADASTRO_FALTANTE]))
-    df_divergencia = pd.DataFrame(_flatten(pc[CATEGORIA_DIVERGENCIA]))
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -164,7 +169,6 @@ def auditoria_exportar():
         df_orfaos.to_excel(writer, sheet_name="Orfaos Puros", index=False)
         df_mestre.to_excel(writer, sheet_name="Reparar Mestre", index=False)
         df_faltante.to_excel(writer, sheet_name="Cadastros Faltantes", index=False)
-        df_divergencia.to_excel(writer, sheet_name="Divergencias", index=False)
 
     output.seek(0)
     response = make_response(output.getvalue())
@@ -221,17 +225,8 @@ def api_produto_detalhes(cod_produto: str):
         extras["recursos"] = db.session.execute(text(
             "SELECT COUNT(*) FROM recursos_producao WHERE cod_produto=:c"
         ), {"c": cod_produto}).scalar() or 0
-        extras["perfis_fiscais"] = db.session.execute(text(
-            "SELECT COUNT(*) FROM perfil_fiscal_produto_fornecedor WHERE cod_produto=:c"
-        ), {"c": cod_produto}).scalar() or 0
-        extras["depara_atacadao"] = db.session.execute(text(
-            "SELECT COUNT(*) FROM portal_atacadao_produto_depara WHERE codigo_nosso=:c"
-        ), {"c": cod_produto}).scalar() or 0
-        extras["depara_sendas"] = db.session.execute(text(
-            "SELECT COUNT(*) FROM portal_sendas_produto_depara WHERE codigo_nosso=:c"
-        ), {"c": cod_produto}).scalar() or 0
-        extras["precos_rede"] = db.session.execute(text(
-            "SELECT COUNT(*) FROM tabela_rede_precos WHERE cod_produto=:c"
+        extras["custo_considerado_atual"] = db.session.execute(text(
+            "SELECT COUNT(*) FROM custo_considerado WHERE cod_produto=:c AND custo_atual=true"
         ), {"c": cod_produto}).scalar() or 0
     except Exception:
         pass
@@ -248,6 +243,9 @@ def api_produto_detalhes(cod_produto: str):
 # API WRITE: mestre (CREATE / UPDATE)
 # ============================================================================
 
+# custo_produto NAO editavel via este endpoint — usar /api/custo-considerado
+# (comprado) ou tela /custeio/definicao (produzido). Custo do mestre nao tem
+# UI proposital, e mantido apenas como campo legado lido (nao escrito).
 CAMPOS_MESTRE_EDITAVEIS = [
     "nome_produto",
     "codigo_ean",
@@ -266,8 +264,6 @@ CAMPOS_MESTRE_EDITAVEIS = [
     "produto_vendido",
     "lead_time",
     "lote_minimo_compra",
-    "disparo_producao",
-    "custo_produto",
 ]
 
 
@@ -284,7 +280,7 @@ def _coerce(campo: str, valor):
     """
     if valor is None or valor == "":
         return None
-    if campo in ("palletizacao", "peso_bruto", "altura_cm", "largura_cm", "comprimento_cm", "custo_produto"):
+    if campo in ("palletizacao", "peso_bruto", "altura_cm", "largura_cm", "comprimento_cm"):
         try:
             return float(valor)
         except Exception:
@@ -304,7 +300,7 @@ def _coerce(campo: str, valor):
 @produtos_bp.route("/api/mestre", methods=["POST"])
 @login_required
 def api_criar_mestre():
-    """Cria novo registro em cadastro_palletizacao (resolve orfao puro)."""
+    """Cria novo registro em cadastro_palletizacao (resolve M1)."""
     dados = request.get_json(silent=True) or {}
     cod = (dados.get("cod_produto") or "").strip()
     if not cod:
@@ -331,7 +327,7 @@ def api_criar_mestre():
         return jsonify({"sucesso": False, "erro": "palletizacao invalida (deve ser numerico >= 0)"}), 400
     if not isinstance(peso, (int, float)) or peso < 0:
         return jsonify({"sucesso": False, "erro": "peso_bruto invalido (deve ser numerico >= 0)"}), 400
-    # Quando vendido, exigir > 0 (regra A1/A2 — coerente com auditor)
+    # Quando vendido, exigir > 0 (regras V1/V2)
     if vendido and pall <= 0:
         return jsonify({"sucesso": False, "erro": "palletizacao deve ser > 0 para produto vendido"}), 400
     if vendido and peso <= 0:
@@ -369,7 +365,7 @@ def api_criar_mestre():
 @produtos_bp.route("/api/mestre/<path:cod_produto>", methods=["PUT"])
 @login_required
 def api_atualizar_mestre(cod_produto: str):
-    """Atualiza campos de cadastro_palletizacao (resolve REPARAR_MESTRE)."""
+    """Atualiza campos de cadastro_palletizacao (resolve M2-M4, V1-V3, P1, C1-C2)."""
     cod_produto = cod_produto.strip()
     dados = request.get_json(silent=True) or {}
 
@@ -419,7 +415,7 @@ def api_atualizar_mestre(cod_produto: str):
 @produtos_bp.route("/api/bom-item", methods=["POST"])
 @login_required
 def api_criar_bom_item():
-    """Cria item em lista_materiais (resolve B3/B6)."""
+    """Cria item em lista_materiais (resolve P2/P4)."""
     dados = request.get_json(silent=True) or {}
     cod_produzido = (dados.get("cod_produto_produzido") or "").strip()
     cod_componente = (dados.get("cod_produto_componente") or "").strip()
@@ -493,7 +489,7 @@ def api_criar_bom_item():
 @produtos_bp.route("/api/recurso", methods=["POST"])
 @login_required
 def api_criar_recurso():
-    """Cria registro em recursos_producao (resolve B5)."""
+    """Cria registro em recursos_producao (resolve P3)."""
     dados = request.get_json(silent=True) or {}
     cod = (dados.get("cod_produto") or "").strip()
     linha = (dados.get("linha_producao") or "").strip()
@@ -547,115 +543,78 @@ def api_criar_recurso():
 
 
 # ============================================================================
-# API WRITE: perfil fiscal produto/fornecedor
+# API WRITE: custo considerado (C3)
 # ============================================================================
 
-@produtos_bp.route("/api/perfil-fiscal", methods=["POST"])
+@produtos_bp.route("/api/custo-considerado", methods=["POST"])
 @login_required
-def api_criar_perfil_fiscal():
-    """Cria perfil fiscal minimo (resolve C2)."""
+def api_criar_custo_considerado():
+    """
+    Cria registro em custo_considerado (resolve C3).
+    Reutiliza ServicoCusteio.cadastrar_custo_manual — mesma logica de
+    /custeio/api/considerado/cadastrar, com bloqueio para produzido (custo
+    de produzido vem do BOM via tela /custeio/definicao).
+    """
+    from app.custeio.services.custeio_service import ServicoCusteio
+    from app.producao.models import CadastroPalletizacao
+
     dados = request.get_json(silent=True) or {}
     cod = (dados.get("cod_produto") or "").strip()
-    cnpj_fornecedor = (dados.get("cnpj_fornecedor") or "").strip()
-    ncm = (dados.get("ncm_esperado") or "").strip()
+    custo_considerado = dados.get("custo_considerado")
+    motivo = (dados.get("motivo") or "Cadastro via auditoria de produtos").strip()
+    tipo_custo = (dados.get("tipo_custo") or "MANUAL").strip()
 
-    if not cod or not cnpj_fornecedor:
-        return jsonify({"sucesso": False, "erro": "cod_produto e cnpj_fornecedor sao obrigatorios"}), 400
+    if not cod:
+        return jsonify({"sucesso": False, "erro": "cod_produto obrigatorio"}), 400
+    if custo_considerado is None or custo_considerado == "":
+        return jsonify({"sucesso": False, "erro": "custo_considerado obrigatorio"}), 400
 
-    row = db.session.execute(
-        text("SELECT nome_produto FROM cadastro_palletizacao WHERE cod_produto=:c"), {"c": cod}
-    ).fetchone()
-    if not row:
-        return jsonify({"sucesso": False, "erro": f"Produto {cod} nao existe no mestre"}), 400
-    nome = row[0]
+    try:
+        custo_float = float(custo_considerado)
+    except (TypeError, ValueError):
+        return jsonify({"sucesso": False, "erro": "custo_considerado deve ser numerico"}), 400
+    if custo_float <= 0:
+        return jsonify({"sucesso": False, "erro": "custo_considerado deve ser > 0"}), 400
 
-    cfops = (dados.get("cfop_esperados") or "").strip()
-    cnpj_compradora = (dados.get("cnpj_empresa_compradora") or "").strip() or None
+    # Verifica que o produto e comprado (e nao produzido puro)
+    produto = CadastroPalletizacao.query.filter_by(cod_produto=cod).first()
+    if not produto:
+        return jsonify({"sucesso": False, "erro": f"Produto {cod} nao existe no mestre"}), 404
+
+    if produto.produto_produzido and not produto.produto_comprado:
+        tipo = "INTERMEDIARIO" if not produto.produto_vendido else "ACABADO"
+        return jsonify({
+            "sucesso": False,
+            "erro": (
+                f"Produto {tipo} nao pode ter custo cadastrado diretamente. "
+                f"Use a tela /custeio/definicao para calculo via BOM."
+            ),
+        }), 400
+
+    if not produto.produto_comprado:
+        return jsonify({
+            "sucesso": False,
+            "erro": "custo_considerado so se aplica a produtos COMPRADOS.",
+        }), 400
+
     user = getattr(current_user, "nome", "auditoria_produtos")
 
     try:
-        db.session.execute(
-            text(
-                "INSERT INTO perfil_fiscal_produto_fornecedor ("
-                "cnpj_empresa_compradora, cnpj_fornecedor, cod_produto, nome_produto, "
-                "ncm_esperado, cfop_esperados, criado_por, criado_em"
-                ") VALUES ("
-                ":cc, :cf, :cod, :nome, :ncm, :cfops, :user, NOW()"
-                ")"
-            ),
-            {
-                "cc": cnpj_compradora, "cf": cnpj_fornecedor, "cod": cod, "nome": nome,
-                "ncm": ncm or None, "cfops": cfops or None, "user": user,
-            },
+        resultado = ServicoCusteio.cadastrar_custo_manual(
+            cod_produto=cod,
+            custo_considerado=custo_float,
+            tipo_custo=tipo_custo,
+            usuario=user,
+            motivo=motivo,
         )
-        db.session.commit()
     except Exception as e:
-        db.session.rollback()
         return jsonify({"sucesso": False, "erro": str(e)}), 500
 
-    return jsonify({"sucesso": True, "mensagem": f"Perfil fiscal {cod} x {cnpj_fornecedor} criado"})
+    if resultado.get("erro"):
+        return jsonify({"sucesso": False, "erro": resultado["erro"]}), 400
 
-
-# ============================================================================
-# API WRITE: resolver divergencias (D2/D3) — atualizar mestre
-# ============================================================================
-
-@produtos_bp.route("/api/sincronizar-nome/<path:cod_produto>", methods=["POST"])
-@login_required
-def api_sincronizar_nome(cod_produto: str):
-    """D2: atualiza nome_produto do mestre."""
-    cod_produto = cod_produto.strip()
-    dados = request.get_json(silent=True) or {}
-    novo_nome = (dados.get("novo_nome") or "").strip()
-    if not novo_nome:
-        return jsonify({"sucesso": False, "erro": "novo_nome obrigatorio"}), 400
-
-    existe = db.session.execute(
-        text("SELECT 1 FROM cadastro_palletizacao WHERE cod_produto=:c"), {"c": cod_produto}
-    ).fetchone()
-    if not existe:
-        return jsonify({"sucesso": False, "erro": "Produto nao encontrado"}), 404
-
-    try:
-        db.session.execute(
-            text("UPDATE cadastro_palletizacao SET nome_produto=:n, updated_at=NOW() WHERE cod_produto=:c"),
-            {"n": novo_nome, "c": cod_produto},
-        )
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"sucesso": False, "erro": str(e)}), 500
-
-    return jsonify({"sucesso": True, "mensagem": f"Nome atualizado no mestre para '{novo_nome}'"})
-
-
-@produtos_bp.route("/api/atualizar-peso/<path:cod_produto>", methods=["POST"])
-@login_required
-def api_atualizar_peso(cod_produto: str):
-    """D3: atualiza peso_bruto do mestre."""
-    cod_produto = cod_produto.strip()
-    dados = request.get_json(silent=True) or {}
-    try:
-        novo_peso = float(dados.get("novo_peso") or 0)
-    except Exception:
-        return jsonify({"sucesso": False, "erro": "novo_peso invalido"}), 400
-    if novo_peso <= 0:
-        return jsonify({"sucesso": False, "erro": "novo_peso deve ser > 0"}), 400
-
-    existe = db.session.execute(
-        text("SELECT 1 FROM cadastro_palletizacao WHERE cod_produto=:c"), {"c": cod_produto}
-    ).fetchone()
-    if not existe:
-        return jsonify({"sucesso": False, "erro": "Produto nao encontrado"}), 404
-
-    try:
-        db.session.execute(
-            text("UPDATE cadastro_palletizacao SET peso_bruto=:p, updated_at=NOW() WHERE cod_produto=:c"),
-            {"p": novo_peso, "c": cod_produto},
-        )
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"sucesso": False, "erro": str(e)}), 500
-
-    return jsonify({"sucesso": True, "mensagem": f"peso_bruto atualizado no mestre para {novo_peso}"})
+    return jsonify({
+        "sucesso": True,
+        "cod_produto": cod,
+        "mensagem": f"Custo considerado cadastrado para {cod}",
+    })

@@ -23,7 +23,7 @@
     </button>
 
 {% elif acao == 'criar_mestre' %}
-    {% if prob.regra_id == 'B6' %}
+    {% if prob.regra_id == 'P4' %}
         {% set comps = dados_modal.componentes_orfaos | default([]) %}
         <div class="btn-group btn-group-sm">
             {% for comp in comps[:3] %}
@@ -55,36 +55,10 @@
         <i class="fas fa-industry"></i> Adicionar recurso
     </button>
 
-{% elif acao == 'add_perfil_fiscal' %}
+{% elif acao == 'add_custo_considerado' %}
     <button class="btn btn-sm btn-primary auditoria-acao-btn"
-            onclick="abrirModalAddPerfilFiscal('{{ cod }}', {{ nome|tojson }})">
-        <i class="fas fa-receipt"></i> Adicionar perfil fiscal
-    </button>
-
-{% elif acao == 'link_depara_atacadao' %}
-    <a href="/portal/atacadao/depara-produtos" target="_blank" class="btn btn-sm btn-outline-primary auditoria-acao-btn">
-        <i class="fas fa-external-link-alt"></i> Tela De-Para Atacadao
-    </a>
-
-{% elif acao == 'link_depara_sendas' %}
-    <a href="/portal/sendas/depara/produtos/listar"
-       target="_blank" class="btn btn-sm btn-outline-primary auditoria-acao-btn">
-        <i class="fas fa-external-link-alt"></i> Tela De-Para Sendas
-    </a>
-
-{% elif acao == 'link_preco_rede' %}
-    <span class="text-muted small">Cadastrar via SQL/Excel direto na tabela</span>
-
-{% elif acao == 'resolver_nome' %}
-    <button class="btn btn-sm btn-info auditoria-acao-btn"
-            onclick='abrirModalResolverNome("{{ cod }}", {{ nome|tojson }}, {{ dados_modal.nomes_alternativos|default([])|tojson }})'>
-        <i class="fas fa-equals"></i> Resolver nome
-    </button>
-
-{% elif acao == 'resolver_peso' %}
-    <button class="btn btn-sm btn-info auditoria-acao-btn"
-            onclick='abrirModalResolverPeso("{{ cod }}", {{ dados_modal|tojson }})'>
-        <i class="fas fa-balance-scale"></i> Resolver peso
+            onclick="abrirModalAddCustoConsiderado('{{ cod }}', {{ nome|tojson }})">
+        <i class="fas fa-coins"></i> Adicionar custo
     </button>
 
 {% else %}
@@ -166,7 +140,8 @@
                 <i class="fas fa-search-dollar"></i> Auditoria de Produtos
             </h1>
             <p class="text-muted mb-0 small">
-                Cadastro centralizado: cruzamento de <code>cadastro_palletizacao</code> com transacionais.
+                Cadastros mortais: cruzamento de <code>cadastro_palletizacao</code>, <code>lista_materiais</code>,
+                <code>recursos_producao</code> e <code>custo_considerado</code>.
             </p>
         </div>
         <div class="btn-group" role="group">
@@ -182,11 +157,11 @@
         </div>
     </div>
 
-    <!-- Resumo geral em 4 cards: cada card e uma categoria/aba -->
+    <!-- Resumo geral em 3 cards: cada card e uma categoria/aba -->
     <div class="row g-3 mb-3">
 
         {# === ORFAOS === #}
-        <div class="col-md-3 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card auditoria-cat-card border-danger" data-categoria="{{ CAT_ORFAO }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
@@ -202,7 +177,7 @@
         </div>
 
         {# === REPARAR MESTRE === #}
-        <div class="col-md-3 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card auditoria-cat-card border-warning" data-categoria="{{ CAT_MESTRE }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
@@ -218,32 +193,16 @@
         </div>
 
         {# === CADASTROS FALTANTES === #}
-        <div class="col-md-3 col-sm-6">
+        <div class="col-md-4 col-sm-6">
             <div class="card auditoria-cat-card border-primary" data-categoria="{{ CAT_FALTANTE }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <div class="text-muted small">Cadastros faltantes</div>
                             <div class="h2 mb-0 text-primary">{{ totais.por_categoria[CAT_FALTANTE] }}</div>
-                            <div class="text-muted small">tabela externa</div>
+                            <div class="text-muted small">BOM / recurso / custo</div>
                         </div>
                         <i class="fas fa-puzzle-piece auditoria-categoria-icon text-primary"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {# === DIVERGENCIAS === #}
-        <div class="col-md-3 col-sm-6">
-            <div class="card auditoria-cat-card border-info" data-categoria="{{ CAT_DIV }}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div class="text-muted small">Divergencias</div>
-                            <div class="h2 mb-0 text-info">{{ totais.por_categoria[CAT_DIV] }}</div>
-                            <div class="text-muted small">mestre vs transacional</div>
-                        </div>
-                        <i class="fas fa-not-equal auditoria-categoria-icon text-info"></i>
                     </div>
                 </div>
             </div>
@@ -329,21 +288,21 @@
                                 <tr>
                                     <td><code>{{ o.cod_produto }}</code></td>
                                     <td>
-                                        {% for m in o.modulos %}
+                                        {% for m in (o.modulos or []) %}
                                             <span class="badge bg-secondary me-1">{{ m }}</span>
                                         {% endfor %}
                                     </td>
                                     <td>
-                                        {% for n in o.nomes_encontrados[:3] %}
+                                        {% for n in (o.nomes_encontrados or [])[:3] %}
                                             <small>{{ n }}{% if not loop.last %} | {% endif %}</small>
                                         {% endfor %}
-                                        {% if o.nomes_encontrados|length > 3 %}
-                                            <small class="text-muted">+{{ o.nomes_encontrados|length - 3 }}</small>
+                                        {% if (o.nomes_encontrados or [])|length > 3 %}
+                                            <small class="text-muted">+{{ (o.nomes_encontrados or [])|length - 3 }}</small>
                                         {% endif %}
                                     </td>
                                     <td class="text-center">
                                         <button class="btn btn-sm btn-success"
-                                                onclick="abrirModalCriarMestre('{{ o.cod_produto }}', {{ (o.nomes_encontrados[0] if o.nomes_encontrados else '')|tojson }})">
+                                                onclick="abrirModalCriarMestre('{{ o.cod_produto }}', {{ ((o.nomes_encontrados or [])[0] if o.nomes_encontrados else '')|tojson }})">
                                             <i class="fas fa-plus"></i> Cadastrar no mestre
                                         </button>
                                     </td>
@@ -417,36 +376,6 @@
         </div>
     </div>
 
-    <!-- =================================================================== -->
-    <!-- PAINEL: DIVERGENCIAS                                                -->
-    <!-- =================================================================== -->
-    <div class="auditoria-painel" id="painel-{{ CAT_DIV }}">
-        <div class="card mb-3">
-            <div class="card-header bg-info-subtle d-flex justify-content-between align-items-center">
-                <div>
-                    <i class="fas fa-not-equal text-info"></i>
-                    <strong>Divergencias</strong>
-                    <span class="text-muted small">— {{ rotulo_categoria[CAT_DIV] }}</span>
-                </div>
-                <span class="badge bg-info">{{ por_categoria[CAT_DIV]|length }} produtos</span>
-            </div>
-            <div class="card-body p-0">
-                <p class="text-muted small mb-0 px-3 pt-2">
-                    <i class="fas fa-info-circle"></i>
-                    {{ descricao_categoria[CAT_DIV] }}
-                </p>
-                {% if not por_categoria[CAT_DIV] %}
-                    <div class="auditoria-empty">
-                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
-                        <div>Nenhuma divergencia detectada.</div>
-                    </div>
-                {% else %}
-                    {{ tabela_produtos(por_categoria[CAT_DIV], modal_acao='divergencia') }}
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
 </div>
 
 <!-- ======================================================================= -->
@@ -478,65 +407,37 @@
                         </div>
                     </div>
 
-                    <!-- Logistica -->
-                    <h6 class="text-muted text-uppercase small mt-3">Logistica</h6>
+                    <!-- Categorizacao (UNIVERSAL — M2/M3/M4) -->
+                    <h6 class="text-muted text-uppercase small mt-3">
+                        Categorizacao <span class="text-danger">(obrigatorio para todos)</span>
+                    </h6>
                     <hr class="mt-1">
                     <div class="row g-3 mb-3">
-                        <div class="col-md-3">
-                            <label class="form-label small">Palletizacao*</label>
-                            <input type="number" step="0.01" class="form-control" name="palletizacao" id="m_palletizacao" required>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Categoria*</label>
+                            <input type="text" class="form-control" name="categoria_produto" id="m_categoria_produto" required>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Peso bruto (kg)*</label>
-                            <input type="number" step="0.001" class="form-control" name="peso_bruto" id="m_peso_bruto" required>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Materia-prima*</label>
+                            <input type="text" class="form-control" name="tipo_materia_prima" id="m_tipo_materia_prima" required>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Codigo EAN</label>
-                            <input type="text" class="form-control" name="codigo_ean" id="m_codigo_ean">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Custo (R$)</label>
-                            <input type="number" step="0.0001" class="form-control" name="custo_produto" id="m_custo_produto">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Embalagem*</label>
+                            <input type="text" class="form-control" name="tipo_embalagem" id="m_tipo_embalagem" required>
                         </div>
                     </div>
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label small">Altura (cm)</label>
-                            <input type="number" step="0.01" class="form-control" name="altura_cm" id="m_altura_cm">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small">Largura (cm)</label>
-                            <input type="number" step="0.01" class="form-control" name="largura_cm" id="m_largura_cm">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small">Comprimento (cm)</label>
-                            <input type="number" step="0.01" class="form-control" name="comprimento_cm" id="m_comprimento_cm">
-                        </div>
-                    </div>
-
-                    <!-- Categorizacao -->
-                    <h6 class="text-muted text-uppercase small mt-3">Categorizacao</h6>
-                    <hr class="mt-1">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-3">
-                            <label class="form-label small">Categoria</label>
-                            <input type="text" class="form-control" name="categoria_produto" id="m_categoria_produto">
-                        </div>
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <label class="form-label small">Subcategoria</label>
                             <input type="text" class="form-control" name="subcategoria" id="m_subcategoria">
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Materia-prima</label>
-                            <input type="text" class="form-control" name="tipo_materia_prima" id="m_tipo_materia_prima">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small">Embalagem</label>
-                            <input type="text" class="form-control" name="tipo_embalagem" id="m_tipo_embalagem">
+                        <div class="col-md-6">
+                            <label class="form-label small">Codigo EAN</label>
+                            <input type="text" class="form-control" name="codigo_ean" id="m_codigo_ean">
                         </div>
                     </div>
 
-                    <!-- Flags -->
+                    <!-- Flags de uso -->
                     <h6 class="text-muted text-uppercase small mt-3">Flags de uso</h6>
                     <hr class="mt-1">
                     <div class="row g-3 mb-3">
@@ -566,30 +467,58 @@
                         </div>
                     </div>
 
-                    <!-- Producao (so quando produzido) -->
+                    <!-- Vendido (V1/V2/V3) -->
+                    <h6 class="text-muted text-uppercase small mt-3">
+                        Vendido — Logistica <span class="text-warning small">(obrigatorio se V)</span>
+                    </h6>
+                    <hr class="mt-1">
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label small">Linha de producao</label>
-                            <input type="text" class="form-control" name="linha_producao" id="m_linha_producao">
+                        <div class="col-md-3">
+                            <label class="form-label small">Palletizacao</label>
+                            <input type="number" step="0.01" class="form-control" name="palletizacao" id="m_palletizacao">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small">Disparo (MTO/MTS)</label>
-                            <select class="form-select" name="disparo_producao" id="m_disparo_producao">
-                                <option value="">-</option>
-                                <option value="MTO">MTO (Make-to-Order)</option>
-                                <option value="MTS">MTS (Make-to-Stock)</option>
-                            </select>
+                        <div class="col-md-3">
+                            <label class="form-label small">Peso bruto (kg)</label>
+                            <input type="number" step="0.001" class="form-control" name="peso_bruto" id="m_peso_bruto">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Altura (cm)</label>
+                            <input type="number" step="0.01" class="form-control" name="altura_cm" id="m_altura_cm">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Largura (cm)</label>
+                            <input type="number" step="0.01" class="form-control" name="largura_cm" id="m_largura_cm">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Comprimento (cm)</label>
+                            <input type="number" step="0.01" class="form-control" name="comprimento_cm" id="m_comprimento_cm">
                         </div>
                     </div>
 
-                    <!-- Compras (so quando comprado) -->
+                    <!-- Produzido (P1) -->
+                    <h6 class="text-muted text-uppercase small mt-3">
+                        Produzido <span class="text-success small">(obrigatorio se P)</span>
+                    </h6>
+                    <hr class="mt-1">
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-12">
+                            <label class="form-label small">Linha de producao</label>
+                            <input type="text" class="form-control" name="linha_producao" id="m_linha_producao">
+                        </div>
+                    </div>
+
+                    <!-- Comprado (C1/C2) -->
+                    <h6 class="text-muted text-uppercase small mt-3">
+                        Comprado <span class="text-primary small">(obrigatorio se C)</span>
+                    </h6>
+                    <hr class="mt-1">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
                             <label class="form-label small">Lead time (dias)</label>
                             <input type="number" class="form-control" name="lead_time" id="m_lead_time">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small">Lote minimo (un)</label>
+                        <div class="col-md-6">
+                            <label class="form-label small">Lote minimo de compra (un)</label>
                             <input type="number" class="form-control" name="lote_minimo_compra" id="m_lote_minimo_compra">
                         </div>
                     </div>
@@ -735,182 +664,64 @@
 
 
 <!-- ======================================================================= -->
-<!-- MODAL: Adicionar perfil fiscal                                          -->
+<!-- MODAL: Adicionar Custo Considerado (C3)                                 -->
 <!-- ======================================================================= -->
-<div class="modal fade" id="modalAddPerfilFiscal" tabindex="-1">
+<div class="modal fade" id="modalAddCustoConsiderado" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="fas fa-receipt auditoria-modal-header-icone"></i>
-                    Adicionar perfil fiscal
+                    <i class="fas fa-coins auditoria-modal-header-icone"></i>
+                    Adicionar custo considerado
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info">
                     <strong>Produto comprado:</strong>
-                    <code id="pfProdutoCod"></code>
-                    <span id="pfProdutoNome" class="text-muted"></span>
+                    <code id="ccProdutoCod"></code>
+                    <span id="ccProdutoNome" class="text-muted"></span>
                 </div>
-                <form id="formPerfilFiscal">
+                <p class="small text-muted">
+                    Apenas para produtos <strong>COMPRADOS</strong>. Produtos produzidos
+                    recebem custo via BOM em <a href="/custeio/definicao" target="_blank">/custeio/definicao</a>.
+                </p>
+                <form id="formCustoConsiderado">
                     <div class="row g-3">
                         <div class="col-md-12">
-                            <label class="form-label small fw-bold">CNPJ do fornecedor*</label>
-                            <input type="text" class="form-control" name="cnpj_fornecedor" id="pf_cnpj_fornecedor" required>
+                            <label class="form-label small fw-bold">Custo considerado (R$)*</label>
+                            <input type="number" step="0.000001" class="form-control"
+                                   name="custo_considerado" id="cc_valor" required>
+                            <small class="text-muted">
+                                Valor unitario do produto comprado (compoe custo de COGS).
+                            </small>
                         </div>
                     </div>
                     <div class="row g-3 mt-1">
                         <div class="col-md-6">
-                            <label class="form-label small">NCM esperado</label>
-                            <input type="text" class="form-control" name="ncm_esperado" id="pf_ncm" maxlength="10">
+                            <label class="form-label small">Tipo de custo</label>
+                            <select class="form-select" name="tipo_custo" id="cc_tipo_custo">
+                                <option value="MANUAL" selected>MANUAL</option>
+                                <option value="MEDIO_MES">MEDIO_MES</option>
+                                <option value="ULTIMA_COMPRA">ULTIMA_COMPRA</option>
+                            </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small">CFOPs esperados</label>
-                            <input type="text" class="form-control" name="cfop_esperados" id="pf_cfops" placeholder="ex: 1102,2102">
+                            <label class="form-label small">Motivo (opcional)</label>
+                            <input type="text" class="form-control" name="motivo" id="cc_motivo"
+                                   placeholder="Ex: Sem fechamento mensal vigente">
                         </div>
-                    </div>
-                    <div class="row g-3 mt-1">
-                        <div class="col-md-12">
-                            <label class="form-label small">CNPJ empresa compradora (opcional)</label>
-                            <input type="text" class="form-control" name="cnpj_empresa_compradora" id="pf_cnpj_compradora">
-                            <small class="text-muted">Deixe vazio se aplicar a todas as empresas</small>
-                        </div>
-                    </div>
-                    <div class="alert alert-warning small mt-3">
-                        <i class="fas fa-info-circle"></i>
-                        Apenas campos minimos sao preenchidos aqui. Para configurar aliquotas e tolerancias detalhadas,
-                        use a tela completa do modulo Recebimento.
                     </div>
                 </form>
-                <div id="modalPerfilFiscalFeedback" class="mt-3"></div>
+                <div id="modalCustoConsideradoFeedback" class="mt-3"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="salvarPerfilFiscal()">
-                    <i class="fas fa-save"></i> Adicionar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- ======================================================================= -->
-<!-- MODAL: Resolver divergencia de NOME                                     -->
-<!-- ======================================================================= -->
-<div class="modal fade" id="modalResolverNome" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-info-subtle">
-                <h5 class="modal-title">
-                    <i class="fas fa-equals auditoria-modal-header-icone"></i>
-                    Resolver divergencia de nome
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <strong>Produto:</strong> <code id="rnProdutoCod"></code>
-                </div>
-
-                <div class="card auditoria-mestre-card mb-3">
-                    <div class="card-header">
-                        <i class="fas fa-database"></i> <strong>Nome no mestre (atual)</strong>
-                    </div>
-                    <div class="card-body">
-                        <div id="rnNomeMestre" class="h6 mb-0"></div>
-                    </div>
-                </div>
-
-                <div class="card auditoria-divergencia-card mb-3">
-                    <div class="card-header">
-                        <i class="fas fa-table"></i> <strong>Nomes em transacionais</strong>
-                    </div>
-                    <div class="card-body p-2">
-                        <table class="table table-sm mb-0" id="rnTabelaAlternativos">
-                            <thead><tr><th>Tabela</th><th>Nome</th><th class="text-end">Ação</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <hr>
-                <label class="form-label small fw-bold">Novo nome no mestre</label>
-                <input type="text" class="form-control" id="rnNovoNome">
-                <small class="text-muted">
-                    O mestre sera atualizado com este nome. Transacionais NAO sao tocadas (snapshots historicos).
-                </small>
-                <div id="modalResolverNomeFeedback" class="mt-3"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="salvarSincronizarNome()">
-                    <i class="fas fa-save"></i> Atualizar mestre
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<!-- ======================================================================= -->
-<!-- MODAL: Resolver divergencia de PESO                                     -->
-<!-- ======================================================================= -->
-<div class="modal fade" id="modalResolverPeso" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-info-subtle">
-                <h5 class="modal-title">
-                    <i class="fas fa-balance-scale auditoria-modal-header-icone"></i>
-                    Resolver divergencia de peso
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <strong>Produto:</strong> <code id="rpProdutoCod"></code>
-                </div>
-
-                <div class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <div class="card auditoria-mestre-card text-center h-100">
-                            <div class="card-body">
-                                <div class="text-muted small">Mestre</div>
-                                <div class="h3 mb-0" id="rpPesoMestre">0.000</div>
-                                <div class="text-muted small">kg</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card auditoria-divergencia-card text-center h-100">
-                            <div class="card-body">
-                                <div class="text-muted small">Faturamento (avg)</div>
-                                <div class="h3 mb-0" id="rpPesoFaturado">0.000</div>
-                                <div class="text-muted small">kg</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <dl class="row auditoria-info-list small">
-                    <dt class="col-sm-6">Diferenca</dt>
-                    <dd class="col-sm-6"><span id="rpDiff" class="badge bg-warning text-dark">0%</span></dd>
-                    <dt class="col-sm-6">Faixa em faturamento (min - max)</dt>
-                    <dd class="col-sm-6"><span id="rpRange">-</span></dd>
-                    <dt class="col-sm-6">Amostras</dt>
-                    <dd class="col-sm-6"><span id="rpAmostras">-</span></dd>
-                </dl>
-
-                <hr>
-                <label class="form-label small fw-bold">Novo peso_bruto no mestre (kg)</label>
-                <input type="number" step="0.001" class="form-control" id="rpNovoPeso">
-                <div id="modalResolverPesoFeedback" class="mt-3"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="salvarAtualizarPeso()">
-                    <i class="fas fa-save"></i> Atualizar mestre
+                <a href="/custeio/parametros" target="_blank" class="btn btn-outline-info">
+                    <i class="fas fa-external-link-alt"></i> Abrir tela de Custeio
+                </a>
+                <button type="button" class="btn btn-primary" onclick="salvarCustoConsiderado()">
+                    <i class="fas fa-save"></i> Cadastrar
                 </button>
             </div>
         </div>
@@ -1023,10 +834,8 @@ async function abrirModalEditarMestre(cod, campoFoco) {
     setter('m_tipo_materia_prima', 'tipo_materia_prima');
     setter('m_tipo_embalagem', 'tipo_embalagem');
     setter('m_linha_producao', 'linha_producao');
-    setter('m_disparo_producao', 'disparo_producao');
     setter('m_lead_time', 'lead_time');
     setter('m_lote_minimo_compra', 'lote_minimo_compra');
-    setter('m_custo_produto', 'custo_produto');
     setter('m_produto_comprado', 'produto_comprado', true);
     setter('m_produto_produzido', 'produto_produzido', true);
     setter('m_produto_vendido', 'produto_vendido', true);
@@ -1143,119 +952,28 @@ async function salvarRecurso() {
 }
 
 // =========================================================================
-// MODAL: Add Perfil Fiscal
+// MODAL: Add Custo Considerado (C3)
 // =========================================================================
-function abrirModalAddPerfilFiscal(cod, nome) {
-    document.getElementById('pfProdutoCod').textContent = cod;
-    document.getElementById('pfProdutoNome').textContent = nome ? ' — ' + nome : '';
-    document.getElementById('formPerfilFiscal').reset();
-    document.getElementById('formPerfilFiscal').dataset.cod = cod;
-    document.getElementById('modalPerfilFiscalFeedback').innerHTML = '';
-    new bootstrap.Modal(document.getElementById('modalAddPerfilFiscal')).show();
+function abrirModalAddCustoConsiderado(cod, nome) {
+    document.getElementById('ccProdutoCod').textContent = cod;
+    document.getElementById('ccProdutoNome').textContent = nome ? ' — ' + nome : '';
+    document.getElementById('formCustoConsiderado').reset();
+    document.getElementById('formCustoConsiderado').dataset.cod = cod;
+    document.getElementById('modalCustoConsideradoFeedback').innerHTML = '';
+    new bootstrap.Modal(document.getElementById('modalAddCustoConsiderado')).show();
 }
 
-async function salvarPerfilFiscal() {
-    const cod = document.getElementById('formPerfilFiscal').dataset.cod;
-    const fd = new FormData(document.getElementById('formPerfilFiscal'));
+async function salvarCustoConsiderado() {
+    const cod = document.getElementById('formCustoConsiderado').dataset.cod;
+    const fd = new FormData(document.getElementById('formCustoConsiderado'));
     const dados = Object.fromEntries(fd.entries());
     dados.cod_produto = cod;
-    const res = await jsonFetch('/produtos/api/perfil-fiscal', { method: 'POST', body: dados });
+    const res = await jsonFetch('/produtos/api/custo-considerado', { method: 'POST', body: dados });
     if (!res.ok || !res.data.sucesso) {
-        feedbackBox('modalPerfilFiscalFeedback', false, res.data.erro || 'Erro');
+        feedbackBox('modalCustoConsideradoFeedback', false, res.data.erro || 'Erro');
         return;
     }
-    feedbackBox('modalPerfilFiscalFeedback', true, res.data.mensagem || 'Adicionado');
-    setTimeout(() => window.location.reload(), 800);
-}
-
-// =========================================================================
-// MODAL: Resolver nome (D2)
-// =========================================================================
-function abrirModalResolverNome(cod, nomeMestre, nomesAlternativos) {
-    document.getElementById('rnProdutoCod').textContent = cod;
-    document.getElementById('rnNomeMestre').textContent = nomeMestre || '(vazio)';
-    document.getElementById('rnNovoNome').value = nomeMestre || '';
-    document.getElementById('rnNovoNome').dataset.cod = cod;
-    const tbody = document.querySelector('#rnTabelaAlternativos tbody');
-    tbody.innerHTML = '';
-    (nomesAlternativos || []).forEach(item => {
-        // createElement/textContent — evita XSS em item.nome (vem de transacionais)
-        const tr = document.createElement('tr');
-        const tdFonte = document.createElement('td');
-        const small = document.createElement('small');
-        small.className = 'text-muted';
-        small.textContent = item.fonte || '';
-        tdFonte.appendChild(small);
-        const tdNome = document.createElement('td');
-        tdNome.textContent = item.nome || '';
-        const tdBtn = document.createElement('td');
-        tdBtn.className = 'text-end';
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-sm btn-outline-info';
-        btn.textContent = 'Usar este';
-        btn.addEventListener('click', () => {
-            document.getElementById('rnNovoNome').value = item.nome || '';
-        });
-        tdBtn.appendChild(btn);
-        tr.appendChild(tdFonte);
-        tr.appendChild(tdNome);
-        tr.appendChild(tdBtn);
-        tbody.appendChild(tr);
-    });
-    document.getElementById('modalResolverNomeFeedback').innerHTML = '';
-    new bootstrap.Modal(document.getElementById('modalResolverNome')).show();
-}
-
-async function salvarSincronizarNome() {
-    const cod = document.getElementById('rnNovoNome').dataset.cod;
-    const novo = document.getElementById('rnNovoNome').value.trim();
-    if (!novo) {
-        feedbackBox('modalResolverNomeFeedback', false, 'Novo nome obrigatorio');
-        return;
-    }
-    const res = await jsonFetch('/produtos/api/sincronizar-nome/' + encodeURIComponent(cod),
-        { method: 'POST', body: { novo_nome: novo } });
-    if (!res.ok || !res.data.sucesso) {
-        feedbackBox('modalResolverNomeFeedback', false, res.data.erro || 'Erro');
-        return;
-    }
-    feedbackBox('modalResolverNomeFeedback', true, res.data.mensagem || 'Atualizado');
-    setTimeout(() => window.location.reload(), 800);
-}
-
-// =========================================================================
-// MODAL: Resolver peso (D3)
-// =========================================================================
-function abrirModalResolverPeso(cod, dadosModal) {
-    const d = dadosModal || {};
-    document.getElementById('rpProdutoCod').textContent = cod;
-    document.getElementById('rpPesoMestre').textContent = (d.peso_mestre || 0).toFixed(3);
-    document.getElementById('rpPesoFaturado').textContent = (d.peso_faturado_avg || 0).toFixed(3);
-    document.getElementById('rpDiff').textContent = (d.diff_pct || 0) + '%';
-    document.getElementById('rpRange').textContent =
-        (d.peso_faturado_min || 0).toFixed(3) + ' - ' + (d.peso_faturado_max || 0).toFixed(3) + ' kg';
-    document.getElementById('rpAmostras').textContent = d.qtd_amostras || 0;
-    document.getElementById('rpNovoPeso').value = (d.peso_faturado_avg || d.peso_mestre || 0).toFixed(3);
-    document.getElementById('rpNovoPeso').dataset.cod = cod;
-    document.getElementById('modalResolverPesoFeedback').innerHTML = '';
-    new bootstrap.Modal(document.getElementById('modalResolverPeso')).show();
-}
-
-async function salvarAtualizarPeso() {
-    const cod = document.getElementById('rpNovoPeso').dataset.cod;
-    const peso = parseFloat(document.getElementById('rpNovoPeso').value);
-    if (!peso || peso <= 0) {
-        feedbackBox('modalResolverPesoFeedback', false, 'Peso invalido');
-        return;
-    }
-    const res = await jsonFetch('/produtos/api/atualizar-peso/' + encodeURIComponent(cod),
-        { method: 'POST', body: { novo_peso: peso } });
-    if (!res.ok || !res.data.sucesso) {
-        feedbackBox('modalResolverPesoFeedback', false, res.data.erro || 'Erro');
-        return;
-    }
-    feedbackBox('modalResolverPesoFeedback', true, res.data.mensagem || 'Atualizado');
+    feedbackBox('modalCustoConsideradoFeedback', true, res.data.mensagem || 'Cadastrado');
     setTimeout(() => window.location.reload(), 800);
 }
 </script>
