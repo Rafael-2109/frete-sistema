@@ -19,6 +19,7 @@ import os
 import sys
 import time
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +28,7 @@ from _comum import (
     norm_cod, norm_lote, m2o_id, m2o_name,
     garantir_cache_dir, is_location_interna, ler_snapshot_meta,
     consultar_pickings_recebimento_lf_render,
+    is_loc_ajuste, is_loc_fornecedor, is_loc_cliente, buscar_partner_ids_empresas,
 )
 
 
@@ -106,6 +108,80 @@ def baixar_movimentacoes(odoo, data_inicio, pickings_render, data_fim=None):
     df['src_interna'] = df['loc_src_name'].apply(is_location_interna)
     df['dst_interna'] = df['loc_dst_name'].apply(is_location_interna)
 
+    # Classificar negocio (compra/venda/ajuste) p/ as 3 colunas do script 4
+    df = classificar_negocio(odoo, df)
+
+    return df
+
+
+def classificar_negocio(odoo, df):
+    """Adiciona colunas `is_intercompany` e `categoria_negocio`.
+
+    categoria_negocio (1 por mov, prioridade ajuste > fornecedor > cliente):
+      COMPRA_EXT      : ponta fornecedor + partner EXTERNO (entrada=compra; saida=devolucao)
+      VENDA_EXT       : ponta cliente + partner EXTERNO (saida=venda; entrada=retorno)
+      INTERCOMPANY    : ponta fornecedor/cliente mas partner = empresa do grupo (NF entre empresas)
+      AJUSTE_TERCEIRO : ponta de ajuste de inventario E create_uid != 42
+      AJUSTE_PROPRIO  : ponta de ajuste de inventario E create_uid == 42 (Rafael/scripts)
+      OUTRO           : transferencia interna, producao, industrializacao, transito, etc.
+
+    `is_intercompany` so e resolvido (via partner do picking) para movs de
+    fornecedor/cliente — as demais ficam False.
+    """
+    partners_empresas = buscar_partner_ids_empresas(odoo)
+    print(f'Partners de empresas (inter-company): {sorted(partners_empresas)}')
+
+    # Flags de location por ponta (origem OU destino)
+    aj = df['loc_src_name'].apply(is_loc_ajuste) | df['loc_dst_name'].apply(is_loc_ajuste)
+    forn = df['loc_src_name'].apply(is_loc_fornecedor) | df['loc_dst_name'].apply(is_loc_fornecedor)
+    cli = df['loc_src_name'].apply(is_loc_cliente) | df['loc_dst_name'].apply(is_loc_cliente)
+
+    # Resolver partner (commercial) dos pickings das movs de compra/venda
+    cand = df[(forn | cli) & df['picking_id_n'].notna()]
+    pids = sorted({int(x) for x in cand['picking_id_n'].dropna().unique()})
+    picking_inter = {}
+    if pids:
+        print(f'Resolvendo partner de {len(pids)} pickings (compra/venda)...')
+        partner_por_picking = {}
+        partner_ids = set()
+        for i in range(0, len(pids), ODOO_BATCH_SIZE):
+            for p in odoo.read('stock.picking', pids[i:i + ODOO_BATCH_SIZE], ['partner_id']):
+                pp = p['partner_id'][0] if p.get('partner_id') else None
+                partner_por_picking[p['id']] = pp
+                if pp:
+                    partner_ids.add(pp)
+        # commercial_partner_id (resolve contatos-filho -> empresa-mae)
+        comm = {}
+        partner_ids = sorted(partner_ids)
+        for i in range(0, len(partner_ids), ODOO_BATCH_SIZE):
+            for r in odoo.read('res.partner', partner_ids[i:i + ODOO_BATCH_SIZE],
+                               ['commercial_partner_id']):
+                comm[r['id']] = (r['commercial_partner_id'][0]
+                                 if r.get('commercial_partner_id') else r['id'])
+        for pk, part in partner_por_picking.items():
+            picking_inter[pk] = comm.get(part, part) in partners_empresas
+
+    def is_inter(pk):
+        if pk is None or pd.isna(pk):
+            return False
+        return bool(picking_inter.get(int(pk), False))
+
+    df['is_intercompany'] = df['picking_id_n'].apply(is_inter)
+
+    # Categoria por np.select (prioridade pela ordem: ajuste > fornecedor > cliente)
+    eh_proprio = df['create_uid_id'] == RAFAEL_ODOO_UID
+    inter = df['is_intercompany']
+    condicoes = [
+        aj & ~eh_proprio,
+        aj & eh_proprio,
+        forn & inter,
+        forn & ~inter,
+        cli & inter,
+        cli & ~inter,
+    ]
+    escolhas = ['AJUSTE_TERCEIRO', 'AJUSTE_PROPRIO', 'INTERCOMPANY', 'COMPRA_EXT',
+                'INTERCOMPANY', 'VENDA_EXT']
+    df['categoria_negocio'] = np.select(condicoes, escolhas, default='OUTRO')
     return df
 
 
@@ -145,7 +221,8 @@ def main():
                 'qty_done',
                 'picking_id_n', 'picking_name', 'reference', 'origin',
                 'create_uid_id', 'create_uid_name', 'state',
-                'origem_classificada', 'src_interna', 'dst_interna']
+                'origem_classificada', 'src_interna', 'dst_interna',
+                'is_intercompany', 'categoria_negocio']
     cols_out = [c for c in cols_out if c in df.columns]
     out_path = os.path.join(cache_dir, 'movimentacoes.csv')
     df[cols_out].to_csv(out_path, index=False)
@@ -153,6 +230,11 @@ def main():
 
     print('\n=== Por classificacao ===')
     print(df.groupby(['filial', 'origem_classificada'], as_index=False).agg(
+        n=('id', 'count'), qtd_total=('qty_done', 'sum')
+    ).to_string(index=False, float_format=lambda x: f'{x:>12,.2f}'))
+
+    print('\n=== Por categoria de negocio (compra/venda/ajuste) ===')
+    print(df.groupby(['filial', 'categoria_negocio'], as_index=False).agg(
         n=('id', 'count'), qtd_total=('qty_done', 'sum')
     ).to_string(index=False, float_format=lambda x: f'{x:>12,.2f}'))
 

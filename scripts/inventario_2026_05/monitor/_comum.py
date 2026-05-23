@@ -100,6 +100,53 @@ def is_location_interna(loc_name):
 
 
 # ============================================================
+# CLASSIFICACAO DE NEGOCIO (compra / venda / ajuste) — scripts 2 e 4
+# ============================================================
+# Locations VIRTUAIS de ajuste de inventario. 3 variantes coexistem no Odoo
+# CIEL IT (idioma/encoding): PT 'Ajuste de Inventario' e 'Ajuste de Estoque',
+# EN 'Inventory adjustment'. Validado no movimentacoes.csv (2026-05-21).
+LOC_KW_AJUSTE = ('Ajuste de Inventario', 'Inventory adjustment', 'Ajuste de Estoque')
+LOC_KW_FORNECEDOR = ('Fornecedor', 'Vendor')   # entrada de compra
+LOC_KW_CLIENTE = ('Cliente', 'Customer')        # saida de venda
+
+
+def _loc_match(name, kws):
+    if name is None or (isinstance(name, float) and pd.isna(name)):
+        return False
+    low = str(name).lower()
+    return any(k.lower() in low for k in kws)
+
+
+def is_loc_ajuste(name):
+    """Location virtual de ajuste de inventario (qualquer das 3 variantes)."""
+    return _loc_match(name, LOC_KW_AJUSTE)
+
+
+def is_loc_fornecedor(name):
+    """Location de fornecedor (compra)."""
+    return _loc_match(name, LOC_KW_FORNECEDOR)
+
+
+def is_loc_cliente(name):
+    """Location de cliente (venda)."""
+    return _loc_match(name, LOC_KW_CLIENTE)
+
+
+def buscar_partner_ids_empresas(odoo):
+    """Set de partner_ids de TODAS as res.company do grupo.
+
+    Validado 2026-05-21: FB=1, SC=33, CD=34, LF=35. Usado para identificar
+    NF entre empresas (commercial_partner_id do picking dentro deste set =
+    inter-company) e excluir das colunas de compra/venda EXTERNA.
+    """
+    ids = set()
+    for c in odoo.search_read('res.company', [], ['partner_id']):
+        if c.get('partner_id'):
+            ids.add(c['partner_id'][0])
+    return ids
+
+
+# ============================================================
 # HELPERS PANDAS / ODOO
 # ============================================================
 def m2o_id(x):

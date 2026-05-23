@@ -92,6 +92,38 @@ def gerar_diff(odoo, teorico):
     return j, teorico_migr, odoo_migr
 
 
+COLS_NEGOCIO = ['qtd_comprada', 'qtd_vendida', 'qtd_ajuste_terceiros']
+
+
+def agregar_negocio(movs):
+    """Agrega impacto no saldo por (filial, cod, lote), por categoria de negocio.
+
+    Impacto no estoque = +qty_done se destino interno, -qty_done se origem interno.
+    Uniforme p/ as 3 colunas (sinal = efeito no saldo do lote):
+      - qtd_comprada (COMPRA_EXT): entrada de fornecedor externo (+); devolucao (-)
+      - qtd_vendida  (VENDA_EXT):  venda a cliente externo (-); retorno (+)
+      - qtd_ajuste_terceiros (AJUSTE_TERCEIRO): ajuste de inventario por uid != 42 (+/-)
+    Exclui NF entre empresas (categoria INTERCOMPANY) e ajustes proprios (uid 42).
+    Retorna vazio se o CSV nao tiver `categoria_negocio` (script 2 antigo).
+    """
+    if not len(movs) or 'categoria_negocio' not in movs.columns:
+        return pd.DataFrame(columns=['filial', 'cod', 'lote'] + COLS_NEGOCIO)
+    m = movs.copy()
+    m['qty_done'] = pd.to_numeric(m['qty_done'], errors='coerce').fillna(0)
+    # Excluir MIGRACAO (coerente com o diff ativo; MIGRACAO tem abas proprias)
+    m = m[~m['lote'].apply(is_migracao)].copy()
+    dst = m['dst_interna'].astype(bool)
+    src = m['src_interna'].astype(bool)
+    impacto = np.where(dst, m['qty_done'], 0.0) - np.where(src, m['qty_done'], 0.0)
+    m['qtd_comprada'] = np.where(m['categoria_negocio'] == 'COMPRA_EXT', impacto, 0.0)
+    m['qtd_vendida'] = np.where(m['categoria_negocio'] == 'VENDA_EXT', impacto, 0.0)
+    m['qtd_ajuste_terceiros'] = np.where(m['categoria_negocio'] == 'AJUSTE_TERCEIRO', impacto, 0.0)
+    agg = m.groupby(['filial', 'cod', 'lote'], as_index=False)[COLS_NEGOCIO].sum()
+    for c in COLS_NEGOCIO:
+        agg[c] = agg[c].round(4)
+    return agg
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--cache-dir', default=None)
@@ -183,6 +215,18 @@ def main():
     by_cod['status'] = np.where(by_cod['diff_total'].abs() < 0.5, 'OK', 'DIVERGENTE')
     by_cod = add_nome(by_cod)
 
+    # ===== Colunas de negocio (compra / venda / ajuste de terceiros) =====
+    # merge sempre cria as 3 colunas (neg traz o schema mesmo vazio) -> fillna(0)
+    neg = agregar_negocio(movs)
+    j = j.merge(neg, on=['filial', 'cod', 'lote'], how='left')
+    for c in COLS_NEGOCIO:
+        j[c] = j[c].fillna(0).round(4)
+    # Por_Cod = soma dos MESMOS lotes ativos do Por_Lote (as duas abas batem)
+    neg_cod = j.groupby(['filial', 'cod'], as_index=False)[COLS_NEGOCIO].sum()
+    by_cod = by_cod.merge(neg_cod, on=['filial', 'cod'], how='left')
+    for c in COLS_NEGOCIO:
+        by_cod[c] = by_cod[c].fillna(0).round(4)
+
     resumo_cod = by_cod.groupby('filial', as_index=False).agg(
         n_cods=('cod', 'count'),
         OK=('status', lambda s: (s == 'OK').sum()),
@@ -218,6 +262,7 @@ def main():
         cols_lote = ['empresa', 'filial', 'cod', 'nome_produto', 'lote', 'qtd_inicial_inv',
                      'qtd_movs_entrada', 'qtd_movs_saida', 'qtd_teorica',
                      'qtd_odoo_atual', 'diff_qtd', 'custo_unit', 'diff_valor',
+                     'qtd_comprada', 'qtd_vendida', 'qtd_ajuste_terceiros',
                      'cobertura', 'status']
         cols_lote = [c for c in cols_lote if c in j.columns]
         j[cols_lote].sort_values(['filial', 'cod', 'lote']).to_excel(
@@ -225,7 +270,8 @@ def main():
         )
 
         cols_cod = ['empresa', 'filial', 'cod', 'nome_produto', 'n_lotes', 'teorico_total',
-                    'odoo_total', 'diff_total', 'diff_valor_total', 'status']
+                    'odoo_total', 'diff_total', 'diff_valor_total',
+                    'qtd_comprada', 'qtd_vendida', 'qtd_ajuste_terceiros', 'status']
         cols_cod = [c for c in cols_cod if c in by_cod.columns]
         by_cod[cols_cod].sort_values(['filial', 'cod']).to_excel(
             writer, sheet_name='Diff_Por_Cod', index=False
