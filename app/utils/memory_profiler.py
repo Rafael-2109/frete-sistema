@@ -178,6 +178,54 @@ def _dump_tracemalloc(reason: str):
         logger.warning(f"[MEMPROF] tracemalloc dump falhou: {e}")
 
 
+# --------------------------------------------------------------------- malloc_trim (glibc)
+# Distingue fragmentacao (liberavel via trim) de retencao real (objetos vivos).
+# Cai muito apos trim -> era fragmentacao glibc (fix sem mudar comportamento:
+# MALLOC_ARENA_MAX=2). Nao cai -> retencao real (precisa tracemalloc).
+_libc_cache = None
+
+
+def _libc():
+    """Carrega libc.so.6 (glibc) lazy. None se indisponivel (nao-Linux/musl)."""
+    global _libc_cache
+    if _libc_cache is False:
+        return None
+    if _libc_cache is None:
+        try:
+            import ctypes
+            _libc_cache = ctypes.CDLL("libc.so.6")
+        except Exception:
+            _libc_cache = False
+            return None
+    return _libc_cache
+
+
+def _maybe_malloc_trim():
+    """Devolve paginas LIVRES das arenas glibc ao SO. Loga RSS antes/depois.
+
+    SEGURO: NAO toca em objetos vivos — so devolve memoria que o glibc ja tinha
+    liberado mas reteve em arenas para reuso. Custo: ~ms a centenas de ms, em
+    thread separada (monitor). Pior caso (retencao em pymalloc, nao glibc): no-op.
+    Atras de flag MEMPROF_TRIM (default OFF) — liga/desliga via env var.
+    """
+    if not _flag("MEMPROF_TRIM"):
+        return
+    libc = _libc()
+    if libc is None:
+        return
+    try:
+        rss_before = _rss_mb()
+        ret = libc.malloc_trim(0)  # 0 = sem padding, devolve tudo possivel
+        rss_after = _rss_mb()
+        delta = rss_after - rss_before
+        logger.info(
+            f"[MEMPROF] trim pid={os.getpid()} ret={ret} "
+            f"rss_before={rss_before:.0f}MB rss_after={rss_after:.0f}MB delta={delta:+.0f}MB"
+        )
+    except Exception as e:
+        logger.warning(f"[MEMPROF] malloc_trim falhou: {e}")
+
+
 # --------------------------------------------------------------------- monitor thread
 _monitor_started = False
 
@@ -190,6 +238,7 @@ def _monitor_loop():
         _set_baseline()
     while True:
         try:
+            _maybe_malloc_trim()  # se MEMPROF_TRIM=true: trim + log antes/depois
             rss = _rss_mb()
             logger.info(
                 f"[MEMPROF] worker pid={os.getpid()} rss={rss:.0f}MB | filhos: {_children_summary()}"
