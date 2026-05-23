@@ -16,6 +16,7 @@ from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 
+from app import db
 from app.pallet.services.credito_service import CreditoService
 from app.pallet.services.nf_service import NFService
 from app.pallet.services.solucao_pallet_service import SolucaoPalletService
@@ -442,6 +443,25 @@ def acao_vincular_devolucao():
         # Converter chaves de vinculacoes para int
         quantidades = {int(k): int(v) for k, v in vinculacoes.items()}
         nf_remessa_ids = list(quantidades.keys())
+
+        # Pre-check: validar que TODAS as NFs de remessa existem antes de
+        # disparar o service. Frontend pode ter ID stale (NF cancelada/excluida
+        # em outra sessao) — mensagem clara em vez de erro logado por NF.
+        from app.pallet.models.nf_remessa import PalletNFRemessa
+        existentes = db.session.query(PalletNFRemessa.id).filter(
+            PalletNFRemessa.id.in_(nf_remessa_ids)
+        ).all()
+        ids_existentes = {row[0] for row in existentes}
+        ids_faltantes = [nid for nid in nf_remessa_ids if nid not in ids_existentes]
+        if ids_faltantes:
+            return jsonify({
+                'sucesso': False,
+                'mensagem': (
+                    f'NF(s) de remessa nao encontrada(s): {ids_faltantes}. '
+                    'Recarregue a tela — podem ter sido canceladas/excluidas.'
+                ),
+                'dados': {'ids_faltantes': ids_faltantes},
+            }), 404
 
         # Converter data
         if nf_devolucao.get('data_nf'):

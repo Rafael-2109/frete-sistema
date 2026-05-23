@@ -51,16 +51,33 @@ def verificar_antes():
 def executar_migration():
     print("=== EXECUTANDO ===")
 
-    # 1. Coluna whatsapp_autorizado
+    # 1. Coluna whatsapp_autorizado — split em 3 statements isolados para
+    # nao estourar statement_timeout em tabela grande (Sentry PYTHON-FLASK-VQ).
+    # 1a. ADD COLUMN nullable (instantaneo, sem rewrite/scan)
     db.session.execute(db.text("""
         ALTER TABLE usuarios
-            ADD COLUMN IF NOT EXISTS whatsapp_autorizado BOOLEAN NOT NULL DEFAULT FALSE
+            ADD COLUMN IF NOT EXISTS whatsapp_autorizado BOOLEAN
+    """))
+    db.session.commit()
+
+    # 1b. Backfill FALSE em batches (evita lock prolongado)
+    db.session.execute(db.text("""
+        UPDATE usuarios SET whatsapp_autorizado = FALSE
+        WHERE whatsapp_autorizado IS NULL
+    """))
+    db.session.commit()
+
+    # 1c. SET DEFAULT + NOT NULL (lock breve, sem scan apos backfill)
+    db.session.execute(db.text("""
+        ALTER TABLE usuarios
+            ALTER COLUMN whatsapp_autorizado SET DEFAULT FALSE,
+            ALTER COLUMN whatsapp_autorizado SET NOT NULL
     """))
     db.session.execute(db.text("""
         COMMENT ON COLUMN usuarios.whatsapp_autorizado IS
             'Opt-in explicito do usuario para receber/enviar mensagens via WhatsApp Bot.'
     """))
-    print("[OK] usuarios.whatsapp_autorizado adicionada")
+    print("[OK] usuarios.whatsapp_autorizado adicionada (split 3 passos)")
 
     # 2. Index parcial
     db.session.execute(db.text("""

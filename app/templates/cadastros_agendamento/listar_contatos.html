@@ -232,19 +232,22 @@
       
       <!-- Paginação -->
       {% if contatos.pages > 1 %}
+      {# args_no_page evita 'multiple values for page' quando request.args contem page #}
+      {% set args_no_page = request.args.copy() %}
+      {% if 'page' in args_no_page %}{% set _ = args_no_page.pop('page') %}{% endif %}
       <nav aria-label="Navegação da página">
         <ul class="pagination justify-content-center">
           {% if contatos.has_prev %}
             <li class="page-item">
-              <a class="page-link" href="{{ url_for('cadastros_agendamento.listar_contatos', page=contatos.prev_num, **request.args) }}">Anterior</a>
+              <a class="page-link" href="{{ url_for('cadastros_agendamento.listar_contatos', page=contatos.prev_num, **args_no_page) }}">Anterior</a>
             </li>
           {% endif %}
-          
+
           {% for page_num in contatos.iter_pages() %}
             {% if page_num %}
               {% if page_num != contatos.page %}
                 <li class="page-item">
-                  <a class="page-link" href="{{ url_for('cadastros_agendamento.listar_contatos', page=page_num, **request.args) }}">{{ page_num }}</a>
+                  <a class="page-link" href="{{ url_for('cadastros_agendamento.listar_contatos', page=page_num, **args_no_page) }}">{{ page_num }}</a>
                 </li>
               {% else %}
                 <li class="page-item active">
@@ -257,10 +260,10 @@
               </li>
             {% endif %}
           {% endfor %}
-          
+
           {% if contatos.has_next %}
             <li class="page-item">
-              <a class="page-link" href="{{ url_for('cadastros_agendamento.listar_contatos', page=contatos.next_num, **request.args) }}">Próximo</a>
+              <a class="page-link" href="{{ url_for('cadastros_agendamento.listar_contatos', page=contatos.next_num, **args_no_page) }}">Próximo</a>
             </li>
           {% endif %}
         </ul>

@@ -632,6 +632,61 @@ def listar_todas_tabelas():
     per_page = 20
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
 
+    # 3.1) Pre-calculo batch de status_tabela (substitui N+1 do property
+    # TabelaFrete.status_tabela que era chamado 20x no template via status_cor
+    # e status_texto). Sentry PYTHON-FLASK-S9.
+    status_lookup = {}
+    tabelas_page = paginacao.items
+    if tabelas_page:
+        nomes_tabela_page = list({t.nome_tabela for t in tabelas_page})
+        transp_ids_page = list({t.transportadora_id for t in tabelas_page})
+
+        # Query 1: todos os pares (transp_id, nome_tabela) que tem vinculo
+        vinculos_pares = db.session.query(
+            CidadeAtendida.transportadora_id, CidadeAtendida.nome_tabela
+        ).filter(CidadeAtendida.nome_tabela.in_(nomes_tabela_page)).distinct().all()
+
+        vinc_por_nome = {}  # nome_tabela -> set(transp_id)
+        for tid, nome in vinculos_pares:
+            vinc_por_nome.setdefault(nome, set()).add(tid)
+
+        # Query 2: razao_social de todas as transp envolvidas (pagina +
+        # transp com vinculos), para resolver "mesmo grupo" sem N+1.
+        transp_ids_envolvidas = set(transp_ids_page)
+        for tids in vinc_por_nome.values():
+            transp_ids_envolvidas.update(tids)
+        transps_map = {
+            t.id: (t.razao_social or '').upper()
+            for t in Transportadora.query.filter(
+                Transportadora.id.in_(transp_ids_envolvidas)
+            ).all()
+        }
+
+        for t in tabelas_page:
+            transp_vinculadas = vinc_por_nome.get(t.nome_tabela, set())
+            if t.transportadora_id in transp_vinculadas:
+                status_lookup[t.id] = ('success', '✅ OK')
+                continue
+            # Mesmo grupo: prefixo (20 chars) da razao_social bate com
+            # outra transp que tenha vinculo no mesmo nome_tabela.
+            nome_atual = transps_map.get(t.transportadora_id, '')
+            nome_base = (
+                nome_atual.replace('LTDA', '').replace('EIRELI', '')
+                .replace('S.A.', '').replace('S/A', '').strip()[:20]
+            )
+            tem_grupo = False
+            if nome_base:
+                for other_id in transp_vinculadas:
+                    if other_id == t.transportadora_id:
+                        continue
+                    if nome_base in transps_map.get(other_id, ''):
+                        tem_grupo = True
+                        break
+            if tem_grupo:
+                status_lookup[t.id] = ('info', 'ℹ️ Mesmo Grupo')
+            else:
+                status_lookup[t.id] = ('danger', '❌ Órfã')
+
     # 4) Resolver nome da transportadora selecionada (para preservar no input apos reload)
     transportadora_selecionada_nome = ''
     if transportadora_id:
@@ -644,6 +699,7 @@ def listar_todas_tabelas():
         'tabelas/listar_todas_tabelas.html',
         paginacao=paginacao,
         tabelas=paginacao.items,
+        status_lookup=status_lookup,
         transportadoras=transportadoras,
         uf_list=uf_list,
         modalidades=modalidades,

@@ -815,6 +815,15 @@ class SQLDeterministicValidator:
         type_issues = self._check_type_matches(sql, field_map)
         issues.extend(type_issues)
 
+        # Check 3: Campos nao-qualificados em SELECT quando tabela unica.
+        # Cobre caso comum onde LLM gera SELECT campo_que_nao_existe FROM t
+        # (Sentry PYTHON-FLASK-M5: qtd_faturada AS qtd_produto_faturado em
+        # faturamento_produto sem prefixo, escapou Check 1).
+        unqualified_issues = self._check_unqualified_select_fields(
+            sql, field_map, tables_used
+        )
+        issues.extend(unqualified_issues)
+
         approved = len(issues) == 0
         sql_upper = sql.upper().lstrip()
         is_read_only = sql_upper.startswith("SELECT") or sql_upper.startswith("WITH")
@@ -831,6 +840,79 @@ class SQLDeterministicValidator:
             "issues": issues,
             "warnings": warnings,
         }
+
+    def _check_unqualified_select_fields(
+        self, sql: str, field_map: dict, tables_used: list
+    ) -> list:
+        """Valida campos NAO-qualificados do SELECT quando ha 1 tabela unica.
+
+        Caso de uso (Sentry M5): LLM gerou
+            SELECT qtd_faturada AS qtd_produto_faturado FROM faturamento_produto
+        Sem prefixo `faturamento_produto.qtd_faturada`, Check 1 nao pega.
+        Se ha apenas 1 tabela em tables_used, podemos validar com seguranca
+        que toda coluna nao-qualificada DEVE existir nessa tabela.
+        """
+        issues = []
+        if len(tables_used) != 1:
+            return issues
+        tname = tables_used[0].lower()
+        if tname not in field_map:
+            return issues
+        fields = field_map[tname]
+
+        # Extrair SELECT list (entre SELECT e FROM)
+        m = re.search(r"\bSELECT\b(.*?)\bFROM\b", sql, re.IGNORECASE | re.DOTALL)
+        if not m:
+            return issues
+        select_clause = m.group(1)
+
+        # Split por virgula no top-level (respeitando parenteses)
+        items = []
+        depth = 0
+        current = ""
+        for ch in select_clause:
+            if ch == "(":
+                depth += 1
+                current += ch
+            elif ch == ")":
+                depth -= 1
+                current += ch
+            elif ch == "," and depth == 0:
+                items.append(current.strip())
+                current = ""
+            else:
+                current += ch
+        if current.strip():
+            items.append(current.strip())
+
+        seen = set()
+        for item in items:
+            # Pular expressoes com funcao/operador
+            if "(" in item or any(op in item for op in ("+", "-", "*", "/", "||", "::")):
+                continue
+            # Remover AS alias preservando o campo
+            base = re.split(r"\s+AS\s+", item, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+            # Ja qualificado (tabela.campo) — coberto por Check 1
+            if "." in base:
+                continue
+            # Tem que ser identificador puro
+            if not re.match(r"^[a-zA-Z_]\w*$", base):
+                continue
+            # Wildcards / keywords / literais
+            if base.lower() in ("distinct", "null", "true", "false"):
+                continue
+            field_lower = base.lower()
+            if field_lower in seen:
+                continue
+            seen.add(field_lower)
+
+            if field_lower not in fields:
+                issues.append(
+                    f"campo_inexistente:{tname}.{field_lower} "
+                    f"(coluna nao qualificada do SELECT nao consta em '{tname}')"
+                )
+
+        return issues
 
     def _check_qualified_fields(self, sql: str, field_map: dict) -> list:
         """Detecta `tabela.campo` ou `alias.campo` onde campo nao existe.

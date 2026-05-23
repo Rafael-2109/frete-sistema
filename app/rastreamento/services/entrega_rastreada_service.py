@@ -8,7 +8,7 @@ Data: 2025-10-03
 from app import db
 from app.rastreamento.models import EntregaRastreada, RastreamentoEmbarque
 from app.rastreamento.services.gps_service import GPSService
-from app.embarques.models import Embarque
+from app.embarques.models import Embarque, EmbarqueItem
 from app.carteira.models import CarteiraPrincipal
 from datetime import datetime
 from app.utils.timezone import agora_utc_naive
@@ -36,9 +36,28 @@ class EntregaRastreadaService:
             current_app.logger.warning(f"Embarque {embarque_id} não tem itens para criar entregas rastreadas")
             return []
 
+        # Pre-check FK: valida que cada item.id ainda existe na DB.
+        # Evita ForeignKeyViolation em entregas_rastreadas.embarque_item_id
+        # quando o relationship retorna objetos stale (Sentry PYTHON-FLASK-VP).
+        item_ids_em_memoria = [item.id for item in embarque.itens_ativos]
+        ids_validos_db = set()
+        if item_ids_em_memoria:
+            ids_validos_db = {
+                row[0] for row in db.session.query(EmbarqueItem.id).filter(
+                    EmbarqueItem.id.in_(item_ids_em_memoria)
+                ).all()
+            }
+
         entregas_criadas = []
 
         for idx, item in enumerate(embarque.itens_ativos, start=1):
+            if item.id not in ids_validos_db:
+                current_app.logger.warning(
+                    f"EmbarqueItem {item.id} (pedido {item.pedido}) nao existe mais "
+                    f"na DB — pulando entrega rastreada (provavelmente cancelado/deletado "
+                    f"antes deste commit). Embarque {embarque_id}."
+                )
+                continue
             # Buscar dados completos da carteira
             pedido_carteira = db.session.query(CarteiraPrincipal).filter_by(
                 num_pedido=item.pedido

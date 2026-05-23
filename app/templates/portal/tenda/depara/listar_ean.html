@@ -97,20 +97,23 @@
 
             <!-- Paginação -->
             {% if depara_list.pages > 1 %}
+            {# args_no_page evita 'multiple values for page' quando request.args contem page #}
+            {% set args_no_page = request.args.copy() %}
+            {% if 'page' in args_no_page %}{% set _ = args_no_page.pop('page') %}{% endif %}
             <nav aria-label="Paginação">
                 <ul class="pagination justify-content-center">
                     {% if depara_list.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=depara_list.prev_num, **request.args) }}">
+                        <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=depara_list.prev_num, **args_no_page) }}">
                             Anterior
                         </a>
                     </li>
                     {% endif %}
-                    
+
                     {% for page_num in depara_list.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {% if page_num == depara_list.page %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=page_num, **request.args) }}">
+                                <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=page_num, **args_no_page) }}">
                                     {{ page_num }}
                                 </a>
                             </li>
@@ -120,10 +123,10 @@
                             </li>
                         {% endif %}
                     {% endfor %}
-                    
+
                     {% if depara_list.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=depara_list.next_num, **request.args) }}">
+                        <a class="page-link" href="{{ url_for('portal_tenda_depara.listar_ean', page=depara_list.next_num, **args_no_page) }}">
                             Próximo
                         </a>
                     </li>

@@ -49,7 +49,14 @@ def pedidos_upload():
         except PedidoVoeJaExisteError as e:
             flash(str(e), 'warning')
         except PedidoVoeParserError as e:
-            current_app.logger.exception('Erro ao parsear pedido VOE')
+            # Parser LLM (Haiku/Sonnet) falhou em extrair items completos do PDF.
+            # NAO eh bug do sistema — eh limitacao do PDF/LLM ocasional.
+            # Logar como warning (sem stack) para nao gerar issue no Sentry.
+            # Sentry PYTHON-FLASK-RG.
+            current_app.logger.warning(
+                'PedidoVoeParserError em pedidos_upload: %s | arquivo=%s',
+                e, pdf_file.filename,
+            )
             flash(f'Erro ao parsear PDF: {e}', 'danger')
     return render_template('motos_assai/pedidos/upload.html', form=form)
 

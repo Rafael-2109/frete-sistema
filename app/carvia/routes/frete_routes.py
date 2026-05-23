@@ -363,7 +363,29 @@ def register_frete_routes(bp):
 
                 # Gravar numero_cte no subcontrato
                 if sub:
-                    sub.cte_numero = form.numero_cte.data.strip()
+                    novo_cte = form.numero_cte.data.strip()
+
+                    # Pre-check: cte_numero duplicado em outro subcontrato ativo
+                    # Evita UniqueViolation (uq_carvia_subcontratos_cte_numero_ativo)
+                    # que so estoura no autoflush e deixa session em PendingRollback.
+                    if novo_cte and novo_cte != sub.cte_numero:
+                        conflito = CarviaSubcontrato.query.filter(
+                            CarviaSubcontrato.cte_numero == novo_cte,
+                            CarviaSubcontrato.status != 'CANCELADO',
+                            CarviaSubcontrato.id != sub.id,
+                        ).first()
+                        if conflito:
+                            flash(
+                                f'CTe {novo_cte} ja vinculado ao subcontrato #{conflito.id} '
+                                f'(status {conflito.status}). Cancele o outro ou use outro CTe.',
+                                'danger',
+                            )
+                            return render_template(
+                                'carvia/fretes/editar.html',
+                                frete=frete, form=form, sub=sub, fatura=fatura,
+                            )
+
+                    sub.cte_numero = novo_cte
 
                 # Gravar valores no frete
                 frete.valor_cte = converter_valor_brasileiro(form.valor_cte.data)

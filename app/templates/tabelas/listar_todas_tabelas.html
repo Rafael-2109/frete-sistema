@@ -155,8 +155,9 @@
                class="btn btn-sm btn-danger" title="Excluir"><i class="fas fa-trash"></i></button>
           </td>
           <td class="cel-status">
-            <span class="badge badge-{{ tabela.status_cor }}">
-              {{ tabela.status_texto }}
+            {% set _st = status_lookup.get(tabela.id, ('secondary', '❓ Desconhecido')) %}
+            <span class="badge badge-{{ _st[0] }}">
+              {{ _st[1] }}
             </span>
           </td>
           <td class="cel-transp" title="{{ tabela.transportadora.razao_social }}">{{ tabela.transportadora.razao_social }}</td>

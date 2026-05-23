@@ -886,8 +886,15 @@ def listar_nfs_entrada(
     - lista vazia -> []
     """
     from sqlalchemy import or_
+    from sqlalchemy.orm import selectinload
 
-    query = HoraNfEntrada.query.order_by(
+    # selectinload evita N+1 ao acessar nf.itens e nf.pedido no template
+    # e em matching_service.resumo_vinculo_nf / comparativo_valores_nf.
+    # Sentry PYTHON-FLASK-VJ (hora_nf_entrada_item) e PYTHON-FLASK-VK (hora_pedido).
+    query = HoraNfEntrada.query.options(
+        selectinload(HoraNfEntrada.itens),
+        selectinload(HoraNfEntrada.pedido),
+    ).order_by(
         HoraNfEntrada.data_emissao.desc(), HoraNfEntrada.id.desc()
     )
     if lojas_permitidas_ids is not None:
