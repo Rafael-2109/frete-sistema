@@ -38,7 +38,23 @@ def reverter_picking(odoo, pid, dry):
     # popular product_return_moves (default_get com contexto)
     odoo.execute_kw('stock.return.picking', 'write', [[wid], {}], {'context': ctx})
     res = odoo.execute_kw('stock.return.picking', 'create_returns', [[wid]], {'context': ctx})
-    new_pid = res.get('res_id') if isinstance(res, dict) else res
+    # CR3#7 (2026-05-24 v4): create_returns pode retornar dict {'res_id': N},
+    # int N direto, ou [N] (lista 1-id em algumas versoes Odoo CIEL IT).
+    # Sincronizado com app/odoo/estoque/scripts/picking.py:devolver (v3 fix).
+    if isinstance(res, dict):
+        new_pid = res.get('res_id')
+    elif isinstance(res, list) and len(res) == 1 and isinstance(res[0], int):
+        new_pid = res[0]
+    elif isinstance(res, bool):
+        new_pid = None
+    else:
+        new_pid = res
+    if not isinstance(new_pid, int) or isinstance(new_pid, bool) or new_pid <= 0:
+        return (
+            f'picking {pid}: create_returns retornou inesperado: res={res!r} '
+            f'(esperava int > 0, dict com res_id, ou [int] de 1 elemento). '
+            'Abortando antes de prosseguir.'
+        )
     # validar a devolucao: setar qty_done = reserved e button_validate
     mls = odoo.search_read('stock.move.line', [['picking_id', '=', new_pid]], ['id', 'quantity', 'qty_done'])
     for ml in mls:

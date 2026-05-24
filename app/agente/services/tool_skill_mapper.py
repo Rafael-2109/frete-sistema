@@ -119,6 +119,8 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'ajustando-quant-odoo': 'Estoque Odoo (Write)',
     'transferindo-interno-odoo': 'Estoque Odoo (Write)',
     'operando-reservas-odoo': 'Estoque Odoo (Write)',
+    'operando-picking-odoo': 'Estoque Odoo (Write)',
+    'operando-mo-odoo': 'Estoque Odoo (Write)',
     'consultando-quant-odoo': 'Estoque Odoo (Read)',
 
     # ── CarVia ──

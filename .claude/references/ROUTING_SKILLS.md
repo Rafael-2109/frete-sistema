@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 24/05/2026 (45 skills invocaveis — adicionada em 2026-05-24: `transferindo-interno-odoo` (WRITE transferencia interna intra-empresa: lote→lote mesma loc OU loc→loc mesmo lote; composicao de ajustar_quant 2x com delta_esperado propagado, G021/G022/G027 codificados). Anteriores, 2026-05-23: `ajustando-quant-odoo` (WRITE 1 stock.quant), `operando-reservas-odoo` (WRITE cirurgia/cancelamento de pickings com MLs orfas), `consultando-quant-odoo` (READ ao vivo no Odoo — auditoria pos-WRITE). 2026-05-16: `parseando-sped-ecd`, `auditando-sped-contabil`, `auditando-sped-vs-manual`, `comparando-sped-ground-truth` — pipeline de auditoria SPED ECD usado exclusivamente pelo subagent `auditor-sped-ecd`)
+**Ultima Atualizacao**: 24/05/2026 (47 skills invocaveis — adicionada em 2026-05-24 v5: `operando-mo-odoo` (WRITE cancelar Manufacturing Order single ou batch; service novo `app/odoo/estoque/scripts/mo.py`; guard G-MO-01 furo contabil — bloqueia consumo>0; idempotencia validada AO VIVO em MO state=cancel). 2026-05-24 v3: `operando-picking-odoo` (WRITE cancelar/validar/devolver picking; capina StockPickingService para `app/odoo/estoque/scripts/picking.py`; invariante G019/G020 fechada no codigo — re-leitura de state pos-button_validate; novo atomo `devolver` cria stock.return.picking idempotente). 2026-05-24 v2: `transferindo-interno-odoo` (WRITE transferencia interna intra-empresa: lote→lote mesma loc OU loc→loc mesmo lote; composicao de ajustar_quant 2x com delta_esperado propagado, G021/G022/G027 codificados). 2026-05-23: `ajustando-quant-odoo` (WRITE 1 stock.quant), `operando-reservas-odoo` (WRITE cirurgia/cancelamento de pickings com MLs orfas), `consultando-quant-odoo` (READ ao vivo no Odoo — auditoria pos-WRITE). 2026-05-16: `parseando-sped-ecd`, `auditando-sped-contabil`, `auditando-sped-vs-manual`, `comparando-sped-ground-truth` — pipeline de auditoria SPED ECD usado exclusivamente pelo subagent `auditor-sped-ecd`)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -28,7 +28,7 @@
 | RECEBIMENTO (pipeline, DFEs, picking) | "DFE bloqueado", "primeira compra", "match NF x PO", "picking nao valida", "quality check" | -> Subagente `gestor-recebimento` |
 | DEVOLUCOES (NFD, retornos, descarte) | "devolucoes pendentes", "status NFD", "De-Para confianca", "descarte vs retorno", "produtos devolvidos" | -> Subagente `gestor-devolucoes` |
 | ESTOQUE/PRODUCAO (ruptura, projecao, programacao — READ) | "vai faltar", "estoque comprometido", "producao vs programada", "giro estoque", "estoque parado" | -> Subagente `gestor-estoque-producao` |
-| ESTOQUE ODOO (WRITE — ajustar quant, transferir, faturar IC) | "ajusta saldo do quant", "ajuste +/- residuo", "cria saldo do lote X", "ajuste por planilha", "zera quant fantasma", "corrige reserva orfa", "limpa ML orfa", "cancela picking", "transfere lote A para lote B", "move saldo MIGRACAO -> lote canonico", "manda saldo pra Indisponivel", "Pre-Producao -> Estoque", "Indisponivel -> Estoque", "consolidar grafia MIGRACAO/MIGRAÇÃO" | -> Subagente `gestor-estoque-odoo` (orquestra todas as skills WRITE de estoque — fluxos>>skills, NUNCA invocar skill atomica direto) |
+| ESTOQUE ODOO (WRITE — ajustar quant, transferir, faturar IC, cancelar MO) | "ajusta saldo do quant", "ajuste +/- residuo", "cria saldo do lote X", "ajuste por planilha", "zera quant fantasma", "corrige reserva orfa", "limpa ML orfa", "cancela picking", "valida picking pendurado em assigned", "re-valida picking false-positive G019", "devolve picking (NF errada)", "cancela 854 fantasmas >7d", "transfere lote A para lote B", "move saldo MIGRACAO -> lote canonico", "manda saldo pra Indisponivel", "Pre-Producao -> Estoque", "Indisponivel -> Estoque", "consolidar grafia MIGRACAO/MIGRAÇÃO", "cancela MO 19713", "cancela MOs zumbi antigas FB", "limpa MOs draft/confirmed sem consumo", "cancela MO travada" | -> Subagente `gestor-estoque-odoo` (orquestra todas as skills WRITE de estoque — fluxos>>skills, NUNCA invocar skill atomica direto) |
 | ESTOQUE ODOO (READ AO VIVO — quant/ML/picking) | "saldo restante apos ajuste", "sobrou saldo em loc !=indisp?", "quants em lote MIGRACAO", "auditoria pos-WRITE", "snapshot ao vivo Odoo" | -> `consultando-quant-odoo` |
 | PERFORMANCE LOGISTICA (entregas, ranking, KPIs) | "entregas atrasadas", "lead time", "ranking transportadoras", "mes a mes", "em transito" | -> Subagente `analista-performance-logistica` |
 | SENTRY (erros, issues, monitoring) | "issues do Sentry", "erros em producao", "bugs no Sentry", "resolver issue", "root cause analysis", "500 errors", "Seer" | -> `consultando-sentry` |
@@ -95,8 +95,11 @@ Se a resposta esta no reference -> NAO usar skill.
 
 6. ESTOQUE WRITE (alterar saldo/lote/quant no Odoo)?
    |-- Ajustar saldo de 1 quant (+/-, zerar, criar, resetar reserva) -> ajustando-quant-odoo
-   |-- Limpar MLs orfas / cancelar picking (cirurgia ou inteiro) -> operando-reservas-odoo
-   |-- (em construcao — ver app/odoo/estoque/ROADMAP_SKILLS.md) Transferir interno / MO / picking / pre-etapa / escriturar entrada / faturar saida -> Subagente `gestor-estoque-odoo`
+   |-- Transferir interno (lote↔lote / loc↔loc / MIGRA↔Indisp) -> transferindo-interno-odoo
+   |-- Limpar MLs orfas / cirurgia em picking -> operando-reservas-odoo
+   |-- Cancelar/validar/devolver picking generico (fantasma, G019 false-positive, NF errada) -> operando-picking-odoo
+   |-- Cancelar MO single ou batch (guard G-MO-01 furo contabil; idempotencia) -> operando-mo-odoo
+   |-- (em construcao — ver app/odoo/estoque/ROADMAP_SKILLS.md) pre-etapa / escriturar entrada / faturar saida -> Subagente `gestor-estoque-odoo`
 
 7. ESTOQUE READ AO VIVO (consultar Odoo, nao DB local)?
    |-- Saldo restante por (cod, empresa), agregado, filtros — auditoria pos-WRITE -> consultando-quant-odoo
@@ -150,7 +153,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (44 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (46 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -160,12 +163,15 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status),
 `mcp__routes__search_routes` (1 tool: busca semantica rotas)
 
-### Skills Odoo (12)
+### Skills Odoo (15)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
 `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
 `conciliando-transferencias-internas`, `gerando-baseline-conciliacao`,
 `ajustando-quant-odoo` (WRITE — usado pelo subagente `gestor-estoque-odoo`),
-`operando-reservas-odoo` (WRITE — cirurgia/cancelamento de pickings; complementa skill 1),
+`transferindo-interno-odoo` (WRITE — transferencia interna intra-empresa; delega ajustar_quant×2),
+`operando-reservas-odoo` (WRITE — cirurgia/cancelamento de reservas e MLs orfas),
+`operando-picking-odoo` (WRITE — cancelar/validar/devolver picking generico; invariante G019/G020),
+`operando-mo-odoo` (WRITE — cancelar MO single ou batch; guard G-MO-01 furo contabil),
 `consultando-quant-odoo` (READ-only AO VIVO — auditoria pos-WRITE, snapshots de quants)
 
 ### Skills SSW (2)

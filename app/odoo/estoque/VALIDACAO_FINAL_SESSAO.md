@@ -294,3 +294,320 @@ E 3 erros descobertos pelo USUÁRIO Rafael na revisão final:
 9. **CR2#2 (dual-ownership 3 scripts em MAPA_SCRIPTS)**: corrigido — `ajuste_fb_cd_indisponivel`, `transferir_local_pasta22`, `transferir_indisp_para_estoque_p15_cd` movidos para seção `scripts/transfer.py` (orquestradores que compõem Skill 2 modo B/A wildcard); nota arquitetural explicativa adicionada na seção `quant.py + MIGRAÇÃO↔Indisponível`. Apenas 2 scripts permanecem lá: `mover_migracao_para_indisponivel` (CSV de pulados — lógica adicional além de transferência) e `executar_fluxo_b_vivas` (fluxo composto cross-skill cancel+return+transfer).
 
 **Skill 2 fechada com 0 pendências não-bloqueantes.** Próxima sessão pode focar Skill 4/5 (MO/picking) ou fluxos compostos da Skill 2 (D010/D012/D013) sem dívida arquitetural pendente.
+
+---
+
+## 8. Sessão 2026-05-24 v3: Skill 5 `operando-picking-odoo` maturando + FECHA ONDA 0.4 (G019/G020)
+
+> Sessão da tarde 2026-05-24 v3. Iniciada após v2 (Skill 2). Foco: maturação da Skill 5 — átomo C2 de operações de picking + descoberta arquitetural crítica.
+
+### Achado crítico — premissa do prompt desatualizada (parcialmente)
+
+O prompt da sessão afirmava que **G019/G020/G011/G023 eram BUGS ABERTOS** bloqueantes da Skill 8 (faturando-odoo). Investigação contra código revelou:
+
+| Gotcha | Doc status (antes) | Código real | Pytest cobrindo |
+|---|---|---|---|
+| G019 (validar engole 'cannot marshal None') | PROPOSTO | ✅ FIX em `validar()` (linhas 407-481) | 5 testes pré-existentes |
+| G020 (liberar_faturamento sem pré-cond state=done) | PROPOSTO | ✅ FIX em `liberar_faturamento()` (linhas 500-525) | 3 testes pré-existentes |
+| G011 (preencher_qty_done faltando) | "corrigido pipeline" | ✅ Helper existe (linhas 295-337) | 2 testes pré-existentes |
+| G023 (consolidar_move_lines over-reservation) | ✅ IMPLEMENTADO | ✅ Método existe (linhas 144-293) | 0 testes (gap descoberto) |
+
+**Discrepância resolvida**: docs/CLAUDE/ROADMAP atualizados para refletir que ONDA 0.4 estava FECHADA NO CÓDIGO desde 2026-05-18, faltando só:
+- Pytest cobrindo G023 (8 testes novos adicionados)
+- Pytest cobrindo `ajustar_qty_done_pelo_disponivel` (6 testes novos)
+- Pytest cobrindo `validar(linhas_esperadas=)` G023 inline (2 testes novos)
+- Capinagem `services/ → estoque/scripts/`
+- Atualização dos docs de gotcha (PROPOSTO → IMPLEMENTADO)
+
+### Estrutura final dos artefatos
+
+- **Service `app/odoo/estoque/scripts/picking.py`**: capinado de `services/`; método NOVO `devolver()` adicionado (derivado de `fat_lf_cleanup.reverter_picking` PROD 2026-05-20). Shim preservado em `services/stock_picking_service.py` (6 consumidores ativos intactos).
+- **Pytest baseline**: 19 originais + 16 novos baseline (G023/ajustar_qty_done/validar-com-linhas) + 7 cobrindo `devolver` = **42 testes verdes**.
+- **Total tests baseline 2026-05-24 v3**: 30 quant + 37 transfer + 19 lot + 42 picking = **128 verdes**.
+- **Skill `.claude/skills/operando-picking-odoo/`**: SKILL.md (~280 linhas) com 3 átomos + 3 fluxos compostos (2.5.a/b/c) + armadilhas; `scripts/operar_picking.py` (CLI 3 modos `--modo cancelar/validar/devolver`, `--dry-run` default).
+- **Folha de fluxo `app/odoo/estoque/fluxos/2.5-cancelar-validar-devolver-picking.md`**: 3 sub-casos + cross-skill com Skill 2.4 documentado.
+- **Validação C6 dry-run vs Odoo PROD**: 6 casos 100% bate (pid 321147 assigned cancelar/devolver; 321146 assigned validar; 321150 done devolver/cancelar; 321107 cancel NOOP). Log em `/tmp/log_skill5_C6_validacao_dry_run.json`.
+- **Cross-refs C7**: subagente + ROUTING_SKILLS (46 invocaveis + 14 Skills Odoo) + tool_skill_mapper + CLAUDE.md raiz + app/odoo/CLAUDE.md.
+- **Arquivamento C9**: `16_cancelar_pickings_fantasmas` movido para `_validados/operando-picking-odoo/` (sys.path corrigido parents[2]→parents[4]; header de arquivado) + VALIDACAO.md detalhada.
+- **Docs G019/G020 atualizadas** (PROPOSTO → IMPLEMENTADO; Ref paths atualizados de `services/` para `estoque/scripts/`).
+- **ROADMAP ONDA 0.4** marcada `[X] FECHADO 2026-05-24 v3`.
+
+### Code-review consolidado (2 reviewers paralelos)
+
+**Reviewer #1 (code)** → 4 HIGH findings, **TODOS CORRIGIDOS NA MESMA SESSÃO**:
+
+1. **CR1#1 (picking.py:560)**: `create_returns` pode retornar `[8888]` (lista 1-id em algumas versões Odoo) — guard original aceitava só `dict` ou `int`. CORRIGIDO: aceita os 3 shapes; guard explícito contra `bool` (subclasse de `int` em Python).
+2. **CR1#2 (test_devolver_state_final_nao_done_raises)**: `search_read.side_effect` tinha `[[], []]` (2º elemento `[]` causava 0 MLs, branch incompleto). CORRIGIDO: 2º elemento agora `[{id, qty, qty_done}]`, plus assertion `write.assert_any_call qty_done=5.0`.
+3. **CR1#3 (operar_picking.py:282-283)**: double-read do state em `devolver_single` (svc.devolver já garante state=done). CORRIGIDO: usa `state_devolucao='done'` deterministicamente (lê só `name` se necessário).
+4. **CR1#4 (operar_picking.py TIMEZONE)**: `datetime.now()` viola REGRAS_TIMEZONE.md (Brasil naive). CORRIGIDO: `from app.utils.timezone import agora_brasil_naive`.
+
+**Reviewer #2 (docs)** → 5 HIGH + 2 MED findings, **TODOS CORRIGIDOS**:
+
+5. **CR2#1 (CLAUDE.md:3)**: header "Atualizado 2026-05-22" mas conteúdo é v3. CORRIGIDO: "2026-05-24" + nota ONDA 0.4 ✅.
+6. **CR2#3 (G019.md Ref)**: cita `services/stock_picking_service.py` (path antigo). CORRIGIDO: `estoque/scripts/picking.py:407-481`.
+7. **CR2#4 (G020.md Ref)**: idem. CORRIGIDO: `estoque/scripts/picking.py:500-525`.
+8. **CR2#5 (MAPA_SCRIPTS fat_lf_cleanup)**: status "SUPERADO" inconsistente com VALIDACAO.md ("permanece VIVO"). CORRIGIDO: status `AO-CAPINAR-VIVO` + nota explicativa.
+9. **CR2#6 (gestor-estoque-odoo.md:19)**: warning "ESQUELETO" desatualizado (sugeria parar para skills 1/2/3/5/9 que estão LIVES). CORRIGIDO: lista explícita de LIVES vs NÃO INICIADAS.
+10. **CR2#7 (SKILL.md frontmatter)**: "depende de invariante G019/G020 já fechada neste service" — frasing ambígua. CORRIGIDO: "ONDA 0.4 ✅ fechada 2026-05-24 v3, destrava implementação da Skill 8".
+
+**Pendência cosmética** (CR2#2 LOW — subtotal Fase 0 35 vs total 42): mantida no SKILL.md como está (Fase 0 = 35 verdes pós-baseline; total = 42 com `devolver`). Não bloqueia.
+
+### Pytest final pós-correções
+
+**128 verdes** (30 quant + 37 transfer + 19 lot + 42 picking) em 2.86s. Mantém baseline integral pós-9 correções HIGH.
+
+### Status global da skill 5
+
+🟡 mín viável (3 átomos: `cancelar`, `validar` com G019/G020 invariante, `devolver` NOVO com idempotência via `origin ilike`). 0 execuções `--confirmar` em PROD nesta sessão (demanda-driven). **FECHA ONDA 0.4** — Skill 8 `faturando-odoo` agora pode confiar no invariante de `svc.validar()`.
+
+### Próximos passos (escolha em sessão futura)
+
+1. **Skill 4 `operando-mo-odoo`** — próxima na ordem bottom-up (única WRITE intra-estoque restante).
+2. **Skill 8 `faturando-odoo`** — **AGORA DESBLOQUEADA** pela ONDA 0.4 fechada; é a skill MACRO (NF→SEFAZ) — cuidado especial.
+3. **Skill 7 `escriturando-odoo`** — entrada IC + DFe; depende de contrato estável de transfer + picking (ambos ✅).
+4. **Fluxos compostos** (Skill 2 D010/D012/D013, Skill 5.a com batch fantasma novo).
+
+---
+
+## 9. Sessão 2026-05-24 v4: Skill 2 MODO C `transferir_para_indisponivel` estreia em PROD + incidente G031 + fix
+
+> Após sessão v3 (Skill 5). Foco: demanda real do Rafael de "Transfere esses 16 produtos pra Indisponivel" virou átomo novo + 1º incidente arquitetural real da Skill 2.
+
+### 9.1 Cronologia
+
+| # | Evento | Resultado |
+|---|---|---|
+| 1 | Achado inicial: pulei `resolver_empresa`/constants | Reconheci e corrigi caminho |
+| 2 | Decisões coletadas (consolidar MIGRAÇÃO, 4529301 NOOP, 104000033 -0,028) | 3 decisões aplicadas |
+| 3 | C2 service `transferir_para_indisponivel` v1 (composição A+B encadeada) | Bug: dry-run falha (Passo 2 antes do Passo 1 commitar) |
+| 4 | Refactor para 1 passo direto (`ajustar_quant` 2x) | Dry-run 14/14 OK |
+| 5 | C3-C5 CLI modo C + 12 testes pytest v1 | 140 verdes |
+| 6 | `--confirmar` v1 em PROD | ⚠️ **16/16 FALHA_AUMENTO** ("lote MIGRAÇÃO vinculado a outro produto") |
+| 7 | Diagnóstico: `LOTES_MIGRACAO_POR_COMPANY[1]=30482` é `lot_id` de UM produto; usar como FK universal falha | Causa raiz isolada (G031) |
+| 8 | Rollback via Skill 1 `ajustar_quant +qty criar_se_faltar=True` em 16 lotes origem | ✅ **16/16 EXECUTADO**; 4.319,4019 un restauradas em ~10s |
+| 9 | Insight Rafael: "lote é por produto, usar busca tipo ilike/like igual Odoo" | Confirmou direção do fix |
+| 10 | Fix v2: aceita `nome_lote_destino='MIGRAÇÃO'` (str), resolve POR PRODUTO via `lot_svc.criar_se_nao_existe` em real; `buscar_por_nome` em dry-run | Service refatorado |
+| 11 | 3 testes pytest novos cobrindo o fix (15 total modo C) | 143 verdes |
+| 12 | Constants `LOTES_MIGRACAO_POR_COMPANY` documentadas como HISTÓRICO/EXEMPLO + nova `NOME_LOTE_MIGRACAO_POR_COMPANY` | Locations.py atualizado |
+| 13 | Dry-run pós-fix valida resolução POR PRODUTO (lot_id_destino=57932 ≠ 30482) | OK |
+| 14 | `--confirmar` v2 em PROD | ✅ **16/16 EXECUTADO** em 23s; 4.319,4019 un movidas |
+| 15 | Verificação direta Odoo: 16/16 origem zerada + MIGRAÇÃO somando exato | Estado validado |
+| 16 | Docs atualizados (SKILL.md + fluxo 2.2 + G031 + ROADMAP + memória) | C7-C10 fechado |
+
+### 9.2 Métricas finais
+
+- **143 pytest verdes** (30 quant + 52 transfer + 19 lot + 42 picking). Transfer subiu de 37→52 com 15 testes novos modo C.
+- **6 dry-run PROD validados** (3 modo C iniciais + 3 negativos).
+- **2 `--confirmar` PROD em sequência** (1ª falhou, 2ª OK após fix).
+- **1 rollback PROD** (16/16 OK em ~10s).
+- **4.319,4019 un movidas** (FB/Estoque → FB/Indisp lote MIGRAÇÃO POR PRODUTO).
+- **1 lote criado on-demand** (4829012 produto não tinha MIGRAÇÃO; criou lot_id=59829).
+- **Logs auditoria**:
+  - `log_2.2_para_indisp_20260524_105037.json` (1ª `--confirmar` — falha)
+  - `log_2.1_ROLLBACK_para_indisp_falha_20260524_105219.json` (rollback OK)
+  - `log_2.2_para_indisp_FIX_20260524_110128.json` (2ª `--confirmar` — OK)
+
+### 9.3 Pre-mortem rigoroso
+
+#### Riscos operacionais (impacto: PROD)
+
+| Risco | Probabilidade | Impacto | Mitigação atual | Mitigação adicional |
+|---|---|---|---|---|
+| **Outra constant `lot_id` universal usada em WRITE futuro** | Alta (humano repete padrão) | Alto (estado parcial; rollback manual) | G031 doc; comentário em locations.py | **Auditoria grep `LOTES_*\[` em todo codebase** (próxima sessão) |
+| **MODO C com `--lote LOTE_REAL` errado** (ex.: lote de outro produto) | Média | Médio (FALHA_REDUCAO/AUMENTO; sem dano) | `lot_svc.buscar_por_nome` filtra `product_id` (G021 herdado) | Adicionar validação pré-flight no CLI |
+| **Falha de rede entre `ajustar_quant -qty` e `ajustar_quant +qty`** | Baixa | Alto (estado parcial inrecuperável sem auditoria) | `qty_reduzida_origem` reportado | **Helper automático de rollback** baseado em log JSON |
+| **Lote MIGRAÇÃO criado on-demand sem aprovação fiscal** | Média (16 produtos teste, 1 criação) | Médio (lote orfão se transferência rollback) | `lote_destino_criado_agora=True` reportado em auditoria | Pre-flight check + flag `--criar-lote-destino` opcional |
+| **`origem` em sub-location não-padrão** (não FB/Estoque) | Baixa | Baixo (falha clara `FALHA_QUANT_VAZIO`) | `location_id_origem` override aceito | OK |
+| **Rerodar MODO C após sucesso** (idempotência) | Alta | Médio (saldo é movido 2x; conta inflada) | Service NÃO tem guard contra duplo movimento | **Adicionar log/cache de operações recentes** OU pre-check "saldo origem > 0" |
+
+#### Riscos técnicos (impacto: código + integração)
+
+| Risco | Probabilidade | Impacto | Mitigação atual |
+|---|---|---|---|
+| **Pyright stale reportando imports `app.odoo.estoque.scripts.*` não resolvíveis** | Alta | Baixo (apenas IDE; runtime OK) | Documentado; ignorar |
+| **`stock_lot_service` lança erro em `criar` se nome já existe** (race condition) | Baixa | Médio | `criar_se_nao_existe` já trata via fallback `buscar_por_nome` em `except` |
+| **`StockLotService.buscar_por_nome` retorna lot_id de produto DIFERENTE** se filtro company_id falhar | Baixa | Alto (mesmo bug G031) | Filtro `product_id` + `company_id` no service (G021) |
+| **`criar_se_nao_existe` falhar em dry-run-then-real**: dry-run valida com lote inexistente (`FALHA_LOTE_DESTINO_INEXISTENTE`), real cria lote ok, próximo dry-run vê lote existente — divergência de plano | Média | Baixo (operacional — dry-run "stale" mostra plano diferente) | Documentar comportamento em SKILL.md |
+
+#### Riscos de processo (impacto: continuidade)
+
+| Risco | Probabilidade | Impacto | Mitigação |
+|---|---|---|---|
+| **Próxima sessão usa constants `lot_id` universal sem ler G031** | Alta | Alto (replica incidente) | G031 + comentário extenso em locations.py + memória atualizada |
+| **Skill 5/6/7/8 futura introduz mesmo padrão** | Média | Alto | Princípio "resolver POR PRODUTO via service" deve aparecer em CLAUDE.md §contrato de átomo |
+| **Esquecer de auditar OUTROS lugares que usam `LOTES_MIGRACAO_POR_COMPANY`** | Alta | Alto | Seção "Outros lugares que podem ter mesma falha" em G031.md tem comando `grep` acionável |
+| **Devolução do saldo Indisp para Estoque** (operação inversa) sem skill equivalente | Média | Médio (operadores improvisam) | Documentar inversa como caso 2.2.d existente (MIGRA→lote real) |
+
+#### Riscos arquiteturais (impacto: aposentar/refatorar)
+
+| Risco | Probabilidade | Impacto | Mitigação proposta |
+|---|---|---|---|
+| **Constants `lot_id` ficarem como dead code** após N skills migrarem | Alta | Baixo (limpa codebase) | Quando todos usarem `lot_svc`, REMOVER `LOTES_MIGRACAO_POR_COMPANY` (apenas manter `NOME_*`) |
+| **Pattern "resolver via lot_svc" repetir-se em 4-5 skills** sem helper compartilhado | Média | Baixo (duplicação) | Considerar `_utils.resolver_lote_consolidador(odoo, nome, pid, cid)` em sessão futura |
+| **Rollback automático**: não há padrão para reverter estado parcial sem intervenção humana | Média | Médio (incidentes maiores) | Macro `--rollback-from-log <path>` futuro (não bloqueante) |
+
+### 9.4 Aprendizados estruturais
+
+1. **stock.lot é POR PRODUTO no Odoo CIEL IT** — nunca usar `lot_id` como FK universal. ETL/Migration que herdar lots de mestre por nome precisa criar 1 lot por (nome × produto × company).
+2. **Dry-run só simula chave, não FK** — testes de FK só disparam em `--confirmar`. Adicionar smoke test "1 unidade real" pode ser etapa intermediária entre dry-run e batch completo.
+3. **Estado parcial em composições compostas é INEVITÁVEL** — não tem como ser totalmente atômico em RPC distribuído. Solução: relatório claro + rollback documentado (testado nesta sessão).
+4. **Constants em `app/odoo/constants/`** devem distinguir explicitamente entre (a) IDs universais (`COMPANY_LOCATIONS`, `LOCAIS_INDISPONIVEL` — por company, faz sentido) e (b) IDs "por instância" (lot, product, partner — NÃO universal). Adicionar comentário-padrão em cada arquivo.
+5. **Lição Rafael**: "lote é por produto, usar `ilike`/`like` igual Odoo" — princípio geral de busca via serviço (não cache de IDs).
+
+### 9.5 Pendências (não-bloqueantes)
+
+1. **Auditoria grep `LOTES_*_POR_COMPANY\[` em todo codebase** — verificar se outras skills usam como FK.
+2. **Smoke test 1-unidade** (`--confirmar` em 1 caso antes de batch) como passo intermediário.
+3. **Helper `_utils.resolver_lote_consolidador`** se pattern se repetir.
+4. **Macro `--rollback-from-log`** futuro.
+5. **CLI `--nome-lote-destino`** custom (atualmente hardcoded "MIGRAÇÃO" via service).
+
+**Conclusão**: Skill 2 mín viável evolui para 3 modos (A/B/C). Incidente G031 expôs risco arquitetural — corrigido + documentado + pattern escalável codificado. PROD validado: 4.319,4019 un movidas em 23s.
+
+### 9.6 Code-review consolidado (3 reviewers paralelos pós-implementação)
+
+**Reviewer 1 (code)**, **Reviewer 2 (docs)**, **Reviewer 3 (arquitetura)** retornaram total de **17 findings** (4 HIGH cada x 3 + alguns MED/LOW). Aplicadas correções HIGH/MED + 1 bug crítico cross-arquivo:
+
+| # | Sev | Reviewer | Issue | Status |
+|---|---|---|---|---|
+| **CR1#1** | HIGH | code | CLI `_FALHAS` sem `FALHA_LOTE_DESTINO_INEXISTENTE` → exit 4 falso em dry-run sem lote MIGRAÇÃO | ✅ corrigido + removidos `FALHA_PASSO_1/2` stale |
+| **CR1#3+CR3#1** | HIGH | code+arq | Help text `--para-indisponivel` ainda referencia `LOTES_MIGRACAO_POR_COMPANY` (defeated constant) | ✅ corrigido — agora cita `lot_svc.criar_se_nao_existe` |
+| **CR1#4** | MED | code | Test comment em `test_transferir_para_indisponivel_cd` reforça constant antiga | ✅ comment atualizado para citar G031 |
+| **CR1#5** | HIGH | code | Sem teste cobrindo `EXECUTADO_AUTO_CORRIGIDO` como sucesso (gap de regressão) | ✅ +1 teste novo |
+| **CR2#1** | HIGH | docs | SKILL.md frontmatter diz "2 modos atômicos" | ✅ "3 modos atômicos" |
+| **CR2#2** | HIGH | docs | ROADMAP linha 23 contradição interna "37→40" vs linha 71 "37→52" | ✅ alinhado para "37→52" |
+| **CR2#3** | MED | docs | ROADMAP ORDEM DE EXECUÇÃO row Skill 2 "33 pytest, 2 modos" stale | ✅ "52 pytest, 3 modos + MODO C PROD" |
+| **CR2#4** | MED | docs | Ambiguidade `FALHA_PASSO_1/2` vs `FALHA_REDUCAO/AUMENTO` | ✅ removido PASSO_1/2; ROADMAP nota refactor |
+| **CR2#5** | LOW | docs | Memory "14+ orquestradores" vs SKILL.md "16+" | ✅ memory atualizado |
+| **CR3#2** | HIGH | arq | `LOTES_MIGRACAO_POR_COMPANY` ainda importável sem guard | ✅ DeprecationWarning + comentário extenso |
+| **CR3#5** | MED | arq | FALHA_AUMENTO sem `rollback_hint` machine-readable | ✅ `rollback_hint` dict adicionado + 2 testes |
+| **CR3#6** | MED | arq | Tree galho 2.2 sem "SEM NF" como disambiguation | ✅ atualizado em subagente |
+| **CR3#7** | **CRITICAL** | arq | `fat_lf_cleanup.py:41` tem mesmo bug `create_returns` que `picking.devolver` pré-v3 (não trata `list`/`bool`); script VIVO em PROD | ✅ parser sincronizado com v3 (aceita 3 shapes) |
+| **CR3#7b** | MED | arq | MAPA_SCRIPTS Skill 8 table inconsistente (status `AO-CAPINAR` vs Skill 5 table `AO-CAPINAR-VIVO`) | ✅ Skill 8 row atualizada |
+| CR3#3 | LOW | arq | Outras constants `COMPANY_PARTNER_ID`, `INCOTERM_CIF`, `CARRIER_NACOM` | ✅ confirmadas safe (uma-por-company, não per-product) |
+| CR3#4 | LOW | arq | `picking.devolver` G019 pattern já correto | ✅ confirmado |
+| CR3#8 | LOW | arq | Pattern "resolver POR PRODUTO via lot_svc" é geral, não MIGRAÇÃO-only | ✅ documentado conclusão; sem ação (premature abstraction) |
+
+**Pytest pós-correções**: **146 verdes** (era 143; +3 testes: `EXECUTADO_AUTO_CORRIGIDO`, `rollback_hint`, `rollback_hint dry-run None`).
+
+**Achado mais crítico (CR3#7)**: `scripts/inventario_2026_05/fat_lf_cleanup.py:41` continuava com parser `create_returns` antigo (`new_pid = res.get('res_id') if isinstance(res, dict) else res`) — mesmo bug que `picking.devolver` na v3 pre-CR1#1. Se o Odoo retornasse uma lista `[pid]` em vez de dict ou int, fat_lf_cleanup silenciosamente passava a lista como `picking_id` em `search_read`, fazendo a validação subsequente retornar vazio e a função reportar sucesso falso. Sincronizado com a v3.
+
+### 9.7 Pendências da sessão (não-bloqueantes)
+
+1. Auditar `grep -rn "LOTES_MIGRACAO_POR_COMPANY\[" app/ scripts/` em sessão futura — confirmar zero callers reais (já confirmado em CR3 via grep, mas reauditar periodicamente).
+2. Smoke test 1-unidade (`--confirmar` em 1 caso antes de batch) como padrão entre dry-run e batch completo.
+3. Helper `_utils.resolver_lote_consolidador(nome, pid, cid)` se padrão se repetir com nome diferente de "MIGRAÇÃO" (premature agora).
+4. Macro `--rollback-from-log <path>` futuro — automatizar reversão usando `rollback_hint` reportado.
+5. CLI `--nome-lote-destino` custom (atualmente hardcoded "MIGRAÇÃO" via default; service aceita).
+
+---
+
+## 10. Sessão 2026-05-24 v5: Skill 4 `operando-mo-odoo` nasce + 4 dry-run PROD + 9 findings code-review
+
+> Após sessão v4 (Skill 2 modo C + G031). Foco: criar Skill 4 do zero (sem service legado) seguindo ordem bottom-up. Demanda real: cancelar MOs antigas/zumbi periodicamente em FB (caso 120 MOs em 2026-05-20 validou pattern em PROD).
+
+### 10.1 Cronologia
+
+| # | Evento | Resultado |
+|---|---|---|
+| 1 | Setup + pytest baseline 146 verdes | OK |
+| 2 | C1 mineração: 2 scripts-fonte (`cancelar_mos.py` + `14_cancelar_mos_antigas_fb.py`) + investigação AO VIVO via `/tmp/investigar_mos_skill4.py` | 10.000 MOs FB, 17 CD, 3367 LF; idempotência action_cancel validada em FB/OP/BALDE/00009 |
+| 3 | C2 service `mo.py` (NOVO — do zero pattern Skill 1) + shim preventivo `services/stock_mo_service.py` | 26 testes pytest verdes baseline |
+| 4 | C3-C5 SKILL.md + CLI `operar_mo.py` (single OR batch) | Help text + --dry-run default + exit codes 0/1/2/4 |
+| 5 | C6 dry-run vs PROD 4 casos (NOOP idempotente, DRY_RUN_OK sem consumo, FALHA_FURO_CONTABIL consumo=1410.05, batch FB ate 2025-06) | 100% bate; log em `/tmp/log_skill4_C6_validacao_dry_run.json` |
+| 6 | C7 cross-refs: subagente + ROUTING_SKILLS (46→47 invocaveis, 14→15 Skills Odoo) + tool_skill_mapper + CLAUDE.md raiz + app/odoo/CLAUDE.md | 6 arquivos atualizados |
+| 7 | C8 folha `app/odoo/estoque/fluxos/3.1-cancelar-mo.md` (3 sub-casos a/b/c; 3.1.c DELEGADO para mrp.unbuild) | Pattern progressive disclosure |
+| 8 | C9-C10 arquivar `cancelar_mos.py` + `14_cancelar_mos_antigas_fb.py` para `_validados/operando-mo-odoo/` (sys.path parents[2]→parents[4]; museum vivo validado via import) | MAPA_SCRIPTS + ROADMAP + README fluxos atualizados |
+| 9 | Code-review paralelo (2 reviewers): 9 findings reais (4 HIGH + 4 MED + 1 LOW) | Ver §10.4 abaixo |
+| 10 | Fixes aplicados: order server-side no search_read, warning consumo='qualquer', tratamento `None` pós-cancel, ROUTING_SKILLS galho 6, README fluxos status, SKILL.md "4 casos", refinar cross-skill 3.1.c | +3 testes (29 verdes total Skill 4) |
+| 11 | Baseline final: **175 pytest verdes** (146 antigos + 29 Skill 4) | ✅ |
+
+### 10.2 Métricas finais
+
+- **29 pytest verdes** (Skill 4 — 26 baseline + 3 cobrindo CR fixes).
+- **175 pytest verdes totais** (172 anterior + 3 da Skill 4).
+- **4 dry-run PROD validados** (todos sem `--confirmar` em PROD nesta sessão; pattern já validado em PROD em sessão anterior 2026-05-20 via scripts-fonte).
+- **0 execuções `--confirmar`** em PROD nesta sessão (demanda-driven).
+- **2 scripts SUPERADOS** (`cancelar_mos.py` + `14_cancelar_mos_antigas_fb.py` → `_validados/operando-mo-odoo/`).
+- **2 docs novos**: `app/odoo/estoque/fluxos/3.1-cancelar-mo.md` (folha) + `_validados/operando-mo-odoo/VALIDACAO.md`.
+- **1 service novo**: `app/odoo/estoque/scripts/mo.py` (~380 linhas) + shim `services/stock_mo_service.py`.
+- **1 SKILL.md + 1 CLI** em `.claude/skills/operando-mo-odoo/`.
+
+### 10.3 Pre-mortem 4 dimensões
+
+#### Riscos operacionais (impacto: PROD)
+
+| Risco | Probabilidade | Impacto | Mitigação atual | Mitigação adicional |
+|---|---|---|---|---|
+| **Operador usa `--consumo qualquer` esperando cancelar MOs com consumo** | Média | Baixo (todas FALHA_FURO_CONTABIL — sem efeito mas confuso) | Warning logado (CR fix M3) | Considerar erro fatal no service |
+| **Cancelamento de MO `in progress` real (operador apontando)** | Baixa-Média | Médio (perde apontamento parcial) | Default `--states draft,confirmed,progress,to_close` inclui progress; recomenda CLI doc filtrar | Adicionar flag `--excluir-progress` opcional como helper |
+| **MO mãe-filha (multi-nível semi-acabado)**: cancelar acabado deixa semi órfão | Média | Médio (fluxo cross-skill manual) | Docs em SKILL.md + memória [[reaproveitar-semiacabado-orfao-mo-cancelada]] | Verificar via Skill 9 antes — não automatizado |
+| **Cascade delete da MO (config customizada Odoo)** | Baixa | Baixo (CR fix M1 trata como EXECUTADO) | `cancel_deleted` status retornado | Logar caso real se ocorrer (auditoria) |
+| **Search_read sem limit em batch de 10.000+ MOs FB** | Média (FB tem 10k+ MOs cumulativas) | Médio (Python sort lento, RAM ~50MB para 10k dicts) | order server-side ASC (CR fix H1) | Iteração futura: search + read em batches de 500 |
+
+#### Riscos técnicos (impacto: código + integração)
+
+| Risco | Probabilidade | Impacto | Mitigação atual |
+|---|---|---|---|
+| **Pyright stale reportando `app.odoo.estoque.scripts.mo` não resolvível** | Alta | Baixo (apenas IDE) | Documentado em §9.3 |
+| **Idempotência action_cancel em state=cancel** | Alta (validado AO VIVO) | Baixo | NOOP retornado sem RPC extra |
+| **`mrp.production.action_cancel` retorna `True` em sucesso** | Alta | Baixo | Code reapproved não checar retorno; checa apenas state pós |
+| **`stock.move.quantity` campo correto (vs product_qty)** | Alta | Médio se errado | Validado em scripts-fonte + investigação AO VIVO; comentado no service |
+
+#### Riscos de processo (impacto: continuidade)
+
+| Risco | Probabilidade | Impacto | Mitigação |
+|---|---|---|---|
+| **Próxima sessão usa Skill 4 sem ler G-MO-01 docs** | Média | Alto (cancelar com consumo = furo) | SKILL.md + fluxo 3.1 + service docstring + memória |
+| **Skill 4 evolui para criar/alterar MO sem demanda real** | Baixa | Médio (premature implementation) | Princípio demanda-driven documentado; átomos previstos marcados ⬜ |
+| **Operador esquece de pre-flight via Skill 9 antes de batch** | Média | Médio (cancela MO de produto crítico) | Receita docs CLI mostra dry-run obrigatório; canary `--limite 1` documentado |
+| **Cross-skill com mrp.unbuild manual (3.1.c)** falha por operador errar args XML-RPC | Alta | Médio (lotes errados na devolução) | Memória `[[reaproveitar-semiacabado-orfao-mo-cancelada]]` documenta procedimento |
+
+#### Riscos arquiteturais (impacto: aposentar/refatorar)
+
+| Risco | Probabilidade | Impacto | Mitigação proposta |
+|---|---|---|---|
+| **Demanda real para `mrp.unbuild` virar skill** se 2+ casos repetirem | Baixa-Média | Baixo (criar skill nova `mrp-unbuild-odoo`) | Acompanhar — RFC quando padrão repetir |
+| **Demanda real para `alterar_mo` (mover componente, mudar qty) virar fluxo composto** | Média | Baixo (criar folha cross-skill 3.2) | Caso real existe ([[mo_componente_local_consumo]]); aguardar 2+ ocorrências |
+| **Helper `medir_consumo_mo` reutilizado em outras skills** (planejamento, auditoria) | Média | Baixo (mover para `_utils`) | Conforme demanda |
+
+### 10.4 Code-review consolidado (2 reviewers paralelos)
+
+**Reviewer 1 (code)** focou em `mo.py` + `test_stock_mo_service.py` + `operar_mo.py`. **Reviewer 2 (docs/arquitetura)** focou em SKILL.md + fluxo 3.1 + ROADMAP + cross-refs.
+
+| # | Sev | Rev | Issue | Status |
+|---|---|---|---|---|
+| **CR1-H1** | HIGH | code | `cancelar_mos_em_massa` search_read sem `order` (Python sort 10k+ MOs) | ✅ `order='create_date asc'` server-side + comentário explica por que não usar `limit=max_n` (pré-filtro de consumo precisa de TUDO antes do trim) |
+| **CR1-M1** | MED | code | `_ler_mo` retorna `None` após action_cancel → FALHA_STATE_INESPERADO falso | ✅ Tratado como `EXECUTADO` com `state_apos='cancel_deleted'` + warning log + 1 teste novo |
+| **CR1-M3** | MED | code | `consumo='qualquer'` sem `forcar_consumo=True` silenciosamente bloqueia todas | ✅ Warning logado em entry-point de `cancelar_mos_em_massa` + 1 teste novo |
+| CR1-LOW1 | LOW | code | `mo.py` sem `__all__` (shim `from ... import *` exporta tudo) | ⏸️ Não bloqueia; aceitável (constants úteis) |
+| CR1-LOW2 | LOW | code | `_salvar_log` path `scripts/inventario_2026_05/auditoria/` envelhece mal | ⏸️ Conscientizado; refatorar quando inventory project encerrar |
+| CR1-LOW3 | LOW | code | `import pytest` inline em 1 teste | ⏸️ Estilo menor |
+| **CR2-H1** | HIGH | docs | `fluxos/README.md` linha 51, 54: status `2.5`/`3.1` mostrados como ⬜ (incorreto — ambos 🟡) | ✅ Atualizado para 🟡 com link folha |
+| **CR2-H2** | HIGH | docs | `ROUTING_SKILLS.md` galho 6 (ESTOQUE WRITE) não lista `operando-mo-odoo` (agrupa em "em construção") | ✅ Adicionada linha explícita no galho 6 |
+| CR2-H3 | LOW | docs | Divergência "14" (v3) vs "15" (v5) Skills Odoo entre checkpoints | ⏸️ Não bloqueia (transição entre sessões correta) |
+| **CR2-M1** | MED | docs | `SKILL.md` seção Validação: "C6: 2-3 casos" mas real é 4 | ✅ Atualizado para "4 casos" + descrição completa |
+| **CR2-M2** | MED | docs | `fluxos/3.1-cancelar-mo.md` cross-skill: Skill 2 listada como "pré-condição de 3.1.c" mas 3.1.c é DELEGADO | ✅ Refinado: Skill 2 apenas como referência de contexto relacionado |
+| CR2-LOW1-4 | LOW | docs | Vários menores (description frontmatter, ponteiro VALIDACAO_FINAL §10 stale) | ⏸️ Não bloqueia; §10 agora existe (este texto) |
+
+### 10.5 Pytest final pós-correções
+
+**175 verdes totais** (172 anterior + 3 da Skill 4 cobrindo CR1-M1, CR1-M3, CR1-H1). Skill 4 isolada: **29 verdes** em 0.78s.
+
+### 10.6 Aprendizados estruturais
+
+1. **Pattern de criar skill do zero**: Skill 4 (sem service legado) seguiu pattern de Skill 1 (criar do zero) mais bem-sucedido que tentar adaptar Skill 5 (capinar service existente). Diferenças: (a) sem shim retroativo (criamos shim preventivo para futuro); (b) sem testes prévios para preservar (escrever todos do zero foi mais limpo); (c) sem risco de quebrar consumers ativos.
+2. **Investigação AO VIVO é crítica para skills WRITE em domínios novos**: rodar `/tmp/investigar_mos_skill4.py` antes do C1 final revelou (a) idempotência confirmada (não documentada), (b) volumes reais (FB 10k MOs vs CD 17 vs LF 3.4k) que mudaram a estratégia de filtros default, (c) confirmação que `qty_produced ≠ consumo` (campo correto é `stock.move.quantity`).
+3. **Code-review paralelo (code + docs) pega bugs ortogonais**: reviewer code achou OOM/M1 não-relacionados ao que o reviewer docs achou (status incoerente no README + ROUTING galho 6 sem skill listada). Sem ambos, 4 fixes HIGH/MED ficariam abertos.
+4. **G019-like pattern reaproveitável**: re-le state pós-ação é invariante geral, não específica de pickings. Skill 4 aplica em `cancelar_mo` (verifica state='cancel' pós-action_cancel).
+5. **Princípio demanda-driven validado novamente**: `criar_mo` e `alterar_mo` estavam previstos no briefing inicial mas NÃO implementados — sem demanda real. Mantidos como ⬜ no catálogo. Pattern alinhado com [[feedback_skills_demanda_driven]].
+6. **Status `cancel_deleted`** (M1 fix): novo precedente para skills futuras que cancelam objetos Odoo com cascade customizado (M0s, vouchers, journals).
+
+### 10.7 Pendências da sessão v5 (não-bloqueantes)
+
+1. **Smoke test `--confirmar 1 MO` real** em PROD quando demanda surgir (canary `--limite 1` antes de batch — padrão sessão).
+2. **Skill `mrp-unbuild-odoo`** futura se padrão 3.1.c (MO com consumo) repetir 2+ casos.
+3. **Skill `alterar_mo`** (mover componente, ajustar qty) — implementar como folha de fluxo composto 3.2 se padrão repetir.
+4. **Helper `_utils.medir_consumo_mo`** se for usado por outras skills (planejamento, auditoria).
+5. **Refatorar batch para `search` + `read` chunked** se executions reais em batch >5000 MOs surgirem (atualmente Python sort de 10k é OK ~50ms).
+6. **`--excluir-progress` flag opcional** se incidente de cancelar MO em produção ativa ocorrer.

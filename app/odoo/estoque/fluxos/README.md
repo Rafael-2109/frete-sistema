@@ -48,10 +48,11 @@ Exemplo:
    2.2 realocar saldo (lote→lote mesma loc / loc→loc mesmo lote / MIGRAÇÃO↔Indisponível) → transferindo-interno-odoo 🟡 ([folha](2.2-realocar-saldo.md))
    2.3 transferir saldo entre CÓDIGOS (par UnificacaoCodigos, mesmo lote) → (skill da feature transferencia-saldo-codigo) ⬜
    2.4 cancelar reserva / MLs órfãs / picking → operando-reservas-odoo 🟡 ([folha](2.4-cancelar-reserva-orfa.md))
-   2.5 cancelar/criar/devolver picking → operando-picking-odoo ⬜
+   2.5 cancelar/validar/devolver picking → operando-picking-odoo 🟡 ([folha](2.5-cancelar-validar-devolver-picking.md))
    2.9 CONSULTA ao vivo (saldo restante, quants, MLs órfãs) → consultando-quant-odoo 🟡 ([folha](2.9-consulta-quant-ao-vivo.md))  (pickings: previsto, sem CLI ainda)
 3  Produção / PCP
-   3.1 cancelar/criar/alterar MO → operando-mo-odoo ⬜
+   3.1 cancelar MO (single ou batch — guard G-MO-01 furo contábil) → operando-mo-odoo 🟡 ([folha](3.1-cancelar-mo.md))
+       (3.1.c MO COM consumo > 0 → DELEGADO para `mrp.unbuild` cross-skill — sem skill ainda)
 ```
 
 > O nó **2.3** já tem spec+plano prontos (`docs/superpowers/{specs,plans}/2026-05-22-transferencia-saldo-codigos-odoo*`) — convergente: `TransferenciaSaldoCodigoService` (= `ajustar_quant`×2 + `criar_se_nao_existe` + espelho local).

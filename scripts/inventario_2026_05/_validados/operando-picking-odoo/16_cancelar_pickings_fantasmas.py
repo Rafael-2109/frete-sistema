@@ -1,6 +1,12 @@
 """16 - Cancelar pickings fantasmas que reservam lotes da planilha
 'transf para MIGRACAO.xlsx' (2026-05-18).
 
+**ARQUIVADO 2026-05-24 v3 — SUPERADO pela skill `operando-picking-odoo`.**
+Use `.claude/skills/operando-picking-odoo/scripts/operar_picking.py
+--modo cancelar --json /tmp/pickings_reservadores_15.json --idade-min 7`
+em vez deste. Mantido aqui como museum vivo (executavel para retomadas
+em caso extremo, sys.path corrigido p/ rodar de _validados).
+
 Pickings fantasmas = pickings em state=assigned/draft com >7 dias de idade
 e origin antiga (C24xxxxx) ou SEM origin, criados ha meses mas nunca
 executados. Reservam saldo de lotes que precisamos transferir para MIGRACAO.
@@ -34,7 +40,7 @@ from pathlib import Path
 from typing import Dict, List
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+sys.path.insert(0, str(_THIS.parents[4]))
 
 from app import create_app  # noqa: E402
 from app.odoo.services.stock_picking_service import StockPickingService  # noqa: E402

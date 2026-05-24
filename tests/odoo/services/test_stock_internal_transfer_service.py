@@ -687,3 +687,374 @@ def test_transferir_quantidade_para_lote_v2_resolve_lote_destino(service, odoo_m
     assert res['lote_destino_nome'] == LOTE_MIGRACAO_CANONICO
     assert res['lote_destino_criado_agora'] is True
     assert res['lot_id_destino'] == 30400
+
+
+# ============================================================
+# transferir_para_indisponivel — 2026-05-24 v4 (Skill 2 extension)
+# Invariante: destino sempre = (LOCAIS_INDISPONIVEL[cid], LOTES_MIGRACAO[cid])
+# ============================================================
+
+def test_transferir_para_indisponivel_fb_caso_feliz(service):
+    """FB: chama ajustar_quant 2x direto (refatorado v4 — 1 passo cross loc+lote)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -223.0},  # reducao origem
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 223.0},   # aumento destino
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=11111, company_id=1,
+            lot_id_origem=26909, qty=223.0,
+        )
+
+    assert res['status'] == 'EXECUTADO'
+    assert res['qty_transferida'] == 223.0
+    assert res['location_id_origem'] == 8           # default FB/Estoque
+    assert res['location_id_destino'] == 31088      # FB/Indisp
+    assert res['lot_id_origem'] == 26909
+    # lot_id_destino vem do lot_svc_mock.criar_se_nao_existe (default 999)
+    # — NAO eh constant fixa (incidente 2026-05-24 v4)
+    assert res['lot_id_destino'] == 999
+    assert res['lote_destino_nome'] == 'MIGRAÇÃO'
+    assert res['lote_destino_criado_agora'] is False
+    # 2 chamadas ajustar_quant
+    assert quant_svc.ajustar_quant.call_count == 2
+    # Call 1: reduzir origem (lote real, FB/Estoque, -qty)
+    call1 = quant_svc.ajustar_quant.call_args_list[0].kwargs
+    assert call1['location_id'] == 8
+    assert call1['lot_id'] == 26909
+    assert call1['delta'] == -223.0
+    assert call1['delta_esperado'] == -223.0
+    assert call1['criar_se_faltar'] is False
+    # Call 2: aumentar destino (MIGRACAO, FB/Indisp, +qty, criar se faltar)
+    call2 = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call2['location_id'] == 31088
+    assert call2['lot_id'] == 999  # resolvido por produto via lot_svc
+    assert call2['delta'] == 223.0
+    assert call2['delta_esperado'] == 223.0
+    assert call2['criar_se_faltar'] is True
+
+
+def test_transferir_para_indisponivel_cd(service):
+    """CD: usa LOCAIS_INDISPONIVEL[4]=31090 + LOTES_MIGRACAO[4]=30856."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO'}, {'status': 'EXECUTADO'},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=2222, company_id=4,
+            lot_id_origem=99999, qty=100.0,
+        )
+
+    assert res['location_id_origem'] == 32         # CD/Estoque
+    assert res['location_id_destino'] == 31090     # CD/Indisp
+    # lot_id_destino: resolvido via lot_svc.criar_se_nao_existe POR PRODUTO
+    # (mock default 999). NAO usar LOTES_MIGRACAO_POR_COMPANY[4]=30856 como FK
+    # universal (G031 — incidente 2026-05-24 v4).
+    assert res['lot_id_destino'] == 999
+    assert res['lote_destino_nome'] == 'MIGRAÇÃO'
+
+
+def test_transferir_para_indisponivel_construtor_default_cria_lot_svc():
+    """StockInternalTransferService sem lot_svc explicito cria default — guard nao dispara.
+
+    (Constructor de StockInternalTransferService cria StockLotService por
+    default; guard no metodo so dispara se voce passar `service.lot_svc = None`
+    manualmente apos construir — caso degenerado.)
+    """
+    from app.odoo.estoque.scripts.transfer import StockInternalTransferService
+    odoo = MagicMock()
+    odoo.search.return_value = [42]  # lot_svc.buscar_por_nome retorna 42 via search
+    svc = StockInternalTransferService(odoo=odoo)  # sem lot_svc, cria default
+    assert svc.lot_svc is not None  # default criado
+
+
+def test_transferir_para_indisponivel_company_invalida_raises():
+    """company_id sem entrada em LOCAIS_INDISPONIVEL → ValueError."""
+    from app.odoo.estoque.scripts.transfer import StockInternalTransferService
+    lot_svc = MagicMock()
+    lot_svc.criar_se_nao_existe.return_value = (999, False)
+    svc = StockInternalTransferService(odoo=MagicMock(), lot_svc=lot_svc)
+    with pytest.raises(ValueError, match='LOCAIS_INDISPONIVEL'):
+        svc.transferir_para_indisponivel(
+            product_id=1, company_id=999,
+            lot_id_origem=42, qty=10,
+        )
+
+
+def test_transferir_para_indisponivel_origem_ja_indisp_raises(service):
+    """location_id_origem == Indisp → ValueError (já está lá)."""
+    with pytest.raises(ValueError, match='ja esta em Indisponivel'):
+        service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=42, qty=10,
+            location_id_origem=31088,  # já é FB/Indisp
+        )
+
+
+def test_transferir_para_indisponivel_lote_origem_ja_migracao_raises(service):
+    """lot_id_origem == lote MIGRACAO resolvido pelo lot_svc → ValueError.
+
+    O lot_svc_mock default retorna criar_se_nao_existe=(999, False), entao
+    passar lot_id_origem=999 gatilha o guard.
+    """
+    with pytest.raises(ValueError, match='ja consolidado'):
+        service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=999,  # mesmo id que lot_svc_mock retorna
+            qty=10,
+        )
+
+
+def test_transferir_para_indisponivel_qty_zero_raises(service):
+    with pytest.raises(ValueError, match='qty deve ser > 0'):
+        service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=42, qty=0,
+        )
+
+
+def test_transferir_para_indisponivel_dry_run(service):
+    """Dry-run propaga para ambos ajustes."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'DRY_RUN_OK', 'ajuste_aplicado': -100.0},
+        {'status': 'DRY_RUN_OK', 'ajuste_aplicado': 100.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+            dry_run=True,
+        )
+
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['qty_transferida'] == 100.0  # planejado
+    # Ambas chamadas com dry_run=True
+    for call in quant_svc.ajustar_quant.call_args_list:
+        assert call.kwargs['dry_run'] is True
+
+
+def test_transferir_para_indisponivel_falha_reducao(service):
+    """Se reducao origem falha, aumento destino NÃO é chamado."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.return_value = {
+        'status': 'FALHA_QUANT_VAZIO',
+        'erro': 'sem quant para product=1 ...',
+    }
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+        )
+
+    assert res['status'] == 'FALHA_REDUCAO'
+    assert res['qty_transferida'] == 0.0
+    assert 'sem quant' in res['erro']
+    # Apenas 1 chamada (não chegou ao aumento)
+    assert quant_svc.ajustar_quant.call_count == 1
+
+
+def test_transferir_para_indisponivel_falha_aumento_estado_parcial(service):
+    """Reducao OK + aumento falha → FALHA_AUMENTO + qty_reduzida_origem reportada."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -100.0},  # origem ok
+        {'status': 'FALHA_ODOO', 'erro': 'rede caiu no aumento'},  # destino falhou
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+        )
+
+    assert res['status'] == 'FALHA_AUMENTO'
+    assert res['qty_transferida'] == 0.0
+    assert res['qty_reduzida_origem'] == 100.0  # origem foi reduzida em PROD
+    assert res['erro'] == 'rede caiu no aumento'
+
+
+def test_transferir_para_indisponivel_location_id_origem_explicito(service):
+    """Override location_id_origem (ex.: FB/Pré-Produção/Linha Manual)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -50.0},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 50.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=50.0,
+            location_id_origem=4067,  # FB/Pré-Produção/Linha Manual
+        )
+
+    # Reducao deve usar location_id=4067 (não default 8)
+    call_origem = quant_svc.ajustar_quant.call_args_list[0].kwargs
+    assert call_origem['location_id'] == 4067
+    # Destino segue invariante (Indisp)
+    call_destino = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call_destino['location_id'] == 31088
+
+
+def test_transferir_para_indisponivel_resetar_reserva_propaga(service):
+    """--resetar-reserva-origem propaga só para reducao (destino sempre False)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -50.0},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 50.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=50.0,
+            resetar_reserva_origem=True,
+        )
+
+    call_origem = quant_svc.ajustar_quant.call_args_list[0].kwargs
+    assert call_origem['resetar_reserva'] is True
+    assert call_origem['validar_nao_abaixo_reserva'] is False
+    # Destino NUNCA reseta reserva
+    call_destino = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call_destino.get('resetar_reserva', False) is False
+
+
+def test_transferir_para_indisponivel_dry_run_lote_destino_inexistente(odoo_mock):
+    """Em dry-run, se lote MIGRAÇÃO não existe → FALHA_LOTE_DESTINO_INEXISTENTE."""
+    from app.odoo.estoque.scripts.transfer import StockInternalTransferService
+    lot_svc = MagicMock()
+    lot_svc.buscar_por_nome.return_value = None  # lote nao existe
+    svc = StockInternalTransferService(odoo=odoo_mock, lot_svc=lot_svc)
+    res = svc.transferir_para_indisponivel(
+        product_id=1, company_id=1,
+        lot_id_origem=26909, qty=100.0,
+        dry_run=True,
+    )
+    assert res['status'] == 'FALHA_LOTE_DESTINO_INEXISTENTE'
+    assert res['lot_id_destino'] is None
+    assert res['lote_destino_nome'] == 'MIGRAÇÃO'
+    # Em dry-run NAO chama criar_se_nao_existe (evita poluir Odoo)
+    lot_svc.criar_se_nao_existe.assert_not_called()
+
+
+def test_transferir_para_indisponivel_modo_real_cria_lote_destino(odoo_mock):
+    """Em modo real, criar_se_nao_existe POR PRODUTO (não usa constant universal)."""
+    from unittest.mock import patch
+    from app.odoo.estoque.scripts.transfer import StockInternalTransferService
+    lot_svc = MagicMock()
+    lot_svc.criar_se_nao_existe.return_value = (77777, True)  # criado agora
+    svc = StockInternalTransferService(odoo=odoo_mock, lot_svc=lot_svc)
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -100.0},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 100.0},
+    ]
+    with patch.object(svc, '_quant_svc', return_value=quant_svc):
+        res = svc.transferir_para_indisponivel(
+            product_id=11111, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+        )
+
+    # lot_svc.criar_se_nao_existe chamado com NOME + PRODUTO + COMPANY
+    lot_svc.criar_se_nao_existe.assert_called_once_with(
+        'MIGRAÇÃO', 11111, 1,
+    )
+    assert res['lot_id_destino'] == 77777
+    assert res['lote_destino_criado_agora'] is True
+    # Aumento usa o lot_id resolvido POR PRODUTO (não constant)
+    call_destino = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call_destino['lot_id'] == 77777
+
+
+def test_transferir_para_indisponivel_aceita_executado_auto_corrigido(service):
+    """ajustar_quant pode retornar EXECUTADO_AUTO_CORRIGIDO (guard delta_esperado);
+    composição deve aceitar como sucesso (não levantar FALHA_REDUCAO/AUMENTO)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO_AUTO_CORRIGIDO', 'ajuste_aplicado': -100.0,
+         'auto_correcao_aplicada': True},
+        {'status': 'EXECUTADO_AUTO_CORRIGIDO', 'ajuste_aplicado': 100.0,
+         'auto_correcao_aplicada': True},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+        )
+    assert res['status'] == 'EXECUTADO'
+    assert res['qty_transferida'] == 100.0
+
+
+def test_transferir_para_indisponivel_falha_aumento_inclui_rollback_hint(service):
+    """CR3#5 (2026-05-24 v4): FALHA_AUMENTO em modo real reporta rollback_hint
+    com chamada exata ajustar_quant para reverter origem (machine-readable)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -100.0},
+        {'status': 'FALHA_ODOO', 'erro': 'rede caiu'},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+        )
+    assert res['status'] == 'FALHA_AUMENTO'
+    assert res['qty_reduzida_origem'] == 100.0
+    assert res['rollback_hint'] is not None
+    hint = res['rollback_hint']
+    assert hint['action'] == 'ajustar_quant'
+    assert hint['product_id'] == 1
+    assert hint['company_id'] == 1
+    assert hint['location_id'] == 8       # FB/Estoque (default origem)
+    assert hint['lot_id'] == 26909        # lote origem
+    assert hint['delta'] == 100.0          # reverter +qty
+    assert hint['delta_esperado'] == 100.0
+    assert hint['criar_se_faltar'] is True  # defensivo (Odoo pode deletar quant zerado)
+
+
+def test_transferir_para_indisponivel_dry_run_nao_inclui_rollback_hint(service):
+    """Em dry-run não há estado parcial → rollback_hint None mesmo se simular FALHA."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'DRY_RUN_OK'},
+        {'status': 'FALHA_QUANT_VAZIO', 'erro': 'sem quant'},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+            dry_run=True,
+        )
+    assert res['status'] == 'FALHA_AUMENTO'
+    assert res['qty_reduzida_origem'] == 0.0  # dry-run não reduziu
+    assert res['rollback_hint'] is None
+
+
+def test_transferir_para_indisponivel_nome_lote_destino_custom(service):
+    """Aceita nome_lote_destino customizado (não força 'MIGRAÇÃO')."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO'}, {'status': 'EXECUTADO'},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=50.0,
+            nome_lote_destino='QUARENTENA',  # nome alternativo
+        )
+    # lot_svc.criar_se_nao_existe chamado com NOME custom
+    assert res['lote_destino_nome'] == 'QUARENTENA'
+    service.lot_svc.criar_se_nao_existe.assert_called_with(
+        'QUARENTENA', 1, 1,
+    )

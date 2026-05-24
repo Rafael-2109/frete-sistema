@@ -36,7 +36,7 @@ app/odoo/
   │   ├── sincronizacao_integrada_service.py # Orquestra sync completa (fat→cart) (~19K)
   │   ├── pedido_sync_service.py           # Sync individual de pedido (~19K)
   │   ├── inventario_pipeline_service.py   # Pipeline inventario 2026-05 (F0-F5, ondas LF/FB/CD)
-  │   ├── stock_picking_service.py         # Operacoes stock.picking (criar/validar/cancelar)
+  │   ├── stock_picking_service.py         # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/picking.py (Skill 5)
   │   ├── stock_lot_service.py             # Operacoes stock.lot (criar/buscar com fallback like)
   │   ├── stock_internal_transfer_service.py # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/transfer.py (Skill 2)
   │   ├── stock_quant_adjustment_service.py # SHIM 2026-05-23 — re-exporta de app/odoo/estoque/scripts/quant.py (Skill 1)
@@ -231,8 +231,10 @@ A partir de 2026-05-22, todas as operacoes de ESCRITA de estoque no Odoo (ajuste
 | Skill | Service (novo) | SHIM antigo | Status |
 |-------|----------------|-------------|--------|
 | `ajustando-quant-odoo` | `app/odoo/estoque/scripts/quant.py` | `services/stock_quant_adjustment_service.py` | ✅ MATURADA |
-| `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 min viavel (2026-05-24) |
+| `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 min viavel (2026-05-24 v2) |
 | `operando-reservas-odoo` | `app/odoo/estoque/scripts/reserva.py` | — | 🟡 min viavel |
+| `operando-picking-odoo` | `app/odoo/estoque/scripts/picking.py` | `services/stock_picking_service.py` | 🟡 min viavel (2026-05-24 v3 — invariante G019/G020 codificada) |
+| `operando-mo-odoo` | `app/odoo/estoque/scripts/mo.py` | `services/stock_mo_service.py` (preventivo) | 🟡 min viavel (2026-05-24 v5 — guard G-MO-01 furo contabil; idempotencia validada) |
 | `consultando-quant-odoo` (READ) | `app/odoo/estoque/scripts/consulta_quant.py` | — | 🟡 min viavel |
 
 Subagente orquestrador: `.claude/agents/gestor-estoque-odoo.md`. Folhas de fluxo: `app/odoo/estoque/fluxos/`.

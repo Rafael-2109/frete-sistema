@@ -1,6 +1,6 @@
 # app/odoo/estoque — Operações de Escrita de Estoque no Odoo
 
-**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22) | **Atualizado:** 2026-05-22
+**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22; ONDA 0.4 ✅ fechada 2026-05-24 v3 — G019/G020 codificadas no service) | **Atualizado:** 2026-05-24
 **Audiência:** Claude Code (dev) + agente web. Doc **machine-first** — contratos e regras.
 
 Pacote-destino da consolidação dos ~105 scripts ad-hoc de inventário (`scripts/inventario_2026_05/`) em **átomos versáteis e auto-seguros** (services), consumidos por **skills** (`.claude/skills/`) + o subagente **`gestor-estoque-odoo`** (`.claude/agents/`). Este CLAUDE.md é a **constituição** da arquitetura.
@@ -74,9 +74,9 @@ O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem c
 |-------|-------------|-------------------|--------|--------|
 | `ajustando-quant-odoo` | stock.quant | `scripts/quant.py` (StockQuantAdjustmentService) | C1 | ✅ **MATURADA** (100 ajustes em prod 2026-05-23) |
 | `transferindo-interno-odoo` | transferência interna intra-empresa (lote→lote mesma loc / loc→loc mesmo lote / MIGRAÇÃO↔Indisponível) | `scripts/transfer.py` (delega `ajustar_quant`×2 com `delta_esperado` propagado; G021/G022/G027) | C2 | 🟡 **mín viável** (33 pytest verdes; 2 scripts SUPERADOS 2026-05-24; orquestradores de planilha permanecem VIVOS) |
-| `operando-mo-odoo` | mrp.production (cancelar/criar/alterar) | `scripts/mo.py` (GAP→criar) | C2 | ⬜ |
+| `operando-mo-odoo` | mrp.production (cancelar — V1; criar/alterar sem demanda) | [`scripts/mo.py`](scripts/mo.py) (StockMOService — V1 criado 2026-05-24 v5; guard G-MO-01 furo contabil) | C2 | 🟡 **mín viável** (26 pytest verdes; 4 dry-run PROD validados; ainda 0 `--confirmar` em PROD) |
 | `operando-reservas-odoo` | stock.move.line + stock.picking + stock.quant (residual) | [`scripts/reserva.py`](scripts/reserva.py) (StockReservaService) | C1/C2 | 🟡 **mín viável** (3 átomos · 6 pickings/15 quants em prod 2026-05-23) |
-| `operando-picking-odoo` | stock.picking (criar/cancelar/devolver/alterar-lote/validar) | `scripts/picking.py` | C2 | ⬜ |
+| `operando-picking-odoo` | stock.picking (cancelar/validar/devolver — criar/alterar-lote sem demanda) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **mín viável** (3 átomos · 42 pytest verdes · invariante G019/G020 fechada · 6 casos dry-run PROD 2026-05-24 v3) |
 | `faturando-odoo` | **SÓ SAÍDA**: NF→robô CIEL IT→SEFAZ | `orchestrators/inventario_pipeline.py` (saída) | C3 | ⬜ |
 | `escriturando-odoo` | **SÓ ENTRADA**: DFe/NF→in_invoice→saldo | pipeline (entrada) + escriturar_dfe | C3 | ⬜ |
 | `planejando-pre-etapa-odoo` | planner (pesquisa+valida) | `scripts/pre_etapa.py` | C2 | ⬜ |
@@ -104,7 +104,7 @@ Faturamento/escrituração tocam SEFAZ (irreversível): **átomo macro** (defaul
 | infra | G016 SSL | retry + keepalive | conexão |
 | ordem | faturar→entrada; sleep; validar→liberar | guard clause (átomo N recusa se estado de N-1 ausente) | pré-condição |
 
-**Pré-requisito bloqueante:** **G019/G020 ABERTOS** (`validar()` engole erro) — fechar antes de `faturando-odoo`.
+**Pré-requisito bloqueante:** ~~G019/G020 ABERTOS~~ **G019/G020 FECHADAS no service** (2026-05-24 v3 — `validar()` re-lê `state` pós-`button_validate` e raise `RuntimeError` se != 'done'; `liberar_faturamento()` valida pré-cond `state=done` antes; cobertos por 8 testes pytest em `test_stock_picking_service.py`). Docs G019/G020 atualizadas de PROPOSTO → IMPLEMENTADO. Skill 8 `faturando-odoo` agora pode invocar `svc.validar()` confiando no invariante.
 **Irredutível:** tempo do robô CIEL IT (externo) — polling+timeout dá resultado determinístico, nunca tempo.
 
 ## 9. SUBAGENTE `gestor-estoque-odoo` (WRITE)

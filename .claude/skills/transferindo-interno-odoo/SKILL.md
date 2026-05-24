@@ -2,10 +2,12 @@
 name: transferindo-interno-odoo
 description: >-
   Skill WRITE (átomo C2) para TRANSFERIR saldo de estoque DENTRO de uma mesma
-  empresa no Odoo (NÃO emite NF). Suporta 2 modos atômicos: (a) lote→lote na
+  empresa no Odoo (NÃO emite NF). Suporta 3 modos atômicos: (a) lote→lote na
   MESMA location (`--lote-origem` → `--lote-destino`); (b) location→location
-  com o MESMO lote (`--loc-origem` → `--loc-destino`). Internamente delega a
-  `ajustar_quant` 2x (reduz origem, aumenta destino), propagando
+  com o MESMO lote (`--loc-origem` → `--loc-destino`); (c) **MODO C**
+  `--para-indisponivel` cross loc+lote consolidando em MIGRAÇÃO POR PRODUTO
+  (NOVO 2026-05-24 v4 — codifica invariante destino=Indisp+MIGRAÇÃO; ver G031).
+  Internamente delega a `ajustar_quant` 2x (reduz origem, aumenta destino), propagando
   `delta_esperado` para herdar o guard anti-bug CICLAMATO da Skill 1 (regra
   inviolável 11 do roadmap 2026-05-24). Usar quando o pedido é "transfere
   N un do lote A pro lote B", "move o saldo do lote MIGRAÇÃO para o lote
@@ -58,10 +60,22 @@ input (modo loc→loc):
   --loc-origem <id> --loc-destino <id>
   [--lote <nome|VAZIO>] (mesmo lote nos 2 lados; default = sem lote)
   [--resetar-reserva-origem] [--tolerancia-delta T] [--confirmar]
+input (MODO C — para-indisponivel; NOVO 2026-05-24 v4):
+  --cod <default_code> --empresa <FB|CD>
+  --qty <float positivo>
+  --para-indisponivel  (flag)
+  --lote <LOTE_REAL>   (obrigatorio — NUNCA proxy vazio em modo C)
+  [--loc-origem <id>]  (default = COMPANY_LOCATIONS[empresa])
+  [--resetar-reserva-origem] [--tolerancia-delta T] [--confirmar]
+  Invariante: destino = (LOCAIS_INDISPONIVEL[cid], lote 'MIGRAÇÃO' RESOLVIDO
+  POR PRODUTO via lot_svc — NUNCA usar LOTES_MIGRACAO_POR_COMPANY como FK
+  universal — ver Gotcha G031).
 output (JSON): {modo, chave{...}, resultado{
   status, qty_transferida, lot_id_origem, lot_id_destino,
+  lote_destino_nome?, lote_destino_criado_agora?,
   reducao_origem{...resultado ajustar_quant...},
-  aumento_destino{...resultado ajustar_quant...},
+  aumento_destino{...resultado ajustar_quant...} (modos A/B)
+    OU aumento_destino_migracao{...} (modo C),
   tempo_ms, erro?, location_id_origem?, location_id_destino?, lot_id?
 }}
 pré-condições:
@@ -85,7 +99,8 @@ gotchas-invariante (codificados no service transfer.py):
     tuple (id, bool); a skill NUNCA usa o retorno como int direto.
 modos:         --dry-run (default, exit 4) -> --confirmar (exit 0)
 status:        EXECUTADO · DRY_RUN_OK · FALHA_REDUCAO · FALHA_AUMENTO ·
-               FALHA_PRODUTO · FALHA_LOTE · FALHA_LOCAL · BLOQUEADO_SERIAL · FALHA_ODOO
+               FALHA_PRODUTO · FALHA_LOTE · FALHA_LOCAL · BLOQUEADO_SERIAL ·
+               FALHA_ODOO · FALHA_PRE_COND · FALHA_LOTE_DESTINO_INEXISTENTE (modo C dry-run)
 ```
 
 ## Receitas (caso real → args)
@@ -98,6 +113,7 @@ status:        EXECUTADO · DRY_RUN_OK · FALHA_REDUCAO · FALHA_AUMENTO ·
 | Consolidar 2 grafias de MIGRAÇÃO (MIGRACAO sem cedilha→MIGRAÇÃO com cedilha) | `--cod C --empresa E --qty N --lote-origem MIGRACAO --lote-destino MIGRAÇÃO` | padronizar_migracao |
 | Devolver de Indisponível para Estoque (mesmo lote, locs diferentes) | `--cod C --empresa CD --qty N --lote MIGRAÇÃO --loc-origem 31090 --loc-destino 32` | mover_migracao reverse |
 | Reduzir lote A com reserva órfã + transferir (RESETAR reserva primeiro) | `--cod C --empresa E --qty N --lote-origem A --lote-destino B --resetar-reserva-origem` | corrigir_reserved_negativo |
+| **MODO C** — Mover saldo para Indisponivel CONSOLIDANDO em MIGRAÇÃO (átomo único) | `--cod C --empresa FB --qty N --para-indisponivel --lote LOTE_REAL` | ad-hoc batch de "transferir produtos pra Indisponivel" (1ª demanda real 2026-05-24 v4) |
 
 ## Exemplos
 
@@ -124,6 +140,15 @@ python "$SK" --cod 210030325 --empresa FB --qty 66532.0 \
 python "$SK" --cod 104000037 --empresa FB --qty 5.0 \
     --lote-origem 'MIGRAÇÃO' --lote-destino 'MI 074-177/25' \
     --resetar-reserva-origem --confirmar
+
+# 6) MODO C — transferir saldo de FB/Estoque para FB/Indisp consolidando em MIGRAÇÃO
+#    (lote MIGRAÇÃO destino resolvido POR PRODUTO via lot_svc — não é constant)
+python "$SK" --cod 210843125 --empresa FB --qty 223.0 \
+    --para-indisponivel --lote '26909' --confirmar
+
+# 7) MODO C com loc origem custom (ex.: FB/Pré-Produção/Linha Manual)
+python "$SK" --cod 4869012 --empresa FB --qty 50.0 \
+    --para-indisponivel --lote '353/25' --loc-origem 4067 --confirmar
 ```
 
 ## Armadilhas
@@ -139,6 +164,10 @@ python "$SK" --cod 104000037 --empresa FB --qty 5.0 \
 - **Empresas diferentes** NÃO suportadas — só intra-empresa. Inter-company emite NF (use `faturando-odoo` + `escriturando-odoo`).
 - **Quant origem com qty NEGATIVO** + intenção de reduzir mais ainda → `FALHA_QUANT_NEGATIVO` (skill 1 já protege).
 - **action_apply_inventory infla quant negativo** (gotcha conhecido). Se destino tem qty<0 (raro), prefira `transferir_entre_lotes_v2` que valida via `ajustar_quant`.
+- **G031 — `stock.lot` é POR PRODUTO** (incidente 2026-05-24 v4): `LOTES_MIGRACAO_POR_COMPANY` em `constants/locations.py` é HISTÓRICO/EXEMPLO — NÃO usar como FK universal. `lot_id=30482` é o lote MIGRAÇÃO de UM produto específico; passar isso para `stock.quant.create` de outro produto gera *"O número de lote/série (MIGRAÇÃO) está vinculado a outro produto."*. **CAMINHO CORRETO**: resolver POR PRODUTO via `lot_svc.buscar_por_nome('MIGRAÇÃO', product_id, company_id)` ou `lot_svc.criar_se_nao_existe(...)`. **MODO C codifica** esta invariante.
+- **MODO C `--lote ""` (proxy vazio P-15/05)** é REJEITADO — destino MIGRAÇÃO precisa de lote real conhecido.
+- **MODO C estado parcial `FALHA_AUMENTO`** em modo real: origem reduzida, destino não creditado. Reportado em `qty_reduzida_origem`. Rollback: chamar Skill 1 `ajustar_quant +qty_reduzida` no lote origem (PROD 2026-05-24 v4 — 16/16 caso rollback testado e bem-sucedido).
+- **MODO C dry-run com lote MIGRAÇÃO inexistente para o produto**: retorna `FALHA_LOTE_DESTINO_INEXISTENTE` em vez de criar (evita poluir Odoo). Em `--confirmar` o lote é criado via `criar_se_nao_existe` (`lote_destino_criado_agora=True` reportado).
 
 ## Composição em FLUXOS
 
@@ -152,6 +181,7 @@ Este átomo serve a múltiplos fluxos (folhas da árvore em `app/odoo/estoque/fl
 - **2.2.f wildcard De-Local** (transferir_local_pasta22, ajuste_fb_cd_indisponivel): orquestrador externo + esta skill para a transferência atômica em cada quant resolvido.
 - **2.2.g multi-grafia consolidação** (padronizar_migracao, consolidar_lote_104000015): modo lote→lote.
 - **2.2.h unreserve→transfer→reassign** (substituir_lote_205030410): composição com **skill 2.4** ANTES de chamar esta.
+- **2.2.i para-indisponivel (MODO C, NOVO 2026-05-24 v4)** — átomo único que codifica invariante "destino = (LOCAIS_INDISPONIVEL[cid], MIGRAÇÃO POR PRODUTO)". Cobre fluxo "transferir produtos pra Indisponivel consolidando em MIGRAÇÃO" via `transferir_para_indisponivel()`. **Demanda real validada PROD**: 16 produtos × 4.319,4019 un movidas em 23s, todos consolidados em lote MIGRAÇÃO POR PRODUTO (1 lote criado on-demand, 15 já existiam).
 
 ## Validação (este átomo é validado por reprodução dos ad-hoc — ROADMAP C6)
 

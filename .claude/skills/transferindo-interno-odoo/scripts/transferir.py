@@ -57,6 +57,13 @@ CASAS_DECIMAIS = 6
 _FALHAS = {
     'FALHA_PRODUTO', 'FALHA_LOCAL', 'FALHA_LOTE', 'FALHA_REDUCAO',
     'FALHA_AUMENTO', 'BLOQUEADO_SERIAL', 'FALHA_ODOO',
+    # Modo C (para-indisponivel — 2026-05-24 v4 final, pos-refactor):
+    'FALHA_PRE_COND', 'FALHA_LOTE_DESTINO_INEXISTENTE',
+    # CR1#1 (2026-05-24 v4): FALHA_LOTE_DESTINO_INEXISTENTE deve dar exit
+    # de falha (1), nao DRY_RUN_OK (4). FALHA_PASSO_1/2 removidos —
+    # eram nomes do design original (composicao A+B encadeada); a
+    # refatoracao para 1 passo direto via ajustar_quant 2x reemitiu como
+    # FALHA_REDUCAO/FALHA_AUMENTO (alinhado com modos A/B existentes).
 }
 
 
@@ -110,11 +117,21 @@ def main() -> int:
 
     # Modo B (loc -> loc, mesmo lote)
     ap.add_argument('--loc-origem', type=int,
-                    help='[MODO B] location_id origem')
+                    help='[MODO B/C] location_id origem (MODO C: default = COMPANY_LOCATIONS[empresa])')
     ap.add_argument('--loc-destino', type=int,
                     help='[MODO B] location_id destino')
     ap.add_argument('--lote',
-                    help='[MODO B] nome do lote (mesmo nos 2 lados; default = sem lote)')
+                    help='[MODO B] nome do lote (mesmo nos 2 lados; default = sem lote). '
+                         '[MODO C] nome do lote ORIGEM REAL a transferir para Indisp/MIGRAÇÃO.')
+
+    # Modo C (para-indisponivel — invariante: destino = Indisp + MIGRACAO POR PRODUTO)
+    ap.add_argument('--para-indisponivel', action='store_true',
+                    help='[MODO C] transfere para {emp}/Indisponivel CONSOLIDANDO no lote MIGRACAO. '
+                         'Destino auto-resolvido: location_id via LOCAIS_INDISPONIVEL '
+                         '(constant valida — por company); lot_id via lot_svc.criar_se_nao_existe '
+                         '(POR PRODUTO — NUNCA usar LOTES_MIGRACAO_POR_COMPANY como FK universal; '
+                         'ver gotcha G031). Exige --lote (lote ORIGEM REAL) + --qty. '
+                         'Loc origem opcional (default = principal).')
 
     # Comportamento
     ap.add_argument('--resetar-reserva-origem', action='store_true',
@@ -132,25 +149,39 @@ def main() -> int:
         ap.error(f'--qty deve ser > 0 (recebido {args.qty})')
 
     # Modo A detectado por: --lote-origem OU --lote-destino presentes (incluindo '' = proxy vazio P-15/05).
-    # Modo B detectado por: --loc-origem ou --loc-destino com valor.
+    # Modo B detectado por: --loc-origem ou --loc-destino com valor (sem --para-indisponivel).
+    # Modo C detectado por: --para-indisponivel flag.
     # NB: argparse com nargs default permite `--lote-origem ''` (string vazia) — checar `is not None`,
     # NAO truthy, para nao bloquear o proxy P-15/05 (CR1#1, 2026-05-24 v2).
+    modo_c = bool(args.para_indisponivel)
     modo_a = (args.lote_origem is not None) or (args.lote_destino is not None)
-    modo_b = (args.loc_origem is not None) or (args.loc_destino is not None)
-    if modo_a and modo_b:
+    modo_b = (
+        (args.loc_origem is not None) or (args.loc_destino is not None)
+    ) and not modo_c
+    modos_ativos = [m for m, v in [('A', modo_a), ('B', modo_b), ('C', modo_c)] if v]
+    if len(modos_ativos) > 1:
         ap.error(
-            'modos A (lote->lote) e B (loc->loc) sao mutuamente exclusivos. '
-            'Use --lote-origem/--lote-destino OU --loc-origem/--loc-destino, nao ambos.'
+            f'modos {modos_ativos} sao mutuamente exclusivos. Escolha UM: '
+            'A (--lote-origem + --lote-destino) | '
+            'B (--loc-origem + --loc-destino [--lote]) | '
+            'C (--para-indisponivel --lote LOTE_REAL)'
         )
-    if not modo_a and not modo_b:
+    if not modos_ativos:
         ap.error(
-            'forneca um modo: A (--lote-origem + --lote-destino) ou '
-            'B (--loc-origem + --loc-destino [--lote])'
+            'forneca um modo: A (--lote-origem + --lote-destino) | '
+            'B (--loc-origem + --loc-destino [--lote]) | '
+            'C (--para-indisponivel --lote LOTE_REAL)'
         )
     if modo_a and not (args.lote_origem is not None and args.lote_destino is not None):
         ap.error('MODO A exige --lote-origem E --lote-destino (use "" para proxy vazio P-15/05 na origem)')
     if modo_b and not (args.loc_origem is not None and args.loc_destino is not None):
         ap.error('MODO B exige --loc-origem E --loc-destino')
+    if modo_c and not args.lote:
+        ap.error(
+            'MODO C exige --lote LOTE_REAL (lote ORIGEM real a transferir; '
+            'destino auto = MIGRACAO; passar "" nao faz sentido — Indisp '
+            'so opera com lote conhecido)'
+        )
 
     app = create_app()
     with app.app_context():
@@ -247,29 +278,68 @@ def main() -> int:
                             'chave': chave, 'resultado': res}, dry_run)
 
         # ---- MODO B: loc -> loc (mesmo lote) ----
-        chave['modo'] = 'loc->loc'
-        chave['location_id_origem'] = args.loc_origem
-        chave['location_id_destino'] = args.loc_destino
-        chave['lote_nome'] = args.lote or '(sem lote / P-15/05)'
+        if modo_b:
+            chave['modo'] = 'loc->loc'
+            chave['location_id_origem'] = args.loc_origem
+            chave['location_id_destino'] = args.loc_destino
+            chave['lote_nome'] = args.lote or '(sem lote / P-15/05)'
 
-        # Resolver lote (mesmo nos 2 lados) — None = sem lote
-        lot_id, label, erro = _resolver_lote_id(
-            lot_svc, args.lote, prod['pid'], company_id, 'lote',
+            # Resolver lote (mesmo nos 2 lados) — None = sem lote
+            lot_id, label, erro = _resolver_lote_id(
+                lot_svc, args.lote, prod['pid'], company_id, 'lote',
+            )
+            chave['lote_label'] = label
+            if erro:
+                return _emitir({'status': 'FALHA_LOTE', 'chave': chave, 'erro': erro}, dry_run)
+
+            res = svc.transferir_entre_locations(
+                product_id=prod['pid'], company_id=company_id,
+                lot_id=lot_id,
+                qty=args.qty,
+                location_id_origem=args.loc_origem,
+                location_id_destino=args.loc_destino,
+                resetar_reserva_origem=args.resetar_reserva_origem,
+                tolerancia_delta=args.tolerancia_delta,
+                dry_run=dry_run,
+            )
+            return _emitir({'modo': 'dry-run' if dry_run else 'confirmado',
+                            'chave': chave, 'resultado': res}, dry_run)
+
+        # ---- MODO C: para-indisponivel (invariante: destino = Indisp + MIGRACAO) ----
+        chave['modo'] = 'para-indisponivel'
+        chave['lote_origem_nome'] = args.lote
+        # Resolver lote ORIGEM real — obrigatorio, NUNCA proxy vazio em modo C
+        lot_id_origem, label_o, erro = _resolver_lote_id(
+            lot_svc, args.lote, prod['pid'], company_id, 'origem',
         )
-        chave['lote_label'] = label
         if erro:
             return _emitir({'status': 'FALHA_LOTE', 'chave': chave, 'erro': erro}, dry_run)
+        if lot_id_origem is None:
+            return _emitir({
+                'status': 'FALHA_LOTE',
+                'chave': chave,
+                'erro': f'MODO C exige lote real existente; --lote {args.lote!r} '
+                        f'nao resolveu (proxy vazio P-15/05 nao permitido aqui)',
+            }, dry_run)
+        chave['lot_id_origem'] = lot_id_origem
+        chave['lote_origem_label'] = label_o
 
-        res = svc.transferir_entre_locations(
-            product_id=prod['pid'], company_id=company_id,
-            lot_id=lot_id,
-            qty=args.qty,
-            location_id_origem=args.loc_origem,
-            location_id_destino=args.loc_destino,
-            resetar_reserva_origem=args.resetar_reserva_origem,
-            tolerancia_delta=args.tolerancia_delta,
-            dry_run=dry_run,
-        )
+        try:
+            res = svc.transferir_para_indisponivel(
+                product_id=prod['pid'], company_id=company_id,
+                lot_id_origem=lot_id_origem,
+                qty=args.qty,
+                location_id_origem=args.loc_origem,  # None => default COMPANY_LOCATIONS[cid]
+                resetar_reserva_origem=args.resetar_reserva_origem,
+                tolerancia_delta=args.tolerancia_delta,
+                dry_run=dry_run,
+            )
+        except ValueError as exc:
+            return _emitir({
+                'status': 'FALHA_PRE_COND',
+                'chave': chave,
+                'erro': str(exc),
+            }, dry_run)
         return _emitir({'modo': 'dry-run' if dry_run else 'confirmado',
                         'chave': chave, 'resultado': res}, dry_run)
 

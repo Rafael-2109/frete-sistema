@@ -1,4 +1,17 @@
-"""14 - Cancelar MOs antigas state=confirmed que reservam MIGRACAO em Pre-Prod FB.
+"""[arquivado 2026-05-24 v5] 14 - Cancelar MOs antigas state=confirmed que reservam MIGRACAO em Pre-Prod FB.
+
+SUPERADO pela Skill 4 `operando-mo-odoo` em 2026-05-24 v5. Logica generalizada
+no service `app/odoo/estoque/scripts/mo.py` (cancelar_mos_em_massa com filtro
+de consumo zero). Este script permanece executavel (museum vivo) para
+referencia historica e bate exato com a CLI nova:
+  python .claude/skills/operando-mo-odoo/scripts/operar_mo.py --modo cancelar \\
+      --create-ate $(date -d '-180 days' +%Y-%m-%d) \\
+      --states confirmed --empresas 1 --consumo zero --confirmar
+
+Ver `_validados/operando-mo-odoo/VALIDACAO.md` para mapeamento de args
+(--dias-corte do script original = --create-ate na CLI nova).
+
+ORIGINAL:
 
 Cancela mrp.production em state=confirmed criadas ate 6 meses atras que
 reservam lote MIGRACAO em sub-locations de Pre-Producao (Linha Balde/Vidro/
@@ -32,7 +45,7 @@ from pathlib import Path
 from typing import Dict, List
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+sys.path.insert(0, str(_THIS.parents[4]))  # _validados/operando-mo-odoo → projeto raiz
 
 from app import create_app  # noqa: E402
 from app.odoo.utils.connection import get_odoo_connection  # noqa: E402

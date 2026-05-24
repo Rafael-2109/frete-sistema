@@ -1,4 +1,16 @@
-"""Cancelar Ordens de Producao (mrp.production) por criterio parametrizavel,
+"""[arquivado 2026-05-24 v5] Cancelar Ordens de Producao (mrp.production) por criterio parametrizavel,
+
+SUPERADO pela Skill 4 `operando-mo-odoo` em 2026-05-24 v5. Logica generalizada
+no service `app/odoo/estoque/scripts/mo.py` (StockMOService.cancelar_mo +
+cancelar_mos_em_massa). Este script permanece executavel (museum vivo) para
+referencia historica e bate exato com a CLI nova:
+  python .claude/skills/operando-mo-odoo/scripts/operar_mo.py --modo cancelar \\
+      --create-de YYYY-MM-DD --create-ate YYYY-MM-DD --states draft,confirmed,progress,to_close \\
+      --empresas 1,3,4,5 --consumo zero [--limite N] [--confirmar]
+
+Ver `_validados/operando-mo-odoo/VALIDACAO.md` para o mapeamento de args.
+
+ORIGINAL:
 liberando automaticamente as reservas dos componentes (action_cancel).
 
 Caso 2026-05-20: cancelar MOs criadas em 2024-2025 NAO efetivadas e SEM consumo
@@ -30,7 +42,7 @@ from datetime import datetime
 from pathlib import Path
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+sys.path.insert(0, str(_THIS.parents[4]))  # _validados/operando-mo-odoo → projeto raiz
 
 from app import create_app  # noqa: E402
 from app.odoo.utils.connection import get_odoo_connection  # noqa: E402

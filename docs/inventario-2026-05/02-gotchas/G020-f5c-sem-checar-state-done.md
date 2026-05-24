@@ -2,7 +2,7 @@
 
 **Descoberta**: 2026-05-18 sessao 2 manha (teste 100 produtos LF)
 **Severidade**: MED (cascateia G019; robo CIEL IT nunca cria invoice)
-**Status**: PROPOSTO (fix pendente)
+**Status**: ✅ IMPLEMENTADO (atualizado 2026-05-24 v3 — fix esta em `app/odoo/estoque/scripts/picking.py` linhas 500-525, capinado de `app/odoo/services/`; cobertura 3 testes pytest em `test_stock_picking_service.py`: `test_liberar_faturamento_chama_action`, `test_liberar_faturamento_state_nao_done_raises`, `test_liberar_faturamento_propaga_erro_negocio`). Note que `liberar_faturamento` NAO e exposto na skill `operando-picking-odoo` (so saida via Skill 8 `faturando-odoo`); o invariante esta no service e tras a garantia para o pipeline.
 
 ---
 
@@ -70,5 +70,5 @@ cancelados em 2026-05-18 ~12:25): nenhuma acao Odoo adicional necessaria
 ## Ref
 
 - G019 (f5b false-positive — bug raiz que cascateia aqui)
-- `app/odoo/services/stock_picking_service.py:290-314`
+- `app/odoo/estoque/scripts/picking.py:500-525` (`liberar_faturamento()` — capinado de `services/` em 2026-05-24 v3; shim em `services/stock_picking_service.py` re-exporta)
 - `app/odoo/services/inventario_pipeline_service.py:768-862` (f5c)

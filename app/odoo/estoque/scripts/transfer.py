@@ -754,6 +754,267 @@ class StockInternalTransferService:
             'tempo_ms': int((time.time() - inicio) * 1000),
         }
 
+    def transferir_para_indisponivel(
+        self,
+        *,
+        product_id: int,
+        company_id: int,
+        lot_id_origem: int,
+        qty: float,
+        location_id_origem: Optional[int] = None,
+        nome_lote_destino: str = 'MIGRAÇÃO',
+        resetar_reserva_origem: bool = False,
+        tolerancia_delta: float = 0.001,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Transfere `qty` para {emp}/Indisponivel CONSOLIDANDO no lote MIGRAÇÃO.
+
+        Invariante GARANTIDA pela skill:
+            location_id_destino = LOCAIS_INDISPONIVEL[company_id]
+            lot_id_destino      = lot_svc.buscar_por_nome(nome_lote_destino,
+                                                          product_id, company_id)
+            (criado se faltar em modo real)
+
+        **IMPORTANTE (CR-incidente 2026-05-24 v4)**: stock.lot tem
+        product_id — cada produto tem seu PROPRIO lote MIGRACAO (mesmo
+        nome, ids diferentes). Por isso a constant
+        LOTES_MIGRACAO_POR_COMPANY (em locations.py) NAO eh usavel como
+        FK universal — eh apenas um lot_id de exemplo (de UM produto).
+        Resolver por produto via lot_svc, sempre.
+
+        Faz sentido para FB e CD (LF=5 historicamente sem MIGRACAO, mas
+        nao bloqueamos: passa o nome do lote e deixa o lot_svc decidir).
+
+        Decomposicao: 2 ajustes diretos via `ajustar_quant`:
+            Reducao: (loc_origem, lot_id_origem, -qty)
+            Aumento: (loc_Indisp, lot_id_destino MIGRACAO, +qty,
+                     criar_se_faltar=True)
+
+        Falha reducao: estado inalterado (FALHA_REDUCAO).
+        Falha aumento: estado PARCIAL — origem reduzida, destino nao
+        creditado (FALHA_AUMENTO).
+
+        Args:
+            product_id, company_id: identificam produto/empresa.
+            lot_id_origem: stock.lot.id do lote real de origem.
+            qty: positiva.
+            location_id_origem: default = COMPANY_LOCATIONS[company_id]
+                (FB/Estoque=8, CD/Estoque=32).
+            nome_lote_destino: nome do lote consolidador (default 'MIGRAÇÃO'
+                canonico com cedilha). Resolvido POR PRODUTO via
+                lot_svc.buscar_por_nome; criado em modo real se faltar.
+            resetar_reserva_origem: passa para reducao.
+            tolerancia_delta: tolerancia absoluta dos guards delta_esperado.
+            dry_run: simula ambos ajustes; lote destino nao eh criado
+                em dry-run (apenas pesquisado).
+
+        Returns:
+            dict com:
+                reducao_origem: resultado do ajuste origem
+                aumento_destino_migracao: resultado do ajuste destino
+                qty_transferida: total efetivado
+                qty_reduzida_origem: somente em FALHA_AUMENTO real
+                status: 'EXECUTADO' | 'DRY_RUN_OK' | 'FALHA_REDUCAO' |
+                        'FALHA_AUMENTO' | 'FALHA_LOTE_DESTINO_INEXISTENTE'
+                location_id_origem, location_id_destino, lot_id_origem,
+                lot_id_destino, lote_destino_nome,
+                lote_destino_criado_agora (bool), tempo_ms
+
+        Raises:
+            ValueError: company sem LOCAIS_INDISPONIVEL; origem ja em
+                Indisp; qty <= 0; lot_svc nao injetado no construtor.
+        """
+        # Import tardio para evitar dependencia circular at module load.
+        # NB: LOTES_MIGRACAO_POR_COMPANY NAO eh importado de proposito
+        # (gotcha do incidente 2026-05-24 v4 — lot_id por produto).
+        from app.odoo.constants.locations import (
+            COMPANY_LOCATIONS, LOCAIS_INDISPONIVEL,
+        )
+
+        if qty <= 0:
+            raise ValueError(f'qty deve ser > 0 (recebido {qty})')
+
+        if self.lot_svc is None:
+            raise ValueError(
+                'transferir_para_indisponivel requer lot_svc no construtor '
+                '(StockInternalTransferService(odoo, lot_svc=StockLotService(odoo))).'
+            )
+
+        # Resolver location destino via constants
+        location_id_destino = LOCAIS_INDISPONIVEL.get(company_id)
+        if location_id_destino is None:
+            raise ValueError(
+                f'company_id={company_id} sem entrada em LOCAIS_INDISPONIVEL '
+                f'(definidos: {sorted(LOCAIS_INDISPONIVEL)})'
+            )
+
+        # Default location_id_origem = principal interno da empresa
+        if location_id_origem is None:
+            location_id_origem = COMPANY_LOCATIONS.get(company_id)
+            if location_id_origem is None:
+                raise ValueError(
+                    f'company_id={company_id} sem COMPANY_LOCATIONS; informe '
+                    f'location_id_origem explicito'
+                )
+
+        # Pre-cond: nao pode ser ja no destino
+        if location_id_origem == location_id_destino:
+            raise ValueError(
+                f'location_id_origem == Indisponivel ({location_id_destino}) — '
+                'ja esta em Indisponivel; nada a mover'
+            )
+
+        # Resolver lote MIGRACAO POR PRODUTO (fix incidente 2026-05-24 v4)
+        # Em dry-run: apenas buscar; nao criar (evita poluir Odoo).
+        # Em modo real: criar_se_nao_existe.
+        lote_destino_criado = False
+        if dry_run:
+            lot_id_destino = self.lot_svc.buscar_por_nome(
+                nome_lote_destino, product_id, company_id,
+            )
+            if lot_id_destino is None:
+                # Em dry-run, sinalizar que precisaria criar
+                return {
+                    'reducao_origem': None,
+                    'aumento_destino_migracao': None,
+                    'qty_transferida': 0.0,
+                    'status': 'FALHA_LOTE_DESTINO_INEXISTENTE',
+                    'location_id_origem': location_id_origem,
+                    'location_id_destino': location_id_destino,
+                    'lot_id_origem': lot_id_origem,
+                    'lot_id_destino': None,
+                    'lote_destino_nome': nome_lote_destino,
+                    'lote_destino_criado_agora': False,
+                    'erro': (
+                        f'lote {nome_lote_destino!r} nao existe para '
+                        f'product_id={product_id} company_id={company_id}. '
+                        'Em modo real seria criado; --confirmar para executar.'
+                    ),
+                    'tempo_ms': 0,
+                }
+        else:
+            lot_id_destino, lote_destino_criado = self.lot_svc.criar_se_nao_existe(
+                nome_lote_destino, product_id, company_id,
+            )
+
+        # Pre-cond: lote_origem == lote_destino MIGRACAO (origem ja eh consolidador)
+        if lot_id_origem == lot_id_destino:
+            raise ValueError(
+                f'lot_id_origem == lot_id_destino MIGRACAO ({lot_id_destino}) '
+                f'do produto {product_id} — ja consolidado; nada a mover'
+            )
+
+        inicio = time.time()
+        svc = self._quant_svc()
+
+        # 1 passo direto cross-(loc+lote): delega a `ajustar_quant` 2x.
+        # Refatorado em 2026-05-24 v4 (CR-dry-run): a composicao anterior
+        # `transferir_entre_locations` + `transferir_entre_lotes_v2` falhava
+        # em dry-run porque Passo 2 tentava reduzir lote_origem em Indisp
+        # antes do Passo 1 criar o quant la. Solucao: 2 ajustes diretos.
+
+        # Reduzir origem (lote real, loc origem)
+        res_origem = svc.ajustar_quant(
+            product_id=product_id,
+            company_id=company_id,
+            location_id=location_id_origem,
+            lot_id=lot_id_origem,
+            delta=-qty,
+            delta_esperado=-qty,
+            tolerancia_delta=tolerancia_delta,
+            criar_se_faltar=False,
+            validar_nao_negativar=True,
+            validar_nao_abaixo_reserva=not resetar_reserva_origem,
+            resetar_reserva=resetar_reserva_origem,
+            dry_run=dry_run,
+        )
+
+        if res_origem['status'] not in ('EXECUTADO', 'DRY_RUN_OK',
+                                        'EXECUTADO_AUTO_CORRIGIDO'):
+            return {
+                'reducao_origem': res_origem,
+                'aumento_destino_migracao': None,
+                'qty_transferida': 0.0,
+                'status': 'FALHA_REDUCAO',
+                'location_id_origem': location_id_origem,
+                'location_id_destino': location_id_destino,
+                'lot_id_origem': lot_id_origem,
+                'lot_id_destino': lot_id_destino,
+                'lote_destino_nome': nome_lote_destino,
+                'lote_destino_criado_agora': lote_destino_criado,
+                'erro': res_origem.get('erro'),
+                'tempo_ms': int((time.time() - inicio) * 1000),
+            }
+
+        # Aumentar destino: (loc Indisp, lote MIGRACAO) — criar quant se faltar
+        res_destino = svc.ajustar_quant(
+            product_id=product_id,
+            company_id=company_id,
+            location_id=location_id_destino,
+            lot_id=lot_id_destino,
+            delta=qty,
+            delta_esperado=qty,
+            tolerancia_delta=tolerancia_delta,
+            criar_se_faltar=True,
+            validar_nao_negativar=True,
+            validar_nao_abaixo_reserva=True,
+            dry_run=dry_run,
+        )
+
+        if res_destino['status'] not in ('EXECUTADO', 'DRY_RUN_OK',
+                                         'EXECUTADO_AUTO_CORRIGIDO'):
+            # Estado PARCIAL em modo real: origem reduzida, destino nao creditado.
+            qty_reduzida = (
+                abs(res_origem.get('ajuste_aplicado') or 0.0)
+                if not dry_run else 0.0
+            )
+            # CR3#5 (2026-05-24 v4): rollback_hint = chamada exata
+            # ajustar_quant para reverter origem (operador-acionavel).
+            rollback_hint = {
+                'action': 'ajustar_quant',
+                'product_id': product_id,
+                'company_id': company_id,
+                'location_id': location_id_origem,
+                'lot_id': lot_id_origem,
+                'delta': qty_reduzida,
+                'delta_esperado': qty_reduzida,
+                'criar_se_faltar': True,
+                'comentario': (
+                    f'Rollback de FALHA_AUMENTO em transferir_para_indisponivel: '
+                    f'reverter reducao de {qty_reduzida} un no quant origem.'
+                ),
+            } if not dry_run and qty_reduzida > 0 else None
+            return {
+                'reducao_origem': res_origem,
+                'aumento_destino_migracao': res_destino,
+                'qty_transferida': 0.0,
+                'qty_reduzida_origem': qty_reduzida,
+                'rollback_hint': rollback_hint,
+                'status': 'FALHA_AUMENTO',
+                'location_id_origem': location_id_origem,
+                'location_id_destino': location_id_destino,
+                'lot_id_origem': lot_id_origem,
+                'lot_id_destino': lot_id_destino,
+                'lote_destino_nome': nome_lote_destino,
+                'lote_destino_criado_agora': lote_destino_criado,
+                'erro': res_destino.get('erro'),
+                'tempo_ms': int((time.time() - inicio) * 1000),
+            }
+
+        return {
+            'reducao_origem': res_origem,
+            'aumento_destino_migracao': res_destino,
+            'qty_transferida': qty,
+            'status': 'DRY_RUN_OK' if dry_run else 'EXECUTADO',
+            'location_id_origem': location_id_origem,
+            'location_id_destino': location_id_destino,
+            'lot_id_origem': lot_id_origem,
+            'lot_id_destino': lot_id_destino,
+            'lote_destino_nome': nome_lote_destino,
+            'lote_destino_criado_agora': lote_destino_criado,
+            'tempo_ms': int((time.time() - inicio) * 1000),
+        }
+
     def transferir_quantidade_para_lote_v2(
         self,
         *,
