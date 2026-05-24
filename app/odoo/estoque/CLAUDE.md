@@ -1,6 +1,6 @@
 # app/odoo/estoque — Operações de Escrita de Estoque no Odoo
 
-**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22; ONDA 0.4 ✅ fechada 2026-05-24 v3 — G019/G020 codificadas no service) | **Atualizado:** 2026-05-24
+**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22; ONDA 0.4 ✅ fechada 2026-05-24 v3 — G019/G020 codificadas no service; **Skill 4 `operando-mo-odoo` 🟡 NOVA criada do zero em 2026-05-24 v5** — 1ª skill WRITE sem service legado, guard G-MO-01 furo contábil) | **Atualizado:** 2026-05-24
 **Audiência:** Claude Code (dev) + agente web. Doc **machine-first** — contratos e regras.
 
 Pacote-destino da consolidação dos ~105 scripts ad-hoc de inventário (`scripts/inventario_2026_05/`) em **átomos versáteis e auto-seguros** (services), consumidos por **skills** (`.claude/skills/`) + o subagente **`gestor-estoque-odoo`** (`.claude/agents/`). Este CLAUDE.md é a **constituição** da arquitetura.

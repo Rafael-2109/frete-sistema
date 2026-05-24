@@ -271,6 +271,8 @@ Log: `/tmp/log_skill2_C6_validacao_dry_run.json`.
 | 9 `consultando-quant-odoo` (READ) | 🟡 mín viável | Auditoria pós-WRITE validada 23/05 |
 | 4-8 (MO/picking/preetapa/escriturar/faturar) | ⬜ | Próximas ondas |
 
+> **Nota histórica:** esta tabela reflete o estado da sessão v2 (2026-05-24). Estado atual v5 (2026-05-24): Skill 4 (MO) e Skill 5 (picking) viraram 🟡 mín viável; restam Skill 6 (pre-etapa), 7 (escriturar), 8 (faturar) — esta última DESBLOQUEADA pela ONDA 0.4 fechada em v3. Ver §10 para sessão v5 completa.
+
 **Conclusão da sessão**: Skill 2 entrou no catálogo como mín viável. O ÁTOMO está pronto (35 testes incluindo 2 FALHA_AUMENTO, 4 métodos, helpers MIGRACAO, propagação delta_esperado). A ORQUESTRAÇÃO de planilha (D010/D012/D013) permanece via scripts ad-hoc VIVOS até demanda real justificar fluxos compostos.
 
 ### Fechamento (correções pós code-review da sessão)
@@ -494,7 +496,7 @@ O prompt da sessão afirmava que **G019/G020/G011/G023 eram BUGS ABERTOS** bloqu
 
 ### 9.7 Pendências da sessão (não-bloqueantes)
 
-1. Auditar `grep -rn "LOTES_MIGRACAO_POR_COMPANY\[" app/ scripts/` em sessão futura — confirmar zero callers reais (já confirmado em CR3 via grep, mas reauditar periodicamente).
+1. ✅ **RESOLVIDA em 2026-05-24 v5**: Auditar `grep -rn "LOTES_MIGRACAO_POR_COMPANY\[" app/ scripts/` — **ZERO callers reais** confirmado (apenas 2 matches em docs descrevendo o incidente: ROADMAP §sessão v4 + este VALIDACAO §9.1). Sem código WRITE usando a constant como FK universal.
 2. Smoke test 1-unidade (`--confirmar` em 1 caso antes de batch) como padrão entre dry-run e batch completo.
 3. Helper `_utils.resolver_lote_consolidador(nome, pid, cid)` se padrão se repetir com nome diferente de "MIGRAÇÃO" (premature agora).
 4. Macro `--rollback-from-log <path>` futuro — automatizar reversão usando `rollback_hint` reportado.

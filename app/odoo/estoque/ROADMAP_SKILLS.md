@@ -11,6 +11,28 @@
 
 **Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline: `pytest tests/odoo/services/test_stock_quant_adjustment_service.py tests/odoo/services/test_stock_internal_transfer_service.py` (30 + 33 = **63 ✅**).
 
+**Sessão 2026-05-24 v5 (Skill 4 `operando-mo-odoo` — NOVA, 1ª skill criada do zero do orquestrador):**
+- ✅ **Verificação main**: avançou 1 commit (`fb494608 skip D8 sem código`) — sem rebase necessário (skip-only).
+- ✅ **C1 mineração** dos 2 scripts-fonte (`cancelar_mos.py` + `14_cancelar_mos_antigas_fb.py`) + **investigação AO VIVO** via `/tmp/investigar_mos_skill4.py`. Revelou: FB tem 10.000 MOs (limite atingido — mais cumulativas), CD apenas 17 (quase inativo, 15 cancel + 2 draft), LF 3.367. **Idempotência `action_cancel` em state=cancel** confirmada via probe em FB/OP/BALDE/00009 id=4192 (retorna `True` sem erro, state continua 'cancel'). **`qty_produced` ≠ consumo** validado (MOs com qty_produced=0 e consumo_total>0 são comuns).
+- ✅ **C2 service `app/odoo/estoque/scripts/mo.py`** (NOVO — criado do zero, sem service legado em `services/`). Shim preventivo em `app/odoo/services/stock_mo_service.py`. 2 átomos: `cancelar_mo` (com guard G-MO-01 + G019-like re-le state) e `cancelar_mos_em_massa` (composição com filtros). Helper `medir_consumo_mo` (soma `stock.move.quantity` raw materials != cancel, chunks 200, TOL=0.0001). **29 testes pytest verdes** (26 baseline + 3 cobrindo code-review fixes).
+- ✅ **C3-C5 SKILL.md + CLI** `.claude/skills/operando-mo-odoo/scripts/operar_mo.py` (single OU batch, `--dry-run` default, exit codes 0/1/2/4).
+- ✅ **C6 validação dry-run vs Odoo PROD**: 4 casos (NOOP idempotente id=4192, DRY_RUN_OK id=19985 sem consumo, FALHA_FURO_CONTABIL id=19984 consumo=1410.05, batch FB ate 2025-06 consumo zero). Log `/tmp/log_skill4_C6_validacao_dry_run.json`. **0 execuções `--confirmar` em PROD** (demanda-driven — pattern já validado em PROD em sessão 2026-05-20 via scripts-fonte: 120 MOs zumbi canceladas).
+- ✅ **C7 cross-refs**: subagente + ROUTING_SKILLS (46→47 invocaveis + 14→15 Skills Odoo + galho 6 ESTOQUE WRITE listando skill) + tool_skill_mapper + CLAUDE.md raiz + app/odoo/CLAUDE.md + app/odoo/estoque/CLAUDE.md §6 catálogo.
+- ✅ **C8 folha de fluxo** `app/odoo/estoque/fluxos/3.1-cancelar-mo.md` com 3 sub-casos (a single, b batch, c MO COM consumo DELEGADO para `mrp.unbuild` cross-skill). README atualizado.
+- ✅ **C9-C10**: 2 scripts SUPERADOS em `_validados/operando-mo-odoo/`: `cancelar_mos.py` + `14_cancelar_mos_antigas_fb.py` + VALIDACAO.md (sys.path corrigido parents[2]→parents[4]; museum vivo validado via import). MAPA_SCRIPTS atualizado seção `scripts/mo.py`.
+- ✅ **Code-review paralelo (2 reviewers)**: 9 findings reais (4 HIGH + 4 MED + 1 LOW). Fixes aplicados:
+  - **CR1-H1** (code): `cancelar_mos_em_massa` `search_read` sem `order` → `order='create_date asc'` server-side (FB tem 10k+ MOs).
+  - **CR1-M1** (code): `_ler_mo` retorna `None` pós-`action_cancel` → tratar como `EXECUTADO` com `state_apos='cancel_deleted'` + warning.
+  - **CR1-M3** (code): `consumo='qualquer'` sem `forcar_consumo=True` silenciosamente bloqueia todas → warning logado entry-point.
+  - **CR2-H1** (docs): `fluxos/README.md` mostrava `2.5`/`3.1` como ⬜ → 🟡 com link folha.
+  - **CR2-H2** (docs): ROUTING_SKILLS galho 6 não listava `operando-mo-odoo` → adicionado.
+  - **CR2-M1** (docs): SKILL.md "C6: 2-3 casos" → "4 casos" (alinhado com VALIDACAO.md).
+  - **CR2-M2** (docs): fluxo 3.1 cross-skill Skill 2 como "pré-condição de 3.1.c" → refinado (3.1.c é DELEGADO; Skill 2 apenas contexto relacionado).
+- ✅ **Status novo `cancel_deleted`** introduzido para skills futuras que cancelam objetos Odoo com cascade customizado.
+- ✅ **VALIDACAO_FINAL_SESSAO §10** com pre-mortem 4 dimensões + code-review consolidado.
+- ✅ **Memória `[[skill4_mo_pattern]]`** criada + MEMORY.md atualizado.
+- ✅ **Commit consolidado** `b8ed3b5c` em `feat/estoque-odoo` (3 sessões: v3 + v4 + v5; 36 arquivos; 175 pytest verdes totais).
+
 **Sessão 2026-05-24 v4 (Skill 2 modo C `transferir_para_indisponivel` — NOVA + incidente G031):**
 - ✅ **Demanda real** de Rafael: "Transfere esses 16 produtos pra Indisponivel" (planilha FB). Resolveu para modo composto cross loc+lote.
 - ✅ **C1 mineração**: investigação ao vivo de 16 quants em FB; padrão descoberto (14 triviais 1 lote em FB/Estoque + 1 NOOP 4529301 já em Indisp + 1 split 104000033 com 2 lotes em FB/Estoque com diff -0,028).
@@ -61,25 +83,26 @@
 - **Skill 9 (`consultando-quant-odoo`) 🟡 mín viável (ANCILLARY READ)** — 2 átomos (`listar_quants` 8-param + `auditar_pares`). Nasceu sob demanda (auditoria pós-WRITE). Dogfood: investigação 4856125 + classificação correta de 104 pares (17+46+39+2=104 ✓). [Fluxo 2.9](fluxos/2.9-consulta-quant-ao-vivo.md).
 - **C7-C10 nas 3 skills:** subagente `gestor-estoque-odoo.md` lista as 5 skills (3 escopadas + 2 utils), ROUTING_SKILLS Odoo 12 entries, tool_skill_mapper 3 entradas (`Estoque Odoo (Write)/(Read)`), fluxos 2.1/2.4/2.9 escritos, MAPA_SCRIPTS 2 seções novas (`scripts/reserva.py` + `scripts/consulta_quant.py`), 8 scripts movidos para `_validados/`.
 
-**Status global do esforço de migração (atualizado 2026-05-24 v3):**
+**Status global do esforço de migração (atualizado 2026-05-24 v5):**
 - **1/8 skills WRITE MATURADA** (skill 1 `ajustando-quant-odoo`)
-- **3/8 skills WRITE mín viável** (skill 2 `transferindo-interno-odoo` 🟡 desde 2026-05-24 v2 + skill 2.4 `operando-reservas-odoo` 🟡 desde 2026-05-23 + skill 5 `operando-picking-odoo` 🟡 NOVA 2026-05-24 v3)
+- **4/8 skills WRITE mín viável** (skill 2 `transferindo-interno-odoo` 🟡 + skill 2.4 `operando-reservas-odoo` 🟡 + skill 5 `operando-picking-odoo` 🟡 + skill 4 `operando-mo-odoo` 🟡 NOVA 2026-05-24 v5)
 - **1 skill READ ancillary mín viável** (skill 9 `consultando-quant-odoo` — ancillary, fora da ordem bottom-up)
-- 4/8 skills WRITE não iniciadas (MO, planejando-pre-etapa, escriturando, faturando)
+- **3/8 skills WRITE não iniciadas** (planejando-pre-etapa, escriturando, faturando — este último DESBLOQUEADO pela ONDA 0.4 fechada em v3)
 - **ONDA 0.4 ✅ FECHADA** em 2026-05-24 v3 (G019/G020 codificadas no `picking.py` + 8 testes; destrava Skill 8 faturando)
-- **11 scripts SUPERADOS** (em `_validados/`: 5 ajustando-quant + 3 operando-reservas + 2 transferindo-interno + 1 operando-picking); ~94 scripts ad-hoc continuam VIVOS (operação viva — ROADMAP é guia, não destruidor).
-- **Baseline pytest: 30+52+19+42=143 verdes** (Skill 2 transfer subiu de 37→52 com 15 testes novos cobrindo modo C `transferir_para_indisponivel`).
+- **13 scripts SUPERADOS** (em `_validados/`: 5 ajustando-quant + 3 operando-reservas + 2 transferindo-interno + 1 operando-picking + 2 operando-mo); ~92 scripts ad-hoc continuam VIVOS (operação viva — ROADMAP é guia, não destruidor).
+- **Baseline pytest: 30+52+19+42+29=172 verdes pré-CR + 3 CR fixes = 175 verdes** (Skill 4 NOVA contribui 29 pytest).
 
-**Próximo passo (escolha do usuário em sessão futura, pós-2026-05-24 v3):**
-1. **Skill 4 (`operando-mo-odoo`)** — próxima na ordem bottom-up (única WRITE intra-estoque restante). Cobre `cancelar_mos.py` e `14_cancelar_mos_antigas_fb.py`. Service GAP (criar do zero). Gotchas: consumo>0 = furo contábil, manual_consumption, componente em local errado.
-2. **Skill 8 (`faturando-odoo`)** — **AGORA DESBLOQUEADA** pela ONDA 0.4 fechada (G019/G020 codificadas + 8 testes). É a skill MACRO (NF→SEFAZ); requer cuidado especial — irreversível.
-3. **Skill 7 (`escriturando-odoo`)** — entrada IC + DFe. Depende de contrato estável de transfer (Skill 2 ✅) e picking (Skill 5 ✅). Caminho para fluxos 1.x (inter-company).
+**Próximo passo (escolha do usuário em sessão futura, pós-2026-05-24 v5):**
+1. **Skill 8 (`faturando-odoo`)** — **DESBLOQUEADA** pela ONDA 0.4 fechada (G019/G020 codificadas + 8 testes). É a skill MACRO (NF→SEFAZ); requer cuidado especial — irreversível. Service `InventarioPipelineService` existe; falta capinagem + SKILL.md + CLI. ~6-8h.
+2. **Skill 7 (`escriturando-odoo`)** — entrada IC + DFe. Depende de contrato estável de transfer (Skill 2 ✅) e picking (Skill 5 ✅). Caminho para fluxos 1.x (inter-company).
+3. **Skill 6 (`planejando-pre-etapa-odoo`)** — planner; isolado; depende de skills 1+2+5. Implementar se demanda de planning surgir.
 4. **Fluxos compostos da Skill 2** — escrever folhas filhas (`2.2.D010`, `2.2.D012`, `2.2.D013`) para cobrir orquestradores de planilha. Implementar somente se padrão se repetir com 2+ casos reais cada.
-5. **Skill 5 — extensões**: `criar_picking_interno` ou `alterar_lote_no_picking` se surgir demanda real ad-hoc (atualmente é pipeline-only / fluxo cross-skill).
-6. **Skill 2 — extensões**: arg `--lot-id-origem`/`--lot-id-destino` na CLI (cobre `padronizar_migracao` sem ambiguidade); `transferir_quantidade_para_lote_v2` com destino sem lote.
-7. **Skill 3 (completar átomos previstos)** — `unreserve_picking`, `unreserve_mo(reassign=)`, `find_orphan_mls`. Implementar conforme demanda real (não especulativo).
-8. **Skill 9 (completar átomos previstos)** — `listar_move_lines`, `listar_pickings`, `find_orphan_mls`, `snapshot_estoque_por_lote`, `saldo_fora_principal`. Idem — demanda-driven.
-9. **Demandas reais** do dia-a-dia continuam orientando — cada caso real revela novos átomos necessários (provado em 4 sessões consecutivas: skills 1/2.4/9/2/5 nasceram/maturaram).
+5. **Auditoria G031** (pendência §9.7 v4): `grep -rn "LOTES_MIGRACAO_POR_COMPANY\[" app/ scripts/` em sessão futura — confirmar zero callers reais (já confirmado em CR3 via grep, reauditar periodicamente).
+6. **Skill 5 — extensões**: `criar_picking_interno` ou `alterar_lote_no_picking` se surgir demanda real ad-hoc.
+7. **Skill 4 — extensões**: `mrp_unbuild` (skill futura `mrp-unbuild-odoo` se padrão 3.1.c repetir 2+ casos); `alterar_mo` como fluxo cross-skill 3.2 se padrão repetir.
+8. **Skill 2 — extensões**: arg `--lot-id-origem`/`--lot-id-destino` na CLI (cobre `padronizar_migracao` sem ambiguidade).
+9. **Skill 3 / Skill 9 — completar átomos previstos** conforme demanda real (não especulativo).
+10. **Demandas reais** do dia-a-dia continuam orientando — cada caso real revela novos átomos necessários (provado em 5 sessões consecutivas: skills 1/2.4/9/2/5/4 nasceram/maturaram).
 
 **Mentalidade (não esquecer):** átomo versátil auto-seguro + `--dry-run`→`--confirmar` (CLAUDE.md §1); **`fluxos>>skills`** (caso novo = folha de fluxo, não skill nova); premissas resolvidas via `_utils` (não copiar); **NUNCA criar script ad-hoc** — capinar a skill; operação VIVA = preservar os ad-hoc restantes até cada átomo maturar (arquivar SUPERADO só após checklist C1-C10 da skill correspondente). **Skills nascem de demandas reais** — sessão 23/05 provou: 3 skills criadas a partir de 2 casos reais (104 ajustes negativos + auditoria pós-WRITE).
 
@@ -144,7 +167,7 @@ Não criamos evals sintéticos. Os ~105 scripts ad-hoc **corretos** são o **gro
 |------|-------|---------------------|
 | 1 | `ajustando-quant-odoo` ✅ MATURADA | **PILOTO** validado em produção 2026-05-23 (100 ajustes em 55s) |
 | 2 | `transferindo-interno-odoo` 🟡 (mín viável + MODO C PROD) | **NOVA 2026-05-24 v2 / MODO C v4** — 52 pytest verdes, 3 modos (lote→lote / loc→loc / **para-indisponivel atômico**), delega `ajustar_quant`×2 com `delta_esperado` propagado; 2 scripts SUPERADOS, 14+ orquestradores VIVOS; **1 execução `--confirmar` PROD validada (4.319 un em 23s pós-incidente G031 + fix)** |
-| 3 | `operando-reservas-odoo` 🟡 (mín viável) · `operando-mo-odoo` ⬜ · `operando-picking-odoo` 🟡 (mín viável NOVA 2026-05-24 v3) | cancelamentos/limpeza (gaps); skill 3 ANTECIPADA por demanda real 2026-05-23; skill 5 capina StockPickingService + atomo NOVO `devolver` (idempotente); FECHA invariante G019/G020 (pre-req ONDA 0.4) |
+| 3 | `operando-reservas-odoo` 🟡 (mín viável) · `operando-mo-odoo` 🟡 (mín viável NOVA 2026-05-24 v5 — 29 pytest, guard G-MO-01 furo contábil, idempotência action_cancel) · `operando-picking-odoo` 🟡 (mín viável NOVA 2026-05-24 v3) | cancelamentos/limpeza (gaps); skill 3 ANTECIPADA por demanda real 2026-05-23; skill 5 capina StockPickingService + atomo NOVO `devolver` (idempotente); FECHA invariante G019/G020 (pre-req ONDA 0.4); skill 4 criada do zero (sem service legado) |
 | 4 | `planejando-pre-etapa-odoo` ⬜ | planner; isolado |
 | 5 | `escriturando-odoo` ⬜ | entrada IC + DFe; depende de contrato estável de transfer |
 | 6 | `faturando-odoo` ⬜ | **ÚLTIMO** — macro perigoso (SEFAZ); ~~exige ONDA 0.4 (G019/G020) fechada~~ ONDA 0.4 ✅ fechada 2026-05-24 v3 |
