@@ -38,7 +38,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+# ARQUIVADO 2026-05-23 — movido para _validados/ajustando-quant-odoo/ (2 niveis abaixo).
+# parents[2] (era repo root) → parents[4] após o move. Skill substituta: ajustando-quant-odoo.
+sys.path.insert(0, str(_THIS.parents[4]))
 
 import pandas as pd  # noqa: E402
 

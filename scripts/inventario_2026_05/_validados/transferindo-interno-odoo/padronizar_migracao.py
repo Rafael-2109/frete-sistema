@@ -34,8 +34,15 @@ import logging
 import sys
 from pathlib import Path
 
+# Arquivado: este script vivia em scripts/inventario_2026_05/ — agora em _validados/transferindo-interno-odoo/
+# Profundidade aumentou 2 niveis -> parents[4] (em vez de parents[2]).
+# Script preservado como museum vivo (ainda executavel). Para fluxo novo, usar a skill:
+#   .claude/skills/transferindo-interno-odoo/scripts/transferir.py
+# LIMITACAO documentada: consolidacao de 2 grafias ESPECIFICAS de MIGRACAO (sem cedilha
+# -> com cedilha, ambas literais e existentes) NAO e coberta pela skill atual via nomes —
+# requer --lot-id (futuro). Use lot_id direto OU o service quant.py.
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+sys.path.insert(0, str(_THIS.parents[4]))
 
 from sqlalchemy import text  # noqa: E402
 

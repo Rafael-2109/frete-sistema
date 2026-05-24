@@ -116,6 +116,10 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'integracao-odoo': 'Integracao Odoo',
     'conciliando-transferencias-internas': 'Financeiro Odoo',
     'gerando-baseline-conciliacao': 'Baseline Conciliacao',
+    'ajustando-quant-odoo': 'Estoque Odoo (Write)',
+    'transferindo-interno-odoo': 'Estoque Odoo (Write)',
+    'operando-reservas-odoo': 'Estoque Odoo (Write)',
+    'consultando-quant-odoo': 'Estoque Odoo (Read)',
 
     # ── CarVia ──
     'gerindo-carvia': 'Gestao CarVia',
@@ -177,6 +181,8 @@ CATEGORY_TO_DOMAIN: Dict[str, str] = {
     'Recebimento Fisico': 'Odoo',
     'Razao Geral Odoo': 'Odoo',
     'Integracao Odoo': 'Odoo',
+    'Estoque Odoo (Write)': 'Odoo',
+    'Estoque Odoo (Read)': 'Odoo',
     'Baseline Conciliacao': 'Financeiro',
 
     # ── CarVia ──

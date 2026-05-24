@@ -28,7 +28,9 @@ from datetime import datetime
 from pathlib import Path
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+# ARQUIVADO 2026-05-23 — movido para _validados/operando-reservas-odoo/ (2 niveis abaixo).
+# parents[2] (era repo root) → parents[4] após o move. Skill substituta: operando-reservas-odoo.
+sys.path.insert(0, str(_THIS.parents[4]))
 
 from app import create_app  # noqa: E402
 from app.odoo.utils.connection import get_odoo_connection  # noqa: E402

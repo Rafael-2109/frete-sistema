@@ -1,0 +1,209 @@
+# ROADMAP_SKILLS — task-list física (capinar átomo por átomo)
+
+**Criado:** 2026-05-22 | **Constituição:** `app/odoo/estoque/CLAUDE.md` | **Mineração:** `docs/inventario-2026-05/consolidacao/MAPA_SCRIPTS.md`
+**Para:** Claude Code + agente web. Este é o **arquivo de progresso vivo** da migração 105-scripts → ~8 skills-átomos + subagente `gestor-estoque-odoo`.
+
+---
+
+## ⏯️ ESTADO ATUAL E COMO CONTINUAR (handoff — atualizar a cada avanço)
+
+**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **base atualizada via fast-forward em 2026-05-24 → `main`@b4f7b24c**). **NADA commitado ainda na branch (todas as mudanças staged/untracked).** `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois. Em 2026-05-24 main avançou 5 commits e foi mergeado por fast-forward na worktree antes de iniciar a Skill 2.
+
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline: `pytest tests/odoo/services/test_stock_quant_adjustment_service.py tests/odoo/services/test_stock_internal_transfer_service.py` (30 + 33 = **63 ✅**).
+
+**Sessão 2026-05-24 v2 (Skill 2 maturando — `transferindo-interno-odoo` C1-C10):**
+- ✅ **Fast-forward main → worktree** (origem 8d755573, agora b4f7b24c — 5 commits trazidos sem conflito; 2 docs antigos `docs/inventario-2026-05/consolidacao/ROADMAP_SKILLS.md` + `ARQUITETURA_ORQUESTRADOR_ODOO.md` convertidos em ponteiros para `app/odoo/estoque/`).
+- ✅ **C1 mineração de 18 scripts** (9 lidos por mim integral + 7 por subagente Explore + 2 do main: `consolidar_lote_104000015_sal_fb`, `recuperar_aumentos_falhos`). Síntese em `/tmp/skill2-mineracao-sintese.md`.
+- ✅ **C2 service `transfer.py`** movido para `app/odoo/estoque/scripts/` + shim em `app/odoo/services/`. **Estendido com:** constantes `LOTES_MIGRACAO_VARIANTES/LOTE_MIGRACAO_CANONICO/TOL_ARREDONDAMENTO`, helpers `is_migracao`/`_lotes_migracao_ids`/`_melhor_lote_migracao_na_loc`, públicos `resolver_lote_origem/destino`, e 3 novos métodos: `transferir_entre_lotes_v2` (delega `ajustar_quant`×2 com `delta_esperado` propagado), `transferir_entre_locations` (mesmo lote, 2 locs), `transferir_quantidade_para_lote_v2` (wrapper). **33 testes pytest verdes** (14 originais preservados + 19 novos cobrindo v2 + helpers + gotchas).
+- ✅ **C3-C5 contrato + SKILL.md + CLI**: `.claude/skills/transferindo-interno-odoo/` com SKILL.md (~270 linhas) e `scripts/transferir.py` (CLI 2 modos exclusive: A lote→lote, B loc→loc; `--dry-run` default; suporta `--resetar-reserva-origem`, `--tolerancia-delta`).
+- ✅ **C6 validação dry-run vs Odoo PROD**: 3 casos validados (10 emergenciais E01 confirma estado pós-execução de 18/05; padronizar_migracao detectado bug semântico = limitação documentada; loc→loc com saldo real = DRY_RUN_OK plano completo em 47ms). Log em `/tmp/log_skill2_C6_validacao_dry_run.json`.
+- ✅ **C7 cross-refs**: subagente `gestor-estoque-odoo.md` (skills + árvore 2.2), ROUTING_SKILLS (45 invocaveis), tool_skill_mapper (`Estoque Odoo (Write)`), CLAUDE.md raiz (status skill 2).
+- ✅ **C8 folha 2.2**: `app/odoo/estoque/fluxos/2.2-realocar-saldo.md` com 8 sub-casos cobertos e gotchas-invariante detalhados.
+- ✅ **C9-C10**: 2 scripts movidos para `_validados/transferindo-interno-odoo/`: `10_executar_emergenciais_fb.py` + `padronizar_migracao.py` (sys.path `parents[2]→parents[4]`, header `arquivado`). Outros 16+ orquestradores PERMANECEM VIVOS. MAPA_SCRIPTS + ROADMAP atualizados. [VALIDACAO.md](../../scripts/inventario_2026_05/_validados/transferindo-interno-odoo/VALIDACAO.md).
+- **Limitação documentada**: CLI não cobre caso `padronizar_migracao` (consolidar 2 grafias literais ESPECÍFICAS de MIGRAÇÃO) — adicionar `--lot-id-origem`/`--lot-id-destino` quando houver demanda real.
+
+**Sessão 2026-05-24 v1 (cleanup das pendências bloqueantes + guard anti-bug — manhã):**
+- ✅ Reversão `104000037 CICLAMATO DE SODIO FB` — `+33.7319` no quant 229937 (lote `MI074-177/25` FB/Estoque): qty `5.0136 → 38.7455`. Verificado direto no Odoo. Log: [`log_2.1_reversao_ciclamato_20260524_000000.json`](../../scripts/inventario_2026_05/auditoria/log_2.1_reversao_ciclamato_20260524_000000.json).
+- ✅ Quant órfão `104000039 AROMA NATURAL - ALHO FB/Pré-Produção/Linha Manual` — quant 260657 `reserved=-0.6 → 0`. Verificado. Log: [`log_2.4_zerar_residual_orfao_aroma_20260524_000001.json`](../../scripts/inventario_2026_05/auditoria/log_2.4_zerar_residual_orfao_aroma_20260524_000001.json).
+- ✅ Comunicado dos 6 pickings tocados — gerado em [`/tmp/comunicado_pickings_20260524.md`](file:///tmp/comunicado_pickings_20260524.md), entregue ao usuário.
+- ✅ **GUARD `delta_esperado` implementado no service `quant.py`** — 3 novos params (`delta_esperado`, `tolerancia_delta`, `corrigir_para_esperado`); 2 novos status (`FALHA_DELTA_DIVERGENTE`, `EXECUTADO_AUTO_CORRIGIDO`); CLI atualizada; 7 testes pytest novos (29 total). Protege contra repetição do bug CICLAMATO em retomadas de FALHA. Detalhes em [VALIDACAO_FINAL_SESSAO §6](VALIDACAO_FINAL_SESSAO.md#6-sessão-2026-05-24-guard-delta_esperado--validação-cancelamentos-gaps-12-fechados).
+- ✅ **Cancelamentos OUT/01053 + INT/07950 validados** — todos os 6 moves cancelados com `move_dest_ids=[]`. Self-contained, sem picking espelho LF pendente. Detalhes em [VALIDACAO_FINAL_SESSAO §6](VALIDACAO_FINAL_SESSAO.md).
+- Aprendizado novo (atualizar [[feedback_ajuste_positivo_criar_saldo]]): usuário preferiu **lote real menor** (MI074-177/25 qty 5 → 38) ao **lote consolidador P-15/05** (40 → 74). Default da memória pode mudar.
+
+**Feito até 2026-05-23 (3 skills nasceram/maturaram em 2 sessões consecutivas):**
+- ONDA 0 ✅ — pacote `app/odoo/estoque/` + subagente `.claude/agents/gestor-estoque-odoo.md`.
+- **Skill 1 (`ajustando-quant-odoo`) ✅ MATURADA** — 100 ajustes em produção (104 linhas → 84 EXEC + 15 reservados retomados c/ --resetar-reserva + 1 NOOP + 4 descartes). 4 políticas de premissa cristalizadas (MIGRA → 1-quant-cobre → zerar-insuficiente → PEPS multi-quant). 5 scripts em `_validados/ajustando-quant-odoo/`. **Volume efetivo: 79,65% (4.774/5.994 un); 53 COMPLETA + 45 PARCIAL + 1 OVER (104000037 CICLAMATO bug operacional, excesso 33.73 un reversível) + 1 ZERO + 4 DESCARTE.** Bug documentado em VALIDACAO.md §"Bug operacional".
+- **Skill 3 (`operando-reservas-odoo`) 🟡 mín viável** — 3 átomos (`cancelar_moves_orfaos`, `cancelar_picking_inteiro`, `zerar_reserved_residual`). Caso real: 6 pickings/15 MLs órfãs limpas + 15 quants residuais zerados em ~4s. 3 scripts em `_validados/operando-reservas-odoo/`. **Gotcha descoberto:** `--resetar-reserva` (skill 1) + unlink ML (skill 3) gera `reserved < 0` → exige `zerar_reserved_residual` ao final do fluxo. Documentado em [fluxo 2.4](fluxos/2.4-cancelar-reserva-orfa.md).
+- **Skill 9 (`consultando-quant-odoo`) 🟡 mín viável (ANCILLARY READ)** — 2 átomos (`listar_quants` 8-param + `auditar_pares`). Nasceu sob demanda (auditoria pós-WRITE). Dogfood: investigação 4856125 + classificação correta de 104 pares (17+46+39+2=104 ✓). [Fluxo 2.9](fluxos/2.9-consulta-quant-ao-vivo.md).
+- **C7-C10 nas 3 skills:** subagente `gestor-estoque-odoo.md` lista as 5 skills (3 escopadas + 2 utils), ROUTING_SKILLS Odoo 12 entries, tool_skill_mapper 3 entradas (`Estoque Odoo (Write)/(Read)`), fluxos 2.1/2.4/2.9 escritos, MAPA_SCRIPTS 2 seções novas (`scripts/reserva.py` + `scripts/consulta_quant.py`), 8 scripts movidos para `_validados/`.
+
+**Status global do esforço de migração (atualizado 2026-05-24 v2):**
+- **1/8 skills WRITE MATURADA** (skill 1 `ajustando-quant-odoo`)
+- **2/8 skills WRITE mín viável** (skill 2 `transferindo-interno-odoo` 🟡 NOVA 2026-05-24 + skill 2.4 `operando-reservas-odoo` 🟡 desde 2026-05-23)
+- **1 skill READ ancillary mín viável** (skill 9 `consultando-quant-odoo` — ancillary, fora da ordem bottom-up)
+- 5/8 skills WRITE não iniciadas (MO, picking, planejando-pre-etapa, escriturando, faturando)
+- **10 scripts SUPERADOS** (em `_validados/`: 5 ajustando-quant + 3 operando-reservas + 2 transferindo-interno); ~95 scripts ad-hoc continuam VIVOS (operação viva — ROADMAP é guia, não destruidor).
+- **Baseline pytest: 30+33+(skill 2.4 não tem teste isolado)+19=82 verdes** em `test_stock_quant_adjustment_service.py + test_stock_internal_transfer_service.py + test_stock_lot_service.py`.
+
+**Próximo passo (escolha do usuário em sessão futura, pós-2026-05-24 v2):**
+1. **Skill 4 (`operando-mo-odoo`)** — próxima na ordem bottom-up. Cobre `cancelar_mos.py` e `14_cancelar_mos_antigas_fb.py`. Service GAP (criar do zero). Gotchas: consumo>0 = furo contábil, manual_consumption, componente em local errado.
+2. **Skill 5 (`operando-picking-odoo`)** — fundir com 2.4 ou independente? `StockPickingService` parcial existe. Cobre `16_cancelar_pickings_fantasmas` + etapas 09/fat_lf_05. Gotchas G011/G019/G020 ABERTOS.
+3. **Fluxos compostos da Skill 2** — escrever folhas filhas (`2.2.D010`, `2.2.D012`, `2.2.D013`) para cobrir orquestradores de planilha (13, 15, 15r, transferir_lote, transferir_local_pasta22, ajuste_fb_cd_indisponivel, mover_migracao, relotar). Implementar somente se padrão se repetir com 2+ casos reais cada.
+4. **Skill 2 — extensões**: arg `--lot-id-origem`/`--lot-id-destino` na CLI (cobre `padronizar_migracao` sem ambiguidade); `transferir_quantidade_para_lote_v2` com destino sem lote.
+5. **Skill 3 (completar átomos previstos)** — `unreserve_picking`, `unreserve_mo(reassign=)`, `find_orphan_mls`. Implementar conforme demanda real (não especulativo).
+6. **Skill 9 (completar átomos previstos)** — `listar_move_lines`, `listar_pickings`, `find_orphan_mls`, `snapshot_estoque_por_lote`, `saldo_fora_principal`. Idem — demanda-driven.
+7. **Demandas reais** do dia-a-dia continuam orientando — cada caso real revela novos átomos necessários (foi o que aconteceu nas 2 últimas sessões: skill 2.4 e 9 antecipadas; skill 2 maturada).
+
+**Mentalidade (não esquecer):** átomo versátil auto-seguro + `--dry-run`→`--confirmar` (CLAUDE.md §1); **`fluxos>>skills`** (caso novo = folha de fluxo, não skill nova); premissas resolvidas via `_utils` (não copiar); **NUNCA criar script ad-hoc** — capinar a skill; operação VIVA = preservar os ad-hoc restantes até cada átomo maturar (arquivar SUPERADO só após checklist C1-C10 da skill correspondente). **Skills nascem de demandas reais** — sessão 23/05 provou: 3 skills criadas a partir de 2 casos reais (104 ajustes negativos + auditoria pós-WRITE).
+
+> **Como usar:** 1 assunto por vez, bottom-up. Antes de capinar QUALQUER átomo: `find scripts/inventario_2026_05 -name '*.py'` (operação VIVA — o nº muda) e **ler integral** os scripts-fonte (a situação no MAPA_SCRIPTS foi inferida, não lida — validar reabrindo). Preservar os ad-hoc até o átomo maturar; arquivar SUPERADO só após C9.
+
+---
+
+## CHECKLIST FIXO POR SKILL (instanciado em cada seção abaixo)
+
+```
+[ ] C1  Minerar scripts-fonte: LER INTEGRAL, extrair lógica + gotchas + edge cases (não confiar na situação inferida)
+[ ] C2  Service base em app/odoo/estoque/ com gotchas codificados como INVARIANTE + testes pytest verdes
+[ ] C3  Contrato de átomo definido (input · output · pré-cond · pós-cond · gotchas-invariante) — ver CLAUDE.md §3
+[ ] C4  SKILL.md em .claude/skills/<skill>/ (contrato + receitas caso→args + gotchas + fronteira NÃO-USAR)
+[ ] C5  scripts/<skill>/*.py: --dry-run (default seguro) + --confirmar; importam app.odoo.estoque
+[ ] C6  VALIDAÇÃO POR REPRODUÇÃO (scripts ad-hoc = evals — ver seção abaixo): p/ CADA script-fonte CORRETO, skill --dry-run com os mesmos inputs → plano BATE (ground-truth: log auditoria/ se já rodou; ou script --dry-run se reexecutável)
+[ ] C7  Registrar: gestor-estoque-odoo (skills:) + ROUTING_SKILLS.md + tool_skill_mapper.py + cross-refs
+[ ] C8  Referência(s) de fluxo em app/odoo/estoque/fluxos/ que compõem o átomo (se já houver fluxo que o use)
+[ ] C9  MOVER cada script VALIDADO → scripts/inventario_2026_05/_validados/<skill>/ (após confirmar 0 imports externos) + registrar linha em _validados/<skill>/VALIDACAO.md
+[ ] C10 MAPA_SCRIPTS situação→SUPERADO + atualizar status neste ROADMAP
+```
+
+**Doc por skill (item "documentar após substituir"):** a própria `SKILL.md` é a doc de uso (CC+agente). Além dela: marcar MAPA_SCRIPTS (C10) e migrar o conteúdo de `docs/inventario-2026-05/consolidacao/manuais/<service>.md` para dentro da SKILL.md.
+
+---
+
+## ESTRATÉGIA DE VALIDAÇÃO — os scripts ad-hoc SÃO os evals
+
+Não criamos evals sintéticos. Os ~105 scripts ad-hoc **corretos** são o **ground-truth**: um átomo só "atende" quando **reproduz** o que eles fazem. Aprovado → o script é **movido para `_validados/<skill>/`** (registro físico de progresso).
+
+**Protocolo por script-fonte:**
+1. **Triar (no C1)** — classificar cada script-fonte:
+   - `EVAL` = correto + reproduzível → vira caso de validação;
+   - `COM-BUG` = bug/dead-code conhecido (ex: `ajuste_estoque_lf_pasta17` docstring stale) → a skill faz o **CERTO**; divergência é **melhoria**, não falha (anotar);
+   - `JÁ-MORTO` = discovery/pontual → não é eval, arquiva em `_historico/` (não em `_validados/`).
+2. **Reproduzir em `--dry-run`:**
+   - script **reexecutável** (idempotente, tem `--dry-run`): rodar `script --dry-run` **E** `skill --dry-run` com os mesmos inputs → comparar o **plano** (produto/lote/local/qtd/sinal);
+   - script **já executado** (input consumido): comparar `skill --dry-run` vs `auditoria/log_*.json` (o que de fato rodou).
+3. **PASSOU** (plano bate) → `git mv` do script para `scripts/inventario_2026_05/_validados/<skill>/` + linha em `_validados/<skill>/VALIDACAO.md` (`script · inputs · ground-truth · resultado · data`).
+4. **NÃO bateu** → investigar antes de mover: bug no átomo (corrigir) · bug no script (anotar, skill mantém o certo) · semântica diferente (ajustar args/`--semantica`).
+
+**Pastas (distintas):** `_validados/<skill>/` = comprovadamente coberto pela skill (com evidência) · `_historico/` = JÁ-MORTO sem reuso · `_ad-hoc/` = ainda ativo, não capinado. Rastreabilidade: "quais ad-hoc o átomo X já cobre" = `ls _validados/<skill>/`.
+
+> ⚠️ Mover só após **0 imports externos** ao script (C9) — a maioria é standalone (executável), mas conferir. Operação VIVA: se um script validado ainda for necessário para rodar, a skill (que o reproduz) é quem roda agora.
+
+---
+
+## ONDA 0 — pré-requisitos (desbloqueiam tudo)
+
+```
+[ ] 0.1  Materializar app/odoo/estoque/ (scripts/ orchestrators/ _utils.py __init__.py) + shims em services/ (PLANO_MIGRACAO §1/§7)
+[ ] 0.2  Esqueleto subagente .claude/agents/gestor-estoque-odoo.md (prompt = árvore de DECISÃO §5; WRITE; diferenciar de gestor-estoque-producao)
+[ ] 0.3  Esqueleto app/odoo/estoque/fluxos/ + README com a convenção de folha (CLAUDE.md §5.1)
+[ ] 0.4  (bloqueia faturamento) FECHAR G019/G020 — validar() engole erro / marca done falso
+```
+
+---
+
+## ORDEM DE EXECUÇÃO (bottom-up)
+
+| Onda | Skill | Por quê nesta ordem |
+|------|-------|---------------------|
+| 1 | `ajustando-quant-odoo` ✅ MATURADA | **PILOTO** validado em produção 2026-05-23 (100 ajustes em 55s) |
+| 2 | `transferindo-interno-odoo` 🟡 (mín viável) | **NOVA 2026-05-24** — 33 pytest verdes, 2 modos (lote→lote / loc→loc), delega `ajustar_quant`×2 com `delta_esperado` propagado; 2 scripts SUPERADOS, 16+ orquestradores VIVOS (fluxos compostos pendentes) |
+| 3 | `operando-reservas-odoo` 🟡 (mín viável) · `operando-mo-odoo` ⬜ · `operando-picking-odoo` ⬜ | cancelamentos/limpeza (gaps); skill 3 ANTECIPADA por demanda real 2026-05-23 |
+| 4 | `planejando-pre-etapa-odoo` ⬜ | planner; isolado |
+| 5 | `escriturando-odoo` ⬜ | entrada IC + DFe; depende de contrato estável de transfer |
+| 6 | `faturando-odoo` ⬜ | **ÚLTIMO** — macro perigoso (SEFAZ); exige ONDA 0.4 (G019/G020) fechada |
+| ANCILLARY | `consultando-quant-odoo` 🟡 | READ-only AO VIVO; nasceu sob demanda (auditoria pós-WRITE) — não bloqueia outras |
+
+---
+
+## SKILL 1 — `ajustando-quant-odoo`  (PILOTO)  ✅ MATURADA
+- **Objeto:** stock.quant | **Camada:** C1 | **Service:** `StockQuantAdjustmentService` ✅ (existe + manual + 22 testes; orquestrador `ajuste_inventario.py` existe)
+- **Scripts-fonte (MAPA_SCRIPTS):** SUPERADOS já cobertos → 11, 12, 13, 14_v2, criar_saldo. AO-CAPINAR (composições) → limpar_quants_ghost, zerar_negativos, corrigir_reserved_negativo, fat_lf_03_prestage, fat_lf_06_consolidar_validos.
+- **Gotchas-invariante:** G028 (consolidar_move_lines), G029 (payment_provider), action_apply_inventory infla quant NEGATIVO (usar picking p/ destino negativo), `=`→`in` em lot.name (G002). **GUARD delta_esperado** (anti-bug CICLAMATO 2026-05-24): valida `|ajuste_aplicado - delta_esperado| <= tolerancia_delta`; modo `--corrigir-para-esperado` auto-aplica delta_esperado.
+- **Checkpoints:** C1 🟡 · C2 ✅ · C3 ✅ · C4 ✅ · C5 ✅ · **C6 ✅** (dry-run 3 casos vs ground-truth + WRITE REAL 100 linhas em 2026-05-23: **84 EXECUTADO + 1 NOOP + 15 bloqueio anti-reservado correto**) · C7 ✅ · C8 ✅ · C9 ✅ · C10 ✅
+  - **Status global da skill 1: ✅ MATURADA** (2026-05-23 — caso real de 104 ajustes negativos do usuário invocou o fluxo 2.1 ponta-a-ponta; HOST agente compôs `StockQuantAdjustmentService.ajustar_quant` em loop in-process; 4 políticas de premissa aplicadas: MIGRA→fallback `qualquer lote único`→`zerar quant insuficiente`→`PEPS multi-quant`; logs em [`auditoria/log_2.1_*.json`](../../scripts/inventario_2026_05/auditoria/) e evidência completa em [`_validados/ajustando-quant-odoo/VALIDACAO.md`](../../scripts/inventario_2026_05/_validados/ajustando-quant-odoo/VALIDACAO.md)).
+  - 2026-05-22: shim provado — 11 consumidores intactos. SKILL.md (template) + ajustar_quant.py (ajuste pontual de 1 quant, dry-run default/--confirmar) criados; skill ligada ao gestor-estoque-odoo.
+  - 2026-05-23: C6 dry-run rodado contra Odoo PROD com 3 casos reais dos logs `frete_sistema/scripts/inventario_2026_05/auditoria/`: (1) `11_ajuste_cd` cod=4310152/lote=119338/CD/Δ=-1.1e-05; (2) `12_ajuste_pos_cd` cod=205460830/lote=345232-25/CD/Δ=+2e-05; (3) `criar_saldo_positivo_lf` cod=104000127/lote=0730/682153-F3/LF/Δ=+37.5 --criar-se-faltar. **Premissas (product_id, company_id, location_id, lot_id, quant_id) bateram 100%**. Operação viva alterou `qty_antes` nos casos 1 e 3 (quant 207125 sumiu pós-zeragem; quant 256433 já tinha 37.5 do run de 20/05) — invariantes do átomo (`FALHA_QUANT_VAZIO`, regra `--criar-se-faltar` ignora lote existente) protegem corretamente. **Worktree não tinha `.env`** — solução: `set -a; . <(grep -E '^ODOO_' /home/.../frete_sistema/.env); set +a` (carrega só ODOO_*, sem DATABASE_URL para não tocar PROD).
+  - 2026-05-23: C7 ✅ — `gestor-estoque-odoo` adicionado em [CLAUDE.md §SUBAGENTES](../../../CLAUDE.md); skill `ajustando-quant-odoo` adicionada em [ROUTING_SKILLS.md](../../../.claude/references/ROUTING_SKILLS.md) (Passo 1 row, Passo 3 árvore nodo 6, desambiguação `gestor-estoque-odoo vs gestor-estoque-producao` + `ajustando-quant-odoo vs transferindo-interno-odoo`, Skills Odoo 9→10) + em [tool_skill_mapper.py](../../../app/agente/services/tool_skill_mapper.py) (`Estoque Odoo (Write)`/`Odoo`). C8 ✅ — folha [fluxos/2.1-ajuste-saldo-por-planilha.md](fluxos/2.1-ajuste-saldo-por-planilha.md) criada cobrindo schema heterogêneo dos 5 scripts; README da árvore marcado ✅. C9 ✅ — 5 scripts (11, 12, 13, 14_v2, criar_saldo_lf) movidos via `git mv` para [`scripts/inventario_2026_05/_validados/ajustando-quant-odoo/`](../../../scripts/inventario_2026_05/_validados/ajustando-quant-odoo/VALIDACAO.md); 0 imports externos confirmado; sys.path interno corrigido `parents[2]→parents[4]` em cada um (museum vivo — ainda executáveis). C10 ✅ — [MAPA_SCRIPTS.md](../../../docs/inventario-2026-05/consolidacao/MAPA_SCRIPTS.md) §"scripts/quant.py" linkado para `_validados/` e VALIDACAO.md.
+
+## SKILL 2 — `transferindo-interno-odoo`  🟡 (mín viável + helpers + 33 pytest verdes)
+- **Objeto:** transferência interna intra-empresa | **Camada:** C2 | **Service:** [`app/odoo/estoque/scripts/transfer.py`](scripts/transfer.py) (StockInternalTransferService — API v1 preservada + API v2 que delega a `ajustar_quant` 2x + helpers MIGRAÇÃO + `transferir_entre_locations`)
+- **Scripts-fonte:** 10 (SUPERADO 2026-05-24), padronizar_migracao (SUPERADO 2026-05-24 com limitação 2-grafias), 13_transferencia_migracao_fb, 15_transferencia_para_migracao, 15r, 15_transferir_preprod, 17_transferir_preprod_lf, substituir_lote_205030410, transferir_lote, transferir_local_pasta22, recuperar_aumentos_falhos, mover_migracao_para_indisponivel, ajuste_fb_cd_indisponivel, transferir_indisp_para_estoque_p15_cd, relotar_migracao_para_lotes_fb, transferir_fluxo_c (COM-BUG G-TRANSFER-01), executar_fluxo_b_vivas (COM-BUG), consolidar_lote_104000015_sal_fb.
+- **Semânticas (explícitas via arg, nunca inferir):** D010 sinal diff_qtd · D012 delta · D013 De-Para+wildcard (vivem nos orquestradores externos; a skill cobre o ÁTOMO).
+- **Gotchas-invariante codificados (10):** G021 (lot_id empresa errada — filtro company_id em TODA busca de lote), G022 (2 lotes MIGRACAO/produto — wildcard 3 grafias + maior saldo na loc), G027 (reserved_quantity stale — `--resetar-reserva-origem` opcional), G028 (consolidar_move_lines — herdado), G002 (lot.name `=` instável — herdado), G_proxy_vazio (P-15/05 = literal + sem lote), G-TRANSFER-01 (criar_se_nao_existe retorna tuple), action_apply_inventory infla quant negativo (herdado), delta_esperado propagado a CADA passo (regra inviolável 11), G_clamp_arred (TOL=0.001).
+- **Átomos implementados (4):** `transferir_entre_lotes` (v1 preservada — 12 testes originais), `transferir_entre_lotes_v2` (v2 nova, delega `ajustar_quant`×2 com `delta_esperado` propagado), `transferir_entre_locations` (mesmo lote, 2 locs), `transferir_quantidade_para_lote_v2` (wrapper v2 com criar destino).
+- **Helpers (4):** `is_migracao` (3 variantes), `_lotes_migracao_ids` (G021), `_melhor_lote_migracao_na_loc` (G022), `resolver_lote_origem/destino` (públicos).
+- **Checkpoints:** C1 ✅ (18 scripts lidos integral — 9 por mim + 7 por subagente Explore + 2 do main) · C2 ✅ (service `transfer.py` movido + estendido; 33 testes pytest verdes) · C3 ✅ (contrato em SKILL.md) · C4 ✅ ([`SKILL.md`](../../.claude/skills/transferindo-interno-odoo/SKILL.md)) · C5 ✅ ([`transferir.py`](../../.claude/skills/transferindo-interno-odoo/scripts/transferir.py)) · **C6 ✅** (3 casos dry-run PROD: lote→lote OK; padronizar OK com limitação; loc→loc OK detalhado) · C7 ✅ (subagente + ROUTING_SKILLS + tool_skill_mapper `Estoque Odoo (Write)` + CLAUDE.md raiz) · C8 ✅ ([fluxo 2.2](fluxos/2.2-realocar-saldo.md) com 8 sub-casos) · C9 ✅ (2 scripts movidos: 10_emergenciais + padronizar_migracao; sys.path corrigido parents[2]→parents[4]; outros 16+ permanecem VIVOS — operação viva) · C10 ✅ (MAPA_SCRIPTS + este ROADMAP atualizados)
+- **Status global da skill 2: 🟡 mín viável** (2026-05-24 — átomo composto pronto; 0 execuções `--confirmar` em PROD; fluxos compostos para orquestradores de planilha pendentes; limitação `--lot-id` documentada). [VALIDACAO.md](../../scripts/inventario_2026_05/_validados/transferindo-interno-odoo/VALIDACAO.md).
+
+## SKILL 3 — `operando-reservas-odoo`  🟡 (mínimo viável + write real validado)
+- **Objeto:** stock.move.line + stock.picking + stock.quant (residual) | **Camada:** C1/C2 | **Service:** [`reserva.py`](scripts/reserva.py) (StockReservaService — 3 átomos)
+- **Scripts-fonte (MAPA_SCRIPTS):** SUPERADOS → remover_reservas_saida, cancelar_reservas_migracao, limpar_reservas_fantasma (movidos para `_validados/operando-reservas-odoo/` em 2026-05-23).
+- **Gotchas-invariante codificados (5):** G024 (`reserved_uom_qty` inexistente Odoo 16/17), G025 (Odoo CIEL IT: `stock.move._action_cancel` é PRIVADO via XML-RPC), G026 (MO `to_close/done` tem `picked=True` — não mexer), G027 (`reserved_quantity` interno SEMPRE vem de saída — zerar residual stale é seguro), G028 (batch 50 com fallback individual).
+- **Átomos implementados (3):** `cancelar_moves_orfaos(picking_id, ml_ids, moves_writes)` (cirurgia), `cancelar_picking_inteiro(picking_id)` (action_cancel cascade), `zerar_reserved_residual(quant_ids)` (cleanup pós-unlink — descoberta 2026-05-23).
+- **Átomos previstos:** `unreserve_picking`, `unreserve_mo(reassign=)`, `find_orphan_mls` — implementar conforme demanda.
+- **Checkpoints:** C1 ✅ (4 scripts-fonte lidos integral + probes Odoo 17) · C2 ✅ ([`reserva.py`](scripts/reserva.py)) · C3 ✅ (contrato em SKILL.md) · C4 ✅ (`SKILL.md`) · C5 ✅ ([`operar_reserva.py`](../../.claude/skills/operando-reservas-odoo/scripts/operar_reserva.py)) · **C6 ✅** (write real 2026-05-23 — 6 pickings/15 quants em 3,6s + 15 quants `zerar_reserved_residual` em 62ms) · C7 ✅ (subagente + ROUTING_SKILLS + tool_skill_mapper) · C8 ✅ ([fluxo 2.4](fluxos/2.4-cancelar-reserva-orfa.md)) · C9 ✅ (3 scripts movidos `parents[2]→parents[4]`) · C10 ✅ (MAPA_SCRIPTS seção `scripts/reserva.py`)
+- **Status global da skill 3: 🟡 — mínimo viável maturado, demais átomos previstos** (2026-05-23 — caso real "15 MLs órfãs em 6 pickings pós-`--resetar-reserva`" resolvido ponta-a-ponta; gotcha descoberto: `--resetar-reserva` + unlink ML gera `reserved` negativo, exige `zerar_reserved_residual` após; documentado em SKILL.md e [`VALIDACAO.md`](../../scripts/inventario_2026_05/_validados/operando-reservas-odoo/VALIDACAO.md)).
+
+## SKILL 4 — `operando-mo-odoo`  ⬜
+- **Objeto:** mrp.production | **Camada:** C2 | **Service:** GAP → criar
+- **Scripts-fonte:** cancelar_mos (base argparse), 14_cancelar_mos_antigas_fb (filtro consumo=0).
+- **Gotchas-invariante:** consumo>0 = furo contábil (bloquear cancelamento), manual_consumption não reserva via action_assign, componente preso em local errado.
+- **Checkpoints:** C1–C10 ⬜
+
+## SKILL 5 — `operando-picking-odoo`  ⬜
+- **Objeto:** stock.picking | **Camada:** C2 | **Service:** `StockPickingService` 🟡 (falta manual)
+- **Scripts-fonte:** 16_cancelar_pickings_fantasmas (filtro >7d/origin C24xxx) + etapas de 09/fat_lf_05; (criar/devolver/alterar-lote a destilar do pipeline).
+- **Gotchas-invariante:** G011 (qty_done assign↔validate), G023 (entrada destino auto), G019/G020 (validar engole erro — ABERTOS, ver ONDA 0.4).
+- **Checkpoints:** C1–C10 ⬜
+
+## SKILL 6 — `planejando-pre-etapa-odoo`  ⬜
+- **Objeto:** planner (read+valida) | **Camada:** C2 | **Service:** `PreEtapaEstoqueService` 🟡 (falta manual)
+- **Scripts-fonte:** 03b_planejar_pre_etapa_cd, 04b_propor_pre_etapa_cd, 09b_executar_pre_etapa (executor → orchestrators/pre_etapa_executor), 04_propor_ajustes.
+- **Gotchas-invariante:** D007 (consolidar em MIGRAÇÃO p/ minimizar NF); planner NÃO escreve (quem escreve cai em transfer/quant).
+- **Checkpoints:** C1–C10 ⬜
+
+## SKILL 7 — `escriturando-odoo`  (SÓ ENTRADA)  ⬜
+- **Objeto:** entrada DFe/NF → in_invoice | **Camada:** C3 (macro + etapas E→F) | **Service:** pipeline (etapa entrada) + `escriturar_dfe_lf.py` (assunto NOVO)
+- **Scripts-fonte:** entrada_fb_piloto (etapas 0-18), escriturar_dfe_lf (Fluxo A, NÃO reusa RecebimentoLf), fat_lf_resume_entrada.sh (resiliente a hang robô).
+- **Gotchas-invariante:** G034 (CFOP entrada 1xxx ≠ saída 5xxx), G023, quirk DFe status 04, action_gerar_po_dfe usa company do USUÁRIO (forçar allowed_company_ids), tipo='serv-industrializacao' p/ CFOP 1901.
+- **Fronteira:** recebimento de COMPRAS → gestor-recebimento; CTe → fretes; pallet → pallet.
+- **Checkpoints:** C1–C10 ⬜
+
+## SKILL 8 — `faturando-odoo`  (SÓ SAÍDA — ÚLTIMO)  ⬜
+- **Objeto:** NF saída→robô CIEL IT→SEFAZ | **Camada:** C3 (macro + etapas B→D) | **Service:** `InventarioPipelineService` 🟡 (macro, ~20 gotchas, falta manual)
+- **PRÉ-REQUISITO:** ONDA 0.4 (G019/G020 fechados).
+- **Scripts-fonte:** 09_executar_onda1_bulk (A-F), 09c_executar_onda2_fb_cd (transfer_only 19-37), fat_lf_02_carregar (TIPO→ação), fat_lf_04_executar (driver B-F), fat_lf_05_executar_clean (G028 reserva multi-lote), fat_lf_cleanup (return+cancel+reset), fat_lf_resume.sh (loop B→D SSL-resiliente), teste_210030325 (→ exemplo no fluxo).
+- **Gotchas-invariante:** G004, G011, G016 (SSL), G019/G020 (fechar antes), quarteto fiscal G035/G017/G007/G018 (pré-flight cstat 225), G028.
+- **Checkpoints:** C1–C10 ⬜
+
+## SKILL 9 — `consultando-quant-odoo`  (READ ANCILLARY)  🟡
+- **Objeto:** stock.quant (READ-only) ao vivo via XML-RPC | **Camada:** READ (sem WRITE) | **Service:** [`consulta_quant.py`](scripts/consulta_quant.py) (StockQuantQueryService — 2 átomos)
+- **Origem:** nasceu da demanda de auditoria pós-WRITE (2026-05-23: "sobrou saldo em loc !=Indisponivel para os 104 produtos ajustados?"). NÃO faz parte da ordem bottom-up das skills WRITE — é skill ANCILLARY (suporte às outras).
+- **Scripts-fonte minerados (parcial):** `monitor/1_baixar_estoques.py` (pattern de search batch), `auditoria/levantar_estoque_fora_principal.py` (classificação por usage+parent_path). Os ~35 outros READ legados (monitor/*, auditoria/comparar_sot_*, diff_*, relatorio_*, investiga_*) continuam VIVOS — átomos previstos cobrem subconjunto, demais permanecem ad-hoc.
+- **Átomos implementados (2):** `listar_quants(cods, pids, empresas, pares_cod_empresa, locations_excluir, com_lote, only_principal, agregar)` (query versátil — 8 parâmetros) + `auditar_pares(pares_cod_empresa)` (helper de alto nível — classifica em zerado/so_indisp/com_saldo/sem_produto).
+- **Átomos previstos:** `listar_move_lines`, `listar_pickings`, `find_orphan_mls(quant_ids)`, `snapshot_estoque_por_lote(empresa)`, `saldo_fora_principal(empresa)` — implementar conforme demanda.
+- **Checkpoints:** C1 🟡 (mineração parcial — 2 scripts-fonte essenciais lidos; ~33 outros READ permanecem como referência) · C2 ✅ ([`consulta_quant.py`](scripts/consulta_quant.py)) · C3 ✅ (contrato em SKILL.md) · C4 ✅ (`SKILL.md`) · C5 ✅ ([`consultar_quants.py`](../../.claude/skills/consultando-quant-odoo/scripts/consultar_quants.py)) · **C6 ✅** (dogfood 2026-05-23 — investigação 4856125 + auditoria 104 pares: `auditar_pares` retornou 17+46+39+2=104 ✓) · C7 ✅ (subagente READ direto + ROUTING_SKILLS + tool_skill_mapper `Estoque Odoo (Read)`/`Odoo`) · C8 ✅ ([fluxo 2.9](fluxos/2.9-consulta-quant-ao-vivo.md)) · C9 ⏸️ (decisão: NÃO mover scripts READ ainda — skill mínima cobre subconjunto; átomos previstos cobrirão mais cenários, scripts ad-hoc continuam VIVOS) · C10 ✅ (MAPA_SCRIPTS seção `scripts/consulta_quant.py`)
+- **Status global da skill 9: 🟡 — READ-only mínimo viável, ancillary** (2026-05-23 — pattern de "auditar saldo restante" cristalizado em `auditar_pares`; corrige erro de produto-cartesiano (cods × empresas) presente na 1ª query inline; case real "sobrou saldo dos 104 produtos?" → 17 zerados + 46 só_indisp + 39 com_saldo + 2 sem_produto = 104 ✓).
+
+---
+
+## NÃO VIRAM SKILL (registro)
+- **Leitura/diff/SOT batch** (~33 scripts restantes: `monitor/2,3,4`, `01_extrair_estoque_odoo`, `08_extrair_pos_execucao`, `comparar_sot_*`, `confronto_4_fontes`, `diff_*`, `relatorio_*`, `investiga_*`, etc.) → continuam como scripts ad-hoc operação viva. A skill 9 cobre o pattern essencial de busca `stock.quant`; casos específicos (snapshot CSV batch, classificação por usage, cross-source com Render local) são átomos PREVISTOS na skill 9 — implementar conforme demanda. **Justificativa do C9 ⏸️ da skill 9:** mover scripts READ sem cobertura completa quebra fluxos que dependem deles (operação viva).
+- **JÁ-MORTO** (discovery F0: 00-00e, auditoria/investiga_*, baixar_xml_preview_626032, debug_sefaz_608607) → arquivar em `_historico/`.
+- **`operando-lote`** (stock.lot) = **utils** em `app/odoo/estoque/_utils.py` (chamado por skills 1/2).
+
+---
+
+## LEGENDA
+⬜ não iniciado · 🟡 parcial · ✅ concluído · C# = checkpoint do checklist fixo.
+Atualizar status do checkpoint e da skill A CADA avanço (este arquivo é o progresso vivo).

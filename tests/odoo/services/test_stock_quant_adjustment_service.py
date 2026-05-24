@@ -297,3 +297,123 @@ def test_erro_sem_quant_id_e_sem_chave(service):
 def test_erro_criar_se_faltar_com_quant_id(service):
     with pytest.raises(ValueError, match='criar_se_faltar'):
         service.ajustar_quant(quant_id=10, delta=10.0, criar_se_faltar=True)
+
+
+# ----------------------------------------------------------------------
+# delta_esperado (guard anti-bug retomada-FALHA — CICLAMATO 2026-05-23)
+# ----------------------------------------------------------------------
+
+def test_delta_esperado_bate_executa(service, odoo_mock):
+    """delta_esperado bate com ajuste_aplicado dentro da tolerancia -> EXECUTADO."""
+    odoo_mock.search_read.return_value = [_quant(qty=5.0136)]
+    r = service.ajustar_quant(
+        product_id=27721, company_id=1, location_id=8, lot_id=57545,
+        delta=33.7319, delta_esperado=33.7319, tolerancia_delta=0.1,
+    )
+    assert r['status'] == 'EXECUTADO'
+    assert r['ajuste_aplicado'] == 33.7319
+    odoo_mock.write.assert_called_once()  # escreveu
+
+
+def test_delta_esperado_diverge_aborta(service, odoo_mock):
+    """ajuste_aplicado diverge de delta_esperado alem da tolerancia -> FALHA_DELTA_DIVERGENTE sem write."""
+    # Cenario CICLAMATO: pedido era -7, mas politica zerou tudo (delta=-qty_atual=-40.7319)
+    odoo_mock.search_read.return_value = [_quant(qty=40.7319, reservada=40.7319)]
+    r = service.ajustar_quant(
+        product_id=27721, company_id=1, location_id=8, lot_id=58819,
+        valor_absoluto=0,  # zerar
+        delta_esperado=-7.0, tolerancia_delta=0.1,
+        resetar_reserva=True,  # garante que nao para no FALHA_RESERVADO
+    )
+    assert r['status'] == 'FALHA_DELTA_DIVERGENTE'
+    assert r['delta_esperado'] == -7.0
+    assert r['tolerancia_delta'] == 0.1
+    # divergencia = |-40.7319 - (-7.0)| = 33.7319
+    assert abs(r['divergencia'] - 33.7319) < 0.0001
+    # NAO escreveu (guard cortou antes)
+    odoo_mock.write.assert_not_called()
+    odoo_mock.execute_kw.assert_not_called()
+
+
+def test_delta_esperado_dentro_tolerancia_passa(service, odoo_mock):
+    """divergencia < tolerancia -> nao bloqueia (arredondamento)."""
+    odoo_mock.search_read.return_value = [_quant(qty=5.0136)]
+    r = service.ajustar_quant(
+        product_id=27721, company_id=1, location_id=8, lot_id=57545,
+        delta=33.7319, delta_esperado=33.73, tolerancia_delta=0.01,
+    )
+    # divergencia = |33.7319 - 33.73| = 0.0019 < 0.01
+    assert r['status'] == 'EXECUTADO'
+
+
+def test_sem_delta_esperado_mantem_comportamento(service, odoo_mock):
+    """Sem delta_esperado, comportamento atual preservado (sem regressao)."""
+    odoo_mock.search_read.return_value = [_quant(qty=40.7319, reservada=40.7319)]
+    r = service.ajustar_quant(
+        product_id=27721, company_id=1, location_id=8, lot_id=58819,
+        valor_absoluto=0, resetar_reserva=True,
+        # delta_esperado=None (default)
+    )
+    # Sem guard, executa normalmente
+    assert r['status'] == 'EXECUTADO'
+    assert r['qty_apos'] == 0.0
+
+
+def test_delta_esperado_dry_run_tambem_aborta(service, odoo_mock):
+    """Guard funciona em dry_run (bloqueia plano divergente antes do write)."""
+    odoo_mock.search_read.return_value = [_quant(qty=40.7319)]
+    r = service.ajustar_quant(
+        product_id=27721, company_id=1, location_id=8, lot_id=58819,
+        valor_absoluto=0,
+        delta_esperado=-7.0, tolerancia_delta=0.1,
+        resetar_reserva=True, dry_run=True,
+    )
+    assert r['status'] == 'FALHA_DELTA_DIVERGENTE'
+    odoo_mock.write.assert_not_called()
+
+
+def test_corrigir_para_esperado_aplica_delta_esperado(service, odoo_mock):
+    """corrigir_para_esperado=True: divergencia detectada -> aplica delta_esperado em vez do delta enviado."""
+    # Cenario CICLAMATO retomada: orquestrador enviou valor_absoluto=0 (politica homogenea),
+    # mas a coluna 'delta_esperado' da planilha tinha -7 (pedido original).
+    odoo_mock.search_read.return_value = [_quant(qty=40.7319, reservada=40.7319)]
+    r = service.ajustar_quant(
+        product_id=27721, company_id=1, location_id=8, lot_id=58819,
+        valor_absoluto=0,  # zerar (politica homogenea errada)
+        delta_esperado=-7.0,
+        corrigir_para_esperado=True,  # auto-corrige
+        resetar_reserva=True,
+    )
+    # Auto-correcao aplicada: usa delta_esperado=-7 em vez de zerar
+    assert r['status'] == 'EXECUTADO_AUTO_CORRIGIDO'
+    assert r['auto_correcao_aplicada'] is True
+    assert r['valor_absoluto_original_solicitado'] == 0
+    assert abs(r['ajuste_aplicado_original'] - (-40.7319)) < 0.0001
+    assert r['ajuste_aplicado'] == -7.0  # pedido original aplicado
+    assert r['qty_apos'] == round(40.7319 - 7.0, 6)  # 33.7319
+    assert abs(r['divergencia_resolvida'] - 33.7319) < 0.0001
+    # ESCREVEU (auto-correcao executou)
+    odoo_mock.write.assert_called()
+    odoo_mock.execute_kw.assert_called()
+
+
+def test_corrigir_para_esperado_sem_divergencia_nao_marca_auto(service, odoo_mock):
+    """corrigir_para_esperado=True mas SEM divergencia -> EXECUTADO normal (nao marca auto)."""
+    odoo_mock.search_read.return_value = [_quant(qty=5.0136)]
+    r = service.ajustar_quant(
+        product_id=27721, company_id=1, location_id=8, lot_id=57545,
+        delta=33.7319, delta_esperado=33.7319,
+        corrigir_para_esperado=True,
+    )
+    # Sem divergencia: status normal (auto-correcao nao acionada)
+    assert r['status'] == 'EXECUTADO'
+    assert r.get('auto_correcao_aplicada') is None or r.get('auto_correcao_aplicada') is False
+
+
+def test_erro_tolerancia_delta_negativa(service):
+    """tolerancia_delta < 0 levanta ValueError (desarmaria o guard silenciosamente)."""
+    with pytest.raises(ValueError, match='tolerancia_delta deve ser >= 0'):
+        service.ajustar_quant(
+            quant_id=10, delta=10.0, delta_esperado=5.0,
+            tolerancia_delta=-0.5,
+        )

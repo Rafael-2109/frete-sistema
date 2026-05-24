@@ -25,8 +25,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
-sys.path.insert(0, str(_THIS.parent / 'monitor'))
+# ARQUIVADO 2026-05-23 — movido para _validados/operando-reservas-odoo/ (2 niveis abaixo).
+# parents[2] (era repo root) → parents[4] após o move. Skill substituta: operando-reservas-odoo.
+# 'monitor' tambem precisa subir 2 niveis (ainda no inventario_2026_05/monitor/).
+sys.path.insert(0, str(_THIS.parents[4]))
+sys.path.insert(0, str(_THIS.parents[2] / 'monitor'))
 
 from _comum import m2o_id, m2o_name  # type: ignore  # noqa: E402
 

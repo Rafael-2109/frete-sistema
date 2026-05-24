@@ -28,8 +28,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Arquivado: este script vivia em scripts/inventario_2026_05/ — agora em _validados/transferindo-interno-odoo/
+# Profundidade aumentou 2 niveis -> parents[4] (em vez de parents[2]).
+# Script preservado como museum vivo (ainda executavel). Para fluxo novo, usar a skill:
+#   .claude/skills/transferindo-interno-odoo/scripts/transferir.py
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+sys.path.insert(0, str(_THIS.parents[4]))
 
 from app import create_app  # noqa: E402
 from app.odoo.constants.locations import COMPANY_LOCATIONS  # noqa: E402

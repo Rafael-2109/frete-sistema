@@ -38,8 +38,8 @@ app/odoo/
   │   ├── inventario_pipeline_service.py   # Pipeline inventario 2026-05 (F0-F5, ondas LF/FB/CD)
   │   ├── stock_picking_service.py         # Operacoes stock.picking (criar/validar/cancelar)
   │   ├── stock_lot_service.py             # Operacoes stock.lot (criar/buscar com fallback like)
-  │   ├── stock_internal_transfer_service.py # Transferencias internas FB <-> CD (= 2 ajustes de quant)
-  │   ├── stock_quant_adjustment_service.py # PRIMITIVA: ajuste atomico de 1 quant (inventory adjustment); base dos ajustes por planilha
+  │   ├── stock_internal_transfer_service.py # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/transfer.py (Skill 2)
+  │   ├── stock_quant_adjustment_service.py # SHIM 2026-05-23 — re-exporta de app/odoo/estoque/scripts/quant.py (Skill 1)
   │   ├── pre_etapa_estoque_service.py     # Pre-etapa CD/FB para minimizar NF (D007)
   │   └── indisponibilizacao_estoque_service.py # Bloqueio temporario de lotes em ajuste
   ├── utils/                   # 12 utils
@@ -221,6 +221,21 @@ cache_produtos = {p['id']: p for p in produtos}
 | `app/integracoes/` (1 import) | `FaturamentoService` | tagplus importador_v2 |
 | `app/custeio/` (1 import) | `CarteiraService` | custeio_routes |
 | `app/__init__.py` | `sync_integrada_bp`, `circuit_breaker_bp` | Registro de blueprints |
+
+---
+
+## Subpacote `estoque/` — orquestrador Odoo (skills WRITE)
+
+A partir de 2026-05-22, todas as operacoes de ESCRITA de estoque no Odoo (ajuste quant, transferencia interna, cancelar reservas, etc.) migraram para o subpacote `app/odoo/estoque/`. Os arquivos antigos em `services/stock_*_service.py` agora sao SHIMs que re-exportam. Detalhes completos: **`app/odoo/estoque/CLAUDE.md`** (constituicao do orquestrador).
+
+| Skill | Service (novo) | SHIM antigo | Status |
+|-------|----------------|-------------|--------|
+| `ajustando-quant-odoo` | `app/odoo/estoque/scripts/quant.py` | `services/stock_quant_adjustment_service.py` | ✅ MATURADA |
+| `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 min viavel (2026-05-24) |
+| `operando-reservas-odoo` | `app/odoo/estoque/scripts/reserva.py` | — | 🟡 min viavel |
+| `consultando-quant-odoo` (READ) | `app/odoo/estoque/scripts/consulta_quant.py` | — | 🟡 min viavel |
+
+Subagente orquestrador: `.claude/agents/gestor-estoque-odoo.md`. Folhas de fluxo: `app/odoo/estoque/fluxos/`.
 
 ---
 
