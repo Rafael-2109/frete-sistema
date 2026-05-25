@@ -12,21 +12,23 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status global** | 🟡 PLANEJADO COMPLETO + 3 MINERACOES + **TESTE REAL 6 CODS 100% PROD** (sessao v14a-ops, §7.5 NOVA com 5 dificuldades D-OPS-1..D-OPS-5 + 3 NFs SEFAZ autorizadas + 695.945 un consolidadas em FB/Indisp/MIGRAÇÃO) |
-| **Sessao atual** | v14a-ops (2026-05-25) — teste real LF→FB 6 cods orquestrado em 51min; descobertas 5 dificuldades reais para Skill 8 v15+ eliminar |
+| **Status global** | 🟡 PLANEJADO COMPLETO + 3 MINERACOES + **TESTE REAL 6 CODS 100% PROD** (v14a-ops, §7.5 5 dificuldades D-OPS-1..D-OPS-5) + **SUB-SKILL C5 + FIX SKILL 2 D-OPS-5 EM v14b** |
+| **Sessao atual** | v14b (2026-05-25) — **FIX Skill 2 D-OPS-5** (aceita lot_id_origem=None para tracking='none'; 9 pytest novos + canary PROD validado) + **CRIA sub-skill `auditando-cadastro-fiscal-odoo`** perfil V1 'inventario' (G017+G018+G035+G014 + D-OPS-2/3; 14 pytest verdes + smoke PROD 6 cods 987ms) + cross-refs aplicados (CLAUDE.md estoque + ROUTING_SKILLS + tool_skill_mapper + gestor-estoque-odoo) |
 | **Sessoes estimadas** | 8-9 sessoes (v13 → v20+) — v15a expandido com 3 atomos Skill 5 |
-| **Baseline pytest atual** | 393 verdes (tests/odoo/ — confirmado em v14a 2026-05-25 em 15.87s) |
-| **Baseline pytest pos-v20 esperado** | ≥425 verdes (+~30 testes Skill 8 — +3 atomos × ~3 cenarios em C6.5) |
+| **Baseline pytest atual** | 416 verdes (tests/odoo/ — confirmado v14b em 14.43s; 393 baseline + 9 D-OPS-5 + 14 C5 sub-skill) |
+| **Baseline pytest pos-v20 esperado** | ≥440 verdes (+~24 testes restantes do Skill 8 — +3 atomos × ~5 cenarios em C6.5 + orchestrator) |
 | **Branch** | `feat/estoque-odoo` (worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo`) |
 | **Service-fonte** | `app/odoo/services/inventario_pipeline_service.py` (1.346 LOC) — minerado v13 §7.2 (D1-D9) |
 | **Script-fonte macro** | `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC) — minerado v14a §7.3 (D10-D18 + compensatorio + G014) |
 | **Service externo** | `app/recebimento/services/recebimento_lf_odoo_service.py` (4562 LOC, 37 etapas em 7 fases) — minerado v14a-fix §7.4 (G-RECLF-1 a G-RECLF-11) — **NAO MEXER** |
 | **Pattern de reuso** | `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (Skill 6 v9, 907 LOC) |
-| **Destino do orchestrator** | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (a criar) |
-| **Decisoes ABERTAS** | 1 (paralelismo ETAPA E — G-RECLF-1, decidir em v17) — 6 RESOLVIDAS em v13 + R1 INTACTA + ETAPA F via Skill 5 v14a-fix |
-| **Checkpoints concluidos** | 4 de 24 (C1 ✅ pre-mortem + C2 ✅ mineracao service + C3 ✅ mineracao script v14a + C4 ✅ escopo; +C6.5 expandido para 3 atomos) |
-| **Skills NOVAS criadas pela Skill 8** | (1) `auditando-cadastro-fiscal-odoo` — sub-skill agnostica para pre-flight; (2) **3 atomos NOVOS** na Skill 5 `operando-picking-odoo` — `criar_picking_inter_company` + `validar_picking_inter_company` + **`criar_picking_entrada_destino_manual`** (C6.5 expandido v14a-fix) |
-| **Pattern arquitetural FINAL** | **Etapa = barreira de sincronizacao** (MACRO: A→expire_all+re-load→B→...→F com `db.engine.dispose()` profilatico antes/apos C+D + serializa Playwright F5e vs step_23 RecebimentoLfOdoo G-RECLF-9). Mitiga DetachedInstanceError + SSL drop. **Sub-nuance MICRO ETAPA B** (D16): pipeline por picking com sleep 5s (G022 mitigation) — NAO paraleliza N pickings entre si. **ETAPA F via Skill 5** (Fluxo>>Skills mantido). |
+| **Destino do orchestrator** | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (a criar v15b) |
+| **Sub-skill C5 service** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (~430 LOC) — capinado v14b a partir de `validar_cadastro_fiscal` no script 09 + gtin_validator.py + queries D-OPS-2 |
+| **Decisoes ABERTAS** | 1 (paralelismo ETAPA E — G-RECLF-1, decidir em v17) — 6 RESOLVIDAS em v13 + R1 INTACTA + ETAPA F via Skill 5 v14a-fix + G035 V1 RESOLVIDO em v14b |
+| **Checkpoints concluidos** | 5 de 24 (C1 ✅ pre-mortem + C2 ✅ mineracao service + C3 ✅ mineracao script v14a + C4 ✅ escopo + **C5 ✅ sub-skill auditando-cadastro-fiscal-odoo v14b**; +C6.5 expandido para 3 atomos) |
+| **Skills NOVAS criadas pela Skill 8** | (1) `auditando-cadastro-fiscal-odoo` ✅ V1 inventario LIVE (v14b); (2) **3 atomos NOVOS** na Skill 5 `operando-picking-odoo` ⬜ v15a — `criar_picking_inter_company` + `validar_picking_inter_company` + `criar_picking_entrada_destino_manual` |
+| **Fixes a Skill 2 (helper)** | **D-OPS-5 ✅ FIXADO em v14b** — `_listar_quants_origem` aceita `aceita_tracking_none=True` default + atomo `transferir_para_indisponivel` valida `product.tracking` quando `lot_id_origem=None`; 9 pytest novos; canary PROD em cod 208000043 sem lote validado em ~1.5s + reversão |
+| **Pattern arquitetural FINAL** | **Etapa = barreira de sincronizacao** (MACRO: A→expire_all+re-load→B→...→F com `db.engine.dispose()` profilatico antes/apos C+D + serializa Playwright F5e vs step_23 RecebimentoLfOdoo G-RECLF-9). Mitiga DetachedInstanceError + SSL drop. **Sub-nuance MICRO ETAPA B** (D16): pipeline por picking com sleep 5s (G022 mitigation) — NAO paraleliza N pickings entre si. **ETAPA F via Skill 5** (Fluxo>>Skills mantido). **PRE-FLIGHT via sub-skill C5** (Skill 8 v15+ chama subprocess `auditar_cadastro_inventario.py --ciclo X --perfil inventario`). |
 | **Demanda real associada** | Casos em todas as direcoes (Rafael v13) — a estruturar nas sessoes posteriores |
 
 ---
@@ -317,12 +319,14 @@ Resulta em: NFs autorizadas pela SEFAZ + saldo de estoque ajustado em ambas as f
 |------|--------|--------|
 | Decisao tomada | ✅ | v13 (Rafael 2026-05-25) |
 | Contrato V0 | ✅ | esta secao §4 |
-| Implementacao service | ⬜ | v14 (C5 redefinido) |
-| Wrapper CLI | ⬜ | v14 (C5) |
-| Testes pytest | ⬜ | v14 (C5) |
-| SKILL.md | ⬜ | v14 (C5) |
-| Integracao com Skill 8 | ⬜ | v15 (C6 orchestrator base chama sub-skill) |
-| Cross-refs (subagente, ROUTING_SKILLS, etc.) | ⬜ | v14 (C5) |
+| Implementacao service | ✅ | v14b — `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (~430 LOC) |
+| Wrapper CLI | ✅ | v14b — `.claude/skills/auditando-cadastro-fiscal-odoo/scripts/auditar_cadastro_inventario.py` |
+| Testes pytest | ✅ | v14b — 14 verdes em `tests/odoo/services/test_cadastro_fiscal_audit.py` |
+| SKILL.md | ✅ | v14b — `.claude/skills/auditando-cadastro-fiscal-odoo/SKILL.md` |
+| Integracao com Skill 8 | ⬜ | v15b (C6 orchestrator base invoca sub-skill via subprocess `--ciclo X --perfil inventario`) |
+| Cross-refs (subagente, ROUTING_SKILLS, tool_skill_mapper) | ✅ | v14b — `.claude/agents/gestor-estoque-odoo.md` + `.claude/references/ROUTING_SKILLS.md` + `app/agente/services/tool_skill_mapper.py` + `app/odoo/estoque/CLAUDE.md` |
+| Smoke PROD V1 | ✅ | v14b — 6 cods v14a-ops em 987ms; detectou 2 G014 + 1 D-OPS-3 (esperados) |
+| Cobertura V1 perfil inventario | ✅ | G017 NCM + G018 weight + G035 barcode (+ auto-fix) + G014 lote vencido + D-OPS-2 duplicacao + D-OPS-3 tracking='none' |
 
 ---
 
@@ -461,7 +465,7 @@ done
 | **C2** | Mineracao detalhada `inventario_pipeline_service.py` | mapa metodos+linhas+helpers, conferir com cabecalho | Doc inline neste arquivo (§7.2) com referencia file:line | ~~v14~~ **v13 mid** | ✅ | mapa completo + **9 descobertas-chave** D1-D9 documentadas |
 | **C3** | Mineracao `09_executar_onda1_bulk.py` (etapas A/B/C/D/E/F + main) | mapa etapas+funcoes+chamadas, conferir | Doc inline (§7.3) com referencia file:line | ~~v14~~ **v14a** | ✅ | Tabela §7.3 com 11 funcoes + 9 descobertas D10-D18 + dependencias externas; R1 RESPONDIDO (10.3 INTACTA) |
 | **C4** | Confirmar escopo completo (a/b/c) com Rafael | decisoes §10.1, §10.2 fechadas | Rafael confirmou via AskUserQuestion | v13 | ✅ | "estruturar bem, depois rodar casos reais" |
-| **C5** | **Criar sub-skill `auditando-cadastro-fiscal-odoo` (perfil inventario V1)** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (service) + `.claude/skills/auditando-cadastro-fiscal-odoo/{SKILL.md,scripts/auditar_cadastro.py}` (CLI) + cross-refs (subagente + ROUTING_SKILLS + tool_skill_mapper) | smoke dry-run em onda real OK; >5 pytest verdes; --perfil inventario funcional | v14 | ⬜ | **REDEFINIDO v13 — decisao 10.5 RESOLVIDA (Rafael: pre-flight como sub-skill separada agnostica para reuso futuro em venda-cliente)** |
+| **C5** | **Criar sub-skill `auditando-cadastro-fiscal-odoo` (perfil inventario V1)** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (service ~430 LOC) + `.claude/skills/auditando-cadastro-fiscal-odoo/{SKILL.md,scripts/auditar_cadastro_inventario.py}` (CLI) + cross-refs (subagente + ROUTING_SKILLS + tool_skill_mapper + CLAUDE.md estoque) | smoke dry-run em onda real OK; >5 pytest verdes; --perfil inventario funcional | ~~v14~~ **v14b** | ✅ | **CONCLUIDO v14b** — service ~430 LOC capinado de `validar_cadastro_fiscal` (script 09) + `gtin_validator.py` + queries D-OPS-2 em AjusteEstoqueInventario; 14 pytest verdes; smoke PROD 6 cods em 987ms detectou 2 G014 + 1 D-OPS-3 (esperados); cobertura G017+G018+G035+G014+D-OPS-2+D-OPS-3 |
 | **C6** | Capinar orchestrator base (skeleton) | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` com entry-points (vazios), imports, dataclasses, constants | pytest smoke import OK | v15 | ⬜ | |
 | **C6.5** | **NOVO v13 + EXPANDIDO v14a-fix — Estender Skill 5 com 3 atomos** (DECISAO 10.6) | `app/odoo/estoque/scripts/picking.py` ganha `criar_picking_inter_company` + `validar_picking_inter_company` + **`criar_picking_entrada_destino_manual` (NOVO v14a-fix — ETAPA F G023)**; SKILL.md `operando-picking-odoo` estendida; pytest >8 verdes novos (3 atomos × ~3 cenarios) | dry-run PROD OK em 2 pickings reais (1 inter-company + 1 entrada destino manual); idempotencia via origin validada | v15a | ⬜ | **EXPANDIDO v14a-fix** — 3 atomos em vez de 2 (ETAPA F entrava INLINE no orchestrator antes, viola Fluxo>>Skills) |
 | **C7** | Capinar F5a no orchestrator (chamando atomo Skill 5 estendido) | metodo `_executar_etapa_b_criar` no orchestrator que itera ajustes em paralelo (Semaphore=5) chamando `criar_picking_inter_company` | 5+ pytest verdes; dry-run em onda real OK; barreira de sincronizacao validada | v15 | ⬜ | depende C6.5 |
@@ -1365,6 +1369,33 @@ E' um picking SOLTO (sem MO associada) que reservaria saldo para transferir para
 - ✅ **§0 atualizado** com status `🟡 PLANEJADO COMPLETO + 3 MINERACOES + TESTE REAL 6 CODS 100% PROD`
 - 🟢 **3 NFs SEFAZ autorizadas** + 0 falhas operacionais (com workarounds)
 - 🟢 **Pytest baseline mantido: 393 verdes**
+
+### Sessao v14b (2026-05-25) — FIX Skill 2 D-OPS-5 + CRIAR sub-skill `auditando-cadastro-fiscal-odoo` V1
+- ✅ **PRIORIDADE 1 — Fix Skill 2 D-OPS-5 RESOLVIDO**:
+  - `_listar_quants_origem` (transfer.py L1104-1180) adicionou parametro `aceita_tracking_none: bool = True` default. Quando True (novo default), NAO aplica filtro `['lot_id', '!=', False]` no domain do search_read. Permite incluir quants sem lote (produto tracking='none').
+  - `transferir_para_indisponivel` (Modo C atomico L780+): relaxou tipo `lot_id_origem: Optional[int]`. Adicionou validacao: se `lot_id_origem is None`, faz 1 read em `product.tracking`. Se != 'none', raise ValueError clara ("anomalia: quant orfao sem lote em produto rastreavel"). Se == 'none', prossegue (ajustar_quant ja aceita lot_id=None).
+  - `distribuir_para_indisponivel` (helper alto-nivel L1224+): adicionou parametro `aceita_tracking_none: bool = True` default + propaga para `_listar_quants_origem`.
+  - **Campo novo no retorno**: `tracking_origem` (None quando lot_id passado; 'none' quando lot_id=None e tracking validado).
+  - **9 pytest novos verdes** (6 no test_stock_internal_transfer_service + 3 no test_distribuir_para_indisponivel)
+  - **Canary PROD validado**: cod 208000043 QUADRO DE MADEIRA NADIR (1 un sem lote em FB/Estoque) movido via Skill 2 modo C para FB/Indisp/MIGRAÇÃO. dry-run + --confirmar + reversão Skill 1 ×2 OK. Estado PROD restaurado.
+
+- ✅ **PRIORIDADE 2 — Sub-skill `auditando-cadastro-fiscal-odoo` perfil V1 'inventario' CRIADA**:
+  - Service `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (~430 LOC) — `CadastroFiscalAuditService` com 3 entry-points de resolucao (produto_ids | cods | ciclo) + 4 checks (G017+G018+D-OPS-3, G035, G014, D-OPS-2) + entry-point unificado `auditar_perfil_inventario` retornando status_global + bloqueios/warnings/acoes_aplicadas + tempo_ms.
+  - SKILL.md `.claude/skills/auditando-cadastro-fiscal-odoo/SKILL.md` com contrato + receitas + exit codes + trade-offs.
+  - CLI `auditar_cadastro_inventario.py` com 3 modos input mutuamente exclusivos + flags --auto-corrigir-barcode + --no-pipeline-check + --no-lote-vencido-check + --confirmar.
+  - **14 pytest novos verdes** em `tests/odoo/services/test_cadastro_fiscal_audit.py`.
+  - **Smoke PROD v14a-ops 6 cods em 987ms**: detectou 2 G014 (lotes 0711/24 venceram em 2026-05-08 para cods 4829046 + 4879046) + 1 D-OPS-3 (cod 103500105 PIMENTA JALAPENO tracking='none' — esperado!) + 0 bloqueios. Status PRE_FLIGHT_WARN + pode_faturar=true.
+  - **G035 incluido no V1** (decisao Rafael v14b — Rafael pediu "G035 + outros gotchas como NCM, lote vencido") — incluidos G014 + D-OPS-2/3 alem de G017/G018/G035.
+  - **Cross-refs aplicados**: `app/odoo/estoque/CLAUDE.md` §6 (nova tabela sub-skills PRE-FLIGHT), `.claude/references/ROUTING_SKILLS.md` (header count + tabela skills + decision tree §8 + lista skills Odoo), `app/agente/services/tool_skill_mapper.py` (entry 'Pre-Flight Cadastro Fiscal Odoo'), `.claude/agents/gestor-estoque-odoo.md` (skills frontmatter + header status).
+
+- ✅ **PRIORIDADE 3 — D-OPS-3 (bug L965 script 09) DECISAO**: (a) NAO mexer no script (alinha regra Rafael "use scripts existentes apenas"). Sub-skill V1 flagga produto tracking='none' como INFO (apos fix Skill 2 v14b, deixou de ser WARN). v15a Skill 5 atomo `criar_picking_inter_company` codifica fix permanente.
+- ✅ **§0 atualizado** com status `🟡 + SUB-SKILL C5 + FIX SKILL 2 D-OPS-5 EM v14b` + baseline `416 verdes`
+- ✅ **§4.6 status sub-skill atualizado** (todos ✅ exceto C6 v15b integracao com Skill 8)
+- ✅ **§7 C5 ✅ marcado COMPLETO** com criterios de aceite atingidos
+- 🟢 **Pytest baseline novo: 416 verdes** (393 + 9 D-OPS-5 + 14 sub-skill C5)
+- 🟢 **Sub-skill C5 desbloqueia integracao Skill 8 v15b** (orchestrator base chama subprocess sub-skill pre-faturamento)
+- 🟢 **Fix Skill 2 D-OPS-5 desbloqueia atomo Skill 5 inter-company v15a** (3o atomo `criar_picking_inter_company` pode reusar pattern tracking='none' validado em transfer.py)
+- 🟢 **NAO mexeu** no RecebimentoLfOdooService (regra Rafael v14a-fix) NEM no script 09 (regra Rafael v14a-ops)
 
 ---
 

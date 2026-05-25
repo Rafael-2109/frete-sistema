@@ -106,6 +106,36 @@
 - Skill 2 `transferindo-interno-odoo` 🟡 — bug D-OPS-5 descoberto, fix futuro (memória `[[skill2_distribuir_indisp_pattern]]` precisa atualização para incluir caso tracking='none').
 - Próximo passo: sessão v14b com criação da sub-skill `auditando-cadastro-fiscal-odoo` perfil inventário V1.
 
+**Sessão 2026-05-25 v14b — FIX Skill 2 D-OPS-5 + CRIAR sub-skill `auditando-cadastro-fiscal-odoo` V1:**
+- ✅ Setup worktree + pytest baseline 393 verdes confirmados.
+- ✅ AskUserQuestion v14b — Rafael escolheu: AMBOS P1+P2; G035 V1 INCLUIR + outros gotchas (NCM, lote vencido); D-OPS-3 (a) NÃO mexer no script.
+- ✅ **P1 — Fix Skill 2 D-OPS-5 (`transfer.py`)**:
+  - `_listar_quants_origem` (L1104-1180) ganhou `aceita_tracking_none: bool = True` default. NÃO aplica filtro `['lot_id', '!=', False]` quando True.
+  - `transferir_para_indisponivel` (Modo C atomico) relaxou tipo `lot_id_origem: Optional[int]`. Quando None, faz 1 read `product.tracking`; raise se != 'none'.
+  - `distribuir_para_indisponivel` (helper) ganhou `aceita_tracking_none: bool = True` + propaga para `_listar_quants_origem`.
+  - Campo novo no retorno: `tracking_origem` ('none' quando lot_id_origem=None validado).
+  - **9 pytest novos verdes** (6 no test_stock_internal_transfer_service + 3 no test_distribuir_para_indisponivel).
+  - **Canary PROD validado**: cod 208000043 QUADRO DE MADEIRA NADIR (1 un sem lote em FB/Estoque) movido + reversão completa via Skill 1 ×2 (~1.5s + reversão OK).
+
+- ✅ **P2 — Sub-skill `auditando-cadastro-fiscal-odoo` perfil V1 'inventario' CRIADA**:
+  - Service `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (~430 LOC) — `CadastroFiscalAuditService` com 4 checks: G017 NCM (BLOQUEIO), G018 weight (WARN), G035 barcode (BLOQUEIO + auto-fix opcional), G014 lote vencido (WARN), D-OPS-2 duplicação pipeline (BLOQUEIO), D-OPS-3 tracking='none' (INFO).
+  - SKILL.md + CLI wrapper `auditar_cadastro_inventario.py` com 3 modos input (produtos | cods | ciclo) + flags `--auto-corrigir-barcode` + `--no-pipeline-check` + `--no-lote-vencido-check`.
+  - **14 pytest novos verdes** em `tests/odoo/services/test_cadastro_fiscal_audit.py`.
+  - **Smoke PROD 6 cods v14a-ops em 987ms**: detectou 2 G014 (lotes vencidos 0711/24) + 1 D-OPS-3 (103500105 tracking='none') + 0 bloqueios. Status PRE_FLIGHT_WARN + pode_faturar=true.
+  - **Cross-refs aplicados** (5): `app/odoo/estoque/CLAUDE.md` §6 (nova tabela sub-skills PRE-FLIGHT) + `.claude/references/ROUTING_SKILLS.md` (header count 48→49 + tabela skills + decision tree §8) + `app/agente/services/tool_skill_mapper.py` (entry 'Pre-Flight Cadastro Fiscal Odoo') + `.claude/agents/gestor-estoque-odoo.md` (skills frontmatter + header status v14b).
+
+- ✅ **P3 — D-OPS-3 DECISAO RESOLVIDA**: (a) NÃO mexer no script (alinha "use scripts existentes apenas") — Sub-skill V1 flagga tracking='none' como INFO; Skill 8 v15a atomo `criar_picking_inter_company` codifica fix permanente.
+- 🟢 **Pytest baseline novo: 416 verdes** (393 + 9 D-OPS-5 + 14 sub-skill C5).
+- 🟢 **C5 ✅ CONCLUIDO no PLANEJAMENTO Skill 8** — desbloqueia integracao Skill 8 v15b com sub-skill (orchestrator base invoca via subprocess).
+- 🟢 **Fix Skill 2 D-OPS-5 desbloqueia atomo Skill 5 inter-company v15a** — pattern tracking='none' validado para reuso em `criar_picking_inter_company`.
+- 🟢 **NÃO MEXEU** em script 09 (D-OPS-3 não-fix conforme Rafael) NEM em RecebimentoLfOdooService (regra v14a-fix).
+
+**Status global após v14b:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 3 MINERAÇÕES + TESTE REAL + SUB-SKILL C5 PRONTA + FIX SKILL 2 D-OPS-5**; C5 ✅ concluído (5 de 24); 19 checkpoints ⬜; 1 decisão ABERTA (paralelismo G-RECLF-1 v17).
+- Skill 2 `transferindo-interno-odoo` 🟡 — bug D-OPS-5 ✅ RESOLVIDO em v14b com canary PROD.
+- Sub-skill `auditando-cadastro-fiscal-odoo` 🟡 V1 LIVE — invocável diretamente pelo usuário OU via subprocess pela Skill 8 v15b+.
+- Próximo passo: sessão v15a com extensão da Skill 5 com 3 átomos inter-company (`criar_picking_inter_company` + `validar_picking_inter_company` + `criar_picking_entrada_destino_manual`) — incorpora fix tracking='none' (D-OPS-3) no novo átomo.
+
 **Sessão 2026-05-25 v13 (Planejamento Skill 8 `faturando-odoo` — estruturacao C1+C4):**
 - ✅ **Verificacao main**: main = `a937748b` (merge v12); sem avanco; sem rebase.
 - ✅ **Pytest baseline confirmado**: 393 verdes em `tests/odoo/` (18s). Observacao: rodar `tests/odoo/services/` isolado produz 27 falhas (fixture pollution pre-existente); usar `tests/odoo/` como baseline canonico.
