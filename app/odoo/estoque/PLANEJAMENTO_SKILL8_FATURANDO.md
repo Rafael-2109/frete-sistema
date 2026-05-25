@@ -12,8 +12,8 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status global** | 🟡 PLANEJADO COMPLETO + 3 MINERACOES COMPLETAS (sessao v14a-fix, +§7.4 RecebimentoLfOdooService + ETAPA F via atomo Skill 5 + compensatorio/G014 destacados) |
-| **Sessao atual** | v14a-fix (2026-05-25) — minerar RecebimentoLfOdoo 4562 LOC (READ-only) + adicionar 3o atomo Skill 5 ETAPA F + destacar gotchas ETAPA B |
+| **Status global** | 🟡 PLANEJADO COMPLETO + 3 MINERACOES + **TESTE REAL 6 CODS 100% PROD** (sessao v14a-ops, §7.5 NOVA com 5 dificuldades D-OPS-1..D-OPS-5 + 3 NFs SEFAZ autorizadas + 695.945 un consolidadas em FB/Indisp/MIGRAÇÃO) |
+| **Sessao atual** | v14a-ops (2026-05-25) — teste real LF→FB 6 cods orquestrado em 51min; descobertas 5 dificuldades reais para Skill 8 v15+ eliminar |
 | **Sessoes estimadas** | 8-9 sessoes (v13 → v20+) — v15a expandido com 3 atomos Skill 5 |
 | **Baseline pytest atual** | 393 verdes (tests/odoo/ — confirmado em v14a 2026-05-25 em 15.87s) |
 | **Baseline pytest pos-v20 esperado** | ≥425 verdes (+~30 testes Skill 8 — +3 atomos × ~3 cenarios em C6.5) |
@@ -901,6 +901,122 @@ A ETAPA E do orchestrator Skill 8 chama `RecebimentoLfOdooService().processar_re
 
 ---
 
+## 7.5 DIFICULDADES OPERACIONAIS DESCOBERTAS (teste real 6 cods 2026-05-25 v14a-ops)
+
+> **Origem**: Rafael solicitou teste real de faturamento LF→FB + transferencia para Indisp/MIGRACAO de 6 cods (102020600, 4829046, 4879046, 103500105, 4849003, 4759598). Operacao COMPLETA em 22min (script 09 ~10min + Skill 5 cancelamento + Skill 2 distribuir + workaround). **5/6 cods OK na 1a rodada**, 1 cod (103500105 tracking='none') exigiu workaround. **Resultado: 654.385 un movidas LF/Estoque → SEFAZ → FB/Indisp/MIGRACAO + 41.56 un do 103500105 via workaround.** Esta secao registra as **dificuldades reais** descobertas que a Skill 8 (v15+) deve eliminar.
+
+### 7.5.1 DIFICULDADE 1 — CICLO hardcoded no script 09 (L112)
+
+**Sintoma**: `CICLO = 'INVENTARIO_2026_05'` hardcoded em `09_executar_onda1_bulk.py:112` impede ciclos isolados de teste. Forcou mover 6 ajustes antigos para `status='REPROCESSADO_v14a'` (varchar(20) — limite curto!) e meus 6 novos do ciclo `TESTE_v14a_FAT_LF_FB_6CODS` para `INVENTARIO_2026_05`.
+
+**Impacto Skill 8 v15+**: orchestrator NAO pode ter ciclo hardcoded. Aceitar `--ciclo NOME` como argumento OBRIGATORIO. Pre-flight de duplicacao (DIFICULDADE 2) elimina necessidade de "fundir" ciclos.
+
+**Side-finding**: `ajuste_estoque_inventario.status` e' `varchar(20)` — nomes como 'CANCELADO_v14a_compensatorio' (28 chars) sao rejeitados. Limite curto demais para status descritivos. **Migration futura**: aumentar para `varchar(40)` ou `varchar(60)`.
+
+### 7.5.2 DIFICULDADE 2 — Falta pre-flight de DUPLICACAO + propagacao falso F5e_SEFAZ_OK
+
+**Sintoma**: descobri que os 6 cods JA estavam em pipeline ativo do `INVENTARIO_2026_05`:
+- 2 EXECUTADO/F5e_SEFAZ_OK (NF 629363 RETNA/00035 cancelada + pickings com return done = saldo voltou)
+- 4 PROPOSTO/F5c_LIBERADO (pickings done sem invoice, robo CIEL IT nunca criou)
+
+Script 09 NAO detectou essa duplicacao. Permitiu criar novos pickings/NFs sem aviso (so o filtro `fase_pipeline not in (F5a..F5e)` impede re-criacao do mesmo cod no mesmo pipeline).
+
+**Falso positivo F5e_SEFAZ_OK** (DERIVADA crítica de DIFICULDADE 2 + 3): ajuste 172261 (103500105 PERDA) foi marcado `EXECUTADO/F5e_SEFAZ_OK` mesmo NAO estando na linha da NF 709837 (que so' contem 102020600). Razao: `inventario_pipeline_service.py:f5e_transmitir_sefaz` propaga `chave_nfe` para TODOS ajustes do mesmo `invoice_id_odoo` (linha 1245 — `F5e ajuste X replicado de invoice Y`), sem verificar se o ajuste tem linha real na invoice. Compensatórios (criados por bug L965) ficam falsamente "autorizados".
+
+**Impacto Skill 8 v15+**:
+- **Pre-flight obrigatorio em C5** (sub-skill `auditando-cadastro-fiscal-odoo` perfil `inventario`): validar `NAO ha ajuste do mesmo cod/company em fase F5a..F5e_SEFAZ_OK no mesmo ciclo`. Se houver, abortar com mensagem clara (operador decide: cancelar/aguardar/forcar).
+- **Fix F5e propagacao**: em vez de replicar chave para TODOS ajustes do invoice, replicar so' para ajustes que TEM linha real na invoice. Cross-ref via `account.move.line.product_id` ↔ `aj.cod_produto`. Compensatórios ficam em fase `F5e_SKIP_COMPENSATORIO` (novo status).
+
+### 7.5.3 DIFICULDADE 3 — Bug tracking='none' em ETAPA B (L965)
+
+**Sintoma**: cod 103500105 (PIMENTA JALAPENO, tracking='none') tinha 41.56 un em LF/Estoque (sem lot_id, conforme tracking=none). Ajuste original tinha `lote_origem=None`, foi para `ajustes_sem_lote` (L932). Loop FIFO em `quants_validos` (L962) tem:
+```python
+for q in quants_validos:
+    if qty_a_distribuir <= 0.001: break
+    if not q.get('lot_id'):
+        continue   # <-- BUG: pula quants sem lot_id
+    ...
+```
+Quants sem lot_id sao PULADOS — mas e' exatamente onde tracking='none' guarda saldo. Resultado: script gera `qty_restante=41.56 sem estoque para resolver` (warning L988-991) + cria compensatorio `INDUSTRIALIZACAO_FB_LF PROPOSTO` (L1009-1025) que viraria saldo positivo na LF — sentido inverso e SEM SENTIDO operacional para tracking=none.
+
+**Workaround v14a-ops**: criar ajuste com `lote_origem='SEMLOTE'` (string nao-vazia dummy) — forca entrada em `ajustes_com_lote` (L944) que cria linha com `lot_name='SEMLOTE'`. Odoo aceita `lot_name` em move para produto tracking='none' (ignora — nao cria stock.lot). Validado em PROD: 103500105 41.56 un faturado via NF nova.
+
+**Impacto Skill 8 v15+**:
+- **Fix no atomo Skill 5 `criar_picking_inter_company`** (C6.5 v15a): no helper que monta `linhas` para o move, detectar `produto.tracking == 'none'` e:
+  - SE `aj.lote_origem` vazio → criar move SEM lot_name (apropriado para tracking=none)
+  - SE `aj.lote_origem` preenchido → ignorar (tracking=none nao usa lote)
+- **NAO portar o bug L965** para o novo atomo. Quants sem lot_id de produto tracking='none' devem ser ACEITOS no FIFO `quants_validos`.
+
+### 7.5.4 DIFICULDADE 4 — Picking automatico pos-RecLF (FB/INT/08056) SEM MO
+
+**Sintoma**: ETAPA E (RecebimentoLfOdooService) processou 2 invoices com sucesso. Apos, os 4 cods DEV (4759598, 4829046, 4849003, 4879046) apareceram em FB/Estoque com `reserved_quantity == quantity` (saldo 100% reservado). Investigacao revelou picking `FB/INT/08056` (id 321341):
+- state=`assigned`, type=`FB: Transferencias Internas`
+- src=FB/Estoque → dst=Estoque Virtual/Producao
+- `origin=False`, `raw_material_production_id=False`, `production_id=False`, `group_id=False`
+- Criado **automaticamente pelo Odoo** apos o robo CIEL IT processar invoice da entrada FB
+
+E' um picking SOLTO (sem MO associada) que reservaria saldo para transferir para Producao. Sem cancelar, **Skill 2 falha** (Modo C tenta reduzir quant reservado).
+
+**Workaround v14a-ops**: Skill 5 modo `cancelar` em FB/INT/08056 (cancelou em 1s, liberou reserva). Skill 2 prosseguiu sem problema.
+
+**Impacto Skill 8 v15+**:
+- **Pos-ETAPA E hook**: orchestrator deve **detectar pickings automaticos pos-RecLF com origin=False + reservando saldo recem-recebido** e cancela-los proativamente. Cross-ref: para cada `picking_id` resultante do RecebimentoLfOdooService.step_09 (buscar_picking) que esteja em state=done, listar `stock.picking` que **reservam quants criados por aquele picking** com `origin=False` e cancelar (Skill 5).
+- Alternativa: detectar via heuristica (`origin=False AND src=FB/Estoque AND dst=Estoque Virtual/Producao AND group_id=False`).
+
+### 7.5.5 Resumo das 4 dificuldades + side-findings
+
+| # | Dificuldade | Severidade | Mitigacao Skill 8 v15+ |
+|---|-------------|------------|------------------------|
+| **D-OPS-1** | CICLO hardcoded | Media | `--ciclo NOME` arg obrigatorio |
+| **D-OPS-1b** | `ajuste_estoque_inventario.status` varchar(20) | Baixa | Migration: varchar(40+) |
+| **D-OPS-2** | Falta pre-flight de duplicacao | Alta | C5 sub-skill faz pre-flight; aborta se cod em pipeline ativo |
+| **D-OPS-2b** | F5e propaga chave para ajustes sem linha real (falso positivo) | Alta (auditoria) | Fix em `f5e_transmitir_sefaz`: replicar so' para ajustes com linha na invoice |
+| **D-OPS-3** | Bug L965 tracking='none' no script 09 | Alta | Novo atomo Skill 5 detecta tracking='none' + aceita quants sem lot_id |
+| **D-OPS-4** | Picking automatico pos-RecLF SEM MO | Media | Pos-hook ETAPA E detecta+cancela pickings com `origin=False` reservando saldo recem-recebido |
+| **D-OPS-5** | Skill 2 `_listar_quants_origem` tambem filtra `lot_id != False` (L1145+1147) | Alta | Adicionar `aceita_tracking_none=True` default; modo C precisa lidar com `lot_id_origem=None` |
+
+### 7.5.6 Validacao do workaround D-OPS-3 em PROD (16:43-16:51 — 8min)
+
+- ✅ Compensatorio 172264 cancelado (status='CANCEL_v14a_BUG')
+- ✅ Novo ajuste 172265 criado (PERDA_LF_FB, lote_origem='SEMLOTE')
+- ✅ Script 09 ETAPA B-E COMPLETO em ~5min:
+  - Picking 321351 criado (1 ajuste, 1 linha, **0 compensatorios** — workaround funcionou!)
+  - Invoice 709989 criada CIEL IT
+  - NF RETNA/2026/00090 SEFAZ-OK (chave 35260518467441000163550010000132451007099890)
+  - RecLF 68 criado (DFe=43417, PO=C2619538, Picking=FB/IN/13325, Invoice 709995 posted)
+- ✅ **Side-finding D-OPS-5**: Skill 2 `transferindo-interno-odoo` **TAMBEM tem o bug** L1145+1147 (`domain.append(['lot_id', '!=', False])`) — mesmo padrao de exclusao de quants sem lot_id. FALHA_SEM_QUANT para tracking='none'.
+- ✅ **Workaround aplicado**: 2 Skill 1 calls em vez de Skill 2:
+  - PASSO 1: `ajustar_quant --quant-id 264041 --valor-absoluto 0 --confirmar` (FB/Estoque 41.56 → 0)
+  - PASSO 2: `ajustar_quant --quant-id 255309 --delta 41.56 --confirmar` (FB/Indisp/MIGRAÇÃO 881.34 → 922.9)
+- ✅ Validacao FINAL: cod 103500105 100% em FB/Indisponivel/MIGRAÇÃO (922.9 un)
+
+### 7.5.7 DIFICULDADE 5 — Skill 2 tambem filtra quants sem lot_id (D-OPS-5 NOVA v14a-ops)
+
+**Sintoma**: Skill 2 `distribuir_para_indisponivel` (helper alto-nivel) chama `_listar_quants_origem` que aplica `domain.append(['lot_id', '!=', False])` em `app/odoo/estoque/scripts/transfer.py:1145+1147`. Para produto tracking='none' (sem lot_id), retorna `quants_disponiveis=0` → `FALHA_SEM_QUANT`.
+
+**Workaround v14a-ops**: 2 calls Skill 1 (`ajustar_quant`) em vez de Skill 2. Funcional mas viola principio "1 chamada de alto-nivel".
+
+**Impacto Skill 8 v15+ + Skill 2 atual**:
+- **Fix em Skill 2 `_listar_quants_origem`** (NOVA tarefa para Rafael decidir): adicionar parametro `aceita_tracking_none=True` (default) que NAO aplica filtro `['lot_id', '!=', False]`. Modo C `distribuir_para_indisponivel` precisa lidar com isso especialmente — `lot_id_origem=False` na chamada de `ajustar_quant`.
+- Atualizar memoria `[[skill2_distribuir_indisp_pattern]]` com esse caso.
+
+### 7.5.8 Resumo executivo (workflow v14a-ops 16:00-16:51, 51min)
+
+| Etapa | Tempo | Resultado |
+|-------|-------|-----------|
+| Pre-flight 6 cods | ~1min | OK (G017+G018+saldo); G035 detectou 2 barcodes invalidos |
+| Mover ciclo (UPDATE DB local) | ~30s | 6 antigos→REPROCESSADO_v14a; 6 novos→INVENTARIO_2026_05 |
+| G035 fix + criar AjusteEstoqueInventario | ~5s | 2 barcodes limpos + 6 ajustes APROVADOS |
+| Script 09 ETAPAS A→E (5 cods, 1 compensatorio) | ~10min | 2 pickings + 2 invoices + 2 NFs SEFAZ-OK + 2 RecLF OK |
+| Cancelar FB/INT/08056 (libera reserva) | ~1s | state=assigned→cancel |
+| Skill 2 distribuir 5 cods | ~10s | 5/5 EXECUTADO_TOTAL, 654.385 un |
+| Workaround 103500105 (cancelar comp + criar novo ajuste + script 09 + Skill 1 x2) | ~10min | NF RETNA/2026/00090 SEFAZ-OK + 41.56 un consolidados em FB/Indisp/MIGRAÇÃO |
+| **TOTAL** | **51min** | **6/6 cods 100% OK, 695.945 un consolidadas em FB/Indisp/MIGRAÇÃO + 3 NFs SEFAZ autorizadas** |
+
+**5 dificuldades reais identificadas** (D-OPS-1, -2, -3, -4, -5) — Skill 8 v15+ deve eliminar todas.
+
+---
+
 ## 8. RISCOS ARQUITETURAIS E MITIGACAO
 
 ### 8.1 PRE-MORTEM v13 (decisoes tomadas nesta sessao — leitura OBRIGATORIA em v14)
@@ -1214,6 +1330,41 @@ A ETAPA E do orchestrator Skill 8 chama `RecebimentoLfOdooService().processar_re
 - ✅ §10.6 expandido com 3o atomo Skill 5 + cronograma C6.5 ~1.5 dia (+50%)
 - 🟢 **Sem mudancas em codigo neste fix** (so docs/planejamento; RecebimentoLfOdoo INTOCADO conforme Rafael)
 - 🟢 **Pytest baseline mantido: 393 verdes**.
+
+### Sessao v14a-ops (2026-05-25 — 16:00→16:51, 51min) — TESTE REAL LF→FB 6 cods em PROD
+- ✅ Rafael solicitou teste real: faturar 6 cods de LF para FB + transferir para FB/Indisp/MIGRAÇÃO
+  - 102020600 AZEITONAS PRETAS TRITURADA — 1.385 un (tipo 1)
+  - 4829046 MOLHO DE PIMENTA ST ISABEL — 2 un (tipo 4)
+  - 4879046 MOLHO SHOYU ST ISABEL — 23 un (tipo 4)
+  - 103500105 PIMENTA JALAPENO VERMELHA — 41.56 un (tipo 1, tracking='none')
+  - 4849003 MOSTARDA GL ST ISABEL — 128 un (tipo 4)
+  - 4759598 OLEO SOJA SENHORA DO VISO — 500 un (tipo 4)
+- ✅ Decisao Rafael: usar scripts existentes (NAO Skill 8 — ela e' planejada, nao implementada) + mapear dificuldades reais
+- ✅ Pre-flight READ-only OK: G017+G018 todos OK; G035 detectou 2 barcodes invalidos (4829046, 4849003); saldos LF suficientes
+- ✅ Acao fiscal aplicada per fat_lf_02_carregar pattern: tipo 1/2/3=PERDA_LF_FB; tipo 4/6=DEV_LF_FB
+- ✅ Estado descoberto: 6 cods ja em pipeline antigo INVENTARIO_2026_05 (2 EXECUTADO/F5e_SEFAZ_OK NF cancelada + 4 PROPOSTO/F5c_LIBERADO sem invoice; todos pickings antigos com return done = saldo voltou para LF/Estoque)
+- ✅ Workaround: status='REPROCESSADO_v14a' nos 6 antigos para excluir do filtro do script 09 + mover meus 6 novos para INVENTARIO_2026_05
+- ✅ Script 09 ETAPAS A→E executado em ~10min:
+  - 2 pickings criados (321332 PERDA com 102020600 1.385un, 321333 DEV com 4 cods 653un)
+  - 2 invoices CIEL IT criadas (709837 PERDA + 709835 DEV)
+  - 2 NFs SEFAZ-OK (chaves 35260518467441000163550010000132411007098371 + ...132421007098352)
+  - 2 RecLF processados (66 e 67) com invoices FB posted (709846, 709863)
+- ✅ Cancelado picking automatico FB/INT/08056 (criado pos-RecLF, reservava saldo para Estoque Virtual/Produção sem MO)
+- ✅ Skill 2 `distribuir_para_indisponivel` para 5 cods (102020600 + 4 DEV): 5/5 EXECUTADO_TOTAL, 654.385 un, fallback Modo B (lote ja MIGRAÇÃO)
+- ⚠️ **Bug descoberto** L965 script 09: 103500105 (tracking='none') NAO foi faturado — virou compensatorio INDUSTRIALIZACAO_FB_LF PROPOSTO
+- ✅ Workaround 103500105 (~10min):
+  - Compensatorio 172264 cancelado (status='CANCEL_v14a_BUG' — varchar(20) limite!)
+  - Novo ajuste 172265 com lote_origem='SEMLOTE' (dummy nao-vazio forca entrada em ajustes_com_lote L944)
+  - Script 09 com filtro 103500105: NF RETNA/2026/00090 SEFAZ-OK + RecLF 68 OK em ~5min
+  - **Bug DESCOBERTO em Skill 2** (`_listar_quants_origem` L1145+1147): mesmo padrao de filtro `lot_id != False`. FALHA_SEM_QUANT para tracking='none'.
+  - Workaround Skill 2: 2 calls Skill 1 `ajustar_quant` (zerar FB/Estoque sem lote + delta+ em FB/Indisp/MIGRAÇÃO com lote)
+- ✅ **Estado FINAL PROD validado**: TODOS 6 cods em FB/Indisp/MIGRAÇÃO:
+  - 102020600: 8.0 | 4829046: 7.0 | 4879046: 23.0 | 103500105: 922.9 | 4849003: 128.0 | 4759598: 502.0
+  - **Total ajustado: 695.945 un consolidadas em FB/Indisp/MIGRAÇÃO**
+- ✅ **§7.5 NOVA** criada com 5 dificuldades operacionais reais (D-OPS-1..D-OPS-5) + side-findings + workflow timeline
+- ✅ **§0 atualizado** com status `🟡 PLANEJADO COMPLETO + 3 MINERACOES + TESTE REAL 6 CODS 100% PROD`
+- 🟢 **3 NFs SEFAZ autorizadas** + 0 falhas operacionais (com workarounds)
+- 🟢 **Pytest baseline mantido: 393 verdes**
 
 ---
 

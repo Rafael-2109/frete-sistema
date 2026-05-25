@@ -80,6 +80,32 @@
 - Skill 5 será ESTENDIDA com **3 átomos** em v15a (C6.5 expandido — `criar_picking_inter_company` + `validar_picking_inter_company` + `criar_picking_entrada_destino_manual`).
 - Próximo passo: sessão v14b com criação da sub-skill `auditando-cadastro-fiscal-odoo` perfil inventário V1.
 
+**Sessão 2026-05-25 v14a-ops (TESTE REAL 6 cods LF→FB em PROD — 51min, 3 NFs SEFAZ, 695.945 un consolidadas):**
+- ✅ Rafael solicitou teste real (não Skill 8 implementação) para mapear dificuldades reais
+- ✅ 6 cods PROD: 102020600, 4829046, 4879046, 103500105 (tracking='none'), 4849003, 4759598
+- ✅ Pre-flight READ-only OK; G035 detectou 2 barcodes inválidos (auto-fix via `gtin_validator.clear_invalid_barcodes`)
+- ✅ Mover ciclo: 6 antigos→`REPROCESSADO_v14a` + 6 novos→`INVENTARIO_2026_05`
+- ✅ Script 09 ETAPAS A→E completou em ~10min: 2 pickings, 2 invoices CIEL IT, **2 NFs SEFAZ-OK**, 2 RecLF processados
+- ✅ FB/INT/08056 cancelado via Skill 5 (picking automático pós-RecLF reservando saldo para Estoque Virtual/Produção sem MO)
+- ✅ Skill 2 `distribuir_para_indisponivel` 5 cods → FB/Indisp/MIGRAÇÃO: 654.385 un, fallback Modo B
+- ⚠️ **103500105 NÃO faturou na 1ª rodada** (bug L965 script 09 para tracking='none')
+- ✅ Workaround v14a-ops (~10min): compensatório cancelado + novo ajuste com `lote_origem='SEMLOTE'` (string não-vazia força entrada em ajustes_com_lote L944) + Skill 1 ×2 (Skill 2 tem mesmo bug L1145)
+- ✅ Resultado FINAL: 3 NFs SEFAZ autorizadas (chaves 35260518467441000163550010000132411007098371, ...132421007098352, ...132451007099890); TODOS 6 cods em FB/Indisp/MIGRAÇÃO (8+7+23+922.9+128+502 = 1590.9 un total)
+- ✅ **§7.5 NOVA criada** com 5 dificuldades operacionais reais (D-OPS-1..D-OPS-5) que Skill 8 v15+ deve eliminar:
+  - **D-OPS-1**: CICLO hardcoded (`--ciclo NOME` arg em Skill 8)
+  - **D-OPS-1b**: `ajuste_estoque_inventario.status` varchar(20) — limite curto (Migration: varchar(40+))
+  - **D-OPS-2**: Falta pre-flight de duplicação (C5 sub-skill faz pre-flight; aborta se cod em pipeline ativo)
+  - **D-OPS-2b**: F5e propaga chave para ajustes sem linha real (falso positivo) — fix em `f5e_transmitir_sefaz` replicar só para ajustes com linha
+  - **D-OPS-3**: Bug L965 tracking='none' no script 09 — novo átomo Skill 5 deve aceitar quants sem lot_id
+  - **D-OPS-4**: Picking automático pós-RecLF SEM MO — pós-hook ETAPA E detecta+cancela `origin=False` reservando saldo recém-recebido
+  - **D-OPS-5**: Skill 2 `_listar_quants_origem` L1145+1147 **TAMBÉM filtra** `lot_id != False` — adicionar `aceita_tracking_none=True` default
+- 🟢 **Pytest baseline mantido: 393 verdes** (sem mudanças em código de teste)
+
+**Status global após v14a-ops:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 3 MINERAÇÕES + TESTE REAL 6 CODS PROD VALIDADO**; 5 dificuldades reais documentadas (§7.5); 1 decisão ABERTA (paralelismo G-RECLF-1 v17); Skill 2 + Skill 5 + script 09 tem bug tracking='none' (workaround validado em PROD).
+- Skill 2 `transferindo-interno-odoo` 🟡 — bug D-OPS-5 descoberto, fix futuro (memória `[[skill2_distribuir_indisp_pattern]]` precisa atualização para incluir caso tracking='none').
+- Próximo passo: sessão v14b com criação da sub-skill `auditando-cadastro-fiscal-odoo` perfil inventário V1.
+
 **Sessão 2026-05-25 v13 (Planejamento Skill 8 `faturando-odoo` — estruturacao C1+C4):**
 - ✅ **Verificacao main**: main = `a937748b` (merge v12); sem avanco; sem rebase.
 - ✅ **Pytest baseline confirmado**: 393 verdes em `tests/odoo/` (18s). Observacao: rodar `tests/odoo/services/` isolado produz 27 falhas (fixture pollution pre-existente); usar `tests/odoo/` como baseline canonico.
