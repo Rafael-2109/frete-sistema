@@ -1,17 +1,22 @@
 ---
 name: operando-reservas-odoo
 description: >-
-  Skill WRITE (átomo C1/C2) para OPERAR RESERVAS no Odoo: cirurgia (cancelar
-  moves órfãos preservando picking) ou cancelamento (picking inteiro via
-  action_cancel). Usar quando o pedido é "limpa reserva órfã do picking X",
-  "cancela picking Y", "remove move.lines apontando para quant zerado",
-  "MLs órfãs no picking Z", "picking quebrado pós-ajuste de inventário".
-  `--dry-run` é o DEFAULT; só efetiva com `--confirmar`.
+  Skill WRITE (átomos C1/C2) para OPERAR RESERVAS no Odoo: cirurgia (cancelar
+  moves órfãos preservando picking), cancelamento (picking inteiro via
+  action_cancel), unreserve (do_unreserve mantendo picking — NOVO v7),
+  find_orphan_mls (READ-only listar MLs zerados — NOVO v7), zerar_reserved_residual
+  (cleanup pós-unlink). 5 ATOMOS no total. Usar quando o pedido é "limpa reserva
+  órfã do picking X", "cancela picking Y", "remove move.lines apontando para
+  quant zerado", "MLs órfãs no picking Z", "picking quebrado pós-ajuste de
+  inventário", "libera reservas mantendo picking" (NOVO v7), "MLs órfãs por
+  quants alvo" (NOVO v7). Compõe **fluxo 2.6 — tratar reserva ATIVA pré-Skill 2**.
+  `--dry-run` é o DEFAULT (modos write); só efetiva com `--confirmar`.
   NÃO USAR PARA:
   - ajustar saldo de quant (não toca reservas) -> ajustando-quant-odoo
-  - cancelar MO de produção (mrp.production) -> operando-mo-odoo (futura skill)
-  - mover saldo entre lotes/locais -> transferindo-interno-odoo (futura)
-  - só consultar reservas/MLs (não altera) -> consultando-sql
+  - cancelar MO de produção (mrp.production) -> operando-mo-odoo
+  - mover saldo entre lotes/locais -> transferindo-interno-odoo
+  - só consultar reservas/MLs (não altera) -> consultando-sql ou consultando-quant-odoo
+  - reservar (action_assign) -> Skill 5 operando-picking-odoo
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -66,6 +71,63 @@ modos:         --dry-run (default) -> --confirmar
 status:        PICKING_CANCELADO · DRY_RUN_OK · NOOP · FALHA_*
 ```
 
+## Contrato — Unreserve picking (átomo 4, NOVO v7)
+
+```
+objeto:        stock.picking — libera MLs SEM cancelar (do_unreserve nativo)
+input:         --unreserve-picking --picking-id <id> [--confirmar]
+output (JSON): {status, picking_id, picking_name, picking_state_antes,
+                 picking_state_depois, n_mls_antes, n_mls_depois,
+                 tempo_ms, [aviso se G_UNRESERVE_TRAVA]}
+pré-condições: picking existe; state IN ['assigned', 'partially_available',
+                 'confirmed', 'waiting']. State 'done'/'cancel' = FALHA.
+                 Se n_mls_antes=0 = NOOP.
+pós-condições: MLs do picking APAGADAS (qty_done virou 0); reserved_quantity
+               dos quants relacionados RECALCULADO pelo Odoo; picking volta
+               para confirmed/waiting/partially_available (ou TRAVA em assigned
+               se Odoo re-reservar automaticamente — aviso emitido).
+gotchas-invariante: G_UNRESERVE_TRAVA — picking pode CONTINUAR em assigned
+                    se Odoo re-reservar automaticamente (depende de trigger).
+                    Output emite "aviso" no campo correspondente.
+modos:         --dry-run (default) -> --confirmar
+status:        PICKING_UNRESERVED · DRY_RUN_OK · NOOP · FALHA_PICKING_NAO_EXISTE
+               · FALHA_PICKING_STATE_INVALIDO · FALHA_ODOO
+```
+
+## Contrato — Find orphan MLs (átomo 5, NOVO v7, READ-only)
+
+```
+objeto:        stock.move.line — classifica MLs ÓRFÃS (quants com qty=0)
+input:         --find-orphan --quant-ids <Q1,Q2,...> [--states <csv>]
+                 (default states=assigned,partially_available)
+output (JSON): {status='ORPHAN_MLS_LISTED', total_orfaos, mls_orfas: [...],
+                 quants_zerados_com_mls: [...], quants_com_saldo: [...],
+                 tempo_ms}
+pré-condições: quant_ids não-vazio (vazio = retorna zerado sem RPC).
+pós-condições: READ-only — sem mutação Odoo.
+gotchas-invariante: G030 (cross-ref ML→quant via tupla — não usa quant_id direto
+                    que é computed store:False). Internamente reaproveita Skill 9
+                    `listar_move_lines_por_quant`. TOL=0.0001 para arredondamento.
+modos:         sempre exec (READ-only, sem --dry-run)
+status:        ORPHAN_MLS_LISTED · sem falhas (defensive)
+```
+
+## Tabela de decisão — 5 caminhos seguros para desreservar (fluxo 2.6)
+
+Quando antes de uma Skill 2 (transferência) há reservas ativas bloqueando o quant origem, escolha 1 dos 5 caminhos:
+
+| Caminho | Comando | Quando usar | Risco | Reversível? |
+|---|---|---|---|---|
+| **A. Cancelar picking inteiro** | Skill 5 `--modo cancelar` OU Skill 2.4 `--cancelar-picking` | Picking sem valor fiscal (fantasma; INT sem origem/partner) | IRREVERSÍVEL. Consultar Fiscal se NF emitida. | ❌ |
+| **B. Devolver picking** | Skill 5 `--modo devolver` | Picking state=done que precisa estornar saldo | Cria NF devolução. Estorno fiscal pode ser necessário. | Parcial |
+| **C. Desreservar mantendo picking** | Skill 2.4 `--unreserve-picking` (NOVO v7) | Operador quer liberar mas manter picking para re-reservar | **RISCO G_UNRESERVE_TRAVA**: picking pode TRAVAR em assigned. Verificar `n_mls_depois==0`. | ✅ (re-reserva via Odoo) |
+| **D. Não desreservar, usar OUTRO lote** | Skill 2 `--lote-origem <ALT>` | Existe lote livre com saldo suficiente | Mais seguro — não toca reserva. Pode não haver alternativo. | ✅ |
+| **E. Cirurgia em ML órfã** | Skill 2.4 `--ml-ids <ML> --moves-writes "..."` + opcional `--zerar-residual` depois | Picking tem MIX MLs OK + órfãs (`--find-orphan` >0). | NÃO aplica para reserva ATIVA. | ❌ |
+
+**Regra de seleção (prefira)**: D → E (se órfãs) → A (se fantasma) → B (se done) → C (último recurso).
+
+**Premissa absoluta (NUNCA pular)**: antes de chamar Skill 2 transferência, rodar Skill 9 `--modo pickings` para identificar reservas. Se `reserved > 0` → fluxo 2.6. Documentado em `app/odoo/estoque/fluxos/2.6-tratar-reserva-bloqueia-transferencia.md`.
+
 ## Receitas (caso real -> args)
 
 | Preciso de... | Atomo | Args |
@@ -75,16 +137,16 @@ status:        PICKING_CANCELADO · DRY_RUN_OK · NOOP · FALHA_*
 | Cancelar picking sem MLs válidas | cancelamento | `--cancelar-picking --picking-id P --confirmar` |
 | Cancelar picking com poucas MLs válidas | cancelamento | idem (operação/Fiscal decide) |
 
-## Catálogo de átomos (alguns implementados, outros previstos)
+## Catálogo de átomos
 
-| Átomo | Status | Quando implementar |
+| Átomo | Status | Notas |
 |---|---|---|
-| `cancelar_moves_orfaos(picking_id, ml_ids, moves_writes)` | ✅ implementado | — |
-| `cancelar_picking_inteiro(picking_id)` | ✅ implementado | — |
-| `zerar_reserved_residual(quant_ids)` | ✅ implementado | cleanup stale APÓS unreserve/unlink (descoberta 2026-05-23: unlink ML gera `reserved_quantity` NEGATIVO se quant já estava zerado) |
-| `unreserve_picking(picking_id)` | ⬜ previsto | quando precisar liberar sem cancelar (preserva moves) |
+| `cancelar_moves_orfaos(picking_id, ml_ids, moves_writes)` | ✅ | Cirurgia preservando picking |
+| `cancelar_picking_inteiro(picking_id)` | ✅ | action_cancel cascade |
+| `unreserve_picking(picking_id)` | ✅ **NOVO v7** | do_unreserve nativo + guard G_UNRESERVE_TRAVA |
+| `find_orphan_mls(quant_ids)` | ✅ **NOVO v7** | READ-only — reaproveita Skill 9 cross-ref por tupla (G030) |
+| `zerar_reserved_residual(quant_ids)` | ✅ | Cleanup stale APÓS unreserve/unlink (G027) |
 | `unreserve_mo(mo_id, reassign=False)` | ⬜ previsto | quando precisar liberar reservas de componentes de MO |
-| `find_orphan_mls(quant_ids)` | ⬜ previsto | identificar MLs órfãs por quant_id (helper read) |
 
 ## Composição em FLUXOS
 
@@ -100,20 +162,37 @@ status:        PICKING_CANCELADO · DRY_RUN_OK · NOOP · FALHA_*
 - **`picking.state='done'` é IMUTÁVEL** — não tentar reverter. Validação à priori na skill.
 - **Cirurgia pode deixar `move.state='confirmed'` ou `waiting`** (Odoo pode tentar re-assign) — se isso for problema, usar cancelamento inteiro.
 - **`stock.picking.do_unreserve` libera TODAS as MLs do picking** — não usar para cirurgia em picking com MLs válidas.
+- **G_UNRESERVE_TRAVA** (NOVO v7): após `unreserve_picking`, picking pode CONTINUAR em `state=assigned` se Odoo re-reservar automaticamente. Verificar `n_mls_depois==0` no output; se "aviso" emitido, reconsiderar caminho A (cancelar).
+- **G030** (NOVO v7): `stock.move.line.quant_id` é `store: False` (computed UI-only "Pick From"). Filtros `quant_id in [...]` são IGNORADOS pelo Odoo. Skill 9 + Skill 2.4 `find_orphan_mls` fazem cross-ref via tupla (product, lot, location, company) automaticamente.
+- **Caminho C é último recurso**: se quiser desreservar sem perder picking, prefira caminho D (outro lote) primeiro. Caminho C tem risco real de TRAVA confirmado pelo usuário 2026-05-24.
 
 ## Exemplos
 
 ```bash
 SK=.claude/skills/operando-reservas-odoo/scripts/operar_reserva.py
 
-# 1) Dry-run: cirurgia em FB/FB/EMB/11673 (1 ML órfã)
-python "$SK" --picking-id 316701 --move-ids 1075205 --ml-ids 217654353
+# 1) Cirurgia dry-run em FB/FB/EMB/11673 (1 ML órfã)
+python "$SK" --picking-id 316701 --moves-writes "1075205:0.1986" --ml-ids 217654353
 
-# 2) Efetivar
-python "$SK" --picking-id 316701 --move-ids 1075205 --ml-ids 217654353 --confirmar
+# 2) Efetivar cirurgia
+python "$SK" --picking-id 316701 --moves-writes "1075205:0.1986" --ml-ids 217654353 --confirmar
 
 # 3) Cancelar picking inteiro (FB/INT/07950 — só tinha 1 ML, virou órfã)
 python "$SK" --cancelar-picking --picking-id 320076 --confirmar
+
+# 4) NOVO v7: unreserve_picking — libera reservas SEM cancelar (caminho C fluxo 2.6)
+python "$SK" --unreserve-picking --picking-id 320753              # dry-run
+python "$SK" --unreserve-picking --picking-id 320753 --confirmar  # efetivar
+# Output esperado: n_mls_depois=0, picking_state_depois=confirmed/waiting
+# Se output emite "aviso" com G_UNRESERVE_TRAVA + state=assigned, reconsiderar caminho A.
+
+# 5) NOVO v7: find_orphan_mls — READ-only, lista MLs apontando para quants zerados
+python "$SK" --find-orphan --quant-ids 229937,258975
+# Output: {total_orfaos, mls_orfas[...], quants_zerados_com_mls[...], quants_com_saldo[...]}
+# Se total_orfaos > 0, usar caminho E (cirurgia) para limpar.
+
+# 6) Zerar reserved residual (OBRIGATÓRIO após cirurgia E + ML afetando quant já com reserved=0)
+python "$SK" --zerar-residual --quant-ids 258975,258988,258958 --confirmar
 ```
 
 ## Validação

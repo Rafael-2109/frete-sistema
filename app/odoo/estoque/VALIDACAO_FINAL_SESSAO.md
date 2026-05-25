@@ -730,3 +730,267 @@ O prompt da sessão afirmava que **G019/G020/G011/G023 eram BUGS ABERTOS** bloqu
 4. **Capinagem `09b_executar_pre_etapa.py`** para `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (C3 macro) quando padrão for usado novamente — atualmente VIVO ad-hoc.
 5. **Defensive isinstance em `enriquecer_quants_para_planejar`** (CR-F5): proteger contra Odoo retornar bare int em product_id se a API mudar.
 6. **Helper `_utils.enriquecer_quants_raw`** se for usado por outras skills (Skill 9 query, futuro orchestrator).
+
+---
+
+## 12. Sessao 2026-05-24 v6.1: Caso REAL 71 cods Indisponivel PAUSADO — gap arquitetural reservas ativas
+
+> Apos sessao v6 (Skill 6 nasce), usuario pediu para validar Skill 2 modo A+B com caso real: 71 cods em FB para mover para FB/Indisponivel em 2 etapas (lote->MIGRACAO + FB/Estoque->FB/Indisp). Auditoria AO VIVO revelou gap arquitetural significativo — gestor/skills nao tem ferramentas claras para tratar RESERVAS ATIVAS bloqueando transferencias futuras. **Caso PAUSADO sem nenhum write em PROD.**
+
+### 12.1 Cronologia
+
+| # | Evento | Resultado |
+|---|---|---|
+| 1 | Usuario aciso sobre limitacao reserved=0 forcado na Skill 6 enriquecer + pediu validacao Skill 2 modo A+B com caso real | Plano de 2 etapas formulado |
+| 2 | Plano de execucao + setup: salvar 71 cods em TSV + verificar CLI Skill 9 | OK |
+| 3 | Auditoria batch AO VIVO via Skill 9 (`consultar_quants.py --cods <71> --empresas FB`) | 190 quants retornados, COM `reserved_quantity` real |
+| 4 | Analisador Python classifica 71 cods em 5 categorias (GREEN/SKIP-sem-saldo/SKIP-sublocation/FLAG-quase-100%/FLAG-50%) | Padrao identificado: lote 13206 + MIGRACAO FB/Estoque reservados em 5+ cods |
+| 5 | Gerador de plano A+B (`gerar_plano_indisp.py`): 67 cods em plano (4 SKIP), 95 chamadas Etapa A, 67 chamadas Etapa B | Plano detalhado em `plano_etapa_A.tsv` + `plano_etapa_B.tsv` |
+| 6 | AskUserQuestion 3 questoes para decisao das 3 categorias (4a/4b/SKIP) | USUARIO INTERROMPEU — apontou gap arquitetural |
+| 7 | Usuario: "Vi voce quebrando a cabeça para resolver as reservas... gestor precisa saber resolver isso pela skill ou helpers. Registre as duvidas e problemas." | Pivot para REGISTRO + sem execucao |
+| 8 | Avaliacao da estrutura: Skill 2.4 + Skill 9 + fluxo 2.4 + prompt subagente | 4 gaps identificados (vide 12.3) |
+| 9 | Artefatos de registro: `docs/.../casos-pendentes/CASO_PENDENTE_RESERVAS_71_CODS_2026_05_24.md` + memoria `[[caso_real_tratar_reservas_pre_transferencia]]` + inputs preservados | OK |
+
+### 12.2 Metricas
+
+- **0 execucoes** em PROD (auditoria foi READ-only Skill 9)
+- **1 chamada XML-RPC** READ batch (`consultar_quants.py` — 190 quants em ~3s)
+- **5 arquivos preservados** em `docs/inventario-2026-05/casos-pendentes/`
+- **1 doc completo** do caso (CASO_PENDENTE_RESERVAS_71_CODS_2026_05_24.md ~280 linhas)
+- **1 memoria nova** + entry em MEMORY.md
+
+### 12.3 Gap arquitetural identificado (4 dimensoes)
+
+| # | Dimensao | Status atual | O que faltou |
+|---|---|---|---|
+| 1 | **Mapeamento conceitual** | Reservas ORFAS (post-mortem) cobertas (Skill 2.4) | Reservas ATIVAS (ante-mortem) bloqueando transferencias — NAO MAPEADO |
+| 2 | **Implementacao (atomos)** | Skill 9 retorna `reserved_quantity` real; Skill 2.4 cobre cirurgia/cancel/residual | Faltam: `listar_pickings_por_quant`, `listar_move_lines_por_quant`, `unreserve_picking`, `find_orphan_mls` |
+| 3 | **Wiring (fluxos)** | Fluxo 2.4 cobre orfa | Falta fluxo 2.6 "tratar reserva ativa pre-transferencia" |
+| 4 | **Direcionamento (prompt)** | Subagente lista Skills 2.4, 5, 9 | Falta regra inviolavel "checar reservas via Skill 9 ANTES de Skill 2" |
+| 5 | **Doc operacional** | Gotcha [[gotcha_resetar_reserva_orfao_negativo]] cobre orfas | Falta tabela "5 caminhos seguros para desreservar" (A=cancel / B=devolver / C=unreserve / D=outro lote / E=cirurgia orfa) |
+
+### 12.4 Padrao operacional descoberto
+
+**Lote `13206` reservado em 3 cods** (4899027 + 4890128 + 4902852 — molhos salada/pesto). Lote nao se repete (eh especifico por produto) — entao sao **3 reservas distintas** em produtos diferentes mas com mesmo nome de lote (codificacao do operador?).
+
+**Lote `MIGRACAO` em FB/Estoque reservado em 5 cods** (103000113, 104000054, 105000021, 105000038, 103000117). Cada produto tem seu proprio stock.lot.id=MIGRACAO (gotcha G031). 5 reservas distintas — provavelmente picking unico cruzando os 5 cods, ou 5 pickings separados.
+
+**Hipotese a validar (P2 do roteiro):** existe 1 picking ativo que reserva os 5+3=8 cods simultaneamente? Investigacao SQL/XML-RPC necessaria — sem o atomo `listar_pickings_por_quant`, query deve ser ad-hoc:
+```sql
+SELECT sml.picking_id, sp.name, sp.state, pp.default_code, sl.name as lot, sml.quantity
+FROM stock_move_line sml
+JOIN stock_picking sp ON sml.picking_id=sp.id
+JOIN product_product pp ON sml.product_id=pp.id
+LEFT JOIN stock_lot sl ON sml.lot_id=sl.id
+WHERE sml.state IN ('assigned','partially_available') AND sml.company_id=1
+  AND ((sl.name='13206' AND pp.default_code IN ('4899027','4890128','4902852'))
+    OR (sl.name='MIGRAÇÃO' AND pp.default_code IN ('103000113','104000054','105000021','105000038','103000117')));
+```
+
+### 12.5 Decisoes pendentes (a serem tomadas em sessao futura)
+
+3 questoes que **AskUserQuestion** apresentou ao usuario (interrompido):
+1. **Cat 4a (4 cods 99%):** reduzir qty para saldo livre? skip? tocar reserva?
+2. **Cat 4b (5 cods 50%):** skip? cobertura parcial? cancelar pickings primeiro?
+3. **Cat SKIP (4 cods):** confirmar skip? transferir 301000003 de Pos-Producao primeiro?
+
+Mais decisoes pendentes (descobertas pos-pausa):
+4. **Etapa B impactada:** 5 cods tem MIGRACAO em FB/Estoque ja reservada — Etapa B vai falhar ao tentar mover qty_total. Como tratar?
+5. **Prioridade implementacao gap:** P1 (implementar atomos faltantes ANTES) ou P2 (consultando-sql ad-hoc agora, atomos depois)?
+
+### 12.6 Aprendizados estruturais (para integrar nas Skills/prompt)
+
+1. **Auditoria batch READ-only ANTES de WRITE batch eh INVARIANTE operacional**: 1 chamada Skill 9 economizou ~14 chamadas perigosas (4 SKIP + 9 FLAG + 1 Pos-Producao). Adicionar como regra ao prompt do gestor.
+2. **`reserved_quantity` real eh fonte de verdade — `reserved=0 forcado` (Skill 6 enriquecer) eh false negative** que ja confundiu nesta sessao. Resolver via opcao B do gap reserved (modificar script 01 para incluir reserved_quantity).
+3. **Padrao de reserva sistemica** (mesmo lote/MIGRACAO reservado em multiplos cods) indica picking ativo de operacao em andamento — NAO devemos tocar sem entender o que esta rolando.
+4. **Gestor precisa de READ inverso ML→quant**: o usuario falou explicitamente que o gestor "precisa saber resolver isso pela skill ou helpers". Atomo `listar_pickings_por_quant` na Skill 9 eh prioridade 1.
+5. **5 caminhos para desreservar precisam estar DOCUMENTADOS** com explicacao de risco — operador (e agente) precisa saber a diferenca.
+
+### 12.7 Artefatos preservados (referencia da proxima sessao)
+
+| Arquivo | Conteudo |
+|---|---|
+| `docs/inventario-2026-05/casos-pendentes/CASO_PENDENTE_RESERVAS_71_CODS_2026_05_24.md` | Doc completo (~280 linhas): pedido + auditoria + classificacao + gap + decisoes |
+| `docs/inventario-2026-05/casos-pendentes/transferencias_indisp_2026_05_24.tsv` | 71 cods originais com qty solicitada |
+| `docs/inventario-2026-05/casos-pendentes/audit_fb_indisp.json` | 190 quants brutos retornados pela Skill 9 (com reserved_quantity real) |
+| `docs/inventario-2026-05/casos-pendentes/audit_indisp_classificado.json` | Classificacao detalhada dos 71 cods |
+| `docs/inventario-2026-05/casos-pendentes/plano_etapa_A.tsv` | 95 chamadas Skill 2 modo A (cod/lote/qty) |
+| `docs/inventario-2026-05/casos-pendentes/plano_etapa_B.tsv` | 67 chamadas Skill 2 modo B (cod/lote/qty) |
+| Memoria `[[caso_real_tratar_reservas_pre_transferencia]]` | Resumo do caso + gap + roteiro retomada |
+
+### 12.8 Confirmacao: zero writes em PROD
+
+Auditoria: 1 chamada `consultar_quants.py` (READ-only via XML-RPC).
+**Modificacoes Odoo PROD: zero.**
+**Modificacoes banco PG PROD: zero.**
+**Modificacoes filesystem PROD: zero.**
+**Apenas: 5 arquivos copiados de `/tmp/` para `docs/inventario-2026-05/casos-pendentes/` (rastreabilidade) + doc/memoria/VALIDACAO §12 atualizadas (registro).**
+
+### 12.9 Status final
+
+- Caso PAUSADO no checkpoint "AskUserQuestion 3 decisoes pendentes"
+- Plano A+B gerado e preservado, pronto para retomada
+- Gap arquitetural REGISTRADO em 3 lugares (doc caso + memoria + esta §12)
+- Sem commit — usuario decide na proxima sessao (priorizar gap fix vs retomar caso vs ambos)
+
+---
+
+## 13. Sessao 2026-05-24 v7: Gap reservas pre-transferencia RESOLVIDO — 4 atomos novos + fluxo 2.6 + G030
+
+> Apos sessao v6.1 (caso 71-cods PAUSADO). Rafael escolheu P1 (caminho completo: implementar 4 gaps ANTES de retomar caso, transformando o caso em validacao do novo fluxo).
+
+### 13.1 Cronologia
+
+| # | Evento | Resultado |
+|---|---|---|
+| 1 | Setup + pytest baseline 196 verdes | OK |
+| 2 | Verificacao main: nenhum commit novo (`fb494608` ja conhecido) | OK |
+| 3 | AskUserQuestion sobre estrategia P1 vs P2 vs Skill 8 vs Skill 6 09b | Rafael escolheu P1 |
+| 4 | **Fase A — Pesquisa AO VIVO** (probe `/tmp/investigar_unreserve_skill24.py`) | 4 descobertas chaves (vide 13.2) |
+| 5 | **Fase B — Skill 9 extensao**: 2 atomos novos `listar_move_lines_por_quant`/`listar_pickings_por_quant` + CLI 2 modos + 19 pytest | OK |
+| 6 | **Smoke C6 modo pickings**: FALHOU — Skill 9 retornou 30+ pickings com lixo (quants random) | **G030 DESCOBERTO** |
+| 7 | Investigacao G030: `fields_get` revelou quant_id `store: False` | Documentado em gotchas/G030 |
+| 8 | Fix codificado: cross-ref via TUPLA (product, lot, location, company) em vez de quant_id direto | 19 pytest verdes pos-fix |
+| 9 | **Smoke C6 modo pickings pos-fix**: SUCESSO — 1 picking FB/INT/08022 com 3 MLs lote 13206 (1035.083 un) | 100% bate caso real |
+| 10 | **Smoke C6 modo pickings MIGRAÇÃO**: 3 pickings (EMB MO ativa + OUT DEVOLUcaO LF) com 6 MLs | 100% bate auditoria v6.1 |
+| 11 | **Fase C — Skill 2.4 extensao**: 2 atomos novos `unreserve_picking` (do_unreserve + guard G_UNRESERVE_TRAVA) + `find_orphan_mls` (READ-only via Skill 9) + CLI 2 modos + 14 pytest | OK |
+| 12 | **Smoke C6 unreserve_picking**: dry-run FB/INT/08022 OK (n_mls=4); --confirmar em CD/OUT/02001 state=cancel = FALHA_STATE corretamente | Pre-state guard OK |
+| 13 | **Smoke C6 find_orphan**: 3 quants lote 13206 = 0 orfaos (esperado — todos com saldo) | OK |
+| 14 | **Fase D — Folha fluxo 2.6**: 5 caminhos seguros (A=cancel/B=devolver/C=unreserve/D=outro lote/E=cirurgia orfa) + regra selecao D→E→A→B→C + README dos fluxos atualizado | OK |
+| 15 | **Fase E — Regra inviolavel no prompt + tabela 5-caminhos**: subagente `gestor-estoque-odoo` "PRE-CHECK reserva ANTES de Skill 2" + invariante G030; SKILL.md 2.4 estendida; SKILL.md 9 estendida com 3 contratos | OK |
+| 16 | **Fase F — Validacao caso real**: AskUserQuestion estrategia α/β/γ/δ → Rafael escolheu β (cancelar 1 + pular 3) | OK |
+| 17 | **WRITE PROD**: FB/INT/08022 (id=320753) cancelado via Skill 5 `--modo cancelar --confirmar` em 1.43s | EXECUTADO |
+| 18 | **Verificacao direto no Odoo**: Skill 9 modo pickings → 0 pickings reservando os 3 quants. reserved=0 em todos 3 quants confirmado | ✅ |
+| 19 | **Batch dry-run completo**: 84 chamadas MODO C — 79 DRY_RUN_OK + 5 falhas (1 LOTE_DESTINO_INEXISTENTE esperado + 4 FALHA_LOTE P-15/05) em 385s | OK |
+| 20 | AskUserQuestion P-15/05: Rafael escolheu opcao 3 (executar 80 + tratar 4 P-15/05 via MODO B) | Plano confirmado |
+| 21 | **Batch --confirmar MODO C principal**: 84 chamadas em 512s — **80 EXECUTADO em PROD** + 4 FALHA_LOTE (P-15/05 esperado) | ✅ |
+| 22 | **Batch P-15/05 --confirmar MODO B**: 3 chamadas em 19s — **3 EXECUTADO em PROD** (208000043, 602000006, 208000044). 1 PULADO (105000003 — lote literal P-15/05 interpretado como proxy; tratar via Skill 1 ajustar_quant em sessao futura) | ✅ |
+| 23 | **INCIDENTE OPERACIONAL**: por timing/race entre background do batch principal e smoke `--limite 3 --confirmar` rodado em paralelo + batch pt2 `--start 3` (matado mid-flight). Possivel duplicacao de items 12+13 (207030327+206030034) | DETECTADO |
+| 24 | Auditoria duplicacoes via Skill 9 comparando qty_real vs qty_esperado: **2 duplicacoes confirmadas** (items 12+13 — 504 un cada). Items 1+2 do smoke nao chegaram a duplicar (qty_antes=0 do smoke = batch principal ja tinha reduzido) | OK |
+| 25 | **REVERSAO 2 duplicacoes via Skill 1 ajustar_quant**: 4 chamadas (207030327 origem +504 + destino -504; 206030034 origem +504 + destino -504). Todas EXECUTADO | ✅ |
+| 26 | Auditoria final pos-reversao: estados restaurados corretamente. **Total operacoes PROD validadas: 88 WRITES** (1 cancel + 80 Etapa A+B MODO C + 3 P-15/05 MODO B + 4 reversao) | ✅ |
+| 27 | **Fase G — C7-C10**: ROADMAP atualizado, memoria nova G030 + fluxo_2_6_pattern, memoria caso atualizada (RESOLVIDO), VALIDACAO §13 atualizado pos-batch, logs PROD preservados em casos-pendentes/ | OK |
+
+### 13.2 Descobertas Fase A (probe AO VIVO)
+
+| # | Achado | Impacto |
+|---|---|---|
+| 1 | **G030**: `stock.move.line.quant_id` e' COMPUTED `store: False` (string UI "Pick From"). Filtro IGNORADO pelo Odoo CIEL IT. | Cross-ref ML→quant DEVE ser via TUPLA `(product, lot, location, company)`. Codificado em Skill 9. |
+| 2 | `stock.picking.do_unreserve` e' XML-RPC publico, retorna None em state=cancel (NOOP silencioso) | Skill 2.4 `unreserve_picking` codifica + guard pre-state |
+| 3 | `stock.picking._action_unreserve` NÃO EXISTE (Fault method does not exist) | Skill 2.4 usa SOMENTE `do_unreserve` |
+| 4 | Caso real lote 13206: 1 picking FB/INT/08022 (Transferencia Interna, sem origem/partner, 3 MLs 1035.083 un) | Candidato natural caminho A (cancelar) |
+| 5 | Caso real MIGRAÇÃO FB/Estoque: 3 pickings (FB/FB/EMB/11673+11674 MO ativa origin=FB/OP/MANUAL + FB/OUT/01046 DEVOLUÇÃO LA FAMIGLIA partner=LF) | Risco fiscal — caminhos D ou PULAR |
+
+### 13.3 Metricas finais
+
+- **4 atomos novos**: 2 READ (Skill 9 modo move-lines/pickings) + 2 WRITE (Skill 2.4 unreserve_picking + find_orphan_mls)
+- **33 pytest novos**: 19 Skill 9 query (`test_stock_quant_query_service.py` NOVO) + 14 Skill 2.4 reserva (`test_stock_reserva_service.py` NOVO)
+- **229 pytest verdes totais** (196 anterior + 19 query + 14 reserva = 229)
+- **5 smokes PROD**: 2 Skill 9 (lote 13206 + MIGRAÇÃO FB) + 3 Skill 2.4 (unreserve dry-run + state=cancel falha + find_orphan zerados)
+- **1 WRITE PROD validado**: Skill 5 cancelar FB/INT/08022 em 1.43s, verificacao direto no Odoo OK
+- **1 NOVO fluxo**: `fluxos/2.6-tratar-reserva-bloqueia-transferencia.md` (~250 linhas, 5 caminhos, exemplo caso real)
+- **1 NOVO gotcha**: G030 documentado em `docs/inventario-2026-05/02-gotchas/G030-quant-id-em-stock-move-line-eh-computed.md`
+- **6 docs atualizados**: SKILL.md 9 + SKILL.md 2.4 + agente gestor-estoque-odoo (description+header+arvore+invariantes) + fluxos/README + ROADMAP_SKILLS + esta §13
+- **2 memorias atualizadas**: `caso_real_tratar_reservas_pre_transferencia` (RESOLVIDO) + nova `gotcha_g030_quant_id_store_false` + MEMORY.md
+
+### 13.4 Pre-mortem (4 dimensoes)
+
+#### Riscos operacionais (impacto: PROD)
+
+| Risco | Probabilidade | Impacto | Mitigacao atual |
+|---|---|---|---|
+| **Usuario chama Skill 2 sem PRE-CHECK reserva** | Baixa-Media | Alto (Odoo retorna erro qty<demanda OU transferencia incompleta) | Regra inviolavel no prompt + tabela 5-caminhos + fluxo 2.6. Sub-agente carrega no boot. |
+| **Caminho C (unreserve) deixa picking TRAVADO em assigned** | Media (operacional) | Medio (precisa intervencao manual no Odoo UI) | Output emite "aviso G_UNRESERVE_TRAVA" + verifica `n_mls_depois==0`. Doc da skill recomenda caminho A se travar. |
+| **Caminho A (cancelar) em picking fiscal sem consultar Fiscal** | Media | Alto (NF de devolucao invalidada) | Doc da skill alerta; fluxo 2.6 destaca `origin contendo "Devolução"` como red flag. Caso real v7: 3 pickings MIGRAÇÃO PULADOS (1 era DEVOLUcaO LF). |
+| **Caminho E (cirurgia) sem `zerar_reserved_residual` apos** | Media | Medio (quant `reserved` negativo) | Doc da skill + fluxo 2.4 obriga zerar_residual apos cirurgia. Skill 2.4 expoe modo `--zerar-residual`. |
+| **G030 reaparece** (Odoo CIEL IT upgrade muda `quant_id`) | Baixa | Alto (Skill 9 modo pickings retorna lixo silenciosamente) | Pytest cobrindo cross-ref via tupla. Doc G030. Probe `fields_get` em sessao futura se observar regressao. |
+
+#### Riscos tecnicos (impacto: codigo + integracao)
+
+| Risco | Probabilidade | Impacto | Mitigacao |
+|---|---|---|---|
+| **Domain compound OR-AND falha em Odoo 18+** | Baixa | Medio (Skill 9 modo pickings retorna vazio) | Codigo testado contra Odoo 17 CIEL IT. Sintaxe ['|']*(N-1) + N x [AND, AND, AND, AND] e' padrao OR canonico. |
+| **`unreserve_picking` em picking com cancel cascade complicado** | Baixa | Medio (state pos imprevisivel) | Re-le state apos action. Output sempre inclui state_antes/depois. |
+| **`find_orphan_mls` retorna FP em TOL muito pequeno** | Baixa | Baixo (extra cleanup desnecessario) | TOL=0.0001 (1e-4) testado contra valores reais 0.00005 vs 0.001. |
+
+#### Riscos de processo (impacto: continuidade)
+
+| Risco | Probabilidade | Impacto | Mitigacao |
+|---|---|---|---|
+| **Proxima sessao usa Skill 2 sem ler regra inviolavel** | Media | Medio (volta gap original) | Regra na 2a posicao da lista de invariantes do subagente; obrigatorio carregar no boot. |
+| **Fluxo 2.6 nao documenta caminho NOVO descoberto** | Media | Baixo (operacao funciona, doc fica desatualizada) | Adicionar como sub-caso na proxima sessao real. |
+| **Batch Etapa A+B nao executa em --confirmar nesta sessao** | Alta (intencional — alta carga) | Baixo (pode rodar em proxima sessao) | Dry-run completo + log preservado. Rafael decide quando executar real. |
+
+#### Riscos arquiteturais (impacto: aposentar/refatorar)
+
+| Risco | Probabilidade | Impacto | Mitigacao |
+|---|---|---|---|
+| **Atomos `unreserve_picking`/`find_orphan_mls` nunca usados** | Baixa | Baixo (cobertura defensiva) | Demanda comprovada pelo caso 71-cods. Pattern composavel para fluxos futuros. |
+| **Skill 2.4 cresce alem de 5 atomos** (operador quer `unreserve_mo`) | Media | Baixo-Medio | Atomo `unreserve_mo` ja CATALOGADO no service. Adicionar quando demanda real surgir. |
+| **Skill 9 vira batch monolitico** (operador quer `listar_pickings(filtros)` direto) | Baixa | Baixo | Atomo previsto `listar_pickings(states, type_ids, partner_ids)` mantido no catalogo. |
+
+### 13.5 Aprendizados estruturais
+
+1. **Probe AO VIVO ANTES de pytest mock-based eh INVARIANTE para Skill READ Odoo**: descoberto que minha hipotese inicial sobre `quant_id` estava errada por nao ter feito probe real. 16 pytest viraram 19 apos refactor pos-G030. **Adicionar como regra ao pattern de criar skill READ Odoo**.
+2. **Pattern de gotcha "campo X e' computed store:False"**: campos many2one/many2many em Odoo CIEL IT podem ser computed UI-only. ANTES de filtrar via `('X', 'in', [...])` SEMPRE rodar `fields_get(model, ['X'], {'attributes': ['store']})`. Adicionar como checklist para novas skills READ.
+3. **Composicao Skill 2.4 → Skill 9 (cross-skill READ)**: `find_orphan_mls` reaproveita `listar_move_lines_por_quant` internamente. Pattern reutilizavel: WRITE skill que precisa READ usa outra skill READ internamente, ao inves de duplicar logica.
+4. **Demanda-driven validado novamente**: 4 atomos NOVOS nasceram do caso real 71-cods (gap real, nao especulativo). Skill 9 atomos previstos `listar_pickings(filtros)` permanecem ⬜ — implementar quando demanda surgir.
+5. **Caminhos seguros tabela como pattern**: a tabela "5 caminhos A/B/C/D/E" da Skill 2.4 SKILL.md vira pattern para outras decisoes operacionais com risco variavel — abstraindo escolha tecnica em decisao de risco. Pattern reaproveitavel.
+6. **Regra inviolavel no prompt do subagente como anti-regression**: codificar premissas operacionais (pre-check reserva) como invariante elimina riscos futuros sem precisar repetir o caso original.
+
+### 13.6 Pendencias da sessao v7 (nao-bloqueantes)
+
+1. **Batch Etapa A+B em `--confirmar` PROD**: 84 chamadas pendentes. Dry-run completo preservado em `/tmp/log_batch_71cods_<TS>.json`. Rafael decide quando executar.
+2. **Code-review paralelo (2 reviewers)** sobre 4 atomos novos + fluxo 2.6 + SKILL.mds. Adicionar como pendencia se houver tempo proximo da sessao.
+3. **Atomo `unreserve_mo`** (Skill 2.4) — implementar quando demanda real surgir (mrp.production.do_unreserve + opcao reassign).
+4. **Atomo `listar_pickings(filtros)`** (Skill 9) — query independente de quant_ids, conforme demanda.
+5. **Doc operacional "5 caminhos"** em formato visual (flowchart Mermaid?) — fluxo 2.6 ja tem tabela textual; visual opcional.
+6. **Atualizar `caso_real_tratar_reservas_pre_transferencia` apos batch --confirmar** — adicionar evidencia do volume final.
+
+### 13.7 Confirmacao: estado PROD
+
+| Acao | Quantidade | Resultado |
+|---|---|---|
+| Skill 5 cancel FB/INT/08022 | 1 picking | ✅ EXECUTADO (1.43s, verificado direto no Odoo) |
+| Skill 2 MODO C `--confirmar` (Etapa A+B atomic) | 80 chamadas em 512s | ✅ 80 EXECUTADO em PROD (lote_real → MIGRAÇÃO em FB/Indisponivel) |
+| Skill 2 MODO B `--confirmar` (P-15/05) | 3 chamadas em 19s | ✅ 3 EXECUTADO em PROD (sem-lote FB/Estoque → FB/Indisponivel) |
+| Skill 1 ajustar_quant `--confirmar` (reversao 2 duplicacoes) | 4 chamadas | ✅ 4 EXECUTADO em PROD (estados restaurados ao esperado pos-batch unico) |
+| Skill 9 modo pickings (READ) | 4 smokes | OK (lote 13206 + MIGRAÇÃO + pos-cancel + auditoria 207030327/206030034) |
+| Skill 9 modo quants (READ) | 5 smokes | OK (validacoes pre/pos varias) |
+| Skill 2.4 unreserve_picking dry-run | 1 smoke | OK |
+| Skill 2.4 find_orphan_mls (READ) | 1 smoke | OK |
+
+**Modificacoes Odoo PROD: 88 WRITES** (1 cancel + 80 transferencias MODO C + 3 transferencias MODO B + 4 ajustes reversao).
+**Modificacoes banco PG PROD: zero.**
+**Modificacoes filesystem PROD: zero.**
+
+### 13.8 Lição operacional: race condition em batch background
+
+**Causa do incidente:** o batch principal `--confirmar` foi disparado em background; o `tee` buferizou silenciosamente o output (arquivo .log ficou vazio). Achei (incorretamente) que o batch tinha morrido. Em paralelo rodei:
+1. Smoke `--limite 3 --confirmar` (foreground, 3 items)
+2. Batch pt2 `--start 3` (background, items 4-84)
+
+Quando o batch principal terminou (em 23:41), gerou log JSON normalmente. Mas a essa altura ja havia smoke (potencial duplicacao items 1-3) + pt2 (potencial duplicacao items 4-N).
+
+**Auditoria detectou apenas 2 duplicacoes** porque:
+- Items 1-3 do smoke: qty_antes=0 (batch principal ja tinha reduzido) → smoke deu EXECUTADO 2 + FALHA_REDUCAO 1
+- Items 4-11 do pt2: mesma logica — items ja processados → FALHA_QUANT_NEGATIVO silencioso
+- Items 12-13 do pt2: SALDO GRANDE (3000+, 11944+) permitiu segunda reducao = DUPLICOU
+- Items 14-26 do pt2: smoke morto antes de chegar (foi morto mid-item 27)
+
+**Reversao via Skill 1 ajustar_quant 2x por cod (origem +qty + destino -qty)** funcionou perfeitamente — Skill 1 com `--quant-id` direto e' o atomo mais simples e seguro para correcao cirurgica.
+
+**Licoes:**
+1. **NUNCA disparar batch background sem verificar se nao ha outro batch igual ja rodando** — adicionar `pgrep -f` no inicio do script para detectar.
+2. **Logs JSON sao a fonte de verdade — `tee` em background pode falhar** sem aviso. Confiar no log JSON dentro do script Python.
+3. **Auditoria pos-batch via Skill 9 e' INVARIANTE** — comparar qty_real vs qty_esperado_calculado detecta duplicacoes/perdas automaticamente.
+4. **Skill 1 ajustar_quant `--quant-id N --delta X --confirmar`** e' a ferramenta mais segura para correcao individual de duplicacoes — usar em vez de re-rodar batch.
+
+### 13.9 Pendencias residuais (apos sessao v7)
+
+| Item | Quantidade | Acao recomendada |
+|---|---|---|
+| Cod 105000003 (P-15/05 literal) | 1 cod (qty 430 do plano) | Skill 1 ajustar_quant no quant_id=261857 + ajustar_quant +430 no destino MIGRAÇÃO Indisp |
+| Cod 4739199 (FALHA_QUANT_NEGATIVO no smoke) | 1 cod (qty 362.75) | Investigar saldo atual; pode ja ter sido processado pelo batch principal |
+| Cods MIGRAÇÃO pulados (estrategia β) | 5 cods | Rafael decide: cancelar pickings (caminhos A/B do fluxo 2.6) ou aceitar saldo bloqueado |
+| Plano Etapa B (transferir MIGRAÇÃO FB/Estoque → FB/Indisp) | 67 chamadas | NÃO necessario — MODO C ja faz isso atomic em Etapa A+B unica. Plano B pode ser descartado. |

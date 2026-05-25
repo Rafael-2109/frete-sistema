@@ -49,7 +49,8 @@ Exemplo:
    2.3 transferir saldo entre CÓDIGOS (par UnificacaoCodigos, mesmo lote) → (skill da feature transferencia-saldo-codigo) ⬜
    2.4 cancelar reserva / MLs órfãs / picking → operando-reservas-odoo 🟡 ([folha](2.4-cancelar-reserva-orfa.md))
    2.5 cancelar/validar/devolver picking → operando-picking-odoo 🟡 ([folha](2.5-cancelar-validar-devolver-picking.md))
-   2.9 CONSULTA ao vivo (saldo restante, quants, MLs órfãs) → consultando-quant-odoo 🟡 ([folha](2.9-consulta-quant-ao-vivo.md))  (pickings: previsto, sem CLI ainda)
+   2.6 TRATAR reserva ATIVA pré-transferência (caminho A/B/C/D/E) → composição Skills 9+2.4+5+2 🟡 ([folha](2.6-tratar-reserva-bloqueia-transferencia.md))  (NOVO v7 — pré-cond inviolável de Skill 2)
+   2.9 CONSULTA ao vivo (saldo restante, quants, MLs, pickings reservando) → consultando-quant-odoo 🟡 ([folha](2.9-consulta-quant-ao-vivo.md))  (+ NOVO v7: --modo move-lines/pickings cross-ref reverso)
 3  Produção / PCP
    3.1 cancelar MO (single ou batch — guard G-MO-01 furo contábil) → operando-mo-odoo 🟡 ([folha](3.1-cancelar-mo.md))
        (3.1.c MO COM consumo > 0 → DELEGADO para `mrp.unbuild` cross-skill — sem skill ainda)

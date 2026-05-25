@@ -14,7 +14,35 @@ source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate
 set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a
 ```
 
-## FOCO RECOMENDADO: Skill 8 `faturando-odoo` (DESBLOQUEADA pela ONDA 0.4)
+## ⚠️ PRIORIDADE ABSOLUTA: Gap arquitetural "tratar reservas pre-transferencia" (caso PAUSADO 2026-05-24 v6.1)
+
+**Antes de qualquer outro foco, ler:**
+- `docs/inventario-2026-05/casos-pendentes/CASO_PENDENTE_RESERVAS_71_CODS_2026_05_24.md`
+- Memoria `[[caso_real_tratar_reservas_pre_transferencia]]`
+- VALIDACAO_FINAL_SESSAO §12 (sessao 2026-05-24 v6.1)
+
+**Resumo:** caso real de 71 cods para FB/Indisponivel foi PAUSADO porque o gestor/skills nao tem ferramentas claras para tratar RESERVAS ATIVAS (lote 13206 + MIGRACAO de FB/Estoque reservados em 8 cods). Gap em 4 dimensoes:
+1. **Faltam atomos** Skill 9 `listar_pickings_por_quant`, `listar_move_lines_por_quant` + Skill 2.4 `unreserve_picking`, `find_orphan_mls`
+2. **Falta fluxo** `app/odoo/estoque/fluxos/2.6-tratar-reserva-bloqueia-transferencia.md`
+3. **Falta regra inviolavel** no prompt do gestor: "checar reservas via Skill 9 ANTES de Skill 2"
+4. **Falta doc operacional** dos 5 caminhos seguros para desreservar (cancelar / devolver / unreserve / outro lote / cirurgia orfa)
+
+**2 caminhos para retomar:**
+- **P1 (recomendado):** implementar gaps 1-4 ANTES de retomar caso, transformando o caso em validacao do novo fluxo
+- **P2 (rapido):** usar `consultando-sql` ad-hoc para investigar pickings reservando lote 13206 + MIGRACAO; retomar caso com decisao caso-a-caso; gaps implementados depois
+
+**Inputs do caso preservados em `docs/inventario-2026-05/casos-pendentes/`:**
+- `transferencias_indisp_2026_05_24.tsv` (71 cods)
+- `audit_fb_indisp.json` (190 quants brutos com reserved real)
+- `audit_indisp_classificado.json` (classificacao 58 GREEN + 9 FLAG + 4 SKIP)
+- `plano_etapa_A.tsv` (95 chamadas)
+- `plano_etapa_B.tsv` (67 chamadas)
+
+**Apos retomar/resolver:** atualizar SKILL.md/fluxos/prompt com aprendizados; commitar memoria atualizada.
+
+---
+
+## FOCO ALTERNATIVO (se gap reservas ja resolvido OU se decisao = adiar): Skill 8 `faturando-odoo` (DESBLOQUEADA pela ONDA 0.4)
 
 **Por quê:**
 1. **Macro perigoso DESBLOQUEADO**: ONDA 0.4 fechada em 2026-05-24 v3 codificou G019/G020 no `picking.py` (re-le state pós-button_validate, raise se != 'done'). Skill 8 agora pode confiar em `svc.validar()` sem false-positives.

@@ -7,9 +7,39 @@
 
 ## ⏯️ ESTADO ATUAL E COMO CONTINUAR (handoff — atualizar a cada avanço)
 
-**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual `996a3863` — 3 commits sobre main@b4f7b24c). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
+**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual `1d1ac416` — 4 commits sobre main@b4f7b24c). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: 194 pytest verdes (175 anterior + 19 pre_etapa).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **229 pytest verdes** (196 anterior + 19 Skill 9 query + 14 Skill 2.4 reserva).
+
+**Sessão 2026-05-24 v7 (Gap reservas pre-transferencia — 4 átomos novos + fluxo 2.6 + validacao caso real):**
+- ✅ **Verificação main**: nenhum commit novo desde v6 (`fb494608` ja conhecido) — sem rebase.
+- ✅ **Fase A — Pesquisa AO VIVO** (probe `/tmp/investigar_unreserve_skill24.py`):
+  - **Descoberta G030**: `stock.move.line.quant_id` em Odoo CIEL IT é COMPUTED `store: False` (campo UI "Pick From"). Filtro `('quant_id', 'in', [...])` é IGNORADO pelo Odoo (retorna lixo). Cross-ref ML→quant DEVE ser via tupla `(product_id, lot_id, location_id, company_id)`.
+  - `stock.picking.do_unreserve` é XML-RPC público, retorna None em state=cancel (NOOP silencioso).
+  - `stock.picking._action_unreserve` NÃO EXISTE (Fault method does not exist).
+  - Casos reais identificados: lote 13206 em FB/INT/08022 (3 MLs, 1035.083 un); MIGRAÇÃO em 3 pickings (FB/FB/EMB/11673+11674 MO ativa + FB/OUT/01046 DEVOLUÇÃO LA FAMIGLIA).
+- ✅ **Fase B — Skill 9 extensão**: 2 átomos NOVOS em `app/odoo/estoque/scripts/consulta_quant.py`:
+  - `listar_move_lines_por_quant(quant_ids, states)`: cross-ref reverso via tupla G030 (read stock.quant → domain compound OR de AND → search stock.move.line).
+  - `listar_pickings_por_quant(quant_ids, states)`: agrupa MLs por picking + enriquece metadados (picking_type, origin, partner, scheduled_date, create_date). Ordena por state-priority. Inclui `mls_sem_picking` para MOs.
+  - CLI estendida com 2 modos novos: `--modo move-lines` + `--modo pickings`. `--states` configurável (default assigned+partial; `todos` = sem filtro).
+  - **19 pytest novos** em `tests/odoo/services/test_stock_quant_query_service.py` cobrindo: vazio, default states, custom states, sem filtro, domain compound OR de N quants, resolve quant_id via tupla, picking_state batch unico, ML sem picking, incluir_move/picking flags, quantity None defensive, lot_id=False, agrupa 3MLs em 1 picking, separa mls_sem_picking, ordem assigned-antes-done, enriquece partner/origin/picking_type, zero MLs. **2 smokes PROD: 1035.083 un caso 13206 + 6 MLs MIGRAÇÃO FB/Estoque caso real.**
+- ✅ **Fase C — Skill 2.4 extensão**: 2 átomos NOVOS em `app/odoo/estoque/scripts/reserva.py`:
+  - `unreserve_picking(picking_id, dry_run)`: wrapper sobre `stock.picking.do_unreserve` + guard pre-state (NÃO done/cancel) + NOOP se sem MLs + aviso G_UNRESERVE_TRAVA se state pós == assigned.
+  - `find_orphan_mls(quant_ids, states)`: READ-only — lista MLs apontando para quants com qty=0 (TOL 1e-4). Reaproveita Skill 9 internamente (G030 cross-ref). Retorna `mls_orfas` + `quants_zerados_com_mls` + `quants_com_saldo`.
+  - CLI estendida com 2 modos novos: `--unreserve-picking` + `--find-orphan`. 5 modos totais (cirurgia + cancelar + unreserve + find-orphan + zerar-residual).
+  - **14 pytest novos** em `tests/odoo/services/test_stock_reserva_service.py` cobrindo: dry-run default, picking inexistente, state done/cancel recusado, sem MLs NOOP, --confirmar releitura, aviso G_UNRESERVE_TRAVA, exceção Odoo, quant_ids vazio, classifica zerado vs saldo, sem MLs retorna vazio, states default/customizado, TOL 1e-4.
+- ✅ **Fase D — Fluxo 2.6**: `app/odoo/estoque/fluxos/2.6-tratar-reserva-bloqueia-transferencia.md` criado com 5 caminhos seguros (A=cancel/B=devolver/C=unreserve/D=outro lote/E=cirurgia órfã). Regra de seleção D→E→A→B→C. Composição Skills 9+2.4+5+2. README dos fluxos atualizado com galho 2.6.
+- ✅ **Fase E — Regra inviolavel + tabela**:
+  - Subagente `gestor-estoque-odoo`: regra inviolável NOVA "PRÉ-CHECK reserva ANTES de Skill 2" + invariante G030 + atualização da árvore com galho 2.6 + 2 novos átomos Skill 2.4 + 2 novos modos Skill 9 no header v6→v7.
+  - SKILL.md Skill 2.4 estendida com tabela "5 caminhos seguros para desreservar" + contratos de 5 átomos + armadilhas G_UNRESERVE_TRAVA + G030.
+  - SKILL.md Skill 9 estendida com 3 contratos (quants + move-lines + pickings) + receitas + armadilha G030.
+  - Gotcha G030 documentado em `docs/inventario-2026-05/02-gotchas/G030-quant-id-em-stock-move-line-eh-computed.md`.
+- ✅ **Fase F — Validação com caso real 71 cods**:
+  - Auditoria pos-implementação confirmou estado idêntico ao v6.1: 4 pickings bloqueantes (FB/INT/08022 13206 + FB/FB/EMB/11673+11674 MO + FB/OUT/01046 DEVOLUÇÃO).
+  - Rafael escolheu estratégia β (cancelar FB/INT/08022, PULAR os 3 MIGRAÇÃO).
+  - **PROD: FB/INT/08022 (id=320753) cancelado** via Skill 5 `--modo cancelar --confirmar` em 1.43s. Verificado via Skill 9 modo pickings: 0 pickings reservando os 3 quants 13206. reserved_quantity=0 nos 3 quants confirmado.
+  - Batch dry-run iniciado: 84 chamadas Skill 2 modo C (95 plano A - 11 chamadas dos 5 cods MIGRAÇÃO pulados). Amostra (4 chamadas dos cods desbloqueados): 3 DRY_RUN_OK + 1 FALHA_LOTE_DESTINO_INEXISTENTE (esperado — MIGRAÇÃO não existe ainda; em --confirmar `criar_se_nao_existe` cria).
+- 🟡 **Fase G — pendente**: cross-refs ROUTING_SKILLS + commit consolidado (in progress).
 
 **Sessão 2026-05-24 v6 (Skill 6 `planejando-pre-etapa-odoo` — capinada do zero):**
 - ✅ **Verificação main**: avançou 1 commit cosmético (`fb494608` skip D8 sem código) — sem rebase necessário.
@@ -96,14 +126,16 @@
 - **Skill 9 (`consultando-quant-odoo`) 🟡 mín viável (ANCILLARY READ)** — 2 átomos (`listar_quants` 8-param + `auditar_pares`). Nasceu sob demanda (auditoria pós-WRITE). Dogfood: investigação 4856125 + classificação correta de 104 pares (17+46+39+2=104 ✓). [Fluxo 2.9](fluxos/2.9-consulta-quant-ao-vivo.md).
 - **C7-C10 nas 3 skills:** subagente `gestor-estoque-odoo.md` lista as 5 skills (3 escopadas + 2 utils), ROUTING_SKILLS Odoo 12 entries, tool_skill_mapper 3 entradas (`Estoque Odoo (Write)/(Read)`), fluxos 2.1/2.4/2.9 escritos, MAPA_SCRIPTS 2 seções novas (`scripts/reserva.py` + `scripts/consulta_quant.py`), 8 scripts movidos para `_validados/`.
 
-**Status global do esforço de migração (atualizado 2026-05-24 v6):**
+**Status global do esforço de migração (atualizado 2026-05-24 v7):**
 - **1/8 skills WRITE MATURADA** (skill 1 `ajustando-quant-odoo`)
-- **5/8 skills WRITE mín viável** (skill 2 `transferindo-interno-odoo` 🟡 + skill 2.4 `operando-reservas-odoo` 🟡 + skill 5 `operando-picking-odoo` 🟡 + skill 4 `operando-mo-odoo` 🟡 + skill 6 `planejando-pre-etapa-odoo` 🟡 NOVA 2026-05-24 v6)
-- **1 skill READ ancillary mín viável** (skill 9 `consultando-quant-odoo` — ancillary, fora da ordem bottom-up)
+- **5/8 skills WRITE mín viável** (skill 2 `transferindo-interno-odoo` 🟡 + skill 2.4 `operando-reservas-odoo` 🟡 **+2 átomos v7** + skill 5 `operando-picking-odoo` 🟡 + skill 4 `operando-mo-odoo` 🟡 + skill 6 `planejando-pre-etapa-odoo` 🟡)
+- **1 skill READ ancillary mín viável** (skill 9 `consultando-quant-odoo` 🟡 **+2 átomos v7 — cross-ref reverso ML→quant via tupla G030**)
 - **2/8 skills WRITE não iniciadas** (escriturando, faturando — este último DESBLOQUEADO pela ONDA 0.4 fechada em v3)
 - **ONDA 0.4 ✅ FECHADA** em 2026-05-24 v3 (G019/G020 codificadas no `picking.py` + 8 testes; destrava Skill 8 faturando)
-- **15 scripts SUPERADOS** (em `_validados/`: 5 ajustando-quant + 3 operando-reservas + 2 transferindo-interno + 1 operando-picking + 2 operando-mo + 2 planejando-pre-etapa); ~90 scripts ad-hoc continuam VIVOS (operação viva — ROADMAP é guia, não destruidor).
-- **Baseline pytest: 175 verdes anterior + 19 pre_etapa (13 originais preservados + 6 helpers novos) = 194 verdes**.
+- **NOVO Fluxo 2.6** (v7): cobre gap arquitetural "tratar reserva ATIVA pré-transferência" — composição Skills 9+2.4+5+2 com 5 caminhos seguros (A=cancel/B=devolver/C=unreserve/D=outro lote/E=cirurgia órfã); regra inviolável no prompt do subagente.
+- **NOVO Gotcha G030** (v7): `stock.move.line.quant_id` é COMPUTED `store: False` — filtro IGNORADO pelo Odoo; cross-ref via tupla `(product_id, lot_id, location_id, company_id)`.
+- **15 scripts SUPERADOS** (em `_validados/`); ~90 scripts ad-hoc continuam VIVOS.
+- **Baseline pytest: 229 verdes** (194 anterior + 19 Skill 9 query novos + 14 Skill 2.4 reserva novos + 2 a mais nos existing aleatórios).
 
 **Próximo passo (escolha do usuário em sessão futura, pós-2026-05-24 v6):**
 1. **Skill 8 (`faturando-odoo`)** — **DESBLOQUEADA** pela ONDA 0.4 fechada (G019/G020 codificadas + 8 testes). É a skill MACRO (NF→SEFAZ); requer cuidado especial — irreversível. Service `InventarioPipelineService` existe; falta capinagem + SKILL.md + CLI. ~6-8h.
