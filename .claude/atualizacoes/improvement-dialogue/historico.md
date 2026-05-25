@@ -31,6 +31,13 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 25 | 2026-05-20 | 1 | 0 | 1 | 0 | OK (TDE ja existe no dropdown — premissa incorreta) |
 | 26 | 2026-05-21 | 3 | 3 | 0 | 0 | OK (parser recibo Motochefe 2 causas-raiz + cluster R12 escrita/skill 2 sugestoes) |
 | 27 | 2026-05-24 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 28 | 2026-05-25 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+
+## 2026-05-25
+- **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
+- Filtros: `status='proposed'`, `author='agent_sdk'`, `version=1`, sem v2 correspondente.
+- Diagnostico: 44 v1 `agent_sdk` ja com status `responded` (ultima 2026-05-21 07:17);
+  Agent SDK D7 nao propos novas sugestoes desde entao. Pipeline em dia.
 
 ## 2026-05-21
 - **OK** — 3 sugestoes avaliadas, todas implementadas e persistidas (ids 118-120).
