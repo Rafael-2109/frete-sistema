@@ -14,6 +14,7 @@ ARQUITETURA (v3 — ClaudeSDKClient persistente):
 
 import logging
 import queue
+import re
 import time
 from functools import lru_cache
 from typing import AsyncGenerator, Dict, Any, List, Optional, Callable
@@ -623,20 +624,109 @@ Nunca invente informações."""
                 return f"Editando {file_name}"
             return "Editando arquivo"
 
-        elif tool_name == 'TodoWrite':
-            todos = tool_input.get('todos', [])
-            if todos:
-                # Conta tarefas por status
-                in_progress = sum(1 for t in todos if t.get('status') == 'in_progress')
-                if in_progress > 0:
-                    current = next((t for t in todos if t.get('status') == 'in_progress'), None)
-                    if current:
-                        return current.get('activeForm', 'Atualizando tarefas')
-                return f"Gerenciando {len(todos)} tarefas"
-            return "Atualizando tarefas"
+        elif tool_name == 'TaskCreate':
+            # SDK 0.2.82+: TodoWrite foi substituido por TaskCreate/TaskUpdate/TaskGet/TaskList
+            subject = tool_input.get('subject') or tool_input.get('content') or ''
+            if subject:
+                return f"Criando tarefa: {subject[:60]}"
+            return "Criando tarefa"
+
+        elif tool_name == 'TaskUpdate':
+            task_id = tool_input.get('taskId') or tool_input.get('task_id') or ''
+            status = tool_input.get('status', '')
+            if status and task_id:
+                return f"Atualizando tarefa #{task_id} → {status}"
+            if task_id:
+                return f"Atualizando tarefa #{task_id}"
+            return "Atualizando tarefa"
+
+        elif tool_name == 'TaskGet':
+            task_id = tool_input.get('taskId') or tool_input.get('task_id') or ''
+            if task_id:
+                return f"Consultando tarefa #{task_id}"
+            return "Consultando tarefa"
+
+        elif tool_name == 'TaskList':
+            return "Listando tarefas"
 
         # Default: usa o nome da ferramenta
         return tool_name
+
+    # ─────────────────────────────────────────────────────────────────
+    # Task* tools parser (SDK 0.2.82+: substituiu TodoWrite)
+    # ─────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _extract_task_id_from_text(text: str) -> Optional[str]:
+        """Extrai task_id (#N) de output como 'Task #3 created successfully: ...'."""
+        match = re.search(r'#(\d+)', text or '')
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _parse_task_list_output(text: str) -> list:
+        """Parseia output multi-linha do TaskList em lista de dicts.
+
+        Formato esperado por linha (do CLI bundled 2.1.142+):
+            '#N [status] subject'  ex: '#1 [pending] Estudar fundamentos'
+        Retorna lista vazia se nao houver linhas reconheciveis.
+        """
+        tasks = []
+        for line in (text or '').splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            m = re.match(r'#(\d+)\s*\[([\w_]+)\]\s*(.+)', line)
+            if m:
+                tasks.append({
+                    'task_id': m.group(1),
+                    'status': m.group(2),
+                    'subject': m.group(3).strip(),
+                })
+        return tasks
+
+    def _build_task_event(
+        self,
+        tool_name: str,
+        original_input: dict,
+        result_content: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Constroi payload do evento task_event para frontend.
+
+        Returns None se evento nao deve ser emitido (ex: TaskGet — read-only).
+        """
+        if tool_name == 'TaskCreate':
+            task_id = self._extract_task_id_from_text(result_content)
+            if task_id is None:
+                return None
+            return {
+                'action': 'created',
+                'task_id': task_id,
+                'subject': original_input.get('subject') or original_input.get('content') or '',
+                'description': original_input.get('description', ''),
+                'status': 'pending',  # CLI cria como pending
+            }
+        if tool_name == 'TaskUpdate':
+            task_id = str(
+                original_input.get('taskId')
+                or original_input.get('task_id')
+                or ''
+            )
+            if not task_id:
+                return None
+            evt: Dict[str, Any] = {
+                'action': 'updated',
+                'task_id': task_id,
+            }
+            for k in ('status', 'subject', 'description', 'activeForm'):
+                if k in original_input:
+                    evt[k] = original_input[k]
+            return evt
+        if tool_name == 'TaskList':
+            tasks = self._parse_task_list_output(result_content)
+            return {
+                'action': 'snapshot',
+                'tasks': tasks,
+            }
+        return None
 
     def _format_system_prompt(
         self,
@@ -716,7 +806,6 @@ Nunca invente informações."""
 
         # Só validar respostas que contenham tabelas com dados numéricos
         # Indicadores: linhas com pipe (tabela markdown) + dígitos
-        import re
         has_table = bool(re.search(r'\|.*\d.*\|', full_text))
         if not has_table:
             return None
@@ -1062,15 +1151,9 @@ Nunca invente informações."""
                             }
                         ))
 
-                        # TodoWrite emit
-                        if block.name == 'TodoWrite' and block.input:
-                            todos = block.input.get('todos', [])
-                            if todos:
-                                events.append(StreamEvent(
-                                    type='todos',
-                                    content={'todos': todos},
-                                    metadata={'tool_id': block.id}
-                                ))
+                        # Task* tools emit (SDK 0.2.82+: substituiu TodoWrite — ver SDK_CHANGELOG.md)
+                        # Emit no tool_result (UserMessage handler) — task_id e dados completos
+                        # vem do output texto formatado.
             return events
 
         # ─── UserMessage (tool results) ───
@@ -1087,6 +1170,7 @@ Nunca invente informações."""
             if content and isinstance(content, list):
                 for block in content:
                     if isinstance(block, ToolResultBlock):
+                        raw_result_content = block.content  # preservado p/ parser Task* (sem truncamento)
                         result_content = block.content
                         is_error = getattr(block, 'is_error', False) or False
                         tool_use_id = getattr(block, 'tool_use_id', '')
@@ -1121,6 +1205,44 @@ Nunca invente informações."""
                                 'duration_ms': tool_duration_ms,
                             }
                         ))
+
+                        # Task* tools emit (SDK 0.2.82+: substituiu TodoWrite)
+                        # Usa raw_result_content (texto bruto, sem truncamento) p/ parsear
+                        # output formatado do CLI ('Task #N created...', '#N [status] subject').
+                        if tool_name in ('TaskCreate', 'TaskUpdate', 'TaskList') and not is_error:
+                            try:
+                                tool_call_orig = next(
+                                    (tc for tc in state.tool_calls if tc.id == tool_use_id),
+                                    None
+                                )
+                                original_input = (
+                                    tool_call_orig.input
+                                    if tool_call_orig and isinstance(tool_call_orig.input, dict)
+                                    else {}
+                                )
+                                # Normalizar raw para string (lista de blocks ou string direta)
+                                if isinstance(raw_result_content, list):
+                                    parts = []
+                                    for b in raw_result_content:
+                                        text = getattr(b, 'text', None)
+                                        if text:
+                                            parts.append(text)
+                                    # Lista sem blocks parseaveis = fallback string vazia
+                                    # (str([<object>]) produz texto imparseavel — code-review HIGH).
+                                    raw_str = '\n'.join(parts) if parts else ''
+                                elif raw_result_content is None:
+                                    raw_str = ''
+                                else:
+                                    raw_str = str(raw_result_content)
+                                task_evt = self._build_task_event(tool_name, original_input, raw_str)
+                                if task_evt is not None:
+                                    events.append(StreamEvent(
+                                        type='task_event',
+                                        content=task_evt,
+                                        metadata={'tool_use_id': tool_use_id}
+                                    ))
+                            except Exception as e:
+                                logger.warning(f"[AGENT_SDK] Falha ao emitir task_event ({tool_name}): {e}")
             return events
 
         # ─── ResultMessage (fim) ───

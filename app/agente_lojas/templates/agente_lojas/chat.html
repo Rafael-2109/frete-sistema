@@ -251,19 +251,32 @@
     }
   }
 
-  // TodoWrite progress — renderiza/atualiza lista in-place.
-  // Mantem 1 unico container de todos por turno (atualiza conforme agent
-  // chama TodoWrite multiplas vezes para marcar progresso).
+  // Task progress — renderiza/atualiza lista in-place.
+  // Mantem 1 unico container por turno + Map por task_id para acumulacao incremental.
+  // SDK 0.2.82+: TodoWrite substituido por TaskCreate/TaskUpdate/TaskList. Eventos:
+  //   - created: nova task (adiciona ao Map)
+  //   - updated: task existente (mescla por task_id)
+  //   - snapshot: TaskList completo (substitui Map)
+  // Formato canonical: {task_id, status, subject}. Formato antigo TodoWrite
+  // ({content, activeForm}) e normalizado em appendTodos para back-compat.
   let todosEl = null;
-  function appendTodos(todos) {
-    if (!Array.isArray(todos) || todos.length === 0) return;
+  let currentTasks = new Map();  // task_id -> {task_id, status, subject}
+
+  function _renderTasks() {
+    if (currentTasks.size === 0) return;
     if (!todosEl || !todosEl.isConnected) {
       todosEl = document.createElement('div');
       todosEl.className = 'lojas-todos';
       log.appendChild(todosEl);
     }
     const ul = document.createElement('ul');
-    todos.forEach(t => {
+    // Ordenar por task_id numerico (CLI gera autoincremento)
+    const sorted = Array.from(currentTasks.values()).sort((a, b) => {
+      const an = parseInt(a.task_id, 10) || 0;
+      const bn = parseInt(b.task_id, 10) || 0;
+      return an - bn;
+    });
+    sorted.forEach(t => {
       const li = document.createElement('li');
       const status = (t.status || 'pending').toLowerCase();
       const icon = status === 'completed' ? '✓' : status === 'in_progress' ? '▶' : '○';
@@ -272,7 +285,7 @@
       ti.textContent = icon;
       const txt = document.createElement('span');
       txt.className = status;
-      txt.textContent = t.content || t.activeForm || '';
+      txt.textContent = t.subject || t.content || t.activeForm || '';
       li.appendChild(ti);
       li.appendChild(txt);
       ul.appendChild(li);
@@ -281,7 +294,55 @@
     todosEl.appendChild(ul);
     log.scrollTop = log.scrollHeight;
   }
-  function resetTodos() { todosEl = null; }
+
+  function appendTaskEvent(meta) {
+    if (!meta || !meta.action) return;
+    if (meta.action === 'snapshot' && Array.isArray(meta.tasks)) {
+      currentTasks.clear();
+      meta.tasks.forEach(t => {
+        if (t && t.task_id) currentTasks.set(String(t.task_id), { ...t, task_id: String(t.task_id) });
+      });
+      _renderTasks();
+    } else if (meta.action === 'created' && meta.task_id) {
+      const tid = String(meta.task_id);
+      const existing = currentTasks.get(tid) || {};
+      currentTasks.set(tid, {
+        ...existing,
+        task_id: tid,
+        status: meta.status || existing.status || 'pending',
+        subject: meta.subject || existing.subject || '',
+      });
+      _renderTasks();
+    } else if (meta.action === 'updated' && meta.task_id) {
+      const tid = String(meta.task_id);
+      const existing = currentTasks.get(tid);
+      if (existing) {
+        const patch = {};
+        if (meta.status !== undefined) patch.status = meta.status;
+        if (meta.subject !== undefined) patch.subject = meta.subject;
+        currentTasks.set(tid, { ...existing, ...patch });
+        _renderTasks();
+      }
+      // Se task_id desconhecido, ignora — snapshot proximo resincroniza
+    }
+  }
+
+  // Back-compat: TodoWrite (SDK <= 0.1.81) emitia evento 'todos' com array {status, content}.
+  // Mantemos appendTodos para nao quebrar caso algum cliente velho ainda emita.
+  function appendTodos(todos) {
+    if (!Array.isArray(todos) || todos.length === 0) return;
+    currentTasks.clear();
+    todos.forEach((t, i) => {
+      const tid = String(t.task_id || (i + 1));
+      currentTasks.set(tid, {
+        task_id: tid,
+        status: t.status || 'pending',
+        subject: t.content || t.activeForm || '',
+      });
+    });
+    _renderTasks();
+  }
+  function resetTodos() { todosEl = null; currentTasks.clear(); }
 
   function appendInfo(html, klass) {
     const div = document.createElement('div');
@@ -469,7 +530,12 @@
           } else if (event === 'tool_result') {
             appendToolResult(payload.content, payload.is_error);
           } else if (event === 'todos') {
+            // Back-compat SDK <= 0.1.81 (TodoWrite). SDK 0.2.82+ usa 'task_event'.
             appendTodos(payload.todos);
+          } else if (event === 'task_event') {
+            // SDK 0.2.82+: TaskCreate/TaskUpdate/TaskList. Metadata carrega
+            // {action: created|updated|snapshot, task_id?, subject?, tasks?, status?}.
+            appendTaskEvent(payload);
           } else if (event === 'error') {
             appendError(payload.content || 'erro desconhecido');
             // Fix code-reviewer (2026-05-09): se modal AskUserQuestion estava

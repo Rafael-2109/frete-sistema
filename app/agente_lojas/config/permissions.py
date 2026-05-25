@@ -279,7 +279,8 @@ async def can_use_tool(
             )
 
         # ============================================================
-        # Outras tools (Skill, Task, Read, Glob, Grep, TodoWrite)
+        # Outras tools (Skill, Task, Read, Glob, Grep, TaskCreate/Update/Get/List)
+        # SDK 0.2.82+: TodoWrite substituido por Task* tools.
         # Allow direto.
         # ============================================================
         return PermissionResultAllow(updated_input=tool_input)

@@ -1,13 +1,139 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.2.82)
+# Agente Web — SDK Changelog (0.1.49 → 0.2.87)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-05-16 (SDK 0.2.82 + anthropic 0.98.1)
+> **Atualizado**: 2026-05-25 (SDK 0.2.87 + CLI 2.1.150 + adocao tardia das Task* tools)
 
 ---
 
-## SDK 0.2.82 (atualizado 2026-05-16) — stderr callback isolation + EffortLevel + CVE mcp
+## SDK 0.2.83 → 0.2.87 (atualizado 2026-05-25) — CLI bumps + adocao tardia Task* tools
+
+**Versao**: `claude-agent-sdk==0.2.87` (CLI bundled 2.1.150) + `anthropic==0.98.1`
+**Bumps intermediarios**: 0.2.83 (CLI 2.1.146), 0.2.84 (2.1.147), 0.2.85 (2.1.148), 0.2.86 (2.1.149)
+
+### Mudancas no SDK Python (zero!)
+
+Diff GitHub `v0.2.82...v0.2.87`: **19 commits, 10 arquivos modificados, ZERO arquivos `src/` do SDK Python**.
+Todas as 5 versoes sao apenas CLI bundled bumps (2.1.143 → 2.1.150). A unica mudanca nao-bump foi
+em CI workflows (#984: Workload Identity Federation, escopo interno Anthropic).
+
+### Mudanca real do PROJETO: adocao das Task* tools (descoberta retroativa)
+
+A breaking change `TodoWrite -> TaskCreate/TaskUpdate/TaskGet/TaskList` foi **introduzida no 0.2.82**
+(ver secao abaixo), mas **passou despercebida** ate este upgrade — release notes oficial do 0.2.82
+no GitHub tem secao `### Breaking` que **nao consta no `CHANGELOG.md` do repo** (lugar onde a doc
+projeto havia se baseado).
+
+**Investigacao retroativa em 2026-05-25 (apos upgrade):**
+- Consulta `claude_session_store` mtime >= 2026-05-16 mostra: TaskCreate/Update/Get/List em 54 rows
+  cada como `deferred_tools_delta` (listing) — mas ZERO invocacoes reais (`tool_use` blocks).
+  TodoWrite tambem ZERO invocacoes reais nesse periodo.
+- Top tools usadas em prod (>= 16/05): Bash 611, mcp__sql 227, Read 120, mcp__schema 72,
+  ToolSearch 71, Grep 70, Edit 38, Skill 33, Glob 24, Agent 21.
+- **Conclusao**: codigo que reagia a TodoWrite era morto **pre-existente** (agente nunca chamou
+  TodoWrite mesmo antes do upgrade). Quebra do 0.2.82 sem impacto pratico observado.
+
+**Decisao**: ativar TaskCreate proativamente — instrumentar parser + UI + system_prompt para que,
+quando o agente comecar a usar (orientado pela nova secao `<task_management>` no system prompt),
+a UI ja renderize progresso em tempo real.
+
+### Arquivos modificados (12 — adocao Task* tools)
+
+| # | Arquivo | Mudanca |
+|---|---------|---------|
+| 1 | `app/agente/sdk/client.py` | `_extract_tool_description` (L626): 4 branches Task* (description amigavel). Novos helpers estaticos `_extract_task_id_from_text`, `_parse_task_list_output`, e metodo `_build_task_event(tool_name, original_input, result_content)`. No `_parse_sdk_message` UserMessage handler: emite `task_event` com `{action, task_id, subject?, tasks?, status?}` apos `tool_result` quando tool e Task* e nao houver erro. Usa `raw_result_content` (sem truncamento de 500 chars) para evitar parser quebrar TaskList grande. |
+| 2 | `app/agente_lojas/sdk/client.py` | Remove `_try_parse_todos`. Adiciona `_build_task_event_from_result(content)` — handler standalone sem state, detecta tipo por regex no texto: `'Task #N created'`, `'Updated task #N'`, ou linhas `'#N [status] subject'`. Limitacao documentada: perde `description` do TaskCreate e detalhes extras do TaskUpdate (compensado via snapshot do TaskList). `ALLOWED_TOOLS_M1` substitui `'TodoWrite'` pelas 4 Task* tools. |
+| 3 | `app/agente/config/settings.py:66` | `tools_enabled` substitui `'TodoWrite'` por 4 Task* tools (TaskOutput/TaskStop ja presentes pre-existentes). |
+| 4 | `app/agente/services/tool_skill_mapper.py:76` | `TOOL_TO_CATEGORY` substitui `'TodoWrite'` por 4 entradas Task* -> `'Gestao de Tarefas'`. |
+| 5 | `app/agente_lojas/config/permissions.py:282` | Comentario atualizado. Allow direto continua (sem logica adicional). |
+| 6 | `app/agente/routes/chat.py:809` | Novo handler `elif event.type == 'task_event'` apos handler 'todos' (back-compat). Emite SSE `task_event` com payload `{action, task_id?, subject?, tasks?, status?}`. R8 (contrato 3 camadas) preservado. |
+| 7 | `app/static/agente/js/chat.js` | `toolIcons` (L684) substitui TodoWrite por 4 icons Task*. `updateTodoList` agora aceita formato canonical Task* (`{task_id, status, subject}`) via helper `_normalizeTodoItem` — formato antigo TodoWrite (`{status, content, activeForm}`) preservado p/ back-compat. Novo case `'task_event'` no switch SSE, com 3 actions: `created` (push), `updated` (merge por task_id), `snapshot` (replace). |
+| 8 | `app/agente_lojas/templates/agente_lojas/chat.html` | Refatora `appendTodos` para usar `Map<task_id, task>` interno (`currentTasks`) + helper `_renderTasks()` ordenado por task_id numerico. Novo handler `appendTaskEvent(meta)` espelha logica do Nacom. `appendTodos` mantido para back-compat. Case `'task_event'` adicionado no SSE switch. |
+| 9 | `app/agente_lojas/prompts/preset_operacional.md:3` | Substitui `"TodoWrite"` por `"TaskCreate, TaskUpdate, TaskGet, TaskList"` na lista de tools disponiveis. |
+| 10 | `app/agente/prompts/system_prompt.md` (fim) | Novo bloco `<task_management>` orientando uso de TaskCreate/Update/List em tarefas 3+ acoes ou multi-step. Exemplo concreto (auditoria de carteira P1-P7). NAO usar para tarefas triviais. Status validos enumerados. |
+| 11 | `app/agente/CLAUDE.md` | Bump versao + tabela eventos (`todos` -> `task_event`). |
+| 12 | `requirements.txt` | `claude-agent-sdk==0.2.82` -> `0.2.87`. |
+
+### Shape canonical do evento SSE `task_event`
+
+```javascript
+// Backend emite (3 actions):
+{ type: 'task_event', content: { action: 'created', task_id: '1', subject: '...', description: '...', status: 'pending' } }
+{ type: 'task_event', content: { action: 'updated', task_id: '1', status: 'completed' } }
+{ type: 'task_event', content: { action: 'snapshot', tasks: [{ task_id, status, subject }, ...] } }
+
+// SSE achatado (chat.py:_sse_event ou agente_lojas route._sse):
+event: task_event
+data: { "action": "created", "task_id": "1", "subject": "...", "description": "...", "status": "pending" }
+```
+
+### Limitacoes conhecidas (documentadas)
+
+- **Agente Lojas**: parser standalone (sem `state.tool_calls` arquivado) entao detecta tipo por
+  regex no output texto. Perde `description` do TaskCreate e detalhes extras do TaskUpdate
+  (ex: novo `subject`). Compensado pela snapshot do TaskList quando agente lista.
+- **Output do CLI e texto formatado, nao JSON**: parser regex pode quebrar se CLI mudar formato
+  no futuro (ex: 'Task #N created successfully:' -> outro literal). Mitigacao: helpers
+  isolados, fix por regex update.
+- **Sem testes unitarios** ainda — apenas smoke test inline validou todos os parsers em
+  isolamento (executado em 25/05/2026 antes do commit).
+
+### Validacao recomendada (pos-deploy)
+
+1. **Restart workers** apos `pip install -r requirements.txt`
+2. **Sanity check**: invocar agente com prompt multi-step ("audita a carteira completa") e
+   confirmar emissao de evento `task_event` (logs `[AGENT_SDK]` + DevTools Network SSE)
+3. **Frontend**: verificar painel de tarefas renderizando no chat (mesmo onde TodoWrite
+   nunca apareceu)
+4. **Sentry**: monitorar janela de 24h para erros `Falha ao emitir task_event` no log
+   (esperado: zero) ou TypeErrors no chat.js
+5. **Local dev**: `.venv/bin/pip install --upgrade claude-agent-sdk==0.2.87`
+
+### CLI bundled bumps consecutivos
+
+| SDK | CLI |
+|-----|-----|
+| 0.2.83 | 2.1.146 |
+| 0.2.84 | 2.1.147 |
+| 0.2.85 | 2.1.148 |
+| 0.2.86 | 2.1.149 |
+| 0.2.87 | 2.1.150 |
+
+> Cadence: 1 CLI bump por SDK release (commits intermediarios 2.1.143/144/145 nunca foram
+> publicados como SDK release — apenas o 2.1.146 foi). Ver `git log` no repo CLI para detalhe.
+
+Bumps sequenciais sem changelog detalhado (release notes de cada um sao apenas "Updated bundled
+Claude CLI to version X"). Cadence sugere alta estabilidade. Unica mudanca nao-bump foi CI
+Workload Identity Federation (#984), escopo interno Anthropic.
+
+---
+
+## SDK 0.2.82 (atualizado 2026-05-16, revisao 2026-05-25) — stderr callback isolation + EffortLevel + CVE mcp + ⚠️ 2 BREAKING omitidas
+
+> **NOTA DE REVISAO (2026-05-25)**: A documentacao original deste upgrade BASEOU-SE no
+> `CHANGELOG.md` do repo (que NAO listava breakings). Investigacao retroativa via release notes
+> do GitHub (`https://github.com/anthropics/claude-agent-sdk-python/releases/tag/v0.2.82`)
+> revelou secao `### Breaking` AUSENTE DO `CHANGELOG.md` DO REPO (presente apenas na release page do
+> GitHub), com **2 mudancas omitidas que existiam ali**:
+>
+> **Breaking #1 — TodoWrite -> Task* tools**: Headless e SDK sessions agora usam
+> `TaskCreate`/`TaskUpdate`/`TaskGet`/`TaskList` em vez de `TodoWrite`. Tool consumers devem
+> **acumular por task_id** em vez de substituir snapshot list. **Codigo TodoWrite no projeto
+> ficou morto** desde 16/05 (era morto **mesmo antes** do upgrade — agente nunca chamava).
+> Refatoracao completa feita em 25/05/2026 — ver secao 0.2.83-0.2.87 acima.
+>
+> **Breaking #2 — MCP non-blocking por default**: MCP servers conectam em background.
+> Sessions iniciam imediatamente e slow servers reportam `status: "pending"` no `init`.
+> Override: `MCP_CONNECTION_NONBLOCKING=0` (restaura comportamento antigo, espera 5s) ou
+> marcar server `alwaysLoad: true`. **Sem sintoma observado em prod** (0 rows com
+> status='pending'/alwaysLoad nas entries de `init` pos-16/05) — MCP servers do projeto
+> (memory, schema, sql, sessions, artifact, playwright, render_logs, routes_search,
+> teams_card, text_to_sql) inicializam rapido o suficiente. **Sem intervencao necessaria** —
+> mas atencao: a query de validacao (rows com `status='pending'`) NAO detecta o failure
+> mode real (tool call do 1o turno antes do MCP server estar pronto, que aparece como
+> `MCP connection error` no log). **Monitorar pos-deploy 48h** Sentry/logs por
+> `MCP.*(connection|server).*error` nos primeiros segundos de cada nova sessao SDK.
 
 **Versao**: `claude-agent-sdk==0.2.82` (CLI bundled 2.1.142) + `anthropic==0.98.1`
 **Bumps intermediarios**: 0.1.81 (CLI 2.1.139)

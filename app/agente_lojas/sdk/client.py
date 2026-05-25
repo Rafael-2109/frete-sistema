@@ -77,7 +77,7 @@ PROJECT_ROOT = os.path.dirname(
 # - Bash: executar scripts das skills (consultas SQL via consultando-sql)
 # - Task: invocar subagent `orientador-loja` (M2)
 # - Read/Glob/Grep: leitura de arquivos do projeto (SKILL.md, schemas, etc.)
-# - TodoWrite: feedback visual de tarefas
+# - TaskCreate/TaskUpdate/TaskGet/TaskList: feedback visual de tarefas (SDK 0.2.82+: substituiu TodoWrite)
 # NAO incluir Write/Edit/MultiEdit — operador de loja nao modifica codigo.
 # NOTA: 'Skill' NAO esta listada — SDK 0.1.77+ adiciona automaticamente quando
 # `skills=` esta set em ClaudeAgentOptions. Fallback (SDK < 0.1.77) injeta
@@ -88,7 +88,10 @@ ALLOWED_TOOLS_M1 = [
     'Read',
     'Glob',
     'Grep',
-    'TodoWrite',
+    'TaskCreate',
+    'TaskUpdate',
+    'TaskGet',
+    'TaskList',
 ]
 
 
@@ -376,12 +379,17 @@ class AgentLojasClient:
             'yes' if event_queue is not None else 'no',
         )
 
+        # Dict acumula tool_use_id -> tool_name ao longo do stream.
+        # Necessario para Task* tool parser correlacionar tool_result com tool_name
+        # (evita falsos positivos em outros tools com texto similar).
+        tool_use_to_name: Dict[str, str] = {}
+
         try:
             async with ClaudeSDKClient(options=options) as sdk_client:
                 await sdk_client.query(user_message)
 
                 async for msg in sdk_client.receive_response():
-                    async for event in _parse_message(msg):
+                    async for event in _parse_message(msg, tool_use_to_name=tool_use_to_name):
                         yield event
 
         except GeneratorExit:
@@ -423,51 +431,122 @@ class AgentLojasClient:
                 cleanup_session_context(our_session_id)
 
 
-def _try_parse_todos(content: Any) -> Optional[list]:
-    """Tenta detectar tool_result do TodoWrite e extrair lista de todos.
+import re as _re_module  # module-level (evita re-import no hot-path)
 
-    TodoWrite retorna texto contendo JSON `{"todos": [...]}` apos ser
-    chamado. Esta funcao parseia sem dependencias externas (json stdlib).
+
+def _build_task_event_from_result(
+    content: Any,
+    expected_tool_name: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Constroi task_event a partir de tool_result texto formatado.
+
+    SDK 0.2.82+ substituiu TodoWrite por Task* tools. Output do CLI eh texto
+    formatado (nao JSON), entao detectamos via regex no conteudo.
+
+    Formatos esperados (do CLI bundled 2.1.142+):
+      - TaskCreate:  'Task #N created successfully: <subject>'
+      - TaskUpdate:  'Updated task #N status' (e variantes, sempre comeca com 'Updated task #')
+      - TaskList:    linhas '#N [status] subject' (uma por task; pode ser vazia para 0 tasks)
+
+    Args:
+        content: tool_result content (str ou estrutura conversivel).
+        expected_tool_name: se fornecido, restringe parsing ao tool especifico
+            (evita falsos positivos quando output de outro tool contem padroes
+            de tarefa, ex: Bash logando 'Updated task #5'). Recomendado SEMPRE.
 
     Returns:
-        Lista de dicts {content, status, activeForm} ou None se nao for TodoWrite.
+        Dict com {action, task_id?, subject?, tasks?, status?} ou None.
+
+    Nota: este parser NAO tem acesso ao input original do tool_call (handler
+    standalone), entao perde 'description' do TaskCreate e detalhes extras do
+    TaskUpdate. UI compensa via snapshot do TaskList.
     """
-    if not content:
+    # Normalizar para string (sem early return — TaskList vazio precisa
+    # emitir snapshot vazio para frontend limpar UI, mesmo com content='').
+    s = (str(content).strip() if content else '')
+
+    # TaskList: SEMPRE emite snapshot quando expected_tool_name=='TaskList'.
+    # Sem expected_tool_name (legacy fallback), so emite snapshot se linhas
+    # casam padrao (evita falso positivo de outros tools com formato similar).
+    if expected_tool_name == 'TaskList':
+        tasks = []
+        for ln in s.splitlines():
+            ln = ln.strip()
+            if not ln:
+                continue
+            m = _re_module.match(r'#(\d+)\s*\[([\w_]+)\]\s*(.+)', ln)
+            if m:
+                tasks.append({
+                    'task_id': m.group(1),
+                    'status': m.group(2),
+                    'subject': m.group(3).strip(),
+                })
+        # Snapshot incondicional quando tool confirmado (CR HIGH #3)
+        return {'action': 'snapshot', 'tasks': tasks}
+
+    # Legacy fallback (sem expected_tool_name): so emite snapshot se TODAS
+    # as linhas (>=1) casam padrao TaskList. Sem isso, qualquer Bash output
+    # multi-linha sem '#N [status]' geraria snapshot vazio incorreto.
+    if expected_tool_name is None and s:
+        lines = [ln.strip() for ln in s.splitlines() if ln.strip()]
+        if lines and all(_re_module.match(r'#\d+\s*\[[\w_]+\]', ln) for ln in lines):
+            tasks = []
+            for ln in lines:
+                m = _re_module.match(r'#(\d+)\s*\[([\w_]+)\]\s*(.+)', ln)
+                if m:
+                    tasks.append({
+                        'task_id': m.group(1),
+                        'status': m.group(2),
+                        'subject': m.group(3).strip(),
+                    })
+            if tasks:
+                return {'action': 'snapshot', 'tasks': tasks}
+
+    # Sem conteudo e nao-TaskList: nada a parsear
+    if not s:
         return None
-    text = str(content) if not isinstance(content, str) else content
-    # Heuristica rapida — se nao tem 'todos', nao eh TodoWrite output
-    if 'todos' not in text:
-        return None
-    import json as _json
-    # Procura JSON object dentro do texto
-    try:
-        # Caso 1: texto eh JSON puro
-        if text.lstrip().startswith('{'):
-            data = _json.loads(text)
-            todos = data.get('todos') if isinstance(data, dict) else None
-            if isinstance(todos, list):
-                return todos
-    except (_json.JSONDecodeError, ValueError):
-        pass
-    # Caso 2: JSON aninhado (procurar substring)
-    try:
-        start = text.find('{"todos"')
-        if start == -1:
-            start = text.find('{ "todos"')
-        if start >= 0:
-            # Tenta parsear ate o fim — json.loads stop no primeiro objeto valido
-            decoder = _json.JSONDecoder()
-            data, _ = decoder.raw_decode(text[start:])
-            todos = data.get('todos') if isinstance(data, dict) else None
-            if isinstance(todos, list):
-                return todos
-    except (_json.JSONDecodeError, ValueError):
-        pass
+
+    # TaskCreate: 'Task #N created successfully: <subject>' (anchored com re.match)
+    if expected_tool_name in (None, 'TaskCreate'):
+        m_create = _re_module.match(
+            r'Task\s+#(\d+)\s+created\s+successfully\s*:\s*(.+)',
+            s, _re_module.IGNORECASE
+        )
+        if m_create:
+            return {
+                'action': 'created',
+                'task_id': m_create.group(1),
+                'subject': m_create.group(2).strip(),
+                'status': 'pending',
+            }
+
+    # TaskUpdate: 'Updated task #N ...' (anchored com re.match — evita falso
+    # positivo em qualquer texto que contenha 'Updated task #N' em meio).
+    if expected_tool_name in (None, 'TaskUpdate'):
+        m_upd = _re_module.match(r'Updated\s+task\s+#(\d+)', s, _re_module.IGNORECASE)
+        if m_upd:
+            return {
+                'action': 'updated',
+                'task_id': m_upd.group(1),
+            }
+
     return None
 
 
-async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
-    """Traduz mensagens do SDK em eventos SSE simples."""
+async def _parse_message(
+    msg,
+    tool_use_to_name: Optional[Dict[str, str]] = None,
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """Traduz mensagens do SDK em eventos SSE simples.
+
+    Args:
+        msg: SDK message (SystemMessage, AssistantMessage, UserMessage, ResultMessage).
+        tool_use_to_name: dict mutavel {tool_use_id: tool_name} mantido pelo
+            chamador (stream_response) — populado em AssistantMessage e
+            consultado em UserMessage para correlacionar tool_result com tool_name.
+            Necessario para filtro de Task* tools no parser (evita falsos positivos
+            quando outros tools tem output contendo 'Updated task #N' etc.).
+    """
     # Init (SystemMessage com session_id)
     if isinstance(msg, SystemMessage):
         data = getattr(msg, 'data', {}) or {}
@@ -491,6 +570,10 @@ async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
                     'metadata': {},
                 }
             elif isinstance(block, ToolUseBlock):
+                # Registrar tool_use_id -> tool_name para correlacao posterior
+                # com tool_result (Task* tools precisam saber qual tool foi).
+                if tool_use_to_name is not None and getattr(block, 'id', None):
+                    tool_use_to_name[block.id] = block.name
                 yield {
                     'type': 'tool_call',
                     'content': '',
@@ -516,20 +599,42 @@ async def _parse_message(msg) -> AsyncGenerator[Dict[str, Any], None]:
                             parts.append(text)
                     content = "\n".join(parts) if parts else str(content)
 
-                # TodoWrite: extrai lista de todos e emite evento dedicado
-                # para renderizacao no UI. tool_result da TodoWrite contem
-                # JSON com {todos: [{content, status, activeForm}, ...]}.
-                # Mesmo padrao do agente Nacom (client.py:803).
-                todos_payload = _try_parse_todos(content)
-                if todos_payload is not None:
-                    yield {
-                        'type': 'todos',
-                        'content': '',
-                        'metadata': {'todos': todos_payload},
-                    }
-                    # Nao emite tool_result generico para evitar duplicacao
-                    # (UI renderiza so o evento 'todos').
-                    continue
+                # Task* tools (SDK 0.2.82+): detecta tool_result de TaskCreate,
+                # TaskUpdate e TaskList via parser de texto formatado. Emite
+                # evento dedicado 'task_event' para renderizacao no UI.
+                # Mesmo padrao do agente Nacom Goya (client.py:_build_task_event).
+                tool_use_id = getattr(block, 'tool_use_id', '') or ''
+                expected_tool = (
+                    (tool_use_to_name or {}).get(tool_use_id)
+                    if tool_use_to_name is not None else None
+                )
+                # CR HIGH: so chama parser se tool_name confirmado como Task*
+                # (evita falso positivo em Bash output que contem "Updated task #N").
+                # Se tool_use_to_name nao foi populado (fallback legacy), chama
+                # sem filtro — comportamento degradado mas funcional.
+                if expected_tool is None or expected_tool in (
+                    'TaskCreate', 'TaskUpdate', 'TaskList',
+                ):
+                    task_evt = None
+                    try:
+                        task_evt = _build_task_event_from_result(
+                            content, expected_tool_name=expected_tool
+                        )
+                    except Exception as e:
+                        # CR HIGH: NUNCA propagar excecao do parser (R1 services).
+                        logger.warning(
+                            "[AGENTE_LOJAS] Falha ao parsear task_event (%s): %s",
+                            expected_tool or 'unknown', e
+                        )
+                    if task_evt is not None:
+                        yield {
+                            'type': 'task_event',
+                            'content': '',
+                            'metadata': task_evt,
+                        }
+                        # Nao emite tool_result generico para evitar duplicacao
+                        # (UI renderiza so o evento 'task_event').
+                        continue
 
                 yield {
                     'type': 'tool_result',

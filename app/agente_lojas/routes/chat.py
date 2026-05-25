@@ -179,6 +179,11 @@ async def _drain_async_gen(
             elif etype == 'done':
                 state['final_metadata'] = meta
                 event_queue.put(_sse('done', meta))
+            elif etype == 'task_event':
+                # SDK 0.2.82+: handler dedicado (matches Nacom contract — payload
+                # e o task_evt direto, sem prefix 'content'). Garante shape
+                # identico ao Nacom para o frontend (CR MED #6).
+                event_queue.put(_sse('task_event', meta))
             else:
                 event_queue.put(_sse(etype, {'content': content, **meta}))
     except Exception as e:

@@ -63,7 +63,11 @@ class AgentSettings:
         'Write',            # Escrita de arquivos (RESTRITO a /tmp via can_use_tool)
         'Edit',             # Edição de arquivos (RESTRITO a /tmp via can_use_tool)
         'MultiEdit',        # Edição múltipla (RESTRITO a /tmp via can_use_tool)
-        'TodoWrite',        # Gerenciamento de tarefas (feedback visual)
+        # Task* tools (SDK 0.2.82+: substituiu TodoWrite — ver SDK_CHANGELOG.md)
+        'TaskCreate',       # Cria nova tarefa (#N autoincremental)
+        'TaskUpdate',       # Atualiza tarefa por taskId (status, subject, etc.)
+        'TaskGet',          # Consulta tarefa por taskId
+        'TaskList',         # Lista todas tarefas — UI usa como snapshot
         'WebSearch',        # Busca na web
         'WebFetch',         # Fetch e análise de conteúdo web
         # Interação com usuário

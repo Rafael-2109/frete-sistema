@@ -681,7 +681,11 @@ function renderTimeline() {
         'Grep': 'fa-filter',
         'Write': 'fa-edit',
         'Edit': 'fa-pencil-alt',
-        'TodoWrite': 'fa-tasks'
+        // SDK 0.2.82+: Task* tools substituiram TodoWrite
+        'TaskCreate': 'fa-plus-square',
+        'TaskUpdate': 'fa-edit',
+        'TaskGet': 'fa-eye',
+        'TaskList': 'fa-tasks'
     };
 
     container.innerHTML = actionTimeline.slice(0, 15).map(a => {
@@ -690,7 +694,13 @@ function renderTimeline() {
                           a.status === 'error' ? 'fa-times' : 'fa-spinner fa-spin';
 
         // FEAT-024: Usa descrição amigável quando disponível
-        const displayName = a.description || a.tool_name;
+        // Finding 2 fix (XSS): SDK 0.2.82+ a description carrega subject das Task*
+        // controlado pelo agente (_extract_tool_description). Escape obrigatorio.
+        // Em atributo title="..." aspas tambem precisam escape (escapeHtml so
+        // cobre <, >, &).
+        const safeName = escapeHtml(a.description || a.tool_name || '');
+        const safeToolName = escapeHtml(a.tool_name || '').replace(/"/g, '&quot;');
+        const safeDuration = Number.isFinite(a.duration_ms) ? a.duration_ms : 0;
 
         return `
             <div class="timeline-item">
@@ -698,11 +708,11 @@ function renderTimeline() {
                     <i class="fas ${statusIcon}"></i>
                 </div>
                 <div class="timeline-info">
-                    <div class="tool-name" title="${a.tool_name}">
+                    <div class="tool-name" title="${safeToolName}">
                         <i class="fas ${iconClass}"></i>
-                        ${displayName}
+                        ${safeName}
                     </div>
-                    ${a.duration_ms ? `<div class="tool-duration">${a.duration_ms}ms</div>` : ''}
+                    ${safeDuration ? `<div class="tool-duration">${safeDuration}ms</div>` : ''}
                 </div>
             </div>
         `;
@@ -718,39 +728,67 @@ function clearTimeline() {
 
 // ============================================
 // FEAT-008: TODO LIST VISUAL
+// SDK 0.2.82+: aceita formato novo Task* (task_id, status, subject)
+// e formato antigo TodoWrite (status, content, activeForm) — back-compat.
 // ============================================
+function _normalizeTodoItem(item) {
+    // Formato novo (Task* tools): {task_id, status, subject, description?}
+    if (item && item.task_id !== undefined) {
+        return {
+            task_id: String(item.task_id),
+            status: item.status || 'pending',
+            content: item.subject || item.content || '',
+            activeForm: item.subject || item.activeForm || '',
+        };
+    }
+    // Formato antigo (TodoWrite): {status, content, activeForm}
+    return {
+        task_id: item.task_id ? String(item.task_id) : null,
+        status: item.status || 'pending',
+        content: item.content || '',
+        activeForm: item.activeForm || item.content || '',
+    };
+}
+
 function updateTodoList(todos) {
-    currentTodos = todos;
+    const normalized = (todos || []).map(_normalizeTodoItem);
+    currentTodos = normalized;
     const list = document.getElementById('todo-list');
     const progressBar = document.getElementById('todo-progress-bar');
     const progressBadge = document.getElementById('todo-progress-badge');
     const todoPanel = document.getElementById('todo-panel');
 
     // Mostra painel se houver todos
-    if (todos.length > 0) {
+    if (normalized.length > 0) {
         todoPanel.classList.remove('hidden');
     }
 
-    // Renderiza lista
-    list.innerHTML = todos.map(todo => {
+    // Renderiza lista — escapeHtml em displayText/status (XSS prevention: subject
+    // vem de tool_input controlado pelo agente, pode conter HTML malicioso)
+    list.innerHTML = normalized.map(todo => {
         const statusIcon = todo.status === 'completed' ? 'fa-check' :
                           todo.status === 'in_progress' ? 'fa-spinner fa-spin' : 'fa-circle';
         const displayText = todo.status === 'in_progress' ? todo.activeForm : todo.content;
+        const safeStatus = escapeHtml(todo.status || 'pending');
+        const safeText = escapeHtml(displayText || '');
 
         return `
             <li class="todo-item">
-                <span class="todo-status ${todo.status}">
+                <span class="todo-status ${safeStatus}">
                     <i class="fas ${statusIcon}"></i>
                 </span>
-                <span class="todo-text ${todo.status}">${displayText}</span>
+                <span class="todo-text ${safeStatus}">${safeText}</span>
             </li>
         `;
     }).join('');
 
-    // Calcula progresso
-    const completed = todos.filter(t => t.status === 'completed').length;
-    const inProgress = todos.filter(t => t.status === 'in_progress').length;
-    const percent = todos.length > 0 ? Math.round((completed / todos.length) * 100) : 0;
+    // Calcula progresso — usar `normalized` (formato canonical) em vez de `todos` (raw).
+    // Itens com formato Task* novo nao tem 'content'/'activeForm', apenas 'subject';
+    // mas 'status' existe em ambos, entao o calculo de % nao quebra hoje. Mantendo
+    // `normalized` evita bug latente se normalize() filtrar/excluir itens no futuro.
+    const completed = normalized.filter(t => t.status === 'completed').length;
+    const inProgress = normalized.filter(t => t.status === 'in_progress').length;
+    const percent = normalized.length > 0 ? Math.round((completed / normalized.length) * 100) : 0;
 
     progressBar.style.width = percent + '%';
     progressBadge.textContent = percent + '%';
@@ -762,7 +800,7 @@ function updateTodoList(todos) {
     );
 
     // FEAT-009: Atualiza barra de progresso geral
-    updateGeneralProgressBar(todos, completed, inProgress, percent);
+    updateGeneralProgressBar(normalized, completed, inProgress, percent);
 }
 
 // ============================================
@@ -853,6 +891,13 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
     // Reset apenas em envios novos (usuario clicou submit / pressionou Enter).
     if (!isAutoRetry) {
         _autoRetryCount = 0;
+        // Finding 1 fix (SDK 0.2.87 task_event refator): zera currentTodos entre
+        // turnos genuinos para evitar session bleed. O case 'created' do
+        // task_event faz merge com currentTodos[] (slice + findIndex+push), entao
+        // tasks do turno anterior persistiam visualmente quando o novo turno
+        // criava tasks com IDs diferentes. Em auto-retry NAO zeramos: e o mesmo
+        // turno tentando de novo, as tasks ja exibidas devem permanecer.
+        clearTodoList();
     }
     messageInput.value = '';
     sendBtn.disabled = true;
@@ -2014,11 +2059,55 @@ function processSSEEvent(eventType, data, state) {
             }
 
             // FEAT-008/FEAT-024: Evento de todos (vem do TodoWrite)
+            // SDK <= 0.1.81 — mantido para back-compat. SDK 0.2.82+ usa 'task_event'.
             case 'todos': {
                 // FEAT-024: Suporta formato {todos: [...]} ou array direto
                 const todosData = data.todos || (Array.isArray(data) ? data : null);
                 if (todosData && Array.isArray(todosData)) {
                     updateTodoList(todosData);
+                }
+                break;
+            }
+
+            // SDK 0.2.82+: TodoWrite foi substituido por TaskCreate/TaskUpdate/TaskList.
+            // Backend emite task_event com 3 actions:
+            //   - created: nova task (adiciona em currentTodos)
+            //   - updated: task existente (atualiza por task_id)
+            //   - snapshot: TaskList completo (substitui currentTodos)
+            case 'task_event': {
+                const action = data.action;
+                if (action === 'snapshot' && Array.isArray(data.tasks)) {
+                    updateTodoList(data.tasks);
+                } else if (action === 'created' && data.task_id) {
+                    const next = (currentTodos || []).slice();
+                    // Evita duplicata se created chegar duas vezes
+                    const idx = next.findIndex(t => String(t.task_id) === String(data.task_id));
+                    const newItem = {
+                        task_id: data.task_id,
+                        status: data.status || 'pending',
+                        subject: data.subject || '',
+                        description: data.description || '',
+                    };
+                    if (idx >= 0) {
+                        next[idx] = { ...next[idx], ...newItem };
+                    } else {
+                        next.push(newItem);
+                    }
+                    updateTodoList(next);
+                } else if (action === 'updated' && data.task_id) {
+                    const next = (currentTodos || []).slice();
+                    const idx = next.findIndex(t => String(t.task_id) === String(data.task_id));
+                    if (idx >= 0) {
+                        // Mescla campos atualizados (status, subject, description)
+                        const patch = {};
+                        if (data.status !== undefined) patch.status = data.status;
+                        if (data.subject !== undefined) patch.subject = data.subject;
+                        if (data.description !== undefined) patch.description = data.description;
+                        next[idx] = { ...next[idx], ...patch };
+                        updateTodoList(next);
+                    }
+                    // Se task_id nao esta em currentTodos, ignora — TaskList snapshot
+                    // resincroniza eventualmente.
                 }
                 break;
             }

@@ -73,7 +73,11 @@ TOOL_TO_CATEGORY: Dict[str, str] = {
     'WebFetch': 'Acesso Web',
     'LSP': 'Analise de Codigo',
     'Task': 'Subagente',
-    'TodoWrite': 'Gestao de Tarefas',
+    # Task* tools (SDK 0.2.82+: substituiu TodoWrite — ver SDK_CHANGELOG.md)
+    'TaskCreate': 'Gestao de Tarefas',
+    'TaskUpdate': 'Gestao de Tarefas',
+    'TaskGet': 'Gestao de Tarefas',
+    'TaskList': 'Gestao de Tarefas',
     'NotebookEdit': 'Edicao de Notebook',
 }
 

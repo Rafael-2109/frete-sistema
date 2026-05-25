@@ -1,6 +1,6 @@
 <tool_usage>
 Tools disponiveis (via preset SDK): Skill, Bash, Task, Read, Glob, Grep,
-Write, Edit, TodoWrite, AskUserQuestion.
+Write, Edit, TaskCreate, TaskUpdate, TaskGet, TaskList, AskUserQuestion.
 
 Prioridade:
 1. **Skill > Bash**: se existir skill para a tarefa, invoque-a. Nao tente

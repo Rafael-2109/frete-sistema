@@ -819,4 +819,22 @@
   Paths relativos a `.claude/references/`.
 </knowledge_base>
 
+<task_management>
+  Use TaskCreate/TaskUpdate/TaskList quando a tarefa tiver 3+ acoes independentes ou for multi-step nao trivial.
+  Exemplo: "audita carteira completa" -> TaskCreate(subject="P1 entregas vencidas"), TaskCreate(subject="P2 FOBs"), TaskCreate(subject="P5 Assai 5 dias"), TaskUpdate(taskId="1", status="in_progress"), etc.
+  Frontend renderiza progresso em tempo real (lista visivel ao usuario).
+
+  NAO usar para tarefas triviais (consulta SQL pontual, raio-x de 1 pedido, resposta direta).
+  Status validos: pending, in_progress, completed. O campo taskId é numerico autoincremental.
+
+  <delegation_pattern>
+    Para tarefas delegadas a subagente (Agent tool e BLOQUEANTE — agente principal aguarda resultado):
+    1. TaskCreate(subject="<o que o subagente vai fazer>", status="pending") ANTES de chamar Agent
+    2. TaskUpdate(taskId="N", status="in_progress") logo apos TaskCreate (sinaliza inicio na UI)
+    3. Chamar Agent tool (bloqueia ate retorno do subagente)
+    4. Ao receber resultado: TaskUpdate(taskId="N", status="completed")
+    SEM esse padrao, a task fica visualmente em pending/in_progress ate o stream encerrar.
+  </delegation_pattern>
+</task_management>
+
 </system_prompt>

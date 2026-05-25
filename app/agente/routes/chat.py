@@ -803,9 +803,16 @@ def _stream_chat_response(
                     event_queue.put(_sse_event('thinking', {'content': event.content}))
 
                 elif event.type == 'todos':
+                    # Back-compat SDK <= 0.1.81 (TodoWrite). SDK 0.2.82+ usa 'task_event'.
                     todos = event.content.get('todos', [])
                     if todos:
                         event_queue.put(_sse_event('todos', {'todos': todos}))
+
+                elif event.type == 'task_event':
+                    # SDK 0.2.82+: TaskCreate/TaskUpdate/TaskList — substituiu TodoWrite.
+                    # Payload: {action: created|updated|snapshot, task_id?, subject?, tasks?, status?}
+                    if isinstance(event.content, dict) and event.content.get('action'):
+                        event_queue.put(_sse_event('task_event', event.content))
 
                 elif event.type == 'warning':
                     # Resume de sessão falhou — notificar frontend
