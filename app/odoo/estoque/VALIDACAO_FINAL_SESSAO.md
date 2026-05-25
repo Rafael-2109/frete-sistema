@@ -1197,6 +1197,66 @@ Plano da sessao v9: capinar `09b_executar_pre_etapa.py` (746 LOC, executor da pr
 |---|---|
 | Modificacoes Odoo PROD em v9 | **ZERO** (apenas dry-runs) |
 | Modificacoes banco PG PROD em v9 | **ZERO** (apenas reads do AjusteEstoqueInventario) |
-| Modificacoes filesystem PROD em v9 | 3 logs JSON em `scripts/inventario_2026_05/auditoria/log_skill6_pre_etapa_executar_onda_dryrun_*.json` (auditoria das smokes; nao toca dados de negocio) |
-| Pytest baseline v9 | 230 → **251 verdes** (+21 orchestrator) |
-| Arquivos modificados | 12 (CRIAR: 2 + MODIFICAR: 9 + MOVER: 1) |
+| Modificacoes filesystem PROD em v9 | 4 logs JSON em `scripts/inventario_2026_05/auditoria/log_skill6_pre_etapa_executar_onda_dryrun_*.json` (auditoria das smokes; nao toca dados de negocio) |
+| Pytest baseline v9 | 230 → **258 verdes** (+21 orchestrator + 7 code-review fixes) |
+| Arquivos modificados | 14 (CRIAR: 2 + MODIFICAR: 11 + MOVER: 1) |
+
+### 15.8 Code Review (commit 6a73c6fa)
+
+Code-reviewer (Agent feature-dev:code-reviewer) detectou **8 findings reais** no commit `6a73c6fa`. **Todos os 8 aplicados** em commit subsequente. Resumo:
+
+| Finding | Severidade | Tipo | Arquivo:Linha | Fix |
+|---|---|---|---|---|
+| BUG-1 | HIGH | Dry-run engana operador | `pre_etapa_executor.py` `_executar_positivo_puro` | Guard `DRY_RUN_OK_LOTE_A_CRIAR` quando lote_destino nominal nao existe (em vez de chamar Skill 1 com `lot_id=None` que simularia ajuste no proxy P-15/05) |
+| BUG-2 | HIGH | Contador `produtos_ok` em dry-run | `pre_etapa_executor.py` `_processar_produto` else fallback | Separar semantica via novos contadores `produtos_dry`, `produtos_sem_ajuste`, `pos/neg/puro_dry`. Caso "anomalia em modo real" loga warning |
+| EDGE-1 | HIGH | In-place doador[quantity] entre POS+NEG | `pre_etapa_executor.py` `_executar_transferencia_interna` docstring | Docstring expandida documentando comportamento intencional + edge case dry-run (sem decremento) que pode mostrar OK em sequencias inviaveis |
+| PATTERN-1 | HIGH | `EXECUTADO_AUTO_CORRIGIDO` dead code | `pre_etapa_executor.py` `_avaliar_sucesso_v2` | Removido do set de sucesso (flat status v2 nunca propaga). Docstring atualizado sem ref a linha hardcoded |
+| EDGE-2 | MED | `sucesso=None` em dry-run nao incrementa nenhum contador | (corrigido com BUG-2) | Novos contadores `*_dry` distinguem dry-run de NOOP real |
+| EDGE-3 | MED | `expire_all()` sem `commit()` previo pode ler stale | `pre_etapa_executor.py` `executar_onda_pre_etapa` docstring | Pre-condicao "sessao caller deve estar limpa" documentada |
+| DOC-1 | LOW | Docstring referencia "linha 542 transfer.py" desatualizada | `pre_etapa_executor.py:336-337` | Substituida por nome de funcao (`transferir_entre_lotes_v2`) |
+| PATTERN-2 | LOW | `ACAO_AUDIT_CURTA` duplicada em orchestrator | `pre_etapa_executor.py:54-61` + `pre_etapa.py` | Movida para `pre_etapa.py` (fonte unica) + gerador programatico a partir de `ACOES_INTERNAS_POR_CID`. Preserva nomes legacy 09b validado por novo pytest |
+
+**Smoke pos-fix validou BUG-2** (`/tmp/smoke_pos_fix_v9.json`):
+- Antes (v9 sem fix): `contadores={produtos_ok=1, neg_ok=0, ...}` (semanticamente confuso — 1 produto OK com 0 ajustes confirmados em dry-run)
+- Pos-fix v9: `contadores={produtos_ok=0, produtos_dry=1, neg_dry=1, ...}` (claro — 1 produto em dry-run, 1 ajuste NEG simulado)
+
+**7 testes pytest novos** cobrindo fixes: `test_acao_audit_curta_importada_de_pre_etapa`, `test_acao_audit_curta_preserva_nomes_legacy_09b`, `test_executar_positivo_puro_dry_run_lote_inexistente_nao_engana`, `test_executar_positivo_puro_dry_run_lote_p15_nao_dispara_guard_bug1`, `test_avaliar_sucesso_v2_simplificado_sem_auto_corrigido`, `test_contadores_iniciais_incluem_dry_e_sem_ajuste`, `test_novos_contadores_fabrica_dicts_independentes`. **Baseline pytest: 251 → 258 verdes.**
+
+### 15.9 Pre-mortem (4 dimensoes — 6 meses adiante)
+
+Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para guiar v10 + sessoes futuras.
+
+#### Dimensao 1: Bugs reais que podem aparecer em PROD
+
+- **PM-1 (MITIGADO v9)**: dry-run mostra ajuste em proxy P-15/05 mas em --confirmar vai para lote nominal recem-criado → confunde operador. Mitigado por BUG-1 fix (guard `DRY_RUN_OK_LOTE_A_CRIAR`).
+- **PM-2 (PARCIAL)**: bulk de 100+ produtos sem `--quiet` polui logs com ~30 linhas de boot Flask por chamada. Mitigado parcialmente (`--quiet` reduz mas nao zera). Operadores em PROD usar `--quiet` SEMPRE.
+- **PM-3 (LATENTE)**: paralelizacao `max_workers > 5` sobrecarrega Odoo XML-RPC (rate limit + timeouts SSL G016). Documentado em armadilhas mas NAO enforced no codigo. Risco: operador passa `--max-workers 20` por engano e quebra Odoo PROD. Mitigacao futura: clamp automatico no codigo (`min(max_workers, 5)`) + warning.
+- **PM-4 (LATENTE)**: doador in-place updated entre POS+NEG do mesmo lote. Se plano original previu mais qty do que o lote tem, ajustes subsequentes falham com mensagem "quant origem X tem Y un". Documentado em docstring CR-EDGE-1, mas operador pode interpretar como bug e tentar workaround errado.
+- **PM-5 (LATENTE)**: `OperacaoOdooAuditoria.registrar` em lazy import com try/except amplo. Se falhar (DB down, schema migrado), perde registro de auditoria silenciosamente. Em pos-incidente pode haver gap. Mitigacao futura: re-raise em modo `--strict-audit`.
+
+#### Dimensao 2: Limitacoes descobertas tarde
+
+- **PM-6**: nao ha retry interno em XML-RPC failure. Cada chamada `ajustar_quant`/`transferir_quantidade_para_lote_v2` sem retry — timeout temporario do Odoo causa FALHA imediata. **Mitigacao**: hook `tenacity` retry em sessao futura quando padrao se repetir.
+- **PM-7**: ausencia de telemetria de progresso. Bulk de 1000 produtos pode rodar 30 minutos sem feedback. Operador nao sabe se travou ou se esta processando. **Mitigacao**: progress callback opcional (impressao a cada 10 produtos) em sessao futura.
+- **PM-8**: retomada de FALHAs requer operador alterar `ajuste.status='FALHA'` -> `'APROVADO'` manualmente em SQL ou via UI. Nao ha CLI `--modo re-aprovar-falhas`. Risco: operador esquece de re-aprovar e ajustes ficam FALHA para sempre.
+- **PM-9**: composicao via `transferir_quantidade_para_lote_v2` chama 2 vezes XML-RPC (`ajustar_quant` x2). Bulk de 1000 POS+NEG vira 4000 calls XML-RPC (vs 2000 do legacy v1). Perdas de performance ~2x em batches grandes.
+
+#### Dimensao 3: Decisoes que podem se mostrar erradas
+
+- **PM-10**: helpers privados `_resolver_product_id`, `_buscar_quants_produto_cid`, `_localizar_doador` NAO promovidos a skills. Risco: orchestrator Skill 8 faturando vai precisar dos mesmos helpers e duplicara. Mitigacao em v10: avaliar promover para `consultando-quant-odoo` (Skill 9) ou `_utils.py`.
+- **PM-11**: lazy imports `from app import db` dentro de funcoes. Pattern correto para tests sem app, mas overhead pequeno acumula em bulks. Verificar se PROD reclamar.
+- **PM-12**: contador `produtos_sem_ajuste` em modo REAL acompanhado de warning loga, mas operador pode ignorar warning no JSON. Mitigacao: bubble-up para status agregado se `produtos_sem_ajuste > 0`.
+
+#### Dimensao 4: O que falta para `executar-onda --confirmar` funcionar 100% em PROD
+
+1. **Canary REAL ainda nao executado** (1 ajuste APROVADO id=163696 NEG 835k un MIGRAÇÃO em CD). Foco C da v10 cobre.
+2. **Retry em XML-RPC failure** (PM-6) — proximo refactor.
+3. **Cap automatico max_workers** (PM-3) — fix trivial em sessao futura.
+4. **CLI re-aprovar-falhas** (PM-8) — modo 6 da Skill 6 quando demanda.
+5. **Telemetria de progresso** (PM-7) — nice-to-have.
+
+### 15.10 Decisoes-chave v9 (revisitando pos-CR + pre-mortem)
+
+- **Decisao 6 (NOVA — CR v9)**: dry-run NUNCA simula ajuste no quant errado para "parecer que funcionou". Se ha incerteza sobre o estado real (lote nao existe), retornar status especifico (`DRY_RUN_OK_LOTE_A_CRIAR`) e dar visibilidade total ao operador. Aplicavel a TODAS as skills WRITE futuras.
+- **Decisao 7 (NOVA — CR v9)**: contadores devem ter semantica DISTINTA para dry-run vs NOOP real vs anomalia. Nunca colapsar "tudo zero" em `produtos_ok`. Aplicavel a TODAS as skills WRITE com composicao.
+- **Decisao 8 (NOVA — CR v9)**: constantes que cruzam multiplos modulos vivem em UM lugar so (fonte unica). Importar via `from`, nunca duplicar. Aplicar `ACAO_AUDIT_CURTA` como exemplo + adicionar regra ao CLAUDE.md modulo.

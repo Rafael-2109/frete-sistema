@@ -30,6 +30,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.odoo.estoque.scripts.pre_etapa import (
+    ACAO_AUDIT_CURTA,
     ACOES_INTERNAS_POR_CID,
     COMPANY_LOCATIONS_PRE_ETAPA,
     ONDA_NUM_POR_CID,
@@ -42,25 +43,34 @@ from app.odoo.utils.connection import get_odoo_connection
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# Constantes
+# Constantes locais
 # ============================================================
 
 LOTE_MIGRACAO = 'MIGRAÇÃO'
 LOTE_DEFAULT_SEM_NOME = 'P-15/05'
 TOL_DELTA = 0.001  # mesma de transfer.py / quant.py
 
-# Mapeamento para auditoria: VARCHAR(20) constraint em operacao_odoo_auditoria.acao
-# (nomes completos sao usados em acao_decidida do ajuste — sem limite de coluna).
-ACAO_AUDIT_CURTA: Dict[str, str] = {
-    'AJUSTE_CD_TRANSF_INTERNA_POS': 'cd_pre_pos',
-    'AJUSTE_CD_TRANSF_INTERNA_NEG': 'cd_pre_neg',
-    'AJUSTE_CD_POSITIVO_PURO': 'cd_pos_puro',
-    'AJUSTE_FB_TRANSF_INTERNA_POS': 'fb_pre_pos',
-    'AJUSTE_FB_TRANSF_INTERNA_NEG': 'fb_pre_neg',
-    'AJUSTE_FB_POSITIVO_PURO': 'fb_pos_puro',
-}
+# ACAO_AUDIT_CURTA importado de pre_etapa.py (CR-PATTERN-2 v9 — fonte unica).
 
 CICLO_DEFAULT = 'INVENTARIO_2026_05'
+
+# Contadores iniciais (centralizado — usado em paralelo + serial + thread).
+# CR-EDGE-2/BUG-2 v9: adicionados *_dry para distinguir dry-run de NOOP real.
+_CONTADORES_INICIAIS: Dict[str, int] = {
+    'produtos_ok': 0,        # >= 1 sucesso real e 0 falhas
+    'produtos_parcial': 0,   # >= 1 sucesso e >= 1 falha
+    'produtos_falha': 0,     # 0 sucessos e >= 1 falha
+    'produtos_dry': 0,       # dry-run: nenhum sucesso/falha real (CR-BUG-2)
+    'produtos_sem_ajuste': 0,  # 0 sucessos e 0 falhas em modo real (caso anomalo)
+    'pos_ok': 0, 'pos_falha': 0, 'pos_dry': 0,
+    'neg_ok': 0, 'neg_falha': 0, 'neg_dry': 0,
+    'puro_ok': 0, 'puro_falha': 0, 'puro_dry': 0,
+}
+
+
+def _novos_contadores() -> Dict[str, int]:
+    """Fabrica contadores zerados (evita compartilhar dict mutavel global)."""
+    return dict(_CONTADORES_INICIAIS)
 
 
 # ============================================================
@@ -205,6 +215,21 @@ def _executar_transferencia_interna(
     A location e' a do quant doador (mesma origem/destino — transferencia
     intra-localizacao entre lotes). location_principal NAO e' usada aqui.
 
+    **EDGE-1 v9 — update in-place de quants_atuais**: ao final do passo real,
+    decrementa `doador['quantity'] -= qty` (linha ~298). Esta lista e'
+    compartilhada entre TODOS os ajustes POS+NEG do mesmo produto no
+    `_processar_produto`. Por que isso importa:
+    - Permite que ajustes subsequentes do MESMO lote vejam o saldo real
+      ja consumido por ajustes anteriores na sequencia (POS antes de NEG).
+    - Se o plano original previu mais qty do que o lote tem saldo real
+      (planejado vs efetivo divergiram), ajustes subsequentes do mesmo lote
+      caem em FALHA com mensagem "quant origem X tem Y un, ajuste pede Z".
+      Comportamento esperado — protege contra over-debit.
+    - Em dry-run, NAO ha decremento (curto-circuito antes do `return`),
+      entao multiplos ajustes do mesmo lote em dry-run podem MOSTRAR
+      DRY_RUN_OK mesmo sendo inviaveis em sequencia. Operador deve revisar
+      o JSON antes de --confirmar.
+
     Returns: dict {sucesso, erro, transferido_qty, tempo_ms}
     """
     from app import db  # lazy (evita circular em tests sem app)
@@ -333,14 +358,20 @@ def _executar_transferencia_interna(
 def _avaliar_sucesso_v2(res: Dict[str, Any], dry_run: bool) -> bool:
     """Decide se composicao v2 (transferir_entre_lotes_v2) foi sucesso.
 
-    Skill 2 v2 retorna `status` flat: 'EXECUTADO' | 'DRY_RUN_OK' |
-    'FALHA_REDUCAO' | 'FALHA_AUMENTO' (linha 542 de transfer.py).
-    Sucesso = status terminal positivo.
+    Skill 2 `transferir_entre_lotes_v2` retorna `status` flat:
+    'EXECUTADO' | 'DRY_RUN_OK' | 'FALHA_REDUCAO' | 'FALHA_AUMENTO'
+    (ver retorno final em `app/odoo/estoque/scripts/transfer.py
+    transferir_entre_lotes_v2`).
+
+    NOTA: 'EXECUTADO_AUTO_CORRIGIDO' aparece nos sub-dicts
+    'reducao_origem'/'aumento_destino' (resultados de ajustar_quant) mas
+    NUNCA no status flat top-level — o v2 nao propaga. Tratamos como
+    sinonimo de EXECUTADO no flat por defensividade (CR-PATTERN-1 v9).
     """
     status = res.get('status', '')
     if dry_run:
-        return status in {'DRY_RUN_OK', 'EXECUTADO', 'EXECUTADO_AUTO_CORRIGIDO'}
-    return status in {'EXECUTADO', 'EXECUTADO_AUTO_CORRIGIDO'}
+        return status in {'DRY_RUN_OK', 'EXECUTADO'}
+    return status == 'EXECUTADO'
 
 
 # ============================================================
@@ -387,6 +418,36 @@ def _executar_positivo_puro(
                 criar_se_faltar=not dry_run,
             )
         )
+
+        # CR-BUG-1 v9: em dry-run, se lote_destino nominal NAO existe ainda
+        # (lot_id_destino=None mas nome != P-15/05/proxy), NAO chamar Skill 1
+        # com lot_id=None — isso simularia ajuste no quant SEM lote (proxy),
+        # nao no lote nominal que sera criado no --confirmar. Retornar plano
+        # explicito DRY_RUN_OK_LOTE_A_CRIAR para nao enganar o operador.
+        if (
+            dry_run
+            and lot_id_destino is None
+            and lote_destino_nome
+            and lote_destino_nome != LOTE_DEFAULT_SEM_NOME
+            and lote_destino_nome.strip() != ''
+        ):
+            return {
+                'sucesso': None,
+                'plano': {
+                    'status': 'DRY_RUN_OK_LOTE_A_CRIAR',
+                    'qty_antes': 0.0,
+                    'qty_apos': qty,
+                    'ajuste_aplicado': qty,
+                    'observacao': (
+                        f'Lote destino {lote_destino_nome!r} NAO existe no Odoo. '
+                        f'Em --confirmar: sera criado + quant novo com qty={qty}. '
+                        f'(Dry-run NAO simula no quant SEM lote para nao enganar.)'
+                    ),
+                },
+                'lote_destino_nome': nome_canonico,
+                'lote_destino_criado_agora': True,
+                'tempo_ms': int((time.time() - inicio) * 1000),
+            }
 
         # 2. Ajuste via Skill 1 — guard delta_esperado=qty ativo.
         res = quant_svc.ajustar_quant(
@@ -541,6 +602,9 @@ def _processar_produto(
 
     quants_atuais = _buscar_quants_produto_cid(odoo, product_id, cid)
 
+    # produto_dry conta ajustes em dry-run (CR-BUG-2/EDGE-2 v9)
+    produto_out['dry_runs'] = 0
+
     # POS primeiro (preencher alvos)
     for a in pos:
         r = _executar_transferencia_interna(
@@ -554,6 +618,9 @@ def _processar_produto(
         elif r['sucesso'] is False:
             contadores['pos_falha'] += 1
             produto_out['falhas'] += 1
+        else:  # r['sucesso'] is None — dry-run
+            contadores['pos_dry'] += 1
+            produto_out['dry_runs'] += 1
     # NEG (sobras -> MIGRACAO)
     for a in neg:
         r = _executar_transferencia_interna(
@@ -567,6 +634,9 @@ def _processar_produto(
         elif r['sucesso'] is False:
             contadores['neg_falha'] += 1
             produto_out['falhas'] += 1
+        else:  # dry-run
+            contadores['neg_dry'] += 1
+            produto_out['dry_runs'] += 1
     # POSITIVO_PURO
     for a in puro:
         r = _executar_positivo_puro(
@@ -580,16 +650,29 @@ def _processar_produto(
         elif r['sucesso'] is False:
             contadores['puro_falha'] += 1
             produto_out['falhas'] += 1
+        else:  # dry-run
+            contadores['puro_dry'] += 1
+            produto_out['dry_runs'] += 1
 
+    # CR-BUG-2 v9: separar semantica de dry-run vs NOOP real vs anomalia.
     if produto_out['falhas'] == 0 and produto_out['sucessos'] > 0:
         contadores['produtos_ok'] += 1
     elif produto_out['sucessos'] == 0 and produto_out['falhas'] > 0:
         contadores['produtos_falha'] += 1
     elif produto_out['falhas'] > 0 and produto_out['sucessos'] > 0:
         contadores['produtos_parcial'] += 1
+    elif dry_run and produto_out['dry_runs'] > 0:
+        # Dry-run com ajustes simulados (esperado em dry-run)
+        contadores['produtos_dry'] += 1
     else:
-        # dry-run ou tudo NOOP — considera produto ok
-        contadores['produtos_ok'] += 1
+        # Modo real sem ajustes processados (anomalia — produto sem POS/NEG/PURO
+        # apos filtro, ou bug upstream). NAO considerar como ok.
+        contadores['produtos_sem_ajuste'] += 1
+        logger.warning(
+            f'produto cod={cod} sem ajustes processados '
+            f'(sucessos=0 falhas=0 dry_runs={produto_out["dry_runs"]} '
+            f'dry_run={dry_run}) — pos={len(pos)} neg={len(neg)} puro={len(puro)}'
+        )
     return produto_out
 
 
@@ -609,12 +692,7 @@ def _processar_produto_thread(
     """
     from app import db  # lazy
     from app.odoo.models import AjusteEstoqueInventario  # lazy
-    contadores_locais = {
-        'produtos_ok': 0, 'produtos_parcial': 0, 'produtos_falha': 0,
-        'pos_ok': 0, 'pos_falha': 0,
-        'neg_ok': 0, 'neg_falha': 0,
-        'puro_ok': 0, 'puro_falha': 0,
-    }
+    contadores_locais = _novos_contadores()
     produto_out: Dict[str, Any] = {'cod': cod}
     with app.app_context():
         try:
@@ -662,12 +740,7 @@ def _executar_paralelo(
 
     Returns: (contadores_agregados, lista de produto_outs).
     """
-    contadores = {
-        'produtos_ok': 0, 'produtos_parcial': 0, 'produtos_falha': 0,
-        'pos_ok': 0, 'pos_falha': 0,
-        'neg_ok': 0, 'neg_falha': 0,
-        'puro_ok': 0, 'puro_falha': 0,
-    }
+    contadores = _novos_contadores()
     produtos: List[Dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
@@ -713,12 +786,21 @@ def executar_onda_pre_etapa(
     - POS/NEG: Skill 2 transferir_quantidade_para_lote_v2 (delta_esperado propagado)
     - PURO: Skill 1 ajustar_quant (criar_se_faltar=True, delta_esperado=qty)
 
+    **Pre-condicao (CR-EDGE-3 v9 — paralelizacao)**: se `max_workers > 1`, a
+    sessao Flask-SQLAlchemy do caller deve estar limpa (sem transacoes pendentes
+    nao-commitadas) antes desta chamada. As threads filhas leem do banco em
+    isolamento de transacao — escritas nao-commitadas do caller principal NAO
+    sao visiveis. O `db.session.expire_all()` chamado internamente protege
+    contra read stale na sessao principal pos-threads, mas NAO commita estado
+    pendente upstream. Caller responsavel por garantir consistencia.
+
     Args:
         ciclo: identificador (default INVENTARIO_2026_05).
         company_id: 4 (CD Onda 5) ou 1 (FB Onda 6).
         onda_num: default inferido de company_id (4->5, 1->6).
         usuario: para auditoria.
         max_workers: paralelizacao por produto (default 1 serial; 5 para bulk ~5x).
+            CUIDADO: > 5 sobrecarrega Odoo XML-RPC (rate limit + timeouts).
         limite: executa N primeiros produtos (sub-piloto).
         cod_produto: filtra para 1 produto especifico.
         dry_run: True (default) simula; False executa real.
@@ -806,12 +888,7 @@ def executar_onda_pre_etapa(
         lot_svc = StockLotService(odoo=odoo)
         quant_svc = StockQuantAdjustmentService(odoo=odoo, lot_svc=lot_svc)
         transfer_svc = StockInternalTransferService(odoo=odoo, lot_svc=lot_svc)
-        contadores = {
-            'produtos_ok': 0, 'produtos_parcial': 0, 'produtos_falha': 0,
-            'pos_ok': 0, 'pos_falha': 0,
-            'neg_ok': 0, 'neg_falha': 0,
-            'puro_ok': 0, 'puro_falha': 0,
-        }
+        contadores = _novos_contadores()
         produtos = []
         for cod in cods_ordenados:
             prod_out = _processar_produto(

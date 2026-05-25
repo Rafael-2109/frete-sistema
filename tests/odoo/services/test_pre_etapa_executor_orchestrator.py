@@ -347,3 +347,152 @@ def test_constantes_acao_audit_curta_cobre_todas():
 
 def test_lote_migracao_constante():
     assert LOTE_MIGRACAO == 'MIGRAÇÃO'
+
+
+# ============================================================
+# CR v9 — fixes aplicados pos-code-review
+# ============================================================
+
+def test_acao_audit_curta_importada_de_pre_etapa():
+    """CR-PATTERN-2 v9: ACAO_AUDIT_CURTA deve ser a MESMA instancia
+    importada de pre_etapa.py (fonte unica), nao duplicada no orchestrator.
+    """
+    from app.odoo.estoque.scripts.pre_etapa import (
+        ACAO_AUDIT_CURTA as ACAO_AUDIT_CURTA_PRE_ETAPA,
+    )
+    # Mesma referencia (single source of truth)
+    assert ACAO_AUDIT_CURTA is ACAO_AUDIT_CURTA_PRE_ETAPA
+
+
+def test_acao_audit_curta_preserva_nomes_legacy_09b():
+    """CR-PATTERN-2 v9: gerador programatico deve preservar EXATAMENTE
+    os mesmos nomes curtos usados no 09b legacy (compat. com
+    registros historicos em operacao_odoo_auditoria).
+    """
+    expected = {
+        'AJUSTE_CD_TRANSF_INTERNA_POS': 'cd_pre_pos',
+        'AJUSTE_CD_TRANSF_INTERNA_NEG': 'cd_pre_neg',
+        'AJUSTE_CD_POSITIVO_PURO': 'cd_pos_puro',
+        'AJUSTE_FB_TRANSF_INTERNA_POS': 'fb_pre_pos',
+        'AJUSTE_FB_TRANSF_INTERNA_NEG': 'fb_pre_neg',
+        'AJUSTE_FB_POSITIVO_PURO': 'fb_pos_puro',
+    }
+    assert ACAO_AUDIT_CURTA == expected
+    for v in ACAO_AUDIT_CURTA.values():
+        assert len(v) <= 20  # VARCHAR(20) constraint
+
+
+def test_executar_positivo_puro_dry_run_lote_inexistente_nao_engana():
+    """CR-BUG-1 v9: dry-run com lote_destino nominal que nao existe
+    deve retornar DRY_RUN_OK_LOTE_A_CRIAR (NAO chamar Skill 1 com
+    lot_id=None, que simularia ajuste no quant SEM lote — enganando
+    operador).
+    """
+    quant_svc = MagicMock()
+    transfer_svc = MagicMock()
+    # resolver_lote_destino com criar_se_faltar=False retorna (None, ..., False)
+    transfer_svc.resolver_lote_destino.return_value = (None, 'LOTE_NOVO_2026', False)
+    ajuste = _ajuste_mock(
+        acao='AJUSTE_CD_POSITIVO_PURO',
+        qtd_ajuste=50.0, lote_destino='LOTE_NOVO_2026',
+    )
+    res = _executar_positivo_puro(
+        quant_svc, transfer_svc, ajuste, product_id=999,
+        location_principal=32, dry_run=True, executado_por='test',
+    )
+    # Skill 1 NAO deve ter sido chamada — guard CR-BUG-1
+    quant_svc.ajustar_quant.assert_not_called()
+    # Retorno deve indicar o guard
+    assert res['sucesso'] is None  # dry-run
+    assert res['plano']['status'] == 'DRY_RUN_OK_LOTE_A_CRIAR'
+    assert res['plano']['qty_antes'] == 0.0
+    assert res['plano']['qty_apos'] == 50.0
+    assert res['lote_destino_criado_agora'] is True
+    assert 'LOTE_NOVO_2026' in res['plano']['observacao']
+
+
+def test_executar_positivo_puro_dry_run_lote_p15_nao_dispara_guard_bug1():
+    """CR-BUG-1 v9: o guard NAO deve disparar para lote_destino_nome
+    'P-15/05' ou vazio (esses sao proxies para 'quant SEM lote', e
+    lot_id=None e' semanticamente correto nesse caso).
+    """
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.return_value = {
+        'status': 'DRY_RUN_OK', 'qty_antes': 0, 'qty_apos': 25.0,
+    }
+    transfer_svc = MagicMock()
+    transfer_svc.resolver_lote_destino.return_value = (None, 'P-15/05(sem-lote)', False)
+    ajuste = _ajuste_mock(
+        acao='AJUSTE_CD_POSITIVO_PURO',
+        qtd_ajuste=25.0, lote_destino='P-15/05',
+    )
+    res = _executar_positivo_puro(
+        quant_svc, transfer_svc, ajuste, product_id=999,
+        location_principal=32, dry_run=True, executado_por='test',
+    )
+    # Skill 1 DEVE ser chamada (P-15/05 e proxy valido para quant sem lote)
+    quant_svc.ajustar_quant.assert_called_once()
+    call_kwargs = quant_svc.ajustar_quant.call_args.kwargs
+    assert call_kwargs['lot_id'] is None  # OK — proxy P-15/05
+    # NAO retornou o guard BUG-1 (sucesso=None ok; status NAO eh
+    # DRY_RUN_OK_LOTE_A_CRIAR — caiu no caminho normal Skill 1)
+    assert res['sucesso'] is None
+    assert res.get('plano', {}).get('status') != 'DRY_RUN_OK_LOTE_A_CRIAR'
+
+
+def test_avaliar_sucesso_v2_simplificado_sem_auto_corrigido():
+    """CR-PATTERN-1 v9: EXECUTADO_AUTO_CORRIGIDO removido do set (nunca
+    propagado pelo flat status do v2). Mantido como sinonimo de EXECUTADO
+    nos sub-dicts internos, mas nao no avaliador flat.
+    """
+    # FLAT status EXECUTADO (caminho normal) — sucesso real
+    assert _avaliar_sucesso_v2({'status': 'EXECUTADO'}, dry_run=False) is True
+    # FLAT status DRY_RUN_OK em dry-run — sucesso dry
+    assert _avaliar_sucesso_v2({'status': 'DRY_RUN_OK'}, dry_run=True) is True
+    # FALHAS (transfer.py retorna esses flat)
+    assert _avaliar_sucesso_v2({'status': 'FALHA_REDUCAO'}, dry_run=False) is False
+    assert _avaliar_sucesso_v2({'status': 'FALHA_AUMENTO'}, dry_run=False) is False
+    # EXECUTADO_AUTO_CORRIGIDO no flat (NUNCA acontece, mas se acontecer):
+    # comportamento conservador — NAO conta como sucesso (mudanca CR v9).
+    assert _avaliar_sucesso_v2({'status': 'EXECUTADO_AUTO_CORRIGIDO'}, dry_run=False) is False
+
+
+# ============================================================
+# Contadores *_dry (CR-BUG-2/EDGE-2 v9)
+# ============================================================
+
+def test_contadores_iniciais_incluem_dry_e_sem_ajuste():
+    """CR-BUG-2/EDGE-2 v9: _novos_contadores deve incluir contadores
+    novos: pos_dry/neg_dry/puro_dry/produtos_dry/produtos_sem_ajuste.
+    """
+    from app.odoo.estoque.orchestrators.pre_etapa_executor import (
+        _novos_contadores,
+    )
+    c = _novos_contadores()
+    # Contadores antigos preservados
+    assert 'produtos_ok' in c and c['produtos_ok'] == 0
+    assert 'produtos_parcial' in c and c['produtos_parcial'] == 0
+    assert 'produtos_falha' in c and c['produtos_falha'] == 0
+    assert 'pos_ok' in c and 'pos_falha' in c
+    assert 'neg_ok' in c and 'neg_falha' in c
+    assert 'puro_ok' in c and 'puro_falha' in c
+    # Contadores NOVOS v9
+    assert c['produtos_dry'] == 0
+    assert c['produtos_sem_ajuste'] == 0
+    assert c['pos_dry'] == 0
+    assert c['neg_dry'] == 0
+    assert c['puro_dry'] == 0
+
+
+def test_novos_contadores_fabrica_dicts_independentes():
+    """_novos_contadores deve retornar dicts NOVOS (nao referencia para
+    _CONTADORES_INICIAIS) — mutacao em um nao afeta outro.
+    """
+    from app.odoo.estoque.orchestrators.pre_etapa_executor import (
+        _CONTADORES_INICIAIS, _novos_contadores,
+    )
+    c1 = _novos_contadores()
+    c2 = _novos_contadores()
+    c1['pos_ok'] = 99
+    assert c2['pos_ok'] == 0  # nao foi afetado
+    assert _CONTADORES_INICIAIS['pos_ok'] == 0  # original intacto

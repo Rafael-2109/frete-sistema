@@ -61,6 +61,19 @@ ONDA_NUM_POR_CID: Dict[int, int] = {4: 5, 1: 6}
 ACAO_RESIDUAL_FB_CD: str = 'TRANSFERIR_FB_CD'  # CFOP 5152 (so CD)
 COMPANY_LOCATIONS_PRE_ETAPA: Dict[int, int] = {4: 32, 1: 8}  # principal por CID
 
+# Mapeamento curto para auditoria (VARCHAR(20) constraint em
+# operacao_odoo_auditoria.acao). Gerado a partir de ACOES_INTERNAS_POR_CID
+# para garantir sincronia (CR-PATTERN-2 v9 — fonte unica). Preserva os
+# nomes usados pelo 09b legacy (compatibilidade com registros historicos
+# em operacao_odoo_auditoria).
+_PREFIXO_CID_AUDIT = {4: 'cd', 1: 'fb'}
+_ABREV_OP_AUDIT = {'POS': 'pre_pos', 'NEG': 'pre_neg', 'PURO': 'pos_puro'}
+ACAO_AUDIT_CURTA: Dict[str, str] = {
+    acao: f'{_PREFIXO_CID_AUDIT[cid]}_{_ABREV_OP_AUDIT[op_long]}'
+    for cid, acoes in ACOES_INTERNAS_POR_CID.items()
+    for op_long, acao in acoes.items()
+}
+
 
 @dataclass
 class TransferenciaInternaPlanejada:
