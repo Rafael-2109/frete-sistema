@@ -7,9 +7,48 @@
 
 ## ⏯️ ESTADO ATUAL E COMO CONTINUAR (handoff — atualizar a cada avanço)
 
-**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual 9+ commits sobre main@a937748b — último v15a). `main` está VIVO (Rafael commita em paralelo — avancou 11 commits desde v13: SPED V36, weekly, fix tabelas, SDK 0.2.87, D8) → merge coordenado depois. Nenhum conflito esperado em `app/odoo/estoque/` (SPED V36 e' em `app/relatorios_fiscais`, SDK em `app/agente`).
+**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual ~26 commits sobre main@15be9003 — último v15b com rebase 2026-05-25). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **435 pytest verdes** (tests/odoo/ — v15a confirmado em 14.36s).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **465 pytest verdes** (tests/odoo/ — v15b confirmado em 14.85s).
+
+**Sessão 2026-05-25 v15b (C6+C7+C8+F5c ✅ — Orchestrator base Skill 8 LIVE):**
+- ✅ Setup worktree + venv + ENV; rebase de main (11 commits — SDK 0.2.87, SPED V36, references, weekly, fix tabelas) sem conflito; pytest baseline 435 verdes.
+- ✅ Leituras: PLANEJAMENTO §0+§3+§6+§7.2+§7.3+§10.6+§12 + memorias `[[skill5_picking_pattern]]` (v15a 3 atomos) + `[[skill6_planejar_pre_etapa_pattern]]` (orchestrator C3 v9) + `[[sub-skill-c5-pattern]]` (PRE-FLIGHT subprocess) + `pre_etapa_executor.py` template + `picking.py` atomos novos.
+- ✅ AskUserQuestion v15b: opcoes "C6+C7+C8 juntos" + "Rebase agora" escolhidas.
+- ✅ **CRIADO** `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (~1300 LOC):
+  - Constants: `ACAO_PARA_DIRECAO`, `ACOES_PICKING`, `MAX_CODS_POR_PICKING=30`, `SLEEP_ENTRE_CHUNKS=5.0`, `ETAPAS_VALIDAS=(A,B,C,D,E,F)`, fases F5a/F5b/F5c OK/FALHA.
+  - Helpers: `_commit_resilient` (D14 versao MAIS FORTE com `engine.dispose()` em SSL drop), `_registrar_auditoria` (lazy import OperacaoOdooAuditoria), `_pre_flight_via_subskill_c5` (subprocess sub-skill C5 com `sys.executable` + env copy), `_resolver_picking_metadata` (acao->meta), `_carregar_ajustes` (D11 + CR-C1 status filter default), `_agrupar_em_chunks` (max 30 cods), `_agrupar_por_direcao` (CR-C2: por acao_decidida full, NAO `(co, tipo_op)`).
+  - Classe `FaturamentoPipelineExecutor`: `pre_flight`, `executar_etapa_a` (D15 DELEGADO Skill 2 — v15b stub NOOP), `executar_etapa_b` (F5a+F5b+F5c via Skill 5 v15a atomos + G022 sleep + G-ETB-COMPENSATORIO preservando acao_decidida origem), `executar_etapa_c/d/e/f` (stubs NOT_IMPLEMENTED_v15b — v16/v17), `executar_pipeline_bulk` (entry-point macro A->F com PRE-FLIGHT C5 + CR-H4 guard ETAPA D).
+  - CLI: `python -m app.odoo.estoque.orchestrators.faturamento_pipeline --modo bulk|pre-flight --etapas A,B,C,... --ciclo X --cod-produto Y --limite N --confirmar --confirmar-sefaz --pular-pre-flight`.
+- ✅ **30 PYTEST NOVOS VERDES** em `tests/odoo/services/test_faturamento_pipeline_orchestrator.py`:
+  - 2 `_commit_resilient` (OK + retry SSL+dispose) + 2 `_resolver_picking_metadata` (PERDA_LF_FB + acao invalida) + 2 `_agrupar_em_chunks` (max 30 + vazio) + 2 `_agrupar_por_direcao` (por acao + acao invalida) + 3 `_pre_flight_via_subskill_c5` (JSON OK + parse erro + CLI ausente).
+  - 2 `executar_etapa_a` (dry-run NOOP + skip vazio) + 3 `executar_etapa_b` (dry-run planeja + real invoca atomos + skip vazio).
+  - 2 `executar_pipeline_bulk` (PRE-FLIGHT bloqueia + pular-pre-flight executa) + 1 etapa invalida FALHA_USO.
+  - 4 stubs C/D/E/F (NOT_IMPLEMENTED_v15b + D bloqueado sem sefaz + D com sefaz ainda stub + E/F stubs).
+  - 2 sanity (ACOES_PICKING==8 + ETAPAS_VALIDAS ordem A-F).
+  - **5 NOVOS pos code-review** (CR-C1 status filter / CR-H4 etapa D bloqueia se B falhou / CR-M3 BLOQUEADO_SEFAZ status falha / CR-H2 compensatorio preserva acao / CR-M1 intersecao vazia retorna []).
+- ✅ **BASELINE PYTEST ODOO**: 435 → **465 verdes em 14.85s** (+30 v15b).
+- ✅ **SMOKE DRY-RUN PROD** em cod 210639522 (INDUSTRIALIZACAO_FB_LF, status=PROPOSTO):
+  - `python -m app.odoo.estoque.orchestrators.faturamento_pipeline --ciclo INVENTARIO_2026_05 --etapas A,B --cod-produto 210639522 --limite 1 --pular-pre-flight`
+  - ETAPA A status `DRY_RUN_OK_ETAPA_A_NOOP` (1 ajuste 789ms).
+  - ETAPA B status `DRY_RUN_OK_ETAPA_B` (1 picking planejado: origin=`INV-INVENTARIO_2026_05-SAIDA-INDUSTRI-171489`, tipo_op=industrializacao, co=1->cd=5, picking_type=53, partner=35, location_origem=8, location_destino=26489, qty=6000.0).
+  - Status global `DRY_RUN_OK` em 1623ms.
+  - Pos-fixes: `grupos_direcao={"INDUSTRIALIZACAO_FB_LF": 1}` (CR-C2 confirmado).
+- ✅ **Code-review paralelo (feature-dev:code-reviewer)** — 9 findings (2 CRITICAL + 4 HIGH + 3 MEDIUM):
+  - CR-C1 (92): `_carregar_ajustes` filtro de status faltando → adicionado default `['PROPOSTO','APROVADO']`
+  - CR-C2 (85): `_agrupar_por_direcao` por `(co, tipo_op)` permitia mix `DEV_LF_FB`+`DEV_LF_CD` → corrigido para agrupar por `acao_decidida` full
+  - CR-H1 (83): sleep G022 nao cobria transicoes entre grupos → tracker global `chunk_executado`
+  - CR-H2 (80): compensatorio hardcoded `acao='INDUSTRIALIZACAO_FB_LF'` → preserva `acao_decidida` do origem
+  - CR-H3 (80): ETAPA A real-run path nao testado → registrado TODO v16
+  - CR-H4 (82): ETAPA D sem guard se B falhou → adicionado `ETAPAS_ABORT_SE_ANTERIOR_FALHOU` + `BLOQUEADO_ETAPA_ANTERIOR_FALHOU` status
+  - CR-M1 (85): intersecao acoes vazia retornava todos → retorna `[]`
+  - CR-M2 (72): teste hardcoded Odoo IDs → registrado TODO leve (M2 nao bloqueante)
+  - CR-M3 (78): `BLOQUEADO_SEM_CONFIRMAR_SEFAZ` nao contava como falha agregada → corrigido
+- ✅ Cross-refs aplicados: CLAUDE.md estoque (status global + tabela §6 Skill 8) + ROADMAP HANDOFF (esta secao) + PLANEJAMENTO §0/§7/§12 trilha v15b.
+
+**Status global após v15b:**
+- Skill 8 `faturando-odoo` 🟡 **ORCHESTRATOR BASE LIVE** — C6/C7/C8/F5c implementados; ETAPAS C/D/E/F stubs v16/v17; **9 checkpoints ✅** (C1-C5 + C6 + C6.5 + C7 + C8 + 30 pytest); 15 ⬜; 1 decisão ABERTA (paralelismo G-RECLF-1 v17).
+- Próximo passo (v16): **F5d aguardar invoices + sub-etapas F5d.5 (G029 payment_provider) + F5d.6 (G007 price zero) + F5d.7 (G034 fiscal setup DEV_*) + D10 db.engine.dispose() profilatico antes/apos C+D + helper `_commit_helpers.py` consolidado (D14+G-RECLF-4+G-RECLF-5)**. Provavel +20-30 pytest novos.
 
 **Sessão 2026-05-25 v15a (C6.5 ✅ — Skill 5 estendida com 3 atomos inter-company):**
 - ✅ Setup worktree + venv + ENV; pytest baseline confirmado: 416 verdes em 14.34s (paridade v14b).

@@ -12,11 +12,11 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status global** | 🟡 PLANEJADO COMPLETO + 3 MINERACOES + **TESTE REAL 6 CODS 100% PROD** (v14a-ops, §7.5 5 dificuldades D-OPS-1..D-OPS-5) + **SUB-SKILL C5 v14b** + **3 ATOMOS INTER-COMPANY SKILL 5 v15a** |
-| **Sessao atual** | v15a (2026-05-25) — **C6.5 ✅ COMPLETO**: estende Skill 5 com 3 atomos inter-company (`criar_picking_inter_company` codifica D-OPS-3 tracking='none' · `validar_picking_inter_company` fluxo F5b completo + G018 peso/volumes · `criar_picking_entrada_destino_manual` ETAPA F com G023 company_id forcado + idempotencia origin); +19 pytest verdes (42→61 stock_picking_service, 416→435 baseline Odoo); centralizadas constants ETAPA F em `app/odoo/constants/picking_types.py`; smoke PROD validou D-OPS-3 detection em 6 cods v14a-ops (103500105 PIMENTA tracking='none' confirmado, lot_name removido das linhas normalizadas); cross-refs aplicados (SKILL.md operando-picking-odoo + subagente + ROUTING_SKILLS + CLAUDE.md estoque) |
-| **Sessoes estimadas** | 7-8 sessoes restantes (v15b → v20+) — orchestrator base + F5a/b/c/d/e + ETAPA E + ETAPA F invocando atomos Skill 5 |
-| **Baseline pytest atual** | 435 verdes (tests/odoo/ — confirmado v15a em 14.36s; 416 baseline v14b + 19 v15a — 2 aplicar_peso_volumes + 6 criar_picking_inter_company [incl D-OPS-3] + 4 validar_picking_inter_company + 7 criar_picking_entrada_destino_manual) |
-| **Baseline pytest pos-v20 esperado** | ≥445 verdes (+~10 testes restantes do Skill 8 orchestrator base) |
+| **Status global** | 🟡 PLANEJADO COMPLETO + 3 MINERACOES + TESTE REAL + SUB-SKILL C5 + 3 ATOMOS INTER-COMPANY SKILL 5 + **ORCHESTRATOR BASE LIVE v15b** (C6/C7/C8/F5c implementados; ETAPAS C/D/E/F stubs v16/v17) |
+| **Sessao atual** | v15b (2026-05-25) — **C6 ✅ + C7 ✅ + C8 ✅ + F5c ✅ COMPLETOS**: cria `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (~1300 LOC). Orchestrator C3 macro compoe Skill 5 atomos v15a (criar+validar+liberar) em pipeline A->B->C->D->E->F. PRE-FLIGHT via sub-skill C5 (subprocess). ETAPA A delegavel Skill 2 (v15b stub NOOP — v16 expandir). ETAPAS C/D/E/F sao stubs `NOT_IMPLEMENTED_v15b`. **+30 pytest verdes** (425 → 465 baseline Odoo). Smoke dry-run PROD validado: cod 210639522 INDUSTRIALIZACAO_FB_LF 6000un picking_type=53. Code-review 9 findings (2 CRITICAL + 4 HIGH + 3 MEDIUM) aplicados (C1/C2/H1/H2/H4/M1/M3). |
+| **Sessoes estimadas** | 5-6 sessoes restantes (v16 → v20+) — F5d/F5e/E/F + recovery + canary + bulk PROD |
+| **Baseline pytest atual** | 465 verdes (tests/odoo/ — confirmado v15b em 14.85s; 435 baseline v15a + 30 v15b orchestrator) |
+| **Baseline pytest pos-v20 esperado** | ≥490 verdes (+~25 testes restantes Skill 8 F5d/F5e/E/F + recovery) |
 | **Branch** | `feat/estoque-odoo` (worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo`) |
 | **Service-fonte** | `app/odoo/services/inventario_pipeline_service.py` (1.346 LOC) — minerado v13 §7.2 (D1-D9) |
 | **Script-fonte macro** | `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC) — minerado v14a §7.3 (D10-D18 + compensatorio + G014) |
@@ -466,11 +466,11 @@ done
 | **C3** | Mineracao `09_executar_onda1_bulk.py` (etapas A/B/C/D/E/F + main) | mapa etapas+funcoes+chamadas, conferir | Doc inline (§7.3) com referencia file:line | ~~v14~~ **v14a** | ✅ | Tabela §7.3 com 11 funcoes + 9 descobertas D10-D18 + dependencias externas; R1 RESPONDIDO (10.3 INTACTA) |
 | **C4** | Confirmar escopo completo (a/b/c) com Rafael | decisoes §10.1, §10.2 fechadas | Rafael confirmou via AskUserQuestion | v13 | ✅ | "estruturar bem, depois rodar casos reais" |
 | **C5** | **Criar sub-skill `auditando-cadastro-fiscal-odoo` (perfil inventario V1)** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (service ~430 LOC) + `.claude/skills/auditando-cadastro-fiscal-odoo/{SKILL.md,scripts/auditar_cadastro_inventario.py}` (CLI) + cross-refs (subagente + ROUTING_SKILLS + tool_skill_mapper + CLAUDE.md estoque) | smoke dry-run em onda real OK; >5 pytest verdes; --perfil inventario funcional | ~~v14~~ **v14b** | ✅ | **CONCLUIDO v14b** — service ~430 LOC capinado de `validar_cadastro_fiscal` (script 09) + `gtin_validator.py` + queries D-OPS-2 em AjusteEstoqueInventario; 14 pytest verdes; smoke PROD 6 cods em 987ms detectou 2 G014 + 1 D-OPS-3 (esperados); cobertura G017+G018+G035+G014+D-OPS-2+D-OPS-3 |
-| **C6** | Capinar orchestrator base (skeleton) | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` com entry-points (vazios), imports, dataclasses, constants | pytest smoke import OK | v15 | ⬜ | |
+| **C6** | Capinar orchestrator base (skeleton) | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` com entry-points, helpers (_commit_resilient/_carregar_ajustes/_pre_flight_via_subskill_c5/_resolver_picking_metadata/_agrupar_por_direcao/_agrupar_em_chunks), classe `FaturamentoPipelineExecutor` + CLI argparser + main() com app_context | pytest smoke import OK + 30 pytest verdes + smoke dry-run PROD OK | v15b | ✅ | **COMPLETO v15b 2026-05-25** — ~1300 LOC; constants `ACAO_PARA_DIRECAO`+`ACOES_PICKING`+`MAX_CODS_POR_PICKING=30`+`SLEEP_ENTRE_CHUNKS=5.0`+`ETAPAS_VALIDAS=(A,B,C,D,E,F)`; helpers D11/D14/D15/D16/D18 codificados; PRE-FLIGHT C5 subprocess; pre/pos-fixes pos code-review (CR-C1+C2+H1+H2+H4+M1+M3) |
 | **C6.5** | **NOVO v13 + EXPANDIDO v14a-fix — Estender Skill 5 com 3 atomos** (DECISAO 10.6) | `app/odoo/estoque/scripts/picking.py` ganha `criar_picking_inter_company` + `validar_picking_inter_company` + **`criar_picking_entrada_destino_manual` (NOVO v14a-fix — ETAPA F G023)**; SKILL.md `operando-picking-odoo` estendida; pytest >8 verdes novos (3 atomos × ~3 cenarios) | dry-run PROD OK em 2 pickings reais (1 inter-company + 1 entrada destino manual); idempotencia via origin validada | v15a | ✅ | **COMPLETO v15a (2026-05-25)** — 3 atomos LIVE com 19 pytest verdes (61 total stock_picking_service); constants ETAPA F centralizadas em `app/odoo/constants/picking_types.py`; smoke PROD com 6 cods v14a-ops validou D-OPS-3 detection (`103500105` PIMENTA tracking='none' detectado corretamente, `lot_name` removido das linhas); 435 baseline Odoo |
-| **C7** | Capinar F5a no orchestrator (chamando atomo Skill 5 estendido) | metodo `_executar_etapa_b_criar` no orchestrator que itera ajustes em paralelo (Semaphore=5) chamando `criar_picking_inter_company` | 5+ pytest verdes; dry-run em onda real OK; barreira de sincronizacao validada | v15 | ⬜ | depende C6.5 |
-| **C8** | Capinar F5b no orchestrator (chamando atomo Skill 5 estendido) | metodo `_executar_etapa_b_validar` + chamada `validar_picking_inter_company` | 5+ pytest verdes; dry-run OK; G011 qty_done + G018 peso_liquido validados via Skill 5 | v15-v16 | ⬜ | depende C6.5 |
-| **C9** | Capinar F5c (liberar faturamento) | metodo `_executar_f5c` + pre-validar state='done' | 3+ pytest verdes; dry-run OK | v16 | ⬜ | |
+| **C7** | Capinar F5a no orchestrator (chamando atomo Skill 5 estendido) | metodo `_processar_chunk_etapa_b` chama `criar_picking_inter_company` (Skill 5 v15a) com chunks <=30 cods + G022 sleep 5s entre chunks + tracker `chunk_executado` global (CR-H1) + G-ETB-COMPENSATORIO preservando acao_decidida origem (CR-H2) | smoke dry-run PROD OK; pytest cobre invocacao mocada + acao invalida + chunk vazio | v15b | ✅ | **COMPLETO v15b 2026-05-25** — invocacao via `picking_svc.criar_picking_inter_company(...)`; metadata resolvido via `_resolver_picking_metadata` (acao->picking_type+partner+locations); origin idempotente `INV-{ciclo}-SAIDA-{tipo_op[:8].upper()}-{ajuste_id:06d}`; CR-C2 corrigiu agrupamento (`acao_decidida` em vez de `(co, tipo_op)`) |
+| **C8** | Capinar F5b no orchestrator (chamando atomo Skill 5 estendido) | metodo `_processar_chunk_etapa_b` chama `validar_picking_inter_company` (Skill 5 v15a) APOS F5a; passa `linhas_esperadas` com lot_name + G018 v2 codificado intra-atomo | smoke dry-run PROD OK; pytest cobre fluxo F5a->F5b->F5c sequencial em chunk | v15b | ✅ | **COMPLETO v15b 2026-05-25** — invocacao via `picking_svc.validar_picking_inter_company(picking_id, linhas_esperadas=..., aplicar_peso_volumes=True)`; pendencias G021 capturadas + alimentam G-ETB-COMPENSATORIO em PERDA_LF_FB |
+| **C9** | Capinar F5c (liberar faturamento) | metodo `_processar_chunk_etapa_b` chama `picking_svc.liberar_faturamento(picking_id)` apos F5b OK | smoke dry-run PROD OK; pytest cobre fluxo F5c em real run | v15b (EXPANDIDO no escopo de v15b) | ✅ | **COMPLETO v15b 2026-05-25** — atomo legacy `liberar_faturamento` valida pre-cond state='done' (G019/G020 fechada v3); fase `F5c_LIBERADO` + auditoria registrada |
 | **C10** | Capinar F5d (aguardar invoices) + G016 SSL + G007+G034+G029 | metodo `_executar_f5d` com sub-etapas .5/.6/.7 + commit_with_retry | 5+ pytest verdes; dry-run com mock SSL drop OK | v16 | ⬜ | |
 | **C11** | Capinar F5e (transmitir SEFAZ) + G016 SSL | metodo `_executar_f5e` Playwright serial + commit_with_retry + idempotencia F5e_SEFAZ_OK | 5+ pytest verdes (mockando Playwright); dry-run sem confirmar-sefaz OK | v16-v17 | ⬜ | |
 | **C12** | Capinar etapa E (RecebimentoLf X→FB) | metodo `_executar_etapa_e` + idempotencia odoo_lf_invoice_id | 4+ pytest verdes; dry-run OK | v17 | ⬜ | |
@@ -1396,6 +1396,63 @@ E' um picking SOLTO (sem MO associada) que reservaria saldo para transferir para
 - 🟢 **Sub-skill C5 desbloqueia integracao Skill 8 v15b** (orchestrator base chama subprocess sub-skill pre-faturamento)
 - 🟢 **Fix Skill 2 D-OPS-5 desbloqueia atomo Skill 5 inter-company v15a** (3o atomo `criar_picking_inter_company` pode reusar pattern tracking='none' validado em transfer.py)
 - 🟢 **NAO mexeu** no RecebimentoLfOdooService (regra Rafael v14a-fix) NEM no script 09 (regra Rafael v14a-ops)
+
+### Sessao v15b (2026-05-25) — **C6 + C7 + C8 + F5c ✅** Orchestrator base Skill 8 LIVE
+
+- ✅ Setup worktree + venv + ENV; rebase de main (11 commits — SDK 0.2.87, SPED V36, references, weekly, fix tabelas Sentry) sem conflito (zero overlap com `app/odoo/estoque/`).
+- ✅ Pytest baseline pos-rebase: **435 verdes em 15.03s** (paridade v15a).
+- ✅ AskUserQuestion v15b: opcoes "C6+C7+C8 juntos" (sem fasear) + "Rebase agora" escolhidas.
+- ✅ Leituras obrigatorias (regra inviolavel 0): PLANEJAMENTO §0+§3+§6+§7.2+§7.3+§10.6+§12 INTEIRO + memorias `[[skill5_picking_pattern]]` (v15a 3 atomos) + `[[skill6_planejar_pre_etapa_pattern]]` (orchestrator C3 pattern v9) + `[[sub-skill-c5-pattern]]` (PRE-FLIGHT subprocess) + `pre_etapa_executor.py` template (907 LOC) + `picking.py` atomos novos (1378 LOC).
+- ✅ **CRIADO `app/odoo/estoque/orchestrators/faturamento_pipeline.py`** (~1300 LOC):
+  - **Constants modulo**: `ACAO_PARA_DIRECAO` (8 acoes -> tipo_op/co/cd), `ACOES_PICKING` (frozenset), `MAX_CODS_POR_PICKING=30`, `SLEEP_ENTRE_CHUNKS=5.0`, `ETAPAS_VALIDAS=(A,B,C,D,E,F)`, fases F5a/F5b/F5c OK/FALHA.
+  - **Helpers**:
+    - `_commit_resilient` (D14): MAIS FORTE que `_commit_with_retry` — backoff exponencial 2s/4s/8s + `engine.dispose()` proativo quando substring 'ssl' em err.lower().
+    - `_registrar_auditoria`: lazy import `OperacaoOdooAuditoria` (CR-Pattern Skill 6 v9); external_id `INV-{ciclo}-A{id:06d}-{fase}-{uuid8}`.
+    - `_pre_flight_via_subskill_c5`: subprocess `sys.executable` + `env=os.environ.copy()` + cwd=project_root + timeout=120s. Parsea JSON do stdout. Trade-offs R22 mitigados (path absoluto + env preservado + timeout actionable).
+    - `_resolver_picking_metadata` (acao -> picking_type+partner+locations) via ACAO_PARA_DIRECAO + get_picking_type + COMPANY_PARTNER_ID + COMPANY_LOCATIONS + LOCATION_DESTINO_POR_DIRECAO.
+    - `_carregar_ajustes` (D11 + CR-C1): `expire_all()` + filtro `status_filter` default `['PROPOSTO','APROVADO']` (CR-C1 CRITICAL — exclui CANCELADO/EXECUTADO/FALHA) + `acoes` filter + `fases_pipeline` + `cod_produto` + `limite`. CR-M1: intersecao acoes vazia retorna `[]`.
+    - `_agrupar_em_chunks`: max 30 cods por chunk; mesmo cod sempre no mesmo chunk.
+    - `_agrupar_por_direcao` (CR-C2 CRITICAL): agrupa por `acao_decidida` (NAO `(co, tipo_op)`) — preserva (co, cd) unico no chunk = partner_id correto. Era inconsistente para `DEV_LF_FB` (cd=1) vs `DEV_LF_CD` (cd=4) que compartilham (5, 'dev-industrializacao').
+  - **Classe `FaturamentoPipelineExecutor`**:
+    - `__init__`: injetavel `odoo` + `picking_svc` (StockPickingService).
+    - `pre_flight`: wrapper publico do helper.
+    - `executar_etapa_a` (D15 DELEGADO Skill 2): v15b stub `DRY_RUN_OK_ETAPA_A_NOOP` / `EXECUTADO_ETAPA_A_NOOP` — marca todos `fase_pipeline='TRANSF_OK'`. v16 expandir com analise de quants + invocacao Skill 2 inline.
+    - `executar_etapa_b` (C7+C8+F5c): agrupa por `acao_decidida` -> chunks -> pipeline POR CHUNK (F5a -> F5b -> F5c) com G022 sleep 5s entre chunks (CR-H1 tracker global cobre transicoes entre grupos).
+    - `_processar_chunk_etapa_b`: invoca atomos Skill 5 v15a em sequencia + auditoria + commit_resilient apos cada sub-etapa. G-ETB-COMPENSATORIO em PERDA_LF_FB (CR-H2 preserva acao_decidida do origem em vez de hardcode INDUSTRIALIZACAO_FB_LF).
+    - `_resolver_pids_em_batch`: 1 read batch product.product por `default_code`.
+    - `_criar_compensatorios_g_etb`: cria `AjusteEstoqueInventario` PROPOSTO com `acao_decidida` igual ao origem para ondas futuras.
+    - `executar_etapa_c/d/e/f`: stubs `NOT_IMPLEMENTED_v15b` com roadmap v16/v17. ETAPA D exige `confirmar_sefaz=True` (CR-H4 + CR-M3 codificados).
+    - `executar_pipeline_bulk` (entry-point macro): PRE-FLIGHT C5 -> A -> expire+reload -> B -> ... -> F. CR-H4: `ETAPAS_ABORT_SE_ANTERIOR_FALHOU=(D,)` bloqueia ETAPA D se B falhou. CR-M3: `BLOQUEADO_*` conta como falha em status agregado.
+  - **CLI** `python -m app.odoo.estoque.orchestrators.faturamento_pipeline`:
+    - Modos `bulk` (default) | `pre-flight`
+    - Args `--ciclo` `--etapas A,B,C,D,E,F` `--company-origem-id` `--cod-produto` `--limite` `--confirmar` `--confirmar-sefaz` `--pular-pre-flight` `--usuario`
+    - Cria Flask `app_context()` no `main()` (D11 — `db.session.expire_all()` precisa).
+    - Exit codes alinhados Skill 6 v9: 0=OK, 1=falha negocial, 2=uso, 4=DRY_RUN_OK.
+- ✅ **30 PYTEST NOVOS VERDES** em `tests/odoo/services/test_faturamento_pipeline_orchestrator.py`:
+  - 25 baseline + 5 NOVOS pos code-review (status_filter / etapa D bloqueia / BLOQUEADO_SEFAZ status falha / compensatorio preserva acao / intersecao vazia retorna []).
+- ✅ **BASELINE PYTEST ODOO**: 435 → **465 verdes em 14.85s** (+30 v15b).
+- ✅ **SMOKE DRY-RUN PROD** em cod 210639522 (INDUSTRIALIZACAO_FB_LF, status=PROPOSTO, fase=None):
+  - `python -m app.odoo.estoque.orchestrators.faturamento_pipeline --ciclo INVENTARIO_2026_05 --etapas A,B --cod-produto 210639522 --limite 1 --pular-pre-flight`
+  - **status=DRY_RUN_OK em 1623ms**
+  - ETAPA A status `DRY_RUN_OK_ETAPA_A_NOOP` (1 ajuste 789ms).
+  - ETAPA B status `DRY_RUN_OK_ETAPA_B` (1 picking planejado):
+    - origin: `INV-INVENTARIO_2026_05-SAIDA-INDUSTRI-171489` (idempotente)
+    - tipo_op=industrializacao, co=1 (FB) -> cd=5 (LF)
+    - picking_type_id=53 (FB Expedicao Industrializacao) ✓
+    - partner_id=35 (LF) ✓
+    - location_origem=8 (FB/Estoque) ✓
+    - location_destino=26489 (Em Transito Industrializacao) ✓
+    - qty_total=6000.0
+  - Pos-fixes CR-C2: `grupos_direcao={"INDUSTRIALIZACAO_FB_LF": 1}` (chave por acao_decidida) ✓
+- ✅ **CODE-REVIEW PARALELO** (feature-dev:code-reviewer) — 9 findings com confidence >= 70:
+  - 2 CRITICAL (C1=92 status filter / C2=85 agrupamento incorreto)
+  - 4 HIGH (H1=83 sleep boundary / H2=80 compensatorio acao / H3=80 ETAPA A untested / H4=82 abort guard D)
+  - 3 MEDIUM (M1=85 intersecao vazia / M2=72 teste IDs hardcoded / M3=78 BLOQUEADO_SEFAZ status)
+  - **Aplicados 7/9**: C1+C2+H1+H2+H4+M1+M3 (TODOs registrados para H3+M2 — proxima sessao).
+- ✅ Cross-refs aplicados: `CLAUDE.md estoque` (status global + tabela §6) + `ROADMAP_SKILLS.md` HANDOFF + PLANEJAMENTO §0 + §7 (C6/C7/C8 ✅) + §12 (esta trilha).
+- ✅ **NAO MEXEU** no script 09 (regra Rafael v14a-ops) nem RecebimentoLfOdooService (regra v14a-fix) nem InventarioPipelineService legacy.
+- 🟢 **C6+C7+C8+F5c destravam v16** (ETAPA C — F5d aguardar invoices + sub-etapas .5/.6/.7).
+- 🟢 Pattern arquitetural v15a validado em producao: atomos Skill 5 invocados via Python (NAO subprocess CLI) + barreira sincronizacao + auditoria + dry-run default.
 
 ### Sessao v15a (2026-05-25) — C6.5 ✅ Estender Skill 5 com 3 atomos inter-company
 
