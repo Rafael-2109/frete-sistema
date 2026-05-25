@@ -1,5 +1,11 @@
 # PROMPT_PROXIMA_SESSAO_SKILL2 — FASE C bulk (153 cods restantes) + 12 pendencias
 
+> **✅ EXECUTADO em 2026-05-25 v11** (commit `a21b1469`). FASE C bulk completo:
+> 153 cods + cleanup. Cobertura 99.69%. Caso 158 cods FECHADO. Este arquivo
+> foi arquivado para historico. Proxima sessao = abrir `PROMPT_PROXIMA_SESSAO.md` (geral).
+>
+> **Resultado**: `docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/README.md`
+
 > **Sessao seguinte ao v10** (commit `b10e6653`): Skill 2 ja MATURADA com
 > helper `distribuir_para_indisponivel` + CLI alto-nivel `transferir_para_indisp_em_lote.py`.
 > Canary 5 cods PROD validado (15.224 un movidas). Falta executar bulk dos

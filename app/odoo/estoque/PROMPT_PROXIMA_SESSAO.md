@@ -1,10 +1,10 @@
-# PROMPT_PROXIMA_SESSAO — orquestrador-Odoo (worktree feat/estoque-odoo) v10
+# PROMPT_PROXIMA_SESSAO — orquestrador-Odoo (worktree feat/estoque-odoo) v12
 
 > Copie tudo entre `---BEGIN---` e `---END---` e cole como prompt inicial da próxima sessão. Mantém você dentro do plano global sem desviar.
 
 ---BEGIN---
 
-Continue o trabalho do orquestrador-Odoo. Worktree: `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **commits ao fim de v9: bf53ea84 (v7) + 507e5e36 (v7-extras) + 4e30c468 (v8) + 6a73c6fa (v9) sobre `main`@b4f7b24c**). `main` continua VIVO em paralelo (Rafael commita lá) — verificar se avançou e considerar rebase incremental ANTES de iniciar.
+Continue o trabalho do orquestrador-Odoo. Worktree: `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **commits ao fim de v11: bf53ea84 (v7) + 507e5e36 (v7-extras) + 4e30c468 (v8) + 6a73c6fa (v9 Skill 6 orchestrator) + 9fc7e712 (v9 CR fixes) + 448ea62e (v9 docs PROMPT) + 79676cc1 (v10 PROMPT_SKILL2 inicial) + c73a6020 (v10 PROMPT regra) + b10e6653 (v10 Skill 2 distribuir + canary 5 cods) + b158c396 (v10 PROMPT FASE C bulk) + a21b1469 (v11 FASE C bulk 158 cods completo + cleanup) sobre `main`@b4f7b24c**). `main` continua VIVO em paralelo (Rafael commita lá) — verificar se avançou e considerar rebase incremental ANTES de iniciar.
 
 ## Setup OBRIGATÓRIO (worktree sem .env)
 
@@ -13,6 +13,16 @@ cd /home/rafaelnascimento/projetos/frete_sistema_estoque_odoo
 source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate
 set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a
 ```
+
+## ✅ SKILL 2 MATURADA em v10+v11 (2026-05-25) — demanda real 158 cods FB
+
+Helper alto-nivel `distribuir_para_indisponivel` (app/odoo/estoque/scripts/transfer.py) + CLI thin wrapper (`.claude/skills/transferindo-interno-odoo/scripts/transferir_para_indisp_em_lote.py`) + 17 testes pytest + fluxo 2.2.j. Executado em PROD:
+- **v10 canary + sub-piloto**: 5 cods, 8 transferencias, 15.224 un (18s)
+- **v11 bulk**: 153 cods, 485 transferencias, 10.994.553 un (11min 33s)
+- **v11 cleanup**: Skill 2.4 `--zerar-residual` 28 quants (-28.265 un reserved) + Skill 1 `--valor-absoluto 0` 2 quants (qty<0 → 0)
+- **TOTAL**: 158 cods, 495+ writes, 11.009.776 un movidas para FB/Indisp/MIGRACAO, cobertura 99.69%
+
+Pendencias finais 12 cods (35.313 un, 0.32% da demanda) documentadas em `docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/`. **Caso fechado**, sem acoes pendentes operacionais.
 
 ## ✅ SKILL 6 CICLO COMPLETO em v9 (2026-05-25)
 
@@ -58,11 +68,12 @@ A jornada v7 + v7-extras + v8 + cirurgia processou **~115 writes PROD, ~22.500 u
 
 ## PENDÊNCIAS RESIDUAIS
 
-**ZERO pendências operacionais** do caso 71 cods + ZERO da Skill 6. Apenas pendências cosméticas:
+**ZERO pendências operacionais** do caso 71 cods + ZERO da Skill 6 + ZERO da Skill 2 (caso 158 cods v10+v11 fechado). Apenas pendências cosméticas:
 - **3 moves residuais com qty=0 no picking FB/OUT/01046** (cosmético, aguarda validação manual no Odoo UI)
 - **1 ajuste APROVADO real id=163696** (NEG cod=208000012 cid=4 qty=835.851,71 un MIGRAÇÃO) — aguardando aprovação do Rafael para canary `executar-onda --confirmar`
+- **12 cods pendentes da demanda 158 v10+v11** (35.313 un, 0.32%) — 2 cods inexistentes + 1 sem saldo + 1 saldo Odoo<pedido + 8 arredondamento <1 un. Acoes recomendadas em `docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/README.md`.
 
-## FOCOS POSSÍVEIS PARA v10 (escolher 1 ao iniciar a sessão)
+## FOCOS POSSÍVEIS PARA v12 (escolher 1 ao iniciar a sessão)
 
 ### Foco A: Skill 8 `faturando-odoo` (RECOMENDADO — DESBLOQUEADA pela ONDA 0.4 v3 + Skill 6 v9)
 - Skill MACRO mais perigosa (NF→SEFAZ irreversível).
