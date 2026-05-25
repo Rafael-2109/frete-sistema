@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**104 arquivos** | **~66.1K LOC** | **108 templates** | **Atualizado**: 2026-05-18
+**107 arquivos** | **~66.9K LOC** | **109 templates** | **Atualizado**: 2026-05-25
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 
@@ -33,17 +33,17 @@ Sempre prefira ler o sub-doc correspondente ao topico ao inves de reconstruir co
 
 ```
 app/carvia/
-  routes/          # 29 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
+  routes/          # 30 sub-rotas (dashboard, importacao, nf, nf_transferencia, operacao,
                    #   subcontrato, fatura, despesa, fluxo_caixa, conciliacao, cte_complementar,
                    #   custo_entrega, admin, cliente, cotacao_v2, pedido, frete, gerencial,
                    #   aprovacao, comissao, config, conta_corrente, exportacao, receita,
-                   #   scanner, simulador, tabela_carvia, importacao_config, api)
-  services/        # 41 services em 6 sub-pacotes + 2 root:
+                   #   scanner, simulador, tabela_carvia, importacao_config, api, anexo)
+  services/        # 42 services em 6 sub-pacotes + 2 root:
                    #   admin/ (admin_service)
                    #   clientes/ (cliente_service)
                    #   documentos/ (carvia_frete, conferencia, embarque_carvia,
                    #                linking, matching, nf_transferencia, operacao_cancel,
-                   #                ssw_emissao, aprovacao_frete) — 9
+                   #                ssw_emissao, aprovacao_frete, anexo) — 10
                    #   financeiro/ (conciliacao, csv_razao, historico_match, ofx, pagamento,
                    #                sugestao, comissao, conta_corrente, custo_entrega_autolink,
                    #                custo_entrega_cobertura, custo_entrega_fatura, fluxo_caixa,
@@ -56,12 +56,12 @@ app/carvia/
   workers/         # 4 workers RQ com SSL-drop resilience (R15):
                    #   _ssw_helpers, ssw_cte_jobs, ssw_cte_complementar_jobs, verificar_ctrc_ssw_jobs
   utils/           # tomador.py, upload_policies.py, excel_export_helper.py, papeis_frete.py
-  models/          # Pacote 13 modulos: admin, aprovacao, clientes, comissao, config_moto,
-                   #   conta_corrente, cotacao, cte_custos, documentos, faturas, financeiro,
-                   #   frete, tabelas
+  models/          # Pacote 14 modulos: admin, anexos, aprovacao, clientes, comissao,
+                   #   config_moto, conta_corrente, cotacao, cte_custos, documentos, faturas,
+                   #   financeiro, frete, tabelas
   forms.py         # 4 forms WTForms
 
-app/templates/carvia/  # 108 templates (dashboard, listagens, detalhes, wizards, modais)
+app/templates/carvia/  # 109 templates (dashboard, listagens, detalhes, wizards, modais)
 ```
 
 ---

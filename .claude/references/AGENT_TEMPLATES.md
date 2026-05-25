@@ -1,8 +1,8 @@
 # Agent Templates — Blocos Reusaveis
 
-**Ultima Atualizacao**: 2026-05-18 (contagem subagents 14 -> 15: `auditor-sped-ecd` adicionado em 2026-05-16)
+**Ultima Atualizacao**: 2026-05-25 (contagem subagents 15 -> 16: `gestor-estoque-odoo` adicionado em 2026-05-24 — commit `2af8123e` "orquestrador Odoo — 4 skills + subagente")
 
-Blocos canonicos referenciados pelos 15 subagents em `.claude/agents/` (14 Nacom Goya — 12 originais + `gestor-motos-assai` em 2026-05-09 + `auditor-sped-ecd` em 2026-05-16 — + 1 `orientador-loja` Lojas HORA adicionado em 2026-04-29). Atualizacao aqui propaga a todos os agents que referenciam.
+Blocos canonicos referenciados pelos 16 subagents em `.claude/agents/` (15 Nacom Goya — 12 originais + `gestor-motos-assai` em 2026-05-09 + `auditor-sped-ecd` em 2026-05-16 + `gestor-estoque-odoo` em 2026-05-24 — + 1 `orientador-loja` Lojas HORA adicionado em 2026-04-29). Atualizacao aqui propaga a todos os agents que referenciam.
 
 **Como usar**: Cada agent inclui um bloco com um header e uma linha de referencia:
 ```markdown

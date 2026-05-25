@@ -9,6 +9,6 @@ Ver app/odoo/estoque/CLAUDE.md.
 """
 from app.odoo.estoque.scripts.quant import *  # noqa: F401,F403
 from app.odoo.estoque.scripts.quant import (  # noqa: F401
-    StockQuantAdjustmentService,
-    TOL_ARREDONDAMENTO,
+    StockQuantAdjustmentService, # type: ignore
+    TOL_ARREDONDAMENTO, # type: ignore
 )

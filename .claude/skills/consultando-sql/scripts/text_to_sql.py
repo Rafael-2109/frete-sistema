@@ -914,23 +914,78 @@ class SQLDeterministicValidator:
 
         return issues
 
+    def _extract_alias_map(self, sql: str, field_map: dict) -> dict:
+        """Extrai mapa `alias_lower -> tabela_lower` a partir de FROM/JOIN ... [AS] alias.
+
+        Patterns capturados:
+            FROM separacao s
+            FROM separacao AS s
+            JOIN faturamento_produto fp
+            JOIN faturamento_produto AS fp
+
+        Apenas inclui aliases cuja tabela esteja em `field_map` (i.e., schema conhecido).
+        Estrategia conservadora: se alias colide com nome de tabela conhecido,
+        prevalece o nome de tabela (mais seguro).
+
+        Sentry PYTHON-FLASK-M5 (25/05/2026): LLM gerou `s.qtd_saldo_produto_pedido`
+        em alias de `separacao`. Sem alias map, o prefix `s` era pulado.
+        """
+        alias_map: dict = {}
+        # Pattern: FROM/JOIN tabela [AS] alias
+        # Captura: tabela (group 1), alias opcional via AS ou implicito (group 2 ou 3)
+        pattern = re.compile(
+            r"\b(?:FROM|JOIN)\s+"
+            r"([a-zA-Z_]\w*)"           # group 1: tabela
+            r"(?:\s+AS\s+([a-zA-Z_]\w*)" # group 2: alias com AS
+            r"|\s+([a-zA-Z_]\w*))?",     # group 3: alias sem AS
+            re.IGNORECASE,
+        )
+        # Palavras-chave SQL que podem aparecer apos tabela e NAO sao aliases
+        non_alias_keywords = {
+            "on", "using", "where", "group", "order", "having", "limit",
+            "offset", "union", "inner", "left", "right", "full", "cross",
+            "outer", "natural", "join", "lateral", "as", "and", "or",
+        }
+        for tname, alias_with_as, alias_implicit in pattern.findall(sql):
+            tname_lower = tname.lower()
+            if tname_lower not in field_map:
+                continue
+            alias = (alias_with_as or alias_implicit or "").lower()
+            if not alias or alias in non_alias_keywords:
+                continue
+            # Nao sobrescrever nome de tabela conhecido
+            if alias in field_map:
+                continue
+            # Primeira ocorrencia vence (caso raro de mesmo alias duas vezes)
+            alias_map.setdefault(alias, tname_lower)
+        return alias_map
+
     def _check_qualified_fields(self, sql: str, field_map: dict) -> list:
         """Detecta `tabela.campo` ou `alias.campo` onde campo nao existe.
 
-        IMPORTANTE: aliases (em, cp, s) sao comuns no SQL gerado. Nao temos
-        como resolver alias -> tabela sem parser AST. Estrategia conservadora:
-        - Se `prefix.campo` e prefix e nome de tabela conhecida: validar
-        - Se prefix nao e tabela conhecida: assumir alias e pular (Haiku valida)
+        Aliases (s, fp, cp) sao resolvidos via `_extract_alias_map` a partir
+        de FROM/JOIN ... [AS] alias. Se alias nao for resolvido, mantemos
+        estrategia conservadora (skip, deixa Haiku validar).
+
+        Sentry PYTHON-FLASK-M5 (25/05/2026): `s.qtd_saldo_produto_pedido` em
+        SELECT com `FROM separacao s` escapava por nao resolver alias.
         """
         issues = []
         seen = set()
+        alias_map = self._extract_alias_map(sql, field_map)
+
         # Pattern: \b(palavra).(palavra) — captura tabela.campo
         for prefix, field in re.findall(r"\b([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)\b", sql):
             prefix_lower = prefix.lower()
             field_lower = field.lower()
 
-            # Se prefix nao e tabela conhecida — assumir alias (skip)
-            if prefix_lower not in field_map:
+            # Resolver prefix: pode ser nome de tabela direto, ou alias
+            if prefix_lower in field_map:
+                resolved_table = prefix_lower
+            elif prefix_lower in alias_map:
+                resolved_table = alias_map[prefix_lower]
+            else:
+                # Prefix nao e tabela nem alias resolvivel — skip (Haiku valida)
                 continue
 
             # Tabela conhecida: campo deve existir
@@ -939,11 +994,18 @@ class SQLDeterministicValidator:
                 continue
             seen.add(key)
 
-            if field_lower not in field_map[prefix_lower]:
-                issues.append(
-                    f"campo_inexistente:{prefix_lower}.{field_lower} "
-                    f"(nao consta em fields[] de '{prefix_lower}')"
-                )
+            if field_lower not in field_map[resolved_table]:
+                # Reportar com alias original para clareza, indicando tabela resolvida
+                if prefix_lower == resolved_table:
+                    issues.append(
+                        f"campo_inexistente:{prefix_lower}.{field_lower} "
+                        f"(nao consta em fields[] de '{prefix_lower}')"
+                    )
+                else:
+                    issues.append(
+                        f"campo_inexistente:{prefix_lower}.{field_lower} "
+                        f"(alias '{prefix_lower}' = '{resolved_table}', campo nao consta)"
+                    )
 
         return issues
 

@@ -1,6 +1,6 @@
 # Carteira — Guia de Desenvolvimento
 
-**LOC**: ~18.4K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 18/05/2026
+**LOC**: ~18.5K | **Arquivos**: 50 | **22 JS** (21 templates + 1 static) | **Atualizado**: 25/05/2026
 
 Workspace principal do sistema de fretes. Exibe pedidos agrupados, gera separacoes,
 analisa ruptura de estoque, programa lotes (Atacadao/Sendas) e gerencia standby.
@@ -22,6 +22,7 @@ app/carteira/
   ├── models.py                  # 7 models (657 linhas)
   ├── models_alertas.py          # AlertaSeparacaoCotada
   ├── models_adapter_presep.py   # Adapter PreSeparacaoItem -> Separacao
+  ├── alert_system.py            # AlertaSistemaCarteira (separacoes cotadas pre-sync, integrado com NotificationDispatcher)
   └── main_routes.py             # Apenas dashboard index() — NAO adicionar novas rotas
 ```
 

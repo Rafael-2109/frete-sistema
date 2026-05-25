@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 18/05/2026
+**Ultima atualizacao**: 25/05/2026
 
 ---
 
@@ -136,3 +136,10 @@
 | `auditando-sped-vs-manual` | `app/relatorios_fiscais/manual_ecd/` (Leiaute 9 oficial), `app/relatorios_fiscais/CLAUDE.md` |
 | `auditando-sped-contabil` | `app/relatorios_fiscais/CLAUDE.md` |
 | `comparando-sped-ground-truth` | `app/relatorios_fiscais/CLAUDE.md` |
+| `ajustando-quant-odoo` (WRITE) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/ROADMAP_SKILLS.md`, `odoo/IDS_FIXOS.md` |
+| `transferindo-interno-odoo` (WRITE) | `app/odoo/estoque/CLAUDE.md`, `odoo/IDS_FIXOS.md` (lotes MIGRACAO, locais Indisponivel) |
+| `operando-reservas-odoo` (WRITE) | `app/odoo/estoque/CLAUDE.md`, `docs/inventario-2026-05/02-gotchas/G030*` |
+| `operando-picking-odoo` (WRITE) | `app/odoo/estoque/CLAUDE.md` (invariante G019/G020) |
+| `operando-mo-odoo` (WRITE) | `app/odoo/estoque/CLAUDE.md` (guard G-MO-01) |
+| `planejando-pre-etapa-odoo` (READ+WRITE) | `app/odoo/estoque/CLAUDE.md`, `docs/inventario-2026-05/00-decisoes/D007*` |
+| `consultando-quant-odoo` (READ AO VIVO) | `app/odoo/estoque/CLAUDE.md` (auditoria pos-WRITE) |

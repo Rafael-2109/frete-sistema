@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-05-25-1](atualizacao-2026-05-25-1.md) — Nona auditoria. Bug estrutural NOVO: 6 arquivos criados em `memory/memory/` (subdir aninhado, possivel bug do skill `remember`) movidos para top-level e subdir removido. 3 correcoes factuais (drift recorrente): skills 40->47 (+6 orquestrador Odoo + 1 HORA); SDK 0.2.82->0.2.87. 86 memorias (cresceu +37 em 7 dias — sessoes intensas SPED ECD V31-V36 + Skills 2/4/5/6/10 + caso real 71 cods). MEMORY.md 128 linhas (85% do budget — alerta). Frontmatter OK em 86/86.
+
 - [2026-05-18-1](atualizacao-2026-05-18-1.md) — Oitava auditoria. Sistema saudavel estruturalmente. 3 correcoes factuais (drift): skills 35->40 invocaveis (+5 SPED ECD + baseline conciliacao); SDK 0.1.80->0.2.82 (migracao minor); 1 orfao detectado e registrado (`feedback_rastrear_acesso_ui_completo.md` existia desde 2026-05-12). 49 memorias (cresceu +17), MEMORY.md 90 linhas. Frontmatter OK em 49/49.
 
 - [2026-05-11-1](atualizacao-2026-05-11-1.md) — Setima auditoria. Sistema saudavel. 3 correcoes factuais: skills 29->35 invocaveis em MEMORY.md + `skills_inventario.md` (6 novas skills motos_assai); SDK 0.1.66->0.1.80 em MEMORY.md + `sdk_0160_subagent_bugs.md` (alinhamento com `requirements.txt`). 32 memorias, MEMORY.md 73 linhas. Frontmatter OK em 32/32.

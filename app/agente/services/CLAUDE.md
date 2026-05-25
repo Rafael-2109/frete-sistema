@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~10.5K | **Arquivos**: 17 | **Atualizado**: 2026-05-18
+**LOC**: ~10.5K | **Arquivos**: 17 | **Atualizado**: 2026-05-25
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -22,7 +22,7 @@ app/agente/services/
   ├── friction_analyzer.py            #   490 LOC — Deteccao de friccao heuristica (P2-4)
   ├── session_summarizer.py           #   480 LOC — Resumos M1 estruturados via Sonnet (P0-2)
   ├── sql_evaluator_falses_service.py #   387 LOC — Detector de falsos negativos no SQL evaluator
-  ├── tool_skill_mapper.py            #   337 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
+  ├── tool_skill_mapper.py            #   350 LOC — Mapeamento Tool → Categoria → Dominio (lookup)
   ├── recommendations_engine.py       #   279 LOC — Recomendacoes rule-based para dashboard
   ├── suggestion_generator.py         #   223 LOC — Sugestoes pos-resposta via Sonnet (P1-1)
   └── sentiment_detector.py           #   214 LOC — Deteccao LOCAL de frustracao, zero API (P1-2)

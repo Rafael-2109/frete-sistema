@@ -1,8 +1,10 @@
 # Odoo — Guia de Desenvolvimento
 
-**46 arquivos** | **~23K LOC** | **Atualizado**: 20/05/2026
+**63 arquivos** | **~28.8K LOC** | **Atualizado**: 25/05/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
+
+> Subpacote `estoque/` (orquestrador WRITE + READ ao vivo): 13 arquivos / ~6.7K LOC. Guia completo: `app/odoo/estoque/CLAUDE.md`.
 
 ---
 
@@ -14,15 +16,17 @@ app/odoo/
   ├── routes_circuit_breaker.py # Blueprint p/ status do circuit breaker
   ├── config/
   │   └── odoo_config.py       # 1 config (constantes Odoo: URL, DB, UID)
-  ├── constants/               # 2 modulos de constantes-dado
+  ├── constants/               # 4 modulos de constantes-dado
   │   ├── locations.py             # COMPANY_LOCATIONS (FB=8, CD=32, LF=42)
-  │   └── operacoes_fiscais.py     # MATRIZ_INTERCOMPANY (D002 — operacoes NACOM)
+  │   ├── operacoes_fiscais.py     # MATRIZ_INTERCOMPANY (D002 — operacoes NACOM)
+  │   ├── picking_types.py         # IDs de picking_type por empresa/operacao
+  │   └── ids_diversos.py          # IDs fixos auxiliares (categorias, tags)
   ├── models/                  # 2 models SQLAlchemy (excecao a regra "sem models proprios")
   │   ├── ajuste_estoque_inventario.py  # Ciclo de inventario (1 linha por divergencia)
   │   └── operacao_odoo_auditoria.py    # Auditoria polimorfica de operacoes Odoo
   ├── routes/
   │   └── sincronizacao_integrada.py  # 1 rota (sync manual + fallback + pedido individual)
-  ├── services/                # 19 services
+  ├── services/                # 21 services
   │   ├── carteira_service.py              # Sync sale.order → CarteiraPrincipal/Separacao (~142K)
   │   ├── faturamento_service.py           # Sync account.move → FaturamentoProduto (~90K)
   │   ├── importacao_fallback_service.py   # Fallback quando sync principal falha (~69K)
@@ -40,6 +44,8 @@ app/odoo/
   │   ├── stock_lot_service.py             # Operacoes stock.lot (criar/buscar com fallback like)
   │   ├── stock_internal_transfer_service.py # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/transfer.py (Skill 2)
   │   ├── stock_quant_adjustment_service.py # SHIM 2026-05-23 — re-exporta de app/odoo/estoque/scripts/quant.py (Skill 1)
+  │   ├── stock_mo_service.py              # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/mo.py (Skill 4 — cancelar MO)
+  │   ├── transferencia_saldo_codigo_service.py # Transferencia entre codigos de produto (interna)
   │   ├── pre_etapa_estoque_service.py     # Pre-etapa CD/FB para minimizar NF (D007)
   │   └── indisponibilizacao_estoque_service.py # Bloqueio temporario de lotes em ajuste
   ├── utils/                   # 12 utils
@@ -56,10 +62,24 @@ app/odoo/
   │   ├── gtin_validator.py        # Valida GTIN (cEAN) p/ SEFAZ NF-e; barcode invalido → cstat=225 (G035) (~116 LOC)
   │   └── sanitizacao_faturamento.py # Sanitiza dados de faturamento (~4K)
   ├── jobs/                    # 0 jobs (vazio — jobs ficam no scheduler)
-  └── docs/                    # 3 docs internos
-      ├── campos_minimos_sale_order.md
-      ├── mapeamento_campos_odoo_carteira.md
-      └── triggers_sale_order.md
+  ├── docs/                    # 3 docs internos
+  │   ├── campos_minimos_sale_order.md
+  │   ├── mapeamento_campos_odoo_carteira.md
+  │   └── triggers_sale_order.md
+  └── estoque/                 # Subpacote ORQUESTRADOR (skills WRITE + READ ao vivo, 2026-05-22+)
+      │                        # 13 arquivos / ~6.7K LOC. Ver app/odoo/estoque/CLAUDE.md
+      ├── __init__.py / _cli_utils.py / _utils.py
+      ├── scripts/             # Atomos por skill (Skills 1, 2, 2.4, 5, 4, 6, 9)
+      │   ├── quant.py             # Skill 1 — ajustar_quant (✅ MATURADA)
+      │   ├── transfer.py          # Skill 2 — transferindo-interno-odoo
+      │   ├── reserva.py           # Skill 2.4 — operando-reservas-odoo
+      │   ├── picking.py           # Skill 5 — operando-picking-odoo
+      │   ├── mo.py                # Skill 4 — operando-mo-odoo
+      │   ├── pre_etapa.py         # Skill 6 — planejando-pre-etapa-odoo
+      │   └── consulta_quant.py    # Skill 9 — consultando-quant-odoo (READ-only)
+      ├── orchestrators/       # Macros C3 (compoem atomos em fluxos)
+      │   └── pre_etapa_executor.py
+      └── fluxos/              # Folhas de fluxo Markdown (2.1, 2.2, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1)
 ```
 
 ---
@@ -231,13 +251,14 @@ A partir de 2026-05-22, todas as operacoes de ESCRITA de estoque no Odoo (ajuste
 | Skill | Service (novo) | SHIM antigo | Status |
 |-------|----------------|-------------|--------|
 | `ajustando-quant-odoo` | `app/odoo/estoque/scripts/quant.py` | `services/stock_quant_adjustment_service.py` | ✅ MATURADA |
-| `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 min viavel (2026-05-24 v2) |
-| `operando-reservas-odoo` | `app/odoo/estoque/scripts/reserva.py` | — | 🟡 min viavel |
-| `operando-picking-odoo` | `app/odoo/estoque/scripts/picking.py` | `services/stock_picking_service.py` | 🟡 min viavel (2026-05-24 v3 — invariante G019/G020 codificada) |
-| `operando-mo-odoo` | `app/odoo/estoque/scripts/mo.py` | `services/stock_mo_service.py` (preventivo) | 🟡 min viavel (2026-05-24 v5 — guard G-MO-01 furo contabil; idempotencia validada) |
-| `consultando-quant-odoo` (READ) | `app/odoo/estoque/scripts/consulta_quant.py` | — | 🟡 min viavel |
+| `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 v10 (2026-05-25 — Modo C + distribuir_para_indisponivel helper validado 5 cods PROD) |
+| `operando-reservas-odoo` | `app/odoo/estoque/scripts/reserva.py` | — | 🟡 v7+ (5 atomos: cirurgia, cancelamento, unreserve, find_orphan_mls, zerar_residual) |
+| `operando-picking-odoo` | `app/odoo/estoque/scripts/picking.py` | `services/stock_picking_service.py` | 🟡 v3 (2026-05-24 — invariante G019/G020 codificada) |
+| `operando-mo-odoo` | `app/odoo/estoque/scripts/mo.py` | `services/stock_mo_service.py` (preventivo) | 🟡 v5 (2026-05-24 — guard G-MO-01 furo contabil; idempotencia validada) |
+| `planejando-pre-etapa-odoo` | `app/odoo/estoque/scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` | — | 🟡 v6 (2026-05-24 — 4 modos CLI planejar/propor/listar-onda/aprovar-onda) |
+| `consultando-quant-odoo` (READ) | `app/odoo/estoque/scripts/consulta_quant.py` | — | 🟡 v7+ (3 modos: quants/move-lines/pickings — fluxo 2.6) |
 
-Subagente orquestrador: `.claude/agents/gestor-estoque-odoo.md`. Folhas de fluxo: `app/odoo/estoque/fluxos/`.
+Subagente orquestrador: `.claude/agents/gestor-estoque-odoo.md`. Folhas de fluxo: `app/odoo/estoque/fluxos/` (2.1, 2.2, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1).
 
 ---
 
