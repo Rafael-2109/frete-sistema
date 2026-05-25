@@ -1058,3 +1058,121 @@ def test_transferir_para_indisponivel_nome_lote_destino_custom(service):
     service.lot_svc.criar_se_nao_existe.assert_called_with(
         'QUARENTENA', 1, 1,
     )
+
+
+# ============================================================
+# v14b — Fix D-OPS-5: aceita lot_id_origem=None para produto tracking='none'
+# Bug descoberto em teste real 2026-05-25 v14a-ops (PIMENTA JALAPENO
+# 103500105 41.56 un sem lote em FB/Estoque retornava FALHA_SEM_QUANT).
+# ============================================================
+
+def test_transferir_para_indisponivel_lot_origem_none_tracking_none_executa(service, odoo_mock):
+    """v14b D-OPS-5: lot_id_origem=None + produto tracking='none' → OK, chama ajustar_quant 2x.
+
+    Produto sem rastreabilidade guarda saldo SEM lot_id. Atomo aceita e
+    chama ajustar_quant com lot_id=None na reducao (origem) e lot_id=999
+    na criacao do destino (lote MIGRAÇÃO ainda existe semanticamente).
+    """
+    from unittest.mock import patch, MagicMock
+    odoo_mock.read.return_value = [{'id': 1, 'tracking': 'none'}]
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -41.56},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 41.56},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=None, qty=41.56,
+        )
+
+    assert res['status'] == 'EXECUTADO'
+    assert res['qty_transferida'] == 41.56
+    assert res['lot_id_origem'] is None
+    assert res['lot_id_destino'] == 999  # lot_svc_mock default
+    assert res['tracking_origem'] == 'none'
+    # 1 read para validar tracking + 2 ajustes
+    odoo_mock.read.assert_called_once_with('product.product', [1], ['tracking'])
+    assert quant_svc.ajustar_quant.call_count == 2
+    # Call 1: reduzir origem com lot_id=None (essencial — quant sem lote)
+    call_origem = quant_svc.ajustar_quant.call_args_list[0].kwargs
+    assert call_origem['lot_id'] is None
+    assert call_origem['delta'] == -41.56
+    # Call 2: aumentar destino com lot_id=999 (lote MIGRACAO ainda usado)
+    call_destino = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call_destino['lot_id'] == 999
+
+
+def test_transferir_para_indisponivel_lot_origem_none_tracking_lot_raises(service, odoo_mock):
+    """v14b D-OPS-5: lot_id_origem=None + produto tracking='lot' → ValueError (anomalia)."""
+    odoo_mock.read.return_value = [{'id': 1, 'tracking': 'lot'}]
+    with pytest.raises(ValueError, match='tracking.*lot.*anomalia'):
+        service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=None, qty=10.0,
+        )
+    # Read foi feito mas nenhum ajuste tentado
+    odoo_mock.read.assert_called_once()
+
+
+def test_transferir_para_indisponivel_lot_origem_none_produto_inexistente_raises(service, odoo_mock):
+    """v14b D-OPS-5: lot_id_origem=None + produto inexistente → ValueError clara."""
+    odoo_mock.read.return_value = []  # produto nao existe
+    with pytest.raises(ValueError, match='product_id=999.*inexistente'):
+        service.transferir_para_indisponivel(
+            product_id=999, company_id=1,
+            lot_id_origem=None, qty=10.0,
+        )
+
+
+def test_transferir_para_indisponivel_tracking_origem_no_retorno_quando_lot_passado(service):
+    """v14b: tracking_origem=None nos retornos quando lot_id_origem foi passado (sem read)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -100.0},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 100.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+        )
+    # Quando lot_id passado, atomo NAO faz read de tracking (otimizacao)
+    assert res.get('tracking_origem') is None
+
+
+# ============================================================
+# v14b — _listar_quants_origem: parametro aceita_tracking_none
+# ============================================================
+
+def test_listar_quants_origem_default_aceita_tracking_none_true_nao_filtra_lot_id(service, odoo_mock):
+    """v14b D-OPS-5: default aceita_tracking_none=True → NAO filtra ['lot_id', '!=', False]."""
+    odoo_mock.search_read.return_value = []  # vazio, foco e' no domain enviado
+    service._listar_quants_origem(
+        product_id=1, company_id=1, locs_origem=[8, 48],
+    )
+    # Inspect o domain do search_read
+    call = odoo_mock.search_read.call_args
+    domain = call.args[1] if len(call.args) > 1 else call.kwargs.get('domain')
+    domain_strs = [str(c) for c in domain]
+    # NAO deve haver filtro de lot_id != False
+    assert not any("'lot_id', '!=', False" in s or '"lot_id", "!=", False' in s
+                   for s in domain_strs), (
+        f'Default aceita_tracking_none=True NAO deve filtrar lot_id; domain: {domain}'
+    )
+
+
+def test_listar_quants_origem_aceita_tracking_none_false_filtra_lot_id(service, odoo_mock):
+    """v14b D-OPS-5: aceita_tracking_none=False → filtra ['lot_id', '!=', False] (legacy)."""
+    odoo_mock.search_read.return_value = []
+    service._listar_quants_origem(
+        product_id=1, company_id=1, locs_origem=[8, 48],
+        aceita_tracking_none=False,
+    )
+    call = odoo_mock.search_read.call_args
+    domain = call.args[1] if len(call.args) > 1 else call.kwargs.get('domain')
+    # DEVE haver filtro de lot_id != False (comportamento antigo)
+    assert ['lot_id', '!=', False] in domain, (
+        f'aceita_tracking_none=False DEVE filtrar lot_id; domain: {domain}'
+    )
