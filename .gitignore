@@ -146,3 +146,4 @@ scripts/ecommerce/output/
 docs/inventario-2026-05/07-relatorios/
 relatorios/
 scripts/inventario_2026_05/auditoria/
+.claude/scheduled_tasks.lock
