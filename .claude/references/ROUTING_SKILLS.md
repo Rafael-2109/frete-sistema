@@ -1,6 +1,6 @@
 # Routing de Skills
 
-**Ultima Atualizacao**: 24/05/2026 (47 skills invocaveis — adicionada em 2026-05-24 v5: `operando-mo-odoo` (WRITE cancelar Manufacturing Order single ou batch; service novo `app/odoo/estoque/scripts/mo.py`; guard G-MO-01 furo contabil — bloqueia consumo>0; idempotencia validada AO VIVO em MO state=cancel). 2026-05-24 v3: `operando-picking-odoo` (WRITE cancelar/validar/devolver picking; capina StockPickingService para `app/odoo/estoque/scripts/picking.py`; invariante G019/G020 fechada no codigo — re-leitura de state pos-button_validate; novo atomo `devolver` cria stock.return.picking idempotente). 2026-05-24 v2: `transferindo-interno-odoo` (WRITE transferencia interna intra-empresa: lote→lote mesma loc OU loc→loc mesmo lote; composicao de ajustar_quant 2x com delta_esperado propagado, G021/G022/G027 codificados). 2026-05-23: `ajustando-quant-odoo` (WRITE 1 stock.quant), `operando-reservas-odoo` (WRITE cirurgia/cancelamento de pickings com MLs orfas), `consultando-quant-odoo` (READ ao vivo no Odoo — auditoria pos-WRITE). 2026-05-16: `parseando-sped-ecd`, `auditando-sped-contabil`, `auditando-sped-vs-manual`, `comparando-sped-ground-truth` — pipeline de auditoria SPED ECD usado exclusivamente pelo subagent `auditor-sped-ecd`)
+**Ultima Atualizacao**: 24/05/2026 (48 skills invocaveis — adicionada em 2026-05-24 v6: `planejando-pre-etapa-odoo` (READ Odoo + WRITE banco local — planejador da pre-etapa D007 do inventario CD/FB; substitui NFs inter-filial CD↔FB R$ 32,9 mi + INDISPONIBILIZAR_* R$ 60,5 mi por transferencias INTERNAS na company + residual minimo CFOP 5152; 4 modos: planejar/propor/listar-onda/aprovar-onda; service `app/odoo/estoque/scripts/pre_etapa.py` capinado de services/; hash sha256 anti-replay no workflow de aprovacao; 19 testes pytest verdes — 13 originais + 6 helpers novos). 2026-05-24 v5: `operando-mo-odoo` (WRITE cancelar Manufacturing Order single ou batch; service novo `app/odoo/estoque/scripts/mo.py`; guard G-MO-01 furo contabil — bloqueia consumo>0; idempotencia validada AO VIVO em MO state=cancel). 2026-05-24 v3: `operando-picking-odoo` (WRITE cancelar/validar/devolver picking; capina StockPickingService para `app/odoo/estoque/scripts/picking.py`; invariante G019/G020 fechada no codigo — re-leitura de state pos-button_validate; novo atomo `devolver` cria stock.return.picking idempotente). 2026-05-24 v2: `transferindo-interno-odoo` (WRITE transferencia interna intra-empresa: lote→lote mesma loc OU loc→loc mesmo lote; composicao de ajustar_quant 2x com delta_esperado propagado, G021/G022/G027 codificados). 2026-05-23: `ajustando-quant-odoo` (WRITE 1 stock.quant), `operando-reservas-odoo` (WRITE cirurgia/cancelamento de pickings com MLs orfas), `consultando-quant-odoo` (READ ao vivo no Odoo — auditoria pos-WRITE). 2026-05-16: `parseando-sped-ecd`, `auditando-sped-contabil`, `auditando-sped-vs-manual`, `comparando-sped-ground-truth` — pipeline de auditoria SPED ECD usado exclusivamente pelo subagent `auditor-sped-ecd`)
 
 **REGRA**: Use a skill MAIS ESPECIFICA. `descobrindo-odoo-estrutura` e ULTIMO RECURSO.
 
@@ -99,7 +99,8 @@ Se a resposta esta no reference -> NAO usar skill.
    |-- Limpar MLs orfas / cirurgia em picking -> operando-reservas-odoo
    |-- Cancelar/validar/devolver picking generico (fantasma, G019 false-positive, NF errada) -> operando-picking-odoo
    |-- Cancelar MO single ou batch (guard G-MO-01 furo contabil; idempotencia) -> operando-mo-odoo
-   |-- (em construcao — ver app/odoo/estoque/ROADMAP_SKILLS.md) pre-etapa / escriturar entrada / faturar saida -> Subagente `gestor-estoque-odoo`
+   |-- Planejar pre-etapa CD/FB D007 (READ Odoo + WRITE banco local; planejar/propor/listar/aprovar com hash anti-replay) -> planejando-pre-etapa-odoo
+   |-- (em construcao — ver app/odoo/estoque/ROADMAP_SKILLS.md) escriturar entrada / faturar saida -> Subagente `gestor-estoque-odoo`
 
 7. ESTOQUE READ AO VIVO (consultar Odoo, nao DB local)?
    |-- Saldo restante por (cod, empresa), agregado, filtros — auditoria pos-WRITE -> consultando-quant-odoo
@@ -153,7 +154,7 @@ Se a resposta esta no reference -> NAO usar skill.
 
 ---
 
-## Skills — Inventario Completo (46 invocaveis em `.claude/skills/`)
+## Skills — Inventario Completo (48 invocaveis em `.claude/skills/`)
 
 Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invocavel mas expoe data folder (schemas/queries) descoberto via filesystem.
 `SKILL_IMPROVEMENT_ROADMAP.md` na raiz de `.claude/skills/` e DOC, nao skill (nao conta no inventario).
@@ -163,7 +164,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `mcp__sessions__*` (2 tools), `mcp__render__*` (3 tools: logs, erros, status),
 `mcp__routes__search_routes` (1 tool: busca semantica rotas)
 
-### Skills Odoo (15)
+### Skills Odoo (16)
 `rastreando-odoo`, `executando-odoo-financeiro`, `descobrindo-odoo-estrutura`,
 `validacao-nf-po`, `conciliando-odoo-po`, `recebimento-fisico-odoo`, `razao-geral-odoo`,
 `conciliando-transferencias-internas`, `gerando-baseline-conciliacao`,
@@ -172,6 +173,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `operando-reservas-odoo` (WRITE — cirurgia/cancelamento de reservas e MLs orfas),
 `operando-picking-odoo` (WRITE — cancelar/validar/devolver picking generico; invariante G019/G020),
 `operando-mo-odoo` (WRITE — cancelar MO single ou batch; guard G-MO-01 furo contabil),
+`planejando-pre-etapa-odoo` (READ Odoo + WRITE banco local — planejar/propor/listar/aprovar pre-etapa D007; hash sha256 anti-replay),
 `consultando-quant-odoo` (READ-only AO VIVO — auditoria pos-WRITE, snapshots de quants)
 
 ### Skills SSW (2)

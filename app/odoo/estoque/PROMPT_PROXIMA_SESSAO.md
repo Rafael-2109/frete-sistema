@@ -55,14 +55,15 @@ set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env)
 
 **Alternativa válida 3**: **Skill 6 `planejando-pre-etapa-odoo`** (planner READ+valida; isolado). Cobre `03b_planejar_pre_etapa_cd`, `04b_propor_pre_etapa_cd`, `09b_executar_pre_etapa`. Service existe (`PreEtapaEstoqueService`); falta SKILL.md + CLI + folha de fluxo. Bom para quebrar inércia se Skill 8 parecer pesada demais.
 
-## Estado atual (sessão 2026-05-24 v5 fechada — Skill 4 NOVA + 175 pytest verdes)
+## Estado atual (sessão 2026-05-24 v6 fechada — Skill 6 NOVA + 196 pytest verdes)
 
-**5 skills no catálogo do gestor-estoque-odoo:**
+**6 skills WRITE + 1 READ ancillary no catálogo do gestor-estoque-odoo:**
 - ✅ Skill 1 `ajustando-quant-odoo` MATURADA — 100 ajustes PROD 2026-05-23; 30 pytest; 5 scripts SUPERADOS; guard delta_esperado.
 - 🟡 Skill 2 `transferindo-interno-odoo` mín viável + MODO C PROD — 52 pytest (modo C +15 testes); 2 scripts SUPERADOS; 3 modos atômicos (A lote→lote / B loc→loc / C `--para-indisponivel` cross loc+lote consolidando MIGRAÇÃO POR PRODUTO); delega `ajustar_quant`×2; G021/G022/G027/G031 codificados; 1 execução PROD validada (4.319 un em 23s pós-incidente G031 + fix; rollback testado).
 - 🟡 Skill 2.4 `operando-reservas-odoo` mín viável — 3 átomos validados PROD 2026-05-23 (6 pickings + 15 quants).
 - 🟡 Skill 5 `operando-picking-odoo` mín viável — 42 pytest; 3 átomos (cancelar, validar com G019/G020 invariante, devolver idempotente); FECHA ONDA 0.4; 1 script SUPERADO; 6 casos dry-run PROD 100% bate.
-- 🟡 **Skill 4 `operando-mo-odoo` mín viável NOVA (2026-05-24 v5)** — 1ª skill WRITE criada do zero (sem service legado em `services/`); 29 pytest (26 baseline + 3 cobrindo code-review fixes); 2 átomos (`cancelar_mo` + `cancelar_mos_em_massa`) + helper `medir_consumo_mo`; guard G-MO-01 INVIOLÁVEL (consumo>0 = furo contábil; CLI V1 NÃO expõe `forcar_consumo`); G019-like re-le state pós action_cancel; idempotência state=cancel = NOOP validada AO VIVO em FB/OP/BALDE/00009; status NOVO `cancel_deleted` para cascade customizado Odoo; 4 dry-run PROD 100% bate; 2 scripts SUPERADOS; 9 code-review findings (4 HIGH + 4 MED + 1 LOW) aplicados.
+- 🟡 Skill 4 `operando-mo-odoo` mín viável (2026-05-24 v5) — 1ª skill WRITE criada do zero (sem service legado em `services/`); 29 pytest; 2 átomos (`cancelar_mo` + `cancelar_mos_em_massa`) + helper `medir_consumo_mo`; guard G-MO-01 INVIOLÁVEL (consumo>0 = furo contábil); G019-like re-le state pós action_cancel; idempotência state=cancel = NOOP; status NOVO `cancel_deleted`; 4 dry-run PROD 100% bate; 2 scripts SUPERADOS; 9 code-review findings aplicados.
+- 🟡 **Skill 6 `planejando-pre-etapa-odoo` mín viável NOVA (2026-05-24 v6)** — capina retroativa pesada de 03b+04b para `estoque/scripts/pre_etapa.py` + shim; 21 pytest (13 originais preservados + 6 helpers novos + 2 cobrindo CR fixes); 4 modos CLI (planejar READ Odoo + grava JSON+Excel; propor WRITE banco local DELETE+INSERT; listar-onda READ + hash sha256; aprovar-onda WRITE com hash check anti-replay); workflow Onda 5 (CD) + Onda 6 (FB futura); G-PRE-01..10 codificados (D007 restricao temporal FB pos-etapa, FIFO determinístico, MIGRAÇÃO consolidador, hash anti-replay, idempotência); 3 smokes CLI validados (exit codes 1/2/4); 2 scripts SUPERADOS; 09b executor permanece VIVO (C3 macro pendente capinagem); 15 code-review findings (3 HIGH + 8 MED + 4 LOW) — 8 corrigidos + 2 testes novos; **NOVOS PATTERNS reutilizáveis**: savepoint para services em Flask routes, getattr defensivo em hash anti-replay, guard outliers em WRITE downstream.
 - 🟡 Skill 9 `consultando-quant-odoo` mín viável (READ ancillary) — 2 átomos.
 
 **Marcos da sessão v5:**
@@ -74,7 +75,7 @@ set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env)
 
 **13 scripts em `_validados/`** (5 ajustando-quant + 3 operando-reservas + 2 transferindo-interno + 1 operando-picking + 2 operando-mo). ~92 scripts ad-hoc continuam VIVOS (operação viva).
 
-**Pytest baseline: 175 verdes** (30 quant + 52 transfer + 19 lot + 42 picking + 29 mo + 3 CR fixes). 5 falhas em `test_inventario_pipeline_service.py` são **pré-existentes** (não relacionadas a estoque-odoo; Skill 8 capinará esse service).
+**Pytest baseline: 196 verdes** (30 quant + 52 transfer + 19 lot + 42 picking + 29 mo + 3 CR4 fixes + 21 pre_etapa = 175 anterior + 21 Skill 6). 5 falhas em `test_inventario_pipeline_service.py` são **pré-existentes** (não relacionadas a estoque-odoo; Skill 8 capinará esse service).
 
 ## LEITURAS OBRIGATÓRIAS ANTES DE AGIR (ordem)
 
@@ -155,7 +156,7 @@ set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env)
 [ ] Setup (cd worktree + venv + ODOO_*)
 [ ] Verificar se main avançou: git fetch origin main && git log --oneline b8ed3b5c..origin/main
 [ ] Se avançou: rebase incremental ANTES de iniciar
-[ ] Pytest baseline: pytest tests/odoo/services/test_stock_quant_adjustment_service.py test_stock_internal_transfer_service.py test_stock_lot_service.py test_stock_picking_service.py test_stock_mo_service.py (esperado: 175 verdes)
+[ ] Pytest baseline: pytest tests/odoo/services/test_stock_quant_adjustment_service.py test_stock_internal_transfer_service.py test_stock_lot_service.py test_stock_picking_service.py test_stock_mo_service.py test_pre_etapa_estoque_service.py (esperado: 196 verdes)
 [ ] Ler ROADMAP_SKILLS HANDOFF + VALIDACAO_FINAL_SESSAO §10 + G031 + memórias-chave
 [ ] Confirmar com Rafael: Skill 8 faturando (foco recomendado), Skill 7 escriturando, fluxos compostos Skill 2, Skill 6 pre-etapa, ou outra prioridade
 [ ] Se Skill 8: C1 mineração — ler integral `09_executar_onda1_bulk`, `09c_executar_onda2_fb_cd`, `fat_lf_02_carregar`, `fat_lf_04_executar`, `fat_lf_05_executar_clean`, `fat_lf_cleanup`, `fat_lf_resume.sh`, `teste_210030325` + ler 6 gotchas G004/G011/G016/G028/G019/G020 + quarteto fiscal G035/G017/G007/G018 + memórias [[ciel_it_quirks]] [[skill5_picking_pattern]]
@@ -238,6 +239,11 @@ scripts/inventario_2026_05/auditoria/
   log_skill4_mo_dryrun_20260524_115*.json   (4 logs individuais)
 ```
 
-Comece pela leitura dos 4 docs obrigatórios (CLAUDE.md + ROADMAP + VALIDACAO §10 + memórias). Verificar pytest baseline 175 verdes. Confirme com Rafael o foco da sessão. **Recomendação**: Skill 8 `faturando-odoo` (DESBLOQUEADA pela ONDA 0.4; macro perigoso — cuidado com SEFAZ irreversível; smoke test 1-ajuste antes de batch obrigatório). Antes de qualquer write em PROD: pre-flight quarteto fiscal + verificação direta no Odoo + pytest baseline pós-mudança.
+Comece pela leitura dos 4 docs obrigatórios (CLAUDE.md + ROADMAP + VALIDACAO §11 sessão v6 Skill 6 + memórias incluindo [[skill6_planejar_pre_etapa_pattern]]). Verificar pytest baseline 196 verdes. Confirme com Rafael o foco da sessão. **Recomendação**: Skill 8 `faturando-odoo` (DESBLOQUEADA pela ONDA 0.4 + agora Skill 6 entrega o plano da Onda 5 que alimenta o executor; macro perigoso — cuidado com SEFAZ irreversível; smoke test 1-ajuste antes de batch obrigatório) OU capinar `09b_executar_pre_etapa.py` para `orchestrators/pre_etapa_executor.py` (C3 macro fecha ciclo planejar+propor+aprovar+executar da pre-etapa CD/FB). Antes de qualquer write em PROD: pre-flight quarteto fiscal + verificação direta no Odoo + pytest baseline pós-mudança.
+
+**Padrões NOVOS de Skill 6 reutilizáveis em sessões futuras:**
+- **Savepoint pattern** (regra 24): qualquer service que faça `db.session.rollback()` ou `commit()` chamado por Flask route/agente DEVE usar `db.session.begin_nested()` para isolar do caller (sem isso, nuke transação).
+- **getattr defensivo em hash anti-replay** (regra 25): hash baseado em atributos ORM DEVE usar `getattr(obj, 'attr', '')` para tolerar evolução do ORM sem AttributeError silencioso.
+- **Guard de outliers em WRITE downstream** (regra 26): se camada READ filtra outliers (cod[0] in 1-4), camada WRITE que consome JSON externo manualmente editável DEVE refazer o filtro.
 
 ---END---

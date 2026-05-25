@@ -1,6 +1,6 @@
 # app/odoo/estoque — Operações de Escrita de Estoque no Odoo
 
-**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22; ONDA 0.4 ✅ fechada 2026-05-24 v3 — G019/G020 codificadas no service; **Skill 4 `operando-mo-odoo` 🟡 NOVA criada do zero em 2026-05-24 v5** — 1ª skill WRITE sem service legado, guard G-MO-01 furo contábil) | **Atualizado:** 2026-05-24
+**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22; ONDA 0.4 ✅ fechada 2026-05-24 v3 — G019/G020 codificadas no service; **Skill 6 `planejando-pre-etapa-odoo` 🟡 NOVA capinada em 2026-05-24 v6** — planner READ Odoo + WRITE banco local; 4 modos planejar/propor/listar/aprovar; hash sha256 anti-replay; 19 testes pytest verdes — 13 originais preservados + 6 helpers novos; capina `03b_planejar_pre_etapa_cd` + `04b_propor_pre_etapa_cd`; executor `09b` permanece VIVO como C3 macro pendente) | **Atualizado:** 2026-05-24
 **Audiência:** Claude Code (dev) + agente web. Doc **machine-first** — contratos e regras.
 
 Pacote-destino da consolidação dos ~105 scripts ad-hoc de inventário (`scripts/inventario_2026_05/`) em **átomos versáteis e auto-seguros** (services), consumidos por **skills** (`.claude/skills/`) + o subagente **`gestor-estoque-odoo`** (`.claude/agents/`). Este CLAUDE.md é a **constituição** da arquitetura.
@@ -79,7 +79,7 @@ O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem c
 | `operando-picking-odoo` | stock.picking (cancelar/validar/devolver — criar/alterar-lote sem demanda) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **mín viável** (3 átomos · 42 pytest verdes · invariante G019/G020 fechada · 6 casos dry-run PROD 2026-05-24 v3) |
 | `faturando-odoo` | **SÓ SAÍDA**: NF→robô CIEL IT→SEFAZ | `orchestrators/inventario_pipeline.py` (saída) | C3 | ⬜ |
 | `escriturando-odoo` | **SÓ ENTRADA**: DFe/NF→in_invoice→saldo | pipeline (entrada) + escriturar_dfe | C3 | ⬜ |
-| `planejando-pre-etapa-odoo` | planner (pesquisa+valida) | `scripts/pre_etapa.py` | C2 | ⬜ |
+| `planejando-pre-etapa-odoo` | planner D007 (READ Odoo + WRITE banco local; 4 modos: planejar/propor/listar/aprovar) | [`scripts/pre_etapa.py`](scripts/pre_etapa.py) (PreEtapaEstoqueService + 4 helpers top-level; capinado v6) | C2 | 🟡 **mín viável** (19 pytest verdes — 13 originais + 6 helpers novos; 4 modos CLI; hash sha256 anti-replay; capina 03b+04b; 09b executor permanece VIVO como C3) |
 
 ### Skills READ ancillary (1 — sob demanda, complementam as WRITE)
 

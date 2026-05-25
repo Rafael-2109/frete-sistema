@@ -1,4 +1,16 @@
-"""F7.5b (D007) — Planejar pre-etapa CD.
+"""[ARQUIVADO 2026-05-24 v6] F7.5b (D007) — Planejar pre-etapa CD.
+
+⚠️ SUPERADO pela Skill 6 `planejando-pre-etapa-odoo` (modo `planejar`).
+Mantido como museum vivo para reproducibilidade historica.
+Para gerar plano novo, usar:
+    python .claude/skills/planejando-pre-etapa-odoo/scripts/planejar_pre_etapa.py \\
+        --modo planejar --company-id 4 --confirmar
+
+Spec D007: docs/inventario-2026-05/00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md
+Skill 6: .claude/skills/planejando-pre-etapa-odoo/SKILL.md
+Service: app/odoo/estoque/scripts/pre_etapa.py (capinado de services/)
+
+----- Conteudo original abaixo -----
 
 Le /tmp/estoque_odoo_2026_05.json + /tmp/inventario_fisico_2026_05.json,
 chama PreEtapaEstoqueService por produto do CD, e gera plano consolidado.
@@ -14,11 +26,6 @@ Inputs:
 Outputs:
 - /tmp/plano_pre_etapa_cd.json
 - docs/inventario-2026-05/07-relatorios/plano-pre-etapa-cd.xlsx
-
-Uso:
-    python scripts/inventario_2026_05/03b_planejar_pre_etapa_cd.py [--dry-run]
-
-Spec: docs/inventario-2026-05/00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md
 """
 import argparse
 import json
@@ -28,7 +35,7 @@ from collections import defaultdict
 from pathlib import Path
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+sys.path.insert(0, str(_THIS.parents[4]))  # arquivado: parents[2] -> parents[4]
 
 import openpyxl  # noqa: E402
 

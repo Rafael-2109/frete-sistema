@@ -1,4 +1,18 @@
-"""F7.6b (D007) — Propor ajustes da pre-etapa CD (Onda 5).
+"""[ARQUIVADO 2026-05-24 v6] F7.6b (D007) — Propor ajustes da pre-etapa CD (Onda 5).
+
+⚠️ SUPERADO pela Skill 6 `planejando-pre-etapa-odoo` (modos `propor`/`listar-onda`/`aprovar-onda`).
+Mantido como museum vivo para reproducibilidade historica.
+Para uso operacional:
+    SK=.claude/skills/planejando-pre-etapa-odoo/scripts/planejar_pre_etapa.py
+    python "$SK" --modo propor --company-id 4 --usuario rafael --confirmar
+    python "$SK" --modo listar-onda --company-id 4
+    python "$SK" --modo aprovar-onda --company-id 4 --hash <sha> --usuario rafael --confirmar
+
+Spec D007: docs/inventario-2026-05/00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md
+Skill 6: .claude/skills/planejando-pre-etapa-odoo/SKILL.md
+Service: app/odoo/estoque/scripts/pre_etapa.py (capinado de services/)
+
+----- Conteudo original abaixo -----
 
 Le /tmp/plano_pre_etapa_cd.json (gerado por 03b), DELETE ajustes CD
 PROPOSTO existentes (com backup automatico SQL antes), INSERT novos
@@ -13,19 +27,6 @@ Acoes geradas (D007):
 Onda: 5 (executa ANTES de Onda 2).
 
 Tambem suporta --listar-onda=5 e --aprovar-onda=5 --hash=<sha>.
-
-Uso:
-    # Propor (DELETE + INSERT)
-    python scripts/inventario_2026_05/04b_propor_pre_etapa_cd.py --propor [--dry-run]
-
-    # Listar onda 5 + hash
-    python scripts/inventario_2026_05/04b_propor_pre_etapa_cd.py --listar-onda=5
-
-    # Aprovar onda 5
-    python scripts/inventario_2026_05/04b_propor_pre_etapa_cd.py \\
-        --aprovar-onda=5 --hash=<sha> --usuario=rafael
-
-Spec: docs/inventario-2026-05/00-decisoes/D007-pre-etapa-cd-fb-minimizar-nf.md
 """
 import argparse
 import hashlib
@@ -37,7 +38,7 @@ from decimal import Decimal
 from pathlib import Path
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+sys.path.insert(0, str(_THIS.parents[4]))  # arquivado: parents[2] -> parents[4]
 
 from sqlalchemy import text  # noqa: E402
 

@@ -144,14 +144,14 @@ Este é o **inverso**: cada um dos 90 scripts → **qual gold-script absorve sua
 | `fat_lf_resume_entrada.sh` | **shell**: loop resume E+F resiliente a hang do robô CIEL IT | AO-CAPINAR |
 | `teste_210030325_lf` | piloto E2E histórico | JÁ-MORTO (vira exemplo no GUIA) |
 
-## → `orchestrators/pre_etapa_executor.py` (+ fluxo de proposta F2-F4)
+## → `app/odoo/estoque/scripts/pre_etapa.py` (Skill 6 `planejando-pre-etapa-odoo` 🟡 capinada 2026-05-24 v6)
 
 | Script | O que MINERAR | Situação |
 |--------|---------------|----------|
-| `03b_planejar_pre_etapa_cd` | chama `PreEtapaEstoqueService.planejar` | AO-CAPINAR |
-| `04b_propor_pre_etapa_cd` | persistir ajustes pré-etapa (DELETE+INSERT, backup) | AO-CAPINAR |
-| `09b_executar_pre_etapa` | executor: TRANSF_INTERNA_POS/NEG + POSITIVO_PURO | AO-CAPINAR |
-| `04_propor_ajustes` | `resolver_operacao_por_tipo_produto`; ondas; aprovar c/ hash | AO-CAPINAR |
+| `03b_planejar_pre_etapa_cd` | chama `PreEtapaEstoqueService.planejar`; modo `planejar` da Skill 6 | **SUPERADO 2026-05-24 v6** — capinado para [`scripts/pre_etapa.py`](../../../app/odoo/estoque/scripts/pre_etapa.py) helper `planejar_pre_etapa_batch_company` + CLI `--modo planejar`; arquivado em [`_validados/planejando-pre-etapa-odoo/`](../../../scripts/inventario_2026_05/_validados/planejando-pre-etapa-odoo/VALIDACAO.md) |
+| `04b_propor_pre_etapa_cd` | persistir ajustes pré-etapa (DELETE+INSERT, backup, hash); modos `propor/listar-onda/aprovar-onda` da Skill 6 | **SUPERADO 2026-05-24 v6** — capinado para [`scripts/pre_etapa.py`](../../../app/odoo/estoque/scripts/pre_etapa.py) helpers `propor_ajustes_pre_etapa`+`listar_onda_pre_etapa`+`aprovar_onda_pre_etapa` + CLI `--modo propor/listar-onda/aprovar-onda`; arquivado em [`_validados/planejando-pre-etapa-odoo/`](../../../scripts/inventario_2026_05/_validados/planejando-pre-etapa-odoo/VALIDACAO.md) |
+| `09b_executar_pre_etapa` | executor: TRANSF_INTERNA_POS/NEG + POSITIVO_PURO (composição C3 macro de Skills 1+2) | **VIVO** — C3 macro pendente capinagem para `orchestrators/pre_etapa_executor.py` (não é átomo da Skill 6; quando demanda surgir, capinar como Skill 8 macro) |
+| `04_propor_ajustes` | `resolver_operacao_por_tipo_produto`; outras ondas (1-4); aprovar c/ hash | **VIVO** — fora da Skill 6 (cobre Onda 5 apenas); ondas 1-4 permanecem ad-hoc operação viva |
 
 ## → gold de LEITURA / DIFF (`_utils.py` + 1-2 scripts de leitura consolidados) 📖
 
