@@ -11,8 +11,10 @@ Chave dos dicts: tupla (company_origem_id, tipo_operacao).
 
 Fonte dos valores: audit dos picking_types e default_location_dest_id (2026-05-18);
 G034 (2026-05-18) criou PT 97/88 via XML-RPC para dev-industrializacao.
+v15a (2026-05-25): centralizadas constants ETAPA F (entrada destino manual) que
+estavam inline em `scripts/inventario_2026_05/09_executar_onda1_bulk.py:126-146`.
 """
-from typing import Dict, Tuple
+from typing import Dict, FrozenSet, Tuple
 
 
 # stock.picking.type.id de SAIDA por (company_origem, tipo_operacao).
@@ -71,3 +73,59 @@ def get_picking_type(company_origem: int, tipo_operacao: str) -> int:
             f'Validas: {sorted(PICKING_TYPE_POR_DIRECAO.keys())}'
         )
     return pt
+
+
+# ============================================================================
+# ETAPA F — Entrada Destino Manual (FB→{LF, CD})
+# ============================================================================
+# Padrao L17: NFs sentido FB→{LF, CD} de industrializacao interna precisam
+# de picking de ENTRADA criado MANUALMENTE no destino. O robo CIEL IT nao
+# cria entrada automatica (nao ha DFe no sentido reverso).
+#
+# Validado em PROD via pickings:
+#   - 317306 LF/IN/01733 (NF 608629)
+#   - 317316 LF/IN/01734 (NF 627348)
+#
+# Centralizado em v15a (2026-05-25) — antes inline em
+# `scripts/inventario_2026_05/09_executar_onda1_bulk.py:126-146`.
+# ============================================================================
+
+# Acoes (do AjusteEstoqueInventario.acao_decidida) que requerem ETAPA F.
+# DEV_FB_LF e TRANSFERIR_FB_CD ainda NAO testadas: ativar quando primeira
+# operacao real validar o pattern (mesma logica, picking_type pode mudar).
+ACOES_ENTRADA_DESTINO_MANUAL: FrozenSet[str] = frozenset({
+    'INDUSTRIALIZACAO_FB_LF',   # FB→LF — validado (317306, 317316)
+    # 'DEV_FB_LF',              # FB→LF — nao testado
+    # 'TRANSFERIR_FB_CD',       # FB→CD — nao testado
+})
+
+
+# stock.picking.type.id de ENTRADA por company DESTINO.
+# Origem do picking eh `LOCATION_DESTINO_TRANSITO_INDUSTR` (26489 Em Transito
+# Industrializacao); destino e o `COMPANY_LOCATIONS[company_destino]` (estoque
+# interno principal do destino).
+#
+# Validado em PROD com pickings 317306, 317316 (LF/IN/01733-01734).
+# CD nao validado ainda — descobrir via audit picking_types quando primeira
+# operacao FB→CD real ocorrer.
+PICKING_TYPE_ENTRADA_DESTINO_MANUAL: Dict[int, int] = {
+    5: 19,   # LF: Recebimento (validado 317306, 317316)
+    # 4: ?,  # CD: Recebimento — descobrir via audit picking_types
+}
+
+
+# Label da company para usar em `origin` de pickings ETAPA F.
+# Convenção do CICLO atual: `INV-{CICLO}-ENTRADA-{LABEL}-NF{invoice_id}`.
+# Inclui FB para casos futuros de espelhamento reverso (LF→FB entrada manual).
+COMPANY_LABEL_ENTRADA: Dict[int, str] = {
+    1: 'FB',
+    4: 'CD',
+    5: 'LF',
+}
+
+
+# Alias semantico: `LOCATION_DESTINO_TRANSITO_INDUSTR` da SAIDA (ETAPA B) eh
+# a MESMA location que serve como ORIGEM da ENTRADA (ETAPA F). Manter os 2
+# nomes — `LOCATION_DESTINO_TRANSITO_INDUSTR` vira de SAIDA; o alias deixa
+# explicito quando usado em ENTRADA (centralizando o numero magico 26489).
+LOCATION_ORIGEM_ENTRADA_INDUSTR = LOCATION_DESTINO_TRANSITO_INDUSTR  # 26489

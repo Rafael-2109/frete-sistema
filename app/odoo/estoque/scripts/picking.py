@@ -9,6 +9,13 @@ Padrao: create -> action_confirm -> action_assign -> preencher qty_done ->
 button_validate -> action_liberar_faturamento -> aguardar invoice do robo CIEL IT.
 
 Spec: docs/superpowers/specs/2026-05-17-ajuste-inventario-nacom-lf-design.md §6.2
+
+v15a (2026-05-25): adicionados 3 atomos inter-company para reuso na Skill 8
+`faturando-odoo` (C6.5 — DECISAO 10.6 PLANEJAMENTO_SKILL8_FATURANDO):
+  - `criar_picking_inter_company` (F5a — codifica fix D-OPS-3 tracking='none')
+  - `validar_picking_inter_company` (F5b — fluxo F5b completo + G018 peso/volumes)
+  - `criar_picking_entrada_destino_manual` (ETAPA F — G023 company_id forcado +
+    idempotencia via origin)
 """
 import logging
 import time
@@ -736,3 +743,636 @@ class StockPickingService:
             'sem invoice do robo CIEL IT'
         )
         return None
+
+    # ========================================================================
+    # ATOMOS v15a — INTER-COMPANY (C6.5 — Skill 8 faturando-odoo decision 10.6)
+    # ========================================================================
+
+    def aplicar_peso_volumes_fallback(
+        self, picking_id: int,
+        peso_unitario_fallback: float = 0.001,
+        volumes_fallback: int = 1,
+    ) -> Dict[str, Any]:
+        """G018 v2: fallback peso_liquido / peso_bruto / volumes em picking.
+
+        `product.write({weight: X})` NAO PERSISTE em CIEL IT (hook reseta para 0),
+        mas `l10n_br_peso_liquido`, `l10n_br_peso_bruto` e `l10n_br_volumes` em
+        `stock.picking` SAO writable (verificado via fields_get). Aplicar este
+        fallback entre F5b (validar) e F5c (liberar_faturamento) evita que
+        `action_liberar_faturamento` rejeite por peso=0/volumes=0 silenciosamente.
+
+        Quando aplicar:
+            - Apos `validar()` (qty_done preenchido + button_validate OK).
+            - Antes de `liberar_faturamento()` (F5c).
+
+        Args:
+            picking_id: stock.picking.id.
+            peso_unitario_fallback: peso por unidade quando product.weight=0.
+                Default 0.001 kg (1g — minimo aceito por SEFAZ).
+            volumes_fallback: volumes minimo. Default 1.
+
+        Returns:
+            {'aplicado': bool, 'peso_liquido_antes': float,
+             'peso_liquido_depois': float, 'volumes_antes': int,
+             'volumes_depois': int}
+
+        Fonte: scripts/inventario_2026_05/09_executar_onda1_bulk.py:346-413
+            (funcao `aplicar_peso_volumes_fallback_picking`).
+        """
+        p = self.odoo.read(
+            'stock.picking', [picking_id],
+            ['l10n_br_peso_liquido', 'l10n_br_peso_bruto',
+             'l10n_br_volumes', 'state'],
+        )
+        if not p:
+            return {'aplicado': False, 'erro': 'picking nao encontrado'}
+        peso_atual = float(p[0].get('l10n_br_peso_liquido') or 0)
+        peso_bruto_atual = float(p[0].get('l10n_br_peso_bruto') or 0)
+        volumes_atual = int(p[0].get('l10n_br_volumes') or 0)
+
+        updates: Dict[str, Any] = {}
+        if peso_atual <= 0 or peso_bruto_atual <= 0:
+            # Calcular peso fallback = SUM(qty_done) * peso_unitario
+            moves = self.odoo.search_read(
+                'stock.move', [['picking_id', '=', picking_id]],
+                ['quantity'],
+            )
+            qty_total = sum(float(m.get('quantity') or 0) for m in moves)
+            peso_calc = max(
+                qty_total * peso_unitario_fallback,
+                peso_unitario_fallback,
+            )
+            if peso_atual <= 0:
+                updates['l10n_br_peso_liquido'] = peso_calc
+            if peso_bruto_atual <= 0:
+                updates['l10n_br_peso_bruto'] = peso_calc
+        if volumes_atual <= 0:
+            updates['l10n_br_volumes'] = volumes_fallback
+
+        if not updates:
+            return {
+                'aplicado': False,
+                'peso_liquido_antes': peso_atual,
+                'peso_liquido_depois': peso_atual,
+                'volumes_antes': volumes_atual,
+                'volumes_depois': volumes_atual,
+            }
+
+        self.odoo.write('stock.picking', [picking_id], updates)
+        logger.info(
+            f'Picking {picking_id}: G018 fallback aplicado — peso '
+            f'{peso_atual} -> {updates.get("l10n_br_peso_liquido", peso_atual)}, '
+            f'volumes {volumes_atual} -> '
+            f'{updates.get("l10n_br_volumes", volumes_atual)}'
+        )
+        return {
+            'aplicado': True,
+            'peso_liquido_antes': peso_atual,
+            'peso_liquido_depois': updates.get('l10n_br_peso_liquido', peso_atual),
+            'volumes_antes': volumes_atual,
+            'volumes_depois': updates.get('l10n_br_volumes', volumes_atual),
+        }
+
+    def criar_picking_inter_company(
+        self,
+        company_origem_id: int,
+        company_destino_id: int,
+        location_origem_id: int,
+        location_destino_id: int,
+        linhas: List[Dict[str, Any]],
+        picking_type_id: int,
+        partner_id: int,
+        origin: Optional[str] = None,
+        scheduled_date: Optional[str] = None,
+        incoterm_id: Optional[int] = INCOTERM_CIF,
+        carrier_id: Optional[int] = CARRIER_NACOM,
+        tracking_por_pid: Optional[Dict[int, str]] = None,
+    ) -> Dict[str, Any]:
+        """ATOMO ETAPA B (Skill 8 F5a): cria stock.picking de SAIDA inter-company.
+
+        Encapsula `criar_transferencia` com:
+            - Pre-flight D-OPS-3: produtos `tracking='none'` tem `lot_name`/
+              `lot_id` removidos das linhas (Odoo CIEL IT nao aceita lote em
+              produto sem rastreio — falha silenciosa em XML-RPC).
+            - Pre-cond: linhas nao vazia + `company_origem != company_destino`
+              + partner_id OBRIGATORIO (fiscal_position resolver).
+            - G004: incoterm + carrier defaults (passe None p/ omitir).
+
+        Gotchas codificados:
+            G004: NACOM exige `incoterm` + `carrier_id` para
+                `action_liberar_faturamento` disparar (sem isso: "Voce deve
+                informar o Tipo de Frete para liberar o faturamento.").
+            G021: linhas com qty<=0 sao filtradas (caller pode passar mistura).
+            D-OPS-3: produtos `tracking='none'` (sem rastreio) tem lot_name/
+                lot_id stripeados antes do create. Evita o bug L965 do script
+                09 que pula esses quants (fix v14b Skill 2 + agora codificado
+                aqui para Skill 8 v15+).
+            G022: caller eh responsavel por `sleep` entre pickings (orchestrator
+                Skill 8 v15b ira preservar pattern script L1136-1138).
+
+        NAO encapsula (caller faz):
+            - Resolucao de lote+qty per ajuste (G023 lote_origem) — caller
+              monta `linhas` com lot_name corretos.
+            - Lote vencido on-the-fly (G014) — caller usa Skill 2 transferir
+              ANTES de chamar este atomo.
+            - Compensatorio (G-ETB-COMPENSATORIO) — caller analisa
+              `qty_restante` e decide.
+
+        Args:
+            company_origem_id: company emissora (FB=1, CD=4, LF=5).
+            company_destino_id: company destino — usado para validacao + logging
+                (NAO vai no payload do picking — apenas log).
+            location_origem_id: stock.location de saida (estoque da company origem).
+            location_destino_id: stock.location virtual de transito (ex.
+                LOCATION_DESTINO_TRANSITO_INDUSTR=26489 para industrializacao).
+            linhas: [{'product_id': int, 'quantity': float,
+                      'lot_name': str|None, 'lot_id': int|None,
+                      'uom_id': int|None, 'name': str|None}, ...]
+            picking_type_id: stock.picking.type.id (SAIDA da company origem;
+                usar `picking_types.get_picking_type(company_origem, tipo_op)`).
+            partner_id: res.partner.id destino — OBRIGATORIO em inter-company.
+            origin: campo `origin` do picking (rastreabilidade idempotente).
+            scheduled_date: 'YYYY-MM-DD HH:MM:SS' (UTC).
+            incoterm_id: G004 — Tipo de Frete (default INCOTERM_CIF=6). None omite.
+            carrier_id: G004 — Carrier (default CARRIER_NACOM=996). None omite.
+            tracking_por_pid: pre-fetched {pid: tracking}. Se None, lemos do Odoo
+                em batch (1 read). Aceita p/ otimizar em bulk.
+
+        Returns:
+            Dict com:
+              picking_id: int — id do stock.picking criado
+              tracking_none_pids: list[int] — pids tracking='none' detectados
+                (informativo; lot_name foi removido das linhas correspondentes)
+              linhas_planejadas: list — linhas APOS normalizacao tracking='none'
+              tempo_ms: int
+
+        Raises:
+            ValueError: pre-cond falhou (linhas vazias, company iguais, partner_id
+                ausente).
+            Exception: erros XML-RPC do Odoo (propaga para caller decidir retry).
+        """
+        inicio = time.time()
+
+        # Pre-cond
+        if not linhas:
+            raise ValueError(
+                'linhas vazias — picking exige ao menos 1 produto'
+            )
+        if company_origem_id == company_destino_id:
+            raise ValueError(
+                f'company_origem ({company_origem_id}) == company_destino '
+                f'({company_destino_id}) — use Skill 2 transferindo-interno-odoo '
+                'para intra-company.'
+            )
+        if not partner_id:
+            raise ValueError(
+                'partner_id OBRIGATORIO para inter-company '
+                '(fiscal_position precisa resolver). '
+                'Usar `operacoes_fiscais.COMPANY_PARTNER_ID[company_destino_id]`.'
+            )
+
+        # G021: filtrar qty<=0
+        linhas_filtradas = [
+            l for l in linhas
+            if float(l.get('quantity') or 0) > 0
+        ]
+        if not linhas_filtradas:
+            raise ValueError(
+                'linhas filtradas (qty > 0) vazias — todas as qty <= 0'
+            )
+
+        # D-OPS-3 pre-flight: detectar produtos tracking='none' em batch.
+        pids_distintos = sorted({l['product_id'] for l in linhas_filtradas})
+        if tracking_por_pid is None:
+            prod_tracking = self.odoo.read(
+                'product.product', pids_distintos, ['tracking'],
+            )
+            tracking_por_pid = {
+                p['id']: (p.get('tracking') or 'lot')
+                for p in prod_tracking
+            }
+
+        tracking_none_pids: List[int] = sorted([
+            pid for pid in pids_distintos
+            if tracking_por_pid.get(pid) == 'none'
+        ])
+
+        # Normalizar linhas: produtos tracking='none' nao podem ter lot_name/lot_id
+        linhas_normalizadas: List[Dict[str, Any]] = []
+        for linha in linhas_filtradas:
+            linha_norm = dict(linha)  # copia rasa
+            pid = linha_norm['product_id']
+            if tracking_por_pid.get(pid) == 'none':
+                # D-OPS-3 FIX: produto sem rastreio NAO aceita lote
+                if linha_norm.get('lot_name') or linha_norm.get('lot_id'):
+                    logger.info(
+                        f'  criar_picking_inter_company: D-OPS-3 fix — '
+                        f'produto {pid} tracking=none, removendo '
+                        f'lot_name={linha_norm.get("lot_name")!r} / '
+                        f'lot_id={linha_norm.get("lot_id")}'
+                    )
+                linha_norm.pop('lot_name', None)
+                linha_norm.pop('lot_id', None)
+            linhas_normalizadas.append(linha_norm)
+
+        # WRITE — delega para criar_transferencia (incoterm/carrier ja codificado)
+        picking_id = self.criar_transferencia(
+            company_origem_id=company_origem_id,
+            company_destino_id=company_destino_id,
+            location_origem_id=location_origem_id,
+            location_destino_id=location_destino_id,
+            linhas=linhas_normalizadas,
+            picking_type_id=picking_type_id,
+            partner_id=partner_id,
+            scheduled_date=scheduled_date,
+            origin=origin,
+            incoterm_id=incoterm_id,
+            carrier_id=carrier_id,
+        )
+
+        logger.info(
+            f'criar_picking_inter_company: picking {picking_id} '
+            f'origem={company_origem_id} destino={company_destino_id} '
+            f'linhas={len(linhas_normalizadas)} '
+            f'tracking_none_pids={len(tracking_none_pids)} '
+            f'origin={origin!r}'
+        )
+        return {
+            'picking_id': picking_id,
+            'tracking_none_pids': tracking_none_pids,
+            'linhas_planejadas': linhas_normalizadas,
+            'tempo_ms': int((time.time() - inicio) * 1000),
+        }
+
+    def validar_picking_inter_company(
+        self,
+        picking_id: int,
+        linhas_esperadas: List[Dict[str, Any]],
+        aplicar_peso_volumes: bool = True,
+        peso_unitario_fallback: float = 0.001,
+        volumes_fallback: int = 1,
+    ) -> Dict[str, Any]:
+        """ATOMO ETAPA B (Skill 8 F5b): valida picking inter-company.
+
+        Sequencia (D3 v14a — codificada inviolavel):
+            1. `confirmar_e_reservar` (action_confirm + action_assign)
+            2. `preencher_qty_done` (com lot_name/lot_id de linhas_esperadas)
+            3. `ajustar_qty_done_pelo_disponivel` (G021 — reduz demand se < disp)
+            4. `validar(linhas_esperadas=)` (G023 consolidar + button_validate +
+               G019 re-le state)
+            5. (opcional) `aplicar_peso_volumes_fallback` (G018 v2 — preparacao
+               para F5c liberar_faturamento; chamado APOS validate quando
+               qty_done ja' foi consolidado)
+
+        Substitui o fluxo F5b distribuido em
+        `inventario_pipeline_service.f5b_validar_pickings` + script 09
+        L1110-1124 (aplicar_peso_volumes_fallback_picking).
+
+        Gotchas codificados:
+            G019: `validar()` re-le state apos button_validate; raise se
+                != 'done'. Evita false-positive 'cannot marshal None'.
+            G023: `validar(linhas_esperadas=)` consolida MLs ANTES de
+                button_validate (descarta reservas em lotes nao esperados).
+            G021: `ajustar_qty_done_pelo_disponivel` reduz demand se < qty_done
+                (evita over-reserva). Pendencias retornadas no output.
+            G018 v2: peso/volumes via stock.picking write (product.weight nao
+                persiste em CIEL IT).
+
+        NAO faz `liberar_faturamento` (F5c) — fica na Skill 8 orchestrator.
+        NAO faz `aguardar_invoice_do_robo` (parte de F5d) — idem.
+
+        Args:
+            picking_id: stock.picking.id em state=draft/confirmed/assigned.
+            linhas_esperadas: [{'product_id': int, 'quantity': float,
+                                'lot_name': str|None, 'lot_id': int|None}, ...]
+                vindas dos ajustes do inventario (lote_origem + qtd_ajuste).
+                Lista vazia/None desliga G021/G023 (NAO recomendado).
+            aplicar_peso_volumes: ativa G018 v2 (default True).
+            peso_unitario_fallback: peso/un quando product.weight=0 (default 0.001).
+            volumes_fallback: volumes minimo (default 1).
+
+        Returns:
+            Dict com:
+              picking_id: int
+              state_apos_validate: str ('done' se G019 OK)
+              mls_pendencias: list — moves cuja demand foi reduzida (G021)
+              g023_aplicado: bool — true se linhas_esperadas nao-vazia
+              peso_volumes: dict — resultado de aplicar_peso_volumes_fallback
+                  (vazio se aplicar_peso_volumes=False)
+              tempo_ms: int
+
+        Raises:
+            RuntimeError: G019 false-positive (state != 'done' apos validate).
+            RuntimeError: produto sem move_line (estoque insuficiente).
+            Exception: outros erros Odoo (Quality checks, etc).
+        """
+        inicio = time.time()
+
+        # 1. Confirmar + reservar
+        self.confirmar_e_reservar(picking_id)
+
+        # 2. Preencher qty_done com lotes do ajuste
+        if linhas_esperadas:
+            self.preencher_qty_done(picking_id, linhas_esperadas)
+
+        # 3. Ajustar demand pelo disponivel (G021)
+        ajuste_qty = self.ajustar_qty_done_pelo_disponivel(picking_id)
+        pendencias = ajuste_qty.get('pendencias', []) if ajuste_qty else []
+
+        # 4. Validar (G023 + G019 — re-le state)
+        # Contrato de validar(): retorna True se state=='done' OU raise
+        # RuntimeError. Se chegou aqui sem raise, state == 'done' garantido.
+        # CR v15a Issue 3 fix: NAO refaz read extra (validar() ja garante).
+        self.validar(picking_id, linhas_esperadas=linhas_esperadas)
+        state_final = 'done'
+
+        # 5. G018 v2: peso/volumes (preparacao p/ F5c). Apos validate, qty_done
+        # ja foi consolidado e moves estao em state='done'.
+        peso_volumes_resultado: Dict[str, Any] = {}
+        if aplicar_peso_volumes:
+            try:
+                peso_volumes_resultado = self.aplicar_peso_volumes_fallback(
+                    picking_id,
+                    peso_unitario_fallback=peso_unitario_fallback,
+                    volumes_fallback=volumes_fallback,
+                )
+            except Exception as e:
+                logger.warning(
+                    f'Picking {picking_id}: G018 fallback peso/volumes '
+                    f'falhou (nao bloqueante): {e}'
+                )
+                peso_volumes_resultado = {
+                    'aplicado': False,
+                    'erro': str(e)[:200],
+                }
+
+        logger.info(
+            f'validar_picking_inter_company: picking {picking_id} '
+            f'state={state_final} pendencias_g021={len(pendencias)} '
+            f'g023={bool(linhas_esperadas)} '
+            f'peso_volumes_aplicado={peso_volumes_resultado.get("aplicado")}'
+        )
+        return {
+            'picking_id': picking_id,
+            'state_apos_validate': state_final,
+            'mls_pendencias': pendencias,
+            'g023_aplicado': bool(linhas_esperadas),
+            'peso_volumes': peso_volumes_resultado,
+            'tempo_ms': int((time.time() - inicio) * 1000),
+        }
+
+    def criar_picking_entrada_destino_manual(
+        self,
+        company_destino_id: int,
+        location_origem_id: int,
+        location_destino_id: int,
+        moves_data: List[Dict[str, Any]],
+        picking_type_id: int,
+        origin: str,
+    ) -> Dict[str, Any]:
+        """ATOMO ETAPA F (Skill 8 G023): cria + valida picking de ENTRADA manual
+        em destino (FB → {LF, CD}).
+
+        Padrao L17: NFs sentido FB→{LF, CD} de industrializacao interna precisam
+        de picking de entrada criado MANUALMENTE no destino. O robo CIEL IT NAO
+        cria entrada automatica (nao ha DFe no sentido reverso).
+
+        Validado em PROD com pickings 317306 (LF/IN/01733) e 317316 (LF/IN/01734).
+
+        Sequencia inviolavel:
+            1. Idempotencia via `origin`: se ja existe picking com mesmo origin:
+                - state='done': retorna esse id (status='IDEMPOTENT_DONE')
+                - outro state: retorna esse id mas status='IDEMPOTENT_OTHER'
+                  (operador deve investigar; nao recria).
+            2. `odoo.create('stock.picking', payload)` com moves_data.
+            3. **G023 CRITICO**: `write('stock.move', moves, {'company_id':
+               company_destino_id})` apos create — XML-RPC NAO herda company
+               do picking para os moves.
+            4. `action_confirm` + `action_assign`.
+            5. G011: para cada move_line — re-escrever `quantity` (auto-vazio
+               apos action_assign) + setar `lot_name` (de moves_data) se a
+               ML nao tem lot_id/lot_name.
+            6. `button_validate`.
+            7. G019/G020: re-le state e raise se != 'done'.
+
+        Gotchas codificados:
+            G023 (L17 script L1637-1640): company_id em moves DEVE ser escrito
+                apos create — XML-RPC nao herda.
+            G011 (script L1646-1665): re-escrever quantity em MLs e setar
+                lot_name se faltando.
+            G019/G020: re-le state apos button_validate; raise se != 'done'.
+            Idempotencia (script L1552-1578): busca por `origin = X` exato
+                — se done, skip; se outro state, retorna p/ investigacao.
+
+        Args:
+            company_destino_id: company onde a entrada eh criada (LF=5, CD=4).
+            location_origem_id: stock.location virtual de transito (ex.
+                LOCATION_ORIGEM_ENTRADA_INDUSTR=26489 Em Transito Industrializacao).
+            location_destino_id: stock.location de estoque interno do destino
+                (ex. COMPANY_LOCATIONS[5]=42 para LF/Estoque).
+            moves_data: [{'product_id': int, 'quantity': float,
+                          'lot_dest_name': str, 'name': str (opcional)}, ...]
+                NB: usa 'lot_dest_name' (nome padronizado p/ entrada manual,
+                ex. INV-{cod}-{YYYYMMDD}), distinto do 'lot_name' de SAIDA.
+            picking_type_id: stock.picking.type.id de ENTRADA do destino
+                (ex. PICKING_TYPE_ENTRADA_DESTINO_MANUAL[5]=19 para LF).
+            origin: rastreabilidade + idempotencia. Caller monta string como
+                `f'INV-{ciclo}-ENTRADA-{label}-NF{invoice_id}'` (formato
+                consistente com script 09 L1547-1549).
+
+        Returns:
+            Dict com:
+              picking_id: int — id do picking (novo ou idempotente)
+              status: str — CRIADO | IDEMPOTENT_DONE | IDEMPOTENT_OTHER
+              state: str — state final do picking
+              n_moves: int — numero de moves criados (0 se idempotente)
+              tempo_ms: int
+
+        Raises:
+            ValueError: pre-cond falhou (moves_data vazio, origin vazio).
+            RuntimeError: G019/G020 — state != 'done' apos button_validate.
+            Exception: outros erros XML-RPC (propaga).
+        """
+        inicio = time.time()
+
+        # Pre-cond
+        if not moves_data:
+            raise ValueError(
+                'moves_data vazio — picking entrada exige ao menos 1 produto'
+            )
+        if not origin:
+            raise ValueError(
+                'origin vazio — picking entrada manual exige origin '
+                "(idempotencia via 'origin' exato)"
+            )
+
+        # Filter qty<=0
+        moves_filtrados = [
+            m for m in moves_data
+            if float(m.get('quantity') or 0) > 0
+        ]
+        if not moves_filtrados:
+            raise ValueError(
+                'moves_data filtrados (qty > 0) vazios — todas qty <= 0'
+            )
+
+        # 1. Idempotencia: ja existe picking com este origin?
+        existentes = self.odoo.search_read(
+            'stock.picking',
+            [['origin', '=', origin]],
+            ['id', 'name', 'state'],
+        )
+        if existentes:
+            ex = existentes[0]
+            if ex['state'] == 'done':
+                logger.info(
+                    f'criar_picking_entrada_destino_manual: origin={origin!r} '
+                    f'ja existe done (picking {ex["id"]} {ex["name"]}) — skip'
+                )
+                return {
+                    'picking_id': ex['id'],
+                    'status': 'IDEMPOTENT_DONE',
+                    'state': 'done',
+                    'n_moves': 0,
+                    'tempo_ms': int((time.time() - inicio) * 1000),
+                }
+            else:
+                logger.warning(
+                    f'criar_picking_entrada_destino_manual: origin={origin!r} '
+                    f'ja existe picking {ex["id"]} {ex["name"]} state='
+                    f'{ex["state"]} != done. Nao recria — investigacao manual.'
+                )
+                return {
+                    'picking_id': ex['id'],
+                    'status': 'IDEMPOTENT_OTHER',
+                    'state': ex['state'],
+                    'n_moves': 0,
+                    'tempo_ms': int((time.time() - inicio) * 1000),
+                }
+
+        # 2. Criar stock.picking com moves
+        moves_payload = []
+        for m in moves_filtrados:
+            move_dict = {
+                'product_id': m['product_id'],
+                'product_uom_qty': float(m['quantity']),
+                'name': m.get('name', f'{origin} - prod={m["product_id"]}'),
+                'location_id': location_origem_id,
+                'location_dest_id': location_destino_id,
+            }
+            moves_payload.append((0, 0, move_dict))
+
+        picking_data = {
+            'picking_type_id': picking_type_id,
+            'location_id': location_origem_id,
+            'location_dest_id': location_destino_id,
+            'company_id': company_destino_id,
+            'origin': origin,
+            'move_ids_without_package': moves_payload,
+        }
+        picking_id = self.odoo.create('stock.picking', picking_data)
+        logger.info(
+            f'criar_picking_entrada_destino_manual: picking {picking_id} '
+            f'criado (company_destino={company_destino_id}, '
+            f'{len(moves_payload)} moves, origin={origin!r})'
+        )
+
+        # 3. G023 CRITICO: forcar company_id nos moves (XML-RPC nao herda)
+        moves_ids = self.odoo.search(
+            'stock.move', [['picking_id', '=', picking_id]],
+        )
+        if moves_ids:
+            self.odoo.write(
+                'stock.move', moves_ids,
+                {'company_id': company_destino_id},
+            )
+            logger.debug(
+                f'  G023: company_id={company_destino_id} forcado em '
+                f'{len(moves_ids)} moves'
+            )
+
+        # 4. action_confirm + action_assign
+        self.odoo.execute_kw(
+            'stock.picking', 'action_confirm', [[picking_id]],
+        )
+        self.odoo.execute_kw(
+            'stock.picking', 'action_assign', [[picking_id]],
+        )
+
+        # 5. G011: preencher lot_name + re-escrever quantity E qty_done em MLs
+        # Mapear pid -> lot_dest_name
+        lote_por_pid: Dict[int, str] = {}
+        for m in moves_filtrados:
+            pid = m['product_id']
+            lote_dest = m.get('lot_dest_name', '').strip()
+            if lote_dest:
+                lote_por_pid[pid] = lote_dest
+
+        mls = self.odoo.search_read(
+            'stock.move.line',
+            [['picking_id', '=', picking_id]],
+            ['id', 'product_id', 'quantity', 'lot_id', 'lot_name'],
+        )
+        for ml in mls:
+            pid_ml = ml['product_id'][0] if ml.get('product_id') else None
+            if not pid_ml:
+                continue
+            # G011 (CR v15a Issue 2 fix): re-escrever quantity COMO REFORCO
+            # (auto-vazio apos assign em algumas versoes CIEL IT) E setar
+            # qty_done explicitamente — button_validate consulta qty_done
+            # (nao quantity) para decidir o quanto efetivamente transferir.
+            # Atomo eh mais DEFENSIVO que o script L1660-1665 (que tambem
+            # validou em PROD 317306/317316 — provavelmente porque CIEL IT
+            # trata ETAPA F como immediate_transfer e auto-seta qty_done;
+            # mesmo assim setamos explicito para alinhar pattern Skill 5
+            # `preencher_qty_done` + reduzir risco de regressao versao Odoo).
+            qty_ml = float(ml.get('quantity') or 0)
+            updates: Dict[str, Any] = {
+                'quantity': qty_ml,
+                'qty_done': qty_ml,
+            }
+            # Setar lot_name se ML nao tem lot_id NEM lot_name AND tem destino
+            if not ml.get('lot_id') and not ml.get('lot_name'):
+                lote_dest = lote_por_pid.get(pid_ml)
+                if lote_dest:
+                    updates['lot_name'] = lote_dest
+            self.odoo.write('stock.move.line', [ml['id']], updates)
+
+        # 6. button_validate com skip_backorder (CR v15a Issue 1 fix)
+        # Alinha pattern dos outros atomos Skill 5 (`validar()`, `devolver()`):
+        # `skip_backorder=True` + `picking_ids_not_to_backorder` evita o
+        # wizard de backorder (que deixaria state='assigned' em vez de 'done'
+        # quando ha diferenca entre qty_done e demand). Se isso acontecer
+        # sem o context, G019 raise (falha alta, mas evitavel — Issue 1 v15a CR).
+        self.odoo.execute_kw(
+            'stock.picking', 'button_validate', [[picking_id]],
+            {'context': {
+                'skip_backorder': True,
+                'picking_ids_not_to_backorder': [picking_id],
+            }},
+        )
+
+        # 7. G019/G020: re-le state e raise se != 'done'
+        p_after = self.odoo.read(
+            'stock.picking', [picking_id], ['state'],
+        )
+        state_final = p_after[0]['state'] if p_after else None
+        if state_final != 'done':
+            raise RuntimeError(
+                f'criar_picking_entrada_destino_manual: picking '
+                f'{picking_id} state={state_final!r} apos button_validate '
+                f'(esperado "done"). Provavelmente estoque negativo, wizard '
+                f'pendente, ou outro impedimento. G019/G020 false-positive.'
+            )
+
+        logger.info(
+            f'criar_picking_entrada_destino_manual: picking {picking_id} '
+            f'state=done (origin={origin!r})'
+        )
+        return {
+            'picking_id': picking_id,
+            'status': 'CRIADO',
+            'state': 'done',
+            'n_moves': len(moves_filtrados),
+            'tempo_ms': int((time.time() - inicio) * 1000),
+        }
