@@ -1,10 +1,10 @@
-# PROMPT_PROXIMA_SESSAO — orquestrador-Odoo (worktree feat/estoque-odoo)
+# PROMPT_PROXIMA_SESSAO — orquestrador-Odoo (worktree feat/estoque-odoo) v8
 
 > Copie tudo entre `---BEGIN---` e `---END---` e cole como prompt inicial da próxima sessão. Mantém você dentro do plano global sem desviar.
 
 ---BEGIN---
 
-Continue o trabalho do orquestrador-Odoo. Worktree: `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **commit atual `b8ed3b5c` — base `main`@b4f7b24c + 2 commits feat/estoque-odoo**). `main` continua VIVO em paralelo (Rafael commita lá) — verificar se avançou e considerar rebase incremental ANTES de iniciar.
+Continue o trabalho do orquestrador-Odoo. Worktree: `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **5+ commits sobre `main`@b4f7b24c — último commit v7-extras**). `main` continua VIVO em paralelo (Rafael commita lá) — verificar se avançou e considerar rebase incremental ANTES de iniciar.
 
 ## Setup OBRIGATÓRIO (worktree sem .env)
 
@@ -14,264 +14,184 @@ source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate
 set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a
 ```
 
-## ⚠️ PRIORIDADE ABSOLUTA: Gap arquitetural "tratar reservas pre-transferencia" (caso PAUSADO 2026-05-24 v6.1)
+## ✅ GAP RESERVAS RESOLVIDO em v7 (2026-05-24)
 
-**Antes de qualquer outro foco, ler:**
-- `docs/inventario-2026-05/casos-pendentes/CASO_PENDENTE_RESERVAS_71_CODS_2026_05_24.md`
-- Memoria `[[caso_real_tratar_reservas_pre_transferencia]]`
-- VALIDACAO_FINAL_SESSAO §12 (sessao 2026-05-24 v6.1)
+A sessão v7 fechou o gap arquitetural "tratar reserva ATIVA pré-transferência" (caso 71 cods PAUSADO em v6.1):
+- **4 átomos novos**: Skill 9 `listar_move_lines_por_quant` + `listar_pickings_por_quant` (cross-ref via tupla G030); Skill 2.4 `unreserve_picking` + `find_orphan_mls`.
+- **Fluxo 2.6** `fluxos/2.6-tratar-reserva-bloqueia-transferencia.md` com 5 caminhos seguros (A=cancel/B=devolver/C=unreserve/D=outro lote/E=cirurgia órfã).
+- **Regra inviolável** no prompt do `gestor-estoque-odoo`: "PRE-CHECK reserva via Skill 9 ANTES de Skill 2".
+- **Tabela "5 caminhos"** em SKILL.md da Skill 2.4.
+- **Gotcha G030** documentado (`stock.move.line.quant_id` é computed `store: False` — filtro IGNORADO; cross-ref via tupla obrigatório).
+- **88 writes em PROD validados**: 1 cancel FB/INT/08022 + 80 chamadas Skill 2 MODO C + 3 P-15/05 MODO B + 4 reversões (incidente race condition).
+- **230 pytest verdes** (196 anterior + 33 novos + 1 H1 draft).
 
-**Resumo:** caso real de 71 cods para FB/Indisponivel foi PAUSADO porque o gestor/skills nao tem ferramentas claras para tratar RESERVAS ATIVAS (lote 13206 + MIGRACAO de FB/Estoque reservados em 8 cods). Gap em 4 dimensoes:
-1. **Faltam atomos** Skill 9 `listar_pickings_por_quant`, `listar_move_lines_por_quant` + Skill 2.4 `unreserve_picking`, `find_orphan_mls`
-2. **Falta fluxo** `app/odoo/estoque/fluxos/2.6-tratar-reserva-bloqueia-transferencia.md`
-3. **Falta regra inviolavel** no prompt do gestor: "checar reservas via Skill 9 ANTES de Skill 2"
-4. **Falta doc operacional** dos 5 caminhos seguros para desreservar (cancelar / devolver / unreserve / outro lote / cirurgia orfa)
+## ⚠️ REGRAS INVIOLÁVEIS NOVAS (v7-extras — LER ANTES DE QUALQUER AÇÃO)
 
-**2 caminhos para retomar:**
-- **P1 (recomendado):** implementar gaps 1-4 ANTES de retomar caso, transformando o caso em validacao do novo fluxo
-- **P2 (rapido):** usar `consultando-sql` ad-hoc para investigar pickings reservando lote 13206 + MIGRACAO; retomar caso com decisao caso-a-caso; gaps implementados depois
+1. **EXECUTAR FLUXOS = subagente, NÃO principal** (lição que custou ~150k tokens em v7):
+   - Para EXECUTAR fluxos sobre caso real (auditoria + write em PROD via composição de skills), SEMPRE spawn `gestor-estoque-odoo` via Task tool.
+   - Use o principal APENAS para IMPLEMENTAR átomos novos / debugar gaps arquiteturais / refatorar services.
+   - Economia esperada: ~30-50% tokens em batches de 80+ chamadas.
 
-**Inputs do caso preservados em `docs/inventario-2026-05/casos-pendentes/`:**
-- `transferencias_indisp_2026_05_24.tsv` (71 cods)
-- `audit_fb_indisp.json` (190 quants brutos com reserved real)
-- `audit_indisp_classificado.json` (classificacao 58 GREEN + 9 FLAG + 4 SKIP)
-- `plano_etapa_A.tsv` (95 chamadas)
-- `plano_etapa_B.tsv` (67 chamadas)
+2. **`--quiet` em CLIs estoque** (NOVO v7-extras): todos os 7 CLIs aceitam `--quiet` (suprime Flask boot ~50 linhas/call). Use SEMPRE em batches via subprocess. JSON output não é afetado.
 
-**Apos retomar/resolver:** atualizar SKILL.md/fluxos/prompt com aprendizados; commitar memoria atualizada.
+3. **`--forcar-concorrencia`** (NOVO v7-extras): scripts CLI agora detectam concorrência via `pgrep -f` no startup. Default = sys.exit(2) se outro processo igual rodando (previne incidente race condition v7). Use `--forcar-concorrencia` SÓ quando ciente.
 
----
+4. **Log JSON é fonte de verdade** (lição v7): NUNCA confiar em `tee` background (pode falhar silenciosamente). Sempre parsear JSON do log salvo pelo script (`/tmp/log_*.json` para batches).
 
-## FOCO ALTERNATIVO (se gap reservas ja resolvido OU se decisao = adiar): Skill 8 `faturando-odoo` (DESBLOQUEADA pela ONDA 0.4)
+## PENDÊNCIAS RESIDUAIS (não-bloqueantes — pode resolver na v8 ou postergar)
 
-**Por quê:**
-1. **Macro perigoso DESBLOQUEADO**: ONDA 0.4 fechada em 2026-05-24 v3 codificou G019/G020 no `picking.py` (re-le state pós-button_validate, raise se != 'done'). Skill 8 agora pode confiar em `svc.validar()` sem false-positives.
-2. **Service existe** (`InventarioPipelineService` em `app/odoo/services/inventario_pipeline_service.py`) — capinagem retroativa para `app/odoo/estoque/orchestrators/inventario_pipeline.py` + shim. Pattern Skill 5.
-3. **Ordem bottom-up correta** após Skill 4: todas as skills WRITE intra-estoque estão ✅/🟡 mín viável; Skill 8 é a última macro perigosa antes de fluxos inter-company.
-4. **Gotchas conhecidos** (~20 documentados em docs/inventario-2026-05/02-gotchas/): G004 (picking→robô→SEFAZ), G011 (preencher qty_done), G016 (SSL crash), quarteto fiscal pré-SEFAZ G035/G017/G007/G018, G028 (over-reservation). G019/G020 já codificados.
-5. **CRÍTICO: irreversível** (NF→SEFAZ). Cuidado especial: smoke 1 ajuste antes de batch; verificar invoice criada por robô CIEL IT em cada caso.
+| Item | Quantidade | Comando recomendado |
+|---|---|---|
+| Cod **105000003** (P-15/05 literal — lote real, qty 430 do plano caso 71-cods) | 1 cod | Skill 1 `--quant-id 261857 --delta -430 --confirmar` + ajustar destino MIGRAÇÃO Indisp `--quant-id <X> --delta +430 --confirmar` (resolver quant destino via Skill 9) |
+| Cod **4739199** (lote 353/25 — FALHA_QUANT_NEGATIVO no smoke v7) | 1 cod | Investigar saldo atual via Skill 9; pode já ter sido reduzido pelo batch principal — verificar antes de tocar |
+| **5 cods MIGRAÇÃO pulados** (103000113, 103000117, 104000054, 105000021, 105000038) | 5 cods | Rafael decide via fluxo 2.6: cancelar pickings (caminhos A/B) ou aceitar saldo bloqueado. Pickings: FB/FB/EMB/11673+11674 (MO ativa centavos) + FB/OUT/01046 (DEVOLUcaO LA FAMIGLIA ~890un — risco fiscal) |
+| Plano Etapa B (67 chamadas separadas) | — | NÃO necessário — MODO C atomic já fez Etapa A+B atomic |
 
-**Escopo da Skill 8 (C1 mineração inicial):**
+## FOCOS POSSÍVEIS PARA v8 (escolher 1 ao iniciar a sessão)
 
-- **Scripts-fonte conhecidos no MAPA_SCRIPTS:**
-  - `09_executar_onda1_bulk` (pipeline macro A-F — etapa única).
-  - `09c_executar_onda2_fb_cd` (transfer_only etapas 19-37 — saída inter-company FB↔CD).
-  - `fat_lf_02_carregar` (TIPO→ação driver).
-  - `fat_lf_04_executar` (driver etapas B-F).
-  - `fat_lf_05_executar_clean` (G028 reserva multi-lote pós-rename).
-  - `fat_lf_cleanup` (devolução/cancelamento — já parcialmente capinado em Skill 5 `devolver`).
-  - `fat_lf_resume.sh` (loop B→D SSL-resiliente).
-  - `teste_210030325` (caso isolado para exemplo no fluxo).
-- **Operações esperadas (átomos macro + etapas para recuperação):**
-  - `faturar_ajuste(ajuste_id)` (macro A-F) — picking → reservar → preencher qty_done → validar (Skill 5 ✅) → liberar_faturamento → aguardar invoice robô CIEL IT.
-  - `faturar_etapa_x(ajuste_id, etapa)` — etapas isoladas para recuperar de falhas parciais.
-  - `faturar_em_massa(criterio)` — batch sobre N ajustes (canary `--limite 1` obrigatório).
-- **Gotchas-invariante a codificar:**
-  - **G004** (assinatura do átomo): picking → robô CIEL IT → SEFAZ. Estrutural, não validador.
-  - **G011** (preencher qty_done): pipeline preenche antes de chamar `validar()` (não delegar a caller externo — fazer parte do átomo).
-  - **G016** (SSL crash loop F5e): retry + keepalive na conexão.
-  - **G019/G020** (já codificados em Skill 5 `picking.py` — usar `svc.validar()`).
-  - **Quarteto fiscal pré-SEFAZ (G035/G017/G007/G018)**: validador checa+corrige+bloqueia ANTES de transmitir (gtin_validator). Pre-flight obrigatório.
-  - **G028** (consolidar_move_lines pós-rename): chamada via `svc.validar(linhas_esperadas=)` (Skill 5 já cobre).
-  - **Quarteto fiscal pré-SEFAZ**: NCM false, custo zero, weight zero, barcode inválido → quebra SEFAZ Schema 225. Validador deve corrigir+bloquear.
-  - **Ordem**: faturar→entrada; sleep; validar→liberar (guard clauses entre átomos).
-  - **Tempo irredutível**: robô CIEL IT externo — polling+timeout dá resultado determinístico, NUNCA tempo fixo.
+### Foco A (RECOMENDADO se pendências forem prioridade): Resolver residuais via subagente
+- Spawnar `gestor-estoque-odoo` com prompt: "Resolver pendências v7-residuais — cod 105000003 + cod 4739199 + 5 cods MIGRAÇÃO".
+- O subagente seguirá fluxo 2.6 automaticamente para os 5 cods MIGRAÇÃO; Skill 1 direta para os 2 individuais.
+- Tempo estimado: ~30-60min, ~40-60k tokens (vs ~150k se principal orquestrar).
+- Risco: baixo (pendências bem mapeadas; subagente segue regras invioláveis).
 
-**Alternativa válida 1**: **Skill 7 `escriturando-odoo`** (SÓ ENTRADA — DFe próprio → in_invoice → saldo). Pré-requisito: contrato estável de transfer (Skill 2 ✅) e picking (Skill 5 ✅). Mais simples que Skill 8 (sem SEFAZ direto). Cobre `entrada_fb_piloto` etapas 0-18, `escriturar_dfe_lf` (Fluxo A inventário, NÃO reusa RecebimentoLf). ~4-6h.
+### Foco B: Skill 8 `faturando-odoo` (DESBLOQUEADA pela ONDA 0.4 v3)
+- Skill MACRO mais perigosa (NF→SEFAZ irreversível).
+- Service `InventarioPipelineService` existe — capinar para `app/odoo/estoque/orchestrators/inventario_pipeline.py` + shim. Pattern Skill 5.
+- Pre-flight quarteto fiscal G035/G017/G007/G018 obrigatório.
+- Smoke 1-ajuste antes de batch (regra inviolável SEFAZ).
+- ~6-8h, ~200-300k tokens.
+- Risco: ALTO (SEFAZ irreversível; robô CIEL IT externo timing).
 
-**Alternativa válida 2**: **Fluxos compostos** da Skill 2 (`2.2.D010`, `2.2.D012`, `2.2.D013`) — folhas filhas cobrindo orquestradores de planilha (15, 15r, transferir_lote, transferir_local_pasta22, ajuste_fb_cd_indisponivel, mover_migracao, relotar). Implementar SOMENTE se padrão se repetir com 2+ casos reais cada.
+### Foco C: Skill 7 `escriturando-odoo` (entrada IC + DFe)
+- Pré-cond: Skill 2 ✅ + Skill 5 ✅. Mais simples que Skill 8 (sem SEFAZ direto).
+- ~4-6h, ~150-200k tokens.
 
-**Alternativa válida 3**: **Skill 6 `planejando-pre-etapa-odoo`** (planner READ+valida; isolado). Cobre `03b_planejar_pre_etapa_cd`, `04b_propor_pre_etapa_cd`, `09b_executar_pre_etapa`. Service existe (`PreEtapaEstoqueService`); falta SKILL.md + CLI + folha de fluxo. Bom para quebrar inércia se Skill 8 parecer pesada demais.
+### Foco D: Capinar `09b_executar_pre_etapa.py` (C3 macro Skill 6)
+- Fecha ciclo Skill 6 (planejar+propor+aprovar+executor): capina `09b` → `orchestrators/pre_etapa_executor.py`.
+- Macro C3 que delega Skills 1+2.
+- ~3-4h, ~80-120k tokens.
 
-## Estado atual (sessão 2026-05-24 v6 fechada — Skill 6 NOVA + 196 pytest verdes)
-
-**6 skills WRITE + 1 READ ancillary no catálogo do gestor-estoque-odoo:**
-- ✅ Skill 1 `ajustando-quant-odoo` MATURADA — 100 ajustes PROD 2026-05-23; 30 pytest; 5 scripts SUPERADOS; guard delta_esperado.
-- 🟡 Skill 2 `transferindo-interno-odoo` mín viável + MODO C PROD — 52 pytest (modo C +15 testes); 2 scripts SUPERADOS; 3 modos atômicos (A lote→lote / B loc→loc / C `--para-indisponivel` cross loc+lote consolidando MIGRAÇÃO POR PRODUTO); delega `ajustar_quant`×2; G021/G022/G027/G031 codificados; 1 execução PROD validada (4.319 un em 23s pós-incidente G031 + fix; rollback testado).
-- 🟡 Skill 2.4 `operando-reservas-odoo` mín viável — 3 átomos validados PROD 2026-05-23 (6 pickings + 15 quants).
-- 🟡 Skill 5 `operando-picking-odoo` mín viável — 42 pytest; 3 átomos (cancelar, validar com G019/G020 invariante, devolver idempotente); FECHA ONDA 0.4; 1 script SUPERADO; 6 casos dry-run PROD 100% bate.
-- 🟡 Skill 4 `operando-mo-odoo` mín viável (2026-05-24 v5) — 1ª skill WRITE criada do zero (sem service legado em `services/`); 29 pytest; 2 átomos (`cancelar_mo` + `cancelar_mos_em_massa`) + helper `medir_consumo_mo`; guard G-MO-01 INVIOLÁVEL (consumo>0 = furo contábil); G019-like re-le state pós action_cancel; idempotência state=cancel = NOOP; status NOVO `cancel_deleted`; 4 dry-run PROD 100% bate; 2 scripts SUPERADOS; 9 code-review findings aplicados.
-- 🟡 **Skill 6 `planejando-pre-etapa-odoo` mín viável NOVA (2026-05-24 v6)** — capina retroativa pesada de 03b+04b para `estoque/scripts/pre_etapa.py` + shim; 21 pytest (13 originais preservados + 6 helpers novos + 2 cobrindo CR fixes); 4 modos CLI (planejar READ Odoo + grava JSON+Excel; propor WRITE banco local DELETE+INSERT; listar-onda READ + hash sha256; aprovar-onda WRITE com hash check anti-replay); workflow Onda 5 (CD) + Onda 6 (FB futura); G-PRE-01..10 codificados (D007 restricao temporal FB pos-etapa, FIFO determinístico, MIGRAÇÃO consolidador, hash anti-replay, idempotência); 3 smokes CLI validados (exit codes 1/2/4); 2 scripts SUPERADOS; 09b executor permanece VIVO (C3 macro pendente capinagem); 15 code-review findings (3 HIGH + 8 MED + 4 LOW) — 8 corrigidos + 2 testes novos; **NOVOS PATTERNS reutilizáveis**: savepoint para services em Flask routes, getattr defensivo em hash anti-replay, guard outliers em WRITE downstream.
-- 🟡 Skill 9 `consultando-quant-odoo` mín viável (READ ancillary) — 2 átomos.
-
-**Marcos da sessão v5:**
-- Skill 4 criada do zero seguindo pattern Skill 1 (sem service legado para capinar) — pattern mais limpo que Skill 5 (capinagem retroativa).
-- Investigação AO VIVO ANTES do C1 final revelou volumes reais (FB 10k+ MOs, CD 17, LF 3.4k), idempotência action_cancel não documentada, campo `qty_produced` ≠ consumo.
-- Princípio demanda-driven validado novamente: `criar_mo` e `alterar_mo` NÃO implementados (sem caso real isolado); `alterar_mo` é fluxo cross-skill (ver [[mo_componente_local_consumo]]); `mrp.unbuild` documentado mas skill separada (futura).
-- Code-review paralelo (code + docs) pegou 9 bugs ortogonais — pattern reaproveitável.
-- Auditoria G031 callers reais: **ZERO** (pendência §9.7 v4 ✅ RESOLVIDA — só 2 matches em docs descrevendo o incidente).
-
-**13 scripts em `_validados/`** (5 ajustando-quant + 3 operando-reservas + 2 transferindo-interno + 1 operando-picking + 2 operando-mo). ~92 scripts ad-hoc continuam VIVOS (operação viva).
-
-**Pytest baseline: 196 verdes** (30 quant + 52 transfer + 19 lot + 42 picking + 29 mo + 3 CR4 fixes + 21 pre_etapa = 175 anterior + 21 Skill 6). 5 falhas em `test_inventario_pipeline_service.py` são **pré-existentes** (não relacionadas a estoque-odoo; Skill 8 capinará esse service).
+### Foco E: Code-review v7 dos 4 átomos novos (deferida v7-extras)
+- Spawn 2 code-reviewers paralelos (já feito em v7 — 1 HIGH + 4 MED corrigidos). Re-rodar se quiser cobertura adicional.
 
 ## LEITURAS OBRIGATÓRIAS ANTES DE AGIR (ordem)
 
-1. `app/odoo/estoque/CLAUDE.md` — constituição (§1 princípio fundador, §4 fluxos>>skills, §6 catálogo com 5 skills WRITE + 1 READ, §8 invariantes, §12 invariantes execução).
-2. `app/odoo/estoque/ROADMAP_SKILLS.md` — seção HANDOFF (estado v5 + próximos passos + ordem bottom-up atualizada).
-3. `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` §10 (Skill 4 v5 + pre-mortem 4 dimensões + 9 findings code-review).
-4. `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` §9 (Skill 2 v4 + MODO C + incidente G031 + 17 findings code-review).
-5. **Se foco = Skill 8 `faturando-odoo`** (recomendado):
-   - `app/odoo/services/inventario_pipeline_service.py` (service legado a capinar; ~20 gotchas codificados).
-   - `docs/inventario-2026-05/02-gotchas/G004-padrao-real-eh-picking-robo-CIEL-IT.md` — assinatura do átomo macro.
-   - `docs/inventario-2026-05/02-gotchas/G011-preencher-qty-done-faltando.md` — pré-cond `validar()`.
-   - `docs/inventario-2026-05/02-gotchas/G016-ssl-crash-no-loop-f5e-perde-commits.md` — retry + keepalive.
-   - `docs/inventario-2026-05/02-gotchas/{G035,G017,G007,G018}.md` — quarteto fiscal pré-SEFAZ.
-   - `docs/inventario-2026-05/02-gotchas/G019-f5b-validar-engole-erro.md` + `G020-f5c-sem-checar-state-done.md` (✅ JÁ CODIFICADOS em Skill 5).
-   - Memórias: `[[ciel_it_quirks]]` (NCM custom, weight não persiste, barcode → SEFAZ 225), `[[picking_317346_pendente]]` (caso de invoice CIEL IT lento), `[[skill5_picking_pattern]]` (pattern capinagem reaproveitável).
-6. **Se foco = Skill 7 `escriturando-odoo`**:
-   - `docs/inventario-2026-05/02-gotchas/G023-etapa-f-entrada-destino-manual.md` (consolidar MLs entrada).
-   - `docs/inventario-2026-05/02-gotchas/G034-robo-ciel-it-aplica-defaults-pt-66-em-dev-industr.md` (CFOP entrada 1xxx ≠ saída 5xxx; PT 97/88 criados).
-   - Memória: `[[escrituracao_entrada_lf_dfe]]` (action_gerar_po_dfe usa company USUÁRIO — forçar allowed_company_ids; tipo='serv-industrializacao' p/ CFOP 1901).
+1. `app/odoo/estoque/CLAUDE.md` — constituição (§1 princípio fundador, §6 catálogo 7 skills, §8 invariantes).
+2. `app/odoo/estoque/ROADMAP_SKILLS.md` — seção HANDOFF (estado v7 + próximos passos).
+3. `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` §13 + §13.8.1 (sessão v7 completa + melhorias v7-extras + lições operacionais).
+4. `.claude/agents/gestor-estoque-odoo.md` — invariantes (8 regras, das quais 3 são v7-novas: PRE-CHECK reserva, EXECUTAR-FLUXOS-subagente, --quiet/--forcar/log-JSON).
+5. **Se foco = A (residuais via subagente)**:
+   - `app/odoo/estoque/fluxos/2.6-tratar-reserva-bloqueia-transferencia.md` (fluxo + 5 caminhos)
+   - `.claude/skills/operando-reservas-odoo/SKILL.md` (tabela "5 caminhos seguros")
+   - `.claude/skills/consultando-quant-odoo/SKILL.md` (3 modos: quants/move-lines/pickings)
+6. **Se foco = B (Skill 8)**:
+   - `app/odoo/services/inventario_pipeline_service.py`
+   - `docs/inventario-2026-05/02-gotchas/G004*.md`, `G011*.md`, `G016*.md`, `G023*.md` (já codificados em picking.py), `G035*.md`, `G017*.md`, `G007*.md`, `G018*.md` (quarteto fiscal pré-SEFAZ).
+   - Memórias: `[[ciel_it_quirks]]`, `[[picking_317346_pendente]]`, `[[skill5_picking_pattern]]`.
 7. Memórias-chave gerais:
-   - `[[arquitetura_orquestrador_odoo]]` — princípio das 5 camadas + fluxos>>skills.
-   - `[[skill4_mo_pattern]]` — pattern de skill criada do zero + guard G-MO-01 + cancel_deleted (lição reaproveitável).
-   - `[[skill5_picking_pattern]]` — pattern capinagem + atomo NOVO + ONDA 0.4 fechada.
-   - `[[skill2_transfer_interno_pattern]]` §incidente G031 v4 + MODO C — `stock.lot` é POR PRODUTO.
-   - `[[feedback_skills_demanda_driven]]` — skills nascem de casos reais; átomos previstos ⬜ até demanda surgir.
-   - `[[feedback_incompletude_quebra_regras]]` — C7-C10 INVIOLÁVEIS.
+   - `[[arquitetura_orquestrador_odoo]]` — princípio fluxos>>skills
+   - `[[caso_real_tratar_reservas_pre_transferencia]]` — caso v7 RESOLVIDO (referência histórica)
+   - `[[gotcha_g030_quant_id_store_false]]` — cross-ref via tupla
+   - `[[fluxo_2_6_pattern]]` — pattern 5-caminhos
+   - `[[skill5_picking_pattern]]` — pattern capinagem retroativa
+   - `[[feedback_skills_demanda_driven]]` — skills nascem de casos reais
+   - `[[feedback_incompletude_quebra_regras]]` — C7-C10 invioláveis
 
-## REGRAS INVIOLÁVEIS (não negociáveis)
+## REGRAS INVIOLÁVEIS (não negociáveis — herdadas + v7-novas)
 
 1. `--dry-run` antes do real; confirmação explícita antes de SEFAZ/irreversível.
-2. NUNCA criar script ad-hoc — capinar a skill. Workspace `/tmp/` é OK (descartável).
+2. NUNCA criar script ad-hoc — capinar a skill. `/tmp/` OK (descartável).
 3. `fluxos>>skills` — caso novo = folha de fluxo, NÃO skill nova.
-4. Skills nascem de DEMANDAS REAIS — não implementar átomos especulativamente. **PARA SKILL 8**: justificar cada átomo macro com pipeline real; etapas isoladas só se demanda de retomada surgir.
+4. Skills nascem de DEMANDAS REAIS — não implementar átomos especulativamente.
 5. C7-C10 são INVIOLÁVEIS — completar cada checkpoint com artefato concreto.
-6. Verificar resultado DIRETO no Odoo — não confiar só no output. CRÍTICO para Skill 8 (SEFAZ irreversível); confirmar invoice criada por robô CIEL IT em cada caso.
-7. Operação VIVA — preservar ad-hocs até cada átomo maturar; arquivar SUPERADO só após C9.
+6. Verificar resultado DIRETO no Odoo — não confiar só no output.
+7. Operação VIVA — preservar ad-hocs até cada átomo maturar.
 8. Premissas pesquisadas e validadas ANTES de compor átomos.
-9. Após qualquer unlink em MLs em quants com reserved=0: chamar `zerar_reserved_residual` (G027 da skill 2.4).
+9. Após qualquer unlink em MLs em quants com reserved=0: chamar `zerar_reserved_residual` (G027).
 10. Ao retomar FALHAs: cruzar `mo_id`/`quant_id`/etc. com pedido original — NÃO aplicar política homogênea.
-11. Composição de átomos propaga `delta_esperado` a CADA chamada (regra inviolável 11 — herda dos modos A/B/C da Skill 2).
-12. `--corrigir-para-esperado` em batch SEMPRE rodar `--dry-run` primeiro e revisar manualmente.
-13. Antes de modificar `app/odoo/estoque/scripts/quant.py`: pytest baseline 30 verdes.
-14. Antes de modificar `app/odoo/estoque/scripts/transfer.py`: pytest baseline 52 verdes (3 modos: A 33 + B 4 + C 15). CUIDADO com modo C — invariante G031 (resolver MIGRAÇÃO POR PRODUTO) é crítica.
-15. Antes de modificar `app/odoo/estoque/scripts/picking.py`: pytest baseline 42 verdes. CUIDADO especial com `validar()` e `liberar_faturamento()` (invariante G019/G020 que destrava Skill 8 — quebrá-las re-abre a ONDA 0.4 E QUEBRA SKILL 8 EM USO).
-16. **(NOVO Skill 4)** Antes de modificar `app/odoo/estoque/scripts/mo.py`: pytest baseline 29 verdes. CUIDADO com guard G-MO-01 (consumo>0=furo contábil — quebrá-lo permite cancelamento que cria furo). Status `cancel_deleted` é INVARIANTE.
-17. TIMEZONE: NUNCA `datetime.now()` em código novo — usar `from app.utils.timezone import agora_brasil_naive` (regra `.claude/references/REGRAS_TIMEZONE.md`; hook `ban_datetime_now.py` BLOQUEIA Edit/Write).
-18. **(NOVO Skill 4)** G-MO-01 furo contábil: NUNCA cancelar MO com `consumo_total > 0` sem unbuild prévio. CLI V1 da Skill 4 NÃO expõe `forcar_consumo` — operador DEVE usar `mrp.unbuild` via fluxo cross-skill se precisar reverter consumo.
-19. **(pós-G031)** `stock.lot` é POR PRODUTO no Odoo CIEL IT — NUNCA usar `lot_id` de uma constant como FK universal. SEMPRE resolver via `lot_svc.buscar_por_nome(nome, product_id, company_id)` ou `lot_svc.criar_se_nao_existe(...)`. **Auditoria 2026-05-24 v5 confirmou ZERO callers reais** de `LOTES_MIGRACAO_POR_COMPANY[` em código WRITE (só 2 matches em docs descrevendo o incidente).
-20. Constants `_id_POR_COMPANY`: antes de usar como FK em WRITE, verificar se o ID é uma-por-company (OK: `COMPANY_LOCATIONS`, `LOCAIS_INDISPONIVEL`, `COMPANY_PARTNER_ID`) ou um-por-produto/instância (RISCO: `LOTES_MIGRACAO_POR_COMPANY` ← deprecated).
-21. `rollback_hint` em FALHA_AUMENTO: composições atomicas DEVEM reportar `rollback_hint` machine-readable (chamada exata `ajustar_quant` para reverter) — pattern estabelecido em Skill 2 modo C (CR3#5).
-22. **(NOVO Skill 8)** Pre-flight quarteto fiscal ANTES de SEFAZ: validar NCM, custo>0, weight>0, barcode válido (G035/G017/G007/G018). Bloquear transmissão se algum falhar — Schema 225 reject custa retrabalho fiscal.
-23. **(NOVO Skill 8)** Polling+timeout para robô CIEL IT (G016 SSL): nunca confiar em tempo fixo. Loop B→D com retry e keepalive.
+11. Composição de átomos propaga `delta_esperado` a CADA chamada.
+12. `--corrigir-para-esperado` em batch SEMPRE rodar `--dry-run` primeiro.
+13. Pytest baseline ANTES de modificar service (atualizar baseline em mudanças).
+14. TIMEZONE: NUNCA `datetime.now()` em código novo — usar `from app.utils.timezone import agora_brasil_naive`.
+15. **(v6)** Skill 6 `pre_etapa.py`: pytest baseline 19 verdes.
+16. **(v4)** Skill 2 `transfer.py`: pytest baseline 52 verdes. CUIDADO com modo C — invariante G031 crítica.
+17. **(v3)** Skill 5 `picking.py`: pytest baseline 42 verdes. NÃO quebrar invariante G019/G020 (re-abre ONDA 0.4 + quebra Skill 8).
+18. **(v5)** Skill 4 `mo.py`: pytest baseline 29 verdes. CUIDADO com guard G-MO-01 (consumo>0=furo contábil).
+19. **(v7)** Skill 9 `consulta_quant.py`: pytest baseline 19 verdes. NÃO usar `quant_id` direto (G030 — store:False).
+20. **(v7)** Skill 2.4 `reserva.py`: pytest baseline 15 verdes (14 originais + 1 H1 draft fix). `unreserve_picking` recusa state ∈ {done, cancel, draft}.
+21. **(v7) PRE-CHECK reserva ANTES Skill 2**: SEMPRE verificar `reserved>0` via Skill 9 dos quants candidatos a DOAR. Se sim, INVESTIGAR pickings via fluxo 2.6 ANTES de chamar Skill 2.
+22. **(v7) `stock.move.line.quant_id` é COMPUTED `store: False`** (G030): NUNCA filtrar por ele direto. Skill 9 faz cross-ref via tupla automaticamente.
+23. **(v7-extras) EXECUTAR FLUXOS = subagente, NÃO principal**: para casos reais, spawn `gestor-estoque-odoo` via Task tool.
+24. **(v7-extras) `--quiet` em batches via subprocess** + `--forcar-concorrencia` SÓ quando ciente.
+25. **(v7-extras) Log JSON é fonte de verdade** — não confiar em `tee` background.
 
-## ARQUITETURA — relembrar a árvore de decisão
+## ARQUITETURA — árvore de decisão
 
 ```
 1  NF inter-company (emissão/SEFAZ entre filiais)
-   1.1  só faturamento (saída)              → fluxos/1.1.* (faturando-odoo ⬜ ← FOCO PROPOSTO)
+   1.1  só faturamento (saída)              → fluxos/1.1.* (faturando-odoo ⬜ ← FOCO B)
    1.2  só entrada/escrituração
-        1.2.1 inventário (DFe próprio)      → fluxos/1.2.1 (escriturando-odoo ⬜)
+        1.2.1 inventário (DFe próprio)      → fluxos/1.2.1 (escriturando-odoo ⬜ ← FOCO C)
         1.2.2 COMPRAS (DFe fornecedor)      → DELEGAR a gestor-recebimento
    1.3  transferência completa              → fluxos/1.3 ⬜
 2  Estoque (SEM NF — galho 1.x se com NF)
    2.1 ajuste de saldo (1 quant; planilha)  → ajustando-quant-odoo ✅ [folha 2.1]
-   2.2 realocar saldo (lote↔lote / loc↔loc / **MIGRA↔Indisp via MODO C atômico v4**)
-                                            → transferindo-interno-odoo 🟡 [folha 2.2] (3 modos)
+   2.2 realocar saldo (lote↔lote / loc↔loc / MIGRA↔Indisp via MODO C)
+                                            → transferindo-interno-odoo 🟡 [folha 2.2]
    2.3 transferir saldo entre CÓDIGOS       → (skill transferencia-saldo-codigo) ⬜
-   2.4 cancelar reserva / cirurgia ML       → operando-reservas-odoo 🟡 [folha 2.4]
+   2.4 cancelar reserva / cirurgia ML / unreserve picking / find_orphan
+                                            → operando-reservas-odoo 🟡 [folha 2.4]
    2.5 cancelar/validar/devolver picking    → operando-picking-odoo 🟡 [folha 2.5]
-   2.9 CONSULTA AO VIVO (quants/MLs)        → consultando-quant-odoo 🟡 [folha 2.9]
+   2.6 TRATAR reserva ATIVA pré-transferência (pré-cond INVIOLÁVEL Skill 2)
+                                            → fluxo composto 9+2.4+5+2 [folha 2.6]
+   2.9 CONSULTA AO VIVO (quants/MLs/pickings cross-ref reverso)
+                                            → consultando-quant-odoo 🟡 [folha 2.9]
 3  Produção / PCP
-   3.1 cancelar MO (single ou batch — guard G-MO-01) → operando-mo-odoo 🟡 [folha 3.1] (3.1.c MO com consumo DELEGADO mrp.unbuild)
+   3.1 cancelar MO (single/batch — guard G-MO-01) → operando-mo-odoo 🟡 [folha 3.1]
+4  Planejamento de ajustes (READ Odoo + WRITE banco local)
+   4.1 PRE-ETAPA inventario CD/FB D007      → planejando-pre-etapa-odoo 🟡 [folha 4.1]
 ```
 
-## CHECKLIST DA SESSÃO
+## CHECKLIST DA SESSÃO v8
 
 ```
 [ ] Setup (cd worktree + venv + ODOO_*)
-[ ] Verificar se main avançou: git fetch origin main && git log --oneline b8ed3b5c..origin/main
+[ ] Verificar se main avançou: git fetch origin main && git log --oneline <commit-v7>..origin/main
 [ ] Se avançou: rebase incremental ANTES de iniciar
-[ ] Pytest baseline: pytest tests/odoo/services/test_stock_quant_adjustment_service.py test_stock_internal_transfer_service.py test_stock_lot_service.py test_stock_picking_service.py test_stock_mo_service.py test_pre_etapa_estoque_service.py (esperado: 196 verdes)
-[ ] Ler ROADMAP_SKILLS HANDOFF + VALIDACAO_FINAL_SESSAO §10 + G031 + memórias-chave
-[ ] Confirmar com Rafael: Skill 8 faturando (foco recomendado), Skill 7 escriturando, fluxos compostos Skill 2, Skill 6 pre-etapa, ou outra prioridade
-[ ] Se Skill 8: C1 mineração — ler integral `09_executar_onda1_bulk`, `09c_executar_onda2_fb_cd`, `fat_lf_02_carregar`, `fat_lf_04_executar`, `fat_lf_05_executar_clean`, `fat_lf_cleanup`, `fat_lf_resume.sh`, `teste_210030325` + ler 6 gotchas G004/G011/G016/G028/G019/G020 + quarteto fiscal G035/G017/G007/G018 + memórias [[ciel_it_quirks]] [[skill5_picking_pattern]]
-[ ] Investigar AO VIVO 1 ajuste pendente real via Skill 9 (consultar `account.move` + picking source pendente)
-[ ] Capinar `app/odoo/services/inventario_pipeline_service.py` → `app/odoo/estoque/orchestrators/inventario_pipeline.py` (NÃO em `scripts/` — Skill 8 é macro C3) + shim em `services/`
-[ ] Cada átomo novo: C1-C10 SEM PULAR ETAPAS
-[ ] Testes pytest cobrindo gotchas-invariante (G011 pre-cond, G016 retry, quarteto fiscal pré-SEFAZ) ANTES do C2 final
-[ ] Smoke test 1-ajuste em PROD antes de batch (CRÍTICO — SEFAZ irreversível)
-[ ] Validar resultado direto no Odoo (regra inviolável 6) — confirmar invoice criada por robô CIEL IT
-[ ] Final da sessão: N code-reviewers paralelos + atualizar VALIDACAO_FINAL_SESSAO §N + memórias + PROMPT_PROXIMA_SESSAO
+[ ] Pytest baseline: 230 verdes esperado (rodar full suite estoque)
+[ ] Ler ROADMAP_SKILLS HANDOFF + VALIDACAO §13+§13.8.1 + 5 memórias-chave
+[ ] AskUserQuestion com Rafael: foco A (residuais via subagente) | B (Skill 8) | C (Skill 7) | D (09b executor) | E (code-review v7 extra)
+[ ] Se foco A: spawn gestor-estoque-odoo via Task tool (NÃO orquestrar do principal)
+[ ] Se foco B/C/D: implementar via principal seguindo pattern Skills 4/5/6
+[ ] Após writes em PROD: verificar resultado DIRETO no Odoo (regra inviolável 6)
+[ ] Code-review paralelo (2 reviewers) ao fim da sessão
+[ ] Atualizar ROADMAP_SKILLS HANDOFF + VALIDACAO §14 + memórias
+[ ] Commit consolidado + atualizar este PROMPT_PROXIMA_SESSAO.md (v9)
 ```
 
-## NÃO-FAZER (red flags)
+## NÃO-FAZER (red flags v8)
 
 - ❌ Criar scripts ad-hoc em `scripts/inventario_2026_05/` (capinar a skill)
 - ❌ Implementar átomos previstos sem demanda real
-- ❌ Marcar C# como ✅ sem entregar o artefato concreto
-- ❌ Responder com números vagos (sempre verificar somatória bate com input)
-- ❌ Aplicar `Δ=-qty_atual` em retomada sem cruzar pedido original (use `--delta-esperado <pedido>`)
-- ❌ Pular `zerar_reserved_residual` após unlink de MLs em quants já com `reserved=0`
-- ❌ Mover scripts para `_validados/` sem corrigir `sys.path` `parents[2]→parents[4]`
-- ❌ Tocar `main` (worktree `feat/estoque-odoo` — coordenar merge depois)
-- ❌ Modificar `quant.py`, `transfer.py`, `picking.py`, `reserva.py`, ou `mo.py` sem rodar pytest ANTES e DEPOIS
-- ❌ Compor átomos sem propagar `delta_esperado` (regra inviolável 11)
-- ❌ Usar `datetime.now()` em código novo (regra inviolável 17 — hook bloqueia)
-- ❌ Quebrar invariante G019/G020 em `picking.py` `validar()`/`liberar_faturamento()` (re-abre ONDA 0.4 + QUEBRA SKILL 8)
-- ❌ Quebrar invariante G031 em Skill 2 modo C — `transferir_para_indisponivel` DEVE usar `lot_svc.criar_se_nao_existe` POR PRODUTO
-- ❌ Quebrar guard G-MO-01 em `mo.py` `cancelar_mo` — permitir consumo>0 sem unbuild garante furo contábil
-- ❌ Cancelar MO com `consumo_total > 0` sem unbuild — furo contábil garantido (G-MO-01)
-- ❌ Confiar em `action_assign` reservar componente de MO com `manual_consumption=True` — não funciona (G-MO-02)
-- ❌ Usar `LOTES_MIGRACAO_POR_COMPANY` (ou qualquer constant `lot_id`) como FK em `stock.quant.create`/`write` — SEMPRE resolver POR PRODUTO via `lot_svc`
-- ❌ Compor átomo de operação parcialmente irreversível sem reportar `rollback_hint` machine-readable (lição CR3#5 Skill 2 v4)
-- ❌ **(NOVO Skill 8)** Transmitir SEFAZ sem pre-flight quarteto fiscal G035/G017/G007/G018 — Schema 225 reject custa retrabalho fiscal
-- ❌ **(NOVO Skill 8)** Confiar em tempo fixo para robô CIEL IT criar invoice — usar polling+timeout (irredutível externo)
-- ❌ **(NOVO Skill 8)** Pular smoke test 1-ajuste antes de batch — SEFAZ é irreversível por NF
-- ❌ Recompor Skill 5 `validar()`/`liberar_faturamento()` na Skill 8 — USAR via `svc.validar(linhas_esperadas=)` confiando no invariante já codificado
-
-## Logs de auditoria
-
-### Sessão 23/05 (104 ajustes negativos + cirurgia em 6 pickings)
-```
-scripts/inventario_2026_05/auditoria/
-  log_2.1_ajuste_planilha_*.json   (4 logs)
-  log_2.4_operar_reservas_*.json
-  log_2.4_zerar_reserved_residual_*.json
-```
-
-### Sessão 24/05 v1 cleanup
-```
-scripts/inventario_2026_05/auditoria/
-  log_2.1_reversao_ciclamato_20260524_000000.json
-  log_2.4_zerar_residual_orfao_aroma_20260524_000001.json
-/tmp/comunicado_pickings_20260524.md
-```
-
-### Sessão 24/05 v2 Skill 2 (sem --confirmar)
-```
-/tmp/log_skill2_C6_validacao_dry_run.json  (3 casos)
-docs/inventario-2026-05/consolidacao/MINERACAO_SKILL2_2026_05_24.md  (versionado)
-```
-
-### Sessão 24/05 v3 Skill 5 (sem --confirmar)
-```
-/tmp/log_skill5_C6_validacao_dry_run.json  (6 casos vs PROD)
-```
-
-### Sessão 24/05 v4 Skill 2 modo C (incidente + rollback + fix + sucesso)
-```
-scripts/inventario_2026_05/auditoria/
-  log_2.2_para_indisp_20260524_105037.json          (1ª --confirmar — FALHA 16/16 G031)
-  log_2.1_ROLLBACK_para_indisp_falha_20260524_105219.json  (rollback 100% OK em ~10s)
-  log_2.2_para_indisp_FIX_20260524_110128.json      (2ª --confirmar — OK 16/16 em 23s, 4.319 un)
-/tmp/skill2_modoC_dry_run_14_casos.json             (dry-run pré-fix)
-```
-
-### Sessão 24/05 v5 Skill 4 NOVA (sem --confirmar)
-```
-/tmp/log_skill4_C6_validacao_dry_run.json  (4 casos PROD: NOOP idempotente, DRY_RUN_OK, FALHA_FURO_CONTABIL, batch)
-scripts/inventario_2026_05/auditoria/
-  log_skill4_mo_dryrun_20260524_115*.json   (4 logs individuais)
-```
-
-Comece pela leitura dos 4 docs obrigatórios (CLAUDE.md + ROADMAP + VALIDACAO §11 sessão v6 Skill 6 + memórias incluindo [[skill6_planejar_pre_etapa_pattern]]). Verificar pytest baseline 196 verdes. Confirme com Rafael o foco da sessão. **Recomendação**: Skill 8 `faturando-odoo` (DESBLOQUEADA pela ONDA 0.4 + agora Skill 6 entrega o plano da Onda 5 que alimenta o executor; macro perigoso — cuidado com SEFAZ irreversível; smoke test 1-ajuste antes de batch obrigatório) OU capinar `09b_executar_pre_etapa.py` para `orchestrators/pre_etapa_executor.py` (C3 macro fecha ciclo planejar+propor+aprovar+executar da pre-etapa CD/FB). Antes de qualquer write em PROD: pre-flight quarteto fiscal + verificação direta no Odoo + pytest baseline pós-mudança.
-
-**Padrões NOVOS de Skill 6 reutilizáveis em sessões futuras:**
-- **Savepoint pattern** (regra 24): qualquer service que faça `db.session.rollback()` ou `commit()` chamado por Flask route/agente DEVE usar `db.session.begin_nested()` para isolar do caller (sem isso, nuke transação).
-- **getattr defensivo em hash anti-replay** (regra 25): hash baseado em atributos ORM DEVE usar `getattr(obj, 'attr', '')` para tolerar evolução do ORM sem AttributeError silencioso.
-- **Guard de outliers em WRITE downstream** (regra 26): se camada READ filtra outliers (cod[0] in 1-4), camada WRITE que consome JSON externo manualmente editável DEVE refazer o filtro.
+- ❌ Marcar C# como ✅ sem entregar artefato concreto
+- ❌ Modificar `quant.py`, `transfer.py`, `picking.py`, `reserva.py`, `mo.py`, `pre_etapa.py`, `consulta_quant.py` sem rodar pytest ANTES e DEPOIS
+- ❌ Compor átomos sem propagar `delta_esperado`
+- ❌ Usar `datetime.now()` em código novo (hook bloqueia)
+- ❌ Filtrar `stock.move.line` por `quant_id` direto (G030 — ignorado pelo Odoo)
+- ❌ Cancelar MO com `consumo_total > 0` sem unbuild (G-MO-01)
+- ❌ Quebrar G019/G020 em `picking.py` (re-abre ONDA 0.4)
+- ❌ Quebrar G031 em Skill 2 modo C (MIGRAÇÃO POR PRODUTO)
+- ❌ **(v7-extras)** ORQUESTRAR FLUXOS do agente principal (use subagente)
+- ❌ **(v7-extras)** Rodar batch SEM `--quiet` (polui ~50 linhas/call × N)
+- ❌ **(v7-extras)** Confiar em `tee` background — parsear JSON do log salvo pelo script
+- ❌ **(v7-extras)** Disparar batch sem checar concorrência via `pgrep -f` (scripts já fazem isso automaticamente; respeitar exit 2)
 
 ---END---
+
+## NOTAS PARA RAFAEL (não fazem parte do prompt)
+
+- v7 fechou gap reservas com 88 writes PROD validados (1 cancel + 80 MODO C + 3 P-15/05 MODO B + 4 reversões pós-incidente race condition).
+- v7-extras (commit follow-up): `_cli_utils.py` NOVO + 7 CLIs atualizados com `--quiet`+`--forcar-concorrencia` + regra subagent no prompt + CR1+CR2 fixes (1 HIGH + 4 MED + 1 LOW aplicados + 1 teste novo H1 draft) + memória nova `[[gotcha_g030_quant_id_store_false]]` + `[[fluxo_2_6_pattern]]` + VALIDACAO §13.8.1.
+- Pendências residuais documentadas (3 itens não-bloqueantes).
+- Estimativa de economia em v8 com regras v7-extras: ~50-100k tokens por caso real.

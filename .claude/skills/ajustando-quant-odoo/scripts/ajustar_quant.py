@@ -33,7 +33,9 @@ from pathlib import Path
 _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[4]))  # .claude/skills/<skill>/scripts/<f> -> repo root
 
-from app import create_app  # noqa: E402
+from app.odoo.estoque._cli_utils import (  # noqa: E402
+    adicionar_args_padrao, setup_cli_completo,
+)
 from app.odoo.estoque._utils import EMPRESAS, resolver_empresa, resolver_produto  # noqa: E402
 from app.odoo.estoque.scripts.quant import StockQuantAdjustmentService  # noqa: E402
 from app.odoo.services.stock_lot_service import StockLotService  # noqa: E402
@@ -85,13 +87,14 @@ def main() -> int:
                          'gera FALHA_DELTA_DIVERGENTE.')
     ap.add_argument('--confirmar', action='store_true',
                     help='EFETIVA no Odoo. Sem isso = dry-run (preview).')
+    adicionar_args_padrao(ap)  # --quiet + --forcar-concorrencia (v7)
     args = ap.parse_args()
 
     dry_run = not args.confirmar
     delta, valor_absoluto = args.delta, args.valor_absoluto
     criar = bool(args.criar_se_faltar) and (delta is not None and delta > 0)
 
-    app = create_app()
+    app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
         odoo = get_odoo_connection()
         lot_svc = StockLotService(odoo=odoo)

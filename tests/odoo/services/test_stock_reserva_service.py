@@ -62,6 +62,19 @@ def test_unreserve_picking_state_cancel_recusado():
     assert res['status'] == 'FALHA_PICKING_STATE_INVALIDO'
 
 
+def test_unreserve_picking_state_draft_recusado():
+    """CR1-H1 v7-fix: guard cobre 'draft' (docstring promete; codigo original omitia)."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 100, 'name': 'PKG', 'state': 'draft', 'move_line_ids': [1, 2]},
+    ]
+    svc = StockReservaService(odoo=odoo)
+    res = svc.unreserve_picking(100, dry_run=False)
+    assert res['status'] == 'FALHA_PICKING_STATE_INVALIDO'
+    assert 'draft' in res['erro']
+    odoo.execute_kw.assert_not_called()
+
+
 def test_unreserve_picking_sem_mls_noop():
     """Picking valido mas sem MLs → NOOP."""
     odoo = MagicMock()

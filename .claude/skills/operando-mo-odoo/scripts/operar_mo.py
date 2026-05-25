@@ -34,7 +34,9 @@ from typing import Any, Dict, List, Optional
 _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[4]))
 
-from app import create_app  # noqa: E402
+from app.odoo.estoque._cli_utils import (  # noqa: E402
+    adicionar_args_padrao, setup_cli_completo,
+)
 from app.odoo.estoque.scripts.mo import StockMOService  # noqa: E402
 from app.utils.timezone import agora_brasil_naive  # noqa: E402  # timezone
 
@@ -183,6 +185,7 @@ def main() -> int:
                     help='nao chama action_cancel (default)')
     ap.add_argument('--confirmar', action='store_true', default=False,
                     help='executa action_cancel real')
+    adicionar_args_padrao(ap)  # --quiet + --forcar-concorrencia (v7)
     args = ap.parse_args()
 
     if args.confirmar:
@@ -204,7 +207,7 @@ def main() -> int:
         )
         return 2
 
-    app = create_app()
+    app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
         svc = StockMOService()
 

@@ -110,6 +110,16 @@ class StockQuantQueryService:
         # CASO ESPECIAL: pares_cod_empresa fornecido -> derivar cods + filtrar depois
         pares_set: Optional[set] = None
         if pares_cod_empresa:
+            # CR1-M1 v7-fix: fail-fast — pares_cod_empresa exige resolucao
+            # via cods (pid_to_cod precisa ser construido). Se pids passado
+            # diretamente sem cods, filtragem de pares falha silenciosamente.
+            if pids and not cods:
+                raise ValueError(
+                    'pares_cod_empresa exige resolucao via default_code. '
+                    'Passe cods= (nao pids=) quando usar pares_cod_empresa. '
+                    'Motivo: filtragem de pares precisa mapear pid->cod '
+                    'que so eh construido via read em product.product por default_code.'
+                )
             pares_set = {(c, e) for c, e in pares_cod_empresa}
             cods_dos_pares = sorted({c for c, _ in pares_cod_empresa})
             cods = cods_dos_pares  # override

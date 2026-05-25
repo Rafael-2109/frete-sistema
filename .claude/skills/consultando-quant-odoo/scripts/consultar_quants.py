@@ -26,7 +26,9 @@ from pathlib import Path
 _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[4]))
 
-from app import create_app  # noqa: E402
+from app.odoo.estoque._cli_utils import (  # noqa: E402
+    adicionar_args_padrao, setup_cli_completo,
+)
 from app.odoo.estoque.scripts.consulta_quant import (  # noqa: E402
     INDISP, StockQuantQueryService,
 )
@@ -73,9 +75,10 @@ def main() -> int:
     # Comum
     ap.add_argument('--limit', type=int, default=20000)
     ap.add_argument('--formato', choices=['json', 'tabela'], default='tabela')
+    adicionar_args_padrao(ap)  # --quiet + --forcar-concorrencia (v7)
     args = ap.parse_args()
 
-    app = create_app()
+    app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
         odoo = get_odoo_connection()
         svc = StockQuantQueryService(odoo=odoo)

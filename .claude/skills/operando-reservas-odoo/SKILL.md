@@ -20,9 +20,9 @@ description: >-
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
-# operando-reservas-odoo (WRITE — átomos C1/C2)
+# operando-reservas-odoo (WRITE — 5 átomos C1/C2)
 
-Skill **mínimo viável** (C1 mineração ✅ · C2-C5 implementado para 2 átomos · C6-C10 conforme uso). Construída em 2026-05-23 a partir do caso real "6 pickings com 15 MLs órfãs pós-`--resetar-reserva` da skill 1".
+Skill **mínimo viável** (C1 mineração ✅ · C2-C5 implementado para 5 átomos · C6-C10 conforme uso). Construída em 2026-05-23 a partir do caso real "6 pickings com 15 MLs órfãs pós-`--resetar-reserva` da skill 1". **Estendida em 2026-05-24 v7** com 2 átomos novos (`unreserve_picking` + `find_orphan_mls`) para fechar gap arquitetural "tratar reserva ATIVA pré-transferência" (caso 71 cods + fluxo 2.6).
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/reserva.py`.
 
@@ -69,6 +69,26 @@ pós-condições: picking.state='cancel'; moves filhas state='cancel';
 gotchas-invariante: action_cancel é nativo do Odoo (cascade automático)
 modos:         --dry-run (default) -> --confirmar
 status:        PICKING_CANCELADO · DRY_RUN_OK · NOOP · FALHA_*
+```
+
+## Contrato — Zerar reserved residual (átomo 3)
+
+```
+objeto:        stock.quant — zera reserved_quantity stale (positivo ou negativo)
+input:         --zerar-residual --quant-ids <Q1,Q2,...> [--confirmar]
+output (JSON): {status, quant_ids, valores_antes:{id:{qty,reserved}},
+                 valores_depois:{id:{qty,reserved}}, quants_processados, tempo_ms}
+pré-condições: quant_ids não-vazio; NÃO deve haver MLs ATIVAS (state=assigned/partial)
+               apontando para os quants (Skill 9 find_orphan ou modo move-lines
+               para verificar antes).
+pós-condições: stock.quant.reserved_quantity = 0 para todos quant_ids.
+gotchas-invariante: G027 — `reserved_quantity` interno SEMPRE vem de saída; zerar
+                    residual stale e SEGURO apos unreserve/unlink. NUNCA usar
+                    para zerar reserva legítima (MLs ativas) — usar
+                    unreserve_picking ou cancelar_picking_inteiro primeiro.
+modos:         --dry-run (default) -> --confirmar
+status:        ZERAR_RESIDUAL_OK (CR1-M2 v7-fix; era CIRURGIA_OK) · DRY_RUN_OK ·
+               FALHA_ODOO
 ```
 
 ## Contrato — Unreserve picking (átomo 4, NOVO v7)
@@ -132,10 +152,13 @@ Quando antes de uma Skill 2 (transferência) há reservas ativas bloqueando o qu
 
 | Preciso de... | Atomo | Args |
 |---------------|-------|------|
-| Limpar 1 ML órfã preservando picking | cirurgia | `--picking-id P --move-ids M --ml-ids ML --confirmar` |
-| Limpar 6 MLs órfãs em 1 picking | cirurgia | `--picking-id P --move-ids M1,M2,... --ml-ids ML1,ML2,... --confirmar` |
+| Limpar 1 ML órfã preservando picking | cirurgia | `--picking-id P --ml-ids ML --moves-writes "M:qty" --confirmar` |
+| Limpar 6 MLs órfãs em 1 picking | cirurgia | `--picking-id P --ml-ids ML1,ML2,... --moves-writes "M1:q1,M2:q2,..." --confirmar` |
 | Cancelar picking sem MLs válidas | cancelamento | `--cancelar-picking --picking-id P --confirmar` |
 | Cancelar picking com poucas MLs válidas | cancelamento | idem (operação/Fiscal decide) |
+| Desreservar picking mantendo-o ativo (caminho C fluxo 2.6) | unreserve | `--unreserve-picking --picking-id P [--confirmar]` |
+| Listar MLs órfãs por quants zerados (diagnóstico caminho E) | find_orphan | `--find-orphan --quant-ids Q1,Q2 [--states csv]` |
+| Zerar reserved residual pós-cirurgia/unlink | zerar-residual | `--zerar-residual --quant-ids Q1,Q2 --confirmar` |
 
 ## Catálogo de átomos
 

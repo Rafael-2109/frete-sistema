@@ -66,6 +66,7 @@ logger = logging.getLogger(__name__)
 STATUS_OK_CIRURGIA = 'CIRURGIA_OK'
 STATUS_OK_CANCEL = 'PICKING_CANCELADO'
 STATUS_OK_UNRESERVE = 'PICKING_UNRESERVED'
+STATUS_OK_ZERAR_RESIDUAL = 'ZERAR_RESIDUAL_OK'  # CR1-M2 v7-fix
 STATUS_DRY_RUN = 'DRY_RUN_OK'
 STATUS_NOOP = 'NOOP'
 STATUS_FALHA_PICKING = 'FALHA_PICKING_NAO_EXISTE'
@@ -297,8 +298,8 @@ class StockReservaService:
         out['picking_state_antes'] = picking['state']
         out['n_mls_antes'] = len(picking.get('move_line_ids', []))
 
-        # Pre-cond: NAO done/cancel/draft
-        if picking['state'] in ('done', 'cancel'):
+        # Pre-cond: NAO done/cancel/draft (CR1-H1 v7-fix: adicionado 'draft')
+        if picking['state'] in ('done', 'cancel', 'draft'):
             out['status'] = STATUS_FALHA_STATE
             out['erro'] = (
                 f'picking {picking["name"]} state={picking["state"]} — '
@@ -521,7 +522,7 @@ class StockReservaService:
                 'qty': q['quantity'], 'reserved': q['reserved_quantity'],
             } for q in quants_depois}
             out['quants_processados'] = zerados
-            out['status'] = STATUS_OK_CIRURGIA  # reuso do status
+            out['status'] = STATUS_OK_ZERAR_RESIDUAL  # CR1-M2 v7-fix (era CIRURGIA_OK)
         except Exception as exc:
             out['status'] = STATUS_FALHA_ODOO
             out['erro'] = str(exc)[:500]

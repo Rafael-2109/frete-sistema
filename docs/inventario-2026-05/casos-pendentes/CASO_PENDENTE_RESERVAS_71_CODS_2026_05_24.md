@@ -1,8 +1,11 @@
 # Caso pendente: Tratar reservas pre-transferencia (71 cods Indisponivel — 2026-05-24)
 
-**Status:** PAUSADO no meio da execucao (auditoria + plano gerados, NENHUM write em PROD).
-**Razao da pausa:** Gap arquitetural identificado — gestor/skills nao tem ferramenta clara para tratar reservas ATIVAS bloqueando transferencias futuras.
-**Inputs preservados:** `docs/inventario-2026-05/casos-pendentes/` (TSV original + audit + plano A/B).
+**Status:** ✅ **RESOLVIDO em 2026-05-24 v7** — 88 writes em PROD efetivados. 4 gaps arquiteturais implementados (Skills 9+2.4 estendidas + fluxo 2.6 + regra inviolavel prompt + tabela 5-caminhos + gotcha G030).
+**Pendencias residuais (nao-bloqueantes):** cod 105000003 (Skill 1 ajustar_quant direto), 5 cods MIGRACAO pulados (estrategia β decidida por Rafael).
+**Ver:** `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` §13 (cronologia completa + 88 writes confirmados) + `ROADMAP_SKILLS.md §v7`.
+**Inputs preservados:** `docs/inventario-2026-05/casos-pendentes/` (TSV original + audit + plano A/B + logs PROD).
+
+> **HISTORICO (pre-v7 — preservado abaixo para contexto):** O caso estava PAUSADO em 2026-05-24 v6.1 por gap arquitetural identificado. Em v7 (mesmo dia, sessao seguinte) os 4 gaps foram fechados e o caso validado em PROD. Texto abaixo descreve o estado pre-resolucao.
 
 ---
 

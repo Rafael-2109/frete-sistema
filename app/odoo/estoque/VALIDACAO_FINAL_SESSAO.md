@@ -940,7 +940,7 @@ Auditoria: 1 chamada `consultar_quants.py` (READ-only via XML-RPC).
 
 ### 13.6 Pendencias da sessao v7 (nao-bloqueantes)
 
-1. **Batch Etapa A+B em `--confirmar` PROD**: 84 chamadas pendentes. Dry-run completo preservado em `/tmp/log_batch_71cods_<TS>.json`. Rafael decide quando executar.
+1. **Batch Etapa A+B em `--confirmar` PROD**: ✅ EXECUTADO em v7 (CR2-H2 v7-fix). 80 chamadas MODO C em 512s + 3 P-15/05 MODO B + 4 reversoes (incidente race condition) = 87 transferencias efetivadas. Pendentes residuais: ver §13.9 (1 cod 105000003 + 5 cods MIGRACAO pulados). Log PROD preservado em `docs/inventario-2026-05/casos-pendentes/log_batch_71cods_PRINCIPAL_2026_05_24.json`.
 2. **Code-review paralelo (2 reviewers)** sobre 4 atomos novos + fluxo 2.6 + SKILL.mds. Adicionar como pendencia se houver tempo proximo da sessao.
 3. **Atomo `unreserve_mo`** (Skill 2.4) — implementar quando demanda real surgir (mrp.production.do_unreserve + opcao reassign).
 4. **Atomo `listar_pickings(filtros)`** (Skill 9) — query independente de quant_ids, conforme demanda.
@@ -985,6 +985,37 @@ Quando o batch principal terminou (em 23:41), gerou log JSON normalmente. Mas a 
 2. **Logs JSON sao a fonte de verdade — `tee` em background pode falhar** sem aviso. Confiar no log JSON dentro do script Python.
 3. **Auditoria pos-batch via Skill 9 e' INVARIANTE** — comparar qty_real vs qty_esperado_calculado detecta duplicacoes/perdas automaticamente.
 4. **Skill 1 ajustar_quant `--quant-id N --delta X --confirmar`** e' a ferramenta mais segura para correcao individual de duplicacoes — usar em vez de re-rodar batch.
+
+### 13.8.1 IMPLEMENTACAO das 3 melhorias evitam-repeticao (Q1+Q2+Q3 v7-extras)
+
+Apos o incidente, implementei 3 melhorias evitam-repeticao (registradas em commit consolidado):
+
+**Q1: `--quiet` em todos CLIs de skills estoque** (7 scripts atualizados via `_cli_utils.py`):
+- `app/odoo/estoque/_cli_utils.py` NOVO — helper compartilhado com:
+  - `silenciar_stdout()` context manager (suprime stdout + stderr + logging INFO/DEBUG durante create_app)
+  - `criar_app_silencioso(quiet=False)` wrapper
+  - `adicionar_args_padrao(ap)` adiciona --quiet + --forcar-concorrencia ao argparse
+  - `setup_cli_completo(__file__, quiet, forcar)` setup unificado
+- CLIs aplicados: ajustar_quant.py, transferir.py, operar_picking.py, operar_mo.py, operar_reserva.py, consultar_quants.py, planejar_pre_etapa.py
+- Reducao observada: ~50 linhas/call → 0 linhas/call (apenas JSON output)
+- Limitacao: 4 prints diretos no inicio (`✅ Tipos PostgreSQL`) acontecem ANTES do import de `setup_cli_completo` ser executado — sao do `from app import create_app` chain. Solucao parcial: redirect funciona apos esse ponto. Solucao completa exigiria wrapper bash que redireciona stdout do processo Python — postergado.
+
+**Q2: `verificar_concorrencia(script_path)` via pgrep -f** (mesmo helper `_cli_utils.py`):
+- Detecta processos concorrentes do MESMO script via `pgrep -f <basename>`
+- Exclui PID atual + PPID (subshell)
+- Retorna lista de PIDs concorrentes; vazia = OK
+- `verificar_concorrencia_e_avisar(__file__, forcar=False)` emite aviso em stderr + retorna False
+- `setup_cli_completo` chama-o automaticamente; sys.exit(2) se houver concorrencia sem --forcar-concorrencia
+- Aplicado nos mesmos 7 CLIs via `setup_cli_completo`
+- Override: `--forcar-concorrencia` flag prossegue mesmo com aviso (uso consciente em PROD)
+
+**Q3: Regra inviolavel "EXECUTAR FLUXOS = subagente, não principal"** (em `.claude/agents/gestor-estoque-odoo.md`):
+- Adicionada como 6a invariante (depois das 5 originais)
+- Texto: "Para EXECUTAR fluxos sobre caso real (em vez de IMPLEMENTAR código novo), SEMPRE spawnar `gestor-estoque-odoo` via Task tool ao invés de orquestrar do agente principal."
+- Justificativas codificadas: (1) prompt enxuto carrega árvore de decisão sob demanda — ~30-50% menos tokens; (2) regra PRE-CHECK reserva seguida automaticamente; (3) árvore de fluxos guia composição correta.
+- Tambem adicionado: "USE `--quiet` em batches via subprocess" + "Log JSON é fonte de verdade (não `tee` background)".
+
+**Esperado para v8:** se Rafael pedir EXECUTAR (ex.: rodar caso 105000003 pendente ou tratar 5 cods MIGRACAO), agente principal deve SPAWNAR subagente — nao orquestrar diretamente. Tokens estimados: ~40-60k para caso de tamanho similar a F (88 writes), vs ~150k da v7.
 
 ### 13.9 Pendencias residuais (apos sessao v7)
 

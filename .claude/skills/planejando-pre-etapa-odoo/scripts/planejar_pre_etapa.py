@@ -36,7 +36,9 @@ from typing import Any, Dict, List, Optional
 _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[4]))
 
-from app import create_app  # noqa: E402
+from app.odoo.estoque._cli_utils import (  # noqa: E402
+    adicionar_args_padrao, setup_cli_completo,
+)
 from app.odoo.estoque.scripts.pre_etapa import (  # noqa: E402
     COMPANY_LOCATIONS_PRE_ETAPA,
     ONDA_NUM_POR_CID,
@@ -458,6 +460,7 @@ def main() -> int:
                     help='Default seguro (calcula mas NAO grava/escreve).')
     ap.add_argument('--confirmar', action='store_true', default=False,
                     help='Executa real (grava JSON/XLSX em planejar; DELETE+INSERT em propor; UPDATE em aprovar-onda).')
+    adicionar_args_padrao(ap)  # --quiet + --forcar-concorrencia (v7)
     args = ap.parse_args()
 
     if args.confirmar:
@@ -476,7 +479,7 @@ def main() -> int:
         logger.error('Modo aprovar-onda exige --hash <sha256> (obtido via listar-onda).')
         return 2
 
-    app = create_app()
+    app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
         if args.modo == 'planejar':
             out = modo_planejar(args)

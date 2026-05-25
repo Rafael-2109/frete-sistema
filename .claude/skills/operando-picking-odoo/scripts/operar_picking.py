@@ -36,7 +36,9 @@ from typing import Any, Dict, List, Optional
 _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[4]))
 
-from app import create_app  # noqa: E402
+from app.odoo.estoque._cli_utils import (  # noqa: E402
+    adicionar_args_padrao, setup_cli_completo,
+)
 from app.odoo.estoque.scripts.picking import StockPickingService  # noqa: E402
 from app.odoo.utils.connection import get_odoo_connection  # noqa: E402
 from app.utils.timezone import agora_brasil_naive  # noqa: E402  # CR1#4 timezone
@@ -338,6 +340,7 @@ def main() -> int:
                          'de button_validate.')
     ap.add_argument('--confirmar', action='store_true',
                     help='Efetivar (default = --dry-run).')
+    adicionar_args_padrao(ap)  # --quiet + --forcar-concorrencia (v7)
     args = ap.parse_args()
 
     dry_run = not args.confirmar
@@ -363,7 +366,7 @@ def main() -> int:
         except Exception as exc:
             ap.error(f'--linhas-esperadas inválido: {exc}')
 
-    app = create_app()
+    app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
         odoo = get_odoo_connection()
         svc = StockPickingService(odoo=odoo)

@@ -39,7 +39,9 @@ from pathlib import Path
 _THIS = Path(__file__).resolve()
 sys.path.insert(0, str(_THIS.parents[4]))
 
-from app import create_app  # noqa: E402
+from app.odoo.estoque._cli_utils import (  # noqa: E402
+    adicionar_args_padrao, setup_cli_completo,
+)
 from app.odoo.estoque.scripts.reserva import StockReservaService  # noqa: E402
 from app.odoo.utils.connection import get_odoo_connection  # noqa: E402
 
@@ -48,7 +50,7 @@ _FALHAS = {
 }
 _OK_STATUSES = {
     'CIRURGIA_OK', 'PICKING_CANCELADO', 'PICKING_UNRESERVED',
-    'NOOP', 'ORPHAN_MLS_LISTED',
+    'NOOP', 'ORPHAN_MLS_LISTED', 'ZERAR_RESIDUAL_OK',  # CR1-M2 v7-fix
 }
 
 
@@ -102,6 +104,7 @@ def main() -> int:
                     help='[--find-orphan] States das MLs (csv). '
                          'Default=assigned,partially_available')
     ap.add_argument('--confirmar', action='store_true')
+    adicionar_args_padrao(ap)  # --quiet + --forcar-concorrencia (v7)
     args = ap.parse_args()
 
     # Validar modo
@@ -123,7 +126,7 @@ def main() -> int:
 
     dry_run = not args.confirmar
     read_only = args.find_orphan
-    app = create_app()
+    app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
         odoo = get_odoo_connection()
         svc = StockReservaService(odoo=odoo)

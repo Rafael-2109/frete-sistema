@@ -167,4 +167,4 @@ python "$SK" --modo move-lines --quant-ids 229937 --states done
 
 ## Validação
 
-Construída e validada em 2026-05-23 ao responder a pergunta "para os 104 produtos ajustados hoje, sobrou saldo em loc !=Indisponivel?" — retornou 84 (cod, empresa) com saldo restante + 118 em Indisponivel + 20 totalmente zerados. Ver `_validados/consultando-quant-odoo/VALIDACAO.md` (a criar).
+Construída e validada em 2026-05-23 ao responder a pergunta "para os 104 produtos ajustados hoje, sobrou saldo em loc !=Indisponivel?" — retornou 84 (cod, empresa) com saldo restante + 118 em Indisponivel + 20 totalmente zerados. **Estendida em v7 com 2 atomos cross-ref reverso** (validados em PROD via caso 71 cods). Ver [`_validados/consultando-quant-odoo/VALIDACAO.md`](../../scripts/inventario_2026_05/_validados/consultando-quant-odoo/VALIDACAO.md) (CR2-L1 v7-fix).
