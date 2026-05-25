@@ -12,20 +12,20 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status global** | 🟡 PLANEJADO COMPLETO (sessao v13, escopo + 6 decisoes RESOLVIDAS; pre-flight sub-skill + paralelismo por etapa + F5a/F5b via Skill 5) |
-| **Sessao atual** | v13 (2026-05-25) — planejamento + estruturacao + decisoes |
+| **Status global** | 🟡 PLANEJADO COMPLETO + MINERACAO COMPLETA (sessao v14a, +C3 ✅ — pattern macro = etapa-barreira CONFIRMADO; sub-nuance B = pipeline por picking DOCUMENTADA; D10-D18 padroes novos a PRESERVAR) |
+| **Sessao atual** | v14a (2026-05-25) — C3 mineracao script `09_executar_onda1_bulk.py` + revalidacao R1 |
 | **Sessoes estimadas** | 8-9 sessoes (v13 → v20+) — +1 por estender Skill 5 com atomos inter-company (C6.5) |
-| **Baseline pytest atual** | 393 verdes (tests/odoo/) |
+| **Baseline pytest atual** | 393 verdes (tests/odoo/ — confirmado em v14a 2026-05-25 em 15.87s) |
 | **Baseline pytest pos-v20 esperado** | ≥420 verdes (+~25-30 testes Skill 8) |
 | **Branch** | `feat/estoque-odoo` (worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo`) |
-| **Service-fonte** | `app/odoo/services/inventario_pipeline_service.py` (1.346 LOC) |
-| **Script-fonte macro** | `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (~1.850 LOC) |
+| **Service-fonte** | `app/odoo/services/inventario_pipeline_service.py` (1.346 LOC) — minerado v13 §7.2 (D1-D9) |
+| **Script-fonte macro** | `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC) — minerado v14a §7.3 (D10-D18) |
 | **Pattern de reuso** | `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (Skill 6 v9, 907 LOC) |
 | **Destino do orchestrator** | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (a criar) |
-| **Decisoes ABERTAS** | 0 (TODAS 6 RESOLVIDAS em v13) |
-| **Checkpoints concluidos** | 3 de 24 (C1 ✅ pre-mortem + C2 ✅ mineracao service + C4 ✅ escopo; +C6.5 novo) |
+| **Decisoes ABERTAS** | 0 (TODAS 6 RESOLVIDAS em v13; R1 REVALIDADO em v14a — decisao 10.3 INTACTA) |
+| **Checkpoints concluidos** | 4 de 24 (C1 ✅ pre-mortem + C2 ✅ mineracao service + C3 ✅ mineracao script v14a + C4 ✅ escopo; +C6.5 novo) |
 | **Skills NOVAS criadas pela Skill 8** | (1) `auditando-cadastro-fiscal-odoo` — sub-skill agnostica para pre-flight; (2) atomos NOVOS na Skill 5 `operando-picking-odoo` — `criar_picking_inter_company` + `validar_picking_inter_company` (C6.5) |
-| **Pattern arquitetural FINAL** | **Etapa = barreira de sincronizacao** (todos pickings → todas validacoes → todas emissoes → polling F5d → SEFAZ F5e → E → F). Mitiga DetachedInstanceError + SSL drop. |
+| **Pattern arquitetural FINAL** | **Etapa = barreira de sincronizacao** (MACRO: A→expire_all+re-load→B→...→F com `db.engine.dispose()` profilatico antes/apos C+D). Mitiga DetachedInstanceError + SSL drop. **Sub-nuance MICRO ETAPA B** (D16): pipeline por picking com sleep 5s (G022 mitigation) — NAO paraleliza N pickings entre si. |
 | **Demanda real associada** | Casos em todas as direcoes (Rafael v13) — a estruturar nas sessoes posteriores |
 
 ---
@@ -401,13 +401,17 @@ done
 
 | Diferenca | Razao |
 |-----------|-------|
-| **Etapas SEQUENCIAIS com BARREIRA de sincronizacao** (B→C→D→E→F) | **DECISAO 10.3 (Rafael v13)**: fazer TUDO por etapa — todos os pickings, depois todas as validacoes, depois todas as emissoes. Mitiga DetachedInstanceError + SSL timeout. Cada etapa = barreira de sincronizacao (aguarda 100% completar antes de iniciar a proxima) |
-| Paralelismo INTRA-etapa (B com Semaphore=5) | preservar — pattern do service e' performatico e validado em PROD |
-| **NAO interleaving de ajustes entre etapas** | NAO rodar B→C→D em pipeline por ajuste (ajuste 1 vai B→C; ajuste 2 vai B→C; ...). Em vez: TODOS em B, depois TODOS em C, etc. Isso e' chave para reduzir SSL drop window. |
-| Polling F5d sequencial longo | nao paralelizar — Odoo CIEL IT rejeita concorrente |
-| F5e SEQUENCIAL (1 browser Playwright) | preservar — Playwright nao concorre |
-| Recovery loop fora do orchestrator (script shell?) | DECISAO: capinar como `--resume` modo CLI no proprio entry-point Python |
-| **F5a/F5b refatorados para atomos Skill 5** | **DECISAO 10.6 (Rafael v13)**: principio inviolavel "se mexe com picking, devera ser atraves da Skill 5". F5a vira `criar_picking_inter_company` na Skill 5; F5b vira `validar_picking_inter_company` na Skill 5. Skill 8 ORQUESTRA sequencia. |
+| **Etapas SEQUENCIAIS com BARREIRA de sincronizacao** (B→C→D→E→F) | **DECISAO 10.3 (Rafael v13) + CONFIRMADA v14a R1**: fazer TUDO por etapa. Mecanismo do script (main L1771-1860): `expire_all() + carregar_ajustes()` re-load entre etapas + `db.engine.dispose()` profilatico antes/apos C+D. Cada etapa = barreira (aguarda 100% completar antes de iniciar a proxima) |
+| Paralelismo INTRA-etapa (B com Semaphore=5) | **REFINADO v14a sub-nuance D16**: ETAPA B no script faz pipeline POR PICKING (criar→validar→liberar→sleep 5s→proximo) — NAO paraleliza N pickings entre si (G022 over-reservation mitigation). Service `f5b_validar_pickings(ajustes_chunk)` paraleliza ajustes DENTRO de 1 picking via Semaphore=5; mas o script chama com 1 chunk de cada vez. **PRESERVAR pattern intra-B no Skill 8 orchestrator v15** |
+| **NAO interleaving de ajustes entre etapas** | NAO rodar B→C→D em pipeline por ajuste (ajuste 1 vai B→C; ajuste 2 vai B→C; ...). Em vez: TODOS em B, depois TODOS em C, etc. Isso e' chave para reduzir SSL drop window. **MAS** dentro de B, sim pipeline por picking (sub-nuance acima) |
+| Polling F5d sequencial longo | nao paralelizar — Odoo CIEL IT rejeita concorrente. **D10 v14a**: chamar `db.engine.dispose()` ANTES e APOS (profilatico, alem do `_commit_with_retry` interno) |
+| F5e SEQUENCIAL (1 browser Playwright) | preservar — Playwright nao concorre. **D10 v14a**: idem dispose antes/apos |
+| Recovery loop fora do orchestrator (script shell?) | DECISAO: capinar como `--resume` modo CLI no proprio entry-point Python. **D12 v14a**: preservar `--apenas-etapa` + `--ate-etapa` para recovery operacional |
+| **F5a/F5b refatorados para atomos Skill 5** | **DECISAO 10.6 (Rafael v13)**: principio inviolavel "se mexe com picking, devera ser atraves da Skill 5". F5a vira `criar_picking_inter_company` na Skill 5; F5b vira `validar_picking_inter_company` na Skill 5. Skill 8 ORQUESTRA sequencia. **D16 v14a**: atomo Skill 5 deve preservar sleep 5s entre pickings ou orchestrator Skill 8 invoca com pausa |
+| **D14 v14a — `_commit_resilient` MAIS FORTE que `_commit_with_retry`** | Script faz `engine.dispose()` proativo quando detecta SSL na string do erro; service so' rollback+close+retry. **APLICAR versao MAIS FORTE no orchestrator Skill 8** (consolidar helper em `app/odoo/estoque/scripts/_commit_helpers.py` ou similar) |
+| **D17 v14a — `ACAO_PARA_CFOP_ENTRADA` (5xxx→1xxx)** | Constante inline no script (L1300-1305). **Skill 8 deve centralizar** em `app/odoo/constants/operacoes_fiscais.py` (mesmo arquivo das outras matrizes fiscais) |
+| **D11 v14a — `expire_all() + carregar_ajustes()` entre etapas** | Pattern explicito no script para invalidar ORM cache stale. **APLICAR no orchestrator Skill 8** entre cada etapa A→B→C→D→E→F |
+| **D18 v14a — Default `dry_run=True` + `--confirmar`** | Pattern reuso Skill 6 v9. Skill 8 CLI deve seguir + segundo nivel `--confirmar-sefaz` para ETAPA D (irreversivel SEFAZ) |
 
 ### 6.3 Destino do orchestrator
 
@@ -453,7 +457,7 @@ done
 |---|-----------|-----------|-------------------|-----------------|--------|-------|
 | **C1** | Pre-mortem completo (§7.1) | secao §7.1 atualizada com 4 dimensoes x 6 etapas | Tabela de riscos com mitigacao codificavel | v13 | 🟡 | esta sessao |
 | **C2** | Mineracao detalhada `inventario_pipeline_service.py` | mapa metodos+linhas+helpers, conferir com cabecalho | Doc inline neste arquivo (§7.2) com referencia file:line | ~~v14~~ **v13 mid** | ✅ | mapa completo + **9 descobertas-chave** D1-D9 documentadas |
-| **C3** | Mineracao `09_executar_onda1_bulk.py` (etapas A/B/E/F) | mapa etapas+funcoes+chamadas, conferir | Doc inline (§7.3) com referencia file:line | v14 | ⬜ | |
+| **C3** | Mineracao `09_executar_onda1_bulk.py` (etapas A/B/C/D/E/F + main) | mapa etapas+funcoes+chamadas, conferir | Doc inline (§7.3) com referencia file:line | ~~v14~~ **v14a** | ✅ | Tabela §7.3 com 11 funcoes + 9 descobertas D10-D18 + dependencias externas; R1 RESPONDIDO (10.3 INTACTA) |
 | **C4** | Confirmar escopo completo (a/b/c) com Rafael | decisoes §10.1, §10.2 fechadas | Rafael confirmou via AskUserQuestion | v13 | ✅ | "estruturar bem, depois rodar casos reais" |
 | **C5** | **Criar sub-skill `auditando-cadastro-fiscal-odoo` (perfil inventario V1)** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (service) + `.claude/skills/auditando-cadastro-fiscal-odoo/{SKILL.md,scripts/auditar_cadastro.py}` (CLI) + cross-refs (subagente + ROUTING_SKILLS + tool_skill_mapper) | smoke dry-run em onda real OK; >5 pytest verdes; --perfil inventario funcional | v14 | ⬜ | **REDEFINIDO v13 — decisao 10.5 RESOLVIDA (Rafael: pre-flight como sub-skill separada agnostica para reuso futuro em venda-cliente)** |
 | **C6** | Capinar orchestrator base (skeleton) | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` com entry-points (vazios), imports, dataclasses, constants | pytest smoke import OK | v15 | ⬜ | |
@@ -624,9 +628,149 @@ Apos Playwright (5-10min), sessao pode estar morta. Re-fetch via `db.session.get
 | `AjusteEstoqueInventario` | model SQLAlchemy | `app.odoo.models.AjusteEstoqueInventario` — UPDATE de `picking_id_odoo`, `fase_pipeline`, `invoice_id_odoo`, `chave_nfe`, `status`, `erro_msg` |
 | `MATRIZ_INTERCOMPANY`, `PICKING_TYPE_POR_DIRECAO`, `COMPANY_LOCATIONS`, `COMPANY_PARTNER_ID`, `ids_diversos` | constants | `app.odoo.constants` |
 
-### 7.3 Mineracao script-fonte (C3 — preencher em v14)
+### 7.3 Mineracao script-fonte `09_executar_onda1_bulk.py` (C3 ✅ COMPLETA v14a)
 
-> Modelo similar para `09_executar_onda1_bulk.py`. Etapas A/B/E/F.
+#### Estrutura geral (1866 LOC, 6 etapas A→F)
+
+| Bloco | Linhas | Conteudo |
+|-------|--------|----------|
+| Imports + constants | L1-150 | `CICLO='INVENTARIO_2026_05'`, `ACOES_PICKING` (8 acoes NF), `ACOES_LOTE` ({RENOMEAR_LOTE, TRANSFERIR_LOTE}), `ACOES_ENTRADA_DESTINO_MANUAL` ({INDUSTRIALIZACAO_FB_LF} — so' validado), `PICKING_TYPE_ENTRADA_DESTINO_MANUAL` ({5:19}), `LOCATION_ORIGEM_ENTRADA_INDUSTR=26489`, `ETAPAS_VALIDAS=('A','B','C','D','E','F')` |
+| Helpers | L151-415 | `banner`, `_commit_resilient` (G016 D14), `resolver_product_id`, **`validar_cadastro_fiscal`** (G017 NCM strict + G018 weight=0 warn — **FONTE para sub-skill `auditando-cadastro-fiscal-odoo` C5 v14b**), `corrigir_weight_zero` (apenas detecta), `aplicar_peso_volumes_fallback_picking` (G018 v2 ENTRE F5b/F5c — `l10n_br_peso_liquido` writable em stock.picking) |
+| Carregamento | L416-494 | `carregar_ajustes` (DB local + filtros onda/status/cod), `imprimir_resumo_ajustes` |
+| ETAPA A | L498-613 | `etapa_a_transferencias_lote` — DELEGADO para Skill 2 (StockInternalTransferService) |
+| ETAPA B | L617-1149 | `etapa_b_pickings` (532 LOC monolitica) — chama `picking_svc.criar_transferencia` (F5a) + `pipeline_svc.f5b/f5c` |
+| ETAPA C | L1156-1190 | `etapa_c_aguardar_invoices` (35 LOC) — DELEGADO para `pipeline_svc.f5d_aguardar_invoices` |
+| ETAPA D | L1197-1232 | `etapa_d_sefaz` (36 LOC) — DELEGADO para `pipeline_svc.f5e_transmitir_sefaz` |
+| ETAPA E | L1239-1421 | `etapa_e_entrada_fb` (183 LOC) — DELEGADO para `RecebimentoLfOdooService.processar_recebimento` |
+| ETAPA F | L1428-1688 | `etapa_f_entrada_destino_manual` (entry L1428-1505) + `_f_criar_entrada_destino_para_invoice` (helper L1508-1688) — implementacao DIRETA XML-RPC (cria picking + G023 company_id forcado + G011 lot_name + G019/G020 re-le state) |
+| main() | L1695-1862 | argparser + orchestracao A→B→C→D→E→F |
+
+#### Mapa detalhado funcao → linhas → side-effects → deps
+
+| Funcao | Linhas | Side-effects | Deps Odoo | Deps DB | Notas |
+|--------|--------|--------------|-----------|---------|-------|
+| `_commit_resilient` | 158-210 | DB commit + rollback + close + **engine.dispose()** se SSL | - | session | **D14**: MAIS FORTE que `_commit_with_retry` do service — faz `engine.dispose()` proativo quando detecta SSL (não só rollback+close). Backoff exponencial 2s, 4s. |
+| `validar_cadastro_fiscal` | 228-294 | (READ-only) | product.product | - | **G017 NCM strict raise + G018 weight=0 warn**. `modo` = strict\|warn\|skip. **Fonte para C5 v14b**. |
+| `corrigir_weight_zero` | 297-343 | (READ-only despite name) | product.product | - | **G018 v2**: write NAO persiste em CIEL IT (hook reseta). Funcao so' detecta e loga. Fix REAL e' em `aplicar_peso_volumes_fallback_picking`. |
+| `aplicar_peso_volumes_fallback_picking` | 346-413 | write stock.picking | stock.picking | - | **G018 v2 fix codificado**: escreve `l10n_br_peso_liquido`/`l10n_br_peso_bruto`/`l10n_br_volumes` (writable em picking). Chamado ENTRE F5b e F5c. |
+| `carregar_ajustes` | 416-469 | (READ-only) | - | AjusteEstoqueInventario | Filtros: ciclo + company_id + status_filtro + onda (PERDA/INDUS/DEV/RENOMEAR) + cod_produto. `limite_produtos` limita N produtos distintos. |
+| `etapa_a_transferencias_lote` | 501-613 | DB UPDATE fase_pipeline | (via Skill 2 atomo) | AjusteEstoqueInventario | **D13 + D15**: SEQUENCIAL (max_workers arg legacy/no-op — comentario L555 "XML-RPC nao thread-safe Request-sent"). Pre-snapshot D1 (L533-545). Idempotente via `TRANSF_OK`. **DELEGAVEL 100% para Skill 2**. |
+| `etapa_b_pickings` | 624-1149 | create stock.picking + write moves + insert AjusteEstoqueInventario (compensatorio) | stock.quant, stock.lot, product.product, stock.picking, stock.move | AjusteEstoqueInventario | **D16**: `time.sleep(5)` entre chunks (G022 mitigation over-reservation). Pre-validacao fiscal G017 (L719-732, strict-aborta-etapa). Loop POR GRUPO (company_origem, tipo_op) SERIAL, dentro POR CHUNK SERIAL. Cada chunk: F5a → F5b → G018 fallback → F5c sequencial. **G014 PROTECTION**: lote vencido → transferir para lote novo on-the-fly. **G023**: respeitar lote_origem dos ajustes (nao FIFO automatico) + resolver sem-lote via FIFO descontando alocado. **Compensatorio**: se qty_restante > 0 e' PERDA_LF_FB → cria novo `AjusteEstoqueInventario('INDUSTRIALIZACAO_FB_LF', lote_destino='MIGRACAO', status='PROPOSTO')` para ondas futuras. |
+| `etapa_c_aguardar_invoices` | 1156-1190 | (delegado a service) | (via service) | AjusteEstoqueInventario (via service) | Filtra `picking_id_odoo + F5c_LIBERADO + sem invoice_id_odoo`. Chama `pipeline_svc.f5d_aguardar_invoices` (D5/D6 do service §7.2). |
+| `etapa_d_sefaz` | 1197-1232 | (delegado a service) | (via service) | AjusteEstoqueInventario (via service) | Filtra `invoice_id_odoo + F5d_INVOICE_GERADA`. Reduz para invoices distintas (D8 do service). Chama `pipeline_svc.f5e_transmitir_sefaz` (D7+D8+D9 do service §7.2). |
+| `etapa_e_entrada_fb` | 1239-1421 | insert RecebimentoLf + RecebimentoLfLote; depois processa via service externo | account.move (READ) | AjusteEstoqueInventario, RecebimentoLf, RecebimentoLfLote | Filtra `ACOES_ENTRADA_FB = {PERDA_LF_FB, TRANSFERIR_CD_FB, DEV_LF_FB, DEV_CD_LF}` (sentido X→FB). Agrupa por invoice_id (1 NF = 1 RecebimentoLf). **D17**: `ACAO_PARA_CFOP_ENTRADA` mapeia 5xxx→1xxx (PERDA 5903→1903, TRANSFERIR 5152→1152, DEV 5949→1949). Idempotente via `RecebimentoLf.odoo_lf_invoice_id`. Re-fetch ajustes da invoice (anti-DetachedInstanceError D9). Chama `RecebimentoLfOdooService.processar_recebimento` (service externo modulo recebimento, sincrono). |
+| `etapa_f_entrada_destino_manual` | 1428-1505 | (delegado a `_f_criar_entrada_destino_para_invoice`) | - | AjusteEstoqueInventario (via helper) | Filtra `ACOES_ENTRADA_DESTINO_MANUAL = {INDUSTRIALIZACAO_FB_LF}` (so' validado). Agrupa por invoice_id (1 NF = 1 picking entrada). |
+| `_f_criar_entrada_destino_para_invoice` | 1508-1688 | create stock.picking + write stock.move (company_id) + write stock.move.line + action_confirm + action_assign + button_validate | account.move (READ), stock.picking, stock.move, stock.move.line | AjusteEstoqueInventario (UPDATE fase_pipeline) | **Origin**: `INV-{CICLO}-ENTRADA-{LABEL}-NF{invoice_id}` (idempotencia via origin). Lote MIGRACAO/vazio vira `INV-{cod}-{YYYYMMDD}` (consistente com pickings validados 317306/317316). **G023 critico (L1637-1640)**: forca `company_id` em moves apos create (XML-RPC nao herda). **G011 (L1646-1665)**: preencher `lot_name` + re-escrever `quantity` em move_lines. **G019/G020 (L1670-1676)**: re-le state e raise se != done. |
+
+#### Pattern de orchestracao em main() (L1771-1860)
+
+```python
+if 'A' in etapas:
+    etapa_a_transferencias_lote(odoo, ajustes, ...)
+    db.session.expire_all()          # invalida ORM cache da sessao
+    ajustes = carregar_ajustes(...)  # re-load do DB com fase_pipeline atualizada
+
+if 'B' in etapas:
+    etapa_b_pickings(odoo, ajustes, ...)
+    db.session.expire_all(); ajustes = carregar_ajustes(...)
+
+if 'C' in etapas:
+    db.engine.dispose()              # G016 PROFILATICO antes de polling 1800s
+    etapa_c_aguardar_invoices(odoo, ajustes, ...)
+    db.engine.dispose()              # G016 PROFILATICO apos
+    db.session.expire_all(); ajustes = carregar_ajustes(...)
+
+if 'D' in etapas:
+    db.engine.dispose()              # G016 PROFILATICO antes de Playwright 5-10min/NF
+    etapa_d_sefaz(odoo, ajustes, ...)
+    db.engine.dispose()
+    db.session.expire_all(); ajustes = carregar_ajustes(...)
+
+if 'E' in etapas:
+    etapa_e_entrada_fb(odoo, ajustes, ...)
+    db.session.expire_all(); ajustes = carregar_ajustes(...)
+
+if 'F' in etapas:
+    etapa_f_entrada_destino_manual(odoo, ajustes, ...)
+    # NAO recarrega (e' ultima etapa)
+```
+
+**CONCLUSAO R1 ✅**: pattern do script **CONFIRMA decisao 10.3** (etapa = barreira de sincronizacao) em NIVEL MACRO (entre etapas A/B/C/D/E/F). Mecanismo: cada `if 'X' in etapas` aguarda etapa concluir → `expire_all()` + `carregar_ajustes()` (re-load com fase atualizada) → so' depois a proxima inicia. Etapas longas (C/D) ainda ganham `db.engine.dispose()` ANTES e APOS (G016 profilatico).
+
+**Sub-nuance NIVEL MICRO em ETAPA B**: pipeline POR PICKING (criar→validar→liberar→sleep 5s→proximo) — NAO paraleliza N pickings entre si (G022 mitigation D16). Service `f5b_validar_pickings(ajustes_chunk)` PARALELIZA ajustes DENTRO de 1 picking (Semaphore=5), mas o script chama com 1 chunk de cada vez. **IMPLICACAO Skill 8 orchestrator v15**: preservar pattern intra-B (NAO criar N pickings em paralelo).
+
+#### Descobertas-chave NOVAS D10-D18 (alem das D1-D9 do service §7.2)
+
+**D10 — `db.engine.dispose()` PROFILATICO antes E apos ETAPAS C+D** (L1799-1813 / L1822-1844)
+- Forca recriar conexoes DB que podem estar idle/SSL morto.
+- Mais agressivo que `_commit_with_retry` do service (que age durante etapa).
+- **APLICAR em Skill 8 orchestrator**: chamar antes/depois de F5d (polling 1800s) e F5e (Playwright 5-10min/NF).
+
+**D11 — `db.session.expire_all() + carregar_ajustes()` ENTRE etapas** (L1777-1782 e similares)
+- Invalida TODOS ORM objects da sessao e re-carrega do DB.
+- Razao: etapas anteriores commitaram `fase_pipeline` atualizada; objetos stale na sessao poderiam ter dados antigos.
+- **APLICAR em Skill 8 orchestrator**: re-carregar lista de ajustes entre cada etapa.
+
+**D12 — `--apenas-etapa` + `--ate-etapa` para recovery operacional** (L1704-1707)
+- Permite rodar etapas isoladas (`--apenas-etapa=C` para retomar polling) OU pipeline parcial (`--ate-etapa=B` para parar antes de SEFAZ).
+- **CRITICO no Skill 8 CLI**: preservar como `--apenas-etapa` + `--ate-etapa` ou equivalente `--etapas LISTA`.
+
+**D13 — ETAPA A e SEQUENCIAL** (loop principal L583 `for idx, snap in enumerate(snapshots, 1)`)
+- `max_workers` arg existe mas e' legacy/no-op no loop principal.
+- Comentario L555: `"SEQUENCIAL — conexao XML-RPC nao e thread-safe (Request-sent)"`.
+- **IMPLICACAO Skill 8**: ETAPA A no orchestrator pode SER sequencial. Como sera' DELEGADA via Skill 2 (cada chamada e' processo separado = sem race), pode-se considerar paralelizacao via subprocess.
+
+**D14 — `_commit_resilient` (script L158-210) MAIS FORTE que `_commit_with_retry` (service L165)**
+- Script: detecta SSL via substring match em err.lower() + faz `engine.dispose()` proativo apos rollback+close.
+- Service: so' rollback+close+retry (sem engine.dispose).
+- **APLICAR em Skill 8 orchestrator**: usar versao MAIS FORTE (`_commit_resilient`-like) em commits criticos pos-Playwright/polling longo.
+
+**D15 — ETAPA A 100% DELEGAVEL para Skill 2 `transferindo-interno-odoo`** (confirma §2.3)
+- Usa apenas `StockInternalTransferService.transferir_quantidade_para_lote` (atomo Skill 2 ja existente).
+- Skill 8 orchestrator NAO reimplementa — invoca Skill 2 via service direto (NAO subprocess CLI, pois e' chamado dentro do mesmo Python).
+
+**D16 — `time.sleep(5)` entre chunks ETAPA B** (L1136-1138, comentario "G022 mitigation")
+- Reduz over-reservation por reservas orfas em lote velho pos-renomeacao (ETAPA A pendentes).
+- Tambem da' tempo de PgBouncer SSL/keepalive renovar conexao.
+- **APLICAR em Skill 8 orchestrator**: preservar sleep entre criacao de pickings (mesmo no novo atomo Skill 5 `criar_picking_inter_company` C6.5).
+
+**D17 — `ACAO_PARA_CFOP_ENTRADA` mapeia CFOP saida (5xxx) → CFOP entrada (1xxx)** (L1300-1305)
+- PERDA_LF_FB: saida 5903 → entrada 1903
+- TRANSFERIR_CD_FB: saida 5152 → entrada 1152
+- DEV_LF_FB / DEV_CD_LF: saida 5949 → entrada 1949
+- **Razao**: o Odoo da FB so' tem `fiscal_position` cadastrada para CFOPs de entrada (1xxx). Gravar 5xxx no `RecebimentoLfLote.cfop` causa "CFOP nao cadastrado".
+- **APLICAR em Skill 8 orchestrator ETAPA E**: preservar mapa.
+
+**D18 — Default `dry_run=True` + `--confirmar` para escrever** (L1708-1709)
+- Pattern reuso v9 (Skill 6).
+- `--confirmar-sefaz` adicional exige `--confirmar` para ETAPA D (irreversivel).
+- **APLICAR em Skill 8 CLI**: mesmo pattern + 2 nivel de confirmacao para SEFAZ.
+
+#### Dependencias externas confirmadas
+
+| Dependencia | Onde | Notas |
+|-------------|------|-------|
+| `StockInternalTransferService` | `app.odoo.services.stock_internal_transfer_service` | DELEGADO Skill 2 (capinado v10-v12 — agora `app/odoo/estoque/scripts/transfer.py`) |
+| `StockLotService` | `app.odoo.services.stock_lot_service` | Utility — resolve lote por nome |
+| `StockPickingService` | `app.odoo.services.stock_picking_service` | DELEGADO Skill 5 (`app/odoo/estoque/scripts/picking.py`) — invocado em F5a via `criar_transferencia` (C6.5 v15 cria `criar_picking_inter_company`) |
+| `InventarioPipelineService` | `app.odoo.services.inventario_pipeline_service` | Service-fonte ja' minerado §7.2 — F5b/F5c/F5d/F5e |
+| `RecebimentoLfOdooService` | `app.recebimento.services.recebimento_lf_odoo_service` | Service EXTERNO modulo recebimento. ETAPA E o invoca SINCRONO via `processar_recebimento(rec.id, usuario_nome=...)`. **NAO mexer** — reuso como esta'. |
+| `AjusteEstoqueInventario` | `app.odoo.models` | Model DB local — UPDATE `fase_pipeline`, `picking_id_odoo`, `invoice_id_odoo`, `chave_nfe`, `erro_msg`, `custo_medio` |
+| `RecebimentoLf`, `RecebimentoLfLote` | `app.recebimento.models` | DB local — agg por (pid, lote_dest, cfop) com qty |
+| `COMPANY_LOCATIONS`, `COMPANY_PARTNER_ID`, `ACAO_PARA_DIRECAO`, `PICKING_TYPE_POR_DIRECAO` | `app.odoo.constants` | Ja' centralizado |
+| `ACAO_PARA_CFOP_ENTRADA` (inline L1300-1305) | script | **NAO centralizado** — Skill 8 deve centralizar em `app/odoo/constants/operacoes_fiscais.py` |
+| `ACOES_ENTRADA_FB` (inline L1261-1263) | script | **NAO centralizado** — Skill 8 deve centralizar |
+| `ACOES_ENTRADA_DESTINO_MANUAL`, `PICKING_TYPE_ENTRADA_DESTINO_MANUAL`, `COMPANY_LABEL_ENTRADA`, `LOCATION_ORIGEM_ENTRADA_INDUSTR` (L126-146) | script | **NAO centralizado** — Skill 8 deve centralizar |
+
+#### Resposta R1 (revalidar 10.3)
+
+✅ **R1 CONFIRMA decisao 10.3** (etapa = barreira) em NIVEL MACRO.
+🟡 **Sub-nuance** documentada: dentro de ETAPA B, pipeline por picking com `sleep 5s` (G022). Decisao 10.3 INTACTA. **NAO requer AskUserQuestion adicional**.
+
+**Recomendacao para §6.2 + v15 orchestrator**:
+- Macro: etapa = barreira (todos pickings → expire_all → re-load → todas validacoes → expire_all → ...)
+- Micro ETAPA B: pipeline por picking (criar 1 → validar 1 → liberar 1 → sleep 5s → criar 2 → ...)
+- Micro outras etapas: ja' sequencial natural (C polling longo, D Playwright serial, E/F idempotente por invoice_id)
 
 ---
 
@@ -698,10 +842,15 @@ Apos Playwright (5-10min), sessao pode estar morta. Re-fetch via `db.session.get
 
 | Item | Origem | Status | Acao | Sessao prevista |
 |------|--------|--------|------|-----------------|
-| Confirmar caminho exato do `gtin_validator.py` (G035) | C5 | ⬜ | grep + Read | v14 |
-| Confirmar onde fica `validar_cadastro_fiscal` (G017 fonte) | C5 | ⬜ | Read `09_executar_onda1_bulk.py:139-211` | v14 |
-| Decidir: pre-flight como sub-skill nova ou entry-point Skill 8? | §10.5 | ⬜ | AskUserQuestion (v14) | v14 |
-| Decidir: centralizar journals 847/1002/987 nesta skill ou depois? | §10.4 | ⬜ | AskUserQuestion (v14) | v14 |
+| ~~Confirmar caminho exato do `gtin_validator.py` (G035)~~ | C5 | ✅ v14a | **NAO NECESSARIO** — script `09_executar_onda1_bulk.py:228-294` tem `validar_cadastro_fiscal` inline cobrindo G017 NCM strict + G018 weight=0 warn. **G035 (barcode invalido)** NAO esta' coberto no script — provavelmente esta' em outro lugar OU nao foi automatizado ainda. Confirmar em C5 v14b se incluir G035 no V1 ou adiar. | v14a / decisao em v14b |
+| ~~Confirmar onde fica `validar_cadastro_fiscal` (G017 fonte)~~ | C5 | ✅ v14a | LOCALIZADO: `09_executar_onda1_bulk.py:228-294` | v14a |
+| ~~Decidir: pre-flight como sub-skill nova ou entry-point Skill 8?~~ | §10.5 | ✅ v13 | sub-skill nova (RESOLVIDO §10.5) | v13 |
+| ~~Decidir: centralizar journals 847/1002/987 nesta skill ou depois?~~ | §10.4 | ✅ v13 | adiar para Skill 7 (RESOLVIDO §10.4) | v13 |
+| Centralizar `ACAO_PARA_CFOP_ENTRADA` (5xxx→1xxx) em `app/odoo/constants/operacoes_fiscais.py` | C3 v14a D17 | ⬜ | criar constante + import em Skill 8 + fluxos futuros | v15b ou v17 |
+| Centralizar `ACOES_ENTRADA_FB`, `ACOES_ENTRADA_DESTINO_MANUAL`, `PICKING_TYPE_ENTRADA_DESTINO_MANUAL`, `COMPANY_LABEL_ENTRADA`, `LOCATION_ORIGEM_ENTRADA_INDUSTR` em `app/odoo/constants/` | C3 v14a §7.3 | ⬜ | criar constantes + imports | v15b ou v17 |
+| Decidir em C5 v14b: implementar G035 (barcode invalido — `<cEAN>` invalido SEFAZ cstat=225) ou adiar? | C3 v14a §9 | ⬜ | AskUserQuestion em v14b | v14b |
+| Decidir em C5 v14b: V1 INLINE simples (pre-mortem R3) ou ja' estruturar perfis multiplos? | §10.5 + R3 v13 | ⬜ | implementacao V1 INLINE; estrutura perfis SO' quando 2o perfil chegar | v14b |
+| Consolidar helper `_commit_resilient` (versao MAIS FORTE D14) em arquivo unico para reuso (orchestrator Skill 8 + script ad-hoc atual) | C3 v14a D14 | ⬜ | criar `app/odoo/estoque/scripts/_commit_helpers.py` ou similar; refatorar script + Skill 8 para importar | v15b ou v16 |
 | Picking 317346 pendente (caso FB/SAI/IND/01559 do v8) | memoria | ⬜ | verificar se invoice apareceu apos 1 semana; usar como canary C20? | v19-v20 |
 | Casos reais de Rafael "em todas as direcoes" | resposta v13 | ⬜ | catalogar (planilha?) antes do canary C20 | v19 |
 
@@ -717,19 +866,31 @@ Apos Playwright (5-10min), sessao pode estar morta. Re-fetch via `db.session.get
 - **Decisao**: Estruturar antes; casos reais agendados para apos C18.
 - **Razao Rafael**: "tenho casos em todas as direcoes; primeiro estruturar".
 
-### 10.3 ✅ Pattern paralelismo (RESOLVIDO v13)
+### 10.3 ✅ Pattern paralelismo (RESOLVIDO v13 + REVALIDADO v14a — INTACTA)
 - **Decisao**: (a) **Preservar Semaphore=5 do service atual** — paraleliza DENTRO de cada etapa; sequencializa ENTRE etapas (barreira de sincronizacao).
 - **Razao Rafael v13 2026-05-25**: "fazer tudo por etapa — todos os pickings, todas as validacoes, todas emissoes de fatura, etc.". Razao concreta: DetachedInstanceError e SSL connection timeout sao agravados por loops longos com state DB compartilhado. Etapas curtas e atomicas reduzem janela de exposicao.
-- **Pattern arquitetural** (consolidando):
-  - **Por etapa**: F5a (todos pickings em paralelo Semaphore=5) → RETORNA → F5b (todas validacoes em paralelo Semaphore=5) → RETORNA → F5c (...) → RETORNA → F5d (polling longo SEQUENCIAL) → RETORNA → F5e (SEFAZ Playwright SEQUENCIAL 1 browser) → RETORNA → E → F.
-  - **Cada etapa eh uma barreira de sincronizacao**: aguarda 100% completar antes de iniciar a proxima.
-  - **DentroDaEtapa: Semaphore=5** (paraleliza ate 5 ajustes simultaneamente).
-  - **EntreEtapas: serial** (nao ha' interleaving de ajustes entre etapas).
+- **REVALIDACAO v14a (R1) — pattern do script CONFIRMA decisao em NIVEL MACRO**:
+  - main() L1771-1860: cada `if 'X' in etapas` → executa etapa → `db.session.expire_all()` + `carregar_ajustes()` (re-load do DB) → so' depois a proxima.
+  - ETAPAS C+D ganham `db.engine.dispose()` ANTES e APOS (G016 profilatico — D10).
+  - **NAO houve interleaving de ajustes entre etapas no script** — comprovado.
+- **REVALIDACAO v14a (R1) — sub-nuance MICRO ETAPA B descoberta**:
+  - Script faz pipeline POR PICKING dentro de B (criar 1 → validar 1 → liberar 1 → sleep 5s → criar 2 → ...) — NAO paraleliza N pickings entre si.
+  - Razao codificada (G022 mitigation D16): pickings concorrentes geram over-reservation em lotes velhos pos-renomeacao de ETAPA A. Sleep 5s tambem da' tempo ao PgBouncer renovar SSL.
+  - Service `f5b_validar_pickings(ajustes_chunk)` paraleliza ajustes DENTRO de 1 picking via Semaphore=5; mas o script chama com 1 chunk de cada vez.
+  - **IMPLICACAO para v15 (orchestrator Skill 8 base + F5a/F5b)**: PRESERVAR pattern intra-B (sleep 5s entre pickings).
+- **Pattern arquitetural** (consolidando v13+v14a):
+  - **NIVEL MACRO entre etapas**: A → (expire+reload) → B → (expire+reload) → C → (dispose+expire+reload) → D → (dispose+expire+reload) → E → (expire+reload) → F.
+  - **NIVEL MICRO ETAPA B**: pipeline por picking (criar→validar→liberar→sleep 5s→proximo). Service intra-picking paraleliza ajustes via Semaphore=5.
+  - **NIVEL MICRO ETAPA A**: SEQUENCIAL (D13 — XML-RPC nao thread-safe). Possivel paralelizar via Skill 2 subprocess (cada processo = sem race).
+  - **NIVEL MICRO ETAPAS C/D/E/F**: ja' sequencial natural (polling longo, Playwright serial, agregacao por invoice_id).
 - **Mitigacoes** de DetachedInstanceError + SSL drop:
   - G016 codificado: `_commit_with_retry` antes de cada operacao longa + re-fetch via `db.session.get(AjusteEstoqueInventario, ajuste_id)` apos.
+  - **D14 v14a**: `_commit_resilient` do script faz tambem `engine.dispose()` proativo (versao MAIS FORTE — APLICAR no Skill 8).
+  - **D10 v14a**: `db.engine.dispose()` profilatico ANTES e APOS C+D (alem do retry interno do service).
+  - **D11 v14a**: `expire_all() + carregar_ajustes()` entre etapas (re-load com fase atualizada).
   - Etapas longas (F5d 1800s, F5e Playwright 5-10min/NF) tem re-fetch explicito.
   - TCP keepalive em `config.py:115-118` (ja' configurado).
-- **Smoke obrigatorio em pytest**: simular SSL drop mid-etapa via mock + verificar re-fetch correto.
+- **Smoke obrigatorio em pytest**: simular SSL drop mid-etapa via mock + verificar re-fetch correto + verificar `engine.dispose()` chamado profilaticamente antes de C/D.
 
 ### 10.4 ✅ Centralizar journals (847/1002/987) (RESOLVIDO v13)
 - **Decisao**: (b) **Adiar para Skill 7 escriturando** que tambem precisa.
@@ -783,16 +944,18 @@ Apos Playwright (5-10min), sessao pode estar morta. Re-fetch via `db.session.get
 
 | Sessao | Foco | Checkpoints | Risco |
 |--------|------|-------------|-------|
-| **v13 (esta)** | Planejamento + estruturacao + decisao 10.5 (pre-flight sub-skill) | C1, C4 | Baixo (sem codigo) |
-| **v14** | Mineracao detalhada + decisoes 10.3/10.4/10.6 + **criar sub-skill `auditando-cadastro-fiscal-odoo`** | C2, C3, **C5** | Baixo-Medio (cria service novo) |
-| **v15** | **Estender Skill 5 (atomos inter-company)** + Orchestrator base + F5a + F5b (Skill 8 invoca sub-skill C5 no bulk + chama atomos novos Skill 5) | C6, **C6.5**, C7, C8 | Medio-Alto (mexe service + estende skill madura) |
-| **v16** | F5c + F5d (com G016+G007+G034+G029) | C9, C10 | Medio (SSL pattern critico) |
-| **v17** | F5e + etapas E/F | C11, C12, C13 | Alto (SEFAZ Playwright, G023) |
-| **v18** | Recovery + SKILL.md + tests + smokes | C14, C15, C16, C17 | Medio |
-| **v19** | Folhas fluxos + cross-refs + Canary | C18, C19, C20 | Alto (PRIMEIRA NF real) |
-| **v20+** | Bulk + code-review + commit final | C21, C22, C23 | Alto (volume real) |
+| **v13** | Planejamento + estruturacao + 6 decisoes RESOLVIDAS + C2 mineracao service | C1, C2, C4 | Baixo (sem codigo) |
+| **v14a (esta)** | C3 mineracao script + revalidar R1 (10.3 INTACTA) | **C3** | Baixo (sem codigo) |
+| **v14b (proxima)** | Criar sub-skill `auditando-cadastro-fiscal-odoo` perfil inventario V1 | **C5** | Baixo-Medio (cria service novo) |
+| **v15a** | Estender Skill 5 com atomos inter-company (`criar_picking_inter_company` + `validar_picking_inter_company`) | **C6.5** | Medio (mexe skill madura — pytest >5 verdes + canary obrigatorio) |
+| **v15b** | Orchestrator base + F5a + F5b (chamam atomos novos Skill 5; invoca sub-skill C5 no bulk) | C6, C7, C8 | Medio-Alto |
+| **v16** | F5c + F5d (com G016+G007+G034+G029) + D10 dispose profilatico + D14 commit_resilient forte | C9, C10 | Medio (SSL pattern critico) |
+| **v17** | F5e + etapas E/F (D17 ACAO_PARA_CFOP_ENTRADA centralizado) | C11, C12, C13 | Alto (SEFAZ Playwright, G023 company_id forcado em moves) |
+| **v18** | Recovery (`--resume`, `--apenas-etapa`, `--ate-etapa` D12) + SKILL.md + tests + smokes | C14, C15, C16, C17 | Medio |
+| **v19** | Folhas fluxos 1.1+1.3 + cross-refs + Canary REAL PROD (1 ajuste) | C18, C19, C20 | Alto (PRIMEIRA NF real) |
+| **v20+** | Bulk REAL PROD + code-review + commit final + arquivar 09_* SUPERADOS | C21, C22, C23 | Alto (volume real) |
 
-**Total estimado: 8 sessoes** (sub-skill C5 fica em v14 sem expandir cronograma). Pode estender se canary C20 revelar gaps nao previstos OU se sub-skill `auditando-cadastro-fiscal-odoo` exigir validacao mais profunda em v14.
+**Total estimado: 9-10 sessoes** (sub-skill C5 em v14b separada; Skill 5 estendida em v15a separada). Pode estender se canary C20 revelar gaps nao previstos. Pre-mortem R6+R7 (v13) preserva contexto via divisao de sessoes longas.
 
 ---
 
@@ -845,7 +1008,43 @@ Apos Playwright (5-10min), sessao pode estar morta. Re-fetch via `db.session.get
   - Achados secundarios MED-B-2 / MED-C-1 / MED-C-2 + dependencias externas listadas
 - ⬜ Resto dos checkpoints pendentes para v14+ (mineracao C3 do script 09_* + sub-skill C5)
 
-### Sessao v14 (futuro)
+### Sessao v14a (2026-05-25) — C3 mineracao script + revalidar R1
+- ✅ Setup worktree + venv + ENV; verificacao main avancou 11 commits (SPED V36, weekly, fix tabelas, SDK 0.2.87, D8) — sem conflito esperado com `app/odoo/estoque/`, sem rebase.
+- ✅ Pytest baseline confirmado: **393 verdes em 15.87s** (tests/odoo/).
+- ✅ Leituras obrigatorias: CLAUDE.md estoque + PLANEJAMENTO_SKILL8 INTEIRO (especialmente §7.2 D1-D9 + §8.1 pre-mortem 15 riscos) + ROADMAP_SKILLS HANDOFF v13 + gestor-estoque-odoo invariantes.
+- ✅ AskUserQuestion: foco v14a so (C3 + revalidar R1) escolhido — preserva contexto para v14b fresca (pre-mortem R6).
+- ✅ **C3 mineracao script `09_executar_onda1_bulk.py` (1866 LOC) COMPLETA**:
+  - Estrutura geral §7.3 (11 blocos + tabela com 11 funcoes+linhas+side-effects+deps).
+  - Pattern macro confirmado em `main()` L1771-1860: cada `if 'X' in etapas` → executa → `db.session.expire_all() + carregar_ajustes()` → so' depois proxima. C+D ganham `db.engine.dispose()` ANTES e APOS (G016 profilatico).
+  - **9 descobertas-chave NOVAS D10-D18** documentadas como padroes a PRESERVAR no orchestrator Skill 8:
+    - D10: `db.engine.dispose()` PROFILATICO antes/apos C+D
+    - D11: `expire_all() + carregar_ajustes()` entre etapas
+    - D12: `--apenas-etapa` + `--ate-etapa` para recovery operacional
+    - D13: ETAPA A SEQUENCIAL (max_workers arg legacy/no-op — XML-RPC nao thread-safe Request-sent)
+    - D14: `_commit_resilient` (script) MAIS FORTE que `_commit_with_retry` (service) — faz `engine.dispose()` se SSL
+    - D15: ETAPA A 100% DELEGAVEL para Skill 2 `transferindo-interno-odoo`
+    - D16: `time.sleep(5)` entre chunks ETAPA B (G022 over-reservation mitigation)
+    - D17: `ACAO_PARA_CFOP_ENTRADA` mapeia 5xxx→1xxx (PERDA 5903→1903, TRANSFERIR 5152→1152, DEV 5949→1949)
+    - D18: default `dry_run=True` + `--confirmar` + `--confirmar-sefaz` (2 niveis)
+  - Constantes inline a CENTRALIZAR pela Skill 8 em `app/odoo/constants/operacoes_fiscais.py`:
+    - `ACAO_PARA_CFOP_ENTRADA` (L1300-1305 script)
+    - `ACOES_ENTRADA_FB`, `ACOES_ENTRADA_DESTINO_MANUAL`, `PICKING_TYPE_ENTRADA_DESTINO_MANUAL`, `COMPANY_LABEL_ENTRADA`, `LOCATION_ORIGEM_ENTRADA_INDUSTR` (L126-146)
+  - Dependencias externas listadas: StockInternalTransferService (Skill 2), StockPickingService (Skill 5), InventarioPipelineService (service §7.2), RecebimentoLfOdooService (modulo externo recebimento).
+  - `validar_cadastro_fiscal` (L228-294) identificado como **fonte para sub-skill `auditando-cadastro-fiscal-odoo` (C5 v14b)** — G017 NCM strict + G018 weight=0 warn. **NAO precisa de gtin_validator.py separado** — script ja' tem logica G017 inline, e G018 e' detect-only (fix real e' em `aplicar_peso_volumes_fallback_picking` ENTRE F5b/F5c, nao no produto).
+- ✅ **R1 REVALIDADO — decisao 10.3 INTACTA**:
+  - ✅ Macro: pattern do script CONFIRMA "etapa = barreira" (mecanismo explicito via `expire_all+reload+dispose`).
+  - 🟡 Micro ETAPA B: descoberta de sub-nuance (pipeline por picking com sleep 5s G022). Documentada em §6.2 + §7.3 + §10.3. **NAO requer AskUserQuestion adicional** — decisao 10.3 intacta + sub-nuance preservada no orchestrator v15.
+- ✅ Refatoracoes §0/§6.2/§7-tabela-C3/§10.3/§11 aplicadas:
+  - §0: status global atualizado (C3 ✅, 4 de 24), pattern arquitetural FINAL atualizado com sub-nuance ETAPA B.
+  - §6.2: tabela "O que ADAPTAR" expandida com D10-D18 + sub-nuance ETAPA B.
+  - §7 tabela: C3 marcado ✅ com referencia §7.3 + 9 descobertas + R1 RESPONDIDO.
+  - §10.3: REVALIDADO v14a — secao expandida com macro/micro pattern + mitigacoes D10/D11/D14.
+  - §11: cronograma redividido v14a/v14b/v15a/v15b (preserva pre-mortem R6+R7).
+  - §7.3 NOVA: 11 funcoes+linhas+side-effects+deps + 9 descobertas D10-D18 + dependencias externas + conclusao R1.
+- 🟢 **Sem mudancas em codigo nesta sessao** (so docs/planejamento).
+- 🟢 **Pytest baseline mantido: 393 verdes**.
+
+### Sessao v14b (futuro) — Criar sub-skill `auditando-cadastro-fiscal-odoo`
 - [adicionar quando ocorrer]
 
 ---

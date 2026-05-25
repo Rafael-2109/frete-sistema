@@ -7,9 +7,46 @@
 
 ## ⏯️ ESTADO ATUAL E COMO CONTINUAR (handoff — atualizar a cada avanço)
 
-**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual 6+ commits sobre main@b4f7b24c — último v9). `main` está VIVO (Rafael commita em paralelo — avancou apenas `fb494608` cosmetico D8 SKIP) → merge coordenado depois.
+**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual 7+ commits sobre main@a937748b — último v14a). `main` está VIVO (Rafael commita em paralelo — avancou 11 commits desde v13: SPED V36, weekly, fix tabelas, SDK 0.2.87, D8) → merge coordenado depois. Nenhum conflito esperado em `app/odoo/estoque/` (SPED V36 e' em `app/relatorios_fiscais`, SDK em `app/agente`).
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **393 pytest verdes** (tests/odoo/ — v13 confirmado).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **393 pytest verdes** (tests/odoo/ — v14a confirmado em 15.87s).
+
+**Sessão 2026-05-25 v14a (C3 mineração script + revalidação R1 — sem código, só docs):**
+- ✅ **Verificação main**: avançou 11 commits (SPED V36, weekly, fix tabelas Sentry, SDK 0.2.87, D8) — nenhum conflito esperado em `app/odoo/estoque/`. Sem rebase nesta sessão.
+- ✅ **Pytest baseline confirmado**: 393 verdes em 15.87s (tests/odoo/).
+- ✅ **AskUserQuestion**: foco v14a só escolhido (preserva contexto para v14b fresca conforme pre-mortem R6).
+- ✅ **C3 mineração completa** do script `09_executar_onda1_bulk.py` (1866 LOC):
+  - Estrutura mapeada: 11 funções top-level em 6 etapas A→F + main() + helpers.
+  - Tabela §7.3 do PLANEJAMENTO com funções+linhas+side-effects+deps documentada.
+  - Pattern de orchestração identificado em `main()` L1771-1860: **etapa = barreira de sincronização** confirmada (cada `if 'X' in etapas` → executa → `db.session.expire_all() + carregar_ajustes()` → só depois próxima).
+  - **9 descobertas novas D10-D18** documentadas como padrões a PRESERVAR no orchestrator Skill 8:
+    - D10: `db.engine.dispose()` PROFILÁTICO antes E após C+D (mais agressivo que retry interno)
+    - D11: `expire_all() + carregar_ajustes()` entre etapas (barreira sincronização)
+    - D12: `--apenas-etapa` + `--ate-etapa` para recovery operacional
+    - D13: ETAPA A é SEQUENCIAL (max_workers arg legacy — XML-RPC não thread-safe Request-sent)
+    - D14: `_commit_resilient` (script) MAIS FORTE que `_commit_with_retry` (service) — faz `engine.dispose()` se SSL
+    - D15: ETAPA A 100% DELEGÁVEL para Skill 2 `transferindo-interno-odoo`
+    - D16: `time.sleep(5)` entre chunks ETAPA B (G022 over-reservation mitigation)
+    - D17: `ACAO_PARA_CFOP_ENTRADA` 5xxx→1xxx (não centralizada — pendência §9)
+    - D18: default `dry_run=True` + `--confirmar` + `--confirmar-sefaz` (2 níveis)
+- ✅ **R1 RESPONDIDO — decisão 10.3 INTACTA**:
+  - Macro: pattern script CONFIRMA "etapa = barreira" (mecanismo explícito).
+  - Micro ETAPA B: sub-nuance descoberta — pipeline POR PICKING com sleep 5s (G022 mitigation D16). Documentada em §6.2 + §7.3 + §10.3. **Não requer AskUserQuestion adicional**.
+- ✅ **Pendências §9 atualizadas**:
+  - Resolvidas: `validar_cadastro_fiscal` LOCALIZADO em script (não precisa de `gtin_validator.py` separado para G017/G018 V1); decisões 10.4/10.5 já fechadas em v13.
+  - NOVAS pendências para v15b/v17: centralizar `ACAO_PARA_CFOP_ENTRADA` + 5 outras constantes inline em `app/odoo/constants/`.
+  - NOVA pendência v14b: decidir se G035 (barcode inválido) entra na sub-skill V1 ou adia.
+  - NOVA pendência v15b/v16: consolidar helper `_commit_resilient` (versão MAIS FORTE D14) em arquivo único para reuso.
+- ✅ **Refatorações §0/§6.2/§7-tabela-C3/§9/§10.3/§11/§12 aplicadas** no PLANEJAMENTO_SKILL8.
+- 🟢 **Sem mudanças em código** (só docs/planejamento).
+- 🟢 **Pytest baseline mantido: 393 verdes**.
+
+**Status global após v14a:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 2 MINERAÇÕES COMPLETAS** (C1 + C2 + C3 + C4 ✅; 20 checkpoints ⬜; 6 decisões RESOLVIDAS + R1 INTACTA).
+- 1 sub-skill nova prevista: `auditando-cadastro-fiscal-odoo` (C5 v14b).
+- Skill 5 `operando-picking-odoo` será ESTENDIDA com 2 átomos novos em v15a (C6.5).
+- Baseline pytest mantido: 393 verdes.
+- Próximo passo: sessão v14b com criação da sub-skill `auditando-cadastro-fiscal-odoo` perfil inventário V1.
 
 **Sessão 2026-05-25 v13 (Planejamento Skill 8 `faturando-odoo` — estruturacao C1+C4):**
 - ✅ **Verificacao main**: main = `a937748b` (merge v12); sem avanco; sem rebase.
