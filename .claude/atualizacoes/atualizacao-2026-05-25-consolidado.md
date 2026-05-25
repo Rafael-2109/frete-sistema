@@ -12,7 +12,7 @@
 | 2 | References Audit | OK | 39 arquivos revisados (20 P0 + 10 P1 + 9 P2), 7 corrigidos. SDK 0.2.82->0.2.87, subagents 15->16, skills 41->48. Listeners/IDs/tolerancias/paths conferem com codigo. 0 caminhos quebrados. |
 | 3 | Memorias Cleanup | OK | 86/86 frontmatter OK, 0 orfaos, MEMORY.md 128/150 linhas. Bug estrutural corrigido: 6 arquivos em `memory/memory/` movidos para top-level. 3 correcoes de drift (skills 40->47, SDK 0.2.82->0.2.87). +37 topic files em 7 dias. |
 | 4 | Sentry Triage | OK | Backlog producao zerado. Fix `PYTHON-FLASK-M5` (UndefinedColumn alias `s.qtd_saldo_produto_pedido`/`fp.qtd_faturada`) — novo `_extract_alias_map` parseia `FROM/JOIN tabela [AS] alias`. Suite inline 6 casos validada. Issue marcada como resolved. |
-| 5 | Test Runner | PARCIAL | 1699 testes, 1611 passed / 33 failed / 48 errors / 7 skipped (94.82%). Reproducao quase identica do baseline 2026-05-18. Sem correlacao com D4. Recomendacao P0: fix collection error (`_try_parse_todos`), state pollution hora, SQLite ARRAY. |
+| 5 | Test Runner | PARCIAL | 1699 testes, 1610 passed / 34 failed / 48 errors / 7 skipped (94.76%). Reproducao quase identica do baseline 2026-05-18. Sem correlacao com D4. Recomendacao P0: fix collection error (`_try_parse_todos`), state pollution hora, SQLite ARRAY. |
 | 6 | Memory Eval | OK | Health 84/100 (+4 vs 80), recupera apos 2 ciclos de queda. Eficacia 0.573->0.656 (+14.5pp). KG coverage retrocede 50.79%->47.53%. Bug latente: memorias `_archived_` continuam em uso. 10 recomendacoes. |
 | 7 | Agent Intelligence Report | OK | Health 72, friction 36, 185 sessoes (+15%), resolution rate 76.1% (+11.8pp, REVERTEU declinio). Persistido no banco (report_id=4). Trend: **improving**. 3 itens fechados, 3 novos WARNING, 12 ativos (3 CRITICAL, 6 WARNING, 3 INFO). |
 
@@ -46,12 +46,12 @@
 
 ### D5 — Tests
 - Total: 1699
-- Passed: 1611
-- Failed: 33
+- Passed: 1610
+- Failed: 34
 - Error: 48
 - Skipped: 7
-- Taxa de sucesso: 94.82%
-- Tempo total: 561.63s (~9min 21s)
+- Taxa de sucesso: 94.76%
+- Tempo total: 571.33s (~9min 31s)
 - Correlacoes com D4: 0
 
 ### D6 — Memory Eval (Producao)
