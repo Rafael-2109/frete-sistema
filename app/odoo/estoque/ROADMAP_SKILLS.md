@@ -43,10 +43,28 @@
 - 🟢 **Sem mudancas em codigo nesta sessao** (so docs/planejamento).
 - 🟢 **Pytest baseline mantido: 393 verdes**.
 
-**Status global apos v13:**
-- Skill 8 `faturando-odoo` ⬜ **PLANEJADA** (C1+C4 ✅; 21 checkpoints ⬜) — 0 LOC de codigo novo, planejamento completo.
+**v13 mid-sessao (continuou apos commit 63d817d5)**: Rafael pediu para aproveitar contexto e fechar A+B+C.
+- ✅ **A — Decisao 10.5 RESOLVIDA**: pre-flight como **sub-skill nova `auditando-cadastro-fiscal-odoo`** (agnostica com perfis multiplos — atende Skill 8 inventario + futuro venda-cliente). Razao Rafael: "podem haver faturamentos para cliente cujo pre-flight tera regras DIFERENTES (certificado A1, IE, FCI, etc.)". §4 reescrita inteira como DELEGADO + contrato V0 + perfis multiplos.
+- ✅ **B — 3 decisoes adicionais RESOLVIDAS**:
+  - **10.3 Paralelismo**: PRESERVAR Semaphore=5 + **ETAPA = BARREIRA DE SINCRONIZACAO** (todos pickings → todas validacoes → todas emissoes; mitiga DetachedInstanceError + SSL drop). Razao explicita Rafael ("erros de DetachedInstanceErros e SSL connection timeout").
+  - **10.4 Journals**: ADIAR para Skill 7 escriturando (tarefa ortogonal).
+  - **10.6 Refatorar F5a/F5b**: **REFATORAR COMPLETAMENTE** seguindo principio "Fluxo >> Skills" — atomos NOVOS na Skill 5 (`criar_picking_inter_company` + `validar_picking_inter_company`). Razao Rafael: "Se mexe com picking, devera ser atraves da Skill 5; principio da atomicidade e funcao especifica".
+  - **NOVO checkpoint C6.5 v15**: estender Skill 5 com atomos inter-company (~1 dia extra; +1 sessao no cronograma).
+- ✅ **C — Mineracao detalhada `inventario_pipeline_service.py` COMPLETA** (~70k tokens consumidos):
+  - Tabela §7.2 com 14 metodos+linhas+side-effects+deps (cabecalho L1-L575 + F5a-F5e L581-1346).
+  - **9 descobertas-chave D1-D9** documentadas como padroes a PRESERVAR no orchestrator:
+    - D1: SNAPSHOT antes de threads | D2: agrupamento por picking | D3: bug L19/L20/L21 fix (preencher_qty_done sequencia)
+    - D4: G023 linhas_esperadas | D5: SNAPSHOT meta + db.session.get re-fetch em polling longo
+    - D6: sub-etapas F5d.5/.6/.7 em try/except | D7: HARD_FAIL_CONFIG_ERRORS aborta batch
+    - D8: idempotencia TRIPLA em F5e | D9: db.session.get re-fetch + commit_with_retry apos Playwright
+  - Achados secundarios MED-B-2 / MED-C-1 / MED-C-2 + dependencias externas listadas.
+
+**Status global apos v13 mid-sessao:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA COMPLETO** (C1 + C2 + C4 ✅; 21 checkpoints ⬜; 6 decisoes RESOLVIDAS; pattern arquitetural FINAL declarado).
+- 1 sub-skill nova prevista: `auditando-cadastro-fiscal-odoo` (C5 redefinido para criar — v14).
+- Skill 5 `operando-picking-odoo` sera ESTENDIDA com 2 atomos novos em v15 (C6.5).
 - Baseline pytest mantido: 393 verdes.
-- Proximo passo: sessao v14 com mineracao detalhada (C2+C3) + pre-flight (C5) + decisoes 10.3-10.6.
+- Proximo passo: sessao v14 com mineracao C3 (script `09_executar_onda1_bulk.py` 1850 LOC) + criar sub-skill `auditando-cadastro-fiscal-odoo` (C5).
 
 **Sessão 2026-05-25 v12 (S1+S2+S4 fechando lacunas v11 — Skill 2 ARQUITETURALMENTE COMPLETA):**
 - ✅ **Pre-mortem da operacao v10+v11** identificou 3 lacunas estruturais:

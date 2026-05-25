@@ -12,9 +12,9 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status global** | 🟡 PLANEJADO (sessao v13, escopo definido com Rafael) |
-| **Sessao atual** | v13 (2026-05-25) — planejamento + estruturacao |
-| **Sessoes estimadas** | 6-8 sessoes (v13 → v20+) |
+| **Status global** | 🟡 PLANEJADO COMPLETO (sessao v13, escopo + 6 decisoes RESOLVIDAS; pre-flight sub-skill + paralelismo por etapa + F5a/F5b via Skill 5) |
+| **Sessao atual** | v13 (2026-05-25) — planejamento + estruturacao + decisoes |
+| **Sessoes estimadas** | 8-9 sessoes (v13 → v20+) — +1 por estender Skill 5 com atomos inter-company (C6.5) |
 | **Baseline pytest atual** | 393 verdes (tests/odoo/) |
 | **Baseline pytest pos-v20 esperado** | ≥420 verdes (+~25-30 testes Skill 8) |
 | **Branch** | `feat/estoque-odoo` (worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo`) |
@@ -22,8 +22,10 @@
 | **Script-fonte macro** | `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (~1.850 LOC) |
 | **Pattern de reuso** | `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (Skill 6 v9, 907 LOC) |
 | **Destino do orchestrator** | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (a criar) |
-| **Decisoes ABERTAS** | 5 (ver §10) |
-| **Checkpoints concluidos** | 0 de 23 |
+| **Decisoes ABERTAS** | 0 (TODAS 6 RESOLVIDAS em v13) |
+| **Checkpoints concluidos** | 3 de 24 (C1 ✅ pre-mortem + C2 ✅ mineracao service + C4 ✅ escopo; +C6.5 novo) |
+| **Skills NOVAS criadas pela Skill 8** | (1) `auditando-cadastro-fiscal-odoo` — sub-skill agnostica para pre-flight; (2) atomos NOVOS na Skill 5 `operando-picking-odoo` — `criar_picking_inter_company` + `validar_picking_inter_company` (C6.5) |
+| **Pattern arquitetural FINAL** | **Etapa = barreira de sincronizacao** (todos pickings → todas validacoes → todas emissoes → polling F5d → SEFAZ F5e → E → F). Mitiga DetachedInstanceError + SSL drop. |
 | **Demanda real associada** | Casos em todas as direcoes (Rafael v13) — a estruturar nas sessoes posteriores |
 
 ---
@@ -116,14 +118,14 @@ Resulta em: NFs autorizadas pela SEFAZ + saldo de estoque ajustado em ambas as f
 |-----------|-------|
 | **Etapas pipeline** | F5a, F5b, F5c, F5d (com sub-etapas .5/.6/.7), F5e |
 | **Etapas adjacentes** | E (RecebimentoLf X→FB), F (entrada manual FB→{LF,CD} G023) |
-| **Pre-flight** | G017 NCM, G035 barcode, G018 weight (validar+corrigir antes do bulk) |
 | **Recovery** | Loop com idempotencia por `fase_pipeline` + timeout/iteracao + stagnation detector |
 | **SSL/timeout** | G016 commit_with_retry + re-fetch ajuste + TCP keepalive |
 | **Auditoria** | `OperacaoOdooAuditoria.registrar` por etapa+ajuste+uuid8 |
 | **Paralelizacao** | `ThreadPoolExecutor + Semaphore(max_concurrent=5)` (preservar do service atual) |
-| **Modos CLI** | `--pre-flight` / `--etapa A|B|C|D|E|F` / `--canary` / `--bulk` / `--resume` |
+| **Pre-flight inventario** | INVOCA a sub-skill `auditando-cadastro-fiscal-odoo --perfil inventario` ANTES do bulk (sem implementar diretamente) |
+| **Modos CLI** | `--canary` / `--bulk` / `--resume` / `--etapa A\|B\|C\|D\|E\|F` (NAO inclui `--pre-flight` — esta na sub-skill) |
 | **Folha de fluxo** | `app/odoo/estoque/fluxos/1.1-faturamento-completo.md` + `1.3-transferencia-completa.md` |
-| **SKILL.md** | Com 5+ receitas (canary, bulk, resume, pre-flight, recovery manual de NF travada) |
+| **SKILL.md** | Com 5+ receitas (canary, bulk, resume, recovery NF travada, integracao com pre-flight) |
 | **Tests** | Pytest `tests/odoo/services/test_faturamento_pipeline_orchestrator.py` (>20 testes) |
 
 ### 2.3 Sai do escopo (DELEGADO)
@@ -134,6 +136,7 @@ Resulta em: NFs autorizadas pela SEFAZ + saldo de estoque ajustado em ambas as f
 | **Picking generico** (cancelar, validar, devolver fora do pipeline) | Skill 5 `operando-picking-odoo` ✅ |
 | **Reservas / cirurgia ML orfa** | Skill 2.4 `operando-reservas-odoo` 🟡 |
 | **Ajustes positivos puros** (etapa de planejamento) | Skill 6 `planejando-pre-etapa-odoo` 🟡 |
+| **Pre-flight (G017 NCM + G035 barcode + G018 weight) + futuros perfis** | **Sub-skill nova `auditando-cadastro-fiscal-odoo`** (DECISAO 10.5 v13 — Rafael) ⬜ |
 | **Recebimento de COMPRAS** (DFe fornecedor, NAO inventario) | gestor-recebimento (subagente) |
 | **Reconciliacao financeira** (CNAB, extrato) | auditor-financeiro (subagente) |
 | **Centralizacao de journals** (847/1002/987) | Tarefa ortogonal — pode entrar em C6 ou ficar para Skill 7 (escriturando) |
@@ -232,40 +235,92 @@ Resulta em: NFs autorizadas pela SEFAZ + saldo de estoque ajustado em ambas as f
 
 ---
 
-## 4. PRE-FLIGHT (obrigatorio antes do bulk)
+## 4. PRE-FLIGHT (DELEGADO a sub-skill `auditando-cadastro-fiscal-odoo`)
 
-### 4.1 G017 — NCM cadastro
+### 4.0 Decisao v13: pre-flight COMO SKILL SEPARADA
+
+**Razao do Rafael (v13 2026-05-25):** podem haver no futuro **faturamentos para cliente** (vendas comerciais, nao so' inventario inter-company) cujo pre-flight tera regras DIFERENTES (ex: certificado A1, validacao de inscricao estadual do destinatario, tabela de precos, FCI, etc.). Ter o pre-flight INVENTARIO como entry-point da Skill 8 amarraria as duas coisas e bloquearia reuso futuro.
+
+**Decisao:** criar sub-skill nova `auditando-cadastro-fiscal-odoo` com **perfis multiplos** (`--perfil inventario`, futuro `--perfil venda-cliente`, etc.). Skill 8 **INVOCA** a sub-skill com perfil correto ANTES do bulk; nao implementa pre-flight diretamente.
+
+### 4.1 Contrato da sub-skill `auditando-cadastro-fiscal-odoo` (v0 — refinar em C5/C6)
+
+```
+## Contrato
+- objeto:        product.product + l10n_br_ciel_it_account.ncm
+- input:         --perfil PERFIL (inventario | venda-cliente | ...)
+                 --produto-ids LISTA  OU  --ciclo NOME (le AjusteEstoqueInventario)
+                 --auto-corrigir-barcode (opcional, default False — G035)
+- output:        relatorio JSON estruturado com:
+                   * por produto: ncm_ok, barcode_ok, weight_ok, gaps por gotcha
+                   * resumo: pode_faturar (bool), bloqueios por categoria
+                   * acoes_aplicadas (lista de corrections automaticas)
+- pré-condições: nenhuma (READ-only por default; WRITE so' com --auto-corrigir)
+- pós-condições: NENHUM ajuste de inventario tocado; opcional WRITE em product.barcode
+- gotchas-invariante: G017 (NCM CIEL IT custom), G035 (barcode→cEAN), G018 (weight bloqueia F5c)
+- modos:         --dry-run (default, NAO escreve nada) → --confirmar (escreve barcode=False onde necessario)
+```
+
+### 4.2 Perfis previstos (estende quando demanda surgir)
+
+| Perfil | Validacoes | Demanda |
+|--------|-----------|---------|
+| `inventario` (V1) | G017 NCM + G035 barcode + G018 weight | Skill 8 v1 (esta sessao em diante) |
+| `venda-cliente` (futuro) | inventario + certificado A1 + IE destinatario + tabela_preco + FCI | quando Rafael indicar |
+| `compras-importacao` (futuro hipotetico) | NCM + barcode + dados aduaneiros | sem demanda atual |
+
+**Atomo extensivel:** estrutura segue pattern "DSL de validacoes por perfil" — cada perfil = lista de checks. Adicionar perfil = adicionar entrada no dict de perfis + N funcoes de check. Nao requer alterar entry-point.
+
+### 4.3 Validacoes V1 (perfil `inventario`)
+
+#### G017 — NCM cadastro
 
 - **Risco:** `product.l10n_br_ncm_id=False` gera `<NCM>False</NCM>` no XML → SEFAZ cstat=225.
 - **Detecao:** query `product.product` com `l10n_br_ncm_id=False` para produtos da onda.
-- **Correcao:** cadastrar NCM via `l10n_br_ciel_it_account.ncm` (campo `codigo_ncm`, NAO `code` — quirk CIEL IT).
-- **Existe?** SIM — funcao `validar_cadastro_fiscal` em `09_executar_onda1_bulk.py:139-211`.
-- **Acao Skill 8:** capinar como sub-modo `--pre-flight` ou sub-skill nova `auditando-cadastro-fiscal-odoo`. **A DECIDIR (§10.5).**
+- **Correcao:** cadastrar NCM via `l10n_br_ciel_it_account.ncm` (campo `codigo_ncm`, NAO `code` — quirk CIEL IT). Default sub-skill: NAO auto-corrige (operador cadastra manual).
+- **Fonte existente:** funcao `validar_cadastro_fiscal` em `09_executar_onda1_bulk.py:139-211`.
 
-### 4.2 G035 — barcode invalido
+#### G035 — barcode invalido
 
 - **Risco:** `product.barcode` populado com `default_code` (ex: 9 digitos sem check digit GTIN-13) gera `<cEAN>` invalido → SEFAZ cstat=225.
-- **Detecao:** validar GTIN dos produtos da onda (existe `gtin_validator.py`).
-- **Correcao:** `odoo.write('product.product', [ids], {'barcode': False})`.
-- **Existe?** SIM — `gtin_validator.py` (caminho TBC em C5).
-- **Acao Skill 8:** integrar em `--pre-flight`.
+- **Detecao:** validar GTIN dos produtos da onda (existe `gtin_validator.py` em algum lugar de `scripts/` — confirmar caminho em C2/C5).
+- **Correcao:** `odoo.write('product.product', [ids], {'barcode': False})`. Opcional auto-corrigir via flag `--auto-corrigir-barcode` (default False).
 
-### 4.3 G018 — weight=0
+#### G018 — weight=0
 
 - **Risco:** `product.weight=0` bloqueia `action_liberar_faturamento` (F5c) silenciosamente.
 - **Detecao:** query `product.product.weight=0` para produtos da onda.
-- **Correcao:** **NAO** alterar `product.weight` (CIEL IT hook nao persiste — quirk). Em vez: escrever `stock.picking.l10n_br_peso_liquido` manualmente apos F5b e antes de F5c.
-- **Existe?** Workaround em script ad-hoc. NAO documentado em pre-flight isolado.
-- **Acao Skill 8:** integrar peso_liquido fix dentro de F5b/F5c (tratado dentro do atomo) + alertar no pre-flight quando produto tem weight=0.
+- **Correcao:** **NAO** alterar `product.weight` (CIEL IT hook nao persiste — quirk). Sub-skill apenas REPORTA. O fix (`stock.picking.l10n_br_peso_liquido` manual apos F5b) e' codificado DENTRO da Skill 8 F5b/F5c.
 
-### 4.4 Saida do pre-flight
+### 4.4 Output da sub-skill (formato estruturado)
 
-| Status | Acao operador |
-|--------|---------------|
-| `PRE_FLIGHT_OK` | bulk pode iniciar |
-| `PRE_FLIGHT_NCM_FALTANDO` | cadastrar NCMs antes (lista no relatorio) |
-| `PRE_FLIGHT_BARCODE_INVALIDO` | limpar barcode (operador autoriza correcao OU executa via `--auto-corrigir-barcode`) |
-| `PRE_FLIGHT_WEIGHT_ZERO` | warning so' (peso_liquido sera setado dentro do atomo) |
+| Campo | Valor |
+|-------|-------|
+| `status_global` | `PRE_FLIGHT_OK` / `PRE_FLIGHT_BLOQUEADO` |
+| `pode_faturar` | bool |
+| `bloqueios` | dict por categoria: `ncm_faltando` (lista produtos), `barcode_invalido` (lista produtos), `weight_zero` (lista — warning so) |
+| `acoes_aplicadas` | lista (se `--auto-corrigir-barcode`): `[{'produto_id': X, 'campo': 'barcode', 'valor_antes': '...', 'valor_depois': False}]` |
+| `relatorio_path` | caminho do CSV/JSON salvo |
+
+### 4.5 Integracao Skill 8 ↔ sub-skill
+
+- Skill 8 modo `--bulk` ou `--canary` chama subprocess da sub-skill com `--perfil inventario --ciclo <NOME>`.
+- Se `pode_faturar=False`: aborta com mensagem clara apontando bloqueios.
+- Se `pode_faturar=True`: prossegue para etapa A→B→C→D→E→F.
+- Operador pode rodar sub-skill ISOLADAMENTE (sem Skill 8) para auditoria/cleanup de cadastro.
+
+### 4.6 Status da sub-skill
+
+| Item | Status | Quando |
+|------|--------|--------|
+| Decisao tomada | ✅ | v13 (Rafael 2026-05-25) |
+| Contrato V0 | ✅ | esta secao §4 |
+| Implementacao service | ⬜ | v14 (C5 redefinido) |
+| Wrapper CLI | ⬜ | v14 (C5) |
+| Testes pytest | ⬜ | v14 (C5) |
+| SKILL.md | ⬜ | v14 (C5) |
+| Integracao com Skill 8 | ⬜ | v15 (C6 orchestrator base chama sub-skill) |
+| Cross-refs (subagente, ROUTING_SKILLS, etc.) | ⬜ | v14 (C5) |
 
 ---
 
@@ -346,11 +401,13 @@ done
 
 | Diferenca | Razao |
 |-----------|-------|
-| Etapas SEQUENCIAIS B→C→D→E→F (nao paralelo entre etapas) | F5d depende de F5c terminar; F5e depende de F5d achar invoice; etc. |
-| Paralelismo INTRA-etapa (B com Semaphore=5) | preservar — pattern do service e' performatico |
+| **Etapas SEQUENCIAIS com BARREIRA de sincronizacao** (B→C→D→E→F) | **DECISAO 10.3 (Rafael v13)**: fazer TUDO por etapa — todos os pickings, depois todas as validacoes, depois todas as emissoes. Mitiga DetachedInstanceError + SSL timeout. Cada etapa = barreira de sincronizacao (aguarda 100% completar antes de iniciar a proxima) |
+| Paralelismo INTRA-etapa (B com Semaphore=5) | preservar — pattern do service e' performatico e validado em PROD |
+| **NAO interleaving de ajustes entre etapas** | NAO rodar B→C→D em pipeline por ajuste (ajuste 1 vai B→C; ajuste 2 vai B→C; ...). Em vez: TODOS em B, depois TODOS em C, etc. Isso e' chave para reduzir SSL drop window. |
 | Polling F5d sequencial longo | nao paralelizar — Odoo CIEL IT rejeita concorrente |
 | F5e SEQUENCIAL (1 browser Playwright) | preservar — Playwright nao concorre |
 | Recovery loop fora do orchestrator (script shell?) | DECISAO: capinar como `--resume` modo CLI no proprio entry-point Python |
+| **F5a/F5b refatorados para atomos Skill 5** | **DECISAO 10.6 (Rafael v13)**: principio inviolavel "se mexe com picking, devera ser atraves da Skill 5". F5a vira `criar_picking_inter_company` na Skill 5; F5b vira `validar_picking_inter_company` na Skill 5. Skill 8 ORQUESTRA sequencia. |
 
 ### 6.3 Destino do orchestrator
 
@@ -368,9 +425,15 @@ done
 - Auditoria `OperacaoOdooAuditoria.registrar(pipeline_etapa='F5{a/b/c/d/e}_{action}', ...)`
 
 **Wrapper CLI**: `.claude/skills/faturando-odoo/scripts/faturar_pipeline.py`
-- Modos: `--pre-flight` / `--canary` / `--bulk` / `--resume` / `--consolidar`
-- Args: `--ciclo NOME` / `--company-id ID` / `--etapas LISTA` / `--confirmar-sefaz` / `--max-workers N` / `--max-iter N` / `--timeout-iter S` / `--limite N` / `--ajuste-id ID`
+- Modos: `--canary` / `--bulk` / `--resume` / `--consolidar` (NAO `--pre-flight` — esta na sub-skill `auditando-cadastro-fiscal-odoo`)
+- Args: `--ciclo NOME` / `--company-id ID` / `--etapas LISTA` / `--confirmar-sefaz` / `--max-workers N` / `--max-iter N` / `--timeout-iter S` / `--limite N` / `--ajuste-id ID` / `--pular-pre-flight` (default False, exige pre-flight OK)
 - Exit codes: 0 (OK) / 1 (falha negocial) / 2 (uso) / 4 (DRY_RUN_OK)
+
+**Sub-skill `auditando-cadastro-fiscal-odoo`** (a criar em v14 — C5 redefinido):
+- Caminho: `.claude/skills/auditando-cadastro-fiscal-odoo/SKILL.md`
+- Service base: `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (a criar — extrair logica de `09_executar_onda1_bulk.py:139-211` + `gtin_validator.py`)
+- Modos: `--perfil inventario` (V1) / futuros `--perfil venda-cliente` etc.
+- Wrapper CLI: `.claude/skills/auditando-cadastro-fiscal-odoo/scripts/auditar_cadastro.py`
 
 ---
 
@@ -389,13 +452,14 @@ done
 | # | Checkpoint | Entregavel | Criterio de aceite | Sessao prevista | Status | Notas |
 |---|-----------|-----------|-------------------|-----------------|--------|-------|
 | **C1** | Pre-mortem completo (§7.1) | secao §7.1 atualizada com 4 dimensoes x 6 etapas | Tabela de riscos com mitigacao codificavel | v13 | 🟡 | esta sessao |
-| **C2** | Mineracao detalhada `inventario_pipeline_service.py` | mapa metodos+linhas+helpers, conferir com cabecalho | Doc inline neste arquivo (§7.2) com referencia file:line | v14 | ⬜ | |
+| **C2** | Mineracao detalhada `inventario_pipeline_service.py` | mapa metodos+linhas+helpers, conferir com cabecalho | Doc inline neste arquivo (§7.2) com referencia file:line | ~~v14~~ **v13 mid** | ✅ | mapa completo + **9 descobertas-chave** D1-D9 documentadas |
 | **C3** | Mineracao `09_executar_onda1_bulk.py` (etapas A/B/E/F) | mapa etapas+funcoes+chamadas, conferir | Doc inline (§7.3) com referencia file:line | v14 | ⬜ | |
 | **C4** | Confirmar escopo completo (a/b/c) com Rafael | decisoes §10.1, §10.2 fechadas | Rafael confirmou via AskUserQuestion | v13 | ✅ | "estruturar bem, depois rodar casos reais" |
-| **C5** | Capinar pre-flight (G017+G035+G018) | sub-modulo `app/odoo/estoque/scripts/pre_flight_faturamento.py` ou integrado no orchestrator | smoke dry-run em onda real (sem write) | v14-v15 | ⬜ | decisao §10.5 |
+| **C5** | **Criar sub-skill `auditando-cadastro-fiscal-odoo` (perfil inventario V1)** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (service) + `.claude/skills/auditando-cadastro-fiscal-odoo/{SKILL.md,scripts/auditar_cadastro.py}` (CLI) + cross-refs (subagente + ROUTING_SKILLS + tool_skill_mapper) | smoke dry-run em onda real OK; >5 pytest verdes; --perfil inventario funcional | v14 | ⬜ | **REDEFINIDO v13 — decisao 10.5 RESOLVIDA (Rafael: pre-flight como sub-skill separada agnostica para reuso futuro em venda-cliente)** |
 | **C6** | Capinar orchestrator base (skeleton) | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` com entry-points (vazios), imports, dataclasses, constants | pytest smoke import OK | v15 | ⬜ | |
-| **C7** | Capinar F5a (criar pickings) | metodo `_executar_f5a` no orchestrator | 5+ pytest verdes; dry-run em onda real OK | v15 | ⬜ | reusar Skill 5 onde possivel |
-| **C8** | Capinar F5b (validar pickings) | metodo `_executar_f5b` + G018 peso_liquido + G011 qty_done | 5+ pytest verdes; dry-run OK | v15-v16 | ⬜ | |
+| **C6.5** | **NOVO v13 — Estender Skill 5 com atomos inter-company** (DECISAO 10.6) | `app/odoo/estoque/scripts/picking.py` ganha `criar_picking_inter_company` + `validar_picking_inter_company`; SKILL.md `operando-picking-odoo` estendida; pytest >5 verdes novos | dry-run PROD OK em 1 picking real; idempotencia validada | v15 | ⬜ | **NOVO checkpoint criado em v13 mid** |
+| **C7** | Capinar F5a no orchestrator (chamando atomo Skill 5 estendido) | metodo `_executar_etapa_b_criar` no orchestrator que itera ajustes em paralelo (Semaphore=5) chamando `criar_picking_inter_company` | 5+ pytest verdes; dry-run em onda real OK; barreira de sincronizacao validada | v15 | ⬜ | depende C6.5 |
+| **C8** | Capinar F5b no orchestrator (chamando atomo Skill 5 estendido) | metodo `_executar_etapa_b_validar` + chamada `validar_picking_inter_company` | 5+ pytest verdes; dry-run OK; G011 qty_done + G018 peso_liquido validados via Skill 5 | v15-v16 | ⬜ | depende C6.5 |
 | **C9** | Capinar F5c (liberar faturamento) | metodo `_executar_f5c` + pre-validar state='done' | 3+ pytest verdes; dry-run OK | v16 | ⬜ | |
 | **C10** | Capinar F5d (aguardar invoices) + G016 SSL + G007+G034+G029 | metodo `_executar_f5d` com sub-etapas .5/.6/.7 + commit_with_retry | 5+ pytest verdes; dry-run com mock SSL drop OK | v16 | ⬜ | |
 | **C11** | Capinar F5e (transmitir SEFAZ) + G016 SSL | metodo `_executar_f5e` Playwright serial + commit_with_retry + idempotencia F5e_SEFAZ_OK | 5+ pytest verdes (mockando Playwright); dry-run sem confirmar-sefaz OK | v16-v17 | ⬜ | |
@@ -466,24 +530,99 @@ done
 | Mock robo CIEL IT (cria invoice) dificil | mockar `odoo.search('account.move', ...)` apos sleep N |
 | Centralizar journals (847/1002/987) exige rodar pre-flight em todo o codigo legacy | tarefa ortogonal — adiar para Skill 7 ou pos-v20 |
 
-### 7.2 Mineracao service-fonte (C2 — preencher em v14)
+### 7.2 Mineracao service-fonte `inventario_pipeline_service.py` (C2 ✅ COMPLETA v13 mid)
 
-> Quando este checkpoint for executado, preencher com mapa metodo→linhas, dependencias, side-effects. Modelo:
+#### Mapa detalhado metodo → linhas → side-effects → deps
 
 | Metodo | Linhas | Side-effects | Deps Odoo | Deps DB | Notas |
 |--------|--------|--------------|-----------|---------|-------|
-| `resolver_location_destino` | 66-107 | (read-only) | constants | - | TBC |
-| `__init__` | 109-... | inicializa odoo conn | - | - | TBC |
-| `_commit_with_retry` | 165-202 | DB commit + rollback | - | session | G016 |
-| `_garantir_payment_provider` | 204-291 | write account.move | account.move | - | G029 |
-| `_garantir_fiscal_setup` | 293-... | write account.move + reset_to_draft+post | account.move | - | G034 |
-| `_corrigir_price_zero_em_invoice` | 401-... | write account.move.line | account.move.line | - | G007 |
-| `_registrar_op` | 523-... | insert auditoria | - | OperacaoOdooAuditoria | - |
-| `f5a_criar_pickings` | 581-... | create stock.picking + write moves | stock.picking, stock.move | AjusteEstoqueInventario | paralelo |
-| `f5b_validar_pickings` | 774-... | action_assign + qty_done + button_validate | stock.picking, stock.move.line | AjusteEstoqueInventario | paralelo, agrupado |
-| `f5c_liberar_faturamento` | 882-... | action_liberar_faturamento | stock.picking | AjusteEstoqueInventario | paralelo |
-| `f5d_aguardar_invoices` | 945-... | search account.move + _garantir_* | account.move | AjusteEstoqueInventario | polling longo |
-| `f5e_transmitir_sefaz` | 1116-... | Playwright transmit + write account.move | account.move | AjusteEstoqueInventario | serial, irreversivel |
+| `resolver_location_destino` | 66-107 | (READ-only — resolver) | constants `LOCATION_DESTINO_*` | - | Resolve stock.location.id por (tipo_op, company_origem). G023: dest precisa ser virtual (company_id=False) |
+| `__init__` | 109-119 | inicializa odoo conn + Semaphore | `get_odoo_connection()` | - | Args: `max_concurrent=5`, `max_workers=10` |
+| Class constants `PAYMENT_PROVIDER_SEM_PAGAMENTO` | 125 | - | `ids_diversos` | - | G029 — id=38 SEM PAGAMENTO |
+| Class constants `FISCAL_SETUP_POR_ACAO` | 143-159 | - | - | - | G034 — 3 acoes DEV mapeadas (LF_FB sem precedente) |
+| `_commit_with_retry` | 165-202 | DB commit + rollback + close | - | session | **G016 Opcao B** — try OperationalError + rollback+close+retry (max 2) |
+| `_garantir_payment_provider` | 204-291 | read+write account.move (com reset_to_draft+post fallback) | account.move | OperacaoOdooAuditoria | **G029 F5d.5** — idempotente; fallback se write em posted falhar |
+| `_garantir_fiscal_setup` | 293-399 | read+write account.move + reset_to_draft+post | account.move | OperacaoOdooAuditoria | **G034 F5d.7** — guard pre-state autorizado bloqueia; nao altera journal pos-post |
+| `_corrigir_price_zero_em_invoice` | 401-506 | read account.move.line + reset_to_draft + write + post | account.move, product.product, account.move.line | OperacaoOdooAuditoria | **G007 F5d.6** — fallback standard_price ou 0.01; retorna count corrigidas |
+| `_resolver_picking_type` | 508-521 | - (lookup) | constants `PICKING_TYPE_POR_DIRECAO` | - | ValueError se sem mapeamento |
+| `_registrar_op` | 523-575 | insert | - | OperacaoOdooAuditoria | external_id unique INV-{ciclo}-A{id:06d}-{fase}-{uuid8} |
+| `f5a_criar_pickings` | 581-754 | create stock.picking + write moves | stock.picking, stock.move, product.product | AjusteEstoqueInventario (UPDATE picking_id_odoo + fase_pipeline) | **PARALELO** Semaphore=5; SNAPSHOT antes threads; idempotente via picking_id_existente; usa `picking_svc.criar_transferencia` |
+| `_agrupar_por_picking` | 760-772 | - (utility) | - | - | Suporta N ajustes/picking (1 picking pode ter N produtos) |
+| `f5b_validar_pickings` | 774-876 | confirmar_e_reservar + preencher_qty_done + ajustar_qty_done + validar | stock.picking, stock.move.line | AjusteEstoqueInventario (UPDATE fase_pipeline) | **PARALELO** Semaphore=5; agrupado por pid; **bug L19/L20/L21 fix**: preencher_qty_done ENTRE action_assign e ajustar; G023: `linhas_esperadas` para `validar()` |
+| `f5c_liberar_faturamento` | 882-939 | action_liberar_faturamento | stock.picking | AjusteEstoqueInventario (UPDATE fase_pipeline) | **PARALELO** Semaphore=5; agrupado por pid; dispara robo CIEL IT |
+| `f5d_aguardar_invoices` | 945-1102 | polling search account.move + sub-etapas .5/.6/.7 | account.move | AjusteEstoqueInventario (UPDATE fase_pipeline + invoice_id_odoo) | **POLLING LONGO** 1800s/40s; SNAPSHOT meta antes; `db.session.get` re-fetch pos-resolved; G016 commit antes+depois |
+| `f5e_transmitir_sefaz` | 1116-1346 | Playwright transmit + write account.move | account.move | AjusteEstoqueInventario (UPDATE fase_pipeline + chave_nfe + status) | **SERIAL** 1 browser; idempotencia TRIPLA; HARD_FAIL_CONFIG abort batch; G016 commit antes+depois cada NF; re-fetch via db.session.get |
+
+#### Descobertas-chave (padroes a PRESERVAR no orchestrator Skill 8)
+
+**D1 — Pattern SNAPSHOT antes de threads** (F5a L599-616):
+```python
+snapshots = [{'id': a.id, 'acao_decidida': a.acao_decidida, ...} for a in ajustes]
+def _odoo_io(snap): ...  # threads SO fazem Odoo I/O, sem tocar DB local
+# DB writes na main thread (apos as_completed)
+```
+**Razao**: evita problemas de pool de conexao + savepoint isolado em tests + SQLAlchemy `DetachedInstanceError`. **APLICAR em F5b/F5c quando estender Skill 5 (C6.5).**
+
+**D2 — Agrupamento por picking** (`_agrupar_por_picking` L760-772):
+1 picking pode ter N ajustes (N produtos no mesmo picking inter-company). Pattern: dict `{picking_id: [ajustes...]}`. **Marca fase em TODOS os ajustes do mesmo picking.** Preservar em qualquer etapa que opera por picking.
+
+**D3 — Bug L19/L20/L21 fix em F5b** (L795-799 docstring):
+Sem `preencher_qty_done` ENTRE `action_assign` e `ajustar_qty_done_pelo_disponivel`, move_lines ficam com qty_done=0 → cascateia em peso_liquido=0 (L20) e volumes=0 (L21) → F5c falha em `action_liberar_faturamento`. **Sequencia codificada e' inviolavel.** Codificar em `validar_picking_inter_company` da Skill 5 (C6.5).
+
+**D4 — G023 `linhas_esperadas` em F5b validate** (L837-840):
+Passar `linhas_esperadas` para `validar()` consolida move_lines antes de `button_validate` — descarta reservas em lotes nao planejados pos-renomeacao via ETAPA A. Importante quando ETAPA A renomeia lotes MIGRACAO → lote canonico.
+
+**D5 — Pattern SNAPSHOT meta antes de polling longo** (F5d L972-975):
+```python
+ajustes_meta_por_pid = {
+    pid: [{'id': a.id, 'ciclo': a.ciclo} for a in lista]
+    for pid, lista in ajustes_por_pid.items()
+}
+```
+**Razao G016**: sessao pode expirar em SSL idle timeout durante esperas de 30min. Apos resolved, faz `db.session.get(AjusteEstoqueInventario, meta['id'])` para re-fetch. **APLICAR em qualquer etapa com loop >5min.**
+
+**D6 — Sub-etapas F5d.5/.6/.7 em try/except** (F5d L1031-1066):
+- F5d.5: `_garantir_payment_provider` (G029) — falha vira warning
+- F5d.6: `_corrigir_price_zero_em_invoice` (G007) — falha vira warning
+- F5d.7: `_garantir_fiscal_setup` (G034 DEV_*) — falha vira warning
+**Falha individual NAO derruba o ajuste** — pode tentar transmissao SEFAZ mesmo assim. Pattern arquitetural: sub-etapas idempotentes que melhoram sucesso da F5e mas nao bloqueiam.
+
+**D7 — `HARD_FAIL_CONFIG_ERRORS` em F5e** (L1110-1114):
+```python
+HARD_FAIL_CONFIG_ERRORS = {
+    'playwright_indisponivel',
+    'odoo_password_ausente',
+    'odoo_username_ausente',
+}
+```
+Estes 3 erros + `tentativas == 0` **ABORTA o batch inteiro** via `raise RuntimeError`. Operador precisa intervir manualmente. **Preservar lista no orchestrator.**
+
+**D8 — Idempotencia TRIPLA em F5e**:
+1. Por ajuste: `if not inv_id` → SKIP (sem invoice_id_odoo do F5d)
+2. Por invoice no batch: `if inv_id in invoices_processadas` — 1 invoice = 1 transmissao SEFAZ
+3. Por persistencia: `if aj.fase_pipeline == 'F5e_SEFAZ_OK' or aj.status == 'EXECUTADO'`
+**Crucial para recovery** — `--resume` re-roda F5e sem re-transmitir o que ja' foi enviado.
+
+**D9 — Pattern `db.session.get` re-fetch + `_commit_with_retry`** (F5e L1230-1237, L1326-1332):
+Apos Playwright (5-10min), sessao pode estar morta. Re-fetch via `db.session.get(AjusteEstoqueInventario, ajuste_id_local)`. Se retornar `None` (ajuste deletado), log error + continue. **Sempre apos operacao longa: re-fetch + commit_with_retry.**
+
+#### Achados secundarios
+
+- **`MED C-1`** (L1269-1275): `situacao_nf != 'autorizado'` mas `sucesso=True` (caso `excecao_autorizado`) — registrar em `aj.erro_msg` para audit fiscal, NAO marca como falha.
+- **`MED C-2`** (L1294-1302): persistir `cstat`+`xmotivo` de `ultimo_estado` na falha SEFAZ — campo mais acionavel.
+- **`MED B-2`** (L1155-1168): skip silencioso virou WARNING — sinal de F5d timeout (sem invoice_id_odoo).
+- `transmitir_nfe_via_playwright` esta em `app.recebimento.services.playwright_nfe_transmissao` — modulo externo a esta skill (reutilizar como esta).
+- `picking_svc` injetado via construtor (default `StockPickingService(odoo=self.odoo)`) — facil mockar em testes.
+
+#### Dependencias externas confirmadas
+
+| Dependencia | Tipo | Onde |
+|-------------|------|------|
+| `StockPickingService` | service legado | `app.odoo.services.stock_picking_service` (provavelmente SHIM para `app/odoo/estoque/scripts/picking.py`) |
+| `transmitir_nfe_via_playwright` | funcao Playwright | `app.recebimento.services.playwright_nfe_transmissao` — **NAO mexer**, reutilizar como esta |
+| `OperacaoOdooAuditoria.registrar` | helper de auditoria | `app.odoo.models.OperacaoOdooAuditoria` — schema fixo (external_id unique) |
+| `AjusteEstoqueInventario` | model SQLAlchemy | `app.odoo.models.AjusteEstoqueInventario` — UPDATE de `picking_id_odoo`, `fase_pipeline`, `invoice_id_odoo`, `chave_nfe`, `status`, `erro_msg` |
+| `MATRIZ_INTERCOMPANY`, `PICKING_TYPE_POR_DIRECAO`, `COMPANY_LOCATIONS`, `COMPANY_PARTNER_ID`, `ids_diversos` | constants | `app.odoo.constants` |
 
 ### 7.3 Mineracao script-fonte (C3 — preencher em v14)
 
@@ -530,31 +669,65 @@ done
 - **Decisao**: Estruturar antes; casos reais agendados para apos C18.
 - **Razao Rafael**: "tenho casos em todas as direcoes; primeiro estruturar".
 
-### 10.3 ⬜ Pattern paralelismo (PENDENTE v14)
-- **Opcoes**:
-  - (a) Preservar Semaphore=5 do service atual (paraleliza F5a, F5b, F5c por picking_id)
-  - (b) Refatorar para pattern Skill 6 v9 (ThreadPoolExecutor por ajuste com app_context+conn proprios)
-- **Recomendacao**: (a) — pattern do service e' eficiente, validado em PROD em ondas anteriores. (b) so' se houver evidencia de starvation.
+### 10.3 ✅ Pattern paralelismo (RESOLVIDO v13)
+- **Decisao**: (a) **Preservar Semaphore=5 do service atual** — paraleliza DENTRO de cada etapa; sequencializa ENTRE etapas (barreira de sincronizacao).
+- **Razao Rafael v13 2026-05-25**: "fazer tudo por etapa — todos os pickings, todas as validacoes, todas emissoes de fatura, etc.". Razao concreta: DetachedInstanceError e SSL connection timeout sao agravados por loops longos com state DB compartilhado. Etapas curtas e atomicas reduzem janela de exposicao.
+- **Pattern arquitetural** (consolidando):
+  - **Por etapa**: F5a (todos pickings em paralelo Semaphore=5) → RETORNA → F5b (todas validacoes em paralelo Semaphore=5) → RETORNA → F5c (...) → RETORNA → F5d (polling longo SEQUENCIAL) → RETORNA → F5e (SEFAZ Playwright SEQUENCIAL 1 browser) → RETORNA → E → F.
+  - **Cada etapa eh uma barreira de sincronizacao**: aguarda 100% completar antes de iniciar a proxima.
+  - **DentroDaEtapa: Semaphore=5** (paraleliza ate 5 ajustes simultaneamente).
+  - **EntreEtapas: serial** (nao ha' interleaving de ajustes entre etapas).
+- **Mitigacoes** de DetachedInstanceError + SSL drop:
+  - G016 codificado: `_commit_with_retry` antes de cada operacao longa + re-fetch via `db.session.get(AjusteEstoqueInventario, ajuste_id)` apos.
+  - Etapas longas (F5d 1800s, F5e Playwright 5-10min/NF) tem re-fetch explicito.
+  - TCP keepalive em `config.py:115-118` (ja' configurado).
+- **Smoke obrigatorio em pytest**: simular SSL drop mid-etapa via mock + verificar re-fetch correto.
 
-### 10.4 ⬜ Centralizar journals (847/1002/987) (PENDENTE v14)
-- **Opcoes**:
-  - (a) Sim, nesta skill — criar `app/odoo/constants/journals.py` em C6
-  - (b) Nao, adiar para Skill 7 (escriturando) que tambem precisa
-  - (c) Nao, deixar inline no orchestrator
-- **Recomendacao**: (b) — escopo Skill 8 ja' grande, tarefa ortogonal.
+### 10.4 ✅ Centralizar journals (847/1002/987) (RESOLVIDO v13)
+- **Decisao**: (b) **Adiar para Skill 7 escriturando** que tambem precisa.
+- **Razao Rafael v13**: adiar (recomendacao aceita).
+- **Implicacao operacional**:
+  - Skill 8 v1: usa inline com comentarios `# journal_id=847 (VND)` quando necessario.
+  - Quando Skill 7 capinar, criar `app/odoo/constants/journals.py` ENTAO + tarefa de migracao para Skill 8 (~1 PR doc-only).
+  - Sem bloqueador imediato — pattern atual do service ja' funciona.
 
-### 10.5 ⬜ Pre-flight como sub-skill ou entry-point (PENDENTE v14)
-- **Opcoes**:
-  - (a) Sub-skill nova `auditando-cadastro-fiscal-odoo` (orquestrada pelo Skill 8)
-  - (b) Entry-point `--pre-flight` no proprio `faturar_pipeline.py`
-  - (c) Helper privado dentro do orchestrator (chamado automaticamente antes do bulk)
-- **Recomendacao**: (b) — minimiza fragmentacao; suficiente para v1.
+### 10.5 ✅ Pre-flight como sub-skill OU entry-point (RESOLVIDO v13)
+- **Decisao**: (a) **Sub-skill nova `auditando-cadastro-fiscal-odoo`** (orquestrada pela Skill 8).
+- **Razao Rafael v13 2026-05-25**: podem haver no futuro **faturamentos para cliente** (vendas comerciais, nao so' inventario inter-company) cujo pre-flight tera regras DIFERENTES (certificado A1, IE destinatario, tabela preco, FCI). Ter pre-flight INVENTARIO como entry-point da Skill 8 amarra as duas coisas e bloqueia reuso futuro.
+- **Implicacao operacional**:
+  - C5 redefinido: criar sub-skill nova em v14 (era "integrar pre-flight em Skill 8")
+  - Sub-skill tem perfis multiplos (`--perfil inventario` V1; futuros `--perfil venda-cliente` etc.)
+  - Skill 8 INVOCA via subprocess (delegacao limpa)
+  - Operador pode rodar sub-skill ISOLADAMENTE (sem Skill 8) para auditoria de cadastro
+  - +1 sessao no cronograma global (7-9 sessoes em vez de 6-8)
+- **Cross-refs a atualizar quando criar (C5 v14)**:
+  - subagente `gestor-estoque-odoo` (adicionar `auditando-cadastro-fiscal-odoo` ao skills lista)
+  - `ROUTING_SKILLS.md` (incluir nova skill, +1 invocavel)
+  - `tool_skill_mapper.py` (mapear `'auditando-cadastro-fiscal-odoo': 'Estoque Odoo (Audit)'` ou similar)
+  - `CLAUDE.md` raiz (Skills WRITE + Skills READ — defaultly READ-only)
+  - `app/odoo/estoque/CLAUDE.md` §6 catalogo (Skills READ ancillary — passa de 1 para 2: `consultando-quant-odoo` + `auditando-cadastro-fiscal-odoo`)
 
-### 10.6 ⬜ Refatorar F5a/F5b para reusar Skill 5 (PENDENTE v15)
-- **Opcoes**:
-  - (a) Sim — F5a vira `picking.criar_picking_inter_company`; F5b vira `picking.validar_picking_com_pre_validacao_state`
-  - (b) Nao — manter F5a/F5b especificos do pipeline (sao pesados, com qty_done agrupado)
-- **Recomendacao**: (b) — overhead de generalizacao maior que beneficio.
+### 10.6 ✅ Refatorar F5a/F5b para reusar Skill 5 (RESOLVIDO v13)
+- **Decisao**: (c) **REFATORAR COMPLETAMENTE** — F5a vira atomo novo na Skill 5 `criar_picking_inter_company`; F5b vira atomo novo `validar_picking_inter_company`.
+- **Razao Rafael v13 2026-05-25**: principio arquitetural inviolavel — "Se mexe com picking, devera ser atraves da Skill 5". "Devemos seguir o principio da atomicidade e funcao especifica". "Fluxo >> Skills (esta registrado, apenas SIGA)".
+- **Implicacao arquitetural**:
+  - **Skill 5 estendida** com 2 atomos novos para inter-company:
+    - `criar_picking_inter_company(args) -> picking_id` (F5a) — encapsula G004 partner_id + G023 company_id forcado em moves + carrier + incoterm
+    - `validar_picking_inter_company(picking_id, qty_done_map, peso_liquido_map) -> bool` (F5b) — encapsula G011 qty_done + G018 peso_liquido + G019/G020 idempotencia
+  - **F5c `liberar_faturamento`** pode ir tambem para Skill 5 ou ficar na Skill 8 (decidir em v14 — mas inclinacao para Skill 5: e' operacao em picking).
+  - **F5d/F5e** permanecem na Skill 8 (operam em `account.move`, nao picking).
+- **Atualizacao do cronograma**:
+  - v14 inclui PLANEJAR extensao da Skill 5 (especificar 2-3 atomos novos no SKILL.md existente)
+  - v15 EXECUTA: primeiro estende Skill 5 (~1 dia), depois implementa orchestrator Skill 8 que usa
+  - Possivel +1 sessao se atomos novos exigirem mais cuidado (pytest >5 verdes + dry-run PROD)
+- **Risco mitigado**: refatoracao FRESCA (capinando de inventario_pipeline_service.py) reduz risco — nao mexe em codigo legacy de Skill 5, apenas ADICIONA atomos.
+- **Cross-refs a atualizar quando criar atomos novos (em v15)**:
+  - `app/odoo/estoque/scripts/picking.py` (adicionar 2 funcoes top-level)
+  - `.claude/skills/operando-picking-odoo/SKILL.md` (estender contrato com 2 novos atomos)
+  - testes pytest em `tests/odoo/services/test_stock_picking_service.py` (adicionar >5 verdes)
+  - subagente `gestor-estoque-odoo` (atualizar listagem Skill 5 com novos atomos)
+  - VALIDACAO_FINAL_SESSAO.md §17+ (nova entrada documentando extensao)
+  - memoria `[[skill5_picking_pattern]]` (atualizar com inter-company)
 
 ---
 
@@ -562,16 +735,16 @@ done
 
 | Sessao | Foco | Checkpoints | Risco |
 |--------|------|-------------|-------|
-| **v13 (esta)** | Planejamento + estruturacao | C1, C4 | Baixo (sem codigo) |
-| **v14** | Mineracao + decisoes 10.3/10.4/10.5 + pre-flight C5 | C2, C3, C5 (parcial) | Baixo |
-| **v15** | Orchestrator base + F5a + F5b | C6, C7, C8 | Medio (mexe service pattern) |
+| **v13 (esta)** | Planejamento + estruturacao + decisao 10.5 (pre-flight sub-skill) | C1, C4 | Baixo (sem codigo) |
+| **v14** | Mineracao detalhada + decisoes 10.3/10.4/10.6 + **criar sub-skill `auditando-cadastro-fiscal-odoo`** | C2, C3, **C5** | Baixo-Medio (cria service novo) |
+| **v15** | **Estender Skill 5 (atomos inter-company)** + Orchestrator base + F5a + F5b (Skill 8 invoca sub-skill C5 no bulk + chama atomos novos Skill 5) | C6, **C6.5**, C7, C8 | Medio-Alto (mexe service + estende skill madura) |
 | **v16** | F5c + F5d (com G016+G007+G034+G029) | C9, C10 | Medio (SSL pattern critico) |
 | **v17** | F5e + etapas E/F | C11, C12, C13 | Alto (SEFAZ Playwright, G023) |
 | **v18** | Recovery + SKILL.md + tests + smokes | C14, C15, C16, C17 | Medio |
 | **v19** | Folhas fluxos + cross-refs + Canary | C18, C19, C20 | Alto (PRIMEIRA NF real) |
 | **v20+** | Bulk + code-review + commit final | C21, C22, C23 | Alto (volume real) |
 
-**Total estimado: 8 sessoes**. Pode estender se canary C20 revelar gaps nao previstos.
+**Total estimado: 8 sessoes** (sub-skill C5 fica em v14 sem expandir cronograma). Pode estender se canary C20 revelar gaps nao previstos OU se sub-skill `auditando-cadastro-fiscal-odoo` exigir validacao mais profunda em v14.
 
 ---
 
@@ -587,8 +760,42 @@ done
 - ✅ Mapeamento SSL/timeout: G016 codificado (commit_with_retry+re-fetch+TCP keepalive) + recovery scripts fat_lf_resume*.sh (timeout 900 + idempotencia fase_pipeline + stagnation detector)
 - ✅ **C1 — Pre-mortem completo** registrado (§7.1, 4 dimensoes x todas etapas)
 - ✅ **C4 — Escopo confirmado**: pipeline COMPLETO A-F em N sessoes
-- ⬜ Resto dos checkpoints pendentes para v14+
 - 🟡 Documento PLANEJAMENTO_SKILL8_FATURANDO.md criado (esta versao)
+- ✅ Commit `63d817d5`: docs(estoque) v13 — planejamento Skill 8 + ROADMAP HANDOFF + CLAUDE.md atualizado
+- ✅ **AskUserQuestion v13 mid**: avancar A+B+C nesta sessao (~70k tokens)
+- ✅ **Decisao 10.5 RESOLVIDA** (mid-sessao v13): pre-flight como **sub-skill nova `auditando-cadastro-fiscal-odoo`** (Rafael: razao = futuros faturamentos para cliente terao pre-flight diferente; agnostica com perfis multiplos)
+- ✅ **Refatoracoes §2.2/§2.3/§4/§6.3/§7C5/§10.5/§11** aplicadas:
+  - §2.2: pre-flight saiu de "Entra na Skill 8", virou invocacao via subprocess
+  - §2.3: pre-flight delegado para sub-skill nova
+  - §4: reescrita inteira como "DELEGADO" + contrato V0 da sub-skill + perfis multiplos
+  - §6.3: orchestrator nao tem `--pre-flight`, mas tem `--pular-pre-flight` opcional
+  - §7 C5: redefinido para criar a sub-skill (em vez de integrar pre-flight em Skill 8)
+  - §10.5: RESOLVIDA com razao + cross-refs a atualizar em C5
+  - §11: v14 inclui criacao da sub-skill (cabe sem expandir cronograma global)
+- ✅ **AskUserQuestion v13 B**: 3 decisoes adicionais resolvidas:
+  - **10.3 paralelismo**: PRESERVAR Semaphore=5 + ETAPA = BARREIRA DE SINCRONIZACAO (mitiga DetachedInstanceError + SSL drop conforme Rafael)
+  - **10.4 journals**: ADIAR para Skill 7 escriturando
+  - **10.6 F5a/F5b**: REFATORAR COMPLETAMENTE — atomos novos na Skill 5 (`criar_picking_inter_company` + `validar_picking_inter_company`) seguindo principio "Fluxo >> Skills"
+- ✅ **Refatoracoes adicionais aplicadas** (apos B):
+  - §6.2: pattern de etapa-barreira documentado + F5a/F5b via Skill 5
+  - §7: novo checkpoint **C6.5** (estender Skill 5 com atomos inter-company); C7/C8 reescritos para chamar atomos Skill 5
+  - §10.3/§10.4/§10.6: RESOLVIDAS com razao + implicacoes operacionais + cross-refs
+  - §11: v15 expandido com C6.5
+  - §0: 6 decisoes RESOLVIDAS; pattern arquitetural FINAL declarado
+- ✅ **C2 — Mineracao detalhada `inventario_pipeline_service.py` COMPLETA** (mid-sessao):
+  - Tabela §7.2 com 14 metodos+linhas+side-effects+deps (cabecalho L1-L575 + F5a L581-754 + F5b L774-876 + F5c L882-939 + F5d L945-1102 + F5e L1116-1346)
+  - **9 descobertas-chave D1-D9** documentadas como padroes a PRESERVAR no orchestrator:
+    - D1: SNAPSHOT antes de threads (evita DetachedInstanceError)
+    - D2: agrupamento por picking (N ajustes/picking)
+    - D3: bug L19/L20/L21 fix (preencher_qty_done sequencia)
+    - D4: G023 `linhas_esperadas` em validate
+    - D5: SNAPSHOT meta + `db.session.get` re-fetch em polling longo
+    - D6: sub-etapas F5d.5/.6/.7 em try/except (falha individual nao derruba)
+    - D7: `HARD_FAIL_CONFIG_ERRORS` aborta batch
+    - D8: idempotencia TRIPLA em F5e (sem inv_id, batch, persistencia)
+    - D9: `db.session.get` re-fetch + `_commit_with_retry` apos Playwright
+  - Achados secundarios MED-B-2 / MED-C-1 / MED-C-2 + dependencias externas listadas
+- ⬜ Resto dos checkpoints pendentes para v14+ (mineracao C3 do script 09_* + sub-skill C5)
 
 ### Sessao v14 (futuro)
 - [adicionar quando ocorrer]
