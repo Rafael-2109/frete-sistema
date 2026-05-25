@@ -436,8 +436,36 @@ def test_distribui_fallback_modo_b_quando_lote_origem_eq_destino(service):
     assert 'fallback Modo B' in resultado_fallback.get('_fallback_motivo', '')
 
 
+def test_distribui_fallback_modo_b_NAO_aplicado_se_lote_nao_eh_migracao(service):
+    """S1-pre-mortem mitigation v12: deteccao DUPLA — msg match AND lote eh MIGRACAO.
+
+    Sem o filtro semantico (lote MIGRACAO), uma mensagem 'lot_id_origem ==
+    lot_id_destino' vinda de OUTRO contexto (ex.: bug futuro do atomo)
+    aplicaria fallback Modo B em quant errado e moveria o produto pra Indisp
+    indevidamente. Filtro adicional `is_migracao(lote_name)` impede.
+    """
+    quants = [
+        _mk_quant(101, 60001, '139/26', 8, 10),  # LOTE REAL, NAO migracao
+    ]
+    with patch.object(service, '_listar_quants_origem', return_value=quants), \
+         patch.object(service, 'transferir_para_indisponivel') as mk_t, \
+         patch.object(service, 'transferir_entre_locations') as mk_b:
+        # Atomo levanta mensagem com substring que casa, MAS lote NAO eh MIGRACAO
+        mk_t.side_effect = ValueError(
+            'lot_id_origem == lot_id_destino (mensagem fake nao-MIGRACAO)'
+        )
+        res = service.distribuir_para_indisponivel(
+            product_id=1, company_id=1, qty_solicitada=10, dry_run=True,
+        )
+    # Fallback Modo B NAO foi tentado (lote nao eh MIGRACAO)
+    assert mk_b.call_count == 0
+    # Quant 101 pulado normalmente
+    assert len(res['quants_pulados']) == 1
+    assert 'ValueError' in res['quants_pulados'][0]['motivo']
+
+
 def test_distribui_fallback_modo_b_falha_pula_quant(service):
-    """S1 v12: se fallback Modo B tambem falhar, pula quant com motivo composto."""
+    """S1 v12: se fallback Modo B tambem falhar (exception), pula quant com motivo composto."""
     quants = [
         _mk_quant(101, 30544, 'MIGRAÇÃO', 8, 1),
         _mk_quant(102, 60002, '138/26', 8, 1093),
@@ -453,17 +481,100 @@ def test_distribui_fallback_modo_b_falha_pula_quant(service):
         res = service.distribuir_para_indisponivel(
             product_id=1, company_id=1, qty_solicitada=1094, dry_run=True,
         )
-    # Fallback Modo B foi tentado mas falhou
     assert mk_b.call_count == 1
     assert res['status'] == 'DRY_RUN_PARCIAL'
     assert res['qty_movida'] == 1093.0
     assert res['qty_nao_movida'] == 1.0
-    # Quant 101 pulado com motivo composto
     assert len(res['quants_pulados']) == 1
     pulado = res['quants_pulados'][0]
     assert 'modo C + fallback Modo B falharam' in pulado['motivo']
-    assert 'lot_id_origem' in pulado['motivo']
+    assert 'B (exception)' in pulado['motivo']
     assert 'reservada' in pulado['motivo']
+
+
+def test_distribui_fallback_modo_b_retorna_falha_dict_pula_quant(service):
+    """F1 v12-CR: Modo B retorna {'status': 'FALHA_AUMENTO'} sem exception.
+
+    Este eh o caso critico do code-review: Modo B pode retornar dict de
+    falha em vez de levantar exception. ANTES do fix, esse dict era
+    tratado como sucesso (fallback_aplicado=True) e o quant aparecia em
+    `transferencias` com qty_movida=0 mas o `quants_pulados` ficava vazio
+    — operador nao percebe que houve estado parcial em PROD (origem JA
+    reduzida, destino nao creditado).
+
+    APOS o fix: status nao OK em res_b -> pular quant com motivo composto
+    + reportar qty_reduzida_origem_modo_b.
+    """
+    quants = [
+        _mk_quant(101, 30544, 'MIGRAÇÃO', 8, 1),
+    ]
+    res_b_falha = {
+        'status': 'FALHA_AUMENTO',
+        'qty_transferida': 0.0,
+        'qty_reduzida_origem': 1.0,  # PROD: origem ja foi reduzida em 1 un
+        'reducao_origem': {'status': 'EXECUTADO'},
+        'aumento_destino': {'status': 'FALHA_QUANT_VAZIO'},
+        'location_id_origem': 8,
+        'location_id_destino': 31088,
+        'lot_id': 30544,
+        'erro': 'destino nao creditado por X',
+        'tempo_ms': 100,
+    }
+    with patch.object(service, '_listar_quants_origem', return_value=quants), \
+         patch.object(service, 'transferir_para_indisponivel') as mk_t, \
+         patch.object(service, 'transferir_entre_locations') as mk_b:
+        mk_t.side_effect = ValueError(
+            'lot_id_origem == lot_id_destino MIGRACAO (30544)'
+        )
+        mk_b.return_value = res_b_falha
+        res = service.distribuir_para_indisponivel(
+            product_id=1, company_id=1, qty_solicitada=1, dry_run=False,
+        )
+    assert mk_b.call_count == 1
+    # quant 101 deve estar em quants_pulados (NAO em transferencias)
+    assert len(res['transferencias']) == 0
+    assert len(res['quants_pulados']) == 1
+    pulado = res['quants_pulados'][0]
+    assert 'modo C + fallback Modo B falharam' in pulado['motivo']
+    assert "'FALHA_AUMENTO'" in pulado['motivo']
+    assert pulado.get('qty_reduzida_origem_modo_b') == 1.0
+    # qty_movida total deve ser 0 (nada moveu)
+    assert res['qty_movida'] == 0
+    assert res['qty_nao_movida'] == 1
+    assert res['status'] == 'EXECUTADO_PARCIAL'
+
+
+def test_distribui_fallback_NAO_tentado_se_company_sem_indisp(service):
+    """F4 v12-CR: company_id sem entrada em LOCAIS_INDISPONIVEL ->
+    motivo distinto de erro generico do atomo C.
+
+    Antes do fix: silencio (cai no caminho generico com motivo 'atomo
+    levantou ValueError') — operador nao sabia que nao tentamos fallback.
+
+    Apos fix: motivo distinto reporta o gap de mapeamento.
+    """
+    quants = [
+        _mk_quant(101, 999, 'MIGRAÇÃO', 100, 1),  # lote MIGRACAO, mas company=99 (nao mapeada)
+    ]
+    with patch.object(service, '_listar_quants_origem', return_value=quants), \
+         patch.object(service, 'transferir_para_indisponivel') as mk_t, \
+         patch.object(service, 'transferir_entre_locations') as mk_b, \
+         patch.object(service, '_locs_default_origem' if False else '_ordenar_quants_origem', return_value=quants):
+        mk_t.side_effect = ValueError(
+            'lot_id_origem == lot_id_destino MIGRACAO (999)'
+        )
+        # company_id=99 nao esta em LOCAIS_INDISPONIVEL (FB=1, SC=3, CD=4, LF=5)
+        res = service.distribuir_para_indisponivel(
+            product_id=1, company_id=99, qty_solicitada=1, dry_run=True,
+            locs_origem=[100],  # custom — company 99 nao tem default
+        )
+    # Fallback Modo B NAO foi chamado (loc_indisp == None)
+    assert mk_b.call_count == 0
+    # Quant 101 pulado com motivo F4 distinto
+    assert len(res['quants_pulados']) == 1
+    pulado = res['quants_pulados'][0]
+    assert 'sem entrada em LOCAIS_INDISPONIVEL' in pulado['motivo']
+    assert 'company_id=99' in pulado['motivo']
 
 
 def test_distribui_falha_aumento_em_meio_continua_tentando_outros(service):

@@ -88,6 +88,7 @@ CASAS_DECIMAIS = 6
 _STATUS_FALHA = {
     'FALHA_PRE_COND', 'FALHA_SEM_QUANT', 'FALHA_PARCIAL_NAO_TOLERADO',
     'FALHA_PRODUTO',  # erro orquestrador (cod nao existe)
+    'BLOQUEADO_SERIAL',  # F2 v12-CR: produto tracking=serial, nao se moveu nada
 }
 _STATUS_PARCIAL = {'EXECUTADO_PARCIAL', 'DRY_RUN_PARCIAL'}
 _STATUS_OK_TOTAL = {'EXECUTADO_TOTAL', 'DRY_RUN_OK'}
@@ -436,14 +437,59 @@ def _executar_cleanup_pos_bulk(
         for q in quants_qty_neg
     ]
 
-    # 2. Zerar reserveds residuais
+    # 2. Zerar reserveds residuais — COM GUARD "MOs ativas"
+    # (mitigacao S2-pre-mortem v12): se um quant com reserved<0 tem ML
+    # ativa (state assigned/partially_available), pode ser reserva
+    # LEGITIMA com sinal errado (raro mas possivel). Skill 9
+    # `listar_move_lines_por_quant` faz cross-ref via tupla (G030).
+    # Excluir esses quants do zerar_residual e reportar em
+    # `quants_pulados_mo_ativa`.
+    out['quants_pulados_mo_ativa'] = []
+    qids_seguros: list = []  # F3 v12-CR: precisa visibilidade no escopo externo
     if quants_reserved_neg:
-        reserva_svc = StockReservaService(odoo=odoo)
-        qids = [q['id'] for q in quants_reserved_neg]
-        res_zerar = reserva_svc.zerar_reserved_residual(
-            quant_ids=qids, dry_run=dry_run,
+        from app.odoo.estoque.scripts.consulta_quant import (
+            StockQuantQueryService,
         )
-        out['resultado_zerar_residual'] = res_zerar
+        query_svc = StockQuantQueryService(odoo=odoo)
+        qids_candidatos = [q['id'] for q in quants_reserved_neg]
+        # listar MLs vivas (assigned/partially_available default)
+        ml_check = query_svc.listar_move_lines_por_quant(
+            quant_ids=qids_candidatos,
+        )
+        mls_por_quant: Dict[int, list] = {}
+        for ml in ml_check.get('move_lines', []):
+            qid = ml.get('_quant_id_resolvido')
+            if qid is None:
+                continue
+            mls_por_quant.setdefault(qid, []).append(ml)
+        # Filtrar: zera SO os sem MLs ativas
+        for q in quants_reserved_neg:
+            mls = mls_por_quant.get(q['id'], [])
+            if mls:
+                out['quants_pulados_mo_ativa'].append({
+                    'quant_id': q['id'],
+                    'reserved_quantity': float(q.get('reserved_quantity') or 0),
+                    'n_mls_ativas': len(mls),
+                    'mls_sample_ids': [m['id'] for m in mls[:3]],
+                    'motivo': (
+                        f'quant tem {len(mls)} ML(s) viva(s) — reserved<0 '
+                        f'pode ser legitimo. NAO zerar sem investigar via '
+                        f'Skill 9 listar_pickings_por_quant.'
+                    ),
+                })
+            else:
+                qids_seguros.append(q['id'])
+        if qids_seguros:
+            reserva_svc = StockReservaService(odoo=odoo)
+            res_zerar = reserva_svc.zerar_reserved_residual(
+                quant_ids=qids_seguros, dry_run=dry_run,
+            )
+            out['resultado_zerar_residual'] = res_zerar
+        else:
+            out['resultado_zerar_residual'] = {
+                'status': 'CLEANUP_OK_VAZIO',
+                'acao': 'todos os quants com reserved<0 tem ML ativa — pulados',
+            }
 
     # 3. Ajustar quants com qty<0 para 0 (apenas em modo real)
     if quants_qty_neg:
@@ -462,7 +508,11 @@ def _executar_cleanup_pos_bulk(
                 'resultado': res_aj,
             })
 
-    out['n_reserveds_zerados'] = len(quants_reserved_neg)
+    # F3 v12-CR: contar SO os quants efetivamente zerados (excluindo os pulados
+    # pelo GUARD de MO ativa). Antes contava len(quants_reserved_neg) o que
+    # inflava o numero quando havia MLs vivas em algum quant.
+    out['n_reserveds_zerados'] = len(qids_seguros)
+    out['n_reserveds_pulados_mo_ativa'] = len(out['quants_pulados_mo_ativa'])
     out['n_qty_ajustados'] = len(quants_qty_neg)
     out['status'] = 'CLEANUP_OK' if (quants_reserved_neg or quants_qty_neg) else 'CLEANUP_OK_VAZIO'
     out['tempo_ms'] = int((time.time() - t0) * 1000)
@@ -623,6 +673,25 @@ def main() -> int:
     if args.csv_cleanup and cleanup_result is not None:
         _escrever_csv_cleanup(args.csv_cleanup, cleanup_result)
 
+    # F6 v12-CR: avisar quando --confirmar foi usado SEM --cleanup-pos-bulk.
+    # A invariante do subagente diz "CLEANUP POS-BULK obrigatorio"; sem flag,
+    # o operador (humano OU subagente) pode esquecer e deixar reserveds
+    # fantasmas + saldos negativos no FB/Pre-Prod (licao v11). NUNCA aborta
+    # o output JSON — so emite aviso em stderr.
+    if not dry_run and not args.cleanup_pos_bulk:
+        # So avisar se houve pelo menos 1 transferencia executada (caso
+        # contrario nada para limpar).
+        if any(r.get('transferencias') for r in resultados):
+            print(
+                '\nAVISO: --confirmar usado SEM --cleanup-pos-bulk. '
+                'A invariante do subagente gestor-estoque-odoo diz cleanup '
+                'obrigatorio. Verifique reserveds<0 e qty<0 nos cods '
+                'processados via Skill 9 + Skill 2.4 zerar_residual + '
+                'Skill 1 ajustar_quant. Para automatizar: adicionar '
+                '--cleanup-pos-bulk na proxima execucao.\n',
+                file=sys.stderr,
+            )
+
     # 6. JSON de saida
     sumario = _sumarizar(resultados, dry_run)
     payload = {
@@ -644,14 +713,33 @@ def main() -> int:
     n_parciais = sum(1 for r in resultados if r['status'] in _STATUS_PARCIAL)
     n_total = len(resultados)
     n_ok_total = n_total - n_falhas - n_parciais
+
+    # Cleanup pos-bulk (S2 v12) contribui para exit code se chamado
+    # (mitigacao S2-pre-mortem): cleanup que falhou no Odoo (FALHA_ODOO)
+    # NAO deve ser ignorado — eleva exit code para 1.
+    cleanup_falhou = False
+    if cleanup_result is not None:
+        cleanup_status = cleanup_result.get('status', '')
+        zr = cleanup_result.get('resultado_zerar_residual') or {}
+        if cleanup_status not in ('CLEANUP_OK', 'CLEANUP_OK_VAZIO'):
+            cleanup_falhou = True
+        if zr.get('status', '').startswith('FALHA'):
+            cleanup_falhou = True
+        # Se algum ajuste de qty<0 falhou
+        for aj in cleanup_result.get('resultados_ajustar_negativo', []):
+            r_aj = aj.get('resultado') or {}
+            if r_aj.get('status', '').startswith('FALHA'):
+                cleanup_falhou = True
+                break
+
     if dry_run:
-        if n_falhas:
+        if n_falhas or cleanup_falhou:
             return 1
         if n_parciais:
             return 1  # dry-run parcial conta como falha (qty incompleta)
         return 4 if n_ok_total == n_total else 1
     # Real:
-    if n_falhas:
+    if n_falhas or cleanup_falhou:
         return 1
     if n_parciais:
         return 1  # confirmado mas parcial = falha (algo nao moveu); CSV pendencias documenta

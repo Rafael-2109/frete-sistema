@@ -1408,8 +1408,17 @@ class StockInternalTransferService:
             except ValueError as exc:
                 fallback_aplicado = False
                 # Detectar caso especifico: lot_id_origem == lot_id_destino
-                # (lote origem eh o proprio MIGRACAO consolidador)
-                if 'lot_id_origem == lot_id_destino' in str(exc):
+                # (lote origem eh o proprio MIGRACAO consolidador POR PRODUTO).
+                #
+                # Detecao DUPLA (mitigacao S1-pre-mortem v12):
+                #   1. Mensagem contem 'lot_id_origem == lot_id_destino'
+                #      (matching de substring — fragil se atomo mudar msg)
+                #   2. AND nome do lote eh variante MIGRACAO (semantica forte)
+                # Sem (2), risco de fallback aplicado em caso errado (msg
+                # parecida mas semantica diferente).
+                eh_migracao_quant = is_migracao(q.get('_lote_name'))
+                msg_match = 'lot_id_origem == lot_id_destino' in str(exc)
+                if msg_match and eh_migracao_quant:
                     from app.odoo.constants.locations import LOCAIS_INDISPONIVEL
                     loc_indisp = LOCAIS_INDISPONIVEL.get(company_id)
                     if (loc_indisp is not None
@@ -1429,30 +1438,6 @@ class StockInternalTransferService:
                                 tolerancia_delta=tolerancia_delta,
                                 dry_run=dry_run,
                             )
-                            # Normalizar para estrutura compativel com modo C:
-                            # renomear 'aumento_destino' -> 'aumento_destino_migracao'
-                            # e adicionar marca de fallback.
-                            res = {
-                                'reducao_origem': res_b.get('reducao_origem'),
-                                'aumento_destino_migracao': res_b.get('aumento_destino'),
-                                'qty_transferida': res_b.get('qty_transferida', 0),
-                                'status': res_b.get('status'),
-                                'location_id_origem': res_b.get('location_id_origem'),
-                                'location_id_destino': res_b.get('location_id_destino'),
-                                'lot_id_origem': res_b.get('lot_id'),
-                                'lot_id_destino': res_b.get('lot_id'),
-                                'lote_destino_nome': q['_lote_name'],
-                                'lote_destino_criado_agora': False,
-                                'tempo_ms': res_b.get('tempo_ms', 0),
-                                '_fallback_modo_b': True,
-                                '_fallback_motivo': (
-                                    f'lot_id_origem == destino MIGRACAO; '
-                                    f'fallback Modo B (loc->loc mantem lote)'
-                                ),
-                            }
-                            if res_b.get('erro'):
-                                res['erro'] = res_b['erro']
-                            fallback_aplicado = True
                         except (ValueError, RuntimeError) as exc_b:
                             quants_pulados.append({
                                 'quant_id': q['id'],
@@ -1463,10 +1448,76 @@ class StockInternalTransferService:
                                 'reserved_quantity': q['reserved_quantity'],
                                 'motivo': (
                                     f'modo C + fallback Modo B falharam: '
-                                    f'C={exc} | B={exc_b}'
+                                    f'C={exc} | B (exception)={exc_b}'
                                 ),
                             })
                             continue
+                        # F1 v12-CR: Modo B pode retornar dict com FALHA_REDUCAO
+                        # ou FALHA_AUMENTO sem levantar exception. NUNCA tratar
+                        # como sucesso silenciosamente — em PROD significa que
+                        # origem JA foi reduzida (estado parcial) ou nao se
+                        # moveu nada. Pular o quant e relatar.
+                        status_b = res_b.get('status') or ''
+                        if status_b not in ('EXECUTADO', 'DRY_RUN_OK'):
+                            qty_red = float(res_b.get('qty_reduzida_origem') or 0)
+                            quants_pulados.append({
+                                'quant_id': q['id'],
+                                'lot_id': q['lot_id'],
+                                'lote_nome': q['_lote_name'],
+                                'location_id': q['location_id'],
+                                'quantity': q['quantity'],
+                                'reserved_quantity': q['reserved_quantity'],
+                                'motivo': (
+                                    f'modo C + fallback Modo B falharam: '
+                                    f'C={exc} | B (status={status_b!r}): '
+                                    f'{res_b.get("erro")}'
+                                ),
+                                'qty_reduzida_origem_modo_b': qty_red,
+                                'resultado_modo_b': res_b,
+                            })
+                            continue
+                        # Normalizar para estrutura compativel com modo C:
+                        # renomear 'aumento_destino' -> 'aumento_destino_migracao'
+                        # e adicionar marca de fallback.
+                        res = {
+                            'reducao_origem': res_b.get('reducao_origem'),
+                            'aumento_destino_migracao': res_b.get('aumento_destino'),
+                            'qty_transferida': res_b.get('qty_transferida', 0),
+                            'status': status_b,
+                            'location_id_origem': res_b.get('location_id_origem'),
+                            'location_id_destino': res_b.get('location_id_destino'),
+                            'lot_id_origem': res_b.get('lot_id'),
+                            'lot_id_destino': res_b.get('lot_id'),
+                            'lote_destino_nome': q['_lote_name'],
+                            'lote_destino_criado_agora': False,
+                            'tempo_ms': res_b.get('tempo_ms', 0),
+                            '_fallback_modo_b': True,
+                            '_fallback_motivo': (
+                                f'lot_id_origem == destino MIGRACAO; '
+                                f'fallback Modo B (loc->loc mantem lote)'
+                            ),
+                        }
+                        if res_b.get('erro'):
+                            res['erro'] = res_b['erro']
+                        fallback_aplicado = True
+                    elif (loc_indisp is None
+                            and msg_match and eh_migracao_quant):
+                        # F4 v12-CR: company sem LOCAIS_INDISPONIVEL — fallback
+                        # NAO TENTADO. Motivo distinto para o operador entender.
+                        quants_pulados.append({
+                            'quant_id': q['id'],
+                            'lot_id': q['lot_id'],
+                            'lote_nome': q['_lote_name'],
+                            'location_id': q['location_id'],
+                            'quantity': q['quantity'],
+                            'reserved_quantity': q['reserved_quantity'],
+                            'motivo': (
+                                f'fallback Modo B nao tentado: '
+                                f'company_id={company_id} sem entrada em '
+                                f'LOCAIS_INDISPONIVEL. Atomo C: {exc}'
+                            ),
+                        })
+                        continue
                 if not fallback_aplicado:
                     quants_pulados.append({
                         'quant_id': q['id'],

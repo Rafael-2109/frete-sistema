@@ -149,6 +149,98 @@ def test_cleanup_exclui_indisp_da_busca():
     )
 
 
+def test_cleanup_pula_quant_com_ml_ativa():
+    """S2-pre-mortem mitigation v12: GUARD MO ativa.
+
+    Quants com reserved<0 + ML ativa (assigned/partially_available) NAO devem
+    ser zerados — pode ser reserva legitima com sinal errado. Reportar em
+    `quants_pulados_mo_ativa` e processar apenas os sem MLs ativas.
+    """
+    odoo_mock = MagicMock()
+    odoo_mock.search_read.return_value = [
+        # Quant 200: reserved<0 SEM MLs ativas (deveria ser zerado)
+        {'id': 200, 'product_id': [27918, 'SAL'], 'lot_id': False,
+         'location_id': [27458, 'FB/Salm'], 'quantity': 0.0, 'reserved_quantity': -5.0},
+        # Quant 201: reserved<0 COM ML ativa (NAO zerar)
+        {'id': 201, 'product_id': [27918, 'SAL'], 'lot_id': [60001, 'X'],
+         'location_id': [4067, 'FB/Man'], 'quantity': 0.0, 'reserved_quantity': -10.0},
+    ]
+    with patch(
+        'app.odoo.estoque.scripts.consulta_quant.StockQuantQueryService'
+    ) as mk_query_svc, \
+         patch(
+        'app.odoo.estoque.scripts.reserva.StockReservaService'
+    ) as mk_res_svc:
+        # Query returna 1 ML ativa para quant 201
+        instance_q = mk_query_svc.return_value
+        instance_q.listar_move_lines_por_quant.return_value = {
+            'move_lines': [
+                {'id': 9999, '_quant_id_resolvido': 201, 'state': 'assigned'},
+            ],
+        }
+        instance_r = mk_res_svc.return_value
+        instance_r.zerar_reserved_residual.return_value = {
+            'status': 'DRY_RUN_OK', 'tempo_ms': 1,
+        }
+        res = _executar_cleanup_pos_bulk(
+            odoo=odoo_mock, product_ids=[27918],
+            company_id=1, locs_origem=[27458, 4067],
+            dry_run=True,
+        )
+    # Quant 201 PULADO por MO ativa
+    assert len(res['quants_pulados_mo_ativa']) == 1
+    pulado = res['quants_pulados_mo_ativa'][0]
+    assert pulado['quant_id'] == 201
+    assert pulado['n_mls_ativas'] == 1
+    # Quant 200 zerado (sem MLs ativas)
+    qids_chamados = instance_r.zerar_reserved_residual.call_args.kwargs['quant_ids']
+    assert qids_chamados == [200]
+
+
+def test_cleanup_falha_odoo_propaga_para_caller():
+    """F5 v12-CR: cleanup com FALHA_ODOO no zerar_residual NAO eh ignorado.
+
+    Quando `zerar_reserved_residual` retorna `{'status': 'FALHA_ODOO', ...}`,
+    o caller (CLI main) deve detectar via `cleanup_falhou` e elevar exit
+    code para 1. Esse teste valida o callback do helper — o exit code do
+    CLI eh testado via cleanup_result.resultado_zerar_residual.status que
+    o main() inspeciona.
+    """
+    odoo_mock = MagicMock()
+    odoo_mock.search_read.return_value = [
+        {'id': 200, 'product_id': [27918, 'X'], 'lot_id': False,
+         'location_id': [27458, 'Y'], 'quantity': 0.0, 'reserved_quantity': -5.0},
+    ]
+    with patch(
+        'app.odoo.estoque.scripts.consulta_quant.StockQuantQueryService'
+    ) as mk_query_svc, \
+         patch(
+        'app.odoo.estoque.scripts.reserva.StockReservaService'
+    ) as mk_r:
+        instance_q = mk_query_svc.return_value
+        instance_q.listar_move_lines_por_quant.return_value = {'move_lines': []}
+        instance = mk_r.return_value
+        # Simular FALHA_ODOO no zerar_residual
+        instance.zerar_reserved_residual.return_value = {
+            'status': 'FALHA_ODOO',
+            'erro': 'XML-RPC timeout simulado',
+            'tempo_ms': 100,
+        }
+        res = _executar_cleanup_pos_bulk(
+            odoo=odoo_mock, product_ids=[27918],
+            company_id=1, locs_origem=[27458],
+            dry_run=False,
+        )
+    # Cleanup result deve manter status FALHA_ODOO no sub-resultado
+    zr = res.get('resultado_zerar_residual') or {}
+    assert zr.get('status') == 'FALHA_ODOO'
+    # main() deteria via startswith('FALHA') — simulando aqui
+    cleanup_falhou = zr.get('status', '').startswith('FALHA')
+    assert cleanup_falhou is True, (
+        'caller main() deve detectar FALHA via startswith e elevar exit code'
+    )
+
+
 def test_cleanup_dry_run_nao_efetiva():
     """dry_run=True propaga aos calls internos."""
     odoo_mock = MagicMock()

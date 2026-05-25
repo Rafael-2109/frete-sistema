@@ -9,7 +9,39 @@
 
 **Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual 6+ commits sobre main@b4f7b24c — último v9). `main` está VIVO (Rafael commita em paralelo — avancou apenas `fb494608` cosmetico D8 SKIP) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **381 pytest verdes** (364 anterior + 17 Skill 2 v10 distribuir_para_indisponivel).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **390 pytest verdes** (381 v11 + 2 S1 + 6 S2 + 1 mitigacao MO).
+
+**Sessão 2026-05-25 v12 (S1+S2+S4 fechando lacunas v11 — Skill 2 ARQUITETURALMENTE COMPLETA):**
+- ✅ **Pre-mortem da operacao v10+v11** identificou 3 lacunas estruturais:
+  - L1: 1 un MIGRACAO em FB/Estoque do cod 4310176 ficou orfao (skill 2 modo C levantou ValueError, pulamos manual)
+  - L2: 28 reserveds residuais negativos + 2 saldos negativos precisaram cleanup MANUAL apos bulk
+  - L3: subagente nao sabia da regra de cleanup pos-bulk
+- ✅ **S1 — Fallback automatico Modo B em `distribuir_para_indisponivel`**:
+  - Quando atomo modo C levanta `ValueError('lot_id_origem == lot_id_destino')` E lote eh variante MIGRACAO (deteccao DUPLA — substring match + `is_migracao` semantica), o helper tenta automaticamente `transferir_entre_locations` (Modo B) mantendo o mesmo lote, movendo origem → Indisp.
+  - Output marca `_fallback_modo_b=True` + `_fallback_motivo`.
+  - Caso real 4310176 reprocessado em PROD: 1 un MIGRACAO movido com sucesso. Cobertura 100% (era 99.9%).
+  - +3 testes pytest (fallback OK + fallback fail pula + filtro semantico nao-MIGRACAO).
+- ✅ **S2 — Flag `--cleanup-pos-bulk` no CLI**:
+  - Apos bulk, lista quants em FB exceto Indisp dos cods processados com transferencias executadas:
+    - reserved_quantity<0 → Skill 2.4 `zerar_residual` (COM GUARD MO ativa via Skill 9 — pula quants com MLs vivas)
+    - quantity<0 → Skill 1 `ajustar_quant --valor-absoluto 0`
+  - Output em `payload.cleanup_pos_bulk`; CSV opcional `--csv-cleanup PATH`.
+  - Exit code do CLI considera FALHA do cleanup (eleva para 1).
+  - Smoke PROD: 3 cods, cleanup_OK_VAZIO (ja zerado em v11).
+  - +6 testes pytest (vazio, classificacao 2 tipos, exclui Indisp, dry-run propagado, guard MO ativa).
+- ✅ **S4 — Invariantes NOVAS no subagente `gestor-estoque-odoo`**:
+  - **CLEANUP POS-BULK obrigatorio** apos `distribuir_para_indisponivel` (com flag `--cleanup-pos-bulk` como atalho)
+  - **Fallback Modo B** documentado como comportamento padrao quando lote MIGRACAO origem==destino
+- ✅ **Mitigacoes pre-mortem v12**:
+  - **S1**: deteccao DUPLA (substring + semantica) para fallback (mitiga risco de matching errado se msg do atomo mudar)
+  - **S2-A**: GUARD MO ativa via `listar_move_lines_por_quant` (cross-ref tupla G030) antes de zerar reserved<0 — quants com MLs vivas vao para `quants_pulados_mo_ativa` em vez de zerar reserva legitima
+  - **S2-B**: cleanup contribui para exit code do CLI (FALHA_ODOO no zerar/ajustar eleva exit 1)
+- ✅ **Baseline pytest: 388 → 390 verdes** (+2 testes mitigacao pre-mortem)
+- ✅ **Skill 2 `transferindo-interno-odoo` MATURADA ARQUITETURALMENTE**:
+  - 3 modos atomicos (A lote→lote / B loc→loc / C para-indisponivel)
+  - Helper alto-nivel `distribuir_para_indisponivel` com fallback automatico Modo B
+  - CLI alto-nivel `transferir_para_indisp_em_lote.py` com `--cleanup-pos-bulk` integrado
+  - Demanda real 158 cods FB processada (v10+v11) + lacunas estruturalmente resolvidas (v12)
 
 **Sessão 2026-05-25 v11 (FASE C bulk — 153 cods FB Indisponivel + cleanup completo):**
 - ✅ **FASE C.1 — re-dry-run 153 cods**: consistente com dry-run anterior (141 OK + 9 parciais + 3 falhas), ~50s. Sem alteracao de saldo entre v10 e v11.
