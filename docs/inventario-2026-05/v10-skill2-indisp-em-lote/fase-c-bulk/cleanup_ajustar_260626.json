@@ -1,0 +1,29 @@
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)
+✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)
+✅ Módulo pg_types_config também importado
+⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'
+✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py
+{
+  "modo": "confirmado",
+  "chave": {
+    "quant_id": 260626
+  },
+  "resultado": {
+    "quant_id": 260626,
+    "product_id": null,
+    "company_id": null,
+    "location_id": null,
+    "lot_id": null,
+    "delta": null,
+    "valor_absoluto": 0.0,
+    "acao": "updated",
+    "qty_antes": -34.795536,
+    "reservada": 0.0,
+    "qty_apos": 0.0,
+    "ajuste_aplicado": 34.795536,
+    "status": "EXECUTADO",
+    "tempo_ms": 1794
+  }
+}

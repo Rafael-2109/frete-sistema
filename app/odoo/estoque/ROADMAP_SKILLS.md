@@ -11,6 +11,37 @@
 
 **Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **381 pytest verdes** (364 anterior + 17 Skill 2 v10 distribuir_para_indisponivel).
 
+**Sessão 2026-05-25 v11 (FASE C bulk — 153 cods FB Indisponivel + cleanup completo):**
+- ✅ **FASE C.1 — re-dry-run 153 cods**: consistente com dry-run anterior (141 OK + 9 parciais + 3 falhas), ~50s. Sem alteracao de saldo entre v10 e v11.
+- ✅ **FASE C.2 — bulk REAL 153 cods**: 11min 33s, 485 transferencias executadas, 10.994.553 un movidos FB/Estoque → FB/Indisp/MIGRAÇÃO. Status: 141 EXECUTADO_TOTAL + 9 EXECUTADO_PARCIAL + 2 FALHA_PRODUTO + 1 FALHA_SEM_QUANT. Cobertura 99.68%.
+- ✅ **FASE C.3 — verificacao Odoo direto**: sample 10 cods aleatorios via Skill 9 — 100% match esperado (FB/Estoque=0, FB/Indisp acrescido).
+- ✅ **FASE C.4 — cleanup pendencias**:
+  - **Cleanup reserveds residuais via Skill 2.4 `--zerar-residual`**: 28 quants processados (17 cods em FB/Pré-Prod), -28.265 un de reserved negativo zerados em 5.4s. Skill 2.4 modo `zerar_residual` validado em PROD.
+  - **Cleanup saldos negativos via Skill 1 `--valor-absoluto 0`**: 2 quants com qty<0 ajustados para qty=0 (260624 SAL SEM IODO -877.175 → 0; 260626 ACIDO CITRICO -34.795 → 0). +911.97 un de Physical Inventory.
+- ✅ **FASE C.5 — Estado final FB**:
+  - 0 quants com qty<0 em FB exc Indisp ✓
+  - 0 quants com qty=0 + reserved<0 ✓
+  - 9 quants com qty>0 + reserved>0 (saldo legitimo MOs ativas — cod 104000031 SACARINA SODICA — NAO MEXER).
+- 🟢 **Pendencias REAIS finais (12 cods, 35.313 un — 0.32% da demanda)**:
+  - 2 FALHA_PRODUTO (45121452 + 501 — cods inexistentes em product.product)
+  - 1 FALHA_SEM_QUANT (104000011 HIPOCLORITO — sem saldo em FB/CD/LF)
+  - 1 SALMOURA 1969 un — saldo Odoo de fato menor que pedido
+  - 8 cods < 1 un — arredondamento (saldo residual em LF/CD/Pre-Prod fora escopo)
+  - 1 caso 4310176 — 1 un MIGRAÇÃO em FB/Estoque == MIGRAÇÃO destino (skipped corretamente).
+- ✅ **Artefatos persistidos**: `docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/` (README + JSONs + CSVs detalhados de toda jornada PROD).
+
+**Totalizacao jornada v10+v11**:
+- 5 cods canary/sub-piloto v10 + 153 cods bulk v11 = **158 cods FB demanda completa processada**
+- **11.009.776 un movidos FB/Estoque → FB/Indisp/MIGRAÇÃO** + 28 reserveds zerados (-28.265 un) + 2 saldos negativos ajustados (+912 un)
+- Tempo total PROD: ~12 min
+- 495+ writes Odoo executados (8 canary/sub-piloto + 485 bulk + 28 zerar + 2 ajustar)
+
+**Status global apos v11:**
+- Skill 2 `transferindo-interno-odoo` ✅ **MATURADA** — 3 modos atomicos + helper alto-nivel `distribuir_para_indisponivel` validado em demanda real PROD.
+- Skill 2.4 `operando-reservas-odoo` ✅ — modo `--zerar-residual` validado em batch (28 quants).
+- Skill 1 `ajustando-quant-odoo` ✅ — modo `--valor-absoluto 0` validado para cleanup de saldos negativos.
+- **Baseline pytest: 381 verdes** (sem mudanca apos v11 — sem novo codigo).
+
 **Sessão 2026-05-25 v10 (Skill 2 alto-nível — helper `distribuir_para_indisponivel` + canary 5 cods REAL):**
 - ✅ **Verificação main**: avancou apenas `fb494608` cosmético (mesmo de v8/v9) — sem rebase.
 - ✅ **FASE A — avaliacao demanda real (158 cods FB)**: planilha simples (cod, qty, nome). Skill 9 cross-ref ao vivo: 552 quants em FB exceto Indisp, 155 dos 158 cods com saldo. Distribuição: 44 single-lote OK + 74 multi-lote + 28 com reserva ativa + 9 saldo insuficiente + 3 sem quant. Politica definida com Rafael: origem = todas locs FB exceto Indisp; selecao MIGRACAO_FIRST_FIFO; reserva via `--resetar-reserva-origem` (defensivo).

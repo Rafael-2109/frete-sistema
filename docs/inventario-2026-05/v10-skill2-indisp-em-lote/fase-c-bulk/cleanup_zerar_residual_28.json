@@ -1,0 +1,270 @@
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)
+✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)
+✅ Módulo pg_types_config também importado
+⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'
+✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py
+{
+  "quant_ids": [
+    146579,
+    260349,
+    260624,
+    260625,
+    260626,
+    260629,
+    260634,
+    260644,
+    260646,
+    260647,
+    260648,
+    260650,
+    260651,
+    260652,
+    260654,
+    260655,
+    260658,
+    260681,
+    260687,
+    260716,
+    260717,
+    260725,
+    260726,
+    260730,
+    260731,
+    260735,
+    260738,
+    260742
+  ],
+  "valores_antes": {
+    "146579": {
+      "qty": 8.02e-06,
+      "reserved": -0.186
+    },
+    "260349": {
+      "qty": 0.0,
+      "reserved": -6277.5
+    },
+    "260624": {
+      "qty": -877.175,
+      "reserved": -2124.6684
+    },
+    "260625": {
+      "qty": 0.0,
+      "reserved": -88.7694834
+    },
+    "260626": {
+      "qty": -34.795536,
+      "reserved": -170.0213522
+    },
+    "260629": {
+      "qty": 0.0,
+      "reserved": -0.4872
+    },
+    "260634": {
+      "qty": 0.0,
+      "reserved": -29.0
+    },
+    "260644": {
+      "qty": 0.0,
+      "reserved": -497.96
+    },
+    "260646": {
+      "qty": 0.0,
+      "reserved": -211.0
+    },
+    "260647": {
+      "qty": 0.0,
+      "reserved": -2.1441828
+    },
+    "260648": {
+      "qty": 0.0,
+      "reserved": -5.15952
+    },
+    "260650": {
+      "qty": 0.0,
+      "reserved": -4.2493434
+    },
+    "260651": {
+      "qty": 0.0,
+      "reserved": -520.4943
+    },
+    "260652": {
+      "qty": 0.0,
+      "reserved": -0.137588
+    },
+    "260654": {
+      "qty": 0.0,
+      "reserved": -9.45
+    },
+    "260655": {
+      "qty": 0.0,
+      "reserved": -2.1
+    },
+    "260658": {
+      "qty": 0.0,
+      "reserved": -0.42
+    },
+    "260681": {
+      "qty": 0.0,
+      "reserved": -0.32
+    },
+    "260687": {
+      "qty": 0.0,
+      "reserved": -1931.4
+    },
+    "260716": {
+      "qty": 0.0,
+      "reserved": -683.52
+    },
+    "260717": {
+      "qty": 0.0,
+      "reserved": -1122.6
+    },
+    "260725": {
+      "qty": 0.0,
+      "reserved": -0.21681
+    },
+    "260726": {
+      "qty": 0.0,
+      "reserved": -0.1445634
+    },
+    "260730": {
+      "qty": 0.0,
+      "reserved": -0.4157028
+    },
+    "260731": {
+      "qty": 0.0,
+      "reserved": -13.8564
+    },
+    "260735": {
+      "qty": 0.0,
+      "reserved": -0.009504
+    },
+    "260738": {
+      "qty": 0.0,
+      "reserved": -4680.72
+    },
+    "260742": {
+      "qty": 0.0,
+      "reserved": -9888.24
+    }
+  },
+  "valores_depois": {
+    "146579": {
+      "qty": 8.02e-06,
+      "reserved": 0.0
+    },
+    "260349": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260624": {
+      "qty": -877.175,
+      "reserved": 0.0
+    },
+    "260625": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260626": {
+      "qty": -34.795536,
+      "reserved": 0.0
+    },
+    "260629": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260634": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260644": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260646": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260647": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260648": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260650": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260651": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260652": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260654": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260655": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260658": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260681": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260687": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260716": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260717": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260725": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260726": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260730": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260731": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260735": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260738": {
+      "qty": 0.0,
+      "reserved": 0.0
+    },
+    "260742": {
+      "qty": 0.0,
+      "reserved": 0.0
+    }
+  },
+  "quants_processados": 28,
+  "status": "ZERAR_RESIDUAL_OK",
+  "tempo_ms": 978
+}
