@@ -237,12 +237,41 @@ Para cada linha (cod, qty) da planilha:
   `quantity` completa (ignora reserved). NAO cancela picking — so zera
   reserved_quantity stale. Para reserva legitima (ML viva), considere
   fluxo 2.6 ANTES.
-- **Lote MIGRAÇÃO em FB/Estoque (cod ja parcialmente consolidado)** — o
-  atomo `transferir_para_indisponivel` levanta `ValueError` se
-  `lot_id_origem == lot_id_destino`. O orquestrador CAPTURA este caso
-  e pula o quant (registra em `quants_pulados` com motivo), continuando
-  o loop. Caso real: cod `4310176` (1 un MIGRAÇÃO em FB/Estoque +
-  1093 un em lotes reais; processado parcial com 1093/1094 movidos).
+- **Lote MIGRAÇÃO em FB/Estoque == destino (S1 v12 fallback)** — quando o
+  atomo `transferir_para_indisponivel` levanta `ValueError` por
+  `lot_id_origem == lot_id_destino` (cod parcialmente consolidado: o
+  lot_id MIGRAÇÃO em FB/Estoque eh o MESMO de FB/Indisp porque `stock.lot`
+  eh por produto — G031), o orquestrador automaticamente tenta MODO B
+  (`transferir_entre_locations`) mantendo o mesmo lote, movendo origem→Indisp.
+  Caso real validado v12: cod 4310176 com 1 un MIGRAÇÃO em FB/Estoque —
+  fallback Modo B moveu para FB/Indisp (cobertura 100% em vez de 99.9%).
+  Output marca `_fallback_modo_b=True` + `_fallback_motivo` na transferencia.
+
+### Flag `--cleanup-pos-bulk` (S2 v12)
+
+Apos bulk, o CLI pode automaticamente:
+1. Listar quants em FB exceto Indisp dos cods processados (apenas cods
+   com transferencias executadas — FALHA_PRODUTO/FALHA_SEM_QUANT excluidos).
+2. Identificar `reserved_quantity < 0` (fantasmas de MOs antigas) e
+   `quantity < 0` (saldos negativos de manual_consumption).
+3. Aplicar Skill 2.4 `zerar_reserved_residual` para reserveds<0.
+4. Aplicar Skill 1 `ajustar_quant --valor-absoluto 0` para qty<0.
+
+Output em `payload.cleanup_pos_bulk` (status, quants encontrados,
+resultados das operacoes). CSV opcional via `--csv-cleanup PATH`.
+
+Respeita `--dry-run` / `--confirmar` do bulk. SEM cleanup-pos-bulk, o
+operador esquece pos-bulk (licao v11 — caso 158 cods FB ficou com 28
+reserveds fantasma + 2 saldos negativos que precisaram cleanup manual).
+
+```bash
+# Bulk + cleanup automatico
+python "$SK_LOTE" --planilha demanda.csv --empresa FB \
+    --resetar-reserva-origem --confirmar \
+    --cleanup-pos-bulk \
+    --csv-out audit.csv --csv-pendencias pendencias.csv \
+    --csv-cleanup cleanup.csv
+```
 - **Ordem das variantes MIGRACAO/MIGRAÇÃO** — em `MIGRACAO_FIRST_FIFO`,
   a ordem lexicografica entre as variantes eh `MIGRACAO` (sem cedilha,
   'C' < 'Ç') ANTES de `MIGRAÇÃO` (com cedilha). Determinismo OK.

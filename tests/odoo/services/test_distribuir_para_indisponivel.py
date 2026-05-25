@@ -335,24 +335,71 @@ def test_distribui_locs_origem_override_respeitada(service):
 # Comportamento em FALHAS de transferencias internas
 # ============================================================
 
-def test_distribui_value_error_atomo_pula_quant_e_continua(service):
-    """ValueError do atomo (ex.: lote origem == destino MIGRACAO) -> pula quant
+def test_distribui_value_error_atomo_lote_destino_pula_quant_e_continua(service):
+    """ValueError do atomo (lote origem inexistente em modo C) -> pula quant
     e continua greedy.
 
-    Caso real 2026-05-25 v10 (cod 4310176): lote MIGRAÇÃO em FB/Estoque tem
-    o MESMO stock.lot.id que o MIGRAÇÃO destino em FB/Indisponivel — o atomo
-    `transferir_para_indisponivel` levanta ValueError pre-cond. O helper
-    NAO deve quebrar o cod inteiro; deve pular esse quant e tentar outros.
+    Esse teste cobre o caso GENERICO: ValueError do atomo que NAO eh por
+    `lot_id_origem == lot_id_destino` — pula sem tentar fallback Modo B.
     """
     quants = [
-        _mk_quant(101, 30544, 'MIGRAÇÃO', 8, 1),       # caso bugado
+        _mk_quant(101, 30544, 'MIGRAÇÃO', 8, 1),       # caso fallback (testado em outro test)
         _mk_quant(102, 60002, '138/26', 8, 742),
         _mk_quant(103, 60003, '139/26', 8, 351),
     ]
     with patch.object(service, '_listar_quants_origem', return_value=quants), \
-         patch.object(service, 'transferir_para_indisponivel') as mk_t:
-        # 1a chamada levanta ValueError (pre-cond)
-        # 2a e 3a chamadas executam OK
+         patch.object(service, 'transferir_para_indisponivel') as mk_t, \
+         patch.object(service, 'transferir_entre_locations') as mk_b:
+        # 1a chamada modo C: ValueError generico (NAO lot_id_origem==destino)
+        # 2a e 3a OK
+        mk_t.side_effect = [
+            ValueError('algum outro erro de pre-cond do atomo'),
+            _mk_transfer_ok(742),
+            _mk_transfer_ok(351),
+        ]
+        res = service.distribuir_para_indisponivel(
+            product_id=29716, company_id=1, qty_solicitada=1094, dry_run=True,
+        )
+    # Fallback Modo B NAO deve ter sido chamado (msg generica nao matches)
+    assert mk_b.call_count == 0
+    assert res['status'] == 'DRY_RUN_PARCIAL'
+    assert res['qty_movida'] == 1093.0  # 742 + 351 (quant 101 pulado)
+    assert res['qty_nao_movida'] == 1.0
+    assert len(res['quants_pulados']) == 1
+    pulado = res['quants_pulados'][0]
+    assert pulado['quant_id'] == 101
+    assert 'ValueError' in pulado['motivo']
+    assert len(res['transferencias']) == 2
+
+
+def test_distribui_fallback_modo_b_quando_lote_origem_eq_destino(service):
+    """S1 v12: fallback automatico Modo B quando origem == destino MIGRACAO.
+
+    Caso real 2026-05-25 v10/v11 (cod 4310176): quant com lote MIGRACAO em
+    FB/Estoque (loc=8) — seu lot_id eh o MESMO do MIGRACAO destino em
+    FB/Indisp (loc=31088), pois `stock.lot` eh por produto (G031). O modo C
+    levanta `ValueError('lot_id_origem == lot_id_destino...')`. O helper
+    detecta a mensagem e tenta MODO B (`transferir_entre_locations`)
+    mantendo o mesmo lote — move loc=8 -> loc=31088 (Indisp) sem renomear.
+    """
+    quants = [
+        _mk_quant(101, 30544, 'MIGRAÇÃO', 8, 1),       # caso fallback
+        _mk_quant(102, 60002, '138/26', 8, 742),
+        _mk_quant(103, 60003, '139/26', 8, 351),
+    ]
+    res_modo_b_ok = {
+        'status': 'DRY_RUN_OK',
+        'qty_transferida': 1.0,
+        'reducao_origem': {'status': 'DRY_RUN_OK'},
+        'aumento_destino': {'status': 'DRY_RUN_OK'},
+        'location_id_origem': 8,
+        'location_id_destino': 31088,
+        'lot_id': 30544,
+        'tempo_ms': 1,
+    }
+    with patch.object(service, '_listar_quants_origem', return_value=quants), \
+         patch.object(service, 'transferir_para_indisponivel') as mk_t, \
+         patch.object(service, 'transferir_entre_locations') as mk_b:
         mk_t.side_effect = [
             ValueError(
                 'lot_id_origem == lot_id_destino MIGRACAO (30544) do '
@@ -361,20 +408,62 @@ def test_distribui_value_error_atomo_pula_quant_e_continua(service):
             _mk_transfer_ok(742),
             _mk_transfer_ok(351),
         ]
+        mk_b.return_value = res_modo_b_ok
         res = service.distribuir_para_indisponivel(
             product_id=29716, company_id=1, qty_solicitada=1094, dry_run=True,
         )
+    # Fallback Modo B foi chamado com args corretos
+    assert mk_b.call_count == 1
+    call_kwargs = mk_b.call_args.kwargs
+    assert call_kwargs['product_id'] == 29716
+    assert call_kwargs['company_id'] == 1
+    assert call_kwargs['lot_id'] == 30544
+    assert call_kwargs['location_id_origem'] == 8
+    assert call_kwargs['location_id_destino'] == 31088  # FB/Indisp
+    assert call_kwargs['qty'] == 1.0
+    # Cobertura total: 1 (fallback) + 742 + 351 = 1094
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['qty_movida'] == 1094.0
+    assert res['qty_nao_movida'] == 0.0
+    # Quant 101 NAO foi pulado — foi atendido pelo fallback
+    assert len(res['quants_pulados']) == 0
+    # 3 transferencias registradas (1a com flag _fallback_modo_b)
+    assert len(res['transferencias']) == 3
+    transf_fallback = res['transferencias'][0]
+    assert transf_fallback['lot_id_origem'] == 30544
+    resultado_fallback = transf_fallback['resultado']
+    assert resultado_fallback.get('_fallback_modo_b') is True
+    assert 'fallback Modo B' in resultado_fallback.get('_fallback_motivo', '')
+
+
+def test_distribui_fallback_modo_b_falha_pula_quant(service):
+    """S1 v12: se fallback Modo B tambem falhar, pula quant com motivo composto."""
+    quants = [
+        _mk_quant(101, 30544, 'MIGRAÇÃO', 8, 1),
+        _mk_quant(102, 60002, '138/26', 8, 1093),
+    ]
+    with patch.object(service, '_listar_quants_origem', return_value=quants), \
+         patch.object(service, 'transferir_para_indisponivel') as mk_t, \
+         patch.object(service, 'transferir_entre_locations') as mk_b:
+        mk_t.side_effect = [
+            ValueError('lot_id_origem == lot_id_destino MIGRACAO (30544)'),
+            _mk_transfer_ok(1093),
+        ]
+        mk_b.side_effect = RuntimeError('reservada > saldo restante')
+        res = service.distribuir_para_indisponivel(
+            product_id=1, company_id=1, qty_solicitada=1094, dry_run=True,
+        )
+    # Fallback Modo B foi tentado mas falhou
+    assert mk_b.call_count == 1
     assert res['status'] == 'DRY_RUN_PARCIAL'
-    assert res['qty_movida'] == 1093.0  # 742 + 351
+    assert res['qty_movida'] == 1093.0
     assert res['qty_nao_movida'] == 1.0
-    # Quant 101 (MIGRACAO origem==destino) pulado
+    # Quant 101 pulado com motivo composto
     assert len(res['quants_pulados']) == 1
     pulado = res['quants_pulados'][0]
-    assert pulado['quant_id'] == 101
-    assert pulado['lote_nome'] == 'MIGRAÇÃO'
-    assert 'ValueError' in pulado['motivo']
-    # Loop seguiu com os outros 2 quants -> 2 transferencias OK
-    assert len(res['transferencias']) == 2
+    assert 'modo C + fallback Modo B falharam' in pulado['motivo']
+    assert 'lot_id_origem' in pulado['motivo']
+    assert 'reservada' in pulado['motivo']
 
 
 def test_distribui_falha_aumento_em_meio_continua_tentando_outros(service):

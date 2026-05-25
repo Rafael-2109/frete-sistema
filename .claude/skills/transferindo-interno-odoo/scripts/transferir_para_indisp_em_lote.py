@@ -314,6 +314,161 @@ def _escrever_csv_pendencias(
             ])
 
 
+def _escrever_csv_cleanup(path: str, cleanup_result: Dict[str, Any]) -> None:
+    """S2 v12: CSV do cleanup (1 linha por quant tocado — reserved OU qty)."""
+    p = Path(path)
+    with p.open('w', encoding='utf-8', newline='') as f:
+        w = csv.writer(f)
+        w.writerow([
+            'quant_id', 'product_id', 'location_id', 'lot_id',
+            'tipo', 'qty_antes', 'reserved_antes',
+            'qty_depois', 'reserved_depois', 'status',
+        ])
+        # Reserveds zerados
+        for q in cleanup_result.get('quants_reserved_negativo', []):
+            res = cleanup_result.get('resultado_zerar_residual') or {}
+            depois = (res.get('valores_depois') or {}).get(q['quant_id']) or {}
+            w.writerow([
+                q['quant_id'], q.get('product_id'), q.get('location_id'),
+                q.get('lot_id'), 'RESERVED_NEG',
+                q.get('quantity'), q.get('reserved_quantity'),
+                depois.get('qty', q.get('quantity')),
+                depois.get('reserved', 0 if res else q.get('reserved_quantity')),
+                res.get('status', 'NAO_EXECUTADO'),
+            ])
+        # Qty negativos ajustados
+        for aj in cleanup_result.get('resultados_ajustar_negativo', []):
+            res_aj = aj.get('resultado') or {}
+            w.writerow([
+                aj['quant_id'], '', '', '',
+                'QTY_NEG',
+                aj.get('qty_antes'), '',
+                res_aj.get('qty_apos', 0),
+                '',
+                res_aj.get('status', 'NAO_EXECUTADO'),
+            ])
+
+
+def _executar_cleanup_pos_bulk(
+    odoo,
+    product_ids: List[int],
+    company_id: int,
+    locs_origem: List[int],
+    dry_run: bool,
+) -> Dict[str, Any]:
+    """S2 v12: cleanup automatico pos-bulk modo C.
+
+    Lista quants em FB exceto Indisp dos product_ids processados e:
+      1. Zera `reserved_quantity < 0` em quants `qty=0` (Skill 2.4 zerar_residual)
+      2. Ajusta `quantity < 0` para 0 (Skill 1 ajustar_quant --valor-absoluto 0)
+
+    Retorna dict estruturado com listas de quants encontrados e resultados das
+    operacoes (zerar_residual + ajustes).
+
+    NOTA: a chamada eh feita DENTRO do app_context do Flask, com o mesmo odoo
+    do bulk. Reutiliza os services ja instanciados (StockReservaService +
+    StockQuantAdjustmentService) ao inves de spawning subprocess.
+    """
+    from app.odoo.estoque.scripts.quant import StockQuantAdjustmentService
+    from app.odoo.estoque.scripts.reserva import StockReservaService
+
+    t0 = time.time()
+    out: Dict[str, Any] = {
+        'modo': 'dry-run' if dry_run else 'confirmado',
+        'product_ids': product_ids,
+        'company_id': company_id,
+        'locs_origem': locs_origem,
+        'quants_reserved_negativo': [],
+        'quants_qty_negativo': [],
+        'resultado_zerar_residual': None,
+        'resultados_ajustar_negativo': [],
+    }
+    if not product_ids:
+        out['status'] = 'CLEANUP_OK_VAZIO'
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    # 1. Listar quants em FB exceto Indisp dos product_ids processados
+    from app.odoo.constants.locations import LOCAIS_INDISPONIVEL
+    loc_indisp = LOCAIS_INDISPONIVEL.get(company_id)
+    excluir = [loc_indisp] if loc_indisp else []
+    domain = [
+        ['product_id', 'in', product_ids],
+        ['company_id', '=', company_id],
+        ['location_id', 'in', locs_origem],
+    ]
+    if excluir:
+        domain.append(['location_id', 'not in', excluir])
+    quants = odoo.search_read(
+        'stock.quant', domain,
+        ['id', 'product_id', 'lot_id', 'location_id',
+         'quantity', 'reserved_quantity'],
+    )
+
+    # Classificar
+    quants_reserved_neg = []
+    quants_qty_neg = []
+    TOL = 0.001
+    for q in quants:
+        qty = float(q.get('quantity') or 0)
+        reserved = float(q.get('reserved_quantity') or 0)
+        if qty < -TOL:
+            quants_qty_neg.append(q)
+        if reserved < -TOL:
+            quants_reserved_neg.append(q)
+
+    out['quants_reserved_negativo'] = [
+        {'quant_id': q['id'],
+         'product_id': q['product_id'][0] if q['product_id'] else None,
+         'location_id': q['location_id'][0] if q['location_id'] else None,
+         'lot_id': q['lot_id'][0] if q['lot_id'] else None,
+         'quantity': float(q.get('quantity') or 0),
+         'reserved_quantity': float(q.get('reserved_quantity') or 0)}
+        for q in quants_reserved_neg
+    ]
+    out['quants_qty_negativo'] = [
+        {'quant_id': q['id'],
+         'product_id': q['product_id'][0] if q['product_id'] else None,
+         'location_id': q['location_id'][0] if q['location_id'] else None,
+         'lot_id': q['lot_id'][0] if q['lot_id'] else None,
+         'quantity': float(q.get('quantity') or 0),
+         'reserved_quantity': float(q.get('reserved_quantity') or 0)}
+        for q in quants_qty_neg
+    ]
+
+    # 2. Zerar reserveds residuais
+    if quants_reserved_neg:
+        reserva_svc = StockReservaService(odoo=odoo)
+        qids = [q['id'] for q in quants_reserved_neg]
+        res_zerar = reserva_svc.zerar_reserved_residual(
+            quant_ids=qids, dry_run=dry_run,
+        )
+        out['resultado_zerar_residual'] = res_zerar
+
+    # 3. Ajustar quants com qty<0 para 0 (apenas em modo real)
+    if quants_qty_neg:
+        quant_svc = StockQuantAdjustmentService(odoo=odoo)
+        for q in quants_qty_neg:
+            qty = float(q.get('quantity') or 0)
+            res_aj = quant_svc.ajustar_quant(
+                quant_id=q['id'],
+                valor_absoluto=0.0,
+                dry_run=dry_run,
+            )
+            out['resultados_ajustar_negativo'].append({
+                'quant_id': q['id'],
+                'qty_antes': qty,
+                'delta_aplicado': -qty,  # +|qty| para ir de qty<0 a 0
+                'resultado': res_aj,
+            })
+
+    out['n_reserveds_zerados'] = len(quants_reserved_neg)
+    out['n_qty_ajustados'] = len(quants_qty_neg)
+    out['status'] = 'CLEANUP_OK' if (quants_reserved_neg or quants_qty_neg) else 'CLEANUP_OK_VAZIO'
+    out['tempo_ms'] = int((time.time() - t0) * 1000)
+    return out
+
+
 def _sumarizar(resultados: List[Dict[str, Any]], dry_run: bool) -> Dict[str, Any]:
     """Sumario macro para JSON de saida."""
     by_status: Dict[str, int] = {}
@@ -368,6 +523,14 @@ def main() -> int:
     ap.add_argument('--csv-out', help='CSV detalhado (1 linha por transferencia)')
     ap.add_argument('--csv-pendencias',
                     help='CSV de cods com parcial/falha (proximas sessoes)')
+    ap.add_argument('--cleanup-pos-bulk', action='store_true',
+                    help='(S2 v12) Apos bulk, listar reserveds negativos e qty<0 nos cods '
+                         'processados em FB exc Indisp; aplicar Skill 2.4 zerar_residual + '
+                         'Skill 1 ajustar_quant valor_absoluto=0. Eh defensivo (NAO altera '
+                         'saldo "vivo", so limpa fantasmas e zera negativos). Resultados '
+                         'em payload.cleanup_pos_bulk e CSV separado (se --csv-cleanup). '
+                         'Respeita --dry-run/--confirmar.')
+    ap.add_argument('--csv-cleanup', help='CSV do cleanup (--cleanup-pos-bulk)')
     adicionar_args_padrao(ap)
     args = ap.parse_args()
 
@@ -427,11 +590,38 @@ def main() -> int:
             )
             resultados.append(res)
 
+        # 4.5 Cleanup pos-bulk (S2 v12) — dentro do app_context
+        cleanup_result: Optional[Dict[str, Any]] = None
+        if args.cleanup_pos_bulk:
+            # Product_ids unicos dos cods que tiveram pelo menos 1 transferencia
+            # (FALHA_PRODUTO/FALHA_SEM_QUANT nao geram cleanup util).
+            product_ids = sorted({
+                r['produto_id'] for r in resultados
+                if r.get('produto_id') is not None
+                and r.get('transferencias')  # so cods com transferencias executadas
+            })
+            # locs_origem efetivas (override OU default da company)
+            from app.odoo.estoque.scripts.transfer import (
+                LOCS_ORIGEM_INTERNAS_POR_COMPANY,
+            )
+            locs_eff = locs_origem or LOCS_ORIGEM_INTERNAS_POR_COMPANY.get(
+                company_id, []
+            )
+            cleanup_result = _executar_cleanup_pos_bulk(
+                odoo=odoo,
+                product_ids=product_ids,
+                company_id=company_id,
+                locs_origem=locs_eff,
+                dry_run=dry_run,
+            )
+
     # 5. CSVs opcionais (fora do app_context — escrita disco pura)
     if args.csv_out:
         _escrever_csv_out(args.csv_out, resultados)
     if args.csv_pendencias:
         _escrever_csv_pendencias(args.csv_pendencias, resultados)
+    if args.csv_cleanup and cleanup_result is not None:
+        _escrever_csv_cleanup(args.csv_cleanup, cleanup_result)
 
     # 6. JSON de saida
     sumario = _sumarizar(resultados, dry_run)
@@ -445,6 +635,8 @@ def main() -> int:
         'resetar_reserva_origem': args.resetar_reserva_origem,
         'cods': resultados,
     }
+    if cleanup_result is not None:
+        payload['cleanup_pos_bulk'] = cleanup_result
     print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
 
     # 7. Exit code
