@@ -138,13 +138,18 @@ Quando antes de uma Skill 2 (transferência) há reservas ativas bloqueando o qu
 
 | Caminho | Comando | Quando usar | Risco | Reversível? |
 |---|---|---|---|---|
-| **A. Cancelar picking inteiro** | Skill 5 `--modo cancelar` OU Skill 2.4 `--cancelar-picking` | Picking sem valor fiscal (fantasma; INT sem origem/partner) | IRREVERSÍVEL. Consultar Fiscal se NF emitida. | ❌ |
+| **A. Cancelar picking inteiro** | Skill 5 `--modo cancelar` OU Skill 2.4 `--cancelar-picking` | Picking SEM MLs válidas além das bloqueantes (fantasma; INT sem origem/partner) | IRREVERSÍVEL. Consultar Fiscal se NF emitida. **NÃO USAR se picking tem MLs válidas de outros cods** (caso FB/OUT/01046 v8). | ❌ |
 | **B. Devolver picking** | Skill 5 `--modo devolver` | Picking state=done que precisa estornar saldo | Cria NF devolução. Estorno fiscal pode ser necessário. | Parcial |
-| **C. Desreservar mantendo picking** | Skill 2.4 `--unreserve-picking` (NOVO v7) | Operador quer liberar mas manter picking para re-reservar | **RISCO G_UNRESERVE_TRAVA**: picking pode TRAVAR em assigned. Verificar `n_mls_depois==0`. | ✅ (re-reserva via Odoo) |
-| **D. Não desreservar, usar OUTRO lote** | Skill 2 `--lote-origem <ALT>` | Existe lote livre com saldo suficiente | Mais seguro — não toca reserva. Pode não haver alternativo. | ✅ |
-| **E. Cirurgia em ML órfã** | Skill 2.4 `--ml-ids <ML> --moves-writes "..."` + opcional `--zerar-residual` depois | Picking tem MIX MLs OK + órfãs (`--find-orphan` >0). | NÃO aplica para reserva ATIVA. | ❌ |
+| **C. Desreservar mantendo picking** | Skill 2.4 `--unreserve-picking` (NOVO v7) | Operador quer liberar mas manter picking para re-reservar | **RISCO G_UNRESERVE_TRAVA**: picking pode TRAVAR. **NÃO USAR em picking MIX** — libera TODAS as MLs (incluindo válidas). | ✅ (re-reserva via Odoo) |
+| **D. Não desreservar, usar OUTRO lote** | Skill 2 `--lote-origem <ALT>` OU `--para-indisponivel --lote <ALT>` | Existe lote livre com saldo suficiente | Mais seguro — não toca reserva. **Validado v8: 11 cods resolvidos via D.** | ✅ |
+| **E. Cirurgia ML bloqueante (preserva picking)** | Skill 2.4 cirurgia + `--zerar-residual` + Skill 2 MODO C | Picking tem MIX MLs válidas + bloqueantes; quer preservar MLs válidas. **PREFERIDO sobre A neste caso** (validado v8 FB/OUT/01046 23 MLs). | Cirurgia segura. Deixa 3 moves residuais com qty=0 (cosmético; operador valida no Odoo UI). | Parcial (picking preservado, MLs bloqueantes removidas) |
 
-**Regra de seleção (prefira)**: D → E (se órfãs) → A (se fantasma) → B (se done) → C (último recurso).
+**Regra de seleção (refinada v8 — prefira nesta ordem)**:
+- **D primeiro** (sem risco fiscal, sem tocar picking).
+- **E quando picking tem MIX** MLs válidas + bloqueantes — preserva o que importa.
+- **A só se picking é 100% bloqueante/fantasma** (caso v7 FB/INT/08022).
+- **B se state=done** com estorno necessário.
+- **C como último recurso** (libera tudo + risco TRAVA).
 
 **Premissa absoluta (NUNCA pular)**: antes de chamar Skill 2 transferência, rodar Skill 9 `--modo pickings` para identificar reservas. Se `reserved > 0` → fluxo 2.6. Documentado em `app/odoo/estoque/fluxos/2.6-tratar-reserva-bloqueia-transferencia.md`.
 
@@ -188,6 +193,9 @@ Quando antes de uma Skill 2 (transferência) há reservas ativas bloqueando o qu
 - **G_UNRESERVE_TRAVA** (NOVO v7): após `unreserve_picking`, picking pode CONTINUAR em `state=assigned` se Odoo re-reservar automaticamente. Verificar `n_mls_depois==0` no output; se "aviso" emitido, reconsiderar caminho A (cancelar).
 - **G030** (NOVO v7): `stock.move.line.quant_id` é `store: False` (computed UI-only "Pick From"). Filtros `quant_id in [...]` são IGNORADOS pelo Odoo. Skill 9 + Skill 2.4 `find_orphan_mls` fazem cross-ref via tupla (product, lot, location, company) automaticamente.
 - **Caminho C é último recurso**: se quiser desreservar sem perder picking, prefira caminho D (outro lote) primeiro. Caminho C tem risco real de TRAVA confirmado pelo usuário 2026-05-24.
+- **Cirurgia deixa moves residuais com qty=0** (NOVO v8 — lição FB/OUT/01046): após cirurgia (`unlink ML + product_uom_qty=0`), os 3 moves ficam vivos em state=assigned ate operador validar via Odoo UI (`button_validate` cancela automaticamente moves com qty=0). Cosmético — NÃO bloqueia operação. Se quiser limpar 100% manualmente, cancelar moves no Odoo UI (não tem CLI — `stock.move._action_cancel` é privado G025).
+- **Caminho E é PREFERIDO sobre A quando picking tem MIX MLs válidas + bloqueantes** (NOVO v8): cirurgia preserva picking + suas MLs válidas (caso FB/OUT/01046: 23 MLs onde 3 eram bloqueantes e 20 eram devoluções legítimas — cancelar inteiro teria perdido as 20). Caminho A só se picking é 100% bloqueante.
+- **Pattern "cirurgia → zerar_residual → MODO C"** (NOVO v8): combinação atômica de 3 chamadas que resolve o destravamento completo. Codificado no fluxo 2.6 caminho E.
 
 ## Exemplos
 

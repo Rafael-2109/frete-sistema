@@ -1025,3 +1025,93 @@ Apos o incidente, implementei 3 melhorias evitam-repeticao (registradas em commi
 | Cod 4739199 (FALHA_QUANT_NEGATIVO no smoke) | 1 cod (qty 362.75) | Investigar saldo atual; pode ja ter sido processado pelo batch principal |
 | Cods MIGRAÇÃO pulados (estrategia β) | 5 cods | Rafael decide: cancelar pickings (caminhos A/B do fluxo 2.6) ou aceitar saldo bloqueado |
 | Plano Etapa B (transferir MIGRAÇÃO FB/Estoque → FB/Indisp) | 67 chamadas | NÃO necessario — MODO C ja faz isso atomic em Etapa A+B unica. Plano B pode ser descartado. |
+
+---
+
+## 14. Sessao 2026-05-25 v8: 13 pendencias residuais resolvidas (8 PARCIAL + 5 MIGRACAO) + cirurgia FB/OUT/01046
+
+> Apos sessao v7-extras (commit 507e5e36). Rafael pediu "transfira os 8 pendentes + os 5 MIGRACAO". Auditoria 71 cods identificou status real, batch v8 fechou 11 cods diretamente, cirurgia FB/OUT/01046 destravou os 3 ultimos.
+
+### 14.1 Cronologia
+
+| # | Evento | Resultado |
+|---|---|---|
+| 1 | Auditoria 71 cods (`/tmp/auditar_71cods.py`) consolidando logs v7+v7-P-15/05 | 54 OK + 8 PARCIAL + 5 MIGRACAO PULADO + 4 SKIP_planejado |
+| 2 | Investigacao alternativas para 5 MIGRACAO via Skill 9 | 3 cods (103000113, 105000021, 105000038) tem outros lotes livres (caminho D); 2 cods (103000117, 104000054) parcialmente cobertos pelo D |
+| 3 | Plano consolidado: 20 chamadas (14 MODO C + 6 Skill 1) | Dry-run 20/20 OK em 94s |
+| 4 | Batch v8 `--confirmar`: 20 chamadas PROD | **20/20 EXECUTADO em 116s** — todas as transferencias planejadas |
+| 5 | Auditoria pos-v8 | 65 OK + 2 PARCIAL (103000117 + 104000054 ainda bloqueados por FB/OUT/01046) + 4 SKIP_planejado |
+| 6 | Rafael consulta: picking FB/OUT/01046 foi revertido na realidade — "ajuste o estoque" | Decidiu: cirurgia (preserva picking) em vez de cancelar |
+| 7 | Investigacao AO VIVO do picking FB/OUT/01046 | **23 MLs** (nao 3!) — 20 sao devolucoes validas de outros cods + 3 sao os bloqueantes |
+| 8 | Identificacao moves parent: cada uma das 3 MLs alvo tem move 1:1 (1161587/103000117, 1161611/103000113, 1161613/104000054) | Cirurgia segura: unlink 3 MLs + zerar product_uom_qty dos 3 moves |
+| 9 | Cirurgia (Skill 2.4 cancelar_moves_orfaos) | CIRURGIA_OK em 1.24s — 3 MLs unlinked, 3 moves zerados, picking preservado com 20 MLs validas |
+| 10 | Zerar reserved residual (Skill 2.4) | ZERAR_RESIDUAL_OK em 0.75s — 3 quants com reserved=0 |
+| 11 | 3x Skill 2 MODO C transferindo lote MIGRACAO livre para FB/Indisp | 3/3 EXECUTADO (890.4646 un total) |
+| 12 | Auditoria final consolidando v7+v7-P-15/05+v8+cirurgia | **67/67 cods executaveis OK (100%) + 4 SKIP planejados** = 71/71 conforme plano |
+
+### 14.2 Metricas finais (v7 + v7-extras + v8 + cirurgia)
+
+| Operacao | Volume |
+|---|---:|
+| Cancel FB/INT/08022 (Skill 5 v7) | 1 picking, 3 MLs lote 13206 desbloqueado |
+| Skill 2 MODO C batch principal (v7) | 80 chamadas, ~13k un, 512s |
+| Skill 2 MODO B P-15/05 (v7) | 3 chamadas, 2.458 un, 19s |
+| Skill 1 reversao duplicacoes (v7 incidente race condition) | 4 ajustes, 504 un cada |
+| Skill 2 MODO C + Skill 1 batch v8 residuais | 20 chamadas, ~5.940 un, 116s |
+| Skill 2.4 cirurgia FB/OUT/01046 (v8) | 1 cirurgia (3 MLs unlinked + 3 moves zerados) |
+| Skill 2.4 zerar_reserved_residual (v8) | 3 quants residuais |
+| Skill 2 MODO C destravamento pos-cirurgia (v8) | 3 chamadas, 890.46 un |
+| **TOTAL JORNADA** | **~115 writes PROD, ~22.500 un transferidas para FB/Indisponivel** |
+
+### 14.3 Estado final do plano (71 cods → FB/Indisp)
+
+- **67 cods OK_TOTAL** (100% dos executaveis)
+- **4 SKIP planejados** desde inicio (103 PEPINO, 46 VINAGRE TRIPLO sem saldo; X105000022 descontinuado X-prefix; 301000003 em FB/Pos-Producao)
+- **0 PARCIAL** (todas pendencias resolvidas)
+- **0 FALHA**
+
+### 14.4 Cirurgia FB/OUT/01046 — consistencia tecnica
+
+**Antes:** picking state=assigned, 23 MLs, 3 MLs bloqueando quants MIGRACAO FB/Estoque (103000117 620.32 + 103000113 14.35 + 104000054 255.79 un).
+
+**Apos cirurgia:**
+- 23 MLs → 20 MLs (3 unlinked)
+- 3 moves (1161587/1161611/1161613) com product_uom_qty=0, state=assigned ainda
+- Picking continua state=assigned, processavel normalmente
+- Quants origem: reserved=0 (apos zerar_reserved_residual)
+- Lotes MIGRACAO livres → transferidos via MODO C (890 un para MIGRACAO FB/Indisp)
+
+**Consequencia operacional:** quando operador validar o picking via Odoo UI, as 20 MLs validas processam normalmente. Os 3 moves com qty=0 ficam pendurados ate o operator processar — Odoo limpa automaticamente em alguns fluxos (cancel automatico em moves com qty=0 apos validate). Se o operador fiscal quiser limpar 100%, pode cancelar manualmente os 3 moves no Odoo UI (cosmetico, nao-urgente).
+
+**Por que essa abordagem (e nao outra):**
+- Cancelar picking inteiro (Skill 5 cancelar): perderia as 20 MLs validas de devolucoes de outros cods
+- do_unreserve no picking (Skill 2.4 unreserve_picking): liberaria TODAS as 23 MLs (incluindo as 20 que precisam permanecer reservadas)
+- Cirurgia: unico caminho que **preserva picking + libera quants alvo + impacto auditavel**
+
+### 14.5 Licoes operacionais reforcadas
+
+1. **Cirurgia (Skill 2.4 cancelar_moves_orfaos) eh PREFERIDA sobre Skill 5 cancelar quando picking tem MIX MLs validas + bloqueantes** — adicionada como invariante no fluxo 2.6 caminho E.
+2. **Auditoria pre-tratamento ALWAYS via Skill 9 modo pickings** — descobriu 23 MLs (nao 3 como assumido apenas pelos 5 cods MIGRACAO). Skill 5 cancelar teria causado dano.
+3. **Pattern "cirurgia → zerar residual → MODO C"** — composicao de 3 skills resolve o caso completo. Codificar como receita explicita no fluxo 2.6.
+4. **Caminho D (outro lote alternativo) eh o MAIS SEGURO** — 11 cods MIGRACAO resolvidos no v8 sem mexer em picking, apenas usando lotes alternativos livres. Aplicavel em ~60-70% dos casos quando estoque distribuido em multiplos lotes.
+
+### 14.6 Confirmacao: estado PROD
+
+| Acao | Quantidade | Resultado |
+|---|---|---|
+| Batch v8 (20 chamadas) | 14 MODO C + 6 Skill 1 | ✅ 20/20 EXECUTADO |
+| Cirurgia FB/OUT/01046 | 1 cirurgia | ✅ CIRURGIA_OK (3 MLs + 3 moves) |
+| Zerar reserved residual | 3 quants | ✅ ZERAR_RESIDUAL_OK |
+| MODO C destravamento | 3 chamadas | ✅ 3/3 EXECUTADO (890 un) |
+| Auditoria final 71 cods | comparacao | ✅ 67/67 executaveis OK + 4 SKIP planejado = 100% |
+
+**Modificacoes Odoo PROD v8: 24 writes** (20 batch + 1 cirurgia + 3 MODO C destravamento; zerar_residual eh complemento de cirurgia).
+**Modificacoes banco PG PROD: zero.**
+**Modificacoes filesystem PROD: zero.**
+
+**Total acumulado da jornada (v7 + v7-extras + v8): ~115 writes PROD.**
+
+### 14.7 Pendencias residuais (apos v8 + cirurgia)
+
+- **3 moves do picking FB/OUT/01046 com qty=0** (cosmetico): aguardam validacao manual no Odoo UI pelo time fiscal. Nao bloqueia operacao.
+- **NENHUMA pendencia operacional** do plano 71 cods.

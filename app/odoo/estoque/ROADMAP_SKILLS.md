@@ -7,9 +7,21 @@
 
 ## ⏯️ ESTADO ATUAL E COMO CONTINUAR (handoff — atualizar a cada avanço)
 
-**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual `1d1ac416` — 4 commits sobre main@b4f7b24c). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
+**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual 5+ commits sobre main@b4f7b24c — último v8). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **229 pytest verdes** (196 anterior + 19 Skill 9 query + 14 Skill 2.4 reserva).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^ODOO_' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **230 pytest verdes** (196 anterior + 19 Skill 9 query + 14 Skill 2.4 reserva + 1 H1 draft).
+
+**Sessão 2026-05-25 v8 (Caso 71 cods 100% FECHADO):**
+- ✅ Auditoria 71 cods identificou estado real: 54 OK + 8 PARCIAL + 5 MIGRACAO bloqueado + 4 SKIP planejado.
+- ✅ Batch v8 (20 chamadas: 14 MODO C + 6 Skill 1): 11 cods PARCIAIS/MIGRAÇÃO resolvidos via caminho D (outros lotes alternativos livres em FB/Estoque).
+- ✅ Cirurgia FB/OUT/01046 (caminho E inédito): 3 MLs bloqueantes unlinked + 3 quants zerados (reserved residual) + 3 MODO C destravando 890 un. Picking preservado com 20 MLs válidas (devoluções legítimas).
+- ✅ **Caso 71 cods 100% CONCLUÍDO**: 67/67 executáveis OK + 4 SKIP planejados.
+- ✅ Pattern v8 NOVO atomico: `cirurgia (Skill 2.4) → zerar_residual (Skill 2.4) → MODO C (Skill 2)`. Codificado no fluxo 2.6 caminho E.
+- ✅ Regra inviolável NOVA #26+#27 no `gestor-estoque-odoo.md`: CIRURGIA (E) PREFERIDA sobre CANCELAR (A) quando picking tem MIX MLs válidas + bloqueantes.
+- ✅ Documentação completa atualizada: VALIDACAO §14 + fluxo 2.6 (caminho E refinado + caso real exemplo 2) + SKILL.md 2.4 (tabela 5-caminhos refinada + armadilhas v8) + gestor-estoque-odoo.md (invariantes v8) + memórias `[[caso_real_tratar_reservas_pre_transferencia]]` (100% RESOLVIDO) + `[[fluxo_2_6_pattern]]` (pattern v8).
+- ✅ Total jornada v7+v7-extras+v8+cirurgia: ~115 writes PROD, ~22.500 un transferidas para FB/Indisponivel.
+
+
 
 **Sessão 2026-05-24 v7 (Gap reservas pre-transferencia — 4 átomos novos + fluxo 2.6 + validacao caso real):**
 - ✅ **Verificação main**: nenhum commit novo desde v6 (`fb494608` ja conhecido) — sem rebase.
