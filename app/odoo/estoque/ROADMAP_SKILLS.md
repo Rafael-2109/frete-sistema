@@ -9,7 +9,44 @@
 
 **Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual 6+ commits sobre main@b4f7b24c — último v9). `main` está VIVO (Rafael commita em paralelo — avancou apenas `fb494608` cosmetico D8 SKIP) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **390 pytest verdes** (381 v11 + 2 S1 + 6 S2 + 1 mitigacao MO).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **393 pytest verdes** (tests/odoo/ — v13 confirmado).
+
+**Sessão 2026-05-25 v13 (Planejamento Skill 8 `faturando-odoo` — estruturacao C1+C4):**
+- ✅ **Verificacao main**: main = `a937748b` (merge v12); sem avanco; sem rebase.
+- ✅ **Pytest baseline confirmado**: 393 verdes em `tests/odoo/` (18s). Observacao: rodar `tests/odoo/services/` isolado produz 27 falhas (fixture pollution pre-existente); usar `tests/odoo/` como baseline canonico.
+- ✅ **AskUserQuestion**: foco A (Skill 8) escolhido. Rafael: "estruturar bem a skill, depois trabalhar em casos reais" + lembrete explicito "erros + SSL connection timeout".
+- ✅ **Levantamento contexto Skill 8** (subagente Explore + leituras complementares):
+  - Service `inventario_pipeline_service.py` (1.346 LOC, F5a-F5e + helpers `_commit_with_retry`/`_garantir_payment_provider`/`_garantir_fiscal_setup`/`_corrigir_price_zero_em_invoice`).
+  - Script-fonte macro `09_executar_onda1_bulk.py` (~1.850 LOC, etapas A-F).
+  - 15 scripts ad-hoc vivos (`fat_lf_*`, `09*`, `debug_sefaz_*`).
+  - Constants OK (MATRIZ_INTERCOMPANY + picking_types + ids_diversos); journals (847/1002/987) NAO centralizados.
+  - 9 gotchas mapeados (G004/G007/G011/G016/G017/G018/G023/G029/G034/G035).
+  - Pattern Skill 6 v9 `pre_etapa_executor.py` identificado como template.
+  - Galho 1.1/1.3 dos fluxos: NENHUMA folha criada.
+- ✅ **Mapeamento SSL/timeout completo**:
+  - G016 fix codificado: combinacao A (commit antes operacao longa) + B (try/except + retry + re-fetch via `db.session.get`) + C (TCP keepalive em `config.py:115-118`).
+  - Recovery scripts `fat_lf_resume.sh` (B→D, 18 iter timeout 900s, stagnation detector) + `fat_lf_resume_entrada.sh` (E:30 iter + F:12 iter, timeout 600s).
+  - Quirks CIEL IT timing (3-5min madrugada, 5-10min manha, >2h pico).
+- ✅ **NOVO ARQUIVO**: `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` (~600 LOC) — documento vivo de planejamento persistente.
+  - 14 secoes: cabecalho de estado, visao macro, escopo, decomposicao etapas A-F, pre-flight, SSL/timeout/recovery, pattern Skill 6 v9 reuso, 23 checkpoints granulares, pre-mortem 4 dimensoes x 6 etapas, riscos arquiteturais, pendencias vivas, decisoes (6, 2 RESOLVIDAS + 4 pendentes v14), cronograma (8 sessoes v13→v20+), trilha de auditoria, glossario, ponteiros.
+  - **Regra inviolavel 0** documentada: ANTES de qualquer modificacao em codigo Skill 8 LER este arquivo INTEIRO + atualizar checkpoint ativo.
+  - Checkpoints C1 (pre-mortem) + C4 (escopo) marcados ✅; restantes ⬜.
+  - Cronograma realista: v14 (C2/C3 mineracao + C5 pre-flight) → v15 (C6/C7/C8 base+F5a+F5b) → v16 (C9/C10 F5c+F5d) → v17 (C11/C12/C13 F5e+E+F) → v18 (C14/C15/C16/C17 recovery+SKILL+tests) → v19 (C18/C19/C20 folhas+cross-refs+canary) → v20+ (C21/C22/C23 bulk+code-review+commit).
+- ✅ **Decisoes RESOLVIDAS** com Rafael:
+  - 10.1 Escopo COMPLETO A-F em N sessoes (nao incremental)
+  - 10.2 Estruturar antes; casos reais apos C18
+- ⬜ **Decisoes PENDENTES** para v14:
+  - 10.3 Pattern paralelismo (preservar Semaphore=5 vs refatorar ThreadPool Skill 6) — recomendacao: preservar
+  - 10.4 Centralizar journals nesta skill (vs adiar) — recomendacao: adiar para Skill 7
+  - 10.5 Pre-flight como sub-skill vs entry-point — recomendacao: entry-point (b)
+  - 10.6 Refatorar F5a/F5b para Skill 5 — recomendacao: nao refatorar
+- 🟢 **Sem mudancas em codigo nesta sessao** (so docs/planejamento).
+- 🟢 **Pytest baseline mantido: 393 verdes**.
+
+**Status global apos v13:**
+- Skill 8 `faturando-odoo` ⬜ **PLANEJADA** (C1+C4 ✅; 21 checkpoints ⬜) — 0 LOC de codigo novo, planejamento completo.
+- Baseline pytest mantido: 393 verdes.
+- Proximo passo: sessao v14 com mineracao detalhada (C2+C3) + pre-flight (C5) + decisoes 10.3-10.6.
 
 **Sessão 2026-05-25 v12 (S1+S2+S4 fechando lacunas v11 — Skill 2 ARQUITETURALMENTE COMPLETA):**
 - ✅ **Pre-mortem da operacao v10+v11** identificou 3 lacunas estruturais:

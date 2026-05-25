@@ -1,6 +1,6 @@
 # app/odoo/estoque — Operações de Escrita de Estoque no Odoo
 
-**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22; ONDA 0.4 ✅ fechada 2026-05-24 v3 — G019/G020 codificadas no service; **Skill 6 `planejando-pre-etapa-odoo` 🟡 mín viável COMPLETA capinada em 2026-05-24 v6 + ESTENDIDA 2026-05-25 v9** — planner READ Odoo + WRITE banco local + **WRITE Odoo via orchestrator C3 macro**; 5 modos planejar/propor/listar/aprovar/**executar-onda**; hash sha256 anti-replay; **42 testes pytest verdes** — 21 service + 21 orchestrator novo; capina `03b_planejar_pre_etapa_cd` + `04b_propor_pre_etapa_cd` + **`09b_executar_pre_etapa` v9** — executor compoe Skills 1+2 via `app/odoo/estoque/orchestrators/pre_etapa_executor.py` com guard delta_esperado propagado + auditoria + paralelizacao) | **Atualizado:** 2026-05-25
+**Status:** EM CONSTRUÇÃO (ONDA 0 concluída 2026-05-22; ONDA 0.4 ✅ fechada 2026-05-24 v3 — G019/G020 codificadas no service; **Skill 2 `transferindo-interno-odoo` ✅ MATURADA ARQUITETURALMENTE em 2026-05-25 v12** — 3 modos atomicos + helper alto-nivel `distribuir_para_indisponivel` com fallback Modo B + flag `--cleanup-pos-bulk`; demanda 158 cods FB PROD 100% efetiva; **Skill 6 `planejando-pre-etapa-odoo` 🟡 mín viável COMPLETA v9** — 5 modos planejar/propor/listar/aprovar/executar-onda; **Skill 8 `faturando-odoo` ⬜ PLANEJADA v13** — documento vivo `PLANEJAMENTO_SKILL8_FATURANDO.md` com 23 checkpoints granulares para 6-8 sessoes; baseline pytest 393 verdes) | **Atualizado:** 2026-05-25 v13
 **Audiência:** Claude Code (dev) + agente web. Doc **machine-first** — contratos e regras.
 
 Pacote-destino da consolidação dos ~105 scripts ad-hoc de inventário (`scripts/inventario_2026_05/`) em **átomos versáteis e auto-seguros** (services), consumidos por **skills** (`.claude/skills/`) + o subagente **`gestor-estoque-odoo`** (`.claude/agents/`). Este CLAUDE.md é a **constituição** da arquitetura.
@@ -125,14 +125,17 @@ Papel: orquestrar operações de escrita + **pesquisar premissas obrigatórias**
 
 ```
 app/odoo/estoque/
-  __init__.py          fachada
-  CLAUDE.md            este doc (constituição)
-  ROADMAP_SKILLS.md    task-list da migração (transitório)
-  _utils.py            resolvers de PREMISSAS: resolver_empresa, resolver_produto, EMPRESAS (✅) + (futuro) buscar_quant, _registrar_op, norm_lote
-  scripts/             átomos C1/C2 (quant, transfer, lot, picking, mo, reserva, pre_etapa)
-  orchestrators/       átomos C3 macro (inventario_pipeline)
-  fluxos/              folhas da árvore (L3, progressive disclosure)
+  __init__.py                          fachada
+  CLAUDE.md                            este doc (constituição)
+  ROADMAP_SKILLS.md                    task-list da migração (transitório) — HANDOFF v13 atualizado
+  VALIDACAO_FINAL_SESSAO.md            historico consolidado das sessoes (§1-§16)
+  PLANEJAMENTO_SKILL8_FATURANDO.md     **planejamento vivo MACRO Skill 8 — sobrevive N sessoes** (v13+)
+  _utils.py                            resolvers de PREMISSAS: resolver_empresa, resolver_produto, EMPRESAS (✅) + (futuro) buscar_quant, _registrar_op, norm_lote
+  scripts/                             átomos C1/C2 (quant, transfer, lot, picking, mo, reserva, pre_etapa)
+  orchestrators/                       átomos C3 macro (pre_etapa_executor ✅, faturamento_pipeline ⬜ v15+)
+  fluxos/                              folhas da árvore (L3, progressive disclosure)
 # COMPAT: app/odoo/services/<nome>_service.py vira SHIM (re-export) — preserva 105 scripts + testes ativos
+# **NOVO PATTERN v13 (skills MACRO C3 multi-sessao):** criar `PLANEJAMENTO_SKILL<N>_<NOME>.md` quando a capinagem exigir 3+ sessoes (criterio: SEFAZ irreversivel + estado distribuido + 4+ etapas dependentes). Regra inviolavel 0 do planejamento: LER inteiro + atualizar checkpoint ativo ANTES de qualquer modificacao em codigo.
 ```
 
 ## 12. INVARIANTES DE EXECUÇÃO (toda operação WRITE)
@@ -145,7 +148,9 @@ app/odoo/estoque/
 
 ## 13. PONTEIROS
 
-- Roadmap (capinar): `app/odoo/estoque/ROADMAP_SKILLS.md`
+- Roadmap (capinar): `app/odoo/estoque/ROADMAP_SKILLS.md` (HANDOFF v13 atualizado)
+- Historico consolidado: `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` (§1-§16)
+- **Planejamento Skill 8 MACRO (sobrevive N sessoes):** `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` (v13+) — **OBRIGATORIO LER ANTES de tocar Skill 8**
 - Folhas de fluxo: `app/odoo/estoque/fluxos/`
 - Subagente: `.claude/agents/gestor-estoque-odoo.md`
 - Mineração script→átomo: `docs/inventario-2026-05/consolidacao/MAPA_SCRIPTS.md`
