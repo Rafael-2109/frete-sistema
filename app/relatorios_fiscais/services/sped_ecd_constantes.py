@@ -38,7 +38,7 @@ COMPANY_LF_ID = 5                        # LA FAMIGLIA - LF (raiz 18.467.441) �
 # Usada para nomear o arquivo SPED gerado e logs do script standalone.
 # BUMP a cada iteracao de correcao + atualizar HISTORICO em SPED_ECD_PLANO.md.
 # Fonte unica da verdade — gerar_sped.py e demais scripts leem daqui.
-VERSAO_SPED = 'V32'
+VERSAO_SPED = 'V36'
 
 LEIAUTE_VERSAO = '9.00'                  # Leiaute 9 vigente desde Dez/2021
 COD_PLAN_REF = '1'                       # 1=PJ Lucro Real (decisao usuario)
@@ -79,15 +79,20 @@ EMITIR_CCUS_SPED = False
 # ============================================================
 # Mapeamento account_type Odoo -> COD_NAT (Natureza da conta — I050 campo 3)
 # ============================================================
-# Tabela Manual ECD:
-#   01 = Conta de Ativo
-#   02 = Conta de Passivo
+# Tabela COD_NAT — Manual ECD Leiaute 9 (manual_ecd/bloco_I_lancamentos.md):
+#   01 = Contas de Ativo
+#   02 = Contas de Passivo
 #   03 = Patrimonio Liquido
-#   04 = Conta de Receita
-#   05 = Conta de Custo
-#   07 = Conta de Resultado
-#   09 = Conta de Compensacao
-#   99 = Outras
+#   04 = Contas de Resultado  (engloba receita + despesa + custo)
+#   05 = Contas de Compensacao
+#   09 = Outras
+#
+# V33 (CAT 33 — 2026-05-24): mapping corrigido contra Manual ECD.
+# Antes: 04=Receita, 05=Custo, 07=Resultado, 09=Compensacao (TUDO ERRADO).
+# Auditoria V31 vs contadora 2S 2024: V31 emitia 187 contas com cod_nat=04
+# e 191 com cod_nat=05; contadora emite 209x04 e 18x05 (so as de compensacao real).
+# Diff = 173 contas mal-classificadas. Agora income+expense+expense_* -> 04 e
+# off_balance -> 05 (alinha com contadora e Manual).
 
 ACCOUNT_TYPE_TO_NAT = {
     # Ativo (01)
@@ -98,12 +103,11 @@ ACCOUNT_TYPE_TO_NAT = {
     'liability_current': '02', 'liability_non_current': '02',
     # Patrimonio Liquido (03)
     'equity': '03', 'equity_unaffected': '03',
-    # Receita (04)
+    # Resultado (04) — V33: engloba receita + despesa + custo (Manual ECD)
     'income': '04', 'income_other': '04',
-    # Custo/Despesa (05)
-    'expense': '05', 'expense_depreciation': '05', 'expense_direct_cost': '05',
-    # Compensacao (09)
-    'off_balance': '09',
+    'expense': '04', 'expense_depreciation': '04', 'expense_direct_cost': '04',
+    # Compensacao (05) — V33: era '09' (Outras), corrigido para '05' (Manual ECD)
+    'off_balance': '05',
 }
 
 # Account types patrimoniais (Balanco Patrimonial — J100)
@@ -113,6 +117,53 @@ ACCOUNT_TYPES_PATRIMONIAIS = {
     'liability_payable', 'liability_credit_card',
     'liability_current', 'liability_non_current',
     'equity', 'equity_unaffected',
+}
+
+# ============================================================
+# Codes de Compensacao que ENTRAM no BP (excecao a regra geral)
+# ============================================================
+# V33 (CAT 32 — 2026-05-24): por padrao codes 5xx/6xx/7xx/8xx/9xx sao excluidos
+# do BP (`blocks.py:_classe_pelo_code`). Contadora NACOM, porem, inclui as 2
+# contas abaixo no ATIVO (COD_AGL_SUP=115 ESTOQUES) — NACOM em recuperacao
+# judicial classifica essas contas de compensacao como ativos judiciais.
+#
+# Saldo na contadora 2S 2024:
+#   510101 CONTAS DE COMPENSACAO         = R$ 19.977.000,00 D
+#   510102 CONTAS DE COMPENSACAO PASSIVA = R$  7.008.059,56 D
+#
+# Sem isso, J100 fecha com diff de R$ 19,97 milhoes (REGRA_VALIDA_ATIVO_PASSIVO_FIN
+# bloqueia upload PVA).
+#
+# **DUAS LISTAS COMPLEMENTARES** (ver blocks.py:_classe_pelo_code / _classe_da_conta):
+#  1) CODES_COMPENSACAO_NO_BP_ATIVO — codes EXATOS (sinteticas raiz + groups).
+#  2) CODES_COMPENSACAO_NO_BP_ATIVO_PREFIXES — qualquer code com este prefix.
+#     Cobre as analiticas filhas: 5101010001..30+ (REMESSA INDUSTRIALIZACAO,
+#     BONIFICACAO, BENS EM COMODATO, COMPENSACAO ATIVA/PASSIVA etc.) que sao
+#     onde efetivamente o saldo R$ 27M esta.
+
+CODES_COMPENSACAO_NO_BP_ATIVO = {
+    '510101',   # sintetica/group nivel 4 (COMPENSACAO ATIVA) — vincula a 115 no J100
+    '510102',   # sintetica/group nivel 4 (COMPENSACAO PASSIVA) — vincula a 115 no J100
+}
+
+CODES_COMPENSACAO_NO_BP_ATIVO_PREFIXES = (
+    # V35 (2026-05-24): trocado de '5101' para '51010' — '5101' fazia o group
+    # sintetico '5101' (que NAO esta em CODES_COMPENSACAO_NO_BP_ATIVO) ser
+    # incluido no BP indevidamente como 3a raiz. '51010' cobre analiticas
+    # 5101010001..30+ e 5101020001..30+ sem pegar a sintetica raiz.
+    '51010',
+)
+
+# V35 (CAT 12 — 2026-05-24): redirect de COD_AGL_SUP no J100. Sem isso, codes 510101+
+# apareceriam como filhas da raiz '5' (CONTAS DE COMPENSACAO), gerando 3a raiz
+# IND_GRP_BAL=A. Contadora mapeia para COD_AGL_SUP=115 (ESTOQUES dentro do Ativo).
+# Aplicado SOMENTE no J100 (blocks.py:construir_J005_J100). I050 mantem cod_sup
+# real do plano (5101) — Manual ECD nao proibe COD_AGL_SUP diferente de COD_CTA_SUP.
+# Sinteticas raiz 5/51/5101 NAO sao mais incluidas no BP (removidas de
+# CODES_COMPENSACAO_NO_BP_ATIVO acima), entao nao geram raizes extras.
+CODES_J100_COD_AGL_SUP_REDIRECT = {
+    '510101': '115',  # COMPENSACAO ATIVA  -> ESTOQUES (sintetica 115 sob ATIVO CIRCULANTE 11)
+    '510102': '115',  # COMPENSACAO PASSIVA -> ESTOQUES
 }
 
 # Account types resultado (DRE — J150)

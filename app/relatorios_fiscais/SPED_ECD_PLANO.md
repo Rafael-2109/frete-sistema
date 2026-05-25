@@ -1,9 +1,109 @@
 # SPED ECD — Plano de Correcoes (vivo)
 
 **Status**: ATIVO — em correcao iterativa
-**Versao atual**: ver `VERSAO_SPED` em `services/sped_ecd_constantes.py` (fonte unica) — **V26 em prod**
+**Versao atual**: ver `VERSAO_SPED` em `services/sped_ecd_constantes.py` (fonte unica) — **V34 em codigo, V26 em prod PVA**
 **Periodo de teste**: 01/07/2024 a 31/12/2024 (3 companies: FB+SC+CD)
 **Ultima validacao PVA**: V26 (PDF `erros v26.pdf` — 2026-05-16 11:42)
+**Ultima auditoria vs contadora**: V31 vs SPED contadora 2S 2024 — 2026-05-24 (relatorio `/tmp/subagent-findings/audit-sped-V31-vs-CONTADORA-2024.md`)
+**Ultima geracao**: V36 — 2026-05-24 21:00 — 1 erro validador interno (balanco diff R$ 445K — causa: 9 contas Passivo cadastradas como `account_type=expense` no Odoo, NAO bug do gerador)
+
+---
+
+## AUDITORIA V31 vs CONTADORA 2024 (2026-05-24) — NOVAS CATEGORIAS
+
+Contadora Tamiris enviou:
+- **1S 2024 ASSINADO** (jan-jun, aprovado RFB) — `61724241000178-35208934897-20240101-20240630-G-...-SPED-ECD 2.txt`
+- **2S 2024 (a enviar)** — `SpedContabil-61724241000178__17_20240701_20241231_G.txt` (ground truth primario)
+
+Subagente `auditor-sped-ecd` rodou as 4 skills (parser, contabil, ground truth, manual). Descobriu **10 NOVAS CATEGORIAS** alem das ja conhecidas:
+
+| CAT | Sintoma | Severidade | Arquivo:linha | Origem |
+|-----|---------|------------|---------------|--------|
+| **CAT 30** | 0000 IND_FIN_ESC=0/COD_HASH_SUB vazio/IND_MUDANC_PC=0 — V31 emite como Original mas contadora envia como Substituta com mudanca PC | **BLOQ** | `constantes.py:52,55` + `blocks.py:254-262` | Parametros UI nao expostos |
+| **CAT 31** | J100 inflado 5x (350 vs 67) — `_gerar_hierarquia_sintetica` cria 10 niveis fake por digito do code | **BLOQ** | `data.py:333` | Algoritmo gera 1 sintetica/digito; correto = ler `account.account.parent_id` |
+| **CAT 32** | DESBALANCEAMENTO R$ 19,97 MILHOES — V31 exclui codes 5xx (compensacao); contadora inclui no Ativo | **BLOQ** | `blocks.py:998` | `_classe_pelo_code` exclui demais; contadora classifica COD_AGL_SUP=115 |
+| **CAT 33** | COD_NAT mapping invertido — V31 trata 04=Receita/05=Custo; Manual diz 04=Resultado/05=Compensacao. 173 contas mal-classificadas | **BLOQ** | `constantes.py:86-107` | `ACCOUNT_TYPE_TO_NAT` mapeia `expense`→05 (errado) |
+| **CAT 34** | NUM_ORD/NUM_INST hardcoded em I030 e J900 — sempre `1`/`999999`; contadora 2S=17/921870, 1S=16/201703 | **BLOQ** | `blocks.py:331,333` + J900 | Sem parametro UI; segunda ECD reprovaria |
+| **CAT 35** | J005 DT_INI semestral (01072024) — Manual exige exercicio social inteiro (01012024) | **BLOQ** | `blocks.py:906` | Calcular `date(year, 1, 1)` |
+| **CAT 36** | J150 estrutura rasa (7 linhas vs 18 detalhadas) — sem CMV, devolucoes, despesas adm/comercial separadas | IMPORTANTE | `blocks.py:1170-1189` + `_calcular_grupos_dre_hierarquicos` | Constante `grupos` insuficiente |
+| **CAT 37** | I157 ausente (245 linhas) — Transferencia Saldos Plano Anterior; obrigatorio se IND_MUDANC_PC=1 | **BLOQ se CAT 30** | (nao implementado) | Tabela externa do contador (CSV) |
+| **CAT 38** | J801 + J932 ausentes — Termo Verificacao Substituicao + signatario COD_ASSIN=910; obrigatorio se IND_FIN_ESC=1 | **BLOQ se CAT 30** | (nao implementado) | Texto RTF + constantes |
+| **CAT 39** | DT_ALT=01012010 hardcoded em sinteticas geradas (contadora usa data real 08022023) | IMPORTANTE | `data.py:396` | Calcular `min(create_date)` das filhas |
+| **CAT 40** | I050 nome nivel 1 code 2 "PASSIVO E PATRIMONIO LIQUIDO" (contadora separa: PASSIVO + nivel 2 code 23 = PL) | IMPORTANTE | `data.py:359` (NOMES_CLASSE_NIVEL_1) | Constante a renomear |
+
+### CATEGORIAS REJEITADAS (suspeitas iniciais que NAO sao bug)
+- 0000 IND_NIRE: V31=0 OK (contadora 2S tambem=0; so a 1S=1)
+- 0000 COD_SCP: V31=0 OK (campo 18 vazio em ambos; confusao com IND_FIN_ESC)
+- Bloco C (C001-C990) ausente: **NAO IMPLEMENTAR** — Manual ECD `bloco_C_recuperada.md:7` diz que PVA gera ao executar "Recuperar ECD Anterior". Documentar passo operacional para contador.
+
+### TOP 3 ALAVANCAGEM (corrigir 1 → resolve N)
+1. **Refatorar `_gerar_hierarquia_sintetica`** (data.py:333) usando `parent_id` Odoo — resolve CAT 31 + 363 contas extras I050 + I052 desalinhado
+2. **Corrigir `ACCOUNT_TYPE_TO_NAT`** (constantes.py:86-107) — resolve CAT 33 e 173 contas mal-classificadas
+3. **Incluir codes 5xx no Ativo** (blocks.py:998) — resolve CAT 32 e desbalanceamento R$ 19,97M
+
+### COMO MEXER (ordem sugerida)
+1. CAT 33 (constantes mapping) — 5 min, ALTO IMPACTO
+2. CAT 35 (J005 DT_INI) — trivial, 2 min
+3. CAT 34 (NUM_ORD param UI) — adicionar campo form
+4. CAT 31 (hierarquia parent_id) — refactor maior, requer mapear plano Odoo
+5. CAT 32 (codes 5xx) — decidir politica com contadora antes
+6. CAT 30 + 37 + 38 (Substituta + I157 + J801 + J932) — implementar quando enviar 2a ECD; CAT 30 sozinho ja exige novos params UI
+
+### O QUE NAO MEXER (confirmado IDENTICO ou correto)
+J930, I010, I150, 0007, 0150, I001, I990, J001, J990, 9001, 9990, 9999, I200 corpo, I250 corpo, I155 codes, I051 codes referenciais (1 conta divergente isolada), I355 (cosmetico).
+
+---
+
+## HISTORICO V33/V34/V35/V36 (2026-05-24) — 6 CATs IMPLEMENTADAS
+
+| Versao | Mudancas | Validador | Detalhes |
+|--------|----------|-----------|----------|
+| V33 | CAT 33 + CAT 32 v1 + CAT 31 | 126 erros (todos "COD_NAT=99") | Sinteticas via account.group sem cod_nat |
+| V34 | + fix cod_nat sinteticas + CAT 32 v2 (prefixes) + validator soma raizes | **1 erro** (balanco diff R$ 445K) | -99% erros vs V33 |
+| V35 | + CAT 35 (J005 ano inteiro) + CAT 36 (J150 18 linhas conf Tamiris) + CAT 12 v1 (redirect 510101->115) | 1 erro (balanco voltou R$ 19,53M) | propagacao saldo nao seguia redirect |
+| V36 | + CAT 12 v2 (redirect tambem na propagacao saldos) | **1 erro** (balanco diff R$ 445K — INCONSISTENCIA ODOO, nao bug) | J100 agora so 2 raizes, alinhado com contadora |
+
+**Mudancas V33/V34 confirmadas:**
+
+| CAT | Status | Resultado |
+|-----|--------|-----------|
+| CAT 31 (hierarquia parent_id) | **FIXED_NOT_VALIDATED** | I050 783 -> 417 (CONT-2S=420). Sinteticas 211 (era 783). Hierarquia 5 niveis reais (era 10 fake). V33 fix: cod_nat inferido por prefix do code. |
+| CAT 32 (codes 5xx no BP) | **FIXED_NOT_VALIDATED** (parcial) | V34 emite codes 5101* no Ativo (J100 raiz nivel 1 code 5 + filhas). Ativo TOTAL: R$ 287,370,144.07 (vs R$ 267,392,858 sem fix). Diff balanco caiu 98% (R$ 19,97M -> R$ 445K). **PENDENTE**: contadora redirecta 510101 para COD_AGL_SUP=115 (ESTOQUES) no J100, fazendo 1 raiz so '1' ATIVO. Nosso V34 emite 3 raizes (1, 2, 5). PVA pode reprovar. |
+| CAT 33 (COD_NAT mapping) | **FIXED_NOT_VALIDATED** | Mapping corrigido conforme Manual ECD: income/expense* -> 04 (Resultado), off_balance -> 05 (Compensacao). Distribuicao V34: 209x04 idem CONT-2S, 17x05 vs CONT 18x05. |
+
+**Diff balanco V34 (R$ 445K):**
+- Ativo V34 = R$ 287,370,144.07 | CONT-2S = R$ 287,369,843.88 | diff: R$ 300 (centavos) ✓
+- Passivo+PL V34 = R$ 286,925,019.21 | CONT-2S = R$ 287,369,843.88 | diff: R$ 444,824
+- **Causa provavel**: contas Passivo classificadas diferente entre V34 e contadora.
+
+**Status V36 (2026-05-24):**
+
+CATs IMPLEMENTADAS (FIXED_NOT_VALIDATED — aguardam PVA externo):
+- CAT 31, 32, 33 (TOP 3 alavancagem)
+- CAT 12 (redirect 510101->115 no J100 + propagacao saldos)
+- CAT 35 (J005 DT_INI ano inteiro 01/01/AAAA)
+- CAT 36 (J150 com estrutura de 18 linhas conforme tabela Tamiris sessao 613/web 18/05)
+
+CAT 13 RESOLVIDA: diff R$ 444K Passivo = INCONSISTENCIA ODOO (9 contas com
+account_type=expense, codes 2*). NAO e bug do gerador. Documentado em
+`INCONSISTENCIAS_ODOO.md` Inconsistencia 6 (NOVA).
+
+**Pendencias do agente em sessao Tamiris (web 613) — 3 pontos NAO respondidos**:
+1. Linha 4 J150 (9.3.1.1): tipo D ou T? (V36 emite D conforme tabela dela)
+2. Linha 7 J150 (9.4) VL_CTA_INI=16117672: cola acidental ou valor real?
+3. Implementacao J150: hardcoded (atual) vs tela web?
+
+**Proximas iteracoes sugeridas:**
+
+1. **PVA externo validar V36** (usuario sobe arquivo, retorna PDF erros)
+2. **Contadora corrigir 9 contas Inconsist 6** (INSS, IRRF, FGTS, CSRF, IRRF SERVICOS, INSS TERCEIROS, etc.) — corrigir `account_type` para `liability_*` no Odoo CIEL IT
+3. **VL_CTA_INI no J150** (recuperacao ECD anterior — Tamiris mencionou em 18/05, ainda nao implementado)
+4. **J150 valores divergem da contadora**: V36 CMV R$ 16M vs CONT R$ 111M, V36 DESP ADM R$ 88M vs CONT R$ 0. Provavel reflexo das CONTAS DE RESULTADO mal classificadas no Odoo (similar a Inconsist 6, mas em codes 3*). **Investigar e gerar lista Inconsist 7**.
+5. **CAT 30+37+38** (Substituta + I157 + J801 + J932) — necessario para 2a ECD do mesmo periodo.
+6. **CAT 34** (NUM_ORD/NUM_INST param UI).
+7. **CAT 36 melhorias**: validar/corrigir mapeamentos de account_type Odoo -> COD_AGL DRE com a Tamiris (especialmente 9.5.x onde nao temos account_type dedicado).
+
+---
 
 ---
 

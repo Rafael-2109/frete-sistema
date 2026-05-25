@@ -18,8 +18,58 @@
 | 3 | `l10n_br_conta_referencial` com >5 pontos | **4 codes** | Filtrado por codigo (V22 — pontos>5) — sem erro PVA, mas indica dado errado | CAT 21 PLANO |
 | 4 | Codes do `PLANO_REFERENCIAL` fallback nao existem na Tabela 11 RFB | **4-5 codes (codigo+Odoo)** | PVA reclama 7x CAT 21 + parte CAT 22 V22 | CAT 21/22 PLANO (NOVA — descoberta V22 2026-05-16) |
 | 5 | Analiticas patrimoniais com `account_type` Odoo incompativel com a hierarquia do code | TBD (subset da Inconsist 2) | Sinteticas geradas pelo gerador herdam `account_type` da primeira filha — quando filha tem `expense` mas code e patrimonial (1xxx/2xxx), sintetica fica orfa no J100. Provoca CAT 6 BP estrutural (~24 erros V26). | CAT 6 PLANO (NOVA — descoberta V26 PVA 2026-05-16) |
+| **6** | **Contas Passivo (code 2*) cadastradas com `account_type=expense`** | **9 codes** (~27 registros 3-companies) | Saldo nao agrega no Passivo do J100 — gera **diff R$ 444.771,25** no balanco V36 (Ativo 287.370.144 vs Passivo+PL 286.925.019). | **NOVA — descoberta V36 2026-05-24 via diff vs CONT-2S** |
 
-**Total de codes para corrigir no Odoo**: ate ~469 (89 + 376 + 4 — alguns podem se sobrepor).
+**Total de codes para corrigir no Odoo**: ate ~478 (89 + 376 + 4 + 9 — alguns podem se sobrepor).
+
+---
+
+## INCONSISTENCIA 6 — Contas Passivo (code 2*) com account_type=expense
+
+### Evidencia objetiva
+
+Query Odoo: 9 codes unicos com `code` comecando com `2` (Passivo no plano NACOM) mas
+`account_type` em (`expense`, `expense_depreciation`, `expense_direct_cost`). Esses
+codes representam **obrigacoes trabalhistas/fiscais a recolher** (INSS, FGTS, IRRF,
+etc.) que sao Passivos Circulantes, nao despesas.
+
+### Por que e problema
+
+- Manual ECD: `account_type` deve refletir a natureza contabil real da conta.
+- Em V36, o `_classe_da_conta` retorna 'asset' para `expense*` so se code patrimonial
+  ja foi processado (sintetica). Para analitica, lê o `account_type` direto e
+  retorna '' (resultado) — saldo NAO entra no Passivo do J100.
+- Resultado: saldo de R$ 444.771,25 (somatorio destas 9 contas) **desaparece**
+  do Passivo no balanco V36.
+
+### Impacto no PVA do SPED V36
+
+Diff Ativo (R$ 287.370.144,07) ≠ Passivo+PL (R$ 286.925.019,21) = R$ 445.124,86.
+PVA reprova upload (REGRA_VALIDA_ATIVO_PASSIVO_FIN).
+
+### Acao requerida
+
+Corrigir `account_type` no Odoo CIEL IT para `liability_payable` ou `liability_current`:
+
+| Code | Descricao | Companies | account_type atual | Saldo 31/12/2024 |
+|------|-----------|-----------|--------------------|------------------|
+| 2110100008 | RESCISOES | FB | expense | -4.551,16 |
+| 2110200001 | INSS A RECOLHER | FB+SC+CD | expense | -344.700,19 |
+| 2110200008 | IRRF - SALARIOS A RECOLHER | FB+SC+CD | expense | -17.896,66 |
+| 2110200015 | FGTS A RECOLHER | FB+SC+CD | expense | -46.644,00 |
+| 2110200030 | CONTRIBUICAO SINDICAL A RECOLHER | FB+SC+CD | expense | -8.815,66 |
+| 2110200031 | CONTRIBUICAO CONFEDERATIVA A RECOLHER | FB+SC+CD | expense | 0,00 |
+| 2150100006 | CSRF A RECOLHER | FB+SC+CD | expense | -4.866,53 |
+| 2150100007 | IRRF - SERVICOS A RECOLHER | FB+SC+CD | expense | -3.050,22 |
+| 2150100008 | INSS DE TERCEIROS A RECOLHER | FB+SC+CD | expense | -14.601,27 |
+| **TOTAL** | | | | **-R$ 445.125,69** |
+
+### Excecao reconhecida (NAO mexer)
+
+Codes `2140100*` (DESC.DUPL./ANTECIPACOES — 26 codes) e `2140200001` (EMPRESTIMOS
+NACIONAIS) com `account_type=asset_cash` sao **INTENCIONAIS** segundo a contadora
+(reclassificacao redutora de Ativo no fechamento — ver memoria
+`gotcha_desconto_duplicatas_classificacao`). NAO corrigir.
 
 ---
 

@@ -603,6 +603,13 @@ class SpedEcdValidator:
     # ============================================================
 
     def _validar_batimento_contabil(self, contexto: dict):
+        # V33 (CAT 32 — 2026-05-24): SOMAR todas as raizes IND_GRP_BAL=A em vez de
+        # sobrescrever. NACOM emite 3 raizes J100 nivel 1: '1' ATIVO, '2' PASSIVO,
+        # '5' COMPENSACAO (esta ultima marcada IND_GRP_BAL=A pela hierarquia real
+        # do plano de contas). Validador antigo pegava so a ultima emitida (=5).
+        # Contadora emite so 2 raizes (1 e 2) — ela mapeia 510101 para COD_AGL_SUP=115
+        # ESTOQUES (dentro do Ativo), tecnica de aglutinacao J100 que ainda nao
+        # implementamos. Por enquanto, somar como fallback.
         ativo_fin = 0.0
         passivo_pl_fin = 0.0
         for r in self._registros_de_tipo('J100'):
@@ -611,9 +618,9 @@ class SpedEcdValidator:
                 try:
                     val_fin = float(campos[9].replace(',', '.'))
                     if campos[5] == 'A':
-                        ativo_fin = val_fin
+                        ativo_fin += val_fin  # V33: somar (era =)
                     elif campos[5] == 'P':
-                        passivo_pl_fin = val_fin
+                        passivo_pl_fin += val_fin  # V33: somar (era =)
                 except (ValueError, IndexError):
                     continue
 

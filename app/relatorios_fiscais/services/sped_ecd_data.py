@@ -182,9 +182,11 @@ def buscar_plano_contas_consolidado(
     # Campos consultados — incluindo mapeamento Odoo CIEL IT (V1.1):
     # - l10n_br_conta_referencial: codigo do plano referencial Receita (87% cobertura)
     # - l10n_br_cod_nat: codigo da natureza Receita (99% cobertura)
+    # V33 (CAT 31 — 2026-05-24): incluir group_id para hierarquia real via account.group
     CAMPOS_PLANO = [
         'id', 'code', 'name', 'account_type', 'company_id', 'create_date',
         'l10n_br_conta_referencial', 'l10n_br_cod_nat',
+        'group_id',  # V33: many2one para account.group (hierarquia)
     ]
 
     # 1. Buscar FB (matriz) primeiro SE estiver nas companies passadas.
@@ -201,6 +203,8 @@ def buscar_plano_contas_consolidado(
             code = c.get('code')
             if not code:
                 continue
+            gid = c.get('group_id')
+            group_odoo_id = gid[0] if isinstance(gid, (list, tuple)) and gid else None
             plano_dedupe[code] = {
                 'code': code,
                 'name': c.get('name', ''),
@@ -210,6 +214,8 @@ def buscar_plano_contas_consolidado(
                 # V1.1 — mapeamento direto Odoo CIEL IT
                 'conta_referencial_odoo': (c.get('l10n_br_conta_referencial') or '').strip(),
                 'cod_nat_odoo': (c.get('l10n_br_cod_nat') or '').strip(),
+                # V33 (CAT 31) — group_id Odoo (mapeado para prefix em buscar_account_groups)
+                'group_odoo_id': group_odoo_id,
             }
             id_to_code[c['id']] = code
 
@@ -230,6 +236,8 @@ def buscar_plano_contas_consolidado(
             id_to_code[c['id']] = code
             # So adiciona ao plano se nao existe
             if code not in plano_dedupe:
+                gid = c.get('group_id')
+                group_odoo_id = gid[0] if isinstance(gid, (list, tuple)) and gid else None
                 plano_dedupe[code] = {
                     'code': code,
                     'name': c.get('name', ''),
@@ -238,6 +246,7 @@ def buscar_plano_contas_consolidado(
                     'company_id_origem': cid,
                     'conta_referencial_odoo': (c.get('l10n_br_conta_referencial') or '').strip(),
                     'cod_nat_odoo': (c.get('l10n_br_cod_nat') or '').strip(),
+                    'group_odoo_id': group_odoo_id,
                 }
 
     logger.info(
@@ -245,10 +254,94 @@ def buscar_plano_contas_consolidado(
         f'{len(id_to_code)} account_ids mapeados'
     )
 
-    # 3. Gerar hierarquia sintetica (R2 mitigacao)
-    plano_completo = _gerar_hierarquia_sintetica(plano_dedupe)
+    # V33 (CAT 31): buscar account.group consolidado (hierarquia real)
+    grupos_odoo = buscar_account_groups_consolidado(connection, comps)
+
+    # Popular group_prefix em cada analitica (mapear group_odoo_id -> prefix)
+    id_to_prefix = {dados['odoo_id']: prefix for prefix, dados in grupos_odoo.items()}
+    n_com_grupo = 0
+    n_sem_grupo = 0
+    for code, dados in plano_dedupe.items():
+        gid = dados.get('group_odoo_id')
+        if gid and gid in id_to_prefix:
+            dados['group_prefix'] = id_to_prefix[gid]
+            n_com_grupo += 1
+        else:
+            dados['group_prefix'] = ''
+            n_sem_grupo += 1
+    logger.info(
+        f'[SPED ECD V33 CAT 31] Analiticas mapeadas para account.group: '
+        f'{n_com_grupo} com group_id, {n_sem_grupo} sem (usarao fallback prefix)'
+    )
+
+    # 3. Gerar hierarquia sintetica (V33: usa grupos_odoo se disponivel)
+    plano_completo = _gerar_hierarquia_sintetica(plano_dedupe, grupos_odoo=grupos_odoo)
 
     return plano_completo, id_to_code
+
+
+def buscar_account_groups_consolidado(
+    connection, companies: List[int]
+) -> Dict[str, dict]:
+    """
+    V33 (CAT 31 — 2026-05-24): busca account.group das companies e resolve
+    hierarquia via parent_id.
+
+    Account.group e o modelo Odoo que define a hierarquia REAL do plano de contas
+    (parent_id). Cada account.account tem group_id apontando para um account.group.
+    NACOM tem 211 grupos cadastrados (identicos nas 3 companies), com hierarquia
+    1->11->111->1110->11101 (5 niveis tipicos) e 5->51->5101->510101 (compensacao).
+
+    Retorna dict {code_prefix_start: {odoo_id, name, parent_prefix, create_date}}.
+    Deduplica por code_prefix_start (FB primeiro, depois SC/CD).
+
+    Args:
+        connection: OdooConnection
+        companies: lista company_ids
+
+    Returns:
+        dict indexado por prefix. Exemplo:
+            {'1': {'odoo_id': 6722, 'name': 'ATIVO', 'parent_prefix': '', ...},
+             '11': {'odoo_id': 6723, 'name': 'ATIVO CIRCULANTE', 'parent_prefix': '1', ...},
+             ...}
+    """
+    grupos_por_prefix = {}
+    # Buscar todos os grupos com parent_id e create_date
+    for cid in companies:
+        grupos = _buscar_paginado(
+            connection, 'account.group',
+            [['company_id', '=', cid]],
+            ['id', 'name', 'code_prefix_start', 'parent_id', 'create_date'],
+            batch=1000, max_total=5000,
+        )
+        for g in grupos:
+            prefix = (g.get('code_prefix_start') or '').strip()
+            if not prefix or not prefix[0].isdigit():
+                continue
+            # Deduplica: FB primeiro (groups identicos nas 3 companies)
+            if prefix in grupos_por_prefix:
+                continue
+            parent = g.get('parent_id')
+            parent_odoo_id = parent[0] if isinstance(parent, (list, tuple)) and parent else None
+            grupos_por_prefix[prefix] = {
+                'odoo_id': g['id'],
+                'name': (g.get('name') or '').strip(),
+                'parent_odoo_id': parent_odoo_id,
+                'parent_prefix': '',  # sera resolvido abaixo
+                'create_date': (g.get('create_date') or '2010-01-01')[:10],
+            }
+
+    # Resolver parent_prefix via lookup id_to_prefix
+    id_to_prefix = {dados['odoo_id']: prefix for prefix, dados in grupos_por_prefix.items()}
+    for prefix, dados in grupos_por_prefix.items():
+        pid = dados.get('parent_odoo_id')
+        if pid and pid in id_to_prefix:
+            dados['parent_prefix'] = id_to_prefix[pid]
+
+    logger.info(
+        f'[SPED ECD V33 CAT 31] account.group consolidado: {len(grupos_por_prefix)} grupos unicos'
+    )
+    return grupos_por_prefix
 
 
 def filtrar_plano_por_movimento(plano_consolidado: List[dict],
@@ -330,8 +423,188 @@ def filtrar_plano_por_movimento(plano_consolidado: List[dict],
     return plano_filtrado
 
 
-def _gerar_hierarquia_sintetica(plano_analiticas: Dict[str, dict]) -> List[dict]:
+def _gerar_hierarquia_sintetica(
+    plano_analiticas: Dict[str, dict],
+    grupos_odoo: Dict[str, dict] = None,
+) -> List[dict]:
     """
+    Gera contas sinteticas para cadeia hierarquica completa do plano.
+
+    Duas estrategias:
+
+    1) V33 (CAT 31 — 2026-05-24): se `grupos_odoo` passado, usa `account.group`
+       do Odoo (hierarquia REAL via parent_id). Plano NACOM tem 211 grupos
+       cadastrados com arvore: 1 ATIVO -> 11 ATIVO CIRCULANTE -> 111 DISPONIB
+       -> 1110 -> 11101 CAIXA GERAL (5 niveis tipicos). Bem alinhado com o
+       SPED da contadora que tambem usa 5 niveis. Resolve CAT 31 (V31 inflava
+       10 niveis fake via chunks 1-char).
+
+    2) Fallback (V32 e anteriores — `grupos_odoo=None`): chunks por 1 char.
+       Para cada code analitica de N digitos, gera sinteticas em todos os
+       niveis intermediarios (1 a N-1). Inflavel (10 niveis fake para code
+       1110100002), mas garante cadeia. Mantido para compat e quando Odoo
+       nao retornar grupos.
+
+    Args:
+        plano_analiticas: dict {code: dados_conta} das analiticas Odoo
+        grupos_odoo: dict {prefix: {odoo_id, name, parent_prefix, create_date}}
+                     opcional (V33) — output de `buscar_account_groups_consolidado`
+
+    Returns:
+        Lista ordenada por code: sinteticas + analiticas (formato I050).
+    """
+    if grupos_odoo:
+        return _gerar_hierarquia_via_groups(plano_analiticas, grupos_odoo)
+    return _gerar_hierarquia_via_chunks(plano_analiticas)
+
+
+def _inferir_cod_nat_por_code(code: str) -> str:
+    """
+    V33 (CAT 31 — 2026-05-24): infere COD_NAT (Manual ECD Tabela) para
+    contas sinteticas via prefix do code (convencao plano NACOM):
+
+      - 1xxx       -> '01' Ativo
+      - 21xxx, 22xxx -> '02' Passivo
+      - 23xxx      -> '03' Patrimonio Liquido
+      - 3xxx       -> '04' Resultado
+      - 5xxx       -> '05' Compensacao
+      - outros     -> '99' (placeholder — Manual nao lista 99 oficialmente)
+
+    Sinteticas geradas via `account.group` (V33) NAO vem com `l10n_br_cod_nat`
+    nem `account_type` (sao groups, nao accounts). Sem esta inferencia, todas
+    cairiam em '99' e validador interno bloquearia.
+    """
+    if not code:
+        return '99'
+    if code.startswith('1'):
+        return '01'
+    if code.startswith('23'):
+        return '03'  # NACOM: code 23 = PATRIMONIO LIQUIDO
+    if code.startswith('2'):
+        return '02'  # PASSIVO (21=Circulante, 22=Nao Circulante)
+    if code.startswith('3'):
+        return '04'  # Resultado
+    if code.startswith('5'):
+        return '05'  # Compensacao
+    return '99'
+
+
+def _gerar_hierarquia_via_groups(
+    plano_analiticas: Dict[str, dict],
+    grupos_odoo: Dict[str, dict],
+) -> List[dict]:
+    """
+    V33 (CAT 31): hierarquia sintetica via account.group do Odoo.
+
+    Cada account.group vira uma sintetica (IND_CTA=S) com:
+      - code = code_prefix_start do group
+      - cod_sup = parent_prefix (resolvido em buscar_account_groups_consolidado)
+      - nivel = calculado recursivamente via parent_prefix
+      - name = nome real do group Odoo
+      - cod_nat_odoo = inferido pelo prefix do code (groups nao tem cod_nat no Odoo)
+
+    Analiticas usam group_prefix como cod_sup (populado em
+    buscar_plano_contas_consolidado).
+
+    Diferenca chave vs chunks: para code 1110100002, a hierarquia REAL e
+    1 -> 11 -> 111 -> 1110 -> 11101 -> 1110100002 (5 sinteticas), nao
+    1 -> 11 -> 111 -> 1110 -> 11101 -> 111010 -> 1110100 -> 11101000 ->
+    111010000 -> 1110100002 (9 sinteticas fake).
+
+    Reduz I050 de 783 (V31) para ~420 (alinhado com contadora 420).
+    """
+    sinteticas = {}
+    for prefix, dados_grupo in grupos_odoo.items():
+        if not prefix or not prefix[0].isdigit():
+            continue
+        sinteticas[prefix] = {
+            'code': prefix,
+            'nivel': 0,  # placeholder — calculado abaixo
+            'name': dados_grupo.get('name', '') or f'GRUPO {prefix}',
+            'tipo': 'S',
+            'cod_sup': dados_grupo.get('parent_prefix', '') or '',
+            'account_type': '',  # sinteticas nao herdam account_type (V33)
+            'create_date': dados_grupo.get('create_date', '2010-01-01'),
+            # V33 fix: groups nao tem cod_nat — inferir por prefix do code
+            'cod_nat_odoo': _inferir_cod_nat_por_code(prefix),
+        }
+
+    # Calcular nivel hierarquico real via parent_prefix (recursivo)
+    def _calcular_nivel(code, cache):
+        if code in cache:
+            return cache[code]
+        if code not in sinteticas:
+            return 0
+        sup = sinteticas[code]['cod_sup']
+        nivel = 1 if not sup else _calcular_nivel(sup, cache) + 1
+        cache[code] = nivel
+        sinteticas[code]['nivel'] = nivel
+        return nivel
+
+    nivel_cache = {}
+    for code in sinteticas:
+        _calcular_nivel(code, nivel_cache)
+
+    # Combinar sinteticas (ordenadas hierarquicamente) + analiticas
+    todas = []
+    for code in sorted(sinteticas.keys(), key=lambda c: (sinteticas[c]['nivel'], c)):
+        todas.append(sinteticas[code])
+
+    n_anal_com_grupo = 0
+    n_anal_sem_grupo = 0
+    n_anal_dedup = 0
+
+    for code, dados in plano_analiticas.items():
+        if not code or not code[0].isdigit():
+            continue
+        if code in sinteticas:
+            n_anal_dedup += 1
+            continue  # ja virou sintetica
+
+        # cod_sup: group_prefix Odoo se mapeado, senao fallback prefix-longest-match
+        group_prefix = dados.get('group_prefix', '') or ''
+        if group_prefix and group_prefix in sinteticas:
+            cod_sup = group_prefix
+            nivel = sinteticas[group_prefix]['nivel'] + 1
+            n_anal_com_grupo += 1
+        else:
+            cod_sup = ''
+            nivel = 1
+            for prefix_len in range(len(code) - 1, 0, -1):
+                cand = code[:prefix_len]
+                if cand in sinteticas:
+                    cod_sup = cand
+                    nivel = sinteticas[cand]['nivel'] + 1
+                    break
+            n_anal_sem_grupo += 1
+
+        todas.append({
+            'code': code,
+            'nivel': nivel,
+            'name': dados.get('name', ''),
+            'tipo': 'A',
+            'cod_sup': cod_sup,
+            'account_type': dados.get('account_type', ''),
+            'create_date': dados.get('create_date', '2010-01-01'),
+            'conta_referencial_odoo': dados.get('conta_referencial_odoo', ''),
+            'cod_nat_odoo': dados.get('cod_nat_odoo', ''),
+        })
+
+    logger.info(
+        f'[SPED ECD V33 CAT 31] Hierarquia via account.group: '
+        f'{len(sinteticas)} sinteticas | analiticas: '
+        f'{n_anal_com_grupo} com group_id, {n_anal_sem_grupo} fallback prefix, '
+        f'{n_anal_dedup} deduplicadas (ja eram sinteticas)'
+    )
+
+    todas.sort(key=lambda x: (x['code'], x['nivel']))
+    return todas
+
+
+def _gerar_hierarquia_via_chunks(plano_analiticas: Dict[str, dict]) -> List[dict]:
+    """
+    FALLBACK V32: gera sinteticas por chunks de 1 char.
+
     Para cada code analitica de N digitos, gera contas sinteticas em todos os
     niveis intermediarios (1 a N-1), garantindo cadeia hierarquica completa.
 
@@ -348,6 +621,9 @@ def _gerar_hierarquia_sintetica(plano_analiticas: Dict[str, dict]) -> List[dict]
       (compatibilidade com SPED V31 e anteriores).
     - Apos cadastro de totalizadoras no Odoo: SPED automaticamente passa a usar
       nomes reais (DISPONIBILIDADES, BANCOS etc.), sem alterar codigo.
+
+    DEPRECATED V33: substituido por _gerar_hierarquia_via_groups quando
+    grupos_odoo disponivel. Mantido para fallback se Odoo nao retornar groups.
     """
     sinteticas = {}  # code -> dados sintetica
     n_origem_odoo = 0       # V32: telemetria

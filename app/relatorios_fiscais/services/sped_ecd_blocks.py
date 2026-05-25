@@ -30,6 +30,9 @@ from typing import Dict, Iterable, List, Optional
 from app.relatorios_fiscais.services.sped_ecd_constantes import (
     ACCOUNT_TYPE_TO_NAT,
     CNPJ_MATRIZ,
+    CODES_COMPENSACAO_NO_BP_ATIVO,
+    CODES_COMPENSACAO_NO_BP_ATIVO_PREFIXES,
+    CODES_J100_COD_AGL_SUP_REDIRECT,
     CONTADOR_CPF,
     CONTADOR_DT_CRC,
     CONTADOR_EMAIL,
@@ -898,12 +901,21 @@ def construir_J005_unico(params: dict, contador: ContadorRegistros) -> str:
     PVA reclamava "Deve existir pelo menos 1 J100 (Balanco) e 1 J150 (DRE)
     para cada J005" — porque cada J005 separado nao tinha o outro tipo.
 
+    V35 (CAT 35 — 2026-05-24): DT_INI sempre 01/01/AAAA (exercicio social inteiro),
+    nao date_ini do periodo SPED. Manual ECD: J005 deve cobrir exercicio completo,
+    nao recorte semestral. Contadora 2S 2024 emite |J005|01012024|31122024|...
+    independente de o SPED ser do 2S. V34 e anteriores emitiam |01072024| (errado).
+
     Layout J005 5 campos (Manual ECD Leiaute 9):
         REG | DT_INI | DT_FIN | ID_DEM | CAB_DEM
     """
+    # V35: forcar DT_INI = 01/01 do ano do date_ini (exercicio social inteiro)
+    from datetime import date as _date
+    date_ini_real = params['date_ini']
+    j005_dt_ini = _date(date_ini_real.year, 1, 1)
     return contador.emit(formatar_registro([
         'J005',                                                # 1 REG
-        formatar_data(params['date_ini']),                     # 2 DT_INI
+        formatar_data(j005_dt_ini),                            # 2 DT_INI (V35: 01/01/AAAA)
         formatar_data(params['date_fim']),                     # 3 DT_FIN
         '1',                                                   # 4 ID_DEM (1 — cobre BP+DRE como contadora)
         '',                                                    # 5 CAB_DEM (vazio — padrao contadora)
@@ -964,9 +976,16 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
     # Heuristica de classificacao por code (para sinteticas sem account_type)
     def _classe_pelo_code(code: str) -> str:
         """Retorna 'asset' ou 'liability_or_equity' baseado no primeiro digito do code.
-        V1.7: ignora codes 3, 4, 5+ (resultado, custos, compensacao) — nao vao para BP."""
+        V1.7: ignora codes 3, 4, 5+ (resultado, custos, compensacao) — nao vao para BP.
+        V33 (CAT 32): excecao para CODES_COMPENSACAO_NO_BP_ATIVO (codes exatos das
+        sinteticas) e _PREFIXES (analiticas 5101*) — contadora NACOM inclui
+        compensacao no Ativo (recuperacao judicial)."""
         if not code:
             return ''
+        if code in CODES_COMPENSACAO_NO_BP_ATIVO:
+            return 'asset'
+        if any(code.startswith(p) for p in CODES_COMPENSACAO_NO_BP_ATIVO_PREFIXES):
+            return 'asset'
         if code.startswith('1'):
             return 'asset'
         if code.startswith('2'):
@@ -982,7 +1001,7 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
         INDUSTRIALIZACAO, BONIFICACAO etc.) sao excluidos do balanco mesmo
         que account_type seja 'asset_current' ou 'liability_current'.
         Odoo CIEL IT classifica mal essas contas; o Manual ECD diz que
-        compensacao tem natureza propria (COD_NAT=09) e fica fora do BP.
+        compensacao tem natureza propria (COD_NAT=05) e fica fora do BP.
 
         V30 (CAT 6 fix 2026-05-16): SINTETICAS sempre classificadas via
         `_classe_pelo_code` (hierarquia do code) — NUNCA via account_type.
@@ -993,8 +1012,19 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
         herdava 'expense' e era excluida do BP, deixando outras analiticas
         patrimoniais da mesma sub-arvore orfas no J100 (cod_sup nao existe).
         Para sinteticas, code prefix e dado puro do Odoo e nao ambiguo.
-        Analiticas continuam usando account_type (autoritativo — proprio da conta)."""
+        Analiticas continuam usando account_type (autoritativo — proprio da conta).
+
+        V33 (CAT 32 — 2026-05-24): excecao para CODES_COMPENSACAO_NO_BP_ATIVO.
+        Contadora NACOM (recuperacao judicial) classifica codes 510101/510102
+        como ATIVO (COD_AGL_SUP=115 ESTOQUES) totalizando R$ 27M. Sem isso,
+        J100 fecha com diff de R$ 19,97M (REGRA_VALIDA_ATIVO_PASSIVO_FIN reprova).
+        """
         code = (conta.get('code') or '').strip()
+        # V33: excecao ANTES do filtro 5xx — codes/prefixes de compensacao no BP
+        if code in CODES_COMPENSACAO_NO_BP_ATIVO:
+            return 'asset'
+        if any(code.startswith(p) for p in CODES_COMPENSACAO_NO_BP_ATIVO_PREFIXES):
+            return 'asset'
         if code.startswith(('5', '6', '7', '8', '9')):
             return ''  # compensacao ou contas extra-balanco
         # V30: sinteticas SEMPRE pelo code (herdam account_type errado da filha)
@@ -1025,9 +1055,25 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
         if c.get('tipo') == 'S' or _classe_da_conta(c) != ''
     ]
 
+    # V35 (CAT 12 — 2026-05-24): aplicar redirect cod_sup p/ J100 ANTES de
+    # propagar saldos. Sem isso, saldo de 510101/510102 sobe pela arvore '5'
+    # (compensacao raiz) e NUNCA chega em '1 ATIVO'. Resultado: Ativo nivel 1
+    # nao inclui R$ 19,9M de compensacao, balanco nao bate. Com redirect na
+    # propagacao, 510101 sobe via 115 -> 11 -> 1 e saldo agrega no Ativo total.
+    # Aplicado APENAS na copia para J100 — plano original I050 mantem cod_sup real.
+    plano_para_propagacao_j100 = []
+    for c in plano_para_propagacao:
+        if c['code'] in CODES_J100_COD_AGL_SUP_REDIRECT:
+            c_redir = c.copy()
+            c_redir['cod_sup'] = CODES_J100_COD_AGL_SUP_REDIRECT[c['code']]
+            plano_para_propagacao_j100.append(c_redir)
+        else:
+            plano_para_propagacao_j100.append(c)
+
     # V1.6: calcular saldos hierarquicos (sintetica = soma das analiticas filhas)
     # V30: usa plano filtrado para que sinteticas batam com filhas emitidas
-    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco_fonte, plano_para_propagacao)
+    # V35: plano com cod_sup J100-redirecionado para 510101/510102
+    saldos_hierarquicos = calcular_saldos_hierarquicos(balanco_fonte, plano_para_propagacao_j100)
 
     # Filtrar plano so patrimoniais (asset_*, liability_*, equity_*, + sinteticas 1x/2x)
     # E ordenar por code asc para hierarquia visual no PVA
@@ -1084,12 +1130,17 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
         ind_dc_ini = _ind_dc_v24(s['saldo_inicial'], ind_dc_natural)
         ind_dc_fin = _ind_dc_v24(s['saldo_final'], ind_dc_natural)
 
+        # V35 (CAT 12 — 2026-05-24): redirect cod_sup p/ compensacao colocar
+        # como filha de 115 ESTOQUES (dentro do Ativo), eliminando 3a raiz
+        # IND_GRP_BAL=A. Alinha com contadora.
+        cod_sup_j100 = CODES_J100_COD_AGL_SUP_REDIRECT.get(code) or conta.get('cod_sup', '')
+
         linhas.append(contador.emit(formatar_registro([
             'J100',                                            # 1 REG
             code,                                              # 2 COD_AGL (codigo do plano)
             ind_cod_agl,                                       # 3 IND_COD_AGL (T/D)
             str(conta.get('nivel', 1)),                        # 4 NIVEL_AGL
-            conta.get('cod_sup', ''),                          # 5 COD_AGL_SUP
+            cod_sup_j100,                                      # 5 COD_AGL_SUP (V35: redirect 510101->115)
             ind_grp,                                           # 6 IND_GRP_BAL
             remover_acentos(conta.get('name', '')),            # 7 DESCR_COD_AGL
             formatar_valor(abs(s['saldo_inicial'])),           # 8 VL_CTA_INI (V1.6: REAL)
@@ -1102,90 +1153,171 @@ def construir_J005_J100(balanco_consolidado: dict, plano_consolidado: List[dict]
     return linhas
 
 
-# V28 (CAT 5/20 fix 2026-05-16): Mapeamento account_type Odoo -> COD_AGL detalhe DRE
-# (codes numericos hierarquicos no formato N.N.N — Manual ECD Leiaute 9 J150).
-# Cada conta analitica de resultado e mapeada para um COD_AGL detalhe (nivel 3),
-# que e o COD_AGL_SUP do nivel 2 (T), que por sua vez tem COD_AGL_SUP='9' (raiz nivel 1).
-# Ref: SPED da contadora (ground truth aceito RFB) usa estrutura semelhante (codes
-# hierarquicos 9.x.y.z com COD_AGL_SUP populado).
+# V35 (CAT 36 — 2026-05-24): Mapeamento account_type Odoo -> COD_AGL detalhe DRE.
+# Estrutura J150 reconfigurada conforme tabela enviada pela contadora Tamiris
+# (sessao web user_id=44 em 2026-05-18, ground truth alinhado com SPED 2S 2024).
+#
+# Tabela da contadora tem 18 linhas, 5 niveis (1,3,4,5 — pula nivel 2), estrutura:
+#   9 RESULTADOS -> 9.3 RESULTADO -> 9.3.1 RESULTADO OPERACIONAL
+#                                  -> 9.3.1.1 RES OP BRUTO      (income)
+#                                  -> 9.3.1.2 DEVOLUCOES        (sem account_type)
+#                                  -> 9.3.1.3 CMV               (expense_direct_cost)
+#                -> 9.4 DESPESAS OPERACIONAIS -> 9.4.2 DESP ADM/COM
+#                                              -> 9.4.2.1 DESP ADM (expense + expense_depreciation*)
+#                                              -> 9.4.2.2 DESP COM (sem account_type)
+#                -> 9.5 RESULTADO FINANCEIRO -> 9.5.1.1 REC FIN (sem)
+#                                            -> 9.5.2.1 DESP ADM (sem)
+#                                            -> 9.5.3.1 OUTRAS REC OP (income_other)
+#                                            -> 9.5.3.2 OUTRAS DESP FIN (sem)
+#
+# Mapeamento confirmado pela Tamiris (sessao 613):
+#   - expense_depreciation -> 9.4.2.1 (Despesas Administrativas)
+#
+# PENDENCIAS aguardando resposta da Tamiris:
+#   - Linha 4 (9.3.1.1): tipo D (Detalhe) conforme tabela; manter assim
+#   - Linha 7 (9.4): valor 16117672 era cola acidental; sera calculado dos saldos
+#   - Codes detalhe sem account_type Odoo (9.3.1.2 devolucoes, 9.4.2.2 comerciais,
+#     9.5.1.1 rec fin, 9.5.2.1 desp adm, 9.5.3.2 outras desp fin) terao valor 0
+#     e serao SKIPPED pelo filtro `if abs(valor) < 0.01 and nivel != 1`. PVA deve
+#     aceitar so as linhas com valor.
 DRE_ACCOUNT_TYPE_TO_COD_AGL = {
-    'income':              '9.1.1',  # RECEITA OPERACIONAL BRUTA
-    'income_other':        '9.1.2',  # OUTRAS RECEITAS
-    'expense_direct_cost': '9.2.1',  # CUSTO DIRETO DAS VENDAS
-    'expense':             '9.2.2',  # DESPESAS OPERACIONAIS
-    'expense_depreciation':'9.2.3',  # DEPRECIACAO E AMORTIZACAO
+    'income':              '9.3.1.1',  # RECEITA OPERACIONAL BRUTA
+    'income_other':        '9.5.3.1',  # OUTRAS RECEITAS OPERACIONAIS
+    'expense_direct_cost': '9.3.1.3',  # CUSTOS DOS PRODUTOS E MERCADORIAS VENDIDAS
+    'expense':             '9.4.2.1',  # DESPESAS ADMINISTRATIVAS
+    'expense_depreciation':'9.4.2.1',  # DESPESAS ADMINISTRATIVAS (confirmado Tamiris 2026-05-18)
 }
 
 
 def _calcular_grupos_dre_hierarquicos(dre_consolidado: dict):
     """
-    V28 (CAT 5/20 fix 2026-05-16): calcula grupos DRE em hierarquia explicita
-    e mapa de I052 (cada conta analitica de resultado -> COD_AGL detalhe DRE).
+    V35 (CAT 36 fix 2026-05-24): calcula grupos DRE conforme estrutura da contadora.
 
-    Estrutura (Manual ECD Leiaute 9 J150 — codes numericos hierarquicos):
+    Estrutura (18 grupos, 5 niveis — pula nivel 2):
 
-        9       T  1   -      RESULTADO DO EXERCICIO   (raiz unica - resultado liquido)
-        9.1     T  2   9      RECEITAS
-        9.1.1   D  3   9.1    RECEITA OPERACIONAL BRUTA       <- I052 vincula `income`
-        9.1.2   D  3   9.1    OUTRAS RECEITAS                  <- I052 vincula `income_other`
-        9.2     T  2   9      CUSTOS E DESPESAS
-        9.2.1   D  3   9.2    CUSTO DIRETO DAS VENDAS         <- I052 vincula `expense_direct_cost`
-        9.2.2   D  3   9.2    DESPESAS OPERACIONAIS           <- I052 vincula `expense`
-        9.2.3   D  3   9.2    DEPRECIACAO E AMORTIZACAO       <- I052 vincula `expense_depreciation`
+        9         T  1   -      RESULTADOS                       (raiz unica)
+        9.3       T  3   9      RESULTADO
+        9.3.1     T  4   9.3    RESULTADO OPERACIONAL
+        9.3.1.1   D  5   9.3.1  RESULTADO OPERACIONAL BRUTO     <- income
+        9.3.1.2   D  5   9.3.1  DEVOLUCOES DE VENDAS            (sem account_type)
+        9.3.1.3   D  5   9.3.1  CMV                              <- expense_direct_cost
+        9.4       T  3   9      DESPESAS OPERACIONAIS
+        9.4.2     T  4   9.4    DESPESAS ADM E COMERCIAIS
+        9.4.2.1   D  5   9.4.2  DESPESAS ADMINISTRATIVAS        <- expense + expense_depreciation
+        9.4.2.2   D  5   9.4.2  DESPESAS COMERCIAIS              (sem account_type)
+        9.5       T  3   9      RESULTADO FINANCEIRO
+        9.5.1     T  4   9.5    RECEITAS FINANCEIRAS
+        9.5.1.1   D  5   9.5.1  RECEITAS FINANCEIRAS             (sem)
+        9.5.2     T  4   9.5    DESPESAS OPERACIONAIS
+        9.5.2.1   D  5   9.5.2  DESPESAS ADMINISTRATIVAS         (sem)
+        9.5.3     T  4   9.5    RECEITAS OPERACIONAIS
+        9.5.3.1   D  5   9.5.3  OUTRAS RECEITAS OPERACIONAIS    <- income_other
+        9.5.3.2   D  5   9.5.3  OUTRAS DESPESAS FINANCEIRAS      (sem)
 
-    Soma com sinal: nivel 1 = +9.1 (C) + 9.2 (D, computa negativo) = resultado_liquido.
+    Soma com sinal: nivel 1 = receita - despesa = resultado_liquido.
 
     Returns:
         (grupos, mapa_i052):
             grupos: List[Tuple[cod_agl, descr, valor, ind_dc, ind_grp_dre, nivel, cod_sup, is_total]]
             mapa_i052: Dict[code_conta_analitica, cod_agl_detalhe_dre]
-                       (cada conta analitica de resultado mapeada para 1 code DRE detalhe)
     """
-    # Agrupamentos por account_type
-    receita_bruta = sum(
+    # Agrupamentos por account_type (somente os COM mapping Odoo)
+    receita_op_bruta = sum(
         abs(s['saldo']) for s in dre_consolidado.values()
         if s.get('account_type') == 'income'
     )
-    receita_outras = sum(
+    receita_outras_op = sum(
         abs(s['saldo']) for s in dre_consolidado.values()
         if s.get('account_type') == 'income_other'
     )
-    custo_direto = sum(
+    cmv = sum(
         abs(s['saldo']) for s in dre_consolidado.values()
         if s.get('account_type') == 'expense_direct_cost'
     )
-    despesa_geral = sum(
+    despesa_adm = sum(
         abs(s['saldo']) for s in dre_consolidado.values()
-        if s.get('account_type') == 'expense'
-    )
-    despesa_deprec = sum(
-        abs(s['saldo']) for s in dre_consolidado.values()
-        if s.get('account_type') == 'expense_depreciation'
+        if s.get('account_type') in ('expense', 'expense_depreciation')
     )
 
-    receita_total = receita_bruta + receita_outras
-    despesa_total = custo_direto + despesa_geral + despesa_deprec
-    resultado_liquido = receita_total - despesa_total
+    # Grupos sem account_type Odoo dedicado — ficam com 0 e sao puladas (skip valor < 0.01)
+    devolucoes = 0.0
+    despesa_comercial = 0.0
+    receita_financeira = 0.0
+    despesa_adm_fin = 0.0
+    outras_despesas_fin = 0.0
+
+    # Totalizadores (somam filhas com sinal)
+    # 9.3.1 = RES OP BRUTO - DEVOLUCOES - CMV
+    nivel_9_3_1 = receita_op_bruta - devolucoes - cmv
+    nivel_9_3 = nivel_9_3_1
+    # 9.4.2 = DESP ADM + DESP COM (ambos D)
+    nivel_9_4_2 = despesa_adm + despesa_comercial
+    nivel_9_4 = nivel_9_4_2
+    # 9.5.1 = REC FIN (so receita)
+    nivel_9_5_1 = receita_financeira
+    # 9.5.2 = DESP ADM FIN
+    nivel_9_5_2 = despesa_adm_fin
+    # 9.5.3 = OUTRAS REC OP - OUTRAS DESP FIN
+    nivel_9_5_3 = receita_outras_op - outras_despesas_fin
+    # 9.5 = REC FIN - DESP ADM FIN + OUTRAS REC OP - OUTRAS DESP FIN
+    nivel_9_5 = nivel_9_5_1 - nivel_9_5_2 + nivel_9_5_3
+    # 9 = 9.3 - 9.4 + 9.5
+    resultado_liquido = nivel_9_3 - nivel_9_4 + nivel_9_5
+
+    # Helper para sinal IND_DC + IND_GRP_DRE
+    def _sinal(valor, default_credor=True):
+        """Retorna (ind_dc, ind_grp_dre) baseado no sinal e na natureza esperada."""
+        if valor >= 0:
+            return ('C', 'R') if default_credor else ('D', 'D')
+        return ('D', 'D') if default_credor else ('C', 'R')
 
     # (cod_agl, descr, valor, ind_dc, ind_grp_dre, nivel, cod_sup, is_total)
     grupos = [
         # Nivel 1 (T) — raiz unica, resultado liquido
-        ('9', 'RESULTADO DO EXERCICIO',
+        ('9', 'RESULTADOS',
          abs(resultado_liquido),
          'C' if resultado_liquido >= 0 else 'D',
          'R' if resultado_liquido >= 0 else 'D',
          1, '', True),
-        # Nivel 2 (T) — Receitas
-        ('9.1', 'RECEITAS', receita_total, 'C', 'R', 2, '9', True),
-        # Nivel 3 (D) — Receitas detalhe
-        ('9.1.1', 'RECEITA OPERACIONAL BRUTA', receita_bruta, 'C', 'R', 3, '9.1', False),
-        ('9.1.2', 'OUTRAS RECEITAS', receita_outras, 'C', 'R', 3, '9.1', False),
-        # Nivel 2 (T) — Custos e Despesas
-        ('9.2', 'CUSTOS E DESPESAS', despesa_total, 'D', 'D', 2, '9', True),
-        # Nivel 3 (D) — Custos e Despesas detalhe
-        ('9.2.1', 'CUSTO DIRETO DAS VENDAS', custo_direto, 'D', 'D', 3, '9.2', False),
-        ('9.2.2', 'DESPESAS OPERACIONAIS', despesa_geral, 'D', 'D', 3, '9.2', False),
-        ('9.2.3', 'DEPRECIACAO E AMORTIZACAO', despesa_deprec, 'D', 'D', 3, '9.2', False),
+
+        # === 9.3 RESULTADO (T nivel 3) ===
+        ('9.3', 'RESULTADO',
+         abs(nivel_9_3),
+         'C' if nivel_9_3 >= 0 else 'D',
+         'R' if nivel_9_3 >= 0 else 'D',
+         3, '9', True),
+        ('9.3.1', 'RESULTADO OPERACIONAL',
+         abs(nivel_9_3_1),
+         'C' if nivel_9_3_1 >= 0 else 'D',
+         'R' if nivel_9_3_1 >= 0 else 'D',
+         4, '9.3', True),
+        ('9.3.1.1', 'RESULTADO OPERACIONAL BRUTO', receita_op_bruta, 'C', 'R', 5, '9.3.1', False),
+        ('9.3.1.2', 'DEVOLUCOES DE VENDAS', devolucoes, 'D', 'D', 5, '9.3.1', False),
+        ('9.3.1.3', 'CUSTOS DOS PRODUTOS E MERCADORIAS VENDIDAS', cmv, 'D', 'D', 5, '9.3.1', False),
+
+        # === 9.4 DESPESAS OPERACIONAIS (T nivel 3) ===
+        ('9.4', 'DESPESAS OPERACIONAIS', nivel_9_4, 'D', 'D', 3, '9', True),
+        ('9.4.2', 'DESPESAS ADMINISTRATIVAS E COMERCIAIS', nivel_9_4_2, 'D', 'D', 4, '9.4', True),
+        ('9.4.2.1', 'DESPESAS ADMINISTRATIVAS', despesa_adm, 'D', 'D', 5, '9.4.2', False),
+        ('9.4.2.2', 'DESPESAS COMERCIAIS', despesa_comercial, 'D', 'D', 5, '9.4.2', False),
+
+        # === 9.5 RESULTADO FINANCEIRO (T nivel 3) ===
+        ('9.5', 'RESULTADO FINANCEIRO',
+         abs(nivel_9_5),
+         'C' if nivel_9_5 >= 0 else 'D',
+         'R' if nivel_9_5 >= 0 else 'D',
+         3, '9', True),
+        ('9.5.1', 'RECEITAS FINANCEIRAS', nivel_9_5_1, 'C', 'R', 4, '9.5', True),
+        ('9.5.1.1', 'RECEITAS FINANCEIRAS', receita_financeira, 'C', 'R', 5, '9.5.1', False),
+        ('9.5.2', 'DESPESAS OPERACIONAIS', nivel_9_5_2, 'D', 'D', 4, '9.5', True),
+        ('9.5.2.1', 'DESPESAS ADMINISTRATIVAS', despesa_adm_fin, 'D', 'D', 5, '9.5.2', False),
+        ('9.5.3', 'RECEITAS OPERACIONAIS',
+         abs(nivel_9_5_3),
+         'C' if nivel_9_5_3 >= 0 else 'D',
+         'R' if nivel_9_5_3 >= 0 else 'D',
+         4, '9.5', True),
+        ('9.5.3.1', 'OUTRAS RECEITAS OPERACIONAIS', receita_outras_op, 'C', 'R', 5, '9.5.3', False),
+        ('9.5.3.2', 'OUTRAS DESPESAS FINANCEIRAS', outras_despesas_fin, 'D', 'D', 5, '9.5.3', False),
     ]
 
     # Mapa I052: cada conta analitica de resultado -> COD_AGL detalhe DRE
