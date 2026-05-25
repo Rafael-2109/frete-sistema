@@ -221,7 +221,23 @@ FECHAMENTO:
 [ ] Code-review paralelo (2 reviewers) ao fim
 [ ] Atualizar ROADMAP_SKILLS HANDOFF + VALIDACAO §16 + memórias
 [ ] Commit consolidado
-[ ] Atualizar PROMPT_PROXIMA_SESSAO.md (v11) e arquivar este (PROMPT_PROXIMA_SESSAO_SKILL2.md → executed)
+[ ] **DECIDIR PROXIMO PROMPT** (informar Rafael EXPLICITAMENTE):
+    - Se FASE A+B+C 100% concluidas (capinou + executou TUDO da relacao):
+      [ ] Arquivar este arquivo (mover para `_validados/` OU renomear para
+          `PROMPT_PROXIMA_SESSAO_SKILL2_EXECUTED_<data>.md`)
+      [ ] Atualizar `PROMPT_PROXIMA_SESSAO.md` para v11 incorporando o feito
+      [ ] DIZER PARA RAFAEL: "Proxima sessao = abrir PROMPT_PROXIMA_SESSAO.md (v11)"
+    - Se FASE C ficou parcial (executou so X de Y transferencias):
+      [ ] Atualizar ESTE arquivo na seção "Pendente para proxima sessao":
+          - Quantas transferencias sobraram
+          - Quais cods especificos
+          - Estado atual (estatus dos ajustes no banco local)
+      [ ] DIZER PARA RAFAEL: "Proxima sessao = abrir PROMPT_PROXIMA_SESSAO_SKILL2.md
+          (atualizado) para continuar FASE C"
+    - Se FASE B + C nao iniciaram (so Fase A — demanda recebida mas capinagem
+      decidida para sessao futura):
+      [ ] Atualizar este arquivo com estrategia confirmada
+      [ ] DIZER PARA RAFAEL: "Proxima sessao = continuar SKILL2.md (Fase B+C)"
 ```
 
 ## NÃO-FAZER (red flags Skill 2 + v9)
