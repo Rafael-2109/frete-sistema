@@ -1,16 +1,21 @@
-"""planejar_pre_etapa.py — skill `planejando-pre-etapa-odoo`: 4 modos.
+"""planejar_pre_etapa.py — skill `planejando-pre-etapa-odoo`: 5 modos.
 
 Expoe PreEtapaEstoqueService (1 produto) + helpers top-level
 (planejar_pre_etapa_batch_company, propor_ajustes_pre_etapa,
-listar_onda_pre_etapa, aprovar_onda_pre_etapa) via CLI unificada.
+listar_onda_pre_etapa, aprovar_onda_pre_etapa, executar_onda_pre_etapa)
+via CLI unificada.
 
 Modos:
   planejar:      READ Odoo (quants 1 company + complementar) + grava JSON+Excel
   propor:        WRITE banco local (DELETE+INSERT em ajuste_estoque_inventario)
   listar-onda:   READ banco local (lista PROPOSTO + hash sha256)
   aprovar-onda:  WRITE banco local (UPDATE status PROPOSTO -> APROVADO)
+  executar-onda: WRITE Odoo (compoe Skills 1+2; orchestrator C3 macro)
+                 POS/NEG via transferir_quantidade_para_lote_v2 (Skill 2 v2),
+                 PURO via ajustar_quant (Skill 1 com guard delta_esperado).
 
---dry-run eh DEFAULT em planejar/propor/aprovar-onda. listar-onda eh sempre READ.
+--dry-run eh DEFAULT em planejar/propor/aprovar-onda/executar-onda.
+listar-onda eh sempre READ.
 
 Exemplos:
   python planejar_pre_etapa.py --modo planejar --company-id 4
@@ -19,6 +24,12 @@ Exemplos:
   python planejar_pre_etapa.py --modo listar-onda --company-id 4
   python planejar_pre_etapa.py --modo aprovar-onda --company-id 4 --hash <sha> \
       --usuario rafael --confirmar
+  # Executar (sub-piloto 10 produtos primeiro):
+  python planejar_pre_etapa.py --modo executar-onda --company-id 4 --limite 10 --confirmar
+  # Executar bulk paralelo:
+  python planejar_pre_etapa.py --modo executar-onda --company-id 4 --max-workers 5 --confirmar
+  # Executar 1 produto especifico:
+  python planejar_pre_etapa.py --modo executar-onda --company-id 4 --cod-produto 4310177 --confirmar
 
 Exit: 0 efetivado · 4 dry-run OK · 1 falha · 2 uso.
 
@@ -38,6 +49,9 @@ sys.path.insert(0, str(_THIS.parents[4]))
 
 from app.odoo.estoque._cli_utils import (  # noqa: E402
     adicionar_args_padrao, setup_cli_completo,
+)
+from app.odoo.estoque.orchestrators.pre_etapa_executor import (  # noqa: E402
+    executar_onda_pre_etapa,
 )
 from app.odoo.estoque.scripts.pre_etapa import (  # noqa: E402
     COMPANY_LOCATIONS_PRE_ETAPA,
@@ -348,6 +362,52 @@ def modo_aprovar_onda(args: argparse.Namespace) -> Dict[str, Any]:
 
 
 # ============================================================
+# MODO executar-onda (orchestrator C3 macro — compoe Skills 1+2)
+# ============================================================
+
+def modo_executar_onda(args: argparse.Namespace) -> Dict[str, Any]:
+    """Modo executar-onda: WRITE Odoo via orchestrator pre_etapa_executor.
+
+    Compoe Skills 1+2 sobre ajustes APROVADO:
+    - POS/NEG: transferir_quantidade_para_lote_v2 (Skill 2 com delta_esperado)
+    - PURO: ajustar_quant criar_se_faltar=True (Skill 1 com guard CICLAMATO)
+    """
+    t0 = time.time()
+    out: Dict[str, Any] = {
+        'modo': 'executar-onda',
+        'ts_inicio': agora_brasil_naive().isoformat(timespec='seconds'),
+        'dry_run': args.dry_run,
+        'company_id': args.company_id,
+        'ciclo': args.ciclo,
+        'limite': args.limite,
+        'cod_produto_filter': args.cod_produto,
+        'max_workers': args.max_workers,
+    }
+
+    try:
+        r = executar_onda_pre_etapa(
+            ciclo=args.ciclo,
+            company_id=args.company_id,
+            onda_num=args.onda_num,
+            usuario=args.usuario,
+            max_workers=args.max_workers,
+            limite=args.limite,
+            cod_produto=args.cod_produto,
+            dry_run=args.dry_run,
+        )
+    except Exception as exc:
+        out['status'] = 'FALHA_ODOO'
+        out['erro'] = str(exc)
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    # r ja vem com status DRY_RUN_OK_EXECUTADO / EXECUTADO_ONDA / FALHA_*
+    out.update(r)
+    out['tempo_ms'] = int((time.time() - t0) * 1000)
+    return out
+
+
+# ============================================================
 # Output e dispatch
 # ============================================================
 
@@ -355,10 +415,15 @@ _FALHAS_STATUS = {
     'FALHA_INPUT_AUSENTE', 'FALHA_PLANO_AUSENTE', 'FALHA_BANCO',
     'FALHA_BACKUP', 'FALHA_ODOO', 'FALHA_USO',
     'FALHA_HASH_DIVERGENTE', 'FALHA_NENHUM_PROPOSTO',
+    'FALHA_NENHUM_APROVADO',  # executar-onda sem ajustes APROVADO
 }
-_REAL_OKS = {'PLANEJADO', 'PROPOSTO', 'LISTADO', 'LISTADO_VAZIO', 'APROVADO'}
+_REAL_OKS = {
+    'PLANEJADO', 'PROPOSTO', 'LISTADO', 'LISTADO_VAZIO', 'APROVADO',
+    'EXECUTADO_ONDA',  # executar-onda real
+}
 _DRY_OKS = {
     'DRY_RUN_OK_PLANEJADO', 'DRY_RUN_OK_PROPOSTO', 'DRY_RUN_OK_APROVADO',
+    'DRY_RUN_OK_EXECUTADO',  # executar-onda dry-run
 }
 
 
@@ -411,8 +476,9 @@ def main() -> int:
     )
     ap.add_argument(
         '--modo', required=True,
-        choices=['planejar', 'propor', 'listar-onda', 'aprovar-onda'],
-        help='Modo de operacao (4 modos disponiveis).',
+        choices=['planejar', 'propor', 'listar-onda', 'aprovar-onda',
+                 'executar-onda'],
+        help='Modo de operacao (5 modos disponiveis).',
     )
     ap.add_argument(
         '--company-id', type=int, required=True, choices=[4, 1],
@@ -455,6 +521,17 @@ def main() -> int:
     ap.add_argument('--hash', default='',
                     help='Hash sha256 esperado (obrigatorio para aprovar-onda).')
 
+    # Modo executar-onda
+    ap.add_argument('--limite', type=int, default=None,
+                    help='Executa N primeiros produtos (sub-piloto). '
+                         'Default: todos os APROVADOS.')
+    ap.add_argument('--cod-produto', default=None,
+                    help='Executa 1 produto especifico (default_code). '
+                         'Default: todos APROVADOS.')
+    ap.add_argument('--max-workers', type=int, default=1,
+                    help='Paralelizacao por produto (default=1 serial; '
+                         '5 para bulk ~5x mais rapido).')
+
     # Execucao
     ap.add_argument('--dry-run', action='store_true', default=True,
                     help='Default seguro (calcula mas NAO grava/escreve).')
@@ -489,6 +566,8 @@ def main() -> int:
             out = modo_listar_onda(args)
         elif args.modo == 'aprovar-onda':
             out = modo_aprovar_onda(args)
+        elif args.modo == 'executar-onda':
+            out = modo_executar_onda(args)
         else:
             ap.error(f'Modo invalido: {args.modo}')
             return 2  # unreachable

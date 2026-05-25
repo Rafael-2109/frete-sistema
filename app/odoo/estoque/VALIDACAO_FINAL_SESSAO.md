@@ -1115,3 +1115,88 @@ Apos o incidente, implementei 3 melhorias evitam-repeticao (registradas em commi
 
 - **3 moves do picking FB/OUT/01046 com qty=0** (cosmetico): aguardam validacao manual no Odoo UI pelo time fiscal. Nao bloqueia operacao.
 - **NENHUMA pendencia operacional** do plano 71 cods.
+
+---
+
+## 15. Sessao 2026-05-25 v9: 09b capinado → orchestrator C3 macro Skill 6 (ciclo completo)
+
+### 15.1 Contexto
+
+Plano da sessao v9: capinar `09b_executar_pre_etapa.py` (746 LOC, executor da pre-etapa Onda 5/6 — composicao C3 macro de Skills 1+2) para `app/odoo/estoque/orchestrators/pre_etapa_executor.py`, fechando o ciclo da Skill 6 (planejar→propor→listar→aprovar→executar).
+
+**Foco escolhido por Rafael (AskUserQuestion)**: Foco C — Capinar 09b. Estimativa ~3-4h. Risco BAIXO (sem SEFAZ; pattern ja validado em PROD em sessoes anteriores).
+
+### 15.2 Mudancas realizadas
+
+| Tipo | Item | Detalhes |
+|------|------|---------|
+| **CRIAR** | `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (~580 LOC) | Orchestrator C3 macro. Entry-point `executar_onda_pre_etapa()`. Compoe Skills 1 (`StockQuantAdjustmentService.ajustar_quant` para PURO com guard delta_esperado=qty) + 2 (`StockInternalTransferService.transferir_quantidade_para_lote_v2` para POS/NEG com delta_esperado propagado em `-origem`/`+destino`). Mantem auditoria via `OperacaoOdooAuditoria.registrar` + paralelizacao via `ThreadPoolExecutor` (cada thread cria app_context + conexao Odoo + svcs proprios). |
+| **CRIAR** | `tests/odoo/services/test_pre_etapa_executor_orchestrator.py` (21 testes) | Helpers (`_resolver_product_id`, `_buscar_quants_produto_cid`, `_localizar_doador`), `_avaliar_sucesso_v2`, execucao individual dry-run (`_executar_transferencia_interna` doador OK / sem doador / insuficiente; `_executar_positivo_puro` dry-run validando guard delta_esperado propagado para Skill 1), entry-point (`executar_onda_pre_etapa` FALHA_USO company_id invalido, FALHA_NENHUM_APROVADO ciclo inexistente), constantes (ACOES_INTERNAS_POR_CID, ACAO_AUDIT_CURTA, LOTE_MIGRACAO). |
+| **MODIFICAR** | `.claude/skills/planejando-pre-etapa-odoo/scripts/planejar_pre_etapa.py` | Adicionado modo `executar-onda` (5o modo). Funcao `modo_executar_onda(args)`. Args novos: `--limite`, `--cod-produto`, `--max-workers`. Status novos: `EXECUTADO_ONDA`, `DRY_RUN_OK_EXECUTADO`, `FALHA_NENHUM_APROVADO`. Atualizados `_FALHAS_STATUS`, `_REAL_OKS`, `_DRY_OKS`. |
+| **MODIFICAR** | `.claude/skills/planejando-pre-etapa-odoo/SKILL.md` | Header v6→v9 (5 modos). Frontmatter `description` atualizada (executar-onda + triggers novos). Contrato `executar-onda` completo (objeto/input/output/pre-cond/pos-cond/gotchas/modos/status). Receitas: 5 linhas novas (canary/sub-piloto/bulk/single produto/preview). Sub-fluxo 4.1.e adicionado. Armadilhas executar-onda (5 novas). Exemplos 9-13 novos. Validacao: 22→48 testes/smokes. NAO-FAZER: 3 red flags executar-onda novos. |
+| **MODIFICAR** | `app/odoo/estoque/fluxos/4.1-pre-etapa-cd-d007.md` | Titulo: 4 modos→5 modos. Passo F reescrito (orchestrator desta skill). G-PRE-10 reescrito (orchestrator C3 v9). Exemplo passo 7 atualizado. Sub-caso 4.1.e (executar Onda APROVADA, 9 passos). Cross-skill: Skill 1+2 menciona v9 + orchestrator. |
+| **MODIFICAR** | `.claude/agents/gestor-estoque-odoo.md` | `description` atualizada (executor C3 + Skills 1+2). Header v7→v9 (executar-onda + orchestrator). Galho 4.1 atualizado (5 modos + orchestrator). |
+| **MOVER** | `scripts/inventario_2026_05/09b_executar_pre_etapa.py` → `_validados/planejando-pre-etapa-odoo/` | `git mv`. Header ARQUIVADO adicionado (aviso + receita Skill 6 + diferencas vs capinado). sys.path corrigido `parents[2]→parents[4]`. Smoke import museum vivo verde para 3 arquivos (03b+04b+09b). |
+| **MODIFICAR** | `scripts/inventario_2026_05/_validados/planejando-pre-etapa-odoo/VALIDACAO.md` | Header v6→v9. 09b movido de VIVO para SUPERADO (com detalhes da composicao Skills 1+2 + 21 testes pytest + 3 smokes CLI). Cobertura: 22→48 testes/smokes. C7-C10 marcados como concluidos v6+v9. |
+| **MODIFICAR** | `docs/inventario-2026-05/consolidacao/MAPA_SCRIPTS.md` | Secao pre_etapa.py renomeada para incluir `orchestrators/pre_etapa_executor.py`. Linha 09b: status VIVO→SUPERADO 2026-05-25 v9 com detalhes da composicao. |
+| **MODIFICAR** | `app/odoo/estoque/ROADMAP_SKILLS.md` | HANDOFF: secao "Sessao 2026-05-25 v9" adicionada com 11 bullets. Baseline 230→251. Status global: 16 scripts SUPERADOS (era 15). Secao SKILL 6: titulo atualizado (5 modos), checkpoints C1-C10 expandidos com detalhes v9, status global → 🟡 mín viável COMPLETA. |
+| **MODIFICAR** | `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` (este arquivo) | Secao §15 nova. |
+
+### 15.3 Decisoes-chave
+
+**Decisao 1: API v2 propagada vs reutilizar v1 legado.**
+- 09b legacy chamava `transferir_quantidade_para_lote` (v1 — sem guard delta_esperado). v2 (`transferir_quantidade_para_lote_v2`) delega para `ajustar_quant`x2 com `delta_esperado=±qty` propagado em ambos passos.
+- **Decisao**: usar v2 sempre — guard CICLAMATO ativo protege contra bug operacional (politica homogenea em retomada de FALHA).
+- **Trade-off**: v2 e' ~10% mais lenta que v1 (2 calls a `ajustar_quant`). Aceito — robustez > velocidade marginal.
+
+**Decisao 2: PURO via Skill 1 vs `odoo.create('stock.quant')` direto.**
+- 09b legacy fazia `odoo.create('stock.quant', {...})` + `action_apply_inventory` DIRETO (sem usar Skill 1).
+- **Decisao**: refatorar para `quant_svc.ajustar_quant(criar_se_faltar=True, delta_esperado=qty)` — guard CICLAMATO + identificacao via tupla (product, company, location, lot) consistente com resto do sistema.
+- **Trade-off**: ligeiramente mais chamadas internas (resolve lote -> ajusta), mas mesma quantidade de calls XML-RPC.
+
+**Decisao 3: Helpers privados no orchestrator (nao expor como skills).**
+- `_resolver_product_id`, `_buscar_quants_produto_cid`, `_localizar_doador`, `_avaliar_sucesso_v2` permanecem PRIVADOS no orchestrator (prefixo `_`).
+- **Razao**: sao especificos do flow pre-etapa (estrutura ajuste_estoque_inventario + lote_origem/destino por nome). Promover a skills genericas seria precoce.
+
+**Decisao 4: Auditoria via `OperacaoOdooAuditoria` preservada.**
+- 09b legacy registrava em `operacao_odoo_auditoria` com `pipeline_etapa='ONDA_5_PRE_ETAPA'` + external_id unico por ajuste.
+- **Decisao**: preservar 100% — auditoria e' usada para rastrear cada ajuste tocado em PROD. Sem auditoria, retomada de FALHAs perde contexto.
+
+**Decisao 5: Paralelizacao via `ThreadPoolExecutor` preservada.**
+- 09b legacy ja suportava `--max-workers` (default 1 serial; 5 para bulk ~5x).
+- **Decisao**: preservar pattern exato. Cada thread cria app_context + conexao Odoo + svcs (Skill 1+2) proprios — Flask-SQLAlchemy scoped session funciona corretamente.
+- **Nota**: documentar trade-off `max_workers > 5` sobrecarrega Odoo XML-RPC (rate limit) — esta na armadilha v9 do SKILL.md.
+
+### 15.4 Smokes C6 detalhes
+
+**Smoke 1**: company_id invalido (999) → argparse rejeita em `choices=[4, 1]` antes mesmo de chamar a funcao. Exit 2. **DUPLA validacao**: argparse + `executar_onda_pre_etapa` ambos checam.
+
+**Smoke 2**: ciclo inexistente (`CICLO_INEXISTENTE_TEST_v9`) → query AjusteEstoqueInventario retorna []. Resposta: `status=FALHA_NENHUM_APROVADO`, `ajustes_total=0`, `produtos_total=0`, tempo 869ms. Exit 1. JSON estruturado salvo em `scripts/inventario_2026_05/auditoria/log_skill6_pre_etapa_executar_onda_dryrun_20260525_012909.json`.
+
+**Smoke 3 (REAL dry-run)**: ciclo INVENTARIO_2026_05 cid=4 → encontrou **1 ajuste APROVADO real** (id=163696, cod=208000012, product_id=28108, NEG, qty=835.851,71). Dispatch correto:
+- `produtos[0].pos_total=0, neg_total=1, puro_total=0` ✓
+- `neg_results[0].resultado.sucesso=None` (dry-run nao confirma) ✓
+- `neg_results[0].resultado.plano.status=DRY_RUN_OK` (Skill 2 v2 OK em dry-run) ✓
+- `plano.lot_id_origem=None` (P-15/05 quant sem lote) ✓
+- `plano.lot_id_destino=56779` (MIGRAÇÃO resolvido via `resolver_lote_destino` com `criar_se_faltar=False` em dry-run) ✓
+- Tempo: 1.9s (Odoo conectado UID=42 + read quants + dry-run composto)
+- Exit 4 (DRY_RUN_OK_EXECUTADO) ✓
+
+**Confirmado**: composicao Skill 2 v2 + guard delta_esperado propagado + auditoria + dispatch por `acao_decidida` funcionam end-to-end em dry-run real.
+
+### 15.5 Pendencias residuais (apos v9)
+
+- **NENHUMA pendencia operacional** — Skill 6 5 modos completos.
+- **Smoke `--confirmar` real em PROD**: nao executado nesta sessao porque so havia 1 ajuste APROVADO (id=163696 valor alto 835k un — exige aprovacao explicita do Rafael antes). Pattern ja validado em PROD em sessoes anteriores via 09b legacy.
+- **Pyright warnings cosmeticos** em `pre_etapa_executor.py`: 3 imports `app.odoo.estoque.*` nao resolvem (PYTHONPATH falso positivo) — runtime OK.
+- **`--quiet` nao suprime 100% dos logs Flask** (~30 linhas escapam antes do silenciar_stdout context) — nao bloqueador (JSON output preservado).
+
+### 15.6 Confirmacao: estado PROD apos v9
+
+| Acao | Resultado |
+|---|---|
+| Modificacoes Odoo PROD em v9 | **ZERO** (apenas dry-runs) |
+| Modificacoes banco PG PROD em v9 | **ZERO** (apenas reads do AjusteEstoqueInventario) |
+| Modificacoes filesystem PROD em v9 | 3 logs JSON em `scripts/inventario_2026_05/auditoria/log_skill6_pre_etapa_executar_onda_dryrun_*.json` (auditoria das smokes; nao toca dados de negocio) |
+| Pytest baseline v9 | 230 → **251 verdes** (+21 orchestrator) |
+| Arquivos modificados | 12 (CRIAR: 2 + MODIFICAR: 9 + MOVER: 1) |

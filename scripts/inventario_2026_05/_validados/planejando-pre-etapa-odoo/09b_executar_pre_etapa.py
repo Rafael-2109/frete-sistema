@@ -1,5 +1,34 @@
 """F9b (D007) — Executor da Pre-etapa CD/FB (Onda 5/6).
 
+⚠️ ARQUIVADO 2026-05-25 (sessao v9) — SUPERADO PELA SKILL 6.
+
+Este script foi capinado para a Skill 6 `planejando-pre-etapa-odoo` modo
+`executar-onda` (orchestrator C3 macro em
+`app/odoo/estoque/orchestrators/pre_etapa_executor.py`).
+
+USE A SKILL 6 modo `executar-onda` em vez deste script:
+    SK=.claude/skills/planejando-pre-etapa-odoo/scripts/planejar_pre_etapa.py
+    python "$SK" --modo executar-onda --company-id 4 --limite 1 --confirmar       # canary
+    python "$SK" --modo executar-onda --company-id 4 --max-workers 5 --confirmar  # bulk paralelo
+    python "$SK" --modo executar-onda --company-id 4 --cod-produto X --confirmar  # 1 produto especifico
+
+Diferencas do capinado vs este script legacy:
+- API v2 modernizada: `transferir_quantidade_para_lote` v1 -> v2 (guard
+  delta_esperado propagado em ambos passos -origem/+destino — protege contra
+  bug CICLAMATO 2026-05-23).
+- POSITIVO_PURO refatorado: `odoo.create('stock.quant')` DIRETO -> Skill 1
+  `ajustar_quant(criar_se_faltar=True, delta_esperado=qty)` — guard CICLAMATO.
+- Output JSON estruturado (regra v7 "Log JSON e fonte de verdade") em vez de
+  print/banner orientado a humano.
+- Auditoria via OperacaoOdooAuditoria preservada.
+- Paralelizacao via ThreadPoolExecutor preservada.
+
+Este script permanece como REFERENCIA HISTORICA (museum vivo) — NAO executar.
+
+============================================================
+TEXTO ORIGINAL (referencia historica):
+============================================================
+
 Executa ajustes APROVADO de uma company:
 - AJUSTE_{CID}_TRANSF_INTERNA_POS: transferir lote_origem → lote_destino
 - AJUSTE_{CID}_TRANSF_INTERNA_NEG: transferir lote_origem → MIGRAÇÃO
@@ -49,7 +78,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 _THIS = Path(__file__).resolve()
-sys.path.insert(0, str(_THIS.parents[2]))
+# parents[4] porque o museum vivo esta em _validados/<skill>/ (4 niveis acima do root)
+sys.path.insert(0, str(_THIS.parents[4]))
 
 from app import create_app, db  # noqa: E402
 from app.odoo.constants.locations import COMPANY_LOCATIONS  # noqa: E402
