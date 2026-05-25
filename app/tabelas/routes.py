@@ -481,8 +481,10 @@ def listar_todas_tabelas():
 
     if cidade:
         # Filtra tabelas que atendem à cidade através dos vínculos
-        from app.vinculos.models import CidadeAtendida
-        
+        # CidadeAtendida ja importado no topo do arquivo (linha 16)
+        # NUNCA reimportar localmente — causa UnboundLocalError quando o bloco nao executa
+        # mas variavel e usada apos a funcao (Sentry PYTHON-FLASK-W3)
+
         # Subconsulta para encontrar tabelas que atendem a cidade especificada
         subquery_cidades = db.session.query(CidadeAtendida.nome_tabela, CidadeAtendida.transportadora_id).join(
             Cidade, CidadeAtendida.cidade_id == Cidade.id
@@ -515,8 +517,10 @@ def listar_todas_tabelas():
     
     # Se tiver filtro de status ou apenas órfãs, aplicamos a lógica
     if status or apenas_orfas:
-        from app.vinculos.models import CidadeAtendida
-        
+        # CidadeAtendida ja importado no topo (linha 16); reimport local
+        # causava Sentry PYTHON-FLASK-W3 (UnboundLocalError quando bloco
+        # nao executava mas linha 646 usava o nome).
+
         # Se apenas órfãs foi marcado, filtra apenas tabelas órfãs
         if apenas_orfas:
             # Subconsulta para encontrar tabelas que TÊM vínculos
@@ -1043,7 +1047,8 @@ def exportar_tabelas():
             query = query.filter(TabelaFrete.uf_destino == uf_destino)
         
         if cidade:
-            from app.vinculos.models import CidadeAtendida
+            # CidadeAtendida ja importado no topo (linha 16); evitar reimport
+            # local previne mesmo bug do Sentry PYTHON-FLASK-W3 em exportar_tabelas.
             subquery_cidades = db.session.query(CidadeAtendida.nome_tabela, CidadeAtendida.transportadora_id).join(
                 Cidade, CidadeAtendida.cidade_id == Cidade.id
             ).filter(
@@ -1070,8 +1075,9 @@ def exportar_tabelas():
         
         # Filtros de status/órfãs
         if status or apenas_orfas:
-            from app.vinculos.models import CidadeAtendida
-            
+            # CidadeAtendida ja importado no topo (linha 16); reimport local
+            # causa UnboundLocalError (ver Sentry PYTHON-FLASK-W3).
+
             if apenas_orfas or status == 'orfa':
                 query = query.filter(
                     ~db.session.query(literal(True)).filter(
