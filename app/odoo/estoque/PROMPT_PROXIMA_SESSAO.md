@@ -4,7 +4,7 @@
 
 ---BEGIN---
 
-Continue o trabalho do orquestrador-Odoo. Worktree: `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **HEAD apos v14a: `f9b875c2` docs(estoque): v14a — C3 mineracao script 09 + revalidar R1 (10.3 INTACTA)**). `main` continua VIVO em paralelo (Rafael commita lá — SPED ECD em progresso) — verificar se avançou e considerar rebase ANTES de iniciar.
+Continue o trabalho do orquestrador-Odoo. Worktree: `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **HEAD apos v14a-fix: docs(estoque): v14a-fix — RecebimentoLfOdoo mineracao §7.4 + ETAPA F via Skill 5 + gotchas destacados**). `main` continua VIVO em paralelo (Rafael commita lá — SPED ECD em progresso) — verificar se avançou e considerar rebase ANTES de iniciar.
 
 ## Setup OBRIGATÓRIO (worktree sem .env)
 
@@ -15,9 +15,15 @@ set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/fret
 git fetch origin main && git log --oneline f9b875c2..origin/main  # ver se main avancou desde v14a
 ```
 
-## 📋 ESTADO ATUAL — Skill 8 `faturando-odoo` PLANEJADA + 2 MINERACOES COMPLETAS
+## 📋 ESTADO ATUAL — Skill 8 `faturando-odoo` PLANEJADA + 3 MINERACOES COMPLETAS (apos v14a-fix)
 
 Sessão v14a (2026-05-25) concluiu C3 (mineração `09_executar_onda1_bulk.py` 1866 LOC) + revalidou R1: **decisão 10.3 INTACTA**. Pattern macro **etapa = barreira de sincronização** CONFIRMADO; sub-nuance MICRO ETAPA B (pipeline por picking com sleep 5s G022) documentada.
+
+**v14a-fix (2026-05-25)** — auditoria Rafael identificou 4 lacunas → RESOLVIDAS:
+1. **L1 ETAPA F via Skill 5**: 3o átomo NOVO `criar_picking_entrada_destino_manual` (C6.5 expandido — Fluxo>>Skills mantido).
+2. **L2 RecebimentoLfOdooService 4562 LOC minerado §7.4 READ-only** — **NÃO MEXER**: 37 etapas em 7 fases (FB DFe→PO→Picking→Invoice→Finalização→Transfer FB→CD→Recebimento CD). 30-60min POR INVOICE. **11 gotchas G-RECLF-1 a G-RECLF-11** documentados. **G-RECLF-9 (Playwright SEFAZ concorrente) JÁ MITIGADO** pelo etapa-barreira.
+3. **L3+L4 Gotchas DESTACADOS em §7.3**: G-ETB-COMPENSATORIO (qty_restante>0 cria AjusteEstoqueInventario PROPOSTO para ondas futuras) + G-ETB-G014 (lote vencido on-the-fly via Skill 2).
+4. **5 pendências novas §9**: paralelismo ETAPA E (G-RECLF-1 v17), centralizar constantes ETAPA F (bloqueia C6.5 v15a), verificar atomo Skill 2 v1 ou v2 em G014 (v15b).
 
 **Documento vivo de planejamento** (REGRA INVIOLAVEL 0 — LER INTEIRO ANTES de qualquer modificacao em codigo Skill 8 OU sub-skill):
 - `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` (~1100 LOC, 14 seções + pre-mortem §8.1 + §7.3 NOVA mineracao script)
@@ -53,6 +59,23 @@ Sessão v14a (2026-05-25) concluiu C3 (mineração `09_executar_onda1_bulk.py` 1
 - D16: `time.sleep(5)` entre chunks ETAPA B (G022 over-reservation mitigation)
 - D17: `ACAO_PARA_CFOP_ENTRADA` 5xxx→1xxx (PERDA 5903→1903, TRANSFERIR 5152→1152, DEV 5949→1949)
 - D18: default `dry_run=True` + `--confirmar` + `--confirmar-sefaz` (2 níveis)
+
+**G-ETB destacados v14a-fix** (ETAPA B script):
+- G-ETB-COMPENSATORIO: `qty_restante > 0` em PERDA_LF_FB cria NOVO `AjusteEstoqueInventario(acao='INDUSTRIALIZACAO_FB_LF', status='PROPOSTO')` para ondas futuras (preservar em C7)
+- G-ETB-G014: lote vencido on-the-fly via `StockInternalTransferService.transferir_quantidade_para_lote` → lote novo `INV-{cod}-{HOJE}` (preservar em C7; verificar v1 ou v2 — pendência §9)
+
+**G-RECLF-1 a G-RECLF-11** (RecebimentoLfOdooService 4562 LOC — v14a-fix §7.4):
+- G-RECLF-1: 30-60min/invoice — bulk não viável síncrono (decidir paralelismo em v17)
+- G-RECLF-2: FASE 6+7 pode falhar sem derrubar FB — aceitar `transfer_status='erro'` como sucesso parcial
+- G-RECLF-3: idempotência ja' codificada — pre-check `existente AND status='processado'` antes de re-chamar
+- G-RECLF-4: `_safe_update`/`_checkpoint` MAIS FORTES que D14 — consolidar com util compartilhada
+- G-RECLF-5: `app.utils.database_retry.commit_with_retry` ja existe — Skill 8 deve usar (não re-implementar)
+- G-RECLF-6: PAYMENT_PROVIDER_ID 92/30 (RecebimentoLfOdoo) DIFERENTE 38 (Skill 8) — sem conflito (propósitos diferentes)
+- G-RECLF-7: PICKING_TYPE 51/13 (RecebimentoLfOdoo) DIFERENTE MATRIZ Skill 8 — sem conflito
+- G-RECLF-8: PARTNER_CD_IN_FB=34 (consistente com COMPANY_PARTNER_ID Skill 8) ✓
+- G-RECLF-9: Playwright SEFAZ concorrente (step_23 vs F5e) — **JÁ MITIGADO pelo etapa-barreira** ✓
+- G-RECLF-10: `processar_transfer_only` exige FB-OK — Rafael pode usar para retry FASE 6+7
+- G-RECLF-11: Reset etapa=18 se erro pos-18 (idempotência interna)
 
 ## ⚠️ PRE-MORTEM — Riscos CRÍTICOS para v14b (LER §8.1 INTEIRO)
 
@@ -185,6 +208,11 @@ Sessão v14a (2026-05-25) concluiu C3 (mineração `09_executar_onda1_bulk.py` 1
 43. **(v14a) Pattern macro etapa = barreira CONFIRMADO**; sub-nuance MICRO ETAPA B (pipeline por picking sleep 5s G022) preservada. v15 orchestrator deve respeitar AMBOS.
 44. **(v14a) `validar_cadastro_fiscal` LOCALIZADO em script L228-294** — `gtin_validator.py` separado NÃO necessário para G017/G018 V1. G035 ainda em investigação (decidir em v14b).
 45. **(v14a) Constantes inline a CENTRALIZAR**: `ACAO_PARA_CFOP_ENTRADA`, `ACOES_ENTRADA_FB`, `ACOES_ENTRADA_DESTINO_MANUAL`, `PICKING_TYPE_ENTRADA_DESTINO_MANUAL`, `COMPANY_LABEL_ENTRADA`, `LOCATION_ORIGEM_ENTRADA_INDUSTR` — antes ou durante v15b/v17.
+46. **(v14a-fix) NÃO MEXER em `RecebimentoLfOdooService`** (4562 LOC validados em PROD) — Skill 8 INVOCA `processar_recebimento(rec_id)` na ETAPA E como entry-point publico. Aceita `transfer_status='erro'` como sucesso parcial (FASE 6+7 podem falhar sem derrubar FB).
+47. **(v14a-fix) ETAPA F NUNCA implementa picking inline** — sempre via Skill 5 atomo `criar_picking_entrada_destino_manual` (C6.5 expandido v15a). Encapsula G011 lot_name + G023 company_id forcado + G019/G020 state check + idempotencia via origin.
+48. **(v14a-fix) Consolidar `_commit_resilient`/`_commit_with_retry`/`_safe_update`/`_checkpoint`** em util compartilhada — usar `app.utils.database_retry.commit_with_retry` ja existente OU criar `app/odoo/estoque/scripts/_commit_helpers.py` (v15b ou v16).
+49. **(v14a-fix) Centralizar constantes ETAPA F ANTES de C6.5 v15a** (`ACOES_ENTRADA_DESTINO_MANUAL`, `PICKING_TYPE_ENTRADA_DESTINO_MANUAL`, `COMPANY_LABEL_ENTRADA`, `LOCATION_ORIGEM_ENTRADA_INDUSTR`) — o novo atomo Skill 5 PRECISA destas constantes; centralizar em `app/odoo/constants/operacoes_fiscais.py` (mesmo arquivo MATRIZ_INTERCOMPANY) bloqueia C6.5 se não feito.
+50. **(v14a-fix) Decisão paralelismo ETAPA E pendente para v17** (G-RECLF-1) — 30-60min POR INVOICE; bulk 100 invoices = 50-100h síncrono. OPCAO A: assíncrono via RQ worker; OPCAO B: paralelo invoice_ids distintos (verificar thread-safety RecebimentoLfOdoo); OPCAO C: sequencial + recovery `--apenas-etapa=E --resume`. AskUserQuestion em v17.
 
 ## NÃO-FAZER (red flags v14b)
 
@@ -223,8 +251,9 @@ Sessão v14a (2026-05-25) concluiu C3 (mineração `09_executar_onda1_bulk.py` 1
 | Sessão | Foco | Checkpoints | Risco |
 |--------|------|-------------|-------|
 | ~~v14a~~ | ~~C3 mineração script + revalidar R1~~ | ~~C3~~ | ~~Baixo~~ ✅ |
+| ~~v14a-fix~~ | ~~RecebimentoLfOdoo §7.4 + ETAPA F atomo Skill 5 + gotchas destacados~~ | ~~4 lacunas RESOLVIDAS~~ | ~~Baixo~~ ✅ |
 | **v14b (esta)** | C5 sub-skill auditando-cadastro-fiscal-odoo perfil inventário V1 | C5 | Baixo-Médio |
-| **v15a** | C6.5 estender Skill 5 com átomos inter-company (`criar_picking_inter_company` + `validar_picking_inter_company`) | C6.5 | Médio (mexe skill madura — pytest >5 verdes + canary obrigatório) |
+| **v15a** | **Centralizar constantes ETAPA F (pre-req)** + C6.5 estender Skill 5 com **3 átomos** inter-company (`criar_picking_inter_company` + `validar_picking_inter_company` + **NOVO `criar_picking_entrada_destino_manual`** v14a-fix) | C6.5 (expandido) | Médio (mexe skill madura — pytest >8 verdes + canary obrigatório em 2 pickings: 1 inter-company + 1 entrada destino manual) |
 | **v15b** | C6+C7+C8 orchestrator base + F5a + F5b (chama átomos novos Skill 5; invoca sub-skill C5 no bulk; centraliza D17 ACAO_PARA_CFOP_ENTRADA) | C6, C7, C8 | Médio |
 | **v16** | C9+C10 F5c + F5d (G016+G007+G034+G029 + D10 dispose profilático + D14 commit_resilient forte + D11 expire_all entre etapas) | C9, C10 | Médio (SSL crítico) |
 | **v17** | C11+C12+C13 F5e + etapas E/F (G023 company_id forçado + D17 centralizado finalizado) | C11, C12, C13 | Alto (SEFAZ + G023) |

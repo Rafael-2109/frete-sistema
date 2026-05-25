@@ -46,6 +46,38 @@
 - 1 sub-skill nova prevista: `auditando-cadastro-fiscal-odoo` (C5 v14b).
 - Skill 5 `operando-picking-odoo` será ESTENDIDA com 2 átomos novos em v15a (C6.5).
 - Baseline pytest mantido: 393 verdes.
+
+**Sessão 2026-05-25 v14a-fix (auditoria Rafael — 4 lacunas RESOLVIDAS, NAO MEXEU em RecebimentoLfOdoo):**
+- ✅ Rafael auditou v14a com 2 perguntas: (1) Fluxo>>Skills mantido? (2) Gotchas cobertos incluindo RecebimentoLF?
+- ✅ Auto-auditoria honesta identificou **4 lacunas** reais:
+  - L1: ETAPA F faz picking inline no orchestrator (viola Fluxo>>Skills — `odoo.create('stock.picking')` direto)
+  - L2: `RecebimentoLfOdooService` (4562 LOC, 37 etapas) NAO foi minerado (anotado generico "DELEGADO, reuso como esta'")
+  - L3: Gotcha compensatório ETAPA B L994-1031 (regra de negócio importante — `qty_restante > 0` cria novo AjusteEstoqueInventario PROPOSTO) não destacado
+  - L4: G014 PROTECTION ETAPA B L795-917 (lote vencido on-the-fly via Skill 2) não detalhado
+- ✅ AskUserQuestion: opção (a) Corrigir AGORA + **NÃO MEXER no RecebimentoLfOdooService** escolhida
+- ✅ **L2 RESOLVIDO — §7.4 NOVA Mineração `RecebimentoLfOdooService` (READ-only)**:
+  - Header docstring completo lido + helpers críticos (`_safe_update`/`_checkpoint`/`_write_and_verify`/`_recover_state_from_odoo`)
+  - 37 etapas em 7 fases (FB DFe→PO→Picking→Invoice→Finalização→Transfer FB→CD→Recebimento CD)
+  - Pattern: Checkpoint por Etapa + Fire and Poll (FIRE_TIMEOUT=120s, POLL=10s, MAX=1800s = 30min)
+  - **Tempo total estimado: 30-60min POR INVOICE** (FB 30min + transfer FB→CD 30min)
+  - **11 gotchas G-RECLF-1 a G-RECLF-11** documentados, destaque:
+    - G-RECLF-1: bulk ETAPA E NÃO viável síncrono (50-100h em onda 100 invoices) — **decidir paralelismo em v17**
+    - G-RECLF-2: FASE 6+7 pode falhar sem derrubar FB — Skill 8 aceita `transfer_status='erro'` como sucesso parcial
+    - G-RECLF-4: `_safe_update`/`_checkpoint` versão MAIS FORTE que `_commit_with_retry` (D14) — consolidar
+    - G-RECLF-9: Playwright SEFAZ no step_23 sobreposto com F5e — **JÁ MITIGADO pelo etapa-barreira (decisão 10.3)** ✓
+- ✅ **L1 RESOLVIDO — ETAPA F via 3o átomo Skill 5**:
+  - §10.6 EXPANDIDO: 3 átomos (`criar_picking_inter_company` + `validar_picking_inter_company` + **NOVO** `criar_picking_entrada_destino_manual`)
+  - §3 diagrama + §7 tabela C6.5 (pytest >8 verdes) + C13 (orchestrator INVOCA átomo)
+- ✅ **L3+L4 RESOLVIDO — Gotchas DESTACADOS em §7.3**:
+  - G-ETB-COMPENSATORIO: regra de negócio para ondas futuras
+  - G-ETB-G014: lote vencido on-the-fly via Skill 2 (verificar se v1 ou v2 — pendência v15b)
+- ✅ **5 novas pendências §9** registradas: paralelismo G-RECLF-1 (v17), centralizar constantes ETAPA F (bloqueia C6.5 v15a), verificar atomo v1/v2 G014 (v15b)
+- 🟢 **NÃO MEXEU em código** (RecebimentoLfOdoo INTOCADO conforme regra Rafael; só docs/planejamento)
+- 🟢 **Pytest baseline mantido: 393 verdes**.
+
+**Status global após v14a-fix:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 3 MINERAÇÕES COMPLETAS** (service + script + RecebimentoLfOdoo); 4 lacunas RESOLVIDAS; 1 decisão ABERTA (paralelismo G-RECLF-1 v17).
+- Skill 5 será ESTENDIDA com **3 átomos** em v15a (C6.5 expandido — `criar_picking_inter_company` + `validar_picking_inter_company` + `criar_picking_entrada_destino_manual`).
 - Próximo passo: sessão v14b com criação da sub-skill `auditando-cadastro-fiscal-odoo` perfil inventário V1.
 
 **Sessão 2026-05-25 v13 (Planejamento Skill 8 `faturando-odoo` — estruturacao C1+C4):**
