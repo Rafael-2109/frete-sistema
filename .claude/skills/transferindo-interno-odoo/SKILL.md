@@ -114,6 +114,7 @@ status:        EXECUTADO · DRY_RUN_OK · FALHA_REDUCAO · FALHA_AUMENTO ·
 | Devolver de Indisponível para Estoque (mesmo lote, locs diferentes) | `--cod C --empresa CD --qty N --lote MIGRAÇÃO --loc-origem 31090 --loc-destino 32` | mover_migracao reverse |
 | Reduzir lote A com reserva órfã + transferir (RESETAR reserva primeiro) | `--cod C --empresa E --qty N --lote-origem A --lote-destino B --resetar-reserva-origem` | corrigir_reserved_negativo |
 | **MODO C** — Mover saldo para Indisponivel CONSOLIDANDO em MIGRAÇÃO (átomo único) | `--cod C --empresa FB --qty N --para-indisponivel --lote LOTE_REAL` | ad-hoc batch de "transferir produtos pra Indisponivel" (1ª demanda real 2026-05-24 v4) |
+| **PLANILHA cod+qty → Indisponivel em LOTE** (orquestrador alto nivel) | `transferir_para_indisp_em_lote.py --planilha file.csv --empresa FB --resetar-reserva-origem` | demanda real 2026-05-25 v10 (158 cods FB) — descobre lotes origem via Skill 9, distribui qty greedy entre quants (MIGRACAO_FIRST_FIFO) |
 
 ## Exemplos
 
@@ -149,7 +150,120 @@ python "$SK" --cod 210843125 --empresa FB --qty 223.0 \
 # 7) MODO C com loc origem custom (ex.: FB/Pré-Produção/Linha Manual)
 python "$SK" --cod 4869012 --empresa FB --qty 50.0 \
     --para-indisponivel --lote '353/25' --loc-origem 4067 --confirmar
+
+# 8) PLANILHA → Indisponivel em LOTE (orquestrador alto-nivel — caso 158 cods FB v10)
+SK_LOTE=.claude/skills/transferindo-interno-odoo/scripts/transferir_para_indisp_em_lote.py
+
+# 8a) dry-run da planilha completa, com resetar-reserva (preview JSON em stdout)
+python "$SK_LOTE" --planilha /tmp/demanda.csv --empresa FB \
+    --resetar-reserva-origem \
+    --csv-out /tmp/audit.csv --csv-pendencias /tmp/pendencias.csv
+
+# 8b) inline (debug, 3 cods)
+python "$SK_LOTE" --cods "104000015=100,3800005=50,210030007=1000" --empresa FB
+
+# 8c) efetivar (--confirmar) com CSVs de auditoria
+python "$SK_LOTE" --planilha /tmp/demanda.csv --empresa FB \
+    --resetar-reserva-origem --confirmar \
+    --csv-out /tmp/audit_real.csv --csv-pendencias /tmp/pendencias_real.csv
 ```
+
+## Orquestrador alto-nivel — planilha → Indisponivel em LOTE
+
+`transferir_para_indisp_em_lote.py` eh um CLI thin wrapper sobre o helper
+`StockInternalTransferService.distribuir_para_indisponivel` (alto-nivel
+composto sobre `transferir_para_indisponivel`). **Capinado em 2026-05-25 v10
+para demanda real de 158 cods FB.**
+
+### Input
+
+- `--planilha CSV_PATH` (CSV/TSV com colunas `cod`, `qty`[, `nome`])
+  OU `--cods "C1=Q1,C2=Q2"` inline (debug)
+- `--empresa FB|CD|LF` required
+
+### Politica
+
+- `--politica MIGRACAO_FIRST_FIFO` (default) — drena MIGRAÇÃO primeiro,
+  depois lotes reais em ordem lex de nome
+- `--politica FIFO` — so ordem lex de nome
+- `--politica MAIOR_SALDO` — drena lotes grandes primeiro
+
+### Origem default (todas internas exceto Indisp por company)
+
+- FB: `[8, 48, 4066, 4067, 4068, 27458]` (Estoque + Pos-Prod + Pre-Prod Vidro/Manual/Balde/Salmoura)
+- CD: `[32]` (Estoque)
+- LF: `[42]` (Estoque)
+- Override via `--locs-origem "id1,id2,..."`
+
+### Algoritmo
+
+Para cada linha (cod, qty) da planilha:
+1. Resolve `product_id` via default_code.
+2. Lista quants origem (quantity>0, lote nao-vazio, locs permitidas).
+3. Ordena por `politica_ordem`.
+4. Greedy: drena quants ate atingir `qty_solicitada`. Cada quant chama
+   o atomo `transferir_para_indisponivel` 1x.
+5. Coleta resultados: `qty_movida`, `qty_nao_movida`, transferencias,
+   quants_pulados.
+
+### Output
+
+- JSON estruturado em stdout (`{sumario, cods: [...]}`)
+- `--csv-out PATH`: 1 linha por transferencia interna realizada (audit)
+- `--csv-pendencias PATH`: 1 linha por cod com parcial/falha
+
+### Exit codes
+
+- `0` confirmado total (todos cods 100%)
+- `4` dry-run total
+- `1` falha (FALHA_PRODUTO, FALHA_SEM_QUANT, parcial em real, etc)
+- `2` erro de uso
+
+### Status por cod
+
+- `DRY_RUN_OK` / `EXECUTADO_TOTAL` — atingiu qty_solicitada
+- `DRY_RUN_PARCIAL` / `EXECUTADO_PARCIAL` — moveu parte (saldo insuficiente
+  OU lotes pulados — ex.: lote origem == destino MIGRAÇÃO no caso de
+  cod ja consolidado em FB/Estoque)
+- `FALHA_PRODUTO` — default_code nao existe em product.product
+- `FALHA_SEM_QUANT` — sem saldo em nenhuma loc origem
+- `FALHA_PRE_COND` — pre-cond do atomo (raro — geralmente vira parcial)
+- `FALHA_PARCIAL_NAO_TOLERADO` — `tolerar_parcial=False` configurado
+
+### Gotchas do orquestrador
+
+- **`--resetar-reserva-origem` DEFENSIVO** — quando reserved>0, o atomo
+  internamente RESPEITA reserva por default; passando esta flag, usa
+  `quantity` completa (ignora reserved). NAO cancela picking — so zera
+  reserved_quantity stale. Para reserva legitima (ML viva), considere
+  fluxo 2.6 ANTES.
+- **Lote MIGRAÇÃO em FB/Estoque (cod ja parcialmente consolidado)** — o
+  atomo `transferir_para_indisponivel` levanta `ValueError` se
+  `lot_id_origem == lot_id_destino`. O orquestrador CAPTURA este caso
+  e pula o quant (registra em `quants_pulados` com motivo), continuando
+  o loop. Caso real: cod `4310176` (1 un MIGRAÇÃO em FB/Estoque +
+  1093 un em lotes reais; processado parcial com 1093/1094 movidos).
+- **Ordem das variantes MIGRACAO/MIGRAÇÃO** — em `MIGRACAO_FIRST_FIFO`,
+  a ordem lexicografica entre as variantes eh `MIGRACAO` (sem cedilha,
+  'C' < 'Ç') ANTES de `MIGRAÇÃO` (com cedilha). Determinismo OK.
+- **`qty_falta` em FALHA_AUMENTO** — em modo real, se uma transferencia
+  interna falha (`FALHA_AUMENTO`: origem reduzida mas destino nao
+  creditado), o orquestrador NAO decrementa qty_falta — segue tentando
+  outros quants. Estado parcial fica documentado em
+  `transferencias[].resultado.qty_reduzida_origem`. Rollback manual via
+  `ajustar_quant`+qty no quant origem.
+- **Tempo de execucao** — em dry-run, ~50s para 158 cods FB (~3 cods/s).
+  Em real, estimativa 30-50 min (action_apply_inventory eh ~3-5s cada;
+  493 transferencias estimadas). Sem paralelizacao por hora.
+
+### Demanda real 2026-05-25 (158 cods FB)
+
+- 146 OK total (DRY_RUN_OK)
+- 9 parciais (8 arredondamento <0.5% + 1 MIGRAÇÃO origem-destino — fix v10 PARCIAL em vez de FALHA)
+- 2 FALHA_PRODUTO (cods inexistentes — 45121452, 501)
+- 1 FALHA_SEM_QUANT (104000011 HIPOCLORITO sem saldo em FB,CD,LF)
+- Cobertura: 99.68% em dry-run (11.009.776 / 11.045.089 un)
+- 493 transferencias internas executadas (media 3 transf/cod)
 
 ## Armadilhas
 

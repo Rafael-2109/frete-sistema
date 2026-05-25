@@ -9,7 +9,29 @@
 
 **Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual 6+ commits sobre main@b4f7b24c — último v9). `main` está VIVO (Rafael commita em paralelo — avancou apenas `fb494608` cosmetico D8 SKIP) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **251 pytest verdes** (230 anterior + 21 Skill 6 orchestrator novo).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP. Baseline esperado: **381 pytest verdes** (364 anterior + 17 Skill 2 v10 distribuir_para_indisponivel).
+
+**Sessão 2026-05-25 v10 (Skill 2 alto-nível — helper `distribuir_para_indisponivel` + canary 5 cods REAL):**
+- ✅ **Verificação main**: avancou apenas `fb494608` cosmético (mesmo de v8/v9) — sem rebase.
+- ✅ **FASE A — avaliacao demanda real (158 cods FB)**: planilha simples (cod, qty, nome). Skill 9 cross-ref ao vivo: 552 quants em FB exceto Indisp, 155 dos 158 cods com saldo. Distribuição: 44 single-lote OK + 74 multi-lote + 28 com reserva ativa + 9 saldo insuficiente + 3 sem quant. Politica definida com Rafael: origem = todas locs FB exceto Indisp; selecao MIGRACAO_FIRST_FIFO; reserva via `--resetar-reserva-origem` (defensivo).
+- ✅ **FASE B — capinagem**:
+  - **Helper alto-nível** `distribuir_para_indisponivel` em `app/odoo/estoque/scripts/transfer.py` (+~250 LOC): _listar_quants_origem (read enriquecido + N+1 evitado), _ordenar_quants_origem (3 politicas), greedy distribute com ValueError-handling (pula quant em pre-cond do atomo — caso 4310176 lote MIGRACAO origem==destino).
+  - **CLI thin wrapper** `.claude/skills/transferindo-interno-odoo/scripts/transferir_para_indisp_em_lote.py` (~370 LOC): --planilha CSV ou --cods inline, --dry-run default, --csv-out, --csv-pendencias, exit codes 0/1/2/4.
+  - **17 testes pytest novos** em `tests/odoo/services/test_distribuir_para_indisponivel.py` cobrindo: distribuicao greedy, 3 politicas (MIGRACAO_FIRST_FIFO/FIFO/MAIOR_SALDO), reserva (resetar vs respeitar), pre-cond invalidas, ValueError do atomo capturado, FALHA_AUMENTO em meio continua tentando outros.
+  - **Baseline pytest estoque 364 → 381** verdes.
+  - **SKILL.md atualizado** com nova receita (8 exemplos + secao "orquestrador alto-nivel" + gotchas).
+  - **Fluxo 2.2.j** criado: `app/odoo/estoque/fluxos/2.2.j-para-indisponivel-em-lote.md` com sequencia composta + gotchas + receita.
+- ✅ **FASE C parcial — canary + sub-piloto REAL PROD**:
+  - **Canary 1 cod** `210844125` (2 lotes 13203+13757, 2536 un): EXECUTADO_TOTAL em 8s. Verificacao Odoo direta: FB/Estoque ambos zerados, FB/Indisp MIGRACAO subiu de 5500→8036 (delta exato 2536).
+  - **Sub-piloto 4 cods**: 3800005 BATELADA INGLES (3093.72), 210881114 ROTULO BARBECUE (2988), 209751213 ROTULO OLEO (3047), 210030214 CAIXA PAPELAO (3559). EXECUTADO_TOTAL 4/4 em 10.5s. Verificacao Odoo 100% match.
+  - **Total PROD nesta sessao**: 5 cods, 8 transferencias internas, 15.224 un movidas FB/Estoque → FB/Indisp/MIGRACAO.
+- ✅ **Artefatos pos-sessao** em `docs/inventario-2026-05/v10-skill2-indisp-em-lote/`: README com plano FASE C bulk + demanda_completa_158.csv + demanda_restantes_153.csv (sem 5 ja exec) + pendencias_dry_run.csv (12 cods) + audit_dry_run.csv + canary1.json + sub_piloto.json.
+- 🟡 **FASE C bulk (153 cods restantes)** para sessao seguinte: comando documentado no README v10. Estimativa 5-10 min real.
+
+**Status global apos v10:**
+- Skill 2 `transferindo-interno-odoo` 🟡 **mín viável + 3 modos + helper alto-nivel `distribuir_para_indisponivel`** — 1 canary + 4 sub-piloto PROD validados.
+- **Baseline pytest: 381 verdes** (364 anterior + 17 v10 distribuir).
+- 5/158 cods da demanda v10 executados em PROD; **153 cods restantes** prontos para bulk em sessao seguinte.
 
 **Sessão 2026-05-25 v9 (09b capinado → orchestrator C3 macro Skill 6 — ciclo completo):**
 - ✅ **Verificação main**: avancou apenas `fb494608` (D8 SKIP cosmetico) — sem rebase.

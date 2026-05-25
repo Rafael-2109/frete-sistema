@@ -1,0 +1,156 @@
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)
+✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)
+✅ Módulo pg_types_config também importado
+⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'
+✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py
+{
+  "sumario": {
+    "modo": "confirmado",
+    "cods_total": 1,
+    "cods_por_status": {
+      "EXECUTADO_TOTAL": 1
+    },
+    "qty_solicitada_total": 2536.0,
+    "qty_movida_total": 2536.0,
+    "qty_nao_movida_total": 0.0,
+    "transferencias_executadas": 2
+  },
+  "empresa": "FB",
+  "company_id": 1,
+  "politica_ordem": "MIGRACAO_FIRST_FIFO",
+  "locs_origem_override": null,
+  "nome_lote_destino": "MIGRAÇÃO",
+  "resetar_reserva_origem": true,
+  "cods": [
+    {
+      "cod": "210844125",
+      "qty_solicitada": 2536.0,
+      "nome_planilha": null,
+      "linha_planilha": 1,
+      "produto_id": 32306,
+      "produto_nome": "ROTULO MOSTARDA DIJON PET 210 GR - STRUMPF",
+      "status": "EXECUTADO_TOTAL",
+      "qty_movida": 2536.0,
+      "qty_nao_movida": 0.0,
+      "transferencias": [
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 59685,
+          "lote_origem_nome": "13203",
+          "qty_pretendida": 1192.0,
+          "qty_movida": 1192.0,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 262250,
+              "product_id": 32306,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 59685,
+              "delta": -1192.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 1192.0,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -1192.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 870
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 255605,
+              "product_id": 32306,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 58420,
+              "delta": 1192.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 5500.0,
+              "reservada": 0.0,
+              "qty_apos": 6692.0,
+              "ajuste_aplicado": 1192.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 645
+            },
+            "qty_transferida": 1192.0,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 59685,
+            "lot_id_destino": 58420,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1516
+          }
+        },
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 28115,
+          "lote_origem_nome": "13757",
+          "qty_pretendida": 1344.0,
+          "qty_movida": 1344.0,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 259636,
+              "product_id": 32306,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 28115,
+              "delta": -1344.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 1344.0,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -1344.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 769
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 255605,
+              "product_id": 32306,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 58420,
+              "delta": 1344.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 6692.0,
+              "reservada": 0.0,
+              "qty_apos": 8036.0,
+              "ajuste_aplicado": 1344.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 683
+            },
+            "qty_transferida": 1344.0,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 28115,
+            "lot_id_destino": 58420,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1453
+          }
+        }
+      ],
+      "quants_disponiveis": 2,
+      "quants_pulados": [],
+      "politica_ordem": "MIGRACAO_FIRST_FIFO",
+      "locs_origem_usadas": [
+        8,
+        48,
+        4066,
+        4067,
+        4068,
+        27458
+      ],
+      "erro": null,
+      "tempo_ms": 3077
+    }
+  ]
+}

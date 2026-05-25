@@ -72,6 +72,29 @@ TOL_ARREDONDAMENTO = 0.001
 LOTES_MIGRACAO_VARIANTES = ['MIGRAÇÃO', 'MIGRACAO', 'MIGRAÇAO']
 LOTE_MIGRACAO_CANONICO = 'MIGRAÇÃO'
 
+# Locations internas (NAO Indisponivel) por company onde o saldo "vivo" do
+# produto pode ficar. Usado por `distribuir_para_indisponivel` como origem
+# default quando o caller nao passa `locs_origem` explicito.
+#
+# FONTE (auditoria F0, 2026-05-25): demanda real 158 cods FB confirmou que o
+# saldo "vivo" se espalha entre FB/Estoque + Pos-Producao + 4 Pre-Producao*.
+# Mantendo CD com so loc 32 (CD nao tem Pre-Producao em PROD CIEL IT).
+# LF intencionalmente fora: Indisponivel LF=31091 raramente eh destino
+# operacional (D011 §95) — quem precisar, passa locs_origem explicito.
+LOCS_ORIGEM_INTERNAS_POR_COMPANY: Dict[int, List[int]] = {
+    1: [8, 48, 4066, 4067, 4068, 27458],
+    # FB: 8=Estoque, 48=Pos-Producao,
+    # 4066/4067/4068=Pre-Producao/Linha Vidro/Manual/Balde, 27458=Linha Salmoura
+    4: [32],   # CD: 32=Estoque
+    5: [42],   # LF: 42=Estoque (Indisponivel LF raramente eh destino)
+}
+
+# Politicas de ordenacao multi-quant para `distribuir_para_indisponivel`.
+POLITICA_MIGRACAO_FIRST_FIFO = 'MIGRACAO_FIRST_FIFO'  # default — drena consolidador legado primeiro
+POLITICA_FIFO = 'FIFO'                                # ordenacao por nome de lote
+POLITICA_MAIOR_SALDO = 'MAIOR_SALDO'                  # drena lotes grandes primeiro
+POLITICAS_VALIDAS = (POLITICA_MIGRACAO_FIRST_FIFO, POLITICA_FIFO, POLITICA_MAIOR_SALDO)
+
 
 def is_migracao(nome: Optional[str]) -> bool:
     """True se o nome de lote bate com QUALQUER variante de MIGRACAO."""
@@ -1071,3 +1094,371 @@ class StockInternalTransferService:
         res['lote_destino_nome'] = nome_canonico
         res['lote_destino_criado_agora'] = criado
         return res
+
+    # ============================================================
+    # Composicao alto-nivel: distribuir qty entre quants e mover
+    # tudo para Indisponivel/MIGRACAO. Helper para orquestrador de
+    # planilha (demanda 2026-05-25, 158 cods FB).
+    # ============================================================
+
+    def _listar_quants_origem(
+        self,
+        *,
+        product_id: int,
+        company_id: int,
+        locs_origem: List[int],
+        incluir_quants_indisp_destino: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Lista quants do produto/company nas locations origem permitidas.
+
+        Enriquece cada quant com `_lote_name` (str|None) para uso em
+        politicas de ordenacao. Filtra:
+          - quantity > 0 (sem saldo nao eh origem util)
+          - lot_id obrigatorio (Modo C exige lote real; quant sem lote
+            seria movido como P-15/05 — fora de escopo aqui)
+          - location_id em locs_origem (NAO inclui Indisponivel salvo flag)
+
+        Args:
+            product_id, company_id: identificadores.
+            locs_origem: ids de locations origem permitidas.
+            incluir_quants_indisp_destino: SE True, inclui Indisponivel
+                (caso degenerado em testes — produto ja totalmente em destino).
+
+        Returns:
+            Lista de dicts {id, lot_id, _lote_name, location_id,
+                            quantity, reserved_quantity, available}.
+            Ordem do retorno: como o Odoo entregar (search nao garante ordem).
+        """
+        from app.odoo.constants.locations import LOCAIS_INDISPONIVEL
+        loc_indisp = LOCAIS_INDISPONIVEL.get(company_id)
+
+        domain: List = [
+            ['product_id', '=', product_id],
+            ['company_id', '=', company_id],
+            ['location_id', 'in', list(locs_origem)],
+            ['quantity', '>', 0],
+        ]
+        if not incluir_quants_indisp_destino and loc_indisp is not None:
+            # Defensivo — caller pode ter incluido Indisp em locs_origem
+            # por engano. Sempre filtra.
+            domain.append(['location_id', '!=', loc_indisp])
+            domain.append(['lot_id', '!=', False])
+        else:
+            domain.append(['lot_id', '!=', False])
+
+        quants = self.odoo.search_read(
+            'stock.quant', domain,
+            ['id', 'lot_id', 'location_id', 'quantity', 'reserved_quantity'],
+        )
+        if not quants:
+            return []
+
+        # Enriquecer com nome do lote (1 read em lote, evita N+1)
+        lot_ids = list({q['lot_id'][0] for q in quants if q.get('lot_id')})
+        lot_name_map: Dict[int, str] = {}
+        if lot_ids:
+            lots = self.odoo.read('stock.lot', lot_ids, ['name'])
+            lot_name_map = {l['id']: l.get('name') or '' for l in lots}
+
+        out: List[Dict[str, Any]] = []
+        for q in quants:
+            lot_id_pair = q.get('lot_id')
+            lot_id = lot_id_pair[0] if lot_id_pair else None
+            loc_pair = q.get('location_id')
+            loc_id = loc_pair[0] if loc_pair else None
+            qty = float(q.get('quantity') or 0)
+            reserved = float(q.get('reserved_quantity') or 0)
+            out.append({
+                'id': q['id'],
+                'lot_id': lot_id,
+                '_lote_name': lot_name_map.get(lot_id, '') if lot_id else None,
+                'location_id': loc_id,
+                'quantity': qty,
+                'reserved_quantity': reserved,
+                'available': max(0.0, qty - reserved),
+            })
+        return out
+
+    def _ordenar_quants_origem(
+        self,
+        quants: List[Dict[str, Any]],
+        politica: str,
+    ) -> List[Dict[str, Any]]:
+        """Ordena quants por politica de drenagem.
+
+        Politicas:
+        - MIGRACAO_FIRST_FIFO (default): drena lotes MIGRAÇÃO (todas as
+          variantes G022) primeiro; depois lotes reais por nome de lote
+          em ordem alfabetica crescente (FIFO de cabeca-de-pilha).
+          Justificativa: drenar consolidador legado primeiro reduz
+          pendencia de MIGRAÇÃO; nome de lote no formato '027-098/26'
+          ordena lexicograficamente proximo ao FIFO contabil.
+        - FIFO: so por nome de lote crescente.
+        - MAIOR_SALDO: drena lotes maiores primeiro (minimiza # de
+          chamadas; pode deixar lotes pequenos orfaos).
+
+        Returns:
+            Nova lista (nao mutates input).
+
+        Raises:
+            ValueError: politica desconhecida.
+        """
+        if politica == POLITICA_MIGRACAO_FIRST_FIFO:
+            def keyfn(q):
+                lote_name = q.get('_lote_name') or ''
+                eh_migr = 0 if is_migracao(lote_name) else 1
+                # ZZ no fim para quants sem lote (defensivo — _listar ja filtra)
+                return (eh_migr, lote_name or 'ZZZZ', -q.get('quantity', 0))
+            return sorted(quants, key=keyfn)
+        if politica == POLITICA_FIFO:
+            return sorted(
+                quants,
+                key=lambda q: (q.get('_lote_name') or 'ZZZZ', -q.get('quantity', 0)),
+            )
+        if politica == POLITICA_MAIOR_SALDO:
+            return sorted(quants, key=lambda q: -q.get('quantity', 0))
+        raise ValueError(
+            f'politica desconhecida: {politica!r}. Validas: {POLITICAS_VALIDAS}'
+        )
+
+    def distribuir_para_indisponivel(
+        self,
+        *,
+        product_id: int,
+        company_id: int,
+        qty_solicitada: float,
+        locs_origem: Optional[List[int]] = None,
+        politica_ordem: str = POLITICA_MIGRACAO_FIRST_FIFO,
+        resetar_reserva_origem: bool = False,
+        tolerancia_delta: float = 0.001,
+        nome_lote_destino: str = 'MIGRAÇÃO',
+        dry_run: bool = False,
+        tolerar_parcial: bool = True,
+    ) -> Dict[str, Any]:
+        """Distribui `qty_solicitada` entre quants origem do produto/company,
+        chamando `transferir_para_indisponivel` N vezes (1 por quant origem).
+
+        ESTRATEGIA:
+        1. Lista quants com saldo nas locs origem (default = todas internas
+           FB exceto Indisp para company=1).
+        2. Ordena por `politica_ordem` (default MIGRACAO_FIRST_FIFO).
+        3. Greedy: drena quants em ordem ate atingir qty_solicitada.
+           Para cada quant, pretende mover min(saldo_disponivel, qty_falta).
+           Se `resetar_reserva_origem=False`, `saldo_disponivel = quantity - reserved`
+           (respeita reserva). Se True, `saldo_disponivel = quantity` (a Skill 2.6
+           defensiva zera reserved no ajuste interno).
+        4. Para cada (quant_origem, qty_parcial), chama
+           `transferir_para_indisponivel`. Coleta resultados.
+        5. Retorna sumario com qty_movida total + lista de transferencias +
+           quants ignorados (zerados, ja em Indisp, etc) + status.
+
+        Args:
+            product_id, company_id: identificacao do produto/empresa.
+            qty_solicitada: total a transferir para Indisponivel (positivo).
+            locs_origem: ids de locations origem permitidas. Default = todas
+                internas exceto Indisp para a company.
+            politica_ordem: 'MIGRACAO_FIRST_FIFO' (default), 'FIFO', 'MAIOR_SALDO'.
+            resetar_reserva_origem: passa para cada chamada interna.
+            tolerancia_delta: tolerancia absoluta dos guards.
+            nome_lote_destino: lote consolidador no destino (default 'MIGRAÇÃO').
+            dry_run: simula todas as transferencias.
+            tolerar_parcial: se False, retorna FALHA_PARCIAL_NAO_TOLERADO quando
+                nao foi possivel mover qty_solicitada total; default True
+                (regra prioritaria — registrar parcialmente).
+
+        Returns:
+            {
+                'status': str (ver abaixo),
+                'product_id': int,
+                'company_id': int,
+                'qty_solicitada': float,
+                'qty_movida': float,         # soma de qty_transferida das parciais
+                'qty_nao_movida': float,     # qty_solicitada - qty_movida
+                'transferencias': [          # 1 por chamada interna
+                    {
+                        'location_id_origem': int,
+                        'lot_id_origem': int,
+                        'lote_origem_nome': str,
+                        'qty_pretendida': float,
+                        'qty_movida': float,
+                        'resultado': {...transferir_para_indisponivel completo...},
+                    }, ...
+                ],
+                'quants_disponiveis': int,   # total de quants origem no inicio
+                'quants_pulados': [...],     # com motivo (sem saldo, etc)
+                'politica_ordem': str,
+                'locs_origem_usadas': List[int],
+                'tempo_ms': int,
+                'erro': Optional[str],
+            }
+
+            Status possiveis:
+              - DRY_RUN_OK            qty_solicitada atingida em dry-run
+              - DRY_RUN_PARCIAL       dry-run mas nao deu pra atingir qty
+              - EXECUTADO_TOTAL       qty_solicitada movida 100% (real)
+              - EXECUTADO_PARCIAL     parte movida; sobrou qty_nao_movida (real)
+              - FALHA_SEM_QUANT       sem quants origem com saldo
+              - FALHA_PARCIAL_NAO_TOLERADO  tolerar_parcial=False e nao deu total
+              - FALHA_PRE_COND        ValueError em pre-cond (qty<=0, etc)
+
+        Raises:
+            ValueError: qty_solicitada<=0 ou politica invalida ou company
+                sem locs default.
+        """
+        if qty_solicitada <= 0:
+            raise ValueError(f'qty_solicitada deve ser > 0 (recebido {qty_solicitada})')
+        if politica_ordem not in POLITICAS_VALIDAS:
+            raise ValueError(
+                f'politica_ordem={politica_ordem!r} invalida. '
+                f'Validas: {POLITICAS_VALIDAS}'
+            )
+
+        if locs_origem is None:
+            locs_origem = LOCS_ORIGEM_INTERNAS_POR_COMPANY.get(company_id)
+            if not locs_origem:
+                raise ValueError(
+                    f'company_id={company_id} sem locs default em '
+                    f'LOCS_ORIGEM_INTERNAS_POR_COMPANY; passe locs_origem explicito.'
+                )
+
+        inicio = time.time()
+
+        # 1. Listar quants origem
+        quants = self._listar_quants_origem(
+            product_id=product_id,
+            company_id=company_id,
+            locs_origem=locs_origem,
+        )
+        if not quants:
+            return {
+                'status': 'FALHA_SEM_QUANT',
+                'product_id': product_id,
+                'company_id': company_id,
+                'qty_solicitada': qty_solicitada,
+                'qty_movida': 0.0,
+                'qty_nao_movida': qty_solicitada,
+                'transferencias': [],
+                'quants_disponiveis': 0,
+                'quants_pulados': [],
+                'politica_ordem': politica_ordem,
+                'locs_origem_usadas': locs_origem,
+                'tempo_ms': int((time.time() - inicio) * 1000),
+                'erro': (
+                    f'Sem quants com saldo>0 e lote nao-vazio em '
+                    f'locs={locs_origem} para product={product_id} '
+                    f'company={company_id}'
+                ),
+            }
+
+        # 2. Ordenar
+        quants_ord = self._ordenar_quants_origem(quants, politica_ordem)
+
+        # 3. Greedy distribute
+        qty_falta = qty_solicitada
+        transferencias: List[Dict[str, Any]] = []
+        quants_pulados: List[Dict[str, Any]] = []
+        for q in quants_ord:
+            if qty_falta <= 0:
+                break
+            qty_disp = (
+                q['quantity'] if resetar_reserva_origem else q['available']
+            )
+            if qty_disp <= 0:
+                quants_pulados.append({
+                    'quant_id': q['id'],
+                    'lot_id': q['lot_id'],
+                    'lote_nome': q['_lote_name'],
+                    'location_id': q['location_id'],
+                    'quantity': q['quantity'],
+                    'reserved_quantity': q['reserved_quantity'],
+                    'motivo': (
+                        f'quantity={q["quantity"]} reserved={q["reserved_quantity"]} '
+                        f'-> disponivel=0 sem resetar reserva'
+                    ),
+                })
+                continue
+            # qty pretendida deste quant
+            qty_p = min(qty_disp, qty_falta)
+            # 4. Chamar atomo
+            #
+            # ValueError vindo do atomo (pre-cond invalida — ex.: lote origem
+            # eh ele proprio o MIGRACAO destino, location_id_origem ja eh
+            # Indisp, etc) NAO eh falha do cod inteiro: significa "esse quant
+            # nao serve, tenta o proximo". Capturamos e registramos em
+            # quants_pulados, continuamos o loop.
+            try:
+                res = self.transferir_para_indisponivel(
+                    product_id=product_id,
+                    company_id=company_id,
+                    lot_id_origem=q['lot_id'],
+                    qty=qty_p,
+                    location_id_origem=q['location_id'],
+                    nome_lote_destino=nome_lote_destino,
+                    resetar_reserva_origem=resetar_reserva_origem,
+                    tolerancia_delta=tolerancia_delta,
+                    dry_run=dry_run,
+                )
+            except ValueError as exc:
+                quants_pulados.append({
+                    'quant_id': q['id'],
+                    'lot_id': q['lot_id'],
+                    'lote_nome': q['_lote_name'],
+                    'location_id': q['location_id'],
+                    'quantity': q['quantity'],
+                    'reserved_quantity': q['reserved_quantity'],
+                    'motivo': f'atomo levantou ValueError (pre-cond): {exc}',
+                })
+                continue
+            qty_movida_p = float(res.get('qty_transferida') or 0)
+            transferencias.append({
+                'location_id_origem': q['location_id'],
+                'lot_id_origem': q['lot_id'],
+                'lote_origem_nome': q['_lote_name'],
+                'qty_pretendida': qty_p,
+                'qty_movida': qty_movida_p,
+                'status': res.get('status'),
+                'resultado': res,
+            })
+            # Atualizar qty_falta:
+            # - Em dry-run: tratar como se tivesse movido qty_pretendida
+            #   (a skill nao consegue prever encadeamento real entre quants
+            #   diferentes; dry-run aqui = best-case "tudo OK").
+            #   Status DRY_RUN_OK significa atomo simulou OK.
+            # - Em real: usar qty efetivamente movida (qty_transferida).
+            if dry_run and res.get('status') == 'DRY_RUN_OK':
+                qty_falta -= qty_p
+            elif not dry_run and res.get('status') == 'EXECUTADO':
+                qty_falta -= qty_movida_p
+            else:
+                # FALHA — nao decrementa qty_falta, continua tentando outros quants
+                pass
+
+        qty_movida_total = qty_solicitada - max(0.0, qty_falta)
+        # Decimais 6 para evitar arredondamento spurio
+        qty_movida_total = round(qty_movida_total, 6)
+        qty_nao_movida = round(max(0.0, qty_falta), 6)
+        atingiu_total = qty_nao_movida < tolerancia_delta
+
+        # Status:
+        if dry_run:
+            status = 'DRY_RUN_OK' if atingiu_total else 'DRY_RUN_PARCIAL'
+        else:
+            status = 'EXECUTADO_TOTAL' if atingiu_total else 'EXECUTADO_PARCIAL'
+        if not atingiu_total and not tolerar_parcial:
+            status = 'FALHA_PARCIAL_NAO_TOLERADO'
+
+        return {
+            'status': status,
+            'product_id': product_id,
+            'company_id': company_id,
+            'qty_solicitada': qty_solicitada,
+            'qty_movida': qty_movida_total,
+            'qty_nao_movida': qty_nao_movida,
+            'transferencias': transferencias,
+            'quants_disponiveis': len(quants),
+            'quants_pulados': quants_pulados,
+            'politica_ordem': politica_ordem,
+            'locs_origem_usadas': locs_origem,
+            'tempo_ms': int((time.time() - inicio) * 1000),
+            'erro': None,
+        }
