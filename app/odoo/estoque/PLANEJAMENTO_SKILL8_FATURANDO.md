@@ -632,6 +632,54 @@ Apos Playwright (5-10min), sessao pode estar morta. Re-fetch via `db.session.get
 
 ## 8. RISCOS ARQUITETURAIS E MITIGACAO
 
+### 8.1 PRE-MORTEM v13 (decisoes tomadas nesta sessao — leitura OBRIGATORIA em v14)
+
+> Imaginando 6 meses adiante: "por que a Skill 8 nao foi entregue como planejei nesta sessao v13?"
+
+#### Riscos arquiteturais (decisoes RESOLVIDAS v13)
+
+| # | Risco | Prob | Impacto | Mitigacao |
+|---|-------|------|---------|-----------|
+| **R1** | **"Etapa = barreira" pode NAO ser o padrao do script atual** (decidido 10.3 ANTES de minerar `09_executar_onda1_bulk.py`). Service paraleliza intra-etapa, mas script pode encadear A→B→C→D→E→F por ajuste em vez de aguardar 100% completar cada etapa. | Alta | Alto | **C3 v14 PRIMEIRO**: confirmar pattern real do script ANTES de codar orchestrator v15. Se contradisser 10.3, re-validar com Rafael |
+| **R2** | **Refatoracao F5a/F5b para Skill 5 pode QUEBRAR a Skill 5 madura** (42 pytest verdes). Adicionar `criar_picking_inter_company` encapsulando G004/G023/partner/company/carrier/incoterm vira "atomo Frankenstein" — viola atomicidade | Media-Alta | Alto | C6.5 deve ter pytest >10 verdes ANTES de C7/C8; canary obrigatorio em picking real |
+| **R3** | **Sub-skill `auditando-cadastro-fiscal-odoo` viola "skills nascem de demanda real"** (feedback Rafael). Capinar com perfil V1 + estrutura para perfis futuros NAO existentes ainda. Demanda atual: 1 perfil so' | Alta | Medio | V14 C5: implementar perfil V1 INLINE; estrutura de perfis SO' quando 2o perfil chegar |
+| **R4** | **Decisao 10.5 desfaz simplicidade**: pre-flight como entry-point Skill 8 = 1 comando; sub-skill separada = 2 comandos + cross-refs + subprocess + risco divergencia | Media | Medio | Documentar TRADE-OFF no SKILL.md: "ganha reuso futuro; perde simplicidade atual" |
+| **R5** | **D2 "agrupamento por picking" mascara erros parciais**: 1 picking com 5 ajustes onde so 1 tem qty errada marca TODOS como F5b_FALHA. Operador pensa que problema e' global | Media | Medio | Refatoracao C8: marcar falha INDIVIDUAL no ajuste problematico + warning no picking grupo (nao FALHA cega) |
+
+#### Riscos de execucao (proximas sessoes v14-v20)
+
+| # | Risco | Prob | Impacto | Mitigacao |
+|---|-------|------|---------|-----------|
+| **R6** | **C3 mineracao 1850 LOC consome 80% do contexto de v14**, sem sobrar para C5 | Alta | Medio | Dividir v14: **v14a so C3 + decisao R1** (~80k tokens); **v14b so C5** (sessao fresca) |
+| **R7** | **C6.5 + C7/C8 no mesmo v15 = sobrecarga**. Estender Skill 5 (2 atomos + 10 pytest + dry-run) + implementar 2 etapas orchestrator e' >1 sessao | Alta | Medio | Dividir v15: **v15a so C6.5** (Skill 5 estendida + canary); **v15b C6/C7/C8** (orchestrator + F5a/F5b) |
+| **R8** | **Mock Playwright em pytest e' fragil**. F5e tem ~250 LOC + 3 caminhos erro + idempotencia tripla. Mock simplista mascara bug real | Media | Alto (NF errada PROD) | C11 v17: `unittest.mock.patch` com 5+ cenarios (sucesso, falha CSTAT, HARD_FAIL, timeout, sessao expirou) + canary OBRIGATORIO |
+| **R9** | **G016 `_commit_with_retry` mascara problema real**: se SSL drop e' frequente, codigo fica em retry sem corrigir causa raiz (PgBouncer config, keepalive errado) | Baixa | Medio | Adicionar telemetria: log + Sentry quando retry > 1 (sinal sistemico) |
+| **R10** | **Canary C20 revela quirk nao previsto** (robo CIEL IT mudou, CFOP novo, etc.) que invalida design v15-v18 | Media | Alto | C20 OBRIGATORIO com 1 ajuste so + revisao Rafael ANTES de C21 bulk |
+
+#### Riscos de processo (sustentabilidade)
+
+| # | Risco | Prob | Impacto | Mitigacao |
+|---|-------|------|---------|-----------|
+| **R11** | **PLANEJAMENTO crescera a ~1500 LOC** com edits parciais entre sessoes. Inconsistencia entre §3 + §7.2 + §10 | Alta | Medio | Cada sessao DEVE atualizar §0 + §12 + checkpoint; code-review focado em consistencia ao fim de v18 |
+| **R12** | **Cronograma 8 sessoes era OTIMISTA**. Com R6+R7+sub-skill+possivel re-validacao 10.3 → 10-12 sessoes | Alta | Medio | Documentar §11: "cronograma orientativo, decisoes em cada sessao podem expandir" |
+| **R13** | **Eu (agente) releio PLANEJAMENTO mas IGNORO padroes D1-D9**. Memoria nao persiste — preciso seguir literal | Alta | Alto | Cada sessao v14+ checklist "§7.2 D1-D9 aplicados?" antes de commit |
+| **R14** | **Rafael muda de ideia em alguma decisao** (ex: 10.6 reverter se Skill 5 ficar complexa) | Media | Baixo | §10 marca decisoes com data + razao; revisao explicita no inicio de cada sessao |
+| **R15** | **Sub-skill `auditando-cadastro-fiscal-odoo` nunca tem perfil 2**. Estrutura de perfis = trabalho que nao compensa | Media | Baixo | Aceitar V1 minima + simples; expandir perfis SO' com demanda real |
+
+#### Descobertas esperadas em v14+ (que podem mudar o plano)
+
+| Descoberta | Impacto se confirmada |
+|------------|-----------------------|
+| Script `09_executar_onda1_bulk.py` faz **pipeline por ajuste** (nao etapa-barreira) | **Decisao 10.3 precisa re-validar com Rafael ANTES de v15** |
+| `gtin_validator.py` esta em `app/odoo/utils/` ou `app/recebimento/services/`, nao `scripts/` | Atualizar §4 e §9 (pendencias) |
+| Pre-flight V1 e' 200 LOC simples — estrutura de perfis multiplos overkill | Confirmar R3 + simplificar §4 |
+| F5c (`liberar_faturamento`) tambem pode ir para Skill 5 (operacao em picking) | Estender 10.6 — F5c vira atomo `liberar_faturamento_picking` na Skill 5 |
+| `picking_svc.preencher_qty_done` precisa ser exposto na Skill 5 atual ou criar atomo composto na Skill 5 | C6.5 — analisar interface da Skill 5 atual antes de adicionar |
+
+### 8.2 Riscos arquiteturais gerais (mantidos da versao v13 inicial)
+
+
+
 | Risco | Probabilidade | Impacto | Mitigacao |
 |-------|---------------|---------|-----------|
 | **Capinar tudo de uma vez quebra demanda real** | Alta | Alto | capinar por etapa (C7-C13 sequencial); validar pytest a cada etapa; canary obrigatorio antes de bulk |
