@@ -1,0 +1,438 @@
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!
+✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)
+✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)
+✅ Módulo pg_types_config também importado
+⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'
+✅ [MODELS] Tipos PostgreSQL registrados em estoque/models.py
+{
+  "sumario": {
+    "modo": "confirmado",
+    "cods_total": 4,
+    "cods_por_status": {
+      "EXECUTADO_TOTAL": 4
+    },
+    "qty_solicitada_total": 12687.719,
+    "qty_movida_total": 12687.719,
+    "qty_nao_movida_total": 0.0,
+    "transferencias_executadas": 6
+  },
+  "empresa": "FB",
+  "company_id": 1,
+  "politica_ordem": "MIGRACAO_FIRST_FIFO",
+  "locs_origem_override": null,
+  "nome_lote_destino": "MIGRAÇÃO",
+  "resetar_reserva_origem": true,
+  "cods": [
+    {
+      "cod": "3800005",
+      "qty_solicitada": 3093.719,
+      "nome_planilha": null,
+      "linha_planilha": 1,
+      "produto_id": 29973,
+      "produto_nome": "BATELADA DE INGLES",
+      "status": "EXECUTADO_TOTAL",
+      "qty_movida": 3093.719,
+      "qty_nao_movida": 0.0,
+      "transferencias": [
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 59069,
+          "lote_origem_nome": "INV-3800005-20260519",
+          "qty_pretendida": 3093.719,
+          "qty_movida": 3093.719,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 259711,
+              "product_id": 29973,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 59069,
+              "delta": -3093.719,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 3093.719,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -3093.719,
+              "status": "EXECUTADO",
+              "tempo_ms": 725
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 255611,
+              "product_id": 29973,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 58444,
+              "delta": 3093.719,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 3093.719,
+              "reservada": 0.0,
+              "qty_apos": 6187.438,
+              "ajuste_aplicado": 3093.719,
+              "status": "EXECUTADO",
+              "tempo_ms": 668
+            },
+            "qty_transferida": 3093.719,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 59069,
+            "lot_id_destino": 58444,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1393
+          }
+        }
+      ],
+      "quants_disponiveis": 1,
+      "quants_pulados": [],
+      "politica_ordem": "MIGRACAO_FIRST_FIFO",
+      "locs_origem_usadas": [
+        8,
+        48,
+        4066,
+        4067,
+        4068,
+        27458
+      ],
+      "erro": null,
+      "tempo_ms": 1467
+    },
+    {
+      "cod": "210881114",
+      "qty_solicitada": 2988.0,
+      "nome_planilha": null,
+      "linha_planilha": 2,
+      "produto_id": 32330,
+      "produto_nome": "ROTULO MOLHO BARBECUE PET 220 GR - STRUMPF",
+      "status": "EXECUTADO_TOTAL",
+      "qty_movida": 2988.0,
+      "qty_nao_movida": 0.0,
+      "transferencias": [
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 59684,
+          "lote_origem_nome": "13203",
+          "qty_pretendida": 1488.0,
+          "qty_movida": 1488.0,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 262252,
+              "product_id": 32330,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 59684,
+              "delta": -1488.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 1488.0,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -1488.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 619
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 255203,
+              "product_id": 32330,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 57891,
+              "delta": 1488.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 4872.0,
+              "reservada": 0.0,
+              "qty_apos": 6360.0,
+              "ajuste_aplicado": 1488.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 707
+            },
+            "qty_transferida": 1488.0,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 59684,
+            "lot_id_destino": 57891,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1327
+          }
+        },
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 40505,
+          "lote_origem_nome": "26910",
+          "qty_pretendida": 1500.0,
+          "qty_movida": 1500.0,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 259641,
+              "product_id": 32330,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 40505,
+              "delta": -1500.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 1500.0,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -1500.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 626
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 255203,
+              "product_id": 32330,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 57891,
+              "delta": 1500.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 6360.0,
+              "reservada": 0.0,
+              "qty_apos": 7860.0,
+              "ajuste_aplicado": 1500.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 614
+            },
+            "qty_transferida": 1500.0,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 40505,
+            "lot_id_destino": 57891,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1241
+          }
+        }
+      ],
+      "quants_disponiveis": 2,
+      "quants_pulados": [],
+      "politica_ordem": "MIGRACAO_FIRST_FIFO",
+      "locs_origem_usadas": [
+        8,
+        48,
+        4066,
+        4067,
+        4068,
+        27458
+      ],
+      "erro": null,
+      "tempo_ms": 2661
+    },
+    {
+      "cod": "209751213",
+      "qty_solicitada": 3047.0,
+      "nome_planilha": null,
+      "linha_planilha": 3,
+      "produto_id": 31708,
+      "produto_nome": "ROTULO - OLEO MISTO GL 5,02 LT - ROST",
+      "status": "EXECUTADO_TOTAL",
+      "qty_movida": 3047.0,
+      "qty_nao_movida": 0.0,
+      "transferencias": [
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 59647,
+          "lote_origem_nome": "13201",
+          "qty_pretendida": 47.0,
+          "qty_movida": 47.0,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 262194,
+              "product_id": 31708,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 59647,
+              "delta": -47.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 47.0,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -47.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 657
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 255284,
+              "product_id": 31708,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 58063,
+              "delta": 47.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 5475.0,
+              "reservada": 0.0,
+              "qty_apos": 5522.0,
+              "ajuste_aplicado": 47.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 644
+            },
+            "qty_transferida": 47.0,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 59647,
+            "lot_id_destino": 58063,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1301
+          }
+        },
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 19756,
+          "lote_origem_nome": "241072",
+          "qty_pretendida": 3000.0,
+          "qty_movida": 3000.0,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 259480,
+              "product_id": 31708,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 19756,
+              "delta": -3000.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 3000.0,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -3000.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 590
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 255284,
+              "product_id": 31708,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 58063,
+              "delta": 3000.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 5522.0,
+              "reservada": 0.0,
+              "qty_apos": 8522.0,
+              "ajuste_aplicado": 3000.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 609
+            },
+            "qty_transferida": 3000.0,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 19756,
+            "lot_id_destino": 58063,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1199
+          }
+        }
+      ],
+      "quants_disponiveis": 2,
+      "quants_pulados": [],
+      "politica_ordem": "MIGRACAO_FIRST_FIFO",
+      "locs_origem_usadas": [
+        8,
+        48,
+        4066,
+        4067,
+        4068,
+        27458
+      ],
+      "erro": null,
+      "tempo_ms": 2603
+    },
+    {
+      "cod": "210030214",
+      "qty_solicitada": 3559.0,
+      "nome_planilha": null,
+      "linha_planilha": 4,
+      "produto_id": 35891,
+      "produto_nome": "CAIXA DE PAPELAO - 220 X 145 X 110 - LISA",
+      "status": "EXECUTADO_TOTAL",
+      "qty_movida": 3559.0,
+      "qty_nao_movida": 0.0,
+      "transferencias": [
+        {
+          "location_id_origem": 8,
+          "lot_id_origem": 37453,
+          "lote_origem_nome": "3208480",
+          "qty_pretendida": 3559.0,
+          "qty_movida": 3559.0,
+          "status": "EXECUTADO",
+          "resultado": {
+            "reducao_origem": {
+              "quant_id": 259489,
+              "product_id": 35891,
+              "company_id": 1,
+              "location_id": 8,
+              "lot_id": 37453,
+              "delta": -3559.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 3559.0,
+              "reservada": 0.0,
+              "qty_apos": 0.0,
+              "ajuste_aplicado": -3559.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 630
+            },
+            "aumento_destino_migracao": {
+              "quant_id": 254975,
+              "product_id": 35891,
+              "company_id": 1,
+              "location_id": 31088,
+              "lot_id": 57672,
+              "delta": 3559.0,
+              "valor_absoluto": null,
+              "acao": "updated",
+              "qty_antes": 12454.0,
+              "reservada": 0.0,
+              "qty_apos": 16013.0,
+              "ajuste_aplicado": 3559.0,
+              "status": "EXECUTADO",
+              "tempo_ms": 685
+            },
+            "qty_transferida": 3559.0,
+            "status": "EXECUTADO",
+            "location_id_origem": 8,
+            "location_id_destino": 31088,
+            "lot_id_origem": 37453,
+            "lot_id_destino": 57672,
+            "lote_destino_nome": "MIGRAÇÃO",
+            "lote_destino_criado_agora": false,
+            "tempo_ms": 1315
+          }
+        }
+      ],
+      "quants_disponiveis": 1,
+      "quants_pulados": [],
+      "politica_ordem": "MIGRACAO_FIRST_FIFO",
+      "locs_origem_usadas": [
+        8,
+        48,
+        4066,
+        4067,
+        4068,
+        27458
+      ],
+      "erro": null,
+      "tempo_ms": 1390
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 **Descoberta**: 2026-05-18 sessao 2 manha (teste 100 produtos LF)
 **Severidade**: CRITICAL (cascateia em G020 + invoice nunca criada pelo robo)
-**Status**: PROPOSTO (fix pendente)
+**Status**: ✅ IMPLEMENTADO (atualizado 2026-05-24 v3 — fix esta em `app/odoo/estoque/scripts/picking.py` linhas 407-481, capinado de `app/odoo/services/`; cobertura 5 testes pytest em `test_stock_picking_service.py`: `test_validar_state_done_apos_button_validate_sucesso`, `test_validar_state_nao_done_raises`, `test_validar_trata_cannot_marshal_none_com_state_done`, `test_validar_marshal_none_mas_state_assigned_raises`, `test_validar_propaga_outras_excecoes`). Tambem coberto na skill `operando-picking-odoo` (CLI `--modo validar` retorna status `FALSE_POSITIVE_G019` quando o invariante levanta).
 
 ---
 
@@ -104,5 +104,5 @@ Para os 4 pickings que ficaram em assigned (cancelados em 2026-05-18 ~12:25):
 
 - G020 (f5c sem pre-cond — bug em cascata)
 - G016 (SSL resilience — ainda nao cobre f5d, descoberto no mesmo teste)
-- `app/odoo/services/stock_picking_service.py:249-279`
-- `app/odoo/services/inventario_pipeline_service.py:663-762` (f5b)
+- `app/odoo/estoque/scripts/picking.py:407-481` (`validar()` — capinado de `services/` em 2026-05-24 v3; shim em `services/stock_picking_service.py` re-exporta)
+- `app/odoo/services/inventario_pipeline_service.py:663-762` (f5b — caller que historicamente engolia o erro; agora consome o invariante)

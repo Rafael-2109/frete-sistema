@@ -1,0 +1,200 @@
+{
+  "timestamp_inicio": "20260524_234113",
+  "dry_run": false,
+  "total_planejado": 3,
+  "resultados": [
+    {
+      "i": 1,
+      "cod": "208000043",
+      "qty": 508.0,
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.87,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "208000043",
+          "produto": "QUADRO DE MADEIRA - NADIR",
+          "tracking": "none",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "loc->loc",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lote_nome": "(sem lote / P-15/05)",
+          "lote_label": "P-15/05(sem-lote)"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 17957,
+            "product_id": 30629,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": null,
+            "delta": -508.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 531.0,
+            "reservada": 0.0,
+            "qty_apos": 23.0,
+            "ajuste_aplicado": -508.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 679
+          },
+          "aumento_destino": {
+            "quant_id": 263197,
+            "product_id": 30629,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": null,
+            "delta": 508.0,
+            "valor_absoluto": null,
+            "acao": "created",
+            "qty_antes": 0.0,
+            "reservada": 0.0,
+            "qty_apos": 508.0,
+            "ajuste_aplicado": 508.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 650
+          },
+          "qty_transferida": 508.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id": null,
+          "tempo_ms": 1330
+        }
+      }
+    },
+    {
+      "i": 2,
+      "cod": "602000006",
+      "qty": 960.0,
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 8.16,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "602000006",
+          "produto": "BARRICAS",
+          "tracking": "none",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "loc->loc",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lote_nome": "(sem lote / P-15/05)",
+          "lote_label": "P-15/05(sem-lote)"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 259985,
+            "product_id": 32361,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": null,
+            "delta": -960.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 970.0,
+            "reservada": 0.0,
+            "qty_apos": 10.0,
+            "ajuste_aplicado": -960.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 1078
+          },
+          "aumento_destino": {
+            "quant_id": 263199,
+            "product_id": 32361,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": null,
+            "delta": 960.0,
+            "valor_absoluto": null,
+            "acao": "created",
+            "qty_antes": 0.0,
+            "reservada": 0.0,
+            "qty_apos": 960.0,
+            "ajuste_aplicado": 960.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 1586
+          },
+          "qty_transferida": 960.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id": null,
+          "tempo_ms": 2665
+        }
+      }
+    },
+    {
+      "i": 3,
+      "cod": "208000044",
+      "qty": 1290.0,
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 4.25,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "208000044",
+          "produto": "CHAPA DE FIBRA DE MADEIRA - NADIR",
+          "tracking": "none",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "loc->loc",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lote_nome": "(sem lote / P-15/05)",
+          "lote_label": "P-15/05(sem-lote)"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 17959,
+            "product_id": 30630,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": null,
+            "delta": -1290.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 1474.0,
+            "reservada": 0.0,
+            "qty_apos": 184.0,
+            "ajuste_aplicado": -1290.0,
+            "status": "EXECUTADO",
+            "tempo_ms": -1920
+          },
+          "aumento_destino": {
+            "quant_id": 263201,
+            "product_id": 30630,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": null,
+            "delta": 1290.0,
+            "valor_absoluto": null,
+            "acao": "created",
+            "qty_antes": 0.0,
+            "reservada": 0.0,
+            "qty_apos": 1290.0,
+            "ajuste_aplicado": 1290.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 622
+          },
+          "qty_transferida": 1290.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id": null,
+          "tempo_ms": -1298
+        }
+      }
+    }
+  ],
+  "timestamp_fim": "20260524_234132",
+  "total_sucesso": 3,
+  "total_falha": 0,
+  "tempo_total_s": 19.3
+}

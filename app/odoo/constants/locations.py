@@ -63,13 +63,51 @@ def get_local_indisponivel(company_id: int) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Lote consolidador 'MIGRACAO' por company (stock.lot.id ja existente — D005/D011).
-# So FB e CD usam MIGRACAO; LF (5) nao usa (apenas NF FB<->LF); SC (3) fora de escopo.
-# Fonte: D011-...:104 ("id=30482 FB MIGRAÇÃO, id=30856 CD MIGRAÇÃO"), 121
+# ⛔ DEPRECATED 2026-05-24 v4 (G031) — NAO USAR EM ESCRITA.
+#
+# `LOTES_MIGRACAO_POR_COMPANY` é HISTORICO/EXEMPLO. Cada valor é o `stock.lot.id`
+# do lote MIGRAÇÃO de UM produto especifico (escolhido em D011 do inventario
+# 2026-05). **stock.lot tem `product_id` no Odoo CIEL IT** — cada produto tem
+# seu PROPRIO lote MIGRACAO (mesmo NOME, lot_ids DIFERENTES).
+#
+# Usar isso como FK universal em `stock.quant.create({lot_id: 30482, product_id: Y})`
+# de produto diferente do "dono" do lote gera erro:
+#   <Fault 2: 'O numero de lote/serie (MIGRACAO) esta vinculado a outro produto.'>
+#
+# Incidente real 2026-05-24 v4: 16/16 FALHA_AUMENTO em PROD; rollback 100% OK;
+# fix via `lot_svc.criar_se_nao_existe`. Ver
+# `docs/inventario-2026-05/02-gotchas/G031-lot-migracao-por-produto.md`.
+#
+# ✅ CAMINHO CORRETO — sempre resolver POR PRODUTO:
+#   lot_svc.buscar_por_nome('MIGRAÇÃO', product_id, company_id)        # read
+#   lot_svc.criar_se_nao_existe('MIGRAÇÃO', product_id, company_id)    # write
+#
+# Mantido apenas para read-only docs / referencias historicas. Future-proof:
+# considerar remocao quando todas as skills migrarem (auditar via grep
+# `LOTES_MIGRACAO_POR_COMPANY\[`).
 # ---------------------------------------------------------------------------
 LOTES_MIGRACAO_POR_COMPANY: Dict[int, int] = {
-    1: 30482,  # FB — lote MIGRAÇÃO
-    4: 30856,  # CD — lote MIGRAÇÃO
+    1: 30482,  # FB — lote MIGRACAO de UM produto (NAO universal — G031)
+    4: 30856,  # CD — lote MIGRACAO de UM produto (NAO universal — G031)
+}
+
+
+def _warn_lot_migracao_universal() -> None:
+    """Avisa que LOTES_MIGRACAO_POR_COMPANY NAO eh FK universal (G031)."""
+    import warnings
+    warnings.warn(
+        'LOTES_MIGRACAO_POR_COMPANY eh HISTORICO/EXEMPLO — stock.lot tem '
+        'product_id no Odoo. Usar lot_svc.buscar_por_nome/criar_se_nao_existe '
+        'POR PRODUTO em vez disso. Ver gotcha G031.',
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+# Nome canonico do lote consolidador por company (USAR este para resolver
+# POR PRODUTO via lot_svc.buscar_por_nome / criar_se_nao_existe).
+NOME_LOTE_MIGRACAO_POR_COMPANY: Dict[int, str] = {
+    1: 'MIGRAÇÃO',  # FB (com cedilha — canonico)
+    4: 'MIGRAÇÃO',  # CD
 }
 
 

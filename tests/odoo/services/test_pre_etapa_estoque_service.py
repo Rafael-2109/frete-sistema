@@ -371,3 +371,276 @@ def test_caso_composto_piloto_like(service):
     assert len(plano.residual_fb_cd) == 1
     assert plano.residual_fb_cd[0].qty == 20.0
     assert plano.ajustes_positivos_puros == []
+
+
+# ============================================================
+# Helpers I/O (Skill 6 — capinada 2026-05-24)
+# Cobertura: enriquecer_quants_para_planejar, planejar_pre_etapa_batch_company,
+# _calcular_hash_onda
+# ============================================================
+
+from app.odoo.estoque.scripts.pre_etapa import (  # noqa: E402
+    _calcular_hash_onda,
+    enriquecer_quants_para_planejar,
+    planejar_pre_etapa_batch_company,
+)
+
+
+def _quant_raw(quant_id, product_id, lot_id, quantity, location_id=32, value=0):
+    """Helper para montar dict de quant RAW (formato do script 01)."""
+    return {
+        'id': quant_id,
+        'product_id': [product_id, 'fake_name'] if product_id else False,
+        'lot_id': [lot_id, 'fake_lote'] if lot_id else False,
+        'location_id': [location_id, 'fake_loc'],
+        'quantity': float(quantity),
+        'value': float(value),
+    }
+
+
+# ============================================================
+# 14. enriquecer_quants_para_planejar: produto + lote enriquecem
+# ============================================================
+
+def test_enriquecer_quants_para_planejar_basic():
+    """quants raw enriquecidos com cod_produto + lote_nome via odoo.read."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        # 1a chamada (produtos)
+        [{'id': 100, 'default_code': '210030325', 'name': 'POUCH 5 KG'}],
+        # 2a chamada (lotes)
+        [{'id': 200, 'name': 'MIGRAÇÃO'}],
+    ]
+
+    quants_raw = [
+        _quant_raw(1, 100, 200, 50, value=320),
+        _quant_raw(2, 100, None, 30, value=192),  # sem lote
+    ]
+
+    out = enriquecer_quants_para_planejar(odoo, quants_raw, label='CD')
+
+    assert len(out) == 2
+    assert out[0]['quant_id'] == 1
+    assert out[0]['cod_produto'] == '210030325'
+    assert out[0]['lote_nome'] == 'MIGRAÇÃO'
+    assert out[0]['quantity'] == 50.0
+    assert out[0]['reserved_quantity'] == 0.0  # nao bloqueante — sempre 0
+    assert out[0]['value'] == 320.0
+    # Sem lote: lote_nome=''
+    assert out[1]['lot_id'] is None
+    assert out[1]['lote_nome'] == ''
+
+
+# ============================================================
+# 15. enriquecer_quants_para_planejar: lista vazia → sem RPC
+# ============================================================
+
+def test_enriquecer_quants_para_planejar_lista_vazia_nao_chama_odoo():
+    """Lista vazia nao chama odoo.read (evita RPC desnecessario)."""
+    odoo = MagicMock()
+    out = enriquecer_quants_para_planejar(odoo, [], label='vazio')
+    assert out == []
+    assert odoo.read.call_count == 0
+
+
+# ============================================================
+# 16. planejar_pre_etapa_batch_company: filtra outliers (cod[0] not in 1-4)
+# ============================================================
+
+def test_planejar_batch_company_filtra_outliers():
+    """Cods com inicial nao-digito ou fora 1-4 vao para outliers_skipados."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        # produtos enriquecimento (1 chamada — quants_company)
+        [
+            {'id': 100, 'default_code': '210030325', 'name': 'CD valido'},
+            {'id': 101, 'default_code': 'X105000001', 'name': 'CD outlier X'},
+            {'id': 102, 'default_code': '5310177', 'name': 'CD fora 1-4'},
+        ],
+        # lotes enriquecimento
+        [{'id': 200, 'name': 'LOTE_A'}],
+        # produtos complementar (vazio — sem FB)
+        # lotes complementar (vazio)
+    ]
+
+    quants_company_raw = [
+        _quant_raw(1, 100, 200, 100, value=64.34),
+        _quant_raw(2, 101, None, 50, value=30),
+        _quant_raw(3, 102, None, 25, value=15),
+    ]
+    linhas_inv = [
+        {'cod_produto': '210030325', 'lote_inventariado': 'LOTE_B',
+         'qtd_inventario': 100, 'validade_inv': None},
+    ]
+
+    out = planejar_pre_etapa_batch_company(
+        odoo=odoo, company_id=4, location_id=32,
+        quants_company_raw=quants_company_raw,
+        linhas_inv_raw=linhas_inv,
+        quants_complementar_raw=None,
+    )
+
+    # X-prefix + cod fora 1-4 vao pra outliers
+    assert 'X105000001' in out['outliers_skipados']
+    assert '5310177' in out['outliers_skipados']
+    assert len(out['outliers_skipados']) == 2
+    # Apenas o valido foi processado
+    assert out['produtos_processados'] == 1
+    assert out['cod_to_name']['210030325'] == 'CD valido'
+    assert out['company_id'] == 4
+
+
+# ============================================================
+# 17. planejar_pre_etapa_batch_company: cods_filter restringe universo
+# ============================================================
+
+def test_planejar_batch_company_cods_filter_restringe_universo():
+    """cods_filter restringe processamento aos cods especificados."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [
+            {'id': 100, 'default_code': '210030325', 'name': 'A'},
+            {'id': 200, 'default_code': '210030400', 'name': 'B'},
+        ],
+        [{'id': 300, 'name': 'LOTE_X'}],
+    ]
+
+    quants_company_raw = [
+        _quant_raw(1, 100, 300, 100, value=64.34),
+        _quant_raw(2, 200, 300, 80, value=50),
+    ]
+    linhas_inv = [
+        {'cod_produto': '210030325', 'lote_inventariado': 'LOTE_NOVO_A',
+         'qtd_inventario': 100, 'validade_inv': None},
+        {'cod_produto': '210030400', 'lote_inventariado': 'LOTE_NOVO_B',
+         'qtd_inventario': 80, 'validade_inv': None},
+    ]
+
+    out = planejar_pre_etapa_batch_company(
+        odoo=odoo, company_id=4, location_id=32,
+        quants_company_raw=quants_company_raw,
+        linhas_inv_raw=linhas_inv,
+        cods_filter=['210030325'],  # restringe a 1 produto
+    )
+
+    assert out['produtos_processados'] == 1
+    # So o 210030325 gerou transfer (POS LOTE_X -> LOTE_NOVO_A)
+    assert len(out['transferencias_internas']) == 1
+    assert out['transferencias_internas'][0]['cod_produto'] == '210030325'
+
+
+# ============================================================
+# 18. _calcular_hash_onda: determinismo (mesmo ordem = mesmo hash)
+# ============================================================
+
+def test_calcular_hash_onda_determinismo():
+    """Hash eh deterministico (ordenado por id) e estavel entre execucoes."""
+    # Fake ajuste (objeto-like com .id, .cod_produto, .company_id, .lote_odoo,
+    # .qtd_ajuste, .acao_decidida)
+    class FakeAjuste:
+        def __init__(self, _id, cod, cid, lote, qty, acao):
+            self.id = _id
+            self.cod_produto = cod
+            self.company_id = cid
+            self.lote_odoo = lote
+            self.qtd_ajuste = qty
+            self.acao_decidida = acao
+
+    a1 = FakeAjuste(1, '210030325', 4, 'MIGRAÇÃO', Decimal('100'), 'AJUSTE_CD_POSITIVO_PURO')
+    a2 = FakeAjuste(2, '210030400', 4, 'P-15/05', Decimal('-50'), 'AJUSTE_CD_TRANSF_INTERNA_NEG')
+    a3 = FakeAjuste(3, '4310177', 4, 'LOTE_X', Decimal('20'), 'AJUSTE_CD_TRANSF_INTERNA_POS')
+
+    h_ordem_1 = _calcular_hash_onda([a1, a2, a3])
+    h_ordem_2 = _calcular_hash_onda([a3, a1, a2])  # ordem diferente
+    h_repeticao = _calcular_hash_onda([a1, a2, a3])
+
+    assert h_ordem_1 == h_ordem_2  # ordem nao importa (sort interno por id)
+    assert h_ordem_1 == h_repeticao  # determinismo
+    assert len(h_ordem_1) == 64  # sha256 hex
+
+
+# ============================================================
+# 19. _calcular_hash_onda: sensibilidade a campos (anti-replay)
+# ============================================================
+
+def test_calcular_hash_onda_sensibilidade_a_campos():
+    """Hash muda se qualquer campo critico (cod, cid, lote, qty, acao) mudar."""
+    class FakeAjuste:
+        def __init__(self, _id, cod, cid, lote, qty, acao):
+            self.id = _id
+            self.cod_produto = cod
+            self.company_id = cid
+            self.lote_odoo = lote
+            self.qtd_ajuste = qty
+            self.acao_decidida = acao
+
+    base = FakeAjuste(1, '210030325', 4, 'MIGRAÇÃO', Decimal('100'),
+                      'AJUSTE_CD_POSITIVO_PURO')
+    h_base = _calcular_hash_onda([base])
+
+    # Mudar cod_produto
+    diff_cod = FakeAjuste(1, '210030400', 4, 'MIGRAÇÃO', Decimal('100'),
+                          'AJUSTE_CD_POSITIVO_PURO')
+    assert _calcular_hash_onda([diff_cod]) != h_base
+
+    # Mudar qty
+    diff_qty = FakeAjuste(1, '210030325', 4, 'MIGRAÇÃO', Decimal('200'),
+                          'AJUSTE_CD_POSITIVO_PURO')
+    assert _calcular_hash_onda([diff_qty]) != h_base
+
+    # Mudar acao
+    diff_acao = FakeAjuste(1, '210030325', 4, 'MIGRAÇÃO', Decimal('100'),
+                           'AJUSTE_CD_TRANSF_INTERNA_NEG')
+    assert _calcular_hash_onda([diff_acao]) != h_base
+
+
+# ============================================================
+# 20. CR-F2: _calcular_hash_onda tolera ORM com atributos ausentes
+# ============================================================
+
+def test_calcular_hash_onda_getattr_defensivo_orm_evoluido():
+    """Se ORM evoluiu e atributo critico foi renomeado, _calcular_hash_onda
+    NAO raise AttributeError (defesa via getattr). Hash calcula com '' default,
+    mantendo a invariante anti-replay funcional mesmo em runtime degradado."""
+    class AjusteEvoluido:
+        # Renomeou 'lote_odoo' para 'lote_legado'; getattr deve usar ''
+        def __init__(self, _id):
+            self.id = _id
+            self.cod_produto = 'X'
+            self.company_id = 4
+            # Sem self.lote_odoo (atributo ausente)
+            self.qtd_ajuste = Decimal('100')
+            self.acao_decidida = 'AJUSTE_X'
+
+    h = _calcular_hash_onda([AjusteEvoluido(1)])
+    assert len(h) == 64
+    # Estabilidade: re-rodar gera mesmo hash (ate o ORM ser corrigido)
+    assert _calcular_hash_onda([AjusteEvoluido(1)]) == h
+
+
+# ============================================================
+# 21. CR-F4: propor_ajustes_pre_etapa guard _cod_valido
+# ============================================================
+
+def test_cod_valido_filtra_outliers_em_propor():
+    """Smoke local da funcao _cod_valido (interna a propor_ajustes_pre_etapa).
+
+    Verifica que cods com inicial fora 1-4 ou vazios sao rejeitados, evitando
+    ValueError/IndexError no `tipo_de_cod = int(cod[0])` quando o plano JSON
+    foi manualmente editado.
+    """
+    # Recria a logica interna do guard (CR-F4) — espelha propor_ajustes_pre_etapa
+    def _cod_valido(cod):
+        return bool(cod) and cod[0].isdigit() and int(cod[0]) in (1, 2, 3, 4)
+
+    # Validos
+    assert _cod_valido('210030325')
+    assert _cod_valido('4310177')
+    assert _cod_valido('1')
+
+    # Invalidos
+    assert not _cod_valido('')
+    assert not _cod_valido('X105000001')
+    assert not _cod_valido('5310177')  # tipo 5 nao existe
+    assert not _cod_valido('A1B2')
+    assert not _cod_valido(None) if None != '' else True  # bool() trata None

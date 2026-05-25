@@ -190,7 +190,8 @@ Gotchas rapidos:
 | `controlador-custo-frete` | Custo real frete, divergencia CTe, conta corrente transportadoras |
 | `gestor-recebimento` | Pipeline recebimento 4 fases, DFEs bloqueados, troubleshooting |
 | `gestor-devolucoes` | Devolucoes NFD, De-Para AI, descarte vs retorno |
-| `gestor-estoque-producao` | Ruptura, estoque comprometido, producao vs programada |
+| `gestor-estoque-producao` | Ruptura, estoque comprometido, producao vs programada (READ-ONLY) |
+| `gestor-estoque-odoo` | Operacoes de **escrita** de estoque no Odoo + consulta AO VIVO: skills atomicas `ajustando-quant-odoo` (✅ MATURADA), `transferindo-interno-odoo` (🟡 min viavel — lote↔lote mesma loc OU loc↔loc mesmo lote intra-empresa OU MIGRACAO↔Indisponivel via MODO C; delegacao a ajustar_quant 2x com delta_esperado propagado; G021/G022/G027/G031 codificados), `operando-reservas-odoo` (🟡 min viavel — cirurgia/cancelamento de MLs orfas), `operando-picking-odoo` (🟡 min viavel — cancelar/validar/devolver picking generico; **invariante G019/G020 codificada** — ONDA 0.4 ✅ fechada), `operando-mo-odoo` (🟡 min viavel NOVA 2026-05-24 v5 — cancelar MO single ou batch; guard G-MO-01 furo contabil + idempotencia action_cancel validada), `consultando-quant-odoo` (🟡 READ-only ao vivo, auditoria pos-WRITE). Demais atomos (escriturar, faturar IC) em construcao. SEMPRE --dry-run+confirmacao. Ver `app/odoo/estoque/CLAUDE.md` e `ROADMAP_SKILLS.md` |
 | `analista-performance-logistica` | KPIs entrega, ranking transportadoras, atrasos (read-only) |
 | `gestor-motos-assai` | Pipeline B2B Q.P.A. Sendas/Assaí (estoque, recibo, separação, NF) |
 

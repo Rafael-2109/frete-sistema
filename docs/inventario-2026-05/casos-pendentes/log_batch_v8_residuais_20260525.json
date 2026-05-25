@@ -1,0 +1,1111 @@
+{
+  "timestamp_inicio": "20260525_002727",
+  "dry_run": false,
+  "total_planejado": 20,
+  "resultados": [
+    {
+      "i": 1,
+      "tipo": "s2c",
+      "params": {
+        "cod": "4899027",
+        "qty": 269.0,
+        "lote": "13206"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.6,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "4899027",
+          "produto": "MOLHO DE SALADA MOSTARDA E GENGIBRE - PET 12X240 ML - ST ISABEL",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "13206",
+          "lot_id_origem": 59398,
+          "lote_origem_label": "13206"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261594,
+            "product_id": 27862,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 59398,
+            "delta": -269.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 269.0,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -269.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 770
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 263141,
+            "product_id": 27862,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 59830,
+            "delta": 269.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 269.0,
+            "reservada": 0.0,
+            "qty_apos": 538.0,
+            "ajuste_aplicado": 269.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 665
+          },
+          "qty_transferida": 269.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 59398,
+          "lot_id_destino": 59830,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1436
+        }
+      }
+    },
+    {
+      "i": 2,
+      "tipo": "s2c",
+      "params": {
+        "cod": "4890128",
+        "qty": 319.083,
+        "lote": "13206"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 4.03,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "4890128",
+          "produto": "MOLHO DE SALADA PARMESAO - PET 12X240 ML - CAMPO BELO",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "13206",
+          "lot_id_origem": 59396,
+          "lote_origem_label": "13206"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261590,
+            "product_id": 27858,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 59396,
+            "delta": -319.083,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 319.083,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -319.083,
+            "status": "EXECUTADO",
+            "tempo_ms": 705
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254816,
+            "product_id": 27858,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30672,
+            "delta": 319.083,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 770.083,
+            "reservada": 0.0,
+            "qty_apos": 1089.166,
+            "ajuste_aplicado": 319.083,
+            "status": "EXECUTADO",
+            "tempo_ms": -1869
+          },
+          "qty_transferida": 319.083,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 59396,
+          "lot_id_destino": 30672,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": -1163
+        }
+      }
+    },
+    {
+      "i": 3,
+      "tipo": "s2c",
+      "params": {
+        "cod": "4902852",
+        "qty": 447.0,
+        "lote": "13206"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.33,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "4902852",
+          "produto": "MOLHO PESTO - PET 12X200 GR - BOCCANEIRA",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "13206",
+          "lot_id_origem": 59400,
+          "lote_origem_label": "13206"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261598,
+            "product_id": 35889,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 59400,
+            "delta": -447.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 447.0,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -447.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 609
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 255114,
+            "product_id": 35889,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 57834,
+            "delta": 447.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 507.0,
+            "reservada": 0.0,
+            "qty_apos": 954.0,
+            "ajuste_aplicado": 447.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 613
+          },
+          "qty_transferida": 447.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 59400,
+          "lot_id_destino": 57834,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1223
+        }
+      }
+    },
+    {
+      "i": 4,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 261857,
+        "delta": -430.0,
+        "label": "105000003 P-15/05 origem"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 5.84,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 261857
+        },
+        "resultado": {
+          "quant_id": 261857,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": -430.0,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 430.0,
+          "reservada": 0.0,
+          "qty_apos": 0.0,
+          "ajuste_aplicado": -430.0,
+          "status": "EXECUTADO",
+          "tempo_ms": 1477
+        }
+      }
+    },
+    {
+      "i": 5,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 254511,
+        "delta": 430.0,
+        "label": "105000003 MIGRAÇÃO destino"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 5.78,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 254511
+        },
+        "resultado": {
+          "quant_id": 254511,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": 430.0,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 2494.3135,
+          "reservada": 0.0,
+          "qty_apos": 2924.3135,
+          "ajuste_aplicado": 430.0,
+          "status": "EXECUTADO",
+          "tempo_ms": 1336
+        }
+      }
+    },
+    {
+      "i": 6,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 259985,
+        "delta": -10.0,
+        "label": "602000006 FB/Estoque origem"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 5.74,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 259985
+        },
+        "resultado": {
+          "quant_id": 259985,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": -10.0,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 10.0,
+          "reservada": 0.0,
+          "qty_apos": 0.0,
+          "ajuste_aplicado": -10.0,
+          "status": "EXECUTADO",
+          "tempo_ms": 1311
+        }
+      }
+    },
+    {
+      "i": 7,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 263199,
+        "delta": 10.0,
+        "label": "602000006 FB/Indisp destino"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 5.72,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 263199
+        },
+        "resultado": {
+          "quant_id": 263199,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": 10.0,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 960.0,
+          "reservada": 0.0,
+          "qty_apos": 970.0,
+          "ajuste_aplicado": 10.0,
+          "status": "EXECUTADO",
+          "tempo_ms": 1324
+        }
+      }
+    },
+    {
+      "i": 8,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 259018,
+        "delta": -564.0964,
+        "label": "105000026 MIGRACAO origem"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 3.28,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 259018
+        },
+        "resultado": {
+          "quant_id": 259018,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": -564.0964,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 564.0964,
+          "reservada": 0.0,
+          "qty_apos": 0.0,
+          "ajuste_aplicado": -564.0964,
+          "status": "EXECUTADO",
+          "tempo_ms": 1390
+        }
+      }
+    },
+    {
+      "i": 9,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 254922,
+        "delta": 564.0964,
+        "label": "105000026 MIGRAÇÃO destino"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 5.85,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 254922
+        },
+        "resultado": {
+          "quant_id": 254922,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": 564.0964,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 11384.4821,
+          "reservada": 0.0,
+          "qty_apos": 11948.5785,
+          "ajuste_aplicado": 564.0964,
+          "status": "EXECUTADO",
+          "tempo_ms": 1384
+        }
+      }
+    },
+    {
+      "i": 10,
+      "tipo": "s2c",
+      "params": {
+        "cod": "103000113",
+        "qty": 250.0,
+        "lote": "136/26"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.94,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "103000113",
+          "produto": "PIMENTA BIQUINHO",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "136/26",
+          "lot_id_origem": 58720,
+          "lote_origem_label": "136/26"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 256944,
+            "product_id": 27706,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 58720,
+            "delta": -250.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 4275.0,
+            "reservada": 0.0,
+            "qty_apos": 4025.0,
+            "ajuste_aplicado": -250.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 804
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254936,
+            "product_id": 27706,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30063,
+            "delta": 250.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 251771.17,
+            "reservada": 0.0,
+            "qty_apos": 252021.17,
+            "ajuste_aplicado": 250.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 767
+          },
+          "qty_transferida": 250.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 58720,
+          "lot_id_destino": 30063,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1572
+        }
+      }
+    },
+    {
+      "i": 11,
+      "tipo": "s2c",
+      "params": {
+        "cod": "105000021",
+        "qty": 647.0336,
+        "lote": "1102"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 7.01,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "105000021",
+          "produto": "POLPA - PIMENTA MALAGUETA",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "1102",
+          "lot_id_origem": 27168,
+          "lote_origem_label": "1102"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261870,
+            "product_id": 27865,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 27168,
+            "delta": -647.0336,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 647.0336,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -647.0336,
+            "status": "EXECUTADO",
+            "tempo_ms": 879
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254523,
+            "product_id": 27865,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30117,
+            "delta": 647.0336,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 22150.5674,
+            "reservada": 0.0,
+            "qty_apos": 22797.601,
+            "ajuste_aplicado": 647.0336,
+            "status": "EXECUTADO",
+            "tempo_ms": 731
+          },
+          "qty_transferida": 647.0336,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 27168,
+          "lot_id_destino": 30117,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1610
+        }
+      }
+    },
+    {
+      "i": 12,
+      "tipo": "s2c",
+      "params": {
+        "cod": "105000021",
+        "qty": 5.0,
+        "lote": "140/26"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.71,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "105000021",
+          "produto": "POLPA - PIMENTA MALAGUETA",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "140/26",
+          "lot_id_origem": 59395,
+          "lote_origem_label": "140/26"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261572,
+            "product_id": 27865,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 59395,
+            "delta": -5.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 5.0,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -5.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 753
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254523,
+            "product_id": 27865,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30117,
+            "delta": 5.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 22797.601,
+            "reservada": 0.0,
+            "qty_apos": 22802.601,
+            "ajuste_aplicado": 5.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 733
+          },
+          "qty_transferida": 5.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 59395,
+          "lot_id_destino": 30117,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1487
+        }
+      }
+    },
+    {
+      "i": 13,
+      "tipo": "s2c",
+      "params": {
+        "cod": "105000021",
+        "qty": 10.668,
+        "lote": "1209/24"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 4.28,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "105000021",
+          "produto": "POLPA - PIMENTA MALAGUETA",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "1209/24",
+          "lot_id_origem": 11559,
+          "lote_origem_label": "1209/24"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 259497,
+            "product_id": 27865,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 11559,
+            "delta": -10.668,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 10.668,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -10.668,
+            "status": "EXECUTADO",
+            "tempo_ms": 744
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254523,
+            "product_id": 27865,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30117,
+            "delta": 10.668,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 22802.601,
+            "reservada": 0.0,
+            "qty_apos": 22813.269,
+            "ajuste_aplicado": 10.668,
+            "status": "EXECUTADO",
+            "tempo_ms": 711
+          },
+          "qty_transferida": 10.668,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 11559,
+          "lot_id_destino": 30117,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1456
+        }
+      }
+    },
+    {
+      "i": 14,
+      "tipo": "s2c",
+      "params": {
+        "cod": "105000038",
+        "qty": 1052.477,
+        "lote": "761493"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.71,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "105000038",
+          "produto": "EMULSAO - ALHO - ST 2172",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "761493",
+          "lot_id_origem": 20803,
+          "lote_origem_label": "761493"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261894,
+            "product_id": 27719,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 20803,
+            "delta": -1052.477,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 1052.477,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -1052.477,
+            "status": "EXECUTADO",
+            "tempo_ms": 757
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254534,
+            "product_id": 27719,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30133,
+            "delta": 1052.477,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 7895.6686,
+            "reservada": 0.0,
+            "qty_apos": 8948.1456,
+            "ajuste_aplicado": 1052.477,
+            "status": "EXECUTADO",
+            "tempo_ms": 689
+          },
+          "qty_transferida": 1052.477,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 20803,
+          "lot_id_destino": 30133,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1446
+        }
+      }
+    },
+    {
+      "i": 15,
+      "tipo": "s2c",
+      "params": {
+        "cod": "105000038",
+        "qty": 5.0,
+        "lote": "140/26"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.67,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "105000038",
+          "produto": "EMULSAO - ALHO - ST 2172",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "140/26",
+          "lot_id_origem": 59394,
+          "lote_origem_label": "140/26"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261570,
+            "product_id": 27719,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 59394,
+            "delta": -5.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 5.0,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -5.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 727
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254534,
+            "product_id": 27719,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30133,
+            "delta": 5.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 8948.1456,
+            "reservada": 0.0,
+            "qty_apos": 8953.1456,
+            "ajuste_aplicado": 5.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 708
+          },
+          "qty_transferida": 5.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 59394,
+          "lot_id_destino": 30133,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1436
+        }
+      }
+    },
+    {
+      "i": 16,
+      "tipo": "s2c",
+      "params": {
+        "cod": "105000038",
+        "qty": 1.5337,
+        "lote": "1208/24"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.83,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "105000038",
+          "produto": "EMULSAO - ALHO - ST 2172",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "1208/24",
+          "lot_id_origem": 59023,
+          "lote_origem_label": "1208/24"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 259503,
+            "product_id": 27719,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 59023,
+            "delta": -1.5337,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 1.5337,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -1.5337,
+            "status": "EXECUTADO",
+            "tempo_ms": 680
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254534,
+            "product_id": 27719,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30133,
+            "delta": 1.5337,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 8953.1456,
+            "reservada": 0.0,
+            "qty_apos": 8954.6793,
+            "ajuste_aplicado": 1.5337,
+            "status": "EXECUTADO",
+            "tempo_ms": 703
+          },
+          "qty_transferida": 1.5337,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 59023,
+          "lot_id_destino": 30133,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1384
+        }
+      }
+    },
+    {
+      "i": 17,
+      "tipo": "s2c",
+      "params": {
+        "cod": "103000117",
+        "qty": 52.0,
+        "lote": "0326/25"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.57,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "103000117",
+          "produto": "PIMENTA BIQUINHO B",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "0326/25",
+          "lot_id_origem": 57335,
+          "lote_origem_label": "0326/25"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 256902,
+            "product_id": 29648,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 57335,
+            "delta": -52.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 52.0,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -52.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 650
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 255155,
+            "product_id": 29648,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 30066,
+            "delta": 52.0,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 74428.48,
+            "reservada": 0.0,
+            "qty_apos": 74480.48,
+            "ajuste_aplicado": 52.0,
+            "status": "EXECUTADO",
+            "tempo_ms": 653
+          },
+          "qty_transferida": 52.0,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 57335,
+          "lot_id_destino": 30066,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1304
+        }
+      }
+    },
+    {
+      "i": 18,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 261748,
+        "delta": -620.32,
+        "label": "103000117 P-15/05 literal origem"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 3.25,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 261748
+        },
+        "resultado": {
+          "quant_id": 261748,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": -620.32,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 620.32,
+          "reservada": 0.0,
+          "qty_apos": 0.0,
+          "ajuste_aplicado": -620.32,
+          "status": "EXECUTADO",
+          "tempo_ms": 1378
+        }
+      }
+    },
+    {
+      "i": 19,
+      "tipo": "s1q",
+      "params": {
+        "quant_id": 255155,
+        "delta": 620.32,
+        "label": "103000117 MIGRAÇÃO destino"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 5.84,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "quant_id": 255155
+        },
+        "resultado": {
+          "quant_id": 255155,
+          "product_id": null,
+          "company_id": null,
+          "location_id": null,
+          "lot_id": null,
+          "delta": 620.32,
+          "valor_absoluto": null,
+          "acao": "updated",
+          "qty_antes": 74480.48,
+          "reservada": 0.0,
+          "qty_apos": 75100.8,
+          "ajuste_aplicado": 620.32,
+          "status": "EXECUTADO",
+          "tempo_ms": 1391
+        }
+      }
+    },
+    {
+      "i": 20,
+      "tipo": "s2c",
+      "params": {
+        "cod": "104000054",
+        "qty": 255.7932,
+        "lote": "05/11/2029"
+      },
+      "exit_code": 0,
+      "status": "EXECUTADO",
+      "tempo_s": 6.68,
+      "output": {
+        "modo": "confirmado",
+        "chave": {
+          "cod": "104000054",
+          "produto": "ACUCAR MASCAVO",
+          "tracking": "lot",
+          "company_id": 1,
+          "empresa": "FB",
+          "modo": "para-indisponivel",
+          "lote_origem_nome": "05/11/2029",
+          "lot_id_origem": 59434,
+          "lote_origem_label": "05/11/2029"
+        },
+        "resultado": {
+          "reducao_origem": {
+            "quant_id": 261782,
+            "product_id": 31579,
+            "company_id": 1,
+            "location_id": 8,
+            "lot_id": 59434,
+            "delta": -255.7932,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 255.7932,
+            "reservada": 0.0,
+            "qty_apos": 0.0,
+            "ajuste_aplicado": -255.7932,
+            "status": "EXECUTADO",
+            "tempo_ms": 654
+          },
+          "aumento_destino_migracao": {
+            "quant_id": 254903,
+            "product_id": 31579,
+            "company_id": 1,
+            "location_id": 31088,
+            "lot_id": 57634,
+            "delta": 255.7932,
+            "valor_absoluto": null,
+            "acao": "updated",
+            "qty_antes": 356.5008,
+            "reservada": 0.0,
+            "qty_apos": 612.294,
+            "ajuste_aplicado": 255.7932,
+            "status": "EXECUTADO",
+            "tempo_ms": 656
+          },
+          "qty_transferida": 255.7932,
+          "status": "EXECUTADO",
+          "location_id_origem": 8,
+          "location_id_destino": 31088,
+          "lot_id_origem": 59434,
+          "lot_id_destino": 57634,
+          "lote_destino_nome": "MIGRAÇÃO",
+          "lote_destino_criado_agora": false,
+          "tempo_ms": 1311
+        }
+      }
+    }
+  ],
+  "timestamp_fim": "20260525_002924",
+  "total_sucesso": 20,
+  "total_falha": 0,
+  "tempo_total_s": 116.7
+}

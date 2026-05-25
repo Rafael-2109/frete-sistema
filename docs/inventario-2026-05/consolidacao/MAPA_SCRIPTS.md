@@ -24,13 +24,15 @@ Este é o **inverso**: cada um dos 90 scripts → **qual gold-script absorve sua
 
 ## → `scripts/quant.py` (StockQuantAdjustmentService) — ajuste de inventário
 
+**Skill:** `ajustando-quant-odoo` ([SKILL.md](../../../.claude/skills/ajustando-quant-odoo/SKILL.md))  ·  **Fluxo:** [`2.1 ajuste-saldo-por-planilha`](../../../app/odoo/estoque/fluxos/2.1-ajuste-saldo-por-planilha.md)  ·  **Subagente:** `gestor-estoque-odoo`  ·  **Arquivados em:** [`_validados/ajustando-quant-odoo/`](../../../scripts/inventario_2026_05/_validados/ajustando-quant-odoo/VALIDACAO.md) (2026-05-23, validação por log; `--confirmar` em caso real pendente).
+
 | Script | O que MINERAR (valor único) | Situação |
 |--------|------------------------------|----------|
-| `11_ajuste_negativo_cd` | validação anti-negativar + anti-reserva | SUPERADO (já no gold) |
-| `12_ajuste_positivo_cd` | criar lote+quant se faltar | SUPERADO |
-| `13_ajuste_positivo_fb` | idem (FB) | SUPERADO |
-| `14_ajuste_positivo_cd_v2` | idem | SUPERADO |
-| `criar_saldo_positivo_lf` | tracking lot/none/serial; soma; sem-lote | SUPERADO |
+| `11_ajuste_negativo_cd` | validação anti-negativar + anti-reserva | SUPERADO → _validados/ (2026-05-23) |
+| `12_ajuste_positivo_cd` | criar lote+quant se faltar | SUPERADO → _validados/ (2026-05-23) |
+| `13_ajuste_positivo_fb` | idem (FB) | SUPERADO → _validados/ (2026-05-23) |
+| `14_ajuste_positivo_cd_v2` | idem | SUPERADO → _validados/ (2026-05-23) |
+| `criar_saldo_positivo_lf` | tracking lot/none/serial; soma; sem-lote | SUPERADO → _validados/ (2026-05-23) |
 | `ajuste_estoque_lf_pasta17` | realocação +/- entre lotes; **NÃO valida soma=0** (quem valida net-zero é `transferir_lote.py`); ⚠️ **dead-code** branch `COMPOSTO` (`:180`) + docstring stale — a "salvaguarda de lote-composto" anunciada **não existe** no código | AO-CAPINAR (corrigir docstring ao capinar) |
 | `limpar_quants_ghost_210030005_fb` | zerar por `quant_id`; quant ghost residual | AO-CAPINAR (hook quant_id pronto) |
 | `zerar_negativos_fb` | **algoritmo de compensação** (consome outros lotes p/ zerar negativo) | AO-CAPINAR (orquestrador sobre quant) |
@@ -40,46 +42,92 @@ Este é o **inverso**: cada um dos 90 scripts → **qual gold-script absorve sua
 
 ## → `scripts/transfer.py` (StockInternalTransferService) — transferência de lote
 
+**Skill:** `transferindo-interno-odoo` ([SKILL.md](../../../.claude/skills/transferindo-interno-odoo/SKILL.md)) · **Fluxo:** [`2.2 realocar-saldo`](../../../app/odoo/estoque/fluxos/2.2-realocar-saldo.md) · **Subagente:** `gestor-estoque-odoo` · **Arquivados em:** [`_validados/transferindo-interno-odoo/`](../../../scripts/inventario_2026_05/_validados/transferindo-interno-odoo/VALIDACAO.md) (2026-05-24, dry-run validados; --confirmar pendente demanda real).
+
 | Script | O que MINERAR | Situação |
 |--------|---------------|----------|
-| `10_executar_emergenciais_fb` | MIGRAÇÃO→canônico (9 casos) | SUPERADO |
-| `substituir_lote_205030410_fb` | lote→lote, 1 produto | SUPERADO |
-| `13_transferencia_migracao_fb` | MIGRAÇÃO→lote canônico (lista) | AO-CAPINAR |
-| `15_transferencia_para_migracao` | **semântica D010**: `diff>0 → lote→MIGRAÇÃO` (4.888 linhas) | AO-CAPINAR |
-| `15r_transferencia_reversa` | **semântica D010 inversa**: `diff>0 → MIGRAÇÃO→lote` | AO-CAPINAR |
-| `15_transferir_preprod_para_estoque_fb` | Pré-Prod→Estoque (já argparse) | AO-CAPINAR (fundir c/ 17) |
-| `17_transferir_preprod_lf_para_estoque` | idem LF | AO-CAPINAR (fundir c/ 15) |
-| `padronizar_migracao` | renomear `MIGRACAO`→`MIGRAÇÃO` (cedilha) — vai p/ `lot.py` | AO-CAPINAR |
+| `10_executar_emergenciais_fb` | MIGRAÇÃO→canônico (9 casos) | SUPERADO → _validados/ (2026-05-24) |
+| `padronizar_migracao` | renomear `MIGRACAO`→`MIGRAÇÃO` (cedilha) | SUPERADO → _validados/ (2026-05-24, com limitação 2-grafias documentada) |
+| `substituir_lote_205030410_fb` | lote→lote, 1 produto (unreserve→transfer→reassign) | AO-CAPINAR (composição cross-skill com 2.4 — VIVO) |
+| `13_transferencia_migracao_fb` | MIGRAÇÃO→lote canônico (lista) | AO-CAPINAR (orquestrador planilha — VIVO) |
+| `15_transferencia_para_migracao` | **semântica D010**: `diff>0 → lote→MIGRAÇÃO` (4.888 linhas) | AO-CAPINAR (orquestrador planilha — VIVO) |
+| `15r_transferencia_reversa` | **semântica D010 inversa**: `diff>0 → MIGRAÇÃO→lote` | AO-CAPINAR (orquestrador planilha — VIVO) |
+| `15_transferir_preprod_para_estoque_fb` | Pré-Prod→Estoque (já argparse) | AO-CAPINAR (fundir c/ 17 — VIVO) |
+| `17_transferir_preprod_lf_para_estoque` | idem LF | AO-CAPINAR (fundir c/ 15 — VIVO) |
+| `ajuste_fb_cd_indisponivel` | **semântica D013**: De-Local/De-Lote→Para + wildcard sub-locais; gotcha 2 lotes MIGRAÇÃO/produto (G022); checkpoint incremental | AO-CAPINAR (orquestrador planilha + wildcard — VIVO) |
+| `transferir_local_pasta22` | **De/Para LOCAL+LOTE (Pasta22)**, multi-empresa (FB/CD/LF), wildcard saída → Indisponível/MIGRAÇÃO; 3 premissas explícitas (qty BRUTA, P-15/05 literal+sem-lote, todos internos) | AO-CAPINAR (orquestrador planilha + wildcard — VIVO) |
+| `transferir_indisp_para_estoque_p15_cd` | Indisponível→Estoque/P-15/05 no CD (B inter-local, 2 passos); guard de quant_id esperado; hard-fail saldo insuficiente | AO-CAPINAR (caso ad-hoc — VIVO; Skill 2 modo B cobre o átomo) |
+
+> **Skill 2 status 🟡 mín viável:** átomos `transferir_entre_lotes_v2` (lote→lote mesma loc) + `transferir_entre_locations` (loc→loc mesmo lote) cobertos pela skill. Orquestradores (planilha, retries, sharding, checkpoint, semânticas D010/D012/D013) permanecem VIVOS até fluxos compostos serem escritos (demanda-driven).
 
 ## → `scripts/quant.py` + orquestrador MIGRAÇÃO↔Indisponível
 
-| Script | O que MINERAR | Situação |
-|--------|---------------|----------|
-| `mover_migracao_para_indisponivel` | 3 filiais; **quants com reserva pulam → gera CSV** (liga a cancelar_reserva) | AO-CAPINAR |
-| `ajuste_fb_cd_indisponivel` | **semântica D013**: De-Local/De-Lote→Para + wildcard sub-locais; gotcha 2 lotes MIGRAÇÃO/produto | AO-CAPINAR |
-| `transferir_local_pasta22` | **De/Para LOCAL+LOTE (Pasta22)**, multi-empresa (FB/CD/LF), wildcard saída → Indisponível/MIGRAÇÃO (irmão de `ajuste_fb_cd_indisponivel`, já usa a primitiva) | AO-CAPINAR |
-| `transferir_indisp_para_estoque_p15_cd` | Indisponível→Estoque/P-15/05 (2 passos) | AO-CAPINAR |
-| `executar_fluxo_b_vivas` | composto: cancel invoice + return picking + transfer→Indisponível | AO-CAPINAR |
-
-## → `scripts/picking.py`
+> **Nota arquitetural (CR2#2, 2026-05-24 v2):** os scripts que MOVEM saldo entre locations
+> (`mover_migracao_para_indisponivel`, `ajuste_fb_cd_indisponivel`, `transferir_local_pasta22`,
+> `transferir_indisp_para_estoque_p15_cd`) são **orquestradores que compõem a Skill 2
+> `transferindo-interno-odoo`** (modo B loc→loc, ou modo A wildcard). Estão listados na seção
+> [`scripts/transfer.py`](#-scriptstransferpy-stockinternaltransferservice--transferência-de-lote) acima.
+> Mantemos referência aqui apenas para os scripts cujo PADRÃO específico é "movimento
+> envolvendo MIGRAÇÃO↔Indisponível com lógica adicional" (CSV de pulados, etc).
 
 | Script | O que MINERAR | Situação |
 |--------|---------------|----------|
-| `16_cancelar_pickings_fantasmas` | filtro picking fantasma (>7d, origin C24xxxxx/sem origin) | AO-CAPINAR |
+| `mover_migracao_para_indisponivel` | 3 filiais (B mover_loc para FB/CD + A relocate_lote para LF); **quants com reserva pulam → gera CSV** (liga a cancelar_reserva); MIGRAÇÃO se mantém | AO-CAPINAR (Skill 2 cobre o átomo; orquestração + CSV pulados pertencem a fluxo composto — VIVO) |
+| `executar_fluxo_b_vivas` | **fluxo composto cross-skill**: cancel invoice + return picking + transfer→Indisponível. Passo 3 = Skill 2; passos 1+2 = `faturando-odoo` (futuro) + `operando-picking-odoo` (futuro) | AO-CAPINAR (fluxo composto cross-skill — VIVO; ver MINERACAO_SKILL2_2026_05_24.md §"COM-BUG G-TRANSFER-01") |
 
-## → `scripts/cancelar_mo.py` (GAP — criar)
+> **Removidos desta seção (2026-05-24 v2 — CR2#2 reconciliação):** `ajuste_fb_cd_indisponivel`, `transferir_local_pasta22`, `transferir_indisp_para_estoque_p15_cd` movidos para a seção `scripts/transfer.py` (são orquestradores de transferência interna — Skill 2 cobre o átomo; orquestração permanece VIVA).
 
-| Script | O que MINERAR | Situação |
-|--------|---------------|----------|
-| `cancelar_mos` | base genérica (argparse, filtro data/estado) | AO-CAPINAR (base do gold) |
-| `14_cancelar_mos_antigas_fb` | **filtro consumo=0** (cancelar com consumo = furo contábil); sub-locais Pré-Prod | AO-CAPINAR |
+## → `app/odoo/estoque/scripts/picking.py` (StockPickingService) — cancelar / validar / devolver picking
 
-## → `scripts/cancelar_reserva.py` (GAP — criar)
+**Skill destino**: `operando-picking-odoo` (2026-05-24 v3 — mín viável). Service capinado de `app/odoo/services/stock_picking_service.py` (shim preservado). **42 testes pytest verdes**. Fluxo associado: [`fluxos/2.5-cancelar-validar-devolver-picking.md`](../../../app/odoo/estoque/fluxos/2.5-cancelar-validar-devolver-picking.md). **Invariante G019/G020 codificada** (ONDA 0.4 ✅ fechada).
 
 | Script | O que MINERAR | Situação |
 |--------|---------------|----------|
-| `remover_reservas_saida` | base: todas reservas de saída, 4 companies | AO-CAPINAR (base do gold) |
-| `cancelar_reservas_migracao` | **G024/G025**: unlink move.line órfã + recompute manual `reserved_quantity` | AO-CAPINAR |
+| `16_cancelar_pickings_fantasmas` | filtro picking fantasma (>7d, origin C24xxxxx/sem origin) + batch cancelar | SUPERADO 2026-05-24 v3 — [`_validados/operando-picking-odoo/`](../../../scripts/inventario_2026_05/_validados/operando-picking-odoo/VALIDACAO.md) |
+| `fat_lf_cleanup` (`reverter_picking`) | criar stock.return.picking + write({}, ctx) + create_returns + popula qty_done + validar | AO-CAPINAR-VIVO 2026-05-24 v3 — átomo `devolver()` destilado para `svc.devolver()`; **script permanece VIVO** porque também cancela invoice (cross-skill financeiro) e reseta `fase_pipeline` local. Só o método `reverter_picking` foi destilado; resto não tem cobertura na Skill 5. |
+| `executar_fluxo_b_vivas` | cross-skill cancel + return + transfer | AO-CAPINAR-VIVO (orquestrador composto) |
+| `teste_210030325_lf` | scratch de validação 1 produto | AO-CAPINAR-VIVO (scratch ad-hoc, baixa prioridade) |
+| `fat_lf_05_executar_clean`, `09_executar_onda1_bulk` | pipeline macro (Skill 8 faturando) | AO-CAPINAR-VIVO — Skill 8 cobrirá macro; átomos `validar` e `cancelar` daqui já estão na Skill 5 |
+| `substituir_lote_205030410_fb` | unreserve + transfer + reassign | AO-CAPINAR-VIVO — **NÃO é átomo Skill 5**: é fluxo cross-skill (Skill 2.4 unreserve + Skill 2 transfer + Skill 2.4 reassign); aguarda 2+ casos para virar folha de fluxo composto |
+
+## → `scripts/mo.py` (StockMOService) — cancelar Manufacturing Order
+
+**Skill:** `operando-mo-odoo` ([SKILL.md](../../../.claude/skills/operando-mo-odoo/SKILL.md))  ·  **Fluxo:** [`3.1 cancelar-mo`](../../../app/odoo/estoque/fluxos/3.1-cancelar-mo.md)  ·  **Subagente:** `gestor-estoque-odoo`  ·  **Arquivados em:** [`_validados/operando-mo-odoo/`](../../../scripts/inventario_2026_05/_validados/operando-mo-odoo/VALIDACAO.md) (2026-05-24 v5, 4 dry-run PROD validados; 0 `--confirmar` nesta sessão — pattern validado em PROD 2026-05-20 via scripts-fonte: 120 MOs zumbi canceladas).
+
+| Script | O que MINERAR (valor único) | Situação |
+|--------|------------------------------|----------|
+| `cancelar_mos` | base genérica (argparse, filtro data/estado/empresas/consumo); `medir_consumo` (chunks 200, soma `stock.move.quantity` `state != cancel`) | SUPERADO → _validados/ (2026-05-24 v5) |
+| `14_cancelar_mos_antigas_fb` | **filtro consumo=0** (G-MO-01 furo contábil); pattern de identificar zumbis FB MIGRAÇÃO em Pre-Prod (4066/4067/4068/27458) | SUPERADO → _validados/ (2026-05-24 v5) |
+
+> **Átomos implementados** (mín viável V1, 29 pytest verdes): `cancelar_mo(mo_id, motivo, forcar_consumo, consumo_total, dry_run)` (guard G-MO-01 + G019-like re-le state + idempotência state=cancel = NOOP), `cancelar_mos_em_massa(criterio, max_n, motivo, dry_run)` (composição com filtros + medir_consumo batch).
+> **Helper:** `medir_consumo_mo(mo_ids)` — soma `stock.move.quantity` por raw_material_production_id (TOL=0.0001).
+> **NÃO implementados** (sem demanda): `criar_mo`, `alterar_mo` (cross-skill — ver [[mo_componente_local_consumo]]), `mrp_unbuild` (separado — ver [[reaproveitar-semiacabado-orfao-mo-cancelada]]).
+
+## → `scripts/reserva.py` (StockReservaService) — operar reservas no Odoo
+
+**Skill:** `operando-reservas-odoo` ([SKILL.md](../../../.claude/skills/operando-reservas-odoo/SKILL.md))  ·  **Fluxo:** [`2.4 cancelar-reserva-orfa`](../../../app/odoo/estoque/fluxos/2.4-cancelar-reserva-orfa.md)  ·  **Subagente:** `gestor-estoque-odoo`  ·  **Arquivados em:** [`_validados/operando-reservas-odoo/`](../../../scripts/inventario_2026_05/_validados/operando-reservas-odoo/VALIDACAO.md) (2026-05-23, write real validado em 6 pickings + 15 quants).
+
+| Script | O que MINERAR (valor único) | Situação |
+|--------|------------------------------|----------|
+| `remover_reservas_saida` | base 4 companies; 3 fases (pickings.do_unreserve + MOs.do_unreserve + zerar reserved residual); batch 50 com fallback | SUPERADO → _validados/ (2026-05-23) |
+| `cancelar_reservas_migracao` | **G024/G025**: cirurgia por CSV — unlink ML órfã + recompute manual; `do_unreserve` por picking | SUPERADO → _validados/ (2026-05-23) |
+| `limpar_reservas_fantasma` | fallback de métodos Odoo CIEL IT (`do_unreserve`/`button_unreserve`/`action_unreserve`); reassign opcional pós-unreserve | SUPERADO → _validados/ (2026-05-23) |
+
+> **Átomos implementados** (mínimo viável, write real validado): `cancelar_moves_orfaos` (cirurgia preservando picking), `cancelar_picking_inteiro` (action_cancel cascade), `zerar_reserved_residual` (cleanup pós-unlink).
+> **Previstos** (catálogo): `unreserve_picking`, `unreserve_mo(reassign=)`, `find_orphan_mls` — adicionar conforme demanda.
+
+## → `scripts/consulta_quant.py` (StockQuantQueryService) — READ ao vivo no Odoo
+
+**Skill:** `consultando-quant-odoo` ([SKILL.md](../../../.claude/skills/consultando-quant-odoo/SKILL.md))  ·  **Fluxo:** [`2.9 consulta-quant-ao-vivo`](../../../app/odoo/estoque/fluxos/2.9-consulta-quant-ao-vivo.md)  ·  **Subagente:** `gestor-estoque-odoo` (READ direto)  ·  **Arquivados em:** [`_validados/consultando-quant-odoo/`](../../../scripts/inventario_2026_05/_validados/consultando-quant-odoo/VALIDACAO.md) (2026-05-23, dogfooding caso real 4856125 + auditoria 104 pares).
+
+| Script (read) | O que MINERAR | Situação |
+|---|---|---|
+| `monitor/1_baixar_estoques` | snapshot batch CSV `(filial, cod, lote, location, qty, valor)` | MANTER (snapshot pesado, fluxo CSV — átomo previsto `snapshot_estoque_por_lote`) |
+| `auditoria/levantar_estoque_fora_principal` | classificação por `parent_path` + `usage` (ESTOQUE_RAIZ / FILHA / INTERNAL_FORA / TRANSIT / VIRTUAL_*) | AO-CAPINAR (átomo previsto `saldo_fora_principal`) |
+| `auditoria/{comparar_sot_*, diff_*, relatorio_*, investiga_*}` (~30 scripts) | queries específicas (cross-SOT, diff entre snapshots, investigação) | MANTER (operação viva — átomos previstos cobrem subconjunto) |
+
+> **Átomos implementados** (mínimo viável): `listar_quants(cods, empresas, pares_cod_empresa, locations_excluir, com_lote, only_principal, agregar)` + `auditar_pares(pares_cod_empresa)`.
+> **Previstos** (catálogo): `listar_move_lines`, `listar_pickings`, `find_orphan_mls`, `snapshot_estoque_por_lote`, `saldo_fora_principal` — adicionar conforme demanda.
 
 ## → `orchestrators/inventario_pipeline.py` (faturamento inter-company — ~20 gotchas)
 
@@ -91,19 +139,19 @@ Este é o **inverso**: cada um dos 90 scripts → **qual gold-script absorve sua
 | `fat_lf_02_carregar` | mapeamento TIPO→ação; ciclo isolado | AO-CAPINAR |
 | `fat_lf_04_executar` | driver B-F por ciclo | AO-CAPINAR |
 | `fat_lf_05_executar_clean` | **G028**: reserva explícita p/ bug multi-lote (59.9→12.3) | AO-CAPINAR |
-| `fat_lf_cleanup` | fluxo de erro: return picking + cancel invoice + reset fase | AO-CAPINAR |
+| `fat_lf_cleanup` | fluxo de erro: return picking + cancel invoice + reset fase | AO-CAPINAR-VIVO 2026-05-24 v3 — método `reverter_picking` destilado para `svc.devolver()` (Skill 5); script permanece VIVO porque também cancela invoice e reseta `fase_pipeline` (cross-skill financeiro). Pós-incidente v4 (G031), o parser `create_returns` foi sincronizado com a versão v3 da Skill 5 (aceita 3 shapes — dict/int/list). |
 | `fat_lf_resume.sh` | **shell**: loop resume B→D **resiliente a SSL drop (G016)**, idempotente | AO-CAPINAR (resiliência do orquestrador) |
 | `fat_lf_resume_entrada.sh` | **shell**: loop resume E+F resiliente a hang do robô CIEL IT | AO-CAPINAR |
 | `teste_210030325_lf` | piloto E2E histórico | JÁ-MORTO (vira exemplo no GUIA) |
 
-## → `orchestrators/pre_etapa_executor.py` (+ fluxo de proposta F2-F4)
+## → `app/odoo/estoque/scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` (Skill 6 `planejando-pre-etapa-odoo` 🟡 capinada 2026-05-24 v6 + estendida 2026-05-25 v9 com executor C3 macro)
 
 | Script | O que MINERAR | Situação |
 |--------|---------------|----------|
-| `03b_planejar_pre_etapa_cd` | chama `PreEtapaEstoqueService.planejar` | AO-CAPINAR |
-| `04b_propor_pre_etapa_cd` | persistir ajustes pré-etapa (DELETE+INSERT, backup) | AO-CAPINAR |
-| `09b_executar_pre_etapa` | executor: TRANSF_INTERNA_POS/NEG + POSITIVO_PURO | AO-CAPINAR |
-| `04_propor_ajustes` | `resolver_operacao_por_tipo_produto`; ondas; aprovar c/ hash | AO-CAPINAR |
+| `03b_planejar_pre_etapa_cd` | chama `PreEtapaEstoqueService.planejar`; modo `planejar` da Skill 6 | **SUPERADO 2026-05-24 v6** — capinado para [`scripts/pre_etapa.py`](../../../app/odoo/estoque/scripts/pre_etapa.py) helper `planejar_pre_etapa_batch_company` + CLI `--modo planejar`; arquivado em [`_validados/planejando-pre-etapa-odoo/`](../../../scripts/inventario_2026_05/_validados/planejando-pre-etapa-odoo/VALIDACAO.md) |
+| `04b_propor_pre_etapa_cd` | persistir ajustes pré-etapa (DELETE+INSERT, backup, hash); modos `propor/listar-onda/aprovar-onda` da Skill 6 | **SUPERADO 2026-05-24 v6** — capinado para [`scripts/pre_etapa.py`](../../../app/odoo/estoque/scripts/pre_etapa.py) helpers `propor_ajustes_pre_etapa`+`listar_onda_pre_etapa`+`aprovar_onda_pre_etapa` + CLI `--modo propor/listar-onda/aprovar-onda`; arquivado em [`_validados/planejando-pre-etapa-odoo/`](../../../scripts/inventario_2026_05/_validados/planejando-pre-etapa-odoo/VALIDACAO.md) |
+| `09b_executar_pre_etapa` | executor: TRANSF_INTERNA_POS/NEG + POSITIVO_PURO (composição C3 macro de Skills 1+2) | **SUPERADO 2026-05-25 v9** — capinado para [`orchestrators/pre_etapa_executor.py`](../../../app/odoo/estoque/orchestrators/pre_etapa_executor.py) (modo `executar-onda` da Skill 6; POS/NEG via `transferir_quantidade_para_lote_v2` Skill 2 v2 com delta_esperado, PURO via `ajustar_quant(criar_se_faltar=True, delta_esperado=qty)` Skill 1 guard CICLAMATO; mantem auditoria OperacaoOdooAuditoria + paralelizacao ThreadPoolExecutor); arquivado em [`_validados/planejando-pre-etapa-odoo/`](../../../scripts/inventario_2026_05/_validados/planejando-pre-etapa-odoo/VALIDACAO.md). **21 testes pytest novos verdes + 3 smokes CLI verdes.** |
+| `04_propor_ajustes` | `resolver_operacao_por_tipo_produto`; outras ondas (1-4); aprovar c/ hash | **VIVO** — fora da Skill 6 (cobre Onda 5 apenas); ondas 1-4 permanecem ad-hoc operação viva |
 
 ## → gold de LEITURA / DIFF (`_utils.py` + 1-2 scripts de leitura consolidados) 📖
 

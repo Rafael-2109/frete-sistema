@@ -1,0 +1,2062 @@
+{
+  "resumo": [
+    {
+      "cod": "201250027",
+      "nome": "CAIXA DE PAPELAO - 255 X 190 X 155 - LISA",
+      "qty_pedido": 135.0,
+      "saldo_fb_estoque": 2193.0,
+      "saldo_fb_indisp": 32675.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "205-120/26",
+          2193.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "201240023",
+      "nome": "CAIXA DE PAPELAO - 415 X 155 X 150 - LISA",
+      "qty_pedido": 157.0,
+      "saldo_fb_estoque": 1189.0,
+      "saldo_fb_indisp": 293256.0,
+      "saldo_outras": 672.0,
+      "reservado_total": 672.0,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "308-216/25",
+          1032.0,
+          0.0
+        ],
+        [
+          "0409/24",
+          141.0,
+          0.0
+        ],
+        [
+          "13210",
+          16.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "103000113",
+      "nome": "PIMENTA BIQUINHO",
+      "qty_pedido": 250.0,
+      "saldo_fb_estoque": 4349.7914,
+      "saldo_fb_indisp": 251771.17,
+      "saldo_outras": 900.8,
+      "reservado_total": 915.1514,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "46863622",
+          60.44,
+          0.0
+        ],
+        [
+          "136/26",
+          4275.0,
+          0.0
+        ],
+        [
+          "MIGRACAO",
+          14.3514,
+          14.3514
+        ]
+      ],
+      "tem_migr_fb_estoque": true,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4739199",
+      "nome": "OL. MIS. AZEITE DE OLIVA - GL 4X5,02 L - DOM GAMEI",
+      "qty_pedido": 362.75,
+      "saldo_fb_estoque": 362.75,
+      "saldo_fb_indisp": 42.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "353/25",
+          362.75,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210871646",
+      "nome": "ROTULO MOLHO SHOYU 150 ML - PRATILE",
+      "qty_pedido": 380.0,
+      "saldo_fb_estoque": 380.0,
+      "saldo_fb_indisp": 9680.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "23340",
+          380.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4879012",
+      "nome": "MOLHO SHOYU - PET 12X1,01 L - ST ISABEL",
+      "qty_pedido": 386.0,
+      "saldo_fb_estoque": 386.0,
+      "saldo_fb_indisp": 9.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "318/23",
+          386.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4820152",
+      "nome": "MOLHO DE PIMENTA CREMOSA DEFUMADA - PET 12X200 G -",
+      "qty_pedido": 391.917,
+      "saldo_fb_estoque": 391.917,
+      "saldo_fb_indisp": 12.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "FAT-4820152-20260520",
+          391.917,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3902801",
+      "nome": "MOLHO PESTO - BOCCANEIRA",
+      "qty_pedido": 451.2,
+      "saldo_fb_estoque": 451.2,
+      "saldo_fb_indisp": 451.2,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "INV-3902801-20260519",
+          451.2,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3851101",
+      "nome": "MAIONESE COM RELISH - STRUMPF",
+      "qty_pedido": 462.2,
+      "saldo_fb_estoque": 462.20000000000005,
+      "saldo_fb_indisp": 574.56,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "225/25",
+          219.24,
+          0.0
+        ],
+        [
+          "13214",
+          242.96,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3833101",
+      "nome": "KETCHUP RUSTICO - STRUMPF",
+      "qty_pedido": 475.2,
+      "saldo_fb_estoque": 475.2,
+      "saldo_fb_indisp": 475.2,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "279/25",
+          475.2,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "105000102",
+      "nome": "PASTA DE MOSTARDA WILSON (MACERADO)",
+      "qty_pedido": 500.957024,
+      "saldo_fb_estoque": 500.943,
+      "saldo_fb_indisp": 1902.8385,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "233",
+          500.943,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "INSUF_FB_ESTOQUE"
+    },
+    {
+      "cod": "207030327",
+      "nome": "ROTULO - AZ VI VD 200 G - CAMPO BELO",
+      "qty_pedido": 504.0,
+      "saldo_fb_estoque": 3000.0,
+      "saldo_fb_indisp": 32178.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "049-034/26",
+          3000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "206030034",
+      "nome": "TAMPA ALUMINIO AZUL - VD 100/200 G - CONSERVA",
+      "qty_pedido": 504.0,
+      "saldo_fb_estoque": 11944.0,
+      "saldo_fb_indisp": 719898.76,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "212-127/26",
+          11944.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "208000043",
+      "nome": "QUADRO DE MADEIRA - NADIR",
+      "qty_pedido": 508.0,
+      "saldo_fb_estoque": 531.0,
+      "saldo_fb_indisp": 2855.22,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "sem-lote",
+          531.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "104000054",
+      "nome": "ACUCAR MASCAVO",
+      "qty_pedido": 511.5864,
+      "saldo_fb_estoque": 511.5864,
+      "saldo_fb_indisp": 356.5008,
+      "saldo_outras": 0,
+      "reservado_total": 255.7932,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "MIGRACAO",
+          255.7932,
+          255.7932
+        ],
+        [
+          "05/11/2029",
+          255.7932,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": true,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4880176",
+      "nome": "MOLHO BARBECUE - PET 12X200 G - CAMPO BELO",
+      "qty_pedido": 523.0,
+      "saldo_fb_estoque": 522.833,
+      "saldo_fb_indisp": 533.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "100/26",
+          522.833,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "INSUF_FB_ESTOQUE"
+    },
+    {
+      "cod": "4899027",
+      "nome": "MOLHO DE SALADA MOSTARDA E GENGIBRE - PET 12X240 M",
+      "qty_pedido": 538.0,
+      "saldo_fb_estoque": 538.0,
+      "saldo_fb_indisp": 0,
+      "saldo_outras": 0,
+      "reservado_total": 269.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 0,
+      "lotes_em_estoque": [
+        [
+          "13206",
+          269.0,
+          269.0
+        ],
+        [
+          "FAT-4899027-20260520",
+          269.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": false,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3854101",
+      "nome": "MAIONESE COM AZEITONA PRETA - STRUMPF",
+      "qty_pedido": 538.72,
+      "saldo_fb_estoque": 538.72,
+      "saldo_fb_indisp": 964.6,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "INV-3854101-20260519",
+          338.72,
+          0.0
+        ],
+        [
+          "13214",
+          200.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210010351",
+      "nome": "ROTULO MAIONESE COM RELISH PET 240G - STRUMPF",
+      "qty_pedido": 576.0,
+      "saldo_fb_estoque": 576.0,
+      "saldo_fb_indisp": 2733.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 0108",
+          576.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "105000003",
+      "nome": "AROMA - MAIONESE",
+      "qty_pedido": 579.7796,
+      "saldo_fb_estoque": 579.7796,
+      "saldo_fb_indisp": 2350.9563,
+      "saldo_outras": 0,
+      "reservado_total": 6.4224,
+      "em_fb_estoque": 4,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0310/24",
+          143.3572,
+          0.0
+        ],
+        [
+          "13216",
+          5.0256,
+          5.0256
+        ],
+        [
+          "P-15/05",
+          430.0,
+          0.0
+        ],
+        [
+          "13224",
+          1.3968,
+          1.3968
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4890128",
+      "nome": "MOLHO DE SALADA PARMESAO - PET 12X240 ML - CAMPO B",
+      "qty_pedido": 639.166,
+      "saldo_fb_estoque": 639.166,
+      "saldo_fb_indisp": 450.0,
+      "saldo_outras": 0,
+      "reservado_total": 319.083,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "033/26",
+          1.0,
+          0.0
+        ],
+        [
+          "13206",
+          319.083,
+          319.083
+        ],
+        [
+          "034/26",
+          319.083,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4870146",
+      "nome": "MOLHO SHOYU - PET 12X150 ML - CAMPO BELO",
+      "qty_pedido": 659.229,
+      "saldo_fb_estoque": 659.229,
+      "saldo_fb_indisp": 457.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "120/26",
+          659.229,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "105000021",
+      "nome": "POLPA - PIMENTA MALAGUETA",
+      "qty_pedido": 662.85164,
+      "saldo_fb_estoque": 662.8516,
+      "saldo_fb_indisp": 22150.5674,
+      "saldo_outras": 0,
+      "reservado_total": 0.15,
+      "em_fb_estoque": 4,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "MIGRACAO",
+          0.15,
+          0.15
+        ],
+        [
+          "1209/24",
+          10.668,
+          0.0
+        ],
+        [
+          "140/26",
+          5.0,
+          0.0
+        ],
+        [
+          "1102",
+          647.0336,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": true,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "103",
+      "nome": "PEPINO",
+      "qty_pedido": 683.264,
+      "status": "SEM_SALDO_FB",
+      "saldo_total_fb": 0,
+      "detalhes": "NENHUM quant encontrado em FB"
+    },
+    {
+      "cod": "210901619",
+      "nome": "ROTULO MOLHO CHIMICHURRI PET 200 GR - MONTANA GRIL",
+      "qty_pedido": 690.0,
+      "saldo_fb_estoque": 690.0,
+      "saldo_fb_indisp": 4800.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 104/25",
+          690.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210856125",
+      "nome": "ROTULO MAIONESE VERDE PET 210G - STRUMPF",
+      "qty_pedido": 704.0,
+      "saldo_fb_estoque": 704.0,
+      "saldo_fb_indisp": 4133.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0801/25",
+          704.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210857125",
+      "nome": "ROTULO MAIONESE DIJONESE PET 210G - STRUMPF",
+      "qty_pedido": 720.0,
+      "saldo_fb_estoque": 720.0,
+      "saldo_fb_indisp": 1720.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 20970",
+          720.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4860112",
+      "nome": "MOLHO INGLES - PET 12X1,01 L - CAMPO BELO",
+      "qty_pedido": 743.833,
+      "saldo_fb_estoque": 743.833,
+      "saldo_fb_indisp": 39.167,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "131/26",
+          743.833,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "46",
+      "nome": "VINAGRE DE ALCOOL TRIPLO",
+      "qty_pedido": 799.084389,
+      "status": "SEM_SALDO_FB",
+      "saldo_total_fb": 0,
+      "detalhes": "NENHUM quant encontrado em FB"
+    },
+    {
+      "cod": "3088981",
+      "nome": "PEPINO RELISH - STRUMPF",
+      "qty_pedido": 808.923,
+      "saldo_fb_estoque": 808.923,
+      "saldo_fb_indisp": 4741.451,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 0310/24",
+          118.812,
+          0.0
+        ],
+        [
+          "13212",
+          690.111,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3800004",
+      "nome": "BATELADA DE BARBECUE",
+      "qty_pedido": 843.2,
+      "saldo_fb_estoque": 843.2,
+      "saldo_fb_indisp": 634.4,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "INV-3800004-20260519",
+          634.4,
+          0.0
+        ],
+        [
+          "13213",
+          208.8,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3853101",
+      "nome": "MAIONESE AIOLI - STRUMPF",
+      "qty_pedido": 866.44,
+      "saldo_fb_estoque": 866.44,
+      "saldo_fb_indisp": 1113.4,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "INV-3853101-20260519",
+          866.44,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4820153",
+      "nome": "MOLHO DE PIMENTA CREMOSA ERVAS FINAS - PET 12X200 ",
+      "qty_pedido": 870.0,
+      "saldo_fb_estoque": 870.0,
+      "saldo_fb_indisp": 15.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "319/24",
+          870.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "203030016",
+      "nome": "TAMPA PLASTICA AZUL  - BD 2,2 L - CONSERVA",
+      "qty_pedido": 888.0,
+      "saldo_fb_estoque": 4372.0,
+      "saldo_fb_indisp": 99485.0,
+      "saldo_outras": 0,
+      "reservado_total": 294.0,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "413-280/25",
+          3982.0,
+          0.0
+        ],
+        [
+          "ME413",
+          96.0,
+          0.0
+        ],
+        [
+          "13231",
+          294.0,
+          294.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4902852",
+      "nome": "MOLHO PESTO - PET 12X200 GR - BOCCANEIRA",
+      "qty_pedido": 894.0,
+      "saldo_fb_estoque": 894.0,
+      "saldo_fb_indisp": 60.0,
+      "saldo_outras": 0,
+      "reservado_total": 447.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "13206",
+          447.0,
+          447.0
+        ],
+        [
+          "268/25",
+          447.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3855101",
+      "nome": "MAIONESE ORIGINAL - STRUMPF",
+      "qty_pedido": 920.0,
+      "saldo_fb_estoque": 920.0,
+      "saldo_fb_indisp": 1461.04,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "INV-3855101-20260519",
+          548.52,
+          0.0
+        ],
+        [
+          "13215",
+          371.48,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "105000023",
+      "nome": "ANTIESPUMANTE AFE 1520 ",
+      "qty_pedido": 928.3261,
+      "saldo_fb_estoque": 929.9053,
+      "saldo_fb_indisp": 1639.1893,
+      "saldo_outras": 0,
+      "reservado_total": 1.5792,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0608/24",
+          782.9664,
+          0.0
+        ],
+        [
+          "H171M8F003",
+          145.3597,
+          0.0
+        ],
+        [
+          "13233",
+          1.5792,
+          1.5792
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210030342",
+      "nome": "ROTULO FRONTAL - MOLHO DE SALADA PARMESAO PET 240 ",
+      "qty_pedido": 940.0,
+      "saldo_fb_estoque": 940.0,
+      "saldo_fb_indisp": 83508.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "13203",
+          940.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "105000066",
+      "nome": "PASTA DE MOSTARDA RUSTICA DIJON - STRUMPF",
+      "qty_pedido": 943.84,
+      "saldo_fb_estoque": 943.8399999999999,
+      "saldo_fb_indisp": 1202.44,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "58756",
+          185.32,
+          0.0
+        ],
+        [
+          "INV-10500006620260519",
+          758.52,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "602000006",
+      "nome": "BARRICAS",
+      "qty_pedido": 970.0,
+      "saldo_fb_estoque": 970.0,
+      "saldo_fb_indisp": 30192.74,
+      "saldo_outras": 0,
+      "reservado_total": 10.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "sem-lote",
+          970.0,
+          10.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3900101",
+      "nome": "MOLHO CHIMICHURRI - INDUSTRIA",
+      "qty_pedido": 976.0,
+      "saldo_fb_estoque": 976.0,
+      "saldo_fb_indisp": 960.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 114/25",
+          976.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210801107",
+      "nome": "ROTULO KETCHUP DEFUMADO PEDACUDO VIDRO 360 GR - ST",
+      "qty_pedido": 1000.0,
+      "saldo_fb_estoque": 1000.0,
+      "saldo_fb_indisp": 678.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 19294",
+          1000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210832107",
+      "nome": "ROTULO KETCHUP PICANTE VIDRO 360 GR - STRUMPF",
+      "qty_pedido": 1000.0,
+      "saldo_fb_estoque": 1000.0,
+      "saldo_fb_indisp": 360.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 19295",
+          1000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "209831101",
+      "nome": "SELO MARROM KETCHUP DEFUMADO - STRUMPF",
+      "qty_pedido": 1000.0,
+      "saldo_fb_estoque": 1000.0,
+      "saldo_fb_indisp": 1678.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0312/24",
+          1000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "209832101",
+      "nome": "SELO VERMELHO KETCHUP APIMENTADO - STRUMPF",
+      "qty_pedido": 1000.0,
+      "saldo_fb_estoque": 1000.0,
+      "saldo_fb_indisp": 1360.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0312/24",
+          1000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210010348",
+      "nome": "ROTULO MAIONESE AIOLI PET 240G - STRUMPF",
+      "qty_pedido": 1014.0,
+      "saldo_fb_estoque": 1014.0,
+      "saldo_fb_indisp": 1677.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 20969",
+          14.0,
+          0.0
+        ],
+        [
+          "11667",
+          1000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "105000038",
+      "nome": "EMULSAO - ALHO - ST 2172",
+      "qty_pedido": 1059.161728,
+      "saldo_fb_estoque": 1059.1667,
+      "saldo_fb_indisp": 7895.6686,
+      "saldo_outras": 0,
+      "reservado_total": 0.156,
+      "em_fb_estoque": 4,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "MIGRACAO",
+          0.156,
+          0.156
+        ],
+        [
+          "1208/24",
+          1.5337,
+          0.0
+        ],
+        [
+          "140/26",
+          5.0,
+          0.0
+        ],
+        [
+          "761493",
+          1052.477,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": true,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "201030011",
+      "nome": "CAIXA DE PAPELAO - 555 X 370 X 170 - CAMPO BELO",
+      "qty_pedido": 1200.0,
+      "saldo_fb_estoque": 3827.0,
+      "saldo_fb_indisp": 133228.43,
+      "saldo_outras": 72.0,
+      "reservado_total": 804.0,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "ME 106-068/26",
+          330.0,
+          0.0
+        ],
+        [
+          "160-100/26",
+          3069.0,
+          787.0
+        ],
+        [
+          "2026",
+          428.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3071801",
+      "nome": "MOLHO RELISH DE PIMENTA - BOCCANEIRA",
+      "qty_pedido": 1202.4,
+      "saldo_fb_estoque": 1202.3999999999999,
+      "saldo_fb_indisp": 33.6,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "316/25",
+          33.6,
+          0.0
+        ],
+        [
+          "13212",
+          1168.8,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "208000044",
+      "nome": "CHAPA DE FIBRA DE MADEIRA - NADIR",
+      "qty_pedido": 1290.0,
+      "saldo_fb_estoque": 1474.0,
+      "saldo_fb_indisp": 35086.55,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "sem-lote",
+          1474.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "103000117",
+      "nome": "PIMENTA BIQUINHO B",
+      "qty_pedido": 1292.64,
+      "saldo_fb_estoque": 1292.64,
+      "saldo_fb_indisp": 74428.48,
+      "saldo_outras": 0,
+      "reservado_total": 620.32,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0326/25",
+          52.0,
+          0.0
+        ],
+        [
+          "MIGRACAO",
+          620.32,
+          620.32
+        ],
+        [
+          "P-15/05",
+          620.32,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": true,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3072801",
+      "nome": "GELEIA DE PIMENTA - BOCCANEIRA",
+      "qty_pedido": 1308.0,
+      "saldo_fb_estoque": 1308.0,
+      "saldo_fb_indisp": 1308.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "20260519",
+          1308.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210003013",
+      "nome": "FRASCO 1LT 38MM 45G - STRUMPF",
+      "qty_pedido": 1354.0,
+      "saldo_fb_estoque": 1354.0,
+      "saldo_fb_indisp": 5494.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "2742731/00",
+          310.0,
+          0.0
+        ],
+        [
+          "40372",
+          1044.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4729697",
+      "nome": "OL. MIS. AZEITE DE OLIVA - PET 24X200 ML - CASA BL",
+      "qty_pedido": 1359.0,
+      "saldo_fb_estoque": 1359.0,
+      "saldo_fb_indisp": 7.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0312/24",
+          1359.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "105000026",
+      "nome": "CONDIMENTO - BBQ NG - ST 2176",
+      "qty_pedido": 1364.0964,
+      "saldo_fb_estoque": 1364.0964,
+      "saldo_fb_indisp": 10584.4821,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "MIGRACAO",
+          564.0964,
+          0.0
+        ],
+        [
+          "777981",
+          800.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": true,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "3859701",
+      "nome": "MAIONESE ALHO E ERVAS",
+      "qty_pedido": 1369.76,
+      "saldo_fb_estoque": 1369.76,
+      "saldo_fb_indisp": 1369.76,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "INV-3859701-20260519",
+          1369.76,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210081852",
+      "nome": "ROTULO RELISH DE PEPINO PET 200 GR - BOCCANEIRA",
+      "qty_pedido": 1450.0,
+      "saldo_fb_estoque": 1450.0,
+      "saldo_fb_indisp": 7498.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "238/25",
+          1450.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4860146",
+      "nome": "MOLHO INGLES - PET 12X150 ML - CAMPO BELO",
+      "qty_pedido": 1650.083,
+      "saldo_fb_estoque": 1650.083,
+      "saldo_fb_indisp": 1743.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "114/26",
+          1650.083,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210030442",
+      "nome": "ROTULO VERSO - MOLHO DE SALADA PARMESAO PET 240 ML",
+      "qty_pedido": 1786.0,
+      "saldo_fb_estoque": 1786.0,
+      "saldo_fb_indisp": 63734.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "13203",
+          1786.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210010357",
+      "nome": "ROTULO MAIONESE ORIGINAL PET 240G - STRUMPF",
+      "qty_pedido": 1930.0,
+      "saldo_fb_estoque": 1930.0,
+      "saldo_fb_indisp": 3413.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 27122024",
+          612.0,
+          0.0
+        ],
+        [
+          "20079",
+          1318.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "X105000022",
+      "nome": "MOLHO SHOYU TRADICIONAL",
+      "qty_pedido": 1955.189,
+      "status": "SEM_SALDO_FB",
+      "saldo_total_fb": 0,
+      "detalhes": "NENHUM quant encontrado em FB"
+    },
+    {
+      "cod": "301000003",
+      "nome": "SALMOURA COGUMELO PADRAO (FOR002)",
+      "qty_pedido": 2000.0,
+      "saldo_fb_estoque": 0,
+      "saldo_fb_indisp": 303840.222,
+      "saldo_outras": 2000.0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 0,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "SO_INDISP"
+    },
+    {
+      "cod": "210803107",
+      "nome": "ROTULO KETCHUP RUSTICO PEDACUDO VIDRO 360 GR - STR",
+      "qty_pedido": 2000.0,
+      "saldo_fb_estoque": 2000.0,
+      "saldo_fb_indisp": 1026.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "LF/Estoque - 19293",
+          1000.0,
+          0.0
+        ],
+        [
+          "13203",
+          1000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "209833101",
+      "nome": "SELO PRETO KETCHUP RUSTICO - STRUMPF",
+      "qty_pedido": 2000.0,
+      "saldo_fb_estoque": 2000.0,
+      "saldo_fb_indisp": 3026.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "20504",
+          1000.0,
+          0.0
+        ],
+        [
+          "13201",
+          1000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "207032727",
+      "nome": "ROTULO - PEPINO VD 200 G - CAMPO BELO",
+      "qty_pedido": 2000.0,
+      "saldo_fb_estoque": 19400.0,
+      "saldo_fb_indisp": 60713.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 5,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "193-132/25",
+          200.0,
+          0.0
+        ],
+        [
+          "438-317/24",
+          2000.0,
+          0.0
+        ],
+        [
+          "200-119/26",
+          13200.0,
+          0.0
+        ],
+        [
+          "524-300/25",
+          2000.0,
+          0.0
+        ],
+        [
+          "4212/24",
+          2000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "210831105",
+      "nome": "ROTULO KETCHUP DEFUMADO PET 470 GR - STRUMPF",
+      "qty_pedido": 2076.0,
+      "saldo_fb_estoque": 2076.0,
+      "saldo_fb_indisp": 5580.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "216/25",
+          2076.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "201030023",
+      "nome": "CAIXA DE PAPELAO - 415 X 155 X 150 - CAMPO BELO",
+      "qty_pedido": 2193.0,
+      "saldo_fb_estoque": 7728.0,
+      "saldo_fb_indisp": 327614.0,
+      "saldo_outras": -453.0,
+      "reservado_total": -677.0,
+      "em_fb_estoque": 3,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "207-124/26",
+          260.0,
+          0.0
+        ],
+        [
+          "0108/24",
+          1915.0,
+          0.0
+        ],
+        [
+          "ME 188-113/26",
+          5553.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "4830176",
+      "nome": "KETCHUP   - PET 12X200 G - CAMPO BELO",
+      "qty_pedido": 2225.9993,
+      "saldo_fb_estoque": 2225.9993,
+      "saldo_fb_indisp": 5220.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "124/26",
+          2225.9993,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "209831000",
+      "nome": "POTE DE VIDRO 360G - 73x112",
+      "qty_pedido": 2291.0,
+      "saldo_fb_estoque": 2291.0,
+      "saldo_fb_indisp": 4355.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "0412/24",
+          104.0,
+          0.0
+        ],
+        [
+          "13201",
+          2187.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "206000309",
+      "nome": "VIDRO 200 GR \u2013 SPECK FOODS",
+      "qty_pedido": 2372.0,
+      "saldo_fb_estoque": 2372.0,
+      "saldo_fb_indisp": 6486.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 1,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "2602/01",
+          2372.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    },
+    {
+      "cod": "207381220",
+      "nome": "ROTULO 240PET - STRUMPF",
+      "qty_pedido": 2376.0,
+      "saldo_fb_estoque": 2376.0,
+      "saldo_fb_indisp": 7288.0,
+      "saldo_outras": 0,
+      "reservado_total": 0.0,
+      "em_fb_estoque": 2,
+      "em_fb_indisp": 1,
+      "lotes_em_estoque": [
+        [
+          "25250",
+          376.0,
+          0.0
+        ],
+        [
+          "13211",
+          2000.0,
+          0.0
+        ]
+      ],
+      "tem_migr_fb_estoque": false,
+      "tem_migr_fb_indisp": true,
+      "status": "COMPLETO_FB_ESTOQUE"
+    }
+  ],
+  "casos": {
+    "SEM_SALDO_FB": [
+      "103",
+      "46",
+      "X105000022"
+    ],
+    "SO_INDISP": [
+      "301000003"
+    ],
+    "COMPLETO_FB_ESTOQUE": [
+      "201250027",
+      "201240023",
+      "103000113",
+      "4739199",
+      "210871646",
+      "4879012",
+      "4820152",
+      "3902801",
+      "3851101",
+      "3833101",
+      "207030327",
+      "206030034",
+      "208000043",
+      "104000054",
+      "4899027",
+      "3854101",
+      "210010351",
+      "105000003",
+      "4890128",
+      "4870146",
+      "105000021",
+      "210901619",
+      "210856125",
+      "210857125",
+      "4860112",
+      "3088981",
+      "3800004",
+      "3853101",
+      "4820153",
+      "203030016",
+      "4902852",
+      "3855101",
+      "105000023",
+      "210030342",
+      "105000066",
+      "602000006",
+      "3900101",
+      "210801107",
+      "210832107",
+      "209831101",
+      "209832101",
+      "210010348",
+      "105000038",
+      "201030011",
+      "3071801",
+      "208000044",
+      "103000117",
+      "3072801",
+      "210003013",
+      "4729697",
+      "105000026",
+      "3859701",
+      "210081852",
+      "4860146",
+      "210030442",
+      "210010357",
+      "210803107",
+      "209833101",
+      "207032727",
+      "210831105",
+      "201030023",
+      "4830176",
+      "209831000",
+      "206000309",
+      "207381220"
+    ],
+    "INSUF_FB_ESTOQUE": [
+      "105000102",
+      "4880176"
+    ],
+    "MULTILOC": [
+      "201240023",
+      "103000113",
+      "201030011",
+      "301000003",
+      "201030023"
+    ],
+    "RESERVED_ALTO": [
+      {
+        "cod": "201240023",
+        "reservas": [
+          [
+            262744,
+            "FB/Pr\u00e9-Produ\u00e7\u00e3o/Linha Balde",
+            "308-216/25",
+            672.0,
+            672.0
+          ]
+        ]
+      },
+      {
+        "cod": "103000113",
+        "reservas": [
+          [
+            258942,
+            "FB/Estoque",
+            "MIGRACAO",
+            14.3514,
+            14.3514
+          ],
+          [
+            259893,
+            "FB/Pr\u00e9-Produ\u00e7\u00e3o/Linha Manual",
+            "136/26",
+            900.8,
+            900.8
+          ]
+        ]
+      },
+      {
+        "cod": "104000054",
+        "reservas": [
+          [
+            258987,
+            "FB/Estoque",
+            "MIGRACAO",
+            255.7932,
+            255.7932
+          ]
+        ]
+      },
+      {
+        "cod": "4899027",
+        "reservas": [
+          [
+            261594,
+            "FB/Estoque",
+            "13206",
+            269.0,
+            269.0
+          ]
+        ]
+      },
+      {
+        "cod": "105000003",
+        "reservas": [
+          [
+            261339,
+            "FB/Estoque",
+            "13216",
+            5.0256,
+            5.0256
+          ],
+          [
+            262013,
+            "FB/Estoque",
+            "13224",
+            1.3968,
+            1.3968
+          ]
+        ]
+      },
+      {
+        "cod": "4890128",
+        "reservas": [
+          [
+            261590,
+            "FB/Estoque",
+            "13206",
+            319.083,
+            319.083
+          ]
+        ]
+      },
+      {
+        "cod": "105000021",
+        "reservas": [
+          [
+            259010,
+            "FB/Estoque",
+            "MIGRACAO",
+            0.15,
+            0.15
+          ]
+        ]
+      },
+      {
+        "cod": "203030016",
+        "reservas": [
+          [
+            262678,
+            "FB/Estoque",
+            "13231",
+            294.0,
+            294.0
+          ]
+        ]
+      },
+      {
+        "cod": "4902852",
+        "reservas": [
+          [
+            261598,
+            "FB/Estoque",
+            "13206",
+            447.0,
+            447.0
+          ]
+        ]
+      },
+      {
+        "cod": "105000023",
+        "reservas": [
+          [
+            262934,
+            "FB/Estoque",
+            "13233",
+            1.5792,
+            1.5792
+          ]
+        ]
+      },
+      {
+        "cod": "602000006",
+        "reservas": [
+          [
+            259985,
+            "FB/Estoque",
+            "",
+            970.0,
+            10.0
+          ]
+        ]
+      },
+      {
+        "cod": "105000038",
+        "reservas": [
+          [
+            259034,
+            "FB/Estoque",
+            "MIGRACAO",
+            0.156,
+            0.156
+          ]
+        ]
+      },
+      {
+        "cod": "201030011",
+        "reservas": [
+          [
+            256929,
+            "FB/Estoque",
+            "160-100/26",
+            3069.0,
+            787.0
+          ],
+          [
+            260341,
+            "FB/Pr\u00e9-Produ\u00e7\u00e3o/Linha Balde",
+            "ME 106-068/26",
+            72.0,
+            17.0
+          ]
+        ]
+      },
+      {
+        "cod": "103000117",
+        "reservas": [
+          [
+            258944,
+            "FB/Estoque",
+            "MIGRACAO",
+            620.32,
+            620.32
+          ]
+        ]
+      },
+      {
+        "cod": "201030023",
+        "reservas": [
+          [
+            262659,
+            "FB/Pr\u00e9-Produ\u00e7\u00e3o/Linha Balde",
+            "157-097/26",
+            53.0,
+            53.0
+          ],
+          [
+            262660,
+            "FB/Pr\u00e9-Produ\u00e7\u00e3o/Linha Balde",
+            "207-124/26",
+            70.0,
+            35.0
+          ]
+        ]
+      }
+    ],
+    "X_PREFIX": [],
+    "CURTO": [],
+    "MIGRACAO_JA_EM_FB_ESTOQUE": [
+      "103000113",
+      "104000054",
+      "105000021",
+      "105000038",
+      "103000117",
+      "105000026"
+    ],
+    "MIGRACAO_JA_EM_INDISP": [
+      "201250027",
+      "201240023",
+      "103000113",
+      "4739199",
+      "210871646",
+      "4879012",
+      "4820152",
+      "3902801",
+      "3851101",
+      "3833101",
+      "105000102",
+      "207030327",
+      "206030034",
+      "208000043",
+      "104000054",
+      "4880176",
+      "3854101",
+      "210010351",
+      "105000003",
+      "4890128",
+      "4870146",
+      "105000021",
+      "210901619",
+      "210856125",
+      "210857125",
+      "4860112",
+      "3088981",
+      "3800004",
+      "3853101",
+      "4820153",
+      "203030016",
+      "4902852",
+      "3855101",
+      "105000023",
+      "210030342",
+      "105000066",
+      "602000006",
+      "3900101",
+      "210801107",
+      "210832107",
+      "209831101",
+      "209832101",
+      "210010348",
+      "105000038",
+      "201030011",
+      "3071801",
+      "208000044",
+      "103000117",
+      "3072801",
+      "210003013",
+      "4729697",
+      "105000026",
+      "3859701",
+      "210081852",
+      "4860146",
+      "210030442",
+      "210010357",
+      "301000003",
+      "210803107",
+      "209833101",
+      "207032727",
+      "210831105",
+      "201030023",
+      "4830176",
+      "209831000",
+      "206000309",
+      "207381220"
+    ]
+  }
+}
