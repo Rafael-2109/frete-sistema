@@ -137,27 +137,6 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_cce_tem_nf",
-      "columns": [
-        "tem_nf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_assai_cce_nf_id",
-      "columns": [
-        "nf_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_assai_cce_chave_nfe",
-      "columns": [
-        "chave_nfe"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_assai_cce_numero_nf_referenciada",
       "columns": [
         "numero_nf_referenciada"
@@ -175,6 +154,27 @@
       "name": "ix_assai_cce_status",
       "columns": [
         "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_cce_tem_nf",
+      "columns": [
+        "tem_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_cce_nf_id",
+      "columns": [
+        "nf_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_cce_chave_nfe",
+      "columns": [
+        "chave_nfe"
       ],
       "unique": false
     }

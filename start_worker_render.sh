@@ -298,7 +298,7 @@ echo ""
 echo "⚡ Usando worker_render.py otimizado para evitar importações circulares"
 exec python worker_render.py \
     --workers $WORKER_COUNT \
-    --queues high,hora_nfe,artifacts,atacadao,odoo_lancamento,impostos,recebimento,hora_backfill,sped_ecd,default \
+    --queues high,hora_nfe,artifacts,atacadao,odoo_lancamento,impostos,recebimento,hora_backfill,sped_ecd,inventario,default \
     --verbose
 
 

@@ -240,6 +240,13 @@
       "unique": false
     },
     {
+      "name": "ix_pedido_compras_tipo_pedido",
+      "columns": [
+        "tipo_pedido"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_pedido_chave_acesso",
       "columns": [
         "nf_chave_acesso"
@@ -264,13 +271,6 @@
       "name": "ix_pedido_compras_num_requisicao",
       "columns": [
         "num_requisicao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_pedido_compras_tipo_pedido",
-      "columns": [
-        "tipo_pedido"
       ],
       "unique": false
     },

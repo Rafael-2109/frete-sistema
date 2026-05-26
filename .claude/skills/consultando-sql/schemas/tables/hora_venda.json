@@ -207,9 +207,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_data_venda",
+      "name": "ix_hora_venda_nf_saida_numero",
       "columns": [
-        "data_venda"
+        "nf_saida_numero"
       ],
       "unique": false
     },
@@ -221,16 +221,23 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_status",
+      "name": "ix_hora_venda_data_venda",
       "columns": [
-        "status"
+        "data_venda"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_venda_cpf_cliente",
+      "name": "ix_hora_venda_loja_id",
       "columns": [
-        "cpf_cliente"
+        "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     },
@@ -242,9 +249,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_venda_loja_id",
+      "name": "ix_hora_venda_cpf_cliente",
       "columns": [
-        "loja_id"
+        "cpf_cliente"
       ],
       "unique": false
     },
@@ -259,13 +266,6 @@
       "name": "ix_hora_venda_origem_criacao",
       "columns": [
         "origem_criacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_nf_saida_numero",
-      "columns": [
-        "nf_saida_numero"
       ],
       "unique": false
     }

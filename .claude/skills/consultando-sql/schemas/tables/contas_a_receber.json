@@ -233,9 +233,9 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_cnpj",
+      "name": "idx_conta_receber_nf",
       "columns": [
-        "cnpj"
+        "titulo_nf"
       ],
       "unique": false
     },
@@ -268,6 +268,13 @@
       "unique": false
     },
     {
+      "name": "ix_contas_a_receber_metodo_baixa",
+      "columns": [
+        "metodo_baixa"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_conta_receber_cnpj",
       "columns": [
         "cnpj"
@@ -282,23 +289,16 @@
       "unique": false
     },
     {
-      "name": "ix_contas_a_receber_metodo_baixa",
-      "columns": [
-        "metodo_baixa"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_conta_receber_nf",
-      "columns": [
-        "titulo_nf"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_contas_a_receber_vencimento",
       "columns": [
         "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_receber_cnpj",
+      "columns": [
+        "cnpj"
       ],
       "unique": false
     },

@@ -98,9 +98,9 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_invocation_metrics_recorded_at",
+      "name": "ix_agent_invocation_metrics_agent_type",
       "columns": [
-        "recorded_at"
+        "agent_type"
       ],
       "unique": false
     },
@@ -112,16 +112,16 @@
       "unique": false
     },
     {
-      "name": "ix_agent_invocation_metrics_user_id",
+      "name": "ix_agent_invocation_metrics_recorded_at",
       "columns": [
-        "user_id"
+        "recorded_at"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_invocation_metrics_agent_type",
+      "name": "ix_agent_invocation_metrics_user_id",
       "columns": [
-        "agent_type"
+        "user_id"
       ],
       "unique": false
     }
