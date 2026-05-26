@@ -2244,8 +2244,9 @@ Nunca invente informações."""
             if resume_id and not pooled.sdk_session_id:
                 pooled.sdk_session_id = resume_id
 
-            # ─── Ajustar model/permission se client já existia ───
             current_model = model or self.settings.model
+            permission_mode = "plan" if plan_mode else "acceptEdits"
+
             if existing and existing.connected:
                 # Client reutilizado — stderr callback nao pode ser reaplicado.
                 # O ClaudeSDKClient foi criado com as options originais (primeira conexao).
@@ -2256,20 +2257,22 @@ Nunca invente informações."""
                         content='[INFO] Client reutilizado do pool. '
                                 'Stderr capturado pela conexao original.'
                     )
-                # Client reutilizado — aplicar mudanças de configuração
-                try:
-                    await pooled.client.set_model(current_model)
-                except Exception as model_err:
-                    logger.warning(
-                        f"[AGENT_SDK_PERSISTENT] set_model ignorado: {model_err}"
-                    )
-                permission_mode = "plan" if plan_mode else "acceptEdits"
-                try:
-                    await pooled.client.set_permission_mode(permission_mode)
-                except Exception as perm_err:
-                    logger.warning(
-                        f"[AGENT_SDK_PERSISTENT] set_permission_mode ignorado: {perm_err}"
-                    )
+
+            # ─── Enfileiramento estilo terminal (2026-05-25) ───
+            # Se lock ocupado por turno anterior, sinaliza ao frontend ANTES
+            # de esperar — UX similar ao Claude Code CLI que aceita input
+            # enquanto processa. Race entre check e await e aceitavel: pior
+            # caso 'queued' nao aparece e a request espera no lock mesmo assim.
+            if pooled.lock.locked():
+                logger.info(
+                    f"[AGENT_SDK_PERSISTENT] queue | session={pool_key[:8]}... "
+                    "(turno anterior em andamento, aguardando lock)"
+                )
+                yield StreamEvent(
+                    type='queued',
+                    content='Mensagem em fila — aguardando turno anterior...',
+                    metadata={'session_id': pool_key},
+                )
 
             # ─── Preparar prompt para query() ───
             if document_files:
@@ -2283,9 +2286,27 @@ Nunca invente informações."""
                 query_prompt = prompt
 
             # ─── STREAMING: query() + receive_response() ───
-            # asyncio.Lock serializa chamadas no mesmo client (DC-1, R08)
+            # asyncio.Lock serializa chamadas no mesmo client (DC-1, R08).
+            # FIFO desde Python 3.10 — ordem de chegada preservada.
             async with pooled.lock:
                 pooled.last_used = time.time()
+
+                # set_model/set_permission_mode DENTRO do lock (2026-05-25):
+                # antes ficavam fora, causando race quando msg B chegava com
+                # modelo diferente durante stream de A — set_model afetava A.
+                if existing and existing.connected:
+                    try:
+                        await pooled.client.set_model(current_model)
+                    except Exception as model_err:
+                        logger.warning(
+                            f"[AGENT_SDK_PERSISTENT] set_model ignorado: {model_err}"
+                        )
+                    try:
+                        await pooled.client.set_permission_mode(permission_mode)
+                    except Exception as perm_err:
+                        logger.warning(
+                            f"[AGENT_SDK_PERSISTENT] set_permission_mode ignorado: {perm_err}"
+                        )
 
                 logger.info(
                     f"[AGENT_SDK_PERSISTENT] query() | "

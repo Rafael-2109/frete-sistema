@@ -1083,7 +1083,7 @@ def _obter_resposta_agente_streaming(
     # Timeout por inatividade: mata quando não há atividade real.
     # Cada chunk/tool_call recebido renova o deadline.
     # Sem teto absoluto — operações longas (subagentes Odoo, bulk) são legítimas.
-    INACTIVITY_TIMEOUT = 240   # 4 min sem atividade = timeout
+    INACTIVITY_TIMEOUT = 300   # 5 min sem atividade = timeout (alinhado com web 2026-05-25)
 
     try:
         async def _stream_with_flush():

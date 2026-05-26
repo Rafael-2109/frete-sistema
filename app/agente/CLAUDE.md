@@ -223,8 +223,8 @@ substituir por `loop.call_soon_threadsafe(pq.async_event.set)`.
 | Camada | Timeout | Funcao |
 |--------|---------|--------|
 | Heartbeat SSE | 10s | Evita proxy/Render matar conexao idle |
-| Inatividade (renewal) | 240s | Renovavel a cada evento/chunk — timeout se parar de emitir |
-| Stream max | 540s (web) / 600s (teams) | Teto absoluto do streaming |
+| Inatividade (renewal) | 300s | Renovavel a cada evento/chunk — timeout se parar de emitir (era 240s ate 2026-05-25) |
+| Stream max | 1740s (web) / sem teto (teams) | Teto absoluto. Era 540s/600s ate 2026-05-25 (3 timeouts em 7d). Render permite 100min ([fonte](https://render.com/articles/real-time-ai-chat-websockets-infrastructure)) |
 | None sentinel | finally | Garante que SSE generator termina |
 
 NUNCA remover o `yield None` no `finally` do generator — frontend trava esperando eventos.
@@ -297,16 +297,16 @@ Timeouts em 4 arquivos com **deadline renewal**. DEVEM respeitar esta ordem ou c
 | Heartbeat SSE | 10s | `routes/_constants.py` | Keep-alive para proxy |
 | AskUser web | 55s | `pending_questions.py:30` | Espera resposta do usuario |
 | AskUser Teams | 120s | `feature_flags.py` | Idem, via Adaptive Card |
-| **Web inatividade** | 240s | `routes/_constants.py` | Renovavel a cada evento real (heartbeats NAO renovam) |
-| **Teams inatividade** | 240s | `services.py:848` | Renovavel a cada chunk recebido |
+| **Web inatividade** | 300s | `routes/_constants.py` | Renovavel a cada evento real (heartbeats NAO renovam) — era 240s ate 2026-05-25 |
+| **Teams inatividade** | 300s | `services.py:1086` | Renovavel a cada chunk recebido — era 240s ate 2026-05-25 |
 | SDK stream_close | 240s | `client.py:547` | Timeout CLI hooks/MCP |
 | Job `validate_subagent_output` | 60s | `hooks.py:SubagentStop enqueue` | Timeout RQ para validacao Haiku |
-| Web teto absoluto | 540s | `routes/_constants.py` | Teto absoluto SSE (margem 60s vs Render) |
-| Teams teto absoluto | 600s | `services.py:849` | Teto absoluto Teams |
-| Gunicorn timeout | 600s | `start_render.sh` gunicorn_config | Per-request heartbeat gthread (= Render) |
-| Render hard limit | 600s | infra | Request timeout do servidor |
+| Web teto absoluto | 1740s | `routes/_constants.py` | Teto absoluto SSE (margem 60s vs gunicorn 1800s) — era 540s ate 2026-05-25 |
+| Teams teto absoluto | — | — | Sem teto absoluto (DC-9, INACTIVITY_TIMEOUT renovavel) |
+| Gunicorn timeout | 1800s | `start_render.sh` gunicorn_config | Per-request heartbeat gthread — era 600s ate 2026-05-25 |
+| Render hard limit | 100min (6000s) | infra | Render permite ate 100min ([fonte](https://render.com/articles/real-time-ai-chat-websockets-infrastructure)) |
 
-**Deadline renewal**: operacoes longas com progresso continuo NAO sao mais mortas pelo timeout fixo. A cada chunk/evento recebido, o deadline de inatividade (120s) e renovado. Apenas inatividade real (2 min sem progresso) ou teto absoluto disparam timeout.
+**Deadline renewal**: operacoes longas com progresso continuo NAO sao mais mortas pelo timeout fixo. A cada chunk/evento recebido, o deadline de inatividade (300s) e renovado. Apenas inatividade real (5 min sem progresso) ou teto absoluto disparam timeout.
 
 **REGRA**: `USER_RESPONSE_TIMEOUT` (55s) DEVE ser < timeout do SDK (240s). Se >= SDK, o CLI mata o stream antes do usuario responder.
 
@@ -409,11 +409,12 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 
 **Regra**: ao adicionar novo evento emitido de `can_use_tool` ou outro callback async, usar o mesmo padrao `event_queue.put(raw_sse_string)` — NAO tentar passar por `StreamEvent` (nao ha contexto).
 
-### Mapa de eventos (atualizado 2026-04-01)
+### Mapa de eventos (atualizado 2026-05-25)
 
 | Evento | client.py | routes/chat.py | chat.js | Origem |
 |--------|-----------|-----------|---------|--------|
 | `init` | StreamEvent | _sse_event | case | Streaming paths (v2/v3) |
+| `queued` | StreamEvent | _sse_event | case | Enfileiramento estilo terminal (2026-05-25) — `pooled.lock.locked()` antes de aguardar |
 | `text` | StreamEvent | _sse_event | case | AssistantMessage.TextBlock |
 | `thinking` | StreamEvent | _sse_event | case | AssistantMessage.ThinkingBlock |
 | `tool_call` | StreamEvent | _sse_event | case | AssistantMessage.ToolUseBlock |

@@ -821,6 +821,15 @@ def _stream_chat_response(
                         'reason': (event.metadata or {}).get('reason', ''),
                     }))
 
+                elif event.type == 'queued':
+                    # Enfileiramento estilo terminal (2026-05-25): turno anterior
+                    # em andamento, esta request aguarda no asyncio.Lock do
+                    # PooledClient. Frontend exibe indicador "na fila".
+                    event_queue.put(_sse_event('queued', {
+                        'content': event.content,
+                        'session_id': (event.metadata or {}).get('session_id', ''),
+                    }))
+
                 elif event.type == 'error':
                     response_state['error_message'] = event.content
                     error_data = {'message': event.content}
@@ -1321,7 +1330,7 @@ def _stream_chat_response(
                         f"({MAX_STREAM_DURATION_SECONDS}s)"
                     )
                     yield _sse_event('error', {
-                        'message': 'Tempo limite excedido (9 min)'
+                        'message': f'Tempo limite excedido ({MAX_STREAM_DURATION_SECONDS // 60} min)'
                     })
                 else:
                     inact_elapsed = INACTIVITY_TIMEOUT_SECONDS

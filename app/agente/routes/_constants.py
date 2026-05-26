@@ -72,10 +72,13 @@ _health_cache = {'result': None, 'timestamp': 0}
 _HEALTH_CACHE_TTL = 300  # segundos (5 min — models.retrieve nao gasta tokens)
 
 # Deadline com renewal: teto absoluto + inatividade renovavel
-# MAX_STREAM_DURATION_SECONDS: teto absoluto (540s = 9 min, margem de 1 min antes do Render 600s)
+# MAX_STREAM_DURATION_SECONDS: teto absoluto. Render web service permite ate 100min
+# (6000s) per request (https://render.com/articles/real-time-ai-chat-websockets-infrastructure).
+# Subimos para 29min (1740s) — 3 timeouts reais em 7d (2026-05-21/22/25) batiam no antigo
+# 540s. Margem ~60s vs novo gunicorn timeout=1800s.
 # INACTIVITY_TIMEOUT_SECONDS: deadline renovavel — cada evento real renova. Heartbeats NAO renovam.
-MAX_STREAM_DURATION_SECONDS = 540
-INACTIVITY_TIMEOUT_SECONDS = 240  # 4 min sem evento real = timeout (mantem valor original)
+MAX_STREAM_DURATION_SECONDS = 1740  # 29 min (era 540s)
+INACTIVITY_TIMEOUT_SECONDS = 300    # 5 min sem evento real = timeout (era 240s)
 
 # Threshold de cosine similarity para considerar memoria efetiva (semantico)
 # Configuravel via env var. 0.50 e mais alto que retrieval (0.40) porque

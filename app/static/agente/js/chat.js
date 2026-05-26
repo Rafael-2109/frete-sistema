@@ -54,6 +54,25 @@ const TOKEN_BUDGET = 200000;
 // FEAT-026: Controle de streaming para Stop
 let currentEventSource = null;
 let isGenerating = false;
+// 2026-05-25 v2 fix concurrent streams: counter + entries Set para suporte
+// a enfileiramento estilo terminal CLI (msg A streamando + msg B aguardando).
+// Antes: isGenerating global causava cancel da B quando A emitia 'done'.
+// Agora: cada stream tem flag local; isGenerating so vira false quando contador zera.
+// _activeStreams = Set<{reader, streamLocal}> — stopGeneration usa para marcar
+// streamLocal.active=false ANTES de cancelar (suprime erro spurious no catch).
+let _activeStreamCount = 0;
+const _activeStreams = new Set();
+function _streamStarted() {
+    _activeStreamCount++;
+    isGenerating = true;
+}
+function _streamEnded() {
+    _activeStreamCount = Math.max(0, _activeStreamCount - 1);
+    if (_activeStreamCount === 0) {
+        isGenerating = false;
+        hideStopButton();
+    }
+}
 
 // Auto-retry: revive sessão após error_recovery (exit code 1 por inatividade)
 let _lastUserMessage = null;
@@ -70,11 +89,13 @@ const typingContainer = document.getElementById('typing-container');
 const typingText = document.getElementById('typing-text');
 
 // Habilita/desabilita botão e auto-resize
-// Fix concurrent-send (2026-05-25): inclui isGenerating no calculo para
-// evitar reenvio durante stream (causava CLIConnectionError "Failed to write
-// to process stdin" + repeat-detect short circuit em loop).
+// 2026-05-25 v2: enfileiramento estilo terminal Claude Code CLI.
+// Backend usa asyncio.Lock no PooledClient para serializar turnos (FIFO).
+// Quando msg B chega durante stream de A, B aguarda no lock e backend emite
+// SSE 'queued' antes — frontend mostra indicador "na fila".
+// Guard mantem apenas check de input nao-vazio.
 function updateSendBtnState() {
-    sendBtn.disabled = !messageInput.value.trim() || isGenerating;
+    sendBtn.disabled = !messageInput.value.trim();
 }
 messageInput.addEventListener('input', () => {
     updateSendBtnState();
@@ -141,7 +162,17 @@ function stopGeneration() {
 
     // Marca como não gerando (isso vai parar o loop)
     isGenerating = false;
+    _activeStreamCount = 0;  // Stop global: zera contador
     updateSendBtnState();  // Fix concurrent-send: reabilita botao se input nao-vazio
+
+    // Stop global: marca cada stream como inativo ANTES de cancelar — para que
+    // o outer catch de handleStreamResponse (que roda ANTES do finally) consiga
+    // suprimir a mensagem "Erro de conexao" spurious.
+    _activeStreams.forEach(entry => {
+        entry.streamLocal.active = false;
+        try { entry.reader.cancel(); } catch (e) { /* ignore */ }
+    });
+    _activeStreams.clear();
 
     // Cancela o reader se existir (fallback — funciona com ou sem SDK Client)
     if (currentEventSource && currentEventSource.cancel) {
@@ -886,8 +917,8 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
     const message = messageInput.value.trim();
     if (!message) return;
 
-    // FEAT-026: Marca como gerando
-    isGenerating = true;
+    // FEAT-026: Marca como gerando — counter-based para suportar streams concorrentes
+    _streamStarted();
 
     // Adiciona mensagem do usuário
     addMessage(message, 'user');
@@ -973,9 +1004,8 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
         hideTyping();
         addMessage('❌ Erro de conexão. Tente novamente.', 'assistant');
     } finally {
-        // FEAT-026: Finaliza geração
-        isGenerating = false;
-        hideStopButton();
+        // FEAT-026: Finaliza geração — counter-based (so vira false quando ultimo stream termina)
+        _streamEnded();
         updateSendBtnState();  // Fix concurrent-send: reabilita botao se input nao-vazio
     }
 }
@@ -986,6 +1016,13 @@ async function handleStreamResponse(response) {
     const decoder = new TextDecoder();
     let buffer = '';
     let currentEventType = null;
+
+    // 2026-05-25 v2: flag LOCAL para suportar streams concorrentes.
+    // Antes: usavamos isGenerating global → done de stream A matava stream B.
+    // Agora: cada stream tem sua propria flag; isGenerating fica em counter.
+    const streamLocal = { active: true };
+    const streamEntry = { reader, streamLocal };
+    _activeStreams.add(streamEntry);
 
     // =================================================================
     // TIMEOUT NO READER
@@ -1035,7 +1072,7 @@ async function handleStreamResponse(response) {
     const FEEDBACK_TIMEOUT = 15000; // 15 segundos
 
     const feedbackTimer = setInterval(() => {
-        if (!isGenerating) {
+        if (!streamLocal.active) {
             clearInterval(feedbackTimer);
             return;
         }
@@ -1049,8 +1086,8 @@ async function handleStreamResponse(response) {
 
     try {
         while (true) {
-            // FEAT-026: Verifica se foi interrompido
-            if (!isGenerating) {
+            // FEAT-026: Verifica se foi interrompido (usa flag LOCAL deste stream)
+            if (!streamLocal.active) {
                 reader.cancel();
                 break;
             }
@@ -1085,7 +1122,7 @@ async function handleStreamResponse(response) {
                             }
 
                             // Processa o evento com estado compartilhado
-                            processSSEEvent(currentEventType, data, state);
+                            processSSEEvent(currentEventType, data, state, streamLocal);
                             currentEventType = null;
                         } catch (e) {
                             console.error('[SSE] Erro ao parsear JSON:', e, 'linha:', line);
@@ -1114,14 +1151,22 @@ async function handleStreamResponse(response) {
         // =================================================================
         // TRATAMENTO DE ERRO GERAL NO STREAM
         // =================================================================
-        console.error('[SSE] Erro no stream:', error);
+        // 2026-05-25 v2: suprime erro quando cancelamento foi deliberado
+        // (stopGeneration global OU done event ja desativou streamLocal).
+        // Antes: cada stream cancelado mostrava "Erro de conexao" spurious
+        // — pior com streams concorrentes (N msgs = N erros falsos no Stop).
+        if (!streamLocal.active) {
+            console.log('[SSE] Stream cancelado deliberadamente — suprimindo erro:', error.message);
+        } else {
+            console.error('[SSE] Erro no stream:', error);
 
-        // Mostra erro amigável se não houver mensagem parcial
-        if (!state.text) {
-            addMessage(
-                `❌ **Erro de conexão**\n\n${error.message || 'Erro desconhecido'}`,
-                'assistant'
-            );
+            // Mostra erro amigável se não houver mensagem parcial
+            if (!state.text) {
+                addMessage(
+                    `❌ **Erro de conexão**\n\n${error.message || 'Erro desconhecido'}`,
+                    'assistant'
+                );
+            }
         }
     } finally {
         // =================================================================
@@ -1135,6 +1180,10 @@ async function handleStreamResponse(response) {
         // =================================================================
         clearInterval(feedbackTimer);
         hideTyping();
+
+        // 2026-05-25 v2: garantia de cleanup mesmo em error/cancel paths
+        streamLocal.active = false;
+        _activeStreams.delete(streamEntry);
 
         // FIX: Garante que items pendentes sejam finalizados mesmo se stream terminar sem 'done'
         // Isso resolve o problema de "Ações spinning" quando conexão quebra ou timeout
@@ -1925,7 +1974,10 @@ function downloadSubagentJsonl(agentId) {
 // ─────────────────────────────────────────────────────────────────────
 
 // Processa evento SSE com estado compartilhado
-function processSSEEvent(eventType, data, state) {
+function processSSEEvent(eventType, data, state, streamLocal) {
+    // 2026-05-25 v2: streamLocal (opcional, p/ back-compat) marca termino LOCAL
+    // do stream — antes usavamos isGenerating global que cancelava streams concorrentes.
+    if (!streamLocal) streamLocal = { active: true };  // back-compat callers
     try {
         switch (eventType) {
             case 'start':
@@ -1979,6 +2031,13 @@ function processSSEEvent(eventType, data, state) {
                 state.lastTextTime = Date.now();
                 break;
 
+            case 'queued':
+                // Enfileiramento estilo terminal (2026-05-25): backend sinaliza
+                // que esta msg esta aguardando turno anterior terminar (lock).
+                // Mostra indicador no typing para o usuario saber.
+                showTyping(`⏳ ${data.content || 'Aguardando turno anterior...'}`);
+                break;
+
             case 'text':
                 // FEAT-032: Atualiza timestamp de último texto recebido
                 state.lastTextTime = Date.now();
@@ -2030,7 +2089,7 @@ function processSSEEvent(eventType, data, state) {
                 // =================================================================
                 const toolName = data.tool_name || 'ferramenta';
                 setTimeout(() => {
-                    if (isGenerating) {
+                    if (streamLocal.active) {
                         // Verifica se ainda está na mesma tool
                         const lastItem = actionTimeline[0];
                         if (lastItem && lastItem.tool_name === toolName && lastItem.status === 'pending') {
@@ -2312,7 +2371,7 @@ function processSSEEvent(eventType, data, state) {
             case 'done':
                 hideTyping();
                 hideThinkingPanel();
-                isGenerating = false;  // FIX-6: Para feedbackTimer e sinaliza fim do while loop
+                streamLocal.active = false;  // 2026-05-25 v2: marca fim LOCAL (nao mata streams concorrentes)
                 updateSendBtnState();  // Fix concurrent-send: reabilita botao se usuario digitou durante stream
                 if (data.session_id) sessionId = data.session_id;
                 updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
