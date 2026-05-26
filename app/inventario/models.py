@@ -1,0 +1,86 @@
+"""Modelos do módulo Inventário.
+
+Spec: docs/superpowers/specs/2026-05-26-relatorio-confronto-inventario-design.md
+"""
+from app import db
+from app.utils.timezone import agora_utc_naive
+
+
+class CicloInventario(db.Model):
+    """Ciclo de inventário (ex.: INV-2026-05-16)."""
+    __tablename__ = 'inventario_ciclo'
+
+    id            = db.Column(db.Integer, primary_key=True)
+    codigo        = db.Column(db.String(50), unique=True, nullable=False)
+    data_snapshot = db.Column(db.Date, nullable=False)
+    descricao     = db.Column(db.String(200))
+    status        = db.Column(db.String(20), default='ATIVO', nullable=False)
+    criado_em     = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    criado_por    = db.Column(db.String(100))
+
+    __table_args__ = (
+        db.Index('ix_inventario_ciclo_status', 'status'),
+    )
+
+    def __repr__(self):
+        return f'<CicloInventario {self.codigo}>'
+
+
+class InventarioBase(db.Model):
+    """Snapshot físico FB/CD/LF (uma linha por cod + empresa)."""
+    __tablename__ = 'inventario_base'
+
+    id           = db.Column(db.Integer, primary_key=True)
+    ciclo_id     = db.Column(db.Integer, db.ForeignKey('inventario_ciclo.id'),
+                             nullable=False, index=True)
+    cod_produto  = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto = db.Column(db.String(200))
+    empresa      = db.Column(db.String(10), nullable=False)
+    qtd          = db.Column(db.Numeric(15, 3), nullable=False, default=0)
+
+    __table_args__ = (
+        db.UniqueConstraint('ciclo_id', 'cod_produto', 'empresa',
+                            name='uq_inv_base_ciclo_cod_empresa'),
+    )
+
+
+class AjusteManualInventario(db.Model):
+    """Ajustes manuais (Planilha2 — preenchido pelo time)."""
+    __tablename__ = 'inventario_ajuste_manual'
+
+    id            = db.Column(db.Integer, primary_key=True)
+    ciclo_id      = db.Column(db.Integer, db.ForeignKey('inventario_ciclo.id'),
+                              nullable=False, index=True)
+    cod_produto   = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto  = db.Column(db.String(200))
+    local         = db.Column(db.String(20))
+    qtd           = db.Column(db.Numeric(15, 3), nullable=False)
+    tipo_ajuste   = db.Column(db.String(20))
+    observacao    = db.Column(db.String(500))
+    criado_em     = db.Column(db.DateTime, default=agora_utc_naive, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=agora_utc_naive,
+                              onupdate=agora_utc_naive, nullable=False)
+    criado_por    = db.Column(db.String(100))
+
+
+class InventarioSnapshotOdoo(db.Model):
+    """Cache de estoque + apontamentos + compras do Odoo (botão refresh)."""
+    __tablename__ = 'inventario_snapshot_odoo'
+
+    id             = db.Column(db.Integer, primary_key=True)
+    ciclo_id       = db.Column(db.Integer, db.ForeignKey('inventario_ciclo.id'),
+                               nullable=False, index=True)
+    cod_produto    = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto   = db.Column(db.String(200))
+    estoque_fb     = db.Column(db.Numeric(15, 3), default=0)
+    estoque_cd     = db.Column(db.Numeric(15, 3), default=0)
+    estoque_lf     = db.Column(db.Numeric(15, 3), default=0)
+    pa_qtd         = db.Column(db.Numeric(15, 3), default=0)
+    componente_qtd = db.Column(db.Numeric(15, 3), default=0)
+    compras_qtd    = db.Column(db.Numeric(15, 3), default=0)
+    refresh_em     = db.Column(db.DateTime, default=agora_utc_naive)
+
+    __table_args__ = (
+        db.UniqueConstraint('ciclo_id', 'cod_produto',
+                            name='uq_inv_snapshot_ciclo_cod'),
+    )
