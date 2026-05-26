@@ -47,6 +47,66 @@ RESPOSTA: NAO. Rafael corrigiu o entendimento — eh assim para QUALQUER NF emit
 
 ---
 
+## 📊 INSIGHT ARQUITETURAL — comparacao LancamentoOdooService vs RecebimentoLfOdooService (Rafael 2026-05-26)
+
+Rafael deu exemplo: "Escriturar NF deveria ser capaz de lançar um frete. Verifique o servico de lancamento de fretes e compare-o com o RecebimentoLF, voce vai ver diversas semelhancas na forma, possivelmente as maiores diferencas eh q frete nao tem picking e transferencia nao tem fatura, o restante sao constants/parametros."
+
+**Mapeamento lado-a-lado** (validado lendo ambos):
+
+| Conceito | LancamentoOdooService (Frete/CTe — 16 ETAPAS) | RecebimentoLfOdooService (NF Recebimento — 37 STEPS) |
+|----------|---------------------------------------------|----------------------------------------------------|
+| Buscar/criar DFe | ETAPA 1 (buscar por chave) | step_00 (criar via XML) + step_01 (buscar) |
+| Avancar status DFe | — | step_02 |
+| Configurar DFe (data, tipo, vencimento, linha) | ETAPAS 2-5 (data+pay_ref+tipo+linha+venc) | step_03 (configurar) |
+| Gerar PO via `action_gerar_po_dfe` | ETAPA 6 (fire_and_poll) | step_04 (gerar) + step_05 (extrair) |
+| Configurar PO (team, payment, picking_type, operacao) | ETAPA 7 | step_06 |
+| Confirmar PO (`button_confirm`) | ETAPA 9 | step_07 |
+| Aprovar PO (`button_approve` se preciso) | ETAPA 10 | step_08 |
+| **PICKING (buscar+preencher_lotes+quality+validar)** | **— NAO TEM —** (frete = servico, sem bem fisico) | **steps 9-12** (FASE 3) |
+| Criar Invoice (`action_create_invoice`) | ETAPA 11 | step_13 + step_14 (extrair) |
+| Configurar Invoice (situacao_nf, operacao) | ETAPA 13 | step_15 |
+| Calcular imposto (`onchange_calcular_imposto`) | ETAPAS 12+14 | (inline step_15) |
+| Postar Invoice (`action_post`) | ETAPA 15 | step_16 |
+| Finalizar (status local + vinculos) | ETAPA 16 | steps 17-18 (FASE 5) |
+| **TRANSFERENCIA FB→CD** (picking saida + invoice + SEFAZ + recebimento CD via DFe) | **— NAO TEM —** | **steps 19-37** (FASE 6+7) |
+
+**Insight-chave**: ambos compartilham 80% do **esqueleto** (DFe → Configurar → PO → Confirmar → Invoice → Configurar → Postar). Diferencas sao:
+- **Frete**: nao tem picking (servico, nao bem) → pula 4 steps
+- **Transferencia inter-company**: tem FASE 6+7 adicional (saida + entrada CD via DFe)
+- **Rafael**: "o restante sao constants/parametros" — operacao fiscal, picking_type, produto, payment_provider, l10n_br_tipo_pedido (CHAVE p/ CFOP), partner
+
+**Constants/parametros que diferem entre fluxos**:
+- `PRODUTO_SERVICO_FRETE_ID=29993` (frete) vs produtos fisicos da NF (recebimento)
+- `OPERACOES_TRANSPORTE` (frete: por destino+regime) vs operacao por industrializacao/transferencia
+- `picking_type_id`: 1=FB, 13=CD (CTe entrada); 19=LF (industr entrada); 53=FB (industr saida)
+- `l10n_br_tipo_pedido` no DFe: chave para Odoo derivar CFOP correto (ex: 'serv-industrializacao' → 1901; 'aquisicao' → 1933; etc)
+- `payment_provider_id`: 92=FB transferencia bancaria; 30=CD; etc
+- `partner_id`/`partner_ref`: emitente da NF (varia)
+
+**Conclusao arquitetural para Skill 7 ABRANGENTE**:
+Atomos do Skill 7 escriturando-odoo deveriam ser **REUSAVEIS** entre frete + recebimento + transferencia. Lista de atomos (a extrair em v19+):
+- `buscar_ou_criar_dfe(chave_nfe, xml=None, company_id) → dfe_id`
+- `avancar_status_dfe(dfe_id, target_status='04')`
+- `configurar_dfe(dfe_id, **kwargs)` (data, tipo_pedido, vencimento, linha_produto opcional)
+- `gerar_po_from_dfe(dfe_id, company_destino, ctx_force_company=True) → po_id` (fire_and_poll)
+- `configurar_po(po_id, **kwargs)` (team_id, payment_term, picking_type, operacao, partner_ref)
+- `confirmar_po(po_id)` (button_confirm + aprovar se necessario)
+- `criar_invoice_from_po(po_id) → invoice_id`
+- `configurar_invoice(invoice_id, situacao_nf='autorizado', operacao=None)`
+- `calcular_imposto(invoice_id)` (`onchange_l10n_br_calcular_imposto_btn`)
+- `postar_invoice(invoice_id)` (`action_post`)
+- `finalizar_lancamento(invoice_id, **kwargs)` (status local + vinculos opcionais)
+
+**FLUXOS L3 que compoem os atomos** (sem orchestrator inline):
+- **FLUXO 1.5 lancar-frete-cte**: dfe → configurar (linha=produto_frete) → gerar_po → configurar_po → confirmar → criar_invoice → configurar → calcular → postar (SEM picking)
+- **FLUXO 1.2.1 escriturar-dfe-industrializacao**: dfe → configurar (tipo='serv-industrializacao') → gerar_po → configurar_po → confirmar → **Skill 5 (buscar_picking + preencher_lotes_picking + quality + validar)** → criar_invoice → configurar → calcular → postar
+- **FLUXO 1.3 transferencia-completa**: SAIDA via Skill 8 (faturando) + ENTRADA via FLUXO 1.2.1 + (opcional FASE 6+7) via outro fluxo de transferencia FB→CD
+- **FLUXO 1.6 lancar-despesa-extra**: dfe → configurar (linha=despesa) → gerar_po → configurar_po → confirmar → criar_invoice → configurar → calcular → postar (SEM picking, similar frete mas para despesas operacionais)
+
+Isso confirma a tendencia que Rafael apontou: **RecebimentoLfOdoo + LancamentoOdoo no futuro serao WRAPPERS de Skill 7 escriturando-odoo + Skill 5 operando-picking-odoo**, nao o inverso.
+
+---
+
 ## 📐 REVISAO ARQUITETURAL NECESSARIA — agendar v19+
 
 A v17.5 fechou pipeline A-F LIVE, mas a auditoria com Rafael apos a sessao identificou **2 antipadroes arquiteturais a corrigir**:
@@ -212,6 +272,8 @@ Pytest >=520 (atual 513 +7 esperado: 3 recovery + 2 SKILL.md flow + 2 smokes wra
 2. app/odoo/estoque/ROADMAP_SKILLS.md HANDOFF v17.5 (esta sessao terminou)
 3. app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md §0 + §10.6 + §12 trilha v17.5 + C14 + C15 checkpoints
 4. **scripts/inventario_2026_05/escriturar_dfe_lf.py** (FLUXO A correto de escrituracao — referencia para refator Skill 7 v19+; NOTE: "NAO reusar RecebimentoLfOdooService — direcao inversa")
+4b. **app/fretes/services/lancamento_odoo_service.py** (16 ETAPAS — referencia da forma generica de lancar via DFe; comparar com RecebimentoLfOdooService p/ identificar atomos comuns na Skill 7)
+4c. **app/recebimento/services/recebimento_lf_odoo_service.py** (37 STEPS — referencia da forma completa com picking + transferencia; SEMPRE LER mas NUNCA MEXER)
 5. Memoria [[skill7-escriturando-pattern]] (pattern v17.5 — V1 STRICT documentado como antipadrao)
 6. Memoria [[skill8-pipeline-completo-v17]] (status v17 + 11 fixes)
 7. Memoria [[feedback-constituicao-skill-so-responsabilidade]] (anti-padrao inline v17.5)
@@ -264,8 +326,8 @@ X Esquecer cross-refs (subagente + ROUTING_SKILLS + tool_skill_mapper + CLAUDE.m
 v17 (concluida 2026-05-25): pipeline A-F LIVE + 11 fixes | commit e0a29f21
 v17.5 (concluida 2026-05-26): REVERT E + Skill 7 V1 STRICT + ETAPA F canary | commit e8bfea73 — **2 antipadroes documentados**
 **v18 (proxima)**: C14 recovery + C15 SKILL.md Skill 8 + C17 smokes + G036 em GOTCHAS | Risco Medio (escopo conservador, sem mexer nos antipadroes)
-**v19 (NOVA — agendar)**: REFATOR Skill 7 (extrair de RecebimentoLfOdoo + tornar abrangente — referencia `escriturar_dfe_lf.py`) + criar atomo Skill 5 `preencher_lotes_picking` + criar FLUXO L3 1.2.1 escriturar-dfe-industrializacao | Risco Alto (refator arquitetural)
-v20: Reescrever ETAPA F orchestrator para invocar FLUXO L3 (em vez de Skill 5 inline) + arquivar `criar_picking_entrada_destino_manual` como caminho B paliativo documentado | Risco Alto
+**v19 (NOVA — agendar)**: REFATOR Skill 7 ATOMICA + ABRANGENTE — extrair atomos COMUNS entre `RecebimentoLfOdooService` (37 steps) + `LancamentoOdooService` (16 etapas) + `escriturar_dfe_lf.py` (FLUXO A inventario). Atomos esperados: buscar_ou_criar_dfe, configurar_dfe, gerar_po_from_dfe, configurar_po, confirmar_po, criar_invoice_from_po, configurar_invoice, calcular_imposto, postar_invoice, finalizar_lancamento. Criar atomo Skill 5 `preencher_lotes_picking`. Criar FLUXO L3 1.2.1 escriturar-dfe-industrializacao + FLUXO L3 1.5 lancar-frete-cte (provar reuso dos atomos entre dominios diferentes — frete vs industrializacao). | Risco MUITO ALTO (refator arquitetural cross-modulo).
+v20: Reescrever ETAPA F orchestrator para invocar FLUXO L3 1.2.1 (em vez de Skill 5 inline) + arquivar `criar_picking_entrada_destino_manual` como caminho B paliativo documentado. Eventualmente: refator parcial RecebimentoLfOdoo + LancamentoOdoo para virarem WRAPPERS dos atomos Skill 7 (inversao da relacao Rafael apontou). | Risco Alto
 v21: C18 folhas fluxos restantes (1.1 faturamento completo + 1.3 transferencia completa) + C19 cross-refs final + C20 canary REAL PROD | Risco Alto
 v22+: C21 bulk REAL PROD + C22 code-review final + C23 commit + arquivar 09_* | Risco Alto
 
