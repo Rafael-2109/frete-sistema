@@ -7,6 +7,7 @@ from app.inventario import inventario_bp
 from app.inventario.services.movimentacoes_odoo_service import (
     MovimentacoesOdooService,
 )
+from app.utils.auth_decorators import require_admin
 from app.utils.json_helpers import sanitize_for_json
 
 
@@ -27,6 +28,7 @@ def _build_filtros(args):
 
 @inventario_bp.route('/movimentacoes', endpoint='movimentacoes')
 @login_required
+@require_admin
 def movimentacoes():
     filtros = _build_filtros(request.args)
     return render_template('inventario/movimentacoes.html', filtros=filtros)
@@ -34,6 +36,7 @@ def movimentacoes():
 
 @inventario_bp.route('/movimentacoes/api', endpoint='movimentacoes_api')
 @login_required
+@require_admin
 def movimentacoes_api():
     filtros = _build_filtros(request.args)
     resultado = MovimentacoesOdooService.buscar_paginado(filtros)
@@ -43,6 +46,7 @@ def movimentacoes_api():
 @inventario_bp.route('/movimentacoes/export.xlsx',
                       endpoint='movimentacoes_export')
 @login_required
+@require_admin
 def movimentacoes_export():
     filtros = _build_filtros(request.args)
     filtros['page_size'] = 1000

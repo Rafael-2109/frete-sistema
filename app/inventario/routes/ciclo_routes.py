@@ -6,6 +6,7 @@ from app import db
 from app.inventario import inventario_bp
 from app.inventario.models import CicloInventario
 from app.inventario.services.inventario_loader import InventarioLoader
+from app.utils.auth_decorators import require_admin
 from app.utils.json_helpers import sanitize_for_json
 
 
@@ -18,6 +19,7 @@ def _user_nome():
 
 @inventario_bp.route('/ciclos', endpoint='listar_ciclos')
 @login_required
+@require_admin
 def listar_ciclos():
     ciclos = CicloInventario.query.order_by(CicloInventario.criado_em.desc()).all()
     return render_template('inventario/ciclos.html', ciclos=ciclos)
@@ -25,6 +27,7 @@ def listar_ciclos():
 
 @inventario_bp.route('/ciclos/novo', methods=['POST'], endpoint='criar_ciclo')
 @login_required
+@require_admin
 def criar_ciclo():
     codigo = (request.form.get('codigo') or '').strip()
     data_str = (request.form.get('data_snapshot') or '').strip()
@@ -50,6 +53,7 @@ def criar_ciclo():
 @inventario_bp.route('/ciclos/<int:ciclo_id>/upload', methods=['POST'],
                       endpoint='upload_xlsx')
 @login_required
+@require_admin
 def upload_xlsx(ciclo_id):
     ciclo = CicloInventario.query.get_or_404(ciclo_id)
     if 'arquivo' not in request.files:
@@ -70,6 +74,7 @@ def upload_xlsx(ciclo_id):
 @inventario_bp.route('/ciclos/<int:ciclo_id>/arquivar', methods=['POST'],
                       endpoint='arquivar_ciclo')
 @login_required
+@require_admin
 def arquivar_ciclo(ciclo_id):
     c = CicloInventario.query.get_or_404(ciclo_id)
     c.status = 'ARQUIVADO'

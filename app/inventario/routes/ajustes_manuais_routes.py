@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.inventario import inventario_bp
 from app.inventario.models import AjusteManualInventario, CicloInventario
+from app.utils.auth_decorators import require_admin
 from app.utils.json_helpers import sanitize_for_json
 
 
@@ -17,6 +18,7 @@ def _user_nome():
 
 @inventario_bp.route('/ajustes/<int:ciclo_id>', endpoint='listar_ajustes')
 @login_required
+@require_admin
 def listar_ajustes(ciclo_id):
     CicloInventario.query.get_or_404(ciclo_id)
     rows = AjusteManualInventario.query.filter_by(ciclo_id=ciclo_id).order_by(
@@ -28,6 +30,7 @@ def listar_ajustes(ciclo_id):
 @inventario_bp.route('/ajustes/<int:ciclo_id>', methods=['POST'],
                       endpoint='criar_ajuste')
 @login_required
+@require_admin
 def criar_ajuste(ciclo_id):
     CicloInventario.query.get_or_404(ciclo_id)
     cod = (request.form.get('cod_produto') or '').strip()
@@ -55,6 +58,7 @@ def criar_ajuste(ciclo_id):
 @inventario_bp.route('/ajustes/<int:ciclo_id>/<int:aj_id>', methods=['PUT'],
                       endpoint='editar_ajuste')
 @login_required
+@require_admin
 def editar_ajuste(ciclo_id, aj_id):
     a = AjusteManualInventario.query.filter_by(id=aj_id, ciclo_id=ciclo_id).first_or_404()
     data = request.form
@@ -73,6 +77,7 @@ def editar_ajuste(ciclo_id, aj_id):
 @inventario_bp.route('/ajustes/<int:ciclo_id>/<int:aj_id>', methods=['DELETE'],
                       endpoint='deletar_ajuste')
 @login_required
+@require_admin
 def deletar_ajuste(ciclo_id, aj_id):
     a = AjusteManualInventario.query.filter_by(id=aj_id, ciclo_id=ciclo_id).first_or_404()
     db.session.delete(a)
