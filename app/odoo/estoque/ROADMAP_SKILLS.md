@@ -19,7 +19,7 @@
 7. Se sessão for sobre Skill 8 → ler `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO (regra inviolável 0).
 
 ### Baseline pytest esperado
-- **555 verdes** (tests/odoo/ — v19+ confirmado em 15.96s. Baseline anterior 521 v18 + 34 v19+ = 22 S1 ABRANGENTE + 7 S2 preencher_lotes + 4 S4 dispatch fluxo L3 + 1 timeout fix CR-v19+-MED-2.)
+- **563 verdes** (tests/odoo/ — v20+ confirmado em 18.21s. 555 baseline v19+ + 8 net v20+ = 4 FIX A/B Skill 7 + 1 DeprecationWarning V1 STRICT + 3 opt-in `--usar-fluxo-l3-v19`.)
 
 ### Estado global (atualizado v18 Fase 0 — 2026-05-26)
 
@@ -31,31 +31,33 @@
 | Skill 4 `operando-mo-odoo` | 🟡 mín viável | `scripts/mo.py` |
 | Skill 5 `operando-picking-odoo` | 🟡 7 átomos LIVE v19+ (`preencher_lotes_picking` NOVO; `criar_picking_entrada_destino_manual` DEPRECATED) — 68 pytest | `scripts/picking.py` |
 | Skill 6 `planejando-pre-etapa-odoo` | 🟡 mín viável COMPLETA v9 (planner + executor C3) | `scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` |
-| Skill 7 `escriturando-odoo` | 🟡 ABRANGENTE LIVE v19+ (7 átomos: buscar_dfe, criar_dfe_a_partir_do_invoice_saida, escriturar_dfe, gerar_po_from_dfe, preencher_po, confirmar_po, criar_invoice_from_po) — 33 pytest = 11 V1 + 22 v19+; AP1+AP4 ✅ | `scripts/escrituracao.py` |
-| Skill 8 `faturando-odoo` (orchestrator C3 — nomenclatura confusa AP6 v20+) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x LIVE v19+ (76 pytest) | `orchestrators/faturamento_pipeline.py` + `.claude/skills/faturando-odoo/SKILL.md` |
+| Skill 7 `escriturando-odoo` | 🟡 ABRANGENTE LIVE v20+ (7 átomos + FIX A `escriturar_dfe` 2 caminhos idempotencia + FIX B `gerar_po_from_dfe` 3 caminhos idempotencia DFe↔PO) — 38 pytest = 12 V1 + 26 ABRANGENTE; AP1+AP4 ✅; V1 wrapper DeprecationWarning v20+ | `scripts/escrituracao.py` |
+| Skill 8 `faturando-odoo` (orchestrator C3 — nomenclatura confusa AP6 v21+) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x LIVE v19+ + **opt-in `--usar-fluxo-l3-v19` v20+** (79 pytest = 76 + 3 S3 dispatch opt-in) | `orchestrators/faturamento_pipeline.py` + `.claude/skills/faturando-odoo/SKILL.md` |
 | Skill 9 `consultando-quant-odoo` (READ) | 🟡 mín viável (3 modos G030) | `scripts/consulta_quant.py` |
 | Sub-skill C5 `auditando-cadastro-fiscal-odoo` | 🟡 V1 'inventario' | `scripts/cadastro_fiscal_audit.py` |
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
-### Próximo passo (v20+) — canary REAL PROD + refator nomenclatura
+### Próximo passo (v21+) — bulk REAL PROD + remoção tampão + refator nomenclatura
 
-**v19+ CONCLUÍDA** (2026-05-26):
-1. ✅ Skill 7 ABRANGENTE — 7 átomos extraídos da mineração de `RecebimentoLfOdooService` (NÃO MEXER): `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`. 22 pytest.
-2. ✅ Skill 5 átomo `preencher_lotes_picking` LIVE (7 pytest).
-3. ✅ Fluxos L3 1.2.1 (caminho A — DFe veio) e 1.2.2 (caminho B — DFe criado via XML da SAÍDA).
-4. ✅ Método `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` no orchestrator (composição dos átomos via fluxo L3). 4 pytest dispatch.
-5. ✅ `criar_picking_entrada_destino_manual` DEPRECATED docblock (museum vivo até v20+ canary remover).
-6. ✅ §6.5 antipadrões: AP1 ✅ AP3 ✅ AP4 ✅ AP5 ✅ resolvidos; AP2 reclassificado (causa raiz real); AP6 NOVO (nomenclatura).
+**v20+ CONCLUÍDA** (2026-05-26):
+1. ✅ S1 cross-refs final (gestor-estoque-odoo árvore + ROUTING_SKILLS + fachada SKILL.md `faturando-odoo` Receita 5).
+2. ✅ S2 canary REAL PROD FLUXO L3 1.2.x — caso INDUSTRIALIZACAO_FB_LF (invoice 627348, DFe 42868) — `FLUXO_OK` em 1190ms; ZERO duplicações em PROD. Validou caminho A; FIX B caminho 2 (`dfe_purchase_fiscal_id`) detectou IDEMPOTENT como previsto.
+3. ✅ S2b FIX A em `escriturar_dfe` (idempotência via `campos_ja_iguais` + `data_preservada_tipo_igual`); FIX B em `gerar_po_from_dfe` (3 caminhos vínculo DFe↔PO minerados de `validacao_nf_po_service.py`); fix orchestrator whitelist linha 2939 aceitando `IDEMPOTENT_ESCRITURADO`. 4 pytest novos + 3 ajustados.
+4. ✅ S3 opt-in `--usar-fluxo-l3-v19` no `executar_pipeline_bulk` + `_executar_etapa_f_via_fluxo_l3` + CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO (atual: só LF=5). Default OFF preserva 100% legacy. 3 pytest mockados.
+5. ✅ S5 DeprecationWarning runtime em `criar_recebimento_orchestrado` (V1 STRICT wrapper). 1 pytest novo.
+6. ✅ R3 doc fluxo 1.2.2 atualizado (premissa "INDUSTRIALIZACAO_FB_LF nunca tem DFe via SEFAZ" reescrita com fato empírico PROD 2026-05).
 
-**v20+ alvo** (Risco ALTO):
-1. Canary REAL PROD do FLUXO L3 1.2.x via subagente gestor-estoque-odoo em 1 caso INDUSTRIALIZACAO_FB_LF de teste.
-2. Ativar opt-in: `executar_pipeline_bulk` passa a chamar `executar_fluxo_l3_1_2_x` em vez das ETAPAS E/F legacy (flag `--usar-fluxo-l3-v19`).
-3. Refator nomenclatura AP6: criar Skill 8 ATÔMICA L2 (validar+liberar+polling+SEFAZ sobre `account.move`) extraindo C+D do orchestrator. Renomear orchestrator para `inventario_pipeline`.
-4. Após canary OK: remover ETAPAS E/F legacy + remover `criar_picking_entrada_destino_manual` + remover wrapper V1 STRICT `criar_recebimento_orchestrado`.
-5. Escrever folhas L3 pendentes (1.1.x, 1.3, 2.3) sobre os novos átomos.
+**v21+ alvo** (Risco MÉDIO — bulk PROD + refator):
+1. **Bulk REAL PROD do FLUXO L3 v19+** via opt-in `--usar-fluxo-l3-v19` em onda completa (não só 1 invoice). Casos disponíveis no ciclo INVENTARIO_2026_05 (4 INDUSTRIALIZACAO_FB_LF F5c_LIBERADO).
+2. Após bulk OK: **remover tampão** `criar_picking_entrada_destino_manual` (Skill 5 v15a) + **remover wrapper V1 STRICT** `criar_recebimento_orchestrado` + **remover ETAPAS E/F legacy** do orchestrator.
+3. **Expandir** `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO` para FB=1 e CD=4 (mapear team_id, payment_term_id, picking_type_id + validar canary).
+4. **Expandir** `L10N_BR_TIPO_PEDIDO_POR_ACAO` para todas direções via lookup MATRIZ_INTERCOMPANY.
+5. **Refator nomenclatura AP6** (S4 adiado v20+): extrair `executar_skill8_atomica(picking_ids, constants_por_acao, dry_run)` do orchestrator (5 ops C+D sobre `account.move`) + atualizar §6 catálogo (Tabela 1 ganha Skill 8 ATÔMICA L2; Tabela 2 renomeia para `inventario_pipeline`).
+6. Escrever folhas L3 pendentes (1.1.x só saída, 1.3 transferência completa, 2.3 transferir saldo entre códigos) sobre Skill 8 ATÔMICA L2.
+7. Atualizar `fase_pipeline` local dos 4 INDUSTRIALIZACAO_FB_LF de F5c_LIBERADO → F5f_ENTRADA_OK (gap DB local vs Odoo — Rafael decide).
 
-**Estimativa**: 2-3 sessões. **Bloqueia**: refator nomenclatura AP6 + remoção do tampão arquitetural Skill 5 v15a.
+**Estimativa**: 2-3 sessões. **Bloqueia**: galhos L3 1.1 + 1.3 (precisam Skill 8 ATÔMICA L2 extraída).
 
 ### Pendências (Skill 8 — pós-v18)
 
@@ -67,8 +69,8 @@
 | C17 smokes dry-run | ✅ v18 |
 | C18 folhas fluxos L3 1.2.1+1.2.2 + dispatch `executar_fluxo_l3_1_2_x` | ✅ v19+ |
 | C18b folhas fluxos L3 1.1.x + 1.3 (SAÍDA + transferência completa) | ⬜ pendente v20+ (depende refator nomenclatura AP6) |
-| C19 cross-refs final | ⬜ pendente v19+ |
-| C20 canary REAL PROD | ⬜ pendente v20+ |
+| C19 cross-refs final | ✅ v20+ |
+| C20 canary REAL PROD | ✅ v20+ (1 invoice INDUSTRIALIZACAO_FB_LF — FLUXO_OK 1190ms) |
 | C21 bulk REAL PROD | ⬜ pendente v21+ |
 | C22 code-review final | ⬜ pendente v22+ |
 | C23 commit + arquivar `09_executar_onda1_bulk.py` | ⬜ pendente v22+ |

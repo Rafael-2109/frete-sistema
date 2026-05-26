@@ -43,6 +43,9 @@
 | N15 | Reescrever §0 / §1 / §6 do `PROMPT_PROXIMA_SESSAO.md` por sessão | São atemporais. Reescrever quebra a convenção e força próximas sessões a redescobrir | `PROMPT_PROXIMA_SESSAO.md §0` — apenas §2-§5 são por-sessão |
 | N16 | Afirmar que "Skill 8 delega Skill X" ou "Skill 5 invoca Skill Y" OU dizer que "FLUXO L3 delega átomo" | Skills L2 são átomas — NÃO delegam, NÃO invocam outras skills. **FLUXO L3 COMPÕE átomos L2** (composição ≠ delegação). **Orchestrator C3 COMPÕE FLUXOS L3 e átomos**. Em nenhuma direção há "delegação" entre camadas — sempre "composição". Lição custosa v19+ (AP6 NOVO). | CLAUDE.md §6.5 AP6 + §14 D-V19-1 |
 | N17 | Propor `criar_dfe_manual(dados_campo_a_campo)` ou átomo similar que crie DFe sem XML | NÃO É VIÁVEL via XML-RPC. Service externo SEMPRE faz `create('l10n_br_ciel_it_account.dfe', {'company_id': X, 'l10n_br_xml_dfe': xml_b64})` + `action_processar_arquivo_manual`. Para NF nossa, XML vem de `account.move.l10n_br_xml_aut_nfe` (auto-populado). | CLAUDE.md §14 D-V19-2 + `escrituracao.py:criar_dfe_a_partir_do_invoice_saida` |
+| N18 | Adicionar status novo em átomo sem atualizar whitelist do orchestrator que valida | Custou 1 round de canary REAL v20+ (linha 2939 do orchestrator não aceitava `IDEMPOTENT_ESCRITURADO` novo do FIX A). Toda mudança de status do átomo exige checklist de callsites (grep). | AR9 desta tabela |
+| N19 | Confiar no resumo do subagente após reenvio para re-executar algo | Subagente é stateful — pode responder "do contexto recente" sem re-executar script. SEMPRE verificar timestamp do log/output arquivo para confirmar re-execução. | AR10 desta tabela |
+| N20 | Idempotência via campo "direto" único (ex: só `dfe.purchase_id`) sem fallback inverso | Padrão validado em PROD: vínculos Odoo têm 14.6% direto + 75% via campo paralelo (`purchase_fiscal_id`) + 85.4% via reverso. Sem cobrir os 3 caminhos, idempotência falsa-negativa duplica registros fiscais (PO/picking/invoice). | CLAUDE.md §6.5 AP2 v20+ + `validacao_nf_po_service.py:530-534` |
 
 ---
 
@@ -119,6 +122,29 @@
 - **Custo**: revisão do plano S1 mid-sessão; renomeação de átomo para `criar_dfe_a_partir_do_invoice_saida(invoice_id_saida, company_destino)` (que extrai XML existente de `account.move.l10n_br_xml_aut_nfe`).
 - **Como evitar**: ANTES de propor átomo cross-skill que toca Odoo, minerar o pattern equivalente já validado em PROD (subagente Explore READ-only — não MEXER no código fonte se for marcado NÃO MEXER N11/N12). O pattern correto sempre está no service legado.
 - **Onde**: CLAUDE.md §14 D-V19-2 + N17 desta tabela.
+
+### AR9 — Orchestrator whitelist desatualizado quando átomo ganha status novo (v20+ canary REAL)
+
+- **O quê**: Ao adicionar status `IDEMPOTENT_*` no átomo Skill 7 (FIX A em `escriturar_dfe` v20+), esqueci de atualizar o callsite no orchestrator `executar_fluxo_l3_1_2_x` linha 2939 que valida `if r3.get('status') not in ('ESCRITURADO', 'DRY_RUN_OK')`. Real-run do canary retornou `FALHA_PASSO_3_ESCRITURAR` mesmo com o átomo respondendo `IDEMPOTENT_ESCRITURADO` (sucesso!) e `erro: null`.
+- **Por que aconteceu**: ao corrigir um átomo isoladamente (S2b FIX A+B), não rodei `grep status orchestrator` para mapear todos os callsites. O dispatch v19+ tinha whitelist hardcoded de status conhecidos no momento.
+- **Custo**: 1 round adicional de canary real (mesmo invoice, mesmo script — só re-execução após fix). Conscientização que toda mudança em status do átomo exige checklist de callsites.
+- **Como evitar**: SEMPRE que adicionar status novo num átomo (`IDEMPOTENT_*`, `PARCIAL`, `RETOMADO`, etc.):
+  1. `grep -n "<NOME_FUNCAO>.*status\|not in.*ESCRITURADO\|not in.*CRIADO\|not in.*IDEMPOTENT" <orchestrator>.py`
+  2. Atualizar cada whitelist encontrado para aceitar o status novo
+  3. Adicionar pytest cobrindo o branch novo (não só o átomo isolado)
+  4. Documentar status novo na docstring do átomo (Returns)
+- **Onde corrigido**: `app/odoo/estoque/orchestrators/faturamento_pipeline.py:2939` (aceita `IDEMPOTENT_ESCRITURADO`); checklist v21+ deve auditar passos 5+ se FIX C aplicar.
+
+### AR10 — Subagente reportando dados velhos após reenvio (v20+ canary REAL)
+
+- **O quê**: Subagente `gestor-estoque-odoo` foi spawnado, executou canary, parou, recebeu SendMessage para re-executar após meu fix, MAS respondeu com base no resultado anterior (não re-executou). Eu interpretei como completo e quase prossegui.
+- **Por que aconteceu**: o subagente já estava em estado "completed" e respondeu seu último output. Reenvio com SendMessage não força re-execução de script — só processa o novo contexto.
+- **Custo**: ~5min de confusão; quase quase prossegui com canary REAL sem o re-run validado. Detectei pelo timestamp do log JSON.
+- **Como evitar**: ao reenviar mensagem para subagente que precisa RE-EXECUTAR algo (script, ferramenta, etc.):
+  1. Seja ULTRA-EXPLÍCITO no prompt: incluir comando bash exato + ordem clara "RODE AGORA"
+  2. Após receber resposta, **verificar timestamp do arquivo de log/output** para confirmar re-execução (não confiar apenas no resumo do subagente)
+  3. Se timestamp não atualizou, executar diretamente OU spawn novo subagente com contexto reduzido
+  4. Lição: subagente é stateful — ele responde "do contexto recente", não necessariamente "do estado atual do filesystem"
 
 ### AR5 — Catálogo §6 mistura skill L2 com orchestrator C3 (origem do problema)
 

@@ -182,7 +182,7 @@ Mapeamento script-fonte→átomo: `docs/inventario-2026-05/consolidacao/MAPA_SCR
 - **COMO EVITAR**: ao criar nova skill, garantir **ABRANGÊNCIA desde o início**. Pre-cond bloqueia em REAL-RUN, não em DRY-RUN. Limites legítimos vivem em FLUXOS L3 + CONSTANTS + PRE-FLIGHT.
 - **RESOLUÇÃO v19+ (2026-05-26)**: criados 7 átomos ABRANGENTES em `escrituracao.py` (`buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`). Cada átomo é dry-run-first e versátil (qualquer direção FB↔LF↔CD). `criar_recebimento_orchestrado` V1 STRICT permanece como **wrapper temporário deprecado v20+** para preservar ETAPA E legacy. Mineração do `RecebimentoLfOdooService` (NÃO MEXER) feita via Explore subagente sem tocar o service externo. 22 pytest mockados verdes.
 
-### AP2 ⚠️ RECLASSIFICADO v19+ — ETAPA F criava picking de ENTRADA dentro de orchestrator de SAÍDA
+### AP2 ⚠️ CANARY VALIDADO v20+ / ⏳ remoção tampão pendente v21+ pós-bulk PROD — ETAPA F criava picking de ENTRADA dentro de orchestrator de SAÍDA
 
 - **CAUSA RAIZ REAL (descoberta v19+)**: Rafael identificou — Skill 8 (`faturando-odoo`) = SAÍDA. Criar picking de ENTRADA dentro de ETAPA F viola fronteira fiscal Skill 7/Skill 8. A explicação anterior ("DFe demora paliativo") foi um **sintoma**, não a causa: a causa é **picking de entrada nunca deveria ser criado por nós** — é responsabilidade do motor Odoo via `DFe → action_gerar_po_dfe → PO confirmada → picking automático`.
 - **CONSEQUÊNCIA**: 8 pickings INV-* PT 19 criados manualmente em PROD via Skill 5 v15a `criar_picking_entrada_destino_manual` (tampão). Acoplou orchestrator SAÍDA a operações de ENTRADA. Hardcodou CFOP (G037 caso degenerado). Bypass do motor fiscal Odoo.
@@ -192,6 +192,14 @@ Mapeamento script-fonte→átomo: `docs/inventario-2026-05/consolidacao/MAPA_SCR
   - Método novo `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` no orchestrator implementa caminho correto (compõe 7 átomos Skill 7 + Skill 5 `preencher_lotes_picking` + Skill 5 `validar`). 4 pytest mockados verdes validam dispatch caminho A vs B.
   - `criar_picking_entrada_destino_manual` (Skill 5 v15a) marcada DEPRECATED em docblock — museum vivo até v20+ canary do fluxo L3 1.2.x em PROD, então será removida.
   - ETAPAS E + F legacy do orchestrator preservadas funcionais (não quebrar 554 pytest verdes). v20+ ativa opt-in: `executar_pipeline_bulk` passa a chamar `executar_fluxo_l3_1_2_x` em vez das ETAPA E/F legacy.
+- **RESOLUÇÃO PARCIAL v20+ (2026-05-26)**:
+  - **Canary REAL PROD OK**: 1 caso INDUSTRIALIZACAO_FB_LF (invoice 627348, DFe 42868) processado via `executar_fluxo_l3_1_2_x` em 1190ms. Status `FLUXO_OK`. ZERO duplicações no Odoo PROD. Caminho A (DFe via SEFAZ) detectado corretamente; FIX B caminho 2 (`dfe_purchase_fiscal_id`) protegeu contra duplicação como previsto.
+  - **Opt-in `--usar-fluxo-l3-v19` LIVE**: arg em `executar_pipeline_bulk` + helper `_executar_etapa_f_via_fluxo_l3` + `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO` (atual: só LF=5 validado). Default OFF preserva 100% legacy. CD/FB destino retornam `NAO_SUPORTADA_V20` (pendente v21+ expansão constants).
+  - **2 FIXES CRÍTICOS na Skill 7**: FIX A em `escriturar_dfe` (anti-sobrescrita fiscal `l10n_br_data_entrada`); FIX B em `gerar_po_from_dfe` (idempotência via 3 caminhos vínculo DFe↔PO minerados de `validacao_nf_po_service.py:530-534`). Sem FIX B, action_gerar_po_dfe DUPLICARIA PO+picking+invoice quando dfe.purchase_id=False mas PO existe via link reverso (75% dos casos).
+  - **DeprecationWarning runtime** em `criar_recebimento_orchestrado` (V1 STRICT wrapper).
+- **PENDENTE v21+**:
+  - Bulk REAL PROD (não só 1 invoice) via opt-in. Após OK: remover tampão `criar_picking_entrada_destino_manual` + remover wrapper V1 STRICT + remover ETAPAS E/F legacy.
+  - Expandir CONSTANTS para FB e CD destino.
 
 ### AP3 ✅ RESOLVIDO v18 — Orchestrator C3 chamando atomos INLINE (origem dos AP1+AP2)
 

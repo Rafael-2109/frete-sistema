@@ -215,12 +215,18 @@ def test_escriturar_dfe_dry_run():
 
 
 def test_escriturar_dfe_real_escriturado():
-    """real_run escreve + verify -> ESCRITURADO."""
+    """real_run escreve + verify -> ESCRITURADO. FIX A v20+: pre-read
+    retorna valores DIFERENTES do proposto (forca caminho de write)."""
     odoo = MagicMock()
-    odoo.read.return_value = [{
-        'l10n_br_tipo_pedido': 'transf-filial',
-        'l10n_br_data_entrada': '2026-05-26',
-    }]
+    odoo.read.side_effect = [
+        # 1a chamada: pre-read FIX A — DFe ainda vazio (forca write)
+        [{'l10n_br_tipo_pedido': False, 'l10n_br_data_entrada': False}],
+        # 2a chamada: post-write verify — confirma valores escritos
+        [{
+            'l10n_br_tipo_pedido': 'transf-filial',
+            'l10n_br_data_entrada': '2026-05-26',
+        }],
+    ]
     svc = EscrituracaoLfService(odoo=odoo)
     res = svc.escriturar_dfe(
         dfe_id=4321,
@@ -237,6 +243,61 @@ def test_escriturar_dfe_real_escriturado():
             'l10n_br_tipo_pedido': 'transf-filial',
         },
     )
+
+
+# ============================================================
+# FIX A v20+ — idempotencia escriturar_dfe (anti-sobrescrita fiscal)
+# ============================================================
+
+def test_escriturar_dfe_idempotent_campos_iguais():
+    """FIX A v20+: pre-read mostra valores ja iguais ao proposto
+    -> IDEMPOTENT_ESCRITURADO (no-op, sem write).
+
+    Cenario: caller passa data_entrada explicito e ambos campos ja
+    estao iguais no Odoo. Anti-sobrescrita defensiva.
+    """
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_tipo_pedido': 'serv-industrializacao',
+        'l10n_br_data_entrada': '2026-05-18',
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.escriturar_dfe(
+        dfe_id=4321,
+        l10n_br_tipo_pedido='serv-industrializacao',
+        data_entrada='2026-05-18',
+        dry_run=False,
+    )
+    assert res['status'] == 'IDEMPOTENT_ESCRITURADO'
+    assert res['idempotent_via'] == 'campos_ja_iguais'
+    assert not odoo.write.called  # CRUCIAL: nao escreve
+
+
+def test_escriturar_dfe_preserva_data_entrada_populada():
+    """FIX A v20+: data_entrada ja populada no Odoo + caller usou default
+    (None -> date.today()) -> PRESERVA data atual + se tipo igual,
+    IDEMPOTENT via 'data_preservada_tipo_igual'.
+
+    Cenario REAL: 4 DFes INDUSTRIALIZACAO_FB_LF do ciclo INVENTARIO_2026_05
+    tem l10n_br_data_entrada=18-20/05 e default caller seria 26/05;
+    sem FIX A, write reescreveria data fiscal de invoice posted.
+    """
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_tipo_pedido': 'serv-industrializacao',
+        'l10n_br_data_entrada': '2026-05-18',  # ja populada
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.escriturar_dfe(
+        dfe_id=4321,
+        l10n_br_tipo_pedido='serv-industrializacao',
+        data_entrada=None,  # caller usa default = date.today()
+        dry_run=False,
+    )
+    assert res['status'] == 'IDEMPOTENT_ESCRITURADO'
+    assert res['idempotent_via'] == 'data_preservada_tipo_igual'
+    assert res['data_entrada'] == '2026-05-18'  # data atual preservada
+    assert not odoo.write.called  # CRUCIAL: nao escreve
 
 
 def test_escriturar_dfe_tipo_pedido_invalido():
@@ -257,10 +318,15 @@ def test_escriturar_dfe_tipo_pedido_invalido():
 # ============================================================
 
 def test_gerar_po_dry_run():
-    """dry_run=True NAO dispara; reporta plano."""
+    """dry_run=True NAO dispara; reporta plano. FIX B v20+: precisa cobrir
+    todos os 3 caminhos vazios para chegar no dry-run plano."""
     odoo = MagicMock()
-    # Idempotencia check: DFe sem purchase_id
-    odoo.read.return_value = [{'purchase_id': False}]
+    # FIX B v20+: dfe_check ja' le purchase_id+purchase_fiscal_id
+    odoo.read.return_value = [{
+        'purchase_id': False, 'purchase_fiscal_id': False,
+    }]
+    # Caminho 3 reverso vazio
+    odoo.search_read.return_value = []
     svc = EscrituracaoLfService(odoo=odoo)
     res = svc.gerar_po_from_dfe(dfe_id=4321, dry_run=True)
     assert res['status'] == 'DRY_RUN_OK'
@@ -271,23 +337,31 @@ def test_gerar_po_dry_run():
 
 
 def test_gerar_po_idempotent_existe():
-    """DFe ja tem purchase_id -> IDEMPOTENT_EXISTE."""
+    """DFe ja tem purchase_id (caminho 1 direto) -> IDEMPOTENT_EXISTE."""
     odoo = MagicMock()
-    odoo.read.return_value = [{'purchase_id': [777, 'PO/2026/0001']}]
+    odoo.read.return_value = [{
+        'purchase_id': [777, 'PO/2026/0001'],
+        'purchase_fiscal_id': False,
+    }]
     svc = EscrituracaoLfService(odoo=odoo)
     res = svc.gerar_po_from_dfe(dfe_id=4321, dry_run=False)
     assert res['status'] == 'IDEMPOTENT_EXISTE'
     assert res['po_id'] == 777
+    assert res['idempotent_via'] == 'dfe_purchase_id_direto'
 
 
 def test_gerar_po_real_criado(monkeypatch):
-    """real-run: fire + poll retorna po_id."""
+    """real-run: fire + poll retorna po_id. FIX B v20+: precisa cobrir
+    3 caminhos vazios antes de chegar no fire."""
     odoo = MagicMock()
-    # Sequencia de .read: 1a idempotencia (sem PO) → 2a poll (com PO)
+    # Sequencia de .read: 1a dfe_check FIX B (sem PO em ambos campos)
+    # → 2a poll_gerar_po (com PO encontrada)
     odoo.read.side_effect = [
-        [{'purchase_id': False}],
-        [{'purchase_id': [888, 'PO/2026/0002']}],
+        [{'purchase_id': False, 'purchase_fiscal_id': False}],  # dfe_check
+        [{'purchase_id': [888, 'PO/2026/0002']}],               # poll
     ]
+    # Caminho 3 reverso vazio (no dfe_check)
+    odoo.search_read.return_value = []
     odoo.execute_kw.return_value = None  # fire action retorna None
     svc = EscrituracaoLfService(odoo=odoo)
     monkeypatch.setattr('time.sleep', lambda _: None)
@@ -296,6 +370,61 @@ def test_gerar_po_real_criado(monkeypatch):
     )
     assert res['status'] == 'CRIADO'
     assert res['po_id'] == 888
+
+
+# ============================================================
+# FIX B v20+ — idempotencia gerar_po_from_dfe (3 caminhos vinculo DFe<->PO)
+# ============================================================
+
+def test_gerar_po_idempotent_via_purchase_fiscal_id():
+    """FIX B v20+ caminho 2: DFe tem purchase_fiscal_id populado
+    (75% dos concluidos via escrituracao) -> IDEMPOTENT_EXISTE sem fire.
+
+    Pattern minerado de validacao_nf_po_service.py:530-534.
+    """
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'purchase_id': False,
+        'purchase_fiscal_id': [555, 'PO/2026/0010'],  # escrituracao
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.gerar_po_from_dfe(dfe_id=4321, dry_run=False)
+    assert res['status'] == 'IDEMPOTENT_EXISTE'
+    assert res['po_id'] == 555
+    assert res['idempotent_via'] == 'dfe_purchase_fiscal_id'
+    # CRUCIAL: nao chamou search_read (caminho 2 detectou antes)
+    assert not odoo.search_read.called
+    # CRUCIAL: nao disparou action
+    assert not odoo.execute_kw.called
+
+
+def test_gerar_po_idempotent_via_po_dfe_id_reverso():
+    """FIX B v20+ caminho 3: DFe vazio em ambos campos diretos MAS
+    PO existe via po.dfe_id reverso -> IDEMPOTENT_EXISTE sem fire.
+
+    Caso descoberto em PROD 2026-05-26: 4 DFes INDUSTRIALIZACAO_FB_LF do
+    INVENTARIO_2026_05 (42868/42930/42931/42882) tem purchase_id=False
+    mas POs 42121/22/25/26 apontam reverso. Sem este check, _fire_and_poll
+    dispararia action_gerar_po_dfe e DUPLICARIA PO+picking+invoice.
+    """
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'purchase_id': False, 'purchase_fiscal_id': False,
+    }]
+    odoo.search_read.return_value = [{'id': 42125}]  # PO reverso
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.gerar_po_from_dfe(dfe_id=42868, dry_run=False)
+    assert res['status'] == 'IDEMPOTENT_EXISTE'
+    assert res['po_id'] == 42125
+    assert res['idempotent_via'] == 'po_dfe_id_reverso'
+    # CRUCIAL: search_read chamado com filtro correto
+    odoo.search_read.assert_called_with(
+        'purchase.order',
+        [('dfe_id', '=', 42868), ('state', '!=', 'cancel')],
+        ['id'], limit=1, order='id desc',
+    )
+    # CRUCIAL: nao disparou action_gerar_po_dfe
+    assert not odoo.execute_kw.called
 
 
 def test_gerar_po_timeout(monkeypatch):

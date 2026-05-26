@@ -2478,3 +2478,148 @@ def test_resume_sem_stagnation_continua_ate_max_iter():
         )
     assert result['motivo_parada'] == 'MAX_ITER'
     assert mock_bulk.call_count == 2
+
+
+# ============================================================
+# v20+ S3 — opt-in `usar_fluxo_l3_v19` (substitui ETAPAS E+F legacy)
+# ============================================================
+
+def test_v20_s3_etapa_e_skip_quando_flag_v19():
+    """v20+ S3: ETAPA E com `usar_fluxo_l3_v19=True` retorna
+    SKIP_NAO_SUPORTADA_V20_FLUXO_L3 (entrada FB nao mapeada no
+    minimo viavel; pendencia v21+).
+    """
+    executor = FaturamentoPipelineExecutor()
+    # NAO mockamos EscrituracaoLfService — branch early do flag retorna
+    # antes de tocar service externo.
+    res = executor.executar_etapa_e(
+        ciclo='TEST_V20_S3',
+        dry_run=True,
+        usar_fluxo_l3_v19=True,
+    )
+    assert res['status'] == 'SKIP_NAO_SUPORTADA_V20_FLUXO_L3'
+    assert 'company_destino=1 (FB) nao mapeadas' in res['observacao']
+    assert res['etapa'] == 'E'
+
+
+def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
+    """v20+ S3: ETAPA F com flag=True + ajuste destino LF (5) invoca
+    `_executar_etapa_f_via_fluxo_l3` que chama `executar_fluxo_l3_1_2_x`
+    com constants resolvidos (canary validado caso INDUSTRIALIZACAO_FB_LF).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V20_S3_LF'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=1,  # FB origem
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_inventario=168.11,
+        qtd_odoo=0,
+        qtd_ajuste=168.11,
+        lote_destino='MIGRAÇÃO',
+        invoice_id_odoo=627348,
+        chave_nfe='35260561724241000178550010000944701006273480',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v20_s3',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'FLUXO_OK',
+            'caminho': 'A',
+            'dfe_id': 42868,
+            'po_id': 42122,
+            'picking_id': 320393,
+            'invoice_id': 688686,
+            'passos': [],
+            'tempo_ms': 1190,
+        },
+    ) as mock_fluxo:
+        res = executor.executar_etapa_f(
+            ciclo=ciclo_test,
+            dry_run=False,
+            usar_fluxo_l3_v19=True,
+        )
+
+    # Cleanup
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert res['status'] == 'EXECUTADO_OK'
+    assert res['modo'] == 'fluxo_l3_v19'
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['falha'] == 0
+    assert res['contadores']['nao_suportada_v20'] == 0
+    assert 627348 in res['invoices_ok']
+    assert res['invoices_ok'][627348]['caminho'] == 'A'
+    # CRUCIAL: chamou executar_fluxo_l3_1_2_x com constants LF
+    mock_fluxo.assert_called_once()
+    kwargs = mock_fluxo.call_args.kwargs
+    assert kwargs['invoice_id_saida'] == 627348
+    assert kwargs['company_destino'] == 5  # LF
+    assert kwargs['l10n_br_tipo_pedido'] == 'serv-industrializacao'
+    assert kwargs['team_id'] == 41
+    assert kwargs['payment_term_id'] == 2791
+    assert kwargs['picking_type_id'] == 19
+    assert kwargs['payment_provider_id'] == 38
+
+
+def test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada(db):
+    """v20+ S3: ETAPA F com flag=True + ajuste destino CD (4)
+    retorna NAO_SUPORTADA_V20 (constants CD nao mapeadas em
+    CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO — pendencia v21+).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V20_S3_CD'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='999999',
+        tipo_produto=4,
+        company_id=1,  # FB origem (TRANSFERIR_FB_CD)
+        acao_decidida='TRANSFERIR_FB_CD',  # destino CD=4
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        invoice_id_odoo=999999,
+        chave_nfe='35260518467441000163550010000132451007099001',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v20_s3',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+    ) as mock_fluxo:
+        res = executor.executar_etapa_f(
+            ciclo=ciclo_test,
+            dry_run=False,
+            usar_fluxo_l3_v19=True,
+        )
+
+    # Cleanup
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert res['status'] == 'SKIP_NAO_SUPORTADA_V20'
+    assert res['modo'] == 'fluxo_l3_v19'
+    assert res['contadores']['nao_suportada_v20'] == 1
+    assert res['contadores']['ok'] == 0
+    assert 999999 in res['invoices_nao_suportadas_v20']
+    msg = res['invoices_nao_suportadas_v20'][999999]
+    assert 'company_destino=4' in msg
+    assert 'Pendencia v21+' in msg
+    # CRUCIAL: NAO chamou executar_fluxo_l3_1_2_x (nao tinha constants)
+    mock_fluxo.assert_not_called()

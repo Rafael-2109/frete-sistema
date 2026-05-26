@@ -218,7 +218,31 @@ class EscrituracaoLfService:
 
         Raises:
             NotImplementedError: cnpj_emitente ou company_id_recebedor fora V1.
+
+        .. deprecated:: v20+
+            Wrapper V1 STRICT mantido para preservar ETAPA E legacy do
+            orchestrator (`faturamento_pipeline.executar_etapa_e`). Sera
+            removido em v21+ ou v22+ apos canary REAL PROD do FLUXO L3
+            1.2.x validar substituicao via `executar_fluxo_l3_1_2_x`
+            (compoe os 7 atomos ABRANGENTES `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`,
+            `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`,
+            `confirmar_po`, `criar_invoice_from_po`).
+            Migracao: usar `executar_fluxo_l3_1_2_x` no orchestrator
+            (S3 v20+ adiciona flag opt-in `--usar-fluxo-l3-v19`).
+            Constituicao: `app/odoo/estoque/CLAUDE.md` §6.5 AP1 (resolvido v19+).
         """
+        import warnings as _warnings  # lazy
+        _warnings.warn(
+            'EscrituracaoLfService.criar_recebimento_orchestrado eh '
+            'WRAPPER V1 STRICT deprecado v20+ (mantido para preservar '
+            'ETAPA E legacy do orchestrator). Sera removido em v21+ ou '
+            'v22+ apos canary REAL PROD do FLUXO L3 1.2.x validar '
+            'substituicao via executar_fluxo_l3_1_2_x. Ver CLAUDE.md '
+            'estoque §6.5 AP1.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         t0 = time.time()
 
         # Pre-cond V1 STRICT
@@ -948,6 +972,60 @@ class EscrituracaoLfService:
             'l10n_br_tipo_pedido': l10n_br_tipo_pedido,
         }
 
+        # FIX A v20+ (MEDIO critico fiscal): idempotencia pre-write +
+        # preservacao de l10n_br_data_entrada ja populada.
+        #
+        # Caso descoberto em PROD 2026-05-26 (subagente audit Fase A):
+        # 4 DFes INDUSTRIALIZACAO_FB_LF tem l10n_br_data_entrada ja setada
+        # (18-20/05); sem este check, real-run reescreveria para date.today()
+        # (26/05) alterando data fiscal de invoice posted. Risco SPED/contabil.
+        #
+        # Regras:
+        #   - Se ambos campos ja iguais ao proposto -> IDEMPOTENT_ESCRITURADO
+        #     (no-op sem write)
+        #   - Se l10n_br_data_entrada ja populada (truthy) E caller usou default
+        #     -> PRESERVAR data atual (sobrescrever proposto)
+        #   - Re-check apos preservacao: se ambos iguais -> IDEMPOTENT
+        try:
+            pre_check = self.odoo.read(
+                'l10n_br_ciel_it_account.dfe', [dfe_id],
+                ['l10n_br_tipo_pedido', 'l10n_br_data_entrada'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_pre_read_dfe: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not pre_check:
+            out['erro'] = 'pre_read_dfe_nao_encontrou'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        pre = pre_check[0]
+        atual_tipo = pre.get('l10n_br_tipo_pedido')
+        atual_data = pre.get('l10n_br_data_entrada')
+
+        # Caso 1: ambos campos ja iguais ao proposto -> no-op
+        if atual_tipo == l10n_br_tipo_pedido and atual_data == out['data_entrada']:
+            out['status'] = 'IDEMPOTENT_ESCRITURADO'
+            out['idempotent_via'] = 'campos_ja_iguais'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Caso 2: data_entrada ja populada (truthy) E caller usou default
+        # (data_entrada=None original que virou date.today()) -> PRESERVAR
+        # atual. Operador que passa data_entrada explicito sobrepoe esta logica.
+        # Detecta default via comparacao com date.today() atual.
+        if atual_data and data_entrada is None:
+            out['data_entrada'] = atual_data
+            values['l10n_br_data_entrada'] = atual_data
+            # Re-check apos preservacao
+            if atual_tipo == l10n_br_tipo_pedido:
+                out['status'] = 'IDEMPOTENT_ESCRITURADO'
+                out['idempotent_via'] = 'data_preservada_tipo_igual'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
         if dry_run:
             out['status'] = 'DRY_RUN_OK'
             out['plano'] = {
@@ -1031,22 +1109,77 @@ class EscrituracaoLfService:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # Idempotencia: DFe ja tem purchase_id?
+        # FIX B v20+ (CRITICO): idempotencia via TRES CAMINHOS de vinculo
+        # DFe<->PO no CIEL IT. Pattern minerado de `validacao_nf_po_service.py`
+        # L530-534+L575-609 (service de match NF x PO validado em PROD):
+        #   1. DFE.purchase_id (~14.6% — many2one direto, excepcional)
+        #   2. DFE.purchase_fiscal_id (~75% dos concluidos — escrituracao)
+        #   3. PO.dfe_id reverso (~85.4% — caminho primario em status=04)
+        #
+        # Caso descoberto em PROD 2026-05-26 (subagente audit Fase A):
+        # 4 DFes do ciclo INVENTARIO_2026_05 INDUSTRIALIZACAO_FB_LF
+        # (42868/42930/42931/42882) tem `purchase_id=False` mas pipeline
+        # completo no Odoo (PO+picking+invoice existem). Rafael confirmou
+        # que sem cobrir os 3 caminhos, `_fire_and_poll` dispara action e
+        # DUPLICA PO+picking+invoice.
+        # Doc: `/tmp/subagent-findings/audit_idempotencia_v20_1779815000.md`.
         try:
             dfe_check = self.odoo.read(
                 'l10n_br_ciel_it_account.dfe', [dfe_id],
-                ['purchase_id'],
+                ['purchase_id', 'purchase_fiscal_id'],
             )
         except Exception as e:
             out['erro'] = f'erro_ler_dfe: {str(e)[:200]}'
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        if dfe_check and dfe_check[0].get('purchase_id'):
-            po_ref = dfe_check[0]['purchase_id']
-            po_id_ex = po_ref[0] if isinstance(po_ref, (list, tuple)) else po_ref
+        if dfe_check:
+            chk = dfe_check[0]
+            # Caminho 1: purchase_id direto (14.6%)
+            purchase_id = chk.get('purchase_id')
+            if purchase_id:
+                po_id_ex = (
+                    purchase_id[0]
+                    if isinstance(purchase_id, (list, tuple))
+                    else purchase_id
+                )
+                out['status'] = 'IDEMPOTENT_EXISTE'
+                out['po_id'] = po_id_ex
+                out['idempotent_via'] = 'dfe_purchase_id_direto'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+            # Caminho 2: purchase_fiscal_id (75% dos concluidos — escrituracao)
+            purchase_fiscal_id = chk.get('purchase_fiscal_id')
+            if purchase_fiscal_id:
+                po_id_ex = (
+                    purchase_fiscal_id[0]
+                    if isinstance(purchase_fiscal_id, (list, tuple))
+                    else purchase_fiscal_id
+                )
+                out['status'] = 'IDEMPOTENT_EXISTE'
+                out['po_id'] = po_id_ex
+                out['idempotent_via'] = 'dfe_purchase_fiscal_id'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+        # Caminho 3 (85.4%): fallback search reverso po.dfe_id
+        try:
+            po_reverso = self.odoo.search_read(
+                'purchase.order',
+                [('dfe_id', '=', dfe_id), ('state', '!=', 'cancel')],
+                ['id'],
+                limit=1, order='id desc',
+            )
+        except Exception as e:
+            out['erro'] = f'erro_search_po_reverso: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if po_reverso:
             out['status'] = 'IDEMPOTENT_EXISTE'
-            out['po_id'] = po_id_ex
+            out['po_id'] = po_reverso[0]['id']
+            out['idempotent_via'] = 'po_dfe_id_reverso'
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 

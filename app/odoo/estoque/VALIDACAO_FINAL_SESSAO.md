@@ -1999,3 +1999,66 @@ Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para
 3. Refator nomenclatura AP6 (Skill 8 ATÔMICA L2 vs `inventario_pipeline` C3).
 4. Após canary OK: remover ETAPAS E/F legacy + remover `criar_picking_entrada_destino_manual` + remover wrapper V1 STRICT.
 5. Folhas L3 pendentes: 1.1.x, 1.3, 2.3.
+
+---
+
+## Sessão 2026-05-26 v20+ — Canary REAL OK + FIX A/B/whitelist orchestrator + opt-in `--usar-fluxo-l3-v19` + DeprecationWarning V1 STRICT
+
+**Commit base**: 8670e08d (v19+ Skill 7 ABRANGENTE + Fluxos L3 1.2.1/1.2.2 + dispatch).
+**Status final**: 563 pytest verdes (555 baseline → +8 testes novos).
+
+### Entregas
+
+1. **S1 cross-refs final** ✅ — `.claude/agents/gestor-estoque-odoo.md` árvore (nodos 1.2.1+1.2.2 explícitos); `.claude/references/ROUTING_SKILLS.md` (header v19+ + entry Skills Odoo `escriturando-odoo` ABRANGENTE + árvore §3); `.claude/skills/faturando-odoo/SKILL.md` (Receita 5 + tabela legacy vs v19+ + AP1/AP3/AP4/AP5 ✅ + checklist V19/V20/V21).
+
+2. **S2 canary REAL PROD** ✅ — Subagente executou 3 fases:
+   - Fase 1 (dry-run): caminho A detectado em INDUSTRIALIZACAO_FB_LF (invoice 627348, DFe 42868) — não B esperado. **Descoberta R3** (doc fluxo 1.2.2 desatualizada).
+   - Fase A audit idempotência: 3 átomos NÃO-idempotentes descobertos (`escriturar_dfe` MÉDIO sobrescreveria `l10n_br_data_entrada`; `gerar_po_from_dfe` CRÍTICO `dfe.purchase_id=False` em PROD apesar de PO via link reverso → duplicaria PO+picking+invoice; `preencher_po` BAIXO).
+   - **Sugestão chave Rafael** (verificar `validacao_nf_po_service.py`): descobri vínculo DFe↔PO via **3 caminhos** (não 2): `purchase_id` 14.6% + `purchase_fiscal_id` 75% (faltava!) + `po.dfe_id` reverso 85.4%.
+   - Fase B real-run #1: FALHA_PASSO_3 — bug whitelist orchestrator. Fixado.
+   - Fase B real-run #2 (final): ✅ FLUXO_OK em 1190ms. ZERO duplicações. Caminho 2 do FIX B detectou IDEMPOTENT_EXISTE como previsto.
+
+3. **S2b FIX A + FIX B Skill 7** ✅
+   - FIX A `escriturar_dfe`: pré-read + idempotência via 2 caminhos (`campos_ja_iguais` + `data_preservada_tipo_igual`). Anti-sobrescrita fiscal.
+   - FIX B `gerar_po_from_dfe`: idempotência via **3 caminhos** (`dfe_purchase_id_direto` + `dfe_purchase_fiscal_id` + `po_dfe_id_reverso`). Anti-duplicação CRÍTICA.
+   - Fix orchestrator whitelist (linha 2939): aceita `IDEMPOTENT_ESCRITURADO` novo status.
+   - 4 pytest novos + 3 existentes ajustados.
+
+4. **S3 opt-in `--usar-fluxo-l3-v19`** ✅
+   - arg propagado em `executar_pipeline_bulk` + `executar_pipeline_resume` + `executar_etapa_e/f`.
+   - `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO` (atual: só LF=5 validado canary).
+   - `_executar_etapa_f_via_fluxo_l3` itera invoices, resolve constants, invoca `executar_fluxo_l3_1_2_x`.
+   - ETAPA E com flag=True → SKIP_NAO_SUPORTADA_V20 (FB destino pendente v21+).
+   - ETAPA F destino LF (canary validado) usa fluxo L3; destino CD ainda NAO_SUPORTADA_V20.
+   - CLI flag adicionado. Default OFF preserva 100% legacy.
+   - 3 pytest novos.
+
+5. **S5 DeprecationWarning V1 STRICT** ✅ — `criar_recebimento_orchestrado` emite warning runtime. Docstring `.. deprecated:: v20+`. 1 pytest novo.
+
+6. **R3 doc fluxo 1.2.2** atualizado — premissa "INDUSTRIALIZACAO_FB_LF nunca tem DFe via SEFAZ" reescrita com fato empírico.
+
+### Antipadrões — status v20+
+
+| Antipadrão | Status |
+|------------|--------|
+| AP1 V1 STRICT raise | ✅ resolvido v19+; wrapper deprecado v20+ |
+| AP2 ETAPA F orchestrator picking ENTRADA | ✅ canary validou FLUXO L3 caminho correto; tampão remoção pendente v21+ |
+| AP3 orchestrator chama skill INLINE | ✅ resolvido v18 |
+| AP4 pre-cond raise antes dry-run | ✅ resolvido v19+ |
+| AP5 gotcha sem ler CONSTANTS | ✅ resolvido v18 |
+| AP6 confusão nomenclatura Skill 8 | ⏳ adiado v21+ |
+
+### Novos antipadrões / desvios descobertos v20+
+
+- **AR9 candidato**: orchestrator whitelist desatualizado quando átomo ganha status novo (`IDEMPOTENT_*`). Lição custou 1 real-run no canary. Ao adicionar status novo no átomo, conferir TODOS callsites do orchestrator que validam status retornado.
+- **Subagente reportando dados velhos**: subagente terminou e respondeu com base no resultado anterior (não re-executou após meu fix). Lição: ao reenviar, ULTRA-EXPLÍCITO + verificar timestamp do log para confirmar re-execução.
+
+### Próximo passo v21+
+
+1. Bulk REAL PROD do FLUXO L3 via opt-in (não só 1 invoice).
+2. Após bulk OK: remover `criar_picking_entrada_destino_manual` + remover wrapper V1 STRICT + remover ETAPAS E/F legacy.
+3. Expandir `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO` para FB=1 e CD=4 (mapear constants + validar canary).
+4. Expandir `L10N_BR_TIPO_PEDIDO_POR_ACAO` para todas direções (MATRIZ_INTERCOMPANY).
+5. **Refator nomenclatura AP6** (S4 adiado desta sessão): extrair `executar_skill8_atomica` do orchestrator + atualizar §6 catálogo.
+6. Folhas L3 pendentes: 1.1.x, 1.3, 2.3.
+7. Atualizar `fase_pipeline` local dos 4 INDUSTRIALIZACAO_FB_LF (gap DB local vs Odoo — Rafael decide).

@@ -83,11 +83,14 @@ Orquestrador de **operações de escrita de estoque no Odoo**. Você **decide o 
 
 ```
 1  NF inter-company (emissão/SEFAZ entre filiais)
-   1.1  só faturamento (saída)              → fluxos/1.1.* (faturando-odoo) ⬜ pendente v19+
-   1.2  só entrada/escrituração
-        1.2.1 inventário (DFe próprio)      → fluxos/1.2.1 (escriturando-odoo) ⬜ pendente v19+
-        1.2.2 COMPRAS (DFe fornecedor)      → DELEGAR a gestor-recebimento
-   1.3  transferência completa (saída+entrada) → fluxos/1.3 (faturando-odoo ⨾ escriturando-odoo) ⬜ pendente v19+
+   1.1  só faturamento (saída)              → fluxos/1.1.* (orchestrator C3 inventario_pipeline) ⬜ pendente v20+ (depende refator AP6 Skill 8 ATÔMICA L2)
+   1.2  só entrada/escrituração — caminho A vs B decidido por `buscar_dfe(chave_nfe, company_destino)`
+        1.2.1 caminho A — DFe já veio via SEFAZ (PERDA_LF_FB / DEV_LF_FB / TRANSFERIR_CD_FB típicos)
+              → [folha 1.2.1](app/odoo/estoque/fluxos/1.2.1-escriturar-dfe-industrializacao.md) ✅ v19+ — compõe Skill 7 ABRANGENTE (buscar_dfe → escriturar_dfe → gerar_po_from_dfe → preencher_po → confirmar_po → criar_invoice_from_po) + Skill 5 (preencher_lotes_picking → validar)
+        1.2.2 caminho B — DFe ausente; upload XML da SAÍDA (INDUSTRIALIZACAO_FB_LF canônico; fallback dos demais)
+              → [folha 1.2.2](app/odoo/estoque/fluxos/1.2.2-criar-dfe-manual-transferencia.md) ✅ v19+ — idêntico ao A + passo extra Skill 7 `criar_dfe_a_partir_do_invoice_saida` antes de escriturar
+        1.2.3 COMPRAS (DFe fornecedor)      → DELEGAR a gestor-recebimento
+   1.3  transferência completa (saída+entrada) → fluxos/1.3 (compõe Skill 8 ATÔMICA L2 + folha 1.2.x) ⬜ pendente v20+ (depende refator AP6)
 2  Estoque (sem NF — operações Odoo internas, NÃO emite documento fiscal; com NF → galho 1.x)
    2.1 ajuste de saldo (1 quant pontual; N→1 via planilha)         → ajustando-quant-odoo ✅ [folha 2.1](fluxos/2.1-ajuste-saldo-por-planilha.md)
    2.2 realocar saldo (lote→lote / loc→loc / MIGRAÇÃO↔Indisp Modo C) → transferindo-interno-odoo 🟡 [folha 2.2](fluxos/2.2-realocar-saldo.md)
@@ -105,7 +108,7 @@ Orquestrador de **operações de escrita de estoque no Odoo**. Você **decide o 
 
 > As skills acima nascem pelo `ROADMAP_SKILLS.md`. Marque mentalmente quais já existem antes de prometer execução.
 
-> **Galho 1 (NF inter-company) está ⬜ TODO**: refator v19+ destrava (Skill 7 ABRANGENTE + FLUXO L3 1.2.1 + extrair ETAPA F do orchestrator). Até lá, **caso real de inter-company** = invocar Skill 8 `faturando-odoo` (via SKILL.md `.claude/skills/faturando-odoo/SKILL.md`) que tem pipeline A-F + recovery LIVE v18 **com antipadrões documentados** em §6.5 do CLAUDE.md.
+> **Galho 1.2 LIVE v19+** via Skill 7 ABRANGENTE (7 átomos) + folhas L3 1.2.1/1.2.2 + dispatch `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` no orchestrator. Canary REAL PROD pendente v20+; opt-in `--usar-fluxo-l3-v19` ativa o caminho novo no `executar_pipeline_bulk` (default preserva ETAPAS E+F legacy = zero regressão). Galhos 1.1 (só saída) e 1.3 (saída+entrada) permanecem ⬜ até refator AP6 extrair **Skill 8 ATÔMICA L2** (`account.move` validar+liberar+polling+SEFAZ) do orchestrator atual.
 
 ---
 

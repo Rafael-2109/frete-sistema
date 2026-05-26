@@ -1,4 +1,4 @@
-"""Tests para EscrituracaoLfService (Skill 7 v17.5).
+"""Tests para EscrituracaoLfService (Skill 7 v17.5 + DeprecationWarning v20+).
 
 V1 STRICT: SO LF->FB via RecebimentoLfOdooService externo (4562 LOC NAO MEXER).
 
@@ -16,7 +16,9 @@ Cobertura:
 7. test_grecl2_transfer_erro_parcial    - G-RECLF-2: transfer_status='erro' = PARCIAL
 8. test_high4_svc_instanciado_fresh     - svc externo eh fresh por invocacao
 9. test_invoice_sumiu_odoo              - account.move sumiu -> FALHA
+10. test_v20_deprecation_warning        - V20+ wrapper emite DeprecationWarning
 """
+import warnings
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -574,3 +576,43 @@ def test_invoice_sumiu_odoo(db):
 
     AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
     db.session.commit()
+
+
+# ============================================================
+# v20+ — DeprecationWarning no wrapper V1 STRICT
+# ============================================================
+
+def test_v20_deprecation_warning_emitido():
+    """v20+ (S5): wrapper V1 STRICT emite DeprecationWarning ao ser
+    invocado (mesmo em dry-run). Fim de vida agendado v21+ ou v22+
+    apos canary REAL PROD do FLUXO L3 1.2.x validar substituicao via
+    executar_fluxo_l3_1_2_x.
+    """
+    odoo = MagicMock()
+    svc = EscrituracaoLfService(odoo=odoo)
+
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter('always')
+        res = svc.criar_recebimento_orchestrado(
+            invoice_id=999,
+            ajustes=[],  # vazio para sair rapido sem tocar Odoo
+            ciclo='TEST_DEPRECATION_V20',
+            usuario='test_v20',
+            dry_run=True,
+        )
+
+    # Pelo menos 1 DeprecationWarning emitido
+    dep_warnings = [
+        w for w in recorded if issubclass(w.category, DeprecationWarning)
+    ]
+    assert len(dep_warnings) >= 1, (
+        f'Esperado >=1 DeprecationWarning, recebido {len(dep_warnings)}. '
+        f'Total warnings: {len(recorded)}.'
+    )
+    # Mensagem mencionar v20+ + AP1 + FLUXO L3
+    msg = str(dep_warnings[0].message)
+    assert 'V1 STRICT' in msg
+    assert 'v20+' in msg or 'v21+' in msg or 'v22+' in msg
+    assert 'executar_fluxo_l3_1_2_x' in msg
+    # Atomo ainda funciona (nao quebra fluxo)
+    assert res['status'] in ('SKIP_AJUSTES_VAZIOS', 'DRY_RUN_OK', 'FALHA')

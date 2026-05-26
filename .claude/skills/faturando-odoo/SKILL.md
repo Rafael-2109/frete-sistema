@@ -269,6 +269,88 @@ python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
   --max-iter 12 --confirmar --auto-confirma-direcao-nova
 ```
 
+## Receita 5: FLUXO L3 1.2.x via `executar_fluxo_l3_1_2_x` (v19+ ABRANGENTE — caminho A ou B automatico)
+
+**Contexto v19+**: substitui ETAPAS E+F legacy do `executar_pipeline_bulk`. Compoe
+Skill 7 ABRANGENTE (7 atomos) + Skill 5 (`preencher_lotes_picking` + `validar`).
+Decide caminho A vs B internamente via `buscar_dfe(chave_nfe_do_invoice_saida,
+company_destino)`:
+
+- **caminho A** (DFe ja veio via SEFAZ no destino): pula `criar_dfe_a_partir_do_invoice_saida`
+  e segue direto para `escriturar_dfe → gerar_po → preencher_po → confirmar_po →
+  preencher_lotes → validar → criar_invoice`. Tipico de PERDA_LF_FB,
+  DEV_LF_FB, TRANSFERIR_CD_FB.
+- **caminho B** (DFe ausente apos timeout): faz upload do XML autorizado da NF de
+  SAIDA (`account.move.l10n_br_xml_aut_nfe`) para criar DFe no destino, dispara
+  `action_processar_arquivo_manual`, depois segue passos identicos. Canonico para
+  INDUSTRIALIZACAO_FB_LF (sentido reverso nao tem DFe SEFAZ automatico).
+
+**Disparo direto (sessao v20+ canary REAL PROD)**:
+```python
+# Em PROD via Python (orquestrado por subagente gestor-estoque-odoo)
+from app.odoo.estoque.orchestrators.faturamento_pipeline import (
+    FaturamentoPipelineExecutor,
+)
+
+executor = FaturamentoPipelineExecutor(db_session=db.session, odoo=odoo_conn)
+
+# DRY-RUN primeiro (decide caminho + planeja todos passos)
+plano = executor.executar_fluxo_l3_1_2_x(
+    invoice_id_saida=607443,           # account.move da NF SAIDA SEFAZ-OK
+    company_destino=5,                 # 1=FB, 4=CD, 5=LF
+    l10n_br_tipo_pedido='serv-industrializacao',  # ou 'transf-filial'/'retorno'
+    team_id=<TEAM>,                    # constants por company
+    payment_term_id=<PT>,
+    picking_type_id=<PT_ID>,
+    payment_provider_id=38,            # G029
+    lote_default='MIGRAÇÃO',
+    poll_timeout_po_s=1800,
+    poll_timeout_invoice_s=300,
+    dry_run=True,                      # PRIMEIRO sempre dry-run
+)
+# plano['caminho'] ∈ {'A', 'B'}; plano['status'] = 'DRY_RUN_OK'
+# plano['passos'] lista cada step + status + tempo_ms
+
+# APOS REVISAO HUMANA EXPLICITA do plano:
+real = executor.executar_fluxo_l3_1_2_x(
+    invoice_id_saida=607443, company_destino=5, ...,
+    dry_run=False,
+)
+# real['status'] = 'FLUXO_OK' ou 'FALHA_PASSO_<N>_<MOTIVO>'
+# Posting da invoice (account.move.action_post) NAO faz parte — caller faz.
+```
+
+**Output keys**:
+- `status`: `DRY_RUN_OK` | `FLUXO_OK` | `FALHA_PASSO_1_BUSCAR_DFE` |
+  `FALHA_PASSO_2_CRIAR_DFE` | ... | `FALHA_PASSO_9_CRIAR_INVOICE`
+- `caminho`: `'A'` | `'B'` | `'INDEFINIDO'`
+- `dfe_id`, `po_id`, `picking_id`, `invoice_id`: ints (None em dry-run)
+- `passos`: lista de `{passo, status, tempo_ms, erro}`
+- `tempo_ms`, `erro`
+
+**Idempotencia codificada**:
+- Passo 1 (buscar_dfe) reusa DFe existente (nao cria duplicado)
+- Passo 2 (criar_dfe) `IDEMPOTENT_EXISTE` quando DFe ja existe com mesma chave
+- Passo 7 (preencher_lotes) `IDEMPOTENT_DONE` se picking ja em state='done'
+- Passo 8 (validar) idem
+- Passo 9 (criar_invoice) `IDEMPOTENT_EXISTE` se PO ja tem invoice
+
+**Diferenca vs ETAPAS E+F legacy** (preservadas em paralelo ate canary v20+ OK):
+| Aspecto | Legacy E+F (V1 STRICT) | FLUXO L3 1.2.x (v19+ ABRANGENTE) |
+|---------|------------------------|----------------------------------|
+| ETAPA E | Skill 7 atomo `criar_recebimento_orchestrado` (LF→FB only; raise NotImplementedError outras direcoes) | 7 atomos componiveis (qualquer direcao FB↔LF↔CD; dry-run-first) |
+| ETAPA F | Skill 5 atomo `criar_picking_entrada_destino_manual` (CAMINHO B paliativo — bypassa motor Odoo, hardcoda CFOP via G037) | Caminho B usa `criar_dfe_a_partir_do_invoice_saida` + motor Odoo gera PO+picking nativo (CFOP derivado via fiscal_position) |
+| Decisao A vs B | Manual (`--auto-confirma-direcao-nova` flag) | Automatico via `buscar_dfe` |
+| Direcoes suportadas | LF→FB (E) + canary INDUSTR FB→LF / TRANSFERIR FB→CD (F com flag) | INDUSTRIALIZACAO_FB_LF, TRANSFERIR_CD_FB/FB_CD, PERDA_LF_FB, DEV_LF_FB/CD_LF/LF_CD/FB_LF (matriz inteira via constants) |
+| Antipadrao | AP2 (orchestrator SAIDA cria picking de ENTRADA — viola fronteira) | AP2 reclassificado/resolvido v19+ (orchestrator delega via FLUXO L3) |
+
+**Ativacao opt-in no `executar_pipeline_bulk` v20+** (S3 da sessao v20+): flag CLI
+`--usar-fluxo-l3-v19` faz ETAPAS E+F do bulk invocarem `executar_fluxo_l3_1_2_x`
+em vez do path legacy. Default `False` preserva 100% comportamento legacy =
+zero risco regressao.
+
+---
+
 ## Receita 4: Pre-flight isolado (--modo pre-flight, sub-skill C5 sem dispatch)
 
 **Contexto**: Auditoria de cadastro fiscal antes de rodar pipeline. Operador
@@ -314,48 +396,69 @@ python .claude/skills/auditando-cadastro-fiscal-odoo/scripts/auditar_cadastro_in
 
 ---
 
-## ANTIPADROES DETECTADOS V17.5 — REFATOR V19+ (NAO ENTRA NO ESCOPO V18)
+## ANTIPADROES DETECTADOS — STATUS v19+ (rastreamento; constituicao §6.5 CLAUDE.md estoque eh fonte canonica)
 
-> Documentado para que sessoes futuras nao reintroduzam.
+> Documentado para que sessoes futuras nao reintroduzam. Status detalhado +
+> causa-raiz + como evitar = `app/odoo/estoque/CLAUDE.md` §6.5.
 
-### Antipadrao 1: Skill 7 V1 STRICT (raise NotImplementedError)
+### Antipadrao 1: Skill 7 V1 STRICT (raise NotImplementedError) ✅ RESOLVIDO v19+
 - Atomo `EscrituracaoLfService.criar_recebimento_orchestrado` raise se cnpj!=LF
-  OU company_recebedor!=FB. Limita Skill 7 a 1 direcao.
-- **Correto**: Skill 7 deveria ser ATOMICA mas ABRANGENTE (1 objeto Odoo:
-  DFe/account.move). Limites = FLUXOS + CONSTANTS + PRE-FLIGHT, NAO o atomo.
-- **Esperado v19+**: extrair atomos COMUNS entre `RecebimentoLfOdooService`
-  (37 steps) + `LancamentoOdooService` (16 etapas — fretes/CTe) + `escriturar_dfe_lf.py`
-  (FLUXO A inventario). Atomos: `buscar_ou_criar_dfe`, `configurar_dfe`,
-  `gerar_po_from_dfe`, `configurar_po`, `confirmar_po`, `criar_invoice_from_po`,
-  `configurar_invoice`, `calcular_imposto`, `postar_invoice`, `finalizar_lancamento`.
+  OU company_recebedor!=FB. Limitava Skill 7 a 1 direcao.
+- **RESOLUCAO v19+ (2026-05-26)**: 7 atomos ABRANGENTES criados em
+  `app/odoo/estoque/scripts/escrituracao.py` (`buscar_dfe`,
+  `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`,
+  `preencher_po`, `confirmar_po`, `criar_invoice_from_po`). Cada atomo eh
+  dry-run-first + versatil (qualquer direcao FB↔LF↔CD). Wrapper V1 STRICT
+  permanece como museum vivo deprecado v20+ para preservar ETAPA E legacy.
+  22 pytest mockados verdes.
 
-### Antipadrao 2: ETAPA F orchestrator cria picking manual via Skill 5
+### Antipadrao 2: ETAPA F orchestrator cria picking manual via Skill 5 ⚠️ RECLASSIFICADO v19+
 - ETAPA F invoca `criar_picking_entrada_destino_manual` (Skill 5) que cria
   picking SEM PO + partner_id.
-- **Correto**: ETAPA F deveria ser FLUXO L3 que compoe:
-  - Skill 7: `escriturar_dfe(...)` -> PO criada -> picking nativo (com PO+partner)
-  - Skill 5: `preencher_lotes_picking(picking_id, lote='MIGRACAO')` (atomo a criar)
-  - Skill 7: `criar_invoice_from_po(po_id)` -> ENTIN CFOP 1901
-- **Esperado v19+**: criar FLUXO L3 `1.2.1-escriturar-dfe-industrializacao.md`
-  + reescrever ETAPA F para invocar FLUXO; `criar_picking_entrada_destino_manual`
-  permanece como CAMINHO B paliativo documentado.
+- **CAUSA RAIZ REAL (descoberta v19+)**: Skill 8 (`faturando-odoo`) = SAIDA.
+  Criar picking de ENTRADA dentro de ETAPA F viola fronteira fiscal Skill 7/8.
+  A explicacao anterior ("DFe demora paliativo") foi sintoma, nao causa.
+- **RESOLUCAO PARCIAL v19+**: 2 folhas L3 escritas (1.2.1 + 1.2.2) + metodo
+  `executar_fluxo_l3_1_2_x` no orchestrator (Receita 5 acima). Caminho B
+  correto = upload XML SAIDA + motor Odoo gera picking nativo. Tampao Skill 5
+  v15a `criar_picking_entrada_destino_manual` marcada DEPRECATED docblock
+  (museum vivo ate canary v20+ remover). ETAPAS E+F legacy preservadas
+  funcionais (nao quebrar baseline 555 pytest).
+- **PENDENTE v20+**: opt-in `--usar-fluxo-l3-v19` (S3) faz bulk invocar
+  `executar_fluxo_l3_1_2_x` em vez do path legacy. Apos canary REAL PROD
+  validar: remove ETAPAS E+F legacy + remove `criar_picking_entrada_destino_manual`.
 
-### Antipadrao 3 (relacionado): orchestrator Skill 8 NUNCA deveria chamar
-- Skill 5 ou Skill 7 INLINE. Eh FLUXO L3 que compoe.
-- Constituicao §6 reforcada: "Fluxo >> Skill"
-- v17.5 ETAPA F chama Skill 5 atomo direto -> viola §6
-- v17.5 ETAPA E chama Skill 7 atomo do orchestrator -> viola §6
-  (mas menos grave que v17 inline ~420 LOC)
-- **Esperado v19+**: extrair ETAPA E e ETAPA F do orchestrator para FLUXOS L3;
-  orchestrator Skill 8 = SO SAIDA (A->B->C->D); FLUXO L3 1.3 compoe
-  Skill 8 saida + Skill 7 entrada.
+### Antipadrao 3 (relacionado): orchestrator chama skill atomo INLINE ✅ RESOLVIDO v18
+- v17.5 ETAPA F chama Skill 5 atomo direto -> viola §6 "Fluxo >> Skill"
+- v17.5 ETAPA E chama Skill 7 atomo direto -> viola §6
+  (menos grave que v17 inline ~420 LOC; mas ainda violacao)
+- **RESOLUCAO v18 (Fase 0)**: §6 CLAUDE.md reorganizado em 3 tabelas distintas
+  (Skills L2 / Orchestrators C3 / Fluxos L3). §3.1 explicita "Orchestrator C3
+  NAO eh skill". v19+ adiciona FLUXO L3 1.2.1/1.2.2 + metodo orchestrator
+  `executar_fluxo_l3_1_2_x` seguindo pattern correto (orchestrator compoe via
+  FLUXO, nao inline).
 
-### Antipadrao 4: V1 STRICT pre-cond ANTES de dry-run check
+### Antipadrao 4: V1 STRICT pre-cond ANTES de dry-run check ✅ RESOLVIDO v19+
 - Skill 7 raise NotImplementedError mesmo em `dry_run=True`. Operador nao
-  consegue "planejar" um CD->FB hipotetico.
-- Reviewer 1 F4 conf 80 marcou como API footgun pequeno.
-- **Esperado v19+**: ao refatorar Skill 7 ABRANGENTE, dry-run sempre deve
-  planejar (mesmo direcoes nao implementadas), so write-path raise.
+  conseguia planejar CD→FB hipotetico.
+- **RESOLUCAO v19+**: 7 atomos novos da Skill 7 ABRANGENTE seguem dry-run-first
+  — pre-cond LEVES (sintaticas) retornam `{status: 'FALHA', erro: '...'}`
+  sem raise; pre-cond pesadas (que dependem de Odoo) APENAS no caminho write.
+  Mesmo pattern em Skill 5 `preencher_lotes_picking`.
+
+### Antipadrao 5: Criar gotcha sem ler docstrings de CONSTANTS ✅ RESOLVIDO v18
+
+### Antipadrao 6: Confusao nomenclatura "Skill 8 = orchestrator C3" vs atomo L2 ⏳ PENDENTE v20+ (S4)
+- Catalogo §6 Tabela 2 cataloga `faturando-odoo` como orchestrator C3 (~4400 LOC)
+  + tem fachada SKILL.md fingindo ser skill L2. Definicao correta:
+  - **Skill 8 ATOMICA L2** (`faturando-odoo` correto): 5 operacoes sobre
+    `account.move` — validar constants + `action_liberar_faturamento` + polling +
+    validar fatura vs constants + SEFAZ Playwright.
+  - **`inventario_pipeline` C3** (atual `faturamento_pipeline.py`): orchestrator
+    pipeline A-F + recovery + dispatch fluxo L3 1.2.x.
+- **REFATOR v20+ (S4 desta sessao)**: extrai metodo `executar_skill8_atomica`
+  do orchestrator + atualiza §6 Tabela 1 (Skills L2) com nova entry + renomeia
+  Tabela 2 entry para `inventario_pipeline`.
 
 ---
 
@@ -384,22 +487,59 @@ python .claude/skills/auditando-cadastro-fiscal-odoo/scripts/auditar_cadastro_in
 
 ---
 
-## CHECKLIST DE EXPANSAO V19+ (futuro — antipadroes detectados v17.5)
+## CHECKLIST DE EXPANSAO — V19+ ENTREGUE / V20+ PENDENTE
 
-- [ ] Refatorar Skill 7 ABRANGENTE — extrair atomos COMUNS entre `RecebimentoLfOdooService`
-      + `LancamentoOdooService` + `escriturar_dfe_lf.py`
-- [ ] Criar atomo Skill 5 `preencher_lotes_picking(picking_id, lote=...)`
-- [ ] Criar FLUXO L3 `1.2.1-escriturar-dfe-industrializacao.md` compondo
-      Skill 7 + Skill 5
-- [ ] Criar FLUXO L3 `1.5-lancar-frete-cte.md` (provar reuso atomos cross-modulo)
-- [ ] Criar FLUXO L3 `1.6-lancar-despesa-extra.md`
-- [ ] Reescrever ETAPA F orchestrator para invocar FLUXO L3 1.2.1
-      (em vez de Skill 5 inline)
-- [ ] Arquivar `criar_picking_entrada_destino_manual` como caminho B paliativo
-      documentado (NAO remove — pode ser util em DFe que demora)
-- [ ] Criar FLUXO L3 `1.3-transferencia-completa.md` (Skill 8 saida + Skill 7 entrada)
-- [ ] Eventualmente: refatorar parcial RecebimentoLfOdoo + LancamentoOdoo
-      para virarem WRAPPERS dos atomos Skill 7 (inversao da relacao)
-- [ ] 5+ pytest novos cobrindo FLUXO L3 1.2.1 + atomo preencher_lotes_picking
-- [ ] CLI wrapper `.claude/skills/faturando-odoo/scripts/faturar.py` (entry-point
-      Python wrapping orchestrator com helpers de smoke/canary/resume + JSON unico stdout)
+### ✅ ENTREGUE em v19+ (2026-05-26, commit 8670e08d)
+- [x] Refatorar Skill 7 ABRANGENTE — 7 atomos extraidos via mineracao Explore
+      do `RecebimentoLfOdooService` (NAO MEXER — service externo) sem tocar
+      o codigo-fonte: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`,
+      `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`,
+      `criar_invoice_from_po`. 22 pytest mockados verdes.
+- [x] Criar atomo Skill 5 `preencher_lotes_picking(picking_id, lotes_data, lote_default)`.
+      7 pytest mockados verdes.
+- [x] Criar FLUXO L3 `1.2.1-escriturar-dfe-industrializacao.md` (caminho A —
+      DFe ja veio via SEFAZ).
+- [x] Criar FLUXO L3 `1.2.2-criar-dfe-manual-transferencia.md` (caminho B —
+      DFe via upload XML da SAIDA; substitui tampao Skill 5 v15a deprecado).
+- [x] Metodo `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` no orchestrator
+      (composicao dos atomos via fluxo L3; decide A vs B via `buscar_dfe`).
+      4 pytest dispatch verdes.
+- [x] `criar_picking_entrada_destino_manual` (Skill 5 v15a) marcada DEPRECATED
+      docblock (museum vivo ate canary v20+).
+- [x] Antipadroes AP1+AP3+AP4+AP5 resolvidos; AP2 reclassificado com causa
+      real; AP6 NOVO (nomenclatura) documentado.
+
+### ⏳ PENDENTE em v20+ (canary REAL PROD + opt-in + refator nomenclatura)
+- [ ] Canary REAL PROD do FLUXO L3 1.2.x via subagente `gestor-estoque-odoo`
+      em 1 caso INDUSTRIALIZACAO_FB_LF (caminho B — primeiro a validar).
+- [ ] Opt-in CLI `--usar-fluxo-l3-v19` no `executar_pipeline_bulk`: quando
+      flag=True, ETAPAS E+F invocam `executar_fluxo_l3_1_2_x` em vez do
+      path legacy. Default=False preserva comportamento legacy (zero
+      risco regressao). 2-3 pytest mockados dispatch.
+- [ ] Refator AP6 (S4): extrair metodo `executar_skill8_atomica` do orchestrator
+      (5 operacoes C+D sobre `account.move`) + atualizar §6 catalogo do
+      CLAUDE.md estoque (Tabela 1 ganha Skill 8 ATOMICA L2; Tabela 2 renomeia
+      orchestrator para `inventario_pipeline`).
+- [ ] DeprecationWarning runtime em `criar_recebimento_orchestrado` (V1 STRICT
+      wrapper) — fim de vida em v21+ ou v22+ apos mais 1 ciclo validacao.
+
+### ⏳ PENDENTE em v21+ (galho 1.1 e 1.3 — refator nomenclatura AP6 destrava)
+- [ ] Criar FLUXO L3 `1.1.x` (so faturamento — saida pura) compondo
+      Skill 8 ATOMICA L2 + Skill 2 + Skill 5.
+- [ ] Criar FLUXO L3 `1.3-transferencia-completa.md` (saida + entrada;
+      compondo galho 1.1 + galho 1.2.x).
+- [ ] Apos canary + bulk REAL PROD do fluxo L3 v19+: remover ETAPAS E+F
+      legacy + remover `criar_picking_entrada_destino_manual` + remover
+      wrapper V1 STRICT.
+
+### ⏳ PENDENTE sem prazo definido
+- [ ] Criar FLUXO L3 `1.5-lancar-frete-cte.md` (provar reuso atomos
+      cross-modulo — fretes/CTe).
+- [ ] Criar FLUXO L3 `1.6-lancar-despesa-extra.md`.
+- [ ] Eventualmente: refatorar parcial `RecebimentoLfOdooService` (NAO MEXER
+      regra v14a-fix) + `LancamentoOdooService` (NAO MEXER regra v19+) para
+      virarem WRAPPERS dos atomos Skill 7 (inversao da relacao).
+- [ ] CLI wrapper `.claude/skills/faturando-odoo/scripts/faturar.py`
+      (entry-point Python wrapping orchestrator com helpers de smoke/canary/resume
+      + JSON unico stdout — atualmente invocacao via `python -m
+      app.odoo.estoque.orchestrators.faturamento_pipeline`).

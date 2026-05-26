@@ -2936,7 +2936,13 @@ class FaturamentoPipelineExecutor:
             dry_run=dry_run,
         )
         _passo('3_escriturar_dfe', r3)
-        if r3.get('status') not in ('ESCRITURADO', 'DRY_RUN_OK'):
+        # FIX v20+ (descoberto no canary REAL 2026-05-26): aceitar
+        # IDEMPOTENT_ESCRITURADO novo status v20+ do atomo Skill 7 (FIX A
+        # anti-sobrescrita fiscal). Sem este accept, DFe ja escriturado em
+        # PROD (caso normal pos-ETAPA E legacy) caia em FALHA_PASSO_3.
+        if r3.get('status') not in (
+            'ESCRITURADO', 'DRY_RUN_OK', 'IDEMPOTENT_ESCRITURADO',
+        ):
             out['status'] = 'FALHA_PASSO_3_ESCRITURAR'
             out['erro'] = r3.get('erro')
             out['tempo_ms'] = int((time.time() - t0) * 1000)
@@ -3104,6 +3110,194 @@ class FaturamentoPipelineExecutor:
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
+    # ============================================================
+    # v20+ — Constants por company_destino para FLUXO L3 1.2.x
+    # ============================================================
+    # MINIMO VIAVEL S3: apenas LF=5 validado em canary REAL PROD 2026-05-26
+    # (caso 627348 INDUSTRIALIZACAO_FB_LF). Demais direcoes pendentes v21+
+    # quando expansao do canary cobrir FB e CD destino.
+    CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO: Dict[int, Dict[str, int]] = {
+        5: {  # LF (validado canary v20+)
+            'team_id': 41,           # purchase.team 'Aprovacao LF - JOSEFA'
+            'payment_term_id': 2791, # 'A VISTA'
+            'picking_type_id': 19,   # 'LF: Recebimento (LF)'
+            'payment_provider_id': 38,  # G029 'SEM PAGAMENTO'
+        },
+        # 1 (FB) e 4 (CD): pendente v21+ (constants nao mapeadas + nao validadas canary)
+    }
+
+    L10N_BR_TIPO_PEDIDO_POR_ACAO: Dict[str, str] = {
+        'INDUSTRIALIZACAO_FB_LF': 'serv-industrializacao',
+        # Demais direcoes: lookup via MATRIZ_INTERCOMPANY na expansao v21+
+    }
+
+    def _resolver_constants_fluxo_l3(
+        self, *, acao_decidida: str, company_destino: int,
+    ) -> Optional[Dict[str, Any]]:
+        """v20+ S3: resolve constants para `executar_fluxo_l3_1_2_x`.
+
+        Retorna None se direcao nao suportada (caller marca NAO_SUPORTADA_V20).
+        Minimo viavel: apenas INDUSTRIALIZACAO_FB_LF (validado canary).
+        """
+        cdest_constants = self.CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO.get(
+            company_destino
+        )
+        l10n_tipo = self.L10N_BR_TIPO_PEDIDO_POR_ACAO.get(acao_decidida)
+        if not cdest_constants or not l10n_tipo:
+            return None
+        return {
+            'company_destino': company_destino,
+            'l10n_br_tipo_pedido': l10n_tipo,
+            **cdest_constants,
+        }
+
+    def _executar_etapa_f_via_fluxo_l3(
+        self,
+        *,
+        ciclo: str,
+        company_origem_id: Optional[int] = None,
+        dry_run: bool = True,
+        usuario: str = 'faturamento_pipeline',
+        cod_produto: Optional[str] = None,
+        t0: float,
+    ) -> Dict[str, Any]:
+        """v20+ S3: ETAPA F substituida pelo FLUXO L3 1.2.x.
+
+        Itera invoices em F5e_SEFAZ_OK ∩ ACOES_ENTRADA_DESTINO_MANUAL,
+        resolve constants por company_destino, invoca
+        `executar_fluxo_l3_1_2_x` por invoice. company_destino nao
+        suportado (constants nao mapeadas) retorna NAO_SUPORTADA_V20 e
+        segue para proximo invoice.
+
+        Minimo viavel: company_destino=5 (LF) validado canary REAL PROD
+        2026-05-26 caso 627348 INDUSTRIALIZACAO_FB_LF. CD=4 e FB=1
+        pendentes v21+.
+
+        Returns:
+            dict similar a executar_etapa_f legacy:
+              status: EXECUTADO_OK | EXECUTADO_PARCIAL | DRY_RUN_OK |
+                      SKIP_NENHUM_AJUSTE
+              invoices_pendentes, invoices_ok, invoices_falha,
+              invoices_nao_suportadas_v20, contadores
+        """
+        from app.odoo.models import AjusteEstoqueInventario  # lazy
+        del AjusteEstoqueInventario  # nao usado diretamente; ja' carregado por _carregar_ajustes
+
+        ajustes = _carregar_ajustes(
+            ciclo=ciclo,
+            company_origem_id=company_origem_id,
+            fases_pipeline=[FASE_F5e_OK],
+            cod_produto=cod_produto,
+            status_filter=['PROPOSTO', 'APROVADO', 'EXECUTADO'],
+        )
+
+        elegiveis: List = [
+            a for a in ajustes
+            if a.invoice_id_odoo
+            and a.acao_decidida in ACOES_ENTRADA_DESTINO_MANUAL
+        ]
+
+        out: Dict[str, Any] = {
+            'etapa': 'F',
+            'modo': 'fluxo_l3_v19',
+            'ciclo': ciclo,
+            'company_origem_id': company_origem_id,
+            'dry_run': dry_run,
+            'ajustes_total': len(elegiveis),
+            'invoices_pendentes': [],
+            'invoices_ok': {},
+            'invoices_falha': {},
+            'invoices_nao_suportadas_v20': {},
+            'contadores': {
+                'ok': 0, 'falha': 0, 'nao_suportada_v20': 0,
+            },
+        }
+
+        if not elegiveis:
+            out['status'] = 'SKIP_NENHUM_AJUSTE'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        ajustes_por_invoice: Dict[int, List] = defaultdict(list)
+        for a in elegiveis:
+            ajustes_por_invoice[a.invoice_id_odoo].append(a)
+        invoices_pendentes = list(ajustes_por_invoice.keys())
+        out['invoices_pendentes'] = sorted(invoices_pendentes)
+
+        for invoice_id in invoices_pendentes:
+            ajs = ajustes_por_invoice[invoice_id]
+            acao = ajs[0].acao_decidida
+            _, _, company_destino = ACAO_PARA_DIRECAO[acao]
+
+            constants = self._resolver_constants_fluxo_l3(
+                acao_decidida=acao, company_destino=company_destino,
+            )
+            if not constants:
+                out['invoices_nao_suportadas_v20'][invoice_id] = (
+                    f'acao={acao} company_destino={company_destino}: '
+                    f'constants nao mapeadas em '
+                    f'CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO. Pendencia v21+.'
+                )
+                out['contadores']['nao_suportada_v20'] += 1
+                continue
+
+            try:
+                r = self.executar_fluxo_l3_1_2_x(
+                    invoice_id_saida=invoice_id,
+                    dry_run=dry_run,
+                    **constants,
+                )
+            except Exception as e:
+                logger.error(
+                    f'  F invoice {invoice_id} acao={acao}: '
+                    f'executar_fluxo_l3_1_2_x raise: {e}', exc_info=True,
+                )
+                out['invoices_falha'][invoice_id] = (
+                    f'fluxo_l3_excecao: {str(e)[:200]}'
+                )
+                out['contadores']['falha'] += 1
+                continue
+
+            status_fluxo = r.get('status')
+            if status_fluxo in ('FLUXO_OK', 'DRY_RUN_OK'):
+                out['invoices_ok'][invoice_id] = {
+                    'caminho': r.get('caminho'),
+                    'po_id': r.get('po_id'),
+                    'picking_id': r.get('picking_id'),
+                    'invoice_id_destino': r.get('invoice_id'),
+                }
+                out['contadores']['ok'] += 1
+                logger.info(
+                    f'  F invoice {invoice_id} acao={acao}: '
+                    f'{status_fluxo} caminho={r.get("caminho")} '
+                    f'tempo={r.get("tempo_ms")}ms'
+                )
+            else:
+                out['invoices_falha'][invoice_id] = (
+                    f'{status_fluxo}: {r.get("erro") or "sem_erro_detalhado"}'
+                )
+                out['contadores']['falha'] += 1
+                logger.error(
+                    f'  F invoice {invoice_id} acao={acao}: '
+                    f'{status_fluxo} erro={r.get("erro")}'
+                )
+
+        n_ok = out['contadores']['ok']
+        n_falha = out['contadores']['falha']
+        if n_falha == 0 and n_ok > 0:
+            out['status'] = (
+                'DRY_RUN_OK' if dry_run else 'EXECUTADO_OK'
+            )
+        elif n_ok > 0:
+            out['status'] = 'EXECUTADO_PARCIAL'
+        elif n_falha > 0:
+            out['status'] = 'FALHA_ETAPA_F'
+        else:
+            out['status'] = 'SKIP_NAO_SUPORTADA_V20'
+
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
     def executar_etapa_e(
         self,
         *,
@@ -3112,6 +3306,7 @@ class FaturamentoPipelineExecutor:
         dry_run: bool = True,
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
+        usar_fluxo_l3_v19: bool = False,
     ) -> Dict[str, Any]:
         """ETAPA E v17.5 — DELEGA atomo Skill 7 `escriturando-odoo` por invoice.
 
@@ -3159,6 +3354,28 @@ class FaturamentoPipelineExecutor:
         )
 
         t0 = time.time()
+
+        # FIX v20+ S3: opt-in `--usar-fluxo-l3-v19` skip ETAPA E legacy.
+        # ETAPA E LEGACY processa ACOES_ENTRADA_FB (LF/CD -> FB destino).
+        # Minimo viavel S3: company_destino=FB(1) NAO esta em
+        # CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO (so LF=5 validado canary).
+        # ETAPA E via fluxo L3 fica pendente v21+ quando FB constants
+        # forem mapeadas+validadas. Default flag=False preserva legacy.
+        if usar_fluxo_l3_v19:
+            return {
+                'etapa': 'E',
+                'ciclo': ciclo,
+                'company_origem_id': company_origem_id,
+                'dry_run': dry_run,
+                'status': 'SKIP_NAO_SUPORTADA_V20_FLUXO_L3',
+                'observacao': (
+                    'ETAPA E (entrada FB via Skill 7 V1 STRICT) NAO substituida '
+                    'pelo FLUXO L3 1.2.x em v20+. Constants para company_destino='
+                    '1 (FB) nao mapeadas em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO. '
+                    'Pendencia v21+: validar canary + mapear constants FB.'
+                ),
+                'tempo_ms': int((time.time() - t0) * 1000),
+            }
 
         # Carregar ajustes em F5e_SEFAZ_OK
         ajustes = _carregar_ajustes(
@@ -3357,6 +3574,7 @@ class FaturamentoPipelineExecutor:
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
         auto_confirma_direcao_nova: bool = False,
+        usar_fluxo_l3_v19: bool = False,
     ) -> Dict[str, Any]:
         """ETAPA F v17.5 — picking entrada manual destino FB->{LF,CD}.
 
@@ -3423,6 +3641,24 @@ class FaturamentoPipelineExecutor:
         from app.utils.timezone import agora_utc_naive  # lazy (banido datetime.utcnow)
 
         t0 = time.time()
+
+        # FIX v20+ S3: opt-in `--usar-fluxo-l3-v19` substitui ETAPA F legacy
+        # (Skill 5 atomo `criar_picking_entrada_destino_manual` tampao AP2)
+        # pelo FLUXO L3 1.2.x via `executar_fluxo_l3_1_2_x`. Minimo viavel:
+        # apenas company_destino=5 (LF) validado em canary REAL PROD
+        # 2026-05-26 caso 627348 INDUSTRIALIZACAO_FB_LF; demais direcoes
+        # (4=CD) retornam NAO_SUPORTADA_V20 e seguem para proximo invoice
+        # (caller decide se aborta ou continua).
+        # Default flag=False preserva 100% comportamento legacy.
+        if usar_fluxo_l3_v19:
+            return self._executar_etapa_f_via_fluxo_l3(
+                ciclo=ciclo,
+                company_origem_id=company_origem_id,
+                dry_run=dry_run,
+                usuario=usuario,
+                cod_produto=cod_produto,
+                t0=t0,
+            )
 
         # Carregar ajustes em F5e_SEFAZ_OK
         ajustes = _carregar_ajustes(
@@ -3860,6 +4096,7 @@ class FaturamentoPipelineExecutor:
         cod_produto: Optional[str] = None,
         limite: Optional[int] = None,
         pular_pre_flight: bool = False,
+        usar_fluxo_l3_v19: bool = False,
     ) -> Dict[str, Any]:
         """Entry-point publico: executa pipeline A->B->C->D->E->F como
         SEQUENCIA de barreiras (D11) com sub-skill C5 PRE-FLIGHT no inicio.
@@ -4044,17 +4281,22 @@ class FaturamentoPipelineExecutor:
                     )
                 elif etapa == 'E':
                     # v17: ETAPA E real-aware (RecebimentoLf X->FB SEQUENCIAL).
+                    # v20+ S3: opt-in usar_fluxo_l3_v19 propagado (skip se True).
                     res = self.executar_etapa_e(
                         ciclo=ciclo,
                         company_origem_id=company_origem_id,
                         dry_run=dry_run,
                         usuario=usuario,
                         cod_produto=cod_produto,
+                        usar_fluxo_l3_v19=usar_fluxo_l3_v19,
                     )
                 elif etapa == 'F':
                     # v17.5: ETAPA F real-aware (DELEGA Skill 5 atomo).
                     # Flag auto_confirma_direcao_nova passa adiante para
                     # liberar canary DEV_FB_LF + TRANSFERIR_FB_CD.
+                    # v20+ S3: opt-in usar_fluxo_l3_v19 substitui ETAPA F
+                    # legacy pelo FLUXO L3 1.2.x quando flag=True (LF
+                    # destino validado canary; CD destino NAO_SUPORTADA_V20).
                     res = self.executar_etapa_f(
                         ciclo=ciclo,
                         company_origem_id=company_origem_id,
@@ -4062,6 +4304,7 @@ class FaturamentoPipelineExecutor:
                         usuario=usuario,
                         cod_produto=cod_produto,
                         auto_confirma_direcao_nova=auto_confirma_direcao_nova,
+                        usar_fluxo_l3_v19=usar_fluxo_l3_v19,
                     )
                 else:
                     res = {'status': 'FALHA_USO_ETAPA_DESCONHECIDA'}
@@ -4303,6 +4546,7 @@ class FaturamentoPipelineExecutor:
         usuario: str = 'faturamento_pipeline_resume',
         cod_produto: Optional[str] = None,
         limite: Optional[int] = None,
+        usar_fluxo_l3_v19: bool = False,
     ) -> Dict[str, Any]:
         """Loop de recovery: invoca `executar_pipeline_bulk(etapas=(apenas_etapa,))`
         repetidamente ate' (a) pendentes==0 OU (b) detector_stagnation OU
@@ -4455,6 +4699,8 @@ class FaturamentoPipelineExecutor:
                     # Recovery NAO re-roda pre-flight (custoso, ja' rodou
                     # no canary inicial; ETAPAS B-F nao escrevem cadastro).
                     pular_pre_flight=True,
+                    # v20+ S3: propagar opt-in para recovery resume
+                    usar_fluxo_l3_v19=usar_fluxo_l3_v19,
                 )
             except Exception as e:
                 logger.error(
@@ -4614,6 +4860,19 @@ def _build_argparser() -> argparse.ArgumentParser:
                    help='nao invoca sub-skill C5 (uso em pytest)')
     p.add_argument('--usuario', default='faturamento_pipeline_cli',
                    help='identificador para auditoria')
+    p.add_argument(
+        '--usar-fluxo-l3-v19', action='store_true',
+        help=(
+            'v20+ S3 opt-in: substitui ETAPAS E+F legacy pelo FLUXO L3 1.2.x '
+            'via executar_fluxo_l3_1_2_x. Default OFF preserva 100%% '
+            'comportamento legacy. ETAPA E (entrada FB destino) retorna '
+            'SKIP_NAO_SUPORTADA_V20_FLUXO_L3 (pendencia v21+); ETAPA F '
+            'destino LF (validado canary REAL PROD 2026-05-26 caso 627348 '
+            'INDUSTRIALIZACAO_FB_LF) usa FLUXO L3 com 7 atomos Skill 7 '
+            'ABRANGENTE + Skill 5 preencher_lotes_picking + validar; destino '
+            'CD ainda NAO_SUPORTADA_V20.'
+        ),
+    )
     return p
 
 
@@ -4683,6 +4942,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 usuario=args.usuario,
                 cod_produto=args.cod_produto,
                 limite=args.limite,
+                usar_fluxo_l3_v19=args.usar_fluxo_l3_v19,
             )
             print(json.dumps(result, indent=2, default=str))
             status = result.get('status', '')
@@ -4708,6 +4968,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             cod_produto=args.cod_produto,
             limite=args.limite,
             pular_pre_flight=args.pular_pre_flight,
+            usar_fluxo_l3_v19=args.usar_fluxo_l3_v19,
         )
         print(json.dumps(result, indent=2, default=str))
 
