@@ -17,9 +17,11 @@ APIs:
 """
 
 from flask import Blueprint, render_template, request, jsonify
+from flask_login import login_required, current_user
 import logging
 import json
 import os
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -340,3 +342,71 @@ def api_retry_transfer(recebimento_id):
     except Exception as e:
         logger.error(f"Erro ao retry transfer {recebimento_id}: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# ADMIN — limpeza de MovimentacaoEstoque de componentes
+# =====================================================
+
+@recebimento_lf_bp.route('/admin/limpar-movs-componentes', methods=['GET', 'POST'])
+@login_required
+def admin_limpar_movs_componentes():
+    """
+    Limpa MovimentacaoEstoque criadas indevidamente para componentes (CFOP=1902)
+    pelo Recebimento LF entre `data_inicio` (default 2026-05-17) e hoje.
+
+    Uso (sempre via URL autenticada):
+        GET  ?data_inicio=2026-05-17                  -> DRY-RUN (so reporta)
+        POST ?confirmar=true&data_inicio=2026-05-17   -> EXECUTA
+
+    Aceita JSON body ou query string.
+    """
+    try:
+        from app.recebimento.services.limpeza_movimentacoes_lf_service import (
+            limpar_movimentacoes_componentes_lf,
+        )
+
+        payload = request.get_json(silent=True) or {}
+        data_inicio_str = (
+            request.args.get('data_inicio')
+            or payload.get('data_inicio')
+            or '2026-05-17'
+        )
+        try:
+            partes = [int(p) for p in data_inicio_str.split('-')]
+            data_inicio = date(partes[0], partes[1], partes[2])
+        except Exception:
+            return jsonify({'error': f'data_inicio invalida: {data_inicio_str} (use YYYY-MM-DD)'}), 400
+
+        confirmar = (
+            request.args.get('confirmar', '').lower() == 'true'
+            or str(payload.get('confirmar', '')).lower() == 'true'
+        )
+        max_delete_raw = request.args.get('max_delete') or payload.get('max_delete') or '500'
+        try:
+            max_delete = int(max_delete_raw)
+        except (TypeError, ValueError):
+            return jsonify({'error': f'max_delete invalido: {max_delete_raw}'}), 400
+
+        # Regra: POST + confirmar=true => executa; qualquer outra coisa => dry-run
+        dry_run = not (request.method == 'POST' and confirmar)
+
+        user_nome = getattr(current_user, 'nome', None) or 'desconhecido'
+        logger.warning(
+            f"[admin_limpar_movs_componentes] usuario={user_nome} "
+            f"data_inicio={data_inicio} dry_run={dry_run} max_delete={max_delete}"
+        )
+
+        resultado = limpar_movimentacoes_componentes_lf(
+            dry_run=dry_run,
+            data_inicio=data_inicio,
+            max_delete=max_delete,
+        )
+        resultado['solicitado_por'] = user_nome
+        resultado['confirmar_recebido'] = confirmar
+        resultado['metodo'] = request.method
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        logger.exception(f"Erro em admin_limpar_movs_componentes: {e}")
+        return jsonify({'error': f'{type(e).__name__}: {e}'}), 500

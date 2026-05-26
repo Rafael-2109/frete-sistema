@@ -4324,14 +4324,25 @@ class RecebimentoLfOdooService:
     def _criar_movimentacoes_estoque(self, odoo):
         """
         Cria MovimentacaoEstoque a partir dos lotes processados.
+
+        REGRA (2026-05-26): SOMENTE produto acabado (tipo='manual', CFOP != 1902)
+        gera MovimentacaoEstoque. Componentes/insumos (tipo='auto', CFOP=1902/5902)
+        NAO devem entrar como compra — sao retorno de industrializacao da LF,
+        nao aquisicao. Gravar componentes inflava o estoque indevidamente.
+
+        Tambem grava numero_nf (RecebimentoLf.numero_nf) na MovimentacaoEstoque
+        para rastreabilidade.
         """
         from app.estoque.models import MovimentacaoEstoque
         from app.producao.models import CadastroPalletizacao
 
         rec = self._get_recebimento()
-        lotes_processados = rec.lotes.filter_by(processado=True).all()
+        # Filtro chave: somente produto acabado (tipo='manual'); exclui componentes (tipo='auto')
+        lotes_processados = rec.lotes.filter_by(processado=True, tipo='manual').all()
         if not lotes_processados:
-            logger.warning(f"  Nenhum lote processado para MovimentacaoEstoque")
+            logger.info(
+                f"  Nenhum lote de produto acabado (tipo='manual') para MovimentacaoEstoque"
+            )
             return
 
         # Coletar product_ids e move_line_ids para busca batch
@@ -4392,6 +4403,8 @@ class RecebimentoLfOdooService:
                 if existente:
                     existente.lote_nome = lote.lote_nome
                     existente.data_validade = lote.data_validade
+                    if not existente.numero_nf:
+                        existente.numero_nf = rec.numero_nf
                     existente.atualizado_em = agora_utc_naive()
                     continue
 
@@ -4407,8 +4420,9 @@ class RecebimentoLfOdooService:
                     tipo_origem='ODOO',
                     lote_nome=lote.lote_nome,
                     data_validade=lote.data_validade,
+                    numero_nf=rec.numero_nf,
                     num_pedido=rec.odoo_po_name,
-                    observacao=f"Recebimento LF {rec.odoo_picking_name} - Lote: {lote.lote_nome}",
+                    observacao=f"Recebimento LF {rec.odoo_picking_name} - NF {rec.numero_nf} - Lote: {lote.lote_nome}",
                     criado_por=rec.usuario or 'Sistema Recebimento LF',
                     ativo=True
                 )
