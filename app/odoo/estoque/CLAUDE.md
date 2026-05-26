@@ -55,6 +55,32 @@ Para muitos fluxos comporem poucos átomos, cada skill DECLARA um contrato (bloc
 ```
 **Composição (pipe):** o `output` de um átomo alimenta o `input` do próximo. **Regra de ouro:** o átomo NUNCA embute outro fluxo. `faturando-odoo` SÓ fatura (saída); `escriturando-odoo` SÓ escritura (entrada). Quem une é o FLUXO (L3).
 
+### 🚨 ARMADILHA SUPERADA v17.5 — "atomo NUNCA embute outro fluxo" foi violado em v17 (custou 1 sessão para corrigir)
+
+**O que aconteceu**: v17 implementou `executar_etapa_e` do orchestrator `faturando-odoo` (Skill 8) **inline** com ~420 LOC criando `RecebimentoLf` + agregação de lotes + invocação do service externo `RecebimentoLfOdooService`. Isso é **logicamente uma operação de ENTRADA** (escriturando) embutida dentro do orchestrator de SAÍDA (faturando). Constituição §6 violada.
+
+**Por que aconteceu**: o orchestrator "podia" tecnicamente fazer (acesso ao DB + Odoo). A logica era complexa (~420 LOC). Foi mais rápido escrever inline do que criar uma skill nova. **MAS** isso acoplou Skill 8 ao service externo `RecebimentoLfOdooService` (4562 LOC, 37 etapas, NÃO MEXER), tornou o orchestrator inflado, dificultou teste isolado, e violou o invariante "atomo = 1 objeto + 1 responsabilidade".
+
+**O que custou**: sessão v17.5 inteira para:
+1. Criar Skill 7 `escriturando-odoo` dedicada (~500 LOC service + SKILL.md + 11 pytest)
+2. REVERT 420 LOC do orchestrator → ~180 LOC delegando atomo
+3. Migrar 4 testes inline + adicionar 2 novos
+4. Aplicar 3 fixes de code-review pós-revert
+
+**Como evitar (regra inviolável)**: ao implementar qualquer composição no orchestrator Skill 8 que envolva **criar registros locais + invocar service externo + agregar dados**, PARE e PERGUNTE:
+- "Esta lógica deveria ser atomo de outra skill?" (cria + invoca svc externo = SIM, provavelmente é C3 macro)
+- "Que skill seria responsável por isso?" (escriturando-odoo? recebimento-fisico-odoo? operando-mo-odoo?)
+- "A skill existe?" Se SIM, usar. Se NÃO, AVISAR Rafael ANTES de implementar inline.
+
+**Padrão correto do orchestrator** (Skill 8 pos-v17.5): orchestrator faz apenas
+1. **Filtro** (filtrar ajustes elegíveis por ETAPA)
+2. **Agrupamento** (por invoice_id ou direção)
+3. **Loop** (sequencial ou paralelo)
+4. **Invocação de atomo** (Skill 5 / Skill 7 / Skill 2)
+5. **Mapeamento de status** (atomo retorna `CRIADO|RETOMADO|PARCIAL|FALHA` → orchestrator agrega contadores)
+
+**NUNCA** orchestrator faz: `db.session.add(NovoModelo(...))`, `svc_externo = ServiceLF()`, `for ajuste in ajs: agg[(pid, lote)] += qty`. Isso é trabalho de atomo.
+
 ## 4. PILAR: fluxos >> skills
 
 Poucos átomos (~8, estáveis) ⟷ MUITOS fluxos (dezenas, crescem). Regras:

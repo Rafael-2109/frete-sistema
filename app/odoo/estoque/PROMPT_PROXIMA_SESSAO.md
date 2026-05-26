@@ -1,5 +1,27 @@
 Continue o trabalho do orquestrador-Odoo. Worktree: /home/rafaelnascimento/projetos/frete_sistema_estoque_odoo (branch feat/estoque-odoo). main continua VIVO em paralelo. Verificar se avancou e considerar rebase ANTES de iniciar.
 
+## 🚨 LEIA ANTES DE TUDO — REGRAS DE ESCOPO INVIOLAVEIS (v17.5 lição custosa)
+
+**NUNCA inline logica de skill no orchestrator Skill 8 `faturando-odoo`.** Isso ja' custou uma sessao inteira em v17.5 — v17 colocou ~420 LOC de logica RecebimentoLf inline em `executar_etapa_e` e violou constituicao §6 do `app/odoo/estoque/CLAUDE.md`.
+
+**Regra de ouro (constituicao §6 — INVIOLAVEL)**:
+- `faturando-odoo` (Skill 8) = SO SAIDA (NF→robô CIEL IT→SEFAZ)
+- `escriturando-odoo` (Skill 7) = SO ENTRADA (RecebimentoLf + svc externo)
+- `operando-picking-odoo` (Skill 5) = SO picking (cancelar/validar/devolver/criar inter-company)
+- ... cada skill 1 OBJETO Odoo + 1 RESPONSABILIDADE
+- Quem une SAIDA + ENTRADA + Picking = **FLUXO L3** (`fluxos/1.3-transferencia-completa.md`), NAO o orchestrator
+
+**Antes de codar qualquer logica nova no orchestrator, PERGUNTE**:
+1. "Esta logica cria registros locais + invoca svc externo + agrega dados? → atomo C3 macro, NAO orchestrator"
+2. "Esta logica toca stock.picking? → Skill 5, NAO orchestrator"
+3. "Esta logica toca RecebimentoLf? → Skill 7 atomo `criar_recebimento_orchestrado`"
+4. "Esta logica cria account.move/invoice? → futura Skill (ou Skill 8 macro entry-point — confirmar com Rafael)"
+5. "NAO SEI" → **PARE e AVISE Rafael** ANTES de implementar
+
+**Padrao correto do orchestrator pos-v17.5**: apenas (a) filtro de ajustes, (b) agrupamento, (c) loop, (d) invocacao de atomo, (e) mapeamento de status → contadores. NADA MAIS. Nunca `db.session.add(NovoModelo(...))` nem `svc_externo = ServiceXYZ()` no orchestrator.
+
+**Se VOCÊ (futura sessão) detectar que esta prestes a inline logica nova no orchestrator** (alem dos 5 padroes acima), PARE. Releia o ALERTA da §3 do CLAUDE.md estoque ("ARMADILHA SUPERADA v17.5"). Considere: **criar nova skill ou estender skill existente** antes de codar inline.
+
 ## Setup OBRIGATORIO (worktree sem .env)
 
     cd /home/rafaelnascimento/projetos/frete_sistema_estoque_odoo
