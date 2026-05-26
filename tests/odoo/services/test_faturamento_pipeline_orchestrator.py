@@ -278,13 +278,17 @@ def test_executar_pipeline_bulk_etapa_d_bloqueado_etapa_anterior_falhou():
 
 
 def test_executar_pipeline_bulk_d_bloqueado_sefaz_status_agregado_falha():
-    """CR-M3 v15b: BLOQUEADO_SEM_CONFIRMAR_SEFAZ conta como falha agregada."""
+    """CR-M3 v15b: BLOQUEADO_SEM_CONFIRMAR_SEFAZ conta como falha agregada.
+
+    v17: bloqueio so ocorre em real-run (dry_run=False) sem confirmar_sefaz.
+    """
     odoo = MagicMock()
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
     res = executor.executar_pipeline_bulk(
         ciclo='TEST',
         etapas=('D',),
+        dry_run=False,           # v17: real-run para acionar guard SEFAZ
         confirmar_sefaz=False,
         pular_pre_flight=True,
     )
@@ -292,8 +296,8 @@ def test_executar_pipeline_bulk_d_bloqueado_sefaz_status_agregado_falha():
         res['etapas_executadas']['D']['status']
         == 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ'
     )
-    # CR-M3 v15b: BLOQUEADO_* conta como falha — status DRY_RUN_PARCIAL
-    assert res['status'] == 'DRY_RUN_PARCIAL'
+    # CR-M3: BLOQUEADO_* conta como falha em real-run -> EXECUTADO_PARCIAL.
+    assert res['status'] == 'EXECUTADO_PARCIAL'
 
 
 def test_compensatorio_preserva_acao_decidida_origem(db):
@@ -858,38 +862,56 @@ def test_etapa_c_v16_perfil_invalido_retorna_falha_uso():
     svc.aguardar_invoice_do_robo.assert_not_called()
 
 
-def test_etapa_d_sem_confirmar_sefaz_bloqueado():
-    """ETAPA D exige --confirmar-sefaz mesmo em stub."""
+def test_etapa_d_real_run_sem_confirmar_sefaz_bloqueado():
+    """v17: ETAPA D real-run exige --confirmar-sefaz (D18 2 niveis)."""
     odoo = MagicMock()
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    res = executor.executar_etapa_d(ciclo='TESTE', confirmar_sefaz=False)
+    res = executor.executar_etapa_d(
+        ciclo='TESTE', dry_run=False, confirmar_sefaz=False,
+    )
     assert res['status'] == 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ'
     assert 'IRREVERSIVEL' in res['erro']
 
 
-def test_etapa_d_com_confirmar_sefaz_stub():
-    """ETAPA D com confirmar_sefaz=True ainda retorna NOT_IMPLEMENTED v17."""
+def test_etapa_d_dry_run_sem_ajustes_skip(db):
+    """v17: ETAPA D dry-run sem ajustes em F5d_INVOICE_GERADA -> SKIP."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_D_SKIP'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
     odoo = MagicMock()
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    res = executor.executar_etapa_d(ciclo='TESTE', confirmar_sefaz=True)
-    assert res['status'] == 'NOT_IMPLEMENTED_v15b'
-    assert 'v17' in res['roadmap']
+    res = executor.executar_etapa_d(ciclo=ciclo_test, dry_run=True)
+    assert res['status'] == 'SKIP_NENHUM_AJUSTE'
+    assert res['ajustes_total'] == 0
 
 
-def test_etapas_e_f_stubs():
+def test_etapa_e_dry_run_sem_ajustes_skip(db):
+    """v17: ETAPA E dry-run sem ajustes F5e_SEFAZ_OK -> SKIP."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_E_SKIP'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
     odoo = MagicMock()
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    assert (
-        executor.executar_etapa_e(ciclo='X')['status']
-        == 'NOT_IMPLEMENTED_v15b'
-    )
-    assert (
-        executor.executar_etapa_f(ciclo='X')['status']
-        == 'NOT_IMPLEMENTED_v15b'
-    )
+    res = executor.executar_etapa_e(ciclo=ciclo_test, dry_run=True)
+    assert res['status'] == 'SKIP_NENHUM_AJUSTE'
+
+
+def test_etapa_f_dry_run_sem_ajustes_skip(db):
+    """v17: ETAPA F dry-run sem ajustes F5e_SEFAZ_OK -> SKIP."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_F_SKIP'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=True)
+    assert res['status'] == 'SKIP_NENHUM_AJUSTE'
 
 
 # ============================================================
@@ -1334,3 +1356,907 @@ def test_etapa_b_atomo_skill5_idempotent_done_pula_f5b_f5c():
     # Ajuste marcado como F5c_LIBERADO (picking ja' done no Odoo)
     assert aj.fase_pipeline == 'F5c_LIBERADO'
     assert aj.picking_id_odoo == 12345
+
+
+# ============================================================
+# v17 — ETAPA D (F5e SEFAZ Playwright)
+# ============================================================
+
+
+def test_etapa_d_dry_run_com_ajustes_planeja(db):
+    """v17: ETAPA D dry-run reporta planejamento (invoices_pendentes)."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_D_DRY_PLAN'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='APROVADO',
+        fase_pipeline='F5d_INVOICE_GERADA', company_id=5,
+        invoice_id_odoo=700001,
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    res = executor.executar_etapa_d(ciclo=ciclo_test, dry_run=True)
+
+    assert res['status'] == 'DRY_RUN_OK_ETAPA_D'
+    assert 700001 in res['invoices_pendentes']
+    assert res['ajustes_total'] == 1
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_d_real_run_sucesso_sefaz(db):
+    """v17: ETAPA D real-run com Playwright mockado sucesso -> F5e_SEFAZ_OK."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_D_REAL_OK'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='APROVADO',
+        fase_pipeline='F5d_INVOICE_GERADA', company_id=5,
+        invoice_id_odoo=700002,
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+
+    with patch(
+        'app.recebimento.services.playwright_nfe_transmissao.'
+        'transmitir_nfe_via_playwright',
+        return_value={
+            'sucesso': True,
+            'chave_nf': '35260518467441000163550010000132451007099890',
+            'situacao_nf': 'autorizado',
+            'inv_name': 'RETNA/2026/00090',
+            'tentativa': 1,
+        },
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_d(
+            ciclo=ciclo_test, dry_run=False, confirmar_sefaz=True,
+        )
+
+    assert res['status'] == 'EXECUTADO_ETAPA_D'
+    assert res['contadores']['sucesso'] == 1
+    assert res['invoices_resolvidas'][700002] == (
+        '35260518467441000163550010000132451007099890'
+    )
+
+    # Assertions via in-memory (mock _commit_resilient nao comita; identity
+    # map garante que safe_session_get retorna a mesma instancia atualizada).
+    aj_check = AjusteEstoqueInventario.query.filter_by(
+        ciclo=ciclo_test
+    ).first()
+    assert aj_check.fase_pipeline == 'F5e_SEFAZ_OK'
+    assert aj_check.chave_nfe == (
+        '35260518467441000163550010000132451007099890'
+    )
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_d_hard_fail_config_aborta_batch(db):
+    """v17 D7: HARD_FAIL_CONFIG_ERRORS aborta batch (status FALHA_CONFIG)."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_D_HARDFAIL'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    for i in range(2):
+        aj = AjusteEstoqueInventario(
+            ciclo=ciclo_test, cod_produto=f'99{i}', acao_decidida='PERDA_LF_FB',
+            qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='APROVADO',
+            fase_pipeline='F5d_INVOICE_GERADA', company_id=5,
+            invoice_id_odoo=700003 + i,
+        )
+        db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+
+    with patch(
+        'app.recebimento.services.playwright_nfe_transmissao.'
+        'transmitir_nfe_via_playwright',
+        return_value={
+            'sucesso': False,
+            'erro': 'playwright_indisponivel',
+            'tentativas': 0,
+        },
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_d(
+            ciclo=ciclo_test, dry_run=False, confirmar_sefaz=True,
+        )
+
+    assert res['status'] == 'FALHA_CONFIG'
+    assert res['erro_config'] == 'playwright_indisponivel'
+    # 1a invoice = falha; 2a invoice NAO foi processada (abort batch)
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_d_idempotencia_persistente_skip(db):
+    """v17 D8.3: ajuste ja F5e_SEFAZ_OK -> SKIP (skip_idempotent)."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_D_IDEMP_PERSIST'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    # Ajuste em F5d_INVOICE_GERADA mas ja com chave_nfe (re-run pos-crash)
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK',  # ja' transmitida em rodada anterior
+        company_id=5,
+        invoice_id_odoo=700005,
+        chave_nfe='35260518467441000163550010000XXX',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    # _carregar_ajustes filtra por F5d_INVOICE_GERADA — ajuste em F5e nao
+    # entra; status SKIP_NENHUM_AJUSTE esperado
+    res = executor.executar_etapa_d(ciclo=ciclo_test, dry_run=True)
+    assert res['status'] == 'SKIP_NENHUM_AJUSTE'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_d_falha_sefaz_com_cstat(db):
+    """v17 MED C-2: SEFAZ falha persiste cstat+xmotivo (campo acionavel)."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_D_FALHA_CSTAT'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='APROVADO',
+        fase_pipeline='F5d_INVOICE_GERADA', company_id=5,
+        invoice_id_odoo=700006,
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+
+    with patch(
+        'app.recebimento.services.playwright_nfe_transmissao.'
+        'transmitir_nfe_via_playwright',
+        return_value={
+            'sucesso': False,
+            'erro': 'rejeicao_sefaz',
+            'tentativas': 3,
+            'ultimo_estado': {'cstat': '225', 'xmotivo': 'Falha no Schema XML'},
+        },
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_d(
+            ciclo=ciclo_test, dry_run=False, confirmar_sefaz=True,
+        )
+
+    assert res['status'] == 'FALHA_ETAPA_D'
+    assert res['contadores']['falha'] == 1
+    aj_check = AjusteEstoqueInventario.query.filter_by(
+        ciclo=ciclo_test
+    ).first()
+    assert aj_check.fase_pipeline == 'F5e_FALHA'
+    assert 'cstat=225' in aj_check.erro_msg
+    assert 'Falha no Schema XML' in aj_check.erro_msg
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+# ============================================================
+# v17 — ETAPA E (RecebimentoLf X->FB)
+# ============================================================
+
+
+def test_etapa_e_dry_run_com_ajustes_planeja(db):
+    """v17: ETAPA E dry-run reporta invoices_pendentes filtrados ACOES_ENTRADA_FB."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_E_DRY_PLAN'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    # PERDA_LF_FB elegivel para ETAPA E
+    aj1 = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=5,
+        invoice_id_odoo=700010,
+        chave_nfe='35260518467441000163550010000132451007099001',
+    )
+    # INDUSTRIALIZACAO_FB_LF NAO elegivel (e' ETAPA F)
+    aj2 = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='888', acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700011,
+        chave_nfe='35260518467441000163550010000132451007099002',
+    )
+    db.session.add(aj1)
+    db.session.add(aj2)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    res = executor.executar_etapa_e(ciclo=ciclo_test, dry_run=True)
+
+    assert res['status'] == 'DRY_RUN_OK_ETAPA_E'
+    assert 700010 in res['invoices_pendentes']
+    assert 700011 not in res['invoices_pendentes']  # FB->X descartado
+    assert res['ajustes_descartados_fb_x'] == 1
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_e_real_run_sucesso_reclf(db):
+    """v17: ETAPA E real-run cria RecebimentoLf + invoca service mock OK."""
+    from app.odoo.models import AjusteEstoqueInventario
+    from app.recebimento.models import RecebimentoLf
+    ciclo_test = 'TEST_v17_E_REAL_OK'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700020).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=5,
+        invoice_id_odoo=700020,
+        chave_nfe='35260518467441000163550010000132451007099020',
+        lote_destino='MIGRAÇÃO',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'name': 'RETNA/2026/00099',
+        'l10n_br_chave_nf': '35260518467441000163550010000132451007099020',
+        'l10n_br_numero_nota_fiscal': '99',
+        'company_id': [5, 'LF'],
+    }]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    # Mock _resolver_pids_em_batch
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    mock_reclf_svc = MagicMock()
+    mock_reclf_svc.processar_recebimento.return_value = {
+        'status': 'processado',
+        'recebimento_id': 999,
+        'odoo_invoice_id': 800020,
+        'transfer_status': 'concluido',
+    }
+
+    with patch(
+        'app.recebimento.services.recebimento_lf_odoo_service.'
+        'RecebimentoLfOdooService',
+        return_value=mock_reclf_svc,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_e(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'EXECUTADO_ETAPA_E'
+    assert res['contadores']['ok'] == 1
+    assert 700020 in res['invoices_ok']
+    # RecLF foi criado
+    rec = RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700020).first()
+    assert rec is not None
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700020).delete()
+    db.session.commit()
+
+
+def test_etapa_e_idempotencia_reclf_processado(db):
+    """v17 G-RECLF-3: RecebimentoLf ja' processado -> SKIP."""
+    from app.odoo.models import AjusteEstoqueInventario
+    from app.recebimento.models import RecebimentoLf
+    ciclo_test = 'TEST_v17_E_IDEMP'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700030).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=5,
+        invoice_id_odoo=700030,
+        chave_nfe='35260518467441000163550010000132451007099030',
+    )
+    db.session.add(aj)
+    rec_existente = RecebimentoLf(
+        odoo_lf_invoice_id=700030, numero_nf='99',
+        chave_nfe='35260518467441000163550010000132451007099030',
+        cnpj_emitente='18.467.441/0001-63', company_id=1,
+        status='processado',  # ja' processado
+        usuario='test', total_etapas=37,
+    )
+    db.session.add(rec_existente)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_e(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'EXECUTADO_ETAPA_E'
+    assert res['contadores']['skip'] == 1
+    assert 700030 in res['invoices_skip']
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700030).delete()
+    db.session.commit()
+
+
+def test_etapa_e_sucesso_parcial_transfer_erro(db):
+    """v17 G-RECLF-2: transfer_status='erro' aceito como sucesso parcial."""
+    from app.odoo.models import AjusteEstoqueInventario
+    from app.recebimento.models import RecebimentoLf
+    ciclo_test = 'TEST_v17_E_PARCIAL'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700040).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=5,
+        invoice_id_odoo=700040,
+        chave_nfe='35260518467441000163550010000132451007099040',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'name': 'RETNA/2026/00100',
+        'l10n_br_chave_nf': '35260518467441000163550010000132451007099040',
+        'l10n_br_numero_nota_fiscal': '100',
+        'company_id': [5, 'LF'],
+    }]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    mock_reclf_svc = MagicMock()
+    mock_reclf_svc.processar_recebimento.return_value = {
+        'status': 'processado',
+        'recebimento_id': 999,
+        'odoo_invoice_id': 800040,
+        'transfer_status': 'erro',  # FB OK mas FASE 6+7 falhou
+    }
+
+    with patch(
+        'app.recebimento.services.recebimento_lf_odoo_service.'
+        'RecebimentoLfOdooService',
+        return_value=mock_reclf_svc,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_e(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'EXECUTADO_ETAPA_E'
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['parcial_fb_ok_transfer_erro'] == 1
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700040).delete()
+    db.session.commit()
+
+
+# ============================================================
+# v17 — ETAPA F (atomo Skill 5)
+# ============================================================
+
+
+def test_etapa_f_dry_run_com_ajustes_planeja(db):
+    """v17: ETAPA F dry-run reporta invoices_pendentes filtrados ACOES_ENTRADA_DESTINO_MANUAL."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_F_DRY_PLAN'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700050,
+        chave_nfe='35260518467441000163550010000132451007099050',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=True)
+
+    assert res['status'] == 'DRY_RUN_OK_ETAPA_F'
+    assert 700050 in res['invoices_pendentes']
+    assert len(res['planejamento']) == 1
+    assert res['planejamento'][0]['acao'] == 'INDUSTRIALIZACAO_FB_LF'
+    assert res['planejamento'][0]['destino_label'] == 'LF'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_f_real_run_sucesso_atomo(db):
+    """v17: ETAPA F real-run DELEGA atomo Skill 5; sucesso CRIADO -> F5f_OK."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_F_REAL_OK'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700060,
+        chave_nfe='35260518467441000163550010000132451007099060',
+        lote_destino='MIGRAÇÃO',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'state': 'posted',
+        'l10n_br_situacao_nf': 'autorizado',
+    }]
+    svc = MagicMock()
+    svc.criar_picking_entrada_destino_manual.return_value = {
+        'picking_id': 999999,
+        'status': 'CRIADO',
+        'state': 'done',
+        'n_moves': 1,
+        'tempo_ms': 500,
+    }
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'EXECUTADO_ETAPA_F'
+    assert res['contadores']['ok'] == 1
+    assert res['invoices_ok'][700060] == 999999
+    # Atomo Skill 5 foi invocado
+    svc.criar_picking_entrada_destino_manual.assert_called_once()
+    call_kwargs = svc.criar_picking_entrada_destino_manual.call_args.kwargs
+    assert call_kwargs['company_destino_id'] == 5  # LF
+    assert call_kwargs['picking_type_id'] == 19   # LF Recebimento
+    assert 'INV-TEST_v17_F_REAL_OK-ENTRADA-LF-NF700060' == call_kwargs['origin']
+
+    aj_check = AjusteEstoqueInventario.query.filter_by(
+        ciclo=ciclo_test
+    ).first()
+    assert aj_check.fase_pipeline == 'F5f_ENTRADA_OK'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_f_v1_strict_direcao_nao_implementada(db):
+    """v17 V1 STRICT: DEV_FB_LF nao mapeado em PICKING_TYPE_ENTRADA_DESTINO_MANUAL.
+
+    Mas DEV_FB_LF NAO esta' em ACOES_ENTRADA_DESTINO_MANUAL (V1 strict de
+    constants/picking_types.py) — entao nem chega no real-run. O teste valida
+    que o ajuste NAO entra na lista de elegiveis.
+    """
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_F_DEV_FB_LF'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='DEV_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700070,
+        chave_nfe='35260518467441000163550010000132451007099070',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=True)
+
+    # DEV_FB_LF nao esta' em ACOES_ENTRADA_DESTINO_MANUAL -> nem entra
+    assert res['status'] == 'SKIP_NENHUM_AJUSTE'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_f_idempotente_done_skip(db):
+    """v17: atomo retorna IDEMPOTENT_DONE -> skip contador + F5f_ENTRADA_OK."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_F_IDEMP_DONE'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700080,
+        chave_nfe='35260518467441000163550010000132451007099080',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    odoo.read.return_value = [{'state': 'posted', 'l10n_br_situacao_nf': 'autorizado'}]
+    svc = MagicMock()
+    svc.criar_picking_entrada_destino_manual.return_value = {
+        'picking_id': 317306,  # PROD validado historico
+        'status': 'IDEMPOTENT_DONE',
+        'state': 'done',
+        'n_moves': 0,
+        'tempo_ms': 50,
+    }
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'EXECUTADO_ETAPA_F'
+    assert res['contadores']['skip'] == 1
+    assert 700080 in res['invoices_skip']
+    aj_check = AjusteEstoqueInventario.query.filter_by(
+        ciclo=ciclo_test
+    ).first()
+    assert aj_check.fase_pipeline == 'F5f_ENTRADA_OK'  # idempotente marca fase
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_f_idempotent_other_investigacao_manual(db):
+    """v17: atomo IDEMPOTENT_OTHER (state != done) -> FALHA investigacao."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_F_IDEMP_OTHER'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700090,
+        chave_nfe='35260518467441000163550010000132451007099090',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    odoo.read.return_value = [{'state': 'posted', 'l10n_br_situacao_nf': 'autorizado'}]
+    svc = MagicMock()
+    svc.criar_picking_entrada_destino_manual.return_value = {
+        'picking_id': 999998,
+        'status': 'IDEMPOTENT_OTHER',
+        'state': 'assigned',  # NOT done — investigacao
+        'n_moves': 0,
+        'tempo_ms': 80,
+    }
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'FALHA_ETAPA_F'
+    assert res['contadores']['falha'] == 1
+    assert 700090 in res['invoices_falha']
+    assert 'IDEMPOTENT_OTHER' in res['invoices_falha'][700090]
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_f_invoice_nao_posted_pula(db):
+    """v17: invoice state != 'posted' (ex cancel) -> skip + falha."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_F_NAO_POSTED'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0, tipo_produto=1, criado_por='test', status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700100,
+        chave_nfe='35260518467441000163550010000132451007099100',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    odoo.read.return_value = [{'state': 'cancel', 'l10n_br_situacao_nf': 'cancelado'}]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'FALHA_ETAPA_F'
+    assert 'invoice_nao_posted' in res['invoices_falha'][700100]
+    svc.criar_picking_entrada_destino_manual.assert_not_called()
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+# ============================================================
+# v17 POS-FIXES (code-review 3 reviewers paralelos)
+# ============================================================
+
+
+def test_etapa_d_critical1_commit_pos_playwright_falha(db):
+    """CRITICAL-1 v17 (Reviewer 1 conf 95): commit POS-Playwright falha ->
+    NAO conta como sucesso; marca FALHA_COMMIT_POS_SEFAZ_OK (SEFAZ ja
+    autorizada mas DB nao atualizado — operador investigar)."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_CR1'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0,
+        tipo_produto=1, criado_por='test',
+        status='APROVADO',
+        fase_pipeline='F5d_INVOICE_GERADA', company_id=5,
+        invoice_id_odoo=700200,
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+
+    # commit_resilient retorna True nos 2 primeiros + False POS-NF
+    # Sequencia: pre-loop OK -> pre-NF OK -> pos-NF FAIL
+    commit_calls = [True, True, False]
+
+    with patch(
+        'app.recebimento.services.playwright_nfe_transmissao.'
+        'transmitir_nfe_via_playwright',
+        return_value={
+            'sucesso': True,
+            'chave_nf': '35260518467441000163550010000132451007099200',
+            'situacao_nf': 'autorizado',
+        },
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        side_effect=lambda: commit_calls.pop(0) if commit_calls else True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_d(
+            ciclo=ciclo_test, dry_run=False, confirmar_sefaz=True,
+        )
+
+    # SEFAZ deu OK mas commit falhou -> contador FALHA, nao SUCESSO
+    assert res['contadores']['falha'] == 1
+    assert res['contadores']['sucesso'] == 0
+    assert 700200 in res['invoices_falha']
+    assert 'FALHA_COMMIT_POS_SEFAZ_OK' in res['invoices_falha'][700200]
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_f_critical4_situacao_nf_nao_autorizado_pula(db):
+    """CRITICAL-4 v17 (Reviewer 3 conf 92): NF cancelada SEFAZ (state ainda
+    'posted' no Odoo) -> NAO criar picking de entrada."""
+    from app.odoo.models import AjusteEstoqueInventario
+    ciclo_test = 'TEST_v17_CR4'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999',
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0,
+        tipo_produto=1, criado_por='test',
+        status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=1,
+        invoice_id_odoo=700300,
+        chave_nfe='35260518467441000163550010000132451007099300',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    odoo = MagicMock()
+    # State posted MAS SEFAZ cancelada
+    odoo.read.return_value = [{
+        'state': 'posted',
+        'l10n_br_situacao_nf': 'cancelado',
+    }]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
+
+    # NF SEFAZ-cancelada -> NAO chama atomo Skill 5
+    assert res['contadores']['falha'] == 1
+    assert 700300 in res['invoices_falha']
+    assert 'invoice_nao_autorizado_sefaz' in res['invoices_falha'][700300]
+    svc.criar_picking_entrada_destino_manual.assert_not_called()
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+
+def test_etapa_e_high3_status_processando_retoma(db):
+    """HIGH-3 v17 (Reviewer 2 conf 88): RecLf em status='processando' (crash
+    recovery) DEVE ser retomado (NAO criar duplicado). Service suporta
+    resume via etapa_atual>0."""
+    from app.odoo.models import AjusteEstoqueInventario
+    from app.recebimento.models import RecebimentoLf
+    ciclo_test = 'TEST_v17_HIGH3'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700400).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='999', acao_decidida='PERDA_LF_FB',
+        qtd_ajuste=10.0, qtd_inventario=10.0, qtd_odoo=0.0,
+        tipo_produto=1, criado_por='test',
+        status='EXECUTADO',
+        fase_pipeline='F5e_SEFAZ_OK', company_id=5,
+        invoice_id_odoo=700400,
+        chave_nfe='35260518467441000163550010000132451007099400',
+    )
+    db.session.add(aj)
+    # RecLf existente em status='processando' (crash anterior)
+    rec_existente = RecebimentoLf(
+        odoo_lf_invoice_id=700400, numero_nf='400',
+        chave_nfe='35260518467441000163550010000132451007099400',
+        cnpj_emitente='18.467.441/0001-63', company_id=1,
+        status='processando',  # crash recovery
+        etapa_atual=8,  # ja' tinha avancado parcialmente
+        usuario='test', total_etapas=37,
+    )
+    db.session.add(rec_existente)
+    db.session.commit()
+
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'name': 'RETNA/2026/00104',
+        'l10n_br_chave_nf': '35260518467441000163550010000132451007099400',
+        'l10n_br_numero_nota_fiscal': '104',
+        'company_id': [5, 'LF'],
+    }]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
+
+    mock_reclf_svc = MagicMock()
+    mock_reclf_svc.processar_recebimento.return_value = {
+        'status': 'processado',
+        'recebimento_id': rec_existente.id,
+        'odoo_invoice_id': 800400,
+        'transfer_status': 'concluido',
+    }
+
+    with patch(
+        'app.recebimento.services.recebimento_lf_odoo_service.'
+        'RecebimentoLfOdooService',
+        return_value=mock_reclf_svc,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_e(ciclo=ciclo_test, dry_run=False)
+
+    assert res['status'] == 'EXECUTADO_ETAPA_E'
+    assert res['contadores']['ok'] == 1
+    # Verificar NAO criou duplicado (apenas 1 RecLf existe)
+    n_rec = RecebimentoLf.query.filter_by(
+        odoo_lf_invoice_id=700400,
+    ).count()
+    assert n_rec == 1, f'Duplicado criado: {n_rec} RecLf (esperado 1)'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    RecebimentoLf.query.filter_by(odoo_lf_invoice_id=700400).delete()
+    db.session.commit()

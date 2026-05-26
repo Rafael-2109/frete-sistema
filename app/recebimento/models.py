@@ -1490,7 +1490,14 @@ class RecebimentoLf(db.Model):
     cnpj_emitente = db.Column(db.String(20), nullable=True)
 
     # Invoice da LF que originou o recebimento (fluxo antecipado, sem DFe inicial)
-    odoo_lf_invoice_id = db.Column(db.Integer, nullable=True, index=True)
+    # UNIQUE: garante idempotencia (G-RECLF-3) — Skill 8 ETAPA E v17 +
+    # PROD reviewer CRITICAL-3 (sessao 2026-05-25 v17). Sem UK, duas chamadas
+    # concorrentes ou re-entrada em crash recovery podem criar RecebimentoLf
+    # duplicado para a mesma invoice da LF -> svc.processar_recebimento
+    # executaria 2x a mesma NF no Odoo (PO/Picking/Invoice duplicado).
+    odoo_lf_invoice_id = db.Column(
+        db.Integer, nullable=True, unique=True, index=True,
+    )
 
     # PO gerado
     odoo_po_id = db.Column(db.Integer, nullable=True)

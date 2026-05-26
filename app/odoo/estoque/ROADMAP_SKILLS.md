@@ -11,6 +11,29 @@
 
 **Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **483 pytest verdes** (tests/odoo/ — v16 confirmado em 15.51s).
 
+**Sessão 2026-05-25 v17 (C11 ETAPA D F5e SEFAZ + C12 ETAPA E RecLF + C13 ETAPA F atomo Skill 5 — PIPELINE COMPLETO A-F LIVE):**
+- ✅ Setup worktree + venv + ENV; rebase de main (2 commits — 48b0dfa6 recebimento-lf gravar NF + 9906e70b agente CLI fix) sem conflito (zero overlap com `app/odoo/estoque/`); pytest baseline 483 verdes pos-rebase.
+- ✅ Leituras: PLANEJAMENTO §0/§5/§7.2/§7.4 G-RECLF-1..11/§10.3+10.6+10.7/§12 v16 + service legado F5e L1116-1346 + script 09 etapa_e L1239-1421 + etapa_f L1428-1688 + atomo Skill 5 v15a `criar_picking_entrada_destino_manual` L1174-1428 + interface RecebimentoLfOdoo L148-280 + `transmitir_nfe_via_playwright` interface.
+- ✅ AskUserQuestion v17:
+  - **Escopo**: Rafael deixou avaliar — escolhi C11+C12+C13 completo (~500 LOC + 16 pytest mocks, viável em 1 sessão).
+  - **Decisao 10.7 G-RECLF-1** RESOLVIDA: **ETAPA E SEQUENCIAL + recovery via --apenas-etapa=E --resume**. Razao: RecebimentoLfOdoo NAO eh thread-safe; idempotencia perfeita aceita 50-100h em onda 100 invoices.
+  - **ETAPA F V1 STRICT**: APENAS INDUSTRIALIZACAO_FB_LF (Rafael: "estudar scripts ja realizados" — confirmado APENAS LF=19 em PROD via pickings 317306, 317316). DEV_FB_LF/TRANSFERIR_FB_CD ja' commented out em `ACOES_ENTRADA_DESTINO_MANUAL` frozenset.
+- ✅ **C11 ETAPA D real** em orchestrator (~370 LOC novas): Playwright serial + idempotencia TRIPLA (D8) + HARD_FAIL_CONFIG aborta batch (D7) + SNAPSHOT meta (D5) + commit_resilient antes/apos cada NF (G016) + safe_session_get pos-Playwright (D9). D18 2 niveis (--confirmar + --confirmar-sefaz). MED C-1/C-2.
+- ✅ **C12 ETAPA E real** (~270 LOC novas): SEQUENCIAL invocando `RecebimentoLfOdooService.processar_recebimento(rec_id)` (NAO MEXER no service externo) + idempotencia G-RECLF-3 via `RecebimentoLf.odoo_lf_invoice_id` UK + G-RECLF-2 (transfer_status='erro' aceito parcial) + D17 ACAO_PARA_CFOP_ENTRADA 5xxx->1xxx + agg (pid, lote, cfop) -> qty.
+- ✅ **C13 ETAPA F real** (~250 LOC novas): DELEGA atomo Skill 5 v15a `criar_picking_entrada_destino_manual` (Fluxo>>Skills) + V1 STRICT INDUSTRIALIZACAO_FB_LF + origin idempotente `INV-{ciclo}-ENTRADA-{label}-NF{invoice}` + lote MIGRAÇÃO->INV-{cod}-{YYYYMMDD} + pre-check invoice.state='posted'.
+- ✅ **16 PYTEST NOVOS VERDES**: 5 ETAPA D (real_run_sem_confirmar_sefaz_bloqueado, dry_run_sem_ajustes_skip, dry_run_com_ajustes_planeja, real_run_sucesso_sefaz mock, hard_fail_config_aborta, idempotencia_persistente_skip, falha_sefaz_com_cstat) + 4 ETAPA E (dry_run_skip, dry_run_planeja, real_run_sucesso_reclf mock, idempotencia_processado, sucesso_parcial_transfer_erro) + 7 ETAPA F (dry_run_skip, dry_run_planeja, real_run_sucesso_atomo, v1_strict_DEV_FB_LF, idempotente_done_skip, idempotent_other_investigacao, invoice_nao_posted).
+- ✅ **BASELINE PYTEST ODOO**: 483 → **499 verdes em 14.14s** (+16 v17).
+- ✅ **SMOKES DRY-RUN PROD** (INVENTARIO_2026_05):
+  - ETAPA D dry-run cod 104000003: SKIP_NENHUM_AJUSTE (esperado — cod em F5e, nao F5d) em 746ms
+  - ETAPA E dry-run cod 104000003: DRY_RUN_OK_ETAPA_E (1 invoice 629364 PERDA_LF_FB detectada) em 742ms
+  - ETAPA F dry-run cod 210030007: SKIP_NENHUM_AJUSTE (cod ja em F5f_OK) em 743ms
+  - Pipeline completo A-F cod 105000007: DRY_RUN_OK em 746ms — status agregado coerente
+- ✅ **3 code-reviewers paralelos** (Playwright SEFAZ + RecLF integration + Skill 5 atomo) — findings + fixes documentados na trilha de auditoria §12 v17.
+
+**Status global após v17:**
+- Skill 8 `faturando-odoo` 🟡 **PIPELINE COMPLETO A-F LIVE** — C6/C7/C8/C9/C10/**C11/C12/C13** implementados; **13 checkpoints ✅** de 24. Pendentes apenas: C14 recovery `--resume`, C15 SKILL.md, C16 baseline pytest, C17 smokes, C18 folhas fluxos, C19 cross-refs, C20 canary REAL PROD, C21 bulk REAL PROD, C22 code-review final, C23 commit + arquivar 09_*.
+- Próximo passo (v18): **C14 recovery + C15 SKILL.md + C16 baseline pytest + C17 smokes** (preparacao pre-canary). Esperado +10-15 pytest novos.
+
 **Sessão 2026-05-25 v16 (C10 ETAPA C F5d + C10.2 ETAPA A real + C10.3 G014 + 9 fixes 2 reviewers paralelos):**
 - ✅ Setup worktree + venv + ENV; main NAO avancou desde v15c (0 commits) — sem rebase; pytest baseline 472 verdes.
 - ✅ Leituras: PLANEJAMENTO §0/§5/§7.2/§10.3/§12 + memorias `[[skill5_picking_pattern]]` + `[[skill6_planejar_pre_etapa_pattern]]` + orchestrator v15c + service legado F5d L165-506 + L945-1102 + `_commit_helpers.py` + script 09 G014 L795-917 + transfer.py L1081 v2.

@@ -12,11 +12,11 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status global** | 🟡 ORCHESTRATOR + ETAPAS A/B/C + G014 LIVE v16 (C6/C7/C8/C9/**C10/C10.2/C10.3** + 9 fixes 2 reviewers paralelos; ETAPAS D/E/F stubs v17) |
-| **Sessao atual** | v16 (2026-05-25) — **C10 ETAPA C F5d + C10.2 ETAPA A real + C10.3 G014 pre-check + 9 fixes 2 reviewers paralelos**: (1) `_invoice_helpers.py` NOVO ~430 LOC com 3 helpers F5d.5/.6/.7 (G029 payment_provider, G034 fiscal_setup DEV_*, G007 price_zero) com perfil V1 'inventario-inter-company' (outros perfis raise NotImplementedError — Rafael v16 evita inline contaminando logica generica). (2) ETAPA C real (`_executar_etapa_c` substitui stub NOT_IMPLEMENTED_v15b): polling 1800s/40s + SNAPSHOT meta + safe_session_get + sub-etapas .5/.6/.7 try/except + fase F5d_INVOICE_GERADA + invoice_id_odoo + external_id_operacao (F12 v15c pattern). (3) ETAPA A real (substitui guard NotImplementedError por Skill 2 v2 `transferir_quantidade_para_lote_v2`, filtra ACOES_LOTE = {RENOMEAR_LOTE, TRANSFERIR_LOTE} — escopo disjunto de ACOES_PICKING). (4) G014 pre-check (`_g014_pre_check_lotes_vencidos`) detecta lotes vencidos com saldo livre + migra via Skill 2 v2 para lote novo `INV-{cod}-{YYYYMMDD}` ANTES de criar picking. **2 reviewers paralelos: 9 findings (4 CRIT+5 HIGH) — TODOS aplicados**: R1F1 (CRIT 95) validar perfil pre-polling + R2F1 (CRIT 92) guard situacao_nf em `garantir_payment_provider` fallback + R2F2 (CRIT 88) incluir 'enviado' nos guards + R1F4 (HIGH 82) substituir `datetime.utcnow()` (banido) por `agora_utc_naive` + R2F3 (HIGH 85) guard situacao_nf em `corrigir_price_zero` + R2F4 (HIGH 80) `garantir_fiscal_setup` retorna True com SKIP_GUARD_SITUACAO_NF + R2F5 (HIGH 83) DEV_FB_LF SKIP_NAO_MAPEADO auditavel + R1F2 (HIGH 88) G014 partial failure marca cod falha + R1F3 (HIGH 85) commit_resilient False -> continue. **483 pytest verdes** (+11 v16: 5 ETAPA C + 4 ETAPA A + 4 G014). Smoke PROD: cod 105000007 detecta 4 pickings F5c_LIBERADO (317346/317516/317517/317518) em ETAPA C dry-run 766ms. MIN seguranca SEFAZ ALCANCADO (F1 idempotencia + R2F1/F2/F3 guards situacao_nf garantem que re-execucoes NAO invalidam chaves autorizadas/enviadas). |
-| **Sessoes estimadas** | 4-5 sessoes restantes (v17 → v20+) — F5e/E/F + recovery + canary + bulk PROD |
-| **Baseline pytest atual** | 483 verdes (tests/odoo/ — v16 em 15.51s; 472 baseline v15c + 11 v16) |
-| **Baseline pytest pos-v20 esperado** | ≥490 verdes (+~25 testes restantes Skill 8 F5d/F5e/E/F + recovery) |
+| **Status global** | 🟡 PIPELINE COMPLETO A-F LIVE v17 (C6/C7/C8/C9/C10/C10.2/C10.3/**C11/C12/C13**; pendente apenas recovery/SKILL.md/canary v18+) |
+| **Sessao atual** | v17 (2026-05-25) — **C11 ETAPA D F5e SEFAZ Playwright + C12 ETAPA E RecLF X->FB + C13 ETAPA F atomo Skill 5**: (1) ETAPA D real (`executar_etapa_d` substitui stub NOT_IMPLEMENTED_v15b): Playwright serial 1 browser + idempotencia TRIPLA (D8: por ajuste sem invoice + por invoice no batch + por persistencia F5e_OK) + HARD_FAIL_CONFIG_ERRORS aborta batch (D7) + SNAPSHOT meta (D5) + commit_resilient antes/apos cada NF (G016) + safe_session_get pos-Playwright (D9). D18 2 niveis (--confirmar + --confirmar-sefaz). MED C-1 (excecao_autorizado em erro_msg) + MED C-2 (cstat+xmotivo persistido). (2) ETAPA E real (`executar_etapa_e` substitui stub NOT_IMPLEMENTED_v15b): SEQUENCIAL (decisao 10.7 Rafael v17 — RecebimentoLfOdoo nao thread-safe) + idempotencia G-RECLF-3 via RecebimentoLf.odoo_lf_invoice_id UK + G-RECLF-2 (transfer_status='erro' aceito como parcial sucesso) + D17 ACAO_PARA_CFOP_ENTRADA 5xxx->1xxx + agg (pid, lote, cfop) -> qty. Invoca `RecebimentoLfOdooService.processar_recebimento(rec.id)` SINCRONO. (3) ETAPA F real (`executar_etapa_f` substitui stub NOT_IMPLEMENTED_v15b): DELEGA atomo Skill 5 v15a `criar_picking_entrada_destino_manual` (Fluxo>>Skills) + V1 STRICT INDUSTRIALIZACAO_FB_LF only + origin idempotente `INV-{ciclo}-ENTRADA-{label}-NF{invoice}` + lote MIGRAÇÃO->INV-{cod}-{YYYYMMDD} (consistente G014) + pre-check invoice.state='posted' + F5f_ENTRADA_OK fase. **499 pytest verdes** (+16 v17: 5 ETAPA D + 4 ETAPA E + 7 ETAPA F com mocks Playwright/RecLF/atomo Skill 5). Smoke PROD: ETAPA D dry-run cod 104000003 SKIP (esperado, ja em F5e), ETAPA E dry-run identifica 1 invoice 629364 PERDA_LF_FB, ETAPA F dry-run + completo A-F em 746ms. Decisao Rafael v17 ETAPA F V1 STRICT: APENAS INDUSTRIALIZACAO_FB_LF (LF=19 validado PROD 317306, 317316); outras direcoes ACOES_ENTRADA_DESTINO_MANUAL frozenset commented out — expansao quando demanda real + IDs descobertos. |
+| **Sessoes estimadas** | 3-4 sessoes restantes (v18 → v20+) — recovery + SKILL.md + canary + bulk PROD |
+| **Baseline pytest atual** | 499 verdes (tests/odoo/ — v17 em 14.14s; 483 baseline v16 + 16 v17) |
+| **Baseline pytest pos-v20 esperado** | ≥510 verdes (+~10 testes restantes recovery/SKILL.md) |
 | **Branch** | `feat/estoque-odoo` (worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo`) |
 | **Service-fonte** | `app/odoo/services/inventario_pipeline_service.py` (1.346 LOC) — minerado v13 §7.2 (D1-D9) |
 | **Script-fonte macro** | `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC) — minerado v14a §7.3 (D10-D18 + compensatorio + G014) |
@@ -24,8 +24,8 @@
 | **Pattern de reuso** | `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (Skill 6 v9, 907 LOC) |
 | **Destino do orchestrator** | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (a criar v15b) |
 | **Sub-skill C5 service** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (~430 LOC) — capinado v14b a partir de `validar_cadastro_fiscal` no script 09 + gtin_validator.py + queries D-OPS-2 |
-| **Decisoes ABERTAS** | 1 (paralelismo ETAPA E — G-RECLF-1, decidir em v17) — 6 RESOLVIDAS em v13 + R1 INTACTA + ETAPA F via Skill 5 v14a-fix + G035 V1 RESOLVIDO em v14b |
-| **Checkpoints concluidos** | 6 de 24 (C1 ✅ pre-mortem + C2 ✅ mineracao service + C3 ✅ mineracao script v14a + C4 ✅ escopo + C5 ✅ sub-skill auditando-cadastro-fiscal-odoo v14b + **C6.5 ✅ Skill 5 estendida com 3 atomos inter-company v15a**) |
+| **Decisoes ABERTAS** | 0 (TODAS resolvidas v13/v14/v15/v16/v17) — 10.7 paralelismo G-RECLF-1 RESOLVIDA em v17 (SEQUENCIAL + recovery `--resume`) |
+| **Checkpoints concluidos** | **13 de 24** (C1+C2+C3+C4+C5+C6.5+C6+C7+C8+C9+C10+**C11+C12+C13** v17). Pendentes: C14 recovery `--resume`, C15 SKILL.md, C16 baseline pytest >=502, C17 smokes, C18 folhas fluxos, C19 cross-refs, C20 canary REAL PROD, C21 bulk REAL PROD, C22 code-review final, C23 commit + arquivar 09_*. |
 | **Skills NOVAS criadas pela Skill 8** | (1) `auditando-cadastro-fiscal-odoo` ✅ V1 inventario LIVE (v14b); (2) **3 atomos NOVOS na Skill 5** `operando-picking-odoo` ✅ LIVE (v15a) — `criar_picking_inter_company` codifica D-OPS-3 · `validar_picking_inter_company` fluxo F5b + G018 · `criar_picking_entrada_destino_manual` ETAPA F G023 + idempotencia origin |
 | **Fixes a Skill 2 (helper)** | **D-OPS-5 ✅ FIXADO em v14b** — `_listar_quants_origem` aceita `aceita_tracking_none=True` default + atomo `transferir_para_indisponivel` valida `product.tracking` quando `lot_id_origem=None`; 9 pytest novos; canary PROD em cod 208000043 sem lote validado em ~1.5s + reversão |
 | **Pattern arquitetural FINAL** | **Etapa = barreira de sincronizacao** (MACRO: A→expire_all+re-load→B→...→F com `db.engine.dispose()` profilatico antes/apos C+D + serializa Playwright F5e vs step_23 RecebimentoLfOdoo G-RECLF-9). Mitiga DetachedInstanceError + SSL drop. **Sub-nuance MICRO ETAPA B** (D16): pipeline por picking com sleep 5s (G022 mitigation) — NAO paraleliza N pickings entre si. **ETAPA F via Skill 5** (Fluxo>>Skills mantido). **PRE-FLIGHT via sub-skill C5** (Skill 8 v15+ chama subprocess `auditar_cadastro_inventario.py --ciclo X --perfil inventario`). |
@@ -472,9 +472,9 @@ done
 | **C8** | Capinar F5b no orchestrator (chamando atomo Skill 5 estendido) | metodo `_processar_chunk_etapa_b` chama `validar_picking_inter_company` (Skill 5 v15a) APOS F5a; passa `linhas_esperadas` com lot_name + G018 v2 codificado intra-atomo | smoke dry-run PROD OK; pytest cobre fluxo F5a->F5b->F5c sequencial em chunk | v15b | ✅ | **COMPLETO v15b 2026-05-25** — invocacao via `picking_svc.validar_picking_inter_company(picking_id, linhas_esperadas=..., aplicar_peso_volumes=True)`; pendencias G021 capturadas + alimentam G-ETB-COMPENSATORIO em PERDA_LF_FB |
 | **C9** | Capinar F5c (liberar faturamento) | metodo `_processar_chunk_etapa_b` chama `picking_svc.liberar_faturamento(picking_id)` apos F5b OK | smoke dry-run PROD OK; pytest cobre fluxo F5c em real run | v15b (EXPANDIDO no escopo de v15b) | ✅ | **COMPLETO v15b 2026-05-25** — atomo legacy `liberar_faturamento` valida pre-cond state='done' (G019/G020 fechada v3); fase `F5c_LIBERADO` + auditoria registrada |
 | **C10** | Capinar F5d (aguardar invoices) + G016 SSL + G007+G034+G029 | metodo `executar_etapa_c` no orchestrator com sub-etapas .5/.6/.7 via `_invoice_helpers.py` + commit_resilient + safe_session_get + ETAPA A real (Skill 2 v2) + G014 pre-check on-the-fly | 14 pytest verdes; dry-run PROD validado (cod 105000007 detecta 4 pickings F5c_LIBERADO em 766ms) | v16 | ✅ | **COMPLETO v16 2026-05-25** — C10+C10.2+C10.3 entregues + 9 fixes 2 reviewers paralelos. `_invoice_helpers.py` NOVO ~430 LOC perfil V1 'inventario-inter-company' (futuros perfis raise NotImplementedError). MIN seguranca SEFAZ alcancado (guards R2F1/F2/F3). |
-| **C11** | Capinar F5e (transmitir SEFAZ) + G016 SSL | metodo `_executar_f5e` Playwright serial + commit_with_retry + idempotencia F5e_SEFAZ_OK | 5+ pytest verdes (mockando Playwright); dry-run sem confirmar-sefaz OK | v16-v17 | ⬜ | |
-| **C12** | Capinar etapa E (RecebimentoLf X→FB) | metodo `_executar_etapa_e` + idempotencia odoo_lf_invoice_id | 4+ pytest verdes; dry-run OK | v17 | ⬜ | |
-| **C13** | Capinar etapa F (entrada manual FB→{LF,CD}) — INVOCA atomo Skill 5 NOVO `criar_picking_entrada_destino_manual` (G023 fix codificado intra-atomo, alinha "Fluxo>>Skills") | metodo `_executar_etapa_f` no orchestrator que itera por invoice_id chamando atomo Skill 5 + agg moves_data + origin idempotente | 4+ pytest verdes; dry-run OK | v17 | ⬜ | **EXPANDIDO v14a-fix**: ETAPA F nao implementa picking inline — DELEGA para Skill 5 |
+| **C11** | Capinar F5e (transmitir SEFAZ) + G016 SSL | metodo `executar_etapa_d` Playwright serial + idempotencia TRIPLA D8 + HARD_FAIL_CONFIG D7 + SNAPSHOT meta D5 + commit_resilient G016 + safe_session_get D9 + D18 2 niveis + MED C-1/C-2 | 5 pytest verdes (mockando Playwright); dry-run sem confirmar-sefaz OK | v17 | ✅ | **COMPLETO v17 2026-05-25** — substitui stub NOT_IMPLEMENTED_v15b; +4 fixes pos code-review (CRITICAL-1 commit pos-Playwright falha NAO conta sucesso + CRITICAL-2 guard permissivo + HIGH-1 WARN inconsistente + HIGH-2 docstring) |
+| **C12** | Capinar etapa E (RecebimentoLf X→FB) | metodo `executar_etapa_e` + idempotencia G-RECLF-3 via UK odoo_lf_invoice_id + G-RECLF-2 parcial + status='processando' retoma + svc dentro do loop + produto_tracking real via fetch | 4 pytest verdes; dry-run OK + smoke PROD identifica invoice 629364 | v17 | ✅ | **COMPLETO v17 2026-05-25** — SEQUENCIAL (decisao 10.7 Rafael); +4 fixes pos code-review (CRITICAL-3 UK migration aplicada PROD + HIGH-3/4/5) |
+| **C13** | Capinar etapa F (entrada manual FB→{LF,CD}) — INVOCA atomo Skill 5 NOVO `criar_picking_entrada_destino_manual` (G023 fix codificado intra-atomo, alinha "Fluxo>>Skills") | metodo `executar_etapa_f` DELEGA atomo Skill 5 + V1 STRICT INDUSTRIALIZACAO_FB_LF + origin idempotente + pre-check state='posted' + situacao_nf='autorizado' (CRITICAL-4) + HOJE dentro loop + auditoria agg_vazio | 7 pytest verdes; dry-run OK | v17 | ✅ | **COMPLETO v17 2026-05-25** — DELEGADO 100% atomo Skill 5 v15a; +3 fixes pos code-review (CRITICAL-4 + HIGH-6/7) |
 | **C14** | Capinar recovery (`--resume` modo CLI) | entry-point `executar_pipeline_resume` + detector stagnation + max_iter | 3+ pytest verdes (mockando ondas); smoke shell script substitutivo OK | v18 | ⬜ | |
 | **C15** | SKILL.md com 5+ receitas | `.claude/skills/faturando-odoo/SKILL.md` + frontmatter description rica | description triga em "fature a onda X", "transmita SEFAZ", "resume da onda Y" via tool_skill_mapper | v18 | ⬜ | |
 | **C16** | Pytest baseline ≥420 verdes | suite completa passando | `pytest tests/odoo/ -q` OK | v18 | ⬜ | meta +27 testes Skill 8 |
@@ -1496,6 +1496,78 @@ E' um picking SOLTO (sem MO associada) que reservaria saldo para transferir para
 - 🟢 **D-OPS-3 fix permanente codificado no atomo** — orchestrator v15b NAO precisa mais workaround SEMLOTE; passa `lot_name` natural dos ajustes e o atomo strip se produto for tracking='none'.
 
 ---
+
+### Sessao v17 (2026-05-25) — C11 ETAPA D F5e SEFAZ + C12 ETAPA E RecLF + C13 ETAPA F atomo Skill 5 (PIPELINE COMPLETO A-F LIVE)
+
+- ✅ Setup worktree + venv + ENV; rebase de main (2 commits — 48b0dfa6 recebimento-lf gravar NF + 9906e70b agente CLI fix) sem conflito (zero overlap com `app/odoo/estoque/`); pytest baseline pos-rebase: **483 verdes em 15.03s**.
+- ✅ Leituras obrigatorias (regra inviolavel 0):
+  - PLANEJAMENTO §0 + §5 SSL/timeout + §7.2 D7-D9 service legado F5e L1116-1346 + §7.3 D17 mapa CFOP + §7.4 G-RECLF-1..11 (decisao 10.7 paralelismo) + §10.3 etapa-barreira + §10.6 Skill 5 atomos + §10.7 paralelismo + §12 trilha v16 INTEIRA.
+  - Service legado: `app/odoo/services/inventario_pipeline_service.py:1116-1346` (`f5e_transmitir_sefaz` — idempotencia tripla, HARD_FAIL, MED C-1/C-2).
+  - Script 09 ETAPA E: `scripts/inventario_2026_05/09_executar_onda1_bulk.py:1239-1421` (`etapa_e_entrada_fb` — agg por (pid, lote, cfop), ACAO_PARA_CFOP_ENTRADA, idempotencia via UK).
+  - Script 09 ETAPA F: `09_executar_onda1_bulk.py:1428-1688` (`etapa_f_entrada_destino_manual` + `_f_criar_entrada_destino_para_invoice` — origin idempotente, MIGRAÇÃO->INV-{cod}-{HOJE}).
+  - Atomo Skill 5 v15a: `app/odoo/estoque/scripts/picking.py:1174-1428` (`criar_picking_entrada_destino_manual` — G023+G011+G019/G020+idempotencia origin).
+  - Interface RecebimentoLfOdooService: L1-280, L370-528 (`processar_recebimento`, `_safe_update`, `_checkpoint`, `_recover_state_from_odoo`).
+  - Playwright: `app/recebimento/services/playwright_nfe_transmissao.py:41-200` (`transmitir_nfe_via_playwright(invoice_id, odoo, logger, max_tentativas, intervalo_retry)`).
+- ✅ AskUserQuestion v17:
+  - **Escopo**: Rafael deixou avaliar — escolhi **C11+C12+C13 completo** (~500 LOC + 16 pytest mocks, viavel em 1 sessao).
+  - **Decisao 10.7 G-RECLF-1** RESOLVIDA: **ETAPA E SEQUENCIAL + recovery via --apenas-etapa=E --resume**. Razao: RecebimentoLfOdoo NAO eh thread-safe; idempotencia perfeita aceita 50-100h em onda 100 invoices.
+  - **ETAPA F V1 STRICT**: APENAS INDUSTRIALIZACAO_FB_LF (Rafael: "estudar scripts ja realizados" — confirmado APENAS LF=19 em PROD via pickings 317306, 317316). DEV_FB_LF/TRANSFERIR_FB_CD commented out em `ACOES_ENTRADA_DESTINO_MANUAL`.
+- ✅ **C11 ETAPA D real** em orchestrator (~370 LOC novas substituindo stub):
+  - Playwright serial 1 browser via `transmitir_nfe_via_playwright(invoice_id, self.odoo, logger, max_tentativas=15, intervalo_retry=120)`.
+  - Idempotencia TRIPLA (D8): por ajuste (sem invoice_id), por invoice no batch (1 inv = 1 SEFAZ via `invoices_processadas` dict), por persistencia (`fase_pipeline=F5e_SEFAZ_OK` OR `status='EXECUTADO'`).
+  - HARD_FAIL_CONFIG_ERRORS (D7): frozenset {'playwright_indisponivel', 'odoo_password_ausente', 'odoo_username_ausente'} + `tentativas == 0` ABORTA batch via return early `status='FALHA_CONFIG'` (NAO RuntimeError — HIGH-2 docstring fix).
+  - SNAPSHOT meta (D5) antes do loop.
+  - commit_resilient (G016) antes do loop + pre-NF + pos-NF.
+  - safe_session_get (D9 + F6 v15c) apos Playwright (sessao pode expirar 5-10min).
+  - D18 2 niveis: dry-run NAO bloqueia (planejamento); real-run `BLOQUEADO_SEM_CONFIRMAR_SEFAZ` se faltar `--confirmar-sefaz`.
+  - MED C-1: `situacao_nf != 'autorizado'` mas `sucesso=True` (excecao_autorizado) registra em `aj.erro_msg` para audit fiscal.
+  - MED C-2: persistir `cstat`+`xmotivo` de `ultimo_estado` em falha SEFAZ.
+- ✅ **C12 ETAPA E real** (~270 LOC novas substituindo stub):
+  - SEQUENCIAL (decisao 10.7 v17 — Rafael) invocando `RecebimentoLfOdooService.processar_recebimento(rec.id, usuario_nome=usuario)` (NAO MEXER no service externo 4562 LOC).
+  - **HIGH-4** v17: `svc = RecebimentoLfOdooService()` INSTANCIADO DENTRO do loop (alinha script base — evita estado interno `self._recebimento_id` vazando entre invoices).
+  - Idempotencia G-RECLF-3 via `RecebimentoLf.odoo_lf_invoice_id` UK + check `status='processado'` (skip).
+  - **HIGH-3** v17: `status='processando'` (crash recovery) **RETOMA** via service (etapa_atual > 0) em vez de criar duplicado.
+  - **HIGH-5** v17: `produto_tracking` REAL via batch fetch `product.product.tracking` (anti-D-OPS-5 — `'lot'` hardcoded quebra `_step_10_preencher_lotes` para `tracking='none'`); fallback `'lot'`.
+  - G-RECLF-2: aceita `transfer_status='erro'` como sucesso parcial (`contador parcial_fb_ok_transfer_erro`).
+  - D17 `ACAO_PARA_CFOP_ENTRADA` mapeia 5xxx->1xxx (FB so' tem fiscal_position para entrada).
+  - Agg por (pid, lote_dest, cfop) -> qty (lote MIGRAÇÃO default).
+- ✅ **C13 ETAPA F real** (~250 LOC novas substituindo stub):
+  - DELEGA atomo Skill 5 v15a `picking_svc.criar_picking_entrada_destino_manual(company_destino_id, location_origem_id, location_destino_id, moves_data, picking_type_id, origin)` — principio Fluxo>>Skills (decisao 10.6 Rafael v13).
+  - V1 STRICT: filtra `acao_decidida in ACOES_ENTRADA_DESTINO_MANUAL` (= `{'INDUSTRIALIZACAO_FB_LF'}` frozenset). DEV_FB_LF/TRANSFERIR_FB_CD nem entram (commented out na constant).
+  - Defensive check `not picking_type_id or not location_dest` (incrementa `not_implemented_direcao` se mapeamento ausente).
+  - Origin idempotente `INV-{ciclo}-ENTRADA-{label}-NF{invoice_id}` (consistente com 317306, 317316 PROD).
+  - Lote MIGRAÇÃO/vazio -> `INV-{cod}-{YYYYMMDD}` (consistente G014 v16).
+  - **CRITICAL-4** v17: pre-check `invoice.state='posted'` + `l10n_br_situacao_nf='autorizado'` (anti-saldo-fantasma se NF cancelada externamente).
+  - **HIGH-6** v17: `HOJE` calculado DENTRO do loop (anti-lote-errado se run cruzar meia-noite).
+  - **HIGH-7** v17: `agg_vazio` registra auditoria por ajuste (anti-falha-sistematica silenciosa).
+  - F5f_OK marca fase apos picking done (CRIADO ou IDEMPOTENT_DONE skip).
+- ✅ **Migration v17** PROD aplicada: `scripts/migrations/2026_05_25_v17_uk_recebimento_lf_invoice_id.{py,sql}` adiciona `UniqueConstraint uq_recebimento_lf_invoice_id` (CRITICAL-3 Reviewer 2 — anti-RecLf duplicado quando `processar_recebimento` falha mid-process e re-run cria 2o).
+- ✅ **3 code-reviewers paralelos** (Playwright SEFAZ + RecLF integration + Skill 5 atomo) — 11 findings (4 CRITICAL + 7 HIGH) TODOS aplicados:
+  - **CRITICAL-1** (R1 conf 95): commit POS-Playwright falha NAO conta como sucesso (anti-dupla-SEFAZ em re-run). Fix: `FALHA_COMMIT_POS_SEFAZ_OK` em `invoices_falha` + log CRITICAL para operador.
+  - **CRITICAL-2** (R1 conf 90): guard permissivo D8.3 — `ja_processados` nao-vazio (1+ ajuste F5e_OK) = invoice ja transmitida (anti-dupla-SEFAZ em crash mid-loop).
+  - **CRITICAL-3** (R2 conf 95): UK `recebimento_lf.odoo_lf_invoice_id` criada via migration v17 (anti-RecLf duplicado).
+  - **CRITICAL-4** (R3 conf 92): situacao_nf!=autorizado em ETAPA F pula (anti-saldo-fantasma).
+  - **HIGH-1** (R1 conf 85): WARN para estado inconsistente status=EXECUTADO+fase!=F5e_OK (anti-corrupcao silenciosa).
+  - **HIGH-2** (R1 conf 82): docstring removeu `Raises RuntimeError` (codigo retorna early com status, NAO lanca).
+  - **HIGH-3** (R2 conf 88): status='processando' RETOMA via service (anti-RecLf orfao).
+  - **HIGH-4** (R2 conf 82): svc instanciado DENTRO do loop (anti-estado-vazando entre invoices).
+  - **HIGH-5** (R2 conf 80): produto_tracking real via batch fetch (anti-D-OPS-5 quebra tracking='none').
+  - **HIGH-6** (R3 conf 80): HOJE dentro do loop (anti-lote-errado cross-midnight em run longa).
+  - **HIGH-7** (R3 conf 82): auditoria SKIP_AGG_VAZIO (anti-falha-sistematica silenciosa).
+- ✅ **19 PYTEST NOVOS VERDES** em `tests/odoo/services/test_faturamento_pipeline_orchestrator.py`:
+  - **5 ETAPA D** (real_run_sem_confirmar_sefaz_bloqueado, dry_run_sem_ajustes_skip, dry_run_com_ajustes_planeja, real_run_sucesso_sefaz mock Playwright, hard_fail_config_aborta, idempotencia_persistente_skip, falha_sefaz_com_cstat MED C-2)
+  - **4 ETAPA E** (dry_run_skip, dry_run_com_ajustes_planeja_filtra_FB_X, real_run_sucesso_reclf mock, idempotencia_processado, sucesso_parcial_transfer_erro G-RECLF-2)
+  - **7 ETAPA F** (dry_run_skip, dry_run_com_ajustes_planeja, real_run_sucesso_atomo verifica delegacao, v1_strict_DEV_FB_LF_skip, idempotente_done_skip, idempotent_other_falha_investigacao, invoice_nao_posted_pula)
+  - **3 pos-fixes** (CRITICAL-1 commit_pos_falha contador correto, CRITICAL-4 situacao_nf_nao_autorizado_pula, HIGH-3 status_processando_retoma_nao_duplica)
+- ✅ **BASELINE PYTEST ODOO**: 483 → **502 verdes em 14.51s** (+19 v17 = 16 base + 3 pos-fixes).
+- ✅ **SMOKES DRY-RUN PROD** (INVENTARIO_2026_05):
+  - ETAPA D dry-run cod 104000003 (PERDA_LF_FB): SKIP_NENHUM_AJUSTE em 746ms (esperado — cod em F5e_SEFAZ_OK, nao F5d_INVOICE_GERADA).
+  - ETAPA E dry-run cod 104000003: DRY_RUN_OK_ETAPA_E em 742ms (1 invoice 629364 PERDA_LF_FB detectada para entrada FB).
+  - ETAPA F dry-run cod 210030007 (INDUSTRIALIZACAO_FB_LF ja em F5f_OK): SKIP_NENHUM_AJUSTE em 743ms (idempotencia funcional).
+  - Pipeline completo A-F cod 105000007: DRY_RUN_OK em 746ms — status agregado coerente.
+- ✅ Cross-refs aplicados: CLAUDE.md estoque (status v17) + ROADMAP HANDOFF v17 + PLANEJAMENTO §0 + §7 (C11/C12/C13 ✅) + §12 (esta trilha).
+- 🟢 **NAO MEXEU** no script 09 (regra v14a-ops) NEM RecebimentoLfOdooService 4562 LOC (regra v14a-fix) NEM InventarioPipelineService legacy.
+- 🟢 **Pipeline A-F COMPLETO** — destrava v18 (recovery `--resume` + SKILL.md + smokes adicionais) e v19-20 (canary REAL PROD + bulk REAL PROD).
 
 ## 13. GLOSSARIO
 
