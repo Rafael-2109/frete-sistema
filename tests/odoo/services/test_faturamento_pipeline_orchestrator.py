@@ -452,19 +452,22 @@ def test_pre_flight_subskill_cli_ausente_raise():
 # ============================================================
 
 def test_executar_etapa_a_dry_run_noop():
-    """ETAPA A v15b: dry-run com ajustes existentes retorna DRY_RUN_OK_ETAPA_A_NOOP."""
+    """ETAPA A v16: dry-run com ajustes ACOES_LOTE retorna DRY_RUN_OK_ETAPA_A."""
     odoo = MagicMock()
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    ajustes = [_ajuste_mock(ajuste_id=1)]
+    # v16: ACOES_LOTE = {RENOMEAR_LOTE, TRANSFERIR_LOTE} (NAO ACOES_PICKING)
+    ajustes = [_ajuste_mock(ajuste_id=1, acao='RENOMEAR_LOTE')]
+    ajustes[0].lote_destino = 'LOT_NOVO'
     with patch(
         'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
         return_value=ajustes,
     ):
         res = executor.executar_etapa_a(ciclo='TESTE')
     assert res['etapa'] == 'A'
-    assert res['status'] == 'DRY_RUN_OK_ETAPA_A_NOOP'
+    assert res['status'] == 'DRY_RUN_OK_ETAPA_A'  # v16 (sem _NOOP)
     assert res['ajustes_total'] == 1
+    assert 'ajustes_planejados' in res  # preview v16
 
 
 def test_executar_etapa_a_skip_nenhum_ajuste():
@@ -498,6 +501,12 @@ def test_executar_etapa_b_dry_run_invoca_atomos_skill5():
     ]
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    # v16: mockar G014 retornando vazio (testa apenas Skill 5 invocacao)
+    executor._g014_pre_check_lotes_vencidos = MagicMock(return_value={
+        'lote_novo_por_cod': {}, 'cods_com_lote_vencido': [],
+        'transferencias_executadas': [], 'transferencias_planejadas': [],
+        'erros': [],
+    })
     ajustes = [_ajuste_mock(
         ajuste_id=1, cod_produto='4310177', acao='PERDA_LF_FB',
         qtd_ajuste=10.0,
@@ -546,6 +555,12 @@ def test_executar_etapa_b_real_invoca_atomos_skill5():
     }
     svc.liberar_faturamento.return_value = None
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    # v16: mockar G014 retornando vazio (teste foca em F5a/F5b/F5c invocacao)
+    executor._g014_pre_check_lotes_vencidos = MagicMock(return_value={
+        'lote_novo_por_cod': {}, 'cods_com_lote_vencido': [],
+        'transferencias_executadas': [], 'transferencias_planejadas': [],
+        'erros': [],
+    })
     ajuste = _ajuste_mock(
         ajuste_id=1, cod_produto='4310177', acao='PERDA_LF_FB',
         qtd_ajuste=10.0,
@@ -633,13 +648,214 @@ def test_executar_pipeline_bulk_pular_pre_flight_executa_etapas():
 # 15. Stubs C/D/E/F retornam NOT_IMPLEMENTED_v15b
 # ============================================================
 
-def test_etapa_c_stub_not_implemented():
+def test_etapa_c_v16_dry_run_skip_nenhum_ajuste():
+    """ETAPA C v16: dry-run sem ajustes F5c_LIBERADO retorna SKIP_NENHUM_AJUSTE."""
     odoo = MagicMock()
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    res = executor.executar_etapa_c(ciclo='TESTE')
-    assert res['status'] == 'NOT_IMPLEMENTED_v15b'
-    assert 'v16' in res['roadmap']
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[],
+    ):
+        res = executor.executar_etapa_c(ciclo='TESTE')
+    assert res['etapa'] == 'C'
+    assert res['status'] == 'SKIP_NENHUM_AJUSTE'
+    assert res['ajustes_total'] == 0
+
+
+def test_etapa_c_v16_dry_run_com_ajustes_planeja():
+    """ETAPA C v16: dry-run com ajustes F5c_LIBERADO retorna DRY_RUN_OK_ETAPA_C.
+
+    Em dry-run NAO faz polling — so' reporta pickings_pendentes esperados.
+    picking_svc.aguardar_invoice_do_robo NAO chamado.
+    """
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj1 = _ajuste_mock(ajuste_id=10, acao='PERDA_LF_FB')
+    aj1.picking_id_odoo = 12345
+    aj1.fase_pipeline = 'F5c_LIBERADO'
+    aj2 = _ajuste_mock(ajuste_id=11, acao='PERDA_LF_FB')
+    aj2.picking_id_odoo = 12345  # mesmo picking (2 ajustes)
+    aj2.fase_pipeline = 'F5c_LIBERADO'
+    aj3 = _ajuste_mock(ajuste_id=12, acao='PERDA_LF_FB')
+    aj3.picking_id_odoo = 67890  # picking distinto
+    aj3.fase_pipeline = 'F5c_LIBERADO'
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj1, aj2, aj3],
+    ):
+        res = executor.executar_etapa_c(ciclo='TESTE', dry_run=True)
+    assert res['etapa'] == 'C'
+    assert res['status'] == 'DRY_RUN_OK_ETAPA_C'
+    assert res['ajustes_total'] == 3
+    assert res['ajustes_sem_picking'] == 0
+    # 2 pickings esperados (12345 com 2 ajustes + 67890 com 1)
+    assert sorted(res['pickings_pendentes']) == [12345, 67890]
+    # NAO invoca aguardar_invoice_do_robo em dry-run
+    svc.aguardar_invoice_do_robo.assert_not_called()
+
+
+def test_etapa_c_v16_ajustes_sem_picking_id_sao_pulados():
+    """ETAPA C v16: ajustes em F5c_LIBERADO sem picking_id_odoo sao filtrados."""
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj_ok = _ajuste_mock(ajuste_id=10, acao='PERDA_LF_FB')
+    aj_ok.picking_id_odoo = 12345
+    aj_ok.fase_pipeline = 'F5c_LIBERADO'
+    aj_anomalo = _ajuste_mock(ajuste_id=11, acao='PERDA_LF_FB')
+    aj_anomalo.picking_id_odoo = None  # anomalia
+    aj_anomalo.fase_pipeline = 'F5c_LIBERADO'
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj_ok, aj_anomalo],
+    ):
+        res = executor.executar_etapa_c(ciclo='TESTE', dry_run=True)
+    assert res['ajustes_total'] == 1  # so o aj_ok
+    assert res['ajustes_sem_picking'] == 1  # aj_anomalo filtrado
+    assert res['pickings_pendentes'] == [12345]
+
+
+def test_etapa_c_v16_real_resolve_invoice_invoca_sub_etapas():
+    """ETAPA C v16 real-run: aguardar_invoice retorna ID + sub-etapas .5/.6/.7
+    sao chamadas via helpers em _invoice_helpers.
+
+    Patcha helpers via target em faturamento_pipeline (re-export).
+    """
+    odoo = MagicMock()
+    svc = MagicMock()
+    svc.aguardar_invoice_do_robo.return_value = 99999  # invoice resolvida
+
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=10, acao='DEV_LF_FB')
+    aj.picking_id_odoo = 12345
+    aj.fase_pipeline = 'F5c_LIBERADO'
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.safe_session_get',
+        return_value=aj,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.garantir_payment_provider',
+        return_value=True,
+    ) as mock_f5d5, patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.corrigir_price_zero_em_invoice',
+        return_value=2,  # 2 linhas corrigidas
+    ) as mock_f5d6, patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.garantir_fiscal_setup',
+        return_value=True,
+    ) as mock_f5d7, patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+    ):
+        res = executor.executar_etapa_c(
+            ciclo='TESTE', dry_run=False,
+            timeout_polling=10, poll_interval=1,
+        )
+
+    assert res['etapa'] == 'C'
+    assert res['status'] == 'EXECUTADO_ETAPA_C'
+    assert res['pickings_resolvidos'] == {12345: 99999}
+    assert res['pickings_timeout'] == []
+    # Sub-etapas chamadas 1 vez cada
+    mock_f5d5.assert_called_once()
+    mock_f5d6.assert_called_once()
+    mock_f5d7.assert_called_once()
+    # F5d.5 OK + F5d.6 retornou 2 + F5d.7 OK (DEV_LF_FB)
+    assert res['sub_etapas']['f5d5_payment_provider_ok'] == 1
+    assert res['sub_etapas']['f5d6_price_zero_corrigidas'] == 2
+    assert res['sub_etapas']['f5d7_fiscal_setup_ok'] == 1
+    # ajuste marcado F5d_INVOICE_GERADA + invoice_id_odoo
+    assert aj.fase_pipeline == 'F5d_INVOICE_GERADA'
+    assert aj.invoice_id_odoo == 99999
+    assert aj.external_id_operacao is not None
+    assert aj.external_id_operacao.startswith('INV-TESTE-A000010-F5d_INVOICE_GERADA-')
+
+
+def test_etapa_c_v16_real_timeout_total_marca_pickings():
+    """ETAPA C v16: timeout sem invoice retorna FALHA_TIMEOUT_TOTAL."""
+    odoo = MagicMock()
+    svc = MagicMock()
+    svc.aguardar_invoice_do_robo.return_value = None  # nunca resolve
+
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=10, acao='PERDA_LF_FB')
+    aj.picking_id_odoo = 12345
+    aj.fase_pipeline = 'F5c_LIBERADO'
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.safe_session_get',
+        return_value=aj,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.time',
+        side_effect=[
+            0, 0,           # t0 + start_polling
+            5, 100,          # check timeout: 5 < 10 (rodada 1), 100 > 10 (sai)
+            100, 100, 100, 100, 100, 100, 100, 100,  # demais time.time() calls
+        ],
+    ):
+        res = executor.executar_etapa_c(
+            ciclo='TESTE', dry_run=False,
+            timeout_polling=10, poll_interval=1,
+        )
+
+    assert res['status'] == 'FALHA_TIMEOUT_TOTAL'
+    assert res['pickings_resolvidos'] == {}
+    assert res['pickings_timeout'] == [12345]
+
+
+def test_etapa_c_v16_perfil_invalido_retorna_falha_uso():
+    """ETAPA C v16: perfil invalido validado ANTES do polling -> FALHA_PERFIL_INVALIDO.
+
+    CR-FIX R1F1 v16 (CRITICAL 95): em vez de propagar NotImplementedError no
+    meio do polling (que poisonava session apos primeira invoice resolvida),
+    validar perfil ANTES do polling iniciar. Erro retornado como `status` no
+    out — fail-fast sem efeitos colaterais.
+    """
+    odoo = MagicMock()
+    svc = MagicMock()
+    svc.aguardar_invoice_do_robo.return_value = 99999
+
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=10, acao='PERDA_LF_FB')
+    aj.picking_id_odoo = 12345
+    aj.fase_pipeline = 'F5c_LIBERADO'
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+    ):
+        res = executor.executar_etapa_c(
+            ciclo='TESTE', dry_run=False,
+            timeout_polling=10, poll_interval=1,
+            perfil_invoice_helpers='venda-cliente',  # NAO implementado V1
+        )
+    assert res['status'] == 'FALHA_PERFIL_INVALIDO'
+    assert 'venda-cliente' in res['erro']
+    # aguardar_invoice_do_robo NAO chamado (fail-fast antes do polling)
+    svc.aguardar_invoice_do_robo.assert_not_called()
 
 
 def test_etapa_d_sem_confirmar_sefaz_bloqueado():
@@ -709,32 +925,278 @@ def test_executar_pipeline_bulk_etapa_invalida_falha_uso():
 # Code-review v15c fixes — CR-F5, CR-F15, CR-F1 integration
 # ============================================================
 
-def test_executar_etapa_a_real_run_sem_flag_raises():
-    """CR-F5 v15c (CRITICAL Reviewer D R-OPS-2): ETAPA A real-run sem
-    flag explicita levanta NotImplementedError. Guard contra uso
-    involuntario do stub NOOP em PROD.
+def test_executar_etapa_a_v16_real_run_invoca_skill2():
+    """ETAPA A v16: real-run invoca Skill 2 v2 transferir_quantidade_para_lote_v2.
+
+    Substitui v15c raise NotImplementedError — agora ha implementacao real.
+    Ajuste com acao RENOMEAR_LOTE + lote_destino preenchido + Skill 2 mockada.
+    """
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{'id': 999, 'default_code': 'C'}]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(
+        ajuste_id=1, cod_produto='C', acao='RENOMEAR_LOTE',
+        qtd_ajuste=50.0, lote_origem='LOT_ANTIGO',
+    )
+    aj.lote_destino = 'LOT_NOVO'
+    aj.qtd_inventario = 50.0
+
+    mock_transfer = MagicMock()
+    mock_transfer.transferir_quantidade_para_lote_v2.return_value = {
+        'status': 'EXECUTADO',
+        'lote_destino_nome': 'LOT_NOVO',
+        'lote_destino_criado_agora': False,
+    }
+    mock_lot_svc = MagicMock()
+    mock_lot_svc.buscar_por_nome.return_value = 555  # lot_id_origem
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+    ), patch(
+        'app.odoo.estoque.scripts.transfer.StockInternalTransferService',
+        return_value=mock_transfer,
+    ), patch(
+        'app.odoo.services.stock_lot_service.StockLotService',
+        return_value=mock_lot_svc,
+    ):
+        res = executor.executar_etapa_a(ciclo='TESTE', dry_run=False)
+
+    assert res['status'] == 'EXECUTADO_ETAPA_A'
+    assert res['ajustes_transferidos'] == 1
+    assert res['ajustes_falha'] == []
+    assert aj.fase_pipeline == 'TRANSF_OK'
+    assert aj.external_id_operacao is not None
+    assert aj.external_id_operacao.startswith('INV-TESTE-A000001-TRANSF_OK-')
+    # Skill 2 v2 invocada 1 vez
+    mock_transfer.transferir_quantidade_para_lote_v2.assert_called_once()
+    call_kwargs = mock_transfer.transferir_quantidade_para_lote_v2.call_args.kwargs
+    assert call_kwargs['product_id'] == 999
+    assert call_kwargs['qty'] == 50.0
+    assert call_kwargs['lot_id_origem'] == 555
+    assert call_kwargs['nome_lote_destino'] == 'LOT_NOVO'
+    assert call_kwargs['dry_run'] is False
+
+
+def test_executar_etapa_a_v16_skip_ja_transf_ok():
+    """ETAPA A v16: ajuste ja em TRANSF_OK eh skipado (idempotencia)."""
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=2, acao='RENOMEAR_LOTE')
+    aj.fase_pipeline = 'TRANSF_OK'  # ja feito
+    aj.lote_destino = 'LOT_NOVO'
+
+    # _carregar_ajustes ja' filtra fase NULL/TRANSF_PENDENTE; mas o test
+    # quer mockar caso fase venha como TRANSF_OK por race (defensive).
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        return_value=True,
+    ):
+        res = executor.executar_etapa_a(ciclo='TESTE', dry_run=False)
+
+    assert res['ajustes_skip_ja_ok'] == 1
+    assert res['ajustes_transferidos'] == 0
+
+
+def test_executar_etapa_a_v16_falha_skill2_marca_transf_falha():
+    """ETAPA A v16: falha em Skill 2 marca fase=TRANSF_FALHA + erro_msg."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{'id': 999, 'default_code': 'C'}]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(
+        ajuste_id=3, cod_produto='C', acao='TRANSFERIR_LOTE',
+        qtd_ajuste=10.0, lote_origem='LOT_X',
+    )
+    aj.lote_destino = 'LOT_Y'
+    aj.qtd_inventario = 10.0
+
+    mock_transfer = MagicMock()
+    mock_transfer.transferir_quantidade_para_lote_v2.side_effect = (
+        RuntimeError('Skill 2 erro: lote destino conflito empresa')
+    )
+    mock_lot_svc = MagicMock()
+    mock_lot_svc.buscar_por_nome.return_value = 777
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+    ), patch(
+        'app.odoo.estoque.scripts.transfer.StockInternalTransferService',
+        return_value=mock_transfer,
+    ), patch(
+        'app.odoo.services.stock_lot_service.StockLotService',
+        return_value=mock_lot_svc,
+    ):
+        res = executor.executar_etapa_a(ciclo='TESTE', dry_run=False)
+
+    assert res['status'] == 'FALHA_TOTAL_ETAPA_A'
+    assert res['ajustes_transferidos'] == 0
+    assert len(res['ajustes_falha']) == 1
+    assert res['ajustes_falha'][0]['ajuste_id'] == 3
+    assert 'conflito' in res['ajustes_falha'][0]['erro']
+    assert aj.fase_pipeline == 'TRANSF_FALHA'
+    assert 'conflito' in (aj.erro_msg or '')
+
+
+def test_g014_pre_check_sem_lote_vencido_retorna_vazio():
+    """G014 v16: cod com saldo livre suficiente em lote valido nao migra."""
+    odoo = MagicMock()
+    # quant com lote NAO vencido (exp futuro) e qty suficiente
+    odoo.search_read.return_value = [
+        {'id': 11, 'lot_id': [101, 'LOT_VALIDO'],
+         'quantity': 100.0, 'reserved_quantity': 0.0},
+    ]
+    odoo.read.return_value = [
+        {'id': 101, 'expiration_date': '2030-01-01'},  # futuro
+    ]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=1, cod_produto='C', qtd_ajuste=50.0)
+
+    res = executor._g014_pre_check_lotes_vencidos(
+        ajustes_chunk=[aj],
+        cods_para_pid={'C': 999},
+        location_origem_id=42,
+        dry_run=True,
+    )
+    assert res['lote_novo_por_cod'] == {}
+    assert res['cods_com_lote_vencido'] == []
+    assert res['transferencias_planejadas'] == []
+
+
+def test_g014_pre_check_lote_vencido_dry_run_planeja():
+    """G014 v16: lote vencido com saldo livre vira lote_novo planejado em dry-run."""
+    odoo = MagicMock()
+    # 2 quants: 1 valido + 1 vencido. livre_validos=10 < demand=50
+    odoo.search_read.return_value = [
+        {'id': 11, 'lot_id': [101, 'LOT_VAL'],
+         'quantity': 10.0, 'reserved_quantity': 0.0},
+        {'id': 12, 'lot_id': [102, 'LOT_VENC'],
+         'quantity': 60.0, 'reserved_quantity': 0.0},
+    ]
+    # LOT_VAL futuro, LOT_VENC vencido
+    odoo.read.return_value = [
+        {'id': 101, 'expiration_date': '2030-01-01'},
+        {'id': 102, 'expiration_date': '2024-01-01'},  # vencido
+    ]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=1, cod_produto='C', qtd_ajuste=50.0)
+
+    res = executor._g014_pre_check_lotes_vencidos(
+        ajustes_chunk=[aj],
+        cods_para_pid={'C': 999},
+        location_origem_id=42,
+        dry_run=True,
+    )
+    assert res['cods_com_lote_vencido'] == ['C']
+    assert 'C' in res['lote_novo_por_cod']
+    # Nome formato: INV-C-YYYYMMDD
+    assert res['lote_novo_por_cod']['C'].startswith('INV-C-')
+    assert len(res['transferencias_planejadas']) == 1
+    plano = res['transferencias_planejadas'][0]
+    assert plano['cod'] == 'C'
+    # qty_a_migrar = min(demand - livre_validos, livre_vencidos)
+    #              = min(50 - 10, 60) = 40
+    assert plano['qty_a_migrar'] == 40.0
+
+
+def test_g014_pre_check_lote_vencido_real_invoca_skill2():
+    """G014 v16 real-run: lote vencido com saldo livre invoca Skill 2 v2."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 11, 'lot_id': [102, 'LOT_VENC'],
+         'quantity': 60.0, 'reserved_quantity': 0.0},
+    ]
+    odoo.read.return_value = [
+        {'id': 102, 'expiration_date': '2024-01-01'},  # vencido
+    ]
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=1, cod_produto='C', qtd_ajuste=30.0)
+
+    mock_transfer = MagicMock()
+    mock_transfer.transferir_quantidade_para_lote_v2.return_value = {
+        'status': 'EXECUTADO',
+    }
+    with patch(
+        'app.odoo.estoque.scripts.transfer.StockInternalTransferService',
+        return_value=mock_transfer,
+    ):
+        res = executor._g014_pre_check_lotes_vencidos(
+            ajustes_chunk=[aj],
+            cods_para_pid={'C': 999},
+            location_origem_id=42,
+            dry_run=False,
+        )
+
+    assert res['cods_com_lote_vencido'] == ['C']
+    assert 'C' in res['lote_novo_por_cod']
+    assert len(res['transferencias_executadas']) == 1
+    transf = res['transferencias_executadas'][0]
+    assert transf['cod'] == 'C'
+    assert transf['qty_migrada'] == 30.0  # min(60, 30) — demand=30
+    assert transf['lote_origem_nome'] == 'LOT_VENC'
+    # Skill 2 v2 invocada com lot_id_origem=102 + nome_lote_novo
+    mock_transfer.transferir_quantidade_para_lote_v2.assert_called_once()
+    call_kwargs = mock_transfer.transferir_quantidade_para_lote_v2.call_args.kwargs
+    assert call_kwargs['lot_id_origem'] == 102
+    assert call_kwargs['qty'] == 30.0
+    assert call_kwargs['nome_lote_destino'].startswith('INV-C-')
+
+
+def test_g014_pre_check_quant_sem_lote_eh_nao_vencido():
+    """G014 v16: quant sem lot_id (tracking='none') NAO conta como vencido."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 11, 'lot_id': False,  # sem lote (D-OPS-5)
+         'quantity': 100.0, 'reserved_quantity': 0.0},
+    ]
+    odoo.read.return_value = []
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=1, cod_produto='C', qtd_ajuste=50.0)
+
+    res = executor._g014_pre_check_lotes_vencidos(
+        ajustes_chunk=[aj],
+        cods_para_pid={'C': 999},
+        location_origem_id=42,
+        dry_run=True,
+    )
+    assert res['cods_com_lote_vencido'] == []
+    assert res['lote_novo_por_cod'] == {}
+
+
+def test_executar_etapa_a_v16_flag_deprecated_noop_funciona():
+    """ETAPA A v16: flag DEPRECATED `permitir_etapa_a_noop_real=True` ainda
+    funciona mas com novo status `EXECUTADO_ETAPA_A_NOOP_DEPRECATED`.
+
+    Sera removido em v17. Tests garantem compat ate la.
     """
     odoo = MagicMock()
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    ajustes = [_ajuste_mock(ajuste_id=1)]
+    aj = _ajuste_mock(ajuste_id=1, acao='RENOMEAR_LOTE')
+    aj.lote_destino = 'LOT_NOVO'
     with patch(
         'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
-        return_value=ajustes,
-    ):
-        with pytest.raises(NotImplementedError, match='ETAPA A real-run'):
-            executor.executar_etapa_a(ciclo='TESTE', dry_run=False)
-
-
-def test_executar_etapa_a_real_run_com_flag_executa_noop():
-    """CR-F5 v15c: com `permitir_etapa_a_noop_real=True` real-run NOOP funciona."""
-    odoo = MagicMock()
-    svc = MagicMock()
-    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    ajustes = [_ajuste_mock(ajuste_id=1)]
-    with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
-        return_value=ajustes,
+        return_value=[aj],
     ), patch(
         'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
         return_value=True,
@@ -743,8 +1205,8 @@ def test_executar_etapa_a_real_run_com_flag_executa_noop():
             ciclo='TESTE', dry_run=False,
             permitir_etapa_a_noop_real=True,
         )
-    assert res['status'] == 'EXECUTADO_ETAPA_A_NOOP'
-    assert ajustes[0].fase_pipeline == 'TRANSF_OK'
+    assert res['status'] == 'EXECUTADO_ETAPA_A_NOOP_DEPRECATED'
+    assert aj.fase_pipeline == 'TRANSF_OK'
 
 
 def test_etapa_b_compensatorio_sem_falhas_vira_auto_corrigido(db):
@@ -794,6 +1256,12 @@ def test_etapa_b_compensatorio_sem_falhas_vira_auto_corrigido(db):
     svc.liberar_faturamento.return_value = None
 
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    # v16: G014 mock — testa apenas compensatorio (CR-F15)
+    executor._g014_pre_check_lotes_vencidos = MagicMock(return_value={
+        'lote_novo_por_cod': {}, 'cods_com_lote_vencido': [],
+        'transferencias_executadas': [], 'transferencias_planejadas': [],
+        'erros': [],
+    })
     with patch(
         'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
         return_value=[aj],
@@ -839,6 +1307,12 @@ def test_etapa_b_atomo_skill5_idempotent_done_pula_f5b_f5c():
         'tempo_ms': 10,
     }
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    # v16: G014 mock — testa apenas idempotencia F5a
+    executor._g014_pre_check_lotes_vencidos = MagicMock(return_value={
+        'lote_novo_por_cod': {}, 'cods_com_lote_vencido': [],
+        'transferencias_executadas': [], 'transferencias_planejadas': [],
+        'erros': [],
+    })
     aj = _ajuste_mock(ajuste_id=1, cod_produto='C', acao='PERDA_LF_FB')
     with patch(
         'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',

@@ -7,9 +7,44 @@
 
 ## ⏯️ ESTADO ATUAL E COMO CONTINUAR (handoff — atualizar a cada avanço)
 
-**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual ~26 commits sobre main@15be9003 — último v15b com rebase 2026-05-25). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
+**Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual v16 sobre main@15be9003). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **465 pytest verdes** (tests/odoo/ — v15b confirmado em 14.85s).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **483 pytest verdes** (tests/odoo/ — v16 confirmado em 15.51s).
+
+**Sessão 2026-05-25 v16 (C10 ETAPA C F5d + C10.2 ETAPA A real + C10.3 G014 + 9 fixes 2 reviewers paralelos):**
+- ✅ Setup worktree + venv + ENV; main NAO avancou desde v15c (0 commits) — sem rebase; pytest baseline 472 verdes.
+- ✅ Leituras: PLANEJAMENTO §0/§5/§7.2/§10.3/§12 + memorias `[[skill5_picking_pattern]]` + `[[skill6_planejar_pre_etapa_pattern]]` + orchestrator v15c + service legado F5d L165-506 + L945-1102 + `_commit_helpers.py` + script 09 G014 L795-917 + transfer.py L1081 v2.
+- ✅ AskUserQuestion v16 — Rafael escolheu: opcao A escopo completo (C10+C10.1+C10.2+C10.3) + opcao Y `_invoice_helpers.py` arquivo separado com perfil param (Rafael: "inline contaminaria logica generica — venda-cliente nao tem fallback standard_price").
+- ✅ **CSV ajustes simples (interrupcao Rafael)**: 121 entradas (12 POSITIVO + 109 NEGATIVO; 101 FB + 14 CD + 6 LF) salvos em `scripts/inventario_2026_05/ajustes_simples_pendentes_v16_2026-05-25.csv` — commit isolado `168499bd`.
+- ✅ **`_invoice_helpers.py` NOVO** (~430 LOC) — 3 helpers F5d.5/.6/.7 com perfil V1 'inventario-inter-company'; outros perfis raise NotImplementedError.
+- ✅ **C10 ETAPA C real** em orchestrator: polling 1800s/40s + SNAPSHOT meta + safe_session_get + sub-etapas .5/.6/.7 try/except + fase F5d_INVOICE_GERADA + invoice_id_odoo + external_id_operacao.
+- ✅ **C10.2 ETAPA A real**: substitui guard NotImplementedError por Skill 2 v2 (`transferir_quantidade_para_lote_v2`), filtra ACOES_LOTE = {RENOMEAR_LOTE, TRANSFERIR_LOTE} (escopo disjunto de ACOES_PICKING). Flag DEPRECATED `permitir_etapa_a_noop_real=True` ainda funciona (compat ate v17).
+- ✅ **C10.3 G014 pre-check** (`_g014_pre_check_lotes_vencidos`): detecta lotes vencidos com saldo livre + migra via Skill 2 v2 para lote novo `INV-{cod}-{YYYYMMDD}` ANTES de criar picking. Idempotente por dia.
+- ✅ **2 code-reviewers paralelos** trouxeram 9 findings (4 CRITICAL + 5 HIGH) — TODOS aplicados:
+  - **R1F1** (CRIT 95): validar perfil ANTES do polling — `NotImplementedError` no meio do polling envenenava session (pickings restantes ficavam F5c_LIBERADO permanentemente). Fix: `_validar_perfil(perfil_invoice_helpers)` antes do loop.
+  - **R2F1** (CRIT 92): guard `situacao_nf` em `garantir_payment_provider` fallback. Sem guard, `button_draft` em NF SEFAZ-autorizada invalidaria chave irreversivelmente. Fix: ler `l10n_br_situacao_nf` na consulta inicial + bloquear `('autorizado', 'excecao_autorizado', 'enviado')`.
+  - **R2F2** (CRIT 88): incluir `'enviado'` (mid-SEFAZ) nos guards de `garantir_fiscal_setup`.
+  - **R1F4** (HIGH 82): substituir `datetime.utcnow()` (banido pelo hook `ban_datetime_now.py`) por `agora_utc_naive`. Sem o fix, pre-commit bloqueava.
+  - **R2F3** (HIGH 85): guard `situacao_nf` em `corrigir_price_zero_em_invoice` (F5d.6 roda ANTES de F5d.7 — pode danificar NF autorizada antes do guard de F5d.7 sequer rodar).
+  - **R2F4** (HIGH 80): `garantir_fiscal_setup` retorna True com `SKIP_GUARD_SITUACAO_NF` em auditoria (em vez de False) quando guard SEFAZ bloqueia — nao infla contador de falhas espurio.
+  - **R2F5** (HIGH 83): `DEV_FB_LF` (sem precedente historico) registra `SKIP_NAO_MAPEADO` em auditoria — nao silencia ausencia de fix fiscal.
+  - **R1F2** (HIGH 88): G014 partial failure — cods com Skill 2 falhada marcados como falha do chunk (em vez de seguir com lote vencido original que faria `action_assign` falhar silenciosamente downstream).
+  - **R1F3** (HIGH 85): commit_resilient False apos invoice resolve -> `continue` (anti-cascata em session sujo, sub-etapas NAO rodam).
+- ✅ **14 PYTEST NOVOS VERDES** em `test_faturamento_pipeline_orchestrator.py`:
+  - 5 ETAPA C v16 (dry-run skip/com ajustes/ajustes sem picking_id, real-run resolve+sub-etapas, real-run timeout total, perfil invalido FALHA_PERFIL_INVALIDO)
+  - 4 ETAPA A v16 (real-run invoca Skill 2 v2, skip ja TRANSF_OK, falha Skill 2 marca TRANSF_FALHA, flag DEPRECATED funciona)
+  - 4 G014 pre-check (sem lote vencido, dry-run planeja, real-run invoca Skill 2 v2, quant sem lote nao conta vencido)
+  - 1 dry-run noop atualizado para v16 status
+- ✅ **BASELINE PYTEST ODOO**: 472 → **483 verdes em 15.51s** (+11 v16; alguns substituiram).
+- ✅ **SMOKE DRY-RUN PROD validado** (cod 105000007):
+  - ETAPA C: 4 pickings F5c_LIBERADO detectados (317346, 317516, 317517, 317518) + status DRY_RUN_OK_ETAPA_C em 766ms
+  - ETAPA A: SKIP_NENHUM_AJUSTE (cod nao tem ACOES_LOTE) — esperado
+  - ETAPA combinado A+B+C: status global DRY_RUN_OK em 862ms
+- ✅ Cross-refs aplicados: CLAUDE.md estoque (status global + skill 8 v16 expandido) + ROADMAP HANDOFF (esta secao) + PLANEJAMENTO §0/§7/§12 trilha v16.
+
+**Status global após v16:**
+- Skill 8 `faturando-odoo` 🟡 **ORCHESTRATOR + ETAPAS A/B/C + G014 LIVE** — C6/C7/C8/C9/**C10** implementados; ETAPAS D/E/F stubs v17; **10 checkpoints ✅** (C1-C5 + C6 + C6.5 + C7 + C8 + C9 + C10) de 24.
+- Próximo passo (v17): **C11 F5e SEFAZ Playwright (IRREVERSIVEL) + C12 ETAPA E RecebimentoLf + C13 ETAPA F via Skill 5 v15a atomo `criar_picking_entrada_destino_manual`**. Esperado +15-20 pytest novos.
 
 **Sessão 2026-05-25 v15b (C6+C7+C8+F5c ✅ — Orchestrator base Skill 8 LIVE):**
 - ✅ Setup worktree + venv + ENV; rebase de main (11 commits — SDK 0.2.87, SPED V36, references, weekly, fix tabelas) sem conflito; pytest baseline 435 verdes.

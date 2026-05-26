@@ -81,6 +81,14 @@ from app.odoo.estoque.scripts._commit_helpers import (
     commit_resilient as _commit_resilient_shared,  # CR-F9 v15c: helper consolidado
     safe_session_get,                              # CR-F6 v15c: re-fetch ORM
 )
+from app.odoo.estoque.scripts._invoice_helpers import (
+    # CR-C10.1 v16 (Rafael 2026-05-25): helpers POS-invoice CIEL IT por PERFIL.
+    # V1 cobre 'inventario-inter-company' apenas; perfis futuros raise.
+    PERFIL_INVENTARIO_INTER_COMPANY,
+    corrigir_price_zero_em_invoice,  # F5d.6 (G007)
+    garantir_fiscal_setup,           # F5d.7 (G034 DEV_*)
+    garantir_payment_provider,       # F5d.5 (G029)
+)
 from app.odoo.estoque.scripts.picking import StockPickingService
 from app.odoo.utils.connection import get_odoo_connection
 
@@ -109,6 +117,13 @@ SLEEP_ENTRE_CHUNKS = 5.0
 # Etapas validas (ordem fixa A->B->C->D->E->F).
 ETAPAS_VALIDAS: Tuple[str, ...] = ('A', 'B', 'C', 'D', 'E', 'F')
 
+# CR-C10.2 v16: ACOES_LOTE — acoes intra-empresa sem NF (ETAPA A).
+# DISJUNTAS de ACOES_PICKING (ETAPA B) — ajustes RENOMEAR_LOTE/TRANSFERIR_LOTE
+# NAO viram picking inter-company; transferem qty entre lotes intra-empresa
+# via Skill 2 `transferir_quantidade_para_lote_v2`.
+# Centralizar em `app/odoo/constants/operacoes_fiscais.py` em v17 (TODO).
+ACOES_LOTE: frozenset = frozenset({'RENOMEAR_LOTE', 'TRANSFERIR_LOTE'})
+
 # Sub-skill C5 PRE-FLIGHT — caminho do CLI do projeto.
 # Resolvido relativo ao root via PROJECT_ROOT (cwd ou setado por env).
 SUB_SKILL_C5_CLI = (
@@ -125,6 +140,14 @@ FASE_F5c_OK = 'F5c_LIBERADO'
 FASE_F5a_FALHA = 'F5a_FALHA'
 FASE_F5b_FALHA = 'F5b_FALHA'
 FASE_F5c_FALHA = 'F5c_FALHA'
+
+# v16 — ETAPA C F5d invoices
+FASE_F5d_OK = 'F5d_INVOICE_GERADA'
+FASE_F5d_TIMEOUT = 'F5d_TIMEOUT'
+
+# Defaults polling ETAPA C (D5 pattern + service legado L948)
+F5D_POLLING_TIMEOUT_S = 1800   # 30 min total
+F5D_POLL_INTERVAL_S = 40       # entre check de cada picking pendente
 
 
 # ============================================================
@@ -584,24 +607,32 @@ class FaturamentoPipelineExecutor:
         dry_run: bool = True,
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
-        permitir_etapa_a_noop_real: bool = False,  # CR-F5 v15c
+        limite: Optional[int] = None,  # v16: aceita limite para smoke
+        permitir_etapa_a_noop_real: bool = False,  # DEPRECATED v16 — compat
     ) -> Dict[str, Any]:
-        """ETAPA A: transferencias internas pre-faturamento.
+        """ETAPA A v16: transferencias intra-empresa SEM NF (RENOMEAR/TRANSFERIR_LOTE).
 
-        DELEGADO 100% para Skill 2 `transferindo-interno-odoo` (D15).
+        Filtra ajustes com `acao_decidida in ACOES_LOTE` = {RENOMEAR_LOTE,
+        TRANSFERIR_LOTE}. ESCOPO DISJUNTO de ACOES_PICKING (ETAPA B).
 
-        **v15c CR-F5 (Reviewer D R-OPS-2 conf 88) — GUARD em real-run**:
-        Em `--confirmar` real, marcar `fase_pipeline='TRANSF_OK'` sem
-        validar Odoo e' PERIGOSO — ETAPA B pode falhar quando lote_origem
-        no DB local != quant atual no Odoo. Por isso, real-run agora RAISE
-        `NotImplementedError` por default (v15b NOOP era armadilha).
+        Implementacao v16 (CR-C10.2 / CR-H3 v15b TODO):
+          - Filtra ACOES_LOTE + fase NULL ou TRANSF_PENDENTE (idempotente)
+          - Para cada ajuste: invoca Skill 2 v2 `transferir_quantidade_para_lote_v2`
+          - SEQUENCIAL (D13 — XML-RPC nao thread-safe Request-sent)
+          - Marca fase TRANSF_OK ou TRANSF_FALHA
+          - external_id_operacao populado (F12 pattern v15c)
+          - Auditoria por ajuste
 
-        Para forcar comportamento NOOP em real-run (operador convicto que
-        ajustes ja' tem `lote_origem` correto), passar
-        `permitir_etapa_a_noop_real=True` explicitamente.
+        Substitui:
+          - v15b NOOP guard que marcava TUDO como TRANSF_OK (perigoso —
+            incluia ACOES_PICKING que NAO sao transferencias).
+          - v15c `raise NotImplementedError` guard.
 
-        v16: substituir NOOP por integracao Skill 2 real (analise de
-        quants + invocacao `transferir_quantidade_para_lote_v2`).
+        Compat flag `permitir_etapa_a_noop_real=True`:
+          - v16: ainda aceito mas emite DeprecationWarning. Marca apenas
+            ajustes ACOES_LOTE como TRANSF_OK sem chamar Skill 2 (uso de
+            operador convicto que lote ja' casa).
+          - v17 (planejado): removido.
 
         Args:
             ciclo: identificador do ciclo.
@@ -609,23 +640,22 @@ class FaturamentoPipelineExecutor:
             dry_run: True (default) simula; False executa real.
             usuario: identificador para auditoria.
             cod_produto: smoke/canary.
-            permitir_etapa_a_noop_real: CR-F5 v15c — forca NOOP em real-run.
-                Default False = raise NotImplementedError em real-run para
-                proteger contra uso involuntario do stub em PROD.
+            permitir_etapa_a_noop_real: DEPRECATED v16 — marca TRANSF_OK
+                sem chamar Skill 2. Sera removido em v17.
 
         Returns:
-            dict com status + contadores.
-
-        Raises:
-            NotImplementedError: em real-run sem `permitir_etapa_a_noop_real=True`
-                (CR-F5 — Reviewer D R-OPS-2).
+            dict com status + contadores (ajustes_total, ajustes_transferidos,
+            ajustes_skip_pid, ajustes_falha, ...).
         """
         t0 = time.time()
+        # CR-C10.2 v16: filtrar ACOES_LOTE (escopo disjunto de ACOES_PICKING).
         ajustes = _carregar_ajustes(
             ciclo=ciclo,
             company_origem_id=company_origem_id,
+            acoes=sorted(ACOES_LOTE),  # so' RENOMEAR_LOTE + TRANSFERIR_LOTE
             fases_pipeline=[None, 'TRANSF_PENDENTE'],
             cod_produto=cod_produto,
+            limite=limite,  # v16 smoke/canary
         )
         out: Dict[str, Any] = {
             'etapa': 'A',
@@ -633,6 +663,12 @@ class FaturamentoPipelineExecutor:
             'company_origem_id': company_origem_id,
             'dry_run': dry_run,
             'ajustes_total': len(ajustes),
+            'ajustes_transferidos': 0,
+            'ajustes_skip_ja_ok': 0,
+            'ajustes_skip_pid_ausente': 0,
+            'ajustes_skip_sem_lote_destino': 0,
+            'ajustes_skip_qty_zero': 0,
+            'ajustes_falha': [],
         }
         if not ajustes:
             out['status'] = 'SKIP_NENHUM_AJUSTE'
@@ -640,40 +676,207 @@ class FaturamentoPipelineExecutor:
             return out
 
         if dry_run:
-            out['status'] = 'DRY_RUN_OK_ETAPA_A_NOOP'
+            # Em dry-run, NAO chama Skill 2. So' reporta planejamento.
+            out['status'] = 'DRY_RUN_OK_ETAPA_A'
             out['observacao'] = (
-                f'v15c: ETAPA A em dry-run retorna NOOP. Em real-run, '
-                f'exige `permitir_etapa_a_noop_real=True` explicito '
-                f'(CR-F5 guard). Em v16, integrar analise de quants + '
-                f'invocacao Skill 2.'
+                f'v16 dry-run: {len(ajustes)} ajustes ACOES_LOTE planejados '
+                f'para transferencia intra-empresa via Skill 2 '
+                f'`transferir_quantidade_para_lote_v2`. Real-run faria '
+                f'1 RPC stock.lot resolver + 1 Skill 2 v2 por ajuste.'
             )
+            out['ajustes_planejados'] = [
+                {
+                    'id': a.id,
+                    'acao': a.acao_decidida,
+                    'cod_produto': a.cod_produto,
+                    'lote_origem': a.lote_origem,
+                    'lote_destino': a.lote_destino,
+                    'qtd_inventario': float(a.qtd_inventario or 0),
+                    'company_id': a.company_id,
+                }
+                for a in ajustes[:10]  # primeiros 10 para preview
+            ]
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # CR-F5 v15c (CRITICAL Reviewer D R-OPS-2): GUARD em real-run.
-        # Marcar TRANSF_OK sem validar Odoo permite ETAPA B operar em
-        # quants nao preparados -> falha silenciosa em PROD.
-        if not permitir_etapa_a_noop_real:
-            raise NotImplementedError(
-                'ETAPA A real-run em v15c esta bloqueada (CR-F5 guard). '
-                'A integracao com Skill 2 (transferir_quantidade_para_lote_v2) '
-                'esta TODO para v16. Para forcar NOOP em real-run (operador '
-                'convicto que `lote_origem` dos ajustes ja casa com quants '
-                'no Odoo), passar `permitir_etapa_a_noop_real=True` '
-                'explicitamente ao chamar executar_etapa_a OU '
-                'executar_pipeline_bulk.'
-            )
+        # ============================================================
+        # REAL-RUN: invoca Skill 2 v2 por ajuste (SEQUENCIAL D13)
+        # ============================================================
 
-        # NOOP real autorizado por flag explicita
-        for a in ajustes:
-            a.fase_pipeline = 'TRANSF_OK'
-        if not _commit_resilient():
-            out['status'] = 'FALHA_COMMIT_TRANSF_OK'
+        # Compat DEPRECATED v15c flag — manter por seguranca durante migracao.
+        if permitir_etapa_a_noop_real:
+            logger.warning(
+                'permitir_etapa_a_noop_real=True DEPRECATED v16 — sera '
+                'removido em v17. Marca TRANSF_OK sem chamar Skill 2 '
+                '(uso de operador convicto que lote ja casa com quants).'
+            )
+            for a in ajustes:
+                a.fase_pipeline = 'TRANSF_OK'
+            if not _commit_resilient():
+                out['status'] = 'FALHA_COMMIT_TRANSF_OK_NOOP'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+            out['status'] = 'EXECUTADO_ETAPA_A_NOOP_DEPRECATED'
+            out['ajustes_atualizados'] = len(ajustes)
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        out['status'] = 'EXECUTADO_ETAPA_A_NOOP'
-        out['ajustes_atualizados'] = len(ajustes)
+        # v16: implementacao real via Skill 2 v2.
+        # Lazy import — evita circular em testes.
+        from app.odoo.estoque.scripts.transfer import (  # noqa: PLC0415
+            StockInternalTransferService,
+        )
+        from app.odoo.services.stock_lot_service import (  # noqa: PLC0415
+            StockLotService,
+        )
+
+        transfer_svc = StockInternalTransferService(odoo=self.odoo)
+        lot_svc = StockLotService(odoo=self.odoo)
+
+        # Pre-snapshot dos ajustes (D1 pattern — anti-DetachedInstance).
+        # Usa `ciclo` parametro (NAO a.ciclo) — consistente em todos snapshots
+        # mesmo se DB retornar valor inconsistente.
+        ajuste_index: Dict[int, Any] = {a.id: a for a in ajustes}
+        snapshots = [
+            {
+                'id': a.id,
+                'ciclo': ciclo,  # parametro, nao a.ciclo
+                'cod_produto': a.cod_produto,
+                'lote_origem': (a.lote_origem or '').strip() or None,
+                'lote_destino': (a.lote_destino or '').strip(),
+                'company_id': a.company_id,
+                'qtd_inventario': float(a.qtd_inventario or 0),
+                'fase_atual': a.fase_pipeline,
+                'acao': a.acao_decidida,
+            }
+            for a in ajustes
+        ]
+
+        # Pre-resolver product_id por cod_produto (cache, 1 batch read)
+        cods_distintos = sorted({s['cod_produto'] for s in snapshots})
+        prod_cache = self._resolver_pids_em_batch(cods_distintos)
+
+        # Iterar SEQUENCIAL (D13)
+        for snap in snapshots:
+            t_snap = time.time()
+            # Idempotencia: skip ja em TRANSF_OK
+            if snap['fase_atual'] == 'TRANSF_OK':
+                out['ajustes_skip_ja_ok'] += 1
+                continue
+
+            pid = prod_cache.get(snap['cod_produto'])
+            if not pid:
+                out['ajustes_skip_pid_ausente'] += 1
+                continue
+
+            if not snap['lote_destino']:
+                out['ajustes_skip_sem_lote_destino'] += 1
+                # Marcar fase TRANSF_FALHA + erro_msg
+                aj = ajuste_index[snap['id']]
+                aj.fase_pipeline = 'TRANSF_FALHA'
+                aj.erro_msg = 'ETAPA A: sem lote_destino no ajuste'
+                _commit_resilient()
+                continue
+
+            qty = snap['qtd_inventario']
+            if qty <= 0:
+                out['ajustes_skip_qty_zero'] += 1
+                continue
+
+            # Resolver lot_id_origem (Skill 2 v2 aceita None se sem lote)
+            lot_id_origem: Optional[int] = None
+            if snap['lote_origem']:
+                try:
+                    lot_id_origem = lot_svc.buscar_por_nome(
+                        snap['lote_origem'], pid, snap['company_id'],
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f'ETAPA A ajuste {snap["id"]} buscar lote '
+                        f'{snap["lote_origem"]!r} falhou: {e}. '
+                        f'Tentando sem lote origem (Skill 2 v2 trata None).'
+                    )
+                    lot_id_origem = None
+
+            # Invocar Skill 2 v2 `transferir_quantidade_para_lote_v2`
+            try:
+                result = transfer_svc.transferir_quantidade_para_lote_v2(
+                    product_id=pid,
+                    company_id=snap['company_id'],
+                    location_id=COMPANY_LOCATIONS[snap['company_id']],
+                    qty=qty,
+                    lot_id_origem=lot_id_origem,
+                    nome_lote_destino=snap['lote_destino'],
+                    dry_run=False,
+                )
+                tempo_ms_snap = int((time.time() - t_snap) * 1000)
+
+                # F12 v15c: external_id_operacao para rastreabilidade
+                external_id_a = (
+                    f'INV-{snap["ciclo"]}-A{snap["id"]:06d}-TRANSF_OK-'
+                    f'{uuid.uuid4().hex[:8]}'
+                )
+                aj = ajuste_index[snap['id']]
+                aj.fase_pipeline = 'TRANSF_OK'
+                aj.external_id_operacao = external_id_a
+                _registrar_auditoria(
+                    ajuste_id=snap['id'], ciclo=snap['ciclo'],
+                    fase='TRANSF_OK',
+                    acao='transferir_quantidade_para_lote_v2',
+                    modelo_odoo='stock.quant',
+                    status='SUCESSO',
+                    payload={
+                        'product_id': pid,
+                        'company_id': snap['company_id'],
+                        'qty': qty,
+                        'lot_id_origem': lot_id_origem,
+                        'lote_destino': snap['lote_destino'],
+                        'lote_origem': snap['lote_origem'],
+                    },
+                    resposta={
+                        'lote_destino_nome': result.get('lote_destino_nome'),
+                        'lote_destino_criado_agora': result.get(
+                            'lote_destino_criado_agora'
+                        ),
+                    },
+                    tempo_ms=tempo_ms_snap, executado_por=usuario,
+                )
+                _commit_resilient()
+                out['ajustes_transferidos'] += 1
+
+            except Exception as e:
+                msg = str(e)[:500]
+                logger.error(
+                    f'ETAPA A ajuste {snap["id"]} Skill 2 falhou: {msg}',
+                    exc_info=True,
+                )
+                aj = ajuste_index[snap['id']]
+                aj.fase_pipeline = 'TRANSF_FALHA'
+                aj.erro_msg = msg
+                _registrar_auditoria(
+                    ajuste_id=snap['id'], ciclo=snap['ciclo'],
+                    fase='TRANSF_FALHA',
+                    acao='transferir_quantidade_para_lote_v2',
+                    modelo_odoo='stock.quant',
+                    status='FALHA', erro_msg=msg,
+                    executado_por=usuario,
+                )
+                _commit_resilient()
+                out['ajustes_falha'].append({
+                    'ajuste_id': snap['id'],
+                    'cod_produto': snap['cod_produto'],
+                    'erro': msg,
+                })
+
+        n_falhas = len(out['ajustes_falha'])
+        n_ok = out['ajustes_transferidos']
+        if n_falhas == 0:
+            out['status'] = 'EXECUTADO_ETAPA_A'
+        elif n_ok > 0:
+            out['status'] = 'EXECUTADO_PARCIAL_ETAPA_A'
+        else:
+            out['status'] = 'FALHA_TOTAL_ETAPA_A'
+
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
@@ -926,8 +1129,58 @@ class FaturamentoPipelineExecutor:
         cods_distintos = sorted({a.cod_produto for a in ajustes_chunk})
         cods_para_pid = self._resolver_pids_em_batch(cods_distintos)
 
+        # CR-C10.3 v16: G014 pre-check lotes vencidos on-the-fly.
+        # Detecta cods com livre_validos < demand E livre_vencidos > 0;
+        # migra qty para lote novo INV-{cod}-{YYYYMMDD} via Skill 2 v2.
+        # Pattern script 09 L795-917 — codificado intra-chunk para evitar
+        # action_assign falhar silenciosamente no F5a (Odoo CIEL IT rejeita
+        # reserva de lote vencido).
+        g014_resultado = self._g014_pre_check_lotes_vencidos(
+            ajustes_chunk=ajustes_chunk,
+            cods_para_pid=cods_para_pid,
+            location_origem_id=meta['location_origem_id'],
+            dry_run=dry_run,
+        )
+        out_chunk['g014'] = g014_resultado
+        lote_novo_por_cod = g014_resultado.get('lote_novo_por_cod', {})
+        if lote_novo_por_cod:
+            logger.info(
+                f'G014: {len(lote_novo_por_cod)} cods com lote vencido '
+                f'migrados para lote novo (dry_run={dry_run})'
+            )
+
+        # CR-FIX R1F2 v16 (HIGH 88): G014 partial failure handling.
+        # Cods que tentaram migrar mas falharam ficam em g014.erros[]. Se
+        # criar picking com lote_origem vencido, action_assign falha
+        # silenciosamente no Odoo CIEL IT — F5b retorna erro de qty
+        # insuficiente, mas root cause (G014 falhou) fica obscuro.
+        # Solucao: filtrar cods com erros de G014 — adicionar a falhas
+        # explicitas e marcar para SKIP do picking (operador investiga).
+        # Aplica APENAS em real-run (em dry-run, planejamento eh OK).
+        cods_g014_falhou: set = set()
+        if not dry_run and g014_resultado.get('erros'):
+            cods_g014_falhou = {e['cod'] for e in g014_resultado['erros']}
+            for cod_err in cods_g014_falhou:
+                ajustes_afetados = [
+                    a.id for a in ajustes_chunk if a.cod_produto == cod_err
+                ]
+                out_chunk['falhas'].append({
+                    'sub_etapa': 'G014_pre_check',
+                    'erro': (
+                        f'G014 falhou em cod={cod_err} — picking NAO criado '
+                        f'(lote vencido nao migrado para lote novo). '
+                        f'Operador deve investigar saldos manualmente.'
+                    ),
+                    'cod_produto': cod_err,
+                    'ajustes_ids': ajustes_afetados,
+                })
+
         ajustes_sem_pid: List[int] = []
         for a in ajustes_chunk:
+            # CR-FIX R1F2 v16 (HIGH 88): pular cods cujo G014 falhou.
+            # Ja' adicionados a out_chunk['falhas'] acima.
+            if a.cod_produto in cods_g014_falhou:
+                continue
             pid = cods_para_pid.get(a.cod_produto)
             if not pid:
                 ajustes_sem_pid.append(a.id)
@@ -940,10 +1193,14 @@ class FaturamentoPipelineExecutor:
                     f'({qty}) — pulando.'
                 )
                 continue
+            # CR-C10.3 v16: se G014 migrou lote vencido, usar lote novo na linha
+            lot_name_efetivo = lote_novo_por_cod.get(
+                a.cod_produto, a.lote_origem or None,
+            )
             linhas.append({
                 'product_id': pid,
                 'quantity': qty,
-                'lot_name': a.lote_origem or None,
+                'lot_name': lot_name_efetivo,
                 'name': f'INV {a.cod_produto} ajuste={a.id}',
             })
 
@@ -1243,6 +1500,244 @@ class FaturamentoPipelineExecutor:
 
         return out_chunk
 
+    def _g014_pre_check_lotes_vencidos(
+        self,
+        *,
+        ajustes_chunk: List,
+        cods_para_pid: Dict[str, int],
+        location_origem_id: int,
+        dry_run: bool,
+    ) -> Dict[str, Any]:
+        """G014 v16: pre-check de lotes vencidos com migracao on-the-fly.
+
+        Pattern script 09 L795-917 — antes de criar picking inter-company,
+        verifica se os lotes_origem dos ajustes estao vencidos
+        (`expiration_date < HOJE`). Lote vencido bloqueia `action_assign`
+        silenciosamente no Odoo (CIEL IT rejeita reserva).
+
+        Logica (por cod):
+          1. READ stock.quant (product+company+location_origem, qty>0)
+          2. READ stock.lot.expiration_date para lotes encontrados
+          3. Separar quants_validos vs quants_vencidos
+          4. Se `livre_validos < demand` E `livre_vencidos > 0`:
+               qty_a_migrar = min(demand - livre_validos, livre_vencidos)
+               nome_lote_novo = 'INV-{cod}-{YYYYMMDD}'  (idempotente por dia)
+               Para cada quant vencido (FIFO ordem): Skill 2 v2 migra
+               `take = min(livre_qv, qty_restante)` para lote novo
+          5. Retorna `lote_novo_por_cod` para caller substituir `lot_name`
+             nas linhas do picking (evita reservar lote vencido).
+
+        Idempotencia: Skill 2 v2 internamente usa `resolver_lote_destino`
+        com `criar_se_faltar=True` que faz search ANTES de criar (mesmo nome
+        + mesmo produto = retorna existente). Re-rodar G014 no mesmo dia
+        para o mesmo cod NAO duplica lote.
+
+        Args:
+            ajustes_chunk: lista de AjusteEstoqueInventario do chunk.
+            cods_para_pid: cache cod -> product.id.
+            location_origem_id: location stock.location.id de origem.
+            dry_run: se True, planeja sem chamar Skill 2.
+
+        Returns:
+            dict {
+                'lote_novo_por_cod': {cod: nome_lote_novo},
+                'cods_com_lote_vencido': [cods detectados],
+                'transferencias_executadas': [dicts com detalhes],
+                'transferencias_planejadas': [dicts em dry-run],
+                'erros': [{cod, erro}],
+            }
+        """
+        # CR-FIX R1F4 v16 (HIGH 82): substituir datetime.utcnow() (banida pelo
+        # hook ban_datetime_now.py) por agora_utc_naive (padrao do projeto —
+        # ver REGRAS_TIMEZONE.md).
+        from datetime import datetime as _dt  # lazy — para _dt.strptime em _is_vencido
+        from datetime import timedelta as _td  # lazy
+        from app.utils.timezone import agora_utc_naive  # lazy
+
+        HOJE = agora_utc_naive()  # naive datetime (UTC), compativel com projeto
+        EXP_NOVO_LOTE = (HOJE + _td(days=365)).strftime('%Y-%m-%d %H:%M:%S')
+        HOJE_STR = HOJE.strftime('%Y%m%d')
+
+        out: Dict[str, Any] = {
+            'lote_novo_por_cod': {},
+            'cods_com_lote_vencido': [],
+            'transferencias_executadas': [],
+            'transferencias_planejadas': [],
+            'erros': [],
+        }
+
+        if not ajustes_chunk:
+            return out
+
+        # Agrupar demand_total e company por cod
+        demand_por_cod: Dict[str, float] = defaultdict(float)
+        company_por_cod: Dict[str, int] = {}
+        for a in ajustes_chunk:
+            demand_por_cod[a.cod_produto] += float(
+                a.qtd_ajuste or a.qtd_inventario or 0
+            )
+            company_por_cod[a.cod_produto] = a.company_id
+
+        # Lazy import — evita circular em testes
+        transfer_svc = None  # so' instancia se for real-run com transferencia
+
+        for cod, demand in demand_por_cod.items():
+            if demand <= 0:
+                continue
+            pid = cods_para_pid.get(cod)
+            if not pid:
+                continue
+            company_id = company_por_cod[cod]
+
+            # READ quants origem
+            try:
+                quants = self.odoo.search_read(
+                    'stock.quant',
+                    [
+                        ['product_id', '=', pid],
+                        ['company_id', '=', company_id],
+                        ['location_id', '=', location_origem_id],
+                        ['quantity', '>', 0],
+                    ],
+                    ['id', 'lot_id', 'quantity', 'reserved_quantity'],
+                )
+            except Exception as e:
+                logger.warning(
+                    f'G014 read quants cod={cod} pid={pid} falhou: {e}'
+                )
+                out['erros'].append({'cod': cod, 'erro': str(e)[:200]})
+                continue
+            if not quants:
+                continue
+
+            # READ expiration_date dos lotes
+            lot_ids = [q['lot_id'][0] for q in quants if q.get('lot_id')]
+            lot_exp_cache: Dict[int, Optional[str]] = {}
+            if lot_ids:
+                try:
+                    lots_info = self.odoo.read(
+                        'stock.lot', lot_ids, ['expiration_date'],
+                    )
+                    lot_exp_cache = {
+                        l['id']: l.get('expiration_date')
+                        for l in lots_info
+                    }
+                except Exception as e:
+                    logger.warning(
+                        f'G014 read stock.lot.expiration_date cod={cod} '
+                        f'lot_ids={lot_ids} falhou: {e}'
+                    )
+                    out['erros'].append({'cod': cod, 'erro': str(e)[:200]})
+                    continue
+
+            def _is_vencido(q):
+                if not q.get('lot_id'):
+                    return False  # quant sem lote = nao vencido
+                exp = lot_exp_cache.get(q['lot_id'][0])
+                if not exp:
+                    return False
+                try:
+                    exp_dt = _dt.strptime(exp.split(' ')[0], '%Y-%m-%d')
+                    return exp_dt < HOJE
+                except Exception:
+                    return False
+
+            quants_validos = [q for q in quants if not _is_vencido(q)]
+            quants_vencidos = [q for q in quants if _is_vencido(q)]
+            livre_validos = sum(
+                float(q['quantity']) - float(q.get('reserved_quantity') or 0)
+                for q in quants_validos
+            )
+            livre_vencidos = sum(
+                float(q['quantity']) - float(q.get('reserved_quantity') or 0)
+                for q in quants_vencidos
+            )
+
+            if livre_validos >= demand or livre_vencidos <= 0:
+                # Saldo livre suficiente ou nao ha vencidos para migrar
+                continue
+
+            out['cods_com_lote_vencido'].append(cod)
+            qty_a_migrar = min(demand - livre_validos, livre_vencidos)
+            nome_lote_novo = f'INV-{cod}-{HOJE_STR}'
+
+            if dry_run:
+                out['transferencias_planejadas'].append({
+                    'cod': cod,
+                    'pid': pid,
+                    'qty_a_migrar': qty_a_migrar,
+                    'demand_total': demand,
+                    'livre_validos': livre_validos,
+                    'livre_vencidos': livre_vencidos,
+                    'nome_lote_novo': nome_lote_novo,
+                    'lotes_vencidos_origem': [
+                        q['lot_id'][1] if q.get('lot_id') else 'sem-lote'
+                        for q in quants_vencidos
+                    ],
+                })
+                out['lote_novo_por_cod'][cod] = nome_lote_novo
+                continue
+
+            # REAL: Skill 2 v2 por quant vencido
+            if transfer_svc is None:
+                from app.odoo.estoque.scripts.transfer import (  # noqa: PLC0415
+                    StockInternalTransferService,
+                )
+                transfer_svc = StockInternalTransferService(odoo=self.odoo)
+
+            qty_restante = qty_a_migrar
+            migrou_algo_pra_cod = False
+            for qv in quants_vencidos:
+                if qty_restante <= 0.001:
+                    break
+                livre_qv = (
+                    float(qv['quantity'])
+                    - float(qv.get('reserved_quantity') or 0)
+                )
+                if livre_qv <= 0:
+                    continue
+                take = min(livre_qv, qty_restante)
+                lot_id_origem = qv['lot_id'][0] if qv.get('lot_id') else None
+                lote_origem_nome = (
+                    qv['lot_id'][1] if qv.get('lot_id') else 'sem-lote'
+                )
+                try:
+                    transfer_svc.transferir_quantidade_para_lote_v2(
+                        product_id=pid,
+                        company_id=company_id,
+                        location_id=location_origem_id,
+                        qty=take,
+                        lot_id_origem=lot_id_origem,
+                        nome_lote_destino=nome_lote_novo,
+                        expiration_date_destino=EXP_NOVO_LOTE,
+                        dry_run=False,
+                    )
+                    out['transferencias_executadas'].append({
+                        'cod': cod,
+                        'qty_migrada': take,
+                        'lote_origem_nome': lote_origem_nome,
+                        'lot_id_origem': lot_id_origem,
+                        'lote_destino': nome_lote_novo,
+                    })
+                    qty_restante -= take
+                    migrou_algo_pra_cod = True
+                except Exception as e:
+                    logger.error(
+                        f'G014 transferir cod={cod} take={take} '
+                        f'lote_origem={lote_origem_nome!r} -> '
+                        f'{nome_lote_novo!r} falhou: {e}',
+                        exc_info=True,
+                    )
+                    out['erros'].append({
+                        'cod': cod,
+                        'erro': f'transferir {take}: {str(e)[:200]}',
+                    })
+
+            if migrou_algo_pra_cod:
+                out['lote_novo_por_cod'][cod] = nome_lote_novo
+
+        return out
+
     def _resolver_pids_em_batch(self, cods: List[str]) -> Dict[str, int]:
         """Resolve cod_produto -> product.id em 1 read batch.
 
@@ -1377,30 +1872,394 @@ class FaturamentoPipelineExecutor:
     # ETAPAS C/D/E/F (STUBS v15b — implementar em v16/v17)
     # ========================================================
 
-    def executar_etapa_c(self, *, ciclo: str, **_kw) -> Dict[str, Any]:
-        """ETAPA C — F5d aguardar invoices CIEL IT (stub v16).
+    def executar_etapa_c(
+        self,
+        *,
+        ciclo: str,
+        company_origem_id: Optional[int] = None,
+        dry_run: bool = True,
+        usuario: str = 'faturamento_pipeline',
+        cod_produto: Optional[str] = None,
+        timeout_polling: int = F5D_POLLING_TIMEOUT_S,
+        poll_interval: int = F5D_POLL_INTERVAL_S,
+        perfil_invoice_helpers: str = PERFIL_INVENTARIO_INTER_COMPANY,
+    ) -> Dict[str, Any]:
+        """ETAPA C v16 — F5d aguardar invoices CIEL IT + sub-etapas .5/.6/.7.
 
-        v16: implementar polling de account.move + sub-etapas F5d.5 (G029
-        payment_provider) + F5d.6 (G007 price zero) + F5d.7 (G034 fiscal
-        setup DEV_*). D10: db.engine.dispose() antes/apos (CR-F7 ja
-        ativo no macro `executar_pipeline_bulk`).
+        Polling longo (default 1800s, intervalo 40s) sobre `picking_svc.
+        aguardar_invoice_do_robo(pid)` (Skill 5 atomo legacy). Para cada
+        invoice resolvida, aplica sub-etapas:
+          - F5d.5 (G029): `garantir_payment_provider` — payment_provider_id=38
+          - F5d.6 (G007): `corrigir_price_zero_em_invoice` — fallback std_price
+          - F5d.7 (G034): `garantir_fiscal_setup` — DEV_* FP/tipo_pedido
 
-        v16 ira utilizar (CR-F11 v15c — refs explicitas para guiar implementer):
-          - `PAYMENT_PROVIDER_SEM_PAGAMENTO` ({} sub-etapa F5d.5 G029)
+        Sub-etapas via `_invoice_helpers.py` com `perfil='inventario-inter-company'`
+        V1 (CR-C10.1 v16 — Rafael). Outros perfis (venda-cliente futuro)
+        raise NotImplementedError nos helpers (logica diferente).
 
-        Polling tipico: 1800s timeout, 40s interval. Re-fetch via
-        `safe_session_get(AjusteEstoqueInventario, id)` apos cada commit
-        para anti-DetachedInstanceError (CR-F6 v15c).
+        Patterns codificados (do service legado L945-1102):
+          - D2: agrupa por picking_id_odoo (1 picking -> 1 invoice)
+          - D5: SNAPSHOT meta antes do polling (sessao pode expirar)
+          - D6: sub-etapas .5/.6/.7 em try/except — falha individual NAO derruba
+          - F6 v15c: safe_session_get apos commit_resilient (anti-DetachedInstance)
+          - F7 v15c: db.engine.dispose() antes/apos JA codificado no macro
+          - F12 v15c: external_id_operacao populado em CADA fase F5d
+          - G016: commit_resilient antes/depois do polling
+
+        Idempotencia:
+          - Filtra `fase_pipeline='F5c_LIBERADO'` + `picking_id_odoo NOT NULL`
+            (ajustes ja em F5d_INVOICE_GERADA tem invoice_id_odoo e sao pulados)
+          - Sub-etapas .5/.6/.7 sao internamente idempotentes (helpers checam estado)
+
+        Args:
+            ciclo: identificador do ciclo.
+            company_origem_id: filtro por company emissora.
+            dry_run: True (default) — em dry-run, NAO faz polling
+                (retorna apenas planejamento: quantos pickings pendentes).
+            usuario: identificador para auditoria.
+            cod_produto: smoke/canary.
+            timeout_polling: segundos totais ate desistir (default 1800).
+            poll_interval: segundos entre checks de cada picking (default 40).
+            perfil_invoice_helpers: V1 = 'inventario-inter-company'.
+                Outros raise NotImplementedError nos helpers.
+
+        Returns:
+            dict com:
+              status: DRY_RUN_OK_ETAPA_C | EXECUTADO_ETAPA_C |
+                      EXECUTADO_PARCIAL_TIMEOUT | SKIP_NENHUM_AJUSTE | FALHA_*
+              pickings_pendentes: lista de picking_ids esperados
+              pickings_resolvidos: dict {pid: invoice_id}
+              pickings_timeout: lista de pids que nao tiveram invoice no timeout
+              sub_etapas: contadores por sub-etapa
         """
-        return {
+        from app import db  # lazy
+        from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+        t0 = time.time()
+
+        # Carregar ajustes em F5c_LIBERADO com picking_id_odoo (idempotencia:
+        # ja em F5d_INVOICE_GERADA tem invoice_id_odoo populado e sao pulados).
+        ajustes = _carregar_ajustes(
+            ciclo=ciclo,
+            company_origem_id=company_origem_id,
+            fases_pipeline=[FASE_F5c_OK],
+            cod_produto=cod_produto,
+        )
+        # Defensivo: filtrar ajustes sem picking_id_odoo (anomalia).
+        ajustes_validos: List = [a for a in ajustes if a.picking_id_odoo]
+        ajustes_sem_picking: List = [a for a in ajustes if not a.picking_id_odoo]
+        if ajustes_sem_picking:
+            logger.warning(
+                f'ETAPA C: {len(ajustes_sem_picking)} ajustes em '
+                f'F5c_LIBERADO SEM picking_id_odoo (anomalia) — pulando: '
+                f'{[a.id for a in ajustes_sem_picking[:5]]}'
+            )
+
+        out: Dict[str, Any] = {
             'etapa': 'C',
             'ciclo': ciclo,
-            'status': 'NOT_IMPLEMENTED_v15b',
-            'roadmap': 'C9/C10 v16',
-            'refs_v16': {
-                'PAYMENT_PROVIDER_SEM_PAGAMENTO': PAYMENT_PROVIDER_SEM_PAGAMENTO,
+            'company_origem_id': company_origem_id,
+            'dry_run': dry_run,
+            'perfil_invoice_helpers': perfil_invoice_helpers,
+            'ajustes_total': len(ajustes_validos),
+            'ajustes_sem_picking': len(ajustes_sem_picking),
+            'pickings_pendentes': [],
+            'pickings_resolvidos': {},
+            'pickings_timeout': [],
+            'sub_etapas': {
+                'f5d5_payment_provider_ok': 0,
+                'f5d5_payment_provider_falha': 0,
+                'f5d6_price_zero_corrigidas': 0,
+                'f5d6_price_zero_falha': 0,
+                'f5d7_fiscal_setup_ok': 0,
+                'f5d7_fiscal_setup_skip': 0,  # acao nao DEV ou ja' correto
+                'f5d7_fiscal_setup_falha': 0,
             },
         }
+
+        if not ajustes_validos:
+            out['status'] = 'SKIP_NENHUM_AJUSTE'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # D2: agrupar por picking_id_odoo (1 picking gera 1 invoice CIEL IT)
+        ajustes_por_pid: Dict[int, List] = defaultdict(list)
+        for a in ajustes_validos:
+            ajustes_por_pid[a.picking_id_odoo].append(a)
+        pickings_pendentes = list(ajustes_por_pid.keys())
+        out['pickings_pendentes'] = sorted(pickings_pendentes)
+
+        if dry_run:
+            # Em dry-run, NAO faz polling. So' reporta planejamento.
+            out['status'] = 'DRY_RUN_OK_ETAPA_C'
+            out['observacao'] = (
+                f'v16 dry-run: {len(pickings_pendentes)} pickings em '
+                f'F5c_LIBERADO esperando invoice CIEL IT. Real-run faria '
+                f'polling de {timeout_polling}s ({poll_interval}s interval) '
+                f'+ sub-etapas .5/.6/.7 por invoice. Perfil sub-etapas: '
+                f'{perfil_invoice_helpers!r}.'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # ============================================================
+        # REAL-RUN: polling + sub-etapas
+        # ============================================================
+
+        # CR-FIX R1F1 v16 (CRITICAL 95): validar perfil ANTES do polling
+        # para anti-poison do session. Se perfil errado, NotImplementedError
+        # de sub-etapa F5d.5 quebraria todo polling com primeira invoice
+        # resolvida (pickings restantes ficam F5c_LIBERADO permanentemente).
+        from app.odoo.estoque.scripts._invoice_helpers import (  # noqa: PLC0415
+            _validar_perfil,
+        )
+        try:
+            _validar_perfil(perfil_invoice_helpers)
+        except (NotImplementedError, ValueError) as e:
+            out['status'] = 'FALHA_PERFIL_INVALIDO'
+            out['erro'] = str(e)
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # D5: SNAPSHOT meta antes do polling (sessao pode expirar em
+        # SSL idle timeout durante esperas de 30 min).
+        ajustes_meta_por_pid: Dict[int, List[Dict[str, Any]]] = {
+            pid: [
+                {
+                    'id': a.id,
+                    'ciclo': a.ciclo,
+                    'acao_decidida': a.acao_decidida,
+                }
+                for a in lista
+            ]
+            for pid, lista in ajustes_por_pid.items()
+        }
+
+        # G016 Opcao A: commit antes do polling longo
+        if not _commit_resilient():
+            logger.error(
+                'F5d commit_resilient falhou ANTES do polling — abortando ETAPA C.'
+            )
+            out['status'] = 'FALHA_COMMIT_PRE_POLLING'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        pendentes_set = set(pickings_pendentes)
+        resolved: Dict[int, int] = {}
+        inicio_por_pid = {pid: time.time() for pid in pendentes_set}
+
+        start_polling = time.time()
+        while pendentes_set and (time.time() - start_polling) < timeout_polling:
+            for pid in list(pendentes_set):
+                # picking_svc.aguardar_invoice_do_robo retorna invoice_id
+                # ou None. Usar poll_interval curto p/ nao bloquear.
+                try:
+                    invoice_id = self.picking_svc.aguardar_invoice_do_robo(
+                        pid,
+                        timeout=poll_interval,
+                        poll_interval=poll_interval,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f'F5d aguardar_invoice_do_robo({pid}) raise: {e}',
+                        exc_info=True,
+                    )
+                    # NAO remover do pendentes_set — tentar de novo no proximo loop
+                    continue
+
+                if not invoice_id:
+                    continue
+
+                # Invoice resolvida — marcar fase F5d_INVOICE_GERADA em todos
+                # ajustes do mesmo picking.
+                resolved[pid] = invoice_id
+                pendentes_set.discard(pid)
+
+                tempo_ms_pid = int(
+                    (time.time() - inicio_por_pid[pid]) * 1000
+                )
+
+                # F6 v15c: re-fetch ajustes via safe_session_get apos polling longo
+                metas = ajustes_meta_por_pid[pid]
+                ajustes_fresh: List = []
+                for meta in metas:
+                    af = safe_session_get(AjusteEstoqueInventario, meta['id'])
+                    if af is not None:
+                        ajustes_fresh.append(af)
+                if not ajustes_fresh:
+                    logger.error(
+                        f'F5d: re-fetch ajustes vazio para picking {pid} '
+                        f'(todos sumiram?). Skipping invoice {invoice_id}.'
+                    )
+                    continue
+
+                # F12 v15c: external_id_operacao para rastreabilidade
+                external_id_f5d = (
+                    f'INV-{ciclo}-A{ajustes_fresh[0].id:06d}-'
+                    f'{FASE_F5d_OK}-{uuid.uuid4().hex[:8]}'
+                )
+                for aj in ajustes_fresh:
+                    aj.fase_pipeline = FASE_F5d_OK
+                    aj.invoice_id_odoo = invoice_id
+                    aj.external_id_operacao = external_id_f5d
+                    _registrar_auditoria(
+                        ajuste_id=aj.id, ciclo=ciclo, fase=FASE_F5d_OK,
+                        acao='aguardar_invoice', modelo_odoo='account.move',
+                        status='SUCESSO', odoo_id=invoice_id,
+                        resposta={'invoice_id': invoice_id, 'picking_id': pid},
+                        tempo_ms=tempo_ms_pid, executado_por=usuario,
+                    )
+                # CR-FIX R1F3 v16 (HIGH 85): se commit falha, NAO continuar
+                # para sub-etapas (session sujo -> Odoo writes orfaos do DB
+                # local). Resume v18 reprocessara este picking — invoice_id
+                # Odoo ja' existe e sera detectado.
+                if not _commit_resilient():
+                    logger.error(
+                        f'F5d commit apos invoice {invoice_id} '
+                        f'(picking {pid}) FALHOU. PULA sub-etapas .5/.6/.7 '
+                        f'(session sujo). fase_pipeline pode estar dessincronizada '
+                        f'— resume v18 retentara.'
+                    )
+                    continue  # proxima iteracao do for pid
+
+                logger.info(
+                    f'F5d picking {pid} -> invoice {invoice_id} '
+                    f'({len(ajustes_fresh)} ajustes)'
+                )
+
+                # ========================================================
+                # SUB-ETAPAS F5d.5 / .6 / .7 (D6 — try/except individual)
+                # ========================================================
+                # Re-fetch novamente apos commit_resilient (defensive — pode ter
+                # feito session.close() em SSL drop).
+                primeiro = safe_session_get(
+                    AjusteEstoqueInventario, ajustes_fresh[0].id,
+                )
+                if primeiro is None:
+                    logger.error(
+                        f'F5d sub-etapas pulam invoice {invoice_id} '
+                        f'(ajuste {ajustes_fresh[0].id} sumiu pos-commit).'
+                    )
+                    continue
+
+                # F5d.5 — G029 payment_provider
+                try:
+                    ok_f5d5 = garantir_payment_provider(
+                        self.odoo, invoice_id, primeiro,
+                        perfil=perfil_invoice_helpers,
+                        executado_por=usuario,
+                    )
+                    if ok_f5d5:
+                        out['sub_etapas']['f5d5_payment_provider_ok'] += 1
+                    else:
+                        out['sub_etapas']['f5d5_payment_provider_falha'] += 1
+                except NotImplementedError:
+                    raise  # perfil errado — propaga
+                except Exception as e:
+                    logger.warning(
+                        f'F5d.5 payment_provider invoice {invoice_id}: {e}'
+                    )
+                    out['sub_etapas']['f5d5_payment_provider_falha'] += 1
+
+                # F5d.6 — G007 price zero
+                try:
+                    n_corrigidas = corrigir_price_zero_em_invoice(
+                        self.odoo, invoice_id, primeiro,
+                        perfil=perfil_invoice_helpers,
+                        executado_por=usuario,
+                    )
+                    out['sub_etapas']['f5d6_price_zero_corrigidas'] += int(
+                        n_corrigidas or 0
+                    )
+                except NotImplementedError:
+                    raise  # perfil errado — propaga
+                except Exception as e:
+                    logger.warning(
+                        f'F5d.6 price_zero invoice {invoice_id}: {e}'
+                    )
+                    out['sub_etapas']['f5d6_price_zero_falha'] += 1
+
+                # F5d.7 — G034 fiscal_setup (apenas DEV_*)
+                try:
+                    ok_f5d7 = garantir_fiscal_setup(
+                        self.odoo, invoice_id, primeiro,
+                        perfil=perfil_invoice_helpers,
+                        executado_por=usuario,
+                    )
+                    if ok_f5d7:
+                        # garantir_fiscal_setup retorna True tambem para acao
+                        # nao-DEV (skip). Heuristica: se acao_decidida NAO eh
+                        # DEV_*, contar como skip; senao OK.
+                        if primeiro.acao_decidida and primeiro.acao_decidida.startswith('DEV_'):
+                            out['sub_etapas']['f5d7_fiscal_setup_ok'] += 1
+                        else:
+                            out['sub_etapas']['f5d7_fiscal_setup_skip'] += 1
+                    else:
+                        out['sub_etapas']['f5d7_fiscal_setup_falha'] += 1
+                except NotImplementedError:
+                    raise  # perfil errado — propaga
+                except Exception as e:
+                    logger.warning(
+                        f'F5d.7 fiscal_setup invoice {invoice_id}: {e}'
+                    )
+                    out['sub_etapas']['f5d7_fiscal_setup_falha'] += 1
+
+                # commit sub-etapas — falha NAO derruba (D6)
+                _commit_resilient()
+
+            # Se ainda ha pendentes, aguarda antes do proximo loop
+            if pendentes_set:
+                logger.info(
+                    f'F5d aguardando {len(pendentes_set)} pickings ainda '
+                    f'(elapsed={int(time.time() - start_polling)}s/'
+                    f'{timeout_polling}s)'
+                )
+                time.sleep(poll_interval)
+
+        # Timeout — registrar ajustes nao resolvidos
+        if pendentes_set:
+            logger.warning(
+                f'F5d timeout {timeout_polling}s — {len(pendentes_set)} '
+                f'pickings sem invoice: {sorted(pendentes_set)}'
+            )
+            for pid in pendentes_set:
+                metas = ajustes_meta_por_pid[pid]
+                ajustes_to_timeout: List = []
+                for meta in metas:
+                    af = safe_session_get(AjusteEstoqueInventario, meta['id'])
+                    if af is not None:
+                        ajustes_to_timeout.append(af)
+                tempo_ms_pid = int(
+                    (time.time() - inicio_por_pid[pid]) * 1000
+                )
+                for aj in ajustes_to_timeout:
+                    # NAO mudar fase para FALHA (operador pode rodar resume)
+                    # Apenas registra auditoria com status TIMEOUT.
+                    _registrar_auditoria(
+                        ajuste_id=aj.id, ciclo=ciclo, fase='F5d',
+                        acao='aguardar_invoice', modelo_odoo='account.move',
+                        status='TIMEOUT', executado_por=usuario,
+                        erro_msg=(
+                            f'timeout {timeout_polling}s — robo CIEL IT '
+                            f'nao criou invoice (picking {pid})'
+                        ),
+                        tempo_ms=tempo_ms_pid,
+                    )
+                _commit_resilient()
+
+        out['pickings_resolvidos'] = dict(resolved)
+        out['pickings_timeout'] = sorted(pendentes_set)
+        n_resolved = len(resolved)
+        n_pendentes_inicial = len(pickings_pendentes)
+        if n_resolved == n_pendentes_inicial:
+            out['status'] = 'EXECUTADO_ETAPA_C'
+        elif n_resolved > 0:
+            out['status'] = 'EXECUTADO_PARCIAL_TIMEOUT'
+        else:
+            out['status'] = 'FALHA_TIMEOUT_TOTAL'
+
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
 
     def executar_etapa_d(
         self, *, ciclo: str, confirmar_sefaz: bool = False, **_kw,
@@ -1654,6 +2513,7 @@ class FaturamentoPipelineExecutor:
                         dry_run=dry_run,
                         usuario=usuario,
                         cod_produto=cod_produto,
+                        limite=limite,  # v16: propagar smoke/canary
                     )
                 elif etapa == 'B':
                     res = self.executar_etapa_b(
@@ -1665,7 +2525,14 @@ class FaturamentoPipelineExecutor:
                         limite=limite,
                     )
                 elif etapa == 'C':
-                    res = self.executar_etapa_c(ciclo=ciclo)
+                    # v16: ETAPA C agora real-aware (timeout default 1800s).
+                    res = self.executar_etapa_c(
+                        ciclo=ciclo,
+                        company_origem_id=company_origem_id,
+                        dry_run=dry_run,
+                        usuario=usuario,
+                        cod_produto=cod_produto,
+                    )
                 elif etapa == 'D':
                     res = self.executar_etapa_d(
                         ciclo=ciclo,
