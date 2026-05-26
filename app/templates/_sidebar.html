@@ -132,6 +132,12 @@
         <li><a class="nc-sidebar__link" href="{{ url_for('estoque.listar_movimentacoes') }}">
           <i class="fas fa-exchange-alt nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Movimentacoes Estoque</span></a></li>
+        {% if current_user.perfil == 'administrador' %}
+        <li><a class="nc-sidebar__link" href="{{ url_for('inventario.listar_ciclos') }}">
+          <i class="fas fa-clipboard-list nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Confronto de Inventario</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--new">NOVO</span></a></li>
+        {% endif %}
         <li><a class="nc-sidebar__link" href="{{ url_for('estoque.saldo_estoque') }}">
           <i class="fas fa-chart-line nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Saldo de Estoque</span>
