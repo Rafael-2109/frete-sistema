@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Inventário — Ajustes Manuais{% endblock %}
+{% block content %}
+<div class="container py-3">
+  <div class="d-flex justify-content-between mb-3">
+    <h3>Ajustes Manuais — Ciclo {{ ciclo_id }}</h3>
+    <div>
+      <a href="{{ url_for('inventario.confronto_por_id', ciclo_id=ciclo_id) }}"
+         class="btn btn-sm btn-outline-secondary">Voltar ao Confronto</a>
+      <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAjuste">
+        + Novo Ajuste
+      </button>
+    </div>
+  </div>
+
+  <table class="table table-striped table-sm">
+    <thead>
+      <tr>
+        <th>Cod</th><th>Produto</th><th>Local</th>
+        <th class="text-end">Qtd</th><th>Tipo</th><th>Observação</th>
+        <th>Criado em</th><th>Por</th><th>Ações</th>
+      </tr>
+    </thead>
+    <tbody id="tbody-ajustes">
+      {% for a in ajustes %}
+      <tr data-id="{{ a.id }}">
+        <td>{{ a.cod_produto }}</td>
+        <td>{{ a.nome_produto or '' }}</td>
+        <td>{{ a.local or '' }}</td>
+        <td class="text-end">{{ a.qtd|valor_br(3) if a.qtd else '' }}</td>
+        <td>{{ a.tipo_ajuste or '' }}</td>
+        <td>{{ a.observacao or '' }}</td>
+        <td>{{ a.criado_em.strftime('%d/%m/%Y %H:%M') if a.criado_em }}</td>
+        <td>{{ a.criado_por or '' }}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-danger btn-delete">×</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" class="text-muted text-center">Nenhum ajuste cadastrado</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal fade" id="modalAjuste" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="form-ajuste">
+        <div class="modal-header"><h5>Novo Ajuste Manual</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-6"><label>Código</label>
+              <input class="form-control" name="cod_produto" required></div>
+            <div class="col-6"><label>Local</label>
+              <select class="form-select" name="local">
+                <option value="">—</option><option>FB</option><option>CD</option><option>LF</option>
+              </select></div>
+            <div class="col-12"><label>Produto (descrição)</label>
+              <input class="form-control" name="nome_produto"></div>
+            <div class="col-6"><label>Qtd</label>
+              <input class="form-control" name="qtd" type="number" step="0.001" required></div>
+            <div class="col-6"><label>Tipo</label>
+              <select class="form-select" name="tipo_ajuste">
+                <option value="">—</option><option>POSITIVO</option>
+                <option>NEGATIVO</option><option>OK</option>
+              </select></div>
+            <div class="col-12"><label>Observação</label>
+              <textarea class="form-control" name="observacao" rows="2"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+const CICLO_ID = {{ ciclo_id }};
+
+document.getElementById('form-ajuste').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  fetch(`/inventario/ajustes/${CICLO_ID}`, {method: 'POST', body: fd})
+    .then(r => r.json()).then(d => {
+      if (d.erro) { alert(d.erro); return; }
+      location.reload();
+    });
+});
+
+document.querySelectorAll('.btn-delete').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr');
+    if (!confirm('Excluir ajuste?')) return;
+    fetch(`/inventario/ajustes/${CICLO_ID}/${tr.dataset.id}`, {method: 'DELETE'})
+      .then(() => tr.remove());
+  });
+});
+</script>
+{% endblock %}
