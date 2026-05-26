@@ -14,7 +14,16 @@ Premissas: P001-P011 em docs/inventario-2026-05/01-premissas/
 Estrutura:
 - `fiscal_position_id`: dict (company_origem, company_destino) -> fiscal_position da SAIDA.
   Service seta isso no account.move; Odoo decide o CFOP. NAO setar CFOP no account.move.
-- `cfop_esperado`: CFOP da SAIDA (informacional/log). Real e decidido pelo Odoo.
+- `cfop_esperado`: CFOP da SAIDA.
+  * NO FLUXO NORMAL (account.move criado via PO+fiscal_position): **informacional/log**.
+    Real e decidido pelo Odoo via fiscal_position + l10n_br_tipo_pedido. NAO hardcodar.
+  * NO CAMINHO B PALIATIVO da ETAPA F (Skill 8) — picking criado MANUALMENTE pela Skill 5
+    atomo `criar_picking_entrada_destino_manual` SEM PO+partner+fiscal_position — vira
+    **FALLBACK NECESSARIO** para setar `l10n_br_cfop_id` explicito no stock.move (G037).
+    Caso degenerado: motor fiscal nao tem como derivar CFOP sem fiscal_position.
+  * Refator v19+ remove o paliativo (caminho A correto: DFe→PO→picking nativo). Apos
+    refator, `cfop_esperado` volta a ser apenas informacional/log.
+  * Doc: docs/inventario-2026-05/02-gotchas/G037-*.md
 - `entrada`: dict (company_origem, company_destino) -> dados da NF de ENTRADA (in_invoice
   escriturada no DESTINO a partir do DFe). Campos: fiscal_position_id, cfop,
   l10n_br_tipo_pedido_entrada. Informacional/auditoria.

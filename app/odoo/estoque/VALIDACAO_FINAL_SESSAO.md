@@ -1260,3 +1260,677 @@ Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para
 - **Decisao 6 (NOVA — CR v9)**: dry-run NUNCA simula ajuste no quant errado para "parecer que funcionou". Se ha incerteza sobre o estado real (lote nao existe), retornar status especifico (`DRY_RUN_OK_LOTE_A_CRIAR`) e dar visibilidade total ao operador. Aplicavel a TODAS as skills WRITE futuras.
 - **Decisao 7 (NOVA — CR v9)**: contadores devem ter semantica DISTINTA para dry-run vs NOOP real vs anomalia. Nunca colapsar "tudo zero" em `produtos_ok`. Aplicavel a TODAS as skills WRITE com composicao.
 - **Decisao 8 (NOVA — CR v9)**: constantes que cruzam multiplos modulos vivem em UM lugar so (fonte unica). Importar via `from`, nunca duplicar. Aplicar `ACAO_AUDIT_CURTA` como exemplo + adicionar regra ao CLAUDE.md modulo.
+
+---
+
+# HISTÓRICO CRONOLÓGICO DAS SESSÕES — migrado do ROADMAP_SKILLS em v18 Fase 0
+
+> Este bloco foi movido do `ROADMAP_SKILLS.md` HANDOFF em 2026-05-26 v18 Fase 0 (decisão D-V18-5 do CLAUDE.md §14). Sessões v13-v18 abaixo. Próximas sessões devem APPEND aqui, não no ROADMAP.
+
+**Sessão 2026-05-26 v18 (C14 recovery + C15 SKILL.md Skill 8 + G037 NOVO — substitui scripts shell fat_lf_resume*.sh):**
+- ✅ Setup worktree + venv + ENV; main NAO avancou desde v17.5 (4 commits apenas docs PROMPT v18 e8bfea73→c5ac0607); pytest baseline 513 verdes.
+- ✅ Leituras: PLANEJAMENTO §0 + `faturamento_pipeline.py` (executar_pipeline_bulk + main) + `escrituracao.py` + SKILL.md Skill 7 (modelo) + `fat_lf_resume.sh` + `fat_lf_resume_entrada.sh` (substitutos shell).
+- ✅ AskUserQuestion v18 — Rafael:
+  - Recovery design: pergunta arquitetural ("`executar_pipeline_bulk` eh fluxo?"). Esclarecido: NAO eh fluxo L3 (em `fluxos/`); eh metodo de C3 macro orchestrator. `executar_pipeline_resume` adicionado ao MESMO orchestrator (C3 macro).
+  - Receitas SKILL.md (TODAS 4): canary+bulk+canary F, resume D, resume E+F, pre-flight isolado.
+  - Status reporting: rico (restantes_por_iter + ultima_invocacao_bulk).
+  - G036 vs G037: G036 ja' ocupado (lote virgula literal); usado G037 para "operacao nao cadastrada exige CFOP explicito".
+- ✅ **C14 RECOVERY `executar_pipeline_resume` v18** em orchestrator (~280 LOC novas):
+  - Constants: `RESUME_MAX_ITER_DEFAULT=18`, `RESUME_TIMEOUT_ITER_S_DEFAULT=900`, `RESUME_ETAPAS_VALIDAS=('B','C','D','E','F')`, `FASES_TERMINAIS_B`, `FASES_PRE_B`.
+  - `_contar_pendentes_por_etapa(etapa, ciclo, company_origem_id, cod_produto)` — filtros por etapa (B: NOT IN terminais; C: F5c_LIBERADO + F5d_TIMEOUT; D: F5d_INVOICE_GERADA + F5e_FALHA; E: F5e_SEFAZ_OK + ACOES_ENTRADA_FB MINUS RecLf processado; F: F5e_SEFAZ_OK + F5f_FALHA + ACOES_ENTRADA_DESTINO_MANUAL).
+  - `executar_pipeline_resume(*, ciclo, apenas_etapa, max_iter, timeout_iter_s, detector_stagnation, ...)` — loop principal: TUDO_OK_INICIAL → loop max_iter → para em TUDO_OK / STAGNATION / MAX_ITER / EXCECAO.
+  - CLI estendido: `--modo {bulk,pre-flight,resume}` + `--apenas-etapa` + `--max-iter` + `--timeout-iter` + `--sem-stagnation`.
+  - `main()` modo='resume' branch + exit codes (0/1/2/4 coerentes com bulk).
+- ✅ **8 PYTEST NOVOS VERDES** em `tests/odoo/services/test_faturamento_pipeline_orchestrator.py`:
+  - apenas_etapa invalida (A) -> FALHA_USO
+  - ETAPA D real sem confirmar_sefaz bloqueia
+  - TUDO_OK_INICIAL sem pendentes
+  - TUDO_OK apos 2 iter (5->2->0)
+  - STAGNATION para na 1a iter (5->5)
+  - MAX_ITER atingido (10->7->5 com max_iter=2)
+  - EXCECAO no bulk -> motivo_parada=EXCECAO
+  - sem_stagnation continua ate' max_iter (5->5->5 com flag desligada)
+- ✅ **C15 SKILL.md `faturando-odoo` v18** em `.claude/skills/faturando-odoo/SKILL.md` (~430 LOC):
+  - Contrato `executar_pipeline_bulk` + `executar_pipeline_resume`
+  - 4 RECEITAS: 1) Canary+Bulk+Canary F; 2) Resume mid-D; 3) Resume mid-E+F; 4) Pre-flight isolado
+  - TRADE-OFFS V1: ETAPA E SEQUENCIAL + ETAPA D Playwright serial + PRE-FLIGHT subprocess + ETAPA F canary com flag + MIGRACAO→INV-{cod}-{YYYYMMDD} + **`--timeout-iter` NAO ENFORCADO** (CR F3) + **stdout mistura logs+JSON** (CR F4) + **CR-H4 nao se aplica em resume isolado** (CR F2)
+  - Secao ANTIPADROES DETECTADOS V17.5 — REFATOR V19+ (4 antipadroes documentados)
+  - Cross-refs + Checklist Expansao V19+
+- ✅ **G037 NOVO**: `docs/inventario-2026-05/02-gotchas/G037-operacao-nao-cadastrada-exige-cfop-explicito.md` (G036 ja' ocupado por lote virgula).
+- ✅ **Referencia rapida G037 em `.claude/references/odoo/GOTCHAS.md`**: nova secao "Gotchas Inter-Company Fiscal (Inventario 2026-05)" com tabela completa G011/G014/G016/G017/G018/G019-20/G022/G023/G034/G035/G036/G037.
+- ✅ **CLAUDE.md estoque §6.5 NOVO**: "ANTIPADROES DETECTADOS V17.5 — REFATOR V19+" (4 antipadroes + gotcha G037).
+- ✅ **1 code-reviewer paralelo** (feature-dev:code-reviewer) — 4 findings (1 CRIT + 3 HIGH) TODOS aplicados:
+  - **F1 CRITICAL conf 90**: `_contar_pendentes_por_etapa` ETAPA F nao contava F5f_FALHA → resume para prematuramente em retries. Fix: incluir F5f_FALHA + F5e_FALHA + F5d_TIMEOUT nas etapas relevantes (C/D/F). STAGNATION garante alerta operador para retries de FALHA.
+  - **F3 HIGH conf 95**: `timeout_iter_s` aceito mas nao propagado para bulk (lying parameter). Fix: clarificar docstring + CLI help text + SKILL.md TRADE-OFFS (NAO ENFORCADO em v18; usar `timeout NNN python -m ...` shell).
+  - **F2 HIGH conf 82**: CR-H4 guard de bulk nao se aplica em resume isolado (B nao no caminho). Fix: documentado no SKILL.md TRADE-OFFS (operador deve rodar bulk antes para B/C antes de resume D).
+  - **F4 HIGH conf 80**: stdout mistura logs Flask + JSON. Fix: documentado no SKILL.md TRADE-OFFS (operador: `2>/dev/null | tail | jq`; subprocess wrapper v19+).
+- ✅ **BASELINE PYTEST ODOO**: 513 → **521 verdes em 14.76s** (+8 net v18). Sem regressao apos aplicar F1+F3 fixes.
+- ✅ **SMOKES DRY-RUN PROD v18** documentados em `/tmp/log_skill8_smokes_v18_*.json`:
+  - resume B cod 105000007 → DRY_RUN_OK TUDO_OK_INICIAL 788ms
+  - resume D cod 105000007 → DRY_RUN_OK TUDO_OK_INICIAL 814ms
+  - resume E cod 104000003 → DRY_RUN_OK TUDO_OK_INICIAL 799ms
+  - resume F cod 210030007 → DRY_RUN_OK TUDO_OK_INICIAL 757ms
+  - resume sem --apenas-etapa → exit 2 + stderr "ERRO USO: --modo resume exige --apenas-etapa" (FALHA_USO confirmado)
+- ✅ Cross-refs aplicados: CLAUDE.md estoque (§6 status + §6.5 antipadroes + tabela §6 catalogo Skill 8 v18) + ROADMAP HANDOFF v18 (esta secao) + PLANEJAMENTO §0 + §12 trilha v18.
+- 🟢 **Scripts shell SUPERADOS** (NAO removidos ate' v22+ pos-canary REAL): `fat_lf_resume.sh` + `fat_lf_resume_entrada.sh` — substituidos por `--modo resume --apenas-etapa B/C/D/E/F`. Workflows operacionais documentados na SKILL.md Receitas 2 e 3.
+
+**Status global após v18:**
+- Skill 8 `faturando-odoo` 🟡 **PIPELINE A-F + RECOVERY + SKILL.md LIVE** — C6/C7/C8/C9/C10/C11/C12/C13/C14/C15 implementados; **15 checkpoints ✅** de 24. Pendentes apenas: C16 baseline pytest >=520 ✅ (atingido em v18: 521), C17 smokes documentados ✅, C18 folhas fluxos (1.1*, 1.3 — pendente v19+ junto com refator Skill 7), C19 cross-refs final, C20 canary REAL PROD, C21 bulk REAL PROD, C22 code-review final, C23 commit + arquivar 09_*.
+- Próximo passo (v19+): **REFATOR Skill 7 ABRANGENTE + FLUXO L3 1.2.1 escriturar-dfe-industrializacao + extrair ETAPA F do orchestrator para FLUXO L3** (escopo MUITO ALTO cross-modulo — antipadroes 1+2+3 documentados em CLAUDE.md §6.5 + SKILL.md). Risco MEDIO em v18 (escopo conservador — sem mexer nos antipadroes); v19+ Risco MUITO ALTO.
+
+**Sessão 2026-05-26 v17.5 (REVERT ETAPA E + criar Skill 7 escriturando-odoo + ETAPA F expandido — RESTAURA CONSTITUICAO §6):**
+- ✅ Setup worktree + venv + ENV; main NAO avancou desde v17 (apenas commit docs PROMPT v17.5 f7a55fef); pytest baseline 502 verdes.
+- ✅ Leituras: PLANEJAMENTO §0/§7.4 G-RECLF-* + executar_etapa_e v17 inline (~420 LOC) + service externo RecebimentoLfOdoo header + constants picking_types.py + SKILL.md modelo Skill 5.
+- ✅ **Investigacoes Odoo PROD (audit 2026-05-26):**
+  - PT 19 LF/IN Recebimento confirmado (4 pickings INV-* historicos: 317306, 317316, 320467, 320476 — todos com src=26489, dest=42, partner None, company LF)
+  - PT 50 CD/IN/INTER DESCOBERTO (src=6 Em Transito Filiais, dest=32 CD/Estoque, partner NACOM GOYA - CD; 3.594+ pickings PROD historicos)
+  - PT 64 LF/RECEB/IND existe mas usado por DFe externos (não inter-company nosso)
+  - TRANSFERIR_FB_CD NUNCA rodou INVENTARIO_2026_05 em PROD (zero pickings CD com origin INV-*)
+  - CFOPs entrada PROD: 1124 (industr FB receb LF), 1152 (transf filial em 28 linhas ENTTR/*); 1903/1949 não observados em PROD
+- ✅ **AskUserQuestion v17.5**: Rafael Q1=C (Habilitar AMBOS com flag); Q2=atomo geral recebimento (V1 strict LF→FB); Q3=B (S1-S5 completo).
+- ✅ **S2 CRIAR Skill 7 `escriturando-odoo`** (atomo C3 macro NOVA):
+  - `app/odoo/estoque/scripts/escrituracao.py` (EscrituracaoLfService ~500 LOC) — atomo `criar_recebimento_orchestrado(invoice_id, ajustes, ciclo, usuario, dry_run, cnpj_emitente, company_id_recebedor)`
+  - V1 STRICT: SO LF→FB (cnpj '18.467.441/0001-63' + company FB=1); outros valores raise NotImplementedError
+  - Encapsula: G-RECLF-3 idempotencia UK + HIGH-3 status='processando' RETOMA + HIGH-4 svc instanciado fresh + HIGH-5 produto_tracking fetch batch + G-RECLF-2 transfer parcial OK + D17 ACAO_PARA_CFOP_ENTRADA 5xxx→1xxx + D9 re-fetch safe_session_get + commit_resilient
+  - Retorna: status (CRIADO|RETOMADO|IDEMPOTENT_PROCESSADO|PARCIAL|FALHA|DRY_RUN_OK|SKIP_AJUSTES_VAZIOS), rec_id, odoo_invoice_id_fb, transfer_status, tempo_ms, erro
+  - `.claude/skills/escriturando-odoo/SKILL.md` com 3 receitas (criar orchestrado, retomar processando, retry transfer via svc externo direto)
+  - 10 pytest verdes em `tests/odoo/services/test_escrituracao_lf_service.py`
+- ✅ **S1+S3 REVERT executar_etapa_e + delegar Skill 7**:
+  - ETAPA E reduzida de ~420 LOC inline para ~180 LOC delegando atomo Skill 7 (constituicao §6 restaurada — Skill 8 = SO SAIDA)
+  - Loop SEQUENCIAL (decisao 10.7 v17 preservada) invocando `EscrituracaoLfService.criar_recebimento_orchestrado` por invoice
+  - Mapeamento de status atomo → contadores (ok/skip/retomado/parcial/falha) + `invoices_retomados` lista nova
+  - 4 testes ETAPA E v17 inline DELETADOS (migrados para test_escrituracao_lf_service.py)
+  - 2 testes novos no orchestrator validam delegacao (test_etapa_e_v175_delega_atomo_skill7_status_criado + test_etapa_e_v175_mapeia_status_idempotent_retomado_parcial)
+- ✅ **S4 ETAPA F EXPANSION canary** (Rafael Q1=C):
+  - `ACOES_ENTRADA_DESTINO_MANUAL` expandida: INDUSTRIALIZACAO_FB_LF (validado) + DEV_FB_LF + TRANSFERIR_FB_CD (canary)
+  - `ACOES_ENTRADA_DESTINO_MANUAL_CANARY` NOVA: subset que exige flag (DEV_FB_LF + TRANSFERIR_FB_CD sem precedente PROD)
+  - `PICKING_TYPE_ENTRADA_DESTINO_MANUAL` expandido: CD=50 (PT NACOM/CD/IN/INTER discovery 2026-05-26)
+  - `LOCATION_ORIGEM_POR_DIRECAO` dict NOVO substitui hardcode 26489 (INDUSTR=26489, DEV_FB_LF=26489 assumido, TRANSFERIR_FB_CD=6)
+  - `get_location_origem_entrada(acao)` helper publico
+  - Flag `--auto-confirma-direcao-nova` em CLI + `auto_confirma_direcao_nova: bool = False` no `executar_etapa_f` + `executar_pipeline_bulk`
+  - Canary bloqueado em real-run sem flag (dry-run sempre planeja todas) — status `direcao_canary_bloqueada` + contador `canary_bloqueado`
+  - Status agregado refinado (canary >0 + sem falhas/ok = EXECUTADO_PARCIAL)
+  - 1 teste V1 STRICT antigo substituido por 3 testes canary (dry-run elegivel + bloqueado sem flag + habilitado com flag — TRANSFERIR_FB_CD valida atomo invocado com location_origem=6 + PT=50)
+- ✅ **BASELINE PYTEST ODOO**: 502 → **512 verdes em 14.79s** (+10 net v17.5).
+- ✅ **SMOKE DRY-RUN PROD v17.5**:
+  - ETAPA E cod 104000003 dry-run: identifica 1 invoice 629364 PERDA_LF_FB, observacao menciona "EscrituracaoLfService.criar_recebimento_orchestrado" via atomo Skill 7 em 765ms
+  - Pipeline E+F cod 105000007 dry-run: SKIP_NENHUM_AJUSTE (esperado, cod em F5c) em 760ms
+- ✅ Cross-refs aplicados: CLAUDE.md estoque §6 (Skill 7 LIVE catalogo) + ROADMAP HANDOFF v17.5 (esta secao) + PLANEJAMENTO §0/§7 (C24 NOVO checkpoint).
+
+**Status global após v17.5:**
+- Skill 7 `escriturando-odoo` 🟡 **mín viável V1 LIVE** (atomo C3 macro; 10 pytest)
+- Skill 8 `faturando-odoo` 🟡 **PIPELINE COMPLETO A-F LIVE** com ETAPA E DELEGANDO Skill 7 (constituicao §6 RESTAURADA) — C6/C7/C8/C9/C10/C11/**C12 REWRITE**/**C13 EXPANSION**/**C24 NEW** implementados; **14 checkpoints ✅** de 24.
+- Próximo passo (v18): **C14 recovery + C15 SKILL.md Skill 8 + C16 baseline pytest + C17 smokes** (preparacao pre-canary REAL). Esperado +5-10 pytest novos.
+
+**Sessão 2026-05-25 v17 (C11 ETAPA D F5e SEFAZ + C12 ETAPA E RecLF + C13 ETAPA F atomo Skill 5 — PIPELINE COMPLETO A-F LIVE):**
+- ✅ Setup worktree + venv + ENV; rebase de main (2 commits — 48b0dfa6 recebimento-lf gravar NF + 9906e70b agente CLI fix) sem conflito (zero overlap com `app/odoo/estoque/`); pytest baseline 483 verdes pos-rebase.
+- ✅ Leituras: PLANEJAMENTO §0/§5/§7.2/§7.4 G-RECLF-1..11/§10.3+10.6+10.7/§12 v16 + service legado F5e L1116-1346 + script 09 etapa_e L1239-1421 + etapa_f L1428-1688 + atomo Skill 5 v15a `criar_picking_entrada_destino_manual` L1174-1428 + interface RecebimentoLfOdoo L148-280 + `transmitir_nfe_via_playwright` interface.
+- ✅ AskUserQuestion v17:
+  - **Escopo**: Rafael deixou avaliar — escolhi C11+C12+C13 completo (~500 LOC + 16 pytest mocks, viável em 1 sessão).
+  - **Decisao 10.7 G-RECLF-1** RESOLVIDA: **ETAPA E SEQUENCIAL + recovery via --apenas-etapa=E --resume**. Razao: RecebimentoLfOdoo NAO eh thread-safe; idempotencia perfeita aceita 50-100h em onda 100 invoices.
+  - **ETAPA F V1 STRICT**: APENAS INDUSTRIALIZACAO_FB_LF (Rafael: "estudar scripts ja realizados" — confirmado APENAS LF=19 em PROD via pickings 317306, 317316). DEV_FB_LF/TRANSFERIR_FB_CD ja' commented out em `ACOES_ENTRADA_DESTINO_MANUAL` frozenset.
+- ✅ **C11 ETAPA D real** em orchestrator (~370 LOC novas): Playwright serial + idempotencia TRIPLA (D8) + HARD_FAIL_CONFIG aborta batch (D7) + SNAPSHOT meta (D5) + commit_resilient antes/apos cada NF (G016) + safe_session_get pos-Playwright (D9). D18 2 niveis (--confirmar + --confirmar-sefaz). MED C-1/C-2.
+- ✅ **C12 ETAPA E real** (~270 LOC novas): SEQUENCIAL invocando `RecebimentoLfOdooService.processar_recebimento(rec_id)` (NAO MEXER no service externo) + idempotencia G-RECLF-3 via `RecebimentoLf.odoo_lf_invoice_id` UK + G-RECLF-2 (transfer_status='erro' aceito parcial) + D17 ACAO_PARA_CFOP_ENTRADA 5xxx->1xxx + agg (pid, lote, cfop) -> qty.
+- ✅ **C13 ETAPA F real** (~250 LOC novas): DELEGA atomo Skill 5 v15a `criar_picking_entrada_destino_manual` (Fluxo>>Skills) + V1 STRICT INDUSTRIALIZACAO_FB_LF + origin idempotente `INV-{ciclo}-ENTRADA-{label}-NF{invoice}` + lote MIGRAÇÃO->INV-{cod}-{YYYYMMDD} + pre-check invoice.state='posted'.
+- ✅ **16 PYTEST NOVOS VERDES**: 5 ETAPA D (real_run_sem_confirmar_sefaz_bloqueado, dry_run_sem_ajustes_skip, dry_run_com_ajustes_planeja, real_run_sucesso_sefaz mock, hard_fail_config_aborta, idempotencia_persistente_skip, falha_sefaz_com_cstat) + 4 ETAPA E (dry_run_skip, dry_run_planeja, real_run_sucesso_reclf mock, idempotencia_processado, sucesso_parcial_transfer_erro) + 7 ETAPA F (dry_run_skip, dry_run_planeja, real_run_sucesso_atomo, v1_strict_DEV_FB_LF, idempotente_done_skip, idempotent_other_investigacao, invoice_nao_posted).
+- ✅ **BASELINE PYTEST ODOO**: 483 → **499 verdes em 14.14s** (+16 v17).
+- ✅ **SMOKES DRY-RUN PROD** (INVENTARIO_2026_05):
+  - ETAPA D dry-run cod 104000003: SKIP_NENHUM_AJUSTE (esperado — cod em F5e, nao F5d) em 746ms
+  - ETAPA E dry-run cod 104000003: DRY_RUN_OK_ETAPA_E (1 invoice 629364 PERDA_LF_FB detectada) em 742ms
+  - ETAPA F dry-run cod 210030007: SKIP_NENHUM_AJUSTE (cod ja em F5f_OK) em 743ms
+  - Pipeline completo A-F cod 105000007: DRY_RUN_OK em 746ms — status agregado coerente
+- ✅ **3 code-reviewers paralelos** (Playwright SEFAZ + RecLF integration + Skill 5 atomo) — findings + fixes documentados na trilha de auditoria §12 v17.
+
+**Status global após v17:**
+- Skill 8 `faturando-odoo` 🟡 **PIPELINE COMPLETO A-F LIVE** — C6/C7/C8/C9/C10/**C11/C12/C13** implementados; **13 checkpoints ✅** de 24. Pendentes apenas: C14 recovery `--resume`, C15 SKILL.md, C16 baseline pytest, C17 smokes, C18 folhas fluxos, C19 cross-refs, C20 canary REAL PROD, C21 bulk REAL PROD, C22 code-review final, C23 commit + arquivar 09_*.
+- Próximo passo (v18): **C14 recovery + C15 SKILL.md + C16 baseline pytest + C17 smokes** (preparacao pre-canary). Esperado +10-15 pytest novos.
+
+**Sessão 2026-05-25 v16 (C10 ETAPA C F5d + C10.2 ETAPA A real + C10.3 G014 + 9 fixes 2 reviewers paralelos):**
+- ✅ Setup worktree + venv + ENV; main NAO avancou desde v15c (0 commits) — sem rebase; pytest baseline 472 verdes.
+- ✅ Leituras: PLANEJAMENTO §0/§5/§7.2/§10.3/§12 + memorias `[[skill5_picking_pattern]]` + `[[skill6_planejar_pre_etapa_pattern]]` + orchestrator v15c + service legado F5d L165-506 + L945-1102 + `_commit_helpers.py` + script 09 G014 L795-917 + transfer.py L1081 v2.
+- ✅ AskUserQuestion v16 — Rafael escolheu: opcao A escopo completo (C10+C10.1+C10.2+C10.3) + opcao Y `_invoice_helpers.py` arquivo separado com perfil param (Rafael: "inline contaminaria logica generica — venda-cliente nao tem fallback standard_price").
+- ✅ **CSV ajustes simples (interrupcao Rafael)**: 121 entradas (12 POSITIVO + 109 NEGATIVO; 101 FB + 14 CD + 6 LF) salvos em `scripts/inventario_2026_05/ajustes_simples_pendentes_v16_2026-05-25.csv` — commit isolado `168499bd`.
+- ✅ **`_invoice_helpers.py` NOVO** (~430 LOC) — 3 helpers F5d.5/.6/.7 com perfil V1 'inventario-inter-company'; outros perfis raise NotImplementedError.
+- ✅ **C10 ETAPA C real** em orchestrator: polling 1800s/40s + SNAPSHOT meta + safe_session_get + sub-etapas .5/.6/.7 try/except + fase F5d_INVOICE_GERADA + invoice_id_odoo + external_id_operacao.
+- ✅ **C10.2 ETAPA A real**: substitui guard NotImplementedError por Skill 2 v2 (`transferir_quantidade_para_lote_v2`), filtra ACOES_LOTE = {RENOMEAR_LOTE, TRANSFERIR_LOTE} (escopo disjunto de ACOES_PICKING). Flag DEPRECATED `permitir_etapa_a_noop_real=True` ainda funciona (compat ate v17).
+- ✅ **C10.3 G014 pre-check** (`_g014_pre_check_lotes_vencidos`): detecta lotes vencidos com saldo livre + migra via Skill 2 v2 para lote novo `INV-{cod}-{YYYYMMDD}` ANTES de criar picking. Idempotente por dia.
+- ✅ **2 code-reviewers paralelos** trouxeram 9 findings (4 CRITICAL + 5 HIGH) — TODOS aplicados:
+  - **R1F1** (CRIT 95): validar perfil ANTES do polling — `NotImplementedError` no meio do polling envenenava session (pickings restantes ficavam F5c_LIBERADO permanentemente). Fix: `_validar_perfil(perfil_invoice_helpers)` antes do loop.
+  - **R2F1** (CRIT 92): guard `situacao_nf` em `garantir_payment_provider` fallback. Sem guard, `button_draft` em NF SEFAZ-autorizada invalidaria chave irreversivelmente. Fix: ler `l10n_br_situacao_nf` na consulta inicial + bloquear `('autorizado', 'excecao_autorizado', 'enviado')`.
+  - **R2F2** (CRIT 88): incluir `'enviado'` (mid-SEFAZ) nos guards de `garantir_fiscal_setup`.
+  - **R1F4** (HIGH 82): substituir `datetime.utcnow()` (banido pelo hook `ban_datetime_now.py`) por `agora_utc_naive`. Sem o fix, pre-commit bloqueava.
+  - **R2F3** (HIGH 85): guard `situacao_nf` em `corrigir_price_zero_em_invoice` (F5d.6 roda ANTES de F5d.7 — pode danificar NF autorizada antes do guard de F5d.7 sequer rodar).
+  - **R2F4** (HIGH 80): `garantir_fiscal_setup` retorna True com `SKIP_GUARD_SITUACAO_NF` em auditoria (em vez de False) quando guard SEFAZ bloqueia — nao infla contador de falhas espurio.
+  - **R2F5** (HIGH 83): `DEV_FB_LF` (sem precedente historico) registra `SKIP_NAO_MAPEADO` em auditoria — nao silencia ausencia de fix fiscal.
+  - **R1F2** (HIGH 88): G014 partial failure — cods com Skill 2 falhada marcados como falha do chunk (em vez de seguir com lote vencido original que faria `action_assign` falhar silenciosamente downstream).
+  - **R1F3** (HIGH 85): commit_resilient False apos invoice resolve -> `continue` (anti-cascata em session sujo, sub-etapas NAO rodam).
+- ✅ **14 PYTEST NOVOS VERDES** em `test_faturamento_pipeline_orchestrator.py`:
+  - 5 ETAPA C v16 (dry-run skip/com ajustes/ajustes sem picking_id, real-run resolve+sub-etapas, real-run timeout total, perfil invalido FALHA_PERFIL_INVALIDO)
+  - 4 ETAPA A v16 (real-run invoca Skill 2 v2, skip ja TRANSF_OK, falha Skill 2 marca TRANSF_FALHA, flag DEPRECATED funciona)
+  - 4 G014 pre-check (sem lote vencido, dry-run planeja, real-run invoca Skill 2 v2, quant sem lote nao conta vencido)
+  - 1 dry-run noop atualizado para v16 status
+- ✅ **BASELINE PYTEST ODOO**: 472 → **483 verdes em 15.51s** (+11 v16; alguns substituiram).
+- ✅ **SMOKE DRY-RUN PROD validado** (cod 105000007):
+  - ETAPA C: 4 pickings F5c_LIBERADO detectados (317346, 317516, 317517, 317518) + status DRY_RUN_OK_ETAPA_C em 766ms
+  - ETAPA A: SKIP_NENHUM_AJUSTE (cod nao tem ACOES_LOTE) — esperado
+  - ETAPA combinado A+B+C: status global DRY_RUN_OK em 862ms
+- ✅ Cross-refs aplicados: CLAUDE.md estoque (status global + skill 8 v16 expandido) + ROADMAP HANDOFF (esta secao) + PLANEJAMENTO §0/§7/§12 trilha v16.
+
+**Status global após v16:**
+- Skill 8 `faturando-odoo` 🟡 **ORCHESTRATOR + ETAPAS A/B/C + G014 LIVE** — C6/C7/C8/C9/**C10** implementados; ETAPAS D/E/F stubs v17; **10 checkpoints ✅** (C1-C5 + C6 + C6.5 + C7 + C8 + C9 + C10) de 24.
+- Próximo passo (v17): **C11 F5e SEFAZ Playwright (IRREVERSIVEL) + C12 ETAPA E RecebimentoLf + C13 ETAPA F via Skill 5 v15a atomo `criar_picking_entrada_destino_manual`**. Esperado +15-20 pytest novos.
+
+**Sessão 2026-05-25 v15b (C6+C7+C8+F5c ✅ — Orchestrator base Skill 8 LIVE):**
+- ✅ Setup worktree + venv + ENV; rebase de main (11 commits — SDK 0.2.87, SPED V36, references, weekly, fix tabelas) sem conflito; pytest baseline 435 verdes.
+- ✅ Leituras: PLANEJAMENTO §0+§3+§6+§7.2+§7.3+§10.6+§12 + memorias `[[skill5_picking_pattern]]` (v15a 3 atomos) + `[[skill6_planejar_pre_etapa_pattern]]` (orchestrator C3 v9) + `[[sub-skill-c5-pattern]]` (PRE-FLIGHT subprocess) + `pre_etapa_executor.py` template + `picking.py` atomos novos.
+- ✅ AskUserQuestion v15b: opcoes "C6+C7+C8 juntos" + "Rebase agora" escolhidas.
+- ✅ **CRIADO** `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (~1300 LOC):
+  - Constants: `ACAO_PARA_DIRECAO`, `ACOES_PICKING`, `MAX_CODS_POR_PICKING=30`, `SLEEP_ENTRE_CHUNKS=5.0`, `ETAPAS_VALIDAS=(A,B,C,D,E,F)`, fases F5a/F5b/F5c OK/FALHA.
+  - Helpers: `_commit_resilient` (D14 versao MAIS FORTE com `engine.dispose()` em SSL drop), `_registrar_auditoria` (lazy import OperacaoOdooAuditoria), `_pre_flight_via_subskill_c5` (subprocess sub-skill C5 com `sys.executable` + env copy), `_resolver_picking_metadata` (acao->meta), `_carregar_ajustes` (D11 + CR-C1 status filter default), `_agrupar_em_chunks` (max 30 cods), `_agrupar_por_direcao` (CR-C2: por acao_decidida full, NAO `(co, tipo_op)`).
+  - Classe `FaturamentoPipelineExecutor`: `pre_flight`, `executar_etapa_a` (D15 DELEGADO Skill 2 — v15b stub NOOP), `executar_etapa_b` (F5a+F5b+F5c via Skill 5 v15a atomos + G022 sleep + G-ETB-COMPENSATORIO preservando acao_decidida origem), `executar_etapa_c/d/e/f` (stubs NOT_IMPLEMENTED_v15b — v16/v17), `executar_pipeline_bulk` (entry-point macro A->F com PRE-FLIGHT C5 + CR-H4 guard ETAPA D).
+  - CLI: `python -m app.odoo.estoque.orchestrators.faturamento_pipeline --modo bulk|pre-flight --etapas A,B,C,... --ciclo X --cod-produto Y --limite N --confirmar --confirmar-sefaz --pular-pre-flight`.
+- ✅ **30 PYTEST NOVOS VERDES** em `tests/odoo/services/test_faturamento_pipeline_orchestrator.py`:
+  - 2 `_commit_resilient` (OK + retry SSL+dispose) + 2 `_resolver_picking_metadata` (PERDA_LF_FB + acao invalida) + 2 `_agrupar_em_chunks` (max 30 + vazio) + 2 `_agrupar_por_direcao` (por acao + acao invalida) + 3 `_pre_flight_via_subskill_c5` (JSON OK + parse erro + CLI ausente).
+  - 2 `executar_etapa_a` (dry-run NOOP + skip vazio) + 3 `executar_etapa_b` (dry-run planeja + real invoca atomos + skip vazio).
+  - 2 `executar_pipeline_bulk` (PRE-FLIGHT bloqueia + pular-pre-flight executa) + 1 etapa invalida FALHA_USO.
+  - 4 stubs C/D/E/F (NOT_IMPLEMENTED_v15b + D bloqueado sem sefaz + D com sefaz ainda stub + E/F stubs).
+  - 2 sanity (ACOES_PICKING==8 + ETAPAS_VALIDAS ordem A-F).
+  - **5 NOVOS pos code-review** (CR-C1 status filter / CR-H4 etapa D bloqueia se B falhou / CR-M3 BLOQUEADO_SEFAZ status falha / CR-H2 compensatorio preserva acao / CR-M1 intersecao vazia retorna []).
+- ✅ **BASELINE PYTEST ODOO**: 435 → **465 verdes em 14.85s** (+30 v15b).
+- ✅ **SMOKE DRY-RUN PROD** em cod 210639522 (INDUSTRIALIZACAO_FB_LF, status=PROPOSTO):
+  - `python -m app.odoo.estoque.orchestrators.faturamento_pipeline --ciclo INVENTARIO_2026_05 --etapas A,B --cod-produto 210639522 --limite 1 --pular-pre-flight`
+  - ETAPA A status `DRY_RUN_OK_ETAPA_A_NOOP` (1 ajuste 789ms).
+  - ETAPA B status `DRY_RUN_OK_ETAPA_B` (1 picking planejado: origin=`INV-INVENTARIO_2026_05-SAIDA-INDUSTRI-171489`, tipo_op=industrializacao, co=1->cd=5, picking_type=53, partner=35, location_origem=8, location_destino=26489, qty=6000.0).
+  - Status global `DRY_RUN_OK` em 1623ms.
+  - Pos-fixes: `grupos_direcao={"INDUSTRIALIZACAO_FB_LF": 1}` (CR-C2 confirmado).
+- ✅ **Code-review paralelo (feature-dev:code-reviewer)** — 9 findings (2 CRITICAL + 4 HIGH + 3 MEDIUM):
+  - CR-C1 (92): `_carregar_ajustes` filtro de status faltando → adicionado default `['PROPOSTO','APROVADO']`
+  - CR-C2 (85): `_agrupar_por_direcao` por `(co, tipo_op)` permitia mix `DEV_LF_FB`+`DEV_LF_CD` → corrigido para agrupar por `acao_decidida` full
+  - CR-H1 (83): sleep G022 nao cobria transicoes entre grupos → tracker global `chunk_executado`
+  - CR-H2 (80): compensatorio hardcoded `acao='INDUSTRIALIZACAO_FB_LF'` → preserva `acao_decidida` do origem
+  - CR-H3 (80): ETAPA A real-run path nao testado → registrado TODO v16
+  - CR-H4 (82): ETAPA D sem guard se B falhou → adicionado `ETAPAS_ABORT_SE_ANTERIOR_FALHOU` + `BLOQUEADO_ETAPA_ANTERIOR_FALHOU` status
+  - CR-M1 (85): intersecao acoes vazia retornava todos → retorna `[]`
+  - CR-M2 (72): teste hardcoded Odoo IDs → registrado TODO leve (M2 nao bloqueante)
+  - CR-M3 (78): `BLOQUEADO_SEM_CONFIRMAR_SEFAZ` nao contava como falha agregada → corrigido
+- ✅ Cross-refs aplicados: CLAUDE.md estoque (status global + tabela §6 Skill 8) + ROADMAP HANDOFF (esta secao) + PLANEJAMENTO §0/§7/§12 trilha v15b.
+
+**Status global após v15b:**
+- Skill 8 `faturando-odoo` 🟡 **ORCHESTRATOR BASE LIVE** — C6/C7/C8/F5c implementados; ETAPAS C/D/E/F stubs v16/v17; **9 checkpoints ✅** (C1-C5 + C6 + C6.5 + C7 + C8 + 30 pytest); 15 ⬜; 1 decisão ABERTA (paralelismo G-RECLF-1 v17).
+- Próximo passo (v16): **F5d aguardar invoices + sub-etapas F5d.5 (G029 payment_provider) + F5d.6 (G007 price zero) + F5d.7 (G034 fiscal setup DEV_*) + D10 db.engine.dispose() profilatico antes/apos C+D + helper `_commit_helpers.py` consolidado (D14+G-RECLF-4+G-RECLF-5)**. Provavel +20-30 pytest novos.
+
+**Sessão 2026-05-25 v15a (C6.5 ✅ — Skill 5 estendida com 3 atomos inter-company):**
+- ✅ Setup worktree + venv + ENV; pytest baseline confirmado: 416 verdes em 14.34s (paridade v14b).
+- ✅ Leituras: memorias `[[skill5_picking_pattern]]` + `[[sub-skill-c5-pattern]]` + `[[skill2_distribuir_indisp_pattern]]` + PLANEJAMENTO §3+§7.3+§7.5+§10.6 + ETAPA B/F do script 09.
+- ✅ AskUserQuestion: 3 atomos juntos nesta sessao escolhido (sem fasear).
+- ✅ **CENTRALIZADAS constants ETAPA F** em `app/odoo/constants/picking_types.py` (resolve R19/pendencia §9):
+  - `ACOES_ENTRADA_DESTINO_MANUAL: FrozenSet[str]` + `PICKING_TYPE_ENTRADA_DESTINO_MANUAL: Dict[int, int]` (LF=19) + `COMPANY_LABEL_ENTRADA: Dict[int, str]` + `LOCATION_ORIGEM_ENTRADA_INDUSTR = LOCATION_DESTINO_TRANSITO_INDUSTR` (alias semantico — mesma 26489).
+  - Decisao: em `picking_types.py` (com PICKING_TYPE_POR_DIRECAO) em vez de `operacoes_fiscais.py` — nao mistura fluxos picking com matriz fiscal.
+- ✅ **3 ATOMOS NOVOS** em `app/odoo/estoque/scripts/picking.py` (StockPickingService) + helper publico:
+  - `criar_picking_inter_company(...)` — encapsula `criar_transferencia` com pre-flight D-OPS-3 (read tracking batch + remove lot_name/lot_id de produtos tracking='none'); pre-cond: company_origem!=company_destino + partner_id obrigatorio + filter qty>0. Aceita `tracking_por_pid` pre-fetched p/ otim bulk.
+  - `validar_picking_inter_company(picking_id, linhas_esperadas, ...)` — fluxo F5b completo (D3): confirmar_e_reservar → preencher_qty_done → ajustar_qty_done_pelo_disponivel (G021) → validar(linhas_esperadas=) (G023 + G019 re-state) → aplicar_peso_volumes_fallback (G018). NAO faz liberar_faturamento (F5c fica na Skill 8).
+  - `criar_picking_entrada_destino_manual(...)` — ETAPA F: idempotencia via origin exato (search; IDEMPOTENT_DONE skip ou IDEMPOTENT_OTHER investigacao) → create picking → **G023 critico** write company_id em moves apos create → action_confirm + action_assign → G011 re-quantity + lot_name em MLs → button_validate → G019/G020 re-state raise se != 'done'.
+  - `aplicar_peso_volumes_fallback(picking_id, ...)` — G018 v2 publico: write l10n_br_peso_liquido + peso_bruto + volumes em stock.picking. Capinado de `09_*` L346-413.
+- ✅ **19 PYTEST NOVOS VERDES** em `tests/odoo/services/test_stock_picking_service.py` (42 → 61):
+  - 2 aplicar_peso_volumes (aplica vs noop) + 6 criar_picking_inter_company (basico, company iguais, partner_id, linhas vazias, **D-OPS-3 fix tracking='none' remove lot_name**, tracking_por_pid otim) + 4 validar_picking_inter_company (fluxo completo, sem linhas_esperadas, peso_volumes off, propaga G019) + 7 criar_picking_entrada_destino_manual (basico CRIADO, moves vazios, origin vazio, idempotente DONE, idempotente OTHER, G019 raise, **G023 company_id forcado em moves**).
+- ✅ **BASELINE PYTEST ODOO**: 416 → **435 verdes em 14.36s** (+19 v15a).
+- ✅ **SMOKE PROD v15a (read-only)** em 6 cods v14a-ops:
+  - Constants ETAPA F importadas: PICKING_TYPE_ENTRADA_DESTINO_MANUAL={5:19}, LOCATION_ORIGEM_ENTRADA_INDUSTR=26489.
+  - Tracking resolvido em PROD: 5 cods tracking='lot', 103500105 PIMENTA = `none` (esperado!).
+  - `criar_picking_inter_company` com mock no WRITE: tracking_none_pids=[35962]; PIMENTA linha SEM `lot_name` (D-OPS-3 fix OK); outros 5 cods preservaram `lot_name='SEMLOTE'`; `criar_transferencia` chamado 1x com linhas normalizadas.
+- ✅ **Cross-refs aplicados**:
+  - `.claude/skills/operando-picking-odoo/SKILL.md` (description estendida; catalogo +4 atomos LIVE; Contratos v15a; Fluxo 2.5.d; Validacao C2-C6 atualizados)
+  - `.claude/agents/gestor-estoque-odoo.md` (header status v15a + 3 atomos inter-company com D-OPS-3 fix)
+  - `.claude/references/ROUTING_SKILLS.md` (header com extensao v15a)
+  - `app/odoo/estoque/CLAUDE.md` (status global + tabela §6 skill 5 estendida)
+  - `PLANEJAMENTO_SKILL8_FATURANDO.md` (§0 status + §7 C6.5 ✅ + §9 pendencias resolvidas + §12 trilha v15a)
+- ✅ **NAO MEXEU** no script 09 (regra Rafael v14a-ops "use scripts existentes apenas") nem no RecebimentoLfOdooService (regra v14a-fix).
+- 🟢 **C6.5 destrava v15b** (orchestrator base Skill 8 C6+C7+C8): invocara atomos LIVE sem reimplementar logica de picking.
+- 🟢 **D-OPS-3 fix permanente codificado no atomo** — orchestrator v15b NAO precisa workaround SEMLOTE.
+
+**Status global após v15a:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 3 MINERAÇÕES + TESTE REAL + SUB-SKILL C5 v14b + 3 ATOMOS INTER-COMPANY v15a**; **6 checkpoints ✅** (de 24); 18 ⬜; 1 decisão ABERTA (paralelismo G-RECLF-1 v17).
+- Skill 5 `operando-picking-odoo` 🟡 ESTENDIDA — 6 átomos LIVE (cancelar/validar/devolver + 3 inter-company v15a + aplicar_peso_volumes_fallback helper); **61 pytest verdes**.
+- Próximo passo (v15b): **C6+C7+C8 orchestrator base Skill 8** — invoca sub-skill C5 via subprocess (pre-flight); chama Skill 2 via Python (ETAPA A); chama atomos Skill 5 v15a (ETAPA B F5a/F5b); coordena F5c liberar_faturamento + sleep G022 entre pickings + etapa-barreira macro.
+
+
+**Sessão 2026-05-25 v14a (C3 mineração script + revalidação R1 — sem código, só docs):**
+- ✅ **Verificação main**: avançou 11 commits (SPED V36, weekly, fix tabelas Sentry, SDK 0.2.87, D8) — nenhum conflito esperado em `app/odoo/estoque/`. Sem rebase nesta sessão.
+- ✅ **Pytest baseline confirmado**: 393 verdes em 15.87s (tests/odoo/).
+- ✅ **AskUserQuestion**: foco v14a só escolhido (preserva contexto para v14b fresca conforme pre-mortem R6).
+- ✅ **C3 mineração completa** do script `09_executar_onda1_bulk.py` (1866 LOC):
+  - Estrutura mapeada: 11 funções top-level em 6 etapas A→F + main() + helpers.
+  - Tabela §7.3 do PLANEJAMENTO com funções+linhas+side-effects+deps documentada.
+  - Pattern de orchestração identificado em `main()` L1771-1860: **etapa = barreira de sincronização** confirmada (cada `if 'X' in etapas` → executa → `db.session.expire_all() + carregar_ajustes()` → só depois próxima).
+  - **9 descobertas novas D10-D18** documentadas como padrões a PRESERVAR no orchestrator Skill 8:
+    - D10: `db.engine.dispose()` PROFILÁTICO antes E após C+D (mais agressivo que retry interno)
+    - D11: `expire_all() + carregar_ajustes()` entre etapas (barreira sincronização)
+    - D12: `--apenas-etapa` + `--ate-etapa` para recovery operacional
+    - D13: ETAPA A é SEQUENCIAL (max_workers arg legacy — XML-RPC não thread-safe Request-sent)
+    - D14: `_commit_resilient` (script) MAIS FORTE que `_commit_with_retry` (service) — faz `engine.dispose()` se SSL
+    - D15: ETAPA A 100% DELEGÁVEL para Skill 2 `transferindo-interno-odoo`
+    - D16: `time.sleep(5)` entre chunks ETAPA B (G022 over-reservation mitigation)
+    - D17: `ACAO_PARA_CFOP_ENTRADA` 5xxx→1xxx (não centralizada — pendência §9)
+    - D18: default `dry_run=True` + `--confirmar` + `--confirmar-sefaz` (2 níveis)
+- ✅ **R1 RESPONDIDO — decisão 10.3 INTACTA**:
+  - Macro: pattern script CONFIRMA "etapa = barreira" (mecanismo explícito).
+  - Micro ETAPA B: sub-nuance descoberta — pipeline POR PICKING com sleep 5s (G022 mitigation D16). Documentada em §6.2 + §7.3 + §10.3. **Não requer AskUserQuestion adicional**.
+- ✅ **Pendências §9 atualizadas**:
+  - Resolvidas: `validar_cadastro_fiscal` LOCALIZADO em script (não precisa de `gtin_validator.py` separado para G017/G018 V1); decisões 10.4/10.5 já fechadas em v13.
+  - NOVAS pendências para v15b/v17: centralizar `ACAO_PARA_CFOP_ENTRADA` + 5 outras constantes inline em `app/odoo/constants/`.
+  - NOVA pendência v14b: decidir se G035 (barcode inválido) entra na sub-skill V1 ou adia.
+  - NOVA pendência v15b/v16: consolidar helper `_commit_resilient` (versão MAIS FORTE D14) em arquivo único para reuso.
+- ✅ **Refatorações §0/§6.2/§7-tabela-C3/§9/§10.3/§11/§12 aplicadas** no PLANEJAMENTO_SKILL8.
+- 🟢 **Sem mudanças em código** (só docs/planejamento).
+- 🟢 **Pytest baseline mantido: 393 verdes**.
+
+**Status global após v14a:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 2 MINERAÇÕES COMPLETAS** (C1 + C2 + C3 + C4 ✅; 20 checkpoints ⬜; 6 decisões RESOLVIDAS + R1 INTACTA).
+- 1 sub-skill nova prevista: `auditando-cadastro-fiscal-odoo` (C5 v14b).
+- Skill 5 `operando-picking-odoo` será ESTENDIDA com 2 átomos novos em v15a (C6.5).
+- Baseline pytest mantido: 393 verdes.
+
+**Sessão 2026-05-25 v14a-fix (auditoria Rafael — 4 lacunas RESOLVIDAS, NAO MEXEU em RecebimentoLfOdoo):**
+- ✅ Rafael auditou v14a com 2 perguntas: (1) Fluxo>>Skills mantido? (2) Gotchas cobertos incluindo RecebimentoLF?
+- ✅ Auto-auditoria honesta identificou **4 lacunas** reais:
+  - L1: ETAPA F faz picking inline no orchestrator (viola Fluxo>>Skills — `odoo.create('stock.picking')` direto)
+  - L2: `RecebimentoLfOdooService` (4562 LOC, 37 etapas) NAO foi minerado (anotado generico "DELEGADO, reuso como esta'")
+  - L3: Gotcha compensatório ETAPA B L994-1031 (regra de negócio importante — `qty_restante > 0` cria novo AjusteEstoqueInventario PROPOSTO) não destacado
+  - L4: G014 PROTECTION ETAPA B L795-917 (lote vencido on-the-fly via Skill 2) não detalhado
+- ✅ AskUserQuestion: opção (a) Corrigir AGORA + **NÃO MEXER no RecebimentoLfOdooService** escolhida
+- ✅ **L2 RESOLVIDO — §7.4 NOVA Mineração `RecebimentoLfOdooService` (READ-only)**:
+  - Header docstring completo lido + helpers críticos (`_safe_update`/`_checkpoint`/`_write_and_verify`/`_recover_state_from_odoo`)
+  - 37 etapas em 7 fases (FB DFe→PO→Picking→Invoice→Finalização→Transfer FB→CD→Recebimento CD)
+  - Pattern: Checkpoint por Etapa + Fire and Poll (FIRE_TIMEOUT=120s, POLL=10s, MAX=1800s = 30min)
+  - **Tempo total estimado: 30-60min POR INVOICE** (FB 30min + transfer FB→CD 30min)
+  - **11 gotchas G-RECLF-1 a G-RECLF-11** documentados, destaque:
+    - G-RECLF-1: bulk ETAPA E NÃO viável síncrono (50-100h em onda 100 invoices) — **decidir paralelismo em v17**
+    - G-RECLF-2: FASE 6+7 pode falhar sem derrubar FB — Skill 8 aceita `transfer_status='erro'` como sucesso parcial
+    - G-RECLF-4: `_safe_update`/`_checkpoint` versão MAIS FORTE que `_commit_with_retry` (D14) — consolidar
+    - G-RECLF-9: Playwright SEFAZ no step_23 sobreposto com F5e — **JÁ MITIGADO pelo etapa-barreira (decisão 10.3)** ✓
+- ✅ **L1 RESOLVIDO — ETAPA F via 3o átomo Skill 5**:
+  - §10.6 EXPANDIDO: 3 átomos (`criar_picking_inter_company` + `validar_picking_inter_company` + **NOVO** `criar_picking_entrada_destino_manual`)
+  - §3 diagrama + §7 tabela C6.5 (pytest >8 verdes) + C13 (orchestrator INVOCA átomo)
+- ✅ **L3+L4 RESOLVIDO — Gotchas DESTACADOS em §7.3**:
+  - G-ETB-COMPENSATORIO: regra de negócio para ondas futuras
+  - G-ETB-G014: lote vencido on-the-fly via Skill 2 (verificar se v1 ou v2 — pendência v15b)
+- ✅ **5 novas pendências §9** registradas: paralelismo G-RECLF-1 (v17), centralizar constantes ETAPA F (bloqueia C6.5 v15a), verificar atomo v1/v2 G014 (v15b)
+- 🟢 **NÃO MEXEU em código** (RecebimentoLfOdoo INTOCADO conforme regra Rafael; só docs/planejamento)
+- 🟢 **Pytest baseline mantido: 393 verdes**.
+
+**Status global após v14a-fix:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 3 MINERAÇÕES COMPLETAS** (service + script + RecebimentoLfOdoo); 4 lacunas RESOLVIDAS; 1 decisão ABERTA (paralelismo G-RECLF-1 v17).
+- Skill 5 será ESTENDIDA com **3 átomos** em v15a (C6.5 expandido — `criar_picking_inter_company` + `validar_picking_inter_company` + `criar_picking_entrada_destino_manual`).
+- Próximo passo: sessão v14b com criação da sub-skill `auditando-cadastro-fiscal-odoo` perfil inventário V1.
+
+**Sessão 2026-05-25 v14a-ops (TESTE REAL 6 cods LF→FB em PROD — 51min, 3 NFs SEFAZ, 695.945 un consolidadas):**
+- ✅ Rafael solicitou teste real (não Skill 8 implementação) para mapear dificuldades reais
+- ✅ 6 cods PROD: 102020600, 4829046, 4879046, 103500105 (tracking='none'), 4849003, 4759598
+- ✅ Pre-flight READ-only OK; G035 detectou 2 barcodes inválidos (auto-fix via `gtin_validator.clear_invalid_barcodes`)
+- ✅ Mover ciclo: 6 antigos→`REPROCESSADO_v14a` + 6 novos→`INVENTARIO_2026_05`
+- ✅ Script 09 ETAPAS A→E completou em ~10min: 2 pickings, 2 invoices CIEL IT, **2 NFs SEFAZ-OK**, 2 RecLF processados
+- ✅ FB/INT/08056 cancelado via Skill 5 (picking automático pós-RecLF reservando saldo para Estoque Virtual/Produção sem MO)
+- ✅ Skill 2 `distribuir_para_indisponivel` 5 cods → FB/Indisp/MIGRAÇÃO: 654.385 un, fallback Modo B
+- ⚠️ **103500105 NÃO faturou na 1ª rodada** (bug L965 script 09 para tracking='none')
+- ✅ Workaround v14a-ops (~10min): compensatório cancelado + novo ajuste com `lote_origem='SEMLOTE'` (string não-vazia força entrada em ajustes_com_lote L944) + Skill 1 ×2 (Skill 2 tem mesmo bug L1145)
+- ✅ Resultado FINAL: 3 NFs SEFAZ autorizadas (chaves 35260518467441000163550010000132411007098371, ...132421007098352, ...132451007099890); TODOS 6 cods em FB/Indisp/MIGRAÇÃO (8+7+23+922.9+128+502 = 1590.9 un total)
+- ✅ **§7.5 NOVA criada** com 5 dificuldades operacionais reais (D-OPS-1..D-OPS-5) que Skill 8 v15+ deve eliminar:
+  - **D-OPS-1**: CICLO hardcoded (`--ciclo NOME` arg em Skill 8)
+  - **D-OPS-1b**: `ajuste_estoque_inventario.status` varchar(20) — limite curto (Migration: varchar(40+))
+  - **D-OPS-2**: Falta pre-flight de duplicação (C5 sub-skill faz pre-flight; aborta se cod em pipeline ativo)
+  - **D-OPS-2b**: F5e propaga chave para ajustes sem linha real (falso positivo) — fix em `f5e_transmitir_sefaz` replicar só para ajustes com linha
+  - **D-OPS-3**: Bug L965 tracking='none' no script 09 — novo átomo Skill 5 deve aceitar quants sem lot_id
+  - **D-OPS-4**: Picking automático pós-RecLF SEM MO — pós-hook ETAPA E detecta+cancela `origin=False` reservando saldo recém-recebido
+  - **D-OPS-5**: Skill 2 `_listar_quants_origem` L1145+1147 **TAMBÉM filtra** `lot_id != False` — adicionar `aceita_tracking_none=True` default
+- 🟢 **Pytest baseline mantido: 393 verdes** (sem mudanças em código de teste)
+
+**Status global após v14a-ops:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 3 MINERAÇÕES + TESTE REAL 6 CODS PROD VALIDADO**; 5 dificuldades reais documentadas (§7.5); 1 decisão ABERTA (paralelismo G-RECLF-1 v17); Skill 2 + Skill 5 + script 09 tem bug tracking='none' (workaround validado em PROD).
+- Skill 2 `transferindo-interno-odoo` 🟡 — bug D-OPS-5 descoberto, fix futuro (memória `[[skill2_distribuir_indisp_pattern]]` precisa atualização para incluir caso tracking='none').
+- Próximo passo: sessão v14b com criação da sub-skill `auditando-cadastro-fiscal-odoo` perfil inventário V1.
+
+**Sessão 2026-05-25 v14b — FIX Skill 2 D-OPS-5 + CRIAR sub-skill `auditando-cadastro-fiscal-odoo` V1:**
+- ✅ Setup worktree + pytest baseline 393 verdes confirmados.
+- ✅ AskUserQuestion v14b — Rafael escolheu: AMBOS P1+P2; G035 V1 INCLUIR + outros gotchas (NCM, lote vencido); D-OPS-3 (a) NÃO mexer no script.
+- ✅ **P1 — Fix Skill 2 D-OPS-5 (`transfer.py`)**:
+  - `_listar_quants_origem` (L1104-1180) ganhou `aceita_tracking_none: bool = True` default. NÃO aplica filtro `['lot_id', '!=', False]` quando True.
+  - `transferir_para_indisponivel` (Modo C atomico) relaxou tipo `lot_id_origem: Optional[int]`. Quando None, faz 1 read `product.tracking`; raise se != 'none'.
+  - `distribuir_para_indisponivel` (helper) ganhou `aceita_tracking_none: bool = True` + propaga para `_listar_quants_origem`.
+  - Campo novo no retorno: `tracking_origem` ('none' quando lot_id_origem=None validado).
+  - **9 pytest novos verdes** (6 no test_stock_internal_transfer_service + 3 no test_distribuir_para_indisponivel).
+  - **Canary PROD validado**: cod 208000043 QUADRO DE MADEIRA NADIR (1 un sem lote em FB/Estoque) movido + reversão completa via Skill 1 ×2 (~1.5s + reversão OK).
+
+- ✅ **P2 — Sub-skill `auditando-cadastro-fiscal-odoo` perfil V1 'inventario' CRIADA**:
+  - Service `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (~430 LOC) — `CadastroFiscalAuditService` com 4 checks: G017 NCM (BLOQUEIO), G018 weight (WARN), G035 barcode (BLOQUEIO + auto-fix opcional), G014 lote vencido (WARN), D-OPS-2 duplicação pipeline (BLOQUEIO), D-OPS-3 tracking='none' (INFO).
+  - SKILL.md + CLI wrapper `auditar_cadastro_inventario.py` com 3 modos input (produtos | cods | ciclo) + flags `--auto-corrigir-barcode` + `--no-pipeline-check` + `--no-lote-vencido-check`.
+  - **14 pytest novos verdes** em `tests/odoo/services/test_cadastro_fiscal_audit.py`.
+  - **Smoke PROD 6 cods v14a-ops em 987ms**: detectou 2 G014 (lotes vencidos 0711/24) + 1 D-OPS-3 (103500105 tracking='none') + 0 bloqueios. Status PRE_FLIGHT_WARN + pode_faturar=true.
+  - **Cross-refs aplicados** (5): `app/odoo/estoque/CLAUDE.md` §6 (nova tabela sub-skills PRE-FLIGHT) + `.claude/references/ROUTING_SKILLS.md` (header count 48→49 + tabela skills + decision tree §8) + `app/agente/services/tool_skill_mapper.py` (entry 'Pre-Flight Cadastro Fiscal Odoo') + `.claude/agents/gestor-estoque-odoo.md` (skills frontmatter + header status v14b).
+
+- ✅ **P3 — D-OPS-3 DECISAO RESOLVIDA**: (a) NÃO mexer no script (alinha "use scripts existentes apenas") — Sub-skill V1 flagga tracking='none' como INFO; Skill 8 v15a atomo `criar_picking_inter_company` codifica fix permanente.
+- 🟢 **Pytest baseline novo: 416 verdes** (393 + 9 D-OPS-5 + 14 sub-skill C5).
+- 🟢 **C5 ✅ CONCLUIDO no PLANEJAMENTO Skill 8** — desbloqueia integracao Skill 8 v15b com sub-skill (orchestrator base invoca via subprocess).
+- 🟢 **Fix Skill 2 D-OPS-5 desbloqueia atomo Skill 5 inter-company v15a** — pattern tracking='none' validado para reuso em `criar_picking_inter_company`.
+- 🟢 **NÃO MEXEU** em script 09 (D-OPS-3 não-fix conforme Rafael) NEM em RecebimentoLfOdooService (regra v14a-fix).
+
+**Status global após v14b:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA + 3 MINERAÇÕES + TESTE REAL + SUB-SKILL C5 PRONTA + FIX SKILL 2 D-OPS-5**; C5 ✅ concluído (5 de 24); 19 checkpoints ⬜; 1 decisão ABERTA (paralelismo G-RECLF-1 v17).
+- Skill 2 `transferindo-interno-odoo` 🟡 — bug D-OPS-5 ✅ RESOLVIDO em v14b com canary PROD.
+- Sub-skill `auditando-cadastro-fiscal-odoo` 🟡 V1 LIVE — invocável diretamente pelo usuário OU via subprocess pela Skill 8 v15b+.
+- Próximo passo: sessão v15a com extensão da Skill 5 com 3 átomos inter-company (`criar_picking_inter_company` + `validar_picking_inter_company` + `criar_picking_entrada_destino_manual`) — incorpora fix tracking='none' (D-OPS-3) no novo átomo.
+
+**Sessão 2026-05-25 v13 (Planejamento Skill 8 `faturando-odoo` — estruturacao C1+C4):**
+- ✅ **Verificacao main**: main = `a937748b` (merge v12); sem avanco; sem rebase.
+- ✅ **Pytest baseline confirmado**: 393 verdes em `tests/odoo/` (18s). Observacao: rodar `tests/odoo/services/` isolado produz 27 falhas (fixture pollution pre-existente); usar `tests/odoo/` como baseline canonico.
+- ✅ **AskUserQuestion**: foco A (Skill 8) escolhido. Rafael: "estruturar bem a skill, depois trabalhar em casos reais" + lembrete explicito "erros + SSL connection timeout".
+- ✅ **Levantamento contexto Skill 8** (subagente Explore + leituras complementares):
+  - Service `inventario_pipeline_service.py` (1.346 LOC, F5a-F5e + helpers `_commit_with_retry`/`_garantir_payment_provider`/`_garantir_fiscal_setup`/`_corrigir_price_zero_em_invoice`).
+  - Script-fonte macro `09_executar_onda1_bulk.py` (~1.850 LOC, etapas A-F).
+  - 15 scripts ad-hoc vivos (`fat_lf_*`, `09*`, `debug_sefaz_*`).
+  - Constants OK (MATRIZ_INTERCOMPANY + picking_types + ids_diversos); journals (847/1002/987) NAO centralizados.
+  - 9 gotchas mapeados (G004/G007/G011/G016/G017/G018/G023/G029/G034/G035).
+  - Pattern Skill 6 v9 `pre_etapa_executor.py` identificado como template.
+  - Galho 1.1/1.3 dos fluxos: NENHUMA folha criada.
+- ✅ **Mapeamento SSL/timeout completo**:
+  - G016 fix codificado: combinacao A (commit antes operacao longa) + B (try/except + retry + re-fetch via `db.session.get`) + C (TCP keepalive em `config.py:115-118`).
+  - Recovery scripts `fat_lf_resume.sh` (B→D, 18 iter timeout 900s, stagnation detector) + `fat_lf_resume_entrada.sh` (E:30 iter + F:12 iter, timeout 600s).
+  - Quirks CIEL IT timing (3-5min madrugada, 5-10min manha, >2h pico).
+- ✅ **NOVO ARQUIVO**: `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` (~600 LOC) — documento vivo de planejamento persistente.
+  - 14 secoes: cabecalho de estado, visao macro, escopo, decomposicao etapas A-F, pre-flight, SSL/timeout/recovery, pattern Skill 6 v9 reuso, 23 checkpoints granulares, pre-mortem 4 dimensoes x 6 etapas, riscos arquiteturais, pendencias vivas, decisoes (6, 2 RESOLVIDAS + 4 pendentes v14), cronograma (8 sessoes v13→v20+), trilha de auditoria, glossario, ponteiros.
+  - **Regra inviolavel 0** documentada: ANTES de qualquer modificacao em codigo Skill 8 LER este arquivo INTEIRO + atualizar checkpoint ativo.
+  - Checkpoints C1 (pre-mortem) + C4 (escopo) marcados ✅; restantes ⬜.
+  - Cronograma realista: v14 (C2/C3 mineracao + C5 pre-flight) → v15 (C6/C7/C8 base+F5a+F5b) → v16 (C9/C10 F5c+F5d) → v17 (C11/C12/C13 F5e+E+F) → v18 (C14/C15/C16/C17 recovery+SKILL+tests) → v19 (C18/C19/C20 folhas+cross-refs+canary) → v20+ (C21/C22/C23 bulk+code-review+commit).
+- ✅ **Decisoes RESOLVIDAS** com Rafael:
+  - 10.1 Escopo COMPLETO A-F em N sessoes (nao incremental)
+  - 10.2 Estruturar antes; casos reais apos C18
+- ⬜ **Decisoes PENDENTES** para v14:
+  - 10.3 Pattern paralelismo (preservar Semaphore=5 vs refatorar ThreadPool Skill 6) — recomendacao: preservar
+  - 10.4 Centralizar journals nesta skill (vs adiar) — recomendacao: adiar para Skill 7
+  - 10.5 Pre-flight como sub-skill vs entry-point — recomendacao: entry-point (b)
+  - 10.6 Refatorar F5a/F5b para Skill 5 — recomendacao: nao refatorar
+- 🟢 **Sem mudancas em codigo nesta sessao** (so docs/planejamento).
+- 🟢 **Pytest baseline mantido: 393 verdes**.
+
+**v13 mid-sessao (continuou apos commit 63d817d5)**: Rafael pediu para aproveitar contexto e fechar A+B+C.
+- ✅ **A — Decisao 10.5 RESOLVIDA**: pre-flight como **sub-skill nova `auditando-cadastro-fiscal-odoo`** (agnostica com perfis multiplos — atende Skill 8 inventario + futuro venda-cliente). Razao Rafael: "podem haver faturamentos para cliente cujo pre-flight tera regras DIFERENTES (certificado A1, IE, FCI, etc.)". §4 reescrita inteira como DELEGADO + contrato V0 + perfis multiplos.
+- ✅ **B — 3 decisoes adicionais RESOLVIDAS**:
+  - **10.3 Paralelismo**: PRESERVAR Semaphore=5 + **ETAPA = BARREIRA DE SINCRONIZACAO** (todos pickings → todas validacoes → todas emissoes; mitiga DetachedInstanceError + SSL drop). Razao explicita Rafael ("erros de DetachedInstanceErros e SSL connection timeout").
+  - **10.4 Journals**: ADIAR para Skill 7 escriturando (tarefa ortogonal).
+  - **10.6 Refatorar F5a/F5b**: **REFATORAR COMPLETAMENTE** seguindo principio "Fluxo >> Skills" — atomos NOVOS na Skill 5 (`criar_picking_inter_company` + `validar_picking_inter_company`). Razao Rafael: "Se mexe com picking, devera ser atraves da Skill 5; principio da atomicidade e funcao especifica".
+  - **NOVO checkpoint C6.5 v15**: estender Skill 5 com atomos inter-company (~1 dia extra; +1 sessao no cronograma).
+- ✅ **C — Mineracao detalhada `inventario_pipeline_service.py` COMPLETA** (~70k tokens consumidos):
+  - Tabela §7.2 com 14 metodos+linhas+side-effects+deps (cabecalho L1-L575 + F5a-F5e L581-1346).
+  - **9 descobertas-chave D1-D9** documentadas como padroes a PRESERVAR no orchestrator:
+    - D1: SNAPSHOT antes de threads | D2: agrupamento por picking | D3: bug L19/L20/L21 fix (preencher_qty_done sequencia)
+    - D4: G023 linhas_esperadas | D5: SNAPSHOT meta + db.session.get re-fetch em polling longo
+    - D6: sub-etapas F5d.5/.6/.7 em try/except | D7: HARD_FAIL_CONFIG_ERRORS aborta batch
+    - D8: idempotencia TRIPLA em F5e | D9: db.session.get re-fetch + commit_with_retry apos Playwright
+  - Achados secundarios MED-B-2 / MED-C-1 / MED-C-2 + dependencias externas listadas.
+
+**Status global apos v13 mid-sessao:**
+- Skill 8 `faturando-odoo` 🟡 **PLANEJADA COMPLETO** (C1 + C2 + C4 ✅; 21 checkpoints ⬜; 6 decisoes RESOLVIDAS; pattern arquitetural FINAL declarado).
+- 1 sub-skill nova prevista: `auditando-cadastro-fiscal-odoo` (C5 redefinido para criar — v14).
+- Skill 5 `operando-picking-odoo` sera ESTENDIDA com 2 atomos novos em v15 (C6.5).
+- Baseline pytest mantido: 393 verdes.
+- Proximo passo: sessao v14 com mineracao C3 (script `09_executar_onda1_bulk.py` 1850 LOC) + criar sub-skill `auditando-cadastro-fiscal-odoo` (C5).
+
+**Sessão 2026-05-25 v12 (S1+S2+S4 fechando lacunas v11 — Skill 2 ARQUITETURALMENTE COMPLETA):**
+- ✅ **Pre-mortem da operacao v10+v11** identificou 3 lacunas estruturais:
+  - L1: 1 un MIGRACAO em FB/Estoque do cod 4310176 ficou orfao (skill 2 modo C levantou ValueError, pulamos manual)
+  - L2: 28 reserveds residuais negativos + 2 saldos negativos precisaram cleanup MANUAL apos bulk
+  - L3: subagente nao sabia da regra de cleanup pos-bulk
+- ✅ **S1 — Fallback automatico Modo B em `distribuir_para_indisponivel`**:
+  - Quando atomo modo C levanta `ValueError('lot_id_origem == lot_id_destino')` E lote eh variante MIGRACAO (deteccao DUPLA — substring match + `is_migracao` semantica), o helper tenta automaticamente `transferir_entre_locations` (Modo B) mantendo o mesmo lote, movendo origem → Indisp.
+  - Output marca `_fallback_modo_b=True` + `_fallback_motivo`.
+  - Caso real 4310176 reprocessado em PROD: 1 un MIGRACAO movido com sucesso. Cobertura 100% (era 99.9%).
+  - +3 testes pytest (fallback OK + fallback fail pula + filtro semantico nao-MIGRACAO).
+- ✅ **S2 — Flag `--cleanup-pos-bulk` no CLI**:
+  - Apos bulk, lista quants em FB exceto Indisp dos cods processados com transferencias executadas:
+    - reserved_quantity<0 → Skill 2.4 `zerar_residual` (COM GUARD MO ativa via Skill 9 — pula quants com MLs vivas)
+    - quantity<0 → Skill 1 `ajustar_quant --valor-absoluto 0`
+  - Output em `payload.cleanup_pos_bulk`; CSV opcional `--csv-cleanup PATH`.
+  - Exit code do CLI considera FALHA do cleanup (eleva para 1).
+  - Smoke PROD: 3 cods, cleanup_OK_VAZIO (ja zerado em v11).
+  - +6 testes pytest (vazio, classificacao 2 tipos, exclui Indisp, dry-run propagado, guard MO ativa).
+- ✅ **S4 — Invariantes NOVAS no subagente `gestor-estoque-odoo`**:
+  - **CLEANUP POS-BULK obrigatorio** apos `distribuir_para_indisponivel` (com flag `--cleanup-pos-bulk` como atalho)
+  - **Fallback Modo B** documentado como comportamento padrao quando lote MIGRACAO origem==destino
+- ✅ **Mitigacoes pre-mortem v12**:
+  - **S1**: deteccao DUPLA (substring + semantica) para fallback (mitiga risco de matching errado se msg do atomo mudar)
+  - **S2-A**: GUARD MO ativa via `listar_move_lines_por_quant` (cross-ref tupla G030) antes de zerar reserved<0 — quants com MLs vivas vao para `quants_pulados_mo_ativa` em vez de zerar reserva legitima
+  - **S2-B**: cleanup contribui para exit code do CLI (FALHA_ODOO no zerar/ajustar eleva exit 1)
+- ✅ **Baseline pytest: 388 → 390 verdes** (+2 testes mitigacao pre-mortem)
+- ✅ **Skill 2 `transferindo-interno-odoo` MATURADA ARQUITETURALMENTE**:
+  - 3 modos atomicos (A lote→lote / B loc→loc / C para-indisponivel)
+  - Helper alto-nivel `distribuir_para_indisponivel` com fallback automatico Modo B
+  - CLI alto-nivel `transferir_para_indisp_em_lote.py` com `--cleanup-pos-bulk` integrado
+  - Demanda real 158 cods FB processada (v10+v11) + lacunas estruturalmente resolvidas (v12)
+
+**Sessão 2026-05-25 v11 (FASE C bulk — 153 cods FB Indisponivel + cleanup completo):**
+- ✅ **FASE C.1 — re-dry-run 153 cods**: consistente com dry-run anterior (141 OK + 9 parciais + 3 falhas), ~50s. Sem alteracao de saldo entre v10 e v11.
+- ✅ **FASE C.2 — bulk REAL 153 cods**: 11min 33s, 485 transferencias executadas, 10.994.553 un movidos FB/Estoque → FB/Indisp/MIGRAÇÃO. Status: 141 EXECUTADO_TOTAL + 9 EXECUTADO_PARCIAL + 2 FALHA_PRODUTO + 1 FALHA_SEM_QUANT. Cobertura 99.68%.
+- ✅ **FASE C.3 — verificacao Odoo direto**: sample 10 cods aleatorios via Skill 9 — 100% match esperado (FB/Estoque=0, FB/Indisp acrescido).
+- ✅ **FASE C.4 — cleanup pendencias**:
+  - **Cleanup reserveds residuais via Skill 2.4 `--zerar-residual`**: 28 quants processados (17 cods em FB/Pré-Prod), -28.265 un de reserved negativo zerados em 5.4s. Skill 2.4 modo `zerar_residual` validado em PROD.
+  - **Cleanup saldos negativos via Skill 1 `--valor-absoluto 0`**: 2 quants com qty<0 ajustados para qty=0 (260624 SAL SEM IODO -877.175 → 0; 260626 ACIDO CITRICO -34.795 → 0). +911.97 un de Physical Inventory.
+- ✅ **FASE C.5 — Estado final FB**:
+  - 0 quants com qty<0 em FB exc Indisp ✓
+  - 0 quants com qty=0 + reserved<0 ✓
+  - 9 quants com qty>0 + reserved>0 (saldo legitimo MOs ativas — cod 104000031 SACARINA SODICA — NAO MEXER).
+- 🟢 **Pendencias REAIS finais (12 cods, 35.313 un — 0.32% da demanda)**:
+  - 2 FALHA_PRODUTO (45121452 + 501 — cods inexistentes em product.product)
+  - 1 FALHA_SEM_QUANT (104000011 HIPOCLORITO — sem saldo em FB/CD/LF)
+  - 1 SALMOURA 1969 un — saldo Odoo de fato menor que pedido
+  - 8 cods < 1 un — arredondamento (saldo residual em LF/CD/Pre-Prod fora escopo)
+  - 1 caso 4310176 — 1 un MIGRAÇÃO em FB/Estoque == MIGRAÇÃO destino (skipped corretamente).
+- ✅ **Artefatos persistidos**: `docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/` (README + JSONs + CSVs detalhados de toda jornada PROD).
+
+**Totalizacao jornada v10+v11**:
+- 5 cods canary/sub-piloto v10 + 153 cods bulk v11 = **158 cods FB demanda completa processada**
+- **11.009.776 un movidos FB/Estoque → FB/Indisp/MIGRAÇÃO** + 28 reserveds zerados (-28.265 un) + 2 saldos negativos ajustados (+912 un)
+- Tempo total PROD: ~12 min
+- 495+ writes Odoo executados (8 canary/sub-piloto + 485 bulk + 28 zerar + 2 ajustar)
+
+**Status global apos v11:**
+- Skill 2 `transferindo-interno-odoo` ✅ **MATURADA** — 3 modos atomicos + helper alto-nivel `distribuir_para_indisponivel` validado em demanda real PROD.
+- Skill 2.4 `operando-reservas-odoo` ✅ — modo `--zerar-residual` validado em batch (28 quants).
+- Skill 1 `ajustando-quant-odoo` ✅ — modo `--valor-absoluto 0` validado para cleanup de saldos negativos.
+- **Baseline pytest: 381 verdes** (sem mudanca apos v11 — sem novo codigo).
+
+**Sessão 2026-05-25 v10 (Skill 2 alto-nível — helper `distribuir_para_indisponivel` + canary 5 cods REAL):**
+- ✅ **Verificação main**: avancou apenas `fb494608` cosmético (mesmo de v8/v9) — sem rebase.
+- ✅ **FASE A — avaliacao demanda real (158 cods FB)**: planilha simples (cod, qty, nome). Skill 9 cross-ref ao vivo: 552 quants em FB exceto Indisp, 155 dos 158 cods com saldo. Distribuição: 44 single-lote OK + 74 multi-lote + 28 com reserva ativa + 9 saldo insuficiente + 3 sem quant. Politica definida com Rafael: origem = todas locs FB exceto Indisp; selecao MIGRACAO_FIRST_FIFO; reserva via `--resetar-reserva-origem` (defensivo).
+- ✅ **FASE B — capinagem**:
+  - **Helper alto-nível** `distribuir_para_indisponivel` em `app/odoo/estoque/scripts/transfer.py` (+~250 LOC): _listar_quants_origem (read enriquecido + N+1 evitado), _ordenar_quants_origem (3 politicas), greedy distribute com ValueError-handling (pula quant em pre-cond do atomo — caso 4310176 lote MIGRACAO origem==destino).
+  - **CLI thin wrapper** `.claude/skills/transferindo-interno-odoo/scripts/transferir_para_indisp_em_lote.py` (~370 LOC): --planilha CSV ou --cods inline, --dry-run default, --csv-out, --csv-pendencias, exit codes 0/1/2/4.
+  - **17 testes pytest novos** em `tests/odoo/services/test_distribuir_para_indisponivel.py` cobrindo: distribuicao greedy, 3 politicas (MIGRACAO_FIRST_FIFO/FIFO/MAIOR_SALDO), reserva (resetar vs respeitar), pre-cond invalidas, ValueError do atomo capturado, FALHA_AUMENTO em meio continua tentando outros.
+  - **Baseline pytest estoque 364 → 381** verdes.
+  - **SKILL.md atualizado** com nova receita (8 exemplos + secao "orquestrador alto-nivel" + gotchas).
+  - **Fluxo 2.2.j** criado: `app/odoo/estoque/fluxos/2.2.j-para-indisponivel-em-lote.md` com sequencia composta + gotchas + receita.
+- ✅ **FASE C parcial — canary + sub-piloto REAL PROD**:
+  - **Canary 1 cod** `210844125` (2 lotes 13203+13757, 2536 un): EXECUTADO_TOTAL em 8s. Verificacao Odoo direta: FB/Estoque ambos zerados, FB/Indisp MIGRACAO subiu de 5500→8036 (delta exato 2536).
+  - **Sub-piloto 4 cods**: 3800005 BATELADA INGLES (3093.72), 210881114 ROTULO BARBECUE (2988), 209751213 ROTULO OLEO (3047), 210030214 CAIXA PAPELAO (3559). EXECUTADO_TOTAL 4/4 em 10.5s. Verificacao Odoo 100% match.
+  - **Total PROD nesta sessao**: 5 cods, 8 transferencias internas, 15.224 un movidas FB/Estoque → FB/Indisp/MIGRACAO.
+- ✅ **Artefatos pos-sessao** em `docs/inventario-2026-05/v10-skill2-indisp-em-lote/`: README com plano FASE C bulk + demanda_completa_158.csv + demanda_restantes_153.csv (sem 5 ja exec) + pendencias_dry_run.csv (12 cods) + audit_dry_run.csv + canary1.json + sub_piloto.json.
+- 🟡 **FASE C bulk (153 cods restantes)** para sessao seguinte: comando documentado no README v10. Estimativa 5-10 min real.
+
+**Status global apos v10:**
+- Skill 2 `transferindo-interno-odoo` 🟡 **mín viável + 3 modos + helper alto-nivel `distribuir_para_indisponivel`** — 1 canary + 4 sub-piloto PROD validados.
+- **Baseline pytest: 381 verdes** (364 anterior + 17 v10 distribuir).
+- 5/158 cods da demanda v10 executados em PROD; **153 cods restantes** prontos para bulk em sessao seguinte.
+
+**Sessão 2026-05-25 v9 (09b capinado → orchestrator C3 macro Skill 6 — ciclo completo):**
+- ✅ **Verificação main**: avancou apenas `fb494608` (D8 SKIP cosmetico) — sem rebase.
+- ✅ **C1 mineracao**: 09b_executar_pre_etapa.py (746 LOC) lido integral + 4 services minerados (quant.py, transfer.py linhas 395-630+1018-1073 v2 API, pre_etapa.py constantes/helpers, _cli_utils.py).
+- ✅ **C2 capinar**: novo `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (~580 LOC). Refatoracoes-chave:
+  - POS/NEG: `transferir_quantidade_para_lote` v1 -> `transferir_quantidade_para_lote_v2` (Skill 2 v2 — guard delta_esperado propagado em ambos passos `-origem`/`+destino`).
+  - PURO: `odoo.create('stock.quant')` + `action_apply_inventory` DIRETO -> `quant_svc.ajustar_quant(criar_se_faltar=True, delta_esperado=qty)` (Skill 1 com guard CICLAMATO).
+  - Output: print/banner orientado a humano -> dict JSON estruturado (regra v7).
+  - Mantem: auditoria via OperacaoOdooAuditoria, paralelizacao ThreadPoolExecutor.
+- ✅ **C2 testes**: 21 testes pytest novos verdes em `tests/odoo/services/test_pre_etapa_executor_orchestrator.py` (helpers + execucao individual dry-run + entry-point FALHA_USO/FALHA_NENHUM_APROVADO + constantes). **Baseline pytest estoque 230 -> 251** verdes.
+- ✅ **C3-C5 CLI**: novo modo `--modo executar-onda` em `.claude/skills/planejando-pre-etapa-odoo/scripts/planejar_pre_etapa.py` (5 modos total). Args novos: `--limite`, `--cod-produto`, `--max-workers`. Status: `EXECUTADO_ONDA`, `DRY_RUN_OK_EXECUTADO`, `FALHA_NENHUM_APROVADO`.
+- ✅ **C6 validacao dry-run vs Odoo PROD**: 3 smokes verdes (`/tmp/log_skill6_C6_validacao_executar_onda.json`):
+  - company_id=999 → argparse error (exit 2)
+  - ciclo inexistente → FALHA_NENHUM_APROVADO (exit 1)
+  - dry-run real ciclo INVENTARIO_2026_05 cid=4 → DRY_RUN_OK_EXECUTADO (exit 4) — encontrou 1 ajuste APROVADO real (id=163696 NEG 835k un) e dispatch correto via Skill 2 v2 (lot_id_destino=56779 MIGRAÇÃO resolvido em 1.9s).
+- ✅ **C7 cross-refs**: subagente `gestor-estoque-odoo.md` (header v7→v9 + description com executor + galho 4.1 atualizado), tool_skill_mapper (sem mudanca — skill ja mapeada), SKILL.md (5 modos + receitas executar-onda + sub-fluxo 4.1.e + armadilhas + 5 exemplos novos), fluxo 4.1 (passo F atualizado + G-PRE-10 reescrito + sub-caso 4.1.e + Cross-skill v9).
+- ✅ **C9 scripts SUPERADOS**: 09b movido para `_validados/planejando-pre-etapa-odoo/` via `git mv` + sys.path corrigido (parents[2]→parents[4]) + header de ARQUIVADO. Smoke import museum vivo verde para 03b+04b+09b.
+- ✅ **C10 docs**: MAPA_SCRIPTS atualizado (seção pre_etapa.py renomeada para incluir orchestrator + 09b status SUPERADO), VALIDACAO Skill 6 atualizada (09b nas SUPERADOS + cobertura testes 22→48), ROADMAP HANDOFF v9 + Skill 6 C9 ✅.
+
+**Status global apos v9:**
+- Skill 6 `planejando-pre-etapa-odoo` 🟡 **mín viável completa (5 modos)** — ciclo planejar→propor→listar→aprovar→**executar** fechado.
+- **16 scripts SUPERADOS** (em `_validados/`); ~89 scripts ad-hoc continuam VIVOS.
+- **Baseline pytest: 251 verdes** (230 v8 + 21 v9 orchestrator).
+
+**Sessão 2026-05-25 v8 (Caso 71 cods 100% FECHADO):**
+- ✅ Auditoria 71 cods identificou estado real: 54 OK + 8 PARCIAL + 5 MIGRACAO bloqueado + 4 SKIP planejado.
+- ✅ Batch v8 (20 chamadas: 14 MODO C + 6 Skill 1): 11 cods PARCIAIS/MIGRAÇÃO resolvidos via caminho D (outros lotes alternativos livres em FB/Estoque).
+- ✅ Cirurgia FB/OUT/01046 (caminho E inédito): 3 MLs bloqueantes unlinked + 3 quants zerados (reserved residual) + 3 MODO C destravando 890 un. Picking preservado com 20 MLs válidas (devoluções legítimas).
+- ✅ **Caso 71 cods 100% CONCLUÍDO**: 67/67 executáveis OK + 4 SKIP planejados.
+- ✅ Pattern v8 NOVO atomico: `cirurgia (Skill 2.4) → zerar_residual (Skill 2.4) → MODO C (Skill 2)`. Codificado no fluxo 2.6 caminho E.
+- ✅ Regra inviolável NOVA #26+#27 no `gestor-estoque-odoo.md`: CIRURGIA (E) PREFERIDA sobre CANCELAR (A) quando picking tem MIX MLs válidas + bloqueantes.
+- ✅ Documentação completa atualizada: VALIDACAO §14 + fluxo 2.6 (caminho E refinado + caso real exemplo 2) + SKILL.md 2.4 (tabela 5-caminhos refinada + armadilhas v8) + gestor-estoque-odoo.md (invariantes v8) + memórias `[[caso_real_tratar_reservas_pre_transferencia]]` (100% RESOLVIDO) + `[[fluxo_2_6_pattern]]` (pattern v8).
+- ✅ Total jornada v7+v7-extras+v8+cirurgia: ~115 writes PROD, ~22.500 un transferidas para FB/Indisponivel.
+
+
+
+**Sessão 2026-05-24 v7 (Gap reservas pre-transferencia — 4 átomos novos + fluxo 2.6 + validacao caso real):**
+- ✅ **Verificação main**: nenhum commit novo desde v6 (`fb494608` ja conhecido) — sem rebase.
+- ✅ **Fase A — Pesquisa AO VIVO** (probe `/tmp/investigar_unreserve_skill24.py`):
+  - **Descoberta G030**: `stock.move.line.quant_id` em Odoo CIEL IT é COMPUTED `store: False` (campo UI "Pick From"). Filtro `('quant_id', 'in', [...])` é IGNORADO pelo Odoo (retorna lixo). Cross-ref ML→quant DEVE ser via tupla `(product_id, lot_id, location_id, company_id)`.
+  - `stock.picking.do_unreserve` é XML-RPC público, retorna None em state=cancel (NOOP silencioso).
+  - `stock.picking._action_unreserve` NÃO EXISTE (Fault method does not exist).
+  - Casos reais identificados: lote 13206 em FB/INT/08022 (3 MLs, 1035.083 un); MIGRAÇÃO em 3 pickings (FB/FB/EMB/11673+11674 MO ativa + FB/OUT/01046 DEVOLUÇÃO LA FAMIGLIA).
+- ✅ **Fase B — Skill 9 extensão**: 2 átomos NOVOS em `app/odoo/estoque/scripts/consulta_quant.py`:
+  - `listar_move_lines_por_quant(quant_ids, states)`: cross-ref reverso via tupla G030 (read stock.quant → domain compound OR de AND → search stock.move.line).
+  - `listar_pickings_por_quant(quant_ids, states)`: agrupa MLs por picking + enriquece metadados (picking_type, origin, partner, scheduled_date, create_date). Ordena por state-priority. Inclui `mls_sem_picking` para MOs.
+  - CLI estendida com 2 modos novos: `--modo move-lines` + `--modo pickings`. `--states` configurável (default assigned+partial; `todos` = sem filtro).
+  - **19 pytest novos** em `tests/odoo/services/test_stock_quant_query_service.py` cobrindo: vazio, default states, custom states, sem filtro, domain compound OR de N quants, resolve quant_id via tupla, picking_state batch unico, ML sem picking, incluir_move/picking flags, quantity None defensive, lot_id=False, agrupa 3MLs em 1 picking, separa mls_sem_picking, ordem assigned-antes-done, enriquece partner/origin/picking_type, zero MLs. **2 smokes PROD: 1035.083 un caso 13206 + 6 MLs MIGRAÇÃO FB/Estoque caso real.**
+- ✅ **Fase C — Skill 2.4 extensão**: 2 átomos NOVOS em `app/odoo/estoque/scripts/reserva.py`:
+  - `unreserve_picking(picking_id, dry_run)`: wrapper sobre `stock.picking.do_unreserve` + guard pre-state (NÃO done/cancel) + NOOP se sem MLs + aviso G_UNRESERVE_TRAVA se state pós == assigned.
+  - `find_orphan_mls(quant_ids, states)`: READ-only — lista MLs apontando para quants com qty=0 (TOL 1e-4). Reaproveita Skill 9 internamente (G030 cross-ref). Retorna `mls_orfas` + `quants_zerados_com_mls` + `quants_com_saldo`.
+  - CLI estendida com 2 modos novos: `--unreserve-picking` + `--find-orphan`. 5 modos totais (cirurgia + cancelar + unreserve + find-orphan + zerar-residual).
+  - **14 pytest novos** em `tests/odoo/services/test_stock_reserva_service.py` cobrindo: dry-run default, picking inexistente, state done/cancel recusado, sem MLs NOOP, --confirmar releitura, aviso G_UNRESERVE_TRAVA, exceção Odoo, quant_ids vazio, classifica zerado vs saldo, sem MLs retorna vazio, states default/customizado, TOL 1e-4.
+- ✅ **Fase D — Fluxo 2.6**: `app/odoo/estoque/fluxos/2.6-tratar-reserva-bloqueia-transferencia.md` criado com 5 caminhos seguros (A=cancel/B=devolver/C=unreserve/D=outro lote/E=cirurgia órfã). Regra de seleção D→E→A→B→C. Composição Skills 9+2.4+5+2. README dos fluxos atualizado com galho 2.6.
+- ✅ **Fase E — Regra inviolavel + tabela**:
+  - Subagente `gestor-estoque-odoo`: regra inviolável NOVA "PRÉ-CHECK reserva ANTES de Skill 2" + invariante G030 + atualização da árvore com galho 2.6 + 2 novos átomos Skill 2.4 + 2 novos modos Skill 9 no header v6→v7.
+  - SKILL.md Skill 2.4 estendida com tabela "5 caminhos seguros para desreservar" + contratos de 5 átomos + armadilhas G_UNRESERVE_TRAVA + G030.
+  - SKILL.md Skill 9 estendida com 3 contratos (quants + move-lines + pickings) + receitas + armadilha G030.
+  - Gotcha G030 documentado em `docs/inventario-2026-05/02-gotchas/G030-quant-id-em-stock-move-line-eh-computed.md`.
+- ✅ **Fase F — Validação com caso real 71 cods**:
+  - Auditoria pos-implementação confirmou estado idêntico ao v6.1: 4 pickings bloqueantes (FB/INT/08022 13206 + FB/FB/EMB/11673+11674 MO + FB/OUT/01046 DEVOLUÇÃO).
+  - Rafael escolheu estratégia β (cancelar FB/INT/08022, PULAR os 3 MIGRAÇÃO).
+  - **PROD: FB/INT/08022 (id=320753) cancelado** via Skill 5 `--modo cancelar --confirmar` em 1.43s. Verificado via Skill 9 modo pickings: 0 pickings reservando os 3 quants 13206. reserved_quantity=0 nos 3 quants confirmado.
+  - Batch dry-run iniciado: 84 chamadas Skill 2 modo C (95 plano A - 11 chamadas dos 5 cods MIGRAÇÃO pulados). Amostra (4 chamadas dos cods desbloqueados): 3 DRY_RUN_OK + 1 FALHA_LOTE_DESTINO_INEXISTENTE (esperado — MIGRAÇÃO não existe ainda; em --confirmar `criar_se_nao_existe` cria).
+- 🟡 **Fase G — pendente**: cross-refs ROUTING_SKILLS + commit consolidado (in progress).
+
+**Sessão 2026-05-24 v6 (Skill 6 `planejando-pre-etapa-odoo` — capinada do zero):**
+- ✅ **Verificação main**: avançou 1 commit cosmético (`fb494608` skip D8 sem código) — sem rebase necessário.
+- ✅ **C1 mineração**: 3 scripts-fonte lidos integral (`03b_planejar_pre_etapa_cd` planner READ, `04b_propor_pre_etapa_cd` WRITE banco local com workflow hash, `09b_executar_pre_etapa` executor C3 — DELEGADO para Skills 1+2, NÃO entra na Skill 6) + service existente `PreEtapaEstoqueService` (340 LOC, 4 dataclasses, algoritmo 10-passos D007) + 13 testes pytest existentes.
+- ✅ **C2 capinar + estender** `app/odoo/services/pre_etapa_estoque_service.py` → `app/odoo/estoque/scripts/pre_etapa.py` + shim em `services/`. Estendido com 7 funções helper top-level (`enriquecer_quants_para_planejar`, `_serializar_plano_em_dicts`, `gerar_excel_plano_pre_etapa`, `planejar_pre_etapa_batch_company`, `_calcular_hash_onda`, `_fazer_backup_pg_dump`, `propor_ajustes_pre_etapa`, `listar_onda_pre_etapa`, `aprovar_onda_pre_etapa`) + 4 constantes (`ACOES_INTERNAS_POR_CID`, `ONDA_NUM_POR_CID`, `ACAO_RESIDUAL_FB_CD`, `COMPANY_LOCATIONS_PRE_ETAPA`). **13 testes originais preservados via shim + 6 testes novos cobrindo helpers** (enriquecer basic+vazio, batch outliers+cods_filter, hash determinismo+sensibilidade) = **19 testes pre_etapa verdes**.
+- ✅ **C3-C5 SKILL.md + CLI** `.claude/skills/planejando-pre-etapa-odoo/scripts/planejar_pre_etapa.py` (4 modos exclusive: planejar/propor/listar-onda/aprovar-onda; `--dry-run` default em modos write; listar-onda sempre READ; exit codes 0/1/2/4).
+- ✅ **C6 validação dry-run**: 3 smokes CLI passando (FALHA_INPUT_AUSENTE exit 1, FALHA_USO exit 2, DRY_RUN_OK_PLANEJADO com inputs vazios exit 4); 2 limitações documentadas (listar-onda em SQLite local — tabela só existe em PG; batch real com Odoo — scripts 01+02 não rodaram nesta worktree). Cobertura completa via 6 pytest novos (helpers I/O com mocks). Log `/tmp/log_skill6_C6_validacao_dry_run.json`.
+- ✅ **C7 cross-refs**: subagente `gestor-estoque-odoo` (description + skills lista + header v5→v6 + árvore galho 4 NOVO); ROUTING_SKILLS (47→48 invocaveis + 15→16 Skills Odoo + galho 6 ESTOQUE WRITE); tool_skill_mapper (`'planejando-pre-etapa-odoo': 'Estoque Odoo (Write)'`); CLAUDE.md raiz + app/odoo/estoque/CLAUDE.md §6 catálogo + header status.
+- ✅ **C8 folha de fluxo** `app/odoo/estoque/fluxos/4.1-pre-etapa-cd-d007.md` com 4 sub-casos a/b/c/d cobrindo preview antes de regenerar, re-aprovar pos-correcao, Onda 6 FB futura, debug subset cods. README atualizado com galho 4 NOVO.
+- ✅ **C9-C10**: 2 scripts SUPERADOS em `_validados/planejando-pre-etapa-odoo/`: `03b_planejar_pre_etapa_cd.py` + `04b_propor_pre_etapa_cd.py` (sys.path corrigido parents[2]→parents[4]; museum vivo via shim). `09b_executar_pre_etapa.py` permanece VIVO (C3 macro pendente capinagem). VALIDACAO.md criada. MAPA_SCRIPTS atualizado seção `pre_etapa.py`.
+- **Pattern reaproveitável**: Skill 6 segue pattern Skill 5 (capinagem retroativa) MAS com extensão pesada (4 helpers I/O + 4 modos CLI — diferente de Skill 5 com 3 átomos puros). Demanda-driven: planejar+propor são os modos COM demanda comprovada (03b+04b rodaram em PROD em sessão anterior); listar+aprovar são workflow auxiliar incluído para completude.
+
+**Sessão 2026-05-24 v5 (Skill 4 `operando-mo-odoo` — NOVA, 1ª skill criada do zero do orquestrador):**
+
+**Sessão 2026-05-24 v5 (Skill 4 `operando-mo-odoo` — NOVA, 1ª skill criada do zero do orquestrador):**
+- ✅ **Verificação main**: avançou 1 commit (`fb494608 skip D8 sem código`) — sem rebase necessário (skip-only).
+- ✅ **C1 mineração** dos 2 scripts-fonte (`cancelar_mos.py` + `14_cancelar_mos_antigas_fb.py`) + **investigação AO VIVO** via `/tmp/investigar_mos_skill4.py`. Revelou: FB tem 10.000 MOs (limite atingido — mais cumulativas), CD apenas 17 (quase inativo, 15 cancel + 2 draft), LF 3.367. **Idempotência `action_cancel` em state=cancel** confirmada via probe em FB/OP/BALDE/00009 id=4192 (retorna `True` sem erro, state continua 'cancel'). **`qty_produced` ≠ consumo** validado (MOs com qty_produced=0 e consumo_total>0 são comuns).
+- ✅ **C2 service `app/odoo/estoque/scripts/mo.py`** (NOVO — criado do zero, sem service legado em `services/`). Shim preventivo em `app/odoo/services/stock_mo_service.py`. 2 átomos: `cancelar_mo` (com guard G-MO-01 + G019-like re-le state) e `cancelar_mos_em_massa` (composição com filtros). Helper `medir_consumo_mo` (soma `stock.move.quantity` raw materials != cancel, chunks 200, TOL=0.0001). **29 testes pytest verdes** (26 baseline + 3 cobrindo code-review fixes).
+- ✅ **C3-C5 SKILL.md + CLI** `.claude/skills/operando-mo-odoo/scripts/operar_mo.py` (single OU batch, `--dry-run` default, exit codes 0/1/2/4).
+- ✅ **C6 validação dry-run vs Odoo PROD**: 4 casos (NOOP idempotente id=4192, DRY_RUN_OK id=19985 sem consumo, FALHA_FURO_CONTABIL id=19984 consumo=1410.05, batch FB ate 2025-06 consumo zero). Log `/tmp/log_skill4_C6_validacao_dry_run.json`. **0 execuções `--confirmar` em PROD** (demanda-driven — pattern já validado em PROD em sessão 2026-05-20 via scripts-fonte: 120 MOs zumbi canceladas).
+- ✅ **C7 cross-refs**: subagente + ROUTING_SKILLS (46→47 invocaveis + 14→15 Skills Odoo + galho 6 ESTOQUE WRITE listando skill) + tool_skill_mapper + CLAUDE.md raiz + app/odoo/CLAUDE.md + app/odoo/estoque/CLAUDE.md §6 catálogo.
+- ✅ **C8 folha de fluxo** `app/odoo/estoque/fluxos/3.1-cancelar-mo.md` com 3 sub-casos (a single, b batch, c MO COM consumo DELEGADO para `mrp.unbuild` cross-skill). README atualizado.
+- ✅ **C9-C10**: 2 scripts SUPERADOS em `_validados/operando-mo-odoo/`: `cancelar_mos.py` + `14_cancelar_mos_antigas_fb.py` + VALIDACAO.md (sys.path corrigido parents[2]→parents[4]; museum vivo validado via import). MAPA_SCRIPTS atualizado seção `scripts/mo.py`.
+- ✅ **Code-review paralelo (2 reviewers)**: 9 findings reais (4 HIGH + 4 MED + 1 LOW). Fixes aplicados:
+  - **CR1-H1** (code): `cancelar_mos_em_massa` `search_read` sem `order` → `order='create_date asc'` server-side (FB tem 10k+ MOs).
+  - **CR1-M1** (code): `_ler_mo` retorna `None` pós-`action_cancel` → tratar como `EXECUTADO` com `state_apos='cancel_deleted'` + warning.
+  - **CR1-M3** (code): `consumo='qualquer'` sem `forcar_consumo=True` silenciosamente bloqueia todas → warning logado entry-point.
+  - **CR2-H1** (docs): `fluxos/README.md` mostrava `2.5`/`3.1` como ⬜ → 🟡 com link folha.
+  - **CR2-H2** (docs): ROUTING_SKILLS galho 6 não listava `operando-mo-odoo` → adicionado.
+  - **CR2-M1** (docs): SKILL.md "C6: 2-3 casos" → "4 casos" (alinhado com VALIDACAO.md).
+  - **CR2-M2** (docs): fluxo 3.1 cross-skill Skill 2 como "pré-condição de 3.1.c" → refinado (3.1.c é DELEGADO; Skill 2 apenas contexto relacionado).
+- ✅ **Status novo `cancel_deleted`** introduzido para skills futuras que cancelam objetos Odoo com cascade customizado.
+- ✅ **VALIDACAO_FINAL_SESSAO §10** com pre-mortem 4 dimensões + code-review consolidado.
+- ✅ **Memória `[[skill4_mo_pattern]]`** criada + MEMORY.md atualizado.
+- ✅ **Commit consolidado** `b8ed3b5c` em `feat/estoque-odoo` (3 sessões: v3 + v4 + v5; 36 arquivos; 175 pytest verdes totais).
+
+**Sessão 2026-05-24 v4 (Skill 2 modo C `transferir_para_indisponivel` — NOVA + incidente G031):**
+- ✅ **Demanda real** de Rafael: "Transfere esses 16 produtos pra Indisponivel" (planilha FB). Resolveu para modo composto cross loc+lote.
+- ✅ **C1 mineração**: investigação ao vivo de 16 quants em FB; padrão descoberto (14 triviais 1 lote em FB/Estoque + 1 NOOP 4529301 já em Indisp + 1 split 104000033 com 2 lotes em FB/Estoque com diff -0,028).
+- ✅ **C2 service `transferir_para_indisponivel`**: método novo em `app/odoo/estoque/scripts/transfer.py:797` codificando invariante "destino = (LOCAIS_INDISPONIVEL[cid], MIGRAÇÃO POR PRODUTO)". **Decomposição refatorada (CR-dry-run)**: 1 passo direto via `ajustar_quant` 2x (reduzir origem + aumentar destino com criar_se_faltar=True) — não mais composição A+B encadeada que falhava em dry-run.
+- ✅ **C3-C5 CLI modo C**: `.claude/skills/transferindo-interno-odoo/scripts/transferir.py` extendido com `--para-indisponivel` flag + validação mutex com modos A/B. Status novos (pós-refactor 1-passo): `FALHA_REDUCAO`, `FALHA_AUMENTO`, `FALHA_PRE_COND`, `FALHA_LOTE_DESTINO_INEXISTENTE`. (Versão intermediária usava `FALHA_PASSO_1/2` da composição A+B encadeada — removida no refactor.)
+- ⚠️ **INCIDENTE 2026-05-24 v4** (G031): 1ª `--confirmar` em PROD falhou 16/16 com erro Odoo *"O número de lote/série (MIGRAÇÃO) está vinculado a outro produto."*. Causa: usei `LOTES_MIGRACAO_POR_COMPANY[1]=30482` como FK universal, mas `stock.lot` tem `product_id` (cada produto tem seu próprio MIGRAÇÃO). Estado parcial: 4.319,4019 un reduzidas em FB/Estoque sem chegar em FB/Indisp.
+- ✅ **Rollback 100%** via Skill 1 `ajustar_quant +qty criar_se_faltar=True` em cada lote origem. 16/16 EXECUTADO. Estado integral restaurado em ~10s. Log `log_2.1_ROLLBACK_para_indisp_falha_20260524_105219.json`.
+- ✅ **Fix arquitetural**: `transferir_para_indisponivel` agora aceita `nome_lote_destino='MIGRAÇÃO'` (str) e resolve POR PRODUTO via `lot_svc.criar_se_nao_existe`. Constants `LOTES_MIGRACAO_POR_COMPANY` documentadas como HISTÓRICO/EXEMPLO em `constants/locations.py`. Nova constant `NOME_LOTE_MIGRACAO_POR_COMPANY` introduzida.
+- ✅ **Re-execução PROD pós-fix**: 16/16 EXECUTADO em 23s; 4.319,4019 un transferidas; 15 lotes MIGRAÇÃO já existiam, 1 criado on-demand (4829012, lot_id=59829). Verificado direto no Odoo: 16/16 origem zerada + MIGRAÇÃO somando exato (ex.: 210843125 MIGR 895→1118 = +223 ✓). Log `log_2.2_para_indisp_FIX_20260524_110128.json`.
+- ✅ **15 testes pytest novos** (143 verdes totais — quant 30 + transfer 52 + lot 19 + picking 42; transfer subiu de 37→52 com 15 testes novos cobrindo modo C `transferir_para_indisponivel`).
+- ✅ **Gotcha G031 documentado**: `docs/inventario-2026-05/02-gotchas/G031-lot-migracao-por-produto.md`.
+- ✅ **C7-C10 atualizados**: SKILL.md (contrato MODO C + receitas + exemplos + armadilha G031 + composição 2.2.i), fluxo 2.2 (nova seção MODO C), ROADMAP, memória `[[skill2_transfer_interno_pattern]]` (a atualizar).
+
+**Sessão 2026-05-24 v3 (Skill 5 maturando — `operando-picking-odoo` C1-C10 + FECHA ONDA 0.4):**
+- ✅ **Verificação main**: main NÃO avançou desde último commit (merge-base = b4f7b24c = origin/main HEAD). Sem rebase necessário.
+- ✅ **Achado crítico**: G019/G020/G011/G023 já tinham FIX no service (`app/odoo/services/stock_picking_service.py`) desde 2026-05-18, mas docs/CLAUDE.md/ROADMAP marcavam ABERTO/PROPOSTO. Validei com Rafael: foco = Skill 5 + pytest baseline ANTES do C1.
+- ✅ **Fase 0 — Pytest baseline G019/G020/G011/G023**: 19 testes pré-existentes em `test_stock_picking_service.py` cobriam G019/G020/G011 (4+3+2). ADICIONEI 16 novos cobrindo G023 (8: noop, match perfeito, qty divergente, duplicata, lote não esperado, sem match, qty negativa/zero, sem linhas), `ajustar_qty_done_pelo_disponivel` (6: bate, reduz+pendência, qty_done acima, state cancel, demand zero, sem ML), `validar(linhas_esperadas=)` (2: chama consolidar antes, falha consolidar não bloqueia). **35 verdes pós-Fase 0.**
+- ✅ **Fase 1.5 — Adicionar `devolver_picking()` ao service**: novo método derivado de `fat_lf_cleanup.reverter_picking` (PROD 2026-05-20). Cria wizard `stock.return.picking` + write({}, context) + create_returns + popula qty_done + button_validate + invariante state=done. Idempotente via `origin ilike "Devolução de NAME"`. **+7 testes (42 verdes).**
+- ✅ **Fase 2 — Capinagem**: `git mv app/odoo/services/stock_picking_service.py → app/odoo/estoque/scripts/picking.py`. Shim criado em `services/` re-exportando. 7 consumidores ativos intactos (`inventario_pipeline_service`, scripts 09/16/teste_210030325/fat_lf_05, testes). **128 verdes totais (30+37+19+42).**
+- ✅ **Fase 3 — SKILL.md + CLI**: `.claude/skills/operando-picking-odoo/SKILL.md` com contrato 3 átomos + 6 receitas + 3 fluxos compostos (2.5.a/b/c) + armadilhas. `scripts/operar_picking.py` com `--modo cancelar/validar/devolver`, `--dry-run` default, exit codes 0/1/2/4.
+- ✅ **Fase 4 — C6 validação dry-run PROD**: 6 casos vs Odoo PROD (pid 321147 assigned, 321146 assigned, 321150 done, 321107 cancel — combinados com 3 modos): 100% bate plano vs estado real. Log em `/tmp/log_skill5_C6_validacao_dry_run.json`. **0 execuções `--confirmar` em PROD** (demanda-driven).
+- ✅ **Fase 5 — C7-C10**: subagente `gestor-estoque-odoo` lista skill + galho 2.5 com [folha 2.5]; ROUTING_SKILLS 46 invocaveis + 14 Skills Odoo + triggers picking (valida pendurado, devolve NF errada, 854 fantasmas); tool_skill_mapper `'operando-picking-odoo': 'Estoque Odoo (Write)'`; fluxo 2.5 escrito; 1 script SUPERADO movido (`16_cancelar_pickings_fantasmas`) + VALIDACAO.md; MAPA_SCRIPTS + este ROADMAP atualizados. **Docs G019/G020 PROPOSTO→IMPLEMENTADO; CLAUDE.md §8 atualizado removendo "G019/G020 ABERTOS"; ONDA 0.4 marcada ✅.**
+- **Limitação documentada**: átomos `criar_picking_interno` e `alterar_lote_no_picking` previstos mas sem demanda — `criar_transferencia` existe no service (usar via Python direto); `alterar_lote` é fluxo cross-skill (Skill 2.4 unreserve + Skill 2 transfer + reassign), não átomo.
+
+**Sessão 2026-05-24 v2 (Skill 2 maturando — `transferindo-interno-odoo` C1-C10):**
+- ✅ **Fast-forward main → worktree** (origem 8d755573, agora b4f7b24c — 5 commits trazidos sem conflito; 2 docs antigos `docs/inventario-2026-05/consolidacao/ROADMAP_SKILLS.md` + `ARQUITETURA_ORQUESTRADOR_ODOO.md` convertidos em ponteiros para `app/odoo/estoque/`).
+- ✅ **C1 mineração de 18 scripts** (9 lidos por mim integral + 7 por subagente Explore + 2 do main: `consolidar_lote_104000015_sal_fb`, `recuperar_aumentos_falhos`). Síntese em `/tmp/skill2-mineracao-sintese.md`.
+- ✅ **C2 service `transfer.py`** movido para `app/odoo/estoque/scripts/` + shim em `app/odoo/services/`. **Estendido com:** constantes `LOTES_MIGRACAO_VARIANTES/LOTE_MIGRACAO_CANONICO/TOL_ARREDONDAMENTO`, helpers `is_migracao`/`_lotes_migracao_ids`/`_melhor_lote_migracao_na_loc`, públicos `resolver_lote_origem/destino`, e 3 novos métodos: `transferir_entre_lotes_v2` (delega `ajustar_quant`×2 com `delta_esperado` propagado), `transferir_entre_locations` (mesmo lote, 2 locs), `transferir_quantidade_para_lote_v2` (wrapper). **33 testes pytest verdes** (14 originais preservados + 19 novos cobrindo v2 + helpers + gotchas).
+- ✅ **C3-C5 contrato + SKILL.md + CLI**: `.claude/skills/transferindo-interno-odoo/` com SKILL.md (~270 linhas) e `scripts/transferir.py` (CLI 2 modos exclusive: A lote→lote, B loc→loc; `--dry-run` default; suporta `--resetar-reserva-origem`, `--tolerancia-delta`).
+- ✅ **C6 validação dry-run vs Odoo PROD**: 3 casos validados (10 emergenciais E01 confirma estado pós-execução de 18/05; padronizar_migracao detectado bug semântico = limitação documentada; loc→loc com saldo real = DRY_RUN_OK plano completo em 47ms). Log em `/tmp/log_skill2_C6_validacao_dry_run.json`.
+- ✅ **C7 cross-refs**: subagente `gestor-estoque-odoo.md` (skills + árvore 2.2), ROUTING_SKILLS (45 invocaveis), tool_skill_mapper (`Estoque Odoo (Write)`), CLAUDE.md raiz (status skill 2).
+- ✅ **C8 folha 2.2**: `app/odoo/estoque/fluxos/2.2-realocar-saldo.md` com 8 sub-casos cobertos e gotchas-invariante detalhados.
+- ✅ **C9-C10**: 2 scripts movidos para `_validados/transferindo-interno-odoo/`: `10_executar_emergenciais_fb.py` + `padronizar_migracao.py` (sys.path `parents[2]→parents[4]`, header `arquivado`). Outros 16+ orquestradores PERMANECEM VIVOS. MAPA_SCRIPTS + ROADMAP atualizados. [VALIDACAO.md](../../scripts/inventario_2026_05/_validados/transferindo-interno-odoo/VALIDACAO.md).
+- **Limitação documentada**: CLI não cobre caso `padronizar_migracao` (consolidar 2 grafias literais ESPECÍFICAS de MIGRAÇÃO) — adicionar `--lot-id-origem`/`--lot-id-destino` quando houver demanda real.
+
+**Sessão 2026-05-24 v1 (cleanup das pendências bloqueantes + guard anti-bug — manhã):**
+- ✅ Reversão `104000037 CICLAMATO DE SODIO FB` — `+33.7319` no quant 229937 (lote `MI074-177/25` FB/Estoque): qty `5.0136 → 38.7455`. Verificado direto no Odoo. Log: [`log_2.1_reversao_ciclamato_20260524_000000.json`](../../scripts/inventario_2026_05/auditoria/log_2.1_reversao_ciclamato_20260524_000000.json).
+- ✅ Quant órfão `104000039 AROMA NATURAL - ALHO FB/Pré-Produção/Linha Manual` — quant 260657 `reserved=-0.6 → 0`. Verificado. Log: [`log_2.4_zerar_residual_orfao_aroma_20260524_000001.json`](../../scripts/inventario_2026_05/auditoria/log_2.4_zerar_residual_orfao_aroma_20260524_000001.json).
+- ✅ Comunicado dos 6 pickings tocados — gerado em [`/tmp/comunicado_pickings_20260524.md`](file:///tmp/comunicado_pickings_20260524.md), entregue ao usuário.
+- ✅ **GUARD `delta_esperado` implementado no service `quant.py`** — 3 novos params (`delta_esperado`, `tolerancia_delta`, `corrigir_para_esperado`); 2 novos status (`FALHA_DELTA_DIVERGENTE`, `EXECUTADO_AUTO_CORRIGIDO`); CLI atualizada; 7 testes pytest novos (29 total). Protege contra repetição do bug CICLAMATO em retomadas de FALHA. Detalhes em [VALIDACAO_FINAL_SESSAO §6](VALIDACAO_FINAL_SESSAO.md#6-sessão-2026-05-24-guard-delta_esperado--validação-cancelamentos-gaps-12-fechados).
+- ✅ **Cancelamentos OUT/01053 + INT/07950 validados** — todos os 6 moves cancelados com `move_dest_ids=[]`. Self-contained, sem picking espelho LF pendente. Detalhes em [VALIDACAO_FINAL_SESSAO §6](VALIDACAO_FINAL_SESSAO.md).
+- Aprendizado novo (atualizar [[feedback_ajuste_positivo_criar_saldo]]): usuário preferiu **lote real menor** (MI074-177/25 qty 5 → 38) ao **lote consolidador P-15/05** (40 → 74). Default da memória pode mudar.
+
+**Feito até 2026-05-23 (3 skills nasceram/maturaram em 2 sessões consecutivas):**
+- ONDA 0 ✅ — pacote `app/odoo/estoque/` + subagente `.claude/agents/gestor-estoque-odoo.md`.
+- **Skill 1 (`ajustando-quant-odoo`) ✅ MATURADA** — 100 ajustes em produção (104 linhas → 84 EXEC + 15 reservados retomados c/ --resetar-reserva + 1 NOOP + 4 descartes). 4 políticas de premissa cristalizadas (MIGRA → 1-quant-cobre → zerar-insuficiente → PEPS multi-quant). 5 scripts em `_validados/ajustando-quant-odoo/`. **Volume efetivo: 79,65% (4.774/5.994 un); 53 COMPLETA + 45 PARCIAL + 1 OVER (104000037 CICLAMATO bug operacional, excesso 33.73 un reversível) + 1 ZERO + 4 DESCARTE.** Bug documentado em VALIDACAO.md §"Bug operacional".
+- **Skill 3 (`operando-reservas-odoo`) 🟡 mín viável** — 3 átomos (`cancelar_moves_orfaos`, `cancelar_picking_inteiro`, `zerar_reserved_residual`). Caso real: 6 pickings/15 MLs órfãs limpas + 15 quants residuais zerados em ~4s. 3 scripts em `_validados/operando-reservas-odoo/`. **Gotcha descoberto:** `--resetar-reserva` (skill 1) + unlink ML (skill 3) gera `reserved < 0` → exige `zerar_reserved_residual` ao final do fluxo. Documentado em [fluxo 2.4](fluxos/2.4-cancelar-reserva-orfa.md).
+- **Skill 9 (`consultando-quant-odoo`) 🟡 mín viável (ANCILLARY READ)** — 2 átomos (`listar_quants` 8-param + `auditar_pares`). Nasceu sob demanda (auditoria pós-WRITE). Dogfood: investigação 4856125 + classificação correta de 104 pares (17+46+39+2=104 ✓). [Fluxo 2.9](fluxos/2.9-consulta-quant-ao-vivo.md).
+- **C7-C10 nas 3 skills:** subagente `gestor-estoque-odoo.md` lista as 5 skills (3 escopadas + 2 utils), ROUTING_SKILLS Odoo 12 entries, tool_skill_mapper 3 entradas (`Estoque Odoo (Write)/(Read)`), fluxos 2.1/2.4/2.9 escritos, MAPA_SCRIPTS 2 seções novas (`scripts/reserva.py` + `scripts/consulta_quant.py`), 8 scripts movidos para `_validados/`.
+
+**Status global do esforço de migração (atualizado 2026-05-24 v7):**
+- **1/8 skills WRITE MATURADA** (skill 1 `ajustando-quant-odoo`)
+- **5/8 skills WRITE mín viável** (skill 2 `transferindo-interno-odoo` 🟡 + skill 2.4 `operando-reservas-odoo` 🟡 **+2 átomos v7** + skill 5 `operando-picking-odoo` 🟡 + skill 4 `operando-mo-odoo` 🟡 + skill 6 `planejando-pre-etapa-odoo` 🟡)
+- **1 skill READ ancillary mín viável** (skill 9 `consultando-quant-odoo` 🟡 **+2 átomos v7 — cross-ref reverso ML→quant via tupla G030**)
+- **2/8 skills WRITE não iniciadas** (escriturando, faturando — este último DESBLOQUEADO pela ONDA 0.4 fechada em v3)
+- **ONDA 0.4 ✅ FECHADA** em 2026-05-24 v3 (G019/G020 codificadas no `picking.py` + 8 testes; destrava Skill 8 faturando)
+- **NOVO Fluxo 2.6** (v7): cobre gap arquitetural "tratar reserva ATIVA pré-transferência" — composição Skills 9+2.4+5+2 com 5 caminhos seguros (A=cancel/B=devolver/C=unreserve/D=outro lote/E=cirurgia órfã); regra inviolável no prompt do subagente.
+- **NOVO Gotcha G030** (v7): `stock.move.line.quant_id` é COMPUTED `store: False` — filtro IGNORADO pelo Odoo; cross-ref via tupla `(product_id, lot_id, location_id, company_id)`.
+- **15 scripts SUPERADOS** (em `_validados/`); ~90 scripts ad-hoc continuam VIVOS.
+- **Baseline pytest: 229 verdes** (194 anterior + 19 Skill 9 query novos + 14 Skill 2.4 reserva novos + 2 a mais nos existing aleatórios).
+
+**Próximo passo (escolha do usuário em sessão futura, pós-2026-05-24 v6):**
+1. **Skill 8 (`faturando-odoo`)** — **DESBLOQUEADA** pela ONDA 0.4 fechada (G019/G020 codificadas + 8 testes). É a skill MACRO (NF→SEFAZ); requer cuidado especial — irreversível. Service `InventarioPipelineService` existe; falta capinagem + SKILL.md + CLI. ~6-8h.
+2. **Skill 7 (`escriturando-odoo`)** — entrada IC + DFe. Depende de contrato estável de transfer (Skill 2 ✅) e picking (Skill 5 ✅). Caminho para fluxos 1.x (inter-company).
+3. **Skill 6 extensões** (sessão futura): C9 do `09b_executar_pre_etapa.py` (capina para `orchestrators/pre_etapa_executor.py` macro C3) quando padrão for usado novamente; smoke `--confirmar` real em PROD do `--modo planejar` (com inputs reais dos scripts 01+02); validação `listar-onda`/`aprovar-onda` em PG local com tabela migrada.
+4. **Fluxos compostos da Skill 2** — escrever folhas filhas (`2.2.D010`, `2.2.D012`, `2.2.D013`) para cobrir orquestradores de planilha. Implementar somente se padrão se repetir com 2+ casos reais cada.
+5. **Auditoria G031** (pendência §9.7 v4): `grep -rn "LOTES_MIGRACAO_POR_COMPANY\[" app/ scripts/` em sessão futura — confirmar zero callers reais (já confirmado em CR3 via grep, reauditar periodicamente).
+6. **Skill 5 — extensões**: `criar_picking_interno` ou `alterar_lote_no_picking` se surgir demanda real ad-hoc.
+7. **Skill 4 — extensões**: `mrp_unbuild` (skill futura `mrp-unbuild-odoo` se padrão 3.1.c repetir 2+ casos); `alterar_mo` como fluxo cross-skill 3.2 se padrão repetir.
+8. **Skill 2 — extensões**: arg `--lot-id-origem`/`--lot-id-destino` na CLI (cobre `padronizar_migracao` sem ambiguidade).
+9. **Skill 3 / Skill 9 — completar átomos previstos** conforme demanda real (não especulativo).
+10. **Demandas reais** do dia-a-dia continuam orientando — cada caso real revela novos átomos necessários (provado em 5 sessões consecutivas: skills 1/2.4/9/2/5/4 nasceram/maturaram).
+
+**Mentalidade (não esquecer):** átomo versátil auto-seguro + `--dry-run`→`--confirmar` (CLAUDE.md §1); **`fluxos>>skills`** (caso novo = folha de fluxo, não skill nova); premissas resolvidas via `_utils` (não copiar); **NUNCA criar script ad-hoc** — capinar a skill; operação VIVA = preservar os ad-hoc restantes até cada átomo maturar (arquivar SUPERADO só após checklist C1-C10 da skill correspondente). **Skills nascem de demandas reais** — sessão 23/05 provou: 3 skills criadas a partir de 2 casos reais (104 ajustes negativos + auditoria pós-WRITE).
+

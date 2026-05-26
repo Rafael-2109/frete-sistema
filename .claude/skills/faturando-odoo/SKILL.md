@@ -119,7 +119,7 @@ gotchas-invariante:
   - G023 company_id forcado em moves (atomo Skill 5)
   - G034 fiscal_position DEV_* (corrigir_fiscal_setup F5d.7)
   - G035 barcode invalido (sub-skill C5 G035 pre-flight)
-  - G037 (v18 NOVO) operacao nao cadastrada exige cfop_esperado da MATRIZ_INTERCOMPANY
+  - G037 (v18 REESCRITO Fase 0) picking ETAPA F criado MANUALMENTE sem PO precisa de `l10n_br_cfop_id` explicito (CAMINHO B PALIATIVO — refator v19+ remove). NAO se aplica ao fluxo normal account.move+PO+fiscal_position que continua informacional.
   - D-OPS-3 tracking='none' (atomo Skill 5 remove lot_name automaticamente)
   - D-OPS-5 produto sem lote (Skill 2 aceita_tracking_none=True)
   - HARD_FAIL_CONFIG_ERRORS aborta batch SEFAZ (D7)

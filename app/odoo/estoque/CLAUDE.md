@@ -25,6 +25,20 @@ Os 105 scripts ad-hoc nasceram de "não procurar → recriar" sob pressão. Obje
 >
 > O subagente **pesquisa premissas → navega a árvore → compõe átomos → confirma**. NUNCA recompõe lógica perigosa do zero, NUNCA inventa SQL/XML-RPC, NUNCA cria script ad-hoc.
 
+### 1.1 INVARIANTE: 1 SKILL = 1 OBJETO ODOO. SEM EXCEÇÃO. (reforçado v18 Fase 0)
+
+> Uma skill L2 atômica tem **EXATAMENTE 1 OBJETO Odoo principal**. Quando o caso de negócio precisa de 2+ objetos, é **FLUXO L3** (Markdown em `fluxos/`), NÃO uma skill nova.
+>
+> **Exemplos corretos**:
+> - `ajustando-quant-odoo` = stock.quant (1 objeto) ✓
+> - `operando-picking-odoo` = stock.picking (1 objeto) ✓
+> - `escriturando-odoo` = account.move + DFe **APENAS PARA ENTRADA** (objeto principal: account.move da entrada; DFe é meio para chegar nele) ✓
+>
+> **Exemplo correto de COMPOSIÇÃO** (NÃO é skill nova):
+> - "Faturar + escriturar uma transferência completa" = compõe Skill 8 SAÍDA + Skill 7 ENTRADA = **FLUXO L3 1.3-transferencia-completa.md**.
+>
+> **Sinais de alerta**: se você está prestes a criar skill que toca `account.move` + `stock.picking` + Playwright SEFAZ + `RecebimentoLf` — PARE. Isso é orchestrator C3 (L1 macro), não skill L2. Vai para `orchestrators/`, NÃO entra no catálogo §6 de skills L2.
+
 ## 2. AS 5 CAMADAS
 
 ```
@@ -54,6 +68,17 @@ Para muitos fluxos comporem poucos átomos, cada skill DECLARA um contrato (bloc
 - modos:         --dry-run (default) → --confirmar
 ```
 **Composição (pipe):** o `output` de um átomo alimenta o `input` do próximo. **Regra de ouro:** o átomo NUNCA embute outro fluxo. `faturando-odoo` SÓ fatura (saída); `escriturando-odoo` SÓ escritura (entrada). Quem une é o FLUXO (L3).
+
+### 3.1 ORCHESTRATOR C3 NÃO É SKILL (reforçado v18 Fase 0)
+
+> Skills L2 são átomos com **1 objeto Odoo**. Quando um caso de negócio exige composição (SEFAZ irreversível, recovery iterativo, multi-step com checkpoint), surge um **orchestrator C3 macro** em `orchestrators/`. **Orchestrator C3 NÃO É skill L2**:
+>
+> - Mora em `app/odoo/estoque/orchestrators/`, NÃO em `.claude/skills/`
+> - Aparece na **Tabela 2 do catálogo §6** (Orchestrators C3), NÃO na **Tabela 1** (Skills L2 atômicas)
+> - O entry-point externo via SKILL.md pode existir (ex.: `.claude/skills/faturando-odoo/SKILL.md`) — mas isso é **FACHADA** apontando para o orchestrator; o orchestrator continua sendo C3 macro, não skill atômica.
+> - O orchestrator macro **COMPÕE skills L2 chamando-as** — mas a composição correta passa por **FLUXOS L3** quando 2+ skills L2 estão envolvidas em sequência inteligente (não loop trivial).
+>
+> **Anti-padrão histórico (v17→v17.5→v18)**: catálogo §6 antigo listou orchestrators C3 (faturando-odoo, escriturando-odoo, planejando-pre-etapa-odoo) na MESMA tabela das skills L2 atômicas. Isso legitimou que orchestrators chamassem outras skills INLINE (violação §6 antipadrão 3). Corrigido v18 Fase 0 com **3 tabelas distintas** no §6.
 
 ### 🚨 ARMADILHA SUPERADA v17.5 — "atomo NUNCA embute outro fluxo" foi violado em v17 (custou 1 sessão para corrigir)
 
@@ -92,97 +117,98 @@ Poucos átomos (~8, estáveis) ⟷ MUITOS fluxos (dezenas, crescem). Regras:
 
 O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem citar skills. Ao descer num ramo, carrega a **folha sob demanda** (`fluxos/<id>-<slug>.md`). Convenção e formato da folha: `app/odoo/estoque/fluxos/README.md`.
 
-## 6. CATÁLOGO DE ÁTOMOS (skills ~8 WRITE + 1 READ ancillary — por objeto, versáteis)
+## 6. CATÁLOGO (3 TABELAS — Skills L2 atômicas · Orchestrators C3 · Fluxos L3)
 
-### Skills WRITE (8 — ordem bottom-up, ver ROADMAP_SKILLS)
+> Reorganizado v18 Fase 0 (era 1 tabela só "Skills WRITE 8" misturando átomos L2 com orchestrators C3 macro — origem dos antipadrões §6.5).
+
+### Tabela 1 — Skills L2 ATÔMICAS (1 objeto Odoo cada — entram no catálogo de skills do agente)
 
 | Skill | Objeto Odoo | Service base (L1) | Camada | Status |
 |-------|-------------|-------------------|--------|--------|
 | `ajustando-quant-odoo` | stock.quant | `scripts/quant.py` (StockQuantAdjustmentService) | C1 | ✅ **MATURADA** (100 ajustes em prod 2026-05-23) |
-| `transferindo-interno-odoo` | transferência interna intra-empresa (lote→lote mesma loc / loc→loc mesmo lote / MIGRAÇÃO↔Indisponível) | `scripts/transfer.py` (delega `ajustar_quant`×2 com `delta_esperado` propagado; G021/G022/G027) | C2 | 🟡 **mín viável** (33 pytest verdes; 2 scripts SUPERADOS 2026-05-24; orquestradores de planilha permanecem VIVOS) |
-| `operando-mo-odoo` | mrp.production (cancelar — V1; criar/alterar sem demanda) | [`scripts/mo.py`](scripts/mo.py) (StockMOService — V1 criado 2026-05-24 v5; guard G-MO-01 furo contabil) | C2 | 🟡 **mín viável** (26 pytest verdes; 4 dry-run PROD validados; ainda 0 `--confirmar` em PROD) |
-| `operando-reservas-odoo` | stock.move.line + stock.picking + stock.quant (residual) | [`scripts/reserva.py`](scripts/reserva.py) (StockReservaService) | C1/C2 | 🟡 **mín viável** (3 átomos · 6 pickings/15 quants em prod 2026-05-23) |
-| `operando-picking-odoo` | stock.picking (cancelar/validar/devolver — criar/alterar-lote sem demanda) + **v15a: 3 átomos inter-company** (`criar_picking_inter_company` codifica D-OPS-3 · `validar_picking_inter_company` fluxo F5b + G018 · `criar_picking_entrada_destino_manual` ETAPA F G023+idempotencia origin) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **mín viável estendida v15a** (6 átomos · **61 pytest verdes** (42 + 19 novos v15a) · invariante G019/G020 fechada · 6 casos dry-run PROD 2026-05-24 v3 · smoke v15a 6 cods v14a-ops validou D-OPS-3 detection) |
-| `faturando-odoo` | **SÓ SAÍDA**: NF→robô CIEL IT→SEFAZ | [`orchestrators/faturamento_pipeline.py`](orchestrators/faturamento_pipeline.py) (v18: ~4150 LOC com pipeline A-F + recovery `executar_pipeline_resume` + SKILL.md em `.claude/skills/faturando-odoo/SKILL.md`) | C3 | 🟡 **PIPELINE COMPLETO A-F + RECOVERY LIVE v18** (72 pytest verdes — 30 v15b + 14 v16 + 19 v17 + 5 v17.5 + 8 v18 recovery; smoke dry-run PROD OK B/D/E/F + FALHA_USO; PRE-FLIGHT C5 subprocess; SKILL.md com 4 receitas + antipadroes documentados v17.5 para refator v19+) |
-| `escriturando-odoo` | **SÓ ENTRADA**: NF SEFAZ-autorizada → `RecebimentoLf` + svc externo (37 etapas LF→FB) | [`scripts/escrituracao.py`](scripts/escrituracao.py) (EscrituracaoLfService) — V1 STRICT LF→FB; invoca `RecebimentoLfOdooService` externo (4562 LOC NAO MEXER) | C3 | 🟡 **mín viável V1 LIVE v17.5** (10 pytest verdes em `test_escrituracao_lf_service.py`; smoke dry-run PROD cod 104000003 identifica invoice 629364 PERDA_LF_FB em 765ms; G-RECLF-2/3 + HIGH-3/4/5 + D17 + D9 encapsulados intra-atomo) |
-| `planejando-pre-etapa-odoo` | planner+executor D007 (READ Odoo + WRITE banco local + **WRITE Odoo C3 macro v9**; 5 modos: planejar/propor/listar/aprovar/**executar-onda**) | [`scripts/pre_etapa.py`](scripts/pre_etapa.py) (PreEtapaEstoqueService + 7 helpers + 4 constantes; capinado v6) + [`orchestrators/pre_etapa_executor.py`](orchestrators/pre_etapa_executor.py) (executar_onda_pre_etapa compondo Skills 1+2; capinado v9) | C2 + C3 | 🟡 **mín viável COMPLETA** (42 pytest verdes — 21 service + 21 orchestrator; 5 modos CLI; hash sha256 anti-replay; capina 03b+04b+09b — ciclo completo planejar→propor→aprovar→executar fechado) |
+| `transferindo-interno-odoo` | transferência interna intra-empresa (lote→lote mesma loc / loc→loc mesmo lote / MIGRAÇÃO↔Indisponível) | `scripts/transfer.py` (delega `ajustar_quant`×2 com `delta_esperado` propagado; G021/G022/G027) | C2 | 🟡 **mín viável** (33 pytest verdes; 2 scripts SUPERADOS 2026-05-24) |
+| `operando-mo-odoo` | mrp.production (cancelar — V1; criar/alterar sem demanda) | [`scripts/mo.py`](scripts/mo.py) (StockMOService — guard G-MO-01 furo contabil) | C2 | 🟡 **mín viável** (26 pytest verdes; 4 dry-run PROD validados) |
+| `operando-reservas-odoo` | stock.move.line + stock.quant (residual) — opera reservas órfãs do picking | [`scripts/reserva.py`](scripts/reserva.py) (StockReservaService) | C1/C2 | 🟡 **mín viável** (3 átomos · 6 pickings/15 quants em prod) |
+| `operando-picking-odoo` | stock.picking (cancelar/validar/devolver + 3 átomos inter-company v15a: `criar_picking_inter_company`, `validar_picking_inter_company`, `criar_picking_entrada_destino_manual`) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **mín viável estendida v15a** (6 átomos · 61 pytest · G019/G020 fechada) |
+| `escriturando-odoo` ⚠️ V1 STRICT | account.move + DFe (entrada — escritura NF SEFAZ-OK no destino) | [`scripts/escrituracao.py`](scripts/escrituracao.py) (EscrituracaoLfService) | **HÍBRIDO** — invoca svc externo `RecebimentoLfOdooService` (37 etapas LF→FB; 4562 LOC NAO MEXER); v17.5 V1 = atomo macro encapsulando svc inteiro (antipadrão 1) | 🟡 **V1 STRICT (antipadrão) — refator v19+ extrair átomos comuns**: `buscar_ou_criar_dfe`, `configurar_dfe`, `gerar_po_from_dfe`, `configurar_po`, `confirmar_po`, `criar_invoice_from_po`, `configurar_invoice`, `calcular_imposto`, `postar_invoice`, `finalizar_lancamento` |
 
-### Skills READ ancillary (1 — sob demanda, complementam as WRITE)
+> **Nota Tabela 1**: estas são as únicas skills WRITE atômicas L2. Cada uma tem `.claude/skills/<nome>/SKILL.md` + scripts/. O subagente as conhece pela árvore de decisão.
+
+### Tabela 2 — Skills READ ancillary L2 (sob demanda — complementam as WRITE)
 
 | Skill | Objeto Odoo | Service base (L1) | Camada | Status |
 |-------|-------------|-------------------|--------|--------|
-| `consultando-quant-odoo` | stock.quant (read ao vivo via XML-RPC) | [`scripts/consulta_quant.py`](scripts/consulta_quant.py) (StockQuantQueryService) | READ | 🟡 **mín viável** (2 átomos · `listar_quants` + `auditar_pares` · auditoria pós-WRITE validada) |
+| `consultando-quant-odoo` | stock.quant (read ao vivo via XML-RPC) — 3 modos: quants / move-lines / pickings | [`scripts/consulta_quant.py`](scripts/consulta_quant.py) (StockQuantQueryService) | READ | 🟡 **mín viável** (3 átomos · cross-ref ML→quant via tupla G030) |
 
-### Sub-skills PRE-FLIGHT (1 — auditoria de cadastro fiscal antes de SEFAZ)
+### Tabela 3 — Orchestrators C3 macros (L1 — NÃO são skills L2)
 
-| Sub-skill | Objeto Odoo | Service base (L1) | Camada | Status |
-|-----------|-------------|-------------------|--------|--------|
-| `auditando-cadastro-fiscal-odoo` | product.product + l10n_br_ncm + stock.lot (G014) + AjusteEstoqueInventario (D-OPS-2) | [`scripts/cadastro_fiscal_audit.py`](scripts/cadastro_fiscal_audit.py) (CadastroFiscalAuditService) | READ-only + WRITE opcional G035 | 🟡 **mín viável V1** (perfil 'inventario'; cobre G017+G018+G035+G014 + D-OPS-2/3; **14 pytest verdes** + smoke PROD 6 cods 987ms; delegada pela Skill 8 v15+) |
+> Compõem skills L2 para casos de negócio complexos (SEFAZ irreversível, recovery iterativo, multi-step com checkpoint). **NÃO aparecem no catálogo de skills do subagente**; ficam acessíveis via FACHADA SKILL.md ou diretamente em Python. Aceita `--dry-run` + `--confirmar` como qualquer átomo.
+
+| Orchestrator | Composição | Service (L1) | Status | SKILL.md fachada |
+|--------------|-----------|--------------|--------|------------------|
+| `faturando-odoo` (Skill 8) | Skill 5 atomos inter-company + Playwright SEFAZ + Skill 7 atomo escriturando + Skill 2 v2 (ETAPA A) + Skill 5 atomo entrada destino (ETAPA F — antipadrão 2, refator v19+ via FLUXO L3) | [`orchestrators/faturamento_pipeline.py`](orchestrators/faturamento_pipeline.py) (~4150 LOC com pipeline A-F + recovery `executar_pipeline_resume`) | 🟡 **PIPELINE A-F + RECOVERY LIVE v18** (72 pytest verdes; smoke PROD dry-run OK B/D/E/F; PRE-FLIGHT C5 subprocess) | `.claude/skills/faturando-odoo/SKILL.md` (FACHADA — 4 receitas + antipadrões v17.5) |
+| `planejando-pre-etapa-odoo` (Skill 6) | Skills 1+2 via `executar_onda_pre_etapa` (READ Odoo + WRITE banco local + WRITE Odoo C3 macro) | [`scripts/pre_etapa.py`](scripts/pre_etapa.py) (planner) + [`orchestrators/pre_etapa_executor.py`](orchestrators/pre_etapa_executor.py) (executor) | 🟡 **mín viável COMPLETA v9** (42 pytest verdes; 5 modos: planejar/propor/listar/aprovar/executar-onda) | (sem fachada externa; CLI direto) |
+
+> **Sinais de orchestrator C3 (vs skill L2 atômica)**: toca 2+ objetos Odoo · invoca service externo + faz agregação · multi-step com checkpoint · usa Playwright/RecebimentoLf/RecLf etc. Se ≥1 sinal, é C3, vai para Tabela 2; NÃO entra na Tabela 1.
+
+### Tabela 4 — Sub-skills PRE-FLIGHT (auditoria fiscal antes de SEFAZ)
+
+| Sub-skill | Objeto Odoo | Service (L1) | Camada | Status |
+|-----------|-------------|--------------|--------|--------|
+| `auditando-cadastro-fiscal-odoo` | product.product + l10n_br_ncm + stock.lot (G014) + AjusteEstoqueInventario (D-OPS-2) | [`scripts/cadastro_fiscal_audit.py`](scripts/cadastro_fiscal_audit.py) (CadastroFiscalAuditService) | READ-only + WRITE opcional G035 | 🟡 **V1 'inventario'** (cobre G017+G018+G035+G014 + D-OPS-2/3; 14 pytest; delegada pela Skill 8 v15+) |
+
+### Tabela 5 — Fluxos L3 (Markdown — compõem múltiplos átomos)
+
+> Folhas em `app/odoo/estoque/fluxos/`. Carregadas SOB DEMANDA pelo subagente.
+
+**Escritas (✅)**: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1.
+**Pendentes (⬜)**: 1.1.1.1, 1.1.1.2, 1.1.1.3, 1.1.2, 1.1.3, **1.2.1** (escriturar DFe industr), 1.3 (transferência completa), 2.3 (transferir saldo entre códigos).
+
+> Galho 1 inteiro (NF inter-company) está ⬜ porque os átomos certos (Skill 7 ABRANGENTE + Skill 5 `preencher_lotes_picking`) ainda não existem. Refator v19+ desbloqueia escrita das folhas 1.x.
+
+---
 
 Não-skills: `lot` (stock.lot) = **utils** em `_utils.py`. Leitura/diff/SOT batch (~33 scripts) = continuam ad-hoc operação viva.
 Mapeamento script-fonte→átomo: `docs/inventario-2026-05/consolidacao/MAPA_SCRIPTS.md`. Checkpoints: `app/odoo/estoque/ROADMAP_SKILLS.md`.
 
-## 6.5 ANTIPADRÕES DETECTADOS v17.5 — REFATOR v19+ (documentado v18)
+## 6.5 ANTIPADRÕES DETECTADOS — REFATOR v19+ (CAUSA RAIZ + CONSEQUÊNCIA + COMO EVITAR)
 
-> Lições adicionais da auditoria Rafael 2026-05-26 (após v17.5). Documentadas
-> aqui para que sessões futuras NÃO os reintroduzam ou esqueçam. Refator pleno
-> agendado v19+ (escopo MUITO ALTO — cross-modulo).
+> Reescrito v18 Fase 0. Antes era lista enumerativa; agora cada antipadrão tem CAUSA RAIZ + CONSEQUÊNCIA + COMO EVITAR (pattern para o agente futuro identificar e bloquear).
 
-### Antipadrão 1: Skill 7 V1 STRICT (raise NotImplementedError)
-- Átomo `EscrituracaoLfService.criar_recebimento_orchestrado` raise se
-  `cnpj_emitente != LF` OU `company_id_recebedor != FB`. Limita Skill 7 a 1
-  direção (LF→FB).
-- **Correto**: Skill 7 deveria ser **ATÔMICA mas ABRANGENTE** (1 objeto Odoo:
-  DFe/account.move). Limites = FLUXOS + CONSTANTS + PRE-FLIGHT, NÃO o átomo.
-- **Esperado v19+**: extrair átomos COMUNS entre `RecebimentoLfOdooService`
-  (37 steps) + `LancamentoOdooService` (16 etapas — fretes/CTe) +
-  `escriturar_dfe_lf.py` (FLUXO A inventário). Átomos esperados:
-  `buscar_ou_criar_dfe`, `configurar_dfe`, `gerar_po_from_dfe`,
-  `configurar_po`, `confirmar_po`, `criar_invoice_from_po`,
-  `configurar_invoice`, `calcular_imposto`, `postar_invoice`,
-  `finalizar_lancamento`.
-- Tendência futura (Rafael): `RecebimentoLfOdoo` + `LancamentoOdoo` viram
-  WRAPPERS dos átomos Skill 7 (inversão da relação atual).
+### AP1 — Skill 7 V1 STRICT (`raise NotImplementedError` em pre-cond)
 
-### Antipadrão 2: ETAPA F orchestrator cria picking manual via Skill 5
-- ETAPA F invoca `criar_picking_entrada_destino_manual` (Skill 5) que cria
-  picking SEM PO + partner_id (caminho B paliativo).
-- **Correto** (caminho A fiscalmente correto): ETAPA F deveria ser FLUXO L3
-  que compõe:
-  - Skill 7: `escriturar_dfe(...)` → PO criada → picking nativo (com PO+partner)
-  - Skill 5: `preencher_lotes_picking(picking_id, lote='MIGRAÇÃO')` (átomo a criar)
-  - Skill 7: `criar_invoice_from_po(po_id)` → ENTIN CFOP 1901 derivado pelo
-    motor fiscal via `l10n_br_tipo_pedido='serv-industrializacao'`
-- **Esperado v19+**: criar FLUXO L3 `1.2.1-escriturar-dfe-industrializacao.md`
-  + reescrever ETAPA F para invocar FLUXO; `criar_picking_entrada_destino_manual`
-  permanece como CAMINHO B paliativo documentado (DFe demora real).
+- **CAUSA RAIZ**: V1 escopo restrito a LF→FB para destravar Skill 8 ETAPA E. Limite implementado via `raise` no átomo (em `escrituracao.py:208-218`) em vez de via FLUXOS L3 + CONSTANTS + PRE-FLIGHT.
+- **CONSEQUÊNCIA**: skill atômica L2 deveria ser **versátil** (§1) servindo N fluxos variando args. V1 STRICT a fixou em 1 direção. Operador NÃO consegue planejar CD→FB hipotético em dry-run (raise mata antes do check).
+- **COMO EVITAR**: ao criar nova skill, garantir **ABRANGÊNCIA desde o início**. Pre-cond bloqueia em REAL-RUN, não em DRY-RUN. Limites legítimos vivem em FLUXOS L3 (que escolhem args válidos) + CONSTANTS (que mapeiam direções suportadas) + PRE-FLIGHT (que audita cadastro). Nunca via `raise NotImplementedError` no átomo.
+- **REFATOR v19+**: extrair átomos COMUNS entre `RecebimentoLfOdooService` (37 steps, NÃO MEXER) + `LancamentoOdooService` (16 etapas, NÃO MEXER) + `escriturar_dfe_lf.py` (FLUXO A inventário). Átomos esperados: `buscar_ou_criar_dfe`, `configurar_dfe`, `gerar_po_from_dfe`, `configurar_po`, `confirmar_po`, `criar_invoice_from_po`, `configurar_invoice`, `calcular_imposto`, `postar_invoice`, `finalizar_lancamento`. Tendência: `RecebimentoLfOdoo` + `LancamentoOdoo` viram WRAPPERS dos átomos Skill 7.
 
-### Antipadrão 3 (relacionado): orchestrator Skill 8 chamando atomos INLINE
-- Constituição §6 reforçada: "Fluxo >> Skill". Atomos isolados ainda OK no
-  orchestrator (Skill 5/7 → 1 invocação), mas COMPOSIÇÕES devem ser FLUXOS L3.
-- v17.5 ETAPA F chama Skill 5 átomo direto do orchestrator — viola §6
-- v17.5 ETAPA E chama Skill 7 átomo do orchestrator — viola §6 (mas menos grave
-  que v17 que era ~420 LOC inline)
-- **Esperado v19+**: extrair ETAPA E e ETAPA F do orchestrator para FLUXOS L3;
-  orchestrator Skill 8 = SÓ SAÍDA (A→B→C→D); FLUXO L3 1.3 compõe Skill 8 saída
-  + Skill 7 entrada.
+### AP2 — Orchestrator Skill 8 ETAPA F invoca Skill 5 atomo INLINE (caminho B paliativo)
 
-### Antipadrão 4: V1 STRICT pre-cond ANTES de dry-run check
-- Skill 7 raise `NotImplementedError` mesmo em `dry_run=True`. Operador NÃO
-  consegue "planejar" um CD→FB hipotético.
-- **Esperado v19+**: ao refatorar Skill 7 ABRANGENTE, dry-run sempre deve
-  planejar (mesmo direções não implementadas); só write-path raise.
+- **CAUSA RAIZ**: DFe demora ~30min para aparecer no Odoo CIEL IT, bloqueando o caminho fiscalmente correto (DFe→PO→picking nativo). v17.5 criou caminho B paliativo: orchestrator chama `criar_picking_entrada_destino_manual` (Skill 5) que cria picking SEM PO+partner.
+- **CONSEQUÊNCIA**: viola §3 ("átomo NUNCA embute outro fluxo") + §3.1 ("orchestrator C3 NÃO é skill"). 8 pickings INV-* PT 19 criados manualmente em PROD que Rafael identificou que **NÃO deveriam ser necessários** — caminho A correto cria picking via DFe→PO automaticamente.
+- **COMO EVITAR**: ao implementar etapa de orchestrator que precise de 2+ skills, criar **FLUXO L3** e fazer orchestrator chamar o FLUXO (não as skills direto). Composição inteligente = FLUXO L3, NÃO inline.
+- **REFATOR v19+**: criar FLUXO L3 `1.2.1-escriturar-dfe-industrializacao.md` compondo: Skill 7 `escriturar_dfe(...)` → PO criada → picking nativo (com PO+partner) → Skill 5 `preencher_lotes_picking(picking_id, lote='MIGRAÇÃO')` (átomo a criar) → Skill 7 `criar_invoice_from_po(po_id)` → ENTIN CFOP 1901 derivado pelo motor fiscal via `l10n_br_tipo_pedido='serv-industrializacao'`. Reescrever ETAPA F orchestrator para invocar FLUXO; `criar_picking_entrada_destino_manual` permanece como CAMINHO B paliativo documentado (DFe demora real).
 
-### Gotcha relacionado: G037 (NOVO v18) — Operação não cadastrada exige CFOP explícito
+### AP3 — Orchestrator C3 chamando atomos INLINE (origem dos AP1+AP2)
 
-- `MATRIZ_INTERCOMPANY[acao]['cfop_esperado']` NÃO é apenas informacional.
-  Quando operação não está cadastrada no Odoo (PT genérico, fiscal_position
-  incompleta, tipo_pedido genérico no DFe), motor fiscal aplica CFOP de default.
-- Mitigação V1 (Skill 8 v17.5): setar `l10n_br_cfop_id` explícito via
-  `cfop_esperado`.
-- Mitigação V2 correta (refator v19+): Skill 7 escritura DFe com
-  `l10n_br_tipo_pedido` correto → motor fiscal deriva CFOP automaticamente.
-- Doc: `docs/inventario-2026-05/02-gotchas/G037-operacao-nao-cadastrada-exige-cfop-explicito.md`
+- **CAUSA RAIZ**: catálogo §6 antigo (pré-v18) misturava skills L2 atômicas com orchestrators C3 macros na MESMA tabela. Quando "skill" pode ser orchestrator, virou natural que orchestrator chamasse outras skills INLINE. v17 levou ao extremo: 420 LOC de RecLF inline em `executar_etapa_e`.
+- **CONSEQUÊNCIA**: orchestrator vira god-object. Acoplamento direto a services externos (RecebimentoLfOdoo, LancamentoOdoo). Teste isolado fica difícil. Refator vira impossível.
+- **COMO EVITAR**: 3 tabelas distintas no §6 (Skills L2 / Orchestrators C3 / Fluxos L3) já implementadas v18 Fase 0. Sempre que orchestrator C3 precisar invocar skill, parar e perguntar: "1 invocação só? OK. 2+? Precisa de FLUXO L3."
+- **REFATOR v19+**: extrair ETAPA E e ETAPA F do orchestrator `faturando-odoo` para FLUXOS L3. Orchestrator Skill 8 fica SÓ SAÍDA (A→B→C→D); FLUXO L3 1.3 compõe Skill 8 SAÍDA + Skill 7 ENTRADA + opcional FB→CD.
+
+### AP4 — V1 STRICT raise ANTES de dry-run check (sub-padrão de AP1)
+
+- **CAUSA RAIZ**: `escrituracao.py:206-217` faz pre-cond check ANTES de verificar `dry_run`. Raise mata antes do plano poder ser mostrado.
+- **CONSEQUÊNCIA**: API footgun pequeno. Operador roda dry-run para PLANEJAR um cenário hipotético (mesmo sem suporte real) — não consegue.
+- **COMO EVITAR**: dry-run SEMPRE planeja (mesmo direções não implementadas — retorna `DRY_RUN_NAO_IMPLEMENTADO` com plano hipotético). Pre-cond raise APENAS no caminho de WRITE (após `if dry_run: return plano`).
+- **REFATOR v19+**: junto com AP1, ao reescrever Skill 7 ABRANGENTE, garantir dry-run-first.
+
+### AP5 — Criar gotcha sem ler docstrings de CONSTANTS (lição G037 v18)
+
+- **CAUSA RAIZ**: criei G037 em v18 baseado em "intuição de uso prático do `cfop_esperado`" sem ler `operacoes_fiscais.py:17` que JÁ DIZIA "informacional/log. Real e decidido pelo Odoo". Rafael perguntou "voce leu esses 2 arquivos?" e expôs o erro.
+- **CONSEQUÊNCIA**: G037 v18 documenta antipadrão com premissa errada. Próxima sessão lê e usa premissa falsa.
+- **COMO EVITAR**: ANTES de criar gotcha sobre operações fiscais, ler `operacoes_fiscais.py` + `picking_types.py` **INTEIROS** (não apenas grep). Confirmar se o gotcha proposto contradiz docstring existente.
+- **CORREÇÃO v18 Fase 0**: G037 reescrito com escopo restrito ao caminho B paliativo (picking ETAPA F manual sem PO). `cfop_esperado` continua **informacional para fluxo normal** com PO+fiscal_position; vira **fallback necessário** apenas no caminho B (que será removido em refator v19+).
 
 ---
 
@@ -223,15 +249,16 @@ Papel: orquestrar operações de escrita + **pesquisar premissas obrigatórias**
 app/odoo/estoque/
   __init__.py                          fachada
   CLAUDE.md                            este doc (constituição)
-  ROADMAP_SKILLS.md                    task-list da migração (transitório) — HANDOFF v13 atualizado
-  VALIDACAO_FINAL_SESSAO.md            historico consolidado das sessoes (§1-§16)
-  PLANEJAMENTO_SKILL8_FATURANDO.md     **planejamento vivo MACRO Skill 8 — sobrevive N sessoes** (v13+)
-  _utils.py                            resolvers de PREMISSAS: resolver_empresa, resolver_produto, EMPRESAS (✅) + (futuro) buscar_quant, _registrar_op, norm_lote
-  scripts/                             átomos C1/C2 (quant, transfer, lot, picking, mo, reserva, pre_etapa)
-  orchestrators/                       átomos C3 macro (pre_etapa_executor ✅, faturamento_pipeline ⬜ v15+)
-  fluxos/                              folhas da árvore (L3, progressive disclosure)
+  PROTECAO_PROXIMA_SESSAO.md           ⭐ LEITURA OBRIGATÓRIA — escudo contra desvios reincidentes (v18 Fase 0)
+  ROADMAP_SKILLS.md                    task-list da migração — HANDOFF enxuto (estado atual + próximo passo)
+  VALIDACAO_FINAL_SESSAO.md            historico consolidado das sessoes (cronológico)
+  PLANEJAMENTO_SKILL8_FATURANDO.md     planejamento vivo MACRO Skill 8 (sobrevive N sessões; regra inviolável 0)
+  _utils.py                            resolvers de PREMISSAS: resolver_empresa, resolver_produto, EMPRESAS (✅)
+  scripts/                             átomos C1/C2 das skills L2 (quant, transfer, picking, mo, reserva, pre_etapa, consulta_quant, cadastro_fiscal_audit, escrituracao)
+  orchestrators/                       orchestrators C3 macros L1 (pre_etapa_executor ✅, faturamento_pipeline ✅ v18 — pipeline A-F + recovery)
+  fluxos/                              folhas L3 Markdown (progressive disclosure — galho 2/3/4 ✅; galho 1 ⬜ bloqueado por refator v19+)
 # COMPAT: app/odoo/services/<nome>_service.py vira SHIM (re-export) — preserva 105 scripts + testes ativos
-# **NOVO PATTERN v13 (skills MACRO C3 multi-sessao):** criar `PLANEJAMENTO_SKILL<N>_<NOME>.md` quando a capinagem exigir 3+ sessoes (criterio: SEFAZ irreversivel + estado distribuido + 4+ etapas dependentes). Regra inviolavel 0 do planejamento: LER inteiro + atualizar checkpoint ativo ANTES de qualquer modificacao em codigo.
+# Pattern (v13): criar `PLANEJAMENTO_SKILL<N>_<NOME>.md` quando capinagem exigir 3+ sessões (critério: SEFAZ irreversível + estado distribuído + 4+ etapas dependentes). Regra inviolável 0: LER inteiro + atualizar checkpoint ANTES de qualquer modificação em código.
 ```
 
 ## 12. INVARIANTES DE EXECUÇÃO (toda operação WRITE)
@@ -254,3 +281,64 @@ app/odoo/estoque/
 - Estrutura/shims: `docs/inventario-2026-05/consolidacao/PLANO_MIGRACAO.md`
 - IDs fixos / Gotchas Odoo: `.claude/references/odoo/IDS_FIXOS.md` · `.claude/references/odoo/GOTCHAS.md`
 - Padrão skill completo: `~/.claude/projects/.../memory/feedback_skill_padrao_completo.md`
+- ⭐ **Escudo contra desvios reincidentes (LEITURA OBRIGATÓRIA):** `app/odoo/estoque/PROTECAO_PROXIMA_SESSAO.md`
+
+---
+
+## 14. HISTÓRICO DE DESVIOS ARQUITETURAIS (documentado v18 Fase 0)
+
+> Esta seção registra DESVIOS DA DOCUMENTAÇÃO ou DO PRINCÍPIO FUNDADOR que sessões anteriores cometeram. **Cada desvio listado aqui já foi corrigido**, mas permanece registrado para que sessões futuras saibam que o problema foi detectado e tratado — e não o reintroduzam acidentalmente.
+
+### D-V18-1 — Catálogo §6 misturava skills L2 com orchestrators C3 macros
+
+- **Detectado em**: 2026-05-26 auditoria Rafael pós-v17.5
+- **Sintoma**: tabela "Skills WRITE (8)" listava `faturando-odoo` (orchestrator C3 ~4150 LOC) + `escriturando-odoo` (atomo HÍBRIDO encapsulando svc externo 4562 LOC) + `planejando-pre-etapa-odoo` (planner+executor) JUNTO com `ajustando-quant-odoo` (átomo C1 de 1 stock.quant). Misturar átomos L2 com orchestrators C3 macros legitimou os antipadrões AP2 + AP3.
+- **Correção**: §6 reorganizado em 3 tabelas distintas (Skills L2 atômicas / Orchestrators C3 / Fluxos L3). §3.1 explicitou "Orchestrator C3 NÃO é skill".
+- **Onde foi corrigido**: este `CLAUDE.md` §6 + §3.1 (v18 Fase 0).
+
+### D-V18-2 — Constituição main DESATUALIZADA vs worktree
+
+- **Detectado em**: 2026-05-26 v18 (sessão começou lendo CLAUDE.md do system-reminder = main)
+- **Sintoma**: `CLAUDE.md` do main dizia Skill 7 + Skill 8 = ⬜ não iniciado; worktree (feat/estoque-odoo) tinha Skill 7 V1 LIVE v17.5 + Skill 8 PIPELINE A-F v18. Sessão nova que abrisse main acharia que precisa COMEÇAR de zero.
+- **Correção**: worktree atualizado v18 Fase 0; merge em main em v19+ trará a constituição reorganizada.
+- **Como evitar**: PROTECAO_PROXIMA_SESSAO.md ordem de leitura — sessão DEVE estar na worktree ANTES de ler `CLAUDE.md`.
+
+### D-V18-3 — G037 v18 criado com premissa contraditória ao docstring
+
+- **Detectado em**: 2026-05-26 Rafael perguntou "voce leu esses 2 arquivos?" (operacoes_fiscais.py + picking_types.py)
+- **Sintoma**: G037 que criei dizia "`cfop_esperado` tem USO PRATICO (nao apenas log)" enquanto `operacoes_fiscais.py:17` dizia "informacional/log. Real e decidido pelo Odoo". Premissa contraditória.
+- **Causa raiz**: criei gotcha sem ler constants inteiras (`grep` em vez de `Read` completo).
+- **Correção**: G037 reescrito em v18 Fase 0 com escopo restrito ao caminho B paliativo (picking ETAPA F manual sem PO). Docstring de `operacoes_fiscais.py` clarificado para incluir o caso degenerado.
+- **AP5 codificado**: novo antipadrão "criar gotcha sem ler docstrings de constants" no §6.5.
+
+### D-V18-4 — Subagente prompt acumulava invariantes históricas ("NOVA v7", "NOVA v8"...)
+
+- **Detectado em**: 2026-05-26 v18 análise de drift documental
+- **Sintoma**: `.claude/agents/gestor-estoque-odoo.md` tinha 13 invariantes invioláveis, 7 começando com "NOVA vX — lição da sessão XYZ". Prompt cresceu sem decay.
+- **Correção**: invariantes reduzidas para 8-10 atemporais em v18 Fase 0; lições históricas viram referências `[[memory-pattern]]`.
+- **Como evitar**: PROTECAO_PROXIMA_SESSAO.md N6 — "NUNCA adicionar invariante histórica no prompt do subagente".
+
+### D-V18-5 — ROADMAP_SKILLS HANDOFF crescia sem decay (807 linhas)
+
+- **Detectado em**: 2026-05-26 v18 análise de drift documental
+- **Sintoma**: cada sessão (v13 até v18) adicionava bloco "Sessao 2026-05-XX vXX" no ROADMAP HANDOFF (~50-70 linhas/sessão). Em 10 sessões = 500+ linhas só de histórico no documento de PRÓXIMO PASSO.
+- **Correção**: histórico migrado para `VALIDACAO_FINAL_SESSAO.md` em v18 Fase 0; ROADMAP reduzido a ≤80 linhas (estado atual + próximo passo).
+- **Como evitar**: PROTECAO_PROXIMA_SESSAO.md N7 — "NUNCA adicionar bloco Sessao XYZ no ROADMAP HANDOFF".
+
+---
+
+## 15. PRINCÍPIOS QUE NÃO PODEM SER OMITIDOS (consolidado v18 Fase 0)
+
+Lista mínima de princípios que TODA sessão precisa internalizar. Se algum não está claro, **PARAR e re-ler CLAUDE.md**:
+
+1. **1 SKILL = 1 OBJETO ODOO** (§1.1). Sem exceção. 2+ objetos = orchestrator C3 (Tabela 2), não skill L2 (Tabela 1).
+2. **Orchestrator C3 NÃO é skill** (§3.1). Mora em `orchestrators/`, não no catálogo de skills.
+3. **Átomo NUNCA embute outro fluxo** (§3 regra de ouro). Composição = FLUXO L3 (Markdown).
+4. **Fluxos >> skills** (§4). Caso novo = nova FOLHA L3; nunca skill nova.
+5. **Dry-run antes do real** (§12). Pre-cond raise APENAS no caminho WRITE.
+6. **NÃO improvise** (§9). Skill não existe = parar e avisar Rafael.
+7. **Ler docstrings de CONSTANTS** antes de criar gotcha sobre operações fiscais (lição AP5/D-V18-3).
+8. **Prompt do subagente = atemporal** (D-V18-4). Lições viram memories, não inline.
+9. **ROADMAP HANDOFF = estado atual + próximo passo** (D-V18-5). Histórico em VALIDACAO.
+
+> Estes 9 itens vivem em `PROTECAO_PROXIMA_SESSAO.md` como **lista negra + lista de obrigações**, navegáveis rapidamente. Esta seção §15 é o âncora canônico.

@@ -528,7 +528,9 @@ Gotchas catalogados em `docs/inventario-2026-05/02-gotchas/`. Referencia rapida:
 | G034 | Robo CIEL IT defaults PT 66 em DEV_* | Skill 8 sub-etapa F5d.7 `garantir_fiscal_setup` |
 | G035 | product.barcode invalido quebra SEFAZ cstat=225 | Sub-skill C5 PRE-FLIGHT (auto-corrige opcional) |
 | G036 | Lote com virgula literal + lotes duplicados quebram `=` | Resolver lote por `name in [valor]` em vez de `=` |
-| **G037 v18 NOVO** | **Operacao nao cadastrada exige CFOP explicito** | **`MATRIZ_INTERCOMPANY[acao]['cfop_esperado']` tem USO PRATICO** (fallback `l10n_br_cfop_id` quando motor fiscal nao deriva via `fiscal_position_id` + `l10n_br_tipo_pedido`). Caminho A correto v19+: extrair Skill 7 escriturando-odoo ampliada que escritura DFe com `l10n_br_tipo_pedido` correto → motor fiscal deriva CFOP automaticamente. |
+| **G037 v18 REESCRITO Fase 0** | **Picking ETAPA F criado MANUALMENTE sem PO precisa de `l10n_br_cfop_id` explícito (CAMINHO B PALIATIVO)** | **Escopo RESTRITO**: APENAS picking criado pelo átomo Skill 5 `criar_picking_entrada_destino_manual` (orchestrator Skill 8 ETAPA F caminho B). NÃO se aplica ao fluxo normal (account.move criado via PO+fiscal_position que continua informacional/log conforme `operacoes_fiscais.py:17`). Caminho A correto v19+: refator Skill 7 ABRANGENTE → DFe → PO → picking nativo → motor fiscal deriva CFOP automaticamente, remove o paliativo. |
 
 **G037 detalhe completo**: `docs/inventario-2026-05/02-gotchas/G037-operacao-nao-cadastrada-exige-cfop-explicito.md`
+
+> **Lição AP5** (v18 Fase 0): versão original do G037 dizia "operação não cadastrada exige CFOP explícito" sem escopo restrito — premissa contradizia `operacoes_fiscais.py:17` ("informacional/log. Real e decidido pelo Odoo"). Erro detectado por Rafael na auditoria pós-v18. Reescrito com escopo restrito ao caminho B paliativo. Antipadrão AP5 "criar gotcha sem ler docstrings de constants" codificado em `app/odoo/estoque/CLAUDE.md §6.5`.
 - O modulo se chama `connection`, NAO `odoo_client`
