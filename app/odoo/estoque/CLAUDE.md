@@ -325,6 +325,14 @@ app/odoo/estoque/
 - **Correção**: histórico migrado para `VALIDACAO_FINAL_SESSAO.md` em v18 Fase 0; ROADMAP reduzido a ≤80 linhas (estado atual + próximo passo).
 - **Como evitar**: PROTECAO_PROXIMA_SESSAO.md N7 — "NUNCA adicionar bloco Sessao XYZ no ROADMAP HANDOFF".
 
+### D-V18-6 — Acúmulo de `PROMPT_PROXIMA_SESSAO_*.md` no root
+
+- **Detectado em**: 2026-05-26 v18 Fase 0 (auditoria Rafael — "Existem N prompts; sanitize")
+- **Sintoma**: 8 prompts cumulativos em `app/odoo/estoque/`: 1 atual + 7 com sufixo `_EXECUTED_<data>`. Sessão nova confusa sobre qual é o "vivo"; root poluído; SHA do commit em cada prompt acumulava metadata.
+- **Causa raiz**: cada sessão criava `PROMPT_PROXIMA_SESSAO.md` novo mas não havia pasta de destino para o executado; sufixo era convencionado mas sem regra clara.
+- **Correção**: criada pasta `_prompts_executados/` + movidos 8 prompts antigos para lá. Convenção atemporal codificada em `PROMPT_PROXIMA_SESSAO.md §0 + §6.2`: (1) 1 só vivo no root; (2) executado renomeado para `_prompts_executados/PROMPT_..._vXX_EXECUTED_<data>.md` ANTES do commit final; (3) §0/§1/§6 atemporais (copiar literal); (4) §2-§5 por-sessão (reescrever para N+1).
+- **Como evitar**: `PROTECAO_PROXIMA_SESSAO.md` N14 + N15. Ao terminar sessão, seguir `PROMPT_PROXIMA_SESSAO.md §6.2`.
+
 ---
 
 ## 15. PRINCÍPIOS QUE NÃO PODEM SER OMITIDOS (consolidado v18 Fase 0)

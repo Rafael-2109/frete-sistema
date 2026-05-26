@@ -39,6 +39,8 @@
 | N11 | Mexer em `app/recebimento/services/recebimento_lf_odoo_service.py` (4562 LOC) | Validado em PROD; serve de FONTE de mineração — NÃO MEXER | Regra v14a-fix |
 | N12 | Mexer em `app/fretes/services/lancamento_odoo_service.py` (16 etapas) | Idem — fonte de mineração para Skill 7 ABRANGENTE v19+ | Regra v19+ |
 | N13 | Mexer em `scripts/inventario_2026_05/09_executar_onda1_bulk.py` | SUPERADO ao final v22+; antes disso é referência viva | Regra v14a-ops |
+| N14 | Acumular múltiplos `PROMPT_PROXIMA_SESSAO_*.md` no root de `app/odoo/estoque/` | Antes de v18 Fase 0 existiam 8 prompts cumulativos — confunde a próxima sessão sobre qual é o "vivo" | `PROMPT_PROXIMA_SESSAO.md §0 + §6.2` — sempre 1 vivo no root; executado vai para `_prompts_executados/` |
+| N15 | Reescrever §0 / §1 / §6 do `PROMPT_PROXIMA_SESSAO.md` por sessão | São atemporais. Reescrever quebra a convenção e força próximas sessões a redescobrir | `PROMPT_PROXIMA_SESSAO.md §0` — apenas §2-§5 são por-sessão |
 
 ---
 
@@ -90,6 +92,13 @@
 - **Status**: REESCRITO em F0.8 (Fase 0 v18) com escopo restrito ao caminho B paliativo (picking ETAPA F manual sem PO).
 - **Como evitar**: SEMPRE ler `operacoes_fiscais.py` + `picking_types.py` INTEIROS antes de criar gotcha sobre operações fiscais (N9 acima).
 - **Onde**: `docs/inventario-2026-05/02-gotchas/G037-*.md` reescrito.
+
+### AR6 — Acúmulo de `PROMPT_PROXIMA_SESSAO_*.md` no root (v18 Fase 0)
+
+- **O quê**: até 2026-05-26 v18, existiam **8 prompts** acumulados em `app/odoo/estoque/`: `PROMPT_PROXIMA_SESSAO.md` (atual) + 7 `PROMPT_PROXIMA_SESSAO_v{15a,15b,15c,16,17,17_5}_EXECUTED_*.md` + `PROMPT_PROXIMA_SESSAO_SKILL2_EXECUTED_*.md`. Sessão nova ficava confusa: qual é o "vivo"? E o root poluído.
+- **Por que aconteceu**: cada sessão criava prompt novo sem regra clara de arquivamento; sufixo `_EXECUTED_<data>` foi convencionado mas não havia pasta de destino dedicada.
+- **Correção v18 Fase 0**: criada pasta `_prompts_executados/` + movidos os 8 prompts antigos. Convenção atemporal codificada em `PROMPT_PROXIMA_SESSAO.md §0 + §6.2`: 1 só vivo no root; executado vai para a pasta; §0/§1/§6 atemporais (copiar literal); §2-§5 por-sessão (reescrever).
+- **Como evitar**: N14+N15 acima. Ao terminar sessão, seguir `PROMPT_PROXIMA_SESSAO.md §6.2` (renomear executado + criar novo com escopo N+1 preservando §0/§1/§6 literais).
 
 ### AR5 — Catálogo §6 mistura skill L2 com orchestrator C3 (origem do problema)
 
