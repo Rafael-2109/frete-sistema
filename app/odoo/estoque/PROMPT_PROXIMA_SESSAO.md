@@ -1,34 +1,62 @@
 Continue o trabalho do orquestrador-Odoo. Worktree: /home/rafaelnascimento/projetos/frete_sistema_estoque_odoo (branch feat/estoque-odoo). main continua VIVO em paralelo. Verificar se avancou e considerar rebase ANTES de iniciar.
 
-## ⚠️ OPEN QUESTIONS — VALIDAR COM RAFAEL ANTES DE CODAR (v17.5 deixou suposicoes minhas nao-confirmadas)
+## ✅ RESPOSTAS VALIDADAS — questoes investigadas no fim da v17.5 (Rafael apontou suposicoes nao-confirmadas; investiguei antes de finalizar prompt)
 
-Durante v17.5 fiz suposicoes nao-validadas que Rafael apontou. Antes de prosseguir v18, VALIDAR explicitamente (NAO inventar):
+**Q1 — Skill 7 V1 STRICT bloqueia TRANSFERIR_CD_FB?**
+RESPOSTA: SIM, e esta CORRETO. O service externo `RecebimentoLfOdooService` (4562 LOC, NAO MEXER) eh hardcoded LF→FB→CD:
+- `COMPANY_FB=1` (recebedor); `COMPANY_LF=5` (emitente — coletado do invoice); `COMPANY_CD=4` (destino transfer FASE 6+7)
+- `CNPJ_FB='61.724.241/0001-78'` usado em filtros internos (linha 2921)
+- **NAO existe** `CNPJ_CD` para emissao no service
+- TRANSFERIR_CD_FB (CD emite NF, FB recebe) NAO eh suportado por este service — precisaria service paralelo (`RecebimentoCdFbOdooService` futuro) ou broadening do existente
+- V1 STRICT raise NotImplementedError esta correto: protege contra invocacao indevida ate' v2
 
-1. **Skill 7 V1 STRICT bloqueia TRANSFERIR_CD_FB?** — eu mesmo coloquei `raise NotImplementedError` se `cnpj_emitente != CNPJ_LF_DEFAULT OR company_id_recebedor != FB(1)`. **MAS** `ACOES_ENTRADA_FB` (operacoes_fiscais.py) inclui `TRANSFERIR_CD_FB` (CD→FB) — ou seja, a Skill 8 ETAPA E filtraria essa ação e tentaria invocar a Skill 7 com `cnpj_emitente` do **CD** (não LF). A Skill 7 V1 vai **raise** nesse caso. Suposicao minha: V1 = só LF→FB. Validar com Rafael:
-   - O service `RecebimentoLfOdooService` aceita `cnpj_emitente=CNPJ_CD`? Olhar no service externo (NAO MEXER, so ler).
-   - Ou TRANSFERIR_CD_FB usa um service diferente?
-   - Ou TRANSFERIR_CD_FB nem precisa de RecebimentoLf — entra no FB via DFe automatico do robo?
+**Q2 — As N NFs recebidas no Render — quais direcoes?**
+RESPOSTA: PROD CONFIRMA exclusivamente LF→FB. 67 RecebimentoLf no DB local (sincronizado):
+- 100% recebedor = `company_id=1` (FB)
+- 94% emitente = `'18.467.441/0001-63'` (CNPJ LF — Discovery)
+- 4 cancelados/erro sem cnpj
+- ZERO CD→FB; ZERO outras direcoes
+- Status: 57 processado, 6 erro, 4 cancelado
+- **V1 STRICT (LF→FB) alinha 100% com uso atual de PROD.** Expansao futura V2 (CD→FB) so' quando demanda real surgir.
 
-2. **As N NFs recebidas no Render** — Rafael mencionou que existem várias NFs recebidas em PROD via RecebimentoLf. **Olhar essas NFs reais**: para quais direcoes? FB→CD? CD→FB? LF→FB so? Padrao usado? Validar antes de assumir que Skill 7 V1 STRICT cobre o que o negocio precisa.
+**Q3 — Os 4 conceitos (operacao / tipo_pedido / CFOP / picking_type) sao ligados?**
+RESPOSTA: SIM, parcialmente. Mapa real:
+- `l10n_br_tipo_pedido` mora em `stock.picking.type` (NAO em `account.fiscal.position`). Ex: PT 53 FB Exped Industr → `tipo_pedido='industrializacao'`. Logo: **picking_type_id ja' deriva tipo_pedido automaticamente**.
+- CFOP eh derivado pelo motor fiscal do Odoo via `fiscal_position_id` + impostos da invoice. Nao se passa CFOP explicito ao criar invoice (Odoo decide).
+- `account.fiscal.position` NAO tem campo direto de CFOP nem tipo_pedido (validado: `cfop_keys=[]`, `tipo_pedido_keys=[]` ao listar fields_get da FP 25)
+- **Conclusao**: 2 conceitos REALMENTE independentes (`picking_type_id` + `fiscal_position_id`); os outros 2 (CFOP + tipo_pedido) sao DERIVADOS.
+- **Implicacao para MATRIZ_INTERCOMPANY**: `cfop_esperado` eh "validacao/log informacional" (Odoo decide o real); `l10n_br_tipo_pedido` eh "derivado do picking_type". MATRIZ pode simplificar — manter so' `fiscal_position_id` + `l10n_br_tipo_pedido` (para validacao), descartar `cfop_esperado` redundante. Mas isto eh refator ortogonal — NAO MEXER em v18 sem demanda.
 
-3. **4 conceitos: operacao / tipo_pedido / CFOP / picking_type estao ligados?** — eu citei como se fossem independentes (varias vezes), MAS provavelmente sao derivados uns dos outros via `fiscal_position` no Odoo. Investigar:
-   - Se eu informo `fiscal_position_id` na NF, o Odoo deriva CFOP automaticamente?
-   - Se eu informo `picking_type_id`, o Odoo deriva `l10n_br_tipo_pedido`?
-   - Quantos desses 4 sao realmente independentes (preciso informar todos) vs derivados (1 ou 2 ja resolve)?
-   - Atualizar MATRIZ_INTERCOMPANY se algum campo for redundante.
+**Q4 — PT 19 LF/IN vs PT 64 LF/RECEB/IND (qual para INDUSTRIALIZACAO_FB_LF)?**
+RESPOSTA: AMBOS sem `l10n_br_tipo_pedido` configurado (False), mesmo dest=42 LF/Estoque, mesmo src=26489 Em Trans. Industr.. Diferenca eh so' o `name`:
+- PT 19: "Recebimento (LF)" — generico
+- PT 64: "Recebimentos Industrialização (LF)" — dedicado por nome
+- Historico PROD: **4 pickings INV-* (317306, 317316, 320467, 320476) usaram PT 19** (validado SEFAZ-OK)
+- PT 19 funciona (PROD), PT 64 talvez seja "mais correto" fiscalmente — mas SEM diferenca configural detectavel via XML-RPC
+- **DECISAO v17.5 (mantida v18)**: PT 19 (alinha com precedente PROD). Trocar para PT 64 seria gratuito — requer canary fiscal sem evidencia clara de beneficio. Permanece como `PICKING_TYPE_ENTRADA_DESTINO_MANUAL[5]=19`.
 
-4. **PT 64 LF/RECEB/IND foi descartado prematuramente** — em v17.5 disse "PT 64 e' para DFe externo, nao inter-company nosso". MAS:
-   - PT 64 tem `default_location_src_id=Em Transito Industr` (mesmo de PT 19!)
-   - PT 64 esta dedicado a Recebimento Industrializacao — bate com INDUSTRIALIZACAO_FB_LF
-   - 4 pickings PROD INV-* usaram PT 19, nao PT 64 — mas isso pode ser **escolha de quem implementou** (Rafael ou script v9), nao necessariamente o ideal
-   - Validar com Rafael: PT 19 vs PT 64 pra INDUSTRIALIZACAO_FB_LF — qual eh o correto fiscalmente?
+**Q5 — Robo CIEL IT cria picking entrada AUTOMATICO no CD para TRANSFERIR_FB_CD?**
+RESPOSTA: NAO. Invoice ENTTR/2026/05/0173 (CD recebe FB, CFOP 1152) tem `picking_ids=[]` VAZIO:
+- `stock_move_id: False` (sem move associado)
+- `picking_ids: []` (sem picking ligado)
+- `picking_ok: True` (campo computed — provavelmente "esta OK do ponto de vista contabil")
+- Conclusao: **robo NAO cria picking automaticamente** para CFOP 1152 inter-filial
+- **ETAPA F canary TRANSFERIR_FB_CD esta CORRETA**: criar picking entrada manual via Skill 5 atomo `criar_picking_entrada_destino_manual` (PT 50 CD/IN/INTER, src=6, dest=32) eh NECESSARIO, nao redundante.
 
-5. **ETAPA F canary DEV_FB_LF + TRANSFERIR_FB_CD** — habilitei com flag, mas:
-   - DEV_FB_LF location_origem=26489 (Em Trans. Industr.) ASSUMIDO — sem precedente PROD
-   - TRANSFERIR_FB_CD: o robo CIEL IT do CD recebe DFe automaticamente? Se SIM, ETAPA F manual eh **redundante** (saldo dobrado)
-   - Olhar 1 NF historica de transferencia FB→CD em PROD: ela gerou picking de entrada **automatico** no CD? Se sim, ETAPA F para essa direcao DEVE ser SKIP, nao canary.
+**Q3 BONUS — `D17 ACAO_PARA_CFOP_ENTRADA`**: explicacao final.
+- Esse mapa popula `RecebimentoLfLote.cfop` (campo do model LOCAL, NAO passa ao Odoo)
+- Service externo usa `cfop` do lote para decidir como preencher lote no Odoo (CFOP 1902 = auto; outros = manual)
+- Logo: D17 eh para LOGICA INTERNA do service externo, nao para criar invoice no Odoo
 
-**REGRA**: nao codar v18 sem validar essas 5 questões com Rafael. AskUserQuestion no inicio de v18.
+---
+
+## 📋 DECISOES V18 (fundamentadas pelas respostas)
+
+1. **NAO broadening da Skill 7 V1 STRICT em v18** — alinhada com 100% de PROD; expandir CD→FB so' quando demanda real surgir.
+2. **NAO refatorar MATRIZ_INTERCOMPANY em v18** — `cfop_esperado` informacional mantido (escopo ortogonal).
+3. **PT 19 mantido para INDUSTRIALIZACAO_FB_LF** — sem evidencia de PT 64 ser melhor; alinha precedente PROD.
+4. **ETAPA F canary TRANSFERIR_FB_CD mantido** — confirmado que robo nao cria picking auto.
+5. **DEV_FB_LF canary mantido** (sem precedente PROD; fp 86 assumido) — somente real-run via Rafael pode validar fiscal.
 
 ---
 
@@ -206,7 +234,7 @@ Pytest >=520 (atual 513 +7 esperado: 3 recovery + 2 SKILL.md flow + 2 smokes wra
 96. `LOCATION_ORIGEM_POR_DIRECAO` dict varia por acao (NAO hardcode 26489).
 
 97. `PICKING_TYPE_ENTRADA_DESTINO_MANUAL` mapeia CD=50 + LF=19 (DEV_FB_LF
-    reusa LF=19; LF/RECEB/IND PT 64 NAO usar — eh para DFe externo).
+    reusa LF=19; LF/RECEB/IND PT 64 NAO usado — sem evidencia configural de ser melhor que PT 19 (ambos sem `l10n_br_tipo_pedido`); precedente PROD 4 pickings em PT 19).
 
 98. Flag `--auto-confirma-direcao-nova` obrigatoria para ETAPA F canary
     em real-run (DEV_FB_LF + TRANSFERIR_FB_CD sem precedente PROD).
@@ -247,6 +275,6 @@ Resumo:
 - Commit v17: e0a29f21
 - Commit v16: f4f964fc
 - Baseline pytest: 513 verdes em 14.53s
-- Audit Odoo 2026-05-26: PT 50 CD/IN/INTER (TRANSFERIR_FB_CD), PT 19 LF/IN confirmado (INDUSTRIALIZACAO_FB_LF), PT 64 LF/RECEB/IND descartado (DFe externo)
+- Audit Odoo 2026-05-26: PT 50 CD/IN/INTER (TRANSFERIR_FB_CD) src=6 dest=32; PT 19 LF/IN mantido (INDUSTRIALIZACAO_FB_LF — 4 pickings PROD); PT 64 LF/RECEB/IND NAO usado (sem evidencia configural de ser melhor — ambos sem tipo_pedido)
 - Memoria v17.5: [[skill7-escriturando-pattern]]
 - Memoria v17: [[skill8-pipeline-completo-v17]]
