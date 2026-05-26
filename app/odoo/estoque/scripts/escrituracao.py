@@ -45,7 +45,8 @@ import logging
 import time
 import uuid
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.odoo.constants.operacoes_fiscais import ACAO_PARA_CFOP_ENTRADA
 from app.odoo.estoque.scripts._commit_helpers import (
@@ -61,6 +62,22 @@ logger = logging.getLogger(__name__)
 CNPJ_LF_DEFAULT = '18.467.441/0001-63'
 COMPANY_ID_FB_DEFAULT = 1
 TOTAL_ETAPAS_RECLF = 37
+
+# ============================================================
+# Defaults v19+ ABRANGENTE (7 atomos: buscar_dfe, criar_dfe_*, escriturar_dfe,
+# gerar_po_from_dfe, preencher_po, confirmar_po, criar_invoice_from_po).
+# ============================================================
+FIRE_TIMEOUT_DEFAULT_S = 120      # action_X dispara: Odoo retorna timeout normal
+POLL_TIMEOUT_PO_DEFAULT_S = 1800  # robo CIEL IT materializa PO em 3-5min/madrugada a >30min/pico
+POLL_TIMEOUT_INVOICE_DEFAULT_S = 300  # invoice draft via action_create_invoice
+POLL_TIMEOUT_DFE_PROC_DEFAULT_S = 120  # action_processar_arquivo_manual parsea XML
+POLL_INTERVAL_S = 2  # gap entre polls
+
+CNPJS_NACOM: frozenset = frozenset({
+    '18.467.441/0001-63',  # LF
+    '61.724.241/0001-69',  # FB (CNPJ historicamente referido)
+    '06.057.223/0001-09',  # CD (placeholder — validar via res.company.vat)
+})
 
 
 def _registrar_auditoria(
@@ -566,3 +583,875 @@ class EscrituracaoLfService:
                 f'_resolver_pids_em_batch falhou para {len(cods)} cods: {e}'
             )
             return {}
+
+    # ============================================================
+    # v19+ ABRANGENTE — 7 atomos para compor via FLUXOS L3 1.2.1 / 1.2.2.
+    # Pattern minerado de RecebimentoLfOdooService (4562 LOC NAO MEXER).
+    # Cada atomo: 1 operacao versatil + dry-run-first (corrige AP4) +
+    # idempotencia via campos Odoo (sem assumir DB local).
+    # ============================================================
+
+    def _fire_and_poll(
+        self,
+        *,
+        fire_fn: Callable[[], Any],
+        poll_fn: Callable[[], Optional[Any]],
+        label: str,
+        poll_timeout_s: int = POLL_TIMEOUT_PO_DEFAULT_S,
+        poll_interval_s: int = POLL_INTERVAL_S,
+    ) -> Any:
+        """Helper SSL-resilient: dispara action longa + polling ate' resultado.
+
+        Pattern espelhado de `RecebimentoLfOdooService._fire_and_poll`.
+        - `fire_fn`: callable que dispara a action (espera timeout — o callable
+          deve internamente passar `timeout_override`+`expected_timeout=True`
+          para `odoo.execute_kw` se aplicavel).
+        - `poll_fn`: callable que verifica se resultado materializou
+          (retorna o resultado se sim, None se ainda nao).
+
+        Levanta `TimeoutError` se poll_timeout_s esgota sem materializar.
+        """
+        # Dispara (timeout esperado — action longa retorna antes de concluir).
+        try:
+            fire_fn()
+        except Exception as e:
+            # `expected_timeout=True` cobre timeout normal; outras exc propagam
+            err_low = str(e).lower()
+            if 'timeout' not in err_low and 'expected' not in err_low:
+                logger.warning(
+                    f'_fire_and_poll({label}): fire raised non-timeout: '
+                    f'{str(e)[:200]}'
+                )
+                raise
+
+        # Poll loop
+        elapsed = 0
+        while elapsed < poll_timeout_s:
+            try:
+                resultado = poll_fn()
+                # CR-v19+-CRIT-1: usar `is not None` para nao confundir
+                # po_id=0 (falsy) com "ainda nao materializou". Pattern do
+                # service externo RecebimentoLfOdooService preserved.
+                if resultado is not None:
+                    return resultado
+            except Exception as e:
+                logger.warning(
+                    f'_fire_and_poll({label}) poll attempt erro '
+                    f'(continuando): {str(e)[:200]}'
+                )
+            time.sleep(poll_interval_s)
+            elapsed += poll_interval_s
+
+        raise TimeoutError(
+            f'_fire_and_poll({label}): poll_timeout_s={poll_timeout_s} '
+            f'esgotado sem materializar resultado'
+        )
+
+    def buscar_dfe(
+        self,
+        *,
+        chave_nfe: str,
+        company_id: int,
+    ) -> Dict[str, Any]:
+        """READ-only: busca DFe por chave_nfe + company_id.
+
+        Retorna estado canonico para decisao do FLUXO L3 (1.2.1 vs 1.2.2).
+        NAO escreve — sem dry_run. Sempre seguro chamar.
+
+        Args:
+            chave_nfe: chave NF-e 44 digitos (`protnfe_infnfe_chnfe` no DFe).
+            company_id: company onde o DFe seria recebido.
+
+        Returns:
+            dict com:
+              encontrado: bool
+              dfe_id: int | None
+              status: str ('pendente' | 'a_processar' | 'processado' | 'ausente')
+              raw: dict — campos lidos do DFe (vazio se nao encontrado)
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'encontrado': False,
+            'dfe_id': None,
+            'status': 'ausente',
+            'raw': {},
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        # Pre-cond simples (READ — nao raise antes de tentar)
+        if not chave_nfe or len(chave_nfe.strip()) < 40:
+            out['erro'] = 'chave_nfe_invalida'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        try:
+            resp = self.odoo.search_read(
+                'l10n_br_ciel_it_account.dfe',
+                [
+                    ('protnfe_infnfe_chnfe', '=', chave_nfe.strip()),
+                    ('company_id', '=', company_id),
+                ],
+                ['id', 'l10n_br_status', 'l10n_br_situacao_dfe',
+                 'nfe_infnfe_ide_nnf', 'protnfe_infnfe_chnfe',
+                 'purchase_id'],
+            )
+        except Exception as e:
+            out['erro'] = f'odoo_search_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not resp:
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        dfe = resp[0]
+        # Mapeamento status: l10n_br_status CIEL IT
+        # '03' = pendente, '04'/'05' = processado, default = a_processar
+        st_raw = (dfe.get('l10n_br_status') or '').strip()
+        if st_raw in ('04', '05'):
+            status = 'processado'
+        elif st_raw == '03':
+            status = 'pendente'
+        else:
+            status = 'a_processar'
+
+        out['encontrado'] = True
+        out['dfe_id'] = dfe['id']
+        out['status'] = status
+        out['raw'] = dfe
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    def criar_dfe_a_partir_do_invoice_saida(
+        self,
+        *,
+        invoice_id_saida: int,
+        company_destino: int,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """Cria DFe no destino a partir do XML autorizado de account.move SAIDA.
+
+        Pattern minerado de `_step_00_criar_dfe_fb` (L838-977) +
+        `_step_25_upload_dfe_cd` (L2834-3037) do svc externo. Lê
+        `account.move.l10n_br_xml_aut_nfe` (base64) + cria DFe no destino +
+        dispara `action_processar_arquivo_manual` (fire-and-poll para Odoo
+        parsear o XML).
+
+        Args:
+            invoice_id_saida: account.move da NF SAIDA (state=posted,
+                situacao=autorizado, l10n_br_xml_aut_nfe nao-vazio).
+            company_destino: company onde DFe sera criado (1=FB, 4=CD, 5=LF).
+            dry_run: True (default) NAO escreve; reporta planejamento.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'CRIADO' | 'IDEMPOTENT_EXISTE' | 'FALHA'
+              dfe_id: int | None
+              chave_nfe: str | None
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'dfe_id': None,
+            'chave_nfe': None,
+            'tempo_ms': 0,
+            'erro': None,
+        }
+
+        # Pre-cond LEVES (nao raise antes de dry_run check — AP4)
+        if not isinstance(invoice_id_saida, int) or invoice_id_saida <= 0:
+            out['erro'] = 'invoice_id_saida_invalido'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        if company_destino not in (1, 4, 5):
+            out['erro'] = f'company_destino_invalida: {company_destino}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Ler XML do invoice SAIDA (sempre — necessario p/ chave_nfe no plano)
+        try:
+            inv_resp = self.odoo.read(
+                'account.move', [invoice_id_saida],
+                ['l10n_br_xml_aut_nfe', 'l10n_br_chave_nf',
+                 'l10n_br_numero_nota_fiscal', 'company_id', 'state'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_ler_invoice_saida: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not inv_resp:
+            out['erro'] = 'invoice_saida_sumiu'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        inv = inv_resp[0]
+        chave = (inv.get('l10n_br_chave_nf') or '').strip()
+        xml_b64 = inv.get('l10n_br_xml_aut_nfe')
+        out['chave_nfe'] = chave
+
+        if not chave:
+            out['erro'] = 'chave_nfe_vazia'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        if not xml_b64:
+            out['erro'] = 'xml_aut_nfe_vazio'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Idempotencia: DFe ja existe?
+        ja = self.buscar_dfe(chave_nfe=chave, company_id=company_destino)
+        if ja.get('encontrado'):
+            out['status'] = 'IDEMPOTENT_EXISTE'
+            out['dfe_id'] = ja['dfe_id']
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Dry-run: reporta plano sem write
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'create_model': 'l10n_br_ciel_it_account.dfe',
+                'create_values': {
+                    'company_id': company_destino,
+                    'l10n_br_xml_dfe': '<base64 size=%d>' % len(xml_b64 or ''),
+                },
+                'after_create': 'action_processar_arquivo_manual fire_and_poll',
+            }
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # REAL-RUN: create + processar
+        try:
+            dfe_id = self.odoo.create(
+                'l10n_br_ciel_it_account.dfe',
+                {
+                    'company_id': company_destino,
+                    'l10n_br_xml_dfe': xml_b64,
+                },
+            )
+            logger.info(
+                f'criar_dfe_a_partir_do_invoice_saida: DFe {dfe_id} criado '
+                f'(company={company_destino}, chave={chave[:20]}...)'
+            )
+        except Exception as e:
+            out['erro'] = f'create_dfe_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Fire-and-poll: action_processar_arquivo_manual
+        def fire_processar():
+            return self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe',
+                'action_processar_arquivo_manual',
+                [[dfe_id]],
+                {},
+            )
+
+        def poll_processar():
+            d = self.odoo.read(
+                'l10n_br_ciel_it_account.dfe', [dfe_id],
+                ['l10n_br_status', 'l10n_br_situacao_dfe'],
+            )
+            if d and (d[0].get('l10n_br_status') or '').strip() in (
+                '03', '04', '05'
+            ):
+                return d[0]
+            return None
+
+        try:
+            self._fire_and_poll(
+                fire_fn=fire_processar,
+                poll_fn=poll_processar,
+                label='processar_dfe',
+                poll_timeout_s=POLL_TIMEOUT_DFE_PROC_DEFAULT_S,
+            )
+        except TimeoutError as e:
+            out['status'] = 'FALHA'
+            out['dfe_id'] = dfe_id
+            out['erro'] = f'processar_timeout: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        except Exception as e:
+            out['status'] = 'FALHA'
+            out['dfe_id'] = dfe_id
+            out['erro'] = f'processar_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['status'] = 'CRIADO'
+        out['dfe_id'] = dfe_id
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    def escriturar_dfe(
+        self,
+        *,
+        dfe_id: int,
+        l10n_br_tipo_pedido: str,
+        data_entrada: Optional[str] = None,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """Configura DFe (l10n_br_tipo_pedido + l10n_br_data_entrada).
+
+        Pattern minerado de `_step_03_configurar_dfe` (L1054-1090) +
+        `_step_26_configurar_dfe_cd` (L3039-3088). write em
+        `l10n_br_ciel_it_account.dfe` para informar tipo de pedido que
+        permitira `action_gerar_po_dfe` derivar PO + fiscal_position
+        correta no proximo passo.
+
+        Args:
+            dfe_id: id do DFe (criado via caminho A ou B).
+            l10n_br_tipo_pedido: 'serv-industrializacao' | 'transf-filial'
+                | 'retorno' | 'outro'. Olhar `MATRIZ_INTERCOMPANY[acao]
+                ['entrada'][(co, cd)]['l10n_br_tipo_pedido_entrada']`.
+            data_entrada: 'YYYY-MM-DD' (default hoje).
+            dry_run: True (default) NAO escreve.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'ESCRITURADO' | 'FALHA'
+              dfe_id: int
+              l10n_br_tipo_pedido: str
+              data_entrada: str
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'dfe_id': dfe_id,
+            'l10n_br_tipo_pedido': l10n_br_tipo_pedido,
+            'data_entrada': data_entrada or date.today().strftime('%Y-%m-%d'),
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        if not isinstance(dfe_id, int) or dfe_id <= 0:
+            out['erro'] = 'dfe_id_invalido'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        if l10n_br_tipo_pedido not in (
+            'serv-industrializacao', 'transf-filial',
+            'retorno', 'outro', 'industrializacao',
+            'perda', 'dev-industrializacao',
+        ):
+            out['erro'] = f'tipo_pedido_invalido: {l10n_br_tipo_pedido!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        values = {
+            'l10n_br_data_entrada': out['data_entrada'],
+            'l10n_br_tipo_pedido': l10n_br_tipo_pedido,
+        }
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'write_model': 'l10n_br_ciel_it_account.dfe',
+                'write_ids': [dfe_id],
+                'write_values': values,
+            }
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        try:
+            self.odoo.write(
+                'l10n_br_ciel_it_account.dfe', [dfe_id], values,
+            )
+            # CR-v19+-MED-1: verify AMBOS os campos (CIEL IT pode descartar
+            # silenciosamente um write parcial via hook de recalculo —
+            # `memory/ciel_it_quirks.md` G018-similar pattern).
+            check = self.odoo.read(
+                'l10n_br_ciel_it_account.dfe', [dfe_id],
+                ['l10n_br_tipo_pedido', 'l10n_br_data_entrada'],
+            )
+            if not check:
+                out['erro'] = 'write_nao_persistiu_dfe_sumiu'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+            chk = check[0]
+            if chk.get('l10n_br_tipo_pedido') != l10n_br_tipo_pedido:
+                out['erro'] = 'write_nao_persistiu_tipo_pedido'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+            if chk.get('l10n_br_data_entrada') != out['data_entrada']:
+                out['erro'] = 'write_nao_persistiu_data_entrada'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+        except Exception as e:
+            out['erro'] = f'write_dfe_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['status'] = 'ESCRITURADO'
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    def gerar_po_from_dfe(
+        self,
+        *,
+        dfe_id: int,
+        fire_timeout_s: int = FIRE_TIMEOUT_DEFAULT_S,
+        poll_timeout_s: int = POLL_TIMEOUT_PO_DEFAULT_S,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """Dispara action_gerar_po_dfe + poll ate' purchase.order materializar.
+
+        Pattern minerado de `_step_04_gerar_po` (L1096-1165). Idempotencia
+        via `dfe.purchase_id` antes de disparar — se ja existe PO, retorna
+        sem fire.
+
+        Args:
+            dfe_id: id do DFe ja escriturado (l10n_br_tipo_pedido set).
+            fire_timeout_s: timeout do disparo da action (default 120s).
+            poll_timeout_s: timeout total do polling (default 1800s).
+            dry_run: True (default) NAO dispara.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'CRIADO' | 'IDEMPOTENT_EXISTE' |
+                      'FALHA' | 'TIMEOUT'
+              po_id: int | None
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'po_id': None,
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        if not isinstance(dfe_id, int) or dfe_id <= 0:
+            out['erro'] = 'dfe_id_invalido'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Idempotencia: DFe ja tem purchase_id?
+        try:
+            dfe_check = self.odoo.read(
+                'l10n_br_ciel_it_account.dfe', [dfe_id],
+                ['purchase_id'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_ler_dfe: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if dfe_check and dfe_check[0].get('purchase_id'):
+            po_ref = dfe_check[0]['purchase_id']
+            po_id_ex = po_ref[0] if isinstance(po_ref, (list, tuple)) else po_ref
+            out['status'] = 'IDEMPOTENT_EXISTE'
+            out['po_id'] = po_id_ex
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'action': 'l10n_br_ciel_it_account.dfe.action_gerar_po_dfe',
+                'dfe_ids': [dfe_id],
+                'context': {'validate_analytic': True},
+                'fire_timeout_s': fire_timeout_s,
+                'poll_timeout_s': poll_timeout_s,
+            }
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # REAL-RUN: fire + poll
+        def fire_gerar_po():
+            return self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe',
+                'action_gerar_po_dfe',
+                [[dfe_id]],
+                {'context': {'validate_analytic': True}},
+                timeout_override=fire_timeout_s,
+                expected_timeout=True,
+            )
+
+        def poll_gerar_po():
+            # poll via dfe.purchase_id (primario) + fallback search
+            d = self.odoo.read(
+                'l10n_br_ciel_it_account.dfe', [dfe_id],
+                ['purchase_id'],
+            )
+            if d and d[0].get('purchase_id'):
+                p = d[0]['purchase_id']
+                return p[0] if isinstance(p, (list, tuple)) else p
+            search = self.odoo.search_read(
+                'purchase.order',
+                [('dfe_id', '=', dfe_id), ('state', '!=', 'cancel')],
+                ['id'],
+                limit=1, order='id desc',
+            )
+            if search:
+                return search[0]['id']
+            return None
+
+        try:
+            po_id = self._fire_and_poll(
+                fire_fn=fire_gerar_po,
+                poll_fn=poll_gerar_po,
+                label='gerar_po',
+                poll_timeout_s=poll_timeout_s,
+            )
+        except TimeoutError as e:
+            out['status'] = 'TIMEOUT'
+            out['erro'] = str(e)[:200]
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        except Exception as e:
+            out['status'] = 'FALHA'
+            out['erro'] = f'fire_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['status'] = 'CRIADO'
+        # CR-v19+-HIGH-2: simplificar coercion (segundo branch era morto)
+        out['po_id'] = int(po_id) if po_id is not None else None
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    def preencher_po(
+        self,
+        *,
+        po_id: int,
+        team_id: int,
+        payment_term_id: int,
+        picking_type_id: int,
+        company_id: int,
+        payment_provider_id: int,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """Preenche purchase.order com campos obrigatorios pos-DFe.
+
+        Pattern minerado de `_step_06_configurar_po` (L1193-1236). Write
+        em campos derivados de MATRIZ_INTERCOMPANY + constants
+        (TEAM_ID, PAYMENT_PROVIDER, PAYMENT_TERM, PICKING_TYPE, COMPANY).
+        Caller (fluxo L3) decide os valores; atomo apenas executa write.
+
+        Args:
+            po_id: id purchase.order ja criada via gerar_po_from_dfe.
+            team_id: sale.team.id.
+            payment_term_id: account.payment.term.id.
+            picking_type_id: stock.picking.type.id.
+            company_id: res.company.id (deve casar com DFe).
+            payment_provider_id: payment.provider.id (G029).
+            dry_run: True (default) NAO escreve.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'PREENCHIDO' | 'FALHA'
+              po_id: int
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'po_id': po_id,
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        # Pre-cond LEVES
+        if not isinstance(po_id, int) or po_id <= 0:
+            out['erro'] = 'po_id_invalido'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        for nome, val in (
+            ('team_id', team_id), ('payment_term_id', payment_term_id),
+            ('picking_type_id', picking_type_id), ('company_id', company_id),
+            ('payment_provider_id', payment_provider_id),
+        ):
+            if not isinstance(val, int) or val <= 0:
+                out['erro'] = f'{nome}_invalido: {val!r}'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+        values = {
+            'team_id': team_id,
+            'payment_provider_id': payment_provider_id,
+            'payment_term_id': payment_term_id,
+            'company_id': company_id,
+            'picking_type_id': picking_type_id,
+        }
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'write_model': 'purchase.order',
+                'write_ids': [po_id],
+                'write_values': values,
+            }
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        try:
+            self.odoo.write('purchase.order', [po_id], values)
+            check = self.odoo.read(
+                'purchase.order', [po_id],
+                ['team_id', 'picking_type_id'],
+            )
+            if not check:
+                out['erro'] = 'po_sumiu_pos_write'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+        except Exception as e:
+            out['erro'] = f'write_po_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['status'] = 'PREENCHIDO'
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    def confirmar_po(
+        self,
+        *,
+        po_id: int,
+        auto_approve: bool = True,
+        fire_timeout_s: int = FIRE_TIMEOUT_DEFAULT_S,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """button_confirm + (cond) button_approve em purchase.order.
+
+        Pattern minerado de `_step_07_confirmar_po` + `_step_08_aprovar_po`
+        (L1300-1391). State sai de 'draft' -> 'purchase' (ou 'to approve'
+        -> 'purchase' via button_approve).
+
+        Args:
+            po_id: id purchase.order ja preenchida via preencher_po.
+            auto_approve: True (default) chama button_approve se state
+                ficar 'to approve' apos confirm (non-fatal se falhar).
+            fire_timeout_s: timeout do disparo (default 120s).
+            dry_run: True (default) NAO confirma.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'CONFIRMADO' | 'IDEMPOTENT_CONFIRMADO' |
+                      'FALHA'
+              po_id: int
+              state_final: str
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'po_id': po_id,
+            'state_final': None,
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        if not isinstance(po_id, int) or po_id <= 0:
+            out['erro'] = 'po_id_invalido'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Idempotencia: ja confirmado?
+        try:
+            check = self.odoo.read(
+                'purchase.order', [po_id], ['state'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_ler_po: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not check:
+            out['erro'] = 'po_sumiu'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        state_atual = check[0].get('state')
+        if state_atual in ('purchase', 'done'):
+            out['status'] = 'IDEMPOTENT_CONFIRMADO'
+            out['state_final'] = state_atual
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'action': 'purchase.order.button_confirm',
+                'po_ids': [po_id],
+                'state_atual': state_atual,
+                'auto_approve': auto_approve,
+            }
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # REAL-RUN: button_confirm
+        try:
+            self.odoo.execute_kw(
+                'purchase.order', 'button_confirm', [[po_id]],
+                {'context': {'validate_analytic': True}},
+                timeout_override=fire_timeout_s,
+                expected_timeout=True,
+            )
+        except Exception as e:
+            err_low = str(e).lower()
+            if 'timeout' not in err_low and 'expected' not in err_low:
+                out['erro'] = f'button_confirm_falhou: {str(e)[:200]}'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+        # Poll: state != 'draft'
+        elapsed = 0
+        state_final = state_atual
+        while elapsed < fire_timeout_s:
+            try:
+                c = self.odoo.read('purchase.order', [po_id], ['state'])
+                if c:
+                    state_final = c[0].get('state')
+                    if state_final != 'draft':
+                        break
+            except Exception:
+                pass
+            time.sleep(POLL_INTERVAL_S)
+            elapsed += POLL_INTERVAL_S
+
+        if state_final == 'draft':
+            out['erro'] = 'po_state_draft_apos_confirm'
+            out['state_final'] = state_final
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Auto-approve (non-fatal)
+        if auto_approve and state_final == 'to approve':
+            try:
+                self.odoo.execute_kw(
+                    'purchase.order', 'button_approve', [[po_id]],
+                )
+                c = self.odoo.read('purchase.order', [po_id], ['state'])
+                if c:
+                    state_final = c[0].get('state')
+            except Exception as e:
+                logger.warning(
+                    f'confirmar_po button_approve falhou (non-fatal): '
+                    f'{str(e)[:200]}'
+                )
+
+        out['status'] = 'CONFIRMADO'
+        out['state_final'] = state_final
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    def criar_invoice_from_po(
+        self,
+        *,
+        po_id: int,
+        fire_timeout_s: int = FIRE_TIMEOUT_DEFAULT_S,
+        poll_timeout_s: int = POLL_TIMEOUT_INVOICE_DEFAULT_S,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """Dispara action_create_invoice + poll ate' invoice draft aparecer.
+
+        Pattern minerado de `_step_13_criar_invoice` (L1578-1629).
+        Idempotencia: se po.invoice_ids ja contem algum invoice, retorna
+        ultimo sem disparar.
+
+        Args:
+            po_id: id purchase.order confirmada (state='purchase').
+            fire_timeout_s: timeout do disparo (default 120s).
+            poll_timeout_s: timeout do polling (default 300s).
+            dry_run: True (default) NAO dispara.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'CRIADO' | 'IDEMPOTENT_EXISTE' |
+                      'TIMEOUT' | 'FALHA'
+              invoice_id: int | None
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'invoice_id': None,
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        if not isinstance(po_id, int) or po_id <= 0:
+            out['erro'] = 'po_id_invalido'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Idempotencia
+        try:
+            po_data = self.odoo.read(
+                'purchase.order', [po_id], ['invoice_ids', 'state'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_ler_po: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not po_data:
+            out['erro'] = 'po_sumiu'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        inv_ids_existentes = po_data[0].get('invoice_ids', []) or []
+        if inv_ids_existentes:
+            out['status'] = 'IDEMPOTENT_EXISTE'
+            out['invoice_id'] = inv_ids_existentes[-1]
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'action': 'purchase.order.action_create_invoice',
+                'po_ids': [po_id],
+                'fire_timeout_s': fire_timeout_s,
+                'poll_timeout_s': poll_timeout_s,
+            }
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # REAL-RUN: fire + poll
+        def fire_criar():
+            return self.odoo.execute_kw(
+                'purchase.order', 'action_create_invoice', [[po_id]],
+                {},
+                timeout_override=fire_timeout_s,
+                expected_timeout=True,
+            )
+
+        def poll_criar():
+            p = self.odoo.read(
+                'purchase.order', [po_id], ['invoice_ids'],
+            )
+            if p and p[0].get('invoice_ids'):
+                return p[0]['invoice_ids'][-1]
+            return None
+
+        try:
+            invoice_id = self._fire_and_poll(
+                fire_fn=fire_criar,
+                poll_fn=poll_criar,
+                label='criar_invoice',
+                poll_timeout_s=poll_timeout_s,
+            )
+        except TimeoutError as e:
+            out['status'] = 'TIMEOUT'
+            out['erro'] = str(e)[:200]
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        except Exception as e:
+            out['status'] = 'FALHA'
+            out['erro'] = f'fire_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['status'] = 'CRIADO'
+        out['invoice_id'] = int(invoice_id) if isinstance(
+            invoice_id, (int, float)
+        ) else None
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out

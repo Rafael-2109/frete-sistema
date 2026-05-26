@@ -1934,3 +1934,68 @@ Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para
 
 **Mentalidade (não esquecer):** átomo versátil auto-seguro + `--dry-run`→`--confirmar` (CLAUDE.md §1); **`fluxos>>skills`** (caso novo = folha de fluxo, não skill nova); premissas resolvidas via `_utils` (não copiar); **NUNCA criar script ad-hoc** — capinar a skill; operação VIVA = preservar os ad-hoc restantes até cada átomo maturar (arquivar SUPERADO só após checklist C1-C10 da skill correspondente). **Skills nascem de demandas reais** — sessão 23/05 provou: 3 skills criadas a partir de 2 casos reais (104 ajustes negativos + auditoria pós-WRITE).
 
+
+---
+
+## Sessão 2026-05-26 v19+ — Skill 7 ABRANGENTE + FLUXOS L3 1.2.1/1.2.2 + dispatch orchestrator
+
+**Commits**: pendente (sessão finalizando).
+
+**Escopo**: refator arquitetural cross-modulo conforme PROMPT v19+ — extrair átomos comuns para Skill 7 ABRANGENTE + criar fluxos L3 + reescrever ETAPA E+F do orchestrator. Sessão evoluiu com 4 rounds de calibração arquitetural conduzidos por Rafael que reformularam parcialmente o plano original:
+
+**Reformulações arquiteturais (Rafael)**:
+1. **"Skill 8 deveria checar constants + parametros, 'clica em Liberar NF-e', polling + SEFAZ"** — definição precisa do átomo Skill 8 ATÔMICA L2: 5 operações encapsuladas sobre `account.move`. Confusão histórica "Skill 8 = orchestrator C3 pipeline A-F" registrada como AP6 v20+.
+2. **"Skill não delega, quem delega são os fluxos + orquestradores"** — corrigiu frase errada minha sobre "Skill 8 delega Skill 2". Skills L2 são átomas; composição = orchestrator C3 / FLUXO L3.
+3. **"Faturamento pode devolver picking de saída em caso de NF cancelada, mas não criar picking de entrada"** — fronteira fiscal: ETAPA F atual criava picking de ENTRADA em orchestrator SAÍDA. AP2 reclassificado com causa raiz REAL.
+4. **"Skill 7 procura DFe e não encontrando o FLUXO decide se segue para criação manual (transferências) ou erro (CTe, Compras)"** — átomos Skill 7 NÃO decidem; FLUXO L3 decide caminho A vs B.
+
+**Achados técnicos da mineração (subagente Explore — `RecebimentoLfOdooService` 4562 LOC NÃO MEXER)**:
+- **D-V19-2 lição**: `criar_dfe_manual(dados_campo_a_campo)` sem XML NÃO É VIÁVEL via XML-RPC. Service externo sempre faz `create('l10n_br_ciel_it_account.dfe', {'company_id': X, 'l10n_br_xml_dfe': xml_b64})`. XML vem de `account.move.l10n_br_xml_aut_nfe` (auto-populado para NF SEFAZ-OK).
+- **D-V19-1 lição**: "Skill 8 delega" é semanticamente errado.
+- `buscar_dfe` por chave NF-e não existe standalone no service — embutido em `_step_00`/`_step_25`. v19+ cria como átomo standalone.
+- `ctx_force_company=allowed_company_ids` no `gerar_po_from_dfe` NÃO é usado pelo service externo. Atomo v19+ omite (confia em `company_id` do DFe + usuário XML-RPC).
+
+**Entregas concretas**:
+
+1. **Skill 7 ABRANGENTE LIVE** (`app/odoo/estoque/scripts/escrituracao.py` v19+):
+   - 7 átomos novos: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`.
+   - Cada átomo dry-run-first (corrige AP4) + idempotência por campos Odoo + fire-and-poll helper interno `_fire_and_poll`.
+   - V1 STRICT `criar_recebimento_orchestrado` preservado (wrapper legacy deprecado v20+).
+   - **22 pytest mockados verdes** em `tests/odoo/services/test_escrituracao_lf_service_v19.py`.
+
+2. **Skill 5 átomo `preencher_lotes_picking` LIVE** (`app/odoo/estoque/scripts/picking.py` v19+):
+   - Para pickings nativos gerados via DFe→PO confirmada — atribui lote+qty em stock.move.line.
+   - Suporta `lote_default='MIGRAÇÃO'` (caso típico inventário) + mapping por produto.
+   - **7 pytest mockados verdes** em `tests/odoo/services/test_stock_picking_preencher_lotes.py`.
+   - `criar_picking_entrada_destino_manual` (Skill 5 v15a) marcada DEPRECATED com docblock explicativo. Museum vivo até v20+ canary.
+
+3. **Fluxos L3 1.2.1 + 1.2.2 escritos** (`app/odoo/estoque/fluxos/`):
+   - `1.2.1-escriturar-dfe-industrializacao.md` — caminho A (DFe veio via SEFAZ).
+   - `1.2.2-criar-dfe-manual-transferencia.md` — caminho B (DFe criado via upload do XML da SAÍDA — NF nossa).
+   - Premissas: para NF nossa (transferências internas), XML existe em `account.move.l10n_br_xml_aut_nfe`. Para CTe/Compras (externos), fluxo retorna erro ao usuário.
+
+4. **Método novo `executar_fluxo_l3_1_2_x` no orchestrator** (`orchestrators/faturamento_pipeline.py` v19+):
+   - Compõe 7 átomos Skill 7 + Skill 5 `preencher_lotes_picking` + Skill 5 `validar` seguindo fluxos L3.
+   - Decide caminho A vs B via `buscar_dfe` (encontrado=True/False).
+   - 9 passos sequenciais com short-circuit em falha + retorno estruturado `{passos: [...]}`.
+   - **4 pytest mockados verdes** em `tests/odoo/services/test_faturamento_pipeline_fluxo_l3.py`.
+   - ETAPAS E+F legacy preservadas (não quebrar baseline). v20+ ativa opt-in.
+
+5. **§6.5 antipadrões atualizados**:
+   - AP1 ✅ resolvido (S1 ABRANGENTE).
+   - AP2 ⚠️ reclassificado — causa raiz REAL identificada (Skill 8 SAÍDA não cria picking ENTRADA; tampão Skill 5 v15a deprecado).
+   - AP3 ✅ resolvido v18.
+   - AP4 ✅ resolvido (dry-run-first nos 7 átomos novos).
+   - AP5 ✅ resolvido v18.
+   - **AP6 NOVO** — confusão nomenclatura "Skill 8 = orchestrator C3" vs definição atômica L2. Refator nomenclatura v20+.
+
+6. **D-V19-1 + D-V19-2** adicionados ao §14 (histórico de desvios).
+
+**Baseline pytest: 554 verdes** (521 v18 baseline + 33 v19+ = 22 Skill 7 ABRANGENTE + 7 Skill 5 S2 + 4 dispatch fluxo L3). Tempo: 16.46s.
+
+**Próximo passo v20+**:
+1. Canary REAL PROD do FLUXO L3 1.2.x via subagente `gestor-estoque-odoo` em 1 caso INDUSTRIALIZACAO_FB_LF.
+2. Ativar opt-in `--usar-fluxo-l3-v19` no `executar_pipeline_bulk`.
+3. Refator nomenclatura AP6 (Skill 8 ATÔMICA L2 vs `inventario_pipeline` C3).
+4. Após canary OK: remover ETAPAS E/F legacy + remover `criar_picking_entrada_destino_manual` + remover wrapper V1 STRICT.
+5. Folhas L3 pendentes: 1.1.x, 1.3, 2.3.

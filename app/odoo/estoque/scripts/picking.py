@@ -1180,8 +1180,28 @@ class StockPickingService:
         picking_type_id: int,
         origin: str,
     ) -> Dict[str, Any]:
-        """ATOMO ETAPA F (Skill 8 G023): cria + valida picking de ENTRADA manual
-        em destino (FB → {LF, CD}).
+        """🛑 DEPRECATED v19+ — tampão arquitetural AP2 (CLAUDE.md §6.5).
+
+        **Pattern correto v19+**: ETAPA F do orchestrator NÃO deve criar
+        picking de ENTRADA (Skill 8 = SAÍDA, fronteira fiscal Skill 7 ENTRADA).
+        Caminho correto: criar DFe via `EscrituracaoLfService
+        .criar_dfe_a_partir_do_invoice_saida(invoice_id_saida, company_destino)`
+        — motor Odoo gera picking automaticamente via DFe→PO→picking nativo.
+
+        Esta função permanece como **museum vivo**:
+          - Validada em PROD pickings 317306/317316 (caminho B paliativo v17.5)
+          - Útil como fallback durante transição v19→v20 se FLUXO L3 falhar
+          - Pytest existente preservado para regressão se for necessário rollback
+          - Será REMOVIDA em v20+ após canary real do FLUXO L3 1.2.x
+
+        Usar:
+          `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x(...)` (v19+ NOVO,
+          em app/odoo/estoque/orchestrators/faturamento_pipeline.py)
+          que internamente compõe Skill 7 ABRANGENTE (7 átomos) + Skill 5
+          `preencher_lotes_picking` + Skill 5 `validar`.
+
+        ATOMO ETAPA F LEGADO (Skill 8 G023): cria + valida picking de ENTRADA
+        manual em destino (FB → {LF, CD}).
 
         Padrao L17: NFs sentido FB→{LF, CD} de industrializacao interna precisam
         de picking de entrada criado MANUALMENTE no destino. O robo CIEL IT NAO
@@ -1426,3 +1446,212 @@ class StockPickingService:
             'n_moves': len(moves_filtrados),
             'tempo_ms': int((time.time() - inicio) * 1000),
         }
+
+    def preencher_lotes_picking(
+        self,
+        *,
+        picking_id: int,
+        lotes_data: Optional[List[Dict[str, Any]]] = None,
+        lote_default: Optional[str] = None,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """ATOMO v19+ S2 (Skill 5): atribui lote+qty em stock.move.line.
+
+        Pattern minerado de `RecebimentoLfOdooService._preencher_lotes_picking`
+        (L3982-4100+). Util para pickings NATIVOS gerados via DFe->PO confirmada
+        (caminho A/B do FLUXO L3 1.2.1/1.2.2) que precisam ter seus move.lines
+        preenchidos com (lote, quantidade) antes do `button_validate`.
+
+        Estrategia:
+          - Agrupa lotes_data por product_id
+          - Para cada produto: 1a entrada atualiza move.line existente,
+            entradas adicionais criam novas move.lines (referenciando a 1a)
+          - Setar `lot_name` no write (Odoo CIEL IT cria stock.lot
+            automaticamente via name unique; nao mexer em stock.lot direto)
+          - Quando lotes_data nao cobre algum product_id: aplicar lote_default
+            se fornecido, senao FALHA (NAO escreve nada — operacao atomica)
+
+        Args:
+            picking_id: id stock.picking (state='assigned' ou similar).
+            lotes_data: lista [{'product_id': int, 'lote_nome': str,
+                                'quantidade': float}, ...]. Mapping por produto.
+                                Multiplos entries para o mesmo product_id criam
+                                multiplas move.lines (1 por lote).
+            lote_default: nome de lote usado quando lotes_data nao cobre algum
+                product_id encontrado nas move.lines do picking (ex: 'MIGRAÇÃO'
+                para inventario). None = falha se sobrar ML sem mapping.
+            dry_run: True (default) NAO escreve; reporta plano.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'PREENCHIDO' | 'FALHA'
+              picking_id: int
+              mls_atualizadas: int — move.lines existentes que receberam write
+              mls_criadas: int — novas move.lines criadas (entradas adicionais)
+              mls_pendentes: list[int] — product_ids no picking sem cobertura
+                                          (apenas em FALHA, quando lote_default
+                                          nao fornecido)
+              tempo_ms: int
+              erro: str | None
+        """
+        inicio = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'picking_id': picking_id,
+            'mls_atualizadas': 0,
+            'mls_criadas': 0,
+            'mls_pendentes': [],
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        # Pre-cond LEVES (NAO raise antes de dry_run — AP4)
+        if not isinstance(picking_id, int) or picking_id <= 0:
+            out['erro'] = 'picking_id_invalido'
+            out['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return out
+        if lotes_data is None:
+            lotes_data = []
+
+        # Ler move.lines atuais do picking
+        try:
+            move_lines = self.odoo.search_read(
+                'stock.move.line',
+                [('picking_id', '=', picking_id)],
+                ['id', 'product_id', 'move_id', 'qty_done', 'quantity',
+                 'product_uom_id', 'location_id', 'location_dest_id',
+                 'lot_id', 'lot_name'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_ler_mls: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return out
+
+        if not move_lines:
+            out['erro'] = 'picking_sem_move_lines'
+            out['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return out
+
+        # Indexar MLs por product_id
+        lines_por_produto: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        for ml in move_lines:
+            pid = ml['product_id'][0] if ml.get('product_id') else None
+            if pid:
+                lines_por_produto[pid].append(ml)
+
+        # Agrupar lotes_data por product_id (preservar ordem)
+        lotes_por_produto: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        for ld in lotes_data:
+            pid_ld = ld.get('product_id')
+            if isinstance(pid_ld, int) and pid_ld > 0:
+                lotes_por_produto[pid_ld].append(ld)
+
+        # Detectar produtos do picking sem cobertura em lotes_data
+        produtos_sem_cobertura = [
+            pid for pid in lines_por_produto.keys()
+            if pid not in lotes_por_produto
+        ]
+        if produtos_sem_cobertura and not lote_default:
+            out['mls_pendentes'] = produtos_sem_cobertura
+            out['erro'] = (
+                f'produtos_sem_cobertura: {produtos_sem_cobertura} '
+                f'(forneca lote_default ou estenda lotes_data)'
+            )
+            out['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return out
+
+        # Aplicar lote_default p/ produtos sem cobertura
+        if lote_default and produtos_sem_cobertura:
+            for pid in produtos_sem_cobertura:
+                mls_pid = lines_por_produto[pid]
+                qty_demand_total = sum(
+                    float(ml.get('quantity') or 0) for ml in mls_pid
+                )
+                lotes_por_produto[pid].append({
+                    'product_id': pid,
+                    'lote_nome': lote_default,
+                    'quantidade': qty_demand_total,
+                })
+
+        # Montar plano (writes + creates)
+        writes: List[Tuple[int, Dict[str, Any]]] = []  # (ml_id, write_data)
+        creates: List[Dict[str, Any]] = []
+        for pid, lotes_produto in lotes_por_produto.items():
+            existing_lines = lines_por_produto.get(pid, [])
+            if not existing_lines:
+                # produto nao esta no picking — skip
+                continue
+            for i, ld in enumerate(lotes_produto):
+                lote_nome = (ld.get('lote_nome') or '').strip()
+                qty = float(ld.get('quantidade') or 0)
+                if qty <= 0:
+                    continue
+                if i == 0:
+                    line = existing_lines[0]
+                    write_data: Dict[str, Any] = {
+                        'qty_done': qty,
+                        'quantity': qty,
+                    }
+                    if lote_nome:
+                        write_data['lot_name'] = lote_nome
+                    writes.append((line['id'], write_data))
+                else:
+                    ref_line = existing_lines[0]
+                    nova_line: Dict[str, Any] = {
+                        'move_id': (
+                            ref_line['move_id'][0]
+                            if ref_line.get('move_id') else None
+                        ),
+                        'picking_id': picking_id,
+                        'product_id': pid,
+                        'product_uom_id': (
+                            ref_line['product_uom_id'][0]
+                            if ref_line.get('product_uom_id') else None
+                        ),
+                        'qty_done': qty,
+                        'quantity': qty,
+                        'location_id': (
+                            ref_line['location_id'][0]
+                            if ref_line.get('location_id') else None
+                        ),
+                        'location_dest_id': (
+                            ref_line['location_dest_id'][0]
+                            if ref_line.get('location_dest_id') else None
+                        ),
+                    }
+                    if lote_nome:
+                        nova_line['lot_name'] = lote_nome
+                    creates.append(nova_line)
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'writes_count': len(writes),
+                'creates_count': len(creates),
+                'writes_sample': writes[:3],
+                'creates_sample': creates[:3],
+            }
+            out['mls_atualizadas'] = len(writes)
+            out['mls_criadas'] = len(creates)
+            out['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return out
+
+        # REAL-RUN: writes + creates
+        try:
+            for ml_id, wdata in writes:
+                self.odoo.write('stock.move.line', [ml_id], wdata)
+            for cdata in creates:
+                self.odoo.create('stock.move.line', cdata)
+        except Exception as e:
+            out['erro'] = f'write_mls_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - inicio) * 1000)
+            return out
+
+        out['status'] = 'PREENCHIDO'
+        out['mls_atualizadas'] = len(writes)
+        out['mls_criadas'] = len(creates)
+        out['tempo_ms'] = int((time.time() - inicio) * 1000)
+        logger.info(
+            f'preencher_lotes_picking: picking={picking_id} '
+            f'atualizadas={len(writes)} criadas={len(creates)}'
+        )
+        return out

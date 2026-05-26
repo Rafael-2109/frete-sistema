@@ -27,10 +27,15 @@ allowed-tools: Read, Bash, Glob, Grep
 
 # operando-picking-odoo (WRITE — átomo C2)
 
+> **🆕 v19+ (2026-05-26)**: novo átomo `preencher_lotes_picking(picking_id, lotes_data, lote_default='MIGRAÇÃO', dry_run)` para pickings nativos via DFe→PO confirmada (compõe FLUXO L3 1.2.1/1.2.2 via Skill 7 ABRANGENTE). Atribui lote + qty em `stock.move.line`. 7 pytest mockados verdes em `tests/odoo/services/test_stock_picking_preencher_lotes.py`. Pattern minerado de `RecebimentoLfOdooService._preencher_lotes_picking` (L3982-4100+).
+
+> **🛑 v19+ DEPRECATED**: `criar_picking_entrada_destino_manual` (Skill 5 v15a) marcada DEPRECATED — tampão arquitetural AP2 (§6.5 CLAUDE.md estoque). Caminho correto: criar DFe via Skill 7 `criar_dfe_a_partir_do_invoice_saida` → motor Odoo gera picking automaticamente. Função permanece como **museum vivo** com pytest preservados até v20+ canary remover.
+
 Skill **mínimo viável** (C1 mineração ✅ · C2-C5 implementados para 3 átomos · C6-C10 conforme uso). Construída em 2026-05-24 a partir de demandas reais:
 - **cancelar fantasma**: 854 pickings >7d cancelados em 2026-05-18 (script `16_cancelar_pickings_fantasmas`).
 - **validar**: invariante G019/G020 já no service desde 2026-05-18 (resolve false-positive `button_validate` retornar OK com `state=assigned`).
 - **devolver**: padrão fat_lf_cleanup.reverter_picking executado em 2026-05-20 (estorno de NFs com erro).
+- **preencher_lotes_picking (v19+)**: pattern para pickings NATIVOS (gerados pelo Odoo via PO confirmada na escrituração de entrada). Atribui lote default (`MIGRAÇÃO` p/ inventário) ou mapping por produto.
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/picking.py` (StockPickingService — extende padrão pré-existente em `services/`).
 

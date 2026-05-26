@@ -2764,6 +2764,346 @@ class FaturamentoPipelineExecutor:
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
+    # ========================================================
+    # FLUXO L3 1.2.1 / 1.2.2 — v19+ ABRANGENTE
+    # ========================================================
+    # Composicao dos 7 atomos da Skill 7 ABRANGENTE (`escriturando-odoo` v19+)
+    # + atomo S2 Skill 5 (`preencher_lotes_picking` v19+) seguindo a inteligencia
+    # documentada em:
+    #   - app/odoo/estoque/fluxos/1.2.1-escriturar-dfe-industrializacao.md
+    #   - app/odoo/estoque/fluxos/1.2.2-criar-dfe-manual-transferencia.md
+    #
+    # AP2 RECLASSIFICADO (v19+): este metodo SUBSTITUI a logica das ETAPA E+F
+    # atuais (que continuam funcionando como legacy ate v20+ ativar opt-in).
+    # ETAPA E legacy: Skill 7 V1 STRICT `criar_recebimento_orchestrado` (AP1).
+    # ETAPA F legacy: Skill 5 v15a `criar_picking_entrada_destino_manual` (AP2).
+    # ========================================================
+
+    def executar_fluxo_l3_1_2_x(
+        self,
+        *,
+        invoice_id_saida: int,
+        company_destino: int,
+        l10n_br_tipo_pedido: str,
+        team_id: int,
+        payment_term_id: int,
+        picking_type_id: int,
+        payment_provider_id: int,
+        lotes_data: Optional[List[Dict[str, Any]]] = None,
+        lote_default: Optional[str] = 'MIGRAÇÃO',
+        poll_timeout_po_s: int = 1800,
+        poll_timeout_invoice_s: int = 300,
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """v19+ ABRANGENTE: executa FLUXO L3 1.2.1 (caminho A) ou 1.2.2 (caminho B).
+
+        Decide via `buscar_dfe(chave_nfe_do_invoice_saida, company_destino)`:
+          - encontrado=True  -> caminho A (DFe ja veio via SEFAZ)
+          - encontrado=False -> caminho B (DFe upload via XML da SAIDA — NF nossa)
+
+        Composicao sequencial dos atomos:
+          1. Skill 7 buscar_dfe (READ — decide caminho)
+          2. SE caminho B: Skill 7 criar_dfe_a_partir_do_invoice_saida (upload XML)
+          3. Skill 7 escriturar_dfe (l10n_br_tipo_pedido + data_entrada)
+          4. Skill 7 gerar_po_from_dfe (fire_and_poll — robo CIEL IT cria PO)
+          5. Skill 7 preencher_po (team_id + payment + picking_type + company)
+          6. Skill 7 confirmar_po (button_confirm + cond button_approve)
+          7. Skill 5 preencher_lotes_picking (lote_default='MIGRAÇÃO' ou mapping)
+          8. Skill 5 validar (button_validate — G019/G020)
+          9. Skill 7 criar_invoice_from_po (action_create_invoice + poll)
+
+        Posting da invoice (account.move.action_post) NAO faz parte deste metodo —
+        fica para o caller (orchestrator pipeline_bulk v20+ ou outro caso).
+
+        Args:
+            invoice_id_saida: account.move da NF SAIDA (state=posted,
+                situacao=autorizado, l10n_br_xml_aut_nfe nao-vazio).
+            company_destino: 1=FB, 4=CD, 5=LF.
+            l10n_br_tipo_pedido: 'serv-industrializacao' | 'transf-filial' |
+                'retorno' | 'outro' — derivado da MATRIZ_INTERCOMPANY[acao]
+                ['entrada'][(co,cd)]['l10n_br_tipo_pedido_entrada'].
+            team_id: sale.team.id (caller fornece via constants).
+            payment_term_id: account.payment.term.id.
+            picking_type_id: stock.picking.type.id.
+            payment_provider_id: payment.provider.id (G029).
+            lotes_data: mapping por produto (caso entrada com lotes especificos);
+                None+lote_default='MIGRAÇÃO' cobre 100%% dos MLs com o default
+                (caso tipico de inventario inter-company).
+            lote_default: lote para MLs nao cobertos por lotes_data.
+            poll_timeout_po_s: timeout do polling de gerar_po_from_dfe.
+            poll_timeout_invoice_s: timeout do polling de criar_invoice_from_po.
+            dry_run: True (default) NAO escreve em Odoo; cada atomo dispara
+                em modo dry_run+true.
+
+        Returns:
+            dict com:
+              status: 'DRY_RUN_OK' | 'FLUXO_OK' | 'FALHA_PASSO_<X>'
+              caminho: 'A' | 'B' | 'INDEFINIDO'
+              dfe_id: int | None
+              po_id: int | None
+              picking_id: int | None
+              invoice_id: int | None
+              passos: list[{'passo': str, 'status': str, 'tempo_ms': int}]
+              tempo_ms: int
+              erro: str | None
+        """
+        from app.odoo.estoque.scripts.escrituracao import (  # lazy
+            EscrituracaoLfService,
+        )
+
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA_PASSO_1_BUSCAR_DFE',
+            'caminho': 'INDEFINIDO',
+            'dfe_id': None,
+            'po_id': None,
+            'picking_id': None,
+            'invoice_id': None,
+            'passos': [],
+            'tempo_ms': 0,
+            'erro': None,
+        }
+
+        escr_svc = EscrituracaoLfService(odoo=self.odoo)
+
+        def _passo(nome: str, resultado: Dict[str, Any]) -> None:
+            out['passos'].append({
+                'passo': nome,
+                'status': resultado.get('status'),
+                'tempo_ms': resultado.get('tempo_ms'),
+                'erro': resultado.get('erro'),
+            })
+
+        # ----- Passo 1: buscar_dfe (READ, decide caminho) -----
+        # Precisa chave_nfe do invoice_saida — leitura previa
+        try:
+            inv_resp = self.odoo.read(
+                'account.move', [invoice_id_saida],
+                ['l10n_br_chave_nf', 'state'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_ler_invoice_saida: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        if not inv_resp:
+            out['erro'] = 'invoice_saida_sumiu'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        chave_nfe = (inv_resp[0].get('l10n_br_chave_nf') or '').strip()
+        if not chave_nfe:
+            out['erro'] = 'invoice_saida_sem_chave_nfe'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        r1 = escr_svc.buscar_dfe(
+            chave_nfe=chave_nfe, company_id=company_destino,
+        )
+        _passo('1_buscar_dfe', r1)
+
+        # ----- Passo 2: caminho A vs B -----
+        # CR-v19+-HIGH-3: NAO retornar early quando status='processado'.
+        # 'processado' significa apenas XML parseado pelo robo CIEL IT
+        # (codes 04/05 em l10n_br_status); NAO garante que PO+picking+invoice
+        # ja existem. Idempotencia real e' feita pelos atomos a jusante
+        # (gerar_po_from_dfe via dfe.purchase_id, criar_invoice_from_po via
+        # po.invoice_ids, etc) — deixar fluir.
+        if r1.get('encontrado'):
+            out['caminho'] = 'A'
+            dfe_id = r1.get('dfe_id')
+        else:
+            out['caminho'] = 'B'
+            r2 = escr_svc.criar_dfe_a_partir_do_invoice_saida(
+                invoice_id_saida=invoice_id_saida,
+                company_destino=company_destino,
+                dry_run=dry_run,
+            )
+            _passo('2_criar_dfe_a_partir_do_invoice_saida', r2)
+            if r2.get('status') not in (
+                'CRIADO', 'IDEMPOTENT_EXISTE', 'DRY_RUN_OK',
+            ):
+                out['status'] = 'FALHA_PASSO_2_CRIAR_DFE'
+                out['erro'] = r2.get('erro')
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+            dfe_id = r2.get('dfe_id')
+
+        out['dfe_id'] = dfe_id
+
+        # ----- Passo 3: escriturar_dfe -----
+        r3 = escr_svc.escriturar_dfe(
+            dfe_id=dfe_id or 0,  # type-hint friendly; atomo valida
+            l10n_br_tipo_pedido=l10n_br_tipo_pedido,
+            dry_run=dry_run,
+        )
+        _passo('3_escriturar_dfe', r3)
+        if r3.get('status') not in ('ESCRITURADO', 'DRY_RUN_OK'):
+            out['status'] = 'FALHA_PASSO_3_ESCRITURAR'
+            out['erro'] = r3.get('erro')
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # ----- Passo 4: gerar_po_from_dfe -----
+        r4 = escr_svc.gerar_po_from_dfe(
+            dfe_id=dfe_id or 0,
+            poll_timeout_s=poll_timeout_po_s,
+            dry_run=dry_run,
+        )
+        _passo('4_gerar_po_from_dfe', r4)
+        if r4.get('status') not in (
+            'CRIADO', 'IDEMPOTENT_EXISTE', 'DRY_RUN_OK',
+        ):
+            out['status'] = 'FALHA_PASSO_4_GERAR_PO'
+            out['erro'] = r4.get('erro')
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        po_id = r4.get('po_id')
+        out['po_id'] = po_id
+
+        # Em dry-run nao temos po_id real — abortar gracioso com FLUXO_OK
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # ----- Passo 5: preencher_po -----
+        r5 = escr_svc.preencher_po(
+            po_id=po_id or 0,
+            team_id=team_id,
+            payment_term_id=payment_term_id,
+            picking_type_id=picking_type_id,
+            company_id=company_destino,
+            payment_provider_id=payment_provider_id,
+            dry_run=False,
+        )
+        _passo('5_preencher_po', r5)
+        if r5.get('status') not in ('PREENCHIDO',):
+            out['status'] = 'FALHA_PASSO_5_PREENCHER_PO'
+            out['erro'] = r5.get('erro')
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # ----- Passo 6: confirmar_po -----
+        r6 = escr_svc.confirmar_po(
+            po_id=po_id or 0, dry_run=False,
+        )
+        _passo('6_confirmar_po', r6)
+        if r6.get('status') not in (
+            'CONFIRMADO', 'IDEMPOTENT_CONFIRMADO',
+        ):
+            out['status'] = 'FALHA_PASSO_6_CONFIRMAR_PO'
+            out['erro'] = r6.get('erro')
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # ----- Passo 7+8: preencher_lotes_picking + validar -----
+        # picking foi gerado pelo Odoo apos confirmar_po. Buscar via
+        # purchase.order.picking_ids
+        # CR-v19+-HIGH-1: filtrar por state. PO pode ter multiplos
+        # pickings (retorno + entrada) ou picking ja 'done' — escolher o
+        # ativo (assigned/partially_available/confirmed) e fazer idempotencia
+        # se ja done.
+        try:
+            po_data = self.odoo.read(
+                'purchase.order', [po_id], ['picking_ids'],
+            )
+            picking_ids = (
+                po_data[0].get('picking_ids', []) if po_data else []
+            )
+            if not picking_ids:
+                out['status'] = 'FALHA_PASSO_7_SEM_PICKING'
+                out['erro'] = 'po_sem_picking_pos_confirm'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+            pks = self.odoo.read(
+                'stock.picking', picking_ids, ['id', 'state', 'name'],
+            ) or []
+        except Exception as e:
+            out['status'] = 'FALHA_PASSO_7_SEM_PICKING'
+            out['erro'] = f'erro_ler_picking_ids: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Tentar achar picking 'done' (idempotente)
+        done_pk = next(
+            (p for p in pks if p.get('state') == 'done'), None,
+        )
+        if done_pk:
+            # Idempotente: preencher_lotes + validar ja rodaram antes
+            picking_id = done_pk['id']
+            out['picking_id'] = picking_id
+            _passo('7_preencher_lotes_picking', {
+                'status': 'IDEMPOTENT_DONE',
+                'tempo_ms': 0,
+                'erro': None,
+            })
+            _passo('8_validar_picking', {
+                'status': 'IDEMPOTENT_DONE',
+                'tempo_ms': 0,
+                'erro': None,
+            })
+        else:
+            # Achar picking ativo p/ preencher + validar
+            ativo_pk = next(
+                (p for p in pks if p.get('state') in (
+                    'assigned', 'partially_available', 'confirmed',
+                )), None,
+            )
+            if not ativo_pk:
+                out['status'] = 'FALHA_PASSO_7_PICKING_STATE_INVALIDO'
+                out['erro'] = (
+                    f'nenhum picking ativo (states: '
+                    f'{[p.get("state") for p in pks]})'
+                )
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+            picking_id = ativo_pk['id']
+            out['picking_id'] = picking_id
+
+            r7 = self.picking_svc.preencher_lotes_picking(
+                picking_id=picking_id,
+                lotes_data=lotes_data or [],
+                lote_default=lote_default,
+                dry_run=False,
+            )
+            _passo('7_preencher_lotes_picking', r7)
+            if r7.get('status') not in ('PREENCHIDO',):
+                out['status'] = 'FALHA_PASSO_7_PREENCHER_LOTES'
+                out['erro'] = r7.get('erro')
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+            # ----- Passo 8: validar picking -----
+            try:
+                self.picking_svc.validar(picking_id)
+                _passo('8_validar_picking', {
+                    'status': 'VALIDADO',
+                    'tempo_ms': 0,
+                    'erro': None,
+                })
+            except Exception as e:
+                out['status'] = 'FALHA_PASSO_8_VALIDAR'
+                out['erro'] = f'validar_picking_falhou: {str(e)[:200]}'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+        # ----- Passo 9: criar_invoice_from_po -----
+        r9 = escr_svc.criar_invoice_from_po(
+            po_id=po_id or 0,
+            poll_timeout_s=poll_timeout_invoice_s,
+            dry_run=False,
+        )
+        _passo('9_criar_invoice_from_po', r9)
+        if r9.get('status') not in ('CRIADO', 'IDEMPOTENT_EXISTE'):
+            out['status'] = 'FALHA_PASSO_9_CRIAR_INVOICE'
+            out['erro'] = r9.get('erro')
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        out['invoice_id'] = r9.get('invoice_id')
+
+        out['status'] = 'FLUXO_OK'
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
     def executar_etapa_e(
         self,
         *,

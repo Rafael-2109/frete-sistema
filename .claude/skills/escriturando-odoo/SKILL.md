@@ -1,35 +1,74 @@
 ---
 name: escriturando-odoo
 description: >-
-  Skill WRITE (átomo C3 macro) para ESCRITURAR ENTRADA de NF SEFAZ-autorizada no
-  destino via RecebimentoLf + agregação de lotes + invocação do service externo
-  RecebimentoLfOdooService (37 etapas LF→FB). Constituição §6: Skill 7 = SO
-  ENTRADA (DFe/NF→in_invoice→saldo); par da Skill 8 `faturando-odoo` (= SO
-  SAÍDA NF→SEFAZ). Quem une saída + entrada é o FLUXO L3.
+  Skill WRITE para ESCRITURAR ENTRADA de NF SEFAZ-autorizada no destino. v19+
+  ABRANGENTE expõe **7 átomos versáteis** que servem qualquer direção FB↔LF↔CD
+  via FLUXOS L3 1.2.1 (DFe veio via SEFAZ) e 1.2.2 (DFe criado via upload do
+  XML da SAÍDA — NF nossa). Átomos: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`,
+  `escriturar_dfe`, `gerar_po_from_dfe` (fire-and-poll), `preencher_po`,
+  `confirmar_po`, `criar_invoice_from_po`. Cada átomo dry-run-first (AP4) +
+  idempotência por campos Odoo. Constituição §6: Skill 7 = SO ENTRADA
+  (DFe/NF→in_invoice→saldo); par da Skill 8 `faturando-odoo` (= SO SAÍDA
+  NF→SEFAZ). Composição (caminho A vs B + sequência) é decidida por FLUXO L3
+  ou orchestrator — átomos NÃO decidem caminho.
 
-  V1 STRICT (2026-05-26 v17.5): SO LF→FB via service externo
-  (PERDA_LF_FB, DEV_LF_FB, TRANSFERIR_CD_FB). Outras direções (CD→LF, etc)
-  raise NotImplementedError até service externo suportar.
+  Wrapper LEGACY `criar_recebimento_orchestrado` V1 STRICT (LF→FB only via
+  service externo `RecebimentoLfOdooService`) preservado para retrocompatibilidade
+  da ETAPA E legacy do orchestrator — deprecado v20+ após canary REAL PROD
+  validar `executar_fluxo_l3_1_2_x`.
 
-  Usar quando o pedido é: "escriture a NF SEFAZ na FB", "cria RecebimentoLf
-  da invoice X", "retoma o RecLf travado da invoice Y", "registra entrada
-  da PERDA_LF_FB no Odoo da FB". Atomo é invocado em Python pela Skill 8
-  (`executar_etapa_e`) ou diretamente pelo operador via fluxo L3.
+  Usar quando o pedido é: "escriture a NF SEFAZ na FB", "criar DFe via upload
+  do XML para inventário inter-company", "gerar PO a partir do DFe X",
+  "preencher lotes do picking gerado", "criar invoice draft a partir do PO Y".
+  Átomos são invocados em Python pelo orchestrator (`executar_fluxo_l3_1_2_x`)
+  ou diretamente pelo operador via fluxo L3.
 
   NÃO USAR PARA:
-  - Faturamento SAÍDA (NF→SEFAZ) -> usar faturando-odoo (Skill 8)
-  - Picking entrada manual SEM RecebimentoLf (G023 FB→LF industr) -> Skill 5
-    atomo criar_picking_entrada_destino_manual (invocado pela Skill 8 ETAPA F)
-  - Recebimento de COMPRAS (DFe fornecedor 4 fases) -> gestor-recebimento (subagente)
-  - Cancelar RecLf orfão (idempotência falha) -> investigação manual (não há
-    atomo para cancel; service externo decide via etapa_atual)
+  - Faturamento SAÍDA (NF→SEFAZ) -> orchestrator faturamento_pipeline
+  - DFe de fornecedor externo (CTe / Compras — XML externo não controlado
+    por nós): `criar_dfe_a_partir_do_invoice_saida` raise FALHA_XML_VAZIO
+    pois XML existe em `account.move.l10n_br_xml_aut_nfe` APENAS para NF nossa.
+    Para CTe/Compras → gestor-recebimento (subagente).
+  - Recebimento de COMPRAS (DFe fornecedor 4 fases) -> gestor-recebimento
+  - Cancelar RecLf orfão / DFe (idempotência falha) -> investigação manual
 
-  `--dry-run` é o DEFAULT no CLI (futuro v18); só efetiva com `--confirmar`.
-  Em Python (invocação pela Skill 8), caller controla dry_run via argumento.
+  `--dry-run` é o DEFAULT no CLI (futuro v20+); só efetiva com `--confirmar`.
+  Em Python (invocação pelo orchestrator), caller controla dry_run via argumento.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
-# escriturando-odoo (WRITE — átomo C3 macro)
+# escriturando-odoo (WRITE — Skill 7 ABRANGENTE v19+ + wrapper V1 STRICT deprecado)
+
+> **🆕 v19+ ABRANGENTE (2026-05-26)**: Skill 7 agora expõe **7 átomos versáteis** que servem qualquer direção FB↔LF↔CD via FLUXOS L3 1.2.1 (caminho A — DFe veio via SEFAZ) e 1.2.2 (caminho B — DFe criado via XML da SAÍDA). AP1+AP4 ✅ resolvidos. Wrapper V1 STRICT (`criar_recebimento_orchestrado`) preservado como deprecado v20+.
+
+## Átomos v19+ ABRANGENTES (NOVOS — `escrituracao.py` v19+)
+
+Todos os átomos seguem pattern: **kwargs nomeados, `dry_run=True` default, retorno `dict` estruturado com `status`/`erro`/`tempo_ms`**.
+
+| Átomo | Inputs essenciais | Outputs | XML-RPC primário |
+|-------|-------------------|---------|------------------|
+| `buscar_dfe(chave_nfe, company_id)` | chave_nfe (44 dígitos) | `{encontrado, dfe_id, status, raw}` (status: `pendente`/`a_processar`/`processado`/`ausente`) | `l10n_br_ciel_it_account.dfe.search_read([(protnfe_infnfe_chnfe, =, X), (company_id, =, Y)], ...)` |
+| `criar_dfe_a_partir_do_invoice_saida(invoice_id_saida, company_destino, dry_run)` ⚠️ APENAS NF NOSSA | invoice_id da SAÍDA (NF nossa SEFAZ-OK — CNPJ emitente ∈ NACOM); company_destino (1/4/5) | `{status, dfe_id, chave_nfe}` (status: `CRIADO`/`IDEMPOTENT_EXISTE`/`DRY_RUN_OK`/`FALHA`) | Lê `account.move.l10n_br_xml_aut_nfe` + `create('l10n_br_ciel_it_account.dfe', {company_id, l10n_br_xml_dfe})` + `action_processar_arquivo_manual` fire-and-poll. **CTe/Compras (XML externo) → não aplicável** (retorna `FALHA xml_aut_nfe_vazio` ou produz DFe inconsistente; redirecionar para `gestor-recebimento`). |
+| `escriturar_dfe(dfe_id, l10n_br_tipo_pedido, data_entrada, dry_run)` | dfe_id; tipo_pedido (`serv-industrializacao`/`transf-filial`/`retorno`/`outro`) | `{status, dfe_id, l10n_br_tipo_pedido, data_entrada}` | `write('l10n_br_ciel_it_account.dfe', [dfe_id], {l10n_br_data_entrada, l10n_br_tipo_pedido})` |
+| `gerar_po_from_dfe(dfe_id, fire_timeout_s, poll_timeout_s, dry_run)` | dfe_id (escriturado) | `{status, po_id}` (status: `CRIADO`/`IDEMPOTENT_EXISTE`/`TIMEOUT`/`FALHA`) | `dfe.action_gerar_po_dfe` fire-and-poll (1800s default) via `dfe.purchase_id` + fallback `purchase.order.search([(dfe_id, =, X)])` |
+| `preencher_po(po_id, team_id, payment_term_id, picking_type_id, company_id, payment_provider_id, dry_run)` | po_id; constants por company | `{status, po_id}` | `write('purchase.order', [po_id], {team_id, payment_provider_id, payment_term_id, company_id, picking_type_id})` |
+| `confirmar_po(po_id, auto_approve, fire_timeout_s, dry_run)` | po_id | `{status, po_id, state_final}` (status: `CONFIRMADO`/`IDEMPOTENT_CONFIRMADO`/`FALHA`) | `purchase.order.button_confirm` + cond `button_approve` (`state='to approve'`) |
+| `criar_invoice_from_po(po_id, fire_timeout_s, poll_timeout_s, dry_run)` | po_id (state=`purchase`) | `{status, invoice_id}` (status: `CRIADO`/`IDEMPOTENT_EXISTE`/`TIMEOUT`/`FALHA`) | `purchase.order.action_create_invoice` fire-and-poll via `po.invoice_ids` |
+
+**Cobertura pytest**: 22 testes mockados em `tests/odoo/services/test_escrituracao_lf_service_v19.py` (3 por átomo + 1 AP4 pre-cond invalid).
+
+## Composição via FLUXO L3 (orchestrator/operador)
+
+A inteligência de **decisão caminho A vs B** vive nos fluxos L3, NÃO nos átomos:
+
+- **Fluxo L3 1.2.1** (`app/odoo/estoque/fluxos/1.2.1-escriturar-dfe-industrializacao.md`): caminho A — `buscar_dfe` retornou `encontrado=True` → escriturar→PO→picking→invoice direto.
+- **Fluxo L3 1.2.2** (`app/odoo/estoque/fluxos/1.2.2-criar-dfe-manual-transferencia.md`): caminho B — `buscar_dfe` retornou `encontrado=False` + NF é nossa → `criar_dfe_a_partir_do_invoice_saida` → daí em diante idêntico ao 1.2.1.
+
+Implementação Python do dispatch caminho A vs B: `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` (em `orchestrators/faturamento_pipeline.py` v19+).
+
+---
+
+## Wrapper V1 STRICT (deprecado v20+) — `criar_recebimento_orchestrado`
 
 Skill **mínimo viável V1** (criada em 2026-05-26 v17.5 a partir de revert da
 lógica inline `executar_etapa_e` no orchestrator Skill 8 v17). Constituição:
@@ -37,6 +76,8 @@ lógica inline `executar_etapa_e` no orchestrator Skill 8 v17). Constituição:
 
 Service: `app/odoo/estoque/scripts/escrituracao.py` (EscrituracaoLfService).
 Service externo (4562 LOC, **NÃO MEXER**): `app/recebimento/services/recebimento_lf_odoo_service.py`.
+
+> **Status v19+**: o método `criar_recebimento_orchestrado` permanece funcional para ETAPA E legacy do orchestrator. Em v20+ será removido após canary REAL PROD validar `executar_fluxo_l3_1_2_x` substituindo as ETAPAS E+F.
 
 ---
 

@@ -41,6 +41,8 @@
 | N13 | Mexer em `scripts/inventario_2026_05/09_executar_onda1_bulk.py` | SUPERADO ao final v22+; antes disso é referência viva | Regra v14a-ops |
 | N14 | Acumular múltiplos `PROMPT_PROXIMA_SESSAO_*.md` no root de `app/odoo/estoque/` | Antes de v18 Fase 0 existiam 8 prompts cumulativos — confunde a próxima sessão sobre qual é o "vivo" | `PROMPT_PROXIMA_SESSAO.md §0 + §6.2` — sempre 1 vivo no root; executado vai para `_prompts_executados/` |
 | N15 | Reescrever §0 / §1 / §6 do `PROMPT_PROXIMA_SESSAO.md` por sessão | São atemporais. Reescrever quebra a convenção e força próximas sessões a redescobrir | `PROMPT_PROXIMA_SESSAO.md §0` — apenas §2-§5 são por-sessão |
+| N16 | Afirmar que "Skill 8 delega Skill X" ou "Skill 5 invoca Skill Y" OU dizer que "FLUXO L3 delega átomo" | Skills L2 são átomas — NÃO delegam, NÃO invocam outras skills. **FLUXO L3 COMPÕE átomos L2** (composição ≠ delegação). **Orchestrator C3 COMPÕE FLUXOS L3 e átomos**. Em nenhuma direção há "delegação" entre camadas — sempre "composição". Lição custosa v19+ (AP6 NOVO). | CLAUDE.md §6.5 AP6 + §14 D-V19-1 |
+| N17 | Propor `criar_dfe_manual(dados_campo_a_campo)` ou átomo similar que crie DFe sem XML | NÃO É VIÁVEL via XML-RPC. Service externo SEMPRE faz `create('l10n_br_ciel_it_account.dfe', {'company_id': X, 'l10n_br_xml_dfe': xml_b64})` + `action_processar_arquivo_manual`. Para NF nossa, XML vem de `account.move.l10n_br_xml_aut_nfe` (auto-populado). | CLAUDE.md §14 D-V19-2 + `escrituracao.py:criar_dfe_a_partir_do_invoice_saida` |
 
 ---
 
@@ -99,6 +101,24 @@
 - **Por que aconteceu**: cada sessão criava prompt novo sem regra clara de arquivamento; sufixo `_EXECUTED_<data>` foi convencionado mas não havia pasta de destino dedicada.
 - **Correção v18 Fase 0**: criada pasta `_prompts_executados/` + movidos os 8 prompts antigos. Convenção atemporal codificada em `PROMPT_PROXIMA_SESSAO.md §0 + §6.2`: 1 só vivo no root; executado vai para a pasta; §0/§1/§6 atemporais (copiar literal); §2-§5 por-sessão (reescrever).
 - **Como evitar**: N14+N15 acima. Ao terminar sessão, seguir `PROMPT_PROXIMA_SESSAO.md §6.2` (renomear executado + criar novo com escopo N+1 preservando §0/§1/§6 literais).
+
+### AR7 — Frase "Skill 8 delega Skill 2" e similares (v19+ — corrigido pela leitura semântica do Rafael)
+
+- **O quê**: em v19+ afirmei "Skill 8 = SAÍDA (A delega Skill 2, B Skill 5...)". Frase semanticamente errada. Skills L2 são átomas. Quem delega/compõe são **orchestrators C3** ou **fluxos L3** (Markdown).
+- **Por que aconteceu**: confusão nomenclatura "Skill 8 = orchestrator C3 pipeline A-F" — em §6 Tabela 2 o orchestrator é catalogado como Skill 8 + tem fachada SKILL.md em `.claude/skills/faturando-odoo/`. Acabei misturando 2 conceitos distintos.
+- **Custo**: 1 round inteiro de calibração arquitetural com Rafael; redefiniu plano da sessão; criou AP6 + N16 + N17 + D-V19-1 + D-V19-2.
+- **Como evitar**: ao referenciar "Skill 8", sempre especificar:
+  - **Skill 8 ATÔMICA L2** (`faturando-odoo` — definição correta v19+): 5 operações sobre `account.move` (validar constants, action_liberar_faturamento, polling, validar fatura, SEFAZ).
+  - **`inventario_pipeline` C3** (atual `faturamento_pipeline.py`): orchestrator que compõe pipeline A-F (Skill 2 ETAPA A + Skill 5 ETAPA B + Skill 8 ATÔMICA futura ETAPA C+D + Skill 7 ENTRADA via fluxos L3 1.2.x).
+- **Onde**: CLAUDE.md §6.5 AP6 + §14 D-V19-1 + N16 desta tabela.
+
+### AR8 — Plano "criar_dfe_manual sem XML" (v19+ — corrigido pela mineração Explore)
+
+- **O quê**: plano inicial v19+ propunha átomo `criar_dfe_manual(dados_campo_a_campo)` que criasse DFe preenchendo campos individuais sem XML. Plano contradiz realidade do Odoo CIEL IT.
+- **Por que aconteceu**: pulei a mineração do service externo na primeira fase do plano. Quando o subagente Explore investigou o `RecebimentoLfOdooService`, descobriu que o service SEMPRE faz `create({'company_id': X, 'l10n_br_xml_dfe': xml_b64})` + `action_processar_arquivo_manual`. Sem XML autorizado, não há criação.
+- **Custo**: revisão do plano S1 mid-sessão; renomeação de átomo para `criar_dfe_a_partir_do_invoice_saida(invoice_id_saida, company_destino)` (que extrai XML existente de `account.move.l10n_br_xml_aut_nfe`).
+- **Como evitar**: ANTES de propor átomo cross-skill que toca Odoo, minerar o pattern equivalente já validado em PROD (subagente Explore READ-only — não MEXER no código fonte se for marcado NÃO MEXER N11/N12). O pattern correto sempre está no service legado.
+- **Onde**: CLAUDE.md §14 D-V19-2 + N17 desta tabela.
 
 ### AR5 — Catálogo §6 mistura skill L2 com orchestrator C3 (origem do problema)
 
