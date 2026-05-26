@@ -125,9 +125,10 @@ class ConfrontoService:
 
     @staticmethod
     def _agg_movimentacoes(data_inicio):
-        cod_raiz = func.coalesce(
-            MovimentacaoEstoque.cod_produto_raiz, MovimentacaoEstoque.cod_produto
-        ).label('raiz')
+        # NOTA: agrupar por cod_produto direto (sem unificação cod_produto_raiz)
+        # para bater 100% com a planilha referência do usuário, que usa
+        # SUMIFS por cod_produto bruto. Unificação será opção futura.
+        cod_raiz = MovimentacaoEstoque.cod_produto.label('raiz')
 
         q_periodo = db.session.query(
             cod_raiz,
