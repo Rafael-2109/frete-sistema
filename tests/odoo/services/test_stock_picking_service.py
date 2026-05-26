@@ -732,6 +732,8 @@ def test_aplicar_peso_volumes_noop_quando_ja_setado():
 def test_criar_picking_inter_company_basico():
     """Fluxo feliz: cria picking, sem produtos tracking='none'."""
     odoo = MagicMock()
+    # v15c F1: search_read por origin retorna [] (sem idempotente)
+    odoo.search_read.return_value = []
     # 1 read tracking + 1 create picking
     odoo.read.return_value = [
         {'id': 1001, 'tracking': 'lot'},
@@ -747,8 +749,10 @@ def test_criar_picking_inter_company_basico():
             {'product_id': 1002, 'quantity': 5.0, 'lot_id': 777},
         ],
         picking_type_id=94, partner_id=1,
+        origin='TEST_ORIGIN_BASICO',  # v15c F1: obrigatorio
     )
     assert r['picking_id'] == 5555
+    assert r['status'] == 'CRIADO'  # v15c F1
     assert r['tracking_none_pids'] == []
     assert len(r['linhas_planejadas']) == 2
     # Linhas mantem lot_name/lot_id (produto eh tracking != 'none')
@@ -766,6 +770,7 @@ def test_criar_picking_inter_company_company_iguais_raises():
             location_origem_id=8, location_destino_id=32,
             linhas=[{'product_id': 1, 'quantity': 1.0}],
             picking_type_id=51, partner_id=34,
+            origin='X',
         )
 
 
@@ -779,6 +784,7 @@ def test_criar_picking_inter_company_partner_id_obrigatorio_raises():
             location_origem_id=42, location_destino_id=5,
             linhas=[{'product_id': 1, 'quantity': 1.0}],
             picking_type_id=94, partner_id=0,
+            origin='X',
         )
 
 
@@ -792,12 +798,14 @@ def test_criar_picking_inter_company_linhas_vazias_raises():
             location_origem_id=42, location_destino_id=5,
             linhas=[],
             picking_type_id=94, partner_id=1,
+            origin='X',
         )
 
 
 def test_criar_picking_inter_company_tracking_none_remove_lot_name():
     """D-OPS-3 fix: produto tracking='none' tem lot_name/lot_id removidos."""
     odoo = MagicMock()
+    odoo.search_read.return_value = []  # v15c F1: nao idempotente
     odoo.read.return_value = [
         {'id': 103500105, 'tracking': 'none'},  # PIMENTA JALAPENO sem rastreio
         {'id': 1002, 'tracking': 'lot'},
@@ -813,8 +821,10 @@ def test_criar_picking_inter_company_tracking_none_remove_lot_name():
             {'product_id': 1002, 'quantity': 5.0, 'lot_name': 'LOT_B'},
         ],
         picking_type_id=94, partner_id=1,
+        origin='TEST_ORIGIN_TRACKING_NONE',
     )
     assert r['picking_id'] == 6666
+    assert r['status'] == 'CRIADO'
     assert r['tracking_none_pids'] == [103500105]
     # Produto 103500105 (tracking='none'): lot_name removido
     linha_none = next(
@@ -832,6 +842,7 @@ def test_criar_picking_inter_company_tracking_none_remove_lot_name():
 def test_criar_picking_inter_company_tracking_por_pid_passed_skip_read():
     """tracking_por_pid pre-fetched evita 1 read em batch (otim bulk)."""
     odoo = MagicMock()
+    odoo.search_read.return_value = []  # v15c F1: nao idempotente
     odoo.create.return_value = 7777
     svc = StockPickingService(odoo=odoo)
     r = svc.criar_picking_inter_company(
@@ -841,6 +852,7 @@ def test_criar_picking_inter_company_tracking_por_pid_passed_skip_read():
             {'product_id': 1001, 'quantity': 10.0, 'lot_name': 'L'},
         ],
         picking_type_id=94, partner_id=1,
+        origin='TEST_ORIGIN_TRACKING_PRE',
         tracking_por_pid={1001: 'lot'},  # caller pre-fetched
     )
     assert r['picking_id'] == 7777
@@ -850,6 +862,64 @@ def test_criar_picking_inter_company_tracking_por_pid_passed_skip_read():
         if c[0] and c[0][0] == 'product.product'
     ]
     assert read_calls == []
+
+
+# ============================================================================
+# v15c F1 — Idempotencia via origin (CRITICAL anti-duplicacao SEFAZ)
+# ============================================================================
+
+def test_criar_picking_inter_company_origin_obrigatorio_raises():
+    """v15c F1 (CRITICAL): origin obrigatorio para idempotencia."""
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='origin OBRIGATORIO'):
+        svc.criar_picking_inter_company(
+            company_origem_id=5, company_destino_id=1,
+            location_origem_id=42, location_destino_id=5,
+            linhas=[{'product_id': 1, 'quantity': 1.0}],
+            picking_type_id=94, partner_id=1,
+            # origin omitido — deve raise
+        )
+
+
+def test_criar_picking_inter_company_idempotent_done():
+    """v15c F1: re-execucao com mesmo origin + picking ja done retorna IDEMPOTENT_DONE."""
+    odoo = MagicMock()
+    # Picking ja existe com origin EXATO em state='done'
+    odoo.search_read.return_value = [{'id': 5555, 'state': 'done'}]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-CYC-SAIDA-INDUSTRI-000123',
+    )
+    assert r['picking_id'] == 5555
+    assert r['status'] == 'IDEMPOTENT_DONE'
+    assert r['state'] == 'done'
+    assert r['tracking_none_pids'] == []
+    assert r['linhas_planejadas'] == []
+    # NAO criou nada
+    odoo.create.assert_not_called()
+
+
+def test_criar_picking_inter_company_idempotent_other_state():
+    """v15c F1: re-execucao + picking existe mas state != done = IDEMPOTENT_OTHER."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{'id': 7777, 'state': 'assigned'}]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-CYC-SAIDA-PERDA-000999',
+    )
+    assert r['picking_id'] == 7777
+    assert r['status'] == 'IDEMPOTENT_OTHER'
+    assert r['state'] == 'assigned'
+    odoo.create.assert_not_called()
 
 
 # ============================================================================

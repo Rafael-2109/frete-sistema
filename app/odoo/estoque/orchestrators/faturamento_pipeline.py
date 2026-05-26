@@ -56,17 +56,30 @@ import uuid
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy.exc import OperationalError
-
 from app.odoo.constants.ids_diversos import (
     CARRIER_NACOM,
     INCOTERM_CIF,
+    PAYMENT_PROVIDER_SEM_PAGAMENTO,  # CR-F11 v15c: ref stub C (G029)
 )
 from app.odoo.constants.locations import COMPANY_LOCATIONS
-from app.odoo.constants.operacoes_fiscais import COMPANY_PARTNER_ID
+from app.odoo.constants.operacoes_fiscais import (
+    ACAO_PARA_CFOP_ENTRADA,  # CR-F8 v15c: ref stub E (D17)
+    ACAO_PARA_DIRECAO,        # CR-F8 v15c: fonte unica de verdade
+    ACOES_ENTRADA_FB,         # CR-F8 v15c: ref stub E
+    ACOES_PICKING,            # CR-F8 v15c: derivada de ACAO_PARA_DIRECAO
+    COMPANY_PARTNER_ID,
+)
 from app.odoo.constants.picking_types import (
+    ACOES_ENTRADA_DESTINO_MANUAL,           # CR-F10 v15c: ref stub F
+    COMPANY_LABEL_ENTRADA,                  # CR-F10 v15c: ref stub F
     LOCATION_DESTINO_POR_DIRECAO,
+    LOCATION_ORIGEM_ENTRADA_INDUSTR,        # CR-F10 v15c: ref stub F (alias 26489)
+    PICKING_TYPE_ENTRADA_DESTINO_MANUAL,    # CR-F10 v15c: ref stub F
     get_picking_type,
+)
+from app.odoo.estoque.scripts._commit_helpers import (
+    commit_resilient as _commit_resilient_shared,  # CR-F9 v15c: helper consolidado
+    safe_session_get,                              # CR-F6 v15c: re-fetch ORM
 )
 from app.odoo.estoque.scripts.picking import StockPickingService
 from app.odoo.utils.connection import get_odoo_connection
@@ -80,26 +93,11 @@ logger = logging.getLogger(__name__)
 
 CICLO_DEFAULT = 'INVENTARIO_2026_05'
 
-# Mapeia acao_decidida -> (tipo_op, company_origem, company_destino).
-# Mesma tabela do `inventario_pipeline_service.ACAO_PARA_DIRECAO` — copiada
-# para evitar import cruzado service <-> orchestrator. Centralizar em
-# `app/odoo/constants/operacoes_fiscais.py` em v17 (pendencia §9 do
-# PLANEJAMENTO).
-ACAO_PARA_DIRECAO: Dict[str, Tuple[str, int, int]] = {
-    'TRANSFERIR_CD_FB':       ('transf-filial',        4, 1),
-    'TRANSFERIR_FB_CD':       ('transf-filial',        1, 4),
-    'INDUSTRIALIZACAO_FB_LF': ('industrializacao',     1, 5),
-    'PERDA_LF_FB':            ('perda',                5, 1),
-    'DEV_FB_LF':              ('dev-industrializacao', 1, 5),
-    'DEV_LF_FB':              ('dev-industrializacao', 5, 1),
-    'DEV_CD_LF':              ('dev-industrializacao', 4, 5),
-    'DEV_LF_CD':              ('dev-industrializacao', 5, 4),
-}
-
-# Subset de acao_decidida que dispara ETAPA B (cria picking inter-company).
-# Equivale a `ACAO_PARA_DIRECAO.keys()` — proxy semantico (filtro pipeline,
-# NAO matriz fiscal). NAO entra em `operacoes_fiscais.py`.
-ACOES_PICKING: frozenset = frozenset(ACAO_PARA_DIRECAO.keys())
+# CR-F8 v15c CRITICAL: `ACAO_PARA_DIRECAO` e `ACOES_PICKING` agora vivem em
+# `app/odoo/constants/operacoes_fiscais.py` (consolidado — Reviewer B conf 95).
+# `inventario_pipeline_service.py` tambem importa daqui — fonte unica.
+# Re-export aqui mantido por compat com testes que importam de orchestrator.
+# (re-exports vem dos imports acima)
 
 # Limite de cods por picking (script 09 L1136). Reduz over-reservation em
 # lotes velhos pos-renomeacao (G022).
@@ -133,67 +131,12 @@ FASE_F5c_FALHA = 'F5c_FALHA'
 # Helpers de auditoria + commit resiliente
 # ============================================================
 
-def _commit_resilient(
-    *, max_attempts: int = 3, backoff_base: float = 2.0,
-) -> bool:
-    """Commit resiliente a SSL drop (D14 — versao MAIS FORTE que `_commit_with_retry`).
-
-    Combina (a) rollback+close+retry com (b) `db.engine.dispose()` proativo
-    quando detecta substring 'SSL' no erro. Backoff exponencial entre
-    tentativas (2s, 4s, 8s).
-
-    Espelha script 09 L158-210 (`_commit_resilient`) — versao consolidada
-    aqui ate criacao do helper compartilhado em
-    `app/odoo/estoque/scripts/_commit_helpers.py` (pendencia §9 v16).
-
-    Args:
-        max_attempts: numero maximo de tentativas (default 3).
-        backoff_base: base do backoff exponencial em segundos (default 2).
-
-    Returns:
-        True se commit OK (em alguma tentativa), False se esgotou.
-    """
-    from app import db  # lazy (evita circular em tests)
-
-    last_err: Optional[Exception] = None
-    for attempt in range(1, max_attempts + 1):
-        try:
-            db.session.commit()
-            if attempt > 1:
-                logger.info(f'G016 _commit_resilient OK na tentativa {attempt}')
-            return True
-        except OperationalError as e:
-            last_err = e
-            err_str = str(e)[:200]
-            err_low = err_str.lower()
-            is_ssl = 'ssl' in err_low or 'connection' in err_low
-            logger.warning(
-                f'G016 _commit_resilient attempt {attempt}/{max_attempts} '
-                f'OperationalError (ssl={is_ssl}): {err_str}'
-            )
-            try:
-                db.session.rollback()
-            except Exception as e_rb:
-                logger.warning(f'G016 rollback falhou (continuando): {e_rb}')
-            try:
-                db.session.close()
-            except Exception as e_cl:
-                logger.warning(f'G016 close falhou (continuando): {e_cl}')
-            if is_ssl:
-                # D14: dispose proativo do engine se SSL drop detectado.
-                try:
-                    db.engine.dispose()
-                    logger.info('G016 db.engine.dispose() executado (SSL drop)')
-                except Exception as e_disp:
-                    logger.warning(f'G016 engine.dispose falhou: {e_disp}')
-            if attempt < max_attempts:
-                sleep_s = backoff_base ** (attempt - 1)
-                time.sleep(sleep_s)
-    logger.error(
-        f'G016 _commit_resilient FAILED apos {max_attempts} tentativas. '
-        f'Ultimo erro: {last_err}'
-    )
-    return False
+# CR-F9 v15c: `_commit_resilient` consolidado em
+# `app/odoo/estoque/scripts/_commit_helpers.py:commit_resilient` (helper
+# compartilhado entre orchestrators). Re-alias local mantido para compat
+# com call sites existentes. Reviewer B+D conf 80-85 — match SSL tightened
+# (lista especifica em vez de `'connection'` BROAD).
+_commit_resilient = _commit_resilient_shared
 
 
 def _registrar_auditoria(
@@ -641,21 +584,24 @@ class FaturamentoPipelineExecutor:
         dry_run: bool = True,
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
+        permitir_etapa_a_noop_real: bool = False,  # CR-F5 v15c
     ) -> Dict[str, Any]:
         """ETAPA A: transferencias internas pre-faturamento.
 
         DELEGADO 100% para Skill 2 `transferindo-interno-odoo` (D15).
-        Esta funcao apenas:
-          1. Carrega ajustes do ciclo+company com fases ('TRANSF_PENDENTE'|None)
-             e acao_decidida em ACOES_PICKING.
-          2. SEQUENCIAL (D13 — XML-RPC nao thread-safe Request-sent):
-             para cada ajuste, invoca Skill 2 via service direto.
-          3. Atualiza `fase_pipeline = 'TRANSF_OK'` em sucesso.
 
-        v15b: implementacao SIMPLES — invoca apenas se o ajuste tem
-        `lote_origem` distinto do quant atual (caller responsavel por
-        decidir se precisa transferir). Em v16, expandir com analise
-        de quants automatica.
+        **v15c CR-F5 (Reviewer D R-OPS-2 conf 88) — GUARD em real-run**:
+        Em `--confirmar` real, marcar `fase_pipeline='TRANSF_OK'` sem
+        validar Odoo e' PERIGOSO — ETAPA B pode falhar quando lote_origem
+        no DB local != quant atual no Odoo. Por isso, real-run agora RAISE
+        `NotImplementedError` por default (v15b NOOP era armadilha).
+
+        Para forcar comportamento NOOP em real-run (operador convicto que
+        ajustes ja' tem `lote_origem` correto), passar
+        `permitir_etapa_a_noop_real=True` explicitamente.
+
+        v16: substituir NOOP por integracao Skill 2 real (analise de
+        quants + invocacao `transferir_quantidade_para_lote_v2`).
 
         Args:
             ciclo: identificador do ciclo.
@@ -663,9 +609,16 @@ class FaturamentoPipelineExecutor:
             dry_run: True (default) simula; False executa real.
             usuario: identificador para auditoria.
             cod_produto: smoke/canary.
+            permitir_etapa_a_noop_real: CR-F5 v15c — forca NOOP em real-run.
+                Default False = raise NotImplementedError em real-run para
+                proteger contra uso involuntario do stub em PROD.
 
         Returns:
             dict com status + contadores.
+
+        Raises:
+            NotImplementedError: em real-run sem `permitir_etapa_a_noop_real=True`
+                (CR-F5 — Reviewer D R-OPS-2).
         """
         t0 = time.time()
         ajustes = _carregar_ajustes(
@@ -686,26 +639,32 @@ class FaturamentoPipelineExecutor:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # v15b min: marca todos como 'TRANSF_OK' (sem analise de quants).
-        # Em v16, integrar com Skill 2 quando descobrirmos casos reais que
-        # exigem transf interna antes da ETAPA B. Caso geral (script 09
-        # L501-613): a maioria dos ajustes NAO precisa de ETAPA A — apenas
-        # quando o lote_origem requer renomeacao.
-        # CR-BUG-1 v9 (Skill 6 lessons): se houver incerteza, retornar
-        # status especifico em vez de simular.
         if dry_run:
             out['status'] = 'DRY_RUN_OK_ETAPA_A_NOOP'
             out['observacao'] = (
-                f'v15b: ETAPA A simplificada — assume que ajustes ja '
-                f'tem `lote_origem` correto no Odoo. Em v16, integrar '
-                f'analise de quants + invocacao Skill 2 se necessario. '
-                f'Por ora retorna NOOP para nao bloquear pipeline A+B+C+D+E+F.'
+                f'v15c: ETAPA A em dry-run retorna NOOP. Em real-run, '
+                f'exige `permitir_etapa_a_noop_real=True` explicito '
+                f'(CR-F5 guard). Em v16, integrar analise de quants + '
+                f'invocacao Skill 2.'
             )
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # Real run: marcar como TRANSF_OK sem operar (v15b stub seguro).
-        # Em v16, invocar Skill 2 aqui se houver lote_origem != quant atual.
+        # CR-F5 v15c (CRITICAL Reviewer D R-OPS-2): GUARD em real-run.
+        # Marcar TRANSF_OK sem validar Odoo permite ETAPA B operar em
+        # quants nao preparados -> falha silenciosa em PROD.
+        if not permitir_etapa_a_noop_real:
+            raise NotImplementedError(
+                'ETAPA A real-run em v15c esta bloqueada (CR-F5 guard). '
+                'A integracao com Skill 2 (transferir_quantidade_para_lote_v2) '
+                'esta TODO para v16. Para forcar NOOP em real-run (operador '
+                'convicto que `lote_origem` dos ajustes ja casa com quants '
+                'no Odoo), passar `permitir_etapa_a_noop_real=True` '
+                'explicitamente ao chamar executar_etapa_a OU '
+                'executar_pipeline_bulk.'
+            )
+
+        # NOOP real autorizado por flag explicita
         for a in ajustes:
             a.fase_pipeline = 'TRANSF_OK'
         if not _commit_resilient():
@@ -849,18 +808,45 @@ class FaturamentoPipelineExecutor:
                 for falha in resultado_chunk.get('falhas', []):
                     out['falhas'].append(falha)
 
-        # Status agregado
-        if out['falhas']:
-            if out['pickings_liberados'] or out['pickings_criados']:
+        # CR-F15 v15c (Reviewer A H2 conf 82): distincao EXECUTADO_AUTO_CORRIGIDO.
+        # Skill 6 v9 pattern — quando compensatorio resolveu pendencia G021
+        # E zero falhas reais, status agregado e' AUTO_CORRIGIDO (NAO falha).
+        # Relevante para `--resume` v18 distinguir auto-corrigido vs falhou.
+        n_falhas = len(out['falhas'])
+        n_compensatorios = len(out['compensatorios_criados'])
+        n_liberados = len(out['pickings_liberados'])
+        n_planejados = len(out['pickings_planejados'])
+
+        if n_falhas > 0:
+            if n_liberados > 0 or len(out['pickings_criados']) > 0:
                 out['status'] = (
-                    'DRY_RUN_OK_PARCIAL' if dry_run else 'EXECUTADO_PARCIAL'
+                    'DRY_RUN_PARCIAL' if dry_run else 'EXECUTADO_PARCIAL'
                 )
             else:
                 out['status'] = 'FALHA_TOTAL'
+        elif n_compensatorios > 0 and not dry_run:
+            # CR-F15: compensatorio criado SEM falha = AUTO_CORRIGIDO
+            out['status'] = 'EXECUTADO_AUTO_CORRIGIDO'
         elif dry_run:
-            out['status'] = 'DRY_RUN_OK_ETAPA_B'
+            out['status'] = (
+                'DRY_RUN_OK_ETAPA_B' if n_planejados > 0
+                else 'DRY_RUN_OK_NENHUM_PICKING'
+            )
         else:
             out['status'] = 'EXECUTADO_ETAPA_B'
+
+        # CR-F14 v15c (Reviewer A H1 conf 85): contadores estruturados
+        # (proxy do Skill 6 v9 `_novos_contadores`) — facilita observabilidade
+        # em bulk + permite `--resume` v18 distinguir _dry de real.
+        out['contadores'] = {
+            'pickings_planejados': n_planejados,
+            'pickings_criados': len(out['pickings_criados']),
+            'pickings_validados': len(out['pickings_validados']),
+            'pickings_liberados': n_liberados,
+            'compensatorios_criados': n_compensatorios,
+            'falhas': n_falhas,
+            'modo': 'dry-run' if dry_run else 'real',
+        }
 
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
@@ -881,15 +867,25 @@ class FaturamentoPipelineExecutor:
         """Processa 1 chunk de ate 30 cods em pipeline F5a -> F5b -> F5c.
 
         Cada chunk gera 1 picking. Sub-nuance D16:
-          - F5a: criar_picking_inter_company (Skill 5 v15a)
+          - F5a: criar_picking_inter_company (Skill 5 v15a) — idempotente
+            via origin (CR-F1 v15c — anti-duplicacao SEFAZ)
           - F5b: validar_picking_inter_company (Skill 5 v15a)
           - F5c: liberar_faturamento (Skill 5 — atomo legacy)
           - Caller (executar_etapa_b) faz sleep 5s entre chunks (G022)
 
+        **G-ETB-G014 WARNING (CR-F3 v15c — Reviewer C conf 95)**:
+        Esta funcao ASSUME que `a.lote_origem` esta valido (lote nao
+        vencido) no Odoo. Em PROD com lote em `expiration_date < HOJE`:
+        - `action_assign` no Odoo rejeitara reserva silenciosamente.
+        - F5b retornara erro de quant insuficiente.
+        - PRE-FLIGHT C5 v14b detecta lotes vencidos como WARNING (nao
+          BLOQUEIO) — operador deve revisar.
+        Implementacao completa do G014 (migracao on-the-fly via Skill 2)
+        e' TODO v16. Ate la, lotes vencidos disparam warning no log.
+
         Args:
             ajustes_chunk: lista de AjusteEstoqueInventario do mesmo
-                (company_origem, tipo_op). Todos com `acao_decidida`
-                compativel (ja agrupados upstream).
+                `acao_decidida` (CR-C2 v15b — agrupados por acao full).
             acao_decidida_referencia: acao do primeiro ajuste — usada para
                 resolver metadata.
             dry_run: simula vs executa.
@@ -898,12 +894,16 @@ class FaturamentoPipelineExecutor:
 
         Returns:
             dict com chave por sub-etapa (picking_planejado / picking_id_criado /
-            picking_id_validado / picking_id_liberado / compensatorios / falhas).
+            picking_id_validado / picking_id_liberado / compensatorios / falhas
+            / ajustes_lote_potencialmente_vencido).
         """
         out_chunk: Dict[str, Any] = {
             'ajustes_ids': [a.id for a in ajustes_chunk],
             'compensatorios': [],
             'falhas': [],
+            # CR-F3 v15c: rastreabilidade de lotes potencialmente vencidos
+            # (G014 TODO v16). Operador pode cross-checar com PRE-FLIGHT C5.
+            'ajustes_lote_potencialmente_vencido': [],
         }
 
         # Resolver metadata da direcao (picking_type + partner + locations)
@@ -1014,13 +1014,39 @@ class FaturamentoPipelineExecutor:
                 carrier_id=CARRIER_NACOM,
             )
             picking_id = f5a_result['picking_id']
+            f5a_status = f5a_result.get('status', 'CRIADO')  # CR-F1 v15c
             out_chunk['picking_id_criado'] = picking_id
+            out_chunk['f5a_status'] = f5a_status  # CRIADO|IDEMPOTENT_DONE|IDEMPOTENT_OTHER
             tempo_f5a = int((time.time() - t_f5a) * 1000)
 
-            # Atualizar fase + picking_id em todos ajustes do chunk
+            # CR-F1 v15c: se atomo retornou IDEMPOTENT_DONE, picking ja foi
+            # processado anteriormente (F5b+F5c) — pular F5b/F5c e marcar
+            # ajustes como ja' finalizados (anti-loop em re-execucao).
+            if f5a_status == 'IDEMPOTENT_DONE':
+                logger.info(
+                    f'F5a IDEMPOTENT_DONE picking_id={picking_id} '
+                    f'origin={origin!r} — pulando F5b/F5c'
+                )
+                for a in ajustes_chunk:
+                    a.picking_id_odoo = picking_id
+                    # Forca fase F5c_OK porque picking ja' esta done
+                    a.fase_pipeline = FASE_F5c_OK
+                _commit_resilient()
+                out_chunk['picking_id_validado'] = picking_id
+                out_chunk['picking_id_liberado'] = picking_id
+                return out_chunk
+
+            # Atualizar fase + picking_id + external_id em todos ajustes do chunk
+            # CR-F12 v15c: setar external_id_operacao para rastreabilidade
+            # (campo do model ate v15b nunca era populado — Reviewer B conf 82)
+            external_id_f5a = (
+                f'INV-{ciclo}-A{ajustes_chunk[0].id:06d}-{FASE_F5a_OK}-'
+                f'{uuid.uuid4().hex[:8]}'
+            )
             for a in ajustes_chunk:
                 a.picking_id_odoo = picking_id
                 a.fase_pipeline = FASE_F5a_OK
+                a.external_id_operacao = external_id_f5a  # CR-F12 v15c
                 _registrar_auditoria(
                     ajuste_id=a.id, ciclo=ciclo, fase=FASE_F5a_OK,
                     acao='criar_picking_inter_company',
@@ -1028,6 +1054,7 @@ class FaturamentoPipelineExecutor:
                     status='SUCESSO', odoo_id=picking_id,
                     payload={
                         'origin': origin,
+                        'f5a_status': f5a_status,  # CR-F1 v15c
                         'linhas_planejadas': len(
                             f5a_result.get('linhas_planejadas', [])
                         ),
@@ -1038,16 +1065,43 @@ class FaturamentoPipelineExecutor:
                     tempo_ms=tempo_f5a, executado_por=usuario,
                 )
             if not _commit_resilient():
+                # F2 v15c (CRITICAL Reviewer D R-OPS-3 conf 82): ABORT chunk
+                # se commit falha apos F5a OK. Continuar para F5b com DB local
+                # dessincronizado (picking_id_odoo NULO mas Odoo com picking)
+                # cria caos: F5b valida picking no Odoo mas erro_msg/fase_pipeline
+                # nao persistem. Re-run depende de F1 idempotencia para nao duplicar.
                 logger.error(
-                    f'F5a commit FAILED apos picking_id={picking_id} criado'
+                    f'F5a commit FAILED apos picking_id={picking_id} criado. '
+                    f'ABORT chunk para evitar cascata. Re-run usara F1 '
+                    f'idempotencia via origin={origin!r}.'
                 )
-                # Continuar — picking ja existe no Odoo (idempotente via origin)
+                out_chunk['falhas'].append({
+                    'sub_etapa': 'F5a_commit',
+                    'erro': (
+                        f'commit_resilient falhou apos F5a OK (picking_id='
+                        f'{picking_id} criado no Odoo, fase nao persistida). '
+                        f'Re-run com F1 idempotencia detectara picking existente.'
+                    ),
+                    'picking_id': picking_id,
+                    'ajustes_ids': out_chunk['ajustes_ids'],
+                })
+                return out_chunk
         except Exception as e:
             msg = str(e)[:500]
             logger.error(
                 f'F5a falhou origin={origin!r}: {msg}', exc_info=True
             )
-            for a in ajustes_chunk:
+            # CR-F6 v15c (Reviewer D R-OPS-5 conf 85): re-fetch ajustes
+            # apos excecao para anti-DetachedInstanceError. commit_resilient
+            # pode ter feito session.close() em falha anterior.
+            from app.odoo.models import AjusteEstoqueInventario  # lazy
+            ajuste_ids = [a.id for a in ajustes_chunk]
+            ajustes_fresh = []
+            for aid in ajuste_ids:
+                af = safe_session_get(AjusteEstoqueInventario, aid)
+                if af is not None:
+                    ajustes_fresh.append(af)
+            for a in ajustes_fresh:
                 a.fase_pipeline = FASE_F5a_FALHA
                 a.erro_msg = msg
                 _registrar_auditoria(
@@ -1328,13 +1382,24 @@ class FaturamentoPipelineExecutor:
 
         v16: implementar polling de account.move + sub-etapas F5d.5 (G029
         payment_provider) + F5d.6 (G007 price zero) + F5d.7 (G034 fiscal
-        setup DEV_*). D10: db.engine.dispose() antes/apos.
+        setup DEV_*). D10: db.engine.dispose() antes/apos (CR-F7 ja
+        ativo no macro `executar_pipeline_bulk`).
+
+        v16 ira utilizar (CR-F11 v15c — refs explicitas para guiar implementer):
+          - `PAYMENT_PROVIDER_SEM_PAGAMENTO` ({} sub-etapa F5d.5 G029)
+
+        Polling tipico: 1800s timeout, 40s interval. Re-fetch via
+        `safe_session_get(AjusteEstoqueInventario, id)` apos cada commit
+        para anti-DetachedInstanceError (CR-F6 v15c).
         """
         return {
             'etapa': 'C',
             'ciclo': ciclo,
             'status': 'NOT_IMPLEMENTED_v15b',
             'roadmap': 'C9/C10 v16',
+            'refs_v16': {
+                'PAYMENT_PROVIDER_SEM_PAGAMENTO': PAYMENT_PROVIDER_SEM_PAGAMENTO,
+            },
         }
 
     def executar_etapa_d(
@@ -1371,12 +1436,21 @@ class FaturamentoPipelineExecutor:
         v17: invoca `RecebimentoLfOdooService.processar_recebimento(rec_id)`
         (modulo externo — NAO MEXER). 30-60min POR INVOICE (G-RECLF-1).
         Decidir paralelismo em v17 (decisao 10.7 PENDENTE).
+
+        v17 ira utilizar (CR-F8 v15c — refs explicitas):
+          - `ACOES_ENTRADA_FB` (filtro de acoes que disparam ETAPA E)
+          - `ACAO_PARA_CFOP_ENTRADA` (mapa 5xxx -> 1xxx para
+            RecebimentoLfLote.cfop — D17)
         """
         return {
             'etapa': 'E',
             'ciclo': ciclo,
             'status': 'NOT_IMPLEMENTED_v15b',
             'roadmap': 'C12 v17',
+            'refs_v17': {
+                'acoes_entrada_fb_count': len(ACOES_ENTRADA_FB),
+                'cfop_entrada_count': len(ACAO_PARA_CFOP_ENTRADA),
+            },
         }
 
     def executar_etapa_f(self, *, ciclo: str, **_kw) -> Dict[str, Any]:
@@ -1385,12 +1459,32 @@ class FaturamentoPipelineExecutor:
         v17: invoca `picking_svc.criar_picking_entrada_destino_manual`
         (atomo Skill 5 v15a) por invoice_id distinto. G023 codificado
         intra-atomo. Idempotencia via origin EXATO.
+
+        v17 ira utilizar (CR-F10 v15c — refs explicitas das 4 constantes
+        ETAPA F centralizadas em `picking_types.py` v15a):
+          - `ACOES_ENTRADA_DESTINO_MANUAL` (filtro: so' INDUSTRIALIZACAO_FB_LF
+            validado em PROD; DEV_FB_LF/TRANSFERIR_FB_CD a validar)
+          - `PICKING_TYPE_ENTRADA_DESTINO_MANUAL` (LF=19; CD/FB a descobrir)
+          - `COMPANY_LABEL_ENTRADA` (FB/CD/LF — usado em `origin`)
+          - `LOCATION_ORIGEM_ENTRADA_INDUSTR` (alias 26489 Em Transito Industr)
         """
         return {
             'etapa': 'F',
             'ciclo': ciclo,
             'status': 'NOT_IMPLEMENTED_v15b',
             'roadmap': 'C13 v17',
+            'refs_v17': {
+                'acoes_entrada_destino_manual_count': len(
+                    ACOES_ENTRADA_DESTINO_MANUAL
+                ),
+                'picking_type_entrada_destino_manual': dict(
+                    PICKING_TYPE_ENTRADA_DESTINO_MANUAL
+                ),
+                'company_label_entrada': dict(COMPANY_LABEL_ENTRADA),
+                'location_origem_entrada_industr': (
+                    LOCATION_ORIGEM_ENTRADA_INDUSTR
+                ),
+            },
         }
 
     # ========================================================
@@ -1488,7 +1582,20 @@ class FaturamentoPipelineExecutor:
         # quando v17 implementar.
         ETAPAS_ABORT_SE_ANTERIOR_FALHOU: Tuple[str, ...] = ('D',)
 
+        # CR-F7 v15c (Reviewer A C2 + C HIGH conf 90): ETAPAS_DISPOSE_ENVOLVEM
+        # listam etapas que exigem `db.engine.dispose()` profilatico ANTES e
+        # APOS (D10 — G016 SSL drop em loops longos). Em v15b C/D sao stubs;
+        # ativar dispose efetivo em v16/v17 quando essas etapas operarem.
+        ETAPAS_DISPOSE_ENVOLVEM: Tuple[str, ...] = ('C', 'D')
+
+        # CR-F4 v15c: importar db aqui para barreira MACRO explicita entre
+        # etapas (D11 — Reviewer A C1 CRITICAL conf 95). expire_all() entre
+        # etapas garante ORM cache invalidado mesmo se `executar_etapa_X`
+        # nao recarregar (defensive).
+        from app import db  # lazy
+
         # Executar etapas na ordem fixa
+        ultima_etapa_executada: Optional[str] = None
         for etapa in ETAPAS_VALIDAS:
             if etapa not in etapas:
                 continue
@@ -1511,6 +1618,34 @@ class FaturamentoPipelineExecutor:
                             ),
                         }
                         continue
+
+            # CR-F4 v15c: BARREIRA MACRO explicita (D11) entre etapas — Reviewer A C1.
+            # expire_all() invalida ORM cache; cada `executar_etapa_X` re-loadara
+            # ajustes frescos com `fase_pipeline` da etapa anterior.
+            if ultima_etapa_executada is not None:
+                try:
+                    db.session.expire_all()
+                    logger.debug(
+                        f'BARREIRA MACRO (D11): expire_all() apos '
+                        f'{ultima_etapa_executada} -> antes de {etapa}'
+                    )
+                except Exception as e:
+                    logger.warning(f'D11 expire_all falhou (continuando): {e}')
+
+            # CR-F7 v15c: db.engine.dispose() PROFILATICO antes de etapas
+            # com ops longas (C polling 1800s, D Playwright 5-10min/NF).
+            # ATIVO ate v15b (stubs leves); custo trivial mesmo em stub.
+            if etapa in ETAPAS_DISPOSE_ENVOLVEM:
+                try:
+                    db.engine.dispose()
+                    logger.debug(
+                        f'D10 db.engine.dispose() PROFILATICO antes de ETAPA {etapa}'
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f'D10 engine.dispose antes de {etapa} falhou: {e}'
+                    )
+
             try:
                 if etapa == 'A':
                     res = self.executar_etapa_a(
@@ -1543,6 +1678,7 @@ class FaturamentoPipelineExecutor:
                 else:
                     res = {'status': 'FALHA_USO_ETAPA_DESCONHECIDA'}
                 out['etapas_executadas'][etapa] = res
+                ultima_etapa_executada = etapa  # CR-F4 v15c: rastrear p/ barreira
             except Exception as e:
                 logger.error(
                     f'ETAPA {etapa} falhou: {e}', exc_info=True,
@@ -1552,9 +1688,23 @@ class FaturamentoPipelineExecutor:
                     'status': 'EXCECAO_NAO_TRATADA',
                     'erro': str(e)[:500],
                 }
+                ultima_etapa_executada = etapa  # mesmo em falha, etapa rodou
                 # Em v15b: nao abortar — continuar outras etapas (operador
                 # decide). Em v17 (SEFAZ): abortar em D se falhar para
                 # nao continuar com state distribuido inconsistente.
+
+            # CR-F7 v15c: db.engine.dispose() PROFILATICO APOS etapas longas
+            # (D10 — alem do dispose antes).
+            if etapa in ETAPAS_DISPOSE_ENVOLVEM:
+                try:
+                    db.engine.dispose()
+                    logger.debug(
+                        f'D10 db.engine.dispose() PROFILATICO apos ETAPA {etapa}'
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f'D10 engine.dispose apos {etapa} falhou: {e}'
+                    )
 
         # Status agregado.
         # CR-M3 v15b: 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ' e

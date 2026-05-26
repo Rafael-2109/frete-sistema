@@ -703,3 +703,160 @@ def test_executar_pipeline_bulk_etapa_invalida_falha_uso():
     )
     assert res['status'] == 'FALHA_USO'
     assert "['Z']" in res['erro']
+
+
+# ============================================================
+# Code-review v15c fixes — CR-F5, CR-F15, CR-F1 integration
+# ============================================================
+
+def test_executar_etapa_a_real_run_sem_flag_raises():
+    """CR-F5 v15c (CRITICAL Reviewer D R-OPS-2): ETAPA A real-run sem
+    flag explicita levanta NotImplementedError. Guard contra uso
+    involuntario do stub NOOP em PROD.
+    """
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    ajustes = [_ajuste_mock(ajuste_id=1)]
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=ajustes,
+    ):
+        with pytest.raises(NotImplementedError, match='ETAPA A real-run'):
+            executor.executar_etapa_a(ciclo='TESTE', dry_run=False)
+
+
+def test_executar_etapa_a_real_run_com_flag_executa_noop():
+    """CR-F5 v15c: com `permitir_etapa_a_noop_real=True` real-run NOOP funciona."""
+    odoo = MagicMock()
+    svc = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    ajustes = [_ajuste_mock(ajuste_id=1)]
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=ajustes,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        return_value=True,
+    ):
+        res = executor.executar_etapa_a(
+            ciclo='TESTE', dry_run=False,
+            permitir_etapa_a_noop_real=True,
+        )
+    assert res['status'] == 'EXECUTADO_ETAPA_A_NOOP'
+    assert ajustes[0].fase_pipeline == 'TRANSF_OK'
+
+
+def test_etapa_b_compensatorio_sem_falhas_vira_auto_corrigido(db):
+    """CR-F15 v15c (Reviewer A H2 conf 82): se compensatorio criado E
+    zero falhas E real-run, status = EXECUTADO_AUTO_CORRIGIDO.
+    """
+    from app.odoo.models import AjusteEstoqueInventario
+
+    ciclo_test = 'TEST_CR_F15_AUTO'
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.flush()
+
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='C', tipo_produto=1, company_id=5,
+        qtd_inventario=100, qtd_odoo=0, qtd_ajuste=100,
+        acao_decidida='PERDA_LF_FB', status='PROPOSTO',
+        lote_origem='LOT_X',
+        criado_por='test',
+    )
+    db.session.add(aj)
+    db.session.flush()
+
+    odoo = MagicMock()
+    # Mock diferenciado por model (idempotencia picking vazia + resolve pid)
+    def search_read_side(*args, **kwargs):
+        model = args[0] if args else kwargs.get('model')
+        if model == 'product.product':
+            return [{'id': 999, 'default_code': 'C'}]
+        return []  # stock.picking (idempotencia F1): sem existente
+    odoo.search_read.side_effect = search_read_side
+    odoo.read.return_value = [{'id': 999, 'tracking': 'lot'}]
+    odoo.create.return_value = 9999
+    svc = MagicMock()
+    svc.criar_picking_inter_company.return_value = {
+        'picking_id': 9999, 'status': 'CRIADO',
+        'tracking_none_pids': [], 'linhas_planejadas': [], 'tempo_ms': 100,
+    }
+    # F5b retorna pendencia com qty_done < demand -> compensatorio cria
+    svc.validar_picking_inter_company.return_value = {
+        'picking_id': 9999, 'state_apos_validate': 'done',
+        'mls_pendencias': [{'product_id': 999, 'qty_demand': 100.0,
+                            'qty_done': 30.0}],
+        'g023_aplicado': True, 'peso_volumes': {'aplicado': True},
+        'tempo_ms': 50,
+    }
+    svc.liberar_faturamento.return_value = None
+
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+    ):
+        res = executor.executar_etapa_b(
+            ciclo=ciclo_test, dry_run=False,
+        )
+    # CR-F15: compensatorio criado + 0 falhas + real-run -> AUTO_CORRIGIDO
+    assert res['status'] == 'EXECUTADO_AUTO_CORRIGIDO'
+    assert len(res['compensatorios_criados']) == 1
+    assert len(res['falhas']) == 0
+    # CR-F14: contadores estruturados presentes
+    assert 'contadores' in res
+    assert res['contadores']['compensatorios_criados'] == 1
+    assert res['contadores']['falhas'] == 0
+
+
+def test_etapa_b_atomo_skill5_idempotent_done_pula_f5b_f5c():
+    """CR-F1 v15c integration: se F5a retorna IDEMPOTENT_DONE, orchestrator
+    pula F5b/F5c e marca ajustes como F5c_LIBERADO (picking ja' done).
+    """
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 9999, 'default_code': 'C'}
+    ]
+    svc = MagicMock()
+    # F1 v15a/c: F5a retorna IDEMPOTENT_DONE (picking ja existia)
+    svc.criar_picking_inter_company.return_value = {
+        'picking_id': 12345,
+        'status': 'IDEMPOTENT_DONE',
+        'state': 'done',
+        'tracking_none_pids': [],
+        'linhas_planejadas': [],
+        'tempo_ms': 10,
+    }
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
+    aj = _ajuste_mock(ajuste_id=1, cod_produto='C', acao='PERDA_LF_FB')
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        return_value=[aj],
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_registrar_auditoria',
+    ):
+        res = executor.executar_etapa_b(ciclo='TESTE', dry_run=False)
+    # F5a chamado
+    svc.criar_picking_inter_company.assert_called_once()
+    # F5b/F5c NAO chamados (IDEMPOTENT_DONE skip)
+    svc.validar_picking_inter_company.assert_not_called()
+    svc.liberar_faturamento.assert_not_called()
+    # Ajuste marcado como F5c_LIBERADO (picking ja' done no Odoo)
+    assert aj.fase_pipeline == 'F5c_LIBERADO'
+    assert aj.picking_id_odoo == 12345

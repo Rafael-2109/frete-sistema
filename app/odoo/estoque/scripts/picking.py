@@ -900,16 +900,27 @@ class StockPickingService:
 
         Returns:
             Dict com:
-              picking_id: int — id do stock.picking criado
+              picking_id: int — id do stock.picking (novo ou idempotente)
+              status: str — CRIADO | IDEMPOTENT_DONE | IDEMPOTENT_OTHER
+              state: str (so quando IDEMPOTENT_*) — state do picking existente
               tracking_none_pids: list[int] — pids tracking='none' detectados
-                (informativo; lot_name foi removido das linhas correspondentes)
+                (informativo; lot_name foi removido das linhas correspondentes;
+                vazio se IDEMPOTENT_*)
               linhas_planejadas: list — linhas APOS normalizacao tracking='none'
+                (vazio se IDEMPOTENT_*)
               tempo_ms: int
 
         Raises:
             ValueError: pre-cond falhou (linhas vazias, company iguais, partner_id
-                ausente).
+                ausente, origin ausente).
             Exception: erros XML-RPC do Odoo (propaga para caller decidir retry).
+
+        v15c F1 (CRITICAL): idempotencia via `origin` EXATO antes de create.
+            Sem isso, SSL drop apos create + commit local falha permite
+            re-execucao a criar DUPLICATA -> 2 invoices CIEL IT -> 2 NFs
+            SEFAZ irreversiveis (catastrofe fiscal). Pattern espelha
+            `criar_picking_entrada_destino_manual` v15a. Reviewer D
+            R-OPS-1 conf 95.
         """
         inicio = time.time()
 
@@ -930,6 +941,44 @@ class StockPickingService:
                 '(fiscal_position precisa resolver). '
                 'Usar `operacoes_fiscais.COMPANY_PARTNER_ID[company_destino_id]`.'
             )
+        # v15c F1: origin agora e' OBRIGATORIO para idempotencia.
+        # Sem origin, fluxo perde a chave de recuperacao apos SSL drop.
+        if not origin:
+            raise ValueError(
+                'origin OBRIGATORIO para idempotencia (v15c F1). '
+                'Caller deve montar string controlada (ex: '
+                'INV-{ciclo}-SAIDA-{tipo_op}-{ajuste_id:06d}).'
+            )
+
+        # v15c F1 (CRITICAL): IDEMPOTENCIA via origin EXATO antes de create.
+        # Sem isso, re-execucao apos SSL drop cria DUPLICATA -> 2 NFs SEFAZ.
+        # Pattern espelha `criar_picking_entrada_destino_manual` v15a.
+        existentes = self.odoo.search_read(
+            'stock.picking',
+            [['origin', '=', origin]],
+            ['id', 'state'],
+        )
+        if existentes:
+            picking_id_existente = existentes[0]['id']
+            state_existente = existentes[0].get('state') or 'unknown'
+            status_idem = (
+                'IDEMPOTENT_DONE' if state_existente == 'done'
+                else 'IDEMPOTENT_OTHER'
+            )
+            logger.info(
+                f'criar_picking_inter_company: IDEMPOTENT — picking '
+                f'{picking_id_existente} ja existe com origin={origin!r} '
+                f'(state={state_existente!r}, status={status_idem}). '
+                f'Skipping create (F1 v15c — anti-duplicacao SEFAZ).'
+            )
+            return {
+                'picking_id': picking_id_existente,
+                'status': status_idem,
+                'state': state_existente,
+                'tracking_none_pids': [],
+                'linhas_planejadas': [],
+                'tempo_ms': int((time.time() - inicio) * 1000),
+            }
 
         # G021: filtrar qty<=0
         linhas_filtradas = [
@@ -999,6 +1048,7 @@ class StockPickingService:
         )
         return {
             'picking_id': picking_id,
+            'status': 'CRIADO',  # v15c F1: distingue de IDEMPOTENT_*
             'tracking_none_pids': tracking_none_pids,
             'linhas_planejadas': linhas_normalizadas,
             'tempo_ms': int((time.time() - inicio) * 1000),
