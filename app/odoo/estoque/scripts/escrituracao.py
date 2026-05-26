@@ -1003,7 +1003,16 @@ class EscrituracaoLfService:
 
         pre = pre_check[0]
         atual_tipo = pre.get('l10n_br_tipo_pedido')
-        atual_data = pre.get('l10n_br_data_entrada')
+        atual_data_raw = pre.get('l10n_br_data_entrada')
+
+        # CR-v20+-HIGH-1 (review code-reviewer 2026-05-26): normalizar
+        # data para 'YYYY-MM-DD' antes de comparar. Odoo 17 XML-RPC
+        # retorna fields.Date como string 'YYYY-MM-DD' OU False; mas se
+        # CIEL IT customizar para fields.Datetime, retorna 'YYYY-MM-DD HH:MM:SS'
+        # e comparacao silenciosamente falharia, forcando write em invoice
+        # posted (exatamente o risco que FIX A foi desenhado para evitar).
+        # `str(x)[:10]` defensivamente extrai apenas a parte de data.
+        atual_data = str(atual_data_raw)[:10] if atual_data_raw else None
 
         # Caso 1: ambos campos ja iguais ao proposto -> no-op
         if atual_tipo == l10n_br_tipo_pedido and atual_data == out['data_entrada']:
@@ -1056,7 +1065,11 @@ class EscrituracaoLfService:
                 out['erro'] = 'write_nao_persistiu_tipo_pedido'
                 out['tempo_ms'] = int((time.time() - t0) * 1000)
                 return out
-            if chk.get('l10n_br_data_entrada') != out['data_entrada']:
+            # CR-v20+-HIGH-1: normalizar data antes de comparar (idem
+            # FIX A pre-read — defesa contra fields.Datetime customizacao).
+            chk_data_raw = chk.get('l10n_br_data_entrada')
+            chk_data = str(chk_data_raw)[:10] if chk_data_raw else None
+            if chk_data != out['data_entrada']:
                 out['erro'] = 'write_nao_persistiu_data_entrada'
                 out['tempo_ms'] = int((time.time() - t0) * 1000)
                 return out

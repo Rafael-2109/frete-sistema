@@ -3284,15 +3284,23 @@ class FaturamentoPipelineExecutor:
 
         n_ok = out['contadores']['ok']
         n_falha = out['contadores']['falha']
-        if n_falha == 0 and n_ok > 0:
+        n_nao_suportada = out['contadores']['nao_suportada_v20']
+
+        # CR-v20+-HIGH-2 (review code-reviewer 2026-05-26): nao_suportada_v20
+        # conta como sinal de parcial — onda mista LF (ok) + CD (nao_suportada)
+        # deve reportar EXECUTADO_PARCIAL, nao EXECUTADO_OK. Operador precisa
+        # saber que parte da onda nao foi processada e fica para v21+.
+        if n_falha == 0 and n_nao_suportada == 0 and n_ok > 0:
             out['status'] = (
                 'DRY_RUN_OK' if dry_run else 'EXECUTADO_OK'
             )
         elif n_ok > 0:
+            # ha ok + (falha ou nao_suportada) — parcial alerta operador
             out['status'] = 'EXECUTADO_PARCIAL'
         elif n_falha > 0:
             out['status'] = 'FALHA_ETAPA_F'
         else:
+            # n_ok==0 + n_falha==0 + (n_nao_suportada >= 0)
             out['status'] = 'SKIP_NAO_SUPORTADA_V20'
 
         out['tempo_ms'] = int((time.time() - t0) * 1000)
@@ -4341,10 +4349,19 @@ class FaturamentoPipelineExecutor:
         # CR-M3 v15b: 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ' e
         # 'BLOQUEADO_ETAPA_ANTERIOR_FALHOU' contam como falha — pipeline
         # nao retorna OK quando ETAPA D foi bloqueada.
+        # CR-v20+-CRITICAL-1 (review code-reviewer 2026-05-26):
+        # 'SKIP_NAO_SUPORTADA_V20_FLUXO_L3' (retornado por ETAPA E quando
+        # `usar_fluxo_l3_v19=True` mas company_destino=1 FB ainda nao
+        # mapeada em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO) DEVE contar
+        # como falha. Sem este check, operador rodando
+        # `--usar-fluxo-l3-v19 --etapas E,F` receberia EXECUTADO_OK mesmo
+        # com ETAPA E silenciosamente skipada — silent correctness gap.
         STATUS_FALHA = (
             'EXCECAO_NAO_TRATADA',
             'BLOQUEADO_SEM_CONFIRMAR_SEFAZ',
             'BLOQUEADO_ETAPA_ANTERIOR_FALHOU',
+            'SKIP_NAO_SUPORTADA_V20_FLUXO_L3',  # v20+ CRITICAL-1
+            'SKIP_NAO_SUPORTADA_V20',           # v20+ ETAPA F via fluxo L3 sem invoices suportados
         )
         status_etapas = [
             r.get('status', '') for r in out['etapas_executadas'].values()

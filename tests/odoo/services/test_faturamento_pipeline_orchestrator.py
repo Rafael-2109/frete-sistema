@@ -2623,3 +2623,133 @@ def test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada(db):
     assert 'Pendencia v21+' in msg
     # CRUCIAL: NAO chamou executar_fluxo_l3_1_2_x (nao tinha constants)
     mock_fluxo.assert_not_called()
+
+
+def test_v20_s3_etapa_f_via_fluxo_l3_excecao_continua_proximo(db):
+    """v20+ S3 HIGH-1 (code-reviewer 2026-05-26): exception em
+    executar_fluxo_l3_1_2_x num invoice NAO aborta loop. Proximo invoice
+    eh processado normalmente. Status final EXECUTADO_PARCIAL.
+
+    Caso PROD critico: transient Odoo RPC error em 1 de N invoices nao
+    deve abortar a onda inteira.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V20_S3_EXC'
+    # 2 invoices INDUSTRIALIZACAO_FB_LF (ambos destino LF=5 suportado)
+    aj1 = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='AAA', tipo_produto=4, company_id=1,
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_inventario=10, qtd_odoo=0, qtd_ajuste=10,
+        lote_destino='MIGRAÇÃO', invoice_id_odoo=111111,
+        chave_nfe='35260561724241000178550010000111111006273480',
+        fase_pipeline='F5e_SEFAZ_OK', status='EXECUTADO',
+        criado_por='test_v20_s3',
+    )
+    aj2 = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='BBB', tipo_produto=4, company_id=1,
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_inventario=20, qtd_odoo=0, qtd_ajuste=20,
+        lote_destino='MIGRAÇÃO', invoice_id_odoo=222222,
+        chave_nfe='35260561724241000178550010000222222006273480',
+        fase_pipeline='F5e_SEFAZ_OK', status='EXECUTADO',
+        criado_por='test_v20_s3',
+    )
+    db.session.add_all([aj1, aj2])
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    # 1o invoice raise; 2o retorna FLUXO_OK
+    side_effects = [
+        RuntimeError('odoo_rpc_timeout_transient'),
+        {
+            'status': 'FLUXO_OK', 'caminho': 'A',
+            'dfe_id': 999, 'po_id': 888, 'picking_id': 777,
+            'invoice_id': 666, 'passos': [], 'tempo_ms': 100,
+        },
+    ]
+    with patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        side_effect=side_effects,
+    ) as mock_fluxo:
+        res = executor.executar_etapa_f(
+            ciclo=ciclo_test, dry_run=False, usar_fluxo_l3_v19=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    # CRUCIAL: loop continuou apos exception no 1o
+    assert mock_fluxo.call_count == 2
+    # Status PARCIAL (1 ok + 1 falha)
+    assert res['status'] == 'EXECUTADO_PARCIAL'
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['falha'] == 1
+    # invoice que falhou registrado em invoices_falha
+    assert 111111 in res['invoices_falha']
+    assert 'odoo_rpc_timeout_transient' in res['invoices_falha'][111111]
+    # invoice OK registrado em invoices_ok
+    assert 222222 in res['invoices_ok']
+
+
+def test_v20_s3_etapa_f_via_fluxo_l3_misto_lf_e_cd_destino(db):
+    """v20+ S3 HIGH-2 (code-reviewer 2026-05-26): onda mista LF (suportado)
+    + CD (NAO_SUPORTADA_V20) na mesma execucao. LF processado via fluxo L3;
+    CD pulado com NAO_SUPORTADA_V20. Status EXECUTADO_PARCIAL.
+
+    Topologia PROD esperada quando canary expandir mas FB/CD ainda nao
+    tiverem constants mapeadas em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V20_S3_MISTO'
+    aj_lf = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='LF1', tipo_produto=4, company_id=1,
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',  # destino LF=5 (SUPORTADO)
+        qtd_inventario=10, qtd_odoo=0, qtd_ajuste=10,
+        lote_destino='MIGRAÇÃO', invoice_id_odoo=333333,
+        chave_nfe='35260561724241000178550010000333333006273480',
+        fase_pipeline='F5e_SEFAZ_OK', status='EXECUTADO',
+        criado_por='test_v20_s3',
+    )
+    aj_cd = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='CD1', tipo_produto=4, company_id=1,
+        acao_decidida='TRANSFERIR_FB_CD',  # destino CD=4 (NAO SUPORTADO)
+        qtd_inventario=20, qtd_odoo=0, qtd_ajuste=20,
+        lote_destino='MIGRAÇÃO', invoice_id_odoo=444444,
+        chave_nfe='35260561724241000178550010000444444006273480',
+        fase_pipeline='F5e_SEFAZ_OK', status='EXECUTADO',
+        criado_por='test_v20_s3',
+    )
+    db.session.add_all([aj_lf, aj_cd])
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'FLUXO_OK', 'caminho': 'A',
+            'dfe_id': 333, 'po_id': 222, 'picking_id': 111,
+            'invoice_id': 100, 'passos': [], 'tempo_ms': 100,
+        },
+    ) as mock_fluxo:
+        res = executor.executar_etapa_f(
+            ciclo=ciclo_test, dry_run=False, usar_fluxo_l3_v19=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    # LF chamou executar_fluxo_l3_1_2_x; CD NAO
+    assert mock_fluxo.call_count == 1
+    kwargs = mock_fluxo.call_args.kwargs
+    assert kwargs['invoice_id_saida'] == 333333  # apenas LF
+    assert kwargs['company_destino'] == 5
+
+    # Status PARCIAL: 1 OK (LF) + 1 NAO_SUPORTADA_V20 (CD)
+    assert res['status'] == 'EXECUTADO_PARCIAL'
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['nao_suportada_v20'] == 1
+    assert res['contadores']['falha'] == 0
+    assert 333333 in res['invoices_ok']
+    assert 444444 in res['invoices_nao_suportadas_v20']
