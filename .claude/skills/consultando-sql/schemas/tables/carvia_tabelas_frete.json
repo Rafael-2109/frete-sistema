@@ -128,10 +128,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_tf_uf",
+      "name": "ix_carvia_tf_tipo_carga",
       "columns": [
-        "uf_origem",
-        "uf_destino"
+        "tipo_carga"
       ],
       "unique": false
     },
@@ -143,9 +142,10 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_tf_tipo_carga",
+      "name": "ix_carvia_tf_uf",
       "columns": [
-        "tipo_carga"
+        "uf_origem",
+        "uf_destino"
       ],
       "unique": false
     }

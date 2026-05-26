@@ -83,18 +83,11 @@
   ],
   "indices": [
     {
-      "name": "ix_validacao_fiscal_dfe_cnpj_empresa_compradora",
+      "name": "ix_validacao_fiscal_dfe_odoo_dfe_id",
       "columns": [
-        "cnpj_empresa_compradora"
+        "odoo_dfe_id"
       ],
-      "unique": false
-    },
-    {
-      "name": "ix_validacao_fiscal_dfe_chave_nfe",
-      "columns": [
-        "chave_nfe"
-      ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "ix_validacao_fiscal_dfe_status",
@@ -111,11 +104,18 @@
       "unique": false
     },
     {
-      "name": "ix_validacao_fiscal_dfe_odoo_dfe_id",
+      "name": "ix_validacao_fiscal_dfe_chave_nfe",
       "columns": [
-        "odoo_dfe_id"
+        "chave_nfe"
       ],
-      "unique": true
+      "unique": false
+    },
+    {
+      "name": "ix_validacao_fiscal_dfe_cnpj_empresa_compradora",
+      "columns": [
+        "cnpj_empresa_compradora"
+      ],
+      "unique": false
     }
   ]
 }

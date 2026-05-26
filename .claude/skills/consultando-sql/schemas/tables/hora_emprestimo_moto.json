@@ -116,6 +116,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_emprestimo_moto_loja_hora_id",
+      "columns": [
+        "loja_hora_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_emprestimo_moto_chassi_entrada",
       "columns": [
         "chassi_entrada"
@@ -133,13 +140,6 @@
       "name": "ix_hora_emprestimo_moto_data_emprestimo",
       "columns": [
         "data_emprestimo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_emprestimo_moto_loja_hora_id",
-      "columns": [
-        "loja_hora_id"
       ],
       "unique": false
     },

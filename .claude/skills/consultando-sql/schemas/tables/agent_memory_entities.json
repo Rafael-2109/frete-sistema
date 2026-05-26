@@ -60,16 +60,16 @@
       "unique": false
     },
     {
-      "name": "ix_agent_memory_entities_user_id",
+      "name": "idx_ame_entity_key",
       "columns": [
-        "user_id"
+        "entity_key"
       ],
       "unique": false
     },
     {
-      "name": "idx_ame_entity_key",
+      "name": "ix_agent_memory_entities_user_id",
       "columns": [
-        "entity_key"
+        "user_id"
       ],
       "unique": false
     }

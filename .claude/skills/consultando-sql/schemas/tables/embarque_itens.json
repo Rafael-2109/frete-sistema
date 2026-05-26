@@ -232,9 +232,9 @@
   ],
   "indices": [
     {
-      "name": "ix_embarque_itens_carvia_cotacao_id",
+      "name": "ix_embarque_itens_separacao_lote_id",
       "columns": [
-        "carvia_cotacao_id"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -247,9 +247,16 @@
       "unique": false
     },
     {
-      "name": "idx_ei_cnpj_cliente",
+      "name": "idx_ei_uf_destino",
       "columns": [
-        "cnpj_cliente"
+        "uf_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_embarque_itens_carvia_cotacao_id",
+      "columns": [
+        "carvia_cotacao_id"
       ],
       "unique": false
     },
@@ -261,16 +268,9 @@
       "unique": false
     },
     {
-      "name": "ix_embarque_itens_separacao_lote_id",
+      "name": "idx_ei_cnpj_cliente",
       "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_ei_uf_destino",
-      "columns": [
-        "uf_destino"
+        "cnpj_cliente"
       ],
       "unique": false
     }

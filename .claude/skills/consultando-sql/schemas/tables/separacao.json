@@ -233,20 +233,6 @@
   ],
   "indices": [
     {
-      "name": "ix_separacao_separacao_lote_id",
-      "columns": [
-        "separacao_lote_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_separacao_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_lote_sync",
       "columns": [
         "separacao_lote_id",
@@ -295,6 +281,13 @@
       "unique": false
     },
     {
+      "name": "ix_separacao_separacao_lote_id",
+      "columns": [
+        "separacao_lote_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_produto_qtd_sync",
       "columns": [
         "cod_produto",
@@ -311,17 +304,17 @@
       "unique": false
     },
     {
-      "name": "ix_separacao_chassi_assai",
-      "columns": [
-        "chassi_assai"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_sep_expedicao_produto",
       "columns": [
         "expedicao",
         "cod_produto"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_chassi_assai",
+      "columns": [
+        "chassi_assai"
       ],
       "unique": false
     },
@@ -375,6 +368,13 @@
       "name": "idx_sep_nf_cd",
       "columns": [
         "nf_cd"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_separacao_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }
