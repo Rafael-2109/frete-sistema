@@ -32,6 +32,13 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 26 | 2026-05-21 | 3 | 3 | 0 | 0 | OK (parser recibo Motochefe 2 causas-raiz + cluster R12 escrita/skill 2 sugestoes) |
 | 27 | 2026-05-24 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 28 | 2026-05-25 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 29 | 2026-05-26 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+
+## 2026-05-26
+- **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
+- Filtros: `status='proposed'`, `author='agent_sdk'`, `version=1`, sem v2 correspondente.
+- Snapshot: 44 v1 agent_sdk responded (ultima 2026-05-21) + 10 v1 rejected + 4 v3 verified (ultima 2026-05-25) + 4 v3 needs_revision. Zero `proposed` ativos. Pipeline em dia; Agent SDK D7 sem novas propostas ha 5 dias.
+- Nenhum commit alem do relatorio e historico.
 
 ## 2026-05-25
 - **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
