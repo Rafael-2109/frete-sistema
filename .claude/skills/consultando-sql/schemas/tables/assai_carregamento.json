@@ -91,6 +91,13 @@
   ],
   "indices": [
     {
+      "name": "ix_assai_carregamento_separacao_id",
+      "columns": [
+        "separacao_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_assai_carregamento_status",
       "columns": [
         "status"
@@ -108,13 +115,6 @@
       "name": "ix_assai_carregamento_loja_id",
       "columns": [
         "loja_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_assai_carregamento_separacao_id",
-      "columns": [
-        "separacao_id"
       ],
       "unique": false
     }

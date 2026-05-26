@@ -64,16 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_pessoal_pluggy_categorias_map_pluggy_parent_id",
+      "name": "ix_pessoal_pluggy_categorias_map_pessoal_categoria_id",
       "columns": [
-        "pluggy_parent_id"
+        "pessoal_categoria_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_pessoal_pluggy_categorias_map_pessoal_categoria_id",
+      "name": "ix_pessoal_pluggy_categorias_map_pluggy_parent_id",
       "columns": [
-        "pessoal_categoria_id"
+        "pluggy_parent_id"
       ],
       "unique": false
     }

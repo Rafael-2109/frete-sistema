@@ -160,30 +160,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_entregue",
-      "columns": [
-        "entregue"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_transportadora",
-      "columns": [
-        "transportadora"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_numero_nf",
-      "columns": [
-        "numero_nf"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -202,6 +181,27 @@
       "unique": false
     },
     {
+      "name": "ix_entregas_monitoradas_numero_nf",
+      "columns": [
+        "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_em_status_finalizacao",
       "columns": [
         "status_finalizacao"
@@ -209,16 +209,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_agenda",
+      "name": "idx_em_entregue",
       "columns": [
-        "data_agenda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
-      "columns": [
-        "separacao_lote_id"
+        "entregue"
       ],
       "unique": false
     },
@@ -237,9 +230,16 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_origem",
+      "name": "idx_em_data_agenda",
       "columns": [
-        "origem"
+        "data_agenda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_transportadora",
+      "columns": [
+        "transportadora"
       ],
       "unique": false
     }

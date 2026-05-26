@@ -66,16 +66,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_nf_entrada_item_peca_peca_id",
+      "name": "ix_hora_nf_entrada_item_peca_nf_id",
       "columns": [
-        "peca_id"
+        "nf_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_item_peca_nf_id",
+      "name": "ix_hora_nf_entrada_item_peca_peca_id",
       "columns": [
-        "nf_id"
+        "peca_id"
       ],
       "unique": false
     }

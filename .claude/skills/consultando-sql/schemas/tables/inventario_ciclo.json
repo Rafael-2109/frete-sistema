@@ -1,0 +1,50 @@
+{
+  "name": "inventario_ciclo",
+  "description": "Tabela inventario_ciclo",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "data_snapshot",
+      "type": "date",
+      "nullable": false
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "ATIVO"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "description": "Data de criação",
+      "nullable": false
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_inventario_ciclo_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    }
+  ]
+}

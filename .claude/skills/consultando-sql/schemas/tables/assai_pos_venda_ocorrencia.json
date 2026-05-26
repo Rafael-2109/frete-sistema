@@ -63,16 +63,16 @@
       "unique": false
     },
     {
-      "name": "ix_assai_pos_venda_ocorrencia_categoria",
+      "name": "ix_assai_pos_venda_ocorrencia_criado_em",
       "columns": [
-        "categoria"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_pos_venda_ocorrencia_criado_em",
+      "name": "ix_assai_pos_venda_ocorrencia_categoria",
       "columns": [
-        "criado_em"
+        "categoria"
       ],
       "unique": false
     }

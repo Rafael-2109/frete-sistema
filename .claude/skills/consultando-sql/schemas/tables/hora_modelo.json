@@ -74,18 +74,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_modelo_nome_modelo",
-      "columns": [
-        "nome_modelo"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_hora_modelo_merged_em_id",
       "columns": [
         "merged_em_id"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_hora_modelo_nome_modelo",
+      "columns": [
+        "nome_modelo"
+      ],
+      "unique": true
     }
   ]
 }

@@ -98,6 +98,13 @@
   ],
   "indices": [
     {
+      "name": "ix_agent_invocation_metrics_user_id",
+      "columns": [
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_agent_invocation_metrics_agent_type",
       "columns": [
         "agent_type"
@@ -115,13 +122,6 @@
       "name": "ix_agent_invocation_metrics_recorded_at",
       "columns": [
         "recorded_at"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_agent_invocation_metrics_user_id",
-      "columns": [
-        "user_id"
       ],
       "unique": false
     }
