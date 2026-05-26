@@ -70,8 +70,14 @@ const typingContainer = document.getElementById('typing-container');
 const typingText = document.getElementById('typing-text');
 
 // Habilita/desabilita botão e auto-resize
+// Fix concurrent-send (2026-05-25): inclui isGenerating no calculo para
+// evitar reenvio durante stream (causava CLIConnectionError "Failed to write
+// to process stdin" + repeat-detect short circuit em loop).
+function updateSendBtnState() {
+    sendBtn.disabled = !messageInput.value.trim() || isGenerating;
+}
 messageInput.addEventListener('input', () => {
-    sendBtn.disabled = !messageInput.value.trim();
+    updateSendBtnState();
     autoResizeTextarea();
 });
 
@@ -135,6 +141,7 @@ function stopGeneration() {
 
     // Marca como não gerando (isso vai parar o loop)
     isGenerating = false;
+    updateSendBtnState();  // Fix concurrent-send: reabilita botao se input nao-vazio
 
     // Cancela o reader se existir (fallback — funciona com ou sem SDK Client)
     if (currentEventSource && currentEventSource.cancel) {
@@ -969,6 +976,7 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
         // FEAT-026: Finaliza geração
         isGenerating = false;
         hideStopButton();
+        updateSendBtnState();  // Fix concurrent-send: reabilita botao se input nao-vazio
     }
 }
 
@@ -2305,6 +2313,7 @@ function processSSEEvent(eventType, data, state) {
                 hideTyping();
                 hideThinkingPanel();
                 isGenerating = false;  // FIX-6: Para feedbackTimer e sinaliza fim do while loop
+                updateSendBtnState();  // Fix concurrent-send: reabilita botao se usuario digitou durante stream
                 if (data.session_id) sessionId = data.session_id;
                 updateMetrics(data.input_tokens, data.output_tokens, data.cost_usd);
 

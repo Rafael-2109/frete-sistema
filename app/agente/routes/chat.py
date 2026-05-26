@@ -342,7 +342,7 @@ def api_chat():
                         f"Se precisa revalidar no Odoo, confirme e rodo novamente."
                     )
                     yield _sse_event_local('text', {
-                        'text': resp_text,
+                        'content': resp_text,
                         'session_id': session_id,
                     })
                     yield _sse_event_local('done', {
