@@ -1,5 +1,37 @@
 Continue o trabalho do orquestrador-Odoo. Worktree: /home/rafaelnascimento/projetos/frete_sistema_estoque_odoo (branch feat/estoque-odoo). main continua VIVO em paralelo. Verificar se avancou e considerar rebase ANTES de iniciar.
 
+## ⚠️ OPEN QUESTIONS — VALIDAR COM RAFAEL ANTES DE CODAR (v17.5 deixou suposicoes minhas nao-confirmadas)
+
+Durante v17.5 fiz suposicoes nao-validadas que Rafael apontou. Antes de prosseguir v18, VALIDAR explicitamente (NAO inventar):
+
+1. **Skill 7 V1 STRICT bloqueia TRANSFERIR_CD_FB?** — eu mesmo coloquei `raise NotImplementedError` se `cnpj_emitente != CNPJ_LF_DEFAULT OR company_id_recebedor != FB(1)`. **MAS** `ACOES_ENTRADA_FB` (operacoes_fiscais.py) inclui `TRANSFERIR_CD_FB` (CD→FB) — ou seja, a Skill 8 ETAPA E filtraria essa ação e tentaria invocar a Skill 7 com `cnpj_emitente` do **CD** (não LF). A Skill 7 V1 vai **raise** nesse caso. Suposicao minha: V1 = só LF→FB. Validar com Rafael:
+   - O service `RecebimentoLfOdooService` aceita `cnpj_emitente=CNPJ_CD`? Olhar no service externo (NAO MEXER, so ler).
+   - Ou TRANSFERIR_CD_FB usa um service diferente?
+   - Ou TRANSFERIR_CD_FB nem precisa de RecebimentoLf — entra no FB via DFe automatico do robo?
+
+2. **As N NFs recebidas no Render** — Rafael mencionou que existem várias NFs recebidas em PROD via RecebimentoLf. **Olhar essas NFs reais**: para quais direcoes? FB→CD? CD→FB? LF→FB so? Padrao usado? Validar antes de assumir que Skill 7 V1 STRICT cobre o que o negocio precisa.
+
+3. **4 conceitos: operacao / tipo_pedido / CFOP / picking_type estao ligados?** — eu citei como se fossem independentes (varias vezes), MAS provavelmente sao derivados uns dos outros via `fiscal_position` no Odoo. Investigar:
+   - Se eu informo `fiscal_position_id` na NF, o Odoo deriva CFOP automaticamente?
+   - Se eu informo `picking_type_id`, o Odoo deriva `l10n_br_tipo_pedido`?
+   - Quantos desses 4 sao realmente independentes (preciso informar todos) vs derivados (1 ou 2 ja resolve)?
+   - Atualizar MATRIZ_INTERCOMPANY se algum campo for redundante.
+
+4. **PT 64 LF/RECEB/IND foi descartado prematuramente** — em v17.5 disse "PT 64 e' para DFe externo, nao inter-company nosso". MAS:
+   - PT 64 tem `default_location_src_id=Em Transito Industr` (mesmo de PT 19!)
+   - PT 64 esta dedicado a Recebimento Industrializacao — bate com INDUSTRIALIZACAO_FB_LF
+   - 4 pickings PROD INV-* usaram PT 19, nao PT 64 — mas isso pode ser **escolha de quem implementou** (Rafael ou script v9), nao necessariamente o ideal
+   - Validar com Rafael: PT 19 vs PT 64 pra INDUSTRIALIZACAO_FB_LF — qual eh o correto fiscalmente?
+
+5. **ETAPA F canary DEV_FB_LF + TRANSFERIR_FB_CD** — habilitei com flag, mas:
+   - DEV_FB_LF location_origem=26489 (Em Trans. Industr.) ASSUMIDO — sem precedente PROD
+   - TRANSFERIR_FB_CD: o robo CIEL IT do CD recebe DFe automaticamente? Se SIM, ETAPA F manual eh **redundante** (saldo dobrado)
+   - Olhar 1 NF historica de transferencia FB→CD em PROD: ela gerou picking de entrada **automatico** no CD? Se sim, ETAPA F para essa direcao DEVE ser SKIP, nao canary.
+
+**REGRA**: nao codar v18 sem validar essas 5 questões com Rafael. AskUserQuestion no inicio de v18.
+
+---
+
 ## 🚨 LEIA ANTES DE TUDO — REGRAS DE ESCOPO INVIOLAVEIS (v17.5 lição custosa)
 
 **NUNCA inline logica de skill no orchestrator Skill 8 `faturando-odoo`.** Isso ja' custou uma sessao inteira em v17.5 — v17 colocou ~420 LOC de logica RecebimentoLf inline em `executar_etapa_e` e violou constituicao §6 do `app/odoo/estoque/CLAUDE.md`.
