@@ -9,6 +9,7 @@ skills:
   - operando-reservas-odoo
   - operando-picking-odoo
   - operando-mo-odoo
+  - escriturando-odoo
   - planejando-pre-etapa-odoo
   - consultando-quant-odoo
   - auditando-cadastro-fiscal-odoo

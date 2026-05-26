@@ -179,6 +179,7 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `operando-reservas-odoo` (WRITE — cirurgia/cancelamento de reservas e MLs orfas),
 `operando-picking-odoo` (WRITE — cancelar/validar/devolver picking generico; invariante G019/G020),
 `operando-mo-odoo` (WRITE — cancelar MO single ou batch; guard G-MO-01 furo contabil),
+`escriturando-odoo` (WRITE C3 macro — escriturar entrada de NF SEFAZ-autorizada no destino via RecebimentoLf + agg lotes + svc externo; V1 STRICT LF→FB; encapsula G-RECLF-2/3 + HIGH-3/4/5 + D17 + D9; invocada pela Skill 8 ETAPA E pos-v17.5),
 `planejando-pre-etapa-odoo` (READ Odoo + WRITE banco local — planejar/propor/listar/aprovar pre-etapa D007; hash sha256 anti-replay),
 `consultando-quant-odoo` (READ-only AO VIVO — auditoria pos-WRITE, snapshots de quants),
 `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT V1 inventario — G017/G018/G035/G014 + D-OPS-2/3; READ-only + WRITE opcional G035 fix)

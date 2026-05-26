@@ -2755,50 +2755,50 @@ class FaturamentoPipelineExecutor:
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """ETAPA E v17 — RecebimentoLf X->FB para NFs SEFAZ-autorizadas.
+        """ETAPA E v17.5 — DELEGA atomo Skill 7 `escriturando-odoo` por invoice.
 
         Para cada invoice_id distinto com `fase_pipeline=F5e_SEFAZ_OK` e
-        `acao_decidida in ACOES_ENTRADA_FB`, cria `RecebimentoLf` na FB +
-        agrega `RecebimentoLfLote` por (product_id, lote_destino, cfop) e
-        invoca `RecebimentoLfOdooService.processar_recebimento(rec_id)` SINCRONO.
+        `acao_decidida in ACOES_ENTRADA_FB`, invoca atomo Skill 7
+        `EscrituracaoLfService.criar_recebimento_orchestrado(invoice_id, ajustes)`
+        que encapsula:
+          - G-RECLF-3 idempotencia via UK odoo_lf_invoice_id
+          - HIGH-3 status='processando' RETOMA
+          - HIGH-4 svc externo instanciado fresh
+          - HIGH-5 produto_tracking via fetch batch
+          - G-RECLF-2 transfer_status='erro' = PARCIAL OK
+          - D17 ACAO_PARA_CFOP_ENTRADA 5xxx->1xxx
+          - D9 re-fetch ajustes via safe_session_get
+          - commit_resilient antes/dentro
 
-        Decisao 10.7 v17 (Rafael 2026-05-25): **SEQUENCIAL + recovery via
-        --apenas-etapa=E --resume**. Razao: RecebimentoLfOdoo NAO eh thread-safe
-        (Redis state); G-RECLF-9 (Playwright SEFAZ no step_23) ja mitigado
-        pela etapa-barreira; G-RECLF-1 (50-100h/onda 100 invoices) aceito —
-        idempotencia perfeita permite resume.
+        REGRA INVIOLAVEL 94 (v17.5 ARQ-2): orchestrator NAO recompoe logica
+        de criar RecebimentoLf inline. Skill 7 = SO ENTRADA.
 
-        Patterns codificados (do script 09 L1239-1421):
-          - L17 (G006/D006) Filtra ACOES_ENTRADA_FB (sentidos X->FB)
-          - D9 (anti-DetachedInstance) Re-fetch ajustes por invoice ANTES
-            de criar RecebimentoLf (commits internos do service expiram objects)
-          - D17 (ACAO_PARA_CFOP_ENTRADA) Mapa 5xxx->1xxx (entrada FB)
-          - G-RECLF-2 Aceita `transfer_status='erro'` como sucesso parcial
-            (FB OK suficiente; FASE 6+7 podem falhar sem derrubar FB)
-          - G-RECLF-3 Idempotencia via `RecebimentoLf.odoo_lf_invoice_id`
-            (constraint UK) + check `status='processado'`
-          - G-RECLF-9 ja mitigado pelo macro etapa-barreira (D nao roda concorrente com E)
+        Decisao 10.7 v17 (Rafael 2026-05-25 — preservada): SEQUENCIAL.
+        Razao: RecebimentoLfOdooService NAO eh thread-safe (Redis state).
+        Idempotencia perfeita permite recovery via --resume.
 
         Args:
             ciclo: identificador do ciclo.
             company_origem_id: filtro por company emissora (None = todas).
-            dry_run: True (default) NAO cria RecebimentoLf; apenas reporta
-                planejamento (quantas invoices seriam processadas).
+            dry_run: True (default) NAO cria RecebimentoLf; reporta planejamento.
             usuario: identificador para auditoria + executado_por do service.
             cod_produto: smoke/canary.
 
         Returns:
             dict com:
               status: DRY_RUN_OK_ETAPA_E | EXECUTADO_ETAPA_E |
-                      EXECUTADO_PARCIAL | SKIP_NENHUM_AJUSTE
+                      EXECUTADO_PARCIAL | SKIP_NENHUM_AJUSTE | FALHA_COMMIT_PRE
               invoices_pendentes: lista de invoice_ids esperados
               invoices_ok: dict {invoice_id: rec_id}
               invoices_falha: dict {invoice_id: erro}
               invoices_skip: lista de invoice_ids ja processados
-              contadores: {ok, falha, skip, parcial_fb_ok_transfer_erro}
+              invoices_retomados: lista (HIGH-3 RETOMADO)
+              contadores: {ok, falha, skip, retomado, parcial_fb_ok_transfer_erro}
         """
-        from app import db  # lazy
-        from app.odoo.models import AjusteEstoqueInventario  # lazy
+        # Lazy imports — Skill 7 service + helpers
+        from app.odoo.estoque.scripts.escrituracao import (  # noqa: PLC0415
+            EscrituracaoLfService,
+        )
 
         t0 = time.time()
 
@@ -2845,10 +2845,12 @@ class FaturamentoPipelineExecutor:
             'invoices_ok': {},
             'invoices_falha': {},
             'invoices_skip': [],
+            'invoices_retomados': [],
             'contadores': {
                 'ok': 0,
                 'falha': 0,
                 'skip': 0,
+                'retomado': 0,
                 'parcial_fb_ok_transfer_erro': 0,
             },
         }
@@ -2868,28 +2870,19 @@ class FaturamentoPipelineExecutor:
         if dry_run:
             out['status'] = 'DRY_RUN_OK_ETAPA_E'
             out['observacao'] = (
-                f'v17 dry-run: {len(invoices_pendentes)} RecebimentoLf '
-                f'seriam criados + processados (SINCRONO via '
-                f'RecebimentoLfOdooService — 30-60min/invoice). Total '
-                f'estimado: {len(invoices_pendentes) * 30}-'
-                f'{len(invoices_pendentes) * 60}min. '
-                f'Decisao 10.7: sequencial + recovery --resume.'
+                f'v17.5 dry-run: {len(invoices_pendentes)} RecebimentoLf '
+                f'seriam criados via atomo Skill 7 '
+                f'(EscrituracaoLfService.criar_recebimento_orchestrado). '
+                f'Tempo estimado real: {len(invoices_pendentes) * 30}-'
+                f'{len(invoices_pendentes) * 60}min (sequencial, '
+                f'decisao 10.7). Recovery via --apenas-etapa=E.'
             )
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
         # ============================================================
-        # REAL-RUN: SEQUENCIAL (decisao 10.7 v17 — Rafael)
+        # REAL-RUN: SEQUENCIAL — DELEGA atomo Skill 7 por invoice
         # ============================================================
-
-        # Lazy imports — modulos externos
-        from app.recebimento.models import (  # noqa: PLC0415
-            RecebimentoLf,
-            RecebimentoLfLote,
-        )
-        from app.recebimento.services.recebimento_lf_odoo_service import (  # noqa: PLC0415
-            RecebimentoLfOdooService,
-        )
 
         # G016 commit antes do loop longo
         if not _commit_resilient():
@@ -2901,260 +2894,92 @@ class FaturamentoPipelineExecutor:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # HIGH-4 v17 (Reviewer 2 conf 82): svc instanciado DENTRO do loop —
-        # alinhamento com script base 09 L1411 (evita estado interno
-        # vazando entre invoices via self._recebimento_id e outros caches).
-        # CNPJ NACOM emissor de NFs LF (61.724.241/0001-78 e' FB; LF emite
-        # com CNPJ filial — coletado do invoice in-loop para resilencia).
+        # Instanciar atomo Skill 7 (uma vez para a ETAPA toda; svc externo
+        # interno e' fresh por invocacao via HIGH-4 do proprio atomo).
+        escrituracao_svc = EscrituracaoLfService(odoo=self.odoo)
 
         for invoice_id in invoices_pendentes:
-            inicio_inv = time.time()
+            ajustes_inv = ajustes_por_invoice[invoice_id]
 
-            # HIGH-4 v17: instanciar svc por invoice (estado interno fresh)
-            svc = RecebimentoLfOdooService()
-
-            # D9: re-fetch ajustes desta invoice (anti-DetachedInstance)
-            ajs_fresh = AjusteEstoqueInventario.query.filter_by(
-                invoice_id_odoo=invoice_id,
-                fase_pipeline=FASE_F5e_OK,
-            ).filter(
-                AjusteEstoqueInventario.acao_decidida.in_(
-                    list(ACOES_ENTRADA_FB)
-                )
-            ).all()
-            if not ajs_fresh:
-                logger.warning(
-                    f'  E invoice {invoice_id}: re-fetch vazio, pulando'
-                )
-                continue
-
-            # G-RECLF-3 idempotencia: existe RecebimentoLf processado?
-            existente = RecebimentoLf.query.filter_by(
-                odoo_lf_invoice_id=invoice_id,
-            ).order_by(RecebimentoLf.id.desc()).first()
-            if existente and existente.status == 'processado':
-                logger.info(
-                    f'  E invoice {invoice_id}: RecebimentoLf '
-                    f'{existente.id} ja processado (skip)'
-                )
-                out['invoices_skip'].append(invoice_id)
-                out['contadores']['skip'] += 1
-                # Marcar fase_pipeline F5f_OK p/ idempotencia futura
-                # (entrada FB ja' executada — proxima rodada pula)
-                # NAO marcar F5f aqui — F5f e' da ETAPA F (FB->X);
-                # ETAPA E (X->FB) fica em F5e_SEFAZ_OK + RecebimentoLf processado.
-                continue
-
-            # HIGH-3 v17 (Reviewer 2 conf 88): tratar status='processando'
-            # como RETOMAR (crash recovery) em vez de criar duplicado.
-            # Service suporta resume via etapa_atual>0 (L174-179 do RecLfSvc).
-            # Sem este fix, crash mid-process deixa RecLf orfao com FB
-            # parcialmente processado + cria 2o RecLf que processa NF
-            # duplicada no Odoo (PO/Picking/Invoice duplicado).
-            if existente and existente.status == 'processando':
-                logger.warning(
-                    f'  E invoice {invoice_id}: RecebimentoLf '
-                    f'{existente.id} em status=processando (crash anterior?). '
-                    f'RETOMANDO via processar_recebimento (service suporta '
-                    f'resume via etapa_atual>0).'
-                )
-                # Cai no fluxo abaixo com `existente` setado — rec=existente
-
-            # Buscar dados da invoice (chave + numero NF)
             try:
-                inv_data = self.odoo.read(
-                    'account.move', [invoice_id],
-                    ['name', 'l10n_br_chave_nf',
-                     'l10n_br_numero_nota_fiscal', 'company_id'],
-                )
-                if not inv_data:
-                    logger.error(
-                        f'  E invoice {invoice_id} sumiu do Odoo, pulando'
-                    )
-                    out['invoices_falha'][invoice_id] = 'invoice_sumiu_odoo'
-                    out['contadores']['falha'] += 1
-                    continue
-                inv = inv_data[0]
-                chave = inv.get('l10n_br_chave_nf') or ajs_fresh[0].chave_nfe
-                numero_nf = str(
-                    inv.get('l10n_br_numero_nota_fiscal', '') or ''
+                resultado = escrituracao_svc.criar_recebimento_orchestrado(
+                    invoice_id=invoice_id,
+                    ajustes=ajustes_inv,
+                    ciclo=ciclo,
+                    usuario=usuario,
+                    dry_run=False,
                 )
             except Exception as e:
                 logger.error(
-                    f'  E invoice {invoice_id}: erro ler invoice: {e}'
+                    f'  E invoice {invoice_id}: atomo Skill 7 raise: {e}',
+                    exc_info=True,
                 )
                 out['invoices_falha'][invoice_id] = (
-                    f'erro_ler_invoice: {str(e)[:100]}'
+                    f'atomo_skill7_excecao: {str(e)[:200]}'
                 )
                 out['contadores']['falha'] += 1
                 continue
 
-            # Resolver product_id de cada cod_produto (cache batch)
-            cods = sorted({a.cod_produto for a in ajs_fresh})
-            prod_cache = self._resolver_pids_em_batch(cods)
+            status_atomo = resultado.get('status')
+            rec_id = resultado.get('rec_id')
 
-            # HIGH-5 v17 (Reviewer 2 conf 80): resolver tracking dos produtos
-            # via batch fetch para evitar bug D-OPS-5 (produto_tracking='lot'
-            # hardcoded quebra _step_10_preencher_lotes do RecLfSvc para
-            # produtos com tracking='none'). Fallback 'lot' se nao detectar.
-            tracking_por_pid: Dict[int, str] = {}
-            pids_validos = [pid for pid in prod_cache.values() if pid]
-            if pids_validos:
-                try:
-                    prods_data = self.odoo.read(
-                        'product.product', pids_validos,
-                        ['id', 'tracking'],
-                    )
-                    tracking_por_pid = {
-                        p['id']: p.get('tracking', 'lot')
-                        for p in prods_data
-                    }
-                except Exception as e:
-                    logger.warning(
-                        f'  E invoice {invoice_id}: erro fetch tracking '
-                        f'(usando default "lot"): {e}'
-                    )
-
-            # Criar RecebimentoLf + Lotes (idempotente — pode retomar)
-            if existente:
-                rec = existente
-                logger.info(
-                    f'  E invoice {invoice_id}: retomando RecebimentoLf '
-                    f'{rec.id} (status={existente.status})'
-                )
-            else:
-                rec = RecebimentoLf(
-                    odoo_lf_invoice_id=invoice_id,
-                    numero_nf=numero_nf,
-                    chave_nfe=chave,
-                    cnpj_emitente='18.467.441/0001-63',  # LF (Discovery)
-                    company_id=1,  # FB (recebedor)
-                    status='pendente',
-                    usuario=usuario,
-                    total_etapas=37,
-                )
-                db.session.add(rec)
-                db.session.flush()
-                # Agregar por (product_id, lote_destino, cfop) -> qty
-                agg: Dict[Tuple[int, str, str], float] = defaultdict(float)
-                for a in ajs_fresh:
-                    pid = prod_cache.get(a.cod_produto)
-                    if not pid:
-                        logger.warning(
-                            f'    sem product_id para {a.cod_produto}, '
-                            f'pulando ajuste {a.id}'
-                        )
-                        continue
-                    lote_dest = (a.lote_destino or 'MIGRAÇÃO').strip()
-                    # D17: CFOP 5xxx (saida) -> 1xxx (entrada FB)
-                    cfop = ACAO_PARA_CFOP_ENTRADA.get(
-                        a.acao_decidida, '1903'
-                    )
-                    agg[(pid, lote_dest, cfop)] += float(
-                        abs(a.qtd_ajuste or 0)
-                    )
-                for (pid, lote_dest, cfop), qty in agg.items():
-                    if qty <= 0:
-                        continue
-                    # HIGH-5 v17: produto_tracking real do Odoo (fallback lot)
-                    produto_tracking = tracking_por_pid.get(pid, 'lot')
-                    db.session.add(RecebimentoLfLote(
-                        recebimento_lf_id=rec.id,
-                        odoo_product_id=pid,
-                        tipo='auto',
-                        lote_nome=lote_dest,
-                        quantidade=qty,
-                        cfop=cfop,
-                        produto_tracking=produto_tracking,
-                        processado=False,
-                    ))
-                if not _commit_resilient():
-                    logger.error(
-                        f'E: commit RecebimentoLf {rec.id} falhou (SSL). '
-                        f'Pulando invoice {invoice_id}.'
-                    )
-                    out['invoices_falha'][invoice_id] = 'commit_recebimento_falhou'
-                    out['contadores']['falha'] += 1
-                    continue
-                logger.info(
-                    f'  E invoice {invoice_id}: RecebimentoLf {rec.id} '
-                    f'criado ({len(agg)} lotes)'
-                )
-
-            # Processar SINCRONO (G-RECLF-1: 30-60min)
-            try:
-                resultado = svc.processar_recebimento(
-                    rec.id, usuario_nome=usuario,
-                )
-                tempo_ms_inv = int((time.time() - inicio_inv) * 1000)
-                # G-RECLF-2: aceita transfer_status='erro' como parcial OK
-                transfer_status = resultado.get('transfer_status')
-                if transfer_status == 'erro':
-                    out['contadores']['parcial_fb_ok_transfer_erro'] += 1
-                    logger.warning(
-                        f'  E invoice {invoice_id}: FB OK mas '
-                        f'transfer FASE 6+7 ERRO (rec={rec.id}). '
-                        f'Aceitando como parcial (G-RECLF-2).'
-                    )
-                # Re-fetch ajustes apos service (commits internos podem expirar)
-                ajustes_post: List = []
-                for a in ajs_fresh:
-                    af = safe_session_get(AjusteEstoqueInventario, a.id)
-                    if af is not None:
-                        ajustes_post.append(af)
-                # NAO marcar fase_pipeline aqui — ETAPA E processa entrada
-                # mas a fase F5e_SEFAZ_OK continua valida; RecebimentoLf
-                # rastreia o estado da entrada FB. Status do RecLF e' fonte
-                # de verdade para idempotencia em re-run.
-                for aj in ajustes_post:
-                    _registrar_auditoria(
-                        ajuste_id=aj.id, ciclo=ciclo, fase='F-E',
-                        acao='recebimento_lf', modelo_odoo='recebimento_lf',
-                        status='SUCESSO' if transfer_status != 'erro' else 'PARCIAL',
-                        odoo_id=resultado.get('odoo_invoice_id'),
-                        resposta=resultado, tempo_ms=tempo_ms_inv,
-                        executado_por=usuario,
-                    )
-                _commit_resilient()
-                out['invoices_ok'][invoice_id] = rec.id
+            if status_atomo == 'CRIADO':
+                out['invoices_ok'][invoice_id] = rec_id
                 out['contadores']['ok'] += 1
                 logger.info(
-                    f'  E invoice {invoice_id}: OK status='
-                    f'{resultado.get("status")} '
-                    f'inv_fb={resultado.get("odoo_invoice_id")} '
-                    f'transfer={transfer_status}'
+                    f'  E invoice {invoice_id}: CRIADO rec={rec_id} '
+                    f'inv_fb={resultado.get("odoo_invoice_id_fb")} '
+                    f'transfer={resultado.get("transfer_status")} '
+                    f'tempo={resultado.get("tempo_ms")}ms'
                 )
-            except Exception as e:
-                tempo_ms_inv = int((time.time() - inicio_inv) * 1000)
-                logger.error(
-                    f'  E invoice {invoice_id}: processamento falhou: {e}',
-                    exc_info=True,
+            elif status_atomo == 'RETOMADO':
+                # HIGH-3: contado como sucesso (RecLf foi retomado e processado)
+                out['invoices_ok'][invoice_id] = rec_id
+                out['invoices_retomados'].append(invoice_id)
+                out['contadores']['ok'] += 1
+                out['contadores']['retomado'] += 1
+                logger.info(
+                    f'  E invoice {invoice_id}: RETOMADO rec={rec_id} '
+                    f'(HIGH-3 recovery)'
                 )
-                # Re-fetch + auditoria
-                ajustes_post: List = []
-                for a in ajs_fresh:
-                    af = safe_session_get(AjusteEstoqueInventario, a.id)
-                    if af is not None:
-                        ajustes_post.append(af)
-                for aj in ajustes_post:
-                    _registrar_auditoria(
-                        ajuste_id=aj.id, ciclo=ciclo, fase='F-E',
-                        acao='recebimento_lf', modelo_odoo='recebimento_lf',
-                        status='FALHA',
-                        odoo_id=getattr(rec, 'id', None),
-                        erro_msg=str(e)[:500], tempo_ms=tempo_ms_inv,
-                        executado_por=usuario,
-                    )
-                _commit_resilient()
+            elif status_atomo == 'IDEMPOTENT_PROCESSADO':
+                out['invoices_skip'].append(invoice_id)
+                out['contadores']['skip'] += 1
+                logger.info(
+                    f'  E invoice {invoice_id}: SKIP G-RECLF-3 '
+                    f'rec={rec_id} ja processado'
+                )
+            elif status_atomo == 'PARCIAL':
+                # G-RECLF-2: FB OK mas transfer FASE 6+7 erro
+                out['invoices_ok'][invoice_id] = rec_id
+                out['contadores']['ok'] += 1
+                out['contadores']['parcial_fb_ok_transfer_erro'] += 1
+                logger.warning(
+                    f'  E invoice {invoice_id}: PARCIAL rec={rec_id} '
+                    f'(G-RECLF-2 transfer_status=erro aceito)'
+                )
+            elif status_atomo == 'FALHA':
                 out['invoices_falha'][invoice_id] = (
-                    f'processar_recebimento: {str(e)[:200]}'
+                    resultado.get('erro') or 'atomo_falha_sem_erro'
+                )
+                out['contadores']['falha'] += 1
+                logger.error(
+                    f'  E invoice {invoice_id}: FALHA atomo Skill 7 - '
+                    f'erro={resultado.get("erro")}'
+                )
+            else:  # SKIP_AJUSTES_VAZIOS ou outro
+                logger.warning(
+                    f'  E invoice {invoice_id}: status atomo desconhecido='
+                    f'{status_atomo!r}, contando como falha'
+                )
+                out['invoices_falha'][invoice_id] = (
+                    f'atomo_status_desconhecido: {status_atomo}'
                 )
                 out['contadores']['falha'] += 1
 
         # Status agregado
         n_ok = out['contadores']['ok']
         n_falha = out['contadores']['falha']
-        n_total = len(invoices_pendentes)
         if n_falha == 0:
             out['status'] = 'EXECUTADO_ETAPA_E'
         elif n_ok > 0 or out['contadores']['skip'] > 0:
@@ -3173,8 +2998,9 @@ class FaturamentoPipelineExecutor:
         dry_run: bool = True,
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
+        auto_confirma_direcao_nova: bool = False,
     ) -> Dict[str, Any]:
-        """ETAPA F v17 — picking entrada manual destino FB->{LF,CD}.
+        """ETAPA F v17.5 — picking entrada manual destino FB->{LF,CD}.
 
         Para cada invoice_id distinto com `fase_pipeline=F5e_SEFAZ_OK` e
         `acao_decidida in ACOES_ENTRADA_DESTINO_MANUAL`, **DELEGA** para
@@ -3186,12 +3012,18 @@ class FaturamentoPipelineExecutor:
           Toda operacao em stock.picking passa por StockPickingService.
           Orchestrator NUNCA chama odoo.create('stock.picking') direto.
 
-        V1 STRICT (sessao 2026-05-25 v17 — Rafael):
-          - APENAS INDUSTRIALIZACAO_FB_LF (filtro em ACOES_ENTRADA_DESTINO_MANUAL)
-          - DEV_FB_LF / TRANSFERIR_FB_CD: NotImplementedError no atomo Skill 5
-            (PICKING_TYPE_ENTRADA_DESTINO_MANUAL nao mapeado p/ outras dirs)
-          - Expansao quando: 1) demanda real surgir; 2) IDs picking_type
-            descobertos via audit Odoo
+        EXPANSAO v17.5 (decisao Rafael Q1=C — 2026-05-26):
+          - INDUSTRIALIZACAO_FB_LF: validado PROD (317306, 317316). LF=19.
+            location_origem=26489 Em Transito Industrializacao.
+            ✅ executa sempre (sem flag).
+          - DEV_FB_LF: canary fiscal sem precedente PROD. LF=19 reusado;
+            fp 86 assumido (sem precedente — pode precisar ajuste pos-canary).
+            location_origem=26489 (assumido). 🟡 exige
+            `auto_confirma_direcao_nova=True` em real-run.
+          - TRANSFERIR_FB_CD: discovery Odoo 2026-05-26 — PT 50
+            CD/IN/INTER (NACOM/CD/IN/INTER/0000N); src=6 Em Transito Filiais;
+            dest=32 CD/Estoque; partner=NACOM GOYA - CD (34). 🟡 exige
+            `auto_confirma_direcao_nova=True` em real-run.
 
         Patterns codificados (do script 09 L1428-1688):
           - L17 Filtra ACOES_ENTRADA_DESTINO_MANUAL (sentidos FB->X)
@@ -3208,6 +3040,10 @@ class FaturamentoPipelineExecutor:
             dry_run: True (default) NAO cria picking; reporta planejamento.
             usuario: identificador para auditoria.
             cod_produto: smoke/canary.
+            auto_confirma_direcao_nova: v17.5 (default False) — flag explicita
+                para habilitar DEV_FB_LF + TRANSFERIR_FB_CD em real-run. Dry-run
+                sempre planeja TODAS as direcoes (informacional). Em real-run,
+                direcoes canary sem a flag retornam `direcao_canary_bloqueada`.
 
         Returns:
             dict com:
@@ -3217,10 +3053,15 @@ class FaturamentoPipelineExecutor:
               invoices_ok: dict {invoice_id: picking_id}
               invoices_skip: dict {invoice_id: 'IDEMPOTENT_DONE'|...}
               invoices_falha: dict {invoice_id: erro}
-              contadores: {ok, skip, falha, not_implemented_direcao}
+              invoices_canary_bloqueado: dict {invoice_id: motivo} — v17.5
+              contadores: {ok, skip, falha, canary_bloqueado, not_implemented_direcao}
         """
         from app import db  # lazy
         from app.odoo.models import AjusteEstoqueInventario  # lazy
+        from app.odoo.constants.picking_types import (  # lazy v17.5
+            ACOES_ENTRADA_DESTINO_MANUAL_CANARY,
+            LOCATION_ORIGEM_POR_DIRECAO,
+        )
         from app.utils.timezone import agora_utc_naive  # lazy (banido datetime.utcnow)
 
         t0 = time.time()
@@ -3246,15 +3087,18 @@ class FaturamentoPipelineExecutor:
             'ciclo': ciclo,
             'company_origem_id': company_origem_id,
             'dry_run': dry_run,
+            'auto_confirma_direcao_nova': auto_confirma_direcao_nova,
             'ajustes_total': len(elegiveis),
             'invoices_pendentes': [],
             'invoices_ok': {},
             'invoices_skip': {},
             'invoices_falha': {},
+            'invoices_canary_bloqueado': {},
             'contadores': {
                 'ok': 0,
                 'skip': 0,
                 'falha': 0,
+                'canary_bloqueado': 0,
                 'not_implemented_direcao': 0,
             },
         }
@@ -3274,6 +3118,7 @@ class FaturamentoPipelineExecutor:
         if dry_run:
             # Reportar planejamento por invoice
             planejamento = []
+            invoices_canary = 0
             for inv_id, ajs in ajustes_por_invoice.items():
                 acao = ajs[0].acao_decidida
                 _, _, co_dest = ACAO_PARA_DIRECAO[acao]
@@ -3282,6 +3127,9 @@ class FaturamentoPipelineExecutor:
                 qty_total = sum(
                     float(abs(a.qtd_ajuste or 0)) for a in ajs
                 )
+                eh_canary = acao in ACOES_ENTRADA_DESTINO_MANUAL_CANARY
+                if eh_canary:
+                    invoices_canary += 1
                 planejamento.append({
                     'invoice_id': inv_id,
                     'acao': acao,
@@ -3289,14 +3137,17 @@ class FaturamentoPipelineExecutor:
                     'company_destino_id': co_dest,
                     'cods': cods,
                     'qty_total': qty_total,
+                    'canary_v175': eh_canary,
                 })
             out['status'] = 'DRY_RUN_OK_ETAPA_F'
             out['planejamento'] = planejamento
+            out['invoices_canary_count'] = invoices_canary
             out['observacao'] = (
-                f'v17 dry-run: {len(invoices_pendentes)} pickings entrada '
-                f'destino seriam criados (DELEGADO Skill 5 atomo '
-                f'criar_picking_entrada_destino_manual). V1 STRICT: '
-                f'APENAS INDUSTRIALIZACAO_FB_LF (LF=19 validado PROD).'
+                f'v17.5 dry-run: {len(invoices_pendentes)} pickings entrada '
+                f'destino seriam criados (DELEGADO Skill 5 atomo). '
+                f'{invoices_canary} sao direcoes canary (DEV_FB_LF / '
+                f'TRANSFERIR_FB_CD) — exigem '
+                f'`auto_confirma_direcao_nova=True` em real-run.'
             )
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
@@ -3328,8 +3179,24 @@ class FaturamentoPipelineExecutor:
             acao = ajs[0].acao_decidida
             _, company_origem, company_destino = ACAO_PARA_DIRECAO[acao]
 
-            # V1 STRICT: validar direcao mapeada em
-            # PICKING_TYPE_ENTRADA_DESTINO_MANUAL
+            # v17.5 CANARY GUARD: direcao nova exige --auto-confirma-direcao-nova
+            if (acao in ACOES_ENTRADA_DESTINO_MANUAL_CANARY
+                    and not auto_confirma_direcao_nova):
+                logger.warning(
+                    f'  F invoice {invoice_id} acao={acao}: '
+                    f'direcao CANARY v17.5 sem precedente PROD. Bloqueada por '
+                    f'falta de flag auto_confirma_direcao_nova=True. '
+                    f'Use dry-run para planejamento; real-run exige flag.'
+                )
+                out['invoices_canary_bloqueado'][invoice_id] = (
+                    f'direcao_canary_bloqueada: acao={acao} '
+                    f'(usar auto_confirma_direcao_nova=True)'
+                )
+                out['contadores']['canary_bloqueado'] += 1
+                continue
+
+            # Validar direcao mapeada em PICKING_TYPE_ENTRADA_DESTINO_MANUAL
+            # (v17.5 PT 50 CD adicionado p/ TRANSFERIR_FB_CD)
             picking_type_id = PICKING_TYPE_ENTRADA_DESTINO_MANUAL.get(
                 company_destino
             )
@@ -3343,11 +3210,26 @@ class FaturamentoPipelineExecutor:
                     f'  F invoice {invoice_id} acao={acao}: '
                     f'PICKING_TYPE_ENTRADA_DESTINO_MANUAL sem entrada '
                     f'para company_destino={company_destino}. '
-                    f'V1 STRICT: APENAS INDUSTRIALIZACAO_FB_LF (LF=19).'
+                    f'Validas: {sorted(PICKING_TYPE_ENTRADA_DESTINO_MANUAL.keys())}'
                 )
                 out['invoices_falha'][invoice_id] = (
                     f'direcao_nao_implementada: acao={acao} '
                     f'company_destino={company_destino}'
+                )
+                out['contadores']['not_implemented_direcao'] += 1
+                out['contadores']['falha'] += 1
+                continue
+
+            # v17.5: location_origem varia por direcao (antes era hardcode 26489)
+            location_origem = LOCATION_ORIGEM_POR_DIRECAO.get(acao)
+            if location_origem is None:
+                logger.warning(
+                    f'  F invoice {invoice_id} acao={acao}: '
+                    f'LOCATION_ORIGEM_POR_DIRECAO sem entrada. '
+                    f'Validas: {sorted(LOCATION_ORIGEM_POR_DIRECAO.keys())}'
+                )
+                out['invoices_falha'][invoice_id] = (
+                    f'location_origem_nao_mapeada: acao={acao}'
                 )
                 out['contadores']['not_implemented_direcao'] += 1
                 out['contadores']['falha'] += 1
@@ -3472,10 +3354,11 @@ class FaturamentoPipelineExecutor:
             )
 
             # DELEGA para atomo Skill 5 v15a
+            # v17.5: location_origem varia por direcao (antes hardcode 26489)
             try:
                 resultado = self.picking_svc.criar_picking_entrada_destino_manual(
                     company_destino_id=company_destino,
-                    location_origem_id=LOCATION_ORIGEM_ENTRADA_INDUSTR,
+                    location_origem_id=location_origem,
                     location_destino_id=location_dest,
                     moves_data=moves_data,
                     picking_type_id=picking_type_id,
@@ -3585,12 +3468,16 @@ class FaturamentoPipelineExecutor:
                 )
                 out['contadores']['falha'] += 1
 
-        # Status agregado
+        # Status agregado (v17.5: canary_bloqueado conta como sucesso parcial
+        # se houver outras ok; isolado vira EXECUTADO_PARCIAL — operador roda
+        # de novo com --auto-confirma-direcao-nova para processar canary)
         n_ok = out['contadores']['ok']
         n_falha = out['contadores']['falha']
-        if n_falha == 0:
+        n_canary = out['contadores']['canary_bloqueado']
+        if n_falha == 0 and n_canary == 0:
             out['status'] = 'EXECUTADO_ETAPA_F'
-        elif n_ok > 0 or out['contadores']['skip'] > 0:
+        elif n_ok > 0 or out['contadores']['skip'] > 0 or n_canary > 0:
+            # Tem alguma operacao ok/skip OU canary aguardando confirmacao
             out['status'] = 'EXECUTADO_PARCIAL'
         else:
             out['status'] = 'FALHA_ETAPA_F'
@@ -3610,6 +3497,7 @@ class FaturamentoPipelineExecutor:
         company_origem_id: Optional[int] = None,
         dry_run: bool = True,
         confirmar_sefaz: bool = False,
+        auto_confirma_direcao_nova: bool = False,
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
         limite: Optional[int] = None,
@@ -3806,13 +3694,16 @@ class FaturamentoPipelineExecutor:
                         cod_produto=cod_produto,
                     )
                 elif etapa == 'F':
-                    # v17: ETAPA F real-aware (DELEGA Skill 5 atomo).
+                    # v17.5: ETAPA F real-aware (DELEGA Skill 5 atomo).
+                    # Flag auto_confirma_direcao_nova passa adiante para
+                    # liberar canary DEV_FB_LF + TRANSFERIR_FB_CD.
                     res = self.executar_etapa_f(
                         ciclo=ciclo,
                         company_origem_id=company_origem_id,
                         dry_run=dry_run,
                         usuario=usuario,
                         cod_produto=cod_produto,
+                        auto_confirma_direcao_nova=auto_confirma_direcao_nova,
                     )
                 else:
                     res = {'status': 'FALHA_USO_ETAPA_DESCONHECIDA'}
@@ -3909,6 +3800,9 @@ def _build_argparser() -> argparse.ArgumentParser:
                    help='executa real (sem --confirmar = dry-run)')
     p.add_argument('--confirmar-sefaz', action='store_true',
                    help='2 nivel — exigido para ETAPA D (IRREVERSIVEL)')
+    p.add_argument('--auto-confirma-direcao-nova', action='store_true',
+                   help='v17.5 — habilita ETAPA F canary direcoes '
+                        'DEV_FB_LF + TRANSFERIR_FB_CD (sem precedente PROD)')
     p.add_argument('--pular-pre-flight', action='store_true',
                    help='nao invoca sub-skill C5 (uso em pytest)')
     p.add_argument('--usuario', default='faturamento_pipeline_cli',
@@ -3969,6 +3863,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             company_origem_id=args.company_origem_id,
             dry_run=dry_run,
             confirmar_sefaz=args.confirmar_sefaz,
+            auto_confirma_direcao_nova=args.auto_confirma_direcao_nova,
             usuario=args.usuario,
             cod_produto=args.cod_produto,
             limite=args.limite,

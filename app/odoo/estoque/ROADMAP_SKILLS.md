@@ -9,7 +9,51 @@
 
 **Onde:** worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, base atual v16 sobre main@15be9003). `main` está VIVO (Rafael commita em paralelo) → merge coordenado depois.
 
-**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **483 pytest verdes** (tests/odoo/ — v16 confirmado em 15.51s).
+**Retomar (ordem):** 1) `cd` na worktree + `source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate`; 2) carregar DATABASE_URL+ODOO_* (worktree sem `.env`): `set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a`; 3) ler `app/odoo/estoque/CLAUDE.md` (constituição/mentalidade); 4) ler este ROADMAP; 5) **se sessao for sobre Skill 8 `faturando-odoo` — LER `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO + atualizar checkpoint ativo (regra inviolavel 0 do planejamento)**. Baseline esperado: **512 pytest verdes** (tests/odoo/ — v17.5 confirmado em 14.79s).
+
+**Sessão 2026-05-26 v17.5 (REVERT ETAPA E + criar Skill 7 escriturando-odoo + ETAPA F expandido — RESTAURA CONSTITUICAO §6):**
+- ✅ Setup worktree + venv + ENV; main NAO avancou desde v17 (apenas commit docs PROMPT v17.5 f7a55fef); pytest baseline 502 verdes.
+- ✅ Leituras: PLANEJAMENTO §0/§7.4 G-RECLF-* + executar_etapa_e v17 inline (~420 LOC) + service externo RecebimentoLfOdoo header + constants picking_types.py + SKILL.md modelo Skill 5.
+- ✅ **Investigacoes Odoo PROD (audit 2026-05-26):**
+  - PT 19 LF/IN Recebimento confirmado (4 pickings INV-* historicos: 317306, 317316, 320467, 320476 — todos com src=26489, dest=42, partner None, company LF)
+  - PT 50 CD/IN/INTER DESCOBERTO (src=6 Em Transito Filiais, dest=32 CD/Estoque, partner NACOM GOYA - CD; 3.594+ pickings PROD historicos)
+  - PT 64 LF/RECEB/IND existe mas usado por DFe externos (não inter-company nosso)
+  - TRANSFERIR_FB_CD NUNCA rodou INVENTARIO_2026_05 em PROD (zero pickings CD com origin INV-*)
+  - CFOPs entrada PROD: 1124 (industr FB receb LF), 1152 (transf filial em 28 linhas ENTTR/*); 1903/1949 não observados em PROD
+- ✅ **AskUserQuestion v17.5**: Rafael Q1=C (Habilitar AMBOS com flag); Q2=atomo geral recebimento (V1 strict LF→FB); Q3=B (S1-S5 completo).
+- ✅ **S2 CRIAR Skill 7 `escriturando-odoo`** (atomo C3 macro NOVA):
+  - `app/odoo/estoque/scripts/escrituracao.py` (EscrituracaoLfService ~500 LOC) — atomo `criar_recebimento_orchestrado(invoice_id, ajustes, ciclo, usuario, dry_run, cnpj_emitente, company_id_recebedor)`
+  - V1 STRICT: SO LF→FB (cnpj '18.467.441/0001-63' + company FB=1); outros valores raise NotImplementedError
+  - Encapsula: G-RECLF-3 idempotencia UK + HIGH-3 status='processando' RETOMA + HIGH-4 svc instanciado fresh + HIGH-5 produto_tracking fetch batch + G-RECLF-2 transfer parcial OK + D17 ACAO_PARA_CFOP_ENTRADA 5xxx→1xxx + D9 re-fetch safe_session_get + commit_resilient
+  - Retorna: status (CRIADO|RETOMADO|IDEMPOTENT_PROCESSADO|PARCIAL|FALHA|DRY_RUN_OK|SKIP_AJUSTES_VAZIOS), rec_id, odoo_invoice_id_fb, transfer_status, tempo_ms, erro
+  - `.claude/skills/escriturando-odoo/SKILL.md` com 3 receitas (criar orchestrado, retomar processando, retry transfer via svc externo direto)
+  - 10 pytest verdes em `tests/odoo/services/test_escrituracao_lf_service.py`
+- ✅ **S1+S3 REVERT executar_etapa_e + delegar Skill 7**:
+  - ETAPA E reduzida de ~420 LOC inline para ~180 LOC delegando atomo Skill 7 (constituicao §6 restaurada — Skill 8 = SO SAIDA)
+  - Loop SEQUENCIAL (decisao 10.7 v17 preservada) invocando `EscrituracaoLfService.criar_recebimento_orchestrado` por invoice
+  - Mapeamento de status atomo → contadores (ok/skip/retomado/parcial/falha) + `invoices_retomados` lista nova
+  - 4 testes ETAPA E v17 inline DELETADOS (migrados para test_escrituracao_lf_service.py)
+  - 2 testes novos no orchestrator validam delegacao (test_etapa_e_v175_delega_atomo_skill7_status_criado + test_etapa_e_v175_mapeia_status_idempotent_retomado_parcial)
+- ✅ **S4 ETAPA F EXPANSION canary** (Rafael Q1=C):
+  - `ACOES_ENTRADA_DESTINO_MANUAL` expandida: INDUSTRIALIZACAO_FB_LF (validado) + DEV_FB_LF + TRANSFERIR_FB_CD (canary)
+  - `ACOES_ENTRADA_DESTINO_MANUAL_CANARY` NOVA: subset que exige flag (DEV_FB_LF + TRANSFERIR_FB_CD sem precedente PROD)
+  - `PICKING_TYPE_ENTRADA_DESTINO_MANUAL` expandido: CD=50 (PT NACOM/CD/IN/INTER discovery 2026-05-26)
+  - `LOCATION_ORIGEM_POR_DIRECAO` dict NOVO substitui hardcode 26489 (INDUSTR=26489, DEV_FB_LF=26489 assumido, TRANSFERIR_FB_CD=6)
+  - `get_location_origem_entrada(acao)` helper publico
+  - Flag `--auto-confirma-direcao-nova` em CLI + `auto_confirma_direcao_nova: bool = False` no `executar_etapa_f` + `executar_pipeline_bulk`
+  - Canary bloqueado em real-run sem flag (dry-run sempre planeja todas) — status `direcao_canary_bloqueada` + contador `canary_bloqueado`
+  - Status agregado refinado (canary >0 + sem falhas/ok = EXECUTADO_PARCIAL)
+  - 1 teste V1 STRICT antigo substituido por 3 testes canary (dry-run elegivel + bloqueado sem flag + habilitado com flag — TRANSFERIR_FB_CD valida atomo invocado com location_origem=6 + PT=50)
+- ✅ **BASELINE PYTEST ODOO**: 502 → **512 verdes em 14.79s** (+10 net v17.5).
+- ✅ **SMOKE DRY-RUN PROD v17.5**:
+  - ETAPA E cod 104000003 dry-run: identifica 1 invoice 629364 PERDA_LF_FB, observacao menciona "EscrituracaoLfService.criar_recebimento_orchestrado" via atomo Skill 7 em 765ms
+  - Pipeline E+F cod 105000007 dry-run: SKIP_NENHUM_AJUSTE (esperado, cod em F5c) em 760ms
+- ✅ Cross-refs aplicados: CLAUDE.md estoque §6 (Skill 7 LIVE catalogo) + ROADMAP HANDOFF v17.5 (esta secao) + PLANEJAMENTO §0/§7 (C24 NOVO checkpoint).
+
+**Status global após v17.5:**
+- Skill 7 `escriturando-odoo` 🟡 **mín viável V1 LIVE** (atomo C3 macro; 10 pytest)
+- Skill 8 `faturando-odoo` 🟡 **PIPELINE COMPLETO A-F LIVE** com ETAPA E DELEGANDO Skill 7 (constituicao §6 RESTAURADA) — C6/C7/C8/C9/C10/C11/**C12 REWRITE**/**C13 EXPANSION**/**C24 NEW** implementados; **14 checkpoints ✅** de 24.
+- Próximo passo (v18): **C14 recovery + C15 SKILL.md Skill 8 + C16 baseline pytest + C17 smokes** (preparacao pre-canary REAL). Esperado +5-10 pytest novos.
 
 **Sessão 2026-05-25 v17 (C11 ETAPA D F5e SEFAZ + C12 ETAPA E RecLF + C13 ETAPA F atomo Skill 5 — PIPELINE COMPLETO A-F LIVE):**
 - ✅ Setup worktree + venv + ENV; rebase de main (2 commits — 48b0dfa6 recebimento-lf gravar NF + 9906e70b agente CLI fix) sem conflito (zero overlap com `app/odoo/estoque/`); pytest baseline 483 verdes pos-rebase.

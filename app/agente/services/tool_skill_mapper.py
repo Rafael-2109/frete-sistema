@@ -125,6 +125,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'operando-reservas-odoo': 'Estoque Odoo (Write)',
     'operando-picking-odoo': 'Estoque Odoo (Write)',
     'operando-mo-odoo': 'Estoque Odoo (Write)',
+    'escriturando-odoo': 'Escrituracao Entrada Odoo (Write)',
     'planejando-pre-etapa-odoo': 'Estoque Odoo (Write)',
     'consultando-quant-odoo': 'Estoque Odoo (Read)',
     'auditando-cadastro-fiscal-odoo': 'Pre-Flight Cadastro Fiscal Odoo',
