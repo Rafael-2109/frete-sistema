@@ -1196,6 +1196,11 @@ def create_app(config_name=None):
 
     app.register_blueprint(estoque_bp)
 
+    # Modulo de Inventario (Relatorio de Confronto)
+    from app.inventario import inventario_bp
+    app.register_blueprint(inventario_bp)
+    app.logger.info("✅ Módulo Inventário registrado com sucesso")
+
     # Modulo de Pallet (Gestao de NF de Pallet em Terceiros)
     # v2 + v3 (tela unificada)
     from app.pallet.routes import register_blueprints as register_pallet_v2
