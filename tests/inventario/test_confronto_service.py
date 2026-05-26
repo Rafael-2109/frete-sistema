@@ -41,6 +41,7 @@ def test_linha_com_compras_venda_consumo_producao(db, ciclo):
     db.session.add(InventarioBase(
         ciclo_id=ciclo.id, cod_produto='4320147', empresa='FB', qtd=Decimal('100')))
     _add_mov(db, '4320147', 'ENTRADA', 'COMPRA', 50)
+    _add_mov(db, '4320147', 'ENTRADA', 'REVERSAO', 5)
     _add_mov(db, '4320147', 'FATURAMENTO', 'VENDA', -20)
     _add_mov(db, '4320147', 'CONSUMO', 'LF', -30)
     _add_mov(db, '4320147', 'PRODUÇÃO', '1106', 80)
@@ -48,7 +49,7 @@ def test_linha_com_compras_venda_consumo_producao(db, ciclo):
 
     linhas = ConfrontoService.montar_linhas(ciclo.id)
     l = next(x for x in linhas if x['cod_produto'] == '4320147')
-    assert l['compras'] == Decimal('50')
+    assert l['compras'] == Decimal('55')  # 50 + 5 REVERSAO (toda ENTRADA conta)
     assert l['vendas'] == Decimal('-20')
     assert l['consumo'] == Decimal('-30')
     assert l['producao'] == Decimal('80')
@@ -98,7 +99,7 @@ def test_calculo_mov_e_diferencas(db, ciclo):
 
     linhas = ConfrontoService.montar_linhas(ciclo.id)
     l = next(x for x in linhas if x['cod_produto'] == '4999999')
-    # MOV = inv_total(100) + compras(50) + pa(80) + componente(-40) = 190
+    # MOV = inv_total(100) + compras(50, qualquer ENTRADA) + pa(80) + componente(-40) = 190
     assert l['mov'] == Decimal('190')
     # odoo(150) - mov(190) = -40
     assert l['odoo_menos_mov'] == Decimal('-40')

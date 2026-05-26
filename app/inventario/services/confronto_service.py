@@ -1,7 +1,7 @@
 """Agregador principal do Relatório de Confronto de Inventário."""
 from decimal import Decimal
 from typing import List, Dict, Any
-from sqlalchemy import func, case, and_
+from sqlalchemy import func, case
 from app import db
 from app.inventario.models import (
     CicloInventario, InventarioBase, AjusteManualInventario,
@@ -132,10 +132,8 @@ class ConfrontoService:
         q_periodo = db.session.query(
             cod_raiz,
             func.max(MovimentacaoEstoque.nome_produto),
-            func.sum(case((and_(
-                MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA',
-                MovimentacaoEstoque.local_movimentacao == 'COMPRA',
-            ), MovimentacaoEstoque.qtd_movimentacao), else_=0)),
+            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA',
+                           MovimentacaoEstoque.qtd_movimentacao), else_=0)),
             func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
                            MovimentacaoEstoque.qtd_movimentacao), else_=0)),
             func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'CONSUMO',

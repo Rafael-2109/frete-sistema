@@ -49,6 +49,8 @@ class InventarioLoader:
         InventarioBase.query.filter_by(ciclo_id=ciclo_id).delete()
         db.session.flush()
 
+        # Agrega (cod, empresa) -> (qtd_total, nome) para lidar com duplicatas
+        agregado = {}  # (empresa, cod) -> {'qtd': Decimal, 'nome': str}
         inseridos = pulados = 0
         erros = []
         for empresa in EMPRESAS_ESPERADAS:
@@ -97,14 +99,22 @@ class InventarioLoader:
                     continue
 
                 nome = row[col_idx['nome_produto']] if 'nome_produto' in col_idx else None
-                db.session.add(InventarioBase(
-                    ciclo_id=ciclo_id,
-                    cod_produto=cod,
-                    nome_produto=str(nome).strip() if nome else None,
-                    empresa=empresa,
-                    qtd=qtd,
-                ))
-                inseridos += 1
+                nome_str = str(nome).strip() if nome else None
+                key = (empresa, cod)
+                if key in agregado:
+                    agregado[key]['qtd'] += qtd
+                    if nome_str and not agregado[key]['nome']:
+                        agregado[key]['nome'] = nome_str
+                else:
+                    agregado[key] = {'qtd': qtd, 'nome': nome_str}
+
+        # Persist agregado
+        for (empresa, cod), v in agregado.items():
+            db.session.add(InventarioBase(
+                ciclo_id=ciclo_id, cod_produto=cod,
+                nome_produto=v['nome'], empresa=empresa, qtd=v['qtd'],
+            ))
+            inseridos += 1
 
         db.session.flush()
         return {'inseridos': inseridos, 'pulados': pulados, 'erros': erros}
