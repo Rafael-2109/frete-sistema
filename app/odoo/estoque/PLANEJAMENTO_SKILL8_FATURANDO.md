@@ -12,11 +12,11 @@
 
 | Campo | Valor |
 |-------|-------|
-| **Status global** | 🟡 PIPELINE COMPLETO A-F LIVE v17.5 (C6/C7/C8/C9/C10/C10.2/C10.3/C11/**C12 REWRITE/C13 EXPANSAO**/**C24 Skill 7 NOVA**; pendente apenas recovery/SKILL.md/canary v18+) |
-| **Sessao atual** | v17.5 (2026-05-26) — **REVERT ETAPA E + CRIAR Skill 7 escriturando-odoo + ETAPA F EXPANDIDA**. v17 colocou logica RecebimentoLf inline em `executar_etapa_e` (420 LOC) violando constituicao §6 (Skill 8 = SO SAIDA; Skill 7 = SO ENTRADA). v17.5 corrige: (1) **C24 NOVO — Skill 7 `escriturando-odoo`**: `app/odoo/estoque/scripts/escrituracao.py` (EscrituracaoLfService ~500 LOC) — atomo C3 macro `criar_recebimento_orchestrado(invoice_id, ajustes)` encapsula G-RECLF-2/3 + HIGH-3/4/5 + D17 + D9 + commit_resilient. SKILL.md em `.claude/skills/escriturando-odoo/SKILL.md` com 3 receitas. 10 pytest verdes em `tests/odoo/services/test_escrituracao_lf_service.py`. V1 STRICT: SO LF→FB via RecebimentoLfOdooService externo (4562 LOC NAO MEXER). (2) **C12 REWRITE — ETAPA E DELEGA atomo Skill 7**: `executar_etapa_e` reduzido de ~420 LOC para ~180 LOC; loop simples invocando atomo + mapeando status (CRIADO|RETOMADO|IDEMPOTENT_PROCESSADO|PARCIAL|FALHA) para contadores. 4 testes ETAPA E v17 migrados para `test_escrituracao_lf_service.py` (testam atomo direto); +2 testes novos no orchestrator validam delegacao (test_etapa_e_v175_delega_atomo_skill7_status_criado + test_etapa_e_v175_mapeia_status_idempotent_retomado_parcial). (3) **C13 EXPANSAO — ETAPA F canary DEV_FB_LF + TRANSFERIR_FB_CD**: `ACOES_ENTRADA_DESTINO_MANUAL` expandida (era V1 STRICT INDUSTRIALIZACAO_FB_LF). Discovery audit Odoo 2026-05-26: PT 50 CD/IN/INTER (src=6 Em Transito Filiais, dest=32 CD/Estoque) p/ TRANSFERIR_FB_CD. `PICKING_TYPE_ENTRADA_DESTINO_MANUAL` ganha entrada CD=50. `LOCATION_ORIGEM_POR_DIRECAO` dict substitui hardcode 26489 (varia: INDUSTRIALIZACAO_FB_LF=26489, DEV_FB_LF=26489, TRANSFERIR_FB_CD=6). Flag `--auto-confirma-direcao-nova` (default False) bloqueia canary DEV_FB_LF + TRANSFERIR_FB_CD em real-run; dry-run sempre planeja TODAS. 3 testes novos canary. Decisao Rafael Q1=C (Habilitar AMBOS com flag). **512 pytest verdes** (502 baseline +10 net: +10 Skill 7 + 2 ETAPA E delegacao + 3 ETAPA F canary - 4 migrados - 1 V1 STRICT antigo). Smoke PROD: ETAPA E cod 104000003 detecta invoice 629364 via atomo Skill 7 em 765ms; pipeline E+F cod 105000007 dry-run em 760ms. |
-| **Sessoes estimadas** | 3-4 sessoes restantes (v18 → v20+) — recovery + SKILL.md Skill 8 + canary REAL + bulk PROD |
-| **Baseline pytest atual** | 512 verdes (tests/odoo/ — v17.5 em 14.79s; 502 baseline v17 + 10 net v17.5) |
-| **Baseline pytest pos-v20 esperado** | ≥520 verdes (+~8 testes restantes recovery/SKILL.md) |
+| **Status global** | 🟡 PIPELINE A-F + RECOVERY + SKILL.md LIVE v18 (C6-C13 + C14 recovery + C15 SKILL.md + C24 Skill 7; pendentes: C18 fluxos L3, C19 cross-refs final, C20-C23 canary+bulk+commit) |
+| **Sessao atual** | v18 (2026-05-26) — **RECOVERY + SKILL.md Skill 8 + G037 NOVO + 4 antipadroes documentados**. C14: `executar_pipeline_resume(*, ciclo, apenas_etapa, max_iter, timeout_iter_s, detector_stagnation, ...)` em orchestrator (~280 LOC novas) — loop de `executar_pipeline_bulk(etapas=(apenas_etapa,))` ate' TUDO_OK / STAGNATION / MAX_ITER / EXCECAO. Substitui `fat_lf_resume.sh` + `fat_lf_resume_entrada.sh`. Constants: RESUME_MAX_ITER_DEFAULT=18, RESUME_TIMEOUT_ITER_S_DEFAULT=900, RESUME_ETAPAS_VALIDAS=('B','C','D','E','F'), FASES_TERMINAIS_B. `_contar_pendentes_por_etapa(etapa, ciclo, ...)` filtros por etapa cobre B/C/D/E/F + cross-ref RecebimentoLf para E. CLI estendido: `--modo {bulk,pre-flight,resume}` + `--apenas-etapa` + `--max-iter` + `--timeout-iter` + `--sem-stagnation`. C15: SKILL.md `.claude/skills/faturando-odoo/SKILL.md` (~430 LOC) com 4 receitas + TRADE-OFFS + secao ANTIPADROES DETECTADOS V17.5 — REFATOR V19+ + Checklist Expansao. G037 NOVO em `docs/inventario-2026-05/02-gotchas/G037-operacao-nao-cadastrada-exige-cfop-explicito.md` (G036 ja' ocupado por lote virgula). Referencia rapida em `.claude/references/odoo/GOTCHAS.md` nova secao tabela G011-G037. CLAUDE.md estoque §6.5 NOVO "ANTIPADROES DETECTADOS V17.5 — REFATOR V19+" (4 antipadroes + gotcha G037). 8 PYTEST novos em test_faturamento_pipeline_orchestrator.py cobrindo recovery. 1 code-reviewer paralelo (feature-dev) entregou 4 findings TODOS aplicados (F1 CRIT contador inclui F5x_FALHA, F3 HIGH lying parameter clarificado, F2+F4 HIGH doc TRADE-OFFS). **521 pytest verdes** (513 baseline + 8 net v18). Smokes dry-run PROD: resume B/D/E/F + FALHA_USO em `/tmp/log_skill8_smokes_v18_*.json`. |
+| **Sessoes estimadas** | 2-3 sessoes restantes (v19 → v22+) — refator Skill 7 ABRANGENTE + FLUXO L3 1.2.1 + canary REAL + bulk PROD |
+| **Baseline pytest atual** | 521 verdes (tests/odoo/ — v18 em 14.76s; 513 baseline v17.5 + 8 net v18) |
+| **Baseline pytest pos-v22+ esperado** | ≥530 verdes (+~9 testes restantes FLUXOS L3 + canary REAL evidences) |
 | **Branch** | `feat/estoque-odoo` (worktree `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo`) |
 | **Service-fonte** | `app/odoo/services/inventario_pipeline_service.py` (1.346 LOC) — minerado v13 §7.2 (D1-D9) |
 | **Script-fonte macro** | `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC) — minerado v14a §7.3 (D10-D18 + compensatorio + G014) |
@@ -25,8 +25,8 @@
 | **Destino do orchestrator** | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (LIVE v17.5) |
 | **Sub-skill C5 service** | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` (~430 LOC) — capinado v14b a partir de `validar_cadastro_fiscal` no script 09 + gtin_validator.py + queries D-OPS-2 |
 | **Skill 7 service (v17.5)** | `app/odoo/estoque/scripts/escrituracao.py` (~500 LOC) — atomo C3 macro `criar_recebimento_orchestrado(invoice_id, ajustes)` que encapsula RecebimentoLf + agg + svc externo. SKILL.md em `.claude/skills/escriturando-odoo/SKILL.md`. 10 pytest. |
-| **Decisoes ABERTAS** | 0 (TODAS resolvidas v13/v14/v15/v16/v17/v17.5) — Q1 v17.5 (ETAPA F expansion) resolvida Rafael=C (flag `--auto-confirma-direcao-nova`) |
-| **Checkpoints concluidos** | **14 de 24** (C1+C2+C3+C4+C5+C6.5+C6+C7+C8+C9+C10+C11+C12+C13+**C24** v17.5). Pendentes: C14 recovery `--resume`, C15 SKILL.md Skill 8, C16 baseline pytest >=520, C17 smokes, C18 folhas fluxos, C19 cross-refs, C20 canary REAL PROD, C21 bulk REAL PROD, C22 code-review final, C23 commit + arquivar 09_*. |
+| **Decisoes ABERTAS** | 0 (TODAS resolvidas v13-v18) — v18 Q1 recovery design = compor `executar_pipeline_bulk` em loop; v18 Q2 receitas SKILL.md = 4 (canary+bulk+canary F, resume D, resume E+F, pre-flight); v18 Q3 status reporting = rico; v18 Q4 G037 (renumerado de G036 ocupado). |
+| **Checkpoints concluidos** | **17 de 24** (C1+C2+C3+C4+C5+C6.5+C6+C7+C8+C9+C10+C11+C12+C13+C24+**C14 v18 recovery**+**C15 v18 SKILL.md**+**C16 v18 pytest >=520 atingido 521**+**C17 v18 smokes documentados**). Pendentes: C18 folhas fluxos L3 (1.1*, 1.3 — junto com refator v19+), C19 cross-refs final, C20 canary REAL PROD, C21 bulk REAL PROD, C22 code-review final, C23 commit + arquivar 09_*. |
 | **Skills NOVAS criadas pela Skill 8** | (1) `auditando-cadastro-fiscal-odoo` ✅ V1 inventario LIVE (v14b); (2) **3 atomos NOVOS na Skill 5** `operando-picking-odoo` ✅ LIVE (v15a) — `criar_picking_inter_company` codifica D-OPS-3 · `validar_picking_inter_company` fluxo F5b + G018 · `criar_picking_entrada_destino_manual` ETAPA F G023 + idempotencia origin |
 | **Fixes a Skill 2 (helper)** | **D-OPS-5 ✅ FIXADO em v14b** — `_listar_quants_origem` aceita `aceita_tracking_none=True` default + atomo `transferir_para_indisponivel` valida `product.tracking` quando `lot_id_origem=None`; 9 pytest novos; canary PROD em cod 208000043 sem lote validado em ~1.5s + reversão |
 | **Pattern arquitetural FINAL** | **Etapa = barreira de sincronizacao** (MACRO: A→expire_all+re-load→B→...→F com `db.engine.dispose()` profilatico antes/apos C+D + serializa Playwright F5e vs step_23 RecebimentoLfOdoo G-RECLF-9). Mitiga DetachedInstanceError + SSL drop. **Sub-nuance MICRO ETAPA B** (D16): pipeline por picking com sleep 5s (G022 mitigation) — NAO paraleliza N pickings entre si. **ETAPA F via Skill 5** (Fluxo>>Skills mantido). **PRE-FLIGHT via sub-skill C5** (Skill 8 v15+ chama subprocess `auditar_cadastro_inventario.py --ciclo X --perfil inventario`). |
@@ -1220,6 +1220,72 @@ E' um picking SOLTO (sem MO associada) que reservaria saldo para transferir para
 ---
 
 ## 12. TRILHA DE AUDITORIA (sessoes — adicionar entry a cada)
+
+### Sessao v18 (2026-05-26 — C14 recovery + C15 SKILL.md + G037)
+- ✅ Setup worktree + venv + ENV; main NAO avancou desde v17.5 (apenas 4 commits docs PROMPT v18 e8bfea73→c5ac0607); pytest baseline 513 verdes.
+- ✅ Leituras: PLANEJAMENTO §0 + `faturamento_pipeline.py` (executar_pipeline_bulk L3492-3764 + main L3813-3884) + `escrituracao.py` + SKILL.md Skill 7 (modelo) + `fat_lf_resume.sh` + `fat_lf_resume_entrada.sh` + estrutura `fluxos/` (10 folhas L3 ja' presentes) + `orchestrators/pre_etapa_executor.py` (pattern de C3 macro).
+- ✅ AskUserQuestion v18 — Rafael:
+  - **Recovery design**: pergunta arquitetural ("`executar_pipeline_bulk` eh fluxo?"). Esclarecido: NAO eh fluxo L3 (em `fluxos/`); eh metodo de C3 macro orchestrator (`orchestrators/faturamento_pipeline.py`). `executar_pipeline_resume` adicionado ao MESMO orchestrator (C3 macro), compondo `executar_pipeline_bulk(etapas=(apenas_etapa,))` em loop.
+  - **Receitas SKILL.md (TODAS 4)**: canary+bulk+canary F, resume D, resume E+F, pre-flight isolado.
+  - **Status reporting**: rico (restantes_por_iter + ultima_invocacao_bulk).
+  - **G036 vs G037**: G036 ja' ocupado (lote virgula literal — `docs/inventario-2026-05/02-gotchas/G036-lote-virgula-literal-e-duplicado-operador-igual.md`); usado G037 para "operacao nao cadastrada exige CFOP explicito".
+- ✅ **C14 RECOVERY** (`executar_pipeline_resume`) em `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (~280 LOC novas):
+  - Constants `RESUME_MAX_ITER_DEFAULT=18`, `RESUME_TIMEOUT_ITER_S_DEFAULT=900`, `RESUME_ETAPAS_VALIDAS=('B','C','D','E','F')`, `FASES_TERMINAIS_B`, `FASES_PRE_B`.
+  - `_contar_pendentes_por_etapa(etapa, ciclo, company_origem_id, cod_produto)` com filtros B/C/D/E/F (ETAPA E cross-ref com RecebimentoLf.status='processado' — espelha `fat_lf_resume_entrada.sh:contar_e`).
+  - `executar_pipeline_resume(*, ciclo, apenas_etapa, max_iter, timeout_iter_s, detector_stagnation, ...)` — loop principal: TUDO_OK_INICIAL → loop max_iter → TUDO_OK / STAGNATION / MAX_ITER / EXCECAO.
+  - CLI estendido: `--modo {bulk,pre-flight,resume}` + `--apenas-etapa` + `--max-iter` + `--timeout-iter` + `--sem-stagnation`.
+  - `main()` modo='resume' branch com exit codes coerentes (0/1/2/4).
+- ✅ **8 PYTEST NOVOS** em `tests/odoo/services/test_faturamento_pipeline_orchestrator.py`:
+  - 1) apenas_etapa invalida (A) -> FALHA_USO
+  - 2) ETAPA D real sem confirmar_sefaz bloqueia
+  - 3) TUDO_OK_INICIAL sem pendentes (bulk nao invocado)
+  - 4) TUDO_OK apos 2 iter (mock 5->2->0)
+  - 5) STAGNATION detector para na 1a iter (mock 5->5)
+  - 6) MAX_ITER atingido (mock 10->7->5 com max_iter=2)
+  - 7) EXCECAO no bulk -> motivo_parada=EXCECAO
+  - 8) sem_stagnation continua ate' max_iter (mock 5->5->5 com flag)
+- ✅ **C15 SKILL.md** em `.claude/skills/faturando-odoo/SKILL.md` (~430 LOC):
+  - Frontmatter completo com NAO USAR PARA + V1 LIVE descricao
+  - REGRAS CRITICAS (9 itens)
+  - Contrato `executar_pipeline_bulk` (entry-point principal) + `executar_pipeline_resume`
+  - 4 RECEITAS concretas com bash exemplos
+  - TRADE-OFFS V1 ACEITOS (estendido pos CR v18 F2/F3/F4): timeout-iter NAO ENFORCADO + stdout mistura logs+JSON + CR-H4 nao se aplica em resume isolado
+  - Secao ANTIPADROES DETECTADOS V17.5 — REFATOR V19+ (4 antipadroes detalhados)
+  - Cross-refs (constituicao, planejamento, ROADMAP, subagente, ROUTING_SKILLS, tool_skill_mapper, Skill 7 par, sub-skill C5, Skill 5 atomos, Skill 2 v2, service-fonte legado, scripts shell substituidos, gotchas, IDs fixos)
+  - CHECKLIST DE EXPANSAO V19+ (10 itens documentados)
+- ✅ **G037 NOVO** em `docs/inventario-2026-05/02-gotchas/G037-operacao-nao-cadastrada-exige-cfop-explicito.md`: sintoma + causa raiz + solucao V1 paliativa (cfop_esperado da MATRIZ_INTERCOMPANY) + solucao V2 correta (refator v19+ via Skill 7 ABRANGENTE + `l10n_br_tipo_pedido`).
+- ✅ **Referencia rapida G037 em `.claude/references/odoo/GOTCHAS.md`**: nova secao "Gotchas Inter-Company Fiscal (Inventario 2026-05)" com tabela completa G011-G037.
+- ✅ **CLAUDE.md estoque §6.5 NOVO** "ANTIPADROES DETECTADOS V17.5 — REFATOR V19+" (4 antipadroes + gotcha G037 detalhados).
+- ✅ **1 code-reviewer paralelo** (feature-dev:code-reviewer) — 4 findings (1 CRIT + 3 HIGH) TODOS aplicados:
+  - **F1 CRITICAL conf 90**: `_contar_pendentes_por_etapa` ETAPA F nao contava `F5f_FALHA` → resume parava prematuramente em retries. Fix: incluir `F5f_FALHA` + `F5e_FALHA` + `F5d_TIMEOUT` nas etapas relevantes (C/D/F). STAGNATION garante alerta operador para retries de FALHA (intervencao manual: revert fase_pipeline OU investigar SEFAZ cstat).
+  - **F3 HIGH conf 95**: `timeout_iter_s` aceito mas nao propagado para `executar_pipeline_bulk` (lying parameter). Fix: clarificar docstring + CLI help text + SKILL.md TRADE-OFFS (NAO ENFORCADO em v18; operador deve usar `timeout NNN python -m ...` shell para enforcement real).
+  - **F2 HIGH conf 82**: CR-H4 guard de bulk nao se aplica em resume isolado (B nao no caminho). Fix: documentado no SKILL.md TRADE-OFFS — operador deve rodar `--modo bulk --etapas A,B,C,D` antes de tentar `--modo resume --apenas-etapa D` para ter B/C garantidos.
+  - **F4 HIGH conf 80**: stdout mistura logs Flask + JSON. Fix: documentado no SKILL.md TRADE-OFFS — operador `2>/dev/null | tail | jq`; subprocess wrapper pendente v19+.
+- ✅ **BASELINE PYTEST ODOO**: 513 → **521 verdes em 14.76s** (+8 net v18). Sem regressao apos aplicar F1+F3 fixes (re-rodado pos-fixes).
+- ✅ **SMOKES DRY-RUN PROD v18** em `/tmp/log_skill8_smokes_v18_*.json`:
+  - resume B cod 105000007 → DRY_RUN_OK TUDO_OK_INICIAL 788ms (sem pendentes)
+  - resume D cod 105000007 → DRY_RUN_OK TUDO_OK_INICIAL 814ms (sem pendentes)
+  - resume E cod 104000003 → DRY_RUN_OK TUDO_OK_INICIAL 799ms (sem pendentes)
+  - resume F cod 210030007 → DRY_RUN_OK TUDO_OK_INICIAL 757ms (sem pendentes; cod ja' em F5f_OK conforme v17)
+  - resume sem --apenas-etapa → exit 2 + stderr "ERRO USO: --modo resume exige --apenas-etapa" (FALHA_USO confirmado)
+  - Resumo consolidado em `/tmp/log_skill8_smokes_v18_resumo.json`
+- ✅ Cross-refs aplicados:
+  - `app/odoo/estoque/CLAUDE.md` (§6 status global + §6.5 antipadroes + tabela §6 catalogo Skill 8 v18)
+  - `app/odoo/estoque/ROADMAP_SKILLS.md` HANDOFF v18 (entry NOVA acima da v17.5)
+  - `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` §0 + §12 trilha v18 (esta entry)
+  - `.claude/references/odoo/GOTCHAS.md` (nova secao tabela G011-G037)
+  - `docs/inventario-2026-05/02-gotchas/G037-*.md` (NOVO arquivo)
+  - `.claude/skills/faturando-odoo/SKILL.md` (NOVO arquivo)
+- 🟢 **Scripts shell SUPERADOS** (NAO removidos ate' v22+ pos-canary REAL):
+  - `scripts/inventario_2026_05/fat_lf_resume.sh` → substituido por `--modo resume --apenas-etapa D/C`
+  - `scripts/inventario_2026_05/fat_lf_resume_entrada.sh` → substituido por `--modo resume --apenas-etapa E/F`
+  - Workflows operacionais migrados para SKILL.md Receitas 2 e 3
+- 🟢 **NAO MEXEU** em `RecebimentoLfOdooService` (regra v14a-fix) nem em `09_executar_onda1_bulk.py` (regra v14a-ops) nem em `escriturar_dfe_lf.py` (referencia v19+).
+
+**Status global após v18:**
+- Skill 8 `faturando-odoo` 🟡 **PIPELINE A-F + RECOVERY + SKILL.md LIVE** — C6-C13 + C24 (v17.5) + **C14 + C15 + C16 + C17** (v18); **17 checkpoints ✅** de 24.
+- Pendentes apenas: C18 folhas fluxos L3 (1.1*, 1.3 — junto com refator Skill 7 v19+), C19 cross-refs final, C20 canary REAL PROD, C21 bulk REAL PROD, C22 code-review final, C23 commit + arquivar 09_*.
+- Próximo passo (v19+): **REFATOR Skill 7 ABRANGENTE** + **FLUXO L3 1.2.1 escriturar-dfe-industrializacao** + **extrair ETAPA F do orchestrator para FLUXO L3** (escopo MUITO ALTO cross-modulo — antipadroes 1+2+3 documentados em CLAUDE.md §6.5 + SKILL.md). Risco MEDIO em v18 (escopo conservador); v19+ Risco MUITO ALTO.
 
 ### Sessao v13 (2026-05-25)
 - ✅ Setup worktree + venv + ENV + pytest baseline 393 verdes

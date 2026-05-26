@@ -2274,3 +2274,207 @@ def test_etapa_f_critical4_situacao_nf_nao_autorizado_pula(db):
 # (atomo Skill 7 — RETOMAR direto sem duplicar). Orchestrator delegado
 # valida apenas o mapeamento status='RETOMADO' -> ok+retomado em
 # test_etapa_e_v175_mapeia_status_idempotent_retomado_parcial.
+
+
+# ============================================================
+# v18 — Recovery `executar_pipeline_resume` (C14)
+# ============================================================
+
+def test_resume_apenas_etapa_invalida_retorna_falha_uso():
+    """apenas_etapa='A' nao eh suportada em resume (A nao precisa recovery
+    iterativo — Skill 2 ja tem retomada propria via fase_pipeline=TRANSF_OK).
+    """
+    executor = FaturamentoPipelineExecutor()
+    result = executor.executar_pipeline_resume(
+        ciclo='TEST_RESUME',
+        apenas_etapa='A',
+        dry_run=True,
+    )
+    assert result['status'] == 'FALHA_USO'
+    assert result['motivo_parada'] == 'FALHA_USO'
+    assert 'invalida' in result['erro']
+    assert result['iteracoes_executadas'] == 0
+
+
+def test_resume_etapa_d_real_sem_confirmar_sefaz_bloqueia():
+    """ETAPA D em real-run exige --confirmar-sefaz (IRREVERSIVEL).
+
+    Resume reusa o guard CR-H4 do bulk, mas valida ANTES de invocar para
+    evitar loop inutil.
+    """
+    executor = FaturamentoPipelineExecutor()
+    result = executor.executar_pipeline_resume(
+        ciclo='TEST_RESUME',
+        apenas_etapa='D',
+        dry_run=False,
+        confirmar_sefaz=False,
+    )
+    assert result['status'] == 'FALHA_USO'
+    assert result['motivo_parada'] == 'FALHA_USO'
+    assert 'confirmar-sefaz' in result['erro']
+
+
+def test_resume_tudo_ok_inicial_quando_nao_ha_pendentes():
+    """Contagem inicial 0 -> TUDO_OK_INICIAL sem invocar bulk.
+
+    Util quando operador re-roda recovery por inercia depois que processo
+    ja concluiu.
+    """
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, '_contar_pendentes_por_etapa', return_value=0,
+    ), patch.object(executor, 'executar_pipeline_bulk') as mock_bulk:
+        result = executor.executar_pipeline_resume(
+            ciclo='TEST_RESUME',
+            apenas_etapa='D',
+            dry_run=True,
+        )
+    assert result['status'] == 'DRY_RUN_OK'
+    assert result['motivo_parada'] == 'TUDO_OK_INICIAL'
+    assert result['restantes_iniciais'] == 0
+    assert result['iteracoes_executadas'] == 0
+    mock_bulk.assert_not_called()
+
+
+def test_resume_tudo_ok_apos_2_iteracoes():
+    """Pendentes 5 -> 2 -> 0 — TUDO_OK na iter 2.
+
+    Bulk invocado 2x; restantes_por_iter tem 2 entradas com tempo_ms e
+    status do bulk; ultima_invocacao_bulk preserva ultimo dict.
+    """
+    executor = FaturamentoPipelineExecutor()
+    # Contagem inicial 5, depois 2 (apos iter 1), depois 0 (apos iter 2).
+    contagens = [5, 2, 0]
+    with patch.object(
+        executor, '_contar_pendentes_por_etapa',
+        side_effect=lambda **kw: contagens.pop(0),
+    ), patch.object(
+        executor, 'executar_pipeline_bulk',
+        return_value={'status': 'EXECUTADO_OK', 'etapas_executadas': {'D': {}}},
+    ) as mock_bulk:
+        result = executor.executar_pipeline_resume(
+            ciclo='TEST_RESUME',
+            apenas_etapa='D',
+            dry_run=False,
+            confirmar_sefaz=True,
+            max_iter=5,
+        )
+    assert result['status'] == 'EXECUTADO_OK'
+    assert result['motivo_parada'] == 'TUDO_OK'
+    assert result['iteracoes_executadas'] == 2
+    assert result['restantes_iniciais'] == 5
+    assert len(result['restantes_por_iter']) == 2
+    assert result['restantes_por_iter'][0]['restantes'] == 2
+    assert result['restantes_por_iter'][1]['restantes'] == 0
+    assert mock_bulk.call_count == 2
+    # confirmar_sefaz propagado para bulk
+    _, kw = mock_bulk.call_args
+    assert kw['confirmar_sefaz'] is True
+    assert kw['etapas'] == ('D',)
+    assert kw['pular_pre_flight'] is True
+
+
+def test_resume_stagnation_detector_para_quando_pendentes_nao_diminui():
+    """Pendentes 5 -> 5 (mesmo) -> STAGNATION.
+
+    Operador deve investigar (SEFAZ rejeicao, robo CIEL IT travado,
+    cadastro fiscal pendente apos pre-flight).
+    """
+    executor = FaturamentoPipelineExecutor()
+    contagens = [5, 5]  # iter 1 retorna 5 (mesmo de prev)
+    with patch.object(
+        executor, '_contar_pendentes_por_etapa',
+        side_effect=lambda **kw: contagens.pop(0),
+    ), patch.object(
+        executor, 'executar_pipeline_bulk',
+        return_value={'status': 'DRY_RUN_OK', 'etapas_executadas': {'E': {}}},
+    ):
+        result = executor.executar_pipeline_resume(
+            ciclo='TEST_RESUME',
+            apenas_etapa='E',
+            dry_run=True,
+            detector_stagnation=True,
+            max_iter=5,
+        )
+    assert result['status'] == 'DRY_RUN_PARCIAL'
+    assert result['motivo_parada'] == 'STAGNATION'
+    assert result['iteracoes_executadas'] == 1
+    assert result['restantes_iniciais'] == 5
+    assert result['restantes_por_iter'][0]['restantes'] == 5
+
+
+def test_resume_max_iter_atingido_sem_zerar_pendentes():
+    """Pendentes diminui mas nunca chega a 0 dentro de max_iter -> MAX_ITER.
+
+    Cenario realista: ETAPA E com gargalo no robo CIEL IT (G-RECLF-1) —
+    100 invoices podem demorar 50-100h, max_iter=2 nao chega ao fim.
+    """
+    executor = FaturamentoPipelineExecutor()
+    contagens = [10, 7, 5]  # inicial 10, iter1=7, iter2=5
+    with patch.object(
+        executor, '_contar_pendentes_por_etapa',
+        side_effect=lambda **kw: contagens.pop(0),
+    ), patch.object(
+        executor, 'executar_pipeline_bulk',
+        return_value={'status': 'EXECUTADO_OK', 'etapas_executadas': {'E': {}}},
+    ) as mock_bulk:
+        result = executor.executar_pipeline_resume(
+            ciclo='TEST_RESUME',
+            apenas_etapa='E',
+            dry_run=False,
+            max_iter=2,
+        )
+    assert result['status'] == 'EXECUTADO_PARCIAL'
+    assert result['motivo_parada'] == 'MAX_ITER'
+    assert result['iteracoes_executadas'] == 2
+    assert mock_bulk.call_count == 2
+
+
+def test_resume_excecao_no_bulk_retorna_parcial_com_motivo_excecao():
+    """Excecao no bulk pega no try/except e retorna motivo_parada=EXCECAO.
+
+    Erro preservado em result['erro'] (truncado em 300 chars).
+    """
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, '_contar_pendentes_por_etapa', return_value=5,
+    ), patch.object(
+        executor, 'executar_pipeline_bulk',
+        side_effect=RuntimeError('XML-RPC connection refused'),
+    ):
+        result = executor.executar_pipeline_resume(
+            ciclo='TEST_RESUME',
+            apenas_etapa='C',
+            dry_run=True,
+            max_iter=3,
+        )
+    assert result['status'] == 'DRY_RUN_PARCIAL'
+    assert result['motivo_parada'] == 'EXCECAO'
+    assert result['iteracoes_executadas'] == 1
+    assert 'XML-RPC connection refused' in result['erro']
+
+
+def test_resume_sem_stagnation_continua_ate_max_iter():
+    """detector_stagnation=False ignora pendentes iguais, vai ate max_iter.
+
+    Util quando operador sabe que ETAPA D tem timing irregular (Playwright
+    SEFAZ pode demorar variavelmente) e quer dar mais chances.
+    """
+    executor = FaturamentoPipelineExecutor()
+    contagens = [5, 5, 5]  # iter 1 e 2 mesmos
+    with patch.object(
+        executor, '_contar_pendentes_por_etapa',
+        side_effect=lambda **kw: contagens.pop(0),
+    ), patch.object(
+        executor, 'executar_pipeline_bulk',
+        return_value={'status': 'DRY_RUN_OK', 'etapas_executadas': {'D': {}}},
+    ) as mock_bulk:
+        result = executor.executar_pipeline_resume(
+            ciclo='TEST_RESUME',
+            apenas_etapa='D',
+            dry_run=True,
+            detector_stagnation=False,
+            max_iter=2,
+        )
+    assert result['motivo_parada'] == 'MAX_ITER'
+    assert mock_bulk.call_count == 2

@@ -1,6 +1,6 @@
 # GOTCHAS Criticos - Integracao Odoo
 
-**Ultima verificacao:** 18/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/`)
+**Ultima verificacao:** 26/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/` — incluindo **G037 v18 NOVO** sobre CFOP explicito quando operacao nao cadastrada)
 
 ---
 
@@ -508,4 +508,27 @@ Gotchas descobertos via analise de issues do Sentry (Marco/2026):
 
 - **ERRADO**: `from app.odoo.utils.odoo_client import ...`
 - **CORRETO**: `from app.odoo.utils.connection import ...`
+
+---
+
+## Gotchas Inter-Company Fiscal (Inventario 2026-05)
+
+Gotchas catalogados em `docs/inventario-2026-05/02-gotchas/`. Referencia rapida:
+
+| ID | Tema | Quando atinge |
+|----|------|---------------|
+| G011 | Preencher qty_done faltando | Skill 5 atomo `validar_picking_inter_company` codifica |
+| G014 | FEFO lotes vencidos bloqueia reserva | Skill 8 ETAPA C `_g014_pre_check_lotes_vencidos` codifica |
+| G016 | SSL crash no loop F5e perde commits | `_commit_resilient` proativo + dispose |
+| G017 | NCM=False bloqueia SEFAZ | Sub-skill C5 PRE-FLIGHT |
+| G018 | weight=0 bloqueia F5c | Skill 5 atomo `aplicar_peso_volumes_fallback` (G018 v2 publico) |
+| G019/G020 | Picking state nao avanca a done | Skill 5 atomo `validar()` re-le state pos-button_validate |
+| G022 | Over-reservation pos-renomeacao | Skill 8 ETAPA B sleep 5s entre chunks |
+| G023 | company_id ausente em moves | Skill 5 atomo forca company_id pos-create |
+| G034 | Robo CIEL IT defaults PT 66 em DEV_* | Skill 8 sub-etapa F5d.7 `garantir_fiscal_setup` |
+| G035 | product.barcode invalido quebra SEFAZ cstat=225 | Sub-skill C5 PRE-FLIGHT (auto-corrige opcional) |
+| G036 | Lote com virgula literal + lotes duplicados quebram `=` | Resolver lote por `name in [valor]` em vez de `=` |
+| **G037 v18 NOVO** | **Operacao nao cadastrada exige CFOP explicito** | **`MATRIZ_INTERCOMPANY[acao]['cfop_esperado']` tem USO PRATICO** (fallback `l10n_br_cfop_id` quando motor fiscal nao deriva via `fiscal_position_id` + `l10n_br_tipo_pedido`). Caminho A correto v19+: extrair Skill 7 escriturando-odoo ampliada que escritura DFe com `l10n_br_tipo_pedido` correto → motor fiscal deriva CFOP automaticamente. |
+
+**G037 detalhe completo**: `docs/inventario-2026-05/02-gotchas/G037-operacao-nao-cadastrada-exige-cfop-explicito.md`
 - O modulo se chama `connection`, NAO `odoo_client`

@@ -174,6 +174,24 @@ FASE_F5e_FALHA = 'F5e_FALHA'
 FASE_F5f_OK = 'F5f_ENTRADA_OK'
 FASE_F5f_FALHA = 'F5f_FALHA'
 
+# v18 — Recovery `executar_pipeline_resume` defaults (substitui
+# `fat_lf_resume.sh` 18 iters + `fat_lf_resume_entrada.sh` 30 iters E + 12 F).
+RESUME_MAX_ITER_DEFAULT = 18
+RESUME_TIMEOUT_ITER_S_DEFAULT = 900  # 15 min/iter (espelha shell)
+RESUME_ETAPAS_VALIDAS: Tuple[str, ...] = ('B', 'C', 'D', 'E', 'F')
+
+# v18 — fases terminais por etapa (ajuste sai do "pendente" da etapa quando
+# alcanca uma fase >= terminal). Usado por `_contar_pendentes_por_etapa`.
+# Ordem: nao-iniciado -> F5a_*/F5b_* (em B) -> F5c_LIBERADO (terminal B / pre C)
+# -> F5d_INVOICE_GERADA (terminal C / pre D) -> F5e_SEFAZ_OK (terminal D / pre E,F)
+# -> F5f_ENTRADA_OK (terminal F).
+FASES_TERMINAIS_B: frozenset = frozenset({
+    FASE_F5c_OK, FASE_F5d_OK, FASE_F5e_OK, FASE_F5f_OK,
+})
+FASES_PRE_B: frozenset = frozenset({
+    None, 'TRANSF_OK', FASE_F5a_OK, FASE_F5a_FALHA, FASE_F5b_OK, FASE_F5b_FALHA, FASE_F5c_FALHA,
+})
+
 # v17 — HARD_FAIL_CONFIG_ERRORS (D7 do service legado L1110-1114).
 # Estes erros + tentativas=0 ABORTAM o batch SEFAZ (operador deve intervir).
 HARD_FAIL_CONFIG_ERRORS: frozenset = frozenset({
@@ -3763,33 +3781,482 @@ class FaturamentoPipelineExecutor:
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
+    # ============================================================
+    # v18 — Recovery `executar_pipeline_resume` (C14)
+    # ============================================================
+
+    def _contar_pendentes_por_etapa(
+        self,
+        *,
+        etapa: str,
+        ciclo: str,
+        company_origem_id: Optional[int] = None,
+        cod_produto: Optional[str] = None,
+    ) -> int:
+        """Conta ajustes ainda pendentes para a etapa indicada.
+
+        Define "pendente" por etapa (espelha filtros usados em
+        `executar_etapa_X` + scripts `fat_lf_resume*.sh`):
+
+          - B: acao in ACOES_PICKING + fase nao-terminal de B
+               (fase NOT IN {F5c, F5d, F5e, F5f}). Inclui F5a_FALHA / F5b_FALHA /
+               F5c_FALHA naturalmente (NAO terminais).
+          - C: acao in ACOES_PICKING + fase IN (F5c_LIBERADO, F5d_TIMEOUT).
+               F5d_TIMEOUT incluida (CR v18 F1): re-rodar C tenta polling
+               novamente; pode pegar invoice agora pronta no CIEL IT.
+          - D: acao in ACOES_PICKING + fase IN (F5d_INVOICE_GERADA, F5e_FALHA).
+               F5e_FALHA incluida (CR v18 F1): operador pode tentar retry —
+               se executar_etapa_d nao re-processar F5e_FALHA, vira STAGNATION
+               alertando operador (intervencao manual: revert fase_pipeline OU
+               investigar SEFAZ rejeicao cstat).
+          - E: acao in ACOES_ENTRADA_FB + fase == F5e_SEFAZ_OK MINUS invoices
+               com RecebimentoLf status='processado'. Espelha contador de
+               `fat_lf_resume_entrada.sh:contar_e`. RecLf em outros status
+               (pendente/processando/erro) ainda conta como pendente — recovery
+               re-invoca Skill 7 que aplica HIGH-3 retoma.
+          - F: acao in ACOES_ENTRADA_DESTINO_MANUAL + fase IN (F5e_SEFAZ_OK,
+               F5f_FALHA). F5f_FALHA incluida (CR v18 F1 CRITICAL): retry
+               idempotente — Skill 5 atomo `criar_picking_entrada_destino_manual`
+               eh idempotente via origin exato. Se F5f_FALHA persistir, vira
+               STAGNATION alertando operador.
+
+        Pre-cond: app_context ativo (db.session disponivel).
+
+        Args:
+            etapa: 'B' | 'C' | 'D' | 'E' | 'F'.
+            ciclo: identificador do ciclo.
+            company_origem_id: filtro opcional (so ETAPA B-D filtram por
+                acoes da company origem; E/F sao por acao_decidida).
+            cod_produto: smoke/canary (1 produto).
+
+        Returns:
+            int >= 0.
+
+        Raises:
+            ValueError: etapa invalida.
+        """
+        if etapa not in RESUME_ETAPAS_VALIDAS:
+            raise ValueError(
+                f'_contar_pendentes_por_etapa: etapa={etapa!r} invalida. '
+                f'Validas: {RESUME_ETAPAS_VALIDAS}'
+            )
+
+        from app import db  # lazy
+        from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+        db.session.expire_all()  # D11 — invalida ORM cache
+
+        q = AjusteEstoqueInventario.query.filter_by(ciclo=ciclo)
+        q = q.filter(
+            AjusteEstoqueInventario.status.in_(['PROPOSTO', 'APROVADO'])
+        )
+        if cod_produto:
+            q = q.filter(AjusteEstoqueInventario.cod_produto == cod_produto)
+
+        if etapa in ('B', 'C', 'D'):
+            # Filtra acoes da company emissora se informada.
+            if company_origem_id is not None:
+                acoes_co = [
+                    a for a, (_, co, _) in ACAO_PARA_DIRECAO.items()
+                    if co == company_origem_id and a in ACOES_PICKING
+                ]
+                if not acoes_co:
+                    return 0
+                q = q.filter(
+                    AjusteEstoqueInventario.acao_decidida.in_(acoes_co)
+                )
+            else:
+                q = q.filter(
+                    AjusteEstoqueInventario.acao_decidida.in_(
+                        list(ACOES_PICKING)
+                    )
+                )
+
+            if etapa == 'B':
+                # Pendentes: fase IS NULL OR fase NOT IN terminais de B.
+                q = q.filter(
+                    (
+                        AjusteEstoqueInventario.fase_pipeline.is_(None)
+                    ) | (
+                        AjusteEstoqueInventario.fase_pipeline.notin_(
+                            list(FASES_TERMINAIS_B)
+                        )
+                    )
+                )
+            elif etapa == 'C':
+                # CR v18 F1: incluir F5d_TIMEOUT (retry polling pode pegar
+                # invoice agora pronta).
+                q = q.filter(
+                    AjusteEstoqueInventario.fase_pipeline.in_(
+                        [FASE_F5c_OK, FASE_F5d_TIMEOUT]
+                    )
+                )
+            elif etapa == 'D':
+                # CR v18 F1: incluir F5e_FALHA (alerta operador via
+                # STAGNATION para investigar SEFAZ rejeicao OU revert manual).
+                q = q.filter(
+                    AjusteEstoqueInventario.fase_pipeline.in_(
+                        [FASE_F5d_OK, FASE_F5e_FALHA]
+                    )
+                )
+            return int(q.count())
+
+        if etapa == 'E':
+            # Pendentes: acoes_entrada_fb em F5e_SEFAZ_OK; remover invoices
+            # com RecebimentoLf 'processado' (G-RECLF-3).
+            from app.recebimento.models import RecebimentoLf  # lazy
+            q = q.filter(
+                AjusteEstoqueInventario.acao_decidida.in_(
+                    list(ACOES_ENTRADA_FB)
+                )
+            )
+            q = q.filter(
+                AjusteEstoqueInventario.fase_pipeline == FASE_F5e_OK
+            )
+            ajustes = q.all()
+            invs = {
+                a.invoice_id_odoo for a in ajustes if a.invoice_id_odoo
+            }
+            if not invs:
+                return 0
+            feitos = {
+                r.odoo_lf_invoice_id
+                for r in (
+                    RecebimentoLf.query
+                    .filter(
+                        RecebimentoLf.odoo_lf_invoice_id.in_(list(invs))
+                    )
+                    .filter(RecebimentoLf.status == 'processado')
+                    .all()
+                )
+            }
+            return len(invs - feitos)
+
+        # etapa == 'F'
+        # CR v18 F1 CRITICAL: incluir F5f_FALHA — retry idempotente da Skill 5
+        # atomo via origin exato. Persistencia em F5f_FALHA gera STAGNATION
+        # alertando operador a investigar (cause real do retry-falha).
+        q = q.filter(
+            AjusteEstoqueInventario.acao_decidida.in_(
+                list(ACOES_ENTRADA_DESTINO_MANUAL)
+            )
+        )
+        q = q.filter(
+            AjusteEstoqueInventario.fase_pipeline.in_(
+                [FASE_F5e_OK, FASE_F5f_FALHA]
+            )
+        )
+        return int(q.count())
+
+    def executar_pipeline_resume(
+        self,
+        *,
+        ciclo: str,
+        apenas_etapa: str,
+        max_iter: int = RESUME_MAX_ITER_DEFAULT,
+        timeout_iter_s: int = RESUME_TIMEOUT_ITER_S_DEFAULT,
+        detector_stagnation: bool = True,
+        company_origem_id: Optional[int] = None,
+        dry_run: bool = True,
+        confirmar_sefaz: bool = False,
+        auto_confirma_direcao_nova: bool = False,
+        usuario: str = 'faturamento_pipeline_resume',
+        cod_produto: Optional[str] = None,
+        limite: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Loop de recovery: invoca `executar_pipeline_bulk(etapas=(apenas_etapa,))`
+        repetidamente ate' (a) pendentes==0 OU (b) detector_stagnation OU
+        (c) max_iter atingido.
+
+        Substitui scripts shell `fat_lf_resume.sh` (B->D) + `fat_lf_resume_entrada.sh`
+        (E + F). Reusa toda a infraestrutura de `executar_pipeline_bulk`
+        (barreira MACRO D11 + D10 dispose + CR-H4 guard + auditoria).
+
+        Pattern (espelha shell `fat_lf_resume.sh:18-39`):
+          1. Contar pendentes iniciais. Se 0 -> TUDO_OK_INICIAL.
+          2. Para iter in 1..max_iter:
+             a. executar_pipeline_bulk(etapas=(apenas_etapa,), pular_pre_flight=True)
+             b. recontar pendentes.
+             c. se pendentes == 0 -> TUDO_OK.
+             d. se detector_stagnation AND pendentes == prev_pendentes -> STAGNATION.
+             e. prev_pendentes = pendentes.
+          3. Se loop completar sem retorno -> MAX_ITER.
+
+        Args:
+            ciclo: identificador do ciclo.
+            apenas_etapa: 'B' | 'C' | 'D' | 'E' | 'F' (A nao precisa recovery
+                iterativo — Skill 2 ja' tem retomada propria).
+            max_iter: limite de iteracoes (default 18, espelha shell).
+            timeout_iter_s: timeout do bulk por iter (default 900s).
+                **CR v18 F3 — NAO ENFORCADO em v18**: serve apenas de
+                orientacao operacional (informa o operador qual eh o tempo
+                esperado por iter para ETAPA C polling = 1800s, D Playwright =
+                5-10min/NF, E RecLf = 30-60min/invoice). NAO eh propagado
+                para `executar_pipeline_bulk` (que NAO tem parametro de
+                timeout em v18). Enforcement via ThreadPoolExecutor.submit().result(timeout=)
+                pendente refator v19+. Operador pode usar `timeout` do shell
+                Linux: `timeout 900 python -m ... --modo resume ...`.
+            detector_stagnation: True (default) para parada antecipada se
+                pendentes nao diminuir. Util em ETAPA D (operador deve checar
+                rejeicao SEFAZ se travar).
+            company_origem_id: filtro de company emissora (1/4/5).
+            dry_run: True default — simula. False executa real.
+            confirmar_sefaz: 2 nivel obrigatorio em ETAPA D.
+            auto_confirma_direcao_nova: ETAPA F canary v17.5.
+            usuario: auditoria.
+            cod_produto: smoke/canary 1 produto.
+            limite: limita N primeiros ajustes por iter.
+
+        Returns:
+            dict com:
+              modo: 'resume'
+              ciclo, apenas_etapa, max_iter
+              iteracoes_executadas: int
+              restantes_iniciais: int
+              restantes_por_iter: List[{iter, restantes, status_bulk}]
+              motivo_parada: 'TUDO_OK_INICIAL' | 'TUDO_OK' | 'STAGNATION' |
+                             'MAX_ITER' | 'EXCECAO' | 'FALHA_USO'
+              ultima_invocacao_bulk: dict (resultado do bulk da ultima iter)
+              status: 'EXECUTADO_OK' | 'EXECUTADO_PARCIAL' | 'DRY_RUN_OK' |
+                      'DRY_RUN_PARCIAL' | 'FALHA_USO'
+              tempo_ms: int
+              erro: str (se EXCECAO ou FALHA_USO)
+
+        Raises:
+            ValueError: apenas_etapa nao em RESUME_ETAPAS_VALIDAS.
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'modo': 'resume',
+            'ciclo': ciclo,
+            'apenas_etapa': apenas_etapa,
+            'max_iter': max_iter,
+            'detector_stagnation': detector_stagnation,
+            'dry_run': dry_run,
+            'iteracoes_executadas': 0,
+            'restantes_iniciais': None,
+            'restantes_por_iter': [],
+            'motivo_parada': None,
+            'ultima_invocacao_bulk': None,
+        }
+
+        # Validar apenas_etapa.
+        if apenas_etapa not in RESUME_ETAPAS_VALIDAS:
+            out['status'] = 'FALHA_USO'
+            out['motivo_parada'] = 'FALHA_USO'
+            out['erro'] = (
+                f'apenas_etapa={apenas_etapa!r} invalida para resume. '
+                f'Validas: {RESUME_ETAPAS_VALIDAS} '
+                f'(A nao precisa recovery iterativo).'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Guard CR-H4: D exige confirmar_sefaz em real-run.
+        if apenas_etapa == 'D' and not dry_run and not confirmar_sefaz:
+            out['status'] = 'FALHA_USO'
+            out['motivo_parada'] = 'FALHA_USO'
+            out['erro'] = (
+                'ETAPA D em real-run exige --confirmar-sefaz (IRREVERSIVEL).'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Contar pendentes iniciais.
+        try:
+            restantes_iniciais = self._contar_pendentes_por_etapa(
+                etapa=apenas_etapa,
+                ciclo=ciclo,
+                company_origem_id=company_origem_id,
+                cod_produto=cod_produto,
+            )
+        except Exception as e:
+            logger.error(
+                f'resume: contagem inicial falhou: {e}', exc_info=True,
+            )
+            out['status'] = 'EXECUTADO_PARCIAL' if not dry_run else 'DRY_RUN_PARCIAL'
+            out['motivo_parada'] = 'EXCECAO'
+            out['erro'] = f'contagem_inicial: {str(e)[:300]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['restantes_iniciais'] = restantes_iniciais
+        if restantes_iniciais == 0:
+            out['motivo_parada'] = 'TUDO_OK_INICIAL'
+            out['status'] = 'DRY_RUN_OK' if dry_run else 'EXECUTADO_OK'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            logger.info(
+                f'resume ciclo={ciclo} etapa={apenas_etapa}: '
+                f'TUDO_OK_INICIAL (0 pendentes).'
+            )
+            return out
+
+        # Loop principal.
+        prev_restantes = restantes_iniciais
+        for i in range(1, max_iter + 1):
+            iter_t0 = time.time()
+            logger.info(
+                f'resume ITER {i}/{max_iter} ciclo={ciclo} '
+                f'etapa={apenas_etapa} prev_restantes={prev_restantes}'
+            )
+
+            # Invocar bulk com 1 etapa.
+            try:
+                bulk_result = self.executar_pipeline_bulk(
+                    ciclo=ciclo,
+                    etapas=(apenas_etapa,),
+                    company_origem_id=company_origem_id,
+                    dry_run=dry_run,
+                    confirmar_sefaz=confirmar_sefaz,
+                    auto_confirma_direcao_nova=auto_confirma_direcao_nova,
+                    usuario=usuario,
+                    cod_produto=cod_produto,
+                    limite=limite,
+                    # Recovery NAO re-roda pre-flight (custoso, ja' rodou
+                    # no canary inicial; ETAPAS B-F nao escrevem cadastro).
+                    pular_pre_flight=True,
+                )
+            except Exception as e:
+                logger.error(
+                    f'resume ITER {i}: bulk falhou: {e}', exc_info=True,
+                )
+                out['iteracoes_executadas'] = i
+                out['motivo_parada'] = 'EXCECAO'
+                out['ultima_invocacao_bulk'] = {'erro': str(e)[:300]}
+                out['status'] = (
+                    'EXECUTADO_PARCIAL' if not dry_run else 'DRY_RUN_PARCIAL'
+                )
+                out['erro'] = f'iter {i} bulk: {str(e)[:300]}'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+            out['ultima_invocacao_bulk'] = bulk_result
+
+            # Re-contar pendentes pos-iter.
+            try:
+                restantes = self._contar_pendentes_por_etapa(
+                    etapa=apenas_etapa,
+                    ciclo=ciclo,
+                    company_origem_id=company_origem_id,
+                    cod_produto=cod_produto,
+                )
+            except Exception as e:
+                logger.error(
+                    f'resume ITER {i}: contagem pos falhou: {e}',
+                    exc_info=True,
+                )
+                out['iteracoes_executadas'] = i
+                out['motivo_parada'] = 'EXCECAO'
+                out['status'] = (
+                    'EXECUTADO_PARCIAL' if not dry_run else 'DRY_RUN_PARCIAL'
+                )
+                out['erro'] = f'iter {i} contagem: {str(e)[:300]}'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+            iter_ms = int((time.time() - iter_t0) * 1000)
+            out['restantes_por_iter'].append({
+                'iter': i,
+                'restantes': restantes,
+                'status_bulk': bulk_result.get('status'),
+                'tempo_ms': iter_ms,
+            })
+
+            # TUDO_OK ?
+            if restantes == 0:
+                out['iteracoes_executadas'] = i
+                out['motivo_parada'] = 'TUDO_OK'
+                out['status'] = 'DRY_RUN_OK' if dry_run else 'EXECUTADO_OK'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                logger.info(
+                    f'resume ciclo={ciclo} etapa={apenas_etapa}: '
+                    f'TUDO_OK apos {i} iter (de {restantes_iniciais} -> 0).'
+                )
+                return out
+
+            # STAGNATION ?
+            if detector_stagnation and restantes == prev_restantes:
+                out['iteracoes_executadas'] = i
+                out['motivo_parada'] = 'STAGNATION'
+                out['status'] = (
+                    'EXECUTADO_PARCIAL' if not dry_run else 'DRY_RUN_PARCIAL'
+                )
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                logger.warning(
+                    f'resume ciclo={ciclo} etapa={apenas_etapa}: STAGNATION '
+                    f'apos {i} iter (restantes={restantes} sem progresso). '
+                    f'Operador deve investigar (ex.: SEFAZ rejeicao, robo CIEL IT travado, '
+                    f'cadastro fiscal pendente).'
+                )
+                return out
+
+            # Em dry-run, fase_pipeline nao avanca — `restantes` ficara igual.
+            # Detector_stagnation evita loop infinito; sem detector, max_iter
+            # ainda fecha. Documentado em pytest dry-run para evitar surpresa.
+            prev_restantes = restantes
+
+        # MAX_ITER atingido.
+        out['iteracoes_executadas'] = max_iter
+        out['motivo_parada'] = 'MAX_ITER'
+        out['status'] = (
+            'EXECUTADO_PARCIAL' if not dry_run else 'DRY_RUN_PARCIAL'
+        )
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        logger.warning(
+            f'resume ciclo={ciclo} etapa={apenas_etapa}: MAX_ITER '
+            f'apos {max_iter} iter (restantes={prev_restantes}).'
+        )
+        return out
+
 
 # ============================================================
-# CLI (modo: bulk / pre-flight / etapa-X)
+# CLI (modo: bulk / pre-flight / resume)
 # ============================================================
 
 def _build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog='faturar_pipeline',
         description=(
-            'Skill 8 faturando-odoo orchestrator v15b — '
-            'pipeline A->B->C->D->E->F inter-company.'
+            'Skill 8 faturando-odoo orchestrator v18 — '
+            'pipeline A->B->C->D->E->F + recovery resume.'
         ),
     )
     p.add_argument('--ciclo', default=CICLO_DEFAULT,
                    help=f'identificador do ciclo (default {CICLO_DEFAULT})')
     p.add_argument(
-        '--modo', choices=['bulk', 'pre-flight'],
+        '--modo', choices=['bulk', 'pre-flight', 'resume'],
         default='bulk',
-        help='bulk = pipeline A->F; pre-flight = so sub-skill C5',
+        help=(
+            'bulk = pipeline A->F; pre-flight = so sub-skill C5; '
+            'resume = loop iterativo so de --apenas-etapa (v18)'
+        ),
     )
     p.add_argument(
         '--etapas', default=','.join(ETAPAS_VALIDAS),
         help=(
             f'etapas separadas por virgula (default {",".join(ETAPAS_VALIDAS)}); '
-            f'use "A,B" para parar antes de C'
+            f'use "A,B" para parar antes de C. Ignorado em --modo resume.'
         ),
     )
+    p.add_argument('--apenas-etapa', default=None, choices=list(RESUME_ETAPAS_VALIDAS),
+                   help=(
+                       'v18 — etapa unica para --modo resume '
+                       f'(validas: {",".join(RESUME_ETAPAS_VALIDAS)}).'
+                   ))
+    p.add_argument('--max-iter', type=int, default=RESUME_MAX_ITER_DEFAULT,
+                   help=(
+                       f'v18 — max iteracoes do loop resume '
+                       f'(default {RESUME_MAX_ITER_DEFAULT}, espelha shell).'
+                   ))
+    p.add_argument('--timeout-iter', type=int, default=RESUME_TIMEOUT_ITER_S_DEFAULT,
+                   help=(
+                       f'v18 — orientacao operacional (default {RESUME_TIMEOUT_ITER_S_DEFAULT}s); '
+                       'NAO ENFORCADO em v18 (CR v18 F3): serve apenas de '
+                       'sinalizacao. Operador pode usar `timeout NNN python -m ...` '
+                       'do shell para enforcement real.'
+                   ))
+    p.add_argument('--sem-stagnation', action='store_true',
+                   help='v18 — desabilita detector_stagnation (default True).')
     p.add_argument('--company-origem-id', type=int, default=None,
                    help='filtro por company emissora (1/4/5)')
     p.add_argument('--cod-produto', default=None,
@@ -3854,6 +4321,39 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 0
             if result.get('status_global') == 'PRE_FLIGHT_WARN':
                 return 0  # warn nao bloqueia
+            return 1
+
+        if args.modo == 'resume':
+            if not args.apenas_etapa:
+                sys.stderr.write(
+                    'ERRO USO: --modo resume exige --apenas-etapa '
+                    f'(validas: {",".join(RESUME_ETAPAS_VALIDAS)}).\n'
+                )
+                return 2
+            result = executor.executar_pipeline_resume(
+                ciclo=args.ciclo,
+                apenas_etapa=args.apenas_etapa,
+                max_iter=args.max_iter,
+                timeout_iter_s=args.timeout_iter,
+                detector_stagnation=not args.sem_stagnation,
+                company_origem_id=args.company_origem_id,
+                dry_run=dry_run,
+                confirmar_sefaz=args.confirmar_sefaz,
+                auto_confirma_direcao_nova=args.auto_confirma_direcao_nova,
+                usuario=args.usuario,
+                cod_produto=args.cod_produto,
+                limite=args.limite,
+            )
+            print(json.dumps(result, indent=2, default=str))
+            status = result.get('status', '')
+            if status == 'EXECUTADO_OK':
+                return 0
+            if status == 'DRY_RUN_OK':
+                return 4
+            if status in ('DRY_RUN_PARCIAL', 'EXECUTADO_PARCIAL'):
+                return 1
+            if status == 'FALHA_USO':
+                return 2
             return 1
 
         # modo bulk
