@@ -1234,11 +1234,13 @@ def resolver_produto(termo: str, limit: int = 50, modo: str = 'hibrida'):
     filtro_final = and_(*filtros)
 
     # Buscar produtos ativos E vendidos (exclui etiquetas, intermediarios, etc)
+    # limit * 5: pool maior reduz risco de cortar SKUs validos com score empate
+    # (incidente 2026-05-26: "azeitona" cortava ~90 SKUs arbitrariamente com limit*3)
     produtos = CadastroPalletizacao.query.filter(
         filtro_final,
         CadastroPalletizacao.ativo == True,
         CadastroPalletizacao.produto_vendido == True
-    ).limit(limit * 3).all()  # Buscar mais para depois ordenar
+    ).limit(limit * 5).all()  # Buscar mais para depois ordenar
 
     if not produtos:
         return []
@@ -1299,8 +1301,11 @@ def resolver_produto(termo: str, limit: int = 50, modo: str = 'hibrida'):
             'matches': matches
         })
 
-    # Ordenar por score (maior primeiro) e limitar
-    resultados.sort(key=lambda x: -x['score'])
+    # Ordenar por score (maior primeiro), com tie-breaker deterministico por cod_produto
+    # Sem tie-breaker, ordem dependia de physical row order do PostgreSQL → resultados
+    # variavam apos VACUUM/INSERT/UPDATE. Incidente 2026-05-26: palmito Campo Belo cortou
+    # 4149306 (Tolete 6x1,8kg) por estar na posicao 11 com mesmo score=5 dos outros 10.
+    resultados.sort(key=lambda x: (-x['score'], x['cod_produto']))
     return resultados[:limit]
 
 
@@ -1317,7 +1322,9 @@ def resolver_produto_unico(termo: str, modo: str = 'hibrida'):
         - produto_dict: Dict com dados do produto ou None
         - info: Dict com metadados {encontrado, multiplos, candidatos}
     """
-    resultados = resolver_produto(termo, limit=10, modo=modo)
+    # limit=50: garante que termo generico (ex: "azeitona" com 100+ SKUs empate score=5)
+    # capture todos os candidatos relevantes antes do tie-breaker eliminar excedentes.
+    resultados = resolver_produto(termo, limit=50, modo=modo)
 
     info = {
         'termo_original': termo,
