@@ -1,0 +1,35 @@
+/* Módulo Inventário — usa design tokens */
+.inv-tabela {
+  font-size: 0.85rem;
+}
+.inv-tabela th {
+  background: var(--bg-light);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+}
+.inv-tabela td.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.inv-row-divergente,
+.inv-row-divergente td {
+  background: var(--bg-warning-soft);
+}
+.inv-cell-drill {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.inv-cell-drill:hover {
+  color: var(--text-link);
+  background: var(--bg-hover);
+}
+.inv-snapshot-status {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.inv-snapshot-status.stale {
+  color: var(--text-warning);
+}
