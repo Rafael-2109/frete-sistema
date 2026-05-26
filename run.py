@@ -3,9 +3,9 @@ import sys
 
 # 🔥 PRIMEIRA COISA: REGISTRAR TIPOS POSTGRESQL
 try:
-    print("✅ run.py: Tipos PostgreSQL registrados ANTES de importar app")
+    print("✅ run.py: Tipos PostgreSQL registrados ANTES de importar app", file=sys.stderr)
 except Exception as e:
-    print(f"⚠️ run.py: Erro ao registrar tipos PostgreSQL: {e}")
+    print(f"⚠️ run.py: Erro ao registrar tipos PostgreSQL: {e}", file=sys.stderr)
 
 # Configurar encoding UTF-8 para Windows
 if sys.platform.startswith('win'):

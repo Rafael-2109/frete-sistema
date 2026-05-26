@@ -2,6 +2,14 @@
 import sys
 import os
 import logging
+import warnings
+
+# Silenciar warning SAWarning de FK cyclic conhecido (assai/carvia/fretes)
+# Aparece em todo boot e nao indica erro real
+warnings.filterwarnings(
+    'ignore',
+    message='Cannot correctly sort tables',
+)
 
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -121,9 +129,9 @@ if _sentry_dsn:
                 _sentry_integrations.append(
                     AnthropicIntegration(include_prompts=True)
                 )
-                print("  📊 Sentry AI Monitoring ativo (AnthropicIntegration)")
+                print("  📊 Sentry AI Monitoring ativo (AnthropicIntegration)", file=sys.stderr)
             except ImportError:
-                print("  ⚠️ AnthropicIntegration indisponivel (sentry-sdk ou anthropic desatualizado)")
+                print("  ⚠️ AnthropicIntegration indisponivel (sentry-sdk ou anthropic desatualizado)", file=sys.stderr)
 
         sentry_sdk.init(
             dsn=_sentry_dsn,
@@ -147,9 +155,9 @@ if _sentry_dsn:
             # Stack traces em mensagens para melhor debugging
             attach_stacktrace=True,
         )
-        print(f"✅ Sentry inicializado (env={os.getenv('ENVIRONMENT', 'development')})")
+        print(f"✅ Sentry inicializado (env={os.getenv('ENVIRONMENT', 'development')})", file=sys.stderr)
     except Exception as e:
-        print(f"⚠️ Erro ao inicializar Sentry: {e}")
+        print(f"⚠️ Erro ao inicializar Sentry: {e}", file=sys.stderr)
 
 # 🔥 IMPORTAÇÃO CRÍTICA: Registrar tipos PostgreSQL ANTES de TUDO
 # Isso garante que os tipos sejam registrados antes de qualquer conexão
@@ -159,7 +167,7 @@ if "postgres" in os.getenv("DATABASE_URL", ""):
 
         registrar_tipos_postgresql_producao()
     except Exception as e:
-        print(f"⚠️ Erro ao importar módulo de tipos PostgreSQL: {e}")
+        print(f"⚠️ Erro ao importar módulo de tipos PostgreSQL: {e}", file=sys.stderr)
 
 # 🔧 IMPORTANTE: Registrar tipos PostgreSQL ANTES de criar SQLAlchemy
 # Isso garante que todas as conexões usem os tipos corretos
@@ -188,18 +196,18 @@ try:
     DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
     extensions.register_type(DATEARRAY)
 
-    print("✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)")
+    print("✅ Tipos PostgreSQL registrados ANTES do SQLAlchemy (solução definitiva)", file=sys.stderr)
 
     # Importar também o módulo de configuração se existir
     try:
         from app.utils.pg_types_config import registrar_tipos_postgresql #type: ignore
 
-        print("✅ Módulo pg_types_config também importado")
+        print("✅ Módulo pg_types_config também importado", file=sys.stderr)
     except Exception:
         pass
 
 except Exception as e:
-    print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}")
+    print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}", file=sys.stderr)
 
 # 🔧 Inicializações globais
 db = SQLAlchemy()
@@ -242,10 +250,10 @@ def register_pg_types_on_connect(dbapi_conn, connection_record):
             DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
             extensions.register_type(DATEARRAY, dbapi_conn)
 
-        print(f"✅ [POOL] Tipos PostgreSQL registrados na conexão {id(dbapi_conn)}")
+        print(f"✅ [POOL] Tipos PostgreSQL registrados na conexão {id(dbapi_conn)}", file=sys.stderr)
 
     except Exception as e:
-        print(f"⚠️ [POOL] Erro ao registrar tipos na conexão: {e}")
+        print(f"⚠️ [POOL] Erro ao registrar tipos na conexão: {e}", file=sys.stderr)
 
 
 def formatar_data_segura(data, formato="%d/%m/%Y"):
@@ -1347,7 +1355,7 @@ def create_app(config_name=None):
                     # Tentar criar tabelas com encoding correto
                     with engine.connect() as conn:
                         db.metadata.create_all(conn, tables=_tables_to_create)
-                        print("✅ Tabelas criadas com encoding UTF-8")
+                        print("✅ Tabelas criadas com encoding UTF-8", file=sys.stderr)
                 else:
                     # Para bancos locais (SQLite) — excluir MVs
                     _skip_tables = {'mv_pedidos', 'mv_comercial_equipes', 'mv_comercial_vendedores'}

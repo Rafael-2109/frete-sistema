@@ -35,11 +35,13 @@ def registrar_tipos_postgresql_producao():
         DATEARRAY = extensions.new_array_type((1182,), "DATEARRAY", DATE)
         extensions.register_type(DATEARRAY)
         
-        print("✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!")
+        import sys as _sys
+        print("✅ [PRODUÇÃO] Tipos PostgreSQL registrados globalmente com sucesso!", file=_sys.stderr)
         return True
-        
+
     except Exception as e:
-        print(f"⚠️ [PRODUÇÃO] Erro ao registrar tipos PostgreSQL: {e}")
+        import sys as _sys
+        print(f"⚠️ [PRODUÇÃO] Erro ao registrar tipos PostgreSQL: {e}", file=_sys.stderr)
         return False
 
 # Registrar imediatamente ao importar o módulo

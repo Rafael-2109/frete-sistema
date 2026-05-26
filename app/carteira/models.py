@@ -652,7 +652,9 @@ try:
     PreSeparacaoItem = PreSeparacaoItemAdapter
     PreSeparacaoItem.query = PreSeparacaoItemAdapter.query_adapter()
     
-    print("⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'")
+    import sys as _sys
+    print("⚠️ ADAPTER ATIVO: PreSeparacaoItem está usando Separacao com status='PREVISAO'", file=_sys.stderr)
 except ImportError as e:
-    print(f"⚠️ Adapter não pôde ser carregado: {e}")
+    import sys as _sys
+    print(f"⚠️ Adapter não pôde ser carregado: {e}", file=_sys.stderr)
     # Mantém a classe original se o adapter não estiver disponível

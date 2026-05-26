@@ -100,8 +100,9 @@ def setup_logging():
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Handler para console
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Handler para console — STDERR para nao poluir STDOUT de scripts CLI
+    # (Render captura stdout+stderr; web/worker permanecem inalterados)
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(formatter)
     console_handler.setLevel(logging.INFO)
     

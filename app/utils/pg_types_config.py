@@ -42,11 +42,13 @@ def registrar_tipos_postgresql():
         TIMESTAMPTZARRAY = extensions.new_array_type((1185,), "TIMESTAMPTZARRAY", TIMESTAMPTZ)
         extensions.register_type(TIMESTAMPTZARRAY)
         
-        print("✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)")
+        import sys as _sys
+        print("✅ Tipos PostgreSQL registrados com sucesso (solução definitiva)", file=_sys.stderr)
         return True
-        
+
     except Exception as e:
-        print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}")
+        import sys as _sys
+        print(f"⚠️ Erro ao registrar tipos PostgreSQL: {e}", file=_sys.stderr)
         return False
 
 # Registrar ao importar o módulo
