@@ -493,6 +493,161 @@ def test_preencher_po_real():
     )
 
 
+def test_preencher_po_com_l10n_br_tipo_pedido_F3c():
+    """F3c v25+ (Rafael 2026-05-27): `preencher_po` aceita
+    `l10n_br_tipo_pedido` e escreve no write. Padrao
+    INDUSTRIALIZACAO_FB_LF: DFe=compra (passo 3), PO=serv-industrializacao
+    (passo 5 — este atomo). Invoice herda da PO (passo 9).
+    """
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'team_id': [143, 'Aprovação LF - RAFAEL'],
+        'picking_type_id': [19, 'LF: Recebimento'],
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.preencher_po(
+        po_id=42543,
+        team_id=143,
+        payment_term_id=2791,
+        picking_type_id=19,
+        company_id=5,
+        payment_provider_id=38,
+        l10n_br_tipo_pedido='serv-industrializacao',
+        dry_run=False,
+    )
+    assert res['status'] == 'PREENCHIDO'
+    odoo.write.assert_called_once_with(
+        'purchase.order', [42543],
+        {
+            'team_id': 143,
+            'payment_provider_id': 38,
+            'payment_term_id': 2791,
+            'company_id': 5,
+            'picking_type_id': 19,
+            'l10n_br_tipo_pedido': 'serv-industrializacao',
+        },
+    )
+
+
+def test_preencher_po_sem_l10n_br_tipo_pedido_nao_escreve():
+    """F3c: quando l10n_br_tipo_pedido=None (default), NAO inclui no write
+    (preserva tipo herdado do DFe). Backward compat com callers que ainda
+    nao passam o parametro."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'team_id': [119, 'NACOM'],
+        'picking_type_id': [1, 'FB Receipts'],
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.preencher_po(
+        po_id=888,
+        team_id=119,
+        payment_term_id=2791,
+        picking_type_id=1,
+        company_id=1,
+        payment_provider_id=92,
+        # l10n_br_tipo_pedido omitido (=None)
+        dry_run=False,
+    )
+    assert res['status'] == 'PREENCHIDO'
+    write_call = odoo.write.call_args
+    write_values = write_call.args[2]
+    assert 'l10n_br_tipo_pedido' not in write_values
+
+
+def test_preencher_po_l10n_br_tipo_pedido_invalido_falha():
+    """F3c: tipo invalido fora da whitelist -> FALHA antes de write."""
+    odoo = MagicMock()
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.preencher_po(
+        po_id=888,
+        team_id=119,
+        payment_term_id=2791,
+        picking_type_id=1,
+        company_id=1,
+        payment_provider_id=92,
+        l10n_br_tipo_pedido='tipo_que_nao_existe',
+        dry_run=False,
+    )
+    assert res['status'] == 'FALHA'
+    assert 'l10n_br_tipo_pedido_invalido' in res['erro']
+    odoo.write.assert_not_called()
+
+
+# ============================================================
+# F2a v25+ — alinhar_dfe_lines_company (B-V23-1 generalizado p/ caminho A)
+# ============================================================
+
+def test_alinhar_dfe_lines_company_idempotente_quando_ja_alinhado():
+    """F2a v25+: todas as dfe.lines ja em company_destino -> IDEMPOTENT_OK
+    + sem write."""
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = [
+        # 1a search dfe.lines
+        [129585, 129586],
+        # 2a read dfe.lines (todas em company=5 LF)
+        [
+            {'id': 129585, 'company_id': [5, 'LF']},
+            {'id': 129586, 'company_id': [5, 'LF']},
+        ],
+    ]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.alinhar_dfe_lines_company(dfe_id=43533, company_destino=5)
+    assert res['status'] == 'IDEMPOTENT_OK'
+    assert res['lines_total'] == 2
+    assert res['lines_corrigidas'] == []
+    # Sem write (so search + read)
+    assert odoo.execute_kw.call_count == 2
+
+
+def test_alinhar_dfe_lines_company_corrige_quando_company_errada():
+    """F2a v25+: dfe.lines em company FB (=1) e destino LF (=5) -> write
+    batch corrige + retorna ids."""
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = [
+        # 1a search
+        [129585, 129586],
+        # 2a read (lines em FB=1 — INCORRETO)
+        [
+            {'id': 129585, 'company_id': [1, 'FB']},
+            {'id': 129586, 'company_id': [1, 'FB']},
+        ],
+        # 3a write
+        True,
+    ]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.alinhar_dfe_lines_company(dfe_id=43533, company_destino=5)
+    assert res['status'] == 'OK'
+    assert res['lines_total'] == 2
+    assert res['lines_corrigidas'] == [129585, 129586]
+    # Validar que o write batch foi feito com company_id=5
+    write_call = odoo.execute_kw.call_args_list[2]
+    assert write_call.args == (
+        'l10n_br_ciel_it_account.dfe.line', 'write',
+        [[129585, 129586], {'company_id': 5}],
+    )
+
+
+def test_alinhar_dfe_lines_company_sem_lines_idempotent():
+    """F2a v25+: DFe sem lines (caso raro) -> IDEMPOTENT_OK."""
+    odoo = MagicMock()
+    odoo.execute_kw.return_value = []  # search retorna []
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.alinhar_dfe_lines_company(dfe_id=43533, company_destino=5)
+    assert res['status'] == 'IDEMPOTENT_OK'
+    assert res['lines_total'] == 0
+
+
+def test_alinhar_dfe_lines_company_dfe_id_invalido():
+    """F2a v25+: dfe_id <= 0 -> FALHA_NAO_FATAL antes de Odoo."""
+    odoo = MagicMock()
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.alinhar_dfe_lines_company(dfe_id=0, company_destino=5)
+    assert res['status'] == 'FALHA_NAO_FATAL'
+    assert 'dfe_id_invalido' in res['erro']
+    odoo.execute_kw.assert_not_called()
+
+
 # ============================================================
 # confirmar_po
 # ============================================================

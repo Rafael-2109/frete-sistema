@@ -2358,3 +2358,179 @@ Os 2 fixes operam **non-fatal com warning + fallback** (preserva status='CRIADO'
 3. **Expand CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO** para FB=1 e CD=4 (atualmente só LF=5 mapeada).
 4. **Sub-skill C5 estender** G007 (standard_price=0) + l10n_br_tipo_produto.
 5. **Folhas L3 1.1.x** (só saída) + **1.3** (transferência completa) — bloqueadas pelo refator AP6.
+
+
+---
+
+## Sessao 2026-05-27 v24+ — Skill 8 ATOMICA L2 (AP6 RESOLVIDO PARCIAL) + C5 G007+tipo_produto
+
+### Escopo executado
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | S2 AP6 refator: criar Skill 8 ATOMICA L2 com 5 atomos espelhando Skill 7 ABRANGENTE v19+ | ✅ |
+| 2 | 28 pytest verdes em `tests/odoo/services/test_faturamento_invoice_service.py` | ✅ |
+| 3 | S4 Sub-skill C5 estender: G007 standard_price=0 (WARN) + l10n_br_tipo_produto (BLOQUEIO) | ✅ |
+| 4 | 4 pytest novos C5 + atualizar 5 mocks existentes (mock dict ganhou `standard_price` + `l10n_br_tipo_produto`) | ✅ |
+| 5 | SKILL.md `faturando-odoo` fachada reescrita (frontmatter ATOMICA L2 + secao "5 ATOMOS L2" + exemplo composicao) | ✅ |
+| 6 | CLAUDE.md §6 Tabela 1 ganhou `faturando-odoo` ATOMICA L2; §6.5 AP6 → RESOLVIDO PARCIAL; §14 D-V24-1 novo | ✅ |
+| 7 | ROADMAP_SKILLS HANDOFF atualizado (proximo passo v25+ refinado) | ✅ |
+| 8 | Pytest baseline: 622 → **654 verdes** (+32 net = 28 Skill 8 ATOMICA + 4 C5) | ✅ |
+
+### Escopo PULADO v24+ (priorizacao + tempo + ausencia de canary disponivel)
+
+| # | Item | Razao | Adiado para |
+|---|------|-------|-------------|
+| S1 | Bulk REAL PROD via `--usar-fluxo-l3-v19` | Ciclo INVENTARIO_2026_05 vazio para canary (so 2 museums 176013/14 EXECUTADO F5f); FATURAMENTO_LF 30 INDUSTR em F5d_BLOCKER_TX (risco SEFAZ reincide); 261 PERDA/DEV destino=FB exige S3 antes | v25+ |
+| S3 | Expand CONSTANTS FB=1 + CD=4 | Discovery XML-RPC team_id+payment_term+picking_type+payment_provider exige tempo significativo PROD | v25+ |
+| S5 | Folhas L3 1.1.x + 1.3 | Dependem refator profundo orchestrator (substituir ETAPAs C+D pela nova Skill 8 ATOMICA — opt-in v25+) | v25+ |
+
+### Decisao arquitetural
+
+**5 atomos SEPARADOS** (Rafael v24+) — REJEITOU recomendacao Explore de 1 atomo macro. Justificativa: macro = pattern DEPRECATED (wrapper Skill 7 V1 STRICT `criar_recebimento_orchestrado`) violava AP1+AP4; atomos separados permitem recovery isolado por etapa + dry-run-first natural por atomo + idempotencia por atomo + composicao via FLUXO L3 ou orchestrator C3.
+
+**Refator orchestrator NAO foi tocado nesta sessao** — Skill 8 ATOMICA L2 EXISTE em paralelo com o orchestrator legacy que continua usando logica inline. Migracao para usar a nova skill via opt-in `--usar-skill8-atomica-v25` (pattern espelhado de `--usar-fluxo-l3-v19`) fica para v25+. Esta sessao entrega a SKILL ATOMICA + catalogo + docs; v25+ entrega a migracao + canary + remocao legacy.
+
+### Codigos criados v24+
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `app/odoo/estoque/scripts/faturamento.py` (NOVO ~750 LOC) | FaturamentoInvoiceService com 5 atomos: validar_invoice_constants · liberar_faturamento (delega Skill 5 LEGACY) · polling_invoice (delega Skill 5 LEGACY) · validar_invoice_pos_robo (G029+G007+G034 via _invoice_helpers) · transmitir_sefaz (Playwright IRREVERSIVEL + D7 HARD_FAIL + D8.3 idempotencia + CRITICAL-1 commit pos-SEFAZ + MED C-1/C-2 cstat) |
+| `tests/odoo/services/test_faturamento_invoice_service.py` (NOVO ~600 LOC) | 28 pytest: 4 validar_constants + 5 liberar + 4 polling + 5 validar_pos_robo + 8 transmitir + 2 sanity |
+| `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` | Estendeu `_check_ncm_weight_tracking` com G007 (standard_price=0 WARN) + l10n_br_tipo_produto (BLOQUEIO); atualizado `auditar_perfil_inventario` para incluir novos campos em bloqueios/warnings |
+| `tests/odoo/services/test_cadastro_fiscal_audit.py` | +4 pytest novos + atualizou 5 mocks existentes (dict ganhou `standard_price` + `l10n_br_tipo_produto`) |
+| `.claude/skills/faturando-odoo/SKILL.md` | Frontmatter reescrito (ATOMICA L2 v24+); corpo adicionou secao "5 ATOMOS L2 (v24+ AP6 — espelha Skill 7 ABRANGENTE)" com tabela contratos + exemplo composicao |
+| `app/odoo/estoque/CLAUDE.md` | §6 Tabela 1 ganhou entry `faturando-odoo` ATOMICA L2; §6.5 AP6 → RESOLVIDO PARCIAL v24+; §14 D-V24-1 novo |
+| `app/odoo/estoque/ROADMAP_SKILLS.md` | HANDOFF baseline 580→654; tabela estado global Skill 8 ATOMICA + orchestrator legacy separados; proximo passo v25+ refinado |
+
+### Pendencias v25+
+
+1. **Opt-in `--usar-skill8-atomica-v25`** no `executar_pipeline_bulk`: ETAPAs C+D delegam à Skill 8 ATOMICA em vez de logica inline (default OFF preserva legacy).
+2. **Renomear** `faturamento_pipeline.py` → `inventario_pipeline.py` + alias compat (preserva 8 imports atuais).
+3. **Canary REAL PROD** do opt-in em 1-5 ajustes (validar paridade vs legacy). Apos OK: remove ETAPAS C+D legacy + migrar 14 testes.
+4. **Bulk REAL PROD** `--usar-fluxo-l3-v19` em conjunto maior (validar B-V23-1/2 automaticos).
+5. **Expand CONSTANTS** FB=1 + CD=4 (discovery XML-RPC).
+6. **Folhas L3 1.1.x + 1.3** (Markdown apenas, compoem Skill 8 ATOMICA + Skill 7 ABRANGENTE).
+
+
+---
+
+## Sessao 2026-05-27 v24.1+ — Hotfix _team_g039_status + Cirurgia AVULSO_FRASCO (37688un destravados)
+
+### Escopo
+
+| Item | Status |
+|------|--------|
+| Operacao PROD avulsa: transferir 37688un FRASCO 210030009 FB/Indisp/MIGRACAO -> LF/Estoque/AJ-27-05 (INDUSTRIALIZACAO_FB_LF) | ✅ DESTRAVADA via cirurgia 9 passos |
+| Hotfix v24.1+ — filtrar `_*` meta-keys (commit 42c097d5): regression v23+ G039 `_team_g039_status` nao filtrado no splat em `_executar_etapa_f_via_fluxo_l3` | ✅ |
+| Pytest regressao `test_v24_1_etapa_f_via_fluxo_l3_filtra_meta_keys_g039_status` | ✅ 1 net (655 baseline) |
+| Cirurgia subagente: revert lote + devolucao picking + DFe draft + tipo correto + reprocessar + write company + criar PO LF + picking + invoice ENTIN/2026/05/0056 | ✅ |
+| 4 gotchas novos descobertos (G-DFE-PURCHASE-FISCAL-ID-STALE / G-DFE-LINE-COMPANY-EMITENTE / G-INDUSTR-LF-PADRAO / G-PO-NATIVA-SEM-PICKING) | ✅ memory salva |
+| 5 falhas distintas analisadas (subagente root-cause): 3 bugs reais P0+P1 + 1 cascateado + 1 nao-bug | ✅ documento `CIRURGIA_AVULSO_FRASCO_2026_05_27.md` |
+| PROMPT v25+ atualizado com S0 (8 fixes P0-P3 priorizados) | ✅ |
+| 5 commits/snapshot estado PROD preservado | ✅ |
+
+### Estado FINAL PROD (preservado)
+
+- Invoice ENTIN/2026/05/0056 (id=719071): posted journal 1047 ENTIN, R$ 7.796,58
+- NF SAIDA 718364: SEFAZ autorizada chave `35260561724241000178550010000945741007183640`
+- PO 42543 (C2602695): purchase, LF, tipo=serv-industrializacao, fp=131, team=143 Rafael
+- Picking 321834 (LF/IN/01780): done, lote AJ-27-05 (correto, do XML SEFAZ)
+- LF/Estoque/AJ-27-05 (quant 265199): 37688un
+- Em Transito Industrializacao AJ-27-05 (quant 265091): 37688 orfao (padrao paradigma)
+
+### Bugs arquiteturais identificados v25+ (ordem implementar)
+
+P0-A passar `lotes_data` ao `executar_fluxo_l3_1_2_x` (CADA inter-company afetada) ·
+P0-B `lote_default='MIGRACAO'` -> `None` + raise (falha rapida) ·
+P0-C L3 v19+ default ·
+P1-D `escriturar_dfe` forca tipo correto ·
+P1-E ordem `preencher_po` -> `confirmar_po` ·
+P2-F guard `EXECUTADO_PARCIAL` ·
+P3-G G-PO-DFE-LOCK ·
+P3-H G-DFE-LINE-COMPANY (parcial B-V23-1 v23.5+).
+
+### Hipoteses descartadas (importante para nao desperdicar esforco)
+
+- ❌ G039 NAO foi causa original (PO 42525 ja nasceu com team=143 Rafael correto)
+- ❌ G-PERM-1 ir.rule dfe.line so surgiu na cirurgia (purchase_fiscal_id stale)
+
+### Memoria salva
+
+- `~/.claude/projects/.../memory/gotchas_industrializacao_fb_lf_v24_cirurgia.md` — 4 gotchas + pattern cirurgico completo
+- `app/odoo/estoque/CIRURGIA_AVULSO_FRASCO_2026_05_27.md` — analise root cause + 5 falhas + 8 fixes priorizados + estado PROD final
+
+### Commits
+
+- `42c097d5` fix(estoque): v24.1+ HOTFIX filtrar _* meta-keys
+- `038e5e89` docs(estoque): root cause AVULSO_FRASCO + 5 falhas + memory gotchas + PROMPT v25+ atualizado
+
+---
+
+## Sessao 2026-05-27 v25+ S0 — 4 fixes pipeline INDUSTRIALIZACAO_FB_LF (validacao Rafael + implementacao end-to-end)
+
+### Escopo
+
+| Item | Status |
+|------|--------|
+| Validacao Rafael dos 5 achados do agente v24+ | ✅ corrigido: agente confundiu ETAPA E (STRICT LF->FB) com ETAPA F (v17.5 ja cobre INDUSTRIALIZACAO_FB_LF) |
+| Confirmacao caminho legacy vs novo: --usar-fluxo-l3-v19 e' OPT-IN (`faturamento_pipeline.py:4999`); cirurgia v24+ rodou COM a flag (caminho novo) — bug splat _team_g039_status NAO foi do legacy | ✅ documentado |
+| Rafael definiu 4 fixes diretos (sem inventar moda): (1) LOTE copiar da saida c/ qtd; (2) empresa obrigatoria; (3) tipos compra DFe + serv-industrializacao PO+Fatura; (4) team=143 fixo | ✅ implementados |
+| F1 — `_executar_etapa_f_via_fluxo_l3` resolve `lotes_data` por invoice a partir de `AjusteEstoqueInventario` + agrega `(product_id, lote_destino)` com `abs(qtd_ajuste)` (espelha legacy v17.5 linhas 3998-4018; vazio/'MIGRACAO' -> `INV-{cod}-{HOJE}`) | ✅ |
+| F1b — `executar_fluxo_l3_1_2_x` default `lote_default` 'MIGRACAO' -> None (forca caller a fornecer); caller passa `INV-FALLBACK-{HOJE}` apenas como ultimo recurso | ✅ |
+| F2a — Novo atomo publico `EscrituracaoLfService.alinhar_dfe_lines_company(dfe_id, company_destino)` (generaliza B-V23-1 que estava inline em `criar_dfe_a_partir_do_invoice_saida` caminho B) + invocacao no passo 1.5 do `executar_fluxo_l3_1_2_x` quando caminho A (DFe via SEFAZ) | ✅ |
+| F2b — G023 force company_id em picking + moves apos passo 7 (espelha hardening do atomo legacy `criar_picking_entrada_destino_manual` picking.py L1391-1399); nao-fatal | ✅ |
+| F3a — `L10N_BR_TIPO_PEDIDO_POR_ACAO` refatorado `Dict[str,str]` -> `Dict[str,Dict[str,str]]` com keys 'dfe'/'po'; INDUSTRIALIZACAO_FB_LF -> {'dfe': 'compra', 'po': 'serv-industrializacao'} | ✅ |
+| F3b — passo 3 `escriturar_dfe(l10n_br_tipo_pedido='compra')`; assinatura `executar_fluxo_l3_1_2_x` renomeada `l10n_br_tipo_pedido` -> `l10n_br_tipo_pedido_dfe` + adicionado `l10n_br_tipo_pedido_po` | ✅ |
+| F3c — `EscrituracaoLfService.preencher_po` aceita parametro opcional `l10n_br_tipo_pedido`; quando fornecido escreve no write da PO (whitelist espelha `escriturar_dfe`) | ✅ |
+| F3d — passo 5 `preencher_po(l10n_br_tipo_pedido='serv-industrializacao')`; Fatura (passo 9) herda da PO sem intervencao adicional | ✅ |
+| F4 — `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[5]['team_id']` 41 -> **143** STATIC FIXO; `_resolver_constants_fluxo_l3` desliga override G039 dinamico para destino LF=5; demais destinos FB/CD mantem G039 quando forem mapeados | ✅ |
+| 8 pytest novos `test_escrituracao_lf_service_v19.py`: F3c (3 testes) + F2a `alinhar_dfe_lines_company` (4 testes) | ✅ |
+| 2 testes G039 reescritos em `test_faturamento_pipeline_orchestrator.py` para refletir F4 (team=143 STATIC fixo, G039 desligado p/ LF) | ✅ |
+| Tests existentes adaptados: 4 callsites em `test_faturamento_pipeline_fluxo_l3.py` + 5 tests ETAPA F em `test_faturamento_pipeline_orchestrator.py` (mock _resolver_pids_em_batch + dfe/po split) | ✅ |
+| Hipoteses descartadas por Rafael: A2 (G-PO-NATIVA-SEM-PICKING criar picking manual) NAO implementado — Rafael confirmou nao foi necessario | ✅ |
+
+### Veredito sobre os 5 achados do agente v24+
+
+| Falha | Veredito | Acao |
+|-------|----------|------|
+| #1 "legacy v17 so LF->FB" | ❌ DIAGNOSTICO ERRADO — agente confundiu ETAPA E (V1 STRICT) com ETAPA F v17.5 (ja cobre FB->LF; PROD 317306/317316) | nao precisa fix; documentado |
+| #2 tipo='rem-industrializacao' default XML | ✅ ATIVO no fluxo manual (cirurgia humana via UI); ja mitigado no fluxo automatico via passo 3 escriturar_dfe + F3a-d garante explicito tanto DFe quanto PO | F3a-d aplicados |
+| #3 `lote_default='MIGRACAO'` silencioso | ✅ CONFIRMADO bug arquitetural critico — caminho novo L3 v19+ ignora `AjusteEstoqueInventario.lote_destino`; legacy v17.5 fazia certo | F1+F1b aplicados |
+| #4 picking_type=64 errado | ✅ CASCATA de #2 (com tipo correto, picking_type=19 e' resolvido corretamente); F3 elimina cascata | F3a-d aplicados |
+| #5 qty_received=0 | ✅ NAO E' BUG — consequencia matematica da devolucao da cirurgia | nao precisa fix |
+| Hipotese G039 | ❌ NAO foi causa do original (PO 42525 ja nasceu team=143) | F4 aplicado por motivo diferente (Rafael decidiu fixar 143 STATIC + desligar G039 dinamico p/ LF) |
+| Hipotese G-PERM-1 | ❌ So surgiu na cirurgia (purchase_fiscal_id stale + ir.rule dfe.line bloqueia Rafael) | nao precisa fix automatico |
+
+### Gaps adicionais identificados nao mencionados pelo agente
+
+- **Gap-1**: B-V23-1 (fix dfe.line.company_id) so estava no caminho B (`criar_dfe_a_partir_do_invoice_saida`); caminho A (DFe via SEFAZ) NAO tinha fix equivalente. Como em INDUSTRIALIZACAO_FB_LF os DFes vem via SEFAZ (4 de 4 do canary v20+), esse gap atinge o caso mais comum. F2a fecha o gap.
+- **Gap-2**: caminho novo L3 v19+ deixava picking nativo (via `action_gerar_po_dfe`) sem G023 force company; legacy `criar_picking_entrada_destino_manual` ja codificava. F2b fecha o gap.
+- **Gap-3**: orchestrator novo L3 v19+ ignorava `AjusteEstoqueInventario.lote_destino` (campo definido pelo operador na planilha); legacy v17.5 lia corretamente. F1 fecha o gap.
+
+### Arquivos tocados (commit `ea505c0e`)
+
+- `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (5 hunks: F3a+F4 constants, F4 by-pass G039 em `_resolver_constants_fluxo_l3`, F3b passo 3, F3d passo 5, F2a passo 1.5, F2b passo 6.5, F1 lotes_data resolver no `_executar_etapa_f_via_fluxo_l3`)
+- `app/odoo/estoque/scripts/escrituracao.py` (2 hunks: F2a novo atomo `alinhar_dfe_lines_company` ~120 LOC, F3c `preencher_po` aceita `l10n_br_tipo_pedido`)
+- `app/odoo/estoque/CIRURGIA_AVULSO_FRASCO_2026_05_27.md` (secao "Implementacao v25+" com tabela dos 4 fixes -> mapeamento + arquivos tocados)
+- `tests/odoo/services/test_escrituracao_lf_service_v19.py` (+8 testes novos)
+- `tests/odoo/services/test_faturamento_pipeline_fluxo_l3.py` (4 callsites adaptados)
+- `tests/odoo/services/test_faturamento_pipeline_orchestrator.py` (5 tests ETAPA F + 2 tests G039 reescritos)
+
+### Baseline pytest
+
+655 (v24.1+ hotfix) -> **662 verdes** (+7 net = 8 novos testes F2a/F3c - 1 teste removido por reescrita F4). 17s tests/odoo/.
+
+### Decisao Rafael "Fixo 143 sempre"
+
+`AskUserQuestion` resposta explicita: todas as POs LF inter-company desta skill DEVEM nascer com team=143 (Rafael), independente de quem dispara. Implementado via CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[5]['team_id']=143 + by-pass G039 override quando company_destino=5. Demais destinos (FB=1, CD=4) mantem G039 dinamico quando forem mapeados.
+
+### Pendente v26+ (canary REAL PROD)
+
+- Canary 1-5 ajustes INDUSTRIALIZACAO_FB_LF via pipeline `--usar-fluxo-l3-v19 --usar-skill8-atomica-v25` validando fixes F1-F4 automaticamente.
+- Demais sub-objetivos v25+ originais permanecem: S1 opt-in skill8 atomica + S3 rename orchestrator + S4 expand CONSTANTS FB/CD + S5 folhas L3 1.1.x/1.3.
+
+### Commits
+
+- `ea505c0e` feat(estoque): v25+ S0 — 4 fixes pipeline INDUSTRIALIZACAO_FB_LF (Rafael 2026-05-27)
+- (a fazer) docs(estoque): atualizar PROTECAO + CLAUDE.md §14 + ROADMAP + PROMPT v26+

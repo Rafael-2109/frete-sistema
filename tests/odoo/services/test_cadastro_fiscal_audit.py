@@ -77,15 +77,15 @@ def test_check_ncm_weight_tracking_perfil_completo(svc, odoo_mock):
         # produto SEM NCM (G017) + origem='0' OK
         {'id': 1, 'default_code': '102020600', 'name': 'AZEITONAS',
          'l10n_br_ncm_id': False, 'weight': 0.5, 'tracking': 'lot',
-         'l10n_br_origem': '0'},
+         'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'},
         # produto com weight=0 (G018) + tracking='none' (D-OPS-3) + origem OK
         {'id': 2, 'default_code': '103500105', 'name': 'PIMENTA JALAPENO',
          'l10n_br_ncm_id': [42, '0710.10.00'], 'weight': 0.0, 'tracking': 'none',
-         'l10n_br_origem': '0'},
+         'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'},
         # produto sem nenhum problema
         {'id': 3, 'default_code': '4759598', 'name': 'OLEO SOJA',
          'l10n_br_ncm_id': [99, '1507.10.00'], 'weight': 0.92, 'tracking': 'lot',
-         'l10n_br_origem': '0'},
+         'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'},
     ]
     res = svc._check_ncm_weight_tracking([1, 2, 3])
     # G017: so o id=1 (sem NCM)
@@ -115,19 +115,19 @@ def test_check_ncm_weight_tracking_g038_origem_ausente_bloqueia(svc, odoo_mock):
         # produto com origem='0' Nacional — OK
         {'id': 100, 'default_code': '210010800', 'name': 'LACRE',
          'l10n_br_ncm_id': [99, 'NCM'], 'weight': 0.5, 'tracking': 'lot',
-         'l10n_br_origem': '0'},
+         'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'},
         # produto com origem=False — BLOQUEIO G038 (caso 104000046)
         {'id': 200, 'default_code': '104000046', 'name': 'CORANTE VERMELHO',
          'l10n_br_ncm_id': [99, 'NCM'], 'weight': 0.5, 'tracking': 'lot',
-         'l10n_br_origem': False},
+         'l10n_br_origem': False, 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'},
         # produto com origem=None — BLOQUEIO G038
         {'id': 300, 'default_code': 'X', 'name': 'X',
          'l10n_br_ncm_id': [99, 'NCM'], 'weight': 0.5, 'tracking': 'lot',
-         'l10n_br_origem': None},
+         'l10n_br_origem': None, 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'},
         # produto com origem='' (string vazia) — BLOQUEIO G038
         {'id': 400, 'default_code': 'Y', 'name': 'Y',
          'l10n_br_ncm_id': [99, 'NCM'], 'weight': 0.5, 'tracking': 'lot',
-         'l10n_br_origem': ''},
+         'l10n_br_origem': '', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'},
     ]
     res = svc._check_ncm_weight_tracking([100, 200, 300, 400])
     # G038: ids 200, 300, 400 (sem id=100 que e' '0' Nacional OK)
@@ -196,7 +196,7 @@ def test_auditar_perfil_inventario_status_ok_sem_problemas(svc, odoo_mock):
         # _check_ncm_weight_tracking
         [{'id': 100, 'default_code': '4759598', 'name': 'OLEO SOJA',
           'l10n_br_ncm_id': [99, '1507.10.00'], 'weight': 0.92, 'tracking': 'lot',
-          'l10n_br_origem': '0'}],
+          'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'}],
     ]
     res = svc.auditar_perfil_inventario(
         cods_produto=['4759598'],
@@ -219,7 +219,7 @@ def test_auditar_perfil_inventario_status_bloqueado_ncm_faltando(svc, odoo_mock)
     odoo_mock.read.side_effect = [
         [{'id': 100, 'default_code': '102020600', 'name': 'AZEITONAS',
           'l10n_br_ncm_id': False, 'weight': 0.5, 'tracking': 'lot',
-          'l10n_br_origem': '0'}],
+          'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'}],
     ]
     res = svc.auditar_perfil_inventario(
         cods_produto=['102020600'],
@@ -240,7 +240,7 @@ def test_auditar_perfil_inventario_status_warn_weight_zero(svc, odoo_mock):
     odoo_mock.read.side_effect = [
         [{'id': 100, 'default_code': '103500105', 'name': 'PIMENTA',
           'l10n_br_ncm_id': [42, '0710.10.00'], 'weight': 0.0, 'tracking': 'none',
-          'l10n_br_origem': '0'}],
+          'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'}],
     ]
     res = svc.auditar_perfil_inventario(
         cods_produto=['103500105'],
@@ -269,7 +269,7 @@ def test_auditar_perfil_inventario_bloqueia_g038_origem_ausente(svc, odoo_mock):
     odoo_mock.read.side_effect = [
         [{'id': 200, 'default_code': '104000046', 'name': 'CORANTE VERMELHO',
           'l10n_br_ncm_id': [99, 'NCM'], 'weight': 0.5, 'tracking': 'lot',
-          'l10n_br_origem': False}],
+          'l10n_br_origem': False, 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'}],
     ]
     res = svc.auditar_perfil_inventario(
         cods_produto=['104000046'],
@@ -309,7 +309,7 @@ def test_auditar_perfil_inventario_skip_lote_vencido(svc, odoo_mock):
     odoo_mock.read.side_effect = [
         [{'id': 100, 'default_code': '102020600', 'name': 'X',
           'l10n_br_ncm_id': [42, 'NCM'], 'weight': 1.0, 'tracking': 'lot',
-          'l10n_br_origem': '0'}],
+          'l10n_br_origem': '0', 'standard_price': 10.0, 'l10n_br_tipo_produto': '01'}],
     ]
     res = svc.auditar_perfil_inventario(
         cods_produto=['102020600'],
@@ -320,6 +320,96 @@ def test_auditar_perfil_inventario_skip_lote_vencido(svc, odoo_mock):
     # Conta de search_read: 1 (resolve cods) + 1 (barcode) = 2
     # (sem chamada de lote vencido)
     assert odoo_mock.search_read.call_count == 2
+
+
+# ============================================================
+# NOVOS v24+ — G007 standard_price=0 + l10n_br_tipo_produto ausente
+# ============================================================
+
+def test_check_ncm_weight_tracking_g007_standard_price_zero(svc, odoo_mock):
+    """G007 v24+: standard_price=0 detectado como WARN (nao BLOQUEIO)."""
+    odoo_mock.read.return_value = [
+        {'id': 100, 'default_code': '4759598', 'name': 'OLEO SOJA',
+         'l10n_br_ncm_id': [99, '1507.10.00'], 'weight': 0.92, 'tracking': 'lot',
+         'l10n_br_origem': '0',
+         'standard_price': 0.0,   # G007
+         'l10n_br_tipo_produto': '01'},
+    ]
+    res = svc._check_ncm_weight_tracking([100])
+    assert len(res['standard_price_zero']) == 1
+    assert res['standard_price_zero'][0]['gotcha'] == 'G007'
+    assert res['standard_price_zero'][0]['standard_price'] == 0.0
+    # Outros checks limpos
+    assert res['ncm_faltando'] == []
+    assert res['weight_zero'] == []
+    assert res['tipo_produto_ausente'] == []
+
+
+def test_check_ncm_weight_tracking_l10n_br_tipo_produto_ausente(svc, odoo_mock):
+    """l10n_br_tipo_produto ausente v24+ detectado como BLOQUEIO."""
+    odoo_mock.read.return_value = [
+        {'id': 200, 'default_code': '105000031', 'name': 'PRODUTO SEM TIPO',
+         'l10n_br_ncm_id': [99, '1507.10.00'], 'weight': 1.0, 'tracking': 'lot',
+         'l10n_br_origem': '0',
+         'standard_price': 10.0,
+         'l10n_br_tipo_produto': False},  # ausente
+    ]
+    res = svc._check_ncm_weight_tracking([200])
+    assert len(res['tipo_produto_ausente']) == 1
+    assert res['tipo_produto_ausente'][0]['gotcha'] == 'l10n_br_tipo_produto'
+    assert res['tipo_produto_ausente'][0]['l10n_br_tipo_produto'] is False
+    # Outros checks limpos
+    assert res['standard_price_zero'] == []
+    assert res['ncm_faltando'] == []
+
+
+def test_auditar_perfil_inventario_warn_standard_price_zero(svc, odoo_mock):
+    """G007 v24+: standard_price=0 sozinho -> PRE_FLIGHT_WARN."""
+    odoo_mock.search_read.side_effect = [
+        [{'id': 100, 'default_code': '4759598'}],
+        [],  # sem lotes vencidos
+        [],  # sem barcodes invalidos
+    ]
+    odoo_mock.read.side_effect = [
+        [{'id': 100, 'default_code': '4759598', 'name': 'OLEO SOJA',
+          'l10n_br_ncm_id': [99, 'NCM'], 'weight': 0.92, 'tracking': 'lot',
+          'l10n_br_origem': '0',
+          'standard_price': 0.0,   # G007 WARN
+          'l10n_br_tipo_produto': '01'}],
+    ]
+    res = svc.auditar_perfil_inventario(
+        cods_produto=['4759598'],
+        verificar_duplicacao_pipeline=False,
+    )
+    assert res['status_global'] == 'PRE_FLIGHT_WARN'
+    assert res['pode_faturar'] is True
+    assert len(res['warnings']['standard_price_zero']) == 1
+    # Sem bloqueios
+    assert all(len(v) == 0 for v in res['bloqueios'].values())
+
+
+def test_auditar_perfil_inventario_bloqueia_l10n_br_tipo_produto_ausente(svc, odoo_mock):
+    """l10n_br_tipo_produto ausente v24+ -> PRE_FLIGHT_BLOQUEADO + pode_faturar=False."""
+    odoo_mock.search_read.side_effect = [
+        [{'id': 200, 'default_code': '105000031'}],
+        [],  # sem lotes vencidos
+        [],  # sem barcodes invalidos
+    ]
+    odoo_mock.read.side_effect = [
+        [{'id': 200, 'default_code': '105000031', 'name': 'X',
+          'l10n_br_ncm_id': [99, 'NCM'], 'weight': 1.0, 'tracking': 'lot',
+          'l10n_br_origem': '0',
+          'standard_price': 10.0,
+          'l10n_br_tipo_produto': False}],  # ausente -> BLOQUEIO
+    ]
+    res = svc.auditar_perfil_inventario(
+        cods_produto=['105000031'],
+        verificar_duplicacao_pipeline=False,
+    )
+    assert res['status_global'] == 'PRE_FLIGHT_BLOQUEADO'
+    assert res['pode_faturar'] is False
+    assert len(res['bloqueios']['tipo_produto_ausente']) == 1
+    assert res['bloqueios']['tipo_produto_ausente'][0]['default_code'] == '105000031'
 
 
 # ============================================================

@@ -174,30 +174,40 @@ class CadastroFiscalAuditService:
     def _check_ncm_weight_tracking(
         self, produto_ids: List[int],
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """G017 (NCM), G018 (weight=0), G038 (l10n_br_origem ausente — NOVO v22+),
+        """G017 (NCM), G018 (weight=0), G038 (l10n_br_origem ausente — v22+),
+        G007 (standard_price=0 — NOVO v24+ pre-flight),
+        l10n_br_tipo_produto ausente (NOVO v24+ — BLOQUEIO SEFAZ),
         D-OPS-3 (tracking='none').
 
         Returns:
             {
                 'ncm_faltando': [{id, default_code, name}],
                 'weight_zero': [{id, default_code, name}],
-                'origem_ausente': [{id, default_code, name, gotcha: 'G038'}],  # NOVO v22+
+                'origem_ausente': [{id, default_code, name, gotcha: 'G038'}],
+                'standard_price_zero': [{id, default_code, name, gotcha: 'G007',
+                                          standard_price: float}],  # NOVO v24+
+                'tipo_produto_ausente': [{id, default_code, name,
+                                           gotcha: 'l10n_br_tipo_produto',
+                                           l10n_br_tipo_produto: value}],  # NOVO v24+
                 'tracking_none': [{id, default_code, name}],
             }
         """
         if not produto_ids:
             return {
                 'ncm_faltando': [], 'weight_zero': [],
-                'origem_ausente': [], 'tracking_none': [],
+                'origem_ausente': [], 'standard_price_zero': [],
+                'tipo_produto_ausente': [], 'tracking_none': [],
             }
         prods = self.odoo.read(
             'product.product', produto_ids,
             ['default_code', 'name', 'l10n_br_ncm_id', 'weight', 'tracking',
-             'l10n_br_origem'],
+             'l10n_br_origem', 'standard_price', 'l10n_br_tipo_produto'],
         )
         ncm_faltando: List[Dict] = []
         weight_zero: List[Dict] = []
         origem_ausente: List[Dict] = []
+        standard_price_zero: List[Dict] = []
+        tipo_produto_ausente: List[Dict] = []
         tracking_none: List[Dict] = []
         for p in prods:
             base = {'id': p['id'], 'default_code': p.get('default_code'),
@@ -213,12 +223,31 @@ class CadastroFiscalAuditService:
             if not origem_val:
                 origem_ausente.append({**base, 'gotcha': 'G038',
                                         'l10n_br_origem': origem_val})
+            # G007 v24+ pre-flight: standard_price=0 nao bloqueia SEFAZ direto
+            # (runtime corrigir_price_zero_em_invoice fallback 0.01), mas
+            # ajustes com std_price=0 ficam com vUnCom=0.01 esquisito — WARN
+            # para que operador cadastre custo medio real ANTES do bulk.
+            std_price = float(p.get('standard_price') or 0)
+            if std_price <= 0:
+                standard_price_zero.append({**base, 'gotcha': 'G007',
+                                             'standard_price': std_price})
+            # l10n_br_tipo_produto v24+ pre-flight: campo SEFAZ obrigatorio
+            # para muitas operacoes (servicos, industrializacao, etc.).
+            # Vazio/False = BLOQUEIO. Valores validos sao strings ('01'-'09')
+            # mapeados conforme Tabela CIEL IT.
+            tipo_prod_val = p.get('l10n_br_tipo_produto')
+            if not tipo_prod_val:
+                tipo_produto_ausente.append({**base,
+                    'gotcha': 'l10n_br_tipo_produto',
+                    'l10n_br_tipo_produto': tipo_prod_val})
             if (p.get('tracking') or 'none') == 'none':
                 tracking_none.append({**base, 'gotcha': 'D-OPS-3', 'tracking': 'none'})
         return {
             'ncm_faltando': ncm_faltando,
             'weight_zero': weight_zero,
             'origem_ausente': origem_ausente,
+            'standard_price_zero': standard_price_zero,
+            'tipo_produto_ausente': tipo_produto_ausente,
             'tracking_none': tracking_none,
         }
 
@@ -434,11 +463,13 @@ class CadastroFiscalAuditService:
                 'bloqueios': {
                     'ncm_faltando': [...],         # G017 — BLOQUEIO
                     'barcode_invalido': [...],     # G035 — BLOQUEIO (a menos auto_corrigir)
-                    'origem_ausente': [...],       # G038 — BLOQUEIO (NOVO v22+)
+                    'origem_ausente': [...],       # G038 — BLOQUEIO (v22+)
+                    'tipo_produto_ausente': [...], # l10n_br_tipo_produto — BLOQUEIO (NOVO v24+)
                     'duplicacao_pipeline': [...],  # D-OPS-2 — BLOQUEIO
                 },
                 'warnings': {
                     'weight_zero': [...],          # G018 — apenas WARN
+                    'standard_price_zero': [...],  # G007 — apenas WARN (NOVO v24+)
                     'lote_vencido': [...],         # G014 — apenas WARN
                     'tracking_none': [...],        # D-OPS-3 — apenas INFO
                 },
@@ -461,9 +492,10 @@ class CadastroFiscalAuditService:
                 'auditados': 0,
                 'erros_resolucao': [],
                 'bloqueios': {'ncm_faltando': [], 'barcode_invalido': [],
-                              'origem_ausente': [], 'duplicacao_pipeline': []},
-                'warnings': {'weight_zero': [], 'lote_vencido': [],
-                             'tracking_none': []},
+                              'origem_ausente': [], 'tipo_produto_ausente': [],
+                              'duplicacao_pipeline': []},
+                'warnings': {'weight_zero': [], 'standard_price_zero': [],
+                             'lote_vencido': [], 'tracking_none': []},
                 'acoes_aplicadas': [],
                 'tempo_ms': int((time.time() - inicio) * 1000),
                 'erro': str(exc),
@@ -487,10 +519,12 @@ class CadastroFiscalAuditService:
             'ncm_faltando': ncm_w_trk['ncm_faltando'],
             'barcode_invalido': bc_res['barcode_invalido'],
             'origem_ausente': ncm_w_trk['origem_ausente'],  # G038 v22+
+            'tipo_produto_ausente': ncm_w_trk['tipo_produto_ausente'],  # NOVO v24+
             'duplicacao_pipeline': dup_pipe,
         }
         warnings = {
             'weight_zero': ncm_w_trk['weight_zero'],
+            'standard_price_zero': ncm_w_trk['standard_price_zero'],  # NOVO v24+
             'lote_vencido': lote_venc,
             'tracking_none': ncm_w_trk['tracking_none'],
         }
