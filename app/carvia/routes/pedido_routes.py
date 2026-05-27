@@ -327,6 +327,67 @@ def register_pedido_routes(bp):
                     "Erro ao expandir provisorio (nao-bloqueante): %s", e
                 )
 
+            # 2.5. Fix 2026-05-27: atualizar valor_mercadoria/peso/volumes da cotacao
+            # quando ultrapassar (regra "so sobe, nunca desce"). Antes deste fix,
+            # api_anexar_nf_pedido nao mexia em valor_mercadoria, gerando cotacao
+            # com saldo residual positivo na VIEW mv_pedidos (linhas COT- duplicadas).
+            try:
+                from app.carvia.models import (
+                    CarviaCotacao as _CC, CarviaPedido as _CP, CarviaNf as _CNf,
+                )
+                cot_for_update = db.session.get(_CC, pedido.cotacao_id)
+                if cot_for_update:
+                    # Soma CarviaPedidoItem.valor_total (mercadoria) dos pedidos
+                    # nao cancelados com NF da cotacao.
+                    soma_valor_real = float(db.session.query(
+                        db.func.coalesce(db.func.sum(CarviaPedidoItem.valor_total), 0)
+                    ).join(
+                        _CP, CarviaPedidoItem.pedido_id == _CP.id
+                    ).filter(
+                        _CP.cotacao_id == pedido.cotacao_id,
+                        CarviaPedidoItem.numero_nf.isnot(None),
+                        CarviaPedidoItem.numero_nf != '',
+                        _CP.status != 'CANCELADO',
+                    ).scalar() or 0)
+
+                    teto_valor = float(cot_for_update.valor_mercadoria or 0)
+                    if soma_valor_real > teto_valor + 0.01:
+                        cot_for_update.valor_mercadoria = soma_valor_real
+                        logger.info(
+                            "api_anexar_nf_pedido: valor_mercadoria cotacao %s "
+                            "atualizado %.2f -> %.2f (NF %s)",
+                            pedido.cotacao_id, teto_valor, soma_valor_real, numero_nf,
+                        )
+
+                    # peso e volumes: agregar das NFs ja vinculadas
+                    nfs_nums = {
+                        n for (n,) in db.session.query(
+                            CarviaPedidoItem.numero_nf
+                        ).join(
+                            _CP, CarviaPedidoItem.pedido_id == _CP.id
+                        ).filter(
+                            _CP.cotacao_id == pedido.cotacao_id,
+                            CarviaPedidoItem.numero_nf.isnot(None),
+                            CarviaPedidoItem.numero_nf != '',
+                            _CP.status != 'CANCELADO',
+                        ).distinct().all()
+                    }
+                    if nfs_nums:
+                        nfs_rows = _CNf.query.filter(
+                            _CNf.numero_nf.in_(list(nfs_nums))
+                        ).all()
+                        soma_peso = sum(float(n.peso_bruto or 0) for n in nfs_rows)
+                        soma_volumes = sum(int(n.quantidade_volumes or 0) for n in nfs_rows)
+                        if soma_peso > float(cot_for_update.peso or 0) + 0.01:
+                            cot_for_update.peso = soma_peso
+                        if soma_volumes > int(cot_for_update.volumes or 0):
+                            cot_for_update.volumes = soma_volumes
+            except Exception as e:
+                logger.warning(
+                    "Erro ao atualizar totais da cotacao %s: %s",
+                    pedido.cotacao_id, e
+                )
+
             # 3. Limpar alerta saida-sem-nf se todos os itens da cotacao agora tem NF
             try:
                 from app.carvia.models import CarviaCotacao as _CC
