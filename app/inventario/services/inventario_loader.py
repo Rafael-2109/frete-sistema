@@ -2,6 +2,7 @@
 
 Reaproveita lógica do scripts/inventario_2026_05/02_carregar_inventario_xlsx.py.
 """
+import unicodedata
 from decimal import Decimal, InvalidOperation
 from typing import IO, Dict
 import openpyxl
@@ -12,19 +13,38 @@ from app.inventario.models import InventarioBase
 TIPOS_CODIGO_ACEITOS = {'1', '2', '3', '4'}
 
 HEADER_ALIASES = {
+    # Codigo
     'codigo': 'cod_produto',
     'cod': 'cod_produto',
     'cod_produto': 'cod_produto',
+    # Lote (informativo, nao persistido em InventarioBase)
     'lote': 'lote',
+    # Quantidade
     'qtd': 'qtd',
     'quantidade': 'qtd',
     'qtd_contada': 'qtd',
+    'quantidade/un': 'qtd',   # LF — header "QUANTIDADE/UN"
+    'final': 'qtd',           # CD — header "FINAL" (qtd final da contagem)
+    # Nome do produto
     'descricao': 'nome_produto',
+    'desc': 'nome_produto',   # CD — header "DESC"
     'produto': 'nome_produto',
     'nome_produto': 'nome_produto',
 }
 
 EMPRESAS_ESPERADAS = ('FB', 'CD', 'LF')
+
+
+def _normalizar_header(h) -> str:
+    """Strip + lowercase + remove acentos (NFKD).
+
+    Ex: 'DESCRIÇÃO ' -> 'descricao' (passa a matchar alias 'descricao').
+    """
+    if not h:
+        return ''
+    s = str(h).strip().lower()
+    s = unicodedata.normalize('NFKD', s)
+    return ''.join(c for c in s if not unicodedata.combining(c))
 
 
 class InventarioLoader:
@@ -66,7 +86,7 @@ class InventarioLoader:
             for i, h in enumerate(header):
                 if not h:
                     continue
-                key = HEADER_ALIASES.get(str(h).strip().lower())
+                key = HEADER_ALIASES.get(_normalizar_header(h))
                 if key:
                     col_idx[key] = i
 
