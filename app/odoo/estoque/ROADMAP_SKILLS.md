@@ -38,18 +38,17 @@
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
-### Próximo passo (v24+) — codificar B-V23-1 + B-V23-2 (bugs cascateados) + bulk REAL
+### Próximo passo (v24+) — bulk REAL PROD + AP6 refator + expand CONSTANTS
 
-**v23+ CONCLUÍDA** (2026-05-27 — commit a fazer):
-1. ✅ S0 G-PERM-1 investigado: causa raiz NÃO era ir.rule isolada; era cascata `dfe.line.company_id` + `PO.line.account_id` em company errada
-2. ✅ S1 Átomo novo Skill 7 `garantir_purchase_team(user_id, company_id)` em `escrituracao.py` (~150 LOC) + 7 pytest
-3. ✅ S1 Hook `_resolver_team_g039` no orchestrator com cache `_g039_team_cache` + fallback STATIC + 7 pytest
-4. ✅ S2 Fix raiz contador F status='EXECUTADO' em `_contar_pendentes_por_etapa` + 3 pytest
-5. ✅ S3 Picking 321617 (LF/IN/01779) avaliado e CORRETO (state=done, company=LF only)
-6. ✅ S3 Workarounds PROD: PO team 41→143, dfe.lines company 1→5, PO.lines account 22611→26459
-7. ✅ S3 Invoice ENTIN/2026/05/0055 (id=717630) criada + posted em PROD (R$ 12.525,54 untaxed, CFOP 1949)
-8. ✅ S3 Ajustes 176013/176014: status=EXECUTADO, fase=F5f_ENTRADA_OK
-9. ✅ Baseline pytest: 580→**597 verdes** (+17 net v23+)
+**v23+ + v23.5+ CONCLUÍDAS** (2026-05-27 — commit a fazer):
+1. ✅ S0 G-PERM-1 investigado: causa raiz NÃO era ir.rule isolada; era cascata B-V23-1 + B-V23-2
+2. ✅ S1 G039 átomo `garantir_purchase_team` + hook `_resolver_team_g039` + 14 pytest
+3. ✅ S2 Fix raiz contador F status='EXECUTADO' + 3 pytest
+4. ✅ S3 Caminho B FLUXO L3 1.2.x 100% PROD: invoice ENTIN/2026/05/0055 posted
+5. ✅ S3 Workarounds manuais aplicados PROD (PO team 41→143, dfe.lines company 1→5, PO.lines account 22611→26459)
+6. ✅ **B-V23-1 fix raiz** (v23.5+) `criar_dfe_a_partir_do_invoice_saida` codifica write `dfe.line.company_id=company_destino` pós-poll + 3 pytest
+7. ✅ **B-V23-2 fix raiz** (v23.5+) novo átomo `resolver_account_id_por_company` + hook em `gerar_po_from_dfe` + 9 pytest
+8. ✅ Baseline pytest: 580 → **609 verdes** (+29 net v23+v23.5+)
 
 ### Estado FINAL ajustes 176013/176014 PROD (v23+)
 - status=EXECUTADO, fase_pipeline=F5f_ENTRADA_OK
@@ -65,13 +64,12 @@
 
 **B-V23-2**: Skill 7 `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id apontando para account da company FONTE em vez de buscar account equivalente na company DESTINO. Workaround manual v23+: write account_id=equivalente_destino. Fix raiz v24+: novo átomo helper `resolver_account_id_por_company` + hook nos átomos da Skill 7.
 
-**v24+ alvo**:
-1. **B-V23-1 fix raiz**: codificar `dfe.line.company_id=company_destino` no átomo `criar_dfe_a_partir_do_invoice_saida` + pytest
-2. **B-V23-2 fix raiz**: novo átomo helper `resolver_account_id_por_company(code, company_destino)` + hook em `gerar_po_from_dfe`/`preencher_po` + pytest
-3. **Bulk REAL PROD** (não só 2 ajustes 176013/14) via opt-in `--usar-fluxo-l3-v19` com fixes aplicados
-4. **AP6 refator** (extrair Skill 8 ATÔMICA L2 do orchestrator) — adiado v23+
-5. **Expand CONSTANTS** FB=1 e CD=4 (mapear team_id+payment_term+picking_type+payment_provider)
-6. **Sub-skill C5 estender** G007 (standard_price=0) + l10n_br_tipo_produto
+**v24+ alvo** (B-V23-1/2 já resolvidos v23.5+ — escopo reduzido):
+1. **Bulk REAL PROD** via `--usar-fluxo-l3-v19` em conjunto maior de ajustes (não só 176013/14). Validar fixes B-V23-1+2 automáticos.
+2. **AP6 refator**: extrair Skill 8 ATÔMICA L2 do orchestrator (5 ops C+D sobre `account.move`)
+3. **Expand CONSTANTS** FB=1 e CD=4 (mapear team_id+payment_term+picking_type+payment_provider)
+4. **Sub-skill C5 estender** G007 (standard_price=0) + l10n_br_tipo_produto
+5. **Folhas L3** 1.1.x + 1.3 (dependem AP6)
 
 ### Estado dos ajustes 176013/176014 (v23+ retoma)
 - id=176013/176014: `status='EXECUTADO', fase_pipeline='F5e_SEFAZ_OK', picking=321601, invoice=716448, chave_nfe='35260561724241000178550010000945661007164482'`

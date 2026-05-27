@@ -729,3 +729,391 @@ def test_garantir_purchase_team_fallback_nome_user_sem_name():
     assert res['status'] == 'DRY_RUN_OK'
     assert 'USER99' in res['plano']['values']['name']
     assert 'FB' in res['plano']['values']['name']  # sigla company=1
+
+
+# ============================================================
+# v23.5+ B-V23-1 — criar_dfe_a_partir_do_invoice_saida fix raiz
+# (alinhar dfe.line.company_id com pai DFe apos parse XML)
+# ============================================================
+
+def test_criar_dfe_b_v23_1_corrige_lines_em_company_errada(monkeypatch):
+    """Apos parse XML, dfe.lines herdam company_id da SAIDA (FB=1).
+    Fix B-V23-1: identifica + corrige via batch write para company_destino (LF=5)."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        # 1. read invoice SAIDA
+        [{
+            'l10n_br_xml_aut_nfe': 'PHhtbCB2ZXJzaW9uPSIxLjAiPz4=',
+            'l10n_br_chave_nf': '35260561724241000178550010000945661007164482',
+            'l10n_br_numero_nota_fiscal': '94566',
+            'company_id': [1, 'FB'],
+            'state': 'posted',
+        }],
+        # 2. poll processar_dfe (state=03 'processado')
+        [{
+            'l10n_br_status': '03',
+            'l10n_br_situacao_dfe': 'autorizado',
+        }],
+    ]
+    # search_read na buscar_dfe -> vazio (idempotencia: DFe nao existe)
+    odoo.search_read.return_value = []
+    # execute_kw: create DFe -> 43533; processar fire -> None;
+    # search dfe.lines -> [129585, 129586];
+    # read dfe.lines -> [{'id':...,'company_id':[1,FB]},...];
+    # write dfe.lines -> True
+    odoo.create.return_value = 43533
+    odoo.execute_kw.side_effect = [
+        None,  # action_processar_arquivo_manual fire
+        [129585, 129586],  # search dfe.line por dfe_id
+        [
+            {'id': 129585, 'company_id': [1, 'FB']},
+            {'id': 129586, 'company_id': [1, 'FB']},
+        ],  # read dfe.line
+        True,  # write company_id=5
+    ]
+
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.criar_dfe_a_partir_do_invoice_saida(
+        invoice_id_saida=716448, company_destino=5, dry_run=False,
+    )
+
+    assert res['status'] == 'CRIADO'
+    assert res['dfe_id'] == 43533
+    # Fix B-V23-1: lines corrigidas reportadas
+    assert res.get('dfe_lines_corrigidas_b_v23_1') == [129585, 129586]
+    # Verificar chamadas: search + read + write em dfe.line
+    chamadas_dfe_line = [
+        call for call in odoo.execute_kw.call_args_list
+        if call.args[0] == 'l10n_br_ciel_it_account.dfe.line'
+    ]
+    # 3 chamadas: search, read, write
+    assert len(chamadas_dfe_line) == 3
+    # Ultima chamada deve ser write company_id=5
+    write_call = chamadas_dfe_line[-1]
+    assert write_call.args[1] == 'write'
+    write_args = write_call.args[2]
+    assert write_args[0] == [129585, 129586]
+    assert write_args[1] == {'company_id': 5}
+
+
+def test_criar_dfe_b_v23_1_idempotente_quando_lines_ja_corretas(monkeypatch):
+    """Lines ja em company_destino -> skip write (idempotente)."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [{
+            'l10n_br_xml_aut_nfe': 'PHhtbCB2ZXJzaW9uPSIxLjAiPz4=',
+            'l10n_br_chave_nf': '35260561724241000178550010000945661007164482',
+            'l10n_br_numero_nota_fiscal': '94566',
+            'company_id': [5, 'LF'],
+            'state': 'posted',
+        }],
+        [{'l10n_br_status': '03', 'l10n_br_situacao_dfe': 'autorizado'}],
+    ]
+    odoo.search_read.return_value = []
+    odoo.create.return_value = 43534
+    odoo.execute_kw.side_effect = [
+        None,  # processar
+        [129600, 129601],  # search dfe.line
+        [
+            {'id': 129600, 'company_id': [5, 'LF']},  # JA em LF
+            {'id': 129601, 'company_id': [5, 'LF']},
+        ],
+    ]
+
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.criar_dfe_a_partir_do_invoice_saida(
+        invoice_id_saida=716449, company_destino=5, dry_run=False,
+    )
+
+    assert res['status'] == 'CRIADO'
+    # SEM key 'dfe_lines_corrigidas_b_v23_1' (skip idempotente)
+    assert 'dfe_lines_corrigidas_b_v23_1' not in res
+    # Apenas 2 chamadas em dfe.line: search + read (sem write)
+    chamadas_dfe_line = [
+        call for call in odoo.execute_kw.call_args_list
+        if call.args[0] == 'l10n_br_ciel_it_account.dfe.line'
+    ]
+    assert len(chamadas_dfe_line) == 2
+    assert chamadas_dfe_line[0].args[1] == 'search'
+    assert chamadas_dfe_line[1].args[1] == 'read'
+
+
+def test_criar_dfe_b_v23_1_falha_no_fix_eh_non_fatal(monkeypatch):
+    """Se write dfe.line.company_id falhar, status segue 'CRIADO' + log warning.
+    Caller (orchestrator passo 9) detectara falha 'leitura dfe.line' com erro claro."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [{
+            'l10n_br_xml_aut_nfe': 'PHhtbCB2ZXJzaW9uPSIxLjAiPz4=',
+            'l10n_br_chave_nf': '35260561724241000178550010000945661007164482',
+            'company_id': [1, 'FB'],
+            'state': 'posted',
+        }],
+        [{'l10n_br_status': '03', 'l10n_br_situacao_dfe': 'autorizado'}],
+    ]
+    odoo.search_read.return_value = []
+    odoo.create.return_value = 43535
+    odoo.execute_kw.side_effect = [
+        None,  # processar
+        Exception('Connection lost'),  # search falha
+    ]
+
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.criar_dfe_a_partir_do_invoice_saida(
+        invoice_id_saida=716450, company_destino=5, dry_run=False,
+    )
+
+    # Status segue CRIADO (fix B-V23-1 e' non-fatal)
+    assert res['status'] == 'CRIADO'
+    assert res['dfe_id'] == 43535
+    # SEM key 'dfe_lines_corrigidas_b_v23_1' (fix falhou silenciosamente)
+    assert 'dfe_lines_corrigidas_b_v23_1' not in res
+
+
+# ============================================================
+# v23.5+ B-V23-2 — resolver_account_id_por_company + hook gerar_po_from_dfe
+# ============================================================
+
+def test_resolver_account_id_por_company_ja_na_destino():
+    """Account ja' em company destino -> JA_NA_DESTINO sem search."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'id': 26459,
+        'code': '3202010001',
+        'name': 'CUSTOS DAS MERCADORIAS VENDIDAS',
+        'company_id': [5, 'LF'],
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.resolver_account_id_por_company(
+        account_id_fonte=26459, company_destino=5,
+    )
+
+    assert res['status'] == 'JA_NA_DESTINO'
+    assert res['account_id_destino'] == 26459
+    assert res['code'] == '3202010001'
+    # SEM search_read (idempotente)
+    assert not odoo.execute_kw.called
+
+
+def test_resolver_account_id_por_company_ok_existe_em_destino():
+    """Account em FB + existe equivalente LF -> OK_EXISTE + retorna id LF."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'id': 22611,
+        'code': '3202010001',
+        'name': 'CUSTOS DAS MERCADORIAS VENDIDAS',
+        'company_id': [1, 'FB'],
+    }]
+    odoo.execute_kw.return_value = [{
+        'id': 26459,
+        'code': '3202010001',
+        'name': 'CUSTOS DAS MERCADORIAS VENDIDAS',
+        'company_id': [5, 'LF'],
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.resolver_account_id_por_company(
+        account_id_fonte=22611, company_destino=5,
+    )
+
+    assert res['status'] == 'OK_EXISTE'
+    assert res['account_id_destino'] == 26459
+    assert res['code'] == '3202010001'
+    # Verifica search_read chamado com domain correto
+    args, kwargs = odoo.execute_kw.call_args
+    assert args[0] == 'account.account'
+    assert args[1] == 'search_read'
+    domain = args[2][0]
+    assert ('code', '=', '3202010001') in domain
+    assert ('company_id', '=', 5) in domain
+
+
+def test_resolver_account_id_por_company_nao_existe_destino():
+    """Account em FB + NAO existe equivalente em destino -> NAO_EXISTE_DESTINO."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'id': 99999, 'code': 'XXXXXX_ESPECIFICO_FB',
+        'name': 'Especifico FB', 'company_id': [1, 'FB'],
+    }]
+    odoo.execute_kw.return_value = []  # NAO encontra em destino
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.resolver_account_id_por_company(
+        account_id_fonte=99999, company_destino=5,
+    )
+
+    assert res['status'] == 'NAO_EXISTE_DESTINO'
+    assert res['account_id_destino'] is None
+    assert res['code'] == 'XXXXXX_ESPECIFICO_FB'
+
+
+def test_resolver_account_id_por_company_account_id_invalido():
+    """account_id_fonte <= 0 -> FALHA imediato."""
+    odoo = MagicMock()
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.resolver_account_id_por_company(
+        account_id_fonte=0, company_destino=5,
+    )
+
+    assert res['status'] == 'FALHA'
+    assert 'account_id_fonte_invalido' in (res['erro'] or '')
+    assert not odoo.read.called
+
+
+def test_resolver_account_id_por_company_account_fonte_nao_existe():
+    """account_id_fonte aponta para id inexistente -> FALHA."""
+    odoo = MagicMock()
+    odoo.read.return_value = []  # account fonte sumiu
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.resolver_account_id_por_company(
+        account_id_fonte=999999, company_destino=5,
+    )
+
+    assert res['status'] == 'FALHA'
+    assert 'account_fonte_nao_existe' in (res['erro'] or '')
+
+
+def test_gerar_po_b_v23_2_corrige_account_ids_em_company_errada(monkeypatch):
+    """gerar_po_from_dfe status=CRIADO + PO.lines em account FB -> write batch LF."""
+    odoo = MagicMock()
+    # Idempotencia DFe-PO: nenhum caminho retorna PO existente
+    odoo.read.side_effect = [
+        # 1. Idempotencia caminho 1+2: dfe sem purchase_id/purchase_fiscal_id
+        [{'purchase_id': False, 'purchase_fiscal_id': False}],
+        # 2. fire_and_poll poll: PO criada
+        [{'purchase_id': [42419, 'C2619591']}],
+        # 3. Read po.order_line (hook B-V23-2 inicial)
+        [{'order_line': [128461, 128462]}],
+        # 4-5. Read account.account fonte para cada line (no resolver)
+        [{'id': 22611, 'code': '3202010001', 'name': 'CUSTOS',
+          'company_id': [1, 'FB']}],
+        [{'id': 22611, 'code': '3202010001', 'name': 'CUSTOS',
+          'company_id': [1, 'FB']}],
+    ]
+    # Idempotencia caminho 3: search reverso vazio -> dispara
+    odoo.search_read.return_value = []
+    odoo.execute_kw.side_effect = [
+        # 1. fire action_gerar_po_dfe
+        None,
+        # 2. Read po.lines (atomo no hook)
+        [
+            {'id': 128461, 'company_id': [5, 'LF'],
+             'account_id': [22611, '3202010001 CUSTOS']},
+            {'id': 128462, 'company_id': [5, 'LF'],
+             'account_id': [22611, '3202010001 CUSTOS']},
+        ],
+        # 3-4. search_read account na company destino x 2 (1 por line)
+        [{'id': 26459, 'code': '3202010001', 'name': 'CUSTOS',
+          'company_id': [5, 'LF']}],
+        [{'id': 26459, 'code': '3202010001', 'name': 'CUSTOS',
+          'company_id': [5, 'LF']}],
+        # 5. Write batch po.lines com novo account
+        True,
+    ]
+
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.gerar_po_from_dfe(dfe_id=43533, dry_run=False)
+
+    assert res['status'] == 'CRIADO'
+    assert res['po_id'] == 42419
+    # Fix B-V23-2: lines corrigidas reportadas
+    assert sorted(res.get('po_lines_corrigidas_b_v23_2', [])) == [128461, 128462]
+    # Confirma batch write em po.line
+    chamadas_write = [
+        c for c in odoo.execute_kw.call_args_list
+        if c.args[0] == 'purchase.order.line' and c.args[1] == 'write'
+    ]
+    assert len(chamadas_write) == 1
+    write_args = chamadas_write[0].args[2]
+    assert sorted(write_args[0]) == [128461, 128462]
+    assert write_args[1] == {'account_id': 26459}
+
+
+def test_gerar_po_b_v23_2_idempotente_quando_accounts_alinhados(monkeypatch):
+    """PO.lines ja' com account na company correta -> skip write (idempotente)."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [{'purchase_id': False, 'purchase_fiscal_id': False}],  # idempot 1+2
+        [{'purchase_id': [42420, 'C9999']}],  # poll
+        [{'order_line': [200001]}],  # po.order_line
+        [{'id': 26459, 'code': '3202010001', 'name': 'CUSTOS',
+          'company_id': [5, 'LF']}],  # account fonte ja em LF
+    ]
+    odoo.search_read.return_value = []
+    odoo.execute_kw.side_effect = [
+        None,  # fire
+        [{'id': 200001, 'company_id': [5, 'LF'],
+          'account_id': [26459, '3202010001']}],  # read po.lines
+    ]
+
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.gerar_po_from_dfe(dfe_id=43534, dry_run=False)
+
+    assert res['status'] == 'CRIADO'
+    # SEM key po_lines_corrigidas_b_v23_2 (idempotente)
+    assert 'po_lines_corrigidas_b_v23_2' not in res
+    # SEM write em po.line
+    chamadas_write = [
+        c for c in odoo.execute_kw.call_args_list
+        if c.args[0] == 'purchase.order.line' and c.args[1] == 'write'
+    ]
+    assert len(chamadas_write) == 0
+
+
+def test_gerar_po_b_v23_2_falha_no_fix_eh_non_fatal(monkeypatch):
+    """Hook B-V23-2 falha (exception) -> status segue CRIADO + log warning."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [{'purchase_id': False, 'purchase_fiscal_id': False}],  # idempot
+        [{'purchase_id': [42421, 'C8888']}],  # poll
+        Exception('Connection lost no read po.order_line'),
+    ]
+    odoo.search_read.return_value = []
+    odoo.execute_kw.side_effect = [None]  # fire OK
+
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.gerar_po_from_dfe(dfe_id=43535, dry_run=False)
+
+    # Status segue CRIADO (fix B-V23-2 non-fatal)
+    assert res['status'] == 'CRIADO'
+    assert res['po_id'] == 42421
+    # SEM key po_lines_corrigidas_b_v23_2 (fix falhou silenciosamente)
+    assert 'po_lines_corrigidas_b_v23_2' not in res
+
+
+def test_gerar_po_b_v23_2_account_nao_existe_destino_loga_warning(monkeypatch):
+    """Account fonte SEM equivalente em company destino -> status CRIADO mas
+    line PERMANECE com account divergente + warning log + sem key corrigidas."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        [{'purchase_id': False, 'purchase_fiscal_id': False}],
+        [{'purchase_id': [42422, 'C7777']}],
+        [{'order_line': [300001]}],
+        [{'id': 99999, 'code': 'ESPECIFICO_FB', 'name': 'Especifico',
+          'company_id': [1, 'FB']}],
+    ]
+    odoo.search_read.return_value = []
+    odoo.execute_kw.side_effect = [
+        None,  # fire
+        [{'id': 300001, 'company_id': [5, 'LF'],
+          'account_id': [99999, 'ESPECIFICO_FB']}],
+        [],  # search_read em destino vazio (account nao existe em LF)
+    ]
+
+    svc = EscrituracaoLfService(odoo=odoo)
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    res = svc.gerar_po_from_dfe(dfe_id=43536, dry_run=False)
+
+    assert res['status'] == 'CRIADO'
+    # SEM key po_lines_corrigidas (nao corrigiu porque account nao existe em destino)
+    assert 'po_lines_corrigidas_b_v23_2' not in res
+    # SEM write em po.line (nao havia o que escrever)
+    chamadas_write = [
+        c for c in odoo.execute_kw.call_args_list
+        if c.args[0] == 'purchase.order.line' and c.args[1] == 'write'
+    ]
+    assert len(chamadas_write) == 0

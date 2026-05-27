@@ -2306,8 +2306,55 @@ Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para
 
 ### Pendências v24+
 
-1. **B-V23-1 fix raiz**: codificar `dfe.line.company_id=company_destino` no átomo `criar_dfe_a_partir_do_invoice_saida` (write após criação).
-2. **B-V23-2 fix raiz**: criar átomo helper `resolver_account_id_por_company` + hook em `gerar_po_from_dfe`/`preencher_po`.
+1. ~~**B-V23-1 fix raiz**~~ ✅ CODIFICADO v23.5+ (vide bloco abaixo).
+2. ~~**B-V23-2 fix raiz**~~ ✅ CODIFICADO v23.5+ (vide bloco abaixo).
 3. Continuar **AP6** refator (extrair Skill 8 ATÔMICA L2 do orchestrator).
 4. Bulk REAL PROD (não só 2 ajustes 176013/14) via opt-in `--usar-fluxo-l3-v19` com fixes B-V23-1+2 aplicados.
 5. Sub-skill C5 estender G007 + l10n_br_tipo_produto (descobertos v21+ como bloqueios SEFAZ não-detectados).
+
+---
+
+## Sessão 2026-05-27 v23.5+ — Fix raiz B-V23-1 + B-V23-2 codificados (mesma sessão v23+)
+
+### Resultado executivo
+
+✅ **2 bugs arquiteturais Skill 7 RESOLVIDOS na mesma sessão v23+** (a pedido do Rafael "ideal é voce corrigir isso q falta até pra não se perder entre sessões"). **609 pytest verdes** (+12 net v23.5+: 3 B-V23-1 + 9 B-V23-2).
+
+| # | Entrega | Estado |
+|---|---------|--------|
+| 1 | **B-V23-1** fix raiz codificado em `criar_dfe_a_partir_do_invoice_saida` (escrituracao.py:1066+) — search dfe.lines pós-poll + batch write `company_id=company_destino` se divergente | ✅ LIVE |
+| 2 | **B-V23-1** pytest: 3 cenários (lines em company errada → write, lines já corretas → skip idempotente, falha → non-fatal warning) | ✅ |
+| 3 | **B-V23-2** novo átomo `resolver_account_id_por_company(account_id_fonte, company_destino)` em escrituracao.py — read account fonte (code) + search [(code,=,code),(company_id,=,destino)] + retorna id destino ou status NAO_EXISTE_DESTINO | ✅ LIVE |
+| 4 | **B-V23-2** hook em `gerar_po_from_dfe` após status=CRIADO: itera PO.lines + resolve account equivalente da line.company_id + batch write se divergente | ✅ LIVE |
+| 5 | **B-V23-2** pytest: 9 cenários (5 átomo + 4 hook — JA_NA_DESTINO, OK_EXISTE com batch, NAO_EXISTE_DESTINO, account invalid, fonte sumiu, hook corrige+write batch, idempotente, fix non-fatal, account inexistente warning) | ✅ |
+| 6 | PROTECAO N25/N26 → RESOLVIDOS (codificados) | ✅ |
+| 7 | Pytest baseline: 597 → **609 verdes** (+12 net v23.5+) | ✅ |
+
+### Decisão arquitetural
+
+Os 2 fixes operam **non-fatal com warning + fallback** (preserva status='CRIADO' mesmo em falha do fix): caller (orchestrator passo 9) detecta os mesmos erros conhecidos (G-PERM-1 'leitura dfe.line' ou 'Empresas incompatíveis') com diagnóstico operacional claro, ao invés de mascarar problemas. Idempotência garantida (skip write quando já alinhado).
+
+**B-V23-2 hook só roda em status=CRIADO** (PO recém-criada pelo robô CIEL IT). Para IDEMPOTENT_EXISTE (PO já existia antes do disparo), hook não toca — PO pode estar em estado avançado (invoice já criada, etc); operador trata manualmente se necessário.
+
+### Códigos modificados v23.5+
+
+| Arquivo | Mudança |
+|---------|---------|
+| `app/odoo/estoque/scripts/escrituracao.py` | +~250 LOC: fix B-V23-1 em `criar_dfe_a_partir_do_invoice_saida` (busca+batch write dfe.lines.company_id pós-poll) + novo átomo `resolver_account_id_por_company` + hook B-V23-2 em `gerar_po_from_dfe` (itera PO.lines + resolve account + batch write) |
+| `tests/odoo/services/test_escrituracao_lf_service_v19.py` | +12 pytest: 3 B-V23-1 + 9 B-V23-2 (5 átomo + 4 hook) |
+| `app/odoo/estoque/PROTECAO_PROXIMA_SESSAO.md` | N25/N26 marcados RESOLVIDOS v23.5+ |
+
+### Estado FINAL PROD (preservado v23+ — workarounds manuais permanecem como museum vivo)
+
+- Ajustes 176013/176014: status=EXECUTADO, fase=F5f_ENTRADA_OK
+- Invoice ENTRADA 717630 ENTIN/2026/05/0055: posted LF, R$ 12.525,54 untaxed
+- DFe 43533 lines 129585/86: company_id=5 LF (write manual v23+)
+- PO 42419 lines 128461/62: account_id=26459 LF (write manual v23+)
+
+### Pendências v24+ (reduzidas — bulk + refator)
+
+1. **Bulk REAL PROD** via `--usar-fluxo-l3-v19` em conjunto maior de ajustes (não só 176013/14). Validar que fixes B-V23-1/2 funcionam automaticamente sem workarounds manuais.
+2. **AP6 refator**: extrair Skill 8 ATÔMICA L2 do orchestrator (5 ops C+D sobre `account.move`).
+3. **Expand CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO** para FB=1 e CD=4 (atualmente só LF=5 mapeada).
+4. **Sub-skill C5 estender** G007 (standard_price=0) + l10n_br_tipo_produto.
+5. **Folhas L3 1.1.x** (só saída) + **1.3** (transferência completa) — bloqueadas pelo refator AP6.
