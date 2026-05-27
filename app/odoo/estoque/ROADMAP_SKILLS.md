@@ -39,7 +39,14 @@
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
-### Próximo passo (v26+) — canary REAL PROD F1-F4 + opt-in `--usar-skill8-atomica-v25` + expand CONSTANTS FB+CD + folhas L3
+### Cleanup banco local v26+ (2026-05-27)
+
+- 30 ajustes `FATURAMENTO_LF_2026_05_20 / F5d_BLOCKER_TX / INDUSTRIALIZACAO_FB_LF / APROVADO` DELETADOS (decisão Rafael "isso não existe mais").
+- 67 registros `operacao_odoo_auditoria` vinculados (soft-link via `tabela_origem`+`registro_id`) DELETADOS junto.
+- **Pós-cleanup**: zero candidatos naturais para canary REAL F1-F4 (apenas 177465 AVULSO_FRASCO em F5e_SEFAZ_OK, já idempotente Odoo via cirurgia manual v24+). Canary REAL deferido para próxima INDUSTRIALIZACAO_FB_LF natural do operador.
+- Commit: `701e4885`.
+
+### Próximo passo (v27+) — opt-in `--usar-skill8-atomica-v25` + rename + expand CONSTANTS FB+CD + folhas L3 (S0 canary REAL deferido)
 
 **v25+ S0 CONCLUÍDA** (2026-05-27 — commit `ea505c0e`):
 1. ✅ Validação Rafael dos 5 achados do agente v24+ (cirurgia AVULSO_FRASCO): corrigido diagnóstico errado #1 + confirmados #2/#3/#4 + descartados G039/G-PERM-1 como causa.
