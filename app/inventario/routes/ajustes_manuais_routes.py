@@ -107,8 +107,13 @@ def upsert_ajuste(ciclo_id):
     local = (request.form.get('local') or '').strip() or None
     nome_produto = (request.form.get('nome_produto') or '').strip() or None
 
-    existentes = AjusteManualInventario.query.filter_by(
-        ciclo_id=ciclo_id, cod_produto=cod).all()
+    # with_for_update() serializa saves simultaneos para o mesmo (ciclo, cod):
+    # 2 requests concorrentes nao criam mais 2 registros (CR HIGH 2026-05-27).
+    # Sem UNIQUE constraint na tabela, o lock e' a unica defesa contra duplicacao.
+    existentes = (AjusteManualInventario.query
+                  .filter_by(ciclo_id=ciclo_id, cod_produto=cod)
+                  .with_for_update()
+                  .all())
 
     if not qtd_str:
         deleted = 0

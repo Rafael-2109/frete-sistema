@@ -28,9 +28,12 @@ function escapeAttr(s) {
 }
 
 function drillUrl(cod, empresa, tipo) {
+  // CICLO_DATA_SNAPSHOT injetado pelo template (ISO YYYY-MM-DD) — bug 2026-05-27
+  // ao reescrever JS deixei o '2026-05-16' literal herdado da v0; agora usa o
+  // data_snapshot do ciclo, valido para qualquer ciclo presente/futuro.
   const params = new URLSearchParams({
     cod: cod, empresa: empresa || '', tipo: tipo || 'ESTOQUE',
-    data_inicio: '2026-05-16',
+    data_inicio: CICLO_DATA_SNAPSHOT,
   });
   return `/inventario/movimentacoes?${params}`;
 }
@@ -151,8 +154,9 @@ function wireInlineEdit() {
     inp.addEventListener('input', () => {
       const cod = inp.dataset.cod;
       const td = inp.closest('td');
-      clearTimeout(_saveTimers[`${cod}:${inp.dataset.field}`]);
-      _saveTimers[`${cod}:${inp.dataset.field}`] = setTimeout(() => {
+      const timerKey = `${cod}:${inp.dataset.field}`;
+      clearTimeout(_saveTimers[timerKey]);
+      _saveTimers[timerKey] = setTimeout(() => {
         const tr = inp.closest('tr');
         const localInp = tr.querySelector('input[data-field="local"]');
         const qtdInp = tr.querySelector('input[data-field="qtd"]');
@@ -161,13 +165,18 @@ function wireInlineEdit() {
           () => (localInp.value || '').trim(),
           () => (qtdInp.value || '').trim().replace(',', '.'),
         );
+        delete _saveTimers[timerKey];  // marca timer como concluido (vs apenas no-op clearTimeout)
       }, SAVE_DEBOUNCE_MS);
     });
     inp.addEventListener('blur', () => {
       const cod = inp.dataset.cod;
       const timerKey = `${cod}:${inp.dataset.field}`;
+      // Forca flush se houver timer PENDENTE (nao executado).
+      // delete _saveTimers[timerKey] no setTimeout garante que aqui so
+      // entra quando ha edicao nao salva — evita double-save apos timer ja disparou.
       if (_saveTimers[timerKey]) {
         clearTimeout(_saveTimers[timerKey]);
+        delete _saveTimers[timerKey];
         const tr = inp.closest('tr');
         const td = inp.closest('td');
         const localInp = tr.querySelector('input[data-field="local"]');

@@ -88,6 +88,7 @@
 
 <script>
 const CICLO_ID = {{ ciclo.id }};
+const CICLO_DATA_SNAPSHOT = '{{ ciclo.data_snapshot.isoformat() }}';
 </script>
 <script src="{{ url_for('static', filename='js/inventario/confronto.js') }}"></script>
 {% endblock %}
