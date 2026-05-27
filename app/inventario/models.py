@@ -64,7 +64,18 @@ class AjusteManualInventario(db.Model):
 
 
 class InventarioSnapshotOdoo(db.Model):
-    """Cache de estoque + apontamentos + compras do Odoo (botão refresh)."""
+    """Cache de estoque + apontamentos + compras do Odoo + MOV local (botão refresh).
+
+    Freeze 2026-05-27: alem dos campos Odoo (estoque_*, pa_qtd, componente_qtd,
+    compras_qtd), grava tambem agregacoes de MovimentacaoEstoque local
+    (mov_*) no mesmo momento T0 do refresh. Garante que ODOO-MOV e SIST-MOV
+    do Confronto sejam matematicamente validas (mesmo momento).
+
+    AjusteManualInventario PERMANECE LIVE (nao snapshotado) — usuario edita
+    AJ.LOCAL/AJ.QTD inline pelo confronto e espera ver na hora. AJ nao
+    entra no calculo de ODOO-MOV/SIST-MOV (colunas independentes), entao
+    manter live preserva matematica + UX.
+    """
     __tablename__ = 'inventario_snapshot_odoo'
 
     id             = db.Column(db.Integer, primary_key=True)
@@ -72,12 +83,20 @@ class InventarioSnapshotOdoo(db.Model):
                                nullable=False, index=True)
     cod_produto    = db.Column(db.String(50), nullable=False, index=True)
     nome_produto   = db.Column(db.String(200))
+    # Odoo (origem snapshot_odoo_service._baixar_*)
     estoque_fb     = db.Column(db.Numeric(15, 3), default=0)
     estoque_cd     = db.Column(db.Numeric(15, 3), default=0)
     estoque_lf     = db.Column(db.Numeric(15, 3), default=0)
     pa_qtd         = db.Column(db.Numeric(15, 3), default=0)
     componente_qtd = db.Column(db.Numeric(15, 3), default=0)
     compras_qtd    = db.Column(db.Numeric(15, 3), default=0)
+    # MOV local congelado (origem MovimentacaoEstoque desde data_snapshot do ciclo)
+    mov_compras    = db.Column(db.Numeric(15, 3), default=0)
+    mov_vendas     = db.Column(db.Numeric(15, 3), default=0)
+    mov_consumo    = db.Column(db.Numeric(15, 3), default=0)
+    mov_producao   = db.Column(db.Numeric(15, 3), default=0)
+    # SIST congelado (sum total MovimentacaoEstoque ATIVA, sem filtro de data)
+    mov_sist_total = db.Column(db.Numeric(15, 3), default=0)
     refresh_em     = db.Column(db.DateTime, default=agora_utc_naive)
 
     __table_args__ = (

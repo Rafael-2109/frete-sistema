@@ -46,6 +46,8 @@ def test_refresh_grava_estoque_por_empresa(db, ciclo):
          patch.object(SnapshotOdooService, '_baixar_apontamentos',
                       return_value={}), \
          patch.object(SnapshotOdooService, '_baixar_compras',
+                      return_value={}), \
+         patch.object(SnapshotOdooService, '_baixar_movimentacoes_local',
                       return_value={}):
         resultado = SnapshotOdooService.refresh(ciclo.id, job=None)
     assert resultado.get('inseridos', 0) >= 1
@@ -64,6 +66,8 @@ def test_refresh_idempotente(db, ciclo):
          patch.object(SnapshotOdooService, '_baixar_apontamentos',
                       return_value={}), \
          patch.object(SnapshotOdooService, '_baixar_compras',
+                      return_value={}), \
+         patch.object(SnapshotOdooService, '_baixar_movimentacoes_local',
                       return_value={}):
         SnapshotOdooService.refresh(ciclo.id, job=None)
         SnapshotOdooService.refresh(ciclo.id, job=None)
@@ -89,6 +93,8 @@ def test_refresh_filtra_indisponivel(db, ciclo):
          patch.object(SnapshotOdooService, '_baixar_apontamentos',
                       return_value={}), \
          patch.object(SnapshotOdooService, '_baixar_compras',
+                      return_value={}), \
+         patch.object(SnapshotOdooService, '_baixar_movimentacoes_local',
                       return_value={}):
         SnapshotOdooService.refresh(ciclo.id, job=None)
     s = InventarioSnapshotOdoo.query.filter_by(

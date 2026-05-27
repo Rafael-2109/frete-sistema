@@ -24,7 +24,14 @@ class ConfrontoService:
 
         inv = ConfrontoService._agg_inventario_base(ciclo_id)
         snap = ConfrontoService._agg_snapshot(ciclo_id)
-        movs = ConfrontoService._agg_movimentacoes(data_inicio)
+        # FREEZE 2026-05-27: se snapshot tem MOV congelado (qualquer cod com
+        # qualquer mov_* != 0 OU mov_sist_total != 0), usa snapshot — garante
+        # ODOO-MOV/SIST-MOV consistentes (mesmo T0). Fallback live para retro-
+        # compat com snapshots antigos (pre-freeze) ou ciclos sem snapshot.
+        if ConfrontoService._snapshot_tem_mov_freezado(snap):
+            movs = ConfrontoService._movs_do_snapshot(snap)
+        else:
+            movs = ConfrontoService._agg_movimentacoes(data_inicio)
         ajustes = ConfrontoService._agg_ajustes(ciclo_id)
 
         cods = set(inv.keys()) | set(snap.keys()) | set(movs.keys()) | set(ajustes.keys())
@@ -121,7 +128,44 @@ class ConfrontoService:
             'pa_qtd': r.pa_qtd or Decimal('0'),
             'componente_qtd': r.componente_qtd or Decimal('0'),
             'compras_qtd': r.compras_qtd,
+            # FREEZE 2026-05-27: MOV congelado no snapshot
+            'mov_compras': r.mov_compras or Decimal('0'),
+            'mov_vendas': r.mov_vendas or Decimal('0'),
+            'mov_consumo': r.mov_consumo or Decimal('0'),
+            'mov_producao': r.mov_producao or Decimal('0'),
+            'mov_sist_total': r.mov_sist_total or Decimal('0'),
         } for r in rows}
+
+    @staticmethod
+    def _snapshot_tem_mov_freezado(snap):
+        """True se qualquer linha do snapshot tem mov_* != 0 (foi freezado).
+
+        Snapshots pre-freeze tem todas as cols mov_* = 0 (default) → cai no
+        fallback live. Snapshots novos com qualquer movimentacao registrada
+        no periodo retornam True e usam o snapshot.
+        """
+        if not snap:
+            return False
+        for v in snap.values():
+            if (v.get('mov_compras', 0) or v.get('mov_vendas', 0) or
+                v.get('mov_consumo', 0) or v.get('mov_producao', 0) or
+                v.get('mov_sist_total', 0)):
+                return True
+        return False
+
+    @staticmethod
+    def _movs_do_snapshot(snap):
+        """Reconstroi dict de movs no formato do _agg_movimentacoes a partir
+        do snapshot. Permite usar o snapshot como source-of-truth do MOV/SIST.
+        """
+        return {cod: {
+            'nome': v.get('nome') or '',
+            'compras': v.get('mov_compras') or Decimal('0'),
+            'vendas': v.get('mov_vendas') or Decimal('0'),
+            'consumo': v.get('mov_consumo') or Decimal('0'),
+            'producao': v.get('mov_producao') or Decimal('0'),
+            'sist_total': v.get('mov_sist_total') or Decimal('0'),
+        } for cod, v in snap.items()}
 
     @staticmethod
     def _agg_movimentacoes(data_inicio):

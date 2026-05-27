@@ -1,14 +1,21 @@
-"""Refresh cache Odoo (estoque + apontamentos + compras).
+"""Refresh cache Odoo (estoque + apontamentos + compras) + freeze MOV local.
 
 Reaproveita lógica de:
 - scripts/inventario_2026_05/monitor/export_excel_completo.py (estoque)
 - scripts/inventario_2026_05/monitor/relatorio_apontamentos_compras.py (apt + compras)
+
+Freeze 2026-05-27: alem dos dados Odoo, agrega `MovimentacaoEstoque` local
+(mov_compras/vendas/consumo/producao filtrado >= data_snapshot, mov_sist_total
+sem filtro de data) e grava no snapshot. Garante consistencia temporal do
+ODOO-MOV no Confronto.
 """
 from decimal import Decimal
 from collections import defaultdict
 from typing import Dict
+from sqlalchemy import func, case
 from app import db
 from app.inventario.models import CicloInventario, InventarioSnapshotOdoo
+from app.estoque.models import MovimentacaoEstoque
 from app.odoo.utils.connection import get_odoo_connection
 from app.utils.timezone import agora_utc_naive
 
@@ -60,8 +67,12 @@ class SnapshotOdooService:
         _progress(75, 'Baixando compras externas')
         compras = SnapshotOdooService._baixar_compras(odoo, data_inicio)
 
+        _progress(85, 'Congelando MOV local (MovimentacaoEstoque)')
+        movs = SnapshotOdooService._baixar_movimentacoes_local(ciclo.data_snapshot)
+
         _progress(90, 'Persistindo snapshot')
-        cods = set(estoques.keys()) | set(apontamentos.keys()) | set(compras.keys())
+        cods = (set(estoques.keys()) | set(apontamentos.keys()) |
+                set(compras.keys()) | set(movs.keys()))
 
         InventarioSnapshotOdoo.query.filter_by(ciclo_id=ciclo_id).delete()
         db.session.flush()
@@ -70,21 +81,80 @@ class SnapshotOdooService:
             est = estoques.get(cod, {})
             apt = apontamentos.get(cod, {})
             cmp = compras.get(cod, {})
+            mv = movs.get(cod, {})
             db.session.add(InventarioSnapshotOdoo(
                 ciclo_id=ciclo_id,
                 cod_produto=cod,
-                nome_produto=(est.get('nome') or apt.get('nome') or cmp.get('nome')),
+                nome_produto=(est.get('nome') or apt.get('nome') or
+                              cmp.get('nome') or mv.get('nome')),
                 estoque_fb=est.get('fb', Decimal('0')),
                 estoque_cd=est.get('cd', Decimal('0')),
                 estoque_lf=est.get('lf', Decimal('0')),
                 pa_qtd=apt.get('pa', Decimal('0')),
                 componente_qtd=apt.get('componente', Decimal('0')),
                 compras_qtd=cmp.get('qtd', Decimal('0')),
+                mov_compras=mv.get('compras', Decimal('0')),
+                mov_vendas=mv.get('vendas', Decimal('0')),
+                mov_consumo=mv.get('consumo', Decimal('0')),
+                mov_producao=mv.get('producao', Decimal('0')),
+                mov_sist_total=mv.get('sist_total', Decimal('0')),
                 refresh_em=agora_utc_naive(),
             ))
         db.session.flush()  # commit fica para o caller (route/worker)
         _progress(100, 'Concluído')
         return {'inseridos': len(cods), 'refresh_em': agora_utc_naive().isoformat()}
+
+    @staticmethod
+    def _baixar_movimentacoes_local(data_snapshot) -> Dict:
+        """{cod: {compras, vendas, consumo, producao, sist_total, nome}}.
+
+        Replica EXATAMENTE a logica de ConfrontoService._agg_movimentacoes
+        (sem unificacao cod_produto_raiz; agrupa por cod bruto p/ bater
+        com planilha referencia). Congelar no snapshot garante que ODOO-MOV
+        do confronto seja matematicamente valida (mesmo momento T0).
+        """
+        cod_raiz = MovimentacaoEstoque.cod_produto.label('raiz')
+        # Periodo: ENTRADA/FATURAMENTO/CONSUMO/PRODUCAO desde data_snapshot
+        q_periodo = db.session.query(
+            cod_raiz,
+            func.max(MovimentacaoEstoque.nome_produto),
+            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA',
+                           MovimentacaoEstoque.qtd_movimentacao), else_=0)),
+            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
+                           MovimentacaoEstoque.qtd_movimentacao), else_=0)),
+            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'CONSUMO',
+                           MovimentacaoEstoque.qtd_movimentacao), else_=0)),
+            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'PRODUÇÃO',
+                           MovimentacaoEstoque.qtd_movimentacao), else_=0)),
+        ).filter(
+            MovimentacaoEstoque.ativo.is_(True),
+            MovimentacaoEstoque.data_movimentacao >= data_snapshot,
+        ).group_by(cod_raiz)
+
+        periodo = {r[0]: {
+            'nome': r[1] or '',
+            'compras': r[2] or Decimal('0'),
+            'vendas': r[3] or Decimal('0'),
+            'consumo': r[4] or Decimal('0'),
+            'producao': r[5] or Decimal('0'),
+        } for r in q_periodo.all()}
+
+        # SIST total: sum acumulado ATIVO sem filtro de data
+        q_saldo = db.session.query(
+            cod_raiz,
+            func.sum(MovimentacaoEstoque.qtd_movimentacao),
+        ).filter(MovimentacaoEstoque.ativo.is_(True)).group_by(cod_raiz)
+
+        for cod, sist in q_saldo.all():
+            if cod not in periodo:
+                periodo[cod] = {'nome': '', 'compras': Decimal('0'),
+                                'vendas': Decimal('0'), 'consumo': Decimal('0'),
+                                'producao': Decimal('0')}
+            periodo[cod]['sist_total'] = sist or Decimal('0')
+
+        for cod in periodo:
+            periodo[cod].setdefault('sist_total', Decimal('0'))
+        return periodo
 
     @staticmethod
     def _baixar_estoque(odoo) -> Dict:

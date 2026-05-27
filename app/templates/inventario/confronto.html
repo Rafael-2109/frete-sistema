@@ -71,9 +71,12 @@
           <th class="num" style="width:90px">PRODUÇÃO</th>
           <th class="txt" style="width:90px">AJ.LOCAL</th>
           <th class="num" style="width:90px">AJ.QTD</th>
-          <th class="num" style="width:90px">ODOO</th>
-          <th class="num" style="width:90px">MOV</th>
-          <th class="num" style="width:90px">SIST</th>
+          <th class="num" style="width:90px"
+              title="Soma estoque_fb+cd+lf do snapshot Odoo">ODOO</th>
+          <th class="num" style="width:90px"
+              title="MOV = inv_total + compras + pa + componente. Congelado no snapshot {{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else '(nao gerado)' }}.">MOV</th>
+          <th class="num" style="width:90px"
+              title="SIST = sum MovimentacaoEstoque ATIVA (sem filtro data). Congelado no snapshot {{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else '(nao gerado)' }}.">SIST</th>
           <th class="num" style="width:90px">ODOO-MOV</th>
           <th class="num" style="width:90px">SIST-MOV</th>
           <th class="num" style="width:90px">FB-O</th>

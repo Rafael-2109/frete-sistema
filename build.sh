@@ -149,6 +149,13 @@ echo "CarVia: tabela carvia_anexos (anexos Frete + Subcontrato)..."
 python scripts/migrations/criar_carvia_anexos.py \
     || echo "⚠️ Migration criar_carvia_anexos falhou, continuando deploy..."
 
+# 13. Inventario (2026-05-27): snapshot freeze MOV/SIST em inventario_snapshot_odoo.
+# +5 cols Numeric(15,3) DEFAULT 0 (mov_compras/vendas/consumo/producao/sist_total).
+# Idempotente (IF NOT EXISTS). Resolve gap temporal ODOO vs MOV/SIST no Confronto.
+echo "Inventario: snapshot freeze MOV/SIST..."
+python scripts/migrations/2026_05_27_inventario_snapshot_freeze_mov.py \
+    || echo "⚠️ Migration inventario_snapshot_freeze_mov falhou, continuando deploy..."
+
 # Migrations motos_assai (01-08): removidas do build apos deploy concluido em
 # 2026-05-08. Scripts permanecem em scripts/migrations/ como historico — rodar
 # manualmente apenas em fresh install / staging novo (ordem: 02, 01, 07, 08
