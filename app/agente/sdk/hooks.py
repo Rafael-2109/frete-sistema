@@ -481,16 +481,27 @@ def build_hooks(
                         f"{pub_err}"
                     )
 
-            # Contexto para o modelo: saber que subagente foi acionado
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": "SubagentStart",
-                    "additionalContext": (
-                        f"Subagente '{agent_type}' iniciado (id={agent_id[:12] if agent_id else 'N/A'}). "
-                        f"Aguarde resultado antes de responder ao usuario."
-                    ),
-                }
-            }
+            # BUG FIX 2026-05-26: NAO injetar additionalContext.
+            #
+            # Sintoma observado (sessao adcfe8d8 26/05): subagente
+            # gestor-estoque-odoo (Opus 4.7) respondia em 1 turn, sem usar
+            # nenhuma tool, com texto "Aguardando resultado do subagente X
+            # conforme instrucao do SubagentStart hook" e end_turn.
+            #
+            # Causa raiz: o SDK injeta o `additionalContext` deste hook
+            # tanto no contexto do PAI quanto no contexto do PROPRIO
+            # SUBAGENTE recem-iniciado (como `hook_additional_context`
+            # attachment). O texto "Subagente 'X' iniciado. Aguarde
+            # resultado antes de responder ao usuario" eh ambiguo
+            # gramaticalmente — o filho le como "(voce eh o) Subagente X,
+            # aguarde resultado", obedece literalmente e termina sem
+            # invocar nenhuma skill/tool.
+            #
+            # Solucao: remover o additionalContext. O pubsub `task_started`
+            # acima ja notifica o frontend (proposito principal do hook).
+            # O agente pai eh informado naturalmente quando o subagente
+            # termina (TaskNotificationMessage + subagent_summary).
+            return {}
         except Exception as e:
             logger.debug(f"[HOOK:SubagentStart] Suppressed: {e}")
             return {}
