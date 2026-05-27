@@ -276,7 +276,7 @@ class OdooConnection:
             kwargs['fields'] = fields
         if limit is not None:
             kwargs['limit'] = limit
-        if offset:
+        if offset is not None:
             kwargs['offset'] = offset
         if order:
             kwargs['order'] = order

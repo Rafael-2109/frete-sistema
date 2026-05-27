@@ -36,6 +36,11 @@ class ConfrontoService:
 
         cods = set(inv.keys()) | set(snap.keys()) | set(movs.keys()) | set(ajustes.keys())
 
+        # Filtra cods inativos no Odoo (product.product.active=False).
+        # 1 batch query — silencioso se Odoo falhar (retorna set vazio).
+        inativos = ConfrontoService._produtos_inativos_odoo(cods)
+        cods = cods - inativos
+
         linhas = []
         for cod in sorted(cods):
             i = inv.get(cod, {})
@@ -62,7 +67,15 @@ class ConfrontoService:
             componente_pos = s.get('componente_qtd', Decimal('0'))
             componente_apres = -componente_pos
 
-            mov = inv_total + compras + pa + componente_apres
+            # MOV = saldo previsto = inicial + compras + pa(Odoo MRP) -
+            # componente(Odoo MRP) + vendas. NAO inclui 'consumo'/'producao'
+            # locais porque pa/componente_apres ja sao o mesmo evento vindo
+            # do snapshot Odoo MRP (apontamentos via _baixar_apontamentos) —
+            # incluir ambos = double-count.
+            # 'vendas' (FATURAMENTO) ja vem NEGATIVO (reconciliacao_service.py:151
+            # grava qtd_movimentacao = -qtd_faturado), entao soma = subtracao.
+            # componente_apres ja inverteu o sinal (componente eh consumo).
+            mov = inv_total + compras + pa + componente_apres + vendas
             odoo_menos_mov = odoo_total - mov
             sist_menos_mov = sist_total - mov
 
@@ -100,6 +113,31 @@ class ConfrontoService:
                 'flag_divergencia_compras': flag_div,
             })
         return linhas
+
+    @staticmethod
+    def _produtos_inativos_odoo(cods):
+        """Retorna set de cod_produto que estao com active=False no Odoo.
+
+        Usa 1 batch search_read com context active_test=False (caso contrario
+        Odoo filtra inativos por default e nao retorna nada).
+        Silencioso em caso de falha (retorna set vazio — confronto continua).
+        """
+        if not cods:
+            return set()
+        try:
+            from app.odoo.utils.connection import get_odoo_connection
+            odoo = get_odoo_connection()
+            prods = odoo.execute_kw(
+                'product.product', 'search_read',
+                [[['default_code', 'in', list(cods)]]],
+                {'fields': ['default_code', 'active'],
+                 'context': {'active_test': False}},
+            )
+            return {str(p['default_code']).strip()
+                    for p in prods
+                    if not p.get('active', True) and p.get('default_code')}
+        except Exception:
+            return set()
 
     @staticmethod
     def _agg_inventario_base(ciclo_id):

@@ -3,7 +3,9 @@
 let LINHAS_CACHE = [];
 const SAVE_DEBOUNCE_MS = 600;
 const _saveTimers = {};
-const DIFF_THRESHOLD = 1;
+// Threshold alinhado com fmt() (que considera "-" valores < 0.0005).
+// Qualquer delta visualmente diferente de zero recebe cor semantica.
+const DIFF_THRESHOLD = 0.0005;
 
 function fmt(v) {
   if (v == null || v === '') return '-';
@@ -46,17 +48,18 @@ function renderLinhas(linhas) {
   }
   let html = '';
   for (const l of linhas) {
-    const divergente = Math.abs(l.odoo_menos_mov || 0) > DIFF_THRESHOLD ||
-                       Math.abs(l.sist_menos_mov || 0) > DIFF_THRESHOLD;
+    // Cores semanticas aplicadas APENAS nas celulas de diferenca
+    // (ODOO-MOV, SIST-MOV) via diffClass(). Linha inteira nao recebe destaque.
     const cod = escapeAttr(l.cod_produto);
     const ajLocal = l.ajuste_local == null ? '' : escapeAttr(l.ajuste_local);
     const ajQtd = (l.ajuste_qtd == null || l.ajuste_qtd === '') ? '' :
                   Number(l.ajuste_qtd).toLocaleString('pt-BR',
                     {minimumFractionDigits: 3, maximumFractionDigits: 3,
                      useGrouping: false});
-    html += `<tr class="${divergente ? 'inv-row-divergente' : ''}" data-cod="${cod}">` +
+    const nomeEsc = escapeAttr(l.nome_produto || '');
+    html += `<tr data-cod="${cod}">` +
       `<td class="txt"><strong>${cod}</strong></td>` +
-      `<td class="txt" title="${escapeAttr(l.nome_produto || '')}">${l.nome_produto || ''}</td>` +
+      `<td class="txt" title="${nomeEsc}">${nomeEsc}</td>` +
       `<td class="num">${fmt(l.inv_fb)}</td>` +
       `<td class="num">${fmt(l.inv_cd)}</td>` +
       `<td class="num">${fmt(l.inv_lf)}</td>` +
@@ -96,6 +99,8 @@ function renderLinhas(linhas) {
   tbody.innerHTML = html;
   document.getElementById('resumo').textContent = `${linhas.length} produtos`;
   wireInlineEdit();
+  // Re-aplica offset sticky col 2 nos novos <td> (CSS baseline pode divergir)
+  if (typeof syncStickyCol2Offset === 'function') syncStickyCol2Offset();
 }
 
 function getCsrfToken() {
@@ -247,4 +252,82 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
 });
 document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
 document.getElementById('filtro-divergente').addEventListener('change', aplicarFiltros);
+
+// P3 — Resize manual de colunas (handle drag na borda direita do TH).
+// Atua tanto no <th> quanto em todos <td> da mesma coluna (mesmo indice).
+// Tambem sincroniza offset sticky da col 2 com largura real da col 1
+// (CSS baseline left:90px pode divergir por padding/border).
+function wireColResize() {
+  const ths = document.querySelectorAll('#tabela-confronto thead th');
+  ths.forEach((th, idx) => {
+    if (th.querySelector('.inv-col-resize-handle')) return;
+    const handle = document.createElement('div');
+    handle.className = 'inv-col-resize-handle';
+    handle.dataset.col = idx;
+    th.appendChild(handle);
+    handle.addEventListener('mousedown', startResize);
+  });
+  // Sincroniza offset sticky col 2 com largura REAL da col 1 (no init)
+  syncStickyCol2Offset();
+}
+
+function syncStickyCol2Offset() {
+  const th1 = document.querySelector('#tabela-confronto thead th:nth-child(1)');
+  if (!th1) return;
+  const w1 = th1.getBoundingClientRect().width;
+  document.querySelectorAll(
+    '#tabela-confronto th:nth-child(2), #tabela-confronto td:nth-child(2)'
+  ).forEach(el => { el.style.left = w1 + 'px'; });
+}
+
+function startResize(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const handle = e.currentTarget;
+  const th = handle.parentElement;
+  const colIdx = parseInt(handle.dataset.col, 10);
+  const startX = e.clientX;
+  const startW = th.getBoundingClientRect().width;
+  // Em table-layout:fixed, <col> e' a fonte canonica da width da coluna.
+  // Tambem fixamos width no <th> como reforco (caso colgroup tenha quirk).
+  const col = document.querySelector(
+    `#tabela-confronto colgroup col:nth-child(${colIdx + 1})`
+  );
+  handle.classList.add('dragging');
+
+  function setColWidth(w) {
+    const px = w + 'px';
+    if (col) col.style.width = px;
+    // Reforco: width inline no <th> (alguns navegadores tratam <col> como
+    // sugestao; inline style no <th> vence)
+    th.style.width = px;
+    th.style.maxWidth = px;
+    th.style.minWidth = px;
+  }
+
+  function onMove(ev) {
+    // Permite encolher ate 20px; texto cortado via overflow:hidden + ellipsis
+    const newW = Math.max(20, startW + (ev.clientX - startX));
+    setColWidth(newW);
+    // Recalcula offset sticky da coluna 2 se mudou a 1
+    if (colIdx === 0) {
+      document.querySelectorAll(
+        '#tabela-confronto th:nth-child(2), #tabela-confronto td:nth-child(2)'
+      ).forEach(el => { el.style.left = newW + 'px'; });
+    }
+  }
+  function onUp() {
+    handle.classList.remove('dragging');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// Inicializa handles uma vez (thead nao re-renderiza, so tbody)
+document.addEventListener('DOMContentLoaded', wireColResize);
+// Fallback: chamar tambem apos carregar (caso DOMContentLoaded ja tenha disparado)
+wireColResize();
+
 carregar();

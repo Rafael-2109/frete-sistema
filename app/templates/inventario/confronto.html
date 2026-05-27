@@ -1,87 +1,91 @@
 {% extends "base.html" %}
 {% block title %}Inventário — Confronto {{ ciclo.codigo }}{% endblock %}
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <h2 class="mb-0">Confronto — {{ ciclo.codigo }}</h2>
-      <small class="text-muted">Snapshot físico: {{ ciclo.data_snapshot.strftime('%d/%m/%Y') }}</small>
+<div class="inv-confronto-container">
+  <!-- Linha unica: filtros + status snapshot + botoes -->
+  <div class="inv-toolbar">
+    <input id="filtro-busca" class="form-control form-control-sm inv-filtro-busca"
+           placeholder="Filtrar cod/produto...">
+    <div class="form-check form-check-inline mb-0">
+      <input id="filtro-divergente" class="form-check-input" type="checkbox">
+      <label class="form-check-label small" for="filtro-divergente">Só Δ ≠ 0</label>
     </div>
-    <div>
-      <span class="me-2 inv-snapshot-status {% if not last_refresh %}vazio{% endif %}"
-            id="ts-snapshot-wrapper"
-            title="{% if not last_refresh %}Clique em 'Atualizar Odoo' para popular as colunas COMPRAS, PA, COMP., FB-O, CD-O, LF-O{% endif %}">
-        Snapshot Odoo:
-        <span id="ts-snapshot">
-          {{ last_refresh.strftime('%d/%m/%Y %H:%M') if last_refresh else 'NUNCA GERADO — clique Atualizar Odoo' }}
-        </span>
-      </span>
-      <button id="btn-refresh" class="btn btn-sm btn-outline-secondary">
-        <i class="fas fa-sync"></i> Atualizar Odoo
-      </button>
-      <a href="{{ url_for('inventario.confronto_export', ciclo_id=ciclo.id) }}"
-         class="btn btn-sm btn-success">
-        <i class="fas fa-file-excel"></i> Exportar XLSX
-      </a>
-      <a href="{{ url_for('inventario.listar_ajustes', ciclo_id=ciclo.id) }}"
-         class="btn btn-sm btn-outline-primary">
-        Ajustes Manuais
-      </a>
-      <a href="{{ url_for('inventario.listar_ciclos') }}"
-         class="btn btn-sm btn-link">Ciclos</a>
-    </div>
+    <span id="resumo" class="text-muted small inv-resumo"></span>
+    <span class="inv-snapshot-status {% if not last_refresh %}vazio{% endif %}"
+          id="ts-snapshot-wrapper"
+          title="{% if not last_refresh %}Clique em 'Atualizar Odoo' para popular as colunas COMPRAS, PA, COMP., FB-O, CD-O, LF-O{% endif %}">
+      Snapshot: <span id="ts-snapshot">{{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else 'NUNCA' }}</span>
+    </span>
+    <button id="btn-refresh" class="btn btn-sm btn-outline-secondary" title="Atualizar Odoo">
+      <i class="fas fa-sync"></i> Atualizar Odoo
+    </button>
+    <a href="{{ url_for('inventario.confronto_export', ciclo_id=ciclo.id) }}"
+       class="btn btn-sm btn-success" title="Exportar XLSX">
+      <i class="fas fa-file-excel"></i> XLSX
+    </a>
+    <a href="{{ url_for('inventario.listar_ajustes', ciclo_id=ciclo.id) }}"
+       class="btn btn-sm btn-outline-primary">Ajustes</a>
+    <a href="{{ url_for('inventario.listar_ciclos') }}"
+       class="btn btn-sm btn-link">Ciclos</a>
   </div>
 
-  <div class="row g-2 mb-3 align-items-center">
-    <div class="col-3">
-      <input id="filtro-busca" class="form-control form-control-sm"
-             placeholder="Filtrar cod/produto...">
-    </div>
-    <div class="col-3">
-      <div class="form-check form-check-inline">
-        <input id="filtro-divergente" class="form-check-input" type="checkbox">
-        <label class="form-check-label">Só com diferença |Δ| &gt; 1</label>
-      </div>
-    </div>
-    <div class="col-6 text-end">
-      <span id="resumo" class="text-muted small"></span>
-    </div>
-  </div>
-
-  <div id="job-progress" class="d-none alert alert-info py-2">
-    <div class="progress" style="height:8px"><div class="progress-bar" style="width:0%"></div></div>
-    <small class="mt-1 d-block">Atualizando Odoo... <span id="job-msg"></span></small>
+  <div id="job-progress" class="d-none alert alert-info py-1 mb-1 inv-progress">
+    <div class="progress" style="height:6px"><div class="progress-bar" style="width:0%"></div></div>
+    <small class="d-block">Atualizando Odoo... <span id="job-msg"></span></small>
   </div>
 
   <div class="inv-tabela-wrapper">
     <table id="tabela-confronto" class="table table-sm table-striped inv-tabela">
+      <colgroup>
+        <col style="width:90px">   <!-- cod -->
+        <col style="width:260px">  <!-- produto -->
+        <col style="width:80px">   <!-- FB -->
+        <col style="width:80px">   <!-- CD -->
+        <col style="width:80px">   <!-- LF -->
+        <col style="width:90px">   <!-- TOTAL -->
+        <col style="width:90px">   <!-- COMPRAS -->
+        <col style="width:90px">   <!-- PA -->
+        <col style="width:90px">   <!-- COMP. -->
+        <col style="width:90px">   <!-- VENDAS -->
+        <col style="width:90px">   <!-- CONSUMO -->
+        <col style="width:90px">   <!-- PRODUÇÃO -->
+        <col style="width:90px">   <!-- AJ.LOCAL -->
+        <col style="width:90px">   <!-- AJ.QTD -->
+        <col style="width:90px">   <!-- ODOO -->
+        <col style="width:90px">   <!-- MOV -->
+        <col style="width:90px">   <!-- SIST -->
+        <col style="width:90px">   <!-- ODOO-MOV -->
+        <col style="width:90px">   <!-- SIST-MOV -->
+        <col style="width:90px">   <!-- FB-O -->
+        <col style="width:90px">   <!-- CD-O -->
+        <col style="width:90px">   <!-- LF-O -->
+      </colgroup>
       <thead>
         <tr>
-          <th class="txt" style="width:90px">cod</th>
-          <th class="txt" style="width:260px">produto</th>
-          <th class="num" style="width:80px">FB</th>
-          <th class="num" style="width:80px">CD</th>
-          <th class="num" style="width:80px">LF</th>
-          <th class="num" style="width:90px">TOTAL</th>
-          <th class="num" style="width:90px">COMPRAS</th>
-          <th class="num" style="width:90px">PA</th>
-          <th class="num" style="width:90px">COMP.</th>
-          <th class="num" style="width:90px">VENDAS</th>
-          <th class="num" style="width:90px">CONSUMO</th>
-          <th class="num" style="width:90px">PRODUÇÃO</th>
-          <th class="txt" style="width:90px">AJ.LOCAL</th>
-          <th class="num" style="width:90px">AJ.QTD</th>
-          <th class="num" style="width:90px"
-              title="Soma estoque_fb+cd+lf do snapshot Odoo">ODOO</th>
-          <th class="num" style="width:90px"
-              title="MOV = inv_total + compras + pa + componente. Congelado no snapshot {{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else '(nao gerado)' }}.">MOV</th>
-          <th class="num" style="width:90px"
+          <th class="txt">cod</th>
+          <th class="txt">produto</th>
+          <th class="num">FB</th>
+          <th class="num">CD</th>
+          <th class="num">LF</th>
+          <th class="num">TOTAL</th>
+          <th class="num">COMPRAS</th>
+          <th class="num">PA</th>
+          <th class="num">COMP.</th>
+          <th class="num">VENDAS</th>
+          <th class="num">CONSUMO</th>
+          <th class="num">PRODUÇÃO</th>
+          <th class="txt">AJ.LOCAL</th>
+          <th class="num">AJ.QTD</th>
+          <th class="num" title="Soma estoque_fb+cd+lf do snapshot Odoo">ODOO</th>
+          <th class="num"
+              title="MOV = inv_total + compras + pa + componente + vendas (vendas tem sinal negativo). Congelado no snapshot {{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else '(nao gerado)' }}.">MOV</th>
+          <th class="num"
               title="SIST = sum MovimentacaoEstoque ATIVA (sem filtro data). Congelado no snapshot {{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else '(nao gerado)' }}.">SIST</th>
-          <th class="num" style="width:90px">ODOO-MOV</th>
-          <th class="num" style="width:90px">SIST-MOV</th>
-          <th class="num" style="width:90px">FB-O</th>
-          <th class="num" style="width:90px">CD-O</th>
-          <th class="num" style="width:90px">LF-O</th>
+          <th class="num">ODOO-MOV</th>
+          <th class="num">SIST-MOV</th>
+          <th class="num">FB-O</th>
+          <th class="num">CD-O</th>
+          <th class="num">LF-O</th>
         </tr>
       </thead>
       <tbody id="tbody-confronto"><tr><td colspan="22">Carregando...</td></tr></tbody>
