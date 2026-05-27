@@ -5,8 +5,9 @@ description: |
   de cadastro fiscal de produtos no Odoo ANTES de operacoes que tocam SEFAZ
   (faturamento inventario, transferencia inter-company, NF de inventario).
   Cobre G017 (NCM ausente), G018 (weight=0), G035 (barcode invalido GTIN),
-  G014 (lote vencido com saldo) + D-OPS-2 (duplicacao em pipeline ativo) +
-  D-OPS-3 (tracking='none' info). Perfil V1: 'inventario' (Skill 8 faturando-odoo).
+  G038 (l10n_br_origem ausente — NOVO v22+ 2026-05-27), G014 (lote vencido com saldo)
+  + D-OPS-2 (duplicacao em pipeline ativo) + D-OPS-3 (tracking='none' info).
+  Perfil V1: 'inventario' (Skill 8 faturando-odoo).
   Roadmap perfis: 'venda-cliente' (V2), 'compras-importacao' (V3+).
 
   USAR QUANDO:
@@ -48,6 +49,7 @@ description: |
   - G017 (NCM)        — BLOQUEIO ('strict')
   - G018 (weight=0)   — WARN (fallback aplicado no picking F5b->F5c)
   - G035 (barcode)    — BLOQUEIO ou AUTO-FIX
+  - G038 (l10n_br_origem) — BLOQUEIO (NOVO v22+; sem auto-fix por design — operador seta '0' Nacional / '1' Estr. importacao / etc; sem isso modal "Aviso: Produtos sem Origem" trava Playwright SEFAZ em loop silencioso 15 tentativas)
   - G014 (lote venc.) — WARN (ETAPA B do faturamento resolve)
   - D-OPS-2 (duplicacao pipeline) — BLOQUEIO
   - D-OPS-3 (tracking='none') — INFO (apos fix Skill 2 v14b nao bloqueia)

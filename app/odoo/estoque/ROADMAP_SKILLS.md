@@ -38,7 +38,42 @@
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
-### Próximo passo (v22+) — pipeline retry + remoção tampão + refator nomenclatura
+### Próximo passo (v23+) — codificar G039 + investigar G-PERM-1 + completar passo 9-10 caminho B
+
+**v22+ CONCLUÍDA** (2026-05-27 — commit `7f6eb196`):
+1. ✅ Fix G-AUDIT-3 em Skill 5 `criar_picking_inter_company` (segrega state=cancel da idempotência) + 2 pytest
+2. ✅ Sub-skill C5 estendida com check G038 (`l10n_br_origem` ausente) + 2 pytest + gotcha completo G038
+3. ✅ Fix produto PROD 104000046 (`l10n_br_origem='0'` Nacional) via XML-RPC
+4. ✅ Pipeline retry REAL A→D fim-a-fim: G-AUDIT-3 funcionou (picking 321600 cancel ignorado, NOVO 321601 criado), SEFAZ autorizou chave `35260561724241000178550010000945661007164482` em ~50s
+5. ✅ Caminho B FLUXO L3 1.2.x validado PARCIAL em PROD pela 1ª vez: DFe 43533 + PO C2619591 (id=42419) order_line OK + workaround team 143 destravou state='purchase' + button_approve gerou picking 321617
+6. ✅ Descoberta G039 (purchase.team gatekeeper LF) + Descoberta G-PERM-1 (ir.rule dfe.line Rafael)
+7. ✅ Docs: PROTECAO N23 RESOLVIDO + N24 NOVO; CLAUDE.md §14 D-V22-1/2/3; GOTCHAS.md tabela; G038 detalhe
+8. ❌ PENDENTE v23+: passo 9 (action_create_invoice) bloqueado por G-PERM-1; 4 tasks v23+ (13-16)
+
+### Estado dos ajustes 176013/176014 (v23+ retoma)
+- id=176013/176014: `status='EXECUTADO', fase_pipeline='F5e_SEFAZ_OK', picking=321601, invoice=716448, chave_nfe='35260561724241000178550010000945661007164482'`
+- Picking 321600 (FB/SAI/IND/01601): `state=cancel` (preservado pelo fix G-AUDIT-3)
+- Picking 321601 (FB/SAI/IND/01602): `state=done` (criado v22+)
+- Picking 321617 (LF/IN/...): gerado v22+ via button_approve PO 42419
+- Invoice 716448 RPI/2026/00238: `state=posted, situacao_nf='autorizado', chave válida`
+- DFe 43533 (LF): criado v22+ via caminho B com lines populadas
+- PO 42419 C2619591: `state=purchase, team_id=143 'Aprovação LF - RAFAEL', picking_ids=[321617]`
+- Invoice ENTRADA LF: NÃO CRIADA (passo 9 bloqueado G-PERM-1)
+- Purchase team 143: criado v22+ (user_id=42, company=5)
+
+**v23+ alvo**:
+1. **S0 INVESTIGAR G-PERM-1** (task 15): listar `ir.rule` ativos em `l10n_br_ciel_it_account.dfe.line` + identificar rule que filtra Rafael (uid=42). Workaround: rodar pipeline com user com permissão.
+2. **S1 CODIFICAR G039 INVARIANTE** (task 16): Skill 7 novo átomo `garantir_purchase_team(user_id, company_id)` + hook em `confirmar_po` OU `_executar_etapa_f_via_fluxo_l3` — SEMPRE criar/setar purchase.team ANTES de button_confirm.
+3. **S2 FIX RAIZ CONTADOR F** (task 13): `_contar_pendentes_por_etapa` linha 4458 — ETAPA F filtro `status IN ('PROPOSTO','APROVADO','EXECUTADO')`.
+4. **S3 COMPLETAR PASSO 9+10 CAMINHO B**: pós-S0 desbloqueio, re-rodar resume F → invoice entrada + ajustes F5f_OK.
+5. **S4 INVESTIGAR PO to_approve regra exata** (task 14): comparar canary 627348 (caminho A autorizado) com PO 42419 (caminho B). Diferença: fiscal_position? valor? team_id?
+6. **S2-S7 ORIGINAIS v22+** (se sobrar tempo): remoção tampão criar_picking_entrada_destino_manual + V1 STRICT wrapper + ETAPAS E/F legacy; refator AP6; expand CONSTANTS FB/CD; folhas L3 1.1/1.3/2.3; C5 G007+l10n_br_tipo_produto; lote literal P-15/05.
+
+**Estimativa**: 2-3 sessões. **Bloqueia**: S2 remoção tampão depende de caminho B 100% (passo 9+10).
+
+---
+
+### Próximo passo (v22+) — pipeline retry + remoção tampão + refator nomenclatura (ARQUIVADO — ver bloco v23+ acima)
 
 **v20+ CONCLUÍDA** (2026-05-26):
 1. ✅ S1 cross-refs final (gestor-estoque-odoo árvore + ROUTING_SKILLS + fachada SKILL.md `faturando-odoo` Receita 5).
