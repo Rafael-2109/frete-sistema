@@ -131,6 +131,7 @@ O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem c
 | `operando-reservas-odoo` | stock.move.line + stock.quant (residual) — opera reservas órfãs do picking | [`scripts/reserva.py`](scripts/reserva.py) (StockReservaService) | C1/C2 | 🟡 **mín viável** (3 átomos · 6 pickings/15 quants em prod) |
 | `operando-picking-odoo` | stock.picking (cancelar/validar/devolver + 3 átomos inter-company v15a + 1 átomo NOVO v19+ `preencher_lotes_picking`; `criar_picking_entrada_destino_manual` 🛑 DEPRECATED v19+ AP2) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **7 átomos LIVE v19+ + G-AUDIT-3 fix v22+** (70 pytest = 68 + 2 net v22+ idempotência cancel; G019/G020 fechada + G-AUDIT-3 codificada) |
 | `escriturando-odoo` ✅ ABRANGENTE v19+ + G039 v23+ + B-V23-1/2 v23.5+ | account.move + DFe (entrada — escritura NF SEFAZ-OK no destino) | [`scripts/escrituracao.py`](scripts/escrituracao.py) (EscrituracaoLfService) | **HÍBRIDO** — V1 STRICT `criar_recebimento_orchestrado` (wrapper deprecado v20+) + **9 átomos ABRANGENTES**: 7 v19+ (`buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida` ⚡com fix B-V23-1 v23.5+ batch write dfe.line.company_id pós-poll⚡, `escriturar_dfe`, `gerar_po_from_dfe` ⚡com hook B-V23-2 v23.5+ batch write PO.line.account_id por company⚡, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`) + 2 v23+/v23.5+ (`garantir_purchase_team` G039 idempotente por user+company, `resolver_account_id_por_company` helper B-V23-2). Compostos via FLUXO L3 1.2.1/1.2.2 (caminho A/B) | 🟡 **ABRANGENTE LIVE** (45 pytest = 11 V1 + 22 v19+ + 7 G039 + 3 B-V23-1 + 5 B-V23-2 átomo + 4 B-V23-2 hook gerar_po; PROD canary v23+: invoice ENTIN/2026/05/0055 posted; AP1+AP4 ✅; G039+B-V23-1+B-V23-2 ✅ |
+| `faturando-odoo` ✅ ATÔMICA v24+ (NOVA — AP6 refator) | account.move (NF SAIDA inter-company) | [`scripts/faturamento.py`](scripts/faturamento.py) (FaturamentoInvoiceService) | **ATÔMICA L2** — **5 átomos** espelhando Skill 7 ABRANGENTE v19+: `validar_invoice_constants` (READ pre-cond) · `liberar_faturamento` (delega Skill 5 LEGACY) · `polling_invoice` (delega Skill 5 LEGACY `aguardar_invoice_do_robo`) · `validar_invoice_pos_robo` (G029+G007+G034 via `_invoice_helpers`) · `transmitir_sefaz` (Playwright IRREVERSIVEL + D7 HARD_FAIL + D8.3 idempotência + CRITICAL-1 commit pós-SEFAZ + MED C-1/C-2 cstat). Composição via FLUXO L3 1.1.x (saida pura ⬜) ou via orchestrator C3 LEGACY `inventario_pipeline` (migração v25+) | 🟡 **ATÔMICA LIVE v24+** (28 pytest verdes; ~750 LOC; AP6 RESOLVIDO PARCIAL — orchestrator C3 LEGACY ainda usa lógica inline em paralelo; migração para usar os 5 átomos planejada v25+ via opt-in `--usar-skill8-atomica-v25`) |
 
 > **Nota Tabela 1**: estas são as únicas skills WRITE atômicas L2. Cada uma tem `.claude/skills/<nome>/SKILL.md` + scripts/. O subagente as conhece pela árvore de decisão.
 
@@ -258,18 +259,23 @@ Cada skill WRITE PODE expor `--modo {listar, detalhar}` do **seu objeto principa
 - **COMO EVITAR**: ANTES de criar gotcha sobre operações fiscais, ler `operacoes_fiscais.py` + `picking_types.py` **INTEIROS** (não apenas grep). Confirmar se o gotcha proposto contradiz docstring existente.
 - **CORREÇÃO v18 Fase 0**: G037 reescrito com escopo restrito ao caminho B paliativo (picking ETAPA F manual sem PO). v19+ AP2 resolvido remove o caso degenerado — `cfop_esperado` volta a ser apenas informacional/log após v20+ canary remover criar_picking_entrada_destino_manual.
 
-### AP6 ⏳ PENDENTE v20+ — Confusão nomenclatura "Skill 8 = orchestrator C3" vs átomo L2 RESTRITA
+### AP6 ⏳ RESOLVIDO PARCIAL v24+ — Confusão nomenclatura "Skill 8 = orchestrator C3" vs átomo L2 RESTRITA
 
-- **CAUSA RAIZ**: catálogo §6 Tabela 2 cataloga `faturando-odoo` como orchestrator C3 pipeline A-F (~4150 LOC) + tem fachada SKILL.md em `.claude/skills/faturando-odoo/` fingindo ser skill L2. Definição correta (Rafael v19+): **Skill 8 ATÔMICA L2** = validar constants + `action_liberar_faturamento` + polling invoice + validar fatura vs constants + SEFAZ Playwright (5 operações encapsuladas, 1 objeto Odoo = `account.move`). Orchestrator C3 que compõe pipeline A-F é coisa DIFERENTE — atualmente chamado de "Skill 8" por confusão histórica.
+- **CAUSA RAIZ**: catálogo §6 Tabela 2 catalogava `faturando-odoo` como orchestrator C3 pipeline A-F (~5111 LOC) + tinha fachada SKILL.md em `.claude/skills/faturando-odoo/` fingindo ser skill L2. Definição correta (Rafael v19+): **Skill 8 ATÔMICA L2** = validar constants + `action_liberar_faturamento` + polling invoice + validar fatura vs constants + SEFAZ Playwright (5 operações encapsuladas, 1 objeto Odoo = `account.move`). Orchestrator C3 que compõe pipeline A-F é coisa DIFERENTE.
 - **CONSEQUÊNCIA**: durante v19+, eu (Claude) afirmei "Skill 8 = SAÍDA delega Skill 2" — frase errada porque skills L2 não delegam (composição = orchestrator C3 / FLUXO L3). Rafael corrigiu. A confusão de nomes induziu o erro.
 - **COMO EVITAR**: ao referenciar "Skill 8" futuramente, especificar:
-  - **Skill 8 ATÔMICA L2** (`faturando-odoo` definição correta): validar+liberar+polling+SEFAZ sobre `account.move`. **Não existe ainda** — refator v20+.
-  - **`inventario_pipeline` C3** (atual `faturamento_pipeline.py` orchestrator): pipeline A-F que internamente compõe Skill 2 + Skill 5 + Skill 8 ATÔMICA (futura) + Skill 7 ABRANGENTE via fluxos L3 1.2.x.
-- **REFATOR v20+**:
-  1. Criar Skill 8 ATÔMICA L2 extraindo as 5 operações C+D do orchestrator atual.
-  2. Renomear orchestrator `faturamento_pipeline.py` para `inventario_pipeline.py` (ou outro nome que reflita "compõe múltiplos casos de negócio inter-company").
-  3. Atualizar §6 Tabela 1 (Skills L2): adicionar `faturando-odoo` ATÔMICA. Tabela 2 (Orchestrators C3): renomear entrada para `inventario_pipeline`.
-  4. Ativar opt-in: orchestrator chama `executar_fluxo_l3_1_2_x` em vez das ETAPAS E/F legacy. Após canary REAL PROD validar, remove ETAPA E/F legacy + remove `criar_picking_entrada_destino_manual`.
+  - **Skill 8 ATÔMICA L2** (`faturando-odoo` definição correta, ✅ LIVE v24+): 5 átomos em `app/odoo/estoque/scripts/faturamento.py` sobre `account.move`. SKILL.md fachada reescrita v24+ aponta para os 5 átomos.
+  - **`inventario_pipeline` C3** (atual `faturamento_pipeline.py` orchestrator — rename pendente v25+): pipeline A-F + recovery + opt-in `--usar-fluxo-l3-v19` que compõe Skill 2 + Skill 5 + Skill 7 ABRANGENTE via FLUXO L3 1.2.x. ETAPAS C+D ainda têm lógica inline em paralelo (refator v25+).
+- **RESOLUÇÃO PARCIAL v24+ (2026-05-27)**:
+  1. ✅ Criada Skill 8 ATÔMICA L2 em `app/odoo/estoque/scripts/faturamento.py` (~750 LOC) com 5 átomos espelhando padrão Skill 7 ABRANGENTE: `validar_invoice_constants` · `liberar_faturamento` · `polling_invoice` · `validar_invoice_pos_robo` · `transmitir_sefaz`. Cada átomo dry-run-first + idempotente + invariantes G016/G019/G020/G029/G007/G034/D7/D8.3/D9/CRITICAL-1/MED C-1/MED C-2 codificados intra-átomo.
+  2. ✅ 28 pytest verdes em `tests/odoo/services/test_faturamento_invoice_service.py` (baseline 622 → 650).
+  3. ✅ SKILL.md fachada reescrita: frontmatter aponta para "Skill 8 ATÔMICA L2 v24+" + corpo adiciona seção "5 ÁTOMOS L2" com tabela contratos + exemplo composição típica.
+  4. ✅ Tabela 1 §6 adicionada entry `faturando-odoo` ATÔMICA L2.
+- **PENDENTE v25+ (refator profundo + canary)**:
+  1. ⬜ Opt-in `--usar-skill8-atomica-v25` no `executar_pipeline_bulk` (similar ao `--usar-fluxo-l3-v19`): ETAPAS C+D delegam à nova Skill 8 ATÔMICA em vez de lógica inline.
+  2. ⬜ Renomear `faturamento_pipeline.py` → `inventario_pipeline.py` + alias compat.
+  3. ⬜ Canary REAL PROD do opt-in em 1-5 ajustes para validar paridade vs legacy.
+  4. ⬜ Após canary OK: remover ETAPAS C+D legacy (~500 LOC) + migrar 14 testes para `test_faturamento_invoice_service.py`.
 
 ---
 
@@ -399,6 +405,26 @@ app/odoo/estoque/
 - **Sintoma**: plano inicial v19+ propunha átomo `criar_dfe_manual(dados_campo_a_campo)` para criar DFe sem XML. Realidade: service externo SEMPRE faz `create('l10n_br_ciel_it_account.dfe', {'company_id': X, 'l10n_br_xml_dfe': xml_b64})`. Odoo parseia tudo via `action_processar_arquivo_manual`. Sem XML não há caminho suportado.
 - **Correção v19+**: átomo renomeado para `criar_dfe_a_partir_do_invoice_saida(invoice_id_saida, company_destino)` — extrai `account.move.l10n_br_xml_aut_nfe` (XML autorizado já existente em qualquer NF SEFAZ-OK) e usa como input. Para NF nossa (transferência interna FB↔LF↔CD), XML existe; para CTe/Compras (externos), átomo recusa.
 - **Como evitar**: ANTES de propor átomo cross-skill que toca Odoo, minerar o pattern equivalente já validado em PROD (Explore READ-only — não MEXER no código-fonte se for marcado NÃO MEXER).
+
+### D-V24-1 — AP6 nomenclatura "Skill 8 = orchestrator C3" RESOLVIDO PARCIAL via criar Skill 8 ATÔMICA L2 separada (2026-05-27)
+
+- **Detectado em**: 2026-05-27 v24+ início — sessão pulou S1 bulk REAL PROD (ciclo INVENTARIO_2026_05 só tinha 2 ajustes museum 176013/14 F5f_ENTRADA_OK; FATURAMENTO_LF_2026_05_20 só PERDA/DEV destino=FB não-suportado pelas CONSTANTS atuais; 30 INDUSTR em F5d_BLOCKER_TX = risco SEFAZ reincide) → escolha Rafael: refator AP6 puro código.
+- **Sintoma**: catálogo §6 tabela 2 catalogava `faturando-odoo` como orchestrator C3 + tinha fachada SKILL.md fingindo ser skill L2 (inerentemente inconsistente — orchestrators C3 não são skills L2). Operações C+D do orchestrator (ETAPAS C+D ~1500 LOC inline) duplicavam lógica que deveria viver em Skill 8 ATÔMICA dedicada sobre `account.move`.
+- **Causa raiz histórica**: AP6 documentado v19+ como pendente v20+ → mantido pendente v20+/v21+/v22+/v23+ por priorização de outros fixes (G-AUDIT-1/2/3, G038, G039, B-V23-1/2). v24+ finalmente endereçou.
+- **Correção v24+ (2026-05-27)**:
+  - ✅ Criada Skill 8 ATÔMICA L2 em `app/odoo/estoque/scripts/faturamento.py` (FaturamentoInvoiceService, ~750 LOC) com 5 átomos espelhando padrão Skill 7 ABRANGENTE v19+: `validar_invoice_constants` · `liberar_faturamento` · `polling_invoice` · `validar_invoice_pos_robo` · `transmitir_sefaz`.
+  - ✅ Decisão arquitetural: **5 átomos SEPARADOS** (Rafael v24+) — contradiz recomendação inicial do Explore (1 átomo macro). Justificativa: macro é DEPRECATED pattern (wrapper Skill 7 V1 STRICT) violava AP1+AP4; átomos separados permitem recovery isolado por etapa + dry-run-first natural + idempotência por átomo + composição via FLUXO L3 ou orchestrator C3.
+  - ✅ 28 pytest verdes (`tests/odoo/services/test_faturamento_invoice_service.py`) cobrindo: validar_constants (4 testes — OK/divergência/invoice não existe/campo inválido); liberar_faturamento (5 testes — dry-run/bloqueado sem confirmar/picking não done/picking não existe/OK delega Skill 5); polling_invoice (4 testes — dry-run/OK/timeout/exceção); validar_invoice_pos_robo (5 testes — dry-run/bloqueado/perfil inválido/OK todas sub-etapas/OK_PARCIAL); transmitir_sefaz (8 testes — dry-run/bloqueado/ajustes vazios/OK propaga chave/idempotent skip/HARD_FAIL_CONFIG/CRITICAL-1 commit pós-SEFAZ/falha cstat) + 2 sanity constants.
+  - ✅ Baseline pytest: 622 → 650 verdes (+28 net).
+  - ✅ SKILL.md `.claude/skills/faturando-odoo/SKILL.md` reescrita: frontmatter aponta para "Skill 8 ATÔMICA L2 v24+" + corpo adiciona seção "5 ÁTOMOS L2" com contratos + exemplo composição.
+  - ✅ §6 Tabela 1 adicionada entry `faturando-odoo` ATÔMICA L2.
+- **PENDENTE v25+ (refator profundo)**:
+  - Opt-in `--usar-skill8-atomica-v25` no orchestrator (pattern espelhado de `--usar-fluxo-l3-v19`): ETAPAS C+D do `executar_pipeline_bulk` delegariam à nova Skill 8 ATÔMICA em vez de lógica inline. Default OFF preserva 100% legacy = zero regressão.
+  - Renomear `faturamento_pipeline.py` → `inventario_pipeline.py` + alias compat (preserva 8 imports atuais).
+  - Canary REAL PROD do opt-in em 1-5 ajustes para validar paridade vs legacy.
+  - Após canary OK: remove ETAPAS C+D legacy (~500 LOC) + migrar 14 testes para `test_faturamento_invoice_service.py`.
+- **LIÇÃO ATEMPORAL**: refators arquiteturais de larga escala (4400+ LOC orchestrator) devem seguir padrão "criar novo + opt-in + canary + remove legacy" em vez de big-bang. Pattern provado v20+ (`--usar-fluxo-l3-v19`) + v24+ (atômica Skill 8 criada antes de migrar orchestrator).
+- **Onde**: `app/odoo/estoque/scripts/faturamento.py` + `tests/odoo/services/test_faturamento_invoice_service.py` + `.claude/skills/faturando-odoo/SKILL.md` + §6 Tabela 1 + §6.5 AP6 atualizado.
 
 ### D-V23-3 — Skill 7 `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id em company FONTE (B-V23-2 ✅ CODIFICADO v23.5+)
 

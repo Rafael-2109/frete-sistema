@@ -1,25 +1,35 @@
 ---
 name: faturando-odoo
 description: >-
-  Skill WRITE (orchestrator C3 macro) para FATURAR SAIDA inter-company de
-  inventario: NF (account.move) -> robo CIEL IT XML-RPC -> SEFAZ via Playwright
-  (IRREVERSIVEL). Constituição §6: Skill 8 = SO SAIDA; par da Skill 7
-  `escriturando-odoo` (= SO ENTRADA RecebimentoLf/DFe). Quem une saida + entrada
-  = FLUXO L3 (1.3-transferencia-completa.md ⬜ a escrever v20+).
+  Skill WRITE ATOMICA L2 (v24+ AP6 refator) para 5 operacoes sobre `account.move`
+  (NF SAIDA inter-company): validar_invoice_constants (pre-cond fiscal) +
+  liberar_faturamento (dispara robo CIEL IT via XML-RPC) + polling_invoice
+  (aguarda criacao) + validar_invoice_pos_robo (G029+G007+G034) + transmitir_sefaz
+  (Playwright SEFAZ IRREVERSIVEL).
 
-  Pipeline A->B->C->D->E->F com PRE-FLIGHT C5 + 3 modos CLI (bulk / pre-flight
-  / resume v18). Compoe Skill 2 v2 (ETAPA A) + Skill 5 v15a 3 atomos inter-company
-  (F5a/F5b/F5c + ETAPA F G023) + Playwright SEFAZ (ETAPA D irreversivel) +
-  Skill 7 `escriturando-odoo` (ETAPA E delegada).
+  Constituicao §6 Tabela 1: Skill 8 = SO SAIDA `account.move`; par da Skill 7
+  `escriturando-odoo` (= SO ENTRADA DFe+account.move entrada). Quem une saida +
+  entrada = FLUXO L3 1.3-transferencia-completa.md (⬜ a escrever v25+) ou
+  orchestrator C3 `inventario_pipeline` (atual `faturamento_pipeline.py`).
 
-  Usar quando o pedido eh: "fatura a NF inter-company X", "executa onda completa
-  de faturamento LF/CD/FB", "retoma faturamento travado em D apos crash",
-  "smoke 1 ajuste end-to-end", "pre-flight cadastro fiscal antes de bulk",
-  "transmite NFs via SEFAZ".
+  V24+ AT0MICA LIVE (2026-05-27): 5 atomos componiveis em
+  `app/odoo/estoque/scripts/faturamento.py` (~750 LOC, 28 pytest verdes).
+  Espelha pattern Skill 7 ABRANGENTE v19+ (7 atomos). Cada atomo dry-run-first
+  + idempotente intra-Odoo + auto-seguro (G016/G019/G020/G029/G007/G034/D7/D8/
+  D9/CRITICAL-1/MED C-1/MED C-2 codificados intra-atomo).
 
-  V1 LIVE (2026-05-26 v17.5+v18): ETAPA F canary DEV_FB_LF + TRANSFERIR_FB_CD
-  via flag `--auto-confirma-direcao-nova` (PALIATIVO — caminho B; refator v19+
-  para FLUXO L3 que invoca Skill 7 escriturando-odoo extrair PO+picking nativo).
+  Orchestrator C3 LEGACY `faturamento_pipeline.py` (~5111 LOC, pipeline A-F +
+  recovery + opt-in --usar-fluxo-l3-v19) ainda existe com ETAPAs C+D inline.
+  Migracao para usar os 5 atomos novos planejada v25+ via opt-in
+  `--usar-skill8-atomica-v25` (canary primeiro, depois remove legacy).
+
+  Usar atomos diretamente quando o pedido eh: "valida constants invoice X",
+  "libera faturamento picking Y", "aguarda invoice do robo CIEL IT", "aplica
+  G029+G007+G034 invoice Z", "transmite NF W via SEFAZ".
+
+  Usar orchestrator quando o pedido eh: "executa onda completa de faturamento
+  LF/CD/FB", "retoma faturamento travado em D apos crash", "smoke 1 ajuste
+  end-to-end", "pre-flight cadastro fiscal antes de bulk".
 
   NAO USAR PARA:
   - Escrituracao ENTRADA (RecebimentoLf/DFe) -> Skill 7 escriturando-odoo
@@ -29,23 +39,91 @@ description: >-
   - Cancelar NF SEFAZ-autorizada (processo formal 24h) -> NAO ha atomo
   - Lancar CTe / despesa extra -> integracao-odoo (LancamentoOdooService 16 etapas)
 
-  `--dry-run` eh o DEFAULT no CLI; ETAPA D em real-run exige `--confirmar-sefaz`
-  (2 nivel — IRREVERSIVEL). ETAPA F canary direcoes novas exige
-  `--auto-confirma-direcao-nova`.
+  `dry_run=True` eh o DEFAULT em cada atomo + no orchestrator CLI; atomo
+  `transmitir_sefaz` em real-run exige `confirmar_sefaz=True` (2 nivel —
+  IRREVERSIVEL).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
-# faturando-odoo (WRITE — orchestrator C3 macro)
+# faturando-odoo (WRITE — Skill 8 ATÔMICA L2 v24+ + orchestrator C3 legacy)
 
-Skill **PIPELINE COMPLETO A-F LIVE v17.5+v18** (criada em 2026-05-25 v15b
-como esqueleto; A-F maturada v16+v17; revert ETAPA E + Skill 7 + ETAPA F
-canary v17.5; recovery `executar_pipeline_resume` v18). Constituicao:
-`app/odoo/estoque/CLAUDE.md` §6.
+Skill **ATÔMICA L2 LIVE v24+ (2026-05-27 AP6 refator)** com 5 átomos
+componíveis sobre `account.move` + orchestrator C3 LEGACY **PIPELINE COMPLETO
+A-F + RECOVERY + FLUXO L3 1.2.x LIVE v17.5+v18+v19+** (será migrado para usar
+os 5 átomos via opt-in v25+).
 
-Orchestrator: `app/odoo/estoque/orchestrators/faturamento_pipeline.py`
-(FaturamentoPipelineExecutor, ~4150 LOC).
+Service ATÔMICA L2: `app/odoo/estoque/scripts/faturamento.py`
+(FaturamentoInvoiceService, ~750 LOC, 28 pytest verdes — espelha pattern
+Skill 7 ABRANGENTE v19+).
+Orchestrator C3 LEGACY: `app/odoo/estoque/orchestrators/faturamento_pipeline.py`
+(FaturamentoPipelineExecutor, ~5111 LOC).
 Service-fonte legado (COMPAT, NAO MEXER): `app/odoo/services/inventario_pipeline_service.py` (1346 LOC, minerado em §7.2 do planejamento).
 Script-fonte macro (SUPERADO ao final v22+): `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC, minerado em §7.3).
+
+---
+
+## 5 ÁTOMOS L2 (v24+ AP6 — espelha Skill 7 ABRANGENTE)
+
+| # | Átomo | Pre-cond | Pos-cond | Idempotência |
+|---|-------|----------|----------|--------------|
+| 1 | `validar_invoice_constants(invoice_id, constants_esperadas, dry_run)` | account.move existe + campos suportados em CONSTANTS_CAMPOS_VALIDAVEIS | reporta divergencias (READ-only sempre) | n/a (READ-only) |
+| 2 | `liberar_faturamento(picking_id, ajuste_ids, dry_run, confirmar)` | stock.picking state='done' (G019/G020) | action_liberar_faturamento disparado; robo CIEL IT criará invoice em 3-30min | Skill 5 LEGACY codifica (delegado a `StockPickingService.liberar_faturamento`) |
+| 3 | `polling_invoice(picking_id, ajuste_ids, timeout_s, poll_interval_s, dry_run)` | picking ja com `liberar_faturamento` disparado | retorna invoice_id ou TIMEOUT | DELEGA `StockPickingService.aguardar_invoice_do_robo` (Skill 5 LEGACY) |
+| 4 | `validar_invoice_pos_robo(invoice_id, ajuste_id_primeiro, perfil, dry_run, confirmar)` | account.move criada pelo robo CIEL IT | G029 + G007 + G034 aplicados via `_invoice_helpers` (perfil V1 'inventario-inter-company') | helpers idempotentes (checam estado pre-existente) |
+| 5 | `transmitir_sefaz(invoice_id, ajuste_ids, max_tentativas, intervalo_retry, dry_run, confirmar_sefaz)` | account.move em F5d_INVOICE_GERADA + confirmar_sefaz=True | fase=F5e_SEFAZ_OK + chave_nfe propagada (D-OPS-2b) + status=EXECUTADO | D8.3 tripla (sem invoice_id / por invoice / por persistência) + CRITICAL-1 commit pós-SEFAZ |
+
+**Gotchas codificados intra-átomo** (inviolaveis): G016 commit_resilient SSL drop · G019/G020 picking state='done' · G029 payment_provider_id=38 · G007 price_unit fallback · G034 DEV_* fiscal_position · D5 SNAPSHOT meta · D7 HARD_FAIL_CONFIG aborta batch · D8 idempotência tripla · D9 re-fetch via safe_session_get · CRITICAL-1 commit POS-Playwright falha = NAO conta sucesso · MED C-1 situacao_nf != 'autorizado' em erro_msg · MED C-2 cstat+xmotivo em falha.
+
+**Composição típica** (1 ajuste end-to-end):
+
+```python
+from app.odoo.estoque.scripts.faturamento import FaturamentoInvoiceService
+from app.odoo.estoque.scripts.picking import StockPickingService
+from app.odoo.utils.connection import get_odoo_connection
+
+odoo = get_odoo_connection()
+picking_svc = StockPickingService(odoo=odoo)
+svc = FaturamentoInvoiceService(odoo=odoo, picking_svc=picking_svc)
+
+# 1. Validar pre-cond (opcional — orchestrator pode pular)
+r1 = svc.validar_invoice_constants(
+    invoice_id=716448,
+    constants_esperadas={'fiscal_position_id': 25, 'l10n_br_tipo_pedido': 'industrializacao'},
+)
+
+# 2. Liberar faturamento (real-run exige confirmar=True)
+r2 = svc.liberar_faturamento(
+    picking_id=321600, ajuste_ids=[176013, 176014],
+    ciclo='INVENTARIO_2026_05',
+    dry_run=False, confirmar=True,
+)
+
+# 3. Polling do robo CIEL IT
+r3 = svc.polling_invoice(
+    picking_id=321600, ajuste_ids=[176013, 176014],
+    timeout_s=1800, dry_run=False,
+)
+invoice_id = r3['invoice_id']
+
+# 4. Aplicar G029+G007+G034
+r4 = svc.validar_invoice_pos_robo(
+    invoice_id=invoice_id, ajuste_id_primeiro=176013,
+    ciclo='INVENTARIO_2026_05',
+    dry_run=False, confirmar=True,
+)
+
+# 5. Transmitir SEFAZ (IRREVERSIVEL — exige confirmar_sefaz=True)
+r5 = svc.transmitir_sefaz(
+    invoice_id=invoice_id, ajuste_ids=[176013, 176014],
+    ciclo='INVENTARIO_2026_05',
+    dry_run=False, confirmar_sefaz=True,
+)
+# r5['chave_nfe'] = chave SEFAZ autorizada
+```
+
+**Status v24+**: 5 átomos LIVE + 28 pytest verdes. Orchestrator C3 LEGACY
+ainda usa lógica inline (ETAPA C+D) em paralelo — refator profundo v25+ via
+opt-in `--usar-skill8-atomica-v25` (canary primeiro, depois remove legacy).
 
 ---
 
