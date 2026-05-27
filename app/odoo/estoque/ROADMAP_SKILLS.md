@@ -38,17 +38,40 @@
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
-### Próximo passo (v23+) — codificar G039 + investigar G-PERM-1 + completar passo 9-10 caminho B
+### Próximo passo (v24+) — codificar B-V23-1 + B-V23-2 (bugs cascateados) + bulk REAL
 
-**v22+ CONCLUÍDA** (2026-05-27 — commit `7f6eb196`):
-1. ✅ Fix G-AUDIT-3 em Skill 5 `criar_picking_inter_company` (segrega state=cancel da idempotência) + 2 pytest
-2. ✅ Sub-skill C5 estendida com check G038 (`l10n_br_origem` ausente) + 2 pytest + gotcha completo G038
-3. ✅ Fix produto PROD 104000046 (`l10n_br_origem='0'` Nacional) via XML-RPC
-4. ✅ Pipeline retry REAL A→D fim-a-fim: G-AUDIT-3 funcionou (picking 321600 cancel ignorado, NOVO 321601 criado), SEFAZ autorizou chave `35260561724241000178550010000945661007164482` em ~50s
-5. ✅ Caminho B FLUXO L3 1.2.x validado PARCIAL em PROD pela 1ª vez: DFe 43533 + PO C2619591 (id=42419) order_line OK + workaround team 143 destravou state='purchase' + button_approve gerou picking 321617
-6. ✅ Descoberta G039 (purchase.team gatekeeper LF) + Descoberta G-PERM-1 (ir.rule dfe.line Rafael)
-7. ✅ Docs: PROTECAO N23 RESOLVIDO + N24 NOVO; CLAUDE.md §14 D-V22-1/2/3; GOTCHAS.md tabela; G038 detalhe
-8. ❌ PENDENTE v23+: passo 9 (action_create_invoice) bloqueado por G-PERM-1; 4 tasks v23+ (13-16)
+**v23+ CONCLUÍDA** (2026-05-27 — commit a fazer):
+1. ✅ S0 G-PERM-1 investigado: causa raiz NÃO era ir.rule isolada; era cascata `dfe.line.company_id` + `PO.line.account_id` em company errada
+2. ✅ S1 Átomo novo Skill 7 `garantir_purchase_team(user_id, company_id)` em `escrituracao.py` (~150 LOC) + 7 pytest
+3. ✅ S1 Hook `_resolver_team_g039` no orchestrator com cache `_g039_team_cache` + fallback STATIC + 7 pytest
+4. ✅ S2 Fix raiz contador F status='EXECUTADO' em `_contar_pendentes_por_etapa` + 3 pytest
+5. ✅ S3 Picking 321617 (LF/IN/01779) avaliado e CORRETO (state=done, company=LF only)
+6. ✅ S3 Workarounds PROD: PO team 41→143, dfe.lines company 1→5, PO.lines account 22611→26459
+7. ✅ S3 Invoice ENTIN/2026/05/0055 (id=717630) criada + posted em PROD (R$ 12.525,54 untaxed, CFOP 1949)
+8. ✅ S3 Ajustes 176013/176014: status=EXECUTADO, fase=F5f_ENTRADA_OK
+9. ✅ Baseline pytest: 580→**597 verdes** (+17 net v23+)
+
+### Estado FINAL ajustes 176013/176014 PROD (v23+)
+- status=EXECUTADO, fase_pipeline=F5f_ENTRADA_OK
+- Picking SAÍDA 321601 (FB/SAI/IND/01602): state=done; Picking 321600 cancel preservado
+- Invoice SAÍDA 716448 RPI/2026/00238: SEFAZ autorizada chave 35260561724241000178550010000945661007164482
+- Invoice ENTRADA 717630 ENTIN/2026/05/0055: state=posted journal 1047 'ENTRADA REMESSA INDUSTRIALIZAÇÃO'
+- PO 42419 C2619591: state=purchase, team=143 RAFAEL, picking 321617 done, invoice 717630
+- DFe 43533: criado v22+, company=LF, lines company=LF (após fix v23+)
+
+### Bugs arquiteturais descobertos v23+ (codificar v24+)
+
+**B-V23-1**: Skill 7 `criar_dfe_a_partir_do_invoice_saida` cria dfe.lines com `company_id` da FONTE (FB) em vez de DESTINO (LF). Workaround manual v23+: write company_id=destino após criação. Fix raiz v24+ no átomo.
+
+**B-V23-2**: Skill 7 `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id apontando para account da company FONTE em vez de buscar account equivalente na company DESTINO. Workaround manual v23+: write account_id=equivalente_destino. Fix raiz v24+: novo átomo helper `resolver_account_id_por_company` + hook nos átomos da Skill 7.
+
+**v24+ alvo**:
+1. **B-V23-1 fix raiz**: codificar `dfe.line.company_id=company_destino` no átomo `criar_dfe_a_partir_do_invoice_saida` + pytest
+2. **B-V23-2 fix raiz**: novo átomo helper `resolver_account_id_por_company(code, company_destino)` + hook em `gerar_po_from_dfe`/`preencher_po` + pytest
+3. **Bulk REAL PROD** (não só 2 ajustes 176013/14) via opt-in `--usar-fluxo-l3-v19` com fixes aplicados
+4. **AP6 refator** (extrair Skill 8 ATÔMICA L2 do orchestrator) — adiado v23+
+5. **Expand CONSTANTS** FB=1 e CD=4 (mapear team_id+payment_term+picking_type+payment_provider)
+6. **Sub-skill C5 estender** G007 (standard_price=0) + l10n_br_tipo_produto
 
 ### Estado dos ajustes 176013/176014 (v23+ retoma)
 - id=176013/176014: `status='EXECUTADO', fase_pipeline='F5e_SEFAZ_OK', picking=321601, invoice=716448, chave_nfe='35260561724241000178550010000945661007164482'`

@@ -2530,7 +2530,12 @@ def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
     db.session.commit()
 
     executor = FaturamentoPipelineExecutor()
+    # v23+ G039: mockar _resolver_team_g039 para evitar side-effects
+    # PROD (sem mock, hook chama Odoo real e pode criar purchase.team).
+    # Retorna (None, None) -> fallback team_id STATIC (41) preservado.
     with patch.object(
+        executor, '_resolver_team_g039', return_value=(None, None),
+    ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
         return_value={
             'status': 'FLUXO_OK',
@@ -2566,6 +2571,7 @@ def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
     assert kwargs['invoice_id_saida'] == 627348
     assert kwargs['company_destino'] == 5  # LF
     assert kwargs['l10n_br_tipo_pedido'] == 'serv-industrializacao'
+    # v23+: G039 hook mockado retorna (None,None) -> fallback STATIC (41)
     assert kwargs['team_id'] == 41
     assert kwargs['payment_term_id'] == 2791
     assert kwargs['picking_type_id'] == 19
@@ -2753,3 +2759,261 @@ def test_v20_s3_etapa_f_via_fluxo_l3_misto_lf_e_cd_destino(db):
     assert res['contadores']['falha'] == 0
     assert 333333 in res['invoices_ok']
     assert 444444 in res['invoices_nao_suportadas_v20']
+
+
+# ============================================================
+# v23+ G039 — _resolver_team_g039 + _resolver_constants_fluxo_l3 hook
+# ============================================================
+
+def test_resolver_team_g039_cache_hit():
+    """Segunda chamada com mesma (uid, company) usa cache (sem Odoo call)."""
+    odoo = MagicMock()
+    odoo._uid = 42  # Rafael
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+    # Pre-popula cache
+    executor._g039_team_cache = {(42, 5): 143}
+
+    team_id, status = executor._resolver_team_g039(company_id=5)
+
+    assert team_id == 143
+    assert status == 'CACHE'
+    # Sem nova chamada Odoo
+    assert not odoo.execute_kw.called
+
+
+def test_resolver_team_g039_cache_miss_chama_garantir():
+    """Cache vazio -> chama garantir_purchase_team via Skill 7 service."""
+    odoo = MagicMock()
+    odoo._uid = 42
+    # search_read retorna team existente -> OK_EXISTENTE
+    odoo.execute_kw.return_value = [{
+        'id': 143, 'name': 'Aprovação LF - RAFAEL',
+        'user_id': [42, 'Rafael'], 'company_id': [5, 'LF'],
+        'active': True,
+    }]
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    team_id, status = executor._resolver_team_g039(company_id=5)
+
+    assert team_id == 143
+    assert status == 'OK_EXISTENTE'
+    # Cache populado para proxima chamada
+    assert executor._g039_team_cache == {(42, 5): 143}
+
+
+def test_resolver_team_g039_falha_garantir_retorna_none():
+    """garantir_purchase_team FALHA -> retorna (None, None) p/ fallback."""
+    odoo = MagicMock()
+    odoo._uid = 42
+    odoo.execute_kw.side_effect = Exception('Odoo down')
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    team_id, status = executor._resolver_team_g039(company_id=5)
+
+    assert team_id is None
+    assert status is None
+    # Cache NAO populado em falha
+    assert (42, 5) not in executor._g039_team_cache
+
+
+def test_resolver_team_g039_uid_zero_retorna_none():
+    """uid=0 (auth nao feita) -> tenta authenticate; se falha, fallback."""
+    odoo = MagicMock()
+    odoo._uid = 0  # nao autenticado
+    odoo.authenticate.return_value = False  # auth falha
+    # apos authenticate, _uid permanece 0
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    team_id, status = executor._resolver_team_g039(company_id=5)
+
+    # uid invalido apos auth -> None
+    assert team_id is None
+    assert status is None
+
+
+def test_resolver_constants_fluxo_l3_hook_g039_substitui_team_id():
+    """Hook G039: team_id STATIC (41) substituido por team correto (143)."""
+    odoo = MagicMock()
+    odoo._uid = 42
+    odoo.execute_kw.return_value = [{
+        'id': 143, 'name': 'Aprovação LF - RAFAEL',
+        'user_id': [42, 'Rafael'], 'company_id': [5, 'LF'],
+        'active': True,
+    }]
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    constants = executor._resolver_constants_fluxo_l3(
+        acao_decidida='INDUSTRIALIZACAO_FB_LF', company_destino=5,
+    )
+
+    assert constants is not None
+    # team_id override: 41 (static) -> 143 (G039)
+    assert constants['team_id'] == 143
+    assert constants['_team_g039_status'] == 'OK_EXISTENTE'
+    # outros constants preservados
+    assert constants['payment_term_id'] == 2791
+    assert constants['picking_type_id'] == 19
+    assert constants['payment_provider_id'] == 38
+    assert constants['l10n_br_tipo_pedido'] == 'serv-industrializacao'
+
+
+def test_resolver_constants_fluxo_l3_hook_g039_falha_preserva_team_static():
+    """Hook G039 falha (Odoo down) -> preserva team_id STATIC + WARNING log."""
+    odoo = MagicMock()
+    odoo._uid = 42
+    odoo.execute_kw.side_effect = Exception('Connection refused')
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    constants = executor._resolver_constants_fluxo_l3(
+        acao_decidida='INDUSTRIALIZACAO_FB_LF', company_destino=5,
+    )
+
+    assert constants is not None
+    # Fallback: team_id STATIC (41) preservado
+    assert constants['team_id'] == 41
+    # SEM marcador _team_g039_status quando hook falha
+    assert '_team_g039_status' not in constants
+
+
+def test_resolver_constants_fluxo_l3_acao_nao_suportada_retorna_none():
+    """Pre-existente: acao nao mapeada -> None (sem chamar hook G039)."""
+    odoo = MagicMock()
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    constants = executor._resolver_constants_fluxo_l3(
+        acao_decidida='ACAO_INEXISTENTE', company_destino=5,
+    )
+
+    assert constants is None
+    # Hook G039 NAO chamado quando direcao nao suportada (early return)
+    assert not odoo.execute_kw.called
+
+
+# ============================================================
+# v23+ S2 — _contar_pendentes_por_etapa fix status='EXECUTADO' ETAPA F
+# ============================================================
+
+def test_contar_pendentes_por_etapa_f_aceita_status_executado(db):
+    """v23+ S2: ETAPA F conta ajustes status='EXECUTADO' + fase=F5e_SEFAZ_OK.
+
+    Sem este fix, contador retornava 0 para ajustes pos-SEFAZ pendentes
+    de criar invoice de ENTRADA (passo 9 FLUXO L3 1.2.x). Workaround
+    manual `UPDATE status='APROVADO'` era necessario antes do retry F.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V23_S2_F_EXECUTADO'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='100000001',
+        tipo_produto=4,
+        company_id=1,  # FB origem
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        invoice_id_odoo=999999,
+        chave_nfe='35260561724241000178550010000999999007099001',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',  # v23+ S2: deveria contar mesmo com EXECUTADO
+        criado_por='test_v23_s2',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    count = executor._contar_pendentes_por_etapa(
+        etapa='F', ciclo=ciclo_test,
+    )
+
+    # Cleanup
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert count == 1, (
+        f'Esperado 1 pendente F com status=EXECUTADO, recebi {count}. '
+        f'v23+ S2 fix raiz NAO aplicado.'
+    )
+
+
+def test_contar_pendentes_por_etapa_b_nao_aceita_status_executado(db):
+    """v23+ S2: ETAPA B NAO conta ajustes status='EXECUTADO' (sem regressao).
+
+    Apenas ETAPA F aceita EXECUTADO; demais etapas mantem PROPOSTO/APROVADO
+    porque status nao deveria avancar para EXECUTADO antes do SEFAZ-OK.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V23_S2_B_EXECUTADO'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='100000002',
+        tipo_produto=4,
+        company_id=1,
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',  # ACOES_PICKING (B/C/D)
+        qtd_inventario=5.0,
+        qtd_odoo=0,
+        qtd_ajuste=5.0,
+        lote_destino='MIGRAÇÃO',
+        fase_pipeline=None,  # B = fase nao-terminal (inclui None)
+        status='EXECUTADO',  # nao deveria contar em B
+        criado_por='test_v23_s2',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    count_b = executor._contar_pendentes_por_etapa(
+        etapa='B', ciclo=ciclo_test,
+    )
+
+    # Cleanup
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert count_b == 0, (
+        f'Esperado 0 pendentes B com status=EXECUTADO (status invalido '
+        f'para B), recebi {count_b}. Regressao S2: filtro ampliado '
+        f'vazando para etapas B/C/D/E.'
+    )
+
+
+def test_contar_pendentes_por_etapa_f_status_aprovado_ainda_conta(db):
+    """v23+ S2: regressao check — ETAPA F com status='APROVADO' ainda
+    conta (comportamento legacy preservado).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V23_S2_F_APROVADO'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='100000003',
+        tipo_produto=4,
+        company_id=1,
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_inventario=8.0,
+        qtd_odoo=0,
+        qtd_ajuste=8.0,
+        lote_destino='MIGRAÇÃO',
+        invoice_id_odoo=888888,
+        chave_nfe='35260561724241000178550010000888888007099001',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='APROVADO',  # legacy: ainda deve contar
+        criado_por='test_v23_s2',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    count = executor._contar_pendentes_por_etapa(
+        etapa='F', ciclo=ciclo_test,
+    )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert count == 1, (
+        f'Esperado 1 pendente F com status=APROVADO (legacy), recebi '
+        f'{count}. Regressao S2: removeu compatibilidade APROVADO.'
+    )

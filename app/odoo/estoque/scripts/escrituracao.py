@@ -671,6 +671,162 @@ class EscrituracaoLfService:
             f'esgotado sem materializar resultado'
         )
 
+    # ============================================================
+    # v23+ G039 — Invariante purchase.team (NF inter-company LF/CD/FB)
+    # ============================================================
+    # PO criada via FLUXO L3 1.2.x (caminho A ou B) cai em `team_id` default
+    # (ex.: 41 'Aprovacao LF - JOSEFA' user_id=78 Edilane). Se PO precisa
+    # aprovacao dupla por valor/regra CIEL IT custom, `button_confirm`
+    # retorna True mas state fica 'to approve' permanente; `button_approve`
+    # via XML-RPC nao destrava quando o user de execucao (ex.: Rafael uid=42)
+    # nao e' o user do team. Resultado: FALHA_PASSO_7_SEM_PICKING.
+    #
+    # SOLUCAO v23+ (codifica workaround manual v22+): garantir purchase.team
+    # com user_id=<user_de_execucao> + company_id=<destino>. Se nao existe,
+    # CREATE. Caller (orchestrator) substitui team_id static por este team
+    # ANTES de preencher_po.
+    #
+    # Doc: PROTECAO_PROXIMA_SESSAO.md N24 + CLAUDE.md §14 D-V22-3.
+    _COMPANY_SIGLA_DEFAULT: Dict[int, str] = {1: 'FB', 4: 'CD', 5: 'LF'}
+
+    def garantir_purchase_team(
+        self,
+        *,
+        user_id: int,
+        company_id: int,
+        nome_template: str = 'Aprovação {sigla} - {primeiro_nome}',
+        dry_run: bool = True,
+    ) -> Dict[str, Any]:
+        """Atomo Skill 7 G039: garante purchase.team com (user_id, company_id) ativo.
+
+        Idempotencia: busca `purchase.team` com domain
+        `[('user_id','=',user_id),('company_id','=',company_id),('active','=',True)]`.
+        Se ja existe -> retorna team_id existente (status='OK_EXISTENTE').
+        Se nao existe -> CREATE com nome derivado de `nome_template`
+        (status='CRIADO'). Dry-run nao escreve, retorna 'DRY_RUN_OK' + plano.
+
+        Args:
+            user_id: res.users.id do user de execucao do pipeline (ex.: Rafael=42).
+            company_id: res.company.id da PO (ex.: LF=5).
+            nome_template: template do nome do team novo. Placeholders:
+                `{sigla}` -> sigla da company (FB/CD/LF; fallback `company_id={id}`)
+                `{primeiro_nome}` -> primeiro nome do user (UPPER; fallback 'USER{id}')
+            dry_run: True (default) NAO escreve.
+
+        Returns:
+            dict com:
+              status: 'OK_EXISTENTE' | 'CRIADO' | 'DRY_RUN_OK' | 'FALHA'
+              team_id: int | None
+              team_data: dict | None (id+name+user_id+company_id+active)
+              criado: bool (True se houve CREATE)
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'team_id': None,
+            'team_data': None,
+            'criado': False,
+            'tempo_ms': 0,
+            'erro': None,
+        }
+
+        # Pre-cond LEVES (sintaticas)
+        if not isinstance(user_id, int) or user_id <= 0:
+            out['erro'] = f'user_id_invalido: {user_id!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        if not isinstance(company_id, int) or company_id <= 0:
+            out['erro'] = f'company_id_invalido: {company_id!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Busca team existente
+        try:
+            teams_existentes = self.odoo.execute_kw(
+                'purchase.team', 'search_read',
+                [[
+                    ('user_id', '=', user_id),
+                    ('company_id', '=', company_id),
+                    ('active', '=', True),
+                ]],
+                {'fields': ['id', 'name', 'user_id', 'company_id', 'active']},
+            )
+        except Exception as e:
+            out['erro'] = f'erro_search_purchase_team: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if teams_existentes:
+            team = teams_existentes[0]
+            out['status'] = 'OK_EXISTENTE'
+            out['team_id'] = team['id']
+            out['team_data'] = team
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Nao existe — preparar CREATE
+        sigla = self._COMPANY_SIGLA_DEFAULT.get(company_id, f'company_id={company_id}')
+
+        # Resolve primeiro nome do user (best-effort)
+        try:
+            user_data = self.odoo.read(
+                'res.users', [user_id], ['name', 'login'],
+            )
+            user_nome_completo = (user_data[0].get('name') if user_data else None) or f'USER{user_id}'
+            primeiro_nome = user_nome_completo.split()[0].upper() if user_nome_completo else f'USER{user_id}'
+        except Exception as e:
+            logger.warning(f'garantir_purchase_team: falha ler res.users {user_id}: {str(e)[:200]}')
+            primeiro_nome = f'USER{user_id}'
+
+        nome_novo = nome_template.format(sigla=sigla, primeiro_nome=primeiro_nome)
+        values_novo = {
+            'name': nome_novo,
+            'user_id': user_id,
+            'company_id': company_id,
+        }
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK'
+            out['plano'] = {
+                'create_model': 'purchase.team',
+                'values': values_novo,
+            }
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # REAL-RUN: CREATE
+        try:
+            team_id_novo = self.odoo.execute_kw(
+                'purchase.team', 'create', [values_novo],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_create_purchase_team: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not isinstance(team_id_novo, int) or team_id_novo <= 0:
+            out['erro'] = f'create_retornou_invalido: {team_id_novo!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Confirma via read
+        try:
+            team_data = self.odoo.read(
+                'purchase.team', [team_id_novo],
+                ['id', 'name', 'user_id', 'company_id', 'active'],
+            )
+            out['team_data'] = team_data[0] if team_data else None
+        except Exception:
+            out['team_data'] = {'id': team_id_novo, 'name': nome_novo, **values_novo}
+
+        out['status'] = 'CRIADO'
+        out['team_id'] = team_id_novo
+        out['criado'] = True
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
     def buscar_dfe(
         self,
         *,

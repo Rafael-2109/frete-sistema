@@ -594,3 +594,138 @@ def test_buscar_dfe_chave_invalida_nao_raise():
     assert res['erro'] == 'chave_nfe_invalida'
     # NAO chamou search_read
     assert not odoo.search_read.called
+
+
+# ============================================================
+# v23+ G039 — garantir_purchase_team (NF inter-company)
+# ============================================================
+
+def test_garantir_purchase_team_idempotente_quando_existe():
+    """Team com user+company+active ja existe -> OK_EXISTENTE sem create."""
+    odoo = MagicMock()
+    # search_read retorna team existente
+    odoo.execute_kw.return_value = [{
+        'id': 143,
+        'name': 'Aprovação LF - RAFAEL',
+        'user_id': [42, 'Rafael de Carvalho Nascimento'],
+        'company_id': [5, 'LA FAMIGLIA - LF'],
+        'active': True,
+    }]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.garantir_purchase_team(user_id=42, company_id=5, dry_run=False)
+
+    assert res['status'] == 'OK_EXISTENTE'
+    assert res['team_id'] == 143
+    assert res['criado'] is False
+    assert res['team_data']['name'] == 'Aprovação LF - RAFAEL'
+    # APENAS 1 chamada execute_kw (search_read) — sem CREATE
+    assert odoo.execute_kw.call_count == 1
+    args, _ = odoo.execute_kw.call_args
+    assert args[0] == 'purchase.team'
+    assert args[1] == 'search_read'
+
+
+def test_garantir_purchase_team_dry_run_planeja_create():
+    """Team nao existe + dry_run -> DRY_RUN_OK sem write."""
+    odoo = MagicMock()
+    odoo.execute_kw.return_value = []  # search_read vazio
+    odoo.read.return_value = [{'name': 'Rafael de Carvalho Nascimento', 'login': 'rafael@x'}]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.garantir_purchase_team(user_id=42, company_id=5, dry_run=True)
+
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['criado'] is False
+    assert res['team_id'] is None
+    # plano com nome derivado
+    assert 'plano' in res
+    assert res['plano']['create_model'] == 'purchase.team'
+    assert res['plano']['values']['user_id'] == 42
+    assert res['plano']['values']['company_id'] == 5
+    assert 'RAFAEL' in res['plano']['values']['name']
+    assert 'LF' in res['plano']['values']['name']  # sigla company=5
+
+
+def test_garantir_purchase_team_create_real_quando_nao_existe():
+    """Team nao existe + real-run -> CRIADO com team_id novo."""
+    odoo = MagicMock()
+    # Order: search_read vazio (nao existe) -> read user -> create -> read team novo
+    odoo.execute_kw.side_effect = [
+        [],     # search_read purchase.team -> vazio
+        144,    # create purchase.team -> id
+    ]
+    odoo.read.side_effect = [
+        [{'name': 'Maria Silva', 'login': 'maria@y'}],  # read res.users
+        [{                                                # read purchase.team novo
+            'id': 144,
+            'name': 'Aprovação CD - MARIA',
+            'user_id': [55, 'Maria Silva'],
+            'company_id': [4, 'NACOM GOYA - CD'],
+            'active': True,
+        }],
+    ]
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.garantir_purchase_team(user_id=55, company_id=4, dry_run=False)
+
+    assert res['status'] == 'CRIADO'
+    assert res['team_id'] == 144
+    assert res['criado'] is True
+    assert res['team_data']['id'] == 144
+    # 2 execute_kw chamadas: search_read + create
+    assert odoo.execute_kw.call_count == 2
+    args_create, _ = odoo.execute_kw.call_args_list[1]
+    assert args_create[0] == 'purchase.team'
+    assert args_create[1] == 'create'
+    values = args_create[2][0]
+    assert values['user_id'] == 55
+    assert values['company_id'] == 4
+    assert 'CD' in values['name']
+    assert 'MARIA' in values['name']
+
+
+def test_garantir_purchase_team_user_id_invalido():
+    """user_id <= 0 -> FALHA imediato sem chamada Odoo."""
+    odoo = MagicMock()
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.garantir_purchase_team(user_id=0, company_id=5, dry_run=False)
+
+    assert res['status'] == 'FALHA'
+    assert res['team_id'] is None
+    assert 'user_id_invalido' in (res['erro'] or '')
+    assert not odoo.execute_kw.called
+
+
+def test_garantir_purchase_team_company_id_invalido():
+    """company_id <= 0 -> FALHA imediato sem chamada Odoo."""
+    odoo = MagicMock()
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.garantir_purchase_team(user_id=42, company_id=-1, dry_run=False)
+
+    assert res['status'] == 'FALHA'
+    assert res['team_id'] is None
+    assert 'company_id_invalido' in (res['erro'] or '')
+    assert not odoo.execute_kw.called
+
+
+def test_garantir_purchase_team_search_falha_propaga_erro():
+    """Exception em search_read -> FALHA com erro detalhado, sem create."""
+    odoo = MagicMock()
+    odoo.execute_kw.side_effect = Exception('Connection timeout')
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.garantir_purchase_team(user_id=42, company_id=5, dry_run=False)
+
+    assert res['status'] == 'FALHA'
+    assert res['team_id'] is None
+    assert 'erro_search_purchase_team' in (res['erro'] or '')
+
+
+def test_garantir_purchase_team_fallback_nome_user_sem_name():
+    """Se res.users.read falhar/retornar vazio, usa fallback 'USER{id}'."""
+    odoo = MagicMock()
+    odoo.execute_kw.return_value = []  # search_read vazio
+    odoo.read.return_value = []  # res.users.read vazio -> fallback
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.garantir_purchase_team(user_id=99, company_id=1, dry_run=True)
+
+    assert res['status'] == 'DRY_RUN_OK'
+    assert 'USER99' in res['plano']['values']['name']
+    assert 'FB' in res['plano']['values']['name']  # sigla company=1

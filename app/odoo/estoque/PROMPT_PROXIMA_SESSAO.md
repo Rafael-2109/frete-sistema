@@ -1,13 +1,13 @@
 # PROMPT PRÓXIMA SESSÃO — orquestrador-Odoo
 
-**Esta sessão visa**: v23+ codificar invariante G039 (purchase.team Skill 7) + investigar G-PERM-1 (ir.rule dfe.line) + fix raiz contador F status=EXECUTADO + completar fluxo F passo 9+10 (caminho B FLUXO L3 1.2.x). Ondas paralelas: S2 remoção tampão + S3-S7 originais v22+ adiados.
-**Base**: commits v22+ EXECUTED (G-AUDIT-3 fix + Sub-skill C5 G038 + Caminho B parcial validado em PROD chave 35260561724241000178550010000945661007164482). 580 pytest verdes.
-**Risco**: MÉDIO (codificar 1 invariante arquitetural — purchase.team — + investigar 1 ir.rule perm = 2 frentes de pesquisa).
+**Esta sessão visa**: v24+ codificar fix raiz B-V23-1 (Skill 7 `criar_dfe_a_partir_do_invoice_saida` force company_id=destino nas dfe.lines) + B-V23-2 (novo átomo `resolver_account_id_por_company` + hook em `gerar_po_from_dfe`/`preencher_po`) + bulk REAL PROD (não só 2 ajustes) via opt-in `--usar-fluxo-l3-v19` com fixes aplicados. Adiados v25+: AP6 refator + expand CONSTANTS FB/CD + C5 G007.
+**Base**: commit a fazer v23+ (G039 codificado + 17 testes net + invoice ENTIN/2026/05/0055 posted PROD + 2 bugs B-V23-1/2 documentados). 597 pytest verdes.
+**Risco**: MÉDIO (2 fixes em Skill 7 ABRANGENTE — código já validado em PROD com workaround manual; bulk REAL PROD acende novos cenários).
 **Estimativa**: 2-3 sessões.
 
-> **Criado em**: 2026-05-27 v22+ EXECUTED (sucessor do v21+ EXECUTED).
+> **Criado em**: 2026-05-27 v23+ EXECUTED (sucessor do v22+ EXECUTED).
 > **Audiência**: Claude Code OU agente web na próxima sessão do orquestrador-Odoo.
-> **Predecessores executados**: `_prompts_executados/PROMPT_PROXIMA_SESSAO_v{15a,15b,15c,16,17,17_5,18,19,20,21,22}_EXECUTED_*.md` + `PROMPT_PROXIMA_SESSAO_SKILL2_EXECUTED_*.md`.
+> **Predecessores executados**: `_prompts_executados/PROMPT_PROXIMA_SESSAO_v{15a,15b,15c,16,17,17_5,18,19,20,21,22,23}_EXECUTED_*.md` + `PROMPT_PROXIMA_SESSAO_SKILL2_EXECUTED_*.md`.
 
 ---
 
@@ -47,8 +47,8 @@ git log --oneline HEAD..origin/main | head -10   # rebase se main avançou
 
 ### 1.2 Leitura obrigatória em ordem
 
-1. **⭐ `app/odoo/estoque/PROTECAO_PROXIMA_SESSAO.md`** INTEIRO (escudo contra desvios reincidentes — N1-N24 + AR1-AR12 + lições memories). **Atenção especial a N24 NOVO v22+** (purchase.team invariante LF) e N23 ✅ RESOLVIDO v22+.
-2. **`app/odoo/estoque/CLAUDE.md`** — §1.1 (1 SKILL = 1 OBJETO) + §3.1 (orchestrator C3 não é skill) + §6 (4 tabelas catálogo) + §6.5 (antipadrões — AP2 com resolução parcial v22+ Caminho B; AP6 pendente v23+) + §14 (histórico desvios — D-V22-1/2/3 + G-PERM-1) + §15 (9 princípios canônicos).
+1. **⭐ `app/odoo/estoque/PROTECAO_PROXIMA_SESSAO.md`** INTEIRO (escudo contra desvios reincidentes — N1-N26 + AR1-AR12 + lições memories). **Atenção especial a N25/N26 NOVOS v23+** (B-V23-1 e B-V23-2 — bugs Skill 7 PENDENTES) e N24 ✅ RESOLVIDO v23+ (G039 codificado).
+2. **`app/odoo/estoque/CLAUDE.md`** — §1.1 (1 SKILL = 1 OBJETO) + §3.1 (orchestrator C3 não é skill) + §6 (4 tabelas catálogo) + §6.5 (antipadrões) + §14 (histórico desvios — D-V22 + D-V23) + §15 (9 princípios canônicos).
 3. **`app/odoo/estoque/ROADMAP_SKILLS.md`** — HANDOFF enxuto (≤80 linhas): estado global + próximo passo + pendências + onde NÃO mexer.
 4. **Este `PROMPT_PROXIMA_SESSAO.md`** — INTEIRO (§2 contexto + §3 escopo + §4 checklist + §5 riscos).
 5. **`app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md`** §0 — se sessão tocar Skill 8 / orchestrator (regra inviolável 0).
@@ -60,10 +60,10 @@ git log --oneline HEAD..origin/main | head -10   # rebase se main avançou
 
 ```bash
 timeout 90 python -m pytest tests/odoo/ --tb=line -q 2>&1 | tail -3
-# Esperado: 580 passed (v22+ baseline)
+# Esperado: 597 passed (v23+ baseline)
 ```
 
-Se ≠ 580 → investigar regressão antes de prosseguir.
+Se ≠ 597 → investigar regressão antes de prosseguir.
 
 ### 1.4 Validar entendimento com Rafael (opcional mas recomendado)
 
@@ -71,97 +71,87 @@ Antes de codar: spawn AskUserQuestion confirmando escopo §3 + decisões abertas
 
 ---
 
-## §2. CONTEXTO ATUAL (atualizado por sessão v22+ — FINALIZADA com 2 descobertas arquiteturais)
+## §2. CONTEXTO ATUAL (atualizado por sessão v23+ — FINALIZADA — Caminho B 100% PROD + G039 codificado + 2 bugs Skill 7 descobertos)
 
 ### Estado do código
-- **Commit base**: v22+ EXECUTED (G-AUDIT-3 fix + Sub-skill C5 G038 + Caminho B parcial em PROD). Pipeline real CHEGOU ATÉ SEFAZ (chave 35260561724241000178550010000945661007164482); ETAPA F caminho B avançou até passo 7→9 (FALHA_PASSO_9_CRIAR_INVOICE por ir.rule perm Rafael em dfe.line).
-- **Baseline pytest**: 580 verdes em ~15s (+4 net v22+ via Skill 5 G-AUDIT-3 + Sub-skill C5 G038).
+- **Commit base**: v23+ EXECUTED (G039 codificado + B-V23-1/2 documentados + invoice ENTIN/2026/05/0055 posted PROD).
+- **Baseline pytest**: 597 verdes (580 v22+ + 17 net v23+).
 - **Worktree**: `feat/estoque-odoo` (main pode ter avançado — rebase em §1.1).
 
 ### Estado da arquitetura
-- **Skill 5 GANHOU fix G-AUDIT-3** v22+ — `criar_picking_inter_company` segrega state=cancel da idempotência por origin. 70 pytest (+2 net v22+). Validado E2E em PROD (picking 321600 cancel ignorado, 321601 NOVO criado).
-- **Sub-skill C5 GANHOU check G038** v22+ — `_check_ncm_weight_tracking` detecta `l10n_br_origem in (False, None, '')` como BLOQUEIO. 16 pytest (+2 net v22+). Sem auto-fix (operador seta '0' Nacional / '1' Estrangeira / etc).
-- **Caminho B FLUXO L3 1.2.x VALIDADO PARCIAL em PROD** v22+ — primeira execução REAL: DFe 43533 criado no LF via `criar_dfe_a_partir_do_invoice_saida` + PO C2619591 (id=42419) criada com order_line correta + workaround team 143 destravou state→'purchase' + button_approve gerou picking 321617. Falhou em passo 9 (criar_invoice) por ir.rule perm Rafael em dfe.line.
-- **Descoberta G039**: PO LF cai com `team_id=41` 'Aprovação LF - JOSEFA' (user_id=78 Edilane) → state='to approve' permanente via XML-RPC. Solução: criar `purchase.team` com user_id=user-execução + write PO team_id=novo + ciclo cancel→draft→confirm destrava. Team 143 'Aprovação LF - RAFAEL' criado.
-- **Descoberta G-PERM-1**: Rafael (uid=42) tem 2 grupos `ir.model.access` necessários em dfe.line (28 Accounting/Billing + 1 Internal User) mas erro persistente "não tem acesso 'leitura'". Causa: `ir.rule` record-level.
+- **Skill 7 GANHOU átomo G039** v23+ — `garantir_purchase_team(user_id, company_id, dry_run)` em `escrituracao.py` ~150 LOC + constant `_COMPANY_SIGLA_DEFAULT` (1=FB, 4=CD, 5=LF). Idempotência por (user_id, company_id, active=True); CREATE com nome template "Aprovação {sigla} - {primeiro_nome}". 7 pytest cobrindo cenários.
+- **Orchestrator GANHOU hook G039** v23+ — `_resolver_team_g039` com cache `_g039_team_cache: Dict[(uid, company_id), team_id]`; lazy auth; substitui `team_id` STATIC no `_resolver_constants_fluxo_l3` pelo team correto. Fallback silencioso (warning + STATIC) se hook falhar. 7 pytest cobrindo hit cache, miss, falha, override constants, fallback.
+- **Orchestrator GANHOU fix S2** v23+ — `_contar_pendentes_por_etapa` ETAPA F aceita `status IN (PROPOSTO, APROVADO, EXECUTADO)`. Demais etapas preservam PROPOSTO/APROVADO. 3 pytest.
+- **FLUXO L3 1.2.x CAMINHO B VALIDADO 100% em PROD v23+** — primeiro fim-a-fim: PO 42419 confirmada (team 143 RAFAEL) → picking 321617 done (LF/Estoque) → invoice ENTIN/2026/05/0055 posted (R$ 12.525,54 untaxed CFOP 1949). Validação cascateada descobriu 2 bugs Skill 7 (B-V23-1/2) que precisaram workaround manual PROD.
 
-### Estado dos 2 ajustes de teste v22+
-- id=176013/176014: `status='EXECUTADO', fase_pipeline='F5e_SEFAZ_OK', picking_id_odoo=321601, invoice_id_odoo=716448, chave_nfe='35260561724241000178550010000945661007164482'`
-- Picking 321600 (FB/SAI/IND/01601): `state=cancel` (preservado)
-- Picking 321601 (FB/SAI/IND/01602): `state=done` (criado v22+ pelo fix G-AUDIT-3)
-- Picking 321617 (LF/IN/<seq>): gerado v22+ pelo button_approve PO 42419 — verificar state atual
-- Invoice 716448 RPI/2026/00238: `state=posted, l10n_br_situacao_nf='autorizado', chave SEFAZ válida 44 dígitos`
-- DFe 43533 (LF, chave 35260...82): criado v22+ via caminho B com lines populadas
-- PO 42419 C2619591 (LF, partner FB): `state=purchase, team_id=143, picking_ids=[321617]`
-- Invoice ENTRADA: NÃO CRIADA (falha passo 9 por ir.rule perm)
-- Purchase team 143 'Aprovação LF - RAFAEL': criado, user_id=42, company_id=5
+### Estado dos 2 ajustes de teste v23+ (museum vivo)
+- id=176013/176014: `status='EXECUTADO', fase_pipeline='F5f_ENTRADA_OK'`
+- Picking saída 321601 done; saída SEFAZ 716448 chave 35260561724241000178550010000945661007164482
+- PO entrada 42419 `state=purchase, team_id=143, picking_ids=[321617], invoice_ids=[717630]`
+- Picking entrada 321617 (LF/IN/01779): `state=done` (LF/Estoque)
+- Invoice entrada 717630 (ENTIN/2026/05/0055): `state=posted, move_type=in_invoice, company=LF, journal=1047 'ENTRADA REMESSA INDUSTRIALIZAÇÃO', amount_untaxed=12525.54, amount_total=0.0 (neutralizado CFOP 1949)`
+- DFe entrada 43533 (lines company corrigidas v23+ workaround)
 
 ### Skills LIVE (catálogo §6 do CLAUDE.md estoque)
-- Skills L2 atômicas (7): 1, 2 (4 modos A/B/C/D v21+), 2.4, 4, 5 (7 átomos + G-AUDIT-3 v22+), 7 ABRANGENTE v20+, 9 (READ).
-- Orchestrators C3 (2): Skill 6 executor, `faturamento_pipeline` (pipeline A-F + recovery + dispatch fluxo L3 1.2.x v19+ + opt-in v20+ + fix G-AUDIT-1 v21+).
+- Skills L2 atômicas (7): 1, 2 (4 modos A/B/C/D v21+), 2.4, 4, 5 (7 átomos + G-AUDIT-3 v22+), **7 ABRANGENTE v20+ + G039 v23+** (8 átomos total: 7 ABRANGENTES + garantir_purchase_team), 9 (READ).
+- Orchestrators C3 (2): Skill 6 executor, `faturamento_pipeline` (pipeline A-F + recovery + dispatch fluxo L3 1.2.x v19+ + opt-in v20+ + fix G-AUDIT-1 v21+ + hook G039 v23+ + fix contador F v23+).
 - Sub-skill PRE-FLIGHT: `auditando-cadastro-fiscal-odoo` (V1 'inventario' v14b + G038 v22+).
-- Fluxos L3 escritos (11): 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, 1.2.1 v19+, 1.2.2 v19+ (Caminho B validado parcial v22+).
-- Fluxos L3 pendentes: 1.1.x, 1.3, 2.3 (dependem refator AP6).
+- Fluxos L3 escritos (11): 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, 1.2.1 v19+, 1.2.2 v19+ (Caminho B 100% validado v23+).
 
-### Pendências críticas v23+
-- 4 tasks v22+ não-resolvidas (13-16 no TaskList): contador F EXECUTADO; PO to_approve regra exata; ir.rule dfe.line Rafael; Skill 7 codificar purchase.team invariante (G039).
-- Itens originais v22+ NÃO TOCADOS: S2 remoção tampão; S3 refator AP6; S4 expand CONSTANTS FB/CD; S5 folhas L3 1.1/1.3/2.3; S6 C5 G007/l10n_br_tipo_produto; S7 lote literal P-15/05.
+### Bugs arquiteturais descobertos v23+ (PENDENTES v24+)
+
+#### B-V23-1 — `criar_dfe_a_partir_do_invoice_saida` cria dfe.lines com company_id ERRADO
+- Lines herdam company_id do XML da SAÍDA (FB=1) em vez de DESTINO (LF=5).
+- Sintoma: passo 9 falha 'leitura dfe.line' (Fault 4).
+- Workaround v23+: write dfe.line.company_id manualmente.
+- **Fix v24+**: codificar no átomo — após `action_processar_arquivo_manual`, read dfe.lines + write company_id=company_destino.
+
+#### B-V23-2 — `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id em company errada
+- account_id resolvido para account.account da FONTE (FB id=22611) em vez de DESTINO (LF id=26459).
+- Sintoma após fix B-V23-1: "Empresas incompatíveis".
+- Workaround v23+: write PO.line.account_id manualmente.
+- **Fix v24+**: novo átomo helper `resolver_account_id_por_company(account_id_fonte, company_destino)` + hook nos átomos Skill 7 que tocam PO.lines.
 
 ---
 
-## §3. ESCOPO DESTA SESSÃO (v23+ — codificar G039 + investigar G-PERM-1 + fix raiz contador F + completar passo 9-10 caminho B)
+## §3. ESCOPO DESTA SESSÃO (v24+ — codificar B-V23-1 + B-V23-2 + bulk REAL PROD)
 
 > **CONFIRMAR ESCOPO COM RAFAEL via AskUserQuestion ANTES de codar** (§1.4).
 
 ### Objetivo macro
-Codificar a invariante G039 (purchase.team gatekeeper LF) na Skill 7 + investigar a causa exata de G-PERM-1 (ir.rule dfe.line) + fix raiz contador F → permitir que caminho B FLUXO L3 1.2.x rode end-to-end SEM intervenção manual.
+Codificar os 2 bugs descobertos em v23+ (B-V23-1 e B-V23-2) no Skill 7 ABRANGENTE → eliminar workarounds manuais → permitir bulk REAL PROD via FLUXO L3 1.2.x caminho B (não só 2 ajustes 176013/14, mas onda completa).
 
 ### Sub-objetivos (ordem proposta — confirmar com Rafael)
 
-#### S0 — Investigar G-PERM-1 ir.rule dfe.line (BLOQUEIO crítico)
-- Listar `ir.rule` ativos em `l10n_br_ciel_it_account.dfe.line` via XML-RPC
-- Identificar qual rule filtra Rafael (uid=42) — provavelmente por company_id ou record_uid
-- Comparar com Edilane (uid=78) — qual rule passa para ela
-- Workaround imediato: rodar pipeline com user com permissão OU adicionar Rafael a grupo CIEL IT específico
-- Sem isso, S1 abaixo fica bloqueado
+#### S1 — Codificar fix raiz B-V23-1 no átomo `criar_dfe_a_partir_do_invoice_saida`
+- Após `action_processar_arquivo_manual` (que cria DFe + lines), ler dfe.lines criadas (search por dfe_id) + write `{'company_id': company_destino}`.
+- Idempotência: read antes do write; se já estiver correto, skip.
+- Pytest novo cobrindo: lines em company errada (write executado) + lines em company correta (skip idempotente).
+- Smoke real PROD: criar DFe novo via XML de outra invoice de SAÍDA → verificar lines.company_id já correto sem workaround manual.
 
-#### S1 — Codificar invariante G039 purchase.team na Skill 7
-- Novo átomo (ou método) em `escrituracao.py`: `garantir_purchase_team(user_id, company_id, dry_run)` que:
-  - Busca `purchase.team` com user_id=user_id + company_id=company_id
-  - Se não existe, CREATE
-  - Retorna team_id
-- Hook em `confirmar_po` (Skill 7) OU em `_executar_etapa_f_via_fluxo_l3` (orchestrator): chamar `garantir_purchase_team` + `write PO team_id` ANTES de `button_confirm`
-- Pytest novo cobrindo cenário (mock purchase.team search vazio + create)
-- Smoke real PROD: re-rodar caminho B com outra invoice — deve auto-criar team + confirmar PO direto sem to_approve
+#### S2 — Codificar fix raiz B-V23-2: átomo helper + hook
+- Novo átomo Skill 7 `resolver_account_id_por_company(account_id_fonte, company_destino)`: read account.account fonte (read code) → search [('code','=',code), ('company_id','=',company_destino)] → retorna id destino OU None se não encontrar (caller decide o que fazer).
+- Hook em `gerar_po_from_dfe` OU `preencher_po` (decidir onde): após criar/preencher PO.lines, iterar lines + para cada line: read `account_id` + chamar `resolver_account_id_por_company` + write se diferente.
+- Pytest novo cobrindo: account em company correta (skip) + account em company errada (resolve + write) + account não existe na destino (FALHA com erro claro).
 
-#### S2 — Fix raiz contador F status='EXECUTADO' (Task 13)
-- Alterar `_contar_pendentes_por_etapa` linha 4458: ETAPA F filtro `status IN ('PROPOSTO','APROVADO','EXECUTADO')` (outras etapas mantém PROPOSTO/APROVADO)
-- Pytest novo cobrindo contador F com status='EXECUTADO'
-- Remove necessidade de workaround manual de UPDATE status
+#### S3 — Bulk REAL PROD via opt-in `--usar-fluxo-l3-v19`
+- Pós-S1+S2 OK: rodar `executar_pipeline_resume --apenas-etapa F --usar-fluxo-l3-v19 --ciclo INVENTARIO_2026_05 --confirmar --confirmar-sefaz` sobre conjunto maior de ajustes (não só 176013/14 que já estão em F5f_ENTRADA_OK).
+- Monitorar: novos bugs cascateados? Performance? Idempotência ETAPA F multi-invoice?
+- Documentar findings em `VALIDACAO_FINAL_SESSAO.md` §"Sessão v24+".
 
-#### S3 — Completar passo 9+10 caminho B FLUXO L3 1.2.x (após S0+S1)
-- Pós-S0 desbloqueio G-PERM-1: re-rodar resume F nos ajustes 176013/176014 (status='APROVADO' temporário OU pós-S2 EXECUTADO direto)
-- Passo 9 (criar_invoice_from_po) deve completar
-- Passo 10 (validar invoice) deve completar
-- Ajustes mudam para fase F5f_OK + status final
-- Validação E2E 100% caminho B
+#### S4 — Expand CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO para FB=1 e CD=4
+- Pós-S3 OK: mapear `team_id` + `payment_term_id` + `picking_type_id` + `payment_provider_id` para FB e CD destino (atualmente só LF=5 mapeada).
+- Pré-cond: descobrir IDs corretos via XML-RPC (queries similares ao que foi feito v23+ para account_id LF=26459).
+- Pytest mockado cobrindo as 3 direções.
 
-#### S4 — Investigar PO to_approve regra exata (Task 14)
-- Cross-check canary 627348 (caminho A SEFAZ-via-DFe que autorizou normalmente): fiscal_position_id populada? team_id? amount_total? Como passou aprovação?
-- Comparar com PO 42419 (caminho B): identificar diferença causal
-- Decidir: caminho B precisa setar fiscal_position antes de button_confirm? OU regra de aprovação é por valor (R$X limit)?
-
-#### S5 — S2-S7 originais v22+ (se sobrar tempo)
-- S2 remoção tampão (criar_picking_entrada_destino_manual + V1 STRICT wrapper + ETAPAS E/F legacy)
-- S3 refator AP6 (Skill 8 ATÔMICA L2)
-- S4 expand CONSTANTS FB/CD destino
-- S5 folhas L3 pendentes (1.1.x, 1.3, 2.3)
-- S6 C5 G007 + l10n_br_tipo_produto
-- S7 lote literal P-15/05 forcar_lote_literal=True
+#### S5 — Itens adiados v23+ (oportunístico)
+- AP6 refator: extrair Skill 8 ATÔMICA L2 do orchestrator (5 ops C+D sobre `account.move`)
+- Folhas L3 1.1.x (só saída) + 1.3 (transferência completa)
+- C5 G007 (standard_price=0) + l10n_br_tipo_produto
 
 ### O que NÃO entra nesta sessão (escopo declarado fora)
-- ❌ Refatorar `RecebimentoLfOdooService` ou `LancamentoOdooService` (NÃO MEXER — regras v14a-fix + v19+).
-- ❌ Mexer em `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (regra v14a-ops — SUPERADO ao final v22+).
+- ❌ Refatorar `RecebimentoLfOdooService` ou `LancamentoOdooService` (NÃO MEXER).
+- ❌ Mexer em `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (SUPERADO ao final v22+).
 
 ---
 
@@ -170,29 +160,26 @@ Codificar a invariante G039 (purchase.team gatekeeper LF) na Skill 7 + investiga
 Antes de codar:
 - [ ] Setup técnico §1.1 OK (worktree + venv + env + git status limpo)
 - [ ] Leitura §1.2 completa (8 documentos)
-- [ ] Baseline pytest 580 confirmado
-- [ ] Cross-check Odoo: PO 42419 + picking 321617 + DFe 43533 + invoice 716448 + Team 143 (estado ainda preservado)
-- [ ] AskUserQuestion §1.4 confirmou escopo S0-S5 com Rafael
+- [ ] Baseline pytest 597 confirmado
+- [ ] Cross-check Odoo: estado dos ajustes 176013/14, PO 42419, invoice 717630 (estado preservado)
+- [ ] AskUserQuestion §1.4 confirmou escopo S1-S5 com Rafael
 
 Implementação:
-- [ ] S0 — ir.rule investigation + workaround/fix G-PERM-1
-- [ ] S1 — Skill 7 garantir_purchase_team + hook + pytest novo + smoke real PROD
-- [ ] S2 — Fix contador F status='EXECUTADO' + pytest novo
-- [ ] S3 — Completar passo 9+10 caminho B (re-rodar resume F após S0+S1)
-- [ ] S4 — Investigar canary 627348 vs PO 42419 (PO to_approve regra exata)
-- [ ] S5 — S2-S7 originais conforme tempo
+- [ ] S1 — B-V23-1 fix no `criar_dfe_a_partir_do_invoice_saida` + pytest + smoke real PROD
+- [ ] S2 — B-V23-2 átomo `resolver_account_id_por_company` + hook + pytest + smoke real PROD
+- [ ] S3 — Bulk REAL PROD via opt-in (escolher subset de ajustes para o canary do bulk)
+- [ ] S4 — Expand CONSTANTS para FB + CD (se sobrar tempo)
+- [ ] S5 — AP6/folhas L3/C5 G007 conforme tempo
 
 Validação:
-- [ ] Pytest baseline ≥ 580 + novos testes (estimativa 4-8 novos)
-- [ ] ≥1 code-reviewer paralelo (Skill 7 invariante + S0 ir.rule fix)
-- [ ] Atualizações cross-refs: SKILL.md `escriturando-odoo` + ROADMAP HANDOFF + PROTECAO N24
+- [ ] Pytest baseline ≥ 597 + novos testes (estimativa 4-8 novos)
+- [ ] ≥1 code-reviewer paralelo (Skill 7 fixes)
+- [ ] Atualizações cross-refs: SKILL.md `escriturando-odoo` + ROADMAP HANDOFF + PROTECAO N25/N26 (passar para RESOLVIDOS)
 
 Documentação:
-- [ ] Atualizar antipadrões §6.5 CLAUDE.md (AP2 ✅ se caminho B completar; AP6 conforme S3)
-- [ ] Atualizar §6 catálogo (Skill 7 com garantir_purchase_team se aplicável)
-- [ ] Atualizar PROTECAO_PROXIMA_SESSAO se novo antipadrão detectado
-- [ ] Memória NOVA `[[g039-purchase-team-gatekeeper]]` para gravar lição v22+ G039
-- [ ] Memória NOVA `[[g_perm_1_ir_rule_dfe_line]]` para gravar descoberta v23+
+- [ ] Atualizar PROTECAO N25/N26 (RESOLVIDOS)
+- [ ] Atualizar CLAUDE.md §6.5 + §14 (D-V23-2/3 fix raiz codificado)
+- [ ] Memórias `[[b_v23_1_dfe_line_company_id]]` + `[[b_v23_2_po_line_account_id]]` resolvidas
 - [ ] Append em VALIDACAO_FINAL_SESSAO.md (regra D-V18-5)
 
 ---
@@ -201,12 +188,11 @@ Documentação:
 
 | Risco | Probabilidade | Impacto | Mitigação |
 |-------|---------------|---------|-----------|
-| ir.rule dfe.line é por user_id explícito (não por grupo) — workaround só via mudar pipeline user | MÉDIA | ALTO | S0 prioritário. Se for o caso, pipeline user passa a ser uid configurável; default Rafael (uid=42) muda para uid com perm. Documentar em CLAUDE.md. |
-| Codificar `garantir_purchase_team` quebra POs já existentes em outros teams | BAIXA | MÉDIO | Hook só roda se team_id default for "default 41 Edilane LF". Outros teams (Samantha-LF id=135, Jessica_Fiscal_LF id=131, etc) NÃO são tocados. |
-| Fix contador F muda comportamento de ondas anteriores (que dependem status=APROVADO em F) | BAIXA | MÉDIO | Adicionar fase_pipeline filter junto: ETAPA F = `status IN (..., EXECUTADO) AND fase_pipeline IN (F5e_OK, F5f_FALHA)`. Restrito ao caso pós-D OK. |
-| Passo 9 (criar_invoice) tem mais regras escondidas além de ir.rule | MÉDIA | ALTO | S3 só roda após S0+S1 OK. Se passo 9 ainda falhar, investigar logs adicionais Odoo (não só XML-RPC). |
-| Sessão estoura tokens (já longa em v22+) | ALTA | ALTO | Spawn subagente `gestor-estoque-odoo` para casos reais; principal só implementa refator + revisa. |
-| Workaround team 143 não destravar para outras direções (CD, FB destino) | MÉDIA | MÉDIO | S1 cobrir multi-company; pytest cobrir 3 direções (LF/FB/CD destino). |
+| Fix B-V23-1 quebra cenários onde dfe.lines DEVEM ficar em company fonte (ex: DFe de COMPRA externa) | BAIXA | ALTO | Restringir fix ao caso `criar_dfe_a_partir_do_invoice_saida` (NF interna nossa) — não tocar fluxo de DFe de compras (gestor-recebimento). Pytest cobre os 2 cenários. |
+| Fix B-V23-2 acende novos bugs cascateados (taxes, fiscal_position, etc.) | ALTA | MÉDIO | S3 bulk REAL PROD em conjunto pequeno (3-5 ajustes) antes de onda grande. Capturar erros + iterar conforme cascade. |
+| `resolver_account_id_por_company` retorna None (account não existe na destino) | MÉDIA | ALTO | Átomo retorna `{'status': 'FALHA', 'erro': 'account_nao_existe_em_destino'}`; caller (orchestrator) decide se aborta linha ou tenta fallback (ex: usar account default da company destino). Logging detalhado. |
+| Bulk REAL PROD trava com SEFAZ rejeição em algum ajuste novo (não 176013/14) | MÉDIA | MÉDIO | Pre-flight C5 deve pegar antes. Se passar pre-flight mas rejeitar SEFAZ, recovery captura erro + ajustes individuais ficam em fase intermediária + operador investiga. |
+| Sessão estoura tokens | MÉDIA | ALTO | Spawn subagente `gestor-estoque-odoo` para casos reais; principal só implementa refator + revisa. |
 
 ---
 

@@ -3145,6 +3145,15 @@ class FaturamentoPipelineExecutor:
 
         Retorna None se direcao nao suportada (caller marca NAO_SUPORTADA_V20).
         Minimo viavel: apenas INDUSTRIALIZACAO_FB_LF (validado canary).
+
+        v23+ G039 (NF inter-company): substitui `team_id` STATIC (default
+        do dict CONSTANTS_FLUXO_L3) pelo team do user de execucao atual
+        (`self.odoo._uid`). Garante que `button_confirm`/`button_approve`
+        nao trave a PO em state='to approve' por falta de aprovador. Cache
+        local em `self._g039_team_cache[(user_id, company_id)]` evita N
+        round-trips por onda (1 garantir_purchase_team por (user,company)).
+        Em caso de falha do hook G039 (Odoo down, etc.), preserva `team_id`
+        STATIC + loga WARNING — fallback compativel com comportamento legacy.
         """
         cdest_constants = self.CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO.get(
             company_destino
@@ -3152,11 +3161,90 @@ class FaturamentoPipelineExecutor:
         l10n_tipo = self.L10N_BR_TIPO_PEDIDO_POR_ACAO.get(acao_decidida)
         if not cdest_constants or not l10n_tipo:
             return None
-        return {
+
+        resolved: Dict[str, Any] = {
             'company_destino': company_destino,
             'l10n_br_tipo_pedido': l10n_tipo,
-            **cdest_constants,
+            **cdest_constants,  # team_id STATIC ainda presente como fallback
         }
+
+        # v23+ G039 — override team_id pelo team do user de execucao
+        team_g039_id, team_g039_status = self._resolver_team_g039(
+            company_id=company_destino,
+        )
+        if team_g039_id is not None:
+            resolved['team_id'] = team_g039_id
+            resolved['_team_g039_status'] = team_g039_status
+        # else: fallback silencioso para team_id STATIC ja em `resolved`
+
+        return resolved
+
+    def _resolver_team_g039(
+        self, *, company_id: int,
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """v23+ G039: resolve team_id do user de execucao para `company_id`.
+
+        Cache local em `self._g039_team_cache[(user_id, company_id)]`.
+        Lazy-init do cache (atributo ausente -> cria vazio).
+
+        Returns:
+            (team_id, status) onde:
+              status: 'OK_EXISTENTE' | 'CRIADO' | 'CACHE' | None (falha)
+              team_id: int | None (None = fallback static do caller)
+        """
+        if not hasattr(self, '_g039_team_cache'):
+            self._g039_team_cache = {}
+
+        # Lazy auth — necessario para descobrir uid de execucao
+        try:
+            if not self.odoo._uid:
+                self.odoo.authenticate()
+        except Exception as e:
+            logger.warning(
+                f'_resolver_team_g039: auth Odoo falhou: {str(e)[:200]}'
+            )
+            return None, None
+
+        uid = self.odoo._uid
+        if not isinstance(uid, int) or uid <= 0:
+            logger.warning(
+                f'_resolver_team_g039: uid invalido ({uid!r})'
+            )
+            return None, None
+
+        key = (uid, company_id)
+        if key in self._g039_team_cache:
+            return self._g039_team_cache[key], 'CACHE'
+
+        try:
+            from app.odoo.estoque.scripts.escrituracao import (
+                EscrituracaoLfService,
+            )
+            escr_svc = EscrituracaoLfService(odoo=self.odoo)
+            r = escr_svc.garantir_purchase_team(
+                user_id=uid,
+                company_id=company_id,
+                dry_run=False,  # idempotente; CREATE so se necessario
+            )
+        except Exception as e:
+            logger.warning(
+                f'_resolver_team_g039 erro garantir_purchase_team '
+                f'(user_id={uid}, company_id={company_id}): {str(e)[:200]}'
+            )
+            return None, None
+
+        status = r.get('status')
+        if status in ('OK_EXISTENTE', 'CRIADO'):
+            team_id = r.get('team_id')
+            if isinstance(team_id, int) and team_id > 0:
+                self._g039_team_cache[key] = team_id
+                return team_id, status
+        logger.warning(
+            f'_resolver_team_g039: garantir_purchase_team retornou '
+            f'status={status} erro={r.get("erro")} '
+            f'(user_id={uid}, company_id={company_id}) — fallback STATIC'
+        )
+        return None, None
 
     def _executar_etapa_f_via_fluxo_l3(
         self,
@@ -4454,8 +4542,19 @@ class FaturamentoPipelineExecutor:
         db.session.expire_all()  # D11 — invalida ORM cache
 
         q = AjusteEstoqueInventario.query.filter_by(ciclo=ciclo)
+        # CR v23+ S2: ETAPA F aceita 'EXECUTADO' porque ajustes ja' progrediram
+        # apos ETAPA D OK (status muda PROPOSTO->APROVADO->EXECUTADO em F5e_SEFAZ_OK).
+        # Sem este filtro ampliado, contador F retornaria 0 para ajustes
+        # pos-SEFAZ pendentes de criar invoice de ENTRADA (passo 9 do FLUXO L3
+        # 1.2.x). Workaround manual `UPDATE status='APROVADO'` era necessario
+        # antes do retry resume F. v23+ codifica fix raiz. Demais etapas
+        # mantem PROPOSTO/APROVADO (status nao deveria ser EXECUTADO antes do
+        # SEFAZ-OK).
+        status_validos: List[str] = ['PROPOSTO', 'APROVADO']
+        if etapa == 'F':
+            status_validos.append('EXECUTADO')
         q = q.filter(
-            AjusteEstoqueInventario.status.in_(['PROPOSTO', 'APROVADO'])
+            AjusteEstoqueInventario.status.in_(status_validos)
         )
         if cod_produto:
             q = q.filter(AjusteEstoqueInventario.cod_produto == cod_produto)

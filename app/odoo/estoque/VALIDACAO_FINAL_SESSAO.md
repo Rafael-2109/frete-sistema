@@ -2232,5 +2232,82 @@ Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para
 | AP6 confusão nomenclatura Skill 8 | ⏳ adiado v23+ |
 | G-AUDIT-3 idempotência state=cancel | ✅ RESOLVIDO v22+ |
 | G038 l10n_br_origem ausente | ✅ DETECÇÃO v22+ (sub-skill C5) — sem auto-fix por design |
-| G039 purchase.team gatekeeper LF | ⏳ workaround manual v22+; codificação v23+ |
-| G-PERM-1 ir.rule dfe.line | ⏳ investigação v23+ |
+| G039 purchase.team gatekeeper LF | ✅ CODIFICADO v23+ (átomo `garantir_purchase_team` + hook `_resolver_team_g039` no orchestrator com cache) |
+| G-PERM-1 ir.rule dfe.line | ✅ INVESTIGADO v23+ (causa raiz NÃO era ir.rule isolada; era cascata: dfe.line.company_id + PO.line.account_id em company errada) |
+
+---
+
+## Sessão 2026-05-27 v23+ — Caminho B FLUXO L3 1.2.x VALIDADO 100% PROD + G039 codificado + 2 bugs arquiteturais descobertos
+
+### Resultado executivo
+
+✅ **Pipeline FLUXO L3 1.2.x caminho B COMPLETO em PROD pela 1ª vez** (passo 7→10 fim-a-fim) + **597 pytest verdes** (+17 net v23+) + **2 bugs arquiteturais descobertos** para fix v24+.
+
+| # | Entrega | Estado |
+|---|---------|--------|
+| 1 | **S0** Investigação G-PERM-1: ir.rule id=353 mapeada; descoberta que causa raiz NÃO é a rule isolada | ✅ |
+| 2 | **S1** Átomo NOVO Skill 7 `garantir_purchase_team(user_id, company_id, dry_run)` + 7 pytest cobrindo (idempotência, dry-run, real-run, validações) | ✅ LIVE |
+| 3 | **S1** Hook `_resolver_team_g039` no orchestrator com cache local `_g039_team_cache` + fallback STATIC + 7 pytest cobrindo | ✅ LIVE |
+| 4 | **S2** Fix raiz contador F status='EXECUTADO' em `_contar_pendentes_por_etapa` + 3 pytest cobrindo | ✅ LIVE |
+| 5 | **S3** Picking 321617 (LF/IN/01779) avaliado: state=done, company=LF only, location_dest=LF/Estoque (CORRETO, sem multi-company) | ✅ |
+| 6 | **S3** Workaround PROD: write PO 42419 team_id 41→143 'RAFAEL' | ✅ |
+| 7 | **S3** Workaround PROD: write dfe.lines 129585/86 company_id 1(FB)→5(LF) | ✅ |
+| 8 | **S3** Workaround PROD: write PO.lines 128461/62 account_id 22611(FB)→26459(LF) | ✅ |
+| 9 | **S3** Invoice ENTIN/2026/05/0055 (id=717630) criada + posted em PROD (R$ 12.525,54 untaxed, CFOP 1949 retorno industrialização) | ✅ |
+| 10 | **S3** Ajustes 176013/176014: status=EXECUTADO, fase=F5f_ENTRADA_OK | ✅ |
+| 11 | Pytest baseline: 580→**597 verdes** (+17 net v23+; +7 átomo + +7 hook + +3 contador F + 1 ajuste existente mockado G039) | ✅ |
+
+### Bugs arquiteturais descobertos v23+ (codificar em v24+)
+
+#### B-V23-1 — Skill 7 `criar_dfe_a_partir_do_invoice_saida` cria dfe.lines com company_id ERRADO
+
+- **O quê**: ao criar DFe a partir do XML de uma NF de SAÍDA, as `dfe.line` herdam `company_id` da SAÍDA (ex.: FB=1) em vez de forçar `company_destino` (ex.: LF=5).
+- **Sintoma**: passo 9 `action_create_invoice` falha com `<Fault 4: Rafael não tem acesso 'leitura' a dfe.line>`. Causa: método interno CIEL IT faz `with_company(dfe.company_id=5)` reduzindo `allowed_company_ids=[5]`; dfe.lines company=1 não passam pela ir.rule 353 nesse contexto.
+- **Workaround v23+**: write `dfe.line.company_id=5` manualmente após criação (aplicado em PROD para lines 129585/86).
+- **Fix raiz v24+**: no átomo `criar_dfe_a_partir_do_invoice_saida`, após `action_processar_arquivo_manual`, ler dfe.lines criadas + `write({'company_id': company_destino})`. Adicionar pytest cobrindo.
+
+#### B-V23-2 — Skill 7 `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id em company errada
+
+- **O quê**: ao criar PO via `action_gerar_po_dfe`, as `purchase.order.line` recebem `account_id` apontando para `account.account` da company da fonte (FB id=22611) em vez de resolver para a company_destino (LF id=26459).
+- **Sintoma**: passo 9 `action_create_invoice` (após fix B-V23-1) falha com `"Empresas incompatíveis: PO line LF vs Account FB"`. Cada code de conta (ex.: '3202010001 CUSTOS DAS MERCADORIAS VENDIDAS') existe em todas as 4 companies (FB/SC/CD/LF), mas a PO line foi linkada ao id da company errada.
+- **Workaround v23+**: write `PO.line.account_id` manualmente após criação (aplicado em PROD para lines 128461/62: 22611→26459).
+- **Fix raiz v24+**: novo átomo `resolver_account_id_por_company(account_id_fonte, company_destino) -> account_id_destino` que faz `search([(code, =, source.code), (company_id, =, destino)])`. Hook em `gerar_po_from_dfe`/`preencher_po`: ao ler/criar PO.lines, substitui account_id pelo equivalente na company_destino. Adicionar pytest.
+
+### Códigos modificados v23+
+
+| Arquivo | Mudança |
+|---------|---------|
+| `app/odoo/estoque/scripts/escrituracao.py` | +~150 LOC: novo átomo `garantir_purchase_team` + constant `_COMPANY_SIGLA_DEFAULT` antes de `buscar_dfe` |
+| `app/odoo/estoque/orchestrators/faturamento_pipeline.py` | Hook G039 em `_resolver_constants_fluxo_l3` + novo método `_resolver_team_g039` com cache + fix S2 em `_contar_pendentes_por_etapa` etapa F |
+| `tests/odoo/services/test_escrituracao_lf_service_v19.py` | +7 pytest cobrindo átomo `garantir_purchase_team` (idempotência, dry-run, real-run, fallback nome user, erros) |
+| `tests/odoo/services/test_faturamento_pipeline_orchestrator.py` | +10 pytest: 7 hook G039 (cache hit/miss, falha, override constants, fallback) + 3 contador F (status EXECUTADO aceito F, NÃO aceito B, APROVADO ainda conta) + 1 ajuste teste existente mockando `_resolver_team_g039` para evitar side-effect PROD |
+
+### Writes manuais aplicados em PROD v23+
+
+| # | Write | De → Para | Motivo |
+|---|-------|-----------|--------|
+| 1 | `purchase.order(42419).team_id` | 41 'JOSEFA' → 143 'RAFAEL' | G039 — Rafael precisava ser aprovador para destravar 'to approve' |
+| 2 | `l10n_br_ciel_it_account.dfe.line([129585,129586]).company_id` | 1 (FB) → 5 (LF) | B-V23-1 — alinhar com pai DFe (LF) para passar ir.rule 353 no contexto with_company(5) |
+| 3 | `purchase.order.line([128461,128462]).account_id` | 22611 (FB) → 26459 (LF) | B-V23-2 — alinhar com company_id da line (LF) para passar validação "empresas incompatíveis" em action_create_invoice |
+
+### Estado FINAL ajustes 176013/176014 PROD
+
+| Campo | Valor |
+|-------|-------|
+| status | EXECUTADO |
+| fase_pipeline | F5f_ENTRADA_OK |
+| picking_id_odoo (saída) | 321601 |
+| invoice_id_odoo (saída SEFAZ) | 716448 |
+| chave_nfe (saída SEFAZ) | 35260561724241000178550010000945661007164482 |
+| (entrada gerada — sem campo DB) | invoice 717630 'ENTIN/2026/05/0055' posted LF |
+| PO entrada | 42419 'C2619591' state=purchase team=143 RAFAEL |
+| DFe entrada | 43533 (criado v22+ via XML da saída) |
+| Picking entrada | 321617 'LF/IN/01779' state=done |
+
+### Pendências v24+
+
+1. **B-V23-1 fix raiz**: codificar `dfe.line.company_id=company_destino` no átomo `criar_dfe_a_partir_do_invoice_saida` (write após criação).
+2. **B-V23-2 fix raiz**: criar átomo helper `resolver_account_id_por_company` + hook em `gerar_po_from_dfe`/`preencher_po`.
+3. Continuar **AP6** refator (extrair Skill 8 ATÔMICA L2 do orchestrator).
+4. Bulk REAL PROD (não só 2 ajustes 176013/14) via opt-in `--usar-fluxo-l3-v19` com fixes B-V23-1+2 aplicados.
+5. Sub-skill C5 estender G007 + l10n_br_tipo_produto (descobertos v21+ como bloqueios SEFAZ não-detectados).
