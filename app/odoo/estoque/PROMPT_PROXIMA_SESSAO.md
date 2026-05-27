@@ -1,8 +1,8 @@
 # PROMPT PRÓXIMA SESSÃO — orquestrador-Odoo
 
-**Esta sessão visa**: v24+ codificar fix raiz B-V23-1 (Skill 7 `criar_dfe_a_partir_do_invoice_saida` force company_id=destino nas dfe.lines) + B-V23-2 (novo átomo `resolver_account_id_por_company` + hook em `gerar_po_from_dfe`/`preencher_po`) + bulk REAL PROD (não só 2 ajustes) via opt-in `--usar-fluxo-l3-v19` com fixes aplicados. Adiados v25+: AP6 refator + expand CONSTANTS FB/CD + C5 G007.
-**Base**: commit a fazer v23+ (G039 codificado + 17 testes net + invoice ENTIN/2026/05/0055 posted PROD + 2 bugs B-V23-1/2 documentados). 597 pytest verdes.
-**Risco**: MÉDIO (2 fixes em Skill 7 ABRANGENTE — código já validado em PROD com workaround manual; bulk REAL PROD acende novos cenários).
+**Esta sessão visa**: v24+ bulk REAL PROD (não só 2 ajustes) via opt-in `--usar-fluxo-l3-v19` com fixes B-V23-1+2 já codificados em v23.5+. AP6 refator (extrair Skill 8 ATÔMICA L2). Expand CONSTANTS FB/CD. Sub-skill C5 estender G007.
+**Base**: commit a fazer v23+v23.5+ (G039 codificado + B-V23-1 + B-V23-2 fix raiz codificados + invoice ENTIN/2026/05/0055 posted PROD + 12 testes adicionais v23.5+). 609 pytest verdes.
+**Risco**: MÉDIO (bulk REAL PROD em conjunto maior acende novos cenários cascateados; AP6 refator é mudança arquitetural).
 **Estimativa**: 2-3 sessões.
 
 > **Criado em**: 2026-05-27 v23+ EXECUTED (sucessor do v22+ EXECUTED).
@@ -71,11 +71,11 @@ Antes de codar: spawn AskUserQuestion confirmando escopo §3 + decisões abertas
 
 ---
 
-## §2. CONTEXTO ATUAL (atualizado por sessão v23+ — FINALIZADA — Caminho B 100% PROD + G039 codificado + 2 bugs Skill 7 descobertos)
+## §2. CONTEXTO ATUAL (atualizado por sessão v23+v23.5+ — FINALIZADA — Caminho B 100% PROD + G039 + B-V23-1 + B-V23-2 codificados)
 
 ### Estado do código
-- **Commit base**: v23+ EXECUTED (G039 codificado + B-V23-1/2 documentados + invoice ENTIN/2026/05/0055 posted PROD).
-- **Baseline pytest**: 597 verdes (580 v22+ + 17 net v23+).
+- **Commit base**: v23+v23.5+ EXECUTED (G039 + B-V23-1 + B-V23-2 fix raiz codificados + invoice ENTIN/2026/05/0055 posted PROD).
+- **Baseline pytest**: 609 verdes (580 v22+ + 29 net v23+v23.5+).
 - **Worktree**: `feat/estoque-odoo` (main pode ter avançado — rebase em §1.1).
 
 ### Estado da arquitetura
@@ -98,56 +98,57 @@ Antes de codar: spawn AskUserQuestion confirmando escopo §3 + decisões abertas
 - Sub-skill PRE-FLIGHT: `auditando-cadastro-fiscal-odoo` (V1 'inventario' v14b + G038 v22+).
 - Fluxos L3 escritos (11): 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, 1.2.1 v19+, 1.2.2 v19+ (Caminho B 100% validado v23+).
 
-### Bugs arquiteturais descobertos v23+ (PENDENTES v24+)
+### Bugs arquiteturais ✅ RESOLVIDOS v23.5+ (codificados na mesma sessão)
 
-#### B-V23-1 — `criar_dfe_a_partir_do_invoice_saida` cria dfe.lines com company_id ERRADO
-- Lines herdam company_id do XML da SAÍDA (FB=1) em vez de DESTINO (LF=5).
-- Sintoma: passo 9 falha 'leitura dfe.line' (Fault 4).
-- Workaround v23+: write dfe.line.company_id manualmente.
-- **Fix v24+**: codificar no átomo — após `action_processar_arquivo_manual`, read dfe.lines + write company_id=company_destino.
+#### B-V23-1 ✅ — Skill 7 `criar_dfe_a_partir_do_invoice_saida` force company_id pos-poll
+- Fix codificado: search dfe.lines por dfe_id pós `action_processar_arquivo_manual` + batch write `company_id=company_destino` se divergente.
+- Idempotente (skip se já alinhado). Non-fatal (warning log se falhar).
+- 3 pytest novos cobrindo: corrige, idempotent, falha non-fatal.
 
-#### B-V23-2 — `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id em company errada
-- account_id resolvido para account.account da FONTE (FB id=22611) em vez de DESTINO (LF id=26459).
-- Sintoma após fix B-V23-1: "Empresas incompatíveis".
-- Workaround v23+: write PO.line.account_id manualmente.
-- **Fix v24+**: novo átomo helper `resolver_account_id_por_company(account_id_fonte, company_destino)` + hook nos átomos Skill 7 que tocam PO.lines.
+#### B-V23-2 ✅ — Skill 7 `resolver_account_id_por_company` + hook em `gerar_po_from_dfe`
+- Novo átomo helper `resolver_account_id_por_company(account_id_fonte, company_destino)`: read fonte (code) + search [(code,=,code),(company_id,=,destino)]. Retorna OK_EXISTE, JA_NA_DESTINO ou NAO_EXISTE_DESTINO.
+- Hook em `gerar_po_from_dfe` após status=CRIADO: itera PO.lines + resolve account equivalente da line.company_id + batch write se divergente.
+- Account inexistente em destino: warning log + line preserva divergência (caller detecta passo 9 com diag claro).
+- 9 pytest novos (5 átomo + 4 hook).
 
 ---
 
-## §3. ESCOPO DESTA SESSÃO (v24+ — codificar B-V23-1 + B-V23-2 + bulk REAL PROD)
+## §3. ESCOPO DESTA SESSÃO (v24+ — bulk REAL PROD + AP6 refator + expand CONSTANTS)
 
 > **CONFIRMAR ESCOPO COM RAFAEL via AskUserQuestion ANTES de codar** (§1.4).
 
 ### Objetivo macro
-Codificar os 2 bugs descobertos em v23+ (B-V23-1 e B-V23-2) no Skill 7 ABRANGENTE → eliminar workarounds manuais → permitir bulk REAL PROD via FLUXO L3 1.2.x caminho B (não só 2 ajustes 176013/14, mas onda completa).
+Validar fixes B-V23-1+2 (codificados v23.5+) em escala REAL PROD via `--usar-fluxo-l3-v19` em conjunto maior de ajustes. Refator nomenclatura AP6 (extrair Skill 8 ATÔMICA L2). Expand CONSTANTS para suportar FB/CD destino além de LF.
 
 ### Sub-objetivos (ordem proposta — confirmar com Rafael)
 
-#### S1 — Codificar fix raiz B-V23-1 no átomo `criar_dfe_a_partir_do_invoice_saida`
-- Após `action_processar_arquivo_manual` (que cria DFe + lines), ler dfe.lines criadas (search por dfe_id) + write `{'company_id': company_destino}`.
-- Idempotência: read antes do write; se já estiver correto, skip.
-- Pytest novo cobrindo: lines em company errada (write executado) + lines em company correta (skip idempotente).
-- Smoke real PROD: criar DFe novo via XML de outra invoice de SAÍDA → verificar lines.company_id já correto sem workaround manual.
+#### S1 — Bulk REAL PROD validação fixes B-V23-1+2
+- Selecionar canary de 3-5 ajustes da onda (não só 176013/14 que já estão em F5f_ENTRADA_OK).
+- Rodar `executar_pipeline_resume --apenas-etapa F --usar-fluxo-l3-v19 --ciclo INVENTARIO_2026_05 --confirmar --confirmar-sefaz --limite 5`.
+- Validar: B-V23-1 fix automático elimina workaround manual de dfe.line.company_id. B-V23-2 fix automático elimina workaround manual de PO.line.account_id. Invoice ENTIN criada + posted sem intervenção.
+- Se OK: escalar para onda completa LF.
 
-#### S2 — Codificar fix raiz B-V23-2: átomo helper + hook
-- Novo átomo Skill 7 `resolver_account_id_por_company(account_id_fonte, company_destino)`: read account.account fonte (read code) → search [('code','=',code), ('company_id','=',company_destino)] → retorna id destino OU None se não encontrar (caller decide o que fazer).
-- Hook em `gerar_po_from_dfe` OU `preencher_po` (decidir onde): após criar/preencher PO.lines, iterar lines + para cada line: read `account_id` + chamar `resolver_account_id_por_company` + write se diferente.
-- Pytest novo cobrindo: account em company correta (skip) + account em company errada (resolve + write) + account não existe na destino (FALHA com erro claro).
+#### S2 — AP6 refator (extrair Skill 8 ATÔMICA L2)
+- Extrair as 5 ops C+D do orchestrator (`account.move` validar+liberar+polling+SEFAZ) para nova skill `faturando-odoo` ATÔMICA L2.
+- Atualizar §6 Tabela 1 (Skills L2): adicionar `faturando-odoo` ATÔMICA.
+- Tabela 2 (Orchestrators C3): renomear orchestrator `faturamento_pipeline` para `inventario_pipeline`.
+- Pytest cobrindo nova skill atômica.
 
-#### S3 — Bulk REAL PROD via opt-in `--usar-fluxo-l3-v19`
-- Pós-S1+S2 OK: rodar `executar_pipeline_resume --apenas-etapa F --usar-fluxo-l3-v19 --ciclo INVENTARIO_2026_05 --confirmar --confirmar-sefaz` sobre conjunto maior de ajustes (não só 176013/14 que já estão em F5f_ENTRADA_OK).
-- Monitorar: novos bugs cascateados? Performance? Idempotência ETAPA F multi-invoice?
-- Documentar findings em `VALIDACAO_FINAL_SESSAO.md` §"Sessão v24+".
-
-#### S4 — Expand CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO para FB=1 e CD=4
-- Pós-S3 OK: mapear `team_id` + `payment_term_id` + `picking_type_id` + `payment_provider_id` para FB e CD destino (atualmente só LF=5 mapeada).
-- Pré-cond: descobrir IDs corretos via XML-RPC (queries similares ao que foi feito v23+ para account_id LF=26459).
+#### S3 — Expand CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO para FB=1 e CD=4
+- Descobrir IDs corretos via XML-RPC (queries similares ao que foi feito v23+ para account_id LF=26459).
+- Mapear `team_id` + `payment_term_id` + `picking_type_id` + `payment_provider_id` por company_destino.
+- Atualizar `L10N_BR_TIPO_PEDIDO_POR_ACAO` para todas direções via lookup MATRIZ_INTERCOMPANY.
 - Pytest mockado cobrindo as 3 direções.
 
-#### S5 — Itens adiados v23+ (oportunístico)
-- AP6 refator: extrair Skill 8 ATÔMICA L2 do orchestrator (5 ops C+D sobre `account.move`)
-- Folhas L3 1.1.x (só saída) + 1.3 (transferência completa)
-- C5 G007 (standard_price=0) + l10n_br_tipo_produto
+#### S4 — Sub-skill C5 estender G007 + l10n_br_tipo_produto
+- Adicionar check G007 (standard_price=0) no `auditar_perfil_inventario`.
+- Adicionar check `l10n_br_tipo_produto` ausente.
+- Pytest + smoke real PROD.
+
+#### S5 — Folhas L3 1.1.x + 1.3 (depende AP6)
+- 1.1.x (só saída) compõe Skill 8 ATÔMICA L2 (v24+ S2).
+- 1.3 (transferência completa) compõe Skill 8 ATÔMICA + Skill 7 ABRANGENTE via 1.2.x.
+- Markdown apenas (escrita L3, sem código novo).
 
 ### O que NÃO entra nesta sessão (escopo declarado fora)
 - ❌ Refatorar `RecebimentoLfOdooService` ou `LancamentoOdooService` (NÃO MEXER).

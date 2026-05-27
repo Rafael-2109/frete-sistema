@@ -1063,8 +1063,77 @@ class EscrituracaoLfService:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
+        # v23.5+ B-V23-1 FIX RAIZ: alinhar dfe.line.company_id com pai DFe.
+        # ----
+        # Quando XML da SAIDA cross-company (ex: FB->LF) eh parseado pelo
+        # Odoo CIEL IT, o pai `l10n_br_ciel_it_account.dfe` recebe
+        # `company_id = company_destino` (LF=5) mas as filhas
+        # `l10n_br_ciel_it_account.dfe.line` HERDAM `company_id` da company
+        # da SAIDA original (FB=1). Sintoma: passo 9 `action_create_invoice`
+        # falha com `<Fault 4: 'Rafael nao tem acesso leitura' a dfe.line>`
+        # porque o metodo CIEL IT faz `with_company(dfe.company_id=5)` que
+        # reduz `allowed_company_ids=[5]`; dfe.lines company=1 nao passam
+        # pela `ir.rule id=353 'dfe_line multi-company'` (domain
+        # [('company_id', 'in', company_ids)]) nesse contexto reduzido.
+        #
+        # FIX: apos `action_processar_arquivo_manual` parsear o XML e criar
+        # as lines, ler todas as lines do DFe e fazer batch write
+        # `company_id=company_destino` se houver inconsistencia.
+        # Idempotencia: se todas ja estao corretas, skip write.
+        #
+        # Validado v23+ workaround manual em PROD (dfe 43533 lines
+        # 129585/86 FB->LF) + codificado v23.5+ como fix raiz.
+        # Doc: PROTECAO N25 + VALIDACAO B-V23-1.
+        lines_atualizadas: list = []
+        try:
+            line_ids = self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe.line', 'search',
+                [[('dfe_id', '=', dfe_id)]],
+            )
+            if line_ids:
+                lines_atuais = self.odoo.execute_kw(
+                    'l10n_br_ciel_it_account.dfe.line', 'read',
+                    [line_ids], {'fields': ['id', 'company_id']},
+                )
+                ids_para_corrigir = []
+                for ln in lines_atuais:
+                    company_atual = ln.get('company_id')
+                    company_atual_id = (
+                        company_atual[0]
+                        if isinstance(company_atual, list)
+                        else company_atual
+                    )
+                    if company_atual_id != company_destino:
+                        ids_para_corrigir.append(ln['id'])
+                if ids_para_corrigir:
+                    self.odoo.execute_kw(
+                        'l10n_br_ciel_it_account.dfe.line', 'write',
+                        [ids_para_corrigir, {'company_id': company_destino}],
+                    )
+                    lines_atualizadas = ids_para_corrigir
+                    logger.info(
+                        f'criar_dfe_a_partir_do_invoice_saida: B-V23-1 fix '
+                        f'aplicado em {len(ids_para_corrigir)} dfe.lines '
+                        f'(company_id -> {company_destino}). lines={ids_para_corrigir}'
+                    )
+                else:
+                    logger.debug(
+                        f'criar_dfe_a_partir_do_invoice_saida: B-V23-1 '
+                        f'idempotent — todas {len(line_ids)} dfe.lines ja '
+                        f'em company_id={company_destino}'
+                    )
+        except Exception as e:
+            # NAO-fatal: lines com company errada caem no passo 9 com erro
+            # claro 'leitura dfe.line'. Logamos warning para diagnostico.
+            logger.warning(
+                f'criar_dfe_a_partir_do_invoice_saida: B-V23-1 fix falhou '
+                f'(non-fatal): {str(e)[:200]}'
+            )
+
         out['status'] = 'CRIADO'
         out['dfe_id'] = dfe_id
+        if lines_atualizadas:
+            out['dfe_lines_corrigidas_b_v23_1'] = lines_atualizadas
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
@@ -1235,6 +1304,122 @@ class EscrituracaoLfService:
             return out
 
         out['status'] = 'ESCRITURADO'
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    # ============================================================
+    # v23.5+ B-V23-2 — Helper resolver_account_id_por_company
+    # ============================================================
+    # `action_gerar_po_dfe` cria PO.lines no destino (company=LF=5) mas
+    # `account_id` e resolvido para `account.account` da company FONTE
+    # (FB id=22611 '3202010001 CUSTOS') em vez do equivalente DESTINO
+    # (LF id=26459). Cada code de conta existe em todas 4 companies.
+    # Sintoma: passo 9 `action_create_invoice` falha com `"Empresas
+    # incompativeis: PO line LF vs Account FB"`.
+    #
+    # Helper resolve o account.account equivalente no destino por
+    # (code, company_id). Hook em `gerar_po_from_dfe` apos status=CRIADO
+    # itera PO.lines + corrige account_id divergente em batch.
+    # Doc: PROTECAO N26 + VALIDACAO B-V23-2.
+
+    def resolver_account_id_por_company(
+        self,
+        *,
+        account_id_fonte: int,
+        company_destino: int,
+    ) -> Dict[str, Any]:
+        """Helper Skill 7 B-V23-2: resolve account.account equivalente em outra company.
+
+        Le `code` do account_id_fonte + search `(code, company_id=destino)`.
+        Retorna id do account na company destino, ou None se nao existir
+        (caller decide fallback ou erro).
+
+        Args:
+            account_id_fonte: id atual do account.account (qualquer company).
+            company_destino: company alvo (1=FB, 4=CD, 5=LF).
+
+        Returns:
+            dict com:
+              status: 'OK_EXISTE' | 'JA_NA_DESTINO' | 'NAO_EXISTE_DESTINO' | 'FALHA'
+              account_id_destino: int | None
+              code: str | None
+              tempo_ms: int
+              erro: str | None
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA',
+            'account_id_destino': None,
+            'code': None,
+            'tempo_ms': 0,
+            'erro': None,
+        }
+
+        if not isinstance(account_id_fonte, int) or account_id_fonte <= 0:
+            out['erro'] = f'account_id_fonte_invalido: {account_id_fonte!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        if not isinstance(company_destino, int) or company_destino <= 0:
+            out['erro'] = f'company_destino_invalida: {company_destino!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Le account fonte (code + company_id)
+        try:
+            ac_fonte = self.odoo.read(
+                'account.account', [account_id_fonte],
+                ['id', 'code', 'name', 'company_id'],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_ler_account_fonte: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not ac_fonte:
+            out['erro'] = 'account_fonte_nao_existe'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        ac = ac_fonte[0]
+        code = (ac.get('code') or '').strip()
+        company_fonte = ac.get('company_id')
+        company_fonte_id = (
+            company_fonte[0] if isinstance(company_fonte, list)
+            else company_fonte
+        )
+        out['code'] = code
+
+        if not code:
+            out['erro'] = 'account_fonte_sem_code'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Ja esta na company correta?
+        if company_fonte_id == company_destino:
+            out['status'] = 'JA_NA_DESTINO'
+            out['account_id_destino'] = account_id_fonte
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Search account equivalente na company destino
+        try:
+            ac_destino = self.odoo.execute_kw(
+                'account.account', 'search_read',
+                [[('code', '=', code), ('company_id', '=', company_destino)]],
+                {'fields': ['id', 'code', 'name', 'company_id'], 'limit': 1},
+            )
+        except Exception as e:
+            out['erro'] = f'erro_search_account_destino: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        if not ac_destino:
+            out['status'] = 'NAO_EXISTE_DESTINO'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['status'] = 'OK_EXISTE'
+        out['account_id_destino'] = ac_destino[0]['id']
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
@@ -1415,6 +1600,104 @@ class EscrituracaoLfService:
         out['status'] = 'CRIADO'
         # CR-v19+-HIGH-2: simplificar coercion (segundo branch era morto)
         out['po_id'] = int(po_id) if po_id is not None else None
+
+        # v23.5+ B-V23-2 FIX RAIZ: alinhar PO.line.account_id com company da line.
+        # ----
+        # `action_gerar_po_dfe` cria PO no DESTINO (LF=5) mas as PO.lines
+        # recebem `account_id` apontando para account.account da company
+        # FONTE (FB id=22611) em vez do equivalente DESTINO (LF id=26459).
+        # Sintoma cascateado pos-fix B-V23-1: passo 9 `action_create_invoice`
+        # falha com `"Empresas incompativeis: PO line LF vs Account FB"`.
+        #
+        # FIX: ler PO.lines + para cada line: ler account_id atual + resolver
+        # account.account equivalente em line.company_id via
+        # `resolver_account_id_por_company` + batch write apenas se diferente.
+        # Idempotencia: se accounts ja estao alinhados, skip write.
+        #
+        # NOTA: hook so' roda em status=CRIADO (PO recem-criada pelo robo).
+        # Para status=IDEMPOTENT_EXISTE (PO ja existia antes do disparo),
+        # NAO tocamos — operador pode estar em estado avancado (invoice ja
+        # criada, etc). Hook nao-fatal: log warning se algo der errado.
+        # Doc: PROTECAO N26 + VALIDACAO B-V23-2.
+        po_lines_corrigidas: list = []
+        try:
+            po_data = self.odoo.read(
+                'purchase.order', [out['po_id']],
+                ['order_line'],
+            )
+            if po_data and po_data[0].get('order_line'):
+                line_ids = po_data[0]['order_line']
+                lines_atuais = self.odoo.execute_kw(
+                    'purchase.order.line', 'read',
+                    [line_ids], {'fields': ['id', 'company_id', 'account_id']},
+                )
+                # Agrupar IDs novos por (company_destino, account_id_destino)
+                # para batch writes (1 write por (company,account_destino_id))
+                writes_por_account: Dict[int, list] = {}
+                for ln in lines_atuais:
+                    line_company = ln.get('company_id')
+                    line_company_id = (
+                        line_company[0] if isinstance(line_company, list)
+                        else line_company
+                    )
+                    line_account = ln.get('account_id')
+                    line_account_id = (
+                        line_account[0] if isinstance(line_account, list)
+                        else line_account
+                    )
+                    if not line_account_id or not line_company_id:
+                        continue
+                    resolver_out = self.resolver_account_id_por_company(
+                        account_id_fonte=line_account_id,
+                        company_destino=line_company_id,
+                    )
+                    rstatus = resolver_out.get('status')
+                    if rstatus == 'JA_NA_DESTINO':
+                        # idempotente — account ja' esta na company da line
+                        continue
+                    if rstatus == 'OK_EXISTE':
+                        novo_id = resolver_out['account_id_destino']
+                        writes_por_account.setdefault(novo_id, []).append(
+                            ln['id']
+                        )
+                    elif rstatus == 'NAO_EXISTE_DESTINO':
+                        # Operador precisa criar account equivalente — log
+                        # warning + segue. Caller (orchestrator passo 9)
+                        # detectara erro 'Empresas incompativeis' com
+                        # diagnostico claro.
+                        logger.warning(
+                            f'gerar_po_from_dfe: B-V23-2 account code='
+                            f'{resolver_out.get("code")!r} NAO existe em '
+                            f'company={line_company_id}. PO line '
+                            f'{ln["id"]} continuara com account divergente.'
+                        )
+                # Aplica writes em batch
+                for novo_account_id, ids_linhas in writes_por_account.items():
+                    self.odoo.execute_kw(
+                        'purchase.order.line', 'write',
+                        [ids_linhas, {'account_id': novo_account_id}],
+                    )
+                    po_lines_corrigidas.extend(ids_linhas)
+                    logger.info(
+                        f'gerar_po_from_dfe: B-V23-2 fix aplicado em '
+                        f'{len(ids_linhas)} PO.lines (account_id -> '
+                        f'{novo_account_id}). lines={ids_linhas}'
+                    )
+                if not po_lines_corrigidas:
+                    logger.debug(
+                        f'gerar_po_from_dfe: B-V23-2 idempotent — todas '
+                        f'{len(lines_atuais)} PO.lines ja alinhadas'
+                    )
+        except Exception as e:
+            # NAO-fatal: caller detectara erro 'Empresas incompativeis' no
+            # passo 9 se account ficar divergente.
+            logger.warning(
+                f'gerar_po_from_dfe: B-V23-2 fix falhou (non-fatal): '
+                f'{str(e)[:200]}'
+            )
+
+        if po_lines_corrigidas:
+            out['po_lines_corrigidas_b_v23_2'] = po_lines_corrigidas
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
