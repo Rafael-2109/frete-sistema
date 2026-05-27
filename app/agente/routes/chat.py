@@ -109,6 +109,28 @@ def api_chat():
         model = data.get('model')
         effort_level = data.get('effort_level', 'off')
 
+        # Sticky session check (mitiga Anthropic Issue #61862)
+        # Se a sessão já tem dono em OUTRO worker, retornar 409 com hint —
+        # frontend retry com backoff até cair no worker dono. Evita recriar
+        # subprocess CLI que disparara Vj3 over-fires de interrupted_turn.
+        # Fail-open se Redis off ou flag desligada.
+        if session_id:
+            try:
+                from app.agente.sdk.sticky_session import claim_ownership, get_owner
+                if not claim_ownership(session_id):
+                    owner = get_owner(session_id)
+                    return jsonify({
+                        'success': False,
+                        'error': 'session_owned_by_other_worker',
+                        'message': 'Reconectando à sessão…',
+                        'retry_after_ms': 200,
+                        'owner_hint': owner[:16] if owner else None,
+                    }), 409
+            except Exception as _sticky_err:
+                # Fail-open: qualquer erro no sticky NÃO bloqueia a request
+                from flask import current_app as _ca
+                _ca.logger.debug(f"[STICKY] check ignorado: {_sticky_err}")
+
         # Fase 1 (2026-04-21): Smart model routing no canal Web.
         # Se flag USE_WEB_SMART_MODEL_ROUTING ligada, analisa padroes do prompt
         # e rebaixa Opus -> Sonnet para tarefas estruturadas/repetitivas.

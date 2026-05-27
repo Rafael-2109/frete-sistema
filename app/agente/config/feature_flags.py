@@ -610,6 +610,29 @@ if AGENT_SDK_SESSION_STORE_FLUSH not in ("batched", "eager"):
     AGENT_SDK_SESSION_STORE_FLUSH = "batched"
 
 # ====================================================================
+# Sticky Session via Redis (2026-05-27)
+# ====================================================================
+# Mitiga Anthropic Issue #61862 (Vj3 over-fires interrupted_turn).
+# Workers Gunicorn (workers=4) sem session affinity fazem requests da
+# mesma sessao caírem em workers diferentes → cada worker novo recria
+# subprocess CLI → materialize_resume_session → Vj3 dispara "Continue
+# from where you left off" → chain parentUuid quebra → modelo perde
+# turnos intermediários.
+#
+# Quando ON: workers registram ownership em Redis. Request num worker
+# nao-dono retorna 409. Frontend JS retry com backoff até cair no dono.
+#
+# Rollback: AGENT_STICKY_SESSION_ENABLED=false. Fail-open se Redis off.
+#
+# Ref: https://github.com/anthropics/claude-code/issues/61862
+AGENT_STICKY_SESSION_ENABLED = os.getenv(
+    "AGENT_STICKY_SESSION_ENABLED", "false"
+).lower() == "true"
+
+# TTL do ownership (segundos). Default 30min = mais que session idle típica.
+STICKY_SESSION_TTL_SEC = int(os.getenv("STICKY_SESSION_TTL_SEC", "1800"))
+
+# ====================================================================
 # Thinking Display (SDK 0.1.65+)
 # ====================================================================
 # Controla o campo `display` do ThinkingConfig (forwarded como --thinking-display CLI).

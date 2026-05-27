@@ -13,6 +13,13 @@ Verifica:
 import os
 import sys
 
+# Sair silencioso em PROD (Render) para evitar trigger do bug claude-code #61862:
+# Vj3() over-fires interrupted_turn quando hook_success attachment com conteudo
+# vira leaf do JSONL. Em DEV continua emitindo warnings para o desenvolvedor.
+# Ref: docs/agente/STICKY_SESSION_FIX.md
+if os.getenv('RENDER') or os.getenv('CLAUDE_AGENT_PROD'):
+    sys.exit(0)
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS_DIR = os.path.join(BASE_DIR, 'skills')
 REFS_DIR = os.path.join(BASE_DIR, 'references')

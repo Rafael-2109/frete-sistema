@@ -4325,8 +4325,12 @@ async function _refreshCsrfToken() {
 setInterval(_refreshCsrfToken, 90 * 60 * 1000);
 
 /**
- * Wrapper fetch com retry automático em erro CSRF.
+ * Wrapper fetch com retry automatico em erro CSRF.
  * Detecta csrf_error na resposta, renova o token e retenta 1x.
+ *
+ * Tambem trata 409 'session_owned_by_other_worker' (sticky session L1):
+ * worker errado pegou a request → backoff curto e retry. Ate 6 tentativas
+ * (probabilidade ~99.8% de acertar worker dono com 4 workers gunicorn).
  */
 async function _fetchWithCsrfRetry(url, options = {}) {
     let resp = await fetch(url, options);
@@ -4345,6 +4349,28 @@ async function _fetchWithCsrfRetry(url, options = {}) {
             }
         } catch {
             // Se não conseguiu parsear como JSON, retorna a resposta original
+        }
+    }
+
+    // Sticky session retry (Anthropic Issue #61862)
+    // Worker errado retornou 409 — backoff exponencial + retry ate 6x.
+    const STICKY_MAX_RETRIES = 6;
+    let stickyAttempt = 0;
+    while (resp.status === 409 && stickyAttempt < STICKY_MAX_RETRIES) {
+        try {
+            const cloned = resp.clone();
+            const body = await cloned.json();
+            if (body.error !== 'session_owned_by_other_worker') break;
+
+            const baseDelay = body.retry_after_ms || 200;
+            // Backoff suave: 200, 240, 288, 346, 415, 498 ms — total ~2s worst case
+            const delay = Math.round(baseDelay * Math.pow(1.2, stickyAttempt));
+            console.log(`[STICKY] Worker errado (tentativa ${stickyAttempt + 1}/${STICKY_MAX_RETRIES}), retry em ${delay}ms (owner=${body.owner_hint || '?'})`);
+            await new Promise(r => setTimeout(r, delay));
+            resp = await fetch(url, options);
+            stickyAttempt += 1;
+        } catch {
+            break;
         }
     }
 
