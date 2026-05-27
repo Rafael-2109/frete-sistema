@@ -2062,3 +2062,116 @@ Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para
 5. **Refator nomenclatura AP6** (S4 adiado desta sessão): extrair `executar_skill8_atomica` do orchestrator + atualizar §6 catálogo.
 6. Folhas L3 pendentes: 1.1.x, 1.3, 2.3.
 7. Atualizar `fase_pipeline` local dos 4 INDUSTRIALIZACAO_FB_LF (gap DB local vs Odoo — Rafael decide).
+
+---
+
+## Sessão 2026-05-26/27 v21+ — Caso real fluxo bulk FB→LF (1 NF, 2 cods) + Skill 2 átomo NOVO `transferir_loc_e_lote`
+
+### Resultado executivo
+
+✅ **8 entregas concretas em PROD** + **átomo NOVO Skill 2** + **576 pytest verdes** (+11 net v21+).
+
+| # | Entrega | Estado |
+|---|---------|--------|
+| 1 | DELETE 23.483 linhas poluídas ciclo INVENTARIO_2026_05 (com backup JSON preservado) | ✅ executado |
+| 2 | Cancel REAL 3 INT zumbi (FB/INT/05618=317347, /07953=320098, /07967=320133) | ✅ executado |
+| 3 | Átomo NOVO Skill 2 `transferir_loc_e_lote` (loc+lote DIFERENTES em 1 chamada) | ✅ LIVE (~225 LOC service + 11 pytest + SKILL.md + CLI modo D) |
+| 4 | Pre-criar lote literal 'P-15/05' (lot_id=60033) para 210010800 em FB | ✅ executado |
+| 5 | ETAPA 0 REAL: 250.330 SLEEVE + 1,8 CORANTE de FB/Indisp/MIGRAÇÃO → FB/Estoque/P-15/05 ou sem-lote | ✅ executado (2629ms total; 4 quants atualizados/criados) |
+| 6 | WRITE 2 produtos: 210010800 (price=0.05, l10n_br_tipo_produto='02') + 104000046 (l10n_br_tipo_produto='01') | ✅ executado |
+| 7 | Sub-skill C5 auto-fix barcode REAL (limpa barcode='210010800' do pid 28270) | ✅ executado |
+| 8 | INSERT 2 ajustes novos id=176013/176014 ciclo INVENTARIO_2026_05 status=APROVADO | ✅ executado |
+| 9 | Pipeline REAL A→F com `--usar-fluxo-l3-v19 --confirmar --confirmar-sefaz` | ❌ 3 retries falharam — pipeline NÃO chegou ao SEFAZ |
+
+### Pipeline retries — 3 bugs descobertos em sequência
+
+| Retry | Etapa que falhou | Bug | Fix aplicado |
+|-------|------------------|-----|--------------|
+| 1 (v21+ inicial) | B/F5a | **G-AUDIT-1**: orchestrator passou `etapa=fase` (string 'F5a_PICKING_OK') em coluna `operacao_odoo_auditoria.etapa` declarada como INTEGER → `psycopg2.errors.InvalidTextRepresentation` + rollback cascateado | ✅ removido `etapa=fase` (linha 255); `pipeline_etapa` carrega info (string) |
+| 2 (pós G-AUDIT-1) | B/F5a | **G-AUDIT-2**: `operacao_odoo_auditoria.acao` é VARCHAR(20), Skill 5 v15a usa `acao='criar_picking_inter_company'` (27 chars) → `StringDataRightTruncation` + rollback cascateado. Outras ações Skill 5 também excedem: `validar_picking_inter_company` (28), `criar_picking_entrada_destino_manual` (37). | ✅ Migration ALTER COLUMN: acao 20→60, status 20→30, pipeline_etapa 20→40. Modelo Python sincronizado. Arquivos .sql + .py em `scripts/migrations/v21_ampliar_operacao_odoo_auditoria.{sql,py}` |
+| 3 (pós G-AUDIT-2) | B/F5b | **G-AUDIT-3** ARQUITETURAL: Skill 5 `criar_picking_inter_company` idempotência inadequada — reaproveita picking 321600 (state=cancel do retry 1) via origin match → F5b `action_assign` falha com `<Fault 2: 'Nada para verificar a disponibilidade.'>` | ⏳ PENDENTE v22+ — adicionar `if state == 'cancel': criar novo` na lógica de idempotência |
+
+### Estado ao final v21+
+
+- Ajustes 176013/176014: `status=APROVADO, fase=F5b_FALHA, picking_id_odoo=321600` (gravado pelo orchestrator no retry 2)
+- Picking 321600 (FB/SAI/IND/01601): `state=cancel` (do retry 1 cancel órfão)
+- Quants ETAPA 0: intactos (saldos preservados)
+- v22+ exige: force-update ajustes (picking_id_odoo=None, fase=None) OU fix Skill 5 G-AUDIT-3 antes de retry.
+
+---
+
+## Antipadrões descobertos v21+ (acumulado)
+
+### G-AUDIT-1 (FIX aplicado)
+- **O quê**: passar string em coluna INTEGER do ORM (PostgreSQL)
+- **Onde**: orchestrator `_registrar_auditoria` linha 255
+- **Como evitar**: sempre conferir schema DB ANTES de adicionar uso de campo novo. Pytest mockado não pega esse tipo de bug — considerar teste de integração.
+
+### G-AUDIT-2 (FIX aplicado via migration)
+- **O quê**: schema VARCHAR muito pequeno para nomes longos de ações
+- **Onde**: `operacao_odoo_auditoria.acao` VARCHAR(20) vs 'criar_picking_inter_company' (27)
+- **Como evitar**: dimensionar VARCHAR com folga (60+ para acoes, 40+ para etapas/status); audit periodic via `SELECT MAX(LENGTH(coluna)) FROM tabela`.
+
+### G-AUDIT-3 (PENDENTE v22+)
+- **O quê**: idempotência reaproveita picking state=cancel
+- **Onde**: Skill 5 `criar_picking_inter_company` lógica de match por origin
+- **Como evitar**: state válido para reaproveitar = `draft/confirmed/assigned/done`. State=cancel exige criar NOVO. Pytest novo cobrindo cenário "retry após cancel".
+
+### TODO v22+ — investigar coluna VARCHAR pequena em outras tabelas
+- `OperacaoOdooAuditoria` foi pega, mas pode haver outras (LancamentoFreteOdooAuditoria, etc.)
+- Query para audit: `SELECT table_name, column_name, character_maximum_length FROM information_schema.columns WHERE data_type = 'character varying' AND character_maximum_length < 30 AND table_schema = 'public';`
+
+### Skill 2 átomo NOVO `transferir_loc_e_lote` (v21+)
+
+- **Service**: `app/odoo/estoque/scripts/transfer.py:780+` (~225 LOC novas)
+- **Pattern**: delega `ajustar_quant`×2 com `delta_esperado` propagado (mesmo de `transferir_entre_lotes_v2` e `transferir_entre_locations`)
+- **Args**: `product_id, company_id, qty, location_id_origem, lot_id_origem, location_id_destino, lot_id_destino (Optional), nome_lote_destino (Optional), criar_lote_destino_se_faltar=True, expiration_date_destino, resetar_reserva_origem, tolerancia_delta, dry_run`
+- **Pré-cond**: pelo menos UMA dimensão muda (loc OU lote diferente entre origem e destino) — ValueError caso contrário
+- **Status return**: EXECUTADO / DRY_RUN_OK / FALHA_REDUCAO / FALHA_AUMENTO / FALHA_RESOLVER_LOTE
+- **CLI**: `--loc-e-lote` flag + `--loc-origem` + `--loc-destino` + `--lote-origem` + `--lote-destino`
+- **Pytest**: 11 testes novos cobrindo todos cenários (feliz, resolve P-15/05 proxy, cria lote literal, raise origem==destino, qty<=0, FALHA_REDUCAO/AUMENTO/RESOLVER, dry-run, tracking='none')
+- **Caso real validado em PROD**: ETAPA 0 (210010800 250.330 + 104000046 1,8) — 2629ms total, 4 quants atualizados/criados, todos saldos batem com expectativa via XML-RPC direto.
+
+### Descobertas críticas v21+
+
+**D-V21-1 — Estimativa do ciclo INVENTARIO_2026_05 ERRADA**
+- Estimei 222 linhas; era 23.483. Apenas após backup completo descobri a escala real.
+- Lição: nunca estimar volume de tabelas sem `SELECT COUNT(*)` ANTES.
+
+**D-V21-2 — Resolver lote 'P-15/05' é PROXY de sem-lote**
+- `resolver_lote_destino` linha 479 trata `nome_lote='P-15/05'` SEMPRE como `lot_id=None` (proxy sem-lote).
+- Funciona para tracking='none' mas NÃO para tracking='lot' (cria quant lot_id=False inválido).
+- Workaround: caller pre-cria lote LITERAL via `lot_svc.criar_se_nao_existe` direto e passa `lot_id_destino=int`.
+- TODO v22+: adicionar arg `forcar_lote_literal=True` no resolver OU diferenciar P-15/05 proxy vs literal por contexto.
+
+**D-V21-3 — Loc 26489 (Em Trânsito Industrialização) é virtual `usage=transit`**
+- Não armazena saldo. Cancel de pickings INT origem 26489 NÃO devolve saldo a nenhum lugar real.
+- Importante: ao cancelar INT em loc virtual, NÃO é preciso rodar Skill 2 MODO C depois (sem saldo a consolidar).
+
+**D-V21-4 — Bloqueios SEFAZ pré-existentes em produtos do inventário**
+- 210010800: standard_price=0 (G007), weight=0 (G018), barcode==default_code (G035), l10n_br_tipo_produto=False
+- 104000046: l10n_br_tipo_produto=False
+- Sub-skill C5 V1 cobre só G017/G018/G035/G014/D-OPS-2/D-OPS-3 — NÃO cobre G007 (price=0) nem l10n_br_tipo_produto.
+- TODO v22+: estender C5 V1 'inventario' para cobrir G007 e l10n_br_tipo_produto (perfil 'inventario-saida-completa').
+
+### Antipadrões — status v21+ (acumulado)
+
+| Antipadrão | Status |
+|------------|--------|
+| AP1 V1 STRICT raise | ✅ resolvido v19+; wrapper deprecado v20+ |
+| AP2 ETAPA F orchestrator picking ENTRADA | ⏳ canary v20+ OK; remoção tampão aguardando bulk REAL OK (v21+ rodando agora) |
+| AP3 orchestrator chama skill INLINE | ✅ resolvido v18 |
+| AP4 pre-cond raise antes dry-run | ✅ resolvido v19+ |
+| AP5 gotcha sem ler CONSTANTS | ✅ resolvido v18 |
+| AP6 confusão nomenclatura Skill 8 | ⏳ adiado v22+ |
+
+### Próximo passo v22+
+
+1. Verificar resultado pipeline real (rodando background) — pode ter completado ou falhado mid-stream
+2. Se pipeline OK: remover tampão `criar_picking_entrada_destino_manual` + V1 STRICT wrapper + ETAPAS E/F legacy
+3. Se pipeline FALHA: investigar mid-stream (provavelmente robô CIEL IT lento ou SEFAZ rejeição cadastro)
+4. **Refator AP6 (Skill 8 ATÔMICA L2)**: extrair `executar_skill8_atomica` do orchestrator (5 ops C+D sobre `account.move`) + atualizar §6 catálogo
+5. **Expand CONSTANTS_FLUXO_L3 FB e CD destino**: mapear team_id, payment_term_id, picking_type_id por direção; canary REAL por direção nova
+6. **Folhas L3 pendentes (1.1, 1.3, 2.3)** — depende refator AP6
+7. **C5 V1 'inventario' estendido**: cobrir G007 (price=0) + l10n_br_tipo_produto
+8. **Resolver lote 'P-15/05'**: arg `forcar_lote_literal=True` OU contexto que diferencia proxy vs literal

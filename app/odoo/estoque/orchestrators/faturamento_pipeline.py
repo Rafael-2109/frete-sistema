@@ -246,13 +246,20 @@ def _registrar_auditoria(
         external_id = (
             f'INV-{ciclo}-A{ajuste_id:06d}-{fase}-{uuid.uuid4().hex[:8]}'
         )
+        # G-AUDIT-1 (NOVO v21+ FIX 2026-05-27): NUNCA passar `etapa=fase`.
+        # Coluna `etapa` é INTEGER no modelo (`OperacaoOdooAuditoria.etapa = db.Column(db.Integer)`)
+        # mas fase é string ('F5a_PICKING_OK', etc.). Passar string em INTEGER causa
+        # `psycopg2.errors.InvalidTextRepresentation` que faz rollback cascateado.
+        # Fonte correta da informação semântica de fase é `pipeline_etapa` (string),
+        # já passado abaixo. `etapa_descricao` (string) também já carrega fase.
+        # Incidente: 2026-05-27 pipeline REAL v21+ crashou em F5a depois de criar
+        # picking órfão 321600 — ver memory [[g_audit_1_etapa_int_vs_string]] (v22+).
         OperacaoOdooAuditoria.registrar(
             external_id=external_id,
             tabela_origem='ajuste_estoque_inventario',
             registro_id=ajuste_id,
             acao=acao,
             modelo_odoo=modelo_odoo or 'stock.picking',
-            etapa=fase,
             etapa_descricao=f'{fase} {acao}',
             status=status,
             payload_json=payload,

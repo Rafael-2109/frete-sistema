@@ -19,14 +19,14 @@
 7. Se sessão for sobre Skill 8 → ler `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO (regra inviolável 0).
 
 ### Baseline pytest esperado
-- **563 verdes** (tests/odoo/ — v20+ confirmado em 18.21s. 555 baseline v19+ + 8 net v20+ = 4 FIX A/B Skill 7 + 1 DeprecationWarning V1 STRICT + 3 opt-in `--usar-fluxo-l3-v19`.)
+- **576 verdes** (tests/odoo/ — v21+ confirmado em 14.74s. 565 baseline v20+ + 11 net v21+ = 11 testes Skill 2 átomo NOVO `transferir_loc_e_lote`. Fix G-AUDIT-1 v21+ NÃO aumentou contagem — apenas removeu linha sem novo teste; 77 testes orchestrator continuam passando.)
 
 ### Estado global (atualizado v18 Fase 0 — 2026-05-26)
 
 | Skill / Componente | Status | Localização |
 |--------------------|--------|-------------|
 | Skill 1 `ajustando-quant-odoo` | ✅ MATURADA | `scripts/quant.py` |
-| Skill 2 `transferindo-interno-odoo` | 🟡 mín viável (FIX D-OPS-5 v14b) | `scripts/transfer.py` |
+| Skill 2 `transferindo-interno-odoo` | 🟡 **4 modos atômicos** (A/B/C/D) — D NOVO v21+ `transferir_loc_e_lote` (loc+lote em 1 chamada) — 44 pytest (33 v20+ + 11 net v21+) | `scripts/transfer.py` |
 | Skill 2.4 `operando-reservas-odoo` | 🟡 mín viável (5 átomos) | `scripts/reserva.py` |
 | Skill 4 `operando-mo-odoo` | 🟡 mín viável | `scripts/mo.py` |
 | Skill 5 `operando-picking-odoo` | 🟡 7 átomos LIVE v19+ (`preencher_lotes_picking` NOVO; `criar_picking_entrada_destino_manual` DEPRECATED) — 68 pytest | `scripts/picking.py` |
@@ -38,7 +38,7 @@
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
-### Próximo passo (v21+) — bulk REAL PROD + remoção tampão + refator nomenclatura
+### Próximo passo (v22+) — pipeline retry + remoção tampão + refator nomenclatura
 
 **v20+ CONCLUÍDA** (2026-05-26):
 1. ✅ S1 cross-refs final (gestor-estoque-odoo árvore + ROUTING_SKILLS + fachada SKILL.md `faturando-odoo` Receita 5).
@@ -48,14 +48,34 @@
 5. ✅ S5 DeprecationWarning runtime em `criar_recebimento_orchestrado` (V1 STRICT wrapper). 1 pytest novo.
 6. ✅ R3 doc fluxo 1.2.2 atualizado (premissa "INDUSTRIALIZACAO_FB_LF nunca tem DFe via SEFAZ" reescrita com fato empírico PROD 2026-05).
 
-**v21+ alvo** (Risco MÉDIO — bulk PROD + refator):
-1. **Bulk REAL PROD do FLUXO L3 v19+** via opt-in `--usar-fluxo-l3-v19` em onda completa (não só 1 invoice). Casos disponíveis no ciclo INVENTARIO_2026_05 (4 INDUSTRIALIZACAO_FB_LF F5c_LIBERADO).
-2. Após bulk OK: **remover tampão** `criar_picking_entrada_destino_manual` (Skill 5 v15a) + **remover wrapper V1 STRICT** `criar_recebimento_orchestrado` + **remover ETAPAS E/F legacy** do orchestrator.
-3. **Expandir** `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO` para FB=1 e CD=4 (mapear team_id, payment_term_id, picking_type_id + validar canary).
-4. **Expandir** `L10N_BR_TIPO_PEDIDO_POR_ACAO` para todas direções via lookup MATRIZ_INTERCOMPANY.
-5. **Refator nomenclatura AP6** (S4 adiado v20+): extrair `executar_skill8_atomica(picking_ids, constants_por_acao, dry_run)` do orchestrator (5 ops C+D sobre `account.move`) + atualizar §6 catálogo (Tabela 1 ganha Skill 8 ATÔMICA L2; Tabela 2 renomeia para `inventario_pipeline`).
-6. Escrever folhas L3 pendentes (1.1.x só saída, 1.3 transferência completa, 2.3 transferir saldo entre códigos) sobre Skill 8 ATÔMICA L2.
-7. Atualizar `fase_pipeline` local dos 4 INDUSTRIALIZACAO_FB_LF de F5c_LIBERADO → F5f_ENTRADA_OK (gap DB local vs Odoo — Rafael decide).
+**v21+ FINALIZADA** (2026-05-26/27 — pausada com 3 bugs sequenciais descobertos no pipeline real):
+1. ✅ Cancel 3 INT zumbi (317347, 320098, 320133) — Skill 5 modo cancelar
+2. ✅ DELETE 23.483 linhas ciclo INVENTARIO_2026_05 (backup JSON em /tmp/backup_ajustes_INV_2026_05_20260526_191927.json)
+3. ✅ **Skill 2 átomo NOVO `transferir_loc_e_lote`** (loc+lote em 1 chamada) — 11 pytest + SKILL.md + CLI modo D
+4. ✅ Pre-criar lote literal 'P-15/05' lot_id=60033 (210010800 FB)
+5. ✅ ETAPA 0 REAL: 250.330 SLEEVE + 1,8 CORANTE de Indisp/MIGRAÇÃO → Estoque/P-15/05 (4 quants atualizados/criados)
+6. ✅ WRITE 2 produtos (price=0.05 + tipo='02'/'01' + auto-fix barcode)
+7. ✅ INSERT 2 ajustes novos id=176013/176014 (status=APROVADO)
+8. ✅ **Fix G-AUDIT-1**: removido `etapa=fase` do orchestrator linha 255 (pipeline_etapa carrega info) — bug schema INTEGER vs string crashou pipeline retry 1
+9. ✅ **Migration G-AUDIT-2**: `operacao_odoo_auditoria.acao` VARCHAR(20)→VARCHAR(60), `status` →30, `pipeline_etapa` →40 (acomoda 'criar_picking_inter_company'=27 etc.) — arquivos .sql + .py em `scripts/migrations/`
+10. ❌ **G-AUDIT-3 PENDENTE v22+**: Skill 5 `criar_picking_inter_company` reaproveita picking state=cancel (idempotência inadequada) → `action_assign` falha em F5b. 3 retries do pipeline NÃO chegaram ao SEFAZ.
+
+### Estado dos ajustes 176013/176014 (v22+ retoma)
+- id=176013/176014: `status=APROVADO, fase_pipeline='F5b_FALHA', picking_id_odoo=321600`
+- Picking 321600 (FB/SAI/IND/01601): `state=cancel`
+- Quants ETAPA 0: intactos (pipeline nunca tocou saldo)
+- v22+ exige: fix Skill 5 G-AUDIT-3 + force-update ajustes (picking_id=NULL, fase=NULL) + retry pipeline
+
+**v22+ alvo**:
+1. Verificar resultado pipeline retry (rodando background ao final desta sessão)
+2. Se pipeline OK: **remover tampão** `criar_picking_entrada_destino_manual` (Skill 5 v15a) + **remover wrapper V1 STRICT** `criar_recebimento_orchestrado` + **remover ETAPAS E/F legacy** do orchestrator
+3. Se pipeline FALHA mid-stream: investigar erro novo (não G-AUDIT-1 mais — pode ser cadastro fiscal não cobertos por C5, robô CIEL IT lento, ou SEFAZ rejeição)
+4. **Refator nomenclatura AP6** (S4 adiado v20+/v21+): extrair `executar_skill8_atomica(picking_ids, constants_por_acao, dry_run)` do orchestrator (5 ops C+D sobre `account.move`) + atualizar §6 catálogo (Tabela 1 ganha Skill 8 ATÔMICA L2; Tabela 2 renomeia para `inventario_pipeline`).
+5. **Expandir** `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO` para FB=1 e CD=4 (mapear team_id, payment_term_id, picking_type_id + validar canary).
+6. **Expandir** `L10N_BR_TIPO_PEDIDO_POR_ACAO` para todas direções via lookup MATRIZ_INTERCOMPANY.
+7. Escrever folhas L3 pendentes (1.1.x só saída, 1.3 transferência completa, 2.3 transferir saldo entre códigos) sobre Skill 8 ATÔMICA L2.
+8. **Sub-skill C5 V1 estendido**: cobrir G007 (standard_price=0) + l10n_br_tipo_produto (descobertos v21+ como bloqueios SEFAZ não-detectados).
+9. **Resolver lote 'P-15/05'**: arg `forcar_lote_literal=True` no resolver — diferenciar proxy (sem-lote) vs literal.
 
 **Estimativa**: 2-3 sessões. **Bloqueia**: galhos L3 1.1 + 1.3 (precisam Skill 8 ATÔMICA L2 extraída).
 

@@ -46,6 +46,9 @@
 | N18 | Adicionar status novo em átomo sem atualizar whitelist do orchestrator que valida | Custou 1 round de canary REAL v20+ (linha 2939 do orchestrator não aceitava `IDEMPOTENT_ESCRITURADO` novo do FIX A). Toda mudança de status do átomo exige checklist de callsites (grep). | AR9 desta tabela |
 | N19 | Confiar no resumo do subagente após reenvio para re-executar algo | Subagente é stateful — pode responder "do contexto recente" sem re-executar script. SEMPRE verificar timestamp do log/output arquivo para confirmar re-execução. | AR10 desta tabela |
 | N20 | Idempotência via campo "direto" único (ex: só `dfe.purchase_id`) sem fallback inverso | Padrão validado em PROD: vínculos Odoo têm 14.6% direto + 75% via campo paralelo (`purchase_fiscal_id`) + 85.4% via reverso. Sem cobrir os 3 caminhos, idempotência falsa-negativa duplica registros fiscais (PO/picking/invoice). | CLAUDE.md §6.5 AP2 v20+ + `validacao_nf_po_service.py:530-534` |
+| N21 | Passar string em coluna INTEGER (ou vice-versa) sem ler schema do banco — incidente G-AUDIT-1 v21+ | orchestrator passou `etapa='F5a_PICKING_OK'` (string) para coluna `operacao_odoo_auditoria.etapa` declarada como `db.Column(db.Integer)`. `psycopg2.errors.InvalidTextRepresentation` rolled back session, picking 321600 ficou órfão draft no Odoo, pipeline crashou em F5a. Sempre que adicionar campo novo a ORM model, confirmar tipo no DB schema (`information_schema.columns`) E nos callers. | CLAUDE.md §14 D-V21-5 |
+| N22 | Schema VARCHAR pequeno para nomes longos — incidente G-AUDIT-2 v21+ | `operacao_odoo_auditoria.acao` era VARCHAR(20) mas Skill 5 v15a usa `criar_picking_inter_company` (27 chars), `validar_picking_inter_company` (28), `criar_picking_entrada_destino_manual` (37). `StringDataRightTruncation` rolled back sessão. Dimensionar VARCHAR com folga (60+ para acoes/identificadores), 40+ para etapas/status. Audit periódico via `SELECT MAX(LENGTH(coluna))`. | CLAUDE.md §14 D-V21-6 + migration `scripts/migrations/v21_ampliar_operacao_odoo_auditoria.sql` |
+| N23 | Idempotência reaproveitar registro state=cancel — incidente G-AUDIT-3 v21+ (PENDENTE v22+) | Skill 5 `criar_picking_inter_company` faz idempotência por origin match. Se picking existente está em state=cancel (do retry anterior), reaproveita erroneamente → `action_assign` falha (`<Fault 2: 'Nada para verificar a disponibilidade.'>`). Estados válidos para reaproveitar: `draft/confirmed/assigned/done`. State=cancel exige criar NOVO. | CLAUDE.md §14 D-V21-7 — fix v22+ |
 
 ---
 
@@ -134,6 +137,29 @@
   3. Adicionar pytest cobrindo o branch novo (não só o átomo isolado)
   4. Documentar status novo na docstring do átomo (Returns)
 - **Onde corrigido**: `app/odoo/estoque/orchestrators/faturamento_pipeline.py:2939` (aceita `IDEMPOTENT_ESCRITURADO`); checklist v21+ deve auditar passos 5+ se FIX C aplicar.
+
+### AR12 — Pipeline com 3 bugs schema/arquitetural em sequência (v21+ G-AUDIT-1/2/3)
+
+- **O quê**: pipeline real v21+ rodou 3 vezes (inicial + 2 retries). Cada um descobriu bug NOVO:
+  - **G-AUDIT-1** (retry 1): orchestrator passa string em coluna INTEGER (`etapa`) → `InvalidTextRepresentation`
+  - **G-AUDIT-2** (retry 2): VARCHAR(20) pequeno demais para `acao='criar_picking_inter_company'` (27) → `StringDataRightTruncation`
+  - **G-AUDIT-3** (retry 3, PENDENTE v22+): Skill 5 idempotência reaproveita picking state=cancel → `action_assign` falha
+- **Custo**: ~3 horas com 3 retries + investigação + migration + ainda não chegou ao SEFAZ. Pipeline real foi rodado pela primeira vez em PROD nesta sessão (canary v20+ era 1 invoice via L3 direto, sem pipeline A-F completo).
+- **Como evitar**: novos pipelines/skills devem ter SMOKE TEST integration (REAL DB, NÃO mock) ANTES de canary PROD. Cobertura unitária mockada não pega esses bugs.
+- **Lição expensive**: cada retry descobriu bug novo porque pytest mockou auditoria (não validou schema real). Lição: para pipelines críticos SEFAZ, ter pytest de integração que escreva REAL na auditoria com nomes longos reais.
+- **Onde codificado**: N21 + N22 + N23 desta tabela.
+
+### AR11 — Passar string em coluna INTEGER do auditoria (v21+ G-AUDIT-1)
+
+- **O quê**: orchestrator `_registrar_auditoria` linha 255 passava `etapa=fase` (string `'F5a_PICKING_OK'`) para coluna `operacao_odoo_auditoria.etapa` declarada como `db.Column(db.Integer)`. PostgreSQL rejeitou via `psycopg2.errors.InvalidTextRepresentation: invalid input syntax for type integer`. Session rollback cascateou. Pipeline real v21+ crashou em F5a APÓS criar picking 321600 (órfão draft no Odoo).
+- **Por que aconteceu**: dois campos no modelo — `etapa` (INTEGER, herdado de schema antigo) e `pipeline_etapa` (String, novo). Código passou `fase` em ambos. Pytest mockou `OperacaoOdooAuditoria.registrar` então não pegou. Schema do DB nunca foi cross-validado contra uso real.
+- **Custo**: 1 round de pipeline real bem-sucedido pela primeira vez foi DESPERDIÇADO — picking órfão criado, ajustes APROVADOS sem fase, ETAPA C/D/E/F bloqueadas por rollback.
+- **Correção**: removido `etapa=fase` em `app/odoo/estoque/orchestrators/faturamento_pipeline.py:255` (`pipeline_etapa` + `etapa_descricao` continuam carregando a info semântica).
+- **Como evitar**:
+  1. SEMPRE conferir schema real do DB (`information_schema.columns`) ao passar dados para ORM model novo (ou não-óbvio)
+  2. Pytest com REAL DB (não mock) detecta esses bugs antes de PROD — considerar test de integração para auditoria
+  3. Modelo Python deve ter `__table_args__` ou docstring esclarecendo semântica de campos similares (`etapa` int vs `pipeline_etapa` string)
+- **Onde**: `app/odoo/estoque/orchestrators/faturamento_pipeline.py:249-269` (com comentário G-AUDIT-1) + N21 desta tabela.
 
 ### AR10 — Subagente reportando dados velhos após reenvio (v20+ canary REAL)
 
