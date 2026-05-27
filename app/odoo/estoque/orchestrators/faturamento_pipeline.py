@@ -3336,11 +3336,23 @@ class FaturamentoPipelineExecutor:
                 out['contadores']['nao_suportada_v20'] += 1
                 continue
 
+            # v24.1+ FIX (regression v23+ G039): `_resolver_constants_fluxo_l3`
+            # adiciona meta-keys prefixadas '_' (ex: '_team_g039_status') no
+            # dict resolved. Filtrar ANTES do splat porque
+            # `executar_fluxo_l3_1_2_x` tem assinatura strict sem **kwargs.
+            # Sem filtro: TypeError: unexpected keyword argument
+            # '_team_g039_status'. Descoberto v24+ canary REAL PROD operacao
+            # avulsa INDUSTRIALIZACAO_FB_LF 37688un cod 210030009 — NF SEFAZ
+            # autorizada (chave 35260561724241000178550010000945741007183640)
+            # ficou pendente escrituracao por bug ETAPA F.
+            public_constants = {
+                k: v for k, v in constants.items() if not k.startswith('_')
+            }
             try:
                 r = self.executar_fluxo_l3_1_2_x(
                     invoice_id_saida=invoice_id,
                     dry_run=dry_run,
-                    **constants,
+                    **public_constants,
                 )
             except Exception as e:
                 logger.error(

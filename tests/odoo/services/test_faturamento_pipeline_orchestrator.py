@@ -2578,6 +2578,86 @@ def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
     assert kwargs['payment_provider_id'] == 38
 
 
+def test_v24_1_etapa_f_via_fluxo_l3_filtra_meta_keys_g039_status(db):
+    """v24.1+ REGRESSION: `_executar_etapa_f_via_fluxo_l3` deve FILTRAR
+    meta-keys prefixadas '_' (ex: '_team_g039_status' adicionado v23+ G039)
+    ANTES do splat em `executar_fluxo_l3_1_2_x` (assinatura strict sem
+    **kwargs). Sem filtro: `TypeError: unexpected keyword argument
+    '_team_g039_status'`.
+
+    Bug descoberto v24+ canary REAL PROD operacao avulsa
+    INDUSTRIALIZACAO_FB_LF 37688un cod 210030009 (NF SEFAZ autorizada
+    chave 35260561724241000178550010000945741007183640 pendente
+    escrituracao por ETAPA F crash em 47ms).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V24_1_FILTRA_META_KEYS'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='210030009',
+        tipo_produto=2,  # INSUMO
+        company_id=1,
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        qtd_inventario=37688.0,
+        qtd_odoo=0,
+        qtd_ajuste=37688.0,
+        lote_destino='AJ-27-05',
+        invoice_id_odoo=718364,
+        chave_nfe='35260561724241000178550010000945741007183640',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v24_1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    # v23+ G039 hook retorna (team_id, status) reais -> `_team_g039_status`
+    # POPULADO no dict resolved (pre-condicao do bug fixado v24.1+)
+    with patch.object(
+        executor, '_resolver_team_g039', return_value=(143, 'OK_EXISTENTE'),
+    ), patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'FLUXO_OK',
+            'caminho': 'B',
+            'dfe_id': 99999,
+            'po_id': 88888,
+            'picking_id': 77777,
+            'invoice_id': 66666,
+            'passos': [],
+            'tempo_ms': 5000,
+        },
+    ) as mock_fluxo:
+        res = executor.executar_etapa_f(
+            ciclo=ciclo_test,
+            dry_run=False,
+            usar_fluxo_l3_v19=True,
+        )
+
+    # Cleanup
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    # Status FLUXO_OK -> fix funcionou (sem TypeError)
+    assert res['status'] == 'EXECUTADO_OK'
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['falha'] == 0
+
+    # CRUCIAL: kwargs splatted NAO contem meta-key '_team_g039_status'
+    mock_fluxo.assert_called_once()
+    kwargs = mock_fluxo.call_args.kwargs
+    assert '_team_g039_status' not in kwargs, (
+        "Regression v24.1+: meta-key '_team_g039_status' vazou para o "
+        "splat de executar_fluxo_l3_1_2_x (TypeError esperado)."
+    )
+    # E o team_id correto chega (G039 substituiu STATIC=41 por 143)
+    assert kwargs['team_id'] == 143
+    assert kwargs['invoice_id_saida'] == 718364
+    assert kwargs['company_destino'] == 5  # LF
+
+
 def test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada(db):
     """v20+ S3: ETAPA F com flag=True + ajuste destino CD (4)
     retorna NAO_SUPORTADA_V20 (constants CD nao mapeadas em
