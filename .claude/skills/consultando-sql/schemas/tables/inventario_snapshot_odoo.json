@@ -53,6 +53,31 @@
       "default": 0
     },
     {
+      "name": "mov_compras",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "mov_vendas",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "mov_consumo",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "mov_producao",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "mov_sist_total",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
       "name": "refresh_em",
       "type": "timestamp"
     }
@@ -71,16 +96,16 @@
   ],
   "indices": [
     {
-      "name": "ix_inventario_snapshot_odoo_cod_produto",
+      "name": "ix_inventario_snapshot_odoo_ciclo_id",
       "columns": [
-        "cod_produto"
+        "ciclo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_inventario_snapshot_odoo_ciclo_id",
+      "name": "ix_inventario_snapshot_odoo_cod_produto",
       "columns": [
-        "ciclo_id"
+        "cod_produto"
       ],
       "unique": false
     }
