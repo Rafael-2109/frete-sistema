@@ -15,12 +15,12 @@ V1 (2026-05-24): unico atomo demanda-driven (skills nascem de casos reais):
 Atomos PREVISTOS sem demanda (NAO implementar — feedback-skills-demanda-driven):
 - criar_mo: sem demanda real isolada (pipeline cria via Odoo)
 - alterar_mo: caso real existe mas e fluxo cross-skill (Skill 2 transfer +
-  write em stock.move). Ver memoria [[mo_componente_local_consumo]].
+  write em stock.move). Ver memoria local Claude Code [[mo_componente_local_consumo]].
 
 Gotchas-invariante codificados:
 - G-MO-01: consumo_total > 0 = FURO CONTABIL -> bloqueia cancelamento.
   Operador deve usar mrp.unbuild via fluxo cross-skill se precisar reverter
-  consumo. Ver [[reaproveitar-semiacabado-orfao-mo-cancelada]] §3.
+  consumo. Ver memoria local Claude Code [[reaproveitar-semiacabado-orfao-mo-cancelada]] §3.
 - G-MO-02: manual_consumption=True nao reserva via action_assign. NAO
   relevante para cancelar (action_cancel ignora reservas/picked). Relevante
   para criar/alterar (nao cobertos em V1).
@@ -30,18 +30,30 @@ Gotchas-invariante codificados:
   action_cancel e seguro com picked (nao mexe em quants existentes).
 
 Helpers:
-- medir_consumo_mo(mo_ids): soma stock.move.quantity (state != 'cancel') por
-  raw_material_production_id. Tolerancia > 0.0001 (mesma de cancelar_mos.py
-  e 14_cancelar_mos_antigas_fb.py).
+- medir_consumo_mo(mo_ids): retorna dict {mo_id: {done, reservado, total}}.
+  Soma stock.move.quantity por raw_material_production_id particionado por state:
+    done       = state='done'                              (consumo CONTABIL real)
+    reservado  = state IN (assigned, waiting, partially_available, confirmed)
+                                                           (apenas reserva fantasma)
+    total      = done + reservado                          (compat legacy)
+  Tolerancia > 0.0001 (mesma de cancelar_mos.py e 14_cancelar_mos_antigas_fb.py).
+- medir_consumo_mo_legacy(mo_ids): retorna {mo_id: float total} (compat ate
+  callers migrarem; nao usar em codigo novo).
 
 Status canonicos (output['status']):
 - EXECUTADO — state pos='cancel' (action_cancel teve efeito)
 - NOOP — state pre='cancel' (idempotente, action_cancel chamado mesmo assim)
-- FALHA_FURO_CONTABIL — consumo_total > 0 e forcar_consumo=False (default)
+- FALHA_FURO_CONTABIL_REAL — consumo done > 0 e forcar_consumo=False (default).
+                              Renomeado em 2026-05-27 v6 (era FALHA_FURO_CONTABIL).
+                              Alias FALHA_FURO_CONTABIL mantido em compatibilidade.
 - FALHA_STATE_NAO_CANCELAVEL — state pre='done' (nao tem como reverter sem unbuild)
 - FALHA_STATE_INESPERADO — state pos != 'cancel' (chamado mas nao cancelou)
 - FALHA — excecao generica
-- DRY_RUN_OK | DRY_RUN_NOOP | DRY_RUN_FALHA_FURO_CONTABIL | DRY_RUN_FALHA_STATE_NAO_CANCELAVEL
+- DRY_RUN_OK | DRY_RUN_NOOP | DRY_RUN_FALHA_FURO_CONTABIL_REAL |
+  DRY_RUN_FALHA_STATE_NAO_CANCELAVEL
+- DRY_RUN_OK_RESERVA_FANTASMA — consumo done = 0 mas reservado > 0 (NOVO 2026-05-27 v6).
+                                 Passa o guard (action_cancel apenas libera reservas).
+- OK_RESERVA_FANTASMA — espelho confirmado de DRY_RUN_OK_RESERVA_FANTASMA
 
 Spec: consolidacao de scripts cancelar_mos.py + 14_cancelar_mos_antigas_fb.py
 (inventario 2026-05). Validado AO VIVO 2026-05-24 (10.000 MOs FB / 17 CD /
@@ -50,7 +62,7 @@ Spec: consolidacao de scripts cancelar_mos.py + 14_cancelar_mos_antigas_fb.py
 import logging
 import time
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from app.odoo.utils.connection import get_odoo_connection
 
@@ -64,6 +76,12 @@ STATES_CANCELAVEIS = ('draft', 'confirmed', 'progress', 'to_close')
 
 # States bloqueados (nao da pra reverter sem unbuild).
 STATES_NAO_CANCELAVEIS = ('done',)
+
+# Particao de stock.move.state para classificar consumo (G-MO-01 v6, 2026-05-27).
+# DONE = baixa contabil efetivada (action_cancel = furo); RESERVADO = apenas
+# reserva (action_cancel libera sem furo).
+_STATES_CONSUMO_DONE = ('done',)
+_STATES_CONSUMO_RESERVADO = ('assigned', 'waiting', 'partially_available', 'confirmed')
 
 # Campos minimos para diagnostico/auditoria.
 _CAMPOS_MO = [
@@ -94,32 +112,59 @@ class StockMOService:
         for i in range(0, len(lst), n):
             yield lst[i:i + n]
 
-    def medir_consumo_mo(self, mo_ids: List[int]) -> Dict[int, float]:
-        """Soma stock.move.quantity (state != cancel) dos componentes por MO.
+    def medir_consumo_mo(self, mo_ids: List[int]) -> Dict[int, Dict[str, float]]:
+        """Soma stock.move.quantity dos componentes por MO, particionado por state.
 
-        Pattern de cancelar_mos.py e 14_cancelar_mos_antigas_fb.py. Util para:
-        - Guard G-MO-01: filtrar MOs com consumo=0 antes de cancelar em massa.
-        - Auditoria: relatar consumo de cada MO no log.
+        Pattern refinado em 2026-05-27 v6 a partir da descoberta de que MOs
+        com `quantity > 0` em state `assigned`/`waiting` sao apenas RESERVAS
+        marcadas (picked=True), NAO consumo contabil. Sem essa particao, o
+        guard G-MO-01 classificava 29 MOs zumbi como FURO (todas eram falso
+        positivo — auditoria 2026-05-27).
 
         Returns:
-            {mo_id: consumo_total (float)}. MOs sem moves retornam 0.0.
+            {mo_id: {'done': float, 'reservado': float, 'total': float}}.
+            done       = sum(quantity WHERE state='done')                  furo real
+            reservado  = sum(quantity WHERE state IN reservado-states)     so reserva
+            total      = done + reservado                                  legacy
+            MOs sem moves retornam {'done': 0.0, 'reservado': 0.0, 'total': 0.0}.
         """
         if not mo_ids:
             return {}
-        consumo: Dict[int, float] = defaultdict(float)
+        done: Dict[int, float] = defaultdict(float)
+        reservado: Dict[int, float] = defaultdict(float)
         for ch in self._chunks(mo_ids):
             mvs = self.odoo.search_read(
                 'stock.move',
                 [['raw_material_production_id', 'in', list(ch)],
                  ['state', '!=', 'cancel']],
-                ['raw_material_production_id', 'quantity'],
+                ['raw_material_production_id', 'state', 'quantity'],
             )
             for m in mvs:
                 rid = m.get('raw_material_production_id')
-                if rid:
-                    consumo[rid[0]] += float(m.get('quantity') or 0)
-        # Garante chave para TODAS as mo_ids (mesmo sem moves = 0.0).
-        return {mid: float(consumo.get(mid, 0.0)) for mid in mo_ids}
+                if not rid:
+                    continue
+                st = m.get('state')
+                qty = float(m.get('quantity') or 0)
+                if st in _STATES_CONSUMO_DONE:
+                    done[rid[0]] += qty
+                elif st in _STATES_CONSUMO_RESERVADO:
+                    reservado[rid[0]] += qty
+        return {
+            mid: {
+                'done': float(done.get(mid, 0.0)),
+                'reservado': float(reservado.get(mid, 0.0)),
+                'total': float(done.get(mid, 0.0)) + float(reservado.get(mid, 0.0)),
+            }
+            for mid in mo_ids
+        }
+
+    def medir_consumo_mo_legacy(self, mo_ids: List[int]) -> Dict[int, float]:
+        """Compat: retorna apenas o `total` (= done + reservado) por MO.
+
+        Para callers que ainda dependem do formato float legacy. NAO usar em
+        codigo novo — preferir `medir_consumo_mo` (dict particionado).
+        """
+        return {mid: d['total'] for mid, d in self.medir_consumo_mo(mo_ids).items()}
 
     # ============================================================
     # Operacao atomica: cancelar 1 MO
@@ -131,29 +176,39 @@ class StockMOService:
         *,
         motivo: str = '',
         forcar_consumo: bool = False,
-        consumo_total: Optional[float] = None,
+        consumo_total: Optional[Union[Dict[str, float], float]] = None,
         dry_run: bool = False,
     ) -> Dict[str, Any]:
         """Cancela 1 mrp.production via action_cancel com guards G-MO-*.
+
+        Guard G-MO-01 refinado em 2026-05-27 v6:
+        - done > TOL  -> FALHA_FURO_CONTABIL_REAL  (consumo contabil efetivado)
+        - done = 0 e reservado > TOL -> OK_RESERVA_FANTASMA (action_cancel
+                                         libera reservas sem furo)
+        - done = 0 e reservado = 0 -> OK (limpo)
 
         Args:
             mo_id: mrp.production.id alvo.
             motivo: registrado apenas para log/auditoria (Odoo nao tem
                 campo nativo para motivo de cancelamento).
-            forcar_consumo: se True, IGNORA o guard G-MO-01 (consumo>0).
+            forcar_consumo: se True, IGNORA o guard G-MO-01 ate em furo real.
                 NAO RECOMENDADO — use mrp.unbuild via cross-skill se precisar
                 reverter consumo. Mantido para casos extremos auditados.
-            consumo_total: consumo_total ja calculado (opcional). Quando
-                informado, evita re-query (uso em cancelar_mos_em_massa).
-                Quando None, mede via medir_consumo_mo (custa 1 RPC extra).
+            consumo_total: dict {done, reservado, total} ja calculado
+                (opcional). Quando informado, evita re-query (uso em
+                cancelar_mos_em_massa). Quando None, mede via medir_consumo_mo
+                (custa 1 RPC extra). Aceita float (compat legacy) — tratado
+                como `total` (sem particao; degrada para guard antigo).
             dry_run: nao chama action_cancel; retorna plano validado.
 
         Returns:
             dict com chaves:
-                status: EXECUTADO | NOOP | FALHA_FURO_CONTABIL |
-                        FALHA_STATE_NAO_CANCELAVEL | FALHA_STATE_INESPERADO |
-                        FALHA | DRY_RUN_* (espelhos com DRY_RUN_ prefix)
-                mo_id, name, state_antes, state_apos, consumo_total,
+                status: EXECUTADO | NOOP | OK_RESERVA_FANTASMA |
+                        FALHA_FURO_CONTABIL_REAL | FALHA_STATE_NAO_CANCELAVEL |
+                        FALHA_STATE_INESPERADO | FALHA | DRY_RUN_* (espelhos)
+                mo_id, name, state_antes, state_apos,
+                consumo: {done, reservado, total} (G-MO-01 v6),
+                consumo_total: float total (compat legacy),
                 forcar_consumo (se aplicavel), motivo, tempo_ms, acao,
                 erro (se houver).
 
@@ -198,36 +253,61 @@ class StockMOService:
             r['erro'] = (
                 f"State '{state_antes}' nao e cancelavel via action_cancel. "
                 f"Para reverter consumo, use mrp.unbuild via fluxo cross-skill "
-                f"(ver memoria 'reaproveitar-semiacabado-orfao-mo-cancelada')."
+                f"(ver memoria local Claude Code 'reaproveitar-semiacabado-orfao-mo-cancelada')."
             )
             r['tempo_ms'] = int((time.time() - inicio) * 1000)
             return r
 
-        # --- 4. Guard G-MO-01: consumo > 0 = FURO CONTABIL ---
+        # --- 4. Guard G-MO-01 (v6): particao done vs reservado ---
+        # Compat: aceita dict (novo) OU float (legacy — tratado como total puro).
         if consumo_total is None:
-            consumo_total = self.medir_consumo_mo([mo_id]).get(mo_id, 0.0)
-        r['consumo_total'] = round(consumo_total, 3)
+            consumo = self.medir_consumo_mo([mo_id]).get(
+                mo_id, {'done': 0.0, 'reservado': 0.0, 'total': 0.0}
+            )
+        elif isinstance(consumo_total, dict):
+            consumo = consumo_total
+        else:  # float legacy — tratamos como 'total' sem particao (degrada para guard antigo)
+            v = float(consumo_total)
+            consumo = {'done': v, 'reservado': 0.0, 'total': v}
+        r['consumo'] = {
+            'done': round(consumo['done'], 3),
+            'reservado': round(consumo['reservado'], 3),
+            'total': round(consumo['total'], 3),
+        }
+        r['consumo_total'] = r['consumo']['total']  # compat
 
-        if consumo_total > TOL_CONSUMO and not forcar_consumo:
-            r['status'] = ('DRY_RUN_FALHA_FURO_CONTABIL'
-                           if dry_run else 'FALHA_FURO_CONTABIL')
+        done = consumo['done']
+        reservado = consumo['reservado']
+
+        # G-MO-01 REAL: done > TOL = consumo contabil efetivado -> furo
+        if done > TOL_CONSUMO and not forcar_consumo:
+            r['status'] = ('DRY_RUN_FALHA_FURO_CONTABIL_REAL'
+                           if dry_run else 'FALHA_FURO_CONTABIL_REAL')
             r['erro'] = (
-                f"G-MO-01: consumo_total={consumo_total:.3f} > {TOL_CONSUMO} "
-                f"em mrp.production {mo_id} ({mo.get('name')}). "
-                f"Cancelar com consumo > 0 cria furo contabil (componentes "
-                f"consumidos sem produto finalizado). Use mrp.unbuild via "
-                f"fluxo cross-skill (ver memoria "
-                f"'reaproveitar-semiacabado-orfao-mo-cancelada'). "
-                f"Se realmente precisar, passe forcar_consumo=True (NAO "
+                f"G-MO-01: consumo done={done:.3f} > {TOL_CONSUMO} em "
+                f"mrp.production {mo_id} ({mo.get('name')}). Cancelar com "
+                f"consumo contabil efetivado (state='done') cria furo "
+                f"(componentes consumidos sem produto finalizado). Use "
+                f"mrp.unbuild via fluxo cross-skill (ver memoria "
+                f"'reaproveitar-semiacabado-orfao-mo-cancelada' — memoria local Claude Code). Se "
+                f"realmente precisar, passe forcar_consumo=True (NAO "
                 f"recomendado, auditavel)."
             )
             r['tempo_ms'] = int((time.time() - inicio) * 1000)
             return r
 
         # --- 5. Dry-run: parou aqui ---
+        # Diferencia limpo (reservado=0) de reserva fantasma (reservado>0).
+        reserva_fantasma = reservado > TOL_CONSUMO
         if dry_run:
-            r['status'] = 'DRY_RUN_OK'
+            r['status'] = ('DRY_RUN_OK_RESERVA_FANTASMA'
+                           if reserva_fantasma else 'DRY_RUN_OK')
             r['state_apos_esperado'] = 'cancel'
+            if reserva_fantasma:
+                r['warning_reserva_fantasma'] = (
+                    f'reservado={reservado:.3f} un (G-MO-01 v6). action_cancel '
+                    f'libera reservas sem furo contabil (done={done:.3f}).'
+                )
             r['tempo_ms'] = int((time.time() - inicio) * 1000)
             return r
 
@@ -261,11 +341,13 @@ class StockMOService:
         r['state_apos'] = state_apos
 
         if state_apos == 'cancel':
-            r['status'] = 'EXECUTADO'
+            r['status'] = 'OK_RESERVA_FANTASMA' if reserva_fantasma else 'EXECUTADO'
             r['acao'] = 'cancelled'
             logger.info(
                 f'MO {mo_id} ({mo.get("name")}) cancelada '
-                f'(state {state_antes}->cancel)'
+                f'(state {state_antes}->cancel'
+                + (f', reserva_fantasma={reservado:.3f} un' if reserva_fantasma else '')
+                + ')'
                 + (f' motivo: {motivo}' if motivo else '')
             )
         else:
@@ -369,18 +451,27 @@ class StockMOService:
         )
 
         # --- 2. Medir consumo em batch (perf) ---
+        # Dict {mo_id: {done, reservado, total}} desde 2026-05-27 v6.
         mo_ids = [m['id'] for m in mos]
         consumo_map = self.medir_consumo_mo(mo_ids)
 
+        def _vazio():
+            return {'done': 0.0, 'reservado': 0.0, 'total': 0.0}
+
         # --- 3. Filtrar por consumo (default 'zero') ---
+        # 'zero' agora filtra apenas furo REAL (done > TOL). Reserva fantasma
+        # (reservado > 0 mas done = 0) PASSA — action_cancel libera sem furo.
         filtradas_por_consumo = 0
         if consumo == 'zero':
-            candidatas = [m for m in mos if consumo_map.get(m['id'], 0) <= TOL_CONSUMO]
+            candidatas = [
+                m for m in mos
+                if consumo_map.get(m['id'], _vazio())['done'] <= TOL_CONSUMO
+            ]
             filtradas_por_consumo = len(mos) - len(candidatas)
             if filtradas_por_consumo:
                 logger.info(
                     f'cancelar_mos_em_massa: {filtradas_por_consumo} MOs excluidas '
-                    f'por consumo>{TOL_CONSUMO} (preservadas)'
+                    f'por consumo done > {TOL_CONSUMO} (furo contabil real preservado)'
                 )
         elif consumo == 'qualquer':
             candidatas = mos
@@ -402,7 +493,7 @@ class StockMOService:
                 mo['id'],
                 motivo=motivo,
                 forcar_consumo=forcar_consumo,
-                consumo_total=consumo_map.get(mo['id'], 0.0),
+                consumo_total=consumo_map.get(mo['id'], _vazio()),
                 dry_run=dry_run,
             )
             resultados.append(r)
@@ -430,4 +521,345 @@ class StockMOService:
             'contagem_status': dict(contagem),
             'resultados': resultados,
             'tempo_total_ms': int((time.time() - inicio) * 1000),
+        }
+
+    # ============================================================
+    # Modos READ (CLAUDE.md §6.b — listar + detalhar do objeto)
+    # ============================================================
+
+    def listar_mos(
+        self,
+        *,
+        create_de: Optional[str] = None,
+        create_ate: Optional[str] = None,
+        states: Optional[List[str]] = None,
+        empresas: Optional[List[int]] = None,
+        max_n: int = 0,
+    ) -> Dict[str, Any]:
+        """READ: lista MOs candidatas + classificacao por consumo (V6).
+
+        Mesmos filtros de cancelar_mos_em_massa, mas SEM action_cancel. Cada
+        item ganha rotulo `classificacao`:
+            SEGURO            = done=0 e reservado=0
+            RESERVA_FANTASMA  = done=0 e reservado>0 (action_cancel libera)
+            FURO_REAL         = done>0 (exige mrp.unbuild)
+
+        Returns:
+            {
+              criterio: dict,
+              total: int,
+              classificacao: {SEGURO|RESERVA_FANTASMA|FURO_REAL: N},
+              itens: [{id, name, state, company_id, create_date,
+                       classificacao, consumo:{done,reservado,total}}],
+              tempo_ms: int,
+            }
+        """
+        inicio = time.time()
+        if states is None:
+            states = list(STATES_CANCELAVEIS)
+        if empresas is None:
+            empresas = [1, 4, 5]
+
+        domain: List = [
+            ['state', 'in', states],
+            ['company_id', 'in', empresas],
+        ]
+        if create_de:
+            domain.append(['create_date', '>=', create_de])
+        if create_ate:
+            domain.append(['create_date', '<', create_ate])
+
+        mos = self.odoo.search_read(
+            'mrp.production', domain,
+            ['id', 'name', 'state', 'create_date', 'company_id'],
+            order='create_date asc',
+        )
+        if max_n > 0:
+            mos = mos[:max_n]
+
+        # Medir consumo em batch
+        mo_ids = [m['id'] for m in mos]
+        consumo_map = self.medir_consumo_mo(mo_ids)
+
+        # Classificar e montar itens
+        classificacao_count: Dict[str, int] = defaultdict(int)
+        itens: List[Dict[str, Any]] = []
+        for m in mos:
+            c = consumo_map.get(m['id'], {'done': 0.0, 'reservado': 0.0, 'total': 0.0})
+            if c['done'] > TOL_CONSUMO:
+                cls = 'FURO_REAL'
+            elif c['reservado'] > TOL_CONSUMO:
+                cls = 'RESERVA_FANTASMA'
+            else:
+                cls = 'SEGURO'
+            classificacao_count[cls] += 1
+            itens.append({
+                'id': m['id'],
+                'name': m['name'],
+                'state': m['state'],
+                'company_id': m['company_id'][0] if m.get('company_id') else None,
+                'company_name': m['company_id'][1] if m.get('company_id') else None,
+                'create_date': m.get('create_date'),
+                'classificacao': cls,
+                'consumo': {
+                    'done': round(c['done'], 3),
+                    'reservado': round(c['reservado'], 3),
+                    'total': round(c['total'], 3),
+                },
+            })
+
+        return {
+            'criterio': {
+                'create_de': create_de, 'create_ate': create_ate,
+                'states': states, 'empresas': empresas, 'max_n': max_n,
+            },
+            'total': len(itens),
+            'classificacao': dict(classificacao_count),
+            'itens': itens,
+            'tempo_ms': int((time.time() - inicio) * 1000),
+        }
+
+    # ============================================================
+    # Audit pre/pos (opt-in — costoso, +1-2s/MO)
+    # ============================================================
+
+    _AUDIT_FIELDS_MOVE = (
+        'id', 'state', 'product_id', 'product_uom_qty', 'quantity', 'picked',
+        'location_id', 'move_line_ids',
+    )
+
+    def _snapshot_mo(self, mo_id: int) -> Optional[Dict[str, Any]]:
+        """Snapshot minimo de MO + raws + finished + MLs + quants origem.
+
+        Para audit pre/pos action_cancel. Retorna None se MO nao existe.
+        """
+        mos = self.odoo.search_read(
+            'mrp.production', [['id', '=', mo_id]],
+            ['id', 'name', 'state', 'reservation_state',
+             'qty_produced', 'move_raw_ids', 'move_finished_ids'],
+        )
+        if not mos:
+            return None
+        mo = mos[0]
+
+        all_move_ids = list(mo['move_raw_ids']) + list(mo['move_finished_ids'])
+        moves = self.odoo.search_read(
+            'stock.move', [['id', 'in', all_move_ids]],
+            list(self._AUDIT_FIELDS_MOVE),
+        ) if all_move_ids else []
+        # Conta MLs por move (sem ler MLs detalhadas — economiza RPC).
+        mls_count = sum(len(m.get('move_line_ids') or []) for m in moves)
+
+        # Quants nas origens dos raws (para detectar liberacao de reservas).
+        quant_keys = set()
+        for m in moves:
+            if m.get('product_id') and m.get('location_id'):
+                rid = m.get('raw_material_production_id') if hasattr(m, 'get') else None
+                # raw_material_production_id NAO esta em _AUDIT_FIELDS_MOVE;
+                # presenca de raws_ids no MO ja delimitou.
+                _ = rid
+                quant_keys.add((m['product_id'][0], m['location_id'][0]))
+        quants: List[Dict[str, Any]] = []
+        for (pid, loc_id) in quant_keys:
+            quants.extend(self.odoo.search_read(
+                'stock.quant',
+                [['product_id', '=', pid], ['location_id', '=', loc_id]],
+                ['product_id', 'location_id', 'lot_id', 'quantity', 'reserved_quantity'],
+            ))
+
+        return {
+            'mo': mo,
+            'moves_raw': [m for m in moves if m['id'] in mo['move_raw_ids']],
+            'moves_finished': [m for m in moves if m['id'] in mo['move_finished_ids']],
+            'mls_count': mls_count,
+            'quants_origem': quants,
+        }
+
+    @staticmethod
+    def _diff_snapshots(pre: Dict[str, Any], pos: Dict[str, Any]) -> Dict[str, Any]:
+        """Diff sucinto pre/pos para o JSON de auditoria."""
+        d = {
+            'mo_state': {
+                'pre': pre['mo']['state'],
+                'pos': pos['mo']['state'],
+            },
+            'reservation_state': {
+                'pre': pre['mo'].get('reservation_state'),
+                'pos': pos['mo'].get('reservation_state'),
+            },
+            'mls_count': {'pre': pre['mls_count'], 'pos': pos['mls_count']},
+            'raws_states': {
+                'pre': sorted([(m['id'], m['state'], m.get('quantity', 0)) for m in pre['moves_raw']]),
+                'pos': sorted([(m['id'], m['state'], m.get('quantity', 0)) for m in pos['moves_raw']]),
+            },
+            'finished_states': {
+                'pre': sorted([(m['id'], m['state']) for m in pre['moves_finished']]),
+                'pos': sorted([(m['id'], m['state']) for m in pos['moves_finished']]),
+            },
+            'quants_reserved_delta': [],
+        }
+        pre_q = {
+            (q['product_id'][0] if q.get('product_id') else None,
+             q['lot_id'][0] if q.get('lot_id') else None): float(q.get('reserved_quantity') or 0)
+            for q in pre['quants_origem']
+        }
+        pos_q = {
+            (q['product_id'][0] if q.get('product_id') else None,
+             q['lot_id'][0] if q.get('lot_id') else None): float(q.get('reserved_quantity') or 0)
+            for q in pos['quants_origem']
+        }
+        for k, v_pre in pre_q.items():
+            v_pos = float(pos_q.get(k, 0))
+            if abs(v_pre - v_pos) > 0.0001:
+                d['quants_reserved_delta'].append({
+                    'product_id': k[0], 'lot_id': k[1],
+                    'reserved_pre': v_pre, 'reserved_pos': v_pos,
+                    'delta': v_pos - v_pre,
+                })
+        return d
+
+    def cancelar_mo_com_audit(
+        self,
+        mo_id: int,
+        *,
+        motivo: str = '',
+        forcar_consumo: bool = False,
+        consumo_total: Optional[Union[Dict[str, float], float]] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """cancelar_mo + snapshots pre/pos + diff (opt-in costoso).
+
+        Wrapper que captura estado completo antes e depois do action_cancel,
+        para auditoria. Em dry-run, captura so o snapshot pre. Custo: +1-2s
+        por MO (queries adicionais). Use para single mode ou batches pequenos.
+        """
+        snap_pre = self._snapshot_mo(mo_id)
+        out = self.cancelar_mo(
+            mo_id, motivo=motivo, forcar_consumo=forcar_consumo,
+            consumo_total=consumo_total, dry_run=dry_run,
+        )
+        out['audit'] = {'pre': snap_pre}
+        if not dry_run and snap_pre is not None and out.get('status') in (
+            'EXECUTADO', 'OK_RESERVA_FANTASMA', 'NOOP'
+        ):
+            snap_pos = self._snapshot_mo(mo_id)
+            out['audit']['pos'] = snap_pos
+            if snap_pos is not None:
+                out['audit']['diff'] = self._diff_snapshots(snap_pre, snap_pos)
+        return out
+
+    def detalhar_mo(self, mo_id: int) -> Dict[str, Any]:
+        """READ: detalhamento completo de 1 MO (raws + finished + MLs + consumo).
+
+        Sem WRITE — para investigacao individual antes/depois de operar.
+
+        Returns:
+            {id, name, state, company, product, product_qty, qty_produced,
+             reservation_state, classificacao, consumo:{done,reservado,total},
+             details:{
+                raws:[{id, product, state, planejado, quantity, picked, MLs}],
+                finished:[{id, product, state, planejado, quantity, picked}],
+                date_start, date_deadline, date_finished, origin, bom_id,
+             },
+             tempo_ms}
+            Se MO inexistente: {'erro': '...'}
+        """
+        inicio = time.time()
+        mos = self.odoo.search_read(
+            'mrp.production', [['id', '=', mo_id]],
+            ['id', 'name', 'state', 'company_id', 'product_id', 'product_qty',
+             'qty_produced', 'reservation_state', 'date_start', 'date_deadline',
+             'date_finished', 'origin', 'bom_id',
+             'move_raw_ids', 'move_finished_ids'],
+        )
+        if not mos:
+            return {'erro': f'MO {mo_id} nao existe', 'tempo_ms': int((time.time() - inicio) * 1000)}
+        mo = mos[0]
+
+        # Consumo + classificacao
+        c = self.medir_consumo_mo([mo_id]).get(
+            mo_id, {'done': 0.0, 'reservado': 0.0, 'total': 0.0}
+        )
+        if c['done'] > TOL_CONSUMO:
+            cls = 'FURO_REAL'
+        elif c['reservado'] > TOL_CONSUMO:
+            cls = 'RESERVA_FANTASMA'
+        else:
+            cls = 'SEGURO'
+
+        # Moves (raws + finished)
+        all_move_ids = list(mo['move_raw_ids']) + list(mo['move_finished_ids'])
+        moves = self.odoo.search_read(
+            'stock.move', [['id', 'in', all_move_ids]],
+            ['id', 'state', 'product_id', 'product_uom_qty', 'quantity',
+             'picked', 'location_id', 'location_dest_id', 'move_line_ids',
+             'raw_material_production_id'],
+        ) if all_move_ids else []
+        move_by_id = {m['id']: m for m in moves}
+
+        # Move lines (batch)
+        all_ml_ids: List[int] = []
+        for m in moves:
+            all_ml_ids.extend(m.get('move_line_ids') or [])
+        mls = self.odoo.search_read(
+            'stock.move.line', [['id', 'in', all_ml_ids]],
+            ['id', 'state', 'quantity', 'picked', 'location_id', 'lot_id', 'move_id'],
+        ) if all_ml_ids else []
+        mls_by_move: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        for ml in mls:
+            mv = ml.get('move_id')
+            if mv:
+                mls_by_move[mv[0]].append({
+                    'id': ml['id'],
+                    'state': ml['state'],
+                    'quantity': ml.get('quantity', 0),
+                    'picked': ml.get('picked'),
+                    'location': ml['location_id'][1] if ml.get('location_id') else None,
+                    'lot': ml['lot_id'][1] if ml.get('lot_id') else None,
+                })
+
+        def _fmt_move(m: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                'id': m['id'],
+                'product_id': m['product_id'][0] if m.get('product_id') else None,
+                'product_name': m['product_id'][1] if m.get('product_id') else None,
+                'state': m['state'],
+                'planejado': m.get('product_uom_qty', 0),
+                'quantity': m.get('quantity', 0),
+                'picked': m.get('picked'),
+                'location': m['location_id'][1] if m.get('location_id') else None,
+                'location_dest': m['location_dest_id'][1] if m.get('location_dest_id') else None,
+                'move_lines': mls_by_move.get(m['id'], []),
+            }
+
+        raws = [_fmt_move(move_by_id[i]) for i in mo['move_raw_ids'] if i in move_by_id]
+        finished = [_fmt_move(move_by_id[i]) for i in mo['move_finished_ids'] if i in move_by_id]
+
+        return {
+            'id': mo['id'],
+            'name': mo['name'],
+            'state': mo['state'],
+            'company_id': mo['company_id'][0] if mo.get('company_id') else None,
+            'company_name': mo['company_id'][1] if mo.get('company_id') else None,
+            'product_id': mo['product_id'][0] if mo.get('product_id') else None,
+            'product_name': mo['product_id'][1] if mo.get('product_id') else None,
+            'product_qty': mo.get('product_qty'),
+            'qty_produced': mo.get('qty_produced'),
+            'reservation_state': mo.get('reservation_state'),
+            'classificacao': cls,
+            'consumo': {
+                'done': round(c['done'], 3),
+                'reservado': round(c['reservado'], 3),
+                'total': round(c['total'], 3),
+            },
+            'details': {
+                'date_start': mo.get('date_start'),
+                'date_deadline': mo.get('date_deadline'),
+                'date_finished': mo.get('date_finished'),
+                'origin': mo.get('origin'),
+                'bom_id': mo['bom_id'][1] if mo.get('bom_id') else None,
+                'raws': raws,
+                'finished': finished,
+            },
+            'tempo_ms': int((time.time() - inicio) * 1000),
         }

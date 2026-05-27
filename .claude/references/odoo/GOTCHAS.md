@@ -1,6 +1,6 @@
 # GOTCHAS Criticos - Integracao Odoo
 
-**Ultima verificacao:** 26/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/` — incluindo **G037 v18 NOVO** sobre CFOP explicito quando operacao nao cadastrada)
+**Ultima verificacao:** 27/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/` — incluindo **G037 v18** sobre CFOP explicito, **G038 v22+** sobre l10n_br_origem ausente bloqueando SEFAZ e **G-MO-05 v6** sobre `medir_consumo_mo` indistinto por state inflando FURO em RESERVA FANTASMA)
 
 ---
 

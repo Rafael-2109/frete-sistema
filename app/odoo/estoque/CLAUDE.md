@@ -171,6 +171,42 @@ O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem c
 Não-skills: `lot` (stock.lot) = **utils** em `_utils.py`. Leitura/diff/SOT batch (~33 scripts) = continuam ad-hoc operação viva.
 Mapeamento script-fonte→átomo: `docs/inventario-2026-05/consolidacao/MAPA_SCRIPTS.md`. Checkpoints: `app/odoo/estoque/ROADMAP_SKILLS.md`.
 
+### 6.b MODOS READ EM SKILLS WRITE (pattern compartilhado — 2026-05-27)
+
+Cada skill WRITE PODE expor `--modo {listar, detalhar}` do **seu objeto principal**, em adição aos verbos operacionais. Pattern uniforme para o orquestrador investigar o objeto antes/depois de operar — sem trocar de skill.
+
+**NÃO confundir com §1.1 (1 skill = 1 objeto)**: continua valendo. Os modos READ operam sobre o **MESMO objeto Odoo principal** da skill — apenas adicionam leitura ao verbos WRITE. Não há violação do invariante.
+
+**Quando criar:**
+- Demanda concreta de investigação repetida do objeto (ex.: caso `operando-mo-odoo` v6 2026-05-27 — 343 MOs zumbi pré-2026-05-15 exigiram scripts ad-hoc de listar/detalhar para classificar antes de cancelar).
+- NÃO preventivo: skill ganha modos READ quando o gap aparecer (`skills-demanda-driven`).
+
+**Contrato compartilhado:**
+
+```
+--modo listar    (READ)
+  input:   filtros do objeto (idem filtros do verbo WRITE; ex.: create_de/states/empresas)
+  output:  {criterio, total, classificacao:{<status_read>:N}, itens:[{id,name,state,company,classificacao,...}]}
+  WRITE:   NUNCA — CLI bloqueia --confirmar em modo listar
+  invariante: rótulo `classificacao` por item indica risco de operar (ex.: SEGURO|RESERVA_FANTASMA|FURO_REAL)
+
+--modo detalhar  (READ)
+  input:   --<obj>-id N (single, sem filtros)
+  output:  {<campos comuns: id,name,state,company>, details:{<específico do objeto>}}
+  WRITE:   NUNCA — CLI bloqueia --confirmar
+  invariante: campos comuns (id,name,state,company) em raiz; detalhes específicos em `details`
+```
+
+**Fronteira com Tabela 2 (`consultando-quant-odoo` ancillary):**
+- `--modo listar/detalhar` em skill WRITE = leitura do **objeto principal** dela (MOs em operando-mo, pickings em operando-picking, quants em ajustando-quant).
+- `consultando-quant-odoo` (Tabela 2) = leituras **cross-objeto** centradas em quant (ML→quant, picking→quants reservando), que não cabem em uma única skill WRITE.
+
+**Mitigação anti-WRITE-acidental:**
+- CLI: `--modo {listar, detalhar}` + `--confirmar` → exit 2 (uso inválido).
+- Service: métodos `listar_*`/`detalhar_*` não recebem `dry_run` (sempre READ); pytest valida que não chamam `write`/`create`/`action_*`.
+
+**Implementações atuais:** `operando-mo-odoo` v6 (2026-05-27) — primeira skill a adotar; serve de referência.
+
 ## 6.5 ANTIPADRÕES DETECTADOS — CAUSA RAIZ + CONSEQUÊNCIA + COMO EVITAR
 
 > Reescrito v18 Fase 0. Atualizado v19+ (2026-05-26): AP1, AP3, AP4 ✅ RESOLVIDOS; AP2 RECLASSIFICADO com causa real; AP5 ✅ (v18); AP6 NOVO.
