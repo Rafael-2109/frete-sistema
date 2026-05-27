@@ -33,6 +33,13 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 27 | 2026-05-24 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 28 | 2026-05-25 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 29 | 2026-05-26 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 30 | 2026-05-27 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+
+## 2026-05-27
+- **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
+- Filtros: `status='proposed'`, `author='agent_sdk'`, `version=1`, sem v2 correspondente.
+- Snapshot 7d: 3 v1 agent_sdk responded (ultima 2026-05-21 07:17) + 3 v2 claude_code responded (ultima 2026-05-21 11:10) + 1 v3 agent_sdk verified (2026-05-25 10:05). Zero `proposed` ativos. 4o SKIP consecutivo (24/25/26/27).
+- Nenhum commit alem do relatorio e historico.
 
 ## 2026-05-26
 - **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
