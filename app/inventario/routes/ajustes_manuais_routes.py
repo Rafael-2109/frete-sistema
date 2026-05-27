@@ -83,3 +83,71 @@ def deletar_ajuste(ciclo_id, aj_id):
     db.session.delete(a)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+@inventario_bp.route('/ajustes/<int:ciclo_id>/upsert', methods=['POST'],
+                      endpoint='upsert_ajuste')
+@login_required
+@require_admin
+def upsert_ajuste(ciclo_id):
+    """Upsert inline de AJ.LOCAL/AJ.QTD por (ciclo_id, cod_produto).
+
+    Comportamento:
+      - qtd vazia ou == 0 -> DELETE TODOS os registros do (ciclo, cod) e retorna {'deleted': N}
+      - existe registro -> UPDATE (local, qtd)
+      - nao existe -> INSERT
+    Recebe form: cod_produto (obrig), local (opcional), qtd (opcional p/ delete).
+    """
+    CicloInventario.query.get_or_404(ciclo_id)
+    cod = (request.form.get('cod_produto') or '').strip()
+    if not cod:
+        return jsonify({'erro': 'cod_produto obrigatorio'}), 400
+
+    qtd_str = (request.form.get('qtd') or '').strip()
+    local = (request.form.get('local') or '').strip() or None
+    nome_produto = (request.form.get('nome_produto') or '').strip() or None
+
+    existentes = AjusteManualInventario.query.filter_by(
+        ciclo_id=ciclo_id, cod_produto=cod).all()
+
+    if not qtd_str:
+        deleted = 0
+        for a in existentes:
+            db.session.delete(a)
+            deleted += 1
+        db.session.commit()
+        return jsonify({'deleted': deleted, 'ok': True})
+
+    try:
+        qtd = Decimal(qtd_str)
+    except InvalidOperation:
+        return jsonify({'erro': 'qtd invalida'}), 400
+
+    if qtd == 0:
+        deleted = 0
+        for a in existentes:
+            db.session.delete(a)
+            deleted += 1
+        db.session.commit()
+        return jsonify({'deleted': deleted, 'ok': True})
+
+    if existentes:
+        # Atualiza o mais recente, descarta duplicatas anteriores
+        existentes.sort(key=lambda x: x.criado_em, reverse=True)
+        a = existentes[0]
+        a.local = local
+        a.qtd = qtd
+        if nome_produto and not a.nome_produto:
+            a.nome_produto = nome_produto
+        for extra in existentes[1:]:
+            db.session.delete(extra)
+        db.session.commit()
+        return jsonify({'id': a.id, 'ok': True, 'mode': 'update'})
+
+    a = AjusteManualInventario(
+        ciclo_id=ciclo_id, cod_produto=cod, nome_produto=nome_produto,
+        local=local, qtd=qtd, criado_por=_user_nome(),
+    )
+    db.session.add(a)
+    db.session.commit()
+    return jsonify({'id': a.id, 'ok': True, 'mode': 'insert'}), 201

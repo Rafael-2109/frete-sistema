@@ -1,35 +1,152 @@
-/* Módulo Inventário — usa design tokens */
-.inv-tabela {
-  font-size: 0.85rem;
+/* Modulo Inventario — usa tokens --bs-* e design tokens
+ * Confronto: tabela densa com scroll, resize de colunas, cores semanticas
+ * em diferencas, edicao inline de AJ.LOCAL/AJ.QTD.
+ */
+
+/* Wrapper com scroll horiz+vert e altura calculada para nao empurrar a pagina. */
+.inv-tabela-wrapper {
+  overflow: auto;
+  max-height: calc(100vh - 240px);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 4px;
 }
-.inv-tabela th {
-  background: var(--bg-light);
+
+/* Tabela densa */
+.inv-tabela {
+  font-size: 0.78rem;
+  margin-bottom: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Bordas em cada celula (col + row) */
+.inv-tabela th,
+.inv-tabela td {
+  border-right: 1px solid var(--bs-border-color);
+  border-bottom: 1px solid var(--bs-border-color);
+  padding: 2px 6px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inv-tabela th:first-child,
+.inv-tabela td:first-child {
+  border-left: 1px solid var(--bs-border-color);
+}
+.inv-tabela thead tr:first-child th {
+  border-top: 1px solid var(--bs-border-color);
+}
+
+/* Header sticky + resize horizontal nativo do browser */
+.inv-tabela thead th {
+  background: var(--bs-secondary-bg);
   position: sticky;
   top: 0;
   z-index: 10;
-  white-space: nowrap;
+  font-weight: 600;
+  resize: horizontal;
+  overflow: auto;
+  min-width: 40px;
 }
+
+/* Alinhamento por tipo de conteudo:
+ * - th.num e td.num: numerico -> direita
+ * - th.txt e td.txt: texto -> esquerda */
+.inv-tabela th.num,
 .inv-tabela td.num {
   text-align: right;
   font-family: var(--font-mono);
-  white-space: nowrap;
 }
+.inv-tabela th.txt,
+.inv-tabela td.txt {
+  text-align: left;
+}
+
+/* Linha divergente: fundo amarelo suave (mantido) */
 .inv-row-divergente,
 .inv-row-divergente td {
-  background: var(--bg-warning-soft);
+  background: rgba(var(--bs-warning-rgb), 0.18);
 }
+
+/* Celula clicavel (drill-down) */
 .inv-cell-drill {
   cursor: pointer;
   text-decoration: underline dotted;
 }
 .inv-cell-drill:hover {
-  color: var(--text-link);
-  background: var(--bg-hover);
+  color: var(--bs-link-color, var(--bs-primary));
+  background: rgba(var(--bs-primary-rgb, 13, 110, 253), 0.08);
 }
+
+/* Cores semanticas para diferencas (Odoo-Mov, Sist-Mov):
+ * - diff > 1   -> vermelho (Odoo SOBRA: estoque fantasma criado)
+ * - diff < -1  -> amarelo (Odoo FALTA: movimentacao nao escriturada)
+ * - |diff| <=1 -> sem cor (ruido de arredondamento) */
+.inv-diff-pos {
+  background: rgba(var(--bs-danger-rgb), 0.18);
+  color: var(--bs-danger);
+  font-weight: 600;
+}
+.inv-diff-neg {
+  background: rgba(var(--bs-warning-rgb), 0.22);
+  color: var(--bs-warning);
+  font-weight: 600;
+}
+
+/* Inputs inline (AJ.LOCAL / AJ.QTD) */
+.inv-tabela td input.inv-input {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  padding: 1px 3px;
+  border-radius: 2px;
+  color: inherit;
+}
+.inv-tabela td input.inv-input:hover {
+  border-color: var(--bs-border-color);
+  background: var(--bs-secondary-bg);
+}
+.inv-tabela td input.inv-input:focus {
+  outline: none;
+  border-color: var(--bs-primary);
+  background: var(--bs-secondary-bg);
+  box-shadow: 0 0 0 1px var(--bs-primary);
+}
+.inv-tabela td input.inv-input.num {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+/* Feedback de salvamento inline */
+.inv-tabela td.inv-saving input.inv-input {
+  border-color: var(--text-muted);
+  background: var(--bs-tertiary-bg);
+}
+.inv-tabela td.inv-saved input.inv-input {
+  border-color: var(--bs-success);
+}
+.inv-tabela td.inv-error input.inv-input {
+  border-color: var(--bs-danger);
+  background: rgba(var(--bs-danger-rgb), 0.12);
+}
+
+/* Snapshot vazio: badge vermelha destacada */
 .inv-snapshot-status {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
 .inv-snapshot-status.stale {
-  color: var(--text-warning);
+  color: var(--bs-warning);
+}
+.inv-snapshot-status.vazio {
+  background: rgba(var(--bs-danger-rgb), 0.18);
+  color: var(--bs-danger);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
 }

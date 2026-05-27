@@ -288,9 +288,13 @@ class OdooConnection:
         kwargs = {}
         if limit is not None:
             kwargs['limit'] = limit
-        
+
         return self.execute_kw(model, 'search', [domain], kwargs)
-    
+
+    def search_count(self, model: str, domain: list) -> int:
+        """Conta registros que casam com o domain (sem trazer ids/fields)."""
+        return int(self.execute_kw(model, 'search_count', [domain]) or 0)
+
     def read(self, model: str, ids: list, fields: Optional[list] = None) -> list:
         """Lê registros do Odoo por IDs"""
         kwargs = {}

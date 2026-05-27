@@ -8,10 +8,12 @@
       <small class="text-muted">Snapshot físico: {{ ciclo.data_snapshot.strftime('%d/%m/%Y') }}</small>
     </div>
     <div>
-      <span class="me-2 small text-muted">
+      <span class="me-2 inv-snapshot-status {% if not last_refresh %}vazio{% endif %}"
+            id="ts-snapshot-wrapper"
+            title="{% if not last_refresh %}Clique em 'Atualizar Odoo' para popular as colunas COMPRAS, PA, COMP., FB-O, CD-O, LF-O{% endif %}">
         Snapshot Odoo:
         <span id="ts-snapshot">
-          {{ last_refresh.strftime('%d/%m/%Y %H:%M') if last_refresh else 'nunca gerado' }}
+          {{ last_refresh.strftime('%d/%m/%Y %H:%M') if last_refresh else 'NUNCA GERADO — clique Atualizar Odoo' }}
         </span>
       </span>
       <button id="btn-refresh" class="btn btn-sm btn-outline-secondary">
@@ -51,18 +53,32 @@
     <small class="mt-1 d-block">Atualizando Odoo... <span id="job-msg"></span></small>
   </div>
 
-  <div class="table-responsive">
+  <div class="inv-tabela-wrapper">
     <table id="tabela-confronto" class="table table-sm table-striped inv-tabela">
       <thead>
         <tr>
-          <th>cod</th><th>produto</th>
-          <th>FB</th><th>CD</th><th>LF</th><th>TOTAL</th>
-          <th>COMPRAS</th><th>PA</th><th>COMP.</th>
-          <th>VENDAS</th><th>CONSUMO</th><th>PRODUÇÃO</th>
-          <th>AJ.LOCAL</th><th>AJ.QTD</th>
-          <th>ODOO</th><th>MOV</th><th>SIST</th>
-          <th>ODOO-MOV</th><th>SIST-MOV</th>
-          <th>FB-O</th><th>CD-O</th><th>LF-O</th>
+          <th class="txt" style="width:90px">cod</th>
+          <th class="txt" style="width:260px">produto</th>
+          <th class="num" style="width:80px">FB</th>
+          <th class="num" style="width:80px">CD</th>
+          <th class="num" style="width:80px">LF</th>
+          <th class="num" style="width:90px">TOTAL</th>
+          <th class="num" style="width:90px">COMPRAS</th>
+          <th class="num" style="width:90px">PA</th>
+          <th class="num" style="width:90px">COMP.</th>
+          <th class="num" style="width:90px">VENDAS</th>
+          <th class="num" style="width:90px">CONSUMO</th>
+          <th class="num" style="width:90px">PRODUÇÃO</th>
+          <th class="txt" style="width:90px">AJ.LOCAL</th>
+          <th class="num" style="width:90px">AJ.QTD</th>
+          <th class="num" style="width:90px">ODOO</th>
+          <th class="num" style="width:90px">MOV</th>
+          <th class="num" style="width:90px">SIST</th>
+          <th class="num" style="width:90px">ODOO-MOV</th>
+          <th class="num" style="width:90px">SIST-MOV</th>
+          <th class="num" style="width:90px">FB-O</th>
+          <th class="num" style="width:90px">CD-O</th>
+          <th class="num" style="width:90px">LF-O</th>
         </tr>
       </thead>
       <tbody id="tbody-confronto"><tr><td colspan="22">Carregando...</td></tr></tbody>
