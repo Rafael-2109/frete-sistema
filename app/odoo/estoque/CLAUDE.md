@@ -130,7 +130,7 @@ O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem c
 | `operando-mo-odoo` | mrp.production (cancelar — V1; criar/alterar sem demanda) | [`scripts/mo.py`](scripts/mo.py) (StockMOService — guard G-MO-01 furo contabil) | C2 | 🟡 **mín viável** (26 pytest verdes; 4 dry-run PROD validados) |
 | `operando-reservas-odoo` | stock.move.line + stock.quant (residual) — opera reservas órfãs do picking | [`scripts/reserva.py`](scripts/reserva.py) (StockReservaService) | C1/C2 | 🟡 **mín viável** (3 átomos · 6 pickings/15 quants em prod) |
 | `operando-picking-odoo` | stock.picking (cancelar/validar/devolver + 3 átomos inter-company v15a + 1 átomo NOVO v19+ `preencher_lotes_picking`; `criar_picking_entrada_destino_manual` 🛑 DEPRECATED v19+ AP2) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **7 átomos LIVE v19+ + G-AUDIT-3 fix v22+** (70 pytest = 68 + 2 net v22+ idempotência cancel; G019/G020 fechada + G-AUDIT-3 codificada) |
-| `escriturando-odoo` ✅ ABRANGENTE v19+ | account.move + DFe (entrada — escritura NF SEFAZ-OK no destino) | [`scripts/escrituracao.py`](scripts/escrituracao.py) (EscrituracaoLfService) | **HÍBRIDO** — V1 STRICT `criar_recebimento_orchestrado` (wrapper deprecado v20+) + **7 átomos ABRANGENTES v19+**: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`. Compostos via FLUXO L3 1.2.1/1.2.2 (caminho A/B) | 🟡 **ABRANGENTE v19+ LIVE** (33 pytest = 11 V1 + 22 v19+ ABRANGENTE; AP1+AP4 ✅ resolvidos; dry-run-first; idempotência por campos Odoo) |
+| `escriturando-odoo` ✅ ABRANGENTE v19+ + G039 v23+ + B-V23-1/2 v23.5+ | account.move + DFe (entrada — escritura NF SEFAZ-OK no destino) | [`scripts/escrituracao.py`](scripts/escrituracao.py) (EscrituracaoLfService) | **HÍBRIDO** — V1 STRICT `criar_recebimento_orchestrado` (wrapper deprecado v20+) + **9 átomos ABRANGENTES**: 7 v19+ (`buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida` ⚡com fix B-V23-1 v23.5+ batch write dfe.line.company_id pós-poll⚡, `escriturar_dfe`, `gerar_po_from_dfe` ⚡com hook B-V23-2 v23.5+ batch write PO.line.account_id por company⚡, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`) + 2 v23+/v23.5+ (`garantir_purchase_team` G039 idempotente por user+company, `resolver_account_id_por_company` helper B-V23-2). Compostos via FLUXO L3 1.2.1/1.2.2 (caminho A/B) | 🟡 **ABRANGENTE LIVE** (45 pytest = 11 V1 + 22 v19+ + 7 G039 + 3 B-V23-1 + 5 B-V23-2 átomo + 4 B-V23-2 hook gerar_po; PROD canary v23+: invoice ENTIN/2026/05/0055 posted; AP1+AP4 ✅; G039+B-V23-1+B-V23-2 ✅ |
 
 > **Nota Tabela 1**: estas são as únicas skills WRITE atômicas L2. Cada uma tem `.claude/skills/<nome>/SKILL.md` + scripts/. O subagente as conhece pela árvore de decisão.
 
@@ -364,7 +364,44 @@ app/odoo/estoque/
 - **Correção v19+**: átomo renomeado para `criar_dfe_a_partir_do_invoice_saida(invoice_id_saida, company_destino)` — extrai `account.move.l10n_br_xml_aut_nfe` (XML autorizado já existente em qualquer NF SEFAZ-OK) e usa como input. Para NF nossa (transferência interna FB↔LF↔CD), XML existe; para CTe/Compras (externos), átomo recusa.
 - **Como evitar**: ANTES de propor átomo cross-skill que toca Odoo, minerar o pattern equivalente já validado em PROD (Explore READ-only — não MEXER no código-fonte se for marcado NÃO MEXER).
 
-### D-V22-3 — Caminho B FLUXO L3 1.2.x cria PO sem `fiscal_position_id` + `purchase.team` errado (G039 PENDENTE v23+)
+### D-V23-3 — Skill 7 `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id em company FONTE (B-V23-2 ✅ CODIFICADO v23.5+)
+
+- **Detectado em**: 2026-05-27 v23+ S3 reprodução PROD passo 9 `action_create_invoice` após fix D-V23-2.
+- **Sintoma**: `<Fault 2: Empresas incompatíveis nos registros: 'C2619591: [210010800] ...' pertence à empresa 'LA FAMIGLIA - LF' e 'Account' (account_id: '3202010001 CUSTOS DAS MERCADORIAS VENDIDAS') pertence a outra empresa>`. `action_gerar_po_dfe` cria PO.lines no destino (company=LF=5) mas `account_id` é resolvido para `account.account` da FB (id=22611 '3202010001') em vez do equivalente LF (id=26459). Cada code de conta existe em todas 4 companies.
+- **Causa raiz**: robô CIEL IT executa `action_gerar_po_dfe` com context herdado do criador (Rafael company principal=FB). Account resolver default usa company atual do user, não company da PO.
+- **Workaround v23+ aplicado (manual write)**: PO.lines 128461/62 account_id 22611 (FB) → 26459 (LF).
+- **FIX v23.5+ (CODIFICADO)**:
+  - Novo átomo Skill 7 `resolver_account_id_por_company(account_id_fonte, company_destino)` em `escrituracao.py:1310+`: read code do fonte + search [(code,=,code),(company_id,=,destino)]. Status: OK_EXISTE / JA_NA_DESTINO / NAO_EXISTE_DESTINO / FALHA.
+  - Hook em `gerar_po_from_dfe` após status='CRIADO' (PO recém-criada): itera PO.lines + resolve account equivalente da line.company_id + batch write por account_id_destino. NAO toca status=IDEMPOTENT_EXISTE (PO já existia).
+  - Account inexistente em destino: warning log + line preserva account divergente (caller detecta no passo 9 com diag claro). NON-fatal: warning preserva status=CRIADO.
+  - 9 pytest (5 átomo + 4 hook).
+- **Onde**: `app/odoo/estoque/scripts/escrituracao.py:1310-1421` átomo + `:1604-1701` hook.
+
+### D-V23-2 — Skill 7 `criar_dfe_a_partir_do_invoice_saida` cria dfe.lines com `company_id` herdado do XML da SAÍDA (B-V23-1 ✅ CODIFICADO v23.5+)
+
+- **Detectado em**: 2026-05-27 v23+ S3 reprodução PROD passo 9 `action_create_invoice`.
+- **Sintoma**: `<Fault 4: 'Rafael (id=42) não tem acesso "leitura" a: Item Documento Fiscal (l10n_br_ciel_it_account.dfe.line)'>`. DFe criado no LF (company=5) MAS dfe.lines herdam company=1 (FB) do XML da saída. Método CIEL IT faz `with_company(dfe.company_id=5)` reduzindo `allowed_company_ids=[5]`; lines company=1 não passam pela ir.rule id=353 'dfe_line multi-company' nesse contexto reduzido.
+- **Causa raiz**: `action_processar_arquivo_manual` parsea XML da NF de SAÍDA (que tem company=1 emitente) e propaga company_id da fonte para as filhas, em vez de forçar company_id do pai DFe.
+- **Workaround v23+ aplicado (manual write)**: dfe.lines 129585/86 company_id 1 (FB) → 5 (LF).
+- **FIX v23.5+ (CODIFICADO)**:
+  - `criar_dfe_a_partir_do_invoice_saida` em `escrituracao.py:1066-1108`: após `_fire_and_poll`, search dfe.lines por dfe_id + read company_id de cada + identifica divergentes + batch write `company_id=company_destino`.
+  - Idempotente (skip write se já alinhado). NON-fatal (warning log preserva status=CRIADO se write falhar — caller detecta erro original com diag claro).
+  - 3 pytest cobrindo: corrige + idempotent + falha non-fatal.
+- **Onde**: `app/odoo/estoque/scripts/escrituracao.py:1046-1108`.
+
+### D-V23-1 — G039 purchase.team gatekeeper LF (✅ CODIFICADO v23+)
+
+- **Detectado em**: 2026-05-27 v22+ resume F pós-G-AUDIT-3 fix.
+- **Sintoma**: PO criada via FLUXO L3 1.2.x cai em `team_id=41` 'Aprovação LF - JOSEFA' (user_id=78 Edilane) default. `button_confirm` retorna True mas state fica 'to approve' permanente; `button_approve` via XML-RPC não destrava quando user de execução (Rafael uid=42) não é o user do team. Resultado: sem picking auto, `FALHA_PASSO_7_SEM_PICKING`.
+- **Causa raiz**: regra CIEL IT custom de aprovação dupla por valor/regra (~PO state='to approve' permanente para non-aprovador).
+- **Workaround v22+ aplicado (manual write)**: criado `purchase.team` id=143 'Aprovação LF - RAFAEL' (user_id=42, company_id=5) + write PO 42419 team_id=143.
+- **FIX v23+ (CODIFICADO)**:
+  - Átomo `escrituracao.garantir_purchase_team(user_id, company_id, dry_run)`: busca por (user_id, company_id, active=True); CREATE com nome template "Aprovação {sigla} - {primeiro_nome}" se não existe.
+  - Hook `_resolver_team_g039` no orchestrator `faturamento_pipeline.py` com cache local `_g039_team_cache: Dict[(uid, company_id), team_id]`; lazy auth; substitui `team_id` STATIC no `_resolver_constants_fluxo_l3` pelo team correto. Fallback silencioso (warning + STATIC) se hook falhar.
+  - 14 pytest (7 átomo + 7 hook).
+- **Onde**: `app/odoo/estoque/scripts/escrituracao.py:674-870` (átomo) + `app/odoo/estoque/orchestrators/faturamento_pipeline.py:3120-3240` (hook).
+
+### D-V22-3 — Caminho B FLUXO L3 1.2.x cria PO sem `fiscal_position_id` + `purchase.team` errado (G039 ✅ CODIFICADO v23+)
 
 - **Detectado em**: 2026-05-27 v22+ resume F pós-G-AUDIT-3 fix + G038 fix. FLUXO L3 1.2.2 (caminho B — `criar_dfe_a_partir_do_invoice_saida` + `action_gerar_po_dfe` + `button_confirm`) executou com sucesso até criar **DFe 43533** (com 2 linhas populadas) + **PO 42419 'C2619591'** (order_line correta) MAS PO ficou em `state='to approve'` (não 'purchase'). Sem confirm = sem picking = `FALHA_PASSO_7_SEM_PICKING: po_sem_picking_pos_confirm`.
 - **Sintoma combinado**:
