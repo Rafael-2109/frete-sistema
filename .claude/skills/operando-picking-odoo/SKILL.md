@@ -2,30 +2,40 @@
 name: operando-picking-odoo
 description: >-
   Skill WRITE (átomo C2) para OPERAR PICKINGS no Odoo: cancelar (single ou batch
-  fantasmas >7d), validar (button_validate com invariante G019/G020) ou devolver
-  (criar stock.return.picking + validar, idempotente). Usar quando o pedido é
-  "cancela picking X", "cancela pickings fantasma da planilha", "re-valida
+  fantasmas >7d), validar (button_validate com invariante G019/G020), devolver
+  (criar stock.return.picking + validar, idempotente) E **átomos inter-company
+  v15a** invocados pela Skill 8 faturando-odoo (`criar_picking_inter_company`
+  com D-OPS-3 tracking='none' fix · `validar_picking_inter_company` fluxo F5b
+  completo com G018 peso/volumes · `criar_picking_entrada_destino_manual` ETAPA
+  F com G023 company_id forçado e idempotência via origin). Usar quando o pedido
+  é "cancela picking X", "cancela pickings fantasma da planilha", "re-valida
   picking Y (state assigned ficou pendurado)", "devolve o picking Z (NF errada)",
   "estoque voltou pra Em Trânsito Industrialização — devolve".
-  `--dry-run` é o DEFAULT; só efetiva com `--confirmar`.
+  Os átomos inter-company v15a NÃO TÊM CLI ad-hoc — são invocados em Python
+  pelo orchestrator Skill 8 (v15b+). Modo CLI permanece para cancelar/validar/
+  devolver. `--dry-run` é o DEFAULT no CLI; só efetiva com `--confirmar`.
   NÃO USAR PARA:
   - cirurgia/MLs órfãs/zerar reserved residual -> operando-reservas-odoo
   - ajustar saldo de quant (não toca picking) -> ajustando-quant-odoo
   - mover saldo entre lotes/locais -> transferindo-interno-odoo
-  - criar picking inter-company para faturar -> faturando-odoo (futura —
-    invariante G019/G020 já codificada neste service, ONDA 0.4 ✅ fechada
-    2026-05-24 v3, destrava implementação da Skill 8)
-  - cancelar MO de produção -> operando-mo-odoo (futura)
+  - faturar inventario inter-company end-to-end (orchestrar A-F) -> faturando-odoo
+    (Skill 8 v15+, em construção — INVOCA os átomos v15a desta skill)
+  - cancelar MO de produção -> operando-mo-odoo
   - só consultar pickings (não altera) -> consultando-sql
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # operando-picking-odoo (WRITE — átomo C2)
 
+> **🆕 v19+ (2026-05-26)**: novo átomo `preencher_lotes_picking(picking_id, lotes_data, lote_default='MIGRAÇÃO', dry_run)` para pickings nativos via DFe→PO confirmada (compõe FLUXO L3 1.2.1/1.2.2 via Skill 7 ABRANGENTE). Atribui lote + qty em `stock.move.line`. 7 pytest mockados verdes em `tests/odoo/services/test_stock_picking_preencher_lotes.py`. Pattern minerado de `RecebimentoLfOdooService._preencher_lotes_picking` (L3982-4100+).
+
+> **🛑 v19+ DEPRECATED**: `criar_picking_entrada_destino_manual` (Skill 5 v15a) marcada DEPRECATED — tampão arquitetural AP2 (§6.5 CLAUDE.md estoque). Caminho correto: criar DFe via Skill 7 `criar_dfe_a_partir_do_invoice_saida` → motor Odoo gera picking automaticamente. Função permanece como **museum vivo** com pytest preservados até v20+ canary remover.
+
 Skill **mínimo viável** (C1 mineração ✅ · C2-C5 implementados para 3 átomos · C6-C10 conforme uso). Construída em 2026-05-24 a partir de demandas reais:
 - **cancelar fantasma**: 854 pickings >7d cancelados em 2026-05-18 (script `16_cancelar_pickings_fantasmas`).
 - **validar**: invariante G019/G020 já no service desde 2026-05-18 (resolve false-positive `button_validate` retornar OK com `state=assigned`).
 - **devolver**: padrão fat_lf_cleanup.reverter_picking executado em 2026-05-20 (estorno de NFs com erro).
+- **preencher_lotes_picking (v19+)**: pattern para pickings NATIVOS (gerados pelo Odoo via PO confirmada na escrituração de entrada). Atribui lote default (`MIGRAÇÃO` p/ inventário) ou mapping por produto.
 
 Constituição: `app/odoo/estoque/CLAUDE.md`. Service: `app/odoo/estoque/scripts/picking.py` (StockPickingService — extende padrão pré-existente em `services/`).
 
@@ -102,6 +112,77 @@ status:        DEVOLUCAO_CRIADA · DEVOLUCAO_REUTILIZADA (idempotente) ·
                FALHA_CREATE_RETURNS · FALHA_ODOO
 ```
 
+## Contratos — Átomos inter-company v15a (Python-only, sem CLI ad-hoc)
+
+> Estes 3 átomos são **invocados em Python** pelo orchestrator Skill 8 `faturando-odoo` (v15b+). NÃO têm modo CLI dedicado (modo CLI permanece para `cancelar`/`validar`/`devolver`). O caller (Skill 8) controla dry-run via lógica externa (decisão de chamar ou não chamar o átomo).
+
+### `criar_picking_inter_company` (ETAPA B F5a — codifica D-OPS-3)
+
+```
+objeto:        stock.picking de SAIDA inter-company (FB→LF, LF→FB, FB→CD, ...)
+input:         company_origem_id, company_destino_id, location_origem_id,
+               location_destino_id, linhas, picking_type_id, partner_id
+               (OBRIGATORIO), origin (opcional), tracking_por_pid (opcional —
+               pre-fetched p/ otim bulk)
+output (dict): {picking_id, tracking_none_pids, linhas_planejadas, tempo_ms}
+pré-condições: linhas nao-vazia (qty>0); company_origem != company_destino;
+               partner_id != 0/None (fiscal_position resolver)
+pós-condições: stock.picking criado com state='draft', incoterm + carrier
+               default NACOM; lot_name/lot_id REMOVIDOS para produtos
+               tracking='none' (D-OPS-3 fix)
+gotchas-invariante: G004 (incoterm+carrier obrigatorios) · G021 (filter qty<=0) ·
+               **D-OPS-3 (produto tracking='none' tem lot_name removido —
+               Odoo CIEL IT nao aceita lote sem rastreio)**
+demanda real:  Skill 8 F5a — substitui criar_transferencia + validacao manual
+               de tracking que estava INLINE no script 09 L965 (bug D-OPS-3)
+```
+
+### `validar_picking_inter_company` (ETAPA B F5b — fluxo completo)
+
+```
+objeto:        stock.picking — fluxo F5b inteiro encapsulado
+input:         picking_id, linhas_esperadas, aplicar_peso_volumes (default True),
+               peso_unitario_fallback (default 0.001), volumes_fallback (default 1)
+output (dict): {picking_id, state_apos_validate, mls_pendencias, g023_aplicado,
+               peso_volumes, tempo_ms}
+pré-condições: picking existe em state in (draft, confirmed, assigned)
+pós-condições: picking.state='done' (G019 garante via re-leitura); pendencias
+               de G021 reportadas; G018 peso/volumes aplicado em picking
+sequencia:     1) confirmar_e_reservar  2) preencher_qty_done (lotes do ajuste)
+               3) ajustar_qty_done_pelo_disponivel (G021 — pendencias)
+               4) validar(linhas_esperadas=) — G023 consolidar + G019 re-state
+               5) aplicar_peso_volumes_fallback (G018 v2 — opcional)
+gotchas-invariante: G019/G020/G021/G023/G018 codificados (cascateia se G019
+               raise)
+demanda real:  Skill 8 F5b — substitui inventario_pipeline_service.f5b_validar
+               _pickings + aplicar_peso_volumes_fallback_picking (script 09
+               L1110-1124). NAO faz liberar_faturamento (F5c fica na Skill 8).
+```
+
+### `criar_picking_entrada_destino_manual` (ETAPA F G023)
+
+```
+objeto:        stock.picking de ENTRADA manual no destino (FB→LF, FB→CD)
+input:         company_destino_id, location_origem_id (transito),
+               location_destino_id (estoque destino), moves_data
+               [{product_id, quantity, lot_dest_name}, ...], picking_type_id
+               (entrada do destino), origin (OBRIGATORIO — idempotencia)
+output (dict): {picking_id, status, state, n_moves, tempo_ms}
+               status ∈ {CRIADO, IDEMPOTENT_DONE, IDEMPOTENT_OTHER}
+pré-condições: moves_data nao vazio (qty>0); origin nao vazio
+pós-condições: stock.picking criado com state='done' OU retorna picking
+               existente com mesmo origin (idempotente); G023 company_id
+               forcado em moves (XML-RPC nao herda); G011 lot_name + quantity
+               re-escritos nas MLs; G019/G020 re-le state e raise se != done
+gotchas-invariante: **G023 critico** (write company_id em moves apos create —
+               XML-RPC nao herda da picking) · G011 (re-quantity + lot_name)
+               · G019/G020 (re-le state) · idempotencia via origin exato
+               (`origin = X` no domain)
+demanda real:  Skill 8 ETAPA F — pickings 317306/317316 LF/IN/01733-01734
+               validados em PROD 2026-05-19. Substitui implementacao INLINE
+               no script 09 L1508-1688 (`_f_criar_entrada_destino_para_invoice`).
+```
+
 ## Receitas (caso real -> args)
 
 | Preciso de... | Modo | Args |
@@ -122,6 +203,10 @@ status:        DEVOLUCAO_CRIADA · DEVOLUCAO_REUTILIZADA (idempotente) ·
 | `devolver(picking_id)` | ✅ implementado (StockPickingService.devolver — NOVO 2026-05-24) | fat_lf_cleanup.reverter_picking PROD 2026-05-20 |
 | `criar_transferencia(...)` | ✅ implementado | Pipeline-only — sem CLI ad-hoc (usar via Python diretamente) |
 | `consolidar_move_lines(picking_id, linhas_esperadas)` | ✅ implementado (G023) | Chamado INTERNAMENTE por `validar()` quando recebe `linhas_esperadas` |
+| `aplicar_peso_volumes_fallback(picking_id, ...)` | ✅ implementado (v15a — G018 v2) | F5b/F5c Skill 8 — l10n_br_peso_liquido + volumes via write em stock.picking. Caller controla entre `validar()` e `liberar_faturamento()`. |
+| `criar_picking_inter_company(...)` | ✅ implementado (v15a — D-OPS-3 fix) | Skill 8 F5a — encapsula G004 (incoterm/carrier) + G021 (filter qty<=0) + **D-OPS-3 (tracking='none' remove lot_name/lot_id)**. SEM CLI ad-hoc — invocado em Python pelo orchestrator. |
+| `validar_picking_inter_company(...)` | ✅ implementado (v15a) | Skill 8 F5b — sequencia: confirmar_e_reservar -> preencher_qty_done -> ajustar_qty_done_pelo_disponivel -> validar(G023+G019) -> aplicar_peso_volumes_fallback (G018). SEM CLI ad-hoc. |
+| `criar_picking_entrada_destino_manual(...)` | ✅ implementado (v15a — ETAPA F) | Skill 8 ETAPA F — encapsula G023 critico (company_id forcado em moves apos create — XML-RPC nao herda) + G011 (lot_name + re-quantity) + G019/G020 + **idempotencia via origin exato**. SEM CLI ad-hoc. |
 | `alterar_lote_no_picking(...)` | ⬜ previsto | Caso `substituir_lote_205030410_fb` é FLUXO CROSS-SKILL (Skill 2.4 + 2 + reassign), não átomo. Implementar como folha de fluxo se houver 2+ casos. |
 | `criar_picking_interno(...)` | ⬜ previsto | Sem demanda ad-hoc isolada — quem cria picking interno é pipeline (Skill 8). Implementar se aparecer caso fora-pipeline. |
 
@@ -145,6 +230,13 @@ status:        DEVOLUCAO_CRIADA · DEVOLUCAO_REUTILIZADA (idempotente) ·
   2. `operar_picking.py --modo devolver --picking-id X --confirmar` → cria devolução do picking.
   3. Cancelar invoice via Odoo UI ou Skill financeiro (fora do escopo).
   4. Resetar fase_pipeline do ajuste local p/ reprocessamento.
+
+- **Fluxo 2.5.d — Skill 8 invoca átomos inter-company v15a** (orchestrator faturando-odoo, v15b+):
+  1. Skill 8 chama `criar_picking_inter_company(...)` por chunk de ajustes (ETAPA B F5a — codifica D-OPS-3).
+  2. Skill 8 chama `validar_picking_inter_company(picking_id, linhas_esperadas, aplicar_peso_volumes=True)` (ETAPA B F5b — fluxo completo).
+  3. Skill 8 chama `liberar_faturamento(picking_id)` (F5c — fica fora do átomo `validar_picking_inter_company`).
+  4. Após F5d (invoice gerada) + F5e (SEFAZ-OK), Skill 8 chama `criar_picking_entrada_destino_manual(...)` por invoice (ETAPA F — idempotente via origin).
+  5. Caller (Skill 8) preserva sleep 5s entre pickings (G022 mitigation script 09 L1136-1138).
 
 ## Armadilhas
 
@@ -189,13 +281,13 @@ python "$SK" --modo devolver --picking-id 320063
 
 ## Validação
 
-Skill **construída em 2026-05-24**:
+Skill **construída em 2026-05-24** + **estendida em v15a (2026-05-25)** com 3 átomos inter-company:
 - C1: 4 scripts-fonte minerados integral (`16_cancelar_pickings_fantasmas`, `fat_lf_cleanup`, `substituir_lote_205030410_fb`, `fat_lf_05_executar_clean` etapas-chave) + 4 docs de gotchas (G011/G019/G020/G023).
-- C2: service `app/odoo/estoque/scripts/picking.py` (capinado de `app/odoo/services/`) com shim em `services/` re-exportando. Método novo `devolver()` adicionado. **42 testes pytest verdes** (19 originais + 16 novos cobrindo G023/ajustar_qty_done/validar-com-linhas/G011/G019/G020 + 7 cobrindo `devolver`).
-- C3: contrato de 3 átomos definido (cancelar, validar, devolver).
-- C4: SKILL.md com receitas, fluxos 2.5.a/b/c, armadilhas, exemplos.
-- C5: `scripts/operar_picking.py` (CLI 3 modos, --dry-run default, exit codes 0/1/2/4).
-- C6: validação dry-run vs Odoo PROD em 1-2 casos pendente.
-- C7-C10: cross-refs + arquivamento `_validados/operando-picking-odoo/` + atualizar docs G019/G020 + ROADMAP.
+- C2: service `app/odoo/estoque/scripts/picking.py` (capinado de `app/odoo/services/`) com shim em `services/` re-exportando. Métodos novos: `devolver()` + (v15a) `aplicar_peso_volumes_fallback` + `criar_picking_inter_company` + `validar_picking_inter_company` + `criar_picking_entrada_destino_manual`. **61 testes pytest verdes** (42 originais + 19 novos v15a — 2 cobrindo aplicar_peso_volumes + 6 criar_picking_inter_company [incluindo D-OPS-3 fix] + 4 validar_picking_inter_company + 7 criar_picking_entrada_destino_manual).
+- C3: contrato de 6 átomos definido (cancelar, validar, devolver, criar_picking_inter_company, validar_picking_inter_company, criar_picking_entrada_destino_manual).
+- C4: SKILL.md com receitas, fluxos 2.5.a/b/c/d, armadilhas, exemplos.
+- C5: `scripts/operar_picking.py` (CLI 3 modos para cancelar/validar/devolver, --dry-run default, exit codes 0/1/2/4). Átomos v15a SEM CLI ad-hoc (invocados em Python pelo orchestrator Skill 8).
+- C6: validação dry-run vs Odoo PROD em smoke v15a OK (6 cods v14a-ops — `103500105` PIMENTA tracking='none' detectado corretamente; lot_name removido das linhas normalizadas; criar_transferencia invocado com linhas pos-D-OPS-3 fix).
+- C7-C10: cross-refs aplicados (subagente gestor-estoque-odoo + ROUTING_SKILLS + tool_skill_mapper + CLAUDE.md estoque + memoria skill5_picking_pattern).
 
 Mapeamento script-fonte → átomo no `docs/inventario-2026-05/consolidacao/MAPA_SCRIPTS.md`. Resultado da validação em `_validados/operando-picking-odoo/VALIDACAO.md`.

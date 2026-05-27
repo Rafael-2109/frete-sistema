@@ -2,11 +2,14 @@
 name: transferindo-interno-odoo
 description: >-
   Skill WRITE (átomo C2) para TRANSFERIR saldo de estoque DENTRO de uma mesma
-  empresa no Odoo (NÃO emite NF). Suporta 3 modos atômicos: (a) lote→lote na
+  empresa no Odoo (NÃO emite NF). Suporta 4 modos atômicos: (a) lote→lote na
   MESMA location (`--lote-origem` → `--lote-destino`); (b) location→location
   com o MESMO lote (`--loc-origem` → `--loc-destino`); (c) **MODO C**
   `--para-indisponivel` cross loc+lote consolidando em MIGRAÇÃO POR PRODUTO
-  (NOVO 2026-05-24 v4 — codifica invariante destino=Indisp+MIGRAÇÃO; ver G031).
+  (NOVO 2026-05-24 v4 — codifica invariante destino=Indisp+MIGRAÇÃO; ver G031);
+  (d) **MODO D** `--loc-e-lote` cross loc+lote GENÉRICO (NOVO 2026-05-26 v21+ —
+  combina loc DIFERENTE + lote DIFERENTE em 1 chamada atômica; caso real ETAPA 0
+  do fluxo bulk FB→LF: FB/Indisp/MIGRAÇÃO → FB/Estoque/P-15/05).
   Internamente delega a `ajustar_quant` 2x (reduz origem, aumenta destino), propagando
   `delta_esperado` para herdar o guard anti-bug CICLAMATO da Skill 1 (regra
   inviolável 11 do roadmap 2026-05-24). Usar quando o pedido é "transfere
@@ -70,6 +73,18 @@ input (MODO C — para-indisponivel; NOVO 2026-05-24 v4):
   Invariante: destino = (LOCAIS_INDISPONIVEL[cid], lote 'MIGRAÇÃO' RESOLVIDO
   POR PRODUTO via lot_svc — NUNCA usar LOTES_MIGRACAO_POR_COMPANY como FK
   universal — ver Gotcha G031).
+input (MODO D — loc+lote GENÉRICO; NOVO 2026-05-26 v21+):
+  --cod <default_code> --empresa <FB|CD|LF>
+  --qty <float positivo>
+  --loc-e-lote (flag)
+  --loc-origem <id> --loc-destino <id>
+  --lote-origem <nome|VAZIO> --lote-destino <nome|VAZIO>
+  [--criar-lote-destino-se-faltar / --nao-criar-lote-destino] (default cria)
+  [--expiration-date-destino YYYY-MM-DD]
+  [--resetar-reserva-origem] [--tolerancia-delta T] [--confirmar]
+  Pre-cond: pelo menos UMA dimensão muda (loc OU lote diferente entre origem e destino).
+  Para tracking='none': passe --lote-origem VAZIO --lote-destino VAZIO (ignora lote).
+  Casos típicos: Indisp/MIGRAÇÃO → Estoque/P-15/05 (caso ETAPA 0 v21+); Estoque/Lote-A → Pre-Producao/Lote-B; Indisp/Lote-X → Estoque/Lote-Y.
 output (JSON): {modo, chave{...}, resultado{
   status, qty_transferida, lot_id_origem, lot_id_destino,
   lote_destino_nome?, lote_destino_criado_agora?,
@@ -114,6 +129,7 @@ status:        EXECUTADO · DRY_RUN_OK · FALHA_REDUCAO · FALHA_AUMENTO ·
 | Devolver de Indisponível para Estoque (mesmo lote, locs diferentes) | `--cod C --empresa CD --qty N --lote MIGRAÇÃO --loc-origem 31090 --loc-destino 32` | mover_migracao reverse |
 | Reduzir lote A com reserva órfã + transferir (RESETAR reserva primeiro) | `--cod C --empresa E --qty N --lote-origem A --lote-destino B --resetar-reserva-origem` | corrigir_reserved_negativo |
 | **MODO C** — Mover saldo para Indisponivel CONSOLIDANDO em MIGRAÇÃO (átomo único) | `--cod C --empresa FB --qty N --para-indisponivel --lote LOTE_REAL` | ad-hoc batch de "transferir produtos pra Indisponivel" (1ª demanda real 2026-05-24 v4) |
+| **MODO D** — Mover saldo com loc+lote DIFERENTES em 1 chamada (NOVO v21+) | `--cod C --empresa FB --qty N --loc-e-lote --loc-origem 31088 --loc-destino 8 --lote-origem MIGRAÇÃO --lote-destino P-15/05` | Demanda 2026-05-26 v21+ — ETAPA 0 do fluxo bulk FB→LF (Indisp/MIGRAÇÃO → Estoque/P-15/05) |
 | **PLANILHA cod+qty → Indisponivel em LOTE** (orquestrador alto nivel) | `transferir_para_indisp_em_lote.py --planilha file.csv --empresa FB --resetar-reserva-origem` | demanda real 2026-05-25 v10 (158 cods FB) — descobre lotes origem via Skill 9, distribui qty greedy entre quants (MIGRACAO_FIRST_FIFO) |
 
 ## Exemplos
@@ -150,6 +166,27 @@ python "$SK" --cod 210843125 --empresa FB --qty 223.0 \
 # 7) MODO C com loc origem custom (ex.: FB/Pré-Produção/Linha Manual)
 python "$SK" --cod 4869012 --empresa FB --qty 50.0 \
     --para-indisponivel --lote '353/25' --loc-origem 4067 --confirmar
+
+# MODO D — loc+lote diferentes em 1 chamada (NOVO 2026-05-26 v21+)
+# Caso ETAPA 0 fluxo bulk: FB/Indisp/MIGRAÇÃO → FB/Estoque/P-15/05
+
+# d1) dry-run 210010800 (tracking=lot): cria lote P-15/05 on-demand
+python "$SK" --cod 210010800 --empresa FB --qty 250330.0 \
+    --loc-e-lote \
+    --loc-origem 31088 --loc-destino 8 \
+    --lote-origem 'MIGRAÇÃO' --lote-destino 'P-15/05'
+
+# d2) efetivar — caso real ETAPA 0
+python "$SK" --cod 210010800 --empresa FB --qty 250330.0 \
+    --loc-e-lote \
+    --loc-origem 31088 --loc-destino 8 \
+    --lote-origem 'MIGRAÇÃO' --lote-destino 'P-15/05' --confirmar
+
+# d3) tracking='none' (CORANTE 104000046): lotes vazios = ignora
+python "$SK" --cod 104000046 --empresa FB --qty 1.8 \
+    --loc-e-lote \
+    --loc-origem 31088 --loc-destino 8 \
+    --lote-origem '' --lote-destino '' --confirmar
 
 # 8) PLANILHA → Indisponivel em LOTE (orquestrador alto-nivel — caso 158 cods FB v10)
 SK_LOTE=.claude/skills/transferindo-interno-odoo/scripts/transferir_para_indisp_em_lote.py

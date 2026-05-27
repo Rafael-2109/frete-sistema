@@ -66,6 +66,8 @@ _FALHAS = {
     # eram nomes do design original (composicao A+B encadeada); a
     # refatoracao para 1 passo direto via ajustar_quant 2x reemitiu como
     # FALHA_REDUCAO/FALHA_AUMENTO (alinhado com modos A/B existentes).
+    # MODO D (loc+lote generico — 2026-05-26 v21+):
+    'FALHA_RESOLVER_LOTE',
 }
 
 
@@ -135,6 +137,17 @@ def main() -> int:
                          'ver gotcha G031). Exige --lote (lote ORIGEM REAL) + --qty. '
                          'Loc origem opcional (default = principal).')
 
+    # Modo D (loc+lote generico — NOVO 2026-05-26 v21+)
+    ap.add_argument('--loc-e-lote', action='store_true',
+                    help='[MODO D] transfere mudando LOC E LOTE em 1 chamada atomica. '
+                         'Exige --loc-origem + --loc-destino + --lote-origem + --lote-destino. '
+                         'Pelo menos 1 dimensao (loc OU lote) deve ser diferente entre origem e destino. '
+                         'Caso real: ETAPA 0 do fluxo bulk FB->LF (Indisp/MIGRAÇÃO -> Estoque/P-15/05).')
+    ap.add_argument('--nao-criar-lote-destino', action='store_true',
+                    help='[MODO D] NAO cria lote destino on-demand se nao existir (default: cria via lot_svc).')
+    ap.add_argument('--expiration-date-destino',
+                    help='[MODO D] data de validade do lote destino se criado (formato YYYY-MM-DD).')
+
     # Comportamento
     ap.add_argument('--resetar-reserva-origem', action='store_true',
                     help='zera reserved_quantity da origem ANTES do ajuste '
@@ -152,28 +165,35 @@ def main() -> int:
         ap.error(f'--qty deve ser > 0 (recebido {args.qty})')
 
     # Modo A detectado por: --lote-origem OU --lote-destino presentes (incluindo '' = proxy vazio P-15/05).
-    # Modo B detectado por: --loc-origem ou --loc-destino com valor (sem --para-indisponivel).
+    # Modo B detectado por: --loc-origem ou --loc-destino com valor (sem --para-indisponivel/--loc-e-lote).
     # Modo C detectado por: --para-indisponivel flag.
+    # Modo D detectado por: --loc-e-lote flag (NOVO 2026-05-26 v21+).
     # NB: argparse com nargs default permite `--lote-origem ''` (string vazia) — checar `is not None`,
     # NAO truthy, para nao bloquear o proxy P-15/05 (CR1#1, 2026-05-24 v2).
     modo_c = bool(args.para_indisponivel)
-    modo_a = (args.lote_origem is not None) or (args.lote_destino is not None)
+    modo_d = bool(args.loc_e_lote)
+    modo_a = (
+        (args.lote_origem is not None) or (args.lote_destino is not None)
+    ) and not modo_d
     modo_b = (
         (args.loc_origem is not None) or (args.loc_destino is not None)
-    ) and not modo_c
-    modos_ativos = [m for m, v in [('A', modo_a), ('B', modo_b), ('C', modo_c)] if v]
+    ) and not modo_c and not modo_d
+    modos_ativos = [m for m, v in [('A', modo_a), ('B', modo_b),
+                                     ('C', modo_c), ('D', modo_d)] if v]
     if len(modos_ativos) > 1:
         ap.error(
             f'modos {modos_ativos} sao mutuamente exclusivos. Escolha UM: '
             'A (--lote-origem + --lote-destino) | '
             'B (--loc-origem + --loc-destino [--lote]) | '
-            'C (--para-indisponivel --lote LOTE_REAL)'
+            'C (--para-indisponivel --lote LOTE_REAL) | '
+            'D (--loc-e-lote + --loc-origem + --loc-destino + --lote-origem + --lote-destino)'
         )
     if not modos_ativos:
         ap.error(
             'forneca um modo: A (--lote-origem + --lote-destino) | '
             'B (--loc-origem + --loc-destino [--lote]) | '
-            'C (--para-indisponivel --lote LOTE_REAL)'
+            'C (--para-indisponivel --lote LOTE_REAL) | '
+            'D (--loc-e-lote + --loc-origem + --loc-destino + --lote-origem + --lote-destino)'
         )
     if modo_a and not (args.lote_origem is not None and args.lote_destino is not None):
         ap.error('MODO A exige --lote-origem E --lote-destino (use "" para proxy vazio P-15/05 na origem)')
@@ -185,6 +205,15 @@ def main() -> int:
             'destino auto = MIGRACAO; passar "" nao faz sentido — Indisp '
             'so opera com lote conhecido)'
         )
+    if modo_d:
+        if args.loc_origem is None or args.loc_destino is None:
+            ap.error('MODO D exige --loc-origem E --loc-destino')
+        if args.lote_origem is None or args.lote_destino is None:
+            ap.error(
+                'MODO D exige --lote-origem E --lote-destino (use "" para '
+                'sem-lote/P-15/05 proxy; pelo menos 1 dimensao loc OU lote '
+                'deve ser diferente entre origem e destino)'
+            )
 
     app = setup_cli_completo(__file__, args.quiet, args.forcar_concorrencia)
     with app.app_context():
@@ -301,6 +330,59 @@ def main() -> int:
                 qty=args.qty,
                 location_id_origem=args.loc_origem,
                 location_id_destino=args.loc_destino,
+                resetar_reserva_origem=args.resetar_reserva_origem,
+                tolerancia_delta=args.tolerancia_delta,
+                dry_run=dry_run,
+            )
+            return _emitir({'modo': 'dry-run' if dry_run else 'confirmado',
+                            'chave': chave, 'resultado': res}, dry_run)
+
+        # ---- MODO D: loc+lote generico (NOVO 2026-05-26 v21+) ----
+        if modo_d:
+            chave['modo'] = 'loc-e-lote'
+            chave['location_id_origem'] = args.loc_origem
+            chave['location_id_destino'] = args.loc_destino
+            chave['lote_origem_nome'] = args.lote_origem
+            chave['lote_destino_nome'] = args.lote_destino
+
+            # Resolver lote ORIGEM (None aceita = sem lote / P-15/05 proxy)
+            lot_origem_id, label_o, erro_o = _resolver_lote_id(
+                lot_svc, args.lote_origem, prod['pid'], company_id, 'origem',
+            )
+            chave['lote_origem_label'] = label_o
+            if erro_o:
+                return _emitir({'status': 'FALHA_LOTE', 'chave': chave, 'erro': erro_o}, dry_run)
+
+            # Resolver lote DESTINO (atomo do service tambem resolve internamente
+            # via resolver_lote_destino quando lot_id_destino=None e
+            # nome_lote_destino=str). Aqui resolvemos APENAS para mostrar plano
+            # no dry-run (lote pre-existente vs criado on-demand).
+            criar_destino = not args.nao_criar_lote_destino
+            lot_destino_id, label_d, criado = svc.resolver_lote_destino(
+                nome_lote=args.lote_destino,
+                product_id=prod['pid'], company_id=company_id,
+                location_id=args.loc_destino,
+                criar_se_faltar=criar_destino and not dry_run,
+                expiration_date=args.expiration_date_destino,
+            )
+            chave['lote_destino_label'] = label_d
+            chave['lote_destino_acao'] = (
+                'created' if criado
+                else ('reused' if lot_destino_id is not None else 'sem-lote/will-create')
+            )
+
+            res = svc.transferir_loc_e_lote(
+                product_id=prod['pid'], company_id=company_id,
+                qty=args.qty,
+                location_id_origem=args.loc_origem,
+                lot_id_origem=lot_origem_id,
+                location_id_destino=args.loc_destino,
+                lot_id_destino=lot_destino_id,
+                nome_lote_destino=(
+                    args.lote_destino if lot_destino_id is None else None
+                ),
+                criar_lote_destino_se_faltar=criar_destino,
+                expiration_date_destino=args.expiration_date_destino,
                 resetar_reserva_origem=args.resetar_reserva_origem,
                 tolerancia_delta=args.tolerancia_delta,
                 dry_run=dry_run,

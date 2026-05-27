@@ -18,6 +18,7 @@ import pytest
 from app.odoo.services.stock_internal_transfer_service import (
     StockInternalTransferService,
 )
+from app.odoo.estoque.scripts.transfer import LOTE_MIGRACAO_CANONICO
 
 
 @pytest.fixture
@@ -1058,3 +1059,382 @@ def test_transferir_para_indisponivel_nome_lote_destino_custom(service):
     service.lot_svc.criar_se_nao_existe.assert_called_with(
         'QUARENTENA', 1, 1,
     )
+
+
+# ============================================================
+# v14b — Fix D-OPS-5: aceita lot_id_origem=None para produto tracking='none'
+# Bug descoberto em teste real 2026-05-25 v14a-ops (PIMENTA JALAPENO
+# 103500105 41.56 un sem lote em FB/Estoque retornava FALHA_SEM_QUANT).
+# ============================================================
+
+def test_transferir_para_indisponivel_lot_origem_none_tracking_none_executa(service, odoo_mock):
+    """v14b D-OPS-5: lot_id_origem=None + produto tracking='none' → OK, chama ajustar_quant 2x.
+
+    Produto sem rastreabilidade guarda saldo SEM lot_id. Atomo aceita e
+    chama ajustar_quant com lot_id=None na reducao (origem) e lot_id=999
+    na criacao do destino (lote MIGRAÇÃO ainda existe semanticamente).
+    """
+    from unittest.mock import patch, MagicMock
+    odoo_mock.read.return_value = [{'id': 1, 'tracking': 'none'}]
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -41.56},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 41.56},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=None, qty=41.56,
+        )
+
+    assert res['status'] == 'EXECUTADO'
+    assert res['qty_transferida'] == 41.56
+    assert res['lot_id_origem'] is None
+    assert res['lot_id_destino'] == 999  # lot_svc_mock default
+    assert res['tracking_origem'] == 'none'
+    # 1 read para validar tracking + 2 ajustes
+    odoo_mock.read.assert_called_once_with('product.product', [1], ['tracking'])
+    assert quant_svc.ajustar_quant.call_count == 2
+    # Call 1: reduzir origem com lot_id=None (essencial — quant sem lote)
+    call_origem = quant_svc.ajustar_quant.call_args_list[0].kwargs
+    assert call_origem['lot_id'] is None
+    assert call_origem['delta'] == -41.56
+    # Call 2: aumentar destino com lot_id=999 (lote MIGRACAO ainda usado)
+    call_destino = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call_destino['lot_id'] == 999
+
+
+def test_transferir_para_indisponivel_lot_origem_none_tracking_lot_raises(service, odoo_mock):
+    """v14b D-OPS-5: lot_id_origem=None + produto tracking='lot' → ValueError (anomalia)."""
+    odoo_mock.read.return_value = [{'id': 1, 'tracking': 'lot'}]
+    with pytest.raises(ValueError, match='tracking.*lot.*anomalia'):
+        service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=None, qty=10.0,
+        )
+    # Read foi feito mas nenhum ajuste tentado
+    odoo_mock.read.assert_called_once()
+
+
+def test_transferir_para_indisponivel_lot_origem_none_produto_inexistente_raises(service, odoo_mock):
+    """v14b D-OPS-5: lot_id_origem=None + produto inexistente → ValueError clara."""
+    odoo_mock.read.return_value = []  # produto nao existe
+    with pytest.raises(ValueError, match='product_id=999.*inexistente'):
+        service.transferir_para_indisponivel(
+            product_id=999, company_id=1,
+            lot_id_origem=None, qty=10.0,
+        )
+
+
+def test_transferir_para_indisponivel_tracking_origem_no_retorno_quando_lot_passado(service):
+    """v14b: tracking_origem=None nos retornos quando lot_id_origem foi passado (sem read)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -100.0},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 100.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_para_indisponivel(
+            product_id=1, company_id=1,
+            lot_id_origem=26909, qty=100.0,
+        )
+    # Quando lot_id passado, atomo NAO faz read de tracking (otimizacao)
+    assert res.get('tracking_origem') is None
+
+
+# ============================================================
+# v14b — _listar_quants_origem: parametro aceita_tracking_none
+# ============================================================
+
+def test_listar_quants_origem_default_aceita_tracking_none_true_nao_filtra_lot_id(service, odoo_mock):
+    """v14b D-OPS-5: default aceita_tracking_none=True → NAO filtra ['lot_id', '!=', False]."""
+    odoo_mock.search_read.return_value = []  # vazio, foco e' no domain enviado
+    service._listar_quants_origem(
+        product_id=1, company_id=1, locs_origem=[8, 48],
+    )
+    # Inspect o domain do search_read
+    call = odoo_mock.search_read.call_args
+    domain = call.args[1] if len(call.args) > 1 else call.kwargs.get('domain')
+    domain_strs = [str(c) for c in domain]
+    # NAO deve haver filtro de lot_id != False
+    assert not any("'lot_id', '!=', False" in s or '"lot_id", "!=", False' in s
+                   for s in domain_strs), (
+        f'Default aceita_tracking_none=True NAO deve filtrar lot_id; domain: {domain}'
+    )
+
+
+def test_listar_quants_origem_aceita_tracking_none_false_filtra_lot_id(service, odoo_mock):
+    """v14b D-OPS-5: aceita_tracking_none=False → filtra ['lot_id', '!=', False] (legacy)."""
+    odoo_mock.search_read.return_value = []
+    service._listar_quants_origem(
+        product_id=1, company_id=1, locs_origem=[8, 48],
+        aceita_tracking_none=False,
+    )
+    call = odoo_mock.search_read.call_args
+    domain = call.args[1] if len(call.args) > 1 else call.kwargs.get('domain')
+    # DEVE haver filtro de lot_id != False (comportamento antigo)
+    assert ['lot_id', '!=', False] in domain, (
+        f'aceita_tracking_none=False DEVE filtrar lot_id; domain: {domain}'
+    )
+
+
+# ============================================================
+# transferir_loc_e_lote — 2026-05-26 v21+ (atomo NOVO loc+lote em 1 chamada)
+# Caso real: ETAPA 0 do fluxo bulk FB->LF (Indisp/MIGRAÇÃO -> Estoque/P-15/05)
+# ============================================================
+
+
+def test_transferir_loc_e_lote_feliz_lot_id_destino_int(service):
+    """Caso simples: loc+lote diferentes; caller passa lot_id_destino INT pronto.
+
+    Não chama resolver_lote_destino (atomo apenas delega ajustar_quant 2x).
+    """
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -250.0},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 250.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=28270, company_id=1, qty=250.0,
+            location_id_origem=31088, lot_id_origem=30360,
+            location_id_destino=8, lot_id_destino=99999,
+        )
+
+    assert res['status'] == 'EXECUTADO'
+    assert res['qty_transferida'] == 250.0
+    assert res['location_id_origem'] == 31088
+    assert res['location_id_destino'] == 8
+    assert res['lot_id_origem'] == 30360
+    assert res['lot_id_destino'] == 99999
+    assert res['lote_destino_nome'] is None
+    assert res['lote_destino_criado_agora'] is None
+    # 2 chamadas ajustar_quant com delta_esperado propagado
+    assert quant_svc.ajustar_quant.call_count == 2
+    call1 = quant_svc.ajustar_quant.call_args_list[0].kwargs
+    assert call1['location_id'] == 31088
+    assert call1['lot_id'] == 30360
+    assert call1['delta'] == -250.0
+    assert call1['delta_esperado'] == -250.0
+    assert call1['criar_se_faltar'] is False
+    call2 = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call2['location_id'] == 8
+    assert call2['lot_id'] == 99999
+    assert call2['delta'] == 250.0
+    assert call2['delta_esperado'] == 250.0
+    assert call2['criar_se_faltar'] is True
+
+
+def test_transferir_loc_e_lote_resolve_lote_destino_p15_05_proxy_sem_lote(
+    service, odoo_mock, lot_svc_mock,
+):
+    """nome_lote_destino='P-15/05' resolve para sem-lote (lot_id_destino=None).
+
+    Pattern resolver_lote_destino — 'P-15/05' é proxy de "quant sem lote".
+    """
+    # MIGRAÇÃO nao existe (necessário para resolver)
+    # P-15/05 resolve direto para sem-lote (sem chamar lot_svc)
+    odoo_mock.search.return_value = []
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -1.8},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 1.8},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=34907, company_id=1, qty=1.8,
+            location_id_origem=31088, lot_id_origem=58098,
+            location_id_destino=8,
+            nome_lote_destino='P-15/05',
+            criar_lote_destino_se_faltar=True,
+        )
+
+    assert res['status'] == 'EXECUTADO'
+    assert res['qty_transferida'] == 1.8
+    assert res['lot_id_destino'] is None  # P-15/05 proxy = sem-lote
+    assert res['lote_destino_nome'] == 'P-15/05(sem-lote)'
+    assert res['lote_destino_criado_agora'] is False
+
+
+def test_transferir_loc_e_lote_cria_lote_destino_literal(
+    service, odoo_mock, lot_svc_mock,
+):
+    """nome_lote_destino literal -> lot_svc.criar_se_nao_existe cria + retorna lot_id."""
+    lot_svc_mock.criar_se_nao_existe.return_value = (44444, True)
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -100.0},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 100.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=28270, company_id=1, qty=100.0,
+            location_id_origem=31088, lot_id_origem=30360,
+            location_id_destino=8,
+            nome_lote_destino='LOTE-NOVO-V21',
+            criar_lote_destino_se_faltar=True,
+        )
+
+    assert res['status'] == 'EXECUTADO'
+    assert res['lot_id_destino'] == 44444
+    assert res['lote_destino_nome'] == 'LOTE-NOVO-V21'
+    assert res['lote_destino_criado_agora'] is True
+    lot_svc_mock.criar_se_nao_existe.assert_called_once()
+
+
+def test_transferir_loc_e_lote_origem_igual_destino_raise(service):
+    """ValueError se loc igual E lote igual (não há o que transferir)."""
+    with pytest.raises(ValueError, match='origem == destino'):
+        service.transferir_loc_e_lote(
+            product_id=1, company_id=1, qty=10.0,
+            location_id_origem=8, lot_id_origem=44098,
+            location_id_destino=8, lot_id_destino=44098,
+        )
+
+
+def test_transferir_loc_e_lote_qty_zero_raise(service):
+    """ValueError se qty <= 0."""
+    with pytest.raises(ValueError, match='qty deve ser > 0'):
+        service.transferir_loc_e_lote(
+            product_id=1, company_id=1, qty=0.0,
+            location_id_origem=8, lot_id_origem=44098,
+            location_id_destino=31088, lot_id_destino=50000,
+        )
+
+
+def test_transferir_loc_e_lote_falha_reducao(service):
+    """FALHA_REDUCAO: Skill 1 falha passo 1 (quant origem vazio)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.return_value = {
+        'status': 'FALHA_QUANT_VAZIO', 'erro': 'quant origem nao encontrado',
+    }
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=1, company_id=1, qty=100.0,
+            location_id_origem=31088, lot_id_origem=30360,
+            location_id_destino=8, lot_id_destino=99999,
+        )
+
+    assert res['status'] == 'FALHA_REDUCAO'
+    assert res['qty_transferida'] == 0.0
+    assert res['aumento_destino'] is None
+    assert 'quant origem nao encontrado' in res['erro']
+    # Só 1 chamada (passo 2 não acontece)
+    assert quant_svc.ajustar_quant.call_count == 1
+
+
+def test_transferir_loc_e_lote_falha_aumento_estado_parcial(service):
+    """FALHA_AUMENTO em modo real: passo 1 EXECUTADO, passo 2 falha → estado parcial."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -100.0},
+        {'status': 'FALHA_QUANT_NEGATIVO', 'erro': 'aumento levaria a saldo negativo'},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=1, company_id=1, qty=100.0,
+            location_id_origem=31088, lot_id_origem=30360,
+            location_id_destino=8, lot_id_destino=99999,
+        )
+
+    assert res['status'] == 'FALHA_AUMENTO'
+    assert res['qty_transferida'] == 0.0
+    assert res['qty_reduzida_origem'] == 100.0  # debito parcial efetivo
+    assert res['reducao_origem']['status'] == 'EXECUTADO'
+    assert res['aumento_destino']['status'] == 'FALHA_QUANT_NEGATIVO'
+
+
+def test_transferir_loc_e_lote_dry_run(service):
+    """dry_run: ambos passos chamam ajustar_quant com dry_run=True; status=DRY_RUN_OK."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'DRY_RUN_OK', 'ajuste_aplicado': 0.0},
+        {'status': 'DRY_RUN_OK', 'ajuste_aplicado': 0.0},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=1, company_id=1, qty=50.0,
+            location_id_origem=31088, lot_id_origem=30360,
+            location_id_destino=8, lot_id_destino=99999,
+            dry_run=True,
+        )
+
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['qty_transferida'] == 50.0
+    # Ambas chamadas com dry_run=True
+    for call in quant_svc.ajustar_quant.call_args_list:
+        assert call.kwargs['dry_run'] is True
+
+
+def test_transferir_loc_e_lote_dry_run_falha_aumento_qty_reduzida_zero(service):
+    """CR1#6 pattern: dry-run + FALHA_AUMENTO → qty_reduzida_origem=0 (nada gravado)."""
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'DRY_RUN_OK', 'ajuste_aplicado': 0.0},
+        {'status': 'FALHA_QUANT_NEGATIVO', 'erro': 'X'},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=1, company_id=1, qty=50.0,
+            location_id_origem=31088, lot_id_origem=30360,
+            location_id_destino=8, lot_id_destino=99999,
+            dry_run=True,
+        )
+
+    assert res['status'] == 'FALHA_AUMENTO'
+    assert res['qty_transferida'] == 0.0
+    assert res['qty_reduzida_origem'] == 0.0  # dry-run nao grava
+
+
+def test_transferir_loc_e_lote_resolver_falha_status(service, odoo_mock, lot_svc_mock):
+    """Resolver lote destino falha → FALHA_RESOLVER_LOTE."""
+    odoo_mock.search.return_value = []
+    lot_svc_mock.criar_se_nao_existe.side_effect = RuntimeError('lot service down')
+    res = service.transferir_loc_e_lote(
+        product_id=1, company_id=1, qty=10.0,
+        location_id_origem=31088, lot_id_origem=30360,
+        location_id_destino=8,
+        nome_lote_destino='LOTE-X',
+        criar_lote_destino_se_faltar=True,
+    )
+
+    assert res['status'] == 'FALHA_RESOLVER_LOTE'
+    assert res['qty_transferida'] == 0.0
+    assert 'lot service down' in res['erro']
+    assert res['reducao_origem'] is None
+    assert res['aumento_destino'] is None
+
+
+def test_transferir_loc_e_lote_tracking_none_sem_lote_ambos_pontas(service):
+    """Caso CORANTE 104000046 (tracking='none'): lot_id_origem=None, lot_id_destino=None.
+
+    Pre-cond: loc origem != destino (lote igual MAS loc diferente = aceita).
+    """
+    from unittest.mock import patch, MagicMock
+    quant_svc = MagicMock()
+    quant_svc.ajustar_quant.side_effect = [
+        {'status': 'EXECUTADO', 'ajuste_aplicado': -1.8},
+        {'status': 'EXECUTADO', 'ajuste_aplicado': 1.8},
+    ]
+    with patch.object(service, '_quant_svc', return_value=quant_svc):
+        res = service.transferir_loc_e_lote(
+            product_id=34907, company_id=1, qty=1.8,
+            location_id_origem=31088, lot_id_origem=None,
+            location_id_destino=8, lot_id_destino=None,
+        )
+
+    assert res['status'] == 'EXECUTADO'
+    assert res['lot_id_origem'] is None
+    assert res['lot_id_destino'] is None
+    call1 = quant_svc.ajustar_quant.call_args_list[0].kwargs
+    assert call1['lot_id'] is None
+    call2 = quant_svc.ajustar_quant.call_args_list[1].kwargs
+    assert call2['lot_id'] is None

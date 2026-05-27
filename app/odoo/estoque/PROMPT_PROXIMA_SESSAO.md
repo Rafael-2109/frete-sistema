@@ -1,254 +1,238 @@
-# PROMPT_PROXIMA_SESSAO — orquestrador-Odoo (worktree feat/estoque-odoo) v13
+# PROMPT PRÓXIMA SESSÃO — orquestrador-Odoo
 
-> Copie tudo entre `---BEGIN---` e `---END---` e cole como prompt inicial da próxima sessão. Mantém você dentro do plano global sem desviar.
+**Esta sessão visa**: v24+ codificar fix raiz B-V23-1 (Skill 7 `criar_dfe_a_partir_do_invoice_saida` force company_id=destino nas dfe.lines) + B-V23-2 (novo átomo `resolver_account_id_por_company` + hook em `gerar_po_from_dfe`/`preencher_po`) + bulk REAL PROD (não só 2 ajustes) via opt-in `--usar-fluxo-l3-v19` com fixes aplicados. Adiados v25+: AP6 refator + expand CONSTANTS FB/CD + C5 G007.
+**Base**: commit a fazer v23+ (G039 codificado + 17 testes net + invoice ENTIN/2026/05/0055 posted PROD + 2 bugs B-V23-1/2 documentados). 597 pytest verdes.
+**Risco**: MÉDIO (2 fixes em Skill 7 ABRANGENTE — código já validado em PROD com workaround manual; bulk REAL PROD acende novos cenários).
+**Estimativa**: 2-3 sessões.
 
----BEGIN---
+> **Criado em**: 2026-05-27 v23+ EXECUTED (sucessor do v22+ EXECUTED).
+> **Audiência**: Claude Code OU agente web na próxima sessão do orquestrador-Odoo.
+> **Predecessores executados**: `_prompts_executados/PROMPT_PROXIMA_SESSAO_v{15a,15b,15c,16,17,17_5,18,19,20,21,22,23}_EXECUTED_*.md` + `PROMPT_PROXIMA_SESSAO_SKILL2_EXECUTED_*.md`.
 
-Continue o trabalho do orquestrador-Odoo. Worktree: `/home/rafaelnascimento/projetos/frete_sistema_estoque_odoo` (branch `feat/estoque-odoo`, **commits ao fim de v12: bf53ea84 (v7) + 507e5e36 (v7-extras) + 4e30c468 (v8) + 6a73c6fa (v9 Skill 6 orchestrator) + 9fc7e712 (v9 CR fixes) + 448ea62e (v9 docs PROMPT) + 79676cc1 (v10 PROMPT_SKILL2 inicial) + c73a6020 (v10 PROMPT regra) + b10e6653 (v10 Skill 2 distribuir + canary 5 cods) + b158c396 (v10 PROMPT FASE C bulk) + a21b1469 (v11 FASE C bulk 158 cods completo + cleanup) + 0ec0bcdd (v11 docs PROMPT geral) + 5db86d27 (v12 S1+S2+S4 — fallback Modo B + --cleanup-pos-bulk + invariantes) sobre `main`@b4f7b24c**). `main` continua VIVO em paralelo (Rafael commita lá) — verificar se avançou e considerar rebase incremental ANTES de iniciar.
+---
 
-## Setup OBRIGATÓRIO (worktree sem .env)
+## §0. CONVENÇÃO DESTE ARQUIVO (atemporal — NÃO ALTERAR sem refator estrutural)
+
+> **Regra de manutenção** (idêntica em todas as sessões):
+>
+> 1. **Um único `PROMPT_PROXIMA_SESSAO.md` vive no root de `app/odoo/estoque/`**. Sempre 1, nunca 2+.
+> 2. Sessão executada renomeia este arquivo para `_prompts_executados/PROMPT_PROXIMA_SESSAO_v<XX>_EXECUTED_<YYYY_MM_DD>.md` ANTES do commit final.
+> 3. Sessão executada CRIA um novo `PROMPT_PROXIMA_SESSAO.md` no root com o escopo da sessão N+1 (preserva §0, §1, §6 atemporais; reescreve §2, §3, §4, §5).
+> 4. **NÃO MEXER** em `PROTECAO_PROXIMA_SESSAO.md` (escudo atemporal — separado deste PROMPT).
+> 5. Histórico cronológico vai em `VALIDACAO_FINAL_SESSAO.md` (regra D-V18-5 do `CLAUDE.md §14`).
+>
+> **Estrutura padrão de TODA versão**:
+> - §0 — Convenção (atemporal — copiar literal)
+> - §1 — Primeiro passo (atemporal — copiar literal)
+> - §2 — Contexto atual (sessão N atualiza para N+1)
+> - §3 — Escopo desta sessão (sessão N decide para N+1)
+> - §4 — Checklist desta sessão (sessão N detalha para N+1)
+> - §5 — Riscos e mitigações (sessão N elabora para N+1)
+> - §6 — Ao terminar (atemporal — copiar literal)
+
+---
+
+## §1. PRIMEIRO PASSO (OBRIGATÓRIO — NÃO PULAR)
+
+> Antes de fazer QUALQUER COISA na sessão (incluindo responder ao usuário com plano detalhado), seguir esta ordem rigorosamente:
+
+### 1.1 Setup técnico (worktree obrigatória)
 
 ```bash
 cd /home/rafaelnascimento/projetos/frete_sistema_estoque_odoo
 source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate
 set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' /home/rafaelnascimento/projetos/frete_sistema/.env); set +a
+git log --oneline HEAD..origin/main | head -10   # rebase se main avançou
 ```
 
-## ✅ SKILL 2 MATURADA ARQUITETURALMENTE em v10+v11+v12 (2026-05-25)
+### 1.2 Leitura obrigatória em ordem
 
-Helper alto-nivel `distribuir_para_indisponivel` + CLI thin wrapper + 26 testes pytest + fluxo 2.2.j + invariantes no subagente.
+1. **⭐ `app/odoo/estoque/PROTECAO_PROXIMA_SESSAO.md`** INTEIRO (escudo contra desvios reincidentes — N1-N26 + AR1-AR12 + lições memories). **Atenção especial a N25/N26 NOVOS v23+** (B-V23-1 e B-V23-2 — bugs Skill 7 PENDENTES) e N24 ✅ RESOLVIDO v23+ (G039 codificado).
+2. **`app/odoo/estoque/CLAUDE.md`** — §1.1 (1 SKILL = 1 OBJETO) + §3.1 (orchestrator C3 não é skill) + §6 (4 tabelas catálogo) + §6.5 (antipadrões) + §14 (histórico desvios — D-V22 + D-V23) + §15 (9 princípios canônicos).
+3. **`app/odoo/estoque/ROADMAP_SKILLS.md`** — HANDOFF enxuto (≤80 linhas): estado global + próximo passo + pendências + onde NÃO mexer.
+4. **Este `PROMPT_PROXIMA_SESSAO.md`** — INTEIRO (§2 contexto + §3 escopo + §4 checklist + §5 riscos).
+5. **`app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md`** §0 — se sessão tocar Skill 8 / orchestrator (regra inviolável 0).
+6. **`.claude/agents/gestor-estoque-odoo.md`** — antipadrões A1-A11 + invariantes 1-10 + árvore + fronteiras.
+7. **`app/odoo/constants/operacoes_fiscais.py`** header (60 linhas iniciais) — MATRIZ_INTERCOMPANY + regra CFOP por tipo de produto.
+8. **`app/odoo/constants/picking_types.py`** header (15 linhas iniciais) — PICKING_TYPE_POR_DIRECAO + LOCATION_DESTINO_POR_DIRECAO.
 
-**v10 canary + sub-piloto** (PROD): 5 cods, 8 transferencias, 15.224 un (18s).
-**v11 bulk** (PROD): 153 cods, 485 transferencias, 10.994.553 un (11min 33s) + cleanup manual (Skill 2.4 zerar 28 quants + Skill 1 ajustar 2 saldos neg).
-**v12 estrutural** (pre-mortem + S1+S2+S4):
-- **S1 — fallback automatico Modo B** (`transfer.py:distribuir_para_indisponivel`): quando atomo modo C levanta `ValueError(lot_id_origem == lot_id_destino)` E lote eh variante MIGRACAO (deteccao DUPLA), tenta automaticamente `transferir_entre_locations` mantendo lote. Validado em PROD: cod 4310176 (1 un MIGRACAO em FB/Estoque) movido para Indisp via fallback — cobertura 100% (era 99.9%).
-- **S2 — `--cleanup-pos-bulk`** no CLI: apos bulk, listar reserveds<0 + qty<0 dos cods processados, aplicar Skill 2.4 + Skill 1 automaticamente. COM GUARD MO ativa (Skill 9 cross-ref) — pula quants com MLs vivas. Exit code eleva se cleanup falhar.
-- **S4 — invariantes NOVAS** no `gestor-estoque-odoo.md`: CLEANUP POS-BULK obrigatorio + fallback Modo B documentado.
+### 1.3 Confirmar baseline pytest
 
-**TOTAL** Skill 2 (v10+v11+v12): 158 cods + 1 reprocess 4310176, 495+ writes PROD, 11.009.777 un movidas, cobertura 100% efetiva. Lacunas estruturais resolvidas no codigo (nao so docs).
-
-Pendencias REAIS (11 cods agora, 35.312 un = 0.32%) documentadas em `docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/`. **Skill 2 fechada**, sem acoes pendentes operacionais.
-
-## ✅ SKILL 6 CICLO COMPLETO em v9 (2026-05-25)
-
-Capina `09b_executar_pre_etapa.py` (746 LOC) → `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (~580 LOC). Skill 6 passa de 4 modos → 5 modos:
-- `planejar` (READ Odoo + grava JSON+Excel) — v6
-- `propor` (WRITE banco local DELETE+INSERT) — v6
-- `listar-onda` (READ + hash sha256) — v6
-- `aprovar-onda` (WRITE banco local com hash check) — v6
-- **`executar-onda` (WRITE Odoo via orchestrator C3 macro) — v9 NOVO** (compõe Skills 1+2 com guard delta_esperado propagado + auditoria + paralelização)
-
-**Modernizações vs 09b legacy:**
-- API v2: `transferir_quantidade_para_lote` v1 → v2 (guard CICLAMATO)
-- PURO: `odoo.create('stock.quant')` direto → Skill 1 `ajustar_quant(criar_se_faltar=True, delta_esperado=qty)`
-- Output: print/banner → dict JSON estruturado (regra v7)
-
-**Pytest baseline: 251 verdes** (230 v8 + 21 orchestrator novo).
-**Smokes C6**: 3 verdes (incluindo dry-run real com ajuste APROVADO id=163696 NEG 835k un — dispatch correto).
-
-## ✅ CASO 71 cods 100% CONCLUÍDO em v8 (referência histórica)
-
-A jornada v7 + v7-extras + v8 + cirurgia processou **~115 writes PROD, ~22.500 un transferidas** para FB/Indisponivel. Status final: 67/67 cods executáveis OK + 4 SKIP planejados.
-
-## ⚠️ REGRAS INVIOLÁVEIS NOVAS (v7-extras + v8 + v9 — LER ANTES DE QUALQUER AÇÃO)
-
-1. **EXECUTAR FLUXOS = subagente, NÃO principal** (v7-extras — lição que custou ~150k tokens em v7):
-   - Para EXECUTAR fluxos sobre caso real, SEMPRE spawn `gestor-estoque-odoo` via Task tool.
-   - Use o principal APENAS para IMPLEMENTAR átomos novos / debugar gaps arquiteturais / refatorar services.
-   - Economia esperada: ~30-50% tokens em batches de 80+ chamadas.
-
-2. **CIRURGIA (E) PREFERIDA sobre CANCELAR (A) quando picking tem MIX MLs válidas + bloqueantes** (v8):
-   - SEMPRE listar TODAS as MLs do picking via Skill 9 modo pickings ANTES de cancelar.
-   - Se houver >1 ML válida de outros cods/devoluções → USAR cirurgia (Skill 2.4 `cancelar_moves_orfaos` + `--zerar-residual` + Skill 2 MODO C).
-
-3. **`--quiet` em CLIs estoque** (v7-extras): todos os 8 CLIs aceitam `--quiet`. Use SEMPRE em batches via subprocess. JSON output não é afetado.
-
-4. **`--forcar-concorrencia`** (v7-extras): scripts CLI detectam concorrência via `pgrep -f`. Default = sys.exit(2). Use `--forcar-concorrencia` SÓ quando ciente.
-
-5. **Log JSON é fonte de verdade** (v7): NUNCA confiar em `tee` background. Sempre parsear JSON do log salvo pelo script.
-
-6. **(v9 NOVA) Pre-cond inviolável Skill 6 `executar-onda`**: ajustes status='APROVADO' obrigatório. Rodar `aprovar-onda` ANTES (que exige hash fresh de `listar-onda`).
-
-7. **(v9 NOVA) Canary OBRIGATÓRIO antes de bulk `executar-onda`**: `--limite 1 --confirmar` + verificar Odoo direto ANTES de `--max-workers 5`. Sem canary, FALHAS bulk podem cascatear.
-
-## PENDÊNCIAS RESIDUAIS
-
-**ZERO pendências operacionais** do caso 71 cods + ZERO da Skill 6 + ZERO da Skill 2 (caso 158 cods v10+v11 fechado). Apenas pendências cosméticas:
-- **3 moves residuais com qty=0 no picking FB/OUT/01046** (cosmético, aguarda validação manual no Odoo UI)
-- **1 ajuste APROVADO real id=163696** (NEG cod=208000012 cid=4 qty=835.851,71 un MIGRAÇÃO) — aguardando aprovação do Rafael para canary `executar-onda --confirmar`
-- **12 cods pendentes da demanda 158 v10+v11** (35.313 un, 0.32%) — 2 cods inexistentes + 1 sem saldo + 1 saldo Odoo<pedido + 8 arredondamento <1 un. Acoes recomendadas em `docs/inventario-2026-05/v10-skill2-indisp-em-lote/fase-c-bulk/README.md`.
-
-## FOCOS POSSÍVEIS PARA v12 (escolher 1 ao iniciar a sessão)
-
-### Foco A: Skill 8 `faturando-odoo` (RECOMENDADO — DESBLOQUEADA pela ONDA 0.4 v3 + Skill 6 v9)
-- Skill MACRO mais perigosa (NF→SEFAZ irreversível).
-- Service `InventarioPipelineService` existe — capinar para `app/odoo/estoque/orchestrators/inventario_pipeline.py`. Pattern similar à Skill 6 v9 (orchestrator C3 macro compondo Skills 1+2+5).
-- Pre-flight quarteto fiscal G035/G017/G007/G018 obrigatório.
-- Smoke 1-ajuste antes de batch (regra inviolável SEFAZ).
-- ~6-8h, ~200-300k tokens.
-- Risco: ALTO (SEFAZ irreversível; robô CIEL IT externo timing).
-
-### Foco B: Skill 7 `escriturando-odoo` (entrada IC + DFe)
-- Pré-cond: Skill 2 ✅ + Skill 5 ✅. Mais simples que Skill 8 (sem SEFAZ direto).
-- ~4-6h, ~150-200k tokens.
-
-### Foco C: Smoke `executar-onda --confirmar` real em PROD (1 ajuste APROVADO id=163696)
-- Canary do orchestrator pre_etapa_executor capinado em v9.
-- 1 ajuste só (NEG cod 208000012 cid=4, 835k un MIGRAÇÃO).
-- ~30min (canary dry-run + revisão Rafael + canary real + verificação Odoo).
-- Risco: MÉDIO (valor alto 835k un + estado parcial se FALHA_AUMENTO).
-
-### Foco D: Limpeza de moves residuais FB/OUT/01046 (manual no Odoo UI)
-- Cancelar 3 moves (1161587, 1161611, 1161613) qty=0 após cirurgia v8.
-- ~5min manual no Odoo UI (não há CLI — `stock.move._action_cancel` é privado G025).
-- Cosmético, não-bloqueante.
-
-### Foco E: Outro caso real que Rafael trouxer
-- Subagente `gestor-estoque-odoo` já preparado com regras v7-v8-v9 codificadas.
-- SEMPRE spawn via Task tool (regra inviolável 1).
-
-## LEITURAS OBRIGATÓRIAS ANTES DE AGIR (ordem)
-
-1. `app/odoo/estoque/CLAUDE.md` — constituição.
-2. `app/odoo/estoque/ROADMAP_SKILLS.md` — seção HANDOFF (estado v9 + próximos passos).
-3. `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` §13 + §14 + **§15 v9** (sessão v9 09b capinado + smokes + decisões-chave).
-4. `.claude/agents/gestor-estoque-odoo.md` — invariantes (9 regras: 5 originais + PRE-CHECK reserva v7 + EXECUTAR-FLUXOS-subagente v7-extras + CIRURGIA preferida v8 + log-JSON v7 + executor v9).
-5. **Se foco = A (Skill 8 faturando)**:
-   - `app/odoo/services/inventario_pipeline_service.py`
-   - `docs/inventario-2026-05/02-gotchas/G004*.md`, `G011*.md`, `G016*.md`, `G023*.md` (já codificados em picking.py), `G035*.md`, `G017*.md`, `G007*.md`, `G018*.md` (quarteto fiscal pré-SEFAZ).
-   - Memórias: `[[ciel_it_quirks]]`, `[[picking_317346_pendente]]`, `[[skill5_picking_pattern]]`, **[[skill6_planejar_pre_etapa_pattern]]** (pattern orchestrator C3 reaproveitável).
-6. **Se foco = B (Skill 7 escriturando)**:
-   - `docs/inventario-2026-05/02-gotchas/G023*.md`, `G034*.md`
-   - Memória: `[[escrituracao_entrada_lf_dfe]]`
-7. **Se foco = C (smoke executar-onda real)**:
-   - `app/odoo/estoque/orchestrators/pre_etapa_executor.py` (entry-point `executar_onda_pre_etapa`)
-   - `.claude/skills/planejando-pre-etapa-odoo/SKILL.md` (sub-fluxo 4.1.e)
-   - Comando: `python .claude/skills/planejando-pre-etapa-odoo/scripts/planejar_pre_etapa.py --modo executar-onda --company-id 4 --cod-produto 208000012 --usuario rafael --confirmar`
-   - Antes: validar `--dry-run` retorna 1 APROVADO + plano coerente; verificar Odoo direto após `--confirmar`.
-8. **Se foco = E (caso real)**:
-   - Spawn `gestor-estoque-odoo` via Task tool com prompt curto descrevendo o caso
-9. Memórias-chave gerais:
-   - `[[arquitetura_orquestrador_odoo]]` — princípio fluxos>>skills
-   - `[[caso_real_tratar_reservas_pre_transferencia]]` — caso v7+v8 RESOLVIDO 100%
-   - `[[gotcha_g030_quant_id_store_false]]` — cross-ref via tupla
-   - `[[fluxo_2_6_pattern]]` — pattern 5-caminhos + cirurgia v8
-   - `[[skill5_picking_pattern]]` — pattern capinagem retroativa
-   - **[[skill6_planejar_pre_etapa_pattern]]** — pattern orchestrator C3 macro v9 (reaproveitável para Skill 8)
-   - `[[feedback_skills_demanda_driven]]` — skills nascem de casos reais
-   - `[[feedback_incompletude_quebra_regras]]` — C7-C10 invioláveis
-
-## REGRAS INVIOLÁVEIS (não negociáveis — herdadas + v7 + v8 + v9)
-
-1. `--dry-run` antes do real; confirmação explícita antes de SEFAZ/irreversível.
-2. NUNCA criar script ad-hoc — capinar a skill. `/tmp/` OK (descartável).
-3. `fluxos>>skills` — caso novo = folha de fluxo, NÃO skill nova.
-4. Skills nascem de DEMANDAS REAIS — não implementar átomos especulativamente.
-5. C7-C10 são INVIOLÁVEIS — completar cada checkpoint com artefato concreto.
-6. Verificar resultado DIRETO no Odoo — não confiar só no output.
-7. Operação VIVA — preservar ad-hocs até cada átomo maturar.
-8. Premissas pesquisadas e validadas ANTES de compor átomos.
-9. Após qualquer unlink em MLs em quants com reserved=0: chamar `zerar_reserved_residual` (G027).
-10. Ao retomar FALHAs: cruzar `mo_id`/`quant_id`/etc. com pedido original — NÃO aplicar política homogênea.
-11. Composição de átomos propaga `delta_esperado` a CADA chamada.
-12. `--corrigir-para-esperado` em batch SEMPRE rodar `--dry-run` primeiro.
-13. Pytest baseline ANTES de modificar service (atualizar baseline em mudanças).
-14. TIMEZONE: NUNCA `datetime.now()` em código novo — usar `from app.utils.timezone import agora_brasil_naive`.
-15. **(v6)** Skill 6 `pre_etapa.py`: pytest baseline 21 verdes.
-16. **(v4)** Skill 2 `transfer.py`: pytest baseline 52 verdes. CUIDADO com modo C — invariante G031 crítica.
-17. **(v3)** Skill 5 `picking.py`: pytest baseline 42 verdes. NÃO quebrar invariante G019/G020.
-18. **(v5)** Skill 4 `mo.py`: pytest baseline 29 verdes. CUIDADO com guard G-MO-01.
-19. **(v7)** Skill 9 `consulta_quant.py`: pytest baseline 19 verdes. NÃO usar `quant_id` direto (G030).
-20. **(v7)** Skill 2.4 `reserva.py`: pytest baseline 15 verdes. `unreserve_picking` recusa state ∈ {done, cancel, draft}.
-21. **(v7) PRE-CHECK reserva ANTES Skill 2**: SEMPRE verificar `reserved>0` via Skill 9.
-22. **(v7) `stock.move.line.quant_id` é COMPUTED `store: False`** (G030).
-23. **(v7-extras) EXECUTAR FLUXOS = subagente, NÃO principal**.
-24. **(v7-extras) `--quiet` em batches** + `--forcar-concorrencia` SÓ quando ciente.
-25. **(v7-extras) Log JSON é fonte de verdade** — não confiar em `tee` background.
-26. **(v8) CIRURGIA (E) PREFERIDA sobre CANCELAR (A) em pickings MIX**.
-27. **(v8) Pattern atômico cirurgia → zerar_residual → MODO C**.
-28. **(v9 NOVA) Skill 6 `pre_etapa_executor.py`: pytest baseline 21 verdes**. Total Skill 6: 42 verdes (21 service + 21 orchestrator).
-29. **(v9 NOVA) `executar-onda` exige status='APROVADO'** — rodar `aprovar-onda` antes.
-30. **(v9 NOVA) Canary OBRIGATÓRIO em `executar-onda` real**: `--limite 1 --confirmar` + verificar Odoo direto ANTES de `--max-workers 5`.
-31. **(v9 NOVA) `--max-workers > 5` sobrecarrega Odoo XML-RPC** — sweet spot é 5; serial (1) é seguro.
-32. **(v12 NOVA) CLEANUP POS-BULK obrigatorio apos `distribuir_para_indisponivel`** — usar flag `--cleanup-pos-bulk` (Skill 2.4 zerar reserveds + Skill 1 ajustar saldos neg). Sem isso, operador esquece (licao v11).
-33. **(v12 NOVA) Fallback Modo B em `distribuir_para_indisponivel`** — caso degenerado lote MIGRACAO origem==destino eh tratado automaticamente via `transferir_entre_locations`. NAO precisa intervencao manual.
-34. **(v12 NOVA) GUARD MO ativa em `--cleanup-pos-bulk`** — antes de zerar reserved<0, Skill 9 cross-ref MLs vivas; quants com MLs ativas vao para `quants_pulados_mo_ativa`. NUNCA zera reserved sem verificar se eh fantasma.
-
-## ARQUITETURA — árvore de decisão
-
-```
-1  NF inter-company (emissão/SEFAZ entre filiais)
-   1.1  só faturamento (saída)              → fluxos/1.1.* (faturando-odoo ⬜ ← FOCO A)
-   1.2  só entrada/escrituração
-        1.2.1 inventário (DFe próprio)      → fluxos/1.2.1 (escriturando-odoo ⬜ ← FOCO B)
-        1.2.2 COMPRAS (DFe fornecedor)      → DELEGAR a gestor-recebimento
-   1.3  transferência completa              → fluxos/1.3 ⬜
-2  Estoque (SEM NF — galho 1.x se com NF)
-   2.1 ajuste de saldo (1 quant; planilha)  → ajustando-quant-odoo ✅ [folha 2.1]
-   2.2 realocar saldo (lote↔lote / loc↔loc / MIGRA↔Indisp via MODO C)
-                                            → transferindo-interno-odoo 🟡 [folha 2.2]
-   2.3 transferir saldo entre CÓDIGOS       → (skill transferencia-saldo-codigo) ⬜
-   2.4 cancelar reserva / cirurgia ML / unreserve picking / find_orphan
-                                            → operando-reservas-odoo 🟡 [folha 2.4]
-   2.5 cancelar/validar/devolver picking    → operando-picking-odoo 🟡 [folha 2.5]
-   2.6 TRATAR reserva ATIVA pré-transferência (pré-cond INVIOLÁVEL Skill 2)
-                                            → fluxo composto 9+2.4+5+2 [folha 2.6]
-                                            (5 caminhos A/B/C/D/E + regra v8 cirurgia preferida)
-   2.9 CONSULTA AO VIVO (quants/MLs/pickings cross-ref reverso)
-                                            → consultando-quant-odoo 🟡 [folha 2.9]
-3  Produção / PCP
-   3.1 cancelar MO (single/batch — guard G-MO-01) → operando-mo-odoo 🟡 [folha 3.1]
-4  Planejamento + EXECUÇÃO de ajustes (READ Odoo + WRITE banco local + WRITE Odoo C3)
-   4.1 PRE-ETAPA inventario CD/FB D007 (5 modos: planejar+propor+listar+aprovar+EXECUTAR-ONDA v9)
-                                            → planejando-pre-etapa-odoo 🟡 [folha 4.1]
+```bash
+timeout 90 python -m pytest tests/odoo/ --tb=line -q 2>&1 | tail -3
+# Esperado: 597 passed (v23+ baseline)
 ```
 
-## CHECKLIST DA SESSÃO v10
+Se ≠ 597 → investigar regressão antes de prosseguir.
 
+### 1.4 Validar entendimento com Rafael (opcional mas recomendado)
+
+Antes de codar: spawn AskUserQuestion confirmando escopo §3 + decisões abertas em §5. Aprovação explícita Rafael.
+
+---
+
+## §2. CONTEXTO ATUAL (atualizado por sessão v23+ — FINALIZADA — Caminho B 100% PROD + G039 codificado + 2 bugs Skill 7 descobertos)
+
+### Estado do código
+- **Commit base**: v23+ EXECUTED (G039 codificado + B-V23-1/2 documentados + invoice ENTIN/2026/05/0055 posted PROD).
+- **Baseline pytest**: 597 verdes (580 v22+ + 17 net v23+).
+- **Worktree**: `feat/estoque-odoo` (main pode ter avançado — rebase em §1.1).
+
+### Estado da arquitetura
+- **Skill 7 GANHOU átomo G039** v23+ — `garantir_purchase_team(user_id, company_id, dry_run)` em `escrituracao.py` ~150 LOC + constant `_COMPANY_SIGLA_DEFAULT` (1=FB, 4=CD, 5=LF). Idempotência por (user_id, company_id, active=True); CREATE com nome template "Aprovação {sigla} - {primeiro_nome}". 7 pytest cobrindo cenários.
+- **Orchestrator GANHOU hook G039** v23+ — `_resolver_team_g039` com cache `_g039_team_cache: Dict[(uid, company_id), team_id]`; lazy auth; substitui `team_id` STATIC no `_resolver_constants_fluxo_l3` pelo team correto. Fallback silencioso (warning + STATIC) se hook falhar. 7 pytest cobrindo hit cache, miss, falha, override constants, fallback.
+- **Orchestrator GANHOU fix S2** v23+ — `_contar_pendentes_por_etapa` ETAPA F aceita `status IN (PROPOSTO, APROVADO, EXECUTADO)`. Demais etapas preservam PROPOSTO/APROVADO. 3 pytest.
+- **FLUXO L3 1.2.x CAMINHO B VALIDADO 100% em PROD v23+** — primeiro fim-a-fim: PO 42419 confirmada (team 143 RAFAEL) → picking 321617 done (LF/Estoque) → invoice ENTIN/2026/05/0055 posted (R$ 12.525,54 untaxed CFOP 1949). Validação cascateada descobriu 2 bugs Skill 7 (B-V23-1/2) que precisaram workaround manual PROD.
+
+### Estado dos 2 ajustes de teste v23+ (museum vivo)
+- id=176013/176014: `status='EXECUTADO', fase_pipeline='F5f_ENTRADA_OK'`
+- Picking saída 321601 done; saída SEFAZ 716448 chave 35260561724241000178550010000945661007164482
+- PO entrada 42419 `state=purchase, team_id=143, picking_ids=[321617], invoice_ids=[717630]`
+- Picking entrada 321617 (LF/IN/01779): `state=done` (LF/Estoque)
+- Invoice entrada 717630 (ENTIN/2026/05/0055): `state=posted, move_type=in_invoice, company=LF, journal=1047 'ENTRADA REMESSA INDUSTRIALIZAÇÃO', amount_untaxed=12525.54, amount_total=0.0 (neutralizado CFOP 1949)`
+- DFe entrada 43533 (lines company corrigidas v23+ workaround)
+
+### Skills LIVE (catálogo §6 do CLAUDE.md estoque)
+- Skills L2 atômicas (7): 1, 2 (4 modos A/B/C/D v21+), 2.4, 4, 5 (7 átomos + G-AUDIT-3 v22+), **7 ABRANGENTE v20+ + G039 v23+** (8 átomos total: 7 ABRANGENTES + garantir_purchase_team), 9 (READ).
+- Orchestrators C3 (2): Skill 6 executor, `faturamento_pipeline` (pipeline A-F + recovery + dispatch fluxo L3 1.2.x v19+ + opt-in v20+ + fix G-AUDIT-1 v21+ + hook G039 v23+ + fix contador F v23+).
+- Sub-skill PRE-FLIGHT: `auditando-cadastro-fiscal-odoo` (V1 'inventario' v14b + G038 v22+).
+- Fluxos L3 escritos (11): 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, 1.2.1 v19+, 1.2.2 v19+ (Caminho B 100% validado v23+).
+
+### Bugs arquiteturais descobertos v23+ (PENDENTES v24+)
+
+#### B-V23-1 — `criar_dfe_a_partir_do_invoice_saida` cria dfe.lines com company_id ERRADO
+- Lines herdam company_id do XML da SAÍDA (FB=1) em vez de DESTINO (LF=5).
+- Sintoma: passo 9 falha 'leitura dfe.line' (Fault 4).
+- Workaround v23+: write dfe.line.company_id manualmente.
+- **Fix v24+**: codificar no átomo — após `action_processar_arquivo_manual`, read dfe.lines + write company_id=company_destino.
+
+#### B-V23-2 — `gerar_po_from_dfe`/`preencher_po` deixa PO.line.account_id em company errada
+- account_id resolvido para account.account da FONTE (FB id=22611) em vez de DESTINO (LF id=26459).
+- Sintoma após fix B-V23-1: "Empresas incompatíveis".
+- Workaround v23+: write PO.line.account_id manualmente.
+- **Fix v24+**: novo átomo helper `resolver_account_id_por_company(account_id_fonte, company_destino)` + hook nos átomos Skill 7 que tocam PO.lines.
+
+---
+
+## §3. ESCOPO DESTA SESSÃO (v24+ — codificar B-V23-1 + B-V23-2 + bulk REAL PROD)
+
+> **CONFIRMAR ESCOPO COM RAFAEL via AskUserQuestion ANTES de codar** (§1.4).
+
+### Objetivo macro
+Codificar os 2 bugs descobertos em v23+ (B-V23-1 e B-V23-2) no Skill 7 ABRANGENTE → eliminar workarounds manuais → permitir bulk REAL PROD via FLUXO L3 1.2.x caminho B (não só 2 ajustes 176013/14, mas onda completa).
+
+### Sub-objetivos (ordem proposta — confirmar com Rafael)
+
+#### S1 — Codificar fix raiz B-V23-1 no átomo `criar_dfe_a_partir_do_invoice_saida`
+- Após `action_processar_arquivo_manual` (que cria DFe + lines), ler dfe.lines criadas (search por dfe_id) + write `{'company_id': company_destino}`.
+- Idempotência: read antes do write; se já estiver correto, skip.
+- Pytest novo cobrindo: lines em company errada (write executado) + lines em company correta (skip idempotente).
+- Smoke real PROD: criar DFe novo via XML de outra invoice de SAÍDA → verificar lines.company_id já correto sem workaround manual.
+
+#### S2 — Codificar fix raiz B-V23-2: átomo helper + hook
+- Novo átomo Skill 7 `resolver_account_id_por_company(account_id_fonte, company_destino)`: read account.account fonte (read code) → search [('code','=',code), ('company_id','=',company_destino)] → retorna id destino OU None se não encontrar (caller decide o que fazer).
+- Hook em `gerar_po_from_dfe` OU `preencher_po` (decidir onde): após criar/preencher PO.lines, iterar lines + para cada line: read `account_id` + chamar `resolver_account_id_por_company` + write se diferente.
+- Pytest novo cobrindo: account em company correta (skip) + account em company errada (resolve + write) + account não existe na destino (FALHA com erro claro).
+
+#### S3 — Bulk REAL PROD via opt-in `--usar-fluxo-l3-v19`
+- Pós-S1+S2 OK: rodar `executar_pipeline_resume --apenas-etapa F --usar-fluxo-l3-v19 --ciclo INVENTARIO_2026_05 --confirmar --confirmar-sefaz` sobre conjunto maior de ajustes (não só 176013/14 que já estão em F5f_ENTRADA_OK).
+- Monitorar: novos bugs cascateados? Performance? Idempotência ETAPA F multi-invoice?
+- Documentar findings em `VALIDACAO_FINAL_SESSAO.md` §"Sessão v24+".
+
+#### S4 — Expand CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO para FB=1 e CD=4
+- Pós-S3 OK: mapear `team_id` + `payment_term_id` + `picking_type_id` + `payment_provider_id` para FB e CD destino (atualmente só LF=5 mapeada).
+- Pré-cond: descobrir IDs corretos via XML-RPC (queries similares ao que foi feito v23+ para account_id LF=26459).
+- Pytest mockado cobrindo as 3 direções.
+
+#### S5 — Itens adiados v23+ (oportunístico)
+- AP6 refator: extrair Skill 8 ATÔMICA L2 do orchestrator (5 ops C+D sobre `account.move`)
+- Folhas L3 1.1.x (só saída) + 1.3 (transferência completa)
+- C5 G007 (standard_price=0) + l10n_br_tipo_produto
+
+### O que NÃO entra nesta sessão (escopo declarado fora)
+- ❌ Refatorar `RecebimentoLfOdooService` ou `LancamentoOdooService` (NÃO MEXER).
+- ❌ Mexer em `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (SUPERADO ao final v22+).
+
+---
+
+## §4. CHECKLIST DESTA SESSÃO
+
+Antes de codar:
+- [ ] Setup técnico §1.1 OK (worktree + venv + env + git status limpo)
+- [ ] Leitura §1.2 completa (8 documentos)
+- [ ] Baseline pytest 597 confirmado
+- [ ] Cross-check Odoo: estado dos ajustes 176013/14, PO 42419, invoice 717630 (estado preservado)
+- [ ] AskUserQuestion §1.4 confirmou escopo S1-S5 com Rafael
+
+Implementação:
+- [ ] S1 — B-V23-1 fix no `criar_dfe_a_partir_do_invoice_saida` + pytest + smoke real PROD
+- [ ] S2 — B-V23-2 átomo `resolver_account_id_por_company` + hook + pytest + smoke real PROD
+- [ ] S3 — Bulk REAL PROD via opt-in (escolher subset de ajustes para o canary do bulk)
+- [ ] S4 — Expand CONSTANTS para FB + CD (se sobrar tempo)
+- [ ] S5 — AP6/folhas L3/C5 G007 conforme tempo
+
+Validação:
+- [ ] Pytest baseline ≥ 597 + novos testes (estimativa 4-8 novos)
+- [ ] ≥1 code-reviewer paralelo (Skill 7 fixes)
+- [ ] Atualizações cross-refs: SKILL.md `escriturando-odoo` + ROADMAP HANDOFF + PROTECAO N25/N26 (passar para RESOLVIDOS)
+
+Documentação:
+- [ ] Atualizar PROTECAO N25/N26 (RESOLVIDOS)
+- [ ] Atualizar CLAUDE.md §6.5 + §14 (D-V23-2/3 fix raiz codificado)
+- [ ] Memórias `[[b_v23_1_dfe_line_company_id]]` + `[[b_v23_2_po_line_account_id]]` resolvidas
+- [ ] Append em VALIDACAO_FINAL_SESSAO.md (regra D-V18-5)
+
+---
+
+## §5. RISCOS E MITIGAÇÕES
+
+| Risco | Probabilidade | Impacto | Mitigação |
+|-------|---------------|---------|-----------|
+| Fix B-V23-1 quebra cenários onde dfe.lines DEVEM ficar em company fonte (ex: DFe de COMPRA externa) | BAIXA | ALTO | Restringir fix ao caso `criar_dfe_a_partir_do_invoice_saida` (NF interna nossa) — não tocar fluxo de DFe de compras (gestor-recebimento). Pytest cobre os 2 cenários. |
+| Fix B-V23-2 acende novos bugs cascateados (taxes, fiscal_position, etc.) | ALTA | MÉDIO | S3 bulk REAL PROD em conjunto pequeno (3-5 ajustes) antes de onda grande. Capturar erros + iterar conforme cascade. |
+| `resolver_account_id_por_company` retorna None (account não existe na destino) | MÉDIA | ALTO | Átomo retorna `{'status': 'FALHA', 'erro': 'account_nao_existe_em_destino'}`; caller (orchestrator) decide se aborta linha ou tenta fallback (ex: usar account default da company destino). Logging detalhado. |
+| Bulk REAL PROD trava com SEFAZ rejeição em algum ajuste novo (não 176013/14) | MÉDIA | MÉDIO | Pre-flight C5 deve pegar antes. Se passar pre-flight mas rejeitar SEFAZ, recovery captura erro + ajustes individuais ficam em fase intermediária + operador investiga. |
+| Sessão estoura tokens | MÉDIA | ALTO | Spawn subagente `gestor-estoque-odoo` para casos reais; principal só implementa refator + revisa. |
+
+---
+
+## §6. AO TERMINAR ESTA SESSÃO (atemporal — copiar literal nas próximas)
+
+> **OBRIGATÓRIO** antes do commit final:
+
+### 6.1 Documentação
+1. Append bloco "Sessão YYYY-MM-DD vXX" em `VALIDACAO_FINAL_SESSAO.md` (NÃO no ROADMAP HANDOFF — regra D-V18-5).
+2. Atualizar `ROADMAP_SKILLS.md` HANDOFF (≤80 linhas) — estado global + próximo passo refinado.
+3. Atualizar `CLAUDE.md` estoque (catálogo §6 se skill mudou status; §6.5 se antipadrão resolvido; §14 se novo desvio detectado).
+4. Se detectou NOVO antipadrão reincidente → atualizar `PROTECAO_PROXIMA_SESSAO.md` (ARN + Nij + Lições).
+5. Se padrão emergiu → salvar memória `[[<slug>-pattern]]` via `mcp__memory__save_memory`.
+
+### 6.2 Sanitizar prompts (regra desta convenção — D-V18-PROMPTS)
+1. Renomear este `PROMPT_PROXIMA_SESSAO.md` para `_prompts_executados/PROMPT_PROXIMA_SESSAO_v<XX>_EXECUTED_<YYYY_MM_DD>.md`.
+2. Criar **novo** `PROMPT_PROXIMA_SESSAO.md` no root de `app/odoo/estoque/` com escopo da sessão N+1:
+   - §0 + §1 + §6 — copiar literal deste arquivo (atemporais).
+   - §2 — atualizar com commit novo + estado pós-sessão.
+   - §3 — definir escopo da próxima sessão (sub-objetivos).
+   - §4 — checklist concreto.
+   - §5 — riscos + mitigações específicos.
+
+### 6.3 Commit consolidado
+```bash
+git add <arquivos modificados>
+source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate
+export PATH="/home/rafaelnascimento/projetos/frete_sistema/.venv/bin:$PATH"
+git commit -m "<tipo>(estoque): <sumário> — v<XX> (YYYY-MM-DD)
+<corpo do commit detalhado>
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 ```
-[ ] Setup (cd worktree + venv + DATABASE_URL+ODOO_*)
-[ ] Verificar se main avançou: git fetch origin main && git log --oneline 6a73c6fa..origin/main
-[ ] Se avançou: rebase incremental ANTES de iniciar
-[ ] Pytest baseline: 251 verdes esperado (rodar full suite estoque)
-[ ] Ler ROADMAP_SKILLS HANDOFF + VALIDACAO §13+§14+§15 + 5 memórias-chave (incluindo skill6_planejar_pre_etapa_pattern v9)
-[ ] AskUserQuestion com Rafael: foco A (Skill 8 faturando RECOMENDADO) | B (Skill 7 escriturando) | C (smoke executar-onda real id=163696) | D (limpeza moves residuais) | E (caso real novo)
-[ ] Se foco A/B: implementar via principal seguindo pattern Skill 6 v9 (orchestrator C3 macro reaproveitável)
-[ ] Se foco C: spawn gestor-estoque-odoo via Task tool (regra inviolável 23 — executar fluxos = subagente)
-[ ] Se foco E: SPAWN gestor-estoque-odoo via Task tool
-[ ] Após writes em PROD: verificar resultado DIRETO no Odoo (regra inviolável 6)
-[ ] Code-review paralelo (2 reviewers) ao fim da sessão
-[ ] Atualizar ROADMAP_SKILLS HANDOFF + VALIDACAO §16 + memórias
-[ ] Commit consolidado + atualizar este PROMPT_PROXIMA_SESSAO.md (v11)
-```
 
-## NÃO-FAZER (red flags v10)
+### 6.4 Validação final
+- [ ] Pytest verde ≥ baseline atual
+- [ ] `git status` limpo
+- [ ] `PROMPT_PROXIMA_SESSAO.md` novo criado (1 só vivo no root)
+- [ ] Histórico em `VALIDACAO_FINAL_SESSAO.md`
+- [ ] `PROTECAO_PROXIMA_SESSAO.md` atualizado se houve novo antipadrão
 
-- ❌ Criar scripts ad-hoc em `scripts/inventario_2026_05/` (capinar a skill)
-- ❌ Implementar átomos previstos sem demanda real
-- ❌ Marcar C# como ✅ sem entregar artefato concreto
-- ❌ Modificar `quant.py`, `transfer.py`, `picking.py`, `reserva.py`, `mo.py`, `pre_etapa.py`, `consulta_quant.py`, **`pre_etapa_executor.py`** sem rodar pytest ANTES e DEPOIS
-- ❌ Compor átomos sem propagar `delta_esperado`
-- ❌ Usar `datetime.now()` em código novo (hook bloqueia)
-- ❌ Filtrar `stock.move.line` por `quant_id` direto (G030)
-- ❌ Cancelar MO com `consumo_total > 0` sem unbuild (G-MO-01)
-- ❌ Quebrar G019/G020 em `picking.py` (re-abre ONDA 0.4)
-- ❌ Quebrar G031 em Skill 2 modo C (MIGRAÇÃO POR PRODUTO)
-- ❌ **(v7-extras)** ORQUESTRAR FLUXOS do agente principal (use subagente)
-- ❌ **(v7-extras)** Rodar batch SEM `--quiet`
-- ❌ **(v7-extras)** Confiar em `tee` background — parsear JSON do log salvo
-- ❌ **(v7-extras)** Disparar batch sem checar concorrência via `pgrep -f`
-- ❌ **(v8)** CANCELAR picking inteiro (caminho A) sem antes listar TODAS as MLs via Skill 9
-- ❌ **(v8)** Pular zerar_reserved_residual após cirurgia que faz unlink de MLs
-- ❌ **(v9)** Rodar `executar-onda --confirmar` sem canary `--limite 1 --confirmar` antes — cascateia FALHAs em produtos similares
-- ❌ **(v9)** `executar-onda --max-workers > 5` — sobrecarrega Odoo XML-RPC (sweet spot 5; serial 1 é seguro)
-- ❌ **(v9)** Re-rodar `executar-onda` sobre ajustes FALHA sem corrigir root cause — FALHA fica até operador alterar manualmente para APROVADO
+---
 
----END---
-
-## NOTAS PARA RAFAEL (não fazem parte do prompt)
-
-- v9 fechou o ciclo da Skill 6 (5 modos: planejar→propor→listar→aprovar→executar). Orchestrator C3 macro `pre_etapa_executor.py` compõe Skills 1+2 com guard delta_esperado propagado.
-- Pattern reaproveitável para Skill 8 faturando-odoo (próxima sessão recomendada): mesmo pattern de orchestrator C3 em `orchestrators/`, mesmas regras de helpers privados + auditoria + paralelização + modo dry-run/confirmar.
-- 1 ajuste APROVADO real existe (id=163696 NEG cod=208000012 cid=4 qty=835.851,71 un MIGRAÇÃO). Aguardando aprovação para canary `executar-onda --confirmar`. **Cuidado**: valor alto, verificar Odoo diretamente após canary.
-- Pytest baseline saltou de 230 → 251 (+21 testes orchestrator). 16 scripts SUPERADOS (era 15 + 09b v9).
-- Próxima sessão (v10) RECOMENDADO: **Skill 8 faturando-odoo** (última macro perigosa antes de fluxos inter-company completos). Pattern Skill 6 v9 orchestrator é reaproveitável.
+> **TEMPLATE END**. Para próxima sessão (após executar esta), substituir §2-§5 mantendo §0, §1, §6 literais.

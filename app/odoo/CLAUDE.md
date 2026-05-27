@@ -39,7 +39,7 @@ app/odoo/
   │   ├── alocacao_compras_service.py      # Sync purchase.request.allocation (~23K)
   │   ├── sincronizacao_integrada_service.py # Orquestra sync completa (fat→cart) (~19K)
   │   ├── pedido_sync_service.py           # Sync individual de pedido (~19K)
-  │   ├── inventario_pipeline_service.py   # Pipeline inventario 2026-05 (F0-F5, ondas LF/FB/CD)
+  │   ├── inventario_pipeline_service.py   # ⚠️ LEGADO MINERADO (1346 LOC) — fonte do orchestrator novo em `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (Skill 8 v18). Manter por enquanto (callers legados). Arquivar v22+ pos-canary REAL PROD.
   │   ├── stock_picking_service.py         # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/picking.py (Skill 5)
   │   ├── stock_lot_service.py             # Operacoes stock.lot (criar/buscar com fallback like)
   │   ├── stock_internal_transfer_service.py # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/transfer.py (Skill 2)
@@ -248,17 +248,34 @@ cache_produtos = {p['id']: p for p in produtos}
 
 A partir de 2026-05-22, todas as operacoes de ESCRITA de estoque no Odoo (ajuste quant, transferencia interna, cancelar reservas, etc.) migraram para o subpacote `app/odoo/estoque/`. Os arquivos antigos em `services/stock_*_service.py` agora sao SHIMs que re-exportam. Detalhes completos: **`app/odoo/estoque/CLAUDE.md`** (constituicao do orquestrador).
 
+### Skills L2 atômicas (1 objeto Odoo cada — catálogo principal)
+
 | Skill | Service (novo) | SHIM antigo | Status |
 |-------|----------------|-------------|--------|
 | `ajustando-quant-odoo` | `app/odoo/estoque/scripts/quant.py` | `services/stock_quant_adjustment_service.py` | ✅ MATURADA |
-| `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 v10 (2026-05-25 — Modo C + distribuir_para_indisponivel helper validado 5 cods PROD) |
-| `operando-reservas-odoo` | `app/odoo/estoque/scripts/reserva.py` | — | 🟡 v7+ (5 atomos: cirurgia, cancelamento, unreserve, find_orphan_mls, zerar_residual) |
-| `operando-picking-odoo` | `app/odoo/estoque/scripts/picking.py` | `services/stock_picking_service.py` | 🟡 v3 (2026-05-24 — invariante G019/G020 codificada) |
-| `operando-mo-odoo` | `app/odoo/estoque/scripts/mo.py` | `services/stock_mo_service.py` (preventivo) | 🟡 v5 (2026-05-24 — guard G-MO-01 furo contabil; idempotencia validada) |
-| `planejando-pre-etapa-odoo` | `app/odoo/estoque/scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` | — | 🟡 v6 (2026-05-24 — 4 modos CLI planejar/propor/listar-onda/aprovar-onda) |
+| `transferindo-interno-odoo` | `app/odoo/estoque/scripts/transfer.py` | `services/stock_internal_transfer_service.py` | 🟡 v10 (Modo C + distribuir_para_indisponivel helper validado 5 cods PROD; FIX D-OPS-5 v14b) |
+| `operando-reservas-odoo` | `app/odoo/estoque/scripts/reserva.py` | — | 🟡 v7+ (5 átomos: cirurgia, cancelamento, unreserve, find_orphan_mls, zerar_residual) |
+| `operando-picking-odoo` | `app/odoo/estoque/scripts/picking.py` | `services/stock_picking_service.py` | 🟡 v15a (6 átomos · 61 pytest · G019/G020 fechada · 3 átomos inter-company para ETAPA F) |
+| `operando-mo-odoo` | `app/odoo/estoque/scripts/mo.py` | `services/stock_mo_service.py` (preventivo) | 🟡 v5 (guard G-MO-01 furo contábil; idempotência action_cancel validada) |
+| `escriturando-odoo` ⚠️ V1 STRICT | `app/odoo/estoque/scripts/escrituracao.py` | — | 🟡 V1 LIVE v17.5 — **antipadrão AP1/AP4 documentado em `app/odoo/estoque/CLAUDE.md §6.5` para refator v19+** (Skill 7 ABRANGENTE) |
 | `consultando-quant-odoo` (READ) | `app/odoo/estoque/scripts/consulta_quant.py` | — | 🟡 v7+ (3 modos: quants/move-lines/pickings — fluxo 2.6) |
 
-Subagente orquestrador: `.claude/agents/gestor-estoque-odoo.md`. Folhas de fluxo: `app/odoo/estoque/fluxos/` (2.1, 2.2, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1).
+### Orchestrators C3 macros (compõem skills L2 — NÃO são skills L2 atômicas, ver `estoque/CLAUDE.md §3.1`)
+
+| Orchestrator | Service | SHIM antigo | Status |
+|--------------|---------|-------------|--------|
+| `faturando-odoo` (Skill 8) | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` + SKILL.md fachada em `.claude/skills/faturando-odoo/SKILL.md` | `services/inventario_pipeline_service.py` (1346 LOC — fonte minerada, manter até v22+) | 🟡 PIPELINE A-F + RECOVERY LIVE v18 (72 pytest · smoke PROD dry-run OK) |
+| `planejando-pre-etapa-odoo` (Skill 6) | `app/odoo/estoque/scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` | — | 🟡 v9 (5 modos CLI: planejar/propor/listar/aprovar/executar-onda) |
+
+### Sub-skill PRE-FLIGHT
+
+| Sub-skill | Service | Status |
+|-----------|---------|--------|
+| `auditando-cadastro-fiscal-odoo` | `app/odoo/estoque/scripts/cadastro_fiscal_audit.py` | 🟡 V1 'inventario' (cobre G017+G018+G035+G014 + D-OPS-2/3; 14 pytest; delegada pela Skill 8) |
+
+Subagente orquestrador: `.claude/agents/gestor-estoque-odoo.md`. Folhas de fluxo: `app/odoo/estoque/fluxos/` (galho 2/3/4 escritos; galho 1 ⬜ pendente refator v19+).
+
+> **⭐ ESCUDO contra desvios reincidentes**: `app/odoo/estoque/PROTECAO_PROXIMA_SESSAO.md` (LEITURA OBRIGATÓRIA antes de tocar skills/orchestrators do estoque).
 
 ---
 

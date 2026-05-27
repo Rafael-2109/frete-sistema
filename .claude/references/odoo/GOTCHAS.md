@@ -1,6 +1,6 @@
 # GOTCHAS Criticos - Integracao Odoo
 
-**Ultima verificacao:** 18/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/`)
+**Ultima verificacao:** 26/05/2026 (revisao + adicoes Mai/2026: gotchas inventario 2026-05 LF NACOM em `docs/inventario-2026-05/02-gotchas/` — incluindo **G037 v18 NOVO** sobre CFOP explicito quando operacao nao cadastrada)
 
 ---
 
@@ -508,4 +508,31 @@ Gotchas descobertos via analise de issues do Sentry (Marco/2026):
 
 - **ERRADO**: `from app.odoo.utils.odoo_client import ...`
 - **CORRETO**: `from app.odoo.utils.connection import ...`
+
+---
+
+## Gotchas Inter-Company Fiscal (Inventario 2026-05)
+
+Gotchas catalogados em `docs/inventario-2026-05/02-gotchas/`. Referencia rapida:
+
+| ID | Tema | Quando atinge |
+|----|------|---------------|
+| G011 | Preencher qty_done faltando | Skill 5 atomo `validar_picking_inter_company` codifica |
+| G014 | FEFO lotes vencidos bloqueia reserva | Skill 8 ETAPA C `_g014_pre_check_lotes_vencidos` codifica |
+| G016 | SSL crash no loop F5e perde commits | `_commit_resilient` proativo + dispose |
+| G017 | NCM=False bloqueia SEFAZ | Sub-skill C5 PRE-FLIGHT |
+| G018 | weight=0 bloqueia F5c | Skill 5 atomo `aplicar_peso_volumes_fallback` (G018 v2 publico) |
+| G019/G020 | Picking state nao avanca a done | Skill 5 atomo `validar()` re-le state pos-button_validate |
+| G022 | Over-reservation pos-renomeacao | Skill 8 ETAPA B sleep 5s entre chunks |
+| G023 | company_id ausente em moves | Skill 5 atomo forca company_id pos-create |
+| G034 | Robo CIEL IT defaults PT 66 em DEV_* | Skill 8 sub-etapa F5d.7 `garantir_fiscal_setup` |
+| G035 | product.barcode invalido quebra SEFAZ cstat=225 | Sub-skill C5 PRE-FLIGHT (auto-corrige opcional) |
+| G036 | Lote com virgula literal + lotes duplicados quebram `=` | Resolver lote por `name in [valor]` em vez de `=` |
+| **G037 v18 REESCRITO Fase 0** | **Picking ETAPA F criado MANUALMENTE sem PO precisa de `l10n_br_cfop_id` explícito (CAMINHO B PALIATIVO)** | **Escopo RESTRITO**: APENAS picking criado pelo átomo Skill 5 `criar_picking_entrada_destino_manual` (orchestrator Skill 8 ETAPA F caminho B). NÃO se aplica ao fluxo normal (account.move criado via PO+fiscal_position que continua informacional/log conforme `operacoes_fiscais.py:17`). Caminho A correto v19+: refator Skill 7 ABRANGENTE → DFe → PO → picking nativo → motor fiscal deriva CFOP automaticamente, remove o paliativo. |
+| **G038 v22+ NOVO** | **`product.l10n_br_origem` ausente bloqueia transmissão SEFAZ via modal Odoo silencioso** | Quando `product.l10n_br_origem in (False, None, '')`, Odoo CIEL IT abre modal nativo "Aviso: Produtos sem Origem" interceptando `action_gerar_nfe` ANTES de SEFAZ. Playwright `_tratar_wizard_confirmacao` só trata wizard padrão — fica em loop 15 tentativas (~28min) com `cstat=False`. Sub-skill C5 PRE-FLIGHT v22+ detecta como BLOQUEIO (sem auto-fix — operador seta `'0'` Nacional / `'1'` Estrangeira import / etc). Descoberto 2026-05-27 retry pipeline INVENTARIO_2026_05 (produto 104000046 CORANTE VERMELHO). |
+
+**G037 detalhe completo**: `docs/inventario-2026-05/02-gotchas/G037-operacao-nao-cadastrada-exige-cfop-explicito.md`
+**G038 detalhe completo**: `docs/inventario-2026-05/02-gotchas/G038-l10n-br-origem-ausente-bloqueia-sefaz.md`
+
+> **Lição AP5** (v18 Fase 0): versão original do G037 dizia "operação não cadastrada exige CFOP explícito" sem escopo restrito — premissa contradizia `operacoes_fiscais.py:17` ("informacional/log. Real e decidido pelo Odoo"). Erro detectado por Rafael na auditoria pós-v18. Reescrito com escopo restrito ao caminho B paliativo. Antipadrão AP5 "criar gotcha sem ler docstrings de constants" codificado em `app/odoo/estoque/CLAUDE.md §6.5`.
 - O modulo se chama `connection`, NAO `odoo_client`

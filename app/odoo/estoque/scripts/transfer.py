@@ -777,12 +777,240 @@ class StockInternalTransferService:
             'tempo_ms': int((time.time() - inicio) * 1000),
         }
 
+    def transferir_loc_e_lote(
+        self,
+        *,
+        product_id: int,
+        company_id: int,
+        qty: float,
+        location_id_origem: int,
+        lot_id_origem: Optional[int],
+        location_id_destino: int,
+        lot_id_destino: Optional[int] = None,
+        nome_lote_destino: Optional[str] = None,
+        criar_lote_destino_se_faltar: bool = True,
+        expiration_date_destino: Optional[str] = None,
+        resetar_reserva_origem: bool = False,
+        tolerancia_delta: float = 0.001,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Move `qty` mudando LOC E LOTE simultaneamente (mesma company).
+
+        Atomo NOVO v21+ — caso de uso real (2026-05-26 Rafael): ETAPA 0 do
+        fluxo bulk FB->LF onde saldo em FB/Indisp/MIGRAÇÃO precisa ir para
+        FB/Estoque/P-15/05 (location E lote mudam de uma vez).
+
+        Antes deste atomo, era preciso 2 chamadas encadeadas:
+          - `transferir_entre_locations` (loc->loc mesmo lote)
+          - `transferir_entre_lotes_v2`   (lote->lote mesma loc)
+        Mas isso polui o audit trail e nao garante atomicidade entre os 2
+        passos no Odoo (qualquer falha mid-fluxo deixa state intermediario).
+
+        Estrategia: delega a `ajustar_quant` 2x propagando `delta_esperado`:
+          - Passo 1: ajustar_quant(loc=loc_origem, lot=lot_origem, delta=-qty)
+          - Passo 2: ajustar_quant(loc=loc_destino, lot=lot_destino, delta=+qty,
+                                    criar_se_faltar=True)
+
+        Para CRIAR lote destino on-demand (tracking='lot'):
+          passe `nome_lote_destino='P-15/05'` + `lot_id_destino=None` +
+          `criar_lote_destino_se_faltar=True` (default).
+          Service resolve via `resolver_lote_destino` antes do Passo 1.
+          Para tracking='none': lot_id_destino=None E nome_lote_destino=None
+          (lote ignorado pelo Odoo).
+
+        Args:
+            product_id, company_id: identificam produto/empresa.
+            qty: quantidade a mover (positiva).
+            location_id_origem: loc real onde saldo esta.
+            lot_id_origem: lote origem (None => quant sem lote).
+            location_id_destino: loc destino (deve ser DIFERENTE da origem
+                OU lot_id_destino deve ser diferente do origem — pelo menos
+                1 dimensao muda; caso contrario use ajustar_quant).
+            lot_id_destino: lote destino int (se None, resolve via
+                nome_lote_destino).
+            nome_lote_destino: nome do lote destino (resolve/cria via
+                lot_svc se lot_id_destino=None E
+                criar_lote_destino_se_faltar=True).
+            criar_lote_destino_se_faltar: se True, cria lote destino se nao
+                existir (so usado quando lot_id_destino=None +
+                nome_lote_destino=str).
+            expiration_date_destino: data de validade do lote destino se
+                criado (formato 'YYYY-MM-DD').
+            resetar_reserva_origem: passa resetar_reserva=True para reducao
+                origem (defensivo G027).
+            tolerancia_delta: tolerancia absoluta do guard delta_esperado.
+            dry_run: simula ambos passos.
+
+        Returns:
+            dict {
+                reducao_origem: {...},
+                aumento_destino: {...},
+                qty_transferida: float,
+                status: 'EXECUTADO' | 'DRY_RUN_OK' | 'FALHA_REDUCAO' |
+                        'FALHA_AUMENTO' | 'FALHA_RESOLVER_LOTE',
+                location_id_origem, location_id_destino,
+                lot_id_origem, lot_id_destino,
+                lote_destino_nome (str|None),
+                lote_destino_criado_agora (bool|None),
+                tempo_ms,
+                erro (se falha),
+            }
+
+        Raises:
+            ValueError: qty <= 0 ou (loc igual E lote igual).
+        """
+        if qty <= 0:
+            raise ValueError(f'qty deve ser > 0 (recebido {qty})')
+        if (location_id_origem == location_id_destino
+                and lot_id_origem == lot_id_destino):
+            raise ValueError(
+                f'transferir_loc_e_lote: origem == destino '
+                f'(loc={location_id_origem}, lot={lot_id_origem}) — use '
+                'ajustar_quant ou transferir_entre_lotes_v2 / '
+                'transferir_entre_locations para mudar so 1 dimensao.'
+            )
+
+        inicio = time.time()
+        svc = self._quant_svc()
+
+        lote_destino_nome: Optional[str] = None
+        lote_destino_criado_agora: Optional[bool] = None
+
+        # Resolver lote destino se solicitado (lot_id_destino=None +
+        # nome_lote_destino=str). Para tracking='none' (lote_destino=None +
+        # nome_lote_destino=None), pula resolucao.
+        if lot_id_destino is None and nome_lote_destino:
+            try:
+                lid, nome_canonico, criado = self.resolver_lote_destino(
+                    nome_lote=nome_lote_destino,
+                    product_id=product_id,
+                    company_id=company_id,
+                    location_id=location_id_destino,
+                    criar_se_faltar=criar_lote_destino_se_faltar,
+                    expiration_date=expiration_date_destino,
+                )
+                lot_id_destino = lid
+                lote_destino_nome = nome_canonico
+                lote_destino_criado_agora = criado
+            except Exception as e:
+                return {
+                    'reducao_origem': None,
+                    'aumento_destino': None,
+                    'qty_transferida': 0.0,
+                    'status': 'FALHA_RESOLVER_LOTE',
+                    'location_id_origem': location_id_origem,
+                    'location_id_destino': location_id_destino,
+                    'lot_id_origem': lot_id_origem,
+                    'lot_id_destino': None,
+                    'lote_destino_nome': nome_lote_destino,
+                    'lote_destino_criado_agora': None,
+                    'erro': f'Falha ao resolver/criar lote destino '
+                            f'{nome_lote_destino!r}: {e}',
+                    'tempo_ms': int((time.time() - inicio) * 1000),
+                }
+
+        # Re-validar pos-resolucao: pode acontecer de nome resolver para
+        # mesmo lot_id_origem (mesma loc + mesmo lote = nada a fazer).
+        if (location_id_origem == location_id_destino
+                and lot_id_origem == lot_id_destino):
+            raise ValueError(
+                f'transferir_loc_e_lote: apos resolver_lote_destino, '
+                f'origem == destino (loc={location_id_origem}, '
+                f'lot={lot_id_origem}). Lote {nome_lote_destino!r} '
+                'resolveu para o mesmo lote de origem.'
+            )
+
+        # Passo 1: reduzir origem
+        res_origem = svc.ajustar_quant(
+            product_id=product_id,
+            company_id=company_id,
+            location_id=location_id_origem,
+            lot_id=lot_id_origem,
+            delta=-qty,
+            delta_esperado=-qty,
+            tolerancia_delta=tolerancia_delta,
+            criar_se_faltar=False,
+            validar_nao_negativar=True,
+            validar_nao_abaixo_reserva=not resetar_reserva_origem,
+            resetar_reserva=resetar_reserva_origem,
+            dry_run=dry_run,
+        )
+
+        if res_origem['status'] not in ('EXECUTADO', 'DRY_RUN_OK',
+                                        'EXECUTADO_AUTO_CORRIGIDO'):
+            return {
+                'reducao_origem': res_origem,
+                'aumento_destino': None,
+                'qty_transferida': 0.0,
+                'status': 'FALHA_REDUCAO',
+                'location_id_origem': location_id_origem,
+                'location_id_destino': location_id_destino,
+                'lot_id_origem': lot_id_origem,
+                'lot_id_destino': lot_id_destino,
+                'lote_destino_nome': lote_destino_nome,
+                'lote_destino_criado_agora': lote_destino_criado_agora,
+                'erro': res_origem.get('erro'),
+                'tempo_ms': int((time.time() - inicio) * 1000),
+            }
+
+        # Passo 2: aumentar destino
+        res_destino = svc.ajustar_quant(
+            product_id=product_id,
+            company_id=company_id,
+            location_id=location_id_destino,
+            lot_id=lot_id_destino,
+            delta=qty,
+            delta_esperado=qty,
+            tolerancia_delta=tolerancia_delta,
+            criar_se_faltar=True,
+            validar_nao_negativar=True,
+            validar_nao_abaixo_reserva=True,
+            dry_run=dry_run,
+        )
+
+        if res_destino['status'] not in ('EXECUTADO', 'DRY_RUN_OK',
+                                         'EXECUTADO_AUTO_CORRIGIDO'):
+            # CR1#2 — vide transferir_entre_lotes_v2: estado parcial.
+            qty_reduzida = (
+                abs(res_origem.get('ajuste_aplicado') or 0.0)
+                if not dry_run else 0.0
+            )
+            return {
+                'reducao_origem': res_origem,
+                'aumento_destino': res_destino,
+                'qty_transferida': 0.0,
+                'qty_reduzida_origem': qty_reduzida,
+                'status': 'FALHA_AUMENTO',
+                'location_id_origem': location_id_origem,
+                'location_id_destino': location_id_destino,
+                'lot_id_origem': lot_id_origem,
+                'lot_id_destino': lot_id_destino,
+                'lote_destino_nome': lote_destino_nome,
+                'lote_destino_criado_agora': lote_destino_criado_agora,
+                'erro': res_destino.get('erro'),
+                'tempo_ms': int((time.time() - inicio) * 1000),
+            }
+
+        return {
+            'reducao_origem': res_origem,
+            'aumento_destino': res_destino,
+            'qty_transferida': qty,
+            'status': 'DRY_RUN_OK' if dry_run else 'EXECUTADO',
+            'location_id_origem': location_id_origem,
+            'location_id_destino': location_id_destino,
+            'lot_id_origem': lot_id_origem,
+            'lot_id_destino': lot_id_destino,
+            'lote_destino_nome': lote_destino_nome,
+            'lote_destino_criado_agora': lote_destino_criado_agora,
+            'tempo_ms': int((time.time() - inicio) * 1000),
+        }
+
     def transferir_para_indisponivel(
         self,
         *,
         product_id: int,
         company_id: int,
-        lot_id_origem: int,
+        lot_id_origem: Optional[int],
         qty: float,
         location_id_origem: Optional[int] = None,
         nome_lote_destino: str = 'MIGRAÇÃO',
@@ -805,11 +1033,19 @@ class StockInternalTransferService:
         FK universal — eh apenas um lot_id de exemplo (de UM produto).
         Resolver por produto via lot_svc, sempre.
 
+        **NOVO v14b (fix D-OPS-5)**: aceita `lot_id_origem=None` quando
+        produto tem `tracking='none'` (sem lote, conforme cadastro). Caso
+        descoberto no teste real 2026-05-25 v14a-ops (PIMENTA JALAPENO
+        103500105 41.56 un sem lote em FB/Estoque). Validacao: se
+        `lot_id_origem is None`, verifica `product.tracking` via 1 read.
+        Se `tracking != 'none'`, levanta ValueError (anomalia — quant
+        orfao sem lote em produto rastreavel exige investigacao).
+
         Faz sentido para FB e CD (LF=5 historicamente sem MIGRACAO, mas
         nao bloqueamos: passa o nome do lote e deixa o lot_svc decidir).
 
         Decomposicao: 2 ajustes diretos via `ajustar_quant`:
-            Reducao: (loc_origem, lot_id_origem, -qty)
+            Reducao: (loc_origem, lot_id_origem, -qty)  # lot_id_origem pode ser None
             Aumento: (loc_Indisp, lot_id_destino MIGRACAO, +qty,
                      criar_se_faltar=True)
 
@@ -819,13 +1055,18 @@ class StockInternalTransferService:
 
         Args:
             product_id, company_id: identificam produto/empresa.
-            lot_id_origem: stock.lot.id do lote real de origem.
+            lot_id_origem: stock.lot.id do lote real de origem; None aceito
+                quando produto eh tracking='none' (fix D-OPS-5 v14b).
             qty: positiva.
             location_id_origem: default = COMPANY_LOCATIONS[company_id]
                 (FB/Estoque=8, CD/Estoque=32).
             nome_lote_destino: nome do lote consolidador (default 'MIGRAÇÃO'
                 canonico com cedilha). Resolvido POR PRODUTO via
                 lot_svc.buscar_por_nome; criado em modo real se faltar.
+                NOTA v14b: produto tracking='none' aceita lot_name em moves
+                mas Odoo ignora (nao cria stock.lot real). Lote destino
+                MIGRACAO ainda assim eh criado/usado em destino — guarda
+                semantica de "consolidador" mesmo para tracking='none'.
             resetar_reserva_origem: passa para reducao.
             tolerancia_delta: tolerancia absoluta dos guards delta_esperado.
             dry_run: simula ambos ajustes; lote destino nao eh criado
@@ -841,11 +1082,14 @@ class StockInternalTransferService:
                         'FALHA_AUMENTO' | 'FALHA_LOTE_DESTINO_INEXISTENTE'
                 location_id_origem, location_id_destino, lot_id_origem,
                 lot_id_destino, lote_destino_nome,
-                lote_destino_criado_agora (bool), tempo_ms
+                lote_destino_criado_agora (bool), tempo_ms,
+                tracking_origem (NOVO v14b — 'none'|'lot'|'serial', so quando
+                    lot_id_origem=None ou tracking='none' detectado)
 
         Raises:
             ValueError: company sem LOCAIS_INDISPONIVEL; origem ja em
-                Indisp; qty <= 0; lot_svc nao injetado no construtor.
+                Indisp; qty <= 0; lot_svc nao injetado no construtor;
+                lot_id_origem=None mas produto NAO eh tracking='none' (v14b).
         """
         # Import tardio para evitar dependencia circular at module load.
         # NB: LOTES_MIGRACAO_POR_COMPANY NAO eh importado de proposito
@@ -862,6 +1106,26 @@ class StockInternalTransferService:
                 'transferir_para_indisponivel requer lot_svc no construtor '
                 '(StockInternalTransferService(odoo, lot_svc=StockLotService(odoo))).'
             )
+
+        # v14b — fix D-OPS-5: lot_id_origem=None exige produto tracking='none'
+        # (quant orfao sem lote em produto rastreavel eh anomalia, nao ajuste).
+        tracking_origem: Optional[str] = None
+        if lot_id_origem is None:
+            prod_read = self.odoo.read('product.product', [product_id], ['tracking'])
+            if not prod_read:
+                raise ValueError(
+                    f'product_id={product_id} inexistente em product.product; '
+                    f'lot_id_origem=None exige produto valido para validar tracking.'
+                )
+            tracking_origem = prod_read[0].get('tracking') or 'none'
+            if tracking_origem != 'none':
+                raise ValueError(
+                    f'lot_id_origem=None mas product_id={product_id} tem '
+                    f'tracking={tracking_origem!r}; quant orfao sem lote em '
+                    f'produto rastreavel eh anomalia. Investigar (lote vencido, '
+                    f'movimentacao manual sem lote, bug de cadastro) antes de '
+                    f'transferir. Use lot_id_origem explicito para o lote correto.'
+                )
 
         # Resolver location destino via constants
         location_id_destino = LOCAIS_INDISPONIVEL.get(company_id)
@@ -914,6 +1178,7 @@ class StockInternalTransferService:
                         'Em modo real seria criado; --confirmar para executar.'
                     ),
                     'tempo_ms': 0,
+                    'tracking_origem': tracking_origem,
                 }
         else:
             lot_id_destino, lote_destino_criado = self.lot_svc.criar_se_nao_existe(
@@ -967,6 +1232,7 @@ class StockInternalTransferService:
                 'lote_destino_criado_agora': lote_destino_criado,
                 'erro': res_origem.get('erro'),
                 'tempo_ms': int((time.time() - inicio) * 1000),
+                'tracking_origem': tracking_origem,
             }
 
         # Aumentar destino: (loc Indisp, lote MIGRACAO) — criar quant se faltar
@@ -1022,6 +1288,7 @@ class StockInternalTransferService:
                 'lote_destino_criado_agora': lote_destino_criado,
                 'erro': res_destino.get('erro'),
                 'tempo_ms': int((time.time() - inicio) * 1000),
+                'tracking_origem': tracking_origem,
             }
 
         return {
@@ -1036,6 +1303,7 @@ class StockInternalTransferService:
             'lote_destino_nome': nome_lote_destino,
             'lote_destino_criado_agora': lote_destino_criado,
             'tempo_ms': int((time.time() - inicio) * 1000),
+            'tracking_origem': tracking_origem,
         }
 
     def transferir_quantidade_para_lote_v2(
@@ -1108,25 +1376,34 @@ class StockInternalTransferService:
         company_id: int,
         locs_origem: List[int],
         incluir_quants_indisp_destino: bool = False,
+        aceita_tracking_none: bool = True,
     ) -> List[Dict[str, Any]]:
         """Lista quants do produto/company nas locations origem permitidas.
 
         Enriquece cada quant com `_lote_name` (str|None) para uso em
         politicas de ordenacao. Filtra:
           - quantity > 0 (sem saldo nao eh origem util)
-          - lot_id obrigatorio (Modo C exige lote real; quant sem lote
-            seria movido como P-15/05 — fora de escopo aqui)
           - location_id em locs_origem (NAO inclui Indisponivel salvo flag)
+          - lot_id apenas se `aceita_tracking_none=False`
 
         Args:
             product_id, company_id: identificadores.
             locs_origem: ids de locations origem permitidas.
             incluir_quants_indisp_destino: SE True, inclui Indisponivel
                 (caso degenerado em testes — produto ja totalmente em destino).
+            aceita_tracking_none: SE True (default v14b — fix D-OPS-5), NAO
+                aplica filtro `['lot_id', '!=', False]`. Quants sem lot_id
+                (produto tracking='none') sao INCLUIDOS no resultado.
+                Fix do bug 2026-05-25 v14a-ops (PIMENTA JALAPENO 103500105 41.56 un
+                sem lote retornava FALHA_SEM_QUANT). SE False, mantem
+                comportamento antigo restritivo (so quants com lote). O caller
+                (modo C atomico) valida `product.tracking` para anomalias
+                (quant orfao sem lote em produto tracking='lot').
 
         Returns:
             Lista de dicts {id, lot_id, _lote_name, location_id,
                             quantity, reserved_quantity, available}.
+            Para quants sem lote: lot_id=None, _lote_name=None.
             Ordem do retorno: como o Odoo entregar (search nao garante ordem).
         """
         from app.odoo.constants.locations import LOCAIS_INDISPONIVEL
@@ -1142,8 +1419,9 @@ class StockInternalTransferService:
             # Defensivo — caller pode ter incluido Indisp em locs_origem
             # por engano. Sempre filtra.
             domain.append(['location_id', '!=', loc_indisp])
-            domain.append(['lot_id', '!=', False])
-        else:
+        if not aceita_tracking_none:
+            # Comportamento antigo (restritivo) — exclui quants sem lot_id.
+            # Default v14b inverteu para incluir (fix D-OPS-5).
             domain.append(['lot_id', '!=', False])
 
         quants = self.odoo.search_read(
@@ -1207,7 +1485,10 @@ class StockInternalTransferService:
             def keyfn(q):
                 lote_name = q.get('_lote_name') or ''
                 eh_migr = 0 if is_migracao(lote_name) else 1
-                # ZZ no fim para quants sem lote (defensivo — _listar ja filtra)
+                # Quants sem lote (_lote_name=None) recebem 'ZZZZ' — drenados
+                # POR ULTIMO entre os nao-MIGRACAO (tracking='none', fix
+                # D-OPS-5 v14b: aceita_tracking_none=True default em
+                # _listar_quants_origem).
                 return (eh_migr, lote_name or 'ZZZZ', -q.get('quantity', 0))
             return sorted(quants, key=keyfn)
         if politica == POLITICA_FIFO:
@@ -1234,6 +1515,7 @@ class StockInternalTransferService:
         nome_lote_destino: str = 'MIGRAÇÃO',
         dry_run: bool = False,
         tolerar_parcial: bool = True,
+        aceita_tracking_none: bool = True,
     ) -> Dict[str, Any]:
         """Distribui `qty_solicitada` entre quants origem do produto/company,
         chamando `transferir_para_indisponivel` N vezes (1 por quant origem).
@@ -1265,6 +1547,14 @@ class StockInternalTransferService:
             tolerar_parcial: se False, retorna FALHA_PARCIAL_NAO_TOLERADO quando
                 nao foi possivel mover qty_solicitada total; default True
                 (regra prioritaria — registrar parcialmente).
+            aceita_tracking_none: SE True (default v14b — fix D-OPS-5),
+                propaga para `_listar_quants_origem` permitindo que quants
+                sem `lot_id` (produto `tracking='none'`) sejam incluidos no
+                resultado e drenados normalmente via `transferir_para_indisponivel`
+                (que aceita `lot_id_origem=None` validando tracking via 1 read).
+                Quando False, mantem comportamento antigo (so quants com lote).
+                Caso real: PIMENTA JALAPENO 103500105 41.56 un sem lote em
+                FB/Estoque (descoberto em teste v14a-ops 2026-05-25).
 
         Returns:
             {
@@ -1324,10 +1614,13 @@ class StockInternalTransferService:
         inicio = time.time()
 
         # 1. Listar quants origem
+        # v14b — fix D-OPS-5: propaga aceita_tracking_none (default True)
+        # para incluir quants sem lot_id (produto tracking='none').
         quants = self._listar_quants_origem(
             product_id=product_id,
             company_id=company_id,
             locs_origem=locs_origem,
+            aceita_tracking_none=aceita_tracking_none,
         )
         if not quants:
             return {
@@ -1344,9 +1637,9 @@ class StockInternalTransferService:
                 'locs_origem_usadas': locs_origem,
                 'tempo_ms': int((time.time() - inicio) * 1000),
                 'erro': (
-                    f'Sem quants com saldo>0 e lote nao-vazio em '
-                    f'locs={locs_origem} para product={product_id} '
-                    f'company={company_id}'
+                    f'Sem quants com saldo>0 em locs={locs_origem} para '
+                    f'product={product_id} company={company_id} '
+                    f'(aceita_tracking_none={aceita_tracking_none})'
                 ),
             }
 

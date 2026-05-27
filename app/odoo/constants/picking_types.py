@@ -11,8 +11,10 @@ Chave dos dicts: tupla (company_origem_id, tipo_operacao).
 
 Fonte dos valores: audit dos picking_types e default_location_dest_id (2026-05-18);
 G034 (2026-05-18) criou PT 97/88 via XML-RPC para dev-industrializacao.
+v15a (2026-05-25): centralizadas constants ETAPA F (entrada destino manual) que
+estavam inline em `scripts/inventario_2026_05/09_executar_onda1_bulk.py:126-146`.
 """
-from typing import Dict, Tuple
+from typing import Dict, FrozenSet, Tuple
 
 
 # stock.picking.type.id de SAIDA por (company_origem, tipo_operacao).
@@ -71,3 +73,112 @@ def get_picking_type(company_origem: int, tipo_operacao: str) -> int:
             f'Validas: {sorted(PICKING_TYPE_POR_DIRECAO.keys())}'
         )
     return pt
+
+
+# ============================================================================
+# ETAPA F — Entrada Destino Manual (FB→{LF, CD})
+# ============================================================================
+# Padrao L17: NFs sentido FB→{LF, CD} de industrializacao interna precisam
+# de picking de ENTRADA criado MANUALMENTE no destino. O robo CIEL IT nao
+# cria entrada automatica (nao ha DFe no sentido reverso).
+#
+# Validado em PROD via pickings:
+#   - 317306 LF/IN/01733 (NF 608629)
+#   - 317316 LF/IN/01734 (NF 627348)
+#
+# Centralizado em v15a (2026-05-25) — antes inline em
+# `scripts/inventario_2026_05/09_executar_onda1_bulk.py:126-146`.
+# ============================================================================
+
+# Acoes (do AjusteEstoqueInventario.acao_decidida) que requerem ETAPA F.
+#
+# v17.5 (2026-05-26): expandido para incluir DEV_FB_LF e TRANSFERIR_FB_CD
+# (com flag --auto-confirma-direcao-nova default False; decisao Rafael Q1=C).
+# - INDUSTRIALIZACAO_FB_LF: validado PROD (317306, 317316) — sempre habilitado
+# - DEV_FB_LF: assumido fp 86 (sem precedente PROD) — canary fiscal v17.5
+# - TRANSFERIR_FB_CD: PT 50 CD/IN/INTER src=6 dest=32 (audit Odoo 2026-05-26;
+#   nunca rodou INVENTARIO_2026_05; ENTTR/2026/05 invoices observadas sao
+#   DFe externos, nao desta skill — entrada manual eh necessaria)
+ACOES_ENTRADA_DESTINO_MANUAL: FrozenSet[str] = frozenset({
+    'INDUSTRIALIZACAO_FB_LF',   # FB→LF — validado PROD (317306, 317316)
+    'DEV_FB_LF',                # FB→LF — canary v17.5 (fp 86 assumido)
+    'TRANSFERIR_FB_CD',         # FB→CD — canary v17.5 (PT 50, src=6, dest=32)
+})
+
+
+# Acoes que requerem flag --auto-confirma-direcao-nova=True para executar
+# em real-run (canary fiscal sem precedente PROD).
+# INDUSTRIALIZACAO_FB_LF NAO esta aqui — ja validada (317306, 317316).
+ACOES_ENTRADA_DESTINO_MANUAL_CANARY: FrozenSet[str] = frozenset({
+    'DEV_FB_LF',                # fp 86 assumido — canary fiscal pendente
+    'TRANSFERIR_FB_CD',         # PT 50 nunca rodou INVENTARIO_2026_05 — canary
+})
+
+
+# stock.picking.type.id de ENTRADA por company DESTINO.
+# Origem do picking eh `LOCATION_ORIGEM_POR_DIRECAO[acao]` (varia por direcao
+# em v17.5; antes era hardcode 26489); destino e o
+# `COMPANY_LOCATIONS[company_destino]` (estoque interno principal do destino).
+#
+# Discovery audit Odoo 2026-05-26 v17.5:
+#   - LF PT 19 LF/IN Recebimento  (validado 317306, 317316)
+#   - LF PT 64 LF/RECEB/IND        (dedicado industr — usado por DFe externo,
+#                                    NAO para inter-company nosso)
+#   - CD PT 50 CD/IN/INTER         (src=6 Em Trans. Filiais, dest=32 CD/Estoque)
+PICKING_TYPE_ENTRADA_DESTINO_MANUAL: Dict[int, int] = {
+    5: 19,   # LF: Recebimento (validado 317306, 317316)
+    4: 50,   # CD: Recebimentos Entre Filiais (NACOM/CD/IN/INTER) — v17.5
+}
+
+
+# Label da company para usar em `origin` de pickings ETAPA F.
+# Convenção do CICLO atual: `INV-{CICLO}-ENTRADA-{LABEL}-NF{invoice_id}`.
+# Inclui FB para casos futuros de espelhamento reverso (LF→FB entrada manual).
+COMPANY_LABEL_ENTRADA: Dict[int, str] = {
+    1: 'FB',
+    4: 'CD',
+    5: 'LF',
+}
+
+
+# location_id ORIGEM por direcao (v17.5).
+# Antes da v17.5: hardcode 26489 (LOCATION_ORIGEM_ENTRADA_INDUSTR) em todas
+# as direcoes ETAPA F. v17.5 separa por acao_decidida:
+#   - INDUSTRIALIZACAO_FB_LF: 26489 Em Trans. Industr. (saida PT 53 dest)
+#   - DEV_FB_LF: 26489 Em Trans. Industr. (assumido — saida via PT 88 dest)
+#   - TRANSFERIR_FB_CD: 6 Em Trans. Filiais (saida PT 51 dest; entrada PT 50 src)
+LOCATION_ORIGEM_POR_DIRECAO: Dict[str, int] = {
+    'INDUSTRIALIZACAO_FB_LF': LOCATION_DESTINO_TRANSITO_INDUSTR,  # 26489
+    'DEV_FB_LF':              LOCATION_DESTINO_TRANSITO_INDUSTR,  # 26489 (assumido)
+    'TRANSFERIR_FB_CD':       LOCATION_DESTINO_TRANSITO_FILIAIS,  # 6
+}
+
+
+# Alias semantico: `LOCATION_DESTINO_TRANSITO_INDUSTR` da SAIDA (ETAPA B) eh
+# a MESMA location que serve como ORIGEM da ENTRADA (ETAPA F). Manter os 2
+# nomes — `LOCATION_DESTINO_TRANSITO_INDUSTR` vira de SAIDA; o alias deixa
+# explicito quando usado em ENTRADA (centralizando o numero magico 26489).
+#
+# DEPRECATED v17.5: prefira `LOCATION_ORIGEM_POR_DIRECAO[acao]` que varia
+# por direcao. Mantido para backward-compat (orchestrator legado).
+LOCATION_ORIGEM_ENTRADA_INDUSTR = LOCATION_DESTINO_TRANSITO_INDUSTR  # 26489
+
+
+def get_location_origem_entrada(acao: str) -> int:
+    """Retorna location_id origem da ENTRADA ETAPA F para a `acao_decidida`.
+
+    Raises:
+        ValueError se acao nao mapeada em LOCATION_ORIGEM_POR_DIRECAO.
+
+    Usado pelo orchestrator Skill 8 ETAPA F v17.5 em vez do hardcode
+    LOCATION_ORIGEM_ENTRADA_INDUSTR (so funcionava para INDUSTRIALIZACAO_FB_LF).
+    """
+    loc = LOCATION_ORIGEM_POR_DIRECAO.get(acao)
+    if loc is None:
+        raise ValueError(
+            f'LOCATION_ORIGEM_POR_DIRECAO sem entrada para acao={acao!r}. '
+            f'Validas: {sorted(LOCATION_ORIGEM_POR_DIRECAO.keys())}. '
+            f'Adicionar nova direcao requer audit Odoo (PT entrada destino, '
+            f'src location, fiscal_position).'
+        )
+    return loc

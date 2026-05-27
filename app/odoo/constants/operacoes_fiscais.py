@@ -14,7 +14,16 @@ Premissas: P001-P011 em docs/inventario-2026-05/01-premissas/
 Estrutura:
 - `fiscal_position_id`: dict (company_origem, company_destino) -> fiscal_position da SAIDA.
   Service seta isso no account.move; Odoo decide o CFOP. NAO setar CFOP no account.move.
-- `cfop_esperado`: CFOP da SAIDA (informacional/log). Real e decidido pelo Odoo.
+- `cfop_esperado`: CFOP da SAIDA.
+  * NO FLUXO NORMAL (account.move criado via PO+fiscal_position): **informacional/log**.
+    Real e decidido pelo Odoo via fiscal_position + l10n_br_tipo_pedido. NAO hardcodar.
+  * NO CAMINHO B PALIATIVO da ETAPA F (Skill 8) — picking criado MANUALMENTE pela Skill 5
+    atomo `criar_picking_entrada_destino_manual` SEM PO+partner+fiscal_position — vira
+    **FALLBACK NECESSARIO** para setar `l10n_br_cfop_id` explicito no stock.move (G037).
+    Caso degenerado: motor fiscal nao tem como derivar CFOP sem fiscal_position.
+  * Refator v19+ remove o paliativo (caminho A correto: DFe→PO→picking nativo). Apos
+    refator, `cfop_esperado` volta a ser apenas informacional/log.
+  * Doc: docs/inventario-2026-05/02-gotchas/G037-*.md
 - `entrada`: dict (company_origem, company_destino) -> dados da NF de ENTRADA (in_invoice
   escriturada no DESTINO a partir do DFe). Campos: fiscal_position_id, cfop,
   l10n_br_tipo_pedido_entrada. Informacional/auditoria.
@@ -344,3 +353,74 @@ def resolver_entrada(tipo_operacao: str, company_origem: int,
             f"Direcoes validas: {sorted(entrada.keys())}"
         )
     return dados
+
+
+# ============================================================================
+# ACAO_PARA_DIRECAO — mapa central acao_decidida -> (tipo_op, co, cd)
+#
+# CR-F8 v15c (CRITICAL Reviewer B conf 95): consolidado aqui para eliminar
+# duplicacao entre `inventario_pipeline_service.py:48-57` e
+# `app/odoo/estoque/orchestrators/faturamento_pipeline.py:84-97`. Ambos
+# importam daqui — fonte unica de verdade.
+#
+# Cada `acao_decidida` mapeia para 1 tupla unica (tipo_op, company_origem,
+# company_destino). Skill 8 orchestrator agrupa por `acao_decidida` (NAO por
+# `(co, tipo_op)` — CR-C2 v15b) para preservar partner_id correto em
+# DEV_LF_FB (cd=1) vs DEV_LF_CD (cd=4) que compartilham tipo_op.
+# ============================================================================
+
+ACAO_PARA_DIRECAO: Dict[str, Tuple[str, int, int]] = {
+    'TRANSFERIR_CD_FB':       ('transf-filial',        4, 1),
+    'TRANSFERIR_FB_CD':       ('transf-filial',        1, 4),
+    'INDUSTRIALIZACAO_FB_LF': ('industrializacao',     1, 5),
+    'PERDA_LF_FB':            ('perda',                5, 1),
+    'DEV_FB_LF':              ('dev-industrializacao', 1, 5),
+    'DEV_LF_FB':              ('dev-industrializacao', 5, 1),
+    'DEV_CD_LF':              ('dev-industrializacao', 4, 5),
+    'DEV_LF_CD':              ('dev-industrializacao', 5, 4),
+}
+
+
+# Subset de `acao_decidida` que dispara pipeline de picking (ETAPA B Skill 8).
+# Equivale a `ACAO_PARA_DIRECAO.keys()` — proxy semantico (filtro pipeline,
+# NAO matriz fiscal — por isso fica em `operacoes_fiscais.py` mas como
+# constante derivada).
+ACOES_PICKING: frozenset = frozenset(ACAO_PARA_DIRECAO.keys())
+
+
+# ============================================================================
+# ACAO_PARA_CFOP_ENTRADA — mapa CFOP saida (5xxx) -> CFOP entrada (1xxx).
+#
+# CR-D17 v14a (script 09 L1300-1305): centralizado aqui (era inline no
+# script) para uso por ETAPA E (RecebimentoLf criar X->FB) na Skill 8 v17.
+#
+# Razao: Odoo da FB so tem `fiscal_position` cadastrada para CFOPs de
+# entrada (1xxx). Gravar 5xxx no `RecebimentoLfLote.cfop` causa "CFOP nao
+# cadastrado".
+# ============================================================================
+
+ACAO_PARA_CFOP_ENTRADA: Dict[str, str] = {
+    'PERDA_LF_FB':            '1903',  # saida 5903
+    'TRANSFERIR_CD_FB':       '1152',  # saida 5152
+    'TRANSFERIR_FB_CD':       '1152',  # saida 5152 (FB->CD)
+    'DEV_FB_LF':              '1949',  # saida 5949
+    'DEV_LF_FB':              '1949',  # saida 5949
+    'DEV_CD_LF':              '1949',  # saida 5949
+    'DEV_LF_CD':              '1949',  # saida 5949
+    'INDUSTRIALIZACAO_FB_LF': '1901',  # saida 5901
+}
+
+
+# ============================================================================
+# ACOES_ENTRADA_FB — subset de acoes cuja ETAPA E (Skill 8 v17) cria
+# RecebimentoLf no destino FB.
+#
+# CR v14a (script 09 L1261-1263): centralizado aqui (era inline no script).
+# ============================================================================
+
+ACOES_ENTRADA_FB: frozenset = frozenset({
+    'PERDA_LF_FB',       # LF -> FB (RecebimentoLf na FB)
+    'TRANSFERIR_CD_FB',  # CD -> FB
+    'DEV_LF_FB',         # LF -> FB
+    'DEV_CD_LF',         # CD -> LF (RecebimentoLf na LF — adicionar futuro v17)
+})

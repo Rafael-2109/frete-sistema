@@ -673,3 +673,632 @@ def test_devolver_create_returns_int_retorna_pid_direto():
     svc = StockPickingService(odoo=odoo)
     result = svc.devolver(picking_id=9999)
     assert result == 8888
+
+
+# ============================================================================
+# v15a — aplicar_peso_volumes_fallback (G018 v2)
+# ============================================================================
+
+def test_aplicar_peso_volumes_aplica_quando_zerado():
+    """G018 v2: aplica fallback quando peso_liquido=0 e volumes=0."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_peso_liquido': 0,
+        'l10n_br_peso_bruto': 0,
+        'l10n_br_volumes': 0,
+        'state': 'done',
+    }]
+    odoo.search_read.return_value = [{'quantity': 100.0}, {'quantity': 50.0}]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.aplicar_peso_volumes_fallback(
+        picking_id=9999, peso_unitario_fallback=0.001, volumes_fallback=2,
+    )
+    assert r['aplicado'] is True
+    assert r['peso_liquido_antes'] == 0
+    # peso = 150 * 0.001 = 0.15
+    assert r['peso_liquido_depois'] == pytest.approx(0.15)
+    assert r['volumes_antes'] == 0
+    assert r['volumes_depois'] == 2
+    # write tem que ter sido chamado com os campos certos
+    write_call = odoo.write.call_args
+    assert write_call[0][0] == 'stock.picking'
+    assert write_call[0][1] == [9999]
+    updates = write_call[0][2]
+    assert updates['l10n_br_peso_liquido'] == pytest.approx(0.15)
+    assert updates['l10n_br_peso_bruto'] == pytest.approx(0.15)
+    assert updates['l10n_br_volumes'] == 2
+
+
+def test_aplicar_peso_volumes_noop_quando_ja_setado():
+    """G018 v2: nao sobrescreve quando peso e volumes ja preenchidos."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_peso_liquido': 10.0,
+        'l10n_br_peso_bruto': 10.5,
+        'l10n_br_volumes': 5,
+        'state': 'done',
+    }]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.aplicar_peso_volumes_fallback(picking_id=9999)
+    assert r['aplicado'] is False
+    # NAO chama write
+    odoo.write.assert_not_called()
+
+
+# ============================================================================
+# v15a — criar_picking_inter_company (Skill 8 F5a, codifica D-OPS-3)
+# ============================================================================
+
+def test_criar_picking_inter_company_basico():
+    """Fluxo feliz: cria picking, sem produtos tracking='none'."""
+    odoo = MagicMock()
+    # v15c F1: search_read por origin retorna [] (sem idempotente)
+    odoo.search_read.return_value = []
+    # 1 read tracking + 1 create picking
+    odoo.read.return_value = [
+        {'id': 1001, 'tracking': 'lot'},
+        {'id': 1002, 'tracking': 'serial'},
+    ]
+    odoo.create.return_value = 5555
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[
+            {'product_id': 1001, 'quantity': 10.0, 'lot_name': 'LOT_A'},
+            {'product_id': 1002, 'quantity': 5.0, 'lot_id': 777},
+        ],
+        picking_type_id=94, partner_id=1,
+        origin='TEST_ORIGIN_BASICO',  # v15c F1: obrigatorio
+    )
+    assert r['picking_id'] == 5555
+    assert r['status'] == 'CRIADO'  # v15c F1
+    assert r['tracking_none_pids'] == []
+    assert len(r['linhas_planejadas']) == 2
+    # Linhas mantem lot_name/lot_id (produto eh tracking != 'none')
+    assert r['linhas_planejadas'][0].get('lot_name') == 'LOT_A'
+    assert r['linhas_planejadas'][1].get('lot_id') == 777
+
+
+def test_criar_picking_inter_company_company_iguais_raises():
+    """Pre-cond: company_origem != company_destino."""
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='intra-company'):
+        svc.criar_picking_inter_company(
+            company_origem_id=1, company_destino_id=1,
+            location_origem_id=8, location_destino_id=32,
+            linhas=[{'product_id': 1, 'quantity': 1.0}],
+            picking_type_id=51, partner_id=34,
+            origin='X',
+        )
+
+
+def test_criar_picking_inter_company_partner_id_obrigatorio_raises():
+    """Pre-cond: partner_id eh obrigatorio em inter-company."""
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='partner_id OBRIGATORIO'):
+        svc.criar_picking_inter_company(
+            company_origem_id=5, company_destino_id=1,
+            location_origem_id=42, location_destino_id=5,
+            linhas=[{'product_id': 1, 'quantity': 1.0}],
+            picking_type_id=94, partner_id=0,
+            origin='X',
+        )
+
+
+def test_criar_picking_inter_company_linhas_vazias_raises():
+    """Pre-cond: linhas nao vazia."""
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='linhas'):
+        svc.criar_picking_inter_company(
+            company_origem_id=5, company_destino_id=1,
+            location_origem_id=42, location_destino_id=5,
+            linhas=[],
+            picking_type_id=94, partner_id=1,
+            origin='X',
+        )
+
+
+def test_criar_picking_inter_company_tracking_none_remove_lot_name():
+    """D-OPS-3 fix: produto tracking='none' tem lot_name/lot_id removidos."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = []  # v15c F1: nao idempotente
+    odoo.read.return_value = [
+        {'id': 103500105, 'tracking': 'none'},  # PIMENTA JALAPENO sem rastreio
+        {'id': 1002, 'tracking': 'lot'},
+    ]
+    odoo.create.return_value = 6666
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[
+            # Caller passa lote (workaround SEMLOTE no script v14a-ops)
+            {'product_id': 103500105, 'quantity': 41.56, 'lot_name': 'SEMLOTE'},
+            {'product_id': 1002, 'quantity': 5.0, 'lot_name': 'LOT_B'},
+        ],
+        picking_type_id=94, partner_id=1,
+        origin='TEST_ORIGIN_TRACKING_NONE',
+    )
+    assert r['picking_id'] == 6666
+    assert r['status'] == 'CRIADO'
+    assert r['tracking_none_pids'] == [103500105]
+    # Produto 103500105 (tracking='none'): lot_name removido
+    linha_none = next(
+        l for l in r['linhas_planejadas'] if l['product_id'] == 103500105
+    )
+    assert 'lot_name' not in linha_none
+    assert 'lot_id' not in linha_none
+    # Produto 1002 (tracking='lot'): lot_name preservado
+    linha_lot = next(
+        l for l in r['linhas_planejadas'] if l['product_id'] == 1002
+    )
+    assert linha_lot.get('lot_name') == 'LOT_B'
+
+
+def test_criar_picking_inter_company_tracking_por_pid_passed_skip_read():
+    """tracking_por_pid pre-fetched evita 1 read em batch (otim bulk)."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = []  # v15c F1: nao idempotente
+    odoo.create.return_value = 7777
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[
+            {'product_id': 1001, 'quantity': 10.0, 'lot_name': 'L'},
+        ],
+        picking_type_id=94, partner_id=1,
+        origin='TEST_ORIGIN_TRACKING_PRE',
+        tracking_por_pid={1001: 'lot'},  # caller pre-fetched
+    )
+    assert r['picking_id'] == 7777
+    # NAO chamou odoo.read('product.product', ...) — caller forneceu o map
+    read_calls = [
+        c for c in odoo.read.call_args_list
+        if c[0] and c[0][0] == 'product.product'
+    ]
+    assert read_calls == []
+
+
+# ============================================================================
+# v15c F1 — Idempotencia via origin (CRITICAL anti-duplicacao SEFAZ)
+# ============================================================================
+
+def test_criar_picking_inter_company_origin_obrigatorio_raises():
+    """v15c F1 (CRITICAL): origin obrigatorio para idempotencia."""
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='origin OBRIGATORIO'):
+        svc.criar_picking_inter_company(
+            company_origem_id=5, company_destino_id=1,
+            location_origem_id=42, location_destino_id=5,
+            linhas=[{'product_id': 1, 'quantity': 1.0}],
+            picking_type_id=94, partner_id=1,
+            # origin omitido — deve raise
+        )
+
+
+def test_criar_picking_inter_company_idempotent_done():
+    """v15c F1: re-execucao com mesmo origin + picking ja done retorna IDEMPOTENT_DONE."""
+    odoo = MagicMock()
+    # Picking ja existe com origin EXATO em state='done'
+    odoo.search_read.return_value = [{'id': 5555, 'state': 'done'}]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-CYC-SAIDA-INDUSTRI-000123',
+    )
+    assert r['picking_id'] == 5555
+    assert r['status'] == 'IDEMPOTENT_DONE'
+    assert r['state'] == 'done'
+    assert r['tracking_none_pids'] == []
+    assert r['linhas_planejadas'] == []
+    # NAO criou nada
+    odoo.create.assert_not_called()
+
+
+def test_criar_picking_inter_company_idempotent_other_state():
+    """v15c F1: re-execucao + picking existe mas state != done = IDEMPOTENT_OTHER."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{'id': 7777, 'state': 'assigned'}]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-CYC-SAIDA-PERDA-000999',
+    )
+    assert r['picking_id'] == 7777
+    assert r['status'] == 'IDEMPOTENT_OTHER'
+    assert r['state'] == 'assigned'
+    odoo.create.assert_not_called()
+
+
+def test_criar_picking_inter_company_g_audit_3_pula_pickings_cancelados():
+    """G-AUDIT-3 v22+: se TODOS pickings com origin EXATO sao state=cancel,
+    cria NOVO (nao reaproveita). Codifica invariante descoberta no retry
+    pipeline v21+ INVENTARIO_2026_05 (picking 321600 cancel impedia F5b).
+    """
+    odoo = MagicMock()
+    # 1a search_read (idempotencia por origin): so cancelados
+    # 2a search_read (caso criar_transferencia faca mais buscas): []
+    odoo.search_read.side_effect = [
+        [{'id': 321600, 'state': 'cancel'}],
+        [],
+    ]
+    odoo.read.return_value = [{'id': 1001, 'tracking': 'lot'}]
+    odoo.create.return_value = 321999  # picking NOVO
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-INVENTARIO_2026_05-SAIDA-INDUSTRI-176013',
+    )
+    # NOVO picking criado, nao reaproveitou 321600 cancelado
+    assert r['picking_id'] == 321999
+    assert r['status'] == 'CRIADO'  # nao IDEMPOTENT_*
+    odoo.create.assert_called()  # create FOI chamado
+
+
+def test_criar_picking_inter_company_g_audit_3_prefere_vivo_sobre_cancel():
+    """G-AUDIT-3 v22+: se ha mistura (cancelados + vivos), reaproveita o
+    primeiro nao-cancelado (idempotencia saudavel preservada). Cancelados
+    sao logados mas ignorados.
+    """
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 321600, 'state': 'cancel'},
+        {'id': 321999, 'state': 'assigned'},  # vivo
+    ]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-INVENTARIO_2026_05-SAIDA-INDUSTRI-176014',
+    )
+    # Reaproveitou o vivo, NAO criou novo
+    assert r['picking_id'] == 321999
+    assert r['status'] == 'IDEMPOTENT_OTHER'
+    assert r['state'] == 'assigned'
+    odoo.create.assert_not_called()
+
+
+# ============================================================================
+# v15a — validar_picking_inter_company (Skill 8 F5b)
+# ============================================================================
+
+def test_validar_picking_inter_company_fluxo_completo():
+    """Fluxo completo: confirmar + qty_done + ajustar + validar + G018."""
+    odoo = MagicMock()
+    # search_read para preencher_qty_done (find move_lines por produto)
+    # search_read para ajustar_qty_done_pelo_disponivel (moves)
+    # read para ajustar... (move_lines de cada move)
+    # search_read para consolidar_move_lines (G023)
+    # read state apos button_validate (validar G019)
+    # read state final (return)
+    # read picking peso (aplicar_peso_volumes)
+    # search_read move para somar quantity
+    odoo.search_read.side_effect = [
+        # 1. preencher_qty_done — search_read move_lines
+        [{'id': 5001, 'product_id': [1001, 'P1']}],
+        # 2. ajustar_qty_done — moves
+        [{
+            'id': 4001, 'product_id': [1001, 'P1'],
+            'product_uom_qty': 10.0, 'state': 'assigned',
+            'move_line_ids': [5001],
+        }],
+        # 3. consolidar_move_lines — search_read MLs do picking
+        [{
+            'id': 5001, 'product_id': [1001, 'P1'],
+            'quantity': 10.0, 'qty_done': 10.0,
+            'lot_id': False, 'lot_name': 'LOT_A',
+        }],
+        # 4. aplicar_peso_volumes — search_read moves
+        [{'quantity': 10.0}],
+    ]
+    odoo.read.side_effect = [
+        # ajustar_qty_done — read MLs de cada move
+        [{'id': 5001, 'qty_done': 10.0, 'quantity': 10.0}],
+        # validar — read state pos-button_validate
+        [{'state': 'done'}],
+        # validar_picking_inter_company — read state final p/ output
+        [{'state': 'done'}],
+        # aplicar_peso_volumes — read picking
+        [{
+            'l10n_br_peso_liquido': 0, 'l10n_br_peso_bruto': 0,
+            'l10n_br_volumes': 0, 'state': 'done',
+        }],
+    ]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.validar_picking_inter_company(
+        picking_id=9999,
+        linhas_esperadas=[
+            {'product_id': 1001, 'quantity': 10.0, 'lot_name': 'LOT_A'},
+        ],
+    )
+    assert r['picking_id'] == 9999
+    assert r['state_apos_validate'] == 'done'
+    assert r['g023_aplicado'] is True
+    assert r['peso_volumes']['aplicado'] is True
+    # confirmar + reservar foram chamados
+    odoo.execute_kw.assert_any_call(
+        'stock.picking', 'action_confirm', [[9999]],
+    )
+    odoo.execute_kw.assert_any_call(
+        'stock.picking', 'action_assign', [[9999]],
+    )
+
+
+def test_validar_picking_inter_company_sem_linhas_esperadas():
+    """Sem linhas_esperadas — pula preencher_qty_done e G023."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        # ajustar_qty_done — moves
+        [{
+            'id': 4001, 'product_id': [1001, 'P1'],
+            'product_uom_qty': 10.0, 'state': 'assigned',
+            'move_line_ids': [5001],
+        }],
+        # aplicar_peso_volumes — search_read moves
+        [{'quantity': 10.0}],
+    ]
+    odoo.read.side_effect = [
+        # ajustar_qty_done — read MLs
+        [{'id': 5001, 'qty_done': 10.0, 'quantity': 10.0}],
+        # validar — read state pos button_validate
+        [{'state': 'done'}],
+        # validar_picking_inter_company — read state final
+        [{'state': 'done'}],
+        # aplicar_peso_volumes — read picking
+        [{
+            'l10n_br_peso_liquido': 0, 'l10n_br_peso_bruto': 0,
+            'l10n_br_volumes': 0, 'state': 'done',
+        }],
+    ]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.validar_picking_inter_company(picking_id=9999, linhas_esperadas=[])
+    assert r['g023_aplicado'] is False
+    # NAO chamou preencher_qty_done (precisaria de search_read move_lines)
+    # Como search_read side_effect tem 2 retornos esperados (ajustar + peso),
+    # se preencher fosse chamado, daria StopIteration. Estavel.
+
+
+def test_validar_picking_inter_company_peso_volumes_desativado():
+    """aplicar_peso_volumes=False pula G018 fallback."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        # ajustar_qty_done — moves
+        [{
+            'id': 4001, 'product_id': [1001, 'P1'],
+            'product_uom_qty': 5.0, 'state': 'assigned',
+            'move_line_ids': [5001],
+        }],
+    ]
+    odoo.read.side_effect = [
+        # ajustar_qty_done — read MLs
+        [{'id': 5001, 'qty_done': 5.0, 'quantity': 5.0}],
+        # validar — read state pos button_validate
+        [{'state': 'done'}],
+        # validar_picking_inter_company — read state final
+        [{'state': 'done'}],
+    ]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.validar_picking_inter_company(
+        picking_id=9999, linhas_esperadas=[], aplicar_peso_volumes=False,
+    )
+    assert r['peso_volumes'] == {}
+
+
+def test_validar_picking_inter_company_propaga_g019_raise():
+    """G019 false-positive: state != 'done' apos button_validate cascateia."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        # ajustar_qty_done — moves
+        [],
+    ]
+    odoo.read.side_effect = [
+        # validar — read state pos button_validate
+        [{'state': 'assigned'}],
+    ]
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(RuntimeError, match='apos button_validate'):
+        svc.validar_picking_inter_company(
+            picking_id=9999, linhas_esperadas=[],
+        )
+
+
+# ============================================================================
+# v15a — criar_picking_entrada_destino_manual (ETAPA F G023)
+# ============================================================================
+
+def test_criar_picking_entrada_destino_manual_basico():
+    """Fluxo feliz: cria + G023 company_id + assign + G011 lot_name + validate."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        # idempotencia: nao existe origin
+        [],
+        # G011: MLs do picking criado
+        [{
+            'id': 5001, 'product_id': [205460830, 'TESTE'],
+            'quantity': 35.0, 'lot_id': False, 'lot_name': False,
+        }],
+    ]
+    odoo.create.return_value = 9999  # picking_id
+    odoo.search.return_value = [4001]  # moves do picking (p/ G023 write)
+    odoo.read.return_value = [{'state': 'done'}]  # G019 re-le state
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5,
+        location_origem_id=26489,
+        location_destino_id=42,
+        moves_data=[
+            {'product_id': 205460830, 'quantity': 35.0,
+             'lot_dest_name': 'INV-205460830-20260525'},
+        ],
+        picking_type_id=19,
+        origin='INV-INVENTARIO_2026_05-ENTRADA-LF-NF608629',
+    )
+    assert r['picking_id'] == 9999
+    assert r['status'] == 'CRIADO'
+    assert r['state'] == 'done'
+    assert r['n_moves'] == 1
+    # G023: company_id forcado em moves
+    odoo.write.assert_any_call(
+        'stock.move', [4001], {'company_id': 5},
+    )
+    # G011: lot_name aplicado na ML (era False)
+    write_calls_ml = [
+        c for c in odoo.write.call_args_list
+        if c[0] and c[0][0] == 'stock.move.line'
+    ]
+    assert len(write_calls_ml) == 1
+    ml_update = write_calls_ml[0][0][2]
+    assert ml_update['lot_name'] == 'INV-205460830-20260525'
+    assert ml_update['quantity'] == 35.0
+    # G011 (CR v15a Issue 2 fix): qty_done tambem setado
+    assert ml_update['qty_done'] == 35.0
+    # button_validate chamado COM context skip_backorder (CR v15a Issue 1 fix)
+    odoo.execute_kw.assert_any_call(
+        'stock.picking', 'button_validate', [[9999]],
+        {'context': {
+            'skip_backorder': True,
+            'picking_ids_not_to_backorder': [9999],
+        }},
+    )
+
+
+def test_criar_picking_entrada_destino_manual_moves_vazios_raises():
+    """Pre-cond: moves_data nao vazio."""
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='moves_data'):
+        svc.criar_picking_entrada_destino_manual(
+            company_destino_id=5, location_origem_id=26489,
+            location_destino_id=42, moves_data=[],
+            picking_type_id=19, origin='X',
+        )
+
+
+def test_criar_picking_entrada_destino_manual_origin_vazio_raises():
+    """Pre-cond: origin obrigatorio (idempotencia)."""
+    odoo = MagicMock()
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(ValueError, match='origin'):
+        svc.criar_picking_entrada_destino_manual(
+            company_destino_id=5, location_origem_id=26489,
+            location_destino_id=42,
+            moves_data=[{'product_id': 1, 'quantity': 1.0}],
+            picking_type_id=19, origin='',
+        )
+
+
+def test_criar_picking_entrada_destino_manual_idempotente_done():
+    """Idempotencia: origin ja existe em state='done' — retorna existente."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 1234, 'name': 'LF/IN/01733', 'state': 'done'},
+    ]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5, location_origem_id=26489,
+        location_destino_id=42,
+        moves_data=[{'product_id': 1, 'quantity': 1.0}],
+        picking_type_id=19,
+        origin='INV-X-ENTRADA-LF-NF999',
+    )
+    assert r['picking_id'] == 1234
+    assert r['status'] == 'IDEMPOTENT_DONE'
+    assert r['state'] == 'done'
+    assert r['n_moves'] == 0
+    # NAO criou picking novo
+    odoo.create.assert_not_called()
+
+
+def test_criar_picking_entrada_destino_manual_idempotente_outro_state():
+    """Idempotencia: origin ja existe em state!=done — retorna p/ investigacao."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 5678, 'name': 'LF/IN/01999', 'state': 'assigned'},
+    ]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5, location_origem_id=26489,
+        location_destino_id=42,
+        moves_data=[{'product_id': 1, 'quantity': 1.0}],
+        picking_type_id=19,
+        origin='INV-X-ENTRADA-LF-NF999',
+    )
+    assert r['picking_id'] == 5678
+    assert r['status'] == 'IDEMPOTENT_OTHER'
+    assert r['state'] == 'assigned'
+    odoo.create.assert_not_called()
+
+
+def test_criar_picking_entrada_destino_manual_g019_state_nao_done_raises():
+    """G019/G020: state != 'done' apos button_validate raises RuntimeError."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        # idempotencia: nao existe
+        [],
+        # G011: MLs do picking
+        [{
+            'id': 5001, 'product_id': [1001, 'P'],
+            'quantity': 10.0, 'lot_id': False, 'lot_name': False,
+        }],
+    ]
+    odoo.create.return_value = 8888
+    odoo.search.return_value = [4001]
+    # G019 read state apos button_validate
+    odoo.read.return_value = [{'state': 'assigned'}]  # NAO done!
+    svc = StockPickingService(odoo=odoo)
+    with pytest.raises(RuntimeError, match='button_validate'):
+        svc.criar_picking_entrada_destino_manual(
+            company_destino_id=5, location_origem_id=26489,
+            location_destino_id=42,
+            moves_data=[{'product_id': 1001, 'quantity': 10.0,
+                         'lot_dest_name': 'LOTE_X'}],
+            picking_type_id=19,
+            origin='INV-Y-ENTRADA-LF-NF111',
+        )
+
+
+def test_criar_picking_entrada_destino_manual_g023_company_id_forcado_em_moves():
+    """G023 critico: company_id eh escrito em moves apos create (XML-RPC nao
+    herda — gotcha L17 script L1637-1640)."""
+    odoo = MagicMock()
+    odoo.search_read.side_effect = [
+        [],  # idempotencia vazio
+        [{
+            'id': 5001, 'product_id': [1001, 'P'],
+            'quantity': 1.0, 'lot_id': False, 'lot_name': False,
+        }],
+    ]
+    odoo.create.return_value = 9111
+    odoo.search.return_value = [4001, 4002, 4003]  # 3 moves criados
+    odoo.read.return_value = [{'state': 'done'}]
+    svc = StockPickingService(odoo=odoo)
+    svc.criar_picking_entrada_destino_manual(
+        company_destino_id=5, location_origem_id=26489,
+        location_destino_id=42,
+        moves_data=[
+            {'product_id': 1001, 'quantity': 1.0, 'lot_dest_name': 'L'},
+        ],
+        picking_type_id=19,
+        origin='INV-Z-ENTRADA-LF-NF222',
+    )
+    # G023: company_id=5 escrito em TODOS os 3 moves
+    odoo.write.assert_any_call(
+        'stock.move', [4001, 4002, 4003], {'company_id': 5},
+    )

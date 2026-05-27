@@ -17,13 +17,18 @@ class OperacaoOdooAuditoria(db.Model):
     external_id = db.Column(db.String(64), nullable=False, unique=True)
     tabela_origem = db.Column(db.String(40), nullable=False)
     registro_id = db.Column(db.Integer, nullable=False)
-    acao = db.Column(db.String(20), nullable=False)
+    # G-AUDIT-2 v21+ FIX 2026-05-27: ampliado de 20 para 60 chars. Skill 5 v15a
+    # usa nomes longos: 'criar_picking_entrada_destino_manual'=37, 'validar_picking_inter_company'=28.
+    # Migration: scripts/migrations/v21_ampliar_operacao_odoo_auditoria.{sql,py}.
+    acao = db.Column(db.String(60), nullable=False)
     modelo_odoo = db.Column(db.String(60), nullable=False)
     metodo_odoo = db.Column(db.String(60))
     odoo_id = db.Column(db.Integer)
     etapa = db.Column(db.Integer)
     etapa_descricao = db.Column(db.String(80))
-    status = db.Column(db.String(20), nullable=False)
+    # G-AUDIT-2 v21+ FIX: ampliado de 20 para 30 chars (profilático). status atual
+    # 'EXECUTADO_PARCIAL' (17), 'FALHA_AUTORIZACAO' (17), 'EXECUTADO_AUTO_CORRIGIDO' (24).
+    status = db.Column(db.String(30), nullable=False)
     payload_json = db.Column(db.JSON)
     resposta_json = db.Column(db.JSON)
     dados_antes_json = db.Column(db.JSON)
@@ -32,7 +37,9 @@ class OperacaoOdooAuditoria(db.Model):
     tempo_execucao_ms = db.Column(db.Integer)
     contexto_origem = db.Column(db.String(40))
     contexto_ref = db.Column(db.String(80))
-    pipeline_etapa = db.Column(db.String(20))  # F5a..F5e — pos-G004/D003
+    # G-AUDIT-2 v21+ FIX: ampliado de 20 para 40 chars (profilático).
+    # Atual F5a_PICKING_OK=14, mas pode crescer (ex: F5e_SEFAZ_OK_IDEMPOTENT).
+    pipeline_etapa = db.Column(db.String(40))  # F5a..F5e — pos-G004/D003
     screenshot_s3_key = db.Column(db.String(255))
     executado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     executado_por = db.Column(db.String(80), nullable=False)

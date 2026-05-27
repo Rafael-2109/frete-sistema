@@ -606,3 +606,49 @@ def test_distribui_falha_aumento_em_meio_continua_tentando_outros(service):
     # Transferencia 1 com status FALHA_AUMENTO presente
     assert res['transferencias'][0]['status'] == 'FALHA_AUMENTO'
     assert res['transferencias'][1]['status'] == 'EXECUTADO'
+
+
+# ============================================================
+# v14b — Fix D-OPS-5: propaga aceita_tracking_none para _listar_quants_origem
+# ============================================================
+
+def test_distribui_propaga_aceita_tracking_none_default_true(service):
+    """v14b: default propaga aceita_tracking_none=True para _listar_quants_origem."""
+    with patch.object(service, '_listar_quants_origem', return_value=[]) as mk_lst:
+        service.distribuir_para_indisponivel(
+            product_id=1, company_id=1, qty_solicitada=10, dry_run=True,
+        )
+    mk_lst.assert_called_once()
+    kwargs = mk_lst.call_args.kwargs
+    assert kwargs.get('aceita_tracking_none') is True, (
+        f'Default deve ser aceita_tracking_none=True (fix D-OPS-5); kwargs={kwargs}'
+    )
+
+
+def test_distribui_aceita_tracking_none_false_explicito(service):
+    """v14b: caller pode forcar aceita_tracking_none=False (legacy)."""
+    with patch.object(service, '_listar_quants_origem', return_value=[]) as mk_lst:
+        service.distribuir_para_indisponivel(
+            product_id=1, company_id=1, qty_solicitada=10, dry_run=True,
+            aceita_tracking_none=False,
+        )
+    kwargs = mk_lst.call_args.kwargs
+    assert kwargs.get('aceita_tracking_none') is False
+
+
+def test_distribui_quant_sem_lote_tracking_none_executa(service):
+    """v14b D-OPS-5: quant sem lote (lot_id=None, _lote_name=None) drena via modo C."""
+    quant_sem_lote = _mk_quant(101, None, None, 8, 41.56)
+    ok = _mk_transfer_executado(41.56)
+    with patch.object(service, '_listar_quants_origem', return_value=[quant_sem_lote]), \
+         patch.object(service, 'transferir_para_indisponivel') as mk_t:
+        mk_t.return_value = ok
+        res = service.distribuir_para_indisponivel(
+            product_id=1, company_id=1, qty_solicitada=41.56, dry_run=False,
+        )
+    assert res['status'] == 'EXECUTADO_TOTAL'
+    assert res['qty_movida'] == 41.56
+    # Atomo chamado com lot_id_origem=None
+    call_kwargs = mk_t.call_args.kwargs
+    assert call_kwargs['lot_id_origem'] is None
+    assert call_kwargs['qty'] == 41.56
