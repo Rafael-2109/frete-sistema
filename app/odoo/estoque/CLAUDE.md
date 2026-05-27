@@ -129,7 +129,7 @@ O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem c
 | `transferindo-interno-odoo` | transferência interna intra-empresa — **4 modos atômicos** (v21+): A lote→lote mesma loc / B loc→loc mesmo lote / C MIGRAÇÃO↔Indisp / **D loc+lote em 1 chamada (NOVO v21+)** | `scripts/transfer.py` (delega `ajustar_quant`×2 com `delta_esperado` propagado; G021/G022/G027) | C2 | 🟡 **44 pytest verdes** (33 v20+ + 11 net v21+ Skill 2 átomo NOVO `transferir_loc_e_lote`); 2 scripts SUPERADOS 2026-05-24; átomo D validado em PROD ETAPA 0 v21+ (250.330 SLEEVE + 1,8 CORANTE Indisp/MIGRAÇÃO → Estoque/P-15/05) |
 | `operando-mo-odoo` | mrp.production (cancelar — V1; criar/alterar sem demanda) | [`scripts/mo.py`](scripts/mo.py) (StockMOService — guard G-MO-01 furo contabil) | C2 | 🟡 **mín viável** (26 pytest verdes; 4 dry-run PROD validados) |
 | `operando-reservas-odoo` | stock.move.line + stock.quant (residual) — opera reservas órfãs do picking | [`scripts/reserva.py`](scripts/reserva.py) (StockReservaService) | C1/C2 | 🟡 **mín viável** (3 átomos · 6 pickings/15 quants em prod) |
-| `operando-picking-odoo` | stock.picking (cancelar/validar/devolver + 3 átomos inter-company v15a + 1 átomo NOVO v19+ `preencher_lotes_picking`; `criar_picking_entrada_destino_manual` 🛑 DEPRECATED v19+ AP2) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **7 átomos LIVE v19+** (68 pytest = 61 + 7 S2 `preencher_lotes_picking`; G019/G020 fechada) |
+| `operando-picking-odoo` | stock.picking (cancelar/validar/devolver + 3 átomos inter-company v15a + 1 átomo NOVO v19+ `preencher_lotes_picking`; `criar_picking_entrada_destino_manual` 🛑 DEPRECATED v19+ AP2) | [`scripts/picking.py`](scripts/picking.py) (StockPickingService) | C2 | 🟡 **7 átomos LIVE v19+ + G-AUDIT-3 fix v22+** (70 pytest = 68 + 2 net v22+ idempotência cancel; G019/G020 fechada + G-AUDIT-3 codificada) |
 | `escriturando-odoo` ✅ ABRANGENTE v19+ | account.move + DFe (entrada — escritura NF SEFAZ-OK no destino) | [`scripts/escrituracao.py`](scripts/escrituracao.py) (EscrituracaoLfService) | **HÍBRIDO** — V1 STRICT `criar_recebimento_orchestrado` (wrapper deprecado v20+) + **7 átomos ABRANGENTES v19+**: `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`, `escriturar_dfe`, `gerar_po_from_dfe`, `preencher_po`, `confirmar_po`, `criar_invoice_from_po`. Compostos via FLUXO L3 1.2.1/1.2.2 (caminho A/B) | 🟡 **ABRANGENTE v19+ LIVE** (33 pytest = 11 V1 + 22 v19+ ABRANGENTE; AP1+AP4 ✅ resolvidos; dry-run-first; idempotência por campos Odoo) |
 
 > **Nota Tabela 1**: estas são as únicas skills WRITE atômicas L2. Cada uma tem `.claude/skills/<nome>/SKILL.md` + scripts/. O subagente as conhece pela árvore de decisão.
@@ -363,6 +363,54 @@ app/odoo/estoque/
 - **Sintoma**: plano inicial v19+ propunha átomo `criar_dfe_manual(dados_campo_a_campo)` para criar DFe sem XML. Realidade: service externo SEMPRE faz `create('l10n_br_ciel_it_account.dfe', {'company_id': X, 'l10n_br_xml_dfe': xml_b64})`. Odoo parseia tudo via `action_processar_arquivo_manual`. Sem XML não há caminho suportado.
 - **Correção v19+**: átomo renomeado para `criar_dfe_a_partir_do_invoice_saida(invoice_id_saida, company_destino)` — extrai `account.move.l10n_br_xml_aut_nfe` (XML autorizado já existente em qualquer NF SEFAZ-OK) e usa como input. Para NF nossa (transferência interna FB↔LF↔CD), XML existe; para CTe/Compras (externos), átomo recusa.
 - **Como evitar**: ANTES de propor átomo cross-skill que toca Odoo, minerar o pattern equivalente já validado em PROD (Explore READ-only — não MEXER no código-fonte se for marcado NÃO MEXER).
+
+### D-V22-3 — Caminho B FLUXO L3 1.2.x cria PO sem `fiscal_position_id` + `purchase.team` errado (G039 PENDENTE v23+)
+
+- **Detectado em**: 2026-05-27 v22+ resume F pós-G-AUDIT-3 fix + G038 fix. FLUXO L3 1.2.2 (caminho B — `criar_dfe_a_partir_do_invoice_saida` + `action_gerar_po_dfe` + `button_confirm`) executou com sucesso até criar **DFe 43533** (com 2 linhas populadas) + **PO 42419 'C2619591'** (order_line correta) MAS PO ficou em `state='to approve'` (não 'purchase'). Sem confirm = sem picking = `FALHA_PASSO_7_SEM_PICKING: po_sem_picking_pos_confirm`.
+- **Sintoma combinado**:
+  - PO sem `fiscal_position_id` (campo False)
+  - PO `team_id=41` 'Aprovação LF - JOSEFA' (user_id=78 Edilane) — team default não permitia aprovação por Rafael (uid=42 user_id da PO)
+  - `button_confirm` retornou True mas state manteve 'to approve'
+  - `button_approve` retornou None sem mudança de state
+  - `action_approve`/`approve`/`action_confirm` não existem (não há method genérico para destravar 'to approve' via XML-RPC; provavelmente regra CIEL IT custom requer UI ou group específico que Rafael não tem)
+- **Causa raiz parcial conhecida**: Caminho B (criar DFe via XML da saída) não popula `fiscal_position_id` na PO + usa `purchase.team` default que pode não ter aprovador correto. Aprovação dupla (CIEL IT custom) bloqueia.
+- **Workaround v22+ aplicado (manual write)**:
+  - Criado `purchase.team` id=143 'Aprovação LF - RAFAEL' (user_id=42 Rafael, company_id=5 LF) via XML-RPC
+  - PO 42419 movida para team 143 via write
+  - Estado ainda 'to approve' (mudar team não destrava por si só)
+  - Rafael aprova manualmente no UI Odoo OU investiga regra exata v23+
+- **NOVA INVARIANTE v22+** (a codificar em v23+): ao criar PO no LF via FLUXO L3 1.2.x (caminho A ou B), Skill 7 (ou orchestrator) DEVE garantir:
+  1. `purchase.team` existe para o user_id atual (ou Rafael uid=42) — criar via XML-RPC se não existir
+  2. PO setada com `team_id` correto antes de `button_confirm`
+  3. (Opcional) Validar `fiscal_position_id` populado antes de confirmar (caminho B descobriu que action_gerar_po_dfe não popula esse campo em todos casos)
+- **Pendências v23+**: (a) investigar canary 627348 (caminho A SEFAZ-via-DFe que autorizou) — fiscal_position estava populada? team_id qual? (b) descobrir regra exata de 'to approve' (valor mínimo? group `purchase.group_purchase_manager`? regra CIEL IT customizada?); (c) Skill 7 codificar invariante purchase.team + fiscal_position fallback.
+- **Onde**: PO 42419 + DFe 43533 + invoice 716448 + Team 143 ficam como museum vivo. Tasks 13+14 do TaskList v22+. Gotcha G039 (planejado, ainda não criado).
+
+**v22+ CONTINUAÇÃO PASSO 9 (action_create_invoice)**: após team 143 destravar PO + gerar picking 321617, retry F falhou em PASSO 9 com: `Rafael (id=42) não tem acesso 'leitura' a: Item Documento Fiscal (l10n_br_ciel_it_account.dfe.line)`. Investigação: Rafael TEM grupos `ir.model.access` necessários (28 Accounting/Billing + 1 Internal User), mesmo que Edilane (uid=78). Causa NÃO é access — é `ir.rule` (record-level) ativa em dfe.line que filtra para Rafael apesar de ter company LF=5. Investigação exata pendente v23+ (task 15). Workaround imediato: rodar pipeline com user com permissão (Edilane uid=78).
+
+### D-V22-2 — `product.l10n_br_origem` ausente bloqueia SEFAZ via modal Odoo silencioso (G038 RESOLVIDO via Sub-skill C5)
+
+- **Detectado em**: 2026-05-27 v22+ retry pipeline `INVENTARIO_2026_05` — Playwright em loop 15 tentativas sem efeito; screenshots `/tmp/sefaz_debug/pos_sefaz_inv716448_t*.png` mostraram modal "Aviso do Odoo: Produtos sem Origem".
+- **Sintoma**: invoice 716448 (`state=posted, situacao_nf='rascunho', show_nfe_btn=True`) com `cstat=False, xmotivo=False` após 15 cliques Playwright em "Transmitir NF-e" (~28min). Comparação com canary autorizado (627348) — config fiscal IDÊNTICA exceto que canary tinha `l10n_br_origem='0'` e nosso tinha `False`.
+- **Causa raiz**: `product.product.l10n_br_origem` é OBRIGATÓRIO para NF-e (Tabela A SEFAZ). Quando vazio, Odoo CIEL IT intercepta `action_gerar_nfe` ANTES de SEFAZ com modal nativo. Playwright `_tratar_wizard_confirmacao` (`app/recebimento/services/playwright_nfe_transmissao.py:216`) só trata wizard padrão — modal específico passa silencioso.
+- **Correção v22+ (2026-05-27)**:
+  - Sub-skill C5 estendida com check G038 em `_check_ncm_weight_tracking` (adiciona `l10n_br_origem` no read + retorna `origem_ausente`)
+  - `auditar_perfil_inventario` inclui `origem_ausente` em `bloqueios` (PRE_FLIGHT_BLOQUEADO)
+  - Sem auto-fix (orquestrador não sabe a origem correta — depende cadastro). Operador seta manualmente.
+  - 2 pytest novos: `test_check_ncm_weight_tracking_g038_origem_ausente_bloqueia` + `test_auditar_perfil_inventario_bloqueia_g038_origem_ausente`
+  - Gotcha G038 documentado: `docs/inventario-2026-05/02-gotchas/G038-l10n-br-origem-ausente-bloqueia-sefaz.md`
+  - Cross-ref atualizada: `.claude/references/odoo/GOTCHAS.md` tabela G011-G038
+- **LIÇÃO ATEMPORAL (similar AP5)**: validações fiscais do Odoo CIEL IT podem ser silenciosas via MODAL UI (não exception XML-RPC). Quando Playwright detecta cstat=False persistente após click — **sempre tirar screenshot e inspecionar visualmente** se há modal interceptando. Se houver, gotcha → pre-flight check ANTES do pipeline.
+- **Onde**: `PROTECAO_PROXIMA_SESSAO.md` (N24 NOVO se quiser adicionar) + Sub-skill C5 service estendido.
+
+### D-V22-1 — Idempotência por origin reaproveitava picking state=cancel (G-AUDIT-3 RESOLVIDO)
+
+- **Detectado em**: 2026-05-27 v22+ retry pipeline `INVENTARIO_2026_05` ajustes 176013/176014 — picking 321600 estava em state=cancel (cleanup do retry anterior) e Skill 5 `criar_picking_inter_company` reaproveitava-o erroneamente; `action_assign` na ETAPA F5b retornava `<Fault 2: 'Nada para verificar a disponibilidade.'>` (cancel não tem moves para reservar).
+- **Sintoma**: pipeline crashava em F5b com mensagem genérica "Nada para verificar". Ajustes ficavam `fase_pipeline='F5b_FALHA'` + `picking_id_odoo=<cancel>` + `erro_msg=<Fault 2>`. Não progride no retry porque idempotência continua a reaproveitar o mesmo cancel.
+- **Causa raiz**: bloco de idempotência em `picking.py:944-981` v15c F1 buscava `[['origin', '=', origin]]` e retornava o PRIMEIRO match SEM filtrar state. Estados válidos para reaproveitar: `draft/confirmed/assigned/done`. State=cancel = registro morto.
+- **Correção v22+ (2026-05-27)**: `picking.py:944-1006` segrega cancelados; se TODOS são cancel, prossegue para create (cria NOVO); se mistura, prefere o primeiro vivo e loga skip dos cancelados. 2 pytest novos (`test_..._g_audit_3_pula_pickings_cancelados` + `test_..._g_audit_3_prefere_vivo_sobre_cancel`). Baseline 578 verdes.
+- **LIÇÃO ATEMPORAL**: ao implementar idempotência por chave externa (origin, external_id, etc.), SEMPRE filtrar `state=cancel` (ou equivalente "registro morto") da busca, OU segregar e logar. Idempotência ingênua que "reaproveita o que existir" gera deadlock retry quando retries criam cancelados.
+- **Onde**: `PROTECAO_PROXIMA_SESSAO.md` N23 (RESOLVIDO v22+) + `picking.py:918-931` (docstring atualizado).
 
 ### D-V18-6 — Acúmulo de `PROMPT_PROXIMA_SESSAO_*.md` no root
 

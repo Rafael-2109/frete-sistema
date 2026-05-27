@@ -922,6 +922,59 @@ def test_criar_picking_inter_company_idempotent_other_state():
     odoo.create.assert_not_called()
 
 
+def test_criar_picking_inter_company_g_audit_3_pula_pickings_cancelados():
+    """G-AUDIT-3 v22+: se TODOS pickings com origin EXATO sao state=cancel,
+    cria NOVO (nao reaproveita). Codifica invariante descoberta no retry
+    pipeline v21+ INVENTARIO_2026_05 (picking 321600 cancel impedia F5b).
+    """
+    odoo = MagicMock()
+    # 1a search_read (idempotencia por origin): so cancelados
+    # 2a search_read (caso criar_transferencia faca mais buscas): []
+    odoo.search_read.side_effect = [
+        [{'id': 321600, 'state': 'cancel'}],
+        [],
+    ]
+    odoo.read.return_value = [{'id': 1001, 'tracking': 'lot'}]
+    odoo.create.return_value = 321999  # picking NOVO
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-INVENTARIO_2026_05-SAIDA-INDUSTRI-176013',
+    )
+    # NOVO picking criado, nao reaproveitou 321600 cancelado
+    assert r['picking_id'] == 321999
+    assert r['status'] == 'CRIADO'  # nao IDEMPOTENT_*
+    odoo.create.assert_called()  # create FOI chamado
+
+
+def test_criar_picking_inter_company_g_audit_3_prefere_vivo_sobre_cancel():
+    """G-AUDIT-3 v22+: se ha mistura (cancelados + vivos), reaproveita o
+    primeiro nao-cancelado (idempotencia saudavel preservada). Cancelados
+    sao logados mas ignorados.
+    """
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        {'id': 321600, 'state': 'cancel'},
+        {'id': 321999, 'state': 'assigned'},  # vivo
+    ]
+    svc = StockPickingService(odoo=odoo)
+    r = svc.criar_picking_inter_company(
+        company_origem_id=5, company_destino_id=1,
+        location_origem_id=42, location_destino_id=5,
+        linhas=[{'product_id': 1001, 'quantity': 10.0, 'lot_name': 'X'}],
+        picking_type_id=94, partner_id=1,
+        origin='INV-INVENTARIO_2026_05-SAIDA-INDUSTRI-176014',
+    )
+    # Reaproveitou o vivo, NAO criou novo
+    assert r['picking_id'] == 321999
+    assert r['status'] == 'IDEMPOTENT_OTHER'
+    assert r['state'] == 'assigned'
+    odoo.create.assert_not_called()
+
+
 # ============================================================================
 # v15a — validar_picking_inter_company (Skill 8 F5b)
 # ============================================================================

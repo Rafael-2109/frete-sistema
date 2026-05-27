@@ -2175,3 +2175,62 @@ Cenarios imaginados de "como `executar-onda` pode falhar em PROD" — usado para
 6. **Folhas L3 pendentes (1.1, 1.3, 2.3)** — depende refator AP6
 7. **C5 V1 'inventario' estendido**: cobrir G007 (price=0) + l10n_br_tipo_produto
 8. **Resolver lote 'P-15/05'**: arg `forcar_lote_literal=True` OU contexto que diferencia proxy vs literal
+
+---
+
+# Sessão 2026-05-27 v22+ — G-AUDIT-3 RESOLVIDO + G038/G039 DESCOBERTOS
+
+> Continuação direta da v21+ (3 retries pipeline INVENTARIO_2026_05 sem chegar SEFAZ). Foco: fix G-AUDIT-3 + validar pipeline E2E em PROD.
+
+## Entregas concretas
+
+1. **Fix G-AUDIT-3 (Skill 5 idempotência cancel)** — `picking.py:944-1006`: segrega pickings state=cancel da idempotência por origin; se todos cancel, prossegue para create; se mistura, prefere o vivo. 2 pytest novos (`test_criar_picking_inter_company_g_audit_3_pula_pickings_cancelados` + `test_..._prefere_vivo_sobre_cancel`). Lição atemporal: idempotência por chave externa SEMPRE filtrar registros mortos (cancel) ou segregar + logar.
+
+2. **Sub-skill C5 estendida G038 l10n_br_origem** — `cadastro_fiscal_audit.py:_check_ncm_weight_tracking` adiciona check `l10n_br_origem in (False, None, '')` como BLOQUEIO. Entry-point inclui `origem_ausente` em `bloqueios`. 2 pytest novos + gotcha completo `docs/inventario-2026-05/02-gotchas/G038-l10n-br-origem-ausente-bloqueia-sefaz.md` + cross-ref `.claude/references/odoo/GOTCHAS.md` tabela.
+
+3. **Fix produto PROD 104000046** — XML-RPC write `l10n_br_origem='0'` (Nacional). Cross-checado ciclo INVENTARIO_2026_05 (só 2 produtos, 1 com problema).
+
+4. **Pipeline retry REAL PROD A→D fim-a-fim** — G-AUDIT-3 fix funcionou: picking 321600 cancel ignorado, **NOVO picking 321601** criado, validado, liberado, CIEL IT criou invoice 716448, Playwright SEFAZ autorizou (~50s na 1ª tentativa após fix produto). **Chave SEFAZ**: `35260561724241000178550010000945661007164482`.
+
+5. **Caminho B FLUXO L3 1.2.x validado parcial em PROD** — primeira execução REAL do FLUXO L3 1.2.2 (criar DFe via XML da saída): DFe 43533 criado no LF + PO C2619591 (id=42419) criada com order_line OK (2 linhas LACRE+CORANTE) + workaround team_id 143 destravou state→'purchase' + button_approve gerou picking 321617.
+
+6. **Descoberta arquitetural G039 (purchase.team gatekeeper)** — DESCOBERTA NÃO-ÓBVIA: PO no LF criada via caminho B cai com `team_id=41` 'Aprovação LF - JOSEFA' (user_id=78 Edilane) → state='to approve' permanente (button_confirm retorna True mas state não muda; button_approve idem). **Solução comprovada**: criar `purchase.team` com user_id = user que executa pipeline (uid=42 Rafael), mover PO via write, ciclo cancel+draft+confirm = state='purchase' direto + button_approve gera picking. Workaround manual aplicado team 143 'Aprovação LF - RAFAEL'. Codificação v23+ (task 16).
+
+7. **Descoberta G-PERM-1 (ir.rule dfe.line)** — passo 9 (action_create_invoice) falha com erro CLARO: `Rafael (id=42) não tem acesso 'leitura' a: Item Documento Fiscal (l10n_br_ciel_it_account.dfe.line)`. Mas Rafael TEM os 2 grupos `ir.model.access` necessários (28 Accounting/Billing + 1 Internal User), mesmos que Edilane. Causa: `ir.rule` record-level (não access groups). Investigação exata pendente v23+ (task 15).
+
+## Métricas
+
+- **Baseline pytest**: 576 → **580 verdes** (+4 net: 2 G-AUDIT-3 + 2 G038) em 14.59s
+- **Tempo sessão**: ~8h
+- **Writes PROD**: 1 produto (l10n_br_origem) + 1 picking novo (321601) + 1 invoice (716448 autorizada SEFAZ) + 1 DFe (43533) + 1 PO (42419) + 1 picking entrada (321617) + 1 purchase.team (143) + ajustes 176013/176014 status/fase
+
+## Pendências v23+
+
+- **Task 13**: fix raiz contador F status='EXECUTADO' (filtra apenas APROVADO/PROPOSTO globalmente)
+- **Task 14**: investigar PO em 'to approve' (canary 627348 caminho A — fiscal_position populada? team_id qual?)
+- **Task 15**: ir.rule dfe.line para Rafael (perm leitura via record-level)
+- **Task 16**: Skill 7 codificar invariante `garantir_purchase_team` (G039 codificada)
+- Itens v22+ originais NÃO TOCADOS: S2 remoção tampão (criar_picking_entrada_destino_manual + V1 STRICT wrapper + ETAPAS E/F legacy); S3 refator AP6; S4 expand CONSTANTS FB/CD; S5 folhas L3 1.1/1.3/2.3; S6 C5 G007 + l10n_br_tipo_produto; S7 lote literal P-15/05.
+
+## Documentação atualizada
+
+- `PROTECAO_PROXIMA_SESSAO.md`: N23 RESOLVIDO v22+ + N24 NOVO (purchase.team invariante)
+- `CLAUDE.md` estoque §6 Tabela 1 (Skill 5: 70 pytest) + §6 Sub-skill C5 (16 pytest); §14 D-V22-1 (G-AUDIT-3) + D-V22-2 (G038) + D-V22-3 (G039 + G-PERM-1)
+- `ROADMAP_SKILLS.md`: 580 pytest baseline + Sub-skill C5 v22+
+- `GOTCHAS.md`: G038 NOVO na tabela G011-G038
+- `docs/inventario-2026-05/02-gotchas/G038-*.md`: gotcha completo
+
+## Antipadrões status pós-v22+
+
+| Antipadrão | Status |
+|------------|--------|
+| AP1 V1 STRICT raise | ✅ resolvido v19+; wrapper deprecado v20+ |
+| AP2 ETAPA F orchestrator picking ENTRADA | ⏳ v22+ Caminho B parcial validado em PROD; remoção tampão aguarda v23+ destravar G-PERM-1 ir.rule + completar passo 9+10 |
+| AP3 orchestrator chama skill INLINE | ✅ resolvido v18 |
+| AP4 pre-cond raise antes dry-run | ✅ resolvido v19+ |
+| AP5 gotcha sem ler CONSTANTS | ✅ resolvido v18 |
+| AP6 confusão nomenclatura Skill 8 | ⏳ adiado v23+ |
+| G-AUDIT-3 idempotência state=cancel | ✅ RESOLVIDO v22+ |
+| G038 l10n_br_origem ausente | ✅ DETECÇÃO v22+ (sub-skill C5) — sem auto-fix por design |
+| G039 purchase.team gatekeeper LF | ⏳ workaround manual v22+; codificação v23+ |
+| G-PERM-1 ir.rule dfe.line | ⏳ investigação v23+ |

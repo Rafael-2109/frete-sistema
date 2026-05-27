@@ -11,6 +11,15 @@ Gotchas cobertos V1 (perfil inventario):
                               mais (fix v2 inventario 2026-05).
 - G035 (barcode invalido)    — BLOQUEIO ou AUTO-FIX se `auto_corrigir_barcode=True`
                               + `dry_run=False`. cstat=225 SEFAZ.
+- G038 (l10n_br_origem       — BLOQUEIO. l10n_br_origem in (False, None, '')
+   ausente) — NOVO v22+        produz modal Odoo "Aviso: Produtos sem Origem" que
+                              bloqueia transmissao SEFAZ. Playwright nao trata o
+                              modal, gerando loop silencioso 15× sem efeito.
+                              Descoberto em retry pipeline INVENTARIO_2026_05
+                              (produto 104000046 CORANTE VERMELHO, 2026-05-27).
+                              SEM AUTO-FIX — operador deve setar manualmente
+                              (0=Nacional, 1=Estr. importacao, 2=Estr. mercado
+                              interno, ...).
 - G014 (lote vencido)        — WARN. Resolvido on-the-fly em ETAPA B do
                               faturamento (transfere para lote novo via Skill 2).
 - D-OPS-2 (duplicacao        — BLOQUEIO. Pre-flight checa AjusteEstoqueInventario
@@ -165,23 +174,30 @@ class CadastroFiscalAuditService:
     def _check_ncm_weight_tracking(
         self, produto_ids: List[int],
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """G017 (NCM), G018 (weight=0), D-OPS-3 (tracking='none').
+        """G017 (NCM), G018 (weight=0), G038 (l10n_br_origem ausente — NOVO v22+),
+        D-OPS-3 (tracking='none').
 
         Returns:
             {
                 'ncm_faltando': [{id, default_code, name}],
                 'weight_zero': [{id, default_code, name}],
+                'origem_ausente': [{id, default_code, name, gotcha: 'G038'}],  # NOVO v22+
                 'tracking_none': [{id, default_code, name}],
             }
         """
         if not produto_ids:
-            return {'ncm_faltando': [], 'weight_zero': [], 'tracking_none': []}
+            return {
+                'ncm_faltando': [], 'weight_zero': [],
+                'origem_ausente': [], 'tracking_none': [],
+            }
         prods = self.odoo.read(
             'product.product', produto_ids,
-            ['default_code', 'name', 'l10n_br_ncm_id', 'weight', 'tracking'],
+            ['default_code', 'name', 'l10n_br_ncm_id', 'weight', 'tracking',
+             'l10n_br_origem'],
         )
         ncm_faltando: List[Dict] = []
         weight_zero: List[Dict] = []
+        origem_ausente: List[Dict] = []
         tracking_none: List[Dict] = []
         for p in prods:
             base = {'id': p['id'], 'default_code': p.get('default_code'),
@@ -190,11 +206,19 @@ class CadastroFiscalAuditService:
                 ncm_faltando.append({**base, 'gotcha': 'G017'})
             if float(p.get('weight') or 0) <= 0:
                 weight_zero.append({**base, 'gotcha': 'G018', 'weight': float(p.get('weight') or 0)})
+            # G038 v22+: l10n_br_origem ausente bloqueia transmissao SEFAZ
+            # via modal "Aviso: Produtos sem Origem" (Playwright nao trata).
+            # False/None/'' = ausente. '0' (Nacional), '1'..'8' = OK.
+            origem_val = p.get('l10n_br_origem')
+            if not origem_val:
+                origem_ausente.append({**base, 'gotcha': 'G038',
+                                        'l10n_br_origem': origem_val})
             if (p.get('tracking') or 'none') == 'none':
                 tracking_none.append({**base, 'gotcha': 'D-OPS-3', 'tracking': 'none'})
         return {
             'ncm_faltando': ncm_faltando,
             'weight_zero': weight_zero,
+            'origem_ausente': origem_ausente,
             'tracking_none': tracking_none,
         }
 
@@ -410,6 +434,7 @@ class CadastroFiscalAuditService:
                 'bloqueios': {
                     'ncm_faltando': [...],         # G017 — BLOQUEIO
                     'barcode_invalido': [...],     # G035 — BLOQUEIO (a menos auto_corrigir)
+                    'origem_ausente': [...],       # G038 — BLOQUEIO (NOVO v22+)
                     'duplicacao_pipeline': [...],  # D-OPS-2 — BLOQUEIO
                 },
                 'warnings': {
@@ -436,7 +461,7 @@ class CadastroFiscalAuditService:
                 'auditados': 0,
                 'erros_resolucao': [],
                 'bloqueios': {'ncm_faltando': [], 'barcode_invalido': [],
-                              'duplicacao_pipeline': []},
+                              'origem_ausente': [], 'duplicacao_pipeline': []},
                 'warnings': {'weight_zero': [], 'lote_vencido': [],
                              'tracking_none': []},
                 'acoes_aplicadas': [],
@@ -461,6 +486,7 @@ class CadastroFiscalAuditService:
         bloqueios = {
             'ncm_faltando': ncm_w_trk['ncm_faltando'],
             'barcode_invalido': bc_res['barcode_invalido'],
+            'origem_ausente': ncm_w_trk['origem_ausente'],  # G038 v22+
             'duplicacao_pipeline': dup_pipe,
         }
         warnings = {

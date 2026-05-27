@@ -921,6 +921,15 @@ class StockPickingService:
             SEFAZ irreversiveis (catastrofe fiscal). Pattern espelha
             `criar_picking_entrada_destino_manual` v15a. Reviewer D
             R-OPS-1 conf 95.
+
+        G-AUDIT-3 v22+ (2026-05-27): idempotencia NUNCA reaproveita picking
+            state=cancel. Estados validos para reaproveitar: draft, confirmed,
+            assigned, done. State=cancel representa retry pos-falha (cleanup) e
+            reaproveitar provoca `action_assign` "Nada para verificar a
+            disponibilidade" em F5b. Se TODOS pickings com origin EXATO sao
+            cancel, prossegue para create (cria NOVO). Se ha mistura, retorna
+            o primeiro nao-cancelado (idempotencia saudavel). Caso raro mas
+            possivel se pipeline foi cancelado N vezes e re-executado.
         """
         inicio = time.time()
 
@@ -953,32 +962,64 @@ class StockPickingService:
         # v15c F1 (CRITICAL): IDEMPOTENCIA via origin EXATO antes de create.
         # Sem isso, re-execucao apos SSL drop cria DUPLICATA -> 2 NFs SEFAZ.
         # Pattern espelha `criar_picking_entrada_destino_manual` v15a.
+        # G-AUDIT-3 v22+: NUNCA reaproveitar state=cancel (retry pos-falha).
         existentes = self.odoo.search_read(
             'stock.picking',
             [['origin', '=', origin]],
             ['id', 'state'],
         )
         if existentes:
-            picking_id_existente = existentes[0]['id']
-            state_existente = existentes[0].get('state') or 'unknown'
-            status_idem = (
-                'IDEMPOTENT_DONE' if state_existente == 'done'
-                else 'IDEMPOTENT_OTHER'
-            )
+            cancelados = [
+                p for p in existentes
+                if (p.get('state') or '') == 'cancel'
+            ]
+            reaproveitaveis = [
+                p for p in existentes
+                if (p.get('state') or '') != 'cancel'
+            ]
+            if reaproveitaveis:
+                # Idempotencia saudavel: pega o primeiro nao-cancelado.
+                # Se ha mistura (canceladas + reaproveitavel), prefere o vivo.
+                picking_id_existente = reaproveitaveis[0]['id']
+                state_existente = (
+                    reaproveitaveis[0].get('state') or 'unknown'
+                )
+                status_idem = (
+                    'IDEMPOTENT_DONE' if state_existente == 'done'
+                    else 'IDEMPOTENT_OTHER'
+                )
+                logger.info(
+                    f'criar_picking_inter_company: IDEMPOTENT — picking '
+                    f'{picking_id_existente} ja existe com origin={origin!r} '
+                    f'(state={state_existente!r}, status={status_idem}). '
+                    f'Skipping create (F1 v15c — anti-duplicacao SEFAZ).'
+                    + (
+                        f' (G-AUDIT-3 v22+: ignorando '
+                        f'{len(cancelados)} pickings cancelados '
+                        f'ids={[p["id"] for p in cancelados]}.)'
+                        if cancelados else ''
+                    )
+                )
+                return {
+                    'picking_id': picking_id_existente,
+                    'status': status_idem,
+                    'state': state_existente,
+                    'tracking_none_pids': [],
+                    'linhas_planejadas': [],
+                    'tempo_ms': int((time.time() - inicio) * 1000),
+                }
+            # G-AUDIT-3 v22+: TODOS sao cancel — criar NOVO.
+            # Reaproveitar cancel faz action_assign falhar ("Nada para
+            # verificar a disponibilidade"). Codificado como invariante
+            # apos retry pipeline v21+ INVENTARIO_2026_05 (picking 321600
+            # cancel impedia F5b). Estados validos para reaproveitar:
+            # draft/confirmed/assigned/done.
             logger.info(
-                f'criar_picking_inter_company: IDEMPOTENT — picking '
-                f'{picking_id_existente} ja existe com origin={origin!r} '
-                f'(state={state_existente!r}, status={status_idem}). '
-                f'Skipping create (F1 v15c — anti-duplicacao SEFAZ).'
+                f'criar_picking_inter_company: G-AUDIT-3 v22+ — '
+                f'encontrados {len(cancelados)} pickings cancelados com '
+                f'origin={origin!r} (ids={[p["id"] for p in cancelados]}). '
+                f'NAO reaproveitar (criar NOVO picking).'
             )
-            return {
-                'picking_id': picking_id_existente,
-                'status': status_idem,
-                'state': state_existente,
-                'tracking_none_pids': [],
-                'linhas_planejadas': [],
-                'tempo_ms': int((time.time() - inicio) * 1000),
-            }
 
         # G021: filtrar qty<=0
         linhas_filtradas = [

@@ -19,7 +19,7 @@
 7. Se sessão for sobre Skill 8 → ler `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO (regra inviolável 0).
 
 ### Baseline pytest esperado
-- **576 verdes** (tests/odoo/ — v21+ confirmado em 14.74s. 565 baseline v20+ + 11 net v21+ = 11 testes Skill 2 átomo NOVO `transferir_loc_e_lote`. Fix G-AUDIT-1 v21+ NÃO aumentou contagem — apenas removeu linha sem novo teste; 77 testes orchestrator continuam passando.)
+- **580 verdes** (tests/odoo/ — v22+ confirmado em 14.59s. 576 baseline v21+ + 2 net v22+ = 2 testes Skill 5 G-AUDIT-3 idempotência cancel + 2 testes Sub-skill C5 G038 origem ausente; 77 testes orchestrator continuam passando.)
 
 ### Estado global (atualizado v18 Fase 0 — 2026-05-26)
 
@@ -29,12 +29,12 @@
 | Skill 2 `transferindo-interno-odoo` | 🟡 **4 modos atômicos** (A/B/C/D) — D NOVO v21+ `transferir_loc_e_lote` (loc+lote em 1 chamada) — 44 pytest (33 v20+ + 11 net v21+) | `scripts/transfer.py` |
 | Skill 2.4 `operando-reservas-odoo` | 🟡 mín viável (5 átomos) | `scripts/reserva.py` |
 | Skill 4 `operando-mo-odoo` | 🟡 mín viável | `scripts/mo.py` |
-| Skill 5 `operando-picking-odoo` | 🟡 7 átomos LIVE v19+ (`preencher_lotes_picking` NOVO; `criar_picking_entrada_destino_manual` DEPRECATED) — 68 pytest | `scripts/picking.py` |
+| Skill 5 `operando-picking-odoo` | 🟡 7 átomos LIVE v19+ (`preencher_lotes_picking` NOVO; `criar_picking_entrada_destino_manual` DEPRECATED) + **G-AUDIT-3 fix v22+** (idempotência cancel codificada) — 70 pytest (68 + 2 net v22+) | `scripts/picking.py` |
 | Skill 6 `planejando-pre-etapa-odoo` | 🟡 mín viável COMPLETA v9 (planner + executor C3) | `scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` |
 | Skill 7 `escriturando-odoo` | 🟡 ABRANGENTE LIVE v20+ (7 átomos + FIX A `escriturar_dfe` 2 caminhos idempotencia + FIX B `gerar_po_from_dfe` 3 caminhos idempotencia DFe↔PO) — 38 pytest = 12 V1 + 26 ABRANGENTE; AP1+AP4 ✅; V1 wrapper DeprecationWarning v20+ | `scripts/escrituracao.py` |
 | Skill 8 `faturando-odoo` (orchestrator C3 — nomenclatura confusa AP6 v21+) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x LIVE v19+ + **opt-in `--usar-fluxo-l3-v19` v20+** (79 pytest = 76 + 3 S3 dispatch opt-in) | `orchestrators/faturamento_pipeline.py` + `.claude/skills/faturando-odoo/SKILL.md` |
 | Skill 9 `consultando-quant-odoo` (READ) | 🟡 mín viável (3 modos G030) | `scripts/consulta_quant.py` |
-| Sub-skill C5 `auditando-cadastro-fiscal-odoo` | 🟡 V1 'inventario' | `scripts/cadastro_fiscal_audit.py` |
+| Sub-skill C5 `auditando-cadastro-fiscal-odoo` | 🟡 V1 'inventario' + G038 v22+ (l10n_br_origem) — 16 pytest (14 + 2 net v22+) | `scripts/cadastro_fiscal_audit.py` |
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
