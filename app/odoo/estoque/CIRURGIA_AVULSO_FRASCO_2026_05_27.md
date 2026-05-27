@@ -121,6 +121,35 @@ Quando `purchase.order.button_confirm` é chamado MAS produto não tem `l10n_br_
 
 ---
 
+## Implementação v25+ (commit pendente — 2026-05-27)
+
+Após validação Rafael, aplicados 4 fixes que mapeiam aos 5 problemas reais
+identificados. Hipóteses descartadas (G-PO-NATIVA-SEM-PICKING / G-DFE-LOCK)
+NÃO foram implementadas — Rafael confirmou que não foram necessárias.
+
+| Fix | Mapeamento | O que mudou |
+|---|---|---|
+| **F1** | LOTE obrigatório copiar da saída de acordo com a qtd | `_executar_etapa_f_via_fluxo_l3` agora resolve `prod_cache` em batch + monta `lotes_data` por invoice agregando `(product_id, lote_destino)` com `abs(qtd_ajuste)`. Espelha legacy v17.5 linhas 3998-4018. Lote vazio/'MIGRAÇÃO' → `INV-{cod}-{YYYYMMDD}`. |
+| **F1b** | (consequência de F1) | `executar_fluxo_l3_1_2_x` default `lote_default='MIGRAÇÃO'` → `None`. Caller F1 passa `lotes_data` resolvido + `lote_default='INV-FALLBACK-{HOJE}'` (apenas backup). |
+| **F2a** | empresa obrigatório setar (caminho A) | Novo átomo público `alinhar_dfe_lines_company(dfe_id, company_destino)` em `escrituracao.py`. Generaliza fix B-V23-1 que estava inline em `criar_dfe_a_partir_do_invoice_saida` (caminho B). `executar_fluxo_l3_1_2_x` invoca após `buscar_dfe` retornar `encontrado=True` (caminho A). Passo `1_5_alinhar_dfe_lines_company_a` registrado em `passos`. |
+| **F2b** | empresa obrigatório setar (picking nativo) | `executar_fluxo_l3_1_2_x` força `stock.picking.company_id` + `stock.move.company_id` = `company_destino` após localizar picking ativo no passo 7 (espelha G023 do átomo legacy `criar_picking_entrada_destino_manual`). Não-fatal: erro vira log warning. Passo `6_5_g023_force_company` registrado. |
+| **F3a** | tipo do pedido: compra no DFe; serv-industrializacao no PO | `L10N_BR_TIPO_PEDIDO_POR_ACAO` refatorado de `Dict[str, str]` para `Dict[str, Dict[str, str]]` com keys `'dfe'` e `'po'`. `INDUSTRIALIZACAO_FB_LF → {'dfe': 'compra', 'po': 'serv-industrializacao'}`. |
+| **F3b** | tipo='compra' no DFe (passo 3) | `executar_fluxo_l3_1_2_x` passo 3 chama `escriturar_dfe(l10n_br_tipo_pedido=l10n_br_tipo_pedido_dfe)` (parâmetro renomeado de `l10n_br_tipo_pedido` para `l10n_br_tipo_pedido_dfe`). |
+| **F3c** | preencher_po aceita `l10n_br_tipo_pedido` | Novo parâmetro opcional `l10n_br_tipo_pedido: Optional[str] = None` em `EscrituracaoLfService.preencher_po`. Quando fornecido, escreve no write da PO (entre os valores). Whitelist espelha `escriturar_dfe`. |
+| **F3d** | tipo='serv-industrializacao' no PO (passo 5) | `executar_fluxo_l3_1_2_x` passo 5 chama `preencher_po(l10n_br_tipo_pedido=l10n_br_tipo_pedido_po)`. Fatura herda da PO no passo 9 sem intervenção adicional. |
+| **F4** | Purchase team id=143 fixo | `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[5]['team_id']` 41 → **143** (STATIC FIXO). `_resolver_constants_fluxo_l3` desliga override G039 dinâmico para `company_destino=5` (LF). Demais destinos (FB=1, CD=4) mantêm G039 quando forem mapeados. |
+
+**Pytest baseline**: 655 → 662 verdes (+7 net = +8 testes F2a/F3c novos − 1 teste removido por reescrita F4). Suíte total tests/odoo em 17s.
+
+**Arquivos tocados (4)**:
+- `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (5 hunks — constants F3a+F4, _resolver_constants F4, executar_fluxo_l3_1_2_x assinatura+passos, _executar_etapa_f_via_fluxo_l3 lotes_data F1)
+- `app/odoo/estoque/scripts/escrituracao.py` (2 hunks — novo átomo `alinhar_dfe_lines_company` F2a, `preencher_po` aceita `l10n_br_tipo_pedido` F3c)
+- `tests/odoo/services/test_escrituracao_lf_service_v19.py` (+8 testes novos)
+- `tests/odoo/services/test_faturamento_pipeline_fluxo_l3.py` (4 callsites adaptados para `_dfe`+`_po`)
+- `tests/odoo/services/test_faturamento_pipeline_orchestrator.py` (5 testes ETAPA F + 2 testes G039 reescritos para refletir F4)
+
+---
+
 ## Pattern cirúrgico completo (referência para futuras cirurgias)
 
 1. Reverter transferência de lote (Skill 2 reverso) se houve transfer pós-criação errada

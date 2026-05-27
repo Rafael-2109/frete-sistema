@@ -827,6 +827,122 @@ class EscrituracaoLfService:
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
+    # ============================================================
+    # F2a v25+ — Helper publico para alinhar dfe.line.company_id
+    # ============================================================
+    def alinhar_dfe_lines_company(
+        self,
+        *,
+        dfe_id: int,
+        company_destino: int,
+    ) -> Dict[str, Any]:
+        """Atomo Skill 7 F2a (B-V23-1 generalizado): alinha dfe.line.company_id
+        com `company_destino` em batch (idempotente).
+
+        Extracao da logica codificada inline em
+        `criar_dfe_a_partir_do_invoice_saida` linhas 1066-1131 (B-V23-1 fix
+        raiz v23.5+). F2a v25+ generaliza para uso tambem no caminho A
+        (DFe via SEFAZ) — onde nao passamos por
+        `criar_dfe_a_partir_do_invoice_saida` mas as lines podem ter
+        herdado company do EMITENTE.
+
+        Pre-condicao: DFe ja existe e foi processado (lines criadas).
+
+        Args:
+            dfe_id: id do l10n_br_ciel_it_account.dfe.
+            company_destino: res.company.id que deve aparecer em todas as
+                lines (geralmente 5=LF para entrada industrializacao).
+
+        Returns:
+            dict com:
+              status: 'OK' | 'IDEMPOTENT_OK' | 'FALHA_NAO_FATAL'
+              dfe_id: int
+              lines_total: int
+              lines_corrigidas: List[int] (ids escritos; vazio se idempotente)
+              tempo_ms: int
+              erro: str | None (NAO bloqueia caller — fix nao-fatal)
+        """
+        t0 = time.time()
+        out: Dict[str, Any] = {
+            'status': 'FALHA_NAO_FATAL',
+            'dfe_id': dfe_id,
+            'lines_total': 0,
+            'lines_corrigidas': [],
+            'tempo_ms': 0,
+            'erro': None,
+        }
+        if not isinstance(dfe_id, int) or dfe_id <= 0:
+            out['erro'] = f'dfe_id_invalido: {dfe_id!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        if not isinstance(company_destino, int) or company_destino <= 0:
+            out['erro'] = f'company_destino_invalido: {company_destino!r}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        try:
+            line_ids = self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe.line', 'search',
+                [[('dfe_id', '=', dfe_id)]],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_search_dfe_lines: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        out['lines_total'] = len(line_ids) if line_ids else 0
+        if not line_ids:
+            out['status'] = 'IDEMPOTENT_OK'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        try:
+            lines_atuais = self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe.line', 'read',
+                [line_ids], {'fields': ['id', 'company_id']},
+            )
+        except Exception as e:
+            out['erro'] = f'erro_read_dfe_lines: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        ids_para_corrigir: List[int] = []
+        for ln in lines_atuais:
+            company_atual = ln.get('company_id')
+            company_atual_id = (
+                company_atual[0]
+                if isinstance(company_atual, list)
+                else company_atual
+            )
+            if company_atual_id != company_destino:
+                ids_para_corrigir.append(ln['id'])
+
+        if not ids_para_corrigir:
+            out['status'] = 'IDEMPOTENT_OK'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        try:
+            self.odoo.execute_kw(
+                'l10n_br_ciel_it_account.dfe.line', 'write',
+                [ids_para_corrigir, {'company_id': company_destino}],
+            )
+        except Exception as e:
+            out['erro'] = f'erro_write_dfe_lines: {str(e)[:200]}'
+            out['lines_corrigidas'] = []
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        logger.info(
+            f'alinhar_dfe_lines_company: dfe={dfe_id} F2a aplicado em '
+            f'{len(ids_para_corrigir)} dfe.lines '
+            f'(company_id -> {company_destino})'
+        )
+        out['status'] = 'OK'
+        out['lines_corrigidas'] = ids_para_corrigir
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
     def buscar_dfe(
         self,
         *,
@@ -1710,6 +1826,7 @@ class EscrituracaoLfService:
         picking_type_id: int,
         company_id: int,
         payment_provider_id: int,
+        l10n_br_tipo_pedido: Optional[str] = None,
         dry_run: bool = True,
     ) -> Dict[str, Any]:
         """Preenche purchase.order com campos obrigatorios pos-DFe.
@@ -1726,6 +1843,13 @@ class EscrituracaoLfService:
             picking_type_id: stock.picking.type.id.
             company_id: res.company.id (deve casar com DFe).
             payment_provider_id: payment.provider.id (G029).
+            l10n_br_tipo_pedido: F3c v25+ — quando fornecido, sobrescreve o
+                tipo herdado do DFe (ex: 'compra' no DFe -> 'serv-
+                industrializacao' na PO para INDUSTRIALIZACAO_FB_LF).
+                Se None: nao toca, PO mantem o que herdou.
+                Valores aceitos: 'serv-industrializacao' | 'transf-filial' |
+                'retorno' | 'outro' | 'compra' | 'industrializacao' |
+                'perda' | 'dev-industrializacao' (mesma whitelist do DFe).
             dry_run: True (default) NAO escreve.
 
         Returns:
@@ -1757,6 +1881,19 @@ class EscrituracaoLfService:
                 out['tempo_ms'] = int((time.time() - t0) * 1000)
                 return out
 
+        # F3c v25+: validacao do tipo do pedido (whitelist espelhada de
+        # `escriturar_dfe` linha 1186-1193).
+        if l10n_br_tipo_pedido is not None and l10n_br_tipo_pedido not in (
+            'serv-industrializacao', 'transf-filial',
+            'retorno', 'outro', 'industrializacao',
+            'perda', 'dev-industrializacao', 'compra',
+        ):
+            out['erro'] = (
+                f'l10n_br_tipo_pedido_invalido: {l10n_br_tipo_pedido!r}'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
         values = {
             'team_id': team_id,
             'payment_provider_id': payment_provider_id,
@@ -1764,6 +1901,8 @@ class EscrituracaoLfService:
             'company_id': company_id,
             'picking_type_id': picking_type_id,
         }
+        if l10n_br_tipo_pedido is not None:
+            values['l10n_br_tipo_pedido'] = l10n_br_tipo_pedido
 
         if dry_run:
             out['status'] = 'DRY_RUN_OK'

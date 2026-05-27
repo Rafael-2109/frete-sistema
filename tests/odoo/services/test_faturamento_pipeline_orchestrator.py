@@ -2530,11 +2530,17 @@ def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
     db.session.commit()
 
     executor = FaturamentoPipelineExecutor()
-    # v23+ G039: mockar _resolver_team_g039 para evitar side-effects
-    # PROD (sem mock, hook chama Odoo real e pode criar purchase.team).
-    # Retorna (None, None) -> fallback team_id STATIC (41) preservado.
+    # F4 v25+: G039 nao e' mais chamado para LF=5 (team STATIC fixo 143);
+    # patch defensivo mantido para garantir zero side-effect com Odoo PROD
+    # caso ramo G039 seja acionado para outros destinos no futuro.
+    # F1 v25+: `_executar_etapa_f_via_fluxo_l3` agora resolve `lotes_data`
+    # via `_resolver_pids_em_batch` ANTES de chamar `executar_fluxo_l3_1_2_x`.
+    # Patch _resolver_pids_em_batch para evitar conexao Odoo real no teste.
     with patch.object(
         executor, '_resolver_team_g039', return_value=(None, None),
+    ), patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'103000011': 12345},  # pid sintetico
     ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
         return_value={
@@ -2570,9 +2576,22 @@ def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
     kwargs = mock_fluxo.call_args.kwargs
     assert kwargs['invoice_id_saida'] == 627348
     assert kwargs['company_destino'] == 5  # LF
-    assert kwargs['l10n_br_tipo_pedido'] == 'serv-industrializacao'
-    # v23+: G039 hook mockado retorna (None,None) -> fallback STATIC (41)
-    assert kwargs['team_id'] == 41
+    # F1 v25+: lotes_data resolvido a partir do AjusteEstoque
+    # ('MIGRAÇÃO' -> 'INV-103000011-{HOJE}', qty=168.11)
+    assert 'lotes_data' in kwargs
+    lotes = kwargs['lotes_data']
+    assert len(lotes) == 1
+    assert lotes[0]['product_id'] == 12345
+    assert lotes[0]['lote_nome'].startswith('INV-103000011-')
+    assert lotes[0]['quantidade'] == 168.11
+    # F3a v25+: tipos diferentes em DFe ('compra') vs PO/Fatura
+    # ('serv-industrializacao'). Mudanca expressa em
+    # L10N_BR_TIPO_PEDIDO_POR_ACAO['INDUSTRIALIZACAO_FB_LF'].
+    assert kwargs['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert kwargs['l10n_br_tipo_pedido_po'] == 'serv-industrializacao'
+    # F4 v25+: team_id fixo 143 (Rafael) para LF — G039 override desligado
+    # apenas para destino LF=5. Antes era 41 STATIC + override G039 dinamico.
+    assert kwargs['team_id'] == 143
     assert kwargs['payment_term_id'] == 2791
     assert kwargs['picking_type_id'] == 19
     assert kwargs['payment_provider_id'] == 38
@@ -2613,10 +2632,29 @@ def test_v24_1_etapa_f_via_fluxo_l3_filtra_meta_keys_g039_status(db):
     db.session.commit()
 
     executor = FaturamentoPipelineExecutor()
-    # v23+ G039 hook retorna (team_id, status) reais -> `_team_g039_status`
-    # POPULADO no dict resolved (pre-condicao do bug fixado v24.1+)
+    # F4 v25+ contexto: para LF=5, G039 esta DESLIGADO (team STATIC=143).
+    # Mas o filtro de meta-keys '_' continua sendo defesa generica (futuras
+    # direcoes FB/CD podem reintroduzir override G039 ou outras meta-keys).
+    # Forcamos artificialmente uma meta-key '_team_g039_status' via patch
+    # de `_resolver_constants_fluxo_l3` para validar que continua sendo
+    # filtrada antes do splat (regression v24.1+).
+    def _fake_resolver_constants(*, acao_decidida, company_destino):
+        return {
+            'company_destino': 5,
+            'l10n_br_tipo_pedido_dfe': 'compra',
+            'l10n_br_tipo_pedido_po': 'serv-industrializacao',
+            'team_id': 143,
+            'payment_term_id': 2791,
+            'picking_type_id': 19,
+            'payment_provider_id': 38,
+            '_team_g039_status': 'OK_EXISTENTE',  # meta-key que DEVE ser filtrada
+        }
     with patch.object(
-        executor, '_resolver_team_g039', return_value=(143, 'OK_EXISTENTE'),
+        executor, '_resolver_constants_fluxo_l3',
+        side_effect=_fake_resolver_constants,
+    ), patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'210030009': 54321},
     ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
         return_value={
@@ -2652,7 +2690,7 @@ def test_v24_1_etapa_f_via_fluxo_l3_filtra_meta_keys_g039_status(db):
         "Regression v24.1+: meta-key '_team_g039_status' vazou para o "
         "splat de executar_fluxo_l3_1_2_x (TypeError esperado)."
     )
-    # E o team_id correto chega (G039 substituiu STATIC=41 por 143)
+    # team_id chega corretamente
     assert kwargs['team_id'] == 143
     assert kwargs['invoice_id_saida'] == 718364
     assert kwargs['company_destino'] == 5  # LF
@@ -2686,7 +2724,11 @@ def test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada(db):
     db.session.commit()
 
     executor = FaturamentoPipelineExecutor()
+    # F1 v25+: mock _resolver_pids_em_batch p/ evitar Odoo real
     with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'999999': 77777},
+    ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
     ) as mock_fluxo:
         res = executor.executar_etapa_f(
@@ -2754,7 +2796,11 @@ def test_v20_s3_etapa_f_via_fluxo_l3_excecao_continua_proximo(db):
             'invoice_id': 666, 'passos': [], 'tempo_ms': 100,
         },
     ]
+    # F1 v25+: mock _resolver_pids_em_batch p/ evitar Odoo real
     with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'AAA': 100, 'BBB': 200},
+    ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
         side_effect=side_effects,
     ) as mock_fluxo:
@@ -2811,7 +2857,11 @@ def test_v20_s3_etapa_f_via_fluxo_l3_misto_lf_e_cd_destino(db):
     db.session.commit()
 
     executor = FaturamentoPipelineExecutor()
+    # F1 v25+: mock _resolver_pids_em_batch p/ evitar Odoo real
     with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'LF1': 555, 'CD1': 666},
+    ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
         return_value={
             'status': 'FLUXO_OK', 'caminho': 'A',
@@ -2911,12 +2961,16 @@ def test_resolver_team_g039_uid_zero_retorna_none():
     assert status is None
 
 
-def test_resolver_constants_fluxo_l3_hook_g039_substitui_team_id():
-    """Hook G039: team_id STATIC (41) substituido por team correto (143)."""
+def test_resolver_constants_fluxo_l3_lf_team_fixo_143_g039_desligado():
+    """F4 v25+ (Rafael 2026-05-27): team_id FIXO 143 para LF=5 + G039 hook
+    DESLIGADO neste destino. Antes (v23+): STATIC=41 + override G039 dinamico.
+    Decisao explicita pos-cirurgia AVULSO_FRASCO — todas as POs LF inter-
+    company desta skill devem nascer com team=143 (Rafael)."""
     odoo = MagicMock()
     odoo._uid = 42
+    # G039 search_read retornaria team — mas G039 NAO deve ser chamado para LF
     odoo.execute_kw.return_value = [{
-        'id': 143, 'name': 'Aprovação LF - RAFAEL',
+        'id': 999, 'name': 'fake_team_nao_deve_ser_usado',
         'user_id': [42, 'Rafael'], 'company_id': [5, 'LF'],
         'active': True,
     }]
@@ -2927,18 +2981,24 @@ def test_resolver_constants_fluxo_l3_hook_g039_substitui_team_id():
     )
 
     assert constants is not None
-    # team_id override: 41 (static) -> 143 (G039)
+    # F4: team_id FIXO 143 STATIC (nao override G039)
     assert constants['team_id'] == 143
-    assert constants['_team_g039_status'] == 'OK_EXISTENTE'
+    # F4: G039 hook NAO chamado para LF -> sem marcador _team_g039_status
+    assert '_team_g039_status' not in constants
     # outros constants preservados
     assert constants['payment_term_id'] == 2791
     assert constants['picking_type_id'] == 19
     assert constants['payment_provider_id'] == 38
-    assert constants['l10n_br_tipo_pedido'] == 'serv-industrializacao'
+    # F3a v25+: tipos por passo (dfe vs po), nao mais string simples
+    assert constants['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert constants['l10n_br_tipo_pedido_po'] == 'serv-industrializacao'
+    # G039 search NAO foi chamado (LF by-pass)
+    assert not odoo.execute_kw.called
 
 
-def test_resolver_constants_fluxo_l3_hook_g039_falha_preserva_team_static():
-    """Hook G039 falha (Odoo down) -> preserva team_id STATIC + WARNING log."""
+def test_resolver_constants_fluxo_l3_lf_team_fixo_imune_a_g039_falha():
+    """F4 v25+: Odoo down -> team_id LF continua 143 (FIXO STATIC, sem
+    dependencia de G039)."""
     odoo = MagicMock()
     odoo._uid = 42
     odoo.execute_kw.side_effect = Exception('Connection refused')
@@ -2949,9 +3009,8 @@ def test_resolver_constants_fluxo_l3_hook_g039_falha_preserva_team_static():
     )
 
     assert constants is not None
-    # Fallback: team_id STATIC (41) preservado
-    assert constants['team_id'] == 41
-    # SEM marcador _team_g039_status quando hook falha
+    # team_id STATIC 143 (FIXO F4); imune a falha G039 porque G039 nao roda
+    assert constants['team_id'] == 143
     assert '_team_g039_status' not in constants
 
 

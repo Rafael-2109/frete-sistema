@@ -119,7 +119,8 @@ def test_fluxo_l3_caminho_a_dfe_processado_NAO_RETORNA_EARLY():
         res = executor.executar_fluxo_l3_1_2_x(
             invoice_id_saida=607443,
             company_destino=5,
-            l10n_br_tipo_pedido='serv-industrializacao',
+            l10n_br_tipo_pedido_dfe='compra',
+            l10n_br_tipo_pedido_po='serv-industrializacao',
             team_id=119,
             payment_term_id=2791,
             picking_type_id=1,
@@ -156,7 +157,8 @@ def test_fluxo_l3_caminho_a_dry_run_planeja():
         res = executor.executar_fluxo_l3_1_2_x(
             invoice_id_saida=607443,
             company_destino=5,
-            l10n_br_tipo_pedido='serv-industrializacao',
+            l10n_br_tipo_pedido_dfe='compra',
+            l10n_br_tipo_pedido_po='serv-industrializacao',
             team_id=119,
             payment_term_id=2791,
             picking_type_id=1,
@@ -194,7 +196,8 @@ def test_fluxo_l3_caminho_b_cria_dfe_dry_run():
         res = executor.executar_fluxo_l3_1_2_x(
             invoice_id_saida=607444,
             company_destino=1,
-            l10n_br_tipo_pedido='retorno',
+            l10n_br_tipo_pedido_dfe='retorno',
+            l10n_br_tipo_pedido_po='retorno',
             team_id=119,
             payment_term_id=2791,
             picking_type_id=1,
@@ -225,7 +228,8 @@ def test_fluxo_l3_invoice_sem_chave_nfe_falha():
     res = executor.executar_fluxo_l3_1_2_x(
         invoice_id_saida=607445,
         company_destino=5,
-        l10n_br_tipo_pedido='serv-industrializacao',
+        l10n_br_tipo_pedido_dfe='compra',
+        l10n_br_tipo_pedido_po='serv-industrializacao',
         team_id=119,
         payment_term_id=2791,
         picking_type_id=1,

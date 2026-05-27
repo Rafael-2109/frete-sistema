@@ -2791,13 +2791,14 @@ class FaturamentoPipelineExecutor:
         *,
         invoice_id_saida: int,
         company_destino: int,
-        l10n_br_tipo_pedido: str,
+        l10n_br_tipo_pedido_dfe: str,
+        l10n_br_tipo_pedido_po: str,
         team_id: int,
         payment_term_id: int,
         picking_type_id: int,
         payment_provider_id: int,
         lotes_data: Optional[List[Dict[str, Any]]] = None,
-        lote_default: Optional[str] = 'MIGRAÇÃO',
+        lote_default: Optional[str] = None,
         poll_timeout_po_s: int = 1800,
         poll_timeout_invoice_s: int = 300,
         dry_run: bool = True,
@@ -2810,14 +2811,18 @@ class FaturamentoPipelineExecutor:
 
         Composicao sequencial dos atomos:
           1. Skill 7 buscar_dfe (READ — decide caminho)
+          1.5 (F2a v25+) caminho A: corrigir dfe.line.company_id=destino
           2. SE caminho B: Skill 7 criar_dfe_a_partir_do_invoice_saida (upload XML)
-          3. Skill 7 escriturar_dfe (l10n_br_tipo_pedido + data_entrada)
+          3. Skill 7 escriturar_dfe (l10n_br_tipo_pedido_dfe='compra' + data_entrada)
           4. Skill 7 gerar_po_from_dfe (fire_and_poll — robo CIEL IT cria PO)
-          5. Skill 7 preencher_po (team_id + payment + picking_type + company)
+          5. Skill 7 preencher_po (team + payment + picking_type + company +
+                                   l10n_br_tipo_pedido_po='serv-industrializacao')
           6. Skill 7 confirmar_po (button_confirm + cond button_approve)
-          7. Skill 5 preencher_lotes_picking (lote_default='MIGRAÇÃO' ou mapping)
+          6.5 (F2b v25+) G023 force company_id em picking + moves
+          7. Skill 5 preencher_lotes_picking (lotes_data resolvido — F1 v25+)
           8. Skill 5 validar (button_validate — G019/G020)
-          9. Skill 7 criar_invoice_from_po (action_create_invoice + poll)
+          9. Skill 7 criar_invoice_from_po (action_create_invoice + poll;
+             invoice herda l10n_br_tipo_pedido='serv-industrializacao' da PO)
 
         Posting da invoice (account.move.action_post) NAO faz parte deste metodo —
         fica para o caller (orchestrator pipeline_bulk v20+ ou outro caso).
@@ -2826,17 +2831,28 @@ class FaturamentoPipelineExecutor:
             invoice_id_saida: account.move da NF SAIDA (state=posted,
                 situacao=autorizado, l10n_br_xml_aut_nfe nao-vazio).
             company_destino: 1=FB, 4=CD, 5=LF.
-            l10n_br_tipo_pedido: 'serv-industrializacao' | 'transf-filial' |
-                'retorno' | 'outro' — derivado da MATRIZ_INTERCOMPANY[acao]
-                ['entrada'][(co,cd)]['l10n_br_tipo_pedido_entrada'].
-            team_id: sale.team.id (caller fornece via constants).
+            l10n_br_tipo_pedido_dfe: tipo do pedido escrito no DFe no passo 3
+                (ex.: 'compra' para INDUSTRIALIZACAO_FB_LF). F3a v25+ —
+                separado de l10n_br_tipo_pedido_po porque DFe e PO precisam
+                de tipos diferentes neste fluxo (DFe 'compra' destrava
+                action_gerar_po_dfe; PO 'serv-industrializacao' fixa
+                journal ENTIN + CFOP 1949).
+            l10n_br_tipo_pedido_po: tipo do pedido escrito na PO no passo 5
+                (ex.: 'serv-industrializacao' para INDUSTRIALIZACAO_FB_LF).
+                Invoice herda da PO no passo 9.
+            team_id: purchase.team.id (caller fornece via constants).
+                Para LF (F4 v25+): FIXO 143 (Rafael) via CONSTANTS_FLUXO_L3.
             payment_term_id: account.payment.term.id.
             picking_type_id: stock.picking.type.id.
             payment_provider_id: payment.provider.id (G029).
-            lotes_data: mapping por produto (caso entrada com lotes especificos);
-                None+lote_default='MIGRAÇÃO' cobre 100%% dos MLs com o default
-                (caso tipico de inventario inter-company).
-            lote_default: lote para MLs nao cobertos por lotes_data.
+            lotes_data: mapping por produto. F1 v25+: caller (orchestrator
+                `_executar_etapa_f_via_fluxo_l3`) DEVE resolver via
+                AjusteEstoqueInventario antes de chamar. Formato:
+                [{'product_id': int, 'lote_nome': str, 'quantidade': float}].
+            lote_default: fallback ML sem cobertura em lotes_data. F1b v25+:
+                default mudado de 'MIGRAÇÃO' literal para None (forcar caller
+                a fornecer lotes_data correto). Caller pode passar
+                'INV-{cod}-{HOJE}' resolvido em batch se quiser fallback.
             poll_timeout_po_s: timeout do polling de gerar_po_from_dfe.
             poll_timeout_invoice_s: timeout do polling de criar_invoice_from_po.
             dry_run: True (default) NAO escreve em Odoo; cada atomo dispara
@@ -2917,6 +2933,23 @@ class FaturamentoPipelineExecutor:
         if r1.get('encontrado'):
             out['caminho'] = 'A'
             dfe_id = r1.get('dfe_id')
+
+            # F2a v25+ (Rafael 2026-05-27): aplicar fix B-V23-1 tambem no
+            # caminho A. Quando DFe vem via SEFAZ, as `dfe.line.company_id`
+            # herdam company do EMITENTE (FB=1) em vez do DESTINATARIO
+            # (LF=5). Sintoma: passo 9 `action_create_invoice` falha com
+            # 'Rafael nao tem acesso leitura a dfe.line' (ir.rule id=353).
+            # B-V23-1 estava codificado apenas em
+            # `criar_dfe_a_partir_do_invoice_saida` (caminho B). F2a fecha o
+            # gap para o caminho A — que e' o caminho mais comum em
+            # INDUSTRIALIZACAO_FB_LF (4 de 4 DFes do canary v20+ vieram via
+            # SEFAZ, ver fluxos/1.2.2-criar-dfe-manual-transferencia.md L24).
+            if dfe_id and not dry_run:
+                r1_5 = escr_svc.alinhar_dfe_lines_company(
+                    dfe_id=dfe_id,
+                    company_destino=company_destino,
+                )
+                _passo('1_5_alinhar_dfe_lines_company_a', r1_5)
         else:
             out['caminho'] = 'B'
             r2 = escr_svc.criar_dfe_a_partir_do_invoice_saida(
@@ -2936,10 +2969,10 @@ class FaturamentoPipelineExecutor:
 
         out['dfe_id'] = dfe_id
 
-        # ----- Passo 3: escriturar_dfe -----
+        # ----- Passo 3: escriturar_dfe (F3b v25+: tipo='compra' p/ DFe) -----
         r3 = escr_svc.escriturar_dfe(
             dfe_id=dfe_id or 0,  # type-hint friendly; atomo valida
-            l10n_br_tipo_pedido=l10n_br_tipo_pedido,
+            l10n_br_tipo_pedido=l10n_br_tipo_pedido_dfe,
             dry_run=dry_run,
         )
         _passo('3_escriturar_dfe', r3)
@@ -2978,7 +3011,7 @@ class FaturamentoPipelineExecutor:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # ----- Passo 5: preencher_po -----
+        # ----- Passo 5: preencher_po (F3d v25+: tipo='serv-industrializacao') -----
         r5 = escr_svc.preencher_po(
             po_id=po_id or 0,
             team_id=team_id,
@@ -2986,6 +3019,7 @@ class FaturamentoPipelineExecutor:
             picking_type_id=picking_type_id,
             company_id=company_destino,
             payment_provider_id=payment_provider_id,
+            l10n_br_tipo_pedido=l10n_br_tipo_pedido_po,
             dry_run=False,
         )
         _passo('5_preencher_po', r5)
@@ -3072,6 +3106,47 @@ class FaturamentoPipelineExecutor:
             picking_id = ativo_pk['id']
             out['picking_id'] = picking_id
 
+            # F2b v25+ (Rafael 2026-05-27): G023 force company_id em picking +
+            # moves nativos (gerados via action_gerar_po_dfe). XML-RPC nao
+            # herda company automaticamente em alguns cenarios (sintoma no
+            # AVULSO_FRASCO: picking sairia de location_id=4 Parceiros/
+            # Fornecedores). Espelha hardening do atomo legacy
+            # `criar_picking_entrada_destino_manual` (picking.py L1391-1399).
+            # Idempotente: write em company ja correta = no-op no Odoo.
+            try:
+                self.odoo.write(
+                    'stock.picking', [picking_id],
+                    {'company_id': company_destino},
+                )
+                moves_ids = self.odoo.search(
+                    'stock.move', [('picking_id', '=', picking_id)],
+                )
+                if moves_ids:
+                    self.odoo.write(
+                        'stock.move', moves_ids,
+                        {'company_id': company_destino},
+                    )
+                _passo('6_5_g023_force_company', {
+                    'status': 'OK',
+                    'picking_id': picking_id,
+                    'moves_alinhados': len(moves_ids) if moves_ids else 0,
+                    'tempo_ms': 0,
+                    'erro': None,
+                })
+            except Exception as e:
+                # NAO-fatal: caso company ja esteja correta ou Odoo
+                # rejeitar write — segue fluxo e deixa o erro real
+                # aparecer no passo 7/8/9 se houver.
+                logger.warning(
+                    f'F2b G023 force company falhou (non-fatal): '
+                    f'{str(e)[:200]}'
+                )
+                _passo('6_5_g023_force_company', {
+                    'status': 'FALHOU_NAO_FATAL',
+                    'erro': f'{str(e)[:200]}',
+                    'tempo_ms': 0,
+                })
+
             r7 = self.picking_svc.preencher_lotes_picking(
                 picking_id=picking_id,
                 lotes_data=lotes_data or [],
@@ -3124,8 +3199,14 @@ class FaturamentoPipelineExecutor:
     # (caso 627348 INDUSTRIALIZACAO_FB_LF). Demais direcoes pendentes v21+
     # quando expansao do canary cobrir FB e CD destino.
     CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO: Dict[int, Dict[str, int]] = {
-        5: {  # LF (validado canary v20+)
-            'team_id': 41,           # purchase.team 'Aprovacao LF - JOSEFA'
+        5: {  # LF (validado canary v20+ + F4 v25+ team fixo)
+            # F4 v25+ (Rafael 2026-05-27): team_id FIXO 143 (Rafael) para LF,
+            # NAO derivado do user de execucao via G039. Decisao explicita
+            # apos cirurgia AVULSO_FRASCO mostrar que team=143 e' o padrao
+            # operacional desta skill (todas as POs LF inter-company nascem
+            # com 143). Veja `_resolver_constants_fluxo_l3` para o by-pass
+            # do G039 override apenas no destino LF.
+            'team_id': 143,          # purchase.team Rafael LF (fixo F4 v25+)
             'payment_term_id': 2791, # 'A VISTA'
             'picking_type_id': 19,   # 'LF: Recebimento (LF)'
             'payment_provider_id': 38,  # G029 'SEM PAGAMENTO'
@@ -3133,8 +3214,19 @@ class FaturamentoPipelineExecutor:
         # 1 (FB) e 4 (CD): pendente v21+ (constants nao mapeadas + nao validadas canary)
     }
 
-    L10N_BR_TIPO_PEDIDO_POR_ACAO: Dict[str, str] = {
-        'INDUSTRIALIZACAO_FB_LF': 'serv-industrializacao',
+    # F3a v25+ (Rafael 2026-05-27): tipos diferentes em DFe vs PO.
+    # Evidencia empirica: cirurgia AVULSO_FRASCO confirmou que tipo='compra'
+    # no DFe permite `action_gerar_po_dfe` rodar normalmente (sem derivar
+    # picking_type=64 errado); e em seguida `preencher_po` escreve
+    # 'serv-industrializacao' que e' o tipo correto para invoice/journal
+    # ENTIN + CFOP 1949 retorno industrializacao. Atualmente: passo 3 do
+    # FLUXO L3 escreve 'compra' no DFe; passo 5 escreve 'serv-industrializacao'
+    # na PO; passo 9 invoice herda da PO automaticamente.
+    L10N_BR_TIPO_PEDIDO_POR_ACAO: Dict[str, Dict[str, str]] = {
+        'INDUSTRIALIZACAO_FB_LF': {
+            'dfe': 'compra',                # passo 3 escriturar_dfe
+            'po': 'serv-industrializacao',  # passo 5 preencher_po (herdada por invoice)
+        },
         # Demais direcoes: lookup via MATRIZ_INTERCOMPANY na expansao v21+
     }
 
@@ -3158,24 +3250,34 @@ class FaturamentoPipelineExecutor:
         cdest_constants = self.CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO.get(
             company_destino
         )
-        l10n_tipo = self.L10N_BR_TIPO_PEDIDO_POR_ACAO.get(acao_decidida)
-        if not cdest_constants or not l10n_tipo:
+        l10n_tipo_map = self.L10N_BR_TIPO_PEDIDO_POR_ACAO.get(acao_decidida)
+        if not cdest_constants or not l10n_tipo_map:
             return None
 
+        # F3a v25+: dois tipos por acao (dfe vs po). Compat-friendly:
+        # apos refator do mapping (Dict -> Dict[str,str] com keys 'dfe'/'po')
+        # caller (executar_fluxo_l3_1_2_x) decide qual usar em cada passo.
         resolved: Dict[str, Any] = {
             'company_destino': company_destino,
-            'l10n_br_tipo_pedido': l10n_tipo,
-            **cdest_constants,  # team_id STATIC ainda presente como fallback
+            'l10n_br_tipo_pedido_dfe': l10n_tipo_map['dfe'],
+            'l10n_br_tipo_pedido_po': l10n_tipo_map['po'],
+            **cdest_constants,  # team_id STATIC ja FIXO 143 para LF (F4 v25+)
         }
 
-        # v23+ G039 — override team_id pelo team do user de execucao
-        team_g039_id, team_g039_status = self._resolver_team_g039(
-            company_id=company_destino,
-        )
-        if team_g039_id is not None:
-            resolved['team_id'] = team_g039_id
-            resolved['_team_g039_status'] = team_g039_status
-        # else: fallback silencioso para team_id STATIC ja em `resolved`
+        # F4 v25+ (Rafael 2026-05-27): G039 override DESABILITADO para LF=5.
+        # CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[5]['team_id']=143 e' a
+        # verdade absoluta para esta direcao (decisao explicita Rafael).
+        # Demais destinos (FB=1, CD=4) ainda nao mapeados; quando forem,
+        # decidir caso-a-caso se G039 dinamico ou STATIC fixo aplica.
+        if company_destino != 5:
+            # v23+ G039 — override team_id pelo team do user de execucao
+            team_g039_id, team_g039_status = self._resolver_team_g039(
+                company_id=company_destino,
+            )
+            if team_g039_id is not None:
+                resolved['team_id'] = team_g039_id
+                resolved['_team_g039_status'] = team_g039_status
+            # else: fallback silencioso para team_id STATIC ja em `resolved`
 
         return resolved
 
@@ -3277,6 +3379,7 @@ class FaturamentoPipelineExecutor:
         """
         from app.odoo.models import AjusteEstoqueInventario  # lazy
         del AjusteEstoqueInventario  # nao usado diretamente; ja' carregado por _carregar_ajustes
+        from app.utils.timezone import agora_utc_naive  # lazy F1 v25+
 
         ajustes = _carregar_ajustes(
             ciclo=ciclo,
@@ -3319,6 +3422,19 @@ class FaturamentoPipelineExecutor:
         invoices_pendentes = list(ajustes_por_invoice.keys())
         out['invoices_pendentes'] = sorted(invoices_pendentes)
 
+        # F1 v25+ (Rafael 2026-05-27): resolver product_id em batch para
+        # construcao de `lotes_data` por invoice. Bug AVULSO_FRASCO: caminho
+        # novo L3 v19+ chamava `executar_fluxo_l3_1_2_x` SEM `lotes_data`,
+        # entao `lote_default='MIGRAÇÃO'` literal era aplicado a TODOS MLs
+        # (saldo final em LF/Estoque/MIGRAÇÃO em vez do lote real do XML
+        # SEFAZ). Fix espelha `executar_etapa_f` legacy v17.5 linhas
+        # 3998-4018 — le `AjusteEstoqueInventario.lote_destino` da planilha
+        # (definido pelo operador) e transforma vazio/'MIGRAÇÃO' em
+        # `INV-{cod}-{YYYYMMDD}` (consistente com PROD 317306, 317316).
+        cods_global = sorted({a.cod_produto for a in elegiveis})
+        prod_cache: Dict[str, int] = self._resolver_pids_em_batch(cods_global)
+        HOJE_F1 = agora_utc_naive().strftime('%Y%m%d')
+
         for invoice_id in invoices_pendentes:
             ajs = ajustes_por_invoice[invoice_id]
             acao = ajs[0].acao_decidida
@@ -3348,9 +3464,42 @@ class FaturamentoPipelineExecutor:
             public_constants = {
                 k: v for k, v in constants.items() if not k.startswith('_')
             }
+
+            # F1 v25+: construir `lotes_data` desta invoice (1 entry por
+            # (pid, lote_destino) com qty agregada). Espelha legacy linhas
+            # 3998-4018. Lote vazio/'MIGRAÇÃO' -> 'INV-{cod}-{YYYYMMDD}'.
+            agg_lotes: Dict[Tuple[int, str], float] = defaultdict(float)
+            for a in ajs:
+                pid = prod_cache.get(a.cod_produto)
+                if not pid:
+                    logger.warning(
+                        f'  F invoice {invoice_id}: sem product_id para '
+                        f'{a.cod_produto}, pulando ajuste {a.id}'
+                    )
+                    continue
+                lote_dest_raw = (a.lote_destino or '').strip()
+                if not lote_dest_raw or lote_dest_raw == 'MIGRAÇÃO':
+                    lote_dest = f'INV-{a.cod_produto}-{HOJE_F1}'
+                else:
+                    lote_dest = lote_dest_raw
+                agg_lotes[(pid, lote_dest)] += float(abs(a.qtd_ajuste or 0))
+
+            lotes_data_inv: List[Dict[str, Any]] = [
+                {'product_id': pid, 'lote_nome': lote_dest, 'quantidade': qty}
+                for (pid, lote_dest), qty in agg_lotes.items()
+                if qty > 0
+            ]
+            # F1b: `lote_default` apenas como ULTIMO recurso caso ML do
+            # picking referencie produto fora do AjusteEstoque (ex:
+            # subproduto auto-criado pelo Odoo). Caller normal NAO depende
+            # disso — lotes_data ja cobre todos os pids esperados.
+            lote_default_inv = f'INV-FALLBACK-{HOJE_F1}'
+
             try:
                 r = self.executar_fluxo_l3_1_2_x(
                     invoice_id_saida=invoice_id,
+                    lotes_data=lotes_data_inv,
+                    lote_default=lote_default_inv,
                     dry_run=dry_run,
                     **public_constants,
                 )
