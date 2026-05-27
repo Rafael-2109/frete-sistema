@@ -337,11 +337,20 @@ def processar_mensagem_bot(
     if sdk_session_id:
         logger.info(f"[TEAMS-BOT] Resuming sessao SDK: {sdk_session_id[:20]}...")
 
-    # Configurar session context para permissions.py (AskUserQuestion)
+    # Configurar session context para permissions.py (AskUserQuestion + gating Estoque)
     teams_session_id = session.session_id if session else None
     if teams_session_id:
-        from app.agente.config.permissions import set_current_session_id, cleanup_session_context, can_use_tool as agent_can_use_tool
+        from app.agente.config.permissions import (
+            set_current_session_id,
+            set_current_user_id as set_perm_user_id,
+            cleanup_session_context,
+            can_use_tool as agent_can_use_tool,
+        )
         set_current_session_id(teams_session_id)
+        # Restricao Estoque (2026-05-26): registra user_id para can_use_tool
+        # avaliar gating de skills WRITE de ajuste/Indisponivel.
+        if teams_user_id:
+            set_perm_user_id(teams_user_id)
     else:
         from app.agente.config.permissions import can_use_tool as agent_can_use_tool
 
@@ -524,6 +533,12 @@ def processar_mensagem_bot(
         try:
             from app.agente.tools.text_to_sql_tool import clear_current_user_id as clear_sql_uid
             clear_sql_uid()
+        except (ImportError, Exception):
+            pass
+        # Restricao Estoque (2026-05-26): cleanup user_id do permissions ContextVar
+        try:
+            from app.agente.config.permissions import clear_current_user_id as clear_perm_uid
+            clear_perm_uid()
         except (ImportError, Exception):
             pass
 
@@ -1375,6 +1390,8 @@ def process_teams_task_async(
         from app import db
         from app.agente.config.permissions import (
             set_current_session_id,
+            set_current_user_id as set_perm_user_id,
+            clear_current_user_id as clear_perm_user_id,
             set_teams_task_context,
             cleanup_teams_task_context,
             cleanup_session_context,
@@ -1408,6 +1425,10 @@ def process_teams_task_async(
             # Configurar context para permissions.py
             set_current_session_id(teams_session_id)
             set_teams_task_context(teams_session_id, task_id)
+            # Restricao Estoque (2026-05-26): registra user_id para can_use_tool
+            # avaliar gating de skills WRITE de ajuste/Indisponivel.
+            if teams_user_id:
+                set_perm_user_id(teams_user_id)
 
             # Configurar user_id nos ContextVars de MCP tools
             # (espelha app/agente/routes.py:310-312 e bot_routes.py:197-211)
@@ -1787,6 +1808,11 @@ def process_teams_task_async(
                 from app.agente.tools.text_to_sql_tool import clear_current_user_id as clear_sql_uid
                 clear_sql_uid()
             except (ImportError, Exception):
+                pass
+            # Restricao Estoque (2026-05-26): cleanup user_id do permissions ContextVar
+            try:
+                clear_perm_user_id()
+            except Exception:
                 pass
 
             try:

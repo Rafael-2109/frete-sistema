@@ -707,8 +707,15 @@ def _stream_chat_response(
             # O can_use_tool callback precisa de session_id e event_queue
             # para emitir SSE e esperar resposta do frontend
             # =============================================================
-            from app.agente.config.permissions import set_current_session_id, set_event_queue
+            from app.agente.config.permissions import (
+                set_current_session_id,
+                set_current_user_id as set_perm_user_id,
+                set_event_queue,
+            )
             set_current_session_id(our_session_id)
+            # Restricao Estoque (2026-05-26): registra user_id para can_use_tool
+            # avaliar gating de skills WRITE de ajuste/Indisponivel.
+            set_perm_user_id(user_id)
             set_event_queue(our_session_id, event_queue)
 
             # Garantir que AgentSession existe no DB ANTES do stream iniciar.
@@ -1167,11 +1174,19 @@ def _stream_chat_response(
             # o threading.Event.wait() em permissions.py seria desbloqueado
             try:
                 from app.agente.sdk.pending_questions import cancel_pending
-                from app.agente.config.permissions import cleanup_session_context
+                from app.agente.config.permissions import (
+                    cleanup_session_context,
+                    clear_current_user_id as clear_perm_uid,
+                )
 
                 if response_state.get('our_session_id'):
                     cancel_pending(response_state['our_session_id'])
                     cleanup_session_context(response_state['our_session_id'])
+                # Restricao Estoque: limpar user_id no contexto (evita leak entre sessoes)
+                try:
+                    clear_perm_uid()
+                except Exception:
+                    pass
             except Exception as e:
                 logger.debug(f"[SSE] Cleanup session context falhou (ignorado): {e}")
 
@@ -1512,9 +1527,17 @@ def _stream_chat_response(
         # Garantir cleanup do _stream_context mesmo se thread interna não iniciou
         # (complementa cleanup em linha 719 que só roda se thread executou)
         try:
-            from app.agente.config.permissions import cleanup_session_context
+            from app.agente.config.permissions import (
+                cleanup_session_context,
+                clear_current_user_id as clear_perm_uid,
+            )
             if response_state.get('our_session_id'):
                 cleanup_session_context(response_state['our_session_id'])
+            # Restricao Estoque: limpar user_id no contexto
+            try:
+                clear_perm_uid()
+            except Exception:
+                pass
         except Exception:
             pass
 

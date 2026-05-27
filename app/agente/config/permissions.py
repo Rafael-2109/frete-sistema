@@ -77,6 +77,12 @@ _context_lock = threading.Lock()
 # O dict global _stream_context continua para event_queue (precisa ser cross-thread).
 _current_session_id: ContextVar[str | None] = ContextVar('_agent_session_id', default=None)
 
+# Restricao Estoque (2026-05-26): user_id no contexto para gating de skills WRITE
+# de estoque (ajustando-quant-odoo, transferindo-interno-odoo --para-indisponivel,
+# planejando-pre-etapa-odoo executar-onda). Sem isso, can_use_tool nao sabe quem
+# esta operando — fail-closed nega quando user_id ausente.
+_current_user_id: ContextVar[int | None] = ContextVar('_agent_user_id', default=None)
+
 # Debug Mode: permite admin desbloquear tabelas internas e memorias cross-user.
 # Validacao de perfil e em routes.py; aqui apenas armazena estado no contexto.
 _debug_mode: ContextVar[bool] = ContextVar('_agent_debug_mode', default=False)
@@ -104,6 +110,25 @@ def set_current_session_id(session_id: str) -> None:
 def get_current_session_id() -> str | None:
     """Obtém session_id do contexto atual."""
     return _current_session_id.get()
+
+
+def set_current_user_id(user_id: int | None) -> None:
+    """Define user_id no contexto atual (web/Teams chamam ao iniciar stream).
+
+    Usado pelo can_use_tool para gating de skills WRITE de estoque restritas
+    (ver _ESTOQUE_RESTRICAO_*).  None limpa o contexto (fail-closed em DENY).
+    """
+    _current_user_id.set(user_id)
+
+
+def get_current_user_id() -> int | None:
+    """Obtém user_id do contexto atual (None se nao definido — fail-closed)."""
+    return _current_user_id.get()
+
+
+def clear_current_user_id() -> None:
+    """Limpa user_id do contexto (chamar no finally do stream)."""
+    _current_user_id.set(None)
 
 
 def set_event_queue(session_id: str, event_queue: Any) -> None:
@@ -267,6 +292,104 @@ ALLOWED_WRITE_PREFIXES = [
     '/tmp',             # Fallback explícito
     '/var/tmp',         # Alternativa em alguns sistemas
 ]
+
+
+# =============================================================================
+# RESTRICAO ESTOQUE (2026-05-26) — gating de skills WRITE de ajuste/Indisponivel
+# =============================================================================
+# Motivacao: usuarios nao-admin (ex: Alice) usavam o agente web para executar
+# ajustes positivos/negativos de estoque e transferencias para {emp}/Indisponivel,
+# operacoes que devem ser exclusivas do admin (Rafael). Movimentacoes legitimas
+# (criar PO, faturar, transferencia lote->lote sem Indisponivel) NAO sao afetadas.
+#
+# Pontos de bloqueio (todos no tool_name='Skill'):
+#   1. skill == 'ajustando-quant-odoo'                         (TODOS modos)
+#   2. skill == 'transferindo-interno-odoo' AND args mencionam Indisponivel
+#   3. skill == 'planejando-pre-etapa-odoo' AND modo executar-onda
+#
+# Configuracao via env var (mudanca sem deploy):
+#   AGENT_ESTOQUE_RESTRICAO_ENFORCEMENT=true        (kill-switch)
+#   AGENT_ESTOQUE_RESTRICAO_ALLOWED_USER_IDS=1,55   (whitelist Rafael web+Teams)
+#
+# Forca de bloqueio: PermissionResultDeny + log WARNING (auditavel via Render logs).
+# Fail-closed: se user_id ausente do contexto e enforcement on, NEGA.
+# =============================================================================
+_ESTOQUE_INDISPONIVEL_REGEX = None  # lazy-compiled em _classify_estoque_restricao
+
+
+def _classify_estoque_restricao(
+    tool_name: str,
+    tool_input: dict,
+) -> dict | None:
+    """Identifica se a tool call e uma operacao restrita de ajuste de estoque.
+
+    Returns:
+        Dict {action, description, skill, reason} se restrita; None caso contrario.
+
+    Regras (escopo confirmado com Rafael 2026-05-26):
+      - ajustando-quant-odoo: TODOS os modos sao ajuste de estoque -> BLOQUEAR
+      - transferindo-interno-odoo: bloqueia APENAS quando args mencionam
+        Indisponivel (case-insensitive, cobre Indisponível/INDISPONIVEL,
+        --para-indisponivel, --loc-origem/-destino com Indispon*)
+      - planejando-pre-etapa-odoo: bloqueia modo executar-onda (WRITE Odoo;
+        planejar/propor/listar/aprovar sao seguros — banco local apenas)
+    """
+    if tool_name != 'Skill':
+        return None
+
+    skill = (tool_input.get('skill') or '').strip().lower()
+    args = (tool_input.get('args') or '').strip()
+
+    if not skill:
+        return None
+
+    if skill == 'ajustando-quant-odoo':
+        return {
+            'action': 'ajuste_estoque',
+            'description': 'Ajuste positivo/negativo de saldo de estoque (Skill 1).',
+            'skill': skill,
+            'reason': 'ajuste_quant',
+        }
+
+    if skill == 'transferindo-interno-odoo':
+        # Match case-insensitive em qualquer variante de "Indispon*" ou flag dedicada
+        global _ESTOQUE_INDISPONIVEL_REGEX
+        if _ESTOQUE_INDISPONIVEL_REGEX is None:
+            import re as _re
+            _ESTOQUE_INDISPONIVEL_REGEX = _re.compile(
+                r'(--para-indisponivel|indispon[ií]vel|indisponivel)',
+                _re.IGNORECASE,
+            )
+        if _ESTOQUE_INDISPONIVEL_REGEX.search(args):
+            return {
+                'action': 'transferencia_indisponivel',
+                'description': (
+                    'Transferencia interna envolvendo location/lote Indisponivel '
+                    '(Skill 2 MODO C ou --loc-* Indispon*).'
+                ),
+                'skill': skill,
+                'reason': 'transfer_indisponivel',
+            }
+        return None  # Transferencia interna sem Indisponivel: permitido
+
+    if skill == 'planejando-pre-etapa-odoo':
+        # executar-onda chama Skill 1+2 no Odoo via C3 macro -> WRITE real.
+        # Demais modos (planejar/propor/listar-onda/aprovar-onda) sao banco local.
+        if 'executar-onda' in args.lower():
+            return {
+                'action': 'pre_etapa_executar',
+                'description': (
+                    'Pre-etapa D007 modo executar-onda (WRITE Odoo via C3 macro '
+                    'compondo ajustar_quant + transferir_interno).'
+                ),
+                'skill': skill,
+                'reason': 'pre_etapa_executar_onda',
+            }
+        return None
+
+    return None
+
+
 
 
 async def can_use_tool(
@@ -671,6 +794,46 @@ async def can_use_tool(
                             f"event: destructive_action_warning\n"
                             f"data: {json.dumps(sse_data, ensure_ascii=False)}\n\n"
                         )
+
+        # ================================================================
+        # RESTRICAO ESTOQUE (2026-05-26): gating de skills WRITE restritas
+        # Bloqueia ajuste de quant e transferencias para Indisponivel
+        # para users que NAO estao na whitelist (default Rafael web+Teams).
+        # ================================================================
+        from .feature_flags import (
+            USE_ESTOQUE_RESTRICAO_ENFORCEMENT,
+            ESTOQUE_RESTRICAO_ALLOWED_USER_IDS,
+        )
+
+        if USE_ESTOQUE_RESTRICAO_ENFORCEMENT:
+            estoque_info = _classify_estoque_restricao(tool_name, tool_input)
+            if estoque_info:
+                user_id = get_current_user_id()
+                allowed = ESTOQUE_RESTRICAO_ALLOWED_USER_IDS
+
+                if user_id is None or user_id not in allowed:
+                    logger.warning(
+                        f"[PERMISSION] ESTOQUE_RESTRICAO DENY: "
+                        f"skill={estoque_info['skill']} | reason={estoque_info['reason']} | "
+                        f"user_id={user_id} | allowed={sorted(allowed)} | "
+                        f"agent_type={agent_type} | "
+                        f"agent_id={agent_id[:12] if agent_id else 'N/A'} | "
+                        f"session={(get_current_session_id() or 'N/A')[:8]}..."
+                    )
+                    return PermissionResultDeny(
+                        message=(
+                            f"Operacao restrita: '{estoque_info['action']}' "
+                            f"({estoque_info['description']}) requer autorizacao do administrador "
+                            f"de estoque. Esta acao foi bloqueada para sua conta. "
+                            f"Se voce precisa executar este ajuste, peca ao Rafael."
+                        )
+                    )
+
+                logger.info(
+                    f"[PERMISSION] ESTOQUE_RESTRICAO ALLOW: "
+                    f"skill={estoque_info['skill']} | reason={estoque_info['reason']} | "
+                    f"user_id={user_id} (admin autorizado)"
+                )
 
         # ================================================================
         # DEFAULT: Permite outras tools

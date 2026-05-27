@@ -709,3 +709,51 @@ USE_COST_TRACKER_PERSIST = os.getenv("AGENT_COST_TRACKER_PERSIST", "true").lower
 USE_INVOCATION_METRICS_PERSIST = os.getenv(
     "AGENT_INVOCATION_METRICS_PERSIST", "true"
 ).lower() == "true"
+
+
+# ====================================================================
+# Restricao Estoque (2026-05-26) — gating de skills WRITE de ajuste/Indisponivel
+# ====================================================================
+# Bloqueia, via can_use_tool, skills WRITE de ajuste de estoque para users
+# que NAO estao na whitelist:
+#   - ajustando-quant-odoo            (TODOS modos = ajuste +/-)
+#   - transferindo-interno-odoo       (SO se args mencionam Indisponivel)
+#   - planejando-pre-etapa-odoo       (SO modo executar-onda)
+#
+# Movimentacoes legitimas (criar PO, faturar, transferencia entre lotes/locs
+# sem Indisponivel, cancelar picking, operar reservas, etc.) NAO sao afetadas
+# — o agente continua util para a equipe.
+#
+# Kill-switch: AGENT_ESTOQUE_RESTRICAO_ENFORCEMENT=false desliga completamente.
+# Whitelist: AGENT_ESTOQUE_RESTRICAO_ALLOWED_USER_IDS=1,55 (CSV de user_ids).
+# Default "1,55" cobre Rafael (web + Teams). Ajustar via env var sem deploy.
+USE_ESTOQUE_RESTRICAO_ENFORCEMENT = os.getenv(
+    "AGENT_ESTOQUE_RESTRICAO_ENFORCEMENT", "true"
+).lower() == "true"
+
+
+def _parse_allowed_user_ids_csv(raw: str) -> set[int]:
+    """Parseia CSV de user_ids autorizados ('1,55' -> {1, 55}).
+
+    Ignora valores invalidos com warning (defesa contra typo em env var).
+    """
+    import logging as _ff_logging
+    _ff_logger = _ff_logging.getLogger('sistema_fretes')
+    result: set[int] = set()
+    for piece in (raw or '').split(','):
+        piece = piece.strip()
+        if not piece:
+            continue
+        try:
+            result.add(int(piece))
+        except ValueError:
+            _ff_logger.warning(
+                f"[FEATURE_FLAGS] AGENT_ESTOQUE_RESTRICAO_ALLOWED_USER_IDS: "
+                f"ignorando valor invalido {piece!r}"
+            )
+    return result
+
+
+ESTOQUE_RESTRICAO_ALLOWED_USER_IDS: set[int] = _parse_allowed_user_ids_csv(
+    os.getenv("AGENT_ESTOQUE_RESTRICAO_ALLOWED_USER_IDS", "1,55")
+)
