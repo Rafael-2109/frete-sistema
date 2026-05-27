@@ -2533,4 +2533,39 @@ P3-H G-DFE-LINE-COMPANY (parcial B-V23-1 v23.5+).
 ### Commits
 
 - `ea505c0e` feat(estoque): v25+ S0 — 4 fixes pipeline INDUSTRIALIZACAO_FB_LF (Rafael 2026-05-27)
-- (a fazer) docs(estoque): atualizar PROTECAO + CLAUDE.md §14 + ROADMAP + PROMPT v26+
+- `fe0fd04a` docs(estoque): atualizar PROTECAO + CLAUDE.md §14 + ROADMAP + PROMPT v26+
+
+---
+
+## Sessao 2026-05-27 v26+ — Cleanup F5d_BLOCKER_TX (banco local) + investigacao candidatos canary
+
+### Escopo
+
+| Item | Status |
+|------|--------|
+| Investigacao candidatos canary REAL F1-F4 (PROMPT v26+ §3 S0): query SQL banco local com filtro `acao='INDUSTRIALIZACAO_FB_LF' AND fase IN ('F5e_SEFAZ_OK','F5f_FALHA') AND id NOT IN (176013, 176014)` | ✅ 0 candidatos limpos (177465 AVULSO_FRASCO ja feito via cirurgia manual; 30 em F5d_BLOCKER_TX) |
+| Audit dos 30 ajustes F5d_BLOCKER_TX (FATURAMENTO_LF_2026_05_20 ids 171510-171762): 7 invoices Odoo distintos, status=APROVADO, etapa D SEFAZ bloqueada antes do real-run | ✅ |
+| Audit FKs e soft-links: zero FK fisica em `ajuste_estoque_inventario`; 67 registros em `operacao_odoo_auditoria` via polimorfismo (`tabela_origem`+`registro_id`) — etapas F5d aguardar_invoice (60 SUCESSO) + F5d.6 corrigir_price_zero (5 SUCESSO + 2 FALHA) | ✅ |
+| AskUserQuestion Rafael: "Apague essa pendencia do F5d_BLOCKER_TX. Isso nao existe mais" — escolhida Opcao B (DELETE ajustes + auditoria) | ✅ |
+| DELETE atomico transacional: 30 ajustes + 67 auditoria (commit explicito + verificacao pos-DELETE zero residuos) | ✅ |
+| Validacao pos-cleanup: ajustes restantes F5d_BLOCKER_TX = 0, auditoria orfaos = 0 | ✅ |
+| Mapa final candidatos canary: apenas 177465 AVULSO_FRASCO (F5e_SEFAZ_OK, EXECUTADO via cirurgia manual v24+) | ✅ |
+
+### Por que F5d_BLOCKER_TX nao existia mais
+
+Decisao Rafael ("isso nao existe mais") — esses 30 ajustes ficaram bloqueados na ETAPA D (SEFAZ) por algum motivo operacional/fiscal e foram superados (provavelmente operacao manual paralela ou cancelamento implicito). Limpeza do banco local elimina ruido em queries futuras de candidatos canary.
+
+### Estado pos-cleanup (banco local)
+
+- INDUSTRIALIZACAO_FB_LF com fase F5d_BLOCKER_TX: 0 (era 30)
+- INDUSTRIALIZACAO_FB_LF com fase F5e_SEFAZ_OK: 1 (apenas 177465 AVULSO — ja idempotente Odoo)
+- INDUSTRIALIZACAO_FB_LF com fase F5f_ENTRADA_OK: 104 (43 ENCONTRO_CONTAS_PASTA23 + 59 FATURAMENTO_LF + 2 INVENTARIO_2026_05) — concluidos
+- INDUSTRIALIZACAO_FB_LF com fase F5f_FALHA: 0
+
+### Implicacao para S0 canary REAL F1-F4
+
+Apos cleanup, **NAO HA candidato natural** para canary REAL no banco. F1-F4 ficam validados apenas por pytest (662 verdes) ate proxima INDUSTRIALIZACAO_FB_LF vir do operador organicamente. Decisao deferida v26+ S0.
+
+### Commits
+
+- (a fazer) ops(estoque): cleanup banco local F5d_BLOCKER_TX (30 ajustes + 67 auditoria) + VALIDACAO update
