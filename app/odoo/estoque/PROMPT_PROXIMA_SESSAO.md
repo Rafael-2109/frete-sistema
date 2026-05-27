@@ -115,6 +115,22 @@ Migrar orchestrator legacy para usar Skill 8 ATÔMICA L2 (criada v24+) via opt-i
 
 ### Sub-objetivos (ordem proposta — confirmar com Rafael)
 
+#### S0 — Fixes pipeline INDUSTRIALIZACAO_FB_LF (PRIORITÁRIO v25+, 5 falhas descobertas v24+ cirurgia AVULSO_FRASCO)
+
+**LEITURA OBRIGATÓRIA antes de tocar código S0**: `app/odoo/estoque/CIRURGIA_AVULSO_FRASCO_2026_05_27.md` (análise root cause completa + 8 fixes priorizados P0→P3 + 4 gotchas novos + pattern cirúrgico).
+
+Resumo bugs reais (P0-A e P0-B mais críticos — afetam CADA inter-company silenciosamente):
+- **P0-A**: `_executar_etapa_f_via_fluxo_l3` (`faturamento_pipeline.py:3322-3356`) não passa `lotes_data` → default `'MIGRAÇÃO'` aplicado a TODOS MLs. Fix: construir `lotes_data` dos `AjusteEstoqueInventario` + passar.
+- **P0-B**: Trocar `lote_default='MIGRAÇÃO'` por `None` + raise (`escrituracao.py:2800` + `picking.py:preencher_lotes_picking`). Falha rápida vs saldo errado silencioso.
+- **P0-C**: Tornar L3 v19+ default para todas inter-company (remover opt-in `--usar-fluxo-l3-v19`). Deprecar v17 STRICT.
+- **P1-D**: Confirmar `escriturar_dfe` força `tipo='serv-industrializacao'` antes de `gerar_po_from_dfe` (provável já OK; testar).
+- **P1-E**: Validar ordem `preencher_po` → `confirmar_po` (provável já OK).
+- **P2-F**: Guard `EXECUTADO_PARCIAL` em pipeline_bulk quando ETAPA F skipped.
+- **P3-G**: Codificar G-PO-DFE-LOCK (limpar `purchase_fiscal_id` antes reprocessar).
+- **P3-H**: Codificar G-DFE-LINE-COMPANY (write `dfe.line.company_id`) — parcialmente já em B-V23-1 v23.5+.
+
+Hipóteses descartadas: G039 NÃO foi causa do original; G-PERM-1 só surgiu na cirurgia.
+
 #### S1 — Opt-in `--usar-skill8-atomica-v25` no orchestrator
 - Adicionar flag CLI no `executar_pipeline_bulk` (pattern espelhado de `--usar-fluxo-l3-v19`).
 - Quando flag=True, ETAPAS C+D delegam à Skill 8 ATÔMICA (via novo método `_executar_etapas_c_d_via_atomos`).

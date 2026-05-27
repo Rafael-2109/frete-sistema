@@ -2412,3 +2412,55 @@ Os 2 fixes operam **non-fatal com warning + fallback** (preserva status='CRIADO'
 5. **Expand CONSTANTS** FB=1 + CD=4 (discovery XML-RPC).
 6. **Folhas L3 1.1.x + 1.3** (Markdown apenas, compoem Skill 8 ATOMICA + Skill 7 ABRANGENTE).
 
+
+---
+
+## Sessao 2026-05-27 v24.1+ — Hotfix _team_g039_status + Cirurgia AVULSO_FRASCO (37688un destravados)
+
+### Escopo
+
+| Item | Status |
+|------|--------|
+| Operacao PROD avulsa: transferir 37688un FRASCO 210030009 FB/Indisp/MIGRACAO -> LF/Estoque/AJ-27-05 (INDUSTRIALIZACAO_FB_LF) | ✅ DESTRAVADA via cirurgia 9 passos |
+| Hotfix v24.1+ — filtrar `_*` meta-keys (commit 42c097d5): regression v23+ G039 `_team_g039_status` nao filtrado no splat em `_executar_etapa_f_via_fluxo_l3` | ✅ |
+| Pytest regressao `test_v24_1_etapa_f_via_fluxo_l3_filtra_meta_keys_g039_status` | ✅ 1 net (655 baseline) |
+| Cirurgia subagente: revert lote + devolucao picking + DFe draft + tipo correto + reprocessar + write company + criar PO LF + picking + invoice ENTIN/2026/05/0056 | ✅ |
+| 4 gotchas novos descobertos (G-DFE-PURCHASE-FISCAL-ID-STALE / G-DFE-LINE-COMPANY-EMITENTE / G-INDUSTR-LF-PADRAO / G-PO-NATIVA-SEM-PICKING) | ✅ memory salva |
+| 5 falhas distintas analisadas (subagente root-cause): 3 bugs reais P0+P1 + 1 cascateado + 1 nao-bug | ✅ documento `CIRURGIA_AVULSO_FRASCO_2026_05_27.md` |
+| PROMPT v25+ atualizado com S0 (8 fixes P0-P3 priorizados) | ✅ |
+| 5 commits/snapshot estado PROD preservado | ✅ |
+
+### Estado FINAL PROD (preservado)
+
+- Invoice ENTIN/2026/05/0056 (id=719071): posted journal 1047 ENTIN, R$ 7.796,58
+- NF SAIDA 718364: SEFAZ autorizada chave `35260561724241000178550010000945741007183640`
+- PO 42543 (C2602695): purchase, LF, tipo=serv-industrializacao, fp=131, team=143 Rafael
+- Picking 321834 (LF/IN/01780): done, lote AJ-27-05 (correto, do XML SEFAZ)
+- LF/Estoque/AJ-27-05 (quant 265199): 37688un
+- Em Transito Industrializacao AJ-27-05 (quant 265091): 37688 orfao (padrao paradigma)
+
+### Bugs arquiteturais identificados v25+ (ordem implementar)
+
+P0-A passar `lotes_data` ao `executar_fluxo_l3_1_2_x` (CADA inter-company afetada) ·
+P0-B `lote_default='MIGRACAO'` -> `None` + raise (falha rapida) ·
+P0-C L3 v19+ default ·
+P1-D `escriturar_dfe` forca tipo correto ·
+P1-E ordem `preencher_po` -> `confirmar_po` ·
+P2-F guard `EXECUTADO_PARCIAL` ·
+P3-G G-PO-DFE-LOCK ·
+P3-H G-DFE-LINE-COMPANY (parcial B-V23-1 v23.5+).
+
+### Hipoteses descartadas (importante para nao desperdicar esforco)
+
+- ❌ G039 NAO foi causa original (PO 42525 ja nasceu com team=143 Rafael correto)
+- ❌ G-PERM-1 ir.rule dfe.line so surgiu na cirurgia (purchase_fiscal_id stale)
+
+### Memoria salva
+
+- `~/.claude/projects/.../memory/gotchas_industrializacao_fb_lf_v24_cirurgia.md` — 4 gotchas + pattern cirurgico completo
+- `app/odoo/estoque/CIRURGIA_AVULSO_FRASCO_2026_05_27.md` — analise root cause + 5 falhas + 8 fixes priorizados + estado PROD final
+
+### Commits
+
+- `42c097d5` fix(estoque): v24.1+ HOTFIX filtrar _* meta-keys
+- (a fazer) docs(estoque): root cause AVULSO_FRASCO + 5 falhas + memory gotchas + PROMPT v25+ atualizado
