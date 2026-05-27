@@ -633,6 +633,28 @@ AGENT_STICKY_SESSION_ENABLED = os.getenv(
 STICKY_SESSION_TTL_SEC = int(os.getenv("STICKY_SESSION_TTL_SEC", "1800"))
 
 # ====================================================================
+# POST_SESSION jobs via RQ (2026-05-27)
+# ====================================================================
+# Move jobs POST_SESSION (summarize, patterns, profile, extract_knowledge,
+# extract_personal) do thread/sync inline no worker do chat → fila RQ
+# `agent_background` (worker separado).
+#
+# Motivo: jobs chamam Sonnet API por 5-30s cada. Quando rodam inline,
+# saturam o worker dono da sessao. Gunicorn roteia novas requests para
+# outros workers que vem ownership Sticky e retornam 409. Mesmo o JS
+# fazendo retry, pode demorar muitos segundos ate o worker dono liberar
+# e aceitar a proxima request.
+#
+# Quando ON: jobs enfileirados em ~10ms, worker do chat libera imediato.
+# Quando OFF (default): comportamento atual (thread/sync inline).
+# Fallback: se RQ/Redis off, cai automaticamente em thread/sync.
+#
+# Rollback: AGENT_POST_SESSION_VIA_RQ=false. Sem deploy de codigo.
+AGENT_POST_SESSION_VIA_RQ = os.getenv(
+    "AGENT_POST_SESSION_VIA_RQ", "false"
+).lower() == "true"
+
+# ====================================================================
 # Thinking Display (SDK 0.1.65+)
 # ====================================================================
 # Controla o campo `display` do ThinkingConfig (forwarded como --thinking-display CLI).

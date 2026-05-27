@@ -242,12 +242,15 @@ def run_post_session_processing(
                 f"[POST_SESSION] Trigger sumarizacao para sessao {session_id[:8]}... "
                 f"(msgs={session.message_count}, cost=${float(session.total_cost_usd or 0):.2f}, threshold={SESSION_SUMMARY_THRESHOLD})"
             )
-            from app.agente.services.session_summarizer import summarize_and_save
-            summarize_and_save(
-                app=app,
-                session_id=session_id,
-                user_id=user_id,
-            )
+            # Tenta RQ primeiro (libera worker do chat). Fallback inline se off/erro.
+            from app.agente.workers.background_jobs import try_enqueue_summarize
+            if not try_enqueue_summarize(session_id, user_id):
+                from app.agente.services.session_summarizer import summarize_and_save
+                summarize_and_save(
+                    app=app,
+                    session_id=session_id,
+                    user_id=user_id,
+                )
     except Exception as summary_error:
         logger.warning(f"[POST_SESSION] Erro na sumarizacao (ignorado): {summary_error}")
 
@@ -266,7 +269,10 @@ def run_post_session_processing(
                     f"[POST_SESSION] Trigger analise de padroes para usuario {user_id} "
                     f"(threshold={PATTERN_LEARNING_THRESHOLD})"
                 )
-                analyze_patterns_and_save(app=app, user_id=user_id)
+                # Tenta RQ primeiro (libera worker do chat). Fallback inline.
+                from app.agente.workers.background_jobs import try_enqueue_analyze_patterns
+                if not try_enqueue_analyze_patterns(user_id):
+                    analyze_patterns_and_save(app=app, user_id=user_id)
                 patterns_already_ran = True
     except Exception as pattern_error:
         logger.warning(f"[POST_SESSION] Erro na analise de padroes (ignorado): {pattern_error}")
@@ -286,7 +292,10 @@ def run_post_session_processing(
                         f"[POST_SESSION] Trigger geracao de perfil para usuario {user_id} "
                         f"(threshold={BEHAVIORAL_PROFILE_THRESHOLD})"
                     )
-                    generate_and_save_profile(app=app, user_id=user_id)
+                    # Tenta RQ primeiro. Fallback inline.
+                    from app.agente.workers.background_jobs import try_enqueue_generate_profile
+                    if not try_enqueue_generate_profile(user_id):
+                        generate_and_save_profile(app=app, user_id=user_id)
         except Exception as profile_err:
             logger.warning(f"[POST_SESSION] Erro geracao perfil (ignorado): {profile_err}")
 
@@ -301,45 +310,57 @@ def run_post_session_processing(
 
         if USE_POST_SESSION_EXTRACTION and user_message and assistant_message:
             if _session_meets_extraction_threshold(session, POST_SESSION_EXTRACTION_MIN_MESSAGES):
-                from threading import Thread
-                from app.agente.services.pattern_analyzer import extrair_conhecimento_sessao
-
                 # Copia mensagens para evitar race condition com a sessao
                 messages_for_extraction = list(session.get_messages())
 
-                def _run_extraction_background():
-                    nonlocal messages_for_extraction
-                    try:
-                        with app.app_context():
-                            extrair_conhecimento_sessao(
-                                app=app,
-                                user_id=user_id,
-                                session_messages=messages_for_extraction,
-                                include_subagents=True,
-                                session_id=session_id,
-                            )
-                    except Exception as bg_err:
-                        logger.warning(
-                            f"[KNOWLEDGE_EXTRACTION] Background error: {bg_err}"
-                        )
-                    finally:
-                        # Liberar referencia da closure
-                        messages_for_extraction = None
-                        # Liberar session do pool em thread manual
+                # Tenta RQ primeiro (libera worker). Fallback Thread daemon=False.
+                from app.agente.workers.background_jobs import try_enqueue_extract_knowledge
+                enqueued = try_enqueue_extract_knowledge(
+                    user_id=user_id,
+                    session_messages=messages_for_extraction,
+                    session_id=session_id,
+                    include_subagents=True,
+                )
+
+                if not enqueued:
+                    from threading import Thread
+                    from app.agente.services.pattern_analyzer import extrair_conhecimento_sessao
+
+                    def _run_extraction_background():
+                        nonlocal messages_for_extraction
                         try:
                             with app.app_context():
-                                db.session.remove()
-                        except Exception as e:
-                            logger.debug(f"[EXTRACTION] db.session.remove falhou em background: {e}")
+                                extrair_conhecimento_sessao(
+                                    app=app,
+                                    user_id=user_id,
+                                    session_messages=messages_for_extraction,
+                                    include_subagents=True,
+                                    session_id=session_id,
+                                )
+                        except Exception as bg_err:
+                            logger.warning(
+                                f"[KNOWLEDGE_EXTRACTION] Background error: {bg_err}"
+                            )
+                        finally:
+                            # Liberar referencia da closure
+                            messages_for_extraction = None
+                            # Liberar session do pool em thread manual
+                            try:
+                                with app.app_context():
+                                    db.session.remove()
+                            except Exception as e:
+                                logger.debug(f"[EXTRACTION] db.session.remove falhou em background: {e}")
 
-                thread = Thread(
-                    target=_run_extraction_background,
-                    daemon=False,
-                    name=f"knowledge-extraction-{user_id}",
-                )
-                thread.start()
+                    thread = Thread(
+                        target=_run_extraction_background,
+                        daemon=False,
+                        name=f"knowledge-extraction-{user_id}",
+                    )
+                    thread.start()
+
                 logger.info(
-                    f"[POST_SESSION] Trigger extracao pos-sessao em background "
+                    f"[POST_SESSION] Trigger extracao pos-sessao "
+                    f"({'RQ' if enqueued else 'thread'}) "
                     f"para usuario {user_id} (message_count={session.message_count or 0}, "
                     f"cost=${float(session.total_cost_usd or 0):.2f})"
                 )
@@ -357,41 +378,51 @@ def run_post_session_processing(
 
         if USE_POST_SESSION_PERSONAL_EXTRACTION and user_message and assistant_message:
             if _session_meets_extraction_threshold(session, PERSONAL_MIN_MSGS):
-                from threading import Thread
-                from app.agente.services.pattern_analyzer import extrair_insights_pessoais_sessao
-
                 # Reutilizar mensagens ja copiadas ou copiar novas
                 personal_messages = list(session.get_messages())
 
-                def _run_personal_extraction_background():
-                    nonlocal personal_messages
-                    try:
-                        with app.app_context():
-                            extrair_insights_pessoais_sessao(
-                                app=app,
-                                user_id=user_id,
-                                session_messages=personal_messages,
-                            )
-                    except Exception as bg_err:
-                        logger.warning(
-                            f"[PERSONAL_EXTRACTION] Background error: {bg_err}"
-                        )
-                    finally:
-                        personal_messages = None
+                # Tenta RQ primeiro. Fallback Thread daemon=False.
+                from app.agente.workers.background_jobs import try_enqueue_extract_personal_insights
+                enqueued_personal = try_enqueue_extract_personal_insights(
+                    user_id=user_id,
+                    session_messages=personal_messages,
+                )
+
+                if not enqueued_personal:
+                    from threading import Thread
+                    from app.agente.services.pattern_analyzer import extrair_insights_pessoais_sessao
+
+                    def _run_personal_extraction_background():
+                        nonlocal personal_messages
                         try:
                             with app.app_context():
-                                db.session.remove()
-                        except Exception:
-                            pass
+                                extrair_insights_pessoais_sessao(
+                                    app=app,
+                                    user_id=user_id,
+                                    session_messages=personal_messages,
+                                )
+                        except Exception as bg_err:
+                            logger.warning(
+                                f"[PERSONAL_EXTRACTION] Background error: {bg_err}"
+                            )
+                        finally:
+                            personal_messages = None
+                            try:
+                                with app.app_context():
+                                    db.session.remove()
+                            except Exception:
+                                pass
 
-                personal_thread = Thread(
-                    target=_run_personal_extraction_background,
-                    daemon=False,
-                    name=f"personal-extraction-{user_id}",
-                )
-                personal_thread.start()
+                    personal_thread = Thread(
+                        target=_run_personal_extraction_background,
+                        daemon=False,
+                        name=f"personal-extraction-{user_id}",
+                    )
+                    personal_thread.start()
+
                 logger.info(
-                    f"[POST_SESSION] Trigger extracao pessoal em background "
+                    f"[POST_SESSION] Trigger extracao pessoal "
+                    f"({'RQ' if enqueued_personal else 'thread'}) "
                     f"para usuario {user_id} (message_count={session.message_count or 0}, "
                     f"cost=${float(session.total_cost_usd or 0):.2f})"
                 )

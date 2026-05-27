@@ -279,10 +279,10 @@ echo "👷 Configuração do Worker:"
 echo "   Workers paralelos: $WORKER_COUNT"
 echo "   Timeout padrão: 30 minutos"
 echo "   Perfis:"
-echo "     - Worker 0 [LIGHT-RESERVED]: high, hora_nfe, artifacts, atacadao, default, agent_validation"
+echo "     - Worker 0 [LIGHT-RESERVED]: high, hora_nfe, artifacts, atacadao, agent_background, default, agent_validation"
 echo "     - Worker 1 [FULL]: todas as filas (impostos exclusivo)"
 echo "     - Worker 2+ [GENERAL]: todas exceto impostos"
-echo "   Filas (ordem = prioridade): high, hora_nfe, artifacts, atacadao, odoo_lancamento, impostos, recebimento, hora_backfill, sped_ecd, default"
+echo "   Filas (ordem = prioridade): high, hora_nfe, artifacts, atacadao, agent_background, odoo_lancamento, impostos, recebimento, hora_backfill, sped_ecd, default"
 echo "   ↑ hora_nfe alta prioridade: operador aguarda emissao NFe interativamente"
 echo "   ↑ artifacts media-alta: usuario aguarda build no chat web (30-60s)"
 echo "   ↓ hora_backfill / odoo_lancamento / impostos / recebimento / sped_ecd: PESADAS — bloqueadas no Worker 0"
@@ -298,7 +298,7 @@ echo ""
 echo "⚡ Usando worker_render.py otimizado para evitar importações circulares"
 exec python worker_render.py \
     --workers $WORKER_COUNT \
-    --queues high,hora_nfe,artifacts,atacadao,odoo_lancamento,impostos,recebimento,hora_backfill,sped_ecd,inventario,default \
+    --queues high,hora_nfe,artifacts,atacadao,agent_background,odoo_lancamento,impostos,recebimento,hora_backfill,sped_ecd,inventario,default \
     --verbose
 
 
