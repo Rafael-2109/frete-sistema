@@ -3311,6 +3311,13 @@ class FaturamentoPipelineExecutor:
         'TRANSFERIR_CD_FB': {
             'dfe': 'compra',
             'po': 'transf-filial',
+            # CR-v27+-Finding2-S4 (88% conf — DECISÃO PENDENTE Rafael v28+):
+            # TRANSFERIR_CD_FB NÃO está em ACOES_ENTRADA_DESTINO_MANUAL
+            # (picking_types.py:102). Filtro `_executar_etapa_f_via_fluxo_l3`
+            # exclui esses ajustes — entry mapeada aqui é DEAD CODE até
+            # Rafael decidir: (a) TRANSFERIR_CD_FB requer ETAPA F? → adicionar
+            # em ACOES_ENTRADA_DESTINO_MANUAL + canary; (b) robô CIEL IT já
+            # cria entrada FB automática via DFe SEFAZ? → remover entry daqui.
         },
     }
 
@@ -3756,7 +3763,12 @@ class FaturamentoPipelineExecutor:
             'ajustes_sem_picking': len(ajustes_sem_picking),
             'pickings_pendentes': [],
             'pickings_resolvidos': {},
-            'pickings_timeout': [],
+            # CR-v27+-H2 (83% conf): separar timeout genuino (robo ainda
+            # processando — operador faz resume) de excecao/falha do atomo
+            # (operador investiga). Antes (v25+ S1 inicial), pickings_timeout
+            # misturava ambos os casos, dificultando diagnostico.
+            'pickings_timeout': [],          # robo CIEL IT nao criou invoice no timeout
+            'pickings_falha_excecao': [],    # atomo polling_invoice raise OU status != 'OK'/'TIMEOUT'
             'sub_etapas': {
                 'f5d5_payment_provider_ok': 0,
                 'f5d5_payment_provider_falha': 0,
@@ -3842,11 +3854,13 @@ class FaturamentoPipelineExecutor:
                     f'  C s8 picking {pid}: polling_invoice raise: {e}',
                     exc_info=True,
                 )
-                out['pickings_timeout'].append(pid)
+                # CR-v27+-H2: excecao = falha do atomo, NAO timeout
+                out['pickings_falha_excecao'].append(pid)
                 continue
 
             status_poll = r_poll.get('status')
             if status_poll == 'TIMEOUT':
+                # Timeout genuino: robo CIEL IT nao criou invoice no tempo
                 out['pickings_timeout'].append(pid)
                 continue
             if status_poll != 'OK':
@@ -3854,7 +3868,8 @@ class FaturamentoPipelineExecutor:
                     f'  C s8 picking {pid}: polling_invoice status='
                     f'{status_poll!r} erro={r_poll.get("erro")}'
                 )
-                out['pickings_timeout'].append(pid)
+                # CR-v27+-H2: status nao-OK/nao-TIMEOUT = falha do atomo
+                out['pickings_falha_excecao'].append(pid)
                 continue
 
             invoice_id = r_poll.get('invoice_id')
@@ -3863,7 +3878,8 @@ class FaturamentoPipelineExecutor:
                     f'  C s8 picking {pid}: polling_invoice OK mas sem '
                     f'invoice_id (anomalia atomo).'
                 )
-                out['pickings_timeout'].append(pid)
+                # CR-v27+-H2: anomalia atomo (OK sem invoice_id) = falha
+                out['pickings_falha_excecao'].append(pid)
                 continue
 
             out['pickings_resolvidos'][pid] = invoice_id
@@ -3931,15 +3947,29 @@ class FaturamentoPipelineExecutor:
             for k in out['sub_etapas']:
                 out['sub_etapas'][k] += sub_etapas_atom.get(k, 0)
 
-        # Status final (paridade legacy)
+        # Status final (paridade legacy + H2 v27+)
         n_resolved = len(out['pickings_resolvidos'])
+        n_timeout = len(out['pickings_timeout'])
+        n_falha = len(out['pickings_falha_excecao'])
         n_pendentes_inicial = len(pickings_pendentes)
         if n_resolved == n_pendentes_inicial:
             out['status'] = 'EXECUTADO_ETAPA_C'
         elif n_resolved > 0:
-            out['status'] = 'EXECUTADO_PARCIAL_TIMEOUT'
+            # CR-v27+-H2: distinguir parcial por timeout vs parcial por falha
+            if n_timeout > 0 and n_falha == 0:
+                out['status'] = 'EXECUTADO_PARCIAL_TIMEOUT'
+            elif n_falha > 0 and n_timeout == 0:
+                out['status'] = 'EXECUTADO_PARCIAL_FALHA'
+            else:  # ambos
+                out['status'] = 'EXECUTADO_PARCIAL_MISTO'
         else:
-            out['status'] = 'FALHA_TIMEOUT_TOTAL'
+            # 0 resolvidos — apenas timeouts OU apenas falhas OU mistura
+            if n_falha == 0:
+                out['status'] = 'FALHA_TIMEOUT_TOTAL'
+            elif n_timeout == 0:
+                out['status'] = 'FALHA_EXCECAO_TOTAL'
+            else:
+                out['status'] = 'FALHA_MISTO_TOTAL'
 
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out

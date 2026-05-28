@@ -103,6 +103,17 @@ ACOES_ENTRADA_DESTINO_MANUAL: FrozenSet[str] = frozenset({
     'INDUSTRIALIZACAO_FB_LF',   # FB→LF — validado PROD (317306, 317316)
     'DEV_FB_LF',                # FB→LF — canary v17.5 (fp 86 assumido)
     'TRANSFERIR_FB_CD',         # FB→CD — canary v17.5 (PT 50, src=6, dest=32)
+    # CR-v27+-Finding2-S4 (88% conf — DECISÃO PENDENTE Rafael v28+):
+    # `TRANSFERIR_CD_FB` foi mapeado em `L10N_BR_TIPO_PEDIDO_POR_ACAO`
+    # (inventario_pipeline.py:3311) mas NÃO está aqui. Filtro
+    # `_executar_etapa_f_via_fluxo_l3` em `a.acao_decidida in
+    # ACOES_ENTRADA_DESTINO_MANUAL` exclui TRANSFERIR_CD_FB → dead code
+    # no L10N_BR_TIPO_PEDIDO_POR_ACAO para esta direção.
+    # Decisão Rafael (canary v28+): TRANSFERIR_CD_FB requer ETAPA F
+    # (entrada manual no FB) OU robô CIEL IT já cria entrada automática
+    # via DFe? Se requer ETAPA F: adicionar aqui + em
+    # ACOES_ENTRADA_DESTINO_MANUAL_CANARY. Se não: documentar
+    # inapplicabilidade explícita no comment do L10N_BR_TIPO_PEDIDO_POR_ACAO.
 })
 
 

@@ -3374,13 +3374,20 @@ def test_v25_s1_etapa_c_via_skill8_real_run_invoca_atomos(db):
         'tempo_ms': 50,
     }
 
+    # CR-v27+-C1 (95% conf): import lazy de FaturamentoInvoiceService dentro
+    # do helper. Patch via path do modulo fonte funciona PORQUE o helper
+    # importa dentro da funcao e ai resolve via sys.modules['...faturamento']
+    # — mas dependendo de ordem de carregamento o `return_value` pode ser
+    # ignorado. `side_effect=lambda **kw: fake_svc` garante que CADA chamada
+    # do construtor (FaturamentoInvoiceService(odoo=..., picking_svc=...))
+    # retorna fake_svc, independente de como o import resolve.
     with patch(
         'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
         'app.odoo.estoque.scripts.faturamento.FaturamentoInvoiceService',
-        return_value=fake_svc,
+        side_effect=lambda **kw: fake_svc,
     ):
         res = executor.executar_pipeline_bulk(
             ciclo=ciclo_test,
@@ -3440,9 +3447,11 @@ def test_v25_s1_etapa_d_via_skill8_real_run_invoca_atomo(db):
         'tempo_ms': 5000,
     }
 
+    # CR-v27+-C1 (95% conf): side_effect=lambda garante intercepta\xc3\xa7\xc3\xa3o
+    # mesmo com import lazy do helper (ver test_v25_s1_etapa_c_via_skill8_real_run)
     with patch(
         'app.odoo.estoque.scripts.faturamento.FaturamentoInvoiceService',
-        return_value=fake_svc,
+        side_effect=lambda **kw: fake_svc,
     ):
         res = executor.executar_pipeline_bulk(
             ciclo=ciclo_test,
@@ -3660,3 +3669,168 @@ def test_v27_s4_constants_fluxo_l3_cobre_3_companies():
     assert constants[4]['picking_type_id'] == 13  # Recebimento CD
     assert constants[4]['payment_term_id'] == 2791
     assert constants[4]['payment_provider_id'] == 38
+
+
+# ============================================================
+# v27+ post-code-review fixes (M1 + Finding 3 S4 + H2)
+# ============================================================
+
+def test_v25_s1_default_off_preserva_legacy_etapa_d(db):
+    """CR-v27+-M1 (80% conf): assimetria — antes existia teste default-off
+    apenas para ETAPA C. ETAPA D (SEFAZ IRREVERSIVEL) merece teste equivalente
+    de regressao garantindo que sem flag o path legacy `executar_etapa_d`
+    e' chamado (sem chave 'modo' no output).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V25_S1_LEGACY_D'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        picking_id_odoo=999103,
+        invoice_id_odoo=888103,
+        fase_pipeline='F5d_INVOICE_GERADA',
+        status='APROVADO',
+        criado_por='test_v25_s1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    res = executor.executar_pipeline_bulk(
+        ciclo=ciclo_test,
+        etapas=('D',),
+        dry_run=True,
+        pular_pre_flight=True,
+        # SEM usar_skill8_atomica_v25=True
+    )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_d = res['etapas_executadas']['D']
+    assert 'modo' not in etapa_d, (
+        f'Default OFF deveria preservar legacy (sem chave modo). '
+        f'Recebi: {etapa_d.get("modo")!r}'
+    )
+    assert etapa_d['status'] == 'DRY_RUN_OK_ETAPA_D'
+
+
+def test_v27_s4_resolver_constants_fluxo_l3_acao_desconhecida_retorna_none():
+    """CR-v27+-Finding3-S4 (80% conf): regressao de cobertura — antes
+    test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada exercitava
+    o path None (CD destino sem CONSTANTS). Apos v27+ S4 expand, CD ESTA
+    mapeado. Teste novo cobre o path None via acao_decidida nao mapeada
+    em L10N_BR_TIPO_PEDIDO_POR_ACAO (8 acoes da MATRIZ). Ex.: acao tipica
+    NAO inter-company ('AJUSTE_LOCAL' ou typo).
+    """
+    odoo = MagicMock()
+    odoo._uid = 42
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    # company_destino valido (LF=5) mas acao_decidida NAO mapeada
+    resolved = executor._resolver_constants_fluxo_l3(
+        acao_decidida='ACAO_INVALIDA_PARA_TESTE',
+        company_destino=5,
+    )
+    assert resolved is None, (
+        f'acao_decidida desconhecida deveria retornar None '
+        f'(L10N_BR_TIPO_PEDIDO_POR_ACAO.get retorna None). Recebi: {resolved!r}'
+    )
+
+
+def test_v27_s4_resolver_constants_fluxo_l3_company_invalida_retorna_none():
+    """CR-v27+-Finding3-S4 (80% conf): path None via company_destino NAO
+    mapeada em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO (v27+ S4 cobre 1, 4, 5).
+    Antes v27+ S4 isso retornava None para CD=4; agora apenas para companies
+    fora do dict (ex: SC=3 ou inexistente=999).
+    """
+    odoo = MagicMock()
+    odoo._uid = 42
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+
+    # acao valida + company_destino fora do dict v27+ S4
+    resolved = executor._resolver_constants_fluxo_l3(
+        acao_decidida='INDUSTRIALIZACAO_FB_LF',
+        company_destino=999,  # company inexistente
+    )
+    assert resolved is None
+
+
+def test_v27_h2_pickings_falha_excecao_separado_de_timeout(db):
+    """CR-v27+-H2 (83% conf): apos v27+ S1+H2 fix, o output do helper
+    `_executar_etapa_c_via_skill8_atomica` separa pickings_timeout (robo
+    nao criou invoice) de pickings_falha_excecao (atomo polling_invoice
+    raise OU retornou status != OK/TIMEOUT).
+
+    Teste real-run com 2 pickings: 1 polling raise + 1 polling timeout.
+    Apos: pickings_timeout=[1 pid] + pickings_falha_excecao=[1 pid] +
+    status=FALHA_MISTO_TOTAL (ambos sem resolver).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V27_H2'
+    aj1 = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='AAA', tipo_produto=4, company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10, qtd_odoo=0, qtd_ajuste=10,
+        lote_destino='MIGRAÇÃO', picking_id_odoo=997001,
+        fase_pipeline='F5c_LIBERADO', status='APROVADO',
+        criado_por='test_v27_h2',
+    )
+    aj2 = AjusteEstoqueInventario(
+        ciclo=ciclo_test, cod_produto='BBB', tipo_produto=4, company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=20, qtd_odoo=0, qtd_ajuste=20,
+        lote_destino='MIGRAÇÃO', picking_id_odoo=997002,
+        fase_pipeline='F5c_LIBERADO', status='APROVADO',
+        criado_por='test_v27_h2',
+    )
+    db.session.add_all([aj1, aj2])
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+
+    # 1o picking raise; 2o retorna TIMEOUT
+    fake_svc = MagicMock()
+    fake_svc.polling_invoice.side_effect = [
+        RuntimeError('odoo_rpc_timeout_transient'),  # picking 997001
+        {'status': 'TIMEOUT', 'invoice_id': None,    # picking 997002
+         'tempo_ms': 1800000},
+    ]
+
+    with patch(
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.scripts.faturamento.FaturamentoInvoiceService',
+        side_effect=lambda **kw: fake_svc,
+    ):
+        res = executor.executar_pipeline_bulk(
+            ciclo=ciclo_test, etapas=('C',),
+            dry_run=False, pular_pre_flight=True,
+            usar_skill8_atomica_v25=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_c = res['etapas_executadas']['C']
+    assert etapa_c['modo'] == 'skill8_atomica_v25'
+    # H2: separacao
+    assert 'pickings_falha_excecao' in etapa_c
+    assert sorted(etapa_c['pickings_timeout']) == [997002]
+    assert sorted(etapa_c['pickings_falha_excecao']) == [997001]
+    assert etapa_c['pickings_resolvidos'] == {}
+    # Status final: ambos falharam (timeout + excecao) = MISTO_TOTAL
+    assert etapa_c['status'] == 'FALHA_MISTO_TOTAL'
+    # Atomo invocado 2x
+    assert fake_svc.polling_invoice.call_count == 2
