@@ -102,6 +102,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
+      "columns": [
+        "fatura_cliente_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_fatura_cliente_itens_nf_id",
       "columns": [
         "nf_id"
@@ -119,13 +126,6 @@
       "name": "ix_carvia_fatura_cliente_itens_cte_complementar_id",
       "columns": [
         "cte_complementar_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_fatura_cliente_itens_fatura_cliente_id",
-      "columns": [
-        "fatura_cliente_id"
       ],
       "unique": false
     }

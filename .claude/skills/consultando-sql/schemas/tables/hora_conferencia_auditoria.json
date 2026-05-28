@@ -69,16 +69,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_auditoria_acao",
+      "name": "ix_hora_conferencia_auditoria_conferencia_id",
       "columns": [
-        "acao"
+        "conferencia_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_auditoria_conferencia_id",
+      "name": "ix_hora_conferencia_auditoria_acao",
       "columns": [
-        "conferencia_id"
+        "acao"
       ],
       "unique": false
     },

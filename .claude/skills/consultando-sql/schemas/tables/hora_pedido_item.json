@@ -61,9 +61,9 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_pedido_item_numero_chassi",
+      "name": "ix_hora_pedido_item_peca_id",
       "columns": [
-        "numero_chassi"
+        "peca_id"
       ],
       "unique": false
     },
@@ -75,9 +75,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_pedido_item_peca_id",
+      "name": "ix_hora_pedido_item_numero_chassi",
       "columns": [
-        "peca_id"
+        "numero_chassi"
       ],
       "unique": false
     }

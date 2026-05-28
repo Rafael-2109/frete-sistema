@@ -127,16 +127,9 @@
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_tipo_divergencia",
+      "name": "ix_divergencia_nf_po_cnpj_empresa_compradora",
       "columns": [
-        "tipo_divergencia"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_divergencia_nf_po_status",
-      "columns": [
-        "status"
+        "cnpj_empresa_compradora"
       ],
       "unique": false
     },
@@ -148,9 +141,16 @@
       "unique": false
     },
     {
-      "name": "ix_divergencia_nf_po_cnpj_empresa_compradora",
+      "name": "ix_divergencia_nf_po_tipo_divergencia",
       "columns": [
-        "cnpj_empresa_compradora"
+        "tipo_divergencia"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_divergencia_nf_po_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

@@ -78,6 +78,21 @@
       "default": 0
     },
     {
+      "name": "em_transito_fb",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "em_transito_cd",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
+      "name": "em_transito_lf",
+      "type": "numeric(15,3)",
+      "default": 0
+    },
+    {
       "name": "refresh_em",
       "type": "timestamp"
     }
@@ -96,16 +111,16 @@
   ],
   "indices": [
     {
-      "name": "ix_inventario_snapshot_odoo_ciclo_id",
+      "name": "ix_inventario_snapshot_odoo_cod_produto",
       "columns": [
-        "ciclo_id"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_inventario_snapshot_odoo_cod_produto",
+      "name": "ix_inventario_snapshot_odoo_ciclo_id",
       "columns": [
-        "cod_produto"
+        "ciclo_id"
       ],
       "unique": false
     }
