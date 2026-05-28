@@ -19,7 +19,7 @@
 7. Se sessão for sobre Skill 8 → ler `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO (regra inviolável 0).
 
 ### Baseline pytest esperado
-- **672 verdes** (tests/odoo/ — v27+ S1+S4 confirmado em 17s. 662 baseline v25+ S0 + 10 net v27+ = 6 S1 dispatch mockado + 4 S4 constants/L10N_BR_TIPO_PEDIDO).
+- **682 verdes** (tests/odoo/ — v28+ S7+S6.b+CR Finding 2 confirmado em 15.6s. 676 baseline v27+ pós-CR + 6 net v28+ = 7 S7 dispatch helper E mockado − 1 substituído legado SKIP_NAO_SUPORTADA_V20_FLUXO_L3 v20+).
 
 ### Estado global (atualizado v18 Fase 0 — 2026-05-26)
 
@@ -33,7 +33,7 @@
 | Skill 6 `planejando-pre-etapa-odoo` | 🟡 mín viável COMPLETA v9 (planner + executor C3) | `scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` |
 | Skill 7 `escriturando-odoo` | 🟡 **ABRANGENTE LIVE v25+** (10 átomos: 7 v19+ + 2 v23+/v23.5+ G039/B-V23-2 + **1 v25+ NOVO `alinhar_dfe_lines_company` F2a** + `preencher_po` ganha param `l10n_br_tipo_pedido` F3c) — 53 pytest = 38 anterior + 4 F2a + 3 F3c + 8 hooks/atomos B-V23-1/2 v23.5+ — AP1+AP4 ✅; F2a generaliza B-V23-1 p/ caminho A; F3c destrava tipos diferentes DFe vs PO | `scripts/escrituracao.py` |
 | Skill 8 `faturando-odoo` **ATÔMICA L2 v24+** (AP6 RESOLVIDO PARCIAL — NOVA arquitetura) | 🟢 **5 átomos ATÔMICOS LIVE v24+** (`validar_invoice_constants`, `liberar_faturamento`, `polling_invoice`, `validar_invoice_pos_robo`, `transmitir_sefaz`) — 28 pytest verdes — `scripts/faturamento.py` ~750 LOC | `scripts/faturamento.py` + `.claude/skills/faturando-odoo/SKILL.md` (fachada atualizada v24+) |
-| Orchestrator C3 LEGACY `inventario_pipeline` (renomeado de `faturamento_pipeline` em v27+ S3 — stub alias compat preservado) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x LIVE v19+ + **opt-in `--usar-fluxo-l3-v19` v20+** + **F1+F2b+F3a-d+F4 v25+** + **opt-in `--usar-skill8-atomica-v25` v27+ S1** (helpers `_executar_etapa_c_via_skill8_atomica` + `_executar_etapa_d_via_skill8_atomica` delegam aos atomos 3, 4 e 5 da Skill 8 ATOMICA L2) — 90 pytest = 84 + 6 net v27+ S1 dispatch mockado | `orchestrators/inventario_pipeline.py` (~5600 LOC) + `orchestrators/faturamento_pipeline.py` (STUB alias compat) |
+| Orchestrator C3 LEGACY `inventario_pipeline` (renomeado de `faturamento_pipeline` em v27+ S3 — **stub alias REMOVIDO v28+ S6.b 2026-05-28**) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x LIVE v19+ + **opt-in `--usar-fluxo-l3-v19` v20+** + **F1+F2b+F3a-d+F4 v25+** + **opt-in `--usar-skill8-atomica-v25` v27+ S1** + **helper `_executar_etapa_e_via_fluxo_l3` v28+ S7** (espelha helper F filtrando ACOES_ENTRADA_FB — destrava 4 ações X→FB/X→LF) — 97 pytest = 90 v27+ + 7 net v28+ S7 dispatch helper E mockado (inclui Finding 2 CR FALHA_ETAPA_E) | `orchestrators/inventario_pipeline.py` (~5800 LOC) |
 | Skill 9 `consultando-quant-odoo` (READ) | 🟡 mín viável (3 modos G030) | `scripts/consulta_quant.py` |
 | Sub-skill C5 `auditando-cadastro-fiscal-odoo` | 🟡 V1 'inventario' + G038 v22+ + **G007+l10n_br_tipo_produto v24+** — 20 pytest (16 + 4 net v24+ standard_price=0 WARN + tipo_produto BLOQUEIO) | `scripts/cadastro_fiscal_audit.py` |
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
@@ -46,7 +46,23 @@
 - **Pós-cleanup**: zero candidatos naturais para canary REAL F1-F4 (apenas 177465 AVULSO_FRASCO em F5e_SEFAZ_OK, já idempotente Odoo via cirurgia manual v24+). Canary REAL deferido para próxima INDUSTRIALIZACAO_FB_LF natural do operador.
 - Commit: `701e4885`.
 
-### Próximo passo (v27+) — opt-in `--usar-skill8-atomica-v25` + rename + expand CONSTANTS FB+CD + folhas L3 (S0 canary REAL deferido)
+### Próximo passo (v29+) — canary REAL PROD ETAPA E via FLUXO L3 + skill8 atomica (deferido até lote natural)
+
+**v28+ S7+S6.b CONCLUÍDAS** (2026-05-28 — commit pendente):
+1. ✅ **S7** — Implementado `_executar_etapa_e_via_fluxo_l3` (~190 LOC, espelha helper F filtrando ACOES_ENTRADA_FB). Destrava 4 ações X→FB/X→LF: PERDA_LF_FB + TRANSFERIR_CD_FB + DEV_LF_FB destino=FB; DEV_CD_LF destino=LF. Dispatch em `executar_etapa_e` substitui early return SKIP_NAO_SUPORTADA_V20_FLUXO_L3 legado por chamada ao helper. Default `usar_fluxo_l3_v19=False` preserva 100% legacy Skill 7 V1 STRICT.
+2. ✅ **6 pytest novos v28+ S7** dispatch mockado: LF destino dry-run + FB destino dry-run (G039 dinâmico mocked) + PERDA_LF_FB real-run + DEV_CD_LF real-run + default OFF preserva legacy + SKIP_NENHUM_AJUSTE. Substituem `test_v20_s3_etapa_e_skip_quando_flag_v19` legado.
+3. ✅ **S6.b** — Stub `app/odoo/estoque/orchestrators/faturamento_pipeline.py` REMOVIDO. Confirmado zero imports Python ativos via grep recursivo (`^from` / `^import` em app/, tests/, scripts/). Pytest 681 verdes SEM stub.
+4. ✅ **Documentação atualizada**: CLAUDE.md §6 Tabela 3 + §11 + §14 D-V28-1 novo; PROTECAO N32 marcada OBSOLETO com lição atemporal preservada; ROADMAP HANDOFF; cross-refs ajustadas; help text CLI `--usar-fluxo-l3-v19`.
+5. ✅ Baseline pytest: 676 → **681 verdes** (+5 net = 6 novos S7 − 1 substituído legado) em 15.62s.
+6. ⚠️ **S2 canary REAL** ainda deferido — aguarda próximo lote natural INDUSTRIALIZACAO_FB_LF (S2.a) ou X→FB natural (S2.b validar helper E).
+
+**v29+ alvo**:
+1. **Canary REAL PROD ETAPA E v28+ S7** quando próximo PERDA_LF_FB / TRANSFERIR_CD_FB / DEV_LF_FB / DEV_CD_LF natural surgir: rodar com `--usar-fluxo-l3-v19 --etapas E --confirmar` validando paridade vs legacy Skill 7 V1 STRICT.
+2. **Canary REAL PROD opt-in skill8 ATOMICA v27+ S1** quando próximo INDUSTRIALIZACAO_FB_LF natural surgir: rodar com `--usar-skill8-atomica-v25 --confirmar --confirmar-sefaz`.
+3. **G039 dinâmico FB destino** — primeira execução real ativará `garantir_purchase_team(uid=42, company_id=1)`. Validar criação OK ou diagnosticar se fallback STATIC é necessário.
+4. **Após canary OK**: remover ETAPAS C+D + E legacy (~1500 LOC total) + flip default `usar_fluxo_l3_v19=True` + `usar_skill8_atomica_v25=True`.
+
+### Próximo passo (v27+) — opt-in `--usar-skill8-atomica-v25` + rename + expand CONSTANTS FB+CD + folhas L3 (S0 canary REAL deferido) [ARQUIVADO — ver v28+ acima]
 
 **v25+ S0 CONCLUÍDA** (2026-05-27 — commit `ea505c0e`):
 1. ✅ Validação Rafael dos 5 achados do agente v24+ (cirurgia AVULSO_FRASCO): corrigido diagnóstico errado #1 + confirmados #2/#3/#4 + descartados G039/G-PERM-1 como causa.

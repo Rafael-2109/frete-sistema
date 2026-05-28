@@ -2723,3 +2723,103 @@ python -m app.odoo.estoque.orchestrators.inventario_pipeline \
 - `47085916` — S3 rename + stub (12 files, 6053 ins / 5961 del)
 - `843045a9` — S4 expand CONSTANTS (3 files, 298 ins / 43 del)
 - `b7f32476` — S5 folhas L3 (5 files, 484 ins / 9 del)
+
+---
+
+## Sessão 2026-05-28 v28+ — S7 destravar ETAPA E via FLUXO L3 + S6.b remoção stub
+
+**Audiência:** Claude Code (worktree feat/estoque-odoo).
+**Duração:** 1 sessão executada cleanly (sem cirurgia / retries / blockers).
+**Decisão Rafael (AskUserQuestion §1.4):** Escopo = S7 + S6.b paralelo (S2/S2.b deferidos a próxima sessão por falta de lote natural pós-cleanup v26+); G039 FB = confiar no codificado v23+ (real-run cobrirá em canary).
+
+### S7 — Helper `_executar_etapa_e_via_fluxo_l3`
+
+**Contexto v27+ pós-CR:** CR-Finding 2 do code-reviewer holístico (88% conf) apontou que TRANSFERIR_CD_FB ficaria em SKIP_NAO_SUPORTADA_V20_FLUXO_L3 sob `--usar-fluxo-l3-v19`. Rafael 2026-05-27: "robô CIEL IT tem mesmo defeito de atraso em QUALQUER tipo — CD→FB também precisa funcionar pelo mesmo pattern de pesquisa DFe + criar manual via XML saída". v27+ S4 mapeou constants FB+CD + L10N_BR_TIPO_PEDIDO 8 ações; v28+ S7 destrava o dispatch.
+
+**Implementação** (`app/odoo/estoque/orchestrators/inventario_pipeline.py`, ~190 LOC):
+- Helper privado `_executar_etapa_e_via_fluxo_l3` inserido ANTES do bloco "v25+ S1 — Skill 8 ATOMICA L2 opt-in helpers" (linhas 3664-3854).
+- Espelha `_executar_etapa_f_via_fluxo_l3` (linhas 3450-3662) com APENAS 2 diferenças:
+  - Filtro: `a.acao_decidida in ACOES_ENTRADA_FB` (4 ações: PERDA_LF_FB, TRANSFERIR_CD_FB, DEV_LF_FB destino=FB; DEV_CD_LF destino=LF) em vez de `ACOES_ENTRADA_DESTINO_MANUAL` (sentido FB→X).
+  - Label `'etapa': 'E'` em vez de `'F'`.
+- Lógica restante 100% idêntica:
+  - `_carregar_ajustes` em F5e_SEFAZ_OK + status PROPOSTO/APROVADO/EXECUTADO
+  - Build `lotes_data` agregando por (product_id, lote_destino) com `abs(qtd_ajuste)` (F1 v25+ pattern)
+  - Transform vazio/'MIGRAÇÃO' → `INV-{cod}-{YYYYMMDD}` (consistente com helper F)
+  - Filtro meta-keys `_*` antes do splat (v24.1+ regression fix)
+  - `_resolver_constants_fluxo_l3` por (acao, company_destino) com G039 dinâmico para FB (companies !=5) ou STATIC=143 para LF
+  - Status agregado: EXECUTADO_OK / EXECUTADO_PARCIAL / DRY_RUN_OK / SKIP_NENHUM_AJUSTE / FALHA_ETAPA_E / SKIP_NAO_SUPORTADA_V20
+
+**Dispatch em `executar_etapa_e`** (linhas 4281-4295 substituídas):
+- Pré-v28+: early return `SKIP_NAO_SUPORTADA_V20_FLUXO_L3` quando `usar_fluxo_l3_v19=True` (legado pre-v27+ S4).
+- v28+ S7: `if usar_fluxo_l3_v19: return self._executar_etapa_e_via_fluxo_l3(ciclo, company_origem_id, dry_run, usuario, cod_produto, t0)`.
+- Default `usar_fluxo_l3_v19=False` preserva 100% legacy Skill 7 V1 STRICT (`criar_recebimento_orchestrado` LF→FB only).
+
+**Updates colaterais**:
+- Help text CLI `--usar-fluxo-l3-v19` (linhas 6048-6059): menciona destravamento ETAPA E v28+ S7.
+- Comentário STATUS_FALHA (linhas 5506-5515): preserva SKIP_NAO_SUPORTADA_V20_FLUXO_L3 no tuple por compat futura + nota que ETAPA E não retorna mais esse status v28+ S7.
+- Docstring `executar_etapa_e`: adicionado parágrafo v28+ S7 logo no início.
+
+### 6 pytest novos v28+ S7 (substituem `test_v20_s3_etapa_e_skip_quando_flag_v19` legado)
+
+Em `tests/odoo/services/test_faturamento_pipeline_orchestrator.py` (~280 LOC novos):
+
+1. `test_v28_s7_etapa_e_via_fluxo_l3_lf_destino_dry_run` — DEV_CD_LF (CD→LF destino=5) dry-run. Valida: team_id=143 STATIC, picking_type_id=19 LF, mock _resolver_team_g039=(None, None) garantindo by-pass F4 v25+.
+2. `test_v28_s7_etapa_e_via_fluxo_l3_fb_destino_dry_run` — TRANSFERIR_CD_FB (CD→FB destino=1) dry-run + G039 dinâmico (mocked team_id=155). Valida: picking_type_id=1 FB Recebimentos discovery v27+ S4, l10n_br_tipo_pedido_dfe='compra' + po='transf-filial', lote 'AJ-28-05' preservado da planilha.
+3. `test_v28_s7_etapa_e_via_fluxo_l3_perda_lf_fb_real_run_mockado` — PERDA_LF_FB (LF→FB destino=1) real-run. Mock executar_fluxo_l3_1_2_x retorna FLUXO_OK caminho B; assert status=EXECUTADO_OK + invoices_ok[700003]['caminho']=='B' + quantidade abs(-25.0)==25.0.
+4. `test_v28_s7_etapa_e_via_fluxo_l3_dev_cd_lf_real_run_mockado` — DEV_CD_LF real-run + lote_destino='' (vazio). Assert lote resolvido para 'INV-410001000-{HOJE}' (F1 v25+ pattern), tipos {dfe:'compra', po:'retorno'}.
+5. `test_v28_s7_default_off_preserva_etapa_e_legacy` — flag=False (default). Patches `_executar_etapa_e_via_fluxo_l3` e ASSERT NOT_CALLED. Caminho legacy DRY_RUN_OK_ETAPA_E preserva 100%.
+6. `test_v28_s7_etapa_e_via_fluxo_l3_skip_nenhum_ajuste` — ciclo sem ajustes elegíveis. Mock executar_fluxo_l3_1_2_x NOT_CALLED + status=SKIP_NENHUM_AJUSTE.
+
+### S6.b — Remoção stub `faturamento_pipeline.py`
+
+**Confirmação prévia**: grep recursivo `^from app.odoo.estoque.orchestrators.faturamento_pipeline | ^import app.odoo.estoque.orchestrators.faturamento_pipeline` em `app/ tests/ scripts/` retornou ZERO matches (excluindo o próprio stub). Todas referências em docs/comentários históricos preservados.
+
+**Ação**:
+- `rm app/odoo/estoque/orchestrators/faturamento_pipeline.py` (75 LOC removidas).
+- Pytest tests/odoo COMPLETO pós-rm: 681 verdes em 15.62s (zero regressão).
+
+**Docs atualizadas**:
+- PROTECAO_PROXIMA_SESSAO.md N32: marcada OBSOLETA com lição atemporal preservada ("vale para qualquer stub futuro: contrato implícito; pattern de remoção segura = grep zero + pytest verde + cross-refs + commit isolado").
+- CLAUDE.md §6 Tabela 3 (orchestrator C3): removida menção ao stub; status `inventario_pipeline` atualizado para 96 pytest = 90 v27+ + 6 v28+ S7.
+- CLAUDE.md §11 estrutura do pacote: removida menção ao stub.
+- CLAUDE.md §14 D-V28-1 novo: documentação completa do destravamento ETAPA E + remoção stub + lição atemporal "opt-in flag pode ficar PARCIAL por N+M sessões; resolução é simples quando todas premissas estão consolidadas".
+- ROADMAP HANDOFF: baseline 672 → 681; bloco "v28+ S7+S6.b CONCLUÍDAS"; próximo passo v29+ = canary REAL ETAPA E + skill8 atomica.
+- Help text CLI `--usar-fluxo-l3-v19` (inventario_pipeline.py linhas 6048-6059).
+
+### Baseline pytest
+
+**676 → 682 verdes (+6 net)** em 15.61s:
+- +7 novos v28+ S7 (6 lista acima + 1 Finding 2 CR FALHA_ETAPA_E)
+- −1 substituído legado (`test_v20_s3_etapa_e_skip_quando_flag_v19` removido)
+
+### Code-review paralelo (subagente feature-dev:code-reviewer)
+
+Spawned em background durante implementação. Concluiu sem CRITICAL findings:
+
+- **HIGH Finding 1** — `SKIP_NAO_SUPORTADA_V20` em STATUS_FALHA (linha 5529) é semanticamente errado pós-v28+ S7 (mixed onda com direções não mapeadas reportaria EXECUTADO_PARCIAL em vez de SKIP). Reviewer reconhece que NÃO é breakage novo (helper F já trigava); decisão Rafael's call em sessão v29+ canary. **FOLLOW-UP v29+**: avaliar narrowing do tuple.
+- **HIGH Finding 2** — Faltava teste para branch `FALHA_ETAPA_E` (n_ok==0, n_falha>0). Aplicado: `test_v28_s7_etapa_e_via_fluxo_l3_falha_etapa_e_quando_todos_falham` espelhando helper F branch `FALHA_ETAPA_F`. Mock `executar_fluxo_l3_1_2_x` retorna `FALHA_PASSO_5_PREENCHER_PO`; assert status=FALHA_ETAPA_E + invoices_falha contém erro.
+- **MEDIUM Finding 3** — `usuario` param aceito mas não-usado no helper E (paridade helper F também não usa; legacy path propaga via Skill 7). NÃO é regressão — aceito por paridade. **FOLLOW-UP v29+**: avaliar propagar via passos do FLUXO L3 1.2.x para audit trail.
+- **Stub removal**: clean. N32 PROTECAO corretamente marcada OBSOLETA com lição preservada.
+
+**Veredito reviewer**: "No CRITICAL bugs. Helper E is a faithful mirror of helper F: same `ACAO_PARA_DIRECAO` unpacking, same `_resolver_constants_fluxo_l3` + meta-key filter, same `_resolver_pids_em_batch` + `abs(qtd_ajuste)` lotes aggregation, same status ladder. Tests cover the two most important branches (LF static vs FB G039-dynamic) plus abs-qty preservation. Neither blocks shipping."
+
+### Estado FINAL ajustes PROD (preservado v23+/v24+/v25+/v26+/v27+/v28+ — NÃO MEXIDO)
+
+- 176013/176014: `EXECUTADO/F5f_ENTRADA_OK`, invoice 717630 ENTIN/2026/05/0055 posted, PO 42419 team=143 picking 321617 done
+- 177465 AVULSO_FRASCO: `EXECUTADO/F5e_SEFAZ_OK`, invoice 719071 ENTIN/2026/05/0056 posted, PO 42543 team=143 fp=131 tipo=serv-industrializacao, picking 321834 done, quant LF/Estoque/AJ-27-05=37688un
+
+### Pendências v29+
+
+1. **Canary REAL PROD ETAPA E v28+ S7** — quando próximo PERDA_LF_FB / TRANSFERIR_CD_FB / DEV_LF_FB / DEV_CD_LF natural surgir. Rodar `--usar-fluxo-l3-v19 --etapas E --confirmar` validando paridade vs legacy Skill 7 V1 STRICT.
+2. **Canary REAL PROD opt-in skill8 ATOMICA v27+ S1** — quando próxima INDUSTRIALIZACAO_FB_LF natural surgir. Rodar `--usar-skill8-atomica-v25 --confirmar --confirmar-sefaz`.
+3. **G039 dinâmico FB destino** — primeira execução real ativará `garantir_purchase_team(uid=42, company_id=1)`. Validar criação OK ou diagnosticar se fallback STATIC é necessário.
+4. **Após canary OK**: remover ETAPAS C+D + E legacy (~1500 LOC total) + flip default `usar_fluxo_l3_v19=True` + `usar_skill8_atomica_v25=True`.
+5. **Decisão STATIC vs G039 dinâmico p/ FB+CD** — Rafael decide caso-a-caso após canary (LF é STATIC=143 desde F4 v25+).
+
+### Antipadrões NOVOS detectados nesta sessão
+
+**ZERO antipadrões novos.** Sessão executou conforme plano via opt-in (escolha arquitetural correta: caminho novo coexiste com legacy via flag default OFF — sem regressão). PROTECAO N1-N33 + AR1-AR14 inalterados (N32 marcada OBSOLETA por remoção do stub mas lição preservada).
+
+### Commits (pendentes — preparar 1 commit consolidado)
+
+- v28+ S7 + S6.b — código (~190 LOC helper + ~280 LOC pytest + ~75 LOC stub removido) + docs (CLAUDE.md §6+§11+§14 D-V28-1, ROADMAP HANDOFF, PROTECAO N32, VALIDACAO bloco v28+)

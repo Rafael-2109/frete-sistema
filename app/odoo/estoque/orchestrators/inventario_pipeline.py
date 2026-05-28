@@ -3661,6 +3661,227 @@ class FaturamentoPipelineExecutor:
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
+    def _executar_etapa_e_via_fluxo_l3(
+        self,
+        *,
+        ciclo: str,
+        company_origem_id: Optional[int] = None,
+        dry_run: bool = True,
+        usuario: str = 'faturamento_pipeline',
+        cod_produto: Optional[str] = None,
+        t0: float,
+    ) -> Dict[str, Any]:
+        """v28+ S7: ETAPA E substituida pelo FLUXO L3 1.2.x.
+
+        ESPELHA `_executar_etapa_f_via_fluxo_l3` (helper F v20+ S3) trocando
+        apenas o filtro de acoes: `ACOES_ENTRADA_FB` (4 acoes X->FB ou
+        X->LF: PERDA_LF_FB + TRANSFERIR_CD_FB + DEV_LF_FB destino=FB(1) +
+        DEV_CD_LF destino=LF(5)) em vez de `ACOES_ENTRADA_DESTINO_MANUAL`
+        (sentido FB->X).
+
+        Destrava o caminho FLUXO L3 1.2.x (caminho A buscar DFe via SEFAZ
+        ou caminho B criar manual via XML SAIDA) para essas 4 acoes que
+        ate v27+ ficavam SKIP_NAO_SUPORTADA_V20_FLUXO_L3 quando rodadas
+        com `--usar-fluxo-l3-v19=True`.
+
+        Decisao Rafael 2026-05-27 (CR-v27+-Finding2-S4 RESOLVIDO):
+            "robo CIEL IT tem mesmo defeito de atraso em QUALQUER tipo —
+            CD->FB tambem precisa funcionar pelo mesmo pattern de pesquisa
+            DFe + criar manual via XML saida". CONSTANTS v27+ S4 ja
+            mapeadas em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[1] (FB) +
+            [5] (LF) + L10N_BR_TIPO_PEDIDO_POR_ACAO p/ as 4 acoes.
+
+        Atencao G039 dinamico FB destino: 3 das 4 acoes destinam FB
+        (company_id=1). `_resolver_constants_fluxo_l3` faz override G039
+        dinamico para `company_destino != 5` — entao FB destino vai
+        exercitar `_resolver_team_g039` pela primeira vez em real-run.
+        Hook ja codificado v23+ (lazy create purchase.team idempotente);
+        primeira execucao real cria team Rafael uid=42 + company FB=1
+        automaticamente. Fallback silencioso (None + warning + STATIC
+        do constants) se G039 falhar.
+
+        DEV_CD_LF (4a acao) destina LF (5) — usa team STATIC=143 v25+ F4
+        (G039 desligado para LF), mesma logica de helper F LF destino.
+
+        Returns:
+            dict similar a executar_etapa_f legacy:
+              status: EXECUTADO_OK | EXECUTADO_PARCIAL | DRY_RUN_OK |
+                      SKIP_NENHUM_AJUSTE | FALHA_ETAPA_E | SKIP_NAO_SUPORTADA_V20
+              invoices_pendentes, invoices_ok, invoices_falha,
+              invoices_nao_suportadas_v20, contadores
+        """
+        from app.odoo.models import AjusteEstoqueInventario  # lazy
+        del AjusteEstoqueInventario  # nao usado diretamente; ja' carregado por _carregar_ajustes
+        from app.utils.timezone import agora_utc_naive  # lazy F1 v25+
+
+        ajustes = _carregar_ajustes(
+            ciclo=ciclo,
+            company_origem_id=company_origem_id,
+            fases_pipeline=[FASE_F5e_OK],
+            cod_produto=cod_produto,
+            status_filter=['PROPOSTO', 'APROVADO', 'EXECUTADO'],
+        )
+
+        elegiveis: List = [
+            a for a in ajustes
+            if a.invoice_id_odoo
+            and a.acao_decidida in ACOES_ENTRADA_FB
+        ]
+
+        out: Dict[str, Any] = {
+            'etapa': 'E',
+            'modo': 'fluxo_l3_v19',
+            'ciclo': ciclo,
+            'company_origem_id': company_origem_id,
+            'dry_run': dry_run,
+            'ajustes_total': len(elegiveis),
+            'invoices_pendentes': [],
+            'invoices_ok': {},
+            'invoices_falha': {},
+            'invoices_nao_suportadas_v20': {},
+            'contadores': {
+                'ok': 0, 'falha': 0, 'nao_suportada_v20': 0,
+            },
+        }
+
+        if not elegiveis:
+            out['status'] = 'SKIP_NENHUM_AJUSTE'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        ajustes_por_invoice: Dict[int, List] = defaultdict(list)
+        for a in elegiveis:
+            ajustes_por_invoice[a.invoice_id_odoo].append(a)
+        invoices_pendentes = list(ajustes_por_invoice.keys())
+        out['invoices_pendentes'] = sorted(invoices_pendentes)
+
+        # F1 v25+ (espelha helper F): resolver product_id em batch para
+        # construcao de `lotes_data` por invoice. Mesma logica de
+        # `_executar_etapa_f_via_fluxo_l3` (linhas 3524-3535): le
+        # `AjusteEstoqueInventario.lote_destino` da planilha + transforma
+        # vazio/'MIGRAÇÃO' em `INV-{cod}-{YYYYMMDD}`.
+        cods_global = sorted({a.cod_produto for a in elegiveis})
+        prod_cache: Dict[str, int] = self._resolver_pids_em_batch(cods_global)
+        HOJE_F1 = agora_utc_naive().strftime('%Y%m%d')
+
+        for invoice_id in invoices_pendentes:
+            ajs = ajustes_por_invoice[invoice_id]
+            acao = ajs[0].acao_decidida
+            _, _, company_destino = ACAO_PARA_DIRECAO[acao]
+
+            constants = self._resolver_constants_fluxo_l3(
+                acao_decidida=acao, company_destino=company_destino,
+            )
+            if not constants:
+                out['invoices_nao_suportadas_v20'][invoice_id] = (
+                    f'acao={acao} company_destino={company_destino}: '
+                    f'constants nao mapeadas em '
+                    f'CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO.'
+                )
+                out['contadores']['nao_suportada_v20'] += 1
+                continue
+
+            # v24.1+ FIX REGRESSION (espelha helper F linhas 3554-3565):
+            # `_resolver_constants_fluxo_l3` adiciona meta-keys prefixadas
+            # '_' (ex: '_team_g039_status') no dict resolved. Filtrar
+            # ANTES do splat porque `executar_fluxo_l3_1_2_x` tem assinatura
+            # strict sem **kwargs.
+            public_constants = {
+                k: v for k, v in constants.items() if not k.startswith('_')
+            }
+
+            # F1 v25+: construir `lotes_data` desta invoice (espelha helper F
+            # linhas 3567-3595). 1 entry por (pid, lote_destino) com qty
+            # agregada. Lote vazio/'MIGRAÇÃO' -> 'INV-{cod}-{YYYYMMDD}'.
+            agg_lotes: Dict[Tuple[int, str], float] = defaultdict(float)
+            for a in ajs:
+                pid = prod_cache.get(a.cod_produto)
+                if not pid:
+                    logger.warning(
+                        f'  E invoice {invoice_id}: sem product_id para '
+                        f'{a.cod_produto}, pulando ajuste {a.id}'
+                    )
+                    continue
+                lote_dest_raw = (a.lote_destino or '').strip()
+                if not lote_dest_raw or lote_dest_raw == 'MIGRAÇÃO':
+                    lote_dest = f'INV-{a.cod_produto}-{HOJE_F1}'
+                else:
+                    lote_dest = lote_dest_raw
+                agg_lotes[(pid, lote_dest)] += float(abs(a.qtd_ajuste or 0))
+
+            lotes_data_inv: List[Dict[str, Any]] = [
+                {'product_id': pid, 'lote_nome': lote_dest, 'quantidade': qty}
+                for (pid, lote_dest), qty in agg_lotes.items()
+                if qty > 0
+            ]
+            # F1b: `lote_default` apenas como ULTIMO recurso (espelha helper F).
+            lote_default_inv = f'INV-FALLBACK-{HOJE_F1}'
+
+            try:
+                r = self.executar_fluxo_l3_1_2_x(
+                    invoice_id_saida=invoice_id,
+                    lotes_data=lotes_data_inv,
+                    lote_default=lote_default_inv,
+                    dry_run=dry_run,
+                    **public_constants,
+                )
+            except Exception as e:
+                logger.error(
+                    f'  E invoice {invoice_id} acao={acao}: '
+                    f'executar_fluxo_l3_1_2_x raise: {e}', exc_info=True,
+                )
+                out['invoices_falha'][invoice_id] = (
+                    f'fluxo_l3_excecao: {str(e)[:200]}'
+                )
+                out['contadores']['falha'] += 1
+                continue
+
+            status_fluxo = r.get('status')
+            if status_fluxo in ('FLUXO_OK', 'DRY_RUN_OK'):
+                out['invoices_ok'][invoice_id] = {
+                    'caminho': r.get('caminho'),
+                    'po_id': r.get('po_id'),
+                    'picking_id': r.get('picking_id'),
+                    'invoice_id_destino': r.get('invoice_id'),
+                }
+                out['contadores']['ok'] += 1
+                logger.info(
+                    f'  E invoice {invoice_id} acao={acao}: '
+                    f'{status_fluxo} caminho={r.get("caminho")} '
+                    f'tempo={r.get("tempo_ms")}ms'
+                )
+            else:
+                out['invoices_falha'][invoice_id] = (
+                    f'{status_fluxo}: {r.get("erro") or "sem_erro_detalhado"}'
+                )
+                out['contadores']['falha'] += 1
+                logger.error(
+                    f'  E invoice {invoice_id} acao={acao}: '
+                    f'{status_fluxo} erro={r.get("erro")}'
+                )
+
+        n_ok = out['contadores']['ok']
+        n_falha = out['contadores']['falha']
+        n_nao_suportada = out['contadores']['nao_suportada_v20']
+
+        # Espelha logica do helper F (linhas 3640-3659): nao_suportada conta
+        # como sinal de parcial — onda mista LF (ok) + FB (nao_suportada) deve
+        # reportar EXECUTADO_PARCIAL, nao EXECUTADO_OK.
+        if n_falha == 0 and n_nao_suportada == 0 and n_ok > 0:
+            out['status'] = (
+                'DRY_RUN_OK' if dry_run else 'EXECUTADO_OK'
+            )
+        elif n_ok > 0:
+            out['status'] = 'EXECUTADO_PARCIAL'
+        elif n_falha > 0:
+            out['status'] = 'FALHA_ETAPA_E'
+        else:
+            # n_ok==0 + n_falha==0 + (n_nao_suportada >= 0)
+            out['status'] = 'SKIP_NAO_SUPORTADA_V20'
+
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
     # ========================================================
     # v25+ S1 — Skill 8 ATOMICA L2 opt-in helpers (AP6 refator)
     # ========================================================
@@ -4227,6 +4448,15 @@ class FaturamentoPipelineExecutor:
     ) -> Dict[str, Any]:
         """ETAPA E v17.5 — DELEGA atomo Skill 7 `escriturando-odoo` por invoice.
 
+        **v28+ S7 (2026-05-27 Rafael)**: quando `usar_fluxo_l3_v19=True`,
+        dispatch para `_executar_etapa_e_via_fluxo_l3` (helper novo que
+        espelha `_executar_etapa_f_via_fluxo_l3` filtrando ACOES_ENTRADA_FB
+        em vez de ACOES_ENTRADA_DESTINO_MANUAL). Destrava 4 acoes X->FB
+        ou X->LF (PERDA_LF_FB + TRANSFERIR_CD_FB + DEV_LF_FB destino=FB;
+        DEV_CD_LF destino=LF) via FLUXO L3 1.2.x (caminho A buscar DFe
+        OU caminho B criar manual via XML SAIDA). Default flag=False
+        preserva 100% comportamento legacy (Skill 7 V1 STRICT abaixo).
+
         Para cada invoice_id distinto com `fase_pipeline=F5e_SEFAZ_OK` e
         `acao_decidida in ACOES_ENTRADA_FB`, invoca atomo Skill 7
         `EscrituracaoLfService.criar_recebimento_orchestrado(invoice_id, ajustes)`
@@ -4272,27 +4502,23 @@ class FaturamentoPipelineExecutor:
 
         t0 = time.time()
 
-        # FIX v20+ S3: opt-in `--usar-fluxo-l3-v19` skip ETAPA E legacy.
-        # ETAPA E LEGACY processa ACOES_ENTRADA_FB (LF/CD -> FB destino).
-        # Minimo viavel S3: company_destino=FB(1) NAO esta em
-        # CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO (so LF=5 validado canary).
-        # ETAPA E via fluxo L3 fica pendente v21+ quando FB constants
-        # forem mapeadas+validadas. Default flag=False preserva legacy.
+        # FIX v28+ S7 (Rafael 2026-05-27): opt-in `--usar-fluxo-l3-v19`
+        # substitui ETAPA E legacy (Skill 7 V1 STRICT
+        # `criar_recebimento_orchestrado` LF->FB only) pelo FLUXO L3 1.2.x
+        # via `executar_fluxo_l3_1_2_x`. v27+ S4 mapeou CONSTANTS para FB=1
+        # + LF=5 destinos das 4 ACOES_ENTRADA_FB (PERDA_LF_FB, TRANSFERIR_CD_FB,
+        # DEV_LF_FB destino=FB; DEV_CD_LF destino=LF). G039 hook codificado
+        # v23+ cria purchase.team Rafael+company_destino automaticamente.
+        # Default flag=False preserva 100% comportamento legacy.
         if usar_fluxo_l3_v19:
-            return {
-                'etapa': 'E',
-                'ciclo': ciclo,
-                'company_origem_id': company_origem_id,
-                'dry_run': dry_run,
-                'status': 'SKIP_NAO_SUPORTADA_V20_FLUXO_L3',
-                'observacao': (
-                    'ETAPA E (entrada FB via Skill 7 V1 STRICT) NAO substituida '
-                    'pelo FLUXO L3 1.2.x em v20+. Constants para company_destino='
-                    '1 (FB) nao mapeadas em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO. '
-                    'Pendencia v21+: validar canary + mapear constants FB.'
-                ),
-                'tempo_ms': int((time.time() - t0) * 1000),
-            }
+            return self._executar_etapa_e_via_fluxo_l3(
+                ciclo=ciclo,
+                company_origem_id=company_origem_id,
+                dry_run=dry_run,
+                usuario=usuario,
+                cod_produto=cod_produto,
+                t0=t0,
+            )
 
         # Carregar ajustes em F5e_SEFAZ_OK
         ajustes = _carregar_ajustes(
@@ -5287,18 +5513,20 @@ class FaturamentoPipelineExecutor:
         # 'BLOQUEADO_ETAPA_ANTERIOR_FALHOU' contam como falha — pipeline
         # nao retorna OK quando ETAPA D foi bloqueada.
         # CR-v20+-CRITICAL-1 (review code-reviewer 2026-05-26):
-        # 'SKIP_NAO_SUPORTADA_V20_FLUXO_L3' (retornado por ETAPA E quando
-        # `usar_fluxo_l3_v19=True` mas company_destino=1 FB ainda nao
-        # mapeada em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO) DEVE contar
-        # como falha. Sem este check, operador rodando
-        # `--usar-fluxo-l3-v19 --etapas E,F` receberia EXECUTADO_OK mesmo
-        # com ETAPA E silenciosamente skipada — silent correctness gap.
+        # 'SKIP_NAO_SUPORTADA_V20_FLUXO_L3' historicamente era retornado
+        # por ETAPA E quando `usar_fluxo_l3_v19=True` mas company_destino
+        # FB ainda nao estava mapeada. **v28+ S7 (2026-05-27)**: helper
+        # `_executar_etapa_e_via_fluxo_l3` destrava o dispatch — ETAPA E
+        # nao retorna mais SKIP_NAO_SUPORTADA_V20_FLUXO_L3 (retorna ate
+        # SKIP_NAO_SUPORTADA_V20 quando direcao especifica nao mapeada,
+        # mesmo formato do helper F). Status preservado no tuple para
+        # compat (algum caller futuro pode retornar — defesa generica).
         STATUS_FALHA = (
             'EXCECAO_NAO_TRATADA',
             'BLOQUEADO_SEM_CONFIRMAR_SEFAZ',
             'BLOQUEADO_ETAPA_ANTERIOR_FALHOU',
-            'SKIP_NAO_SUPORTADA_V20_FLUXO_L3',  # v20+ CRITICAL-1
-            'SKIP_NAO_SUPORTADA_V20',           # v20+ ETAPA F via fluxo L3 sem invoices suportados
+            'SKIP_NAO_SUPORTADA_V20_FLUXO_L3',  # v20+ CRITICAL-1 (legado pre-v28+ S7)
+            'SKIP_NAO_SUPORTADA_V20',           # v20+ helper F/E sem invoices suportados
         )
         status_etapas = [
             r.get('status', '') for r in out['etapas_executadas'].values()
@@ -5833,11 +6061,13 @@ def _build_argparser() -> argparse.ArgumentParser:
         help=(
             'v20+ S3 opt-in: substitui ETAPAS E+F legacy pelo FLUXO L3 1.2.x '
             'via executar_fluxo_l3_1_2_x. Default OFF preserva 100%% '
-            'comportamento legacy. ETAPA E (entrada FB destino) retorna '
-            'SKIP_NAO_SUPORTADA_V20_FLUXO_L3 (pendencia v28+); ETAPA F '
-            'todos destinos (LF=5 validado canary 2026-05-26 caso 627348; '
-            'FB=1 e CD=4 CANDIDATE v27+ S4 expand constants + L10N_BR_TIPO_PEDIDO '
-            'mapeado para 8 acoes da MATRIZ_INTERCOMPANY — pendente canary REAL).'
+            'comportamento legacy. ETAPA E (entrada X->FB ou X->LF — '
+            'ACOES_ENTRADA_FB) v28+ S7: helper `_executar_etapa_e_via_fluxo_l3` '
+            'destrava 4 acoes (PERDA_LF_FB + TRANSFERIR_CD_FB + DEV_LF_FB + '
+            'DEV_CD_LF) via FLUXO L3. ETAPA F todos destinos (LF=5 validado '
+            'canary 2026-05-26 caso 627348; FB=1 e CD=4 CANDIDATE v27+ S4 '
+            'expand constants + L10N_BR_TIPO_PEDIDO mapeado para 8 acoes da '
+            'MATRIZ_INTERCOMPANY — pendente canary REAL).'
         ),
     )
     p.add_argument(

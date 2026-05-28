@@ -2484,22 +2484,434 @@ def test_resume_sem_stagnation_continua_ate_max_iter():
 # v20+ S3 — opt-in `usar_fluxo_l3_v19` (substitui ETAPAS E+F legacy)
 # ============================================================
 
-def test_v20_s3_etapa_e_skip_quando_flag_v19():
-    """v20+ S3: ETAPA E com `usar_fluxo_l3_v19=True` retorna
-    SKIP_NAO_SUPORTADA_V20_FLUXO_L3 (entrada FB nao mapeada no
-    minimo viavel; pendencia v21+).
+# ============================================================
+# v28+ S7 — opt-in `usar_fluxo_l3_v19` na ETAPA E (substitui SKIP legado)
+# ============================================================
+# Resolução do CR-v27+-Finding2-S4 (Rafael 2026-05-27):
+# Helper `_executar_etapa_e_via_fluxo_l3` espelha helper F filtrando
+# ACOES_ENTRADA_FB. Destrava 4 acoes (PERDA_LF_FB + TRANSFERIR_CD_FB +
+# DEV_LF_FB destino=FB; DEV_CD_LF destino=LF). Substitui retorno
+# SKIP_NAO_SUPORTADA_V20_FLUXO_L3 do test_v20_s3_etapa_e_skip_quando_flag_v19
+# (legado pre-v28+ S7).
+
+
+def test_v28_s7_etapa_e_via_fluxo_l3_lf_destino_dry_run(db):
+    """v28+ S7: ETAPA E com flag=True + ajuste DEV_CD_LF (destino LF=5)
+    invoca `_executar_etapa_e_via_fluxo_l3` que chama `executar_fluxo_l3_1_2_x`
+    com constants LF (team STATIC 143 F4 v25+, picking_type LF=19).
+
+    DEV_CD_LF eh a unica acao em ACOES_ENTRADA_FB com destino LF (5).
     """
-    executor = FaturamentoPipelineExecutor()
-    # NAO mockamos EscrituracaoLfService — branch early do flag retorna
-    # antes de tocar service externo.
-    res = executor.executar_etapa_e(
-        ciclo='TEST_V20_S3',
-        dry_run=True,
-        usar_fluxo_l3_v19=True,
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V28_S7_LF'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='105000007',
+        tipo_produto=4,
+        company_id=4,  # CD origem
+        acao_decidida='DEV_CD_LF',  # destino LF=5
+        qtd_inventario=100.0,
+        qtd_odoo=0,
+        qtd_ajuste=100.0,
+        lote_destino='MIGRAÇÃO',
+        invoice_id_odoo=700001,
+        chave_nfe='35260561724241000178550010000700001006273480',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v28_s7',
     )
-    assert res['status'] == 'SKIP_NAO_SUPORTADA_V20_FLUXO_L3'
-    assert 'company_destino=1 (FB) nao mapeadas' in res['observacao']
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'105000007': 11111},
+    ), patch.object(
+        executor, '_resolver_team_g039', return_value=(None, None),
+    ), patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'DRY_RUN_OK',
+            'caminho': 'A',
+            'dfe_id': None,
+            'po_id': None,
+            'picking_id': None,
+            'invoice_id': None,
+            'passos': [],
+            'tempo_ms': 50,
+        },
+    ) as mock_fluxo:
+        res = executor.executar_etapa_e(
+            ciclo=ciclo_test,
+            dry_run=True,
+            usar_fluxo_l3_v19=True,
+        )
+
+    # Cleanup
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['modo'] == 'fluxo_l3_v19'
     assert res['etapa'] == 'E'
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['nao_suportada_v20'] == 0
+    assert 700001 in res['invoices_ok']
+    # CRUCIAL: chamou executar_fluxo_l3_1_2_x com constants LF (F4 STATIC=143)
+    mock_fluxo.assert_called_once()
+    kwargs = mock_fluxo.call_args.kwargs
+    assert kwargs['invoice_id_saida'] == 700001
+    assert kwargs['company_destino'] == 5  # LF
+    assert kwargs['team_id'] == 143  # F4 v25+ STATIC LF
+    assert kwargs['picking_type_id'] == 19  # LF Recebimento
+    assert kwargs['dry_run'] is True
+
+
+def test_v28_s7_etapa_e_via_fluxo_l3_fb_destino_dry_run(db):
+    """v28+ S7: ETAPA E com flag=True + ajuste TRANSFERIR_CD_FB (destino
+    FB=1) invoca helper E + chama executar_fluxo_l3_1_2_x com constants
+    FB. G039 dinamico (FB nao tem team STATIC — usa _resolver_team_g039
+    para Rafael+FB).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V28_S7_FB'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='208000001',
+        tipo_produto=4,
+        company_id=4,  # CD origem (TRANSFERIR_CD_FB)
+        acao_decidida='TRANSFERIR_CD_FB',  # destino FB=1
+        qtd_inventario=50.0,
+        qtd_odoo=0,
+        qtd_ajuste=50.0,
+        lote_destino='AJ-28-05',
+        invoice_id_odoo=700002,
+        chave_nfe='35260518467441000163550010000132455007099002',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v28_s7',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    # G039 dinamico p/ FB (Rafael uid + company=1) — mockar retorno team
+    with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'208000001': 22222},
+    ), patch.object(
+        executor, '_resolver_team_g039', return_value=(155, 'CRIADO'),
+    ), patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'DRY_RUN_OK',
+            'caminho': 'A', 'dfe_id': None, 'po_id': None,
+            'picking_id': None, 'invoice_id': None,
+            'passos': [], 'tempo_ms': 75,
+        },
+    ) as mock_fluxo:
+        res = executor.executar_etapa_e(
+            ciclo=ciclo_test,
+            dry_run=True,
+            usar_fluxo_l3_v19=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['modo'] == 'fluxo_l3_v19'
+    assert res['etapa'] == 'E'
+    assert res['contadores']['ok'] == 1
+    mock_fluxo.assert_called_once()
+    kwargs = mock_fluxo.call_args.kwargs
+    assert kwargs['invoice_id_saida'] == 700002
+    assert kwargs['company_destino'] == 1  # FB
+    assert kwargs['picking_type_id'] == 1  # FB Recebimentos discovery v27+ S4
+    assert kwargs['team_id'] == 155  # G039 dinamico (mocked)
+    # TRANSFERIR_CD_FB: tipos {dfe: compra, po: transf-filial}
+    assert kwargs['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert kwargs['l10n_br_tipo_pedido_po'] == 'transf-filial'
+    # lote_destino preservado (nao 'MIGRAÇÃO' nem vazio)
+    lotes = kwargs['lotes_data']
+    assert len(lotes) == 1
+    assert lotes[0]['product_id'] == 22222
+    assert lotes[0]['lote_nome'] == 'AJ-28-05'  # preservado da planilha
+    assert lotes[0]['quantidade'] == 50.0
+
+
+def test_v28_s7_etapa_e_via_fluxo_l3_perda_lf_fb_real_run_mockado(db):
+    """v28+ S7: ETAPA E real-run PERDA_LF_FB (LF->FB destino FB=1) via
+    FLUXO L3 1.2.x. Mock retorna FLUXO_OK; status final = EXECUTADO_OK +
+    invoice em invoices_ok.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V28_S7_PERDA'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='309001000',
+        tipo_produto=4,
+        company_id=5,  # LF origem
+        acao_decidida='PERDA_LF_FB',  # destino FB=1
+        qtd_inventario=0,
+        qtd_odoo=25.0,
+        qtd_ajuste=-25.0,  # perda
+        lote_destino='LOTE-PERDA-X',
+        invoice_id_odoo=700003,
+        chave_nfe='35260561724241000178550010000700003007099003',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v28_s7',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'309001000': 33333},
+    ), patch.object(
+        executor, '_resolver_team_g039', return_value=(155, 'CACHE'),
+    ), patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'FLUXO_OK', 'caminho': 'B',
+            'dfe_id': 50001, 'po_id': 60001, 'picking_id': 70001,
+            'invoice_id': 80001, 'passos': [], 'tempo_ms': 2500,
+        },
+    ) as mock_fluxo:
+        res = executor.executar_etapa_e(
+            ciclo=ciclo_test,
+            dry_run=False,
+            usar_fluxo_l3_v19=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert res['status'] == 'EXECUTADO_OK'
+    assert res['etapa'] == 'E'
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['falha'] == 0
+    assert 700003 in res['invoices_ok']
+    assert res['invoices_ok'][700003]['caminho'] == 'B'
+    assert res['invoices_ok'][700003]['invoice_id_destino'] == 80001
+    mock_fluxo.assert_called_once()
+    kwargs = mock_fluxo.call_args.kwargs
+    assert kwargs['company_destino'] == 1  # FB
+    assert kwargs['dry_run'] is False
+    # qty_ajuste -25 -> abs(25) preservada
+    lotes = kwargs['lotes_data']
+    assert len(lotes) == 1
+    assert lotes[0]['quantidade'] == 25.0
+    assert lotes[0]['lote_nome'] == 'LOTE-PERDA-X'
+
+
+def test_v28_s7_etapa_e_via_fluxo_l3_dev_cd_lf_real_run_mockado(db):
+    """v28+ S7: ETAPA E real-run DEV_CD_LF (CD->LF destino LF=5) via
+    FLUXO L3 1.2.x. Tipos PO: dfe='compra' + po='retorno'.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V28_S7_DEV_CD_LF'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='410001000',
+        tipo_produto=2,
+        company_id=4,  # CD origem
+        acao_decidida='DEV_CD_LF',  # destino LF=5
+        qtd_inventario=15.0,
+        qtd_odoo=0,
+        qtd_ajuste=15.0,
+        lote_destino='',  # vazio -> INV-{cod}-{HOJE}
+        invoice_id_odoo=700004,
+        chave_nfe='35260561724241000178550010000700004007099004',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v28_s7',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'410001000': 44444},
+    ), patch.object(
+        executor, '_resolver_team_g039', return_value=(None, None),
+    ), patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'FLUXO_OK', 'caminho': 'A',
+            'dfe_id': 50002, 'po_id': 60002, 'picking_id': 70002,
+            'invoice_id': 80002, 'passos': [], 'tempo_ms': 1850,
+        },
+    ) as mock_fluxo:
+        res = executor.executar_etapa_e(
+            ciclo=ciclo_test,
+            dry_run=False,
+            usar_fluxo_l3_v19=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    assert res['status'] == 'EXECUTADO_OK'
+    assert res['contadores']['ok'] == 1
+    assert 700004 in res['invoices_ok']
+    mock_fluxo.assert_called_once()
+    kwargs = mock_fluxo.call_args.kwargs
+    assert kwargs['company_destino'] == 5  # LF (DEV_CD_LF)
+    assert kwargs['team_id'] == 143  # F4 v25+ STATIC LF
+    # DEV_CD_LF: tipos {dfe: compra, po: retorno}
+    assert kwargs['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert kwargs['l10n_br_tipo_pedido_po'] == 'retorno'
+    # lote vazio -> 'INV-410001000-{HOJE}'
+    lotes = kwargs['lotes_data']
+    assert len(lotes) == 1
+    assert lotes[0]['lote_nome'].startswith('INV-410001000-')
+
+
+def test_v28_s7_default_off_preserva_etapa_e_legacy(db):
+    """v28+ S7: ETAPA E com flag=False (default) NAO dispatcha helper E —
+    preserva 100% comportamento legacy (Skill 7 V1 STRICT
+    `criar_recebimento_orchestrado`). Garante zero risco de regressao.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V28_S7_LEGACY'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='309001000',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=0, qtd_odoo=10.0, qtd_ajuste=-10.0,
+        lote_destino='LOTE-LEG',
+        invoice_id_odoo=700005,
+        chave_nfe='35260561724241000178550010000700005007099005',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v28_s7',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    # Helper E NUNCA invocado quando flag=False
+    with patch.object(
+        executor, '_executar_etapa_e_via_fluxo_l3',
+    ) as mock_helper_e:
+        # Default flag=False -> caminho legacy (dry_run=True usa branch
+        # DRY_RUN_OK_ETAPA_E que nao toca EscrituracaoLfService)
+        res = executor.executar_etapa_e(
+            ciclo=ciclo_test,
+            dry_run=True,
+            # usar_fluxo_l3_v19=False (default)
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    # CRUCIAL: helper NOVO NAO foi invocado
+    mock_helper_e.assert_not_called()
+    # Caminho legacy retorna DRY_RUN_OK_ETAPA_E
+    assert res['status'] == 'DRY_RUN_OK_ETAPA_E'
+    assert res['etapa'] == 'E'
+    # 1 invoice esperado (planejamento legacy)
+    assert 700005 in res['invoices_pendentes']
+
+
+def test_v28_s7_etapa_e_via_fluxo_l3_skip_nenhum_ajuste(db):
+    """v28+ S7: ETAPA E com flag=True mas zero ajustes elegiveis
+    retorna SKIP_NENHUM_AJUSTE (espelha helper F).
+    """
+    # Sem inserir ajuste — DB limpo
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, '_resolver_pids_em_batch', return_value={},
+    ), patch.object(
+        executor, '_resolver_team_g039', return_value=(None, None),
+    ), patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+    ) as mock_fluxo:
+        res = executor.executar_etapa_e(
+            ciclo='TEST_V28_S7_VAZIO',  # ciclo sem ajustes
+            dry_run=True,
+            usar_fluxo_l3_v19=True,
+        )
+
+    assert res['status'] == 'SKIP_NENHUM_AJUSTE'
+    assert res['etapa'] == 'E'
+    assert res['ajustes_total'] == 0
+    # CRUCIAL: executar_fluxo_l3_1_2_x NAO invocado (sem ajustes)
+    mock_fluxo.assert_not_called()
+
+
+def test_v28_s7_etapa_e_via_fluxo_l3_falha_etapa_e_quando_todos_falham(db):
+    """v28+ S7 (CR Finding 2 — paridade vs helper F branch FALHA_ETAPA_F):
+    ETAPA E com flag=True + 1 ajuste mas `executar_fluxo_l3_1_2_x`
+    retorna status nao-OK -> status agregado=FALHA_ETAPA_E (n_ok==0,
+    n_falha>0). Espelha helper F branch `FALHA_ETAPA_F` linha 3656.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V28_S7_FALHA'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='309001000',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=0, qtd_odoo=10.0, qtd_ajuste=-10.0,
+        lote_destino='LOTE-FALHA',
+        invoice_id_odoo=700006,
+        chave_nfe='35260561724241000178550010000700006007099006',
+        fase_pipeline='F5e_SEFAZ_OK',
+        status='EXECUTADO',
+        criado_por='test_v28_s7',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, '_resolver_pids_em_batch',
+        return_value={'309001000': 33333},
+    ), patch.object(
+        executor, '_resolver_team_g039', return_value=(155, 'CACHE'),
+    ), patch.object(
+        executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'FALHA_PASSO_5_PREENCHER_PO',  # erro qualquer
+            'caminho': 'A', 'dfe_id': 50001, 'po_id': 60001,
+            'picking_id': None, 'invoice_id': None,
+            'passos': [], 'tempo_ms': 800,
+            'erro': 'mock_erro_passo5_preencher_po_falhou',
+        },
+    ):
+        res = executor.executar_etapa_e(
+            ciclo=ciclo_test,
+            dry_run=False,
+            usar_fluxo_l3_v19=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    # Branch n_ok==0 + n_falha>0 -> FALHA_ETAPA_E
+    assert res['status'] == 'FALHA_ETAPA_E'
+    assert res['etapa'] == 'E'
+    assert res['contadores']['ok'] == 0
+    assert res['contadores']['falha'] == 1
+    assert 700006 in res['invoices_falha']
+    # Erro preservado com prefixo do status do fluxo
+    assert 'FALHA_PASSO_5_PREENCHER_PO' in res['invoices_falha'][700006]
 
 
 def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
