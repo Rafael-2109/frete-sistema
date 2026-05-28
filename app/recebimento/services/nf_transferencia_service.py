@@ -18,6 +18,7 @@ from sqlalchemy import delete, func as sa_func
 from app import db
 from app.recebimento.models import (
     NfTransferenciaSnapshot, NfTransferenciaProdutoSnapshot,
+    NfTransferenciaDesconsiderada, CFOPS_RETORNO_INSUMO_INDUSTRIALIZACAO,
 )
 from app.odoo.utils.connection import get_odoo_connection
 from app.odoo.constants.operacoes_fiscais import (
@@ -64,6 +65,27 @@ def _norm_str(v, maxlen=None):
     if maxlen and len(s) > maxlen:
         s = s[:maxlen]
     return s
+
+
+def _parse_odoo_dt(v):
+    """Converte timestamp Odoo (UTC naive ISO string) para datetime naive.
+
+    Odoo XML-RPC retorna `False` (ausente) ou string ISO
+    'YYYY-MM-DD HH:MM:SS'. Mantemos naive (sem tzinfo) — convencao do
+    sistema (.claude/references/REGRAS_TIMEZONE.md).
+
+    Falha de parse (string malformada) NAO levanta — retorna None e loga
+    em DEBUG para nao silenciar erros sistematicos do Odoo.
+    """
+    from datetime import datetime as _dt
+    if v is None or v is False or v == '':
+        return None
+    try:
+        # Odoo: '2026-05-28 13:42:39' (UTC). datetime.fromisoformat aceita.
+        return _dt.fromisoformat(str(v).replace('T', ' ').split('.')[0])
+    except (ValueError, TypeError):
+        logger.debug('_parse_odoo_dt: nao parseou valor=%r', v)
+        return None
 
 
 class NfTransferenciaService:
@@ -248,6 +270,9 @@ class NfTransferenciaService:
             'l10n_br_chave_nf', 'l10n_br_numero_nota_fiscal',
             'company_id', 'partner_id',
             'l10n_br_tipo_pedido', 'fiscal_position_id', 'invoice_line_ids',
+            # `create_date` = timestamp da criacao do account.move
+            # (proxy seguro para "horario de emissao"; UTC naive).
+            'create_date',
         ]
         moves: List[Dict] = []
         for i in range(0, len(ids), ODOO_BATCH):
@@ -301,8 +326,10 @@ class NfTransferenciaService:
         unique = list(set(picking_ids))
         out: Dict[int, Dict] = {}
         for i in range(0, len(unique), ODOO_BATCH):
+            # `date_done` = timestamp da validacao do picking (UTC naive
+            # quando state='done'; None se ainda em assigned/draft).
             for p in odoo.read('stock.picking', unique[i:i + ODOO_BATCH],
-                                ['id', 'name', 'state']):
+                                ['id', 'name', 'state', 'date_done']):
                 out[p['id']] = p
         return out
 
@@ -313,8 +340,11 @@ class NfTransferenciaService:
         unique = list(set(invoice_ids))
         out: Dict[int, Dict] = {}
         for i in range(0, len(unique), ODOO_BATCH):
+            # `create_date` = timestamp da criacao do invoice destino (UTC
+            # naive). Proxy para "data+hora de escrituracao" do in_invoice.
             for inv in odoo.read('account.move', unique[i:i + ODOO_BATCH],
-                                  ['id', 'name', 'state', 'move_type']):
+                                  ['id', 'name', 'state', 'move_type',
+                                   'create_date']):
                 if inv.get('move_type') in ('in_invoice', 'in_refund'):
                     out[inv['id']] = inv
         return out
@@ -415,7 +445,9 @@ class NfTransferenciaService:
 
         # Picking + Invoice destino — pega o primeiro disponivel
         picking_id = picking_name = picking_state = None
+        picking_data_hora = None
         invoice_destino_id = invoice_destino_name = invoice_destino_state = None
+        invoice_destino_data_hora = None
 
         if dfe:
             for f in ('purchase_fiscal_id', 'purchase_id'):
@@ -432,6 +464,7 @@ class NfTransferenciaService:
                             picking_id = p['id']
                             picking_name = p.get('name')
                             picking_state = p.get('state')
+                            picking_data_hora = _parse_odoo_dt(p.get('date_done'))
                             break
                 if invoice_destino_id is None:
                     for iid in po.get('invoice_ids') or []:
@@ -440,6 +473,9 @@ class NfTransferenciaService:
                             invoice_destino_id = inv['id']
                             invoice_destino_name = inv.get('name')
                             invoice_destino_state = inv.get('state')
+                            invoice_destino_data_hora = _parse_odoo_dt(
+                                inv.get('create_date')
+                            )
                             break
                 if picking_id and invoice_destino_id:
                     break
@@ -465,6 +501,7 @@ class NfTransferenciaService:
             partner_origem_id=None,
             partner_destino_id=partner_id,
             data_emissao=move.get('invoice_date') or None,
+            data_emissao_hora=_parse_odoo_dt(move.get('create_date')),
             valor_total=Decimal(str(move.get('amount_total') or 0)),
             acao=_norm_str(acao, 30),
             cfop_saida=_norm_str(cfop_saida, 5),
@@ -476,9 +513,11 @@ class NfTransferenciaService:
             picking_id=picking_id,
             picking_name=_norm_str(picking_name, 50),
             picking_state=_norm_str(picking_state, 30),
+            picking_data_hora=picking_data_hora,
             invoice_destino_id=invoice_destino_id,
             invoice_destino_name=_norm_str(invoice_destino_name, 50),
             invoice_destino_state=_norm_str(invoice_destino_state, 30),
+            invoice_destino_data_hora=invoice_destino_data_hora,
             status_consolidado=status,
         )
 
@@ -508,6 +547,13 @@ class NfTransferenciaService:
         Returns:
             {cod_produto: {'fb': Decimal, 'cd': Decimal, 'lf': Decimal, 'nome': str}}
         """
+        # EXCLUSOES do calculo em_transito_*:
+        # 1. NFs flagadas como "ja ajustadas no estoque" (Desconsiderada)
+        #    -> LEFT JOIN + filter desconsiderada.id IS NULL
+        # 2. Linhas de RETORNO DE INSUMO em industrializacao (CFOPs 5902/
+        #    5903/6902/6903) -> insumos foram consumidos, so o produto
+        #    acabado existe no destino. Filtra por TRIM(cfop) pois snapshot
+        #    grava CFOP com espaco extra ('5902 ' vs '5902').
         rows = (
             db.session.query(
                 NfTransferenciaProdutoSnapshot.cod_produto,
@@ -518,7 +564,18 @@ class NfTransferenciaService:
             .join(NfTransferenciaSnapshot,
                   NfTransferenciaSnapshot.id ==
                   NfTransferenciaProdutoSnapshot.nf_snapshot_id)
+            .outerjoin(
+                NfTransferenciaDesconsiderada,
+                NfTransferenciaDesconsiderada.account_move_id_origem ==
+                NfTransferenciaSnapshot.account_move_id_origem,
+            )
             .filter(NfTransferenciaSnapshot.status_consolidado.in_(STATUS_PENDENTES))
+            .filter(NfTransferenciaDesconsiderada.id.is_(None))  # exclui flagadas
+            .filter(
+                sa_func.coalesce(
+                    sa_func.trim(NfTransferenciaProdutoSnapshot.cfop), ''
+                ).notin_(CFOPS_RETORNO_INSUMO_INDUSTRIALIZACAO)
+            )
             .group_by(
                 NfTransferenciaProdutoSnapshot.cod_produto,
                 NfTransferenciaSnapshot.company_destino,

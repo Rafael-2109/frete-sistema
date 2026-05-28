@@ -148,11 +148,16 @@ class SnapshotOdooService:
         do confronto seja matematicamente valida (mesmo momento T0).
         """
         cod_raiz = MovimentacaoEstoque.cod_produto.label('raiz')
-        # Periodo: ENTRADA/FATURAMENTO/CONSUMO/PRODUCAO desde data_snapshot
+        # Periodo: COMPRAS/FATURAMENTO/CONSUMO/PRODUCAO desde data_snapshot
+        # COMPRAS = tipo='ENTRADA' AND local='COMPRA' (exclui REVERSAO/
+        # TRANSFERENCIA/AJUSTE/PALLET que tambem sao tipo='ENTRADA' mas NAO
+        # sao compra externa). Alinhado com Odoo._baixar_compras() que filtra
+        # PO partner externo (nao inter-company).
         q_periodo = db.session.query(
             cod_raiz,
             func.max(MovimentacaoEstoque.nome_produto),
-            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA',
+            func.sum(case(((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA') &
+                           (MovimentacaoEstoque.local_movimentacao == 'COMPRA'),
                            MovimentacaoEstoque.qtd_movimentacao), else_=0)),
             func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
                            MovimentacaoEstoque.qtd_movimentacao), else_=0)),

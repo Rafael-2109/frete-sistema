@@ -1729,6 +1729,9 @@ class NfTransferenciaSnapshot(db.Model):
     partner_origem_id = db.Column(db.Integer)
     partner_destino_id = db.Column(db.Integer)
     data_emissao = db.Column(db.Date, index=True)
+    # Timestamp completo (data+hora) da emissao da NF origem — complementa
+    # data_emissao (Date). Fonte Odoo: account.move.create_date (UTC naive).
+    data_emissao_hora = db.Column(db.DateTime)
     valor_total = db.Column(db.Numeric(15, 2))
     acao = db.Column(db.String(30))
     cfop_saida = db.Column(db.String(5))
@@ -1744,11 +1747,15 @@ class NfTransferenciaSnapshot(db.Model):
     picking_id = db.Column(db.Integer)
     picking_name = db.Column(db.String(50))
     picking_state = db.Column(db.String(30))
+    # date_done do picking destino (datetime UTC naive).
+    picking_data_hora = db.Column(db.DateTime)
 
     # Invoice destino (account.move in_invoice criado a partir da PO)
     invoice_destino_id = db.Column(db.Integer)
     invoice_destino_name = db.Column(db.String(50))
     invoice_destino_state = db.Column(db.String(30))
+    # create_date do invoice destino (datetime UTC naive).
+    invoice_destino_data_hora = db.Column(db.DateTime)
 
     # Status consolidado
     status_consolidado = db.Column(db.String(30), nullable=False, default='PENDENTE_DFE',
@@ -1785,6 +1792,8 @@ class NfTransferenciaSnapshot(db.Model):
             'partner_origem_id': self.partner_origem_id,
             'partner_destino_id': self.partner_destino_id,
             'data_emissao': self.data_emissao.isoformat() if self.data_emissao else None,
+            'data_emissao_hora': (self.data_emissao_hora.isoformat()
+                                  if self.data_emissao_hora else None),
             'valor_total': float(self.valor_total) if self.valor_total else 0.0,
             'acao': self.acao,
             'cfop_saida': self.cfop_saida,
@@ -1796,9 +1805,13 @@ class NfTransferenciaSnapshot(db.Model):
             'picking_id': self.picking_id,
             'picking_name': self.picking_name,
             'picking_state': self.picking_state,
+            'picking_data_hora': (self.picking_data_hora.isoformat()
+                                  if self.picking_data_hora else None),
             'invoice_destino_id': self.invoice_destino_id,
             'invoice_destino_name': self.invoice_destino_name,
             'invoice_destino_state': self.invoice_destino_state,
+            'invoice_destino_data_hora': (self.invoice_destino_data_hora.isoformat()
+                                          if self.invoice_destino_data_hora else None),
             'status_consolidado': self.status_consolidado,
             'observacao': self.observacao,
         }
@@ -1835,3 +1848,35 @@ class NfTransferenciaProdutoSnapshot(db.Model):
             'cfop': self.cfop,
             'lote_nome': self.lote_nome,
         }
+
+
+# CFOPs de retorno de insumo em industrializacao (NAO entram no em_transito
+# do destino — os insumos foram CONSUMIDOS, so o produto acabado existe):
+#   5902/6902 — Retorno de mercadoria utilizada na industrializacao
+#   5903/6903 — Retorno de mercadoria recebida para industr. e NAO aplicada
+# Fonte: NFs RETNA/* (CFOP 5903) + SARET/* (CFOP 5902) LF->FB no snapshot.
+CFOPS_RETORNO_INSUMO_INDUSTRIALIZACAO = ('5902', '5903', '6902', '6903')
+
+
+class NfTransferenciaDesconsiderada(db.Model):
+    """Flag persistente: NF a EXCLUIR do calculo em_transito_*.
+
+    Usada quando a NF ja foi compensada manualmente no estoque (ex: ajuste
+    de inventario direto na location destino). FK e' LOGICA via
+    account_move_id_origem — sobrevive ao DELETE+INSERT do refresh de
+    NfTransferenciaSnapshot.
+    """
+    __tablename__ = 'nf_transferencia_desconsiderada'
+
+    id = db.Column(db.Integer, primary_key=True)
+    account_move_id_origem = db.Column(
+        db.Integer, nullable=False, unique=True, index=True,
+    )
+    motivo = db.Column(db.String(500))
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    criado_por = db.Column(db.String(100))
+
+    def __repr__(self):
+        return (
+            f'<NfTransferenciaDesconsiderada move_id={self.account_move_id_origem}>'
+        )

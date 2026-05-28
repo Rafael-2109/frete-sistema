@@ -2074,6 +2074,7 @@ def nf_transferencia_api():
     """JSON paginado com NFs do snapshot. Filtros via querystring."""
     from app.recebimento.models import (
         NfTransferenciaSnapshot, NfTransferenciaProdutoSnapshot,
+        NfTransferenciaDesconsiderada,
     )
 
     status = request.args.get('status', 'pendentes')  # pendentes/todos/concluido/cancelada
@@ -2127,10 +2128,24 @@ def nf_transferencia_api():
         for p in produtos:
             produtos_por_nf.setdefault(p.nf_snapshot_id, []).append(p.to_dict())
 
+    # Flag "desconsiderar do em_transito" por account_move_id_origem
+    # (FK logica; sobrevive ao DELETE+INSERT do refresh).
+    move_ids_pagina = [r.account_move_id_origem for r in rows]
+    descons_set = set()
+    if move_ids_pagina:
+        descons_set = {
+            row.account_move_id_origem
+            for row in NfTransferenciaDesconsiderada.query
+                .filter(NfTransferenciaDesconsiderada.account_move_id_origem
+                        .in_(move_ids_pagina))
+                .all()
+        }
+
     linhas = []
     for r in rows:
         d = r.to_dict()
         d['produtos'] = produtos_por_nf.get(r.id, [])
+        d['desconsiderar_est'] = r.account_move_id_origem in descons_set
         linhas.append(d)
 
     # Resumo por status (sem filtros — visao global)
@@ -2202,3 +2217,75 @@ def nf_transferencia_refresh():
             'sucesso': False,
             'erro': str(e),
         }), 500
+
+
+@recebimento_views_bp.route(
+    '/relatorios/nf-transferencia/<int:nf_id>/desconsiderar-est-toggle',
+    methods=['POST'],
+    endpoint='nf_transferencia_desconsiderar_est_toggle',
+)
+@login_required
+def nf_transferencia_desconsiderar_est_toggle(nf_id: int):
+    """Liga/desliga flag 'desconsiderar do em_transito' para uma NF.
+
+    Persistido em NfTransferenciaDesconsiderada (FK logica via
+    account_move_id_origem) — sobrevive ao refresh do snapshot.
+
+    Body JSON opcional: {"motivo": "..."}
+    Resposta: {"sucesso": bool, "desconsiderar_est": bool}
+    """
+    from app.recebimento.models import (
+        NfTransferenciaSnapshot, NfTransferenciaDesconsiderada,
+    )
+
+    nf = NfTransferenciaSnapshot.query.get(nf_id)
+    if nf is None:
+        return jsonify({'sucesso': False, 'erro': 'NF nao encontrada'}), 404
+
+    payload = request.get_json(silent=True) or {}
+    motivo = (payload.get('motivo') or '').strip() or None
+
+    from sqlalchemy.exc import IntegrityError
+
+    # Resolve `criado_por` (hasattr guard alinhado com convencao do projeto
+    # — current_user.nome NAO existe em AnonymousUser; @login_required ja
+    # bloqueia, mas pattern defensivo evita 500 silencioso).
+    nome_usuario = (
+        current_user.nome if hasattr(current_user, 'nome') else None
+    ) or (
+        current_user.email if hasattr(current_user, 'email') else None
+    ) or 'Fiscal'
+
+    try:
+        existente = (
+            NfTransferenciaDesconsiderada.query
+            .filter_by(account_move_id_origem=nf.account_move_id_origem)
+            .first()
+        )
+        if existente:
+            db.session.delete(existente)
+            db.session.commit()
+            return jsonify({'sucesso': True, 'desconsiderar_est': False})
+
+        try:
+            db.session.add(NfTransferenciaDesconsiderada(
+                account_move_id_origem=nf.account_move_id_origem,
+                motivo=motivo,
+                criado_por=nome_usuario,
+            ))
+            db.session.commit()
+            return jsonify({'sucesso': True, 'desconsiderar_est': True})
+        except IntegrityError:
+            # Race condition: outro POST concorrente ja flagrou esta NF.
+            # UNIQUE em account_move_id_origem barrou — estado final ja eh
+            # o desejado (flagada). Retornar sucesso idempotente em vez de
+            # 500 (evita UX confusa do checkbox piscar).
+            db.session.rollback()
+            return jsonify({'sucesso': True, 'desconsiderar_est': True})
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.getLogger(__name__).exception(
+            'Falha no toggle desconsiderar-est (nf_id=%s)', nf_id,
+        )
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500

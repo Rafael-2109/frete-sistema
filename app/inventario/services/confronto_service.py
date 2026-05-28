@@ -239,10 +239,15 @@ class ConfrontoService:
         # SUMIFS por cod_produto bruto. Unificação será opção futura.
         cod_raiz = MovimentacaoEstoque.cod_produto.label('raiz')
 
+        # COMPRAS = tipo='ENTRADA' AND local='COMPRA'. Exclui REVERSAO/
+        # TRANSFERENCIA/AJUSTE/PALLET (tambem ENTRADA, mas nao compra
+        # externa). Alinhado com SnapshotOdooService._baixar_compras
+        # (filtra PO partner externo).
         q_periodo = db.session.query(
             cod_raiz,
             func.max(MovimentacaoEstoque.nome_produto),
-            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA',
+            func.sum(case(((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA') &
+                           (MovimentacaoEstoque.local_movimentacao == 'COMPRA'),
                            MovimentacaoEstoque.qtd_movimentacao), else_=0)),
             func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
                            MovimentacaoEstoque.qtd_movimentacao), else_=0)),

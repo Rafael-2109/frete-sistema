@@ -443,6 +443,29 @@ echo "Inventario 22b: audit hook deterministico (session_id em operacao_odoo_aud
 python scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.py \
     || echo "⚠️ Migration operacao_odoo_auditoria_session falhou, continuando deploy..."
 
+# 22c. NF Transferencia inter-filiais (2026-05-28): snapshot fiscal de NFs
+# inter-company (FB↔CD↔LF) com cross-ref destino. 4 migrations:
+#   - nf_transferencia_snapshot       (tabelas snapshot + produto_snapshot)
+#   - em_transito_inventario_snapshot (3 colunas em_transito_* em inventario_snapshot_odoo)
+#   - nf_transferencia_desconsiderada (flag por NF para EXCLUIR do em_transito; sobrevive ao refresh)
+#   - nf_transferencia_timestamps     (3 colunas DateTime: emissao_hora, picking_data_hora, invoice_destino_data_hora)
+# Ordem: snapshot ANTES de desconsiderada/timestamps (FK logica via account_move_id_origem).
+echo "Fiscal 22c.1: tabelas nf_transferencia_snapshot + produtos..."
+python scripts/migrations/2026_05_28_nf_transferencia_snapshot.py \
+    || echo "⚠️ Migration nf_transferencia_snapshot falhou, continuando deploy..."
+
+echo "Fiscal 22c.2: em_transito_inventario_snapshot (3 colunas em_transito_*)..."
+python scripts/migrations/2026_05_28_add_em_transito_inventario_snapshot.py \
+    || echo "⚠️ Migration em_transito_inventario_snapshot falhou, continuando deploy..."
+
+echo "Fiscal 22c.3: nf_transferencia_desconsiderada (flag por NF)..."
+python scripts/migrations/2026_05_28_nf_transferencia_desconsiderada.py \
+    || echo "⚠️ Migration nf_transferencia_desconsiderada falhou, continuando deploy..."
+
+echo "Fiscal 22c.4: nf_transferencia_timestamps (3 colunas DateTime)..."
+python scripts/migrations/2026_05_28_nf_transferencia_timestamps.py \
+    || echo "⚠️ Migration nf_transferencia_timestamps falhou, continuando deploy..."
+
 # 23. CarVia agendamento (2026-05-21): horario de agendamento + VIEW pedidos v7.
 # Feature CarVia: campo de horario (HH:MM) na cotacao comercial, propagado para
 # EmbarqueItem + EntregaMonitorada (AgendamentoEntrega) e exibido em lista_pedidos

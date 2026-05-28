@@ -121,10 +121,13 @@
           <th>Picking destino</th>
           <th>Invoice destino</th>
           <th>Status</th>
+          <th style="width:130px;" title="Marcar para EXCLUIR esta NF do calculo em_transito (NF ja ajustada manualmente no estoque)">
+            Desconsiderar Est.
+          </th>
         </tr>
       </thead>
       <tbody id="nft-tbody">
-        <tr><td colspan="11" class="nft-empty">Carregando...</td></tr>
+        <tr><td colspan="12" class="nft-empty">Carregando...</td></tr>
       </tbody>
     </table>
   </div>
@@ -145,6 +148,8 @@
 
   const API_URL = "{{ url_for('recebimento_views.nf_transferencia_api') }}";
   const REFRESH_URL = "{{ url_for('recebimento_views.nf_transferencia_refresh') }}";
+  // Toggle "desconsiderar do em_transito" — {nf_id} no template substituido em JS.
+  const TOGGLE_URL_TPL = "{{ url_for('recebimento_views.nf_transferencia_desconsiderar_est_toggle', nf_id=0) }}";
 
   let pagina = 1;
   const pageSize = 100;
@@ -179,6 +184,32 @@
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',
       {hour: '2-digit', minute: '2-digit'});
+  }
+  // Hora-curta para celulas compactas (sem data). Ex: '13:42'.
+  // Odoo retorna UTC naive ('2026-05-28 13:42:39'); New Date(s) interpreta
+  // como hora LOCAL. Adicionar 'Z' forca UTC -> converte pro fuso do browser.
+  function fmtHoraCurta(iso) {
+    if (!iso) return '';
+    const s = String(iso).includes('T') ? String(iso) : String(iso).replace(' ', 'T');
+    const sUtc = s.endsWith('Z') ? s : s + 'Z';
+    const d = new Date(sUtc);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+  }
+  // Data-curta com hora (ex: '28/05/26 13:42') — para colunas estreitas
+  // de doc destino (picking/invoice) abaixo do nome do doc.
+  function fmtDataHoraCurta(iso) {
+    if (!iso) return '';
+    const s = String(iso).includes('T') ? String(iso) : String(iso).replace(' ', 'T');
+    const sUtc = s.endsWith('Z') ? s : s + 'Z';
+    const d = new Date(sUtc);
+    if (isNaN(d.getTime())) return '';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm}/${yy} ${hh}:${mi}`;
   }
   function escapeHtml(s) {
     if (s === null || s === undefined) return '';
@@ -239,22 +270,33 @@
     const totalQtd = (l.produtos || []).reduce(
       (a, p) => a + Number(p.quantidade || 0), 0);
     const statusLbl = STATUS_LABEL[l.status_consolidado] || l.status_consolidado;
+    // Data+hora abaixo dos docs relacionados (small, line abaixo).
+    // dfe nao tem timestamp natural exposto pelo Odoo CIEL IT.
+    const pickTs = fmtDataHoraCurta(l.picking_data_hora);
+    const invTs = fmtDataHoraCurta(l.invoice_destino_data_hora);
     const dfeTxt = l.dfe_name
       ? escapeHtml(l.dfe_name) + (l.dfe_state ? ' <small class="text-muted">' + escapeHtml(l.dfe_state) + '</small>' : '')
       : '<small class="text-muted">não encontrado</small>';
     const pickTxt = l.picking_name
       ? escapeHtml(l.picking_name) + ' <small class="text-muted">(' + escapeHtml(l.picking_state || '') + ')</small>'
+        + (pickTs ? '<br><small class="nft-ts">' + pickTs + '</small>' : '')
       : '<small class="text-muted">—</small>';
     const invTxt = l.invoice_destino_name
       ? escapeHtml(l.invoice_destino_name) + ' <small class="text-muted">(' + escapeHtml(l.invoice_destino_state || '') + ')</small>'
+        + (invTs ? '<br><small class="nft-ts">' + invTs + '</small>' : '')
       : '<small class="text-muted">—</small>';
+    // Emissao: data + hora ao lado (small).
+    const emiHora = fmtHoraCurta(l.data_emissao_hora);
+    const emiTxt = fmtData(l.data_emissao)
+      + (emiHora ? ' <small class="nft-ts">' + emiHora + '</small>' : '');
 
+    const descChecked = l.desconsiderar_est ? 'checked' : '';
     let html = `
-      <tr class="nft-row-toggle" data-nf-id="${l.id}">
+      <tr class="nft-row-toggle ${l.desconsiderar_est ? 'nft-desconsiderada' : ''}" data-nf-id="${l.id}">
         <td><i class="fas fa-chevron-right"></i></td>
         <td><strong>${escapeHtml(l.account_move_name_origem || '')}</strong>
             ${l.numero_nf ? '<br><small class="text-muted">' + escapeHtml(l.numero_nf) + '</small>' : ''}</td>
-        <td>${fmtData(l.data_emissao)}</td>
+        <td>${emiTxt}</td>
         <td>${escapeHtml(l.company_origem)} &rarr; ${escapeHtml(l.company_destino)}</td>
         <td><small>${escapeHtml(l.acao || '')}</small></td>
         <td><small>${escapeHtml(l.cfop_saida || '')}</small></td>
@@ -263,9 +305,18 @@
         <td>${pickTxt}</td>
         <td>${invTxt}</td>
         <td><span class="nft-status-cell nft-status-${l.status_consolidado}">${escapeHtml(statusLbl)}</span></td>
+        <td class="nft-cell-descons">
+          <label class="form-check m-0 small" title="Excluir esta NF do calculo em_transito (ja ajustada no estoque)">
+            <input type="checkbox"
+                   class="form-check-input nft-chk-descons"
+                   data-nf-id="${l.id}"
+                   ${descChecked}>
+            <span class="form-check-label ms-1">Desc. Est.</span>
+          </label>
+        </td>
       </tr>
       <tr class="nft-products d-none" data-nf-products="${l.id}">
-        <td colspan="11">
+        <td colspan="12">
           <table class="table table-sm mb-0">
             <thead>
               <tr>
@@ -304,14 +355,14 @@
 
   function carregar() {
     const tbody = document.getElementById('nft-tbody');
-    tbody.innerHTML = '<tr><td colspan="11" class="nft-empty">Carregando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="nft-empty">Carregando...</td></tr>';
 
     const params = montarFiltros();
     fetch(API_URL + '?' + params.toString())
       .then(r => r.json())
       .then(data => {
         if (!data.linhas || data.linhas.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="11" class="nft-empty">Nenhuma NF encontrada.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="12" class="nft-empty">Nenhuma NF encontrada.</td></tr>';
         } else {
           tbody.innerHTML = data.linhas.map(renderLinha).join('');
           // Toggle accordion
@@ -326,6 +377,16 @@
                 icon.classList.toggle('fa-chevron-right');
                 icon.classList.toggle('fa-chevron-down');
               }
+            });
+          });
+          // Checkbox "Desconsiderar Est." — ISOLA do click do accordion
+          tbody.querySelectorAll('.nft-cell-descons').forEach(td => {
+            td.addEventListener('click', (e) => e.stopPropagation());
+          });
+          tbody.querySelectorAll('.nft-chk-descons').forEach(chk => {
+            chk.addEventListener('change', (e) => {
+              e.stopPropagation();
+              toggleDesconsiderarEst(chk);
             });
           });
         }
@@ -374,6 +435,36 @@
       .catch(err => {
         btn.disabled = false;
         prog.classList.add('d-none');
+        alert('Erro: ' + err.message);
+      });
+  }
+
+  function toggleDesconsiderarEst(chk) {
+    const nfId = chk.getAttribute('data-nf-id');
+    const url = TOGGLE_URL_TPL.replace(/\/0(\/[^/]+)?$/, '/' + nfId + '$1')
+                              .replace(/\/0$/, '/' + nfId);
+    chk.disabled = true;
+    const csrf = document.querySelector('meta[name="csrf-token"]');
+    const headers = {'Content-Type': 'application/json'};
+    if (csrf) headers['X-CSRFToken'] = csrf.getAttribute('content');
+    fetch(url, {method: 'POST', headers: headers,
+                body: JSON.stringify({})})
+      .then(r => r.json())
+      .then(data => {
+        chk.disabled = false;
+        if (!data.sucesso) {
+          chk.checked = !chk.checked;
+          alert('Erro: ' + (data.erro || 'desconhecido'));
+          return;
+        }
+        chk.checked = !!data.desconsiderar_est;
+        // Pinta a linha (somente a row pai do checkbox)
+        const tr = chk.closest('tr');
+        if (tr) tr.classList.toggle('nft-desconsiderada', chk.checked);
+      })
+      .catch(err => {
+        chk.disabled = false;
+        chk.checked = !chk.checked;
         alert('Erro: ' + err.message);
       });
   }

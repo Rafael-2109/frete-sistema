@@ -534,4 +534,34 @@
     color: var(--text-muted);
   }
 
+  /* Timestamp small (data+hora) abaixo do nome do doc destino ou
+     ao lado da data de emissao (2026-05-28). Mesma cor do text-muted
+     pra nao competir com o doc, mas com tamanho ainda menor. */
+  .nft-ts {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* Checkbox "Desconsiderar Est." (2026-05-28) — nao deve disparar
+     o accordion ao clicar; .nft-cell-descons faz stopPropagation no JS. */
+  .nft-cell-descons {
+    cursor: default;
+  }
+
+  .nft-cell-descons .form-check {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  /* Linha visualmente "tachada" quando flagada como desconsiderada
+     do em_transito. Mantem legibilidade — apenas atenua. */
+  .nft-row-toggle.nft-desconsiderada td:not(.nft-cell-descons) {
+    opacity: 0.55;
+    text-decoration: line-through;
+    text-decoration-color: var(--text-muted);
+  }
+
 } /* End @layer modules */

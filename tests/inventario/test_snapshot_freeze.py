@@ -30,11 +30,19 @@ def ciclo_fresh(db):
     return c
 
 
-def _add_mov(db, cod, tipo, qtd, data, nome='Produto teste'):
+def _add_mov(db, cod, tipo, qtd, data, nome='Produto teste', local=None):
+    """local default depende do tipo: ENTRADA→COMPRA, demais→TESTE.
+
+    COMPRA eh OBRIGATORIO para que `mov_compras` agregue (fix 2026-05-28:
+    agregador usa tipo='ENTRADA' AND local='COMPRA' para excluir
+    TRANSFERENCIA/REVERSAO/AJUSTE/PALLET que tambem sao ENTRADA).
+    """
+    if local is None:
+        local = 'COMPRA' if tipo == 'ENTRADA' else 'TESTE'
     db.session.add(MovimentacaoEstoque(
         cod_produto=cod, nome_produto=nome, tipo_movimentacao=tipo,
         qtd_movimentacao=Decimal(str(qtd)), data_movimentacao=data,
-        local_movimentacao='TESTE', ativo=True,
+        local_movimentacao=local, ativo=True,
     ))
 
 
@@ -67,6 +75,32 @@ def test_baixar_movimentacoes_local_agrega_corretamente(db, ciclo_fresh):
     assert m['producao'] == Decimal('40')
     # sist_total = sum total ATIVO = 50 + 20 + 100 + 30 + 10 + 5 + 40 = 255
     assert m['sist_total'] == Decimal('255')
+
+
+def test_baixar_movimentacoes_local_exclui_transferencia_e_reversao(db, ciclo_fresh):
+    """mov_compras deve agregar SOMENTE ENTRADA com local='COMPRA'.
+
+    Regressao 2026-05-28: ENTRADAs com local='TRANSFERENCIA' (inter-company
+    FB↔CD↔LF), 'REVERSAO' (NC), 'AJUSTE' e 'PALLET' eram somadas como compra,
+    inflando mov_compras (ex: cod 4880103 ciclo 16-05 tinha 2052 inflado por
+    3 transferencias FB→CD via LF + 1 reversao).
+    """
+    import uuid
+    cod = f'TESTFRZ-{uuid.uuid4().hex[:8]}'
+    # 1 compra REAL (COMPRA) + 3 entradas que NAO sao compra
+    _add_mov(db, cod, 'ENTRADA', 100, date(2026, 5, 17), local='COMPRA')
+    _add_mov(db, cod, 'ENTRADA', 500, date(2026, 5, 18), local='TRANSFERENCIA')
+    _add_mov(db, cod, 'ENTRADA', 50, date(2026, 5, 19), local='REVERSAO')
+    _add_mov(db, cod, 'ENTRADA', 10, date(2026, 5, 20), local='AJUSTE')
+    db.session.flush()
+
+    movs = SnapshotOdooService._baixar_movimentacoes_local(ciclo_fresh.data_snapshot)
+    assert cod in movs
+    # Somente a entrada 'COMPRA' (100) entra em mov_compras
+    assert movs[cod]['compras'] == Decimal('100'), \
+        'TRANSFERENCIA/REVERSAO/AJUSTE NAO devem inflar mov_compras'
+    # sist_total acumula TUDO (semantica de saldo, nao de compra)
+    assert movs[cod]['sist_total'] == Decimal('660')
 
 
 def test_confronto_usa_snapshot_quando_freezado(db, ciclo_fresh):
