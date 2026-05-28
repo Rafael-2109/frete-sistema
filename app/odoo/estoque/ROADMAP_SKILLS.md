@@ -101,7 +101,7 @@
 3. ✅ **Renomear orchestrator** `faturamento_pipeline.py` → `inventario_pipeline.py` + alias compat (CONCLUÍDO v27+ S3 2026-05-27 — stub re-exporta TODOS símbolos + main() entry-point CLI preservado; 8 imports externos preservados via stub; testes patcham via `inventario_pipeline.<nome>` no nome novo).
 4. **Canary REAL PROD do opt-in skill8**: 1-5 ajustes validam paridade vs legacy. Após OK: remover ETAPAS C+D legacy (~500 LOC) + migrar 14 testes para `test_faturamento_invoice_service.py`.
 5. **Bulk REAL PROD** via `--usar-fluxo-l3-v19` em conjunto maior de ajustes (validar B-V23-1+2 + F1-F4 fixes automáticos eliminam workarounds manuais).
-6. **Expand CONSTANTS** FB=1 e CD=4 (mapear team_id+payment_term+picking_type+payment_provider via discovery XML-RPC; F4 v25+ aplica só p/ LF — FB/CD precisam decidir caso-a-caso STATIC vs G039 dinâmico).
+6. ✅ **Expand CONSTANTS** FB=1 e CD=4 (CONCLUÍDO v27+ S4 2026-05-27 — discovery XML-RPC `stock.picking.type` confirma FB=1+52+54+6, CD=13+50+18, LF=19+24+64; CONSTANTS_FLUXO_L3 expandido p/ 3 companies; team_id=None p/ FB+CD com G039 dinâmico (LF STATIC=143 mantido); L10N_BR_TIPO_PEDIDO_POR_ACAO mapeado p/ todas 8 ações via MATRIZ_INTERCOMPANY (dfe='compra' universal + po derivado de l10n_br_tipo_pedido_entrada); 4 pytest novos = 672 baseline; canary REAL FB/CD pendente próxima PERDA_LF_FB ou TRANSFERIR_*_CD natural).
 7. **Folhas L3 1.1.x + 1.3** (compõem Skill 8 ATÔMICA L2 + Skill 7 ABRANGENTE — markdown apenas, sem código novo).
 
 ### Estado dos ajustes 176013/176014 (v23+ retoma)

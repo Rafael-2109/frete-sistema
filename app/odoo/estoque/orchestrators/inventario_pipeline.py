@@ -3194,11 +3194,43 @@ class FaturamentoPipelineExecutor:
 
     # ============================================================
     # v20+ — Constants por company_destino para FLUXO L3 1.2.x
+    # v27+ S4 EXPAND — entries FB=1 e CD=4 (descoberta XML-RPC + MATRIZ)
     # ============================================================
-    # MINIMO VIAVEL S3: apenas LF=5 validado em canary REAL PROD 2026-05-26
-    # (caso 627348 INDUSTRIALIZACAO_FB_LF). Demais direcoes pendentes v21+
-    # quando expansao do canary cobrir FB e CD destino.
-    CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO: Dict[int, Dict[str, int]] = {
+    # Pattern por destino:
+    #   - team_id: STATIC para LF=143 (decisao F4 v25+ — operacional fixo);
+    #     None para FB+CD (G039 dinamico via _resolver_constants_fluxo_l3
+    #     resolve no run-time pelo user de execucao + criar purchase.team
+    #     se necessario via Skill 7 atomo garantir_purchase_team).
+    #     CANDIDATE: Rafael define STATIC vs G039 caso-a-caso apos canary
+    #     primeira INDUSTRIALIZACAO_*_FB ou TRANSFERIR_*_CD natural.
+    #   - payment_term_id=2791 'A VISTA' universal (validado LF; assume-se
+    #     universal por nao ter pagamento real inter-company).
+    #   - payment_provider_id=38 'SEM PAGAMENTO' universal (G029).
+    #   - picking_type_id: default Recebimento da company (descoberto via
+    #     XML-RPC discovery 2026-05-27 — `stock.picking.type` filter
+    #     code='incoming' + active=True). Casos especiais (transf-filial
+    #     vs industrializacao vs retorno) sao derivados pelo motor fiscal
+    #     Odoo via fiscal_position + l10n_br_tipo_pedido no DFe/PO; CFOP
+    #     correto vira automaticamente. NAO precisa mapear PT especifico
+    #     por acao_decidida no minimo viavel.
+    #
+    # MINIMO VIAVEL v27+ S4: 3 entries (LF=5 + FB=1 + CD=4). LF=5 ja
+    # validado canary REAL PROD 2026-05-26 (caso 627348). FB+CD ainda
+    # CANDIDATE — primeira INDUSTRIALIZACAO_LF_FB / TRANSFERIR_FB_CD /
+    # PERDA_LF_FB natural valida canary v28+.
+    CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO: Dict[int, Dict[str, Any]] = {
+        1: {  # FB — CANDIDATE v27+ S4 (pendente canary REAL)
+            'team_id': None,         # G039 dinamico (Rafael decide STATIC pos-canary)
+            'payment_term_id': 2791, # 'A VISTA' (assumido universal)
+            'picking_type_id': 1,    # 'Recebimento (FB)' (discovery 2026-05-27)
+            'payment_provider_id': 38,  # G029 'SEM PAGAMENTO'
+        },
+        4: {  # CD — CANDIDATE v27+ S4 (pendente canary REAL)
+            'team_id': None,         # G039 dinamico
+            'payment_term_id': 2791, # 'A VISTA'
+            'picking_type_id': 13,   # 'Recebimento (CD)' (discovery 2026-05-27)
+            'payment_provider_id': 38,
+        },
         5: {  # LF (validado canary v20+ + F4 v25+ team fixo)
             # F4 v25+ (Rafael 2026-05-27): team_id FIXO 143 (Rafael) para LF,
             # NAO derivado do user de execucao via G039. Decisao explicita
@@ -3211,7 +3243,6 @@ class FaturamentoPipelineExecutor:
             'picking_type_id': 19,   # 'LF: Recebimento (LF)'
             'payment_provider_id': 38,  # G029 'SEM PAGAMENTO'
         },
-        # 1 (FB) e 4 (CD): pendente v21+ (constants nao mapeadas + nao validadas canary)
     }
 
     # F3a v25+ (Rafael 2026-05-27): tipos diferentes em DFe vs PO.
@@ -3222,12 +3253,65 @@ class FaturamentoPipelineExecutor:
     # ENTIN + CFOP 1949 retorno industrializacao. Atualmente: passo 3 do
     # FLUXO L3 escreve 'compra' no DFe; passo 5 escreve 'serv-industrializacao'
     # na PO; passo 9 invoice herda da PO automaticamente.
+    #
+    # v27+ S4 EXPAND: mapeamento para TODAS direcoes da MATRIZ_INTERCOMPANY.
+    # Padrao identificado em mineracao do operacoes_fiscais.py +
+    # MATRIZ_INTERCOMPANY[op]['entrada'][(co, cd)]['l10n_br_tipo_pedido_entrada']:
+    #
+    #   dfe='compra' UNIVERSAL — destrava action_gerar_po_dfe (validacao
+    #     empirica AVULSO_FRASCO v24+; tipo 'compra' no DFe e' interpretado
+    #     pelo robo CIEL IT como "DFe de fornecedor a receber"  -> gera PO
+    #     normalmente sem derivar picking_type errado).
+    #   po=<derivado da MATRIZ>['entrada'][(co_origem, co_destino)]
+    #     ['l10n_br_tipo_pedido_entrada'] — tipo correto p/ invoice ENTIN
+    #     + CFOP correto via fiscal_position_id da entrada.
+    #
+    # ACAO_PARA_DIRECAO mapping (acao_decidida -> (tipo_op, co_origem, co_destino)):
+    #   INDUSTRIALIZACAO_FB_LF: (industrializacao, 1, 5) -> entrada serv-industrializacao
+    #   PERDA_LF_FB: (perda, 5, 1)                       -> entrada retorno
+    #   DEV_LF_FB:  (dev-industrializacao, 5, 1)         -> entrada outro
+    #   DEV_CD_LF:  (dev-industrializacao, 4, 5)         -> entrada retorno
+    #   DEV_LF_CD:  (dev-industrializacao, 5, 4)         -> entrada outro
+    #   DEV_FB_LF:  (dev-industrializacao, 1, 5)         -> entrada retorno
+    #   TRANSFERIR_FB_CD: (transf-filial, 1, 4)          -> entrada transf-filial
+    #   TRANSFERIR_CD_FB: (transf-filial, 4, 1)          -> entrada transf-filial
     L10N_BR_TIPO_PEDIDO_POR_ACAO: Dict[str, Dict[str, str]] = {
+        # Industrializacao FB→LF (validado canary v20+ + cirurgia v24+)
         'INDUSTRIALIZACAO_FB_LF': {
-            'dfe': 'compra',                # passo 3 escriturar_dfe
-            'po': 'serv-industrializacao',  # passo 5 preencher_po (herdada por invoice)
+            'dfe': 'compra',
+            'po': 'serv-industrializacao',
         },
-        # Demais direcoes: lookup via MATRIZ_INTERCOMPANY na expansao v21+
+        # Perda LF→FB (CANDIDATE v27+ S4 — pendente canary REAL)
+        'PERDA_LF_FB': {
+            'dfe': 'compra',
+            'po': 'retorno',
+        },
+        # Devolucao industrializacao (4 direcoes — CANDIDATE v27+ S4)
+        'DEV_LF_FB': {
+            'dfe': 'compra',
+            'po': 'outro',
+        },
+        'DEV_CD_LF': {
+            'dfe': 'compra',
+            'po': 'retorno',
+        },
+        'DEV_LF_CD': {
+            'dfe': 'compra',
+            'po': 'outro',
+        },
+        'DEV_FB_LF': {
+            'dfe': 'compra',
+            'po': 'retorno',
+        },
+        # Transferencia entre filiais (2 direcoes — CANDIDATE v27+ S4)
+        'TRANSFERIR_FB_CD': {
+            'dfe': 'compra',
+            'po': 'transf-filial',
+        },
+        'TRANSFERIR_CD_FB': {
+            'dfe': 'compra',
+            'po': 'transf-filial',
+        },
     }
 
     def _resolver_constants_fluxo_l3(
@@ -5712,11 +5796,10 @@ def _build_argparser() -> argparse.ArgumentParser:
             'v20+ S3 opt-in: substitui ETAPAS E+F legacy pelo FLUXO L3 1.2.x '
             'via executar_fluxo_l3_1_2_x. Default OFF preserva 100%% '
             'comportamento legacy. ETAPA E (entrada FB destino) retorna '
-            'SKIP_NAO_SUPORTADA_V20_FLUXO_L3 (pendencia v21+); ETAPA F '
-            'destino LF (validado canary REAL PROD 2026-05-26 caso 627348 '
-            'INDUSTRIALIZACAO_FB_LF) usa FLUXO L3 com 7 atomos Skill 7 '
-            'ABRANGENTE + Skill 5 preencher_lotes_picking + validar; destino '
-            'CD ainda NAO_SUPORTADA_V20.'
+            'SKIP_NAO_SUPORTADA_V20_FLUXO_L3 (pendencia v28+); ETAPA F '
+            'todos destinos (LF=5 validado canary 2026-05-26 caso 627348; '
+            'FB=1 e CD=4 CANDIDATE v27+ S4 expand constants + L10N_BR_TIPO_PEDIDO '
+            'mapeado para 8 acoes da MATRIZ_INTERCOMPANY — pendente canary REAL).'
         ),
     )
     p.add_argument(

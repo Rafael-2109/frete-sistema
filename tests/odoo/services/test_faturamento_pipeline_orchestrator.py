@@ -2697,9 +2697,13 @@ def test_v24_1_etapa_f_via_fluxo_l3_filtra_meta_keys_g039_status(db):
 
 
 def test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada(db):
-    """v20+ S3: ETAPA F com flag=True + ajuste destino CD (4)
-    retorna NAO_SUPORTADA_V20 (constants CD nao mapeadas em
-    CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO — pendencia v21+).
+    """v20+ S3 — v27+ S4 UPDATE: CD destino agora SUPORTADO (constants
+    mapeadas em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[4] — discovery
+    XML-RPC 2026-05-27). Antes (v20-v26) retornava NAO_SUPORTADA_V20;
+    agora invoca `executar_fluxo_l3_1_2_x` normalmente com constants
+    CD (picking_type_id=13 'Recebimento CD', team_id=None p/ G039
+    dinamico). CANDIDATE — pendente canary REAL PROD TRANSFERIR_FB_CD
+    para validar paridade vs legacy.
     """
     from app.odoo.models import AjusteEstoqueInventario  # lazy
 
@@ -2725,11 +2729,19 @@ def test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada(db):
 
     executor = FaturamentoPipelineExecutor()
     # F1 v25+: mock _resolver_pids_em_batch p/ evitar Odoo real
+    # v27+ S4: mock _resolver_team_g039 p/ evitar auth real (CD G039 dinamico)
     with patch.object(
         executor, '_resolver_pids_em_batch',
         return_value={'999999': 77777},
     ), patch.object(
+        executor, '_resolver_team_g039', return_value=(150, 'OK_EXISTENTE'),
+    ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
+        return_value={
+            'status': 'FLUXO_OK', 'caminho': 'A',
+            'dfe_id': 99, 'po_id': 88, 'picking_id': 77,
+            'invoice_id': 66, 'passos': [], 'tempo_ms': 100,
+        },
     ) as mock_fluxo:
         res = executor.executar_etapa_f(
             ciclo=ciclo_test,
@@ -2741,16 +2753,26 @@ def test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada(db):
     AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
     db.session.commit()
 
-    assert res['status'] == 'SKIP_NAO_SUPORTADA_V20'
+    # v27+ S4: CD destino agora SUPORTADO (constants mapeadas)
+    assert res['status'] == 'EXECUTADO_OK'
     assert res['modo'] == 'fluxo_l3_v19'
-    assert res['contadores']['nao_suportada_v20'] == 1
-    assert res['contadores']['ok'] == 0
-    assert 999999 in res['invoices_nao_suportadas_v20']
-    msg = res['invoices_nao_suportadas_v20'][999999]
-    assert 'company_destino=4' in msg
-    assert 'Pendencia v21+' in msg
-    # CRUCIAL: NAO chamou executar_fluxo_l3_1_2_x (nao tinha constants)
-    mock_fluxo.assert_not_called()
+    assert res['contadores']['ok'] == 1
+    assert res['contadores']['nao_suportada_v20'] == 0
+    assert res['contadores']['falha'] == 0
+    assert 999999 in res['invoices_ok']
+    # CRUCIAL: chamou executar_fluxo_l3_1_2_x com constants CD
+    mock_fluxo.assert_called_once()
+    kwargs = mock_fluxo.call_args.kwargs
+    assert kwargs['invoice_id_saida'] == 999999
+    assert kwargs['company_destino'] == 4  # CD
+    assert kwargs['picking_type_id'] == 13  # Recebimento (CD)
+    assert kwargs['payment_term_id'] == 2791  # A VISTA
+    assert kwargs['payment_provider_id'] == 38  # SEM PAGAMENTO
+    # team_id derivado via G039 (mocked retorna 150)
+    assert kwargs['team_id'] == 150
+    # TRANSFERIR_FB_CD: tipos {dfe: compra, po: transf-filial}
+    assert kwargs['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert kwargs['l10n_br_tipo_pedido_po'] == 'transf-filial'
 
 
 def test_v20_s3_etapa_f_via_fluxo_l3_excecao_continua_proximo(db):
@@ -2825,12 +2847,14 @@ def test_v20_s3_etapa_f_via_fluxo_l3_excecao_continua_proximo(db):
 
 
 def test_v20_s3_etapa_f_via_fluxo_l3_misto_lf_e_cd_destino(db):
-    """v20+ S3 HIGH-2 (code-reviewer 2026-05-26): onda mista LF (suportado)
-    + CD (NAO_SUPORTADA_V20) na mesma execucao. LF processado via fluxo L3;
-    CD pulado com NAO_SUPORTADA_V20. Status EXECUTADO_PARCIAL.
+    """v20+ S3 — v27+ S4 UPDATE: onda mista LF + CD ambos SUPORTADOS
+    (CD destino mapeado em v27+ S4). Antes (v20-v26) este teste validava
+    LF OK + CD NAO_SUPORTADA = EXECUTADO_PARCIAL. Agora ambos passam
+    pelo fluxo L3 = EXECUTADO_OK.
 
-    Topologia PROD esperada quando canary expandir mas FB/CD ainda nao
-    tiverem constants mapeadas em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO.
+    Topologia PROD esperada quando canary REAL PROD validar CD destino
+    (TRANSFERIR_FB_CD ou DEV_LF_CD). v27+ S4 expandiu constants CD;
+    teste valida que dispatch agora roteia ambos via fluxo L3.
     """
     from app.odoo.models import AjusteEstoqueInventario  # lazy
 
@@ -2858,9 +2882,12 @@ def test_v20_s3_etapa_f_via_fluxo_l3_misto_lf_e_cd_destino(db):
 
     executor = FaturamentoPipelineExecutor()
     # F1 v25+: mock _resolver_pids_em_batch p/ evitar Odoo real
+    # v27+ S4: mock _resolver_team_g039 p/ CD G039 dinamico (LF tem STATIC=143)
     with patch.object(
         executor, '_resolver_pids_em_batch',
         return_value={'LF1': 555, 'CD1': 666},
+    ), patch.object(
+        executor, '_resolver_team_g039', return_value=(150, 'OK_EXISTENTE'),
     ), patch.object(
         executor, 'executar_fluxo_l3_1_2_x',
         return_value={
@@ -2876,19 +2903,19 @@ def test_v20_s3_etapa_f_via_fluxo_l3_misto_lf_e_cd_destino(db):
     AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
     db.session.commit()
 
-    # LF chamou executar_fluxo_l3_1_2_x; CD NAO
-    assert mock_fluxo.call_count == 1
-    kwargs = mock_fluxo.call_args.kwargs
-    assert kwargs['invoice_id_saida'] == 333333  # apenas LF
-    assert kwargs['company_destino'] == 5
-
-    # Status PARCIAL: 1 OK (LF) + 1 NAO_SUPORTADA_V20 (CD)
-    assert res['status'] == 'EXECUTADO_PARCIAL'
-    assert res['contadores']['ok'] == 1
-    assert res['contadores']['nao_suportada_v20'] == 1
+    # v27+ S4: LF e CD ambos chamam executar_fluxo_l3_1_2_x
+    assert mock_fluxo.call_count == 2
+    # Status OK: ambos OK (sem nao_suportada_v20 nem falha)
+    assert res['status'] == 'EXECUTADO_OK'
+    assert res['contadores']['ok'] == 2
+    assert res['contadores']['nao_suportada_v20'] == 0
     assert res['contadores']['falha'] == 0
     assert 333333 in res['invoices_ok']
-    assert 444444 in res['invoices_nao_suportadas_v20']
+    assert 444444 in res['invoices_ok']
+    # Validar que cada invoice foi com company_destino correto
+    call_kwargs = [c.kwargs for c in mock_fluxo.call_args_list]
+    destinations = sorted(kw['company_destino'] for kw in call_kwargs)
+    assert destinations == [4, 5]  # CD + LF
 
 
 # ============================================================
@@ -3488,3 +3515,148 @@ def test_v25_s1_etapa_d_via_skill8_bloqueado_sem_confirmar_sefaz(db):
     assert etapa_d['modo'] == 'skill8_atomica_v25'
     assert etapa_d['status'] == 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ'
     assert 'IRREVERSIVEL' in etapa_d['erro']
+
+
+# ============================================================
+# v27+ S4 — Expand CONSTANTS FB+CD em CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO
+# + L10N_BR_TIPO_PEDIDO_POR_ACAO para todas direcoes MATRIZ_INTERCOMPANY
+# ============================================================
+
+def test_v27_s4_resolver_constants_fluxo_l3_fb_destino():
+    """v27+ S4: CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[1] (FB) mapeado.
+    Validacao via `_resolver_constants_fluxo_l3` com acao PERDA_LF_FB
+    (destino FB=1) — agora retorna dict completo (antes retornava None).
+    """
+    odoo = MagicMock()
+    odoo._uid = 42
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+    # Mock G039 (destino FB usa G039 dinamico — team_id=None nos CONSTANTS)
+    with patch.object(
+        executor, '_resolver_team_g039', return_value=(99, 'OK_EXISTENTE'),
+    ):
+        resolved = executor._resolver_constants_fluxo_l3(
+            acao_decidida='PERDA_LF_FB',
+            company_destino=1,
+        )
+    assert resolved is not None, (
+        'FB destino agora SUPORTADO via v27+ S4 expand'
+    )
+    assert resolved['company_destino'] == 1
+    assert resolved['picking_type_id'] == 1   # Recebimento (FB)
+    assert resolved['payment_term_id'] == 2791
+    assert resolved['payment_provider_id'] == 38
+    # team_id: G039 dinamico (mock 99) sobrescreve None default
+    assert resolved['team_id'] == 99
+    assert resolved['_team_g039_status'] == 'OK_EXISTENTE'
+    # PERDA_LF_FB: tipos {dfe: compra, po: retorno}
+    assert resolved['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert resolved['l10n_br_tipo_pedido_po'] == 'retorno'
+
+
+def test_v27_s4_resolver_constants_fluxo_l3_cd_destino():
+    """v27+ S4: CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[4] (CD) mapeado.
+    Validacao via TRANSFERIR_FB_CD (destino CD=4).
+    """
+    odoo = MagicMock()
+    odoo._uid = 42
+    executor = FaturamentoPipelineExecutor(odoo=odoo)
+    with patch.object(
+        executor, '_resolver_team_g039', return_value=(125, 'CRIADO'),
+    ):
+        resolved = executor._resolver_constants_fluxo_l3(
+            acao_decidida='TRANSFERIR_FB_CD',
+            company_destino=4,
+        )
+    assert resolved is not None
+    assert resolved['company_destino'] == 4
+    assert resolved['picking_type_id'] == 13  # Recebimento (CD)
+    assert resolved['payment_term_id'] == 2791
+    assert resolved['payment_provider_id'] == 38
+    assert resolved['team_id'] == 125  # G039 dinamico
+    # TRANSFERIR_FB_CD: tipos {dfe: compra, po: transf-filial}
+    assert resolved['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert resolved['l10n_br_tipo_pedido_po'] == 'transf-filial'
+
+
+def test_v27_s4_l10n_br_tipo_pedido_cobre_todas_acoes_matriz():
+    """v27+ S4: L10N_BR_TIPO_PEDIDO_POR_ACAO mapeia todas as 8 acoes do
+    ACAO_PARA_DIRECAO (mineracao MATRIZ_INTERCOMPANY).
+
+    Garante que mapeamento e' completo — onda PROD com qualquer combinacao
+    de acoes nao bate em direcao nao mapeada.
+
+    Pattern empirico: dfe='compra' UNIVERSAL (destrava action_gerar_po_dfe);
+    po derivado de MATRIZ[op]['entrada'][(co_origem, co_destino)]
+    ['l10n_br_tipo_pedido_entrada'].
+    """
+    executor = FaturamentoPipelineExecutor()
+    mapping = executor.L10N_BR_TIPO_PEDIDO_POR_ACAO
+
+    # 8 acoes esperadas (mineracao ACAO_PARA_DIRECAO)
+    acoes_esperadas = {
+        'INDUSTRIALIZACAO_FB_LF',  # entrada serv-industrializacao
+        'PERDA_LF_FB',             # entrada retorno
+        'DEV_LF_FB',               # entrada outro
+        'DEV_CD_LF',               # entrada retorno
+        'DEV_LF_CD',               # entrada outro
+        'DEV_FB_LF',               # entrada retorno
+        'TRANSFERIR_FB_CD',        # entrada transf-filial
+        'TRANSFERIR_CD_FB',        # entrada transf-filial
+    }
+    assert set(mapping.keys()) >= acoes_esperadas, (
+        f'Faltam acoes em L10N_BR_TIPO_PEDIDO_POR_ACAO: '
+        f'{acoes_esperadas - set(mapping.keys())}'
+    )
+
+    # dfe='compra' UNIVERSAL para todas (pattern empirico)
+    for acao in acoes_esperadas:
+        entry = mapping[acao]
+        assert entry['dfe'] == 'compra', (
+            f'{acao}: dfe={entry["dfe"]!r} esperado "compra"'
+        )
+        assert 'po' in entry and entry['po'], (
+            f'{acao}: po nao mapeado'
+        )
+
+    # Casos especificos (validado contra MATRIZ_INTERCOMPANY)
+    assert mapping['INDUSTRIALIZACAO_FB_LF']['po'] == 'serv-industrializacao'
+    assert mapping['PERDA_LF_FB']['po'] == 'retorno'
+    assert mapping['DEV_CD_LF']['po'] == 'retorno'
+    assert mapping['DEV_FB_LF']['po'] == 'retorno'
+    assert mapping['DEV_LF_FB']['po'] == 'outro'
+    assert mapping['DEV_LF_CD']['po'] == 'outro'
+    assert mapping['TRANSFERIR_FB_CD']['po'] == 'transf-filial'
+    assert mapping['TRANSFERIR_CD_FB']['po'] == 'transf-filial'
+
+
+def test_v27_s4_constants_fluxo_l3_cobre_3_companies():
+    """v27+ S4: CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO cobre 3 companies
+    (FB=1, CD=4, LF=5). Antes v27+ S4 cobria apenas LF=5.
+
+    LF=5: team_id=143 STATIC (F4 v25+ — decisao operacional).
+    FB=1: team_id=None (G039 dinamico — pendente canary).
+    CD=4: team_id=None (G039 dinamico — pendente canary).
+    """
+    executor = FaturamentoPipelineExecutor()
+    constants = executor.CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO
+
+    # 3 companies mapeadas
+    assert set(constants.keys()) == {1, 4, 5}
+
+    # LF=5: STATIC team_id=143 (F4 v25+)
+    assert constants[5]['team_id'] == 143
+    assert constants[5]['picking_type_id'] == 19  # Recebimento LF
+    assert constants[5]['payment_term_id'] == 2791
+    assert constants[5]['payment_provider_id'] == 38
+
+    # FB=1: G039 dinamico
+    assert constants[1]['team_id'] is None
+    assert constants[1]['picking_type_id'] == 1  # Recebimento FB
+    assert constants[1]['payment_term_id'] == 2791
+    assert constants[1]['payment_provider_id'] == 38
+
+    # CD=4: G039 dinamico
+    assert constants[4]['team_id'] is None
+    assert constants[4]['picking_type_id'] == 13  # Recebimento CD
+    assert constants[4]['payment_term_id'] == 2791
+    assert constants[4]['payment_provider_id'] == 38
