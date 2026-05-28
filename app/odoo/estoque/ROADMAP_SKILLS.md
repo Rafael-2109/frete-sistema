@@ -19,7 +19,7 @@
 7. Se sessão for sobre Skill 8 → ler `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO (regra inviolável 0).
 
 ### Baseline pytest esperado
-- **662 verdes** (tests/odoo/ — v25+ S0 confirmado em 17s. 655 baseline v24.1+ + 7 net v25+ S0 = 8 testes F2a/F3c novos - 1 teste G039 reescrito por F4.)
+- **672 verdes** (tests/odoo/ — v27+ S1+S4 confirmado em 17s. 662 baseline v25+ S0 + 10 net v27+ = 6 S1 dispatch mockado + 4 S4 constants/L10N_BR_TIPO_PEDIDO).
 
 ### Estado global (atualizado v18 Fase 0 — 2026-05-26)
 

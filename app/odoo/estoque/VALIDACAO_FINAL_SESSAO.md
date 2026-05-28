@@ -2569,3 +2569,157 @@ Apos cleanup, **NAO HA candidato natural** para canary REAL no banco. F1-F4 fica
 ### Commits
 
 - (a fazer) ops(estoque): cleanup banco local F5d_BLOCKER_TX (30 ajustes + 67 auditoria) + VALIDACAO update
+
+---
+
+## Sessão 2026-05-27 v27+ — S1 + S3 + S4 + S5 (orchestrator opt-in skill8 + rename + expand CONSTANTS + folhas L3)
+
+> Sessão executou 4 sub-tarefas do PROMPT v27+ §3 (S1 PRIORITÁRIO + S3 + S4 + S5). S2 canary REAL F1-F4 + opt-in DEFERIDO (zero candidatos pós-cleanup F5d v26+).
+
+**Commits desta sessão (4 commits separados — rastreabilidade):**
+- `ab35d5f3` feat(estoque): v27+ S1 — opt-in --usar-skill8-atomica-v25 (ETAPAs C+D)
+- `47085916` refactor(estoque): v27+ S3 — rename faturamento_pipeline → inventario_pipeline
+- `843045a9` feat(estoque): v27+ S4 — expand CONSTANTS FB+CD + L10N_BR_TIPO_PEDIDO_POR_ACAO
+- `b7f32476` docs(estoque): v27+ S5 — folhas L3 1.1.1 + 1.3 (markdown only)
+
+### Pytest baseline
+
+| Fase | Verdes | Delta |
+|------|--------|-------|
+| Início (v25+ S0 + v26+ cleanup) | 662 | — |
+| Pós S1 (6 testes dispatch mockado) | 668 | +6 |
+| Pós S3 (testes patcham via inventario_pipeline) | 668 | 0 |
+| Pós S4 (4 testes constants + 2 testes atualizados) | 672 | +4 |
+| Pós S5 (markdown only) | 672 | 0 |
+| **Final v27+** | **672** | **+10 net** |
+
+### S1 — Opt-in `--usar-skill8-atomica-v25` (ETAPAs C+D)
+
+**Implementação:**
+- Adicionada flag `--usar-skill8-atomica-v25` em `inventario_pipeline.py` (CLI argparse).
+- Parâmetro `usar_skill8_atomica_v25: bool = False` em `executar_pipeline_bulk` + `executar_pipeline_resume`.
+- 2 helpers novos no orchestrator:
+  - `_executar_etapa_c_via_skill8_atomica` (~250 LOC) — substitui `executar_etapa_c` legacy quando flag=True. Compõe átomos 3+4 da Skill 8 ATÔMICA L2 (`polling_invoice` + `validar_invoice_pos_robo`).
+  - `_executar_etapa_d_via_skill8_atomica` (~180 LOC) — substitui `executar_etapa_d` legacy. Compõe átomo 5 (`transmitir_sefaz`).
+- Dispatch no loop das etapas (`executar_pipeline_bulk` linhas ~4528-4585): if flag=True → helper; else legacy.
+- Default OFF preserva 100% comportamento legacy = zero risco regressão.
+- Ortogonal a `--usar-fluxo-l3-v19` (ambas podem coexistir).
+
+**Pytest (6 novos):**
+- `test_v25_s1_etapa_c_via_skill8_dispatch_dry_run`
+- `test_v25_s1_etapa_d_via_skill8_dispatch_dry_run`
+- `test_v25_s1_default_off_preserva_legacy_etapa_c`
+- `test_v25_s1_etapa_c_via_skill8_real_run_invoca_atomos` (mock svc)
+- `test_v25_s1_etapa_d_via_skill8_real_run_invoca_atomo` (mock svc)
+- `test_v25_s1_etapa_d_via_skill8_bloqueado_sem_confirmar_sefaz`
+
+**Smoke CLI dry-run validado:**
+```bash
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
+    --ciclo INVENTARIO_2026_05 --etapas C,D --pular-pre-flight \
+    --usar-skill8-atomica-v25
+# → ETAPA C+D retornam SKIP_NENHUM_AJUSTE (cleanup F5d v26+ esvaziou
+#   candidatos naturais). Help text mostra ambas flags v25+ + v27+.
+```
+
+**Canary REAL PROD pendente** — opt-in inerte (default OFF) até Rafael disparar manualmente.
+
+### S3 — Rename `faturamento_pipeline.py` → `inventario_pipeline.py`
+
+**Estratégia:** `git mv` orchestrator + STUB ALIAS COMPAT `faturamento_pipeline.py` que re-exporta tudo (símbolos públicos via `*`, privados via re-export explícito, entry-point CLI via `if __name__ == '__main__': sys.exit(_main())`). DeprecationWarning ao import.
+
+**Validação:**
+- Imports preservados: testes patcham via `inventario_pipeline.<X>` (nome real do módulo) — `replace_all=True` em 2 arquivos de teste.
+- CLI legacy `python -m ...faturamento_pipeline` funciona via stub.
+- CLI novo `python -m ...inventario_pipeline` funciona.
+- Docstrings atualizadas em 5 arquivos: `faturamento.py`, `escrituracao.py`, `picking.py`, `_invoice_helpers.py`, `operacoes_fiscais.py`.
+- SKILL.md fachada atualizada (15 ocorrências `python -m ...faturamento_pipeline` → `inventario_pipeline`; descrições orchestrator C3).
+- CLAUDE.md §6 Tabela 3 entry orchestrator renomeada.
+
+**Roadmap remoção stub** (v28+):
+- Após canary REAL PROD do opt-in `--usar-skill8-atomica-v25` validar.
+- Após `grep -rn 'faturamento_pipeline'` não retornar mais imports Python ativos.
+- PROTECAO_PROXIMA_SESSAO.md atualizar N32 "alias removido v28+".
+
+### S4 — Expand `CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO` FB+CD + `L10N_BR_TIPO_PEDIDO_POR_ACAO`
+
+**Discovery XML-RPC PROD 2026-05-27** (`stock.picking.type` incoming):
+- **FB (1)**: PT 1 'Recebimento (FB)' + 52 Industrializacao + 54 Entre Filiais + 6 Devolucoes
+- **CD (4)**: PT 13 'Recebimento (CD)' + 50 Entre Filiais + 18 Devolucoes
+- **LF (5)**: PT 19 'Recebimento (LF)' + 24 Devolucoes + 64 Industrializacao
+
+**Mineração MATRIZ_INTERCOMPANY** (`l10n_br_tipo_pedido_entrada` por direção):
+
+| Ação | (orig→dest) | po (entrada) |
+|------|-------------|--------------|
+| INDUSTRIALIZACAO_FB_LF | (1→5) | serv-industrializacao |
+| PERDA_LF_FB | (5→1) | retorno |
+| DEV_LF_FB | (5→1) | outro |
+| DEV_CD_LF | (4→5) | retorno |
+| DEV_LF_CD | (5→4) | outro |
+| DEV_FB_LF | (1→5) | retorno |
+| TRANSFERIR_FB_CD | (1→4) | transf-filial |
+| TRANSFERIR_CD_FB | (4→1) | transf-filial |
+
+**Pattern empírico:** `dfe='compra'` UNIVERSAL (destrava `action_gerar_po_dfe` no robô CIEL IT — validado AVULSO_FRASCO v24+). `po` derivado de MATRIZ_INTERCOMPANY.
+
+**Decisão por destino:**
+- **LF=5**: `team_id=143` STATIC FIXO (decisão F4 v25+ — operacional Rafael)
+- **FB=1**: `team_id=None` (G039 dinâmico)
+- **CD=4**: `team_id=None` (G039 dinâmico)
+- `payment_term_id=2791` 'A VISTA' UNIVERSAL
+- `payment_provider_id=38` 'SEM PAGAMENTO' UNIVERSAL (G029)
+- `picking_type_id`: Recebimento padrão da company
+
+**Pytest (4 novos):**
+- `test_v27_s4_resolver_constants_fluxo_l3_fb_destino`
+- `test_v27_s4_resolver_constants_fluxo_l3_cd_destino`
+- `test_v27_s4_l10n_br_tipo_pedido_cobre_todas_acoes_matriz`
+- `test_v27_s4_constants_fluxo_l3_cobre_3_companies`
+
+**2 testes atualizados** (mudança de comportamento):
+- `test_v20_s3_etapa_f_via_fluxo_l3_cd_destino_nao_suportada` — antes validava NAO_SUPORTADA_V20; agora valida CD destino EXECUTADO_OK (constants mapeadas).
+- `test_v20_s3_etapa_f_via_fluxo_l3_misto_lf_e_cd_destino` — antes EXECUTADO_PARCIAL; agora EXECUTADO_OK (ambos suportados).
+
+**Canary REAL FB/CD pendente** — próxima PERDA_LF_FB ou TRANSFERIR_*_CD natural.
+
+### S5 — Folhas L3 1.1.1 + 1.3 (markdown only)
+
+**Folha 1.1.1** (`fluxos/1.1.1-faturamento-saida-pura.md`, ~310 linhas):
+- Documenta composição Skill 8 ATÔMICA L2 (5 átomos `account.move`).
+- Pré-condições, sequência completa, gotchas, exemplo Python, composição via orchestrator C3 com opt-in v27+ S1.
+- Cobre TODAS direções via constants v27+ S4 (não precisa de variantes 1.1.1.x específicas).
+
+**Folha 1.3** (`fluxos/1.3-transferencia-completa.md`, ~290 linhas):
+- Documenta composição end-to-end: FASE 1 SAÍDA (1.1.1) + PONTO DE NÃO RETORNO SEFAZ + FASE 2 ENTRADA (1.2.x caminho A ou B decidido automaticamente).
+- Tabela 8 ações MATRIZ_INTERCOMPANY + caminho típico.
+- Mapeamento ETAPAS A-F → sub-fluxos com opt-in flags v27+ S1 + v20+ S3.
+- Exemplo Python direto + via orchestrator C3.
+- Roadmap evolução v19→v27+ com canários validados PROD (caminho A LF 627348 + caminho B AVULSO_FRASCO 37688un).
+
+**README.md fluxos** árvore decisão atualizada (galho 1 destravado v27+ S5).
+
+### Estado final ajustes PROD (preservado v23+/v24+/v25+/v26+/v27+ — NÃO MEXIDO)
+
+- 176013/176014: `EXECUTADO/F5f_ENTRADA_OK`, invoice 717630 ENTIN/2026/05/0055 posted, PO 42419 team=143 picking 321617 done
+- 177465 AVULSO_FRASCO: `EXECUTADO/F5e_SEFAZ_OK`, invoice 719071 ENTIN/2026/05/0056 posted, PO 42543 team=143 fp=131 tipo=serv-industrializacao, picking 321834 done, quant LF/Estoque/AJ-27-05=37688un
+
+### Pendências v28+
+
+1. **Canary REAL PROD opt-in `--usar-skill8-atomica-v25`** — quando próxima INDUSTRIALIZACAO_FB_LF natural surgir. Validar paridade vs legacy.
+2. **Canary REAL FB destino** — PERDA_LF_FB / DEV_LF_FB / TRANSFERIR_CD_FB natural valida CONSTANTS FB v27+ S4 + L10N_BR_TIPO_PEDIDO.
+3. **Canary REAL CD destino** — TRANSFERIR_FB_CD / DEV_LF_CD / DEV_*_CD natural valida CONSTANTS CD.
+4. **Decisão STATIC vs G039 dinâmico p/ FB+CD** — após canary, Rafael decide caso-a-caso (LF é STATIC=143 desde F4 v25+).
+5. **Após canary skill8 OK**: remover ETAPAs C+D legacy (~500 LOC) do orchestrator + migrar 14 testes de `test_faturamento_pipeline_orchestrator.py` para `test_faturamento_invoice_service.py`.
+6. **Remover stub `faturamento_pipeline.py`** — após grep `faturamento_pipeline` retornar zero imports Python ativos + PROTECAO N32 documenta remoção.
+
+### Antipadrões NOVOS detectados nesta sessão
+
+**ZERO antipadrões novos.** Sessão executou conforme plano via opt-in (escolha arquitetural correta: caminho novo coexiste com legacy via flag default OFF — sem regressão). PROTECAO_PROXIMA_SESSAO.md N1-N31 + AR1-AR13 inalterados.
+
+### Commits
+
+- `ab35d5f3` — S1 opt-in skill8 (12 files, 925 ins / 16 del)
+- `47085916` — S3 rename + stub (12 files, 6053 ins / 5961 del)
+- `843045a9` — S4 expand CONSTANTS (3 files, 298 ins / 43 del)
+- `b7f32476` — S5 folhas L3 (5 files, 484 ins / 9 del)
