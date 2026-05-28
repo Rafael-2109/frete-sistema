@@ -26,20 +26,28 @@ echo "================================================="
 # 1. Setup dependencias (Chrome, Playwright, Claude CLI, UTF-8, DB)
 # ---------------------------------------------------------------------
 
-echo " Verificando nginx (proxy split agente x sistema)..."
-if ! command -v nginx >/dev/null 2>&1; then
-    echo " Instalando nginx via apt..."
-    apt-get update -qq 2>&1 | tail -3
-    apt-get install -y -qq nginx-light 2>&1 | tail -5
-    if command -v nginx >/dev/null 2>&1; then
-        echo " ✅ nginx instalado: $(nginx -v 2>&1)"
-    else
-        echo " ❌ FATAL: nginx nao instalado. Abortando antes de gunicorn."
+echo " Verificando Caddy (proxy split agente x sistema)..."
+# Caddy: single binary download. Render Python Runtime NAO permite apt
+# nem no build nem no start (start roda como user 'render', sem sudo).
+# Caddy resolve: curl + chmod + run. Funcionalmente equivalente ao nginx.
+CADDY_VERSION="2.11.3"
+CADDY_BIN="${HOME}/bin/caddy"
+mkdir -p "${HOME}/bin"
+if [ ! -x "$CADDY_BIN" ]; then
+    echo " Baixando Caddy v${CADDY_VERSION} (single binary)..."
+    CADDY_URL="https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz"
+    curl -fsSL "$CADDY_URL" -o /tmp/caddy.tar.gz \
+        && tar -xzf /tmp/caddy.tar.gz -C /tmp caddy \
+        && mv /tmp/caddy "$CADDY_BIN" \
+        && chmod +x "$CADDY_BIN" \
+        && rm -f /tmp/caddy.tar.gz
+    if [ ! -x "$CADDY_BIN" ]; then
+        echo " ❌ FATAL: Caddy nao baixou. Abortando antes de gunicorn."
         exit 1
     fi
-else
-    echo " ✅ nginx ja disponivel: $(nginx -v 2>&1)"
 fi
+echo " ✅ Caddy disponivel: $($CADDY_BIN version 2>&1 | head -1)"
+export PATH="${HOME}/bin:$PATH"
 
 echo " Verificando dependencias do Chrome..."
 if ! ldconfig -p | grep -q libnss3; then
@@ -266,31 +274,31 @@ watchdog &
 WATCHDOG_PID=$!
 
 # ---------------------------------------------------------------------
-# 7. Sobe nginx em FOREGROUND (binda 0.0.0.0:10000 para Render detectar)
+# 7. Sobe Caddy em FOREGROUND (binda 0.0.0.0:10000 para Render detectar)
 # ---------------------------------------------------------------------
 echo "================================================="
-echo " Subindo nginx em :10000 (foreground)"
+echo " Subindo Caddy em :10000 (foreground)"
 echo "================================================="
 
-# Valida config primeiro
-nginx -t -c "$(pwd)/nginx.conf" 2>&1 | sed -u 's/^/[NGINX-TEST] /'
-NGINX_TEST_RC=${PIPESTATUS[0]}
-if [ $NGINX_TEST_RC -ne 0 ]; then
-    echo " ❌ FATAL: nginx config invalida"
+# Valida Caddyfile primeiro
+"$CADDY_BIN" validate --config "$(pwd)/Caddyfile" --adapter caddyfile 2>&1 | sed -u 's/^/[CADDY-VALIDATE] /'
+CADDY_TEST_RC=${PIPESTATUS[0]}
+if [ $CADDY_TEST_RC -ne 0 ]; then
+    echo " ❌ FATAL: Caddyfile invalido"
     cleanup
     exit 1
 fi
 
-# nginx em foreground; logs prefixados
-nginx -c "$(pwd)/nginx.conf" -g 'daemon off;' \
-    > >(sed -u 's/^/[NGINX] /') 2> >(sed -u 's/^/[NGINX] /' >&2) &
+# Caddy em foreground; logs prefixados
+"$CADDY_BIN" run --config "$(pwd)/Caddyfile" --adapter caddyfile \
+    > >(sed -u 's/^/[CADDY] /') 2> >(sed -u 's/^/[CADDY] /' >&2) &
 NGINX_PID=$!
-echo " Nginx PID: $NGINX_PID"
+echo " Caddy PID: $NGINX_PID"
 
-# Aguarda nginx (trap captura signals em paralelo)
+# Aguarda Caddy (trap captura signals em paralelo)
 wait $NGINX_PID
 NGINX_RC=$?
 
-echo " nginx encerrou (rc=$NGINX_RC) — derrubando gunicorns"
+echo " Caddy encerrou (rc=$NGINX_RC) — derrubando gunicorns"
 cleanup
 exit $NGINX_RC

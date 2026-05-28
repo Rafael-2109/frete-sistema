@@ -1,0 +1,102 @@
+# =====================================================================
+# Caddyfile — proxy split agente x sistema (substitui nginx)
+# =====================================================================
+# Roteia requests no container Render Pro Plus 8GB/4CPU:
+#   - /agente/*       -> gunicorn-agente   :5001  (workers=1, threads=8)
+#   - /agente-lojas/* -> gunicorn-agente   :5001  (mesmo agente)
+#   - /static/*       -> serve do disco
+#   - resto           -> gunicorn-sistema  :5002  (workers=4, threads=2)
+#
+# Motivo Caddy vs nginx: Render Python Runtime nao permite apt-get
+# (build sem privilegio + start como user nao-root). Caddy distribui
+# como single binary via GitHub releases, baixavel via curl. Funcionalmente
+# equivalente para reverse proxy + SSE + static files.
+# =====================================================================
+
+{
+    # Desliga HTTPS automatico (Render TLS termina externamente)
+    auto_https off
+    # Sem admin API (nao precisamos)
+    admin off
+    # Logs JSON para stderr (Render captura)
+    log {
+        output stderr
+        format console
+        level INFO
+    }
+}
+
+# Server publico (porta Render)
+:10000 {
+    # Upload limit (devolucao, files agente) — 50MB
+    request_body {
+        max_size 50MB
+    }
+
+    # ===============================================================
+    # Health check trivial
+    # ===============================================================
+    @health path /nginx-health
+    handle @health {
+        respond "ok" 200 {
+            close
+        }
+    }
+
+    # ===============================================================
+    # /agente* + /agente-lojas* -> gunicorn-agente (per-process SDK)
+    # ===============================================================
+    # SSE em /agente/api/chat: flush_interval -1 envia chunks
+    # imediatamente (sem buffer), equivalente ao proxy_buffering off
+    # do nginx. Timeouts longos (1800s) para SSE de 29min.
+    @agente path /agente /agente/* /agente-lojas /agente-lojas/*
+    handle @agente {
+        reverse_proxy 127.0.0.1:5001 {
+            flush_interval -1
+            transport http {
+                read_timeout 30m
+                write_timeout 30m
+                dial_timeout 30s
+                keepalive 75s
+                keepalive_idle_conns 32
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # ===============================================================
+    # /static/* -> servir direto do disco (sem proxy)
+    # ===============================================================
+    @static path /static/*
+    handle @static {
+        root * /opt/render/project/src/app
+        file_server {
+            precompressed gzip
+        }
+        # Cache 7d para estaticos
+        header Cache-Control "public, max-age=604800, immutable"
+    }
+
+    # ===============================================================
+    # Resto -> gunicorn-sistema
+    # ===============================================================
+    handle {
+        reverse_proxy 127.0.0.1:5002 {
+            flush_interval -1
+            transport http {
+                read_timeout 30m
+                write_timeout 30m
+                dial_timeout 30s
+                keepalive 75s
+                keepalive_idle_conns 64
+            }
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
