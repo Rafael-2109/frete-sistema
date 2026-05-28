@@ -76,11 +76,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.odoo.constants.ids_diversos import (
     CARRIER_NACOM,
     INCOTERM_CIF,
-    PAYMENT_PROVIDER_SEM_PAGAMENTO,  # CR-F11 v15c: ref stub C (G029)
 )
 from app.odoo.constants.locations import COMPANY_LOCATIONS
 from app.odoo.constants.operacoes_fiscais import (
-    ACAO_PARA_CFOP_ENTRADA,  # CR-F8 v15c: ref stub E (D17)
     ACAO_PARA_DIRECAO,        # CR-F8 v15c: fonte unica de verdade
     ACOES_ENTRADA_FB,         # CR-F8 v15c: ref stub E
     ACOES_PICKING,            # CR-F8 v15c: derivada de ACAO_PARA_DIRECAO
@@ -90,10 +88,14 @@ from app.odoo.constants.picking_types import (
     ACOES_ENTRADA_DESTINO_MANUAL,           # CR-F10 v15c: ref stub F
     COMPANY_LABEL_ENTRADA,                  # CR-F10 v15c: ref stub F
     LOCATION_DESTINO_POR_DIRECAO,
-    LOCATION_ORIGEM_ENTRADA_INDUSTR,        # CR-F10 v15c: ref stub F (alias 26489)
     PICKING_TYPE_ENTRADA_DESTINO_MANUAL,    # CR-F10 v15c: ref stub F
     get_picking_type,
 )
+# v28+ cleanup: removidos imports nao-usados PAYMENT_PROVIDER_SEM_PAGAMENTO
+# (stub C nunca implementado — G029 vai via _invoice_helpers.garantir_payment_provider),
+# ACAO_PARA_CFOP_ENTRADA (stub E D17 ja' encapsulado por Skill 7 atomo legacy),
+# LOCATION_ORIGEM_ENTRADA_INDUSTR (alias 26489 — ETAPA F legacy usa direto via
+# get_location_origem_entrada(acao) que ja' resolve por direcao v17.5).
 from app.odoo.estoque.scripts._commit_helpers import (
     commit_resilient as _commit_resilient_shared,  # CR-F9 v15c: helper consolidado
     safe_session_get,                              # CR-F6 v15c: re-fetch ORM
@@ -671,7 +673,6 @@ class FaturamentoPipelineExecutor:
         usuario: str = 'faturamento_pipeline',
         cod_produto: Optional[str] = None,
         limite: Optional[int] = None,  # v16: aceita limite para smoke
-        permitir_etapa_a_noop_real: bool = False,  # DEPRECATED v16 — compat
     ) -> Dict[str, Any]:
         """ETAPA A v16: transferencias intra-empresa SEM NF (RENOMEAR/TRANSFERIR_LOTE).
 
@@ -686,16 +687,11 @@ class FaturamentoPipelineExecutor:
           - external_id_operacao populado (F12 pattern v15c)
           - Auditoria por ajuste
 
-        Substitui:
-          - v15b NOOP guard que marcava TUDO como TRANSF_OK (perigoso —
-            incluia ACOES_PICKING que NAO sao transferencias).
+        v28+ cleanup: flag `permitir_etapa_a_noop_real` REMOVIDA (DEPRECATED
+        desde v16, ~12 sessoes sem uso real em PROD; default OFF preservava
+        comportamento sem impacto). Substituidos:
+          - v15b NOOP guard que marcava TUDO como TRANSF_OK (perigoso).
           - v15c `raise NotImplementedError` guard.
-
-        Compat flag `permitir_etapa_a_noop_real=True`:
-          - v16: ainda aceito mas emite DeprecationWarning. Marca apenas
-            ajustes ACOES_LOTE como TRANSF_OK sem chamar Skill 2 (uso de
-            operador convicto que lote ja' casa).
-          - v17 (planejado): removido.
 
         Args:
             ciclo: identificador do ciclo.
@@ -703,8 +699,6 @@ class FaturamentoPipelineExecutor:
             dry_run: True (default) simula; False executa real.
             usuario: identificador para auditoria.
             cod_produto: smoke/canary.
-            permitir_etapa_a_noop_real: DEPRECATED v16 — marca TRANSF_OK
-                sem chamar Skill 2. Sera removido em v17.
 
         Returns:
             dict com status + contadores (ajustes_total, ajustes_transferidos,
@@ -766,23 +760,9 @@ class FaturamentoPipelineExecutor:
         # REAL-RUN: invoca Skill 2 v2 por ajuste (SEQUENCIAL D13)
         # ============================================================
 
-        # Compat DEPRECATED v15c flag — manter por seguranca durante migracao.
-        if permitir_etapa_a_noop_real:
-            logger.warning(
-                'permitir_etapa_a_noop_real=True DEPRECATED v16 — sera '
-                'removido em v17. Marca TRANSF_OK sem chamar Skill 2 '
-                '(uso de operador convicto que lote ja casa com quants).'
-            )
-            for a in ajustes:
-                a.fase_pipeline = 'TRANSF_OK'
-            if not _commit_resilient():
-                out['status'] = 'FALHA_COMMIT_TRANSF_OK_NOOP'
-                out['tempo_ms'] = int((time.time() - t0) * 1000)
-                return out
-            out['status'] = 'EXECUTADO_ETAPA_A_NOOP_DEPRECATED'
-            out['ajustes_atualizados'] = len(ajustes)
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
+        # v28+ cleanup: branch `permitir_etapa_a_noop_real` REMOVIDA
+        # (DEPRECATED v16; default OFF preservava comportamento; zero
+        # callers reais em PROD nas ~12 sessoes desde v16).
 
         # v16: implementacao real via Skill 2 v2.
         # Lazy import — evita circular em testes.

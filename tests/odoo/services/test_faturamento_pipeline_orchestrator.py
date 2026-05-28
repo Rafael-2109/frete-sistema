@@ -1205,30 +1205,11 @@ def test_g014_pre_check_quant_sem_lote_eh_nao_vencido():
     assert res['lote_novo_por_cod'] == {}
 
 
-def test_executar_etapa_a_v16_flag_deprecated_noop_funciona():
-    """ETAPA A v16: flag DEPRECATED `permitir_etapa_a_noop_real=True` ainda
-    funciona mas com novo status `EXECUTADO_ETAPA_A_NOOP_DEPRECATED`.
-
-    Sera removido em v17. Tests garantem compat ate la.
-    """
-    odoo = MagicMock()
-    svc = MagicMock()
-    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
-    aj = _ajuste_mock(ajuste_id=1, acao='RENOMEAR_LOTE')
-    aj.lote_destino = 'LOT_NOVO'
-    with patch(
-        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
-        return_value=[aj],
-    ), patch(
-        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
-        return_value=True,
-    ):
-        res = executor.executar_etapa_a(
-            ciclo='TESTE', dry_run=False,
-            permitir_etapa_a_noop_real=True,
-        )
-    assert res['status'] == 'EXECUTADO_ETAPA_A_NOOP_DEPRECATED'
-    assert aj.fase_pipeline == 'TRANSF_OK'
+# v28+ cleanup: test_executar_etapa_a_v16_flag_deprecated_noop_funciona
+# REMOVIDO junto com o flag `permitir_etapa_a_noop_real` da assinatura de
+# `executar_etapa_a` (DEPRECATED v16 ~12 sessoes; zero callers reais).
+# Cenario coberto pelo restante dos testes ETAPA A (dry-run + real-run com
+# Skill 2 v2). Status `EXECUTADO_ETAPA_A_NOOP_DEPRECATED` removido tambem.
 
 
 def test_etapa_b_compensatorio_sem_falhas_vira_auto_corrigido(db):

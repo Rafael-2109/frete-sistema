@@ -19,7 +19,7 @@
 7. Se sessão for sobre Skill 8 → ler `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO (regra inviolável 0).
 
 ### Baseline pytest esperado
-- **682 verdes** (tests/odoo/ — v28+ S7+S6.b+CR Finding 2 confirmado em 15.6s. 676 baseline v27+ pós-CR + 6 net v28+ = 7 S7 dispatch helper E mockado − 1 substituído legado SKIP_NAO_SUPORTADA_V20_FLUXO_L3 v20+).
+- **681 verdes** (tests/odoo/ — v28+ S7+S6.b+CR Finding 2 + cleanup DEPRECATED v16 confirmado em 17.1s. 676 baseline v27+ pós-CR + 5 net v28+ = 7 S7 dispatch helper E mockado − 1 substituído legado SKIP v20+ − 1 cleanup test flag DEPRECATED v16).
 
 ### Estado global (atualizado v18 Fase 0 — 2026-05-26)
 
@@ -33,7 +33,7 @@
 | Skill 6 `planejando-pre-etapa-odoo` | 🟡 mín viável COMPLETA v9 (planner + executor C3) | `scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` |
 | Skill 7 `escriturando-odoo` | 🟡 **ABRANGENTE LIVE v25+** (10 átomos: 7 v19+ + 2 v23+/v23.5+ G039/B-V23-2 + **1 v25+ NOVO `alinhar_dfe_lines_company` F2a** + `preencher_po` ganha param `l10n_br_tipo_pedido` F3c) — 53 pytest = 38 anterior + 4 F2a + 3 F3c + 8 hooks/atomos B-V23-1/2 v23.5+ — AP1+AP4 ✅; F2a generaliza B-V23-1 p/ caminho A; F3c destrava tipos diferentes DFe vs PO | `scripts/escrituracao.py` |
 | Skill 8 `faturando-odoo` **ATÔMICA L2 v24+** (AP6 RESOLVIDO PARCIAL — NOVA arquitetura) | 🟢 **5 átomos ATÔMICOS LIVE v24+** (`validar_invoice_constants`, `liberar_faturamento`, `polling_invoice`, `validar_invoice_pos_robo`, `transmitir_sefaz`) — 28 pytest verdes — `scripts/faturamento.py` ~750 LOC | `scripts/faturamento.py` + `.claude/skills/faturando-odoo/SKILL.md` (fachada atualizada v24+) |
-| Orchestrator C3 LEGACY `inventario_pipeline` (renomeado de `faturamento_pipeline` em v27+ S3 — **stub alias REMOVIDO v28+ S6.b 2026-05-28**) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x LIVE v19+ + **opt-in `--usar-fluxo-l3-v19` v20+** + **F1+F2b+F3a-d+F4 v25+** + **opt-in `--usar-skill8-atomica-v25` v27+ S1** + **helper `_executar_etapa_e_via_fluxo_l3` v28+ S7** (espelha helper F filtrando ACOES_ENTRADA_FB — destrava 4 ações X→FB/X→LF) — 97 pytest = 90 v27+ + 7 net v28+ S7 dispatch helper E mockado (inclui Finding 2 CR FALHA_ETAPA_E) | `orchestrators/inventario_pipeline.py` (~5800 LOC) |
+| Orchestrator C3 LEGACY `inventario_pipeline` (renomeado de `faturamento_pipeline` em v27+ S3 — **stub alias REMOVIDO v28+ S6.b** + **cleanup deprecated v16/v17.5 v28+ post-S7**) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x LIVE v19+ + **opt-in `--usar-fluxo-l3-v19` v20+** + **F1+F2b+F3a-d+F4 v25+** + **opt-in `--usar-skill8-atomica-v25` v27+ S1** + **helper `_executar_etapa_e_via_fluxo_l3` v28+ S7** (espelha helper F filtrando ACOES_ENTRADA_FB — destrava 4 ações X→FB/X→LF) — 96 pytest = 90 v27+ + 7 net v28+ S7 dispatch helper E mockado (inclui Finding 2 CR FALHA_ETAPA_E) − 1 cleanup test flag DEPRECATED v16 | `orchestrators/inventario_pipeline.py` (~5800 LOC) |
 | Skill 9 `consultando-quant-odoo` (READ) | 🟡 mín viável (3 modos G030) | `scripts/consulta_quant.py` |
 | Sub-skill C5 `auditando-cadastro-fiscal-odoo` | 🟡 V1 'inventario' + G038 v22+ + **G007+l10n_br_tipo_produto v24+** — 20 pytest (16 + 4 net v24+ standard_price=0 WARN + tipo_produto BLOQUEIO) | `scripts/cadastro_fiscal_audit.py` |
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |

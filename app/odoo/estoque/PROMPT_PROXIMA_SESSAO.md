@@ -69,7 +69,7 @@ git log --oneline HEAD..origin/main | head -10   # rebase se main avançou
 
 ```bash
 timeout 90 python -m pytest tests/odoo/ --tb=line -q 2>&1 | tail -3
-# Esperado: 681 passed (v28+ S7+S6.b baseline)
+# Esperado: 681 passed (v28+ S7+S6.b + cleanup DEPRECATED v16 baseline)
 ```
 
 Se ≠ 681 → investigar regressão antes de prosseguir.
@@ -83,9 +83,25 @@ Antes de codar: spawn AskUserQuestion confirmando escopo §3 + decisões abertas
 ## §2. CONTEXTO ATUAL (atualizado por sessão v28+ — FINALIZADA — S7+S6.b EXECUTED)
 
 ### Estado do código
-- **Commit base**: v28+ S7+S6.b (pendente — esta sessão prepara).
-- **Baseline pytest**: 681 verdes em 15.62s (676 v27+ pós-CR + 5 net v28+ = 6 S7 dispatch helper E mockado − 1 substituído legado SKIP).
+- **Commits base**: `4e776d82` v28+ S7+S6.b + commit `chore` cleanup deprecated NÍVEL 1 (v28+ pós-S7 — auditoria 4 items DEPRECATED; 2 removidos seguramente).
+- **Baseline pytest**: 681 verdes em 17.14s (676 v27+ pós-CR + 6 net v28+ S7 − 1 substituído legado SKIP − 1 cleanup test do flag DEPRECATED v16 removido = 681).
 - **Worktree**: `feat/estoque-odoo` (main pode ter avançado — rebase em §1.1).
+
+### Cleanup deprecated v28+ pós-S7 (auditoria preventiva Rafael 2026-05-28)
+
+**REMOVIDO** (NÍVEL 1 — puro código zero risco):
+- Flag `permitir_etapa_a_noop_real` (DEPRECATED v16, ~12 sessões, default OFF, zero callers PROD) + branch real-run + status `EXECUTADO_ETAPA_A_NOOP_DEPRECATED` + test.
+- 3 imports não-usados nivel topo de `inventario_pipeline.py` (`PAYMENT_PROVIDER_SEM_PAGAMENTO`, `ACAO_PARA_CFOP_ENTRADA`, `LOCATION_ORIGEM_ENTRADA_INDUSTR`).
+
+**MANTIDO** (NÍVEL 2 — precisa canary REAL S6 v29+):
+- Skill 5 `criar_picking_entrada_destino_manual` (DEPRECATED v19+) — ETAPA F LEGACY depende.
+- Skill 7 wrapper `criar_recebimento_orchestrado` V1 STRICT (DeprecationWarning v20+) — ETAPA E LEGACY depende.
+
+**MANTIDO** como museum vivo (sem caller direto):
+- Alias `LOCATION_ORIGEM_ENTRADA_INDUSTR` em picking_types.py (backward-compat).
+- `LOTES_MIGRACAO_POR_COMPANY` em locations.py (museum vivo G031).
+
+Detalhes completos: `VALIDACAO_FINAL_SESSAO.md` bloco "Cleanup adicional v28+".
 
 ### Estado da arquitetura (v28+)
 
@@ -180,17 +196,31 @@ python -m app.odoo.estoque.orchestrators.inventario_pipeline \
 
 Esta é a validação FINAL — paridade vs legacy em pipeline end-to-end inter-company.
 
-#### S6 — Remover ETAPAS C+D+E legacy (após S2.a+S2 canary OK)
+#### S6 — Remover ETAPAS C+D+E+F legacy (NÍVEL 2 cleanup — após S2.a+S2+S2.b canary OK)
 
-- `executar_etapa_c` (~390 LOC) — remover lógica inline, renomear `_executar_etapa_c_via_skill8_atomica` → `executar_etapa_c` definitivo.
-- `executar_etapa_d` (~580 LOC) — análogo.
-- `executar_etapa_e` (~250 LOC) — remover ramo legacy Skill 7 V1 STRICT, renomear `_executar_etapa_e_via_fluxo_l3` → `executar_etapa_e` definitivo.
-- Total: ~1500 LOC removidas (incluindo `executar_etapa_f` legacy + tampão `criar_picking_entrada_destino_manual` Skill 5).
-- Flip default `usar_fluxo_l3_v19=True` + `usar_skill8_atomica_v25=True` na assinatura de `executar_pipeline_bulk` + `executar_pipeline_resume`.
-- Migrar 14 testes legacy de `test_faturamento_pipeline_orchestrator.py` para `test_faturamento_invoice_service.py` + `test_escrituracao_lf_service_v19.py`.
-- Pytest baseline esperado: 681 → ~675 (testes legacy migrados sem perda de cobertura).
-- Remover Skill 7 wrapper V1 STRICT `criar_recebimento_orchestrado` (DeprecationWarning v20+).
-- Remover Skill 5 átomo DEPRECATED `criar_picking_entrada_destino_manual`.
+> Pré-requisito: canary REAL PROD validou paridade do caminho novo vs legacy em pelo menos 1 caso de cada direção (LF destino + FB destino + CD destino). S2/S2.a/S2.b OK.
+
+**Etapas a remover do orchestrator** (todos com lógica inline atualmente):
+- `executar_etapa_c` (~390 LOC) — renomear `_executar_etapa_c_via_skill8_atomica` → `executar_etapa_c` definitivo.
+- `executar_etapa_d` (~580 LOC) — renomear `_executar_etapa_d_via_skill8_atomica` → `executar_etapa_d` definitivo.
+- `executar_etapa_e` (~250 LOC) — remover ramo legacy Skill 7 V1 STRICT (`criar_recebimento_orchestrado`); renomear `_executar_etapa_e_via_fluxo_l3` → `executar_etapa_e` definitivo.
+- `executar_etapa_f` (~600 LOC) — remover ramo legacy Skill 5 (`criar_picking_entrada_destino_manual` tampão AP2); renomear `_executar_etapa_f_via_fluxo_l3` → `executar_etapa_f` definitivo.
+
+**Skills L2 DEPRECATED a remover** (NÍVEL 2 — após cleanup orchestrator):
+- Skill 5 `criar_picking_entrada_destino_manual` em `picking.py:1215+` (DEPRECATED v19+ AP2 caminho B paliativo).
+- Skill 7 wrapper `criar_recebimento_orchestrado` em `escrituracao.py:159+` (V1 STRICT DeprecationWarning v20+).
+
+**Flags a flipar default** + remover em v30+:
+- `usar_fluxo_l3_v19=True` por default em `executar_pipeline_bulk` + `executar_pipeline_resume`.
+- `usar_skill8_atomica_v25=True` por default análogo.
+
+**Tests a migrar** (~14 legacy):
+- `tests/odoo/services/test_faturamento_pipeline_orchestrator.py` ETAPAs C+D legacy → `tests/odoo/services/test_faturamento_invoice_service.py` (Skill 8 ATÔMICA L2 direta).
+- ETAPA E legacy test → `tests/odoo/services/test_escrituracao_lf_service.py` (Skill 7 V1 STRICT — futuro removido).
+
+**Total estimado removido**: ~1500 LOC orchestrator + ~600 LOC Skill 5 atom DEPRECATED + ~400 LOC Skill 7 wrapper DEPRECATED = **~2500 LOC**.
+
+**Pytest baseline esperado**: 681 → ~675 (testes legacy migrados sem perda de cobertura líquida).
 
 ### O que NÃO entra nesta sessão (escopo declarado fora)
 

@@ -2820,6 +2820,48 @@ Spawned em background durante implementação. Concluiu sem CRITICAL findings:
 
 **ZERO antipadrões novos.** Sessão executou conforme plano via opt-in (escolha arquitetural correta: caminho novo coexiste com legacy via flag default OFF — sem regressão). PROTECAO N1-N33 + AR1-AR14 inalterados (N32 marcada OBSOLETA por remoção do stub mas lição preservada).
 
-### Commits (pendentes — preparar 1 commit consolidado)
+### Commits
 
-- v28+ S7 + S6.b — código (~190 LOC helper + ~280 LOC pytest + ~75 LOC stub removido) + docs (CLAUDE.md §6+§11+§14 D-V28-1, ROADMAP HANDOFF, PROTECAO N32, VALIDACAO bloco v28+)
+- `4e776d82` — feat v28+ S7+S6.b: helper `_executar_etapa_e_via_fluxo_l3` + dispatch + 7 pytest novos + stub `faturamento_pipeline.py` removido + docs (CLAUDE.md §6+§11+§14 D-V28-1, ROADMAP, PROTECAO N32, VALIDACAO bloco v28+). 9 files, 1227 ins / 239 del.
+
+### Cleanup adicional v28+ (segundo commit `chore` — auditoria deprecated)
+
+**Trigger**: Rafael 2026-05-28: "O q eh deprecated/obsoleto, vc ja esta limpando? Atualize as docs, e gere o novo prompt".
+
+**Auditoria 4 items DEPRECATED em código** (grep `deprecated|obsoleto|museum vivo` em app/odoo/estoque/ + app/odoo/constants/):
+
+| # | Item | Marcado em | Caller ATIVO | Decisão | Rationale |
+|---|------|------------|--------------|---------|-----------|
+| 1 | Skill 5 átomo `criar_picking_entrada_destino_manual` | v19+ docblock + AP2 caminho B paliativo | ETAPA F LEGACY (~600 LOC inline em executar_etapa_f) + scripts/inventario_2026_05/09_executar_onda1_bulk.py (NÃO MEXER N13) | ❌ MANTER | Precisa canary REAL S6 v29+ antes de remover; ETAPA F legacy ainda viva |
+| 2 | Skill 7 wrapper V1 STRICT `criar_recebimento_orchestrado` | DeprecationWarning runtime v20+ | ETAPA E LEGACY (executar_etapa_e linha 4623) + 1 test legacy `test_etapa_e_v17_5_delega_skill7_atomo_X_FB` | ❌ MANTER | Precisa canary REAL S6 v29+; ETAPA E legacy ainda viva |
+| 3 | Flag `permitir_etapa_a_noop_real` em executar_etapa_a | DEPRECATED v16 (~12 sessões) | Default OFF; 1 test do flag DEPRECATED + branch real-run | ✅ REMOVIDO | Default OFF preservava comportamento; zero callers reais em PROD nas 12 sessões; teste só validava DeprecationWarning. NÍVEL 1 puro código zero risco. |
+| 4a | Alias `LOCATION_ORIGEM_ENTRADA_INDUSTR` | DEPRECATED v17.5 | Import não-usado em inventario_pipeline.py:93 (Pyright warning); script ad-hoc 09 redefine localmente | ✅ REMOVIDO IMPORT (alias preservado p/ backward-compat) | Import dead-code; alias museum vivo para callers externos hipotéticos |
+| 4b | `LOTES_MIGRACAO_POR_COMPANY` em locations.py | DEPRECATED 2026-05-24 v4 G031 | Apenas tests `test_locations.py` validam conteúdo (museum vivo) | ❌ MANTER | Museum vivo do gotcha G031 (incidente real 2026-05-24); test garante conteúdo permanece como referência histórica |
+
+**Limpeza efetiva (puro código, NÍVEL 1)**:
+
+1. **Removido** flag `permitir_etapa_a_noop_real` da assinatura de `executar_etapa_a` + branch real-run (linhas 763-785) + status `EXECUTADO_ETAPA_A_NOOP_DEPRECATED` + parte da docstring + `test_executar_etapa_a_v16_flag_deprecated_noop_funciona`.
+2. **Removido** 3 imports não-usados nivel topo de `inventario_pipeline.py`:
+   - `PAYMENT_PROVIDER_SEM_PAGAMENTO` (CR-F11 v15c stub C nunca implementado — G029 vai via `_invoice_helpers.garantir_payment_provider`)
+   - `ACAO_PARA_CFOP_ENTRADA` (CR-F8 v15c stub E D17 — já encapsulado por Skill 7 átomo legacy)
+   - `LOCATION_ORIGEM_ENTRADA_INDUSTR` (CR-F10 v15c stub F alias 26489 — ETAPA F legacy usa `get_location_origem_entrada(acao)` v17.5 que resolve por direção)
+3. **Comentário inline** preservado em ambos os pontos explicando por que foram removidos (próxima sessão saber o histórico).
+
+**Mantido** (NÍVEL 2 legacy dependente — precisa canary REAL):
+- Skill 5 `criar_picking_entrada_destino_manual` + Skill 7 `criar_recebimento_orchestrado`: remoção depende de canary REAL PROD ETAPAs E+F v29+ S2 + S2.a + S2.b validar paridade vs legacy. Pendência v29+ S6.
+
+**Mantido como museum vivo**:
+- Alias `LOCATION_ORIGEM_ENTRADA_INDUSTR` + `LOTES_MIGRACAO_POR_COMPANY`: valor histórico/gotcha preservado.
+
+**LIÇÃO ATEMPORAL gravada em CLAUDE.md D-V28-1**: cleanup de deprecated tem 2 níveis distintos:
+- **NÍVEL 1 PURO CÓDIGO** (zero risco): flags com default OFF + branches mortos + imports não-usados + tests de comportamento DEPRECATED. Pode-se remover assim que confirmado zero callers reais via grep + N sessões de evidência.
+- **NÍVEL 2 LEGACY DEPENDENTE** (precisa canary REAL): skills DEPRECATED chamadas por ETAPAs legacy do orchestrator. Só pode-se remover após canary REAL PROD validar paridade do caminho novo. NÍVEL 1 + NÍVEL 2 SEMPRE em commits separados (`chore` vs `feat` cleanup).
+
+**Pytest**: 682 → **681 verdes** (−1 = test do flag DEPRECATED removido). Em 17.14s.
+
+**Antipadrões NOVOS**: ZERO. (Cleanup é prática de manutenção, não novo desvio.)
+
+### Commits
+
+- `4e776d82` — feat v28+ S7+S6.b (acima)
+- v28+ chore cleanup deprecated (pendente — preparar 1 commit consolidado)
