@@ -39,7 +39,7 @@ app/odoo/
   │   ├── alocacao_compras_service.py      # Sync purchase.request.allocation (~23K)
   │   ├── sincronizacao_integrada_service.py # Orquestra sync completa (fat→cart) (~19K)
   │   ├── pedido_sync_service.py           # Sync individual de pedido (~19K)
-  │   ├── inventario_pipeline_service.py   # ⚠️ LEGADO MINERADO (1346 LOC) — fonte do orchestrator novo em `app/odoo/estoque/orchestrators/faturamento_pipeline.py` (Skill 8 v18). Manter por enquanto (callers legados). Arquivar v22+ pos-canary REAL PROD.
+  │   ├── inventario_pipeline_service.py   # ⚠️ LEGADO MINERADO (1346 LOC) — fonte do orchestrator novo em `app/odoo/estoque/orchestrators/inventario_pipeline.py` (renomeado de faturamento_pipeline v27+ S3; stub REMOVIDO v28+ S6.b). Manter por enquanto (callers legados). Arquivar v29+ pos-canary REAL PROD ETAPA E v28+ S7 + opt-in skill8 v27+ S1.
   │   ├── stock_picking_service.py         # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/picking.py (Skill 5)
   │   ├── stock_lot_service.py             # Operacoes stock.lot (criar/buscar com fallback like)
   │   ├── stock_internal_transfer_service.py # SHIM 2026-05-24 — re-exporta de app/odoo/estoque/scripts/transfer.py (Skill 2)
@@ -264,7 +264,8 @@ A partir de 2026-05-22, todas as operacoes de ESCRITA de estoque no Odoo (ajuste
 
 | Orchestrator | Service | SHIM antigo | Status |
 |--------------|---------|-------------|--------|
-| `faturando-odoo` (Skill 8) | `app/odoo/estoque/orchestrators/faturamento_pipeline.py` + SKILL.md fachada em `.claude/skills/faturando-odoo/SKILL.md` | `services/inventario_pipeline_service.py` (1346 LOC — fonte minerada, manter até v22+) | 🟡 PIPELINE A-F + RECOVERY LIVE v18 (72 pytest · smoke PROD dry-run OK) |
+| Skill 8 ATÔMICA L2 `faturando-odoo` (v24+ AP6 refator) | `app/odoo/estoque/scripts/faturamento.py` (5 átomos `account.move`, ~750 LOC) + SKILL.md fachada em `.claude/skills/faturando-odoo/SKILL.md` (atualizada v27+ S3 + v28+ S6.b) | — | 🟢 ATÔMICA LIVE v24+ (28 pytest) |
+| Orchestrator C3 `inventario_pipeline` (renomeado v27+ S3 — stub `faturamento_pipeline.py` REMOVIDO v28+ S6.b + cleanup deprecated v28+ post-S7) | `app/odoo/estoque/orchestrators/inventario_pipeline.py` (~5800 LOC) | `services/inventario_pipeline_service.py` (1346 LOC — fonte minerada, manter até v29+ pos-canary REAL) | 🟡 PIPELINE A-F + RECOVERY + FLUXO L3 1.2.x v19+ + F1-F4 v25+ + opt-in skill8 v27+ S1 + helper E v28+ S7 (96 pytest · canary REAL pendente v29+) |
 | `planejando-pre-etapa-odoo` (Skill 6) | `app/odoo/estoque/scripts/pre_etapa.py` + `orchestrators/pre_etapa_executor.py` | — | 🟡 v9 (5 modos CLI: planejar/propor/listar/aprovar/executar-onda) |
 
 ### Sub-skill PRE-FLIGHT

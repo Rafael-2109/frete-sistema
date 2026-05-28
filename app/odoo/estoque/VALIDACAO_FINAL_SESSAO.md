@@ -2861,7 +2861,33 @@ Spawned em background durante implementação. Concluiu sem CRITICAL findings:
 
 **Antipadrões NOVOS**: ZERO. (Cleanup é prática de manutenção, não novo desvio.)
 
+### Code-review secundário (subagente feature-dev:code-reviewer #2)
+
+Spawned em paralelo durante a edição das docs (Rafael 2026-05-28 perguntou "rodou code-reviewer?"). Resultado: **OK SHIP IT** — zero findings com confidence ≥80.
+
+**Validações executadas pelo reviewer**:
+- Caller sweep do flag `permitir_etapa_a_noop_real` em `scripts/` + `tests/`: ZERO callers remanescentes (apenas comment tombstones).
+- 7 callsites internos de `executar_etapa_a(...)` (incluindo dispatch interno em linha 5369) usam apenas signature sobrevivente (`ciclo`, `company_origem_id`, `dry_run`, `usuario`, `cod_produto`, `limite`).
+- Status `EXECUTADO_ETAPA_A_NOOP_DEPRECATED`: ZERO referências órfãs. `STATUS_FALHA` tuple (linha 5504-5510) NÃO referencia.
+- 3 imports removidos: zero callsites indiretos (eval/getattr).
+- `ACAO_PARA_CFOP_ENTRADA` ainda usado por `scripts/escrituracao.py:52` e `scripts/inventario_2026_05/09_executar_onda1_bulk.py:1300` (inline redef NÃO MEXER N13). Apenas o import top-level do orchestrator era dead-code.
+- `LOCATION_ORIGEM_ENTRADA_INDUSTR` alias preservado em `picking_types.py:177`. Import no orchestrator era unused após refator v17.5.
+- D-V28-1 NÍVEL 1 / NÍVEL 2 taxonomy: "sound and well-evidenced".
+
+**Reviewer não identificou candidatos adicionais NÍVEL 1**: museums vivos (`LOTES_MIGRACAO_POR_COMPANY` G031, alias `LOCATION_ORIGEM_ENTRADA_INDUSTR`) corretamente preservados. `SKIP_NAO_SUPORTADA_V20_FLUXO_L3` preservado em STATUS_FALHA tuple "with accurate inline comment explaining it is no longer produced by ETAPA E post-v28+ S7. Not a cleanup candidate without further confirmation it can never be returned by any remaining code path."
+
+### Docs atualizadas pós-cleanup (auditoria Rafael 2026-05-28)
+
+Auditoria identificou 5 lugares com referências desatualizadas a `faturamento_pipeline.py` ou "stub alias preservado":
+
+1. `.claude/skills/faturando-odoo/SKILL.md` — 4 ocorrências "stub alias preservado" → "stub alias REMOVIDO v28+ S6.b".
+2. `.claude/agents/gestor-estoque-odoo.md` — árvore galho 1.1 ⬜ pendente AP6 → ✅ v27+ S5 (folha 1.1.1 + Skill 8 ATÔMICA L2 opt-in v27+ S1); nota "Galho 1 INTEIRO LIVE v27+ S5 + v28+ S7" substituindo "galhos 1.1 e 1.3 permanecem ⬜".
+3. `app/odoo/estoque/fluxos/1.3-transferencia-completa.md` — linha 164 ETAPA E "pendente FB destino v28+" → "destrava ACOES_ENTRADA_FB via helper E v28+ S7"; roadmap evolução estendido com 4 linhas v28+ (S7 + S6.b + cleanup + v29+ canary).
+4. `app/odoo/CLAUDE.md` (raiz módulo) — linhas 42 + 267 path antigo `faturamento_pipeline.py` → `inventario_pipeline.py` (renomeado v27+ S3, stub REMOVIDO v28+ S6.b) + status atualizado para 96 pytest + helper E v28+ S7.
+5. `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` §0 — nota v28+ explicativa que campos abaixo congelados v22+ (museum vivo); resumo das sessões pós-v22+ até v28+ + ponteiros para VALIDACAO/ROADMAP/PROMPT atuais.
+
 ### Commits
 
 - `4e776d82` — feat v28+ S7+S6.b (acima)
-- v28+ chore cleanup deprecated (pendente — preparar 1 commit consolidado)
+- `f3a83987` — chore cleanup deprecated NÍVEL 1 (acima)
+- Próximo (pendente — preparar): docs sweep v28+ (5 arquivos atualizados pós-auditoria Rafael)

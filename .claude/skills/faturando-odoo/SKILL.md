@@ -11,7 +11,7 @@ description: >-
   `escriturando-odoo` (= SO ENTRADA DFe+account.move entrada). Quem une saida +
   entrada = FLUXO L3 1.3-transferencia-completa.md (⬜ a escrever v25+) ou
   orchestrator C3 `inventario_pipeline` (renomeado de `faturamento_pipeline.py`
-  em v27+ S3; stub alias compat preservado).
+  em v27+ S3; stub alias REMOVIDO v28+ S6.b 2026-05-28).
 
   V24+ AT0MICA LIVE (2026-05-27): 5 atomos componiveis em
   `app/odoo/estoque/scripts/faturamento.py` (~750 LOC, 28 pytest verdes).
@@ -20,7 +20,7 @@ description: >-
   D9/CRITICAL-1/MED C-1/MED C-2 codificados intra-atomo).
 
   Orchestrator C3 LEGACY `inventario_pipeline.py` (renomeado de
-  `faturamento_pipeline.py` em v27+ S3 — stub alias preservado; ~5600 LOC,
+  `faturamento_pipeline.py` em v27+ S3 — stub alias REMOVIDO v28+ S6.b; ~5800 LOC com cleanup deprecated v28+,
   pipeline A-F + recovery + opt-in --usar-fluxo-l3-v19 + **opt-in
   --usar-skill8-atomica-v25 LIVE v27+ S1** delegando ETAPAs C+D aos atomos
   3, 4 e 5 da Skill 8 ATOMICA). Default OFF preserva 100% legacy = zero
@@ -60,7 +60,7 @@ Service ATÔMICA L2: `app/odoo/estoque/scripts/faturamento.py`
 (FaturamentoInvoiceService, ~750 LOC, 28 pytest verdes — espelha pattern
 Skill 7 ABRANGENTE v19+).
 Orchestrator C3 LEGACY: `app/odoo/estoque/orchestrators/inventario_pipeline.py`
-(renomeado de `faturamento_pipeline.py` em v27+ S3 — stub alias preservado;
+(renomeado de `faturamento_pipeline.py` em v27+ S3 — stub alias REMOVIDO v28+ S6.b;
 FaturamentoPipelineExecutor, ~5600 LOC).
 Service-fonte legado (COMPAT, NAO MEXER): `app/odoo/services/inventario_pipeline_service.py` (1346 LOC, minerado em §7.2 do planejamento).
 Script-fonte macro (SUPERADO ao final v22+): `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC, minerado em §7.3).
@@ -538,7 +538,7 @@ python .claude/skills/auditando-cadastro-fiscal-odoo/scripts/auditar_cadastro_in
     `account.move` — validar constants + `action_liberar_faturamento` + polling +
     validar fatura vs constants + SEFAZ Playwright.
   - **`inventario_pipeline` C3** (renomeado de `faturamento_pipeline.py` em
-    v27+ S3 — stub alias compat preservado): orchestrator pipeline A-F +
+    v27+ S3 — stub alias REMOVIDO v28+ S6.b): orchestrator pipeline A-F +
     recovery + dispatch fluxo L3 1.2.x + opt-in skill8 atomica v25+ S1.
 - **REFATOR v20+ (S4 desta sessao)**: extrai metodo `executar_skill8_atomica`
   do orchestrator + atualiza §6 Tabela 1 (Skills L2) com nova entry + renomeia

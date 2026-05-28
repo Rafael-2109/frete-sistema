@@ -83,7 +83,7 @@ Orquestrador de **operações de escrita de estoque no Odoo**. Você **decide o 
 
 ```
 1  NF inter-company (emissão/SEFAZ entre filiais)
-   1.1  só faturamento (saída)              → fluxos/1.1.* (orchestrator C3 inventario_pipeline) ⬜ pendente v20+ (depende refator AP6 Skill 8 ATÔMICA L2)
+   1.1  só faturamento (saída)              → [folha 1.1.1](app/odoo/estoque/fluxos/1.1.1-faturamento-saida-pura.md) ✅ v27+ S5 — compõe Skill 8 ATÔMICA L2 (5 átomos `account.move`) via orchestrator C3 `inventario_pipeline` (opt-in `--usar-skill8-atomica-v25` v27+ S1)
    1.2  só entrada/escrituração — caminho A vs B decidido por `buscar_dfe(chave_nfe, company_destino)`
         1.2.1 caminho A — DFe já veio via SEFAZ (PERDA_LF_FB / DEV_LF_FB / TRANSFERIR_CD_FB típicos)
               → [folha 1.2.1](app/odoo/estoque/fluxos/1.2.1-escriturar-dfe-industrializacao.md) ✅ v19+ — compõe Skill 7 ABRANGENTE (buscar_dfe → escriturar_dfe → gerar_po_from_dfe → preencher_po → confirmar_po → criar_invoice_from_po) + Skill 5 (preencher_lotes_picking → validar)
@@ -108,7 +108,7 @@ Orquestrador de **operações de escrita de estoque no Odoo**. Você **decide o 
 
 > As skills acima nascem pelo `ROADMAP_SKILLS.md`. Marque mentalmente quais já existem antes de prometer execução.
 
-> **Galho 1.2 LIVE v19+** via Skill 7 ABRANGENTE (7 átomos) + folhas L3 1.2.1/1.2.2 + dispatch `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x` no orchestrator. Canary REAL PROD pendente v20+; opt-in `--usar-fluxo-l3-v19` ativa o caminho novo no `executar_pipeline_bulk` (default preserva ETAPAS E+F legacy = zero regressão). Galhos 1.1 (só saída) e 1.3 (saída+entrada) permanecem ⬜ até refator AP6 extrair **Skill 8 ATÔMICA L2** (`account.move` validar+liberar+polling+SEFAZ) do orchestrator atual.
+> **Galho 1 INTEIRO LIVE v27+ S5 + v28+ S7**: 1.1 (folha 1.1.1 via Skill 8 ATÔMICA L2 — opt-in `--usar-skill8-atomica-v25` v27+ S1) + 1.2 (folhas 1.2.1/1.2.2 via Skill 7 ABRANGENTE — opt-in `--usar-fluxo-l3-v19` v20+ + helper E v28+ S7 destrava 4 ações X→FB/X→LF) + 1.3 (composição end-to-end). Canary REAL PROD ETAPA E v28+ S7 + opt-in skill8 v27+ S1 pendente próximo lote natural (PERDA_LF_FB/TRANSFERIR_CD_FB/DEV_LF_FB/DEV_CD_LF para ETAPA E; INDUSTRIALIZACAO_FB_LF para skill8). Default OFF preserva 100% legacy. Após canary OK: S6 cleanup NÍVEL 2 ~2500 LOC.
 
 ---
 

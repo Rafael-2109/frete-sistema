@@ -10,6 +10,13 @@
 
 ## 0. CABECALHO DE ESTADO (atualizar a cada sessao)
 
+> **⚠️ NOTA v28+ 2026-05-28**: campos abaixo congelados em v22+ por sobrevivência multi-sessão (regra inviolável 0). **Estado ATUAL DE FATO** vive em:
+> - `app/odoo/estoque/VALIDACAO_FINAL_SESSAO.md` (histórico cronológico v18→v28+)
+> - `app/odoo/estoque/ROADMAP_SKILLS.md` (HANDOFF enxuto baseline atual)
+> - `app/odoo/estoque/PROMPT_PROXIMA_SESSAO.md` (escopo v29+)
+>
+> **Resumo v28+ (sessões pós-v22+)**: AP1+AP3+AP4+AP5+AP6 ✅ RESOLVIDOS (v18-v24+). AP2 RESOLVIDO PARCIAL v20+ (canary REAL B caminho B PROD; opt-in `--usar-fluxo-l3-v19` LIVE). Skill 8 ATÔMICA L2 separada v24+ (`scripts/faturamento.py` 5 átomos; opt-in `--usar-skill8-atomica-v25` v27+ S1). Orchestrator renomeado `faturamento_pipeline.py` → `inventario_pipeline.py` v27+ S3; **stub REMOVIDO v28+ S6.b**. ETAPA E destravada v28+ S7 via FLUXO L3. Cleanup deprecated v28+ post-S7 NÍVEL 1. **681 pytest verdes v28+** (vs 521 em v18 + 580 em v22+). Canary REAL PROD ETAPA E + skill8 ATÔMICA pendentes v29+ S2/S2.a/S2.b.
+
 | Campo | Valor |
 |-------|-------|
 | **Status global** | 🟡 PIPELINE A-F + RECOVERY + SKILL.md + **FLUXO L3 1.2.x DISPATCH v19+ + CAMINHO B PARCIAL VALIDADO PROD v22+** (C6-C18 + C24 Skill 7 ABRANGENTE + G-AUDIT-3 fix + G038 sub-skill C5; pendentes: completar passo 9-10 caminho B [G-PERM-1 ir.rule], codificar G039 purchase.team invariante Skill 7) |
