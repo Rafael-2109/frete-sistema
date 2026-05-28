@@ -1686,3 +1686,152 @@ class RecebimentoLfLote(db.Model):
             'odoo_lot_id_cd': self.odoo_lot_id_cd,
             'processado': self.processado,
         }
+
+
+# =============================================================================
+# RELATORIO DE NF INTER-COMPANY (TRANSFERENCIA ENTRE FILIAIS)
+# =============================================================================
+
+class NfTransferenciaSnapshot(db.Model):
+    """
+    Snapshot de NF inter-company (FB <-> CD <-> LF) com cross-ref destino.
+
+    Refresh sob demanda (botao). Para cada NF emitida (account.move out_invoice
+    inter-company), busca DFe + picking + invoice no destino e consolida status.
+
+    Status:
+        - PENDENTE_DFE     : NF emitida mas DFe nao encontrado no destino
+        - PENDENTE_PICKING : DFe processado mas picking destino nao done
+        - PENDENTE_INVOICE : Picking done mas invoice destino nao posted
+        - CONCLUIDO        : Picking done E invoice destino posted
+        - CANCELADA        : NF origem state=cancel
+
+    Usado por:
+    - Tela /operacional/compras/relatorios/nf-transferencia (fiscal)
+    - Calculo em_transito_* do InventarioSnapshotOdoo (somar produtos das NFs nao CONCLUIDO/CANCELADA)
+    """
+    __tablename__ = 'nf_transferencia_snapshot'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Auditoria do refresh
+    refresh_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
+    refreshed_por = db.Column(db.String(100))
+
+    # NF origem (account.move out_invoice)
+    chave_nfe = db.Column(db.String(50), index=True)
+    numero_nf = db.Column(db.String(20))
+    serie_nf = db.Column(db.String(5))
+    account_move_id_origem = db.Column(db.Integer, nullable=False, unique=True)
+    account_move_name_origem = db.Column(db.String(50))
+    company_origem = db.Column(db.String(5), nullable=False)
+    company_destino = db.Column(db.String(5), nullable=False)
+    partner_origem_id = db.Column(db.Integer)
+    partner_destino_id = db.Column(db.Integer)
+    data_emissao = db.Column(db.Date, index=True)
+    valor_total = db.Column(db.Numeric(15, 2))
+    acao = db.Column(db.String(30))
+    cfop_saida = db.Column(db.String(5))
+    state_nf_origem = db.Column(db.String(20))
+
+    # DFe destino (l10n_br_ciel_it_account.dfe)
+    dfe_id = db.Column(db.Integer)
+    dfe_name = db.Column(db.String(50))
+    dfe_state = db.Column(db.String(30))
+    dfe_situacao = db.Column(db.String(50))
+
+    # Picking destino (stock.picking criado via PO da DFe)
+    picking_id = db.Column(db.Integer)
+    picking_name = db.Column(db.String(50))
+    picking_state = db.Column(db.String(30))
+
+    # Invoice destino (account.move in_invoice criado a partir da PO)
+    invoice_destino_id = db.Column(db.Integer)
+    invoice_destino_name = db.Column(db.String(50))
+    invoice_destino_state = db.Column(db.String(30))
+
+    # Status consolidado
+    status_consolidado = db.Column(db.String(30), nullable=False, default='PENDENTE_DFE',
+                                    index=True)
+    observacao = db.Column(db.Text)
+
+    produtos = db.relationship(
+        'NfTransferenciaProdutoSnapshot',
+        backref='nf', cascade='all, delete-orphan', lazy='dynamic',
+    )
+
+    __table_args__ = (
+        db.Index('ix_nf_transf_snap_companies', 'company_origem', 'company_destino'),
+    )
+
+    def __repr__(self):
+        return (
+            f'<NfTransferenciaSnapshot {self.account_move_name_origem} '
+            f'{self.company_origem}->{self.company_destino} {self.status_consolidado}>'
+        )
+
+    def to_dict(self, com_produtos=False):
+        d = {
+            'id': self.id,
+            'refresh_em': self.refresh_em.isoformat() if self.refresh_em else None,
+            'refreshed_por': self.refreshed_por,
+            'chave_nfe': self.chave_nfe,
+            'numero_nf': self.numero_nf,
+            'serie_nf': self.serie_nf,
+            'account_move_id_origem': self.account_move_id_origem,
+            'account_move_name_origem': self.account_move_name_origem,
+            'company_origem': self.company_origem,
+            'company_destino': self.company_destino,
+            'partner_origem_id': self.partner_origem_id,
+            'partner_destino_id': self.partner_destino_id,
+            'data_emissao': self.data_emissao.isoformat() if self.data_emissao else None,
+            'valor_total': float(self.valor_total) if self.valor_total else 0.0,
+            'acao': self.acao,
+            'cfop_saida': self.cfop_saida,
+            'state_nf_origem': self.state_nf_origem,
+            'dfe_id': self.dfe_id,
+            'dfe_name': self.dfe_name,
+            'dfe_state': self.dfe_state,
+            'dfe_situacao': self.dfe_situacao,
+            'picking_id': self.picking_id,
+            'picking_name': self.picking_name,
+            'picking_state': self.picking_state,
+            'invoice_destino_id': self.invoice_destino_id,
+            'invoice_destino_name': self.invoice_destino_name,
+            'invoice_destino_state': self.invoice_destino_state,
+            'status_consolidado': self.status_consolidado,
+            'observacao': self.observacao,
+        }
+        if com_produtos:
+            d['produtos'] = [p.to_dict() for p in self.produtos]
+        return d
+
+
+class NfTransferenciaProdutoSnapshot(db.Model):
+    """Linhas de produto da NF inter-company (1 NF tem N linhas)."""
+    __tablename__ = 'nf_transferencia_produto_snapshot'
+
+    id = db.Column(db.Integer, primary_key=True)
+    nf_snapshot_id = db.Column(
+        db.Integer, db.ForeignKey('nf_transferencia_snapshot.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+    cod_produto = db.Column(db.String(50), nullable=False, index=True)
+    nome_produto = db.Column(db.String(200))
+    quantidade = db.Column(db.Numeric(15, 3), nullable=False, default=0)
+    valor_unit = db.Column(db.Numeric(15, 4))
+    valor_total = db.Column(db.Numeric(15, 2))
+    cfop = db.Column(db.String(5))
+    lote_nome = db.Column(db.String(100))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'cod_produto': self.cod_produto,
+            'nome_produto': self.nome_produto,
+            'quantidade': float(self.quantidade) if self.quantidade else 0.0,
+            'valor_unit': float(self.valor_unit) if self.valor_unit else None,
+            'valor_total': float(self.valor_total) if self.valor_total else 0.0,
+            'cfop': self.cfop,
+            'lote_nome': self.lote_nome,
+        }

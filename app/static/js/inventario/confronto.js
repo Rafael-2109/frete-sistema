@@ -43,7 +43,7 @@ function drillUrl(cod, empresa, tipo) {
 function renderLinhas(linhas) {
   const tbody = document.getElementById('tbody-confronto');
   if (!linhas.length) {
-    tbody.innerHTML = '<tr><td colspan="22" class="text-center">Nenhuma linha</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="23" class="text-center">Nenhuma linha</td></tr>';
     return;
   }
   let html = '';
@@ -88,12 +88,13 @@ function renderLinhas(linhas) {
       `<td class="num"><strong>${fmt(l.sist)}</strong></td>` +
       `<td class="num ${diffClass(l.odoo_menos_mov)}">${fmt(l.odoo_menos_mov)}</td>` +
       `<td class="num ${diffClass(l.sist_menos_mov)}">${fmt(l.sist_menos_mov)}</td>` +
-      `<td class="num inv-cell-drill" title="Movimentações FB"` +
-      ` onclick="window.open('${drillUrl(l.cod_produto, 'FB', 'ESTOQUE')}','_blank')">${fmt(l.est_fb)}</td>` +
-      `<td class="num inv-cell-drill" title="Movimentações CD"` +
-      ` onclick="window.open('${drillUrl(l.cod_produto, 'CD', 'ESTOQUE')}','_blank')">${fmt(l.est_cd)}</td>` +
-      `<td class="num inv-cell-drill" title="Movimentações LF"` +
-      ` onclick="window.open('${drillUrl(l.cod_produto, 'LF', 'ESTOQUE')}','_blank')">${fmt(l.est_lf)}</td>` +
+      `<td class="num inv-cell-drill" title="Movimentações FB&#10;Interno + em trânsito (destino FB) = ${fmt(l.est_fb_total)}"` +
+      ` onclick="window.open('${drillUrl(l.cod_produto, 'FB', 'ESTOQUE')}','_blank')">${fmt(l.est_fb_total)}</td>` +
+      `<td class="num inv-cell-drill" title="Movimentações CD&#10;Interno + em trânsito (destino CD) = ${fmt(l.est_cd_total)}"` +
+      ` onclick="window.open('${drillUrl(l.cod_produto, 'CD', 'ESTOQUE')}','_blank')">${fmt(l.est_cd_total)}</td>` +
+      `<td class="num inv-cell-drill" title="Movimentações LF&#10;Interno + em trânsito (destino LF) = ${fmt(l.est_lf_total)}"` +
+      ` onclick="window.open('${drillUrl(l.cod_produto, 'LF', 'ESTOQUE')}','_blank')">${fmt(l.est_lf_total)}</td>` +
+      `<td class="num" title="Em trânsito por destino:&#10;FB: ${fmt(l.em_transito_fb)}&#10;CD: ${fmt(l.em_transito_cd)}&#10;LF: ${fmt(l.em_transito_lf)}">${fmt(l.em_transito_total)}</td>` +
       `</tr>`;
   }
   tbody.innerHTML = html;
@@ -220,7 +221,7 @@ function carregar() {
     })
     .catch(err => {
       document.getElementById('tbody-confronto').innerHTML =
-        `<tr><td colspan="22" class="text-danger">Erro: ${err}</td></tr>`;
+        `<tr><td colspan="23" class="text-danger">Erro: ${err}</td></tr>`;
     });
 }
 

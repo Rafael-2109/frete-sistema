@@ -62,7 +62,18 @@ class ConfrontoService:
             est_fb = s.get('estoque_fb', Decimal('0'))
             est_cd = s.get('estoque_cd', Decimal('0'))
             est_lf = s.get('estoque_lf', Decimal('0'))
-            odoo_total = est_fb + est_cd + est_lf
+            # Em transito (NFs inter-company pendentes — emitidas mas nao escrituradas).
+            # Somado ao estoque do DESTINO para que odoo_total = estoque + em transito
+            # capture o saldo real do grupo (sem perder o que ainda esta em locations
+            # transit do Odoo, que o snapshot Odoo filtra por usage='internal').
+            et_fb = s.get('em_transito_fb', Decimal('0'))
+            et_cd = s.get('em_transito_cd', Decimal('0'))
+            et_lf = s.get('em_transito_lf', Decimal('0'))
+            est_fb_total = est_fb + et_fb
+            est_cd_total = est_cd + et_cd
+            est_lf_total = est_lf + et_lf
+            odoo_total = est_fb_total + est_cd_total + est_lf_total
+            em_transito_total = et_fb + et_cd + et_lf
             pa = s.get('pa_qtd', Decimal('0'))
             componente_pos = s.get('componente_qtd', Decimal('0'))
             componente_apres = -componente_pos
@@ -106,9 +117,20 @@ class ConfrontoService:
                 'sist': sist_total,
                 'odoo_menos_mov': odoo_menos_mov,
                 'sist_menos_mov': sist_menos_mov,
+                # Estoque interno do Odoo (location usage='internal') por empresa
                 'est_fb': est_fb,
                 'est_cd': est_cd,
                 'est_lf': est_lf,
+                # Em transito por DESTINO (NFs inter-company pendentes — emitidas
+                # mas nao escrituradas). Somado a est_<destino> em odoo_total.
+                'em_transito_fb': et_fb,
+                'em_transito_cd': et_cd,
+                'em_transito_lf': et_lf,
+                'em_transito_total': em_transito_total,
+                # Estoque consolidado por empresa (interno + em transito destino)
+                'est_fb_total': est_fb_total,
+                'est_cd_total': est_cd_total,
+                'est_lf_total': est_lf_total,
                 'snapshot_compras': snap_compras,
                 'flag_divergencia_compras': flag_div,
             })
@@ -163,6 +185,11 @@ class ConfrontoService:
             'estoque_fb': r.estoque_fb or Decimal('0'),
             'estoque_cd': r.estoque_cd or Decimal('0'),
             'estoque_lf': r.estoque_lf or Decimal('0'),
+            # EM TRANSITO 2026-05-28: NFs inter-company pendentes por DESTINO
+            # (defaults 0 para snapshots pre-2026-05-28).
+            'em_transito_fb': getattr(r, 'em_transito_fb', None) or Decimal('0'),
+            'em_transito_cd': getattr(r, 'em_transito_cd', None) or Decimal('0'),
+            'em_transito_lf': getattr(r, 'em_transito_lf', None) or Decimal('0'),
             'pa_qtd': r.pa_qtd or Decimal('0'),
             'componente_qtd': r.componente_qtd or Decimal('0'),
             'compras_qtd': r.compras_qtd,

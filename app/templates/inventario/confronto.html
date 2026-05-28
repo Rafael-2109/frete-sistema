@@ -59,6 +59,7 @@
         <col style="width:90px">   <!-- FB-O -->
         <col style="width:90px">   <!-- CD-O -->
         <col style="width:90px">   <!-- LF-O -->
+        <col style="width:100px">  <!-- EM TRANSITO -->
       </colgroup>
       <thead>
         <tr>
@@ -76,19 +77,21 @@
           <th class="num">PRODUÇÃO</th>
           <th class="txt">AJ.LOCAL</th>
           <th class="num">AJ.QTD</th>
-          <th class="num" title="Soma estoque_fb+cd+lf do snapshot Odoo">ODOO</th>
+          <th class="num" title="ODOO = estoque interno (FB+CD+LF) + em transito por destino (NFs inter-company emitidas e nao escrituradas)">ODOO</th>
           <th class="num"
               title="MOV = inv_total + compras + pa + componente + vendas (vendas tem sinal negativo). Congelado no snapshot {{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else '(nao gerado)' }}.">MOV</th>
           <th class="num"
               title="SIST = sum MovimentacaoEstoque ATIVA (sem filtro data). Congelado no snapshot {{ last_refresh.strftime('%d/%m %H:%M') if last_refresh else '(nao gerado)' }}.">SIST</th>
           <th class="num">ODOO-MOV</th>
           <th class="num">SIST-MOV</th>
-          <th class="num">FB-O</th>
-          <th class="num">CD-O</th>
-          <th class="num">LF-O</th>
+          <th class="num" title="Estoque interno + em transito (destino) FB">FB-O</th>
+          <th class="num" title="Estoque interno + em transito (destino) CD">CD-O</th>
+          <th class="num" title="Estoque interno + em transito (destino) LF">LF-O</th>
+          <th class="num"
+              title="EM TRANSITO = NFs inter-company emitidas e ainda nao escrituradas no destino (saldo escondido). Total por produto somando os 3 destinos. Detalhe FB/CD/LF no tooltip da celula.">EM TRÂNSITO</th>
         </tr>
       </thead>
-      <tbody id="tbody-confronto"><tr><td colspan="22">Carregando...</td></tr></tbody>
+      <tbody id="tbody-confronto"><tr><td colspan="23">Carregando...</td></tr></tbody>
     </table>
   </div>
 </div>

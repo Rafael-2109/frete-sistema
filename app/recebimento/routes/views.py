@@ -2038,3 +2038,167 @@ def preview_consolidacao(validacao_id):
         pos_envolvidos=list(pos_envolvidos.values()),
         cenario=cenario
     )
+
+
+# =============================================================================
+# RELATORIO: NF INTER-COMPANY (TRANSFERENCIA ENTRE FILIAIS)
+# =============================================================================
+# Cross-ref NF SAIDA <-> DFe destino <-> Picking destino <-> Invoice destino.
+# Usado pelo fiscal para identificar NFs emitidas mas nao escrituradas no destino
+# (saldo "escondido" em locations transit do Odoo).
+#
+# Atualizacao SOB DEMANDA via botao (POST /relatorios/nf-transferencia/refresh).
+# NAO toca em InventarioSnapshotOdoo — preserva T0 do snapshot do inventario.
+# Inverso: refresh do inventario chama tambem este service (em snapshot_odoo_service).
+
+@recebimento_views_bp.route('/relatorios/nf-transferencia', endpoint='nf_transferencia')
+@login_required
+def nf_transferencia_view():
+    """Tela de relatorio de NFs inter-company com cross-ref destino."""
+    from app.recebimento.models import NfTransferenciaSnapshot
+    ultimo = (
+        db.session.query(NfTransferenciaSnapshot.refresh_em)
+        .order_by(NfTransferenciaSnapshot.refresh_em.desc())
+        .first()
+    )
+    last_refresh = ultimo[0] if ultimo else None
+    return render_template(
+        'recebimento/nf_transferencia.html', last_refresh=last_refresh,
+    )
+
+
+@recebimento_views_bp.route('/relatorios/nf-transferencia/api',
+                              endpoint='nf_transferencia_api')
+@login_required
+def nf_transferencia_api():
+    """JSON paginado com NFs do snapshot. Filtros via querystring."""
+    from app.recebimento.models import (
+        NfTransferenciaSnapshot, NfTransferenciaProdutoSnapshot,
+    )
+
+    status = request.args.get('status', 'pendentes')  # pendentes/todos/concluido/cancelada
+    company_origem = request.args.get('company_origem')  # FB/CD/LF
+    company_destino = request.args.get('company_destino')  # FB/CD/LF
+    data_inicio = request.args.get('data_inicio')  # YYYY-MM-DD
+    data_fim = request.args.get('data_fim')  # YYYY-MM-DD
+    busca = (request.args.get('busca') or '').strip()
+    page = max(1, int(request.args.get('page') or 1))
+    page_size = min(500, max(20, int(request.args.get('page_size') or 100)))
+
+    STATUS_PENDENTES = ('PENDENTE_DFE', 'PENDENTE_PICKING', 'PENDENTE_INVOICE')
+
+    q = NfTransferenciaSnapshot.query
+    if status == 'pendentes':
+        q = q.filter(NfTransferenciaSnapshot.status_consolidado.in_(STATUS_PENDENTES))
+    elif status in ('CONCLUIDO', 'CANCELADA', 'PENDENTE_DFE', 'PENDENTE_PICKING',
+                    'PENDENTE_INVOICE'):
+        q = q.filter_by(status_consolidado=status)
+    # senao: 'todos' — sem filtro de status
+
+    if company_origem:
+        q = q.filter_by(company_origem=company_origem)
+    if company_destino:
+        q = q.filter_by(company_destino=company_destino)
+    if data_inicio:
+        q = q.filter(NfTransferenciaSnapshot.data_emissao >= data_inicio)
+    if data_fim:
+        q = q.filter(NfTransferenciaSnapshot.data_emissao <= data_fim)
+    if busca:
+        like = f'%{busca}%'
+        q = q.filter(or_(
+            NfTransferenciaSnapshot.numero_nf.ilike(like),
+            NfTransferenciaSnapshot.account_move_name_origem.ilike(like),
+            NfTransferenciaSnapshot.chave_nfe.ilike(like),
+        ))
+
+    total = q.count()
+    rows = (q.order_by(NfTransferenciaSnapshot.data_emissao.desc(),
+                       NfTransferenciaSnapshot.id.desc())
+             .offset((page - 1) * page_size)
+             .limit(page_size).all())
+
+    # Eager-load produtos das linhas exibidas
+    ids_pagina = [r.id for r in rows]
+    produtos_por_nf = {}
+    if ids_pagina:
+        produtos = (NfTransferenciaProdutoSnapshot.query
+                    .filter(NfTransferenciaProdutoSnapshot.nf_snapshot_id.in_(ids_pagina))
+                    .order_by(NfTransferenciaProdutoSnapshot.cod_produto).all())
+        for p in produtos:
+            produtos_por_nf.setdefault(p.nf_snapshot_id, []).append(p.to_dict())
+
+    linhas = []
+    for r in rows:
+        d = r.to_dict()
+        d['produtos'] = produtos_por_nf.get(r.id, [])
+        linhas.append(d)
+
+    # Resumo por status (sem filtros — visao global)
+    resumo_status = dict(
+        db.session.query(
+            NfTransferenciaSnapshot.status_consolidado,
+            db.func.count(NfTransferenciaSnapshot.id),
+        ).group_by(NfTransferenciaSnapshot.status_consolidado).all()
+    )
+
+    ultimo = (
+        db.session.query(NfTransferenciaSnapshot.refresh_em,
+                          NfTransferenciaSnapshot.refreshed_por)
+        .order_by(NfTransferenciaSnapshot.refresh_em.desc())
+        .first()
+    )
+
+    from app.utils.json_helpers import sanitize_for_json
+    return jsonify(sanitize_for_json({
+        'linhas': linhas,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'resumo_status': resumo_status,
+        'last_refresh': ultimo[0].isoformat() if ultimo and ultimo[0] else None,
+        'last_refresh_por': ultimo[1] if ultimo else None,
+    }))
+
+
+@recebimento_views_bp.route('/relatorios/nf-transferencia/refresh',
+                              methods=['POST'],
+                              endpoint='nf_transferencia_refresh')
+@login_required
+def nf_transferencia_refresh():
+    """Dispara refresh sincrono do snapshot (botao 'Atualizar do Odoo').
+
+    NAO toca em InventarioSnapshotOdoo — para nao descasar o T0 do
+    snapshot do inventario. Inverso: refresh do inventario chama
+    NfTransferenciaService.refresh internamente (snapshot_odoo_service).
+    """
+    from app.recebimento.services.nf_transferencia_service import (
+        NfTransferenciaService,
+    )
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        dias = int(request.args.get('dias') or 90)
+    except (TypeError, ValueError):
+        dias = 90
+    dias = max(1, min(365, dias))
+
+    try:
+        resumo = NfTransferenciaService.refresh(
+            usuario=current_user.nome or current_user.email or 'Fiscal',
+            dias=dias,
+        )
+        db.session.commit()
+        return jsonify({'sucesso': True, 'resumo': resumo})
+    except Exception as e:
+        db.session.rollback()
+        # Log stack trace server-side. NAO retornar trace ao cliente
+        # (evita vazar caminhos internos + logica de negocio).
+        logger.exception(
+            'Falha no refresh de NfTransferenciaService (dias=%s)',
+            dias,
+        )
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e),
+        }), 500

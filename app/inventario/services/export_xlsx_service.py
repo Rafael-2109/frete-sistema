@@ -30,7 +30,11 @@ class ExportXlsxService:
                 'PA', 'COMPONENTE', 'VENDAS', 'CONSUMO', 'PRODUCAO',
                 'AJUSTE_LOCAL', 'AJUSTE_QTD', 'AJUSTE_TIPO',
                 'ODOO', 'MOV', 'SIST', 'ODOO-MOV', 'SIST-MOV',
-                'ODOO_FB', 'ODOO_CD', 'ODOO_LF']
+                'ODOO_FB', 'ODOO_CD', 'ODOO_LF',
+                # NOVO 2026-05-28: estoque interno (sem transit) + em transit por destino
+                'ODOO_FB_INTERNO', 'ODOO_CD_INTERNO', 'ODOO_LF_INTERNO',
+                'EM_TRANSITO_FB', 'EM_TRANSITO_CD', 'EM_TRANSITO_LF',
+                'EM_TRANSITO_TOTAL']
         for i, c in enumerate(cols):
             ws.write(0, i, c, hfmt)
         linhas = ConfrontoService.montar_linhas(ciclo_id)
@@ -58,9 +62,18 @@ class ExportXlsxService:
             d2 = float(l['sist_menos_mov'])
             ws.write_number(r, 18, d1, rfmt if abs(d1) > 1 else nfmt)
             ws.write_number(r, 19, d2, rfmt if abs(d2) > 1 else nfmt)
-            ws.write_number(r, 20, float(l['est_fb']), nfmt)
-            ws.write_number(r, 21, float(l['est_cd']), nfmt)
-            ws.write_number(r, 22, float(l['est_lf']), nfmt)
+            # ODOO_FB/CD/LF agora refletem interno+em_transito (consistente com tela)
+            ws.write_number(r, 20, float(l.get('est_fb_total', l['est_fb'])), nfmt)
+            ws.write_number(r, 21, float(l.get('est_cd_total', l['est_cd'])), nfmt)
+            ws.write_number(r, 22, float(l.get('est_lf_total', l['est_lf'])), nfmt)
+            # NOVO 2026-05-28: 7 colunas — interno isolado + em transit detalhado
+            ws.write_number(r, 23, float(l['est_fb']), nfmt)
+            ws.write_number(r, 24, float(l['est_cd']), nfmt)
+            ws.write_number(r, 25, float(l['est_lf']), nfmt)
+            ws.write_number(r, 26, float(l.get('em_transito_fb') or 0), nfmt)
+            ws.write_number(r, 27, float(l.get('em_transito_cd') or 0), nfmt)
+            ws.write_number(r, 28, float(l.get('em_transito_lf') or 0), nfmt)
+            ws.write_number(r, 29, float(l.get('em_transito_total') or 0), nfmt)
         ws.freeze_panes(1, 2)
 
         # Aba 2: Ajustes Manuais

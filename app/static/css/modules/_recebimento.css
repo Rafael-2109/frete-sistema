@@ -17,6 +17,7 @@
  * - recebimento/primeira_compra.html (06-04)
  * - recebimento/divergencias.html (06-04)
  * - recebimento/preview_consolidacao.html (06-04)
+ * - recebimento/nf_transferencia.html (2026-05-28) — secao NFT
  */
 
 @layer modules {
@@ -412,5 +413,125 @@
   .badge-transfer-processando { background-color: var(--bs-info); color: hsl(0 0% 100%); }
   .badge-transfer-concluido { background-color: var(--bs-success); color: hsl(0 0% 100%); }
   .badge-transfer-erro { background-color: var(--bs-danger); color: hsl(0 0% 100%); }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     NF TRANSFERENCIA - Relatorio inter-company
+     Source: recebimento/nf_transferencia.html (2026-05-28)
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  .nft-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.75rem 0;
+  }
+
+  .nft-toolbar .form-control,
+  .nft-toolbar .form-select {
+    width: auto;
+  }
+
+  .nft-tabela {
+    font-size: 0.85rem;
+  }
+
+  .nft-tabela th {
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background: var(--bg-light);
+    z-index: 2;
+  }
+
+  .nft-tabela td {
+    vertical-align: middle;
+  }
+
+  .nft-row-toggle {
+    cursor: pointer;
+  }
+
+  .nft-row-toggle:hover {
+    background: var(--bg-button);
+  }
+
+  .nft-products {
+    background: var(--bg-button);
+  }
+
+  .nft-products table {
+    margin: 0;
+    font-size: 0.82rem;
+  }
+
+  .nft-status-cell {
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  /* PENDENTE_* todas usam shade warning (semantica: aguardando acao). */
+  .nft-status-PENDENTE_DFE,
+  .nft-status-PENDENTE_PICKING,
+  .nft-status-PENDENTE_INVOICE {
+    color: var(--semantic-warning);
+  }
+
+  .nft-status-CONCLUIDO {
+    color: var(--semantic-success);
+  }
+
+  .nft-status-CANCELADA {
+    color: var(--semantic-danger);
+  }
+
+  .nft-empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted);
+  }
+
+  .nft-resumo {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .nft-resumo .nft-resumo-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.3rem 0.7rem;
+    background: var(--bg-button);
+    border-radius: 6px;
+    min-width: 80px;
+  }
+
+  /* Variantes semanticas do resumo card. */
+  .nft-resumo-item.is-pendente {
+    background: var(--semantic-warning-subtle);
+    color: var(--semantic-warning);
+  }
+
+  .nft-resumo-item.is-concluido {
+    background: var(--semantic-success-subtle);
+    color: var(--semantic-success);
+  }
+
+  .nft-resumo-item.is-cancelada {
+    background: var(--semantic-danger-subtle);
+    color: var(--semantic-danger);
+  }
+
+  .nft-resumo-item .nft-num {
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  .nft-resumo-item .nft-lbl {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
 
 } /* End @layer modules */

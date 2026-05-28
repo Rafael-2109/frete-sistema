@@ -97,6 +97,12 @@ class InventarioSnapshotOdoo(db.Model):
     mov_producao   = db.Column(db.Numeric(15, 3), default=0)
     # SIST congelado (sum total MovimentacaoEstoque ATIVA, sem filtro de data)
     mov_sist_total = db.Column(db.Numeric(15, 3), default=0)
+    # NF inter-company em transito por DESTINO (NFs emitidas mas nao escrituradas no
+    # destino). Calculado a partir de NfTransferenciaSnapshot no momento do refresh.
+    # Somado ao estoque_<destino> em odoo_total via ConfrontoService.
+    em_transito_fb = db.Column(db.Numeric(15, 3), default=0)
+    em_transito_cd = db.Column(db.Numeric(15, 3), default=0)
+    em_transito_lf = db.Column(db.Numeric(15, 3), default=0)
     refresh_em     = db.Column(db.DateTime, default=agora_utc_naive)
 
     __table_args__ = (
