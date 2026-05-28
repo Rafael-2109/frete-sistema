@@ -3562,6 +3562,537 @@ class FaturamentoPipelineExecutor:
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
 
+    # ========================================================
+    # v25+ S1 — Skill 8 ATOMICA L2 opt-in helpers (AP6 refator)
+    # ========================================================
+    # Substituem ETAPAs C+D legacy quando flag `--usar-skill8-atomica-v25`
+    # esta ativa. Delegam aos 5 atomos de
+    # `app/odoo/estoque/scripts/faturamento.py` (FaturamentoInvoiceService).
+    # Default OFF preserva legacy = zero risco regressao. Ortogonal a
+    # `--usar-fluxo-l3-v19` (que substitui ETAPAs E+F).
+    #
+    # Composicao (paridade contadores com legacy executar_etapa_c/d):
+    #   ETAPA C: polling_invoice + validar_invoice_pos_robo (atomos 3+4)
+    #   ETAPA D: transmitir_sefaz (atomo 5)
+    #
+    # Atomo 1 (validar_invoice_constants) NAO entra: ETAPA C nao tem
+    # pre-cond legacy equivalente (orchestrator legacy nao valida constants).
+    # Atomo 2 (liberar_faturamento) NAO entra: ja' eh executado em ETAPA B
+    # legacy (passo 3 de `executar_etapa_b`). Migracao da ETAPA B para
+    # liberar via Skill 8 ATOMICA pendente refator v26+ (escopo maior).
+
+    def _executar_etapa_c_via_skill8_atomica(
+        self,
+        *,
+        ciclo: str,
+        company_origem_id: Optional[int] = None,
+        dry_run: bool = True,
+        usuario: str = 'faturamento_pipeline',
+        cod_produto: Optional[str] = None,
+        t0: float,
+        timeout_polling: int = F5D_POLLING_TIMEOUT_S,
+        poll_interval: int = F5D_POLL_INTERVAL_S,
+        perfil_invoice_helpers: str = PERFIL_INVENTARIO_INTER_COMPANY,
+    ) -> Dict[str, Any]:
+        """v25+ S1 opt-in: ETAPA C substituida pelos atomos 3+4 da Skill 8
+        ATOMICA L2 (`polling_invoice` + `validar_invoice_pos_robo`).
+
+        Itera ajustes em F5c_LIBERADO ∩ picking_id_odoo, agrupa por
+        picking_id (D2: 1 picking -> 1 invoice CIEL IT). Para cada
+        picking, invoca `polling_invoice` para aguardar o robo CIEL IT
+        criar `account.move`, depois `validar_invoice_pos_robo` para
+        aplicar G029 + G007 + G034 via `_invoice_helpers`. Atualiza
+        `fase_pipeline=F5d_INVOICE_GERADA` + `invoice_id_odoo` +
+        `external_id_operacao` em todos ajustes do mesmo picking.
+
+        Patterns codificados (paridade legacy `executar_etapa_c`):
+          - D2: 1 picking -> 1 invoice CIEL IT (agrupa por picking_id)
+          - D5: snapshot meta intra-atomo (atomo 3 polling_invoice)
+          - D6: sub-etapas .5/.6/.7 try/except (atomo 4 validar_invoice_pos_robo)
+          - F6 v15c: safe_session_get para re-fetch pos-commit (atomo 4)
+          - F12: external_id_operacao por picking ate v17
+          - G016: commit_resilient pos-polling
+
+        Args:
+            ciclo, company_origem_id, dry_run, usuario, cod_produto, t0:
+                args padrao (espelha executar_etapa_c legacy).
+            timeout_polling: segundos totais ate desistir (default 1800).
+            poll_interval: segundos entre checks de cada picking (default 40).
+            perfil_invoice_helpers: V1 = 'inventario-inter-company'.
+                Outros raise NotImplementedError nos helpers.
+
+        Returns:
+            dict com paridade ESTRUTURAL legacy `executar_etapa_c`:
+              etapa: 'C'
+              modo: 'skill8_atomica_v25' (sinalizador para auditoria)
+              status: EXECUTADO_ETAPA_C | DRY_RUN_OK_ETAPA_C |
+                      EXECUTADO_PARCIAL_TIMEOUT | FALHA_TIMEOUT_TOTAL |
+                      FALHA_PERFIL_INVALIDO | FALHA_COMMIT_PRE_POLLING |
+                      SKIP_NENHUM_AJUSTE
+              ajustes_total, ajustes_sem_picking (campos paridade legacy)
+              pickings_pendentes, pickings_resolvidos, pickings_timeout
+              sub_etapas: dict com f5d5/f5d6/f5d7 contadores agregados
+              tempo_ms
+        """
+        from app.odoo.estoque.scripts.faturamento import (  # noqa: PLC0415
+            FaturamentoInvoiceService,
+        )
+        from app.odoo.estoque.scripts._invoice_helpers import (  # noqa: PLC0415
+            _validar_perfil,
+        )
+        from app.odoo.models import AjusteEstoqueInventario  # noqa: PLC0415
+
+        # Carregar ajustes em F5c_LIBERADO (idempotencia via filtro de fase)
+        ajustes = _carregar_ajustes(
+            ciclo=ciclo,
+            company_origem_id=company_origem_id,
+            fases_pipeline=[FASE_F5c_OK],
+            cod_produto=cod_produto,
+        )
+        # Defensivo: filtrar ajustes sem picking_id_odoo (anomalia)
+        ajustes_validos: List = [a for a in ajustes if a.picking_id_odoo]
+        ajustes_sem_picking: List = [
+            a for a in ajustes if not a.picking_id_odoo
+        ]
+        if ajustes_sem_picking:
+            logger.warning(
+                f'ETAPA C (s8 v25+): {len(ajustes_sem_picking)} ajustes em '
+                f'F5c_LIBERADO SEM picking_id_odoo (anomalia) — pulando: '
+                f'{[a.id for a in ajustes_sem_picking[:5]]}'
+            )
+
+        out: Dict[str, Any] = {
+            'etapa': 'C',
+            'modo': 'skill8_atomica_v25',
+            'ciclo': ciclo,
+            'company_origem_id': company_origem_id,
+            'dry_run': dry_run,
+            'perfil_invoice_helpers': perfil_invoice_helpers,
+            'ajustes_total': len(ajustes_validos),
+            'ajustes_sem_picking': len(ajustes_sem_picking),
+            'pickings_pendentes': [],
+            'pickings_resolvidos': {},
+            'pickings_timeout': [],
+            'sub_etapas': {
+                'f5d5_payment_provider_ok': 0,
+                'f5d5_payment_provider_falha': 0,
+                'f5d6_price_zero_corrigidas': 0,
+                'f5d6_price_zero_falha': 0,
+                'f5d7_fiscal_setup_ok': 0,
+                'f5d7_fiscal_setup_skip': 0,
+                'f5d7_fiscal_setup_falha': 0,
+            },
+        }
+
+        if not ajustes_validos:
+            out['status'] = 'SKIP_NENHUM_AJUSTE'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # D2: agrupar por picking_id (1 picking -> 1 invoice CIEL IT)
+        ajustes_por_pid: Dict[int, List] = defaultdict(list)
+        for a in ajustes_validos:
+            ajustes_por_pid[a.picking_id_odoo].append(a)
+        pickings_pendentes = sorted(ajustes_por_pid.keys())
+        out['pickings_pendentes'] = pickings_pendentes
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK_ETAPA_C'
+            out['observacao'] = (
+                f'v25+ S1 dry-run: {len(pickings_pendentes)} pickings em '
+                f'F5c_LIBERADO esperando invoice CIEL IT. Real-run usaria '
+                f'Skill 8 ATOMICA polling_invoice + validar_invoice_pos_robo '
+                f'(perfil={perfil_invoice_helpers!r}).'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # ============================================================
+        # REAL-RUN: instanciar Skill 8 ATOMICA + loop pickings
+        # ============================================================
+
+        # CR-FIX R1F1 v16 (paridade): validar perfil ANTES do polling.
+        try:
+            _validar_perfil(perfil_invoice_helpers)
+        except (NotImplementedError, ValueError) as e:
+            out['status'] = 'FALHA_PERFIL_INVALIDO'
+            out['erro'] = str(e)
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # G016 Opcao A: commit antes do polling longo
+        if not _commit_resilient():
+            logger.error(
+                'F5d (s8 v25+) commit_resilient falhou ANTES do polling — '
+                'abortando ETAPA C.'
+            )
+            out['status'] = 'FALHA_COMMIT_PRE_POLLING'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # Instanciar Skill 8 ATOMICA (reusa picking_svc do orchestrator
+        # para preservar conexao Odoo + retry config).
+        svc = FaturamentoInvoiceService(
+            odoo=self.odoo, picking_svc=self.picking_svc,
+        )
+
+        # Loop por picking — polling_invoice + validar_invoice_pos_robo
+        for pid in pickings_pendentes:
+            ajs_picking = ajustes_por_pid[pid]
+            ajuste_ids = [a.id for a in ajs_picking]
+            ajuste_id_primeiro = ajs_picking[0].id
+
+            # Atomo 3: polling_invoice (delega Skill 5 LEGACY)
+            try:
+                r_poll = svc.polling_invoice(
+                    picking_id=pid,
+                    ajuste_ids=ajuste_ids,
+                    ciclo=ciclo,
+                    timeout_s=timeout_polling,
+                    poll_interval_s=poll_interval,
+                    dry_run=False,
+                    usuario=usuario,
+                )
+            except Exception as e:
+                logger.error(
+                    f'  C s8 picking {pid}: polling_invoice raise: {e}',
+                    exc_info=True,
+                )
+                out['pickings_timeout'].append(pid)
+                continue
+
+            status_poll = r_poll.get('status')
+            if status_poll == 'TIMEOUT':
+                out['pickings_timeout'].append(pid)
+                continue
+            if status_poll != 'OK':
+                logger.error(
+                    f'  C s8 picking {pid}: polling_invoice status='
+                    f'{status_poll!r} erro={r_poll.get("erro")}'
+                )
+                out['pickings_timeout'].append(pid)
+                continue
+
+            invoice_id = r_poll.get('invoice_id')
+            if not invoice_id:
+                logger.error(
+                    f'  C s8 picking {pid}: polling_invoice OK mas sem '
+                    f'invoice_id (anomalia atomo).'
+                )
+                out['pickings_timeout'].append(pid)
+                continue
+
+            out['pickings_resolvidos'][pid] = invoice_id
+
+            # Re-fetch ajustes + marcar F5d_INVOICE_GERADA (paridade legacy
+            # linhas 2145-2173)
+            ajustes_fresh: List = []
+            for aid in ajuste_ids:
+                af = safe_session_get(AjusteEstoqueInventario, aid)
+                if af is not None:
+                    ajustes_fresh.append(af)
+            if not ajustes_fresh:
+                logger.warning(
+                    f'  C s8 picking {pid}: re-fetch ajustes vazio '
+                    f'pos-polling (todos sumiram?). Skipping validar.'
+                )
+                continue
+
+            external_id_f5d = (
+                f'INV-{ciclo}-A{ajustes_fresh[0].id:06d}-'
+                f'{FASE_F5d_OK}-{uuid.uuid4().hex[:8]}'
+            )
+            for aj in ajustes_fresh:
+                aj.fase_pipeline = FASE_F5d_OK
+                aj.invoice_id_odoo = invoice_id
+                aj.external_id_operacao = external_id_f5d
+
+            # Commit pos-polling antes das sub-etapas (paridade R1F3 v16)
+            if not _commit_resilient():
+                logger.error(
+                    f'  C s8 picking {pid} commit pos-polling FALHOU. '
+                    f'PULA validar_invoice_pos_robo (session sujo). '
+                    f'Resume v25+ retentara.'
+                )
+                continue
+
+            logger.info(
+                f'F5d (s8) picking {pid} -> invoice {invoice_id} '
+                f'({len(ajustes_fresh)} ajustes)'
+            )
+
+            # Atomo 4: validar_invoice_pos_robo (G029 + G007 + G034)
+            try:
+                r_val = svc.validar_invoice_pos_robo(
+                    invoice_id=invoice_id,
+                    ajuste_id_primeiro=ajuste_id_primeiro,
+                    perfil=perfil_invoice_helpers,
+                    ciclo=ciclo,
+                    dry_run=False,
+                    confirmar=True,
+                    usuario=usuario,
+                )
+            except NotImplementedError:
+                # Perfil invalido — propaga (anti-poison loop)
+                raise
+            except Exception as e:
+                logger.error(
+                    f'  C s8 invoice {invoice_id} validar_pos_robo raise: '
+                    f'{e}', exc_info=True,
+                )
+                continue
+
+            # Agregar sub_etapas (FaturamentoInvoiceService usa mesmas chaves)
+            sub_etapas_atom = r_val.get('sub_etapas', {})
+            for k in out['sub_etapas']:
+                out['sub_etapas'][k] += sub_etapas_atom.get(k, 0)
+
+        # Status final (paridade legacy)
+        n_resolved = len(out['pickings_resolvidos'])
+        n_pendentes_inicial = len(pickings_pendentes)
+        if n_resolved == n_pendentes_inicial:
+            out['status'] = 'EXECUTADO_ETAPA_C'
+        elif n_resolved > 0:
+            out['status'] = 'EXECUTADO_PARCIAL_TIMEOUT'
+        else:
+            out['status'] = 'FALHA_TIMEOUT_TOTAL'
+
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
+    def _executar_etapa_d_via_skill8_atomica(
+        self,
+        *,
+        ciclo: str,
+        company_origem_id: Optional[int] = None,
+        dry_run: bool = True,
+        confirmar_sefaz: bool = False,
+        usuario: str = 'faturamento_pipeline',
+        cod_produto: Optional[str] = None,
+        t0: float,
+        max_tentativas: int = F5E_PLAYWRIGHT_MAX_TENTATIVAS,
+        intervalo_retry: int = F5E_PLAYWRIGHT_INTERVALO_RETRY_S,
+    ) -> Dict[str, Any]:
+        """v25+ S1 opt-in: ETAPA D substituida pelo atomo 5 da Skill 8
+        ATOMICA L2 (`transmitir_sefaz`).
+
+        Itera ajustes em F5d_INVOICE_GERADA, agrupa por invoice_id
+        (D8.2: 1 invoice -> 1 transmissao SEFAZ). Para cada invoice
+        invoca `transmitir_sefaz` (Playwright IRREVERSIVEL) que ja
+        codifica intra-atomo:
+          - D7: HARD_FAIL_CONFIG_ERRORS aborta batch
+          - D8.3: idempotencia persistente (F5e_SEFAZ_OK / status=EXECUTADO)
+          - D9: re-fetch via safe_session_get pos-Playwright
+          - CRITICAL-1: commit POS-Playwright FALHA = NAO conta sucesso
+          - MED C-1: situacao_nf != 'autorizado' registrado em erro_msg
+          - MED C-2: cstat+xmotivo persistido em falha
+          - G016: commit_resilient antes E depois
+
+        O atomo atualiza diretamente `fase_pipeline=F5e_SEFAZ_OK` +
+        `chave_nfe` + `status='EXECUTADO'` em todos ajustes do mesmo
+        invoice (D-OPS-2b §7.5.2: propaga para TODOS).
+
+        Args:
+            ciclo, company_origem_id, dry_run, confirmar_sefaz, usuario,
+            cod_produto, t0: args padrao (espelha executar_etapa_d legacy).
+            max_tentativas: tentativas Playwright/NF (default 15).
+            intervalo_retry: segundos entre tentativas (default 120).
+
+        Returns:
+            dict com paridade ESTRUTURAL legacy `executar_etapa_d`:
+              etapa: 'D'
+              modo: 'skill8_atomica_v25'
+              status: EXECUTADO_ETAPA_D | DRY_RUN_OK_ETAPA_D |
+                      EXECUTADO_PARCIAL | BLOQUEADO_SEM_CONFIRMAR_SEFAZ |
+                      FALHA_CONFIG | SKIP_NENHUM_AJUSTE | FALHA_ETAPA_D
+              ajustes_total, ajustes_sem_invoice
+              invoices_pendentes, invoices_resolvidas (chave_nfe por inv),
+              invoices_falha, invoices_skip
+              contadores: {sucesso, falha, skip_idempotent}
+        """
+        from app.odoo.estoque.scripts.faturamento import (  # noqa: PLC0415
+            FaturamentoInvoiceService,
+        )
+
+        # D18: real-run exige --confirmar-sefaz (2 niveis)
+        if not dry_run and not confirmar_sefaz:
+            return {
+                'etapa': 'D',
+                'modo': 'skill8_atomica_v25',
+                'ciclo': ciclo,
+                'status': 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ',
+                'erro': (
+                    'ETAPA D (SEFAZ) e IRREVERSIVEL. Real-run exige '
+                    '`--confirmar-sefaz` ALEM de `--confirmar`.'
+                ),
+                'tempo_ms': int((time.time() - t0) * 1000),
+            }
+
+        # Carregar ajustes em F5d_INVOICE_GERADA (idempotencia via fase)
+        ajustes = _carregar_ajustes(
+            ciclo=ciclo,
+            company_origem_id=company_origem_id,
+            fases_pipeline=[FASE_F5d_OK],
+            cod_produto=cod_produto,
+        )
+        ajustes_validos: List = [a for a in ajustes if a.invoice_id_odoo]
+        ajustes_sem_invoice: List = [
+            a for a in ajustes if not a.invoice_id_odoo
+        ]
+        if ajustes_sem_invoice:
+            logger.warning(
+                f'ETAPA D (s8 v25+): {len(ajustes_sem_invoice)} ajustes em '
+                f'F5d_INVOICE_GERADA SEM invoice_id_odoo (anomalia) — '
+                f'pulando: {[a.id for a in ajustes_sem_invoice[:5]]}'
+            )
+
+        out: Dict[str, Any] = {
+            'etapa': 'D',
+            'modo': 'skill8_atomica_v25',
+            'ciclo': ciclo,
+            'company_origem_id': company_origem_id,
+            'dry_run': dry_run,
+            'confirmar_sefaz': confirmar_sefaz,
+            'ajustes_total': len(ajustes_validos),
+            'ajustes_sem_invoice': len(ajustes_sem_invoice),
+            'invoices_pendentes': [],
+            'invoices_resolvidas': {},
+            'invoices_falha': {},
+            'invoices_skip': [],
+            'contadores': {
+                'sucesso': 0,
+                'falha': 0,
+                'skip_idempotent': 0,
+            },
+        }
+
+        if not ajustes_validos:
+            out['status'] = 'SKIP_NENHUM_AJUSTE'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # D8.2: agrupar por invoice_id (1 invoice -> 1 transmissao SEFAZ)
+        ajustes_por_invoice: Dict[int, List] = defaultdict(list)
+        for a in ajustes_validos:
+            ajustes_por_invoice[a.invoice_id_odoo].append(a)
+        invoices_pendentes = sorted(ajustes_por_invoice.keys())
+        out['invoices_pendentes'] = invoices_pendentes
+
+        if dry_run:
+            out['status'] = 'DRY_RUN_OK_ETAPA_D'
+            out['observacao'] = (
+                f'v25+ S1 dry-run: {len(invoices_pendentes)} invoices em '
+                f'F5d_INVOICE_GERADA esperando transmissao SEFAZ. '
+                f'Real-run usaria Skill 8 ATOMICA transmitir_sefaz '
+                f'(Playwright IRREVERSIVEL, ~5-10min/NF; total estimado='
+                f'{len(invoices_pendentes) * 5}-'
+                f'{len(invoices_pendentes) * 10}min).'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # ============================================================
+        # REAL-RUN: Skill 8 ATOMICA transmitir_sefaz por invoice
+        # ============================================================
+
+        # Instanciar service (reusa picking_svc para conexao Odoo)
+        svc = FaturamentoInvoiceService(
+            odoo=self.odoo, picking_svc=self.picking_svc,
+        )
+
+        for invoice_id in invoices_pendentes:
+            ajs_invoice = ajustes_por_invoice[invoice_id]
+            ajuste_ids = [a.id for a in ajs_invoice]
+
+            try:
+                r_sefaz = svc.transmitir_sefaz(
+                    invoice_id=invoice_id,
+                    ajuste_ids=ajuste_ids,
+                    ciclo=ciclo,
+                    max_tentativas=max_tentativas,
+                    intervalo_retry=intervalo_retry,
+                    dry_run=False,
+                    confirmar_sefaz=True,  # ja' validado em D18 acima
+                    usuario=usuario,
+                )
+            except Exception as e:
+                logger.error(
+                    f'  D s8 invoice {invoice_id}: transmitir_sefaz raise: '
+                    f'{e}', exc_info=True,
+                )
+                out['invoices_falha'][invoice_id] = (
+                    f'excecao: {str(e)[:200]}'
+                )
+                out['contadores']['falha'] += 1
+                continue
+
+            status_atom = r_sefaz.get('status')
+
+            # D7: HARD_FAIL_CONFIG aborta batch (operador deve intervir)
+            if status_atom == 'FALHA_CONFIG':
+                logger.error(
+                    f'  D s8 invoice {invoice_id}: FALHA_CONFIG '
+                    f'{r_sefaz.get("erro")} — ABORTA BATCH.'
+                )
+                out['invoices_falha'][invoice_id] = (
+                    f'FALHA_CONFIG: {r_sefaz.get("erro")}'
+                )
+                out['contadores']['falha'] += 1
+                out['status'] = 'FALHA_CONFIG'
+                out['erro_config'] = r_sefaz.get('erro_config') or r_sefaz.get('erro')
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+
+            # D8.3: idempotencia persistente — invoice ja transmitida
+            if status_atom == 'IDEMPOTENT_SKIP':
+                chave = r_sefaz.get('chave_nfe')
+                out['invoices_skip'].append(invoice_id)
+                if chave:
+                    out['invoices_resolvidas'][invoice_id] = chave
+                out['contadores']['skip_idempotent'] += 1
+                logger.info(
+                    f'  D s8 invoice {invoice_id}: IDEMPOTENT_SKIP '
+                    f'(chave_existente={chave!r})'
+                )
+                continue
+
+            if status_atom == 'OK':
+                chave = r_sefaz.get('chave_nfe')
+                out['invoices_resolvidas'][invoice_id] = chave
+                out['contadores']['sucesso'] += 1
+                logger.info(
+                    f'  D s8 invoice {invoice_id} -> SEFAZ OK '
+                    f'(chave={chave}, ajustes={len(ajuste_ids)})'
+                )
+                continue
+
+            # Outros (FALHA, FALHA_COMMIT_POS_SEFAZ_OK, FALHA_AJUSTES_VAZIOS,
+            # BLOQUEADO_SEM_CONFIRMAR_SEFAZ — improvavel ja' que confirmar=True)
+            erro_msg = r_sefaz.get('erro') or 'sem_erro_detalhado'
+            out['invoices_falha'][invoice_id] = (
+                f'{status_atom}: {erro_msg}'
+            )
+            out['contadores']['falha'] += 1
+            logger.error(
+                f'  D s8 invoice {invoice_id}: {status_atom} {erro_msg}'
+            )
+
+        # Status final (paridade legacy)
+        n_sucesso = out['contadores']['sucesso']
+        n_falha = out['contadores']['falha']
+        n_skip = out['contadores']['skip_idempotent']
+        n_pendentes = len(invoices_pendentes)
+
+        if n_falha == 0 and (n_sucesso + n_skip) == n_pendentes:
+            out['status'] = 'EXECUTADO_ETAPA_D'
+        elif n_sucesso > 0 or n_skip > 0:
+            out['status'] = 'EXECUTADO_PARCIAL'
+        else:
+            out['status'] = 'FALHA_ETAPA_D'
+
+        out['tempo_ms'] = int((time.time() - t0) * 1000)
+        return out
+
     def executar_etapa_e(
         self,
         *,
@@ -4361,6 +4892,7 @@ class FaturamentoPipelineExecutor:
         limite: Optional[int] = None,
         pular_pre_flight: bool = False,
         usar_fluxo_l3_v19: bool = False,
+        usar_skill8_atomica_v25: bool = False,
     ) -> Dict[str, Any]:
         """Entry-point publico: executa pipeline A->B->C->D->E->F como
         SEQUENCIA de barreiras (D11) com sub-skill C5 PRE-FLIGHT no inicio.
@@ -4524,25 +5056,52 @@ class FaturamentoPipelineExecutor:
                         limite=limite,
                     )
                 elif etapa == 'C':
-                    # v16: ETAPA C agora real-aware (timeout default 1800s).
-                    res = self.executar_etapa_c(
-                        ciclo=ciclo,
-                        company_origem_id=company_origem_id,
-                        dry_run=dry_run,
-                        usuario=usuario,
-                        cod_produto=cod_produto,
-                    )
+                    # v16: ETAPA C real-aware (timeout default 1800s).
+                    # v25+ S1: opt-in usar_skill8_atomica_v25 substitui legacy
+                    # pelos atomos 3+4 da Skill 8 ATOMICA L2 (polling_invoice +
+                    # validar_invoice_pos_robo). Default OFF preserva legacy =
+                    # zero risco regressao. Ortogonal a usar_fluxo_l3_v19.
+                    if usar_skill8_atomica_v25:
+                        res = self._executar_etapa_c_via_skill8_atomica(
+                            ciclo=ciclo,
+                            company_origem_id=company_origem_id,
+                            dry_run=dry_run,
+                            usuario=usuario,
+                            cod_produto=cod_produto,
+                            t0=time.time(),
+                        )
+                    else:
+                        res = self.executar_etapa_c(
+                            ciclo=ciclo,
+                            company_origem_id=company_origem_id,
+                            dry_run=dry_run,
+                            usuario=usuario,
+                            cod_produto=cod_produto,
+                        )
                 elif etapa == 'D':
                     # v17: ETAPA D real-aware (Playwright SEFAZ).
                     # confirmar_sefaz e' 2 nivel — exigido para real-run.
-                    res = self.executar_etapa_d(
-                        ciclo=ciclo,
-                        company_origem_id=company_origem_id,
-                        dry_run=dry_run,
-                        confirmar_sefaz=confirmar_sefaz,
-                        usuario=usuario,
-                        cod_produto=cod_produto,
-                    )
+                    # v25+ S1: opt-in usar_skill8_atomica_v25 substitui legacy
+                    # pelo atomo 5 da Skill 8 ATOMICA L2 (transmitir_sefaz).
+                    if usar_skill8_atomica_v25:
+                        res = self._executar_etapa_d_via_skill8_atomica(
+                            ciclo=ciclo,
+                            company_origem_id=company_origem_id,
+                            dry_run=dry_run,
+                            confirmar_sefaz=confirmar_sefaz,
+                            usuario=usuario,
+                            cod_produto=cod_produto,
+                            t0=time.time(),
+                        )
+                    else:
+                        res = self.executar_etapa_d(
+                            ciclo=ciclo,
+                            company_origem_id=company_origem_id,
+                            dry_run=dry_run,
+                            confirmar_sefaz=confirmar_sefaz,
+                            usuario=usuario,
+                            cod_produto=cod_produto,
+                        )
                 elif etapa == 'E':
                     # v17: ETAPA E real-aware (RecebimentoLf X->FB SEQUENCIAL).
                     # v20+ S3: opt-in usar_fluxo_l3_v19 propagado (skip se True).
@@ -4831,6 +5390,7 @@ class FaturamentoPipelineExecutor:
         cod_produto: Optional[str] = None,
         limite: Optional[int] = None,
         usar_fluxo_l3_v19: bool = False,
+        usar_skill8_atomica_v25: bool = False,
     ) -> Dict[str, Any]:
         """Loop de recovery: invoca `executar_pipeline_bulk(etapas=(apenas_etapa,))`
         repetidamente ate' (a) pendentes==0 OU (b) detector_stagnation OU
@@ -4985,6 +5545,8 @@ class FaturamentoPipelineExecutor:
                     pular_pre_flight=True,
                     # v20+ S3: propagar opt-in para recovery resume
                     usar_fluxo_l3_v19=usar_fluxo_l3_v19,
+                    # v25+ S1: propagar opt-in Skill 8 ATOMICA L2
+                    usar_skill8_atomica_v25=usar_skill8_atomica_v25,
                 )
             except Exception as e:
                 logger.error(
@@ -5157,6 +5719,19 @@ def _build_argparser() -> argparse.ArgumentParser:
             'CD ainda NAO_SUPORTADA_V20.'
         ),
     )
+    p.add_argument(
+        '--usar-skill8-atomica-v25', action='store_true',
+        help=(
+            'v25+ S1 opt-in: substitui ETAPAs C+D legacy pelos atomos 3, 4 '
+            'e 5 da Skill 8 ATOMICA L2 em app/odoo/estoque/scripts/'
+            'faturamento.py. ETAPA C usa polling_invoice + '
+            'validar_invoice_pos_robo (G029+G007+G034); ETAPA D usa '
+            'transmitir_sefaz (Playwright IRREVERSIVEL). Default OFF '
+            'preserva 100%% comportamento legacy. Ortogonal a '
+            '--usar-fluxo-l3-v19 (ambas podem coexistir; --usar-skill8 '
+            'substitui C+D, --usar-fluxo-l3 substitui E+F).'
+        ),
+    )
     return p
 
 
@@ -5227,6 +5802,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 cod_produto=args.cod_produto,
                 limite=args.limite,
                 usar_fluxo_l3_v19=args.usar_fluxo_l3_v19,
+                usar_skill8_atomica_v25=args.usar_skill8_atomica_v25,
             )
             print(json.dumps(result, indent=2, default=str))
             status = result.get('status', '')
@@ -5253,6 +5829,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             limite=args.limite,
             pular_pre_flight=args.pular_pre_flight,
             usar_fluxo_l3_v19=args.usar_fluxo_l3_v19,
+            usar_skill8_atomica_v25=args.usar_skill8_atomica_v25,
         )
         print(json.dumps(result, indent=2, default=str))
 

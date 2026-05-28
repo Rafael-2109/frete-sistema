@@ -3156,3 +3156,335 @@ def test_contar_pendentes_por_etapa_f_status_aprovado_ainda_conta(db):
         f'Esperado 1 pendente F com status=APROVADO (legacy), recebi '
         f'{count}. Regressao S2: removeu compatibilidade APROVADO.'
     )
+
+
+# ============================================================
+# v25+ S1 — opt-in `usar_skill8_atomica_v25` (substitui ETAPAs C+D legacy)
+# ============================================================
+
+def test_v25_s1_etapa_c_via_skill8_dispatch_dry_run(db):
+    """v25+ S1: ETAPA C com `usar_skill8_atomica_v25=True` em dry-run invoca
+    `_executar_etapa_c_via_skill8_atomica` (helper novo) em vez de
+    `executar_etapa_c` legacy. Validacao via campo `modo` no output.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V25_S1_C_DRY'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        picking_id_odoo=999001,
+        fase_pipeline='F5c_LIBERADO',
+        status='APROVADO',
+        criado_por='test_v25_s1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    res = executor.executar_pipeline_bulk(
+        ciclo=ciclo_test,
+        etapas=('C',),
+        dry_run=True,
+        pular_pre_flight=True,
+        usar_skill8_atomica_v25=True,
+    )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_c = res['etapas_executadas']['C']
+    assert etapa_c['modo'] == 'skill8_atomica_v25', (
+        f'flag=True deveria invocar helper v25+, mas modo={etapa_c.get("modo")!r}'
+    )
+    assert etapa_c['status'] == 'DRY_RUN_OK_ETAPA_C'
+    assert etapa_c['etapa'] == 'C'
+    assert etapa_c['ajustes_total'] == 1
+    assert etapa_c['pickings_pendentes'] == [999001]
+
+
+def test_v25_s1_etapa_d_via_skill8_dispatch_dry_run(db):
+    """v25+ S1: ETAPA D com `usar_skill8_atomica_v25=True` em dry-run invoca
+    `_executar_etapa_d_via_skill8_atomica` (helper novo).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V25_S1_D_DRY'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        picking_id_odoo=999002,
+        invoice_id_odoo=888001,
+        fase_pipeline='F5d_INVOICE_GERADA',
+        status='APROVADO',
+        criado_por='test_v25_s1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    res = executor.executar_pipeline_bulk(
+        ciclo=ciclo_test,
+        etapas=('D',),
+        dry_run=True,
+        pular_pre_flight=True,
+        usar_skill8_atomica_v25=True,
+    )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_d = res['etapas_executadas']['D']
+    assert etapa_d['modo'] == 'skill8_atomica_v25'
+    assert etapa_d['status'] == 'DRY_RUN_OK_ETAPA_D'
+    assert etapa_d['etapa'] == 'D'
+    assert etapa_d['ajustes_total'] == 1
+    assert etapa_d['invoices_pendentes'] == [888001]
+
+
+def test_v25_s1_default_off_preserva_legacy_etapa_c(db):
+    """v25+ S1: SEM flag (default OFF) preserva path legacy `executar_etapa_c`.
+    Output legacy NAO tem chave `modo`.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V25_S1_LEGACY_C'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        picking_id_odoo=999003,
+        fase_pipeline='F5c_LIBERADO',
+        status='APROVADO',
+        criado_por='test_v25_s1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    res = executor.executar_pipeline_bulk(
+        ciclo=ciclo_test,
+        etapas=('C',),
+        dry_run=True,
+        pular_pre_flight=True,
+        # SEM usar_skill8_atomica_v25=True
+    )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_c = res['etapas_executadas']['C']
+    assert 'modo' not in etapa_c, (
+        f'Default OFF deveria preservar legacy (sem chave modo). '
+        f'Recebi: {etapa_c.get("modo")!r}'
+    )
+    assert etapa_c['status'] == 'DRY_RUN_OK_ETAPA_C'
+
+
+def test_v25_s1_etapa_c_via_skill8_real_run_invoca_atomos(db):
+    """v25+ S1: real-run com flag=True invoca polling_invoice +
+    validar_invoice_pos_robo da `FaturamentoInvoiceService` por picking.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V25_S1_C_REAL'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        picking_id_odoo=999004,
+        fase_pipeline='F5c_LIBERADO',
+        status='APROVADO',
+        criado_por='test_v25_s1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    # Mock Skill 8 ATOMICA + commit_resilient (real-run nao deve commitar
+    # de verdade; teste roda dentro transaction).
+    fake_svc = MagicMock()
+    fake_svc.polling_invoice.return_value = {
+        'status': 'OK', 'invoice_id': 707070, 'tempo_ms': 100,
+    }
+    fake_svc.validar_invoice_pos_robo.return_value = {
+        'status': 'OK',
+        'sub_etapas': {
+            'f5d5_payment_provider_ok': 1,
+            'f5d5_payment_provider_falha': 0,
+            'f5d6_price_zero_corrigidas': 0,
+            'f5d6_price_zero_falha': 0,
+            'f5d7_fiscal_setup_ok': 0,
+            'f5d7_fiscal_setup_skip': 1,
+            'f5d7_fiscal_setup_falha': 0,
+        },
+        'tempo_ms': 50,
+    }
+
+    with patch(
+        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        '_commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.odoo.estoque.scripts.faturamento.FaturamentoInvoiceService',
+        return_value=fake_svc,
+    ):
+        res = executor.executar_pipeline_bulk(
+            ciclo=ciclo_test,
+            etapas=('C',),
+            dry_run=False,
+            pular_pre_flight=True,
+            usar_skill8_atomica_v25=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_c = res['etapas_executadas']['C']
+    assert etapa_c['modo'] == 'skill8_atomica_v25'
+    assert etapa_c['status'] == 'EXECUTADO_ETAPA_C'
+    assert etapa_c['pickings_resolvidos'] == {999004: 707070}
+    assert etapa_c['sub_etapas']['f5d5_payment_provider_ok'] == 1
+    assert etapa_c['sub_etapas']['f5d7_fiscal_setup_skip'] == 1
+    # CRUCIAL: atomos invocados
+    fake_svc.polling_invoice.assert_called_once()
+    fake_svc.validar_invoice_pos_robo.assert_called_once()
+
+
+def test_v25_s1_etapa_d_via_skill8_real_run_invoca_atomo(db):
+    """v25+ S1: real-run com flag=True invoca transmitir_sefaz da
+    FaturamentoInvoiceService por invoice.
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V25_S1_D_REAL'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        picking_id_odoo=999005,
+        invoice_id_odoo=888002,
+        fase_pipeline='F5d_INVOICE_GERADA',
+        status='APROVADO',
+        criado_por='test_v25_s1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    fake_svc = MagicMock()
+    chave_test = '35260561724241000178550010000999999007099001'
+    fake_svc.transmitir_sefaz.return_value = {
+        'status': 'OK',
+        'chave_nfe': chave_test,
+        'situacao_nf': 'autorizado',
+        'tempo_ms': 5000,
+    }
+
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.FaturamentoInvoiceService',
+        return_value=fake_svc,
+    ):
+        res = executor.executar_pipeline_bulk(
+            ciclo=ciclo_test,
+            etapas=('D',),
+            dry_run=False,
+            confirmar_sefaz=True,
+            pular_pre_flight=True,
+            usar_skill8_atomica_v25=True,
+        )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_d = res['etapas_executadas']['D']
+    assert etapa_d['modo'] == 'skill8_atomica_v25'
+    assert etapa_d['status'] == 'EXECUTADO_ETAPA_D'
+    assert etapa_d['invoices_resolvidas'] == {888002: chave_test}
+    assert etapa_d['contadores']['sucesso'] == 1
+    assert etapa_d['contadores']['falha'] == 0
+    fake_svc.transmitir_sefaz.assert_called_once()
+    kwargs = fake_svc.transmitir_sefaz.call_args.kwargs
+    assert kwargs['invoice_id'] == 888002
+    assert kwargs['confirmar_sefaz'] is True
+
+
+def test_v25_s1_etapa_d_via_skill8_bloqueado_sem_confirmar_sefaz(db):
+    """v25+ S1: ETAPA D real-run sem `confirmar_sefaz` retorna
+    BLOQUEADO_SEM_CONFIRMAR_SEFAZ (paridade legacy D18).
+    """
+    from app.odoo.models import AjusteEstoqueInventario  # lazy
+
+    ciclo_test = 'TEST_V25_S1_D_NO_CONF'
+    aj = AjusteEstoqueInventario(
+        ciclo=ciclo_test,
+        cod_produto='103000011',
+        tipo_produto=4,
+        company_id=5,
+        acao_decidida='PERDA_LF_FB',
+        qtd_inventario=10.0,
+        qtd_odoo=0,
+        qtd_ajuste=10.0,
+        lote_destino='MIGRAÇÃO',
+        invoice_id_odoo=888003,
+        fase_pipeline='F5d_INVOICE_GERADA',
+        status='APROVADO',
+        criado_por='test_v25_s1',
+    )
+    db.session.add(aj)
+    db.session.commit()
+
+    executor = FaturamentoPipelineExecutor()
+    # Real-run sem --confirmar-sefaz deveria bater CR-H4 ANTES do helper
+    # (sequencial: confirmar_sefaz=False trava em executar_etapa_d original).
+    # Ao chamar via bulk com etapas=('D',), CR-H4 (B falhou) NAO se aplica
+    # porque B nao esta nas etapas solicitadas. Entao o dispatch chega ao
+    # helper que tem D18 propria.
+    res = executor.executar_pipeline_bulk(
+        ciclo=ciclo_test,
+        etapas=('D',),
+        dry_run=False,
+        confirmar_sefaz=False,  # sem confirmacao 2 nivel
+        pular_pre_flight=True,
+        usar_skill8_atomica_v25=True,
+    )
+
+    AjusteEstoqueInventario.query.filter_by(ciclo=ciclo_test).delete()
+    db.session.commit()
+
+    etapa_d = res['etapas_executadas']['D']
+    assert etapa_d['modo'] == 'skill8_atomica_v25'
+    assert etapa_d['status'] == 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ'
+    assert 'IRREVERSIVEL' in etapa_d['erro']
