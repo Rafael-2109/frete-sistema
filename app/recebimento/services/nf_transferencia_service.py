@@ -124,8 +124,11 @@ class NfTransferenciaService:
             }
 
         _progress(35, f'Cross-ref DFe destino ({len(moves)} NFs)')
-        chaves = [m.get('protnfe_infnfe_chnfe') for m in moves
-                  if m.get('protnfe_infnfe_chnfe')]
+        # NF origem usa `l10n_br_chave_nf` (account.move). DFe destino usa
+        # `protnfe_infnfe_chnfe` (l10n_br_ciel_it_account.dfe). Mesma chave
+        # NFe (44 digitos) mas campos com nomes diferentes em cada model.
+        chaves = [m.get('l10n_br_chave_nf') for m in moves
+                  if m.get('l10n_br_chave_nf')]
         dfes = NfTransferenciaService._buscar_dfes_destino(odoo, chaves)
         dfe_by_chave: Dict[str, Dict] = {}
         for d in dfes:
@@ -224,7 +227,13 @@ class NfTransferenciaService:
     @staticmethod
     def _buscar_nfs_origem(odoo, data_corte: str,
                             partners_grupo: List[int]) -> List[Dict]:
-        """Busca account.move out_invoice inter-company (posted+cancel)."""
+        """Busca account.move out_invoice inter-company (posted+cancel).
+
+        Campos validados contra Odoo CIEL IT (2026-05-28):
+        - `l10n_br_chave_nf`        — chave NFe 44 digitos (fonte: reversao_service.py:207).
+        - `l10n_br_numero_nota_fiscal` — numero formatado (fonte: faturamento_service.py:102).
+        - Serie NAO tem equivalente direto em account.move (campo no DFe = nfe_infnfe_ide_serie).
+        """
         domain = [
             ['move_type', '=', 'out_invoice'],
             ['state', 'in', ['posted', 'cancel']],
@@ -236,8 +245,8 @@ class NfTransferenciaService:
             return []
         fields = [
             'id', 'name', 'state', 'invoice_date', 'amount_total',
-            'protnfe_infnfe_chnfe', 'l10n_br_numero_nota_fiscal',
-            'nfe_infnfe_ide_serie', 'company_id', 'partner_id',
+            'l10n_br_chave_nf', 'l10n_br_numero_nota_fiscal',
+            'company_id', 'partner_id',
             'l10n_br_tipo_pedido', 'fiscal_position_id', 'invoice_line_ids',
         ]
         moves: List[Dict] = []
@@ -326,9 +335,12 @@ class NfTransferenciaService:
             return {}
         unique = list(set(line_ids))
         out: Dict[int, List[Dict]] = defaultdict(list)
+        # `l10n_br_cfop_id` em account.move.line eh many2one (retorna [id, name]).
+        # Precedente: pedidos/workers/impostos_jobs.py:311 (`l10n_br_cfop_id` em
+        # purchase.order) — mesmo campo herdado pelas linhas Brazil.
         fields = [
             'id', 'move_id', 'product_id', 'quantity',
-            'price_unit', 'price_subtotal', 'l10n_br_cfop_codigo',
+            'price_unit', 'price_subtotal', 'l10n_br_cfop_id',
         ]
         for i in range(0, len(unique), ODOO_BATCH):
             for ln in odoo.read('account.move.line', unique[i:i + ODOO_BATCH], fields):
@@ -342,7 +354,7 @@ class NfTransferenciaService:
                     'quantidade': ln.get('quantity'),
                     'valor_unit': ln.get('price_unit'),
                     'valor_total': ln.get('price_subtotal'),
-                    'cfop': _m2o_name(ln.get('l10n_br_cfop_codigo')) or None,
+                    'cfop': _m2o_name(ln.get('l10n_br_cfop_id')) or None,
                 })
 
         # Buscar cod_produto via product.product em batch
@@ -370,7 +382,7 @@ class NfTransferenciaService:
     @staticmethod
     def _montar_registro(move, dfe_by_chave, po_data, pickings, invoices_dest,
                           linhas_por_move, agora, usuario) -> NfTransferenciaSnapshot:
-        chave = move.get('protnfe_infnfe_chnfe') or ''
+        chave = move.get('l10n_br_chave_nf') or ''
         company_origem_id = _m2o_id(move.get('company_id'))
         partner_id = _m2o_id(move.get('partner_id'))
 
@@ -441,7 +453,11 @@ class NfTransferenciaService:
             refreshed_por=usuario,
             chave_nfe=_norm_str(chave, 50),
             numero_nf=_norm_str(move.get('l10n_br_numero_nota_fiscal'), 20),
-            serie_nf=_norm_str(move.get('nfe_infnfe_ide_serie'), 5),
+            # serie_nf: account.move CIEL IT nao expoe campo equivalente direto.
+            # Permanece NULL — coluna mantida no schema para uso futuro se Odoo
+            # adicionar campo (workaround: extrair via DFe.nfe_infnfe_ide_serie
+            # se necessario para auditoria fiscal).
+            serie_nf=None,
             account_move_id_origem=move['id'],
             account_move_name_origem=_norm_str(move.get('name'), 50),
             company_origem=company_origem[:5],
