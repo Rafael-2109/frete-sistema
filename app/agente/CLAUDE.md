@@ -273,35 +273,6 @@ das tentativas → 404 silencioso + timeout 55s. Solucao:
 - Sem Redis: degrada para legacy (funciona dentro do mesmo worker, falha cross).
 - API publica 100% preservada — callsites em `permissions.py`, `chat.py`, `bot_routes.py` nao mudaram.
 
-**R-SPLIT-NGINX (2026-05-27)**: nginx faz proxy split entre 2 gunicorn isolados
-no MESMO container Render (`start_render.sh` + `nginx.conf` + `gunicorn_config_*.py`):
-
-| Path | Proxy | Gunicorn | Workers x Threads |
-|---|---|---|---|
-| `/agente/*` | `127.0.0.1:5001` | `gunicorn_config_agente.py` | 1 x 8 |
-| `/agente-lojas/*` | `127.0.0.1:5001` | (mesmo gunicorn-agente) | 1 x 8 |
-| `/static/*` | nginx serve do disco | — | — |
-| resto | `127.0.0.1:5002` | `gunicorn_config_sistema.py` | 4 x 2 |
-
-**Motivo**: Claude Agent SDK e per-process (doc oficial `/sessions`:
-"within a single process"). Multi-worker + sticky session (workaround
-do Anthropic Issue #61862) falhava quando worker dono ficava ocupado
-pos-stream — proxima request do mesmo usuario caia em outro worker e
-retornava 409 `session_owned_by_other_worker`, 6 retries do JS esgotavam
-em ~3.5s antes do worker dono ficar livre.
-
-**Pattern 2 da doc /hosting** endossa: "multiple Claude Agent processes
-inside of the container based on demand". 1 worker para o agente +
-N workers para o sistema = isolamento sem custo extra.
-
-Consequencias:
-- Sticky session redundante: flag `AGENT_STICKY_SESSION_ENABLED=false` default,
-  codigo mantido como fallback para rolling deploy (~30s sem dono).
-- `STICKY_MAX_RETRIES` no `chat.js` reduzido de 6 → 2 (so cobre rolling deploy).
-- Crash em qualquer gunicorn → watchdog mata o outro + nginx → Render reinicia
-  container (mesma semantica de hoje, sem regressao).
-- Health check Render continua em `/` (sistema). nginx tem `/nginx-health`.
-
 ### R5: MCP tools — NAO callable
 Tools em `tools/` sao registros MCP (ToolAnnotations). O agente usa `mcp__X__Y` diretamente.
 NUNCA importar e chamar como funcao Python — nao sao callables, gera erro silencioso.
