@@ -212,25 +212,11 @@
   ],
   "indices": [
     {
-      "name": "idx_pessoal_transacoes_membro",
+      "name": "uq_pessoal_transacoes_pluggy_tx",
       "columns": [
-        "membro_id"
+        "pluggy_transaction_id"
       ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_excluir",
-      "columns": [
-        "excluir_relatorio"
-      ],
-      "unique": false
+      "unique": true
     },
     {
       "name": "idx_pessoal_transacoes_data",
@@ -254,13 +240,6 @@
       "unique": false
     },
     {
-      "name": "uq_pessoal_transacoes_pluggy_tx",
-      "columns": [
-        "pluggy_transaction_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "idx_pessoal_transacoes_categoria",
       "columns": [
         "categoria_id"
@@ -271,6 +250,27 @@
       "name": "idx_pessoal_transacoes_cpf_cnpj",
       "columns": [
         "cpf_cnpj_parte"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_membro",
+      "columns": [
+        "membro_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_excluir",
+      "columns": [
+        "excluir_relatorio"
       ],
       "unique": false
     }

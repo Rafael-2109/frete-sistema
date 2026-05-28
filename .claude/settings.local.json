@@ -211,7 +211,8 @@
       "Skill(resolvendo-problemas)",
       "Bash(python /home/rafaelnascimento/projetos/frete_sistema/scripts/migrations/hora_*)",
       "Bash(git push *)",
-      "Bash(.venv/bin/python scripts/inventario_2026_05/:*)"
+      "Bash(.venv/bin/python scripts/inventario_2026_05/:*)",
+      "mcp__render__update_environment_variables"
     ],
     "deny": [],
     "defaultMode": "auto"

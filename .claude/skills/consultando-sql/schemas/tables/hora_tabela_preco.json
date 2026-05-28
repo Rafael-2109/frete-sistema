@@ -49,17 +49,17 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tabela_preco_vigencia",
+      "name": "ix_hora_tabela_preco_modelo_id",
       "columns": [
-        "modelo_id",
-        "vigencia_inicio"
+        "modelo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_tabela_preco_modelo_id",
+      "name": "ix_hora_tabela_preco_vigencia",
       "columns": [
-        "modelo_id"
+        "modelo_id",
+        "vigencia_inicio"
       ],
       "unique": false
     }

@@ -60,6 +60,10 @@
       "type": "date"
     },
     {
+      "name": "data_emissao_hora",
+      "type": "timestamp"
+    },
+    {
       "name": "valor_total",
       "type": "numeric(15,2)"
     },
@@ -104,6 +108,10 @@
       "type": "varchar(30)"
     },
     {
+      "name": "picking_data_hora",
+      "type": "timestamp"
+    },
+    {
       "name": "invoice_destino_id",
       "type": "integer"
     },
@@ -114,6 +122,10 @@
     {
       "name": "invoice_destino_state",
       "type": "varchar(30)"
+    },
+    {
+      "name": "invoice_destino_data_hora",
+      "type": "timestamp"
     },
     {
       "name": "status_consolidado",
@@ -128,6 +140,20 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_transferencia_snapshot_status_consolidado",
+      "columns": [
+        "status_consolidado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_transferencia_snapshot_data_emissao",
+      "columns": [
+        "data_emissao"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_transferencia_snapshot_chave_nfe",
       "columns": [
         "chave_nfe"
@@ -139,20 +165,6 @@
       "columns": [
         "company_origem",
         "company_destino"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_transferencia_snapshot_status_consolidado",
-      "columns": [
-        "status_consolidado"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_transferencia_snapshot_data_emissao",
-      "columns": [
-        "data_emissao"
       ],
       "unique": false
     }

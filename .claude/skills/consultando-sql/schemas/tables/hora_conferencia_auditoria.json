@@ -62,16 +62,16 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_conferencia_auditoria_criado_em",
+      "name": "ix_hora_conferencia_auditoria_conferencia_id",
       "columns": [
-        "criado_em"
+        "conferencia_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_auditoria_conferencia_id",
+      "name": "ix_hora_conferencia_auditoria_criado_em",
       "columns": [
-        "conferencia_id"
+        "criado_em"
       ],
       "unique": false
     },
