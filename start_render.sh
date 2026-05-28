@@ -148,7 +148,54 @@ if [ "$MCP_ENABLED" = "true" ]; then
 fi
 
 # ---------------------------------------------------------------------
-# 3. CRITICO: neutralizar Render GUNICORN_CMD_ARGS injection
+# 3a. CRITICO: desligar sticky session apos split nginx/Caddy.
+# ---------------------------------------------------------------------
+# Com gunicorn-agente=1 worker, sticky session vira REDUNDANTE — sempre
+# o mesmo "dono". Pior: em rolling deploy do Render, o container antigo
+# deixa ownership em Redis com TTL 30min (`agent:session:owner:{sid}`
+# = "PID@hostname-antigo"). Container novo (PID@hostname-novo) chega, ve
+# dono diferente em Redis, retorna 409 session_owned_by_other_worker
+# por ATE 30min apos o deploy. Observado em PROD apos deploy e9b4b9d6:
+# owner=236@zxwb9 (morto) me=237@vd9pr (vivo) -> 9 requests 409 em 4min.
+#
+# Fix: forcar desligado no env. Codigo do sticky_session.py preservado
+# para rollback emergencial via env override no dashboard Render.
+export AGENT_STICKY_SESSION_ENABLED=false
+echo " 🔧 AGENT_STICKY_SESSION_ENABLED=false (1 worker agente = sticky desnecessario)"
+
+# Cleanup defensivo: remove sticky keys de container morto (deploy anterior).
+# Roda em background — nao bloqueia o startup. Limpa ownerships com TTL > 0
+# que apontam para hostnames diferentes do nosso (containers mortos).
+(
+    sleep 5
+    python -c "
+import os, socket
+try:
+    from app.utils.redis_cache import redis_cache
+    if not redis_cache.disponivel:
+        print('[STICKY-CLEANUP] Redis off, pulando')
+    else:
+        me_host = socket.gethostname()
+        rc = redis_cache.client
+        cursor, total, deletados = 0, 0, 0
+        while True:
+            cursor, keys = rc.scan(cursor=cursor, match='agent:session:owner:*', count=100)
+            for key in keys:
+                total += 1
+                owner = rc.get(key)
+                if owner and me_host not in (owner if isinstance(owner, str) else owner.decode('utf-8', errors='replace')):
+                    rc.delete(key)
+                    deletados += 1
+            if cursor == 0:
+                break
+        print(f'[STICKY-CLEANUP] varridos={total} deletados={deletados} (hostnames != {me_host})')
+except Exception as e:
+    print(f'[STICKY-CLEANUP] erro (ignorado): {e}')
+" 2>&1 | sed -u 's/^/[STICKY-CLEANUP] /' || true
+) &
+
+# ---------------------------------------------------------------------
+# 3b. CRITICO: neutralizar Render GUNICORN_CMD_ARGS injection
 # ---------------------------------------------------------------------
 # Render seta GUNICORN_CMD_ARGS=--bind=0.0.0.0:$PORT no env, que
 # sobrescreve o bind do config (last-wins na linha de comando).
