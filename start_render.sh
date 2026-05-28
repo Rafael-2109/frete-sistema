@@ -165,9 +165,11 @@ echo " Gunicorn-sistema PID: $GUNICORN_SISTEMA_PID"
 echo " Aguardando gunicorns ficarem prontos (max 90s)..."
 GUNICORNS_READY=false
 for attempt in $(seq 1 45); do
-    # Health: /agente/api/health (agente_bp) e /login (sistema — sempre 200 GET)
+    # Health: /agente/api/health (agente_bp url_prefix=/agente) e /auth/login
+    # (auth_bp url_prefix=/auth — rota /login GET retorna 200 sem auth).
+    # NAO usar /login direto (404) nem / (302 redirect).
     AGENTE_RC=$(curl -fs -o /dev/null -w '%{http_code}' http://127.0.0.1:5001/agente/api/health 2>/dev/null || echo "000")
-    SISTEMA_RC=$(curl -fs -o /dev/null -w '%{http_code}' http://127.0.0.1:5002/login 2>/dev/null || echo "000")
+    SISTEMA_RC=$(curl -fs -o /dev/null -w '%{http_code}' http://127.0.0.1:5002/auth/login 2>/dev/null || echo "000")
 
     if [ "$AGENTE_RC" = "200" ] && [ "$SISTEMA_RC" = "200" ]; then
         echo " ✅ Ambos gunicorns prontos (attempt $attempt — agente=$AGENTE_RC sistema=$SISTEMA_RC)"
