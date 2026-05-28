@@ -103,17 +103,19 @@ ACOES_ENTRADA_DESTINO_MANUAL: FrozenSet[str] = frozenset({
     'INDUSTRIALIZACAO_FB_LF',   # FB→LF — validado PROD (317306, 317316)
     'DEV_FB_LF',                # FB→LF — canary v17.5 (fp 86 assumido)
     'TRANSFERIR_FB_CD',         # FB→CD — canary v17.5 (PT 50, src=6, dest=32)
-    # CR-v27+-Finding2-S4 (88% conf — DECISÃO PENDENTE Rafael v28+):
-    # `TRANSFERIR_CD_FB` foi mapeado em `L10N_BR_TIPO_PEDIDO_POR_ACAO`
-    # (inventario_pipeline.py:3311) mas NÃO está aqui. Filtro
-    # `_executar_etapa_f_via_fluxo_l3` em `a.acao_decidida in
-    # ACOES_ENTRADA_DESTINO_MANUAL` exclui TRANSFERIR_CD_FB → dead code
-    # no L10N_BR_TIPO_PEDIDO_POR_ACAO para esta direção.
-    # Decisão Rafael (canary v28+): TRANSFERIR_CD_FB requer ETAPA F
-    # (entrada manual no FB) OU robô CIEL IT já cria entrada automática
-    # via DFe? Se requer ETAPA F: adicionar aqui + em
-    # ACOES_ENTRADA_DESTINO_MANUAL_CANARY. Se não: documentar
-    # inapplicabilidade explícita no comment do L10N_BR_TIPO_PEDIDO_POR_ACAO.
+    # CR-v27+-Finding2-S4 (88% conf — RESOLVIDO 2026-05-27 Rafael):
+    # TRANSFERIR_CD_FB NÃO entra aqui — JÁ ESTÁ em ACOES_ENTRADA_FB
+    # (operacoes_fiscais.py:422). Atualmente processado via ETAPA E
+    # legacy (RecebimentoLf X→FB via Skill 7 V1 STRICT).
+    # Decisão Rafael 2026-05-27: "robô CIEL IT tem mesmo defeito de
+    # atraso EM QUALQUER tipo — CD→FB também precisa funcionar via
+    # FLUXO L3 1.2.x (caminho A buscar DFe / B criar manual via XML
+    # saída)". Implementação v28+ S7: criar
+    # `_executar_etapa_e_via_fluxo_l3` espelhando `_executar_etapa_f_*`,
+    # filtrando ACOES_ENTRADA_FB. Quando ativo, destravará TODAS as
+    # 4 ações X→FB: PERDA_LF_FB, TRANSFERIR_CD_FB, DEV_LF_FB, DEV_CD_LF
+    # (e DEV_CD_LF que é CD→LF). Mapping L10N_BR_TIPO_PEDIDO_POR_ACAO
+    # em inventario_pipeline.py:3311 já está pronto v27+ S4.
 })
 
 

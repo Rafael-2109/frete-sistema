@@ -3311,13 +3311,21 @@ class FaturamentoPipelineExecutor:
         'TRANSFERIR_CD_FB': {
             'dfe': 'compra',
             'po': 'transf-filial',
-            # CR-v27+-Finding2-S4 (88% conf — DECISÃO PENDENTE Rafael v28+):
-            # TRANSFERIR_CD_FB NÃO está em ACOES_ENTRADA_DESTINO_MANUAL
-            # (picking_types.py:102). Filtro `_executar_etapa_f_via_fluxo_l3`
-            # exclui esses ajustes — entry mapeada aqui é DEAD CODE até
-            # Rafael decidir: (a) TRANSFERIR_CD_FB requer ETAPA F? → adicionar
-            # em ACOES_ENTRADA_DESTINO_MANUAL + canary; (b) robô CIEL IT já
-            # cria entrada FB automática via DFe SEFAZ? → remover entry daqui.
+            # CR-v27+-Finding2-S4 (88% conf — RESOLVIDO 2026-05-27 Rafael):
+            # TRANSFERIR_CD_FB JÁ ESTÁ em ACOES_ENTRADA_FB
+            # (operacoes_fiscais.py:422 — ETAPA E legacy). Hoje é processado
+            # via `executar_etapa_e` legacy (RecebimentoLf X→FB via Skill 7
+            # V1 STRICT). Esta entry mapeada aqui (v27+ S4) NÃO é dead code:
+            # destrava o caminho FLUXO L3 1.2.x para esta direção quando
+            # v28+ S7 implementar `_executar_etapa_e_via_fluxo_l3`
+            # (espelhando helper de ETAPA F, mas filtrando ACOES_ENTRADA_FB).
+            # Quando ativo via `--usar-fluxo-l3-v19=True`, TRANSFERIR_CD_FB
+            # (junto com PERDA_LF_FB + DEV_LF_FB + DEV_CD_LF) usará o
+            # caminho A (buscar DFe via SEFAZ) ou B (criar manual via
+            # XML saída) — decisão automática via `buscar_dfe`. Decisão
+            # operacional Rafael 2026-05-27: "robô CIEL IT tem mesmo
+            # defeito de atraso em QUALQUER tipo — CD→FB tbm tem que
+            # funcionar pelo mesmo pattern de pesquisa+criar manual".
         },
     }
 

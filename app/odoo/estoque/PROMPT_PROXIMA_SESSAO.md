@@ -114,19 +114,38 @@ Antes de codar: spawn AskUserQuestion confirmando escopo §3 + decisões abertas
 
 ---
 
-## §3. ESCOPO DESTA SESSÃO (v28+ — S2 canary REAL + S6 cleanup legacy + stub removal)
+## §3. ESCOPO DESTA SESSÃO (v28+ — S7 destravar ETAPA E + S2 canary REAL + S6 cleanup legacy + stub removal)
 
 > **CONFIRMAR ESCOPO COM RAFAEL via AskUserQuestion ANTES de codar** (§1.4).
 
 ### Objetivo macro
 
+**S7 PRIORITÁRIO (resolução Finding 2 S4 — decisão Rafael 2026-05-27):** implementar `_executar_etapa_e_via_fluxo_l3` espelhando o helper existente de ETAPA F. Destrava 4 ações X→FB (PERDA_LF_FB, TRANSFERIR_CD_FB, DEV_LF_FB, DEV_CD_LF) para usarem o caminho FLUXO L3 1.2.x (buscar DFe / criar manual) quando `--usar-fluxo-l3-v19=True`. Hoje retornam SKIP_NAO_SUPORTADA_V20_FLUXO_L3.
+
 Validar o opt-in `--usar-skill8-atomica-v25` em PROD com 1-5 ajustes naturais (canary REAL); após validar paridade vs legacy, remover ETAPAs C+D legacy do orchestrator + migrar testes. Em paralelo, remover stub `faturamento_pipeline.py` quando seguro (grep zero imports Python ativos).
 
-**Dependência crítica:** lote natural INDUSTRIALIZACAO_FB_LF (ou PERDA_LF_FB / TRANSFERIR_*_CD para canary FB+CD destino). Sem lote, sessão fica em standby — pode rodar S6 (remoção legacy ETAPAs C+D) preventivamente APENAS se Rafael autorizar sem canary (risco alto).
+**Dependência crítica:** lote natural INDUSTRIALIZACAO_FB_LF (ou PERDA_LF_FB / TRANSFERIR_*_CD para canary FB+CD destino). Sem lote, sessão fica em standby — pode rodar S6 (remoção legacy ETAPAs C+D) preventivamente APENAS se Rafael autorizar sem canary (risco alto). **S7 é puro código + pytest — não depende de lote natural, pode rodar primeiro.**
 
 ### Sub-objetivos (ordem proposta — confirmar com Rafael)
 
-#### S2 — Canary REAL PROD opt-in skill8 atômica (PRIORITÁRIO — quando lote surgir)
+#### S7 — Destravar ETAPA E via FLUXO L3 (PRIORITÁRIO — puro código v28+)
+
+**Contexto (decisão Rafael 2026-05-27):** "robô CIEL IT tem mesmo defeito de atraso em QUALQUER tipo — CD→FB também tem que funcionar pelo pattern de pesquisa DFe + criar manual". Hoje `executar_etapa_e` com `usar_fluxo_l3_v19=True` retorna `SKIP_NAO_SUPORTADA_V20_FLUXO_L3` (linha ~3628). Vai destravado em v28+ S7.
+
+- Implementar `_executar_etapa_e_via_fluxo_l3` (espelha `_executar_etapa_f_via_fluxo_l3` linhas ~3402-3563 — mas filtra `ACOES_ENTRADA_FB` em vez de `ACOES_ENTRADA_DESTINO_MANUAL`).
+- Modificar `executar_etapa_e`: trocar early return SKIP por dispatch ao helper novo (igual ao pattern de ETAPA F).
+- Mapeamento já pronto v27+ S4: CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[1]=FB + L10N_BR_TIPO_PEDIDO_POR_ACAO['PERDA_LF_FB' / 'TRANSFERIR_CD_FB' / 'DEV_LF_FB'] + CONSTANTS_FLUXO_L3_POR_COMPANY_DESTINO[5]=LF + L10N_BR_TIPO_PEDIDO_POR_ACAO['DEV_CD_LF']. Verificar que `_resolver_constants_fluxo_l3` retorna constants OK para todas 4 ações.
+- **Atenção:** `_resolver_constants_fluxo_l3` faz override G039 dinâmico para `company_destino != 5`. FB destino (3 ações) vai exercitar esse caminho na primeira vez — `_resolver_team_g039` precisa estar funcional para Rafael uid=42 na company FB (pode requerer criar purchase.team FB G039 antes do canary).
+- **Pytest novos (esperado 4-6):**
+  - `test_v28_s7_etapa_e_via_fluxo_l3_lf_destino_dry_run` (DEV_CD_LF → LF=5)
+  - `test_v28_s7_etapa_e_via_fluxo_l3_fb_destino_dry_run` (TRANSFERIR_CD_FB → FB=1)
+  - `test_v28_s7_etapa_e_via_fluxo_l3_perda_lf_fb_real_run_mockado`
+  - `test_v28_s7_etapa_e_via_fluxo_l3_transferir_cd_fb_real_run_mockado`
+  - `test_v28_s7_default_off_preserva_etapa_e_legacy`
+  - `test_v28_s7_acao_nao_mapeada_retorna_nao_suportada` (defensivo)
+- **Não toca:** legacy `executar_etapa_e` (RecebimentoLf via Skill 7 V1 STRICT) preservado para `--usar-fluxo-l3-v19=False` (default OFF).
+
+#### S2 — Canary REAL PROD opt-in skill8 atômica (quando lote surgir)
 
 - Selecionar 1 ajuste natural que entrar em F5c_LIBERADO ou F5d_INVOICE_GERADA.
 - Rodar pipeline com **ambas as flags** (valida F1-F4 v25+ + opt-in v25+ S1 juntos):
@@ -146,10 +165,11 @@ Validar o opt-in `--usar-skill8-atomica-v25` em PROD com 1-5 ajustes naturais (c
   - Tipos DFe='compra' / PO=`<derivado>`
   - PO criada na company destino correta + picking nativo done
 
-#### S2.b — Canary REAL FB/CD destino (separado)
+#### S2.b — Canary REAL FB/CD destino (separado — depende de S7 implementado primeiro)
 
-- Quando próxima PERDA_LF_FB / TRANSFERIR_*_CD natural surgir, rodar com `--usar-fluxo-l3-v19 --confirmar --confirmar-sefaz`.
+- Quando próxima PERDA_LF_FB / TRANSFERIR_CD_FB / DEV_LF_FB / DEV_CD_LF / TRANSFERIR_FB_CD natural surgir, rodar com `--usar-fluxo-l3-v19 --confirmar --confirmar-sefaz`.
 - Valida CONSTANTS v27+ S4 FB+CD (picking_type_id, payment_term_id, team_id=None → G039).
+- Para ações X→FB (4 ações), S7 deve estar implementado (ETAPA E via FLUXO L3).
 - Após OK: Rafael decide STATIC vs G039 dinâmico p/ FB/CD (espelha decisão F4 LF=143).
 
 #### S6 — Remover ETAPAs C+D legacy (após S2 OK)
