@@ -286,6 +286,23 @@ NUNCA importar e chamar como funcao Python — nao sao callables, gera erro sile
 ### R7: JSONB — flag_modified
 Manter o padrao existente em `models.py`: SEMPRE `flag_modified(session, 'data')` apos modificar JSONB.
 
+### R9: Audit Hook Deterministico Odoo — propagacao via PreToolUse (2026-05-28)
+
+Quando flag `AGENT_ODOO_AUDIT_HOOK=true`:
+- `sdk/hooks.py:_keep_stream_open` (PreToolUse) intercepta tool `Bash` e prefixa `command` com `export AGENT_SESSION_ID=<ctx> AGENT_TOOL_USE_ID=<tuid> AGENT_TYPE=<atype> AGENT_USER_NAME=<uname>` antes do command original.
+- Subprocess Bash herda as ENV vars → script Python da skill chama `OdooConnection.execute_kw` → hook em `app/utils/odoo_audit_helpers.py` registra em `operacao_odoo_auditoria` correlacionando com sessao.
+
+**Race-free**: usa `hookSpecificOutput.updatedInput` (SDK 0.1.29+, dict[str, Any]) — isolado por tool call, nao depende de `os.environ` global (que quebraria multi-worker gunicorn).
+
+**Cuidados**:
+- Hook NUNCA quebra a tool (try/except + log debug)
+- shlex.quote escapa valores (defesa contra injection)
+- Quando flag OFF, hook nao muta command (zero overhead)
+- ContextVar `_current_session_id` em `permissions.py:46` e a fonte de `AGENT_SESSION_ID`
+
+Ver `app/odoo/CLAUDE.md` secao P8 para detalhes do hook lado Odoo.
+Migration: `scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}`.
+
 ---
 
 ## Hierarquia de Timeouts

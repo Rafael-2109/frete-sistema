@@ -266,8 +266,32 @@ class OdooConnection:
                     socket.setdefaulttimeout(self.timeout)
                     self._models = None  # Força reconexão na próxima chamada com timeout normal
 
-        # 🔧 Usar Circuit Breaker para proteger execução
-        return self.circuit_breaker.call(_do_execute)
+        # 🔧 Usar Circuit Breaker para proteger execução + Audit Hook deterministico
+        # Hook registra TODA chamada XML-RPC write em operacao_odoo_auditoria,
+        # quando AGENT_ODOO_AUDIT_HOOK=true E method na whitelist. NUNCA quebra Odoo.
+        # Ver app/utils/odoo_audit_helpers.py + CLAUDE.md P8.
+        inicio_audit = time.perf_counter()
+        erro_audit: Optional[BaseException] = None
+        resultado_audit: Any = None
+        try:
+            resultado_audit = self.circuit_breaker.call(_do_execute)
+            return resultado_audit
+        except Exception as e:
+            erro_audit = e
+            raise
+        finally:
+            try:
+                from app.utils.odoo_audit_helpers import registrar_chamada_odoo
+                tempo_ms = int((time.perf_counter() - inicio_audit) * 1000)
+                registrar_chamada_odoo(
+                    model=model, method=method, args=args,
+                    kwargs=kwargs or {},
+                    resultado=resultado_audit, tempo_ms=tempo_ms,
+                    erro=erro_audit,
+                )
+            except Exception:
+                # Audit hook NUNCA quebra Odoo. Erro ja logado em odoo_audit_helpers.
+                pass
     
     def search_read(self, model: str, domain: list, fields: Optional[list] = None, limit: Optional[int] = None, offset: Optional[int] = None, order: Optional[str] = None) -> list:
         """Busca registros no Odoo"""

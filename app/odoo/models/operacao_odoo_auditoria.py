@@ -43,6 +43,11 @@ class OperacaoOdooAuditoria(db.Model):
     screenshot_s3_key = db.Column(db.String(255))
     executado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     executado_por = db.Column(db.String(80), nullable=False)
+    # Audit hook deterministico (2026-05-28) — correlaciona com sessao do agente web.
+    # Migration: scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}.
+    session_id = db.Column(db.String(64), index=True)  # FK logica para agent_sessions.session_id
+    tool_use_id = db.Column(db.String(40), index=True)  # tool_use_id SDK Anthropic
+    agent_type = db.Column(db.String(40), index=True)  # main|gestor-estoque-odoo|worker_rq|scheduler|cli
 
     def __repr__(self):
         return (
@@ -58,6 +63,13 @@ class OperacaoOdooAuditoria(db.Model):
 
         Sanitiza automaticamente campos JSONB (sanitize_for_json).
         NAO commita — caller decide quando (padrao P5/P7 do app/odoo/CLAUDE.md).
+
+        Kwargs aceitos (todos opcionais):
+        - metodo_odoo, odoo_id, etapa, etapa_descricao, payload_json,
+          resposta_json, dados_antes_json, dados_depois_json, erro_msg,
+          tempo_execucao_ms, contexto_origem, contexto_ref, screenshot_s3_key,
+          pipeline_etapa, executado_em
+        - session_id, tool_use_id, agent_type  (audit hook 2026-05-28)
         """
         from app.utils.json_helpers import sanitize_for_json
         kwargs.setdefault('executado_em', agora_utc_naive())

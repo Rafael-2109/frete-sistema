@@ -433,6 +433,16 @@ echo "Inventario 22: audit log ajuste_estoque_inventario..."
 python scripts/migrations/2026_05_18_audit_ajuste_estoque_inventario.py \
     || echo "⚠️ Migration audit_ajuste_estoque_inventario falhou, continuando deploy..."
 
+# 22b. Audit Hook deterministico Odoo (2026-05-28): rastrear toda chamada XML-RPC
+# write em OdooConnection.execute_kw, correlacionando com session_id do agente web.
+# ADD COLUMN session_id/tool_use_id/agent_type + indexes + incorpora v21 (ALTER
+# COLUMN acao/status/pipeline_etapa). Idempotente (ADD COLUMN IF NOT EXISTS).
+# Ativacao gradual via AGENT_ODOO_AUDIT_HOOK=true (default OFF — zero overhead
+# enquanto desligada). Ver app/odoo/CLAUDE.md secao P8.
+echo "Inventario 22b: audit hook deterministico (session_id em operacao_odoo_auditoria)..."
+python scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.py \
+    || echo "⚠️ Migration operacao_odoo_auditoria_session falhou, continuando deploy..."
+
 # 23. CarVia agendamento (2026-05-21): horario de agendamento + VIEW pedidos v7.
 # Feature CarVia: campo de horario (HH:MM) na cotacao comercial, propagado para
 # EmbarqueItem + EntregaMonitorada (AgendamentoEntrega) e exibido em lista_pedidos

@@ -802,3 +802,16 @@ def _parse_allowed_user_ids_csv(raw: str) -> set[int]:
 ESTOQUE_RESTRICAO_ALLOWED_USER_IDS: set[int] = _parse_allowed_user_ids_csv(
     os.getenv("AGENT_ESTOQUE_RESTRICAO_ALLOWED_USER_IDS", "1,55")
 )
+
+
+# ====================================================================
+# Audit Hook deterministico Odoo (2026-05-28)
+# ====================================================================
+# Quando ativo, OdooConnection.execute_kw registra TODA chamada XML-RPC
+# write na tabela operacao_odoo_auditoria, correlacionando com session_id
+# do agente web via ENV vars propagadas pelo PreToolUse hook.
+#
+# Whitelist de metodos: app/utils/odoo_audit_helpers.py METODOS_WRITE_AUDITADOS
+# Schema: scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}
+# Ver app/odoo/CLAUDE.md secao P8.
+USE_ODOO_AUDIT_HOOK = os.getenv("AGENT_ODOO_AUDIT_HOOK", "false").lower() == "true"
