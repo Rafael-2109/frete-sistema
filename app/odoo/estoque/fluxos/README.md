@@ -37,12 +37,14 @@ Exemplo:
 ```
 1  NF inter-company (emissão/SEFAZ entre filiais)
    1.1  só faturamento (saída)
-        1.1.1 LF→CD   1.1.1.1 componentes(1/2/3) ⬜  1.1.1.2 acabado(4) ⬜  1.1.1.3 ambos ⬜
-        1.1.2 LF→FB ⬜   1.1.3 FB→CD ⬜   ...
+        1.1.1 saída pura até SEFAZ-OK (Skill 8 ATÔMICA L2 — 5 átomos) → ✅ v27+ S5 ([folha](1.1.1-faturamento-saida-pura.md))
+        1.1.2 LF→FB ⬜ (variante p/ direção específica — pode ser substituída por 1.1.1 + constants)
+        1.1.3 FB→CD ⬜ (idem)
    1.2  só entrada/escrituração
-        1.2.1 inventário (DFe próprio) → escriturando-odoo ⬜
-        1.2.2 COMPRAS (DFe fornecedor) → DELEGA gestor-recebimento
-   1.3  transferência completa (saída+entrada) = faturando-odoo ⨾ escriturando-odoo ⬜
+        1.2.1 caminho A — DFe via SEFAZ → escriturando-odoo ✅ v19+ ([folha](1.2.1-escriturar-dfe-industrializacao.md))
+        1.2.2 caminho B — DFe via upload XML SAÍDA → escriturando-odoo ✅ v19+ ([folha](1.2.2-criar-dfe-manual-transferencia.md))
+        1.2.3 COMPRAS (DFe fornecedor) → DELEGA gestor-recebimento
+   1.3  transferência completa (saída+entrada) = compõe 1.1.1 + 1.2.x → ✅ v27+ S5 ([folha](1.3-transferencia-completa.md))
 2  Estoque (sem NF)
    2.1 ajuste de saldo (1 quant pontual; N→1 quants via planilha) → ajustando-quant-odoo ✅ ([folha](2.1-ajuste-saldo-por-planilha.md))
    2.2 realocar saldo (lote→lote mesma loc / loc→loc mesmo lote / MIGRAÇÃO↔Indisponível) → transferindo-interno-odoo 🟡 ([folha](2.2-realocar-saldo.md))

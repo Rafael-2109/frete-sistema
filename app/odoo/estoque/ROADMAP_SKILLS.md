@@ -102,7 +102,7 @@
 4. **Canary REAL PROD do opt-in skill8**: 1-5 ajustes validam paridade vs legacy. Após OK: remover ETAPAS C+D legacy (~500 LOC) + migrar 14 testes para `test_faturamento_invoice_service.py`.
 5. **Bulk REAL PROD** via `--usar-fluxo-l3-v19` em conjunto maior de ajustes (validar B-V23-1+2 + F1-F4 fixes automáticos eliminam workarounds manuais).
 6. ✅ **Expand CONSTANTS** FB=1 e CD=4 (CONCLUÍDO v27+ S4 2026-05-27 — discovery XML-RPC `stock.picking.type` confirma FB=1+52+54+6, CD=13+50+18, LF=19+24+64; CONSTANTS_FLUXO_L3 expandido p/ 3 companies; team_id=None p/ FB+CD com G039 dinâmico (LF STATIC=143 mantido); L10N_BR_TIPO_PEDIDO_POR_ACAO mapeado p/ todas 8 ações via MATRIZ_INTERCOMPANY (dfe='compra' universal + po derivado de l10n_br_tipo_pedido_entrada); 4 pytest novos = 672 baseline; canary REAL FB/CD pendente próxima PERDA_LF_FB ou TRANSFERIR_*_CD natural).
-7. **Folhas L3 1.1.x + 1.3** (compõem Skill 8 ATÔMICA L2 + Skill 7 ABRANGENTE — markdown apenas, sem código novo).
+7. ✅ **Folhas L3 1.1.x + 1.3** (CONCLUÍDO v27+ S5 2026-05-27 — `1.1.1-faturamento-saida-pura.md` documenta composição Skill 8 ATÔMICA L2 ETAPAs C+D; `1.3-transferencia-completa.md` documenta composição 1.1.1 + 1.2.x end-to-end com decisão automática caminho A vs B; README árvore decisão atualizada com paths novos; markdown apenas, zero código novo).
 
 ### Estado dos ajustes 176013/176014 (v23+ retoma)
 - id=176013/176014: `status='EXECUTADO', fase_pipeline='F5e_SEFAZ_OK', picking=321601, invoice=716448, chave_nfe='35260561724241000178550010000945661007164482'`

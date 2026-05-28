@@ -162,10 +162,10 @@ O prompt do subagente (L4) carrega só a **árvore de DECISÃO** (galhos), sem c
 
 > Folhas em `app/odoo/estoque/fluxos/`. Carregadas SOB DEMANDA pelo subagente.
 
-**Escritas (✅)**: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 (v19+)** (escriturar DFe caminho A), **1.2.2 (v19+)** (criar DFe a partir do XML da SAÍDA — caminho B).
-**Pendentes (⬜)**: 1.1.1.1, 1.1.1.2, 1.1.1.3, 1.1.2, 1.1.3, 1.3 (transferência completa), 2.3 (transferir saldo entre códigos).
+**Escritas (✅)**: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 (v19+)** (escriturar DFe caminho A), **1.2.2 (v19+)** (criar DFe a partir do XML da SAÍDA — caminho B), **1.1.1 (v27+ S5)** (faturamento saída pura — composição Skill 8 ATÔMICA L2 5 átomos), **1.3 (v27+ S5)** (transferência completa — composição 1.1.1 + 1.2.x end-to-end).
+**Pendentes (⬜)**: 1.1.1.1, 1.1.1.2, 1.1.1.3, 1.1.2, 1.1.3, 2.3 (transferir saldo entre códigos).
 
-> Galho 1 NF inter-company **parcialmente destravado v19+**: 1.2.1 + 1.2.2 escritos + Skill 7 ABRANGENTE 7 átomos LIVE + Skill 5 `preencher_lotes_picking` LIVE. Galho 1.1 (saída) e 1.3 (saída+entrada compostos) permanecem ⬜ até refator v20+ que extrai Skill 8 ATÔMICA L2 do orchestrator (AP6).
+> Galho 1 NF inter-company **destravado v27+ S5**: galhos 1.1, 1.2 e 1.3 escritos como folhas L3 — 1.2.x v19+ (caminho A/B) + 1.1.1 v27+ S5 (saída pura via Skill 8 ATÔMICA L2 — opt-in `--usar-skill8-atomica-v25` LIVE) + 1.3 v27+ S5 (transferência completa compondo 1.1.1 + 1.2.x). Sub-galhos 1.1.1.x e 1.1.2/1.1.3 documentariam variantes específicas — não modeladas (folha 1.1.1 cobre todas via constants v27+ S4).
 
 ---
 
