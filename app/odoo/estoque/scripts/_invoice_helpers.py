@@ -135,7 +135,7 @@ def _registrar_auditoria(
             erro_msg=erro_msg,
             tempo_execucao_ms=tempo_ms,
             pipeline_etapa=fase,
-            contexto_origem='faturamento_pipeline_v16',
+            contexto_origem='inventario_pipeline_v16',
             contexto_ref=ciclo,
             executado_por=executado_por,
             odoo_id=odoo_id,

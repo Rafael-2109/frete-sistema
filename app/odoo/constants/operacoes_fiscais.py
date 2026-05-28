@@ -360,8 +360,9 @@ def resolver_entrada(tipo_operacao: str, company_origem: int,
 #
 # CR-F8 v15c (CRITICAL Reviewer B conf 95): consolidado aqui para eliminar
 # duplicacao entre `inventario_pipeline_service.py:48-57` e
-# `app/odoo/estoque/orchestrators/faturamento_pipeline.py:84-97`. Ambos
-# importam daqui — fonte unica de verdade.
+# `app/odoo/estoque/orchestrators/inventario_pipeline.py:84-97` (renomeado
+# de faturamento_pipeline em v27+ S3). Ambos importam daqui — fonte unica
+# de verdade.
 #
 # Cada `acao_decidida` mapeia para 1 tupla unica (tipo_op, company_origem,
 # company_destino). Skill 8 orchestrator agrupa por `acao_decidida` (NAO por

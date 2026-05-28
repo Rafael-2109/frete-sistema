@@ -10,7 +10,7 @@ Smoke do dispatch (caminho A vs B) sem hit Odoo real.
 """
 from unittest.mock import MagicMock
 
-from app.odoo.estoque.orchestrators.faturamento_pipeline import (
+from app.odoo.estoque.orchestrators.inventario_pipeline import (
     FaturamentoPipelineExecutor,
 )
 

@@ -1237,7 +1237,8 @@ class StockPickingService:
 
         Usar:
           `FaturamentoPipelineExecutor.executar_fluxo_l3_1_2_x(...)` (v19+ NOVO,
-          em app/odoo/estoque/orchestrators/faturamento_pipeline.py)
+          em app/odoo/estoque/orchestrators/inventario_pipeline.py;
+          renomeado de faturamento_pipeline.py em v27+ S3 — stub compat)
           que internamente compõe Skill 7 ABRANGENTE (7 átomos) + Skill 5
           `preencher_lotes_picking` + Skill 5 `validar`.
 

@@ -10,7 +10,8 @@ description: >-
   Constituicao §6 Tabela 1: Skill 8 = SO SAIDA `account.move`; par da Skill 7
   `escriturando-odoo` (= SO ENTRADA DFe+account.move entrada). Quem une saida +
   entrada = FLUXO L3 1.3-transferencia-completa.md (⬜ a escrever v25+) ou
-  orchestrator C3 `inventario_pipeline` (atual `faturamento_pipeline.py`).
+  orchestrator C3 `inventario_pipeline` (renomeado de `faturamento_pipeline.py`
+  em v27+ S3; stub alias compat preservado).
 
   V24+ AT0MICA LIVE (2026-05-27): 5 atomos componiveis em
   `app/odoo/estoque/scripts/faturamento.py` (~750 LOC, 28 pytest verdes).
@@ -18,10 +19,13 @@ description: >-
   + idempotente intra-Odoo + auto-seguro (G016/G019/G020/G029/G007/G034/D7/D8/
   D9/CRITICAL-1/MED C-1/MED C-2 codificados intra-atomo).
 
-  Orchestrator C3 LEGACY `faturamento_pipeline.py` (~5111 LOC, pipeline A-F +
-  recovery + opt-in --usar-fluxo-l3-v19) ainda existe com ETAPAs C+D inline.
-  Migracao para usar os 5 atomos novos planejada v25+ via opt-in
-  `--usar-skill8-atomica-v25` (canary primeiro, depois remove legacy).
+  Orchestrator C3 LEGACY `inventario_pipeline.py` (renomeado de
+  `faturamento_pipeline.py` em v27+ S3 — stub alias preservado; ~5600 LOC,
+  pipeline A-F + recovery + opt-in --usar-fluxo-l3-v19 + **opt-in
+  --usar-skill8-atomica-v25 LIVE v27+ S1** delegando ETAPAs C+D aos atomos
+  3, 4 e 5 da Skill 8 ATOMICA). Default OFF preserva 100% legacy = zero
+  risco regressao. Canary REAL PROD do opt-in pendente proxima
+  INDUSTRIALIZACAO_FB_LF natural (v26+ cleanup esvaziou candidatos).
 
   Usar atomos diretamente quando o pedido eh: "valida constants invoice X",
   "libera faturamento picking Y", "aguarda invoice do robo CIEL IT", "aplica
@@ -55,8 +59,9 @@ os 5 átomos via opt-in v25+).
 Service ATÔMICA L2: `app/odoo/estoque/scripts/faturamento.py`
 (FaturamentoInvoiceService, ~750 LOC, 28 pytest verdes — espelha pattern
 Skill 7 ABRANGENTE v19+).
-Orchestrator C3 LEGACY: `app/odoo/estoque/orchestrators/faturamento_pipeline.py`
-(FaturamentoPipelineExecutor, ~5111 LOC).
+Orchestrator C3 LEGACY: `app/odoo/estoque/orchestrators/inventario_pipeline.py`
+(renomeado de `faturamento_pipeline.py` em v27+ S3 — stub alias preservado;
+FaturamentoPipelineExecutor, ~5600 LOC).
 Service-fonte legado (COMPAT, NAO MEXER): `app/odoo/services/inventario_pipeline_service.py` (1346 LOC, minerado em §7.2 do planejamento).
 Script-fonte macro (SUPERADO ao final v22+): `scripts/inventario_2026_05/09_executar_onda1_bulk.py` (1866 LOC, minerado em §7.3).
 
@@ -235,7 +240,7 @@ source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate
 set -a; . <(grep -E '^(DATABASE_URL|ODOO_)' \
   /home/rafaelnascimento/projetos/frete_sistema/.env); set +a
 
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --ciclo INVENTARIO_2026_05 \
   --etapas A,B,C,D,E,F \
   --cod-produto 105000007 \
@@ -245,7 +250,7 @@ python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
 # Esperado: DRY_RUN_OK em ~1-2s; etapas_executadas mostra plano por etapa.
 
 # 2. BULK real PROD onda completa (com pre-flight + 2 niveis confirmar)
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --ciclo INVENTARIO_2026_05 \
   --company-origem-id 5 \
   --confirmar \
@@ -258,7 +263,7 @@ python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
 # F=segundos/picking. Onda 100 ajustes: ~50-100h sequencial.
 
 # 3. ETAPA F canary isolada (DEV_FB_LF + TRANSFERIR_FB_CD — PALIATIVO v17.5)
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --ciclo INVENTARIO_2026_05 \
   --etapas F \
   --cod-produto 999999 \
@@ -279,7 +284,7 @@ detector_stagnation parar (operador investiga).
 
 ```bash
 # Loop ate 18 iter (default) ou TUDO_OK ou STAGNATION
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --modo resume \
   --apenas-etapa D \
   --ciclo INVENTARIO_2026_05 \
@@ -308,7 +313,7 @@ python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
 
 # Variante: desligar stagnation detector (operador sabe que D tem timing
 # irregular e quer mais chances)
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --modo resume --apenas-etapa D --ciclo INVENTARIO_2026_05 \
   --sem-stagnation --max-iter 30 \
   --confirmar --confirmar-sefaz
@@ -323,7 +328,7 @@ Substitui `fat_lf_resume_entrada.sh` (E loop 30 iter + F loop 12 iter).
 ```bash
 # ETAPA E: cria RecebimentoLf para PERDA_LF_FB / DEV_LF_FB / DEV_CD_LF / DEV_LF_CD.
 # HIGH-3 RETOMA se status='processando' (anti-RecLf orfao por crash).
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --modo resume --apenas-etapa E \
   --ciclo INVENTARIO_2026_05 \
   --max-iter 30 \
@@ -331,7 +336,7 @@ python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
 
 # ETAPA F: picking entrada manual destino (G023) para INDUSTRIALIZACAO_FB_LF
 # + canary DEV_FB_LF/TRANSFERIR_FB_CD com flag.
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --modo resume --apenas-etapa F \
   --ciclo INVENTARIO_2026_05 \
   --max-iter 12 \
@@ -339,10 +344,10 @@ python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
   --auto-confirma-direcao-nova  # opcional, libera canary
 
 # Combinacao: rodar E ate' OK, depois F:
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --modo resume --apenas-etapa E --ciclo INVENTARIO_2026_05 \
   --max-iter 30 --confirmar && \
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --modo resume --apenas-etapa F --ciclo INVENTARIO_2026_05 \
   --max-iter 12 --confirmar --auto-confirma-direcao-nova
 ```
@@ -366,7 +371,7 @@ company_destino)`:
 **Disparo direto (sessao v20+ canary REAL PROD)**:
 ```python
 # Em PROD via Python (orquestrado por subagente gestor-estoque-odoo)
-from app.odoo.estoque.orchestrators.faturamento_pipeline import (
+from app.odoo.estoque.orchestrators.inventario_pipeline import (
     FaturamentoPipelineExecutor,
 )
 
@@ -435,7 +440,7 @@ zero risco regressao.
 quer ver se ha bloqueios (NCM, barcode, weight) sem disparar SEFAZ.
 
 ```bash
-python -m app.odoo.estoque.orchestrators.faturamento_pipeline \
+python -m app.odoo.estoque.orchestrators.inventario_pipeline \
   --modo pre-flight \
   --ciclo INVENTARIO_2026_05
 
@@ -532,8 +537,9 @@ python .claude/skills/auditando-cadastro-fiscal-odoo/scripts/auditar_cadastro_in
   - **Skill 8 ATOMICA L2** (`faturando-odoo` correto): 5 operacoes sobre
     `account.move` — validar constants + `action_liberar_faturamento` + polling +
     validar fatura vs constants + SEFAZ Playwright.
-  - **`inventario_pipeline` C3** (atual `faturamento_pipeline.py`): orchestrator
-    pipeline A-F + recovery + dispatch fluxo L3 1.2.x.
+  - **`inventario_pipeline` C3** (renomeado de `faturamento_pipeline.py` em
+    v27+ S3 — stub alias compat preservado): orchestrator pipeline A-F +
+    recovery + dispatch fluxo L3 1.2.x + opt-in skill8 atomica v25+ S1.
 - **REFATOR v20+ (S4 desta sessao)**: extrai metodo `executar_skill8_atomica`
   do orchestrator + atualiza §6 Tabela 1 (Skills L2) com nova entry + renomeia
   Tabela 2 entry para `inventario_pipeline`.
@@ -620,4 +626,4 @@ python .claude/skills/auditando-cadastro-fiscal-odoo/scripts/auditar_cadastro_in
 - [ ] CLI wrapper `.claude/skills/faturando-odoo/scripts/faturar.py`
       (entry-point Python wrapping orchestrator com helpers de smoke/canary/resume
       + JSON unico stdout — atualmente invocacao via `python -m
-      app.odoo.estoque.orchestrators.faturamento_pipeline`).
+      app.odoo.estoque.orchestrators.inventario_pipeline`).

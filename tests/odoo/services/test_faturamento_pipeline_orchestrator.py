@@ -25,7 +25,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from sqlalchemy.exc import OperationalError
 
-from app.odoo.estoque.orchestrators.faturamento_pipeline import (
+from app.odoo.estoque.orchestrators.inventario_pipeline import (
     ACAO_PARA_DIRECAO,
     ACOES_PICKING,
     ETAPAS_VALIDAS,
@@ -104,7 +104,7 @@ def test_commit_resilient_retry_ssl_dispose(db):
          patch.object(db.session, 'close') as mclose, \
          patch.object(db.engine, 'dispose') as mdisp, \
          patch(
-             'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+             'app.odoo.estoque.orchestrators.inventario_pipeline.time.sleep'
          ):
         # Patch time.sleep para nao esperar 2s
         assert _commit_resilient() is True
@@ -216,7 +216,7 @@ def test_executar_etapa_b_carrega_status_filter_default(db):
     que CANCELADO eh excluido da carga.
     """
     from app.odoo.models import AjusteEstoqueInventario
-    from app.odoo.estoque.orchestrators.faturamento_pipeline import (
+    from app.odoo.estoque.orchestrators.inventario_pipeline import (
         _carregar_ajustes,
     )
 
@@ -359,7 +359,7 @@ def test_compensatorio_preserva_acao_decidida_origem(db):
 def test_carregar_ajustes_intersecao_vazia_retorna_vazio(db):
     """CR-M1 v15b: company_origem + acoes com intersecao vazia retorna []."""
     from app.odoo.models import AjusteEstoqueInventario
-    from app.odoo.estoque.orchestrators.faturamento_pipeline import (
+    from app.odoo.estoque.orchestrators.inventario_pipeline import (
         _carregar_ajustes,
     )
 
@@ -405,10 +405,10 @@ def test_pre_flight_subskill_parseia_json_ok(tmp_path):
         '"warnings":{}}))'
     )
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         'SUB_SKILL_C5_CLI', str(fake_cli),
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._project_root',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._project_root',
         return_value='/',
     ):
         result = _pre_flight_via_subskill_c5(ciclo='TESTE')
@@ -425,10 +425,10 @@ def test_pre_flight_subskill_stdout_invalido_vira_erro_parse(tmp_path):
         'print("isso nao e JSON")'
     )
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         'SUB_SKILL_C5_CLI', str(fake_cli),
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._project_root',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._project_root',
         return_value='/',
     ):
         result = _pre_flight_via_subskill_c5(ciclo='TESTE')
@@ -440,10 +440,10 @@ def test_pre_flight_subskill_stdout_invalido_vira_erro_parse(tmp_path):
 def test_pre_flight_subskill_cli_ausente_raise():
     """CLI nao encontrado -> FileNotFoundError actionable."""
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         'SUB_SKILL_C5_CLI', 'caminho/inexistente.py',
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._project_root',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._project_root',
         return_value='/',
     ):
         with pytest.raises(FileNotFoundError) as exc_info:
@@ -464,7 +464,7 @@ def test_executar_etapa_a_dry_run_noop():
     ajustes = [_ajuste_mock(ajuste_id=1, acao='RENOMEAR_LOTE')]
     ajustes[0].lote_destino = 'LOT_NOVO'
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=ajustes,
     ):
         res = executor.executar_etapa_a(ciclo='TESTE')
@@ -480,7 +480,7 @@ def test_executar_etapa_a_skip_nenhum_ajuste():
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[],
     ):
         res = executor.executar_etapa_a(ciclo='TESTE')
@@ -516,7 +516,7 @@ def test_executar_etapa_b_dry_run_invoca_atomos_skill5():
         qtd_ajuste=10.0,
     )]
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=ajustes,
     ):
         res = executor.executar_etapa_b(ciclo='TESTE', dry_run=True)
@@ -570,15 +570,15 @@ def test_executar_etapa_b_real_invoca_atomos_skill5():
         qtd_ajuste=10.0,
     )
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[ajuste],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._registrar_auditoria',
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.time.sleep'
     ):
         res = executor.executar_etapa_b(ciclo='TESTE', dry_run=False)
     assert res['status'] == 'EXECUTADO_ETAPA_B'
@@ -600,7 +600,7 @@ def test_executar_etapa_b_skip_nenhum_ajuste():
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[],
     ):
         res = executor.executar_etapa_b(ciclo='TESTE')
@@ -635,7 +635,7 @@ def test_executar_pipeline_bulk_pular_pre_flight_executa_etapas():
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[],  # sem ajustes -> SKIP
     ):
         res = executor.executar_pipeline_bulk(
@@ -658,7 +658,7 @@ def test_etapa_c_v16_dry_run_skip_nenhum_ajuste():
     svc = MagicMock()
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[],
     ):
         res = executor.executar_etapa_c(ciclo='TESTE')
@@ -686,7 +686,7 @@ def test_etapa_c_v16_dry_run_com_ajustes_planeja():
     aj3.picking_id_odoo = 67890  # picking distinto
     aj3.fase_pipeline = 'F5c_LIBERADO'
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj1, aj2, aj3],
     ):
         res = executor.executar_etapa_c(ciclo='TESTE', dry_run=True)
@@ -712,7 +712,7 @@ def test_etapa_c_v16_ajustes_sem_picking_id_sao_pulados():
     aj_anomalo.picking_id_odoo = None  # anomalia
     aj_anomalo.fase_pipeline = 'F5c_LIBERADO'
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj_ok, aj_anomalo],
     ):
         res = executor.executar_etapa_c(ciclo='TESTE', dry_run=True)
@@ -737,27 +737,27 @@ def test_etapa_c_v16_real_resolve_invoice_invoca_sub_etapas():
     aj.fase_pipeline = 'F5c_LIBERADO'
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.safe_session_get',
+        'app.odoo.estoque.orchestrators.inventario_pipeline.safe_session_get',
         return_value=aj,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._registrar_auditoria',
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.garantir_payment_provider',
+        'app.odoo.estoque.orchestrators.inventario_pipeline.garantir_payment_provider',
         return_value=True,
     ) as mock_f5d5, patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.corrigir_price_zero_em_invoice',
+        'app.odoo.estoque.orchestrators.inventario_pipeline.corrigir_price_zero_em_invoice',
         return_value=2,  # 2 linhas corrigidas
     ) as mock_f5d6, patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.garantir_fiscal_setup',
+        'app.odoo.estoque.orchestrators.inventario_pipeline.garantir_fiscal_setup',
         return_value=True,
     ) as mock_f5d7, patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.time.sleep'
     ):
         res = executor.executar_etapa_c(
             ciclo='TESTE', dry_run=False,
@@ -795,20 +795,20 @@ def test_etapa_c_v16_real_timeout_total_marca_pickings():
     aj.fase_pipeline = 'F5c_LIBERADO'
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.safe_session_get',
+        'app.odoo.estoque.orchestrators.inventario_pipeline.safe_session_get',
         return_value=aj,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._registrar_auditoria',
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.time.sleep'
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.time',
+        'app.odoo.estoque.orchestrators.inventario_pipeline.time.time',
         side_effect=[
             0, 0,           # t0 + start_polling
             5, 100,          # check timeout: 5 < 10 (rodada 1), 100 > 10 (sai)
@@ -843,13 +843,13 @@ def test_etapa_c_v16_perfil_invalido_retorna_falha_uso():
     aj.fase_pipeline = 'F5c_LIBERADO'
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.time.sleep'
     ):
         res = executor.executar_etapa_c(
             ciclo='TESTE', dry_run=False,
@@ -974,13 +974,13 @@ def test_executar_etapa_a_v16_real_run_invoca_skill2():
     mock_lot_svc.buscar_por_nome.return_value = 555  # lot_id_origem
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._registrar_auditoria',
     ), patch(
         'app.odoo.estoque.scripts.transfer.StockInternalTransferService',
         return_value=mock_transfer,
@@ -1018,10 +1018,10 @@ def test_executar_etapa_a_v16_skip_ja_transf_ok():
     # _carregar_ajustes ja' filtra fase NULL/TRANSF_PENDENTE; mas o test
     # quer mockar caso fase venha como TRANSF_OK por race (defensive).
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ):
         res = executor.executar_etapa_a(ciclo='TESTE', dry_run=False)
@@ -1051,13 +1051,13 @@ def test_executar_etapa_a_v16_falha_skill2_marca_transf_falha():
     mock_lot_svc.buscar_por_nome.return_value = 777
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._registrar_auditoria',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._registrar_auditoria',
     ), patch(
         'app.odoo.estoque.scripts.transfer.StockInternalTransferService',
         return_value=mock_transfer,
@@ -1217,10 +1217,10 @@ def test_executar_etapa_a_v16_flag_deprecated_noop_funciona():
     aj = _ajuste_mock(ajuste_id=1, acao='RENOMEAR_LOTE')
     aj.lote_destino = 'LOT_NOVO'
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._commit_resilient',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._commit_resilient',
         return_value=True,
     ):
         res = executor.executar_etapa_a(
@@ -1285,17 +1285,17 @@ def test_etapa_b_compensatorio_sem_falhas_vira_auto_corrigido(db):
         'erros': [],
     })
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.time.sleep'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.time.sleep'
     ):
         res = executor.executar_etapa_b(
             ciclo=ciclo_test, dry_run=False,
@@ -1337,14 +1337,14 @@ def test_etapa_b_atomo_skill5_idempotent_done_pula_f5b_f5c():
     })
     aj = _ajuste_mock(ajuste_id=1, cod_produto='C', acao='PERDA_LF_FB')
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline._carregar_ajustes',
+        'app.odoo.estoque.orchestrators.inventario_pipeline._carregar_ajustes',
         return_value=[aj],
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_b(ciclo='TESTE', dry_run=False)
@@ -1422,11 +1422,11 @@ def test_etapa_d_real_run_sucesso_sefaz(db):
             'tentativa': 1,
         },
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_d(
@@ -1482,11 +1482,11 @@ def test_etapa_d_hard_fail_config_aborta_batch(db):
             'tentativas': 0,
         },
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_d(
@@ -1560,11 +1560,11 @@ def test_etapa_d_falha_sefaz_com_cstat(db):
             'ultimo_estado': {'cstat': '225', 'xmotivo': 'Falha no Schema XML'},
         },
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_d(
@@ -1674,7 +1674,7 @@ def test_etapa_e_v175_delega_atomo_skill7_status_criado(db):
         'app.odoo.estoque.scripts.escrituracao.EscrituracaoLfService',
         return_value=mock_skill7,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ):
@@ -1744,7 +1744,7 @@ def test_etapa_e_v175_mapeia_status_idempotent_retomado_parcial(db):
         'app.odoo.estoque.scripts.escrituracao.EscrituracaoLfService',
         return_value=mock_skill7,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ):
@@ -1843,11 +1843,11 @@ def test_etapa_f_real_run_sucesso_atomo(db):
     executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
@@ -1931,7 +1931,7 @@ def test_etapa_f_v175_canary_bloqueado_sem_flag(db):
     executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=svc)
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ):
@@ -1989,11 +1989,11 @@ def test_etapa_f_v175_canary_habilitado_com_flag(db):
     executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_f(
@@ -2049,11 +2049,11 @@ def test_etapa_f_idempotente_done_skip(db):
     executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
@@ -2100,11 +2100,11 @@ def test_etapa_f_idempotent_other_investigacao_manual(db):
     executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
@@ -2141,11 +2141,11 @@ def test_etapa_f_invoice_nao_posted_pula(db):
     executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
@@ -2199,11 +2199,11 @@ def test_etapa_d_critical1_commit_pos_playwright_falha(db):
             'situacao_nf': 'autorizado',
         },
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         side_effect=lambda: commit_calls.pop(0) if commit_calls else True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_d(
@@ -2251,11 +2251,11 @@ def test_etapa_f_critical4_situacao_nf_nao_autorizado_pula(db):
     executor._resolver_pids_em_batch = MagicMock(return_value={'999': 12345})
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_registrar_auditoria',
     ):
         res = executor.executar_etapa_f(ciclo=ciclo_test, dry_run=False)
@@ -3348,7 +3348,7 @@ def test_v25_s1_etapa_c_via_skill8_real_run_invoca_atomos(db):
     }
 
     with patch(
-        'app.odoo.estoque.orchestrators.faturamento_pipeline.'
+        'app.odoo.estoque.orchestrators.inventario_pipeline.'
         '_commit_resilient',
         return_value=True,
     ), patch(

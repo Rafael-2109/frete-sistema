@@ -3,9 +3,10 @@
 5 atomos ABRANGENTES sobre `account.move` (NF de SAIDA inter-company),
 espelhando o pattern da Skill 7 `escrituracao.py` ABRANGENTE v19+ (7 atomos).
 
-Constituicao §6.5 AP6 (v24+ RESOLVIDO): este modulo encapsula as 5 operacoes
-das ETAPAs C+D do orchestrator `faturamento_pipeline.py` (renomeado para
-`inventario_pipeline.py` em v24+):
+Constituicao §6.5 AP6 (v24+ RESOLVIDO PARCIAL + v27+ S3 rename):
+este modulo encapsula as 5 operacoes das ETAPAs C+D do orchestrator
+`inventario_pipeline.py` (renomeado de `faturamento_pipeline.py` em
+v27+ S3; stub alias compat preservado para retrocompatibilidade):
 
   1. validar_invoice_constants     — pre-cond fiscal_position/tipo_pedido/payment_term
   2. liberar_faturamento           — action_liberar_faturamento via Skill 5 LEGACY
@@ -37,7 +38,9 @@ Gotchas codificados (invariantes intra-atomo):
 Spec:
   app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md §6+ (AP6 refator v24+)
   app/odoo/estoque/CLAUDE.md §6 Tabela 1 (Skill 8 ATOMICA L2)
-  app/odoo/estoque/orchestrators/faturamento_pipeline.py (v23+ ETAPAS C+D originais)
+  app/odoo/estoque/orchestrators/inventario_pipeline.py (v23+ ETAPAS C+D
+    originais + v25+ S1 opt-in --usar-skill8-atomica-v25 delegando a este
+    modulo; v27+ S3 renomeado de faturamento_pipeline.py com stub alias)
 """
 from __future__ import annotations
 

@@ -5,8 +5,9 @@ via `RecebimentoLf` + agregacao de lotes + invocacao do service externo
 `RecebimentoLfOdooService` (37 etapas LF->FB).
 
 Substitui logica inline anteriormente em
-`app/odoo/estoque/orchestrators/faturamento_pipeline.executar_etapa_e` (v17 —
-reverted em v17.5 por violar a constituicao §6: `faturando-odoo` = SO SAIDA,
+`app/odoo/estoque/orchestrators/inventario_pipeline.executar_etapa_e`
+(antigo `faturamento_pipeline.py` — renomeado v27+ S3; v17 reverted em
+v17.5 por violar a constituicao §6: `faturando-odoo` = SO SAIDA,
 `escriturando-odoo` = SO ENTRADA; quem une saida + entrada e' o FLUXO L3).
 
 REGRA INVIOLAVEL 94 (v17.5 ARQ-2):
@@ -98,7 +99,7 @@ def _registrar_auditoria(
     """Registra operacao em operacao_odoo_auditoria (contexto escrituracao).
 
     Lazy import de OperacaoOdooAuditoria. Pattern espelhado de
-    `faturamento_pipeline._registrar_auditoria` (contexto_origem='escrituracao_lf'
+    `inventario_pipeline._registrar_auditoria` (contexto_origem='escrituracao_lf'
     distingue da Skill 8). TODO v18: consolidar helper compartilhado em
     `app/odoo/estoque/scripts/_auditoria.py` se um 3o callsite surgir.
     """
@@ -221,7 +222,7 @@ class EscrituracaoLfService:
 
         .. deprecated:: v20+
             Wrapper V1 STRICT mantido para preservar ETAPA E legacy do
-            orchestrator (`faturamento_pipeline.executar_etapa_e`). Sera
+            orchestrator (`inventario_pipeline.executar_etapa_e`). Sera
             removido em v21+ ou v22+ apos canary REAL PROD do FLUXO L3
             1.2.x validar substituicao via `executar_fluxo_l3_1_2_x`
             (compoe os 7 atomos ABRANGENTES `buscar_dfe`, `criar_dfe_a_partir_do_invoice_saida`,
