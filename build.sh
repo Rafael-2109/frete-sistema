@@ -4,6 +4,23 @@
 
 echo "=== INICIANDO DEPLOY NO RENDER ==="
 
+# 0a. Instalar nginx (split agente x sistema — ver start_render.sh + nginx.conf)
+echo "Instalando nginx (proxy reverso interno)..."
+if ! command -v nginx >/dev/null 2>&1; then
+    apt-get update && apt-get install -y nginx \
+        && echo "✅ nginx instalado" \
+        || echo "⚠️ FALHA ao instalar nginx — deploy vai falhar no start"
+else
+    echo "✅ nginx ja instalado"
+fi
+
+# 0b. Validar nginx.conf antes de prosseguir (falha rapida no build vs no start)
+if [ -f "nginx.conf" ]; then
+    nginx -t -c "$(pwd)/nginx.conf" 2>&1 \
+        && echo "✅ nginx.conf valido" \
+        || echo "⚠️ nginx.conf INVALIDO — start vai falhar"
+fi
+
 # 0. Baixar dados de treinamento do Tesseract OCR (para OCR de comprovantes)
 # O wheel tesserocr já inclui a lib C compilada. Falta apenas o por.traineddata.
 # apt-get não funciona no Render, então baixamos direto do GitHub.

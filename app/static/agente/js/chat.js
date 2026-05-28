@@ -4352,9 +4352,13 @@ async function _fetchWithCsrfRetry(url, options = {}) {
         }
     }
 
-    // Sticky session retry (Anthropic Issue #61862)
-    // Worker errado retornou 409 — backoff exponencial + retry ate 6x.
-    const STICKY_MAX_RETRIES = 6;
+    // Sticky session retry (Anthropic Issue #61862) — fallback defensivo.
+    // Apos split nginx + 1 worker agente (2026-05-27 start_render.sh + nginx.conf),
+    // o agente roda em UM unico processo, entao 409 'owned_by_other' nunca deve
+    // ocorrer em condicoes normais. Mantemos 2 retries com backoff curto como
+    // protecao para: (a) rolling deploy (~30s sem dono ate novo worker reivindicar),
+    // (b) flag AGENT_STICKY_SESSION_ENABLED ligada inadvertidamente com >1 worker.
+    const STICKY_MAX_RETRIES = 2;
     let stickyAttempt = 0;
     while (resp.status === 409 && stickyAttempt < STICKY_MAX_RETRIES) {
         try {
@@ -4362,10 +4366,10 @@ async function _fetchWithCsrfRetry(url, options = {}) {
             const body = await cloned.json();
             if (body.error !== 'session_owned_by_other_worker') break;
 
-            const baseDelay = body.retry_after_ms || 200;
-            // Backoff suave: 200, 240, 288, 346, 415, 498 ms — total ~2s worst case
-            const delay = Math.round(baseDelay * Math.pow(1.2, stickyAttempt));
-            console.log(`[STICKY] Worker errado (tentativa ${stickyAttempt + 1}/${STICKY_MAX_RETRIES}), retry em ${delay}ms (owner=${body.owner_hint || '?'})`);
+            const baseDelay = body.retry_after_ms || 500;
+            // Backoff longo para janelas de rolling deploy: 500ms, 1000ms
+            const delay = Math.round(baseDelay * Math.pow(2, stickyAttempt));
+            console.log(`[STICKY] 409 inesperado (tentativa ${stickyAttempt + 1}/${STICKY_MAX_RETRIES}), retry em ${delay}ms (owner=${body.owner_hint || '?'})`);
             await new Promise(r => setTimeout(r, delay));
             resp = await fetch(url, options);
             stickyAttempt += 1;
