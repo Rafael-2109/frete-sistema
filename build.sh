@@ -4,23 +4,8 @@
 
 echo "=== INICIANDO DEPLOY NO RENDER ==="
 
-# 0a. Instalar nginx (proxy reverso interno para split agente x sistema)
-# Ver start_render.sh + nginx.conf + gunicorn_config_*.py.
-echo "Instalando nginx..."
-if ! command -v nginx >/dev/null 2>&1; then
-    apt-get update && apt-get install -y nginx \
-        && echo "✅ nginx instalado" \
-        || echo "⚠️ FALHA ao instalar nginx — deploy vai falhar no start"
-else
-    echo "✅ nginx ja instalado"
-fi
-
-# 0b. Validar nginx.conf antes de prosseguir (falha rapida no build vs no start)
-if [ -f "nginx.conf" ]; then
-    nginx -t -c "$(pwd)/nginx.conf" 2>&1 \
-        && echo "✅ nginx.conf valido" \
-        || echo "⚠️ nginx.conf INVALIDO — start vai falhar"
-fi
+# nginx eh instalado no start_render.sh (Render Python Runtime NAO permite
+# apt-get no build.sh — so no start, igual ao chromium-browser).
 
 # 0. Baixar dados de treinamento do Tesseract OCR (para OCR de comprovantes)
 # O wheel tesserocr já inclui a lib C compilada. Falta apenas o por.traineddata.

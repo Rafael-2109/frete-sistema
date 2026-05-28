@@ -26,6 +26,21 @@ echo "================================================="
 # 1. Setup dependencias (Chrome, Playwright, Claude CLI, UTF-8, DB)
 # ---------------------------------------------------------------------
 
+echo " Verificando nginx (proxy split agente x sistema)..."
+if ! command -v nginx >/dev/null 2>&1; then
+    echo " Instalando nginx via apt..."
+    apt-get update -qq 2>&1 | tail -3
+    apt-get install -y -qq nginx-light 2>&1 | tail -5
+    if command -v nginx >/dev/null 2>&1; then
+        echo " ✅ nginx instalado: $(nginx -v 2>&1)"
+    else
+        echo " ❌ FATAL: nginx nao instalado. Abortando antes de gunicorn."
+        exit 1
+    fi
+else
+    echo " ✅ nginx ja disponivel: $(nginx -v 2>&1)"
+fi
+
 echo " Verificando dependencias do Chrome..."
 if ! ldconfig -p | grep -q libnss3; then
     echo " Instalando dependencias do Chrome/Selenium..."
