@@ -1255,6 +1255,9 @@ def _stream_chat_response(
     # sem NameError mesmo se a excecao ocorrer antes do setup.
     _redis_conn = None
     _pubsub = None
+    # Pre-inicializado (como _redis_conn/_pubsub) para o finally poder checar
+    # thread.is_alive() sem NameError se a excecao ocorrer antes do setup.
+    thread = None
 
     try:
         logger.info("[AGENTE] _stream_chat_response iniciado")
@@ -1557,20 +1560,32 @@ def _stream_chat_response(
         # _save_messages_to_db direto. Em sessao saudavel, thread daemon ja
         # persistiu — esta chamada vai dar skip pela flag _persisted. Em caso
         # raro de daemon falhar antes de salvar, este finally salva de fato.
-        try:
-            _save_messages_dedup(
-                app=app,
-                response_state=response_state,
-                original_message=original_message,
-                user_id=user_id,
-                model=model,
-                source='finally_generator',
-            )
-        except Exception as save_error:
-            logger.error(
-                f"[AGENTE] ERRO ao salvar mensagens no finally do generator: "
-                f"{save_error}",
-                exc_info=True,
+        # Defesa em profundidade: so' persiste se a thread daemon (PRIMARY) ja'
+        # terminou. Se ainda esta viva (cliente desconectou mid-turno), delega
+        # ao primary — que salvara a resposta COMPLETA quando o turno terminar.
+        # Persistir aqui com a thread viva gravaria full_text vazio e marcaria
+        # _persisted=True, bloqueando o primary (race 2026-05-29, sessao Marcus).
+        _thread_alive = thread.is_alive() if thread is not None else False
+        if _should_persist_in_finally(_thread_alive):
+            try:
+                _save_messages_dedup(
+                    app=app,
+                    response_state=response_state,
+                    original_message=original_message,
+                    user_id=user_id,
+                    model=model,
+                    source='finally_generator',
+                )
+            except Exception as save_error:
+                logger.error(
+                    f"[AGENTE] ERRO ao salvar mensagens no finally do generator: "
+                    f"{save_error}",
+                    exc_info=True,
+                )
+        else:
+            logger.info(
+                "[AGENTE] generator finally: thread daemon (primary) ainda ativa "
+                "— persistencia da resposta delegada ao primary (evita race)"
             )
 
         # Garantir cleanup do _stream_context mesmo se thread interna não iniciou
@@ -1589,6 +1604,20 @@ def _stream_chat_response(
                 pass
         except Exception:
             pass
+
+
+def _should_persist_in_finally(thread_alive: bool) -> bool:
+    """Decide se o `finally` do generator (defesa em profundidade) deve persistir.
+
+    O path persistente tem 2 gravacoes: a thread daemon `run_async_stream`
+    (PRIMARY, roda quando o turno completa com `full_text` preenchido) e este
+    `finally` do generator (DEFESA). Se a thread daemon AINDA esta viva, o turno
+    segue processando — persistir aqui gravaria `full_text` vazio e marcaria
+    `_persisted=True`, BLOQUEANDO o primary de salvar a resposta real quando ela
+    ficar pronta (race 2026-05-29, sessao do Marcus). Entao a defesa so' age
+    quando o primary JA terminou (ou nunca foi criado: thread_alive=False).
+    """
+    return not thread_alive
 
 
 def _save_messages_dedup(

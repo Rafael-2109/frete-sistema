@@ -303,6 +303,28 @@ Quando flag `AGENT_ODOO_AUDIT_HOOK=true`:
 Ver `app/odoo/CLAUDE.md` secao P8 para detalhes do hook lado Odoo.
 Migration: `scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}`.
 
+### R10: Persistencia da resposta — PRIMARY (thread daemon) vs DEFESA (generator finally)
+
+No path persistente ha 2 gravacoes da resposta em `agent_sessions.data`:
+- **PRIMARY**: `finally` da thread daemon `run_async_stream` — roda quando o turno
+  COMPLETA, com `full_text` preenchido. E' quem deve salvar a resposta.
+- **DEFESA**: `finally` do generator `_stream_chat_response`
+  (`source='finally_generator'`) — rede de seguranca caso o primary falhe/morra.
+
+**INVARIANTE (`_should_persist_in_finally`, 2026-05-29)**: a DEFESA so' persiste se
+a thread daemon JA terminou (`not thread.is_alive()`). Se a thread ainda processa
+(cliente desconectou mid-turno), a defesa DELEGA ao primary. Persistir na defesa
+com a thread viva gravaria `full_text` vazio e marcaria `_persisted=True`,
+BLOQUEANDO o primary de salvar a resposta real (race que perdia a resposta —
+sessao do Marcus: 6 user / 0 assistant no banco apesar do HOOK:Stop). Como
+`add_user_message`/`add_assistant_message` NAO sao idempotentes, a defesa NAO pode
+rodar em paralelo ao primary.
+
+**Frontend**: ao cair a conexao mid-turno, `startDeferredResponsePoll` (chat.js)
+busca a resposta ja' persistida e a renderiza sem recarga manual (associa a 1a
+`assistant` apos a ultima `user` de mesmo conteudo — robusto porque o primary
+persiste user+assistant atomicamente no mesmo commit).
+
 ---
 
 ## Hierarquia de Timeouts

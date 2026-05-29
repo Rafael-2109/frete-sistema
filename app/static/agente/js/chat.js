@@ -87,6 +87,86 @@ function _isTransientError(data) {
 // Garante que o aviso calmo de "ainda processando" apareca no maximo uma vez por envio.
 let _transientNoticeShown = false;
 
+// ── Polling de resposta diferida (Fase 2, 2026-05-29) ──
+// Quando a conexao SSE cai mid-turno, o backend AINDA conclui e PERSISTE a
+// resposta (fix _should_persist_in_finally em chat.py). Como o stream ja' caiu,
+// buscamos a resposta no historico e a renderizamos sem o usuario recarregar.
+// Robustez: o backend persiste user+assistant ATOMICAMENTE, entao so' tratamos
+// como resposta a 1a 'assistant' que aparece DEPOIS da nossa ultima 'user' com o
+// mesmo conteudo — nunca uma resposta antiga.
+let _deferredPollTimer = null;
+let _deferredPollUserMsg = null;
+const _DEFERRED_POLL_INTERVAL_MS = 6000;
+const _DEFERRED_POLL_MAX_ATTEMPTS = 20;  // ~2 min
+
+function stopDeferredResponsePoll() {
+    if (_deferredPollTimer) {
+        clearTimeout(_deferredPollTimer);
+        _deferredPollTimer = null;
+    }
+    _deferredPollUserMsg = null;
+}
+
+function startDeferredResponsePoll() {
+    // So' faz sentido com sessao + pergunta conhecida.
+    if (!sessionId || !_lastUserMessage) return;
+    // Idempotente: nao reinicia se ja' pollando a mesma pergunta.
+    if (_deferredPollTimer && _deferredPollUserMsg === _lastUserMessage) return;
+    stopDeferredResponsePoll();
+    _deferredPollUserMsg = _lastUserMessage;
+    const sid = sessionId;
+    const umsg = _lastUserMessage;
+    // 1o poll via setTimeout: garante que o finally do stream ja' decrementou
+    // _activeStreamCount e da' tempo do turno concluir no servidor.
+    _deferredPollTimer = setTimeout(
+        () => _pollForDeferredResponse(sid, umsg, _DEFERRED_POLL_MAX_ATTEMPTS),
+        _DEFERRED_POLL_INTERVAL_MS
+    );
+}
+
+async function _pollForDeferredResponse(targetSessionId, userMsg, attemptsLeft) {
+    // Aborta se trocou de sessao, iniciou novo stream, ou esgotou tentativas.
+    if (targetSessionId !== sessionId || _activeStreamCount > 0 || attemptsLeft <= 0) {
+        stopDeferredResponsePoll();
+        return;
+    }
+    try {
+        const response = await fetch(`/agente/api/sessions/${targetSessionId}/messages`, {
+            headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content }
+        });
+        const data = await response.json();
+        // Revalida apos o await (estado pode ter mudado).
+        if (targetSessionId !== sessionId || _activeStreamCount > 0) {
+            stopDeferredResponsePoll();
+            return;
+        }
+        if (data && data.success && Array.isArray(data.messages)) {
+            const msgs = data.messages;
+            // Ultima ocorrencia da nossa pergunta (user) com o mesmo conteudo.
+            let idxUser = -1;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                if (msgs[i].role === 'user' && msgs[i].content === userMsg) { idxUser = i; break; }
+            }
+            // Resposta = 1a 'assistant' apos a nossa pergunta.
+            if (idxUser !== -1) {
+                const resp = msgs.slice(idxUser + 1).find(m => m.role === 'assistant' && m.content);
+                if (resp) {
+                    hideTyping();
+                    addMessage(resp.content, 'assistant');
+                    stopDeferredResponsePoll();
+                    return;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[SSE] poll de resposta diferida falhou (re-tenta):', e);
+    }
+    _deferredPollTimer = setTimeout(
+        () => _pollForDeferredResponse(targetSessionId, userMsg, attemptsLeft - 1),
+        _DEFERRED_POLL_INTERVAL_MS
+    );
+}
+
 // ============================================
 // ELEMENTOS DOM
 // ============================================
@@ -944,6 +1024,7 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
     if (!isAutoRetry) {
         _autoRetryCount = 0;
         _transientNoticeShown = false;
+        stopDeferredResponsePoll();  // novo envio cancela polling de resposta diferida anterior
         // Finding 1 fix (SDK 0.2.87 task_event refator): zera currentTodos entre
         // turnos genuinos para evitar session bleed. O case 'created' do
         // task_event faz merge com currentTodos[] (slice + findIndex+push), entao
@@ -1154,11 +1235,12 @@ async function handleStreamResponse(response) {
                     if (!_transientNoticeShown) {
                         _transientNoticeShown = true;
                         addMessage(
-                            '⏳ A conexão ficou lenta. Sua solicitação pode ainda estar ' +
-                            'sendo processada — aguarde alguns instantes ou reenvie.',
+                            '⏳ A conexão ficou lenta, mas sua solicitação continua sendo ' +
+                            'processada. A resposta aparece aqui assim que ficar pronta.',
                             'assistant'
                         );
                     }
+                    startDeferredResponsePoll();
                     break;
                 }
                 // Outros erros - propaga
@@ -1184,11 +1266,12 @@ async function handleStreamResponse(response) {
                 if (!_transientNoticeShown) {
                     _transientNoticeShown = true;
                     addMessage(
-                        '⏳ A conexão foi interrompida. Sua solicitação pode ainda estar ' +
-                        'sendo finalizada no servidor — aguarde alguns instantes ou reenvie.',
+                        '⏳ A conexão foi interrompida, mas sua solicitação continua sendo ' +
+                        'finalizada no servidor. A resposta aparece aqui assim que ficar pronta.',
                         'assistant'
                     );
                 }
+                startDeferredResponsePoll();
             }
         }
     } finally {
@@ -2372,8 +2455,9 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                 if (isTransient) {
                     if (!_transientNoticeShown) {
                         _transientNoticeShown = true;
-                        addMessage('⏳ A conexão foi interrompida, mas sua solicitação pode ainda estar sendo finalizada no servidor. Aguarde alguns instantes — se a resposta não aparecer, é só reenviar.', 'assistant');
+                        addMessage('⏳ A conexão foi interrompida, mas sua solicitação continua sendo finalizada no servidor. A resposta aparece aqui assim que ficar pronta.', 'assistant');
                     }
+                    startDeferredResponsePoll();
                     break;
                 }
 
