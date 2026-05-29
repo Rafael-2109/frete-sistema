@@ -101,17 +101,17 @@
       "unique": false
     },
     {
-      "name": "idx_chat_messages_content_tsv",
-      "columns": [
-        "content_tsv"
-      ],
-      "unique": false
-    },
-    {
       "name": "idx_chat_messages_sender_time",
       "columns": [
         "sender_user_id",
         "criado_em"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_chat_messages_content_tsv",
+      "columns": [
+        "content_tsv"
       ],
       "unique": false
     }

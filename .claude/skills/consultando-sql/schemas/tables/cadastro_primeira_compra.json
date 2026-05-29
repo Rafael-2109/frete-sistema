@@ -197,9 +197,9 @@
   ],
   "indices": [
     {
-      "name": "ix_cadastro_primeira_compra_odoo_dfe_id",
+      "name": "ix_cadastro_primeira_compra_cnpj_empresa_compradora",
       "columns": [
-        "odoo_dfe_id"
+        "cnpj_empresa_compradora"
       ],
       "unique": false
     },
@@ -211,9 +211,9 @@
       "unique": false
     },
     {
-      "name": "ix_cadastro_primeira_compra_cnpj_empresa_compradora",
+      "name": "ix_cadastro_primeira_compra_odoo_dfe_id",
       "columns": [
-        "cnpj_empresa_compradora"
+        "odoo_dfe_id"
       ],
       "unique": false
     }

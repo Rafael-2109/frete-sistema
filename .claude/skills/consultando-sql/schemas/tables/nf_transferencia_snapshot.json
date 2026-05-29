@@ -147,16 +147,16 @@
       "unique": false
     },
     {
-      "name": "ix_nf_transferencia_snapshot_data_emissao",
+      "name": "ix_nf_transferencia_snapshot_chave_nfe",
       "columns": [
-        "data_emissao"
+        "chave_nfe"
       ],
       "unique": false
     },
     {
-      "name": "ix_nf_transferencia_snapshot_chave_nfe",
+      "name": "ix_nf_transferencia_snapshot_data_emissao",
       "columns": [
-        "chave_nfe"
+        "data_emissao"
       ],
       "unique": false
     },

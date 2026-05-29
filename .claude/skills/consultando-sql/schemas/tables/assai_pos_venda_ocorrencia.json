@@ -56,16 +56,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_pos_venda_ocorrencia_chassi",
+      "name": "ix_assai_pos_venda_ocorrencia_criado_em",
       "columns": [
-        "chassi"
+        "criado_em"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_pos_venda_ocorrencia_criado_em",
+      "name": "ix_assai_pos_venda_ocorrencia_chassi",
       "columns": [
-        "criado_em"
+        "chassi"
       ],
       "unique": false
     },

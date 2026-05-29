@@ -106,17 +106,17 @@
       "unique": true
     },
     {
-      "name": "ix_previnculo_resolvido",
+      "name": "ix_carvia_previnculos_extrato_cotacao_status",
       "columns": [
-        "status",
-        "resolvido_em"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_previnculos_extrato_cotacao_status",
+      "name": "ix_previnculo_resolvido",
       "columns": [
-        "status"
+        "status",
+        "resolvido_em"
       ],
       "unique": false
     },
