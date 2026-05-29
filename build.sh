@@ -483,6 +483,14 @@ echo "CarVia 23b: VIEW pedidos v7 (horario_agendamento + agendamento_confirmado 
 python scripts/migrations/alterar_view_pedidos_union_carvia_v7.py \
     || echo "⚠️ Migration view_pedidos_v7 falhou, continuando deploy..."
 
+# 24. UoM compra VIDRO 200 G (2026-05-28): o De-Para (NADIR) sincronizou MI(181)
+# em product.supplierinfo.product_uom (related -> uom_po_id store), inflando o
+# price_unit dos Pedidos de Compra ~10^6x (PO C2619539: R$ 25,6 bi). Reverte o
+# De-Para -> Units e garante uom_po_id=Units no Odoo (best-effort). Idempotente.
+echo "UoM compra VIDRO 200 G: revert MI -> Units (De-Para + Odoo)..."
+python scripts/migrations/2026_05_28_corrigir_uom_compra_vidro_206200004.py \
+    || echo "⚠️ Migration corrigir_uom_compra_vidro falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
