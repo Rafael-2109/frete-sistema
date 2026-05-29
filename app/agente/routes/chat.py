@@ -1157,7 +1157,8 @@ def _stream_chat_response(
                 )
                 event_queue.put(_sse_event('error', {
                     'message': 'Tempo limite excedido. Tente novamente.',
-                    'timeout': True
+                    'timeout': True,
+                    'error_type': 'timeout'
                 }))
 
         except (Exception, BaseExceptionGroup) as e:
@@ -1367,19 +1368,44 @@ def _stream_chat_response(
                         f"({MAX_STREAM_DURATION_SECONDS}s)"
                     )
                     yield _sse_event('error', {
-                        'message': f'Tempo limite excedido ({MAX_STREAM_DURATION_SECONDS // 60} min)'
+                        'message': f'Tempo limite excedido ({MAX_STREAM_DURATION_SECONDS // 60} min)',
+                        'error_type': 'timeout'
                     })
-                else:
-                    inact_elapsed = INACTIVITY_TIMEOUT_SECONDS
-                    logger.warning(
-                        f"[AGENTE] Inactivity deadline exceeded "
-                        f"({inact_elapsed}s sem eventos reais)"
+                    break
+
+                # Inatividade (deadline renovavel) estourou. So e' "travamento"
+                # real se a thread daemon morreu. Se ela ainda esta VIVA, o turno
+                # CONTINUA processando (ex: transcricao longa, tool demorada que
+                # nao emite eventos intermediarios) — NAO alarmar o usuario com
+                # "travou". Emite estado 'processing' (indicador persistente) e
+                # renova o deadline de inatividade. O teto absoluto
+                # (absolute_deadline) segue protegendo contra loop infinito.
+                # (2026-05-29: falso "travou" na sessao do Marcus.)
+                inact_elapsed = INACTIVITY_TIMEOUT_SECONDS
+                if thread.is_alive():
+                    logger.info(
+                        f"[AGENTE] Inatividade {inact_elapsed}s com thread VIVA — "
+                        "emitindo 'processing' e renovando deadline (turno em andamento)"
                     )
-                    yield _sse_event('error', {
-                        'message': 'O processamento parece ter travado. Tente novamente.',
-                        'sdk_stalled': True,
+                    yield _sse_event('processing', {
+                        'message': 'Ainda processando sua solicitação…',
                         'inactivity_seconds': inact_elapsed
                     })
+                    inactivity_deadline = time.time() + INACTIVITY_TIMEOUT_SECONDS
+                    last_heartbeat = time.time()
+                    continue
+
+                # Thread morta + inatividade = travamento real (transiente)
+                logger.warning(
+                    f"[AGENTE] Inactivity deadline exceeded "
+                    f"({inact_elapsed}s) e thread MORTA — encerrando stream"
+                )
+                yield _sse_event('error', {
+                    'message': 'O processamento foi interrompido. Tente reenviar.',
+                    'sdk_stalled': True,
+                    'error_type': 'thread_died',
+                    'inactivity_seconds': inact_elapsed
+                })
                 break
 
             try:
@@ -1478,7 +1504,8 @@ def _stream_chat_response(
                     logger.warning("[AGENTE] Thread morreu sem sinalizar - forçando fim do stream")
                     yield _sse_event('error', {
                         'message': 'Processamento interrompido inesperadamente. Tente novamente.',
-                        'thread_died': True
+                        'thread_died': True,
+                        'error_type': 'thread_died'
                     })
                     break
 

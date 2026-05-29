@@ -78,6 +78,14 @@ function _streamEnded() {
 let _lastUserMessage = null;
 let _autoRetryCount = 0;
 const _MAX_AUTO_RETRIES = 1;
+// Erros transientes (conexao caiu / worker reciclado / SDK reiniciou mid-stream).
+// NAO sao falha final: viram 1 auto-retry silencioso ou aviso calmo, nunca card ❌.
+const _TRANSIENT_ERROR_TYPES = ['cli_connection_error', 'thread_died', 'process_error'];
+function _isTransientError(data) {
+    return !!data && (_TRANSIENT_ERROR_TYPES.includes(data.error_type) || data.thread_died === true);
+}
+// Garante que o aviso calmo de "ainda processando" apareca no maximo uma vez por envio.
+let _transientNoticeShown = false;
 
 // ============================================
 // ELEMENTOS DOM
@@ -935,6 +943,7 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
     // Reset apenas em envios novos (usuario clicou submit / pressionou Enter).
     if (!isAutoRetry) {
         _autoRetryCount = 0;
+        _transientNoticeShown = false;
         // Finding 1 fix (SDK 0.2.87 task_event refator): zera currentTodos entre
         // turnos genuinos para evitar session bleed. O case 'created' do
         // task_event faz merge com currentTodos[] (slice + findIndex+push), entao
@@ -1141,12 +1150,15 @@ async function handleStreamResponse(response) {
                 // =================================================================
                 if (readError.message === 'Read timeout') {
                     console.error('[SSE] Timeout aguardando dados do servidor (60s)');
-                    addMessage(
-                        '⚠️ **Conexão com o servidor perdida**\n\n' +
-                        'O servidor demorou muito para responder. ' +
-                        'Tente enviar sua mensagem novamente.',
-                        'assistant'
-                    );
+                    // Transiente: nao alarmar com erro vermelho. Aviso calmo unico.
+                    if (!_transientNoticeShown) {
+                        _transientNoticeShown = true;
+                        addMessage(
+                            '⏳ A conexão ficou lenta. Sua solicitação pode ainda estar ' +
+                            'sendo processada — aguarde alguns instantes ou reenvie.',
+                            'assistant'
+                        );
+                    }
                     break;
                 }
                 // Outros erros - propaga
@@ -1166,12 +1178,17 @@ async function handleStreamResponse(response) {
         } else {
             console.error('[SSE] Erro no stream:', error);
 
-            // Mostra erro amigável se não houver mensagem parcial
+            // Conexao caiu mid-stream NAO e' falha final (o backend pode ter
+            // concluido). Aviso CALMO unico se nao houver texto parcial — nunca ❌.
             if (!state.text) {
-                addMessage(
-                    `❌ **Erro de conexão**\n\n${error.message || 'Erro desconhecido'}`,
-                    'assistant'
-                );
+                if (!_transientNoticeShown) {
+                    _transientNoticeShown = true;
+                    addMessage(
+                        '⏳ A conexão foi interrompida. Sua solicitação pode ainda estar ' +
+                        'sendo finalizada no servidor — aguarde alguns instantes ou reenvie.',
+                        'assistant'
+                    );
+                }
             }
         }
     } finally {
@@ -2044,6 +2061,16 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                 showTyping(`⏳ ${data.content || 'Aguardando turno anterior...'}`);
                 break;
 
+            case 'processing':
+                // Backend sinaliza que o turno AINDA esta sendo processado
+                // (thread viva, sem eventos por > inatividade). Mantem indicador
+                // persistente em vez de degradar para "travou"/erro.
+                // (2026-05-29: par do fix de falso "travou" em chat.py.)
+                showTyping(`⏳ ${data.message || 'Ainda processando sua solicitação…'}`);
+                state.lastChunkTime = Date.now();
+                state.lastTextTime = Date.now();
+                break;
+
             case 'text':
                 // FEAT-032: Atualiza timestamp de último texto recebido
                 state.lastTextTime = Date.now();
@@ -2320,26 +2347,33 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                 finalizePendingTimelineItems('error');
                 finalizePendingTodos(false);  // Não marca como completed, apenas para o spinner
 
-                // Auto-retry: se process_error (exit code 1 por inatividade) e temos
-                // a última mensagem, retry transparente em vez de mostrar erro.
-                const isProcessError = data.error_type === 'process_error';
-                if (isProcessError && _lastUserMessage && _autoRetryCount < _MAX_AUTO_RETRIES) {
+                // Erros transientes (process_error / cli_connection_error /
+                // thread_died): conexao caiu ou worker reciclou mid-stream. NAO
+                // sao falha final — tratar como reconexao silenciosa em vez de
+                // despejar card vermelho. (2026-05-29: caso sessao do Marcus.)
+                const isTransient = _isTransientError(data);
+                if (isTransient && _lastUserMessage && _autoRetryCount < _MAX_AUTO_RETRIES) {
                     _autoRetryCount++;
-                    console.log(`[SSE] Process error detected, scheduling auto-retry #${_autoRetryCount}`);
-                    addMessage('🔄 Reconectando sessão...', 'assistant');
+                    console.log(`[SSE] Erro transiente (${data.error_type || 'thread_died'}), auto-retry #${_autoRetryCount}`);
+                    // Indicador efemero (nao polui o historico) — some no proximo evento.
+                    showTyping('🔄 Retomando…');
                     setTimeout(() => {
-                        // Remove a mensagem "Reconectando..." antes de reenviar
-                        const msgs = document.querySelectorAll('.message.assistant');
-                        const lastMsg = msgs[msgs.length - 1];
-                        if (lastMsg && lastMsg.textContent.includes('Reconectando')) {
-                            lastMsg.remove();
-                        }
                         messageInput.value = _lastUserMessage;
                         // Issue 1 review (2026-05-12): isAutoRetry=true preserva
                         // _autoRetryCount; senao seria resetado em sendMessage
-                        // e permitiria N retries em loop com process_error repetido.
+                        // e permitiria N retries em loop com erro transiente repetido.
                         sendMessage(null, { isAutoRetry: true });
                     }, 2000);
+                    break;
+                }
+
+                // Transiente mas sem retry disponivel (cap atingido / sem ultima
+                // msg): aviso CALMO uma unica vez, nunca card vermelho.
+                if (isTransient) {
+                    if (!_transientNoticeShown) {
+                        _transientNoticeShown = true;
+                        addMessage('⏳ A conexão foi interrompida, mas sua solicitação pode ainda estar sendo finalizada no servidor. Aguarde alguns instantes — se a resposta não aparecer, é só reenviar.', 'assistant');
+                    }
                     break;
                 }
 
@@ -2347,9 +2381,17 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                 if (data.session_expired) {
                     console.log('[SSE] Sessão SDK expirada, será criada nova na próxima mensagem');
                     addMessage(`⚠️ A sessão anterior expirou no servidor.\n\n**Mas não se preocupe!** Seu histórico está salvo e a conversa continuará normalmente.`, 'assistant');
-                } else {
-                    addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
+                    break;
                 }
+
+                // Timeout absoluto (tarefa > teto): mensagem calma, sem card vermelho.
+                if (data.error_type === 'timeout') {
+                    addMessage('⏳ Esta solicitação demorou mais que o limite. Se for uma tarefa longa, aguarde a conclusão; caso contrário, tente reenviar.', 'assistant');
+                    break;
+                }
+
+                // Erro FINAL irrecuperavel
+                addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
                 break;
             }
 

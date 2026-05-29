@@ -438,7 +438,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 | `tool_result` | StreamEvent | _sse_event | case | UserMessage.ToolResultBlock |
 | `todos` | StreamEvent | _sse_event | case | ToolResult (TodoWrite) — DEPRECATED SDK <= 0.1.81, mantido back-compat |
 | `task_event` | StreamEvent | _sse_event | case | ToolResult (TaskCreate/TaskUpdate/TaskList) — SDK 0.2.82+ |
-| `error` | StreamEvent | _sse_event | case | API errors, exceptions |
+| `error` | StreamEvent | _sse_event | case | API errors, exceptions. `error_type` ∈ {cli_connection_error, thread_died, timeout, process_error} → frontend classifica transiente (auto-retry/aviso calmo) vs final (card ❌). Ver `_isTransientError` em chat.js (2026-05-29) |
 | `interrupt_ack` | StreamEvent | _sse_event | case | ResultMessage (interrupted) |
 | `task_started` | StreamEvent | _sse_event | case | TaskStartedMessage (subagente) |
 | `task_progress` | StreamEvent | _sse_event | case | TaskProgressMessage (subagente) |
@@ -449,6 +449,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 | `done` | StreamEvent | _sse_event | case | ResultMessage (fim, inclui structured_output) |
 | `start` | — | SSE generator | case | Inicio do SSE stream |
 | `heartbeat` | — | SSE generator | case | Keep-alive 10s |
+| `processing` | — | SSE generator | case | Inatividade com thread VIVA = turno em andamento (NAO "travou"). Renova deadline + indicador persistente (2026-05-29) |
 | `suggestions` | — | pos-stream | case | suggestion_generator |
 | `ask_user_question` | — | AskUserQuestion | case | SDK AskUserQuestion tool |
 | `memory_saved` | — | hooks pos-sessao | case | Memoria salva |
