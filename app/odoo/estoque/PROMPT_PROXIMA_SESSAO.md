@@ -48,7 +48,7 @@ git log --oneline HEAD..origin/main | head -10   # rebase se main avançou
 ### 1.2 Leitura obrigatória em ordem
 
 1. **⭐ `app/odoo/estoque/PROTECAO_PROXIMA_SESSAO.md`** INTEIRO (escudo contra desvios reincidentes — N1-N33 + AR1-AR14 + lições memories; atenção especial a N32 marcada OBSOLETA pós-v28+ S6.b — lição atemporal preservada).
-2. **`app/odoo/estoque/CLAUDE.md`** — §1.1 (1 SKILL = 1 OBJETO) + §3.1 (orchestrator C3 não é skill) + §6 (4 tabelas catálogo — `inventario_pipeline` v28+ S7 tem helper E + stub removido v28+ S6.b) + §6.5 (antipadrões) + §14 (histórico desvios — **D-V28-1 NOVO**: destravamento ETAPA E + remoção stub + lição atemporal) + §15 (9 princípios canônicos).
+2. **`app/odoo/estoque/CLAUDE.md`** — §1.1 (1 SKILL = 1 OBJETO) + §3.1 (orchestrator C3 não é skill) + §6 (4 tabelas catálogo — `inventario_pipeline` v28+ S7 tem helper E + stub removido v28+ S6.b) + §6.5 (antipadrões) + §14 (histórico desvios — **D-V29-1 NOVO**: F1 agregado PARCIAL + F3 audit trail usuario + achado CFOP 5902 cadastral; D-V28-1 destravamento ETAPA E) + §15 (9 princípios canônicos).
 3. **`app/odoo/estoque/ROADMAP_SKILLS.md`** — HANDOFF enxuto (≤80 linhas): estado global + próximo passo + pendências + onde NÃO mexer (S7+S6.b v28+ marcados ✅; v29+ canary REAL).
 4. **Este `PROMPT_PROXIMA_SESSAO.md`** — INTEIRO (§2 contexto + §3 escopo + §4 checklist + §5 riscos).
 5. **`app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md`** §0 — se sessão tocar Skill 8 / orchestrator (regra inviolável 0).
@@ -59,20 +59,21 @@ git log --oneline HEAD..origin/main | head -10   # rebase se main avançou
 10. **`app/odoo/estoque/scripts/faturamento.py`** (v24+) — 5 átomos Skill 8 ATÔMICA L2.
 11. **`.claude/skills/faturando-odoo/SKILL.md`** — fachada (paths apontam para inventario_pipeline).
 12. **`app/odoo/estoque/fluxos/1.1.1-faturamento-saida-pura.md`** + **`1.3-transferencia-completa.md`** — folhas L3 v27+ S5.
-13. **`app/odoo/estoque/orchestrators/inventario_pipeline.py`** (v28+ S7) — funções-chave:
-    - `_executar_etapa_f_via_fluxo_l3` linhas 3450-3662 (template)
-    - `_executar_etapa_e_via_fluxo_l3` linhas 3664-3854 (NOVO v28+ S7)
-    - `executar_etapa_e` linhas 4283-4297 (dispatch v28+ S7)
-    - `executar_fluxo_l3_1_2_x` linha 2789 (assinatura strict)
+13. **`app/odoo/estoque/orchestrators/inventario_pipeline.py`** (v29+ F1+F3; ~6230 LOC — linhas APROXIMADAS, localizar via `grep -n "def <nome>"`):
+    - `executar_fluxo_l3_1_2_x` def ~2769 (assinatura strict + `usuario`/`ciclo`/`ajuste_id_ref` F3 v29+; closure `_passo` audita por passo)
+    - `_executar_etapa_f_via_fluxo_l3` def ~3465 (template — ACOES_ENTRADA_DESTINO_MANUAL)
+    - `_executar_etapa_e_via_fluxo_l3` def ~3682 (v28+ S7 — ACOES_ENTRADA_FB)
+    - `executar_etapa_e` def ~4460 (dispatch v28+ S7)
+    - agregado de status (F1 v29+ `'PARCIAL' in s`) ~5545
 
 ### 1.3 Confirmar baseline pytest
 
 ```bash
 timeout 90 python -m pytest tests/odoo/ --tb=line -q 2>&1 | tail -3
-# Esperado: 681 passed (v28+ S7+S6.b + cleanup DEPRECATED v16 baseline)
+# Esperado: 688 passed (v29+ F1+F3 baseline)
 ```
 
-Se ≠ 681 → investigar regressão antes de prosseguir.
+Se ≠ 688 → investigar regressão antes de prosseguir.
 
 ### 1.4 Validar entendimento com Rafael (opcional mas recomendado)
 
@@ -233,7 +234,7 @@ Esta é a validação FINAL — paridade vs legacy em pipeline end-to-end inter-
 
 **Total estimado removido**: ~1500 LOC orchestrator + ~600 LOC Skill 5 atom DEPRECATED + ~400 LOC Skill 7 wrapper DEPRECATED = **~2500 LOC**.
 
-**Pytest baseline esperado**: 681 → ~675 (testes legacy migrados sem perda de cobertura líquida).
+**Pytest baseline esperado**: 688 → ~682 (testes legacy migrados sem perda de cobertura líquida).
 
 ### O que NÃO entra nesta sessão (escopo declarado fora)
 
@@ -262,7 +263,7 @@ Implementação:
 - [ ] **S6** — Após canary OK: remover ETAPAs C+D+E legacy + migrar 14 testes + flip defaults
 
 Validação:
-- [ ] Pytest baseline ≥ 675 (681 - testes migrados + testes novos)
+- [ ] Pytest baseline ≥ 682 (688 - testes migrados + testes novos)
 - [ ] ≥1 code-reviewer paralelo (S2 canary + S6 cleanup) via Task tool
 - [ ] Atualizações cross-refs: CLAUDE.md §6 + ROADMAP HANDOFF + SKILL.md fachada
 
@@ -316,7 +317,7 @@ source /home/rafaelnascimento/projetos/frete_sistema/.venv/bin/activate
 export PATH="/home/rafaelnascimento/projetos/frete_sistema/.venv/bin:$PATH"
 git commit -m "<tipo>(estoque): <sumário> — v<XX> (YYYY-MM-DD)
 <corpo do commit detalhado>
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 ### 6.4 Validação final
