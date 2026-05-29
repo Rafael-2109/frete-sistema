@@ -346,15 +346,76 @@ def test_resolver_lote_origem_migracao_consolida(service, odoo_mock):
     assert erro is None
 
 
-def test_resolver_lote_origem_p15_05_proxy_vazio(service):
-    """G_proxy_vazio: P-15/05 e None -> retorna lot_id=None (sem lote)."""
-    for nome in (None, 'P-15/05', ''):
+def test_resolver_lote_origem_p15_05_proxy_vazio(service, odoo_mock):
+    """G_proxy_vazio (Opção B 2026-05-29): None/'' SEMPRE sem lote (sinal
+    explicito, sem ler tracking); 'P-15/05' so' sem lote se produto
+    tracking='none'.
+    """
+    # None e '' => sem lote, SEM ler tracking
+    for nome in (None, ''):
         lid, label, erro = service.resolver_lote_origem(
             nome_lote=nome, product_id=27918, company_id=1, location_id=8,
         )
         assert lid is None
         assert label == 'P-15/05(sem-lote)'
         assert erro is None
+    odoo_mock.read.assert_not_called()
+    # 'P-15/05' + produto tracking='none' => sem lote (proxy vazio)
+    odoo_mock.read.return_value = [{'tracking': 'none'}]
+    lid, label, erro = service.resolver_lote_origem(
+        nome_lote='P-15/05', product_id=27918, company_id=1, location_id=8,
+    )
+    assert lid is None
+    assert label == 'P-15/05(sem-lote)'
+    assert erro is None
+
+
+def test_resolver_lote_origem_p15_tracking_lot_busca_real(service, odoo_mock, lot_svc_mock):
+    """Opção B (2026-05-29): 'P-15/05' em produto tracking='lot' = stock.lot REAL.
+
+    Odoo nao mantem saldo sem lote em produto rastreado por lote — entao
+    P-15/05 deve resolver para o lote real (busca via lot_svc). Bug que motivou
+    (incidente 2026-05-28): MODO D criava quant SEM lote que o Odoo zerava
+    (saldo de 17 MOVER evaporava).
+    """
+    odoo_mock.read.return_value = [{'tracking': 'lot'}]
+    lot_svc_mock.buscar_por_nome.return_value = 60291  # lote real 'P-15/05'
+
+    lid, nome, erro = service.resolver_lote_origem(
+        nome_lote='P-15/05', product_id=27918, company_id=1, location_id=8,
+    )
+
+    assert lid == 60291
+    assert nome == 'P-15/05'
+    assert erro is None
+    lot_svc_mock.buscar_por_nome.assert_called_once_with('P-15/05', 27918, 1)
+
+
+def test_resolver_lote_origem_p15_tracking_lot_inexistente_erro(service, odoo_mock, lot_svc_mock):
+    """'P-15/05' tracking='lot' mas lote real nao existe -> erro (nada a tirar)."""
+    odoo_mock.read.return_value = [{'tracking': 'lot'}]
+    lot_svc_mock.buscar_por_nome.return_value = None
+
+    lid, nome, erro = service.resolver_lote_origem(
+        nome_lote='P-15/05', product_id=27918, company_id=1, location_id=8,
+    )
+
+    assert lid is None
+    assert nome == 'P-15/05'
+    assert erro is not None and 'inexistente' in erro
+
+
+def test_resolver_lote_p15_tracking_explicito_evita_read(service, odoo_mock, lot_svc_mock):
+    """Passar tracking= explicito evita o read de product.product (otimizacao loops)."""
+    lot_svc_mock.buscar_por_nome.return_value = 60291
+
+    lid, nome, erro = service.resolver_lote_origem(
+        nome_lote='P-15/05', product_id=27918, company_id=1, location_id=8,
+        tracking='lot',
+    )
+
+    assert lid == 60291
+    odoo_mock.read.assert_not_called()  # tracking explicito -> sem read
 
 
 def test_resolver_lote_origem_lote_inexistente(service, lot_svc_mock):
@@ -402,6 +463,52 @@ def test_resolver_lote_destino_literal_criar_se_faltar(service, lot_svc_mock):
     lot_svc_mock.criar_se_nao_existe.assert_called_once_with(
         'MI 026-001/26', 27918, 1, expiration_date='2027-01-15',
     )
+
+
+def test_resolver_lote_destino_p15_tracking_lot_cria_real(service, odoo_mock, lot_svc_mock):
+    """Opção B (2026-05-29): destino 'P-15/05' tracking='lot' cria/usa stock.lot REAL
+    (em vez de quant sem lote que o Odoo zera). Espelha resolver_lote_origem.
+    """
+    odoo_mock.read.return_value = [{'tracking': 'lot'}]
+    lot_svc_mock.criar_se_nao_existe.return_value = (60291, True)
+
+    lid, nome, criado = service.resolver_lote_destino(
+        nome_lote='P-15/05', product_id=27918, company_id=1, location_id=8,
+        criar_se_faltar=True,
+    )
+
+    assert lid == 60291
+    assert nome == 'P-15/05'
+    assert criado is True
+    lot_svc_mock.criar_se_nao_existe.assert_called_once_with(
+        'P-15/05', 27918, 1, expiration_date=None,
+    )
+
+
+def test_resolver_lote_destino_p15_tracking_none_proxy_vazio(service, odoo_mock, lot_svc_mock):
+    """Destino 'P-15/05' tracking='none' segue proxy de quant sem lote (lot_id=None)."""
+    odoo_mock.read.return_value = [{'tracking': 'none'}]
+
+    lid, nome, criado = service.resolver_lote_destino(
+        nome_lote='P-15/05', product_id=27918, company_id=1, location_id=8,
+    )
+
+    assert lid is None
+    assert nome == 'P-15/05(sem-lote)'
+    assert criado is False
+    lot_svc_mock.criar_se_nao_existe.assert_not_called()
+
+
+def test_resolver_lote_destino_none_vazio_sem_read(service, odoo_mock):
+    """Destino None/'' => sem lote SEM ler tracking (sinal explicito)."""
+    for nome in (None, ''):
+        lid, label, criado = service.resolver_lote_destino(
+            nome_lote=nome, product_id=27918, company_id=1, location_id=8,
+        )
+        assert lid is None
+        assert label == 'P-15/05(sem-lote)'
+        assert criado is False
+    odoo_mock.read.assert_not_called()
 
 
 def test_v2_transferir_entre_lotes_feliz_delega_ajustar_quant(service, odoo_mock):
@@ -1230,13 +1337,16 @@ def test_transferir_loc_e_lote_feliz_lot_id_destino_int(service):
 def test_transferir_loc_e_lote_resolve_lote_destino_p15_05_proxy_sem_lote(
     service, odoo_mock, lot_svc_mock,
 ):
-    """nome_lote_destino='P-15/05' resolve para sem-lote (lot_id_destino=None).
+    """nome_lote_destino='P-15/05' em produto tracking='none' resolve para
+    sem-lote (lot_id_destino=None).
 
-    Pattern resolver_lote_destino — 'P-15/05' é proxy de "quant sem lote".
+    Opção B (2026-05-29): 'P-15/05' só é proxy de "quant sem lote" quando o
+    produto é tracking='none'. Em tracking='lot' seria um stock.lot REAL (ver
+    test_resolver_lote_destino_p15_tracking_lot_cria_real).
     """
-    # MIGRAÇÃO nao existe (necessário para resolver)
-    # P-15/05 resolve direto para sem-lote (sem chamar lot_svc)
+    # MIGRAÇÃO nao existe (necessário para resolver) + produto tracking='none'
     odoo_mock.search.return_value = []
+    odoo_mock.read.return_value = [{'tracking': 'none'}]
     from unittest.mock import patch, MagicMock
     quant_svc = MagicMock()
     quant_svc.ajustar_quant.side_effect = [

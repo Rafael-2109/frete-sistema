@@ -419,17 +419,19 @@ def _executar_positivo_puro(
             )
         )
 
-        # CR-BUG-1 v9: em dry-run, se lote_destino nominal NAO existe ainda
-        # (lot_id_destino=None mas nome != P-15/05/proxy), NAO chamar Skill 1
-        # com lot_id=None — isso simularia ajuste no quant SEM lote (proxy),
-        # nao no lote nominal que sera criado no --confirmar. Retornar plano
-        # explicito DRY_RUN_OK_LOTE_A_CRIAR para nao enganar o operador.
+        # CR-BUG-1 v9 (+ Opção B 2026-05-29): em dry-run, se o lote destino NAO
+        # existe ainda (lot_id_destino=None) E o resolver sinalizou um lote REAL
+        # a criar — NAO chamar Skill 1 com lot_id=None (simularia ajuste no quant
+        # SEM lote, enganando o operador). Usa o `nome_canonico` RETORNADO pelo
+        # resolver: 'P-15/05(sem-lote)' = proxy vazio (segue p/ ajuste sem lote);
+        # qualquer outro nome (incl. 'P-15/05' literal de produto tracking='lot')
+        # = lote real a criar no --confirmar. Retorna DRY_RUN_OK_LOTE_A_CRIAR.
         if (
             dry_run
             and lot_id_destino is None
-            and lote_destino_nome
-            and lote_destino_nome != LOTE_DEFAULT_SEM_NOME
-            and lote_destino_nome.strip() != ''
+            and nome_canonico
+            and nome_canonico != 'P-15/05(sem-lote)'
+            and nome_canonico.strip() != ''
         ):
             return {
                 'sucesso': None,
