@@ -19,7 +19,7 @@
 7. Se sessão for sobre Skill 8 → ler `app/odoo/estoque/PLANEJAMENTO_SKILL8_FATURANDO.md` INTEIRO (regra inviolável 0).
 
 ### Baseline pytest esperado
-- **681 verdes** (tests/odoo/ — v28+ S7+S6.b+CR Finding 2 + cleanup DEPRECATED v16 confirmado em 17.1s. 676 baseline v27+ pós-CR + 5 net v28+ = 7 S7 dispatch helper E mockado − 1 substituído legado SKIP v20+ − 1 cleanup test flag DEPRECATED v16).
+- **688 verdes** (tests/odoo/ — v29+ F1+F3 em 17.3s. 681 baseline v28+ + 7 net v29+ = 4 F1 agregado PARCIAL + 3 F3 audit trail usuario). Histórico: v28+ 681 (676 v27+ + 5 net S7).
 
 ### Estado global (atualizado v18 Fase 0 — 2026-05-26)
 
@@ -46,21 +46,22 @@
 - **Pós-cleanup**: zero candidatos naturais para canary REAL F1-F4 (apenas 177465 AVULSO_FRASCO em F5e_SEFAZ_OK, já idempotente Odoo via cirurgia manual v24+). Canary REAL deferido para próxima INDUSTRIALIZACAO_FB_LF natural do operador.
 - Commit: `701e4885`.
 
-### Próximo passo (v29+) — canary REAL PROD ETAPA E via FLUXO L3 + skill8 atomica (deferido até lote natural)
+### Próximo passo (v30+) — corrigir cadastro CFOP FB→5949 (R3b, fiscal) → desbloquear canary S2
 
-**v28+ S7+S6.b CONCLUÍDAS** (2026-05-28 — commit pendente):
-1. ✅ **S7** — Implementado `_executar_etapa_e_via_fluxo_l3` (~190 LOC, espelha helper F filtrando ACOES_ENTRADA_FB). Destrava 4 ações X→FB/X→LF: PERDA_LF_FB + TRANSFERIR_CD_FB + DEV_LF_FB destino=FB; DEV_CD_LF destino=LF. Dispatch em `executar_etapa_e` substitui early return SKIP_NAO_SUPORTADA_V20_FLUXO_L3 legado por chamada ao helper. Default `usar_fluxo_l3_v19=False` preserva 100% legacy Skill 7 V1 STRICT.
-2. ✅ **6 pytest novos v28+ S7** dispatch mockado: LF destino dry-run + FB destino dry-run (G039 dinâmico mocked) + PERDA_LF_FB real-run + DEV_CD_LF real-run + default OFF preserva legacy + SKIP_NENHUM_AJUSTE. Substituem `test_v20_s3_etapa_e_skip_quando_flag_v19` legado.
-3. ✅ **S6.b** — Stub `app/odoo/estoque/orchestrators/faturamento_pipeline.py` REMOVIDO. Confirmado zero imports Python ativos via grep recursivo (`^from` / `^import` em app/, tests/, scripts/). Pytest 681 verdes SEM stub.
-4. ✅ **Documentação atualizada**: CLAUDE.md §6 Tabela 3 + §11 + §14 D-V28-1 novo; PROTECAO N32 marcada OBSOLETO com lição atemporal preservada; ROADMAP HANDOFF; cross-refs ajustadas; help text CLI `--usar-fluxo-l3-v19`.
-5. ✅ Baseline pytest: 676 → **681 verdes** (+5 net = 6 novos S7 − 1 substituído legado) em 15.62s.
-6. ⚠️ **S2 canary REAL** ainda deferido — aguarda próximo lote natural INDUSTRIALIZACAO_FB_LF (S2.a) ou X→FB natural (S2.b validar helper E).
+**v29+ CONCLUÍDA** (2026-05-29 — commit pendente; histórico v28+ em VALIDACAO):
+1. ✅ **F1 (HIGH)** — agregado `executar_pipeline_bulk` detecta `'PARCIAL' in s`; `EXECUTADO_PARCIAL` das etapas não escapa mais p/ `EXECUTADO_OK`. 4 pytest.
+2. ✅ **F3 (MEDIUM)** — `usuario` propagado ao audit trail do FLUXO L3 via `_passo` (`ajuste_id_ref=ajs[0].id` + guard; `_registrar_auditoria` voltou a `ajuste_id: int` — fix pós code-review: `registro_id` é NOT NULL). 3 pytest.
+3. ✅ **Code-review** (sonnet, background): "SHIP IT — zero findings ≥80%"; nota `registro_id` NOT NULL CORRIGIDA.
+4. ✅ **Auditoria CFOP 5902** (2 subagentes READ): ~10 NFs LF→FB DEV tipo 4 com 5902 (correto 5949). Causa cadastral: Operação 2710 GENÉRICA (partner_ids=[]) vs 2719 (5949) restrita ao CD. Recomendação **R3b** (criar Operação LF→FB 5949 partner_ids=[1]). Decisão+execução fiscal Rafael. Detalhe: `CLAUDE.md §14 D-V29-1`.
+5. ✅ Baseline: 681 → **688 verdes** (+7).
+6. ⛔ **Canary S2 BLOQUEADO**: backlog 2026-05-20 (21/21) já escriturado → duplica; cadastro FB gera 5902 → novo DEV_LF_FB nasce errado. Desbloqueio = correção cadastral R3b.
 
-**v29+ alvo**:
-1. **Canary REAL PROD ETAPA E v28+ S7** quando próximo PERDA_LF_FB / TRANSFERIR_CD_FB / DEV_LF_FB / DEV_CD_LF natural surgir: rodar com `--usar-fluxo-l3-v19 --etapas E --confirmar` validando paridade vs legacy Skill 7 V1 STRICT.
-2. **Canary REAL PROD opt-in skill8 ATOMICA v27+ S1** quando próximo INDUSTRIALIZACAO_FB_LF natural surgir: rodar com `--usar-skill8-atomica-v25 --confirmar --confirmar-sefaz`.
-3. **G039 dinâmico FB destino** — primeira execução real ativará `garantir_purchase_team(uid=42, company_id=1)`. Validar criação OK ou diagnosticar se fallback STATIC é necessário.
-4. **Após canary OK**: remover ETAPAS C+D + E legacy (~1500 LOC total) + flip default `usar_fluxo_l3_v19=True` + `usar_skill8_atomica_v25=True`.
+**v30+ alvo**:
+1. **Correção cadastral CFOP FB→5949** (R3b — Rafael/fiscal cria Operação LF→FB 5949 partner_ids=[1] no Odoo) → desbloqueia canary S2.
+2. **Canary S2** ETAPA E v28+ S7 (após cadastro OK + lote natural X→FB/X→LF) via `--usar-fluxo-l3-v19`.
+3. **Canary S2.a** skill8 ATÔMICA (INDUSTRIALIZACAO_FB_LF natural) via `--usar-skill8-atomica-v25 --confirmar-sefaz`.
+4. **Após canary OK**: S6 cleanup NÍVEL 2 ~2500 LOC + flip defaults.
+5. **Pendência fiscal Rafael**: tratamento das 10 NFs já emitidas com 5902 (SARET/2026/00003-12).
 
 ### Próximo passo (v27+) — opt-in `--usar-skill8-atomica-v25` + rename + expand CONSTANTS FB+CD + folhas L3 (S0 canary REAL deferido) [ARQUIVADO — ver v28+ acima]
 

@@ -356,6 +356,30 @@ app/odoo/estoque/
 
 > Esta seção registra DESVIOS DA DOCUMENTAÇÃO ou DO PRINCÍPIO FUNDADOR que sessões anteriores cometeram. **Cada desvio listado aqui já foi corrigido**, mas permanece registrado para que sessões futuras saibam que o problema foi detectado e tratado — e não o reintroduzam acidentalmente.
 
+### D-V29-1 — Follow-up CR findings F1+F3 + achado CFOP 5902 reincidente (2026-05-29)
+
+**Detectado em**: 2026-05-29 v29+ — follow-up dos 2 CR findings do code-reviewer v28+ (decisão Rafael) + auditoria READ-only do candidato natural de canary.
+
+**F1 (HIGH) ✅ CORRIGIDO — `EXECUTADO_PARCIAL` escapava do agregado de `executar_pipeline_bulk`**:
+- Sintoma: o agregado (`inventario_pipeline.py` ~5545) só detectava `s.startswith('FALHA') or s in STATUS_FALHA`. Os status `EXECUTADO_PARCIAL` / `DRY_RUN_PARCIAL` / `EXECUTADO_PARCIAL_TIMEOUT/_MISTO/_FALHA/_ETAPA_A` (retornados por ETAPAs A/C/D/E/F em onda mista — ex. linhas ~3634 helper F, ~3855 helper E, ~4169-4173 ETAPA C/D) NÃO davam `startswith('FALHA')` nem estavam no tuple → **escapavam** → pipeline reportava `EXECUTADO_OK` mascarando pendências. (Inconsistente: `SKIP_NAO_SUPORTADA_V20` estava no tuple e virava PARCIAL, mas a onda mista — pior caso — escapava.)
+- Fix: adicionar `'PARCIAL' in s` na condição (espelha guard CR-H4 `'PARCIAL' in status_b` ~5327). `SKIP_NAO_SUPORTADA_V20` mantido no tuple (direção não-mapeada = pendência que o operador DEVE ver). 4 pytest novos.
+- Decisão Rafael: "você define, só funcione corretamente os edge cases" → Opção 1 (detectar PARCIAL + manter SKIP; narrowing rejeitado pois mascararia pendência).
+
+**F3 (MEDIUM) ✅ CORRIGIDO — `usuario` órfão nos helpers E/F do FLUXO L3**:
+- Sintoma: `_executar_etapa_e/f_via_fluxo_l3` aceitavam `usuario` mas não o usavam (Pyright unused 3436/3650). O caminho L3 NÃO persistia audit trail (os átomos Skill 7/5 não auditam — retornam dict; só `out['passos']` + log).
+- Fix: `executar_fluxo_l3_1_2_x` ganhou `usuario`+`ciclo`; o closure `_passo` registra `OperacaoOdooAuditoria` por passo com `executado_por=usuario` (frase exata do finding: "propagação via passos do FLUXO L3"); `_registrar_auditoria` aceita `ajuste_id: Optional[int]` (None → segmento 'BATCH' no external_id, espelha `faturamento.py`); helpers E/F propagam `usuario`+`ciclo`. 2 pytest novos.
+- Decisão Rafael: "Propagar usuario ao FLUXO L3".
+
+**Baseline pytest**: 681 → **687 verdes** (+6 = 4 F1 + 2 F3).
+
+**Achado CFOP 5902 (auditoria READ-only — ⚠️ DECISÃO FISCAL PENDENTE Rafael, NÃO corrigido)**: o candidato natural de canary revelou **6 NFs LF→FB DEV_LF_FB (produto tipo 4 acabado) com CFOP de linha 5902** (errado; correto **5949** — `operacoes_fiscais.py:124-126` já documentava como "ERRO CONHECIDO"). **Causa NÃO é bug do nosso código** (pipeline mapeou `fiscal_position 89` + `l10n_br_tipo_pedido=dev-industrializacao` corretos); a engine fiscal CIEL-IT auto-seleciona na LINHA a Operação `l10n_br_operacao_id` **2710 "Retorno de Industrialização - Devolução"** (`intra_cfop=5902`) para destino **FB (partner 1)**, enquanto destino **CD (partner 34)** usa **2719 "Retrabalhos"** (`intra_cfop=5949`). É **cadastro fiscal do destino FB no Odoo**. 2 NFs são de hoje (725475 SARET/2026/00011 + 725798 SARET/2026/00012, ainda `autorizado` sem CC-e); 4 do backlog já têm CC-e. Tratamento das NFs + correção cadastral = decisão fiscal Rafael. **Implicação no roadmap**: canary S2 destino-FB (PERDA_LF_FB/DEV_LF_FB/TRANSFERIR_CD_FB) fica **bloqueado** até a correção cadastral — senão cada novo DEV_LF_FB nasce com 5902. Backlog 2026-05-20 (21/21 invoices) já tem entrada escriturada → ETAPA E sobre ele DUPLICARIA (não serve para canary).
+
+**Investigação CFOP-2 FB→5949 (READ-only, 2026-05-29 — causa cadastral confirmada, decisão fiscal Rafael)**: Operação `l10n_br_ciel_it_account.operacao` **2710 'Retorno de Industrialização - Devolução'** (company LF=5, tipo_pedido='dev-industrializacao', saída, `partner_ids=[]` = **GENÉRICA**) → 5902; a **2719 'Retrabalhos'** (5949) está restrita a `partner_ids=[34]` (CD). A engine CIEL-IT prioriza operação com partner específico sobre a genérica → destino FB (sem operação específica) cai na 2710. Uso total da 2710 = **83 linhas / 10 NFs, TODAS LF→FB tipo 4 do inventário** (SARET/2026/00003-12), zero uso legítimo de 5902 (o 5902 legítimo de insumo tipo 1-3 vive em outras operações: 850/81 da FB + venda-industrializacao fp 111). **Recomendação técnica: R3b — criar Operação LF→FB 5949 com `partner_ids=[1]` espelhando a 2719** (NÃO alterar o CFOP da 2710, que é o fallback GENÉRICO — alterá-la mudaria o comportamento de destinos futuros sem operação própria). R2 (forçar `l10n_br_operacao_id` no pipeline) reusa op semanticamente CD + precisa canary. Incoerência cadastral notada p/ fiscal: 2710 tem tipo_pedido='dev-industrializacao' (tipo 4) mas CFOP 5902 (de insumo tipo 1-3). **Correção cadastral = cadastro fiscal Odoo, FORA das skills-átomos do orquestrador — não executável por conta própria** (invariante: não improvisar XML-RPC fora das skills). As 10 NFs já emitidas (3 canceladas 00003-05, 4 com CC-e 00006-09, 3 autorizadas 00010-12) = pendência fiscal Rafael (NF autorizada com CFOP errado → processo formal; CC-e geralmente não corrige CFOP).
+
+**LIÇÕES ATEMPORAIS**:
+1. Status agregado de orchestrator deve detectar TODAS as variantes de "parcial" (`'PARCIAL' in s`), não só `FALHA*` + tuple — senão onda mista mascara pendências como sucesso.
+2. Em inter-company que toca SEFAZ, o CFOP da linha é decidido pela `l10n_br_operacao_id` (auto-selecionada pela engine CIEL-IT por **partner/destino**), NÃO pela `fiscal_position`. Validar a Operação RESULTANTE por destino ANTES do canary real (cadastro FB tem Operação 2710 errada para produto acabado tipo 4 — gera 5902 em vez de 5949).
+
 ### D-V28-1 — ETAPA E retornava SKIP_NAO_SUPORTADA_V20_FLUXO_L3 quando flag `--usar-fluxo-l3-v19=True` (✅ DESTRAVADO v28+ S7 2026-05-28)
 
 - **Detectado em**: 2026-05-27 v27+ S4 — CR-Finding 2 do code-reviewer holístico (88% conf). Sessão v28+ resolveu.

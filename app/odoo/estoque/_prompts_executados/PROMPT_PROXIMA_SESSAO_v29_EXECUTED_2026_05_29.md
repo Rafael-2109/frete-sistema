@@ -1,13 +1,13 @@
 # PROMPT PRÓXIMA SESSÃO — orquestrador-Odoo
 
-**Esta sessão visa**: v30+ DESBLOQUEAR canary S2 via correção cadastral CFOP FB→5949 (R3b — decisão+execução fiscal Rafael) + canary REAL PROD ETAPA E v28+ S7 (após cadastro OK + lote natural) + canary opt-in `--usar-skill8-atomica-v25` + S6 cleanup (após canary).
-**Base**: commit v29+ F1+F3 — agregado `executar_pipeline_bulk` detecta `'PARCIAL'` + audit trail `usuario` no FLUXO L3 (`ajuste_id_ref`) + 688 pytest verdes. **Canary S2 BLOQUEADO por cadastro CFOP** (ver §2).
-**Risco**: ALTO (canary REAL toca SEFAZ irreversível; CFOP cadastral é fiscal; S6 remove ~2500 LOC legacy só após canary).
-**Estimativa**: 1-3 sessões (depende correção cadastral CFOP + lote natural).
+**Esta sessão visa**: v29+ canary REAL PROD ETAPA E v28+ S7 + canary opt-in `--usar-skill8-atomica-v25` (depende lote natural surgir) + S6 cleanup ETAPAs C+D+E legacy (após canary OK).
+**Base**: commit v28+ S7+S6.b — helper `_executar_etapa_e_via_fluxo_l3` LIVE + stub removido + 681 pytest verdes.
+**Risco**: ALTO (canary REAL toca SEFAZ irreversível; S6 remove ~1500 LOC legacy só após canary).
+**Estimativa**: 1-3 sessões (depende quando lote natural surgir).
 
-> **Criado em**: 2026-05-29 v29+ EXECUTED (sucessor que executou follow-up CR F1+F3 + auditoria CFOP READ; canary S2 deferido por bloqueio cadastral).
+> **Criado em**: 2026-05-28 v28+ S7+S6.b EXECUTED (sucessor do v28+ que executou §3 inteiro do PROMPT anterior).
 > **Audiência**: Claude Code OU agente web na próxima sessão do orquestrador-Odoo.
-> **Predecessores executados**: `_prompts_executados/PROMPT_PROXIMA_SESSAO_v{15a,15b,15c,16,17,17_5,18,19,20,21,22,23,24,25_S0,26_PARTIAL,27,28,29}_EXECUTED_*.md` + `PROMPT_PROXIMA_SESSAO_SKILL2_EXECUTED_*.md`.
+> **Predecessores executados**: `_prompts_executados/PROMPT_PROXIMA_SESSAO_v{15a,15b,15c,16,17,17_5,18,19,20,21,22,23,24,25_S0,26_PARTIAL,27,28}_EXECUTED_*.md` + `PROMPT_PROXIMA_SESSAO_SKILL2_EXECUTED_*.md`.
 
 ---
 
@@ -80,19 +80,12 @@ Antes de codar: spawn AskUserQuestion confirmando escopo §3 + decisões abertas
 
 ---
 
-## §2. CONTEXTO ATUAL (atualizado por sessão v29+ — FINALIZADA — F1+F3 + auditoria CFOP; canary S2 BLOQUEADO por cadastro)
+## §2. CONTEXTO ATUAL (atualizado por sessão v28+ — FINALIZADA — S7+S6.b EXECUTED)
 
 ### Estado do código
-- **Commits base**: v29+ F1+F3 (este commit) sobre v28+ S7+S6.b.
-- **Baseline pytest**: **688 verdes** em ~17.3s (681 v28+ + 7 net v29+ = 4 F1 agregado PARCIAL + 3 F3 audit trail usuario).
-- **Worktree**: `feat/estoque-odoo` (main NÃO rebaseado v29+ — Rafael; main avançou ~10 commits estoque/fiscal — avaliar rebase em §1.1).
-
-### 🔴 CANARY S2 BLOQUEADO — causa cadastral CFOP (decisão+execução FISCAL Rafael — v29+ D-V29-1)
-Auditoria READ (2 subagentes) confirmou: ~10 NFs LF→FB DEV tipo 4 saíram com CFOP **5902** (correto **5949**). **NÃO é bug do código** (pipeline mapeia fp 89 + tipo_pedido certos). Causa: Operação `l10n_br_ciel_it_account.operacao` **2710 'Retorno de Industrialização - Devolução'** é GENÉRICA (`partner_ids=[]`) → 5902; a **2719 'Retrabalhos'** (5949) é restrita ao CD (`partner_ids=[34]`). Engine CIEL-IT prioriza Operação com partner específico → destino FB cai na 2710. **Recomendação R3b: criar Operação LF→FB 5949 com `partner_ids=[1]` espelhando a 2719** (cadastro fiscal Odoo — FORA das skills-átomos; NÃO improvisar XML-RPC). Detalhe: `CLAUDE.md §14 D-V29-1` + PROTECAO SEMPRE-FAZER #11.
-- **Enquanto o cadastro NÃO for corrigido, NÃO rodar canary S2 destino-FB** (PERDA_LF_FB/DEV_LF_FB/TRANSFERIR_CD_FB) — cada NF nasceria com 5902 (SEFAZ irreversível). Destino-LF (DEV_CD_LF) não tem esse bloqueio.
-- Backlog 2026-05-20 (21/21 invoices F5e_SEFAZ_OK) já tem entrada escriturada → ETAPA E DUPLICARIA (inviável p/ canary).
-- 10 NFs já emitidas (SARET/2026/00003-12; 3 cancel, 4 cce, 3 autorizadas) = pendência FISCAL Rafael.
-- **F1+F3 v29+ entregues** (code-review "SHIP IT"): agregado detecta `'PARCIAL'`; `usuario` no audit trail do FLUXO L3 via `_passo`/`ajuste_id_ref` (guard registro_id NOT NULL).
+- **Commits base**: `4e776d82` v28+ S7+S6.b + commit `chore` cleanup deprecated NÍVEL 1 (v28+ pós-S7 — auditoria 4 items DEPRECATED; 2 removidos seguramente).
+- **Baseline pytest**: 681 verdes em 17.14s (676 v27+ pós-CR + 6 net v28+ S7 − 1 substituído legado SKIP − 1 cleanup test do flag DEPRECATED v16 removido = 681).
+- **Worktree**: `feat/estoque-odoo` (main pode ter avançado — rebase em §1.1).
 
 ### Cleanup deprecated v28+ pós-S7 (auditoria preventiva Rafael 2026-05-28)
 
@@ -142,21 +135,15 @@ Detalhes completos: `VALIDACAO_FINAL_SESSAO.md` bloco "Cleanup adicional v28+".
 
 ---
 
-## §3. ESCOPO DESTA SESSÃO (v30+ — desbloquear canary via cadastro CFOP R3b + canary S2 + S6)
+## §3. ESCOPO DESTA SESSÃO (v29+ — canary REAL ETAPA E v28+ S7 + canary skill8 atomica v27+ S1 + cleanup legacy)
 
-> **CONFIRMAR ESCOPO COM RAFAEL via AskUserQuestion ANTES de codar** (§1.4). **PRIMEIRO verificar (READ) se o cadastro CFOP R3b já foi feito.**
+> **CONFIRMAR ESCOPO COM RAFAEL via AskUserQuestion ANTES de codar** (§1.4).
 
 ### Objetivo macro
 
-Desbloquear e executar o canary S2 (ETAPA E v28+ S7 + skill8 atômica v27+ S1) validando paridade vs legacy. **Pré-condição BLOQUEANTE: cadastro CFOP FB→5949 corrigido (R3b)**. Após canary OK, S6 cleanup (~2500 LOC) + flip defaults.
+**Validar paridade vs legacy via canary REAL PROD** dos dois opt-ins coexistentes (`--usar-fluxo-l3-v19` + `--usar-skill8-atomica-v25`) em 1-5 ajustes naturais. Após canary OK, remover ETAPAS C+D+E legacy do orchestrator (~1500 LOC total) + flip default `True` em ambas flags.
 
-### Pré-requisito BLOQUEANTE — correção cadastral CFOP FB→5949 (R3b — FISCAL Rafael)
-- **Quem**: Rafael / equipe fiscal (cadastro Odoo — FORA das skills-átomos; NÃO improvisar XML-RPC — PROTECAO SEMPRE-FAZER #11).
-- **O quê**: criar Operação `l10n_br_ciel_it_account.operacao` na company **LF (5)**, `l10n_br_tipo_pedido='dev-industrializacao'`, saída, **`partner_ids=[1]` (FB)**, `l10n_br_intra_cfop_id`=5949 — espelhando a 2719 (LF→CD).
-- **Como validar (READ — eu/subagente posso)**: após criada, confirmar numa NF DEV_LF_FB nova (dry-run) que a linha sai com `l10n_br_cfop_codigo='5949'` (engine casa a nova operação por partner FB, não a 2710 genérica).
-- Detalhe técnico: `CLAUDE.md §14 D-V29-1`.
-
-**Dependência crítica:** (1) cadastro R3b feito (fiscal) + (2) lote natural surgir. Canary destino-FB depende de AMBOS. Canary destino-LF (DEV_CD_LF) e S2.a (INDUSTRIALIZACAO_FB_LF) **não** dependem do R3b.
+**Dependência crítica:** lote natural surgir. Sem lote, sessão fica em standby (todos os fixes v28+ S7 + v27+ S1 codificados aguardam tráfego natural). Pode rodar S6 cleanup PREVENTIVO APENAS se Rafael autorizar sem canary (risco alto remover ~1500 LOC sem validar paridade).
 
 ### Sub-objetivos (ordem proposta — confirmar com Rafael)
 
@@ -249,8 +236,7 @@ Esta é a validação FINAL — paridade vs legacy em pipeline end-to-end inter-
 Antes de codar:
 - [ ] Setup técnico §1.1 OK (worktree + venv + env + git status limpo)
 - [ ] Leitura §1.2 completa (13 documentos incluindo funções-chave inventario_pipeline.py linhas exatas)
-- [ ] Baseline pytest **688** confirmado
-- [ ] **Verificar (READ) se cadastro CFOP R3b foi feito**: existe Operação LF dev-industrializacao 5949 com `partner_ids` contendo 1 (FB)? Se NÃO → canary destino-FB fica deferido (avisar Rafael)
+- [ ] Baseline pytest 681 confirmado
 - [ ] Cross-check Odoo: estado dos ajustes 176013/14 + 177465 (preservado v23+/v24+/v25+/v26+/v27+/v28+)
 - [ ] Identificar candidatos canary: query `AjusteEstoqueInventario` em F5e_SEFAZ_OK com `acao_decidida in ACOES_ENTRADA_FB` OU `acao_decidida='INDUSTRIALIZACAO_FB_LF'` recém-criados (filtrar `created_at >= '2026-05-28 09:00'`)
 - [ ] AskUserQuestion §1.4 confirmou escopo + ordem prioridade com Rafael
@@ -278,7 +264,6 @@ Documentação:
 
 | Risco | Probabilidade | Impacto | Mitigação |
 |-------|---------------|---------|-----------|
-| **Rodar canary destino-FB ANTES do cadastro CFOP R3b → nova NF com 5902 (SEFAZ irreversível)** | MÉDIA | **ALTO** | **Verificar cadastro R3b ANTES** (PROTECAO SEMPRE-FAZER #11). Destino-FB só após confirmar Operação LF 5949 `partner_ids=[1]`. Destino-LF (DEV_CD_LF) + INDUSTRIALIZACAO_FB_LF livres. |
 | Canary REAL ETAPA E S7 diverge do legacy Skill 7 V1 STRICT | MÉDIA | ALTO | Spawn subagente `gestor-estoque-odoo` em background para canary; compara output legacy (`criar_recebimento_orchestrado`) vs novo (helper E v28+ S7) via log JSON; rollback automático se RecebimentoLf criado divergente. |
 | G039 dinâmico FB destino falha (primeira execução real) | MÉDIA | MÉDIO | Hook `garantir_purchase_team` lazy-cria team idempotente. Fallback silencioso para STATIC do constants caso falhe. Se persistir, Rafael decide STATIC FB caso-a-caso (espelha decisão F4 LF=143). |
 | Canary REAL skill8 ATÔMICA v27+ S1 diverge do legacy | MÉDIA | ALTO | Mesma mitigação S2 — subagente background + log JSON diff + rollback. |

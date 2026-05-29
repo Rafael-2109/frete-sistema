@@ -2782,6 +2782,9 @@ class FaturamentoPipelineExecutor:
         poll_timeout_po_s: int = 1800,
         poll_timeout_invoice_s: int = 300,
         dry_run: bool = True,
+        usuario: str = 'faturamento_pipeline',  # F3 v29+ — audit trail
+        ciclo: str = '',                         # F3 v29+ — contexto_ref
+        ajuste_id_ref: Optional[int] = None,     # F3 v29+ — registro_id auditoria
     ) -> Dict[str, Any]:
         """v19+ ABRANGENTE: executa FLUXO L3 1.2.1 (caminho A) ou 1.2.2 (caminho B).
 
@@ -2837,6 +2840,16 @@ class FaturamentoPipelineExecutor:
             poll_timeout_invoice_s: timeout do polling de criar_invoice_from_po.
             dry_run: True (default) NAO escreve em Odoo; cada atomo dispara
                 em modo dry_run+true.
+            usuario: F3 v29+ — propagado ao audit trail (executado_por) de
+                cada passo do fluxo via `_passo`. Os atomos Skill 7/5 NAO
+                auditam por si (retornam dict); a auditoria do caminho L3
+                vive aqui no orchestrator.
+            ciclo: F3 v29+ — contexto_ref/external_id da auditoria por passo.
+            ajuste_id_ref: F3 v29+ — id de AjusteEstoqueInventario usado como
+                `registro_id` da auditoria por passo (coluna NOT NULL). Os
+                helpers E/F passam `ajs[0].id`. Quando None (uso direto sem
+                helper), a auditoria por passo e' PULADA (evita violar
+                registro_id NOT NULL — o passo ainda entra em out['passos']).
 
         Returns:
             dict com:
@@ -2876,6 +2889,28 @@ class FaturamentoPipelineExecutor:
                 'tempo_ms': resultado.get('tempo_ms'),
                 'erro': resultado.get('erro'),
             })
+            # F3 v29+ (Rafael 2026-05-29): propaga `usuario` ao audit trail
+            # via CADA passo do FLUXO L3 (frase exata do finding F3:
+            # "propagacao via passos do FLUXO L3 1.2.x para audit trail").
+            # Os atomos Skill 7/5 NAO auditam por si — retornam dict; entao
+            # o registro vive aqui no orchestrator. `registro_id` e' coluna
+            # NOT NULL (operacao_odoo_auditoria.registro_id) — por isso so'
+            # registramos quando ha `ajuste_id_ref` (helpers E/F passam
+            # ajs[0].id). `odoo_id=invoice_id_saida` vincula ao account.move.
+            # Falha de auditoria NAO derruba o fluxo (try/except interno).
+            if ajuste_id_ref is not None:
+                _registrar_auditoria(
+                    ajuste_id=ajuste_id_ref,
+                    ciclo=ciclo,
+                    fase=f'FLUXO_L3_{nome}',
+                    acao=nome,
+                    status=resultado.get('status') or 'DESCONHECIDO',
+                    erro_msg=resultado.get('erro'),
+                    odoo_id=invoice_id_saida,
+                    modelo_odoo='account.move',
+                    tempo_ms=resultado.get('tempo_ms'),
+                    executado_por=usuario,
+                )
 
         # ----- Passo 1: buscar_dfe (READ, decide caminho) -----
         # Precisa chave_nfe do invoice_saida — leitura previa
@@ -3580,6 +3615,9 @@ class FaturamentoPipelineExecutor:
                     lotes_data=lotes_data_inv,
                     lote_default=lote_default_inv,
                     dry_run=dry_run,
+                    usuario=usuario,  # F3 v29+: propaga ao audit trail do fluxo
+                    ciclo=ciclo,      # F3 v29+: contexto_ref da auditoria
+                    ajuste_id_ref=ajs[0].id if ajs else None,  # F3 v29+ registro_id
                     **public_constants,
                 )
             except Exception as e:
@@ -3803,6 +3841,9 @@ class FaturamentoPipelineExecutor:
                     lotes_data=lotes_data_inv,
                     lote_default=lote_default_inv,
                     dry_run=dry_run,
+                    usuario=usuario,  # F3 v29+: propaga ao audit trail do fluxo
+                    ciclo=ciclo,      # F3 v29+: contexto_ref da auditoria
+                    ajuste_id_ref=ajs[0].id if ajs else None,  # F3 v29+ registro_id
                     **public_constants,
                 )
             except Exception as e:
@@ -5511,8 +5552,18 @@ class FaturamentoPipelineExecutor:
         status_etapas = [
             r.get('status', '') for r in out['etapas_executadas'].values()
         ]
+        # CR-F1 v29+ (Rafael 2026-05-29): detectar tambem `'PARCIAL' in s`.
+        # Os helpers E/F (e ETAPAs A/C/D) retornam variantes EXECUTADO_PARCIAL*
+        # / DRY_RUN_PARCIAL (onda mista: parte OK + parte nao-mapeada / timeout
+        # / falha — ex. linhas ~3634 helper F, ~3855 helper E, ~4169-4173
+        # ETAPA C/D). Esses NAO dao startswith('FALHA') nem estao em
+        # STATUS_FALHA — ANTES deste fix ESCAPAVAM e o agregado reportava
+        # EXECUTADO_OK mascarando pendencias (onda mista parecia 100% OK).
+        # Espelha o pattern do guard CR-H4 (`'PARCIAL' in status_b`, linha
+        # ~5327). SKIP_NAO_SUPORTADA_V20 permanece no tuple (direcao
+        # nao-mapeada = pendencia que o operador DEVE ver).
         if any(
-            s.startswith('FALHA') or s in STATUS_FALHA
+            s.startswith('FALHA') or 'PARCIAL' in s or s in STATUS_FALHA
             for s in status_etapas
         ):
             out['status'] = (

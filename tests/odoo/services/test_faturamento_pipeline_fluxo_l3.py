@@ -8,7 +8,7 @@ Cobertura mockada (sem DB):
 
 Smoke do dispatch (caminho A vs B) sem hit Odoo real.
 """
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.odoo.estoque.orchestrators.inventario_pipeline import (
     FaturamentoPipelineExecutor,
@@ -240,3 +240,125 @@ def test_fluxo_l3_invoice_sem_chave_nfe_falha():
     assert res['erro'] == 'invoice_saida_sem_chave_nfe'
     # Nenhum passo executado
     assert res['passos'] == []
+
+
+# ============================================================
+# F3 v29+ (2026-05-29) — propagacao de `usuario` ao audit trail via _passo
+# ============================================================
+
+def test_v29_f3_fluxo_l3_propaga_usuario_ao_audit_trail():
+    """F3 v29+ (Rafael 2026-05-29): executar_fluxo_l3_1_2_x propaga `usuario`
+    ao audit trail via _passo (cada passo registra OperacaoOdooAuditoria com
+    executado_por=usuario). Os atomos Skill 7/5 NAO auditam por si — retornam
+    dict; a auditoria do caminho L3 vive no orchestrator. Antes do fix o param
+    `usuario` ficava orfao nos helpers E/F (Pyright unused 3436/3650)."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_chave_nf': '35' + '0' * 42,
+        'state': 'posted',
+    }]
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=MagicMock())
+    original = _patch_buscar_dfe(
+        executor, encontrado=True, dfe_id=4321, status='pendente',
+    )
+    try:
+        with patch(
+            'app.odoo.estoque.orchestrators.inventario_pipeline.'
+            '_registrar_auditoria'
+        ) as mock_aud:
+            res = executor.executar_fluxo_l3_1_2_x(
+                invoice_id_saida=607443,
+                company_destino=5,
+                l10n_br_tipo_pedido_dfe='compra',
+                l10n_br_tipo_pedido_po='serv-industrializacao',
+                team_id=143,
+                payment_term_id=2791,
+                picking_type_id=19,
+                payment_provider_id=38,
+                dry_run=True,
+                usuario='operador_x',
+                ciclo='TEST_F3',
+                ajuste_id_ref=70123,
+            )
+    finally:
+        _restore_escrituracao(original)
+
+    assert res['status'] == 'DRY_RUN_OK'
+    # _passo chamado em cada passo -> auditoria registrada com usuario +
+    # registro_id valido (ajuste_id_ref). registro_id e' NOT NULL no modelo.
+    assert mock_aud.call_count >= 1
+    for c in mock_aud.call_args_list:
+        assert c.kwargs['executado_por'] == 'operador_x'
+        assert c.kwargs['ciclo'] == 'TEST_F3'
+        assert c.kwargs['ajuste_id'] == 70123  # registro_id valido (NOT NULL)
+        assert c.kwargs['odoo_id'] == 607443
+        assert c.kwargs['modelo_odoo'] == 'account.move'
+
+
+def test_v29_f3_fluxo_l3_usuario_default_quando_nao_passado():
+    """F3 v29+: usuario default 'faturamento_pipeline' quando caller nao passa
+    (retrocompat). Auditoria por passo ocorre porque ajuste_id_ref e' valido."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_chave_nf': '35' + '0' * 42, 'state': 'posted',
+    }]
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=MagicMock())
+    original = _patch_buscar_dfe(
+        executor, encontrado=True, dfe_id=4321, status='pendente',
+    )
+    try:
+        with patch(
+            'app.odoo.estoque.orchestrators.inventario_pipeline.'
+            '_registrar_auditoria'
+        ) as mock_aud:
+            executor.executar_fluxo_l3_1_2_x(
+                invoice_id_saida=607443,
+                company_destino=5,
+                l10n_br_tipo_pedido_dfe='compra',
+                l10n_br_tipo_pedido_po='serv-industrializacao',
+                team_id=143, payment_term_id=2791,
+                picking_type_id=19, payment_provider_id=38,
+                dry_run=True,
+                ajuste_id_ref=70123,
+            )
+    finally:
+        _restore_escrituracao(original)
+    assert mock_aud.call_count >= 1
+    assert all(
+        c.kwargs['executado_por'] == 'faturamento_pipeline'
+        for c in mock_aud.call_args_list
+    )
+
+
+def test_v29_f3_fluxo_l3_sem_ajuste_id_ref_nao_audita_guard():
+    """F3 v29+: SEM ajuste_id_ref (uso direto sem helper E/F), a auditoria por
+    passo e' PULADA (guard) — `registro_id` e' NOT NULL no modelo; registrar
+    com None violaria a constraint (absorvida pelo try/except, mas nao
+    persiste). O passo continua rastreado em out['passos']."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_chave_nf': '35' + '0' * 42, 'state': 'posted',
+    }]
+    executor = FaturamentoPipelineExecutor(odoo=odoo, picking_svc=MagicMock())
+    original = _patch_buscar_dfe(
+        executor, encontrado=True, dfe_id=4321, status='pendente',
+    )
+    try:
+        with patch(
+            'app.odoo.estoque.orchestrators.inventario_pipeline.'
+            '_registrar_auditoria'
+        ) as mock_aud:
+            res = executor.executar_fluxo_l3_1_2_x(
+                invoice_id_saida=607443,
+                company_destino=5,
+                l10n_br_tipo_pedido_dfe='compra',
+                l10n_br_tipo_pedido_po='serv-industrializacao',
+                team_id=143, payment_term_id=2791,
+                picking_type_id=19, payment_provider_id=38,
+                dry_run=True,
+                # ajuste_id_ref omitido (default None) -> guard pula auditoria
+            )
+    finally:
+        _restore_escrituracao(original)
+    assert mock_aud.call_count == 0
+    assert len(res['passos']) >= 1

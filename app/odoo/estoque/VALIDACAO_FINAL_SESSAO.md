@@ -2891,3 +2891,35 @@ Auditoria identificou 5 lugares com referências desatualizadas a `faturamento_p
 - `4e776d82` — feat v28+ S7+S6.b (acima)
 - `f3a83987` — chore cleanup deprecated NÍVEL 1 (acima)
 - Próximo (pendente — preparar): docs sweep v28+ (5 arquivos atualizados pós-auditoria Rafael)
+
+---
+
+## Sessão 2026-05-29 v29+ — Follow-up CR F1+F3 + auditoria CFOP 5902 (canary S2 bloqueado por cadastro)
+
+> Escopo (decisão Rafael): "faça 1 (auditar Odoo PROD READ) + 3 (CR findings F1+F3)". Canary S2 (ETAPA E real) NÃO executado — sem candidato seguro. Rebase: NÃO (main avançou 10 commits estoque/fiscal; mantido estável durante sessão de risco SEFAZ). Worktree em `ed7b9223`. Baseline 681 → **688 verdes** (+7 = 4 F1 + 3 F3) em 17.3s.
+
+### F1 (HIGH) ✅ — agregado `executar_pipeline_bulk` deixava EXECUTADO_PARCIAL escapar p/ EXECUTADO_OK
+- Detecção do agregado (`inventario_pipeline.py` ~5545) só `startswith('FALHA') or in STATUS_FALHA`; variantes `EXECUTADO_PARCIAL*`/`DRY_RUN_PARCIAL` (ETAPAs A/C/D/E/F em onda mista) escapavam → pipeline reportava `EXECUTADO_OK` mascarando pendências.
+- Fix: `'PARCIAL' in s` (espelha guard CR-H4 ~5327). `SKIP_NAO_SUPORTADA_V20` mantido no tuple. 4 pytest. Decisão Rafael: "você define, só funcione os edge cases" → Opção 1.
+
+### F3 (MEDIUM) ✅ — `usuario` órfão nos helpers E/F + correção pós code-review
+- `usuario` aceito mas não usado (Pyright unused 3436/3650); caminho L3 não persistia audit trail (átomos Skill 7/5 retornam dict, não auditam).
+- Fix v1: `executar_fluxo_l3_1_2_x` ganha usuario/ciclo; `_passo` registra auditoria. Code-reviewer "SHIP IT" mas notou (b): `registro_id` é NOT NULL → `ajuste_id=None` violaria constraint (absorvida pelo try/except → **NÃO persistia**; teste mockado não pegaria).
+- Fix v2 (correção aplicada nesta sessão): `_passo` recebe `ajuste_id_ref=ajs[0].id` dos helpers E/F + **guard** (pula se None — uso direto sem helper); `_registrar_auditoria` revertido p/ `ajuste_id: int`. Agora persiste de verdade. 3 pytest (inclui guard). Decisão Rafael: "Propagar usuario ao FLUXO L3".
+
+### Code-review F1+F3 (sonnet, background): "SHIP IT — zero findings ≥80%" + 1 nota não-bloqueante (b) registro_id NOT NULL → CORRIGIDA nesta sessão.
+
+### Auditoria CFOP 5902 (2 subagentes READ — decisão fiscal Rafael, NÃO corrigido)
+- **CFOP-1**: candidato natural de canary revelou que o agente faturou NFs LF→FB DEV tipo 4 com CFOP **5902** (correto **5949**). 6 NFs na 1ª passada; CFOP-2 elevou para **~10** (SARET/2026/00003-12). PERDA_LF_FB OK (fp 91→5903). Backlog 2026-05-20: 21/21 invoices já com entrada escriturada → ETAPA E duplicaria (canary inviável). Lote de hoje (FATURAR_LF_FB_2026_05_29, criado por subagente sessão anterior) já completo, com CFOP errado.
+- **CFOP-2** (FB→5949): causa cadastral. Operação `l10n_br_ciel_it_account.operacao` **2710 'Retorno de Industrialização - Devolução'** GENÉRICA (partner_ids=[]) → 5902; **2719 'Retrabalhos'** (5949) restrita ao CD (partner 34). Engine prioriza partner específico; FB sem operação própria cai na 2710. Uso total da 2710 = 83 linhas/10 NFs, todas LF→FB tipo 4 do inventário, zero uso legítimo de 5902.
+- **Recomendação: R3b** (criar Operação LF→FB 5949 partner_ids=[1], espelhando 2719). NÃO alterar a 2710 (fallback genérico). Cadastro fiscal Odoo (fora das skills). Detalhe: CLAUDE.md §14 D-V29-1.
+
+### Decisões Rafael
+- Rebase NÃO · F1 Opção 1 · F3 propagar · CFOP investigar READ (feito) · NFs emitidas → pendência fiscal · fechamento após investigação CFOP.
+
+### Pendências v30+
+1. Correção cadastral CFOP FB→5949 (R3b — fiscal Rafael) → DESBLOQUEIA canary S2.
+2. Canary S2 ETAPA E v28+ S7 (após cadastro OK + lote natural).
+3. Canary S2.a skill8 atômica (INDUSTRIALIZACAO_FB_LF natural).
+4. S6 cleanup NÍVEL 2 ~2500 LOC (após canary).
+5. Tratamento fiscal das 10 NFs já emitidas com 5902.

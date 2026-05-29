@@ -4227,3 +4227,90 @@ def test_v27_h2_pickings_falha_excecao_separado_de_timeout(db):
     assert etapa_c['status'] == 'FALHA_MISTO_TOTAL'
     # Atomo invocado 2x
     assert fake_svc.polling_invoice.call_count == 2
+
+
+# ============================================================
+# F1 v29+ (2026-05-29) — agregado executar_pipeline_bulk nao deixa
+# EXECUTADO_PARCIAL de etapa escapar para EXECUTADO_OK
+# ============================================================
+
+def test_v29_f1_executado_parcial_de_etapa_nao_escapa_agregado():
+    """CR-F1 v29+ (Rafael 2026-05-29): uma ETAPA retornando EXECUTADO_PARCIAL
+    deve fazer o pipeline reportar EXECUTADO_PARCIAL (nao EXECUTADO_OK).
+    ANTES do fix, 'PARCIAL' escapava (so startswith('FALHA') + STATUS_FALHA
+    eram detectados no agregado) -> onda mista (parte OK + parte nao-mapeada)
+    reportava OK mascarando pendencias."""
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, 'executar_etapa_a',
+        return_value={'etapa': 'A', 'status': 'EXECUTADO_PARCIAL'},
+    ):
+        res = executor.executar_pipeline_bulk(
+            ciclo='TEST_F1_PARCIAL',
+            etapas=('A',),
+            dry_run=False,
+            pular_pre_flight=True,
+        )
+    assert res['status'] == 'EXECUTADO_PARCIAL', (
+        f"EXECUTADO_PARCIAL de etapa nao pode escapar p/ EXECUTADO_OK; "
+        f"got {res['status']!r}"
+    )
+
+
+def test_v29_f1_variantes_parcial_timeout_misto_detectadas():
+    """CR-F1 v29+: variantes EXECUTADO_PARCIAL_TIMEOUT/_MISTO/_FALHA/_ETAPA_A
+    (ETAPAs A/C/D) tambem disparam PARCIAL no agregado via `'PARCIAL' in s`."""
+    executor = FaturamentoPipelineExecutor()
+    for status_etapa in (
+        'EXECUTADO_PARCIAL_TIMEOUT',
+        'EXECUTADO_PARCIAL_MISTO',
+        'EXECUTADO_PARCIAL_FALHA',
+        'EXECUTADO_PARCIAL_ETAPA_A',
+    ):
+        with patch.object(
+            executor, 'executar_etapa_a',
+            return_value={'etapa': 'A', 'status': status_etapa},
+        ):
+            res = executor.executar_pipeline_bulk(
+                ciclo='TEST_F1_VARIANTE',
+                etapas=('A',),
+                dry_run=False,
+                pular_pre_flight=True,
+            )
+        assert res['status'] == 'EXECUTADO_PARCIAL', (
+            f'{status_etapa} deveria disparar PARCIAL; got {res["status"]!r}'
+        )
+
+
+def test_v29_f1_dry_run_parcial_propaga():
+    """CR-F1 v29+: em dry-run, etapa parcial -> DRY_RUN_PARCIAL (nao
+    DRY_RUN_OK)."""
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, 'executar_etapa_a',
+        return_value={'etapa': 'A', 'status': 'EXECUTADO_PARCIAL'},
+    ):
+        res = executor.executar_pipeline_bulk(
+            ciclo='TEST_F1_DRY',
+            etapas=('A',),
+            dry_run=True,
+            pular_pre_flight=True,
+        )
+    assert res['status'] == 'DRY_RUN_PARCIAL'
+
+
+def test_v29_f1_etapa_ok_continua_executado_ok_nao_regressao():
+    """CR-F1 v29+ NAO-REGRESSAO: etapa 100% OK continua EXECUTADO_OK
+    (o fix `'PARCIAL' in s` nao deve afetar status OK limpos)."""
+    executor = FaturamentoPipelineExecutor()
+    with patch.object(
+        executor, 'executar_etapa_a',
+        return_value={'etapa': 'A', 'status': 'EXECUTADO_OK'},
+    ):
+        res = executor.executar_pipeline_bulk(
+            ciclo='TEST_F1_OK',
+            etapas=('A',),
+            dry_run=False,
+            pular_pre_flight=True,
+        )
+    assert res['status'] == 'EXECUTADO_OK'
