@@ -142,7 +142,7 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 
 | Flag | Default | Impacto |
 |------|---------|---------|
-| `TEAMS_DEFAULT_MODEL` | `claude-opus-4-7` | Modelo LLM (rollback: `claude-opus-4-6`) |
+| `TEAMS_DEFAULT_MODEL` | `claude-opus-4-8` | Modelo LLM (rollback: `claude-opus-4-7`) |
 | `TEAMS_ASYNC_MODE` | `true` | Async (thread) vs sync |
 | `TEAMS_ASK_USER_TIMEOUT` | `120` | Timeout Adaptive Card (seg) |
 | `INACTIVITY_TIMEOUT` | `300` | Sem chunk por 5 min = timeout (DC-9, sem teto absoluto) — era 240s ate 2026-05-25 |

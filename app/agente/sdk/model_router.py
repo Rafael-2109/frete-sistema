@@ -131,7 +131,7 @@ def select_model(
     Exemplo:
         >>> select_model(
         ...     "vincular pedido C123 na nota 456 pelo odoo",
-        ...     "claude-opus-4-7",
+        ...     "claude-opus-4-8",
         ...     "claude-sonnet-4-6",
         ... )
         ('claude-sonnet-4-6', 'padrao_nf_po')

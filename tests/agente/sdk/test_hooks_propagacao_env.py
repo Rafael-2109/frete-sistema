@@ -19,7 +19,7 @@ def hook_keep_stream_open():
         user_name='rafael',
         tool_failure_counts={},
         get_last_thinking=lambda: '',
-        get_model_name=lambda: 'claude-opus-4-7',
+        get_model_name=lambda: 'claude-opus-4-8',
         set_injected_ids=lambda x: None,
     )
     # build_hooks retorna {'PreToolUse': [HookMatcher(..., hooks=[fn])], ...}

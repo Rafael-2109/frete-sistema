@@ -653,8 +653,8 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
   bloco `<task_management>`. Parser em `client.py:_build_task_event` (Nacom) e
   `agente_lojas/sdk/client.py:_build_task_event_from_result` (Lojas, detecta por regex no output).
 - **Floor**: `mcp>=1.19.0` (fix `CallToolResult` silenciosamente perdido em 0.1.70)
-- **Modelo default**: `claude-opus-4-7` (Opus 4.7, $5/$25 per MTok, adaptive thinking, 1M context)
-- **Rollback rapido**: `AGENT_MODEL=claude-opus-4-6` + `TEAMS_DEFAULT_MODEL=claude-opus-4-6`
+- **Modelo default**: `claude-opus-4-8` (Opus 4.8, $5/$25 per MTok, adaptive thinking, 1M context)
+- **Rollback rapido**: `AGENT_MODEL=claude-opus-4-7` + `TEAMS_DEFAULT_MODEL=claude-opus-4-7` (ou `claude-opus-4-6`)
 - **SessionStore**: `PostgresSessionStore` source-of-truth (Fase B cutover 2026-04-21)
   - Tabela `claude_session_store`, flag `AGENT_SDK_SESSION_STORE_ENABLED` default ON
   - Pool asyncpg LAZY per-worker, min=1/max=3

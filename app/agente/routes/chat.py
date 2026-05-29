@@ -141,7 +141,7 @@ def api_chat():
             )
             if USE_WEB_SMART_MODEL_ROUTING and message:
                 from app.agente.sdk.model_router import select_model, log_routing_decision
-                default_for_router = model or 'claude-opus-4-7'
+                default_for_router = model or 'claude-opus-4-8'
                 # So rebaixa se caller escolheu Opus (ou deixou default)
                 if 'opus' in default_for_router.lower():
                     chosen, reason = select_model(

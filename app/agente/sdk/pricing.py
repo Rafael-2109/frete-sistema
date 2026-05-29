@@ -24,9 +24,10 @@ logger = logging.getLogger('sistema_fretes')
 # Preços por 1M tokens em USD [input_base, output_base].
 # Cache: derivado como base × 1.25 (creation) e base × 0.10 (read).
 MODEL_PRICING: dict[str, tuple[float, float]] = {
-    # Default atual (Opus 4.7, Abr/2026)
-    'claude-opus-4-7': (5.00, 25.00),
+    # Default atual (Opus 4.8, Mai/2026)
+    'claude-opus-4-8': (5.00, 25.00),
     # Legacy mantidos para sessões antigas
+    'claude-opus-4-7': (5.00, 25.00),
     'claude-opus-4-6': (5.00, 25.00),
     'claude-opus-4-5-20251101': (5.00, 25.00),
     'claude-opus-4-1-20250805': (15.00, 75.00),   # Opus 4.1 legacy
@@ -41,7 +42,7 @@ _CACHE_CREATION_MULTIPLIER = 1.25   # cache write: 125% do input base
 _CACHE_READ_MULTIPLIER = 0.10       # cache read: 10% do input base
 
 # Modelo default quando não identificado
-DEFAULT_MODEL = 'claude-opus-4-7'
+DEFAULT_MODEL = 'claude-opus-4-8'
 
 # Sentinela para warnings de modelo desconhecido (log 1x por modelo).
 _warned_models: set[str] = set()
@@ -62,7 +63,7 @@ def calculate_cost_with_cache(
         output_tokens: Tokens de output gerados
         cache_creation_tokens: Tokens escritos no cache (1.25x input price)
         cache_read_tokens: Tokens lidos do cache (0.10x input price)
-        model: Modelo usado. Se None ou desconhecido, usa fallback Opus 4.7.
+        model: Modelo usado. Se None ou desconhecido, usa fallback Opus 4.8.
 
     Returns:
         Custo total em USD, arredondado a 6 casas decimais.
@@ -71,14 +72,14 @@ def calculate_cost_with_cache(
         >>> calculate_cost_with_cache(
         ...     input_tokens=1000, output_tokens=500,
         ...     cache_creation_tokens=200, cache_read_tokens=800,
-        ...     model='claude-opus-4-7'
+        ...     model='claude-opus-4-8'
         ... )
         0.02105  # (1000*$5 + 500*$25 + 200*$5*1.25 + 800*$5*0.10) / 1M
     """
     model_id = model or DEFAULT_MODEL
     prices = MODEL_PRICING.get(model_id)
     if prices is None:
-        # Modelo desconhecido: fallback Opus 4.7, log warning 1x
+        # Modelo desconhecido: fallback Opus 4.8, log warning 1x
         if model_id not in _warned_models:
             logger.warning(
                 f"[pricing] Modelo desconhecido '{model_id}' — "

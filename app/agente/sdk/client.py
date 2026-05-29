@@ -183,7 +183,7 @@ def _alert_cache_miss(
         #   Opus 4.x, Haiku 4.5  -> 4096 tokens
         #   Sonnet 4.x, Haiku 3.x (3 e 3.5) -> 2048 tokens
         # IDs reais: claude-3-haiku-20240307, claude-3-5-haiku-20241022,
-        # claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-7.
+        # claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-8.
         # Match explicito por familia — substring "haiku-3" NAO casa "3-5-haiku".
         is_haiku_3x = ("3-haiku" in model_str) or ("3-5-haiku" in model_str)
         is_sonnet_4x = "sonnet-4" in model_str

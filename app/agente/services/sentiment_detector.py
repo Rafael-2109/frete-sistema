@@ -62,7 +62,7 @@ FRUSTRATION_MARKERS = [
 
 # Instrução injetada quando frustração é detectada.
 # FIX 2026-04-17: usa <system-reminder> (tag oficial Claude) em vez de
-# "[CONTEXTO INTERNO — NAO MENCIONE: ...]" — Opus 4.7 tem defesas fortes
+# "[CONTEXTO INTERNO — NAO MENCIONE: ...]" — Opus 4.7+ tem defesas fortes
 # contra prompt injection e estava sinalizando o formato antigo como
 # ataque (falso positivo — era instrucao legitima do sistema).
 FRUSTRATION_INSTRUCTION = (

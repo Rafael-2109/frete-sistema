@@ -12,8 +12,8 @@ import os
 # ====================================================================
 
 # Extended context window (1M tokens)
-# Opus 4.7/4.6 e Sonnet 4.6: 1M tokens NATIVO (sem beta header necessário)
-# Opus 4.7: 1M ao preço padrão $5/$25 per MTok, sem long-context premium
+# Opus 4.8/4.7/4.6 e Sonnet 4.6: 1M tokens NATIVO (sem beta header necessário)
+# Opus 4.8/4.7: 1M ao preço padrão $5/$25 per MTok, sem long-context premium
 # Sonnet 4.5/4.0: precisam de beta header "context-1m-2025-08-07"
 # Flag mantida apenas para documentação — modelos atuais usam 1M automaticamente
 USE_EXTENDED_CONTEXT = os.getenv("AGENT_EXTENDED_CONTEXT", "false").lower() == "true"
@@ -316,13 +316,14 @@ if AGENTE_PDF_STRATEGY not in _VALID_PDF_STRATEGIES:
 # ====================================================================
 
 # Modelo padrao para o bot do Teams.
-# Opus 4.7 (16/04/2026): mesmo preco que 4.6 ($5/$25 per 1M tokens), novo tokenizer
-#   (0-35% mais tokens por texto), stricter effort calibration, comportamento mais
-#   literal, tende a spawnar menos subagentes e usar menos tools por default.
+# Opus 4.8 (28/05/2026): mesma superficie de API que 4.7 (sem breaking change),
+#   mesmo preco $5/$25 per 1M tokens, narrativa mais detalhada, mais deliberado.
+# Opus 4.7 (16/04/2026): novo tokenizer (0-35% mais tokens por texto), stricter
+#   effort calibration, comportamento mais literal.
 # Opus 4.6 (legado): ~91s por resposta com tools.
 # Sonnet 4.6: ~15-25s por resposta com tools, custo $3/$15 per 1M tokens.
-# Rollback instantaneo: TEAMS_DEFAULT_MODEL=claude-opus-4-6
-TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-7")
+# Rollback instantaneo: TEAMS_DEFAULT_MODEL=claude-opus-4-7 (ou =claude-opus-4-6)
+TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-8")
 
 # Modo assincrono para o bot do Teams
 # Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling
