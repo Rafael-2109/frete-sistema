@@ -582,7 +582,12 @@ class ProdutoFornecedorDepara(db.Model):
     um_fornecedor = db.Column(db.String(20), nullable=True)  # det_prod_ucom (ML, MI, MIL)
     um_interna = db.Column(db.String(20), default='UNITS')   # product_uom
     fator_conversao = db.Column(db.Numeric(10, 4), default=1.0000)  # 1000 para Milhar
-    odoo_product_uom_id = db.Column(db.Integer, nullable=True)  # ID da UoM em uom.uom do Odoo
+    # DEPRECADO (2026-05-29): NAO usar. Gravar este ID em supplierinfo.product_uom
+    # (related de product_tmpl_id.uom_po_id, store) ALTERAVA a UoM de compra do
+    # produto inteiro e inflava o price_unit dos Pedidos de Compra. A conversao da
+    # unidade do fornecedor e' feita por fator_un (Odoo) + fator_conversao (validacao).
+    # Coluna mantida por compatibilidade; remover em migration futura.
+    odoo_product_uom_id = db.Column(db.Integer, nullable=True)  # DEPRECADO — ver nota acima
 
     # Controle
     ativo = db.Column(db.Boolean, default=True)

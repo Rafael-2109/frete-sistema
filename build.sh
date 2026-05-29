@@ -491,6 +491,13 @@ echo "UoM compra VIDRO 200 G: revert MI -> Units (De-Para + Odoo)..."
 python scripts/migrations/2026_05_28_corrigir_uom_compra_vidro_206200004.py \
     || echo "⚠️ Migration corrigir_uom_compra_vidro falhou, continuando deploy..."
 
+# 25. Deprecar odoo_product_uom_id no De-Para (2026-05-29): apos o fix de codigo
+# (DeparaService nao grava mais product_uom no supplierinfo), zera o campo obsoleto
+# em todos os De-Paras p/ nenhum fluxo legado reescrever uom_po_id. Idempotente.
+echo "De-Para: deprecar odoo_product_uom_id (zerar campo obsoleto)..."
+python scripts/migrations/2026_05_29_deprecar_odoo_product_uom_id_depara.py \
+    || echo "⚠️ Migration deprecar_odoo_product_uom_id falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
