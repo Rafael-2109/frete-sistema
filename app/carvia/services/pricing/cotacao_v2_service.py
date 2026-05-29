@@ -205,13 +205,11 @@ class CotacaoV2Service:
         if not uf_entrega:
             return None, 'UF de destino nao definida.'
 
-        # Determinar peso e valor para calculo
-        if cotacao.tipo_material == 'MOTO':
-            peso = cotacao.peso_total_motos
-            valor = float(cotacao.valor_mercadoria or 0)
-        else:
-            peso = float(cotacao.peso_cubado or cotacao.peso or 0)
-            valor = float(cotacao.valor_mercadoria or 0)
+        # Determinar peso e valor para calculo. Peso via acessor canonico:
+        # MOTO -> peso_total_motos (property); CARGA_GERAL -> peso_cubado ou
+        # peso bruto. (Ver CarviaCotacao.peso_para_cotacao.)
+        peso = cotacao.peso_para_cotacao
+        valor = float(cotacao.valor_mercadoria or 0)
 
         if peso <= 0:
             return None, 'Peso nao definido. Preencha peso ou adicione motos.'

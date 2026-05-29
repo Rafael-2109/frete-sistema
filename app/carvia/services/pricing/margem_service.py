@@ -68,9 +68,9 @@ class MargemService:
             if not destino or not destino.fisico_cidade or not destino.fisico_uf:
                 return 0.0
 
-            peso = float(cotacao.peso_cubado or cotacao.peso or 0)
-            if cotacao.tipo_material == 'MOTO':
-                peso = cotacao.peso_total_motos
+            # Peso via acessor canonico (MOTO -> peso_total_motos;
+            # CARGA_GERAL -> peso_cubado ou peso bruto).
+            peso = cotacao.peso_para_cotacao
 
             resultado = svc.cotar_todas_opcoes(
                 cidade_destino=destino.fisico_cidade,
