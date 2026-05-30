@@ -15,7 +15,7 @@ source .venv/bin/activate
 
 ## 1. consultando_status_entrega.py
 
-**Proposito:** Consulta status de entregas monitoradas (tabela `monitoramento_entregas`). Suporta filtros por NF, cliente, CNPJ, transportadora, status e periodo.
+**Proposito:** Consulta status de entregas monitoradas (tabela `entregas_monitoradas`). Suporta filtros por NF, cliente, CNPJ, transportadora, status e periodo.
 
 ```bash
 source .venv/bin/activate && \

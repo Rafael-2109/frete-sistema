@@ -114,3 +114,19 @@ Output: JSON imprimido em stdout com secoes `moto`, `pedido`,
 
 Quando chassi nao existe: `{"encontrado": false, "motivo": "chassi nao cadastrado"}`
 Quando fora do escopo: `{"encontrado": true, "access_denied": true, "motivo": "chassi pertence a outra loja"}`
+
+---
+
+## Tipos de evento (`eventos[].tipo`)
+
+Fonte de verdade: `app/hora/services/estoque_service.py`.
+
+- **Em estoque** (`EVENTOS_EM_ESTOQUE`): RECEBIDA, CONFERIDA, TRANSFERIDA,
+  CANCELADA (transferencia cancelada), AVARIADA, FALTANDO_PECA,
+  EMPRESTIMO_ENTRADA, RESSARCIMENTO_SAIDA.
+- **Fora do estoque** (`EVENTOS_FORA_ESTOQUE`): RESERVADA, VENDIDA, DEVOLVIDA,
+  NF_EMITIDA, NF_CANCELADA, EMPRESTIMO_SAIDA, RESSARCIMENTO_ENTRADA.
+- **Em transito**: EM_TRANSITO (limbo — moto entre lojas).
+
+O `estado_atual` deriva do ULTIMO evento. Eventos mais novos podem aparecer no
+estado bruto (ex: "avariada", "em_transito") — sao validos e intermediarios.

@@ -198,7 +198,7 @@ for validacao in validacoes_sem_po:
             validacao.status = 'finalizado_odoo'
 ```
 
-### Verificacao de invoice_status (NOVO - Jan/2026)
+### Verificacao de invoice_status
 
 Quando o vinculo e via `PO.dfe_id` (Caminho 3), verificamos `PO.invoice_status`:
 
@@ -213,7 +213,7 @@ Quando o vinculo e via `PO.dfe_id` (Caminho 3), verificamos `PO.invoice_status`:
 - Antes da correcao, essas NFs ficavam com `status='aprovado'` permitindo acoes indevidas
 - Exemplo real: NF 150602 / PO C2512302 vinculado ha 20h, mas status era `aprovado`
 
-### Atualizacao de PedidoCompras.dfe_id (NOVO - Jan/2026)
+### Atualizacao de PedidoCompras.dfe_id
 
 Quando um vinculo PO <-> DFE e detectado, o job agora tambem atualiza a tabela `pedido_compras`:
 
@@ -337,4 +337,4 @@ Campos frequentemente confundidos no modelo `l10n_br_ciel_it_account.dfe`:
 - `descobrindo-odoo-estrutura` - Para explorar campos Odoo desconhecidos
 - `executando-odoo-financeiro` - Para operacoes financeiras (pagamentos, reconciliacao)
 - `conciliando-odoo-po` - Para split/consolidacao de POs (Fase 3)
-- `recebimento-fisico` - Para recebimento fisico (Fase 4)
+- `recebimento-fisico-odoo` - Para recebimento fisico (Fase 4)

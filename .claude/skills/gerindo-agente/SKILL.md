@@ -147,7 +147,6 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `MEMORY_SEMANTIC_SEARCH` | true | Busca semantica memorias |
 | `MEMORY_KNOWLEDGE_GRAPH` | true | Knowledge graph |
 | `SESSION_SEMANTIC_SEARCH` | true | Busca semantica sessoes |
-| `MEMORY_SEMANTIC_SEARCH` | true | Busca semantica memorias |
 | `AGENT_BEHAVIORAL_PROFILE` | true | Gera user.xml (Tier 1) com perfil comportamental |
 | `AGENT_BEHAVIORAL_PROFILE_THRESHOLD` | 5 | Threshold de sessoes para geracao de perfil |
 | `USE_FRICTION_ANALYSIS` | true | Analise de friccao (5 sinais) |
