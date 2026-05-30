@@ -23,8 +23,8 @@ de auditoria (`auditando-sped-contabil`, `comparando-sped-ground-truth`,
 ```bash
 source .venv/bin/activate
 python .claude/skills/parseando-sped-ecd/scripts/parse_sped.py \
-    /home/rafaelnascimento/SPED_ECD_NACOM_GOYA_01072024_31122024_V21_3COMPANIES.txt \
-    /tmp/sped-parsed-v21.json
+    /home/rafaelnascimento/SPED_ECD_NACOM_GOYA_01072024_31122024_V36_3COMPANIES.txt \
+    /tmp/sped-parsed-v36.json
 ```
 
 Output: JSON com `metadata` (total_lines, stats por registro) + `registros`
@@ -37,7 +37,7 @@ Output: JSON com `metadata` (total_lines, stats por registro) + `registros`
   "metadata": {
     "total_lines": 73891,
     "encoding": "latin-1",
-    "path": "/home/.../SPED_V21.txt",
+    "path": "/home/.../SPED_V36.txt",
     "stats": {"0000": 1, "I050": 1234, "I250": 60123, ...}
   },
   "registros": {
