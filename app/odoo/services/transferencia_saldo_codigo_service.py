@@ -200,7 +200,12 @@ class TransferenciaSaldoCodigoService:
     def _registrar_movimentacao_local(
         self, cod_origem, nome_origem, cod_destino, nome_destino,
         lote_nome, qty, usuario) -> None:
-        """Espelha a troca no estoque local: SAIDA(origem) + ENTRADA(destino).
+        """Espelha a troca no estoque local: SAIDA(origem, -qty) + ENTRADA(destino, +qty).
+
+        Convenção do sistema: saldo = SUM(qtd_movimentacao) puro (sinal embutido no
+        valor), então SAIDA grava NEGATIVO — igual a processar_faturamento.py
+        (-abs(qtd)) e consumo_producao_service.py. Sem o sinal, o saldo local do
+        código de ORIGEM inflaria em vez de reduzir.
 
         AJUSTE/MANUAL — não duplica com o sync (entrada_material_service só
         importa picking_type_code='incoming'; inventory adjustment não gera).
@@ -211,16 +216,16 @@ class TransferenciaSaldoCodigoService:
         obs = (f'Transferencia saldo {cod_origem}->{cod_destino} '
                f'lote {lote_nome or "(sem lote)"} qtd {qty} (CD/Estoque Odoo)')
         session = _get_db_session()
-        for cod, nome, tipo in (
-            (cod_origem, nome_origem, 'SAIDA'),
-            (cod_destino, nome_destino, 'ENTRADA'),
+        for cod, nome, tipo, qtd_sinalizada in (
+            (cod_origem, nome_origem, 'SAIDA', -qty),
+            (cod_destino, nome_destino, 'ENTRADA', qty),
         ):
             mov = MovimentacaoEstoque()
             mov.cod_produto = cod
             mov.nome_produto = nome
             mov.tipo_movimentacao = tipo
             mov.local_movimentacao = 'AJUSTE'
-            mov.qtd_movimentacao = qty
+            mov.qtd_movimentacao = qtd_sinalizada
             mov.data_movimentacao = hoje
             mov.lote_nome = lote_nome
             mov.tipo_origem = 'MANUAL'
