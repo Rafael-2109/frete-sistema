@@ -99,3 +99,41 @@ def test_polimorfismo_3_tabelas_origem(app_ctx):
     )
     assert len(encontrados) == 3
     db.session.rollback()
+
+
+def test_registrar_falha_nao_poisona_sessao_do_caller(app_ctx):
+    """BUG-1 (avaliacao 360): savepoint isola a falha do flush da transacao
+    do caller. Apos uma gravacao de auditoria falhar (ex: external_id dup),
+    a MESMA sessao deve continuar utilizavel SEM rollback manual.
+
+    Antes do fix: o flush abortado poisonava a transacao externa e a proxima
+    operacao na mesma sessao estourava PendingRollbackError em cascata
+    (Sentry PYTHON-FLASK-WX/WT/WS/WR/WQ). Agora begin_nested reverte apenas
+    o savepoint — a transacao externa permanece sa.
+    """
+    # 1a gravacao OK (persiste na transacao via savepoint released)
+    OperacaoOdooAuditoria.registrar(
+        external_id='TEST-SAVEPOINT-001',
+        tabela_origem='account_move', registro_id=1,
+        acao='create', modelo_odoo='account.move',
+        status='SUCESSO', executado_por='pytest',
+    )
+    # 2a gravacao com external_id DUPLICADO -> IntegrityError no flush interno.
+    # begin_nested faz ROLLBACK TO SAVEPOINT e re-propaga a excecao.
+    with pytest.raises(Exception):
+        OperacaoOdooAuditoria.registrar(
+            external_id='TEST-SAVEPOINT-001',  # duplicado de proposito
+            tabela_origem='account_move', registro_id=2,
+            acao='create', modelo_odoo='account.move',
+            status='SUCESSO', executado_por='pytest',
+        )
+    # CRITICO: SEM rollback manual, uma nova gravacao deve funcionar.
+    # No codigo antigo (sem savepoint) isto lancaria PendingRollbackError.
+    rec3 = OperacaoOdooAuditoria.registrar(
+        external_id='TEST-SAVEPOINT-002',
+        tabela_origem='stock_picking', registro_id=3,
+        acao='validate', modelo_odoo='stock.picking',
+        status='SUCESSO', executado_por='pytest',
+    )
+    assert rec3.id is not None  # sessao NAO ficou abortada
+    db.session.rollback()

@@ -87,6 +87,18 @@ class OperacaoOdooAuditoria(db.Model):
             executado_por=executado_por,
             **kwargs,
         )
-        db.session.add(rec)
-        db.session.flush()
+        # BUG-1 (avaliacao 360, 2026-05-30): savepoint isola a falha do flush
+        # da transacao do CALLER. A auditoria NUNCA deve poder derrubar a
+        # operacao que esta auditando. Sem isto, um flush abortado (constraint,
+        # tipo, tamanho de campo) poisonava a sessao e cascateava
+        # PendingRollbackError no pipeline WRITE/SEFAZ (Sentry
+        # PYTHON-FLASK-WX/WT/WS/WR/WQ, 2026-05-29). O hook em
+        # odoo_audit_helpers.py ja envolvia esta chamada em begin_nested; agora
+        # TODOS os 8 callers herdam a protecao (savepoint aninhado e seguro no
+        # SQLAlchemy). A excecao do flush continua sendo propagada — o caller
+        # decide se loga/re-tenta —, mas a transacao externa permanece sa
+        # (ROLLBACK TO SAVEPOINT, nao da transacao inteira).
+        with db.session.begin_nested():
+            db.session.add(rec)
+            db.session.flush()
         return rec
