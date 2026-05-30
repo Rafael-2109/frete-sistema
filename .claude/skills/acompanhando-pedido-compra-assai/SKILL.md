@@ -34,7 +34,8 @@ Consulta pedidos VOE Q.P.A. (1 por loja x modelo) e compras Motochefe
 - `assai_compra_motochefe` (numero, data_emissao, status, criada_em)
 - `assai_compra_motochefe_pedido` (compra_id, pedido_id) — N:N
 
-**Status pedido**: `ABERTO`, `EM_PRODUCAO`, `SEPARANDO`, `FATURADO_PARCIAL`, `FATURADO`, `CANCELADO`
+**Status pedido**: `ABERTO`, `PARCIALMENTE_FATURADO`, `FATURADO`, `CANCELADO`
+(legados `EM_PRODUCAO`/`SEPARANDO`/`FATURADO_PARCIAL` removidos — Big Bang Task 19, 2026-05-13)
 **Status compra**: `ABERTA`, `RECEBIMENTO_PARCIAL`, `FECHADA`, `CANCELADA`
 
 ---
