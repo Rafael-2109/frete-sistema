@@ -113,7 +113,7 @@ Detalhes completos: `VALIDACAO_FINAL_SESSAO.md` bloco "Cleanup adicional v28+".
 
 ### Estado da arquitetura (v28+)
 
-- **Orchestrator C3 LEGACY**: `app/odoo/estoque/orchestrators/inventario_pipeline.py` (~5800 LOC). **Stub `faturamento_pipeline.py` REMOVIDO v28+ S6.b** — zero imports Python ativos.
+- **Orchestrator C3 LEGACY**: `app/odoo/estoque/orchestrators/inventario_pipeline.py` (~6230 LOC). **Stub `faturamento_pipeline.py` REMOVIDO v28+ S6.b** — zero imports Python ativos.
 - **Skill 8 ATÔMICA L2 LIVE v24+** (`scripts/faturamento.py` 5 átomos) — inalterada v28+.
 - **Skill 7 ABRANGENTE LIVE v25+** (`scripts/escrituracao.py` 10 átomos) — inalterada v28+.
 - **Opt-in `--usar-skill8-atomica-v25` LIVE v27+ S1**: helpers ETAPAs C+D delegam aos átomos 3, 4, 5 da Skill 8 ATÔMICA. Default OFF preserva legacy.
@@ -128,6 +128,7 @@ Detalhes completos: `VALIDACAO_FINAL_SESSAO.md` bloco "Cleanup adicional v28+".
 - INDUSTRIALIZACAO_FB_LF F5e_SEFAZ_OK: 1 (apenas 177465 AVULSO_FRASCO — idempotente Odoo via cirurgia manual v24+)
 - INDUSTRIALIZACAO_FB_LF F5f_ENTRADA_OK: 104 (concluídos)
 - INDUSTRIALIZACAO_FB_LF F5f_FALHA: 0
+- **DEV_LF_FB / PERDA_LF_FB em F5e_SEFAZ_OK** (backlog 2026-05-20 + lote `FATURAR_LF_FB_2026_05_29` criado por subagente): entrada já escriturada → **NÃO rodar ETAPA E sobre eles (duplica)**.
 
 ### Estado FINAL ajustes PROD (preservado v23+/v24+/v25+/v26+/v27+/v28+ — NÃO MEXIDO)
 
