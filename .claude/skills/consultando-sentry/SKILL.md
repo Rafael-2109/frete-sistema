@@ -1,7 +1,7 @@
 ---
 name: consultando-sentry
 description: >
-  Consulta issues, eventos e metricas do Sentry via MCP Server (20 tools).
+  Consulta issues, eventos e metricas do Sentry via MCP Server.
   Use quando o usuario mencionar "Sentry", "issues do Sentry", "erros em producao",
   "bugs no Sentry", "exceptions nao tratadas", "500 errors no Sentry", "resolver issue",
   "marcar resolvido no Sentry", ou qualquer variacao que envolva monitoramento de erros.
@@ -45,20 +45,18 @@ Exemplos de queries naturais:
 - `"errors in devolucao module"`
 - `"user feedback from production"`
 
-### 2. Detalhes de uma issue (stacktrace, tags, metadata)
+### 2. Eventos / stacktrace de uma issue
+
+NAO existe `get_issue_details` neste MCP server. Para stacktrace e detalhes
+dos eventos de uma issue use `search_issue_events`; para causa raiz + arquivos
+afetados use `analyze_issue_with_seer` (secao 3).
 
 ```
-mcp__sentry__get_issue_details(
+mcp__sentry__search_issue_events(
     organizationSlug="nacom",
     issueId="PYTHON-FLASK-5",
+    naturalLanguageQuery="latest event with stacktrace",
     regionUrl="https://us.sentry.io"
-)
-```
-
-Tambem aceita URL completa:
-```
-mcp__sentry__get_issue_details(
-    issueUrl="https://nacom.sentry.io/issues/PYTHON-FLASK-5"
 )
 ```
 
@@ -134,17 +132,16 @@ mcp__sentry__find_releases(
 )
 ```
 
-### 9. Trace details
+### 9. Documentacao Sentry
+
+NAO existe `get_trace_details` neste MCP server. Para consultar a documentacao
+oficial do Sentry use `search_docs` + `get_doc`.
 
 ```
-mcp__sentry__get_trace_details(
-    organizationSlug="nacom",
-    traceId="a4d1aae7216b47ff8117cf4e09ce9d0a",
-    regionUrl="https://us.sentry.io"
-)
+mcp__sentry__search_docs(query="distributed tracing setup", maxResults=3)
 ```
 
-## Tools MCP Disponíveis (20 total)
+## Tools MCP Disponíveis (principais)
 
 | Tool | Funcao |
 |------|--------|
@@ -156,18 +153,18 @@ mcp__sentry__get_trace_details(
 | `find_dsns` | Listar DSNs do projeto |
 | `search_issues` | Buscar issues (linguagem natural) |
 | `search_events` | Buscar eventos + contagens/agregacoes |
-| `search_issue_events` | Filtrar eventos de uma issue |
-| `get_issue_details` | Detalhes completos de issue |
+| `search_issue_events` | Filtrar eventos de uma issue (stacktrace) |
 | `get_issue_tag_values` | Distribuicao de tags |
-| `get_trace_details` | Detalhes de trace |
 | `get_event_attachment` | Baixar attachments |
 | `analyze_issue_with_seer` | Root cause analysis AI (Seer) |
 | `update_issue` | Resolver/ignorar/atribuir issue |
 | `update_project` | Atualizar config do projeto |
-| `create_project` | Criar novo projeto |
-| `create_team` | Criar team |
-| `create_dsn` | Criar DSN adicional |
+| `create_project` / `create_team` / `create_dsn` | Criar recursos |
 | `search_docs` / `get_doc` | Documentacao Sentry |
+
+> NAO existem neste MCP server: `get_issue_details` e `get_trace_details`
+> (use `search_issue_events` + `analyze_issue_with_seer` no lugar). Tools de
+> snapshot/profile/replay existem mas nao sao usadas por esta skill.
 
 ## Metodo Secundario — Sentry CLI
 
@@ -182,7 +179,7 @@ sentry issue plan PYTHON-FLASK-5         # Plano de fix automatico
 ## Fluxo Recomendado
 
 1. **Visao geral**: `search_issues` com `"unresolved issues"` ou `search_events` com `"how many errors today"`
-2. **Investigar**: `get_issue_details` para stacktrace + `analyze_issue_with_seer` para causa raiz
+2. **Investigar**: `search_issue_events` para stacktrace + `analyze_issue_with_seer` para causa raiz
 3. **Contexto**: `get_issue_tag_values` para entender distribuicao (URLs, browsers, environments)
 4. **Corrigir**: implementar fix no codigo
 5. **Fechar**: `update_issue` com status `"resolved"`

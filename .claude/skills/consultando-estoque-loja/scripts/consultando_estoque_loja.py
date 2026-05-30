@@ -8,7 +8,10 @@ Regra central (hora/CLAUDE.md):
     - `hora_moto` e insert-once (identidade); estado vem do ULTIMO evento em
       `hora_moto_evento` (ordenado por timestamp DESC).
     - Moto sem eventos = "em transito" (pedido/NF lancados, nao recebida fisica).
-    - `tipo='RECEBIDA'` em evento com `loja_id=X` = moto esta em estoque de X.
+    - ultimo evento em `EVENTOS_EM_ESTOQUE` (estoque_service) com `loja_id=X`
+      = moto esta em estoque de X. NAO apenas 'RECEBIDA' — inclui CONFERIDA,
+      TRANSFERIDA, CANCELADA, AVARIADA, FALTANDO_PECA, EMPRESTIMO_ENTRADA,
+      RESSARCIMENTO_SAIDA.
 
 Uso:
     --loja-ids 2,5                # escopo do usuario (OBRIGATORIO quando nao-admin)
@@ -32,6 +35,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from app import create_app, db  # noqa: E402
 from sqlalchemy import text  # noqa: E402
+from app.hora.services.estoque_service import (  # noqa: E402
+    EVENTOS_EM_ESTOQUE,
+    EVENTOS_FORA_ESTOQUE,
+)
 
 
 def _json_default(obj):
@@ -177,15 +184,16 @@ def _run_query(
         tipo = r.evento_tipo  # pode ser None
         loja_id = r.evento_loja_id
 
-        # Classificacao
-        if tipo is None:
+        # Classificacao alinhada com a fonte de verdade estoque_service
+        # (EVENTOS_EM_ESTOQUE / EVENTOS_FORA_ESTOQUE) — evita drift.
+        if tipo is None or tipo == 'EM_TRANSITO':
             status = 'transito'
-        elif tipo == 'RECEBIDA':
+        elif tipo in EVENTOS_EM_ESTOQUE:
             status = 'estoque'
-        elif tipo in ('VENDIDA', 'SAIDA'):
-            status = 'vendido'
         elif tipo == 'DEVOLVIDA':
             status = 'devolvido'
+        elif tipo in EVENTOS_FORA_ESTOQUE:
+            status = 'vendido'
         else:
             status = 'outro'
 
