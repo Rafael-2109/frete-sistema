@@ -14,9 +14,6 @@ Testa:
 Usa banco local real (mesmo pattern de test_kg_empresa_scope.py que não usa mock).
 Cada teste cria usuário / entidades / memórias efêmeras e desfaz via rollback.
 """
-import inspect
-from datetime import datetime
-from unittest.mock import patch
 
 import pytest
 
