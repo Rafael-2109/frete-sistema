@@ -108,7 +108,7 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 | **A4** | Promoção automática de diretriz (liga `USE_OPERATIONAL_DIRECTIVES` com segurança): candidata→shadow/A-B→regression-gate→promove→monitora-drift→auto-despromove. Plano que funcionou (B§5) é o artefato promovível. Reusa `_build_operational_directives` (`memory_injection.py:420`). | A3, GATE-2 | `USE_OPERATIONAL_DIRECTIVES` + `AGENT_DIRECTIVE_PROMOTION` | G | ⬜ |
 | **D2** | Bootstrap ontologia das TABELAS-mestre corretas (`carteira_principal`/`transportadoras`, NÃO `entity_indexer`→`contas_a_pagar`). | D0, D0.5 | `AGENT_ONTOLOGY` | G | ✅ **COMPLETO** — `5ac8ecafc`: `services/ontology_bootstrap.py` (cliente/produto/transportadora → `_upsert_entity` user_id=0, idempotente, **ZERO Voyage**) + CLI `scripts/agente/bootstrap_ontologia.py` (`--dry-run`/`--force`, não auto-run). 23 testes. Read path = D4. |
 | **D3** | Fatos bi-temporais + episode subgraph de proveniência (reusa `session_turn_indexer.py`). | D2 | `AGENT_ONTOLOGY` | M | ⬜ |
-| **D4** | Tool MCP `query_ontology` (agente consulta o modelo de mundo). | D2 | `AGENT_ONTOLOGY` | M | ⬜ |
+| **D4** | Tool MCP `query_ontology` (agente consulta o modelo de mundo). | D2 | `AGENT_ONTOLOGY` | M | ✅ **COMPLETO** — `d36752073`: `tools/ontology_query_tool.py` (`query_ontology_entities` busca DIRETA user_id IN [uid,0]) + tool MCP `query_ontology` registrada flag-gated em `client.py` (invisível com flag OFF). 12 testes (prova busca direta sem HOP-1). **Fecha o gap D2 → destrava B-TRIAGE+B2-domain.** |
 
 **GATE-3**: flywheel fechado em shadow (promoção sugere, não aplica) por ≥2 semanas com held-out anti-gaming OK; ontologia consultável validada contra os ~298 schemas.
 
