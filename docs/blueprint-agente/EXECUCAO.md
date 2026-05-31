@@ -127,6 +127,9 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 ## DECISÕES DE DESIGN (registradas — não re-decidir)
 - **2026-05-30 — agent_step granularidade**: TURNO (1 par user→assistant). Chave UNIQUE `step_uid='{session_id}:{turn_seq}'` (`turn_seq` = nº msgs role=user na sessão). Idempotente p/ retry da defesa (R10). Join com `agent_session_costs` por `session_id`+janela temporal (NÃO por igualdade de message_id — granularidades distintas). Aprovado por Rafael. Plano: `docs/superpowers/plans/2026-05-30-onda-0-fundacao.md`.
 
+## BLOQUEIOS ATIVOS
+- **S0b (Task 3) + S0c (Task 4) BLOQUEADAS (2026-05-31)**: ambas dependem de `skills_whitelist.py`, que é **WIP NÃO-COMMITADO** do Rafael (não existe no código commitado da `main`/worktree — verificado: `_discover_skills_from_project` em `client.py` filtra só `AgentSettings.SPED_SKILLS_RESERVED` de `settings.py:40`; sem deny-list de subagentes nem skills_whitelist). Implementar criaria o arquivo do zero → duplicação/conflito de merge com o WIP. **Desbloqueio**: Rafael commita `skills_whitelist.py` na main → rebase da `feat/agente-evolucao` → S0b consolida `SPED_SKILLS_RESERVED` nele + S0c lê a deny-list real. S0a (fundação física) NÃO depende disto e está completo.
+
 ## LOG DE EXECUÇÃO (append-only — 1 linha por item concluído)
 - 2026-05-30 — Onda 0 planejada (plano writing-plans) + design gate da chave resolvido. S0a liberado para Task 1.
 - 2026-05-31 — Task 1 (S0a model `AgentStep` + migration dupla) ✅ commit `c13fb31c4`. TDD 3/3 + baseline; spec review ✅ + code quality ✅ (4 melhorias aplicadas); migration local aplicada. Wiring (Task 2) em andamento.
