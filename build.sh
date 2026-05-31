@@ -516,6 +516,13 @@ echo "Agente 26c: bootstrap de ontologia (D2 — roda apenas se AGENT_ONTOLOGY=t
 python scripts/agente/bootstrap_ontologia.py \
     || echo "ℹ️ Bootstrap ontologia pulado (AGENT_ONTOLOGY off) ou falhou — continuando deploy..."
 
+# 27. Inventario Ciclico (2026-05-31): contagem parcial por quant + plano de ajustes.
+# Cria tabelas inventario_contagem + inventario_contagem_item (granularidade quant).
+# Idempotente (model.__table__.create(checkfirst=True)). Confronto inalterado.
+echo "Inventario 27: tabelas inventario_contagem + inventario_contagem_item..."
+python scripts/migrations/inventario_contagem_create.py \
+    || echo "⚠️ Migration inventario_contagem falhou, continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
