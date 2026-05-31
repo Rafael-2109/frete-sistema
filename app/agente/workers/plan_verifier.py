@@ -359,6 +359,18 @@ def _verify_step_shadow_in_context(step_uid: str) -> None:
         logger.debug(f'[verify_shadow] domain falhou (best-effort): {exc}')
 
     # ── Persiste veredito combinado + commit EXPLÍCITO (CRITICAL-1) ──────────
+    # Guard de consistência com judge_step (code-review T2b MINOR): se TODOS os 3
+    # verifiers falharem no nível de try (verify vazio — caso ~teórico, exigiria
+    # falha de import), NÃO grava. Deixa o step sem 'verify' → re-enfileirado no
+    # próximo ciclo (retry), em vez de marcá-lo "feito" com veredito vazio que
+    # nunca mais seria reavaliado.
+    if not verify:
+        logger.warning(
+            f'[verify_shadow] veredito vazio para step_uid={step_uid}, '
+            f'abortando persistencia (permite retry no proximo ciclo)'
+        )
+        return
+
     AgentStep.update_outcome(step_uid, {'verify': verify})
 
     from app import db
