@@ -70,7 +70,7 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 ### ONDA 0 — FUNDAÇÃO FÍSICA  ·  GATE-0 destrava Ondas 1 e 2
 | Item | Descrição | Dep | Flag | Esf | Status |
 |------|-----------|-----|------|-----|--------|
-| **S0a** | Tabela `agent_step` (1ª classe), keyed `(session_uuid, message_id)` reusando `AgentSessionCost.message_id` UNIQUE. Populada no fim da thread PRIMARY (R10), `_stop_hook` só dispara assíncrono. Migration dupla. | — | (schema, sem flag) | M | ⬜ |
+| **S0a** | Tabela `agent_step` (1ª classe), granularidade TURNO, `step_uid` UNIQUE=`'{session_id}:{turn_seq}'` (join com costs por session+janela). Populada no fim da thread PRIMARY (R10), nunca no `_stop_hook`. Migration dupla. | — | (schema, sem flag) | M | 🟡 model+migration ✅ `c13fb31c4` (3/3 testes, spec+quality ✅); falta wiring (Task 2) |
 | **S0b** | Consolidar deny-list dispersa: mover `SPED_SKILLS_RESERVED` (`settings.py:40`) p/ `skills_whitelist.py` (4º grupo); `client.py` lê UMA fonte. | — | — | P | ⬜ |
 | **S0c** | Capability Registry DESCRITIVO: `SkillEntry` + `SkillBinding` (aresta N:M skill↔agente — exposure NÃO é escalar). Populado por `agent_loader._parse_skills` + 5 tabelas-catálogo do estoque. Read-only (flag OFF: só descreve). | S0b | `AGENT_CAPABILITY_REGISTRY` | M | ⬜ |
 
@@ -129,3 +129,4 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 
 ## LOG DE EXECUÇÃO (append-only — 1 linha por item concluído)
 - 2026-05-30 — Onda 0 planejada (plano writing-plans) + design gate da chave resolvido. S0a liberado para Task 1.
+- 2026-05-31 — Task 1 (S0a model `AgentStep` + migration dupla) ✅ commit `c13fb31c4`. TDD 3/3 + baseline; spec review ✅ + code quality ✅ (4 melhorias aplicadas); migration local aplicada. Wiring (Task 2) em andamento.
