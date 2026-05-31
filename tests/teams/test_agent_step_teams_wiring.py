@@ -144,19 +144,31 @@ def test_nao_grava_se_session_none(app_ctx):
     _db.session.rollback()
 
 
-def test_nao_grava_se_resposta_vazia(app_ctx):
-    """best-effort: resposta_texto=None → helper retorna sem gravar e sem exceção."""
+def test_grava_step_mesmo_sem_resposta_texto(app_ctx):
+    """Simetria com o canal web: turno sem texto final (so-tools/erro) ainda gera
+    1 agent_step — captura o turno + tokens p/ o flywheel (Onda 1). O guard so
+    pula quando session is None."""
     from app.teams.services import _gravar_agent_step_teams
-    from app.agente.models import AgentStep
+    from app.agente.models import AgentStep, AgentSession
 
     our_session_id = f'teams_test_empty_{uuid.uuid4().hex}'
     user_id = 1
+    # Turno real sem texto: data tem so a mensagem do usuario (add_assistant_message
+    # nao roda quando resposta_texto e' vazio no fluxo real).
+    sess = AgentSession(
+        session_id=our_session_id,
+        user_id=user_id,
+        data={'messages': [{'role': 'user', 'content': 'so tools, sem texto'}]},
+    )
+    _db.session.add(sess)
+    _db.session.flush()
     fake = _FakeSyncResult(resposta_texto=None)  # type: ignore[arg-type]
 
-    sess = _make_session(our_session_id, user_id)
     _gravar_agent_step_teams(sess, user_id, 'claude-opus-4-8', fake)
 
     steps = AgentStep.query.filter_by(session_id=our_session_id).all()
-    assert len(steps) == 0
+    assert len(steps) == 1
+    assert steps[0].step_uid == f'{our_session_id}:1'
+    assert steps[0].channel == 'teams'
 
     _db.session.rollback()

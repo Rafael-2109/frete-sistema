@@ -96,7 +96,7 @@ SKILLS_SPED_RESERVED: FrozenSet[str] = frozenset({
 # Uniao de TUDO que SAI do listing do principal — fonte unica de verdade.
 # `_discover_skills_from_project` (sdk/client.py) exclui este conjunto.
 # ---------------------------------------------------------------------------
-SKILLS_DELEGADAS_SUBAGENTE: Set[str] = (
+SKILLS_DELEGADAS_SUBAGENTE: FrozenSet[str] = frozenset(
     SKILLS_DOMINIO_HORA
     | SKILLS_DOMINIO_ASSAI
     | SKILLS_ODOO_ESTOQUE_SUBAGENTE

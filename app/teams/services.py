@@ -266,7 +266,11 @@ def _gravar_agent_step_teams(session, user_id, model, sync_result):
     add_user_message+add_assistant_message (mesma semantica do canal web).
     """
     try:
-        if session is None or not getattr(sync_result, 'resposta_texto', None):
+        # Simetria com o canal web (chat.py _save_messages_to_db grava o passo com
+        # base na mensagem do usuario, mesmo sem texto final — turno so-tools ou
+        # erro): mantem o dataset de agent_step consistente entre canais p/ o
+        # flywheel (Onda 1). O call site sempre roda add_user_message antes.
+        if session is None:
             return
         from app.agente.models import AgentStep
         _msgs = (session.data or {}).get('messages', [])
