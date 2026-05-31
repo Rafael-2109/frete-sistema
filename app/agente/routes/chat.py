@@ -1766,6 +1766,52 @@ def _save_messages_to_db(
                     cache_creation_tokens=cache_creation_tokens,
                 )
 
+            # =============================================================
+            # Onda 0 (S0a.2): grava 1 agent_step por TURNO no PRIMARY.
+            #
+            # Ponto (R10/INV-1): DENTRO do app_context, DEPOIS de
+            # add_assistant_message e ANTES do commit final. Este é o PRIMARY
+            # protegido por _save_messages_dedup (`_persisted`); NUNCA gravar no
+            # _stop_hook (corrida R10).
+            #
+            # Guard de simetria `if user_message:` (espelha os guards
+            # add_user_message/add_assistant_message acima): turn_seq é derivado
+            # da CONTAGEM de msgs role=='user'. Se um caller passasse
+            # user_message=None, add_user_message seria pulado mas turn_seq
+            # contaria os user msgs do turno ANTERIOR -> step_uid colidiria com
+            # o turno anterior -> step perdido em silêncio (best-effort engole
+            # o None de insert_step). Só gravar quando há de fato um turno novo.
+            #
+            # turn_seq: conta as msgs role=='user' em data['messages'] AQUI,
+            # que roda DEPOIS de add_user_message -> turn_seq == N para o
+            # N-ésimo turno. Estável no fluxo real porque a 2ª chamada de
+            # _save_messages_to_db é bloqueada pela flag _persisted (dedup),
+            # então add_user_message roda 1x por turno e o count é determinístico.
+            #
+            # Best-effort (INV-6): try/except + warning. Falha de agent_step
+            # NÃO pode quebrar a persistência da resposta nem o stream. O
+            # SAVEPOINT em insert_step isola IntegrityError da transação pai.
+            # =============================================================
+            if user_message:
+                try:
+                    from app.agente.models import AgentStep
+                    _msgs = (session.data or {}).get('messages', [])
+                    _turn_seq = sum(1 for m in _msgs if m.get('role') == 'user')
+                    AgentStep.insert_step(
+                        step_uid=f"{our_session_id}:{_turn_seq}",
+                        session_id=our_session_id,
+                        user_id=user_id,
+                        channel='web',
+                        model=model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        tools_used=tools_used or None,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[AGENTE] agent_step nao gravado (best-effort): {e}"
+                    )
+
             # Atualiza sdk_session_id se não expirou
             # Fase B (SDK 0.1.64 SessionStore): backup_session_transcript removido.
             # SDK persiste entries automaticamente em claude_session_store via
