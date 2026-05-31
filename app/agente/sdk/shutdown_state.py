@@ -51,6 +51,20 @@ def _mark_shutting_down() -> None:
     logger.info("[shutdown_state] interpretador finalizando — Sentry capture suprimida")
 
 
+def _cleanup_sticky_ownerships() -> None:
+    """Libera todas as ownerships sticky deste worker no shutdown.
+
+    Evita ownership 'stuck' por TTL (30min) quando worker termina graceful.
+    Outros workers ficam livres para reivindicar imediatamente.
+    """
+    try:
+        from .sticky_session import cleanup_owned_sessions
+        cleanup_owned_sessions()
+    except Exception as e:
+        # atexit handlers NUNCA podem raise — só log debug.
+        logger.debug(f"[shutdown_state] sticky cleanup falhou (ignorado): {e}")
+
+
 def register_shutdown_handler() -> None:
     """Registra atexit handler. Idempotente — chamadas extras sao no-op.
 
@@ -61,6 +75,7 @@ def register_shutdown_handler() -> None:
     if _HANDLER_REGISTERED:
         return
     atexit.register(_mark_shutting_down)
+    atexit.register(_cleanup_sticky_ownerships)
     _HANDLER_REGISTERED = True
     logger.debug("[shutdown_state] atexit handler registrado")
 

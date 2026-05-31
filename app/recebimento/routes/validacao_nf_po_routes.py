@@ -8,7 +8,6 @@ Endpoints:
   - POST /api/recebimento/depara - Cria De-Para
   - PUT /api/recebimento/depara/<id> - Atualiza De-Para
   - DELETE /api/recebimento/depara/<id> - Remove De-Para
-  - GET /api/recebimento/depara/uoms-odoo - Lista UoMs disponiveis no Odoo
   - POST /api/recebimento/depara/sincronizar-odoo - Sincroniza com Odoo
   - POST /api/recebimento/depara/importar-odoo - Importa do Odoo
   - POST /api/recebimento/depara/importar-excel - Importa de arquivo Excel
@@ -183,33 +182,6 @@ def buscar_depara(depara_id):
         }), 500
 
 
-@validacao_nf_po_bp.route('/depara/uoms-odoo', methods=['GET'])
-@login_required
-def listar_uoms_odoo():
-    """Lista UoMs disponiveis no Odoo para o SELECT de De-Para."""
-    try:
-        from app.odoo.utils.connection import get_odoo_connection
-
-        odoo = get_odoo_connection()
-        if not odoo.authenticate():
-            return jsonify({'sucesso': False, 'erro': 'Falha autenticacao Odoo'}), 500
-
-        # Buscar todas as UoMs disponiveis
-        uom_ids = odoo.search('uom.uom', [], limit=100)
-        uoms = odoo.read('uom.uom', uom_ids, ['id', 'name', 'category_id', 'uom_type', 'factor'])
-
-        resultado = [
-            {'id': u['id'], 'name': u['name']}
-            for u in uoms if u
-        ]
-
-        return jsonify({'sucesso': True, 'uoms': resultado})
-
-    except Exception as e:
-        logger.error(f"Erro ao listar UoMs do Odoo: {e}")
-        return jsonify({'sucesso': False, 'erro': str(e)}), 500
-
-
 @validacao_nf_po_bp.route('/depara', methods=['POST'])
 @login_required
 def criar_depara():
@@ -239,11 +211,6 @@ def criar_depara():
         if data.get('fator_conversao'):
             fator = Decimal(str(data['fator_conversao']))
 
-        # Extrair odoo_product_uom_id se fornecido
-        odoo_product_uom_id = data.get('odoo_product_uom_id')
-        if odoo_product_uom_id is not None:
-            odoo_product_uom_id = int(odoo_product_uom_id)
-
         resultado = service.criar(
             cnpj_fornecedor=data['cnpj_fornecedor'],
             cod_produto_fornecedor=data['cod_produto_fornecedor'],
@@ -255,7 +222,6 @@ def criar_depara():
             um_fornecedor=data.get('um_fornecedor'),
             um_interna=data.get('um_interna', 'UNITS'),
             fator_conversao=fator,
-            odoo_product_uom_id=odoo_product_uom_id,
             criado_por=current_user.nome if current_user else None
         )
 
@@ -297,11 +263,6 @@ def atualizar_depara(depara_id):
         if data.get('fator_conversao') is not None:
             fator = Decimal(str(data['fator_conversao']))
 
-        # Extrair odoo_product_uom_id se fornecido
-        odoo_product_uom_id = data.get('odoo_product_uom_id')
-        if odoo_product_uom_id is not None:
-            odoo_product_uom_id = int(odoo_product_uom_id)
-
         resultado = service.atualizar(
             depara_id=depara_id,
             cod_produto_interno=data.get('cod_produto_interno'),
@@ -310,7 +271,6 @@ def atualizar_depara(depara_id):
             um_fornecedor=data.get('um_fornecedor'),
             um_interna=data.get('um_interna'),
             fator_conversao=fator,
-            odoo_product_uom_id=odoo_product_uom_id,
             ativo=data.get('ativo'),
             atualizado_por=current_user.nome if current_user else None
         )

@@ -114,7 +114,10 @@ def _registrar_auditoria(
             registro_id=ajuste_id,
             acao=acao,
             modelo_odoo=modelo_odoo or 'recebimento_lf',
-            etapa=fase,
+            # G-AUDIT-1/N21 (3a cópia, canary P6 2026-05-29): NÃO passar
+            # `etapa=fase` — coluna `operacao_odoo_auditoria.etapa` é Integer
+            # (string de fase estoura InvalidTextRepresentation). A fase vai em
+            # `pipeline_etapa` (String) + `etapa_descricao`.
             etapa_descricao=f'{fase} {acao}',
             status=status,
             payload_json=payload,

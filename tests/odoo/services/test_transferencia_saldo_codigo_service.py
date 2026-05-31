@@ -190,7 +190,10 @@ def test_registrar_movimentacao_local(service, app):
     assert saida.tipo_movimentacao == 'SAIDA' and saida.cod_produto == '4729198'
     assert entrada.tipo_movimentacao == 'ENTRADA' and entrada.cod_produto == '4759198'
     assert saida.local_movimentacao == 'AJUSTE' and saida.tipo_origem == 'MANUAL'
-    assert saida.lote_nome == '135/26' and saida.qtd_movimentacao == 5.0
+    assert saida.lote_nome == '135/26'
+    # Convenção do sistema: saldo = SUM(qtd_movimentacao) puro → SAIDA negativa, ENTRADA positiva
+    assert saida.qtd_movimentacao == -5.0
+    assert entrada.qtd_movimentacao == 5.0
     assert saida.criado_por == 'rafael'
     assert fake_session.add.call_count == 2
     fake_session.commit.assert_called_once()

@@ -65,7 +65,9 @@ fisicamente). Mostrar em categoria separada.
 
 ### 4. ULTIMO EVENTO = POSICAO ATUAL
 Estoque de uma loja = chassis cujo ULTIMO evento (ordenado por timestamp DESC)
-tem `tipo='RECEBIDA'` E `loja_id=<loja>`.
+esta em `EVENTOS_EM_ESTOQUE` (fonte de verdade: `estoque_service.py`) E tem
+`loja_id=<loja>`. Inclui RECEBIDA, CONFERIDA, TRANSFERIDA, CANCELADA, AVARIADA,
+FALTANDO_PECA, EMPRESTIMO_ENTRADA, RESSARCIMENTO_SAIDA — NAO apenas 'RECEBIDA'.
 
 ---
 

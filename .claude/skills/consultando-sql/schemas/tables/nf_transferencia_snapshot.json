@@ -1,0 +1,172 @@
+{
+  "name": "nf_transferencia_snapshot",
+  "description": "Snapshot de NF inter-company (FB <-> CD <-> LF) com cross-ref destino.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "refresh_em",
+      "type": "timestamp",
+      "nullable": false
+    },
+    {
+      "name": "refreshed_por",
+      "type": "varchar(100)"
+    },
+    {
+      "name": "chave_nfe",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "numero_nf",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "serie_nf",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "account_move_id_origem",
+      "type": "integer",
+      "nullable": false
+    },
+    {
+      "name": "account_move_name_origem",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "company_origem",
+      "type": "varchar(5)",
+      "nullable": false
+    },
+    {
+      "name": "company_destino",
+      "type": "varchar(5)",
+      "nullable": false
+    },
+    {
+      "name": "partner_origem_id",
+      "type": "integer"
+    },
+    {
+      "name": "partner_destino_id",
+      "type": "integer"
+    },
+    {
+      "name": "data_emissao",
+      "type": "date"
+    },
+    {
+      "name": "data_emissao_hora",
+      "type": "timestamp"
+    },
+    {
+      "name": "valor_total",
+      "type": "numeric(15,2)"
+    },
+    {
+      "name": "acao",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "cfop_saida",
+      "type": "varchar(5)"
+    },
+    {
+      "name": "state_nf_origem",
+      "type": "varchar(20)"
+    },
+    {
+      "name": "dfe_id",
+      "type": "integer"
+    },
+    {
+      "name": "dfe_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "dfe_state",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "dfe_situacao",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "picking_id",
+      "type": "integer"
+    },
+    {
+      "name": "picking_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "picking_state",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "picking_data_hora",
+      "type": "timestamp"
+    },
+    {
+      "name": "invoice_destino_id",
+      "type": "integer"
+    },
+    {
+      "name": "invoice_destino_name",
+      "type": "varchar(50)"
+    },
+    {
+      "name": "invoice_destino_state",
+      "type": "varchar(30)"
+    },
+    {
+      "name": "invoice_destino_data_hora",
+      "type": "timestamp"
+    },
+    {
+      "name": "status_consolidado",
+      "type": "varchar(30)",
+      "nullable": false,
+      "default": "PENDENTE_DFE"
+    },
+    {
+      "name": "observacao",
+      "type": "text"
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_nf_transf_snap_companies",
+      "columns": [
+        "company_origem",
+        "company_destino"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_transferencia_snapshot_status_consolidado",
+      "columns": [
+        "status_consolidado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_transferencia_snapshot_chave_nfe",
+      "columns": [
+        "chave_nfe"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_transferencia_snapshot_data_emissao",
+      "columns": [
+        "data_emissao"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -217,25 +217,16 @@ class EmbarqueCarViaService:
             # ===== CAMINHO PADRAO: provisorio=True =====
             # Criar novo EmbarqueItem real + deduzir/deletar provisorio
 
-            # Peso cubado da NF: somar cubado real de cada veiculo pelo modelo
-            from app.carvia.models import CarviaCotacaoMoto as _CCM
-            _cubado_por_modelo = {}
-            for _m in _CCM.query.filter_by(cotacao_id=carvia_cotacao_id).all():
-                if _m.modelo_moto and _m.quantidade and _m.quantidade > 0:
-                    _cubado_por_modelo[_m.modelo_moto.nome.upper()] = (
-                        float(_m.peso_cubado_total or 0) / int(_m.quantidade)
-                    )
+            # Peso cubado da NF: cubado real de cada veiculo pelo modelo, via
+            # calcular_cubado_por_modelos (matching regex que casa "BIG-TRI"
+            # da NF com "BIG TRI" do cadastro). Centralizado — sem duplicar.
             _nf_cubado = 0
             if nf_obj:
-                for _v in nf_obj.veiculos.all():
-                    _mod = (_v.modelo or '').upper()
-                    if _mod in _cubado_por_modelo:
-                        _nf_cubado += _cubado_por_modelo[_mod]
-                    else:
-                        for _nome, _cub in _cubado_por_modelo.items():
-                            if _nome in _mod or _mod in _nome:
-                                _nf_cubado += _cub
-                                break
+                _modelos_nf = [v.modelo for v in nf_obj.veiculos.all() if v.modelo]
+                if _modelos_nf:
+                    _nf_cubado = EmbarqueCarViaService.calcular_cubado_por_modelos(
+                        carvia_cotacao_id, _modelos_nf
+                    )
 
             # Em caso de divergencia CNPJ destino, a NF prevalece (Fase B).
             cnpj_cliente_novo = (
@@ -611,8 +602,10 @@ class EmbarqueCarViaService:
         """Calcula peso cubado total de N veiculos somando o cubado unitario por modelo.
 
         Usa `CarviaCotacaoMoto.peso_cubado_total / quantidade` como cubado unitario
-        de cada modelo cadastrado na cotacao; match exato por nome.upper(), com
-        fallback por substring.
+        de cada modelo cadastrado na cotacao; o match texto-da-NF <-> modelo usa
+        `MotoRecognitionService.resolver_modelo_em_lista` (regex_pattern tolerante
+        a separador hifen/espaco + word-boundary + precedencia por tamanho), que
+        casa "BIG-TRI" (NF) com "BIG TRI" (cadastro).
 
         Args:
             carvia_cotacao_id: ID da CarviaCotacao (fonte dos modelos)
@@ -622,24 +615,26 @@ class EmbarqueCarViaService:
             peso cubado total (float, arredondado 2 casas). Zero se modelos nao batem.
         """
         from app.carvia.models import CarviaCotacaoMoto
+        from app.carvia.services.pricing.moto_recognition_service import (
+            MotoRecognitionService,
+        )
 
-        cubado_por_modelo: Dict[str, float] = {}
+        cubado_por_modelo_id: Dict[int, float] = {}
+        modelos_cotacao = []
         for m in CarviaCotacaoMoto.query.filter_by(cotacao_id=carvia_cotacao_id).all():
             if m.modelo_moto and m.quantidade and m.quantidade > 0:
-                cubado_por_modelo[m.modelo_moto.nome.upper()] = (
+                cubado_por_modelo_id[m.modelo_moto_id] = (
                     float(m.peso_cubado_total or 0) / int(m.quantidade)
                 )
+                modelos_cotacao.append(m.modelo_moto)
 
         total = 0.0
         for modelo_raw in modelos_veiculos:
-            mod = (modelo_raw or '').upper()
-            if mod in cubado_por_modelo:
-                total += cubado_por_modelo[mod]
-            else:
-                for nome, cubado in cubado_por_modelo.items():
-                    if nome in mod or mod in nome:
-                        total += cubado
-                        break
+            mm = MotoRecognitionService.resolver_modelo_em_lista(
+                modelo_raw, modelos_cotacao
+            )
+            if mm is not None:
+                total += cubado_por_modelo_id.get(mm.id, 0.0)
         return round(total, 2)
 
     @staticmethod
@@ -1020,32 +1015,21 @@ class EmbarqueCarViaService:
                         peso_bruto_nf += float(nf_obj.peso_bruto or 0)
                         volumes_nf += int(nf_obj.quantidade_volumes or 0)
 
-        # Cubado real: somar cubado unitario de cada veiculo pelo modelo
-        # Mapa modelo_nome → cubado unitario (a partir das motos da cotacao)
-        cubado_por_modelo = {}
-        for m in CarviaCotacaoMoto.query.filter_by(cotacao_id=cotacao.id).all():
-            if m.modelo_moto and m.quantidade and m.quantidade > 0:
-                cubado_por_modelo[m.modelo_moto.nome.upper()] = (
-                    float(m.peso_cubado_total or 0) / int(m.quantidade)
-                )
-        # Somar cubado de cada veiculo das NFs do escopo (toda do pedido OU so a NF)
-        peso_cubado_nf = 0
-        for nf_num, veics in veiculos_por_nf.items():
-            for v in veics:
-                modelo_upper = (v.modelo or '').upper()
-                if modelo_upper in cubado_por_modelo:
-                    peso_cubado_nf += cubado_por_modelo[modelo_upper]
-                else:
-                    # Fallback: match com word boundary (evita "RET" in "PRETA")
-                    import re as _re
-                    for nome, cubado in cubado_por_modelo.items():
-                        nome_esc = _re.escape(nome)
-                        modelo_esc = _re.escape(modelo_upper)
-                        if (_re.search(r'(?<![A-Za-z])' + nome_esc + r'(?![A-Za-z])', modelo_upper)
-                                or _re.search(r'(?<![A-Za-z])' + modelo_esc + r'(?![A-Za-z])', nome)):
-                            peso_cubado_nf += cubado
-                            break
-        peso_cubado_nf = round(peso_cubado_nf, 2)
+        # Cubado real: somar cubado de cada veiculo das NFs do escopo via
+        # calcular_cubado_por_modelos (matching regex que casa "BIG-TRI" da NF
+        # com "BIG TRI" do cadastro). Centralizado — sem duplicar a logica.
+        modelos_veiculos_escopo = [
+            v.modelo
+            for veics in veiculos_por_nf.values()
+            for v in veics
+            if v.modelo
+        ]
+        peso_cubado_nf = (
+            EmbarqueCarViaService.calcular_cubado_por_modelos(
+                cotacao.id, modelos_veiculos_escopo
+            )
+            if modelos_veiculos_escopo else 0
+        )
 
         # Filial do pedido (SP/RJ)
         filial = pedido.filial if pedido else None
@@ -1191,9 +1175,10 @@ class EmbarqueCarViaService:
     ) -> List[Dict]:
         """Verifica se modelos trazidos pela NF estao todos cadastrados na cotacao.
 
-        Compara `CarviaNfVeiculo.modelo` (uppercase) com
-        `CarviaCotacaoMoto.modelo_moto.nome` da cotacao. Match exato OU
-        substring (mesma logica de `calcular_cubado_por_modelos`).
+        Compara `CarviaNfVeiculo.modelo` com os modelos da cotacao via
+        `MotoRecognitionService.resolver_modelo_em_lista` (regex_pattern
+        tolerante a separador + word-boundary), a mesma logica de matching de
+        `calcular_cubado_por_modelos` — casa "BIG-TRI" da NF com "BIG TRI".
 
         Args:
             carvia_cotacao_id: ID da cotacao alvo.
@@ -1221,28 +1206,29 @@ class EmbarqueCarViaService:
         if not veiculos:
             return []
 
-        modelos_cotacao = set()
-        for m in CarviaCotacaoMoto.query.filter_by(
-            cotacao_id=carvia_cotacao_id
-        ).all():
-            if m.modelo_moto and m.modelo_moto.nome:
-                modelos_cotacao.add(m.modelo_moto.nome.upper())
+        from app.carvia.services.pricing.moto_recognition_service import (
+            MotoRecognitionService,
+        )
+
+        modelos_cotacao_objs = [
+            m.modelo_moto
+            for m in CarviaCotacaoMoto.query.filter_by(
+                cotacao_id=carvia_cotacao_id
+            ).all()
+            if m.modelo_moto and m.modelo_moto.nome
+        ]
 
         agregado: Dict[str, Dict] = {}
         for v in veiculos:
             mod = (v.modelo or '').strip()
             if not mod:
                 continue
-            mod_upper = mod.upper()
-            existe = mod_upper in modelos_cotacao
-            if not existe:
-                for nome_cot in modelos_cotacao:
-                    if nome_cot and (nome_cot in mod_upper or mod_upper in nome_cot):
-                        existe = True
-                        break
-            if existe:
+            # Ja cadastrado na cotacao? (match regex tolerante a separador)
+            if MotoRecognitionService.resolver_modelo_em_lista(
+                mod, modelos_cotacao_objs
+            ) is not None:
                 continue
-            entry = agregado.setdefault(mod_upper, {
+            entry = agregado.setdefault(mod.upper(), {
                 'modelo_nome': mod,
                 'quantidade': 0,
                 'valor_total': 0.0,
@@ -1253,20 +1239,17 @@ class EmbarqueCarViaService:
         if not agregado:
             return []
 
-        nomes_faltantes = list(agregado.keys())
         candidatos_mm = CarviaModeloMoto.query.filter(
             CarviaModeloMoto.ativo == True,  # noqa: E712
         ).all()
-        modelos_existentes = {mm.nome.upper(): mm.id for mm in candidatos_mm}
 
         resultado = []
-        for mod_upper, entry in agregado.items():
-            modelo_id_existente = modelos_existentes.get(mod_upper)
-            if modelo_id_existente is None:
-                for nome_mm, id_mm in modelos_existentes.items():
-                    if nome_mm in mod_upper or mod_upper in nome_mm:
-                        modelo_id_existente = id_mm
-                        break
+        for entry in agregado.values():
+            # Sugerir modelo_moto_id existente (entre TODOS os ativos) via regex
+            mm_existente = MotoRecognitionService.resolver_modelo_em_lista(
+                entry['modelo_nome'], candidatos_mm
+            )
+            modelo_id_existente = mm_existente.id if mm_existente is not None else None
             valor_unit = (
                 entry['valor_total'] / entry['quantidade']
                 if entry['quantidade'] > 0 else 0

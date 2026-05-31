@@ -12,8 +12,8 @@ import os
 # ====================================================================
 
 # Extended context window (1M tokens)
-# Opus 4.7/4.6 e Sonnet 4.6: 1M tokens NATIVO (sem beta header necessário)
-# Opus 4.7: 1M ao preço padrão $5/$25 per MTok, sem long-context premium
+# Opus 4.8/4.7/4.6 e Sonnet 4.6: 1M tokens NATIVO (sem beta header necessário)
+# Opus 4.8/4.7: 1M ao preço padrão $5/$25 per MTok, sem long-context premium
 # Sonnet 4.5/4.0: precisam de beta header "context-1m-2025-08-07"
 # Flag mantida apenas para documentação — modelos atuais usam 1M automaticamente
 USE_EXTENDED_CONTEXT = os.getenv("AGENT_EXTENDED_CONTEXT", "false").lower() == "true"
@@ -316,13 +316,14 @@ if AGENTE_PDF_STRATEGY not in _VALID_PDF_STRATEGIES:
 # ====================================================================
 
 # Modelo padrao para o bot do Teams.
-# Opus 4.7 (16/04/2026): mesmo preco que 4.6 ($5/$25 per 1M tokens), novo tokenizer
-#   (0-35% mais tokens por texto), stricter effort calibration, comportamento mais
-#   literal, tende a spawnar menos subagentes e usar menos tools por default.
+# Opus 4.8 (28/05/2026): mesma superficie de API que 4.7 (sem breaking change),
+#   mesmo preco $5/$25 per 1M tokens, narrativa mais detalhada, mais deliberado.
+# Opus 4.7 (16/04/2026): novo tokenizer (0-35% mais tokens por texto), stricter
+#   effort calibration, comportamento mais literal.
 # Opus 4.6 (legado): ~91s por resposta com tools.
 # Sonnet 4.6: ~15-25s por resposta com tools, custo $3/$15 per 1M tokens.
-# Rollback instantaneo: TEAMS_DEFAULT_MODEL=claude-opus-4-6
-TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-7")
+# Rollback instantaneo: TEAMS_DEFAULT_MODEL=claude-opus-4-7 (ou =claude-opus-4-6)
+TEAMS_DEFAULT_MODEL = os.getenv("TEAMS_DEFAULT_MODEL", "claude-opus-4-8")
 
 # Modo assincrono para o bot do Teams
 # Quando true: retorna task_id imediatamente, processa em daemon thread, Azure Function faz polling
@@ -610,6 +611,51 @@ if AGENT_SDK_SESSION_STORE_FLUSH not in ("batched", "eager"):
     AGENT_SDK_SESSION_STORE_FLUSH = "batched"
 
 # ====================================================================
+# Sticky Session via Redis (2026-05-27)
+# ====================================================================
+# Mitiga Anthropic Issue #61862 (Vj3 over-fires interrupted_turn).
+# Workers Gunicorn (workers=4) sem session affinity fazem requests da
+# mesma sessao caírem em workers diferentes → cada worker novo recria
+# subprocess CLI → materialize_resume_session → Vj3 dispara "Continue
+# from where you left off" → chain parentUuid quebra → modelo perde
+# turnos intermediários.
+#
+# Quando ON: workers registram ownership em Redis. Request num worker
+# nao-dono retorna 409. Frontend JS retry com backoff até cair no dono.
+#
+# Rollback: AGENT_STICKY_SESSION_ENABLED=false. Fail-open se Redis off.
+#
+# Ref: https://github.com/anthropics/claude-code/issues/61862
+AGENT_STICKY_SESSION_ENABLED = os.getenv(
+    "AGENT_STICKY_SESSION_ENABLED", "false"
+).lower() == "true"
+
+# TTL do ownership (segundos). Default 30min = mais que session idle típica.
+STICKY_SESSION_TTL_SEC = int(os.getenv("STICKY_SESSION_TTL_SEC", "1800"))
+
+# ====================================================================
+# POST_SESSION jobs via RQ (2026-05-27)
+# ====================================================================
+# Move jobs POST_SESSION (summarize, patterns, profile, extract_knowledge,
+# extract_personal) do thread/sync inline no worker do chat → fila RQ
+# `agent_background` (worker separado).
+#
+# Motivo: jobs chamam Sonnet API por 5-30s cada. Quando rodam inline,
+# saturam o worker dono da sessao. Gunicorn roteia novas requests para
+# outros workers que vem ownership Sticky e retornam 409. Mesmo o JS
+# fazendo retry, pode demorar muitos segundos ate o worker dono liberar
+# e aceitar a proxima request.
+#
+# Quando ON: jobs enfileirados em ~10ms, worker do chat libera imediato.
+# Quando OFF (default): comportamento atual (thread/sync inline).
+# Fallback: se RQ/Redis off, cai automaticamente em thread/sync.
+#
+# Rollback: AGENT_POST_SESSION_VIA_RQ=false. Sem deploy de codigo.
+AGENT_POST_SESSION_VIA_RQ = os.getenv(
+    "AGENT_POST_SESSION_VIA_RQ", "false"
+).lower() == "true"
+
+# ====================================================================
 # Thinking Display (SDK 0.1.65+)
 # ====================================================================
 # Controla o campo `display` do ThinkingConfig (forwarded como --thinking-display CLI).
@@ -757,3 +803,108 @@ def _parse_allowed_user_ids_csv(raw: str) -> set[int]:
 ESTOQUE_RESTRICAO_ALLOWED_USER_IDS: set[int] = _parse_allowed_user_ids_csv(
     os.getenv("AGENT_ESTOQUE_RESTRICAO_ALLOWED_USER_IDS", "1,55")
 )
+
+
+# ====================================================================
+# Audit Hook deterministico Odoo (2026-05-28)
+# ====================================================================
+# Quando ativo, OdooConnection.execute_kw registra TODA chamada XML-RPC
+# write na tabela operacao_odoo_auditoria, correlacionando com session_id
+# do agente web via ENV vars propagadas pelo PreToolUse hook.
+#
+# Whitelist de metodos: app/utils/odoo_audit_helpers.py METODOS_WRITE_AUDITADOS
+# Schema: scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}
+# Ver app/odoo/CLAUDE.md secao P8.
+USE_ODOO_AUDIT_HOOK = os.getenv("AGENT_ODOO_AUDIT_HOOK", "false").lower() == "true"
+
+
+# ====================================================================
+# Capability Registry (Onda 0 — S0c)
+# ====================================================================
+# Grafo descritivo read-only skill↔agente. Fundacao para ondas futuras
+# (planejador/skill-RAG). Nenhum runtime consome o registry ainda.
+# Ativar quando houver consumidor: AGENT_CAPABILITY_REGISTRY=true.
+# Default false — flag marca a fundacao como inerte ate onda futura.
+USE_CAPABILITY_REGISTRY = os.getenv("AGENT_CAPABILITY_REGISTRY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 1 — Quality Spine + Ontologia (todas OFF por default; ativam em deploy)
+# ====================================================================
+USE_AGENT_QUALITY_SPINE = os.getenv("AGENT_QUALITY_SPINE", "false").lower() == "true"
+USE_AGENT_STEP_JUDGE = os.getenv("AGENT_STEP_JUDGE", "false").lower() == "true"
+USE_AGENT_ONTOLOGY = os.getenv("AGENT_ONTOLOGY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 2 — Planejador + Verify (OFF por default; ativar em deploy gradual)
+# ====================================================================
+
+# B1: PlanState durável — captura TaskCreate/TaskUpdate e persiste em
+# AgentSession.data['plan'] (JSONB). Fundação do super-loop planejador.
+# Com flag OFF (default PROD): nenhum write em data['plan'] — comportamento
+# idêntico ao atual. Ativar com AGENT_PLANNER=true para habilitar.
+USE_AGENT_PLANNER = os.getenv("AGENT_PLANNER", "false").lower() == "true"
+
+# B2: Verify step — juiz pós-turno que avalia se o plano foi executado.
+# Depende de USE_AGENT_PLANNER. Planejado para Onda 2 fase posterior.
+# Rollback: AGENT_VERIFY=false.
+USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 3 — A3: Eval Gate (golden datasets, report-only, D8 cron)
+# ====================================================================
+# Quando ON: D8 (modulo 28) roda run_evals() contra os 4 golden datasets
+# de subagentes e loga resultado (report-only — NUNCA bloqueia o cron).
+# invoke_fn e' o seam injetavel; em shadow (flag ON) usa default que raise
+# NotImplementedError e reporta todos os casos como 'error' (safe).
+# Wiring real do agente sera' feito na ativacao futura.
+#
+# Default false (flag-OFF, D8 no-op). Ativar: AGENT_EVAL_GATE=true.
+# Rollback instantaneo: AGENT_EVAL_GATE=false.
+AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"
+
+# ====================================================================
+# Onda 4 — F4/F5: Skill Hints Advisory (flag-OFF por default)
+# ====================================================================
+# Quando ON: hook UserPromptSubmit adiciona bloco <skill_hints priority="advisory">
+# com as N skills mais relevantes para o turno (keyword matching zero-LLM).
+#
+# LIMITAÇÃO ARQUITETURAL (documentada em context_enrichment.py):
+#   O SDK fixa `skills=` no connect() — não há set_skills() por turno.
+#   Este bloco é ADVISORY: informa o agente, não altera o listing real.
+#
+# Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
+# Ativar: AGENT_SKILL_RAG=true
+USE_AGENT_SKILL_RAG = os.getenv("AGENT_SKILL_RAG", "false").lower() == "true"
+
+# ====================================================================
+# Onda 4 — D5: World Model Injection via ontologia (flag-OFF por default)
+# ====================================================================
+# Quando ON: hook UserPromptSubmit adiciona bloco <world_model priority="advisory">
+# com entidades canônicas da ontologia (D4 query_ontology_entities).
+#
+# D5 é ADITIVO: _DOMAIN_KEYWORDS em memory_injection.py permanece como
+# fallback cold-start. Não remove nem substitui routing_context existente.
+# Se ontologia vazia → None (fallback ativo) — nunca duplica contexto.
+#
+# Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
+# Ativar: AGENT_WORLD_MODEL_INJECT=true
+USE_AGENT_WORLD_MODEL_INJECT = os.getenv("AGENT_WORLD_MODEL_INJECT", "false").lower() == "true"
+
+# ====================================================================
+# Onda 3 — A4: Promoção Automática de Diretriz (shadow, flag-OFF)
+# ====================================================================
+# Fecha o flywheel: sessão bem-sucedida → candidata → avalia (gate A3
+# + anti-gaming R9) → (shadow) só LOGA "promoveria", NÃO escreve.
+#
+# BLOQUEADO para função REAL até:
+#   1. USE_AGENT_PLANNER ON em PROD (base PlanState)
+#   2. Baseline A3 estável (14d de coleta)
+#   3. Coluna directive_status em agent_memories + audit hook Odoo PROD
+#
+# Quando ON (futuro): evaluate_and_promote() fará escrita real via
+# _persist_directive() (hoje = NotImplementedError stub documentado).
+#
+# Default false. Ativar: AGENT_DIRECTIVE_PROMOTION=true.
+# Rollback instantâneo: AGENT_DIRECTIVE_PROMOTION=false.
+# Sem caller ativo: flag ON não ativa nada até wiring no Stop hook/D8.
+AGENT_DIRECTIVE_PROMOTION = os.getenv("AGENT_DIRECTIVE_PROMOTION", "false").lower() == "true"

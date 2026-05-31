@@ -539,3 +539,29 @@ def test_constants_campos_validaveis_inclui_essenciais():
         'journal_id', 'company_id', 'partner_id',
     }
     assert essenciais.issubset(CONSTANTS_CAMPOS_VALIDAVEIS)
+
+
+def test_registrar_auditoria_nao_passa_etapa_string_para_coluna_integer():
+    """G-AUDIT-1 / N21 — 2a cópia do bug em `_invoice_helpers._registrar_auditoria`
+    (descoberta pelo canary P6 2026-05-29). A coluna `operacao_odoo_auditoria.etapa`
+    é `db.Integer`; passar `etapa=fase` (string 'F5d.5') estoura
+    `psycopg2.InvalidTextRepresentation` e envenena a session do pipeline (SEFAZ).
+    A fase deve ir em `pipeline_etapa` (String) + `etapa_descricao` — NUNCA em `etapa`.
+    """
+    from unittest.mock import patch
+    from app.odoo.estoque.scripts import _invoice_helpers
+
+    with patch('app.odoo.models.OperacaoOdooAuditoria') as MockAud:
+        _invoice_helpers._registrar_auditoria(
+            ciclo='TEST_CICLO', ajuste_id=180371, fase='F5d.5',
+            acao='LIBERAR_FAT', status='EXECUTADO', modelo_odoo='account.move',
+        )
+        MockAud.registrar.assert_called_once()
+        kwargs = MockAud.registrar.call_args.kwargs
+        # 'etapa' (coluna Integer) NÃO pode receber a string de fase
+        assert not isinstance(kwargs.get('etapa'), str), (
+            f"etapa (Integer) nao pode ser string; recebeu {kwargs.get('etapa')!r}"
+        )
+        # a fase vai em pipeline_etapa (String) + etapa_descricao
+        assert kwargs.get('pipeline_etapa') == 'F5d.5'
+        assert 'F5d.5' in (kwargs.get('etapa_descricao') or '')

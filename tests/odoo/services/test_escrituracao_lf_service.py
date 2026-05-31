@@ -616,3 +616,27 @@ def test_v20_deprecation_warning_emitido():
     assert 'executar_fluxo_l3_1_2_x' in msg
     # Atomo ainda funciona (nao quebra fluxo)
     assert res['status'] in ('SKIP_AJUSTES_VAZIOS', 'DRY_RUN_OK', 'FALHA')
+
+
+def test_registrar_auditoria_escrituracao_nao_passa_etapa_string():
+    """G-AUDIT-1 / N21 — 3a (e última) cópia do bug, em
+    `escrituracao._registrar_auditoria` (descoberta pelo canary P6 2026-05-29 na
+    ETAPA E). A coluna `operacao_odoo_auditoria.etapa` é Integer; os callsites
+    passam `fase='F-E'` (string) → psycopg2 InvalidTextRepresentation. A fase vai
+    em `pipeline_etapa` (String) + `etapa_descricao` — NUNCA em `etapa`.
+    """
+    from unittest.mock import patch
+    from app.odoo.estoque.scripts import escrituracao
+
+    with patch('app.odoo.models.OperacaoOdooAuditoria') as MockAud:
+        escrituracao._registrar_auditoria(
+            ajuste_id=180371, ciclo='TEST_CICLO', fase='F-E',
+            acao='ESCRITURAR', status='EXECUTADO',
+        )
+        MockAud.registrar.assert_called_once()
+        kwargs = MockAud.registrar.call_args.kwargs
+        assert not isinstance(kwargs.get('etapa'), str), (
+            f"etapa (Integer) nao pode ser string; recebeu {kwargs.get('etapa')!r}"
+        )
+        assert kwargs.get('pipeline_etapa') == 'F-E'
+        assert 'F-E' in (kwargs.get('etapa_descricao') or '')

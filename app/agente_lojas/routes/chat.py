@@ -425,7 +425,7 @@ def _persist_session_after_stream(
                 + float(final_metadata['total_cost_usd'])
             )
         if not session.model:
-            session.model = 'claude-opus-4-7'
+            session.model = 'claude-opus-4-8'
 
         from sqlalchemy.orm.attributes import flag_modified
         flag_modified(session, 'data')

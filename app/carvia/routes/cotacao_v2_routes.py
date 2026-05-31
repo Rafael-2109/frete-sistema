@@ -25,12 +25,16 @@ def _agregar_totais_nfs_cotacao(cotacao_id):
     CARGA_GERAL o cubado agregado retorna 0 (NFs de CARGA_GERAL nao tem
     cubado proprio; usar peso_bruto como proxy na validacao).
 
+    IMPORTANTE (fix 2026-05-27): `valor_total` agora soma `CarviaPedidoItem.valor_total`
+    (valor de mercadoria, sem impostos/frete/etc) — NAO mais `CarviaNf.valor_total`
+    que inclui ICMS/frete e inflava `cotacao.valor_mercadoria` indevidamente.
+
     Returns:
         dict com:
-          - peso_bruto: float (kg)
+          - peso_bruto: float (kg) — soma CarviaNf
           - peso_cubado: float (kg) — 0 para CARGA_GERAL
-          - valor_total: float (R$)
-          - quantidade_volumes: int
+          - valor_total: float (R$) — soma CarviaPedidoItem (mercadoria)
+          - quantidade_volumes: int — soma CarviaNf
           - nfs_vinculadas: set[str] — numeros de NF ja vinculadas (para skip
             de re-anexacao)
     """
@@ -50,6 +54,7 @@ def _agregar_totais_nfs_cotacao(cotacao_id):
             CarviaPedido.cotacao_id == cotacao_id,
             CarviaPedidoItem.numero_nf.isnot(None),
             CarviaPedidoItem.numero_nf != '',
+            CarviaPedido.status != 'CANCELADO',
         ).distinct().all()
     }
 
@@ -62,12 +67,23 @@ def _agregar_totais_nfs_cotacao(cotacao_id):
             'nfs_vinculadas': set(),
         }
 
-    # Agregados diretos das CarviaNfs
+    # Valor de mercadoria: soma CarviaPedidoItem.valor_total (NAO CarviaNf.valor_total)
+    valor_total = float(db.session.query(
+        db.func.coalesce(db.func.sum(CarviaPedidoItem.valor_total), 0)
+    ).join(
+        CarviaPedido, CarviaPedidoItem.pedido_id == CarviaPedido.id
+    ).filter(
+        CarviaPedido.cotacao_id == cotacao_id,
+        CarviaPedidoItem.numero_nf.isnot(None),
+        CarviaPedidoItem.numero_nf != '',
+        CarviaPedido.status != 'CANCELADO',
+    ).scalar() or 0)
+
+    # Peso e volumes: continuam vindo de CarviaNf (sao valores fisicos da NF)
     nfs_rows = CarviaNf.query.filter(
         CarviaNf.numero_nf.in_(list(nfs_vinculadas_nums))
     ).all()
     peso_bruto = sum(float(n.peso_bruto or 0) for n in nfs_rows)
-    valor_total = sum(float(n.valor_total or 0) for n in nfs_rows)
     volumes = sum(int(n.quantidade_volumes or 0) for n in nfs_rows)
 
     # Cubado agregado: somar modelos de CarviaNfVeiculo das NFs vinculadas
@@ -1193,6 +1209,11 @@ def register_cotacao_v2_routes(bp):
                 except Exception:
                     nfs_list = []
 
+            # Fix 2B 2026-05-27: rastrear NFs criadas neste wizard para
+            # disparar hook de status + recalc de valor_mercadoria/peso/volumes apos
+            # o loop principal terminar.
+            numeros_nf_criados_wizard = []
+
             if nfs_list:
                 from app.carvia.models import (
                     CarviaNf, CarviaNfItem, CarviaNfVeiculo,
@@ -1359,8 +1380,79 @@ def register_cotacao_v2_routes(bp):
                             pedido.numero_pedido, numero_nf, cotacao.numero_cotacao,
                         )
 
+                        # Rastrear para hook de status + recalc adiante (Fix 2B)
+                        if numero_nf and numero_nf != '0':
+                            numeros_nf_criados_wizard.append(numero_nf)
+
                     except Exception as e_nf:
                         logger.warning("Erro ao criar pedido para NF na cotacao %s: %s", cotacao.id, e_nf)
+
+            # Fix 2B 2026-05-27: recalcular totais da cotacao e chamar hook de status
+            # APOS o loop principal. Wizard cria pedidos com NF embutida, entao precisa
+            # avaliar transicao ABERTO->FATURADO e atualizar valor_mercadoria se
+            # ultrapassou. Antes deste fix, cotacao ficava com valor_mercadoria estimado
+            # e pedidos ABERTO mesmo com NF ativa.
+            if numeros_nf_criados_wizard:
+                try:
+                    from app.carvia.models import (
+                        CarviaPedido as _CPw, CarviaPedidoItem as _CPIw, CarviaNf as _CNFw,
+                    )
+                    db.session.flush()
+
+                    # Recalc valor_mercadoria (so sobe, nunca desce)
+                    soma_valor_real_w = float(db.session.query(
+                        db.func.coalesce(db.func.sum(_CPIw.valor_total), 0)
+                    ).join(
+                        _CPw, _CPIw.pedido_id == _CPw.id
+                    ).filter(
+                        _CPw.cotacao_id == cotacao.id,
+                        _CPIw.numero_nf.isnot(None),
+                        _CPIw.numero_nf != '',
+                        _CPw.status != 'CANCELADO',
+                    ).scalar() or 0)
+
+                    teto_valor_w = float(cotacao.valor_mercadoria or 0)
+                    if soma_valor_real_w > teto_valor_w + 0.01:
+                        cotacao.valor_mercadoria = soma_valor_real_w
+                        logger.info(
+                            "Wizard: valor_mercadoria cotacao %s atualizado "
+                            "%.2f -> %.2f", cotacao.id, teto_valor_w, soma_valor_real_w,
+                        )
+
+                    # Peso e volumes
+                    nfs_rows_w = _CNFw.query.filter(
+                        _CNFw.numero_nf.in_(list(set(numeros_nf_criados_wizard)))
+                    ).all()
+                    if nfs_rows_w:
+                        soma_peso_w = sum(float(n.peso_bruto or 0) for n in nfs_rows_w)
+                        soma_volumes_w = sum(int(n.quantidade_volumes or 0) for n in nfs_rows_w)
+                        if soma_peso_w > float(cotacao.peso or 0) + 0.01:
+                            cotacao.peso = soma_peso_w
+                        if soma_volumes_w > int(cotacao.volumes or 0):
+                            cotacao.volumes = soma_volumes_w
+                except Exception as e_recalc:
+                    logger.warning(
+                        "Wizard: erro ao recalcular totais cotacao %s: %s",
+                        cotacao.id, e_recalc,
+                    )
+
+                # Hook de transicao ABERTO -> FATURADO para cada NF criada
+                try:
+                    from app.carvia.services.documentos.embarque_carvia_service import (
+                        atualizar_status_pedido_carvia_pelo_faturamento,
+                    )
+                    for nf_num in set(numeros_nf_criados_wizard):
+                        try:
+                            atualizar_status_pedido_carvia_pelo_faturamento(nf_num)
+                        except Exception as e_hook:
+                            logger.warning(
+                                "Wizard: erro hook status NF %s: %s",
+                                nf_num, e_hook,
+                            )
+                except Exception as e_hook_imp:
+                    logger.warning(
+                        "Wizard: erro ao importar hook status: %s", e_hook_imp
+                    )
 
             db.session.commit()
             n_pedidos = len(nfs_list)
@@ -2761,9 +2853,31 @@ def register_cotacao_v2_routes(bp):
             peso_nova = float(
                 (nf.peso_bruto if nf else dados.get('peso_bruto')) or 0
             )
-            valor_nova = float(
-                (nf.valor_total if nf else dados.get('valor_total')) or 0
-            )
+            # Fix 2026-05-27: valor_nova = soma dos valor_total_item dos itens
+            # (valor de mercadoria), NAO valor_total da NF (que inclui impostos/frete).
+            # Match exato com o que sera gravado em CarviaPedidoItem.valor_total adiante.
+            itens_nf_parsed = dados.get('itens', [])
+            if nf and not nf_reutilizada:
+                # PATH improvavel: nf existe mas itens_nf_parsed pode estar vazio se reutilizada
+                soma_itens_nova = sum(
+                    float(it.get('valor_total_item') or 0) for it in itens_nf_parsed
+                )
+                valor_nova = float(soma_itens_nova or (nf.valor_total or 0))
+            elif nf_reutilizada:
+                # NF reutilizada: somar CarviaNfItem.valor_total_item ja gravados
+                from app.carvia.models import CarviaNfItem
+                soma_itens_db = float(db.session.query(
+                    db.func.coalesce(db.func.sum(CarviaNfItem.valor_total_item), 0)
+                ).filter(CarviaNfItem.nf_id == nf.id).scalar() or 0)
+                valor_nova = soma_itens_db or float(nf.valor_total or 0)
+            else:
+                # NF nova (sera criada adiante): usar soma dos itens parsed
+                soma_itens_nova = sum(
+                    float(it.get('valor_total_item') or 0) for it in itens_nf_parsed
+                )
+                valor_nova = float(
+                    soma_itens_nova or (dados.get('valor_total') or 0)
+                )
             volumes_nova = int(
                 (nf.quantidade_volumes if nf else dados.get('quantidade_volumes')) or 0
             )
@@ -2782,6 +2896,12 @@ def register_cotacao_v2_routes(bp):
 
             agg = _agregar_totais_nfs_cotacao(cotacao_id)
             eh_reanexacao = str(numero_nf) in agg['nfs_vinculadas']
+
+            # Flag para Fix 1C (motos): so adiciona motos novas em CarviaCotacaoMoto
+            # quando o valor da NF ultrapassa o teto da cotacao (regra do usuario:
+            # "Apenas se isso ultrapassar o valor da cotacao... acrescentar as motos
+            # na cotacao. Se for inferior, manter o provisorio aguardando o restante").
+            valor_ultrapassou_teto = False
 
             if not eh_reanexacao:
                 soma_peso = agg['peso_bruto'] + peso_nova
@@ -2811,6 +2931,7 @@ def register_cotacao_v2_routes(bp):
                 # setar campo porque nao existe).
                 if soma_valor > teto_valor + _TOL_VAL:
                     cotacao.valor_mercadoria = soma_valor
+                    valor_ultrapassou_teto = True
                 # Simetrico aos outros totais: apenas aumenta. Se a NF nova
                 # nao tem quantidade_volumes (PDF parse falho), soma_volumes
                 # pode ser menor que o atual — nao queremos regredir.
@@ -2859,7 +2980,10 @@ def register_cotacao_v2_routes(bp):
 
                 # Criar veiculos (motos: chassi, cor, modelo)
                 # Enriquecer com dados do item da NF (valor/modelo que LLM nao extrai)
+                # Fix 1C 2026-05-27: coletar veiculos NOVOS para acrescentar em
+                # CarviaCotacaoMoto quando valor ultrapassar o teto.
                 itens_nf_ref = dados.get('itens', [])
+                veiculos_novos_para_cotacao = []  # [(modelo_nome, valor_unit), ...]
                 for v_idx, veiculo in enumerate(dados.get('veiculos', [])):
                     chassi = (veiculo.get('chassi') or '').strip()
                     if chassi:
@@ -2867,15 +2991,102 @@ def register_cotacao_v2_routes(bp):
                         if not existente:
                             # B2 fix: more vehicles than NF items → fall back to last item (same NF line, multiple chassis)
                             item_nf_ref = itens_nf_ref[min(v_idx, len(itens_nf_ref) - 1)] if itens_nf_ref else {}
+                            modelo_nome = veiculo.get('modelo') or item_nf_ref.get('descricao')
+                            valor_unit_v = (
+                                veiculo.get('valor')
+                                or item_nf_ref.get('valor_unitario')
+                                or item_nf_ref.get('valor_total_item')
+                            )
                             db.session.add(CarviaNfVeiculo(
                                 nf_id=nf.id,
                                 chassi=chassi,
-                                modelo=veiculo.get('modelo') or item_nf_ref.get('descricao'),
+                                modelo=modelo_nome,
                                 cor=veiculo.get('cor'),
-                                valor=veiculo.get('valor') or item_nf_ref.get('valor_unitario') or item_nf_ref.get('valor_total_item'),
+                                valor=valor_unit_v,
                                 ano=veiculo.get('ano_modelo'),
                                 numero_motor=veiculo.get('numero_motor'),
                             ))
+                            if modelo_nome:
+                                veiculos_novos_para_cotacao.append(
+                                    (str(modelo_nome).strip(), valor_unit_v)
+                                )
+            else:
+                veiculos_novos_para_cotacao = []
+
+            # Fix 1C 2026-05-27: acrescentar motos novas em CarviaCotacaoMoto
+            # quando o valor ultrapassou o teto. Agrupa por modelo (match por
+            # CarviaModeloMoto.nome case-insensitive). Se modelo nao existe,
+            # cria com cadastro_pendente=True (igual ao backfill manual).
+            if (
+                valor_ultrapassou_teto
+                and cotacao.tipo_material == 'MOTO'
+                and veiculos_novos_para_cotacao
+            ):
+                from collections import defaultdict
+                from app.carvia.models import CarviaCotacaoMoto, CarviaModeloMoto
+                # Agregar por modelo: {nome_upper: (qtd, soma_valor)}
+                agg_modelos = defaultdict(lambda: [0, 0.0])
+                for nome, valor in veiculos_novos_para_cotacao:
+                    key = nome.upper()
+                    agg_modelos[key][0] += 1
+                    if valor is not None:
+                        try:
+                            agg_modelos[key][1] += float(valor)
+                        except (TypeError, ValueError):
+                            pass
+                for nome_key, (qtd, soma_val) in agg_modelos.items():
+                    # Buscar nome original
+                    nome_orig = next(
+                        (n for (n, _) in veiculos_novos_para_cotacao if n.upper() == nome_key),
+                        nome_key,
+                    )
+                    # Resolver modelo
+                    modelo_mm = CarviaModeloMoto.query.filter(
+                        db.func.upper(CarviaModeloMoto.nome) == nome_key,
+                        CarviaModeloMoto.ativo == True,  # noqa: E712
+                    ).first()
+                    if not modelo_mm:
+                        modelo_mm = CarviaModeloMoto(
+                            nome=nome_orig,
+                            comprimento=0,
+                            largura=0,
+                            altura=0,
+                            cubagem_minima=300,
+                            peso_medio=None,
+                            categoria_moto_id=None,
+                            ativo=True,
+                            cadastro_pendente=True,
+                            criado_por=current_user.email,
+                        )
+                        db.session.add(modelo_mm)
+                        db.session.flush()
+                    # Incrementar/criar CarviaCotacaoMoto
+                    valor_unit_medio = (soma_val / qtd) if (qtd and soma_val) else None
+                    existente_cm = CarviaCotacaoMoto.query.filter_by(
+                        cotacao_id=cotacao_id,
+                        modelo_moto_id=modelo_mm.id,
+                    ).first()
+                    if existente_cm:
+                        existente_cm.quantidade = (existente_cm.quantidade or 0) + qtd
+                        if valor_unit_medio:
+                            existente_cm.valor_total = (
+                                float(existente_cm.valor_total or 0) + soma_val
+                            )
+                            existente_cm.valor_unitario = valor_unit_medio
+                    else:
+                        db.session.add(CarviaCotacaoMoto(
+                            cotacao_id=cotacao_id,
+                            modelo_moto_id=modelo_mm.id,
+                            categoria_moto_id=modelo_mm.categoria_moto_id,
+                            quantidade=qtd,
+                            valor_unitario=valor_unit_medio,
+                            valor_total=soma_val if soma_val else None,
+                            placeholder=True,  # peso cubado pendente
+                        ))
+                logger.info(
+                    "Fix 1C: acrescentou %d modelo(s) de moto na cotacao %s (NF %s)",
+                    len(agg_modelos), cotacao_id, numero_nf,
+                )
 
             # 4. Buscar pedido existente com esta NF (dedup) ou criar novo
             # B3 fix: lookup by NF number, not just filial — avoids merging different NFs into same pedido
@@ -2951,6 +3162,20 @@ def register_cotacao_v2_routes(bp):
                 logger.exception(
                     "ERRO expandir_provisorio cotacao=%s pedido=%s nf=%s",
                     cotacao_id, pedido.id, numero_nf,
+                )
+
+            # 8. Transicao ABERTO -> FATURADO (fix 2026-05-27: hook estava
+            # ausente no fluxo api_anexar_nf_cotacao). Pedidos criados aqui ja
+            # nascem com numero_nf preenchido, entao precisamos avaliar a
+            # transicao imediatamente.
+            try:
+                from app.carvia.services.documentos.embarque_carvia_service import (
+                    atualizar_status_pedido_carvia_pelo_faturamento,
+                )
+                atualizar_status_pedido_carvia_pelo_faturamento(numero_nf)
+            except Exception as e:
+                logger.warning(
+                    "Erro ao avaliar transicao FATURADO (NF %s): %s", numero_nf, e
                 )
 
             db.session.commit()

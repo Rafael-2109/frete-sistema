@@ -1,24 +1,64 @@
 /* Modulo Inventario — usa tokens --bs-* e design tokens
  * Confronto: tabela densa com scroll, resize de colunas, cores semanticas
  * em diferencas, edicao inline de AJ.LOCAL/AJ.QTD.
+ *
+ * Layout: container 100vh com flex column. Toolbar fixa no topo,
+ * tabela ocupa o restante (mesmo pattern de carteira-simples).
  */
 
-/* Wrapper com scroll horiz+vert e altura calculada para nao empurrar a pagina. */
-.inv-tabela-wrapper {
-  overflow: auto;
-  max-height: calc(100vh - 240px);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 4px;
+/* Container raiz: usa toda a altura visivel da viewport (menos navbar) */
+.inv-confronto-container {
+  height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 4px 8px;
 }
 
-/* Tabela densa */
+/* Toolbar: linha unica com filtros + status + botoes */
+.inv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+.inv-toolbar .inv-filtro-busca {
+  width: 220px;
+  flex-shrink: 0;
+}
+.inv-toolbar .inv-resumo {
+  margin-right: auto;  /* empurra status+botoes para a direita */
+  white-space: nowrap;
+}
+
+/* Progress bar fica entre toolbar e tabela quando ativo (nao empurra) */
+.inv-progress {
+  flex-shrink: 0;
+}
+
+/* Wrapper da tabela cresce para ocupar todo espaco restante */
+.inv-tabela-wrapper {
+  overflow: auto;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 4px;
+  flex: 1;
+  min-height: 0;  /* permite encolher dentro do flex */
+}
+
+/* Tabela densa.
+ * width:1px e' truque canonico p/ table-layout:fixed: forca o navegador
+ * a usar EXATAMENTE as widths dos <col> sem recalcular (max-content
+ * recalcula e ignora redimensionamento manual). min-width:100% garante
+ * que a tabela ocupa pelo menos o wrapper. */
 .inv-tabela {
   font-size: 0.78rem;
   margin-bottom: 0;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
-  width: max-content;
+  width: 1px;
   min-width: 100%;
 }
 
@@ -41,16 +81,63 @@
   border-top: 1px solid var(--bs-border-color);
 }
 
-/* Header sticky + resize horizontal nativo do browser */
+/* Header sticky topo. min-width baixo permite encolher abaixo do texto;
+ * texto longo eh truncado via text-overflow ellipsis herdado do
+ * seletor generico th/td. Handle de resize (position:absolute right:0
+ * width:6px) cabe dentro do bbox, entao overflow:hidden NAO esconde. */
 .inv-tabela thead th {
   background: var(--bs-secondary-bg);
   position: sticky;
   top: 0;
   z-index: 10;
   font-weight: 600;
-  resize: horizontal;
-  overflow: auto;
-  min-width: 40px;
+  min-width: 20px;
+}
+
+/* Sticky horizontal: as 2 primeiras colunas (cod, produto) ficam fixadas
+ * a esquerda ao rolar horizontalmente. Header se mantem sticky no top
+ * com z-index maior na interseccao (cantos cod/produto no header). */
+.inv-tabela th:nth-child(1),
+.inv-tabela td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: var(--bs-body-bg);
+}
+.inv-tabela th:nth-child(2),
+.inv-tabela td:nth-child(2) {
+  position: sticky;
+  left: 90px;
+  z-index: 5;
+  background: var(--bs-body-bg);
+}
+/* Header sticky precisa de z-index maior nas colunas sticky-left */
+.inv-tabela thead th:nth-child(1),
+.inv-tabela thead th:nth-child(2) {
+  z-index: 11;
+  background: var(--bs-secondary-bg);
+}
+/* table-striped preserva tema sem zebras quebrando o sticky bg */
+.inv-tabela.table-striped > tbody > tr:nth-of-type(odd) > td:nth-child(1),
+.inv-tabela.table-striped > tbody > tr:nth-of-type(odd) > td:nth-child(2) {
+  background: var(--bs-tertiary-bg);
+}
+
+/* Handle de resize manual (P3): div absoluto na borda direita do TH.
+ * Cursor col-resize + dragstart via JS (confronto.js wireColResize). */
+.inv-col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 12;
+}
+.inv-col-resize-handle:hover,
+.inv-col-resize-handle.dragging {
+  background: rgba(var(--bs-primary-rgb), 0.3);
 }
 
 /* Alinhamento por tipo de conteudo:
@@ -66,12 +153,6 @@
   text-align: left;
 }
 
-/* Linha divergente: fundo amarelo suave (mantido) */
-.inv-row-divergente,
-.inv-row-divergente td {
-  background: rgba(var(--bs-warning-rgb), 0.18);
-}
-
 /* Celula clicavel (drill-down) */
 .inv-cell-drill {
   cursor: pointer;
@@ -83,9 +164,10 @@
 }
 
 /* Cores semanticas para diferencas (Odoo-Mov, Sist-Mov):
- * - diff > 1   -> vermelho (Odoo SOBRA: estoque fantasma criado)
- * - diff < -1  -> amarelo (Odoo FALTA: movimentacao nao escriturada)
- * - |diff| <=1 -> sem cor (ruido de arredondamento) */
+ * - diff > 0    -> vermelho (Odoo SOBRA: estoque fantasma criado)
+ * - diff < 0    -> amarelo (Odoo FALTA: movimentacao nao escriturada)
+ * - diff ~ 0    -> sem cor (tolerancia 0.0005 alinhada com fmt())
+ * Threshold em confronto.js: const DIFF_THRESHOLD = 0.0005 */
 .inv-diff-pos {
   background: rgba(var(--bs-danger-rgb), 0.18);
   color: var(--bs-danger);

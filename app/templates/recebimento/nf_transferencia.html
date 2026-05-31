@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+
+{% block title %}NFs de Transferência{% endblock %}
+
+{% block extra_css %}
+{# Styles em app/static/css/modules/_recebimento.css (secao NFT) — 2026-05-28 #}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid premium-page p-3 px-4">
+
+  <header class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <h1 class="h4 mb-1">
+        <i class="fas fa-exchange-alt"></i>
+        NFs de Transferência (inter-filiais)
+      </h1>
+      <p class="small text-muted mb-0">
+        NFs SAÍDA inter-company (FB ↔ CD ↔ LF) com cross-ref do DFe, picking
+        e invoice no destino. NFs com status pendente representam estoque
+        emitido mas ainda não escriturado.
+      </p>
+    </div>
+    <div class="d-flex gap-2 align-items-start">
+      <a href="{{ url_for('recebimento_views.central_fiscal') }}"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Central Fiscal
+      </a>
+    </div>
+  </header>
+
+  <!-- Resumo + ultimo refresh -->
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <div id="nft-resumo" class="nft-resumo small text-muted">
+      <span>Carregando resumo...</span>
+    </div>
+    <div class="small text-muted">
+      <span id="nft-last-refresh">
+        Último refresh:
+        {% if last_refresh %}{{ last_refresh.strftime('%d/%m/%Y %H:%M') }}
+        {% else %}<em>nunca</em>{% endif %}
+      </span>
+      <button id="nft-btn-refresh" class="btn btn-sm btn-primary ms-2">
+        <i class="fas fa-sync"></i> Atualizar do Odoo
+      </button>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="nft-toolbar bg-light rounded px-3 mb-2">
+    <div>
+      <label class="form-label small mb-0">Status</label>
+      <select id="nft-filtro-status" class="form-select form-select-sm">
+        <option value="pendentes" selected>Pendentes</option>
+        <option value="todos">Todas</option>
+        <option value="PENDENTE_DFE">Sem DFe</option>
+        <option value="PENDENTE_PICKING">Sem picking</option>
+        <option value="PENDENTE_INVOICE">Sem invoice</option>
+        <option value="CONCLUIDO">Concluídas</option>
+        <option value="CANCELADA">Canceladas</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label small mb-0">Origem</label>
+      <select id="nft-filtro-origem" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        <option value="FB">FB</option>
+        <option value="CD">CD</option>
+        <option value="LF">LF</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label small mb-0">Destino</label>
+      <select id="nft-filtro-destino" class="form-select form-select-sm">
+        <option value="">Todas</option>
+        <option value="FB">FB</option>
+        <option value="CD">CD</option>
+        <option value="LF">LF</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label small mb-0">Emissão de</label>
+      <input id="nft-filtro-data-inicio" type="date" class="form-control form-control-sm">
+    </div>
+    <div>
+      <label class="form-label small mb-0">até</label>
+      <input id="nft-filtro-data-fim" type="date" class="form-control form-control-sm">
+    </div>
+    <div class="flex-grow-1">
+      <label class="form-label small mb-0">Busca (NF / chave)</label>
+      <input id="nft-filtro-busca" type="text" class="form-control form-control-sm"
+             placeholder="ex.: SDTRA/2026/00881 ou chave NFe...">
+    </div>
+    <div>
+      <label class="form-label small mb-0">&nbsp;</label>
+      <button id="nft-btn-aplicar" class="btn btn-sm btn-outline-primary d-block">
+        <i class="fas fa-filter"></i> Filtrar
+      </button>
+    </div>
+  </div>
+
+  <!-- Progresso -->
+  <div id="nft-progress" class="d-none alert alert-info py-2 mb-2">
+    <i class="fas fa-spinner fa-spin"></i>
+    <span id="nft-progress-msg">Atualizando do Odoo...</span>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-responsive" style="max-height: calc(100vh - 320px); overflow: auto;">
+    <table class="table table-sm table-hover nft-tabela">
+      <thead class="table-light">
+        <tr>
+          <th style="width:30px;"></th>
+          <th>NF Origem</th>
+          <th>Data</th>
+          <th>Direção</th>
+          <th>Ação</th>
+          <th>CFOP</th>
+          <th class="text-end">Valor</th>
+          <th>DFe destino</th>
+          <th>Picking destino</th>
+          <th>Invoice destino</th>
+          <th>Status</th>
+          <th style="width:130px;" title="Marcar para EXCLUIR esta NF do calculo em_transito (NF ja ajustada manualmente no estoque)">
+            Desconsiderar Est.
+          </th>
+        </tr>
+      </thead>
+      <tbody id="nft-tbody">
+        <tr><td colspan="12" class="nft-empty">Carregando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginacao -->
+  <div class="d-flex justify-content-between align-items-center mt-2 small">
+    <span id="nft-pag-info" class="text-muted"></span>
+    <div class="btn-group btn-group-sm" role="group">
+      <button id="nft-pag-prev" class="btn btn-outline-secondary">&laquo; Anterior</button>
+      <button id="nft-pag-next" class="btn btn-outline-secondary">Próxima &raquo;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const API_URL = "{{ url_for('recebimento_views.nf_transferencia_api') }}";
+  const REFRESH_URL = "{{ url_for('recebimento_views.nf_transferencia_refresh') }}";
+  // Toggle "desconsiderar do em_transito" — {nf_id} no template substituido em JS.
+  const TOGGLE_URL_TPL = "{{ url_for('recebimento_views.nf_transferencia_desconsiderar_est_toggle', nf_id=0) }}";
+
+  let pagina = 1;
+  const pageSize = 100;
+
+  const STATUS_LABEL = {
+    'PENDENTE_DFE': 'Sem DFe',
+    'PENDENTE_PICKING': 'Sem picking',
+    'PENDENTE_INVOICE': 'Sem invoice',
+    'CONCLUIDO': 'Concluído',
+    'CANCELADA': 'Cancelada',
+  };
+
+  function fmtNum(v, dec=3) {
+    if (v === null || v === undefined) return '';
+    return Number(v).toLocaleString('pt-BR',
+      {minimumFractionDigits: dec, maximumFractionDigits: dec});
+  }
+  function fmtMoeda(v) {
+    if (v === null || v === undefined) return '';
+    return 'R$ ' + Number(v).toLocaleString('pt-BR',
+      {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+  function fmtData(v) {
+    if (!v) return '';
+    const d = new Date(v + 'T00:00:00');
+    if (isNaN(d.getTime())) return v;
+    return d.toLocaleDateString('pt-BR');
+  }
+  function fmtDataHora(iso) {
+    if (!iso) return 'nunca';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',
+      {hour: '2-digit', minute: '2-digit'});
+  }
+  // Hora-curta para celulas compactas (sem data). Ex: '13:42'.
+  // Odoo retorna UTC naive ('2026-05-28 13:42:39'); New Date(s) interpreta
+  // como hora LOCAL. Adicionar 'Z' forca UTC -> converte pro fuso do browser.
+  function fmtHoraCurta(iso) {
+    if (!iso) return '';
+    const s = String(iso).includes('T') ? String(iso) : String(iso).replace(' ', 'T');
+    const sUtc = s.endsWith('Z') ? s : s + 'Z';
+    const d = new Date(sUtc);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+  }
+  // Data-curta com hora (ex: '28/05/26 13:42') — para colunas estreitas
+  // de doc destino (picking/invoice) abaixo do nome do doc.
+  function fmtDataHoraCurta(iso) {
+    if (!iso) return '';
+    const s = String(iso).includes('T') ? String(iso) : String(iso).replace(' ', 'T');
+    const sUtc = s.endsWith('Z') ? s : s + 'Z';
+    const d = new Date(sUtc);
+    if (isNaN(d.getTime())) return '';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(-2);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${dd}/${mm}/${yy} ${hh}:${mi}`;
+  }
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  function montarFiltros() {
+    const params = new URLSearchParams();
+    params.set('status', document.getElementById('nft-filtro-status').value);
+    const co = document.getElementById('nft-filtro-origem').value;
+    const cd = document.getElementById('nft-filtro-destino').value;
+    const di = document.getElementById('nft-filtro-data-inicio').value;
+    const df = document.getElementById('nft-filtro-data-fim').value;
+    const bs = document.getElementById('nft-filtro-busca').value;
+    if (co) params.set('company_origem', co);
+    if (cd) params.set('company_destino', cd);
+    if (di) params.set('data_inicio', di);
+    if (df) params.set('data_fim', df);
+    if (bs) params.set('busca', bs);
+    params.set('page', pagina);
+    params.set('page_size', pageSize);
+    return params;
+  }
+
+  function renderResumo(resumo, lastRefresh, lastBy) {
+    const el = document.getElementById('nft-resumo');
+    const total = Object.values(resumo).reduce((a, b) => a + Number(b), 0);
+    const pend = (resumo.PENDENTE_DFE || 0) + (resumo.PENDENTE_PICKING || 0) +
+                 (resumo.PENDENTE_INVOICE || 0);
+    el.innerHTML = `
+      <div class="nft-resumo-item">
+        <span class="nft-num">${total}</span>
+        <span class="nft-lbl">Total</span>
+      </div>
+      <div class="nft-resumo-item is-pendente">
+        <span class="nft-num">${pend}</span>
+        <span class="nft-lbl">Pendentes</span>
+      </div>
+      <div class="nft-resumo-item is-concluido">
+        <span class="nft-num">${resumo.CONCLUIDO || 0}</span>
+        <span class="nft-lbl">Concluídas</span>
+      </div>
+      <div class="nft-resumo-item is-cancelada">
+        <span class="nft-num">${resumo.CANCELADA || 0}</span>
+        <span class="nft-lbl">Canceladas</span>
+      </div>
+    `;
+    const lr = document.getElementById('nft-last-refresh');
+    if (lr) {
+      lr.innerHTML = 'Último refresh: ' + fmtDataHora(lastRefresh)
+        + (lastBy ? ' <em>(' + escapeHtml(lastBy) + ')</em>' : '');
+    }
+  }
+
+  function renderLinha(l) {
+    const totalQtd = (l.produtos || []).reduce(
+      (a, p) => a + Number(p.quantidade || 0), 0);
+    const statusLbl = STATUS_LABEL[l.status_consolidado] || l.status_consolidado;
+    // Data+hora abaixo dos docs relacionados (small, line abaixo).
+    // dfe nao tem timestamp natural exposto pelo Odoo CIEL IT.
+    const pickTs = fmtDataHoraCurta(l.picking_data_hora);
+    const invTs = fmtDataHoraCurta(l.invoice_destino_data_hora);
+    const dfeTxt = l.dfe_name
+      ? escapeHtml(l.dfe_name) + (l.dfe_state ? ' <small class="text-muted">' + escapeHtml(l.dfe_state) + '</small>' : '')
+      : '<small class="text-muted">não encontrado</small>';
+    const pickTxt = l.picking_name
+      ? escapeHtml(l.picking_name) + ' <small class="text-muted">(' + escapeHtml(l.picking_state || '') + ')</small>'
+        + (pickTs ? '<br><small class="nft-ts">' + pickTs + '</small>' : '')
+      : '<small class="text-muted">—</small>';
+    const invTxt = l.invoice_destino_name
+      ? escapeHtml(l.invoice_destino_name) + ' <small class="text-muted">(' + escapeHtml(l.invoice_destino_state || '') + ')</small>'
+        + (invTs ? '<br><small class="nft-ts">' + invTs + '</small>' : '')
+      : '<small class="text-muted">—</small>';
+    // Emissao: data + hora ao lado (small).
+    const emiHora = fmtHoraCurta(l.data_emissao_hora);
+    const emiTxt = fmtData(l.data_emissao)
+      + (emiHora ? ' <small class="nft-ts">' + emiHora + '</small>' : '');
+
+    const descChecked = l.desconsiderar_est ? 'checked' : '';
+    let html = `
+      <tr class="nft-row-toggle ${l.desconsiderar_est ? 'nft-desconsiderada' : ''}" data-nf-id="${l.id}">
+        <td><i class="fas fa-chevron-right"></i></td>
+        <td><strong>${escapeHtml(l.account_move_name_origem || '')}</strong>
+            ${l.numero_nf ? '<br><small class="text-muted">' + escapeHtml(l.numero_nf) + '</small>' : ''}</td>
+        <td>${emiTxt}</td>
+        <td>${escapeHtml(l.company_origem)} &rarr; ${escapeHtml(l.company_destino)}</td>
+        <td><small>${escapeHtml(l.acao || '')}</small></td>
+        <td><small>${escapeHtml(l.cfop_saida || '')}</small></td>
+        <td class="text-end">${fmtMoeda(l.valor_total)}</td>
+        <td>${dfeTxt}</td>
+        <td>${pickTxt}</td>
+        <td>${invTxt}</td>
+        <td><span class="nft-status-cell nft-status-${l.status_consolidado}">${escapeHtml(statusLbl)}</span></td>
+        <td class="nft-cell-descons">
+          <label class="form-check m-0 small" title="Excluir esta NF do calculo em_transito (ja ajustada no estoque)">
+            <input type="checkbox"
+                   class="form-check-input nft-chk-descons"
+                   data-nf-id="${l.id}"
+                   ${descChecked}>
+            <span class="form-check-label ms-1">Desc. Est.</span>
+          </label>
+        </td>
+      </tr>
+      <tr class="nft-products d-none" data-nf-products="${l.id}">
+        <td colspan="12">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Cód.</th>
+                <th>Produto</th>
+                <th class="text-end">Qtd</th>
+                <th>CFOP</th>
+                <th class="text-end">Valor unit.</th>
+                <th class="text-end">Valor total</th>
+              </tr>
+            </thead>
+            <tbody>`;
+    if (!l.produtos || l.produtos.length === 0) {
+      html += `<tr><td colspan="6" class="text-muted">Sem produtos no snapshot.</td></tr>`;
+    } else {
+      for (const p of l.produtos) {
+        html += `
+          <tr>
+            <td><code>${escapeHtml(p.cod_produto)}</code></td>
+            <td>${escapeHtml(p.nome_produto || '')}</td>
+            <td class="text-end">${fmtNum(p.quantidade, 3)}</td>
+            <td>${escapeHtml(p.cfop || '')}</td>
+            <td class="text-end">${p.valor_unit != null ? fmtMoeda(p.valor_unit) : ''}</td>
+            <td class="text-end">${fmtMoeda(p.valor_total)}</td>
+          </tr>`;
+      }
+      html += `<tr class="table-light">
+        <td colspan="2"><strong>Total</strong></td>
+        <td class="text-end"><strong>${fmtNum(totalQtd, 3)}</strong></td>
+        <td colspan="3"></td>
+      </tr>`;
+    }
+    html += `</tbody></table></td></tr>`;
+    return html;
+  }
+
+  function carregar() {
+    const tbody = document.getElementById('nft-tbody');
+    tbody.innerHTML = '<tr><td colspan="12" class="nft-empty">Carregando...</td></tr>';
+
+    const params = montarFiltros();
+    fetch(API_URL + '?' + params.toString())
+      .then(r => r.json())
+      .then(data => {
+        if (!data.linhas || data.linhas.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="12" class="nft-empty">Nenhuma NF encontrada.</td></tr>';
+        } else {
+          tbody.innerHTML = data.linhas.map(renderLinha).join('');
+          // Toggle accordion
+          tbody.querySelectorAll('.nft-row-toggle').forEach(tr => {
+            tr.addEventListener('click', () => {
+              const id = tr.getAttribute('data-nf-id');
+              const detail = tbody.querySelector(`[data-nf-products="${id}"]`);
+              if (!detail) return;
+              detail.classList.toggle('d-none');
+              const icon = tr.querySelector('i.fas');
+              if (icon) {
+                icon.classList.toggle('fa-chevron-right');
+                icon.classList.toggle('fa-chevron-down');
+              }
+            });
+          });
+          // Checkbox "Desconsiderar Est." — ISOLA do click do accordion
+          tbody.querySelectorAll('.nft-cell-descons').forEach(td => {
+            td.addEventListener('click', (e) => e.stopPropagation());
+          });
+          tbody.querySelectorAll('.nft-chk-descons').forEach(chk => {
+            chk.addEventListener('change', (e) => {
+              e.stopPropagation();
+              toggleDesconsiderarEst(chk);
+            });
+          });
+        }
+        renderResumo(data.resumo_status || {}, data.last_refresh, data.last_refresh_por);
+        // Paginacao
+        const total = data.total || 0;
+        const ini = total === 0 ? 0 : (pagina - 1) * pageSize + 1;
+        const fim = Math.min(pagina * pageSize, total);
+        document.getElementById('nft-pag-info').textContent =
+          `Mostrando ${ini}-${fim} de ${total}`;
+        document.getElementById('nft-pag-prev').disabled = pagina <= 1;
+        document.getElementById('nft-pag-next').disabled = fim >= total;
+      })
+      .catch(err => {
+        tbody.innerHTML = `<tr><td colspan="11" class="nft-empty text-danger">
+          Erro: ${escapeHtml(err.message || err)}</td></tr>`;
+      });
+  }
+
+  function refreshDoOdoo() {
+    const btn = document.getElementById('nft-btn-refresh');
+    const prog = document.getElementById('nft-progress');
+    const msg = document.getElementById('nft-progress-msg');
+    btn.disabled = true;
+    prog.classList.remove('d-none');
+    msg.textContent = 'Atualizando do Odoo (~30-90s)...';
+
+    const csrf = document.querySelector('meta[name="csrf-token"]');
+    const headers = {'Content-Type': 'application/json'};
+    if (csrf) headers['X-CSRFToken'] = csrf.getAttribute('content');
+
+    fetch(REFRESH_URL, {method: 'POST', headers: headers})
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        prog.classList.add('d-none');
+        if (data.sucesso) {
+          const r = data.resumo || {};
+          msg.textContent = `Atualizado: ${r.total} NFs (${r.pendentes} pendentes).`;
+          pagina = 1;
+          carregar();
+        } else {
+          alert('Erro no refresh: ' + (data.erro || 'desconhecido'));
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        prog.classList.add('d-none');
+        alert('Erro: ' + err.message);
+      });
+  }
+
+  function toggleDesconsiderarEst(chk) {
+    const nfId = chk.getAttribute('data-nf-id');
+    const url = TOGGLE_URL_TPL.replace(/\/0(\/[^/]+)?$/, '/' + nfId + '$1')
+                              .replace(/\/0$/, '/' + nfId);
+    chk.disabled = true;
+    const csrf = document.querySelector('meta[name="csrf-token"]');
+    const headers = {'Content-Type': 'application/json'};
+    if (csrf) headers['X-CSRFToken'] = csrf.getAttribute('content');
+    fetch(url, {method: 'POST', headers: headers,
+                body: JSON.stringify({})})
+      .then(r => r.json())
+      .then(data => {
+        chk.disabled = false;
+        if (!data.sucesso) {
+          chk.checked = !chk.checked;
+          alert('Erro: ' + (data.erro || 'desconhecido'));
+          return;
+        }
+        chk.checked = !!data.desconsiderar_est;
+        // Pinta a linha (somente a row pai do checkbox)
+        const tr = chk.closest('tr');
+        if (tr) tr.classList.toggle('nft-desconsiderada', chk.checked);
+      })
+      .catch(err => {
+        chk.disabled = false;
+        chk.checked = !chk.checked;
+        alert('Erro: ' + err.message);
+      });
+  }
+
+  // Eventos
+  document.getElementById('nft-btn-aplicar').addEventListener('click', () => {
+    pagina = 1;
+    carregar();
+  });
+  document.getElementById('nft-filtro-busca').addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') { pagina = 1; carregar(); }
+  });
+  document.getElementById('nft-pag-prev').addEventListener('click', () => {
+    if (pagina > 1) { pagina--; carregar(); }
+  });
+  document.getElementById('nft-pag-next').addEventListener('click', () => {
+    pagina++; carregar();
+  });
+  document.getElementById('nft-btn-refresh').addEventListener('click', refreshDoOdoo);
+
+  // Load inicial
+  carregar();
+})();
+</script>
+{% endblock %}

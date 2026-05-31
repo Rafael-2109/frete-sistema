@@ -78,6 +78,94 @@ function _streamEnded() {
 let _lastUserMessage = null;
 let _autoRetryCount = 0;
 const _MAX_AUTO_RETRIES = 1;
+// Erros transientes (conexao caiu / worker reciclado / SDK reiniciou mid-stream).
+// NAO sao falha final: viram 1 auto-retry silencioso ou aviso calmo, nunca card ❌.
+const _TRANSIENT_ERROR_TYPES = ['cli_connection_error', 'thread_died', 'process_error'];
+function _isTransientError(data) {
+    return !!data && (_TRANSIENT_ERROR_TYPES.includes(data.error_type) || data.thread_died === true);
+}
+// Garante que o aviso calmo de "ainda processando" apareca no maximo uma vez por envio.
+let _transientNoticeShown = false;
+
+// ── Polling de resposta diferida (Fase 2, 2026-05-29) ──
+// Quando a conexao SSE cai mid-turno, o backend AINDA conclui e PERSISTE a
+// resposta (fix _should_persist_in_finally em chat.py). Como o stream ja' caiu,
+// buscamos a resposta no historico e a renderizamos sem o usuario recarregar.
+// Robustez: o backend persiste user+assistant ATOMICAMENTE, entao so' tratamos
+// como resposta a 1a 'assistant' que aparece DEPOIS da nossa ultima 'user' com o
+// mesmo conteudo — nunca uma resposta antiga.
+let _deferredPollTimer = null;
+let _deferredPollUserMsg = null;
+const _DEFERRED_POLL_INTERVAL_MS = 6000;
+const _DEFERRED_POLL_MAX_ATTEMPTS = 20;  // ~2 min
+
+function stopDeferredResponsePoll() {
+    if (_deferredPollTimer) {
+        clearTimeout(_deferredPollTimer);
+        _deferredPollTimer = null;
+    }
+    _deferredPollUserMsg = null;
+}
+
+function startDeferredResponsePoll() {
+    // So' faz sentido com sessao + pergunta conhecida.
+    if (!sessionId || !_lastUserMessage) return;
+    // Idempotente: nao reinicia se ja' pollando a mesma pergunta.
+    if (_deferredPollTimer && _deferredPollUserMsg === _lastUserMessage) return;
+    stopDeferredResponsePoll();
+    _deferredPollUserMsg = _lastUserMessage;
+    const sid = sessionId;
+    const umsg = _lastUserMessage;
+    // 1o poll via setTimeout: garante que o finally do stream ja' decrementou
+    // _activeStreamCount e da' tempo do turno concluir no servidor.
+    _deferredPollTimer = setTimeout(
+        () => _pollForDeferredResponse(sid, umsg, _DEFERRED_POLL_MAX_ATTEMPTS),
+        _DEFERRED_POLL_INTERVAL_MS
+    );
+}
+
+async function _pollForDeferredResponse(targetSessionId, userMsg, attemptsLeft) {
+    // Aborta se trocou de sessao, iniciou novo stream, ou esgotou tentativas.
+    if (targetSessionId !== sessionId || _activeStreamCount > 0 || attemptsLeft <= 0) {
+        stopDeferredResponsePoll();
+        return;
+    }
+    try {
+        const response = await fetch(`/agente/api/sessions/${targetSessionId}/messages`, {
+            headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content }
+        });
+        const data = await response.json();
+        // Revalida apos o await (estado pode ter mudado).
+        if (targetSessionId !== sessionId || _activeStreamCount > 0) {
+            stopDeferredResponsePoll();
+            return;
+        }
+        if (data && data.success && Array.isArray(data.messages)) {
+            const msgs = data.messages;
+            // Ultima ocorrencia da nossa pergunta (user) com o mesmo conteudo.
+            let idxUser = -1;
+            for (let i = msgs.length - 1; i >= 0; i--) {
+                if (msgs[i].role === 'user' && msgs[i].content === userMsg) { idxUser = i; break; }
+            }
+            // Resposta = 1a 'assistant' apos a nossa pergunta.
+            if (idxUser !== -1) {
+                const resp = msgs.slice(idxUser + 1).find(m => m.role === 'assistant' && m.content);
+                if (resp) {
+                    hideTyping();
+                    addMessage(resp.content, 'assistant');
+                    stopDeferredResponsePoll();
+                    return;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[SSE] poll de resposta diferida falhou (re-tenta):', e);
+    }
+    _deferredPollTimer = setTimeout(
+        () => _pollForDeferredResponse(targetSessionId, userMsg, attemptsLeft - 1),
+        _DEFERRED_POLL_INTERVAL_MS
+    );
+}
 
 // ============================================
 // ELEMENTOS DOM
@@ -232,16 +320,22 @@ const MODEL_INFO = {
         speed: '⚡⚡',
         cost: '$$'
     },
-    'claude-opus-4-7': {
+    'claude-opus-4-8': {
         name: 'Opus',
         description: 'Mais potente. Para análises complexas e planejamento.',
         speed: '⚡',
         cost: '$$$'
     },
-    // Legado: sessoes antigas reportam 4.6 — manter entrada para display correto
+    // Legado: sessoes antigas reportam 4.7/4.6 — manter entradas para display correto
+    'claude-opus-4-7': {
+        name: 'Opus (legado)',
+        description: 'Versao anterior. Mesmo preco do 4.8.',
+        speed: '⚡',
+        cost: '$$$'
+    },
     'claude-opus-4-6': {
         name: 'Opus (legado)',
-        description: 'Versao anterior. Mesmo preco do 4.7.',
+        description: 'Versao anterior. Mesmo preco do 4.8.',
         speed: '⚡',
         cost: '$$$'
     }
@@ -929,6 +1023,8 @@ async function sendMessage(event, { isAutoRetry = false } = {}) {
     // Reset apenas em envios novos (usuario clicou submit / pressionou Enter).
     if (!isAutoRetry) {
         _autoRetryCount = 0;
+        _transientNoticeShown = false;
+        stopDeferredResponsePoll();  // novo envio cancela polling de resposta diferida anterior
         // Finding 1 fix (SDK 0.2.87 task_event refator): zera currentTodos entre
         // turnos genuinos para evitar session bleed. O case 'created' do
         // task_event faz merge com currentTodos[] (slice + findIndex+push), entao
@@ -1135,12 +1231,16 @@ async function handleStreamResponse(response) {
                 // =================================================================
                 if (readError.message === 'Read timeout') {
                     console.error('[SSE] Timeout aguardando dados do servidor (60s)');
-                    addMessage(
-                        '⚠️ **Conexão com o servidor perdida**\n\n' +
-                        'O servidor demorou muito para responder. ' +
-                        'Tente enviar sua mensagem novamente.',
-                        'assistant'
-                    );
+                    // Transiente: nao alarmar com erro vermelho. Aviso calmo unico.
+                    if (!_transientNoticeShown) {
+                        _transientNoticeShown = true;
+                        addMessage(
+                            '⏳ A conexão ficou lenta, mas sua solicitação continua sendo ' +
+                            'processada. A resposta aparece aqui assim que ficar pronta.',
+                            'assistant'
+                        );
+                    }
+                    startDeferredResponsePoll();
                     break;
                 }
                 // Outros erros - propaga
@@ -1160,12 +1260,18 @@ async function handleStreamResponse(response) {
         } else {
             console.error('[SSE] Erro no stream:', error);
 
-            // Mostra erro amigável se não houver mensagem parcial
+            // Conexao caiu mid-stream NAO e' falha final (o backend pode ter
+            // concluido). Aviso CALMO unico se nao houver texto parcial — nunca ❌.
             if (!state.text) {
-                addMessage(
-                    `❌ **Erro de conexão**\n\n${error.message || 'Erro desconhecido'}`,
-                    'assistant'
-                );
+                if (!_transientNoticeShown) {
+                    _transientNoticeShown = true;
+                    addMessage(
+                        '⏳ A conexão foi interrompida, mas sua solicitação continua sendo ' +
+                        'finalizada no servidor. A resposta aparece aqui assim que ficar pronta.',
+                        'assistant'
+                    );
+                }
+                startDeferredResponsePoll();
             }
         }
     } finally {
@@ -2038,6 +2144,16 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                 showTyping(`⏳ ${data.content || 'Aguardando turno anterior...'}`);
                 break;
 
+            case 'processing':
+                // Backend sinaliza que o turno AINDA esta sendo processado
+                // (thread viva, sem eventos por > inatividade). Mantem indicador
+                // persistente em vez de degradar para "travou"/erro.
+                // (2026-05-29: par do fix de falso "travou" em chat.py.)
+                showTyping(`⏳ ${data.message || 'Ainda processando sua solicitação…'}`);
+                state.lastChunkTime = Date.now();
+                state.lastTextTime = Date.now();
+                break;
+
             case 'text':
                 // FEAT-032: Atualiza timestamp de último texto recebido
                 state.lastTextTime = Date.now();
@@ -2314,26 +2430,34 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                 finalizePendingTimelineItems('error');
                 finalizePendingTodos(false);  // Não marca como completed, apenas para o spinner
 
-                // Auto-retry: se process_error (exit code 1 por inatividade) e temos
-                // a última mensagem, retry transparente em vez de mostrar erro.
-                const isProcessError = data.error_type === 'process_error';
-                if (isProcessError && _lastUserMessage && _autoRetryCount < _MAX_AUTO_RETRIES) {
+                // Erros transientes (process_error / cli_connection_error /
+                // thread_died): conexao caiu ou worker reciclou mid-stream. NAO
+                // sao falha final — tratar como reconexao silenciosa em vez de
+                // despejar card vermelho. (2026-05-29: caso sessao do Marcus.)
+                const isTransient = _isTransientError(data);
+                if (isTransient && _lastUserMessage && _autoRetryCount < _MAX_AUTO_RETRIES) {
                     _autoRetryCount++;
-                    console.log(`[SSE] Process error detected, scheduling auto-retry #${_autoRetryCount}`);
-                    addMessage('🔄 Reconectando sessão...', 'assistant');
+                    console.log(`[SSE] Erro transiente (${data.error_type || 'thread_died'}), auto-retry #${_autoRetryCount}`);
+                    // Indicador efemero (nao polui o historico) — some no proximo evento.
+                    showTyping('🔄 Retomando…');
                     setTimeout(() => {
-                        // Remove a mensagem "Reconectando..." antes de reenviar
-                        const msgs = document.querySelectorAll('.message.assistant');
-                        const lastMsg = msgs[msgs.length - 1];
-                        if (lastMsg && lastMsg.textContent.includes('Reconectando')) {
-                            lastMsg.remove();
-                        }
                         messageInput.value = _lastUserMessage;
                         // Issue 1 review (2026-05-12): isAutoRetry=true preserva
                         // _autoRetryCount; senao seria resetado em sendMessage
-                        // e permitiria N retries em loop com process_error repetido.
+                        // e permitiria N retries em loop com erro transiente repetido.
                         sendMessage(null, { isAutoRetry: true });
                     }, 2000);
+                    break;
+                }
+
+                // Transiente mas sem retry disponivel (cap atingido / sem ultima
+                // msg): aviso CALMO uma unica vez, nunca card vermelho.
+                if (isTransient) {
+                    if (!_transientNoticeShown) {
+                        _transientNoticeShown = true;
+                        addMessage('⏳ A conexão foi interrompida, mas sua solicitação continua sendo finalizada no servidor. A resposta aparece aqui assim que ficar pronta.', 'assistant');
+                    }
+                    startDeferredResponsePoll();
                     break;
                 }
 
@@ -2341,9 +2465,17 @@ function processSSEEvent(eventType, data, state, streamLocal) {
                 if (data.session_expired) {
                     console.log('[SSE] Sessão SDK expirada, será criada nova na próxima mensagem');
                     addMessage(`⚠️ A sessão anterior expirou no servidor.\n\n**Mas não se preocupe!** Seu histórico está salvo e a conversa continuará normalmente.`, 'assistant');
-                } else {
-                    addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
+                    break;
                 }
+
+                // Timeout absoluto (tarefa > teto): mensagem calma, sem card vermelho.
+                if (data.error_type === 'timeout') {
+                    addMessage('⏳ Esta solicitação demorou mais que o limite. Se for uma tarefa longa, aguarde a conclusão; caso contrário, tente reenviar.', 'assistant');
+                    break;
+                }
+
+                // Erro FINAL irrecuperavel
+                addMessage(`❌ ${data.message || data.content || 'Erro desconhecido'}`, 'assistant');
                 break;
             }
 
@@ -4325,8 +4457,12 @@ async function _refreshCsrfToken() {
 setInterval(_refreshCsrfToken, 90 * 60 * 1000);
 
 /**
- * Wrapper fetch com retry automático em erro CSRF.
+ * Wrapper fetch com retry automatico em erro CSRF.
  * Detecta csrf_error na resposta, renova o token e retenta 1x.
+ *
+ * Tambem trata 409 'session_owned_by_other_worker' (sticky session L1):
+ * worker errado pegou a request → backoff curto e retry. Ate 6 tentativas
+ * (probabilidade ~99.8% de acertar worker dono com 4 workers gunicorn).
  */
 async function _fetchWithCsrfRetry(url, options = {}) {
     let resp = await fetch(url, options);
@@ -4345,6 +4481,28 @@ async function _fetchWithCsrfRetry(url, options = {}) {
             }
         } catch {
             // Se não conseguiu parsear como JSON, retorna a resposta original
+        }
+    }
+
+    // Sticky session retry (Anthropic Issue #61862) — fallback defensivo.
+    // Apos split nginx + 1 worker agente, sticky vira no-op. Mantemos 2
+    // retries com backoff longo como protecao para rolling deploy (~30s).
+    const STICKY_MAX_RETRIES = 2;
+    let stickyAttempt = 0;
+    while (resp.status === 409 && stickyAttempt < STICKY_MAX_RETRIES) {
+        try {
+            const cloned = resp.clone();
+            const body = await cloned.json();
+            if (body.error !== 'session_owned_by_other_worker') break;
+
+            const baseDelay = body.retry_after_ms || 500;
+            const delay = Math.round(baseDelay * Math.pow(2, stickyAttempt));
+            console.log(`[STICKY] 409 inesperado (tentativa ${stickyAttempt + 1}/${STICKY_MAX_RETRIES}), retry em ${delay}ms (owner=${body.owner_hint || '?'})`);
+            await new Promise(r => setTimeout(r, delay));
+            resp = await fetch(url, options);
+            stickyAttempt += 1;
+        } catch {
+            break;
         }
     }
 

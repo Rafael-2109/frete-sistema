@@ -43,6 +43,11 @@ class OperacaoOdooAuditoria(db.Model):
     screenshot_s3_key = db.Column(db.String(255))
     executado_em = db.Column(db.DateTime, nullable=False, default=agora_utc_naive)
     executado_por = db.Column(db.String(80), nullable=False)
+    # Audit hook deterministico (2026-05-28) — correlaciona com sessao do agente web.
+    # Migration: scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}.
+    session_id = db.Column(db.String(64), index=True)  # FK logica para agent_sessions.session_id
+    tool_use_id = db.Column(db.String(40), index=True)  # tool_use_id SDK Anthropic
+    agent_type = db.Column(db.String(40), index=True)  # main|gestor-estoque-odoo|worker_rq|scheduler|cli
 
     def __repr__(self):
         return (
@@ -58,6 +63,13 @@ class OperacaoOdooAuditoria(db.Model):
 
         Sanitiza automaticamente campos JSONB (sanitize_for_json).
         NAO commita — caller decide quando (padrao P5/P7 do app/odoo/CLAUDE.md).
+
+        Kwargs aceitos (todos opcionais):
+        - metodo_odoo, odoo_id, etapa, etapa_descricao, payload_json,
+          resposta_json, dados_antes_json, dados_depois_json, erro_msg,
+          tempo_execucao_ms, contexto_origem, contexto_ref, screenshot_s3_key,
+          pipeline_etapa, executado_em
+        - session_id, tool_use_id, agent_type  (audit hook 2026-05-28)
         """
         from app.utils.json_helpers import sanitize_for_json
         kwargs.setdefault('executado_em', agora_utc_naive())
@@ -75,6 +87,18 @@ class OperacaoOdooAuditoria(db.Model):
             executado_por=executado_por,
             **kwargs,
         )
-        db.session.add(rec)
-        db.session.flush()
+        # BUG-1 (avaliacao 360, 2026-05-30): savepoint isola a falha do flush
+        # da transacao do CALLER. A auditoria NUNCA deve poder derrubar a
+        # operacao que esta auditando. Sem isto, um flush abortado (constraint,
+        # tipo, tamanho de campo) poisonava a sessao e cascateava
+        # PendingRollbackError no pipeline WRITE/SEFAZ (Sentry
+        # PYTHON-FLASK-WX/WT/WS/WR/WQ, 2026-05-29). O hook em
+        # odoo_audit_helpers.py ja envolvia esta chamada em begin_nested; agora
+        # TODOS os 8 callers herdam a protecao (savepoint aninhado e seguro no
+        # SQLAlchemy). A excecao do flush continua sendo propagada — o caller
+        # decide se loga/re-tenta —, mas a transacao externa permanece sa
+        # (ROLLBACK TO SAVEPOINT, nao da transacao inteira).
+        with db.session.begin_nested():
+            db.session.add(rec)
+            db.session.flush()
         return rec

@@ -25,6 +25,8 @@ logger = logging.getLogger('sistema_fretes')
 # AgentDefinition.model aceita Literal["sonnet", "opus", "haiku", "inherit"] | None.
 _MODEL_MAP: Dict[str, str] = {
     "opus": "opus",
+    "opus-4-8": "opus",
+    "opus_4_8": "opus",
     "opus-4-7": "opus",
     "opus_4_7": "opus",
     "opus-4-6": "opus",
@@ -64,7 +66,7 @@ def _check_effort_field() -> bool:
     Verifica se AgentDefinition tem campo 'effort' nativo (SDK >= 0.1.74).
 
     SDK 0.1.74 oficializou 'xhigh' no Literal de effort (entre 'high' e 'max',
-    Opus 4.7-specific com fallback para 'high' em outros modelos). Antes desse
+    Opus 4.7+ (4.7/4.8) com fallback para 'high' em outros modelos). Antes desse
     SDK, effort por subagente so era passavel via extra_args (workaround).
 
     Returns:
@@ -85,7 +87,7 @@ _SDK_HAS_EFFORT_FIELD = _check_effort_field()
 
 # Valores aceitos pelo Literal de effort (SDK 0.1.74+)
 # - low/medium/high/max: suportados em todos modelos com tier compativel
-# - xhigh: Opus 4.7-specific; fallback para 'high' em outros modelos
+# - xhigh: Opus 4.7+ (4.7/4.8); fallback para 'high' em outros modelos
 # - max: Opus-tier only (Opus 4.5+); fallback para 'high' em Sonnet/Haiku
 _VALID_EFFORTS: set[str] = {"low", "medium", "high", "xhigh", "max"}
 
@@ -436,7 +438,7 @@ def load_agent_definitions(agents_dir: str) -> dict:
             if initial_prompt:
                 agent_kwargs["initialPrompt"] = initial_prompt
 
-            # SDK 0.1.74+: effort por subagente (xhigh = Opus 4.7-specific)
+            # SDK 0.1.74+: effort por subagente (xhigh = Opus 4.7+)
             # Forward-compat: so passa se SDK suporta o campo (nao quebra em < 0.1.74)
             if effort and _SDK_HAS_EFFORT_FIELD:
                 agent_kwargs["effort"] = effort

@@ -44,7 +44,10 @@ Gotchas-invariante codificados:
   da Skill 1 (default True); RESETAR via flag explicito `resetar_reserva`
 - G028: consolidar_move_lines -> herdado de ajustar_quant
 - G002: lot.name search '=' instavel -> usar 'in' (helper sempre normaliza)
-- G_proxy_vazio: 'P-15/05' = literal + tambem cobre quant sem lote (lot_id=False)
+- G_proxy_vazio (Opção B 2026-05-29): None/'' = quant sem lote SEMPRE.
+  'P-15/05' = proxy de quant sem lote SO se produto tracking='none'; em
+  produto tracking='lot'/'serial' e' um stock.lot REAL (Odoo nao mantem saldo
+  sem lote em produto rastreado — bug 17 MOVER 2026-05-28). Ver _tracking_produto.
 - delta_esperado: propagado a CADA chamada de ajustar_quant (regra inviolavel
   11 do roadmap pos-CICLAMATO)
 """
@@ -415,6 +418,27 @@ class StockInternalTransferService:
             return com_saldo[0][0], lids
         return lids[0], lids
 
+    def _tracking_produto(self, product_id: int) -> str:
+        """Lê `product.product.tracking` ('none'|'lot'|'serial') com cache local.
+
+        Usado por `resolver_lote_origem/destino` (Opção B 2026-05-29): o nome
+        de lote 'P-15/05' só é proxy de "quant sem lote" quando o produto é
+        `tracking='none'`. Para `tracking='lot'/'serial'`, 'P-15/05' é um
+        `stock.lot` REAL — o Odoo NÃO mantém saldo sem lote em produto rastreado
+        (o quant sem lote é zerado, o que evaporou o saldo dos 17 MOVER em
+        2026-05-28). O cache evita N reads em loops longos (espelha
+        `_quant_svc_cache`). Default defensivo 'none' se o read vier vazio
+        (preserva o comportamento legado de proxy-vazio).
+        """
+        if not hasattr(self, '_tracking_cache'):
+            self._tracking_cache: Dict[int, str] = {}
+        if product_id not in self._tracking_cache:
+            r = self.odoo.read('product.product', [product_id], ['tracking'])
+            self._tracking_cache[product_id] = (
+                (r[0].get('tracking') or 'none') if r else 'none'
+            )
+        return self._tracking_cache[product_id]
+
     def resolver_lote_origem(
         self,
         *,
@@ -422,22 +446,33 @@ class StockInternalTransferService:
         product_id: int,
         company_id: int,
         location_id: int,
+        tracking: Optional[str] = None,
     ) -> Tuple[Optional[int], str, Optional[str]]:
-        """Resolve lot_id de ORIGEM (G021/G022).
+        """Resolve lot_id de ORIGEM (G021/G022 + Opção B).
 
         - MIGRAÇÃO (qq variante): retorna o de maior saldo na location_id.
         - Literal: busca exato (StockLotService trata bug do operador '=').
-        - None ou 'P-15/05': retorna (None, 'P-15/05(sem-lote)', None) — o
-          caller deve usar lot_id=None na busca do quant (quant sem lote).
+        - None ou '': retorna (None, 'P-15/05(sem-lote)', None) — quant sem
+          lote (sinal explícito; NÃO lê tracking).
+        - 'P-15/05' (Opção B 2026-05-29): em produto `tracking='none'` segue
+          proxy-vazio (lot_id=None); em `tracking='lot'/'serial'` é um
+          `stock.lot` REAL e resolve via busca literal abaixo. `tracking`
+          opcional evita 1 read quando o caller já o conhece.
 
         Returns:
             (lot_id|None, label, erro|None).
             erro=None => sucesso (ou proxy vazio); != None => problema (lote
             inexistente, etc).
         """
-        if nome_lote is None or (isinstance(nome_lote, str) and nome_lote.strip() in ('', 'P-15/05')):
+        nome_strip = nome_lote.strip() if isinstance(nome_lote, str) else ''
+        if nome_lote is None or nome_strip == '':
             return None, 'P-15/05(sem-lote)', None
-        if is_migracao(nome_lote):
+        if nome_strip == 'P-15/05':
+            trk = tracking if tracking is not None else self._tracking_produto(product_id)
+            if trk == 'none':
+                return None, 'P-15/05(sem-lote)', None
+            # tracking lot/serial: cai no tratamento literal (lote REAL P-15/05)
+        if is_migracao(nome_strip):
             lid, _ = self._melhor_lote_migracao_na_loc(
                 product_id, company_id, location_id,
             )
@@ -447,11 +482,11 @@ class StockInternalTransferService:
                 f'lote MIGRACAO* inexistente para product={product_id} '
                 f'company={company_id}'
             )
-        lid = self.lot_svc.buscar_por_nome(nome_lote, product_id, company_id)
+        lid = self.lot_svc.buscar_por_nome(nome_strip, product_id, company_id)
         if lid:
-            return lid, nome_lote, None
-        return None, nome_lote, (
-            f'lote {nome_lote!r} inexistente para product={product_id} '
+            return lid, nome_strip, None
+        return None, nome_strip, (
+            f'lote {nome_strip!r} inexistente para product={product_id} '
             f'company={company_id}'
         )
 
@@ -464,21 +499,33 @@ class StockInternalTransferService:
         location_id: int,
         criar_se_faltar: bool = True,
         expiration_date: Optional[str] = None,
+        tracking: Optional[str] = None,
     ) -> Tuple[Optional[int], str, bool]:
-        """Resolve lot_id de DESTINO (G021/G022).
+        """Resolve lot_id de DESTINO (G021/G022 + Opção B).
 
         - MIGRAÇÃO (qq variante): consolida no de maior saldo na location_id
           (cria canonico 'MIGRAÇÃO' se nenhum existe e criar_se_faltar=True).
         - Literal: criar_se_nao_existe (se criar_se_faltar) ou busca exato.
-        - None ou 'P-15/05': retorna (None, 'P-15/05(sem-lote)', False) — o
-          caller deve usar lot_id=None ao criar o quant (quant sem lote).
+        - None ou '': retorna (None, 'P-15/05(sem-lote)', False) — quant sem
+          lote (sinal explícito; NÃO lê tracking).
+        - 'P-15/05' (Opção B 2026-05-29): em produto `tracking='none'` segue
+          proxy-vazio (lot_id=None); em `tracking='lot'/'serial'` é um
+          `stock.lot` REAL e cai no tratamento literal (cria/usa o lote real).
+          O `nome_canonico` retornado é 'P-15/05(sem-lote)' no proxy-vazio e
+          'P-15/05' no lote real — o caller distingue por esse rótulo.
 
         Returns:
             (lot_id|None, nome_canonico, criado_agora).
         """
-        if nome_lote is None or (isinstance(nome_lote, str) and nome_lote.strip() in ('', 'P-15/05')):
+        nome_strip = nome_lote.strip() if isinstance(nome_lote, str) else ''
+        if nome_lote is None or nome_strip == '':
             return None, 'P-15/05(sem-lote)', False
-        if is_migracao(nome_lote):
+        if nome_strip == 'P-15/05':
+            trk = tracking if tracking is not None else self._tracking_produto(product_id)
+            if trk == 'none':
+                return None, 'P-15/05(sem-lote)', False
+            # tracking lot/serial: cai no tratamento literal (lote REAL P-15/05)
+        if is_migracao(nome_strip):
             lid, lids = self._melhor_lote_migracao_na_loc(
                 product_id, company_id, location_id,
             )
@@ -494,13 +541,13 @@ class StockInternalTransferService:
             )
             return novo, LOTE_MIGRACAO_CANONICO, True
         if not criar_se_faltar:
-            lid = self.lot_svc.buscar_por_nome(nome_lote, product_id, company_id)
-            return lid, nome_lote, False
+            lid = self.lot_svc.buscar_por_nome(nome_strip, product_id, company_id)
+            return lid, nome_strip, False
         lid, criado = self.lot_svc.criar_se_nao_existe(
-            nome_lote, product_id, company_id,
+            nome_strip, product_id, company_id,
             expiration_date=expiration_date,
         )
-        return lid, nome_lote, criado
+        return lid, nome_strip, criado
 
     # ============================================================
     # API v2 — delega a ajustar_quant (Skill 1), propaga delta_esperado

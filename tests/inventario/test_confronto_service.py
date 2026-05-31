@@ -49,7 +49,10 @@ def test_linha_com_compras_venda_consumo_producao(db, ciclo):
 
     linhas = ConfrontoService.montar_linhas(ciclo.id)
     l = next(x for x in linhas if x['cod_produto'] == '4320147')
-    assert l['compras'] == Decimal('55')  # 50 + 5 REVERSAO (toda ENTRADA conta)
+    # mov_compras = SOMENTE ENTRADA+COMPRA (50). REVERSAO=5 NAO conta
+    # (fix 2026-05-28: alinhar com Odoo._baixar_compras que filtra
+    # PO partner externo, excluindo inter-company/devolucao).
+    assert l['compras'] == Decimal('50')
     assert l['vendas'] == Decimal('-20')
     assert l['consumo'] == Decimal('-30')
     assert l['producao'] == Decimal('80')
@@ -99,7 +102,7 @@ def test_calculo_mov_e_diferencas(db, ciclo):
 
     linhas = ConfrontoService.montar_linhas(ciclo.id)
     l = next(x for x in linhas if x['cod_produto'] == '4999999')
-    # MOV = inv_total(100) + compras(50, qualquer ENTRADA) + pa(80) + componente(-40) = 190
+    # MOV = inv_total(100) + compras(50, ENTRADA+COMPRA) + pa(80) + componente(-40) = 190
     assert l['mov'] == Decimal('190')
     # odoo(150) - mov(190) = -40
     assert l['odoo_menos_mov'] == Decimal('-40')

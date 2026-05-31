@@ -85,15 +85,17 @@ class MovimentacoesOdooService:
         ts = datetime.now()
         total = odoo.search_count('stock.move.line', domain)
         offset = (page - 1) * page_size
-        ids = odoo.search('stock.move.line', domain,
-                          offset=offset, limit=page_size, order='date desc')
-        if not ids:
+        # OdooConnection.search() NAO aceita offset/order — usar search_read
+        # que aceita offset, limit, order, fields (connection.py:272)
+        rows = odoo.search_read('stock.move.line', domain,
+                                fields=['date', 'company_id', 'product_id',
+                                        'lot_id', 'qty_done', 'location_id',
+                                        'location_dest_id', 'move_id',
+                                        'create_uid'],
+                                offset=offset, limit=page_size,
+                                order='date desc')
+        if not rows:
             return {'total': total, 'page': page, 'page_size': page_size, 'rows': []}
-
-        rows = odoo.read('stock.move.line', ids,
-                         ['date', 'company_id', 'product_id', 'lot_id',
-                          'qty_done', 'location_id', 'location_dest_id',
-                          'move_id', 'create_uid'])
 
         pids = [_m2o_id(r.get('product_id')) for r in rows]
         pids = [p for p in pids if p]

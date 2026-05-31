@@ -109,6 +109,28 @@ def api_chat():
         model = data.get('model')
         effort_level = data.get('effort_level', 'off')
 
+        # Sticky session check (mitiga Anthropic Issue #61862)
+        # Se a sessão já tem dono em OUTRO worker, retornar 409 com hint —
+        # frontend retry com backoff até cair no worker dono. Evita recriar
+        # subprocess CLI que disparara Vj3 over-fires de interrupted_turn.
+        # Fail-open se Redis off ou flag desligada.
+        if session_id:
+            try:
+                from app.agente.sdk.sticky_session import claim_ownership, get_owner
+                if not claim_ownership(session_id):
+                    owner = get_owner(session_id)
+                    return jsonify({
+                        'success': False,
+                        'error': 'session_owned_by_other_worker',
+                        'message': 'Reconectando à sessão…',
+                        'retry_after_ms': 200,
+                        'owner_hint': owner[:16] if owner else None,
+                    }), 409
+            except Exception as _sticky_err:
+                # Fail-open: qualquer erro no sticky NÃO bloqueia a request
+                from flask import current_app as _ca
+                _ca.logger.debug(f"[STICKY] check ignorado: {_sticky_err}")
+
         # Fase 1 (2026-04-21): Smart model routing no canal Web.
         # Se flag USE_WEB_SMART_MODEL_ROUTING ligada, analisa padroes do prompt
         # e rebaixa Opus -> Sonnet para tarefas estruturadas/repetitivas.
@@ -119,7 +141,7 @@ def api_chat():
             )
             if USE_WEB_SMART_MODEL_ROUTING and message:
                 from app.agente.sdk.model_router import select_model, log_routing_decision
-                default_for_router = model or 'claude-opus-4-7'
+                default_for_router = model or 'claude-opus-4-8'
                 # So rebaixa se caller escolheu Opus (ou deixou default)
                 if 'opus' in default_for_router.lower():
                     chosen, reason = select_model(
@@ -677,6 +699,10 @@ def _stream_chat_response(
         # antes de _save_messages_to_db rodar, perdendo a AssistantMessage.
         '_persisted': False,
         '_save_lock': Lock(),
+        # B1 (Onda 2): eventos Task* acumulados durante o turno (flag-gated).
+        # Populado em _process_stream_event sob USE_AGENT_PLANNER.
+        # Consumido em _save_messages_dedup para construir plan_dict.
+        'task_events': [],
     }
 
     def run_async_stream():
@@ -820,6 +846,17 @@ def _stream_chat_response(
                     # Payload: {action: created|updated|snapshot, task_id?, subject?, tasks?, status?}
                     if isinstance(event.content, dict) and event.content.get('action'):
                         event_queue.put(_sse_event('task_event', event.content))
+                        # B1 (Onda 2): acumula eventos Task* para PlanState (flag-gated).
+                        # Só TaskCreate/TaskUpdate alteram estado; TaskList = snapshot = no-op no PlanState.
+                        # best-effort: nunca quebrar o SSE por erro aqui.
+                        try:
+                            from app.agente.config.feature_flags import USE_AGENT_PLANNER
+                            if USE_AGENT_PLANNER:
+                                _action = event.content.get('action', '')
+                                if _action in ('created', 'updated'):
+                                    response_state['task_events'].append(dict(event.content))
+                        except Exception as _plan_err:
+                            logger.debug(f"[PLAN] acumulacao task_event ignorada: {_plan_err}")
 
                 elif event.type == 'warning':
                     # Resume de sessão falhou — notificar frontend
@@ -1135,7 +1172,8 @@ def _stream_chat_response(
                 )
                 event_queue.put(_sse_event('error', {
                     'message': 'Tempo limite excedido. Tente novamente.',
-                    'timeout': True
+                    'timeout': True,
+                    'error_type': 'timeout'
                 }))
 
         except (Exception, BaseExceptionGroup) as e:
@@ -1232,6 +1270,9 @@ def _stream_chat_response(
     # sem NameError mesmo se a excecao ocorrer antes do setup.
     _redis_conn = None
     _pubsub = None
+    # Pre-inicializado (como _redis_conn/_pubsub) para o finally poder checar
+    # thread.is_alive() sem NameError se a excecao ocorrer antes do setup.
+    thread = None
 
     try:
         logger.info("[AGENTE] _stream_chat_response iniciado")
@@ -1345,19 +1386,44 @@ def _stream_chat_response(
                         f"({MAX_STREAM_DURATION_SECONDS}s)"
                     )
                     yield _sse_event('error', {
-                        'message': f'Tempo limite excedido ({MAX_STREAM_DURATION_SECONDS // 60} min)'
+                        'message': f'Tempo limite excedido ({MAX_STREAM_DURATION_SECONDS // 60} min)',
+                        'error_type': 'timeout'
                     })
-                else:
-                    inact_elapsed = INACTIVITY_TIMEOUT_SECONDS
-                    logger.warning(
-                        f"[AGENTE] Inactivity deadline exceeded "
-                        f"({inact_elapsed}s sem eventos reais)"
+                    break
+
+                # Inatividade (deadline renovavel) estourou. So e' "travamento"
+                # real se a thread daemon morreu. Se ela ainda esta VIVA, o turno
+                # CONTINUA processando (ex: transcricao longa, tool demorada que
+                # nao emite eventos intermediarios) — NAO alarmar o usuario com
+                # "travou". Emite estado 'processing' (indicador persistente) e
+                # renova o deadline de inatividade. O teto absoluto
+                # (absolute_deadline) segue protegendo contra loop infinito.
+                # (2026-05-29: falso "travou" na sessao do Marcus.)
+                inact_elapsed = INACTIVITY_TIMEOUT_SECONDS
+                if thread.is_alive():
+                    logger.info(
+                        f"[AGENTE] Inatividade {inact_elapsed}s com thread VIVA — "
+                        "emitindo 'processing' e renovando deadline (turno em andamento)"
                     )
-                    yield _sse_event('error', {
-                        'message': 'O processamento parece ter travado. Tente novamente.',
-                        'sdk_stalled': True,
+                    yield _sse_event('processing', {
+                        'message': 'Ainda processando sua solicitação…',
                         'inactivity_seconds': inact_elapsed
                     })
+                    inactivity_deadline = time.time() + INACTIVITY_TIMEOUT_SECONDS
+                    last_heartbeat = time.time()
+                    continue
+
+                # Thread morta + inatividade = travamento real (transiente)
+                logger.warning(
+                    f"[AGENTE] Inactivity deadline exceeded "
+                    f"({inact_elapsed}s) e thread MORTA — encerrando stream"
+                )
+                yield _sse_event('error', {
+                    'message': 'O processamento foi interrompido. Tente reenviar.',
+                    'sdk_stalled': True,
+                    'error_type': 'thread_died',
+                    'inactivity_seconds': inact_elapsed
+                })
                 break
 
             try:
@@ -1456,7 +1522,8 @@ def _stream_chat_response(
                     logger.warning("[AGENTE] Thread morreu sem sinalizar - forçando fim do stream")
                     yield _sse_event('error', {
                         'message': 'Processamento interrompido inesperadamente. Tente novamente.',
-                        'thread_died': True
+                        'thread_died': True,
+                        'error_type': 'thread_died'
                     })
                     break
 
@@ -1508,20 +1575,32 @@ def _stream_chat_response(
         # _save_messages_to_db direto. Em sessao saudavel, thread daemon ja
         # persistiu — esta chamada vai dar skip pela flag _persisted. Em caso
         # raro de daemon falhar antes de salvar, este finally salva de fato.
-        try:
-            _save_messages_dedup(
-                app=app,
-                response_state=response_state,
-                original_message=original_message,
-                user_id=user_id,
-                model=model,
-                source='finally_generator',
-            )
-        except Exception as save_error:
-            logger.error(
-                f"[AGENTE] ERRO ao salvar mensagens no finally do generator: "
-                f"{save_error}",
-                exc_info=True,
+        # Defesa em profundidade: so' persiste se a thread daemon (PRIMARY) ja'
+        # terminou. Se ainda esta viva (cliente desconectou mid-turno), delega
+        # ao primary — que salvara a resposta COMPLETA quando o turno terminar.
+        # Persistir aqui com a thread viva gravaria full_text vazio e marcaria
+        # _persisted=True, bloqueando o primary (race 2026-05-29, sessao Marcus).
+        _thread_alive = thread.is_alive() if thread is not None else False
+        if _should_persist_in_finally(_thread_alive):
+            try:
+                _save_messages_dedup(
+                    app=app,
+                    response_state=response_state,
+                    original_message=original_message,
+                    user_id=user_id,
+                    model=model,
+                    source='finally_generator',
+                )
+            except Exception as save_error:
+                logger.error(
+                    f"[AGENTE] ERRO ao salvar mensagens no finally do generator: "
+                    f"{save_error}",
+                    exc_info=True,
+                )
+        else:
+            logger.info(
+                "[AGENTE] generator finally: thread daemon (primary) ainda ativa "
+                "— persistencia da resposta delegada ao primary (evita race)"
             )
 
         # Garantir cleanup do _stream_context mesmo se thread interna não iniciou
@@ -1540,6 +1619,20 @@ def _stream_chat_response(
                 pass
         except Exception:
             pass
+
+
+def _should_persist_in_finally(thread_alive: bool) -> bool:
+    """Decide se o `finally` do generator (defesa em profundidade) deve persistir.
+
+    O path persistente tem 2 gravacoes: a thread daemon `run_async_stream`
+    (PRIMARY, roda quando o turno completa com `full_text` preenchido) e este
+    `finally` do generator (DEFESA). Se a thread daemon AINDA esta viva, o turno
+    segue processando — persistir aqui gravaria `full_text` vazio e marcaria
+    `_persisted=True`, BLOQUEANDO o primary de salvar a resposta real quando ela
+    ficar pronta (race 2026-05-29, sessao do Marcus). Entao a defesa so' age
+    quando o primary JA terminou (ou nunca foi criado: thread_alive=False).
+    """
+    return not thread_alive
 
 
 def _save_messages_dedup(
@@ -1584,6 +1677,24 @@ def _save_messages_dedup(
             )
             return
 
+        # B1 (Onda 2): construir plan_dict a partir dos task_events acumulados.
+        # Segue o mesmo caminho de tools_used: response_state → aqui → _save_messages_to_db.
+        # best-effort: falha na construção do plan não bloqueia a persistência.
+        _plan_dict = None
+        try:
+            from app.agente.config.feature_flags import USE_AGENT_PLANNER
+            if USE_AGENT_PLANNER:
+                _task_events = response_state.get('task_events') or []
+                if _task_events:
+                    from app.agente.sdk.plan_state import PlanState
+                    _ps = PlanState()
+                    for _evt in _task_events:
+                        _ps.apply_task_event(_evt)
+                    if not _ps.is_empty():
+                        _plan_dict = _ps.to_dict()
+        except Exception as _plan_build_err:
+            logger.warning(f"[PLAN] construcao plan_dict falhou (ignorado): {_plan_build_err}")
+
         saved = _save_messages_to_db(
             app=app,
             our_session_id=response_state['our_session_id'],
@@ -1599,6 +1710,7 @@ def _save_messages_dedup(
             sdk_cost_usd=response_state.get('sdk_cost_usd', 0),
             cache_read_tokens=response_state.get('cache_read_tokens', 0),
             cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
+            plan_dict=_plan_dict,
         )
         # Marca flag SO SE o commit do DB foi bem-sucedido.
         # Falhas de pos-processamento NAO afetam o retorno (isolados na propria
@@ -1629,6 +1741,7 @@ def _save_messages_to_db(
     sdk_cost_usd: float = 0,
     cache_read_tokens: int = 0,
     cache_creation_tokens: int = 0,
+    plan_dict: Optional[dict] = None,
 ) -> bool:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
@@ -1659,6 +1772,8 @@ def _save_messages_to_db(
         sdk_cost_usd: Custo informado pelo SDK (ResultMessage.total_cost_usd)
         cache_read_tokens: Tokens servidos do prompt cache (Fase 4 observabilidade)
         cache_creation_tokens: Tokens escritos no prompt cache
+        plan_dict: PlanState serializado (B1 Onda 2) — persistido em data['plan']
+                   se USE_AGENT_PLANNER=True e plan_dict não-vazio. None = no-op.
     """
     if not our_session_id:
         logger.warning("[AGENTE] Não foi possível salvar: session_id não definido")
@@ -1687,6 +1802,62 @@ def _save_messages_to_db(
                     cache_read_tokens=cache_read_tokens,
                     cache_creation_tokens=cache_creation_tokens,
                 )
+
+            # =============================================================
+            # Onda 0 (S0a.2): grava 1 agent_step por TURNO no PRIMARY.
+            #
+            # Ponto (R10/INV-1): DENTRO do app_context, DEPOIS de
+            # add_assistant_message e ANTES do commit final. Este é o PRIMARY
+            # protegido por _save_messages_dedup (`_persisted`); NUNCA gravar no
+            # _stop_hook (corrida R10).
+            #
+            # Guard de simetria `if user_message:` (espelha os guards
+            # add_user_message/add_assistant_message acima): turn_seq é derivado
+            # da CONTAGEM de msgs role=='user'. Se um caller passasse
+            # user_message=None, add_user_message seria pulado mas turn_seq
+            # contaria os user msgs do turno ANTERIOR -> step_uid colidiria com
+            # o turno anterior -> step perdido em silêncio (best-effort engole
+            # o None de insert_step). Só gravar quando há de fato um turno novo.
+            #
+            # turn_seq: conta as msgs role=='user' em data['messages'] AQUI,
+            # que roda DEPOIS de add_user_message -> turn_seq == N para o
+            # N-ésimo turno. Estável no fluxo real porque a 2ª chamada de
+            # _save_messages_to_db é bloqueada pela flag _persisted (dedup),
+            # então add_user_message roda 1x por turno e o count é determinístico.
+            #
+            # Best-effort (INV-6): try/except + warning. Falha de agent_step
+            # NÃO pode quebrar a persistência da resposta nem o stream. O
+            # SAVEPOINT em insert_step isola IntegrityError da transação pai.
+            # =============================================================
+            if user_message:
+                try:
+                    from app.agente.models import AgentStep
+                    _msgs = (session.data or {}).get('messages', [])
+                    _turn_seq = sum(1 for m in _msgs if m.get('role') == 'user')
+                    AgentStep.insert_step(
+                        step_uid=f"{our_session_id}:{_turn_seq}",
+                        session_id=our_session_id,
+                        user_id=user_id,
+                        channel='web',
+                        model=model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        tools_used=tools_used or None,
+                    )
+                    # Onda 1 / E1 — captura frustração no outcome_signal (flag OFF por default)
+                    from app.agente.config.feature_flags import USE_AGENT_QUALITY_SPINE
+                    if USE_AGENT_QUALITY_SPINE:
+                        from app.agente.services.sentiment_detector import get_last_frustration_score
+                        _fscore = get_last_frustration_score(our_session_id)
+                        if _fscore is not None:
+                            AgentStep.update_outcome(
+                                f"{our_session_id}:{_turn_seq}",
+                                {'frustration_score': _fscore},
+                            )
+                except Exception as e:
+                    logger.warning(
+                        f"[AGENTE] agent_step nao gravado (best-effort): {e}"
+                    )
 
             # Atualiza sdk_session_id se não expirou
             # Fase B (SDK 0.1.64 SessionStore): backup_session_transcript removido.
@@ -1731,6 +1902,26 @@ def _save_messages_to_db(
                 f"sdk_cost={sdk_cost}, calc_cost={calc_cost:.6f}, "
                 f"final={cost_usd:.6f}, tokens=({input_tokens},{output_tokens})"
             )
+
+            # B1 (Onda 2): persistir PlanState em data['plan'] (flag-gated).
+            # best-effort: falha aqui NUNCA quebra a persistência de mensagens.
+            # Segue padrão R7 (flag_modified obrigatório para JSONB).
+            try:
+                from app.agente.config.feature_flags import USE_AGENT_PLANNER
+                if USE_AGENT_PLANNER and plan_dict:
+                    from sqlalchemy.orm.attributes import flag_modified
+                    _current_data = session.data or {}
+                    _current_data['plan'] = plan_dict
+                    session.data = _current_data
+                    flag_modified(session, 'data')
+                    logger.debug(
+                        f"[PLAN] data['plan'] gravado: "
+                        f"{len(plan_dict.get('steps', {}))} steps"
+                    )
+            except Exception as _plan_persist_err:
+                logger.warning(
+                    f"[PLAN] persistencia data['plan'] falhou (ignorado): {_plan_persist_err}"
+                )
 
             db.session.commit()
             logger.debug(f"[AGENTE] Mensagens salvas na sessão {our_session_id[:8]}...")

@@ -7,6 +7,23 @@
 
 ---
 
+## Modelo default: Opus 4.7 → 4.8 (2026-05-28)
+
+**Sem mudanca de versao de SDK** (`claude-agent-sdk==0.2.87`). Troca apenas do modelo default.
+
+### Migracao Opus 4.7 → 4.8 (2026-05-28)
+- `config/settings.py`: default `model="claude-opus-4-8"`; `MODEL_PRICING` ganha `'claude-opus-4-8': (5.00, 25.00)` (4.7/4.6/4.5 mantidos como legado); fallback de `calculate_cost` aponta para 4.8.
+- `sdk/pricing.py`: `DEFAULT_MODEL='claude-opus-4-8'` + entrada no `MODEL_PRICING`.
+- `config/feature_flags.py`: `TEAMS_DEFAULT_MODEL` default `claude-opus-4-8`.
+- `config/agent_loader.py`: aliases `opus-4-8`/`opus_4_8` adicionados ao `_MODEL_MAP` (4.7/4.6 mantidos).
+- `routes/chat.py` + `agente_lojas/routes/chat.py`: fallback de modelo `claude-opus-4-8`.
+- UI: `templates/agente/chat.html` (2 dropdowns) + `static/agente/js/chat.js` (registry MODEL_INFO; 4.7/4.6 viram "Opus (legado)").
+- **Rollback instantaneo** via env vars: `AGENT_MODEL=claude-opus-4-7` + `TEAMS_DEFAULT_MODEL=claude-opus-4-7` (ou `claude-opus-4-6`).
+- **Breaking changes**: NENHUMA. Opus 4.8 mantem a mesma superficie de API que 4.7 (adaptive thinking only; `temperature/top_p/top_k` e `budget_tokens` ja removidos no 4.7; prefill de assistant removido — nada disso usado). Mesmo preco $5/$25 per MTok, 1M context, 128K max output.
+- **Comportamento** (re-tuning opcional, nao aplicado): 4.8 narra mais entre tool calls e e mais deliberado/pergunta mais; mais conservador para acionar subagentes/memoria/custom tools (steerable via prompt). `xhigh` effort continua valido (4.7/4.8).
+
+---
+
 ## SDK 0.2.83 → 0.2.87 (atualizado 2026-05-25) — CLI bumps + adocao tardia Task* tools
 
 **Versao**: `claude-agent-sdk==0.2.87` (CLI bundled 2.1.150) + `anthropic==0.98.1`

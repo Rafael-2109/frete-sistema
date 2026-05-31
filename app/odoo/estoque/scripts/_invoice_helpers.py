@@ -127,7 +127,10 @@ def _registrar_auditoria(
             registro_id=ajuste_id,
             acao=acao,
             modelo_odoo=modelo_odoo,
-            etapa=fase,
+            # NÃO passar `etapa=fase`: coluna `operacao_odoo_auditoria.etapa` é
+            # Integer (G-AUDIT-1/N21 — string de fase estoura InvalidTextRepresentation
+            # e envenena a session do pipeline). A fase vai em `pipeline_etapa`
+            # (String) + `etapa_descricao`. Bug que parou o canary P6 2026-05-29.
             etapa_descricao=f'{fase} {acao}',
             status=status,
             payload_json=payload,

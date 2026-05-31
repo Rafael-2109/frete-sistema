@@ -205,6 +205,22 @@ class CarviaCotacao(db.Model):
         ).scalar()
         return int(total)
 
+    @property
+    def peso_para_cotacao(self):
+        """Peso usado na precificacao do frete — acessor canonico.
+
+        Convencao do sistema: para MOTO a fonte de verdade e a property
+        `peso_total_motos` (SUM de CarviaCotacaoMoto.peso_cubado_total); o campo
+        `peso_cubado` fica NULL por design em MOTO e NAO deve ser lido. Para
+        CARGA_GERAL usa o peso cubado declarado, com fallback no peso bruto.
+
+        Consolida a regra que estava duplicada em CotacaoV2Service.calcular_preco
+        e MargemService._melhor_custo_subcontrato.
+        """
+        if self.tipo_material == 'MOTO':
+            return float(self.peso_total_motos)
+        return float(self.peso_cubado or self.peso or 0)
+
     def __repr__(self):
         return f'<CarviaCotacao {self.numero_cotacao} ({self.status}) cliente={self.cliente_id}>'
 

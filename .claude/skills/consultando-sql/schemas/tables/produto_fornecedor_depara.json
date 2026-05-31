@@ -58,7 +58,7 @@
     {
       "name": "odoo_product_uom_id",
       "type": "integer",
-      "description": "ID da UoM em uom.uom do Odoo"
+      "description": "DEPRECADO — ver nota acima"
     },
     {
       "name": "ativo",
@@ -102,13 +102,6 @@
   ],
   "indices": [
     {
-      "name": "ix_produto_fornecedor_depara_cnpj_fornecedor",
-      "columns": [
-        "cnpj_fornecedor"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_produto_fornecedor_depara_cod_produto_interno",
       "columns": [
         "cod_produto_interno"
@@ -119,6 +112,13 @@
       "name": "ix_produto_fornecedor_depara_cod_produto_fornecedor",
       "columns": [
         "cod_produto_fornecedor"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_produto_fornecedor_depara_cnpj_fornecedor",
+      "columns": [
+        "cnpj_fornecedor"
       ],
       "unique": false
     }

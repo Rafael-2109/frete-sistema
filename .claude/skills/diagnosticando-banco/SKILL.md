@@ -234,7 +234,7 @@ health_check_banco.py --all --resumo
 ## Modo 3: Render MCP SQL (fallback producao)
 
 Para producao quando Postgres MCP Pro nao estiver disponivel.
-Usar `mcp__render__query_render_postgres` com `postgresId = "dpg-d13m38vfte5s738t6p50-a"`.
+Usar `mcp__render__query_render_postgres` com o `postgresId` do banco `sistema-fretes-db` — obter o ID em `.claude/references/INFRAESTRUTURA.md` (secao "IDs dos Recursos", linha `Postgres` / `sistema-fretes-db`).
 
 ### Indices Nao Usados
 ```sql

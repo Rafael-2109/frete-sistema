@@ -2038,3 +2038,254 @@ def preview_consolidacao(validacao_id):
         pos_envolvidos=list(pos_envolvidos.values()),
         cenario=cenario
     )
+
+
+# =============================================================================
+# RELATORIO: NF INTER-COMPANY (TRANSFERENCIA ENTRE FILIAIS)
+# =============================================================================
+# Cross-ref NF SAIDA <-> DFe destino <-> Picking destino <-> Invoice destino.
+# Usado pelo fiscal para identificar NFs emitidas mas nao escrituradas no destino
+# (saldo "escondido" em locations transit do Odoo).
+#
+# Atualizacao SOB DEMANDA via botao (POST /relatorios/nf-transferencia/refresh).
+# NAO toca em InventarioSnapshotOdoo — preserva T0 do snapshot do inventario.
+# Inverso: refresh do inventario chama tambem este service (em snapshot_odoo_service).
+
+@recebimento_views_bp.route('/relatorios/nf-transferencia', endpoint='nf_transferencia')
+@login_required
+def nf_transferencia_view():
+    """Tela de relatorio de NFs inter-company com cross-ref destino."""
+    from app.recebimento.models import NfTransferenciaSnapshot
+    ultimo = (
+        db.session.query(NfTransferenciaSnapshot.refresh_em)
+        .order_by(NfTransferenciaSnapshot.refresh_em.desc())
+        .first()
+    )
+    last_refresh = ultimo[0] if ultimo else None
+    return render_template(
+        'recebimento/nf_transferencia.html', last_refresh=last_refresh,
+    )
+
+
+@recebimento_views_bp.route('/relatorios/nf-transferencia/api',
+                              endpoint='nf_transferencia_api')
+@login_required
+def nf_transferencia_api():
+    """JSON paginado com NFs do snapshot. Filtros via querystring."""
+    from app.recebimento.models import (
+        NfTransferenciaSnapshot, NfTransferenciaProdutoSnapshot,
+        NfTransferenciaDesconsiderada,
+    )
+
+    status = request.args.get('status', 'pendentes')  # pendentes/todos/concluido/cancelada
+    company_origem = request.args.get('company_origem')  # FB/CD/LF
+    company_destino = request.args.get('company_destino')  # FB/CD/LF
+    data_inicio = request.args.get('data_inicio')  # YYYY-MM-DD
+    data_fim = request.args.get('data_fim')  # YYYY-MM-DD
+    busca = (request.args.get('busca') or '').strip()
+    page = max(1, int(request.args.get('page') or 1))
+    page_size = min(500, max(20, int(request.args.get('page_size') or 100)))
+
+    STATUS_PENDENTES = ('PENDENTE_DFE', 'PENDENTE_PICKING', 'PENDENTE_INVOICE')
+
+    q = NfTransferenciaSnapshot.query
+    if status == 'pendentes':
+        q = q.filter(NfTransferenciaSnapshot.status_consolidado.in_(STATUS_PENDENTES))
+    elif status in ('CONCLUIDO', 'CANCELADA', 'PENDENTE_DFE', 'PENDENTE_PICKING',
+                    'PENDENTE_INVOICE'):
+        q = q.filter_by(status_consolidado=status)
+    # senao: 'todos' — sem filtro de status
+
+    if company_origem:
+        q = q.filter_by(company_origem=company_origem)
+    if company_destino:
+        q = q.filter_by(company_destino=company_destino)
+    if data_inicio:
+        q = q.filter(NfTransferenciaSnapshot.data_emissao >= data_inicio)
+    if data_fim:
+        q = q.filter(NfTransferenciaSnapshot.data_emissao <= data_fim)
+    if busca:
+        like = f'%{busca}%'
+        q = q.filter(or_(
+            NfTransferenciaSnapshot.numero_nf.ilike(like),
+            NfTransferenciaSnapshot.account_move_name_origem.ilike(like),
+            NfTransferenciaSnapshot.chave_nfe.ilike(like),
+        ))
+
+    total = q.count()
+    rows = (q.order_by(NfTransferenciaSnapshot.data_emissao.desc(),
+                       NfTransferenciaSnapshot.id.desc())
+             .offset((page - 1) * page_size)
+             .limit(page_size).all())
+
+    # Eager-load produtos das linhas exibidas
+    ids_pagina = [r.id for r in rows]
+    produtos_por_nf = {}
+    if ids_pagina:
+        produtos = (NfTransferenciaProdutoSnapshot.query
+                    .filter(NfTransferenciaProdutoSnapshot.nf_snapshot_id.in_(ids_pagina))
+                    .order_by(NfTransferenciaProdutoSnapshot.cod_produto).all())
+        for p in produtos:
+            produtos_por_nf.setdefault(p.nf_snapshot_id, []).append(p.to_dict())
+
+    # Flag "desconsiderar do em_transito" por account_move_id_origem
+    # (FK logica; sobrevive ao DELETE+INSERT do refresh).
+    move_ids_pagina = [r.account_move_id_origem for r in rows]
+    descons_set = set()
+    if move_ids_pagina:
+        descons_set = {
+            row.account_move_id_origem
+            for row in NfTransferenciaDesconsiderada.query
+                .filter(NfTransferenciaDesconsiderada.account_move_id_origem
+                        .in_(move_ids_pagina))
+                .all()
+        }
+
+    linhas = []
+    for r in rows:
+        d = r.to_dict()
+        d['produtos'] = produtos_por_nf.get(r.id, [])
+        d['desconsiderar_est'] = r.account_move_id_origem in descons_set
+        linhas.append(d)
+
+    # Resumo por status (sem filtros — visao global)
+    resumo_status = dict(
+        db.session.query(
+            NfTransferenciaSnapshot.status_consolidado,
+            db.func.count(NfTransferenciaSnapshot.id),
+        ).group_by(NfTransferenciaSnapshot.status_consolidado).all()
+    )
+
+    ultimo = (
+        db.session.query(NfTransferenciaSnapshot.refresh_em,
+                          NfTransferenciaSnapshot.refreshed_por)
+        .order_by(NfTransferenciaSnapshot.refresh_em.desc())
+        .first()
+    )
+
+    from app.utils.json_helpers import sanitize_for_json
+    return jsonify(sanitize_for_json({
+        'linhas': linhas,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'resumo_status': resumo_status,
+        'last_refresh': ultimo[0].isoformat() if ultimo and ultimo[0] else None,
+        'last_refresh_por': ultimo[1] if ultimo else None,
+    }))
+
+
+@recebimento_views_bp.route('/relatorios/nf-transferencia/refresh',
+                              methods=['POST'],
+                              endpoint='nf_transferencia_refresh')
+@login_required
+def nf_transferencia_refresh():
+    """Dispara refresh sincrono do snapshot (botao 'Atualizar do Odoo').
+
+    NAO toca em InventarioSnapshotOdoo — para nao descasar o T0 do
+    snapshot do inventario. Inverso: refresh do inventario chama
+    NfTransferenciaService.refresh internamente (snapshot_odoo_service).
+    """
+    from app.recebimento.services.nf_transferencia_service import (
+        NfTransferenciaService,
+    )
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        dias = int(request.args.get('dias') or 90)
+    except (TypeError, ValueError):
+        dias = 90
+    dias = max(1, min(365, dias))
+
+    try:
+        resumo = NfTransferenciaService.refresh(
+            usuario=current_user.nome or current_user.email or 'Fiscal',
+            dias=dias,
+        )
+        db.session.commit()
+        return jsonify({'sucesso': True, 'resumo': resumo})
+    except Exception as e:
+        db.session.rollback()
+        # Log stack trace server-side. NAO retornar trace ao cliente
+        # (evita vazar caminhos internos + logica de negocio).
+        logger.exception(
+            'Falha no refresh de NfTransferenciaService (dias=%s)',
+            dias,
+        )
+        return jsonify({
+            'sucesso': False,
+            'erro': str(e),
+        }), 500
+
+
+@recebimento_views_bp.route(
+    '/relatorios/nf-transferencia/<int:nf_id>/desconsiderar-est-toggle',
+    methods=['POST'],
+    endpoint='nf_transferencia_desconsiderar_est_toggle',
+)
+@login_required
+def nf_transferencia_desconsiderar_est_toggle(nf_id: int):
+    """Liga/desliga flag 'desconsiderar do em_transito' para uma NF.
+
+    Persistido em NfTransferenciaDesconsiderada (FK logica via
+    account_move_id_origem) — sobrevive ao refresh do snapshot.
+
+    Body JSON opcional: {"motivo": "..."}
+    Resposta: {"sucesso": bool, "desconsiderar_est": bool}
+    """
+    from app.recebimento.models import (
+        NfTransferenciaSnapshot, NfTransferenciaDesconsiderada,
+    )
+
+    nf = NfTransferenciaSnapshot.query.get(nf_id)
+    if nf is None:
+        return jsonify({'sucesso': False, 'erro': 'NF nao encontrada'}), 404
+
+    payload = request.get_json(silent=True) or {}
+    motivo = (payload.get('motivo') or '').strip() or None
+
+    from sqlalchemy.exc import IntegrityError
+
+    # Resolve `criado_por` (hasattr guard alinhado com convencao do projeto
+    # — current_user.nome NAO existe em AnonymousUser; @login_required ja
+    # bloqueia, mas pattern defensivo evita 500 silencioso).
+    nome_usuario = (
+        current_user.nome if hasattr(current_user, 'nome') else None
+    ) or (
+        current_user.email if hasattr(current_user, 'email') else None
+    ) or 'Fiscal'
+
+    try:
+        existente = (
+            NfTransferenciaDesconsiderada.query
+            .filter_by(account_move_id_origem=nf.account_move_id_origem)
+            .first()
+        )
+        if existente:
+            db.session.delete(existente)
+            db.session.commit()
+            return jsonify({'sucesso': True, 'desconsiderar_est': False})
+
+        try:
+            db.session.add(NfTransferenciaDesconsiderada(
+                account_move_id_origem=nf.account_move_id_origem,
+                motivo=motivo,
+                criado_por=nome_usuario,
+            ))
+            db.session.commit()
+            return jsonify({'sucesso': True, 'desconsiderar_est': True})
+        except IntegrityError:
+            # Race condition: outro POST concorrente ja flagrou esta NF.
+            # UNIQUE em account_move_id_origem barrou — estado final ja eh
+            # o desejado (flagada). Retornar sucesso idempotente em vez de
+            # 500 (evita UX confusa do checkbox piscar).
+            db.session.rollback()
+            return jsonify({'sucesso': True, 'desconsiderar_est': True})
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.getLogger(__name__).exception(
+            'Falha no toggle desconsiderar-est (nf_id=%s)', nf_id,
+        )
+        return jsonify({'sucesso': False, 'erro': str(e)}), 500

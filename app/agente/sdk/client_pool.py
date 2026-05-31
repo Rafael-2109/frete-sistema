@@ -347,6 +347,17 @@ async def get_or_create_client(
         f"total_clients={len(_registry)}"
     )
 
+    # Sticky session L1: reivindica ownership Redis após criar o client.
+    # Se outro worker reivindicou no instante (race), nao bloqueia — o
+    # client deste worker continua valido. O proximo request da sessão
+    # vai bater no claim_ownership do chat.py:api_chat e disparar 409.
+    # Esse caso e raro (race em ~ms entre 2 workers).
+    try:
+        from .sticky_session import claim_ownership
+        claim_ownership(session_id)
+    except Exception as _sticky_err:
+        logger.debug(f"[SDK_POOL] sticky claim ignorado: {_sticky_err}")
+
     return pooled
 
 
@@ -366,6 +377,14 @@ async def disconnect_client(session_id: str) -> bool:
 
     if not pooled:
         return False
+
+    # Libera ownership Redis (sticky session L1) — outros workers podem
+    # reivindicar agora que esse worker não tem mais o client SDK ativo.
+    try:
+        from .sticky_session import release_ownership
+        release_ownership(session_id)
+    except Exception as _sticky_err:
+        logger.debug(f"[SDK_POOL] sticky release ignorado: {_sticky_err}")
 
     if pooled.connected:
         try:

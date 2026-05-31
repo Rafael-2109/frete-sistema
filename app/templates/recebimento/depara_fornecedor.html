@@ -314,17 +314,12 @@
 
                             <input type="hidden" id="odooProductId" name="odoo_product_id">
 
-                            <input type="hidden" id="odooProductUomId" name="odoo_product_uom_id">
-
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label class="form-label">UM Fornecedor</label>
-                                        <select class="form-select" id="umFornecedor" name="um_fornecedor" onchange="onUomChange()">
-                                            <option value="">Selecione...</option>
-                                            <!-- Populado via JS ao abrir modal -->
-                                        </select>
-                                        <small class="text-muted">UoMs carregadas do Odoo</small>
+                                        <input type="text" class="form-control" id="umFornecedor" name="um_fornecedor" placeholder="Ex: PL, CX, UN" onchange="sugerirFator()">
+                                        <small class="text-muted">Unidade que o fornecedor usa na NF (etiqueta). A conversao usa o Fator abaixo.</small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -450,64 +445,19 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 const modalDepara = new bootstrap.Modal(document.getElementById('modalDepara'));
 const modalImportarExcel = new bootstrap.Modal(document.getElementById('modalImportarExcel'));
-
-// Cache de UoMs carregadas do Odoo
-let uomsOdooCache = null;
-
-async function carregarUomsOdoo() {
-    if (uomsOdooCache) return uomsOdooCache;
-    try {
-        const resp = await fetch('/api/recebimento/depara/uoms-odoo');
-        const data = await resp.json();
-        if (data.sucesso) {
-            uomsOdooCache = data.uoms;
-            return data.uoms;
-        }
-    } catch (e) {
-        console.error('Erro ao carregar UoMs do Odoo:', e);
-    }
-    return [];
-}
-
-async function popularSelectUom(valorAtual, idAtual) {
-    const select = document.getElementById('umFornecedor');
-    const uoms = await carregarUomsOdoo();
-    select.innerHTML = '<option value="">Selecione...</option>';
-    uoms.forEach(u => {
-        const opt = document.createElement('option');
-        opt.value = u.name;
-        opt.dataset.uomId = u.id;
-        opt.textContent = u.name;
-        if (idAtual && u.id == idAtual) opt.selected = true;
-        else if (valorAtual && u.name === valorAtual) opt.selected = true;
-        select.appendChild(opt);
-    });
-    // Atualizar hidden com ID da opcao selecionada
-    atualizarUomIdHidden();
-}
-
-function atualizarUomIdHidden() {
-    const select = document.getElementById('umFornecedor');
-    const selected = select.options[select.selectedIndex];
-    document.getElementById('odooProductUomId').value = selected?.dataset?.uomId || '';
-}
-
-function onUomChange() {
-    atualizarUomIdHidden();
-    sugerirFator();
-}
 
 async function abrirModalNovo() {
     document.getElementById('modalDeparaTitle').textContent = 'Novo De-Para';
     document.getElementById('formDepara').reset();
     document.getElementById('deparaId').value = '';
     document.getElementById('fatorConversao').value = '1';
-    document.getElementById('odooProductUomId').value = '';
-    await popularSelectUom(null, null);
+    document.getElementById('umFornecedor').value = '';
     modalDepara.show();
 }
 
@@ -527,7 +477,7 @@ async function editarDepara(id) {
             document.getElementById('nomeProdutoInterno').value = d.nome_produto_interno || '';
             document.getElementById('odooProductId').value = d.odoo_product_id || '';
             document.getElementById('fatorConversao').value = d.fator_conversao || 1;
-            await popularSelectUom(d.um_fornecedor, d.odoo_product_uom_id);
+            document.getElementById('umFornecedor').value = d.um_fornecedor || '';
             modalDepara.show();
         } else {
             alert('Erro ao buscar De-Para: ' + data.erro);
@@ -542,8 +492,6 @@ function salvarDepara() {
     const method = id ? 'PUT' : 'POST';
     const url = id ? `/api/recebimento/depara/${id}` : '/api/recebimento/depara';
 
-    const uomIdValue = document.getElementById('odooProductUomId').value;
-
     const dados = {
         cnpj_fornecedor: document.getElementById('cnpjFornecedor').value,
         razao_fornecedor: document.getElementById('razaoFornecedor').value,
@@ -553,7 +501,6 @@ function salvarDepara() {
         nome_produto_interno: document.getElementById('nomeProdutoInterno').value,
         odoo_product_id: document.getElementById('odooProductId').value || null,
         um_fornecedor: document.getElementById('umFornecedor').value,
-        odoo_product_uom_id: uomIdValue ? parseInt(uomIdValue) : null,
         fator_conversao: parseFloat(document.getElementById('fatorConversao').value) || 1
     };
 

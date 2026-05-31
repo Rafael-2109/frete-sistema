@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 279,
+  "total_tabelas": 286,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -1822,6 +1822,42 @@
       ]
     },
     {
+      "name": "inventario_ajuste_manual",
+      "description": "Tabela inventario_ajuste_manual",
+      "key_fields": [
+        "ciclo_id",
+        "cod_produto",
+        "nome_produto"
+      ]
+    },
+    {
+      "name": "inventario_base",
+      "description": "Tabela inventario_base",
+      "key_fields": [
+        "ciclo_id",
+        "cod_produto",
+        "nome_produto"
+      ]
+    },
+    {
+      "name": "inventario_ciclo",
+      "description": "Tabela inventario_ciclo",
+      "key_fields": [
+        "codigo",
+        "data_snapshot",
+        "descricao"
+      ]
+    },
+    {
+      "name": "inventario_snapshot_odoo",
+      "description": "Tabela inventario_snapshot_odoo",
+      "key_fields": [
+        "ciclo_id",
+        "cod_produto",
+        "nome_produto"
+      ]
+    },
+    {
       "name": "lancamento_comprovante",
       "description": "Lançamentos de comprovantes financeiros.",
       "key_fields": [
@@ -1963,6 +1999,33 @@
         "numero_nf",
         "cnpj_cliente",
         "nome_cliente"
+      ]
+    },
+    {
+      "name": "nf_transferencia_desconsiderada",
+      "description": "Flag persistente: NF a EXCLUIR do calculo em_transito_*.",
+      "key_fields": [
+        "account_move_id_origem",
+        "motivo",
+        "criado_por"
+      ]
+    },
+    {
+      "name": "nf_transferencia_produto_snapshot",
+      "description": "Linhas de produto da NF inter-company (1 NF tem N linhas).",
+      "key_fields": [
+        "nf_snapshot_id",
+        "cod_produto",
+        "nome_produto"
+      ]
+    },
+    {
+      "name": "nf_transferencia_snapshot",
+      "description": "Snapshot de NF inter-company (FB <-> CD <-> LF) com cross-ref destino.",
+      "key_fields": [
+        "refresh_em",
+        "refreshed_por",
+        "chave_nfe"
       ]
     },
     {

@@ -286,6 +286,45 @@ NUNCA importar e chamar como funcao Python — nao sao callables, gera erro sile
 ### R7: JSONB — flag_modified
 Manter o padrao existente em `models.py`: SEMPRE `flag_modified(session, 'data')` apos modificar JSONB.
 
+### R9: Audit Hook Deterministico Odoo — propagacao via PreToolUse (2026-05-28)
+
+Quando flag `AGENT_ODOO_AUDIT_HOOK=true`:
+- `sdk/hooks.py:_keep_stream_open` (PreToolUse) intercepta tool `Bash` e prefixa `command` com `export AGENT_SESSION_ID=<ctx> AGENT_TOOL_USE_ID=<tuid> AGENT_TYPE=<atype> AGENT_USER_NAME=<uname>` antes do command original.
+- Subprocess Bash herda as ENV vars → script Python da skill chama `OdooConnection.execute_kw` → hook em `app/utils/odoo_audit_helpers.py` registra em `operacao_odoo_auditoria` correlacionando com sessao.
+
+**Race-free**: usa `hookSpecificOutput.updatedInput` (SDK 0.1.29+, dict[str, Any]) — isolado por tool call, nao depende de `os.environ` global (que quebraria multi-worker gunicorn).
+
+**Cuidados**:
+- Hook NUNCA quebra a tool (try/except + log debug)
+- shlex.quote escapa valores (defesa contra injection)
+- Quando flag OFF, hook nao muta command (zero overhead)
+- ContextVar `_current_session_id` em `permissions.py:46` e a fonte de `AGENT_SESSION_ID`
+
+Ver `app/odoo/CLAUDE.md` secao P8 para detalhes do hook lado Odoo.
+Migration: `scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}`.
+
+### R10: Persistencia da resposta — PRIMARY (thread daemon) vs DEFESA (generator finally)
+
+No path persistente ha 2 gravacoes da resposta em `agent_sessions.data`:
+- **PRIMARY**: `finally` da thread daemon `run_async_stream` — roda quando o turno
+  COMPLETA, com `full_text` preenchido. E' quem deve salvar a resposta.
+- **DEFESA**: `finally` do generator `_stream_chat_response`
+  (`source='finally_generator'`) — rede de seguranca caso o primary falhe/morra.
+
+**INVARIANTE (`_should_persist_in_finally`, 2026-05-29)**: a DEFESA so' persiste se
+a thread daemon JA terminou (`not thread.is_alive()`). Se a thread ainda processa
+(cliente desconectou mid-turno), a defesa DELEGA ao primary. Persistir na defesa
+com a thread viva gravaria `full_text` vazio e marcaria `_persisted=True`,
+BLOQUEANDO o primary de salvar a resposta real (race que perdia a resposta —
+sessao do Marcus: 6 user / 0 assistant no banco apesar do HOOK:Stop). Como
+`add_user_message`/`add_assistant_message` NAO sao idempotentes, a defesa NAO pode
+rodar em paralelo ao primary.
+
+**Frontend**: ao cair a conexao mid-turno, `startDeferredResponsePoll` (chat.js)
+busca a resposta ja' persistida e a renderiza sem recarga manual (associa a 1a
+`assistant` apos a ultima `user` de mesmo conteudo — robusto porque o primary
+persiste user+assistant atomicamente no mesmo commit).
+
 ---
 
 ## Hierarquia de Timeouts
@@ -421,7 +460,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 | `tool_result` | StreamEvent | _sse_event | case | UserMessage.ToolResultBlock |
 | `todos` | StreamEvent | _sse_event | case | ToolResult (TodoWrite) — DEPRECATED SDK <= 0.1.81, mantido back-compat |
 | `task_event` | StreamEvent | _sse_event | case | ToolResult (TaskCreate/TaskUpdate/TaskList) — SDK 0.2.82+ |
-| `error` | StreamEvent | _sse_event | case | API errors, exceptions |
+| `error` | StreamEvent | _sse_event | case | API errors, exceptions. `error_type` ∈ {cli_connection_error, thread_died, timeout, process_error} → frontend classifica transiente (auto-retry/aviso calmo) vs final (card ❌). Ver `_isTransientError` em chat.js (2026-05-29) |
 | `interrupt_ack` | StreamEvent | _sse_event | case | ResultMessage (interrupted) |
 | `task_started` | StreamEvent | _sse_event | case | TaskStartedMessage (subagente) |
 | `task_progress` | StreamEvent | _sse_event | case | TaskProgressMessage (subagente) |
@@ -432,6 +471,7 @@ Ao adicionar novo tipo de evento, **OBRIGATORIO** atualizar:
 | `done` | StreamEvent | _sse_event | case | ResultMessage (fim, inclui structured_output) |
 | `start` | — | SSE generator | case | Inicio do SSE stream |
 | `heartbeat` | — | SSE generator | case | Keep-alive 10s |
+| `processing` | — | SSE generator | case | Inatividade com thread VIVA = turno em andamento (NAO "travou"). Renova deadline + indicador persistente (2026-05-29) |
 | `suggestions` | — | pos-stream | case | suggestion_generator |
 | `ask_user_question` | — | AskUserQuestion | case | SDK AskUserQuestion tool |
 | `memory_saved` | — | hooks pos-sessao | case | Memoria salva |
@@ -636,8 +676,8 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
   bloco `<task_management>`. Parser em `client.py:_build_task_event` (Nacom) e
   `agente_lojas/sdk/client.py:_build_task_event_from_result` (Lojas, detecta por regex no output).
 - **Floor**: `mcp>=1.19.0` (fix `CallToolResult` silenciosamente perdido em 0.1.70)
-- **Modelo default**: `claude-opus-4-7` (Opus 4.7, $5/$25 per MTok, adaptive thinking, 1M context)
-- **Rollback rapido**: `AGENT_MODEL=claude-opus-4-6` + `TEAMS_DEFAULT_MODEL=claude-opus-4-6`
+- **Modelo default**: `claude-opus-4-8` (Opus 4.8, $5/$25 per MTok, adaptive thinking, 1M context)
+- **Rollback rapido**: `AGENT_MODEL=claude-opus-4-7` + `TEAMS_DEFAULT_MODEL=claude-opus-4-7` (ou `claude-opus-4-6`)
 - **SessionStore**: `PostgresSessionStore` source-of-truth (Fase B cutover 2026-04-21)
   - Tabela `claude_session_store`, flag `AGENT_SDK_SESSION_STORE_ENABLED` default ON
   - Pool asyncpg LAZY per-worker, min=1/max=3
@@ -662,9 +702,21 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
   frontmatter. `agent_loader.py` parseia com forward-compat (`_SDK_HAS_EFFORT_FIELD`
   introspection). Sonnet ignorado (xhigh fallback para high = no-op).
 - **`skills` option** (SDK 0.1.77, deprecou `"Skill"` em allowed_tools): `agente_lojas`
-  passa `skills=sorted(SKILLS_PERMITIDAS)` (filtro real do listing — defesa em
-  profundidade do contrato HORA); `agente` Nacom passa `skills="all"` (centralizacao).
-  Forward-compat via `_SDK_HAS_OPTIONS_SKILLS` (introspection).
+  passa `skills=sorted(SKILLS_PERMITIDAS)` (allow-list fechada — defesa em
+  profundidade do contrato HORA); `agente` Nacom passa
+  `skills=_discover_skills_from_project()` (`sdk/client.py`) — descoberta filtrada
+  por **deny-list** (`SPED_SKILLS_RESERVED` + `config/skills_whitelist.py`
+  `SKILLS_DELEGADAS_SUBAGENTE`). Forward-compat via `_SDK_HAS_OPTIONS_SKILLS`.
+  - **Solucao B (2026-05-29)**: a description da meta-tool `Skill` e montada pela
+    CLI (cli.js `sY7`) concatenando `- nome: description` de TODAS as skills do
+    listing, com budget `floor(context_model * 0.08)` = **16.000 chars** (ctx 200K).
+    Com 46 skills (~48.7K) excedia e a CLI TRUNCAVA cada description (~322/skill),
+    descartando as clausulas de desambiguacao (USAR/NAO USAR). Deny-list por
+    dominio reduz o principal a 25 skills (remove HORA + Assai + Odoo-estoque-WRITE,
+    operadas via subagente). Subagentes mantem suas skills via
+    `AgentDefinition.skills` (frontmatter — independente do principal,
+    `agent_loader.py:111`). Complementada pela Solucao A (descriptions enxutas
+    <=~600 chars, limite oficial 1024).
 - **Actionable error messages** (SDK 0.1.77): `ProcessError` carrega texto real do
   CLI (ex: "Reached maximum number of turns") em vez de generico "exit code 1".
   Adocao gratis via upgrade.

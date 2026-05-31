@@ -8,6 +8,10 @@ Freeze 2026-05-27: alem dos dados Odoo, agrega `MovimentacaoEstoque` local
 (mov_compras/vendas/consumo/producao filtrado >= data_snapshot, mov_sist_total
 sem filtro de data) e grava no snapshot. Garante consistencia temporal do
 ODOO-MOV no Confronto.
+
+Em transito 2026-05-28: refresh AGORA dispara tambem NfTransferenciaService.refresh()
+e grava em_transito_fb/cd/lf no snapshot (NFs inter-company emitidas e ainda nao
+escrituradas no destino — saldo "escondido" em locations transit Odoo).
 """
 from decimal import Decimal
 from collections import defaultdict
@@ -18,6 +22,7 @@ from app.inventario.models import CicloInventario, InventarioSnapshotOdoo
 from app.estoque.models import MovimentacaoEstoque
 from app.odoo.utils.connection import get_odoo_connection
 from app.utils.timezone import agora_utc_naive
+from app.recebimento.services.nf_transferencia_service import NfTransferenciaService
 
 
 COMPANIES = [1, 4, 5]
@@ -55,13 +60,31 @@ class SnapshotOdooService:
                 except Exception:
                     pass
 
-        _progress(5, 'Conectando ao Odoo')
+        _progress(5, 'Atualizando NFs em transito (snapshot fiscal)')
+        # IMPORTANTE: refresh fiscal ANTES — popula NfTransferenciaSnapshot global
+        # que serah agregado em em_transito_*. Quando fiscal aciona refresh sozinho
+        # (botao da tela fiscal), NAO chama esta funcao — preserva T0 do inventario.
+        try:
+            nf_transf_resumo = NfTransferenciaService.refresh(
+                usuario='Inventario refresh', dias=90, job=job,
+            )
+        except Exception as e:
+            # Falha no fiscal NAO interrompe o snapshot do inventario — em_transito
+            # ficarah agregado do que ja estava no snapshot fiscal anterior.
+            import logging
+            logging.getLogger(__name__).warning(
+                'NfTransferenciaService.refresh falhou; em_transito usara snapshot '
+                'fiscal anterior. Erro: %s', e,
+            )
+            nf_transf_resumo = {'erro': str(e)}
+
+        _progress(25, 'Conectando ao Odoo')
         odoo = get_odoo_connection()
 
-        _progress(20, 'Baixando estoque por empresa')
+        _progress(35, 'Baixando estoque por empresa')
         estoques = SnapshotOdooService._baixar_estoque(odoo)
 
-        _progress(50, 'Baixando apontamentos (mrp.production)')
+        _progress(55, 'Baixando apontamentos (mrp.production)')
         apontamentos = SnapshotOdooService._baixar_apontamentos(odoo, data_inicio)
 
         _progress(75, 'Baixando compras externas')
@@ -70,9 +93,12 @@ class SnapshotOdooService:
         _progress(85, 'Congelando MOV local (MovimentacaoEstoque)')
         movs = SnapshotOdooService._baixar_movimentacoes_local(ciclo.data_snapshot)
 
-        _progress(90, 'Persistindo snapshot')
+        _progress(90, 'Agregando em_transito (NFs inter-company pendentes)')
+        em_transito = NfTransferenciaService.agregar_em_transito_por_destino()
+
+        _progress(93, 'Persistindo snapshot')
         cods = (set(estoques.keys()) | set(apontamentos.keys()) |
-                set(compras.keys()) | set(movs.keys()))
+                set(compras.keys()) | set(movs.keys()) | set(em_transito.keys()))
 
         InventarioSnapshotOdoo.query.filter_by(ciclo_id=ciclo_id).delete()
         db.session.flush()
@@ -82,11 +108,12 @@ class SnapshotOdooService:
             apt = apontamentos.get(cod, {})
             cmp = compras.get(cod, {})
             mv = movs.get(cod, {})
+            et = em_transito.get(cod, {})
             db.session.add(InventarioSnapshotOdoo(
                 ciclo_id=ciclo_id,
                 cod_produto=cod,
                 nome_produto=(est.get('nome') or apt.get('nome') or
-                              cmp.get('nome') or mv.get('nome')),
+                              cmp.get('nome') or mv.get('nome') or et.get('nome')),
                 estoque_fb=est.get('fb', Decimal('0')),
                 estoque_cd=est.get('cd', Decimal('0')),
                 estoque_lf=est.get('lf', Decimal('0')),
@@ -98,11 +125,18 @@ class SnapshotOdooService:
                 mov_consumo=mv.get('consumo', Decimal('0')),
                 mov_producao=mv.get('producao', Decimal('0')),
                 mov_sist_total=mv.get('sist_total', Decimal('0')),
+                em_transito_fb=et.get('fb', Decimal('0')),
+                em_transito_cd=et.get('cd', Decimal('0')),
+                em_transito_lf=et.get('lf', Decimal('0')),
                 refresh_em=agora_utc_naive(),
             ))
         db.session.flush()  # commit fica para o caller (route/worker)
         _progress(100, 'Concluído')
-        return {'inseridos': len(cods), 'refresh_em': agora_utc_naive().isoformat()}
+        return {
+            'inseridos': len(cods),
+            'refresh_em': agora_utc_naive().isoformat(),
+            'nf_transferencia': nf_transf_resumo,
+        }
 
     @staticmethod
     def _baixar_movimentacoes_local(data_snapshot) -> Dict:
@@ -114,11 +148,16 @@ class SnapshotOdooService:
         do confronto seja matematicamente valida (mesmo momento T0).
         """
         cod_raiz = MovimentacaoEstoque.cod_produto.label('raiz')
-        # Periodo: ENTRADA/FATURAMENTO/CONSUMO/PRODUCAO desde data_snapshot
+        # Periodo: COMPRAS/FATURAMENTO/CONSUMO/PRODUCAO desde data_snapshot
+        # COMPRAS = tipo='ENTRADA' AND local='COMPRA' (exclui REVERSAO/
+        # TRANSFERENCIA/AJUSTE/PALLET que tambem sao tipo='ENTRADA' mas NAO
+        # sao compra externa). Alinhado com Odoo._baixar_compras() que filtra
+        # PO partner externo (nao inter-company).
         q_periodo = db.session.query(
             cod_raiz,
             func.max(MovimentacaoEstoque.nome_produto),
-            func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA',
+            func.sum(case(((MovimentacaoEstoque.tipo_movimentacao == 'ENTRADA') &
+                           (MovimentacaoEstoque.local_movimentacao == 'COMPRA'),
                            MovimentacaoEstoque.qtd_movimentacao), else_=0)),
             func.sum(case((MovimentacaoEstoque.tipo_movimentacao == 'FATURAMENTO',
                            MovimentacaoEstoque.qtd_movimentacao), else_=0)),

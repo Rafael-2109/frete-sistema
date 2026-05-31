@@ -4335,6 +4335,7 @@ class RecebimentoLfOdooService:
         """
         from app.estoque.models import MovimentacaoEstoque
         from app.producao.models import CadastroPalletizacao
+        from app.producao.services.cadastro_palletizacao_service import garantir_cadastro_basico
 
         rec = self._get_recebimento()
         # Filtro chave: somente produto acabado (tipo='manual'); exclui componentes (tipo='auto')
@@ -4389,12 +4390,18 @@ class RecebimentoLfOdooService:
                 if not move_id:
                     continue
 
-                # Verificar se produto e comprado
+                # Produto acabado da LF: registrar SEMPRE (output da industrializacao).
+                # Cria CadastroPalletizacao basico (natureza ACABADO_LF) se faltar.
                 cadastro = CadastroPalletizacao.query.filter_by(
-                    cod_produto=str(cod_produto), produto_comprado=True
+                    cod_produto=str(cod_produto)
                 ).first()
                 if not cadastro:
-                    continue
+                    cadastro, _ = garantir_cadastro_basico(
+                        cod_produto=str(cod_produto),
+                        nome_produto=lote.odoo_product_name or str(cod_produto),
+                        natureza='ACABADO_LF',
+                        criado_por=rec.usuario or 'Sistema Recebimento LF',
+                    )
 
                 # Verificar duplicacao
                 existente = MovimentacaoEstoque.query.filter_by(

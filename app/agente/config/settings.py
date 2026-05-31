@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from typing import ClassVar, List, Optional
 from functools import lru_cache
 
+from app.agente.config.skills_whitelist import SKILLS_SPED_RESERVED
+
 
 @dataclass
 class AgentSettings:
@@ -28,20 +30,17 @@ class AgentSettings:
     """
 
     # Modelo e API
-    # Opus 4.7 (16/04/2026): mesmo preco que 4.6 ($5/$25 per MTok), 128K max output,
-    # 1M context window nativo, adaptive thinking. Override via env AGENT_MODEL.
-    model: str = "claude-opus-4-7"
+    # Opus 4.8 (28/05/2026): mesma superficie de API que 4.7 (sem breaking change),
+    # mesmo preco $5/$25 per MTok, 128K max output, 1M context window nativo,
+    # adaptive thinking. Override via env AGENT_MODEL.
+    model: str = "claude-opus-4-8"
     api_key: Optional[str] = None
 
     # Skills exclusivas do subagente auditor-sped-ecd.
+    # Alias retrocompat para SKILLS_SPED_RESERVED (fonte única em skills_whitelist.py).
     # Filtradas via `skills=list[str]` no SDK 0.1.77+ — invisíveis no listing do
     # principal E rejeitadas pelo Skill tool (SDK_CHANGELOG.md:160-167).
-    SPED_SKILLS_RESERVED: ClassVar[frozenset] = frozenset({
-        "parseando-sped-ecd",
-        "auditando-sped-vs-manual",
-        "auditando-sped-contabil",
-        "comparando-sped-ground-truth",
-    })
+    SPED_SKILLS_RESERVED: ClassVar[frozenset] = SKILLS_SPED_RESERVED
 
     # Tools do SDK (ferramentas padrão permitidas)
     # NOTA: Funcionalidades são implementadas via SKILLS, não Custom Tools MCP
@@ -95,10 +94,11 @@ class AgentSettings:
 
     # Preços por modelo (por 1M tokens) — [input, output]
     # Ref: https://www.anthropic.com/pricing
-    # Nota: Opus 4.7 usa novo tokenizer (~0-35% mais tokens por texto vs 4.6) —
+    # Nota: Opus 4.7/4.8 usam novo tokenizer (~0-35% mais tokens por texto vs 4.6) —
     # custo/USD/request pode subir mesmo com preço/token idêntico. Monitorar.
     MODEL_PRICING: dict = field(default_factory=lambda: {
-        'claude-opus-4-7': (5.00, 25.00),              # Default atual
+        'claude-opus-4-8': (5.00, 25.00),              # Default atual
+        'claude-opus-4-7': (5.00, 25.00),              # Legacy: sessões existentes
         'claude-opus-4-6': (5.00, 25.00),              # Legacy: sessões existentes
         'claude-opus-4-5-20251101': (5.00, 25.00),     # Legacy: sessões antigas
         'claude-sonnet-4-6': (3.00, 15.00),
@@ -149,10 +149,10 @@ class AgentSettings:
             Custo em USD
         """
         model_id = model or self.model
-        # Fallback para Opus 4.7 se modelo desconhecido
+        # Fallback para Opus 4.8 se modelo desconhecido
         input_price, output_price = self.MODEL_PRICING.get(
             model_id,
-            self.MODEL_PRICING.get('claude-opus-4-7', (5.00, 25.00)),
+            self.MODEL_PRICING.get('claude-opus-4-8', (5.00, 25.00)),
         )
         input_cost = (input_tokens / 1_000_000) * input_price
         output_cost = (output_tokens / 1_000_000) * output_price

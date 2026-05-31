@@ -98,9 +98,9 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_invocation_metrics_recorded_at",
+      "name": "ix_agent_invocation_metrics_session_id",
       "columns": [
-        "recorded_at"
+        "session_id"
       ],
       "unique": false
     },
@@ -119,9 +119,9 @@
       "unique": false
     },
     {
-      "name": "ix_agent_invocation_metrics_session_id",
+      "name": "ix_agent_invocation_metrics_recorded_at",
       "columns": [
-        "session_id"
+        "recorded_at"
       ],
       "unique": false
     }

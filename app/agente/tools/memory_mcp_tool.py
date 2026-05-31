@@ -420,14 +420,8 @@ def _maybe_record_evaluator_false_positive(
 
 def _execute_with_context(func):
     """
-    Executa função dentro de Flask app context (se necessário).
-
-    Se a sessão SQLAlchemy está em estado inválido (transação abortada),
-    faz rollback antes de executar para evitar o erro
-    "Can't reconnect until invalid transaction is rolled back".
-    Isso pode ocorrer no Teams (thread com app context reutilizado) quando
-    uma tool call anterior falhou sem rollback — a sessão fica em estado
-    abortado e bloqueia todas as queries subsequentes (cascata HX→HW).
+    Executa função dentro de Flask app context (se necessário) e com guard de
+    sessão SQLAlchemy abortada (ver `_run_with_session_guard`).
 
     Args:
         func: Callable que precisa de app context
@@ -437,21 +431,52 @@ def _execute_with_context(func):
     """
     ctx = _get_app_context()
     if ctx is None:
-        # Já dentro de app context — verificar se sessão precisa de rollback
+        return _run_with_session_guard(func)
+    with ctx:
+        return _run_with_session_guard(func)
+
+
+def _run_with_session_guard(func):
+    """Executa `func` e auto-recupera de uma sessão SQLAlchemy abortada.
+
+    BUG-2 (avaliação 360, 2026-05-30): no Teams (gthread reusa threads entre
+    requests; a thread de processamento reusa o app context entre tools), uma
+    operação anterior pode abortar a transação SEM fazer rollback. A próxima
+    query de memória estoura "Can't reconnect until invalid transaction is
+    rolled back" (Sentry PYTHON-FLASK-EG, regressed, 3 usuários) — o turno
+    perde o contexto de memórias silenciosamente.
+
+    `is_active` sozinho NÃO detecta esse estado de forma confiável no
+    SQLAlchemy 2.0 (o predicado preventivo anterior cobria só 1 dos 2 ramos),
+    então usamos um guard REATIVO: executa; se falhar por transação abortada,
+    faz rollback e re-tenta UMA vez com a sessão limpa. Só age quando o erro é
+    de transação inválida — no caminho normal é uma chamada direta a `func()`,
+    sem overhead nem descarte de estado pendente.
+    """
+    from sqlalchemy.exc import PendingRollbackError, InvalidRequestError
+    try:
+        return func()
+    except Exception as e:
+        msg = str(e).lower()
+        aborted = isinstance(e, PendingRollbackError) or (
+            isinstance(e, InvalidRequestError) and (
+                "invalid transaction" in msg
+                or "rolled back" in msg
+                or "can't reconnect" in msg
+            )
+        )
+        if not aborted:
+            raise
+        logger.warning(
+            "[MEMORY_MCP] Sessão abortada detectada — rollback defensivo + "
+            "retry único (BUG-2): %s", e
+        )
         try:
             from app import db
-            if db.session.is_active is False:
-                logger.warning(
-                    "[MEMORY_MCP] Sessão em estado inválido detectada antes de "
-                    "executar tool — fazendo rollback preventivo"
-                )
-                db.session.rollback()
+            db.session.rollback()
         except Exception:
             pass
-        return func()
-    else:
-        with ctx:
-            return func()
+        return func()  # retry único com a sessão limpa
 
 
 # =====================================================================
@@ -1939,6 +1964,18 @@ try:
                     try:
                         from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
                         if MEMORY_KNOWLEDGE_GRAPH:
+                            # D3: captura source_session_id gateada por USE_AGENT_ONTOLOGY.
+                            # Flag OFF (default) → _kg_session_id = None → NULL no banco.
+                            # Backward-compatible: callers legados nunca passam a flag.
+                            _kg_session_id = None
+                            try:
+                                from ..config.feature_flags import USE_AGENT_ONTOLOGY
+                                if USE_AGENT_ONTOLOGY:
+                                    from app.agente.config.permissions import get_current_session_id
+                                    _kg_session_id = get_current_session_id()
+                            except Exception:
+                                pass
+
                             def _kg_extract():
                                 from ..models import AgentMemory
                                 from ..services.knowledge_graph_service import extract_and_link_entities
@@ -1948,6 +1985,7 @@ try:
                                         actual_user_id, mem.id, content,
                                         haiku_entities=_entities,
                                         haiku_relations=_relations,
+                                        source_session_id=_kg_session_id,
                                     )
 
                             _execute_with_context(_kg_extract)
@@ -2128,6 +2166,17 @@ try:
                     try:
                         from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
                         if MEMORY_KNOWLEDGE_GRAPH:
+                            # D3: captura source_session_id gateada por USE_AGENT_ONTOLOGY.
+                            # Flag OFF (default) → _kg_session_id_upd = None → NULL no banco.
+                            _kg_session_id_upd = None
+                            try:
+                                from ..config.feature_flags import USE_AGENT_ONTOLOGY
+                                if USE_AGENT_ONTOLOGY:
+                                    from app.agente.config.permissions import get_current_session_id
+                                    _kg_session_id_upd = get_current_session_id()
+                            except Exception:
+                                pass
+
                             def _kg_update():
                                 from ..models import AgentMemory
                                 from ..services.knowledge_graph_service import (
@@ -2141,6 +2190,7 @@ try:
                                         actual_user_id, mem.id, mem.content,
                                         haiku_entities=_entities,
                                         haiku_relations=_relations,
+                                        source_session_id=_kg_session_id_upd,
                                     )
 
                             _execute_with_context(_kg_update)

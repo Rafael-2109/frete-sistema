@@ -77,6 +77,71 @@ class MotoRecognitionService:
         return volume_m3 * cubagem * qtd
 
     @staticmethod
+    def resolver_modelo_em_lista(texto: str, modelos: list):
+        """Resolve um texto livre (descricao/veiculo de NF) para o
+        CarviaModeloMoto correspondente dentro de `modelos`.
+
+        Usa o `regex_pattern` cadastrado (tolerante ao separador hifen/espaco,
+        ex.: "(?i)big[\\s\\-]*tri" casa "BIG TRI", "BIG-TRI" e "BIGTRI") e,
+        em fallback, o `nome` com word-boundary (evita "RET" dentro de
+        "PRETA"). Precedencia por tamanho de nome DESC para priorizar o mais
+        especifico (MIA TRI antes de MIA, JETMAX antes de JET).
+
+        Esta e a logica canonica de match modelo<->texto, reutilizada tanto na
+        deteccao de NF (_match_descricao, camada 1) quanto no calculo de cubado
+        NF<->cotacao (EmbarqueCarViaService).
+
+        Args:
+            texto: Descricao/modelo cru a resolver.
+            modelos: Lista de CarviaModeloMoto (precisam expor `nome` e
+                `regex_pattern`).
+
+        Returns:
+            O objeto modelo que casa, ou None.
+        """
+        if not texto:
+            return None
+
+        texto_upper = texto.upper().strip()
+        if not texto_upper:
+            return None
+
+        # Mais especifico primeiro (por tamanho do nome).
+        for modelo in sorted(modelos, key=lambda m: len(m.nome or ''), reverse=True):
+            # 1) regex_pattern do cadastro — tolerante ao separador.
+            #    Removemos a flag inline (?i) (ja passamos re.IGNORECASE) e
+            #    envelopamos com word-boundary para evitar match parcial
+            #    (ex: pattern "(?i)jet" nao matcha "JETMAX").
+            if modelo.regex_pattern:
+                try:
+                    pattern_limpo = re.sub(
+                        r'^\(\?[iLmsux]+\)', '', modelo.regex_pattern
+                    )
+                    pattern_com_boundary = (
+                        r'(?<![A-Za-z0-9])(?:'
+                        + pattern_limpo
+                        + r')(?![A-Za-z0-9])'
+                    )
+                    if re.search(
+                        pattern_com_boundary, texto_upper, re.IGNORECASE
+                    ):
+                        return modelo
+                except re.error:
+                    pass
+
+            # 2) Fallback: nome com word-boundary (evita "RET" em "PRETA").
+            nome_upper = (modelo.nome or '').upper()
+            if not nome_upper:
+                continue
+            nome_escaped = re.escape(nome_upper)
+            if re.search(
+                r'(?<![A-Za-z])' + nome_escaped + r'(?![A-Za-z])', texto_upper
+            ):
+                return modelo
+
+        return None
+
+    @staticmethod
     def _match_descricao(
         texto: str,
         modelos: list,
@@ -112,35 +177,14 @@ class MotoRecognitionService:
 
         texto_upper = texto.upper().strip()
 
-        # 1. Patterns customizados do banco — ordenar por tamanho do nome DESC
-        # para priorizar patterns mais especificos (JETMAX antes de JET,
-        # MIA TRI antes de MIA, X11 MINI antes de X11).
-        modelos_ordenados = sorted(
-            modelos, key=lambda m: len(m.nome or ''), reverse=True
+        # 1. Patterns customizados do banco (regex_pattern) ou nome exato, com
+        # precedencia por tamanho e word-boundary — delegado ao helper canonico
+        # (mesma logica usada no matching NF<->cotacao do EmbarqueCarViaService).
+        modelo_match = MotoRecognitionService.resolver_modelo_em_lista(
+            texto_upper, modelos
         )
-        for modelo in modelos_ordenados:
-            if modelo.regex_pattern:
-                try:
-                    # Remover flag (?i) inline — ja passamos re.IGNORECASE.
-                    # Envelope word boundary automatico evita falso-positivo
-                    # (ex: pattern "(?i)jet" nao matcha "JETMAX").
-                    pattern_limpo = re.sub(
-                        r'^\(\?[iLmsux]+\)', '', modelo.regex_pattern
-                    )
-                    pattern_com_boundary = (
-                        r'(?<![A-Za-z0-9])(?:'
-                        + pattern_limpo
-                        + r')(?![A-Za-z0-9])'
-                    )
-                    if re.search(pattern_com_boundary, texto_upper, re.IGNORECASE):
-                        return modelo.nome
-                except re.error:
-                    pass
-            # Match por nome com word boundary (evita falso positivo:
-            # modelo "RET" nao deve matchear em "PRETA")
-            nome_escaped = re.escape(modelo.nome.upper())
-            if re.search(r'(?<![A-Za-z])' + nome_escaped + r'(?![A-Za-z])', texto_upper):
-                return modelo.nome
+        if modelo_match:
+            return modelo_match.nome
 
         # 2. Motos convencionais (Honda, Yamaha, etc.)
         match = CONVENCIONAL_MOTO_PATTERN.search(texto_upper)

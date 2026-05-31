@@ -34,6 +34,22 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 28 | 2026-05-25 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 29 | 2026-05-26 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 30 | 2026-05-27 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 31 | 2026-05-28 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
+| 32 | 2026-05-29 | 1 | 0 | 1 | 0 | OK (peso cubado CarVia ja existe + formula proposta incorreta; causa-raiz real = matching de nome modelo<->NF) |
+
+## 2026-05-29
+- **OK** — 1 sugestao avaliada e **rejeitada** (`IMP-2026-05-28-001`); v2 persistida (id=123, HTTP 200).
+- **IMP-2026-05-28-001 "Peso cubado nunca calculado no fluxo de cotacao CarVia"** (warning, skill_suggestion): proposta de implementar `peso_cubado = (C x L x A) / 300`.
+  - Rejeitada: (1) o calculo **ja existe** — CARGA_GERAL `cotacao_v2_service.py:96-98` (`x 300`), MOTO `:143-148` (`x cubagem/1.000.000`), agregado MOTO `cotacao_v2_routes.py:2241-2242`/`2372-2373`; (2) a formula `/300` esta **invertida/incorreta** (introduziria bug de precificacao); (3) para MOTO `dimensao_c/l/a` da cotacao sao **NULL por design** (dimensoes vem do `CarviaModeloMoto`).
+  - Verificacao banco (Render): 132 cotacoes, 0 com `dimensao_c>0`; 32/32 modelos com dimensoes+cubagem; COT-97 com peso cubado correto nas motos (BIG TRI 952,698 + JOY SUPER 941,460 = 1.894,158 kg).
+  - Causa-raiz real do sintoma (`embarque_item 13362.peso_cubado=NULL`): matching de nome por substring `embarque_carvia_service.py:633-643` (`"BIG TRI"` x `"...BIG-TRI"` nao casa) + cotacao manual nao propaga `cotacao.peso_cubado`. Recomendacao de fix registrada para revisao humana (toca `routes.py` + logica sensivel — fora do escopo auto-implementavel).
+- Commit apenas do relatorio + historico (sem mudanca de codigo).
+
+## 2026-05-28
+- **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).
+- Filtros: `status='proposed'`, `author='agent_sdk'`, `version=1`, sem v2 correspondente.
+- Snapshot 7d: apenas 1 v3 agent_sdk `verified` (2026-05-25 10:05). Zero `proposed` ativos. 5o SKIP consecutivo (24/25/26/27/28). Agent SDK D7 sem novas propostas desde 2026-05-21 (>= 7 dias).
+- Nenhum commit alem do relatorio e historico.
 
 ## 2026-05-27
 - **SKIP** — nenhuma sugestao pendente no banco (query retornou `[]`).

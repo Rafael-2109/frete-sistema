@@ -62,7 +62,7 @@ FRUSTRATION_MARKERS = [
 
 # Instrução injetada quando frustração é detectada.
 # FIX 2026-04-17: usa <system-reminder> (tag oficial Claude) em vez de
-# "[CONTEXTO INTERNO — NAO MENCIONE: ...]" — Opus 4.7 tem defesas fortes
+# "[CONTEXTO INTERNO — NAO MENCIONE: ...]" — Opus 4.7+ tem defesas fortes
 # contra prompt injection e estava sinalizando o formato antigo como
 # ataque (falso positivo — era instrucao legitima do sistema).
 FRUSTRATION_INSTRUCTION = (
@@ -165,6 +165,24 @@ def detect_frustration(
         )
 
     return (is_frustrated, score)
+
+
+def get_last_frustration_score(session_id: Optional[str]) -> Optional[int]:
+    """Onda 1 / E1 — último score de frustração do turno (cache in-memory) ou None.
+
+    Usado pelo wiring de persistência para capturar o score no turno antes
+    que o cache seja sobrescrito pelo próximo turno.
+
+    Args:
+        session_id: ID da sessão no cache _session_scores.
+
+    Returns:
+        Último score inteiro (0-10+) ou None se sessão ausente / sem scores.
+    """
+    if not session_id:
+        return None
+    scores = _session_scores.get(session_id)
+    return scores[-1] if scores else None
 
 
 def enrich_message_if_frustrated(

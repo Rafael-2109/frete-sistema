@@ -1718,6 +1718,48 @@ class AgentInvocationMetric(db.Model):
         except IntegrityError:
             return None
 
+    @classmethod
+    def marcar_escalonamento(cls, agent_id: Optional[str]) -> bool:
+        """
+        B3 (Onda 2) — seta escalated_to_human=True na métrica identificada por agent_id.
+
+        Mecanismo de escrita da coluna 'morta' escalated_to_human. O CHAMADOR
+        (futuro, no loop do planejador) ficará sob flag USE_AGENT_PLANNER — mas
+        este método existe para shadow/teste desde agora (flag-OFF por padrão).
+
+        Padrão SAVEPOINT IDÊNTICO a insert_metric: begin_nested() + flush(), SEM
+        commit() próprio — o CALLER (loop do planejador em request Flask, sob
+        USE_AGENT_PLANNER) consolida no commit final do request. Commit aqui
+        faria flush prematuro de tudo pendente no meio do turno (o que o SAVEPOINT
+        evita). Best-effort: nunca propaga exceção.
+
+        Args:
+            agent_id: identificador único da métrica (PK lógica UNIQUE).
+                      None ou string inválida → retorna False sem exceção.
+
+        Returns:
+            True  se encontrou e atualizou a métrica com sucesso.
+            False se métrica não encontrada, agent_id inválido, ou erro inesperado.
+        """
+        if not agent_id:
+            return False
+
+        try:
+            entry = cls.query.filter_by(agent_id=agent_id).first()
+            if entry is None:
+                return False
+
+            entry.escalated_to_human = True
+            with db.session.begin_nested():
+                db.session.flush()
+            return True
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return False
+
 
 # =========================================================================
 # AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact
@@ -1812,3 +1854,144 @@ class AgenteArtifact(db.Model):
                 if self.build_started_at and self.build_completed_at else None
             ),
         }
+
+
+class AgentStep(db.Model):
+    """
+    Onda 0 (2026-05-30) — Entidade de PASSO/TURNO do agente.
+
+    Granularidade: TURNO (1 par user→assistant).
+    Chave UNIQUE step_uid = f"{session_id}:{turn_seq}".
+
+    Fundação física que destrava 3 eixos do blueprint:
+    - Flywheel: histórico de steps por sessão
+    - Qualidade: outcome_signal (Onda 1 preenche)
+    - Planejador: ferramentas usadas por turno
+
+    Schema completo: scripts/migrations/2026_05_30_agent_step.sql
+
+    Sem FK para agent_sessions — preserva histórico mesmo após cascade delete
+    de sessão (mesma filosofia de AgentSessionCost).
+    """
+    __tablename__ = 'agent_step'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    # Chave de deduplicação: "{session_id}:{turn_seq}"
+    step_uid = db.Column(db.Text, nullable=False, unique=True)
+
+    # Vínculos (sem FK — preserva histórico)
+    session_id = db.Column(db.Text, nullable=True, index=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+
+    # Canal de origem
+    channel = db.Column(db.Text, nullable=True)  # 'web' | 'teams'
+
+    # Modelo utilizado
+    model = db.Column(db.Text, nullable=True)
+
+    # Tokens do turno
+    input_tokens = db.Column(db.Integer, nullable=False, default=0)
+    output_tokens = db.Column(db.Integer, nullable=False, default=0)
+
+    # Ferramentas utilizadas no turno (lista de nomes)
+    tools_used = db.Column(db.JSON, nullable=True)
+
+    # Sinal de resultado qualitativo (Onda 1 preenche; NULL até lá)
+    outcome_signal = db.Column(db.JSON, nullable=True)
+
+    # Contagem de ações efetivas (Onda 1 preenche; NULL até lá)
+    outcome_effective_count = db.Column(db.Integer, nullable=True)
+
+    # Timestamp
+    created_at = db.Column(
+        db.DateTime, nullable=False,
+        default=lambda: agora_utc_naive(),
+        index=True,
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentStep {self.step_uid} in={self.input_tokens} '
+            f'out={self.output_tokens} channel={self.channel}>'
+        )
+
+    @classmethod
+    def insert_step(
+        cls,
+        step_uid: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        channel: Optional[str] = None,
+        model: Optional[str] = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        tools_used: Optional[List[str]] = None,
+    ) -> Optional['AgentStep']:
+        """
+        Insere um step de turno. Retorna None se duplicado (UNIQUE step_uid).
+
+        SAVEPOINT pattern (espelha AgentSessionCost.insert_entry):
+        usa begin_nested() em vez de commit() direto para que falhas de
+        UNIQUE não poisonem a transação pai do request Flask em curso.
+        IntegrityError faz rollback apenas do SAVEPOINT — a sessão continua
+        usável sem rollback manual pelo caller.
+        """
+        entry = cls(
+            step_uid=step_uid,
+            session_id=session_id,
+            user_id=user_id,
+            channel=channel,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            tools_used=tools_used,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(entry)
+                db.session.flush()
+            return entry
+        except IntegrityError:
+            # Savepoint já foi rollback'd pelo context manager.
+            # Transação pai (request) preservada.
+            return None
+
+    @classmethod
+    def update_outcome(
+        cls,
+        step_uid: str,
+        signal_patch: Optional[dict],
+        effective_count: Optional[int] = None,
+    ) -> Optional['AgentStep']:
+        """Onda 1 / E1 — merge best-effort de sinais em outcome_signal (JSONB).
+
+        Idempotente/seguro: step inexistente -> no-op (retorna None).
+        SAVEPOINT isola falha para não poisonar a transação pai do request.
+        flag_modified obrigatório: mutação in-place de JSON não é detectada pelo ORM.
+
+        Args:
+            step_uid: Chave única do step ('{session_id}:{turn_seq}').
+            signal_patch: Dict de chaves a mergear em outcome_signal.
+                          None ou {} são aceitos (no-op seguro).
+            effective_count: Se fornecido, atualiza outcome_effective_count.
+
+        Returns:
+            O AgentStep atualizado, ou None se step inexistente ou em caso de erro.
+        """
+        try:
+            with db.session.begin_nested():
+                step = cls.query.filter_by(step_uid=step_uid).first()
+                if step is None:
+                    return None
+                from sqlalchemy.orm.attributes import flag_modified
+                merged = dict(step.outcome_signal or {})
+                merged.update(signal_patch or {})
+                step.outcome_signal = merged
+                flag_modified(step, 'outcome_signal')
+                if effective_count is not None:
+                    step.outcome_effective_count = effective_count
+                db.session.flush()
+            return step
+        except Exception:
+            return None

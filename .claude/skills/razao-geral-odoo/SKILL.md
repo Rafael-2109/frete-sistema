@@ -79,13 +79,13 @@ dados_agrupados, contas_info, saldos, total = buscar_movimentos_razao(
     connection,
     data_ini='2024-08-01',
     data_fim='2024-08-31',
-    company_ids=[4, 1, 3],
+    company_ids=[4, 1, 3, 5],
     conta_filter='1010'  # Opcional: filtrar por código de conta
 )
 
 excel = gerar_excel_razao(
     dados_agrupados, contas_info, saldos,
-    data_ini='2024-08-01', data_fim='2024-08-31', company_ids=[4, 1, 3]
+    data_ini='2024-08-01', data_fim='2024-08-31', company_ids=[4, 1, 3, 5]
 )
 
 # excel é BytesIO pronto para send_file() ou salvar em disco

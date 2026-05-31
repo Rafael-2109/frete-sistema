@@ -36,7 +36,7 @@ def _make_hooks(user_id=1):
         user_name='test',
         tool_failure_counts={},
         get_last_thinking=lambda: None,
-        get_model_name=lambda: 'claude-opus-4-7',
+        get_model_name=lambda: 'claude-opus-4-8',
         set_injected_ids=lambda x: None,
         resume_state={},
     )

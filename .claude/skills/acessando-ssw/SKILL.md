@@ -17,7 +17,7 @@ allowed-tools: Read, Bash, Glob, Grep
 
 # Acessando SSW
 
-Skill para consultar a documentacao SSW (228 docs, 45 POPs, 20 fluxos) e guiar usuarios nos processos do sistema.
+Skill para consultar a documentacao SSW (~300 docs, 45 POPs, 20 fluxos) e guiar usuarios nos processos do sistema.
 
 ---
 

@@ -19,4 +19,5 @@ from app.inventario.routes import (  # noqa: E402, F401
     ajustes_manuais_routes,
     snapshot_routes,
     movimentacoes_routes,
+    contagem_routes,
 )

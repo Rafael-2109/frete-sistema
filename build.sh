@@ -4,6 +4,9 @@
 
 echo "=== INICIANDO DEPLOY NO RENDER ==="
 
+# nginx eh instalado no start_render.sh (Render Python Runtime NAO permite
+# apt-get no build.sh — so no start, igual ao chromium-browser).
+
 # 0. Baixar dados de treinamento do Tesseract OCR (para OCR de comprovantes)
 # O wheel tesserocr já inclui a lib C compilada. Falta apenas o por.traineddata.
 # apt-get não funciona no Render, então baixamos direto do GitHub.
@@ -430,6 +433,39 @@ echo "Inventario 22: audit log ajuste_estoque_inventario..."
 python scripts/migrations/2026_05_18_audit_ajuste_estoque_inventario.py \
     || echo "⚠️ Migration audit_ajuste_estoque_inventario falhou, continuando deploy..."
 
+# 22b. Audit Hook deterministico Odoo (2026-05-28): rastrear toda chamada XML-RPC
+# write em OdooConnection.execute_kw, correlacionando com session_id do agente web.
+# ADD COLUMN session_id/tool_use_id/agent_type + indexes + incorpora v21 (ALTER
+# COLUMN acao/status/pipeline_etapa). Idempotente (ADD COLUMN IF NOT EXISTS).
+# Ativacao gradual via AGENT_ODOO_AUDIT_HOOK=true (default OFF — zero overhead
+# enquanto desligada). Ver app/odoo/CLAUDE.md secao P8.
+echo "Inventario 22b: audit hook deterministico (session_id em operacao_odoo_auditoria)..."
+python scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.py \
+    || echo "⚠️ Migration operacao_odoo_auditoria_session falhou, continuando deploy..."
+
+# 22c. NF Transferencia inter-filiais (2026-05-28): snapshot fiscal de NFs
+# inter-company (FB↔CD↔LF) com cross-ref destino. 4 migrations:
+#   - nf_transferencia_snapshot       (tabelas snapshot + produto_snapshot)
+#   - em_transito_inventario_snapshot (3 colunas em_transito_* em inventario_snapshot_odoo)
+#   - nf_transferencia_desconsiderada (flag por NF para EXCLUIR do em_transito; sobrevive ao refresh)
+#   - nf_transferencia_timestamps     (3 colunas DateTime: emissao_hora, picking_data_hora, invoice_destino_data_hora)
+# Ordem: snapshot ANTES de desconsiderada/timestamps (FK logica via account_move_id_origem).
+echo "Fiscal 22c.1: tabelas nf_transferencia_snapshot + produtos..."
+python scripts/migrations/2026_05_28_nf_transferencia_snapshot.py \
+    || echo "⚠️ Migration nf_transferencia_snapshot falhou, continuando deploy..."
+
+echo "Fiscal 22c.2: em_transito_inventario_snapshot (3 colunas em_transito_*)..."
+python scripts/migrations/2026_05_28_add_em_transito_inventario_snapshot.py \
+    || echo "⚠️ Migration em_transito_inventario_snapshot falhou, continuando deploy..."
+
+echo "Fiscal 22c.3: nf_transferencia_desconsiderada (flag por NF)..."
+python scripts/migrations/2026_05_28_nf_transferencia_desconsiderada.py \
+    || echo "⚠️ Migration nf_transferencia_desconsiderada falhou, continuando deploy..."
+
+echo "Fiscal 22c.4: nf_transferencia_timestamps (3 colunas DateTime)..."
+python scripts/migrations/2026_05_28_nf_transferencia_timestamps.py \
+    || echo "⚠️ Migration nf_transferencia_timestamps falhou, continuando deploy..."
+
 # 23. CarVia agendamento (2026-05-21): horario de agendamento + VIEW pedidos v7.
 # Feature CarVia: campo de horario (HH:MM) na cotacao comercial, propagado para
 # EmbarqueItem + EntregaMonitorada (AgendamentoEntrega) e exibido em lista_pedidos
@@ -446,6 +482,46 @@ python scripts/migrations/add_horario_agendamento_carvia.py \
 echo "CarVia 23b: VIEW pedidos v7 (horario_agendamento + agendamento_confirmado CarVia)..."
 python scripts/migrations/alterar_view_pedidos_union_carvia_v7.py \
     || echo "⚠️ Migration view_pedidos_v7 falhou, continuando deploy..."
+
+# 24. UoM compra VIDRO 200 G (2026-05-28): o De-Para (NADIR) sincronizou MI(181)
+# em product.supplierinfo.product_uom (related -> uom_po_id store), inflando o
+# price_unit dos Pedidos de Compra ~10^6x (PO C2619539: R$ 25,6 bi). Reverte o
+# De-Para -> Units e garante uom_po_id=Units no Odoo (best-effort). Idempotente.
+echo "UoM compra VIDRO 200 G: revert MI -> Units (De-Para + Odoo)..."
+python scripts/migrations/2026_05_28_corrigir_uom_compra_vidro_206200004.py \
+    || echo "⚠️ Migration corrigir_uom_compra_vidro falhou, continuando deploy..."
+
+# 25. Deprecar odoo_product_uom_id no De-Para (2026-05-29): apos o fix de codigo
+# (DeparaService nao grava mais product_uom no supplierinfo), zera o campo obsoleto
+# em todos os De-Paras p/ nenhum fluxo legado reescrever uom_po_id. Idempotente.
+echo "De-Para: deprecar odoo_product_uom_id (zerar campo obsoleto)..."
+python scripts/migrations/2026_05_29_deprecar_odoo_product_uom_id_depara.py \
+    || echo "⚠️ Migration deprecar_odoo_product_uom_id falhou, continuando deploy..."
+
+# 26. Evolucao do Agente (2026-05-31): fundacao do Blueprint (Ondas 0-4).
+# 26a tabela agent_step (S0a, entidade de passo/turno) + 26b proveniencia
+# bi-temporal no KG (D3). Migrations duplas idempotentes (IF NOT EXISTS).
+# 26c bootstrap de ontologia canonica (D2) — SELF-SKIP se AGENT_ONTOLOGY != true
+# (CLI exige a flag); idempotente (increment_mentions=False -> nao infla mention_count).
+# Todas best-effort (|| echo) — falha nao quebra o deploy.
+echo "Agente 26a: tabela agent_step (S0a)..."
+python scripts/migrations/2026_05_30_agent_step.py \
+    || echo "⚠️ Migration agent_step falhou, continuando deploy..."
+
+echo "Agente 26b: proveniencia bi-temporal no KG (D3)..."
+python scripts/migrations/2026_05_31_kg_bitemporal.py \
+    || echo "⚠️ Migration kg_bitemporal falhou, continuando deploy..."
+
+echo "Agente 26c: bootstrap de ontologia (D2 — roda apenas se AGENT_ONTOLOGY=true)..."
+python scripts/agente/bootstrap_ontologia.py \
+    || echo "ℹ️ Bootstrap ontologia pulado (AGENT_ONTOLOGY off) ou falhou — continuando deploy..."
+
+# 27. Inventario Ciclico (2026-05-31): contagem parcial por quant + plano de ajustes.
+# Cria tabelas inventario_contagem + inventario_contagem_item (granularidade quant).
+# Idempotente (model.__table__.create(checkfirst=True)). Confronto inalterado.
+echo "Inventario 27: tabelas inventario_contagem + inventario_contagem_item..."
+python scripts/migrations/inventario_contagem_create.py \
+    || echo "⚠️ Migration inventario_contagem falhou, continuando deploy..."
 
 echo "Build concluído com sucesso!"
 

@@ -81,21 +81,27 @@ _SDK_HAS_OPTIONS_SKILLS = _check_options_skills_field()
 
 @lru_cache(maxsize=1)
 def _discover_skills_from_project() -> list[str]:
-    """Descobre skills em .claude/skills/ filtrando SPED_SKILLS_RESERVED.
+    """Descobre skills em .claude/skills/ filtrando as delegadas a subagentes.
 
     Retorna lista ordenada de skill names (basename de diretórios que têm SKILL.md),
-    excluindo skills reservadas ao subagente auditor-sped-ecd.
+    excluindo SKILLS_DELEGADAS_SUBAGENTE — fonte única de verdade em
+    `config/skills_whitelist.py`. Inclui HORA, Assai, Odoo-estoque-WRITE e
+    SPED (reservadas ao subagente auditor-sped-ecd). Ver Solucao B em
+    `config/skills_whitelist.py`.
 
     Esta função é o input para `skills=list[str]` em ClaudeAgentOptions
     (SDK 0.1.77+, ver SDK_CHANGELOG.md:160-167). Skills não listadas aqui:
-    1. Não aparecem no listing do agente principal (economia ~1K tokens).
-    2. São rejeitadas se o principal tentar invocar via Skill tool.
+    1. Não aparecem no listing do agente principal (reduz a description da
+       meta-tool `Skill` abaixo do budget da CLI — evita truncamento, cli.js sY7).
+    2. São rejeitadas se o principal tentar invocá-las via Skill tool — mas
+       continuam disponíveis ao subagente que as declara via AgentDefinition.skills
+       (agent_loader.py:111 — listing independente do principal).
 
     Returns:
         Lista ordenada de skill names.
     """
     from pathlib import Path
-    from app.agente.config.settings import AgentSettings
+    from app.agente.config.skills_whitelist import SKILLS_DELEGADAS_SUBAGENTE
 
     # Path do .claude/skills/ relativo ao root do projeto
     # __file__ = app/agente/sdk/client.py → 4 parents = root
@@ -103,13 +109,15 @@ def _discover_skills_from_project() -> list[str]:
     if not skills_dir.is_dir():
         return []
 
+    excluidas = SKILLS_DELEGADAS_SUBAGENTE
+
     discovered: list[str] = []
     for entry in skills_dir.iterdir():
         if not entry.is_dir():
             continue
         if not (entry / "SKILL.md").is_file():
             continue
-        if entry.name in AgentSettings.SPED_SKILLS_RESERVED:
+        if entry.name in excluidas:
             continue
         discovered.append(entry.name)
 
@@ -183,7 +191,7 @@ def _alert_cache_miss(
         #   Opus 4.x, Haiku 4.5  -> 4096 tokens
         #   Sonnet 4.x, Haiku 3.x (3 e 3.5) -> 2048 tokens
         # IDs reais: claude-3-haiku-20240307, claude-3-5-haiku-20241022,
-        # claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-7.
+        # claude-haiku-4-5-20251001, claude-sonnet-4-6, claude-opus-4-8.
         # Match explicito por familia — substring "haiku-3" NAO casa "3-5-haiku".
         is_haiku_3x = ("3-haiku" in model_str) or ("3-5-haiku" in model_str)
         is_sonnet_4x = "sonnet-4" in model_str
@@ -1617,7 +1625,7 @@ Nunca invente informações."""
             options_dict["skills"] = _discover_skills_from_project()
             logger.debug(
                 f"[AGENT_CLIENT] skills filtradas: {len(options_dict['skills'])} skills "
-                f"(SPED_SKILLS_RESERVED excluídas)"
+                f"(skills delegadas a subagentes excluídas)"
             )
         else:
             options_dict["allowed_tools"].append("Skill")
@@ -1942,6 +1950,25 @@ Nunca invente informações."""
             logger.debug("[AGENT_CLIENT] MCP artifact não disponível")
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro MCP artifact: {e}")
+
+        # Ontologia canônica (D4 Onda 3 — flag USE_AGENT_ONTOLOGY, default OFF)
+        # Quando flag OFF: ontology_server=None → _register_mcp retorna False → sem-op.
+        # Quando flag ON:  expõe mcp__ontology__query_ontology ao agente.
+        from ..config.feature_flags import USE_AGENT_ONTOLOGY
+        if USE_AGENT_ONTOLOGY:
+            try:
+                from ..tools.ontology_query_tool import ontology_server, set_current_user_id as set_ontology_user_id
+                if _register_mcp("ontology", ontology_server, set_ontology_user_id):
+                    logger.info("[AGENT_CLIENT] MCP 'ontology' registrada (1 operação: query_ontology)")
+            except ImportError:
+                logger.debug("[AGENT_CLIENT] MCP ontology não disponível")
+            except Exception as e:
+                logger.warning(f"[AGENT_CLIENT] Erro MCP ontology: {e}")
+        else:
+            logger.debug(
+                "[AGENT_CLIENT] MCP 'ontology' SKIP (AGENT_ONTOLOGY=false). "
+                "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
+            )
 
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(

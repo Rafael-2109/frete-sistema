@@ -440,6 +440,33 @@ def test_executar_positivo_puro_dry_run_lote_p15_nao_dispara_guard_bug1():
     assert res.get('plano', {}).get('status') != 'DRY_RUN_OK_LOTE_A_CRIAR'
 
 
+def test_executar_positivo_puro_dry_run_p15_lote_real_a_criar():
+    """Opção B (2026-05-29): quando resolver_lote_destino retorna nome_canonico
+    'P-15/05' (lote REAL a criar p/ produto tracking='lot') com lot_id=None em
+    dry-run, o guard CR-BUG-1 DEVE disparar (DRY_RUN_OK_LOTE_A_CRIAR) — pois o
+    --confirmar criaria o lote real, nao ajustaria quant sem lote.
+
+    A condicao usa o nome_canonico RETORNADO (que distingue 'P-15/05' literal
+    de 'P-15/05(sem-lote)' proxy), nao o input 'P-15/05' == LOTE_DEFAULT_SEM_NOME.
+    """
+    quant_svc = MagicMock()
+    transfer_svc = MagicMock()
+    # tracking='lot' + lote real ainda nao existe (dry-run, criar_se_faltar=False)
+    transfer_svc.resolver_lote_destino.return_value = (None, 'P-15/05', False)
+    ajuste = _ajuste_mock(
+        acao='AJUSTE_FB_POSITIVO_PURO',
+        qtd_ajuste=58.82, lote_destino='P-15/05',
+    )
+    res = _executar_positivo_puro(
+        quant_svc, transfer_svc, ajuste, product_id=999,
+        location_principal=8, dry_run=True, executado_por='test',
+    )
+    # guard dispara — NAO chama Skill 1 com lot_id=None
+    quant_svc.ajustar_quant.assert_not_called()
+    assert res['plano']['status'] == 'DRY_RUN_OK_LOTE_A_CRIAR'
+    assert res['lote_destino_criado_agora'] is True
+
+
 def test_avaliar_sucesso_v2_simplificado_sem_auto_corrigido():
     """CR-PATTERN-1 v9: EXECUTADO_AUTO_CORRIGIDO removido do set (nunca
     propagado pelo flat status do v2). Mantido como sinonimo de EXECUTADO

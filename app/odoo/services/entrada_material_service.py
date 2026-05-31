@@ -27,7 +27,9 @@ from app.utils.timezone import agora_utc_naive
 from app.estoque.models import MovimentacaoEstoque
 from app.manufatura.models import PedidoCompras
 from app.producao.models import CadastroPalletizacao
+from app.producao.services.cadastro_palletizacao_service import garantir_cadastro_basico
 from app.odoo.utils.connection import get_odoo_connection
+from app.odoo.utils.classificacao_produto import classificar_produto_odoo
 from app.utils.file_storage import get_file_storage
 from io import BytesIO
 import base64
@@ -233,6 +235,7 @@ class EntradaMaterialService:
             'cnpjs': {},
             'codigos': {},
             'cadastros': {},
+            'classificacao': {},  # {cod_produto: 'PRODUTIVO'|'REVENDA'} (natureza Odoo)
             'pedidos': {},
             'movimentos_por_picking': {},
             'dfe_por_pedido': {}  # ✅ DFe ID por pedido de compra
@@ -290,24 +293,43 @@ class EntradaMaterialService:
                 )
                 cache['cnpjs'] = {p['id']: p.get('l10n_br_cnpj') for p in partners}
 
-            # 4. Buscar códigos de produto em BATCH
+            # 4. Buscar códigos de produto em BATCH (+ dados de classificação)
+            #    categ_id retorna [id, complete_name] (ex "TODOS / MATERIA PRIMA / ...")
+            #    l10n_br_tipo_produto = tipo fiscal (SPED 0200); False quando vazio
             if product_ids:
                 logger.info(f"   📦 Buscando {len(product_ids)} códigos de produto em batch...")
                 produtos = self.odoo.execute_kw(
                     'product.product',
                     'read',
                     [list(product_ids)],
-                    {'fields': ['default_code']}
+                    {'fields': ['default_code', 'categ_id', 'l10n_br_tipo_produto']}
                 )
                 cache['codigos'] = {p['id']: p.get('default_code') for p in produtos}
 
-            # 5. Buscar cadastros de palletização em BATCH
+                # 4.1 Classificar natureza (PRODUTIVO/REVENDA) por código a partir do Odoo
+                for p in produtos:
+                    cod = p.get('default_code')
+                    if not cod:
+                        continue
+                    categ = p.get('categ_id')
+                    categ_complete_name = (
+                        categ[1] if isinstance(categ, (list, tuple)) and len(categ) > 1 else None
+                    )
+                    natureza = classificar_produto_odoo(
+                        categ_complete_name,
+                        p.get('l10n_br_tipo_produto'),
+                    )
+                    if natureza:
+                        cache['classificacao'][str(cod)] = natureza
+
+            # 5. Buscar cadastros de palletização em BATCH (TODOS — sem filtro produto_comprado).
+            #    O filtro de "registra ou não" passou para _processar_movimento, combinando
+            #    o cadastro existente (legado) com a classificação Odoo (novo).
             codigos_validos = [c for c in cache['codigos'].values() if c]
             if codigos_validos:
                 logger.info(f"   📋 Buscando {len(codigos_validos)} cadastros em batch...")
                 cadastros = CadastroPalletizacao.query.filter(
-                    CadastroPalletizacao.cod_produto.in_(codigos_validos),
-                    CadastroPalletizacao.produto_comprado == True
+                    CadastroPalletizacao.cod_produto.in_(codigos_validos)
                 ).all()
                 cache['cadastros'] = {c.cod_produto: c for c in cadastros}
 
@@ -583,11 +605,29 @@ class EntradaMaterialService:
             logger.warning(f"⚠️  Produto {product_id} sem código - PULANDO")
             return {'novo': False}
 
-        # 2. Verificar se produto é comprado usando CACHE
-        produto_cadastro = cache['cadastros'].get(str(cod_produto))
+        # 2. Decidir se a movimentação deve ser registrada:
+        #    - LEGADO: produto já cadastrado com produto_comprado=True (preserva
+        #      comportamento anterior — não regride o que já entrava).
+        #    - NOVO: produto "produtivo ou de revenda" segundo classificação Odoo
+        #      (categoria-raiz MP/embalagem/semi OU tipo fiscal 00/01/02/06/10).
+        #      Nesse caso, cria CadastroPalletizacao básico se ainda não existir.
+        cod = str(cod_produto)
+        produto_cadastro = cache['cadastros'].get(cod)
+        natureza = cache['classificacao'].get(cod)  # 'PRODUTIVO' | 'REVENDA' | None
 
-        if not produto_cadastro:
-            logger.debug(f"   ⏭️  Produto {cod_produto} não é comprado - PULANDO")
+        if produto_cadastro and produto_cadastro.produto_comprado:
+            pass  # já registrava antes — mantém
+        elif natureza is not None:
+            if not produto_cadastro:
+                produto_cadastro, _ = garantir_cadastro_basico(
+                    cod_produto=cod,
+                    nome_produto=product_name,
+                    natureza=natureza,
+                    criado_por='Sistema Odoo',
+                )
+                cache['cadastros'][cod] = produto_cadastro  # evita recriar no mesmo lote
+        else:
+            logger.debug(f"   ⏭️  Produto {cod} não é produtivo/revenda nem comprado - PULANDO")
             return {'novo': False}
 
         # 3. Quantidade recebida (usar 'quantity' = quantidade realizada)

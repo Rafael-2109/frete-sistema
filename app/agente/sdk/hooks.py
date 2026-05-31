@@ -109,14 +109,46 @@ def build_hooks(
                 )
                 additional = f"{additional}\n{pre_mortem}" if additional else pre_mortem
 
-        if additional:
-            return {
+        # Audit Hook deterministico (2026-05-28): propaga session_id ao subprocess Bash
+        # via env vars no proprio command (race-free vs os.environ multi-worker).
+        # Habilitado por AGENT_ODOO_AUDIT_HOOK=true. Ver app/utils/odoo_audit_helpers.py.
+        updated_input = None
+        if tool_name == 'Bash':
+            try:
+                from ..config.feature_flags import USE_ODOO_AUDIT_HOOK
+                if USE_ODOO_AUDIT_HOOK:
+                    import shlex
+                    from ..config.permissions import get_current_session_id
+                    tool_input_data = hook_input.get('tool_input', {})
+                    if isinstance(tool_input_data, dict):
+                        command_orig = tool_input_data.get('command', '')
+                        if command_orig and isinstance(command_orig, str):
+                            current_sid = get_current_session_id() or 'noctx'
+                            tool_use_id = hook_input.get('tool_use_id', '') or 'notui'
+                            agent_type_atual = hook_input.get('agent_type', '') or 'main'
+                            prefix = (
+                                f'export AGENT_SESSION_ID={shlex.quote(current_sid)}; '
+                                f'export AGENT_TOOL_USE_ID={shlex.quote(tool_use_id)}; '
+                                f'export AGENT_TYPE={shlex.quote(agent_type_atual)}; '
+                                f'export AGENT_USER_NAME={shlex.quote(user_name or str(user_id))}; '
+                            )
+                            updated_input = {**tool_input_data, 'command': prefix + command_orig}
+            except Exception as e:
+                # Hook NUNCA quebra tool — log e segue.
+                logger.debug(f'[odoo_audit_propagacao] {e}')
+
+        if additional or updated_input:
+            output = {
                 "continue_": True,
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
-                    "additionalContext": additional,
                 },
             }
+            if additional:
+                output["hookSpecificOutput"]["additionalContext"] = additional
+            if updated_input:
+                output["hookSpecificOutput"]["updatedInput"] = updated_input
+            return output
 
         return {"continue_": True}
 
@@ -1235,8 +1267,38 @@ def build_hooks(
                 # Limpar para não reinjetar nos próximos turnos
                 resume_state['failed'] = False
 
-            if session_context or additional_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context:
-                full_context = resume_fallback_context + session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context
+            # ============================================================
+            # Onda 4 — F4/F5: Skill Hints Advisory (flag-gated)
+            # ============================================================
+            skill_hints_context = ""
+            try:
+                from ..config.feature_flags import USE_AGENT_SKILL_RAG
+                if USE_AGENT_SKILL_RAG and prompt:
+                    from .context_enrichment import build_skill_hints_block
+                    _skill_hints = build_skill_hints_block(prompt)
+                    if _skill_hints:
+                        skill_hints_context = "\n" + _skill_hints
+            except Exception as _f4_err:
+                logger.debug(f"[HOOK:UserPromptSubmit] F4/F5 skill_hints falhou (best-effort): {_f4_err}")
+
+            # ============================================================
+            # Onda 4 — D5: World Model Injection (flag-gated, aditivo)
+            # ============================================================
+            # _DOMAIN_KEYWORDS em memory_injection.py permanece como fallback
+            # cold-start — D5 NUNCA remove routing_context existente.
+            world_model_context = ""
+            try:
+                from ..config.feature_flags import USE_AGENT_WORLD_MODEL_INJECT
+                if USE_AGENT_WORLD_MODEL_INJECT and user_id and prompt:
+                    from .context_enrichment import build_world_model_block
+                    _world_model = build_world_model_block(user_id=user_id, query=prompt)
+                    if _world_model:
+                        world_model_context = "\n" + _world_model
+            except Exception as _d5_err:
+                logger.debug(f"[HOOK:UserPromptSubmit] D5 world_model falhou (best-effort): {_d5_err}")
+
+            if session_context or additional_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context:
+                full_context = resume_fallback_context + session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context + skill_hints_context + world_model_context
                 # B2: Log de context budget por categoria
                 memory_tokens_est = len(full_context) // 4
                 logger.info(
@@ -1244,6 +1306,8 @@ def build_hooks(
                     f"user_id={user_id or 'None'} | "
                     f"session_ctx_chars={len(session_context)} | "
                     f"memory_chars={len(additional_context or '')} | "
+                    f"skill_hints_chars={len(skill_hints_context)} | "
+                    f"world_model_chars={len(world_model_context)} | "
                     f"total_tokens_est={memory_tokens_est} | "
                     f"prompt_len={len(prompt)}"
                 )

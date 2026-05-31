@@ -183,6 +183,40 @@ cache_produtos = {p['id']: p for p in produtos}
 
 **Fonte**: `app/fretes/services/lancamento_odoo_service.py:1509-1512,1630-1633`
 
+### P8: Audit Hook Deterministico em execute_kw (2026-05-28)
+
+**Problema**: Skills 1/2/4/5/2.4 nao chamavam `OperacaoOdooAuditoria.registrar` — sem rastreabilidade de qual sessao do agente fez qual operacao Odoo.
+
+**Solucao**: hook automatico em `OdooConnection.execute_kw` (`app/odoo/utils/connection.py:270+`). Quando feature flag `AGENT_ODOO_AUDIT_HOOK=true` E metodo na whitelist, registra UMA linha em `operacao_odoo_auditoria` com:
+- `model` + `method` (modelo_odoo + metodo_odoo + acao)
+- `payload_json` (args+kwargs) + `resposta_json` (resultado) — sanitizado
+- `tempo_execucao_ms`, `status` (`EXECUTADO`/`FALHA_ODOO`), `erro_msg`
+- `session_id` + `tool_use_id` + `agent_type` + `executado_por` (via ENV vars)
+- `external_id` deterministico (~46 chars): `aud:<sid8>:<tuid8>:<ts_ms>:<hash10>`
+
+**Whitelist** (27 metodos): `app/utils/odoo_audit_helpers.py:METODOS_WRITE_AUDITADOS` — CRUD + estoque (`action_apply_inventory`, `action_assign`, `button_validate`) + compras (`button_confirm`, `action_gerar_po_dfe`, `action_create_invoice`) + faturamento (`action_liberar_faturamento`, `action_gerar_nfe`, `action_post`).
+
+**Propagacao session_id ao subprocess Bash**: `app/agente/sdk/hooks.py:_keep_stream_open` (PreToolUse) intercepta tool `Bash` e prefixa o `command` com `export AGENT_SESSION_ID=... AGENT_TOOL_USE_ID=... AGENT_TYPE=... AGENT_USER_NAME=...`. Race-free (usa `updatedInput` do SDK 0.1.29+, isolado por tool call).
+
+**Garantias**:
+1. Hook NUNCA quebra Odoo — try/except total + savepoint isolado
+2. Idempotencia por `external_id` UNIQUE
+3. Read metodos nao registram (whitelist)
+4. Sucesso E falha capturados — status discrimina
+
+**Query exemplo**:
+```sql
+SELECT modelo_odoo, metodo_odoo, status, executado_em, tempo_execucao_ms, erro_msg
+FROM operacao_odoo_auditoria
+WHERE session_id = '<sid_da_sessao>'
+  AND contexto_origem = 'execute_kw_hook'
+ORDER BY executado_em;
+```
+
+**Migration**: `scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}` — ADD COLUMN session_id/tool_use_id/agent_type + indexes + ALTER COLUMN v21 incorporada.
+
+**Testes**: `tests/odoo/utils/test_odoo_audit_helpers.py` (20) + `tests/agente/sdk/test_hooks_propagacao_env.py` (4).
+
 ---
 
 ## Gotchas

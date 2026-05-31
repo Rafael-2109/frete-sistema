@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Inventário Cíclico — Contagens{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Inventário Cíclico — Contagens</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaContagem">
+      + Nova Contagem
+    </button>
+  </div>
+
+  <p class="text-muted">
+    Contagem parcial por quant (local + código + lote). O sistema extrai os
+    saldos do Odoo, você preenche a contagem e ele gera o plano de ajustes.
+    A aplicação no Odoo é feita à parte (skills de estoque).
+  </p>
+
+  <table class="table table-striped table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Código</th><th>Empresa</th><th>Base (T0)</th><th>Status</th>
+        <th class="text-end">Itens</th><th class="text-end">C/ ajuste</th>
+        <th class="text-end">Ajuste +</th><th class="text-end">Ajuste −</th>
+        <th class="text-end">Lotes novos</th><th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contagens %}
+      <tr>
+        <td><strong>{{ c.codigo }}</strong>{% if c.descricao %}<br><small class="text-muted">{{ c.descricao }}</small>{% endif %}</td>
+        <td>{{ c.empresa }}</td>
+        <td>{{ c.data_base.strftime('%d/%m/%Y %H:%M') if c.data_base else '' }}</td>
+        <td>
+          {% if c.status == 'CONTABILIZADA' %}
+            <span class="badge bg-success">CONTABILIZADA</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">BASE GERADA</span>
+          {% endif %}
+        </td>
+        <td class="text-end">{{ c.tot_itens or 0 }}</td>
+        <td class="text-end">{{ c.tot_com_ajuste or 0 }}</td>
+        <td class="text-end text-success">{{ c.tot_ajuste_pos|numero_br(3) if c.tot_ajuste_pos else '—' }}</td>
+        <td class="text-end text-danger">{{ c.tot_ajuste_neg|numero_br(3) if c.tot_ajuste_neg else '—' }}</td>
+        <td class="text-end">{{ c.qt_lotes_novos or 0 }}</td>
+        <td>
+          <a href="{{ url_for('inventario.detalhe_contagem', contagem_id=c.id) }}"
+             class="btn btn-sm btn-primary">Abrir</a>
+          <button class="btn btn-sm btn-outline-danger btn-excluir" data-id="{{ c.id }}"
+                  data-codigo="{{ c.codigo }}">Excluir</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center text-muted">Nenhuma contagem cadastrada</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal fade" id="modalNovaContagem" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="form-nova-contagem">
+        <div class="modal-header">
+          <h5 class="modal-title">Nova Contagem Cíclica</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Empresa *</label>
+            <select class="form-select" name="empresa" required>
+              <option value="">Selecione…</option>
+              <option value="FB">FB</option>
+              <option value="CD">CD</option>
+              <option value="LF">LF</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Locais (opcional)</label>
+            <input class="form-control" name="filtro_locais"
+                   placeholder="Ex.: FB/Estoque, FB/Pré-Produção/Linha Balde">
+            <small class="text-muted">Vazio = todos os locais da empresa.</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Códigos (opcional)</label>
+            <input class="form-control" name="filtro_codigos"
+                   placeholder="Ex.: 4729098, 501, 46">
+            <small class="text-muted">Vazio = todos os códigos.</small>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="incluir_indisponivel"
+                   id="chk-indisp" value="1">
+            <label class="form-check-label" for="chk-indisp">Incluir locais Indisponível</label>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Descrição (opcional)</label>
+            <input class="form-control" name="descricao">
+          </div>
+          <div class="alert alert-info py-2 mb-0">
+            Ao criar, o sistema extrai os saldos atuais do Odoo (pode levar alguns segundos).
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary" id="btn-criar">Criar e gerar base</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('form-nova-contagem').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-criar');
+  btn.disabled = true; btn.textContent = 'Extraindo do Odoo…';
+  const fd = new FormData(e.target);
+  fetch('{{ url_for("inventario.criar_contagem") }}', {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(d => {
+      if (d.erro) { alert('Erro: ' + d.erro); btn.disabled = false; btn.textContent = 'Criar e gerar base'; return; }
+      window.location.href = '/inventario/contagens/' + d.id;
+    })
+    .catch(err => { alert('Erro: ' + err); btn.disabled = false; btn.textContent = 'Criar e gerar base'; });
+});
+
+document.querySelectorAll('.btn-excluir').forEach(b => {
+  b.addEventListener('click', () => {
+    if (!confirm('Excluir a contagem ' + b.dataset.codigo + '?')) return;
+    fetch('/inventario/contagens/' + b.dataset.id + '/excluir', {method: 'POST'})
+      .then(r => r.json()).then(() => location.reload());
+  });
+});
+</script>
+{% endblock %}

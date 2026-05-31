@@ -24,6 +24,7 @@ Uso (STATS — chamado por insights_service.py):
 import logging
 import re
 import unicodedata
+from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 
 from app.utils.timezone import agora_utc_naive
@@ -398,9 +399,10 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
                     if ':' in rest:
                         name_part, maybe_flag = rest.rsplit(':', 1)
                         if maybe_flag.strip().upper() in ('E', 'A'):
-                            # Sufixar relevancia ao nome para downstream processing
-                            # KG save_entities pode usar isso para ajustar mention_count
-                            ename = f"{name_part.strip()}:{maybe_flag.strip().upper()}"
+                            # Descartar o hint de relevancia — nunca consumido por
+                            # _upsert_entity nem por nenhum downstream (dead code).
+                            # Gravar "Atacadão:E" no banco e poluicao de nome.
+                            ename = name_part.strip()
                         # else: ':' faz parte do nome (ex: prioridade:alta)
                     entities.append((etype, ename))
 
@@ -414,11 +416,13 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
                     parts = part.split('>')
                     if len(parts) == 3 and all(p.strip() for p in parts):
                         destino = parts[2].strip()
-                        # v2: confianca suffix (alta/media/baixa) — opcional
+                        # v2: confianca suffix (alta/media/baixa) — opcional.
+                        # Descartar o sufixo (mesma higiene do :E/:A em ENTIDADES, D0):
+                        # senao "ATACADAO:alta" vira entity_name poluido em _upsert_entity.
                         if ':' in destino:
                             dest_parts = destino.rsplit(':', 1)
                             if dest_parts[1].strip().lower() in ('alta', 'media', 'baixa'):
-                                destino = f"{dest_parts[0].strip()}:{dest_parts[1].strip().lower()}"
+                                destino = dest_parts[0].strip()
                         relations.append((
                             parts[0].strip(),
                             parts[1].strip().lower(),
@@ -442,11 +446,18 @@ def _upsert_entity(
     entity_type: str,
     entity_name: str,
     entity_key: Optional[str] = None,
+    increment_mentions: bool = True,
 ) -> int:
     """
     Cria ou atualiza entidade no grafo. Retorna entity_id.
 
     Usa INSERT ON CONFLICT para atomicidade.
+
+    increment_mentions: incrementa mention_count no conflito (default — menção
+        ORGÂNICA do agente). O bootstrap canônico (D2) passa False para NÃO inflar
+        o contador a cada re-run — query_ontology ordena por mention_count, então
+        re-bootstrap repetido enviesaria o ranking. (mention_count = "quantas
+        sessões mencionaram", não "quantas vezes o bootstrap rodou".)
     """
     from sqlalchemy import text
 
@@ -456,14 +467,17 @@ def _upsert_entity(
 
     now = agora_utc_naive()
 
-    result = conn.execute(text("""
+    # Clausula literal hardcoded (sem input do usuario) — sem risco de injecao.
+    _mention_set = "mention_count = agent_memory_entities.mention_count + 1," if increment_mentions else ""
+
+    result = conn.execute(text(f"""
         INSERT INTO agent_memory_entities
             (user_id, entity_type, entity_name, entity_key, mention_count, first_seen_at, last_seen_at)
         VALUES
             (:user_id, :entity_type, :entity_name, :entity_key, 1, :now, :now)
         ON CONFLICT ON CONSTRAINT uq_user_entity
         DO UPDATE SET
-            mention_count = agent_memory_entities.mention_count + 1,
+            {_mention_set}
             last_seen_at = :now,
             entity_key = COALESCE(EXCLUDED.entity_key, agent_memory_entities.entity_key)
         RETURNING id
@@ -484,22 +498,32 @@ def _link_entity_to_memory(
     entity_id: int,
     memory_id: int,
     relation_type: str = 'mentions',
+    source_session_id: Optional[str] = None,
+    source_step_uid: Optional[str] = None,
 ) -> None:
-    """Cria link entre entidade e memória (idempotente)."""
+    """Cria link entre entidade e memória (idempotente).
+
+    Parâmetros D3 (opcionais, backward-compatible):
+        source_session_id: sessão de origem (None = legado, sem proveniência).
+        source_step_uid:   step de origem (None por padrão — MVP).
+    """
     from sqlalchemy import text
 
     if not entity_id or not memory_id:
         return
 
     conn.execute(text("""
-        INSERT INTO agent_memory_entity_links (entity_id, memory_id, relation_type, created_at)
-        VALUES (:entity_id, :memory_id, :relation_type, :now)
+        INSERT INTO agent_memory_entity_links
+            (entity_id, memory_id, relation_type, created_at, source_session_id, source_step_uid)
+        VALUES (:entity_id, :memory_id, :relation_type, :now, :source_session_id, :source_step_uid)
         ON CONFLICT ON CONSTRAINT uq_entity_memory_link DO NOTHING
     """), {
         "entity_id": entity_id,
         "memory_id": memory_id,
         "relation_type": relation_type,
         "now": agora_utc_naive(),
+        "source_session_id": source_session_id,
+        "source_step_uid": source_step_uid,
     })
 
 
@@ -510,8 +534,22 @@ def _upsert_relation(
     relation_type: str = 'co_occurs',
     weight: float = 1.0,
     memory_id: Optional[int] = None,
+    source_session_id: Optional[str] = None,
+    source_step_uid: Optional[str] = None,
+    valid_from: Optional[datetime] = None,
 ) -> None:
-    """Cria ou atualiza relação entre entidades (idempotente)."""
+    """Cria ou atualiza relação entre entidades (idempotente).
+
+    Parâmetros D3 (opcionais, backward-compatible):
+        source_session_id: sessão de origem (None = legado, sem proveniência).
+        source_step_uid:   step de origem (None por padrão — MVP).
+        valid_from:        timestamp de início de validade do fato (None = desconhecido).
+
+    Política de proveniência (1ª origem vence):
+        ON CONFLICT preserva a source_session_id/source_step_uid do INSERT original.
+        Re-upserts com nova sessão NÃO sobrescrevem a proveniência histórica.
+        valid_to fica NULL (fato vigente) — invalidação é fase posterior.
+    """
     from sqlalchemy import text
 
     if not source_entity_id or not target_entity_id:
@@ -521,13 +559,27 @@ def _upsert_relation(
 
     conn.execute(text("""
         INSERT INTO agent_memory_entity_relations
-            (source_entity_id, target_entity_id, relation_type, weight, memory_id, created_at)
+            (source_entity_id, target_entity_id, relation_type, weight, memory_id, created_at,
+             source_session_id, source_step_uid, valid_from)
         VALUES
-            (:source_id, :target_id, :relation_type, :weight, :memory_id, :now)
+            (:source_id, :target_id, :relation_type, :weight, :memory_id, :now,
+             :source_session_id, :source_step_uid, :valid_from)
         ON CONFLICT ON CONSTRAINT uq_entity_relation
         DO UPDATE SET
             weight = agent_memory_entity_relations.weight + :weight,
-            memory_id = COALESCE(EXCLUDED.memory_id, agent_memory_entity_relations.memory_id)
+            memory_id = COALESCE(EXCLUDED.memory_id, agent_memory_entity_relations.memory_id),
+            source_session_id = COALESCE(
+                agent_memory_entity_relations.source_session_id,
+                EXCLUDED.source_session_id
+            ),
+            source_step_uid = COALESCE(
+                agent_memory_entity_relations.source_step_uid,
+                EXCLUDED.source_step_uid
+            ),
+            valid_from = COALESCE(
+                agent_memory_entity_relations.valid_from,
+                EXCLUDED.valid_from
+            )
     """), {
         "source_id": source_entity_id,
         "target_id": target_entity_id,
@@ -535,6 +587,9 @@ def _upsert_relation(
         "weight": weight,
         "memory_id": memory_id,
         "now": agora_utc_naive(),
+        "source_session_id": source_session_id,
+        "source_step_uid": source_step_uid,
+        "valid_from": valid_from,
     })
 
 
@@ -544,6 +599,8 @@ def extract_and_link_entities(
     content: str,
     haiku_entities: Optional[List[Tuple[str, str]]] = None,
     haiku_relations: Optional[List[Tuple[str, str, str]]] = None,
+    source_session_id: Optional[str] = None,
+    source_step_uid: Optional[str] = None,
 ) -> Dict:
     """
     Extrai entidades de uma memória e cria links no grafo.
@@ -563,6 +620,9 @@ def extract_and_link_entities(
         content: Conteúdo da memória
         haiku_entities: Entidades extraídas pelo LLM [(tipo, nome), ...] (nome histórico; atualmente Sonnet)
         haiku_relations: Relações extraídas pelo LLM [(origem, tipo, destino), ...] (nome histórico; atualmente Sonnet)
+        source_session_id: D3 — sessão de origem (None = legado, NULL no banco). Gated por USE_AGENT_ONTOLOGY
+                           no caller (memory_mcp_tool.py). Backward-compatible: callers legados omitem.
+        source_step_uid:   D3 — step de origem (None por padrão — MVP). Backward-compatible.
 
     Returns:
         Dict com estatísticas {entities_count, links_count, relations_count}
@@ -624,9 +684,13 @@ def extract_and_link_entities(
                     entity_id_map[_normalize_name(ename)] = eid
                     stats['entities_count'] += 1
 
-            # Link entidades → memória
+            # Link entidades → memória (D3: propaga source_session_id/source_step_uid)
             for eid in entity_id_map.values():
-                _link_entity_to_memory(conn, eid, memory_id, 'mentions')
+                _link_entity_to_memory(
+                    conn, eid, memory_id, 'mentions',
+                    source_session_id=source_session_id,
+                    source_step_uid=source_step_uid,
+                )
                 stats['links_count'] += 1
 
             # Relações do LLM (parâmetros haiku_* são nomes históricos)
@@ -652,15 +716,27 @@ def extract_and_link_entities(
                         source_id = _upsert_entity(conn, user_id, 'conceito', source_name)
                         if source_id:
                             entity_id_map[source_norm] = source_id
-                            _link_entity_to_memory(conn, source_id, memory_id, 'mentions')
+                            _link_entity_to_memory(
+                                conn, source_id, memory_id, 'mentions',
+                                source_session_id=source_session_id,
+                                source_step_uid=source_step_uid,
+                            )
                     if not target_id:
                         target_id = _upsert_entity(conn, user_id, 'conceito', target_name)
                         if target_id:
                             entity_id_map[target_norm] = target_id
-                            _link_entity_to_memory(conn, target_id, memory_id, 'mentions')
+                            _link_entity_to_memory(
+                                conn, target_id, memory_id, 'mentions',
+                                source_session_id=source_session_id,
+                                source_step_uid=source_step_uid,
+                            )
 
                     if source_id and target_id:
-                        _upsert_relation(conn, source_id, target_id, normalized_rel, 1.0, memory_id)
+                        _upsert_relation(
+                            conn, source_id, target_id, normalized_rel, 1.0, memory_id,
+                            source_session_id=source_session_id,
+                            source_step_uid=source_step_uid,
+                        )
                         stats['relations_count'] += 1
 
             # Co-occurrence: pares de entidades na mesma memória
@@ -676,6 +752,8 @@ def extract_and_link_entities(
                             conn,
                             co_ids[i], co_ids[j],
                             'co_occurs', 0.5, memory_id,
+                            source_session_id=source_session_id,
+                            source_step_uid=source_step_uid,
                         )
                         stats['relations_count'] += 1
 

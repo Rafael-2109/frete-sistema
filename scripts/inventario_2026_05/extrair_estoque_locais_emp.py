@@ -1,11 +1,19 @@
-"""Extrai estoque ATUAL do Odoo para todas as 4 companies (FB/SC/CD/LF),
-filtrando apenas locais internos {emp}/* EXCETO os locais 'Indisponivel'.
+"""Extrai estoque ATUAL do Odoo para todas as 4 companies (FB/SC/CD/LF).
 
-Locais Indisponivel excluidos (D011):
+Modo DEFAULT (inventario): filtra apenas locais internos {emp}/* EXCETO os
+locais 'Indisponivel'.
+
+Locais Indisponivel excluidos no modo default (D011):
   - 31088 FB/Indisponivel
   - 31089 SC/Indisponivel
   - 31090 CD/Indisponivel
   - 31091 LF/Indisponivel
+
+Modo --completo (relatorio completo): NAO exclui Indisponivel e NAO filtra so
+locais raiz — inclui TODOS os locais fisicos (location_id.usage = 'internal')
+de todas as empresas. Adiciona colunas `local_tipo` (Estoque/Indisponivel) e
+`is_migracao` (lote MIGRACAO = estoque fantasma) para o usuario separar
+estoque real de fantasma.
 
 Output: Excel com 3 abas:
   1) Estoque       - linha por (filial, location, produto, lote)
@@ -14,8 +22,11 @@ Output: Excel com 3 abas:
 
 Uso:
     source .venv/bin/activate
+    # Modo inventario (default — exclui Indisponivel):
     python scripts/inventario_2026_05/extrair_estoque_locais_emp.py
-    python scripts/inventario_2026_05/extrair_estoque_locais_emp.py --output /caminho/arquivo.xlsx
+    # Modo relatorio completo (todos os locais internos):
+    python scripts/inventario_2026_05/extrair_estoque_locais_emp.py --completo
+    python scripts/inventario_2026_05/extrair_estoque_locais_emp.py --completo --output /caminho/arquivo.xlsx
 """
 import argparse
 import os
@@ -42,6 +53,23 @@ LOCAIS_INDISPONIVEL_IDS = [31088, 31089, 31090, 31091]
 ODOO_BATCH_SIZE = 200
 
 LOTES_PROXY_VAZIO = {'P-15/05'}
+
+# Variantes de encoding do lote MIGRACAO (estoque fantasma — nao e real)
+LOTES_MIGRACAO = {'MIGRACAO', 'MIGRAÇÃO', 'MIGRACÃO', 'MIGRAÇAO', 'MIG'}
+
+
+def is_migracao(lot_name):
+    """True se o nome bruto do lote for variante de MIGRACAO."""
+    if not lot_name:
+        return False
+    return str(lot_name).upper().strip() in LOTES_MIGRACAO
+
+
+def classificar_local(location_id):
+    """Classifica o local: 'Indisponivel' (location especial) ou 'Estoque'."""
+    if location_id in LOCAIS_INDISPONIVEL_IDS:
+        return 'Indisponivel'
+    return 'Estoque'
 
 
 # ===== Helpers =====
@@ -106,13 +134,21 @@ def is_location_emp_root(loc_name):
 
 
 # ===== Extracao =====
-def baixar_estoque(odoo):
-    print(f'Buscando stock.quant em companies {COMPANIES} (location internal, exceto Indisponivel)...')
-    domain = [
-        ('company_id', 'in', COMPANIES),
-        ('location_id.usage', '=', 'internal'),
-        ('location_id', 'not in', LOCAIS_INDISPONIVEL_IDS),
-    ]
+def baixar_estoque(odoo, completo=False, companies=None):
+    companies = companies or COMPANIES
+    if completo:
+        print(f'Buscando stock.quant em companies {companies} (TODOS os locais internal — modo completo)...')
+        domain = [
+            ('company_id', 'in', companies),
+            ('location_id.usage', '=', 'internal'),
+        ]
+    else:
+        print(f'Buscando stock.quant em companies {companies} (location internal, exceto Indisponivel)...')
+        domain = [
+            ('company_id', 'in', companies),
+            ('location_id.usage', '=', 'internal'),
+            ('location_id', 'not in', LOCAIS_INDISPONIVEL_IDS),
+        ]
     qids = odoo.search('stock.quant', domain)
     print(f'  {len(qids)} quants encontrados')
 
@@ -144,8 +180,13 @@ def baixar_estoque(odoo):
     df['reservado'] = pd.to_numeric(df['reserved_quantity'], errors='coerce').fillna(0)
     df['valor'] = pd.to_numeric(df['value'], errors='coerce').fillna(0)
 
-    # Garantir filtro de locais raiz {emp}/ (e nao filhos virtuais)
-    df = df[df['location_name'].apply(is_location_emp_root)].copy()
+    # Classificacao de local + flag migracao (estoque fantasma)
+    df['local_tipo'] = df['location_id_n'].apply(classificar_local)
+    df['is_migracao'] = df['lot_name'].apply(is_migracao)
+
+    if not completo:
+        # Modo inventario: garantir filtro de locais raiz {emp}/ (e nao filhos virtuais)
+        df = df[df['location_name'].apply(is_location_emp_root)].copy()
 
     # buscar default_code
     pids = df['product_id_n'].dropna().unique().tolist()
@@ -180,6 +221,8 @@ def baixar_estoque(odoo):
         valor=('valor', 'sum'),
         n_quants=('id', 'count'),
         nome_produto=('product_name', 'first'),
+        local_tipo=('local_tipo', 'first'),
+        is_migracao=('is_migracao', 'first'),
     )
     out['custo_unit'] = np.where(out['qtd'] > 0, out['valor'] / out['qtd'], 0)
 
@@ -187,8 +230,8 @@ def baixar_estoque(odoo):
     out = out.rename(columns={'cod_display': 'cod'})
 
     # Reorganizar colunas
-    cols = ['filial', 'company_id_n', 'location_id_n', 'location_name',
-            'cod', 'nome_produto', 'lote',
+    cols = ['filial', 'company_id_n', 'location_id_n', 'location_name', 'local_tipo',
+            'cod', 'nome_produto', 'lote', 'is_migracao',
             'qtd', 'reservado', 'disponivel', 'custo_unit', 'valor', 'n_quants']
     out = out[cols]
 
@@ -246,18 +289,20 @@ def salvar_excel(df, resumo_filial, resumo_local, output_path):
         for col_idx, col_name in enumerate(df.columns):
             ws.write(0, col_idx, col_name, fmt_header)
         # larguras
-        ws.set_column('A:A', 7)   # filial
-        ws.set_column('B:B', 11)  # company_id_n
-        ws.set_column('C:C', 12)  # location_id_n
-        ws.set_column('D:D', 32)  # location_name
-        ws.set_column('E:E', 10)  # cod
-        ws.set_column('F:F', 42)  # nome_produto
-        ws.set_column('G:G', 18)  # lote
-        ws.set_column('H:J', 13, fmt_num)   # qtd/reservado/disponivel
-        ws.set_column('K:K', 13, fmt_num)   # custo_unit
-        ws.set_column('L:L', 15, fmt_money) # valor
-        ws.set_column('M:M', 9, fmt_int)    # n_quants
-        ws.freeze_panes(1, 4)
+        ws.set_column('A:A', 7)    # filial
+        ws.set_column('B:B', 11)   # company_id_n
+        ws.set_column('C:C', 12)   # location_id_n
+        ws.set_column('D:D', 32)   # location_name
+        ws.set_column('E:E', 14)   # local_tipo
+        ws.set_column('F:F', 10)   # cod
+        ws.set_column('G:G', 42)   # nome_produto
+        ws.set_column('H:H', 18)   # lote
+        ws.set_column('I:I', 11)   # is_migracao
+        ws.set_column('J:L', 13, fmt_num)   # qtd/reservado/disponivel
+        ws.set_column('M:M', 13, fmt_num)   # custo_unit
+        ws.set_column('N:N', 15, fmt_money) # valor
+        ws.set_column('O:O', 9, fmt_int)    # n_quants
+        ws.freeze_panes(1, 6)
         ws.autofilter(0, 0, len(df), len(df.columns) - 1)
 
         # Formatar aba Resumo Filial
@@ -283,10 +328,35 @@ def salvar_excel(df, resumo_filial, resumo_local, output_path):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Extrai estoque Odoo locais {emp}/* exceto Indisponivel')
+    ap = argparse.ArgumentParser(description='Extrai estoque Odoo (stock.quant) por filial/local/produto/lote')
     ap.add_argument('--output', default=None,
-                    help='Caminho do .xlsx (default: /tmp/inventario_monitor/estoque_locais_emp_<timestamp>.xlsx)')
+                    help='Caminho do .xlsx (default: /tmp/inventario_monitor/estoque_<modo>_<timestamp>.xlsx)')
+    ap.add_argument('--completo', action='store_true',
+                    help='Inclui TODOS os locais internal (com Indisponivel/MIGRACAO). '
+                         'Default: modo inventario (exclui Indisponivel + so locais raiz)')
+    ap.add_argument('--empresas', default=None,
+                    help='CSV de filiais (FB,SC,CD,LF). Default: todas')
+    ap.add_argument('--csv', action='store_true',
+                    help='Tambem grava um .csv da aba Estoque ao lado do .xlsx')
     args = ap.parse_args()
+
+    # Resolver empresas -> company_ids
+    if args.empresas:
+        name_to_id = {v: k for k, v in COMPANY_NAME.items()}
+        companies = []
+        for nome in args.empresas.split(','):
+            nome = nome.strip().upper()
+            if nome in name_to_id:
+                companies.append(name_to_id[nome])
+            else:
+                print(f'AVISO: filial desconhecida ignorada: {nome}')
+        if not companies:
+            print('ERRO: nenhuma filial valida em --empresas')
+            return
+    else:
+        companies = COMPANIES
+
+    modo = 'completo' if args.completo else 'inventario'
 
     if args.output:
         output_path = args.output
@@ -295,8 +365,9 @@ def main():
         cache_dir = '/tmp/inventario_monitor'
         os.makedirs(cache_dir, exist_ok=True)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_path = os.path.join(cache_dir, f'estoque_locais_emp_{ts}.xlsx')
+        output_path = os.path.join(cache_dir, f'estoque_{modo}_{ts}.xlsx')
 
+    print(f'Modo: {modo} | Empresas: {[COMPANY_NAME.get(c, c) for c in companies]}')
     print(f'Output: {output_path}')
 
     from app import create_app
@@ -304,7 +375,7 @@ def main():
     with app.app_context():
         from app.odoo.utils.connection import get_odoo_connection
         odoo = get_odoo_connection()
-        df = baixar_estoque(odoo)
+        df = baixar_estoque(odoo, completo=args.completo, companies=companies)
 
     if df.empty:
         print('ATENCAO: nenhum quant encontrado com os filtros — Excel nao gerado.')
@@ -313,6 +384,11 @@ def main():
     resumo_filial, resumo_local = gerar_resumos(df)
 
     salvar_excel(df, resumo_filial, resumo_local, output_path)
+
+    if args.csv:
+        csv_path = output_path[:-5] + '.csv' if output_path.endswith('.xlsx') else output_path + '.csv'
+        df.to_csv(csv_path, index=False)
+        print(f'CSV salvo: {csv_path}')
 
     print(f'\nOK. Excel salvo: {output_path}')
     print(f'  Linhas (Estoque): {len(df)}')

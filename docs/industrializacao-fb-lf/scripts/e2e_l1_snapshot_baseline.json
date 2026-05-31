@@ -1,0 +1,72 @@
+{
+  "57": {
+    "property_stock_valuation_account_id": 26132,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  },
+  "64": {
+    "property_stock_valuation_account_id": 26133,
+    "property_stock_account_input_categ_id": 26845,
+    "property_stock_account_output_categ_id": 26855
+  },
+  "69": {
+    "property_stock_valuation_account_id": 26133,
+    "property_stock_account_input_categ_id": 26845,
+    "property_stock_account_output_categ_id": 26855
+  },
+  "73": {
+    "property_stock_valuation_account_id": 26133,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  },
+  "75": {
+    "property_stock_valuation_account_id": 26133,
+    "property_stock_account_input_categ_id": 26845,
+    "property_stock_account_output_categ_id": 26855
+  },
+  "76": {
+    "property_stock_valuation_account_id": 26133,
+    "property_stock_account_input_categ_id": 26845,
+    "property_stock_account_output_categ_id": 26855
+  },
+  "77": {
+    "property_stock_valuation_account_id": 26133,
+    "property_stock_account_input_categ_id": 26845,
+    "property_stock_account_output_categ_id": 26855
+  },
+  "78": {
+    "property_stock_valuation_account_id": 26133,
+    "property_stock_account_input_categ_id": 26845,
+    "property_stock_account_output_categ_id": 26855
+  },
+  "90": {
+    "property_stock_valuation_account_id": 26132,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  },
+  "193": {
+    "property_stock_valuation_account_id": 26138,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  },
+  "387": {
+    "property_stock_valuation_account_id": 26132,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  },
+  "388": {
+    "property_stock_valuation_account_id": 26132,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  },
+  "393": {
+    "property_stock_valuation_account_id": 26132,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  },
+  "395": {
+    "property_stock_valuation_account_id": 26137,
+    "property_stock_account_input_categ_id": 26816,
+    "property_stock_account_output_categ_id": 26817
+  }
+}

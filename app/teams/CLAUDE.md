@@ -107,11 +107,25 @@ Solucao: verifica status task ANTES. Se ja `processing`, trata como sucesso.
 ### Dispatch v2 vs v3
 | Versao | Flag | Mecanismo | Status |
 |--------|------|-----------|--------|
-| v2 | `USE_PERSISTENT_SDK_CLIENT=false` | `asyncio.run()` efemero | **ATIVO (default)** |
-| v3 | `USE_PERSISTENT_SDK_CLIENT=true` | `submit_coroutine()` pool daemon | Rollback (DC-7) |
+| v2 | `USE_PERSISTENT_SDK_CLIENT=false` | `asyncio.run()` efemero | **DESLIGADO em 2026-03-27** |
+| v3 | `USE_PERSISTENT_SDK_CLIENT=true` (default) | `submit_coroutine()` pool daemon persistente | **ATIVO** |
 
-v3 em rollback desde DC-7 (subprocess zombie). Confundir paths = zombie.
-— FONTE: `services.py:506-519`, `feature_flags.py:250`
+**v3 (pool persistente) e o caminho ATIVO.** `services.py:738,1300` chamam
+`submit_coroutine` HARDCODED (comentario inline: "v2 asyncio.run desligado em
+2026-03-27"); o default de `USE_PERSISTENT_SDK_CLIENT` e `true`
+(`feature_flags.py:422`). O rollback historico (DC-7, subprocess zombie) foi
+superado — a afinidade per-process do SDK passou a ser tratada por outra via
+(split Caddy: `/agente*` -> gunicorn-agente com 1 worker).
+
+**CUIDADO (achado avaliacao 360 — A1/CONF-2)**: as rotas `/api/teams/*` NAO
+estao no split do Caddy (`Caddyfile` so roteia `/agente*` e `/agente-lojas*`
+para :5001). O Teams cai no `handle{}` -> `gunicorn-sistema` (**4 workers**,
+:5002). Logo o pool persistente e' **process-local em multi-worker**: uma 2a
+mensagem da mesma conversa pode cair em outro worker (cenario DC-7). Mitigado
+na pratica por: estado em `TeamsTask` (DB, worker-agnostico) + orphan-kill
+(`_cleanup_orphan_claude_processes`). Hardening proposto (nao implementado):
+rotear `/api/teams/*` -> :5001. Ver `docs/RELATORIO_AVALIACAO_360_AGENTE_2026-05-29.md` CONF-2.
+— FONTE: `services.py:738,1300` (submit_coroutine), `feature_flags.py:422`
 
 ### Auto-cadastro de usuarios
 Email deterministico: `teams_{md5[:12]}@teams.nacomgoya.local`, senha aleatoria, perfil='logistica'.
@@ -142,13 +156,13 @@ NUNCA usar `create_app()` na thread. Reutilizar `current_app._get_current_object
 
 | Flag | Default | Impacto |
 |------|---------|---------|
-| `TEAMS_DEFAULT_MODEL` | `claude-opus-4-7` | Modelo LLM (rollback: `claude-opus-4-6`) |
+| `TEAMS_DEFAULT_MODEL` | `claude-opus-4-8` | Modelo LLM (rollback: `claude-opus-4-7`) |
 | `TEAMS_ASYNC_MODE` | `true` | Async (thread) vs sync |
 | `TEAMS_ASK_USER_TIMEOUT` | `120` | Timeout Adaptive Card (seg) |
 | `INACTIVITY_TIMEOUT` | `300` | Sem chunk por 5 min = timeout (DC-9, sem teto absoluto) — era 240s ate 2026-05-25 |
 | `TEAMS_PROGRESSIVE_STREAMING` | `true` | Flush parcial ao DB |
 | `TEAMS_STREAM_FLUSH_INTERVAL` | `4.0` | Intervalo flush (seg) |
-| `USE_PERSISTENT_SDK_CLIENT` | `false` | v3 pool vs v2 efemero (rollback) |
+| `USE_PERSISTENT_SDK_CLIENT` | `true` | v3 pool persistente (ATIVO) vs v2 efemero (desligado 2026-03-27) |
 
 ---
 

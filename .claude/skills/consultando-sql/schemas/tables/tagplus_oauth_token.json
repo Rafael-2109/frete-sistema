@@ -74,18 +74,18 @@
   ],
   "indices": [
     {
-      "name": "ix_tagplus_oauth_token_api_type",
-      "columns": [
-        "api_type"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_tagplus_oauth_token_ativo",
       "columns": [
         "ativo"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_tagplus_oauth_token_api_type",
+      "columns": [
+        "api_type"
+      ],
+      "unique": true
     }
   ],
   "admin_only": true
