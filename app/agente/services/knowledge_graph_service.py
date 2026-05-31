@@ -415,11 +415,13 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
                     parts = part.split('>')
                     if len(parts) == 3 and all(p.strip() for p in parts):
                         destino = parts[2].strip()
-                        # v2: confianca suffix (alta/media/baixa) — opcional
+                        # v2: confianca suffix (alta/media/baixa) — opcional.
+                        # Descartar o sufixo (mesma higiene do :E/:A em ENTIDADES, D0):
+                        # senao "ATACADAO:alta" vira entity_name poluido em _upsert_entity.
                         if ':' in destino:
                             dest_parts = destino.rsplit(':', 1)
                             if dest_parts[1].strip().lower() in ('alta', 'media', 'baixa'):
-                                destino = f"{dest_parts[0].strip()}:{dest_parts[1].strip().lower()}"
+                                destino = dest_parts[0].strip()
                         relations.append((
                             parts[0].strip(),
                             parts[1].strip().lower(),

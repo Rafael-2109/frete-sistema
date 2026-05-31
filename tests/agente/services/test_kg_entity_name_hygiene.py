@@ -16,3 +16,14 @@ def test_parse_preserva_dois_pontos_legitimo_no_nome():
     _resp, entidades, _rel = parse_contextual_response(texto)
     nomes = {e[1] for e in entidades}
     assert "prioridade:alta" in nomes
+
+
+def test_parse_relacao_descarta_sufixo_confianca_no_destino():
+    # HIGH-1 (code-review Onda 1): sufixo de confianca :alta/:media/:baixa em
+    # RELACOES nao pode poluir o destino (vira entity_name em _upsert_entity).
+    texto = "RESPOSTA: ok\nRELACOES: Atacadão>compra>Palmito:alta"
+    _resp, _ent, relacoes = parse_contextual_response(texto)
+    destinos = {r[2] for r in relacoes}
+    assert "Palmito" in destinos, f"esperado destino limpo, veio {destinos}"
+    assert not any(d.endswith((':alta', ':media', ':baixa')) for d in destinos), \
+        f"sufixo de confianca vazou no destino: {destinos}"
