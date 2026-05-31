@@ -119,6 +119,15 @@ JUDGE_ENQUEUER_ENABLED = os.environ.get("AGENT_STEP_JUDGE", "false").lower() == 
 JUDGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("JUDGE_ENQUEUER_LOOKBACK_HOURS", "6"))
 JUDGE_ENQUEUER_LIMIT = int(os.environ.get("JUDGE_ENQUEUER_LIMIT", "50"))
 
+# Verify Enqueuer (30º módulo) — Onda 2 / B2, report-only, flag-OFF por default
+# REUSA a flag AGENT_VERIFY (mesma que controla os verifiers shadow).
+# Roda POR CICLO (cada tick de 30min), SEM guard temporal — varre steps recentes
+# sem outcome_signal['verify'] e enfileira verify_step_shadow na fila LEVE
+# 'agent_judge'. DEFAULT false: modulo e' no-op. Ativar em deploy.
+VERIFY_ENQUEUER_ENABLED = os.environ.get("AGENT_VERIFY", "false").lower() == "true"
+VERIFY_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("VERIFY_ENQUEUER_LOOKBACK_HOURS", "6"))
+VERIFY_ENQUEUER_LIMIT = int(os.environ.get("VERIFY_ENQUEUER_LIMIT", "50"))
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -2142,6 +2151,35 @@ def executar_sincronizacao():
                     pass
 
         logger.info(f"   [TIMER] Step 29 (Judge Enqueuer): {time.time() - _t_step:.1f}s")
+
+        # ── 3️⃣0️⃣ VERIFY ENQUEUER — varredor RQ do verify_step_shadow (30º módulo, report-only) ──
+        # Onda 2 / B2. Flag AGENT_VERIFY default OFF → no-op.
+        # Quando ON: varre AgentStep recentes (lookback) sem outcome_signal['verify']
+        # e enfileira verify_step_shadow (3 verifiers: adversarial/arithmetic/domain)
+        # na fila LEVE 'agent_judge'. Roda TODO ciclo (sem guard temporal) — cap por
+        # `limit` evita backlog. Best-effort: nunca falha o cron. NÃO entra em modulos_sync.
+        _t_step = time.time()
+
+        if VERIFY_ENQUEUER_ENABLED:
+            try:
+                from app.agente.workers.plan_verifier import enqueue_pending_verifies
+
+                _ve_result = enqueue_pending_verifies(
+                    lookback_hours=VERIFY_ENQUEUER_LOOKBACK_HOURS,
+                    limit=VERIFY_ENQUEUER_LIMIT,
+                )
+                logger.info(
+                    f"[VERIFY_ENQUEUER] enfileirados={_ve_result.get('enfileirados', 0)} "
+                    f"candidatos={_ve_result.get('candidatos', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[VERIFY_ENQUEUER] Erro no modulo 30: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 30 (Verify Enqueuer): {time.time() - _t_step:.1f}s")
 
         # Limpar conexões ao final
         try:
