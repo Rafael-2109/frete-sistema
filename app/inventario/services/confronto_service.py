@@ -1,11 +1,12 @@
 """Agregador principal do Relatório de Confronto de Inventário."""
+from datetime import datetime, time
 from decimal import Decimal
 from typing import List, Dict, Any
 from sqlalchemy import func, case
 from app import db
 from app.inventario.models import (
     CicloInventario, InventarioBase, AjusteManualInventario,
-    InventarioSnapshotOdoo,
+    InventarioSnapshotOdoo, ContagemInventario, ContagemInventarioItem,
 )
 from app.estoque.models import MovimentacaoEstoque
 
@@ -33,8 +34,12 @@ class ConfrontoService:
         else:
             movs = ConfrontoService._agg_movimentacoes(data_inicio)
         ajustes = ConfrontoService._agg_ajustes(ciclo_id)
+        # Inventário Cíclico (2026-05-31): ajustes das contagens cíclicas do
+        # período somam às colunas INV FB/CD/LF (spec §6.4).
+        ajustes_ciclicos = ConfrontoService._agg_ajustes_ciclicos(ciclo)
 
-        cods = set(inv.keys()) | set(snap.keys()) | set(movs.keys()) | set(ajustes.keys())
+        cods = (set(inv.keys()) | set(snap.keys()) | set(movs.keys()) |
+                set(ajustes.keys()) | set(ajustes_ciclicos.keys()))
 
         # Filtra cods inativos no Odoo (product.product.active=False).
         # 1 batch query — silencioso se Odoo falhar (retorna set vazio).
@@ -51,6 +56,12 @@ class ConfrontoService:
             inv_fb = i.get('fb', Decimal('0'))
             inv_cd = i.get('cd', Decimal('0'))
             inv_lf = i.get('lf', Decimal('0'))
+            # Soma os ajustes cíclicos do período por empresa (spec §6.4).
+            ac = ajustes_ciclicos.get(cod)
+            if ac:
+                inv_fb += ac['fb']
+                inv_cd += ac['cd']
+                inv_lf += ac['lf']
             inv_total = inv_fb + inv_cd + inv_lf
 
             compras = m.get('compras', Decimal('0'))
@@ -176,6 +187,48 @@ class ConfrontoService:
         return {r[0]: {'nome': r[1], 'fb': r[2] or Decimal('0'),
                        'cd': r[3] or Decimal('0'), 'lf': r[4] or Decimal('0')}
                 for r in q.all()}
+
+    @staticmethod
+    def _agg_ajustes_ciclicos(ciclo) -> Dict[str, Dict[str, Decimal]]:
+        """{cod: {'fb','cd','lf'}} — soma ContagemInventarioItem.ajuste por
+        (cod_produto, empresa) das contagens cíclicas CONTABILIZADAS do período
+        do inventário completo (spec §6.4).
+
+        Período (corte por dia): data_base >= ciclo.data_snapshot e, se houver um
+        inventário completo posterior, < a data_snapshot dele. Para o ciclo
+        vigente (sem completo posterior), o intervalo é aberto em cima — ou seja,
+        simplesmente data_base >= data_snapshot.
+        """
+        if ciclo is None:
+            return {}
+        data_inicio = ciclo.data_snapshot
+        inicio_dt = datetime.combine(data_inicio, time.min)
+        proximo = (CicloInventario.query
+                   .filter(CicloInventario.data_snapshot > data_inicio)
+                   .order_by(CicloInventario.data_snapshot.asc())
+                   .first())
+        q = (db.session.query(
+                ContagemInventarioItem.cod_produto,
+                ContagemInventario.empresa,
+                func.sum(ContagemInventarioItem.ajuste),
+            )
+            .join(ContagemInventario,
+                  ContagemInventarioItem.contagem_id == ContagemInventario.id)
+            .filter(ContagemInventario.status == 'CONTABILIZADA',
+                    ContagemInventario.data_base >= inicio_dt))
+        if proximo is not None:
+            fim_dt = datetime.combine(proximo.data_snapshot, time.min)
+            q = q.filter(ContagemInventario.data_base < fim_dt)
+        q = q.group_by(ContagemInventarioItem.cod_produto, ContagemInventario.empresa)
+
+        out: Dict[str, Dict[str, Decimal]] = {}
+        for cod, empresa, soma in q.all():
+            d = out.setdefault(cod, {'fb': Decimal('0'), 'cd': Decimal('0'),
+                                     'lf': Decimal('0')})
+            emp = (empresa or '').lower()
+            if emp in d:
+                d[emp] += (soma or Decimal('0'))
+        return out
 
     @staticmethod
     def _agg_snapshot(ciclo_id):

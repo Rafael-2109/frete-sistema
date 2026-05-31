@@ -1,0 +1,92 @@
+{
+  "name": "inventario_contagem_item",
+  "description": "Item de contagem ciclica = 1 stock.quant (location_name + cod_produto + lote). ajuste = contagem - qtd_esperada. classe define qual atomo gestor-estoque-odoo aplica.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "contagem_id",
+      "type": "integer",
+      "nullable": false,
+      "description": "FK -> inventario_contagem.id"
+    },
+    {
+      "name": "location_name",
+      "type": "varchar(120)",
+      "nullable": false,
+      "description": "Nome do location Odoo, ex FB/Estoque, FB/Pre-Producao/Linha Balde"
+    },
+    {
+      "name": "location_id",
+      "type": "integer",
+      "description": "ID Odoo do location (determinismo na aplicacao)"
+    },
+    {
+      "name": "local_tipo",
+      "type": "varchar(20)",
+      "description": "Estoque / Indisponivel"
+    },
+    {
+      "name": "is_migracao",
+      "type": "boolean",
+      "default": "false",
+      "description": "Lote MIGRACAO = estoque fantasma"
+    },
+    {
+      "name": "cod_produto",
+      "type": "varchar(50)",
+      "nullable": false
+    },
+    {
+      "name": "nome_produto",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "lote",
+      "type": "varchar(60)",
+      "nullable": false,
+      "default": "''",
+      "description": "Nome do lote; '' (vazio) = sem lote (sentinela para a unique)"
+    },
+    {
+      "name": "company_id",
+      "type": "integer",
+      "description": "1 FB / 4 CD / 5 LF"
+    },
+    {
+      "name": "qtd_esperada",
+      "type": "numeric(15,3)",
+      "default": "0",
+      "description": "Saldo Odoo (quantity) no T0"
+    },
+    {
+      "name": "reservado_esperado",
+      "type": "numeric(15,3)",
+      "default": "0",
+      "description": "reserved_quantity no T0"
+    },
+    {
+      "name": "contagem",
+      "type": "numeric(15,3)",
+      "description": "Qtd contada fisicamente (NULL = nao preenchida; na importacao vira 0)"
+    },
+    {
+      "name": "ajuste",
+      "type": "numeric(15,3)",
+      "default": "0",
+      "description": "contagem - qtd_esperada"
+    },
+    {
+      "name": "classe",
+      "type": "varchar(20)",
+      "description": "NORMAL / RESERVA_FANTASMA / NEGATIVO / LOTE_NOVO / SEM_AJUSTE"
+    },
+    {
+      "name": "obs",
+      "type": "varchar(300)"
+    }
+  ]
+}

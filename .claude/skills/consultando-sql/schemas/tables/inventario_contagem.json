@@ -1,0 +1,92 @@
+{
+  "name": "inventario_contagem",
+  "description": "Cabecalho de uma contagem ciclica parcial (inventario ciclico). Granularidade por quant nos itens. Independente do Confronto (inventario_ciclo) - ligacao apenas temporal por data_base.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "integer",
+      "description": "Primary key"
+    },
+    {
+      "name": "codigo",
+      "type": "varchar(50)",
+      "nullable": false,
+      "description": "Codigo auto-gerado, ex CONT-2026-05-31-FB-01"
+    },
+    {
+      "name": "empresa",
+      "type": "varchar(10)",
+      "nullable": false,
+      "description": "FB / CD / LF"
+    },
+    {
+      "name": "filtro_locais",
+      "type": "json",
+      "description": "Lista de location_name selecionados (None/vazio = todos)"
+    },
+    {
+      "name": "filtro_codigos",
+      "type": "json",
+      "description": "Lista de cod_produto selecionados (None/vazio = todos)"
+    },
+    {
+      "name": "incluir_indisponivel",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false",
+      "description": "Se inclui locais {emp}/Indisponivel na base"
+    },
+    {
+      "name": "data_base",
+      "type": "timestamp",
+      "nullable": false,
+      "description": "T0 da extracao (saldo-esperado ancorado). Tambem e a data de corte do somatorio no Confronto"
+    },
+    {
+      "name": "status",
+      "type": "varchar(20)",
+      "nullable": false,
+      "default": "BASE_GERADA",
+      "description": "BASE_GERADA / CONTABILIZADA"
+    },
+    {
+      "name": "descricao",
+      "type": "varchar(200)"
+    },
+    {
+      "name": "tot_itens",
+      "type": "integer",
+      "default": "0"
+    },
+    {
+      "name": "tot_com_ajuste",
+      "type": "integer",
+      "default": "0"
+    },
+    {
+      "name": "tot_ajuste_pos",
+      "type": "numeric(15,3)",
+      "default": "0"
+    },
+    {
+      "name": "tot_ajuste_neg",
+      "type": "numeric(15,3)",
+      "default": "0"
+    },
+    {
+      "name": "qt_lotes_novos",
+      "type": "integer",
+      "default": "0"
+    },
+    {
+      "name": "criado_em",
+      "type": "timestamp",
+      "nullable": false,
+      "description": "Data de criacao"
+    },
+    {
+      "name": "criado_por",
+      "type": "varchar(100)"
+    }
+  ]
+}

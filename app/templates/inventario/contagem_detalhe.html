@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Contagem {{ contagem.codigo }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Contagem {{ contagem.codigo }}</h2>
+    <a href="{{ url_for('inventario.listar_contagens') }}" class="btn btn-outline-secondary btn-sm">← Contagens</a>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-md-8">
+      <dl class="row mb-0">
+        <dt class="col-sm-3">Empresa</dt><dd class="col-sm-9">{{ contagem.empresa }}</dd>
+        <dt class="col-sm-3">Base (T0)</dt><dd class="col-sm-9">{{ contagem.data_base.strftime('%d/%m/%Y %H:%M') if contagem.data_base else '' }}</dd>
+        <dt class="col-sm-3">Status</dt>
+        <dd class="col-sm-9">
+          {% if contagem.status == 'CONTABILIZADA' %}
+            <span class="badge bg-success">CONTABILIZADA</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">BASE GERADA</span>
+          {% endif %}
+        </dd>
+        <dt class="col-sm-3">Locais</dt><dd class="col-sm-9">{{ contagem.filtro_locais|join(', ') if contagem.filtro_locais else 'Todos' }}</dd>
+        <dt class="col-sm-3">Códigos</dt><dd class="col-sm-9">{{ contagem.filtro_codigos|join(', ') if contagem.filtro_codigos else 'Todos' }}</dd>
+        <dt class="col-sm-3">Indisponível</dt><dd class="col-sm-9">{{ 'Sim' if contagem.incluir_indisponivel else 'Não' }}</dd>
+        <dt class="col-sm-3">Itens na base</dt><dd class="col-sm-9">{{ contagem.tot_itens or 0 }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- Passo 1: baixar base -->
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">1. Planilha-base</h5>
+          <p class="card-text text-muted">Baixe, preencha a coluna <code>CONTAGEM</code> e reenvie.
+            Linha em branco na planilha = contagem 0 (zera). Linha removida = não tocada.</p>
+          <a href="{{ url_for('inventario.download_base', contagem_id=contagem.id) }}"
+             class="btn btn-outline-primary">Baixar planilha-base (.xlsx)</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Passo 2: upload + preview -->
+    <div class="col-md-8">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">2. Enviar contagem preenchida</h5>
+          <form id="form-upload" enctype="multipart/form-data">
+            <div class="input-group mb-2">
+              <input type="file" class="form-control" name="arquivo" accept=".xlsx" required>
+              <button type="button" class="btn btn-secondary" id="btn-preview">Pré-visualizar</button>
+            </div>
+          </form>
+          <div id="preview-box"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Passo 3: relatório / plano -->
+  <div class="card mt-3" id="bloco-relatorio" {% if contagem.status != 'CONTABILIZADA' %}style="display:none"{% endif %}>
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="card-title mb-0">3. Plano de ajustes (relatório por quant)</h5>
+        <div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="chk-so-ajuste" checked>
+            <label class="form-check-label" for="chk-so-ajuste">Só com ajuste</label>
+          </div>
+          <a href="{{ url_for('inventario.download_relatorio', contagem_id=contagem.id) }}"
+             class="btn btn-outline-success btn-sm">Baixar plano (.xlsx)</a>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead>
+            <tr>
+              <th>Local</th><th>Cód</th><th>Produto</th><th>Lote</th>
+              <th class="text-end">Esperado</th><th class="text-end">Reservado</th>
+              <th class="text-end">Contagem</th><th class="text-end">Ajuste</th><th>Classe</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-itens">
+            <tr><td colspan="9" class="text-center text-muted">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CONTAGEM_ID = {{ contagem.id }};
+const CONTABILIZADA = {{ 'true' if contagem.status == 'CONTABILIZADA' else 'false' }};
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toLocaleString('pt-BR', {minimumFractionDigits: 3, maximumFractionDigits: 3});
+}
+const CLASSE_BADGE = {
+  NORMAL: 'bg-secondary', RESERVA_FANTASMA: 'bg-warning text-dark',
+  NEGATIVO: 'bg-danger', LOTE_NOVO: 'bg-info text-dark', SEM_AJUSTE: 'bg-light text-dark',
+};
+
+function resumoHtml(r) {
+  const pc = r.por_classe || {};
+  const chips = Object.keys(pc).map(k =>
+    `<span class="badge ${CLASSE_BADGE[k] || 'bg-secondary'} me-1">${k}: ${pc[k]}</span>`).join('');
+  let avisos = '';
+  if (r.avisos && r.avisos.length) {
+    avisos = `<div class="alert alert-warning py-1 mt-2 mb-0"><small>${r.avisos.join('<br>')}</small></div>`;
+  }
+  return `<div class="alert alert-info mt-2">
+    <strong>Impacto:</strong> ${r.tot_itens} itens · ${r.tot_com_ajuste} com ajuste ·
+    +${fmt(r.tot_ajuste_pos)} / ${fmt(r.tot_ajuste_neg)} un ·
+    ${r.qt_lotes_novos} lote(s) novo(s)<br>${chips}${avisos}</div>`;
+}
+
+document.getElementById('btn-preview').addEventListener('click', () => {
+  const form = document.getElementById('form-upload');
+  const fd = new FormData(form);
+  if (!fd.get('arquivo') || !fd.get('arquivo').name) { alert('Selecione um arquivo .xlsx'); return; }
+  const box = document.getElementById('preview-box');
+  box.innerHTML = '<div class="text-muted">Processando…</div>';
+  fetch(`/inventario/contagens/${CONTAGEM_ID}/preview`, {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(d => {
+      if (d.erro) { box.innerHTML = `<div class="alert alert-danger">${d.erro}</div>`; return; }
+      box.innerHTML = resumoHtml(d.resumo) +
+        `<button class="btn btn-primary" id="btn-confirmar">Confirmar e gravar</button>`;
+      document.getElementById('btn-confirmar').addEventListener('click', confirmar);
+    })
+    .catch(err => { box.innerHTML = `<div class="alert alert-danger">${err}</div>`; });
+});
+
+function confirmar() {
+  const form = document.getElementById('form-upload');
+  const fd = new FormData(form);
+  const btn = document.getElementById('btn-confirmar');
+  btn.disabled = true; btn.textContent = 'Gravando…';
+  fetch(`/inventario/contagens/${CONTAGEM_ID}/confirmar`, {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(d => {
+      if (d.erro) { alert('Erro: ' + d.erro); btn.disabled = false; btn.textContent = 'Confirmar e gravar'; return; }
+      location.reload();
+    });
+}
+
+function carregarItens() {
+  const so = document.getElementById('chk-so-ajuste').checked ? '1' : '0';
+  fetch(`/inventario/contagens/${CONTAGEM_ID}/itens?so_ajuste=${so}`)
+    .then(r => r.json())
+    .then(d => {
+      const tb = document.getElementById('tbody-itens');
+      if (!d.linhas || !d.linhas.length) {
+        tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Nenhum item</td></tr>';
+        return;
+      }
+      tb.innerHTML = d.linhas.map(l => {
+        const badge = CLASSE_BADGE[l.classe] || 'bg-secondary';
+        const ajCls = Number(l.ajuste) < 0 ? 'text-danger' : (Number(l.ajuste) > 0 ? 'text-success' : '');
+        return `<tr>
+          <td>${l.location_name || ''}</td><td>${l.cod_produto || ''}</td>
+          <td><small>${l.nome_produto || ''}</small></td><td>${l.lote || '<em>—</em>'}</td>
+          <td class="text-end">${fmt(l.qtd_esperada)}</td>
+          <td class="text-end">${fmt(l.reservado_esperado)}</td>
+          <td class="text-end">${fmt(l.contagem)}</td>
+          <td class="text-end ${ajCls}">${fmt(l.ajuste)}</td>
+          <td><span class="badge ${badge}">${l.classe || ''}</span></td></tr>`;
+      }).join('');
+    });
+}
+
+if (CONTABILIZADA) {
+  document.getElementById('chk-so-ajuste').addEventListener('change', carregarItens);
+  carregarItens();
+}
+</script>
+{% endblock %}

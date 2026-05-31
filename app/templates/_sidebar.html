@@ -137,6 +137,10 @@
           <i class="fas fa-clipboard-list nc-sidebar__icon"></i>
           <span class="nc-sidebar__label">Confronto de Inventario</span>
           <span class="nc-sidebar__badge nc-sidebar__badge--new">NOVO</span></a></li>
+        <li><a class="nc-sidebar__link" href="{{ url_for('inventario.listar_contagens') }}">
+          <i class="fas fa-clipboard-check nc-sidebar__icon"></i>
+          <span class="nc-sidebar__label">Inventario Ciclico</span>
+          <span class="nc-sidebar__badge nc-sidebar__badge--new">NOVO</span></a></li>
         {% endif %}
         <li><a class="nc-sidebar__link" href="{{ url_for('estoque.saldo_estoque') }}">
           <i class="fas fa-chart-line nc-sidebar__icon"></i>
