@@ -126,9 +126,16 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'operando-picking-odoo': 'Estoque Odoo (Write)',
     'operando-mo-odoo': 'Estoque Odoo (Write)',
     'escriturando-odoo': 'Escrituracao Entrada Odoo (Write)',
+    'faturando-odoo': 'Estoque Odoo (Write)',
     'planejando-pre-etapa-odoo': 'Estoque Odoo (Write)',
     'consultando-quant-odoo': 'Estoque Odoo (Read)',
     'auditando-cadastro-fiscal-odoo': 'Pre-Flight Cadastro Fiscal Odoo',
+
+    # ── SPED ECD audit (subagente auditor-sped-ecd) ──
+    'parseando-sped-ecd': 'Auditoria SPED ECD',
+    'auditando-sped-contabil': 'Auditoria SPED ECD',
+    'auditando-sped-vs-manual': 'Auditoria SPED ECD',
+    'comparando-sped-ground-truth': 'Auditoria SPED ECD',
 
     # ── CarVia ──
     'gerindo-carvia': 'Gestao CarVia',
@@ -137,13 +144,24 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'acessando-ssw': 'Consulta SSW',
     'operando-ssw': 'Operacao SSW',
 
+    # ── Portal Atacadao (Hodie Booking) ──
+    'operando-portal-atacadao': 'Operacao Portal Atacadao',
+
     # ── Sistema ──
-    'buscando-rotas': 'Busca de Rotas',
     'frontend-design': 'Design Frontend',
     'gerindo-agente': 'Memoria do Agente',
     'skill-creator': 'Criacao de Skills',
     'ralph-wiggum': 'Dev Autonomo',
     'prd-generator': 'Geracao de PRD',
+    'gerando-artifact': 'Geracao de Artifact',
+    'consultando-sentry': 'Monitoramento Sentry',
+
+    # ── Lojas HORA (B2C motos eletricas — Agente Lojas HORA) ──
+    'acompanhando-pedido': 'Pipeline Lojas HORA',
+    'conferindo-recebimento': 'Pipeline Lojas HORA',
+    'consultando-estoque-loja': 'Pipeline Lojas HORA',
+    'consultando-pecas-faltando': 'Pipeline Lojas HORA',
+    'rastreando-chassi': 'Rastreamento Chassi HORA',
 
     # ── Motos Assai (B2B Q.P.A. Sendas) ──
     'consultando-estoque-assai': 'Pipeline Motos Assai',
@@ -192,6 +210,9 @@ CATEGORY_TO_DOMAIN: Dict[str, str] = {
     'Integracao Odoo': 'Odoo',
     'Estoque Odoo (Write)': 'Odoo',
     'Estoque Odoo (Read)': 'Odoo',
+    'Escrituracao Entrada Odoo (Write)': 'Odoo',
+    'Pre-Flight Cadastro Fiscal Odoo': 'Odoo',
+    'Auditoria SPED ECD': 'Odoo',
     'Baseline Conciliacao': 'Financeiro',
 
     # ── CarVia ──
@@ -205,9 +226,14 @@ CATEGORY_TO_DOMAIN: Dict[str, str] = {
     'Recibos Motochefe (Conferencia)': 'Motos Assai',
     'Eventos Pipeline Motos Assai': 'Motos Assai',
 
+    # ── Lojas HORA ──
+    'Pipeline Lojas HORA': 'Lojas HORA',
+    'Rastreamento Chassi HORA': 'Lojas HORA',
+
     # ── SSW ──
     'Consulta SSW': 'SSW',
     'Operacao SSW': 'SSW',
+    'Operacao Portal Atacadao': 'SSW',
 
     # ── Sistema ──
     'Busca de Rotas': 'Sistema',
@@ -231,6 +257,8 @@ CATEGORY_TO_DOMAIN: Dict[str, str] = {
     'Criacao de Skills': 'Sistema',
     'Dev Autonomo': 'Sistema',
     'Geracao de PRD': 'Sistema',
+    'Geracao de Artifact': 'Sistema',
+    'Monitoramento Sentry': 'Sistema',
 }
 
 # Cores por dominio (para graficos)
@@ -242,6 +270,7 @@ DOMAIN_COLORS: Dict[str, str] = {
     'SSW': '#fbbf24',          # amber
     'Sistema': '#94a3b8',      # slate
     'Motos Assai': '#34d399',  # emerald
+    'Lojas HORA': '#f472b6',   # pink
     'Outros': '#6b7280',       # gray
 }
 
