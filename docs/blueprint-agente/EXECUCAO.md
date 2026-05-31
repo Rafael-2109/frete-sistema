@@ -106,7 +106,7 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 |------|-----------|-----|------|-----|--------|
 | **A3** | Eval runner automatizado + gate no D8 (golden datasets `evals/`). Processo EXTERNO ao agente avaliado, report-only→enforce. | GATE-1 | `AGENT_EVAL_GATE` | M | ⬜ |
 | **A4** | Promoção automática de diretriz (liga `USE_OPERATIONAL_DIRECTIVES` com segurança): candidata→shadow/A-B→regression-gate→promove→monitora-drift→auto-despromove. Plano que funcionou (B§5) é o artefato promovível. Reusa `_build_operational_directives` (`memory_injection.py:420`). | A3, GATE-2 | `USE_OPERATIONAL_DIRECTIVES` + `AGENT_DIRECTIVE_PROMOTION` | G | ⬜ |
-| **D2** | Bootstrap ontologia das TABELAS-mestre corretas (`carteira_principal`/`transportadoras`, NÃO `entity_indexer`→`contas_a_pagar`). | D0, D0.5 | `AGENT_ONTOLOGY` | G | ⬜ |
+| **D2** | Bootstrap ontologia das TABELAS-mestre corretas (`carteira_principal`/`transportadoras`, NÃO `entity_indexer`→`contas_a_pagar`). | D0, D0.5 | `AGENT_ONTOLOGY` | G | ✅ **COMPLETO** — `5ac8ecafc`: `services/ontology_bootstrap.py` (cliente/produto/transportadora → `_upsert_entity` user_id=0, idempotente, **ZERO Voyage**) + CLI `scripts/agente/bootstrap_ontologia.py` (`--dry-run`/`--force`, não auto-run). 23 testes. Read path = D4. |
 | **D3** | Fatos bi-temporais + episode subgraph de proveniência (reusa `session_turn_indexer.py`). | D2 | `AGENT_ONTOLOGY` | M | ⬜ |
 | **D4** | Tool MCP `query_ontology` (agente consulta o modelo de mundo). | D2 | `AGENT_ONTOLOGY` | M | ⬜ |
 
