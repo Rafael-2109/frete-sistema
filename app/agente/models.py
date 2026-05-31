@@ -1857,12 +1857,17 @@ class AgentEvalScore(db.Model):
         Retorna o `score` do run MAIS RECENTE para `agent_name` (baseline
         contra o qual o run atual compara), ou None se não houver run prévio.
 
-        ORDER BY recorded_at DESC LIMIT 1.
+        ORDER BY recorded_at DESC, id DESC LIMIT 1 — o desempate por id garante
+        determinismo quando dois runs têm o mesmo recorded_at (a decisão de gate
+        consome este valor; sem o tie-break o Postgres devolveria qualquer um).
+
+        IMPORTANTE (call-site): chame ANTES de insert_score do run atual — senão
+        o "mais recente" seria o próprio run atual e o delta daria ~0.
         """
         entry = (
             cls.query
             .filter_by(agent_name=agent_name)
-            .order_by(cls.recorded_at.desc())
+            .order_by(cls.recorded_at.desc(), cls.id.desc())
             .first()
         )
         return entry.score if entry is not None else None
