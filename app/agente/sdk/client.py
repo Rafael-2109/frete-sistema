@@ -84,11 +84,10 @@ def _discover_skills_from_project() -> list[str]:
     """Descobre skills em .claude/skills/ filtrando as delegadas a subagentes.
 
     Retorna lista ordenada de skill names (basename de diretórios que têm SKILL.md),
-    excluindo:
-    1. SPED_SKILLS_RESERVED — reservadas ao subagente auditor-sped-ecd.
-    2. SKILLS_DELEGADAS_SUBAGENTE — operadas exclusivamente via subagente/agente
-       isolado (Lojas HORA, Motos Assai, Odoo-estoque-WRITE). Ver Solucao B em
-       `config/skills_whitelist.py`.
+    excluindo SKILLS_DELEGADAS_SUBAGENTE — fonte única de verdade em
+    `config/skills_whitelist.py`. Inclui HORA, Assai, Odoo-estoque-WRITE e
+    SPED (reservadas ao subagente auditor-sped-ecd). Ver Solucao B em
+    `config/skills_whitelist.py`.
 
     Esta função é o input para `skills=list[str]` em ClaudeAgentOptions
     (SDK 0.1.77+, ver SDK_CHANGELOG.md:160-167). Skills não listadas aqui:
@@ -102,7 +101,6 @@ def _discover_skills_from_project() -> list[str]:
         Lista ordenada de skill names.
     """
     from pathlib import Path
-    from app.agente.config.settings import AgentSettings
     from app.agente.config.skills_whitelist import SKILLS_DELEGADAS_SUBAGENTE
 
     # Path do .claude/skills/ relativo ao root do projeto
@@ -111,7 +109,7 @@ def _discover_skills_from_project() -> list[str]:
     if not skills_dir.is_dir():
         return []
 
-    excluidas = AgentSettings.SPED_SKILLS_RESERVED | SKILLS_DELEGADAS_SUBAGENTE
+    excluidas = SKILLS_DELEGADAS_SUBAGENTE
 
     discovered: list[str] = []
     for entry in skills_dir.iterdir():
@@ -1627,7 +1625,7 @@ Nunca invente informações."""
             options_dict["skills"] = _discover_skills_from_project()
             logger.debug(
                 f"[AGENT_CLIENT] skills filtradas: {len(options_dict['skills'])} skills "
-                f"(SPED_SKILLS_RESERVED excluídas)"
+                f"(skills delegadas a subagentes excluídas)"
             )
         else:
             options_dict["allowed_tools"].append("Skill")

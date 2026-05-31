@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from typing import ClassVar, List, Optional
 from functools import lru_cache
 
+from app.agente.config.skills_whitelist import SKILLS_SPED_RESERVED
+
 
 @dataclass
 class AgentSettings:
@@ -35,14 +37,10 @@ class AgentSettings:
     api_key: Optional[str] = None
 
     # Skills exclusivas do subagente auditor-sped-ecd.
+    # Alias retrocompat para SKILLS_SPED_RESERVED (fonte única em skills_whitelist.py).
     # Filtradas via `skills=list[str]` no SDK 0.1.77+ — invisíveis no listing do
     # principal E rejeitadas pelo Skill tool (SDK_CHANGELOG.md:160-167).
-    SPED_SKILLS_RESERVED: ClassVar[frozenset] = frozenset({
-        "parseando-sped-ecd",
-        "auditando-sped-vs-manual",
-        "auditando-sped-contabil",
-        "comparando-sped-ground-truth",
-    })
+    SPED_SKILLS_RESERVED: ClassVar[frozenset] = SKILLS_SPED_RESERVED
 
     # Tools do SDK (ferramentas padrão permitidas)
     # NOTA: Funcionalidades são implementadas via SKILLS, não Custom Tools MCP
