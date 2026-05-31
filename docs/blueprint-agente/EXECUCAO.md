@@ -112,7 +112,7 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 
 **GATE-3**: flywheel fechado em shadow (promoção sugere, não aplica) por ≥2 semanas com held-out anti-gaming OK; ontologia consultável validada contra os ~298 schemas.
 
-#> **2026-05-31 — BLUEPRINT CODE-COMPLETE (22 itens, Ondas 0-4)**: D3 `b75d90b78` · A3 `f5883709b` · A4 `83d6ce61c` (flywheel fechado shadow) · Onda 4 F4/F5+D5 `7ccae5f56`. Suíte **559 passed / 2 failed** (baseline `pending_questions`). TUDO flag-OFF. Pendente: code-review final (D3/A3/A4/Onda4) + GATEs (deploy do Rafael).
+#> **2026-05-31 — BLUEPRINT CODE-COMPLETE + 100% REVISADO (22 itens, Ondas 0-4)**: D3 `b75d90b78` · A3 `f5883709b` · A4 `83d6ce61c` (flywheel fechado shadow) · Onda 4 F4/F5+D5 `7ccae5f56`. **Code-review final** (D3/A3/A4/Onda4, `/tmp/subagent-findings/review-final.md`): 0 CRITICAL; **HIGH-1** (`valid_from` sem COALESCE no ON CONFLICT → descartado silenciosamente; inconsistente c/ proveniência) corrigido `1c321e232`. Confirmados OK: migration idempotente, SQL sem-injeção, A3 cron isolado/report-only, A4 anti-gaming, hook Onda 4 best-effort por bloco, flags-OFF=zero mudança, timezone. **Suíte final 572 passed / 2 failed** (baseline `pending_questions`, herdado da main). 71 commits, 32 de código. **TUDO flag-OFF — pendente só os GATEs (deploy do Rafael).**
 
 ## ONDA 4 — TETO DE ESCALA
 | Item | Descrição | Dep | Flag | Esf | Status |
