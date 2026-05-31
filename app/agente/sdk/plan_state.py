@@ -1,5 +1,6 @@
 """
 B1 — Onda 2: PlanState durável.
+B3 — Onda 2: replan + budget + escalate.
 
 Captura eventos TaskCreate/TaskUpdate e persiste em AgentSession.data['plan'].
 Classe pura (sem DB), determinística, tolerante a eventos inválidos.
@@ -12,6 +13,11 @@ Uso:
 
     # Roundtrip
     ps2 = PlanState.from_dict(plan_dict)
+
+    # Replan / escalate (B3)
+    ps.mark_step_failed('1')               # failures++ + status='failed'
+    ps.should_escalate(max_retries=2)      # True se algum step > max_retries
+    ps.steps_to_retry(max_retries=2)       # IDs de steps falhos dentro do budget
 
 Integração (wiring em chat.py):
     Sob USE_AGENT_PLANNER, os task_events acumulados em response_state['task_events']
@@ -179,6 +185,66 @@ class PlanState:
                 if isinstance(step, dict):
                     ps.steps[str(task_id)] = dict(step)
         return ps
+
+    # ──────────────────────────────────────────────
+    # Replan / Escalate (B3)
+    # ──────────────────────────────────────────────
+
+    def mark_step_failed(self, task_id: str) -> None:
+        """
+        Marca um step como falho, incrementando o contador de falhas.
+
+        - Se o step não existe, cria-o (upsert defensivo).
+        - Incrementa step['failures'] (inicia em 0).
+        - Seta status='failed'.
+
+        Args:
+            task_id: ID do step que falhou.
+        """
+        if task_id not in self.steps:
+            self.steps[task_id] = {}
+        step = self.steps[task_id]
+        step['failures'] = step.get('failures', 0) + 1
+        step['status'] = 'failed'
+
+    def should_escalate(self, max_retries: int = 2) -> bool:
+        """
+        Retorna True se algum step superou o budget de retentativas.
+
+        Um step está "fora do budget" quando failures > max_retries.
+        Isso significa que foi tentado (max_retries + 1) vezes ou mais.
+
+        Args:
+            max_retries: número máximo de falhas permitidas antes de escalar.
+                         Default=2 (tolera até 2 falhas; na 3ª, escala).
+
+        Returns:
+            True se deve escalar (algum step esgotou o budget), False caso contrário.
+        """
+        for step in self.steps.values():
+            if step.get('failures', 0) > max_retries:
+                return True
+        return False
+
+    def steps_to_retry(self, max_retries: int = 2) -> list:
+        """
+        Retorna lista de task_ids que falharam mas ainda estão dentro do budget.
+
+        "Dentro do budget" = failures > 0 AND failures <= max_retries.
+        Steps que excederam o budget (failures > max_retries) devem ser escalados,
+        não retried — portanto NÃO aparecem nesta lista.
+
+        Args:
+            max_retries: número máximo de falhas permitidas antes de escalar.
+
+        Returns:
+            Lista de task_ids que precisam de replan/retry.
+        """
+        return [
+            task_id
+            for task_id, step in self.steps.items()
+            if 0 < step.get('failures', 0) <= max_retries
+        ]
 
     # ──────────────────────────────────────────────
     # Utilidades

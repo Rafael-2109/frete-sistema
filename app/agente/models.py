@@ -1718,6 +1718,47 @@ class AgentInvocationMetric(db.Model):
         except IntegrityError:
             return None
 
+    @classmethod
+    def marcar_escalonamento(cls, agent_id: Optional[str]) -> bool:
+        """
+        B3 (Onda 2) — seta escalated_to_human=True na métrica identificada por agent_id.
+
+        Mecanismo de escrita da coluna 'morta' escalated_to_human. O CHAMADOR
+        (futuro, no loop do planejador) ficará sob flag USE_AGENT_PLANNER — mas
+        este método existe para shadow/teste desde agora (flag-OFF por padrão).
+
+        Padrão SAVEPOINT espelhado de insert_metric: usa begin_nested() + commit()
+        explícito apenas quando necessário (contexto próprio). Em request Flask,
+        o commit final do request consolida. Best-effort: nunca propaga exceção.
+
+        Args:
+            agent_id: identificador único da métrica (PK lógica UNIQUE).
+                      None ou string inválida → retorna False sem exceção.
+
+        Returns:
+            True  se encontrou e atualizou a métrica com sucesso.
+            False se métrica não encontrada, agent_id inválido, ou erro inesperado.
+        """
+        if not agent_id:
+            return False
+
+        try:
+            entry = cls.query.filter_by(agent_id=agent_id).first()
+            if entry is None:
+                return False
+
+            entry.escalated_to_human = True
+            with db.session.begin_nested():
+                db.session.flush()
+            db.session.commit()
+            return True
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return False
+
 
 # =========================================================================
 # AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact
