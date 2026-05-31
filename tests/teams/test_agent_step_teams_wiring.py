@@ -12,7 +12,7 @@ Setup segue o mesmo padrão do teste web (test_agent_step_wiring.py):
   - db.session.rollback() no fim de cada teste (isolamento)
 """
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List
 
 import pytest
