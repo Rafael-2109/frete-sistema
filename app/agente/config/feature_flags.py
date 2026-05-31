@@ -816,3 +816,13 @@ ESTOQUE_RESTRICAO_ALLOWED_USER_IDS: set[int] = _parse_allowed_user_ids_csv(
 # Schema: scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}
 # Ver app/odoo/CLAUDE.md secao P8.
 USE_ODOO_AUDIT_HOOK = os.getenv("AGENT_ODOO_AUDIT_HOOK", "false").lower() == "true"
+
+
+# ====================================================================
+# Capability Registry (Onda 0 — S0c)
+# ====================================================================
+# Grafo descritivo read-only skill↔agente. Fundacao para ondas futuras
+# (planejador/skill-RAG). Nenhum runtime consome o registry ainda.
+# Ativar quando houver consumidor: AGENT_CAPABILITY_REGISTRY=true.
+# Default false — flag marca a fundacao como inerte ate onda futura.
+USE_CAPABILITY_REGISTRY = os.getenv("AGENT_CAPABILITY_REGISTRY", "false").lower() == "true"
