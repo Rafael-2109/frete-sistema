@@ -133,18 +133,18 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_loja_apelido",
-      "columns": [
-        "apelido"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_loja_cnpj",
       "columns": [
         "cnpj"
       ],
       "unique": true
+    },
+    {
+      "name": "ix_hora_loja_apelido",
+      "columns": [
+        "apelido"
+      ],
+      "unique": false
     }
   ]
 }

@@ -101,9 +101,9 @@
       "unique": true
     },
     {
-      "name": "ix_hora_nf_entrada_pedido_id",
+      "name": "ix_hora_nf_entrada_cnpj_destinatario",
       "columns": [
-        "pedido_id"
+        "cnpj_destinatario"
       ],
       "unique": false
     },
@@ -115,16 +115,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_cnpj_emitente",
+      "name": "ix_hora_nf_entrada_pedido_id",
       "columns": [
-        "cnpj_emitente"
+        "pedido_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_nf_entrada_cnpj_destinatario",
+      "name": "ix_hora_nf_entrada_cnpj_emitente",
       "columns": [
-        "cnpj_destinatario"
+        "cnpj_emitente"
       ],
       "unique": false
     }

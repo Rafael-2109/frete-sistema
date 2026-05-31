@@ -212,6 +212,20 @@
   ],
   "indices": [
     {
+      "name": "idx_pessoal_transacoes_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_pessoal_transacoes_excluir",
+      "columns": [
+        "excluir_relatorio"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_pessoal_transacoes_data",
       "columns": [
         "data"
@@ -257,20 +271,6 @@
       "name": "idx_pessoal_transacoes_membro",
       "columns": [
         "membro_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_pessoal_transacoes_excluir",
-      "columns": [
-        "excluir_relatorio"
       ],
       "unique": false
     }

@@ -147,13 +147,6 @@
       "unique": false
     },
     {
-      "name": "ix_nf_transferencia_snapshot_data_emissao",
-      "columns": [
-        "data_emissao"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_nf_transf_snap_companies",
       "columns": [
         "company_origem",
@@ -165,6 +158,13 @@
       "name": "ix_nf_transferencia_snapshot_status_consolidado",
       "columns": [
         "status_consolidado"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_nf_transferencia_snapshot_data_emissao",
+      "columns": [
+        "data_emissao"
       ],
       "unique": false
     }

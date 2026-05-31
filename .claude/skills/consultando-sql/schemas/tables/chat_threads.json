@@ -62,6 +62,13 @@
   ],
   "indices": [
     {
+      "name": "idx_chat_threads_last_msg",
+      "columns": [
+        "last_message_at"
+      ],
+      "unique": false
+    },
+    {
       "name": "uq_chat_threads_system_dm",
       "columns": [
         "criado_por_id"
@@ -75,13 +82,6 @@
         "entity_id"
       ],
       "unique": true
-    },
-    {
-      "name": "idx_chat_threads_last_msg",
-      "columns": [
-        "last_message_at"
-      ],
-      "unique": false
     }
   ]
 }
