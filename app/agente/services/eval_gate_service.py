@@ -17,7 +17,6 @@ MODO report-only (default):
 Ref: app/agente/workers/step_judge.py (padrao _call_haiku_judge + _parse_judge_json)
 """
 import logging
-import os
 from typing import Callable, Optional
 
 logger = logging.getLogger('sistema_fretes')
