@@ -128,6 +128,15 @@ VERIFY_ENQUEUER_ENABLED = os.environ.get("AGENT_VERIFY", "false").lower() == "tr
 VERIFY_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("VERIFY_ENQUEUER_LOOKBACK_HOURS", "6"))
 VERIFY_ENQUEUER_LIMIT = int(os.environ.get("VERIFY_ENQUEUER_LIMIT", "50"))
 
+# Triage Enqueuer (31º módulo) — Tarefa 2c / B-TRIAGE, report-only, flag-OFF por default
+# REUSA a flag AGENT_PLANNER (mesma que gateia o wiring de triage shadow).
+# Roda POR CICLO (cada tick de 30min), SEM guard temporal — varre steps recentes
+# sem outcome_signal['triage'] e enfileira triage_step_shadow na fila LEVE
+# 'agent_judge'. DEFAULT false: modulo e' no-op. Ativar em deploy.
+TRIAGE_ENQUEUER_ENABLED = os.environ.get("AGENT_PLANNER", "false").lower() == "true"
+TRIAGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("TRIAGE_ENQUEUER_LOOKBACK_HOURS", "6"))
+TRIAGE_ENQUEUER_LIMIT = int(os.environ.get("TRIAGE_ENQUEUER_LIMIT", "50"))
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -2180,6 +2189,36 @@ def executar_sincronizacao():
                     pass
 
         logger.info(f"   [TIMER] Step 30 (Verify Enqueuer): {time.time() - _t_step:.1f}s")
+
+        # ── 3️⃣1️⃣ TRIAGE ENQUEUER — varredor RQ do triage_step_shadow (31º módulo, report-only) ──
+        # Tarefa 2c / B-TRIAGE. Flag AGENT_PLANNER default OFF → no-op.
+        # Quando ON: varre AgentStep recentes (lookback) sem outcome_signal['triage']
+        # e enfileira triage_step_shadow (decompõe a meta do turno em steps ancorados
+        # via triage_meta) na fila LEVE 'agent_judge'. Roda TODO ciclo (sem guard
+        # temporal) — cap por `limit` evita backlog. Best-effort: nunca falha o cron.
+        # NÃO entra em modulos_sync.
+        _t_step = time.time()
+
+        if TRIAGE_ENQUEUER_ENABLED:
+            try:
+                from app.agente.workers.triage_shadow import enqueue_pending_triages
+
+                _te_result = enqueue_pending_triages(
+                    lookback_hours=TRIAGE_ENQUEUER_LOOKBACK_HOURS,
+                    limit=TRIAGE_ENQUEUER_LIMIT,
+                )
+                logger.info(
+                    f"[TRIAGE_ENQUEUER] enfileirados={_te_result.get('enfileirados', 0)} "
+                    f"candidatos={_te_result.get('candidatos', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[TRIAGE_ENQUEUER] Erro no modulo 31: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 31 (Triage Enqueuer): {time.time() - _t_step:.1f}s")
 
         # Limpar conexões ao final
         try:
