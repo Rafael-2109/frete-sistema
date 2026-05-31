@@ -23,6 +23,27 @@
 
 ---
 
+## 0.5 — PLANO DO TESTE CONTROLADO (1 caixa, lote dedicado) — A0→K
+
+> Estratégia: **clean-slate** (zerar componentes na FB + adicionar quantidade controlada num **lote dedicado**, ex. `PILOTO-3105`) → rodar o ciclo **validando após cada etapa** para *recortar a etapa duvidosa*. Toda medição é **por lote/cadeia do piloto** (não saldo absoluto). 🔴 = gate SEFAZ irreversível · ⚠️ = etapa duvidosa (onde L1/G5b são testados).
+
+| Passo | Ação | Ferramenta | Critério |
+|---|---|---|---|
+| **A0** | Snapshot baseline (contábil + físico por lote) | `e2e_piloto_validar.py --modo baseline --lote PILOTO-3105 --out base.json` | foto antes de tudo (p/ Δ) |
+| **A** | Zerar comps + adicionar 1 caixa em lote dedicado (inclui CAIXA 210030203) | *manual (Rafael) — ajuste de estoque* | 16 comps em FB/Estoque(8) lote PILOTO |
+| **B** 🔴 | Remessa FB→LF (pt53, NF 5901) — **lote pinado** | `e2e_remessa_criar.py --lote PILOTO-3105` (dry-run → `--execute` → `--liberar`) | `D 5101010001 +I / C 1150100002 −I` |
+| **C** ⚠️ | Entrada LF — **pré-flight pt64/pt19 dst** | `--modo preflight-lf` antes; *receb LF*; dst=**31092** | material em **31092** (não 42) |
+| **D** | Valida B+C (Δ computado) | `e2e_piloto_validar.py --modo remessa` / `--modo entrada-lf --base base.json` | `Δ1150100011(LF)=0`; 26489 do lote=0 |
+| **E** | 2 MOs (BATELADA + PA), origem 31092 → PA em 31093 | *MO manual (LF)* | só ÁGUA+serviço; PA em 31093 |
+| **F** | Valida E | `e2e_piloto_validar.py --modo mo --mo <bat> --mo2 <pa> --base base.json` | net-zero; PA 31093; loc 42 inalt. |
+| **G** 🔴 | Retorno LF→FB (pt98, NF mista 5902+5124) | *retorno fiscal* | debita 5101020001; PA price=Ic+S |
+| **H** | Entrada FB (pt52) + **op 3252 na 1902 em DRAFT** | `g5b_aplicar_op3252_na_linha.py --move-id <draft>` | 1902 com op 3252 |
+| **I** ⚠️ | Valida entrada FB | `e2e_piloto_validar.py --modo entrada-fb --nf <id>` | **G5b**: 0 SVL comps. ❗**G5a não fecha** (Contador) |
+| **J** | Ajuste/conferência do PA produzido (AVCO=Ic+S; cleanup) | *manual + validar* | AVCO PA = Ic+S |
+| **K** 🔴 | Rollout p/ todos LF | **GATE CONTADOR** (G5a + 3 pernas + regularização) | — |
+
+---
+
 ## 1. RECEITA — 16 componentes remetidos (1 caixa) ✅ validado ao vivo
 
 > Explosão BoM **3695** (PA, rende 1 caixa) + **3646** (BATELADA semi, ×12,818 un/caixa), dividindo pelo rendimento de cada BoM. Validado: `scripts/e2e_remessa_etapa1_dryrun.py` → **16 componentes**, `Ic` ao vivo.
