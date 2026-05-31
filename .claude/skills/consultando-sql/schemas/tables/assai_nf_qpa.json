@@ -104,16 +104,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_nf_qpa_loja_id",
+      "name": "ix_assai_nf_qpa_separacao_id",
       "columns": [
-        "loja_id"
+        "separacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_nf_qpa_separacao_id",
+      "name": "ix_assai_nf_qpa_loja_id",
       "columns": [
-        "separacao_id"
+        "loja_id"
       ],
       "unique": false
     }

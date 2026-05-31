@@ -207,6 +207,20 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_venda_origem_criacao",
+      "columns": [
+        "origem_criacao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_nf_saida_numero",
+      "columns": [
+        "nf_saida_numero"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_venda_data_venda",
       "columns": [
         "data_venda"
@@ -252,20 +266,6 @@
       "name": "ix_hora_venda_tagplus_departamento",
       "columns": [
         "tagplus_departamento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_origem_criacao",
-      "columns": [
-        "origem_criacao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_nf_saida_numero",
-      "columns": [
-        "nf_saida_numero"
       ],
       "unique": false
     }

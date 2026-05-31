@@ -105,13 +105,6 @@
       "unique": false
     },
     {
-      "name": "ix_agent_invocation_metrics_user_id",
-      "columns": [
-        "user_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_agent_invocation_metrics_agent_type",
       "columns": [
         "agent_type"
@@ -122,6 +115,13 @@
       "name": "ix_agent_invocation_metrics_session_id",
       "columns": [
         "session_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_invocation_metrics_user_id",
+      "columns": [
+        "user_id"
       ],
       "unique": false
     }

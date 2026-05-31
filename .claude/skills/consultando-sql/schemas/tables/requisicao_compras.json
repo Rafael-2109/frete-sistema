@@ -121,27 +121,6 @@
   ],
   "indices": [
     {
-      "name": "ix_requisicao_compras_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_requisicao_compras_num_requisicao",
-      "columns": [
-        "num_requisicao"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_requisicao_compras_cod_produto",
-      "columns": [
-        "cod_produto"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_requisicao_compras_purchase_state",
       "columns": [
         "purchase_state"
@@ -167,6 +146,27 @@
       "columns": [
         "company_id",
         "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_num_requisicao",
+      "columns": [
+        "num_requisicao"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_requisicao_compras_cod_produto",
+      "columns": [
+        "cod_produto"
       ],
       "unique": false
     }
