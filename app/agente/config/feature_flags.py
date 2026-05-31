@@ -848,3 +848,16 @@ USE_AGENT_PLANNER = os.getenv("AGENT_PLANNER", "false").lower() == "true"
 # Depende de USE_AGENT_PLANNER. Planejado para Onda 2 fase posterior.
 # Rollback: AGENT_VERIFY=false.
 USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 3 — A3: Eval Gate (golden datasets, report-only, D8 cron)
+# ====================================================================
+# Quando ON: D8 (modulo 28) roda run_evals() contra os 4 golden datasets
+# de subagentes e loga resultado (report-only — NUNCA bloqueia o cron).
+# invoke_fn e' o seam injetavel; em shadow (flag ON) usa default que raise
+# NotImplementedError e reporta todos os casos como 'error' (safe).
+# Wiring real do agente sera' feito na ativacao futura.
+#
+# Default false (flag-OFF, D8 no-op). Ativar: AGENT_EVAL_GATE=true.
+# Rollback instantaneo: AGENT_EVAL_GATE=false.
+AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"

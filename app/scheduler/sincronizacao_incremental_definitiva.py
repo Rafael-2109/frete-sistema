@@ -103,6 +103,13 @@ HEALTH_CHECK_CUSTEIO_ENABLED = os.environ.get("HEALTH_CHECK_CUSTEIO_ENABLED", "t
 HEALTH_CHECK_CUSTEIO_HOUR = int(os.environ.get("HEALTH_CHECK_CUSTEIO_HOUR", "7"))
 _ultimo_health_check_custeio = None  # Timestamp do ultimo health check bem-sucedido
 
+# Eval Gate (28º módulo) — Onda 3 / A3, report-only, flag-OFF por default
+# Roda 1x/dia às 11:00 (apos Improvement Dialogue das 10:00).
+# DEFAULT false (flag AGENT_EVAL_GATE): modulo e' no-op. Ativar em deploy.
+EVAL_GATE_ENABLED = os.environ.get("AGENT_EVAL_GATE", "false").lower() == "true"
+EVAL_GATE_HOUR = int(os.environ.get("AGENT_EVAL_GATE_HOUR", "11"))
+_ultimo_eval_gate = None  # Timestamp da ultima execucao bem-sucedida
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -193,7 +200,7 @@ def executar_sincronizacao():
     Executa sincronização usando services já instanciados
     Similar ao que funciona em SincronizacaoIntegradaService
     """
-    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue, _ultimo_fechamento_mes_custeio, _ultimo_health_check_custeio
+    global faturamento_service, carteira_service, requisicao_service, pedido_service, alocacao_service, entrada_material_service, cte_service, contas_receber_service, baixas_service, contas_pagar_service, nfd_service, pallet_service, reversao_service, monitoramento_sync_service, validacao_recebimento_job, validacao_ibscbs_job, extratos_service, picking_recebimento_sync_service, cte_cancelamento_outlook_job, _ultima_reindexacao_embeddings, _ultima_varredura_seguranca, _ultimo_kg_cleanup, _ultima_auditoria_financeira, _ultimo_improvement_dialogue, _ultimo_fechamento_mes_custeio, _ultimo_health_check_custeio, _ultimo_eval_gate
 
     _t_inicio = time.time()
     logger.info("=" * 60)
@@ -2027,6 +2034,78 @@ def executar_sincronizacao():
 
         logger.info(f"   [TIMER] Step 27 (Health Check Custeio): {time.time() - _t_step:.1f}s")
 
+        # ── 2️⃣8️⃣ EVAL GATE — golden datasets de subagentes (28º módulo, report-only) ──
+        # Onda 3 / A3. Flag AGENT_EVAL_GATE default OFF → no-op.
+        # Quando ON: roda run_evals() por dataset e LOGA resultado (nunca bloqueia).
+        # invoke_fn e' seam injetavel; em shadow usa stub que raise NotImplementedError
+        # e todos os casos sao registrados como 'error' (safe, sem chamada API real).
+        # Wiring real do agente sera' feito na ativacao futura (fora do escopo A3).
+        _t_step = time.time()
+        eval_gate_executou = False
+
+        if EVAL_GATE_ENABLED:
+            hora_eg = agora_utc_naive().hour
+            hoje_eg = agora_utc_naive().date()
+
+            deve_rodar_eg = (
+                hora_eg == EVAL_GATE_HOUR
+                and (_ultimo_eval_gate is None
+                     or _ultimo_eval_gate.date() < hoje_eg)
+            )
+
+            if deve_rodar_eg:
+                eval_gate_executou = True
+                try:
+                    import pathlib as _pathlib
+                    from app.agente.services.eval_gate_service import run_evals, eval_gate as _eval_gate
+
+                    _evals_dir = _pathlib.Path(__file__).parent.parent.parent / ".claude" / "evals" / "subagents"
+
+                    _datasets = [
+                        ("analista-carteira", str(_evals_dir / "analista-carteira" / "dataset.yaml")),
+                        ("auditor-financeiro", str(_evals_dir / "auditor-financeiro" / "dataset.yaml")),
+                        ("controlador-custo-frete", str(_evals_dir / "controlador-custo-frete" / "dataset.yaml")),
+                        ("gestor-motos-assai", str(_evals_dir / "gestor-motos-assai" / "dataset.yaml")),
+                    ]
+
+                    for _agent_name, _dataset_path in _datasets:
+                        try:
+                            _result = run_evals(
+                                agent_name=_agent_name,
+                                dataset_path=_dataset_path,
+                                # invoke_fn ausente = seam nao ativado (shadow mode)
+                                # todos os casos retornam 'error' com NotImplementedError
+                            )
+                            logger.info(
+                                f"[EVAL_GATE] {_agent_name}: "
+                                f"score={_result['score']:.3f} "
+                                f"passed={_result['passed']}/{_result['total']}"
+                            )
+                            # Gate report-only (blocked sempre False neste modo)
+                            _gate = _eval_gate(
+                                baseline_score=0.0,  # sem baseline historico ainda
+                                candidate_score=_result['score'],
+                                mode='report_only',
+                            )
+                            if _gate['regression']:
+                                logger.warning(
+                                    f"[EVAL_GATE] {_agent_name}: regressao detectada "
+                                    f"delta={_gate['delta']:+.3f} (report-only, nao bloqueado)"
+                                )
+                        except Exception as _e_agent:
+                            logger.warning(f"[EVAL_GATE] {_agent_name}: erro ao rodar evals: {_e_agent}")
+
+                    _ultimo_eval_gate = agora_utc_naive()
+                except Exception as e:
+                    logger.error(f"[EVAL_GATE] Erro no modulo 28: {e}")
+                    _ultimo_eval_gate = agora_utc_naive()
+                    try:
+                        db.session.rollback()
+                    except Exception:
+                        pass
+
+        logger.info(f"   [TIMER] Step 28 (Eval Gate): {time.time() - _t_step:.1f}s")
+
         # Limpar conexões ao final
         try:
             db.session.remove()
@@ -2060,6 +2139,8 @@ def executar_sincronizacao():
 
         if health_custeio_executou:
             modulos_sync.append(sucesso_health_custeio)
+
+        # Modulo 28 (EVAL GATE) e' report-only e nunca falha o cron — nao incluir no total
 
         total_modulos = len(modulos_sync)
         total_sucesso = sum(modulos_sync)
@@ -2242,6 +2323,7 @@ def main():
     logger.info(f"   5. Segurança: 21º módulo, diário às {SEGURANCA_SCAN_HOUR:02d}:00 (enabled={SEGURANCA_SCAN_ENABLED})")
     logger.info(f"   6. Fechamento Custeio: 26º módulo, mensal dia {FECHAR_MES_CUSTEIO_DAY} às {FECHAR_MES_CUSTEIO_HOUR:02d}:00 (enabled={FECHAR_MES_CUSTEIO_ENABLED})")
     logger.info(f"   7. Health Check Custeio: 27º módulo, diário às {HEALTH_CHECK_CUSTEIO_HOUR:02d}:00 (enabled={HEALTH_CHECK_CUSTEIO_ENABLED})")
+    logger.info(f"   8. Eval Gate (A3): 28º módulo, diário às {EVAL_GATE_HOUR:02d}:00 report-only (enabled={EVAL_GATE_ENABLED})")
     logger.info(f"   Próxima execução em {INTERVALO_MINUTOS} minutos...")
     logger.info("=" * 60)
 
