@@ -27,11 +27,9 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 
-# Tools que modificam estado (write)
+# Tools que modificam estado (write). TaskGet/TaskList sao read-only -> no-op
+# por fall-through (apply_task_event so trata as de escrita).
 _WRITE_TOOLS = frozenset({'TaskCreate', 'TaskUpdate'})
-
-# Tools read-only (no-op para PlanState)
-_READ_TOOLS = frozenset({'TaskGet', 'TaskList'})
 
 
 class PlanState:
