@@ -416,7 +416,8 @@ def test_enqueue_acha_step_sem_judge(app_ctx):
             # args[0] = dotted-path, args[1] = step_uid
             assert call.args[0] == 'app.agente.workers.step_judge.judge_step'
             uids_chamados.append(call.args[1])
-            assert call.kwargs.get('job_id') == f'judge-step:{call.args[1]}'
+            # job_id deterministico e RQ-safe (sem ':' — ver C1)
+            assert call.kwargs.get('job_id') == f"judge-step-{call.args[1].replace(':', '-')}"
             assert call.kwargs.get('job_timeout') == 120
 
         assert uid in uids_chamados, (
@@ -551,3 +552,48 @@ def test_enqueue_wiring_produtor_consumidor(app_ctx):
     finally:
         _cleanup_step(uid_sem)
         _cleanup_step(uid_com)
+
+
+def test_enqueue_job_id_sem_dois_pontos_rq_safe(app_ctx):
+    """C1 (CRITICAL): o job_id gerado NAO pode conter ':'.
+
+    step_uid e '{session_id}:{turn_seq}' (sempre tem ':'). RQ 2.6.1
+    Job.set_id faz `if ':' in value: raise ValueError` — logo um job_id
+    com ':' levantaria a cada enqueue e o try/except por-step engoliria
+    silenciosamente (enfileirados=0, feature inerte). Este teste prova
+    que o id gerado e RQ-safe SEM depender de Redis/fakeredis (o MagicMock
+    nao valida; a garantia vem da asserção sobre o id).
+
+    FALHARIA contra o codigo antigo (job_id=f'judge-step:{step_uid}').
+    """
+    from app.agente.workers import step_judge
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)
+    # Pre-condicao do teste: o step_uid realmente contem ':'
+    assert ':' in uid, "fixture invalida: step_uid de teste deveria conter ':'"
+
+    mock_queue = MagicMock()
+
+    try:
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', True):
+            step_judge.enqueue_pending_judges(queue=mock_queue)
+
+        # Localiza a chamada referente ao nosso step
+        nossa_chamada = next(
+            (c for c in mock_queue.enqueue.call_args_list if c.args[1] == uid),
+            None,
+        )
+        assert nossa_chamada is not None, (
+            f"step {uid} deveria ter sido enfileirado"
+        )
+        job_id = nossa_chamada.kwargs.get('job_id')
+        assert job_id is not None, "job_id ausente no enqueue"
+        assert ':' not in job_id, (
+            f"job_id '{job_id}' contem ':' — RQ 2.6.1 Job.set_id levantaria "
+            f"ValueError e o enqueue falharia silenciosamente (C1)."
+        )
+        # E o id deve permanecer rastreavel ao step (derivado do step_uid)
+        assert job_id == f"judge-step-{uid.replace(':', '-')}"
+    finally:
+        _cleanup_step(uid)

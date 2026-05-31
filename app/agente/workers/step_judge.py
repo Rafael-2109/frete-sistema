@@ -260,8 +260,13 @@ def enqueue_pending_judges(queue=None, now=None, lookback_hours=6, limit=50) -> 
        sem tocar em Redis/Queue.
     2. Janela: candidatos sao steps com created_at no intervalo [now-lookback, now].
     3. Filtro Python: candidato = step SEM 'judge' em outcome_signal.
-    4. Para cada candidato, enfileira judge_step com job_id deterministico
-       ('judge-step:{step_uid}') — evita pilha de duplicatas do mesmo step na fila.
+    4. Para cada candidato, enfileira judge_step com job_id deterministico derivado
+       do step_uid (sanitizado: ':' -> '-', pois RQ 2.6.1 rejeita ':' no id).
+       NOTA: RQ 2.6.1 NAO deduplica enqueue por job_id (sem `unique=True` nesta
+       versao). O id deterministico serve para RASTREABILIDADE (sobrescreve o hash
+       do job no Redis). Re-enfileirar um step ainda pendente em ciclos seguintes e
+       um RETRY idempotente intencional: um judge que falhou e re-tentado, e
+       update_outcome faz MERGE em outcome_signal -> double-judge e benigno.
     5. Best-effort total (INV-6): falha de Redis NAO levanta excecao.
 
     Args:
@@ -325,10 +330,17 @@ def enqueue_pending_judges(queue=None, now=None, lookback_hours=6, limit=50) -> 
     enfileirados = 0
     for step in candidatos:
         try:
+            # job_id deterministico p/ RASTREABILIDADE (NAO dedup — RQ 2.6.1 nao
+            # tem unique=True). Sanitiza TODOS os ':': step_uid e
+            # '{session_id}:{turn_seq}' (sempre contem ':') e RQ 2.6.1 Job.set_id
+            # levanta ValueError se ':' in id (verificado empiricamente). Sem o
+            # replace, o try/except engoliria a excecao e enfileirados=0 (C1).
+            # Re-enfileirar mesmo step e RETRY idempotente (update_outcome faz merge).
+            job_id = f"judge-step-{step.step_uid.replace(':', '-')}"
             queue.enqueue(
                 'app.agente.workers.step_judge.judge_step',
                 step.step_uid,
-                job_id=f'judge-step:{step.step_uid}',
+                job_id=job_id,
                 job_timeout=120,
             )
             enfileirados += 1
