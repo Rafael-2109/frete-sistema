@@ -62,6 +62,37 @@ def api_feedback():
         user_id = current_user.id
         result = {'processed': True, 'action': feedback_type, 'memory_path': None}
 
+        # Onda 1 / E1 — linka feedback ao agent_step (flag OFF por default)
+        # Best-effort: NUNCA quebrar o endpoint de feedback por causa deste bloco.
+        from app.agente.config.feature_flags import USE_AGENT_QUALITY_SPINE
+        if USE_AGENT_QUALITY_SPINE and feedback_type in ('positive', 'negative'):
+            try:
+                from app.agente.models import AgentStep
+                # Tenta usar step_uid explícito enviado pelo frontend
+                _fb_step_uid = data.get('step_uid')
+                _fb_step = None
+                if _fb_step_uid:
+                    _fb_step = AgentStep.query.filter_by(
+                        step_uid=_fb_step_uid
+                    ).first()
+                # Fallback: último step da sessão
+                if _fb_step is None:
+                    _fb_step = AgentStep.query.filter_by(
+                        session_id=session_id
+                    ).order_by(AgentStep.created_at.desc()).first()
+                if _fb_step is not None:
+                    AgentStep.update_outcome(
+                        _fb_step.step_uid,
+                        {
+                            'feedback': feedback_type,
+                            'error_category': feedback_data.get('error_category'),
+                        },
+                    )
+            except Exception as _fb_link_err:
+                logger.debug(
+                    f"[FEEDBACK] Link ao agent_step falhou (ignorado): {_fb_link_err}"
+                )
+
         # Sessao E (#17): Feedback positivo estruturado (antes era apenas logado)
         if feedback_type == 'positive':
             try:

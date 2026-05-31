@@ -1914,3 +1914,42 @@ class AgentStep(db.Model):
             # Savepoint já foi rollback'd pelo context manager.
             # Transação pai (request) preservada.
             return None
+
+    @classmethod
+    def update_outcome(
+        cls,
+        step_uid: str,
+        signal_patch: Optional[dict],
+        effective_count: Optional[int] = None,
+    ) -> Optional['AgentStep']:
+        """Onda 1 / E1 — merge best-effort de sinais em outcome_signal (JSONB).
+
+        Idempotente/seguro: step inexistente -> no-op (retorna None).
+        SAVEPOINT isola falha para não poisonar a transação pai do request.
+        flag_modified obrigatório: mutação in-place de JSON não é detectada pelo ORM.
+
+        Args:
+            step_uid: Chave única do step ('{session_id}:{turn_seq}').
+            signal_patch: Dict de chaves a mergear em outcome_signal.
+                          None ou {} são aceitos (no-op seguro).
+            effective_count: Se fornecido, atualiza outcome_effective_count.
+
+        Returns:
+            O AgentStep atualizado, ou None se step inexistente ou em caso de erro.
+        """
+        try:
+            with db.session.begin_nested():
+                step = cls.query.filter_by(step_uid=step_uid).first()
+                if step is None:
+                    return None
+                from sqlalchemy.orm.attributes import flag_modified
+                merged = dict(step.outcome_signal or {})
+                merged.update(signal_patch or {})
+                step.outcome_signal = merged
+                flag_modified(step, 'outcome_signal')
+                if effective_count is not None:
+                    step.outcome_effective_count = effective_count
+                db.session.flush()
+            return step
+        except Exception:
+            return None

@@ -285,6 +285,16 @@ def _gravar_agent_step_teams(session, user_id, model, sync_result):
             output_tokens=getattr(sync_result, 'output_tokens', 0) or 0,
             tools_used=getattr(sync_result, 'tools_used', None) or None,
         )
+        # Onda 1 / E1 — captura frustração no outcome_signal (flag OFF por default)
+        from app.agente.config.feature_flags import USE_AGENT_QUALITY_SPINE
+        if USE_AGENT_QUALITY_SPINE:
+            from app.agente.services.sentiment_detector import get_last_frustration_score
+            _fscore = get_last_frustration_score(session.session_id)
+            if _fscore is not None:
+                AgentStep.update_outcome(
+                    f"{session.session_id}:{_turn_seq}",
+                    {'frustration_score': _fscore},
+                )
     except Exception as e:
         logger.warning(f"[TEAMS-BOT] agent_step nao gravado (best-effort): {e}")
 
