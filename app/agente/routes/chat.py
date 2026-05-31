@@ -699,6 +699,10 @@ def _stream_chat_response(
         # antes de _save_messages_to_db rodar, perdendo a AssistantMessage.
         '_persisted': False,
         '_save_lock': Lock(),
+        # B1 (Onda 2): eventos Task* acumulados durante o turno (flag-gated).
+        # Populado em _process_stream_event sob USE_AGENT_PLANNER.
+        # Consumido em _save_messages_dedup para construir plan_dict.
+        'task_events': [],
     }
 
     def run_async_stream():
@@ -842,6 +846,17 @@ def _stream_chat_response(
                     # Payload: {action: created|updated|snapshot, task_id?, subject?, tasks?, status?}
                     if isinstance(event.content, dict) and event.content.get('action'):
                         event_queue.put(_sse_event('task_event', event.content))
+                        # B1 (Onda 2): acumula eventos Task* para PlanState (flag-gated).
+                        # Só TaskCreate/TaskUpdate alteram estado; TaskList = snapshot = no-op no PlanState.
+                        # best-effort: nunca quebrar o SSE por erro aqui.
+                        try:
+                            from app.agente.config.feature_flags import USE_AGENT_PLANNER
+                            if USE_AGENT_PLANNER:
+                                _action = event.content.get('action', '')
+                                if _action in ('created', 'updated'):
+                                    response_state['task_events'].append(dict(event.content))
+                        except Exception as _plan_err:
+                            logger.debug(f"[PLAN] acumulacao task_event ignorada: {_plan_err}")
 
                 elif event.type == 'warning':
                     # Resume de sessão falhou — notificar frontend
@@ -1662,6 +1677,24 @@ def _save_messages_dedup(
             )
             return
 
+        # B1 (Onda 2): construir plan_dict a partir dos task_events acumulados.
+        # Segue o mesmo caminho de tools_used: response_state → aqui → _save_messages_to_db.
+        # best-effort: falha na construção do plan não bloqueia a persistência.
+        _plan_dict = None
+        try:
+            from app.agente.config.feature_flags import USE_AGENT_PLANNER
+            if USE_AGENT_PLANNER:
+                _task_events = response_state.get('task_events') or []
+                if _task_events:
+                    from app.agente.sdk.plan_state import PlanState
+                    _ps = PlanState()
+                    for _evt in _task_events:
+                        _ps.apply_task_event(_evt)
+                    if not _ps.is_empty():
+                        _plan_dict = _ps.to_dict()
+        except Exception as _plan_build_err:
+            logger.warning(f"[PLAN] construcao plan_dict falhou (ignorado): {_plan_build_err}")
+
         saved = _save_messages_to_db(
             app=app,
             our_session_id=response_state['our_session_id'],
@@ -1677,6 +1710,7 @@ def _save_messages_dedup(
             sdk_cost_usd=response_state.get('sdk_cost_usd', 0),
             cache_read_tokens=response_state.get('cache_read_tokens', 0),
             cache_creation_tokens=response_state.get('cache_creation_tokens', 0),
+            plan_dict=_plan_dict,
         )
         # Marca flag SO SE o commit do DB foi bem-sucedido.
         # Falhas de pos-processamento NAO afetam o retorno (isolados na propria
@@ -1707,6 +1741,7 @@ def _save_messages_to_db(
     sdk_cost_usd: float = 0,
     cache_read_tokens: int = 0,
     cache_creation_tokens: int = 0,
+    plan_dict: Optional[dict] = None,
 ) -> bool:
     """
     FEAT-030: Salva mensagens do usuário e assistente no banco.
@@ -1737,6 +1772,8 @@ def _save_messages_to_db(
         sdk_cost_usd: Custo informado pelo SDK (ResultMessage.total_cost_usd)
         cache_read_tokens: Tokens servidos do prompt cache (Fase 4 observabilidade)
         cache_creation_tokens: Tokens escritos no prompt cache
+        plan_dict: PlanState serializado (B1 Onda 2) — persistido em data['plan']
+                   se USE_AGENT_PLANNER=True e plan_dict não-vazio. None = no-op.
     """
     if not our_session_id:
         logger.warning("[AGENTE] Não foi possível salvar: session_id não definido")
@@ -1765,6 +1802,62 @@ def _save_messages_to_db(
                     cache_read_tokens=cache_read_tokens,
                     cache_creation_tokens=cache_creation_tokens,
                 )
+
+            # =============================================================
+            # Onda 0 (S0a.2): grava 1 agent_step por TURNO no PRIMARY.
+            #
+            # Ponto (R10/INV-1): DENTRO do app_context, DEPOIS de
+            # add_assistant_message e ANTES do commit final. Este é o PRIMARY
+            # protegido por _save_messages_dedup (`_persisted`); NUNCA gravar no
+            # _stop_hook (corrida R10).
+            #
+            # Guard de simetria `if user_message:` (espelha os guards
+            # add_user_message/add_assistant_message acima): turn_seq é derivado
+            # da CONTAGEM de msgs role=='user'. Se um caller passasse
+            # user_message=None, add_user_message seria pulado mas turn_seq
+            # contaria os user msgs do turno ANTERIOR -> step_uid colidiria com
+            # o turno anterior -> step perdido em silêncio (best-effort engole
+            # o None de insert_step). Só gravar quando há de fato um turno novo.
+            #
+            # turn_seq: conta as msgs role=='user' em data['messages'] AQUI,
+            # que roda DEPOIS de add_user_message -> turn_seq == N para o
+            # N-ésimo turno. Estável no fluxo real porque a 2ª chamada de
+            # _save_messages_to_db é bloqueada pela flag _persisted (dedup),
+            # então add_user_message roda 1x por turno e o count é determinístico.
+            #
+            # Best-effort (INV-6): try/except + warning. Falha de agent_step
+            # NÃO pode quebrar a persistência da resposta nem o stream. O
+            # SAVEPOINT em insert_step isola IntegrityError da transação pai.
+            # =============================================================
+            if user_message:
+                try:
+                    from app.agente.models import AgentStep
+                    _msgs = (session.data or {}).get('messages', [])
+                    _turn_seq = sum(1 for m in _msgs if m.get('role') == 'user')
+                    AgentStep.insert_step(
+                        step_uid=f"{our_session_id}:{_turn_seq}",
+                        session_id=our_session_id,
+                        user_id=user_id,
+                        channel='web',
+                        model=model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        tools_used=tools_used or None,
+                    )
+                    # Onda 1 / E1 — captura frustração no outcome_signal (flag OFF por default)
+                    from app.agente.config.feature_flags import USE_AGENT_QUALITY_SPINE
+                    if USE_AGENT_QUALITY_SPINE:
+                        from app.agente.services.sentiment_detector import get_last_frustration_score
+                        _fscore = get_last_frustration_score(our_session_id)
+                        if _fscore is not None:
+                            AgentStep.update_outcome(
+                                f"{our_session_id}:{_turn_seq}",
+                                {'frustration_score': _fscore},
+                            )
+                except Exception as e:
+                    logger.warning(
+                        f"[AGENTE] agent_step nao gravado (best-effort): {e}"
+                    )
 
             # Atualiza sdk_session_id se não expirou
             # Fase B (SDK 0.1.64 SessionStore): backup_session_transcript removido.
@@ -1809,6 +1902,26 @@ def _save_messages_to_db(
                 f"sdk_cost={sdk_cost}, calc_cost={calc_cost:.6f}, "
                 f"final={cost_usd:.6f}, tokens=({input_tokens},{output_tokens})"
             )
+
+            # B1 (Onda 2): persistir PlanState em data['plan'] (flag-gated).
+            # best-effort: falha aqui NUNCA quebra a persistência de mensagens.
+            # Segue padrão R7 (flag_modified obrigatório para JSONB).
+            try:
+                from app.agente.config.feature_flags import USE_AGENT_PLANNER
+                if USE_AGENT_PLANNER and plan_dict:
+                    from sqlalchemy.orm.attributes import flag_modified
+                    _current_data = session.data or {}
+                    _current_data['plan'] = plan_dict
+                    session.data = _current_data
+                    flag_modified(session, 'data')
+                    logger.debug(
+                        f"[PLAN] data['plan'] gravado: "
+                        f"{len(plan_dict.get('steps', {}))} steps"
+                    )
+            except Exception as _plan_persist_err:
+                logger.warning(
+                    f"[PLAN] persistencia data['plan'] falhou (ignorado): {_plan_persist_err}"
+                )
 
             db.session.commit()
             logger.debug(f"[AGENTE] Mensagens salvas na sessão {our_session_id[:8]}...")

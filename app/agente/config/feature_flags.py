@@ -816,3 +816,95 @@ ESTOQUE_RESTRICAO_ALLOWED_USER_IDS: set[int] = _parse_allowed_user_ids_csv(
 # Schema: scripts/migrations/2026_05_28_operacao_odoo_auditoria_session.{py,sql}
 # Ver app/odoo/CLAUDE.md secao P8.
 USE_ODOO_AUDIT_HOOK = os.getenv("AGENT_ODOO_AUDIT_HOOK", "false").lower() == "true"
+
+
+# ====================================================================
+# Capability Registry (Onda 0 — S0c)
+# ====================================================================
+# Grafo descritivo read-only skill↔agente. Fundacao para ondas futuras
+# (planejador/skill-RAG). Nenhum runtime consome o registry ainda.
+# Ativar quando houver consumidor: AGENT_CAPABILITY_REGISTRY=true.
+# Default false — flag marca a fundacao como inerte ate onda futura.
+USE_CAPABILITY_REGISTRY = os.getenv("AGENT_CAPABILITY_REGISTRY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 1 — Quality Spine + Ontologia (todas OFF por default; ativam em deploy)
+# ====================================================================
+USE_AGENT_QUALITY_SPINE = os.getenv("AGENT_QUALITY_SPINE", "false").lower() == "true"
+USE_AGENT_STEP_JUDGE = os.getenv("AGENT_STEP_JUDGE", "false").lower() == "true"
+USE_AGENT_ONTOLOGY = os.getenv("AGENT_ONTOLOGY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 2 — Planejador + Verify (OFF por default; ativar em deploy gradual)
+# ====================================================================
+
+# B1: PlanState durável — captura TaskCreate/TaskUpdate e persiste em
+# AgentSession.data['plan'] (JSONB). Fundação do super-loop planejador.
+# Com flag OFF (default PROD): nenhum write em data['plan'] — comportamento
+# idêntico ao atual. Ativar com AGENT_PLANNER=true para habilitar.
+USE_AGENT_PLANNER = os.getenv("AGENT_PLANNER", "false").lower() == "true"
+
+# B2: Verify step — juiz pós-turno que avalia se o plano foi executado.
+# Depende de USE_AGENT_PLANNER. Planejado para Onda 2 fase posterior.
+# Rollback: AGENT_VERIFY=false.
+USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 3 — A3: Eval Gate (golden datasets, report-only, D8 cron)
+# ====================================================================
+# Quando ON: D8 (modulo 28) roda run_evals() contra os 4 golden datasets
+# de subagentes e loga resultado (report-only — NUNCA bloqueia o cron).
+# invoke_fn e' o seam injetavel; em shadow (flag ON) usa default que raise
+# NotImplementedError e reporta todos os casos como 'error' (safe).
+# Wiring real do agente sera' feito na ativacao futura.
+#
+# Default false (flag-OFF, D8 no-op). Ativar: AGENT_EVAL_GATE=true.
+# Rollback instantaneo: AGENT_EVAL_GATE=false.
+AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"
+
+# ====================================================================
+# Onda 4 — F4/F5: Skill Hints Advisory (flag-OFF por default)
+# ====================================================================
+# Quando ON: hook UserPromptSubmit adiciona bloco <skill_hints priority="advisory">
+# com as N skills mais relevantes para o turno (keyword matching zero-LLM).
+#
+# LIMITAÇÃO ARQUITETURAL (documentada em context_enrichment.py):
+#   O SDK fixa `skills=` no connect() — não há set_skills() por turno.
+#   Este bloco é ADVISORY: informa o agente, não altera o listing real.
+#
+# Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
+# Ativar: AGENT_SKILL_RAG=true
+USE_AGENT_SKILL_RAG = os.getenv("AGENT_SKILL_RAG", "false").lower() == "true"
+
+# ====================================================================
+# Onda 4 — D5: World Model Injection via ontologia (flag-OFF por default)
+# ====================================================================
+# Quando ON: hook UserPromptSubmit adiciona bloco <world_model priority="advisory">
+# com entidades canônicas da ontologia (D4 query_ontology_entities).
+#
+# D5 é ADITIVO: _DOMAIN_KEYWORDS em memory_injection.py permanece como
+# fallback cold-start. Não remove nem substitui routing_context existente.
+# Se ontologia vazia → None (fallback ativo) — nunca duplica contexto.
+#
+# Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
+# Ativar: AGENT_WORLD_MODEL_INJECT=true
+USE_AGENT_WORLD_MODEL_INJECT = os.getenv("AGENT_WORLD_MODEL_INJECT", "false").lower() == "true"
+
+# ====================================================================
+# Onda 3 — A4: Promoção Automática de Diretriz (shadow, flag-OFF)
+# ====================================================================
+# Fecha o flywheel: sessão bem-sucedida → candidata → avalia (gate A3
+# + anti-gaming R9) → (shadow) só LOGA "promoveria", NÃO escreve.
+#
+# BLOQUEADO para função REAL até:
+#   1. USE_AGENT_PLANNER ON em PROD (base PlanState)
+#   2. Baseline A3 estável (14d de coleta)
+#   3. Coluna directive_status em agent_memories + audit hook Odoo PROD
+#
+# Quando ON (futuro): evaluate_and_promote() fará escrita real via
+# _persist_directive() (hoje = NotImplementedError stub documentado).
+#
+# Default false. Ativar: AGENT_DIRECTIVE_PROMOTION=true.
+# Rollback instantâneo: AGENT_DIRECTIVE_PROMOTION=false.
+# Sem caller ativo: flag ON não ativa nada até wiring no Stop hook/D8.
+AGENT_DIRECTIVE_PROMOTION = os.getenv("AGENT_DIRECTIVE_PROMOTION", "false").lower() == "true"

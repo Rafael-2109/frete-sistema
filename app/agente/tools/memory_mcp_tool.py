@@ -1964,6 +1964,18 @@ try:
                     try:
                         from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
                         if MEMORY_KNOWLEDGE_GRAPH:
+                            # D3: captura source_session_id gateada por USE_AGENT_ONTOLOGY.
+                            # Flag OFF (default) → _kg_session_id = None → NULL no banco.
+                            # Backward-compatible: callers legados nunca passam a flag.
+                            _kg_session_id = None
+                            try:
+                                from ..config.feature_flags import USE_AGENT_ONTOLOGY
+                                if USE_AGENT_ONTOLOGY:
+                                    from app.agente.config.permissions import get_current_session_id
+                                    _kg_session_id = get_current_session_id()
+                            except Exception:
+                                pass
+
                             def _kg_extract():
                                 from ..models import AgentMemory
                                 from ..services.knowledge_graph_service import extract_and_link_entities
@@ -1973,6 +1985,7 @@ try:
                                         actual_user_id, mem.id, content,
                                         haiku_entities=_entities,
                                         haiku_relations=_relations,
+                                        source_session_id=_kg_session_id,
                                     )
 
                             _execute_with_context(_kg_extract)
@@ -2153,6 +2166,17 @@ try:
                     try:
                         from app.embeddings.config import MEMORY_KNOWLEDGE_GRAPH
                         if MEMORY_KNOWLEDGE_GRAPH:
+                            # D3: captura source_session_id gateada por USE_AGENT_ONTOLOGY.
+                            # Flag OFF (default) → _kg_session_id_upd = None → NULL no banco.
+                            _kg_session_id_upd = None
+                            try:
+                                from ..config.feature_flags import USE_AGENT_ONTOLOGY
+                                if USE_AGENT_ONTOLOGY:
+                                    from app.agente.config.permissions import get_current_session_id
+                                    _kg_session_id_upd = get_current_session_id()
+                            except Exception:
+                                pass
+
                             def _kg_update():
                                 from ..models import AgentMemory
                                 from ..services.knowledge_graph_service import (
@@ -2166,6 +2190,7 @@ try:
                                         actual_user_id, mem.id, mem.content,
                                         haiku_entities=_entities,
                                         haiku_relations=_relations,
+                                        source_session_id=_kg_session_id_upd,
                                     )
 
                             _execute_with_context(_kg_update)

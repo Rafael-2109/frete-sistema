@@ -33,7 +33,7 @@ Odoo-estoque-WRITE. Mantem Odoo do especialista-odoo no principal (pode ser
 invocado direto OU via subagente).
 """
 
-from typing import Set
+from typing import FrozenSet, Set
 
 # ---------------------------------------------------------------------------
 # Dominio Lojas HORA -> agente ISOLADO `app/agente_lojas` (endpoint /agente-lojas)
@@ -80,12 +80,25 @@ SKILLS_ODOO_ESTOQUE_SUBAGENTE: Set[str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Uniao de tudo que SAI do listing do principal (alem de SPED_SKILLS_RESERVED,
-# que continua filtrada em settings.AgentSettings).
+# Skills reservadas ao subagente `auditor-sped-ecd`.
+# Invisíveis ao agente principal E rejeitadas pelo Skill tool (SDK 0.1.77+).
+# O subagente declara estas skills no seu frontmatter `.claude/agents/auditor-sped-ecd.md`
+# via `skills:` — listing independente do principal (agent_loader.py:111).
+# ---------------------------------------------------------------------------
+SKILLS_SPED_RESERVED: FrozenSet[str] = frozenset({
+    "parseando-sped-ecd",
+    "auditando-sped-vs-manual",
+    "auditando-sped-contabil",
+    "comparando-sped-ground-truth",
+})
+
+# ---------------------------------------------------------------------------
+# Uniao de TUDO que SAI do listing do principal — fonte unica de verdade.
 # `_discover_skills_from_project` (sdk/client.py) exclui este conjunto.
 # ---------------------------------------------------------------------------
-SKILLS_DELEGADAS_SUBAGENTE: Set[str] = (
+SKILLS_DELEGADAS_SUBAGENTE: FrozenSet[str] = frozenset(
     SKILLS_DOMINIO_HORA
     | SKILLS_DOMINIO_ASSAI
     | SKILLS_ODOO_ESTOQUE_SUBAGENTE
+    | SKILLS_SPED_RESERVED
 )

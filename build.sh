@@ -498,6 +498,24 @@ echo "De-Para: deprecar odoo_product_uom_id (zerar campo obsoleto)..."
 python scripts/migrations/2026_05_29_deprecar_odoo_product_uom_id_depara.py \
     || echo "⚠️ Migration deprecar_odoo_product_uom_id falhou, continuando deploy..."
 
+# 26. Evolucao do Agente (2026-05-31): fundacao do Blueprint (Ondas 0-4).
+# 26a tabela agent_step (S0a, entidade de passo/turno) + 26b proveniencia
+# bi-temporal no KG (D3). Migrations duplas idempotentes (IF NOT EXISTS).
+# 26c bootstrap de ontologia canonica (D2) — SELF-SKIP se AGENT_ONTOLOGY != true
+# (CLI exige a flag); idempotente (increment_mentions=False -> nao infla mention_count).
+# Todas best-effort (|| echo) — falha nao quebra o deploy.
+echo "Agente 26a: tabela agent_step (S0a)..."
+python scripts/migrations/2026_05_30_agent_step.py \
+    || echo "⚠️ Migration agent_step falhou, continuando deploy..."
+
+echo "Agente 26b: proveniencia bi-temporal no KG (D3)..."
+python scripts/migrations/2026_05_31_kg_bitemporal.py \
+    || echo "⚠️ Migration kg_bitemporal falhou, continuando deploy..."
+
+echo "Agente 26c: bootstrap de ontologia (D2 — roda apenas se AGENT_ONTOLOGY=true)..."
+python scripts/agente/bootstrap_ontologia.py \
+    || echo "ℹ️ Bootstrap ontologia pulado (AGENT_ONTOLOGY off) ou falhou — continuando deploy..."
+
 echo "Build concluído com sucesso!"
 
 
