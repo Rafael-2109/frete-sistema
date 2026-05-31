@@ -833,3 +833,18 @@ USE_CAPABILITY_REGISTRY = os.getenv("AGENT_CAPABILITY_REGISTRY", "false").lower(
 USE_AGENT_QUALITY_SPINE = os.getenv("AGENT_QUALITY_SPINE", "false").lower() == "true"
 USE_AGENT_STEP_JUDGE = os.getenv("AGENT_STEP_JUDGE", "false").lower() == "true"
 USE_AGENT_ONTOLOGY = os.getenv("AGENT_ONTOLOGY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 2 — Planejador + Verify (OFF por default; ativar em deploy gradual)
+# ====================================================================
+
+# B1: PlanState durável — captura TaskCreate/TaskUpdate e persiste em
+# AgentSession.data['plan'] (JSONB). Fundação do super-loop planejador.
+# Com flag OFF (default PROD): nenhum write em data['plan'] — comportamento
+# idêntico ao atual. Ativar com AGENT_PLANNER=true para habilitar.
+USE_AGENT_PLANNER = os.getenv("AGENT_PLANNER", "false").lower() == "true"
+
+# B2: Verify step — juiz pós-turno que avalia se o plano foi executado.
+# Depende de USE_AGENT_PLANNER. Planejado para Onda 2 fase posterior.
+# Rollback: AGENT_VERIFY=false.
+USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
