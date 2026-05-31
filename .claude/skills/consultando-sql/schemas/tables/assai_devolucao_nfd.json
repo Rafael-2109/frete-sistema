@@ -58,16 +58,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_devolucao_nfd_criado_em",
+      "name": "ix_assai_devolucao_nfd_nf_qpa_origem_id",
       "columns": [
-        "criado_em"
+        "nf_qpa_origem_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_devolucao_nfd_nf_qpa_origem_id",
+      "name": "ix_assai_devolucao_nfd_criado_em",
       "columns": [
-        "nf_qpa_origem_id"
+        "criado_em"
       ],
       "unique": false
     }

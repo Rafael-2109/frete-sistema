@@ -67,16 +67,16 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_nf_qpa_item_nf_id",
+      "name": "ix_assai_nf_qpa_item_chassi",
       "columns": [
-        "nf_id"
+        "chassi"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_nf_qpa_item_chassi",
+      "name": "ix_assai_nf_qpa_item_nf_id",
       "columns": [
-        "chassi"
+        "nf_id"
       ],
       "unique": false
     }

@@ -162,9 +162,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_faturas_cliente_status_conferencia",
+      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
       "columns": [
-        "status_conferencia"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -176,9 +176,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_faturas_cliente_cnpj_cliente",
+      "name": "ix_carvia_faturas_cliente_status_conferencia",
       "columns": [
-        "cnpj_cliente"
+        "status_conferencia"
       ],
       "unique": false
     }
