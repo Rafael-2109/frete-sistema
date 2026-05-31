@@ -38,8 +38,13 @@ def _mk_sid():
 def _mk_step(app_ctx, session_id: str, tools=None):
     """Insere e COMMITA um AgentStep de teste, retornando (step_uid, step).
 
-    Commita para que o step seja visivel em novos app_contexts criados por judge_step.
-    O rollback de limpeza acontece no teardown de cada teste.
+    Commita de proposito: judge_step abre um app_context ANINHADO (via
+    create_app mockado p/ retornar o app_ctx do pytest), e o Flask cria uma
+    sessao nova nesse escopo que NAO enxerga dados de SAVEPOINT pendentes (so'
+    enxerga o que foi committado). Esse e' justamente o cenario de PRODUCAO:
+    o step ja' esta committado no banco pelo caminho upstream quando o job RQ
+    roda. Limpeza explicita via `_cleanup_step` no fim de cada teste — session_id
+    e' uuid unico, sem cross-contaminacao.
     """
     from app.agente.models import AgentStep
     uid = f'{session_id}:1'
@@ -54,6 +59,13 @@ def _mk_step(app_ctx, session_id: str, tools=None):
     _db.session.commit()
     step = AgentStep.query.filter_by(step_uid=uid).first()
     return uid, step
+
+
+def _cleanup_step(step_uid: str):
+    """Remove o AgentStep committado de teste (evita orfaos no banco)."""
+    from app.agente.models import AgentStep
+    AgentStep.query.filter_by(step_uid=step_uid).delete()
+    _db.session.commit()
 
 
 def _fake_odoo_falha():
@@ -166,18 +178,88 @@ def test_judge_step_grava_veredito(app_ctx, monkeypatch):
 
     monkeypatch.setattr(step_judge, '_judge_core', _judge_core_sem_odoo)
 
-    step_judge.judge_step(uid)
+    try:
+        # commit REAL acontece dentro de judge_step (CRITICAL-1) — o veredito
+        # e' consolidado no banco e fica visivel ao recarregar.
+        step_judge.judge_step(uid)
 
-    # Verificar que o veredito foi gravado
-    _db.session.expire_all()
-    step = AgentStep.query.filter_by(step_uid=uid).first()
-    assert step is not None
-    assert step.outcome_signal is not None
-    judge_data = step.outcome_signal.get('judge', {})
-    assert judge_data.get('score') == 85
-    assert judge_data.get('label') == 'success'
+        _db.session.expire_all()
+        step = AgentStep.query.filter_by(step_uid=uid).first()
+        assert step is not None
+        assert step.outcome_signal is not None
+        judge_data = step.outcome_signal.get('judge', {})
+        assert judge_data.get('score') == 85
+        assert judge_data.get('label') == 'success'
+    finally:
+        _cleanup_step(uid)
 
-    _db.session.rollback()
+
+def test_judge_step_commita_veredito(app_ctx, monkeypatch):
+    """
+    CRITICAL-1 (code-review Onda 1): judge_step DEVE chamar db.session.commit()
+    apos AgentStep.update_outcome.
+
+    update_outcome usa begin_nested()+flush() (SAVEPOINT) — sem o commit
+    explicito, o flush nunca e' consolidado e o veredito e' DESCARTADO quando
+    o app_context do job RQ morre (transacao pai inexistente). Este teste
+    ESPIONA db.session.commit e prova que e' chamado ao fim do fluxo feliz.
+
+    O spy chama o commit REAL por baixo (passthrough) para que o veredito de
+    fato persista — provando tanto a CHAMADA quanto a PERSISTENCIA. Limpeza
+    explicita via _cleanup_step no fim.
+    """
+    from app.agente.workers import step_judge
+    from app.agente.models import AgentStep
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)
+
+    haiku_response = json.dumps({
+        'score': 60,
+        'label': 'partial',
+        'componente_culpado': None,
+        'evidencia': 'ok',
+    }).replace(': None', ': null')
+
+    monkeypatch.setattr(step_judge, '_call_haiku_judge', lambda *a, **k: haiku_response)
+    monkeypatch.setattr(step_judge, 'create_app', lambda: app_ctx)
+
+    # Spy: conta chamadas a commit E executa o commit REAL (passthrough),
+    # provando a chamada (CRITICAL-1) e a persistencia do veredito.
+    calls = []
+    real_commit = _db.session.commit
+
+    def _spy_commit():
+        calls.append(1)
+        real_commit()
+
+    monkeypatch.setattr(_db.session, 'commit', _spy_commit)
+
+    import app.agente.workers.step_judge as _sj
+    original_judge_core = _sj._judge_core
+
+    def _judge_core_sem_odoo(step, odoo_ops):
+        return original_judge_core(step, [])
+
+    monkeypatch.setattr(step_judge, '_judge_core', _judge_core_sem_odoo)
+
+    try:
+        step_judge.judge_step(uid)
+
+        # PROVA: o commit foi chamado (sem isso o veredito sumiria em producao)
+        assert len(calls) >= 1, (
+            "judge_step NAO chamou db.session.commit() — veredito seria descartado "
+            "quando o app_context do job RQ morre (CRITICAL-1)."
+        )
+
+        # E o veredito de fato persistiu (commit real executado via passthrough)
+        _db.session.expire_all()
+        step = AgentStep.query.filter_by(step_uid=uid).first()
+        assert step.outcome_signal.get('judge', {}).get('score') == 60
+    finally:
+        # restaura commit real para o cleanup nao re-entrar no spy
+        monkeypatch.undo()
+        _cleanup_step(uid)
 
 
 def test_judge_step_dominancia_ambiental(app_ctx, monkeypatch):
@@ -214,24 +296,26 @@ def test_judge_step_dominancia_ambiental(app_ctx, monkeypatch):
 
     monkeypatch.setattr(step_judge, '_judge_core', _judge_core_com_falha)
 
-    step_judge.judge_step(uid)
+    try:
+        # commit REAL dentro de judge_step (CRITICAL-1) consolida o veredito.
+        step_judge.judge_step(uid)
 
-    _db.session.expire_all()
-    step = AgentStep.query.filter_by(step_uid=uid).first()
-    assert step is not None
-    judge_data = step.outcome_signal.get('judge', {})
+        _db.session.expire_all()
+        step = AgentStep.query.filter_by(step_uid=uid).first()
+        assert step is not None
+        judge_data = step.outcome_signal.get('judge', {})
 
-    # INVARIANTE: ambiental domina — score DEVE ser <= 35
-    assert judge_data.get('score') <= 35, (
-        f"Esperado score <= 35 (dominancia ambiental), mas foi {judge_data.get('score')}. "
-        "FALHA_ODOO deve sobrescrever score do Haiku."
-    )
-    # INVARIANTE: componente_culpado deve ser 'odoo'
-    assert judge_data.get('componente_culpado') == 'odoo', (
-        f"Esperado componente_culpado='odoo', mas foi {judge_data.get('componente_culpado')}."
-    )
-
-    _db.session.rollback()
+        # INVARIANTE: ambiental domina — score DEVE ser <= 35
+        assert judge_data.get('score') <= 35, (
+            f"Esperado score <= 35 (dominancia ambiental), mas foi {judge_data.get('score')}. "
+            "FALHA_ODOO deve sobrescrever score do Haiku."
+        )
+        # INVARIANTE: componente_culpado deve ser 'odoo'
+        assert judge_data.get('componente_culpado') == 'odoo', (
+            f"Esperado componente_culpado='odoo', mas foi {judge_data.get('componente_culpado')}."
+        )
+    finally:
+        _cleanup_step(uid)
 
 
 def test_judge_core_sem_odoo_ops_usa_apenas_haiku(app_ctx, monkeypatch):
@@ -290,12 +374,15 @@ def test_judge_step_haiku_json_invalido_nao_grava(app_ctx, monkeypatch):
 
     monkeypatch.setattr(step_judge, '_judge_core', _judge_core_sem_odoo)
 
-    step_judge.judge_step(uid)
+    try:
+        # _judge_core retorna None (JSON invalido) -> judge_step retorna ANTES
+        # do commit, sem gravar veredito.
+        step_judge.judge_step(uid)
 
-    _db.session.expire_all()
-    step = AgentStep.query.filter_by(step_uid=uid).first()
-    # outcome_signal pode ser None ou pode ter outros campos, mas NAO 'judge'
-    if step.outcome_signal is not None:
-        assert 'judge' not in step.outcome_signal
-
-    _db.session.rollback()
+        _db.session.expire_all()
+        step = AgentStep.query.filter_by(step_uid=uid).first()
+        # outcome_signal pode ser None ou pode ter outros campos, mas NAO 'judge'
+        if step.outcome_signal is not None:
+            assert 'judge' not in step.outcome_signal
+    finally:
+        _cleanup_step(uid)

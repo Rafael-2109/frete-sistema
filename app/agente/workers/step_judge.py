@@ -223,6 +223,20 @@ def _judge_step_in_context(step_uid: str) -> None:
 
     AgentStep.update_outcome(step_uid, {'judge': veredito})
 
+    # CRITICAL-1 (code-review Onda 1): commit explicito obrigatorio.
+    # update_outcome usa begin_nested()+flush() (SAVEPOINT) — desenhado para
+    # rodar DENTRO de transacao pai que alguem commita. No job RQ, judge_step
+    # abre create_app()+app_context() SEM transacao pai, entao o flush nunca
+    # commita e o veredito e descartado quando o app_context morre. O esqueleto
+    # clonado (subagent_validator.py) commita explicito — aqui replicamos.
+    from app import db
+    try:
+        db.session.commit()
+    except Exception as commit_err:
+        logger.error(f"[step_judge] commit falhou: {commit_err}")
+        db.session.rollback()
+        return
+
     logger.info(
         f"[step_judge] concluido: step_uid={step_uid[:40]} "
         f"score={veredito['score']} label={veredito['label']}"
