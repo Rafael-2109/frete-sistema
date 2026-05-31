@@ -39,7 +39,6 @@ from app.agente.tools.ontology_query_tool import query_ontology_entities  # noqa
 
 # Modelos disponíveis (mesmo padrão dos outros módulos)
 _HAIKU_MODEL = 'claude-haiku-4-5-20251001'
-_SONNET_MODEL = 'claude-sonnet-4-6'
 
 # Número máximo de termos extraídos da meta para consulta à ontologia
 _MAX_TERMOS_CANDIDATOS = 5

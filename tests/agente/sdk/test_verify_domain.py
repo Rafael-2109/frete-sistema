@@ -12,9 +12,6 @@ Cobertura:
 - test_verify_domain_extra_checks_hook: extra_checks=[fn] → fn é invocado (hook extensível)
 """
 
-from unittest.mock import patch
-
-
 # ─── Fixtures de steps ────────────────────────────────────────────────────────
 
 STEP_COM_ENTIDADES = {
@@ -45,15 +42,6 @@ STEP_MULTIPLAS_ENTIDADES = {
 
 # ─── Helper para mock de retorno da ontologia ─────────────────────────────────
 
-def _ontologia_atacadao(*args, **kwargs):
-    """Simula retorno positivo para 'Atacadão'."""
-    name_like = kwargs.get("name_like", "")
-    entities_param = [e for e in [name_like] if e]
-    # Retorna resultado quando busca por 'Atacadão' ou 'SP'
-    if any(term.lower() in ["atacadão", "atacadao", "sp"] for term in entities_param):
-        return [{"entity_type": "cliente", "entity_name": "ATACADAO DISTRIBUIDORA",
-                 "entity_key": "75315333", "user_id": 0}]
-    return []
 
 
 def _ontologia_vazia(*args, **kwargs):

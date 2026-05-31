@@ -445,11 +445,18 @@ def _upsert_entity(
     entity_type: str,
     entity_name: str,
     entity_key: Optional[str] = None,
+    increment_mentions: bool = True,
 ) -> int:
     """
     Cria ou atualiza entidade no grafo. Retorna entity_id.
 
     Usa INSERT ON CONFLICT para atomicidade.
+
+    increment_mentions: incrementa mention_count no conflito (default — menção
+        ORGÂNICA do agente). O bootstrap canônico (D2) passa False para NÃO inflar
+        o contador a cada re-run — query_ontology ordena por mention_count, então
+        re-bootstrap repetido enviesaria o ranking. (mention_count = "quantas
+        sessões mencionaram", não "quantas vezes o bootstrap rodou".)
     """
     from sqlalchemy import text
 
@@ -459,14 +466,17 @@ def _upsert_entity(
 
     now = agora_utc_naive()
 
-    result = conn.execute(text("""
+    # Clausula literal hardcoded (sem input do usuario) — sem risco de injecao.
+    _mention_set = "mention_count = agent_memory_entities.mention_count + 1," if increment_mentions else ""
+
+    result = conn.execute(text(f"""
         INSERT INTO agent_memory_entities
             (user_id, entity_type, entity_name, entity_key, mention_count, first_seen_at, last_seen_at)
         VALUES
             (:user_id, :entity_type, :entity_name, :entity_key, 1, :now, :now)
         ON CONFLICT ON CONSTRAINT uq_user_entity
         DO UPDATE SET
-            mention_count = agent_memory_entities.mention_count + 1,
+            {_mention_set}
             last_seen_at = :now,
             entity_key = COALESCE(EXCLUDED.entity_key, agent_memory_entities.entity_key)
         RETURNING id

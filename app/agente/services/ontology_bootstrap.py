@@ -165,7 +165,10 @@ def bootstrap_entities(
             continue
 
         try:
-            _upsert_entity(conn, 0, entity_type, entity_name, entity_key)
+            # increment_mentions=False: bootstrap canônico não infla mention_count
+            # a cada re-run (query_ontology ordena por ele — code-review HIGH-1).
+            _upsert_entity(conn, 0, entity_type, entity_name, entity_key,
+                           increment_mentions=False)
             count += 1
         except Exception as exc:
             logger.warning(

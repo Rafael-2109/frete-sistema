@@ -12,8 +12,7 @@ Testa `app/agente/services/ontology_bootstrap.py`:
 SEM dependência de DB real — rows passadas como list[dict] fixos.
 SEM chamada a Voyage.
 """
-import pytest
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -286,16 +285,22 @@ class TestBootstrapAll:
         for et in ("produto", "transportadora", "cliente"):
             assert calls_limit[et] == 5
 
-    def test_zero_voyage_chamado(self):
-        """D2 deve ter CUSTO ZERO: Voyage não é chamado."""
+    def test_zero_voyage_estrutural(self):
+        """D2 tem CUSTO ZERO de API — garantia ESTRUTURAL: ontology_bootstrap NÃO
+        referencia embeddings/Voyage no código-fonte (code-review HIGH-2: a versão
+        anterior com spy 'fake_voyage' era teatro — o spy nunca era instalado)."""
+        import inspect
+        import re
         from app.agente.services import ontology_bootstrap as mod
-        import app.embeddings  # import para verificar que nada de Voyage é invocado
 
+        src = inspect.getsource(mod)
+        # Sem IMPORT de embeddings/voyage (menção em docstring/comentário é OK —
+        # o módulo documenta que NÃO usa Voyage).
+        assert not re.search(r'^\s*(from|import)\s+\S*(embeddings|voyage)', src, re.M | re.I), \
+            "bootstrap não deve importar embeddings/Voyage"
+
+        # E roda limpo (não explode) sem qualquer client de embedding.
         conn = _make_conn()
-
-        voyage_called = []
-        def fake_voyage(*a, **kw):
-            voyage_called.append(True)
 
         def fake_read_tabela(entity_type, conn_arg, limit=None):
             return [{"cod_produto": "X1", "nome_produto": "TESTE",
@@ -303,8 +308,16 @@ class TestBootstrapAll:
                      "cnpj_cpf": "22222222000100", "raz_social": "C1"}.copy()]
 
         with patch.object(mod, "_upsert_entity", MagicMock(return_value=1)), \
-             patch.object(mod, "_read_tabela", fake_read_tabela), \
-             patch("app.embeddings.voyage_client", None, create=True):
+             patch.object(mod, "_read_tabela", fake_read_tabela):
             mod.bootstrap_all(conn)
 
-        assert len(voyage_called) == 0, "Voyage NÃO deve ser chamado em D2"
+    def test_bootstrap_nao_infla_mention_count(self):
+        """code-review HIGH-1: bootstrap passa increment_mentions=False — re-run não
+        infla mention_count (query_ontology ordena por ele)."""
+        from app.agente.services import ontology_bootstrap as mod
+        upsert_mock = MagicMock(return_value=1)
+        with patch.object(mod, "_upsert_entity", upsert_mock):
+            mod.bootstrap_entities('produto', [{'cod_produto': 'P1', 'nome_produto': 'X'}], conn=object())
+        _, kwargs = upsert_mock.call_args
+        assert kwargs.get('increment_mentions') is False, \
+            "bootstrap deve passar increment_mentions=False (HIGH-1)"
