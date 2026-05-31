@@ -362,13 +362,22 @@ def _spawn_subscriber(session_id: str, pq: PendingQuestion) -> None:
 # ============================================================================
 
 def _signal_async_event(pq: PendingQuestion) -> None:
-    """Sinaliza pq.async_event de forma cross-thread safe.
+    """Sinaliza pq.async_event respeitando a fronteira thread<->asyncio.
 
-    Quando o async_event foi criado em loop A (daemon thread persistente)
-    e submit_answer roda em loop B (Flask thread), .set() direto NAO eh
-    oficialmente thread-safe — pode haver missed wakeup se GIL drop entre
-    set() e o check interno do asyncio. call_soon_threadsafe agenda no
-    loop dono.
+    Dois cenarios:
+
+    1. MESMA thread do loop dono (estamos DENTRO do loop que criou o
+       async_event): .set() direto eh imediato E thread-safe — eh o uso
+       NORMAL de asyncio.Event. call_soon_threadsafe aqui APENAS agendaria
+       o set() para depois, sem executa-lo sincronamente; quem checa
+       is_set() em seguida (sem ceder controle ao loop via await) veria
+       False. Por isso set() direto eh o correto.
+
+    2. OUTRA thread (submit_answer roda na Flask thread; subscriber roda em
+       daemon thread) sinalizando um async_event criado no loop daemon
+       persistente: .set() direto NAO eh oficialmente thread-safe (missed
+       wakeup se GIL drop entre set() e o check interno do asyncio).
+       call_soon_threadsafe agenda no loop dono de forma segura.
 
     Fallback (loop None ou closed): set() direto. Sob CPython GIL eh
     seguro na pratica para o caso comum.
@@ -377,6 +386,16 @@ def _signal_async_event(pq: PendingQuestion) -> None:
         return
     loop = pq._loop
     if loop is not None and not loop.is_closed():
+        # Se JA estamos na thread do loop dono, set() direto e' imediato e
+        # thread-safe (uso normal de asyncio.Event). call_soon_threadsafe so'
+        # e' necessario para sinalizar de OUTRA thread (Flask route / subscriber).
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is loop:
+            pq.async_event.set()
+            return
         try:
             loop.call_soon_threadsafe(pq.async_event.set)
             return
