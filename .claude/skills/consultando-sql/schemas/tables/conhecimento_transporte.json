@@ -277,20 +277,6 @@
   ],
   "indices": [
     {
-      "name": "ix_conhecimento_transporte_cnpj_remetente",
-      "columns": [
-        "cnpj_remetente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_conhecimento_transporte_dfe_id",
-      "columns": [
-        "dfe_id"
-      ],
-      "unique": true
-    },
-    {
       "name": "ix_conhecimento_transporte_tomador_e_empresa",
       "columns": [
         "tomador_e_empresa"
@@ -458,6 +444,20 @@
         "cnpj_destinatario"
       ],
       "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_cnpj_remetente",
+      "columns": [
+        "cnpj_remetente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_conhecimento_transporte_dfe_id",
+      "columns": [
+        "dfe_id"
+      ],
+      "unique": true
     }
   ]
 }

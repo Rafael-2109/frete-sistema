@@ -263,9 +263,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cotacoes_numero_cotacao",
+      "name": "ix_carvia_cotacoes_status",
       "columns": [
-        "numero_cotacao"
+        "status"
       ],
       "unique": false
     },
@@ -284,9 +284,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_status",
+      "name": "ix_carvia_cotacoes_numero_cotacao",
       "columns": [
-        "status"
+        "numero_cotacao"
       ],
       "unique": false
     }

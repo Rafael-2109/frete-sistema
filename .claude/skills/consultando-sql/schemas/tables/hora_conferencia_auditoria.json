@@ -69,9 +69,8 @@
       "unique": false
     },
     {
-      "name": "ix_hora_conf_aud_rec_ts",
+      "name": "ix_hora_conferencia_auditoria_criado_em",
       "columns": [
-        "recebimento_id",
         "criado_em"
       ],
       "unique": false
@@ -84,8 +83,9 @@
       "unique": false
     },
     {
-      "name": "ix_hora_conferencia_auditoria_criado_em",
+      "name": "ix_hora_conf_aud_rec_ts",
       "columns": [
+        "recebimento_id",
         "criado_em"
       ],
       "unique": false

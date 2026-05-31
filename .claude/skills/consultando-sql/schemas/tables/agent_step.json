@@ -1,6 +1,6 @@
 {
-  "name": "agent_session_costs",
-  "description": "F8 (2026-05-09) — Persistencia de cost_tracker entries.",
+  "name": "agent_step",
+  "description": "Onda 0 (2026-05-30) — Entidade de PASSO/TURNO do agente.",
   "fields": [
     {
       "name": "id",
@@ -8,7 +8,7 @@
       "description": "Primary key"
     },
     {
-      "name": "message_id",
+      "name": "step_uid",
       "type": "text",
       "nullable": false
     },
@@ -21,8 +21,9 @@
       "type": "integer"
     },
     {
-      "name": "tool_name",
-      "type": "text"
+      "name": "channel",
+      "type": "text",
+      "description": "'web' | 'teams'"
     },
     {
       "name": "model",
@@ -41,48 +42,43 @@
       "default": 0
     },
     {
-      "name": "cache_read_tokens",
-      "type": "integer",
-      "nullable": false,
-      "default": 0
+      "name": "tools_used",
+      "type": "json"
     },
     {
-      "name": "cache_creation_tokens",
-      "type": "integer",
-      "nullable": false,
-      "default": 0
+      "name": "outcome_signal",
+      "type": "json"
     },
     {
-      "name": "cost_usd",
-      "type": "numeric(10,6)",
-      "nullable": false,
-      "default": 0
+      "name": "outcome_effective_count",
+      "type": "integer"
     },
     {
-      "name": "recorded_at",
+      "name": "created_at",
       "type": "timestamp",
+      "description": "Data de criação",
       "nullable": false
     }
   ],
   "indices": [
     {
-      "name": "ix_agent_session_costs_user_id",
-      "columns": [
-        "user_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_agent_session_costs_session_id",
+      "name": "ix_agent_step_session_id",
       "columns": [
         "session_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_session_costs_recorded_at",
+      "name": "ix_agent_step_user_id",
       "columns": [
-        "recorded_at"
+        "user_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_step_created_at",
+      "columns": [
+        "created_at"
       ],
       "unique": false
     }

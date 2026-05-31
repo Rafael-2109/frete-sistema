@@ -246,20 +246,6 @@
   ],
   "indices": [
     {
-      "name": "ix_movimentacao_estoque_cnpj_responsavel",
-      "columns": [
-        "cnpj_responsavel"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_movimentacao_estoque_operacao_producao_id",
-      "columns": [
-        "operacao_producao_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_movimentacao_estoque_num_pedido",
       "columns": [
         "num_pedido"
@@ -482,6 +468,20 @@
       "name": "ix_movimentacao_estoque_numero_nf",
       "columns": [
         "numero_nf"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_cnpj_responsavel",
+      "columns": [
+        "cnpj_responsavel"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_movimentacao_estoque_operacao_producao_id",
+      "columns": [
+        "operacao_producao_id"
       ],
       "unique": false
     }
