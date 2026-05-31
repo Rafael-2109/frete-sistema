@@ -17,6 +17,9 @@ MODO report-only (default):
 Ref: app/agente/workers/step_judge.py (padrao _call_haiku_judge + _parse_judge_json)
 """
 import logging
+import os
+import pathlib
+import subprocess
 from typing import Callable, Optional
 
 logger = logging.getLogger('sistema_fretes')
@@ -80,6 +83,69 @@ def _default_invoke_fn(user_input: str) -> str:  # pragma: no cover
         "invoke_fn nao configurado: wiring real do agente na ativacao. "
         "Para testes, passe um mock como invoke_fn=lambda x: 'output'."
     )
+
+
+# ─── build_subprocess_invoke_fn (wiring REAL — A3 Fase 1, 3b) ────────────────
+
+# Raiz do repositorio (worktree): eval_gate_service.py vive em
+# app/agente/services/ → subir 4 niveis chega na raiz (onde roda `claude -p`).
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+
+
+def build_subprocess_invoke_fn(
+    agent_name: str,
+    model: Optional[str] = None,
+    timeout: int = 120,
+    project_dir: Optional[str] = None,
+) -> Callable[[str], str]:
+    """Constroi o invoke_fn REAL que roda o subagente via `claude -p`.
+
+    Retorna uma closure(user_input: str) -> agent_output: str que executa:
+        claude -p --agent <agent_name> --permission-mode bypassPermissions
+               [--model <model>] <user_input>
+
+    no cwd da raiz do repo (project_dir override) e captura stdout.
+
+    Comportamento de erro (ambos viram caso 'error' no run_evals, sem
+    interromper os demais casos — best-effort INV-6):
+    - returncode != 0  -> raise RuntimeError(f"claude -p rc={rc}: {stderr[:300]}")
+    - subprocess.TimeoutExpired -> propaga (run_evals trata como caso 'error')
+
+    Args:
+        agent_name: Nome do subagente (ex: 'analista-carteira').
+        model: Modelo opcional (--model). None → CLI usa o default.
+        timeout: Timeout por invocacao em segundos (default 120).
+        project_dir: cwd para o subprocess. Default: raiz do repo.
+
+    Returns:
+        Callable[[str], str] — a closure injetavel como invoke_fn de run_evals.
+    """
+    cwd = project_dir or str(_REPO_ROOT)
+
+    def _invoke(user_input: str) -> str:
+        cmd = [
+            'claude', '-p',
+            '--agent', agent_name,
+            '--permission-mode', 'bypassPermissions',
+        ]
+        if model:
+            cmd += ['--model', model]
+        cmd.append(user_input)
+
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={**os.environ},
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or '')[:300]
+            raise RuntimeError(f"claude -p rc={result.returncode}: {stderr}")
+        return (result.stdout or '').strip()
+
+    return _invoke
 
 
 # ─── load_golden_dataset ──────────────────────────────────────────────────────

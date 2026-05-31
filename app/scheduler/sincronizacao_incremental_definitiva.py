@@ -2062,11 +2062,13 @@ def executar_sincronizacao():
         logger.info(f"   [TIMER] Step 27 (Health Check Custeio): {time.time() - _t_step:.1f}s")
 
         # ── 2️⃣8️⃣ EVAL GATE — golden datasets de subagentes (28º módulo, report-only) ──
-        # Onda 3 / A3. Flag AGENT_EVAL_GATE default OFF → no-op.
-        # Quando ON: roda run_evals() por dataset e LOGA resultado (nunca bloqueia).
-        # invoke_fn e' seam injetavel; em shadow usa stub que raise NotImplementedError
-        # e todos os casos sao registrados como 'error' (safe, sem chamada API real).
-        # Wiring real do agente sera' feito na ativacao futura (fora do escopo A3).
+        # Onda 3 / A3 (wiring REAL — Fase 1, 3b). Flag AGENT_EVAL_GATE default OFF → no-op.
+        # Quando ON: ENFILEIRA run_eval_batch na fila NOVA 'agent_eval' (PESADA).
+        # NAO roda inline: o eval REAL invoca o agente via `claude -p` (20-50min) e
+        # bloquearia o ciclo de sincronizacao. O job RQ roda nos Workers 1/2
+        # (light-reserved Worker 0 preservado). Persiste score por-agente em
+        # agent_eval_scores + gate report-only (NUNCA bloqueia).
+        # Guard temporal 1x/dia preservado; best-effort isolado.
         _t_step = time.time()
         eval_gate_executou = False
 
@@ -2083,44 +2085,10 @@ def executar_sincronizacao():
             if deve_rodar_eg:
                 eval_gate_executou = True
                 try:
-                    import pathlib as _pathlib
-                    from app.agente.services.eval_gate_service import run_evals, eval_gate as _eval_gate
+                    from app.agente.workers.eval_runner import enqueue_eval_batch
 
-                    _evals_dir = _pathlib.Path(__file__).parent.parent.parent / ".claude" / "evals" / "subagents"
-
-                    _datasets = [
-                        ("analista-carteira", str(_evals_dir / "analista-carteira" / "dataset.yaml")),
-                        ("auditor-financeiro", str(_evals_dir / "auditor-financeiro" / "dataset.yaml")),
-                        ("controlador-custo-frete", str(_evals_dir / "controlador-custo-frete" / "dataset.yaml")),
-                        ("gestor-motos-assai", str(_evals_dir / "gestor-motos-assai" / "dataset.yaml")),
-                    ]
-
-                    for _agent_name, _dataset_path in _datasets:
-                        try:
-                            _result = run_evals(
-                                agent_name=_agent_name,
-                                dataset_path=_dataset_path,
-                                # invoke_fn ausente = seam nao ativado (shadow mode)
-                                # todos os casos retornam 'error' com NotImplementedError
-                            )
-                            logger.info(
-                                f"[EVAL_GATE] {_agent_name}: "
-                                f"score={_result['score']:.3f} "
-                                f"passed={_result['passed']}/{_result['total']}"
-                            )
-                            # Gate report-only (blocked sempre False neste modo)
-                            _gate = _eval_gate(
-                                baseline_score=0.0,  # sem baseline historico ainda
-                                candidate_score=_result['score'],
-                                mode='report_only',
-                            )
-                            if _gate['regression']:
-                                logger.warning(
-                                    f"[EVAL_GATE] {_agent_name}: regressao detectada "
-                                    f"delta={_gate['delta']:+.3f} (report-only, nao bloqueado)"
-                                )
-                        except Exception as _e_agent:
-                            logger.warning(f"[EVAL_GATE] {_agent_name}: erro ao rodar evals: {_e_agent}")
+                    _eg_result = enqueue_eval_batch()
+                    logger.info(f"[EVAL_GATE] enfileirado run_eval_batch: {_eg_result}")
 
                     _ultimo_eval_gate = agora_utc_naive()
                 except Exception as e:
