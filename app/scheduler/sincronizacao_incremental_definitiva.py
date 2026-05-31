@@ -110,6 +110,15 @@ EVAL_GATE_ENABLED = os.environ.get("AGENT_EVAL_GATE", "false").lower() == "true"
 EVAL_GATE_HOUR = int(os.environ.get("AGENT_EVAL_GATE_HOUR", "11"))
 _ultimo_eval_gate = None  # Timestamp da ultima execucao bem-sucedida
 
+# Judge Enqueuer (29º módulo) — Onda 1 / E2, report-only, flag-OFF por default
+# REUSA a flag AGENT_STEP_JUDGE (mesma que controla o job judge_step em shadow).
+# Roda POR CICLO (cada tick de 30min), SEM guard temporal — varre steps recentes
+# sem veredito e enfileira judge_step na fila LEVE 'agent_judge'.
+# DEFAULT false: modulo e' no-op. Ativar em deploy.
+JUDGE_ENQUEUER_ENABLED = os.environ.get("AGENT_STEP_JUDGE", "false").lower() == "true"
+JUDGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("JUDGE_ENQUEUER_LOOKBACK_HOURS", "6"))
+JUDGE_ENQUEUER_LIMIT = int(os.environ.get("JUDGE_ENQUEUER_LIMIT", "50"))
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -2105,6 +2114,34 @@ def executar_sincronizacao():
                         pass
 
         logger.info(f"   [TIMER] Step 28 (Eval Gate): {time.time() - _t_step:.1f}s")
+
+        # ── 2️⃣9️⃣ JUDGE ENQUEUER — varredor RQ do step_judge (29º módulo, report-only) ──
+        # Onda 1 / E2. Flag AGENT_STEP_JUDGE default OFF → no-op.
+        # Quando ON: varre AgentStep recentes (lookback) sem outcome_signal['judge']
+        # e enfileira judge_step na fila LEVE 'agent_judge'. Roda TODO ciclo (sem
+        # guard temporal) — cap por `limit` evita backlog. Best-effort: nunca falha o cron.
+        _t_step = time.time()
+
+        if JUDGE_ENQUEUER_ENABLED:
+            try:
+                from app.agente.workers.step_judge import enqueue_pending_judges
+
+                _je_result = enqueue_pending_judges(
+                    lookback_hours=JUDGE_ENQUEUER_LOOKBACK_HOURS,
+                    limit=JUDGE_ENQUEUER_LIMIT,
+                )
+                logger.info(
+                    f"[JUDGE_ENQUEUER] enfileirados={_je_result.get('enfileirados', 0)} "
+                    f"candidatos={_je_result.get('candidatos', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[JUDGE_ENQUEUER] Erro no modulo 29: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 29 (Judge Enqueuer): {time.time() - _t_step:.1f}s")
 
         # Limpar conexões ao final
         try:
