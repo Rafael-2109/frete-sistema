@@ -62,6 +62,44 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 
 ---
 
+## ESTADO DE ATIVAÇÃO (2026-05-31) — FUNCIONAL vs WIRING PENDENTE
+
+> Os 22 itens estão **code-complete + testados + flag-OFF**. Mas "funcional" (roda no loop vivo)
+> ≠ "code-complete". Por design GATED (shadow→wire→ativa), parte tem o MECANISMO pronto mas
+> SEM caller no loop vivo ainda. Esta tabela é a VERDADE para a fase de wiring.
+
+### ✅ Funcional ao ligar a flag (caller ativo — ativados em PROD 2026-05-31)
+| Feature | Flag | Caller ativo |
+|---------|------|--------------|
+| S0a `agent_step` | — (schema) | `chat.py::_save_messages_to_db` + `teams::_gravar_agent_step_teams` (todo turno) |
+| E1 quality spine | `AGENT_QUALITY_SPINE` | `chat.py`/`teams` (frustração) + `feedback.py` (👍👎) |
+| D2 bootstrap | `AGENT_ONTOLOGY` | `build.sh 26c` / `scripts/agente/bootstrap_ontologia.py` |
+| D4 `query_ontology` | `AGENT_ONTOLOGY` | tool MCP exposta ao agente (`client.py` registro) |
+| D3 proveniência | `AGENT_ONTOLOGY` | `memory_mcp_tool` (save de memória) |
+| B1 PlanState | `AGENT_PLANNER` | `chat.py` captura Task* events do stream |
+| F4/F5 skill-hints | `AGENT_SKILL_RAG` | hook `_user_prompt_submit_hook` |
+| D5 world_model | `AGENT_WORLD_MODEL_INJECT` | hook `_user_prompt_submit_hook` |
+
+### 🟡 Shadow scaffolding — lógica+testes prontos, SEM caller no loop (precisa WIRING)
+| Feature | O que JÁ existe | O que FALTA wirar (a fase de ativação) |
+|---------|----------------|-----------------------------------------|
+| **E2** step_judge | `workers/step_judge.py` (`judge_step` job RQ + `_judge_core`) | **ENQUEUER**: varredor RQ/módulo-D8 que acha `agent_step` recentes sem `outcome_signal['judge']` + enfileira `judge_step`. Pré-req: agent_step gravando + (ideal) `AGENT_ODOO_AUDIT_HOOK` ligado p/ a âncora ambiental. Fila RQ nova → editar `worker_render.py`+`start_worker_render.sh` (regra das 3 edições). |
+| **B2** verifiers | `sdk/verifiers.py` + `workers/plan_verifier.py` | **CALLER NO SUPER-LOOP**: o loop chama `verify_arithmetic`/`verify_plan_adversarial`/`verify_domain` após um step de plano; SHADOW grava veredito em `outcome_signal['verify']`, depois vira GATE. |
+| **B-TRIAGE** | `sdk/plan_triage.py` (`triage_meta`) | **CALLER**: o loop chama `triage_meta` no início de turno complexo p/ decompor meta→steps; alimenta o `PlanState` (B1). |
+| **B3** replan-loop | `plan_state.py` (`mark_step_failed`/`should_escalate`/`steps_to_retry`) + `AgentInvocationMetric.marcar_escalonamento` | **LOOP ATIVO**: o super-loop detecta step falho → replan com budget → escala (chama `marcar_escalonamento`). Aprovação humana = Web-only (`pending_questions`/`AskUserQuestion`, INV-3). |
+| **A3** eval-gate | `eval_gate_service.py` (`run_evals`/`eval_gate`) + módulo 28 D8 | **INVOKE REAL**: substituir o seam `invoke_fn` stub pela invocação real do agente (SDK) contra os golden cases; estabelecer baseline; report-only→enforce. |
+| **A4** promoção | `directive_promotion_service.py` (`propose_directive_from_plan`/`evaluate_and_promote`) | **BATCH**: job (D8) que varre PlanStates bem-sucedidos → propõe candidata → `evaluate_and_promote` (gate A3 + anti-gaming R9) → (gated) promove. + coluna/estado `directive_status`. Pré-req: baseline A3. |
+
+### Ordem GATED de WIRING (recomendada — cada fase depende da anterior validada em PROD)
+1. **Fundação** (S0a/E1/B1/D*/F4-F5) validada em PROD — **em teste agora** (GATE-0/1).
+2. **E2-enqueuer** (judge em shadow, gravando vereditos) — depois de agent_step OK + audit hook.
+3. **Super-loop do planejador**: B2-loop + B-TRIAGE + B3-loop (shadow primeiro) — GATE-2.
+4. **A3-invoke** (eval real) → baseline → **A4-batch** (fecha o flywheel ativo) — GATE-3.
+
+> Detalhe de design por eixo: `eixos/A-flywheel.md` (E2/A3/A4), `eixos/B-planejador.md` (B2/B-TRIAGE/B3).
+
+---
+
 ## ONDAS E ITENS
 
 > Status: ⬜ pending · 🟡 em progresso · 🔵 shadow (código pronto, validando comportamento) · ✅ done
