@@ -1,5 +1,7 @@
 # PLANO DE EXECUÇÃO — Industrialização FB↔LF
 
+> ⚠️ **SUPERSEDED (2026-05-30)** — Plano preliminar (config de categoria LF → 1150200001 + 5 etapas). Superado por **`GOALS.md`** (plano atual com métricas) + **`SOT_OPERACOES.md`** (desenho). O Bloqueador 1 (teste controlado) foi executado ✅ (`T-PASSO0-TESTE`). Mantido como histórico.
+
 > Plano de ação concreto que implementa a `DIRETRIZ.md` sobre a infra já criada. Desenho-alvo: `00_FLUXO_ATUAL_VS_IDEAL.md` §3. Mecanismo: `ACHADOS_TECNICOS.md`.
 > **Pré-condição de início**: os 16 insumos do piloto de volta em FB/Estoque (gatilho de retomada — `DIRETRIZ.md` §5).
 
@@ -65,7 +67,7 @@ Do relatório (`00_FLUXO_ATUAL_VS_IDEAL.md` §5) + desta sessão:
 ## Checklist de execução (após o "go" do Rafael)
 
 - [x] 16 insumos de volta em FB/Estoque (gatilho atingido — 2026-05-29).
-- [ ] **Bloqueador 1**: teste controlado do approach (net-zero + MO consome).
+- [x] **Bloqueador 1 (entrada/saída)**: teste controlado ✅ PASSOU (2026-05-29, categ 104 / 4870110) — net-zero terceiros confirmado (`D 1150200001 / C 1150200002`). Ver `T-PASSO0-TESTE-resultado.md`. **Falta Fase 2 (MO consumo→produção)** após decisão Contador sobre `1150100004`.
 - [ ] **Bloqueador 2**: tratamento do lado FB (Etapa 5) definido com Contador.
 - [ ] Passo 0: levantar categorias LF + validar contas com Contador + aplicar (contexto LF).
 - [ ] Corrigir pt 64 → `dst=31092`.

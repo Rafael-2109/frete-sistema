@@ -1,5 +1,7 @@
 # DIRETRIZ — Industrialização FB↔LF
 
+> ⚠️ **SUPERSEDED (2026-05-30)** — Este doc propunha migrar a valoração para `1150200001`. A investigação posterior provou que **a saída FB já está correta** (usa a família `51010xx`) e que o problema é o **RETORNO**. A verdade atual está em **`SOT_OPERACOES.md`** (desenho) + **`GOALS.md`** (plano). Mantido como histórico do raciocínio. NÃO seguir o §2 (config de categoria → 1150200001) como verdade.
+
 > **Documento de DECISÃO** (sessão 2026-05-29). Substitui o paradigma anterior ("Opção 2 / inter-company", agora em `HISTORICO/`).
 > - **Alvo do desenho** → `00_FLUXO_ATUAL_VS_IDEAL.md` (seção 3)
 > - **Mecanismo técnico** → `ACHADOS_TECNICOS.md`
