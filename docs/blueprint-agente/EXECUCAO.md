@@ -124,5 +124,8 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 - Conteúdo de `tool_skill_mapper` (service L5) → possível reuso p/ Skill-RAG (Onda 4).
 - Campos exatos de agenda/incoterm em `carteira_principal`/`agendamentos_entrega` → D1 valida contra os 298 schemas.
 
+## DECISÕES DE DESIGN (registradas — não re-decidir)
+- **2026-05-30 — agent_step granularidade**: TURNO (1 par user→assistant). Chave UNIQUE `step_uid='{session_id}:{turn_seq}'` (`turn_seq` = nº msgs role=user na sessão). Idempotente p/ retry da defesa (R10). Join com `agent_session_costs` por `session_id`+janela temporal (NÃO por igualdade de message_id — granularidades distintas). Aprovado por Rafael. Plano: `docs/superpowers/plans/2026-05-30-onda-0-fundacao.md`.
+
 ## LOG DE EXECUÇÃO (append-only — 1 linha por item concluído)
-- (vazio — projeto recém-iniciado 2026-05-30)
+- 2026-05-30 — Onda 0 planejada (plano writing-plans) + design gate da chave resolvido. S0a liberado para Task 1.
