@@ -1727,9 +1727,11 @@ class AgentInvocationMetric(db.Model):
         (futuro, no loop do planejador) ficará sob flag USE_AGENT_PLANNER — mas
         este método existe para shadow/teste desde agora (flag-OFF por padrão).
 
-        Padrão SAVEPOINT espelhado de insert_metric: usa begin_nested() + commit()
-        explícito apenas quando necessário (contexto próprio). Em request Flask,
-        o commit final do request consolida. Best-effort: nunca propaga exceção.
+        Padrão SAVEPOINT IDÊNTICO a insert_metric: begin_nested() + flush(), SEM
+        commit() próprio — o CALLER (loop do planejador em request Flask, sob
+        USE_AGENT_PLANNER) consolida no commit final do request. Commit aqui
+        faria flush prematuro de tudo pendente no meio do turno (o que o SAVEPOINT
+        evita). Best-effort: nunca propaga exceção.
 
         Args:
             agent_id: identificador único da métrica (PK lógica UNIQUE).
@@ -1750,7 +1752,6 @@ class AgentInvocationMetric(db.Model):
             entry.escalated_to_human = True
             with db.session.begin_nested():
                 db.session.flush()
-            db.session.commit()
             return True
         except Exception:
             try:

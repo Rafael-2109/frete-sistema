@@ -7,7 +7,6 @@ Cobertura:
 - test_verify_arithmetic_best_effort: exceção em _call_sonnet_verifier → ok=True, issues=[] (sem propagar)
 - test_verify_arithmetic_contexto_injeta_no_prompt: contexto opcional aparece no prompt enviado ao LLM
 """
-import pytest
 
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
