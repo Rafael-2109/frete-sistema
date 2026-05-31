@@ -1951,6 +1951,25 @@ Nunca invente informações."""
         except Exception as e:
             logger.warning(f"[AGENT_CLIENT] Erro MCP artifact: {e}")
 
+        # Ontologia canônica (D4 Onda 3 — flag USE_AGENT_ONTOLOGY, default OFF)
+        # Quando flag OFF: ontology_server=None → _register_mcp retorna False → sem-op.
+        # Quando flag ON:  expõe mcp__ontology__query_ontology ao agente.
+        from ..config.feature_flags import USE_AGENT_ONTOLOGY
+        if USE_AGENT_ONTOLOGY:
+            try:
+                from ..tools.ontology_query_tool import ontology_server, set_current_user_id as set_ontology_user_id
+                if _register_mcp("ontology", ontology_server, set_ontology_user_id):
+                    logger.info("[AGENT_CLIENT] MCP 'ontology' registrada (1 operação: query_ontology)")
+            except ImportError:
+                logger.debug("[AGENT_CLIENT] MCP ontology não disponível")
+            except Exception as e:
+                logger.warning(f"[AGENT_CLIENT] Erro MCP ontology: {e}")
+        else:
+            logger.debug(
+                "[AGENT_CLIENT] MCP 'ontology' SKIP (AGENT_ONTOLOGY=false). "
+                "Ative AGENT_ONTOLOGY=true para expor query_ontology ao agente."
+            )
+
         # Log de diagnóstico — útil para validar configuração em produção
         logger.info(
             f"[AGENT_CLIENT] Options: model={options_dict.get('model')}, "
