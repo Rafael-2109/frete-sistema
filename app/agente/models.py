@@ -1812,3 +1812,105 @@ class AgenteArtifact(db.Model):
                 if self.build_started_at and self.build_completed_at else None
             ),
         }
+
+
+class AgentStep(db.Model):
+    """
+    Onda 0 (2026-05-30) — Entidade de PASSO/TURNO do agente.
+
+    Granularidade: TURNO (1 par user→assistant).
+    Chave UNIQUE step_uid = f"{session_id}:{turn_seq}".
+
+    Fundação física que destrava 3 eixos do blueprint:
+    - Flywheel: histórico de steps por sessão
+    - Qualidade: outcome_signal (Onda 1 preenche)
+    - Planejador: ferramentas usadas por turno
+
+    Schema completo: scripts/migrations/2026_05_30_agent_step.sql
+
+    Sem FK para agent_sessions — preserva histórico mesmo após cascade delete
+    de sessão (mesma filosofia de AgentSessionCost).
+    """
+    __tablename__ = 'agent_step'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    # Chave de deduplicação: "{session_id}:{turn_seq}"
+    step_uid = db.Column(db.Text, nullable=False, unique=True)
+
+    # Vínculos (sem FK — preserva histórico)
+    session_id = db.Column(db.Text, nullable=True, index=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+
+    # Canal de origem
+    channel = db.Column(db.Text, nullable=True)  # 'web' | 'teams'
+
+    # Modelo utilizado
+    model = db.Column(db.Text, nullable=True)
+
+    # Tokens do turno
+    input_tokens = db.Column(db.Integer, nullable=False, default=0)
+    output_tokens = db.Column(db.Integer, nullable=False, default=0)
+
+    # Ferramentas utilizadas no turno (lista de nomes)
+    tools_used = db.Column(db.JSON, nullable=True)
+
+    # Sinal de resultado qualitativo (Onda 1 preenche; NULL até lá)
+    outcome_signal = db.Column(db.JSON, nullable=True)
+
+    # Contagem de ações efetivas (Onda 1 preenche; NULL até lá)
+    outcome_effective_count = db.Column(db.Integer, nullable=True)
+
+    # Timestamp
+    created_at = db.Column(
+        db.DateTime, nullable=False,
+        default=lambda: agora_utc_naive(),
+        index=True,
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentStep {self.step_uid} in={self.input_tokens} '
+            f'out={self.output_tokens} channel={self.channel}>'
+        )
+
+    @classmethod
+    def insert_step(
+        cls,
+        step_uid: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[int] = None,
+        channel: Optional[str] = None,
+        model: Optional[str] = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        tools_used: Optional[List[str]] = None,
+    ) -> Optional['AgentStep']:
+        """
+        Insere um step de turno. Retorna None se duplicado (UNIQUE step_uid).
+
+        SAVEPOINT pattern (espelha AgentSessionCost.insert_entry):
+        usa begin_nested() em vez de commit() direto para que falhas de
+        UNIQUE não poisonem a transação pai do request Flask em curso.
+        IntegrityError faz rollback apenas do SAVEPOINT — a sessão continua
+        usável sem rollback manual pelo caller.
+        """
+        entry = cls(
+            step_uid=step_uid,
+            session_id=session_id,
+            user_id=user_id,
+            channel=channel,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            tools_used=tools_used,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(entry)
+                db.session.flush()
+            return entry
+        except IntegrityError:
+            # Savepoint já foi rollback'd pelo context manager.
+            # Transação pai (request) preservada.
+            return None
