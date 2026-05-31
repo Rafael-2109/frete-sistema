@@ -91,7 +91,7 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 ### ONDA 2 — ATUADOR DE PLANEJAMENTO  ·  GATE-2 destrava promoção de plano (Onda 3 A4)
 | Item | Descrição | Dep | Flag | Esf | Status |
 |------|-----------|-----|------|-----|--------|
-| **B1** | PlanState durável + Plan tools (promover Task* cosméticos `client.py:696`) em `AgentSession.data['plan']`, reusa `flag_modified` + `output_format` nativo. | S0a | `AGENT_PLANNER` | M | ⬜ |
+| **B1** | PlanState durável + Plan tools (promover Task* cosméticos) em `AgentSession.data['plan']`, reusa `flag_modified`. | S0a | `AGENT_PLANNER` | M | ✅ **COMPLETO** — `286134082`: `sdk/plan_state.py` (PlanState puro) + captura Task* via stream (`_process_stream_event`→`_save_messages_dedup`→`_save_messages_to_db`, seguindo padrão `tools_used`), 3 guards `USE_AGENT_PLANNER` em série. 18 testes + flag-OFF=zero write. |
 | **B-TRIAGE** | Classificador semântico NOVO (NÃO reusar `model_router` — é o inverso): decompõe meta em steps sobre entidades do KG. | B1, D2 | `AGENT_PLANNER` | M | ⬜ |
 | **B2** | VERIFY como gate real, 3 verifiers: `arithmetic` (promove `_self_correct_response`), `adversarial` (promove `subagent_validator` a veredito lido pelo loop), **`domain`** (valida contra ontologia D + guards codificados). Rodar em SOMBRA antes de virar gate. | B1, D2 | `AGENT_VERIFY` | G | ⬜ |
 | **B3** | REPLAN com budget + escalate → escreve `escalated_to_human` (campo morto `models.py:1647`). | B1, B2 | `AGENT_PLANNER` | M | ⬜ |
