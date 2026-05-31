@@ -71,20 +71,20 @@
   ],
   "indices": [
     {
-      "name": "idx_chat_members_user_thread",
-      "columns": [
-        "user_id",
-        "thread_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "uq_chat_members_active",
       "columns": [
         "thread_id",
         "user_id"
       ],
       "unique": true
+    },
+    {
+      "name": "idx_chat_members_user_thread",
+      "columns": [
+        "user_id",
+        "thread_id"
+      ],
+      "unique": false
     }
   ]
 }

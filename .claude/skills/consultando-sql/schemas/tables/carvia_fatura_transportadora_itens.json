@@ -94,9 +94,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_fatura_transportadora_itens_operacao_id",
+      "name": "ix_carvia_fatura_transportadora_itens_subcontrato_id",
       "columns": [
-        "operacao_id"
+        "subcontrato_id"
       ],
       "unique": false
     },
@@ -108,16 +108,16 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_transportadora_itens_fatura_transportadora_id",
+      "name": "ix_carvia_fatura_transportadora_itens_operacao_id",
       "columns": [
-        "fatura_transportadora_id"
+        "operacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_fatura_transportadora_itens_subcontrato_id",
+      "name": "ix_carvia_fatura_transportadora_itens_fatura_transportadora_id",
       "columns": [
-        "subcontrato_id"
+        "fatura_transportadora_id"
       ],
       "unique": false
     }

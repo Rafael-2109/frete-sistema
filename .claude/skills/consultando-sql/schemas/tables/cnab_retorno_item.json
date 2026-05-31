@@ -165,9 +165,9 @@
   ],
   "indices": [
     {
-      "name": "ix_cnab_retorno_item_codigo_ocorrencia",
+      "name": "ix_cnab_retorno_item_extrato_item_id",
       "columns": [
-        "codigo_ocorrencia"
+        "extrato_item_id"
       ],
       "unique": false
     },
@@ -175,13 +175,6 @@
       "name": "ix_cnab_retorno_item_status_match",
       "columns": [
         "status_match"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_cnab_retorno_item_extrato_item_id",
-      "columns": [
-        "extrato_item_id"
       ],
       "unique": false
     },
@@ -239,6 +232,13 @@
       "name": "ix_cnab_retorno_item_nosso_numero",
       "columns": [
         "nosso_numero"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_cnab_retorno_item_codigo_ocorrencia",
+      "columns": [
+        "codigo_ocorrencia"
       ],
       "unique": false
     }

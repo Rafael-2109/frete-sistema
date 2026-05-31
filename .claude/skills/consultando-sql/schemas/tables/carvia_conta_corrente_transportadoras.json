@@ -96,16 +96,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
+      "name": "ix_carvia_conta_corrente_transportadoras_transportadora_id",
       "columns": [
-        "criado_em"
+        "transportadora_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_conta_corrente_transportadoras_transportadora_id",
+      "name": "ix_carvia_conta_corrente_transportadoras_criado_em",
       "columns": [
-        "transportadora_id"
+        "criado_em"
       ],
       "unique": false
     },

@@ -63,6 +63,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_venda_auditoria_acao",
+      "columns": [
+        "acao"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_hora_venda_auditoria_venda_id",
       "columns": [
         "venda_id"
@@ -73,13 +80,6 @@
       "name": "ix_hora_venda_auditoria_item_id",
       "columns": [
         "item_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_auditoria_acao",
-      "columns": [
-        "acao"
       ],
       "unique": false
     }

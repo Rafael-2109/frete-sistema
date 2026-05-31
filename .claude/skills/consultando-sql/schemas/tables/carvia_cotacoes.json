@@ -263,13 +263,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cotacoes_cliente_id",
-      "columns": [
-        "cliente_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_cotacoes_numero_cotacao",
       "columns": [
         "numero_cotacao"
@@ -277,16 +270,23 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_status",
+      "name": "ix_carvia_cotacoes_veiculo_id",
       "columns": [
-        "status"
+        "veiculo_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cotacoes_veiculo_id",
+      "name": "ix_carvia_cotacoes_cliente_id",
       "columns": [
-        "veiculo_id"
+        "cliente_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_cotacoes_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }
