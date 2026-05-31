@@ -863,6 +863,34 @@ USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
 AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"
 
 # ====================================================================
+# Onda 4 — F4/F5: Skill Hints Advisory (flag-OFF por default)
+# ====================================================================
+# Quando ON: hook UserPromptSubmit adiciona bloco <skill_hints priority="advisory">
+# com as N skills mais relevantes para o turno (keyword matching zero-LLM).
+#
+# LIMITAÇÃO ARQUITETURAL (documentada em context_enrichment.py):
+#   O SDK fixa `skills=` no connect() — não há set_skills() por turno.
+#   Este bloco é ADVISORY: informa o agente, não altera o listing real.
+#
+# Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
+# Ativar: AGENT_SKILL_RAG=true
+USE_AGENT_SKILL_RAG = os.getenv("AGENT_SKILL_RAG", "false").lower() == "true"
+
+# ====================================================================
+# Onda 4 — D5: World Model Injection via ontologia (flag-OFF por default)
+# ====================================================================
+# Quando ON: hook UserPromptSubmit adiciona bloco <world_model priority="advisory">
+# com entidades canônicas da ontologia (D4 query_ontology_entities).
+#
+# D5 é ADITIVO: _DOMAIN_KEYWORDS em memory_injection.py permanece como
+# fallback cold-start. Não remove nem substitui routing_context existente.
+# Se ontologia vazia → None (fallback ativo) — nunca duplica contexto.
+#
+# Quando OFF (default): nenhum bloco adicionado — comportamento idêntico.
+# Ativar: AGENT_WORLD_MODEL_INJECT=true
+USE_AGENT_WORLD_MODEL_INJECT = os.getenv("AGENT_WORLD_MODEL_INJECT", "false").lower() == "true"
+
+# ====================================================================
 # Onda 3 — A4: Promoção Automática de Diretriz (shadow, flag-OFF)
 # ====================================================================
 # Fecha o flywheel: sessão bem-sucedida → candidata → avalia (gate A3

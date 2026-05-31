@@ -1267,8 +1267,38 @@ def build_hooks(
                 # Limpar para não reinjetar nos próximos turnos
                 resume_state['failed'] = False
 
-            if session_context or additional_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context:
-                full_context = resume_fallback_context + session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context
+            # ============================================================
+            # Onda 4 — F4/F5: Skill Hints Advisory (flag-gated)
+            # ============================================================
+            skill_hints_context = ""
+            try:
+                from ..config.feature_flags import USE_AGENT_SKILL_RAG
+                if USE_AGENT_SKILL_RAG and prompt:
+                    from .context_enrichment import build_skill_hints_block
+                    _skill_hints = build_skill_hints_block(prompt)
+                    if _skill_hints:
+                        skill_hints_context = "\n" + _skill_hints
+            except Exception as _f4_err:
+                logger.debug(f"[HOOK:UserPromptSubmit] F4/F5 skill_hints falhou (best-effort): {_f4_err}")
+
+            # ============================================================
+            # Onda 4 — D5: World Model Injection (flag-gated, aditivo)
+            # ============================================================
+            # _DOMAIN_KEYWORDS em memory_injection.py permanece como fallback
+            # cold-start — D5 NUNCA remove routing_context existente.
+            world_model_context = ""
+            try:
+                from ..config.feature_flags import USE_AGENT_WORLD_MODEL_INJECT
+                if USE_AGENT_WORLD_MODEL_INJECT and user_id and prompt:
+                    from .context_enrichment import build_world_model_block
+                    _world_model = build_world_model_block(user_id=user_id, query=prompt)
+                    if _world_model:
+                        world_model_context = "\n" + _world_model
+            except Exception as _d5_err:
+                logger.debug(f"[HOOK:UserPromptSubmit] D5 world_model falhou (best-effort): {_d5_err}")
+
+            if session_context or additional_context or correction_hint or debug_context or sql_admin_context or resume_fallback_context or skill_hints_context or world_model_context:
+                full_context = resume_fallback_context + session_context + (additional_context or "") + correction_hint + debug_context + sql_admin_context + skill_hints_context + world_model_context
                 # B2: Log de context budget por categoria
                 memory_tokens_est = len(full_context) // 4
                 logger.info(
@@ -1276,6 +1306,8 @@ def build_hooks(
                     f"user_id={user_id or 'None'} | "
                     f"session_ctx_chars={len(session_context)} | "
                     f"memory_chars={len(additional_context or '')} | "
+                    f"skill_hints_chars={len(skill_hints_context)} | "
+                    f"world_model_chars={len(world_model_context)} | "
                     f"total_tokens_est={memory_tokens_est} | "
                     f"prompt_len={len(prompt)}"
                 )
