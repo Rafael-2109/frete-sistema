@@ -257,6 +257,34 @@ def _select_model_for_message(mensagem: str) -> str:
     return chosen
 
 
+def _gravar_agent_step_teams(session, user_id, model, sync_result):
+    """Onda 0 / S0a — grava agent_step (channel='teams') no PRIMARY (INV-1; INV-3 caminho proprio Teams).
+
+    Best-effort (INV-6): falha NAO quebra a persistencia da resposta nem o turno.
+    Idempotente via step_uid UNIQUE — chamado nos 2 pontos de persistencia (primario
+    + fallback de re-fetch pos-SSL-drop) sem duplicar. Derivar turn_seq DEPOIS de
+    add_user_message+add_assistant_message (mesma semantica do canal web).
+    """
+    try:
+        if session is None or not getattr(sync_result, 'resposta_texto', None):
+            return
+        from app.agente.models import AgentStep
+        _msgs = (session.data or {}).get('messages', [])
+        _turn_seq = sum(1 for m in _msgs if m.get('role') == 'user')
+        AgentStep.insert_step(
+            step_uid=f"{session.session_id}:{_turn_seq}",
+            session_id=session.session_id,
+            user_id=user_id,
+            channel='teams',
+            model=model,
+            input_tokens=getattr(sync_result, 'input_tokens', 0) or 0,
+            output_tokens=getattr(sync_result, 'output_tokens', 0) or 0,
+            tools_used=getattr(sync_result, 'tools_used', None) or None,
+        )
+    except Exception as e:
+        logger.warning(f"[TEAMS-BOT] agent_step nao gravado (best-effort): {e}")
+
+
 def _commit_with_retry(log_prefix: str = "[TEAMS]") -> bool:
     """
     Commit com retry para conexoes PostgreSQL stale (SSL dropped pelo Render).
@@ -408,6 +436,9 @@ def processar_mensagem_bot(
                     session.set_sdk_session_id(new_sdk_session_id)
                     logger.info(f"[TEAMS-BOT] Novo sdk_session_id salvo: {new_sdk_session_id[:20]}...")
 
+                # Onda 0 / S0a-teams: grava agent_step (best-effort, idempotente via step_uid)
+                _gravar_agent_step_teams(session, teams_user_id, selected_model, _sync_result)
+
                 # Commit com retry — conexão PostgreSQL pode cair durante requests longas (30-40s)
                 # O agente processa tools enquanto a conexão fica idle → SSL dropped pelo Render.
                 # P1-A: Se commit falhar (SSL dropped), re-fetch session e re-apply mensagens.
@@ -432,6 +463,8 @@ def processar_mensagem_bot(
                             )
                         if new_sdk_session_id and new_sdk_session_id != sdk_session_id:
                             session.set_sdk_session_id(new_sdk_session_id)
+                        # Onda 0 / S0a-teams: grava agent_step no fallback (best-effort, idempotente)
+                        _gravar_agent_step_teams(session, teams_user_id, selected_model, _sync_result)
                         db.session.commit()
                         logger.info("[TEAMS-BOT] Re-apply + commit bem-sucedido")
                     else:
