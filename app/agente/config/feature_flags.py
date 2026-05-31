@@ -861,3 +861,22 @@ USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
 # Default false (flag-OFF, D8 no-op). Ativar: AGENT_EVAL_GATE=true.
 # Rollback instantaneo: AGENT_EVAL_GATE=false.
 AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"
+
+# ====================================================================
+# Onda 3 — A4: Promoção Automática de Diretriz (shadow, flag-OFF)
+# ====================================================================
+# Fecha o flywheel: sessão bem-sucedida → candidata → avalia (gate A3
+# + anti-gaming R9) → (shadow) só LOGA "promoveria", NÃO escreve.
+#
+# BLOQUEADO para função REAL até:
+#   1. USE_AGENT_PLANNER ON em PROD (base PlanState)
+#   2. Baseline A3 estável (14d de coleta)
+#   3. Coluna directive_status em agent_memories + audit hook Odoo PROD
+#
+# Quando ON (futuro): evaluate_and_promote() fará escrita real via
+# _persist_directive() (hoje = NotImplementedError stub documentado).
+#
+# Default false. Ativar: AGENT_DIRECTIVE_PROMOTION=true.
+# Rollback instantâneo: AGENT_DIRECTIVE_PROMOTION=false.
+# Sem caller ativo: flag ON não ativa nada até wiring no Stop hook/D8.
+AGENT_DIRECTIVE_PROMOTION = os.getenv("AGENT_DIRECTIVE_PROMOTION", "false").lower() == "true"
