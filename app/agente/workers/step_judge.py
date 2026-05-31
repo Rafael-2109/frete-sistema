@@ -25,7 +25,7 @@ Padrao clonado de: app/agente/workers/subagent_validator.py
 """
 import json
 import logging
-from typing import Optional, List
+from typing import Optional
 
 from app import create_app
 
