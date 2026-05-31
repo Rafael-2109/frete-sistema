@@ -1762,6 +1762,113 @@ class AgentInvocationMetric(db.Model):
 
 
 # =========================================================================
+# AgentEvalScore — A3 Fase 1 (baseline de eval por-agente, report-only)
+# 1 linha por run de eval (passed/total) por agent_name. O baseline contra
+# o qual o run atual compara = score do run anterior MAIS RECENTE.
+# Migration: scripts/migrations/2026_05_31_agent_eval_scores.{py,sql}
+# =========================================================================
+
+class AgentEvalScore(db.Model):
+    """
+    A3 (2026-05-31) — score de eval persistido por-agente para o eval gate.
+
+    Substitui o `baseline_score=0.0` hardcoded em eval_gate_service (módulo 28
+    do scheduler). Cada linha representa UM run de eval de um agent_name, com
+    score = passed/total. O baseline para comparação report-only (e enforce
+    futuro) é o `score` do run ANTERIOR mais recente do mesmo agent_name.
+
+    Sem FK — mesmo padrão de AgentInvocationMetric/AgentSessionCost para
+    preservar histórico de scores cross-deploy (análise de regressão).
+
+    Schema completo: scripts/migrations/2026_05_31_agent_eval_scores.sql
+    """
+    __tablename__ = 'agent_eval_scores'
+
+    MODE_REPORT_ONLY = 'report_only'
+    MODE_ENFORCE = 'enforce'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    agent_name = db.Column(db.Text, nullable=False, index=True)
+
+    # score = passed/total (0.0-1.0)
+    score = db.Column(db.Float, nullable=False)
+    total = db.Column(db.Integer, nullable=False, default=0)
+    passed = db.Column(db.Integer, nullable=False, default=0)
+
+    # SHA do código avaliado (rastreabilidade cross-deploy)
+    git_sha = db.Column(db.Text, nullable=True)
+
+    # 'report_only' | 'enforce'
+    mode = db.Column(db.Text, nullable=True)
+
+    recorded_at = db.Column(
+        db.DateTime, nullable=False, default=lambda: agora_utc_naive(), index=True
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentEvalScore {self.agent_name} '
+            f'score={self.score} ({self.passed}/{self.total}) mode={self.mode}>'
+        )
+
+    @classmethod
+    def insert_score(
+        cls,
+        agent_name: str,
+        score: float,
+        total: int,
+        passed: int,
+        git_sha: Optional[str] = None,
+        mode: str = MODE_REPORT_ONLY,
+    ) -> Optional['AgentEvalScore']:
+        """
+        Insere um run de eval. Retorna None em erro (best-effort).
+
+        SAVEPOINT pattern (idêntico a AgentInvocationMetric.insert_metric):
+        usa `begin_nested()` em vez de `commit()` direto. O eval gate roda
+        dentro do scheduler (módulo 28) onde pode já existir transação em
+        curso. `commit()` aqui faria flush prematuro; um erro (ex.: NOT NULL)
+        faria rollback da transação inteira. Solução: savepoint isola — o
+        IntegrityError rollba apenas o SAVEPOINT, preservando o resto da
+        sessão. O caller consolida no commit final.
+        """
+        from sqlalchemy.exc import IntegrityError, DataError
+
+        entry = cls(
+            agent_name=agent_name,
+            score=score,
+            total=total,
+            passed=passed,
+            git_sha=git_sha,
+            mode=mode,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(entry)
+                db.session.flush()
+            return entry
+        except (IntegrityError, DataError):
+            return None
+
+    @classmethod
+    def get_baseline_score(cls, agent_name: str) -> Optional[float]:
+        """
+        Retorna o `score` do run MAIS RECENTE para `agent_name` (baseline
+        contra o qual o run atual compara), ou None se não houver run prévio.
+
+        ORDER BY recorded_at DESC LIMIT 1.
+        """
+        entry = (
+            cls.query
+            .filter_by(agent_name=agent_name)
+            .order_by(cls.recorded_at.desc())
+            .first()
+        )
+        return entry.score if entry is not None else None
+
+
+# =========================================================================
 # AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact
 # Build async via worker RQ (queue 'artifacts'). Bundle no S3.
 # Migration: scripts/migrations/2026_05_12_agente_artifacts.{py,sql}
