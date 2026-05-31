@@ -67,18 +67,18 @@
   ],
   "indices": [
     {
+      "name": "ix_custo_frete_ativo",
+      "columns": [
+        "ativo"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_custo_frete_vigencia",
       "columns": [
         "incoterm",
         "cod_uf",
         "vigencia_inicio"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_custo_frete_ativo",
-      "columns": [
-        "ativo"
       ],
       "unique": false
     }

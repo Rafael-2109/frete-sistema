@@ -98,16 +98,16 @@
       "unique": false
     },
     {
-      "name": "ix_assai_carregamento_separacao_id",
+      "name": "ix_assai_carregamento_pedido_id",
       "columns": [
-        "separacao_id"
+        "pedido_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_carregamento_pedido_id",
+      "name": "ix_assai_carregamento_separacao_id",
       "columns": [
-        "pedido_id"
+        "separacao_id"
       ],
       "unique": false
     },

@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 420,
+  "total_relationships": 424,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1815,6 +1815,24 @@
       "to_column": "id"
     },
     {
+      "from_table": "inventario_ajuste_manual",
+      "from_column": "ciclo_id",
+      "to_table": "inventario_ciclo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "inventario_base",
+      "from_column": "ciclo_id",
+      "to_table": "inventario_ciclo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "inventario_snapshot_odoo",
+      "from_column": "ciclo_id",
+      "to_table": "inventario_ciclo",
+      "to_column": "id"
+    },
+    {
       "from_table": "lancamento_comprovante",
       "from_column": "comprovante_id",
       "to_table": "comprovante_pagamento_boleto",
@@ -1998,6 +2016,12 @@
       "from_table": "nf_devolucao_nf_referenciada",
       "from_column": "entrega_monitorada_id",
       "to_table": "entregas_monitoradas",
+      "to_column": "id"
+    },
+    {
+      "from_table": "nf_transferencia_produto_snapshot",
+      "from_column": "nf_snapshot_id",
+      "to_table": "nf_transferencia_snapshot",
       "to_column": "id"
     },
     {

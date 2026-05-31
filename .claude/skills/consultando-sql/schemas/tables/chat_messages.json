@@ -93,10 +93,9 @@
   ],
   "indices": [
     {
-      "name": "idx_chat_messages_thread_time",
+      "name": "idx_chat_messages_content_tsv",
       "columns": [
-        "thread_id",
-        "criado_em"
+        "content_tsv"
       ],
       "unique": false
     },
@@ -109,9 +108,10 @@
       "unique": false
     },
     {
-      "name": "idx_chat_messages_content_tsv",
+      "name": "idx_chat_messages_thread_time",
       "columns": [
-        "content_tsv"
+        "thread_id",
+        "criado_em"
       ],
       "unique": false
     }

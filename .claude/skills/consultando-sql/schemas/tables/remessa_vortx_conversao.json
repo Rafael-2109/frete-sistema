@@ -91,13 +91,6 @@
   ],
   "indices": [
     {
-      "name": "ix_remessa_vortx_conversao_banco_origem",
-      "columns": [
-        "banco_origem"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_remessa_vortx_conversao_tipo",
       "columns": [
         "tipo"
@@ -115,6 +108,13 @@
       "name": "ix_remessa_vortx_conversao_sucesso",
       "columns": [
         "sucesso"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_remessa_vortx_conversao_banco_origem",
+      "columns": [
+        "banco_origem"
       ],
       "unique": false
     }

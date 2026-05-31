@@ -137,6 +137,13 @@
   ],
   "indices": [
     {
+      "name": "ix_assai_cce_numero_nf_referenciada",
+      "columns": [
+        "numero_nf_referenciada"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_assai_cce_divergencia_origem_id",
       "columns": [
         "divergencia_origem_id"
@@ -168,13 +175,6 @@
       "name": "ix_assai_cce_chave_nfe",
       "columns": [
         "chave_nfe"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_assai_cce_numero_nf_referenciada",
-      "columns": [
-        "numero_nf_referenciada"
       ],
       "unique": false
     }

@@ -96,13 +96,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_devolucao_venda_item_numero_chassi",
-      "columns": [
-        "numero_chassi"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_devolucao_venda_item_status_item",
       "columns": [
         "status_item"
@@ -113,6 +106,13 @@
       "name": "ix_hora_devolucao_venda_item_devolucao_id",
       "columns": [
         "devolucao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_devolucao_venda_item_numero_chassi",
+      "columns": [
+        "numero_chassi"
       ],
       "unique": false
     }

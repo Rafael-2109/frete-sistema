@@ -119,14 +119,21 @@
   ],
   "indices": [
     {
-      "name": "ix_pedido_importacao_temp_status",
+      "name": "ix_pedido_importacao_temp_chave_importacao",
+      "columns": [
+        "chave_importacao"
+      ],
+      "unique": true
+    },
+    {
+      "name": "idx_importacao_temp_status",
       "columns": [
         "status"
       ],
       "unique": false
     },
     {
-      "name": "idx_importacao_temp_status",
+      "name": "ix_pedido_importacao_temp_status",
       "columns": [
         "status"
       ],
@@ -145,13 +152,6 @@
         "expira_em"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_pedido_importacao_temp_chave_importacao",
-      "columns": [
-        "chave_importacao"
-      ],
-      "unique": true
     }
   ]
 }

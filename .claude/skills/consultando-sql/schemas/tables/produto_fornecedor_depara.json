@@ -58,7 +58,7 @@
     {
       "name": "odoo_product_uom_id",
       "type": "integer",
-      "description": "ID da UoM em uom.uom do Odoo"
+      "description": "DEPRECADO — ver nota acima"
     },
     {
       "name": "ativo",

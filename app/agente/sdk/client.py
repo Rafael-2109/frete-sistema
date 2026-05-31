@@ -81,21 +81,29 @@ _SDK_HAS_OPTIONS_SKILLS = _check_options_skills_field()
 
 @lru_cache(maxsize=1)
 def _discover_skills_from_project() -> list[str]:
-    """Descobre skills em .claude/skills/ filtrando SPED_SKILLS_RESERVED.
+    """Descobre skills em .claude/skills/ filtrando as delegadas a subagentes.
 
     Retorna lista ordenada de skill names (basename de diretórios que têm SKILL.md),
-    excluindo skills reservadas ao subagente auditor-sped-ecd.
+    excluindo:
+    1. SPED_SKILLS_RESERVED — reservadas ao subagente auditor-sped-ecd.
+    2. SKILLS_DELEGADAS_SUBAGENTE — operadas exclusivamente via subagente/agente
+       isolado (Lojas HORA, Motos Assai, Odoo-estoque-WRITE). Ver Solucao B em
+       `config/skills_whitelist.py`.
 
     Esta função é o input para `skills=list[str]` em ClaudeAgentOptions
     (SDK 0.1.77+, ver SDK_CHANGELOG.md:160-167). Skills não listadas aqui:
-    1. Não aparecem no listing do agente principal (economia ~1K tokens).
-    2. São rejeitadas se o principal tentar invocar via Skill tool.
+    1. Não aparecem no listing do agente principal (reduz a description da
+       meta-tool `Skill` abaixo do budget da CLI — evita truncamento, cli.js sY7).
+    2. São rejeitadas se o principal tentar invocá-las via Skill tool — mas
+       continuam disponíveis ao subagente que as declara via AgentDefinition.skills
+       (agent_loader.py:111 — listing independente do principal).
 
     Returns:
         Lista ordenada de skill names.
     """
     from pathlib import Path
     from app.agente.config.settings import AgentSettings
+    from app.agente.config.skills_whitelist import SKILLS_DELEGADAS_SUBAGENTE
 
     # Path do .claude/skills/ relativo ao root do projeto
     # __file__ = app/agente/sdk/client.py → 4 parents = root
@@ -103,13 +111,15 @@ def _discover_skills_from_project() -> list[str]:
     if not skills_dir.is_dir():
         return []
 
+    excluidas = AgentSettings.SPED_SKILLS_RESERVED | SKILLS_DELEGADAS_SUBAGENTE
+
     discovered: list[str] = []
     for entry in skills_dir.iterdir():
         if not entry.is_dir():
             continue
         if not (entry / "SKILL.md").is_file():
             continue
-        if entry.name in AgentSettings.SPED_SKILLS_RESERVED:
+        if entry.name in excluidas:
             continue
         discovered.append(entry.name)
 

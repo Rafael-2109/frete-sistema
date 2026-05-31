@@ -64,16 +64,16 @@
   ],
   "indices": [
     {
-      "name": "ix_inventario_ajuste_manual_ciclo_id",
+      "name": "ix_inventario_ajuste_manual_cod_produto",
       "columns": [
-        "ciclo_id"
+        "cod_produto"
       ],
       "unique": false
     },
     {
-      "name": "ix_inventario_ajuste_manual_cod_produto",
+      "name": "ix_inventario_ajuste_manual_ciclo_id",
       "columns": [
-        "cod_produto"
+        "ciclo_id"
       ],
       "unique": false
     }

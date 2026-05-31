@@ -702,9 +702,21 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
   frontmatter. `agent_loader.py` parseia com forward-compat (`_SDK_HAS_EFFORT_FIELD`
   introspection). Sonnet ignorado (xhigh fallback para high = no-op).
 - **`skills` option** (SDK 0.1.77, deprecou `"Skill"` em allowed_tools): `agente_lojas`
-  passa `skills=sorted(SKILLS_PERMITIDAS)` (filtro real do listing — defesa em
-  profundidade do contrato HORA); `agente` Nacom passa `skills="all"` (centralizacao).
-  Forward-compat via `_SDK_HAS_OPTIONS_SKILLS` (introspection).
+  passa `skills=sorted(SKILLS_PERMITIDAS)` (allow-list fechada — defesa em
+  profundidade do contrato HORA); `agente` Nacom passa
+  `skills=_discover_skills_from_project()` (`sdk/client.py`) — descoberta filtrada
+  por **deny-list** (`SPED_SKILLS_RESERVED` + `config/skills_whitelist.py`
+  `SKILLS_DELEGADAS_SUBAGENTE`). Forward-compat via `_SDK_HAS_OPTIONS_SKILLS`.
+  - **Solucao B (2026-05-29)**: a description da meta-tool `Skill` e montada pela
+    CLI (cli.js `sY7`) concatenando `- nome: description` de TODAS as skills do
+    listing, com budget `floor(context_model * 0.08)` = **16.000 chars** (ctx 200K).
+    Com 46 skills (~48.7K) excedia e a CLI TRUNCAVA cada description (~322/skill),
+    descartando as clausulas de desambiguacao (USAR/NAO USAR). Deny-list por
+    dominio reduz o principal a 25 skills (remove HORA + Assai + Odoo-estoque-WRITE,
+    operadas via subagente). Subagentes mantem suas skills via
+    `AgentDefinition.skills` (frontmatter — independente do principal,
+    `agent_loader.py:111`). Complementada pela Solucao A (descriptions enxutas
+    <=~600 chars, limite oficial 1024).
 - **Actionable error messages** (SDK 0.1.77): `ProcessError` carrega texto real do
   CLI (ex: "Reached maximum number of turns") em vez de generico "exit code 1".
   Adocao gratis via upgrade.
