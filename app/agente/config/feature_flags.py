@@ -826,3 +826,10 @@ USE_ODOO_AUDIT_HOOK = os.getenv("AGENT_ODOO_AUDIT_HOOK", "false").lower() == "tr
 # Ativar quando houver consumidor: AGENT_CAPABILITY_REGISTRY=true.
 # Default false — flag marca a fundacao como inerte ate onda futura.
 USE_CAPABILITY_REGISTRY = os.getenv("AGENT_CAPABILITY_REGISTRY", "false").lower() == "true"
+
+# ====================================================================
+# Onda 1 — Quality Spine + Ontologia (todas OFF por default; ativam em deploy)
+# ====================================================================
+USE_AGENT_QUALITY_SPINE = os.getenv("AGENT_QUALITY_SPINE", "false").lower() == "true"
+USE_AGENT_STEP_JUDGE = os.getenv("AGENT_STEP_JUDGE", "false").lower() == "true"
+USE_AGENT_ONTOLOGY = os.getenv("AGENT_ONTOLOGY", "false").lower() == "true"

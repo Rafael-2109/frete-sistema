@@ -398,9 +398,10 @@ def parse_contextual_response(text: str) -> Tuple[Optional[str], List[Tuple[str,
                     if ':' in rest:
                         name_part, maybe_flag = rest.rsplit(':', 1)
                         if maybe_flag.strip().upper() in ('E', 'A'):
-                            # Sufixar relevancia ao nome para downstream processing
-                            # KG save_entities pode usar isso para ajustar mention_count
-                            ename = f"{name_part.strip()}:{maybe_flag.strip().upper()}"
+                            # Descartar o hint de relevancia — nunca consumido por
+                            # _upsert_entity nem por nenhum downstream (dead code).
+                            # Gravar "Atacadão:E" no banco e poluicao de nome.
+                            ename = name_part.strip()
                         # else: ':' faz parte do nome (ex: prioridade:alta)
                     entities.append((etype, ename))
 
