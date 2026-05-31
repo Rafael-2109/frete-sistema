@@ -112,11 +112,13 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 
 **GATE-3**: flywheel fechado em shadow (promoção sugere, não aplica) por ≥2 semanas com held-out anti-gaming OK; ontologia consultável validada contra os ~298 schemas.
 
-### ONDA 4 — TETO DE ESCALA
+#> **2026-05-31 — BLUEPRINT CODE-COMPLETE (22 itens, Ondas 0-4)**: D3 `b75d90b78` · A3 `f5883709b` · A4 `83d6ce61c` (flywheel fechado shadow) · Onda 4 F4/F5+D5 `7ccae5f56`. Suíte **559 passed / 2 failed** (baseline `pending_questions`). TUDO flag-OFF. Pendente: code-review final (D3/A3/A4/Onda4) + GATEs (deploy do Rafael).
+
+## ONDA 4 — TETO DE ESCALA
 | Item | Descrição | Dep | Flag | Esf | Status |
 |------|-----------|-----|------|-----|--------|
-| **F4/F5** | Routing gerado + Skill-RAG por domínio (resolve budget da meta-tool estruturalmente); registry como espaço de estados do planejador (pré/pós-condições viram operadores; fluxos L3 viram planos cacheados). Separar catálogo-gerável de boundaries comportamentais críticas (ficam no prompt). | S0c, B2, D2 | `AGENT_SKILL_RAG` | G | ⬜ |
-| **D5** | `<world_model>` substitui `_DOMAIN_KEYWORDS` mantendo-o como fallback (cold start). | D2, F4/F5 | `AGENT_WORLD_MODEL_INJECT` | M | ⬜ |
+| **F4/F5** | Routing gerado + Skill-RAG por domínio. | S0c, B2, D2 | `AGENT_SKILL_RAG` | G | ✅ **COMPLETO (advisory)** — `7ccae5f56`: `sdk/context_enrichment.py` (`rank_skills_for_query` token-overlap sobre registry S0c + `build_skill_hints_block`) injeta `<skill_hints>` via hook. **GAP SDK honesto**: `skills=` fixo no `connect()` (sem `set_skills()` por turno) → versão ADVISORY (aconselha, não filtra o listing). 22 testes (compart. D5). Flag OFF. |
+| **D5** | `<world_model>` substitui `_DOMAIN_KEYWORDS` mantendo-o como fallback (cold start). | D2, F4/F5 | `AGENT_WORLD_MODEL_INJECT` | M | ✅ **COMPLETO** — `7ccae5f56`: `build_world_model_block` (ontologia D4 via `query_ontology_entities`) injeta `<world_model>` via MESMO hook `UserPromptSubmit` (INV-7). ADITIVO: `_DOMAIN_KEYWORDS`/`_build_routing_context` intactos = fallback cold-start. Flag OFF = zero mudança. |
 
 ---
 
