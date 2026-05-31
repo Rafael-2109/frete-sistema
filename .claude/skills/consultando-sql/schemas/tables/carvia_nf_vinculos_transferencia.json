@@ -61,16 +61,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_nf_vinculos_transferencia_criado_em",
+      "name": "ix_carvia_nf_vinculos_transferencia_nf_transferencia_id",
       "columns": [
-        "criado_em"
+        "nf_transferencia_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_nf_vinculos_transferencia_nf_transferencia_id",
+      "name": "ix_carvia_nf_vinculos_transferencia_criado_em",
       "columns": [
-        "nf_transferencia_id"
+        "criado_em"
       ],
       "unique": false
     }
