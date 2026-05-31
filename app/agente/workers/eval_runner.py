@@ -29,6 +29,7 @@ Padrao clonado de: app/agente/workers/triage_shadow.py
 """
 import logging
 import os
+import pathlib
 import subprocess
 from typing import Optional
 
@@ -40,6 +41,10 @@ from app.agente.services.eval_gate_service import (
 )
 
 logger = logging.getLogger('sistema_fretes')
+
+# Raiz do repo (worker/eval_runner.py → app/agente/workers/ → 4 níveis acima).
+# Usado como cwd dos subprocessos (git, claude -p) e para resolver os datasets.
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 
 # Fila RQ NOVA (PESADA) onde o modulo 28 enfileira run_eval_batch.
 # NAO reusa 'agent_judge' (leve/interativo): o eval real e' 20-50min e
@@ -60,6 +65,7 @@ def _current_git_sha() -> Optional[str]:
         result = subprocess.run(
             ['git', 'rev-parse', 'HEAD'],
             capture_output=True, text=True, timeout=10,
+            cwd=str(_REPO_ROOT),
         )
         if result.returncode == 0:
             return (result.stdout or '').strip() or None
@@ -73,11 +79,7 @@ def _default_datasets() -> list:
 
     Espelha a lista do modulo 28 do scheduler. Resolve a partir da raiz do repo.
     """
-    import pathlib
-    evals_dir = (
-        pathlib.Path(__file__).resolve().parent.parent.parent.parent
-        / '.claude' / 'evals' / 'subagents'
-    )
+    evals_dir = _REPO_ROOT / '.claude' / 'evals' / 'subagents'
     return [
         ('analista-carteira', str(evals_dir / 'analista-carteira' / 'dataset.yaml')),
         ('auditor-financeiro', str(evals_dir / 'auditor-financeiro' / 'dataset.yaml')),
@@ -134,9 +136,14 @@ def _run_eval_batch_in_context(datasets: list) -> dict:
             baseline = AgentEvalScore.get_baseline_score(agent_name)
 
             # Wiring REAL do agente. AGENT_EVAL_MODEL opcional (override de modelo).
+            # CONSTRAINT (code-review T3b I1): timeout GENEROSO — os subagentes são
+            # Opus effort:xhigh fazendo Odoo/SQL real; um run legítimo >120s viraria
+            # TimeoutExpired→'error'→score deflacionado→falso-positivo de regressão
+            # (envenenaria o baseline). Default 600s (folga vs job_timeout=3600).
             invoke = build_subprocess_invoke_fn(
                 agent_name,
                 model=os.environ.get('AGENT_EVAL_MODEL') or None,
+                timeout=int(os.environ.get('AGENT_EVAL_TIMEOUT', '600')),
             )
 
             # judge_fn default = Haiku real (mockado nos testes).
