@@ -51,16 +51,16 @@
   ],
   "indices": [
     {
-      "name": "ix_agent_memory_entity_links_entity_id",
+      "name": "ix_agent_memory_entity_links_memory_id",
       "columns": [
-        "entity_id"
+        "memory_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_agent_memory_entity_links_memory_id",
+      "name": "ix_agent_memory_entity_links_entity_id",
       "columns": [
-        "memory_id"
+        "entity_id"
       ],
       "unique": false
     }

@@ -72,13 +72,6 @@
       "unique": false
     },
     {
-      "name": "ix_hora_avaria_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_avaria_numero_chassi",
       "columns": [
         "numero_chassi"
@@ -89,6 +82,13 @@
       "name": "ix_hora_avaria_loja_id",
       "columns": [
         "loja_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_avaria_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

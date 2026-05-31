@@ -62,17 +62,17 @@
   ],
   "indices": [
     {
-      "name": "uq_chat_threads_entity",
+      "name": "uq_chat_threads_system_dm",
       "columns": [
-        "entity_type",
-        "entity_id"
+        "criado_por_id"
       ],
       "unique": true
     },
     {
-      "name": "uq_chat_threads_system_dm",
+      "name": "uq_chat_threads_entity",
       "columns": [
-        "criado_por_id"
+        "entity_type",
+        "entity_id"
       ],
       "unique": true
     },

@@ -66,6 +66,13 @@
   ],
   "indices": [
     {
+      "name": "ix_agent_session_costs_recorded_at",
+      "columns": [
+        "recorded_at"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_agent_session_costs_user_id",
       "columns": [
         "user_id"
@@ -76,13 +83,6 @@
       "name": "ix_agent_session_costs_session_id",
       "columns": [
         "session_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_agent_session_costs_recorded_at",
-      "columns": [
-        "recorded_at"
       ],
       "unique": false
     }

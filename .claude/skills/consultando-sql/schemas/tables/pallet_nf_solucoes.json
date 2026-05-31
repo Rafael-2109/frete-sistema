@@ -155,13 +155,6 @@
   ],
   "indices": [
     {
-      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
-      "columns": [
-        "nf_remessa_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_pallet_nf_solucoes_chave_nfe_solucao",
       "columns": [
         "chave_nfe_solucao"
@@ -176,24 +169,23 @@
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_tipo",
+      "name": "idx_nf_solucao_tipo_vinculacao",
       "columns": [
-        "tipo"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_nf_solucao_confirmado",
-      "columns": [
-        "confirmado",
+        "tipo",
         "vinculacao"
       ],
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_emitente",
+      "name": "ix_pallet_nf_solucoes_nf_remessa_id",
       "columns": [
-        "cnpj_emitente",
+        "nf_remessa_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_pallet_nf_solucoes_tipo",
+      "columns": [
         "tipo"
       ],
       "unique": false
@@ -213,17 +205,25 @@
       "unique": false
     },
     {
-      "name": "idx_nf_solucao_tipo_vinculacao",
+      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
       "columns": [
-        "tipo",
+        "odoo_picking_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_nf_solucao_confirmado",
+      "columns": [
+        "confirmado",
         "vinculacao"
       ],
       "unique": false
     },
     {
-      "name": "ix_pallet_nf_solucoes_odoo_picking_id",
+      "name": "idx_nf_solucao_emitente",
       "columns": [
-        "odoo_picking_id"
+        "cnpj_emitente",
+        "tipo"
       ],
       "unique": false
     }
