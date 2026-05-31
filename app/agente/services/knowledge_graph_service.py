@@ -24,6 +24,7 @@ Uso (STATS — chamado por insights_service.py):
 import logging
 import re
 import unicodedata
+from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 
 from app.utils.timezone import agora_utc_naive
@@ -535,7 +536,7 @@ def _upsert_relation(
     memory_id: Optional[int] = None,
     source_session_id: Optional[str] = None,
     source_step_uid: Optional[str] = None,
-    valid_from: Optional[object] = None,
+    valid_from: Optional[datetime] = None,
 ) -> None:
     """Cria ou atualiza relação entre entidades (idempotente).
 
@@ -574,6 +575,10 @@ def _upsert_relation(
             source_step_uid = COALESCE(
                 agent_memory_entity_relations.source_step_uid,
                 EXCLUDED.source_step_uid
+            ),
+            valid_from = COALESCE(
+                agent_memory_entity_relations.valid_from,
+                EXCLUDED.valid_from
             )
     """), {
         "source_id": source_entity_id,
