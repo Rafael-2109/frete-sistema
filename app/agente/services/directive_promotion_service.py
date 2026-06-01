@@ -30,6 +30,8 @@ import logging
 import re as _re
 from typing import Optional
 
+from app.agente.config.feature_flags import AGENT_DIRECTIVE_PROMOTION, AGENT_DIRECTIVE_MIN_QUALITY
+
 logger = logging.getLogger('sistema_fretes')
 
 # Status discriminado no resultado de evaluate_and_promote
@@ -395,3 +397,92 @@ def evaluate_and_promote(
         'gate': gate_result,
         'source_session_id': session_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# _buscar_sessoes_com_plano_concluido + _quality_score_da_sessao
+# ---------------------------------------------------------------------------
+
+def _buscar_sessoes_com_plano_concluido(lookback_hours: int, limit: int) -> list:
+    """Sessões recentes (janela lookback) cujo data['plan'] existe. O filtro fino
+    (todos steps completed) fica em propose_directive_from_plan."""
+    from app.agente.models import AgentSession
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    corte = agora_utc_naive() - timedelta(hours=lookback_hours)
+    rows = AgentSession.query.filter(
+        AgentSession.updated_at >= corte,
+        AgentSession.data.isnot(None),
+    ).order_by(AgentSession.updated_at.desc()).limit(limit).all()
+    return [s for s in rows if isinstance(s.data, dict) and s.data.get('plan')]
+
+
+def _quality_score_da_sessao(session_id: str):
+    """Média dos judge scores dos agent_step da sessão (normalizada 0-1).
+    None se não houver judge signal (conservador → abstém)."""
+    from app.agente.models import AgentStep
+    steps = AgentStep.query.filter_by(session_id=session_id).all()
+    scores = []
+    for st in steps:
+        sig = st.outcome_signal or {}
+        judge = sig.get('judge') if isinstance(sig, dict) else None
+        if isinstance(judge, dict) and judge.get('score') is not None:
+            try:
+                scores.append(float(judge['score']))
+            except (TypeError, ValueError):
+                pass
+    if not scores:
+        return None
+    media = sum(scores) / len(scores)
+    return media / 100.0 if media > 1.0 else media
+
+
+# ---------------------------------------------------------------------------
+# run_directive_promotion_batch
+# ---------------------------------------------------------------------------
+
+def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> dict:
+    """Varredor A4-batch (D8 módulo 32). Flag-gated por AGENT_DIRECTIVE_PROMOTION.
+    Para cada sessão recente com plano 100% concluído: propose → quality_score
+    (abstém se None) → evaluate_and_promote (R9 anti-gaming DOMINA → gate vs floor)
+    → se would_promote: _persist_directive (shadow). Best-effort: nunca levanta."""
+    contadores = {'candidatos': 0, 'promovidos': 0, 'abstencoes': 0, 'rejeitados': 0}
+    if not AGENT_DIRECTIVE_PROMOTION:
+        return contadores
+    try:
+        sessoes = _buscar_sessoes_com_plano_concluido(lookback_hours, limit)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch: erro ao buscar sessões: {exc}")
+        return contadores
+    for s in sessoes:
+        try:
+            candidata = propose_directive_from_plan(s.data.get('plan'), s.session_id)
+            if candidata is None:
+                continue
+            contadores['candidatos'] += 1
+            score = _quality_score_da_sessao(s.session_id)
+            if score is None:
+                contadores['abstencoes'] += 1
+                logger.info(f"[directive_promotion] batch: abstém session={s.session_id!r} (sem judge)")
+                continue
+            resultado = evaluate_and_promote(
+                candidata, baseline_score=AGENT_DIRECTIVE_MIN_QUALITY, candidate_score=score,
+            )
+            if resultado.get('decision') == _DECISION_WOULD_PROMOTE:
+                _persist_directive(candidata)
+                contadores['promovidos'] += 1
+            else:
+                contadores['rejeitados'] += 1
+        except Exception as exc:
+            logger.error(f"[directive_promotion] batch: erro session={getattr(s, 'session_id', '?')!r}: {exc}")
+    try:
+        from app import db
+        db.session.commit()
+    except Exception:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+    logger.info(f"[directive_promotion] batch concluído: {contadores}")
+    return contadores

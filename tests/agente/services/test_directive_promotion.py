@@ -429,3 +429,61 @@ class TestPersistDirectiveReal:
         assert id1 == id2
         path = AgentMemory.query.get(id1).path
         assert AgentMemory.query.filter_by(user_id=0, path=path).count() == 1
+
+
+# ---------------------------------------------------------------------------
+# TestRunBatch
+# ---------------------------------------------------------------------------
+
+class TestRunBatch:
+    def _sess(self, sid, plan):
+        from unittest.mock import MagicMock
+        s = MagicMock()
+        s.session_id = sid
+        s.data = {'plan': plan}
+        return s
+
+    def test_flag_off_no_op(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', False):
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r == {'candidatos': 0, 'promovidos': 0, 'abstencoes': 0, 'rejeitados': 0}
+
+    def test_abstem_sem_judge_score(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_quality_score_da_sessao', return_value=None), \
+             patch.object(svc, '_persist_directive') as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r['abstencoes'] == 1 and r['promovidos'] == 0
+        mock_persist.assert_not_called()
+
+    def test_promove_quando_qualidade_e_sem_falha_odoo(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_quality_score_da_sessao', return_value=0.85), \
+             patch.object(svc, '_tem_falha_odoo', return_value=False), \
+             patch.object(svc, '_persist_directive', return_value=123) as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r['promovidos'] == 1
+        mock_persist.assert_called_once()
+
+    def test_rejeita_falha_odoo_dominante(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        plan = {'steps': {'1': {'subject': 'x', 'status': 'completed'}}}
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_quality_score_da_sessao', return_value=0.99), \
+             patch.object(svc, '_tem_falha_odoo', return_value=True), \
+             patch.object(svc, '_persist_directive') as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r['rejeitados'] == 1 and r['promovidos'] == 0
+        mock_persist.assert_not_called()
