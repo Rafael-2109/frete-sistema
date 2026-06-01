@@ -109,8 +109,18 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 |---|---|---|---|
 | **1. E2-enqueuer** (judge shadow) | ✅ CODE-COMPLETE | `ec61021bb`→`366e62a0a` | só GATE (deploy+shadow Rafael) |
 | **2. Super-loop** (B2+B-TRIAGE shadow) | ✅ CODE-COMPLETE | `b31c18760`→`687c55ef3` | só GATE; **B3 ⏸️ ADIADO COM PREMISSA** |
-| **3. A3-invoke** (eval real) | 🟡 **FASE 1** code-complete (mock) | `a3b293be1`→`0d104ec42` | **FASE 2 supervisionada** (run real + baseline) — Rafael |
+| **3. A3-invoke** (eval real) | ✅ **FASE 2 EXECUTADA** (2026-05-31, local supervisionado) | `a3b293be1`→`0d104ec42` + fixes (uncommitted) | baseline analista-carteira gravado em `agent_eval_scores`; 2 bugs corrigidos (ver abaixo); re-baseline granular em curso |
 | **4. A4-batch** (promoção diretriz) | ⬜ **NÃO INICIADA** | — | recon + plano + impl (a mais arriscada; muda comportamento ativo; pré-req baseline A3) |
+
+**A3 FASE 2 — resultado (2026-05-31, local supervisionado, Rafael autorizou bypass restrito):**
+- Smoke + 5 casos `analista-carteira` via `claude -p --agent` (CLI 2.1.159). **I2 CHECK passou** (5 rc=0, out 2194-3824 bytes, 0 fail-por-infra). 1º baseline binário = **0.600 (3/5)**.
+- **Caveat I2 revelou 2 falsos-negativos**: ac-03 (limite carreta) e ac-04 (devolução) — o agente ACERTOU (li os outputs); o judge binário puniu por literalidade. Score real ≈ 5/5.
+- **2 BUGS REAIS corrigidos (uncommitted, TDD, 627 passed):**
+  1. **Judge binário** (`eval_gate_service.py`): `_call_haiku_eval_granular` retorna `{passed_items,total_items,failing}`; `_judge_case` calcula `case_score` parcial; `run_evals` = média; `PASS_THRESHOLD=0.80`. Retrocompat str pass/fail. **Cap em 1.0** (code-review HIGH-1). +16 testes.
+  2. **SSL-drop na persistência** (`eval_runner.py`): `run_eval_batch` ficava 8-50min idle → `OperationalError` no commit → `agentes=0`. Fix: FASE 1 invokes / FASE 2 persistência com rollback+retry; **close()+dispose() quando rollback falha** (code-review HIGH-2, evita duplicata). +4 testes.
+- Code-review adversarial: 0 CRITICAL, 2 HIGH (ambos corrigidos), MEDIUM-1 (semântica baseline pré/pós-fix) documentado no docstring. **NÃO commitado, NÃO push.**
+
+> **CORREÇÃO factual (2026-05-31)**: o "main intocada" acima é IMPRECISO. Verificado via git: os 22 itens do blueprint (lógica shadow `step_judge`/`eval_gate_service` + tabela `agent_step` + TODAS as flags) JÁ ESTÃO em `origin/main` (mergeados em fase anterior). O que NÃO está em main são os **15 commits de WIRING** (`ec61021bb`→`2cf9280c6`): `eval_runner.py`, tabela `agent_eval_scores`, os `enqueue_*` e os **módulos 28-31 no scheduler**. Consequência: ligar as flags em PROD HOJE = no-op (ninguém chama `enqueue_*`). Big bang exige PUSH dos 15 commits → deploy. Branch SEM upstream, ausente em origin.
 
 **Subprodutos colaterais entregues:** baseline `pending_questions` **2 falhas → 0** (fix threading 2a); 3 sinais coexistindo em `outcome_signal` (judge/verify/triage); 2 filas RQ novas (`agent_judge` LEVE, `agent_eval` PESADA); tabela `agent_eval_scores` (migration aplicada local).
 
