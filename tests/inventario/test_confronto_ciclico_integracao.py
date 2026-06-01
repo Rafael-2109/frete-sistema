@@ -10,7 +10,10 @@ from app.utils.timezone import agora_utc_naive
 
 
 def _contagem(db, empresa, data_base, status, itens):
-    """itens = [(location_name, cod, lote, ajuste)]."""
+    """itens = [(location_name, cod, lote, ajuste_inventario)].
+
+    O Confronto soma `ajuste_inventario` (coluna AJUSTE autoritativa), não `ajuste`.
+    """
     c = ContagemInventario(
         codigo=f'CONT-{data_base.isoformat()}-{empresa}',
         empresa=empresa, data_base=data_base, status=status,
@@ -21,7 +24,8 @@ def _contagem(db, empresa, data_base, status, itens):
     for loc, cod, lote, aj in itens:
         db.session.add(ContagemInventarioItem(
             contagem_id=c.id, location_name=loc, cod_produto=cod, lote=lote,
-            company_id=1, contagem=Decimal('0'), ajuste=Decimal(str(aj)),
+            company_id=1, contagem=Decimal('0'),
+            ajuste=Decimal(str(aj)), ajuste_inventario=Decimal(str(aj)),
             classe='NORMAL',
         ))
     db.session.flush()
@@ -73,6 +77,37 @@ def test_ignora_ciclico_nao_contabilizado(db, ciclo):
     linhas = ConfrontoService.montar_linhas(ciclo.id)
     l = next(x for x in linhas if x['cod_produto'] == '4000004')
     assert l['inv_fb'] == Decimal('1000')
+
+
+def test_confronto_usa_ajuste_inventario_nao_ajuste(db, ciclo):
+    """Cenário 'semi-ajustado': o Odoo (qtd_esperada) divergiu do inventário, então
+    `ajuste` (= contagem − qtd_esperada, p/ Odoo) ≠ `ajuste_inventario` (coluna AJUSTE,
+    p/ Confronto). O Confronto deve usar ajuste_inventario.
+
+    Baseline FB = 1000. Usuário contou 80 onde o Odoo (semi-ajustado) tinha 90 ⇒
+    ajuste Odoo = -10, mas o delta real sobre o inventário é -20 (AJUSTE manual).
+    INV deve ir a 980 (1000 - 20), NÃO a 990.
+    """
+    db.session.add(InventarioBase(
+        ciclo_id=ciclo.id, cod_produto='4000006', empresa='FB', qtd=Decimal('1000')))
+    c = ContagemInventario(
+        codigo='CONT-semiaj-FB', empresa='FB',
+        data_base=datetime(2026, 5, 20, 10, 0), status='CONTABILIZADA',
+        criado_em=agora_utc_naive(),
+    )
+    db.session.add(c)
+    db.session.flush()
+    db.session.add(ContagemInventarioItem(
+        contagem_id=c.id, location_name='FB/Estoque', cod_produto='4000006', lote='L1',
+        company_id=1, qtd_esperada=Decimal('90'), contagem=Decimal('80'),
+        ajuste=Decimal('-10'),            # → Odoo (contagem − qtd_esperada)
+        ajuste_inventario=Decimal('-20'), # → Confronto (coluna AJUSTE)
+        classe='NORMAL',
+    ))
+    db.session.flush()
+    linhas = ConfrontoService.montar_linhas(ciclo.id)
+    l = next(x for x in linhas if x['cod_produto'] == '4000006')
+    assert l['inv_fb'] == Decimal('980')      # usa ajuste_inventario (-20), não ajuste (-10)
 
 
 def test_soma_so_na_empresa_da_contagem(db, ciclo):

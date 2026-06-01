@@ -48,7 +48,30 @@ def test_calcular_linha_lote_novo():
     assert r['is_nova'] is True
     assert r['qtd_esperada'] == ZERO
     assert r['ajuste'] == Decimal('145.44')
+    assert r['ajuste_inventario'] == ZERO       # sem coluna AJUSTE => 0
     assert r['classe'] == 'LOTE_NOVO'
+
+
+def test_calcular_linha_sem_ajuste_manual_eh_zero():
+    item = {'qtd_esperada': Decimal('100'), 'reservado_esperado': ZERO}
+    r = calcular_linha(item, Decimal('80'))     # sem ajuste_manual
+    assert r['ajuste'] == Decimal('-20')        # Odoo: contagem − qtd_esperada
+    assert r['ajuste_inventario'] == ZERO       # Confronto: sem AJUSTE => 0
+
+
+def test_calcular_linha_ajuste_manual_autoritativo():
+    # Semi-ajustado: Odoo (qtd_esperada) = 90, físico = 80, mas AJUSTE manual = -20.
+    item = {'qtd_esperada': Decimal('90'), 'reservado_esperado': ZERO}
+    r = calcular_linha(item, Decimal('80'), Decimal('-20'))
+    assert r['ajuste'] == Decimal('-10')        # Odoo: 80 − 90 (independente do manual)
+    assert r['ajuste_inventario'] == Decimal('-20')  # Confronto: valor literal da coluna
+
+
+def test_calcular_linha_ajuste_manual_positivo():
+    item = {'qtd_esperada': Decimal('100'), 'reservado_esperado': ZERO}
+    r = calcular_linha(item, Decimal('100'), Decimal('50'))
+    assert r['ajuste'] == ZERO                  # bate com Odoo
+    assert r['ajuste_inventario'] == Decimal('50')
 
 
 # ----------------------------------------------------------- integração DB
@@ -59,6 +82,21 @@ def _xlsx(linhas):
     ws.append(['location_name', 'cod', 'lote', 'CONTAGEM'])
     for ln in linhas:
         ws.append(list(ln))
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def _xlsx_aj(linhas):
+    """linhas = [(location_name, cod, lote, contagem|None, ajuste|None)].
+
+    Inclui a coluna AJUSTE (autoritativa p/ o Confronto)."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(['location_name', 'cod', 'lote', 'AJUSTE', 'CONTAGEM'])
+    for loc, cod, lote, cont, aj in linhas:
+        ws.append([loc, cod, lote, aj, cont])
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -178,3 +216,53 @@ def test_preview_nao_grava(db):
     it = ContagemInventarioItem.query.filter_by(contagem_id=c.id).first()
     assert it.contagem is None        # preview não gravou
     assert c.status == 'BASE_GERADA'
+
+
+# ------------------------------------------- coluna AJUSTE (ajuste_inventario)
+def test_ajuste_inventario_autoritativo(db):
+    """Semi-ajustado: Odoo (qtd_esperada)=90, físico=80, AJUSTE manual=-20.
+    `ajuste` (Odoo) segue contagem−qtd; `ajuste_inventario` é o valor literal."""
+    c = _contagem_base(db, [('FB/Estoque', '4000001', 'L1', 90, 0)])
+    ContagemService.confirmar_reupload(c.id, _xlsx_aj([
+        ('FB/Estoque', '4000001', 'L1', 80, -20),
+    ]))
+    db.session.flush()
+    it = ContagemInventarioItem.query.filter_by(contagem_id=c.id).first()
+    assert it.ajuste == Decimal('-10')              # 80 − 90 (→ Odoo)
+    assert it.ajuste_inventario == Decimal('-20')   # coluna AJUSTE (→ Confronto)
+
+
+def test_ajuste_inventario_vazio_eh_zero(db):
+    """Coluna AJUSTE presente mas vazia ⇒ ajuste_inventario=0, mesmo com ajuste Odoo≠0."""
+    c = _contagem_base(db, [('FB/Estoque', '4000001', 'L1', 100, 0)])
+    ContagemService.confirmar_reupload(c.id, _xlsx_aj([
+        ('FB/Estoque', '4000001', 'L1', 70, None),
+    ]))
+    db.session.flush()
+    it = ContagemInventarioItem.query.filter_by(contagem_id=c.id).first()
+    assert it.ajuste == Decimal('-30')              # físico gera ajuste Odoo
+    assert it.ajuste_inventario == Decimal('0')     # sem AJUSTE => 0 no Confronto
+
+
+def test_sem_coluna_ajuste_inventario_zero(db):
+    """Planilha legada (sem coluna AJUSTE) ⇒ ajuste_inventario=0 (retrocompat)."""
+    c = _contagem_base(db, [('FB/Estoque', '4000001', 'L1', 100, 0)])
+    ContagemService.confirmar_reupload(c.id, _xlsx([
+        ('FB/Estoque', '4000001', 'L1', 80),
+    ]))
+    db.session.flush()
+    it = ContagemInventarioItem.query.filter_by(contagem_id=c.id).first()
+    assert it.ajuste == Decimal('-20')
+    assert it.ajuste_inventario == Decimal('0')
+
+
+def test_ajuste_manual_negativo_aceito(db):
+    """A coluna AJUSTE aceita negativo (ao contrário da CONTAGEM)."""
+    c = _contagem_base(db, [('FB/Estoque', '4000001', 'L1', 100, 0)])
+    proc = ContagemService.preview_reupload(c.id, _xlsx_aj([
+        ('FB/Estoque', '4000001', 'L1', 100, -15),
+    ]))
+    linha = proc['linhas'][0]
+    assert linha['ajuste'] == Decimal('0')                  # bate com Odoo
+    assert linha['ajuste_inventario'] == Decimal('-15')
+    assert proc['resumo']['tot_ajuste_inv_neg'] == Decimal('-15')

@@ -158,14 +158,19 @@ def itens_contagem(contagem_id):
                        ContagemInventarioItem.lote).all())
     linhas = []
     for it in itens:
-        if so_ajuste and (it.ajuste in (None, 0) or it.classe in (None, 'SEM_AJUSTE')):
+        # "Só com ajuste": oculta linha só se NÃO tem ajuste Odoo NEM ajuste de
+        # inventário (uma pode ter SEM_AJUSTE no Odoo mas ajuste_inventario != 0).
+        sem_odoo = it.ajuste in (None, 0) or it.classe in (None, 'SEM_AJUSTE')
+        sem_inv = it.ajuste_inventario in (None, 0)
+        if so_ajuste and sem_odoo and sem_inv:
             continue
         linhas.append({
             'location_name': it.location_name, 'local_tipo': it.local_tipo,
             'cod_produto': it.cod_produto, 'nome_produto': it.nome_produto,
             'lote': it.lote, 'company_id': it.company_id, 'is_migracao': it.is_migracao,
             'qtd_esperada': it.qtd_esperada, 'reservado_esperado': it.reservado_esperado,
-            'contagem': it.contagem, 'ajuste': it.ajuste, 'classe': it.classe,
+            'contagem': it.contagem, 'ajuste': it.ajuste,
+            'ajuste_inventario': it.ajuste_inventario, 'classe': it.classe,
         })
     return jsonify(sanitize_for_json({'linhas': linhas, 'total': len(linhas)}))
 

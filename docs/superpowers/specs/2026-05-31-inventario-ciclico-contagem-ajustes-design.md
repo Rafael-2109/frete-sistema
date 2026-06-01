@@ -2,11 +2,21 @@
 
 **Data**: 2026-05-31
 **Autor**: Rafael Nascimento + Claude (Opus 4.8)
-**Status**: Aprovado — aguarda escrita do plano de implementação
+**Status**: Aprovado — implementado
 **Módulo**: `app/inventario/` (sub-fluxo novo, ao lado do Confronto existente)
 **Spec irmão (não alterado)**: `docs/superpowers/specs/2026-05-26-relatorio-confronto-inventario-design.md`
 
 ---
+
+> **Revisão 2026-05-31 (pós-implementação) — coluna AJUSTE autoritativa.**
+> Decisão do usuário: o ajuste que vai para a coluna **INV/MOV do Confronto** passa a
+> vir da **coluna AJUSTE da planilha** (campo novo `ajuste_inventario`, autoritativo;
+> vazio = 0), e **não** de `contagem − qtd_esperada`. Motivo: quando o Odoo está
+> "semi-ajustado" (divergente do `InventarioBase`), derivar o ajuste contra o Odoo
+> (`qtd_esperada`) levava a coluna MOV a um valor errado. Os **dois** ajustes ficam
+> separados (não confundir): `ajuste` (= contagem − qtd_esperada) segue alimentando o
+> plano de aplicação no **Odoo** (skills) e a `classe`; `ajuste_inventario` alimenta
+> **só** o Confronto. Ver §5.2, §6.1, §6.4.
 
 ## 1. Visão e objetivos
 
@@ -102,9 +112,10 @@ Resumo (preenchido na contabilização, derivável): `tot_itens`, `tot_com_ajust
 | `company_id` | Integer | 1/4/5 |
 | `qtd_esperada` | Numeric(15,3) | saldo Odoo no T0 (`quantity`) |
 | `reservado_esperado` | Numeric(15,3) | `reserved_quantity` no T0 |
-| `contagem` | Numeric(15,3) nullable | preenchido pelo usuário |
-| `ajuste` | Numeric(15,3) | `= contagem − qtd_esperada` |
-| `classe` | String(20) | NORMAL / RESERVA_FANTASMA / NEGATIVO / LOTE_NOVO / SEM_AJUSTE |
+| `contagem` | Numeric(15,3) nullable | físico contado (coluna CONTAGEM); preenchido pelo usuário |
+| `ajuste` | Numeric(15,3) | `= contagem − qtd_esperada` → delta a aplicar no **Odoo** (skills); define a `classe` |
+| `ajuste_inventario` | Numeric(15,3) NOT NULL default 0 | **valor literal da coluna AJUSTE** (autoritativo; vazio = 0) → delta somado ao último inventário na coluna INV/MOV do **Confronto**. Independe do Odoo |
+| `classe` | String(20) | NORMAL / RESERVA_FANTASMA / NEGATIVO / LOTE_NOVO / SEM_AJUSTE (baseada em `ajuste`) |
 | `obs` | String(300) | |
 
 `UniqueConstraint(contagem_id, location_name, cod_produto, lote)` — `lote=''` para sem-lote evita o NULL-distinct do Postgres.
@@ -118,9 +129,14 @@ Resumo (preenchido na contabilização, derivável): `tot_itens`, `tot_com_ajust
 A unidade de presença/escopo é a **linha = 1 quant** `(location_name, cod_produto, lote)`, **nunca** o código agregado.
 
 - **Quant presente** na planilha reenviada ⇒ inventariado:
-  - `CONTAGEM` preenchida (inclusive `0`) ⇒ `ajuste = contagem − qtd_esperada`.
-  - `CONTAGEM` em branco ⇒ tratada como **0** (zera o fantasma).
+  - `CONTAGEM` preenchida (inclusive `0`) ⇒ `ajuste = contagem − qtd_esperada` (→ Odoo).
+  - `CONTAGEM` em branco ⇒ tratada como **0** (zera o fantasma no Odoo).
+  - `AJUSTE` (coluna autoritativa, opcional) ⇒ `ajuste_inventario = valor literal` (→ Confronto);
+    em branco ⇒ **0** (sem ajuste no Confronto). Aceita negativo. **Não** é derivado da contagem.
 - **Quant ausente** da planilha ⇒ **intocado**, mesmo que o mesmo `cod_produto` apareça em outras linhas.
+
+> **AJUSTE × CONTAGEM são independentes.** CONTAGEM governa o plano para o Odoo (incl.
+> vazia = zera); AJUSTE governa a coluna INV/MOV do Confronto. Preencher um não afeta o outro.
 
 > Exemplo validado com o usuário: código com 5 quants no Odoo; reenvia 3 linhas (2 zeradas + 1 com qtd) ⇒ ajusta só as 3; os 2 quants ausentes ficam intocados.
 
@@ -147,17 +163,29 @@ Calculada na contabilização, gravada em `classe`, exibida no relatório. **Ori
 O Confronto continua sendo renderizado **por inventário completo** (`CicloInventario`, granularidade produto+empresa). A novidade: as colunas **`INV FB/CD/LF`** passam a ser
 
 ```
-INV_<empresa>(produto) = baseline(InventarioBase)               -- contagem do inventário completo
-                       + Σ ajuste das ContagemInventarioItem    -- ajustes cíclicos do período
+INV_<empresa>(produto) = baseline(InventarioBase)                      -- contagem do inventário completo
+                       + Σ ajuste_inventario das ContagemInventarioItem -- coluna AJUSTE (autoritativa)
                          do período vigente, da <empresa>,
                          agrupados por (cod_produto, empresa)
 ```
 
+> **Usa `ajuste_inventario` (coluna AJUSTE), NÃO `ajuste`.** O delta somado ao último
+> inventário é o que o usuário digitou em AJUSTE — independe de `qtd_esperada` (saldo
+> Odoo do T0). Isso evita carregar para a coluna MOV a divergência Odoo↔inventário
+> quando o Odoo está "semi-ajustado".
+
 **Exemplo (validado com o usuário) — Produto A, empresa FB:**
 - Baseline do inventário completo: `INV FB = 1000`.
-- Cíclico (por quant): Lote 1/Local X contou 500 (bate); Lote 2/Local Y contou 400, Odoo tinha 500 ⇒ `ajuste = −100`.
-- Ajuste agregado por produto+empresa = `−100` ⇒ Confronto exibe **`Produto A · FB = 900`**.
-- Como eu aplico o `−100` no Odoo, o snapshot `ODOO` também vai a 900 ⇒ Confronto **bate** (INV 900 = ODOO 900 = MOV 900).
+- Cíclico (por quant): Lote 1/Local X contou 500 (bate, AJUSTE 0); Lote 2/Local Y o físico
+  exigia somar `−100` ao inventário ⇒ coluna **AJUSTE = −100**.
+- `ajuste_inventario` agregado por produto+empresa = `−100` ⇒ Confronto exibe **`Produto A · FB = 900`**.
+
+**Caso "semi-ajustado" (o que motivou a revisão 2026-05-31):** se o Odoo já tinha sido
+parcialmente ajustado antes da contagem (ex. `qtd_esperada = 90` onde o físico é 80, e o
+inventário completo era 100), então `ajuste = 80 − 90 = −10` (aplicado no Odoo, leva ODOO a 80),
+mas o delta correto sobre o inventário é `−20` (100 → 80) ⇒ o usuário digita **AJUSTE = −20**.
+A coluna INV vai a `1000 − 20 = 980` em vez de `1000 − 10 = 990`. Os dois ajustes divergem
+de propósito; cada um corrige a sua dimensão.
 
 **Vigência / reset — corte por data (`>=`):** sejam os inventários completos ordenados por `data_snapshot`. Para o Confronto do inventário completo `I`, somam os ajustes das contagens cíclicas cuja `data_base` cai no intervalo
 

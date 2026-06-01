@@ -174,7 +174,16 @@ class ContagemInventarioItem(db.Model):
     qtd_esperada       = db.Column(db.Numeric(15, 3), default=0)   # saldo Odoo no T0
     reservado_esperado = db.Column(db.Numeric(15, 3), default=0)   # reserved no T0
     contagem      = db.Column(db.Numeric(15, 3))                   # nullable até preencher
-    ajuste        = db.Column(db.Numeric(15, 3), default=0)        # contagem - qtd_esperada
+    # DOIS ajustes com semânticas DISTINTAS (não confundir):
+    #  • ajuste            = contagem − qtd_esperada → delta a APLICAR NO ODOO
+    #    (plano consumido pelas skills gestor-estoque-odoo via delta_esperado).
+    #    Define a `classe`. Derivado SEMPRE da contagem; NÃO vem da planilha.
+    #  • ajuste_inventario = valor LITERAL da coluna AJUSTE da planilha (autoritativo;
+    #    vazio = 0) → delta SOMADO ao último inventário na coluna INV/MOV do Confronto
+    #    (confronto_service._agg_ajustes_ciclicos). Independe do Odoo (qtd_esperada),
+    #    para não carregar a divergência Odoo↔inventário ("semi-ajustado").
+    ajuste            = db.Column(db.Numeric(15, 3), default=0)     # contagem − qtd_esperada (→ Odoo)
+    ajuste_inventario = db.Column(db.Numeric(15, 3), default=0, nullable=False)  # coluna AJUSTE (→ Confronto)
     classe        = db.Column(db.String(20))                       # NORMAL/RESERVA_FANTASMA/NEGATIVO/LOTE_NOVO/SEM_AJUSTE
     obs           = db.Column(db.String(300))
 

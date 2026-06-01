@@ -70,6 +70,12 @@
       "default": 0
     },
     {
+      "name": "ajuste_inventario",
+      "type": "numeric(15,3)",
+      "nullable": false,
+      "default": 0
+    },
+    {
       "name": "classe",
       "type": "varchar(20)"
     },

@@ -5,7 +5,11 @@ Regras (spec §6):
 - A planilha reenviada É o escopo: linha presente = inventariada; ausente = intocada.
 - Linha presente com CONTAGEM vazia ⇒ 0 (zera o fantasma).
 - Linha que não casa com nenhum quant da base ⇒ LOTE_NOVO (qtd_esperada=0).
-- ajuste = contagem − qtd_esperada.
+- DOIS ajustes com semânticas DISTINTAS (não confundir):
+    • ajuste            = contagem − qtd_esperada → delta a APLICAR NO ODOO (skills).
+      Define a `classe`. Derivado SEMPRE da contagem; ignora a coluna AJUSTE.
+    • ajuste_inventario = valor LITERAL da coluna AJUSTE (autoritativo; vazio = 0)
+      → delta somado ao último inventário na coluna INV/MOV do Confronto.
 - Classes (precedência): SEM_AJUSTE → LOTE_NOVO → NEGATIVO → RESERVA_FANTASMA → NORMAL.
 
 Funções puras (`calcular_linha`, `classificar`) testáveis sem Odoo/DB.
@@ -33,6 +37,9 @@ HEADER_ALIASES = {
     'cod': 'cod_produto', 'codigo': 'cod_produto', 'cod_produto': 'cod_produto',
     'lote': 'lote',
     'contagem': 'contagem', 'contado': 'contagem', 'qtd_contada': 'contagem',
+    # Coluna AJUSTE (autoritativa) → ajuste_inventario (delta p/ a coluna INV/MOV
+    # do Confronto). Opcional; vazia = 0. NÃO confundir com `contagem`.
+    'ajuste': 'ajuste',
 }
 
 
@@ -67,21 +74,28 @@ def classificar(qtd_esperada: Decimal, reservado_esperado: Decimal,
     return 'NORMAL'
 
 
-def calcular_linha(item_base: Optional[dict], contagem: Optional[Decimal]) -> dict:
-    """Lógica PURA: dado o item da base (ou None p/ lote novo) e a contagem,
-    devolve qtd_esperada, reservado_esperado, ajuste e classe.
+def calcular_linha(item_base: Optional[dict], contagem: Optional[Decimal],
+                   ajuste_manual: Optional[Decimal] = None) -> dict:
+    """Lógica PURA: dado o item da base (ou None p/ lote novo), a contagem e o
+    ajuste manual da coluna AJUSTE, devolve qtd_esperada, reservado_esperado e os
+    DOIS ajustes (com a classe).
 
-    contagem None ⇒ 0 (linha presente, célula vazia).
+    - contagem None ⇒ 0 (linha presente, célula vazia) ⇒ `ajuste` = 0 − qtd_esperada.
+    - `ajuste`            = contagem − qtd_esperada → delta p/ Odoo. Define a classe.
+    - `ajuste_inventario` = `ajuste_manual` (coluna AJUSTE), autoritativo; None/vazio
+      ⇒ 0 (sem impacto no Confronto). NUNCA derivado da contagem.
     """
     cont = contagem if contagem is not None else ZERO
     is_nova = item_base is None
     qtd_esp = ZERO if is_nova else Decimal(str(item_base.get('qtd_esperada') or 0))
     res_esp = ZERO if is_nova else Decimal(str(item_base.get('reservado_esperado') or 0))
     ajuste = cont - qtd_esp
+    ajuste_inventario = ajuste_manual if ajuste_manual is not None else ZERO
     classe = classificar(qtd_esp, res_esp, ajuste, is_nova)
     return {
         'contagem': cont, 'qtd_esperada': qtd_esp,
         'reservado_esperado': res_esp, 'ajuste': ajuste,
+        'ajuste_inventario': ajuste_inventario,
         'classe': classe, 'is_nova': is_nova,
     }
 
@@ -155,7 +169,13 @@ class ContagemService:
     # ------------------------------------------------------------ parse xlsx
     @staticmethod
     def parse_planilha(file_storage: IO) -> List[dict]:
-        """Lê o xlsx preenchido. Retorna [{location_name, cod_produto, lote, contagem}].
+        """Lê o xlsx preenchido. Retorna
+        [{location_name, cod_produto, lote, contagem, ajuste_manual}].
+
+        - `contagem` (coluna CONTAGEM) → físico; gera o `ajuste` p/ Odoo.
+        - `ajuste_manual` (coluna AJUSTE, opcional) → autoritativo p/ a coluna
+          INV/MOV do Confronto. None se a coluna não existe ou a célula está vazia.
+          Aceita negativo (ao contrário da contagem).
 
         Levanta ValueError com mensagem clara em caso de header/valor inválido.
         """
@@ -199,9 +219,17 @@ class ContagemService:
                 raise ValueError(
                     f'Linha {nrow}: contagem negativa ({contagem}) não é permitida '
                     f'(físico não é negativo).')
+            # Coluna AJUSTE (opcional, autoritativa p/ o Confronto). Aceita negativo.
+            ajuste_manual = None
+            if 'ajuste' in col_idx:
+                try:
+                    ajuste_manual = _to_decimal(row[col_idx['ajuste']])
+                except ValueError as exc:
+                    raise ValueError(f'Linha {nrow}: coluna AJUSTE — {exc}')
             out.append({
                 'location_name': str(loc).strip(),
                 'cod_produto': cod, 'lote': lote, 'contagem': contagem,
+                'ajuste_manual': ajuste_manual,
                 '_nrow': nrow,
             })
         return out
@@ -237,7 +265,7 @@ class ContagemService:
                 'qtd_esperada': it.qtd_esperada,
                 'reservado_esperado': it.reservado_esperado,
             }
-            calc = calcular_linha(item_base, ln['contagem'])
+            calc = calcular_linha(item_base, ln['contagem'], ln.get('ajuste_manual'))
             resultado.append({
                 'location_name': ln['location_name'],
                 'cod_produto': ln['cod_produto'],
@@ -249,6 +277,7 @@ class ContagemService:
                 'reservado_esperado': calc['reservado_esperado'],
                 'contagem': calc['contagem'],
                 'ajuste': calc['ajuste'],
+                'ajuste_inventario': calc['ajuste_inventario'],
                 'classe': calc['classe'],
                 'is_nova': calc['is_nova'],
             })
@@ -259,8 +288,14 @@ class ContagemService:
 
     @staticmethod
     def _resumo(linhas: List[dict]) -> dict:
+        """Resumo dos DOIS impactos (não confundir):
+        - tot_ajuste_pos/neg     → impacto no ODOO (campo `ajuste`).
+        - tot_ajuste_inv_pos/neg → impacto na coluna INV/MOV do Confronto
+          (campo `ajuste_inventario`, vindo da coluna AJUSTE).
+        """
         por_classe: Dict[str, int] = {}
         tot_pos = tot_neg = ZERO
+        tot_inv_pos = tot_inv_neg = ZERO
         tot_com_ajuste = qt_novos = 0
         for r in linhas:
             por_classe[r['classe']] = por_classe.get(r['classe'], 0) + 1
@@ -271,6 +306,11 @@ class ContagemService:
                 tot_pos += aj
             elif aj < ZERO:
                 tot_neg += aj
+            aji = r.get('ajuste_inventario') or ZERO
+            if aji > ZERO:
+                tot_inv_pos += aji
+            elif aji < ZERO:
+                tot_inv_neg += aji
             if r['is_nova']:
                 qt_novos += 1
         return {
@@ -278,6 +318,8 @@ class ContagemService:
             'tot_com_ajuste': tot_com_ajuste,
             'tot_ajuste_pos': tot_pos,
             'tot_ajuste_neg': tot_neg,
+            'tot_ajuste_inv_pos': tot_inv_pos,
+            'tot_ajuste_inv_neg': tot_inv_neg,
             'qt_lotes_novos': qt_novos,
             'por_classe': por_classe,
         }
@@ -322,6 +364,7 @@ class ContagemService:
                 db.session.add(it)
             it.contagem = r['contagem']
             it.ajuste = r['ajuste']
+            it.ajuste_inventario = r['ajuste_inventario']
             it.classe = r['classe']
 
         res = proc['resumo']

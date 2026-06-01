@@ -190,9 +190,14 @@ class ConfrontoService:
 
     @staticmethod
     def _agg_ajustes_ciclicos(ciclo) -> Dict[str, Dict[str, Decimal]]:
-        """{cod: {'fb','cd','lf'}} — soma ContagemInventarioItem.ajuste por
-        (cod_produto, empresa) das contagens cíclicas CONTABILIZADAS do período
-        do inventário completo (spec §6.4).
+        """{cod: {'fb','cd','lf'}} — soma ContagemInventarioItem.ajuste_inventario
+        (coluna AJUSTE autoritativa, NÃO o `ajuste`=contagem−qtd_esperada que vai p/ o
+        Odoo) por (cod_produto, empresa) das contagens cíclicas CONTABILIZADAS do
+        período do inventário completo (spec §6.4).
+
+        Usar ajuste_inventario desacopla a coluna INV/MOV do saldo Odoo do T0: o delta
+        somado ao último inventário é exatamente o que o usuário digitou em AJUSTE,
+        sem carregar a divergência Odoo↔inventário ("semi-ajustado").
 
         Período (corte por dia): data_base >= ciclo.data_snapshot e, se houver um
         inventário completo posterior, < a data_snapshot dele. Para o ciclo
@@ -210,7 +215,7 @@ class ConfrontoService:
         q = (db.session.query(
                 ContagemInventarioItem.cod_produto,
                 ContagemInventario.empresa,
-                func.sum(ContagemInventarioItem.ajuste),
+                func.sum(ContagemInventarioItem.ajuste_inventario),
             )
             .join(ContagemInventario,
                   ContagemInventarioItem.contagem_id == ContagemInventario.id)

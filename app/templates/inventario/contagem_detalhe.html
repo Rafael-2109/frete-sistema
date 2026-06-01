@@ -34,8 +34,14 @@
       <div class="card h-100">
         <div class="card-body">
           <h5 class="card-title">1. Planilha-base</h5>
-          <p class="card-text text-muted">Baixe, preencha a coluna <code>CONTAGEM</code> e reenvie.
-            Linha em branco na planilha = contagem 0 (zera). Linha removida = não tocada.</p>
+          <p class="card-text text-muted mb-1">Baixe, preencha e reenvie. Duas colunas, usos distintos:</p>
+          <ul class="card-text text-muted small mb-2">
+            <li><code>CONTAGEM</code> = físico contado → gera o ajuste a aplicar no <strong>Odoo</strong>
+              (= CONTAGEM − qtd). Em branco = 0 (zera o quant).</li>
+            <li><code>AJUSTE</code> = delta a somar ao último inventário → coluna <strong>INV/MOV do Confronto</strong>.
+              Em branco = sem ajuste. Aceita negativo. Não é calculado da contagem.</li>
+          </ul>
+          <p class="card-text text-muted small mb-2">Linha removida da planilha = não tocada.</p>
           <a href="{{ url_for('inventario.download_base', contagem_id=contagem.id) }}"
              class="btn btn-outline-primary">Baixar planilha-base (.xlsx)</a>
         </div>
@@ -79,11 +85,14 @@
             <tr>
               <th>Local</th><th>Cód</th><th>Produto</th><th>Lote</th>
               <th class="text-end">Esperado</th><th class="text-end">Reservado</th>
-              <th class="text-end">Contagem</th><th class="text-end">Ajuste</th><th>Classe</th>
+              <th class="text-end">Contagem</th>
+              <th class="text-end" title="contagem − qtd_esperada → aplicar no Odoo">Ajuste Odoo</th>
+              <th class="text-end" title="coluna AJUSTE → soma na coluna INV/MOV do Confronto">Ajuste Inv.</th>
+              <th>Classe</th>
             </tr>
           </thead>
           <tbody id="tbody-itens">
-            <tr><td colspan="9" class="text-center text-muted">Carregando…</td></tr>
+            <tr><td colspan="10" class="text-center text-muted">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -114,8 +123,10 @@ function resumoHtml(r) {
   }
   return `<div class="alert alert-info mt-2">
     <strong>Impacto:</strong> ${r.tot_itens} itens · ${r.tot_com_ajuste} com ajuste ·
-    +${fmt(r.tot_ajuste_pos)} / ${fmt(r.tot_ajuste_neg)} un ·
-    ${r.qt_lotes_novos} lote(s) novo(s)<br>${chips}${avisos}</div>`;
+    ${r.qt_lotes_novos} lote(s) novo(s)<br>
+    <span title="ajuste = contagem − qtd_esperada">Odoo: +${fmt(r.tot_ajuste_pos)} / ${fmt(r.tot_ajuste_neg)} un</span> ·
+    <span title="coluna AJUSTE → Confronto">Inventário (Confronto): +${fmt(r.tot_ajuste_inv_pos)} / ${fmt(r.tot_ajuste_inv_neg)} un</span>
+    <br>${chips}${avisos}</div>`;
 }
 
 document.getElementById('btn-preview').addEventListener('click', () => {
@@ -155,19 +166,20 @@ function carregarItens() {
     .then(d => {
       const tb = document.getElementById('tbody-itens');
       if (!d.linhas || !d.linhas.length) {
-        tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Nenhum item</td></tr>';
+        tb.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Nenhum item</td></tr>';
         return;
       }
+      const sgnCls = v => Number(v) < 0 ? 'text-danger' : (Number(v) > 0 ? 'text-success' : '');
       tb.innerHTML = d.linhas.map(l => {
         const badge = CLASSE_BADGE[l.classe] || 'bg-secondary';
-        const ajCls = Number(l.ajuste) < 0 ? 'text-danger' : (Number(l.ajuste) > 0 ? 'text-success' : '');
         return `<tr>
           <td>${l.location_name || ''}</td><td>${l.cod_produto || ''}</td>
           <td><small>${l.nome_produto || ''}</small></td><td>${l.lote || '<em>—</em>'}</td>
           <td class="text-end">${fmt(l.qtd_esperada)}</td>
           <td class="text-end">${fmt(l.reservado_esperado)}</td>
           <td class="text-end">${fmt(l.contagem)}</td>
-          <td class="text-end ${ajCls}">${fmt(l.ajuste)}</td>
+          <td class="text-end ${sgnCls(l.ajuste)}">${fmt(l.ajuste)}</td>
+          <td class="text-end ${sgnCls(l.ajuste_inventario)}">${fmt(l.ajuste_inventario)}</td>
           <td><span class="badge ${badge}">${l.classe || ''}</span></td></tr>`;
       }).join('');
     });
