@@ -363,6 +363,318 @@ class TestRunEvals:
 
 
 # ---------------------------------------------------------------------------
+# Testes: BUG-1 — judge GRANULAR (score parcial por item)
+# ---------------------------------------------------------------------------
+
+class TestJudgeCaseGranular:
+    """_judge_case com judge_fn granular (retorna dict {passed_items, total_items, failing})."""
+
+    def _make_case(self, case_id="ac-03"):
+        return {
+            "id": case_id,
+            "input": "Analise o pedido VCD001.",
+            "expected_behavior": [
+                "Identifica como P2/FOB",
+                "Decisao: aguardar producao",
+                "Menciona estoque",
+                "Cita prazo",
+                "Sem envio parcial",
+            ],
+            "must_not": ["Sugere envio parcial"],
+        }
+
+    def test_granular_4_de_5_status_pass(self):
+        """judge_fn dict {4/5} -> case_score 0.8 -> status 'pass' (>= PASS_THRESHOLD)."""
+        from app.agente.services.eval_gate_service import _judge_case
+
+        def mock_judge_fn(prompt: str) -> dict:
+            return {"passed_items": 4, "total_items": 5, "failing": ["Cita prazo"]}
+
+        result = _judge_case(self._make_case(), agent_output="Resposta.", judge_fn=mock_judge_fn)
+        assert abs(result["case_score"] - 0.8) < 1e-9
+        assert result["status"] == "pass"
+        assert result["id"] == "ac-03"
+
+    def test_granular_2_de_5_status_fail(self):
+        """judge_fn dict {2/5} -> case_score 0.4 -> status 'fail' (< PASS_THRESHOLD)."""
+        from app.agente.services.eval_gate_service import _judge_case
+
+        def mock_judge_fn(prompt: str) -> dict:
+            return {"passed_items": 2, "total_items": 5, "failing": ["a", "b", "c"]}
+
+        result = _judge_case(self._make_case(), agent_output="Resposta.", judge_fn=mock_judge_fn)
+        assert abs(result["case_score"] - 0.4) < 1e-9
+        assert result["status"] == "fail"
+
+    def test_granular_total_items_zero_sem_excecao(self):
+        """total_items=0 -> case_score 0.0 (sem ZeroDivisionError) -> status 'fail'."""
+        from app.agente.services.eval_gate_service import _judge_case
+
+        def mock_judge_fn(prompt: str) -> dict:
+            return {"passed_items": 0, "total_items": 0, "failing": ["parse_error"]}
+
+        result = _judge_case(self._make_case(), agent_output="Resposta.", judge_fn=mock_judge_fn)
+        assert result["case_score"] == 0.0
+        assert result["status"] == "fail"
+
+    def test_granular_passed_maior_que_total_capa_em_1(self):
+        """HIGH-1: Haiku miscount (passed > total) -> case_score capado em 1.0.
+
+        Sem o cap, case_score viraria >1.0 e envenenaria o baseline (gate
+        nunca dispararia regressao). Blinda contra LLM que conta errado.
+        """
+        from app.agente.services.eval_gate_service import _judge_case
+
+        def mock_judge_fn(prompt: str) -> dict:
+            return {"passed_items": 6, "total_items": 5, "failing": []}
+
+        result = _judge_case(self._make_case(), agent_output="Resposta.", judge_fn=mock_judge_fn)
+        assert result["case_score"] == 1.0  # capado, NUNCA 1.2
+        assert result["status"] == "pass"
+
+    def test_granular_threshold_exato_passa(self):
+        """case_score == PASS_THRESHOLD (0.80) -> status 'pass' (limite inclusivo)."""
+        from app.agente.services.eval_gate_service import _judge_case
+
+        def mock_judge_fn(prompt: str) -> dict:
+            return {"passed_items": 8, "total_items": 10, "failing": ["x", "y"]}
+
+        result = _judge_case(self._make_case(), agent_output="Resposta.", judge_fn=mock_judge_fn)
+        assert abs(result["case_score"] - 0.80) < 1e-9
+        assert result["status"] == "pass"
+
+    def test_granular_evidence_legivel(self):
+        """evidence granular resume passed/total e itens faltantes."""
+        from app.agente.services.eval_gate_service import _judge_case
+
+        def mock_judge_fn(prompt: str) -> dict:
+            return {"passed_items": 4, "total_items": 5, "failing": ["Cita prazo"]}
+
+        result = _judge_case(self._make_case(), agent_output="Resposta.", judge_fn=mock_judge_fn)
+        assert "4/5" in result["evidence"]
+        assert "Cita prazo" in result["evidence"]
+
+
+class TestJudgeCaseRetrocompat:
+    """_judge_case mantem retrocompat com judge_fn que retorna str 'pass'/'fail'."""
+
+    def _make_case(self):
+        return {
+            "id": "rc-01",
+            "input": "x",
+            "expected_behavior": ["a"],
+            "must_not": [],
+        }
+
+    def test_retrocompat_str_pass_score_1(self):
+        """str 'pass' -> case_score 1.0, status 'pass'."""
+        from app.agente.services.eval_gate_service import _judge_case
+        result = _judge_case(self._make_case(), agent_output="ok", judge_fn=lambda p: "pass")
+        assert result["case_score"] == 1.0
+        assert result["status"] == "pass"
+
+    def test_retrocompat_str_fail_score_0(self):
+        """str 'fail' -> case_score 0.0, status 'fail'."""
+        from app.agente.services.eval_gate_service import _judge_case
+        result = _judge_case(self._make_case(), agent_output="ok", judge_fn=lambda p: "fail")
+        assert result["case_score"] == 0.0
+        assert result["status"] == "fail"
+
+    def test_retrocompat_str_qualquer_outro_score_0(self):
+        """str que nao e 'pass' -> case_score 0.0, status 'fail'."""
+        from app.agente.services.eval_gate_service import _judge_case
+        result = _judge_case(self._make_case(), agent_output="ok", judge_fn=lambda p: "lixo")
+        assert result["case_score"] == 0.0
+        assert result["status"] == "fail"
+
+
+class TestRunEvalsGranular:
+    """run_evals com judge_fn granular -> score agregado = media dos case_scores."""
+
+    def _two_case_dataset_path(self):
+        import tempfile, yaml as _yaml
+        cases = [
+            {"id": "g1", "input": "a", "expected_behavior": ["x", "y", "z", "w", "v"]},
+            {"id": "g2", "input": "b", "expected_behavior": ["x", "y", "z", "w", "v"]},
+        ]
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
+        _yaml.dump({"cases": cases}, tmp)
+        tmp.close()
+        return tmp.name
+
+    def test_run_evals_media_0_8_e_0_4(self):
+        """2 casos (0.8 e 0.4) -> score agregado == 0.6 (media), passed==1."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._two_case_dataset_path()
+        judge_calls = [0]
+
+        def judge_fn(prompt: str) -> dict:
+            judge_calls[0] += 1
+            if judge_calls[0] == 1:
+                return {"passed_items": 4, "total_items": 5, "failing": ["x"]}
+            return {"passed_items": 2, "total_items": 5, "failing": ["a", "b", "c"]}
+
+        try:
+            result = run_evals(
+                agent_name="g",
+                dataset_path=path,
+                invoke_fn=lambda x: "out",
+                judge_fn=judge_fn,
+            )
+        finally:
+            os.unlink(path)
+
+        assert result["total"] == 2
+        assert abs(result["score"] - 0.6) < 1e-9  # media (0.8 + 0.4) / 2
+        assert result["passed"] == 1  # apenas g1 (0.8) >= 0.80
+        scores = sorted(c["case_score"] for c in result["cases"])
+        assert abs(scores[0] - 0.4) < 1e-9
+        assert abs(scores[1] - 0.8) < 1e-9
+
+    def test_run_evals_case_score_em_cada_caso(self):
+        """Cada item de cases[] ganha o campo case_score."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._two_case_dataset_path()
+        try:
+            result = run_evals(
+                agent_name="g",
+                dataset_path=path,
+                invoke_fn=lambda x: "out",
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+            )
+        finally:
+            os.unlink(path)
+
+        for c in result["cases"]:
+            assert "case_score" in c
+            assert c["case_score"] == 1.0
+
+    def test_run_evals_invoke_error_case_score_zero_conta_media(self):
+        """Caso com status 'error' (invoke falhou) -> case_score 0.0 e conta na media."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._two_case_dataset_path()
+        call = [0]
+
+        def invoke_que_falha(x):
+            call[0] += 1
+            if call[0] == 1:
+                raise RuntimeError("boom")
+            return "out"
+
+        try:
+            result = run_evals(
+                agent_name="g",
+                dataset_path=path,
+                invoke_fn=invoke_que_falha,
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+            )
+        finally:
+            os.unlink(path)
+
+        assert result["total"] == 2
+        # 1 erro (0.0) + 1 perfeito (1.0) -> media 0.5
+        assert abs(result["score"] - 0.5) < 1e-9
+        err_case = [c for c in result["cases"] if c["status"] == "error"][0]
+        assert err_case["case_score"] == 0.0
+
+
+class TestCallHaikuEvalGranular:
+    """_call_haiku_eval_granular: parse tolerante + best-effort em falha."""
+
+    def test_parse_json_com_prefixo_sufixo(self, monkeypatch):
+        """Parse tolerante a prefixo/sufixo (find('{')/rfind('}'))."""
+        from app.agente.services import eval_gate_service as svc
+
+        class _Block:
+            type = "text"
+            text = 'Aqui esta: {"passed_items": 3, "total_items": 5, "failing": ["a", "b"]} fim'
+
+        class _Resp:
+            content = [_Block()]
+
+        class _Messages:
+            def create(self, **kwargs):
+                return _Resp()
+
+        class _Client:
+            messages = _Messages()
+
+        monkeypatch.setattr(svc.anthropic, "Anthropic", lambda *a, **k: _Client())
+        out = svc._call_haiku_eval_granular("prompt")
+        assert out == {"passed_items": 3, "total_items": 5, "failing": ["a", "b"]}
+
+    def test_parse_invalido_retorna_best_effort(self, monkeypatch):
+        """JSON invalido/ausente -> {passed_items:0, total_items:0, failing:['parse_error']}."""
+        from app.agente.services import eval_gate_service as svc
+
+        class _Block:
+            type = "text"
+            text = "isso nao e json nenhum"
+
+        class _Resp:
+            content = [_Block()]
+
+        class _Messages:
+            def create(self, **kwargs):
+                return _Resp()
+
+        class _Client:
+            messages = _Messages()
+
+        monkeypatch.setattr(svc.anthropic, "Anthropic", lambda *a, **k: _Client())
+        out = svc._call_haiku_eval_granular("prompt")
+        assert out == {"passed_items": 0, "total_items": 0, "failing": ["parse_error"]}
+
+
+class TestRunEvalsDefaultJudgeGranular:
+    """run_evals default judge_fn agora e _call_haiku_eval_granular (BUG-1)."""
+
+    def test_default_judge_fn_e_granular(self):
+        from app.agente.services import eval_gate_service as svc
+        import inspect
+
+        sig = inspect.signature(svc.run_evals)
+        # judge_fn continua Optional com default None (resolvido internamente)
+        assert sig.parameters["judge_fn"].default is None
+
+    def test_default_judge_resolvido_para_granular(self, monkeypatch):
+        """Sem judge_fn explicito, run_evals usa _call_haiku_eval_granular."""
+        from app.agente.services import eval_gate_service as svc
+        import os, tempfile, yaml as _yaml
+
+        capturado = []
+
+        def fake_granular(prompt: str) -> dict:
+            capturado.append(prompt)
+            return {"passed_items": 5, "total_items": 5, "failing": []}
+
+        monkeypatch.setattr(svc, "_call_haiku_eval_granular", fake_granular)
+
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
+        _yaml.dump({"cases": [{"id": "d1", "input": "a", "expected_behavior": ["x"]}]}, tmp)
+        tmp.close()
+
+        try:
+            result = svc.run_evals(
+                agent_name="d",
+                dataset_path=tmp.name,
+                invoke_fn=lambda x: "out",
+                # judge_fn ausente -> deve usar _call_haiku_eval_granular
+            )
+        finally:
+            os.unlink(tmp.name)
+
+        assert len(capturado) == 1  # granular foi chamado
+        assert result["score"] == 1.0
+
+
+# ---------------------------------------------------------------------------
 # Testes: eval_gate
 # ---------------------------------------------------------------------------
 

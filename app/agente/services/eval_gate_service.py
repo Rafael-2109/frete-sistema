@@ -7,8 +7,10 @@ Haiku-as-judge (injetavel) e publica um gate report-only no D8.
 SEAM INJETAVEL:
     - invoke_fn: recebe user_input (str) -> agent_output (str).
       Default raise NotImplementedError (documentado: wiring real na ativacao).
-    - judge_fn: recebe prompt (str) -> "pass"|"fail".
-      Default _call_haiku_eval (mockavel em testes).
+    - judge_fn: recebe prompt (str) -> veredito.
+      Default _call_haiku_eval_granular (BUG-1): retorna dict
+      {passed_items, total_items, failing} para score parcial por item.
+      Retrocompat: aceita tambem str "pass"|"fail" (judge legado). Mockavel em testes.
 
 MODO report-only (default):
     eval_gate() NUNCA define blocked=True. Detecta regressao mas apenas loga.
@@ -16,17 +18,23 @@ MODO report-only (default):
 
 Ref: app/agente/workers/step_judge.py (padrao _call_haiku_judge + _parse_judge_json)
 """
+import json
 import logging
 import os
 import pathlib
 import subprocess
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
+
+import anthropic
 
 logger = logging.getLogger('sistema_fretes')
 
 # ─── Constantes ──────────────────────────────────────────────────────────────
 
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
+
+# BUG-1: limite de score_caso para o caso contar como 'pass' (decisao do usuario).
+PASS_THRESHOLD = 0.80
 
 EVAL_JUDGE_SYSTEM_PROMPT = """Voce e' um avaliador de qualidade de subagentes logisticos.
 
@@ -49,8 +57,10 @@ def _call_haiku_eval(prompt: str) -> str:
     """Chama Haiku com EVAL_JUDGE_SYSTEM_PROMPT. Retorna 'pass' ou 'fail'.
 
     Testavel via mock (mesmo padrao de step_judge._call_haiku_judge).
+
+    LEGADO (BUG-1): mantido por retrocompat. O default de run_evals migrou para
+    _call_haiku_eval_granular (judge granular). NAO remover — pode estar referenciado.
     """
-    import anthropic
     client = anthropic.Anthropic()
     resp = client.messages.create(
         model=HAIKU_MODEL,
@@ -65,6 +75,92 @@ def _call_haiku_eval(prompt: str) -> str:
                 return 'pass'
             return 'fail'
     return 'fail'
+
+
+# ─── Haiku judge GRANULAR (BUG-1 — default novo) ──────────────────────────────
+
+EVAL_JUDGE_GRANULAR_SYSTEM_PROMPT = """Voce e' um avaliador GRANULAR de qualidade de subagentes logisticos.
+
+Dado:
+- OUTPUT do agente (o que ele respondeu)
+- EXPECTED_BEHAVIOR (lista de comportamentos que DEVEM ocorrer)
+- MUST_NOT (lista de anti-padroes proibidos)
+
+Sua tarefa: CONTAR quantos itens foram atendidos, item por item.
+
+REGRAS DE CONTAGEM (criticas):
+- Um item de EXPECTED_BEHAVIOR conta como ATENDIDO se a INTENCAO foi cumprida,
+  MESMO com fraseado diferente. Seja TOLERANTE a comportamento equivalente OU SUPERIOR.
+  (Ex: se o item pede "menciona estoque" e o agente deu o numero exato de estoque,
+  o item esta ATENDIDO — comportamento superior tambem conta.)
+- Um item de MUST_NOT conta como FALHO se o anti-padrao APARECER no output.
+- total_items = numero de EXPECTED_BEHAVIOR + numero de MUST_NOT.
+- passed_items = quantos EXPECTED_BEHAVIOR foram atendidos + quantos MUST_NOT NAO foram violados.
+- failing = lista curta (texto) dos itens NAO atendidos ou violados.
+
+Retorne EXCLUSIVAMENTE um JSON (sem markdown, sem comentarios) no formato:
+{"passed_items": <int>, "total_items": <int>, "failing": [<str>, ...]}
+"""
+
+
+def _call_haiku_eval_granular(prompt: str) -> dict:
+    """Chama Haiku com EVAL_JUDGE_GRANULAR_SYSTEM_PROMPT. Retorna dict granular.
+
+    Returns:
+        {"passed_items": int, "total_items": int, "failing": [str, ...]}.
+        Best-effort: parse falho/JSON invalido -> {0, 0, ["parse_error"]}.
+
+    Parse tolerante a prefixo/sufixo (mesmo padrao de step_judge._parse_judge_json:
+    find('{')/rfind('}')). Testavel via mock de anthropic.Anthropic.
+    """
+    fallback = {"passed_items": 0, "total_items": 0, "failing": ["parse_error"]}
+
+    client = anthropic.Anthropic()
+    resp = client.messages.create(
+        model=HAIKU_MODEL,
+        max_tokens=300,
+        system=EVAL_JUDGE_GRANULAR_SYSTEM_PROMPT,
+        messages=[{'role': 'user', 'content': prompt}],
+    )
+
+    raw = ''
+    for block in resp.content:
+        if getattr(block, 'type', None) == 'text':
+            raw = block.text
+            break
+
+    parsed = _parse_granular_json(raw)
+    return parsed if parsed is not None else fallback
+
+
+def _parse_granular_json(raw: str) -> Optional[dict]:
+    """Parseia JSON granular tolerante a prefixo/sufixo. None se invalido.
+
+    Mesmo padrao de step_judge._parse_judge_json (find('{')/rfind('}')).
+    Valida chaves obrigatorias e normaliza tipos.
+    """
+    if not raw:
+        return None
+    try:
+        start = raw.find('{')
+        end = raw.rfind('}')
+        if start < 0 or end < 0 or end <= start:
+            return None
+        parsed = json.loads(raw[start:end + 1])
+        if 'passed_items' not in parsed or 'total_items' not in parsed:
+            return None
+        passed = int(parsed.get('passed_items', 0))
+        total = int(parsed.get('total_items', 0))
+        failing = parsed.get('failing', [])
+        if not isinstance(failing, list):
+            failing = [str(failing)]
+        return {
+            'passed_items': passed,
+            'total_items': total,
+            'failing': [str(f) for f in failing],
+        }
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return None
 
 
 # ─── Invoke stub (default — documentado: wiring real na ativacao) ─────────────
@@ -183,18 +279,24 @@ def load_golden_dataset(path: str) -> list[dict]:
 def _judge_case(
     case: dict,
     agent_output: str,
-    judge_fn: Callable[[str], str],
+    judge_fn: Callable[[str], Union[str, dict]],
 ) -> dict:
-    """Julga um caso individual do golden dataset.
+    """Julga um caso individual do golden dataset (BUG-1: score granular).
 
     Args:
         case: Dict com id, input, expected_behavior e opcionalmente must_not.
         agent_output: Output do agente para o input do caso.
-        judge_fn: Funcao que recebe prompt (str) -> "pass"|"fail".
+        judge_fn: Funcao que recebe prompt (str) -> veredito. Aceita DOIS formatos
+                  (retrocompat inviolavel):
+                  - dict {passed_items, total_items, failing} (judge granular novo)
+                  - str "pass"/"fail" (judge legado, usado pelos testes existentes)
                   Injetavel para testes sem API real.
 
     Returns:
-        Dict com {id, status: 'pass'|'fail', evidence}
+        Dict com {id, status: 'pass'|'fail', case_score: float, evidence}.
+        - granular: case_score = passed_items/total_items (0.0 se total==0).
+        - str: 'pass' -> 1.0; qualquer outro -> 0.0.
+        - status = 'pass' se case_score >= PASS_THRESHOLD, senao 'fail'.
     """
     case_id = case.get('id', 'unknown')
     expected = case.get('expected_behavior', [])
@@ -217,17 +319,48 @@ def _judge_case(
 
     try:
         verdict = judge_fn(prompt)
-        status = 'pass' if str(verdict).strip().lower() == 'pass' else 'fail'
+        case_score, evidence = _score_from_verdict(verdict)
     except Exception as e:
         logger.warning(f"[eval_gate] judge_fn falhou para caso {case_id}: {e}")
-        status = 'fail'
-        verdict = str(e)
+        case_score = 0.0
+        evidence = str(e)[:500]
+
+    status = 'pass' if case_score >= PASS_THRESHOLD else 'fail'
 
     return {
         'id': case_id,
         'status': status,
-        'evidence': str(verdict)[:500],
+        'case_score': case_score,
+        'evidence': evidence[:500],
     }
+
+
+def _score_from_verdict(verdict: Union[str, dict]) -> tuple:
+    """Deriva (case_score: float, evidence: str) do veredito do judge.
+
+    Detecta o formato por tipo (BUG-1):
+    - dict {passed_items, total_items, ...}: case_score = passed/total (0.0 se total==0).
+    - str (retrocompat): 'pass' -> 1.0; qualquer outro -> 0.0.
+    """
+    if isinstance(verdict, dict):
+        total = int(verdict.get('total_items', 0) or 0)
+        passed = int(verdict.get('passed_items', 0) or 0)
+        # HIGH-1 (code-review): cap em 1.0. O Haiku pode miscount e retornar
+        # passed_items > total_items → case_score > 1.0 → media > 1.0 → baseline
+        # envenenado (gate nunca dispara regressao). min() blinda contra isso.
+        case_score = min(1.0, passed / total) if total > 0 else 0.0
+        failing = verdict.get('failing', []) or []
+        if isinstance(failing, list):
+            faltou = ', '.join(str(f) for f in failing) if failing else 'nenhum'
+        else:
+            faltou = str(failing)
+        evidence = f"{passed}/{total} itens; faltou: [{faltou}]"
+        return case_score, evidence
+
+    # Retrocompat: judge_fn legado retorna str 'pass'/'fail'
+    raw = str(verdict).strip().lower()
+    case_score = 1.0 if raw == 'pass' else 0.0
+    return case_score, str(verdict)
 
 
 # ─── run_evals ────────────────────────────────────────────────────────────────
@@ -236,7 +369,7 @@ def run_evals(
     agent_name: str,
     dataset_path: str,
     invoke_fn: Optional[Callable[[str], str]] = None,
-    judge_fn: Optional[Callable[[str], str]] = None,
+    judge_fn: Optional[Callable[[str], Union[str, dict]]] = None,
 ) -> dict:
     """Roda avaliacao completa de um agente contra o golden dataset.
 
@@ -245,16 +378,19 @@ def run_evals(
         dataset_path: Caminho para o dataset.yaml.
         invoke_fn: SEAM — funcao que recebe user_input e retorna agent_output.
                    Default: stub que levanta NotImplementedError (documentado).
-        judge_fn: Funcao de julgamento. Default: _call_haiku_eval.
+        judge_fn: Funcao de julgamento. Default: _call_haiku_eval_granular (BUG-1).
+                  Aceita judge granular (dict) OU legado (str 'pass'/'fail').
 
     Returns:
         Dict com {agent_name, score: float(0-1), total, passed, cases: [...]}.
-        Best-effort: casos com erro sao contados como fail.
+        - score = MEDIA dos case_score de TODOS os casos (BUG-1: granular).
+        - passed = numero de casos com status=='pass' (retrocompat do campo).
+        - Best-effort: casos com erro (invoke falhou) -> case_score 0.0 e contam na media.
     """
     if invoke_fn is None:
         invoke_fn = _default_invoke_fn
     if judge_fn is None:
-        judge_fn = _call_haiku_eval
+        judge_fn = _call_haiku_eval_granular
 
     cases = load_golden_dataset(dataset_path)
     if not cases:
@@ -281,6 +417,7 @@ def run_evals(
             case_results.append({
                 'id': case_id,
                 'status': 'error',
+                'case_score': 0.0,
                 'evidence': f'invoke_fn nao implementado: {str(nie)[:200]}',
             })
             continue
@@ -289,6 +426,7 @@ def run_evals(
             case_results.append({
                 'id': case_id,
                 'status': 'error',
+                'case_score': 0.0,
                 'evidence': f'invoke_fn erro: {str(e)[:200]}',
             })
             continue
@@ -298,14 +436,16 @@ def run_evals(
             result = _judge_case(case=case, agent_output=agent_output, judge_fn=judge_fn)
         except Exception as e:
             logger.warning(f"[eval_gate] _judge_case falhou para {case_id}: {e}")
-            result = {'id': case_id, 'status': 'error', 'evidence': str(e)[:200]}
+            result = {'id': case_id, 'status': 'error', 'case_score': 0.0, 'evidence': str(e)[:200]}
 
         case_results.append(result)
         if result['status'] == 'pass':
             passed += 1
 
     total = len(case_results)
-    score = passed / total if total > 0 else 0.0
+    # BUG-1: score agregado = media dos case_score (casos 'error' contam como 0.0).
+    case_scores = [c.get('case_score', 0.0) for c in case_results]
+    score = (sum(case_scores) / total) if total > 0 else 0.0
 
     return {
         'agent_name': agent_name,
