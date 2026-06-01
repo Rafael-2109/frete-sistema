@@ -17,11 +17,13 @@ Industrialização por encomenda dentro do grupo: **FB** (encomendante) remete i
 | 5 | **`PROPOSTA_CONFIG_RETORNO.md`** | Proposta concreta de operações+journals do retorno (G5a/G5b) — o que criar/ajustar. |
 | — | **`T-*-resultado.md`** | Log de execução: `T-PASSO0-TESTE` (G5b wiring LF ✅), `T-G5B-OP` (op 3252 ✅). |
 
-## ESTADO_ATUAL (checkpoint 2026-05-30)
-**Mapeamento completo + 2 escritas reversíveis aplicadas no Odoo PROD:**
-- ✅ **Op 3252** criada (cópia da 2027, `movimento_estoque=False`, isolada/sem cfop_orig) — o lever G5b. *(reversível: desativar op)*
-- ✅ **L1 aplicado**: 14 categorias LF repointadas → valoração `1150200001` / input `1150100011` / output `1150100012`. *(reversível: `e2e_l1_repoint_lf.py --revert`, snapshot `/tmp/e2e_l1_snapshot.json` — ⚠️ snapshot em /tmp some no reboot)*
-- ⬜ **Piloto E2E NÃO iniciado** — próximo = Etapa 1 (remessa NF 5901 SEFAZ). Runbook em `PROMPT_PROXIMA_SESSAO.md` + `GOALS.md §C` + `PROPOSTA_CONFIG_RETORNO.md §Sequência`. (`GOALS §A` é só o design por-operação.)
+## ESTADO_ATUAL (checkpoint 2026-06-01 — piloto 4870112 1 caixa, lote PILOTO-3105)
+**Config base (reversível):** ✅ Op 3252 (`movimento_estoque=False`, lever G5b) · ✅ **L1 aplicado** (14 categorias LF → valoração `1150200001`/input `1150100011`/output `1150100012`, Design A — **VIVO e validado**).
+**Piloto E2E (ver `RUNBOOK §0.7` + `PROMPT_PROXIMA_SESSAO.md`):**
+- ✅ **Etapa 1 (Remessa)**: NF `RPI/2026/00245` SEFAZ-OK; `D 5101010001 +279,23`.
+- ✅ **Etapa 2 (Entrada LF) COMPLETA — Model B**: picking `LF/IN/01790` (322451) Vendors→**31092** (lotes LF); SVL Design A `D 1150200001 / C 1150100011`; **ENTIN 737062 POSTED** `D 1150100011 / C 5101020001 (PASSIVA)`; **validador Δ1150100011=0 PASS**. (Model A inviável — lote com estoque tem company imutável, G-ENT-6.)
+- ✅ **Etapa E (MO) COMPLETA — fix G-ENT-10**: MOs **20252** (BATELADA) + **20254** (PA) consumiram 31092 → PA em 31093; **net-zero terceiros** (`1150100004`/`1150200001` bal=0), estoque próprio LF intacto (G3 ✅). Fantasmas (20235/36/38/39) = rastro `done`, estoque zerado via Skill 1. Fix: `picked=True` nas move.lines dos raws antes do `mark_done`.
+- ⏳ **Pendente**: drenar trânsito 26489 (companheiro FB→30720); Etapas 4-5 (G5a Contador).
 
 ## Decisão de base (resolvida nesta sessão)
 - **Conta**: usar a família de compensação existente **`51010xx` (ATIVA) / `51020xx` (PASSIVA)** — **NÃO** `1150200001` como conta fiscal (a `DIRETRIZ` errou). `1150200001` é só a conta de **valoração SVL** da LF (camada distinta).

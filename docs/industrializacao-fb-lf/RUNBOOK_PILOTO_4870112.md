@@ -34,8 +34,8 @@
 | **B** ✅🔴 | Remessa FB→LF (pt53, NF 5901) — **lote pinado** | `e2e_remessa_criar.py --lote PILOTO-3105` → `--execute` → `--liberar` + Playwright SEFAZ | **FEITO** — picking 01612(322399) done; **NF RPI/2026/00245(735679) AUTORIZADA** chave `…0946041007356795`; NET `D 5101010001 +279,23 / C estoque`; 1150100012 resíduo R$0,05 |
 | **C** ⚠️ ⬅️ **PRÓXIMO** | Entrada LF — **pré-flight pt64/pt19 dst** | `--modo preflight-lf` antes; *receb LF*; dst=**31092** | material em **31092** (não 42) |
 | **D** | Valida B+C (Δ computado) | `e2e_piloto_validar.py --modo remessa` / `--modo entrada-lf --base base.json` | `Δ1150100011(LF)=0`; 26489 do lote=0 |
-| **E** | 2 MOs (BATELADA + PA), origem 31092 → PA em 31093 | *MO manual (LF)* | só ÁGUA+serviço; PA em 31093 |
-| **F** | Valida E | `e2e_piloto_validar.py --modo mo --mo <bat> --mo2 <pa> --base base.json` | net-zero; PA 31093; loc 42 inalt. |
+| **E** ✅ | 2 MOs (BATELADA + PA), origem 31092 → PA em 31093 | `e2e_mo_lf_criar.py --modo batelada/pa --execute` (fix G-ENT-10) | **FEITO** — 20252+20254; net-zero terceiros; PA em 31093 |
+| **F** ✅ | Valida E | `e2e_piloto_validar.py --modo mo --mo 20252 --mo2 20254 --lote PILOTO-3105 --base base.json` | **PASS** — consumo 31092, PA 31093, loc 42 inalt. |
 | **G** 🔴 | Retorno LF→FB (pt98, NF mista 5902+5124) | *retorno fiscal* | debita 5101020001; PA price=Ic+S |
 | **H** | Entrada FB (pt52) + **op 3252 na 1902 em DRAFT** | `g5b_aplicar_op3252_na_linha.py --move-id <draft>` | 1902 com op 3252 |
 | **I** ⚠️ | Valida entrada FB | `e2e_piloto_validar.py --modo entrada-fb --nf <id>` | **G5b**: 0 SVL comps. ❗**G5a não fecha** (Contador) |
@@ -58,6 +58,71 @@
 - **G-REM-2 (UoM rounding):** a qty do move.line deve respeitar o `uom.rounding` do produto (Litros/Latas/m=1e-06, kg=1e-08). Explodir BoM em precisão total (9 casas) → `button_validate` rejeita ("não respeita a precisão de arredondamento").
 - **G-REM-3 (cap no saldo):** nunca remeter > saldo do quant (mismatch quant 6dp × explosão 8dp gera estoque negativo). Fix: `q_remit = min(explosão, free)`.
 - **G-REM-4 (lote pinado):** criar a move.line manualmente com `lot_id` fixo (sem `action_assign`/FIFO) + gravar `quantity` E `qty_done` juntos + `button_validate` com `skip_backorder` (sem `stock.immediate.transfer`, removido no v17).
+
+---
+
+## 0.7 — CHECKPOINT 2026-06-01 (Passo C / Entrada LF INICIADO — Model A) + GOTCHAS de entrada
+
+**Modelo confirmado (Rafael):** **Model A** — a entrada DRENA o trânsito `26489 → 31092` (terceiros LF). O companheiro nativo "Transferir TERCEIROS" (`26489 → 30720`) é **cancelado** antes. Driver: `scripts/e2e_entrada_lf_criar.py` (caminho A / FLUXO L3 1.2.1, compõe átomos Skill 7 + Skill 5 + override L2). Constants: `tipo_dfe=tipo_po='serv-industrializacao'` (escriturar_dfe **rejeita** 'compra'; canary 42868 usou serv-industr), pt64, team143, pterm2791, provider38, fp derivada (131).
+
+**Estado em PROD (parcial — entrada NÃO concluída):**
+- ✅ **Gate 1**: companheiro `322400` (FB/INT/08121, era `assigned`) **cancelado** (contexto FB company=1). 26489 mantém 42,29 un do lote PILOTO-3105.
+- ⚠️ **Gate 2**: `escriturar_dfe`(43776, serv-industr) OK → `gerar_po_from_dfe` criou **PO `42741` (C2619828) VAZIA** (0 order_line, 0 picking, 0 invoice) → preencher/confirmar `state=purchase`. **Causa: DFe 43776 é resumo SEFAZ** (`l10n_br_status=06`, `situacao_manifesto=nenhum`, `l10n_br_xml_dfe` VAZIO, **0 dfe.line**) — `action_gerar_po_dfe` sem linhas para mapear.
+- 🔧 **Recuperação pronta (NÃO executada — aguardava aprovação)**: `--modo completar-dfe` → cancela PO 42741 vazia + limpa `dfe.purchase_fiscal_id` + escreve `l10n_br_xml_dfe`=XML autorizado da NF 735679 (24KB, 16 linhas) + `action_processar_arquivo_manual` + `alinhar_dfe_lines_company`(43776,5) → depois `--modo escriturar` re-gera PO **com linhas**.
+
+**GOTCHAS de entrada (novos, descobertos nesta sessão):**
+- **G-ENT-1 (companheiro é FB):** o picking "Transferir TERCEIROS" (`picking_terceiro_id` da remessa) é **company FB=1**. Cancelar/ler exige contexto FB (`allowed_company_ids=[1]`), não LF — senão "sem acesso leitura a stock.picking".
+- **G-ENT-2 (DFe resumo sem linhas):** o DFe que chega via SEFAZ para `INDUSTRIALIZACAO_FB_LF` pode ser **só resumo** (`l10n_br_status=06`, XML/linhas vazios). `action_gerar_po_dfe` então cria **PO vazia**. Fix = popular o DFe com o XML autorizado da nossa NF de saída (`l10n_br_xml_aut_nfe`) + `action_processar_arquivo_manual` (= caminho B aplicado ao DFe existente). A idempotência de `criar_dfe_a_partir_do_invoice_saida` (linha 1107) **devolve o DFe vazio** — por isso o fix preenche o existente em vez de chamar o átomo.
+- **G-ENT-3 (escriturar_dfe rejeita 'compra'):** a whitelist do átomo `escriturar_dfe` (escrituracao.py:1306) **não** inclui `'compra'` (apesar do mapping `L10N_BR_TIPO_PEDIDO_POR_ACAO[dfe]='compra'`). Usar `'serv-industrializacao'` no DFe (canary-provado).
+- **G-ENT-4 (company context na leitura da PO):** PO gerada é company LF=5; ler `picking_ids`/`order_line` exige contexto LF — em contexto FB vem vazio (falso "sem picking").
+
+### Execução 2026-06-01 (após "go" do Rafael) — estado e BLOQUEIO do picking
+- ✅ `cancelar-comp` (322400) · ✅ `completar-dfe` (DFe 43776 resumo → escrito XML autorizado da NF 735679 + `action_processar_arquivo_manual` → **16 dfe.lines** + `alinhar_dfe_lines_company` idempotente) · ✅ `escriturar` → PO **42743** (C2619830) company LF, tipo serv-industr, **16 linhas fiscais corretas**, state=purchase.
+- 🔴 **BLOQUEIO (G-ENT-5):** o **picking de recebimento NÃO auto-gera** (`group_id=False`, 0 `move_ids`, `picking_ids=[]`) — diferente do canary PO 42122 (PEPINO) que gerou `group=60114`+picking 320393. **Causa provável:** os 16 produtos têm rotas com **conflito de regra `buy`**: route **5** "Comprar - FB" (rule 116 buy → pt1 FB company=1, dst=FB/Estoque 8) + route **133** "Comprar" LF (rule 130 buy → pt19 LF, dst=42) + route 167 "Pegar Embalagem" + 1 MTO. O canary (routes `[5,168,1]`, **sem 133/167**) não tinha o conflito. Possível co-fator: DFe manualmente completado (vs SEFAZ-sync) pode não disparar o auto-picking do CIEL IT.
+- **NF ENTIN acoplada ao picking:** `criar_invoice_from_po` precisa `qty_received>0` → exige picking validado.
+- **FORK pendente (decisão Rafael):** (A) criar picking manual `26489→31092` vinculado à PO 42743 + validar + invoice + post (tampão Skill 5 v15a, deprecado mas é o caso de uso dele) — isolado/reversível; OU (B) ajustar cadastro de rotas dos 16 produtos (remover conflito buy FB×LF) — limpo mas global/arriscado.
+- PO/DFe canceladas no caminho (rastro): 42741 (vazia, DFe sem linhas), 42742 (pt64 não gerou picking).
+
+### Continuação — A' (picking manual vinculado à PO) + BLOQUEIO lote inter-company (G-ENT-6)
+- Decisão: como o picking não auto-gera, criar **picking manual `26489→31092` vinculado à PO** (moves com `purchase_line_id`→PO line) p/ atualizar `qty_received` (necessário p/ ENTIN). Driver: `--modo criar-picking --po <id>` (+ `validar-picking`, `compartilhar-lotes`).
+- ✅ **Picking 322401 (LF/IN/01789) CRIADO**: 16 moves `26489→31092` `assigned`, lotes PILOTO-3105 pinados, `purchase_line_id` vinculado à PO 42743. pt19 (location override no create).
+- 🔴 **BLOQUEIO (G-ENT-6 — lote inter-company):** `button_validate` falha com **"Empresas incompatíveis: produto LF vs lote PILOTO-3105 de outra empresa (FB)"**. Os 16 lotes PILOTO-3105 (ids 60496-60511) são **company FB=1** (criados na remessa em ctx FB). A LF (cmp 5) **não consome estoque sob lote FB**. ALÉM: `button_validate` em ctx `[5]`-só falha antes com "sem acesso leitura a stock.lot" → exige ctx `[1,5]`.
+- **FIX TENTADO E BLOQUEADO PELO ODOO:** `--modo compartilhar-lotes` (write `company_id=False` nos 16 lotes) → `<Fault 2: 'Alterar a empresa deste registro é proibido neste ponto, você deve arquivá-lo e criar um novo.'>`. **Lote com estoque/movimento tem company IMUTÁVEL.** → **Model A (drenar trânsito FB-lote direto p/ LF) é INVIÁVEL** sem re-lotar.
+- **Lição (G-ENT-6):** lotes de trânsito inter-company DEVEM nascer **compartilhados (`company_id=False`)** — corrigir `e2e_remessa_criar.py` p/ criar/usar lote shared na remessa (senão o retorno/entrada LF trava). Company de lote só muda antes de ter estoque.
+- **FORK pós-Model-A-inviável (decisão Rafael):**
+  - **(B1) Model B nativo** — cancelar picking 322401; LF recebe **fresco Vendors→31092** c/ **lotes LF novos** (mesmo nome, company LF) → valida limpo + SVL Design A + `qty_received` → ENTIN; re-fazer companheiro **26489→30720** (FB) p/ drenar trânsito. Padrão inter-company nativo, robusto. **RECOMENDADO.**
+  - **(A-relot)** — via Skill 1: zerar quant FB-lote em 26489 + recriar sob lote compartilhado (net-zero) → picking 322401 passa a consumir. Preserva "26489→31092 direto", mas + escritas/risco.
+
+### EXECUÇÃO B1 (Model B) — entrada LF CONCLUÍDA (faltando só post) ✅
+Rafael escolheu **B1**. Driver `--modo criar-picking-b1` (cancela Model-A 322401 + cria 16 lotes LF + receipt **Vendors(4)→31092** vinculado à PO + valida):
+- ✅ Picking **322451 (LF/IN/01790) DONE**: 16 moves Vendors→31092, lotes LF PILOTO-3105 (company 5). 16 quants em 31092. `qty_received` atualizou.
+- ✅ **SVL Design A**: `D 1150200001 / C 1150100011 = 278,56` (16 SVLs, via L1).
+- ✅ **ENTIN 737062** (`--modo nf`): `action_create_invoice` em ctx [1,5] (atomo usa ctx FB → "sem acesso account.account LF"). Precisou 2 fixes pré-invoice: **(a) B-V23-2** alinhar `PO.line.account_id` FB→LF (code 3202010001); **(b) limpar `taxes_id` FB** (empresas incompatíveis; IBS/CBS "a recuperar" = refinamento). Invoice saiu como **compra comum** (`D 3202010001 CMV / C 2120100001 Fornecedores`) porque a **operação fiscal não propagou** (op=False). **Fix `fix_entin.py`**: setar **operação 2686** + conta **1150100011** + cfop **1901** nas 16 linhas + payable→**5101020001** (espelha canary ENTIN 688686, journal 1047 ENTRADA-REMESSA, fp 131). Resultado draft: **`D 1150100011 / C 5101020001 = 278,56`** ✓.
+- **NET = `D 1150200001 / C 5101020001`** → Δ1150100011 = 0 (transitória fecha) = **Design A completo**.
+- ✅ **ENTIN 737062 POSTED** (go Rafael). **Validador oficial `--modo entrada-lf --picking 322451 --nf 737062`: Δ1150100011(LF)=0.0 PASS, dst=31092 PASS, material 31092 PASS, SVL Design A ✓, ENTIN D 1150100011/C 5101020001 ✓.** TAREFA 1 COMPLETA.
+- ⏳ **Pendente Tarefa 1 (separado)**: drenar 26489 (companheiro FB→30720, lado FB — NÃO feito no Model B; validador FAIL em "26489 zera" é esperado).
+
+### Tarefa 2 (MO Etapa E) — ✅ CORRIGIDA E VALIDADA (2026-06-01, fix G-ENT-10)
+Script `scripts/e2e_mo_lf_criar.py` (BoM 3695 PA→3646 BATELADA semi; src=31092 dst=31093; ÁGUA 104000017 consu).
+
+**G-ENT-10 (causa raiz CONFIRMADA + fix VALIDADO):** o `action_assign` cria `stock.move.line` com `quantity=reservado` mas **`picked=False`**. O `button_mark_done` cai no wizard `mrp.consumption.warning` (rounding demanda-BoM > estoque), cujo `action_confirm` re-dispara `button_mark_done(skip_consumption=True)` — que, com `picked=False`, interpreta "nada apontado" e **cancela os raws** (produção fantasma). Ground-truth: MO boa **LF/MO/03510 (20216)** consome com raws `picked=True`+`quantity>0`+lote. **Não há método de apontamento próprio do CIEL IT.**
+- **FIX:** após `action_assign` + `qty_producing`, **setar `picked=True` nas `stock.move.line` (e no `stock.move`) dos raws ANTES do `button_mark_done`**. Codificado em `e2e_mo_lf_criar.py:79+` com **POS-CHECK anti-falso-sucesso** (aborta-alerta se algum raw ficar `state=cancel`).
+
+**Limpeza dos fantasmas (Skill 1 `ajustando-quant-odoo`):** as 4 MOs 20235/36/38/39 ficam como **rastro `done`** (NÃO removíveis: `action_cancel` → `FALHA_STATE_NAO_CANCELAVEL`; `unbuild` re-adicionaria os 16 comps = inflaria; 2 do 1º try já tinham outputs zerados → bagunça). Zerado o estoque fantasma: semi `3800018`@31092 (quant 267291, −12,818→0) + PA `4870112`@31093 (quant 267293, −1,0→0), ambos `EXECUTADO`, SVL `value=0` **sem account.move** (confirmado igual ao 1º try — a baixa consome a camada de custo-zero do quant, não o AVCO).
+
+**Redo correto (PROD):**
+- BATELADA **20252** (LF/MO/03519): POS-CHECK **10/10 raws consumidos, 0 cancelados** → semi 3800018 (12,818) em 31092.
+- PA **20254** (LF/MO/03521): POS-CHECK **8/8 raws consumidos, 0 cancelados** → PA 4870112 (1,0) em 31093.
+- **Contábil (G3 net-zero terceiros ✓):** ambas `1150100004`(produção) bal=0 + `1150200001`(terceiros) bal=0; **NÃO tocou estoque próprio LF** (1150100001/002/007 ausentes → o double-count R$785k NÃO se repetiu). AVCO do PA na LF = **R$188,62** (custo LF dos comps; FRASCO na LF ~14,76/un vs 22,23 FB) — **transitório de terceiros**, NÃO é o valor final (PA na FB = Ic+S=R$314,24 via `price_unit` da NF de retorno, §7).
+- **Validador** `e2e_piloto_validar.py --modo mo --mo 20252 --mo2 20254 --lote PILOTO-3105 --base /tmp/piloto_base.json`: consumo 31092 ✓, PA 31093 ✓, **loc 42 inalterado PASS**. (⚠️ exige `--lote PILOTO-3105`; sem ele compara todos os lotes de loc 42 → falso-FAIL.)
+- Resíduo imaterial: poeira de rounding ~1e-5 un em 5 químicos (31092, `value≈0`, esperado G-REM-2).
+- **Pendente:** drenar trânsito 26489 (companheiro FB→30720, lado FB) — separado.
+
+### GOTCHAS B1 novos (G-ENT-7..10)
+- **G-ENT-7 (account/taxes multi-company na fatura):** `action_create_invoice` de PO LF rejeita PO.line com account/taxes da FB. Pré-alinhar `account_id` (resolver code na company destino) + limpar/alinhar `taxes_id` ANTES.
+- **G-ENT-8 (operação fiscal não propaga → compra comum):** sem `l10n_br_operacao_id` na linha, a fatura cai em CMV/Fornecedores. A entrada industrialização exige **op 2686** (cfop 1901) → conta 1150100011 + payable 5101020001 (journal 1047 no_payment). Setar op 2686 NÃO recomputa account via XML-RPC → setar account_id+cfop manual também.
+- **G-ENT-9 (Model B = lotes LF próprios):** no Model B a LF recebe de Vendors com **lotes LF novos** (mesmo nome PILOTO-3105, company 5) — NÃO consome o 26489 FB-lote. 26489 drena separado pelo companheiro (lado FB).
+- **G-ENT-10 (MO via XML-RPC produz sem consumir) ✅ RESOLVIDO:** `action_assign` deixa as `stock.move.line` dos raws com `picked=False`; o `button_mark_done`→wizard `mrp.consumption.warning.action_confirm`→`button_mark_done(skip_consumption=True)` interpreta `picked=False` como "nada apontado" e **cancela os raws**. **Fix: setar `picked=True` nas move.lines (e no move) dos raws ANTES do `mark_done`** + POS-CHECK. NÃO há método de apontamento próprio do CIEL IT (a MO boa só difere por `picked=True`). Validado em 20252/20254. Corolário: MO `state=done` NÃO é cancelável (`action_cancel` falha) nem deletável; `unbuild` reverte o físico mas re-adiciona a BoM (infla) e mantém a MO `done`.
 
 ---
 

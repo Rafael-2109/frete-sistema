@@ -48,6 +48,8 @@
 
 ## B. GOALS (ordenados; cada um com métrica objetiva)
 
+> **STATUS 2026-06-01 (piloto PROD, ver `RUNBOOK §0.7`):** **G0 ✅** (remessa) · **G1 ✅ ATINGIDO** (SVL entrada LF `D 1150200001 / C 1150100011`, Δ1150100011=0, estoque próprio LF não subiu) · **G2 ✅** (material em 31092 — via **Model B** Vendors→31092 lotes LF, NÃO pt64/26489 que é inviável, G-ENT-6) · **G3 ✅ ATINGIDO** (MOs 20252+20254 net-zero terceiros: `1150100004`/`1150200001` bal=0, estoque próprio LF intacto; fix G-ENT-10 = `picked=True` nos raws antes do mark_done) · G4/G5/G6/G8/G9 ⬜ (Etapas 4-5 / Contador). G5b (op 3252) e L1 confirmados vivos.
+
 > Verificáveis num **ciclo-piloto** (1 remessa→produção→retorno do 4870112).
 > **"Saldo do ciclo" = ATRIBUIÇÃO OBJETIVA (não saldo absoluto da conta — que tem histórico R$60,8M etc.):** Δ(débito−crédito) das `account.move.line` cujo `move` pertence à **cadeia documental do piloto** — remessa 5901 + DFe entrada LF + NF retorno + DFe entrada FB do 4870112 — filtradas por `invoice_origin`/`ref`/picking do ciclo. Para `26489` e estoque: filtrar por **produto 4870112 + lote do piloto**. Toda métrica `=0` abaixo é **Δ do ciclo**, não saldo absoluto.
 > **Cenário do piloto** (a fixar com a remessa): definir se Is (sobra)=0 (consumo total → sem linha 5903/1903) ou Is>0. E fixar os valores numéricos esperados Ic (custo 16 componentes) e S (R$35/cx × qtd) p/ o critério do PA (G8).

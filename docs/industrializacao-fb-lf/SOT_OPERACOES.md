@@ -46,8 +46,9 @@ Família de compensação existente, já parcialmente usada:
 ### Etapa 1 — FB SAÍDA / Remessa (5901, CST51) — ✅ JÁ CORRETO (referência)
 NET = `D 5101010001 (ATIVA) +I / C 1150100002 −I` (SVL via 1150100012 + NF fp25/journal17 fecham a transitória). **Manter.** Lever da location/categoria **refutado** empiricamente.
 
-### Etapa 2 — LF ENTRADA / Recebe remessa (1901) — 🔧 SVL · ✅ NF · ❓ design SVL
-- **Física**: hoje pt19 genérico (96% intercompany) → 🔧 padronizar **pt64** `dst=31092`.
+### Etapa 2 — LF ENTRADA / Recebe remessa (1901) — ✅ EXECUTADA E VALIDADA (Model B, 2026-06-01)
+> **CORREÇÃO 2026-06-01 (piloto PROD):** o desenho "26489→31092 direto" (Model A) é **INVIÁVEL** — `company_id` de lote com estoque é IMUTÁVEL no Odoo, e a LF não consome estoque sob lote FB (G-ENT-6). **Adotado Model B (Rafael):** a LF recebe **fresco de Vendors→31092 com lotes LF próprios**; o trânsito 26489 (FB-lote) drena pelo companheiro **26489→30720** (lado FB). SVL/NF abaixo CONFIRMADOS em PROD (Design A: `D 1150200001 / C 1150100011` + ENTIN `D 1150100011 / C 5101020001`, Δ=0). Detalhes: `RUNBOOK §0.7`.
+- **Física (original, Model A — inviável)**: hoje pt19 genérico (96% intercompany) → ~~padronizar pt64 dst=31092~~ → **Model B: pt19 Vendors→31092 lotes LF**.
 - **NF (ENTIN)**: `D 1150100011 / C 5101020001 (PASSIVA)` — ✅ correto.
 - **SVL hoje (errado)**: `D 1150100002/001 (estoque PRÓPRIO LF) / C 3201000002 (resultado!)` — infla ativo LF.
 - **SVL ideal — ❓ design em aberto (✔v2):** a valoração deve ir para terceiros (`1150200001`), MAS a **contrapartida (input/output) precisa fechar a transitória `1150100011`** que a NF debita — senão `1150100011` (LF) acumula (gap que o teste simples não pegou). Dois desenhos candidatos:
@@ -55,8 +56,9 @@ NET = `D 5101010001 (ATIVA) +I / C 1150100002 −I` (SVL via 1150100012 + NF fp2
   - **(B)** valoração→`1150200001`, input/output→`1150200002` (o que testamos): net-zero no SVL isolado, **mas deixa `1150100011` aberta** pela NF.
 - **Lever L1**: repoint categorias contexto LF. ⚠️ **validado só p/ ajuste simples** (T-PASSO0), **NÃO** para o fluxo entrada-com-NF nem MO → **re-testar desenho (A) na Fase 2** ✔v2.
 
-### Etapa 3 — LF PRODUÇÃO / MO (interno) — ❓ Fase 2
-MO manual (BoM 3695→3646). Consumo (terceiros)→PRODUÇÃO; produção do PA←PRODUÇÃO. **Invariante ✔v2: a LF só agrega `consu` (ÁGUA) + serviço — NUNCA adiciona `product` próprio ao PA de terceiros.** Conta `1150100004 PRODUÇÃO` transitória (zera por MO) ❓Contador. **Não testado (Fase 2).**
+### Etapa 3 — LF PRODUÇÃO / MO (interno) — ✅ EXECUTADA E VALIDADA (2026-06-01)
+MO manual (BoM 3695→3646). Consumo (terceiros)→PRODUÇÃO; produção do PA←PRODUÇÃO. **Invariante ✔v2: a LF só agrega `consu` (ÁGUA) + serviço — NUNCA adiciona `product` próprio ao PA de terceiros.** Conta `1150100004 PRODUÇÃO` transitória (zera por MO).
+> **✅ Validado em PROD (piloto 4870112):** MOs 20252 (BATELADA→semi 31092) + 20254 (PA→31093). **Net-zero terceiros confirmado**: `1150100004` (produção) bal=0 E `1150200001` (terceiros) bal=0 nas duas MOs; **estoque próprio LF (1150100001/002/007) intacto** (double-count R$785k NÃO se repetiu). AVCO do PA na LF = R$188,62 (custo LF dos comps, transitório — valor final na FB = Ic+S vem da NF de retorno, §3/§7). **Fix G-ENT-10** (RUNBOOK §0.7): MO via XML-RPC exige `picked=True` nas `stock.move.line` dos raws antes do `button_mark_done` (senão `skip_consumption` cancela os raws = produz sem consumir).
 
 ### Etapa 4 — LF SAÍDA / Retorno (NF MISTA 5902+5903+5124) — 🔧 fechar PASSIVA
 - **Física**: pt98 (hoje usa genéricos "Ordens de Entrega"/"VENDA PRODUÇÃO").
