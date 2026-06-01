@@ -529,6 +529,14 @@ echo "Agente 26d.2: tabela agent_eval_case (A3-R3 calibracao)..."
 python scripts/migrations/2026_06_01_agent_eval_case.py \
     || echo "⚠️ Migration agent_eval_case falhou, continuando deploy..."
 
+# 26e. A4 promocao de diretriz (2026-06-01): coluna directive_status em agent_memories
+# (ciclo de vida candidata|shadow|ativa|despromovida). Idempotente (ADD COLUMN IF NOT EXISTS).
+# Necessaria ANTES de ligar AGENT_OPERATIONAL_DIRECTIVES (senao _build_operational_directives
+# cai em UndefinedColumn e desliga TODAS as diretrizes silenciosamente). Best-effort (|| echo).
+echo "Agente 26e: coluna directive_status em agent_memories (A4)..."
+python scripts/migrations/2026_06_01_agent_memories_directive_status.py \
+    || echo "⚠️ Migration agent_memories_directive_status falhou, continuando deploy..."
+
 # 27. Inventario Ciclico (2026-05-31): contagem parcial por quant + plano de ajustes.
 # Cria tabelas inventario_contagem + inventario_contagem_item (granularidade quant).
 # Idempotente (model.__table__.create(checkfirst=True)). Confronto inalterado.
