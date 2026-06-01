@@ -109,7 +109,7 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 |---|---|---|---|
 | **1. E2-enqueuer** (judge shadow) | ✅ CODE-COMPLETE | `ec61021bb`→`366e62a0a` | só GATE (deploy+shadow Rafael) |
 | **2. Super-loop** (B2+B-TRIAGE shadow) | ✅ CODE-COMPLETE | `b31c18760`→`687c55ef3` | só GATE; **B3 ⏸️ ADIADO COM PREMISSA** |
-| **3. A3-invoke** (eval real) | ✅ **FASE 2 EXECUTADA** (2026-05-31, local supervisionado) | `a3b293be1`→`0d104ec42` + fixes (uncommitted) | baseline analista-carteira gravado em `agent_eval_scores`; 2 bugs corrigidos (ver abaixo); re-baseline granular em curso |
+| **3. A3 gate de regressão** (FIEL À SPEC) | ✅ **R1-R4 CODE-COMPLETE** (2026-06-01) | `a3b293be1`→`0d104ec42` + `ba2e7dbd3`→`7adfa798b` | só GATE (deploy + ligar flags Rafael) |
 | **4. A4-batch** (promoção diretriz) | ⬜ **NÃO INICIADA** | — | recon + plano + impl (a mais arriscada; muda comportamento ativo; pré-req baseline A3) |
 
 **A3 FASE 2 — resultado (2026-05-31, local supervisionado, Rafael autorizou bypass restrito):**
@@ -118,7 +118,15 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 - **2 BUGS REAIS corrigidos (uncommitted, TDD, 627 passed):**
   1. **Judge binário** (`eval_gate_service.py`): `_call_haiku_eval_granular` retorna `{passed_items,total_items,failing}`; `_judge_case` calcula `case_score` parcial; `run_evals` = média; `PASS_THRESHOLD=0.80`. Retrocompat str pass/fail. **Cap em 1.0** (code-review HIGH-1). +16 testes.
   2. **SSL-drop na persistência** (`eval_runner.py`): `run_eval_batch` ficava 8-50min idle → `OperationalError` no commit → `agentes=0`. Fix: FASE 1 invokes / FASE 2 persistência com rollback+retry; **close()+dispose() quando rollback falha** (code-review HIGH-2, evita duplicata). +4 testes.
-- Code-review adversarial: 0 CRITICAL, 2 HIGH (ambos corrigidos), MEDIUM-1 (semântica baseline pré/pós-fix) documentado no docstring. **NÃO commitado, NÃO push.**
+- Code-review adversarial: 0 CRITICAL, 2 HIGH (ambos corrigidos), MEDIUM-1 (semântica baseline pré/pós-fix) documentado no docstring.
+
+**A3 RE-ESCOPO COMO GATE DE REGRESSÃO (2026-06-01) — fidelidade à spec:** após reler `eixos/A-flywheel.md:257-266` + `critica/*`, corrigi um desvio de interpretação: a A3 é **gate de regressão** (fecha Ruptura #5/#3), NÃO vestibular. O score absoluto (0.600/0.721) é de baixo valor por design; o que importa é o **Δ código-antes vs código-depois**. Os 2 fails do baseline granular (ac-03/ac-05) **se cancelam no Δ** (viés constante do dataset) — por isso NÃO reescrevi datasets (era tratar sintoma errado). Plano: `docs/superpowers/plans/2026-05-31-a3-gate-regressao.md`. 4 itens, todos commitados, flag-OFF, **668 passed**:
+  - **R1 N-runs** (`3eebca5b9`): `run_evals` roda cada caso 3× (env `AGENT_EVAL_N_RUNS`), `case_score`=MEDIANA (doma o flaky — `run_eval.md:121`); `case_score_variance` + `invoke_failures` (caveat I2: distingue infra instável de agente ruim).
+  - **R2 gate Δ** (`c5896ed90`): `run_eval_regression_gate(agent, sha_baseline)` mede Δ via `AgentEvalScore.get_score_by_git_sha`; `eval_gate` **report-only SEMPRE** (NUNCA bloqueia — testado com regressão máxima). 1ª medição: baseline=candidate.
+  - **R3 calibração** (`e93893e1b`): migration dupla `agent_eval_case` (aplicada local); spot-check humano 5-10% (`sample_unreviewed` determinística + `concordance_rate`); gated `AGENT_EVAL_CALIBRATION` OFF. Code-review: M4 (fraction=0) + M3 (doc) corrigidos.
+  - **R4 gate no D8** (`7adfa798b`): PASSO 3.5 no `dominio-8` — roda o gate ANTES do commit, report-only (registra `regressed`, fecha Ruptura #3: verified=Δ medido).
+
+**NÃO pushado. main intocada quanto ao WIRING (lógica shadow já em main; faltam os commits de wiring).** Pendente: deploy + ligar flags (GATE do Rafael) → coletar baseline real em PROD.
 
 > **CORREÇÃO factual (2026-05-31)**: o "main intocada" acima é IMPRECISO. Verificado via git: os 22 itens do blueprint (lógica shadow `step_judge`/`eval_gate_service` + tabela `agent_step` + TODAS as flags) JÁ ESTÃO em `origin/main` (mergeados em fase anterior). O que NÃO está em main são os **15 commits de WIRING** (`ec61021bb`→`2cf9280c6`): `eval_runner.py`, tabela `agent_eval_scores`, os `enqueue_*` e os **módulos 28-31 no scheduler**. Consequência: ligar as flags em PROD HOJE = no-op (ninguém chama `enqueue_*`). Big bang exige PUSH dos 15 commits → deploy. Branch SEM upstream, ausente em origin.
 
