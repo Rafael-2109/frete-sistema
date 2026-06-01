@@ -551,6 +551,13 @@ class AgentMemory(db.Model):
     # escopo='empresa': memoria compartilhada (user_id=0, visivel para todos)
     escopo = db.Column(db.String(20), default='pessoal', nullable=False)
 
+    # ── A4 (Onda 3): promoção automática de diretriz ──
+    # NULL = memória comum. candidata|shadow|ativa|despromovida = ciclo de vida
+    # de diretriz promovida. Coluna NOVA (NÃO redefinir effective_count —
+    # 3 consumidores acoplados). _build_operational_directives injeta só
+    # NULL (legado) OU 'ativa'. Ativação shadow→ativa = revisão manual.
+    directive_status = db.Column(db.String(20), nullable=True)
+
     # Prioridade de injecao (v3 — 3 canais de memoria, 2026-04-16)
     # 'mandatory': regra do usuario (priority=obrigatoria, <user_rules>)
     # 'advisory': diretriz operacional (priority=critica, <operational_directives>)
