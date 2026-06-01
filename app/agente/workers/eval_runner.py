@@ -226,7 +226,12 @@ def _run_eval_batch_in_context(datasets: list) -> dict:
             )
 
             # judge_fn default = Haiku real (mockado nos testes).
-            result = run_evals(agent_name, dataset_path, invoke_fn=invoke)
+            # A3-R1: n_runs domina nao-determinismo do LLM (mediana de N runs).
+            # Configuravel via AGENT_EVAL_N_RUNS (custo x estabilidade). Default 3.
+            result = run_evals(
+                agent_name, dataset_path, invoke_fn=invoke,
+                n_runs=int(os.environ.get('AGENT_EVAL_N_RUNS', '3')),
+            )
             resultados.append((agent_name, result))
         except Exception as exc:
             # CONSTRAINT 4: um agente falhando NAO impede os demais.
@@ -299,6 +304,205 @@ def _run_eval_batch_in_context(datasets: list) -> dict:
     return {'agentes': len(scores), 'scores': scores}
 
 
+def run_eval_regression_gate(
+    agent_name: str,
+    dataset_path: str,
+    sha_baseline: Optional[str] = None,
+    n_runs: Optional[int] = None,
+) -> dict:
+    """A3 GATE DE REGRESSAO: mede se uma MUDANCA DE CODIGO regrediu um subagente.
+
+    Coracao da A3 (spec eixos/A-flywheel.md:186 — "regression-eval contra golden
+    dataset confirma que a mudanca nao regrediu"). Compara o score do
+    codigo-DEPOIS (candidate = run recem-medido do sha ATUAL) vs o score do
+    codigo-ANTES (baseline = score do sha-ANTERIOR ja persistido em
+    agent_eval_scores), SEMPRE em modo report-only.
+
+    DESIGN (decisao tomada — NAO usa git worktree temporario): os DOIS scores
+    sao identificados por git_sha em agent_eval_scores. Espelha o que
+    directive_promotion_service.evaluate_and_promote ja faz (recebe baseline +
+    candidate prontos e chama eval_gate).
+
+    Abre create_app()+app_context() e delega a _run_regression_in_context
+    (espelha run_eval_batch / _run_eval_batch_in_context).
+
+    Args:
+        agent_name: Nome do subagente (ex: 'analista-carteira').
+        dataset_path: Caminho do golden dataset.yaml.
+        sha_baseline: SHA do codigo-ANTES (baseline). None → fallback para o run
+            mais recente (get_baseline_score, ignora sha).
+        n_runs: Numero de runs por caso (mediana). None → AGENT_EVAL_N_RUNS ('3').
+
+    Returns:
+        Dict com {agent_name, candidate_score, baseline_score, delta,
+        regression (bool), blocked (SEMPRE False em report_only),
+        git_sha_candidate, git_sha_baseline, cases}. Em falha total →
+        dict com 'error' (best-effort INV-6, nunca propaga).
+    """
+    logger.info(
+        f'[EVAL_RUNNER] iniciando run_eval_regression_gate '
+        f'(agent={agent_name} sha_baseline={sha_baseline or "AUTO"})'
+    )
+
+    try:
+        app = create_app()
+        with app.app_context():
+            return _run_regression_in_context(
+                agent_name, dataset_path, sha_baseline=sha_baseline, n_runs=n_runs,
+            )
+    except Exception as exc:
+        # BEST-EFFORT (INV-6): qualquer falha logada, NAO propaga.
+        logger.error(
+            f'[EVAL_RUNNER] falha inesperada em run_eval_regression_gate '
+            f'({agent_name}): {exc}'
+        )
+        return {
+            'agent_name': agent_name,
+            'error': str(exc),
+            'candidate_score': None,
+            'baseline_score': None,
+            'delta': None,
+            'regression': False,
+            'blocked': False,
+            'git_sha_candidate': None,
+            'git_sha_baseline': sha_baseline,
+            'cases': [],
+        }
+
+
+def _run_regression_in_context(
+    agent_name: str,
+    dataset_path: str,
+    sha_baseline: Optional[str] = None,
+    n_runs: Optional[int] = None,
+) -> dict:
+    """Executa o gate de regressao dentro de app_context ativo.
+
+    Separado para testabilidade (espelha _run_eval_batch_in_context).
+
+    Fluxo:
+        1. Roda run_evals (invoke REAL via build_subprocess_invoke_fn) → candidate.
+        2. Determina baseline:
+           - sha_baseline dado → get_score_by_git_sha(agent, sha_baseline).
+           - senao → get_baseline_score(agent) (run mais recente, fallback).
+           - se None (1a vez) → baseline = candidate (delta 0, sem regressao).
+        3. eval_gate(baseline, candidate, mode='report_only') → gate.
+        4. Persiste o candidate (insert_score + commit best-effort).
+
+    INVARIANTE (razao de ser da A3): NUNCA bloqueia — mode='report_only' SEMPRE.
+    Apenas DETECTA e LOGA regressao (logger.warning com delta dentro do eval_gate).
+    """
+    from app import db
+    from app.agente.models import AgentEvalScore
+
+    try:
+        effective_n_runs = (
+            int(n_runs) if n_runs is not None
+            else int(os.environ.get('AGENT_EVAL_N_RUNS', '3'))
+        )
+
+        # ─── 1. CANDIDATE — score do codigo ATUAL (invoke REAL) ────────────────
+        invoke = build_subprocess_invoke_fn(
+            agent_name,
+            model=os.environ.get('AGENT_EVAL_MODEL') or None,
+            timeout=int(os.environ.get('AGENT_EVAL_TIMEOUT', '600')),
+        )
+        candidate = run_evals(
+            agent_name, dataset_path, invoke_fn=invoke, n_runs=effective_n_runs,
+        )
+        candidate_score = candidate['score']
+
+        # ─── 2. BASELINE — score do codigo ANTES ──────────────────────────────
+        if sha_baseline:
+            baseline_score = AgentEvalScore.get_score_by_git_sha(agent_name, sha_baseline)
+        else:
+            baseline_score = AgentEvalScore.get_baseline_score(agent_name)
+
+        if baseline_score is None:
+            # 1a medicao: nao ha codigo-ANTES com o que comparar. Usa o proprio
+            # candidate → delta 0, sem regressao (neutro).
+            logger.info(
+                f'[EVAL_RUNNER] {agent_name}: sem baseline '
+                f'(sha_baseline={sha_baseline or "AUTO"}), primeira medicao — '
+                f'usando candidate como baseline (delta 0, sem regressao)'
+            )
+            baseline_score = candidate_score
+
+        # ─── 3. GATE — report_only SEMPRE (NUNCA bloqueia) ────────────────────
+        gate = eval_gate(
+            baseline_score=baseline_score,
+            candidate_score=candidate_score,
+            mode='report_only',
+        )
+
+        # ─── 4. PERSISTE o candidate (best-effort, pattern do batch) ──────────
+        git_sha_candidate = _current_git_sha()
+        try:
+            db.session.rollback()
+        except Exception as roll_err:
+            logger.debug(f'[EVAL_RUNNER] rollback defensivo falhou (ok): {roll_err}')
+
+        try:
+            AgentEvalScore.insert_score(
+                agent_name,
+                candidate['score'],
+                candidate['total'],
+                candidate['passed'],
+                git_sha=git_sha_candidate,
+                mode='report_only',
+            )
+            db.session.commit()
+        except Exception as persist_err:
+            logger.warning(
+                f'[EVAL_RUNNER] {agent_name}: falha ao persistir candidate '
+                f'(best-effort): {persist_err}'
+            )
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+
+        logger.info(
+            f"[EVAL_RUNNER] {agent_name}: GATE REGRESSAO "
+            f"candidate={candidate_score:.3f} baseline={baseline_score:.3f} "
+            f"delta={gate['delta']:+.3f} regression={gate['regression']} "
+            f"blocked={gate['blocked']} (report-only, NUNCA bloqueia)"
+        )
+
+        return {
+            'agent_name': agent_name,
+            'candidate_score': candidate_score,
+            'baseline_score': baseline_score,
+            'delta': gate['delta'],
+            'regression': gate['regression'],
+            'blocked': gate['blocked'],  # SEMPRE False em report_only
+            'git_sha_candidate': git_sha_candidate,
+            'git_sha_baseline': sha_baseline,
+            'cases': candidate.get('cases', []),
+        }
+    except Exception as exc:
+        # BEST-EFFORT (INV-6): run_evals/eval_gate explode → dict com 'error'.
+        logger.error(
+            f'[EVAL_RUNNER] {agent_name}: erro no gate de regressao: {exc}'
+        )
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return {
+            'agent_name': agent_name,
+            'error': str(exc),
+            'candidate_score': None,
+            'baseline_score': None,
+            'delta': None,
+            'regression': False,
+            'blocked': False,
+            'git_sha_candidate': None,
+            'git_sha_baseline': sha_baseline,
+            'cases': [],
+        }
+
+
 def enqueue_eval_batch(queue=None) -> dict:
     """Enfileira run_eval_batch na fila NOVA 'agent_eval' (chamado pelo cron M28).
 
@@ -347,6 +551,10 @@ def enqueue_eval_batch(queue=None) -> dict:
 if __name__ == '__main__':
     # Ativacao supervisionada manual (Fase 2): roda 1 dataset SINCRONO.
     #   python -m app.agente.workers.eval_runner --agent analista-carteira
+    #
+    # Gate de regressao (A3 — report-only, NUNCA bloqueia):
+    #   python -m app.agente.workers.eval_runner --regression --agent analista-carteira
+    #   python -m app.agente.workers.eval_runner --regression --agent X --sha-baseline <sha>
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -356,7 +564,37 @@ if __name__ == '__main__':
         '--agent', required=True,
         help='Nome do subagente (ex: analista-carteira).',
     )
+    parser.add_argument(
+        '--regression', action='store_true',
+        help='Roda o GATE DE REGRESSAO (candidate vs baseline por git_sha, report-only).',
+    )
+    parser.add_argument(
+        '--sha-baseline', default=None,
+        help='SHA do codigo-ANTES (baseline) para o gate de regressao. '
+             'Omitido → fallback para o run mais recente.',
+    )
     args = parser.parse_args()
 
-    out = run_eval_batch(agent_filter=args.agent)
-    print(f'[EVAL_RUNNER] resultado: {out}')
+    if args.regression:
+        # Resolve o dataset do agente pela mesma lista do batch.
+        _datasets = dict(_default_datasets())
+        _dataset_path = _datasets.get(args.agent)
+        if _dataset_path is None:
+            print(f'[EVAL_RUNNER] agente desconhecido: {args.agent} '
+                  f'(opcoes: {sorted(_datasets)})')
+        else:
+            out = run_eval_regression_gate(
+                args.agent, _dataset_path, sha_baseline=args.sha_baseline,
+            )
+            print(
+                f"[EVAL_RUNNER] GATE REGRESSAO {args.agent}: "
+                f"candidate={out.get('candidate_score')} "
+                f"baseline={out.get('baseline_score')} "
+                f"delta={out.get('delta')} regression={out.get('regression')} "
+                f"blocked={out.get('blocked')}"
+            )
+            if out.get('error'):
+                print(f"[EVAL_RUNNER] erro: {out['error']}")
+    else:
+        out = run_eval_batch(agent_filter=args.agent)
+        print(f'[EVAL_RUNNER] resultado: {out}')

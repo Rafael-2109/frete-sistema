@@ -134,11 +134,16 @@ class TestBuildSubprocessInvokeFn:
         ]
         with patch('subprocess.run', side_effect=fakes):
             invoke = build_subprocess_invoke_fn('analista-carteira')
+            # n_runs=1: este teste valida o contrato "invoke sempre falha -> status
+            # 'error'" (1 fake por caso). Com o default n_runs=3 (A3-R1) seriam 3
+            # invokes/caso = 6 fakes; aqui a intencao e' o comportamento single-run
+            # do erro de invoke, nao a agregacao N-runs (coberta em TestRunEvalsNRuns).
             result = run_evals(
                 agent_name='analista-carteira',
                 dataset_path=str(ds),
                 invoke_fn=invoke,
                 judge_fn=lambda p: 'pass',
+                n_runs=1,
             )
 
         assert result['total'] == 2

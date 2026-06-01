@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import pathlib
+import statistics
 import subprocess
 from typing import Callable, Optional, Union
 
@@ -370,6 +371,7 @@ def run_evals(
     dataset_path: str,
     invoke_fn: Optional[Callable[[str], str]] = None,
     judge_fn: Optional[Callable[[str], Union[str, dict]]] = None,
+    n_runs: int = 3,
 ) -> dict:
     """Roda avaliacao completa de um agente contra o golden dataset.
 
@@ -380,17 +382,28 @@ def run_evals(
                    Default: stub que levanta NotImplementedError (documentado).
         judge_fn: Funcao de julgamento. Default: _call_haiku_eval_granular (BUG-1).
                   Aceita judge granular (dict) OU legado (str 'pass'/'fail').
+        n_runs: Numero de execucoes invoke+judge POR CASO (A3-R1). LLMs sao
+                nao-deterministicos (spec run_eval.md:121). Cada caso roda n_runs
+                vezes e o case_score AGREGADO = MEDIANA dos runs (comportamento
+                predominante, robusto a outlier). Default 3. n_runs=1 reproduz
+                EXATAMENTE o comportamento single-run legado.
 
     Returns:
         Dict com {agent_name, score: float(0-1), total, passed, cases: [...]}.
-        - score = MEDIA dos case_score de TODOS os casos (BUG-1: granular).
+        - score = MEDIA dos case_score (medianas) de TODOS os casos (BUG-1: granular).
         - passed = numero de casos com status=='pass' (retrocompat do campo).
-        - Best-effort: casos com erro (invoke falhou) -> case_score 0.0 e contam na media.
+        - Best-effort por RUN: um run cujo invoke falha conta case_score 0.0 SEM
+          derrubar os demais runs do mesmo caso. Caso so' vira 'error' se TODOS
+          os runs falharam no invoke.
+        - cada cases[] ganha: case_score (= mediana), n_runs, case_score_variance
+          (pvariance; sinal de flaky), runs_scores (scores individuais p/ debug).
     """
     if invoke_fn is None:
         invoke_fn = _default_invoke_fn
     if judge_fn is None:
         judge_fn = _call_haiku_eval_granular
+    # Guard: n_runs >= 1 (n_runs<=0 nao faz sentido — degrada para 1 run)
+    n_runs = max(1, int(n_runs))
 
     cases = load_golden_dataset(dataset_path)
     if not cases:
@@ -409,41 +422,87 @@ def run_evals(
         case_id = case.get('id', 'unknown')
         user_input = case.get('input', '')
 
-        # Invocar agente (best-effort — erro de invoke nao interrompe demais casos)
-        try:
-            agent_output = invoke_fn(user_input)
-        except NotImplementedError as nie:
-            logger.debug(f"[eval_gate] invoke_fn nao implementado para {case_id}: {nie}")
-            case_results.append({
-                'id': case_id,
-                'status': 'error',
-                'case_score': 0.0,
-                'evidence': f'invoke_fn nao implementado: {str(nie)[:200]}',
-            })
-            continue
-        except Exception as e:
-            logger.warning(f"[eval_gate] invoke_fn falhou para caso {case_id}: {e}")
-            case_results.append({
-                'id': case_id,
-                'status': 'error',
-                'case_score': 0.0,
-                'evidence': f'invoke_fn erro: {str(e)[:200]}',
-            })
-            continue
+        runs_scores = []        # case_score de cada run (best-effort por run)
+        last_evidence = ''      # evidence do ultimo run com judge bem-sucedido
+        all_invoke_failed = True
+        invoke_failures = 0     # quantos runs falharam NO INVOKE (sinal de infra, nao de qualidade — caveat I2)
 
-        # Julgar (best-effort)
-        try:
-            result = _judge_case(case=case, agent_output=agent_output, judge_fn=judge_fn)
-        except Exception as e:
-            logger.warning(f"[eval_gate] _judge_case falhou para {case_id}: {e}")
-            result = {'id': case_id, 'status': 'error', 'case_score': 0.0, 'evidence': str(e)[:200]}
+        for r in range(n_runs):
+            # Invocar agente (best-effort POR RUN — um run ruim nao derruba os outros)
+            try:
+                agent_output = invoke_fn(user_input)
+            except NotImplementedError as nie:
+                logger.debug(
+                    f"[eval_gate] invoke_fn nao implementado para {case_id} (run {r + 1}/{n_runs}): {nie}"
+                )
+                runs_scores.append(0.0)
+                invoke_failures += 1
+                last_evidence = f'invoke_fn nao implementado: {str(nie)[:200]}'
+                continue
+            except Exception as e:
+                logger.warning(
+                    f"[eval_gate] invoke_fn falhou para caso {case_id} (run {r + 1}/{n_runs}): {e}"
+                )
+                runs_scores.append(0.0)
+                invoke_failures += 1
+                last_evidence = f'invoke_fn erro: {str(e)[:200]}'
+                continue
 
-        case_results.append(result)
-        if result['status'] == 'pass':
+            all_invoke_failed = False
+
+            # Julgar (best-effort)
+            try:
+                result_r = _judge_case(case=case, agent_output=agent_output, judge_fn=judge_fn)
+                runs_scores.append(result_r['case_score'])
+                last_evidence = result_r.get('evidence', '')
+            except Exception as e:
+                logger.warning(
+                    f"[eval_gate] _judge_case falhou para {case_id} (run {r + 1}/{n_runs}): {e}"
+                )
+                runs_scores.append(0.0)
+                last_evidence = str(e)[:200]
+
+        # Agregacao por caso: MEDIANA (comportamento predominante, robusto a outlier)
+        if runs_scores:
+            case_score = statistics.median(runs_scores)
+        else:
+            case_score = 0.0
+        # Variance: sinal de flaky (>= 2 runs). pvariance = variancia populacional.
+        case_score_variance = statistics.pvariance(runs_scores) if len(runs_scores) >= 2 else 0.0
+
+        # Status: 'error' se TODOS os runs falharam no invoke; senao pass/fail por mediana
+        if all_invoke_failed:
+            status = 'error'
+        else:
+            status = 'pass' if case_score >= PASS_THRESHOLD else 'fail'
+
+        # Evidence: resumo informativo (mediana de N runs + variance) + ultima evidencia
+        evidence = (
+            f"mediana={case_score:.3f} de {len(runs_scores)} run(s), "
+            f"var={case_score_variance:.4f}"
+        )
+        if invoke_failures:
+            # Sinaliza instabilidade de INFRA (caveat I2): runs com invoke falho.
+            # Distingue "agente ruim" (score baixo c/ invoke OK) de "infra instavel".
+            evidence = f"{evidence}, invoke_failures={invoke_failures}/{n_runs}"
+        if last_evidence:
+            evidence = f"{evidence} | {last_evidence}"
+
+        case_results.append({
+            'id': case_id,
+            'status': status,
+            'case_score': case_score,
+            'n_runs': n_runs,
+            'case_score_variance': case_score_variance,
+            'runs_scores': runs_scores,
+            'invoke_failures': invoke_failures,
+            'evidence': evidence[:500],
+        })
+        if status == 'pass':
             passed += 1
 
     total = len(case_results)
-    # BUG-1: score agregado = media dos case_score (casos 'error' contam como 0.0).
+    # BUG-1: score agregado = media dos case_score (medianas; casos 'error' = 0.0).
     case_scores = [c.get('case_score', 0.0) for c in case_results]
     score = (sum(case_scores) / total) if total > 0 else 0.0
 

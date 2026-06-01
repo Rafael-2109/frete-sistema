@@ -273,6 +273,7 @@ class TestRunEvals:
                 dataset_path=tmp.name,
                 invoke_fn=invoke_fn,
                 judge_fn=judge_fn,
+                n_runs=1,  # judge_fn stateful (conta chamadas) -> preserva intencao single-run
             )
         finally:
             os.unlink(tmp.name)
@@ -355,6 +356,7 @@ class TestRunEvals:
             dataset_path=self._make_dataset_path(),
             invoke_fn=invoke_fn_que_falha,
             judge_fn=lambda p: "pass",
+            n_runs=1,  # invoke_fn stateful (1a chamada explode) -> single-run preserva intencao
         )
         # Nao deve propagar excecao — retorna resultado parcial
         assert result["total"] > 0
@@ -522,6 +524,7 @@ class TestRunEvalsGranular:
                 dataset_path=path,
                 invoke_fn=lambda x: "out",
                 judge_fn=judge_fn,
+                n_runs=1,  # judge_fn stateful (conta chamadas) -> single-run preserva intencao
             )
         finally:
             os.unlink(path)
@@ -573,6 +576,7 @@ class TestRunEvalsGranular:
                 dataset_path=path,
                 invoke_fn=invoke_que_falha,
                 judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+                n_runs=1,  # invoke_fn stateful (1a chamada explode) -> single-run preserva intencao
             )
         finally:
             os.unlink(path)
@@ -665,6 +669,7 @@ class TestRunEvalsDefaultJudgeGranular:
                 agent_name="d",
                 dataset_path=tmp.name,
                 invoke_fn=lambda x: "out",
+                n_runs=1,  # conta chamadas do judge (capturado) -> single-run preserva intencao
                 # judge_fn ausente -> deve usar _call_haiku_eval_granular
             )
         finally:
@@ -762,3 +767,370 @@ class TestEvalGate:
         # Regressao grave sem mode explicito
         result = eval_gate(baseline_score=1.0, candidate_score=0.0)
         assert result["blocked"] is False
+
+
+# ---------------------------------------------------------------------------
+# Testes: A3-R1 — N-RUNS (dominar nao-determinismo do LLM via mediana)
+# ---------------------------------------------------------------------------
+
+class TestRunEvalsNRuns:
+    """run_evals com n_runs > 1: roda invoke+judge N vezes por caso,
+    agrega via MEDIANA (comportamento predominante da spec) e reporta variance.
+
+    Spec: .claude/evals/subagents/run_eval.md:121 — "Rodar 3x e considerar o
+    comportamento predominante."
+    """
+
+    def _single_case_dataset_path(self):
+        """1 caso com 5 expected_behavior (permite scores granulares 0.0..1.0)."""
+        import tempfile, yaml as _yaml
+        cases = [
+            {"id": "n1", "input": "a", "expected_behavior": ["x", "y", "z", "w", "v"]},
+        ]
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
+        _yaml.dump({"cases": cases}, tmp)
+        tmp.close()
+        return tmp.name
+
+    def test_n_runs_3_outputs_diferentes_judge_deterministico_por_output(self):
+        """invoke_fn stateful (outputs diferentes a cada chamada) + judge_fn
+        deterministico-por-output -> mediana correta dos 3 case_scores.
+
+        Outputs mapeiam para scores [0.2, 0.6, 1.0] -> mediana = 0.6.
+        """
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+
+        # invoke retorna 'out0','out1','out2' a cada chamada (stateful via pop)
+        retornos = ["out0", "out1", "out2"]
+        idx = [0]
+
+        def invoke_fn(user_input: str) -> str:
+            r = retornos[idx[0]]
+            idx[0] += 1
+            return r
+
+        # judge deterministico POR OUTPUT (encontra no prompt qual out apareceu)
+        score_por_output = {
+            "out0": {"passed_items": 1, "total_items": 5, "failing": ["a"]},  # 0.2
+            "out1": {"passed_items": 3, "total_items": 5, "failing": ["b"]},  # 0.6
+            "out2": {"passed_items": 5, "total_items": 5, "failing": []},     # 1.0
+        }
+
+        def judge_fn(prompt: str) -> dict:
+            for out, verdict in score_por_output.items():
+                if out in prompt:
+                    return verdict
+            return {"passed_items": 0, "total_items": 5, "failing": ["nao_achou"]}
+
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=invoke_fn,
+                judge_fn=judge_fn,
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        # runs_scores = [0.2, 0.6, 1.0] -> mediana 0.6
+        assert sorted(caso["runs_scores"]) == [0.2, 0.6, 1.0]
+        assert abs(caso["case_score"] - 0.6) < 1e-9
+        assert caso["n_runs"] == 3
+        # invoke chamado exatamente 3x
+        assert idx[0] == 3
+
+    def test_mediana_robusta_a_outlier(self):
+        """3 runs com case_scores [1.0, 0.0, 1.0] -> mediana 1.0 (NAO media 0.667)."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+
+        # judge alterna: run1=1.0, run2=0.0, run3=1.0
+        verdicts = [
+            {"passed_items": 5, "total_items": 5, "failing": []},        # 1.0
+            {"passed_items": 0, "total_items": 5, "failing": ["a"]},     # 0.0
+            {"passed_items": 5, "total_items": 5, "failing": []},        # 1.0
+        ]
+        jidx = [0]
+
+        def judge_fn(prompt: str) -> dict:
+            v = verdicts[jidx[0]]
+            jidx[0] += 1
+            return v
+
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=lambda x: "out",
+                judge_fn=judge_fn,
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        assert sorted(caso["runs_scores"]) == [0.0, 1.0, 1.0]
+        # MEDIANA = 1.0 (elemento do meio apos ordenar), NAO media (0.667)
+        assert caso["case_score"] == 1.0
+        # mediana >= PASS_THRESHOLD -> status pass
+        assert caso["status"] == "pass"
+
+    def test_variance_reportada_flaky(self):
+        """runs [1.0, 0.0, 1.0] -> pvariance > 0 (sinal de flaky)."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+        verdicts = [
+            {"passed_items": 5, "total_items": 5, "failing": []},
+            {"passed_items": 0, "total_items": 5, "failing": ["a"]},
+            {"passed_items": 5, "total_items": 5, "failing": []},
+        ]
+        jidx = [0]
+
+        def judge_fn(prompt: str) -> dict:
+            v = verdicts[jidx[0]]
+            jidx[0] += 1
+            return v
+
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=lambda x: "out",
+                judge_fn=judge_fn,
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        assert caso["case_score_variance"] > 0.0
+
+    def test_variance_zero_quando_estavel(self):
+        """runs [1.0, 1.0, 1.0] -> variance == 0 (estavel/nao-flaky)."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=lambda x: "out",
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        assert caso["runs_scores"] == [1.0, 1.0, 1.0]
+        assert caso["case_score_variance"] == 0.0
+        assert caso["case_score"] == 1.0
+
+    def test_n_runs_1_reproduz_single_run(self):
+        """n_runs=1 -> mediana de 1 elemento = ele mesmo, variance 0.
+
+        Reproduz EXATAMENTE o comportamento single-run legado.
+        """
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=lambda x: "out",
+                judge_fn=lambda p: {"passed_items": 3, "total_items": 5, "failing": ["a"]},
+                n_runs=1,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        assert caso["runs_scores"] == [0.6]
+        assert abs(caso["case_score"] - 0.6) < 1e-9
+        assert caso["case_score_variance"] == 0.0
+        assert caso["n_runs"] == 1
+        # 0.6 < PASS_THRESHOLD (0.80) -> fail
+        assert caso["status"] == "fail"
+        assert abs(result["score"] - 0.6) < 1e-9
+
+    def test_best_effort_por_run_um_run_falha_outros_valem(self):
+        """invoke_fn falha em 1 dos 3 runs -> esse run conta 0.0, os outros 2 valem.
+
+        runs_scores = [0.0 (run que falhou), 1.0, 1.0] -> mediana 1.0.
+        """
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+        call = [0]
+
+        def invoke_fn(user_input: str) -> str:
+            call[0] += 1
+            if call[0] == 2:  # segundo run do unico caso explode
+                raise RuntimeError("boom no run 2")
+            return "out"
+
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=invoke_fn,
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        # 3 runs: run1=1.0, run2=0.0 (invoke falhou), run3=1.0
+        assert sorted(caso["runs_scores"]) == [0.0, 1.0, 1.0]
+        # mediana robusta ao run ruim -> 1.0
+        assert caso["case_score"] == 1.0
+        # caso NAO e' 'error' (nem todos os runs falharam)
+        assert caso["status"] == "pass"
+        # invoke chamado 3x (1 run falhou mas os outros rodaram)
+        assert call[0] == 3
+
+    def test_todos_runs_invoke_falham_status_error(self):
+        """Se TODOS os runs deram erro de invoke -> status='error', case_score 0.0."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+
+        def invoke_sempre_falha(user_input: str) -> str:
+            raise RuntimeError("boom sempre")
+
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=invoke_sempre_falha,
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        assert caso["status"] == "error"
+        assert caso["case_score"] == 0.0
+        assert caso["runs_scores"] == [0.0, 0.0, 0.0]
+
+    def test_invoke_falha_intermitente_conta_failures_nao_vira_error(self):
+        """Caveat I2: invoke falha em ALGUNS runs (nao todos) -> status NAO e' 'error'
+        (ha output para julgar), mas invoke_failures conta as falhas de INFRA.
+
+        Distingue 'agente ruim' (score baixo, invoke OK) de 'infra instavel'
+        (alguns invokes falharam). 1 sucesso entre 3 -> mediana sobre [0,0,score].
+        """
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+
+        # invoke: falha nos 2 primeiros runs, sucede no 3o
+        chamadas = {'n': 0}
+
+        def invoke_intermitente(user_input: str) -> str:
+            chamadas['n'] += 1
+            if chamadas['n'] <= 2:
+                raise RuntimeError(f"infra instavel run {chamadas['n']}")
+            return "output bom"
+
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=invoke_intermitente,
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        # NAO e' 'error' (1 run produziu output julgavel)
+        assert caso["status"] != "error"
+        # invoke_failures registra as 2 falhas de infra (caveat I2)
+        assert caso["invoke_failures"] == 2
+        assert "invoke_failures=2/3" in caso["evidence"]
+        # runs_scores = [0.0, 0.0, 1.0] -> mediana 0.0
+        assert caso["runs_scores"] == [0.0, 0.0, 1.0]
+
+    def test_campos_novos_presentes_em_cada_caso(self):
+        """cases[] ganha n_runs, case_score_variance, runs_scores; mantem id/status/evidence."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+        try:
+            result = run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=lambda x: "out",
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+                n_runs=3,
+            )
+        finally:
+            os.unlink(path)
+
+        caso = result["cases"][0]
+        # campos NOVOS
+        assert "n_runs" in caso
+        assert "case_score_variance" in caso
+        assert "runs_scores" in caso
+        assert isinstance(caso["runs_scores"], list)
+        assert isinstance(caso["case_score_variance"], float)
+        assert isinstance(caso["n_runs"], int)
+        # campos EXISTENTES preservados
+        assert "id" in caso
+        assert "status" in caso
+        assert "evidence" in caso
+        assert "case_score" in caso
+
+    def test_default_n_runs_e_3(self):
+        """run_evals tem n_runs com default 3 na assinatura."""
+        from app.agente.services import eval_gate_service as svc
+        import inspect
+
+        sig = inspect.signature(svc.run_evals)
+        assert "n_runs" in sig.parameters
+        assert sig.parameters["n_runs"].default == 3
+
+    def test_default_n_runs_invoca_3x(self):
+        """Sem passar n_runs explicito -> default 3 -> invoke chamado 3x por caso."""
+        from app.agente.services.eval_gate_service import run_evals
+        import os
+
+        path = self._single_case_dataset_path()
+        call = [0]
+
+        def invoke_fn(user_input: str) -> str:
+            call[0] += 1
+            return "out"
+
+        try:
+            run_evals(
+                agent_name="n",
+                dataset_path=path,
+                invoke_fn=invoke_fn,
+                judge_fn=lambda p: {"passed_items": 5, "total_items": 5, "failing": []},
+                # n_runs ausente -> default 3
+            )
+        finally:
+            os.unlink(path)
+
+        assert call[0] == 3
