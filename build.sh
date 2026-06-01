@@ -516,6 +516,19 @@ echo "Agente 26c: bootstrap de ontologia (D2 — roda apenas se AGENT_ONTOLOGY=t
 python scripts/agente/bootstrap_ontologia.py \
     || echo "ℹ️ Bootstrap ontologia pulado (AGENT_ONTOLOGY off) ou falhou — continuando deploy..."
 
+# 26d. A3 gate de regressao (2026-06-01): baseline de eval por-agente + calibracao.
+# agent_eval_scores (baseline score por run, A3 Fase 1) + agent_eval_case (1 linha
+# por caso p/ spot-check humano 5-10%, A3-R3). Ambas idempotentes (IF NOT EXISTS).
+# Necessarias ANTES de ligar AGENT_EVAL_GATE / AGENT_EVAL_CALIBRATION (senao o eval
+# falha por tabela inexistente em prod — SKIP_DB_CREATE=true). Best-effort (|| echo).
+echo "Agente 26d.1: tabela agent_eval_scores (A3 baseline)..."
+python scripts/migrations/2026_05_31_agent_eval_scores.py \
+    || echo "⚠️ Migration agent_eval_scores falhou, continuando deploy..."
+
+echo "Agente 26d.2: tabela agent_eval_case (A3-R3 calibracao)..."
+python scripts/migrations/2026_06_01_agent_eval_case.py \
+    || echo "⚠️ Migration agent_eval_case falhou, continuando deploy..."
+
 # 27. Inventario Ciclico (2026-05-31): contagem parcial por quant + plano de ajustes.
 # Cria tabelas inventario_contagem + inventario_contagem_item (granularidade quant).
 # Idempotente (model.__table__.create(checkfirst=True)). Confronto inalterado.
