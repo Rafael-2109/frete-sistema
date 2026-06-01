@@ -110,6 +110,33 @@ EVAL_GATE_ENABLED = os.environ.get("AGENT_EVAL_GATE", "false").lower() == "true"
 EVAL_GATE_HOUR = int(os.environ.get("AGENT_EVAL_GATE_HOUR", "11"))
 _ultimo_eval_gate = None  # Timestamp da ultima execucao bem-sucedida
 
+# Judge Enqueuer (29º módulo) — Onda 1 / E2, report-only, flag-OFF por default
+# REUSA a flag AGENT_STEP_JUDGE (mesma que controla o job judge_step em shadow).
+# Roda POR CICLO (cada tick de 30min), SEM guard temporal — varre steps recentes
+# sem veredito e enfileira judge_step na fila LEVE 'agent_judge'.
+# DEFAULT false: modulo e' no-op. Ativar em deploy.
+JUDGE_ENQUEUER_ENABLED = os.environ.get("AGENT_STEP_JUDGE", "false").lower() == "true"
+JUDGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("JUDGE_ENQUEUER_LOOKBACK_HOURS", "6"))
+JUDGE_ENQUEUER_LIMIT = int(os.environ.get("JUDGE_ENQUEUER_LIMIT", "50"))
+
+# Verify Enqueuer (30º módulo) — Onda 2 / B2, report-only, flag-OFF por default
+# REUSA a flag AGENT_VERIFY (mesma que controla os verifiers shadow).
+# Roda POR CICLO (cada tick de 30min), SEM guard temporal — varre steps recentes
+# sem outcome_signal['verify'] e enfileira verify_step_shadow na fila LEVE
+# 'agent_judge'. DEFAULT false: modulo e' no-op. Ativar em deploy.
+VERIFY_ENQUEUER_ENABLED = os.environ.get("AGENT_VERIFY", "false").lower() == "true"
+VERIFY_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("VERIFY_ENQUEUER_LOOKBACK_HOURS", "6"))
+VERIFY_ENQUEUER_LIMIT = int(os.environ.get("VERIFY_ENQUEUER_LIMIT", "50"))
+
+# Triage Enqueuer (31º módulo) — Tarefa 2c / B-TRIAGE, report-only, flag-OFF por default
+# REUSA a flag AGENT_PLANNER (mesma que gateia o wiring de triage shadow).
+# Roda POR CICLO (cada tick de 30min), SEM guard temporal — varre steps recentes
+# sem outcome_signal['triage'] e enfileira triage_step_shadow na fila LEVE
+# 'agent_judge'. DEFAULT false: modulo e' no-op. Ativar em deploy.
+TRIAGE_ENQUEUER_ENABLED = os.environ.get("AGENT_PLANNER", "false").lower() == "true"
+TRIAGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("TRIAGE_ENQUEUER_LOOKBACK_HOURS", "6"))
+TRIAGE_ENQUEUER_LIMIT = int(os.environ.get("TRIAGE_ENQUEUER_LIMIT", "50"))
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -2035,11 +2062,13 @@ def executar_sincronizacao():
         logger.info(f"   [TIMER] Step 27 (Health Check Custeio): {time.time() - _t_step:.1f}s")
 
         # ── 2️⃣8️⃣ EVAL GATE — golden datasets de subagentes (28º módulo, report-only) ──
-        # Onda 3 / A3. Flag AGENT_EVAL_GATE default OFF → no-op.
-        # Quando ON: roda run_evals() por dataset e LOGA resultado (nunca bloqueia).
-        # invoke_fn e' seam injetavel; em shadow usa stub que raise NotImplementedError
-        # e todos os casos sao registrados como 'error' (safe, sem chamada API real).
-        # Wiring real do agente sera' feito na ativacao futura (fora do escopo A3).
+        # Onda 3 / A3 (wiring REAL — Fase 1, 3b). Flag AGENT_EVAL_GATE default OFF → no-op.
+        # Quando ON: ENFILEIRA run_eval_batch na fila NOVA 'agent_eval' (PESADA).
+        # NAO roda inline: o eval REAL invoca o agente via `claude -p` (20-50min) e
+        # bloquearia o ciclo de sincronizacao. O job RQ roda nos Workers 1/2
+        # (light-reserved Worker 0 preservado). Persiste score por-agente em
+        # agent_eval_scores + gate report-only (NUNCA bloqueia).
+        # Guard temporal 1x/dia preservado; best-effort isolado.
         _t_step = time.time()
         eval_gate_executou = False
 
@@ -2056,44 +2085,10 @@ def executar_sincronizacao():
             if deve_rodar_eg:
                 eval_gate_executou = True
                 try:
-                    import pathlib as _pathlib
-                    from app.agente.services.eval_gate_service import run_evals, eval_gate as _eval_gate
+                    from app.agente.workers.eval_runner import enqueue_eval_batch
 
-                    _evals_dir = _pathlib.Path(__file__).parent.parent.parent / ".claude" / "evals" / "subagents"
-
-                    _datasets = [
-                        ("analista-carteira", str(_evals_dir / "analista-carteira" / "dataset.yaml")),
-                        ("auditor-financeiro", str(_evals_dir / "auditor-financeiro" / "dataset.yaml")),
-                        ("controlador-custo-frete", str(_evals_dir / "controlador-custo-frete" / "dataset.yaml")),
-                        ("gestor-motos-assai", str(_evals_dir / "gestor-motos-assai" / "dataset.yaml")),
-                    ]
-
-                    for _agent_name, _dataset_path in _datasets:
-                        try:
-                            _result = run_evals(
-                                agent_name=_agent_name,
-                                dataset_path=_dataset_path,
-                                # invoke_fn ausente = seam nao ativado (shadow mode)
-                                # todos os casos retornam 'error' com NotImplementedError
-                            )
-                            logger.info(
-                                f"[EVAL_GATE] {_agent_name}: "
-                                f"score={_result['score']:.3f} "
-                                f"passed={_result['passed']}/{_result['total']}"
-                            )
-                            # Gate report-only (blocked sempre False neste modo)
-                            _gate = _eval_gate(
-                                baseline_score=0.0,  # sem baseline historico ainda
-                                candidate_score=_result['score'],
-                                mode='report_only',
-                            )
-                            if _gate['regression']:
-                                logger.warning(
-                                    f"[EVAL_GATE] {_agent_name}: regressao detectada "
-                                    f"delta={_gate['delta']:+.3f} (report-only, nao bloqueado)"
-                                )
-                        except Exception as _e_agent:
-                            logger.warning(f"[EVAL_GATE] {_agent_name}: erro ao rodar evals: {_e_agent}")
+                    _eg_result = enqueue_eval_batch()
+                    logger.info(f"[EVAL_GATE] enfileirado run_eval_batch: {_eg_result}")
 
                     _ultimo_eval_gate = agora_utc_naive()
                 except Exception as e:
@@ -2105,6 +2100,93 @@ def executar_sincronizacao():
                         pass
 
         logger.info(f"   [TIMER] Step 28 (Eval Gate): {time.time() - _t_step:.1f}s")
+
+        # ── 2️⃣9️⃣ JUDGE ENQUEUER — varredor RQ do step_judge (29º módulo, report-only) ──
+        # Onda 1 / E2. Flag AGENT_STEP_JUDGE default OFF → no-op.
+        # Quando ON: varre AgentStep recentes (lookback) sem outcome_signal['judge']
+        # e enfileira judge_step na fila LEVE 'agent_judge'. Roda TODO ciclo (sem
+        # guard temporal) — cap por `limit` evita backlog. Best-effort: nunca falha o cron.
+        _t_step = time.time()
+
+        if JUDGE_ENQUEUER_ENABLED:
+            try:
+                from app.agente.workers.step_judge import enqueue_pending_judges
+
+                _je_result = enqueue_pending_judges(
+                    lookback_hours=JUDGE_ENQUEUER_LOOKBACK_HOURS,
+                    limit=JUDGE_ENQUEUER_LIMIT,
+                )
+                logger.info(
+                    f"[JUDGE_ENQUEUER] enfileirados={_je_result.get('enfileirados', 0)} "
+                    f"candidatos={_je_result.get('candidatos', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[JUDGE_ENQUEUER] Erro no modulo 29: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 29 (Judge Enqueuer): {time.time() - _t_step:.1f}s")
+
+        # ── 3️⃣0️⃣ VERIFY ENQUEUER — varredor RQ do verify_step_shadow (30º módulo, report-only) ──
+        # Onda 2 / B2. Flag AGENT_VERIFY default OFF → no-op.
+        # Quando ON: varre AgentStep recentes (lookback) sem outcome_signal['verify']
+        # e enfileira verify_step_shadow (3 verifiers: adversarial/arithmetic/domain)
+        # na fila LEVE 'agent_judge'. Roda TODO ciclo (sem guard temporal) — cap por
+        # `limit` evita backlog. Best-effort: nunca falha o cron. NÃO entra em modulos_sync.
+        _t_step = time.time()
+
+        if VERIFY_ENQUEUER_ENABLED:
+            try:
+                from app.agente.workers.plan_verifier import enqueue_pending_verifies
+
+                _ve_result = enqueue_pending_verifies(
+                    lookback_hours=VERIFY_ENQUEUER_LOOKBACK_HOURS,
+                    limit=VERIFY_ENQUEUER_LIMIT,
+                )
+                logger.info(
+                    f"[VERIFY_ENQUEUER] enfileirados={_ve_result.get('enfileirados', 0)} "
+                    f"candidatos={_ve_result.get('candidatos', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[VERIFY_ENQUEUER] Erro no modulo 30: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 30 (Verify Enqueuer): {time.time() - _t_step:.1f}s")
+
+        # ── 3️⃣1️⃣ TRIAGE ENQUEUER — varredor RQ do triage_step_shadow (31º módulo, report-only) ──
+        # Tarefa 2c / B-TRIAGE. Flag AGENT_PLANNER default OFF → no-op.
+        # Quando ON: varre AgentStep recentes (lookback) sem outcome_signal['triage']
+        # e enfileira triage_step_shadow (decompõe a meta do turno em steps ancorados
+        # via triage_meta) na fila LEVE 'agent_judge'. Roda TODO ciclo (sem guard
+        # temporal) — cap por `limit` evita backlog. Best-effort: nunca falha o cron.
+        # NÃO entra em modulos_sync.
+        _t_step = time.time()
+
+        if TRIAGE_ENQUEUER_ENABLED:
+            try:
+                from app.agente.workers.triage_shadow import enqueue_pending_triages
+
+                _te_result = enqueue_pending_triages(
+                    lookback_hours=TRIAGE_ENQUEUER_LOOKBACK_HOURS,
+                    limit=TRIAGE_ENQUEUER_LIMIT,
+                )
+                logger.info(
+                    f"[TRIAGE_ENQUEUER] enfileirados={_te_result.get('enfileirados', 0)} "
+                    f"candidatos={_te_result.get('candidatos', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[TRIAGE_ENQUEUER] Erro no modulo 31: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 31 (Triage Enqueuer): {time.time() - _t_step:.1f}s")
 
         # Limpar conexões ao final
         try:

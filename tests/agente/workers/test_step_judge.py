@@ -386,3 +386,214 @@ def test_judge_step_haiku_json_invalido_nao_grava(app_ctx, monkeypatch):
             assert 'judge' not in step.outcome_signal
     finally:
         _cleanup_step(uid)
+
+
+# ─── E2 — Varredor RQ (enqueue_pending_judges) ────────────────────────────────
+# WIRING da Onda 3 / A3: torna funcional o varredor batch que enfileira judge_step
+# para steps recentes sem veredito. Padrao de mock de Queue/Redis espelhado de
+# tests/agente/sdk/test_hooks_enqueue_validation.py.
+
+from unittest.mock import MagicMock, patch  # noqa: E402
+
+
+def test_enqueue_acha_step_sem_judge(app_ctx):
+    """enqueue_pending_judges enfileira judge_step com step_uid + job_id corretos
+    para um step recente que ainda nao tem veredito 'judge'."""
+    from app.agente.workers import step_judge
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)
+    mock_queue = MagicMock()
+
+    try:
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', True):
+            result = step_judge.enqueue_pending_judges(queue=mock_queue)
+
+        # O step de teste deve estar entre os enfileirados
+        chamadas = mock_queue.enqueue.call_args_list
+        uids_chamados = []
+        for call in chamadas:
+            # args[0] = dotted-path, args[1] = step_uid
+            assert call.args[0] == 'app.agente.workers.step_judge.judge_step'
+            uids_chamados.append(call.args[1])
+            # job_id deterministico e RQ-safe (sem ':' — ver C1)
+            assert call.kwargs.get('job_id') == f"judge-step-{call.args[1].replace(':', '-')}"
+            assert call.kwargs.get('job_timeout') == 120
+
+        assert uid in uids_chamados, (
+            f"step {uid} sem judge deveria ter sido enfileirado; "
+            f"enfileirados={uids_chamados}"
+        )
+        assert result['enfileirados'] >= 1
+    finally:
+        _cleanup_step(uid)
+
+
+def test_enqueue_ignora_step_com_judge(app_ctx):
+    """Step que ja tem outcome_signal['judge'] NAO e re-enfileirado."""
+    from app.agente.workers import step_judge
+    from app.agente.models import AgentStep
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)
+    # Marca o step como ja julgado
+    AgentStep.update_outcome(uid, {'judge': {'score': 50, 'label': 'partial'}})
+    _db.session.commit()
+
+    mock_queue = MagicMock()
+
+    try:
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', True):
+            step_judge.enqueue_pending_judges(queue=mock_queue)
+
+        uids_chamados = [c.args[1] for c in mock_queue.enqueue.call_args_list]
+        assert uid not in uids_chamados, (
+            f"step {uid} JA julgado nao deveria ser re-enfileirado; "
+            f"enfileirados={uids_chamados}"
+        )
+    finally:
+        _cleanup_step(uid)
+
+
+def test_enqueue_flag_off_nao_enfileira(app_ctx):
+    """Com USE_AGENT_STEP_JUDGE=False, gate corta antes de tocar a fila."""
+    from app.agente.workers import step_judge
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)
+    mock_queue = MagicMock()
+
+    try:
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', False):
+            result = step_judge.enqueue_pending_judges(queue=mock_queue)
+
+        mock_queue.enqueue.assert_not_called()
+        assert result['enfileirados'] == 0
+        assert result['skipped'] == 'flag_off'
+    finally:
+        _cleanup_step(uid)
+
+
+def test_enqueue_ignora_step_fora_da_janela(app_ctx):
+    """Step com created_at anterior ao lookback NAO entra na janela e nao e
+    enfileirado. Controlamos a janela passando `now` deterministicamente."""
+    import datetime
+    from app.agente.workers import step_judge
+
+    sid = _mk_sid()
+    uid, step = _mk_step(app_ctx, sid)
+    mock_queue = MagicMock()
+
+    try:
+        # 'now' 100h depois do created_at do step -> com lookback=6h, fora da janela.
+        future_now = step.created_at + datetime.timedelta(hours=100)
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', True):
+            step_judge.enqueue_pending_judges(
+                queue=mock_queue, now=future_now, lookback_hours=6
+            )
+
+        uids_chamados = [c.args[1] for c in mock_queue.enqueue.call_args_list]
+        assert uid not in uids_chamados, (
+            f"step {uid} fora da janela (>6h) nao deveria ser enfileirado; "
+            f"enfileirados={uids_chamados}"
+        )
+    finally:
+        _cleanup_step(uid)
+
+
+def test_enqueue_redis_down_best_effort(app_ctx):
+    """Sem queue injetada + Redis indisponivel -> NAO levanta excecao,
+    retorna dict com skipped='redis_error' (INV-6 best-effort)."""
+    from app.agente.workers import step_judge
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)
+
+    try:
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', True), \
+             patch('redis.from_url', side_effect=Exception('redis down')):
+            # queue=None forca construcao real da fila (que falha no Redis)
+            result = step_judge.enqueue_pending_judges(queue=None)
+
+        assert result['enfileirados'] == 0
+        assert result.get('skipped') == 'redis_error'
+        assert result['candidatos'] >= 1
+    finally:
+        _cleanup_step(uid)
+
+
+def test_enqueue_wiring_produtor_consumidor(app_ctx):
+    """INTEGRACAO (DoD): com DOIS steps commitados (um sem judge, um com judge),
+    o varredor enfileira SO o sem-judge, com o step_uid exato."""
+    from app.agente.workers import step_judge
+    from app.agente.models import AgentStep
+
+    sid_sem = _mk_sid()
+    sid_com = _mk_sid()
+    uid_sem, _ = _mk_step(app_ctx, sid_sem)
+    uid_com, _ = _mk_step(app_ctx, sid_com)
+    # Marca o segundo como ja julgado
+    AgentStep.update_outcome(uid_com, {'judge': {'score': 90, 'label': 'success'}})
+    _db.session.commit()
+
+    mock_queue = MagicMock()
+
+    try:
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', True):
+            step_judge.enqueue_pending_judges(queue=mock_queue)
+
+        uids_chamados = [c.args[1] for c in mock_queue.enqueue.call_args_list]
+        assert uid_sem in uids_chamados, (
+            f"step sem judge {uid_sem} deveria ser enfileirado"
+        )
+        assert uid_com not in uids_chamados, (
+            f"step com judge {uid_com} NAO deveria ser enfileirado"
+        )
+    finally:
+        _cleanup_step(uid_sem)
+        _cleanup_step(uid_com)
+
+
+def test_enqueue_job_id_sem_dois_pontos_rq_safe(app_ctx):
+    """C1 (CRITICAL): o job_id gerado NAO pode conter ':'.
+
+    step_uid e '{session_id}:{turn_seq}' (sempre tem ':'). RQ 2.6.1
+    Job.set_id faz `if ':' in value: raise ValueError` — logo um job_id
+    com ':' levantaria a cada enqueue e o try/except por-step engoliria
+    silenciosamente (enfileirados=0, feature inerte). Este teste prova
+    que o id gerado e RQ-safe SEM depender de Redis/fakeredis (o MagicMock
+    nao valida; a garantia vem da asserção sobre o id).
+
+    FALHARIA contra o codigo antigo (job_id=f'judge-step:{step_uid}').
+    """
+    from app.agente.workers import step_judge
+
+    sid = _mk_sid()
+    uid, _ = _mk_step(app_ctx, sid)
+    # Pre-condicao do teste: o step_uid realmente contem ':'
+    assert ':' in uid, "fixture invalida: step_uid de teste deveria conter ':'"
+
+    mock_queue = MagicMock()
+
+    try:
+        with patch('app.agente.config.feature_flags.USE_AGENT_STEP_JUDGE', True):
+            step_judge.enqueue_pending_judges(queue=mock_queue)
+
+        # Localiza a chamada referente ao nosso step
+        nossa_chamada = next(
+            (c for c in mock_queue.enqueue.call_args_list if c.args[1] == uid),
+            None,
+        )
+        assert nossa_chamada is not None, (
+            f"step {uid} deveria ter sido enfileirado"
+        )
+        job_id = nossa_chamada.kwargs.get('job_id')
+        assert job_id is not None, "job_id ausente no enqueue"
+        assert ':' not in job_id, (
+            f"job_id '{job_id}' contem ':' — RQ 2.6.1 Job.set_id levantaria "
+            f"ValueError e o enqueue falharia silenciosamente (C1)."
+        )
+        # E o id deve permanecer rastreavel ao step (derivado do step_uid)
+        assert job_id == f"judge-step-{uid.replace(':', '-')}"
+    finally:
+        _cleanup_step(uid)

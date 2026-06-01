@@ -25,6 +25,7 @@ Padrao clonado de: app/agente/workers/subagent_validator.py
 """
 import json
 import logging
+from datetime import timedelta
 from typing import Optional
 
 from app import create_app
@@ -32,6 +33,10 @@ from app import create_app
 logger = logging.getLogger('sistema_fretes')
 
 HAIKU_MODEL = 'claude-haiku-4-5-20251001'
+
+# Fila RQ (LEVE) onde o varredor batch enfileira jobs judge_step.
+# Classificada como leve — NAO entra em FILAS_PESADAS (worker_render.py).
+JUDGE_QUEUE_NAME = 'agent_judge'
 
 JUDGE_SYSTEM_PROMPT = """Voce avalia a QUALIDADE de UM passo (turno) de um agente \
 logistico — se ele atingiu o objetivo do usuario.
@@ -241,3 +246,110 @@ def _judge_step_in_context(step_uid: str) -> None:
         f"[step_judge] concluido: step_uid={step_uid[:40]} "
         f"score={veredito['score']} label={veredito['label']}"
     )
+
+
+def enqueue_pending_judges(queue=None, now=None, lookback_hours=6, limit=50) -> dict:
+    """Varredor RQ batch (E2/A3): enfileira judge_step para steps recentes sem veredito.
+
+    WIRING da Onda 3 / A3 — torna funcional o job judge_step que vive em shadow.
+    Chamado por ciclo (cada tick de 30min do orquestrador de sincronizacao),
+    sob a flag USE_AGENT_STEP_JUDGE (OFF por default).
+
+    Comportamento:
+    1. Gate pela flag (import LAZY p/ patch de teste funcionar): se OFF, retorna
+       sem tocar em Redis/Queue.
+    2. Janela: candidatos sao steps com created_at no intervalo [now-lookback, now].
+    3. Filtro Python: candidato = step SEM 'judge' em outcome_signal.
+    4. Para cada candidato, enfileira judge_step com job_id deterministico derivado
+       do step_uid (sanitizado: ':' -> '-', pois RQ 2.6.1 rejeita ':' no id).
+       NOTA: RQ 2.6.1 NAO deduplica enqueue por job_id (sem `unique=True` nesta
+       versao). O id deterministico serve para RASTREABILIDADE (sobrescreve o hash
+       do job no Redis). Re-enfileirar um step ainda pendente em ciclos seguintes e
+       um RETRY idempotente intencional: um judge que falhou e re-tentado, e
+       update_outcome faz MERGE em outcome_signal -> double-judge e benigno.
+    5. Best-effort total (INV-6): falha de Redis NAO levanta excecao.
+
+    Args:
+        queue: rq.Queue ja construida (injecao p/ teste). Se None, constroi a real.
+        now: datetime de referencia da janela. Default = agora_utc_naive().
+        lookback_hours: tamanho da janela retroativa (horas).
+        limit: cap de steps lidos do banco por execucao.
+
+    Returns:
+        dict com {'enfileirados': int, 'candidatos': int} (+ 'skipped' quando aplicavel).
+    """
+    # 1. Gate — import LAZY (permite patch de USE_AGENT_STEP_JUDGE em teste)
+    from app.agente.config.feature_flags import USE_AGENT_STEP_JUDGE
+    if not USE_AGENT_STEP_JUDGE:
+        return {'enfileirados': 0, 'candidatos': 0, 'skipped': 'flag_off'}
+
+    from app.utils.timezone import agora_utc_naive
+    from app.agente.models import AgentStep
+
+    if now is None:
+        now = agora_utc_naive()
+    corte = now - timedelta(hours=lookback_hours)
+
+    # 2. Query — usa o indice de created_at; janela superior fecha em `now`
+    #    para que `now` passado deterministicamente (teste fora-da-janela) funcione.
+    steps = (
+        AgentStep.query
+        .filter(AgentStep.created_at >= corte)
+        .filter(AgentStep.created_at <= now)
+        .order_by(AgentStep.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+
+    # 3. Filtro Python — candidato = sem veredito 'judge'
+    candidatos = [s for s in steps if 'judge' not in (s.outcome_signal or {})]
+
+    if not candidatos:
+        logger.info("[judge_enqueuer] enfileirados=0 candidatos=0")
+        return {'enfileirados': 0, 'candidatos': 0}
+
+    # 4. Construir fila real inline se nao injetada (best-effort — INV-6)
+    if queue is None:
+        try:
+            import os
+            from rq import Queue
+            import redis
+
+            redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+            r = redis.from_url(redis_url)
+            queue = Queue(JUDGE_QUEUE_NAME, connection=r)
+        except Exception as e:
+            logger.error(f"[judge_enqueuer] Redis indisponivel, abortando best-effort: {e}")
+            return {
+                'enfileirados': 0,
+                'candidatos': len(candidatos),
+                'skipped': 'redis_error',
+            }
+
+    # 5. Enfileirar
+    enfileirados = 0
+    for step in candidatos:
+        try:
+            # job_id deterministico p/ RASTREABILIDADE (NAO dedup — RQ 2.6.1 nao
+            # tem unique=True). Sanitiza TODOS os ':': step_uid e
+            # '{session_id}:{turn_seq}' (sempre contem ':') e RQ 2.6.1 Job.set_id
+            # levanta ValueError se ':' in id (verificado empiricamente). Sem o
+            # replace, o try/except engoliria a excecao e enfileirados=0 (C1).
+            # Re-enfileirar mesmo step e RETRY idempotente (update_outcome faz merge).
+            job_id = f"judge-step-{step.step_uid.replace(':', '-')}"
+            queue.enqueue(
+                'app.agente.workers.step_judge.judge_step',
+                step.step_uid,
+                job_id=job_id,
+                job_timeout=120,
+            )
+            enfileirados += 1
+        except Exception as e:
+            logger.warning(
+                f"[judge_enqueuer] enqueue falhou para step_uid={step.step_uid}: {e}"
+            )
+
+    logger.info(
+        f"[judge_enqueuer] enfileirados={enfileirados} candidatos={len(candidatos)}"
+    )
+    return {'enfileirados': enfileirados, 'candidatos': len(candidatos)}

@@ -863,6 +863,30 @@ USE_AGENT_VERIFY = os.getenv("AGENT_VERIFY", "false").lower() == "true"
 AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"
 
 # ====================================================================
+# Onda 3 — A3-R3: Calibracao do judge de eval (spot-check humano)
+# ====================================================================
+# Quando ON: run_eval_regression_gate persiste 1 linha POR CASO em
+# agent_eval_case (via persist_eval_cases em eval_runner), guardando o veredito
+# granular do judge (case_score = mediana de N runs). Isso habilita:
+#   - spot-check humano de 5-10% (AgentEvalCase.sample_unreviewed);
+#   - metrica de concordancia judge-vs-humano (AgentEvalCase.concordance_rate).
+# Spec eixos/A-flywheel.md:165 ("Calibracao obrigatoria: spot-check humano de
+# 5-10% das notas do judge"). Sem calibracao, trocamos um proxy cego (eco) por
+# outro (judge nao-auditado) — A-flywheel.md:318.
+#
+# Quando OFF (default): run_eval_regression_gate persiste APENAS o score
+# agregado (comportamento atual, A3-R2) — NAO grava os casos. Zero overhead.
+# Ativar: AGENT_EVAL_CALIBRATION=true. Rollback: AGENT_EVAL_CALIBRATION=false.
+#
+# ESCOPO (code-review M3): a calibracao por-caso (agent_eval_case) e' gravada
+# SOMENTE no caminho do GATE DE REGRESSAO (run_eval_regression_gate, A3-R4 no D8),
+# NAO no eval periodico do cron (run_eval_batch / modulo 28). E' intencional: o
+# spot-check humano calibra o judge no ponto onde ele de fato decide regressao
+# (commit do D8), nao no sanity-check periodico. Ligar esta flag NAO faz o batch
+# do cron gravar casos.
+USE_AGENT_EVAL_CALIBRATION = os.getenv("AGENT_EVAL_CALIBRATION", "false").lower() == "true"
+
+# ====================================================================
 # Onda 4 — F4/F5: Skill Hints Advisory (flag-OFF por default)
 # ====================================================================
 # Quando ON: hook UserPromptSubmit adiciona bloco <skill_hints priority="advisory">

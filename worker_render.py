@@ -140,7 +140,7 @@ def run_single_worker(config, burst=False):
 @click.option('--workers', default=2, help='Número de workers paralelos')
 @click.option('--verbose', is_flag=True, help='Modo verbose com mais logs')
 @click.option('--burst', is_flag=True, help='Executa jobs pendentes e para')
-@click.option('--queues', default='high,hora_nfe,artifacts,atacadao,agent_background,odoo_lancamento,impostos,recebimento,hora_backfill,sped_ecd,inventario,agent_validation,default', help='Filas a processar')
+@click.option('--queues', default='high,hora_nfe,artifacts,atacadao,agent_background,odoo_lancamento,impostos,recebimento,hora_backfill,sped_ecd,inventario,agent_eval,agent_validation,agent_judge,default', help='Filas a processar')
 def run_worker(workers, verbose, burst, queues):
     """
     Executa o worker otimizado para o Render
@@ -209,7 +209,7 @@ def run_worker(workers, verbose, burst, queues):
             # Resultado: max 2 workers em pesadas; worker 0 SEMPRE livre.
             # ============================================================
             FILA_EXCLUSIVA = 'impostos'
-            FILAS_PESADAS = {'impostos', 'odoo_lancamento', 'recebimento', 'hora_backfill', 'sped_ecd', 'inventario'}
+            FILAS_PESADAS = {'impostos', 'odoo_lancamento', 'recebimento', 'hora_backfill', 'sped_ecd', 'inventario', 'agent_eval'}
 
             queues_light = [q for q in queues_obj if q.name not in FILAS_PESADAS]
             queues_full = queues_obj  # todas

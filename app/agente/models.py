@@ -1762,6 +1762,343 @@ class AgentInvocationMetric(db.Model):
 
 
 # =========================================================================
+# AgentEvalScore — A3 Fase 1 (baseline de eval por-agente, report-only)
+# 1 linha por run de eval (passed/total) por agent_name. O baseline contra
+# o qual o run atual compara = score do run anterior MAIS RECENTE.
+# Migration: scripts/migrations/2026_05_31_agent_eval_scores.{py,sql}
+# =========================================================================
+
+class AgentEvalScore(db.Model):
+    """
+    A3 (2026-05-31) — score de eval persistido por-agente para o eval gate.
+
+    Substitui o `baseline_score=0.0` hardcoded em eval_gate_service (módulo 28
+    do scheduler). Cada linha representa UM run de eval de um agent_name, com
+    score = passed/total. O baseline para comparação report-only (e enforce
+    futuro) é o `score` do run ANTERIOR mais recente do mesmo agent_name.
+
+    Sem FK — mesmo padrão de AgentInvocationMetric/AgentSessionCost para
+    preservar histórico de scores cross-deploy (análise de regressão).
+
+    Schema completo: scripts/migrations/2026_05_31_agent_eval_scores.sql
+    """
+    __tablename__ = 'agent_eval_scores'
+
+    MODE_REPORT_ONLY = 'report_only'
+    MODE_ENFORCE = 'enforce'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    agent_name = db.Column(db.Text, nullable=False, index=True)
+
+    # score = passed/total (0.0-1.0)
+    score = db.Column(db.Float, nullable=False)
+    total = db.Column(db.Integer, nullable=False, default=0)
+    passed = db.Column(db.Integer, nullable=False, default=0)
+
+    # SHA do código avaliado (rastreabilidade cross-deploy)
+    git_sha = db.Column(db.Text, nullable=True)
+
+    # 'report_only' | 'enforce'
+    mode = db.Column(db.Text, nullable=True)
+
+    recorded_at = db.Column(
+        db.DateTime, nullable=False, default=lambda: agora_utc_naive(), index=True
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentEvalScore {self.agent_name} '
+            f'score={self.score} ({self.passed}/{self.total}) mode={self.mode}>'
+        )
+
+    @classmethod
+    def insert_score(
+        cls,
+        agent_name: str,
+        score: float,
+        total: int,
+        passed: int,
+        git_sha: Optional[str] = None,
+        mode: str = MODE_REPORT_ONLY,
+    ) -> Optional['AgentEvalScore']:
+        """
+        Insere um run de eval. Retorna None em erro (best-effort).
+
+        SAVEPOINT pattern (idêntico a AgentInvocationMetric.insert_metric):
+        usa `begin_nested()` em vez de `commit()` direto. O eval gate roda
+        dentro do scheduler (módulo 28) onde pode já existir transação em
+        curso. `commit()` aqui faria flush prematuro; um erro (ex.: NOT NULL)
+        faria rollback da transação inteira. Solução: savepoint isola — o
+        IntegrityError rollba apenas o SAVEPOINT, preservando o resto da
+        sessão. O caller consolida no commit final.
+        """
+        from sqlalchemy.exc import IntegrityError, DataError
+
+        entry = cls(
+            agent_name=agent_name,
+            score=score,
+            total=total,
+            passed=passed,
+            git_sha=git_sha,
+            mode=mode,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(entry)
+                db.session.flush()
+            return entry
+        except (IntegrityError, DataError):
+            return None
+
+    @classmethod
+    def get_baseline_score(cls, agent_name: str) -> Optional[float]:
+        """
+        Retorna o `score` do run MAIS RECENTE para `agent_name` (baseline
+        contra o qual o run atual compara), ou None se não houver run prévio.
+
+        ORDER BY recorded_at DESC, id DESC LIMIT 1 — o desempate por id garante
+        determinismo quando dois runs têm o mesmo recorded_at (a decisão de gate
+        consome este valor; sem o tie-break o Postgres devolveria qualquer um).
+
+        IMPORTANTE (call-site): chame ANTES de insert_score do run atual — senão
+        o "mais recente" seria o próprio run atual e o delta daria ~0.
+        """
+        entry = (
+            cls.query
+            .filter_by(agent_name=agent_name)
+            .order_by(cls.recorded_at.desc(), cls.id.desc())
+            .first()
+        )
+        return entry.score if entry is not None else None
+
+    @classmethod
+    def get_score_by_git_sha(cls, agent_name: str, git_sha: str) -> Optional[float]:
+        """
+        Retorna o `score` do run MAIS RECENTE de `agent_name` num `git_sha`
+        ESPECÍFICO, ou None se não houver run para esse (agent_name, git_sha).
+
+        Uso (A3 gate de regressão): o baseline = score do código-ANTES,
+        identificado pelo sha-ANTERIOR já persistido em agent_eval_scores. O
+        candidate = score recém-medido do sha-ATUAL. Compará-los por git_sha
+        confirma que uma MUDANÇA DE CÓDIGO não regrediu o subagente.
+
+        Mesmo padrão de get_baseline_score (filter_by + order_by recorded_at
+        DESC, id DESC + first()), mas filtrando também por git_sha.
+
+        Se `git_sha` for None/vazio → retorna None (sem baseline identificável —
+        não há sha contra o qual comparar).
+        """
+        if not git_sha:
+            return None
+        entry = (
+            cls.query
+            .filter_by(agent_name=agent_name, git_sha=git_sha)
+            .order_by(cls.recorded_at.desc(), cls.id.desc())
+            .first()
+        )
+        return entry.score if entry is not None else None
+
+
+class AgentEvalCase(db.Model):
+    """
+    A3-R3 (2026-06-01) — caso de eval persistido para CALIBRAÇÃO do judge.
+
+    Uma linha POR CASO avaliado num run (vs AgentEvalScore, que é 1 linha por
+    RUN agregando todos os casos). Guarda o veredito granular do judge
+    (case_score = mediana de N runs) para habilitar:
+      - spot-check humano de 5-10% (sample_unreviewed) — A-flywheel.md:165;
+      - métrica de concordância judge-vs-humano (concordance_rate).
+
+    Sem calibração, o flywheel só troca um proxy cego (eco) por outro (judge
+    não-auditado) — exatamente o que A-flywheel.md:318 adverte.
+
+    human_verdict NULL = caso ainda NÃO revisado por humano. Quando revisado:
+    'agree' (judge acertou) ou 'disagree' (judge errou). A escrita do verdict
+    humano é manual/futura (V1 = listagem + métrica). Pattern de referência:
+    sql_evaluator_falses_service.record_false_positive (discordância humana
+    persistida e consultável).
+
+    Sem FK — mesmo padrão de AgentEvalScore/AgentInvocationMetric (preserva
+    histórico cross-deploy). reviewed_by guarda usuarios.id SEM FK.
+
+    Schema completo: scripts/migrations/2026_06_01_agent_eval_case.sql
+    """
+    __tablename__ = 'agent_eval_case'
+
+    VERDICT_AGREE = 'agree'
+    VERDICT_DISAGREE = 'disagree'
+
+    id = db.Column(db.BigInteger, primary_key=True)
+
+    agent_name = db.Column(db.Text, nullable=False, index=True)
+    # case_id do dataset (ex 'ac-01')
+    case_id = db.Column(db.Text, nullable=False)
+
+    # SHA do código avaliado (rastreabilidade cross-deploy)
+    git_sha = db.Column(db.Text, nullable=True)
+
+    # case_score = mediana do judge de N runs (0.0-1.0)
+    case_score = db.Column(db.Float, nullable=False)
+    # 'pass' | 'fail' | 'error'
+    status = db.Column(db.Text, nullable=False)
+    n_runs = db.Column(db.Integer, nullable=False, default=1)
+    case_score_variance = db.Column(db.Float, nullable=False, default=0.0)
+    invoke_failures = db.Column(db.Integer, nullable=False, default=0)
+
+    # veredito textual do judge (ex "mediana=0.800 de 3 run(s), var=...")
+    evidence = db.Column(db.Text, nullable=True)
+
+    # NULL = não revisado; 'agree' | 'disagree' quando revisado por humano
+    human_verdict = db.Column(db.Text, nullable=True)
+    human_note = db.Column(db.Text, nullable=True)
+    reviewed_by = db.Column(db.Integer, nullable=True)  # usuarios.id (sem FK)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+
+    recorded_at = db.Column(
+        db.DateTime, nullable=False, default=lambda: agora_utc_naive(), index=True
+    )
+
+    def __repr__(self):
+        return (
+            f'<AgentEvalCase {self.agent_name}/{self.case_id} '
+            f'score={self.case_score} status={self.status} '
+            f'human={self.human_verdict or "unreviewed"}>'
+        )
+
+    @classmethod
+    def insert_case(
+        cls,
+        agent_name: str,
+        case_id: str,
+        case_score: float,
+        status: str,
+        git_sha: Optional[str] = None,
+        n_runs: int = 1,
+        case_score_variance: float = 0.0,
+        invoke_failures: int = 0,
+        evidence: Optional[str] = None,
+    ) -> Optional['AgentEvalCase']:
+        """
+        Insere um caso de eval. Retorna None em erro (best-effort).
+
+        SAVEPOINT pattern (idêntico a AgentEvalScore.insert_score /
+        AgentInvocationMetric.insert_metric): usa `begin_nested()` em vez de
+        `commit()` direto. persist_eval_cases roda no job RQ do eval; um caso
+        que viole NOT NULL não pode derrubar a transação inteira — o SAVEPOINT
+        isola o IntegrityError. O caller consolida no commit final.
+        """
+        from sqlalchemy.exc import IntegrityError, DataError
+
+        entry = cls(
+            agent_name=agent_name,
+            case_id=case_id,
+            case_score=case_score,
+            status=status,
+            git_sha=git_sha,
+            n_runs=n_runs,
+            case_score_variance=case_score_variance,
+            invoke_failures=invoke_failures,
+            evidence=evidence,
+        )
+        try:
+            with db.session.begin_nested():
+                db.session.add(entry)
+                db.session.flush()
+            return entry
+        except (IntegrityError, DataError):
+            return None
+
+    @classmethod
+    def sample_unreviewed(
+        cls,
+        agent_name: Optional[str] = None,
+        fraction: float = 0.1,
+        seed: Optional[int] = None,
+        min_n: int = 1,
+    ) -> List['AgentEvalCase']:
+        """
+        Amostra ~`fraction` (5-10%) dos casos ainda NÃO revisados por humano
+        (human_verdict IS NULL) para spot-check.
+
+        DETERMINÍSTICA por `seed`: ordena os candidatos por id e usa
+        random.Random(seed).sample para escolher — o MESMO seed sobre o MESMO
+        conjunto devolve a MESMA amostra (reprodutível para auditoria). Se
+        `seed` é None, faz uma amostra simples (random.sample sem seed fixo).
+
+        Garante ao menos `min_n` casos se houver candidatos suficientes:
+        size = max(min_n, round(fraction * total)), clampado a [0, total].
+
+        `fraction` é clampada a [0.0, 1.0]. Filtra por `agent_name` se dado.
+
+        Retorna a lista de AgentEvalCase amostrados (ordenada por id para saída
+        estável). Lista vazia se não há candidatos.
+        """
+        import random
+
+        # fraction clampada a [0.0, 1.0]
+        frac = min(1.0, max(0.0, float(fraction)))
+
+        q = cls.query.filter(cls.human_verdict.is_(None))
+        if agent_name:
+            q = q.filter_by(agent_name=agent_name)
+        # ordena por id → conjunto canônico estável p/ a escolha determinística
+        candidatos = q.order_by(cls.id.asc()).all()
+
+        total = len(candidatos)
+        if total == 0:
+            return []
+
+        # fraction == 0.0 é intenção EXPLÍCITA de NÃO amostrar (code-review M4):
+        # o piso min_n só se aplica quando se está de fato amostrando (frac > 0).
+        # Sem este guard, --fraction 0 retornaria min_n casos (surpresa do usuário).
+        if frac <= 0.0:
+            return []
+
+        # tamanho da amostra: ao menos min_n, ~fraction do total, nunca > total
+        size = max(int(min_n), round(frac * total))
+        size = min(size, total)
+        if size <= 0:
+            return []
+
+        rng = random.Random(seed)  # seed None → não-determinístico (amostra simples)
+        escolhidos = rng.sample(candidatos, size)
+        # saída estável por id (a escolha já foi feita; só reordena p/ leitura)
+        escolhidos.sort(key=lambda c: c.id)
+        return escolhidos
+
+    @classmethod
+    def concordance_rate(cls, agent_name: Optional[str] = None) -> dict:
+        """
+        Concordância judge-vs-humano sobre os casos JÁ revisados
+        (human_verdict NOT NULL).
+
+        Retorna {reviewed: int, agree: int, disagree: int, rate: float|None}
+        onde rate = agree/reviewed (None se reviewed == 0 — sem ground-truth
+        ainda, não há taxa definível). Filtra por `agent_name` se dado.
+
+        É a métrica que torna o judge AUDITÁVEL: a literatura reporta ~85% de
+        concordância judge-vs-humano (A-flywheel.md:161); rate muito abaixo
+        disso é sinal de que o judge precisa de re-prompt/recalibração.
+        """
+        q = cls.query.filter(cls.human_verdict.isnot(None))
+        if agent_name:
+            q = q.filter_by(agent_name=agent_name)
+        revisados = q.all()
+
+        reviewed = len(revisados)
+        agree = sum(1 for c in revisados if c.human_verdict == cls.VERDICT_AGREE)
+        disagree = sum(1 for c in revisados if c.human_verdict == cls.VERDICT_DISAGREE)
+        rate = (agree / reviewed) if reviewed > 0 else None
+        return {
+            'reviewed': reviewed,
+            'agree': agree,
+            'disagree': disagree,
+            'rate': rate,
+        }
+
+
+# =========================================================================
 # AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact
 # Build async via worker RQ (queue 'artifacts'). Bundle no S3.
 # Migration: scripts/migrations/2026_05_12_agente_artifacts.{py,sql}
