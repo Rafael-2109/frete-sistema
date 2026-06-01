@@ -468,6 +468,11 @@ def _build_operational_directives(user_id: int) -> Optional[str]:
                 AgentMemory.path.like('/memories/empresa/protocolos/%'),
             ),
             AgentMemory.importance_score >= MANDATORY_IMPORTANCE_THRESHOLD,
+            # A4: injeta só legado (NULL) OU ativa. Exclui shadow/candidata/despromovida.
+            sql_or(
+                AgentMemory.directive_status.is_(None),
+                AgentMemory.directive_status == 'ativa',
+            ),
         ).order_by(
             AgentMemory.effective_count.desc()
         ).limit(MANDATORY_MAX_COUNT * 3).all()
