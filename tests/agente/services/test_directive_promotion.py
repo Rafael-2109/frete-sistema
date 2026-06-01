@@ -456,6 +456,7 @@ class TestRunBatch:
         plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
         with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
              patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_buscar_sessoes_recentes', return_value=[]), \
              patch.object(svc, '_quality_score_da_sessao', return_value=None), \
              patch.object(svc, '_persist_directive') as mock_persist:
             r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
@@ -468,6 +469,7 @@ class TestRunBatch:
         plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
         with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
              patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_buscar_sessoes_recentes', return_value=[]), \
              patch.object(svc, '_quality_score_da_sessao', return_value=0.85), \
              patch.object(svc, '_tem_falha_odoo', return_value=False), \
              patch.object(svc, '_persist_directive', return_value=123) as mock_persist:
@@ -481,9 +483,97 @@ class TestRunBatch:
         plan = {'steps': {'1': {'subject': 'x', 'status': 'completed'}}}
         with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
              patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_buscar_sessoes_recentes', return_value=[]), \
              patch.object(svc, '_quality_score_da_sessao', return_value=0.99), \
              patch.object(svc, '_tem_falha_odoo', return_value=True), \
              patch.object(svc, '_persist_directive') as mock_persist:
             r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
         assert r['rejeitados'] == 1 and r['promovidos'] == 0
         mock_persist.assert_not_called()
+
+    def test_promove_via_judge_sem_plano(self):
+        """Opção B / A4 V2: sessão SEM plano mas de ALTA QUALIDADE (judge) vira
+        candidata e é promovida (shadow). Prova que o batch deixou de depender de
+        PlanState — a 2ª fonte é o judge signal."""
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        s2 = self._sess('s2', None)
+        judge_steps = [
+            {'score': 85, 'label': 'success', 'evidencia': 'ok', 'tools': ['consultando-sql']},
+            {'score': 80, 'label': 'success', 'evidencia': 'ok', 'tools': ['Bash']},
+        ]
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[]), \
+             patch.object(svc, '_buscar_sessoes_recentes', return_value=[s2]), \
+             patch.object(svc, '_judge_steps_da_sessao', return_value=judge_steps), \
+             patch.object(svc, '_primeira_msg_usuario', return_value='Analise X'), \
+             patch.object(svc, '_quality_score_da_sessao', return_value=0.82), \
+             patch.object(svc, '_tem_falha_odoo', return_value=False), \
+             patch.object(svc, '_persist_directive', return_value=99) as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r['promovidos'] == 1, f"esperado 1 promovido via judge, foi {r}"
+        mock_persist.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# TestProposeDirectiveFromJudgeSession (Opção B — A4 V2: candidata vinda do
+# JUDGE signal, INDEPENDENTE de PlanState; o gargalo era a fonte ser só plano)
+# ---------------------------------------------------------------------------
+
+def _judge_steps(*pairs, tools=None):
+    """Cria lista de steps com veredito judge. pairs = (score, label).
+    tools opcional (lista de ferramentas usadas no passo)."""
+    return [
+        {'score': sc, 'label': lb, 'evidencia': f'evid {lb} {sc}',
+         'tools': tools or ['consultando-sql']}
+        for sc, lb in pairs
+    ]
+
+
+class TestProposeDirectiveFromJudgeSession:
+    """A4 V2: sessão de alta qualidade validada pelo judge vira candidata,
+    sem precisar de PlanState. Função PURA (sem DB)."""
+
+    def test_sessao_alta_qualidade_retorna_candidata(self):
+        from app.agente.services.directive_promotion_service import propose_directive_from_judge_session
+        steps = _judge_steps((85, 'success'), (80, 'success'), tools=['consultando-sql', 'Bash'])
+        result = propose_directive_from_judge_session(
+            'sessao-jq-1', steps, user_meta='Analise a carteira do Atacadao',
+        )
+        assert result is not None
+        assert result['source_session_id'] == 'sessao-jq-1'
+        assert result['status'] == 'candidata'
+        assert result.get('titulo') and result.get('when') and result.get('prescricao')
+
+    def test_sessao_com_failure_retorna_none(self):
+        """Qualquer passo 'failure' desqualifica (só promovemos sessão LIMPA)."""
+        from app.agente.services.directive_promotion_service import propose_directive_from_judge_session
+        steps = _judge_steps((85, 'success'), (35, 'failure'))
+        assert propose_directive_from_judge_session('sessao-jq-2', steps) is None
+
+    def test_sessao_qualidade_baixa_retorna_none(self):
+        """Média abaixo do min_quality (default 0.7) → não promove."""
+        from app.agente.services.directive_promotion_service import propose_directive_from_judge_session
+        steps = _judge_steps((45, 'partial'), (50, 'partial'))
+        assert propose_directive_from_judge_session('sessao-jq-3', steps) is None
+
+    def test_sessao_poucos_passos_julgados_retorna_none(self):
+        """Menos de min_steps (default 2) passos julgados → conservador, None."""
+        from app.agente.services.directive_promotion_service import propose_directive_from_judge_session
+        steps = _judge_steps((90, 'success'))
+        assert propose_directive_from_judge_session('sessao-jq-4', steps) is None
+
+    def test_sem_judge_signal_retorna_none(self):
+        """Lista vazia / sem score → None (não inventa candidata)."""
+        from app.agente.services.directive_promotion_service import propose_directive_from_judge_session
+        assert propose_directive_from_judge_session('sessao-jq-5', []) is None
+        assert propose_directive_from_judge_session('sessao-jq-6', [{'label': 'success'}]) is None
+
+    def test_prescricao_reflete_qualidade(self):
+        """A prescrição deve refletir que foi uma abordagem validada pelo judge."""
+        from app.agente.services.directive_promotion_service import propose_directive_from_judge_session
+        steps = _judge_steps((85, 'success'), (85, 'success'), tools=['ajustando-quant-odoo'])
+        result = propose_directive_from_judge_session('sessao-jq-7', steps)
+        assert result is not None
+        low = (result['prescricao'] + ' ' + result['titulo']).lower()
+        assert 'valid' in low or 'judge' in low or 'qualidade' in low

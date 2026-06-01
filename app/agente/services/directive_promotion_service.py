@@ -134,6 +134,120 @@ def _derivar_titulo(subjects: list) -> str:
 
 
 # ---------------------------------------------------------------------------
+# propose_directive_from_judge_session (A4 V2 / Opção B)
+# Fonte de candidata vinda do JUDGE signal (E2), INDEPENDENTE de PlanState.
+# O batch só achava candidata em sessões COM plano concluído (0 PlanStates →
+# no-op eterno). Fiel à spec eixos/A-flywheel.md §2.3: o critério de promoção é
+# o quality_signal (judge), não o plano. Mesmo pipeline a jusante
+# (evaluate_and_promote: R9 anti-gaming + gate A3 report-only).
+# ---------------------------------------------------------------------------
+
+def propose_directive_from_judge_session(
+    session_id: str,
+    judge_steps: list,
+    user_meta: Optional[str] = None,
+    min_quality: float = 0.7,
+    min_steps: int = 2,
+) -> Optional[dict]:
+    """Extrai candidata a diretriz de uma SESSÃO de alta qualidade validada pelo judge.
+
+    Critérios (TODOS obrigatórios — conservador: preferir abster a promover ruído):
+    - >= min_steps passos COM veredito judge (score presente);
+    - NENHUM passo com label='failure' (sessão limpa);
+    - média dos scores (normalizada 0-1) >= min_quality.
+
+    PURO (sem DB). O batch carrega judge_steps + user_meta e passa aqui; a âncora
+    R9 (_tem_falha_odoo) e o gate A3 continuam em evaluate_and_promote.
+
+    Args:
+        session_id: UUID da sessão de origem.
+        judge_steps: lista de dicts {score, label, evidencia, tools} — 1 por passo julgado.
+        user_meta: 1ª mensagem do usuário (para o campo 'when'); opcional.
+        min_quality: piso de qualidade média (0-1).
+        min_steps: mínimo de passos julgados.
+
+    Returns:
+        candidata {titulo, when, prescricao, source_session_id, status='candidata'} ou None.
+    """
+    if not judge_steps or not isinstance(judge_steps, list):
+        return None
+
+    scores = []
+    evidencias = []   # (score_norm, evidencia)
+    tools_all = []
+    tem_failure = False
+    for st in judge_steps:
+        if not isinstance(st, dict):
+            continue
+        raw = st.get('score')
+        if raw is None:
+            continue
+        try:
+            sc = float(raw)
+        except (TypeError, ValueError):
+            continue
+        sc = sc / 100.0 if sc > 1.0 else sc
+        scores.append(sc)
+        if st.get('label') == 'failure':
+            tem_failure = True
+        ev = (st.get('evidencia') or '').strip()
+        if ev:
+            evidencias.append((sc, ev))
+        for t in (st.get('tools') or []):
+            if t:
+                tools_all.append(t)
+
+    if len(scores) < min_steps:
+        return None
+    if tem_failure:
+        return None
+
+    media = sum(scores) / len(scores)
+    if media < min_quality:
+        return None
+
+    # Ferramentas dominantes (dedup preservando 1ª ocorrência)
+    tools_dom = []
+    for t in tools_all:
+        if t not in tools_dom:
+            tools_dom.append(t)
+    tools_txt = ', '.join(tools_dom[:4]) or '(sem ferramenta)'
+
+    # Evidência representativa = passo de MAIOR score
+    evidencias.sort(key=lambda x: x[0], reverse=True)
+    evid_rep = evidencias[0][1][:240] if evidencias else ''
+
+    meta_snip = (user_meta or '').strip().replace('\n', ' ')[:80]
+    titulo = (
+        f"Abordagem validada pelo judge: {meta_snip}" if meta_snip
+        else f"Abordagem validada pelo judge ({len(scores)} passos)"
+    )[:80]
+    when = (
+        f"Em tarefas como: {meta_snip}" if meta_snip
+        else "Em tarefas similares às desta sessão"
+    )
+    prescricao = (
+        f"Abordagem que pontuou alto no judge (qualidade média {media:.2f} "
+        f"em {len(scores)} passos, sem falhas). Ferramentas: {tools_txt}."
+    )
+    if evid_rep:
+        prescricao += f" Ex.: {evid_rep}"
+
+    candidata = {
+        'titulo': titulo,
+        'when': when,
+        'prescricao': prescricao,
+        'source_session_id': session_id,
+        'status': 'candidata',
+    }
+    logger.info(
+        f"[directive_promotion] propose(judge): candidata session={session_id!r} "
+        f"media={media:.2f} passos={len(scores)} titulo={titulo!r}"
+    )
+    return candidata
+
+
+# ---------------------------------------------------------------------------
 # _query_falha_odoo — separada para facilitar mock em testes
 # ---------------------------------------------------------------------------
 
@@ -440,59 +554,150 @@ def _quality_score_da_sessao(session_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Fonte 2 (Opção B / A4 V2): sessões recentes + judge signal (sem PlanState)
+# ---------------------------------------------------------------------------
+
+def _buscar_sessoes_recentes(lookback_hours: int, limit: int) -> list:
+    """Sessões recentes na janela (SEM filtro de plano). Fonte da candidata
+    judge-driven: a sessão qualifica pela QUALIDADE do judge, não pelo plano."""
+    from app.agente.models import AgentSession
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    corte = agora_utc_naive() - timedelta(hours=lookback_hours)
+    return AgentSession.query.filter(
+        AgentSession.updated_at >= corte,
+    ).order_by(AgentSession.updated_at.desc()).limit(limit).all()
+
+
+def _judge_steps_da_sessao(session_id: str) -> list:
+    """Vereditos judge dos agent_step da sessão como lista
+    {score, label, evidencia, tools} para propose_directive_from_judge_session."""
+    from app.agente.models import AgentStep
+    out = []
+    steps = (
+        AgentStep.query.filter_by(session_id=session_id)
+        .order_by(AgentStep.created_at.asc()).all()
+    )
+    for st in steps:
+        sig = st.outcome_signal or {}
+        judge = sig.get('judge') if isinstance(sig, dict) else None
+        if not isinstance(judge, dict) or judge.get('score') is None:
+            continue
+        out.append({
+            'score': judge.get('score'),
+            'label': judge.get('label'),
+            'evidencia': judge.get('evidencia', ''),
+            'tools': st.tools_used or [],
+        })
+    return out
+
+
+def _primeira_msg_usuario(session) -> Optional[str]:
+    """1ª mensagem do usuário da sessão (para o campo 'when' da candidata)."""
+    try:
+        messages = session.get_messages() if session else []
+    except Exception:
+        messages = []
+    for m in (messages or []):
+        if isinstance(m, dict) and m.get('role') == 'user' and m.get('content'):
+            return m['content']
+    return None
+
+
+def _avaliar_e_contabilizar(candidata: dict, session_id: str, contadores: dict) -> None:
+    """quality_score (abstém se None) → evaluate_and_promote (R9 + gate A3) →
+    persist shadow. Atualiza contadores in-place. Compartilhado pelas 2 fontes."""
+    contadores['candidatos'] += 1
+    score = _quality_score_da_sessao(session_id)
+    if score is None:
+        contadores['abstencoes'] += 1
+        logger.info(f"[directive_promotion] batch: abstém session={session_id!r} (sem judge)")
+        return
+    resultado = evaluate_and_promote(
+        candidata, baseline_score=AGENT_DIRECTIVE_MIN_QUALITY, candidate_score=score,
+    )
+    if resultado.get('decision') == _DECISION_WOULD_PROMOTE:
+        _persist_directive(candidata)
+        contadores['promovidos'] += 1
+    else:
+        contadores['rejeitados'] += 1
+
+
+# ---------------------------------------------------------------------------
 # run_directive_promotion_batch
 # ---------------------------------------------------------------------------
 
 def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> dict:
     """Varredor A4-batch (D8 módulo 32). Flag-gated por AGENT_DIRECTIVE_PROMOTION.
-    Para cada sessão recente com plano 100% concluído: propose → quality_score
-    (abstém se None) → evaluate_and_promote (R9 anti-gaming DOMINA → gate vs floor)
-    → se would_promote: _persist_directive (shadow). Best-effort: nunca levanta."""
+
+    DUAS fontes de candidata (a 2ª — Opção B / A4 V2 — desacopla do PlanState):
+      1. PLANO: sessão com plano 100% concluído → propose_directive_from_plan.
+      2. JUDGE: sessão de alta qualidade validada pelo judge (sem precisar de plano)
+         → propose_directive_from_judge_session. Resolve o no-op eterno (0 PlanStates).
+    Ambas passam pelo MESMO gate (evaluate_and_promote: R9 anti-gaming DOMINA + A3
+    report-only). Best-effort: nunca levanta. Sessão processada por uma fonte NÃO é
+    re-proposta pela outra (dedup por session_id)."""
     contadores = {'candidatos': 0, 'promovidos': 0, 'abstencoes': 0, 'rejeitados': 0}
     if not AGENT_DIRECTIVE_PROMOTION:
         return contadores
-    try:
-        sessoes = _buscar_sessoes_com_plano_concluido(lookback_hours, limit)
-    except Exception as exc:
-        logger.error(f"[directive_promotion] batch: erro ao buscar sessões: {exc}")
-        return contadores
-    for s in sessoes:
-        try:
-            candidata = propose_directive_from_plan(s.data.get('plan'), s.session_id)
-            if candidata is None:
-                continue
-            contadores['candidatos'] += 1
-            score = _quality_score_da_sessao(s.session_id)
-            if score is None:
-                contadores['abstencoes'] += 1
-                logger.info(f"[directive_promotion] batch: abstém session={s.session_id!r} (sem judge)")
-                continue
-            resultado = evaluate_and_promote(
-                candidata, baseline_score=AGENT_DIRECTIVE_MIN_QUALITY, candidate_score=score,
-            )
-            if resultado.get('decision') == _DECISION_WOULD_PROMOTE:
-                _persist_directive(candidata)
-                contadores['promovidos'] += 1
-            else:
-                contadores['rejeitados'] += 1
-        except Exception as exc:
-            logger.error(f"[directive_promotion] batch: erro session={getattr(s, 'session_id', '?')!r}: {exc}")
-            # Limpa sessão potencialmente poisoned para não derrubar as próximas iterações.
-            # Trade-off: promoções não-commitadas deste batch são revertidas, mas são
-            # re-propostas no próximo ciclo D8 (idempotente por path). Aceitável (shadow).
-            try:
-                from app import db
-                db.session.rollback()
-            except Exception:
-                pass
-    try:
-        from app import db
-        db.session.commit()
-    except Exception:
+
+    processadas = set()
+
+    def _rollback_seguro():
+        # Limpa sessão potencialmente poisoned para não derrubar as próximas iterações.
+        # Promoções não-commitadas são re-propostas no próximo ciclo D8 (idempotente). Shadow.
         try:
             from app import db
             db.session.rollback()
         except Exception:
             pass
+
+    # ── Fonte 1: PLANO concluído ─────────────────────────────────────────────
+    try:
+        sessoes_plano = _buscar_sessoes_com_plano_concluido(lookback_hours, limit)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch: erro ao buscar sessões (plano): {exc}")
+        sessoes_plano = []
+    for s in sessoes_plano:
+        try:
+            candidata = propose_directive_from_plan(s.data.get('plan'), s.session_id)
+            if candidata is None:
+                continue
+            processadas.add(s.session_id)
+            _avaliar_e_contabilizar(candidata, s.session_id, contadores)
+        except Exception as exc:
+            logger.error(f"[directive_promotion] batch(plano): erro session={getattr(s, 'session_id', '?')!r}: {exc}")
+            _rollback_seguro()
+
+    # ── Fonte 2: JUDGE signal (alta qualidade, sem plano) — Opção B / A4 V2 ───
+    try:
+        sessoes_recentes = _buscar_sessoes_recentes(lookback_hours, limit)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch: erro ao buscar sessões (judge): {exc}")
+        sessoes_recentes = []
+    for s in sessoes_recentes:
+        sid = getattr(s, 'session_id', None)
+        if not sid or sid in processadas:
+            continue
+        try:
+            judge_steps = _judge_steps_da_sessao(sid)
+            if len(judge_steps) < 2:
+                continue
+            candidata = propose_directive_from_judge_session(
+                sid, judge_steps, user_meta=_primeira_msg_usuario(s),
+            )
+            if candidata is None:
+                continue
+            processadas.add(sid)
+            _avaliar_e_contabilizar(candidata, sid, contadores)
+        except Exception as exc:
+            logger.error(f"[directive_promotion] batch(judge): erro session={sid!r}: {exc}")
+            _rollback_seguro()
+
+    try:
+        from app import db
+        db.session.commit()
+    except Exception:
+        _rollback_seguro()
     logger.info(f"[directive_promotion] batch concluído: {contadores}")
     return contadores
