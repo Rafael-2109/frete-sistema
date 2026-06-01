@@ -146,6 +146,41 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
 
 ---
 
+### 📍 CHECKPOINT 2026-06-01 — A3 GATE DE REGRESSÃO MERGEADA + DEPLOY PROD + FLAGS
+
+> Marco: a A3 (reconstruída como gate de regressão fiel à spec) + toda a fase de WIRING + Ondas 0-4
+> foram MERGEADAS em `main` (merge `62e66e483`, `--no-ff`) e PUSHADAS (deploy PROD auto). **668 testes
+> verdes na main pós-merge.** A árvore de trabalho do Rafael (148 schemas regenerados + settings.local)
+> foi preservada via stash/pop (não entrou no deploy).
+
+**O que foi para PROD (flags OFF — comportamento inerte até ligar):**
+- WIRING shadow: E2-enqueuer (judge), super-loop (B2 verify + B-TRIAGE), A3-invoke.
+- A3 gate de regressão: R1 N-runs · R2 gate Δ · R3 calibração (agent_eval_case) · R4 PASSO 3.5 no dominio-8.
+- 2 fixes: judge granular + SSL-drop. Migrations agent_eval_scores + agent_eval_case (NÃO em build.sh).
+
+**ORDEM DE ATIVAÇÃO EM PROD (obrigatória — code-review final pré-merge identificou):**
+1. ✅ Deploy live (web `sistema-fretes` srv-d13m38vfte5s738t6p60 + worker srv-d2muidggjchc73d4segg).
+2. ⚠️ **Rodar as 2 migrations no Render Shell ANTES de ligar flags** (tabelas NÃO estão no build.sh,
+   PROD roda SKIP_DB_CREATE=true):
+   `python scripts/migrations/2026_05_31_agent_eval_scores.py` +
+   `python scripts/migrations/2026_06_01_agent_eval_case.py`.
+3. Ligar flags em shadow (env vars no Render): `AGENT_STEP_JUDGE`, `AGENT_VERIFY`, `AGENT_PLANNER`,
+   `AGENT_EVAL_GATE` (+ idealmente `AGENT_ODOO_AUDIT_HOOK` p/ a âncora do judge). `AGENT_EVAL_CALIBRATION`
+   só após confirmar agent_eval_case criada.
+4. Coletar vereditos ≥1 semana (shadow). Observar queries da Etapa A.4 do PROMPT_WIRING + logs
+   `[JUDGE_ENQUEUER]`/`[VERIFY_ENQUEUER]`/`[TRIAGE_ENQUEUER]`/`[EVAL_GATE]` no Render.
+
+**Achados do code-review final (não-bloqueantes, anotados):**
+- MED-1 (pré-existente, fora de escopo): `agent_validation` ausente do `--queues` hardcoded em
+  `start_worker_render.sh:301` → jobs `validate_subagent_output` não processados em PROD. **Corrigir
+  numa próxima sessão** (não introduzido pela A3).
+- MED-2: migrations agent_eval_* fora do build.sh → ação manual no Render Shell (padrão do projeto).
+
+**Próximo:** A4-batch — ver `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_A4.md` (criado com regra
+anti-drift: RELER a spec antes de decidir escopo, lição da sessão A3).
+
+---
+
 ## ONDAS E ITENS
 
 > Status: ⬜ pending · 🟡 em progresso · 🔵 shadow (código pronto, validando comportamento) · ✅ done

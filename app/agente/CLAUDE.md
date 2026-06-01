@@ -5,6 +5,13 @@
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
 > **Historico SDK** (changelog 0.1.49 → 0.2.87 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
+>
+> **EVOLUCAO DO AGENTE (flywheel/blueprint Ondas 0-4)**: o rastreador VIVO de verdade e' o
+> `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only). Design por
+> eixo em `docs/blueprint-agente/eixos/*.md` + revisao em `critica/*.md`. **ANTES de mexer em
+> qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), LER a spec do eixo +
+> a critica** — lição da sessao A3 (drift por nao reler). Proxima fase: A4 — ver
+> `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_A4.md` (regra anti-drift embutida).
 
 ---
 
