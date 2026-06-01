@@ -31,11 +31,13 @@ Leia nesta ordem (CANÔNICO): **`README.md` → `GOALS.md` → `SOT_OPERACOES.md
 - Resíduo imaterial: poeira de rounding ~1e-5 un em 5 químicos (31092, `value≈0`, esperado G-REM-2).
 
 ## PRÓXIMO (pendente go Rafael)
-1. **Drenar trânsito 26489** (companheiro FB→30720, lado FB — NÃO drena pela LF no Model B). Decidir/refazer com Rafael.
+1. **Drenar trânsito 26489** (companheiro FB→30720, lado FB) — **detalhe + estado ao vivo na seção "Pendências Etapa 2" abaixo** (16 comps FB-lote, 42,29 un; companheiro 322400 cancelado). É a próxima tarefa natural.
 2. **Etapas 4-5** (retorno LF→FB NF mista 5902+5124 + entrada FB com op 3252 na 1902). **G5a depende do Contador** (journal que credita 5101010001 não existe). Ver `GOALS §B`, `SOT §2 Etapas 4-5`.
 
 ## Pendências Etapa 2 (separadas, não bloqueiam a MO)
-- **Drenar 26489**: o trânsito ainda tem os 16 comps FB-lote (Model B não drena pela LF). Refazer o companheiro **26489→30720** (lado FB) OU decidir com Rafael.
+- **Drenar 26489 (PRÓXIMA TAREFA — estado verificado ao vivo 2026-06-01):** o trânsito **26489 tem os 16 comps FB-lote PILOTO-3105 (lots `60496-60511`, company 1), soma `42,28994948` un** (FRASCO 12, TAMPA 12, CAIXA 1, ROTULO 12, ETIQUETA 1, FILME 0,011607, FITA 0,86 + 8 quím+shoyu+AROMA). Último move = `8→26489 ref=FB/SAI/IND/01612` (a remessa). O companheiro nativo **`322400` (FB/INT/08121, pt5 "FB: Transferências Internas", 26489→30720) foi CANCELADO** no Gate 1 do Model A → 26489 nunca drenou.
+  - **Objetivo:** zerar 26489 do piloto movendo os 16 comps → **30720** (`Parceiros/Estoques em poder de terceiros/…LF`, usage=customer, cmp=False) = controle FB de "material em poder da LF". Fecha o lado físico FB da remessa (zera junto com 30720 quando o retorno entrar na Etapa 5).
+  - **Método candidato:** refazer o companheiro **26489→30720** em **contexto FB (company=1, G-ENT-1)** — via server action **1899 "Transferir TERCEIROS"** na remessa 322399 OU picking manual **pt5** (FB: Transferências Internas) 26489→30720 com os 16 lots FB. **Investigar/dry-run + go Rafael.** (loc 14 tem 7 quants negativos = contrapartida virtual de ajustes, NÃO-físico, ignorar.)
 - **Taxes IBS/CBS**: foram LIMPAS na ENTIN (eram da FB, "empresas incompatíveis"). Refinamento: alinhar à LF (a recuperar).
 
 ## Scripts (`docs/industrializacao-fb-lf/scripts/`)
