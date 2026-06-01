@@ -181,6 +181,95 @@ anti-drift: RELER a spec antes de decidir escopo, lição da sessão A3).
 
 ---
 
+### 📍 CHECKPOINT 2026-06-01 (tarde) — VALIDAÇÃO DE FUNCIONAMENTO + MEDIÇÃO (Ondas 0-4)
+
+> Sessão READ-ONLY de medição (PROD via MCP Render, Postgres `dpg-d13m38vfte5s738t6p50-a`,
+> web `srv-d13m38vfte5s738t6p60`, worker `srv-d2muidggjchc73d4segg`). Nada foi ligado/alterado.
+> **JANELA DE DADOS ≈ 14h, PRELIMINAR**: 1ª linha `agent_step` 2026-05-31 20:48 BRT (1 teste, user 1);
+> tráfego real só na manhã de 2026-06-01 (~08:34–10:41 BRT), **67 turnos / 7 sessões / 6 usuários**,
+> concentrado em 2 power-users (82=25 steps, 17=15+13). Fim de semana/feriado ≈ 0. **Qualquer conclusão
+> de "qualidade melhorou" é prematura** (held-out anti-gaming pede ≥2 semanas — GATE-3).
+
+**⚠️ DISCIPLINA DE TIMEZONE (lição desta sessão):** `agent_step.created_at`/`agent_sessions.updated_at`
+gravam **Brasil-naive (UTC-3)**; `now()` do Postgres é **UTC**. Comparar os dois inventa um gap de 3h.
+Regra para queries de recência: usar `now() AT TIME ZONE 'America/Sao_Paulo'`. (Quase reportei um falso
+"S0a parou de gravar há 3h" — era só o offset. Verificado: último step há ~65s, 48 steps/última hora,
+`n_steps == message_count/2` em toda sessão ativa → **S0a 100% saudável, 1 step/turno**.)
+
+**ESTADO REAL DAS FLAGS (todas VERIFICADAS por dado/log, não assumidas):**
+| Flag | Estado | Evidência |
+|---|---|---|
+| `AGENT_QUALITY_SPINE` | **ON** | `frustration_score` em 67/67 steps |
+| `AGENT_STEP_JUDGE` | **ON** | `outcome_signal.judge` em 51/67; log `[JUDGE_ENQUEUER]` a cada ~30min |
+| `AGENT_VERIFY` | **ON** | `outcome_signal.verify` (3 verifiers) em 51/67; log `[VERIFY_ENQUEUER]` |
+| `AGENT_PLANNER` | **ON** | `outcome_signal.triage` em 50/67; log `[TRIAGE_ENQUEUER]`. **MAS B1 PlanState=0** |
+| `AGENT_ODOO_AUDIT_HOOK` | **ON** | `operacao_odoo_auditoria` contexto=`execute_kw_hook` = 350 linhas (último 10:07) |
+| `AGENT_ONTOLOGY` | **ON** | log `MCP 'ontology' registrada (query_ontology)` por turno; 3.539 entidades user_id=0 |
+| `AGENT_SKILL_RAG` | **ON** | log `[CONTEXT_BUDGET] skill_hints_chars=186..274` (0 quando nada ranqueia) |
+| `AGENT_WORLD_MODEL_INJECT` | **ON** | log `world_model_chars=320..452` |
+| `AGENT_DIRECTIVE_PROMOTION` | **ON** | log `[directive_promotion] batch concluído {candidatos:0...}` (no-op) |
+| `AGENT_OPERATIONAL_DIRECTIVES` | **ON** | log `[OPERATIONAL_DIRECTIVES] directives=5 chars=3220` todo turno |
+| `AGENT_EVAL_GATE` | **inerte** | sem log `[EVAL_GATE]` runtime; só criação de tabela no build.sh (26d). `agent_eval_scores`=0 |
+| `AGENT_EVAL_CALIBRATION` | **moot** | `agent_eval_case`=0 (sem casos p/ calibrar) |
+| `AGENT_CAPABILITY_REGISTRY` | n/d | descritor estático, não observável em dado |
+
+**PARTE 1 — A MAQUINARIA PRODUZ DADO? (validação)** — predominantemente **SIM**:
+- ✅ **S0a** `agent_step`: 1 linha/turno, real-time, `n_steps==message_count/2`. **Só canal `web`** — `teams`=0
+  (sem tráfego Teams na janela; wiring Teams NÃO exercido → validar com 1 turno de teste no Teams).
+- ✅ **E1** quality spine: `frustration_score` 67/67 (maioria 0; alguns 1-5). 👍👎→step: **NÃO exercido**
+  (0 feedbacks pós-flag; 12 sessões com feedback historicamente, 0 na janela).
+- ✅ **E2** judge: 51 vereditos, score VARIA {15,25,35,45,85}, label success/partial/failure, com evidência+culpado.
+- ✅ **B2** verify: 3 verifiers gravando; `domain` **sempre skip=`no_plan`** (consequência de B1=0).
+- ✅ **B-TRIAGE**: roda, mas `steps:[]` vazio (tráfego single-shot não decompõe).
+- 🔴 **B1 PlanState = 0** (em 725 sessões). **Causa-raiz confirmada: `Task` tool usado 0× em 67 turnos** —
+  o agente web responde single-shot/tool-direto, nunca emite Task*. B1 está wired certo; **falta combustível**
+  (tráfego não-planejável). Como A4 e o `domain` verifier dependem de PlanState → **gargalo do flywheel**.
+- 🟡 **A3 eval**: `agent_eval_scores`=0. Fase 2 (`eval_runner.py --agent analista-carteira`) foi tentada
+  **LOCAL** (Rafael, NACOM052) e **falhou ao persistir** (Sentry X7 `[EVAL_RUNNER] commit falhou: invalid
+  transaction not rolled back` — o fix SSL-drop NÃO cobriu este caminho). **Baseline ainda inexistente.**
+- ✅ **A4** batch: roda limpo, **no-op** (`candidatos=0`, 0 PlanStates). `directive_status`: 606 memórias, TODAS NULL.
+- ✅ **R9** âncora: hook grava 350 ops. **PORÉM anti-gaming NÃO testado**: só **1** `FALHA_ODOO` na janela e
+  ela **não casa com nenhum `agent_step`** (0 overlap) → a "dominância ambiental" teve n=0 oportunidades reais.
+- ✅ **D2/D4** ontologia: substrato 3.539 entidades user_id=0; tool `query_ontology` registrada **mas usada 0×**.
+- 🟡 **D3** proveniência bi-temporal: colunas existem, **0/7190 relations + 0/2246 links** têm
+  `source_session_id`/`valid_from` → **proveniência não está sendo gravada** apesar de `AGENT_ONTOLOGY` ON
+  (investigar se o path de escrita de relações propaga os params — relações nascem por caminho não-instrumentado).
+- ✅ **Onda 4** F4/F5+D5: `<skill_hints>`/`<world_model>` injetados (mas pequenos vs ~45K de memória).
+
+**PARTE 2 — O RESULTADO É BOM? (qualidade)** — **NÃO MENSURÁVEL AINDA** (sinal não calibrado + volume fino):
+- ⚠️ **Judge tem viés sistemático**: turnos **sem tool** julgados `failure` **88%** (14/16) vs 57% com tool;
+  o judge trata "sem ferramenta" ≈ "sem ação" ≈ falha, punindo respostas informativas corretas.
+- ⚠️ **Judge vs verify em contradição em 73%**: o verifier `adversarial` **refuta o judge em 37/51** vereditos
+  (ex.: refuta "failure por ausência de tool"). Nada reconcilia os dois num sinal corrigido.
+- ⚠️ **0 calibração humana** (`agent_eval_case`=0): impossível dizer se judge ou verifier está certo.
+- Distribuição judge: 67% failure / 18% partial / 16% success — **inflada pelo viés acima** (não é métrica de
+  qualidade do agente). `culpado=odoo` em 23/51 é **inferência do judge** (não a âncora R9, que teve n=0).
+
+**PARTE 4 — REGRESSÃO?** Sentry PROD do agente **LIMPO** quanto ao blueprint. Os 2 erros "novos" (X7
+eval_runner, X5 JSONDecodeError `/tmp/c_audit.py`) são **`environment=development` (NACOM052, máquina do
+Rafael)** — não PROD. X6/X4 são Odoo XML-RPC (pré-existentes). `escalated_to_human`/`user_correction_received`:
+não escritos (B3 adiado + sem feedback). Latência: judge/verify/triage 100% off-path (RQ fila `agent_judge`).
+
+**STATUS DOS GATES (medido):**
+- **GATE-0** (S0a ≥48h, web+teams, Sentry limpo): **web ✅ / teams ⬜ não-exercido**. Falta tráfego Teams.
+- **GATE-1** (sinal qualidade ≥1sem + judge calibrado): ❌ — só ~14h, judge enviesado, 0 calibração.
+- **GATE-2** (super-loop em tarefas reais + verify shadow + `escalated_to_human` escrito): ⚠️ parcial — verify
+  grava, mas **sem PlanState/Task* não há super-loop real**; `escalated_to_human` não escrito (B3 adiado).
+- **GATE-3** (flywheel fechado shadow ≥2sem + held-out): ❌ — A4 no-op (0 PlanState), 0 baseline A3.
+
+**DECISÕES GATED (para o Rafael — NÃO executar sem aval):**
+1. 🔴 **Destravar B1 PlanState** (sem isto o flywheel é no-op eterno): o tráfego web não emite `Task*`. Decidir
+   se (a) o agente principal passa a decompor via subagentes/Task em tarefas multi-step, ou (b) capturar plano
+   de outra fonte (triage já roda — promover triage→PlanState?). É pré-condição de A4 e do verifier `domain`.
+2. **A3 Fase 2**: re-rodar `eval_runner` (LOCAL ou PROD) **corrigindo o bug de transação** (X7) antes — senão
+   baseline nunca persiste. Inspecionar `cases[].evidence` (caveat I2).
+3. **Judge calibração/viés**: antes de A3-enforce ou A4-ativa, tratar o viés "sem-tool=failure" e ligar
+   `AGENT_EVAL_CALIBRATION` p/ spot-check humano 5-10% (hoje 0 casos). Sinal não-calibrado não deve gatear nada.
+4. **D3 proveniência = 0**: investigar wiring (baixa prioridade — nice-to-have).
+5. **Coletar ≥1-2 semanas de dias úteis** antes de qualquer `shadow→ativa` / enforce. Hoje é PRELIMINAR.
+
+---
+
 ## ONDAS E ITENS
 
 > Status: ⬜ pending · 🟡 em progresso · 🔵 shadow (código pronto, validando comportamento) · ✅ done
@@ -279,3 +368,11 @@ anti-drift: RELER a spec antes de decidir escopo, lição da sessão A3).
 - 2026-06-01 — **A4-batch V1 OFFLINE CODE-COMPLETE + revisada** (subagent-driven). Releitura anti-drift (PROMPT_A4 + eixos/crítica A-flywheel): "offline vs A/B" JÁ decidido pela spec+PROD → **V1 offline** (A/B=V2, depende de A1/judge — 0 em PROD); a Opção "log-only" que cogitei foi descartada por NÃO estar na doc (PROMPT_A4:56 lista `_persist_directive real` no escopo). 4 commits: migration dupla `directive_status` (`7c0500f76`, coluna NOVA, NÃO toca effective_count) → builder filtra `IN(NULL,'ativa')` alavanca (`b8db8c560`) → `_persist_directive` real shadow idempotente formato-orgânico (`cf0d920cc`) → `run_directive_promotion_batch`+módulo D8 32 INLINE (`e122e43c3`) + cleanup (`ddb9aa877`). Cadência: 4 implementers TDD + spec-review + code-review/task; **review holístico final SHIP-READY (7/7 invariantes HOLD, 0 blocker de código)**. **677 passed** (baseline 668 +9 A4); 0 regressão. Dupla segurança (shadow nunca injetada + flag OFF). R9 DOMINA. ⚠️ Gotcha ativação: rodar migration `directive_status` ANTES de `AGENT_OPERATIONAL_DIRECTIVES`=ON (senão UndefinedColumn desliga diretrizes); wirar build.sh no merge da main. **FLYWHEEL DISTILL→DEPLOY CONSTRUÍDO (flag-OFF).** Pendente: PUSH/DEPLOY + GATEs do Rafael (PlanStates+judge+baseline acumularem em PROD para o batch sair do no-op).
 - 2026-06-01 — **Verificação PROD pós-flags (Rafael dormindo)**: web `dep-d8egop` + worker `dep-d8egoq` AMBOS `live`; app boot OK (serve requests, D8 cicla); shadow GRAVANDO vereditos (1 agent_step ganhou judge=1+verify=1; triage pendente). Erro recorrente `/e/20/gkpj` (~30min) é **PRÉ-EXISTENTE** (já no deploy `04aeae25` antes das flags) — NÃO causado pela A3/flags; não revertido (só diagnosticado). Gotcha doc: queries `outcome_signal ? 'judge'` falham (coluna é `json`) → usar `::jsonb`.
 - 2026-06-01 — **A4 V1 DEPLOYED + LIVE em PROD**: merge `7fef3778c` → push → auto-deploy. **1º deploy web deu timeout de health-check** (`update_failed`; app subiu saudável — gunicorns Listening 5001+5002, sem crash/OOM; worker MESMO commit subiu OK; causa = porta 10000/nginx vs deadline do Render, **NÃO** código A4). **Retry (`dep-d8enl64`) pegou a janela → LIVE** (12:47). Migration 26e rodou (coluna `directive_status` existe). Batch módulo 32 roda limpo: `[directive_promotion] candidatos=0 promovidos=0 abstencoes=0 rejeitados=0` (no-op, 0 PlanStates). **DESCOBERTA: `AGENT_OPERATIONAL_DIRECTIVES` já estava ON em PROD** (injeta 5 legado; comportamento existente — eu assumira OFF: erro de premissa, devia ter VERIFICADO, não assumido pelo default). A4 transparente (filtro exclui shadow; `directives=5 chars=3220` idêntico antes/depois). **build.sh lento (58 `create_app()`, ~15-20min) = Rafael trata em sessão separada** (não toquei; diagnóstico em memória `deploy-web-build-lento`). Ponteiros: `app/agente/CLAUDE.md`→`EXECUCAO.md`; plano `docs/superpowers/plans/2026-06-01-a4-promocao-diretriz.md`. **PRÓXIMO: VALIDAÇÃO de funcionamento + medição de resultados (Ondas 0-4) — ver `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_VALIDACAO.md`.**
+- 2026-06-01 (tarde) — **VALIDAÇÃO + MEDIÇÃO (READ-ONLY) executada** (ver CHECKPOINT acima). 12/13 flags VERIFICADAS por dado/log (não assumidas). Maquinaria PRODUZ DADO (S0a/E1/E2/B2/B-TRIAGE/R9-hook/D2/D4/Onda4 ✅, web; teams=0 não-exercido). **Resultado NÃO mensurável** (janela ~14h preliminar, judge enviesado [sem-tool=failure 88%], adversarial refuta judge em 73%, 0 calibração humana, R9 anti-gaming n=0). **Gargalos**: 🔴 B1 PlanState=0 (Task usado 0× → flywheel/A4 no-op), A3 baseline=0 (Fase 2 local falhou ao persistir, Sentry X7 transação). D3 proveniência=0. Sentry PROD limpo do blueprint (X7/X5 são DEV local NACOM052). **Falso-alarme evitado**: "S0a parou 3h" era offset UTC×BRT-naive (S0a saudável). Decisões GATED p/ Rafael no checkpoint.
+- 2026-06-01 (tarde) — **2 CORREÇÕES pós-medição (TDD, autorizadas pelo Rafael)**:
+  (1) **Viés do judge E2** (`workers/step_judge.py`): o judge era CEGO ao conteúdo (só via `tools_used`+Odoo) → punia turno informativo sem tool como `failure` (medido: sem-tool=failure 88%). Fix: `_build_judge_prompt`/`_judge_core` agora recebem PERGUNTA+RESPOSTA do turno (reusa `triage_shadow._extract_user_message_text` + `plan_verifier._extract_assistant_response_text`); `JUDGE_SYSTEM_PROMPT` reescrita ("turno sem ferramenta NÃO é falha automática; avalie a resposta vs pergunta"); **R9 (FALHA_ODOO→≤35) preservada**. 4 testes TDD (RED→GREEN, 22 no arquivo). **Smoke A/B com Haiku REAL**: mesmo turno informativo sem tool → ANTIGO `failure`/0 vs NOVO `success`/85 (com raciocínio "não exigia ferramenta"). Destrava confiar no sinal + **A4 V2** (aprender do judge, não de PlanState — judge signal NÃO é 0, são 51 vereditos).
+  (2) **Bug X7 eval_runner** (`workers/eval_runner.py`): A3 Fase 2 local falhava ao persistir → `agent_eval_scores` vazio. Root cause (provado na fonte SQLAlchemy `engine/base.py:663`): o disconnect pós-invokes longos surge no commit como `PendingRollbackError` (code `8s2b` = X7 exato), IRMÃ de `OperationalError` → fora do `except OperationalError` da retry → caía no except genérico ("commit falhou") → `scores={}`. Fix: catch `(OperationalError, PendingRollbackError)`. 1 teste TDD (RED→GREEN reproduz X7; 26 no arquivo). **79 workers green** (ambas correções). Pendente: re-rodar A3 Fase 2 (`eval_runner --agent analista-carteira`) + inspecionar `cases[].evidence` (caveat I2).
+- 2026-06-01 (tarde) — **DIAGNÓSTICO B1 (gargalo do flywheel) — é COMPORTAMENTO, não bug**: verificado que `TaskCreate/Update/List` ESTÃO em `tools_enabled` (settings.py:66-69), o prompt MANDA usar (`<task_management>`+`<delegation_pattern>`), e o B1 captura certo (`chat.py`→`plan_state.py`). Mesmo assim 0 PlanStates: o agente web é single-shot (TaskCreate/Update=0 em 67 turnos) e não decompõe trabalho trivial — corretamente. **"O que é melhor" (decisão p/ Rafael)**: (A) reforçar prompt p/ envolver delegações a subagente em TaskCreate (gera PlanStates do trabalho real + "efeito Claude Code") OU (B) desacoplar A4 do PlanState e aprender do JUDGE signal (A4 V2, destravado pelo fix do judge). B é a correção de fundo.
+- 2026-06-01 (tarde) — **RAFAEL ESCOLHEU OPÇÃO B + corrigir ambiguidade do prompt (implementado, TDD)**:
+  (a) **Prompt** (`system_prompt.md` `<delegation_pattern>`): removida a contradição (`<task_management>` dizia "não p/ trivial", `<delegation_pattern>` dizia "sempre criar task p/ delegação"). Agora: **delegação ÚNICA não precisa de TaskCreate** (o spawn já emite task_started/progress/subagent_summary na UI); TaskCreate **só** em orquestração 2+ delegações/passos. (Risco: muda prompt LIVE — mudança cirúrgica.)
+  (b) **A4 V2 / Opção B** (`directive_promotion_service.py`): nova fonte de candidata `propose_directive_from_judge_session` (sessão de ALTA QUALIDADE validada pelo judge: ≥2 passos julgados, 0 `failure`, média ≥0.7) — **independente de PlanState**, fiel à spec §2.3 (critério = quality_signal). Wirada como 2ª fonte em `run_directive_promotion_batch` (dedup por session_id; MESMO gate `evaluate_and_promote`: R9 anti-gaming + A3 report-only). Candidatas → `directive_status='shadow'` → **NUNCA injetadas** (dupla segurança intacta). TDD: 7 testes (6 pura + 1 batch judge), 3 batch existentes atualizados; **36 directive + 219 services/workers/sdk green**. **Evidência PROD**: 0 sessões qualificam HOJE (6 sessões ≥2 julgados, TODAS com falhas, média 33-51 < 70) — MAS o "0" deixou de ser **estrutural** (PlanState=Task nunca emitido) e virou **de dados** (janela ~14h só de sessões Odoo que falharam) → resolve sozinho com volume + sessões limpas + o judge corrigido (turnos informativos antes mal-pontuados viram success). **NÃO commitado/deployado** (branch `manutencao/semanal-2026-06-01`).
