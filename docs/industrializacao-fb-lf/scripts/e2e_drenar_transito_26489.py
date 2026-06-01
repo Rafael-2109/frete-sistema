@@ -88,6 +88,16 @@ def soma_lote_em(o, loc):
     return sum(q['quantity'] for q in qs), len(qs)
 
 
+def achar_orfaos(o):
+    """Pickings pt5 de dreno de execucoes anteriores NAO finalizados (orfaos a limpar).
+    Identifica pelo origin 'DRENO-PILOTO%' + rota 26489->30720; exclui done/cancel."""
+    return o.execute_kw('stock.picking', 'search_read',
+        [[('picking_type_id', '=', PT_INT), ('location_id', '=', LOC_T),
+          ('location_dest_id', '=', LOC_3OS), ('origin', 'like', 'DRENO-PILOTO%'),
+          ('state', 'not in', ['done', 'cancel'])],
+         ['id', 'name', 'state', 'origin']], {'context': ctx_fb(), 'limit': 20})
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--execute', action='store_true')
@@ -107,6 +117,14 @@ def main():
     if comp['state'] != 'cancel':
         print(f"  [ABORT] companheiro-ref {REF_COMP} NAO esta cancel (state={comp['state']}). "
               f"Pode haver companheiro ativo — investigar antes de duplicar."); return 1
+
+    # orfaos de execucoes anteriores (ex.: 322852, abortado pre-validacao por duplicacao de move.lines)
+    orfaos = achar_orfaos(o)
+    if orfaos:
+        print(f"\n  [ORFAOS] {len(orfaos)} picking(s) pt{PT_INT} de dreno anterior NAO finalizado(s):")
+        for p in orfaos:
+            print(f"    {p['id']} {p['name']} state={p['state']} origin={p['origin']}")
+        print(f"    -> {'serao CANCELADOS no --execute (antes de recriar)' if DRY else 'CANCELANDO antes de recriar'}")
 
     # idempotencia: 26489 ja drenado?
     soma_t0, n_t0 = soma_lote_em(o, LOC_T)
@@ -145,6 +163,16 @@ def main():
         return 0
 
     # ===================== EXECUTE — replica padrao e2e_remessa_criar (G-REM-4)
+    # limpa orfaos (ex.: 322852) ANTES de recriar — evita acumular pickings inconsistentes
+    if orfaos:
+        oids = [p['id'] for p in orfaos]
+        o.execute_kw('stock.picking', 'action_cancel', [oids], {'context': ctx_fb()})
+        chk = o.execute_kw('stock.picking', 'read', [oids, ['name', 'state']], {'context': ctx_fb()})
+        print(f"[orfaos cancelados] {[(c['name'], c['state']) for c in chk]}")
+        bad_cancel = [c for c in chk if c['state'] != 'cancel']
+        if bad_cancel:
+            print(f"  [ABORT] orfao(s) nao cancelaram: {bad_cancel}. Investigar antes de recriar."); return 1
+
     move_vals = [(0, 0, {'name': f"DRENO-26489 {q['pid']}", 'product_id': q['pid'],
                          'product_uom_qty': q['qty'], 'product_uom': q['uom'],
                          'location_id': LOC_T, 'location_dest_id': LOC_3OS, 'company_id': CMP_FB})
@@ -159,6 +187,19 @@ def main():
     smoves = o.search_read('stock.move', [('picking_id', '=', pk_id)], ['id', 'product_id', 'product_uom'], limit=40)
     o.execute_kw('stock.move', 'write', [[m['id'] for m in smoves], {'company_id': CMP_FB}], {'context': ctx_fb()})
     o.execute_kw('stock.picking', 'action_confirm', [[pk_id]], {'context': ctx_fb()})
+
+    # CAUSA RAIZ do bug 322852: o pt5 reserva 'at confirm' -> action_confirm dispara action_assign
+    # automatico que cria move.lines SEM-LOTE; somadas as manuais abaixo davam 32 mls (qty dobrada).
+    # do_unreserve limpa as automaticas ANTES de criar as manuais pinadas (sem action_assign/FIFO).
+    try:
+        o.execute_kw('stock.picking', 'do_unreserve', [[pk_id]], {'context': ctx_fb()})
+    except Exception as e:
+        print(f"  [aviso do_unreserve] {e}")
+    # garante zero move.lines residuais antes de criar as manuais (idempotente)
+    residual = o.search_read('stock.move.line', [('picking_id', '=', pk_id)], ['id'], limit=80)
+    if residual:
+        o.execute_kw('stock.move.line', 'unlink', [[r['id'] for r in residual]], {'context': ctx_fb()})
+        print(f"  [do_unreserve] removidas {len(residual)} move.lines automaticas (SEM-LOTE)")
 
     # move.line MANUAL com lote pinado (sem action_assign/FIFO)
     fails = []

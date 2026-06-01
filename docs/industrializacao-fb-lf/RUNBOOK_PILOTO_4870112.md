@@ -100,7 +100,7 @@ Rafael escolheu **B1**. Driver `--modo criar-picking-b1` (cancela Model-A 322401
 - ✅ **ENTIN 737062** (`--modo nf`): `action_create_invoice` em ctx [1,5] (atomo usa ctx FB → "sem acesso account.account LF"). Precisou 2 fixes pré-invoice: **(a) B-V23-2** alinhar `PO.line.account_id` FB→LF (code 3202010001); **(b) limpar `taxes_id` FB** (empresas incompatíveis; IBS/CBS "a recuperar" = refinamento). Invoice saiu como **compra comum** (`D 3202010001 CMV / C 2120100001 Fornecedores`) porque a **operação fiscal não propagou** (op=False). **Fix `fix_entin.py`**: setar **operação 2686** + conta **1150100011** + cfop **1901** nas 16 linhas + payable→**5101020001** (espelha canary ENTIN 688686, journal 1047 ENTRADA-REMESSA, fp 131). Resultado draft: **`D 1150100011 / C 5101020001 = 278,56`** ✓.
 - **NET = `D 1150200001 / C 5101020001`** → Δ1150100011 = 0 (transitória fecha) = **Design A completo**.
 - ✅ **ENTIN 737062 POSTED** (go Rafael). **Validador oficial `--modo entrada-lf --picking 322451 --nf 737062`: Δ1150100011(LF)=0.0 PASS, dst=31092 PASS, material 31092 PASS, SVL Design A ✓, ENTIN D 1150100011/C 5101020001 ✓.** TAREFA 1 COMPLETA.
-- ⏳ **Pendente Tarefa 1 (separado)**: drenar 26489 (companheiro FB→30720, lado FB — NÃO feito no Model B; validador FAIL em "26489 zera" é esperado).
+- ✅ **Tarefa 1 — dreno 26489 EXECUTADO (2026-06-01)**: picking pt5 manual `FB/INT/08128` (id 322875) done; 26489→0, 30720=42,28994948 (16 quants), **0 SVL** (físico puro). Driver `e2e_drenar_transito_26489.py --execute` (gotcha G-DRENO-1 corrigido — ver §0.7 abaixo). Validador `--modo entrada-lf` deixa de dar FAIL em "26489 zera".
 
 ### Tarefa 2 (MO Etapa E) — ✅ CORRIGIDA E VALIDADA (2026-06-01, fix G-ENT-10)
 Script `scripts/e2e_mo_lf_criar.py` (BoM 3695 PA→3646 BATELADA semi; src=31092 dst=31093; ÁGUA 104000017 consu).
@@ -116,7 +116,12 @@ Script `scripts/e2e_mo_lf_criar.py` (BoM 3695 PA→3646 BATELADA semi; src=31092
 - **Contábil (G3 net-zero terceiros ✓):** ambas `1150100004`(produção) bal=0 + `1150200001`(terceiros) bal=0; **NÃO tocou estoque próprio LF** (1150100001/002/007 ausentes → o double-count R$785k NÃO se repetiu). AVCO do PA na LF = **R$188,62** (custo LF dos comps; FRASCO na LF ~14,76/un vs 22,23 FB) — **transitório de terceiros**, NÃO é o valor final (PA na FB = Ic+S=R$314,24 via `price_unit` da NF de retorno, §7).
 - **Validador** `e2e_piloto_validar.py --modo mo --mo 20252 --mo2 20254 --lote PILOTO-3105 --base /tmp/piloto_base.json`: consumo 31092 ✓, PA 31093 ✓, **loc 42 inalterado PASS**. (⚠️ exige `--lote PILOTO-3105`; sem ele compara todos os lotes de loc 42 → falso-FAIL.)
 - Resíduo imaterial: poeira de rounding ~1e-5 un em 5 químicos (31092, `value≈0`, esperado G-REM-2).
-- **Pendente:** drenar trânsito 26489 (companheiro FB→30720, lado FB) — separado.
+- ✅ **Dreno trânsito 26489 EXECUTADO (2026-06-01):** picking pt5 `FB/INT/08128` (322875) done; 26489→0, 30720=42,29 (16 quants), 0 SVL. Ver G-DRENO-1 abaixo.
+
+### GOTCHA do dreno físico FB (G-DRENO-1, 2026-06-01)
+- **Sintoma:** `e2e_drenar_transito_26489.py --execute` criou o picking pt5 mas abortou no guard `[ABORT] 16 move.line com lote != PILOTO-3105` (deixando órfão 322852, `assigned`).
+- **Causa raiz:** o pt5 ("FB: Transferências Internas") reserva `at confirm` → `action_confirm` dispara `action_assign` automático que cria 16 `stock.move.line` SEM-LOTE (`qty_done=0`). Somadas às 16 manuais pinadas do loop → 32 mls no picking (`move.quantity` dobrado). O guard varre todas e barra as 16 automáticas (defesa correta — não validou qty dobrada).
+- **Fix (codificado no driver):** após `action_confirm`, chamar `stock.picking.do_unreserve` + unlink de move.lines residuais ANTES de criar as manuais pinadas; + idempotência `achar_orfaos()` que detecta/cancela pickings pt5 de dreno não-finalizados (origin `DRENO-PILOTO%`) antes de recriar. Re-execução: cancelou 322852 → criou 322875 limpo → done. **Impacto contábil sempre ZERO** (transit→customer não gera SVL).
 
 ### GOTCHAS B1 novos (G-ENT-7..10)
 - **G-ENT-7 (account/taxes multi-company na fatura):** `action_create_invoice` de PO LF rejeita PO.line com account/taxes da FB. Pré-alinhar `account_id` (resolver code na company destino) + limpar/alinhar `taxes_id` ANTES.

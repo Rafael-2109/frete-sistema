@@ -170,6 +170,8 @@ A remessa FB→LF (Etapa 1, CFOP 5901) gera **DUAS camadas** que, combinadas, la
 ### Lado físico FB da remessa (dreno 26489)
 - O companheiro nativo "Transferir TERCEIROS" (server action **1899** sobre `stock.picking`, método `action_movimentar_estoque_terceiro`) cria um picking **pt5 `26489→30720`** (Parceiros/Estoques em poder de terceiros/LF, usage=**customer**). No fluxo real ele nasce **`assigned` e NUNCA é validado** (191 assigned, 0 done recentes) → por isso 26489 nunca zera.
 - **Mover `26489→30720` é PURAMENTE FÍSICO: 0 SVL, 0 account.move** (verificado: 10 moves done históricos geraram 0 SVL; 26489 transit cmp=False + 30720 customer cmp=False = nenhuma é valued p/ a FB; contas 1150200001/002 têm 0 lançamentos na FB). Driver dry-run-first: `scripts/e2e_drenar_transito_26489.py`.
+- ✅ **EXECUTADO 2026-06-01:** picking pt5 manual `FB/INT/08128` (id 322875) **done** — POS-CHECK ao vivo: 26489 (lote PILOTO-3105) = **0**, 30720 = **42,28994948** (16 quants), **0 SVL** gerados pelos moves do dreno. Confirma empiricamente o "0 contábil".
+- **G-DRENO-1 (gotcha do driver, corrigido):** o pt5 reserva `at confirm` → `action_confirm` dispara `action_assign` automático criando `stock.move.line` SEM-LOTE; somadas às manuais pinadas davam 32 mls (qty dobrada) → guard abortava (deixou órfão 322852). **Fix:** `do_unreserve` + unlink de residuais após `action_confirm` (antes das manuais) + idempotência que cancela órfãos de execuções anteriores (origin `DRENO-PILOTO%`).
 
 ### IDs-chave (config retorno)
 - Contas: 5101010001 FB=**22800**/LF=26652 (ATIVA); 5101020001 FB=22815/LF=**26667** (PASSIVA); 5101010002 FB=22801/LF=26653; 5101020002 FB=22816/LF=26668.
