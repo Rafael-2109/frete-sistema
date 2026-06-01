@@ -1,6 +1,6 @@
 # Sistema de Fretes — Referencia Compartilhada
 
-**Ultima Atualizacao**: 25/05/2026
+**Ultima Atualizacao**: 01/06/2026
 
 > Este CLAUDE.md e lido por AMBOS os contextos (Claude Code dev + Agent SDK web).
 > Conteudo dev-only (Quick Start, CSS, migrations) esta em `~/.claude/CLAUDE.md`.
@@ -17,7 +17,7 @@
 | **Infra (Render, Oregon)** | Web `sistema-fretes` (Pro Plus) · Worker `sistema-fretes-worker-atacadao` (Standard, RQ) · Postgres 18 `sistema-fretes-db` (Basic 4GB) · Redis 8.1 `sistema-fretes-redis` (Starter, `allkeys_lru`) |
 | **Backend** | Python 3.12 · **Flask 3.1.2** · Flask-SQLAlchemy 3.1 · Flask-Login 0.6 · Flask-Migrate 4.1 · Flask-WTF 1.2 · SQLAlchemy 2.0 · Gunicorn 25 + gevent · psycopg2 + asyncpg (pool async SessionStore) · Pydantic 2.12 · FastAPI 0.129 (endpoints isolados) |
 | **Workers / Async** | RQ 2.6 · Redis 7.2 (client) · APScheduler · 3 perfis de worker (light-reserved / full / general — anti-starvation) |
-| **AI / Agente** | Anthropic SDK 0.98.1 · Claude Agent SDK 0.1.80 (CLI 2.1.138) · MCP 1.26 · Voyage AI + pgvector (embeddings) |
+| **AI / Agente** | Anthropic SDK 0.98.1 · Claude Agent SDK 0.2.87 (CLI 2.1.150) · MCP 1.26 · Voyage AI + pgvector (embeddings) |
 | **Frontend** | **HTML5 + Jinja2** (templates) · **Bootstrap 5.3.3** (CSS self-hosted via `@layer bootstrap`, JS bundle CDN) · **jQuery 3.6** + jQuery Mask 1.14 (legado) · **HTMX 1.9.11** · Vanilla JS · CSS `@layer` proprio (tokens → base → components → modules → utilities) · **FontAwesome 6.4.0** (CDN) |
 | **Artifacts (chat web)** | React 18 + TS + Tailwind + Parcel via Node 20 (NVM lazy install no worker) · bundle.html servido em iframe sandboxed |
 | **Mobile App (GPS)** | Capacitor 6 (Android/iOS) — modulo rastreamento de motoristas |

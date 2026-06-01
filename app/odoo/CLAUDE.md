@@ -1,10 +1,10 @@
 # Odoo — Guia de Desenvolvimento
 
-**63 arquivos** | **~28.8K LOC** | **Atualizado**: 25/05/2026
+**70 arquivos** | **~41.9K LOC** | **Atualizado**: 01/06/2026
 
 Integracao bidirecional com Odoo ERP via XML-RPC. API-only: sem models SQLAlchemy proprios — le/escreve models de outros modulos (8+). Modulo mais consumido do sistema (37+ arquivos externos importam).
 
-> Subpacote `estoque/` (orquestrador WRITE + READ ao vivo): 13 arquivos / ~6.7K LOC. Guia completo: `app/odoo/estoque/CLAUDE.md`.
+> Subpacote `estoque/` (orquestrador WRITE + READ ao vivo): 19 arquivos / ~19.4K LOC. Guia completo: `app/odoo/estoque/CLAUDE.md`.
 
 ---
 
@@ -48,9 +48,10 @@ app/odoo/
   │   ├── transferencia_saldo_codigo_service.py # Transferencia entre codigos de produto (interna)
   │   ├── pre_etapa_estoque_service.py     # Pre-etapa CD/FB para minimizar NF (D007)
   │   └── indisponibilizacao_estoque_service.py # Bloqueio temporario de lotes em ajuste
-  ├── utils/                   # 12 utils
+  ├── utils/                   # 13 utils
   │   ├── cached_lookups.py        # Cache de lookups frequentes (metodos entrega, etc.) (~267 LOC)
   │   ├── carteira_mapper.py       # Mapeia sale.order → dict CarteiraPrincipal (~21K)
+  │   ├── classificacao_produto.py # Decide se entrada (compra) registra em MovimentacaoEstoque + natureza por categ_id/tipo fiscal (~138 LOC)
   │   ├── connection.py            # OdooConnection XML-RPC + timeout adaptativo (~16K)
   │   ├── cte_xml_parser.py        # Parser XML de CTe (~21K)
   │   ├── dfe_utils.py             # Helpers DFe (busca, validacao, tipos) (~15K)
@@ -67,17 +68,23 @@ app/odoo/
   │   ├── mapeamento_campos_odoo_carteira.md
   │   └── triggers_sale_order.md
   └── estoque/                 # Subpacote ORQUESTRADOR (skills WRITE + READ ao vivo, 2026-05-22+)
-      │                        # 13 arquivos / ~6.7K LOC. Ver app/odoo/estoque/CLAUDE.md
+      │                        # 19 arquivos / ~19.4K LOC. Ver app/odoo/estoque/CLAUDE.md
       ├── __init__.py / _cli_utils.py / _utils.py
-      ├── scripts/             # Atomos por skill (Skills 1, 2, 2.4, 5, 4, 6, 9)
+      ├── scripts/             # Atomos por skill (Skills 1, 2, 2.4, 5, 4, 6, 7, 8, 9 + PRE-FLIGHT)
+      │   ├── _commit_helpers.py   # Helpers de commit/savepoint compartilhados
+      │   ├── _invoice_helpers.py  # Helpers de account.move (Skills 7/8)
       │   ├── quant.py             # Skill 1 — ajustar_quant (✅ MATURADA)
       │   ├── transfer.py          # Skill 2 — transferindo-interno-odoo
       │   ├── reserva.py           # Skill 2.4 — operando-reservas-odoo
       │   ├── picking.py           # Skill 5 — operando-picking-odoo
       │   ├── mo.py                # Skill 4 — operando-mo-odoo
       │   ├── pre_etapa.py         # Skill 6 — planejando-pre-etapa-odoo
+      │   ├── escrituracao.py      # Skill 7 — escriturando-odoo (ENTRADA DFe/NF, 7 atomos)
+      │   ├── faturamento.py       # Skill 8 — faturando-odoo (SAIDA account.move, 5 atomos)
+      │   ├── cadastro_fiscal_audit.py # PRE-FLIGHT — auditando-cadastro-fiscal-odoo
       │   └── consulta_quant.py    # Skill 9 — consultando-quant-odoo (READ-only)
       ├── orchestrators/       # Macros C3 (compoem atomos em fluxos)
+      │   ├── inventario_pipeline.py  # Pipeline A-F + recovery (renomeado de faturamento_pipeline v27+ S3)
       │   └── pre_etapa_executor.py
       └── fluxos/              # Folhas de fluxo Markdown (2.1, 2.2, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1)
 ```

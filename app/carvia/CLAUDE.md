@@ -1,6 +1,6 @@
 # CarVia — Guia de Desenvolvimento
 
-**107 arquivos** | **~66.9K LOC** | **109 templates** | **Atualizado**: 2026-05-25
+**107 arquivos** | **~67.2K LOC** | **109 templates** | **Atualizado**: 2026-06-01
 
 Gestao de frete subcontratado: importar NF PDFs/XMLs + CTe XMLs, matchear NF-CTe, subcontratar transportadoras com cotacao via tabelas existentes, gerar faturas cliente e transportadora. Tambem emite CTe diretamente no SSW via Playwright.
 

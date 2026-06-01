@@ -1,6 +1,6 @@
 # Agente Services — Guia de Desenvolvimento
 
-**LOC**: ~10.5K | **Arquivos**: 17 | **Atualizado**: 2026-05-25
+**LOC**: ~11.9K | **Arquivos**: 20 | **Atualizado**: 2026-06-01
 
 Hub de analise, otimizacao e aprendizado de sessoes em 3 camadas (P0 core, P1 UX, P2 analytics).
 
@@ -17,6 +17,9 @@ app/agente/services/
   ├── memory_consolidator.py          #   736 LOC — Consolidacao + tier frio (P0)
   ├── metrics_dashboard_service.py    #   690 LOC — Dashboard telemetria subagent (Fase A1+A3)
   ├── improvement_suggester.py        #   602 LOC — Dialogo melhoria Agent SDK <-> Claude Code (D8)
+  ├── eval_gate_service.py            #   568 LOC — Gate de avaliacao offline (A3 golden dataset)
+  ├── directive_promotion_service.py  #   498 LOC — Promocao automatica de diretriz (A4 Distill→Deploy)
+  ├── ontology_bootstrap.py           #   211 LOC — Bootstrap da ontologia (knowledge graph / ontology_query)
   ├── intersession_briefing.py        #   576 LOC — Briefing entre sessoes, zero LLM (P0)
   ├── artifact_service.py             #   491 LOC — Rate limit + spec validation + S3 upload (artifacts)
   ├── friction_analyzer.py            #   490 LOC — Deteccao de friccao heuristica (P2-4)
