@@ -1,9 +1,9 @@
 # PROMPT — Próxima sessão (Industrialização FB↔LF)
 
-> **Reescrito 2026-06-01 (2 sessões).** Estado: **Etapa 1 (Remessa) + Etapa 2 (Entrada LF) + Etapa E (MO) EXECUTADAS e VALIDADAS em PROD.** Pendente: **dreno do trânsito 26489** (companheiro FB→30720) + **Etapas 4-5 (retorno LF→FB + entrada FB)** — G5a depende do Contador.
+> **Atualizado 2026-06-01 (3ª sessão).** Estado: **Etapa 1 (Remessa) + Etapa 2 (Entrada LF) + Etapa E (MO) EXECUTADAS e VALIDADAS em PROD.** **Etapas 4-5 DESBLOQUEADAS**: a **Contadora confirmou o desenho + Opção A (Ativo→Ativo, CPV só na venda)**; roteamento G4/G5a mapeado ao vivo, **spec dos 2 journals em `PROPOSTA_CONFIG_RETORNO.md`** (falta criar via dry-run). Pendente lateral: **dreno do trânsito 26489→30720** (físico, 0 contábil, driver pronto).
 
 ## Como começar
-Leia nesta ordem (CANÔNICO): **`README.md` → `GOALS.md` → `SOT_OPERACOES.md` (v2.1) → `RUNBOOK_PILOTO_4870112.md`** — em especial **§0.7** (checkpoint completo desta sessão: Model A inviável → Model B, gotchas **G-ENT-1..10**) + §0.5/§0.6. Depois `ACHADOS_TECNICOS.md` + `PROPOSTA_CONFIG_RETORNO.md`.
+Leia nesta ordem (CANÔNICO): **`README.md` → `GOALS.md` → `SOT_OPERACOES.md` (v2.2) → `RUNBOOK_PILOTO_4870112.md`** — em especial **§0.7** (Model A inviável → Model B, gotchas **G-ENT-1..10**) + §0.5/§0.6. Depois **`PROPOSTA_CONFIG_RETORNO.md`** (spec G4+G5a, é o entregável atual) + `ACHADOS_TECNICOS.md` (§ACHADO 2026-06-01 = roteamento verificado).
 **IGNORE** (histórico): `DIRETRIZ.md`, `PLANO_EXECUCAO.md`, `HISTORICO/`.
 
 ## Decisões fechadas (não reabrir)
@@ -31,13 +31,16 @@ Leia nesta ordem (CANÔNICO): **`README.md` → `GOALS.md` → `SOT_OPERACOES.md
 - Resíduo imaterial: poeira de rounding ~1e-5 un em 5 químicos (31092, `value≈0`, esperado G-REM-2).
 
 ## PRÓXIMO (pendente go Rafael)
-1. **Drenar trânsito 26489** (companheiro FB→30720, lado FB) — **detalhe + estado ao vivo na seção "Pendências Etapa 2" abaixo** (16 comps FB-lote, 42,29 un; companheiro 322400 cancelado). É a próxima tarefa natural.
-2. **Etapas 4-5** (retorno LF→FB NF mista 5902+5124 + entrada FB com op 3252 na 1902). **G5a depende do Contador** (journal que credita 5101010001 não existe). Ver `GOALS §B`, `SOT §2 Etapas 4-5`.
+1. **Implementar a config G4+G5a** (Contadora já confirmou Opção A) — **spec completa em `PROPOSTA_CONFIG_RETORNO.md`**:
+   - **G5a (FB)**: criar journal `ENTRADA - RETORNO DE INDUSTRIALIZAÇÃO` (purchase, no_payment=**5101010001**/id22800, espelho inverso de j17) + registro `tipo.pedido.diario(FB, serv-industrializacao)` → esse journal; op **3252** na 1902 (mata double-count).
+   - **G4 (LF)**: criar journal `SAÍDA - RETORNO DE INDUSTRIALIZAÇÃO` (sale, no_payment=**5101020001**/id26667, espelho inverso de j1047) + registros `tipo.pedido.diario(LF, dev-industrializacao/perda)`; tirar do journal PERDAS (j1003).
+   - **SEM bloqueio do Contador** (ele já deu Opção A + desenho + perna REMESSA + PA=Ic+S). O resto é técnico/piloto: apontar a conta da 1902 via posição fiscal (`PROPOSTA §5`), medir o AVCO no piloto (`PROPOSTA §6`). **dry-run + go Rafael em TODA escrita.**
+2. **Drenar trânsito 26489→30720** (lateral, físico, **0 contábil**) — driver `scripts/e2e_drenar_transito_26489.py` (dry-run feito; estado ao vivo na seção "Pendências Etapa 2"). Não bloqueia o item 1.
 
 ## Pendências Etapa 2 (separadas, não bloqueiam a MO)
 - **Drenar 26489 (PRÓXIMA TAREFA — estado verificado ao vivo 2026-06-01):** o trânsito **26489 tem os 16 comps FB-lote PILOTO-3105 (lots `60496-60511`, company 1), soma `42,28994948` un** (FRASCO 12, TAMPA 12, CAIXA 1, ROTULO 12, ETIQUETA 1, FILME 0,011607, FITA 0,86 + 8 quím+shoyu+AROMA). Último move = `8→26489 ref=FB/SAI/IND/01612` (a remessa). O companheiro nativo **`322400` (FB/INT/08121, pt5 "FB: Transferências Internas", 26489→30720) foi CANCELADO** no Gate 1 do Model A → 26489 nunca drenou.
   - **Objetivo:** zerar 26489 do piloto movendo os 16 comps → **30720** (`Parceiros/Estoques em poder de terceiros/…LF`, usage=customer, cmp=False) = controle FB de "material em poder da LF". Fecha o lado físico FB da remessa (zera junto com 30720 quando o retorno entrar na Etapa 5).
-  - **Método candidato:** refazer o companheiro **26489→30720** em **contexto FB (company=1, G-ENT-1)** — via server action **1899 "Transferir TERCEIROS"** na remessa 322399 OU picking manual **pt5** (FB: Transferências Internas) 26489→30720 com os 16 lots FB. **Investigar/dry-run + go Rafael.** (loc 14 tem 7 quants negativos = contrapartida virtual de ajustes, NÃO-físico, ignorar.)
+  - **Método DECIDIDO (investigado 2026-06-01):** **picking manual pt5** `26489→30720` (replica o companheiro cancelado 322400) — **NÃO** re-disparar a server action 1899 (não-determinística: remessa já tem `picking_terceiro_id` cancelado; nasceria `assigned` e nunca valida). Driver dry-run-first: **`scripts/e2e_drenar_transito_26489.py`** (`--execute` cria pt5 + 16 lots pinados + valida + POS-CHECK). **Impacto contábil = ZERO provado** (move transit→customer não gera SVL; 10 moves done históricos = 0 SVL; contas 1150200001/002 = 0 linhas). **dry-run feito — falta só go Rafael p/ `--execute`.** (os 30 quants negativos em 26489 = contrapartida virtual de ajustes de OUTROS lotes, NÃO-físico, ignorar.)
 - **Taxes IBS/CBS**: foram LIMPAS na ENTIN (eram da FB, "empresas incompatíveis"). Refinamento: alinhar à LF (a recuperar).
 
 ## Scripts (`docs/industrializacao-fb-lf/scripts/`)
@@ -45,6 +48,7 @@ Leia nesta ordem (CANÔNICO): **`README.md` → `GOALS.md` → `SOT_OPERACOES.md
 - `e2e_mo_lf_criar.py` — driver da MO (modos: dry-run, batelada, pa). **✅ FIX G-ENT-10 aplicado e validado** (picked=True nas move.lines dos raws antes do mark_done + POS-CHECK). Battle-tested 20252/20254.
 - `/tmp/fix_entin.py` — fix fiscal da ENTIN (op 2686 + conta 1150100011 + cfop 1901 + payable 5101020001). **Encodar no driver `--modo nf` se reusar.**
 - `e2e_piloto_validar.py` — validador read-only (baseline/remessa/entrada-lf/mo/...).
+- `e2e_drenar_transito_26489.py` — **NOVO (2026-06-01)** dreno físico FB `26489→30720` (pt5, lotes pinados, POS-CHECK). dry-run-first; `--execute` só com go. 0 contábil.
 
 ## IDs/constantes-chave
 Empresas FB=1/LF=5 · partner LF=35 · Vendors=4 · trânsito=26489 · **31092** (LF/Mat.Terceiros) · **31093** (LF/PA Terceiros) · 30720 (FB customer terceiros) · pt19 (LF receb) · pt36 (LF produção) · op fiscal entrada **2686** · journal **1047** · fp **131** · contas LF: 1150200001(terceiros)/1150100011(transitória)/5101020001(PASSIVA). Lotes: FB PILOTO-3105 ids 60496-60511 (company 1, IMUTÁVEL); LF PILOTO-3105 (company 5, criados no Model B).
@@ -55,5 +59,12 @@ Empresas FB=1/LF=5 · partner LF=35 · Vendors=4 · trânsito=26489 · **31092**
 - `action_create_invoice`/`action_gerar_po_dfe` etc. para PO LF: rodar em **contexto `allowed_company_ids=[1,5]`** (senão "sem acesso a account.account/stock.lot LF" ou "empresas incompatíveis"). Ver G-ENT-1/4/7/8.
 - Classificador bloqueia bash complexo + skill WRITE → invocação canônica simples (1 comando/escrita).
 
-## Pendente Contador (paralelo)
-G5a (journal entrada FB→5101010001, Etapa 5) · 3 pernas (Ic no AVCO do PA) · regularização dos acumulados. NÃO bloqueia a MO nem o dreno.
+## Dúvidas técnicas em aberto (resolver na implementação, com dry-run — NÃO bloqueiam o conceito)
+- **Roteamento da 1902 (G5a)**: usar `tipo_pedido_entrada=serv-industrializacao` criando registro novo no `tipo.pedido.diario(FB)` (recomendado, isolado) **vs** repontar o j1001 ENTSI (global). `tipo_pedido_entrada` é SELECTION → não dá p/ criar valor novo sem DEV. `PROPOSTA §3b`.
+- **Linha 1124 serviço (FB entrada)**: `serv-industrializacao` **não tem registro** no `tipo.pedido.diario(FB)` → cai em journal default — **confirmar qual** antes de escriturar.
+- **pt98 nunca usado** (0 pickings): o piloto será o **1º uso real** (31093→26489) — validar comportamento.
+- **Criar `account.journal` via XML-RPC**: confirmar se é possível por XML-RPC ou exige UI (DDL de journal).
+- **AVCO subvalorizado (G8)**: PA na FB hoje = R$ 35,37/cx (só S) — a NF de retorno precisa declarar `price_unit = Ic+S` (ligado às 3 pernas).
+
+## Contador — JÁ deu o essencial (não bloqueia a implementação)
+✅ **Contadora confirmou (2026-06-01): Etapas 4-5 + Opção A (Ativo→Ativo, CPV só na venda) + perna REMESSA direto (5101010001/5101020001) + PA vale Ic+S.** Com isso, **G4/G5a não dependem de mais nenhuma decisão contábil** — o que resta é execução técnica (criar journals, apontar conta da 1902 via posição fiscal, medir AVCO no piloto). **Único re-escalonamento possível**: SE o piloto revelar descasamento AVCO×razão na 1902 simbólica (`PROPOSTA §6`). Separado e sem prazo: regularização dos acumulados (5101010001 R$60,8M etc — `GOALS G9`).

@@ -148,3 +148,30 @@ A remessa FB→LF (Etapa 1, CFOP 5901) gera **DUAS camadas** que, combinadas, la
 - **Implicação p/ o projeto:** rever a `DIRETRIZ` — em vez de migrar tudo para `1150200001`, possivelmente **fechar o ciclo da família `51010xx`** existente (creditar `5101010001` no retorno). Decisão Contador.
 
 > Resíduo imaterial do teste (2026-05-30): R$ 0,95 nas transitórias `1150100011/012` (par forward+reverse de internal sem NF). Estoque ROTULO restaurado (120), location 26489 `in/out=False`, pickings de teste cancelados/done.
+
+---
+
+## ACHADO 2026-06-01 — roteamento G4/G5a verificado ao vivo + confirmação da Contadora
+
+> Grounding ao vivo (PROD) para fechar a config do retorno. Scripts efêmeros: `inv_cfg_g4_g5a`, `inv_entsi`, `inv_roteamento_completo`, `inv_etapa4_*`, `inv_pergunta_contadora`. Detalhe e spec: `PROPOSTA_CONFIG_RETORNO.md`.
+
+### Confirmação da Contadora (Etapas 4-5 + Opção A)
+- **Etapas 4 e 5 validadas.** Custo dos insumos no retorno = **Ativo→Ativo** (`D 1150100007 PA / C 5101010001`), **CPV só na venda final** do PA. **Não há CPV no retorno** (Opção A).
+- Ground-truth que confirma: a entrada FB real `ENTSI/2026/05/0126` lança **tudo no Ativo** (D 1150100007 PA + D 1150100001 MP + D 1150100002 EMB), **zero CPV**.
+
+### Roteamento `tipo_pedido(_entrada) → tipo.pedido.diario(empresa) → journal → no_payment`
+- **FB entrada (j1001 ENTSI):** `tipo_pedido_entrada=industrializacao → j1001` com **`account_no_payment_id` VAZIO** → **não baixa 5101010001** (causa raiz G5a). `tipo_pedido_entrada=retorno → j1007` (no_payment=**5101020002 PASSIVA RETORNO**, conta errada p/ encomendante).
+- **LF saída:** `dev-industrializacao` (5902) e `perda` (5903) **NÃO têm registro** no `tipo.pedido.diario` da LF → caem em default/PERDAS (j1003, no_payment=5101010001 ATIVA, +R$ 8,67M). `venda-industrializacao` (5124) → **j847 VENDA DE PRODUÇÃO** ✅.
+- **Referência a espelhar:** remessa FB `industrializacao → j17` (sale, no_payment=5101010001 ATIVA → `D 5101010001`); entrada LF `serv-industrializacao → j1047` (purchase, no_payment=5101020001 PASSIVA → `C 5101020001`).
+
+### Double-count confirmado ao vivo (G5b)
+- A entrada FB de retorno **re-infla o estoque próprio**: na `ENTSI/2026/05/0126`, o picking `FB/IN/13403` (22 moves) gera `D 1150100002 MAT. EMBALAGEM` (~R$ 2.660) + `D 1150100001 MATÉRIA-PRIMA` (~R$ 4.296) — os insumos consumidos re-entram. A operação da linha 1902 está com `movimento_estoque=True`. Fix = op **3252** (`movimento_estoque=False`).
+
+### Lado físico FB da remessa (dreno 26489)
+- O companheiro nativo "Transferir TERCEIROS" (server action **1899** sobre `stock.picking`, método `action_movimentar_estoque_terceiro`) cria um picking **pt5 `26489→30720`** (Parceiros/Estoques em poder de terceiros/LF, usage=**customer**). No fluxo real ele nasce **`assigned` e NUNCA é validado** (191 assigned, 0 done recentes) → por isso 26489 nunca zera.
+- **Mover `26489→30720` é PURAMENTE FÍSICO: 0 SVL, 0 account.move** (verificado: 10 moves done históricos geraram 0 SVL; 26489 transit cmp=False + 30720 customer cmp=False = nenhuma é valued p/ a FB; contas 1150200001/002 têm 0 lançamentos na FB). Driver dry-run-first: `scripts/e2e_drenar_transito_26489.py`.
+
+### IDs-chave (config retorno)
+- Contas: 5101010001 FB=**22800**/LF=26652 (ATIVA); 5101020001 FB=22815/LF=**26667** (PASSIVA); 5101010002 FB=22801/LF=26653; 5101020002 FB=22816/LF=26668.
+- Operações retorno: 5124→**849/2702**; 5902→**850**; 5903→**2711**; 1902 simbólica→**3252**; 1124→3064/3134; 1903→838/3120.
+- pt98 (LF saída retorno, 31093→26489, ativo, 0 usos); pt52 (FB entrada retorno, src=26489); pt5 (FB transf. internas, dreno 26489→30720).

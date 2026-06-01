@@ -2,6 +2,7 @@
 
 > **Source of Truth único** do desenho-alvo, sobre o ciclo verificado ao vivo (`CICLO_COMPLETO_MAPA.md`, `ACHADOS_TECNICOS.md` §ACHADO 2026-05-30) + regras fiscais CFOP. **Supersede** `DIRETRIZ.md` (mirava `1150200001`) e `00_FLUXO §3.4` (lançamentos preliminares).
 > **v2.1 (2026-05-30)** — corrigido após verificação adversarial (5 lentes) + reviewer de ambiguidades. Itens ✔v2/✔v2.1. **Reconciliado**: `movimento_estoque` é POR LINHA (não cabeçalho); sem ICMS em nenhuma etapa.
+> **v2.2 (2026-06-01)** — ✅ **Contadora CONFIRMOU as Etapas 4 e 5 + Opção A (Ativo→Ativo)**: insumos consumidos incorporam-se ao custo do PA (`D 1150100007 / C 5101010001`), **CPV só na venda final** (não CPV no retorno). Roteamento G4/G5a mapeado ao vivo → spec em `PROPOSTA_CONFIG_RETORNO.md`. Itens ✔v2.2.
 > Status: ✅ correto · 🔧 config · 🔴 principal/dev · ❓ Contador.
 > **FB e LF = mesma UF (SP, Santana de Parnaíba) → operações INTRAESTADUAIS (CFOP 5xxx/1xxx). Não há 6xxx.** ✔v2
 
@@ -67,17 +68,17 @@ MO manual (BoM 3695→3646). Consumo (terceiros)→PRODUÇÃO; produção do PA�
   - **5903 (sobras, CST51)**: idem, baixa parcial da PASSIVA + devolve fisicamente.
   - **5124 (valor agregado LF, SEM ICMS ✔v2.1)**: `D CLIENTES / C 3101030001 SERVIÇOS DE INDUSTRIALIZAÇÃO (S) + C CBS/IBS/PIS/COFINS a recolher`. ✅ a receita de serviço já espelha o `2120100001 FORNECEDORES` da FB.
 - ⚠️ **LF deve usar SÓ a PASSIVA `51020xx`** — hoje a LF também debita `5101010001 (ATIVA)` via journal **"SAÍDA - PERDAS"** (+R$ 8,67M) ✔v2 → corrigir operação/journal de saída LF p/ não cair em PERDAS.
-- **Lever L4**: operação fiscal de retorno (5902/5903) debita `5101020001`. **✔v2.1 granularidade POR LINHA confirmada** (`account.move.line.l10n_br_operacao_id` — cada linha tem operação própria) → 5902/5903 e 5124 coexistem na mesma NF com operações distintas. Resíduo: confirmar no piloto que a baixa da PASSIVA por linha ocorre.
+- **Lever L4**: operação fiscal de retorno (5902/5903) debita `5101020001`. **✔v2.1 granularidade POR LINHA confirmada** (`account.move.line.l10n_br_operacao_id` — cada linha tem operação própria) → 5902/5903 e 5124 coexistem na mesma NF com operações distintas. ✔v2.2 **caminho mapeado** (`PROPOSTA §4`): hoje `dev-industrializacao`(5902) e `perda`(5903) **NÃO têm registro no `tipo.pedido.diario` da LF** → caem em PERDAS (j1003, no_payment=5101010001 ATIVA, +R$8,67M). Fix: criar journal LF sale `SAÍDA - RETORNO DE INDUSTRIALIZAÇÃO` (no_payment=5101020001 id26667, espelho inverso de j1047) + registros `tipo.pedido.diario(LF, dev-industrializacao/perda)`. Obrigação do piloto a baixar = **R$ 278,56** (ENTIN 737062). Resíduo: confirmar baixa por linha no piloto (NF mista).
 
 ### Etapa 5 — FB ENTRADA / Recebe retorno (1124+1902+1903) — 🔴 PRINCIPAL
 - **Física**: hoje **2.880× pt1 genérico** vs 10× pt52 → 🔧 rotear DFe → **pt52** (`src=26489`).
 - **Lançamento-alvo por linha (✔v2 — baixa ÚNICA de I, sem double-count):**
-  - **1902 (insumos consumidos, simbólico)**: **`D 1150100007 PA (incorpora I_consumido) / C 5101010001 (baixa I_consumido)`**. **NÃO gera stock.move de entrada dos componentes** (senão SVL re-infla estoque = o R$ 785k).
+  - **1902 (insumos consumidos, simbólico)**: **`D 1150100007 PA (incorpora I_consumido) / C 5101010001 (baixa I_consumido)`** — ✔v2.2 **Contadora CONFIRMOU Ativo→Ativo** (não CPV; CPV só na venda final do PA). **NÃO gera stock.move de entrada dos componentes** (senão SVL re-infla estoque = o R$ 785k). *Estado atual (errado) verificado: a entrada cai em j1001 ENTSI (no_payment VAZIO) + re-infla MP/EMB — `ACHADO 2026-06-01`.*
   - **1124 (valor agregado, SEM ICMS ✔v2.1)**: **`D 1150100007 PA (+S) / C 2120100001 FORNECEDORES (S)`** (+ CBS/IBS/PIS/COFINS a recuperar). Só serviço (não baixa `5101010001` de novo — a baixa de I é única, no 1902).
   - **1903 (sobras)**: **`D 1150100002 (sobra volta) / C 5101010001 (baixa I_sobra)`** — físico (re-entra estoque).
 - **AVCO do PA (leg ✔v2):** o PA entra valorado pelo **price_unit da linha 1124/1902 da NF** = `I_consumido + S`. Não é soma automática → a NF de retorno da LF **deve declarar** esse valor. **Sem isso o AVCO grava custo errado.**
 - **Lever L5 — SEPARAR em duas camadas (✔v2):**
-  - **L5a (conta da NF)**: a entrada de retorno **creditar `5101010001`** em vez de só `FORNECEDORES`. Viável-config pelo mesmo mecanismo operação→CFOP→fp→journal da remessa — **MAS não há caminho existente** (os 0,3% de créditos hoje são **cancelamentos de remessa**, não retornos ✔v2) → **precisa ser criado/configurado**.
+  - **L5a (conta da NF)**: a entrada de retorno **creditar `5101010001`** em vez de só `FORNECEDORES`. ✔v2.2 **caminho mapeado** (`PROPOSTA §3`): criar journal FB purchase `ENTRADA - RETORNO DE INDUSTRIALIZAÇÃO` (no_payment=5101010001 id22800, espelho inverso de j17) + registro `tipo.pedido.diario(FB, serv-industrializacao)` → esse journal, com op **3252** na linha 1902. Resíduo: NF mista (no_payment é por cabeçalho × baixa por linha — `PROPOSTA §5`).
   - **L5b (não re-inflar estoque) — ✔v2.1 RECONCILIADO (POR LINHA, config)**: a linha **1902 NÃO pode gerar stock.move**. Governado por **`l10n_br_movimento_estoque`** da operação, que é **por LINHA** (`account.move.line.l10n_br_operacao_id`; 95 ops já usam `False`). → setar a operação da linha 1902 com `movimento_estoque=False` suprime o stock.move **sem separar NF nem DEV**. **Op 3252 criada** para isso. **Resíduo ÚNICO a confirmar no piloto**: que a NF mista gere picking só das linhas `movimento_estoque=True` (1124/1903), pulando a 1902. *(Corrige a versão anterior que dizia "por cabeçalho / pode exigir separar NFs / DEV".)*
 
 ---
@@ -114,14 +115,14 @@ Remessa: insumos `I = Ic (consumido) + Is (sobra)`; valor agregado `S`. Invarian
 ---
 
 ## 5. Decisões / verificações pendentes
-1. **Conta**: confirmar família `51010xx`/`51020xx` (fiscal). Par net-zero da **valoração SVL da LF** — `1150200001/1150200002` (⚠️ colisão com server action 1899) vs **par dedicado** (rastreabilidade). E desenho **(A) vs (B)** da Etapa 2 (fechar `1150100011`). ✔v2
+1. **Conta**: confirmar família `51010xx`/`51020xx` (fiscal). Par net-zero da **valoração SVL da LF** — `1150200001/1150200002` (⚠️ colisão com server action 1899) vs **par dedicado** (rastreabilidade). E desenho **(A) vs (B)** da Etapa 2 (fechar `1150100011`). ✔v2 → **✔v2.2 Contadora confirmou família 51010xx + Opção A (Ativo→Ativo); SVL Design A já vivo na entrada LF (Etapa 2).**
 2. **L5b ✔v2.1 RESOLVIDO (config, por linha)**: op 3252 (`movimento_estoque=False`) na linha 1902. Único resíduo: confirmar no piloto que a NF mista gera picking só das linhas `movimento_estoque=True` (1124/1903).
 3. **L4**: granularidade por-linha (5902 baixar PASSIVA na mesma NF do 5124). ✔v2
 4. ~~Tributação 5124 ICMS~~ → **RESOLVIDO ✔v2.1**: NF real NÃO tem ICMS (CST51 suspenso; CBS/IBS/PIS/COFINS já tratados). **Não mexer em imposto.** Resta só o controle do **prazo de 180 dias** da suspensão CST51 (5901).
 5. **Conta PRODUÇÃO** `1150100004` (L3) e **invariante** "LF só agrega consu+serviço".
 6. **Regularização** dos acumulados: `5101010001` R$ 60,8M (FB) + R$ 8,67M (LF, journal PERDAS), double-count estoque (R$ 785k/produto), `1150100011` −R$ 1,49 bi. Modo A/B/C.
 7. **AVCO do PA**: garantir que a NF de retorno declare price_unit do PA = `Ic+S`. ✔v2
-8. **Conta RETORNO `5101010002`** (R$0): usar para a perna de retorno ou baixar direto a REMESSA? ✔v2
+8. **Conta RETORNO `5101010002`** (R$0): usar para a perna de retorno ou baixar direto a REMESSA? ✔v2 → **✔v2.2 RESOLVIDO: baixar a REMESSA direto** (`5101010001`/`5101020001`) — desenho confirmado pela Contadora; a perna RETORNO (`...02`) NÃO entra.
 
 ---
 
@@ -130,3 +131,5 @@ Remessa: insumos `I = Ic (consumido) + Is (sobra)`; valor agregado `S`. Invarian
 |---|---|---|
 | 1.0 | 2026-05-30 | SOT inicial — ciclo verificado; foco no RETORNO; adota família 51010xx |
 | 2.0 | 2026-05-30 | Correções pós-verificação adversarial: baixa única de I (sem double-count); NF de retorno MISTA (5902 CST51 + 5124 ICMS); leg AVCO do PA (Ic+S); L5 separado em L5a(NF=config)/L5b(SVL=dev); desenho SVL-LF em aberto (fechar 1150100011); LF sair do journal PERDAS; intraestadual confirmado; 180d CST51; invariante 5902=5901; Ativo→Ativo supersede CMV |
+| 2.1 | 2026-05-30 | Reconciliado: `movimento_estoque` por linha (não cabeçalho); sem ICMS em nenhuma etapa (CST51 + CBS/IBS/PIS/COFINS) |
+| 2.2 | 2026-06-01 | **Contadora confirmou Etapas 4-5 + Opção A (Ativo→Ativo, CPV só na venda)**; roteamento G4/G5a mapeado ao vivo (journals/operações/tipo.pedido.diario); spec em `PROPOSTA_CONFIG_RETORNO.md`; resíduo NF mista (cabeçalho×linha) |
