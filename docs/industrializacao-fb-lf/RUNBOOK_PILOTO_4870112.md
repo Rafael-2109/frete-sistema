@@ -29,10 +29,10 @@
 
 | Passo | Ação | Ferramenta | Critério |
 |---|---|---|---|
-| **A0** | Snapshot baseline (contábil + físico por lote) | `e2e_piloto_validar.py --modo baseline --lote PILOTO-3105 --out base.json` | foto antes de tudo (p/ Δ) |
-| **A** | Zerar comps + adicionar 1 caixa em lote dedicado (inclui CAIXA 210030203) | *manual (Rafael) — ajuste de estoque* | 16 comps em FB/Estoque(8) lote PILOTO |
-| **B** 🔴 | Remessa FB→LF (pt53, NF 5901) — **lote pinado** | `e2e_remessa_criar.py --lote PILOTO-3105` (dry-run → `--execute` → `--liberar`) | `D 5101010001 +I / C 1150100002 −I` |
-| **C** ⚠️ | Entrada LF — **pré-flight pt64/pt19 dst** | `--modo preflight-lf` antes; *receb LF*; dst=**31092** | material em **31092** (não 42) |
+| **A0** ✅ | Snapshot baseline (contábil + físico por lote) | `e2e_piloto_validar.py --modo baseline --lote PILOTO-3105 --out base.json` | **FEITO** — `/tmp/piloto_base.json` (⚠️ efêmero) |
+| **A** ✅ | 16 quants criados no lote `PILOTO-3105` @ FB/Estoque(8) | `ajustar_quant.py --cod C --empresa FB --local 8 --lote PILOTO-3105 --delta X --criar-se-faltar --confirmar` (16×) | **FEITO** — qty exata de 1 caixa, Ic R$279,24 |
+| **B** ✅🔴 | Remessa FB→LF (pt53, NF 5901) — **lote pinado** | `e2e_remessa_criar.py --lote PILOTO-3105` → `--execute` → `--liberar` + Playwright SEFAZ | **FEITO** — picking 01612(322399) done; **NF RPI/2026/00245(735679) AUTORIZADA** chave `…0946041007356795`; NET `D 5101010001 +279,23 / C estoque`; 1150100012 resíduo R$0,05 |
+| **C** ⚠️ ⬅️ **PRÓXIMO** | Entrada LF — **pré-flight pt64/pt19 dst** | `--modo preflight-lf` antes; *receb LF*; dst=**31092** | material em **31092** (não 42) |
 | **D** | Valida B+C (Δ computado) | `e2e_piloto_validar.py --modo remessa` / `--modo entrada-lf --base base.json` | `Δ1150100011(LF)=0`; 26489 do lote=0 |
 | **E** | 2 MOs (BATELADA + PA), origem 31092 → PA em 31093 | *MO manual (LF)* | só ÁGUA+serviço; PA em 31093 |
 | **F** | Valida E | `e2e_piloto_validar.py --modo mo --mo <bat> --mo2 <pa> --base base.json` | net-zero; PA 31093; loc 42 inalt. |
@@ -41,6 +41,23 @@
 | **I** ⚠️ | Valida entrada FB | `e2e_piloto_validar.py --modo entrada-fb --nf <id>` | **G5b**: 0 SVL comps. ❗**G5a não fecha** (Contador) |
 | **J** | Ajuste/conferência do PA produzido (AVCO=Ic+S; cleanup) | *manual + validar* | AVCO PA = Ic+S |
 | **K** 🔴 | Rollout p/ todos LF | **GATE CONTADOR** (G5a + 3 pernas + regularização) | — |
+
+---
+
+## 0.6 — CHECKPOINT 2026-06-01 (Etapa 1 EXECUTADA em PROD) + GOTCHAS de criação de remessa
+
+**Feito nesta sessão (A0→B):** A0 baseline · A 16 quants no lote `PILOTO-3105` · B remessa **autorizada no SEFAZ** (picking `FB/SAI/IND/01612` id 322399; NF `RPI/2026/00245` id 735679; chave `35260661724241000178550010000946041007356795`). G0 atingido (resíduo R$0,05 imaterial). Rastro: 3 pickings cancelados 01609/10/11 (iterações de fix).
+
+**Caminho correto de criação+transmissão (provado E2E):**
+1. `e2e_remessa_criar.py --lote PILOTO-3105 --execute` → cria+valida picking pt53 (reversível).
+2. `e2e_remessa_criar.py --picking <id> --liberar` → `action_liberar_faturamento` → robô CIEL IT cria a NF em ~90s (situacao_nf=`rascunho`).
+3. `transmitir_nfe_via_playwright(invoice_id, odoo, logger)` (`app/recebimento/services/playwright_nfe_transmissao.py`) → SEFAZ autoriza (força recompute l10n_br via UI → evita SEFAZ 225). IRREVERSÍVEL.
+
+**GOTCHAS de criação de remessa via XML-RPC (codificados no `e2e_remessa_criar.py`):**
+- **G-REM-1 (partner_id):** o picking pt53 **DEVE** ter `partner_id=35` (LF). Sem ele, `button_validate` falha ao auto-criar o picking-companheiro "Transferir TERCEIROS" (server action 1899) → `Field Destination Location (location_dest_id) not set`.
+- **G-REM-2 (UoM rounding):** a qty do move.line deve respeitar o `uom.rounding` do produto (Litros/Latas/m=1e-06, kg=1e-08). Explodir BoM em precisão total (9 casas) → `button_validate` rejeita ("não respeita a precisão de arredondamento").
+- **G-REM-3 (cap no saldo):** nunca remeter > saldo do quant (mismatch quant 6dp × explosão 8dp gera estoque negativo). Fix: `q_remit = min(explosão, free)`.
+- **G-REM-4 (lote pinado):** criar a move.line manualmente com `lot_id` fixo (sem `action_assign`/FIFO) + gravar `quantity` E `qty_done` juntos + `button_validate` com `skip_backorder` (sem `stock.immediate.transfer`, removido no v17).
 
 ---
 

@@ -67,6 +67,8 @@ Existe um mecanismo NACOM para movimentar material de terceiros com contabiliza�
 - **Pré-condições para liberar faturamento** no picking de saída: `incoterm=6` (CIF) + `carrier_id=996` + operação na linha + CFOP na linha + `res.company.warehouse_id` setado.
 - `amount_total=0` quando ICMS CST=51 (suspenso): a NF de remessa carrega valor em `amount_untaxed` (ex.: 725676 = R$ 2.797,85), mas total a pagar = 0. **NF saída SEFAZ-autorizada NÃO cancela via XML-RPC** (evento formal, janela ~24h).
 - `l10n_br_operacao_id` / `l10n_br_tipo_pedido` **NÃO propagam** para SO criada via inter-company (ficam False).
+- **Criar remessa pt53 via XML-RPC (2026-06-01, validado E2E):** o picking **DEVE** ter `partner_id=35` (LF) — senão `button_validate` falha ao auto-criar o picking-companheiro **"Transferir TERCEIROS"** (server action 1899, ver §2) com `Field Destination Location (location_dest_id) not set`. Demais gotchas (UoM rounding, cap no saldo, lote pinado, `skip_backorder`) em `RUNBOOK_PILOTO_4870112.md §0.6` (G-REM-1..4).
+- **Transmissão SEFAZ** = `transmitir_nfe_via_playwright(invoice_id, odoo, logger)` (`app/recebimento/services/playwright_nfe_transmissao.py`) — XML-RPC puro falha (campos `l10n_br` stale → SEFAZ 225); Playwright força recompute via UI.
 
 ---
 

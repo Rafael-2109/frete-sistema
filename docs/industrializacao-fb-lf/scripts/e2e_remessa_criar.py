@@ -32,6 +32,7 @@ PT_REMESSA = 53
 LOC_FB, LOC_TRANSITO = 8, 26489
 BOM_PA, BOM_BAT, SEMI_CODE = 3695, 3646, '3800018'
 INCOTERM, CARRIER = 6, 996
+PARTNER_LF = 35    # LA FAMIGLIA - LF (partner em cmp FB) — dispara companheiro "Transferir TERCEIROS" no button_validate
 
 
 def ctx_fb():
@@ -43,8 +44,11 @@ def explode(o, caixas):
 
     def add(pid, qty):
         p = o.read('product.product', [pid], ['default_code', 'name', 'type', 'uom_id'])[0]
+        uom_id = p['uom_id'][0] if p['uom_id'] else 1
+        rnd = (o.read('uom.uom', [uom_id], ['rounding'])[0].get('rounding') or 1e-6) if p['uom_id'] else 1e-6
+        qty_r = round(qty / rnd) * rnd if rnd and rnd > 0 else qty  # respeitar precisao da UoM (button_validate)
         comps[pid] = {'cod': p['default_code'], 'nome': p['name'][:32], 'type': p['type'],
-                      'qty': qty, 'uom': p['uom_id'][0] if p['uom_id'] else 1}
+                      'qty': qty_r, 'uom': uom_id}
     rende_pa = float(o.read('mrp.bom', [BOM_PA], ['product_qty'])[0].get('product_qty') or 1.0)
     fpa = caixas / rende_pa
     semi_pid = semi_qty = None
@@ -131,7 +135,8 @@ def main():
         free = q['quantity'] - q['reserved_quantity']
         if free < c['qty'] - 1e-6:
             bloq.append(c['cod'])
-        moves.append({'pid': pid, 'qty': c['qty'], 'uom': c['uom'],
+        q_remit = min(c['qty'], free)  # nunca remeter > disponivel (evita estoque negativo por mismatch de arredondamento)
+        moves.append({'pid': pid, 'qty': q_remit, 'uom': c['uom'],
                       'lot_id': q['lot_id'][0] if q['lot_id'] else False,
                       'src': q['location_id'][0] if q['location_id'] else LOC_FB})
         print(f"  {c['cod'] or '?':>12} {c['nome']:<32} {c['qty']:>12.6f} {str(lote_nm)[:18]:<18} {free:>10.4f}{'  *** FALTA' if free < c['qty']-1e-6 else ''}")
@@ -152,7 +157,7 @@ def main():
                  for m in moves]
     pk_id = o.execute_kw('stock.picking', 'create',
                          [{'picking_type_id': PT_REMESSA, 'location_id': LOC_FB, 'location_dest_id': LOC_TRANSITO,
-                           'company_id': CMP_FB, 'incoterm': INCOTERM, 'carrier_id': CARRIER,
+                           'company_id': CMP_FB, 'partner_id': PARTNER_LF, 'incoterm': INCOTERM, 'carrier_id': CARRIER,
                            'move_ids_without_package': move_vals}], {'context': ctx_fb()})
     print(f"\n[criado] picking id={pk_id}")
     smoves = o.search_read('stock.move', [('picking_id', '=', pk_id)], ['id', 'product_id', 'product_uom'], limit=60)
