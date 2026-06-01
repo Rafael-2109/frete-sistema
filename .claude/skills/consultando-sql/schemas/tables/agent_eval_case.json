@@ -1,0 +1,95 @@
+{
+  "name": "agent_eval_case",
+  "description": "A3-R3 (2026-06-01) — caso de eval persistido para CALIBRAÇÃO do judge.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "agent_name",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "case_id",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "git_sha",
+      "type": "text"
+    },
+    {
+      "name": "case_score",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "n_runs",
+      "type": "integer",
+      "nullable": false,
+      "default": 1
+    },
+    {
+      "name": "case_score_variance",
+      "type": "float",
+      "nullable": false,
+      "default": 0.0
+    },
+    {
+      "name": "invoke_failures",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "evidence",
+      "type": "text"
+    },
+    {
+      "name": "human_verdict",
+      "type": "text"
+    },
+    {
+      "name": "human_note",
+      "type": "text"
+    },
+    {
+      "name": "reviewed_by",
+      "type": "integer",
+      "description": "usuarios.id (sem FK)"
+    },
+    {
+      "name": "reviewed_at",
+      "type": "timestamp"
+    },
+    {
+      "name": "recorded_at",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_eval_case_agent_name",
+      "columns": [
+        "agent_name"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_eval_case_recorded_at",
+      "columns": [
+        "recorded_at"
+      ],
+      "unique": false
+    }
+  ]
+}

@@ -91,16 +91,9 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_carregamento_pedido_id",
+      "name": "ix_assai_carregamento_status",
       "columns": [
-        "pedido_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_assai_carregamento_separacao_id",
-      "columns": [
-        "separacao_id"
+        "status"
       ],
       "unique": false
     },
@@ -112,9 +105,16 @@
       "unique": false
     },
     {
-      "name": "ix_assai_carregamento_status",
+      "name": "ix_assai_carregamento_separacao_id",
       "columns": [
-        "status"
+        "separacao_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_assai_carregamento_pedido_id",
+      "columns": [
+        "pedido_id"
       ],
       "unique": false
     }

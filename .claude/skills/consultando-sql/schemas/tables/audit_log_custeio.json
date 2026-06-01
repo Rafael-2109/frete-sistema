@@ -60,9 +60,9 @@
   ],
   "indices": [
     {
-      "name": "ix_audit_log_custeio_timestamp",
+      "name": "ix_audit_log_custeio_entidade",
       "columns": [
-        "timestamp"
+        "entidade"
       ],
       "unique": false
     },
@@ -70,13 +70,6 @@
       "name": "ix_audit_log_custeio_usuario",
       "columns": [
         "usuario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_audit_log_custeio_entidade",
-      "columns": [
-        "entidade"
       ],
       "unique": false
     },
@@ -92,6 +85,13 @@
       "columns": [
         "entidade",
         "entidade_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_audit_log_custeio_timestamp",
+      "columns": [
+        "timestamp"
       ],
       "unique": false
     },

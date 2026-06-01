@@ -115,16 +115,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_cte_complementares_status",
+      "name": "ix_carvia_cte_complementares_cte_numero",
       "columns": [
-        "status"
+        "cte_numero"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_frete_id",
+      "name": "ix_carvia_cte_complementares_status",
       "columns": [
-        "frete_id"
+        "status"
       ],
       "unique": false
     },
@@ -136,9 +136,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_fatura_cliente_id",
+      "name": "ix_carvia_cte_complementares_frete_id",
       "columns": [
-        "fatura_cliente_id"
+        "frete_id"
       ],
       "unique": false
     },
@@ -164,9 +164,9 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_cte_complementares_cte_numero",
+      "name": "ix_carvia_cte_complementares_fatura_cliente_id",
       "columns": [
-        "cte_numero"
+        "fatura_cliente_id"
       ],
       "unique": false
     }

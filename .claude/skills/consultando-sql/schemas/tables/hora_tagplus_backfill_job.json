@@ -135,13 +135,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_tagplus_backfill_job_rq_job_id",
-      "columns": [
-        "rq_job_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_tagplus_backfill_job_status",
       "columns": [
         "status"
@@ -149,16 +142,23 @@
       "unique": false
     },
     {
-      "name": "ix_hora_tagplus_backfill_job_criado_em",
+      "name": "ix_hora_tagplus_backfill_job_tipo",
       "columns": [
-        "criado_em"
+        "tipo"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_tagplus_backfill_job_tipo",
+      "name": "ix_hora_tagplus_backfill_job_rq_job_id",
       "columns": [
-        "tipo"
+        "rq_job_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_tagplus_backfill_job_criado_em",
+      "columns": [
+        "criado_em"
       ],
       "unique": false
     }

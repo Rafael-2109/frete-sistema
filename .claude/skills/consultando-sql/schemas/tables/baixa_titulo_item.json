@@ -224,9 +224,9 @@
       "unique": false
     },
     {
-      "name": "ix_baixa_titulo_item_status",
+      "name": "ix_baixa_titulo_item_lote_id",
       "columns": [
-        "status"
+        "lote_id"
       ],
       "unique": false
     },
@@ -238,16 +238,16 @@
       "unique": false
     },
     {
-      "name": "idx_baixa_item_nf",
+      "name": "ix_baixa_titulo_item_status",
       "columns": [
-        "nf_excel"
+        "status"
       ],
       "unique": false
     },
     {
-      "name": "ix_baixa_titulo_item_lote_id",
+      "name": "idx_baixa_item_nf",
       "columns": [
-        "lote_id"
+        "nf_excel"
       ],
       "unique": false
     }

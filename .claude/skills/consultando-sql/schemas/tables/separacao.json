@@ -233,6 +233,14 @@
   ],
   "indices": [
     {
+      "name": "idx_sep_falta_pgto_sync",
+      "columns": [
+        "falta_pagamento",
+        "sincronizado_nf"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_sep_nf_cd",
       "columns": [
         "nf_cd"
@@ -367,14 +375,6 @@
       "name": "idx_sep_cotacao",
       "columns": [
         "cotacao_id"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_sep_falta_pgto_sync",
-      "columns": [
-        "falta_pagamento",
-        "sincronizado_nf"
       ],
       "unique": false
     }

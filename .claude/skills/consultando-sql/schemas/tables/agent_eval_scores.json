@@ -1,0 +1,62 @@
+{
+  "name": "agent_eval_scores",
+  "description": "A3 (2026-05-31) — score de eval persistido por-agente para o eval gate.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "description": "Primary key"
+    },
+    {
+      "name": "agent_name",
+      "type": "text",
+      "nullable": false
+    },
+    {
+      "name": "score",
+      "type": "float",
+      "nullable": false
+    },
+    {
+      "name": "total",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "passed",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "git_sha",
+      "type": "text"
+    },
+    {
+      "name": "mode",
+      "type": "text"
+    },
+    {
+      "name": "recorded_at",
+      "type": "timestamp",
+      "nullable": false
+    }
+  ],
+  "indices": [
+    {
+      "name": "ix_agent_eval_scores_agent_name",
+      "columns": [
+        "agent_name"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_agent_eval_scores_recorded_at",
+      "columns": [
+        "recorded_at"
+      ],
+      "unique": false
+    }
+  ]
+}

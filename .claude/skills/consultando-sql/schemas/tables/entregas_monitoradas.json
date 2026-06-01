@@ -160,9 +160,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "name": "idx_em_nf_cd",
       "columns": [
-        "separacao_lote_id"
+        "nf_cd"
       ],
       "unique": false
     },
@@ -174,23 +174,9 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_origem",
+      "name": "idx_em_data_agenda",
       "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
-      "columns": [
-        "cnpj_cliente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_data_embarque",
-      "columns": [
-        "data_embarque"
+        "data_agenda"
       ],
       "unique": false
     },
@@ -202,16 +188,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_agenda",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "data_agenda"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_reagendar",
-      "columns": [
-        "reagendar"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -223,6 +202,13 @@
       "unique": false
     },
     {
+      "name": "idx_em_reagendar",
+      "columns": [
+        "reagendar"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_entregas_monitoradas_numero_nf",
       "columns": [
         "numero_nf"
@@ -230,9 +216,23 @@
       "unique": false
     },
     {
-      "name": "idx_em_nf_cd",
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
       "columns": [
-        "nf_cd"
+        "cnpj_cliente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_origem",
+      "columns": [
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "idx_em_data_embarque",
+      "columns": [
+        "data_embarque"
       ],
       "unique": false
     },

@@ -217,10 +217,10 @@
     "deny": [],
     "defaultMode": "auto"
   },
-  "outputStyle": "precision-engineer",
-  "spinnerTipsEnabled": true,
-  "prefersReducedMotion": false,
   "enabledPlugins": {
     "github@claude-plugins-official": false
-  }
+  },
+  "outputStyle": "precision-engineer",
+  "spinnerTipsEnabled": true,
+  "prefersReducedMotion": false
 }

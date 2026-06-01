@@ -111,16 +111,9 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_extrato_linhas_origem",
+      "name": "ix_carvia_extrato_linhas_data",
       "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_extrato_linhas_status_conciliacao",
-      "columns": [
-        "status_conciliacao"
+        "data"
       ],
       "unique": false
     },
@@ -132,16 +125,23 @@
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_data",
+      "name": "ix_carvia_extrato_linhas_arquivo_ofx",
       "columns": [
-        "data"
+        "arquivo_ofx"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_extrato_linhas_arquivo_ofx",
+      "name": "ix_carvia_extrato_linhas_origem",
       "columns": [
-        "arquivo_ofx"
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_extrato_linhas_status_conciliacao",
+      "columns": [
+        "status_conciliacao"
       ],
       "unique": false
     }
