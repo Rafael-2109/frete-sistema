@@ -173,8 +173,8 @@ def test_judge_step_grava_veredito(app_ctx, monkeypatch):
     import app.agente.workers.step_judge as _sj
     original_judge_core = _sj._judge_core
 
-    def _judge_core_sem_odoo(step, odoo_ops):
-        return original_judge_core(step, [])
+    def _judge_core_sem_odoo(step, odoo_ops, *args, **kwargs):
+        return original_judge_core(step, [], *args, **kwargs)
 
     monkeypatch.setattr(step_judge, '_judge_core', _judge_core_sem_odoo)
 
@@ -238,8 +238,8 @@ def test_judge_step_commita_veredito(app_ctx, monkeypatch):
     import app.agente.workers.step_judge as _sj
     original_judge_core = _sj._judge_core
 
-    def _judge_core_sem_odoo(step, odoo_ops):
-        return original_judge_core(step, [])
+    def _judge_core_sem_odoo(step, odoo_ops, *args, **kwargs):
+        return original_judge_core(step, [], *args, **kwargs)
 
     monkeypatch.setattr(step_judge, '_judge_core', _judge_core_sem_odoo)
 
@@ -291,8 +291,8 @@ def test_judge_step_dominancia_ambiental(app_ctx, monkeypatch):
     import app.agente.workers.step_judge as _sj
     original_judge_core = _sj._judge_core
 
-    def _judge_core_com_falha(step, odoo_ops):
-        return original_judge_core(step, [_fake_odoo_falha()])
+    def _judge_core_com_falha(step, odoo_ops, *args, **kwargs):
+        return original_judge_core(step, [_fake_odoo_falha()], *args, **kwargs)
 
     monkeypatch.setattr(step_judge, '_judge_core', _judge_core_com_falha)
 
@@ -369,8 +369,8 @@ def test_judge_step_haiku_json_invalido_nao_grava(app_ctx, monkeypatch):
     import app.agente.workers.step_judge as _sj
     original_judge_core = _sj._judge_core
 
-    def _judge_core_sem_odoo(step, odoo_ops):
-        return original_judge_core(step, [])
+    def _judge_core_sem_odoo(step, odoo_ops, *args, **kwargs):
+        return original_judge_core(step, [], *args, **kwargs)
 
     monkeypatch.setattr(step_judge, '_judge_core', _judge_core_sem_odoo)
 
@@ -597,3 +597,100 @@ def test_enqueue_job_id_sem_dois_pontos_rq_safe(app_ctx):
         assert job_id == f"judge-step-{uid.replace(':', '-')}"
     finally:
         _cleanup_step(uid)
+
+
+# ─── FIX viés do judge (2026-06-01): judge cego ao conteúdo ───────────────────
+# O judge avaliava só por tools_used + auditoria Odoo, sem ver a PERGUNTA do
+# usuário nem a RESPOSTA do agente → penalizava turno informativo sem tool como
+# 'failure'. Estes testes provam que o conteúdo agora chega ao judge e que a
+# dominância ambiental R9 (FALHA_ODOO → score<=35) continua intacta.
+
+def test_build_judge_prompt_inclui_pergunta_e_resposta():
+    """_build_judge_prompt inclui a PERGUNTA do usuário e a RESPOSTA do agente
+    quando fornecidas (sem isso o judge avalia cego ao conteúdo)."""
+    from app.agente.workers.step_judge import _build_judge_prompt
+
+    class _FakeStep:
+        tools_used = []
+        outcome_signal = None
+        session_id = 'sess-fake-qr1'
+
+    prompt = _build_judge_prompt(
+        _FakeStep(), [],
+        meta="Qual o lead time para Manaus?",
+        response="O lead time para Manaus e de 7 dias uteis.",
+    )
+    assert "Qual o lead time para Manaus?" in prompt
+    assert "lead time para Manaus e de 7 dias" in prompt
+
+
+def test_judge_core_passa_pergunta_e_resposta_ao_haiku(app_ctx, monkeypatch):
+    """_judge_core repassa pergunta + resposta ao prompt enviado ao Haiku."""
+    from app.agente.workers import step_judge
+
+    captured = {}
+
+    def _fake_call(prompt):
+        captured['prompt'] = prompt
+        return json.dumps({
+            'score': 80, 'label': 'success',
+            'componente_culpado': None, 'evidencia': 'respondeu a pergunta',
+        }).replace(': None', ': null')
+
+    monkeypatch.setattr(step_judge, '_call_haiku_judge', _fake_call)
+
+    class _FakeStep:
+        tools_used = []
+        outcome_signal = None
+        session_id = 'sess-fake-qr2'
+
+    step_judge._judge_core(
+        _FakeStep(), [],
+        meta="Pergunta informativa X?",
+        response="Resposta correta Y, sem precisar de ferramenta.",
+    )
+    assert "Pergunta informativa X?" in captured['prompt']
+    assert "Resposta correta Y" in captured['prompt']
+
+
+def test_system_prompt_orienta_resposta_informativa_sem_tool():
+    """A rubrica deve instruir que ausência de ferramenta NÃO é falha automática
+    e que se avalia a resposta contra a pergunta/objetivo do usuário."""
+    from app.agente.workers.step_judge import JUDGE_SYSTEM_PROMPT
+
+    low = JUDGE_SYSTEM_PROMPT.lower()
+    assert ('sem ferramenta' in low or 'sem tool' in low
+            or 'ausencia de ferramenta' in low or 'ausência de ferramenta' in low), \
+        "rubrica deve dizer que turno sem ferramenta pode ser sucesso"
+    assert ('pergunta' in low or 'objetivo do usuario' in low
+            or 'objetivo do usuário' in low), \
+        "rubrica deve avaliar a resposta contra a pergunta/objetivo"
+
+
+def test_judge_core_falha_odoo_domina_mesmo_com_resposta_boa(app_ctx, monkeypatch):
+    """R9 PRESERVADO: mesmo com pergunta+resposta boas no prompt, FALHA_ODOO
+    força score<=35 + componente='odoo' + label='failure'."""
+    from app.agente.workers import step_judge
+
+    monkeypatch.setattr(
+        step_judge, '_call_haiku_judge',
+        lambda *a, **k: json.dumps({
+            'score': 95, 'label': 'success',
+            'componente_culpado': None, 'evidencia': 'resposta confiante',
+        }).replace(': None', ': null'),
+    )
+
+    class _FakeStep:
+        tools_used = ['operando-picking-odoo']
+        outcome_signal = None
+        session_id = 'sess-fake-r9-content'
+
+    veredito = step_judge._judge_core(
+        _FakeStep(), [_fake_odoo_falha()],
+        meta="valida o picking X no odoo",
+        response="Pronto, validei o picking X com sucesso!",
+    )
+    assert veredito is not None
+    assert veredito['score'] <= 35
+    assert veredito['componente_culpado'] == 'odoo'
+    assert veredito['label'] == 'failure'

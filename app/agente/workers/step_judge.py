@@ -39,12 +39,23 @@ HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 JUDGE_QUEUE_NAME = 'agent_judge'
 
 JUDGE_SYSTEM_PROMPT = """Voce avalia a QUALIDADE de UM passo (turno) de um agente \
-logistico — se ele atingiu o objetivo do usuario.
+logistico: se a RESPOSTA do agente atingiu o OBJETIVO da PERGUNTA do usuario.
 
-REGRA DOMINANTE (Process Reward Model): o SINAL AMBIENTAL (operacoes reais no ERP \
-Odoo) DOMINA o texto. Se houve FALHA_ODOO no passo, o score e' baixo (<40) \
-independente de quao confiante a resposta soe. Se as operacoes Odoo foram \
-EXECUTADO com sucesso e coerentes com o pedido, isso eleva o score.
+Como avaliar:
+- Julgue a RESPOSTA contra a PERGUNTA. Sucesso = respondeu de forma correta/util e \
+atendeu ao que foi pedido. Failure = nao atendeu, errou, ou ignorou o pedido.
+- Um turno SEM ferramenta NAO e' falha automatica: muitas perguntas se respondem \
+com conhecimento/contexto, sem acao executiva. So' penalize a ausencia de ferramenta \
+quando a tarefa EXIGIA uma acao/consulta de dados que o agente deixou de fazer.
+- Ferramentas e operacoes sao MEIO, nao fim: o que conta e' o objetivo do usuario.
+
+REGRA DOMINANTE (Process Reward Model, nao-gameavel): o SINAL AMBIENTAL (operacoes \
+reais no ERP Odoo) DOMINA o texto. Se houve FALHA_ODOO no passo, o score e' baixo \
+(<40) e componente_culpado='odoo', por mais confiante que a resposta soe. Operacoes \
+Odoo EXECUTADO com sucesso e coerentes com o pedido elevam o score.
+
+componente_culpado: a causa quando NAO e' sucesso \
+("tool"|"skill"|"reasoning"|"odoo"); null quando sucesso.
 
 Retorne EXCLUSIVAMENTE JSON valido:
 {"score": int 0-100, "label": "success"|"partial"|"failure",
@@ -86,15 +97,23 @@ def _parse_judge_json(raw: str) -> Optional[dict]:
         return None
 
 
-def _build_judge_prompt(step, odoo_ops: list) -> str:
+def _build_judge_prompt(step, odoo_ops: list, meta: Optional[str] = None,
+                        response: Optional[str] = None) -> str:
     """Monta o prompt do usuário para o Haiku judge.
 
     Inclui:
+    - PERGUNTA do usuário (meta) e RESPOSTA do agente (response) do turno —
+      SEM isto o judge avalia cego ao conteúdo e penaliza respostas
+      informativas corretas que não usaram ferramenta.
     - tools_used do step
     - resumo das operacoes Odoo (quantas EXECUTADO, quantas FALHA_ODOO, modelos/metodos)
     - mensagem explicita quando sem auditoria ambiental disponivel
     """
     tools_section = ', '.join(step.tools_used or []) or '(nenhuma)'
+
+    # Conteúdo do turno (truncado p/ orçamento de tokens do Haiku).
+    pergunta_section = (meta or '').strip()[:1500] if meta else '(pergunta do usuario nao disponivel)'
+    resposta_section = (response or '').strip()[:3000] if response else '(resposta do agente nao disponivel)'
 
     if not odoo_ops:
         odoo_section = (
@@ -117,25 +136,34 @@ def _build_judge_prompt(step, odoo_ops: list) -> str:
         )
 
     return (
+        f"## PERGUNTA do usuario:\n{pergunta_section}\n\n"
+        f"## RESPOSTA do agente:\n{resposta_section}\n\n"
         f"## Tools usadas no passo:\n{tools_section}\n\n"
         f"## {odoo_section}\n\n"
-        f"Avalie a qualidade deste passo do agente logistico. "
+        f"Avalie se a RESPOSTA atingiu o objetivo da PERGUNTA (a ausencia de "
+        f"ferramenta nao e' falha se a pergunta foi respondida). "
         f"Retorne JSON com score (0-100), label, componente_culpado e evidencia."
     )
 
 
-def _judge_core(step, odoo_ops: list) -> Optional[dict]:
-    """Nucleo testavel do judge: recebe step + odoo_ops, retorna veredito dict ou None.
+def _judge_core(step, odoo_ops: list, meta: Optional[str] = None,
+                response: Optional[str] = None) -> Optional[dict]:
+    """Nucleo testavel do judge: recebe step + odoo_ops (+ pergunta/resposta do
+    turno), retorna veredito dict ou None.
 
     Separado do boilerplate app_context para facilitar testes unitarios
     sem necessidade de mockar create_app ou sessao de banco.
+
+    meta/response: PERGUNTA do usuario e RESPOSTA do agente — alimentam o judge
+    com o conteudo do turno (sem isto ele avalia cego e penaliza respostas
+    informativas corretas sem ferramenta). Opcionais (degrada se ausentes).
 
     Aplica a heuristica ambiental ANTES de retornar:
         Se QUALQUER op tem status == 'FALHA_ODOO':
             score = min(score_haiku, 35)
             componente_culpado = 'odoo'
     """
-    prompt = _build_judge_prompt(step, odoo_ops)
+    prompt = _build_judge_prompt(step, odoo_ops, meta=meta, response=response)
 
     try:
         raw = _call_haiku_judge(prompt)
@@ -221,7 +249,27 @@ def _judge_step_in_context(step_uid: str) -> None:
     except Exception as e:
         logger.debug(f"[step_judge] nao foi possivel carregar odoo_ops: {e}")
 
-    veredito = _judge_core(step, odoo_ops)
+    # Conteudo do turno (PERGUNTA + RESPOSTA) — best-effort. Reusa os extractors
+    # de turno ja existentes (mesma correlacao turn_seq do step_uid). Sem isto o
+    # judge avalia cego e pune respostas informativas corretas sem ferramenta.
+    meta = None
+    response = None
+    try:
+        from app.agente.models import AgentSession
+        from app.agente.workers.triage_shadow import _extract_user_message_text
+        from app.agente.workers.plan_verifier import _extract_assistant_response_text
+
+        session = AgentSession.query.filter_by(session_id=step.session_id).first()
+        try:
+            turn_seq = int(step_uid.rsplit(':', 1)[-1])
+        except (ValueError, IndexError):
+            turn_seq = None
+        meta = _extract_user_message_text(session, turn_seq)
+        response = _extract_assistant_response_text(session, turn_seq)
+    except Exception as e:
+        logger.debug(f"[step_judge] conteudo do turno nao carregado (best-effort): {e}")
+
+    veredito = _judge_core(step, odoo_ops, meta=meta, response=response)
     if veredito is None:
         logger.warning(f"[step_judge] veredito None para step_uid={step_uid}, abortando persistencia")
         return
