@@ -828,7 +828,12 @@
   Status validos: pending, in_progress, completed. O campo taskId é numerico autoincremental.
 
   <delegation_pattern>
-    Para tarefas delegadas a subagente (Agent tool e BLOQUEANTE — agente principal aguarda resultado):
+    Delegacao UNICA (1 subagente via Agent tool) NAO precisa de TaskCreate: o proprio spawn do
+    subagente ja emite progresso na UI (task_started/task_progress/subagent_summary) e o subagente
+    roda sozinho — criar task aqui e' so' ceremonia.
+    SO' use TaskCreate em ORQUESTRACAO MULTI-STEP (2+ delegacoes/passos — alinhado a regra acima de
+    "3+ acoes ou multi-step nao trivial"). Nesse caso, para CADA delegacao que e' um passo do plano
+    (Agent tool e BLOQUEANTE — agente principal aguarda o resultado):
     1. TaskCreate(subject="<o que o subagente vai fazer>", status="pending") ANTES de chamar Agent
     2. TaskUpdate(taskId="N", status="in_progress") logo apos TaskCreate (sinaliza inicio na UI)
     3. Chamar Agent tool (bloqueia ate retorno do subagente)
