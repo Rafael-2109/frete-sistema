@@ -21,7 +21,7 @@ def listar_opcoes(operacao_id):
     """Listar transportadoras disponiveis para o destino da operacao"""
     from app import db
     from app.carvia.models import CarviaOperacao
-    from app.carvia.services.cotacao_service import CotacaoService
+    from app.carvia.services.pricing.cotacao_service import CotacaoService
 
     op = db.session.get(CarviaOperacao, operacao_id)
     if not op:
@@ -49,7 +49,7 @@ def cotar_transportadora(operacao_id, transportadora_nome):
     """Cotar frete para uma transportadora especifica"""
     from app import db
     from app.carvia.models import CarviaOperacao
-    from app.carvia.services.cotacao_service import CotacaoService
+    from app.carvia.services.pricing.cotacao_service import CotacaoService
     from app.transportadoras.models import Transportadora
 
     op = db.session.get(CarviaOperacao, operacao_id)
@@ -105,7 +105,7 @@ def cotar_todas(operacao_id):
     """Cotar TODAS as transportadoras disponiveis e rankear"""
     from app import db
     from app.carvia.models import CarviaOperacao
-    from app.carvia.services.cotacao_service import CotacaoService
+    from app.carvia.services.pricing.cotacao_service import CotacaoService
 
     op = db.session.get(CarviaOperacao, operacao_id)
     if not op:
