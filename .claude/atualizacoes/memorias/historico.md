@@ -7,6 +7,8 @@
 
 ## Atualizacoes
 
+- [2026-06-01-1](atualizacao-2026-06-01-1.md) — Decima auditoria. Sistema estruturalmente saudavel (113 topic files, frontmatter 113/113 OK com `type` flat OU sob `metadata:`, 0 links quebrados, 0 orfaos). MEMORY.md estourava o limite (156 linhas / 31.6KB) por entradas de 300-589 chars violando "max 2 linhas". Acao: indice reescrito condensando cada entrada a 1 linha, **preservando os 113 ponteiros** (ZERO remocoes). 1 link quebrado corrigido (gotchas_industrializacao_fb_lf_v24_cirurgia — prefixo `memory/` + movido de Historico p/ Modulos&Skills). Resultado: MEMORY.md **148 linhas / 19.7KB**, folga restaurada. Nenhuma memoria removida (inventario/skills Odoo ainda ativos). Candidata futura: picking_317346_pendente (nao verificavel sem Odoo live).
+
 - [2026-05-25-1](atualizacao-2026-05-25-1.md) — Nona auditoria. Bug estrutural NOVO: 6 arquivos criados em `memory/memory/` (subdir aninhado, possivel bug do skill `remember`) movidos para top-level e subdir removido. 3 correcoes factuais (drift recorrente): skills 40->47 (+6 orquestrador Odoo + 1 HORA); SDK 0.2.82->0.2.87. 86 memorias (cresceu +37 em 7 dias — sessoes intensas SPED ECD V31-V36 + Skills 2/4/5/6/10 + caso real 71 cods). MEMORY.md 128 linhas (85% do budget — alerta). Frontmatter OK em 86/86.
 
 - [2026-05-18-1](atualizacao-2026-05-18-1.md) — Oitava auditoria. Sistema saudavel estruturalmente. 3 correcoes factuais (drift): skills 35->40 invocaveis (+5 SPED ECD + baseline conciliacao); SDK 0.1.80->0.2.82 (migracao minor); 1 orfao detectado e registrado (`feedback_rastrear_acesso_ui_completo.md` existia desde 2026-05-12). 49 memorias (cresceu +17), MEMORY.md 90 linhas. Frontmatter OK em 49/49.
