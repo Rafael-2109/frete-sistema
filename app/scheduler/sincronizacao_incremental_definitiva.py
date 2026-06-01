@@ -137,6 +137,15 @@ TRIAGE_ENQUEUER_ENABLED = os.environ.get("AGENT_PLANNER", "false").lower() == "t
 TRIAGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("TRIAGE_ENQUEUER_LOOKBACK_HOURS", "6"))
 TRIAGE_ENQUEUER_LIMIT = int(os.environ.get("TRIAGE_ENQUEUER_LIMIT", "50"))
 
+# Directive Promotion (32º módulo) — Onda 3 / A4, flag-OFF por default
+# Roda POR CICLO (cada tick), INLINE (sem RQ) — leve: DB sweep + scoring, zero LLM.
+# DEFAULT false (flag AGENT_DIRECTIVE_PROMOTION): modulo e' no-op. Ativar em deploy.
+from app.agente.config.feature_flags import (
+    AGENT_DIRECTIVE_PROMOTION as DIRECTIVE_PROMOTION_ENABLED,
+    AGENT_DIRECTIVE_LOOKBACK_HOURS as DIRECTIVE_LOOKBACK_HOURS,
+    AGENT_DIRECTIVE_BATCH_LIMIT as DIRECTIVE_BATCH_LIMIT,
+)
+
 # 🔴 IMPORTANTE: Services como variáveis globais (instanciados FORA do contexto)
 faturamento_service = None
 carteira_service = None
@@ -2187,6 +2196,37 @@ def executar_sincronizacao():
                     pass
 
         logger.info(f"   [TIMER] Step 31 (Triage Enqueuer): {time.time() - _t_step:.1f}s")
+
+        # ── 3️⃣2️⃣ DIRECTIVE PROMOTION — A4-batch (32º módulo, shadow/persist) ──
+        # Onda 3 / A4. Flag AGENT_DIRECTIVE_PROMOTION default OFF → no-op.
+        # Quando ON: varre AgentSessions recentes c/ plano 100% concluído → propõe
+        # candidata → R9 anti-gaming DOMINA → gate vs floor → persiste directive_status='shadow'
+        # (NUNCA injetada até ativação manual). Roda TODO ciclo (cap por limit).
+        # Best-effort: nunca falha o cron. NÃO entra em modulos_sync.
+        _t_step = time.time()
+
+        if DIRECTIVE_PROMOTION_ENABLED:
+            try:
+                from app.agente.services.directive_promotion_service import run_directive_promotion_batch
+
+                _dp_result = run_directive_promotion_batch(
+                    lookback_hours=DIRECTIVE_LOOKBACK_HOURS,
+                    limit=DIRECTIVE_BATCH_LIMIT,
+                )
+                logger.info(
+                    f"[DIRECTIVE_PROMOTION] candidatos={_dp_result.get('candidatos', 0)} "
+                    f"promovidos={_dp_result.get('promovidos', 0)} "
+                    f"abstencoes={_dp_result.get('abstencoes', 0)} "
+                    f"rejeitados={_dp_result.get('rejeitados', 0)}"
+                )
+            except Exception as e:
+                logger.error(f"[DIRECTIVE_PROMOTION] Erro no modulo 32: {e}")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
+        logger.info(f"   [TIMER] Step 32 (Directive Promotion): {time.time() - _t_step:.1f}s")
 
         # Limpar conexões ao final
         try:

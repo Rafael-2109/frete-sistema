@@ -915,20 +915,32 @@ USE_AGENT_SKILL_RAG = os.getenv("AGENT_SKILL_RAG", "false").lower() == "true"
 USE_AGENT_WORLD_MODEL_INJECT = os.getenv("AGENT_WORLD_MODEL_INJECT", "false").lower() == "true"
 
 # ====================================================================
-# Onda 3 — A4: Promoção Automática de Diretriz (shadow, flag-OFF)
+# Onda 3 — A4: Promoção Automática de Diretriz (V1 offline, flag-OFF)
 # ====================================================================
-# Fecha o flywheel: sessão bem-sucedida → candidata → avalia (gate A3
-# + anti-gaming R9) → (shadow) só LOGA "promoveria", NÃO escreve.
+# Fecha o flywheel "Distill→Deploy". A4-batch CONSTRUÍDA (2026-06-01):
+# coluna directive_status (migration 2026_06_01), _persist_directive REAL
+# (escreve directive_status='shadow'), e o caller = run_directive_promotion_batch
+# (D8 módulo 32 em sincronizacao_incremental_definitiva.py).
 #
-# BLOQUEADO para função REAL até:
-#   1. USE_AGENT_PLANNER ON em PROD (base PlanState)
-#   2. Baseline A3 estável (14d de coleta)
-#   3. Coluna directive_status em agent_memories + audit hook Odoo PROD
+# Quando ON: módulo 32 varre PlanStates concluídos → candidata → anti-gaming R9
+# DOMINA (_tem_falha_odoo, conservador) → gate A3 vs floor → PERSISTE como
+# directive_status='shadow'. Diretriz 'shadow' NUNCA é injetada (o builder
+# _build_operational_directives injeta só NULL/'ativa'; e ele é gated por
+# AGENT_OPERATIONAL_DIRECTIVES, OFF). Dupla segurança.
 #
-# Quando ON (futuro): evaluate_and_promote() fará escrita real via
-# _persist_directive() (hoje = NotImplementedError stub documentado).
+# ATIVAÇÃO (gate humano, fora do V1):
+#   shadow→ativa = revisão manual das candidatas + flip de AGENT_OPERATIONAL_DIRECTIVES.
+# Pré-reqs para ON ter efeito útil: USE_AGENT_PLANNER gerando PlanState em PROD +
+# judge signal (AGENT_STEP_JUDGE) acumulando (senão o batch ABSTÉM, no-op seguro).
+# ⚠️ PRÉ-REQ DE DEPLOY: a coluna directive_status DEVE existir antes de ligar
+# AGENT_OPERATIONAL_DIRECTIVES (senão UndefinedColumn no builder desliga TODAS as
+# diretrizes silenciosamente). Rodar a migration / wirar no build.sh ao mergear na main.
 #
-# Default false. Ativar: AGENT_DIRECTIVE_PROMOTION=true.
-# Rollback instantâneo: AGENT_DIRECTIVE_PROMOTION=false.
-# Sem caller ativo: flag ON não ativa nada até wiring no Stop hook/D8.
+# Default false. Ativar: AGENT_DIRECTIVE_PROMOTION=true. Rollback: =false.
 AGENT_DIRECTIVE_PROMOTION = os.getenv("AGENT_DIRECTIVE_PROMOTION", "false").lower() == "true"
+
+# A4-batch: parâmetros do varredor (módulo D8 32). Só atuam com AGENT_DIRECTIVE_PROMOTION=ON.
+AGENT_DIRECTIVE_LOOKBACK_HOURS = int(os.getenv("AGENT_DIRECTIVE_LOOKBACK_HOURS", "24"))
+AGENT_DIRECTIVE_BATCH_LIMIT = int(os.getenv("AGENT_DIRECTIVE_BATCH_LIMIT", "50"))
+# floor de qualidade da sessão de origem (baseline do gate; não há golden do agente principal).
+AGENT_DIRECTIVE_MIN_QUALITY = float(os.getenv("AGENT_DIRECTIVE_MIN_QUALITY", "0.7"))

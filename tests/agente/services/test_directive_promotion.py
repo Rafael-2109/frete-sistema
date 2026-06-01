@@ -5,12 +5,39 @@ Valida o mecanismo shadow (flag-OFF) de promoção automática de diretriz:
 - propose_directive_from_plan: extrai candidata de plano concluído
 - evaluate_and_promote: anti-gaming + gate + shadow (só loga, não escreve)
 - _tem_falha_odoo: anti-reward-hacking conservador (erro → bloqueia)
+- _persist_directive: persistência real como AgentMemory(directive_status='shadow')
 
-SHADOW puro: nenhum teste valida escrita em banco (AgentMemory não deve ser
-criado/alterado em nenhum cenário — stub documentado apenas).
+SHADOW puro: evaluate_and_promote NÃO chama _persist_directive (flag-OFF).
+_persist_directive diretamente: persiste com directive_status='shadow' (idempotente).
 """
 import pytest
+import uuid
 from unittest.mock import MagicMock, patch
+
+from app import create_app, db as _db
+
+
+# ---------------------------------------------------------------------------
+# Fixtures de banco para TestPersistDirectiveReal
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope='module')
+def app_ctx_persist():
+    """Flask app context para testes de DB (escopo de módulo)."""
+    _app = create_app()
+    _app.config.update({
+        'TESTING': True,
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+    })
+    with _app.app_context():
+        yield _app
+
+
+@pytest.fixture
+def rollback_persist():
+    """Garante rollback da sessão no teardown (mesmo se o teste levantar)."""
+    yield
+    _db.session.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -345,26 +372,118 @@ class TestShadowFlag:
         from app.agente.config.feature_flags import AGENT_DIRECTIVE_PROMOTION
         assert AGENT_DIRECTIVE_PROMOTION is False
 
-    def test_persist_directive_e_stub_documentado(self):
-        """
-        _persist_directive é stub documentado — deve levantar NotImplementedError
-        ou retornar None sem efeitos colaterais (sem DB write).
-        """
-        from app.agente.services.directive_promotion_service import _persist_directive
+    def test_evaluate_shadow_nao_persiste(self):
+        """Shadow: evaluate_and_promote LOGA would_promote mas NÃO chama _persist_directive."""
+        from app.agente.services import directive_promotion_service as svc
 
-        candidata = {
-            'titulo': 'Test',
-            'when': 'Test',
-            'prescricao': 'Test',
-            'source_session_id': 'test',
+        cand = {'titulo': 'X', 'when': 'w', 'prescricao': 'p', 'source_session_id': 's', 'status': 'candidata'}
+        with patch.object(svc, '_tem_falha_odoo', return_value=False), \
+             patch.object(svc, '_persist_directive') as mock_persist:
+            r = svc.evaluate_and_promote(cand, baseline_score=0.7, candidate_score=0.8)
+        assert r['decision'] == 'would_promote'
+        mock_persist.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestPersistDirectiveReal
+# ---------------------------------------------------------------------------
+
+class TestPersistDirectiveReal:
+
+    def test_persiste_como_shadow_com_path_e_conteudo_selecionavel(self, app_ctx_persist, rollback_persist):
+        """_persist_directive cria AgentMemory(directive_status='shadow') selecionável pelo builder."""
+        from app.agente.services.directive_promotion_service import _persist_directive
+        from app.agente.models import AgentMemory
+        from app.agente.sdk.memory_injection import _is_nivel_5
+        import re
+
+        cand = {
+            'titulo': f'Fluxo: consultar saldo [2 passos] {uuid.uuid4().hex[:6]}',
+            'when': 'Quando o agente executa: consultar saldo; validar lote',
+            'prescricao': 'Sequência: consultar saldo → validar lote',
+            'source_session_id': 'sess-1',
             'status': 'candidata',
         }
+        mem_id = _persist_directive(cand)
+        mem = AgentMemory.query.get(mem_id)
+        assert mem is not None
+        assert mem.user_id == 0
+        assert mem.escopo == 'empresa'
+        assert mem.directive_status == 'shadow'
+        assert mem.path.startswith('/memories/empresa/heuristicas/')
+        assert mem.importance_score >= 0.7
+        # selecionável + renderável pelo builder:
+        assert _is_nivel_5((mem.content or '').lower())
+        assert re.search(r'<prescricao>(.+?)</prescricao>', mem.content, re.DOTALL)
 
-        # Stub deve ser inócuo (não escreve no banco)
-        # Pode levantar NotImplementedError ou retornar None — ambos são válidos
-        try:
-            result = _persist_directive(candidata)
-            # Se retornar, deve ser None (sem-op documentado)
-            assert result is None
-        except NotImplementedError:
-            pass  # Também válido — stub explícito
+    def test_idempotente_nao_duplica(self, app_ctx_persist, rollback_persist):
+        """Segunda chamada com mesmo título retorna mesmo id, sem duplicar."""
+        from app.agente.services.directive_promotion_service import _persist_directive
+        from app.agente.models import AgentMemory
+
+        t = f'Fluxo idem {uuid.uuid4().hex[:6]}'
+        cand = {'titulo': t, 'when': 'w', 'prescricao': 'faça y',
+                'source_session_id': 's2', 'status': 'candidata'}
+        id1 = _persist_directive(cand)
+        id2 = _persist_directive(cand)  # mesmo título → mesmo path → no dup
+        assert id1 == id2
+        path = AgentMemory.query.get(id1).path
+        assert AgentMemory.query.filter_by(user_id=0, path=path).count() == 1
+
+
+# ---------------------------------------------------------------------------
+# TestRunBatch
+# ---------------------------------------------------------------------------
+
+class TestRunBatch:
+    def _sess(self, sid, plan):
+        from unittest.mock import MagicMock
+        s = MagicMock()
+        s.session_id = sid
+        s.data = {'plan': plan}
+        return s
+
+    def test_flag_off_no_op(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', False):
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r == {'candidatos': 0, 'promovidos': 0, 'abstencoes': 0, 'rejeitados': 0}
+
+    def test_abstem_sem_judge_score(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_quality_score_da_sessao', return_value=None), \
+             patch.object(svc, '_persist_directive') as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r['abstencoes'] == 1 and r['promovidos'] == 0
+        mock_persist.assert_not_called()
+
+    def test_promove_quando_qualidade_e_sem_falha_odoo(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        plan = {'steps': {'1': {'subject': 'consultar', 'status': 'completed'}}}
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_quality_score_da_sessao', return_value=0.85), \
+             patch.object(svc, '_tem_falha_odoo', return_value=False), \
+             patch.object(svc, '_persist_directive', return_value=123) as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r['promovidos'] == 1
+        mock_persist.assert_called_once()
+
+    def test_rejeita_falha_odoo_dominante(self):
+        from app.agente.services import directive_promotion_service as svc
+        from unittest.mock import patch
+        plan = {'steps': {'1': {'subject': 'x', 'status': 'completed'}}}
+        with patch.object(svc, 'AGENT_DIRECTIVE_PROMOTION', True), \
+             patch.object(svc, '_buscar_sessoes_com_plano_concluido', return_value=[self._sess('s1', plan)]), \
+             patch.object(svc, '_quality_score_da_sessao', return_value=0.99), \
+             patch.object(svc, '_tem_falha_odoo', return_value=True), \
+             patch.object(svc, '_persist_directive') as mock_persist:
+            r = svc.run_directive_promotion_batch(lookback_hours=24, limit=50)
+        assert r['rejeitados'] == 1 and r['promovidos'] == 0
+        mock_persist.assert_not_called()

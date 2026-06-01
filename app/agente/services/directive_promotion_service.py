@@ -1,25 +1,22 @@
 """
 A4 (Onda 3) — Promoção Automática de Diretriz. Fecha o flywheel.
 
-SHADOW puro + flag-OFF:
-    Só LOGA, NÃO escreve no banco. Flag AGENT_DIRECTIVE_PROMOTION OFF por default.
-    Sem caller ativo (nenhum hook/D8 invoca este módulo ainda).
+V1 offline + flag-OFF:
+    _persist_directive() é REAL: escreve directive_status='shadow' (persistida,
+    NUNCA injetada — o builder injeta só NULL/'ativa'; e está gated por
+    AGENT_OPERATIONAL_DIRECTIVES OFF). Dupla segurança.
+    Caller = run_directive_promotion_batch (D8 módulo 32), gated por
+    AGENT_DIRECTIVE_PROMOTION (OFF default). Flag ON → o batch persiste shadow.
 
 Flywheel:
     sinais (E1/E2 em agent_step.outcome_signal)
     → eval gate (A3, eval_gate_service.py, Onda 3)
-    → A4: PROMOVE diretriz operacional que funcionou
+    → A4 batch (módulo 32): PROMOVE (shadow) diretriz operacional que funcionou
 
 "Diretriz" = heurística empresa em AgentMemory (user_id=0,
 path /memories/empresa/heuristicas/, lida por
 memory_injection._build_operational_directives quando
 importance_score>=0.7 + nivel>=5).
-
-BLOQUEADO para escrita REAL até:
-1. USE_AGENT_PLANNER ON em PROD (base PlanState)
-2. Baseline A3 estável (14d de coleta)
-3. Coluna directive_status em agent_memories (migration pendente)
-   + audit hook Odoo PROD ativo
 
 Anti-gaming (R9 / step_judge._judge_core):
     Se a sessão de origem teve FALHA_ODOO, o sinal ambiental DOMINA.
@@ -32,7 +29,10 @@ Ref: app/agente/sdk/plan_state.py (PlanState — plano que funcionou)
 Ref: app/agente/sdk/memory_injection.py:420 (_build_operational_directives)
 """
 import logging
+import re as _re
 from typing import Optional
+
+from app.agente.config.feature_flags import AGENT_DIRECTIVE_PROMOTION, AGENT_DIRECTIVE_MIN_QUALITY
 
 logger = logging.getLogger('sistema_fretes')
 
@@ -212,39 +212,99 @@ def _tem_falha_odoo(session_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# _persist_directive — STUB DOCUMENTADO (não implementado)
+# _slug_titulo + _formatar_xml_diretriz + _persist_directive
 # ---------------------------------------------------------------------------
 
-def _persist_directive(candidata: dict) -> None:
+def _slug_titulo(titulo: str) -> str:
+    """Deriva slug URL-safe a partir do título da candidata (max 80 chars)."""
+    base = (titulo or 'diretriz').lower().strip()
+    base = _re.sub(r'[^a-z0-9]+', '-', base).strip('-')
+    return (base or 'diretriz')[:80]
+
+
+def _formatar_xml_diretriz(candidata: dict) -> str:
     """
-    STUB DOCUMENTADO — Persiste diretriz em AgentMemory.
+    Formata a candidata como XML heurística empresa (formato canônico A4).
 
-    NÃO implementado intencionalmente. Precisa de:
-    1. Coluna directive_status em agent_memories (migration pendente)
-    2. USE_AGENT_PLANNER ON em PROD (base PlanState consolidada)
-    3. Baseline A3 estável (14d de coleta para comparação de scores)
-    4. Revisão manual das primeiras candidatas antes de ativar escrita
+    Usa _xml_escape de pattern_analyzer — mesmo helper de escape das heurísticas
+    orgânicas extraídas por extrair_conhecimento_sessao().
 
-    Quando implementado, seguirá o padrão de memory_injection.py:
-        AgentMemory(
-            user_id=0,  # empresa
-            path=f'/memories/empresa/heuristicas/{slug_titulo}.xml',
-            content=_formatar_xml(candidata),
-            importance_score=0.7,  # threshold de _build_operational_directives
-            nivel=5,               # nível de heurística operacional
-            directive_status='promoted',
-        )
+    Formato XML processado pelo builder via regex XML-first
+    (<titulo>/<when>/<prescricao>). Diverge do formato orgânico compacto
+    WHEN:/DO: do pattern_analyzer, mas é compatível com
+    _build_operational_directives (que aceita AMBOS: regex XML-first e
+    fallback WHEN:/DO:).
 
-    Por enquanto: NotImplementedError documentada.
-    O caller (evaluate_and_promote) usa flag AGENT_DIRECTIVE_PROMOTION
-    para decidir se chama este stub — quando OFF (default), nunca é chamado.
+    O content resultante:
+    - Passa _is_nivel_5() via '<nivel>5</nivel>'
+    - Tem <prescricao> não-vazia para ser renderável pelo builder
     """
-    raise NotImplementedError(
-        "_persist_directive: stub documentado. "
-        "Implementar quando: (1) coluna directive_status em agent_memories, "
-        "(2) USE_AGENT_PLANNER ON PROD, (3) baseline A3 14d. "
-        "Ver app/agente/services/directive_promotion_service.py docstring."
+    from .pattern_analyzer import _xml_escape  # mesmo helper das heurísticas orgânicas
+    titulo = _xml_escape(candidata.get('titulo', ''))
+    when = _xml_escape(candidata.get('when', ''))
+    presc = _xml_escape(candidata.get('prescricao', ''))
+    origem = _xml_escape(candidata.get('source_session_id', ''))
+    return (
+        '<heuristica>\n'
+        '  <nivel>5</nivel>\n'
+        f'  <titulo>{titulo}</titulo>\n'
+        f'  <when>{when}</when>\n'
+        f'  <prescricao>{presc}</prescricao>\n'
+        f'  <origem>promovida automaticamente da sessão {origem}</origem>\n'
+        '</heuristica>'
     )
+
+
+def _persist_directive(candidata: dict) -> int:
+    """
+    Persiste candidata a diretriz como AgentMemory(user_id=0, directive_status='shadow').
+
+    Idempotente por path (slug do título): segunda chamada com mesmo título
+    retorna o id existente sem criar duplicata.
+
+    O registro fica com directive_status='shadow' — NÃO injetado pelo builder
+    (_build_operational_directives exclui 'shadow', só injeta NULL ou 'ativa').
+    Promoção shadow→ativa requer revisão manual.
+
+    Só é chamado quando AGENT_DIRECTIVE_PROMOTION=ON (futuro caller batch/D8).
+    evaluate_and_promote() (flag OFF) NUNCA chama esta função.
+
+    Args:
+        candidata: dict com campos titulo, when, prescricao, source_session_id.
+
+    Returns:
+        int: id do AgentMemory criado ou já existente.
+    """
+    from app.agente.models import AgentMemory
+    from app import db
+
+    slug = _slug_titulo(candidata.get('titulo', ''))
+    path = f'/memories/empresa/heuristicas/{slug}.xml'
+
+    existente = AgentMemory.query.filter_by(user_id=0, path=path).first()
+    if existente is not None:
+        logger.info(
+            f"[directive_promotion] _persist: já existe path={path!r} "
+            f"id={existente.id} → no-op"
+        )
+        return existente.id
+
+    mem = AgentMemory(
+        user_id=0,
+        path=path,
+        content=_formatar_xml_diretriz(candidata),
+        is_directory=False,
+        importance_score=0.7,
+        escopo='empresa',
+        directive_status='shadow',
+        created_by=None,  # nullable — sem FK obrigatória; user_id=0 já estabelece autoria
+    )
+    db.session.add(mem)
+    db.session.flush()  # popula mem.id; commit fica com o caller (batch)
+    logger.info(
+        f"[directive_promotion] _persist: criada SHADOW id={mem.id} path={path!r}"
+    )
+    return mem.id
 
 
 # ---------------------------------------------------------------------------
@@ -265,9 +325,10 @@ def evaluate_and_promote(
            — regressão → rejected (candidata pior que baseline)
         3. SHADOW: se passou → would_promote, só LOGA (NÃO escreve no banco)
 
-    Persistência real (stub): _persist_directive() levanta NotImplementedError.
-    Sob AGENT_DIRECTIVE_PROMOTION ON (futuro), o ramo de escrita seria ativado.
-    Hoje: flag OFF → evaluate_and_promote não é chamado por nenhum caller ativo.
+    Persistência real: _persist_directive() escreve AgentMemory(directive_status='shadow').
+    Sob AGENT_DIRECTIVE_PROMOTION ON (futuro), seria chamado aqui.
+    Hoje: flag OFF → evaluate_and_promote não é chamado por nenhum caller ativo,
+    e mesmo quando chamado diretamente, o ramo shadow apenas loga (não chama _persist_directive).
 
     Args:
         candidate: dict com campos titulo, when, prescricao,
@@ -338,3 +399,100 @@ def evaluate_and_promote(
         'gate': gate_result,
         'source_session_id': session_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# _buscar_sessoes_com_plano_concluido + _quality_score_da_sessao
+# ---------------------------------------------------------------------------
+
+def _buscar_sessoes_com_plano_concluido(lookback_hours: int, limit: int) -> list:
+    """Sessões recentes (janela lookback) cujo data['plan'] existe. O filtro fino
+    (todos steps completed) fica em propose_directive_from_plan."""
+    from app.agente.models import AgentSession
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    corte = agora_utc_naive() - timedelta(hours=lookback_hours)
+    rows = AgentSession.query.filter(
+        AgentSession.updated_at >= corte,
+        AgentSession.data.isnot(None),
+    ).order_by(AgentSession.updated_at.desc()).limit(limit).all()
+    return [s for s in rows if isinstance(s.data, dict) and s.data.get('plan')]
+
+
+def _quality_score_da_sessao(session_id: str):
+    """Média dos judge scores dos agent_step da sessão (normalizada 0-1).
+    None se não houver judge signal (conservador → abstém)."""
+    from app.agente.models import AgentStep
+    steps = AgentStep.query.filter_by(session_id=session_id).all()
+    scores = []
+    for st in steps:
+        sig = st.outcome_signal or {}
+        judge = sig.get('judge') if isinstance(sig, dict) else None
+        if isinstance(judge, dict) and judge.get('score') is not None:
+            try:
+                scores.append(float(judge['score']))
+            except (TypeError, ValueError):
+                pass
+    if not scores:
+        return None
+    media = sum(scores) / len(scores)
+    return media / 100.0 if media > 1.0 else media
+
+
+# ---------------------------------------------------------------------------
+# run_directive_promotion_batch
+# ---------------------------------------------------------------------------
+
+def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> dict:
+    """Varredor A4-batch (D8 módulo 32). Flag-gated por AGENT_DIRECTIVE_PROMOTION.
+    Para cada sessão recente com plano 100% concluído: propose → quality_score
+    (abstém se None) → evaluate_and_promote (R9 anti-gaming DOMINA → gate vs floor)
+    → se would_promote: _persist_directive (shadow). Best-effort: nunca levanta."""
+    contadores = {'candidatos': 0, 'promovidos': 0, 'abstencoes': 0, 'rejeitados': 0}
+    if not AGENT_DIRECTIVE_PROMOTION:
+        return contadores
+    try:
+        sessoes = _buscar_sessoes_com_plano_concluido(lookback_hours, limit)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch: erro ao buscar sessões: {exc}")
+        return contadores
+    for s in sessoes:
+        try:
+            candidata = propose_directive_from_plan(s.data.get('plan'), s.session_id)
+            if candidata is None:
+                continue
+            contadores['candidatos'] += 1
+            score = _quality_score_da_sessao(s.session_id)
+            if score is None:
+                contadores['abstencoes'] += 1
+                logger.info(f"[directive_promotion] batch: abstém session={s.session_id!r} (sem judge)")
+                continue
+            resultado = evaluate_and_promote(
+                candidata, baseline_score=AGENT_DIRECTIVE_MIN_QUALITY, candidate_score=score,
+            )
+            if resultado.get('decision') == _DECISION_WOULD_PROMOTE:
+                _persist_directive(candidata)
+                contadores['promovidos'] += 1
+            else:
+                contadores['rejeitados'] += 1
+        except Exception as exc:
+            logger.error(f"[directive_promotion] batch: erro session={getattr(s, 'session_id', '?')!r}: {exc}")
+            # Limpa sessão potencialmente poisoned para não derrubar as próximas iterações.
+            # Trade-off: promoções não-commitadas deste batch são revertidas, mas são
+            # re-propostas no próximo ciclo D8 (idempotente por path). Aceitável (shadow).
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
+    try:
+        from app import db
+        db.session.commit()
+    except Exception:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+    logger.info(f"[directive_promotion] batch concluído: {contadores}")
+    return contadores
