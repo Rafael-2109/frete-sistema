@@ -77,7 +77,7 @@ def test_run_eval_batch_persiste_score_e_commita(app_ctx, monkeypatch):
     # run_evals mockado: score determinístico (zero API)
     monkeypatch.setattr(
         eval_runner, 'run_evals',
-        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
             'agent_name': agent_name, 'score': 0.80, 'total': 10, 'passed': 8, 'cases': [],
         },
     )
@@ -145,7 +145,7 @@ def test_run_eval_batch_baseline_antes_de_insert(app_ctx, monkeypatch):
     scores_seq = iter([0.40, 0.90])
     monkeypatch.setattr(
         eval_runner, 'run_evals',
-        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
             'agent_name': agent_name, 'score': next(scores_seq),
             'total': 10, 'passed': 0, 'cases': [],
         },
@@ -194,7 +194,7 @@ def test_run_eval_batch_best_effort_um_agente_explode(app_ctx, monkeypatch):
         lambda *a, **k: (lambda x: 'mock'),
     )
 
-    def _run_evals(agent_name, dataset_path, invoke_fn=None, judge_fn=None):
+    def _run_evals(agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None):
         if agent_name == agent_boom:
             raise RuntimeError('explosao simulada em run_evals')
         return {'agent_name': agent_name, 'score': 0.70, 'total': 5, 'passed': 3, 'cases': []}
@@ -248,7 +248,7 @@ def test_run_eval_batch_invokes_antes_de_qualquer_query_db(app_ctx, monkeypatch)
 
     ordem = []
 
-    def _run_evals(agent_name, dataset_path, invoke_fn=None, judge_fn=None):
+    def _run_evals(agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None):
         ordem.append(f'run_evals:{agent_name}')
         return {'agent_name': agent_name, 'score': 0.55, 'total': 4, 'passed': 2, 'cases': []}
 
@@ -308,7 +308,7 @@ def test_run_eval_batch_ssl_drop_retry_persiste_na_2a_tentativa(app_ctx, monkeyp
     )
     monkeypatch.setattr(
         eval_runner, 'run_evals',
-        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
             'agent_name': agent_name, 'score': 0.65, 'total': 8, 'passed': 5, 'cases': [],
         },
     )
@@ -396,7 +396,7 @@ def test_run_eval_batch_ssl_drop_rollback_falha_forca_dispose(app_ctx, monkeypat
     )
     monkeypatch.setattr(
         eval_runner, 'run_evals',
-        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
             'agent_name': agent_name, 'score': 0.7, 'total': 5, 'passed': 4, 'cases': [],
         },
     )
@@ -480,7 +480,7 @@ def test_run_eval_batch_ssl_drop_ambas_tentativas_falham_best_effort(app_ctx, mo
     )
     monkeypatch.setattr(
         eval_runner, 'run_evals',
-        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
             'agent_name': agent_name, 'score': 0.50, 'total': 2, 'passed': 1, 'cases': [],
         },
     )
@@ -513,6 +513,290 @@ def test_run_eval_batch_ssl_drop_ambas_tentativas_falham_best_effort(app_ctx, mo
             _db.session.rollback()
         except Exception:
             pass
+        _cleanup_scores(agent)
+
+
+# ─── run_eval_regression_gate (A3-R2 gate de regressão) ───────────────────────
+
+def test_regression_gate_detecta_regressao_mas_nao_bloqueia(app_ctx, monkeypatch):
+    """A3-R2 CORACAO: baseline (sha antigo) score 0.9 ja' em agent_eval_scores;
+    candidate (run_evals mockado) score 0.5 → delta -0.4 → regression=True, MAS
+    blocked=False (report_only — a razao de ser da A3: detecta, NUNCA bloqueia).
+    """
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('regr-')
+    sha_baseline = 'sha-antigo-aaa'
+
+    # Baseline ja' persistido (codigo-ANTES, score 0.9 no sha antigo)
+    AgentEvalScore.insert_score(
+        agent, 0.90, 10, 9, git_sha=sha_baseline, mode='report_only',
+    )
+    _db.session.commit()
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    # candidate (codigo-DEPOIS) score 0.5 → regrediu
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
+            'agent_name': agent_name, 'score': 0.50, 'total': 10, 'passed': 5,
+            'cases': [{'id': 'c1', 'status': 'fail'}],
+        },
+    )
+    # git_sha do candidate determinístico
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-novo-bbb')
+
+    try:
+        out = eval_runner.run_eval_regression_gate(
+            agent, '/tmp/fake_regr.yaml', sha_baseline=sha_baseline,
+        )
+
+        assert out['candidate_score'] == 0.50
+        assert out['baseline_score'] == 0.90
+        assert abs(out['delta'] - (-0.40)) < 1e-9
+        assert out['regression'] is True
+        # INVARIANTE A3: NUNCA bloqueia (report_only)
+        assert out['blocked'] is False
+        assert out['git_sha_candidate'] == 'sha-novo-bbb'
+        assert out['git_sha_baseline'] == sha_baseline
+        assert out['cases'] == [{'id': 'c1', 'status': 'fail'}]
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_regression_gate_sem_regressao_quando_candidate_melhora(app_ctx, monkeypatch):
+    """baseline 0.5, candidate 0.7 → delta +0.2, regression=False, blocked=False."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('noregr-')
+    sha_baseline = 'sha-base-ccc'
+
+    AgentEvalScore.insert_score(
+        agent, 0.50, 10, 5, git_sha=sha_baseline, mode='report_only',
+    )
+    _db.session.commit()
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
+            'agent_name': agent_name, 'score': 0.70, 'total': 10, 'passed': 7, 'cases': [],
+        },
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-novo-ddd')
+
+    try:
+        out = eval_runner.run_eval_regression_gate(
+            agent, '/tmp/fake_noregr.yaml', sha_baseline=sha_baseline,
+        )
+        assert out['candidate_score'] == 0.70
+        assert out['baseline_score'] == 0.50
+        assert abs(out['delta'] - 0.20) < 1e-9
+        assert out['regression'] is False
+        assert out['blocked'] is False
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_regression_gate_primeira_medicao_sem_baseline(app_ctx, monkeypatch, caplog):
+    """Primeira medicao: get_score_by_git_sha E get_baseline retornam None →
+    baseline=candidate, delta 0, regression=False, loga 'primeira medicao'."""
+    import logging
+    from app.agente.workers import eval_runner
+
+    agent = _mk_agent_name('first-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
+            'agent_name': agent_name, 'score': 0.66, 'total': 10, 'passed': 6, 'cases': [],
+        },
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-first-eee')
+
+    try:
+        with caplog.at_level(logging.INFO, logger='sistema_fretes'):
+            out = eval_runner.run_eval_regression_gate(
+                agent, '/tmp/fake_first.yaml', sha_baseline='inexistente-sha',
+            )
+
+        # baseline = candidate (nao ha codigo-ANTES) → delta 0, sem regressao
+        assert out['candidate_score'] == 0.66
+        assert out['baseline_score'] == 0.66
+        assert out['delta'] == 0.0
+        assert out['regression'] is False
+        assert out['blocked'] is False
+        # logou "primeira medicao"
+        assert any('primeira medicao' in r.getMessage() for r in caplog.records)
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_regression_gate_fallback_baseline_sem_sha(app_ctx, monkeypatch):
+    """sha_baseline=None → fallback get_baseline_score (run mais recente, ignora
+    sha). Baseline 0.8 (run previo) vs candidate 0.6 → delta -0.2 regression."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('fallback-')
+
+    # Run previo qualquer (sha diferente do candidate) — fallback ignora sha
+    AgentEvalScore.insert_score(
+        agent, 0.80, 10, 8, git_sha='qualquer-sha', mode='report_only',
+    )
+    _db.session.commit()
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
+            'agent_name': agent_name, 'score': 0.60, 'total': 10, 'passed': 6, 'cases': [],
+        },
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-cand-fff')
+
+    try:
+        out = eval_runner.run_eval_regression_gate(
+            agent, '/tmp/fake_fb.yaml', sha_baseline=None,
+        )
+        assert out['baseline_score'] == 0.80
+        assert out['candidate_score'] == 0.60
+        assert abs(out['delta'] - (-0.20)) < 1e-9
+        assert out['regression'] is True
+        assert out['blocked'] is False
+        assert out['git_sha_baseline'] is None
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_regression_gate_persiste_candidate(app_ctx, monkeypatch):
+    """O candidate medido e' persistido em agent_eval_scores com git_sha do HEAD."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('persist-regr-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
+            'agent_name': agent_name, 'score': 0.55, 'total': 20, 'passed': 11, 'cases': [],
+        },
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-persisted-ggg')
+
+    try:
+        eval_runner.run_eval_regression_gate(agent, '/tmp/fake_persist_regr.yaml')
+
+        rows = AgentEvalScore.query.filter_by(agent_name=agent).all()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.score == 0.55
+        assert row.total == 20
+        assert row.passed == 11
+        assert row.git_sha == 'sha-persisted-ggg'
+        assert row.mode == 'report_only'
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_regression_gate_best_effort_run_evals_explode(app_ctx, monkeypatch):
+    """best-effort (INV-6): run_evals explode → retorna dict com 'error',
+    NAO propaga exceção."""
+    from app.agente.workers import eval_runner
+
+    agent = _mk_agent_name('boom-regr-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+
+    def _boom(agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None):
+        raise RuntimeError('explosao simulada em run_evals')
+
+    monkeypatch.setattr(eval_runner, 'run_evals', _boom)
+
+    try:
+        # NAO deve propagar
+        out = eval_runner.run_eval_regression_gate(agent, '/tmp/fake_boom_regr.yaml')
+        assert 'error' in out
+        assert 'explosao simulada' in out['error']
+        assert out['candidate_score'] is None
+        assert out['regression'] is False
+        assert out['blocked'] is False
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_regression_gate_nunca_bloqueia_mesmo_regressao_grande(app_ctx, monkeypatch):
+    """INVARIANTE A3: mesmo com regressao GRANDE (1.0 → 0.0), blocked SEMPRE False.
+    O gate so' DETECTA e LOGA — enforce e' decisao FUTURA, nao implementada agora.
+    """
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('noblock-')
+    sha_baseline = 'sha-perfeito-hhh'
+
+    AgentEvalScore.insert_score(
+        agent, 1.0, 10, 10, git_sha=sha_baseline, mode='report_only',
+    )
+    _db.session.commit()
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
+            'agent_name': agent_name, 'score': 0.0, 'total': 10, 'passed': 0, 'cases': [],
+        },
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-quebrado-iii')
+
+    try:
+        out = eval_runner.run_eval_regression_gate(
+            agent, '/tmp/fake_noblock.yaml', sha_baseline=sha_baseline,
+        )
+        assert out['delta'] == -1.0
+        assert out['regression'] is True
+        # MESMO com a pior regressao possivel: NUNCA bloqueia
+        assert out['blocked'] is False
+    finally:
+        monkeypatch.undo()
         _cleanup_scores(agent)
 
 

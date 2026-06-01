@@ -126,3 +126,99 @@ def test_insert_score_erro_nao_propaga(app_ctx):
     assert ok.score == 0.60
 
     _db.session.rollback()
+
+
+# ─── get_score_by_git_sha (A3-R2 gate de regressão) ───────────────────────────
+
+def test_get_score_by_git_sha_retorna_run_mais_recente_daquele_sha(app_ctx):
+    """
+    Com 2 runs em git_shas DIFERENTES, get_score_by_git_sha(sha) retorna o
+    score do run MAIS RECENTE daquele sha específico — não confunde com o outro.
+    """
+    from app.agente.models import AgentEvalScore
+    from datetime import timedelta
+
+    agent_name = f'test-agent-sha:{uuid.uuid4().hex[:8]}'
+    sha_antigo = 'aaa111'
+    sha_novo = 'bbb222'
+    base_ts = agora_utc_naive()
+
+    # Run no sha_antigo (score 0.40)
+    r_antigo = AgentEvalScore.insert_score(
+        agent_name=agent_name, score=0.40, total=10, passed=4, git_sha=sha_antigo,
+    )
+    r_antigo.recorded_at = base_ts - timedelta(hours=2)
+
+    # Run no sha_novo (score 0.90) — mais recente em geral
+    r_novo = AgentEvalScore.insert_score(
+        agent_name=agent_name, score=0.90, total=10, passed=9, git_sha=sha_novo,
+    )
+    r_novo.recorded_at = base_ts
+    _db.session.flush()
+
+    # Busca por sha_antigo retorna 0.40 (NAO 0.90, que é o mais recente global)
+    assert AgentEvalScore.get_score_by_git_sha(agent_name, sha_antigo) == 0.40
+    # Busca por sha_novo retorna 0.90
+    assert AgentEvalScore.get_score_by_git_sha(agent_name, sha_novo) == 0.90
+
+    _db.session.rollback()
+
+
+def test_get_score_by_git_sha_dois_runs_mesmo_sha_pega_o_mais_recente(app_ctx):
+    """
+    Dois runs no MESMO git_sha → retorna o score do MAIS RECENTE (recorded_at
+    DESC, id DESC), espelhando get_baseline_score.
+    """
+    from app.agente.models import AgentEvalScore
+    from datetime import timedelta
+
+    agent_name = f'test-agent-sha2:{uuid.uuid4().hex[:8]}'
+    sha = 'ccc333'
+    base_ts = agora_utc_naive()
+
+    velho = AgentEvalScore.insert_score(
+        agent_name=agent_name, score=0.30, total=10, passed=3, git_sha=sha,
+    )
+    velho.recorded_at = base_ts - timedelta(hours=1)
+
+    recente = AgentEvalScore.insert_score(
+        agent_name=agent_name, score=0.75, total=10, passed=7, git_sha=sha,
+    )
+    recente.recorded_at = base_ts
+    _db.session.flush()
+
+    assert AgentEvalScore.get_score_by_git_sha(agent_name, sha) == 0.75
+
+    _db.session.rollback()
+
+
+def test_get_score_by_git_sha_none_para_sha_inexistente(app_ctx):
+    """sha que não tem nenhum run para o agent_name → None."""
+    from app.agente.models import AgentEvalScore
+
+    agent_name = f'test-agent-sha-ghost:{uuid.uuid4().hex[:8]}'
+    AgentEvalScore.insert_score(
+        agent_name=agent_name, score=0.50, total=10, passed=5, git_sha='real-sha',
+    )
+    _db.session.flush()
+
+    assert AgentEvalScore.get_score_by_git_sha(agent_name, 'sha-que-nao-existe') is None
+
+    _db.session.rollback()
+
+
+def test_get_score_by_git_sha_none_para_sha_none_ou_vazio(app_ctx):
+    """git_sha None ou vazio → None (sem baseline identificável), sem query."""
+    from app.agente.models import AgentEvalScore
+
+    agent_name = f'test-agent-sha-null:{uuid.uuid4().hex[:8]}'
+    # Existe ate um run com git_sha=None, mas a busca por None NAO deve retorná-lo.
+    AgentEvalScore.insert_score(
+        agent_name=agent_name, score=0.50, total=10, passed=5, git_sha=None,
+    )
+    _db.session.flush()
+
+    assert AgentEvalScore.get_score_by_git_sha(agent_name, None) is None
+    assert AgentEvalScore.get_score_by_git_sha(agent_name, '') is None
+
+    _db.session.rollback()

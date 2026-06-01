@@ -1872,6 +1872,33 @@ class AgentEvalScore(db.Model):
         )
         return entry.score if entry is not None else None
 
+    @classmethod
+    def get_score_by_git_sha(cls, agent_name: str, git_sha: str) -> Optional[float]:
+        """
+        Retorna o `score` do run MAIS RECENTE de `agent_name` num `git_sha`
+        ESPECÍFICO, ou None se não houver run para esse (agent_name, git_sha).
+
+        Uso (A3 gate de regressão): o baseline = score do código-ANTES,
+        identificado pelo sha-ANTERIOR já persistido em agent_eval_scores. O
+        candidate = score recém-medido do sha-ATUAL. Compará-los por git_sha
+        confirma que uma MUDANÇA DE CÓDIGO não regrediu o subagente.
+
+        Mesmo padrão de get_baseline_score (filter_by + order_by recorded_at
+        DESC, id DESC + first()), mas filtrando também por git_sha.
+
+        Se `git_sha` for None/vazio → retorna None (sem baseline identificável —
+        não há sha contra o qual comparar).
+        """
+        if not git_sha:
+            return None
+        entry = (
+            cls.query
+            .filter_by(agent_name=agent_name, git_sha=git_sha)
+            .order_by(cls.recorded_at.desc(), cls.id.desc())
+            .first()
+        )
+        return entry.score if entry is not None else None
+
 
 # =========================================================================
 # AgenteArtifact — Artifacts (bundle.html) gerados pela skill gerando-artifact
