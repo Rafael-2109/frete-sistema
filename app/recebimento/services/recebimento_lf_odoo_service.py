@@ -94,6 +94,30 @@ from app.utils.timezone import agora_utc_naive
 logger = logging.getLogger(__name__)
 
 
+# Tokens de mensagens de erro de banco recuperaveis reconstruindo a sessao
+# (rollback + close + dispose + retry). Inclui o erro SECUNDARIO de
+# idle-in-transaction timeout (bug PROD RecLF 248/249, 2026-06-01):
+# "Can't reconnect until invalid transaction is rolled back".
+_RECOVERABLE_DB_ERROR_TOKENS = (
+    'ssl', 'decryption', 'bad record', 'not bound to a session', 'detachedinstanceerror',
+    'idle-in-transaction', 'terminating connection', 'server closed the connection',
+    'eof detected', 'broken pipe', 'connection reset',
+    "can't reconnect", 'invalid transaction is rolled back', 'pendingrollbackerror',
+)
+
+
+def _is_recoverable_db_error(exc) -> bool:
+    """True se o erro de banco e recuperavel reconstruindo a sessao.
+
+    Aceita uma Exception OU uma string. Baseia-se na mensagem (estavel entre
+    versoes do SQLAlchemy) e, por seguranca, no nome do tipo PendingRollbackError.
+    """
+    msg = str(exc).lower()
+    if any(tok in msg for tok in _RECOVERABLE_DB_ERROR_TOKENS):
+        return True
+    return type(exc).__name__ == 'PendingRollbackError'
+
+
 class RecebimentoLfOdooService:
     """Processa Recebimento LF completo no Odoo (37 etapas com checkpoint).
 
@@ -405,11 +429,7 @@ class RecebimentoLfOdooService:
                 db.session.commit()
                 return
             except Exception as e:
-                error_str = str(e).lower()
-                is_recoverable = any(err in error_str for err in [
-                    'ssl', 'decryption', 'bad record', 'not bound to a session',
-                    'detachedinstanceerror',
-                ])
+                is_recoverable = _is_recoverable_db_error(e)
                 if is_recoverable and attempt < max_retries - 1:
                     logger.warning(
                         f"  [safe_update] Erro recuperavel tentativa "
@@ -488,11 +508,7 @@ class RecebimentoLfOdooService:
                 break  # Sucesso
 
             except Exception as e:
-                error_str = str(e).lower()
-                is_ssl = any(err in error_str for err in [
-                    'ssl', 'decryption', 'bad record', 'not bound to a session',
-                    'detachedinstanceerror',
-                ])
+                is_ssl = _is_recoverable_db_error(e)
 
                 if is_ssl and attempt < max_retries - 1:
                     logger.warning(
@@ -4446,6 +4462,22 @@ class RecebimentoLfOdooService:
     # Helpers de infraestrutura
     # =================================================================
 
+    def _release_db_session(self):
+        """Encerra qualquer transacao local aberta para a conexao NAO ficar
+        'idle in transaction' durante chamadas Odoo longas (previne o
+        idle_in_transaction_session_timeout do Postgres — config.py).
+
+        rollback() e seguro aqui: os steps apenas LEEM (via _get_recebimento)
+        antes do fire; toda escrita/persistencia acontece depois, no _checkpoint.
+        """
+        try:
+            db.session.rollback()
+        except Exception:
+            try:
+                db.session.close()
+            except Exception:
+                pass
+
     def _fire_and_poll(self, odoo, fire_fn, poll_fn, step_name,
                        fire_timeout=None, poll_interval=None, max_poll_time=None):
         """
@@ -4479,6 +4511,13 @@ class RecebimentoLfOdooService:
         fire_timeout = fire_timeout or self.FIRE_TIMEOUT
         poll_interval = poll_interval or self.POLL_INTERVAL
         max_poll_time = max_poll_time or self.MAX_POLL_TIME
+
+        # FIX idle-in-transaction (PROD RecLF 248/249, 2026-06-01):
+        # libera qualquer transacao local ABERTA antes da chamada Odoo longa.
+        # fire_fn pode bloquear ate fire_timeout (=120s). Com a transacao aberta,
+        # o Postgres mata a conexao por idle_in_transaction_session_timeout=120s
+        # (config.py) -> "Can't reconnect until invalid transaction is rolled back".
+        self._release_db_session()
 
         # 1. FIRE — dispara acao com timeout curto
         fire_result = None
@@ -4516,6 +4555,8 @@ class RecebimentoLfOdooService:
         elapsed = 0
         poll_count = 0
         while elapsed < max_poll_time:
+            # Garante que a sessao nao fique idle-in-transaction durante o sleep
+            self._release_db_session()
             time.sleep(poll_interval)
             elapsed += poll_interval
             poll_count += 1
