@@ -2,8 +2,9 @@
 A4 (Onda 3) — Promoção Automática de Diretriz. Fecha o flywheel.
 
 SHADOW puro + flag-OFF:
-    Só LOGA, NÃO escreve no banco. Flag AGENT_DIRECTIVE_PROMOTION OFF por default.
-    Sem caller ativo (nenhum hook/D8 invoca este módulo ainda).
+    evaluate_and_promote() só LOGA (flag OFF), NÃO chama _persist_directive.
+    _persist_directive() escreve no banco quando chamado diretamente (Task 3).
+    Flag AGENT_DIRECTIVE_PROMOTION OFF por default — nenhum caller ativo ainda.
 
 Flywheel:
     sinais (E1/E2 em agent_step.outcome_signal)
@@ -14,12 +15,6 @@ Flywheel:
 path /memories/empresa/heuristicas/, lida por
 memory_injection._build_operational_directives quando
 importance_score>=0.7 + nivel>=5).
-
-BLOQUEADO para escrita REAL até:
-1. USE_AGENT_PLANNER ON em PROD (base PlanState)
-2. Baseline A3 estável (14d de coleta)
-3. Coluna directive_status em agent_memories (migration pendente)
-   + audit hook Odoo PROD ativo
 
 Anti-gaming (R9 / step_judge._judge_core):
     Se a sessão de origem teve FALHA_ODOO, o sinal ambiental DOMINA.
@@ -32,6 +27,7 @@ Ref: app/agente/sdk/plan_state.py (PlanState — plano que funcionou)
 Ref: app/agente/sdk/memory_injection.py:420 (_build_operational_directives)
 """
 import logging
+import re as _re
 from typing import Optional
 
 logger = logging.getLogger('sistema_fretes')
@@ -212,39 +208,99 @@ def _tem_falha_odoo(session_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# _persist_directive — STUB DOCUMENTADO (não implementado)
+# _slug_titulo + _formatar_xml_diretriz + _persist_directive
 # ---------------------------------------------------------------------------
 
-def _persist_directive(candidata: dict) -> None:
+def _slug_titulo(titulo: str) -> str:
+    """Deriva slug URL-safe a partir do título da candidata (max 80 chars)."""
+    base = (titulo or 'diretriz').lower().strip()
+    base = _re.sub(r'[^a-z0-9]+', '-', base).strip('-')
+    return (base or 'diretriz')[:80]
+
+
+def _formatar_xml_diretriz(candidata: dict) -> str:
     """
-    STUB DOCUMENTADO — Persiste diretriz em AgentMemory.
+    Formata a candidata como XML heurística empresa (formato canônico A4).
 
-    NÃO implementado intencionalmente. Precisa de:
-    1. Coluna directive_status em agent_memories (migration pendente)
-    2. USE_AGENT_PLANNER ON em PROD (base PlanState consolidada)
-    3. Baseline A3 estável (14d de coleta para comparação de scores)
-    4. Revisão manual das primeiras candidatas antes de ativar escrita
+    Usa _xml_escape de pattern_analyzer — mesmo helper de escape das heurísticas
+    orgânicas extraídas por extrair_conhecimento_sessao().
 
-    Quando implementado, seguirá o padrão de memory_injection.py:
-        AgentMemory(
-            user_id=0,  # empresa
-            path=f'/memories/empresa/heuristicas/{slug_titulo}.xml',
-            content=_formatar_xml(candidata),
-            importance_score=0.7,  # threshold de _build_operational_directives
-            nivel=5,               # nível de heurística operacional
-            directive_status='promoted',
-        )
+    Formato XML processado pelo builder via regex XML-first
+    (<titulo>/<when>/<prescricao>). Diverge do formato orgânico compacto
+    WHEN:/DO: do pattern_analyzer, mas é compatível com
+    _build_operational_directives (que aceita AMBOS: regex XML-first e
+    fallback WHEN:/DO:).
 
-    Por enquanto: NotImplementedError documentada.
-    O caller (evaluate_and_promote) usa flag AGENT_DIRECTIVE_PROMOTION
-    para decidir se chama este stub — quando OFF (default), nunca é chamado.
+    O content resultante:
+    - Passa _is_nivel_5() via '<nivel>5</nivel>'
+    - Tem <prescricao> não-vazia para ser renderável pelo builder
     """
-    raise NotImplementedError(
-        "_persist_directive: stub documentado. "
-        "Implementar quando: (1) coluna directive_status em agent_memories, "
-        "(2) USE_AGENT_PLANNER ON PROD, (3) baseline A3 14d. "
-        "Ver app/agente/services/directive_promotion_service.py docstring."
+    from .pattern_analyzer import _xml_escape  # mesmo helper das heurísticas orgânicas
+    titulo = _xml_escape(candidata.get('titulo', ''))
+    when = _xml_escape(candidata.get('when', ''))
+    presc = _xml_escape(candidata.get('prescricao', ''))
+    origem = _xml_escape(candidata.get('source_session_id', ''))
+    return (
+        '<heuristica>\n'
+        '  <nivel>5</nivel>\n'
+        f'  <titulo>{titulo}</titulo>\n'
+        f'  <when>{when}</when>\n'
+        f'  <prescricao>{presc}</prescricao>\n'
+        f'  <origem>promovida automaticamente da sessão {origem}</origem>\n'
+        '</heuristica>'
     )
+
+
+def _persist_directive(candidata: dict) -> int:
+    """
+    Persiste candidata a diretriz como AgentMemory(user_id=0, directive_status='shadow').
+
+    Idempotente por path (slug do título): segunda chamada com mesmo título
+    retorna o id existente sem criar duplicata.
+
+    O registro fica com directive_status='shadow' — NÃO injetado pelo builder
+    (_build_operational_directives exclui 'shadow', só injeta NULL ou 'ativa').
+    Promoção shadow→ativa requer revisão manual.
+
+    Só é chamado quando AGENT_DIRECTIVE_PROMOTION=ON (futuro caller batch/D8).
+    evaluate_and_promote() (flag OFF) NUNCA chama esta função.
+
+    Args:
+        candidata: dict com campos titulo, when, prescricao, source_session_id.
+
+    Returns:
+        int: id do AgentMemory criado ou já existente.
+    """
+    from app.agente.models import AgentMemory
+    from app import db
+
+    slug = _slug_titulo(candidata.get('titulo', ''))
+    path = f'/memories/empresa/heuristicas/{slug}.xml'
+
+    existente = AgentMemory.query.filter_by(user_id=0, path=path).first()
+    if existente is not None:
+        logger.info(
+            f"[directive_promotion] _persist: já existe path={path!r} "
+            f"id={existente.id} → no-op"
+        )
+        return existente.id
+
+    mem = AgentMemory(
+        user_id=0,
+        path=path,
+        content=_formatar_xml_diretriz(candidata),
+        is_directory=False,
+        importance_score=0.7,
+        escopo='empresa',
+        directive_status='shadow',
+        created_by=None,  # nullable — sem FK obrigatória; user_id=0 já estabelece autoria
+    )
+    db.session.add(mem)
+    db.session.flush()  # popula mem.id; commit fica com o caller (batch)
+    logger.info(
+        f"[directive_promotion] _persist: criada SHADOW id={mem.id} path={path!r}"
+    )
+    return mem.id
 
 
 # ---------------------------------------------------------------------------
@@ -265,9 +321,10 @@ def evaluate_and_promote(
            — regressão → rejected (candidata pior que baseline)
         3. SHADOW: se passou → would_promote, só LOGA (NÃO escreve no banco)
 
-    Persistência real (stub): _persist_directive() levanta NotImplementedError.
-    Sob AGENT_DIRECTIVE_PROMOTION ON (futuro), o ramo de escrita seria ativado.
-    Hoje: flag OFF → evaluate_and_promote não é chamado por nenhum caller ativo.
+    Persistência real: _persist_directive() escreve AgentMemory(directive_status='shadow').
+    Sob AGENT_DIRECTIVE_PROMOTION ON (futuro), seria chamado aqui.
+    Hoje: flag OFF → evaluate_and_promote não é chamado por nenhum caller ativo,
+    e mesmo quando chamado diretamente, o ramo shadow apenas loga (não chama _persist_directive).
 
     Args:
         candidate: dict com campos titulo, when, prescricao,
