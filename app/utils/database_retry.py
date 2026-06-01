@@ -9,7 +9,7 @@ com tratamento especial para erros SSL do PostgreSQL.
 from functools import wraps
 import time
 import logging
-from sqlalchemy.exc import OperationalError, DBAPIError, InterfaceError
+from sqlalchemy.exc import OperationalError, DBAPIError, InterfaceError, InvalidRequestError
 from typing import Callable, Any
 
 logger = logging.getLogger(__name__)
@@ -120,12 +120,21 @@ def commit_with_retry(session, max_retries: int = 3) -> bool:
             session.commit()
             return True
             
-        except (OperationalError, DBAPIError) as e:
+        except (OperationalError, DBAPIError, InvalidRequestError) as e:
             error_msg = str(e).lower()
-            
-            if any(err in error_msg for err in ['ssl', 'decryption', 'bad record']):
+
+            # Mantido em sincronia com retry_on_ssl_error: cobre tambem
+            # idle-in-transaction timeout e o erro secundario PendingRollbackError
+            # ("Can't reconnect until invalid transaction is rolled back").
+            recuperaveis = [
+                'ssl', 'decryption', 'bad record', 'eof detected', 'broken pipe',
+                'connection reset', 'idle-in-transaction', 'terminating connection',
+                'server closed the connection', "can't reconnect",
+                'invalid transaction is rolled back',
+            ]
+            if any(err in error_msg for err in recuperaveis):
                 if attempt < max_retries - 1:
-                    logger.warning(f"⚠️ Erro SSL no commit, tentativa {attempt + 1}/{max_retries}")
+                    logger.warning(f"⚠️ Erro recuperavel no commit, tentativa {attempt + 1}/{max_retries}")
                     try:
                         session.rollback()
                         session.close()
