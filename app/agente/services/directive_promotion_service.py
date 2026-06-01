@@ -1,15 +1,17 @@
 """
 A4 (Onda 3) — Promoção Automática de Diretriz. Fecha o flywheel.
 
-SHADOW puro + flag-OFF:
-    evaluate_and_promote() só LOGA (flag OFF), NÃO chama _persist_directive.
-    _persist_directive() escreve no banco quando chamado diretamente (Task 3).
-    Flag AGENT_DIRECTIVE_PROMOTION OFF por default — nenhum caller ativo ainda.
+V1 offline + flag-OFF:
+    _persist_directive() é REAL: escreve directive_status='shadow' (persistida,
+    NUNCA injetada — o builder injeta só NULL/'ativa'; e está gated por
+    AGENT_OPERATIONAL_DIRECTIVES OFF). Dupla segurança.
+    Caller = run_directive_promotion_batch (D8 módulo 32), gated por
+    AGENT_DIRECTIVE_PROMOTION (OFF default). Flag ON → o batch persiste shadow.
 
 Flywheel:
     sinais (E1/E2 em agent_step.outcome_signal)
     → eval gate (A3, eval_gate_service.py, Onda 3)
-    → A4: PROMOVE diretriz operacional que funcionou
+    → A4 batch (módulo 32): PROMOVE (shadow) diretriz operacional que funcionou
 
 "Diretriz" = heurística empresa em AgentMemory (user_id=0,
 path /memories/empresa/heuristicas/, lida por
@@ -475,6 +477,14 @@ def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> 
                 contadores['rejeitados'] += 1
         except Exception as exc:
             logger.error(f"[directive_promotion] batch: erro session={getattr(s, 'session_id', '?')!r}: {exc}")
+            # Limpa sessão potencialmente poisoned para não derrubar as próximas iterações.
+            # Trade-off: promoções não-commitadas deste batch são revertidas, mas são
+            # re-propostas no próximo ciclo D8 (idempotente por path). Aceitável (shadow).
+            try:
+                from app import db
+                db.session.rollback()
+            except Exception:
+                pass
     try:
         from app import db
         db.session.commit()
