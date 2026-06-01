@@ -4,6 +4,8 @@ Documentacao da composicao de margem bruta/liquida e tabelas de custeio.
 
 > **Atualizado em 2026-05-10** apos auditoria — esclarecimentos sobre ICMS-ST,
 > BONIFICACAO, tipos de custo `MANUAL` e `PRODUCAO`, e estado atual do pipeline.
+> **Revisao 2026-06-01**: corrigidas refs de linha/caminho de `custeio_service.py`
+> (vive em `app/custeio/services/`, nao `app/carteira/services/`) e bloco BONIFICACAO.
 
 ---
 
@@ -51,7 +53,7 @@ Margem Bruta (bonificacao) = - CustoConsiderado * (1 + PERCENTUAL_PERDA / 100)
 Notas:
 - Sem PIS/COFINS, sem desconto, sem comissao (zerada).
 - Margem Liquida usa a mesma formula geral (subtrai operacao + producao).
-- FONTE: `carteira_service.py:1371`.
+- FONTE: `carteira_service.py:1376` (bloco `# VERIFICAR SE E BONIFICACAO`, flag `eh_bonificacao` em :1379).
 
 ### Campo pre-calculado
 
@@ -88,7 +90,7 @@ Custo unitario do produto usado para calculo de margem.
 > **PROTECAO MANUAL/PRODUCAO**: ao mudar de MANUAL/PRODUCAO para outro tipo, o
 > sistema valida que o tipo destino tem valor preenchido. Se nao tem, o servico
 > retorna erro impedindo perda silenciosa do custo cadastrado.
-> FONTE: `custeio_service.py:826-841` (Sprint 1 - C2).
+> FONTE: `app/custeio/services/custeio_service.py:827-841` (Sprint 1 - C2).
 
 ### CustoFrete (tabela `custo_frete`)
 
@@ -198,6 +200,6 @@ WHERE custo_atual = TRUE;
    `alterar_tipo_custo`, `cadastrar_custo_manual`, `_salvar_custo_propagado`.
 4. **Soma parcial em propagar_custos_bom**: BOM com componente sem custo gera
    custo subestimado SEM warning. TODO: marcar BOM como "incompleto" quando
-   detectado (`custeio_service.py:1122-1133`).
+   detectado (`app/custeio/services/custeio_service.py:1140,1160` — "soma parcial").
 5. **status_odoo='done' nao existe na tabela**: filtro `in_(['done','purchase'])`
    so captura `'purchase'`. Filtro vestigial mas funcional.

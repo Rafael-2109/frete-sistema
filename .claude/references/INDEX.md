@@ -1,6 +1,6 @@
 # Indice de Referencias
 
-**Ultima atualizacao**: 25/05/2026
+**Ultima atualizacao**: 2026-06-01 (mapeamento Skill->References ampliado: `escriturando-odoo`, `auditando-cadastro-fiscal-odoo`, `faturando-odoo`)
 
 ---
 
@@ -143,3 +143,6 @@
 | `operando-mo-odoo` (WRITE) | `app/odoo/estoque/CLAUDE.md` (guard G-MO-01) |
 | `planejando-pre-etapa-odoo` (READ+WRITE) | `app/odoo/estoque/CLAUDE.md`, `docs/inventario-2026-05/00-decisoes/D007*` |
 | `consultando-quant-odoo` (READ AO VIVO) | `app/odoo/estoque/CLAUDE.md` (auditoria pos-WRITE) |
+| `escriturando-odoo` (WRITE ABRANGENTE) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/fluxos/1.2.1-escriturar-dfe-industrializacao.md`, `odoo/IDS_FIXOS.md` |
+| `auditando-cadastro-fiscal-odoo` (PRE-FLIGHT) | `app/odoo/estoque/CLAUDE.md` (G017/G018/G035/G014 + D-OPS-2/3) |
+| `faturando-odoo` (WRITE Skill 8) | `app/odoo/estoque/CLAUDE.md`, `app/odoo/estoque/orchestrators/inventario_pipeline.py`, `odoo/IDS_FIXOS.md` |

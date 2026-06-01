@@ -1,6 +1,6 @@
 # Padroes Backend — Helpers Compartilhados
 
-**Ultima atualizacao**: 2026-04-14
+**Ultima atualizacao**: 2026-06-01
 
 Guia de padroes backend Python do Sistema de Fretes. Centraliza helpers e
 utilitarios que resolvem problemas recorrentes — **usar ANTES de reinventar**.
@@ -135,12 +135,17 @@ Use `decimal_as_str=False` (default) quando:
 
 ### Callsites atuais
 
+O helper hoje e adotado amplamente (CarVia pricing, agente artifacts, chat notifier,
+HORA workers/TagPlus, inventario routes). Callsites de origem (CarVia pricing):
+
 | Arquivo | Linha | Contexto |
 |---------|-------|----------|
-| `app/carvia/services/pricing/cotacao_v2_service.py` | 240 | `cotacao.detalhes_calculo` com output da `CalculadoraFrete` |
-| `app/carvia/services/pricing/cotacao_v2_service.py` | 385 | `cotacao.detalhes_calculo` manual (defensivo) |
+| `app/carvia/services/pricing/cotacao_v2_service.py` | 238 | `cotacao.detalhes_calculo` com output da `CalculadoraFrete` |
+| `app/carvia/services/pricing/cotacao_v2_service.py` | 400 | `cotacao.detalhes_calculo` manual (defensivo) |
+| `app/carvia/services/pricing/cotacao_v2_service.py` | 500 | `cotacao.detalhes_calculo` manual (defensivo, 2o caminho) |
 
-> Ao adicionar novo callsite, atualizar esta tabela.
+> Lista completa de callsites: `grep -rn "sanitize_for_json" app/ --include="*.py"`.
+> Ao adicionar callsite critico (campo `db.JSON`/`JSONB` com fonte de Decimals), atualizar esta tabela.
 
 ---
 
