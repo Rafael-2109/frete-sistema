@@ -223,6 +223,299 @@ def test_run_eval_batch_best_effort_um_agente_explode(app_ctx, monkeypatch):
         _cleanup_scores(agent_ok, agent_boom)
 
 
+# ─── BUG-2: SSL-drop na persistencia (FASE 1 invokes / FASE 2 persistencia) ────
+
+def test_run_eval_batch_invokes_antes_de_qualquer_query_db(app_ctx, monkeypatch):
+    """BUG-2 ORDEM: todos os run_evals (invokes LENTOS, sem tocar DB) acontecem
+    ANTES de qualquer get_baseline_score (1a query DB). Antes do fix, a conexao
+    abria em get_baseline_score e ficava idle 8-50min durante os invokes → SSL-drop.
+
+    Captura a ordem-de-chamada via lista compartilhada: cada run_evals e cada
+    get_baseline_score anotam seu nome. Espera-se TODOS os 'run_evals:*' ANTES
+    do primeiro 'baseline:*'.
+    """
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent_a = _mk_agent_name('orderA-')
+    agent_b = _mk_agent_name('orderB-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+
+    ordem = []
+
+    def _run_evals(agent_name, dataset_path, invoke_fn=None, judge_fn=None):
+        ordem.append(f'run_evals:{agent_name}')
+        return {'agent_name': agent_name, 'score': 0.55, 'total': 4, 'passed': 2, 'cases': []}
+
+    monkeypatch.setattr(eval_runner, 'run_evals', _run_evals)
+
+    # Spy em get_baseline_score (1a query DB da FASE 2)
+    real_get_baseline = AgentEvalScore.get_baseline_score.__func__
+
+    def _spy_get_baseline(cls, agent_name):
+        ordem.append(f'baseline:{agent_name}')
+        return real_get_baseline(cls, agent_name)
+
+    monkeypatch.setattr(
+        AgentEvalScore, 'get_baseline_score',
+        classmethod(_spy_get_baseline),
+    )
+
+    datasets = [(agent_a, '/tmp/fake_a.yaml'), (agent_b, '/tmp/fake_b.yaml')]
+
+    try:
+        eval_runner._run_eval_batch_in_context(datasets)
+
+        # Ha 2 run_evals e 2 baseline
+        run_idx = [i for i, e in enumerate(ordem) if e.startswith('run_evals:')]
+        base_idx = [i for i, e in enumerate(ordem) if e.startswith('baseline:')]
+        assert len(run_idx) == 2, ordem
+        assert len(base_idx) == 2, ordem
+
+        # INVARIANTE BUG-2: TODOS os invokes ANTES de QUALQUER query DB
+        assert max(run_idx) < min(base_idx), (
+            f'invokes devem ocorrer ANTES de get_baseline_score; ordem={ordem}'
+        )
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent_a, agent_b)
+
+
+def test_run_eval_batch_ssl_drop_retry_persiste_na_2a_tentativa(app_ctx, monkeypatch):
+    """BUG-2 RETRY: OperationalError (SSL-drop) no PRIMEIRO commit → rollback →
+    re-executa a persistencia (insert_score 2x) → 2o commit succeeds → score
+    persistido.
+
+    Antes do fix: o commit explodia com OperationalError e NADA persistia
+    ('agentes=0'). Agora ha 1 retry com rollback (forca reconexao) entre as
+    tentativas.
+    """
+    from sqlalchemy.exc import OperationalError
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('ssl-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+            'agent_name': agent_name, 'score': 0.65, 'total': 8, 'passed': 5, 'cases': [],
+        },
+    )
+
+    # commit: explode na 1a chamada (OperationalError), sucede na 2a.
+    commit_calls = [0]
+    real_commit = _db.session.commit
+
+    def _spy_commit():
+        commit_calls[0] += 1
+        if commit_calls[0] == 1:
+            raise OperationalError('SSL connection has been closed unexpectedly', None, None)
+        return real_commit()
+
+    monkeypatch.setattr(_db.session, 'commit', _spy_commit)
+
+    # rollback: conta as chamadas (deve haver pelo menos 1 entre tentativas)
+    rollback_calls = [0]
+    real_rollback = _db.session.rollback
+
+    def _spy_rollback():
+        rollback_calls[0] += 1
+        return real_rollback()
+
+    monkeypatch.setattr(_db.session, 'rollback', _spy_rollback)
+
+    # insert_score: conta as chamadas (re-executado na 2a tentativa).
+    insert_calls = [0]
+    real_insert = AgentEvalScore.insert_score.__func__
+
+    def _spy_insert(cls, *a, **k):
+        insert_calls[0] += 1
+        return real_insert(cls, *a, **k)
+
+    monkeypatch.setattr(
+        AgentEvalScore, 'insert_score',
+        classmethod(_spy_insert),
+    )
+
+    datasets = [(agent, '/tmp/fake_ssl.yaml')]
+
+    try:
+        result = eval_runner._run_eval_batch_in_context(datasets)
+
+        # 2 commits (1o falhou OperationalError, 2o sucedeu)
+        assert commit_calls[0] == 2, f'esperado 2 commits, foi {commit_calls[0]}'
+        # rollback foi chamado para forcar reconexao
+        assert rollback_calls[0] >= 1, f'rollback nao foi chamado: {rollback_calls[0]}'
+        # insert_score re-executado: 1x por tentativa = 2x (1 agente x 2 tentativas)
+        assert insert_calls[0] == 2, f'esperado 2 insert_score, foi {insert_calls[0]}'
+
+        # score persistido na 2a tentativa — e SEM duplicata (o rollback descartou
+        # o SAVEPOINT da 1a tentativa, entao ha EXATAMENTE 1 linha).
+        rows = AgentEvalScore.query.filter_by(agent_name=agent).all()
+        assert len(rows) == 1, f'esperado 1 linha (sem duplicata), foi {len(rows)}'
+        row = rows[0]
+        assert row.score == 0.65
+        assert row.total == 8
+        assert row.passed == 5
+
+        assert result['agentes'] == 1
+        assert result['scores'].get(agent) == 0.65
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_run_eval_batch_ssl_drop_rollback_falha_forca_dispose(app_ctx, monkeypatch):
+    """HIGH-2 (code-review): no cenario TCP-morto real, o proprio rollback
+    pre-retry falha. O fix forca db.engine.dispose() para descartar a conexao
+    morta do pool, e a 2a tentativa de persistencia/commit sucede.
+
+    Sem o dispose, a 2a tentativa rodaria sobre a mesma conexao quebrada.
+    """
+    from sqlalchemy.exc import OperationalError
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('disp-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+            'agent_name': agent_name, 'score': 0.7, 'total': 5, 'passed': 4, 'cases': [],
+        },
+    )
+
+    # commit: explode na 1a (OperationalError), sucede na 2a.
+    commit_calls = [0]
+    real_commit = _db.session.commit
+
+    def _spy_commit():
+        commit_calls[0] += 1
+        if commit_calls[0] == 1:
+            raise OperationalError('SSL connection has been closed unexpectedly', None, None)
+        return real_commit()
+
+    monkeypatch.setattr(_db.session, 'commit', _spy_commit)
+
+    # rollback: o PRE-RETRY (2a chamada) falha → deve disparar engine.dispose().
+    rollback_calls = [0]
+    real_rollback = _db.session.rollback
+
+    def _spy_rollback():
+        rollback_calls[0] += 1
+        if rollback_calls[0] == 2:  # rollback pre-retry (apos o commit falho)
+            raise OperationalError('connection already closed', None, None)
+        return real_rollback()
+
+    monkeypatch.setattr(_db.session, 'rollback', _spy_rollback)
+
+    # close + dispose: ambos devem ser chamados quando o rollback pre-retry falha.
+    # close() descarta o insert pendente da session (senao a 2a tentativa
+    # DUPLICA a linha); dispose() limpa a conexao morta do pool.
+    cleanup_calls = {'close': 0, 'dispose': 0}
+    real_close = _db.session.close
+    real_dispose = _db.engine.dispose
+
+    def _spy_close(*a, **k):
+        cleanup_calls['close'] += 1
+        return real_close(*a, **k)
+
+    def _spy_dispose(*a, **k):
+        cleanup_calls['dispose'] += 1
+        return real_dispose(*a, **k)
+
+    monkeypatch.setattr(_db.session, 'close', _spy_close)
+    monkeypatch.setattr(_db.engine, 'dispose', _spy_dispose)
+
+    datasets = [(agent, '/tmp/fake_disp.yaml')]
+
+    try:
+        result = eval_runner._run_eval_batch_in_context(datasets)
+
+        # close E dispose foram chamados porque o rollback pre-retry falhou (HIGH-2)
+        assert cleanup_calls['close'] >= 1, f'session.close nao chamado: {cleanup_calls}'
+        assert cleanup_calls['dispose'] >= 1, f'engine.dispose nao chamado: {cleanup_calls}'
+        # 2 commits (1o falhou, 2o sucedeu apos cleanup)
+        assert commit_calls[0] == 2, f'esperado 2 commits, foi {commit_calls[0]}'
+        # score persistido na 2a tentativa
+        assert result['scores'].get(agent) == 0.7
+        # SEM duplicata: close() descartou o insert pendente da 1a tentativa
+        rows = AgentEvalScore.query.filter_by(agent_name=agent).all()
+        assert len(rows) == 1, f'esperado 1 linha (sem duplicata), foi {len(rows)}'
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)
+
+
+def test_run_eval_batch_ssl_drop_ambas_tentativas_falham_best_effort(app_ctx, monkeypatch):
+    """BUG-2 BEST-EFFORT (INV-6): se AMBAS as tentativas de commit falharem com
+    OperationalError, NAO propaga exceção (nao derruba o cron) — retorna o que
+    tiver (best-effort)."""
+    from sqlalchemy.exc import OperationalError
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('ssl2x-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None: {
+            'agent_name': agent_name, 'score': 0.50, 'total': 2, 'passed': 1, 'cases': [],
+        },
+    )
+
+    # commit SEMPRE explode com OperationalError (1a e 2a tentativa)
+    commit_calls = [0]
+
+    def _always_boom_commit():
+        commit_calls[0] += 1
+        raise OperationalError('SSL connection has been closed unexpectedly', None, None)
+
+    monkeypatch.setattr(_db.session, 'commit', _always_boom_commit)
+
+    datasets = [(agent, '/tmp/fake_ssl2x.yaml')]
+
+    try:
+        # NAO deve propagar (best-effort total INV-6)
+        result = eval_runner._run_eval_batch_in_context(datasets)
+
+        # ambas as tentativas de commit ocorreram
+        assert commit_calls[0] == 2, f'esperado 2 commits (ambos falham), foi {commit_calls[0]}'
+
+        # retornou estrutura valida (best-effort) — nada persistido pois commit falhou
+        assert 'agentes' in result
+        assert 'scores' in result
+    finally:
+        monkeypatch.undo()
+        # Limpeza: garante sessao limpa apos OperationalError simulado
+        try:
+            _db.session.rollback()
+        except Exception:
+            pass
+        _cleanup_scores(agent)
+
+
 # ─── enqueue_eval_batch ───────────────────────────────────────────────────────
 
 def test_enqueue_eval_batch_flag_off_nao_enfileira(app_ctx):

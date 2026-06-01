@@ -115,39 +115,33 @@ def run_eval_batch(agent_filter: Optional[str] = None) -> dict:
         return {'agentes': 0, 'scores': {}}
 
 
-def _run_eval_batch_in_context(datasets: list) -> dict:
-    """Executa o eval batch dentro de app_context ativo.
+def _persist_eval_results(resultados: list, git_sha: Optional[str]) -> dict:
+    """FASE 2 (re-executavel): persiste os resultados dos invokes no DB.
 
-    Separado para testabilidade (espelha _triage_step_shadow_in_context).
-    Cada agente roda em try/except ISOLADO (constraint 4). Ao final, UM
-    db.session.commit() consolida todos os SAVEPOINTs de insert_score
-    (constraint 3); rollback em caso de erro no commit.
+    Estruturado como helper IDEMPOTENTE-POR-TENTATIVA para o retry de commit
+    do BUG-2: chamado uma vez; se o commit explodir com OperationalError
+    (SSL-drop pos-invokes longos), o caller faz rollback (descarta os SAVEPOINTs
+    pendentes) e chama ESTE helper DE NOVO, re-executando get_baseline+insert_score
+    com a conexao reconectada antes do 2o commit.
+
+    NAO commita — apenas acumula SAVEPOINTs via insert_score. O commit (e o retry)
+    sao responsabilidade do caller `_run_eval_batch_in_context`.
+
+    Args:
+        resultados: lista de (agent_name, result-dict de run_evals).
+        git_sha: SHA do HEAD (rastreabilidade), ou None.
+
+    Returns:
+        {agent_name: score} dos agentes cujo insert_score nao explodiu.
     """
-    from app import db
     from app.agente.models import AgentEvalScore
 
-    git_sha = _current_git_sha()
     scores = {}
-
-    for agent_name, dataset_path in datasets:
+    for agent_name, result in resultados:
         try:
-            # CONSTRAINT 1: baseline ANTES de insert_score (senao o "mais
-            # recente" seria o proprio run atual → delta sempre ~0).
+            # CONSTRAINT 1: baseline ANTES de insert_score do MESMO agente
+            # (senao o "mais recente" seria o proprio run atual → delta ~0).
             baseline = AgentEvalScore.get_baseline_score(agent_name)
-
-            # Wiring REAL do agente. AGENT_EVAL_MODEL opcional (override de modelo).
-            # CONSTRAINT (code-review T3b I1): timeout GENEROSO — os subagentes são
-            # Opus effort:xhigh fazendo Odoo/SQL real; um run legítimo >120s viraria
-            # TimeoutExpired→'error'→score deflacionado→falso-positivo de regressão
-            # (envenenaria o baseline). Default 600s (folga vs job_timeout=3600).
-            invoke = build_subprocess_invoke_fn(
-                agent_name,
-                model=os.environ.get('AGENT_EVAL_MODEL') or None,
-                timeout=int(os.environ.get('AGENT_EVAL_TIMEOUT', '600')),
-            )
-
-            # judge_fn default = Haiku real (mockado nos testes).
-            result = run_evals(agent_name, dataset_path, invoke_fn=invoke)
 
             gate = eval_gate(
                 baseline_score=baseline if baseline is not None else 0.0,
@@ -174,19 +168,132 @@ def _run_eval_batch_in_context(datasets: list) -> dict:
                 f"(report-only, nunca bloqueia)"
             )
         except Exception as exc:
+            # CONSTRAINT 4: um agente falhando na persistencia NAO impede os demais.
+            logger.warning(f'[EVAL_RUNNER] {agent_name}: erro ao persistir score: {exc}')
+
+    return scores
+
+
+def _run_eval_batch_in_context(datasets: list) -> dict:
+    """Executa o eval batch dentro de app_context ativo.
+
+    Separado para testabilidade (espelha _triage_step_shadow_in_context).
+
+    BUG-2 FIX (SSL-drop pos-invokes longos): a conexao Postgres ficava idle
+    8-50min durante os invokes `claude -p` e o servidor/SSL a derrubava; o
+    commit final explodia com OperationalError e NADA persistia. Solucao:
+    separar em 2 FASES e adicionar retry de commit com rollback.
+
+    FASE 1 — INVOKES (sem tocar DB): roda TODOS os run_evals primeiro,
+        acumulando os resultados. Nenhuma query DB acontece aqui, entao a
+        conexao nao fica idle durante o tempo longo.
+    FASE 2 — PERSISTENCIA (conexao fresca): so' depois de TODOS os invokes,
+        abre as queries DB (get_baseline + insert_score) e commita. Se o
+        commit explodir com OperationalError (SSL-drop residual), faz rollback
+        (forca reconexao) e RE-EXECUTA a persistencia + commit UMA vez mais.
+
+    Cada agente roda em try/except ISOLADO (constraint 4); nada propaga (INV-6).
+    insert_score usa SAVEPOINT que NAO commita sozinho (constraint 3) — o commit
+    explicito ao final do FASE 2 consolida.
+
+    NOTA SEMANTICA (MEDIUM-1 code-review): apos o fix do judge granular (BUG-1),
+    `score` passou de "fracao de casos 100%-pass" para "media dos case_score
+    parciais". Baselines GRAVADOS antes do fix em agent_eval_scores tem a
+    semantica antiga. Na 1a rodada pos-deploy, o candidate (granular, tende a ser
+    maior) vs baseline (binario antigo) pode logar um "improvement" falso. Como o
+    gate e' report_only (nunca bloqueia) o impacto e' so' 1 relatorio enganoso;
+    a partir da 2a rodada o baseline ja' e' granular e a comparacao volta a ser
+    apples-to-apples. Nao ha migration — e' reset natural na 1a rodada.
+    """
+    from app import db
+    from sqlalchemy.exc import OperationalError
+
+    git_sha = _current_git_sha()
+
+    # ─── FASE 1 — INVOKES (LENTO, sem tocar DB) ───────────────────────────────
+    resultados = []
+    for agent_name, dataset_path in datasets:
+        try:
+            # Wiring REAL do agente. AGENT_EVAL_MODEL opcional (override de modelo).
+            # CONSTRAINT (code-review T3b I1): timeout GENEROSO — os subagentes são
+            # Opus effort:xhigh fazendo Odoo/SQL real; um run legítimo >120s viraria
+            # TimeoutExpired→'error'→score deflacionado→falso-positivo de regressão
+            # (envenenaria o baseline). Default 600s (folga vs job_timeout=3600).
+            invoke = build_subprocess_invoke_fn(
+                agent_name,
+                model=os.environ.get('AGENT_EVAL_MODEL') or None,
+                timeout=int(os.environ.get('AGENT_EVAL_TIMEOUT', '600')),
+            )
+
+            # judge_fn default = Haiku real (mockado nos testes).
+            result = run_evals(agent_name, dataset_path, invoke_fn=invoke)
+            resultados.append((agent_name, result))
+        except Exception as exc:
             # CONSTRAINT 4: um agente falhando NAO impede os demais.
             logger.warning(f'[EVAL_RUNNER] {agent_name}: erro ao rodar evals: {exc}')
+
+    # ─── FASE 2 — PERSISTENCIA (conexao fresca, com retry SSL-drop) ───────────
+    # rollback DEFENSIVO antes de qualquer query: limpa estado de conexao
+    # morta / transacao invalida deixado pelos 8-50min de idle. Pode falhar se
+    # a conexao ja morreu — tudo bem, o proximo uso do pool reconecta.
+    try:
+        db.session.rollback()
+    except Exception as roll_err:
+        logger.debug(f'[EVAL_RUNNER] rollback defensivo inicial falhou (ok): {roll_err}')
+
+    scores = _persist_eval_results(resultados, git_sha)
 
     # CONSTRAINT 3: commit explicito — insert_score usa SAVEPOINT que NAO
     # commita sozinho no job RQ (create_app sem transacao pai).
     try:
         db.session.commit()
+    except OperationalError as commit_err:
+        # BUG-2: SSL-drop no 1o commit. Rollback forca reconexao; RE-EXECUTA a
+        # persistencia (rollback descartou os SAVEPOINTs) e tenta o commit 1x mais.
+        logger.warning(
+            f'[EVAL_RUNNER] commit 1a tentativa falhou (SSL-drop?): {commit_err} — '
+            f'rollback + retry'
+        )
+        try:
+            db.session.rollback()
+        except Exception as roll_err:
+            # HIGH-2 (code-review): no cenario TCP-morto real (o que BUG-2
+            # defende), o proprio rollback falha. Nesse caso o SAVEPOINT/insert
+            # da 1a tentativa CONTINUA pendente na session — se so' fizermos
+            # dispose() do pool, a 2a tentativa insere de novo → DUPLICATA no
+            # baseline (pior que agentes=0). Solucao: close() descarta o estado
+            # pendente da session E dispose() limpa as conexoes mortas do pool.
+            # Ordem: close() (desvincula a session da conexao morta) → dispose()
+            # (garante que o pool nao reuse conexao quebrada).
+            logger.warning(
+                f'[EVAL_RUNNER] rollback pre-retry falhou — close+dispose: {roll_err}'
+            )
+            for _cleanup in (db.session.close, db.engine.dispose):
+                try:
+                    _cleanup()
+                except Exception as ce:
+                    logger.debug(f'[EVAL_RUNNER] cleanup pre-retry falhou (ok): {ce}')
+
+        # 2a tentativa: re-persiste (get_baseline + insert_score) com conexao fresca
+        scores = _persist_eval_results(resultados, git_sha)
+        try:
+            db.session.commit()
+        except Exception as retry_err:
+            # 2a tentativa tambem falhou → best-effort (INV-6): nao propaga.
+            logger.error(f'[EVAL_RUNNER] commit 2a tentativa falhou: {retry_err}')
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            scores = {}
     except Exception as commit_err:
+        # Erro de commit nao-SSL (ex: IntegrityError residual) — best-effort.
         logger.error(f'[EVAL_RUNNER] commit falhou: {commit_err}')
         try:
             db.session.rollback()
         except Exception:
             pass
+        scores = {}
 
     logger.info(f'[EVAL_RUNNER] concluido: agentes={len(scores)}')
     return {'agentes': len(scores), 'scores': scores}
