@@ -160,16 +160,9 @@
   ],
   "indices": [
     {
-      "name": "ix_entregas_monitoradas_origem",
+      "name": "ix_entregas_monitoradas_separacao_lote_id",
       "columns": [
-        "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "idx_em_nf_cd",
-      "columns": [
-        "nf_cd"
+        "separacao_lote_id"
       ],
       "unique": false
     },
@@ -181,9 +174,16 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_separacao_lote_id",
+      "name": "ix_entregas_monitoradas_origem",
       "columns": [
-        "separacao_lote_id"
+        "origem"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "columns": [
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -209,16 +209,16 @@
       "unique": false
     },
     {
-      "name": "ix_entregas_monitoradas_cnpj_cliente",
+      "name": "idx_em_reagendar",
       "columns": [
-        "cnpj_cliente"
+        "reagendar"
       ],
       "unique": false
     },
     {
-      "name": "idx_em_reagendar",
+      "name": "idx_em_data_faturamento",
       "columns": [
-        "reagendar"
+        "data_faturamento"
       ],
       "unique": false
     },
@@ -230,9 +230,9 @@
       "unique": false
     },
     {
-      "name": "idx_em_data_faturamento",
+      "name": "idx_em_nf_cd",
       "columns": [
-        "data_faturamento"
+        "nf_cd"
       ],
       "unique": false
     },

@@ -108,13 +108,6 @@
       "unique": true
     },
     {
-      "name": "ix_hora_recebimento_conferencia_substituida",
-      "columns": [
-        "substituida"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_recebimento_conferencia_numero_chassi",
       "columns": [
         "numero_chassi"
@@ -140,6 +133,13 @@
       "name": "ix_hora_recebimento_conferencia_recebimento_id",
       "columns": [
         "recebimento_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_recebimento_conferencia_substituida",
+      "columns": [
+        "substituida"
       ],
       "unique": false
     }

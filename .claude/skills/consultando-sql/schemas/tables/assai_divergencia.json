@@ -78,9 +78,9 @@
   ],
   "indices": [
     {
-      "name": "ix_assai_divergencia_nf_id",
+      "name": "ix_assai_divergencia_chassi",
       "columns": [
-        "nf_id"
+        "chassi"
       ],
       "unique": false
     },
@@ -92,9 +92,9 @@
       "unique": false
     },
     {
-      "name": "ix_assai_divergencia_chassi",
+      "name": "ix_assai_divergencia_nf_id",
       "columns": [
-        "chassi"
+        "nf_id"
       ],
       "unique": false
     }

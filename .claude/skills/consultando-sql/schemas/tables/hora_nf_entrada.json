@@ -94,6 +94,13 @@
   ],
   "indices": [
     {
+      "name": "ix_hora_nf_entrada_chave_44",
+      "columns": [
+        "chave_44"
+      ],
+      "unique": true
+    },
+    {
       "name": "ix_hora_nf_entrada_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
@@ -113,13 +120,6 @@
         "pedido_id"
       ],
       "unique": false
-    },
-    {
-      "name": "ix_hora_nf_entrada_chave_44",
-      "columns": [
-        "chave_44"
-      ],
-      "unique": true
     },
     {
       "name": "ix_hora_nf_entrada_cnpj_emitente",

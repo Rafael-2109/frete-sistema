@@ -140,6 +140,14 @@
   ],
   "indices": [
     {
+      "name": "ix_nf_transf_snap_companies",
+      "columns": [
+        "company_origem",
+        "company_destino"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_nf_transferencia_snapshot_chave_nfe",
       "columns": [
         "chave_nfe"
@@ -157,14 +165,6 @@
       "name": "ix_nf_transferencia_snapshot_status_consolidado",
       "columns": [
         "status_consolidado"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_nf_transf_snap_companies",
-      "columns": [
-        "company_origem",
-        "company_destino"
       ],
       "unique": false
     }
