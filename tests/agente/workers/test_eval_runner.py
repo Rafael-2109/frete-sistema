@@ -1089,3 +1089,91 @@ def test_review_eval_cases_lista_amostra_e_concordancia(app_ctx, monkeypatch):
     finally:
         monkeypatch.undo()
         _cleanup_cases(agent)
+
+
+def test_run_eval_batch_pending_rollback_retry_persiste_na_2a_tentativa(app_ctx, monkeypatch):
+    """BUG X7 (Sentry, 2026-06-01): apos os invokes longos, o get_baseline na FASE 2
+    bate numa conexao SSL-dropped e ENVENENA a transacao; o commit explicito entao
+    levanta PendingRollbackError (code 8s2b, "Can't reconnect until invalid transaction
+    is rolled back") — IRMA de OperationalError, NAO subclasse. O retry so pegava
+    OperationalError, entao a PendingRollbackError caia no except generico ('commit
+    falhou') → scores={} → agentes=0 → agent_eval_scores VAZIO (baseline nunca nascia).
+
+    Apos o fix (catch (OperationalError, PendingRollbackError)): o retry engata,
+    rollback + re-persiste + 2o commit → score persistido SEM duplicata.
+
+    Espelha test_run_eval_batch_ssl_drop_retry_* trocando OperationalError por
+    PendingRollbackError.
+    """
+    from sqlalchemy.exc import PendingRollbackError
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore
+
+    agent = _mk_agent_name('pending-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None: {
+            'agent_name': agent_name, 'score': 0.65, 'total': 8, 'passed': 5, 'cases': [],
+        },
+    )
+
+    # commit: explode na 1a chamada (PendingRollbackError 8s2b), sucede na 2a.
+    commit_calls = [0]
+    real_commit = _db.session.commit
+
+    def _spy_commit():
+        commit_calls[0] += 1
+        if commit_calls[0] == 1:
+            raise PendingRollbackError(
+                "Can't reconnect until invalid transaction is rolled back.  "
+                "Please rollback() fully before proceeding",
+                code="8s2b",
+            )
+        return real_commit()
+
+    monkeypatch.setattr(_db.session, 'commit', _spy_commit)
+
+    rollback_calls = [0]
+    real_rollback = _db.session.rollback
+
+    def _spy_rollback():
+        rollback_calls[0] += 1
+        return real_rollback()
+
+    monkeypatch.setattr(_db.session, 'rollback', _spy_rollback)
+
+    insert_calls = [0]
+    real_insert = AgentEvalScore.insert_score.__func__
+
+    def _spy_insert(cls, *a, **k):
+        insert_calls[0] += 1
+        return real_insert(cls, *a, **k)
+
+    monkeypatch.setattr(AgentEvalScore, 'insert_score', classmethod(_spy_insert))
+
+    datasets = [(agent, '/tmp/fake_pending.yaml')]
+
+    try:
+        result = eval_runner._run_eval_batch_in_context(datasets)
+
+        # 2 commits (1o falhou PendingRollbackError, 2o sucedeu) — prova que o retry engatou
+        assert commit_calls[0] == 2, f'esperado 2 commits, foi {commit_calls[0]}'
+        assert rollback_calls[0] >= 1, f'rollback nao foi chamado: {rollback_calls[0]}'
+        assert insert_calls[0] == 2, f'esperado 2 insert_score, foi {insert_calls[0]}'
+
+        # score persistido SEM duplicata
+        rows = AgentEvalScore.query.filter_by(agent_name=agent).all()
+        assert len(rows) == 1, f'esperado 1 linha (sem duplicata), foi {len(rows)}'
+        assert rows[0].score == 0.65
+
+        assert result['agentes'] == 1
+        assert result['scores'].get(agent) == 0.65
+    finally:
+        monkeypatch.undo()
+        _cleanup_scores(agent)

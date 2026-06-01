@@ -278,7 +278,7 @@ def _run_eval_batch_in_context(datasets: list) -> dict:
     apples-to-apples. Nao ha migration — e' reset natural na 1a rodada.
     """
     from app import db
-    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.exc import OperationalError, PendingRollbackError
 
     git_sha = _current_git_sha()
 
@@ -324,9 +324,15 @@ def _run_eval_batch_in_context(datasets: list) -> dict:
     # commita sozinho no job RQ (create_app sem transacao pai).
     try:
         db.session.commit()
-    except OperationalError as commit_err:
-        # BUG-2: SSL-drop no 1o commit. Rollback forca reconexao; RE-EXECUTA a
-        # persistencia (rollback descartou os SAVEPOINTs) e tenta o commit 1x mais.
+    except (OperationalError, PendingRollbackError) as commit_err:
+        # BUG-2 + BUG X7 (2026-06-01): SSL-drop no 1o commit. O disconnect apos os
+        # invokes longos surge como OperationalError (detectado no statement) OU como
+        # PendingRollbackError (code 8s2b, "Can't reconnect until invalid transaction
+        # is rolled back") quando um get_baseline ja envenenou a transacao na FASE 2.
+        # PendingRollbackError eh IRMA de OperationalError (ambas != hierarquia), entao
+        # PRECISA estar no catch — senao cai no except generico e nada persiste (X7).
+        # Rollback forca reconexao; RE-EXECUTA a persistencia (rollback descartou os
+        # SAVEPOINTs) e tenta o commit 1x mais.
         logger.warning(
             f'[EVAL_RUNNER] commit 1a tentativa falhou (SSL-drop?): {commit_err} — '
             f'rollback + retry'
