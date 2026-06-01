@@ -88,6 +88,78 @@ def _default_datasets() -> list:
     ]
 
 
+def persist_eval_cases(
+    agent_name: str,
+    run_result: dict,
+    git_sha: Optional[str] = None,
+) -> int:
+    """A3-R3: persiste 1 AgentEvalCase por caso do run (calibração do judge).
+
+    Espelha a saída de run_evals (`run_result['cases']`), gravando o veredito
+    GRANULAR do judge por caso (vs o score AGREGADO de AgentEvalScore). Cada
+    linha habilita o spot-check humano de 5-10% (sample_unreviewed) e a métrica
+    de concordância (concordance_rate) — eixos/A-flywheel.md:165.
+
+    insert_case usa SAVEPOINT (begin_nested) que NÃO commita sozinho; esta
+    função faz db.session.commit() ao final (best-effort, rollback defensivo,
+    mesmo pattern do batch). Um caso que explode no insert NÃO impede os demais.
+
+    Args:
+        agent_name: Nome do subagente (ex: 'analista-carteira').
+        run_result: Dict de run_evals; só `run_result['cases']` é lido.
+        git_sha: SHA do código avaliado (rastreabilidade), ou None.
+
+    Returns:
+        Número de casos efetivamente inseridos (best-effort; 0 em falha total).
+    """
+    from app import db
+    from app.agente.models import AgentEvalCase
+
+    cases = run_result.get('cases') or []
+    inseridos = 0
+    for c in cases:
+        try:
+            entry = AgentEvalCase.insert_case(
+                agent_name=agent_name,
+                case_id=c.get('id'),
+                case_score=c.get('case_score', 0.0),
+                status=c.get('status', 'error'),
+                git_sha=git_sha,
+                n_runs=c.get('n_runs', 1),
+                case_score_variance=c.get('case_score_variance', 0.0),
+                invoke_failures=c.get('invoke_failures', 0),
+                evidence=c.get('evidence'),
+            )
+            if entry is not None:
+                inseridos += 1
+        except Exception as exc:
+            # best-effort: um caso falhando NÃO impede os demais (INV-6).
+            logger.warning(
+                f'[EVAL_RUNNER] {agent_name}: erro ao persistir caso '
+                f'{c.get("id")}: {exc}'
+            )
+
+    try:
+        db.session.commit()
+    except Exception as commit_err:
+        # best-effort (INV-6): nada propaga; descarta os SAVEPOINTs pendentes.
+        logger.warning(
+            f'[EVAL_RUNNER] {agent_name}: commit de persist_eval_cases falhou '
+            f'(best-effort): {commit_err}'
+        )
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return 0
+
+    logger.info(
+        f'[EVAL_RUNNER] {agent_name}: persist_eval_cases gravou {inseridos}/'
+        f'{len(cases)} casos (A3-R3 calibracao)'
+    )
+    return inseridos
+
+
 def run_eval_batch(agent_filter: Optional[str] = None) -> dict:
     """Job RQ: roda o eval REAL dos golden datasets e persiste scores.
 
@@ -462,6 +534,25 @@ def _run_regression_in_context(
             except Exception:
                 pass
 
+        # ─── 4b. A3-R3 — persistir CASOS para spot-check humano (gated) ───────
+        # Import LAZY da flag (permite patch em teste). OFF (default) → só o
+        # score agregado é persistido (comportamento A3-R2). ON → grava 1
+        # AgentEvalCase por caso (calibração do judge, A-flywheel.md:165).
+        from app.agente.config.feature_flags import USE_AGENT_EVAL_CALIBRATION
+        if USE_AGENT_EVAL_CALIBRATION:
+            try:
+                persist_eval_cases(agent_name, candidate, git_sha=git_sha_candidate)
+            except Exception as cal_err:
+                # best-effort (INV-6): calibração NUNCA derruba o gate.
+                logger.warning(
+                    f'[EVAL_RUNNER] {agent_name}: persist_eval_cases falhou '
+                    f'(best-effort): {cal_err}'
+                )
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+
         logger.info(
             f"[EVAL_RUNNER] {agent_name}: GATE REGRESSAO "
             f"candidate={candidate_score:.3f} baseline={baseline_score:.3f} "
@@ -548,6 +639,60 @@ def enqueue_eval_batch(queue=None) -> dict:
         return {'skipped': 'enqueue_error'}
 
 
+def review_eval_cases(
+    agent_name: str,
+    fraction: float = 0.1,
+    seed: Optional[int] = None,
+) -> dict:
+    """A3-R3 CLI --review: LISTA uma amostra (5-10%) de casos NÃO revisados +
+    métrica de concordância atual (spot-check humano).
+
+    V1 = SÓ LEITURA + métrica: imprime os casos a revisar (case_id, case_score,
+    status, evidence) e a concordance_rate. A MARCAÇÃO do human_verdict
+    (agree/disagree) é MANUAL/FUTURA — via UPDATE direto em agent_eval_case ou
+    endpoint futuro. Esta função NÃO escreve veredito humano.
+
+    Abre create_app() + app_context() (espelha run_eval_batch). Best-effort:
+    qualquer falha é logada, não propaga.
+
+    Returns:
+        {agent_name, sampled: int, cases: list[dict], concordance: dict}.
+    """
+    try:
+        app = create_app()
+        with app.app_context():
+            from app.agente.models import AgentEvalCase
+
+            amostra = AgentEvalCase.sample_unreviewed(
+                agent_name=agent_name, fraction=fraction, seed=seed,
+            )
+            concordance = AgentEvalCase.concordance_rate(agent_name=agent_name)
+
+            cases = [
+                {
+                    'id': c.id,
+                    'case_id': c.case_id,
+                    'case_score': c.case_score,
+                    'status': c.status,
+                    'evidence': c.evidence,
+                }
+                for c in amostra
+            ]
+            return {
+                'agent_name': agent_name,
+                'sampled': len(cases),
+                'cases': cases,
+                'concordance': concordance,
+            }
+    except Exception as exc:
+        logger.error(f'[EVAL_RUNNER] review_eval_cases falhou ({agent_name}): {exc}')
+        return {
+            'agent_name': agent_name, 'sampled': 0, 'cases': [],
+            'concordance': {'reviewed': 0, 'agree': 0, 'disagree': 0, 'rate': None},
+            'error': str(exc),
+        }
+
+
 if __name__ == '__main__':
     # Ativacao supervisionada manual (Fase 2): roda 1 dataset SINCRONO.
     #   python -m app.agente.workers.eval_runner --agent analista-carteira
@@ -555,6 +700,15 @@ if __name__ == '__main__':
     # Gate de regressao (A3 — report-only, NUNCA bloqueia):
     #   python -m app.agente.workers.eval_runner --regression --agent analista-carteira
     #   python -m app.agente.workers.eval_runner --regression --agent X --sha-baseline <sha>
+    #
+    # Spot-check humano (A3-R3 — calibracao do judge):
+    #   python -m app.agente.workers.eval_runner --review --agent analista-carteira
+    #   python -m app.agente.workers.eval_runner --review --agent X --fraction 0.1 --seed 42
+    #
+    #   V1 = LISTA os casos a revisar + imprime concordance_rate. A MARCACAO do
+    #   veredito humano (human_verdict='agree'|'disagree') e' MANUAL/FUTURA: via
+    #   UPDATE direto em agent_eval_case (set human_verdict, human_note,
+    #   reviewed_by, reviewed_at) ou endpoint futuro. Esta CLI NAO escreve verdict.
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -573,9 +727,56 @@ if __name__ == '__main__':
         help='SHA do codigo-ANTES (baseline) para o gate de regressao. '
              'Omitido → fallback para o run mais recente.',
     )
+    parser.add_argument(
+        '--review', action='store_true',
+        help='A3-R3 spot-check: LISTA uma amostra (5-10%%) de casos NAO revisados '
+             '+ a concordance_rate atual. V1 = SO leitura + metrica; a marcacao do '
+             'human_verdict (agree/disagree) e manual/futura (UPDATE direto ou '
+             'endpoint).',
+    )
+    parser.add_argument(
+        '--fraction', type=float, default=0.1,
+        help='Fracao amostrada no --review (5-10%%). Default 0.1.',
+    )
+    parser.add_argument(
+        '--seed', type=int, default=None,
+        help='Seed para amostragem DETERMINISTICA no --review (reprodutivel). '
+             'Omitido → amostra simples.',
+    )
     args = parser.parse_args()
 
-    if args.regression:
+    if args.review:
+        rev = review_eval_cases(args.agent, fraction=args.fraction, seed=args.seed)
+        if rev.get('error'):
+            print(f"[EVAL_RUNNER] erro no --review: {rev['error']}")
+        else:
+            print(
+                f"[EVAL_RUNNER] SPOT-CHECK {args.agent}: "
+                f"{rev['sampled']} caso(s) amostrado(s) para revisao humana "
+                f"(fraction={args.fraction}, seed={args.seed})"
+            )
+            for c in rev['cases']:
+                print(
+                    f"  - case_id={c['case_id']} score={c['case_score']:.3f} "
+                    f"status={c['status']}\n"
+                    f"      evidence: {(c['evidence'] or '')[:200]}"
+                )
+            conc = rev['concordance']
+            rate_str = (
+                f"{conc['rate']:.1%}" if conc['rate'] is not None
+                else 'N/A (0 revisados)'
+            )
+            print(
+                f"[EVAL_RUNNER] CONCORDANCIA judge-vs-humano: rate={rate_str} "
+                f"(reviewed={conc['reviewed']} agree={conc['agree']} "
+                f"disagree={conc['disagree']})"
+            )
+            print(
+                "[EVAL_RUNNER] Para marcar um veredito (manual/futuro): UPDATE "
+                "agent_eval_case SET human_verdict='agree'|'disagree', "
+                "reviewed_by=<usuarios.id>, reviewed_at=NOW() WHERE id=<id>;"
+            )
+    elif args.regression:
         # Resolve o dataset do agente pela mesma lista do batch.
         _datasets = dict(_default_datasets())
         _dataset_path = _datasets.get(args.agent)

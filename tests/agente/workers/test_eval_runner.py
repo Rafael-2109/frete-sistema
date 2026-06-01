@@ -846,3 +846,246 @@ def test_eval_queue_name_constante(app_ctx):
     """EVAL_QUEUE_NAME == 'agent_eval' (fila NOVA PESADA — constraint 2)."""
     from app.agente.workers import eval_runner
     assert eval_runner.EVAL_QUEUE_NAME == 'agent_eval'
+
+
+# ─── persist_eval_cases (A3-R3 calibração do judge) ───────────────────────────
+
+def _cleanup_cases(*agent_names):
+    """Remove os registros agent_eval_case criados nos testes."""
+    from app.agente.models import AgentEvalCase
+    try:
+        for name in agent_names:
+            AgentEvalCase.query.filter_by(agent_name=name).delete()
+        _db.session.commit()
+    except Exception:
+        _db.session.rollback()
+
+
+def _mk_run_result(n_cases=3):
+    """Run-result fake com n_cases (espelha a saída de run_evals)."""
+    return {
+        'agent_name': 'x', 'score': 0.5, 'total': n_cases, 'passed': 1,
+        'cases': [
+            {
+                'id': f'c-{i}', 'status': 'pass' if i == 0 else 'fail',
+                'case_score': 0.8 if i == 0 else 0.2,
+                'n_runs': 3, 'case_score_variance': 0.01,
+                'invoke_failures': 0,
+                'evidence': f'mediana de 3 run(s) caso {i}',
+            }
+            for i in range(n_cases)
+        ],
+    }
+
+
+def test_persist_eval_cases_insere_n_casos(app_ctx):
+    """persist_eval_cases grava 1 AgentEvalCase por caso + commit, lendo todos
+    os campos do run_result."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalCase
+
+    agent = _mk_agent_name('cases-')
+    try:
+        inseridos = eval_runner.persist_eval_cases(
+            agent, _mk_run_result(3), git_sha='sha-cases-aaa',
+        )
+        assert inseridos == 3
+
+        rows = AgentEvalCase.query.filter_by(agent_name=agent).order_by(
+            AgentEvalCase.case_id.asc()
+        ).all()
+        assert len(rows) == 3
+        c0 = rows[0]
+        assert c0.case_id == 'c-0'
+        assert c0.case_score == 0.8
+        assert c0.status == 'pass'
+        assert c0.git_sha == 'sha-cases-aaa'
+        assert c0.n_runs == 3
+        assert abs(c0.case_score_variance - 0.01) < 1e-9
+        assert c0.invoke_failures == 0
+        assert 'mediana de 3 run(s)' in c0.evidence
+        # não revisado por default
+        assert c0.human_verdict is None
+    finally:
+        _cleanup_cases(agent)
+
+
+def test_persist_eval_cases_sem_cases_retorna_zero(app_ctx):
+    """run_result sem 'cases' (ou vazio) → 0 inseridos, sem erro."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalCase
+
+    agent = _mk_agent_name('empty-')
+    try:
+        assert eval_runner.persist_eval_cases(agent, {'cases': []}) == 0
+        assert eval_runner.persist_eval_cases(agent, {}) == 0
+        assert AgentEvalCase.query.filter_by(agent_name=agent).count() == 0
+    finally:
+        _cleanup_cases(agent)
+
+
+def test_persist_eval_cases_best_effort_commit_falha(app_ctx, monkeypatch):
+    """best-effort (INV-6): commit explode → NÃO propaga, retorna 0."""
+    from app.agente.workers import eval_runner
+
+    agent = _mk_agent_name('boomcommit-')
+
+    def _boom_commit():
+        raise RuntimeError('commit explodiu')
+
+    monkeypatch.setattr(_db.session, 'commit', _boom_commit)
+    try:
+        # NÃO deve propagar
+        out = eval_runner.persist_eval_cases(agent, _mk_run_result(2))
+        assert out == 0
+    finally:
+        monkeypatch.undo()
+        try:
+            _db.session.rollback()
+        except Exception:
+            pass
+        _cleanup_cases(agent)
+
+
+def test_regression_gate_flag_off_nao_persiste_casos(app_ctx, monkeypatch):
+    """AGENT_EVAL_CALIBRATION=False → run_eval_regression_gate persiste só o
+    SCORE agregado (AgentEvalScore), NÃO os casos (AgentEvalCase)."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore, AgentEvalCase
+
+    agent = _mk_agent_name('caloff-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None:
+            _mk_run_result(3) | {'agent_name': agent_name},
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-off')
+
+    with patch('app.agente.config.feature_flags.USE_AGENT_EVAL_CALIBRATION', False):
+        try:
+            eval_runner.run_eval_regression_gate(agent, '/tmp/fake_caloff.yaml')
+
+            # score agregado persistido (A3-R2 inalterado)
+            assert AgentEvalScore.query.filter_by(agent_name=agent).count() == 1
+            # casos NÃO persistidos (flag OFF)
+            assert AgentEvalCase.query.filter_by(agent_name=agent).count() == 0
+        finally:
+            monkeypatch.undo()
+            _cleanup_scores(agent)
+            _cleanup_cases(agent)
+
+
+def test_regression_gate_flag_on_persiste_casos(app_ctx, monkeypatch):
+    """AGENT_EVAL_CALIBRATION=True → run_eval_regression_gate persiste o score
+    agregado E 1 AgentEvalCase por caso (calibração habilitada)."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalScore, AgentEvalCase
+
+    agent = _mk_agent_name('calon-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None:
+            _mk_run_result(3) | {'agent_name': agent_name},
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-on-bbb')
+
+    with patch('app.agente.config.feature_flags.USE_AGENT_EVAL_CALIBRATION', True):
+        try:
+            eval_runner.run_eval_regression_gate(agent, '/tmp/fake_calon.yaml')
+
+            # score agregado persistido
+            assert AgentEvalScore.query.filter_by(agent_name=agent).count() == 1
+            # casos persistidos (flag ON) com o git_sha do candidate
+            rows = AgentEvalCase.query.filter_by(agent_name=agent).all()
+            assert len(rows) == 3
+            assert all(r.git_sha == 'sha-on-bbb' for r in rows)
+        finally:
+            monkeypatch.undo()
+            _cleanup_scores(agent)
+            _cleanup_cases(agent)
+
+
+def test_regression_gate_flag_on_calibracao_falha_nao_derruba_gate(app_ctx, monkeypatch):
+    """best-effort (INV-6): com flag ON, se persist_eval_cases explodir, o GATE
+    ainda retorna seu resultado normal (calibração NUNCA derruba o gate)."""
+    from app.agente.workers import eval_runner
+
+    agent = _mk_agent_name('calboom-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+    monkeypatch.setattr(
+        eval_runner, 'build_subprocess_invoke_fn',
+        lambda *a, **k: (lambda x: 'mock'),
+    )
+    monkeypatch.setattr(
+        eval_runner, 'run_evals',
+        lambda agent_name, dataset_path, invoke_fn=None, judge_fn=None, n_runs=None:
+            _mk_run_result(2) | {'agent_name': agent_name, 'score': 0.5},
+    )
+    monkeypatch.setattr(eval_runner, '_current_git_sha', lambda: 'sha-boom')
+
+    def _boom(*a, **k):
+        raise RuntimeError('persist_eval_cases explodiu')
+
+    monkeypatch.setattr(eval_runner, 'persist_eval_cases', _boom)
+
+    with patch('app.agente.config.feature_flags.USE_AGENT_EVAL_CALIBRATION', True):
+        try:
+            out = eval_runner.run_eval_regression_gate(agent, '/tmp/fake_calboom.yaml')
+            # gate retornou normalmente (não propagou a exceção da calibração)
+            assert out['candidate_score'] == 0.5
+            assert out['blocked'] is False
+            assert 'error' not in out
+        finally:
+            monkeypatch.undo()
+            _cleanup_scores(agent)
+            _cleanup_cases(agent)
+
+
+# ─── review_eval_cases (A3-R3 CLI --review) ───────────────────────────────────
+
+def test_review_eval_cases_lista_amostra_e_concordancia(app_ctx, monkeypatch):
+    """review_eval_cases retorna amostra de não-revisados + concordance_rate."""
+    from app.agente.workers import eval_runner
+    from app.agente.models import AgentEvalCase
+
+    agent = _mk_agent_name('review-')
+
+    monkeypatch.setattr(eval_runner, 'create_app', lambda: app_ctx)
+
+    # 8 não revisados + 2 revisados (1 agree, 1 disagree → rate 0.5)
+    for i in range(8):
+        AgentEvalCase.insert_case(agent, f'u-{i}', 0.5, 'fail')
+    ra = AgentEvalCase.insert_case(agent, 'r-a', 0.9, 'pass')
+    rb = AgentEvalCase.insert_case(agent, 'r-b', 0.1, 'fail')
+    ra.human_verdict = AgentEvalCase.VERDICT_AGREE
+    rb.human_verdict = AgentEvalCase.VERDICT_DISAGREE
+    _db.session.commit()
+
+    try:
+        out = eval_runner.review_eval_cases(agent, fraction=0.25, seed=42)
+        # 25% de 8 não-revisados = 2
+        assert out['sampled'] == 2
+        assert len(out['cases']) == 2
+        # só não-revisados na amostra
+        assert all(c['case_id'].startswith('u-') for c in out['cases'])
+        # concordância sobre os 2 revisados
+        assert out['concordance']['reviewed'] == 2
+        assert out['concordance']['agree'] == 1
+        assert out['concordance']['disagree'] == 1
+        assert abs(out['concordance']['rate'] - 0.5) < 1e-9
+    finally:
+        monkeypatch.undo()
+        _cleanup_cases(agent)
