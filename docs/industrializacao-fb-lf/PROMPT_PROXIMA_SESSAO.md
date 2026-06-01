@@ -3,8 +3,8 @@
 > **Atualizado 2026-06-01 (3ª sessão).** Estado: **Etapa 1 (Remessa) + Etapa 2 (Entrada LF) + Etapa E (MO) EXECUTADAS e VALIDADAS em PROD.** **Etapas 4-5 DESBLOQUEADAS**: a **Contadora confirmou o desenho + Opção A (Ativo→Ativo, CPV só na venda)**; roteamento G4/G5a mapeado ao vivo, **spec dos 2 journals em `PROPOSTA_CONFIG_RETORNO.md`** (falta criar via dry-run). ~~Pendente lateral: dreno do trânsito 26489→30720~~ → **✅ DRENO EXECUTADO 2026-06-01** (picking `FB/INT/08128` id 322875 done; 26489 zerado, 30720=42,29 un, **0 SVL/contábil**).
 
 ## Como começar
-Leia nesta ordem (CANÔNICO): **`README.md` → `GOALS.md` → `SOT_OPERACOES.md` (v2.2) → `RUNBOOK_PILOTO_4870112.md`** — em especial **§0.7** (Model A inviável → Model B, gotchas **G-ENT-1..10**) + §0.5/§0.6. Depois **`PROPOSTA_CONFIG_RETORNO.md`** (spec G4+G5a, é o entregável atual) + `ACHADOS_TECNICOS.md` (§ACHADO 2026-06-01 = roteamento verificado).
-**IGNORE** (histórico): `DIRETRIZ.md`, `PLANO_EXECUCAO.md`, `HISTORICO/`.
+**Índice + estado: `README.md`** (ponto de entrada). Desenho-alvo + decisões: **`SOT_OPERACOES.md`** (dona; em conflito, ela vence). Execução da config G4/G5a: **`PROPOSTA_CONFIG_RETORNO.md`**. Procedimento + gotchas (G-ENT-1..10, G-REM, G-DRENO): **`RUNBOOK_PILOTO_4870112.md`** (§0.5/§0.6/§0.7). Mecanismo + IDs: **`ACHADOS_TECNICOS.md`**.
+**Superseded → `HISTORICO/`** (não seguir).
 
 ## Decisões fechadas (não reabrir)
 - Conta fiscal = família **`51010xx (ATIVA)` / `51020xx (PASSIVA)`**; SEM ICMS (CST51); tudo CONFIG por-linha.
@@ -32,7 +32,7 @@ Leia nesta ordem (CANÔNICO): **`README.md` → `GOALS.md` → `SOT_OPERACOES.md
 
 ## PRÓXIMO (pendente go Rafael)
 1. **Implementar a config G4+G5a** (Contadora já confirmou Opção A) — **spec completa em `PROPOSTA_CONFIG_RETORNO.md`**:
-   - **G5a (FB)**: criar journal `ENTRADA - RETORNO DE INDUSTRIALIZAÇÃO` (purchase, no_payment=**5101010001**/id22800, espelho inverso de j17) + registro `tipo.pedido.diario(FB, serv-industrializacao)` → esse journal; op **3252** na 1902 (mata double-count).
+   - **G5a (FB)**: **AJUSTAR o journal `j1001 ENTRADA - SERVIÇO DE INDUSTRIALIZAÇÃO`** existente — setar `account_no_payment_id`=**5101010001**/id22800 (hoje VAZIO) + registro `tipo.pedido.diario(FB, serv-industrializacao → j1001)`; op **3252** na 1902 (mata double-count). **NÃO criar journal novo** (decisão Rafael — o j1001 já é a NF mista que separa 1124/1902; `SOT §2 L5a`).
    - **G4 (LF)**: criar journal `SAÍDA - RETORNO DE INDUSTRIALIZAÇÃO` (sale, no_payment=**5101020001**/id26667, espelho inverso de j1047) + registros `tipo.pedido.diario(LF, dev-industrializacao/perda)`; tirar do journal PERDAS (j1003).
    - **SEM bloqueio do Contador** (ele já deu Opção A + desenho + perna REMESSA + PA=Ic+S). O resto é técnico/piloto: apontar a conta da 1902 via posição fiscal (`PROPOSTA §5`), medir o AVCO no piloto (`PROPOSTA §6`). **dry-run + go Rafael em TODA escrita.**
 2. ~~Drenar trânsito 26489→30720~~ — **✅ EXECUTADO 2026-06-01** (picking `FB/INT/08128` id 322875 done). Ver "Pendências Etapa 2" abaixo.
@@ -60,8 +60,8 @@ Empresas FB=1/LF=5 · partner LF=35 · Vendors=4 · trânsito=26489 · **31092**
 - Classificador bloqueia bash complexo + skill WRITE → invocação canônica simples (1 comando/escrita).
 
 ## Dúvidas técnicas em aberto (resolver na implementação, com dry-run — NÃO bloqueiam o conceito)
-- **Roteamento da 1902 (G5a)**: usar `tipo_pedido_entrada=serv-industrializacao` criando registro novo no `tipo.pedido.diario(FB)` (recomendado, isolado) **vs** repontar o j1001 ENTSI (global). `tipo_pedido_entrada` é SELECTION → não dá p/ criar valor novo sem DEV. `PROPOSTA §3b`.
-- **Linha 1124 serviço (FB entrada)**: `serv-industrializacao` **não tem registro** no `tipo.pedido.diario(FB)` → cai em journal default — **confirmar qual** antes de escriturar.
+- **Roteamento da 1902 (G5a) — RESOLVIDO (2026-06-01):** criar `tipo.pedido.diario(FB, serv-industrializacao → j1001)` (`serv-industrializacao` está LIVRE na FB — o id 29 é `industrializacao`) + setar no_payment=5101010001 no j1001 + op 3252 na 1902. Decisão: ajustar o j1001, não criar journal novo. `SOT §2 L5a` / `PROPOSTA §3`.
+- **Linha 1124 serviço (FB entrada):** também é `serv-industrializacao` → cairá no **mesmo j1001**; o j1001 já separa 1124(→Fornecedores) de 1902(→no_payment) na NF mista — **confirmar no piloto** que se mantém com o no_payment setado.
 - **pt98 nunca usado** (0 pickings): o piloto será o **1º uso real** (31093→26489) — validar comportamento.
 - **Criar `account.journal` via XML-RPC**: confirmar se é possível por XML-RPC ou exige UI (DDL de journal).
 - **AVCO subvalorizado (G8)**: PA na FB hoje = R$ 35,37/cx (só S) — a NF de retorno precisa declarar `price_unit = Ic+S` (ligado às 3 pernas).

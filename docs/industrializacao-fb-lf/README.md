@@ -1,48 +1,43 @@
-# Industrialização FB↔LF
+# Industrialização FB↔LF — Índice
 
-Industrialização por encomenda dentro do grupo: **FB** (encomendante) remete insumos → **LF** (industrializadora) produz e devolve o PA. Objetivo: **acertar fluxo físico + contábil** para os insumos de terceiros **não inflarem o estoque** (passivo medido: **R$ 785k** só no MOLHO SHOYU PET; `5101010001` FB acumulado **R$ 60,8M**).
+Industrialização por encomenda no grupo: **FB** (encomendante) remete insumos → **LF** (industrializadora) produz e devolve o PA. Objetivo: fechar o fluxo físico+contábil para os insumos de terceiros **não inflarem o estoque** (passivo medido R$ 785k só no MOLHO SHOYU PET; `5101010001` FB acumulado R$ 60,8M).
 
-> **Estado: 2026-05-30** — desenho mapeado e verificado; 2 escritas config aplicadas (op 3252 + L1, reversíveis); **piloto E2E NÃO iniciado** (aguarda go p/ a remessa). Ver `ESTADO_ATUAL` abaixo e `PROMPT_PROXIMA_SESSAO.md`.
+> **Este README é o ÍNDICE** — só ponteiros. Cada assunto tem **um dono**; a informação mora num lugar só (não é replicada entre docs). Progressive disclosure: abra o doc do tema quando precisar do detalhe.
 
----
+## Mapa dos documentos (cada um = 1 tema)
 
-## Leia nesta ordem (CANÔNICO)
+| Camada | Doc | Dono de | Abra quando |
+|---|---|---|---|
+| índice | **`README.md`** (este) | índice + ESTADO atual | ponto de entrada |
+| handoff | **`PROMPT_PROXIMA_SESSAO.md`** | próximo passo da sessão | retomar o trabalho |
+| desenho ⭐ | **`SOT_OPERACOES.md`** | desenho-alvo + **DECISÕES** (CFOP/contábil/estoque por etapa) | entender "o que deve ser" / qualquer decisão |
+| metas | **`GOALS.md`** | metas + critério de sucesso por goal | medir se uma etapa fechou |
+| mecanismo | **`ACHADOS_TECNICOS.md`** | como o Odoo/CIEL IT decide + IDs/constantes | precisar de um ID ou do mecanismo |
+| execução config | **`PROPOSTA_CONFIG_RETORNO.md`** | **COMO** executar a config G4/G5a (IDs, roteamento, dry-run) | criar/ajustar journals do retorno |
+| procedimento | **`RUNBOOK_PILOTO_4870112.md`** | passos do piloto + gotchas (G-ENT/G-REM/G-DRENO) + drivers | executar uma etapa no Odoo |
+| histórico | **`HISTORICO/`** | superseded (DIRETRIZ, PLANO_EXECUCAO, 00_FLUXO, PASSO0, CICLO, T-*) | arqueologia — **NÃO seguir** |
 
-| # | Doc | O que é |
-|---|---|---|
-| 1 | **`GOALS.md`** | **COMECE AQUI.** Plano objetivo: fluxo atual×correto×mudança por operação + 10 goals com **métrica de sucesso** + levers + ordem de ataque. |
-| 2 | **`SOT_OPERACOES.md`** (v2.2) | Fonte única do **desenho-alvo** por operação (CFOP/contábil/estoque), prova de fechamento do ciclo, decisões do Contador. |
-| 2b | **`PROPOSTA_CONFIG_RETORNO.md`** | **Spec G4+G5a** (entregável atual): 2 journals + roteamento, com IDs; status das decisões (Contadora já confirmou Opção A). |
-| 3 | **`CICLO_COMPLETO_MAPA.md`** | Os **fatos verificados**: como o ciclo é hoje, por que não fecha, os 3 saldos que acumulam. |
-| 4 | **`ACHADOS_TECNICOS.md`** | **Mecanismo Odoo/CIEL IT** + IDs (contas, ops, journals, locations) + os achados 2026-05-30 (5101010001, granularidade por-linha, movimento_estoque). |
-| 5 | **`PROPOSTA_CONFIG_RETORNO.md`** | Proposta concreta de operações+journals do retorno (G5a/G5b) — o que criar/ajustar. |
-| — | **`T-*-resultado.md`** | Log de execução: `T-PASSO0-TESTE` (G5b wiring LF ✅), `T-G5B-OP` (op 3252 ✅). |
+⭐ fonte única. **Em conflito, a SOT vence**; os demais apontam para ela, não copiam.
 
-## ESTADO_ATUAL (checkpoint 2026-06-01 — piloto 4870112 1 caixa, lote PILOTO-3105)
-**Config base (reversível):** ✅ Op 3252 (`movimento_estoque=False`, lever G5b) · ✅ **L1 aplicado** (14 categorias LF → valoração `1150200001`/input `1150100011`/output `1150100012`, Design A — **VIVO e validado**).
-**Piloto E2E (ver `RUNBOOK §0.7` + `PROMPT_PROXIMA_SESSAO.md`):**
-- ✅ **Etapa 1 (Remessa)**: NF `RPI/2026/00245` SEFAZ-OK; `D 5101010001 +279,23`.
-- ✅ **Etapa 2 (Entrada LF) COMPLETA — Model B**: picking `LF/IN/01790` (322451) Vendors→**31092** (lotes LF); SVL Design A `D 1150200001 / C 1150100011`; **ENTIN 737062 POSTED** `D 1150100011 / C 5101020001 (PASSIVA)`; **validador Δ1150100011=0 PASS**. (Model A inviável — lote com estoque tem company imutável, G-ENT-6.)
-- ✅ **Etapa E (MO) COMPLETA — fix G-ENT-10**: MOs **20252** (BATELADA) + **20254** (PA) consumiram 31092 → PA em 31093; **net-zero terceiros** (`1150100004`/`1150200001` bal=0), estoque próprio LF intacto (G3 ✅). Fantasmas (20235/36/38/39) = rastro `done`, estoque zerado via Skill 1. Fix: `picked=True` nas move.lines dos raws antes do `mark_done`.
-- ✅ **Etapas 4-5 (retorno) — DESBLOQUEADAS (2026-06-01)**: a **Contadora confirmou** o desenho + **Opção A (Ativo→Ativo, CPV só na venda)**. Roteamento G4 (LF saída baixar PASSIVA 5101020001) + G5a (FB entrada baixar ATIVA 5101010001) **mapeado ao vivo**; spec dos 2 journals + `tipo.pedido.diario` em **`PROPOSTA_CONFIG_RETORNO.md`** (falta criar via dry-run; pendente Contador: 3 pernas + perna REMESSA×RETORNO + resíduo NF mista).
-- ✅ **Dreno 26489→30720 EXECUTADO (2026-06-01)**: picking pt5 `FB/INT/08128` (322875) done; 26489→0, 30720=42,29 (16 quants), **0 SVL/contábil**. Fecha o lado físico FB da remessa. Gotcha G-DRENO-1 (pt5 auto-reserva → `do_unreserve`) corrigido no driver.
+## ESTADO (checkpoint 2026-06-01 — piloto 4870112, 1 caixa, lote PILOTO-3105)
 
-## Decisão de base (resolvida nesta sessão)
-- **Conta**: usar a família de compensação existente **`51010xx` (ATIVA) / `51020xx` (PASSIVA)** — **NÃO** `1150200001` como conta fiscal (a `DIRETRIZ` errou). `1150200001` é só a conta de **valoração SVL** da LF (camada distinta).
-- **Saída FB (remessa) JÁ está correta** (`D 5101010001 / C 1150100002`). O problema é o **RETORNO** não fechar.
-- **Sem ICMS** em nenhuma etapa (CST51 + CBS/IBS/PIS/COFINS). Não mexer em imposto.
-- **Tudo é CONFIG** (operação por-linha + `movimento_estoque`), não DEV.
+Config base (reversível): ✅ op 3252 (`movimento_estoque=False`) · ✅ L1 (categorias LF, Design A).
 
-## Contador — JÁ confirmou o essencial (2026-06-01)
-✅ Opção A (Ativo→Ativo, CPV só na venda) · perna REMESSA direto · PA vale Ic+S · Design A da SVL-LF (vivo na Etapa 2) · conta PRODUÇÃO 1150100004 (validada net-zero na MO). **G4/G5a não dependem de mais decisão contábil** — resta execução técnica (`PROPOSTA §5/§6/§8`).
-- 🟡 Único re-escalonamento possível: SE o piloto revelar descasamento AVCO×razão na 1902 simbólica (3 pernas — `PROPOSTA §6`).
-- ⏳ Separado/sem prazo: **regularização dos acumulados** (`5101010001` R$60,8M FB + R$8,67M LF; double-count R$785k; `1150100011` −R$1,49bi) — `GOALS G9`.
+| Etapa | Estado |
+|---|---|
+| 1 — Remessa FB→LF | ✅ NF `RPI/2026/00245` SEFAZ-OK; `D 5101010001 +279,23` |
+| Dreno físico FB `26489→30720` | ✅ EXECUTADO — picking `FB/INT/08128` (322875); 26489→0, 30720=42,29, **0 SVL** |
+| 2 — Entrada LF (Model B) | ✅ picking 322451→31092; ENTIN 737062 posted; Δ1150100011=0 |
+| E — MO | ✅ MOs 20252+20254; net-zero terceiros; PA em 31093 |
+| 4 — Retorno LF→FB (faturar) | ⏳ pendente — depende da config **G4** |
+| 5 — Entrada FB (escriturar) | ⏳ pendente — depende da config **G5a** |
 
-## ⚠️ SUPERSEDED (referência histórica — NÃO seguir como verdade atual)
-- `DIRETRIZ.md` — propunha migrar tudo p/ `1150200001`. **Superado por `SOT_OPERACOES.md`** (adota 51010xx).
-- `PLANO_EXECUCAO.md` / `00_FLUXO_ATUAL_VS_IDEAL.md §3` — plano/ideal preliminares. **Superados por `GOALS.md` + `SOT`**. (`00_FLUXO §1-2` ainda vale como enunciado do problema.)
-- `PASSO0_LEVANTAMENTO.md` — levantamento das categorias LF (válido); a parte de conta foi superada pelo SOT.
-- `HISTORICO/` — execução "Opção 2 / inter-company" **abandonada**. IDs válidos, fluxo NÃO.
+**Próximo:** config do retorno (G4+G5a). Passo → `PROMPT_PROXIMA_SESSAO.md`. Decisão+execução → `SOT §2 L5a` + `PROPOSTA §3`.
 
-## Scripts (`scripts/`, todos READ-ONLY exceto onde dito)
-Probes Passo 0 (`passo0_*`), ciclo (`ciclo_*`), G5b (`g5b_*`), E2E (`e2e_*`). **WRITE**: `teste_controlado_repoint.py` (LF wiring, auto-restaura), `teste_lever_saida_fb.py` (lever FB, refutado), `g5b_piloto_criar_operacao.py` (op 3252), `e2e_l1_repoint_lf.py` (L1, `--revert`).
+## Decisões fechadas (detalhe e porquê na `SOT`)
+- Conta de compensação = família **`51010xx` ATIVA / `51020xx` PASSIVA** (NÃO `1150200001`, que é só valoração SVL-LF).
+- **Opção A** (Ativo→Ativo, CPV só na venda) — Contadora confirmou 2026-06-01.
+- **G5a = AJUSTAR o journal `j1001` existente** (`account_no_payment_id`=5101010001), **não** criar journal novo. **G4 = criar journal LF de saída** (no_payment=5101020001) + tirar de PERDAS.
+- Compensação 51010xx vem do `account_no_payment_id` do **journal** (não da posição fiscal).
+- Sem ICMS em nenhuma etapa (CST51 + CBS/IBS/PIS/COFINS).
+> Fonte: `SOT_OPERACOES.md` (§0 princípio · §2 por etapa · §5 decisões · §histórico v2.3).

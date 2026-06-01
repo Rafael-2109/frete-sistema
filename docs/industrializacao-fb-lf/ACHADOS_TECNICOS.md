@@ -1,6 +1,7 @@
 # ACHADOS TÉCNICOS — Industrialização FB↔LF (Odoo / CIEL IT)
 
-> Fatos **verificados ao vivo** (PROD, 2026-05-29) que fundamentam a `DIRETRIZ.md`. Tudo aqui é o "como o Odoo/CIEL IT realmente decide", não suposição.
+> **Papel deste doc:** mecanismo Odoo/CIEL IT + **IDs/constantes** (contas, operações, journals, locations, picking types). Desenho-alvo e decisões = `SOT_OPERACOES.md`. Índice geral: `README.md`.
+> Fatos **verificados ao vivo** (PROD) — "como o Odoo/CIEL IT realmente decide", não suposição. (A `DIRETRIZ.md` original foi para `HISTORICO/`.)
 
 ---
 

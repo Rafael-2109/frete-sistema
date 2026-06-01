@@ -1,6 +1,6 @@
 # SOT — Operações de Industrialização FB↔LF (fonte única)
 
-> **Source of Truth único** do desenho-alvo, sobre o ciclo verificado ao vivo (`CICLO_COMPLETO_MAPA.md`, `ACHADOS_TECNICOS.md` §ACHADO 2026-05-30) + regras fiscais CFOP. **Supersede** `DIRETRIZ.md` (mirava `1150200001`) e `00_FLUXO §3.4` (lançamentos preliminares).
+> **Source of Truth único** do desenho-alvo. Mecanismo Odoo/CIEL IT + IDs: `ACHADOS_TECNICOS.md`. Índice geral: `README.md`. Supersede a abordagem antiga (`1150200001` como conta fiscal) — docs preliminares arquivados em `HISTORICO/` (DIRETRIZ, 00_FLUXO, CICLO_COMPLETO_MAPA, PASSO0).
 > **v2.1 (2026-05-30)** — corrigido após verificação adversarial (5 lentes) + reviewer de ambiguidades. Itens ✔v2/✔v2.1. **Reconciliado**: `movimento_estoque` é POR LINHA (não cabeçalho); sem ICMS em nenhuma etapa.
 > **v2.2 (2026-06-01)** — ✅ **Contadora CONFIRMOU as Etapas 4 e 5 + Opção A (Ativo→Ativo)**: insumos consumidos incorporam-se ao custo do PA (`D 1150100007 / C 5101010001`), **CPV só na venda final** (não CPV no retorno). Roteamento G4/G5a mapeado ao vivo → spec em `PROPOSTA_CONFIG_RETORNO.md`. Itens ✔v2.2.
 > Status: ✅ correto · 🔧 config · 🔴 principal/dev · ❓ Contador.
@@ -11,7 +11,7 @@
 ## 0. Princípio fiscal-contábil (a regra)
 
 Industrialização por encomenda: os **insumos nunca mudam de dono** — são e seguem da **FB**. A LF agrega **valor (serviço + materiais próprios da LF: ÁGUA `consu` + energia)**. Por isso:
-- **FB**: na remessa reclassifica insumos de estoque próprio → conta de controle "material em poder de 3os". No retorno **baixa** essa conta: insumos consumidos **incorporam-se ao custo do PA** (Ativo→Ativo, **não** DRE/CMV ✔v2 — supersede `00_FLUXO §3.4` que mandava CMV); sobras voltam ao estoque. FB paga o **serviço** à LF.
+- **FB**: na remessa reclassifica insumos de estoque próprio → conta de controle "material em poder de 3os". No retorno **baixa** essa conta: insumos consumidos **incorporam-se ao custo do PA** (Ativo→Ativo, **não** DRE/CMV ✔v2); sobras voltam ao estoque. FB paga o **serviço** à LF.
 - **LF**: material **não é seu** → balanço com impacto de equity **zero**; reconhece **receita de serviço de industrialização**.
 - **Ciclo fecha**: controle FB e compensação LF **zeram** a cada remessa↔retorno; estoque físico só reflete PA (FB) + sobras.
 
@@ -55,7 +55,7 @@ NET = `D 5101010001 (ATIVA) +I / C 1150100002 −I` (SVL via 1150100012 + NF fp2
 - **SVL ideal — ❓ design em aberto (✔v2):** a valoração deve ir para terceiros (`1150200001`), MAS a **contrapartida (input/output) precisa fechar a transitória `1150100011`** que a NF debita — senão `1150100011` (LF) acumula (gap que o teste simples não pegou). Dois desenhos candidatos:
   - **(A)** valoração→`1150200001`, **input/output→manter transitórias `1150100011/012`**: SVL `D 1150200001 / C 1150100011`; NF `D 1150100011 / C 5101020001`; **NET `D 1150200001 / C 5101020001`** (transitória zera; material sob custódia compensado pela obrigação). ← provável correto.
   - **(B)** valoração→`1150200001`, input/output→`1150200002` (o que testamos): net-zero no SVL isolado, **mas deixa `1150100011` aberta** pela NF.
-- **Lever L1**: repoint categorias contexto LF. ⚠️ **validado só p/ ajuste simples** (T-PASSO0), **NÃO** para o fluxo entrada-com-NF nem MO → **re-testar desenho (A) na Fase 2** ✔v2.
+- **Lever L1**: repoint categorias contexto LF (Design A). ✅ **VIVO e validado em PROD** — entrada LF (Etapa 2) + MO (Etapa E) executadas com Δ1150100011=0 e net-zero terceiros (estado em `README`).
 
 ### Etapa 3 — LF PRODUÇÃO / MO (interno) — ✅ EXECUTADA E VALIDADA (2026-06-01)
 MO manual (BoM 3695→3646). Consumo (terceiros)→PRODUÇÃO; produção do PA←PRODUÇÃO. **Invariante ✔v2: a LF só agrega `consu` (ÁGUA) + serviço — NUNCA adiciona `product` próprio ao PA de terceiros.** Conta `1150100004 PRODUÇÃO` transitória (zera por MO).
@@ -78,7 +78,7 @@ MO manual (BoM 3695→3646). Consumo (terceiros)→PRODUÇÃO; produção do PA�
   - **1903 (sobras)**: **`D 1150100002 (sobra volta) / C 5101010001 (baixa I_sobra)`** — físico (re-entra estoque).
 - **AVCO do PA (leg ✔v2):** o PA entra valorado pelo **price_unit da linha 1124/1902 da NF** = `I_consumido + S`. Não é soma automática → a NF de retorno da LF **deve declarar** esse valor. **Sem isso o AVCO grava custo errado.**
 - **Lever L5 — SEPARAR em duas camadas (✔v2):**
-  - **L5a (conta da NF)**: a entrada de retorno **creditar `5101010001`** em vez de só `FORNECEDORES`. ✔v2.2 **caminho mapeado** (`PROPOSTA §3`): criar journal FB purchase `ENTRADA - RETORNO DE INDUSTRIALIZAÇÃO` (no_payment=5101010001 id22800, espelho inverso de j17) + registro `tipo.pedido.diario(FB, serv-industrializacao)` → esse journal, com op **3252** na linha 1902. Resíduo: NF mista (no_payment é por cabeçalho × baixa por linha — `PROPOSTA §5`).
+  - **L5a (conta da NF) — ✔v2.3 DECISÃO (Rafael 2026-06-01): AJUSTAR o journal existente `j1001 ENTRADA - SERVIÇO DE INDUSTRIALIZAÇÃO`** (NÃO criar journal novo): setar `account_no_payment_id=22800` (5101010001 ATIVA) no j1001 + `tipo.pedido.diario(FB, serv-industrializacao → j1001)` para rotear a op **3252** da linha 1902. Motivo: o j1001 **já é a NF mista** que separa 1124(→Fornecedores) de 1902(→conta-da-operação) — só falta o no_payment p/ a 1902 baixar a ATIVA; criar journal paralelo seria redundante. Efeito GLOBAL e intencional (todo retorno de serviço de industrialização baixa 5101010001 = fecha o regime). **Premissa-chave:** a conta de compensação 51010xx vem do `account_no_payment_id` do **JOURNAL**, NÃO da posição fiscal (a operação não tem campo de fp — verificado ao vivo). IDs/roteamento/dry-run: `PROPOSTA §3`.
   - **L5b (não re-inflar estoque) — ✔v2.1 RECONCILIADO (POR LINHA, config)**: a linha **1902 NÃO pode gerar stock.move**. Governado por **`l10n_br_movimento_estoque`** da operação, que é **por LINHA** (`account.move.line.l10n_br_operacao_id`; 95 ops já usam `False`). → setar a operação da linha 1902 com `movimento_estoque=False` suprime o stock.move **sem separar NF nem DEV**. **Op 3252 criada** para isso. **Resíduo ÚNICO a confirmar no piloto**: que a NF mista gere picking só das linhas `movimento_estoque=True` (1124/1903), pulando a 1902. *(Corrige a versão anterior que dizia "por cabeçalho / pode exigir separar NFs / DEV".)*
 
 ---
@@ -133,3 +133,4 @@ Remessa: insumos `I = Ic (consumido) + Is (sobra)`; valor agregado `S`. Invarian
 | 2.0 | 2026-05-30 | Correções pós-verificação adversarial: baixa única de I (sem double-count); NF de retorno MISTA (5902 CST51 + 5124 ICMS); leg AVCO do PA (Ic+S); L5 separado em L5a(NF=config)/L5b(SVL=dev); desenho SVL-LF em aberto (fechar 1150100011); LF sair do journal PERDAS; intraestadual confirmado; 180d CST51; invariante 5902=5901; Ativo→Ativo supersede CMV |
 | 2.1 | 2026-05-30 | Reconciliado: `movimento_estoque` por linha (não cabeçalho); sem ICMS em nenhuma etapa (CST51 + CBS/IBS/PIS/COFINS) |
 | 2.2 | 2026-06-01 | **Contadora confirmou Etapas 4-5 + Opção A (Ativo→Ativo, CPV só na venda)**; roteamento G4/G5a mapeado ao vivo (journals/operações/tipo.pedido.diario); spec em `PROPOSTA_CONFIG_RETORNO.md`; resíduo NF mista (cabeçalho×linha) |
+| 2.3 | 2026-06-01 | **DECISÃO G5a: ajustar o j1001 existente** (não criar journal novo); premissa fixada: compensação 51010xx vem do `account_no_payment_id` do JOURNAL, não da posição fiscal (operação não tem campo de fp — verificado ao vivo). **Docs reorganizados** (centralização + progressive disclosure): esta SOT = dona do desenho/decisões; `PROPOSTA` = anexo de execução; `README` = índice. Superseded → `HISTORICO/`. |

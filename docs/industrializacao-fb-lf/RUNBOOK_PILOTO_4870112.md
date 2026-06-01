@@ -1,7 +1,7 @@
 # RUNBOOK — Piloto E2E 4870112 (Industrialização FB↔LF)
 
 > **Batch do piloto = 1 CAIXA de 4870112** (MOLHO SHOYU PET 12×1,01 L = 12 frascos). Unidade mínima.
-> Detalha a **Etapa 1 (Remessa)** completa; Etapas 2–5 em esqueleto (ref. `GOALS §A`, `SOT §2`).
+> **Papel deste doc:** procedimento de execução do piloto + **gotchas** (G-ENT/G-REM/G-DRENO) + drivers. Desenho-alvo e decisões = `SOT_OPERACOES.md §2`; índice = `README.md`.
 > **Gates invioláveis:** toda escrita Odoo com dry-run + aprovação do Rafael; **NF SEFAZ (Etapas 1 e 4) = IRREVERSÍVEL → só com "go" explícito**.
 > **Validado ao vivo 2026-05-30** (Odoo PROD v17): op 3252 ✓ · L1 ✓ · receita/Ic ✓ · preview e g5b rodando. Sondas: `/tmp/ind_fb_lf_validar_estado.py`, `scripts/e2e_remessa_etapa1_dryrun.py`, `scripts/g5b_aplicar_op3252_na_linha.py`.
 > **Gotcha Odoo 17:** linhas de produto da fatura têm `display_type='product'` (não `False`); CFOP usa `codigo_cfop`; incoterm em `stock.picking` é o campo **`incoterm`** (não `incoterm_id`).
