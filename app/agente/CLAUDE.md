@@ -1,6 +1,6 @@
 # Agente Logistico Web — Guia de Desenvolvimento
 
-**LOC**: ~41.9K | **Arquivos**: 80 | **Atualizado**: 25/05/2026
+**LOC**: ~48.9K | **Arquivos**: 96 | **Atualizado**: 01/06/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
@@ -10,8 +10,10 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 > `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only). Design por
 > eixo em `docs/blueprint-agente/eixos/*.md` + revisao em `critica/*.md`. **ANTES de mexer em
 > qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), LER a spec do eixo +
-> a critica** — lição da sessao A3 (drift por nao reler). Proxima fase: A4 — ver
-> `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_A4.md` (regra anti-drift embutida).
+> a critica** — lição da sessao A3 (drift por nao reler). A4 V1 **LIVE em PROD** (2026-06-01). Proxima fase: **VALIDAÇÃO de funcionamento + medição de
+> resultados** de tudo (Ondas 0-4) — ver `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_VALIDACAO.md`
+> (regra inviolavel: **VERIFICAR o estado real em PROD, nao assumir**). Historico anti-drift A4:
+> `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_A4.md`.
 
 ---
 
@@ -46,13 +48,15 @@ app/agente/                          # Root — 6 arquivos
 │   ├── memories.py                  # CRUD memorias + users + review
 │   ├── briefing.py                  # api_get_briefing
 │   └── user_preferences.py          # Preferences API (thinking display, etc.)
-├── config/                          # Configuracao e controle de acesso — 6 arquivos
+├── config/                          # Configuracao e controle de acesso — 8 arquivos
 │   ├── __init__.py
 │   ├── agent_loader.py              # Carregamento dinamico do agente
+│   ├── capability_registry.py       # Registro de capacidades/tools por contexto (gating)
 │   ├── empresa_briefing.md          # Briefing institucional injetado no prompt
 │   ├── feature_flags.py             # Feature flags e timeouts configuraveis
 │   ├── permissions.py               # ContextVar session_id, event_queue, thread-safety
-│   └── settings.py                  # Constantes e configuracoes do SDK
+│   ├── settings.py                  # Constantes e configuracoes do SDK
+│   └── skills_whitelist.py          # Allow-list de skills expostas ao agente (budget truncamento)
 ├── hooks/                           # Hooks do Agent SDK — 2 arquivos
 │   ├── __init__.py
 │   └── README.md
@@ -61,29 +65,36 @@ app/agente/                          # Root — 6 arquivos
 │   ├── preset_operacional.md        # Preset customizado (substitui claude_code preset)
 │   ├── prompt_inventario.md         # Prompt operacional inventario 2026-05 (NACOM/LF)
 │   └── system_prompt.md             # System prompt do agente (usuarios finais)
-├── sdk/                             # Integracao com Claude Agent SDK — 17 arquivos
+├── sdk/                             # Integracao com Claude Agent SDK — 22 arquivos
 │   ├── __init__.py
 │   ├── _sanitization.py             # Helpers de sanitizacao PII cross-modulo
 │   ├── client.py                    # Client principal (streaming, build_options, parse)
 │   ├── client_pool.py               # Pool de clients reutilizaveis
+│   ├── context_enrichment.py        # Enriquecimento de contexto per-request (blueprint agente)
 │   ├── cost_tracker.py              # Rastreamento de custos por sessao
 │   ├── hooks.py                     # 8 SDK hook closures (build_hooks() factory)
 │   ├── memory_injection.py          # Pipeline multi-tier de injecao de memorias
 │   ├── memory_injection_rules.py    # Regras declarativas de injecao (paths + filtros)
 │   ├── model_router.py              # Routing de modelo per-request (per-user/preset)
 │   ├── pending_questions.py         # AskUserQuestion (dual event: sync + async)
+│   ├── plan_state.py                # Estado de plano/super-loop (PlanState + Tasks, shadow)
+│   ├── plan_triage.py               # Triagem de plano (B-TRIAGE shadow, blueprint A/B)
 │   ├── pricing.py                   # Tabela precos por modelo (input/output/cache_creation/cache_read)
 │   ├── session_archive.py           # Archive tar.gz S3 de sessoes expiradas
 │   ├── session_persistence.py       # Persistencia JSONL de sessoes SDK
 │   ├── session_store_adapter.py     # Adapter PostgresSessionStore (Fase B cutover)
 │   ├── shutdown_state.py            # Flag global atexit (suprime Sentry de RuntimeError shutdown)
+│   ├── sticky_session.py            # Afinidade de sessao por processo (R-SPLIT-NGINX / Pattern 2)
 │   ├── stream_parser.py             # Dataclasses + classificacao de erros de tool
-│   └── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
-├── services/                        # Servicos de inteligencia — 17 arquivos (ver services/CLAUDE.md)
+│   ├── subagent_reader.py           # Wrapper list_subagents + get_subagent_messages (SDK 0.1.60)
+│   └── verifiers.py                 # Verificadores B2 (verify shadow do super-loop)
+├── services/                        # Servicos de inteligencia — 20 arquivos (ver services/CLAUDE.md)
 │   ├── __init__.py
 │   ├── CLAUDE.md                    # Sub-guia com regras R1-R5 dos services
 │   ├── _utils.py                    # Helpers compartilhados (parse_llm_json_response)
 │   ├── artifact_service.py          # Service de artifacts (rate limit, spec validation, S3)
+│   ├── directive_promotion_service.py # Promocao automatica de diretriz (A4 flywheel Distill→Deploy)
+│   ├── eval_gate_service.py         # Gate de avaliacao offline (A3 golden dataset / eval-gate)
 │   ├── friction_analyzer.py         # Analise de friccao de uso
 │   ├── improvement_suggester.py     # Dialogo D8 melhoria (batch + real-time)
 │   ├── insights_service.py          # Gerador de insights pos-sessao
@@ -91,6 +102,7 @@ app/agente/                          # Root — 6 arquivos
 │   ├── knowledge_graph_service.py   # Grafo de conhecimento (memorias)
 │   ├── memory_consolidator.py       # Consolidacao de memorias redundantes
 │   ├── metrics_dashboard_service.py # Dashboard telemetria subagent (Fase A1+A3)
+│   ├── ontology_bootstrap.py        # Bootstrap da ontologia (knowledge graph / ontology_query)
 │   ├── pattern_analyzer.py          # Extracao de padroes e conhecimento
 │   ├── recommendations_engine.py    # Motor de recomendacoes
 │   ├── sentiment_detector.py        # Deteccao de sentimento
@@ -104,11 +116,12 @@ app/agente/                          # Root — 6 arquivos
 │   ├── artifact.html                # Pagina render bundle artifact (sandboxed iframe)
 │   ├── chat.html                    # Interface de chat web
 │   └── insights.html                # Dashboard de insights
-├── tools/                           # MCP tools (NAO callables) — 12 arquivos
+├── tools/                           # MCP tools (NAO callables) — 13 arquivos
 │   ├── __init__.py
 │   ├── _mcp_enhanced.py             # Wrapper Enhanced (outputSchema + structuredContent)
 │   ├── artifact_tool.py             # build_artifact MCP tool (Enhanced v1.0)
 │   ├── memory_mcp_tool.py           # 12 operacoes de memoria (Enhanced v2.1.0)
+│   ├── ontology_query_tool.py       # Query da ontologia/knowledge graph (MCP tool)
 │   ├── playwright_mcp_tool.py       # Browser automation (13 tools, SSW + Atacadao)
 │   ├── render_logs_tool.py          # Consulta logs Render
 │   ├── routes_search_tool.py        # Busca em rotas Flask
@@ -119,10 +132,15 @@ app/agente/                          # Root — 6 arquivos
 │   └── text_to_sql_tool.py          # Text-to-SQL (Enhanced v2.0.0)
 ├── utils/                           # Helpers de modulo — 2 arquivos
 │   └── pii_masker.py                # Mascaramento regex CPF/CNPJ/email (SDK 0.1.60 fase 2)
-└── workers/                         # Workers RQ locais — 3 arquivos
+└── workers/                         # Workers RQ locais — 8 arquivos
     ├── __init__.py
     ├── artifact_worker.py           # build_artifact_job (Vite+React+TS+Tailwind, queue artifacts)
-    └── subagent_validator.py        # Haiku anti-alucinacao (SDK 0.1.60 fase 4, queue agent_validation)
+    ├── background_jobs.py           # Jobs background diversos (varredores D8, enqueue)
+    ├── eval_runner.py               # Runner de avaliacao offline (A3 golden dataset, queue agent_judge)
+    ├── plan_verifier.py             # Verify B2 do super-loop (shadow, queue agent_judge)
+    ├── step_judge.py                # Judge por step do plano (shadow)
+    ├── subagent_validator.py        # Haiku anti-alucinacao (SDK 0.1.60 fase 4, queue agent_validation)
+    └── triage_shadow.py             # B-TRIAGE shadow (replan/escalate adiado — ver memoria b3-escalate)
 ```
 
 ---
