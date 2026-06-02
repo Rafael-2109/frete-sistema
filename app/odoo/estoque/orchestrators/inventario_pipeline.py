@@ -2945,7 +2945,18 @@ class FaturamentoPipelineExecutor:
         # ja existem. Idempotencia real e' feita pelos atomos a jusante
         # (gerar_po_from_dfe via dfe.purchase_id, criar_invoice_from_po via
         # po.invoice_ids, etc) — deixar fluir.
-        if r1.get('encontrado'):
+        #
+        # C2 (G-ENT-2): DFe-resumo SEFAZ (status='resumo_vazio': '06' e/ou 0
+        # linhas) NAO serve para caminho A — geraria PO vazia. Tratar como
+        # caminho B (criar/popular DFe via XML da NF de SAIDA). Em
+        # INDUSTRIALIZACAO_FB_LF o DFe NUNCA vem populado via SEFAZ (sentido
+        # reverso), entao o caminho B e' o esperado. A DECISAO de caminho
+        # vive AQUI no orchestrator (constituicao §6); buscar_dfe so REPORTA.
+        caminho_b = (
+            (not r1.get('encontrado'))
+            or r1.get('status') == 'resumo_vazio'
+        )
+        if not caminho_b:
             out['caminho'] = 'A'
             dfe_id = r1.get('dfe_id')
 
@@ -2973,8 +2984,9 @@ class FaturamentoPipelineExecutor:
                 dry_run=dry_run,
             )
             _passo('2_criar_dfe_a_partir_do_invoice_saida', r2)
+            # C2: 'POPULADO' = DFe-resumo existente foi populado via XML SAIDA.
             if r2.get('status') not in (
-                'CRIADO', 'IDEMPOTENT_EXISTE', 'DRY_RUN_OK',
+                'CRIADO', 'POPULADO', 'IDEMPOTENT_EXISTE', 'DRY_RUN_OK',
             ):
                 out['status'] = 'FALHA_PASSO_2_CRIAR_DFE'
                 out['erro'] = r2.get('erro')

@@ -953,10 +953,19 @@ class EscrituracaoLfService:
         chave_nfe: str,
         company_id: int,
     ) -> Dict[str, Any]:
-        """READ-only: busca DFe por chave_nfe + company_id.
+        """READ-only: busca DFe por chave_nfe + company_id e QUALIFICA estado.
 
         Retorna estado canonico para decisao do FLUXO L3 (1.2.1 vs 1.2.2).
         NAO escreve — sem dry_run. Sempre seguro chamar.
+
+        QUALIFICACAO (C2 / G-ENT-2): um DFe pode existir mas estar VAZIO
+        (DFe-resumo SEFAZ: `l10n_br_status='06'` e/ou 0 linhas
+        `l10n_br_ciel_it_account.dfe.line`, sem XML completo). Esse DFe NAO
+        serve para gerar PO (caminho A geraria PO vazia). buscar_dfe conta as
+        linhas e reporta `populado` + `n_linhas`. Quando vazio, `status` vira
+        'resumo_vazio' para o orchestrator forcar caminho B (criar/popular via
+        XML da NF de SAIDA). A DECISAO de caminho (A vs B) vive no orchestrator
+        `executar_fluxo_l3_1_2_x` (constituicao §6) — este atomo so REPORTA.
 
         Args:
             chave_nfe: chave NF-e 44 digitos (`protnfe_infnfe_chnfe` no DFe).
@@ -966,7 +975,10 @@ class EscrituracaoLfService:
             dict com:
               encontrado: bool
               dfe_id: int | None
-              status: str ('pendente' | 'a_processar' | 'processado' | 'ausente')
+              status: str ('pendente' | 'a_processar' | 'processado'
+                           | 'resumo_vazio' | 'ausente')
+              populado: bool — True se ha >0 dfe.line (XML completo parseado)
+              n_linhas: int — qtd de l10n_br_ciel_it_account.dfe.line do DFe
               raw: dict — campos lidos do DFe (vazio se nao encontrado)
               tempo_ms: int
               erro: str | None
@@ -976,6 +988,8 @@ class EscrituracaoLfService:
             'encontrado': False,
             'dfe_id': None,
             'status': 'ausente',
+            'populado': False,
+            'n_linhas': 0,
             'raw': {},
             'tempo_ms': 0,
             'erro': None,
@@ -1007,10 +1021,28 @@ class EscrituracaoLfService:
             return out
 
         dfe = resp[0]
+        # QUALIFICACAO C2 (G-ENT-2): contar linhas do DFe. DFe-resumo SEFAZ
+        # (status '06' e/ou 0 linhas) NAO esta populado — geraria PO vazia
+        # se tratado como caminho A. Contamos via search_count em
+        # l10n_br_ciel_it_account.dfe.line (FK dfe_id).
+        try:
+            n_linhas = self.odoo.search_count(
+                'l10n_br_ciel_it_account.dfe.line',
+                [('dfe_id', '=', dfe['id'])],
+            )
+        except Exception as e:
+            out['erro'] = f'odoo_search_count_dfe_line_falhou: {str(e)[:200]}'
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+        populado = n_linhas > 0
+
         # Mapeamento status: l10n_br_status CIEL IT
-        # '03' = pendente, '04'/'05' = processado, default = a_processar
+        # '03' = pendente, '04'/'05' = processado, default = a_processar.
+        # '06' (DFe-resumo) OU sem linhas -> 'resumo_vazio' (forca caminho B).
         st_raw = (dfe.get('l10n_br_status') or '').strip()
-        if st_raw in ('04', '05'):
+        if st_raw == '06' or not populado:
+            status = 'resumo_vazio'
+        elif st_raw in ('04', '05'):
             status = 'processado'
         elif st_raw == '03':
             status = 'pendente'
@@ -1020,6 +1052,8 @@ class EscrituracaoLfService:
         out['encontrado'] = True
         out['dfe_id'] = dfe['id']
         out['status'] = status
+        out['populado'] = populado
+        out['n_linhas'] = n_linhas
         out['raw'] = dfe
         out['tempo_ms'] = int((time.time() - t0) * 1000)
         return out
@@ -1045,9 +1079,18 @@ class EscrituracaoLfService:
             company_destino: company onde DFe sera criado (1=FB, 4=CD, 5=LF).
             dry_run: True (default) NAO escreve; reporta planejamento.
 
+        Idempotencia (C2 / G-ENT-2): se ja existe DFe na company destino,
+        distingue dois casos via `buscar_dfe(...)['populado']`:
+          - populado (>0 dfe.line)   -> IDEMPOTENT_EXISTE (nada a fazer).
+          - NAO populado (DFe-resumo SEFAZ status='06'/0 linhas) -> POPULA o
+            DFe existente fazendo write do XML da SAIDA + reprocessando
+            (action_processar_arquivo_manual). Retorna status 'POPULADO'.
+        Sem este split, um DFe-resumo levaria o orchestrator a gerar PO vazia.
+
         Returns:
             dict com:
-              status: 'DRY_RUN_OK' | 'CRIADO' | 'IDEMPOTENT_EXISTE' | 'FALHA'
+              status: 'DRY_RUN_OK' | 'CRIADO' | 'POPULADO'
+                      | 'IDEMPOTENT_EXISTE' | 'FALHA'
               dfe_id: int | None
               chave_nfe: str | None
               tempo_ms: int
@@ -1103,45 +1146,78 @@ class EscrituracaoLfService:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # Idempotencia: DFe ja existe?
+        # Idempotencia C2 (G-ENT-2): DFe ja existe? Distinguir populado vs
+        # DFe-resumo vazio. So' e' IDEMPOTENT_EXISTE quando JA esta populado
+        # (>0 dfe.line). Se existe mas e' resumo vazio, POPULAR via write do
+        # XML da SAIDA + reprocessar (em vez de criar duplicado).
         ja = self.buscar_dfe(chave_nfe=chave, company_id=company_destino)
-        if ja.get('encontrado'):
+        dfe_existente_id = ja.get('dfe_id') if ja.get('encontrado') else None
+        existe_populado = bool(ja.get('encontrado')) and bool(ja.get('populado'))
+        if existe_populado:
             out['status'] = 'IDEMPOTENT_EXISTE'
             out['dfe_id'] = ja['dfe_id']
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
+        modo = 'popular_existente' if dfe_existente_id else 'criar_novo'
+
         # Dry-run: reporta plano sem write
         if dry_run:
             out['status'] = 'DRY_RUN_OK'
+            out['modo'] = modo
+            out['dfe_id'] = dfe_existente_id  # None se criar_novo
             out['plano'] = {
+                'modo': modo,
                 'create_model': 'l10n_br_ciel_it_account.dfe',
-                'create_values': {
+                'write_values': {
                     'company_id': company_destino,
                     'l10n_br_xml_dfe': '<base64 size=%d>' % len(xml_b64 or ''),
                 },
-                'after_create': 'action_processar_arquivo_manual fire_and_poll',
+                'after_write': 'action_processar_arquivo_manual fire_and_poll',
             }
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # REAL-RUN: create + processar
-        try:
-            dfe_id = self.odoo.create(
-                'l10n_br_ciel_it_account.dfe',
-                {
-                    'company_id': company_destino,
-                    'l10n_br_xml_dfe': xml_b64,
-                },
-            )
-            logger.info(
-                f'criar_dfe_a_partir_do_invoice_saida: DFe {dfe_id} criado '
-                f'(company={company_destino}, chave={chave[:20]}...)'
-            )
-        except Exception as e:
-            out['erro'] = f'create_dfe_falhou: {str(e)[:200]}'
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
+        # REAL-RUN: (a) popular DFe-resumo existente via write OU
+        #           (b) criar DFe novo. Ambos disparam processar abaixo.
+        if dfe_existente_id:
+            try:
+                self.odoo.write(
+                    'l10n_br_ciel_it_account.dfe',
+                    [dfe_existente_id],
+                    {
+                        'company_id': company_destino,
+                        'l10n_br_xml_dfe': xml_b64,
+                    },
+                )
+                dfe_id = dfe_existente_id
+                logger.info(
+                    f'criar_dfe_a_partir_do_invoice_saida: DFe-resumo '
+                    f'{dfe_id} POPULADO via XML da SAIDA '
+                    f'(company={company_destino}, chave={chave[:20]}...)'
+                )
+            except Exception as e:
+                out['erro'] = f'write_dfe_resumo_falhou: {str(e)[:200]}'
+                out['dfe_id'] = dfe_existente_id
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
+        else:
+            try:
+                dfe_id = self.odoo.create(
+                    'l10n_br_ciel_it_account.dfe',
+                    {
+                        'company_id': company_destino,
+                        'l10n_br_xml_dfe': xml_b64,
+                    },
+                )
+                logger.info(
+                    f'criar_dfe_a_partir_do_invoice_saida: DFe {dfe_id} criado '
+                    f'(company={company_destino}, chave={chave[:20]}...)'
+                )
+            except Exception as e:
+                out['erro'] = f'create_dfe_falhou: {str(e)[:200]}'
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
 
         # Fire-and-poll: action_processar_arquivo_manual
         def fire_processar():
@@ -1250,7 +1326,7 @@ class EscrituracaoLfService:
                 f'(non-fatal): {str(e)[:200]}'
             )
 
-        out['status'] = 'CRIADO'
+        out['status'] = 'POPULADO' if dfe_existente_id else 'CRIADO'
         out['dfe_id'] = dfe_id
         if lines_atualizadas:
             out['dfe_lines_corrigidas_b_v23_1'] = lines_atualizadas

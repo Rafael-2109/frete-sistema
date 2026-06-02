@@ -215,6 +215,44 @@ def test_fluxo_l3_caminho_b_cria_dfe_dry_run():
     assert res['dfe_id'] == 7777  # mockado
 
 
+def test_fluxo_l3_caminho_b_dfe_resumo_vazio_forca_b():
+    """C2/G-ENT-2: DFe existe mas e' resumo vazio (status='resumo_vazio')
+    -> orchestrator forca caminho B (criar/popular DFe via XML SAIDA) em vez
+    de caminho A (que geraria PO vazia). DFe 43776 do piloto 4870112."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_chave_nf': '35260518467441000163550010000132451007099011',
+        'state': 'posted',
+    }]
+    executor = FaturamentoPipelineExecutor(
+        odoo=odoo, picking_svc=MagicMock(),
+    )
+    # buscar_dfe REPORTA encontrado=True mas status='resumo_vazio'
+    original = _patch_buscar_dfe(
+        executor, encontrado=True, dfe_id=43776, status='resumo_vazio',
+    )
+    try:
+        res = executor.executar_fluxo_l3_1_2_x(
+            invoice_id_saida=4870112,
+            company_destino=5,
+            l10n_br_tipo_pedido_dfe='compra',
+            l10n_br_tipo_pedido_po='serv-industrializacao',
+            team_id=119,
+            payment_term_id=2791,
+            picking_type_id=1,
+            payment_provider_id=92,
+            dry_run=True,
+        )
+    finally:
+        _restore_escrituracao(original)
+
+    assert res['status'] == 'DRY_RUN_OK'
+    # CRUCIAL: resumo vazio -> caminho B (NAO A)
+    assert res['caminho'] == 'B'
+    passos_nomes = [p['passo'] for p in res['passos']]
+    assert '2_criar_dfe_a_partir_do_invoice_saida' in passos_nomes
+
+
 def test_fluxo_l3_invoice_sem_chave_nfe_falha():
     """invoice SAIDA sem chave_nfe -> FALHA antes de buscar_dfe."""
     odoo = MagicMock()

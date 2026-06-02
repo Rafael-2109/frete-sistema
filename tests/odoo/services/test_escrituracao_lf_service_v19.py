@@ -40,7 +40,7 @@ def test_buscar_dfe_not_found():
 
 
 def test_buscar_dfe_found_pendente():
-    """status='03' -> 'pendente'."""
+    """status='03' + linhas>0 -> 'pendente' + populado=True (C2)."""
     odoo = MagicMock()
     odoo.search_read.return_value = [{
         'id': 4321,
@@ -50,6 +50,7 @@ def test_buscar_dfe_found_pendente():
         'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099001',
         'purchase_id': False,
     }]
+    odoo.search_count.return_value = 3  # DFe populado (3 dfe.line)
     svc = EscrituracaoLfService(odoo=odoo)
     res = svc.buscar_dfe(
         chave_nfe='35260518467441000163550010000132451007099001',
@@ -58,11 +59,17 @@ def test_buscar_dfe_found_pendente():
     assert res['encontrado'] is True
     assert res['dfe_id'] == 4321
     assert res['status'] == 'pendente'
+    assert res['populado'] is True
+    assert res['n_linhas'] == 3
     assert res['raw']['nfe_infnfe_ide_nnf'] == '200'
+    # search_count chamado no modelo de linha com FK dfe_id
+    odoo.search_count.assert_called_once_with(
+        'l10n_br_ciel_it_account.dfe.line', [('dfe_id', '=', 4321)],
+    )
 
 
 def test_buscar_dfe_found_processado():
-    """status='04' -> 'processado'."""
+    """status='04' + linhas>0 -> 'processado' + populado=True (C2)."""
     odoo = MagicMock()
     odoo.search_read.return_value = [{
         'id': 9999,
@@ -72,6 +79,7 @@ def test_buscar_dfe_found_processado():
         'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099002',
         'purchase_id': [777, 'PO/2026/0001'],
     }]
+    odoo.search_count.return_value = 5
     svc = EscrituracaoLfService(odoo=odoo)
     res = svc.buscar_dfe(
         chave_nfe='35260518467441000163550010000132451007099002',
@@ -79,6 +87,57 @@ def test_buscar_dfe_found_processado():
     )
     assert res['status'] == 'processado'
     assert res['dfe_id'] == 9999
+    assert res['populado'] is True
+    assert res['n_linhas'] == 5
+
+
+def test_buscar_dfe_resumo_vazio_status_06():
+    """C2/G-ENT-2: status='06' (DFe-resumo) -> status='resumo_vazio',
+    populado=False — mesmo que (hipoteticamente) houvesse linhas, '06' manda."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{
+        'id': 43776,
+        'l10n_br_status': '06',
+        'l10n_br_situacao_dfe': 'resumo',
+        'nfe_infnfe_ide_nnf': False,
+        'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099007',
+        'purchase_id': False,
+    }]
+    odoo.search_count.return_value = 0  # resumo nao tem linhas
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.buscar_dfe(
+        chave_nfe='35260518467441000163550010000132451007099007',
+        company_id=5,
+    )
+    assert res['encontrado'] is True
+    assert res['dfe_id'] == 43776
+    assert res['status'] == 'resumo_vazio'
+    assert res['populado'] is False
+    assert res['n_linhas'] == 0
+
+
+def test_buscar_dfe_zero_linhas_e_resumo_vazio():
+    """C2: DFe com status diferente de '06' mas 0 linhas tambem e'
+    'resumo_vazio' (nao serve para gerar PO)."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [{
+        'id': 12000,
+        'l10n_br_status': '04',  # 'processado' no mapeamento antigo
+        'l10n_br_situacao_dfe': 'autorizado',
+        'nfe_infnfe_ide_nnf': '500',
+        'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099008',
+        'purchase_id': False,
+    }]
+    odoo.search_count.return_value = 0  # sem linhas
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.buscar_dfe(
+        chave_nfe='35260518467441000163550010000132451007099008',
+        company_id=5,
+    )
+    assert res['encontrado'] is True
+    assert res['status'] == 'resumo_vazio'
+    assert res['populado'] is False
+    assert res['n_linhas'] == 0
 
 
 # ============================================================
@@ -128,7 +187,7 @@ def test_criar_dfe_xml_vazio_falha():
 
 
 def test_criar_dfe_idempotent_existe():
-    """DFe ja existe na company destino -> IDEMPOTENT_EXISTE."""
+    """DFe ja existe E populado na company destino -> IDEMPOTENT_EXISTE."""
     odoo = MagicMock()
     odoo.read.return_value = [{
         'l10n_br_xml_aut_nfe': 'PHhtbD48L3htbD4=',
@@ -145,12 +204,98 @@ def test_criar_dfe_idempotent_existe():
         'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099005',
         'purchase_id': False,
     }]
+    odoo.search_count.return_value = 4  # DFe ja populado
     svc = EscrituracaoLfService(odoo=odoo)
     res = svc.criar_dfe_a_partir_do_invoice_saida(
         invoice_id_saida=607445, company_destino=1, dry_run=False,
     )
     assert res['status'] == 'IDEMPOTENT_EXISTE'
     assert res['dfe_id'] == 5555
+    # Idempotente: NAO escreveu/criou nada
+    assert not odoo.create.called
+    assert not odoo.write.called
+
+
+def test_criar_dfe_resumo_vazio_dry_run_modo_popular():
+    """C2/G-ENT-2: DFe-resumo existente + dry_run -> plano modo
+    'popular_existente' carregando o dfe_id existente (nao cria novo)."""
+    odoo = MagicMock()
+    odoo.read.return_value = [{
+        'l10n_br_xml_aut_nfe': 'PHhtbD48L3htbD4=',
+        'l10n_br_chave_nf': '35260518467441000163550010000132451007099009',
+        'l10n_br_numero_nota_fiscal': '309',
+        'company_id': [1, 'FB'],
+        'state': 'posted',
+    }]
+    odoo.search_read.return_value = [{
+        'id': 43776,
+        'l10n_br_status': '06',  # DFe-resumo
+        'l10n_br_situacao_dfe': 'resumo',
+        'nfe_infnfe_ide_nnf': False,
+        'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099009',
+        'purchase_id': False,
+    }]
+    odoo.search_count.return_value = 0  # resumo vazio
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.criar_dfe_a_partir_do_invoice_saida(
+        invoice_id_saida=607449, company_destino=5, dry_run=True,
+    )
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['modo'] == 'popular_existente'
+    assert res['dfe_id'] == 43776
+    assert res['plano']['modo'] == 'popular_existente'
+    # dry-run NAO escreve
+    assert not odoo.write.called
+    assert not odoo.create.called
+
+
+def test_criar_dfe_resumo_vazio_real_popula(monkeypatch):
+    """C2/G-ENT-2: DFe-resumo existente + real_run -> POPULA via write do
+    XML da SAIDA + reprocessa. NAO cria DFe novo (idempotente por chave)."""
+    odoo = MagicMock()
+    odoo.read.side_effect = [
+        # 1a: invoice saida
+        [{
+            'l10n_br_xml_aut_nfe': 'PHhtbD48L3htbD4=',
+            'l10n_br_chave_nf':
+                '35260518467441000163550010000132451007099010',
+            'l10n_br_numero_nota_fiscal': '310',
+            'company_id': [1, 'FB'],
+            'state': 'posted',
+        }],
+        # 2a: poll processar (status='04' = processado apos popular)
+        [{
+            'l10n_br_status': '04',
+            'l10n_br_situacao_dfe': 'autorizado',
+        }],
+    ]
+    odoo.search_read.return_value = [{
+        'id': 43776,
+        'l10n_br_status': '06',  # DFe-resumo
+        'l10n_br_situacao_dfe': 'resumo',
+        'nfe_infnfe_ide_nnf': False,
+        'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099010',
+        'purchase_id': False,
+    }]
+    odoo.search_count.return_value = 0  # resumo vazio
+    # B-V23-1: search de dfe.line apos processar -> vazio (skip alinhamento)
+    odoo.execute_kw.return_value = []
+    monkeypatch.setattr('time.sleep', lambda _: None)
+    svc = EscrituracaoLfService(odoo=odoo)
+    res = svc.criar_dfe_a_partir_do_invoice_saida(
+        invoice_id_saida=607450, company_destino=5, dry_run=False,
+    )
+    assert res['status'] == 'POPULADO'
+    assert res['dfe_id'] == 43776
+    # NAO criou DFe novo
+    assert not odoo.create.called
+    # POPULOU o DFe existente via write do XML
+    assert odoo.write.called
+    write_args = odoo.write.call_args
+    assert write_args[0][0] == 'l10n_br_ciel_it_account.dfe'
+    assert write_args[0][1] == [43776]
+    assert write_args[0][2]['l10n_br_xml_dfe'] == 'PHhtbD48L3htbD4='
+    assert write_args[0][2]['company_id'] == 5
 
 
 def test_criar_dfe_real_criado(monkeypatch):
