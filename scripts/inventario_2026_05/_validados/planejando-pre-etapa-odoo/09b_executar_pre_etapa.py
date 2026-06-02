@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """F9b (D007) — Executor da Pre-etapa CD/FB (Onda 5/6).
 
 ⚠️ ARQUIVADO 2026-05-25 (sessao v9) — SUPERADO PELA SKILL 6.

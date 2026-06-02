@@ -1,3 +1,5 @@
+# etapa: C1
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """StockQuantAdjustmentService — ajuste atomico de inventario de UM quant.
 
 Primitiva REUTILIZAVEL: aplica um ajuste de saldo em um unico stock.quant via

@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """F7.2 — Carrega planilha do inventario fisico em /tmp.
 
 Formato esperado:

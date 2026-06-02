@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Extrai TODAS as movimentacoes Odoo de 2026-05-16 ate agora, EXCLUINDO
 as feitas pelo servico de recebimento LF no Render.
 

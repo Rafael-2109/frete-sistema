@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """encontro_contas_lf.py — Encontro de contas FB<->LF por produto (Pasta23.xlsx).
 
 REGRA (Rafael 2026-05-20), por produto:

@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Remove TODAS as reservas de SAIDA (origem interna) das 4 companies.
 
 Instrucao do usuario (2026-05-19 noite): "Remova todas as reservas do Odoo

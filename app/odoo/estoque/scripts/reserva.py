@@ -1,3 +1,5 @@
+# etapa: C1-C2
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """StockReservaService — atomos para operar reservas no Odoo.
 
 Skill: `operando-reservas-odoo` (C1 fechado, C2-C5 minimo viavel).

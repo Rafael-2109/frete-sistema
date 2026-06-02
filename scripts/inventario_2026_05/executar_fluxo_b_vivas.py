@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """FLUXO B (inventario 2026-05) — 7 out_invoice FB->LF NAO transmitidas (rascunho), com
 picking FB/SAI/IND done (estoque parado em Em Transito Industrializacao). Objetivo:
 desfazer a saida abortada e isolar o estoque em FB/Indisponivel/MIGRAÇÃO.

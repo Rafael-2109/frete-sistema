@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Versao COMPLETA: compara SOT contra TODAS as 3 fontes derivadas.
 
 Adiciona ao primeiro script:

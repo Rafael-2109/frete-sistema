@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Transferir 2 itens de CD/Indisponivel/MIGRACAO -> CD/Estoque/P-15/05.
 
 Operacao pontual (nao planilha) — pedido do usuario 2026-05-19:

@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """12 - Ajuste positivo CD (2026-05-18).
 
 Aplica ajustes POSITIVOS de saldo no CD (company_id=4) via inventory

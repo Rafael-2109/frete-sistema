@@ -1,3 +1,5 @@
+# etapa: C2
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """StockPickingService — gerencia stock.picking de transferencia.
 
 Generaliza padroes em:

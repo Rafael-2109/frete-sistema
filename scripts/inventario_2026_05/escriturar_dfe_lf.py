@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """FLUXO A (inventario 2026-05) — Escriturar a in_invoice de ENTRADA na LF a partir do DFe
 de industrializacao FB->LF (status 04). Reusa a SEQUENCIA do pipeline com a config da LF
 (NAO reusar RecebimentoLfOdooService — direcao inversa). GENERALIZADO p/ multiplas linhas.

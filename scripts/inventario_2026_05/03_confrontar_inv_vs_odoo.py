@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """F7.3 — Confronto inventario fisico x estoque Odoo.
 
 Aplica regras de lote:

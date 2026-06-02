@@ -1,3 +1,5 @@
+# etapa: READ-preflight
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """CadastroFiscalAuditService — pre-flight de auditoria de cadastro fiscal
 para faturamento/inventario no Odoo (delegado pela Skill 8 faturando-odoo).
 

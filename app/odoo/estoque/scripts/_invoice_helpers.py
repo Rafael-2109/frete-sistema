@@ -1,3 +1,5 @@
+# etapa: helper
+# doc-dono: app/odoo/estoque/CLAUDE.md §11
 """_invoice_helpers.py — Helpers POS-invoice CIEL IT por PERFIL (Skill 8 v16).
 
 CR-C10.1 v16 (CRITICAL Rafael 2026-05-25): capina os 3 helpers F5d.5/.6/.7 do

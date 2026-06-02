@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Auditoria com LOTES + regras de negocio do Rafael (2026-05-18).
 
 REGRAS POR FILIAL:

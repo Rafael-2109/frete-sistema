@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """10 — Executar ajustes emergenciais FB (2026-05-18).
 
 Aplica 9 transferências internas no Odoo FB (company_id=1):

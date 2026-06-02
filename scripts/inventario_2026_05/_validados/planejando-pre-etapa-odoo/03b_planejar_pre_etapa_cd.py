@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """[ARQUIVADO 2026-05-24 v6] F7.5b (D007) — Planejar pre-etapa CD.
 
 ⚠️ SUPERADO pela Skill 6 `planejando-pre-etapa-odoo` (modo `planejar`).

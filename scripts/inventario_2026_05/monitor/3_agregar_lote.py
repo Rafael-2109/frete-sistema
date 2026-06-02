@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """SCRIPT 3: Agrega inventario fisico + movimentacoes NAO-AJUSTE em saldo teorico.
 
 REGRA: aplica APENAS as movs cuja origem_classificada == 'RECEBIMENTO_LF_RENDER'

@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Cancela reservas em lote MIGRACAO* nos quants listados em
 /tmp/migracao_mover_pulados.csv (gerado pelo mover_migracao_para_indisponivel.py).
 

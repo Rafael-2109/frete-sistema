@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Entrada FB do produto 210030325 — fecha o piloto via Recebimento LF.
 
 A NF emitida pela LF (account.move id=608607, RETNA/2026/00029, CFOP de SAIDA 5903,

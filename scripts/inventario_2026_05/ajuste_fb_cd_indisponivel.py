@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Ajuste FB + Transf CD — transferencias Estoque <-> Indisponivel (D011, 2026-05-20).
 
 Processa 2 planilhas com schema De-Local/De-Lote -> Para-Local/Para-Lote + qtd:

@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """SCRIPT 2: Baixa movimentacoes (stock.move.line) desde DATA_INICIO_INV.
 
 Classifica cada movimentacao em 3 categorias (sem deducao):

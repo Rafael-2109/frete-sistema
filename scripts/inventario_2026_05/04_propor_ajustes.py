@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """F7.4 — Persiste propostas de ajuste em ajuste_estoque_inventario (status=PROPOSTO).
 
 Tambem suporta `--listar-onda=N` para inspecionar e

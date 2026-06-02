@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """DIFF DIRETO: Inv fisico 16/05 vs Odoo ATUAL — APENAS lotes != MIGRACAO.
 
 Logica: o saldo "real disponivel" eh tudo em lote != MIGRACAO. Se as movs

@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Compara SOT (inventario fisico + Odoo snapshot 17/05 21:44) com as 3 fontes
 derivadas: tabela ajuste_estoque_inventario, diffs originais, plano-pre-etapa-cd.
 

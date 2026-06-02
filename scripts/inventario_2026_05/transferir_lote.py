@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """transferir_lote.py — Transferencia (realocacao) de lote no MESMO local.
 
 Planilha: filial | cod | nome_produto | lote | diff_qtd

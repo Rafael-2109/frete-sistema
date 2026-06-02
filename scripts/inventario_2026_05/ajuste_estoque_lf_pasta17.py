@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """ajuste_estoque_lf_pasta17.py — Realocacao de lote na LF (ajustes +/-).
 
 Pedido do usuario 2026-05-20 (Pasta17.xlsx, aba "alteracao lote"):

@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """fat_lf_06_consolidar_validos.py — Garante estoque VALIDO (lote nao-vencido) >= QTD por produto.
 
 Problema: action_assign do CIEL IT pula lotes VENCIDOS e exige lote em produtos

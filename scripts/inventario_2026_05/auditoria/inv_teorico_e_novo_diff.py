@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Pega inventario fisico do sabado, aplica movimentacoes Odoo (exceto
 recebimento LF Render) e compara com estoque atual Odoo.
 

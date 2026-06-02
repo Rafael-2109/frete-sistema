@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Rastreia movimentacoes (stock.move.line) de UM produto no Odoo desde uma data.
 
 Mostra cronologia completa (todos os states: done/cancel/draft/etc.) por filial,

@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """ajuste_inventario.py — Orquestrador GENERICO de ajuste de inventario por planilha.
 
 Consolida (substitui FUNCIONALMENTE, sem apagar) os scripts da "Familia A":

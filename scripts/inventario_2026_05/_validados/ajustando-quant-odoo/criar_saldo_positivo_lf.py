@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """criar_saldo_positivo_lf.py — Ajuste de inventario POSITIVO PURO na LF.
 
 Pedido do usuario 2026-05-20: "criar saldo" — NAO transferir de MIGRACAO.

@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """[arquivado 2026-05-24 v5] 14 - Cancelar MOs antigas state=confirmed que reservam MIGRACAO em Pre-Prod FB.
 
 SUPERADO pela Skill 4 `operando-mo-odoo` em 2026-05-24 v5. Logica generalizada

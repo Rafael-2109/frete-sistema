@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Limpa reservas FANTASMA (move.lines 'assigned' sem lastro fisico) das MOs que
 reservam nos locais de Pre-Producao FB+LF, via action_unreserve + action_assign.
 

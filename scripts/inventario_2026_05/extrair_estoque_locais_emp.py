@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Extrai estoque ATUAL do Odoo para todas as 4 companies (FB/SC/CD/LF).
 
 Modo DEFAULT (inventario): filtra apenas locais internos {emp}/* EXCETO os

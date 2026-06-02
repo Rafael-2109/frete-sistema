@@ -1,3 +1,5 @@
+# etapa: helper
+# doc-dono: app/odoo/estoque/CLAUDE.md §11
 """_commit_helpers.py — Helpers consolidados de commit SSL-resilient.
 
 CR-F9 v15c (CRITICAL Reviewer B+D conf 80-85): consolida 3 padroes de

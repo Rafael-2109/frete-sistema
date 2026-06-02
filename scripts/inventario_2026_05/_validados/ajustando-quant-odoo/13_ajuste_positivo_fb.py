@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """13 - Ajuste positivo FB (2026-05-18).
 
 Aplica ajustes POSITIVOS de saldo na FB (company_id=1) via inventory

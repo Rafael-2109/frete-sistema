@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Teste piloto end-to-end — produto 210030325 LF (INVENTARIO_2026_05).
 
 Produto no Odoo: id=28239

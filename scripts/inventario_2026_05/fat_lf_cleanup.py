@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """fat_lf_cleanup.py — Fluxo de erro: devolve picking + cancela invoice + reseta ajuste.
 
 Para NFs com quantidade errada (ou erro SEFAZ) ainda NAO transmitidas: reverte o

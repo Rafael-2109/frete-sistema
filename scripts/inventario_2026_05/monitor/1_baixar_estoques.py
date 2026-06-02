@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """SCRIPT 1: Baixa estoques ATUAIS do Odoo (stock.quant) para companies FB/CD/LF.
 
 Output: <cache>/estoques.csv

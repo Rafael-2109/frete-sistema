@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Substituir lote de 1 item — 205030410 FB.
 
 Operacao pontual (nao planilha):

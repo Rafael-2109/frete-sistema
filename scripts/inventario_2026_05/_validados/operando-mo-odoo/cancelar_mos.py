@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """[arquivado 2026-05-24 v5] Cancelar Ordens de Producao (mrp.production) por criterio parametrizavel,
 
 SUPERADO pela Skill 4 `operando-mo-odoo` em 2026-05-24 v5. Logica generalizada

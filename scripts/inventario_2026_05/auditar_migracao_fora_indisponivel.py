@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Auditoria: quants com lote MIGRAÇÃO/MIGRACAO que NAO estao em {emp}/Indisponivel.
 
 Lista todos os stock.quant cujo lot_id.name contem MIGRACAO/MIGRAÇÃO (variantes

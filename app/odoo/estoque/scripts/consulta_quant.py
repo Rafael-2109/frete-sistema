@@ -1,3 +1,5 @@
+# etapa: READ
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """StockQuantQueryService — atomos READ-only para consultar quants no Odoo AO VIVO.
 
 Skill: `consultando-quant-odoo` (C1 mineracao parcial + C2-C5 minimo viavel).

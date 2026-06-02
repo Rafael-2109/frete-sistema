@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Mover quants do lote MIGRAÇÃO para os locais Indisponivel (D011).
 
 OPERA 3 FILIAIS (SC excluida intencionalmente):

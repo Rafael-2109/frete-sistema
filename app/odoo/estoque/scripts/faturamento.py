@@ -1,3 +1,5 @@
+# etapa: L2-atomica
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """faturamento.py — Skill 8 ATOMICA L2 `faturando-odoo` (v24+ — AP6 refator).
 
 5 atomos ABRANGENTES sobre `account.move` (NF de SAIDA inter-company),

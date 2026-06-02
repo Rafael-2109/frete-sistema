@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """16 - Cancelar pickings fantasmas que reservam lotes da planilha
 'transf para MIGRACAO.xlsx' (2026-05-18).
 

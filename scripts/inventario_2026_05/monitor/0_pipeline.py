@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """SCRIPT 0: Orquestrador. Roda os 4 scripts em sequencia.
 
 Uso:

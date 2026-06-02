@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """SCRIPT 4: Gera DIFFS por (filial, cod, lote) considerando script 3 SEM MIGRACAO.
 
 Le:

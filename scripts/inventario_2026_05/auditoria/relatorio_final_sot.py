@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """RELATORIO FINAL — auditoria SOT vs todas as fontes derivadas.
 
 Versao DEFINITIVA com a descoberta-chave: o inventario fisico do sabado NAO

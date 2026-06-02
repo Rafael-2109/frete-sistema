@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """F9c — Executor Onda 2 TRANSFERIR_FB_CD via reuso RecebimentoLf (etapas 19-37).
 
 Agrupa ate N ajustes PROPOSTO TRANSFERIR_FB_CD em 1 RecebimentoLf virtual,

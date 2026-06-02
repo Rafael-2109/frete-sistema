@@ -1,3 +1,5 @@
+# etapa: L2-hibrido
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """escrituracao.py — Atomo C3 macro Skill 7 `escriturando-odoo` (v17.5).
 
 Encapsula a logica de ESCRITURAR ENTRADA de NF SEFAZ-autorizada no destino

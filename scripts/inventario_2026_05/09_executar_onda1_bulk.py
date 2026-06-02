@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """09 — Bulk de ajustes ordenado por TIPO de processo.
 
 Substitui a abordagem "por produto, sequencial" do teste_210030325_lf.py.

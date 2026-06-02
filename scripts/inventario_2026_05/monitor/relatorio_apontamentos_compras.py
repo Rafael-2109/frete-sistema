@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """RELATORIO: Apontamentos de producao (componentes + PA) + Compras recebidas.
 
 Escopo (FIXO neste relatorio, parametrizavel via flags):

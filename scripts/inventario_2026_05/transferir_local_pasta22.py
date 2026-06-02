@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """transferir_local_pasta22.py — Transferencia De/Para LOCAL+LOTE (Pasta22).
 
 Planilha: filial | cod | nome_produto | DE - LOCAL | DE - LOTE | PARA - LOCAL | PARA - LOTE | QTD

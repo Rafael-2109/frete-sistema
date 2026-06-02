@@ -1,3 +1,5 @@
+# etapa: C2
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """StockInternalTransferService — transferencia entre lotes / locations internas.
 
 Servico ATOMICO e REUTILIZAVEL para ajustar quantidades entre:

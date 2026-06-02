@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Re-filtra o diff anterior considerando APENAS lotes != MIGRACAO.
 
 A logica de negocio do Rafael:

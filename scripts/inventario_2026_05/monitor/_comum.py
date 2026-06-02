@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Helpers compartilhados pelos scripts 1-4 do monitor de inventario."""
 import json
 import os

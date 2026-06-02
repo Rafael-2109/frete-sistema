@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """[ARQUIVADO 2026-05-24 v6] F7.6b (D007) — Propor ajustes da pre-etapa CD (Onda 5).
 
 ⚠️ SUPERADO pela Skill 6 `planejando-pre-etapa-odoo` (modos `propor`/`listar-onda`/`aprovar-onda`).

@@ -1,3 +1,5 @@
+# etapa: monitor
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Export Excel sob demanda (complementa o pipeline do monitor):
 
   Aba 1 'Movimentacoes'    : todas as stock.move.line desde 16/05 (cache do script 2)

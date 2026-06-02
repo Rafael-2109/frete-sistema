@@ -1,3 +1,5 @@
+# etapa: fachada
+# doc-dono: app/odoo/estoque/CLAUDE.md §11
 """Átomos C1/C2 de escrita de estoque (services/primitivas — ver app/odoo/estoque/CLAUDE.md §2).
 
 Cada módulo = 1 service versátil por objeto Odoo, com gotchas codificados como

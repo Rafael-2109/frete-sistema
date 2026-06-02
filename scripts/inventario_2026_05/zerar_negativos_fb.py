@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Zera todos os quants negativos da FB via inventory adjustment.
 
 Estrategia (instrucao do usuario 2026-05-19 noite):

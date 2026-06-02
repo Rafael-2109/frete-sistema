@@ -1,3 +1,5 @@
+# etapa: audit
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """F7.7 — Extrai estado pos-execucao do Odoo e compara com proposta.
 
 Para cada ajuste EXECUTADO/FALHA do ciclo+company_id, consulta o Odoo

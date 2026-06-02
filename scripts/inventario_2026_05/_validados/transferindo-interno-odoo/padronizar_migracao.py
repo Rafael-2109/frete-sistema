@@ -1,3 +1,5 @@
+# etapa: validado
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """Padronizacao 'MIGRACAO' (sem cedilha) -> 'MIGRAÇÃO' (com cedilha + til).
 
 Motivo: o piloto 210030325 LF (2026-05-18) criou na FB um lote NOVO

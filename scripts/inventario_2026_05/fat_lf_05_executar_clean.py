@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """fat_lf_05_executar_clean.py — Faturamento LF com RESERVA EXPLICITA (corrige bug multi-lote).
 
 Problema do executor 09: para ajustes SEM lote_origem (caso deste faturamento),

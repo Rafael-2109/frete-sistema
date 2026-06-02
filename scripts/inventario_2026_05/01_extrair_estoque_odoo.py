@@ -1,3 +1,5 @@
+# etapa: orquestrador
+# doc-dono: scripts/inventario_2026_05/INDEX.md
 """F7.1 — Extrai estoque atual de FB, CD, LF via stock.quant (Odoo).
 
 Output:

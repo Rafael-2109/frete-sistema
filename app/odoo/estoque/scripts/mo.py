@@ -1,3 +1,5 @@
+# etapa: C2
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """StockMOService — operacoes de escrita em mrp.production (Manufacturing Orders).
 
 Primitiva REUTILIZAVEL para CANCELAR MO no Odoo (mrp.production.action_cancel).

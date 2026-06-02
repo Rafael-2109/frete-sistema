@@ -1,3 +1,5 @@
+# etapa: C1-planner
+# doc-dono: app/odoo/estoque/CLAUDE.md §6
 """PreEtapaEstoqueService — planejador da pre-etapa CD/FB (D007).
 
 Substitui NFs inter-filial CD↔FB (R$ 32,9 mi) e INDISPONIBILIZAR_*
