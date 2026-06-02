@@ -67,6 +67,7 @@ References contem APENAS regras de negocio, NAO campos.
 **ANTES de usar CarteiraPrincipal/Separacao**: LER `.claude/references/modelos/REGRAS_CARTEIRA_SEPARACAO.md`
 **ANTES de usar Embarque/Faturamento/etc.**: LER `.claude/references/modelos/REGRAS_MODELOS.md`
 **ANTES de executar qualquer skill ou operacao Odoo**: LER `.claude/references/ROUTING_SKILLS.md`
+**ANTES de criar/editar doc ou script**: LER `.claude/references/ARQUITETURA_DE_ARTEFATOS.md` (padrao PAD-A) ou usar skill `padronizando-docs`.
 
 Gotchas rapidos:
 - CarteiraPrincipal: `qtd_saldo_produto_pedido` (NAO `qtd_saldo`)
