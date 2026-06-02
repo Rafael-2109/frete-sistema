@@ -75,3 +75,10 @@ def test_c5_reference_sem_papel(tmp_path):
     p = _w(tmp_path, "docs/a.md", HEAD + "# T\nconteudo sem papel\n## Fontes\nok\n")
     fs = cs.check_file(p, tmp_path, C)
     assert any(f.code == "C5" for f in fs)
+
+def test_c1_yaml_frontmatter_sem_tipo_nao_bloqueia(tmp_path):
+    # skills/memoria usam frontmatter YAML (name/description), sem 'tipo' nem doc:meta.
+    # C1 nao deve exigir 'tipo' para source=yaml (consistente com camada/sot_de/hub).
+    p = _w(tmp_path, ".claude/skills/foo/SKILL.md", "---\nname: foo\ndescription: bar\n---\n# Foo\nconteudo\n")
+    fs = cs.check_file(p, tmp_path, C)
+    assert [f for f in fs if f.code == "C1"] == []

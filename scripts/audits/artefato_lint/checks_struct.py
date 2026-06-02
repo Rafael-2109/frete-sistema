@@ -24,7 +24,7 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
         out.append(Finding("C1", rel, 1, "header doc:meta ausente", "block"))
         return out
     tipo = m.fields.get("tipo", "")
-    if tipo not in cfg.valid_tipos:
+    if tipo not in cfg.valid_tipos and m.source != "yaml":
         out.append(Finding("C1", rel, 1, f"tipo invalido: {tipo!r}", "block"))
     if m.fields.get("camada") not in cfg.valid_camadas and m.source != "yaml":
         out.append(Finding("C1", rel, 1, "camada ausente/invalida", "block"))
