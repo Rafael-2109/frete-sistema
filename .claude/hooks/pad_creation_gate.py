@@ -40,9 +40,18 @@ def main() -> int:
         if fpath.endswith(".md"):
             if not zones.is_managed_doc(rel, cfg) or zones.is_scratch(content):
                 return _decision("allow")
-            # FIX: tmp file MUST live under ROOT so checks_*.check_file (which does
-            # path.resolve().relative_to(root) as its first line) does not raise.
-            fd, tmpname = tempfile.mkstemp(suffix=".md", dir=str(ROOT))
+            # tmp file deve viver no MESMO diretorio do arquivo-alvo: a resolucao
+            # de links relativos (C7) e file-relative ao dir do doc; gravar em ROOT
+            # marcava falso "link morto" para docs em subdir (gotcha-1). Mantem o
+            # invariante "sob ROOT" (target_dir e sempre subpath de ROOT); fallback
+            # p/ ROOT se o dir do alvo ainda nao existe (ex.: subdir novo).
+            target_dir = Path(fpath).resolve().parent
+            try:
+                target_dir.relative_to(ROOT)
+                tmp_dir = target_dir if target_dir.is_dir() else ROOT
+            except ValueError:
+                tmp_dir = ROOT
+            fd, tmpname = tempfile.mkstemp(suffix=".md", dir=str(tmp_dir))
             tf = Path(tmpname)
             try:
                 import os as _os; _os.close(fd)
