@@ -10,14 +10,20 @@ atualizado: 2026-06-02
 > **Papel:** mapa do ciclo de inventario 2026-05 (NACOM/LF/CD/FB). So ponteiros (paths a partir da raiz do repo).
 
 ## Estado
-- `docs/inventario-2026-05/SOT.md` — fonte da verdade do ciclo
-- `docs/inventario-2026-05/PENDENCIAS.md` — pendencias abertas
-- `docs/inventario-2026-05/PICKINGS_PENDENTES_INVOICE.md` — pickings pendentes de invoice
-- `docs/inventario-2026-05/PROMPT_PROXIMA_SESSAO_LF.md` — prompt da proxima sessao (LF)
-- `docs/inventario-2026-05/AJUSTES_EMERGENCIAIS_FB.md` — ajustes emergenciais FB
+
+> **Fonte canonica unica do estado do ciclo = `docs/inventario-2026-05/SOT.md`.** Os demais itens abaixo sao componentes vivos subordinados (PENDENCIAS) ou registros forenses imutaveis (logs e CHECKPOINTs — snapshots historicos, NAO sao o estado atual).
+
+**Vivo (consultar para o estado atual):**
+- `docs/inventario-2026-05/SOT.md` — **fonte da verdade do ciclo** (canonica)
+- `docs/inventario-2026-05/PENDENCIAS.md` — pendencias abertas (P1-P13)
+- `docs/inventario-2026-05/PROMPT_PROXIMA_SESSAO_LF.md` — prompt de retomada LF (numeros podem estar defasados — sempre conferir contra o SOT)
+- `docs/inventario-2026-05/PICKINGS_PENDENTES_INVOICE.md` — pickings pendentes de invoice (verificar status ao vivo no Odoo antes de agir)
+
+**Registros forenses (HISTORICO — imutaveis, nao sao estado atual):**
+- `docs/inventario-2026-05/AJUSTES_EMERGENCIAIS_FB.md` — ajustes emergenciais FB executados
 - `docs/inventario-2026-05/AUDIT_LOG_AJUSTES.md` — log de auditoria dos ajustes
 - `docs/inventario-2026-05/CHECKPOINT_2026_05_18_CD_FINALIZADO.md` — checkpoint CD finalizado
-- `docs/inventario-2026-05/CHECKPOINT_2026_05_18_LF_FIM_SESSAO2.md` — checkpoint LF fim sessao 2
+- `docs/inventario-2026-05/CHECKPOINT_2026_05_18_LF_FIM_SESSAO2.md` — checkpoint LF (snapshot; serie completa em `99-historia/`, incl. SESSAO3 mais recente)
 
 ## Por categoria (subpastas)
 - `docs/inventario-2026-05/08-execucoes/README.md` — execucoes (indice da subpasta)
