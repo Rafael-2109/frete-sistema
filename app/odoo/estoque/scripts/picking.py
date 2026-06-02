@@ -23,6 +23,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.odoo.constants import ids_diversos
+from app.odoo.services.stock_lot_service import StockLotService
 from app.odoo.utils.connection import get_odoo_connection
 
 logger = logging.getLogger(__name__)
@@ -1495,6 +1496,7 @@ class StockPickingService:
         picking_id: int,
         lotes_data: Optional[List[Dict[str, Any]]] = None,
         lote_default: Optional[str] = None,
+        company_destino: Optional[int] = None,
         dry_run: bool = True,
     ) -> Dict[str, Any]:
         """ATOMO v19+ S2 (Skill 5): atribui lote+qty em stock.move.line.
@@ -1508,8 +1510,12 @@ class StockPickingService:
           - Agrupa lotes_data por product_id
           - Para cada produto: 1a entrada atualiza move.line existente,
             entradas adicionais criam novas move.lines (referenciando a 1a)
-          - Setar `lot_name` no write (Odoo CIEL IT cria stock.lot
-            automaticamente via name unique; nao mexer em stock.lot direto)
+          - Resolve/cria o stock.lot EXPLICITAMENTE na company DESTINO
+            (C3/G-ENT-6) e seta `lot_id` no write/create — NAO depende do
+            Odoo reaproveitar o lote por `lot_name` (que em multi-company puxa
+            o lote da empresa ORIGEM e trava o button_validate com 'Empresas
+            incompativeis'). Respeita G031 (stock.lot e POR PRODUTO no CIEL IT:
+            sempre nome+product_id+company_id).
           - Quando lotes_data nao cobre algum product_id: aplicar lote_default
             se fornecido, senao FALHA (NAO escreve nada — operacao atomica)
 
@@ -1522,24 +1528,32 @@ class StockPickingService:
             lote_default: nome de lote usado quando lotes_data nao cobre algum
                 product_id encontrado nas move.lines do picking (ex: 'MIGRAÇÃO'
                 para inventario). None = falha se sobrar ML sem mapping.
+            company_destino: company_id Odoo onde o lote DEVE existir (C3/G-ENT-6).
+                Default None -> deriva de `picking.company_id` (read). Quando
+                resolvido para um int valido, o atomo resolve/cria o stock.lot
+                nesta company e fixa `lot_id` na move.line. Quando NAO resolvivel
+                (ex: testes mockados), cai no comportamento legado (so lot_name).
             dry_run: True (default) NAO escreve; reporta plano.
 
         Returns:
             dict com:
               status: 'DRY_RUN_OK' | 'PREENCHIDO' | 'FALHA'
               picking_id: int
+              company_destino: int | None — company usada na resolucao dos lotes
               mls_atualizadas: int — move.lines existentes que receberam write
               mls_criadas: int — novas move.lines criadas (entradas adicionais)
               mls_pendentes: list[int] — product_ids no picking sem cobertura
                                           (apenas em FALHA, quando lote_default
                                           nao fornecido)
               tempo_ms: int
-              erro: str | None
+              erro: str | None — inclui 'FALHA_LOTE_COMPANY_DIVERGENTE' (G-ENT-6)
+                                 se o lote resolvido pertence a outra company
         """
         inicio = time.time()
         out: Dict[str, Any] = {
             'status': 'FALHA',
             'picking_id': picking_id,
+            'company_destino': company_destino,
             'mls_atualizadas': 0,
             'mls_criadas': 0,
             'mls_pendentes': [],
@@ -1553,6 +1567,34 @@ class StockPickingService:
             return out
         if lotes_data is None:
             lotes_data = []
+
+        # C3/G-ENT-6: resolver company DESTINO do lote.
+        # Default None -> derivar de picking.company_id (read).
+        if company_destino is None:
+            try:
+                pk = self.odoo.read(
+                    'stock.picking', [picking_id], ['company_id']
+                )
+                if pk and isinstance(pk, list) and pk[0].get('company_id'):
+                    cid = pk[0]['company_id']
+                    # Odoo many2one vem como [id, name]
+                    cand = cid[0] if isinstance(cid, (list, tuple)) else cid
+                    if isinstance(cand, int):
+                        company_destino = cand
+            except Exception as e:
+                # Nao bloqueia: cai no comportamento legado (so lot_name).
+                logger.warning(
+                    f'preencher_lotes_picking: nao derivou company_destino '
+                    f'do picking {picking_id} ({str(e)[:120]}); '
+                    f'usando fallback lot_name'
+                )
+                company_destino = None
+        # So habilita resolucao explicita de lot_id se company_destino e int
+        # valido (>0). Caso contrario, preserva comportamento legado (lot_name).
+        resolver_lote_por_company = (
+            isinstance(company_destino, int) and company_destino > 0
+        )
+        out['company_destino'] = company_destino if resolver_lote_por_company else None
 
         # Ler move.lines atuais do picking
         try:
@@ -1614,7 +1656,10 @@ class StockPickingService:
                     'quantidade': qty_demand_total,
                 })
 
-        # Montar plano (writes + creates)
+        # Montar plano (writes + creates).
+        # Cada entrada carrega metadados internos '_pid'/'_lote_nome' (usados
+        # apenas no real-run para resolver lot_id na company destino — C3/G-ENT-6;
+        # sao removidos antes de enviar ao Odoo).
         writes: List[Tuple[int, Dict[str, Any]]] = []  # (ml_id, write_data)
         creates: List[Dict[str, Any]] = []
         for pid, lotes_produto in lotes_por_produto.items():
@@ -1635,6 +1680,8 @@ class StockPickingService:
                     }
                     if lote_nome:
                         write_data['lot_name'] = lote_nome
+                        write_data['_pid'] = pid
+                        write_data['_lote_nome'] = lote_nome
                     writes.append((line['id'], write_data))
                 else:
                     ref_line = existing_lines[0]
@@ -1662,20 +1709,97 @@ class StockPickingService:
                     }
                     if lote_nome:
                         nova_line['lot_name'] = lote_nome
+                        nova_line['_pid'] = pid
+                        nova_line['_lote_nome'] = lote_nome
                     creates.append(nova_line)
 
         if dry_run:
             out['status'] = 'DRY_RUN_OK'
+            out['resolver_lote_por_company'] = resolver_lote_por_company
             out['plano'] = {
                 'writes_count': len(writes),
                 'creates_count': len(creates),
-                'writes_sample': writes[:3],
-                'creates_sample': creates[:3],
+                'writes_sample': [
+                    (mid, {k: v for k, v in wd.items()
+                           if not k.startswith('_')})
+                    for mid, wd in writes[:3]
+                ],
+                'creates_sample': [
+                    {k: v for k, v in cd.items() if not k.startswith('_')}
+                    for cd in creates[:3]
+                ],
             }
             out['mls_atualizadas'] = len(writes)
             out['mls_criadas'] = len(creates)
             out['tempo_ms'] = int((time.time() - inicio) * 1000)
             return out
+
+        # C3/G-ENT-6: resolver lot_id na company DESTINO (so quando habilitado).
+        # Resolve uma vez por (pid, lote_nome) — cache local.
+        lot_cache: Dict[Tuple[int, str], int] = {}
+        if resolver_lote_por_company:
+            lot_svc = StockLotService(odoo=self.odoo)
+            entradas = [(w[1], 'write') for w in writes] + \
+                       [(c, 'create') for c in creates]
+            for data, _tipo in entradas:
+                lote_nome = data.get('_lote_nome')
+                pid = data.get('_pid')
+                if not lote_nome or not isinstance(pid, int):
+                    continue
+                chave = (pid, lote_nome)
+                if chave not in lot_cache:
+                    try:
+                        lot_id, _criado = lot_svc.criar_se_nao_existe(
+                            lote_nome, pid, company_destino,
+                        )
+                    except Exception as e:
+                        out['erro'] = (
+                            f'erro_resolver_lote {lote_nome!r} pid={pid} '
+                            f'company={company_destino}: {str(e)[:160]}'
+                        )
+                        out['tempo_ms'] = int((time.time() - inicio) * 1000)
+                        return out
+                    # Guard pos-condicao G-ENT-6: lote DEVE pertencer a
+                    # company destino (company de lote com saldo e imutavel).
+                    try:
+                        lot_rec = self.odoo.read(
+                            'stock.lot', [lot_id], ['company_id']
+                        )
+                    except Exception as e:
+                        out['erro'] = (
+                            f'erro_ler_lote_guard lot_id={lot_id}: '
+                            f'{str(e)[:160]}'
+                        )
+                        out['tempo_ms'] = int((time.time() - inicio) * 1000)
+                        return out
+                    lot_cid = None
+                    if lot_rec and isinstance(lot_rec, list):
+                        raw = lot_rec[0].get('company_id')
+                        lot_cid = (
+                            raw[0] if isinstance(raw, (list, tuple)) else raw
+                        )
+                    if lot_cid != company_destino:
+                        out['erro'] = 'FALHA_LOTE_COMPANY_DIVERGENTE'
+                        out['lote_divergente'] = {
+                            'lot_id': lot_id,
+                            'lote_nome': lote_nome,
+                            'product_id': pid,
+                            'company_lote': lot_cid,
+                            'company_destino': company_destino,
+                        }
+                        out['tempo_ms'] = int((time.time() - inicio) * 1000)
+                        # NAO escreve nada — operacao atomica (G-ENT-6)
+                        return out
+                    lot_cache[chave] = lot_id
+                data['lot_id'] = lot_cache[chave]
+
+        # Limpar metadados internos antes de enviar ao Odoo
+        for _ml_id, wd in writes:
+            wd.pop('_pid', None)
+            wd.pop('_lote_nome', None)
+        for cd in creates:
+            cd.pop('_pid', None)
+            cd.pop('_lote_nome', None)
 
         # REAL-RUN: writes + creates
         try:

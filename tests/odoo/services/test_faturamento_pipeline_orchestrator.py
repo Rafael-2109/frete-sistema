@@ -2977,10 +2977,11 @@ def test_v20_s3_etapa_f_via_fluxo_l3_lf_destino(db):
     assert lotes[0]['product_id'] == 12345
     assert lotes[0]['lote_nome'].startswith('INV-103000011-')
     assert lotes[0]['quantidade'] == 168.11
-    # F3a v25+: tipos diferentes em DFe ('compra') vs PO/Fatura
-    # ('serv-industrializacao'). Mudanca expressa em
+    # Correcao Rafael 2026-06-02: INDUSTRIALIZACAO_FB_LF usa
+    # 'serv-industrializacao' tanto em DFe quanto em PO/Fatura (o 'compra'
+    # do F3a era conclusao erronea). Expresso em
     # L10N_BR_TIPO_PEDIDO_POR_ACAO['INDUSTRIALIZACAO_FB_LF'].
-    assert kwargs['l10n_br_tipo_pedido_dfe'] == 'compra'
+    assert kwargs['l10n_br_tipo_pedido_dfe'] == 'serv-industrializacao'
     assert kwargs['l10n_br_tipo_pedido_po'] == 'serv-industrializacao'
     # F4 v25+: team_id fixo 143 (Rafael) para LF — G039 override desligado
     # apenas para destino LF=5. Antes era 41 STATIC + override G039 dinamico.
@@ -3034,7 +3035,9 @@ def test_v24_1_etapa_f_via_fluxo_l3_filtra_meta_keys_g039_status(db):
     def _fake_resolver_constants(*, acao_decidida, company_destino):
         return {
             'company_destino': 5,
-            'l10n_br_tipo_pedido_dfe': 'compra',
+            # INDUSTRIALIZACAO_FB_LF: serv-industrializacao em DFe + PO
+            # (correcao Rafael 2026-06-02)
+            'l10n_br_tipo_pedido_dfe': 'serv-industrializacao',
             'l10n_br_tipo_pedido_po': 'serv-industrializacao',
             'team_id': 143,
             'payment_term_id': 2791,
@@ -3409,8 +3412,9 @@ def test_resolver_constants_fluxo_l3_lf_team_fixo_143_g039_desligado():
     assert constants['payment_term_id'] == 2791
     assert constants['picking_type_id'] == 19
     assert constants['payment_provider_id'] == 38
-    # F3a v25+: tipos por passo (dfe vs po), nao mais string simples
-    assert constants['l10n_br_tipo_pedido_dfe'] == 'compra'
+    # Correcao Rafael 2026-06-02: INDUSTRIALIZACAO_FB_LF usa
+    # 'serv-industrializacao' em DFe e PO (o 'compra' do F3a era erro).
+    assert constants['l10n_br_tipo_pedido_dfe'] == 'serv-industrializacao'
     assert constants['l10n_br_tipo_pedido_po'] == 'serv-industrializacao'
     # G039 search NAO foi chamado (LF by-pass)
     assert not odoo.execute_kw.called
@@ -3987,9 +3991,10 @@ def test_v27_s4_l10n_br_tipo_pedido_cobre_todas_acoes_matriz():
     Garante que mapeamento e' completo — onda PROD com qualquer combinacao
     de acoes nao bate em direcao nao mapeada.
 
-    Pattern empirico: dfe='compra' UNIVERSAL (destrava action_gerar_po_dfe);
-    po derivado de MATRIZ[op]['entrada'][(co_origem, co_destino)]
-    ['l10n_br_tipo_pedido_entrada'].
+    dfe por acao: INDUSTRIALIZACAO_FB_LF usa 'serv-industrializacao'
+    (correcao Rafael 2026-06-02 — alinha com escriturar_dfe + canary 627348);
+    as 7 OUTRAS acoes mantem dfe='compra' (decisao separada). po derivado de
+    MATRIZ[op]['entrada'][(co_origem, co_destino)]['l10n_br_tipo_pedido_entrada'].
     """
     executor = FaturamentoPipelineExecutor()
     mapping = executor.L10N_BR_TIPO_PEDIDO_POR_ACAO
@@ -4010,17 +4015,21 @@ def test_v27_s4_l10n_br_tipo_pedido_cobre_todas_acoes_matriz():
         f'{acoes_esperadas - set(mapping.keys())}'
     )
 
-    # dfe='compra' UNIVERSAL para todas (pattern empirico)
+    # dfe esperado por acao: INDUSTRIALIZACAO_FB_LF -> serv-industrializacao
+    # (Rafael 2026-06-02); as 7 OUTRAS -> 'compra'.
+    dfe_esperado = {acao: 'compra' for acao in acoes_esperadas}
+    dfe_esperado['INDUSTRIALIZACAO_FB_LF'] = 'serv-industrializacao'
     for acao in acoes_esperadas:
         entry = mapping[acao]
-        assert entry['dfe'] == 'compra', (
-            f'{acao}: dfe={entry["dfe"]!r} esperado "compra"'
+        assert entry['dfe'] == dfe_esperado[acao], (
+            f'{acao}: dfe={entry["dfe"]!r} esperado {dfe_esperado[acao]!r}'
         )
         assert 'po' in entry and entry['po'], (
             f'{acao}: po nao mapeado'
         )
 
     # Casos especificos (validado contra MATRIZ_INTERCOMPANY)
+    assert mapping['INDUSTRIALIZACAO_FB_LF']['dfe'] == 'serv-industrializacao'
     assert mapping['INDUSTRIALIZACAO_FB_LF']['po'] == 'serv-industrializacao'
     assert mapping['PERDA_LF_FB']['po'] == 'retorno'
     assert mapping['DEV_CD_LF']['po'] == 'retorno'

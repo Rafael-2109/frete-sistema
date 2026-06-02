@@ -82,6 +82,19 @@ HARD_FAIL_CONFIG_ERRORS: FrozenSet[str] = frozenset({
     'odoo_username_ausente',
 })
 
+# C1: campos do account.move que indicam NF-e JA transmitida/autorizada.
+# Espelham EXATAMENTE o que `playwright_nfe_transmissao` le para declarar
+# sucesso (ground truth do modulo l10n_br_ciel_it). Idempotencia primaria
+# anti-dupla-transmissao SEFAZ (IRREVERSIVEL) le esses campos.
+ACCOUNT_MOVE_SITUACAO_NF_FIELD: str = 'l10n_br_situacao_nf'
+ACCOUNT_MOVE_CHAVE_NF_FIELD: str = 'l10n_br_chave_nf'
+# situacoes que significam "NF-e ja autorizada na SEFAZ" (nunca retransmitir)
+SEFAZ_SITUACOES_AUTORIZADAS: FrozenSet[str] = frozenset({
+    'autorizado',
+    'excecao_autorizado',
+})
+CHAVE_NFE_TAMANHO: int = 44  # chave de acesso NF-e valida tem 44 digitos
+
 # Campos de constants validados em validar_invoice_constants (pre-cond)
 # Caller passa dict {campo: valor_esperado}; atomo le e compara.
 CONSTANTS_CAMPOS_VALIDAVEIS: FrozenSet[str] = frozenset({
@@ -152,6 +165,31 @@ def _registrar_auditoria(
         logger.error(
             f'auditoria faturamento fase={fase} falhou: {e}', exc_info=True,
         )
+
+
+# ============================================================
+# C1/GAP-1 — contexto de auditoria SEM ajuste (remessa AVULSA)
+# ============================================================
+
+class _AjusteAvulso:
+    """Contexto de auditoria nulo para remessa AVULSA (sem ciclo de inventario).
+
+    NAO e um AjusteEstoqueInventario (nao persiste, nao tem saldo/lote/acao).
+    Expoe APENAS os 3 atributos que os helpers universais G029/G007 leem para
+    auditoria (`.id`, `.ciclo`, `.acao_decidida`), permitindo reusar esses
+    helpers sobre o `account.move` sem ancorar num ajuste de ciclo.
+
+    Usado SO no caminho avulso de `validar_invoice_pos_robo` (ajuste_id_primeiro
+    None). G034 (`garantir_fiscal_setup`) NAO recebe este contexto: depende de
+    `acao_decidida` real (mapeamento DEV_*), entao e PULADO no avulso.
+    """
+
+    __slots__ = ('id', 'ciclo', 'acao_decidida')
+
+    def __init__(self, ciclo: str = '') -> None:
+        self.id = None
+        self.ciclo = ciclo
+        self.acao_decidida = None
 
 
 # ============================================================
@@ -624,14 +662,14 @@ class FaturamentoInvoiceService:
         self,
         *,
         invoice_id: int,
-        ajuste_id_primeiro: int,
+        ajuste_id_primeiro: Optional[int] = None,
         perfil: str = PERFIL_INVENTARIO_INTER_COMPANY,
         ciclo: str = '',
         dry_run: bool = True,
         confirmar: bool = False,
         usuario: str = 'faturamento_svc',
     ) -> Dict[str, Any]:
-        """Aplica sub-etapas G029 + G007 + G034 apos robo criar invoice.
+        """Aplica sub-etapas G029 + G007 (+ G034 se houver ajuste) pos-robo.
 
         Delega `_invoice_helpers` (perfil 'inventario-inter-company'):
           - F5d.5 (G029): garantir_payment_provider — payment_provider_id=38
@@ -640,9 +678,25 @@ class FaturamentoInvoiceService:
 
         Helpers sao idempotentes (checam estado pre-existente).
 
+        C1/GAP-1 (DESACOPLAMENTO): `ajuste_id_primeiro` agora OPCIONAL. As
+        sub-etapas G029 (payment_provider) e G007 (price_unit) operam sobre o
+        proprio `account.move` (NAO sobre o ajuste) e sao UNIVERSAIS — ambas
+        necessarias para o SEFAZ aceitar a NF. Logo rodam sempre, com ou sem
+        ajuste. O ajuste so e usado para auditoria nessas duas.
+
+        G034 (`garantir_fiscal_setup`) e' ajuste-ESPECIFICO: corrige
+        fiscal_position/tipo_pedido a partir de `ajuste.acao_decidida` (apenas
+        acoes DEV_* do ciclo de inventario tem mapeamento). Sem ajuste nao ha
+        `acao_decidida` para decidir o fix -> G034 e' PULADO no avulso (contado
+        como f5d7_fiscal_setup_skip).
+
+        Sem ajuste (remessa AVULSA): pula o re-fetch/`FALHA_AJUSTE_NAO_EXISTE`
+        e a auditoria das sub-etapas usa contexto nulo (`_AjusteAvulso`).
+
         Args:
             invoice_id: account.move.id recem-criada pelo robo.
-            ajuste_id_primeiro: id do primeiro ajuste (helpers leem acao_decidida).
+            ajuste_id_primeiro: id do primeiro ajuste (auditoria + acao_decidida
+                de G034). None = remessa avulsa: G029+G007 no invoice, G034 skip.
             perfil: V1 = 'inventario-inter-company'.
                 Outros perfis raise NotImplementedError nos helpers.
             ciclo: identificador do ciclo (auditoria).
@@ -709,17 +763,25 @@ class FaturamentoInvoiceService:
             return out
 
         # REAL-RUN: aplicar sub-etapas (cada uma try/except individual — D6)
-        # Re-fetch ajuste fresco
-        from app.odoo.models import AjusteEstoqueInventario  # lazy
-        primeiro = safe_session_get(AjusteEstoqueInventario, ajuste_id_primeiro)
-        if primeiro is None:
-            out['status'] = 'FALHA_AJUSTE_NAO_EXISTE'
-            out['erro'] = (
-                f'Ajuste id={ajuste_id_primeiro} nao encontrado no DB local '
-                f'(re-fetch retornou None — pode ter sumido pos-commit).'
+        # C1/GAP-1: re-fetch do ajuste SO quando ajuste_id_primeiro fornecido.
+        # Remessa avulsa (None) usa contexto nulo p/ auditoria das sub-etapas
+        # universais (G029/G007) e PULA G034 (ajuste-especifico).
+        avulso = ajuste_id_primeiro is None
+        if avulso:
+            primeiro = _AjusteAvulso(ciclo=ciclo)
+        else:
+            from app.odoo.models import AjusteEstoqueInventario  # lazy
+            primeiro = safe_session_get(
+                AjusteEstoqueInventario, ajuste_id_primeiro,
             )
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
+            if primeiro is None:
+                out['status'] = 'FALHA_AJUSTE_NAO_EXISTE'
+                out['erro'] = (
+                    f'Ajuste id={ajuste_id_primeiro} nao encontrado no DB local '
+                    f'(re-fetch retornou None — pode ter sumido pos-commit).'
+                )
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
 
         # F5d.5 — G029 payment_provider
         try:
@@ -753,25 +815,36 @@ class FaturamentoInvoiceService:
             out['sub_etapas']['f5d6_price_zero_falha'] = 1
 
         # F5d.7 — G034 fiscal_setup (apenas DEV_*)
-        try:
-            ok_f5d7 = garantir_fiscal_setup(
-                self.odoo, invoice_id, primeiro,
-                perfil=perfil, executado_por=usuario,
+        # C1/GAP-1: G034 e' ajuste-especifico (depende de acao_decidida p/
+        # mapear FP/tipo). Sem ajuste (avulso) nao ha como decidir o fix ->
+        # PULAR e contar como skip (NAO falha — a NF avulsa ja' vem com a FP
+        # do picking_type/robo, que e' o esperado fora do ciclo de inventario).
+        if avulso:
+            logger.info(
+                f'F5d.7 fiscal_setup invoice {invoice_id}: PULADO (remessa '
+                f'avulsa sem ajuste — G034 depende de acao_decidida do ciclo).'
             )
-            if ok_f5d7:
-                # Helper retorna True tambem para acao nao-DEV (skip).
-                # Heuristica: se acao NAO eh DEV_*, contar como skip; senao OK.
-                if primeiro.acao_decidida and primeiro.acao_decidida.startswith('DEV_'):
-                    out['sub_etapas']['f5d7_fiscal_setup_ok'] = 1
+            out['sub_etapas']['f5d7_fiscal_setup_skip'] = 1
+        else:
+            try:
+                ok_f5d7 = garantir_fiscal_setup(
+                    self.odoo, invoice_id, primeiro,
+                    perfil=perfil, executado_por=usuario,
+                )
+                if ok_f5d7:
+                    # Helper retorna True tambem para acao nao-DEV (skip).
+                    # Heuristica: se acao NAO eh DEV_*, contar como skip; senao OK.
+                    if primeiro.acao_decidida and primeiro.acao_decidida.startswith('DEV_'):
+                        out['sub_etapas']['f5d7_fiscal_setup_ok'] = 1
+                    else:
+                        out['sub_etapas']['f5d7_fiscal_setup_skip'] = 1
                 else:
-                    out['sub_etapas']['f5d7_fiscal_setup_skip'] = 1
-            else:
+                    out['sub_etapas']['f5d7_fiscal_setup_falha'] = 1
+            except NotImplementedError:
+                raise
+            except Exception as e:
+                logger.warning(f'F5d.7 fiscal_setup invoice {invoice_id}: {e}')
                 out['sub_etapas']['f5d7_fiscal_setup_falha'] = 1
-        except NotImplementedError:
-            raise
-        except Exception as e:
-            logger.warning(f'F5d.7 fiscal_setup invoice {invoice_id}: {e}')
-            out['sub_etapas']['f5d7_fiscal_setup_falha'] = 1
 
         # commit sub-etapas — falha NAO derruba (D6)
         commit_resilient()
@@ -800,6 +873,82 @@ class FaturamentoInvoiceService:
         return out
 
     # ============================================================
+    # C1 — helper: idempotencia primaria intra-Odoo (anti-dupla-SEFAZ)
+    # ============================================================
+
+    def _invoice_ja_autorizado(self, invoice_id: int) -> Dict[str, Any]:
+        """Le o account.move e diz se a NF-e JA esta autorizada na SEFAZ.
+
+        Guarda anti-dupla-transmissao independente de ciclo/ajuste. Le os
+        MESMOS campos que `playwright_nfe_transmissao` usa para declarar
+        sucesso (l10n_br_situacao_nf / l10n_br_chave_nf), garantindo
+        consistencia de criterio.
+
+        Criterio de "autorizado" (qualquer um basta):
+          - l10n_br_situacao_nf em {autorizado, excecao_autorizado}; OU
+          - l10n_br_chave_nf preenchida com 44 digitos (chave de acesso).
+
+        Sinaliza `inconclusivo=True` quando NAO conseguiu LER o estado
+        (read lanca excecao / retorna nao-lista / lista vazia / registro
+        nao-dict). O caller decide a politica:
+          - caminho COM ajuste_ids: trata inconclusivo como autorizado=False
+            e prossegue (D8.3 e a 2a camada anti-dupla-transmissao);
+          - caminho AVULSO (sem ajuste_ids): FAIL-CLOSED — aborta com
+            FALHA_ESTADO_INDETERMINADO (sem 2a camada, o custo de dupla
+            transmissao SEFAZ supera o de um falso bloqueio recuperavel).
+
+        Quando o read RETORNA um account.move valido mas NAO-autorizado,
+        `inconclusivo=False` (leitura conclusiva: a NF realmente nao foi
+        transmitida) — caminho avulso pode prosseguir normalmente.
+
+        Returns:
+            dict {autorizado: bool, inconclusivo: bool,
+                  situacao_nf: str|None, chave_nfe: str|None}
+        """
+        resultado: Dict[str, Any] = {
+            'autorizado': False,
+            'inconclusivo': True,
+            'situacao_nf': None,
+            'chave_nfe': None,
+        }
+        try:
+            registros = self.odoo.read(
+                'account.move', [invoice_id],
+                [ACCOUNT_MOVE_SITUACAO_NF_FIELD, ACCOUNT_MOVE_CHAVE_NF_FIELD],
+            )
+        except Exception as e:
+            logger.warning(
+                f'C1 idempotencia intra-Odoo: read account.move {invoice_id} '
+                f'falhou ({e}). Estado INDETERMINADO (inconclusivo=True).'
+            )
+            return resultado
+
+        # read deve retornar uma lista com o registro; qualquer outra coisa
+        # (None, [], MagicMock nao configurado em teste, formato inesperado)
+        # = leitura inconclusiva -> NAO confirma estado (inconclusivo=True).
+        if not isinstance(registros, list) or not registros:
+            return resultado
+        reg = registros[0]
+        if not isinstance(reg, dict):
+            return resultado
+
+        # Leitura conclusiva: lemos o account.move com sucesso.
+        resultado['inconclusivo'] = False
+        situacao = reg.get(ACCOUNT_MOVE_SITUACAO_NF_FIELD) or None
+        chave = reg.get(ACCOUNT_MOVE_CHAVE_NF_FIELD) or None
+        resultado['situacao_nf'] = situacao
+        resultado['chave_nfe'] = chave
+
+        chave_valida = bool(chave) and len(str(chave)) == CHAVE_NFE_TAMANHO
+        situacao_autorizada = (
+            isinstance(situacao, str)
+            and situacao in SEFAZ_SITUACOES_AUTORIZADAS
+        )
+        if situacao_autorizada or chave_valida:
+            resultado['autorizado'] = True
+        return resultado
+
+    # ============================================================
     # ATOMO 5 — transmitir_sefaz (IRREVERSIVEL)
     # ============================================================
 
@@ -807,7 +956,7 @@ class FaturamentoInvoiceService:
         self,
         *,
         invoice_id: int,
-        ajuste_ids: List[int],
+        ajuste_ids: Optional[List[int]] = None,
         ciclo: str = '',
         max_tentativas: int = F5E_PLAYWRIGHT_MAX_TENTATIVAS_DEFAULT,
         intervalo_retry: int = F5E_PLAYWRIGHT_INTERVALO_RETRY_DEFAULT_S,
@@ -817,10 +966,30 @@ class FaturamentoInvoiceService:
     ) -> Dict[str, Any]:
         """Transmite NF-e via Playwright SEFAZ (IRREVERSIVEL).
 
+        v25+ C1 (DESACOPLAMENTO): `ajuste_ids` agora OPCIONAL. O atomo opera
+        sobre o proprio `account.move` (objeto Odoo do atomo, Constituicao §6).
+        A camada de ajuste (`AjusteEstoqueInventario`, modelo local de ciclo
+        de inventario) vira ANCORA OPCIONAL de auditoria/rastreabilidade —
+        nao pre-requisito. Isso capacita a skill para remessas AVULSAS (sem
+        ciclo).
+
+        Idempotencia em DUAS camadas (defesa em profundidade SEFAZ):
+          1. PRIMARIA (intra-Odoo, SEMPRE): le account.move
+             (`l10n_br_situacao_nf` / `l10n_br_chave_nf`) ANTES de transmitir.
+             Se ja autorizado (situacao in {autorizado, excecao_autorizado}
+             OU chave de 44 digitos preenchida) -> IDEMPOTENT_SKIP. Esta e a
+             guarda anti-dupla-transmissao independente de ciclo/ajuste.
+             FAIL-CLOSED avulso (REAL-RUN): se a leitura for INCONCLUSIVA
+             (read excecao/vazio/formato inesperado) E nao houver ajuste_ids
+             (sem 2a camada) -> FALHA_ESTADO_INDETERMINADO (NAO transmite).
+             Com ajuste_ids, leitura inconclusiva prossegue (D8.3 protege).
+             Em dry-run nao aplica (nada e transmitido).
+          2. SECUNDARIA (D8.3, SO se ajuste_ids fornecido): skip se QUALQUER
+             ajuste ja em F5e_SEFAZ_OK ou status=EXECUTADO (cobre crash
+             mid-loop antes do account.move refletir a chave).
+
         Patterns codificados (preservados do orchestrator v17 ETAPA D):
           - D7: HARD_FAIL_CONFIG_ERRORS aborta com status=FALHA_CONFIG
-          - D8.3: idempotencia persistente — skip se QUALQUER ajuste ja
-                  em FASE_F5e_OK ou status=EXECUTADO (cobre crash mid-loop)
           - D9: re-fetch ajustes via safe_session_get apos Playwright
           - F6 v15c: safe_session_get anti-DetachedInstanceError
           - MED C-1: registra situacao_nf != 'autorizado' em erro_msg
@@ -831,12 +1000,13 @@ class FaturamentoInvoiceService:
                             autorizada — operador investiga manualmente)
 
         D-OPS-2b §7.5.2 (NAO corrigido aqui): F5e propaga chave_nfe para
-        TODOS ajustes do mesmo invoice. Fix definitivo (filtrar por
-        account.move.line) eh TODO pos-canary.
+        TODOS ajustes do mesmo invoice (so quando ajuste_ids fornecido).
+        Fix definitivo (filtrar por account.move.line) eh TODO pos-canary.
 
         Args:
             invoice_id: account.move.id em F5d_INVOICE_GERADA.
-            ajuste_ids: lista de ajustes da mesma invoice (>=1).
+            ajuste_ids: lista OPCIONAL de ajustes da mesma invoice (ancora de
+                auditoria). None/[] = remessa avulsa (idempotencia so intra-Odoo).
             ciclo: identificador do ciclo (auditoria).
             max_tentativas: tentativas Playwright/NF (default 15).
             intervalo_retry: segundos entre tentativas (default 120).
@@ -848,7 +1018,7 @@ class FaturamentoInvoiceService:
             dict com:
               status: 'DRY_RUN_OK' | 'OK' | 'IDEMPOTENT_SKIP' |
                       'BLOQUEADO_SEM_CONFIRMAR_SEFAZ' | 'FALHA_CONFIG' |
-                      'FALHA_AJUSTES_VAZIOS' | 'FALHA_COMMIT_PRE' |
+                      'FALHA_ESTADO_INDETERMINADO' | 'FALHA_COMMIT_PRE' |
                       'FALHA_COMMIT_POS_SEFAZ_OK' | 'FALHA'
               invoice_id: input
               chave_nfe: chave SEFAZ (em OK ou IDEMPOTENT_SKIP)
@@ -868,15 +1038,6 @@ class FaturamentoInvoiceService:
             'situacao_nf': None,
         }
 
-        if not ajuste_ids:
-            out['status'] = 'FALHA_AJUSTES_VAZIOS'
-            out['erro'] = (
-                'ajuste_ids vazio — atomo precisa de >=1 ajuste para auditoria '
-                'e propagacao de chave_nfe (D-OPS-2b).'
-            )
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
-
         # D18: real-run exige --confirmar-sefaz (2 niveis — IRREVERSIVEL)
         if not dry_run and not confirmar_sefaz:
             out['status'] = 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ'
@@ -888,14 +1049,56 @@ class FaturamentoInvoiceService:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
+        # ============================================================
+        # C1 — IDEMPOTENCIA PRIMARIA INTRA-ODOO (vale dry-run E real-run)
+        # Le o proprio account.move ANTES de transmitir. Guarda
+        # anti-dupla-transmissao SEFAZ independente de ciclo/ajuste:
+        # se a NF ja esta autorizada (situacao autorizada OU chave de 44
+        # digitos preenchida) -> IDEMPOTENT_SKIP, NUNCA chama Playwright.
+        # ============================================================
+        idemp = self._invoice_ja_autorizado(invoice_id)
+        if idemp['autorizado']:
+            out['status'] = 'IDEMPOTENT_SKIP'
+            out['chave_nfe'] = idemp['chave_nfe']
+            out['situacao_nf'] = idemp['situacao_nf']
+            out['observacao'] = (
+                f'Idempotencia intra-Odoo: account.move {invoice_id} ja '
+                f'autorizado (situacao_nf={idemp["situacao_nf"]!r}, '
+                f'chave={idemp["chave_nfe"]}). NAO retransmite (SEFAZ '
+                f'irreversivel).'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # C1 FAIL-CLOSED (caminho AVULSO, REAL-RUN): sem ajuste_ids NAO ha 2a
+        # camada (D8.3). Se a leitura do account.move foi INCONCLUSIVA (read
+        # excecao/nao-lista/vazio), NAO ha como garantir que a NF nao foi
+        # transmitida -> ABORTA antes de transmitir (custo de dupla-transmissao
+        # SEFAZ supera o de um falso bloqueio recuperavel). Com ajuste_ids:
+        # prossegue (D8.3 ainda protege; inconclusivo tratado como
+        # autorizado=False). Em dry-run NAO aplica: nada e transmitido, entao
+        # nao ha risco SEFAZ — o operador planeja normalmente (DRY_RUN_OK).
+        if not dry_run and not ajuste_ids and idemp['inconclusivo']:
+            out['status'] = 'FALHA_ESTADO_INDETERMINADO'
+            out['erro'] = (
+                f'Leitura do account.move {invoice_id} inconclusiva '
+                f'(read excecao/vazio/formato inesperado). Abortando para '
+                f'evitar risco de dupla-transmissao SEFAZ (fail-closed '
+                f'avulso — sem ajuste_ids nao ha 2a camada de idempotencia). '
+                f'Operador deve re-tentar apos confirmar o estado da NF.'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
         if dry_run:
+            n_ajustes = len(ajuste_ids or [])
             out['status'] = 'DRY_RUN_OK'
             out['observacao'] = (
                 f'Real-run chamaria transmitir_nfe_via_playwright(invoice='
                 f'{invoice_id}, max_tentativas={max_tentativas}, '
                 f'intervalo_retry={intervalo_retry}s). Tempo estimado: '
-                f'5-10min/NF. {len(ajuste_ids)} ajustes seriam atualizados '
-                f'(propagacao chave_nfe D-OPS-2b).'
+                f'5-10min/NF. {n_ajustes} ajustes seriam atualizados '
+                f'(propagacao chave_nfe D-OPS-2b — camada opcional).'
             )
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
@@ -917,40 +1120,47 @@ class FaturamentoInvoiceService:
                 f'(SSL). Continuando — risco de DB desincronizar.'
             )
 
-        # F6 v15c: re-fetch ajustes
-        ajustes_fresh: List = []
-        for aid in ajuste_ids:
-            af = safe_session_get(AjusteEstoqueInventario, aid)
-            if af is not None:
-                ajustes_fresh.append(af)
+        # ============================================================
+        # CAMADA OPCIONAL DE AJUSTE (so quando ajuste_ids fornecido)
+        # Re-fetch + D8.3 (idempotencia secundaria por fase do ajuste).
+        # Remessa avulsa (ajuste_ids None/[]) PULA: idempotencia ja
+        # garantida pelo account.move acima.
+        # ============================================================
+        if ajuste_ids:
+            # F6 v15c: re-fetch ajustes
+            ajustes_fresh: List = []
+            for aid in ajuste_ids:
+                af = safe_session_get(AjusteEstoqueInventario, aid)
+                if af is not None:
+                    ajustes_fresh.append(af)
 
-        if not ajustes_fresh:
-            out['status'] = 'FALHA'
-            out['erro'] = (
-                f'Re-fetch ajustes vazio para invoice {invoice_id} '
-                f'(todos sumiram?). Skipping Playwright.'
-            )
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
+            if not ajustes_fresh:
+                out['status'] = 'FALHA'
+                out['erro'] = (
+                    f'Re-fetch ajustes vazio para invoice {invoice_id} '
+                    f'(todos sumiram?). Skipping Playwright.'
+                )
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
 
-        # D8.3 (persistencia): skip se QUALQUER ajuste ja em F5e_OK
-        ja_processados = [
-            a for a in ajustes_fresh
-            if a.fase_pipeline == 'F5e_SEFAZ_OK' or a.status == 'EXECUTADO'
-        ]
-        if ja_processados:
-            chave_existente = next(
-                (a.chave_nfe for a in ja_processados if a.chave_nfe), None,
-            )
-            out['status'] = 'IDEMPOTENT_SKIP'
-            out['chave_nfe'] = chave_existente
-            out['observacao'] = (
-                f'Idempotencia D8.3: invoice {invoice_id} ja transmitida '
-                f'({len(ja_processados)}/{len(ajustes_fresh)} ajustes em '
-                f'F5e_OK ou EXECUTADO).'
-            )
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
+            # D8.3 (persistencia): skip se QUALQUER ajuste ja em F5e_OK
+            ja_processados = [
+                a for a in ajustes_fresh
+                if a.fase_pipeline == 'F5e_SEFAZ_OK' or a.status == 'EXECUTADO'
+            ]
+            if ja_processados:
+                chave_existente = next(
+                    (a.chave_nfe for a in ja_processados if a.chave_nfe), None,
+                )
+                out['status'] = 'IDEMPOTENT_SKIP'
+                out['chave_nfe'] = chave_existente
+                out['observacao'] = (
+                    f'Idempotencia D8.3: invoice {invoice_id} ja transmitida '
+                    f'({len(ja_processados)}/{len(ajustes_fresh)} ajustes em '
+                    f'F5e_OK ou EXECUTADO).'
+                )
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
 
         inicio_inv = time.time()
 
@@ -966,9 +1176,9 @@ class FaturamentoInvoiceService:
             logger.error(
                 f'F5e excecao invoice {invoice_id}: {e}', exc_info=True,
             )
-            # F6 v15c: re-fetch pos-Playwright
+            # F6 v15c: re-fetch pos-Playwright (so se ajuste_ids fornecido)
             ajustes_post: List = []
-            for aid in ajuste_ids:
+            for aid in (ajuste_ids or []):
                 af = safe_session_get(AjusteEstoqueInventario, aid)
                 if af is not None:
                     ajustes_post.append(af)
@@ -998,7 +1208,7 @@ class FaturamentoInvoiceService:
         ):
             erro = resultado['erro']
             ajustes_post: List = []
-            for aid in ajuste_ids:
+            for aid in (ajuste_ids or []):
                 af = safe_session_get(AjusteEstoqueInventario, aid)
                 if af is not None:
                     ajustes_post.append(af)
@@ -1019,20 +1229,23 @@ class FaturamentoInvoiceService:
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out
 
-        # D9: re-fetch ajustes apos Playwright (sessao pode ter expirado)
+        # D9: re-fetch ajustes apos Playwright (sessao pode ter expirado).
+        # So quando ajuste_ids fornecido — remessa avulsa nao tem ajustes a
+        # persistir (resultado SEFAZ ja gravado no proprio account.move).
         ajustes_post: List = []
-        for aid in ajuste_ids:
-            af = safe_session_get(AjusteEstoqueInventario, aid)
-            if af is not None:
-                ajustes_post.append(af)
-        if not ajustes_post:
-            out['status'] = 'FALHA'
-            out['erro'] = (
-                f'Re-fetch pos-Playwright vazio para invoice {invoice_id} '
-                f'— resultado NAO persistido (ajustes sumiram).'
-            )
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
+        if ajuste_ids:
+            for aid in ajuste_ids:
+                af = safe_session_get(AjusteEstoqueInventario, aid)
+                if af is not None:
+                    ajustes_post.append(af)
+            if not ajustes_post:
+                out['status'] = 'FALHA'
+                out['erro'] = (
+                    f'Re-fetch pos-Playwright vazio para invoice {invoice_id} '
+                    f'— resultado NAO persistido (ajustes sumiram).'
+                )
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
 
         if resultado.get('sucesso'):
             chave_nfe = resultado.get('chave_nf')

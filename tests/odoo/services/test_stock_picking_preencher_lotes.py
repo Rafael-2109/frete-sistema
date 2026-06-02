@@ -8,8 +8,9 @@ Cobertura:
   - sem lote_default + produtos sem cobertura -> FALHA com mls_pendentes
   - picking sem MLs -> FALHA
   - pre-cond invalido nao raise (AP4)
+  - C3/G-ENT-6: resolve/cria stock.lot na company DESTINO + lot_id explicito
 """
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.odoo.estoque.scripts.picking import StockPickingService
 
@@ -188,3 +189,180 @@ def test_preencher_lotes_pre_cond_picking_id_invalido_nao_raise():
     assert res['status'] == 'FALHA'
     assert res['erro'] == 'picking_id_invalido'
     assert not odoo.search_read.called
+
+
+# ============================================================================
+# C3 / G-ENT-6 — lote resolvido/criado na company DESTINO + lot_id explicito
+# ============================================================================
+
+_LOT_SVC_PATH = (
+    'app.odoo.estoque.scripts.picking.StockLotService'
+)
+
+
+def test_preencher_lotes_company_destino_resolve_lot_na_company():
+    """C3/G-ENT-6: com company_destino, busca stock.lot na company destino
+    e passa lot_id explicito no write (nao so lot_name)."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        _ml(ml_id=10, pid=999, qty=5.0),
+    ]
+    lot_svc = MagicMock()
+    # lote ja existe na company destino (id=4242)
+    lot_svc.criar_se_nao_existe.return_value = (4242, False)
+    # guard pos-condicao: read do lote confirma company destino
+    odoo.read.return_value = [{'id': 4242, 'company_id': [5, 'LF']}]
+    with patch(_LOT_SVC_PATH, return_value=lot_svc):
+        svc = StockPickingService(odoo=odoo)
+        res = svc.preencher_lotes_picking(
+            picking_id=888,
+            lotes_data=[{
+                'product_id': 999,
+                'lote_nome': 'MIGRAÇÃO',
+                'quantidade': 5.0,
+            }],
+            company_destino=5,
+            dry_run=False,
+        )
+    assert res['status'] == 'PREENCHIDO'
+    # resolveu o lote na company destino (nome + product_id + company_id)
+    lot_svc.criar_se_nao_existe.assert_called_once()
+    _args, kwargs = lot_svc.criar_se_nao_existe.call_args
+    # company_destino propagado para a resolucao/criacao do lote
+    passed = {**dict(zip(['nome', 'product_id', 'company_id'], _args)), **kwargs}
+    assert passed.get('company_id', _args[2] if len(_args) > 2 else None) == 5
+    assert passed.get('product_id', _args[1] if len(_args) > 1 else None) == 999
+    # write da move.line recebeu lot_id explicito (nao so lot_name)
+    write_call = odoo.write.call_args
+    assert write_call[0][0] == 'stock.move.line'
+    wdata = write_call[0][2]
+    assert wdata['lot_id'] == 4242
+
+
+def test_preencher_lotes_company_destino_cria_lote_inexistente():
+    """C3: lote ainda nao existe na company destino -> cria com company destino."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        _ml(ml_id=20, pid=777, qty=8.0),
+    ]
+    lot_svc = MagicMock()
+    lot_svc.criar_se_nao_existe.return_value = (5151, True)  # criado agora
+    odoo.read.return_value = [{'id': 5151, 'company_id': [5, 'LF']}]
+    with patch(_LOT_SVC_PATH, return_value=lot_svc):
+        svc = StockPickingService(odoo=odoo)
+        res = svc.preencher_lotes_picking(
+            picking_id=900,
+            lotes_data=[{
+                'product_id': 777,
+                'lote_nome': 'LOTE-LF-NOVO',
+                'quantidade': 8.0,
+            }],
+            company_destino=5,
+            dry_run=False,
+        )
+    assert res['status'] == 'PREENCHIDO'
+    _args, kwargs = lot_svc.criar_se_nao_existe.call_args
+    passed = {**dict(zip(['nome', 'product_id', 'company_id'], _args)), **kwargs}
+    assert passed.get('nome', _args[0] if _args else None) == 'LOTE-LF-NOVO'
+    assert passed.get('company_id', _args[2] if len(_args) > 2 else None) == 5
+    assert odoo.write.call_args[0][2]['lot_id'] == 5151
+
+
+def test_preencher_lotes_company_destino_derivada_do_picking():
+    """C3: company_destino=None -> deriva de picking.company_id (read)."""
+    odoo = MagicMock()
+    # 1o read = stock.picking company; depois search_read das MLs
+    odoo.read.side_effect = [
+        [{'id': 900, 'company_id': [5, 'LF']}],   # read picking
+        [{'id': 6262, 'company_id': [5, 'LF']}],  # read guard pos-cond do lote
+    ]
+    odoo.search_read.return_value = [
+        _ml(ml_id=30, pid=555, qty=3.0),
+    ]
+    lot_svc = MagicMock()
+    lot_svc.criar_se_nao_existe.return_value = (6262, False)
+    with patch(_LOT_SVC_PATH, return_value=lot_svc):
+        svc = StockPickingService(odoo=odoo)
+        res = svc.preencher_lotes_picking(
+            picking_id=900,
+            lotes_data=[{
+                'product_id': 555,
+                'lote_nome': 'L-DERIV',
+                'quantidade': 3.0,
+            }],
+            company_destino=None,  # derivar do picking
+            dry_run=False,
+        )
+    assert res['status'] == 'PREENCHIDO'
+    _args, kwargs = lot_svc.criar_se_nao_existe.call_args
+    passed = {**dict(zip(['nome', 'product_id', 'company_id'], _args)), **kwargs}
+    assert passed.get('company_id', _args[2] if len(_args) > 2 else None) == 5
+
+
+def test_preencher_lotes_guard_lote_company_divergente_aborta():
+    """C3/G-ENT-6 GUARD: se lote resolvido pertence a outra company -> FALHA
+    sem escrever (codifica 'Empresas incompatíveis')."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        _ml(ml_id=40, pid=333, qty=2.0),
+    ]
+    lot_svc = MagicMock()
+    lot_svc.criar_se_nao_existe.return_value = (9090, False)
+    # guard pos-cond: lote pertence a company 1 (FB), mas destino e 5 (LF)
+    odoo.read.return_value = [{'id': 9090, 'company_id': [1, 'FB']}]
+    with patch(_LOT_SVC_PATH, return_value=lot_svc):
+        svc = StockPickingService(odoo=odoo)
+        res = svc.preencher_lotes_picking(
+            picking_id=1000,
+            lotes_data=[{
+                'product_id': 333,
+                'lote_nome': 'L-ERRADO',
+                'quantidade': 2.0,
+            }],
+            company_destino=5,
+            dry_run=False,
+        )
+    assert res['status'] == 'FALHA'
+    assert res['erro'] == 'FALHA_LOTE_COMPANY_DIVERGENTE'
+    # NAO escreveu/criou move.line
+    assert not odoo.write.called
+    assert not odoo.create.called
+
+
+def test_preencher_lotes_company_destino_lot_id_em_creates():
+    """C3: 2 lotes mesmo produto com company_destino -> ambos com lot_id."""
+    odoo = MagicMock()
+    odoo.search_read.return_value = [
+        _ml(ml_id=50, pid=222, qty=10.0),
+    ]
+    odoo.create.return_value = 51
+    lot_svc = MagicMock()
+    # resolve lotes distintos por nome
+    lot_svc.criar_se_nao_existe.side_effect = [
+        (700, False),  # LOTE-A
+        (701, True),   # LOTE-B
+    ]
+    # guard read confirma company destino para ambos
+    odoo.read.side_effect = [
+        [{'id': 700, 'company_id': [5, 'LF']}],
+        [{'id': 701, 'company_id': [5, 'LF']}],
+    ]
+    with patch(_LOT_SVC_PATH, return_value=lot_svc):
+        svc = StockPickingService(odoo=odoo)
+        res = svc.preencher_lotes_picking(
+            picking_id=1100,
+            lotes_data=[
+                {'product_id': 222, 'lote_nome': 'LOTE-A', 'quantidade': 6.0},
+                {'product_id': 222, 'lote_nome': 'LOTE-B', 'quantidade': 4.0},
+            ],
+            company_destino=5,
+            dry_run=False,
+        )
+    assert res['status'] == 'PREENCHIDO'
+    assert res['mls_atualizadas'] == 1
+    assert res['mls_criadas'] == 1
+    # write (LOTE-A) com lot_id=700
+    assert odoo.write.call_args[0][2]['lot_id'] == 700
+    # create (LOTE-B) com lot_id=701
+    create_data = odoo.create.call_args[0][1]
+    assert create_data['lot_id'] == 701

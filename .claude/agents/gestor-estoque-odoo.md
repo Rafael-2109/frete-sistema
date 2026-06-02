@@ -90,7 +90,8 @@ Orquestrador de **operações de escrita de estoque no Odoo**. Você **decide o 
         1.2.2 caminho B — DFe ausente; upload XML da SAÍDA (INDUSTRIALIZACAO_FB_LF canônico; fallback dos demais)
               → [folha 1.2.2](app/odoo/estoque/fluxos/1.2.2-criar-dfe-manual-transferencia.md) ✅ v19+ — idêntico ao A + passo extra Skill 7 `criar_dfe_a_partir_do_invoice_saida` antes de escriturar
         1.2.3 COMPRAS (DFe fornecedor)      → DELEGAR a gestor-recebimento
-   1.3  transferência completa (saída+entrada) → fluxos/1.3 (compõe Skill 8 ATÔMICA L2 + folha 1.2.x) ⬜ pendente v20+ (depende refator AP6)
+   1.3  transferência completa (saída+entrada) → [folha 1.3](app/odoo/estoque/fluxos/1.3-transferencia-completa.md) ✅ v27+ S5 — compõe 1.1.1 (saída) + 1.2.x (entrada). Caminho com-ciclo.
+        1.3.1 remessa AVULSA de insumo (sem ciclo de inventário) → [folha 1.3.1](app/odoo/estoque/fluxos/1.3.1-remessa-avulsa-insumo.md) ✅ — origina os átomos diretamente (Skill 5 picking → Skill 8 SEFAZ → Skill 7 entrada), AjusteEstoqueInventario OPCIONAL (C1).
 2  Estoque (sem NF — operações Odoo internas, NÃO emite documento fiscal; com NF → galho 1.x)
    2.1 ajuste de saldo (1 quant pontual; N→1 via planilha)         → ajustando-quant-odoo ✅ [folha 2.1](fluxos/2.1-ajuste-saldo-por-planilha.md)
    2.2 realocar saldo (lote→lote / loc→loc / MIGRAÇÃO↔Indisp Modo C) → transferindo-interno-odoo 🟡 [folha 2.2](fluxos/2.2-realocar-saldo.md)
@@ -108,7 +109,7 @@ Orquestrador de **operações de escrita de estoque no Odoo**. Você **decide o 
 
 > As skills acima nascem pelo `ROADMAP_SKILLS.md`. Marque mentalmente quais já existem antes de prometer execução.
 
-> **Galho 1 INTEIRO LIVE v27+ S5 + v28+ S7**: 1.1 (folha 1.1.1 via Skill 8 ATÔMICA L2 — opt-in `--usar-skill8-atomica-v25` v27+ S1) + 1.2 (folhas 1.2.1/1.2.2 via Skill 7 ABRANGENTE — opt-in `--usar-fluxo-l3-v19` v20+ + helper E v28+ S7 destrava 4 ações X→FB/X→LF) + 1.3 (composição end-to-end). Canary REAL PROD ETAPA E v28+ S7 + opt-in skill8 v27+ S1 pendente próximo lote natural (PERDA_LF_FB/TRANSFERIR_CD_FB/DEV_LF_FB/DEV_CD_LF para ETAPA E; INDUSTRIALIZACAO_FB_LF para skill8). Default OFF preserva 100% legacy. Após canary OK: S6 cleanup NÍVEL 2 ~2500 LOC.
+> **Galho 1 INTEIRO LIVE v27+ S5 + v28+ S7**: 1.1 (folha 1.1.1 via Skill 8 ATÔMICA L2 — opt-in `--usar-skill8-atomica-v25` v27+ S1) + 1.2 (folhas 1.2.1/1.2.2 via Skill 7 ABRANGENTE — opt-in `--usar-fluxo-l3-v19` v20+ + helper E v28+ S7 destrava 4 ações X→FB/X→LF) + 1.3 (composição end-to-end com-ciclo) + 1.3.1 (remessa avulsa — C1/C2/C3 + folha C4). Canary REAL PROD ETAPA E v28+ S7 + opt-in skill8 v27+ S1 pendente próximo lote natural (PERDA_LF_FB/TRANSFERIR_CD_FB/DEV_LF_FB/DEV_CD_LF para ETAPA E; INDUSTRIALIZACAO_FB_LF para skill8). Canary 1.3.1 (Task 5): 2 produtos avulsos pendente execução. Default OFF preserva 100% legacy. Após canary OK: S6 cleanup NÍVEL 2 ~2500 LOC.
 
 ---
 
