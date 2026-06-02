@@ -127,6 +127,10 @@ coordination/orchestration/*
 *.sqlite-wal
 app/mcp_sistema/.env.production
 
+# Estado runtime da operacao temporaria Troca NF Atacadao 881 (idempotencia do cron)
+scripts/operacionais/troca_nf_atacadao881/estado_reversao.json
+scripts/operacionais/troca_nf_atacadao881/CONCLUIDO.flag
+
 # Git worktrees (isolated workspaces)
 .worktrees/
 
