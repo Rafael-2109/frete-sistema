@@ -29,6 +29,12 @@ class ProdutoDeParaAtacadao(db.Model):
     
     # Fator de conversão (se houver diferença de unidade de medida)
     fator_conversao = db.Column(db.Numeric(10, 4), default=1.0)
+
+    # Protocolo ST: marca o produto como sujeito a Substituição Tributária.
+    # Usado para separar a NF em 2 pedidos (Atacadão RJ) quando a UF exige
+    # (RegiaoTabelaRede.separar_protocolo_st). NÃO entra na UniqueConstraint.
+    protocolo_st = db.Column(db.Boolean, default=False, nullable=False)
+
     observacoes = db.Column(db.Text)
     
     # Controle

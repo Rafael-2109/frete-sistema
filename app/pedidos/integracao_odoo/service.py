@@ -324,7 +324,8 @@ class OdooIntegrationService:
                      observacoes: str = None,
                      calcular_impostos: bool = True,
                      payment_provider_id: int = None,
-                     picking_policy: str = None) -> ResultadoCriacaoPedido:
+                     picking_policy: str = None,
+                     excluir_order_ids: List[int] = None) -> ResultadoCriacaoPedido:
         """
         Cria um pedido de venda no Odoo com Fire-and-Poll para resiliência.
 
@@ -344,6 +345,10 @@ class OdooIntegrationService:
             calcular_impostos: Se deve calcular impostos após criar
             payment_provider_id: ID da forma de pagamento (30 = Transferência Bancária CD)
             picking_policy: Política de envio ('direct' = O mais rápido possível, 'one' = Quando todos prontos)
+            excluir_order_ids: IDs de sale.order a EXCLUIR do poll de timeout. Necessário no
+                split de NF por protocolo ST, onde 2 pedidos compartilham o mesmo
+                l10n_br_pedido_compra: ao criar o 2º, passamos o ID do 1º para o poll não
+                casar com ele. Default None = comportamento original (sem exclusão).
 
         Returns:
             ResultadoCriacaoPedido
@@ -452,6 +457,10 @@ class OdooIntegrationService:
                 ]
                 if pedido_compra_busca:
                     filtros.append(('l10n_br_pedido_compra', '=', pedido_compra_busca))
+                # Split protocolo ST: não casar com pedido(s) já criado(s) do mesmo
+                # l10n_br_pedido_compra (mesmo partner). Garante poll inequívoco.
+                if excluir_order_ids:
+                    filtros.append(('id', 'not in', list(excluir_order_ids)))
 
                 try:
                     # _execute reconecta automaticamente após erro de conexão
@@ -538,7 +547,8 @@ class OdooIntegrationService:
         justificativa: str = None,
         aprovador: str = None,
         numero_pedido_cliente: str = None,
-        payment_provider_id: int = None) -> Tuple[ResultadoCriacaoPedido, RegistroPedidoOdoo]: # type: ignore # noqa: E125
+        payment_provider_id: int = None,
+        excluir_order_ids: List[int] = None) -> Tuple[ResultadoCriacaoPedido, RegistroPedidoOdoo]: # type: ignore # noqa: E125
         """
         Cria pedido no Odoo e registra no banco local para auditoria
 
@@ -597,6 +607,7 @@ class OdooIntegrationService:
                 numero_pedido_cliente=pedido_compra,
                 payment_provider_id=payment_provider_id,
                 picking_policy=picking_policy,
+                excluir_order_ids=excluir_order_ids,
             )
 
             if resultado.sucesso:

@@ -77,6 +77,7 @@
                             <th>Rede</th>
                             <th>UF</th>
                             <th>Regiao</th>
+                            <th>Separar ST</th>
                             <th>Status</th>
                             <th>Criado em</th>
                             <th class="text-center">Acoes</th>
@@ -88,6 +89,13 @@
                             <td><span class="badge bg-primary">{{ r.rede }}</span></td>
                             <td><strong>{{ r.uf }}</strong></td>
                             <td><span class="badge bg-info">{{ r.regiao }}</span></td>
+                            <td>
+                                {% if r.separar_protocolo_st %}
+                                <span class="badge bg-success">Sim</span>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if r.ativo %}
                                 <span class="badge bg-success">Ativo</span>
@@ -116,7 +124,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">
+                            <td colspan="7" class="text-center py-4 text-muted">
                                 <i class="fas fa-inbox fa-2x mb-2"></i><br>
                                 Nenhum mapeamento encontrado
                             </td>

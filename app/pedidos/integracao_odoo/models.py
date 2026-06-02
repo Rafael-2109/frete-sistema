@@ -419,7 +419,9 @@ class PedidoImportacaoTemp(db.Model):
                         'preco_tabela': validacao_prod.get('preco_tabela') if validacao_prod else None,
                         'preco_final': valor_unitario,  # Inicialmente = documento
                         'divergente': validacao_prod.get('divergente', False) if validacao_prod else False,
-                        'diferenca_percentual': validacao_prod.get('diferenca_percentual', 0) if validacao_prod else 0
+                        'diferenca_percentual': validacao_prod.get('diferenca_percentual', 0) if validacao_prod else 0,
+                        # Protocolo ST (enriquecido no upload via ProtocoloStService) — usado p/ split de NF
+                        'protocolo_st': bool(produto.get('protocolo_st', False)),
                     })
 
                 dados_filiais.append({
