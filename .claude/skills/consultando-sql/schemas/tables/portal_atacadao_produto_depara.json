@@ -35,6 +35,13 @@
       "default": 1.0
     },
     {
+      "name": "protocolo_st",
+      "type": "boolean",
+      "description": "True = produto sujeito a Substituicao Tributaria; usado para separar NF em 2 pedidos (Atacadao RJ)",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "observacoes",
       "type": "text"
     },

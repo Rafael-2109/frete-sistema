@@ -26,6 +26,13 @@
       "nullable": false
     },
     {
+      "name": "separar_protocolo_st",
+      "type": "boolean",
+      "description": "True = pedidos desta (rede, uf) sao quebrados em 2 sale.orders (produtos protocolo_st vs demais). Ex: ATACADAO/RJ",
+      "nullable": false,
+      "default": false
+    },
+    {
       "name": "ativo",
       "type": "boolean",
       "description": "True = registro ativo",

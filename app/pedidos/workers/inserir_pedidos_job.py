@@ -83,6 +83,11 @@ def inserir_pedidos_lote_job(session_key: str, filiais_dados: list,
 
         service = get_odoo_service()
 
+        # IDs de sale.order criados neste job. Usado como excluir_order_ids no poll de
+        # timeout: no split de NF por protocolo ST, 2 entradas da mesma filial compartilham
+        # o mesmo l10n_br_pedido_compra; o poll do 2º precisa ignorar o 1º.
+        order_ids_criados = []
+
         for i, filial in enumerate(filiais_dados):
             cnpj = filial['cnpj']
             nome_cliente = filial.get('nome_cliente', '')
@@ -112,6 +117,7 @@ def inserir_pedidos_lote_job(session_key: str, filiais_dados: list,
                     payment_provider_id=30,
                     picking_policy=picking_policy,
                     calcular_impostos=False,  # Feito manualmente abaixo
+                    excluir_order_ids=order_ids_criados,  # split ST: ignora pedido já criado
                 )
 
                 if not resultado.sucesso:
@@ -137,6 +143,7 @@ def inserir_pedidos_lote_job(session_key: str, filiais_dados: list,
 
                 order_id = resultado.order_id
                 order_name = resultado.order_name
+                order_ids_criados.append(order_id)  # split ST: poll do próximo ignora este
 
                 # Registra auditoria
                 _registrar_auditoria(

@@ -125,11 +125,29 @@
                             </div>
                         </div>
                         
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    <label>Protocolo ST</label>
+                                    <div class="custom-control custom-switch">
+                                        <input type="checkbox"
+                                               class="custom-control-input"
+                                               id="protocolo_st"
+                                               name="protocolo_st"
+                                               {% if mapeamento and mapeamento.protocolo_st %}checked{% endif %}>
+                                        <label class="custom-control-label" for="protocolo_st">
+                                            Produto sujeito a Substituição Tributária (separa NF do Atacadão no RJ)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label for="observacoes">Observações</label>
-                            <textarea class="form-control" 
-                                      id="observacoes" 
-                                      name="observacoes" 
+                            <textarea class="form-control"
+                                      id="observacoes"
+                                      name="observacoes"
                                       rows="3">{{ mapeamento.observacoes if mapeamento else '' }}</textarea>
                         </div>
                         

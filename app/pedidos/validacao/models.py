@@ -115,6 +115,10 @@ class RegiaoTabelaRede(db.Model):
     uf = db.Column(db.String(2), nullable=False, index=True)  # 'SP', 'RJ', etc.
     regiao = db.Column(db.String(50), nullable=False)  # 'SUDESTE', 'SUL', etc.
 
+    # Separação de NF por protocolo ST: quando True, pedidos desta (rede, uf) são
+    # quebrados em 2 sale.orders (produtos com protocolo_st vs demais). Ex: ATACADAO/RJ.
+    separar_protocolo_st = db.Column(db.Boolean, default=False, nullable=False)
+
     # Controle
     ativo = db.Column(db.Boolean, default=True, nullable=False)
 
