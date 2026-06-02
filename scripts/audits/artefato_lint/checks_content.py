@@ -42,5 +42,60 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
                     cols = {c.get("name") for c in json.loads(tbl.read_text()).get("fields", [])}
                     if campo not in cols:
                         out.append(Finding("D3", rel, i, f"{modelo}.{campo} nao existe no schema {tbl.name}", "block"))
-    # D1 glossario fica em check separado (precisa do GLOSSARIO.md — Task 12); placeholder de interface:
+    # D1 glossario check
+    out += check_glossario(path, root, cfg)
+    return out
+
+
+GLOSSARIO_REL = ".claude/references/GLOSSARIO.md"
+# linha de tabela markdown: | conceito | canonico | banidos |
+_TABLE_ROW = re.compile(r"^\s*\|(.+)\|(.+)\|(.+)\|\s*$")
+
+
+def _load_glossario(root: Path) -> dict[str, str]:
+    """Le a tabela do GLOSSARIO.md -> {termo_banido_lower: termo_canonico}.
+    Coluna 3 ('Banidos') = lista separada por virgula; '—'/'-'/vazio = sem banidos."""
+    g: dict[str, str] = {}
+    p = Path(root) / GLOSSARIO_REL
+    if not p.exists():
+        return g
+    for line in p.read_text(encoding="utf-8").splitlines():
+        m = _TABLE_ROW.match(line)
+        if not m:
+            continue
+        canonico = m.group(2).strip()
+        banidos_raw = m.group(3).strip()
+        # pula a linha de cabecalho e a linha separadora (---)
+        if canonico.lower() in ("termo canonico", "") or set(canonico) <= set("-: "):
+            continue
+        if banidos_raw in ("—", "-", ""):
+            continue
+        for b in banidos_raw.split(","):
+            b = b.strip().lower()
+            if b and b not in ("—", "-"):
+                g[b] = canonico
+    return g
+
+
+def check_glossario(path: Path, root: Path, cfg, glossario: dict[str, str] | None = None) -> list[Finding]:
+    """D1: uso de termo nao-canonico (banido pelo GLOSSARIO) em doc reference.
+    Severidade 'report' na Onda 0 (advisory) — sinonimos sao FP-prone ate calibracao
+    da Onda 2. O proprio GLOSSARIO.md e pulado (ele DEFINE os termos, nao se auto-acusa)."""
+    rel = str(Path(path).resolve().relative_to(Path(root).resolve()))
+    text = Path(path).read_text(encoding="utf-8")
+    if meta_mod.parse_doc(text).fields.get("tipo", "") != "reference":
+        return []
+    if Path(path).name == "GLOSSARIO.md":
+        return []
+    if glossario is None:
+        glossario = _load_glossario(root)
+    if not glossario:
+        return []
+    out: list[Finding] = []
+    body = _body(text)
+    for i, line in enumerate(body.splitlines(), 1):
+        ll = line.lower()
+        for banido, canonico in glossario.items():
+            if re.search(rf"\b{re.escape(banido)}\b", ll):
+                out.append(Finding("D1", rel, i, f"termo nao-canonico {banido!r} — use {canonico!r}", "report"))
     return out
