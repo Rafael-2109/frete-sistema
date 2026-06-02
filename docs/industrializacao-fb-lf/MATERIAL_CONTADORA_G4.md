@@ -57,3 +57,26 @@ No regime **FB encomenda → LF industrializa → LF devolve o PA**, a cada cicl
 > Aprovada a separação, o restante é técnico: configurar o diário/operação do retorno de insumos com a conta `5101020001` e ajustar a emissão para gerar os 2 documentos + 1 ciclo-piloto (1 caixa) para medir o fechamento.
 
 > Após a resposta, o ajuste é técnico (cadastro de diário) + 1 ciclo-piloto controlado (1 caixa) para medir o fechamento antes de aplicar ao fluxo corrente.
+
+---
+
+## 5. Como fica o ciclo com 2 documentos (verificado ao vivo 2026-06-02, só leitura)
+
+Confirmamos em produção (sem nenhum lançamento real — apenas leitura do que já existe) como o ciclo se comporta ao **separar o retorno de insumos do faturamento do serviço**. Resumo nas 3 esferas:
+
+**Físico (a mercadoria):** o **produto acabado (PA) sempre acompanha a NF de serviço (CFOP 5124)** — é a única linha com movimento físico de estoque. O retorno dos insumos (CFOP 5902) **já é hoje uma linha simbólica, sem movimento de estoque próprio** (reflete os insumos consumidos, não uma mercadoria nova). Logo, **separar em 2 documentos NÃO cria movimentação física nova** — apenas destaca as linhas simbólicas dos insumos num documento próprio. *(Prova: na NF de retorno real `VND/2026/00359`, das 10 linhas só a do PA tem movimento de estoque; as 9 de insumos são simbólicas.)*
+
+**Fiscal — as 2 notas:**
+| Documento | CFOP | CST | Valor | Carrega |
+|---|---|---|---|---|
+| NF de serviço (mantida) | **5124 ↔ 1124** | s/ ICMS (CBS/IBS/PIS/COFINS) | **S** (valor agregado) | **o PA** (mercadoria física) |
+| NF de retorno de insumos (separada) | **5902 ↔ 1902** | CST51 (suspenso) | **Ic** (= valor da remessa) | nada físico (simbólica, total a pagar = 0) |
+
+**Contábil:**
+- A NF de retorno de insumos (só 5902, **total = 0**) baixa a conta de compensação via a **conta de "pagamento simbólico" do diário** — exatamente como já ocorre nas notas de retrabalho/perda (**provado em 14 notas `SARET` reais**: a contrapartida vai 100% para a conta de compensação, **sem gerar contas a receber/pagar**). Para o regime de industrialização, basta o diário do retorno de insumos apontar a conta **`5101020001` (PASSIVA, lado LF)** e a entrada na FB apontar **`5101010001` (ATIVA)** — baixando as duas obrigações.
+- A NF de serviço (5124) gera o contas a pagar/receber do serviço (**S**), como hoje.
+- **Custo do PA (Ativo) = Ic + S:** o serviço (S) entra pela NF de serviço; o custo dos insumos (Ic) incorpora-se ao PA pela baixa da conta de compensação (Ativo→Ativo, como já confirmado). **A medição exata do custo do PA será feita no ciclo-piloto** (não muda a decisão fiscal pedida).
+
+**Consequência operacional (o que muda no dia a dia):** cada ciclo passa a ter **2 notas em vez de 1** (2 emissões/transmissões SEFAZ na LF; 2 escriturações na FB). **Não há aumento de movimentação física** nem de operação de armazém. Os sistemas internos que hoje assumem "1 nota por ciclo" serão ajustados (trabalho técnico nosso).
+
+> **Por que não dá para manter 1 nota só:** numa nota mista (serviço + insumos), o contas a receber/pagar do **serviço absorve** os insumos simbólicos e a conta de compensação **não baixa** (provado nos 2 lados — saída e entrada). A separação em 2 documentos é o **único** arranjo em que a compensação baixa **nativamente**, sem lançamentos manuais de ajuste. A **pergunta 1 (seção 4)** permanece a decisão que destrava tudo.

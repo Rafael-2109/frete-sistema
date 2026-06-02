@@ -1,10 +1,10 @@
 # PROMPT — Próxima sessão (Industrialização FB↔LF)
 
-> **Atualizado 2026-06-02 (fim da 6ª sessão — R-UNIF PROVADO: G5a CONVERGE com G4; decisão fiscal ÚNICA pendente).**
-> Handoff = só o próximo passo + estado. Estado completo: `README.md`. Desenho/decisões (dona): `SOT_OPERACOES.md`. Mecanismo + IDs + evidências: `ACHADOS_TECNICOS.md §"ACHADO 2026-06-02 (sessão 6)"` (e §sessão 5) — ler o **TL;DR** lá.
+> **Atualizado 2026-06-02 (fim da 7ª sessão — grounding do FLUXO 2-NF nas 3 esferas; 3 gaps de execução mapeados; decisão fiscal ÚNICA segue pendente).**
+> Handoff = só o próximo passo + estado. Estado completo: `README.md`. Desenho/decisões (dona): `SOT_OPERACOES.md`. Mecanismo + IDs + evidências: `ACHADOS_TECNICOS.md §"ACHADO 2026-06-02 (sessão 7)"` (e §sessões 6 e 5) — ler o **TL;DR** lá.
 
 ## Como começar
-Leia nesta ordem: **`README.md`** (índice+estado) → **este handoff** → **`ACHADOS_TECNICOS.md` TL;DR das sessões 5 E 6** (o que já foi PROVADO — não refazer). Desenho/decisões: **`SOT_OPERACOES.md`** (em conflito, ela vence). Execução config: `PROPOSTA_CONFIG_RETORNO.md`. Material da Contadora: `MATERIAL_CONTADORA_G4.md`. Procedimento+gotchas: `RUNBOOK_PILOTO_4870112.md`. Superseded → `HISTORICO/` (não seguir).
+Leia nesta ordem: **`README.md`** (índice+estado) → **este handoff** → **`ACHADOS_TECNICOS.md` TL;DR das sessões 5, 6 E 7** (o que já foi PROVADO — não refazer). Desenho/decisões: **`SOT_OPERACOES.md`** (em conflito, ela vence). Execução config: `PROPOSTA_CONFIG_RETORNO.md`. Material da Contadora: `MATERIAL_CONTADORA_G4.md`. Procedimento+gotchas: `RUNBOOK_PILOTO_4870112.md`. Superseded → `HISTORICO/` (não seguir).
 
 ## Onde estamos (piloto 1 caixa, produto 4870112, lote PILOTO-3105)
 - ✅ **Etapa 1** (Remessa FB→LF, NF `RPI/2026/00245` SEFAZ-OK) · ✅ **dreno físico** 26489→30720 · ✅ **Etapa 2** (Entrada LF Model B, ENTIN 737062) · ✅ **Etapa E** (MO 20252+20254, net-zero terceiros, PA em 31093).
@@ -23,7 +23,7 @@ Leia nesta ordem: **`README.md`** (índice+estado) → **este handoff** → **`A
 
 ## PRÓXIMO PASSO
 1. **Levar `MATERIAL_CONTADORA_G4.md` à Contadora** (pergunta 1: pode separar 5902 do 5124 em 2 documentos? + 4 perguntas anexas). A resposta elimina um dos 2 caminhos.
-2. **Se SEPARAR for OK (caminho b):** desenhar/configurar o picking_type|journal de retorno-de-insumos (`tipo_pedido` próprio → `no_payment=26667`); validar no piloto. *(detalhe a confirmar: CFOP da 5902 = 5902, não 5949; ver `ACHADOS` R2b.)*
+2. **Se SEPARAR for OK (caminho b):** resolver os **3 gaps de execução mapeados na sessão 7** (`ACHADOS §"ACHADO 2026-06-02 (sessão 7)"`): (a) **criar/repontar 1 journal de retorno-de-insumos com `no_payment=26667`** (PASSIVA `5101020001`) — hoje **nenhum** journal sale LF aponta a PASSIVA (j1002 RETRABALHO usa 5101010046; mudá-lo atinge todo o retrabalho); (b) **picking_type saindo de `31093` (LF/PA-Terceiros) com `tipo_pedido`** que roteie a NF de insumos (pt98 atual tem `tipo_pedido=False`); (c) definir o **veículo da NF de insumos simbólica** (sem movimento físico) — picking simbólico OU composição SO/robô em 2 docs. Lado FB: `no_payment=22800` no j1001 (ou journal de entrada-de-insumos dedicado). Validar no piloto. *(CFOP da 5902: a op 2864/2710 gera 5902 OU 5949 conforme posição fiscal/produto — confirmar fp que força 5902.)*
 3. **Se exigir 1 NF (caminho V-B):** rodar o **estudo de design do desvio cirúrgico** (ponto de inserção, lançamento de ajuste exato validado pela Contadora, idempotência, estorno on-cancel, filtro no ETL) ANTES de codar.
 4. **G5a — NÃO é mais independente; CONVERGE com o G4 (PROVADO sessão 6):** experimento (NF-teste mista de entrada postada/excluída) mostrou que `no_payment=22800` no j1001 **sozinho NÃO baixa** a ATIVA — o FORNECEDORES do serviço absorve a 1902. ⇒ a 1902 de entrada precisa vir em **documento separado** (mesma decisão fiscal e mesma solução do G4). O script `g5a_aplicar_no_payment_j1001.py` (no_payment no j1001) é **necessário mas insuficiente sozinho** — só funciona se a 1902 chegar à FB em NF separada. Experimento: `scripts/g5a_experimento_entrada_runif.py`. `ACHADOS §"ACHADO 2026-06-02 (sessão 6)"`.
 

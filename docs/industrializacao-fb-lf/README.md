@@ -20,7 +20,7 @@ Industrialização por encomenda no grupo: **FB** (encomendante) remete insumos 
 
 ⭐ fonte única. **Em conflito, a SOT vence**; os demais apontam para ela, não copiam.
 
-## ESTADO (checkpoint 2026-06-01 — piloto 4870112, 1 caixa, lote PILOTO-3105)
+## ESTADO (checkpoint 2026-06-02 — piloto 4870112, 1 caixa, lote PILOTO-3105)
 
 Config base (reversível): ✅ op 3252 (`movimento_estoque=False`) · ✅ L1 (categorias LF, Design A).
 
@@ -34,8 +34,9 @@ Config base (reversível): ✅ op 3252 (`movimento_estoque=False`) · ✅ L1 (ca
 | 5 — Entrada FB (escriturar) | 🔴 **G5a CONVERGE com G4** (PROVADO sessão 6): `no_payment` no j1001 **sozinho NÃO baixa** em NF mista (FORNECEDORES absorve a 1902) → a 1902 precisa vir **SEPARADA** do serviço; **mesma decisão fiscal** do G4 |
 | Sessão 5 (execução G4/G5a) | ✅ READ-ONLY + 4 lentes + 2 NF-teste (postadas/excluídas, sem sujeira) — mecanismo provado; **nada escrito em definitivo** (`ACHADOS §sessão 5` TL;DR) |
 | Sessão 6 (R-UNIF) | ✅ **R-UNIF PROVADO** — NF-teste mista de ENTRADA postada/excluída (zero sujeira): `no_payment=22800` no j1001 não baixa a ATIVA (FORNECEDORES absorve a 1902). **G5a = G4** (1902/5902 em doc separado). j1001 intacto (`ACHADOS §"ACHADO 2026-06-02 (sessão 6)"`) |
+| Sessão 7 (fluxo 2-NF) | ✅ **GROUNDING 2-NF nas 3 esferas (READ-only, 5 scripts `s7_*`, zero escrita).** Separação = **composição de linhas** (insumos 5902/1902 já simbólicos; PA viaja na linha de serviço 5124↔1124). Robô: journal = `picking_type.tipo_pedido`. **3 gaps p/ executar (b):** journal c/ no_payment PASSIVA `5101020001` inexistente · pt98 `tipo_pedido=False` · veículo da NF de insumos simbólica. Anexado ao `MATERIAL_CONTADORA §5`; provas em `ACHADOS §sessão 7` |
 
-**Próximo:** levar `MATERIAL_CONTADORA_G4.md` à Contadora — a resposta fiscal-vs-operacional (separar 5902/1902 do serviço) escolhe o caminho e **resolve os 2 lados (G4 LF + G5a FB) de uma vez** (provado: o `no_payment` sozinho não baixa em NF mista, nem saída nem entrada). Detalhe → `PROMPT_PROXIMA_SESSAO.md`.
+**Próximo:** levar `MATERIAL_CONTADORA_G4.md` à Contadora (agora com **§5 = o ciclo com 2 documentos nas 3 esferas**, fortalecendo a decisão). A resposta fiscal-vs-operacional (separar 5902/1902 do serviço) escolhe o caminho e **resolve os 2 lados (G4 LF + G5a FB) de uma vez**. **Se SEPARAR aprovado:** resolver os 3 gaps de execução da sessão 7 (journal PASSIVA + picking_type 31093 + veículo NF insumos). Detalhe → `PROMPT_PROXIMA_SESSAO.md`.
 
 ## Decisões fechadas (detalhe e porquê na `SOT`)
 - Conta de compensação = família **`51010xx` ATIVA / `51020xx` PASSIVA** (NÃO `1150200001`, que é só valoração SVL-LF).

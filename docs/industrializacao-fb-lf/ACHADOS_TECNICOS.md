@@ -253,3 +253,95 @@ A remessa FB→LF (Etapa 1, CFOP 5901) gera **DUAS camadas** que, combinadas, la
 
 ### Implicação operacional (= a do G4)
 Hoje a FB **recebe 1 DFe mista** (1124+1902) → exige que a LF **emita** o retorno de insumos separado (G4) **E** que a FB **escriture** separado (G5a) — **mesma origem, resolvida pela mesma decisão fiscal**. Aprovada a separação: a 1902 de entrada vira simbólica pura → o `no_payment=22800` do j1001 (ou journal dedicado de entrada-de-insumos) baixa a `5101010001` (espelho da mecânica das `SARET`/perda).
+
+---
+
+## ACHADO 2026-06-02 (sessão 7) — GROUNDING DO FLUXO 2-NF (anatomia SARET + fluxo do PA, 3 esferas)
+
+> READ-only (5 scripts `s7_*`: `anatomia_saret`, `saret_fisico`, `fluxo_pa`, `vnd_picking_vs_nf`). Zero escrita Odoo (decisão da sessão: READ+desenho, prova final do AVCO fica para o piloto). Esta seção DESCREVE o fluxo de 2 documentos ao vivo para anexar ao `MATERIAL_CONTADORA_G4.md`. Desenho/decisão = `SOT §2 Etapa 4/5`.
+
+### TL;DR (sessão 7)
+1. **A separação NÃO é de movimento físico — é de COMPOSIÇÃO de linhas.** Provado: na VND mista de retorno (`VND/2026/00359`, move 738097), das 10 linhas-produto **só a linha do PA (5124) tem `stock.move`**; as **9 linhas de insumos (5902) são SIMBÓLICAS (zero move)**, compostas pela lógica de industrialização. Idem na entrada (`ENTSI/2026/02/0053`: 1×1124 + 25×1902, sem picking 1:1). ⇒ separar em 2 NF = rotear as linhas-insumo (5902/1902) para um **2º documento com journal próprio**, não "mover fisicamente em separado".
+2. **O journal (= o no_payment) vem do `picking_type.l10n_br_tipo_pedido`** (robô server action 1512: `journal = search(company, type='sale', l10n_br_tipo_pedido == picking.picking_type_id.l10n_br_tipo_pedido)`; **1 picking = 1 account.move**). 2 NF com no_payment distinto exigem **2 picking_types (ou 2 origens) com `tipo_pedido` distinto**.
+3. **O PA físico viaja SEMPRE na linha de serviço (5124↔1124)** — é a única `mov_estoque=True` que gera o `stock.move` que valora o AVCO. **O PA não tem CFOP próprio** (confirma a suspeita): pega o 5124 (saída) / 1124 (entrada). Os insumos (5902/1902) são fiscais.
+4. **`no_payment` em SAÍDA = DÉBITO na conta de compensação**; numa NF **100%-simbólica (total=0)** ele absorve TODA a contrapartida (sem CLIENTES) — provado em 14 SARET. **Nenhum journal sale LF aponta a PASSIVA `5101020001`** hoje → o caminho (b) exige criar/repontar 1 journal de retorno-de-insumos com `no_payment=26667`.
+5. **SVL usa `unit_cost` (custo AVCO), NÃO o `price_unit` da NF** — 2 camadas independentes (refina a premissa "AVCO vem do price_unit da 1124"). O AVCO Ic+S é **resíduo a medir no piloto** (G8).
+
+### A. Anatomia SARET (precedente vivo do `no_payment` em doc separado)
+14 SARET 2026 (`SARET/2026/00001-14`, j1002 `SARÍDA-RETRABALHO`, **todas `amount_total=0`** CST51). Estrutura contábil **idêntica** (ex. move 519417 e 725475):
+- `C 1150100012 FATURAMENTO FÍSICO FISCAL` (transitória, = valor mercadoria + ajustes) + **`D 5101010046 REMESSA PARA RETRABALHO (ATIVA)` (= `account_no_payment_id` do j1002)** — **sem linha de CLIENTES** (a NF não tem serviço com pagamento).
+- **Criação:** op **2719 "Retrabalhos"** → CFOP **5949** (create_uid 38 Josefa, partner CD); op **2710 "Retorno de Industrialização - Devolução"** → CFOP **5902** (move 630193) OU **5949** (move 725475) — **o CFOP varia por posição fiscal/produto, não pela op** — create_uid **1 OdooBot (robô)**, `ref=LF/LF/SAI/RETIND/0000X`.
+- **Físico (`s7_saret_fisico`):** a SARET nasce do picking **pt97 "Expedição Industrialização Retorno (LF)"** (`tipo_pedido='dev-industrializacao'` → j1002), **`42 LF/Estoque → 5 Parceiros/Clientes`**, com `stock.move` REAL e **SVL real** (ex. -105,00). `origin=INV-FATURAR_LF_FB_..._SAIDA-DEV-INDU`.
+- ⚠️ **A SARET é DEVOLUÇÃO de PRODUTO real** (óleo/maionese/molho, estoque PRÓPRIO LF, SVL≠0), **não** o "retorno simbólico de insumos consumidos". Ela prova o **mecanismo contábil** (no_payment baixa a compensação numa NF total=0), **não** o caso de uso. O retorno de insumos do regime é simbólico (ver §C).
+
+### B. Picking_types e journals do retorno (LF=5) — o "como" da separação
+| picking_type | `tipo_pedido` | → journal (robô) | `no_payment` | papel |
+|---|---|---|---|---|
+| **pt66** Expedição Industrialização (LF) | `venda-industrializacao` | **j847** VENDA PRODUÇÃO | **VAZIO** | serviço 5124 (NF mista hoje) |
+| **pt97** Exp. Industrialização Retorno (LF) | `dev-industrializacao` | **j1002** RETRABALHO | 5101010046 (RETRABALHO) | devolução produto (SARET) |
+| **pt94** Expedição Ñ Aplicado (LF) | `perda` | **j1003** PERDAS | 5101010001 (ATIVA) | perda pura 5903 |
+| **pt98** Retorno Industrialização (LF) | **`False`** | (não roteia) | — | `31093 LF/PA-Terceiros → 26489`; **0 usos** |
+| pt20 Ordens de Entrega (LF) | `False` | — | — | genérico |
+
+Journals sale LF com no_payment de compensação: j863 `industrializacao`→5101010011 · j1002 `dev-industrializacao`→**5101010046** · j1003 `perda`→5101010001 · j877 `transf-filial`→5101010014 · **j847 `venda-industrializacao`→VAZIO**. **Nenhum aponta a PASSIVA `5101020001` (26667)** — a conta correta do encomendante. ⇒ **G4 (b) precisa de 1 journal de retorno-de-insumos com `no_payment=26667`** (criar novo OU repontar; alterar o j1002 afetaria todo o retrabalho).
+
+### C. Fluxo do PA × insumos — VND mista de retorno (saída LF) e ENTSI (entrada FB)
+**VND/2026/00359 (move 738097, j847, partner FB, ref `LF/SAI/IND/01914`):**
+- linha **5124 (op 2702, `mov_estoque=True`)**: produto **PA** `[4739099] OL.MIS.AZEITE` (categ PRODUTO ACABADO), `price_unit=100`, qty 144 → **único `stock.move` do picking** (pt66, `42→5`, SVL `value=-25222,66 unit_cost=175,16`).
+- 9 linhas **5902 (op 2864, `mov_estoque=True` na op, mas SEM move no picking)**: insumos (ÓLEO, GALÃO, ETIQUETA, CAIXA…) — **simbólicas/compostas**.
+- ⇒ `s7_vnd_picking_vs_nf`: NF 10 linhas (1×5124 + 9×5902); picking **1 move** (só o PA); **9 produtos SEM move**.
+
+**ENTSI/2026/02/0053 (move 506211, j1001, partner LF):**
+- linha **1124 (op 1917, `mov_estoque=True`)**: produto **PA** `[4830176] KETCHUP` → gera o move do PA na FB (valora AVCO).
+- 25 linhas **1902 (op 2027, `mov_estoque=True`)** = insumos: cada uma com um **C espelho** na transitória `1150100011` (**autocancela** — re-infla estoque = **double-count** confirmado). O piloto troca a 1902 para op **3252 (`mov_estoque=False`)** → 0 move → 0 double-count (G5b).
+- contrapartida agregada **`C FORNECEDORES` = total** (dirigida pelo serviço 1124).
+
+**Distinção física CRÍTICA (terceiros × próprio):** a VND/SARET reais saem de **`42 LF/Estoque` (estoque PRÓPRIO LF)** via pt66/pt97 — porque hoje a LF **não segrega** os insumos de terceiros (= a causa do double-count R$785k). O **piloto** (com segregação) tem o PA em **`31093 LF/PA-Terceiros`**, que sai por **pt98 (`31093→26489`)** — mas **pt98 tem `tipo_pedido=False`** (não roteia para journal). ⇒ **GAP do regime 2-NF de terceiros:** faltam picking_types saindo de **31093** com `tipo_pedido` configurado (1 `venda-industrializacao` p/ PA+serviço, 1 p/ insumos→no_payment PASSIVA). A NF de insumos é **simbólica (sem movimento)** → precisa de um **veículo** (picking simbólico OU composição da SO/robô em 2 documentos) — **ponto de desenho a definir** (`SOT §2 Etapa 4`).
+
+### D. Como o PA recebe Ic+S no cenário 2-NF (esfera contábil — desenho + resíduo do piloto)
+- **PA físico** entra na FB pela linha **1124** (serviço, `mov_estoque=True`) → SVL `D 1150100007 PA / C 1150100011`; NF 1124 `D 1150100011 / C FORNECEDORES (S)` ⇒ NET `D PA(+S) / C FORNECEDORES`.
+- **Insumos (1902, op 3252, `mov_estoque=False`)** em NF separada → `D 1150100011 / C 5101010001 (no_payment ATIVA)` (= baixa Ic) — **sem move**, logo **não credita o PA diretamente**.
+- **Para o PA valer Ic+S**, a transitória `1150100011` precisa fechar: o **SVL do PA** teria de creditar `1150100011` por **Ic+S** (não só S) — isto é, o `unit_cost` do move de entrada do PA = Ic+S. Como o SVL usa `unit_cost` (não o `price_unit` fiscal), o valor de entrada do PA tem de ser **declarado** (price_unit da 1124 OU custo no XML). **Risco a medir no piloto:** se `unit_cost(PA) ≠ Ic+S` ou `Ic(1902) ≠` parcela da transitória, `1150100011` não zera (resíduo). **G8 = piloto.** (Coerente com R1 da sessão 5, agora ancorado nos dados reais: a 1902 op 3252 debita a transitória, não o PA.)
+
+### E. Pontos de código que assumem "1 NF por ciclo" (Frente 2 — a ajustar quando o caminho (b) for aprovado)
+| # | Local | Premissa "1 NF" | Delta p/ 2-NF |
+|---|---|---|---|
+| 1 | **Robô CIEL IT** (server action 1512 "Robô Faturamento") | `journal = picking_type.l10n_br_tipo_pedido`; **1 picking = 1 `account.move`** | 2 NF ⇒ **2 pickings/origens** com `tipo_pedido` distinto (nativo, sem código nosso) |
+| 2 | `app/odoo/estoque/orchestrators/inventario_pipeline.py` (~6,2K LOC) | pipeline **ETAPAs A→F = 1 NF mista por ciclo** de ajuste (B cria/valida/libera 1 picking→1 NF; C aguarda invoice; D transmite SEFAZ 1×; E RecLF 1 NF; F 1 picking entrada) | cada etapa roda **2×** (2 pickings → 2 invoices → 2 SEFAZ → 2 DFe entrada) |
+| 3 | `app/odoo/estoque/scripts/faturamento.py` (Skill 8, 5 átomos) | operam **1 `account.move`/chamada** — atômicos | invocar 2× (1 por NF); orchestrator é quem assume 1×/ciclo |
+| 4 | `app/odoo/estoque/scripts/escrituracao.py` (Skill 7, 7 átomos) | **1 DFe → 1 PO → 1 invoice** por fluxo | 2 DFe na FB ⇒ 2 fluxos de escrituração |
+| 5 | `app/recebimento/services/recebimento_lf_odoo_service.py` (~4,6K LOC) | `processar_recebimento` assume **1 DFe/NF por recebimento** (busca DFe FB por `numero_nf`, L928) | 1 recebimento ↔ 2 DFe (serviço + insumos) |
+| 6 | `app/odoo/services/faturamento_service.py` (ETL, ~1,9K LOC) | importa `account.move`→`FaturamentoProduto` por **`numero_nf`+`cod_produto`**; `_processar_cancelamento_nf(numero_nf)` reverte MovimentacaoEstoque/EmbarqueItem/Separacao/EntregaMonitorada por `numero_nf`. **Importa NFs de industrialização sem filtro de company** (sessão 5) | 2 NF = 2 `numero_nf`; **a NF de insumos (total=0) pode gerar `FaturamentoProduto` espúrio** → filtrar/ignorar a NF simbólica no ETL p/ não re-baixar carteira em dobro |
+
+### F. Mudanças no trabalho operacional (delta 1-NF → 2-NF)
+- **Emissão (LF):** 2 NF por ciclo (1 serviço 5124 + 1 insumos 5902) em vez de 1 mista → **2 pickings/origens** com `tipo_pedido` distinto.
+- **SEFAZ (saída LF):** **2 transmissões** (×2 Playwright/robô) por ciclo.
+- **Entrada (FB):** **2 DFe a escriturar** (×2 PO/invoice) por ciclo.
+- **Físico/armazém:** **0 mudança** — não há movimentação nova (insumos já simbólicos; só o PA move). O número de operações de estoque não muda.
+- **Financeiro/conciliação:** só a NF de serviço (5124) gera título (CLIENTES/FORNECEDORES = S); a NF de insumos (total=0) **não gera título** → o conciliador deve ignorá-la (não cobrar/pagar).
+- **Sistemas internos (ETL):** ajustar para 2 NF/ciclo sem duplicar baixa de carteira/movimentação (item E.6).
+- **Operadores:** ver **§G** — hoje o operador **NÃO** digita componente a componente; cria **1 picking só com o PA** e o sistema expande os insumos. No 2-NF não duplica **se a 2ª NF for emitida pela automação**.
+
+### G. Como a NF é montada HOJE — o operador NÃO digita os insumos (fluxo operacional)
+**Provado ao vivo (`s7_como_emite`):**
+- O picking de retorno (`LF/SAI/IND/01914`, id 322836) é criado **MANUALMENTE pelo operador** (Josefa, uid 38), **sem SO/MO/origin** (`origin`/`group_id`/`sale_id` = False), com **1 único `stock.move` — o PA** (azeite, 144 un).
+- O **robô** (server action 1512) busca pickings `liberado_faturamento=True` e fatura via o wizard nativo **`stock.invoice.onshipping.create_invoice()`** (`journal = picking_type.l10n_br_tipo_pedido`). Esse wizard é **estendido pelo CIEL IT**: a partir de **1 picking com 1 linha (o PA), a NF sai com 10 linhas** (1×5124 PA + **9×5902 insumos expandidos automaticamente** da estrutura de industrialização).
+- ⇒ **O operador cria 1 picking (o PA); os insumos 5902 são compostos pelo sistema.** Não há seleção componente-a-componente hoje.
+
+**Implicação para o 2-NF (o operador NÃO precisa duplicar trabalho):** o desenho-alvo mantém o operador criando **1 picking (o PA)**; a **separação acontece na AUTOMAÇÃO**, não nas mãos do operador. Dois lugares possíveis para separar (decisão de arquitetura, parte dos 3 gaps):
+- **(A) na composição do CIEL IT** — fazer o faturamento emitir 2 documentos (serviço 5124 + insumos 5902 em journals distintos). Mexe na extensão do `stock.invoice.onshipping` (código do **fornecedor CIEL IT**) — fora do nosso controle direto.
+- **(B) no nosso pipeline** (Skill 8 `faturando-odoo`) — assumir a emissão das 2 NFs programaticamente (controlamos a composição das linhas e o journal de cada uma). É o caminho com mais controle nosso; alinhado ao pipeline de inventário já existente.
+- ⚠️ **NÃO recomendado:** o operador criar **2 pickings manuais** (1 PA + 1 insumos) — duplicaria o trabalho manual E a expansão automática dos insumos é acoplada ao faturamento do PA (incerto se funciona num picking só-insumos). A separação deve ser **automática**, não operacional.
+> **FONTE CONFIRMADA = BoM do PA** (`s7_fonte_insumos` + `s7_rastreabilidade`): os 9 insumos 5902 batem **9/9** com a BoM **`14653` (type `normal`)** do PA 4739099 — qtys idênticas (GALÃO 4 · ALÇA 4 · TAMPA 4 · RÓTULO 4 · CAIXA 1 · ETIQUETA 1 · FITA 0,94 · FILME 0,018 · ÓLEO 18,474). Existe também BoM **`14794` (type `subcontract`** — mecanismo Odoo de industrialização por encomenda). ⇒ o CIEL IT, no `create_invoice()`, **explode a BoM do PA × qty faturada** para compor as linhas 5902. **Determinístico e replicável por nós** (já explodimos a mesma BoM na remessa — `RUNBOOK §1`). O `stock.move` do PA é **avulso** (sem `move_orig`/MO/origin) → a fonte NÃO é uma remessa rastreada, é a **BoM**.
+
+### H. Rastreabilidade remessa ↔ PA para o cenário 2-NF (vínculo de TELA nativo — `s7_rastreabilidade`)
+**Existe o campo fiscal nativo `account.move.referencia_ids`** (one2many → `l10n_br_ciel_it_account.account.move.referencia`, label **"NF-e referência"**) = o **refNFe** da NF-e (referência por chave a outra NF). **Hoje a NF mista de retorno NÃO o usa** (`referencia_ids` vazio na `VND/2026/00359`; ela só tem `ref=LF/SAI/IND/01914`=o picking e `l10n_br_chave_nf` própria `35260618467441000163550010000132721007380972`). Para a ENTRADA, o equivalente é `l10n_br_ciel_it_account.dfe.referencia` ("Referência Documento Fiscal").
+⇒ **2 NF COM rastreabilidade é viável e fiscalmente correto:** ambas as NFs de retorno (serviço 5124 + insumos 5902) podem **referenciar, via `referencia_ids`, a NF de remessa (RPI/5901)** — e/ou uma à outra — ligando **remessa ↔ retorno ↔ PA** na tela do Odoo (e no XML; `refNFe` é o padrão do regime de industrialização). Vínculo adicional simples: mesmo `invoice_origin`/`ref` (picking/ciclo) nas 2 NFs.
+⇒ **Melhor abordagem (recomendada):** emitir as 2 NFs **pelo nosso pipeline** (Skill 8 — controlamos composição via BoM + journal + `referencia_ids`), em vez de depender da extensão `create_invoice` do CIEL IT (fornecedor). Operador segue criando 1 picking (o PA).
+
+### I. Subcontratação nativa + fluxo de ENTRADA (`s7_subcontratacao`) — base para "1 doc → resto automático"
+- **A industrialização JÁ é modelada como SUBCONTRATAÇÃO:** a BoM `14794` (subcontract) do azeite tem **`subcontractor_ids=[35]` (LF)**. Infra de subcontratação existe: **pt74** "Subcontratação" (FB, mrp_operation) · **pt75 "Reposição para subcontratação"** (FB, outgoing = o *resupply* de componentes FB→LF) · **pt80** "Subcontratação" (LF) · pt95 "REMESSA TERCEIRO (FB)".
+- **Fluxo de ENTRADA provado (ENTSI 506211):** `DFe 38128 → PO 36548 (C2615462, tipo_pedido=serv-industrializacao) → invoice 506211`. A **PO já traz as 26 linhas** (1 PA KETCHUP + 25 componentes) → na entrada a composição vem da **PO**, não de expansão no momento da invoice. Vínculos nativos: **`account.move.dfe_id`** (= 38128) + **`invoice_origin`=PO**. *(Essa ENTSI foi criada por uid 42/Rafael — caso de teste; a cadeia DFe→PO→invoice é o padrão.)*
+- ⇒ **Rastreabilidade de entrada já é NATIVA** (DFe ↔ PO ↔ invoice). Na saída, o vínculo é `referencia_ids` (refNFe, §H).
+- ⇒ **Duas materializações do "1 dispara tudo" (ver resposta ao Rafael 2026-06-02):** **(Forma 1) subcontratação nativa** — gatilho = 1 **PO de compra do PA** à LF → resupply (pt75) + recebimento automáticos + rastreabilidade nativa; a camada fiscal BR (5901/5902/5124) é o que falta mapear com o CIEL IT. **(Forma 2) nosso pipeline deriva** — gatilho = a NF de serviço; a 5902 (saída) e a 1902 (entrada) são derivadas da BoM e vinculadas por refNFe/PO. **A 5902/1902 é 100% derivável da BoM do PA** → emitir/escriturar só 1 e gerar a outra automaticamente é tecnicamente sólido em ambas. **A definir (READ-only):** como o CIEL IT gera as NFs no fluxo de subcontratação → decide Forma 1 (nativo) × Forma 2 (pipeline).
+
