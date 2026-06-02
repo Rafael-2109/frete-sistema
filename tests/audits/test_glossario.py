@@ -1,5 +1,4 @@
 # tests/audits/test_glossario.py
-from pathlib import Path
 from scripts.audits.artefato_lint import checks_content as cc, config
 C = config.load()
 

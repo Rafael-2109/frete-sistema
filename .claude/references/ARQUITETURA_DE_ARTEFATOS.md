@@ -55,12 +55,17 @@ Cada tipo tem secoes obrigatorias (ex.: `reference` exige `> **Papel:**` + `## F
 
 ## Criar artefato conforme
 
-Use o scaffold para gerar o esqueleto correto:
+Use o scaffold para gerar o esqueleto correto (header + secoes obrigatorias do tipo):
 
 ```bash
-python scripts/docs/novo_artefato.py --tipo reference --camada L2 --sot_de "tema" \
-    --hub .claude/references/INDEX.md --path .claude/references/MEU_DOC.md
+python scripts/docs/novo_artefato.py \
+    --tipo reference \
+    --tema "meu-tema" \
+    --hub .claude/references/INDEX.md \
+    --out .claude/references/MEU_DOC.md
 ```
+
+O scaffold carimba `camada: L2` e `sot_de` (= --tema) no header gerado; ajuste a camada no arquivo se o artefato for L1 ou L3.
 
 A skill `padronizando-docs` (T13) guia o fluxo completo: escolha de tipo, template, checklist de 9 itens e registro no hub.
 
