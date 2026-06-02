@@ -765,7 +765,9 @@ $(document).ready(function() {
         let valorTotal = 0;
         itens.forEach(function(item) {
             qtdeTotal += Number(item.quantidade || 0);
-            valorTotal += Number(item.quantidade || 0) * Number(item.preco_documento || 0);
+            // Usa preco_final (preço efetivamente lançado no Odoo), com fallback p/ documento.
+            const precoEfetivo = item.preco_final != null ? item.preco_final : item.preco_documento;
+            valorTotal += Number(item.quantidade || 0) * Number(precoEfetivo || 0);
         });
 
         let html = `

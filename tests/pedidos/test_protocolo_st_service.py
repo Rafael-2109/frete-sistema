@@ -238,3 +238,19 @@ class TestEnriquecerItensRaw:
         itens = [{'nosso_codigo': '111', 'codigo': 'Z'}]
         enriquecer_itens_raw(itens, 'ASSAI')
         assert itens[0]['protocolo_st'] is False
+
+    def test_sobrescreve_protocolo_st_false_obsoleto(self, db):
+        """Regressão /reprocessar: item que ficou protocolo_st=False no upload (sem De-Para)
+        é corrigido ao re-enriquecer depois de ganhar nosso_codigo via De-Para tardio."""
+        from app.portal.atacadao.models import ProdutoDeParaAtacadao
+        db.session.add(ProdutoDeParaAtacadao(
+            codigo_nosso='ZZTEST_RE', codigo_atacadao='ZZRE',
+            protocolo_st=True, ativo=True,
+        ))
+        db.session.flush()
+
+        # Estado pós-reprocessar: nosso_codigo já resolvido, mas protocolo_st obsoleto (False).
+        itens = [{'nosso_codigo': 'ZZTEST_RE', 'codigo': 'ZZRE', 'protocolo_st': False}]
+        enriquecer_itens_raw(itens, 'ATACADAO')
+
+        assert itens[0]['protocolo_st'] is True

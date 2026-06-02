@@ -1151,6 +1151,13 @@ def reprocessar():
                         'valor_unitario': item.get('preco_documento')
                     })
 
+        # Re-enriquece protocolo_st (itens recém-resolvidos via De-Para tardio) e
+        # separar_protocolo_st (caso o flag da UF tenha mudado), espelhando o upload —
+        # sem isto, um produto ST cadastrado após o upload iria para o grupo errado no split.
+        todos_itens = [item for f in dados_filiais for item in f.get('itens', [])]
+        enriquecer_itens_raw(todos_itens, rede)
+        enriquecer_separar_flag(dados_filiais, rede)
+
         # Atualiza registro no banco
         registro_temp.itens_sem_depara = itens_sem_depara
         registro_temp.pode_inserir = len(itens_sem_depara) == 0
