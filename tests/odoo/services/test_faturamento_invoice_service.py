@@ -5,9 +5,13 @@ Cobertura — 1 atomo por bloco:
   liberar_faturamento         - 5 testes
   polling_invoice             - 4 testes
   validar_invoice_pos_robo    - 5 testes
-  transmitir_sefaz            - 8 testes
+  transmitir_sefaz            - 13 testes (inclui C1: ajuste_ids opcional +
+                                idempotencia primaria intra-Odoo anti-SEFAZ)
 
-Total: 26 testes mockados.
+C1 (v25+): transmitir_sefaz desacoplado de AjusteEstoqueInventario —
+  ajuste_ids OPCIONAL; idempotencia primaria le o proprio account.move
+  (l10n_br_situacao_nf / l10n_br_chave_nf); D8.3 vira camada de auditoria
+  opcional (so quando ajuste_ids fornecido). Compat retroativa total.
 
 Pattern: cada teste usa MagicMock(odoo) para simular XML-RPC + dry-run
 sempre planeja (corrige AP4) + real-run idempotente. Mocks de:
@@ -358,13 +362,26 @@ def test_transmitir_real_run_bloqueado_sem_confirmar_sefaz(svc):
     assert res['status'] == 'BLOQUEADO_SEM_CONFIRMAR_SEFAZ'
 
 
-def test_transmitir_ajustes_vazios(svc):
-    """ajuste_ids=[] -> FALHA_AJUSTES_VAZIOS (precisa de >=1 para auditoria)."""
+def test_transmitir_sem_ajustes_dry_run_ok(svc):
+    """C1: ajuste_ids=None (remessa avulsa) -> DRY_RUN_OK (NAO mais
+    FALHA_AJUSTES_VAZIOS). Idempotencia primaria vem do account.move."""
+    res = svc.transmitir_sefaz(
+        invoice_id=716448, ajuste_ids=None,
+        dry_run=True,
+    )
+    assert res['status'] == 'DRY_RUN_OK'
+    assert res['chave_nfe'] is None
+    # observacao reflete 0 ajustes (camada de auditoria opcional ausente)
+    assert '0 ajustes' in res['observacao']
+
+
+def test_transmitir_lista_vazia_dry_run_ok(svc):
+    """C1: ajuste_ids=[] (lista vazia) tambem -> DRY_RUN_OK (sem early-return)."""
     res = svc.transmitir_sefaz(
         invoice_id=716448, ajuste_ids=[],
         dry_run=True,
     )
-    assert res['status'] == 'FALHA_AJUSTES_VAZIOS'
+    assert res['status'] == 'DRY_RUN_OK'
 
 
 def test_transmitir_ok_sucesso_propaga_chave(svc):
@@ -431,6 +448,128 @@ def test_transmitir_idempotent_skip(svc):
     assert res['chave_nfe'] == chave_existente
     # Playwright NAO chamado (idempotencia)
     mock_playwright.assert_not_called()
+
+
+def test_transmitir_idempotent_intra_odoo_sem_ajustes(svc, odoo_mock):
+    """C1 (CRITICO SEFAZ): invoice JA autorizado no Odoo + ajuste_ids=None
+    -> IDEMPOTENT_SKIP via leitura do proprio account.move (situacao_nf=
+    'autorizado' / chave preenchida). Playwright NUNCA chamado (guarda
+    anti-dupla-transmissao independente de ciclo/ajuste)."""
+    chave = '35260561724241000178550010000945661007164482'
+    odoo_mock.read.return_value = [{
+        'l10n_br_situacao_nf': 'autorizado',
+        'l10n_br_chave_nf': chave,
+        'state': 'posted',
+    }]
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.recebimento.services.playwright_nfe_transmissao.transmitir_nfe_via_playwright',
+    ) as mock_playwright:
+        res = svc.transmitir_sefaz(
+            invoice_id=716448, ajuste_ids=None,
+            dry_run=False, confirmar_sefaz=True,
+        )
+    assert res['status'] == 'IDEMPOTENT_SKIP'
+    assert res['chave_nfe'] == chave
+    assert res['situacao_nf'] == 'autorizado'
+    # Playwright NAO chamado (anti-dupla-transmissao SEFAZ)
+    mock_playwright.assert_not_called()
+
+
+def test_transmitir_idempotent_intra_odoo_so_chave(svc, odoo_mock):
+    """C1: invoice com chave de 44 digitos preenchida (mesmo sem
+    situacao_nf=='autorizado' literal) -> IDEMPOTENT_SKIP. Chave
+    truthy de 44 digitos = NF JA transmitida (guarda robusta)."""
+    chave = '35260518467441000163550010000132451007099999'
+    odoo_mock.read.return_value = [{
+        'l10n_br_situacao_nf': 'excecao_autorizado',
+        'l10n_br_chave_nf': chave,
+        'state': 'posted',
+    }]
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.recebimento.services.playwright_nfe_transmissao.transmitir_nfe_via_playwright',
+    ) as mock_playwright:
+        res = svc.transmitir_sefaz(
+            invoice_id=716448, ajuste_ids=None,
+            dry_run=False, confirmar_sefaz=True,
+        )
+    assert res['status'] == 'IDEMPOTENT_SKIP'
+    assert res['chave_nfe'] == chave
+    mock_playwright.assert_not_called()
+
+
+def test_transmitir_compat_d83_idempotent_com_ajustes(svc, odoo_mock):
+    """COMPAT C1: account.move AINDA NAO autorizado no Odoo, mas ajuste
+    fornecido ja em F5e_SEFAZ_OK/EXECUTADO -> IDEMPOTENT_SKIP via D8.3
+    (camada de auditoria preservada quando ajuste_ids fornecido)."""
+    chave_existente = '35260561724241000178550010000945661007164482'
+    # Odoo ainda nao mostra autorizado (so a fase do ajuste sabe)
+    odoo_mock.read.return_value = [{
+        'l10n_br_situacao_nf': False,
+        'l10n_br_chave_nf': False,
+        'state': 'posted',
+    }]
+    ajuste1 = MagicMock(
+        id=176013, fase_pipeline='F5e_SEFAZ_OK', status='EXECUTADO',
+        chave_nfe=chave_existente,
+    )
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.safe_session_get',
+        side_effect=[ajuste1],
+    ), patch(
+        'app.odoo.estoque.scripts.faturamento.commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.recebimento.services.playwright_nfe_transmissao.transmitir_nfe_via_playwright',
+    ) as mock_playwright:
+        res = svc.transmitir_sefaz(
+            invoice_id=716448, ajuste_ids=[176013],
+            dry_run=False, confirmar_sefaz=True,
+        )
+    assert res['status'] == 'IDEMPOTENT_SKIP'
+    assert res['chave_nfe'] == chave_existente
+    mock_playwright.assert_not_called()
+
+
+def test_transmitir_avulsa_real_run_ok_sem_ajustes(svc, odoo_mock):
+    """C1 (happy path AVULSO): real-run sucesso com ajuste_ids=None ->
+    status=OK + chave, SEM tocar AjusteEstoqueInventario. account.move
+    nao-autorizado de entrada (idempotencia intra-Odoo nao dispara),
+    Playwright autoriza, resultado fica no proprio account.move."""
+    chave = '35260561724241000178550010000945661007164482'
+    # account.move ainda NAO autorizado (idempotencia intra-Odoo nao bloqueia)
+    odoo_mock.read.return_value = [{
+        'l10n_br_situacao_nf': False,
+        'l10n_br_chave_nf': False,
+    }]
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.safe_session_get',
+    ) as mock_get, patch(
+        'app.odoo.estoque.scripts.faturamento.commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.recebimento.services.playwright_nfe_transmissao.transmitir_nfe_via_playwright',
+        return_value={
+            'sucesso': True,
+            'chave_nf': chave,
+            'situacao_nf': 'autorizado',
+            'tentativas': 1,
+        },
+    ):
+        res = svc.transmitir_sefaz(
+            invoice_id=716448, ajuste_ids=None,
+            dry_run=False, confirmar_sefaz=True,
+        )
+    assert res['status'] == 'OK'
+    assert res['chave_nfe'] == chave
+    assert res['situacao_nf'] == 'autorizado'
+    # Sem ajustes: camada de auditoria NAO foi tocada
+    mock_get.assert_not_called()
 
 
 def test_transmitir_hard_fail_config_aborta(svc):

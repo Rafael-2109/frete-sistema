@@ -4430,8 +4430,9 @@ class FaturamentoPipelineExecutor:
                 )
                 continue
 
-            # Outros (FALHA, FALHA_COMMIT_POS_SEFAZ_OK, FALHA_AJUSTES_VAZIOS,
+            # Outros (FALHA, FALHA_COMMIT_POS_SEFAZ_OK,
             # BLOQUEADO_SEM_CONFIRMAR_SEFAZ — improvavel ja' que confirmar=True)
+            # (FALHA_AJUSTES_VAZIOS removido em C1 v25+: ajuste_ids agora opcional)
             erro_msg = r_sefaz.get('erro') or 'sem_erro_detalhado'
             out['invoices_falha'][invoice_id] = (
                 f'{status_atom}: {erro_msg}'
