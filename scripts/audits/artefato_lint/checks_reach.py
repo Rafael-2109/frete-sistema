@@ -19,11 +19,8 @@ def _is_tool_reachable(rel: str, cfg) -> bool:
 
 def extract_refs(text: str, file_path: Path, root: Path, managed: set[str]) -> set[str]:
     """Refs de saida -> rel-paths gerenciados. Credita markdown-link E code-span/path,
-    pulando linhas fenced (exemplos de codigo nao sao arestas reais).
-    Resolucao C7-shared (resolve_ref) + fallback root-relative: um nome nu (`a.md`)
-    citado por um hub em subdir (docs/INDEX.md) deve creditar o doc root-level `a.md`
-    se a resolucao file-relativa nao bater num doc gerenciado. So credita arestas
-    para docs GERENCIADOS, entao o fallback nunca inventa no fora-do-grafo."""
+    pulando linhas fenced (exemplos de codigo nao sao arestas reais). Resolucao
+    puramente C7-shared via resolve_ref (C8 == C7, sem fallback)."""
     out: set[str] = set()
     fenced = fenced_lines(text)
     for i, line in enumerate(text.splitlines(), 1):
@@ -32,24 +29,13 @@ def extract_refs(text: str, file_path: Path, root: Path, managed: set[str]) -> s
         for target in list(MD_LINK.findall(line)) + list(PATH_REF.findall(line)):
             cand = resolve_ref(file_path, target, root)
             if cand is not None:
-                _add(out, cand, target, root, managed)
+                _add(out, cand, root, managed)
     return out
 
-def _add(out: set[str], cand: Path, target: str, root: Path, managed: set[str]) -> None:
+def _add(out: set[str], cand: Path, root: Path, managed: set[str]) -> None:
     rel = _rel(cand, root)
     if rel in managed:
         out.add(rel)
-        return
-    # Fallback root-relative SO p/ nome nu (sem '/', sem './' '../'): citado por hub
-    # em subdir, credita o doc root-level. resolve_ref ja trata nomes nus como
-    # file-relativos; este fallback cobre o caso topo-de-arvore.
-    t = target.split("#")[0].strip()
-    if not t or "/" in t:
-        return
-    alt = (root / t).resolve()
-    rel_alt = _rel(alt, root)
-    if rel_alt in managed:
-        out.add(rel_alt)
 
 def _rel(cand: Path, root: Path) -> str | None:
     try:

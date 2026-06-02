@@ -12,10 +12,10 @@ def _codes(fs, sub):
 
 def test_hub_lista_filho_reachable():
     docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "`docs/INDEX.md`"},
-            "docs/INDEX.md": {"tipo": "index", "hub": "docs/INDEX.md", "text": "- [a](a.md)"},
-            "a.md": {"tipo": "reference", "hub": "docs/INDEX.md", "text": "x"}}
+            "docs/INDEX.md": {"tipo": "index", "hub": "docs/INDEX.md", "text": "- [a](./sub/a.md)"},
+            "docs/sub/a.md": {"tipo": "reference", "hub": "docs/INDEX.md", "text": "x"}}
     fs = _run(docs)
-    assert not [f for f in fs if f.path == "a.md" and "orfao" in f.message]
+    assert not [f for f in fs if f.path == "docs/sub/a.md" and "orfao" in f.message]
 
 def test_doc_sem_hub_orfao():
     docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "nada"},
