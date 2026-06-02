@@ -22,10 +22,13 @@ def main() -> int:
              gitdiff.touched_files(ROOT) if args.enforce_touched else
              gitdiff.added_files(ROOT) if args.enforce_added else None)
     idx = checks_script.collect_index_basenames(ROOT, cfg)
+    gitignored = gitdiff.ignored_files(ROOT)
     fs = []
     try:
         for p in ROOT.rglob("*.py"):
             rel = str(p.relative_to(ROOT))
+            if rel in gitignored:
+                continue
             if not zones.is_operational_script(rel, cfg):
                 continue
             if scope is not None and rel not in scope:

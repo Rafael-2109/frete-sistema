@@ -39,13 +39,13 @@ Flags:
 
 Uso tipico:
     # 1. Dry-run: ver plano + pre-requisitos + canary
-    python scripts/inventario_2026_05/teste_210030325_lf.py --dry-run
+    python scripts/inventario_2026_05/teste_e2e_lf_exemplo.py --dry-run
 
     # 2. Real (sem SEFAZ): executar ate aguardar invoice
-    python scripts/inventario_2026_05/teste_210030325_lf.py --confirmar --usuario=rafael
+    python scripts/inventario_2026_05/teste_e2e_lf_exemplo.py --confirmar --usuario=rafael
 
     # 3. Real (com SEFAZ): completar transmissao
-    python scripts/inventario_2026_05/teste_210030325_lf.py --confirmar --confirmar-sefaz --usuario=rafael
+    python scripts/inventario_2026_05/teste_e2e_lf_exemplo.py --confirmar --confirmar-sefaz --usuario=rafael
 
 CRITERIOS DE SUCESSO (validar pos-execucao via 08_extrair_pos_execucao.py):
 - LF: cod 210030325 lote '26014' com ~82.300 un consolidado

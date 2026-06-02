@@ -26,8 +26,8 @@ Particularidade:
         3. _action_assign nas 2 moves (reatribui — agora no lote novo)
 
 Uso:
-    python scripts/inventario_2026_05/substituir_lote_205030410_fb.py            # dry-run
-    python scripts/inventario_2026_05/substituir_lote_205030410_fb.py --confirmar
+    python scripts/inventario_2026_05/substituir_lote_unico.py            # dry-run
+    python scripts/inventario_2026_05/substituir_lote_unico.py --confirmar
 """
 import argparse
 import logging

@@ -28,3 +28,17 @@ def added_files(root: Path) -> set[str]:
     r = subprocess.run(["git", "diff", "--cached", "--diff-filter=A", "--name-only"],
                        cwd=root, capture_output=True, text=True)
     return {l for l in r.stdout.splitlines() if l.strip()}
+
+def ignored_files(root: Path) -> set[str]:
+    """Arquivos UNTRACKED que o git IGNORA (.gitignore). O lint nao deve flaggar
+    arquivos fora do versionamento (ex: scripts ad-hoc locais numa pasta gitignored):
+    nao fazem parte do repo e governanca nao os cobre. Os modos --enforce-* ja os
+    excluem (usam escopo git-diff, que nunca inclui ignorados); este helper estende a
+    mesma semantica ao --report-only (varredura de filesystem). Fallback seguro: se o
+    git falhar/ausente, retorna set vazio (preserva comportamento anterior)."""
+    try:
+        r = subprocess.run(["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
+                           cwd=root, capture_output=True, text=True)
+        return {l for l in r.stdout.splitlines() if l.strip()}
+    except Exception:
+        return set()
