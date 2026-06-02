@@ -1,5 +1,7 @@
 # MAPA DE MINERAÇÃO — os 90 scripts → gold-scripts
 
+> **NOTA (Onda 2 PAD-A):** "gold-script(s)" é vocabulário APOSENTADO — a constituição vigente do orquestrador Odoo é `app/odoo/estoque/CLAUDE.md` (services/primitivas C1/C2 · orchestrators C3). Este doc é mineração transitória válida; a consolidação real dos scripts é a Onda 3.
+
 **Criado:** 2026-05-20 | Companheiro de [`MAPA_ASSUNTOS.md`](MAPA_ASSUNTOS.md) (assunto→gold) e [`PLANO_MIGRACAO.md`](PLANO_MIGRACAO.md) (como migrar).
 Este é o **inverso**: cada um dos 90 scripts → **qual gold-script absorve sua lógica** + **o que preservar** + **situação**.
 

@@ -1,5 +1,7 @@
 # Manual — `StockQuantAdjustmentService` (gold-script: Ajuste de inventário)
 
+> **NOTA (Onda 2 PAD-A):** "gold-script" é vocabulário APOSENTADO — hoje é o service/primitiva (C1) `app/odoo/estoque/scripts/quant.py`, skill `ajustando-quant-odoo`; constituição em `app/odoo/estoque/CLAUDE.md`. Este doc é mineração transitória válida.
+
 **Assunto:** A1 — ajuste de inventário de **1 quant** (a operação atômica de estoque)
 **Arquivo:** `app/odoo/services/stock_quant_adjustment_service.py`
 **Testes:** `tests/odoo/services/test_stock_quant_adjustment_service.py` (22)
