@@ -65,6 +65,8 @@ flask_session/
 
 # Logs
 *.log
+# Log de auditoria de separacoes (fallback dev do hook audit-separacao.py — write-only, ninguem le)
+logs/audit/separacoes_audit.jsonl
 
 # OS generated files
 .DS_Store
