@@ -1,5 +1,7 @@
 # PLANO DE MIGRAÇÃO — `app/odoo/estoque/` (gold-utils · gold-scripts · gold-orchestrators)
 
+> **NOTA (Onda 2 PAD-A):** "gold-utils/gold-scripts/gold-orchestrators" é vocabulário APOSENTADO — a nomenclatura vigente é services/primitivas (C1/C2) · orchestrators (C3), definida em `app/odoo/estoque/CLAUDE.md`. Este doc é mineração transitória válida; a consolidação real dos scripts é a Onda 3.
+
 **Criado:** 2026-05-20 | **Decisão:** pacote dedicado `app/odoo/estoque/` com shims de compatibilidade (blast radius contido: só inventário + testes importam).
 **Companheiros:** [`MAPA_ASSUNTOS.md`](MAPA_ASSUNTOS.md) (o "o quê existe") · [`MAPA_SCRIPTS.md`](MAPA_SCRIPTS.md) (mineração: cada um dos ~100 scripts → gold destino). Este doc é o **"o quê e como migrar"**.
 

@@ -1,5 +1,7 @@
 # MAPA GERAL — Operação de inventário 2026-05
 
+> **NOTA (Onda 2 PAD-A):** o termo "gold-script" foi aposentado — a constituição vigente do orquestrador Odoo é `app/odoo/estoque/CLAUDE.md` (vocabulário: services/primitivas C1/C2 · orchestrators C3). Este doc é mineração transitória válida; a consolidação real dos scripts é a Onda 3.
+
 **Criado:** 2026-05-20 (refeito com profundidade após pesquisa em 4 frentes: decisões, gotchas, estado, primitivas).
 **Escopo:** `scripts/inventario_2026_05/` (**~100 scripts — volátil, operação viva**) + `docs/inventario-2026-05/` (decisões D*, premissas P*, gotchas G*, estado) + primitivas em `app/odoo/services/`.
 
