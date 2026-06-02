@@ -23,7 +23,7 @@ description: >-
   - Conferir/registrar recibo Motochefe (usar conferindo-recibo-assai)
   - Apenas consultar estado (usar consultando-estoque-assai/rastreando-chassi-assai)
   - Pedidos VOE Q.P.A. (usar acompanhando-pedido-compra-assai)
-  - Estoque Lojas HORA (usar registrando-venda-loja ou skills HORA)
+  - Estoque/venda Lojas HORA (usar consultando-venda-loja ou skills HORA)
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

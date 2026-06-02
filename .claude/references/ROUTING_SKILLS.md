@@ -41,6 +41,7 @@
 | LOJAS HORA — ACOMPANHAR PEDIDO | "meu pedido X ja chegou?", "pedidos pendentes", "faltam quantas motos?" — APENAS no Agente Lojas HORA | -> `acompanhando-pedido` |
 | LOJAS HORA — CONFERENCIA | "como esta a conferencia?", "quantos chassis faltam conferir?", "tem divergencia?" — APENAS no Agente Lojas HORA | -> `conferindo-recebimento` |
 | LOJAS HORA — PECAS FALTANDO | "pecas faltando?", "pecas pendentes", "chassi doador" — APENAS no Agente Lojas HORA | -> `consultando-pecas-faltando` |
+| LOJAS HORA — VENDAS (READ) | "minhas vendas", "venda X faturou?", "essa moto foi vendida por quanto?", "preco/desconto do modelo", "margem da venda" — APENAS no Agente Lojas HORA | -> `consultando-venda-loja` |
 | LOJAS HORA — CROSS-ENTIDADE (orquestra varias skills) | "como esta minha loja hoje?", "o que preciso fazer?", "resumo operacional" — APENAS no Agente Lojas HORA | -> Subagente `orientador-loja` |
 | MOTOS ASSAÍ — ESTOQUE/PIPELINE | "quantas motos Q.P.A.?", "estoque Sendas", "pipeline Assaí", "quanto de SOL?" | -> `consultando-estoque-assai` |
 | MOTOS ASSAÍ — RASTREAR CHASSI | "cadê chassi MZX...?", "histórico chassi Q.P.A." | -> `rastreando-chassi-assai` |
@@ -207,11 +208,12 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `monitorando-entregas`, `diagnosticando-banco`,
 `gerando-artifact` (chat web APENAS — bundle.html via React+Tailwind+Parcel, renderizado em modal sandboxed)
 
-### Skills Lojas HORA (5) — APENAS no Agente Lojas HORA (escopo isolado por `<loja_context>`)
+### Skills Lojas HORA (6) — APENAS no Agente Lojas HORA (escopo isolado por `<loja_context>`)
 `acompanhando-pedido` (pedidos HORA->Motochefe pendentes/faturados),
 `conferindo-recebimento` (status conferencia em andamento/concluida),
 `consultando-estoque-loja` (motos disponiveis por loja/modelo/chassi),
 `consultando-pecas-faltando` (pecas faltando registradas + chassi doador),
+`consultando-venda-loja` (consultar vendas + validar preco/desconto + margem, READ),
 `rastreando-chassi` (historico completo de UM chassi: pedido->NF->recebimento->venda)
 
 ### Skills motos_assai (6)

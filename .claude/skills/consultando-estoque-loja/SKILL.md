@@ -18,7 +18,7 @@ description: >-
   NAO USAR PARA:
   - Historico completo de um chassi (usar rastreando-chassi)
   - Conferencia de recebimento (usar conferindo-recebimento — M2)
-  - Venda/baixa de estoque (usar registrando-venda — M3)
+  - Consultar vendas (usar consultando-venda-loja)
   - Estoque Nacom Goya (usar gerindo-expedicao — agente diferente)
 allowed-tools: Read, Bash, Glob, Grep
 ---
@@ -41,7 +41,7 @@ USE para:
 NAO USE para:
 - Historico detalhado de UM chassi -> usar `rastreando-chassi`
 - Conferencia fisica de recebimento -> usar `conferindo-recebimento`
-- Venda B2C -> usar `registrando-venda`
+- Consultar venda B2C -> usar `consultando-venda-loja`
 
 ---
 

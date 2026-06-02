@@ -161,6 +161,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'conferindo-recebimento': 'Pipeline Lojas HORA',
     'consultando-estoque-loja': 'Pipeline Lojas HORA',
     'consultando-pecas-faltando': 'Pipeline Lojas HORA',
+    'consultando-venda-loja': 'Pipeline Lojas HORA',
     'rastreando-chassi': 'Rastreamento Chassi HORA',
 
     # ── Motos Assai (B2B Q.P.A. Sendas) ──
