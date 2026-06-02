@@ -50,14 +50,34 @@ else
     echo "Banco já está atualizado"
 fi
 
-# 4. Verificar e aplicar migração hora_agendamento
-echo "Verificando campo hora_agendamento..."
+# 4. (deploy_render.py movido para o bloco RUN_LEGACY_MIGRATIONS — ver abaixo)
 mkdir -p scripts
-python scripts/deploy_render.py || echo "Script de verificação falhou, continuando..."
 
-# 5. Inicializar banco se necessário
+# 5. Inicializar banco se necessário (db.create_all idempotente) — SEMPRE
 echo "Inicializando banco..."
 python init_db.py
+
+# ============================================================================
+# MIGRATIONS HISTORICAS — guardadas pela flag RUN_LEGACY_MIGRATIONS (default 0).
+#
+# Avaliacao caso-a-caso (2026-06-01): TODAS sao idempotentes e JA estao
+# aplicadas em PROD, portanto no-op no deploy normal. Cada uma rodava num
+# processo Python isolado chamando create_app() (~10-15s em PROD); ~55 delas
+# somavam ~12-14min do build. Agora so rodam em DB novo / DR / staging,
+# setando RUN_LEGACY_MIGRATIONS=1 no Render. Scripts permanecem versionados
+# (NADA deletado — apenas deixam de rodar a cada deploy ja consolidado).
+#
+# PERMANECEM ativos FORA deste guard (idempotentes legitimos a cada deploy):
+#   flask db upgrade · init_db.py · sped_ecd_rules_indexer · bootstrap_ontologia
+# ============================================================================
+if [ "${RUN_LEGACY_MIGRATIONS:-0}" = "1" ]; then
+echo ">>> RUN_LEGACY_MIGRATIONS=1 — aplicando migrations historicas (DB novo/DR)..."
+
+# 4b. deploy_render.py: ALTER hora_agendamento (one-shot ja aplicado) + mapa CTRC
+#     do SSW. NOTA: tambem re-roda 'flask db upgrade' e 'add_icms_aliquota'
+#     (ambos redundantes com este build.sh) — por isso vive dentro do guard.
+echo "deploy_render: hora_agendamento + CTRC map (legado)..."
+python scripts/deploy_render.py || echo "Script de verificação falhou, continuando..."
 
 # 6. Backfill CarVia: preencher icms_aliquota de operacoes antigas via XML.
 # Idempotente — so atualiza operacoes com icms_aliquota IS NULL e
@@ -385,14 +405,7 @@ echo "SPED ECD 18a: tabela sped_ecd_rule_embeddings..."
 python scripts/migrations/2026_05_16_sped_ecd_rule_embeddings.py \
     || echo "⚠️ Migration sped_ecd_rule_embeddings falhou, continuando deploy..."
 
-# 18b. SPED ECD Embeddings: indexer idempotente.
-# Roda a cada deploy. content_hash skip quando nada mudou (custo ~$0 e ~5s).
-# Quando algum manual/PLANO/CLAUDE.md foi editado, re-embeda so os chunks
-# afetados via Voyage AI (~$0.0005-$0.01) e roda cleanup de orfaos.
-# Requer VOYAGE_API_KEY no env — sem ela, falha graceful (deploy continua).
-echo "SPED ECD 18b: re-indexar regras (idempotente)..."
-python -m app.embeddings.indexers.sped_ecd_rules_indexer \
-    || echo "⚠️ Indexer sped_ecd_rules falhou, continuando deploy..."
+# 18b. SPED ECD indexer — MOVIDO para fora do guard (roda SEMPRE). Ver fim do build.sh.
 
 # 19. Inventario 2026-05 (2026-05-18): operacao_odoo_auditoria.
 # Tabela POLIMORFICA de auditoria de operacoes Odoo (account.move, stock.picking,
@@ -512,9 +525,7 @@ echo "Agente 26b: proveniencia bi-temporal no KG (D3)..."
 python scripts/migrations/2026_05_31_kg_bitemporal.py \
     || echo "⚠️ Migration kg_bitemporal falhou, continuando deploy..."
 
-echo "Agente 26c: bootstrap de ontologia (D2 — roda apenas se AGENT_ONTOLOGY=true)..."
-python scripts/agente/bootstrap_ontologia.py \
-    || echo "ℹ️ Bootstrap ontologia pulado (AGENT_ONTOLOGY off) ou falhou — continuando deploy..."
+# 26c. Bootstrap ontologia — MOVIDO para fora do guard (so se AGENT_ONTOLOGY=true). Ver fim.
 
 # 26d. A3 gate de regressao (2026-06-01): baseline de eval por-agente + calibracao.
 # agent_eval_scores (baseline score por run, A3 Fase 1) + agent_eval_case (1 linha
@@ -543,6 +554,29 @@ python scripts/migrations/2026_06_01_agent_memories_directive_status.py \
 echo "Inventario 27: tabelas inventario_contagem + inventario_contagem_item..."
 python scripts/migrations/inventario_contagem_create.py \
     || echo "⚠️ Migration inventario_contagem falhou, continuando deploy..."
+
+else
+  echo ">>> RUN_LEGACY_MIGRATIONS!=1 — pulando migrations historicas (ja aplicadas em PROD)."
+fi
+# ============================================================================
+# SEMPRE (idempotentes leves, fora do guard) — rodam a cada deploy.
+# ============================================================================
+
+# SPED ECD indexer: re-embeda regras SO se Manual/PLANO/CLAUDE.md mudaram
+# (content_hash skip => ~$0 e ~5s quando nada mudou). Requer VOYAGE_API_KEY —
+# sem ela, falha graceful (deploy continua).
+echo "SPED ECD: re-indexar regras (idempotente, skip se nada mudou)..."
+python -m app.embeddings.indexers.sped_ecd_rules_indexer \
+    || echo "⚠️ Indexer sped_ecd_rules falhou, continuando deploy..."
+
+# Agente 26c: bootstrap de ontologia (D2). FONTE UNICA da flag = o proprio script
+# (os.getenv("AGENT_ONTOLOGY","false").lower()=="true"); sem a flag ele faz
+# sys.exit(1), engolido pelo || echo. NAO duplicar a flag no bash: quando voce
+# ligar a flag no gate (ex.: "True"/"1"), o .lower() do script casa e um teste
+# bash "= true" exato NAO casaria. Hoje AGENT_ONTOLOGY=OFF em PROD => no-op.
+echo "Agente 26c: bootstrap de ontologia (so escreve se AGENT_ONTOLOGY=true)..."
+python scripts/agente/bootstrap_ontologia.py \
+    || echo "ℹ️ Bootstrap ontologia pulado (AGENT_ONTOLOGY off) ou falhou — continuando deploy..."
 
 echo "Build concluído com sucesso!"
 
