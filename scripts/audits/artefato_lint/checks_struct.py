@@ -4,7 +4,7 @@ from pathlib import Path
 from unicodedata import normalize
 from .findings import Finding
 from . import meta as meta_mod
-from .text_utils import fenced_lines
+from .text_utils import fenced_lines, resolve_ref
 
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 HEADING = re.compile(r"^#{1,6}\s+(.*)$", re.M)
@@ -65,14 +65,9 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
             continue  # links em exemplos de codigo (``` ```) nao sao referencias reais
         for target in MD_LINK.findall(line):
             t = target.split("#")[0].strip()
-            if not t or t.startswith(("http://", "https://", "mailto:")):
+            cand = resolve_ref(Path(path), target, Path(root))
+            if cand is None:
                 continue
-            if t.startswith("./") or t.startswith("../") or "/" not in t:
-                # Relative to file's parent directory
-                cand = (Path(path).parent / t).resolve()
-            else:
-                # Root-relative (e.g. docs/foo.md, .claude/references/x.md)
-                cand = (Path(root) / t).resolve()
             if not cand.exists():
                 out.append(Finding("C7", rel, i, f"link morto: {t}", "block"))
     # hub so ponteiros
