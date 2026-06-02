@@ -3272,29 +3272,36 @@ class FaturamentoPipelineExecutor:
         },
     }
 
-    # F3a v25+ (Rafael 2026-05-27): tipos diferentes em DFe vs PO.
-    # Evidencia empirica: cirurgia AVULSO_FRASCO confirmou que tipo='compra'
-    # no DFe permite `action_gerar_po_dfe` rodar normalmente (sem derivar
-    # picking_type=64 errado); e em seguida `preencher_po` escreve
-    # 'serv-industrializacao' que e' o tipo correto para invoice/journal
-    # ENTIN + CFOP 1949 retorno industrializacao. Atualmente: passo 3 do
-    # FLUXO L3 escreve 'compra' no DFe; passo 5 escreve 'serv-industrializacao'
-    # na PO; passo 9 invoice herda da PO automaticamente.
+    # F3a v25+ (Rafael 2026-05-27): tipos por acao em DFe vs PO.
+    #
+    # CORRECAO Rafael 2026-06-02 (autoridade fiscal — INDUSTRIALIZACAO_FB_LF):
+    #   dfe='serv-industrializacao' (NAO 'compra'). O dfe='compra' do F3a foi
+    #   conclusao ERRONEA de uma tentativa que mexeu em 3 pontos ao mesmo tempo
+    #   e atribuiu a causa ao 'compra'. Rafael investigou e confirmou que
+    #   'serv-industrializacao' destrava `action_gerar_po_dfe` normalmente. Isso
+    #   alinha com `escriturar_dfe` (que ACEITA 'serv-industrializacao' e
+    #   REJEITA 'compra') e com o canary REAL 627348 (usou serv). Para
+    #   INDUSTRIALIZACAO_FB_LF: passo 3 escreve 'serv-industrializacao' no DFe;
+    #   passo 5 escreve 'serv-industrializacao' na PO; passo 9 invoice herda da
+    #   PO. Tipo correto p/ invoice/journal ENTIN + CFOP 1949 retorno
+    #   industrializacao.
     #
     # v27+ S4 EXPAND: mapeamento para TODAS direcoes da MATRIZ_INTERCOMPANY.
     # Padrao identificado em mineracao do operacoes_fiscais.py +
     # MATRIZ_INTERCOMPANY[op]['entrada'][(co, cd)]['l10n_br_tipo_pedido_entrada']:
     #
-    #   dfe='compra' UNIVERSAL — destrava action_gerar_po_dfe (validacao
-    #     empirica AVULSO_FRASCO v24+; tipo 'compra' no DFe e' interpretado
-    #     pelo robo CIEL IT como "DFe de fornecedor a receber"  -> gera PO
-    #     normalmente sem derivar picking_type errado).
+    #   dfe='compra' para as 7 OUTRAS acoes (PERDA/DEV*/TRANSFERIR*) — decisao
+    #     SEPARADA, NAO revisada por Rafael 2026-06-02. O "dfe='compra'
+    #     UNIVERSAL" NAO se aplica mais a INDUSTRIALIZACAO_FB_LF (ver acima).
+    #     Para as outras: tipo 'compra' no DFe e' interpretado pelo robo CIEL
+    #     IT como "DFe de fornecedor a receber" -> gera PO (validacao empirica
+    #     AVULSO_FRASCO v24+, pendente confirmacao caso a caso).
     #   po=<derivado da MATRIZ>['entrada'][(co_origem, co_destino)]
     #     ['l10n_br_tipo_pedido_entrada'] — tipo correto p/ invoice ENTIN
     #     + CFOP correto via fiscal_position_id da entrada.
     #
     # ACAO_PARA_DIRECAO mapping (acao_decidida -> (tipo_op, co_origem, co_destino)):
-    #   INDUSTRIALIZACAO_FB_LF: (industrializacao, 1, 5) -> entrada serv-industrializacao
+    #   INDUSTRIALIZACAO_FB_LF: (industrializacao, 1, 5) -> dfe+entrada serv-industrializacao
     #   PERDA_LF_FB: (perda, 5, 1)                       -> entrada retorno
     #   DEV_LF_FB:  (dev-industrializacao, 5, 1)         -> entrada outro
     #   DEV_CD_LF:  (dev-industrializacao, 4, 5)         -> entrada retorno
@@ -3304,8 +3311,10 @@ class FaturamentoPipelineExecutor:
     #   TRANSFERIR_CD_FB: (transf-filial, 4, 1)          -> entrada transf-filial
     L10N_BR_TIPO_PEDIDO_POR_ACAO: Dict[str, Dict[str, str]] = {
         # Industrializacao FB→LF (validado canary v20+ + cirurgia v24+)
+        # CORRECAO Rafael 2026-06-02: dfe='serv-industrializacao' (NAO 'compra').
+        # Ver comentario F3a abaixo — o 'compra' era conclusao erronea.
         'INDUSTRIALIZACAO_FB_LF': {
-            'dfe': 'compra',
+            'dfe': 'serv-industrializacao',
             'po': 'serv-industrializacao',
         },
         # Perda LF→FB (CANDIDATE v27+ S4 — pendente canary REAL)

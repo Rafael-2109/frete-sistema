@@ -644,8 +644,9 @@ def test_preencher_po_real():
 def test_preencher_po_com_l10n_br_tipo_pedido_F3c():
     """F3c v25+ (Rafael 2026-05-27): `preencher_po` aceita
     `l10n_br_tipo_pedido` e escreve no write. Padrao
-    INDUSTRIALIZACAO_FB_LF: DFe=compra (passo 3), PO=serv-industrializacao
-    (passo 5 — este atomo). Invoice herda da PO (passo 9).
+    INDUSTRIALIZACAO_FB_LF: DFe=serv-industrializacao (passo 3 — correcao
+    Rafael 2026-06-02), PO=serv-industrializacao (passo 5 — este atomo).
+    Invoice herda da PO (passo 9).
     """
     odoo = MagicMock()
     odoo.read.return_value = [{
