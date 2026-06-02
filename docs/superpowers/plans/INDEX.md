@@ -12,3 +12,4 @@ atualizado: 2026-06-01
 - [PAD-A Onda 0 — Fundacao](2026-06-01-pad-a-onda-0-fundacao.md) — lints+hooks+scaffold+skill+SOT
 - [PAD-A Onda 1 — Indice mestre](2026-06-02-pad-a-onda-1-indice-mestre.md) — hubs + ligar docs/ ao CLAUDE.md + check C8
 - [PAD-A Onda 2 — Conflitos diagnosticados](2026-06-02-pad-a-onda-2-conflitos.md) — reconcilia 6 conflitos doc/memoria + 1 bug worker-RQ + aposenta gold-script
+- [Loop Corretivo Pessoal — a licao que adere](2026-06-02-loop-corretivo-pessoal.md) — memoria pessoal F1 (eixo G): gravar→reconciliar→promover→injetar-garantido→medir-outcome; resolve "expliquei e fez certo, depois errou de novo" (Marcus)

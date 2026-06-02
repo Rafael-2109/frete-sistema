@@ -330,6 +330,29 @@ não escritos (B3 adiado + sem feedback). Latência: judge/verify/triage 100% of
 
 ---
 
+## EIXOS C + G — MEMÓRIA PESSOAL & VIGILÂNCIA (avaliação de memória, 2026-06-02)
+
+> Avaliação dimensional do sistema de memória (02/06/2026). **Reconciliação:** `RECONCILIACAO_MEMORIA.md`.
+> **Eixos:** `eixos/C-vigilancia.md` (vigilância proativa — preenche o "Eixo C" já referenciado por `critica/D-ontologia.md:213,237`), `eixos/G-memoria-pessoal.md` (pipeline de memória pessoal + recuperação).
+> **Plano F1 (acionável):** `docs/superpowers/plans/2026-06-02-loop-corretivo-pessoal.md`.
+> **Sintoma-gatilho (Marcus, user 18):** correção explicada NÃO adere na sessão seguinte — prova PROD: `semantic=0`/`tier2_chars=0` em toda sessão "atualizar baseline".
+> **Tese:** infraestrutura construída e DESLIGADA — *ligar + medir > reconstruir*. **Regra de ouro:** medição (E) antes de atuadores; gate de escrita empresa (F) antes de promover.
+> **NÃO duplicar:** F5↔eixo D (KG), F8↔eixo E (qualidade), F3↔A4 (já LIVE) — ver reconciliação. Tudo abaixo ⬜ PENDENTE (diagnóstico+plano; nada implementado). DoD global aplica.
+
+| Item | Descrição | Dep | Flag | Status |
+|------|-----------|-----|------|--------|
+| **G-F1** | Loop corretivo pessoal: ligar canal `_build_user_rules` + write-path UPDATE-vs-ADD + promoção por reincidência + medição por outcome. (plano dedicado, 3 fases) | E (medir), F (gate escrita) | `AGENT_USER_RULES_CHANNEL`+`AGENT_CORRECTION_PROMOTION`+`AGENT_CORRECTION_RECONCILER` | ⬜ **PENDENTE** — Fase 0 (AgingBench offline) aprovada pelo Rafael |
+| **G-F2** | Aprendizado procedural POSITIVO: tipo `receita` no extrator + fechar feedback 👍 (hoje descartado, `routes/feedback.py:66-90`). Ratio receita:armadilha ≈ 0:1 hoje | E | `AGENT_POSITIVE_LEARNING` (novo) | ⬜ PENDENTE |
+| **G-F4** | Perfil/budget: ligar `USE_USER_XML_POINTER` (`feature_flags.py:201`) + reservar budget Tier 2 (hoje zerado p/ ~5 users) | — | `USE_USER_XML_POINTER` | ⬜ PENDENTE |
+| **G-F6** | Recuperação: HyDE + threshold adaptativo por tamanho de prompt (91% <150 chars → `semantic=0`); somar recorrência ao composite (`memory_injection.py:945`) | — | `AGENT_MEMORY_HYDE` (novo) | ⬜ PENDENTE |
+| **G-F7** | Continuidade: anti-contaminação `work_context` (overwrite incondicional `pattern_analyzer.py:2064-2072`, usa domínio dominante) + ciclo de pendências | — | (ajuste) | ⬜ PENDENTE |
+| **G-F10** | Injeção de memória em subagentes (hoje amnésia): `SubagentStart` hook (`hooks.py:434`) + `additionalContext` | D2 | `AGENT_SUBAGENT_MEMORY` (novo) | ⬜ PENDENTE |
+| **C0** | Job offline de coerência (report-only): detecta contradição + staleness no corpus | E, D | `AGENT_MEMORY_VIGILANCE` (novo) | ⬜ PENDENTE |
+| **C1** | Bi-temporal em `AgentMemory` (migration dupla `valid_from/valid_to` + invalidação no ingest) — KG tem `valid_from/to` mas **0/7204** preenchidos | C0 | `AGENT_MEMORY_VIGILANCE` | ⬜ PENDENTE |
+| **C2** | Reflexão agendada (sleep-time): gera insight de nível superior citando evidência (Generative Agents) | C0, E | `AGENT_MEMORY_VIGILANCE` | ⬜ PENDENTE |
+
+**GATE-MEM:** Fase 0 (AgingBench) decide retrieval vs utilization; depois G-F4/G-F6 (recuperação) + G-F1 Fase 1 (canal) em shadow/canário ≥1 semana; **métrica primária = reincidência por `error_signature` antes/depois da promoção (Marcus ~9 → ≤2)**.
+
 ## BASELINE CONHECIDO (herdado da main — NÃO causado pela Onda 0)
 - ~~**2× falha em `tests/agente/sdk/test_pending_questions.py`**~~ ✅ **RESOLVIDO 2026-05-31 (Tarefa 2a, `b31c18760`)**: causa real diagnosticada — NÃO era o `call_soon_threadsafe` ausente (já existia); era `_signal_async_event` SEMPRE agendar via `call_soon_threadsafe` mesmo quando chamado de DENTRO da thread do loop dono (testes chamam submit/cancel no próprio loop e checam `is_set()` síncrono, sem `await` → callback agendado não rodou). Fix: quando `asyncio.get_running_loop() is pq._loop`, `set()` direto (imediato); cross-thread (Flask/subscriber) mantém `call_soon_threadsafe` (produção inalterada). **`tests/agente/sdk/` agora 196 passed / 0 failed.** Testado no Teams (sem impacto).
 
