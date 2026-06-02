@@ -56,7 +56,7 @@ from app.hora.services.estoque_service import EVENTOS_EM_ESTOQUE
 from app.hora.services.moto_service import get_or_create_moto, registrar_evento
 from app.hora.services.parsers import parse_danfe_to_hora_payload
 from app.utils.file_storage import FileStorage
-from app.utils.timezone import agora_utc_naive
+from app.utils.timezone import agora_utc_naive, agora_brasil
 
 
 # --------------------------------------------------------------------------
@@ -461,6 +461,37 @@ def _resolver_preco_tabela(
     else:
         pct = Decimal('0.00')
     return preco_ref, desconto, pct, tabela_id, None
+
+
+def validar_desconto_tabela(modelo_id, valor_final, forma_pagamento_hora=None, na_data=None):
+    """Publico (Onda F): valida um preco final proposto contra a tabela do modelo.
+
+    Delega a _resolver_preco_tabela (interno) e devolve um dict limpo no lugar
+    da 5-tupla, para a skill READ consultando-venda-loja consumir sem acoplar a
+    funcao privada.
+
+    Args:
+        modelo_id: id do HoraModelo.
+        valor_final: preco final proposto (Decimal/str/number).
+        forma_pagamento_hora: 'A_VISTA' | 'A_PRAZO' | None.
+        na_data: date de referencia da vigencia; default = hoje (Brasil).
+
+    Returns:
+        dict {modelo_id, preco_referencia, desconto_rs, desconto_pct, tabela_id, divergencia}
+    """
+    if na_data is None:
+        na_data = agora_brasil().date()
+    preco_ref, desconto_rs, desconto_pct, tabela_id, divergencia = _resolver_preco_tabela(
+        modelo_id, na_data, Decimal(str(valor_final)), forma_pagamento_hora
+    )
+    return {
+        "modelo_id": modelo_id,
+        "preco_referencia": preco_ref,
+        "desconto_rs": desconto_rs,
+        "desconto_pct": desconto_pct,
+        "tabela_id": tabela_id,
+        "divergencia": divergencia,
+    }
 
 
 # --------------------------------------------------------------------------
