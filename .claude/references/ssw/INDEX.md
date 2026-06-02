@@ -26,6 +26,8 @@ O SSW e um sistema integrado para transportadoras que cobre: operacional, comerc
 | [MAPA_MENU.md](MAPA_MENU.md) | Mapeamento completo dos 26 modulos do menu SSW |
 | [ROUTING_SSW.md](ROUTING_SSW.md) | Decision tree: intencao do usuario → documento correto (POPs, opcoes, fluxos) |
 | [VERIFICACOES_PENDENTES.md](VERIFICACOES_PENDENTES.md) | Checklist de 42 marcadores [CONFIRMAR] para verificacao via Playwright no SSW |
+| [Comercial — sub-indice](./comercial/INDEX.md) | Pasta comercial/: tabelas de frete (417-418-420), NTC, consultas |
+| [Operacional — sub-indice](./operacional/INDEX.md) | Pasta operacional/: cadastros, coletas, romaneio de entregas |
 | [url-map.json](url-map.json) | Mapeamento opcao → URL de ajuda (220 opcoes, 1044 paginas) |
 
 ---

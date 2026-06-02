@@ -131,6 +131,7 @@ Gotchas rapidos:
 | Prompt injection hardening (defense in depth) | `.claude/references/PROMPT_INJECTION_HARDENING.md` |
 | S3 storage (arquivos persistidos — todos modulos) | `.claude/references/S3_STORAGE.md` |
 | Indice completo | `.claude/references/INDEX.md` |
+| Documentacao tecnica (arvore docs/) | `docs/INDEX.md` |
 
 ### Design System (UI/CSS)
 
