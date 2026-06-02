@@ -118,10 +118,17 @@ def _registrar_auditoria(
     Lazy import OperacaoOdooAuditoria — evita circular em testes.
     Falha de auditoria NAO deve quebrar pipeline real (pattern service legado L569).
 
-    C1/GAP-1: `ajuste_id` pode ser None (remessa AVULSA sem ciclo de
-    inventario). Nesse caso o external_id usa o token 'AVULSO' e
-    registro_id=None (auditoria preservada, sem ancorar num ajuste).
+    C1/GAP-1 + C7 (2026-06-02): `ajuste_id` pode ser None (remessa AVULSA sem
+    ciclo de inventario). `operacao_odoo_auditoria.registro_id` e NOT NULL, entao
+    sem ajuste NAO ha como ancorar o registro -> PULAR a auditoria (return early).
+    Registrar com registro_id=None levantava NotNullViolation e envenenava a
+    sessao SQLAlchemy nos commits criticos (mascarado pelo try/except). Espelha
+    guard do orchestrator (CLAUDE.md D-V29-1 nota b). Alcancado no passo 5
+    (validar_invoice_pos_robo) via garantir_payment_provider/corrigir_price_zero
+    com _AjusteAvulso.id=None.
     """
+    if ajuste_id is None:
+        return
     try:
         from app.odoo.models import OperacaoOdooAuditoria  # lazy
         ajuste_token = f'A{ajuste_id:06d}' if ajuste_id is not None else 'AVULSO'

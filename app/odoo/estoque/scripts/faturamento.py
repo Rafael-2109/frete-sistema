@@ -136,7 +136,17 @@ def _registrar_auditoria(
     'inventario_pipeline').
 
     Falha de auditoria NAO derruba operacao real (pattern service legado L569).
+
+    C7 (2026-06-02): caminho AVULSO (folha 1.3.1, ajuste_ids=None) -> sem ajuste
+    NAO ha registro em ajuste_estoque_inventario p/ ancorar; `registro_id` e
+    NOT NULL. Pular evita NotNullViolation + sessao SQLAlchemy envenenada nos
+    commits criticos da Skill 8 (CRITICAL-1 pos-SEFAZ). Espelha guard do
+    orchestrator (CLAUDE.md D-V29-1 nota b); rastreabilidade de baixo nivel
+    permanece no hook execute_kw (P8). Consistente com a folha 1.3.1 (sem
+    ajuste_ids, a rastreabilidade D8.3 e' pulada).
     """
+    if ajuste_id is None:
+        return
     try:
         from app.odoo.models import OperacaoOdooAuditoria  # lazy
         external_id_seg = (

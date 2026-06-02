@@ -797,3 +797,59 @@ def test_registrar_auditoria_nao_passa_etapa_string_para_coluna_integer():
         # a fase vai em pipeline_etapa (String) + etapa_descricao
         assert kwargs.get('pipeline_etapa') == 'F5d.5'
         assert 'F5d.5' in (kwargs.get('etapa_descricao') or '')
+
+
+# ============================================================
+# C7 (2026-06-02) — guard AVULSO em _registrar_auditoria (registro_id NOT NULL)
+# ------------------------------------------------------------
+# Caminho avulso da folha 1.3.1 usa ajuste_ids=None -> ajuste_id=None.
+# `operacao_odoo_auditoria.registro_id` e NOT NULL: registrar(registro_id=None)
+# levanta NotNullViolation; o flush abortado envenena a sessao SQLAlchemy nos
+# commits criticos da Skill 8 (CRITICAL-1 pos-SEFAZ). O try/except mascara o
+# erro (por isso os 28 testes anteriores passavam), mas a sessao fica suja.
+# Bug irmao do CLAUDE.md D-V29-1 nota (b) (resolvido no orchestrator via guard).
+# Afeta os DOIS _registrar_auditoria:
+#   - faturamento.py  -> atomos liberar/polling/transmitir + validar (callsite final)
+#   - _invoice_helpers.py -> sub-etapas F5d.5/F5d.6 (via _AjusteAvulso.id=None no passo 5)
+# Fix: pular o registro quando ajuste_id is None (espelha guard do orchestrator).
+# ============================================================
+
+
+def test_registrar_auditoria_faturamento_avulso_nao_persiste():
+    """C7: faturamento._registrar_auditoria(ajuste_id=None) NAO deve chamar
+    OperacaoOdooAuditoria.registrar (registro_id NOT NULL). Caminho avulso."""
+    from app.odoo.estoque.scripts import faturamento
+    with patch('app.odoo.models.OperacaoOdooAuditoria') as MockAud:
+        faturamento._registrar_auditoria(
+            ajuste_id=None, ciclo='AVULSO', fase='F5c_LIBERADO',
+            acao='liberar_faturamento', status='OK',
+            modelo_odoo='stock.picking',
+        )
+    MockAud.registrar.assert_not_called()
+
+
+def test_registrar_auditoria_faturamento_com_ajuste_persiste():
+    """C7 regressao: caminho COM ajuste (ciclo) continua registrando,
+    com registro_id = ajuste_id (NOT NULL satisfeito)."""
+    from app.odoo.estoque.scripts import faturamento
+    with patch('app.odoo.models.OperacaoOdooAuditoria') as MockAud:
+        faturamento._registrar_auditoria(
+            ajuste_id=176013, ciclo='INVENTARIO_2026_05', fase='F5c_LIBERADO',
+            acao='liberar_faturamento', status='OK',
+            modelo_odoo='stock.picking',
+        )
+    MockAud.registrar.assert_called_once()
+    assert MockAud.registrar.call_args.kwargs['registro_id'] == 176013
+
+
+def test_registrar_auditoria_invoice_helpers_avulso_nao_persiste():
+    """C7: _invoice_helpers._registrar_auditoria(ajuste_id=None) NAO deve chamar
+    registrar. Alcancado no passo 5 (validar_invoice_pos_robo) via
+    garantir_payment_provider/corrigir_price_zero com _AjusteAvulso.id=None."""
+    from app.odoo.estoque.scripts import _invoice_helpers
+    with patch('app.odoo.models.OperacaoOdooAuditoria') as MockAud:
+        _invoice_helpers._registrar_auditoria(
+            ciclo='AVULSO', ajuste_id=None, fase='F5d.5',
+            acao='LIBERAR_FAT', status='EXECUTADO', modelo_odoo='account.move',
+        )
+    MockAud.registrar.assert_not_called()
