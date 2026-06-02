@@ -18,6 +18,12 @@ atualizado: 2026-06-01
 
 **Tech Stack:** Python 3.12 (stdlib: argparse, re, json, difflib, subprocess, pathlib, dataclasses), pytest, bash (hooks), git. Sem dependencia externa nova na Onda 0.
 
+## Indice
+
+- File Structure (decomposicao)
+- Tasks 0-15 (1 secao por task): T0 hubs+skeleton · T1 config · T2 meta · T3 zones · T4 findings · T5 checks_struct · T6 checks_content · T7 checks_dup · T8 checks_script · T9 CLIs · T10 scaffold · T11 hooks+settings · T12 SOT+GLOSSARIO+D1 · T13 skill · T14 pre-commit · T15 baseline
+- Ondas subsequentes + Self-Review
+
 ---
 
 ## File Structure (decomposicao)
