@@ -14,6 +14,7 @@ Industrialização por encomenda no grupo: **FB** (encomendante) remete insumos 
 | metas | **`GOALS.md`** | metas + critério de sucesso por goal | medir se uma etapa fechou |
 | mecanismo | **`ACHADOS_TECNICOS.md`** | como o Odoo/CIEL IT decide + IDs/constantes | precisar de um ID ou do mecanismo |
 | execução config | **`PROPOSTA_CONFIG_RETORNO.md`** | **COMO** executar a config G4/G5a (IDs, roteamento, dry-run) | criar/ajustar journals do retorno |
+| decisão Contadora | **`MATERIAL_CONTADORA_G4.md`** | material objetivo p/ a Contadora decidir o G4 (3 opções, lançamentos, perguntas) | levar o G4 à Contadora |
 | procedimento | **`RUNBOOK_PILOTO_4870112.md`** | passos do piloto + gotchas (G-ENT/G-REM/G-DRENO) + drivers | executar uma etapa no Odoo |
 | histórico | **`HISTORICO/`** | superseded (DIRETRIZ, PLANO_EXECUCAO, 00_FLUXO, PASSO0, CICLO, T-*) | arqueologia — **NÃO seguir** |
 
@@ -29,15 +30,18 @@ Config base (reversível): ✅ op 3252 (`movimento_estoque=False`) · ✅ L1 (ca
 | Dreno físico FB `26489→30720` | ✅ EXECUTADO — picking `FB/INT/08128` (322875); 26489→0, 30720=42,29, **0 SVL** |
 | 2 — Entrada LF (Model B) | ✅ picking 322451→31092; ENTIN 737062 posted; Δ1150100011=0 |
 | E — MO | ✅ MOs 20252+20254; net-zero terceiros; PA em 31093 |
-| 4 — Retorno LF→FB (faturar) | ⏳ pendente — depende da config **G4** |
-| 5 — Entrada FB (escriturar) | ⏳ pendente — depende da config **G5a** |
+| 4 — Retorno LF→FB (faturar) | 🔴 **aguarda decisão Rafael+Contadora** — G4: 1 NF mista NÃO baixa a 5902 (provado, 8 ângulos). 2 caminhos: **(b) separar** a 5902 (nativo) ou **(V-B) 1 NF + ajuste na fonte** (remendo). Decide a pergunta fiscal-vs-operacional |
+| 5 — Entrada FB (escriturar) | 🔴 **G5a CONVERGE com G4** (PROVADO sessão 6): `no_payment` no j1001 **sozinho NÃO baixa** em NF mista (FORNECEDORES absorve a 1902) → a 1902 precisa vir **SEPARADA** do serviço; **mesma decisão fiscal** do G4 |
+| Sessão 5 (execução G4/G5a) | ✅ READ-ONLY + 4 lentes + 2 NF-teste (postadas/excluídas, sem sujeira) — mecanismo provado; **nada escrito em definitivo** (`ACHADOS §sessão 5` TL;DR) |
+| Sessão 6 (R-UNIF) | ✅ **R-UNIF PROVADO** — NF-teste mista de ENTRADA postada/excluída (zero sujeira): `no_payment=22800` no j1001 não baixa a ATIVA (FORNECEDORES absorve a 1902). **G5a = G4** (1902/5902 em doc separado). j1001 intacto (`ACHADOS §"ACHADO 2026-06-02 (sessão 6)"`) |
 
-**Próximo:** config do retorno (G4+G5a). Passo → `PROMPT_PROXIMA_SESSAO.md`. Decisão+execução → `SOT §2 L5a` + `PROPOSTA §3`.
+**Próximo:** levar `MATERIAL_CONTADORA_G4.md` à Contadora — a resposta fiscal-vs-operacional (separar 5902/1902 do serviço) escolhe o caminho e **resolve os 2 lados (G4 LF + G5a FB) de uma vez** (provado: o `no_payment` sozinho não baixa em NF mista, nem saída nem entrada). Detalhe → `PROMPT_PROXIMA_SESSAO.md`.
 
 ## Decisões fechadas (detalhe e porquê na `SOT`)
 - Conta de compensação = família **`51010xx` ATIVA / `51020xx` PASSIVA** (NÃO `1150200001`, que é só valoração SVL-LF).
 - **Opção A** (Ativo→Ativo, CPV só na venda) — Contadora confirmou 2026-06-01.
-- **G5a = AJUSTAR o journal `j1001` existente** (`account_no_payment_id`=5101010001), **não** criar journal novo. **G4 = criar journal LF de saída** (no_payment=5101020001) + tirar de PERDAS.
-- Compensação 51010xx vem do `account_no_payment_id` do **journal** (não da posição fiscal).
+- **G5a NÃO é independente — CONVERGE com o G4** (PROVADO sessão 6): `no_payment=22800` no j1001 **sozinho NÃO baixa** a ATIVA numa NF de entrada mista (o FORNECEDORES do serviço absorve a 1902). O no_payment no j1001 é **necessário mas insuficiente**: a 1902 precisa vir em **documento separado** do serviço (mesma solução do G4). Estrutura real: 0/1600 ENTSI tocam a ATIVA; 1124→op 1917, 1902→op 2027.
+- **G4: 1 NF mista NÃO baixa a 5902** (provado, 8 ângulos — `ACHADOS` TL;DR). A contrapartida é por DOCUMENTO (header), não por linha. **2 caminhos:** (b) separar a 5902 em documento próprio (nativo, já roda — SARET) **ou** (V-B) 1 NF mista + lançamento de ajuste na fonte (remendo, aval Contadora). **V-A (editar/repostar a NF) descartada.** Decisão Rafael+Contadora: separar é exigência fiscal ou preferência operacional? (`MATERIAL_CONTADORA_G4.md`).
+- Compensação 51010xx/51020xx vem do `account_no_payment_id` do **journal** (não da posição fiscal); journal = cabeçalho da NF (campo `l10n_br_tipo_pedido` do journal).
 - Sem ICMS em nenhuma etapa (CST51 + CBS/IBS/PIS/COFINS).
-> Fonte: `SOT_OPERACOES.md` (§0 princípio · §2 por etapa · §5 decisões · §histórico v2.3).
+> Fonte: `SOT_OPERACOES.md` (§2 etapa 4 v2.4 · §5 decisões · §histórico v2.4) + `ACHADOS §"ACHADO 2026-06-01 (sessão 5)"`.

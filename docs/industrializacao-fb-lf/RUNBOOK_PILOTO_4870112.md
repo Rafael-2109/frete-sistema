@@ -19,7 +19,7 @@
 | 5. FB recebe | DFe; **op 3252 na linha 1902** | **52** (26489→8) | 1902+1903+1124 | **G5b** (op 3252) | **G5b: 0 SVL de componentes** (estoque FB não infla) |
 
 ¹ pt64 hoje aponta `dst=42` (LF/Estoque), **não** 31092 → exige override na Etapa 2 (lever L2).
-**⚠️ Distinção G5b × G5a (não confundir):** o **piloto valida só G5b** (op 3252 → componentes não re-entram no estoque). **`Δ5101010001(FB)=0` é G5a** (creditar a ATIVA no retorno) → depende de **journal de entrada novo (Contador)** que ainda não existe (validado ao vivo: 0 journals `purchase` com `account_no_payment_id=5101010001`). G5a **não** é alcançável pela op 3252 sozinha.
+**⚠️ Distinção G5b × G5a (não confundir):** o **piloto valida só G5b** (op 3252 → componentes não re-entram no estoque). **`Δ5101010001(FB)=0` é G5a** (creditar a ATIVA no retorno). **DESENHO ANTIGO REVOGADO (v2.3/v2.4):** G5a **NÃO** depende de journal novo — é **AJUSTAR o j1001** existente setando `account_no_payment_id=22800` (5101010001), comprovado pelo grounding sessão 5 (entrada → C 5101010001). G5a **não** é alcançável pela op 3252 sozinha (op 3252 = G5b, só mata o double-count) — precisa do no_payment no j1001 **+** medir resíduo R1 (conta que a op 3252 debita). Detalhe: `ACHADOS §"ACHADO 2026-06-01 (sessão 5)"`.
 
 ---
 
@@ -38,7 +38,7 @@
 | **F** ✅ | Valida E | `e2e_piloto_validar.py --modo mo --mo 20252 --mo2 20254 --lote PILOTO-3105 --base base.json` | **PASS** — consumo 31092, PA 31093, loc 42 inalt. |
 | **G** 🔴 | Retorno LF→FB (pt98, NF mista 5902+5124) | *retorno fiscal* | debita 5101020001; PA price=Ic+S |
 | **H** | Entrada FB (pt52) + **op 3252 na 1902 em DRAFT** | `g5b_aplicar_op3252_na_linha.py --move-id <draft>` | 1902 com op 3252 |
-| **I** ⚠️ | Valida entrada FB | `e2e_piloto_validar.py --modo entrada-fb --nf <id>` | **G5b**: 0 SVL comps. ❗**G5a não fecha** (Contador) |
+| **I** ⚠️ | Valida entrada FB | `e2e_piloto_validar.py --modo entrada-fb --nf <id>` | **G5b**: 0 SVL comps. **G5a**: C 5101010001 (com no_payment=22800 no j1001) — medir R1 (conta debitada pela op 3252) |
 | **J** | Ajuste/conferência do PA produzido (AVCO=Ic+S; cleanup) | *manual + validar* | AVCO PA = Ic+S |
 | **K** 🔴 | Rollout p/ todos LF | **GATE CONTADOR** (G5a + 3 pernas + regularização) | — |
 
@@ -255,8 +255,8 @@ Após `action_liberar_faturamento`: **robô CIEL IT cria a invoice em ~90s** (po
 2. Criar `e2e_remessa_criar.py` (dry-run-first) OU runbook UI da criação do pt53 (§8 passo 2).
 3. Snapshot baseline de 26489 + 1150100012 (§9).
 
-**Contador (não bloqueiam o piloto G5b; destravam o fechamento do ciclo):**
-4. **G5a**: journal de entrada com `account_no_payment_id=5101010001` (creditar a ATIVA no retorno) — não existe.
+**Contador / desenho (não bloqueiam o piloto G5b; destravam o fechamento do ciclo):**
+4. **G5a — CONVERGE com G4 (PROVADO sessão 6):** setar `account_no_payment_id=22800` no **j1001** é **necessário mas INSUFICIENTE sozinho** — experimento provou que numa NF de entrada mista o no_payment NÃO baixa a ATIVA (o FORNECEDORES do serviço absorve a 1902). ⇒ a 1902 de entrada precisa vir em **NF separada** do serviço (mesma decisão fiscal do G4). 🔴 **G4 = G5a = aprovação FISCAL da Contadora** — emitir a 5902 (saída) E escriturar a 1902 (entrada) em NF SEPARADA do serviço (`PROPOSTA §4` opção b; `MATERIAL_CONTADORA_G4.md`; `ACHADOS §sessão 6`).
 5. **3 pernas**: como `Ic` entra no AVCO do PA com a 1902 simbólica (§7).
 6. Conta valoração SVL-LF (`1150200001` × server action 1899) · conta PRODUÇÃO `1150100004` (L3).
 7. Regularização dos acumulados (5101010001 R$60,8M FB + R$8,67M LF; double-count R$785k; 1150100011 −R$1,49bi).
