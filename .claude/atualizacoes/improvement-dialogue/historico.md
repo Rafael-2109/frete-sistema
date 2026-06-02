@@ -36,6 +36,19 @@ Indice de execucoes do dialogo de melhoria Agent SDK <-> Claude Code.
 | 30 | 2026-05-27 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 31 | 2026-05-28 | 0 | 0 | 0 | 0 | SKIP (sem backlog) |
 | 32 | 2026-05-29 | 1 | 0 | 1 | 0 | OK (peso cubado CarVia ja existe + formula proposta incorreta; causa-raiz real = matching de nome modelo<->NF) |
+| 33 | 2026-06-02 | 1 | 0 | 0 | 1 | OK (re-incidencia do #32 — proposta; premissas falsas: coluna inexistente + formula ja usa max; causa-raiz real = cotacao nao cobre modelo "MIA MOTO CHEFE" da NF) |
+
+## 2026-06-02
+- **OK** — 1 sugestao avaliada e **respondida com PROPOSTA** (`IMP-2026-06-01-001`); v2 persistida (`auto_implemented=false`).
+- **IMP-2026-06-01-001 "CarVia: gravar peso_cubado no carvia_frete e usar no calculo de frete"** (warning, skill_suggestion): **re-incidencia** do `IMP-2026-05-28-001` (#32) com 2 premissas factuais FALSAS:
+  - (1) "campo `peso_cubado` ja existe no schema `carvia_fretes`" -> **FALSO** (so `peso_total`; `models/frete.py:46`, `schemas/.../carvia_fretes.json`).
+  - (2) "calculo usa apenas bruto, ignorando cubado" -> **FALSO** (usa `max(bruto,cubado)` desde FIX 2026-05-21; `carvia_frete_service.py:591-600`).
+  - **Talita CONFIRMADO** (Render): frete 216 (NF 5187) tem `valor_cotado=320,84` mas `peso_total=164` (bruto) -> automatico caiu no bruto, ela corrigiu o valor manualmente, nao o peso.
+  - **Causa-raiz real**: `_peso_cubado_resolvido` cai no bruto quando o modelo do veiculo da NF nao tem cubagem na cotacao. NF 5187 = 2x "MIA MOTO CHEFE", mas cotacao 94 so cotou 1x "X12" -> `calcular_cubado_por_modelos` retorna 0 -> bruto. Comparativo: X12 (cot 94) e X11 MINI (cot 109) resolveram; MIA nao. Itens com `peso_cubado=NULL` no snapshot.
+  - **Nao auto-implementado**: parte 2 ja existe; parte 1 exige coluna nova (model+migration = propor); parte 3 mal localizada (tela `lancar_cte.html` nao exibe peso); fallback de cubado = regra de frete real com risco de superestimar (aval humano). Consistente com decisao do #32.
+  - **Plano proposto** (revisao humana): (A) visibilidade ao operador quando cubado nao resolve [service, auto-implementavel]; (B) cobertura de cubagem por modelo na cotacao [dado/processo]; (C) robustez do matching modelo NF<->cotacao [logica sensivel]; (D opcional) persistir peso_bruto+peso_cubado separados [model+migration, propor].
+- **Passo 3.5 (gate A3)**: PULADO (`auto_implemented=false`, sem mudanca que afete subagente com dataset).
+- Commit apenas do relatorio + historico (sem mudanca de codigo de producao).
 
 ## 2026-05-29
 - **OK** — 1 sugestao avaliada e **rejeitada** (`IMP-2026-05-28-001`); v2 persistida (id=123, HTTP 200).
