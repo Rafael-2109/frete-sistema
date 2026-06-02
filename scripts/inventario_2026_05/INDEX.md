@@ -29,8 +29,8 @@ atualizado: 2026-06-02
 - `fat_lf_06_consolidar_validos.py` — garante estoque valido (lote nao-vencido) >= QTD por produto antes do action_assign do CIEL IT (generaliza G014)
 - `fat_lf_cleanup.py` — fluxo de erro: devolve picking + cancela invoice + reseta ajuste para NFs com quantidade errada nao transmitidas
 - `mover_migracao_para_indisponivel.py` — move quants do lote MIGRACAO para os locais Indisponivel nas 3 filiais CD/FB/LF (D011)
-- `substituir_lote_205030410_fb.py` — operacao pontual: substituicao de lote do produto 205030410 em FB/Pre-Producao/Linha Balde
-- `teste_210030325_lf.py` — piloto end-to-end produto 210030325 LF: 4 TRANSFERIR_LOTE + 2 PERDA_LF_FB (66.532 un via CFOP 5903)
+- `substituir_lote_unico.py` — operacao pontual: substituicao de lote de UM produto (ex-205030410 em FB/Pre-Producao/Linha Balde)
+- `teste_e2e_lf_exemplo.py` — exemplo/piloto end-to-end LF (ex-210030325): 4 TRANSFERIR_LOTE + 2 PERDA_LF_FB via CFOP 5903
 - `transferir_indisp_para_estoque_p15_cd.py` — operacao pontual: 2 itens CD/Indisponivel/MIGRACAO -> CD/Estoque/P-15/05 via inventory adjustment 2 passos
 - `transferir_local_pasta22.py` — transferencia De/Para LOCAL+LOTE multi-empresa (Pasta22): SAIDA p/ Indisponivel/MIGRACAO ou RETORNO ao estoque
 - `transferir_lote.py` — realocacao de lote no mesmo local via planilha diff_qtd (net-zero por produto, transferencia de saldo entre lotes)
