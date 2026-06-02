@@ -76,6 +76,20 @@
                             </select>
                         </div>
 
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="separar_protocolo_st" id="separar_protocolo_st" class="form-check-input"
+                                    {% if registro and registro.separar_protocolo_st %}checked{% endif %}>
+                                <label for="separar_protocolo_st" class="form-check-label">
+                                    Separar Produtos c/ Protocolo ST
+                                </label>
+                            </div>
+                            <small class="text-muted">
+                                Quando marcado, pedidos do Atacadao desta UF sao quebrados em 2 NFs/pedidos no Odoo
+                                (produtos com Protocolo ST vs demais), quando ambos os tipos estao no mesmo pedido.
+                            </small>
+                        </div>
+
                         {% if registro %}
                         <div class="mb-3">
                             <div class="form-check">

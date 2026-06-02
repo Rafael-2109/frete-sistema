@@ -26,6 +26,12 @@ from app.portal.atacadao.models import ProdutoDeParaAtacadao
 from app.pedidos.validacao import ValidadorPrecos
 from app.pedidos.integracao_odoo import get_odoo_service, RegistroPedidoOdoo
 from app.pedidos.integracao_odoo.models import PedidoImportacaoTemp
+from app.pedidos.services.protocolo_st_service import (
+    enriquecer_itens_raw,
+    enriquecer_separar_flag,
+    gerar_grupos_lancamento,
+    parse_bool_planilha,
+)
 from app import db
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -165,6 +171,10 @@ def upload():
             tipo_doc = identificacao.get('tipo', 'DESCONHECIDO')
             numero_doc = identificacao.get('numero_documento', '')
 
+            # Enriquece cada item raw com protocolo_st (De-Para). Flui para dados_brutos
+            # e dados_filiais.itens, alimentando o split de NF por protocolo ST.
+            enriquecer_itens_raw(data_serializable, rede)
+
             # NOTA: NÃO fechar db.session aqui.
             # db.session.close() detacha current_user (Flask-Login) e quaisquer
             # objetos ORM carregados, causando DetachedInstanceError quando
@@ -303,6 +313,10 @@ def upload():
                 },
                 usuario=usuario
             )
+
+            # Enriquece cada filial com separar_protocolo_st (RegiaoTabelaRede). Mutação
+            # in-place; como é um INSERT novo, é serializada no commit (sem flag_modified).
+            enriquecer_separar_flag(registro_temp.dados_filiais or [], rede)
 
             db.session.add(registro_temp)
             db.session.commit()
@@ -498,6 +512,10 @@ def inserir_odoo():
         service = get_odoo_service()
 
         resultados = []
+        # Acumula IDs de sale.order criados nesta requisição. Usado como excluir_order_ids
+        # no poll de timeout — no split de NF por protocolo ST os 2 pedidos compartilham
+        # o mesmo l10n_br_pedido_compra, então o poll do 2º precisa ignorar o 1º.
+        order_ids_criados = []
         filiais_para_inserir = dados_filiais.copy()
 
         # Filtra por CNPJ específico se informado
@@ -523,8 +541,6 @@ def inserir_odoo():
 
         for filial in filiais_para_inserir:
             cnpj = filial.get('cnpj')
-            itens = filial.get('itens', [])
-            uf = filial.get('uf', '')
             nome_cliente = filial.get('nome_cliente', '')
             tem_divergencia_filial = filial.get('tem_divergencia', False)
             numero_pedido_cliente = filial.get('numero_pedido_cliente')  # Número: do PDF
@@ -550,33 +566,11 @@ def inserir_odoo():
                 })
                 continue
 
-            # Prepara divergências para registro
-            divergencias_filial = None
-            if tem_divergencia_filial:
-                divergencias_filial = [
-                    {
-                        'codigo': item.get('nosso_codigo'),
-                        'preco_doc': item.get('preco_documento'),
-                        'preco_tabela': item.get('preco_tabela'),
-                        'preco_final': item.get('preco_final'),
-                        'diferenca': item.get('diferenca_percentual')
-                    }
-                    for item in itens if item.get('divergente')
-                ]
+            # Split de NF por protocolo ST: 1 grupo (normal) ou 2 grupos (ST / Demais).
+            # gerar_grupos_lancamento centraliza a montagem de itens_odoo + divergências.
+            grupos = gerar_grupos_lancamento(filial)
 
-            # Prepara itens para o Odoo (usando nosso_codigo e preco_final editável)
-            itens_odoo = []
-            for item in itens:
-                if item.get('nosso_codigo'):
-                    itens_odoo.append({
-                        'nosso_codigo': item.get('nosso_codigo'),
-                        'quantidade': item.get('quantidade', 0),
-                        'preco': item.get('preco_final', item.get('preco_documento', 0)),  # Usa preço editado
-                        'uf': uf,
-                        'nome_cliente': nome_cliente
-                    })
-
-            if not itens_odoo:
+            if not grupos:
                 resultados.append({
                     'cnpj': cnpj,
                     'nome_cliente': nome_cliente,
@@ -589,52 +583,60 @@ def inserir_odoo():
                 })
                 continue
 
-            # Cria pedido no Odoo e registra
-            # 🔧 NOVO: Passa numero_pedido_cliente e payment_provider_id
-            resultado, registro = service.criar_pedido_e_registrar(
-                cnpj_cliente=cnpj,
-                itens=itens_odoo,
-                rede=rede,
-                tipo_documento=tipo_doc,
-                numero_documento=numero_doc,
-                arquivo_pdf_s3=s3_path,
-                usuario=usuario,
-                divergente=tem_divergencia_filial,
-                divergencias=divergencias_filial,
-                justificativa=justificativa if tem_divergencia_filial else None,
-                aprovador=usuario if tem_divergencia_filial else None,
-                numero_pedido_cliente=numero_pedido_cliente,  # 🔧 NOVO: Número: do PDF
-                payment_provider_id=30  # 🔧 NOVO: Transferência Bancária CD
-            )
+            for grupo in grupos:
+                rotulo = grupo['rotulo_st']
+                grupo_tem_divergencia = grupo['tem_divergencia']
+                sufixo = '' if not rotulo else (' [Protocolo ST]' if rotulo == 'ST' else ' [Demais]')
 
-            # Enfileira cálculo de impostos em RQ (seguro para inserção individual
-            # pois o frontend espera resposta antes de disparar a próxima)
-            if resultado.sucesso and resultado.order_id:
-                try:
-                    from app.portal.workers import enqueue_job
-                    from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
+                # Cria pedido no Odoo e registra. excluir_order_ids impede o poll de timeout
+                # de casar com pedido(s) já criado(s) do mesmo l10n_br_pedido_compra (split ST).
+                resultado, registro = service.criar_pedido_e_registrar(
+                    cnpj_cliente=cnpj,
+                    itens=grupo['itens_odoo'],
+                    rede=rede,
+                    tipo_documento=tipo_doc,
+                    numero_documento=numero_doc,
+                    arquivo_pdf_s3=s3_path,
+                    usuario=usuario,
+                    divergente=grupo_tem_divergencia,
+                    divergencias=grupo['divergencias'],
+                    justificativa=justificativa if grupo_tem_divergencia else None,
+                    aprovador=usuario if grupo_tem_divergencia else None,
+                    numero_pedido_cliente=numero_pedido_cliente,  # Número: do PDF (igual nos 2)
+                    payment_provider_id=30,  # Transferência Bancária CD
+                    excluir_order_ids=order_ids_criados,
+                )
 
-                    enqueue_job(
-                        calcular_impostos_odoo,
-                        resultado.order_id,
-                        resultado.order_name,
-                        queue_name='impostos',
-                        timeout='15m'
-                    )
-                except Exception as e:
-                    import logging as _log
-                    _log.getLogger(__name__).warning(f"Erro ao enfileirar impostos: {e}")
+                # Enfileira cálculo de impostos em RQ (seguro para inserção individual
+                # pois o frontend espera resposta antes de disparar a próxima)
+                if resultado.sucesso and resultado.order_id:
+                    order_ids_criados.append(resultado.order_id)
+                    try:
+                        from app.portal.workers import enqueue_job
+                        from app.pedidos.workers.impostos_jobs import calcular_impostos_odoo
 
-            resultados.append({
-                'cnpj': cnpj,
-                'nome_cliente': nome_cliente,
-                'sucesso': resultado.sucesso,
-                'order_id': resultado.order_id,
-                'order_name': resultado.order_name,
-                'mensagem': resultado.mensagem,
-                'erros': resultado.erros,
-                'registro_id': registro.id if registro else None
-            })
+                        enqueue_job(
+                            calcular_impostos_odoo,
+                            resultado.order_id,
+                            resultado.order_name,
+                            queue_name='impostos',
+                            timeout='15m'
+                        )
+                    except Exception as e:
+                        import logging as _log
+                        _log.getLogger(__name__).warning(f"Erro ao enfileirar impostos: {e}")
+
+                resultados.append({
+                    'cnpj': cnpj,
+                    'nome_cliente': f'{nome_cliente}{sufixo}',
+                    'rotulo_st': rotulo,
+                    'sucesso': resultado.sucesso,
+                    'order_id': resultado.order_id,
+                    'order_name': resultado.order_name,
+                    'mensagem': resultado.mensagem,
+                    'erros': resultado.erros,
+                    'registro_id': registro.id if registro else None
+                })
 
         # Atualiza registro temporário com resultados
         todos_sucesso = all(r.get('sucesso') for r in resultados) if resultados else False
@@ -718,14 +720,12 @@ def inserir_lote():
 
         for filial in dados_filiais:
             cnpj = filial.get('cnpj')
-            itens = filial.get('itens', [])
-            uf = filial.get('uf', '')
             nome_cliente = filial.get('nome_cliente', '')
             tem_divergencia_filial = filial.get('tem_divergencia', False)
             numero_pedido_cliente = filial.get('numero_pedido_cliente')
 
             # Verifica se todos os itens têm De-Para
-            if any(not item.get('nosso_codigo') for item in itens):
+            if any(not item.get('nosso_codigo') for item in filial.get('itens', [])):
                 continue  # Pula filiais sem De-Para completo
 
             justificativa = (
@@ -738,42 +738,19 @@ def inserir_lote():
                 falta_justificativa = True
                 continue
 
-            # Prepara divergências
-            divergencias = None
-            if tem_divergencia_filial:
-                divergencias = [
-                    {
-                        'codigo': item.get('nosso_codigo'),
-                        'preco_doc': item.get('preco_documento'),
-                        'preco_tabela': item.get('preco_tabela'),
-                        'preco_final': item.get('preco_final'),
-                        'diferenca': item.get('diferenca_percentual')
-                    }
-                    for item in itens if item.get('divergente')
-                ]
-
-            # Prepara itens para Odoo
-            itens_odoo = []
-            for item in itens:
-                if item.get('nosso_codigo'):
-                    itens_odoo.append({
-                        'nosso_codigo': item.get('nosso_codigo'),
-                        'quantidade': item.get('quantidade', 0),
-                        'preco': item.get('preco_final', item.get('preco_documento', 0)),
-                        'uf': uf,
-                        'nome_cliente': nome_cliente
-                    })
-
-            if itens_odoo:
+            # Split de NF por protocolo ST: 1 ou 2 grupos por filial → 1 entrada (sale.order)
+            # por grupo. gerar_grupos_lancamento centraliza itens_odoo + divergências.
+            for grupo in gerar_grupos_lancamento(filial):
                 filiais_dados.append({
                     'cnpj': cnpj,
                     'nome_cliente': nome_cliente,
-                    'uf': uf,
-                    'itens_odoo': itens_odoo,
-                    'tem_divergencia': tem_divergencia_filial,
-                    'divergencias': divergencias,
-                    'justificativa': justificativa if tem_divergencia_filial else None,
+                    'uf': filial.get('uf', ''),
+                    'itens_odoo': grupo['itens_odoo'],
+                    'tem_divergencia': grupo['tem_divergencia'],
+                    'divergencias': grupo['divergencias'],
+                    'justificativa': justificativa if grupo['tem_divergencia'] else None,
                     'numero_pedido_cliente': numero_pedido_cliente,
+                    'rotulo_st': grupo['rotulo_st'],
                 })
 
         if falta_justificativa:
@@ -1712,6 +1689,7 @@ def regioes_criar():
                 rede=rede,
                 uf=uf,
                 regiao=regiao,
+                separar_protocolo_st=request.form.get('separar_protocolo_st') == 'on',
                 criado_por=current_user.username if hasattr(current_user, 'username') else str(current_user.id),
                 ativo=True
             )
@@ -1739,6 +1717,7 @@ def regioes_editar(id):
             registro.rede = request.form.get('rede', '').upper()
             registro.uf = request.form.get('uf', '').upper()
             registro.regiao = request.form.get('regiao', '').upper()
+            registro.separar_protocolo_st = request.form.get('separar_protocolo_st') == 'on'
             registro.ativo = request.form.get('ativo') == 'on'
 
             db.session.commit()
@@ -1805,6 +1784,10 @@ def regioes_importar():
         atualizados = 0
         erros = []
 
+        # Coluna opcional separar_protocolo_st: só atualiza o flag se a coluna existir
+        # na planilha (evita resetar valores existentes num import sem a coluna).
+        tem_col_st = 'separar_protocolo_st' in df.columns
+
         for idx, row in df.iterrows():
             try:
                 rede = str(row.get('rede', '')).upper().strip()
@@ -1814,16 +1797,21 @@ def regioes_importar():
                 if not all([rede, uf, regiao]) or rede == 'NAN':
                     continue
 
+                separar_st = parse_bool_planilha(row.get('separar_protocolo_st')) if tem_col_st else False
+
                 existente = RegiaoTabelaRede.query.filter_by(rede=rede, uf=uf).first()
 
                 if existente:
                     existente.regiao = regiao
+                    if tem_col_st:
+                        existente.separar_protocolo_st = separar_st
                     atualizados += 1
                 else:
                     novo = RegiaoTabelaRede(
                         rede=rede,
                         uf=uf,
                         regiao=regiao,
+                        separar_protocolo_st=separar_st,
                         criado_por=current_user.username if hasattr(current_user, 'username') else str(current_user.id),
                         ativo=True
                     )
@@ -1874,6 +1862,7 @@ def regioes_exportar():
             'rede': r.rede,
             'uf': r.uf,
             'regiao': r.regiao,
+            'separar_protocolo_st': 'Sim' if r.separar_protocolo_st else 'Não',
             'ativo': 'Sim' if r.ativo else 'Não',
             'criado_em': r.criado_em.strftime('%d/%m/%Y %H:%M') if r.criado_em else '',
             'criado_por': r.criado_por or ''

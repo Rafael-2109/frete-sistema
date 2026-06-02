@@ -11,6 +11,7 @@ from app import db
 from app.utils.timezone import agora_utc_naive
 from app.portal.atacadao.models import ProdutoDeParaAtacadao
 from app.producao.models import CadastroPalletizacao
+from app.pedidos.services.protocolo_st_service import parse_bool_planilha
 import logging
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ def novo():
                 descricao_atacadao=request.form.get('descricao_atacadao', '').strip(),
                 cnpj_cliente=request.form.get('cnpj_cliente', '').strip(),
                 fator_conversao=float(request.form.get('fator_conversao', 1.0)),
+                protocolo_st=request.form.get('protocolo_st') == 'on',
                 observacoes=request.form.get('observacoes', ''),
                 ativo=request.form.get('ativo') == 'on',
                 criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
@@ -119,6 +121,7 @@ def editar(id):
             mapeamento.descricao_atacadao = request.form.get('descricao_atacadao', '').strip()
             mapeamento.cnpj_cliente = request.form.get('cnpj_cliente', '').strip()
             mapeamento.fator_conversao = float(request.form.get('fator_conversao', 1.0))
+            mapeamento.protocolo_st = request.form.get('protocolo_st') == 'on'
             mapeamento.observacoes = request.form.get('observacoes', '')
             mapeamento.ativo = request.form.get('ativo') == 'on'
             mapeamento.atualizado_em = agora_utc_naive()
@@ -310,6 +313,11 @@ def importar():
                         if obs_val != 'nan':
                             observacoes = obs_val
 
+                    # Protocolo ST (opcional). None = coluna ausente → não altera no update.
+                    protocolo_st = None
+                    if 'protocolo st' in df.columns:
+                        protocolo_st = parse_bool_planilha(row.get('protocolo st'))
+
                     # Verificar se já existe (lookup em memoria; cnpj_cliente=None
                     # quando nao informado, igual ao filtro is_(None) anterior)
                     existe = deparas_existentes.get((codigo_nosso, codigo_atacadao, cnpj_cliente))
@@ -322,6 +330,8 @@ def importar():
                             existe.fator_conversao = fator_conversao
                         if observacoes:
                             existe.observacoes = observacoes
+                        if protocolo_st is not None:
+                            existe.protocolo_st = protocolo_st
                         existe.atualizado_em = agora_utc_naive()
                         contador_atualizados += 1
                     else:
@@ -336,6 +346,7 @@ def importar():
                             descricao_atacadao=descricao_atacadao,
                             cnpj_cliente=cnpj_cliente,
                             fator_conversao=fator_conversao,
+                            protocolo_st=bool(protocolo_st),
                             observacoes=observacoes,
                             ativo=True,
                             criado_por=current_user.nome if hasattr(current_user, 'nome') else 'Sistema'
@@ -518,6 +529,7 @@ def exportar():
                 'nosso cod': m.codigo_nosso,
                 'descricao nosso': m.descricao_nosso or '',
                 'fator conversao': float(m.fator_conversao) if m.fator_conversao else 1.0,
+                'protocolo st': 'Sim' if m.protocolo_st else 'Não',
                 'cnpj cliente': m.cnpj_cliente or '',
                 'observacoes': m.observacoes or ''
             })
@@ -572,6 +584,7 @@ def baixar_modelo():
                 'nosso cod': '4310146',
                 'descricao nosso': '',  # Será preenchido automaticamente se existir no cadastro
                 'fator conversao': 1.0,
+                'protocolo st': 'Não',  # 'Sim' para produto sujeito a ST (separa NF no RJ)
                 'cnpj cliente': '',  # Opcional - para mapeamento específico por cliente
                 'observacoes': ''
             },
@@ -581,6 +594,7 @@ def baixar_modelo():
                 'nosso cod': '4310152',
                 'descricao nosso': '',
                 'fator conversao': 1.0,
+                'protocolo st': 'Sim',
                 'cnpj cliente': '',
                 'observacoes': ''
             }
@@ -601,8 +615,9 @@ def baixar_modelo():
                 'C': 15,  # nosso cod
                 'D': 50,  # descricao nosso
                 'E': 15,  # fator conversao
-                'F': 20,  # cnpj cliente
-                'G': 30   # observacoes
+                'F': 14,  # protocolo st
+                'G': 20,  # cnpj cliente
+                'H': 30   # observacoes
             }
             for col, width in larguras.items():
                 worksheet.column_dimensions[col].width = width
@@ -630,6 +645,11 @@ def baixar_modelo():
                 'Sistema'
             )
             worksheet['F1'].comment = Comment(
+                'Protocolo ST: "Sim" se o produto é sujeito a Substituição Tributária '
+                '(separa a NF em 2 pedidos no RJ). Padrão "Não".',
+                'Sistema'
+            )
+            worksheet['G1'].comment = Comment(
                 'CNPJ do cliente (opcional, para mapeamento específico)',
                 'Sistema'
             )

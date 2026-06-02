@@ -69,6 +69,7 @@
                             <th width="25%">Desc. Atacadão</th>
                             <th width="10%">CNPJ Cliente</th>
                             <th width="5%">Fator</th>
+                            <th width="6%">Protocolo ST</th>
                             <th width="5%">Status</th>
                             <th width="10%" class="text-center">Ações</th>
                         </tr>
@@ -103,6 +104,13 @@
                                 {% endif %}
                             </td>
                             <td>
+                                {% if item.protocolo_st %}
+                                    <span class="badge bg-info">Sim</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
                                 {% if item.ativo %}
                                     <span class="badge bg-success">Ativo</span>
                                 {% else %}
@@ -128,7 +136,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center text-muted py-4">
+                            <td colspan="9" class="text-center text-muted py-4">
                                 <i class="fas fa-info-circle"></i> Nenhum mapeamento encontrado
                             </td>
                         </tr>

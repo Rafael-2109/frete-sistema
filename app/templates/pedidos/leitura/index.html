@@ -654,6 +654,12 @@ $(document).ready(function() {
         const temSemDepara = semDeparaCount > 0;
         const podeInserir = !temSemDepara;
 
+        // Split de NF por protocolo ST: só separa visualmente quando a UF exige
+        // (separar_protocolo_st) E há produtos ST e não-ST no mesmo pedido.
+        const itensComSt = itensFilial.filter(i => i.protocolo_st);
+        const itensSemSt = itensFilial.filter(i => !i.protocolo_st);
+        const fazSplitST = !!filial.separar_protocolo_st && itensComSt.length > 0 && itensSemSt.length > 0;
+
         let headerClass = `bg-${color}`;
         if (temDivergenciaFilial) {
             headerClass = 'bg-danger';
@@ -671,6 +677,7 @@ $(document).ready(function() {
                                 <i class="fas fa-building"></i> ${filial.nome_cliente || 'Cliente nao identificado'}
                                 ${temDivergenciaFilial ? '<span class="badge bg-light text-danger ms-2"><i class="fas fa-exclamation-circle"></i> Divergencia</span>' : ''}
                                 ${temSemDepara ? '<span class="badge bg-light text-warning ms-2"><i class="fas fa-link"></i> Sem De-Para</span>' : ''}
+                                ${fazSplitST ? '<span class="badge bg-info ms-2"><i class="fas fa-cut"></i> Separacao Protocolo ST</span>' : ''}
                             </h5>
                             <small>
                                 CNPJ: ${filial.cnpj} |
@@ -716,7 +723,52 @@ $(document).ready(function() {
             `;
         }
 
+        // Renderiza a(s) tabela(s) de itens. Com split de protocolo ST, 2 seções
+        // rotuladas (Com Protocolo ST / Demais); caso contrário, 1 tabela única.
+        if (fazSplitST) {
+            cardHtml += `
+                    <div class="alert alert-info py-2 mb-3">
+                        <i class="fas fa-cut"></i> <strong>Separacao Produtos c/ Protocolo ST</strong>
+                        — este pedido sera lancado como <strong>2 pedidos</strong> no Odoo
+                        (mesmo numero de pedido de compra).
+                    </div>
+                    <h6 class="text-primary mt-2">
+                        <i class="fas fa-tag"></i> Com Protocolo ST
+                        <span class="badge bg-info">${itensComSt.length}</span>
+                    </h6>
+            `;
+            cardHtml += renderTabelaItens(itensComSt, filial);
+            cardHtml += `
+                    <h6 class="text-secondary mt-3">
+                        <i class="fas fa-box"></i> Demais Produtos
+                        <span class="badge bg-secondary">${itensSemSt.length}</span>
+                    </h6>
+            `;
+            cardHtml += renderTabelaItens(itensSemSt, filial);
+        } else {
+            cardHtml += renderTabelaItens(itensFilial, filial);
+        }
+
         cardHtml += `
+                </div>
+            </div>
+        `;
+
+        return cardHtml;
+    }
+
+    // Monta a tabela de itens de um (sub)grupo de uma filial. Reutilizada pelo split
+    // de protocolo ST (2 chamadas) e pelo caso normal (1 chamada). Totais calculados
+    // a partir dos itens do subconjunto (doc-based; equivalentes ao server no caso normal).
+    function renderTabelaItens(itens, filial) {
+        let qtdeTotal = 0;
+        let valorTotal = 0;
+        itens.forEach(function(item) {
+            qtdeTotal += Number(item.quantidade || 0);
+            valorTotal += Number(item.quantidade || 0) * Number(item.preco_documento || 0);
+        });
+
+        let html = `
                     <div class="table-responsive">
                         <table class="table table-sm table-hover">
                             <thead>
@@ -734,69 +786,63 @@ $(document).ready(function() {
                             <tbody>
         `;
 
-        // itens vem de dados_filiais — já tem validação integrada (preco_tabela, divergente, etc.)
-        if (itensFilial.length > 0) {
-            itensFilial.forEach(function(item) {
-                const divergente = item.divergente || false;
-                const precoTabela = item.preco_tabela;
-                const difPercentual = item.diferenca_percentual || 0;
+        itens.forEach(function(item) {
+            const divergente = item.divergente || false;
+            const precoTabela = item.preco_tabela;
+            const difPercentual = item.diferenca_percentual || 0;
 
-                const nossoCodigoClass = item.nosso_codigo ? '' : 'text-danger';
-                const nossoCodigoText = item.nosso_codigo || '<i class="fas fa-exclamation-triangle"></i> Sem De-Para';
+            const nossoCodigoClass = item.nosso_codigo ? '' : 'text-danger';
+            const nossoCodigoText = item.nosso_codigo || '<i class="fas fa-exclamation-triangle"></i> Sem De-Para';
 
-                // Usa nossa descrição quando disponível, senão usa descrição do PDF
-                const descricaoExibir = item.nossa_descricao || item.descricao || '';
+            // Usa nossa descrição quando disponível, senão usa descrição do PDF
+            const descricaoExibir = item.nossa_descricao || item.descricao || '';
 
-                const rowClass = divergente ? 'table-danger' : (item.nosso_codigo ? '' : 'table-warning');
+            const rowClass = divergente ? 'table-danger' : (item.nosso_codigo ? '' : 'table-warning');
 
-                // Campo de preço final - editável para divergentes, texto para os demais
-                let vlrFinalHtml;
-                if (divergente) {
-                    vlrFinalHtml = `
-                        <input type="number" step="0.01" min="0"
-                            class="form-control form-control-sm preco-editavel-filial text-end"
-                            style="width: 90px;"
-                            data-cnpj="${filial.cnpj}"
-                            data-codigo="${item.codigo_rede}"
-                            data-preco-original="${item.preco_documento}"
-                            value="${item.preco_final || item.preco_documento || 0}"
-                            onchange="atualizarPrecoFilial(this)">
-                    `;
-                } else {
-                    vlrFinalHtml = `R$ ${formatMoney(item.preco_final || item.preco_documento || 0)}`;
-                }
-
-                cardHtml += `
-                    <tr class="${rowClass}">
-                        <td><span class="badge bg-secondary">${item.codigo_rede || ''}</span></td>
-                        <td class="${nossoCodigoClass}"><strong>${nossoCodigoText}</strong></td>
-                        <td>${descricaoExibir}</td>
-                        <td class="text-end">${item.quantidade || 0}</td>
-                        <td class="text-end">R$ ${formatMoney(item.preco_documento || 0)}</td>
-                        <td class="text-end">${precoTabela !== null && precoTabela !== undefined ? 'R$ ' + formatMoney(precoTabela) : '-'}</td>
-                        <td class="text-end">${vlrFinalHtml}</td>
-                        <td class="text-end ${divergente ? 'text-danger fw-bold' : ''}">${precoTabela !== null && precoTabela !== undefined ? (difPercentual > 0 ? '+' : '') + difPercentual.toFixed(2) + '%' : '-'}</td>
-                    </tr>
+            // Campo de preço final - editável para divergentes, texto para os demais
+            let vlrFinalHtml;
+            if (divergente) {
+                vlrFinalHtml = `
+                    <input type="number" step="0.01" min="0"
+                        class="form-control form-control-sm preco-editavel-filial text-end"
+                        style="width: 90px;"
+                        data-cnpj="${filial.cnpj}"
+                        data-codigo="${item.codigo_rede}"
+                        data-preco-original="${item.preco_documento}"
+                        value="${item.preco_final || item.preco_documento || 0}"
+                        onchange="atualizarPrecoFilial(this)">
                 `;
-            });
-        }
+            } else {
+                vlrFinalHtml = `R$ ${formatMoney(item.preco_final || item.preco_documento || 0)}`;
+            }
 
-        cardHtml += `
+            html += `
+                <tr class="${rowClass}">
+                    <td><span class="badge bg-secondary">${item.codigo_rede || ''}</span></td>
+                    <td class="${nossoCodigoClass}"><strong>${nossoCodigoText}</strong></td>
+                    <td>${descricaoExibir}</td>
+                    <td class="text-end">${item.quantidade || 0}</td>
+                    <td class="text-end">R$ ${formatMoney(item.preco_documento || 0)}</td>
+                    <td class="text-end">${precoTabela !== null && precoTabela !== undefined ? 'R$ ' + formatMoney(precoTabela) : '-'}</td>
+                    <td class="text-end">${vlrFinalHtml}</td>
+                    <td class="text-end ${divergente ? 'text-danger fw-bold' : ''}">${precoTabela !== null && precoTabela !== undefined ? (difPercentual > 0 ? '+' : '') + difPercentual.toFixed(2) + '%' : '-'}</td>
+                </tr>
+            `;
+        });
+
+        html += `
                             </tbody>
                             <tfoot class="table-light">
                                 <tr>
                                     <th colspan="3">Total</th>
-                                    <th class="text-end">${filial.quantidade_total || 0}</th>
-                                    <th class="text-end" colspan="4">R$ ${formatMoney(filial.valor_total || 0)}</th>
+                                    <th class="text-end">${qtdeTotal}</th>
+                                    <th class="text-end" colspan="4">R$ ${formatMoney(valorTotal)}</th>
                                 </tr>
                             </tfoot>
                         </table>
                     </div>
-                </div>
-            </div>
         `;
-
-        return cardHtml;
+        return html;
     }
 
     // Armazena filiais para cadastro inline
@@ -1338,16 +1384,27 @@ $(document).ready(function() {
                 justificativas_por_filial: justificativasPorFilial
             }),
             success: function(response) {
-                const resultado = response.resultados && response.resultados[0];
-                if (resultado && resultado.sucesso) {
-                    btn.html('<i class="fas fa-check"></i> Inserido').removeClass('btn-light').addClass('btn-success').prop('disabled', true);
-                    $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-success">${resultado.order_name}</span>`).show();
+                // Split de protocolo ST pode gerar 2 pedidos para 1 filial — exibe todos.
+                const resultadosFilial = response.resultados || [];
+                const okFilial = resultadosFilial.filter(r => r.sucesso);
+                const todosOk = resultadosFilial.length > 0 && okFilial.length === resultadosFilial.length;
+
+                if (okFilial.length > 0) {
+                    if (todosOk) {
+                        btn.html('<i class="fas fa-check"></i> Inserido').removeClass('btn-light').addClass('btn-success').prop('disabled', true);
+                    } else {
+                        btn.html(originalHtml).prop('disabled', false);
+                    }
+                    const badges = okFilial.map(r => `<span class="badge bg-success ms-1">${r.order_name}</span>`).join('');
+                    $(`#status-filial-${cnpjSafe}`).html(badges).show();
                     if (typeof toastr !== 'undefined') {
-                        toastr.success(`Pedido ${resultado.order_name} criado para ${nome}`);
+                        const nomes = okFilial.map(r => r.order_name).join(', ');
+                        toastr.success(`Pedido(s) ${nomes} criado(s) para ${nome}`);
                     }
                 } else {
                     btn.html(originalHtml).prop('disabled', false);
-                    const erro = resultado?.mensagem || response.error || 'Erro ao inserir';
+                    const primeiro = resultadosFilial[0];
+                    const erro = (primeiro && primeiro.mensagem) || response.error || 'Erro ao inserir';
                     $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-danger">Erro</span>`).show();
                     if (typeof toastr !== 'undefined') {
                         toastr.error(erro);
@@ -1556,12 +1613,19 @@ $(document).ready(function() {
                 justificativas_por_filial: justificativasPorFilial
             }),
             success: function(response) {
-                const resultado = response.resultados && response.resultados[0];
-                if (resultado) {
-                    resultados.push(resultado);
-                    if (resultado.sucesso) {
+                // Split de protocolo ST pode gerar 2 pedidos para 1 filial — agrega todos.
+                const resultadosFilial = response.resultados || [];
+                resultadosFilial.forEach(r => resultados.push(r));
+                const okFilial = resultadosFilial.filter(r => r.sucesso);
+                if (resultadosFilial.length > 0) {
+                    if (okFilial.length === resultadosFilial.length) {
                         btn.html('<i class="fas fa-check"></i>').removeClass('btn-light').addClass('btn-success');
-                        $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-success">${resultado.order_name}</span>`).show();
+                        const badges = okFilial.map(r => `<span class="badge bg-success ms-1">${r.order_name}</span>`).join('');
+                        $(`#status-filial-${cnpjSafe}`).html(badges).show();
+                    } else if (okFilial.length > 0) {
+                        btn.html('<i class="fas fa-exclamation"></i>').removeClass('btn-light').addClass('btn-warning');
+                        const badges = okFilial.map(r => `<span class="badge bg-success ms-1">${r.order_name}</span>`).join('');
+                        $(`#status-filial-${cnpjSafe}`).html(`${badges}<span class="badge bg-danger ms-1">1+ Erro</span>`).show();
                     } else {
                         btn.html('<i class="fas fa-times"></i>').removeClass('btn-light').addClass('btn-danger');
                         $(`#status-filial-${cnpjSafe}`).html(`<span class="badge bg-danger">Erro</span>`).show();
