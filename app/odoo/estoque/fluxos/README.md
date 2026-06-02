@@ -44,7 +44,8 @@ Exemplo:
         1.2.1 caminho A — DFe via SEFAZ → escriturando-odoo ✅ v19+ ([folha](1.2.1-escriturar-dfe-industrializacao.md))
         1.2.2 caminho B — DFe via upload XML SAÍDA → escriturando-odoo ✅ v19+ ([folha](1.2.2-criar-dfe-manual-transferencia.md))
         1.2.3 COMPRAS (DFe fornecedor) → DELEGA gestor-recebimento
-   1.3  transferência completa (saída+entrada) = compõe 1.1.1 + 1.2.x → ✅ v27+ S5 ([folha](1.3-transferencia-completa.md))
+   1.3  transferência completa (saída+entrada) = compõe 1.1.1 + 1.2.x → ✅ v27+ S5 ([folha](1.3-transferencia-completa.md)) — caminho com-ciclo (AjusteEstoqueInventario existente)
+        1.3.1 remessa AVULSA de insumo (sem ciclo de inventário) → ✅ C4 ([folha](1.3.1-remessa-avulsa-insumo.md)) — origina átomos diretamente (Skill 5 picking → Skill 8 SEFAZ → Skill 7 entrada); AjusteEstoqueInventario OPCIONAL (C1)
 2  Estoque (sem NF)
    2.1 ajuste de saldo (1 quant pontual; N→1 quants via planilha) → ajustando-quant-odoo ✅ ([folha](2.1-ajuste-saldo-por-planilha.md))
    2.2 realocar saldo (lote→lote mesma loc / loc→loc mesmo lote / MIGRAÇÃO↔Indisponível) → transferindo-interno-odoo 🟡 ([folha](2.2-realocar-saldo.md))
