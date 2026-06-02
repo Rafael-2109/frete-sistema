@@ -9,6 +9,8 @@
   "dup_textual_report": 0.75,
   "dup_semantic_block": 0.92,
   "dup_semantic_report": 0.85,
+  "reach_roots": ["CLAUDE.md"],
+  "tool_reachable_globs": [".claude/skills/**/*.md"],
   "id_hardcoded_regex": "\\d{5,}",
   "banned_hedge": ["dezenas", "varios", "varias", "alguns", "algumas", "muitos", "muitas", "aproximadamente"],
   "banned_time_sensitive": ["atualmente", "por enquanto", "recentemente", "hoje em dia"],

@@ -1,7 +1,21 @@
 from __future__ import annotations
 import re
+from pathlib import Path
 
 _FENCE = re.compile(r"^\s*```")
+MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+
+
+def resolve_ref(file_path: Path, target: str, root: Path) -> Path | None:
+    """Resolve um link/ref markdown -> caminho absoluto, ou None se externo/vazio.
+    Regra IDENTICA a C7 (checks_struct): './' '../' ou sem '/' = relativo ao dir do
+    arquivo; senao root-relative. Fragmentos (#...) sao removidos."""
+    t = target.split("#")[0].strip()
+    if not t or t.startswith(("http://", "https://", "mailto:")):
+        return None
+    if t.startswith("./") or t.startswith("../") or "/" not in t:
+        return (file_path.parent / t).resolve()
+    return (root / t).resolve()
 
 def fenced_lines(text: str) -> set[int]:
     """Numeros de linha (1-indexed) que estao DENTRO de um bloco ``` ... ``` (cerca de

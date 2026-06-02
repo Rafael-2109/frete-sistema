@@ -10,3 +10,4 @@ atualizado: 2026-06-01
 > **Papel:** mapa dos planos de implementacao. So ponteiros.
 
 - [PAD-A Onda 0 — Fundacao](2026-06-01-pad-a-onda-0-fundacao.md) — lints+hooks+scaffold+skill+SOT
+- [PAD-A Onda 1 — Indice mestre](2026-06-02-pad-a-onda-1-indice-mestre.md) — hubs + ligar docs/ ao CLAUDE.md + check C8
