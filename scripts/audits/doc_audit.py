@@ -32,6 +32,7 @@ def main() -> int:
     g.add_argument("--report-only", action="store_true")
     g.add_argument("--enforce-new", action="store_true")
     g.add_argument("--enforce-touched", action="store_true")
+    g.add_argument("--enforce-added", action="store_true")
     g.add_argument("--strict", action="store_true")
     ap.add_argument("--base-ref", default="HEAD")
     ap.add_argument("--path", default=None, help="prefixo de path p/ filtrar (auditoria parcial)")
@@ -42,6 +43,8 @@ def main() -> int:
         scope = gitdiff.changed_files(ROOT, args.base_ref)
     elif args.enforce_touched:
         scope = gitdiff.touched_files(ROOT)
+    elif args.enforce_added:
+        scope = gitdiff.added_files(ROOT)
     all_findings = []
     blocks = {}
     try:

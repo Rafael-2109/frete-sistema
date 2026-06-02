@@ -13,3 +13,11 @@ def test_doc_audit_enforce_new_exit0_quando_sem_diff():
     r = subprocess.run([sys.executable, "scripts/audits/doc_audit.py", "--enforce-new", "--base-ref", "HEAD"],
                        cwd=REPO, capture_output=True, text=True)
     assert r.returncode in (0, 1)
+
+def test_doc_audit_enforce_added_roda():
+    # --enforce-added so audita arquivos com status Added (novos). Sem nada staged,
+    # o escopo e vazio -> exit 0. Modo seguro p/ pre-commit (nao trava edicao de legado).
+    r = subprocess.run([sys.executable, "scripts/audits/doc_audit.py", "--enforce-added"],
+                       cwd=REPO, capture_output=True, text=True)
+    assert r.returncode in (0, 1)
+    assert "achados" in r.stdout.lower() or "OK" in r.stdout

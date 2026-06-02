@@ -13,12 +13,14 @@ def main() -> int:
     g.add_argument("--report-only", action="store_true")
     g.add_argument("--enforce-new", action="store_true")
     g.add_argument("--enforce-touched", action="store_true")
+    g.add_argument("--enforce-added", action="store_true")
     g.add_argument("--strict", action="store_true")
     ap.add_argument("--base-ref", default="HEAD")
     args = ap.parse_args()
     cfg = config.load()
-    scope = gitdiff.changed_files(ROOT, args.base_ref) if args.enforce_new else (
-            gitdiff.touched_files(ROOT) if args.enforce_touched else None)
+    scope = (gitdiff.changed_files(ROOT, args.base_ref) if args.enforce_new else
+             gitdiff.touched_files(ROOT) if args.enforce_touched else
+             gitdiff.added_files(ROOT) if args.enforce_added else None)
     idx = checks_script.collect_index_basenames(ROOT, cfg)
     fs = []
     try:

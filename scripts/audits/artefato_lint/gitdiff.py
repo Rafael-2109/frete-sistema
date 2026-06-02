@@ -20,3 +20,11 @@ def touched_files(root: Path) -> set[str]:
         r = subprocess.run(args, cwd=root, capture_output=True, text=True)
         out |= {l for l in r.stdout.splitlines() if l.strip()}
     return out
+
+def added_files(root: Path) -> set[str]:
+    """Arquivos com status Added (novos) staged para commit. Para o pre-commit
+    (Anel 2 added-only): so NOVO artefato nao-conforme bloqueia; edicao de legado
+    (Modified) NAO entra. Coerente com a migracao gradual (Ondas 1-4)."""
+    r = subprocess.run(["git", "diff", "--cached", "--diff-filter=A", "--name-only"],
+                       cwd=root, capture_output=True, text=True)
+    return {l for l in r.stdout.splitlines() if l.strip()}
