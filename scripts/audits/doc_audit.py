@@ -36,6 +36,7 @@ def main() -> int:
     g.add_argument("--strict", action="store_true")
     ap.add_argument("--base-ref", default="HEAD")
     ap.add_argument("--path", default=None, help="prefixo de path p/ filtrar (auditoria parcial)")
+    ap.add_argument("--skip-dup", action="store_true", help="pula near-duplicate (O(n^2)) — usar no baseline full")
     args = ap.parse_args()
     cfg = config.load()
     scope = None
@@ -52,7 +53,8 @@ def main() -> int:
             all_findings += checks_struct.check_file(p, ROOT, cfg)
             all_findings += checks_content.check_file(p, ROOT, cfg)
             blocks[str(p.relative_to(ROOT))] = checks_content._body(p.read_text(encoding="utf-8"))
-        all_findings += checks_dup.compare_blocks(blocks, cfg)
+        if not args.skip_dup:
+            all_findings += checks_dup.compare_blocks(blocks, cfg)
     except Exception as e:  # exit 2 = erro de execucao
         print(f"erro: {e}", file=sys.stderr)
         return 2

@@ -21,3 +21,9 @@ def test_doc_audit_enforce_added_roda():
                        cwd=REPO, capture_output=True, text=True)
     assert r.returncode in (0, 1)
     assert "achados" in r.stdout.lower() or "OK" in r.stdout
+
+def test_doc_audit_tem_flag_skip_dup():
+    # --skip-dup pula o passo de near-duplicate (O(n^2)) p/ o baseline full nao travar.
+    r = subprocess.run([sys.executable, "scripts/audits/doc_audit.py", "--help"],
+                       cwd=REPO, capture_output=True, text=True)
+    assert "--skip-dup" in r.stdout
