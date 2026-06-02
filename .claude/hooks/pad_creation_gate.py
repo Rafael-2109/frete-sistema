@@ -19,9 +19,16 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except Exception:
         return _decision("allow")
+    tool_name = payload.get("tool_name", "")
     tin = payload.get("tool_input", {})
     fpath = tin.get("file_path", "")
-    content = tin.get("content") or tin.get("new_string") or ""
+    # Anel 1 = creation gate: valida apenas o CONTEUDO COMPLETO de um Write.
+    # Edit entrega new_string (fragmento) -> validar como doc inteiro causaria
+    # falso-bloqueio (C1). Edits sao policiados por Anel 2 (commit lint) e Anel 3
+    # (Stop) sobre o ARQUIVO COMPLETO. Por isso o gate libera Edit (E5/advisory-safe).
+    if tool_name == "Edit":
+        return _decision("allow")
+    content = tin.get("content") or ""
     if not fpath.endswith(".md") and not fpath.endswith(".py"):
         return _decision("allow")
     try:
