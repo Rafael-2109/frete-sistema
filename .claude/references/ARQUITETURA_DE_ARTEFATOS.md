@@ -69,6 +69,18 @@ O scaffold carimba `camada: L2` e `sot_de` (= --tema) no header gerado; ajuste a
 
 A skill `padronizando-docs` (T13) guia o fluxo completo: escolha de tipo, template, checklist de 9 itens e registro no hub.
 
+## Convencao de links
+
+O lint (C7 link-rot + C8 alcancabilidade) resolve um link relativo que contem `/` **sem** prefixo `./` como **ROOT-relative** (path a partir da raiz do repo) — regra fixada na Onda 0. Para evitar falso "link morto" ou falso-orfao, siga a convencao (exemplos em bloco para nao virarem links reais):
+
+```text
+hub / cross-tree  ->  code-span path-completo:  `docs/superpowers/INDEX.md`  (estilo CLAUDE.md; nao checado por link-rot)
+file-relative     ->  prefixe ./ :              [titulo](./sub/y.md)         (clicavel; relativo ao dir do doc, igual GitHub)
+mesmo diretorio   ->  nome nu (sem /):          [titulo](y.md)               (ja e file-relative)
+```
+
+Links legados file-relative com `/` sem `./` (ex.: `modelos/X.md` em INDEX.md antigos) **nao** sao creditados pelo grafo C8 ate migrarem — divida da varredura por cluster (Onda 4+). NAO bloqueiam: C8 e advisory (`report`).
+
 ## Checklist resumido (9 itens)
 
 Itens 1–8 verificados no creation gate (pre-escrita); item 9 no commit lint. Detalhes completos e limiares em [spec](../../docs/superpowers/specs/2026-06-01-arquitetura-de-artefatos-design.md) secao 5.
