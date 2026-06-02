@@ -27,10 +27,17 @@ def _patch_buscar_dfe(executor, *, encontrado, dfe_id=None, status='ausente'):
             self.odoo = odoo
 
         def buscar_dfe(self, *, chave_nfe, company_id):
+            # populado/n_linhas coerentes com o status simulado (C2):
+            # encontrado + status real (pendente/processado/...) -> populado;
+            # resumo_vazio OU nao encontrado -> nao populado, 0 linhas.
+            populado = bool(encontrado) and status != 'resumo_vazio'
+            n_linhas = 1 if populado else 0
             return {
                 'encontrado': encontrado,
                 'dfe_id': dfe_id,
                 'status': status,
+                'populado': populado,
+                'n_linhas': n_linhas,
                 'raw': {},
                 'tempo_ms': 1,
                 'erro': None,

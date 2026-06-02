@@ -74,6 +74,11 @@ POLL_TIMEOUT_INVOICE_DEFAULT_S = 300  # invoice draft via action_create_invoice
 POLL_TIMEOUT_DFE_PROC_DEFAULT_S = 120  # action_processar_arquivo_manual parsea XML
 POLL_INTERVAL_S = 2  # gap entre polls
 
+# l10n_br_status CIEL IT do DFe quando a SEFAZ entregou apenas o RESUMO
+# (sem XML completo / 0 linhas). DFe nesse estado NAO serve para gerar PO
+# (caminho A geraria PO vazia — gotcha G-ENT-2). Ver buscar_dfe (C2).
+DFE_STATUS_RESUMO_SEFAZ = '06'
+
 CNPJS_NACOM: frozenset = frozenset({
     '18.467.441/0001-63',  # LF
     '61.724.241/0001-69',  # FB (CNPJ historicamente referido)
@@ -1038,9 +1043,10 @@ class EscrituracaoLfService:
 
         # Mapeamento status: l10n_br_status CIEL IT
         # '03' = pendente, '04'/'05' = processado, default = a_processar.
-        # '06' (DFe-resumo) OU sem linhas -> 'resumo_vazio' (forca caminho B).
+        # DFE_STATUS_RESUMO_SEFAZ ('06', DFe-resumo) OU sem linhas ->
+        # 'resumo_vazio' (forca caminho B).
         st_raw = (dfe.get('l10n_br_status') or '').strip()
-        if st_raw == '06' or not populado:
+        if st_raw == DFE_STATUS_RESUMO_SEFAZ or not populado:
             status = 'resumo_vazio'
         elif st_raw in ('04', '05'):
             status = 'processado'

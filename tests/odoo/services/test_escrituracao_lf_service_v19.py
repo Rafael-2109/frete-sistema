@@ -17,7 +17,10 @@ campos do Odoo, sem assumir DB local).
 """
 from unittest.mock import MagicMock
 
-from app.odoo.estoque.scripts.escrituracao import EscrituracaoLfService
+from app.odoo.estoque.scripts.escrituracao import (
+    DFE_STATUS_RESUMO_SEFAZ,
+    EscrituracaoLfService,
+)
 
 
 # ============================================================
@@ -97,7 +100,7 @@ def test_buscar_dfe_resumo_vazio_status_06():
     odoo = MagicMock()
     odoo.search_read.return_value = [{
         'id': 43776,
-        'l10n_br_status': '06',
+        'l10n_br_status': DFE_STATUS_RESUMO_SEFAZ,  # '06'
         'l10n_br_situacao_dfe': 'resumo',
         'nfe_infnfe_ide_nnf': False,
         'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099007',
@@ -229,7 +232,7 @@ def test_criar_dfe_resumo_vazio_dry_run_modo_popular():
     }]
     odoo.search_read.return_value = [{
         'id': 43776,
-        'l10n_br_status': '06',  # DFe-resumo
+        'l10n_br_status': DFE_STATUS_RESUMO_SEFAZ,  # '06' DFe-resumo
         'l10n_br_situacao_dfe': 'resumo',
         'nfe_infnfe_ide_nnf': False,
         'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099009',
@@ -271,7 +274,7 @@ def test_criar_dfe_resumo_vazio_real_popula(monkeypatch):
     ]
     odoo.search_read.return_value = [{
         'id': 43776,
-        'l10n_br_status': '06',  # DFe-resumo
+        'l10n_br_status': DFE_STATUS_RESUMO_SEFAZ,  # '06' DFe-resumo
         'l10n_br_situacao_dfe': 'resumo',
         'nfe_infnfe_ide_nnf': False,
         'protnfe_infnfe_chnfe': '35260518467441000163550010000132451007099010',
