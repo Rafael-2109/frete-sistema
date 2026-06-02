@@ -165,16 +165,16 @@
   ],
   "indices": [
     {
-      "name": "ix_contas_a_pagar_parcela",
+      "name": "ix_contas_a_pagar_partner_id",
       "columns": [
-        "parcela"
+        "partner_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_contas_a_pagar_partner_id",
+      "name": "ix_contas_a_pagar_status_sistema",
       "columns": [
-        "partner_id"
+        "status_sistema"
       ],
       "unique": false
     },
@@ -203,13 +203,6 @@
       "name": "idx_conta_pagar_vencimento",
       "columns": [
         "vencimento"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_contas_a_pagar_status_sistema",
-      "columns": [
-        "status_sistema"
       ],
       "unique": false
     },
@@ -259,6 +252,13 @@
       "name": "ix_contas_a_pagar_vencimento",
       "columns": [
         "vencimento"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_contas_a_pagar_parcela",
+      "columns": [
+        "parcela"
       ],
       "unique": false
     }

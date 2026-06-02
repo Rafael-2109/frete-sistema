@@ -86,16 +86,16 @@
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_venda_status",
+      "name": "ix_hora_devolucao_venda_venda_id",
       "columns": [
-        "status"
+        "venda_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_hora_devolucao_venda_venda_id",
+      "name": "ix_hora_devolucao_venda_status",
       "columns": [
-        "venda_id"
+        "status"
       ],
       "unique": false
     }

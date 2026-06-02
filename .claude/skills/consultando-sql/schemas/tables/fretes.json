@@ -296,6 +296,13 @@
   ],
   "indices": [
     {
+      "name": "ix_fretes_odoo_purchase_order_id",
+      "columns": [
+        "odoo_purchase_order_id"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_fretes_frete_cte_id",
       "columns": [
         "frete_cte_id"
@@ -310,16 +317,16 @@
       "unique": false
     },
     {
-      "name": "ix_fretes_odoo_invoice_id",
+      "name": "ix_fretes_cnpj_cliente",
       "columns": [
-        "odoo_invoice_id"
+        "cnpj_cliente"
       ],
       "unique": false
     },
     {
-      "name": "ix_fretes_cnpj_cliente",
+      "name": "ix_fretes_odoo_invoice_id",
       "columns": [
-        "cnpj_cliente"
+        "odoo_invoice_id"
       ],
       "unique": false
     },
@@ -334,13 +341,6 @@
       "name": "ix_fretes_origem",
       "columns": [
         "origem"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_fretes_odoo_purchase_order_id",
-      "columns": [
-        "odoo_purchase_order_id"
       ],
       "unique": false
     }

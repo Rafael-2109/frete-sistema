@@ -85,16 +85,16 @@
       "unique": false
     },
     {
-      "name": "ix_assai_divergencia_nf_id",
+      "name": "ix_assai_divergencia_separacao_id",
       "columns": [
-        "nf_id"
+        "separacao_id"
       ],
       "unique": false
     },
     {
-      "name": "ix_assai_divergencia_separacao_id",
+      "name": "ix_assai_divergencia_nf_id",
       "columns": [
-        "separacao_id"
+        "nf_id"
       ],
       "unique": false
     }

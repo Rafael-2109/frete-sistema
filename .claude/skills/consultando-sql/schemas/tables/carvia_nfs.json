@@ -131,6 +131,13 @@
   ],
   "indices": [
     {
+      "name": "ix_carvia_nfs_status",
+      "columns": [
+        "status"
+      ],
+      "unique": false
+    },
+    {
       "name": "ix_carvia_nfs_numero_nf",
       "columns": [
         "numero_nf"
@@ -141,13 +148,6 @@
       "name": "ix_carvia_nfs_cnpj_destinatario",
       "columns": [
         "cnpj_destinatario"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_carvia_nfs_status",
-      "columns": [
-        "status"
       ],
       "unique": false
     },

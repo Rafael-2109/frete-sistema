@@ -81,13 +81,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_anexos_entidade_id",
-      "columns": [
-        "entidade_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_anexos_entidade_tipo",
       "columns": [
         "entidade_tipo"
@@ -106,6 +99,13 @@
       "name": "ix_carvia_anexos_ativo",
       "columns": [
         "ativo"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_anexos_entidade_id",
+      "columns": [
+        "entidade_id"
       ],
       "unique": false
     }

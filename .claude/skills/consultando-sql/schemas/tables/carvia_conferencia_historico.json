@@ -53,16 +53,16 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_conf_historico_frete_data",
+      "name": "ix_carvia_conferencia_historico_data",
       "columns": [
-        "frete_id",
         "data"
       ],
       "unique": false
     },
     {
-      "name": "ix_carvia_conferencia_historico_data",
+      "name": "ix_carvia_conf_historico_frete_data",
       "columns": [
+        "frete_id",
         "data"
       ],
       "unique": false
