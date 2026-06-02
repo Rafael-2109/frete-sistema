@@ -29,6 +29,8 @@ atualizado: 2026-06-02
 - `docs/inventario-2026-05/08-execucoes/README.md` — execucoes (indice da subpasta)
 - `docs/inventario-2026-05/99-historia/README.md` — historia (indice da subpasta)
 - `docs/inventario-2026-05/00-decisoes/` — decisoes (D0xx)
+  - `docs/inventario-2026-05/00-decisoes/D015-gold-script-aposentado-para-atomos.md` — ADR: "gold-script" aposentado em favor de atomos C1/C2 + subagente (2026-05-22)
+  - `docs/inventario-2026-05/00-decisoes/D016-evolucao-mecanismo-g1-g2-g3.md` — ADR: evolucao G1 (NF-heavy) -> G2 -> G3 (inventory adjustment direto, sem NF)
 - `docs/inventario-2026-05/01-premissas/` — premissas
 - `docs/inventario-2026-05/02-gotchas/` — gotchas (Gxxx)
 - `docs/inventario-2026-05/07-relatorios/` — relatorios
