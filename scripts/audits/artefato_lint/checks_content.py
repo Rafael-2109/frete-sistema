@@ -3,6 +3,7 @@ import json, re
 from pathlib import Path
 from .findings import Finding
 from . import meta as meta_mod
+from .text_utils import fenced_lines
 
 TABLE_FIELD = re.compile(r"\b([A-Z][a-zA-Z_]+)\.([a-z_][a-z0-9_]+)\b")  # Modelo.campo
 
@@ -14,16 +15,21 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
     text = Path(path).read_text(encoding="utf-8")
     tipo = meta_mod.parse_doc(text).fields.get("tipo", "")
     body = _body(text)
+    fenced = fenced_lines(body)
     out: list[Finding] = []
     # B5 markers proibidos (so em reference)
     if tipo == "reference":
         for i, line in enumerate(body.splitlines(), 1):
+            if i in fenced:
+                continue
             for pat in cfg.forbidden_markers_reference:
                 if re.search(pat, line):
                     out.append(Finding("B5", rel, i, f"marker proibido em reference: /{pat}/", "block"))
     # D4 hedge/time-sensitive (so em reference)
     if tipo == "reference":
         for i, line in enumerate(body.splitlines(), 1):
+            if i in fenced:
+                continue
             ll = line.lower()
             for w in cfg.banned_hedge + cfg.banned_time_sensitive:
                 if re.search(rf"\b{re.escape(w)}\b", ll):
@@ -36,6 +42,8 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
     sd = Path(root) / cfg.schemas_tables_dir
     if sd.exists():
         for i, line in enumerate(body.splitlines(), 1):
+            if i in fenced:
+                continue
             for modelo, campo in TABLE_FIELD.findall(line):
                 tbl = sd / f"{modelo.lower()}.json"
                 if tbl.exists():
@@ -93,7 +101,10 @@ def check_glossario(path: Path, root: Path, cfg, glossario: dict[str, str] | Non
         return []
     out: list[Finding] = []
     body = _body(text)
+    fenced = fenced_lines(body)
     for i, line in enumerate(body.splitlines(), 1):
+        if i in fenced:
+            continue
         ll = line.lower()
         for banido, canonico in glossario.items():
             if re.search(rf"\b{re.escape(banido)}\b", ll):

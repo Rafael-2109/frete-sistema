@@ -82,3 +82,10 @@ def test_c1_yaml_frontmatter_sem_tipo_nao_bloqueia(tmp_path):
     p = _w(tmp_path, ".claude/skills/foo/SKILL.md", "---\nname: foo\ndescription: bar\n---\n# Foo\nconteudo\n")
     fs = cs.check_file(p, tmp_path, C)
     assert [f for f in fs if f.code == "C1"] == []
+
+def test_c7_link_dentro_de_code_fence_nao_dispara(tmp_path):
+    # Links dentro de ``` ``` sao exemplos de codigo, nao referencias reais -> C7 nao dispara.
+    _w(tmp_path, "docs/INDEX.md", "<!-- doc:meta\ntipo: index\ncamada: L1\nhub: docs/INDEX.md\natualizado: 2026-06-01\nsot_de: —\n-->\n# i\n")
+    p = _w(tmp_path, "docs/a.md", HEAD + "# T\n## Fontes\nexemplo:\n```markdown\nveja [x](../nao_existe.md)\n```\nok\n")
+    fs = cs.check_file(p, tmp_path, C)
+    assert [f for f in fs if f.code == "C7"] == []

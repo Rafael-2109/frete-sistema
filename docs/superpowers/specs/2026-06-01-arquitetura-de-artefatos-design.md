@@ -15,7 +15,12 @@ atualizado: 2026-06-01
 
 ---
 
+## Contexto
+
+Este desenho nasceu do diagnostico de desorganizacao documental cronica do frete_sistema (~1157 .md, 163 scripts, com orfaos, duplicacao e SOT bicefala — workflows wf_ba978431 e wf_f1b6c258). Define um padrao determinístico em que a forma do artefato e validada no momento da criacao e do commit (nao por memoria do agente), cobrindo docs **e** scripts. O detalhamento do problema com evidencia esta na secao 0.
+
 ## Indice
+- [Contexto](#contexto)
 - [0. Problema (com evidencia)](#0-problema)
 - [1. Objetivo e principios](#1-objetivo)
 - [2. Modelo: artefato, tipo, camada](#2-modelo)
