@@ -4,7 +4,9 @@ Cobertura — 1 atomo por bloco:
   validar_invoice_constants   - 4 testes
   liberar_faturamento         - 5 testes
   polling_invoice             - 4 testes
-  validar_invoice_pos_robo    - 5 testes
+  validar_invoice_pos_robo    - 7 testes (inclui C1/GAP-1: ajuste_id_primeiro
+                                opcional p/ remessa avulsa — G029/G007 no
+                                invoice, G034 pulado)
   transmitir_sefaz            - 15 testes (inclui C1: ajuste_ids opcional +
                                 idempotencia primaria intra-Odoo anti-SEFAZ +
                                 fail-closed avulso em estado indeterminado)
@@ -340,6 +342,56 @@ def test_validar_pos_robo_ok_parcial_com_falha(svc):
     assert res['status'] == 'OK_PARCIAL'
     assert res['sub_etapas']['f5d6_price_zero_falha'] == 1
     assert res['sub_etapas']['f5d7_fiscal_setup_skip'] == 1  # nao-DEV
+
+
+def test_validar_pos_robo_avulso_sem_ajuste(svc):
+    """C1/GAP-1: ajuste_id_primeiro=None (remessa AVULSA) real-run ->
+    aplica G029 (payment_provider) + G007 (price_unit) NO INVOICE, NAO
+    retorna FALHA_AJUSTE_NAO_EXISTE, PULA G034 (fiscal_setup e' ajuste-
+    -especifico via acao_decidida), NAO chama safe_session_get."""
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.safe_session_get',
+    ) as mock_get, patch(
+        'app.odoo.estoque.scripts.faturamento.garantir_payment_provider',
+        return_value=True,
+    ) as mock_g029, patch(
+        'app.odoo.estoque.scripts.faturamento.corrigir_price_zero_em_invoice',
+        return_value=1,
+    ) as mock_g007, patch(
+        'app.odoo.estoque.scripts.faturamento.garantir_fiscal_setup',
+        return_value=True,
+    ) as mock_g034, patch(
+        'app.odoo.estoque.scripts.faturamento.commit_resilient',
+        return_value=True,
+    ):
+        res = svc.validar_invoice_pos_robo(
+            invoice_id=716448, ajuste_id_primeiro=None,
+            dry_run=False, confirmar=True,
+        )
+    assert res['status'] == 'OK'
+    # G029 + G007 aplicados no invoice (universais p/ SEFAZ)
+    assert res['sub_etapas']['f5d5_payment_provider_ok'] == 1
+    assert res['sub_etapas']['f5d6_price_zero_corrigidas'] == 1
+    mock_g029.assert_called_once()
+    mock_g007.assert_called_once()
+    # G034 PULADO (ajuste-especifico: depende de acao_decidida)
+    assert res['sub_etapas']['f5d7_fiscal_setup_skip'] == 1
+    assert res['sub_etapas']['f5d7_fiscal_setup_ok'] == 0
+    assert res['sub_etapas']['f5d7_fiscal_setup_falha'] == 0
+    mock_g034.assert_not_called()
+    # Sem ajuste: NAO re-fetch no DB local
+    mock_get.assert_not_called()
+
+
+def test_validar_pos_robo_avulso_dry_run(svc):
+    """C1/GAP-1: ajuste_id_primeiro=None em dry-run -> DRY_RUN_OK
+    (nao exige ajuste para planejar)."""
+    res = svc.validar_invoice_pos_robo(
+        invoice_id=716448, ajuste_id_primeiro=None,
+        dry_run=True,
+    )
+    assert res['status'] == 'DRY_RUN_OK'
+    assert all(v == 0 for v in res['sub_etapas'].values())
 
 
 # ============================================================

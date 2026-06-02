@@ -168,6 +168,31 @@ def _registrar_auditoria(
 
 
 # ============================================================
+# C1/GAP-1 — contexto de auditoria SEM ajuste (remessa AVULSA)
+# ============================================================
+
+class _AjusteAvulso:
+    """Contexto de auditoria nulo para remessa AVULSA (sem ciclo de inventario).
+
+    NAO e um AjusteEstoqueInventario (nao persiste, nao tem saldo/lote/acao).
+    Expoe APENAS os 3 atributos que os helpers universais G029/G007 leem para
+    auditoria (`.id`, `.ciclo`, `.acao_decidida`), permitindo reusar esses
+    helpers sobre o `account.move` sem ancorar num ajuste de ciclo.
+
+    Usado SO no caminho avulso de `validar_invoice_pos_robo` (ajuste_id_primeiro
+    None). G034 (`garantir_fiscal_setup`) NAO recebe este contexto: depende de
+    `acao_decidida` real (mapeamento DEV_*), entao e PULADO no avulso.
+    """
+
+    __slots__ = ('id', 'ciclo', 'acao_decidida')
+
+    def __init__(self, ciclo: str = '') -> None:
+        self.id = None
+        self.ciclo = ciclo
+        self.acao_decidida = None
+
+
+# ============================================================
 # Service Principal — FaturamentoInvoiceService
 # ============================================================
 
@@ -637,14 +662,14 @@ class FaturamentoInvoiceService:
         self,
         *,
         invoice_id: int,
-        ajuste_id_primeiro: int,
+        ajuste_id_primeiro: Optional[int] = None,
         perfil: str = PERFIL_INVENTARIO_INTER_COMPANY,
         ciclo: str = '',
         dry_run: bool = True,
         confirmar: bool = False,
         usuario: str = 'faturamento_svc',
     ) -> Dict[str, Any]:
-        """Aplica sub-etapas G029 + G007 + G034 apos robo criar invoice.
+        """Aplica sub-etapas G029 + G007 (+ G034 se houver ajuste) pos-robo.
 
         Delega `_invoice_helpers` (perfil 'inventario-inter-company'):
           - F5d.5 (G029): garantir_payment_provider — payment_provider_id=38
@@ -653,9 +678,25 @@ class FaturamentoInvoiceService:
 
         Helpers sao idempotentes (checam estado pre-existente).
 
+        C1/GAP-1 (DESACOPLAMENTO): `ajuste_id_primeiro` agora OPCIONAL. As
+        sub-etapas G029 (payment_provider) e G007 (price_unit) operam sobre o
+        proprio `account.move` (NAO sobre o ajuste) e sao UNIVERSAIS — ambas
+        necessarias para o SEFAZ aceitar a NF. Logo rodam sempre, com ou sem
+        ajuste. O ajuste so e usado para auditoria nessas duas.
+
+        G034 (`garantir_fiscal_setup`) e' ajuste-ESPECIFICO: corrige
+        fiscal_position/tipo_pedido a partir de `ajuste.acao_decidida` (apenas
+        acoes DEV_* do ciclo de inventario tem mapeamento). Sem ajuste nao ha
+        `acao_decidida` para decidir o fix -> G034 e' PULADO no avulso (contado
+        como f5d7_fiscal_setup_skip).
+
+        Sem ajuste (remessa AVULSA): pula o re-fetch/`FALHA_AJUSTE_NAO_EXISTE`
+        e a auditoria das sub-etapas usa contexto nulo (`_AjusteAvulso`).
+
         Args:
             invoice_id: account.move.id recem-criada pelo robo.
-            ajuste_id_primeiro: id do primeiro ajuste (helpers leem acao_decidida).
+            ajuste_id_primeiro: id do primeiro ajuste (auditoria + acao_decidida
+                de G034). None = remessa avulsa: G029+G007 no invoice, G034 skip.
             perfil: V1 = 'inventario-inter-company'.
                 Outros perfis raise NotImplementedError nos helpers.
             ciclo: identificador do ciclo (auditoria).
@@ -722,17 +763,25 @@ class FaturamentoInvoiceService:
             return out
 
         # REAL-RUN: aplicar sub-etapas (cada uma try/except individual — D6)
-        # Re-fetch ajuste fresco
-        from app.odoo.models import AjusteEstoqueInventario  # lazy
-        primeiro = safe_session_get(AjusteEstoqueInventario, ajuste_id_primeiro)
-        if primeiro is None:
-            out['status'] = 'FALHA_AJUSTE_NAO_EXISTE'
-            out['erro'] = (
-                f'Ajuste id={ajuste_id_primeiro} nao encontrado no DB local '
-                f'(re-fetch retornou None — pode ter sumido pos-commit).'
+        # C1/GAP-1: re-fetch do ajuste SO quando ajuste_id_primeiro fornecido.
+        # Remessa avulsa (None) usa contexto nulo p/ auditoria das sub-etapas
+        # universais (G029/G007) e PULA G034 (ajuste-especifico).
+        avulso = ajuste_id_primeiro is None
+        if avulso:
+            primeiro = _AjusteAvulso(ciclo=ciclo)
+        else:
+            from app.odoo.models import AjusteEstoqueInventario  # lazy
+            primeiro = safe_session_get(
+                AjusteEstoqueInventario, ajuste_id_primeiro,
             )
-            out['tempo_ms'] = int((time.time() - t0) * 1000)
-            return out
+            if primeiro is None:
+                out['status'] = 'FALHA_AJUSTE_NAO_EXISTE'
+                out['erro'] = (
+                    f'Ajuste id={ajuste_id_primeiro} nao encontrado no DB local '
+                    f'(re-fetch retornou None — pode ter sumido pos-commit).'
+                )
+                out['tempo_ms'] = int((time.time() - t0) * 1000)
+                return out
 
         # F5d.5 — G029 payment_provider
         try:
@@ -766,25 +815,36 @@ class FaturamentoInvoiceService:
             out['sub_etapas']['f5d6_price_zero_falha'] = 1
 
         # F5d.7 — G034 fiscal_setup (apenas DEV_*)
-        try:
-            ok_f5d7 = garantir_fiscal_setup(
-                self.odoo, invoice_id, primeiro,
-                perfil=perfil, executado_por=usuario,
+        # C1/GAP-1: G034 e' ajuste-especifico (depende de acao_decidida p/
+        # mapear FP/tipo). Sem ajuste (avulso) nao ha como decidir o fix ->
+        # PULAR e contar como skip (NAO falha — a NF avulsa ja' vem com a FP
+        # do picking_type/robo, que e' o esperado fora do ciclo de inventario).
+        if avulso:
+            logger.info(
+                f'F5d.7 fiscal_setup invoice {invoice_id}: PULADO (remessa '
+                f'avulsa sem ajuste — G034 depende de acao_decidida do ciclo).'
             )
-            if ok_f5d7:
-                # Helper retorna True tambem para acao nao-DEV (skip).
-                # Heuristica: se acao NAO eh DEV_*, contar como skip; senao OK.
-                if primeiro.acao_decidida and primeiro.acao_decidida.startswith('DEV_'):
-                    out['sub_etapas']['f5d7_fiscal_setup_ok'] = 1
+            out['sub_etapas']['f5d7_fiscal_setup_skip'] = 1
+        else:
+            try:
+                ok_f5d7 = garantir_fiscal_setup(
+                    self.odoo, invoice_id, primeiro,
+                    perfil=perfil, executado_por=usuario,
+                )
+                if ok_f5d7:
+                    # Helper retorna True tambem para acao nao-DEV (skip).
+                    # Heuristica: se acao NAO eh DEV_*, contar como skip; senao OK.
+                    if primeiro.acao_decidida and primeiro.acao_decidida.startswith('DEV_'):
+                        out['sub_etapas']['f5d7_fiscal_setup_ok'] = 1
+                    else:
+                        out['sub_etapas']['f5d7_fiscal_setup_skip'] = 1
                 else:
-                    out['sub_etapas']['f5d7_fiscal_setup_skip'] = 1
-            else:
+                    out['sub_etapas']['f5d7_fiscal_setup_falha'] = 1
+            except NotImplementedError:
+                raise
+            except Exception as e:
+                logger.warning(f'F5d.7 fiscal_setup invoice {invoice_id}: {e}')
                 out['sub_etapas']['f5d7_fiscal_setup_falha'] = 1
-        except NotImplementedError:
-            raise
-        except Exception as e:
-            logger.warning(f'F5d.7 fiscal_setup invoice {invoice_id}: {e}')
-            out['sub_etapas']['f5d7_fiscal_setup_falha'] = 1
 
         # commit sub-etapas — falha NAO derruba (D6)
         commit_resilient()

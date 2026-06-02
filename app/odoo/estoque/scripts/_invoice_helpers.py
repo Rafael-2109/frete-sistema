@@ -99,7 +99,7 @@ FISCAL_SETUP_POR_ACAO_INVENTARIO: Dict[str, Dict[str, Any]] = {
 def _registrar_auditoria(
     *,
     ciclo: str,
-    ajuste_id: int,
+    ajuste_id: Optional[int],
     fase: str,
     acao: str,
     status: str,
@@ -115,11 +115,16 @@ def _registrar_auditoria(
 
     Lazy import OperacaoOdooAuditoria — evita circular em testes.
     Falha de auditoria NAO deve quebrar pipeline real (pattern service legado L569).
+
+    C1/GAP-1: `ajuste_id` pode ser None (remessa AVULSA sem ciclo de
+    inventario). Nesse caso o external_id usa o token 'AVULSO' e
+    registro_id=None (auditoria preservada, sem ancorar num ajuste).
     """
     try:
         from app.odoo.models import OperacaoOdooAuditoria  # lazy
+        ajuste_token = f'A{ajuste_id:06d}' if ajuste_id is not None else 'AVULSO'
         external_id = (
-            f'INV-{ciclo}-A{ajuste_id:06d}-{fase}-{uuid.uuid4().hex[:8]}'
+            f'INV-{ciclo}-{ajuste_token}-{fase}-{uuid.uuid4().hex[:8]}'
         )
         OperacaoOdooAuditoria.registrar(
             external_id=external_id,
