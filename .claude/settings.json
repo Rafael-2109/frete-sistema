@@ -70,6 +70,34 @@
             "command": "python3 .claude/hooks/enriquecer-feature-dev.py"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/pad_creation_gate.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/pad_sot_modulo.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/pad_stop_completude.py"
+          }
+        ]
       }
     ],
     "PostToolUse": [
