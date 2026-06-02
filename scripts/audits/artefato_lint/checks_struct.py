@@ -8,7 +8,7 @@ from . import meta as meta_mod
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 HEADING = re.compile(r"^#{1,6}\s+(.*)$", re.M)
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-PAPEL_BLOCKQUOTE = re.compile(r"\*\*\s*papel\s*:", re.IGNORECASE)
+PAPEL_BLOCKQUOTE = re.compile(r"\*\*\s*papel\b", re.IGNORECASE)
 
 def _norm(s: str) -> str:
     s = normalize("NFKD", s).encode("ascii", "ignore").decode().lower().strip()

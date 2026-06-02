@@ -62,6 +62,13 @@ def test_c5_papel_via_blockquote_ok(tmp_path):
     fs = cs.check_file(p, tmp_path, C)
     assert [f for f in fs if f.severity == "block"] == []
 
+def test_c5_papel_com_texto_ok(tmp_path):
+    """reference com `> **Papel deste doc:**` (texto antes do :) -> sem block."""
+    _w(tmp_path, "docs/INDEX.md", "<!-- doc:meta\ntipo: index\ncamada: L1\nhub: docs/INDEX.md\natualizado: 2026-06-01\nsot_de: —\n-->\n# i\n")
+    p = _w(tmp_path, "docs/a.md", HEAD + "# T\n> **Papel deste doc:** x\n## Fontes\nok\n")
+    fs = cs.check_file(p, tmp_path, C)
+    assert [f for f in fs if f.severity == "block"] == []
+
 def test_c5_reference_sem_papel(tmp_path):
     """reference com ## Fontes mas SEM nenhum **Papel:** -> C5."""
     _w(tmp_path, "docs/INDEX.md", "<!-- doc:meta\ntipo: index\ncamada: L1\nhub: docs/INDEX.md\natualizado: 2026-06-01\nsot_de: —\n-->\n# i\n")
