@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Wrapper PAD-A: encadeia ui-lint + doc-lint + script-lint. Chamado pelo
+# dispatcher instalado em .git/hooks/pre-commit (gitdir comum). set -e faz
+# qualquer lint que bloqueie abortar o commit.
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+bash scripts/hooks/pre-commit-ui-lint.sh
+bash scripts/hooks/pre-commit-doc-lint.sh
+bash scripts/hooks/pre-commit-script-lint.sh
