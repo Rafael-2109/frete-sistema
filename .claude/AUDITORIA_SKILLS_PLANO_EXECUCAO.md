@@ -1,7 +1,8 @@
 # Plano de Execução das Sugestões da Auditoria de Skills
 
 > Companion de `AUDITORIA_SKILLS_2026-05-29.md`. Decisões tomadas com o Rafael em 2026-05-30.
-> Status: **Onda A interrompida por degradação de I/O da sessão (reads truncando) — retomar em sessão nova.**
+> Status (2026-06-02): **Ondas 0/A/B/C(a) MERGEADAS. Onda D + E1 + F(venda) + F(carregamento) EXECUTADAS em 4 branches separadas, NÃO mergeadas (ver §Onda E/F — RESULTADO). Prioridade Rafael: F > G > mais testes. Falta: F `transferencia-saldo-codigo` + Onda G.**
+> Forense git (wf_192add78) confirmou: os 6 commits da auditoria (6c5cfe037, 7c6ecb0fd, f2c39789f, 894f6fc63, 869fb3052, 88e59dfb1) são TODOS alcançáveis a partir do HEAD atual (d87765cc8); conteúdo presente no working tree (dpg=0, buscando-rotas=0, ROUTING=51, 3 scripts órfãos ABSENT, py_compile OK). Branches/worktrees skills/onda-b e skills/onda-c já removidos (cleanup pós-merge). **C(b) REVERTIDA por decisão do Rafael** (ANTIPADRÕES + CHECKLIST seguem inline em faturando-odoo). **Onda D concluída** — ver §Onda D — RESULTADO. Próximo gate: E (testes, baixo risco).
 
 ## Decisões (Rafael, 2026-05-30)
 - **Branch**: worktree por onda (a partir do HEAD da `main`).
@@ -19,12 +20,12 @@
 | Onda | Conteúdo | Risco | Runtime? | Status |
 |---|---|---|---|---|
 | 0 (P0) | consultando-estoque-loja (bug estoque), consultando-sentry (tools fantasma), acompanhando-pedido-compra-assai (status mortos) | — | sim/doc | ✅ FEITO+VERIFICADO (uncommitted na main) |
-| A | staleness doc-only (7 itens) | Baixo | NÃO | ⏸️ worktree criado, edits NÃO iniciadas (I/O) |
-| B | infra: ROUTING contagem, tool_skill_mapper, remover 3 órfãos operando-ssw | Baixo-médio | não | ⬜ |
-| C | hardcodes (postgresId, model IDs), faturando-odoo −118L p/ references | Médio | não | ⬜ |
-| D | consolidar resolver_entidades (medir drift → SoT em app/ → migrar c/ teste regressão) | Médio-alto | SIM | ⬜ |
-| E | testes: conciliando-transferencias-internas, CT-e operando-ssw | Baixo | não | ⬜ |
-| F | construir skills faltantes (HORA venda M3, carregamento Assai) — brainstorming+spec antes | Médio | sim | ⬜ |
+| A | staleness doc-only (7 itens) | Baixo | NÃO | ✅ MERGEADA (544f4eb35) |
+| B | infra: ROUTING contagem, tool_skill_mapper, remover 3 órfãos operando-ssw | Baixo-médio | não | ✅ MERGEADA (894f6fc63 + 88e59dfb1) — viva na main |
+| C | hardcodes (postgresId), faturando-odoo −118L p/ references | Médio | não | ✅ C(a) MERGEADA (869fb3052); ❌ C(b) REVERTIDA (manter ANTIPADRÕES inline) |
+| D | consolidar resolver_entidades → SoT em `app/resolvedores/` | Médio-alto | SIM | ✅ **EXECUTADA local 2026-06-01** (commit `c694c6c2f`, branch `skills/onda-d-resolvedores`, NÃO pushada). 97 pytest, 3 reviewers, baseline zero-regressão, bug accent corrigido. **Merge pendente** (decisão Rafael). Detalhes ↓ §Onda D — RESULTADO |
+| E | testes: conciliando-transferencias-internas, CT-e operando-ssw | Baixo | não | ✅ **E1 FEITA** (branch `skills/onda-e-testes`, 68 testes pytest determinístico; evals LLM VETADOS por custo; resto = backlog) |
+| F | construir skills faltantes (venda HORA M3, carregamento Assai, transferencia-saldo-codigo) | Médio | sim | 🟡 **2/3 FEITAS** (`consultando-venda-loja` + `carregando-motos-assai` em branches; falta `transferencia-saldo-codigo`) |
 | G | renames (4 substantivos + sufixo -hora) — só após aprovação | ALTO (breaking) | sim | ⬜ |
 
 ## ONDA A — escopo exato (doc-only, nenhum .py muda)
@@ -57,6 +58,39 @@ Verificação Onda A: `git diff` no worktree + grep das refs antigas (devem sumi
 
 **Método seguro**: 1 nome por commit; `grep -rIl "<nome-antigo>"` (excluindo .venv/worktrees) ANTES → atualizar TODAS as ocorrências → `grep` DEPOIS provando zero refs órfãs (exceto histórico). O risco é puramente "esquecer um site de referência" — eliminado por grep exaustivo. Candidatos: visao-produto, validacao-nf-po, razao-geral-odoo, recebimento-fisico-odoo (+ cluster HORA p/ simetria -hora, maior).
 
-## Retomar
-- Onda A: worktree pronto; aplicar os 7 itens acima com o protocolo; `git diff` p/ revisão.
-- P0: decidir commit (na main ou mover p/ branch própria).
+## Onda D — RESULTADO (2026-06-01)
+Consolidou `resolver_entidades` (monolito `gerindo-expedicao` + split `resolvendo-entidades`) em
+`app/resolvedores/` (12 arq, ORM, núcleo + 2 fachadas: "rica" p/ os 9 importadores Python via shim;
+`_cli` p/ os 7 CLIs / 8 subagentes). Scripts viraram wrappers finos. −2858 linhas de duplicação.
+Validado: **97 pytest**, 3 code-reviewers, baseline wrapper-novo vs CLI-antigo = **zero regressão**
+(exceto cidade-accent corrigido de propósito).
+
+- **Onde**: worktree `frete_sistema_resolvedores`, branch `skills/onda-d-resolvedores`, commit `c694c6c2f` (NÃO pushado).
+- **SOT da Onda D** (detalhe completo): `docs/superpowers/specs/2026-06-01-consolidacao-resolvedores-design.md` (no worktree) + memória `onda_d_resolvedores.md`.
+- **Correções ao DRIFT_MAP** (reverificadas ao vivo): **8 subagentes** (não 10); bug accent era **só da split**; `app/utils/grupo_empresarial.py` **INCOMPATÍVEL** (formato de prefixo diferente — não acoplar); `ABREVIACOES_PRODUTO` morto no monolito (SoT = `product_search`).
+- **Mudanças de comportamento deliberadas** (Rafael): `formatar_sugestao_pedido` (TypeError) corrigido; uniformização `qtd_saldo>0` nas funções ricas com `fonte=separacao` (afeta `consultando_situacao_pedidos`).
+- **Pendências port-fiel ADIADAS** (não-regressão; candidatas a onda futura): `resolver_cidade` rico carrega 27k linhas via `query.all()` (sem caller ativo); wildcards `%`/`_` no termo afetam ILIKE.
+
+## Onda E/F — RESULTADO (2026-06-02)
+
+**4 branches executadas, NENHUMA mergeada/pushada** (worktrees preservados):
+
+| Branch | Worktree | Entrega | Verificação |
+|---|---|---|---|
+| `skills/onda-d-resolvedores` | `frete_sistema_resolvedores` | resolver_entidades → app/resolvedores | 97 pytest (sessão anterior) |
+| `skills/onda-e-testes` (`0aa9155f2`) | `frete_sistema_onda_e` | pytest p/ conciliando-transf + CT-e operando-ssw | 68 testes, $0 |
+| `skills/onda-f-venda-hora` | `frete_sistema_onda_f` | skill READ `consultando-venda-loja` (HORA M3 venda) + wrapper `venda_service.validar_desconto_tabela` | 13 testes |
+| `skills/onda-f-carregamento-assai` | `frete_sistema_onda_f2` | skill READ+WRITE `carregando-motos-assai` (carregamento Assaí) | 13 testes, PAD-A-conforme |
+
+**Decisões/aprendizados (em memória):**
+- **Evals LLM VETADOS por custo** → cobertura de skill = **pytest determinístico** (extrai código de markdown / importlib de scripts + mock; zero DB/PROD/token). Ver `feedback_evals_llm_caros_preferir_pytest`.
+- **Prioridade Rafael: F > G > mais testes** (criar skills faltantes > renomear > cobrir testes de baixo risco).
+- **PAD-A** (mergeado `357193fbe`): docs novas conformadas (spec=`explanation`, plano=`how-to`, TOC heading=`Indice`, SKILL.md isento de doc:meta). Gotchas em `pad_a_conformance_gotchas`.
+- **Resto da Onda E = backlog** (READ fat-skills, SSW cadastro): baixo ROI; risco-alto WRITE já coberto (cluster estoque-odoo via tests/odoo/services, SPED e Assaí já têm pytest). **NÃO iterar.**
+- **DEFERIDO p/ migração PAD-A project-wide:** retrofit de `doc:meta` em 2 docs legados tocados pelo wiring (`.claude/references/ROUTING_SKILLS.md`, `app/motos_assai/CLAUDE.md`) — flagados C1 pelo `--enforce-touched` (violação pré-existente, NÃO introduzida).
+
+## Próximos passos (ordem sugerida — prioridade F > G > testes)
+1. **Onda F — `transferencia-saldo-codigo`** (ganho rápido): service + teste JÁ EXISTEM (`tests/odoo/services/test_transferencia_saldo_codigo_service.py`); falta só o **wrapper de skill**. Brainstorming curto (READ vs WRITE) + spec + plano + pytest, PAD-A-conforme. ⬜
+2. **Onda G** (ALTO, breaking): renames (4 substantivos: visao-produto, validacao-nf-po, razao-geral-odoo, recebimento-fisico-odoo + cluster `-hora` simétrico ao `-assai`) — só após aprovação; método em §Rename Safety; grep exaustivo, 1 nome/commit. ⬜
+3. **Integração das 4 branches** (timing do Rafael): merge/PR de D/E/F-venda/F-carregamento. `main` local pode estar à frente de `origin/main` — alinhar antes. Merge de D dispara deploy do gunicorn-agente (runtime).
+4. **Migração PAD-A project-wide** (separada): retrofit `doc:meta` nos docs legados gerenciados (ROUTING_SKILLS.md, app/*/CLAUDE.md, etc.). NÃO misturar com branches de skill.
