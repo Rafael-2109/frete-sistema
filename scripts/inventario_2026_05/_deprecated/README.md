@@ -36,6 +36,6 @@ atualizado: 2026-06-02
 | fat_lf_03_prestage.py | SUPERSEDED | superado por quant.py / transfer.py | app/odoo/estoque/scripts/quant.py |
 | 15_transferir_preprod_para_estoque_fb.py | SUPERSEDED | superado por quant.py / transfer.py | app/odoo/estoque/scripts/quant.py |
 | corrigir_reserved_negativo_fb.py | SUPERSEDED | superado por reserva.py (resetar_reserva) | app/odoo/estoque/scripts/reserva.py |
-| fat_lf_02_carregar.py | SUPERSEDED | superado por orchestrators/inventario_pipeline.py | app/odoo/estoque/scripts/orchestrators/inventario_pipeline.py |
-| fat_lf_04_executar.py | SUPERSEDED | superado por orchestrators/inventario_pipeline.py | app/odoo/estoque/scripts/orchestrators/inventario_pipeline.py |
+| fat_lf_02_carregar.py | SUPERSEDED | superado por orchestrators/inventario_pipeline.py | app/odoo/estoque/orchestrators/inventario_pipeline.py |
+| fat_lf_04_executar.py | SUPERSEDED | superado por orchestrators/inventario_pipeline.py | app/odoo/estoque/orchestrators/inventario_pipeline.py |
 | limpar_quants_ghost_210030005_fb.py | SUPERSEDED | superado por quant.py (zerar por quant_id) | app/odoo/estoque/scripts/quant.py |
