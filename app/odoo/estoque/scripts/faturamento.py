@@ -828,17 +828,26 @@ class FaturamentoInvoiceService:
           - l10n_br_situacao_nf em {autorizado, excecao_autorizado}; OU
           - l10n_br_chave_nf preenchida com 44 digitos (chave de acesso).
 
-        Conservador por seguranca SEFAZ (IRREVERSIVEL): se NAO conseguir
-        confirmar positivamente a autorizacao (read vazio/erro/formato
-        inesperado), retorna autorizado=False — i.e., NAO bloqueia a
-        transmissao por leitura inconclusiva (o caller, quando tem
-        ajuste_ids, ainda conta com a camada D8.3).
+        Sinaliza `inconclusivo=True` quando NAO conseguiu LER o estado
+        (read lanca excecao / retorna nao-lista / lista vazia / registro
+        nao-dict). O caller decide a politica:
+          - caminho COM ajuste_ids: trata inconclusivo como autorizado=False
+            e prossegue (D8.3 e a 2a camada anti-dupla-transmissao);
+          - caminho AVULSO (sem ajuste_ids): FAIL-CLOSED — aborta com
+            FALHA_ESTADO_INDETERMINADO (sem 2a camada, o custo de dupla
+            transmissao SEFAZ supera o de um falso bloqueio recuperavel).
+
+        Quando o read RETORNA um account.move valido mas NAO-autorizado,
+        `inconclusivo=False` (leitura conclusiva: a NF realmente nao foi
+        transmitida) — caminho avulso pode prosseguir normalmente.
 
         Returns:
-            dict {autorizado: bool, situacao_nf: str|None, chave_nfe: str|None}
+            dict {autorizado: bool, inconclusivo: bool,
+                  situacao_nf: str|None, chave_nfe: str|None}
         """
         resultado: Dict[str, Any] = {
             'autorizado': False,
+            'inconclusivo': True,
             'situacao_nf': None,
             'chave_nfe': None,
         }
@@ -850,19 +859,21 @@ class FaturamentoInvoiceService:
         except Exception as e:
             logger.warning(
                 f'C1 idempotencia intra-Odoo: read account.move {invoice_id} '
-                f'falhou ({e}). Tratando como NAO-confirmado (autorizado=False).'
+                f'falhou ({e}). Estado INDETERMINADO (inconclusivo=True).'
             )
             return resultado
 
         # read deve retornar uma lista com o registro; qualquer outra coisa
         # (None, [], MagicMock nao configurado em teste, formato inesperado)
-        # = leitura inconclusiva -> NAO confirma autorizacao.
+        # = leitura inconclusiva -> NAO confirma estado (inconclusivo=True).
         if not isinstance(registros, list) or not registros:
             return resultado
         reg = registros[0]
         if not isinstance(reg, dict):
             return resultado
 
+        # Leitura conclusiva: lemos o account.move com sucesso.
+        resultado['inconclusivo'] = False
         situacao = reg.get(ACCOUNT_MOVE_SITUACAO_NF_FIELD) or None
         chave = reg.get(ACCOUNT_MOVE_CHAVE_NF_FIELD) or None
         resultado['situacao_nf'] = situacao
@@ -908,6 +919,11 @@ class FaturamentoInvoiceService:
              Se ja autorizado (situacao in {autorizado, excecao_autorizado}
              OU chave de 44 digitos preenchida) -> IDEMPOTENT_SKIP. Esta e a
              guarda anti-dupla-transmissao independente de ciclo/ajuste.
+             FAIL-CLOSED avulso (REAL-RUN): se a leitura for INCONCLUSIVA
+             (read excecao/vazio/formato inesperado) E nao houver ajuste_ids
+             (sem 2a camada) -> FALHA_ESTADO_INDETERMINADO (NAO transmite).
+             Com ajuste_ids, leitura inconclusiva prossegue (D8.3 protege).
+             Em dry-run nao aplica (nada e transmitido).
           2. SECUNDARIA (D8.3, SO se ajuste_ids fornecido): skip se QUALQUER
              ajuste ja em F5e_SEFAZ_OK ou status=EXECUTADO (cobre crash
              mid-loop antes do account.move refletir a chave).
@@ -942,7 +958,8 @@ class FaturamentoInvoiceService:
             dict com:
               status: 'DRY_RUN_OK' | 'OK' | 'IDEMPOTENT_SKIP' |
                       'BLOQUEADO_SEM_CONFIRMAR_SEFAZ' | 'FALHA_CONFIG' |
-                      'FALHA_COMMIT_PRE' | 'FALHA_COMMIT_POS_SEFAZ_OK' | 'FALHA'
+                      'FALHA_ESTADO_INDETERMINADO' | 'FALHA_COMMIT_PRE' |
+                      'FALHA_COMMIT_POS_SEFAZ_OK' | 'FALHA'
               invoice_id: input
               chave_nfe: chave SEFAZ (em OK ou IDEMPOTENT_SKIP)
               situacao_nf: 'autorizado' | outro (registrar erro_msg se nao)
@@ -989,6 +1006,26 @@ class FaturamentoInvoiceService:
                 f'autorizado (situacao_nf={idemp["situacao_nf"]!r}, '
                 f'chave={idemp["chave_nfe"]}). NAO retransmite (SEFAZ '
                 f'irreversivel).'
+            )
+            out['tempo_ms'] = int((time.time() - t0) * 1000)
+            return out
+
+        # C1 FAIL-CLOSED (caminho AVULSO, REAL-RUN): sem ajuste_ids NAO ha 2a
+        # camada (D8.3). Se a leitura do account.move foi INCONCLUSIVA (read
+        # excecao/nao-lista/vazio), NAO ha como garantir que a NF nao foi
+        # transmitida -> ABORTA antes de transmitir (custo de dupla-transmissao
+        # SEFAZ supera o de um falso bloqueio recuperavel). Com ajuste_ids:
+        # prossegue (D8.3 ainda protege; inconclusivo tratado como
+        # autorizado=False). Em dry-run NAO aplica: nada e transmitido, entao
+        # nao ha risco SEFAZ — o operador planeja normalmente (DRY_RUN_OK).
+        if not dry_run and not ajuste_ids and idemp['inconclusivo']:
+            out['status'] = 'FALHA_ESTADO_INDETERMINADO'
+            out['erro'] = (
+                f'Leitura do account.move {invoice_id} inconclusiva '
+                f'(read excecao/vazio/formato inesperado). Abortando para '
+                f'evitar risco de dupla-transmissao SEFAZ (fail-closed '
+                f'avulso — sem ajuste_ids nao ha 2a camada de idempotencia). '
+                f'Operador deve re-tentar apos confirmar o estado da NF.'
             )
             out['tempo_ms'] = int((time.time() - t0) * 1000)
             return out

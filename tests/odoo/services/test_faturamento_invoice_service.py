@@ -5,13 +5,16 @@ Cobertura — 1 atomo por bloco:
   liberar_faturamento         - 5 testes
   polling_invoice             - 4 testes
   validar_invoice_pos_robo    - 5 testes
-  transmitir_sefaz            - 13 testes (inclui C1: ajuste_ids opcional +
-                                idempotencia primaria intra-Odoo anti-SEFAZ)
+  transmitir_sefaz            - 15 testes (inclui C1: ajuste_ids opcional +
+                                idempotencia primaria intra-Odoo anti-SEFAZ +
+                                fail-closed avulso em estado indeterminado)
 
 C1 (v25+): transmitir_sefaz desacoplado de AjusteEstoqueInventario —
   ajuste_ids OPCIONAL; idempotencia primaria le o proprio account.move
   (l10n_br_situacao_nf / l10n_br_chave_nf); D8.3 vira camada de auditoria
-  opcional (so quando ajuste_ids fornecido). Compat retroativa total.
+  opcional (so quando ajuste_ids fornecido). FAIL-CLOSED no caminho avulso:
+  leitura inconclusiva do account.move -> FALHA_ESTADO_INDETERMINADO (NAO
+  transmite). Compat retroativa total.
 
 Pattern: cada teste usa MagicMock(odoo) para simular XML-RPC + dry-run
 sempre planeja (corrige AP4) + real-run idempotente. Mocks de:
@@ -500,6 +503,44 @@ def test_transmitir_idempotent_intra_odoo_so_chave(svc, odoo_mock):
         )
     assert res['status'] == 'IDEMPOTENT_SKIP'
     assert res['chave_nfe'] == chave
+    mock_playwright.assert_not_called()
+
+
+def test_transmitir_avulso_fail_closed_read_excecao(svc, odoo_mock):
+    """C1 FAIL-CLOSED: caminho avulso (ajuste_ids=None) + read do
+    account.move lanca excecao -> FALHA_ESTADO_INDETERMINADO. Playwright
+    NUNCA chamado (custo dupla-transmissao SEFAZ > falso bloqueio)."""
+    odoo_mock.read.side_effect = ConnectionError('Odoo XML-RPC indisponivel')
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.recebimento.services.playwright_nfe_transmissao.transmitir_nfe_via_playwright',
+    ) as mock_playwright:
+        res = svc.transmitir_sefaz(
+            invoice_id=716448, ajuste_ids=None,
+            dry_run=False, confirmar_sefaz=True,
+        )
+    assert res['status'] == 'FALHA_ESTADO_INDETERMINADO'
+    assert 'inconclusiva' in res['erro']
+    mock_playwright.assert_not_called()
+
+
+def test_transmitir_avulso_fail_closed_read_vazio(svc, odoo_mock):
+    """C1 FAIL-CLOSED: caminho avulso + read retorna [] (invoice sumiu /
+    sem permissao) -> FALHA_ESTADO_INDETERMINADO, Playwright NAO chamado."""
+    odoo_mock.read.return_value = []
+    with patch(
+        'app.odoo.estoque.scripts.faturamento.commit_resilient',
+        return_value=True,
+    ), patch(
+        'app.recebimento.services.playwright_nfe_transmissao.transmitir_nfe_via_playwright',
+    ) as mock_playwright:
+        res = svc.transmitir_sefaz(
+            invoice_id=716448, ajuste_ids=None,
+            dry_run=False, confirmar_sefaz=True,
+        )
+    assert res['status'] == 'FALHA_ESTADO_INDETERMINADO'
     mock_playwright.assert_not_called()
 
 
