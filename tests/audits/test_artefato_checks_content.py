@@ -31,3 +31,11 @@ def test_acuracia_campo_inexistente(tmp_path):
     p = _w(tmp_path, "docs/a.md", REF + "use Separacao.campo_inexistente\n## Fontes\nFONTE: x\n")
     fs = cc.check_file(p, tmp_path, C)
     assert any(f.code == "D3" for f in fs)
+
+def test_d3_campo_dentro_de_code_fence_nao_dispara(tmp_path):
+    # Modelo.campo dentro de ``` ``` e exemplo de codigo, nao afirmacao -> D3 nao dispara.
+    sd = tmp_path / ".claude/skills/consultando-sql/schemas/tables"; sd.mkdir(parents=True)
+    (sd / "separacao.json").write_text('{"fields":[{"name":"qtd_saldo"}]}', encoding="utf-8")
+    p = _w(tmp_path, "docs/a.md", REF + "exemplo:\n```python\nSeparacao.campo_inexistente\n```\n## Fontes\nFONTE: x\n")
+    fs = cc.check_file(p, tmp_path, C)
+    assert [f for f in fs if f.code == "D3"] == []

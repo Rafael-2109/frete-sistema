@@ -4,6 +4,7 @@ from pathlib import Path
 from unicodedata import normalize
 from .findings import Finding
 from . import meta as meta_mod
+from .text_utils import fenced_lines
 
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 HEADING = re.compile(r"^#{1,6}\s+(.*)$", re.M)
@@ -58,7 +59,10 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
     # Resolution rule:
     #   - links starting with './' or '../' OR containing no '/' → relative to FILE's directory
     #   - links containing '/' but NOT starting with '.' → relative to ROOT
+    fenced = fenced_lines(text)
     for i, line in enumerate(text.splitlines(), 1):
+        if i in fenced:
+            continue  # links em exemplos de codigo (``` ```) nao sao referencias reais
         for target in MD_LINK.findall(line):
             t = target.split("#")[0].strip()
             if not t or t.startswith(("http://", "https://", "mailto:")):
