@@ -12,6 +12,7 @@ skills:
   - acompanhando-saida-assai
   - conferindo-recibo-assai
   - registrando-evento-moto-assai
+  - carregando-motos-assai
 ---
 
 # Gestor Motos Assai

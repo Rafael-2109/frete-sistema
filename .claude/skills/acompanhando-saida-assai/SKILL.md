@@ -17,6 +17,7 @@ description: >-
   - Estoque (usar consultando-estoque-assai)
   - Chassi individual (usar rastreando-chassi-assai)
   - Pedidos/compras (usar acompanhando-pedido-compra-assai)
+  - Carregamento (etapa Sep->NF) (usar carregando-motos-assai)
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

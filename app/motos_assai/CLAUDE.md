@@ -501,6 +501,7 @@ Para consultas e operações via Claude Code ou agente web Nacom Goya:
 | `acompanhando-saida-assai` | READ | Separações + NFs Q.P.A. (match BATEU/DIVERGENTE) |
 | `conferindo-recibo-assai` | READ + WRITE | Recibos Motochefe + wizard A→B→C→D |
 | `registrando-evento-moto-assai` | WRITE | Montagem, disponibilizar, separar, reverter, cancelar |
+| `carregando-motos-assai` | READ + WRITE | Carregamento (Sep→NF): listar/detalhar + iniciar/escanear/finalizar/cancelar/alterar |
 
 Agente orquestrador: `gestor-motos-assai` (sub-agent — `model: sonnet`).
 
