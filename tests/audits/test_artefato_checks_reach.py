@@ -64,3 +64,18 @@ def test_hub_missing_file():
             "a.md": {"tipo": "reference", "hub": "naoexiste/INDEX.md", "text": "x"}}
     fs = _run(docs)
     assert _codes(fs, "inexistente")
+
+def test_tool_reachable_skill_nao_e_orfao():
+    # .claude/skills/** = reachable-by-tool: NUNCA vira C8-ORPHAN (invariante do plano item 7)
+    docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "nada"},
+            ".claude/skills/foo/SKILL.md": {"tipo": "", "hub": None, "text": "x"}}
+    fs = _run(docs)
+    assert not [f for f in fs if f.path == ".claude/skills/foo/SKILL.md"]
+
+def test_fenced_nao_credita_aresta():
+    # link dentro de bloco fenced NAO conta como aresta -> filho fica orfao
+    docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "`H.md`"},
+            "H.md": {"tipo": "index", "hub": "H.md", "text": "```\n- [c](./c.md)\n```"},
+            "c.md": {"tipo": "reference", "hub": None, "text": "x"}}
+    fs = _run(docs)
+    assert any(f.path == "c.md" and "orfao" in f.message for f in fs)

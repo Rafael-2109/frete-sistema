@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 
 _FENCE = re.compile(r"^\s*```")
+MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
 def resolve_ref(file_path: Path, target: str, root: Path) -> Path | None:

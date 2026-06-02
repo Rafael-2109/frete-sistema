@@ -4,9 +4,8 @@ from pathlib import Path
 from unicodedata import normalize
 from .findings import Finding
 from . import meta as meta_mod
-from .text_utils import fenced_lines, resolve_ref
+from .text_utils import fenced_lines, resolve_ref, MD_LINK
 
-MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 HEADING = re.compile(r"^#{1,6}\s+(.*)$", re.M)
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 PAPEL_BLOCKQUOTE = re.compile(r"\*\*\s*papel\b", re.IGNORECASE)

@@ -3,10 +3,9 @@ import re
 from collections import deque
 from pathlib import Path
 from .findings import Finding
-from .text_utils import fenced_lines, resolve_ref
+from .text_utils import fenced_lines, resolve_ref, MD_LINK
 
-MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-PATH_REF = re.compile(r"`?([\w./-]+\.md)`?")  # code-span ou path nu -> .md
+PATH_REF = re.compile(r"`?([\w./-]+\.md)`?")  # code-span ou path nu -> .md (especifico do C8)
 
 def _is_hub(rel: str, tipo: str) -> bool:
     """Nos que PROPAGAM reachability: index declarado OU MOC de-facto por nome."""
@@ -53,7 +52,7 @@ def check_reachability(docs: dict[str, dict], cfg, root: Path) -> list[Finding]:
     managed = set(docs.keys())
     refs = {rel: extract_refs(d["text"], root / rel, root, managed) for rel, d in docs.items()}
     hubs = {rel for rel, d in docs.items() if _is_hub(rel, d.get("tipo", ""))}
-    roots = {"CLAUDE.md"} & managed
+    roots = set(cfg.raw.get("reach_roots", ["CLAUDE.md"])) & managed
 
     # BFS: a fronteira expande SO por hubs + roots
     reached: set[str] = set()
