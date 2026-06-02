@@ -16,7 +16,7 @@ Artefatos duplicados, SOTs bicefala e estado replicado em N docs levaram a decis
 
 ## Zonas gerenciadas
 
-- **Docs gerenciados:** `docs/`, `.claude/references/`, `.claude/skills/`, `app/*/CLAUDE.md`
+- **Docs gerenciados:** `docs/`, `.claude/references/`, `.claude/skills/`, `app/*/CLAUDE.md`, `CLAUDE.md` (raiz)
 - **Scripts operacionais:** zonas declaradas na allowlist de `scripts/audits/artefato_lint.config.json`
 - **Fora de enforcement:** `/tmp`, fixtures de teste, `tipo: scratch`
 
@@ -29,7 +29,7 @@ Artefatos duplicados, SOTs bicefala e estado replicado em N docs levaram a decis
 | `explanation` | o porque (sem passos) | L3 |
 | `adr` | uma decisao datada (imutavel) | L3 |
 | `state` | estado vivo/mutavel | L3 |
-| `index` / `hub` | so ponteiros (MOC) | L1 |
+| `index` | so ponteiros (MOC); o campo `hub:` aponta para um doc deste tipo | L1 |
 | `scratch` | efemero, fora de enforcement | — |
 
 ## Header doc:meta obrigatorio
