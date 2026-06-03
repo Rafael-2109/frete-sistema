@@ -57,7 +57,7 @@ Sem `E4` confiável, ligar atuador = promover ruído. Por isso Ondas 1–2 (olho
 | id | card | tipo | flag | gate | DoD (teste/query) | dep |
 |---|---|---|---|---|---|---|
 | O0.1 | ✅ **DONE** (2026-06-03) — removido `_is_mandatory_trigger`+`_MANDATORY_PATTERNS`+teste; 39 verdes (loop corretivo) | cleanup | — | ✅ | `pytest tests/agente/` verde sem o arquivo; 0 callsite | — |
-| O0.7 | **NOVO** (descoberto em O0.1): `_save_personal_insight` — `except` do embed best-effort NÃO dá rollback → sessão abortada (`InFailedSqlTransaction`) envenena o request. Add `db.session.rollback()` + varrer outros callsites de embed best-effort | cleanup | — | ✅ | teste create-path + query-pós passa com `MEMORY_SEMANTIC_SEARCH=true` (default) | — |
+| O0.7 | ✅ **DONE** (2026-06-03) — `_embed_memory_best_effort` (memory_mcp_tool) agora dá `db.session.rollback()` no `except` (cobre os 3 callsites). Bug: embed best-effort que falha num statement de DB deixava a tx abortada → `InFailedSqlTransaction` no resto do request (latente em PROD: só em falha transitória Voyage/DB). TDD RED→GREEN; 24 verdes c/ embeddings ON | cleanup | — | ✅ | teste simula falha de SQL no embed → `SELECT 1` pós OK (rollback) | — |
 | O0.2 | Fila `agent_validation` ausente do `--queues` (worker PROD) | wiring | — | 🔵 | `validate_subagent_output` processado (log) após add em `start_worker_render.sh:301` | — |
 | O0.3 | Card frontend do painel de adesão (3.7) em `insights.html` | feature | — | ✅ | `/agente/insights` mostra tabela error_signature × antes/depois | — |
 | O0.4 | Ligar `USE_RECURRENCE_SCORE` (3.4B) — pré-req (cc populado) **atendido pelo backfill** | flag-flip | `AGENT_RECURRENCE_SCORE` | 🔵 | 24h sem regressão no health_score; composite de mem cc>0 sobe | — |

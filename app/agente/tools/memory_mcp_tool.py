@@ -776,6 +776,15 @@ def _embed_memory_best_effort(
 
     except Exception as e:
         logger.debug(f"[MEMORY_MCP] _embed_memory_best_effort falhou: {e}")
+        # O0.7 (2026-06-03): um statement de DB que falha aqui deixa a tx SQLAlchemy ABORTADA.
+        # Como isto e best-effort (o erro e engolido), sem rollback a sessao fica poluida e o
+        # RESTANTE do request do caller quebra com InFailedSqlTransaction (a memoria ja foi
+        # salva antes — sem perda de dado, mas o request seguinte morre). rollback isola a falha.
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
 
     return haiku_entities, haiku_relations
 
