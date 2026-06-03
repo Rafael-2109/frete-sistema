@@ -37,7 +37,6 @@
     {
       "name": "protocolo_st",
       "type": "boolean",
-      "description": "True = produto sujeito a Substituicao Tributaria; usado para separar NF em 2 pedidos (Atacadao RJ)",
       "nullable": false,
       "default": false
     },
@@ -75,16 +74,16 @@
   ],
   "indices": [
     {
-      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
+      "name": "ix_portal_atacadao_produto_depara_codigo_nosso",
       "columns": [
-        "codigo_atacadao"
+        "codigo_nosso"
       ],
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_codigo_nosso",
+      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
       "columns": [
-        "codigo_nosso"
+        "cnpj_cliente"
       ],
       "unique": false
     },
@@ -96,9 +95,9 @@
       "unique": false
     },
     {
-      "name": "ix_portal_atacadao_produto_depara_cnpj_cliente",
+      "name": "ix_portal_atacadao_produto_depara_codigo_atacadao",
       "columns": [
-        "cnpj_cliente"
+        "codigo_atacadao"
       ],
       "unique": false
     }

@@ -88,10 +88,30 @@
       "default": "pessoal"
     },
     {
+      "name": "directive_status",
+      "type": "varchar(20)"
+    },
+    {
       "name": "priority",
       "type": "varchar(20)",
       "nullable": false,
       "default": "contextual"
+    },
+    {
+      "name": "error_signature",
+      "type": "varchar(64)"
+    },
+    {
+      "name": "harmful_count",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
+    },
+    {
+      "name": "helpful_count",
+      "type": "integer",
+      "nullable": false,
+      "default": 0
     },
     {
       "name": "created_by",
@@ -129,6 +149,14 @@
     ]
   ],
   "indices": [
+    {
+      "name": "ix_agent_memories_user_errsig",
+      "columns": [
+        "user_id",
+        "error_signature"
+      ],
+      "unique": false
+    },
     {
       "name": "ix_agent_memories_user_id",
       "columns": [

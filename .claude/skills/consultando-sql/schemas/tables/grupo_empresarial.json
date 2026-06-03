@@ -40,9 +40,8 @@
   ],
   "indices": [
     {
-      "name": "idx_grupo_prefixo",
+      "name": "ix_grupo_empresarial_prefixo_cnpj",
       "columns": [
-        "nome_grupo",
         "prefixo_cnpj"
       ],
       "unique": false
@@ -55,8 +54,9 @@
       "unique": false
     },
     {
-      "name": "ix_grupo_empresarial_prefixo_cnpj",
+      "name": "idx_grupo_prefixo",
       "columns": [
+        "nome_grupo",
         "prefixo_cnpj"
       ],
       "unique": false

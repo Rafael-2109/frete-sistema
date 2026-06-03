@@ -103,7 +103,7 @@
     "vinculacao_carteira_separacao",
     "webhook_configs"
   ],
-  "total_tabelas": 286,
+  "total_tabelas": 291,
   "tabelas": [
     {
       "name": "agendamentos_entrega",
@@ -112,6 +112,24 @@
         "entrega_id",
         "data_agendada",
         "hora_agendada"
+      ]
+    },
+    {
+      "name": "agent_eval_case",
+      "description": "A3-R3 (2026-06-01) — caso de eval persistido para CALIBRAÇÃO do judge.",
+      "key_fields": [
+        "agent_name",
+        "case_id",
+        "git_sha"
+      ]
+    },
+    {
+      "name": "agent_eval_scores",
+      "description": "A3 (2026-05-31) — score de eval persistido por-agente para o eval gate.",
+      "key_fields": [
+        "agent_name",
+        "score",
+        "total"
       ]
     },
     {
@@ -173,6 +191,15 @@
       "description": "F8 (2026-05-09) — Persistencia de cost_tracker entries.",
       "key_fields": [
         "message_id",
+        "session_id",
+        "user_id"
+      ]
+    },
+    {
+      "name": "agent_step",
+      "description": "Onda 0 (2026-05-30) — Entidade de PASSO/TURNO do agente.",
+      "key_fields": [
+        "step_uid",
         "session_id",
         "user_id"
       ]
@@ -1846,6 +1873,24 @@
         "codigo",
         "data_snapshot",
         "descricao"
+      ]
+    },
+    {
+      "name": "inventario_contagem",
+      "description": "Tabela inventario_contagem",
+      "key_fields": [
+        "codigo",
+        "empresa",
+        "filtro_locais"
+      ]
+    },
+    {
+      "name": "inventario_contagem_item",
+      "description": "Tabela inventario_contagem_item",
+      "key_fields": [
+        "contagem_id",
+        "location_name",
+        "location_id"
       ]
     },
     {

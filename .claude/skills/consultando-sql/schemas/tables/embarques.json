@@ -296,9 +296,9 @@
       "unique": false
     },
     {
-      "name": "idx_emb_tipo_carga",
+      "name": "idx_emb_status",
       "columns": [
-        "tipo_carga"
+        "status"
       ],
       "unique": false
     },
@@ -310,9 +310,9 @@
       "unique": false
     },
     {
-      "name": "idx_emb_status",
+      "name": "idx_emb_tipo_carga",
       "columns": [
-        "status"
+        "tipo_carga"
       ],
       "unique": false
     }

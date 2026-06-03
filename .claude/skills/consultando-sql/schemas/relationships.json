@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "total_relationships": 424,
+  "total_relationships": 425,
   "relationships": [
     {
       "from_table": "agendamentos_entrega",
@@ -1824,6 +1824,12 @@
       "from_table": "inventario_base",
       "from_column": "ciclo_id",
       "to_table": "inventario_ciclo",
+      "to_column": "id"
+    },
+    {
+      "from_table": "inventario_contagem_item",
+      "from_column": "contagem_id",
+      "to_table": "inventario_contagem",
       "to_column": "id"
     },
     {

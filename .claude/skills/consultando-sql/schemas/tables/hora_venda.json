@@ -207,20 +207,6 @@
   ],
   "indices": [
     {
-      "name": "ix_hora_venda_cnpj_emitente",
-      "columns": [
-        "cnpj_emitente"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_hora_venda_status",
-      "columns": [
-        "status"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_hora_venda_cpf_cliente",
       "columns": [
         "cpf_cliente"
@@ -266,6 +252,20 @@
       "name": "ix_hora_venda_data_venda",
       "columns": [
         "data_venda"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_cnpj_emitente",
+      "columns": [
+        "cnpj_emitente"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_hora_venda_status",
+      "columns": [
+        "status"
       ],
       "unique": false
     }

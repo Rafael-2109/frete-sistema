@@ -103,13 +103,6 @@
   ],
   "indices": [
     {
-      "name": "ix_carvia_emissao_cte_complementar_operacao_id",
-      "columns": [
-        "operacao_id"
-      ],
-      "unique": false
-    },
-    {
       "name": "ix_carvia_emissao_cte_complementar_status",
       "columns": [
         "status"
@@ -120,6 +113,13 @@
       "name": "ix_carvia_emissao_cte_complementar_cte_complementar_id",
       "columns": [
         "cte_complementar_id"
+      ],
+      "unique": false
+    },
+    {
+      "name": "ix_carvia_emissao_cte_complementar_operacao_id",
+      "columns": [
+        "operacao_id"
       ],
       "unique": false
     },

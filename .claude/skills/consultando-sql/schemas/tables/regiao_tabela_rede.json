@@ -28,7 +28,6 @@
     {
       "name": "separar_protocolo_st",
       "type": "boolean",
-      "description": "True = pedidos desta (rede, uf) sao quebrados em 2 sale.orders (produtos protocolo_st vs demais). Ex: ATACADAO/RJ",
       "nullable": false,
       "default": false
     },
@@ -58,6 +57,13 @@
   ],
   "indices": [
     {
+      "name": "ix_regiao_tabela_rede_rede",
+      "columns": [
+        "rede"
+      ],
+      "unique": false
+    },
+    {
       "name": "idx_regiao_rede_uf",
       "columns": [
         "rede",
@@ -69,13 +75,6 @@
       "name": "ix_regiao_tabela_rede_uf",
       "columns": [
         "uf"
-      ],
-      "unique": false
-    },
-    {
-      "name": "ix_regiao_tabela_rede_rede",
-      "columns": [
-        "rede"
       ],
       "unique": false
     }
