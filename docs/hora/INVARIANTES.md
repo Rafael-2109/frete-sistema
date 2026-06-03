@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Invariantes do Módulo HORA (Lojas Motochefe)
+
+> **Papel:** Invariantes do Módulo HORA (Lojas Motochefe).
+
+## Indice
+
+- [Contexto](#contexto)
+- [Os 5 invariantes](#os-5-invariantes)
+  - [1. `hora_moto.chassi` é a chave de rastreamento universal do módulo.](#1-hora_motochassi-é-a-chave-de-rastreamento-universal-do-módulo)
+  - [2. Toda tabela transacional DEVE ter `chassi` como coluna indexada, FK para `hora_moto.chassi`.](#2-toda-tabela-transacional-deve-ter-chassi-como-coluna-indexada-fk-para-hora_motochassi)
+  - [3. `hora_moto` contém APENAS atributos imutáveis da unidade física.](#3-hora_moto-contém-apenas-atributos-imutáveis-da-unidade-física)
+  - [4. Estado atual da moto é uma VIEW sobre `hora_moto_evento`, não um UPDATE na linha da moto.](#4-estado-atual-da-moto-é-uma-view-sobre-hora_moto_evento-não-um-update-na-linha-da-moto)
+  - [5. `HoraVenda.status` é uma máquina de estado fechada com transições registradas em auditoria.](#5-horavendastatus-é-uma-máquina-de-estado-fechada-com-transições-registradas-em-auditoria)
+- [Anti-padrões explicitamente rejeitados](#anti-padrões-explicitamente-rejeitados)
+- [Como este documento se comporta](#como-este-documento-se-comporta)
+- [Referências](#referências)
 
 **Data**: 2026-04-18
 **Status**: contrato de design — aprovado antes de qualquer modelo SQLAlchemy.
