@@ -15,6 +15,8 @@ def test_classify_minimiza_desmascaramento():
         "app/odoo/CLAUDE.md": "explanation",
         ".claude/references/INFRAESTRUTURA.md": "reference",
         "docs/blueprint-agente/eixo-x.md": "explanation",
+        "docs/hora/CHECKLIST_TAGPLUS_GO_LIVE.md": "how-to",
+        "docs/devolucao/RUNBOOK_X.md": "how-to",
     }
     for rel, esperado in casos.items():
         tipo, _c = M.classify(rel, "conteudo")

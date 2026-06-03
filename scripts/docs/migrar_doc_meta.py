@@ -69,6 +69,10 @@ def classify(rel: str, text: str) -> tuple[str, str]:
     ):
         return ("state", "L3")
 
+    # Checklists / runbooks / guias -> procedimento (how-to: so Papel; evita stub Contexto oco)
+    if re.search(r"(?i)(CHECKLIST|RUNBOOK|GUIA)", basename):
+        return ("how-to", "L2")
+
     # ADR (D000-titulo.md)
     if re.match(r"^D\d{3}-", basename):
         return ("explanation", "L3")
