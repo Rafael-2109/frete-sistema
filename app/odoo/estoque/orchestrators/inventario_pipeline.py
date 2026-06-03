@@ -2796,7 +2796,8 @@ class FaturamentoPipelineExecutor:
           1. Skill 7 buscar_dfe (READ — decide caminho)
           1.5 (F2a v25+) caminho A: corrigir dfe.line.company_id=destino
           2. SE caminho B: Skill 7 criar_dfe_a_partir_do_invoice_saida (upload XML)
-          3. Skill 7 escriturar_dfe (l10n_br_tipo_pedido_dfe='compra' + data_entrada)
+          3. Skill 7 escriturar_dfe (l10n_br_tipo_pedido_dfe vem do mapping;
+             INDUSTRIALIZACAO_FB_LF='serv-industrializacao' + data_entrada)
           4. Skill 7 gerar_po_from_dfe (fire_and_poll — robo CIEL IT cria PO)
           5. Skill 7 preencher_po (team + payment + picking_type + company +
                                    l10n_br_tipo_pedido_po='serv-industrializacao')
@@ -2815,11 +2816,15 @@ class FaturamentoPipelineExecutor:
                 situacao=autorizado, l10n_br_xml_aut_nfe nao-vazio).
             company_destino: 1=FB, 4=CD, 5=LF.
             l10n_br_tipo_pedido_dfe: tipo do pedido escrito no DFe no passo 3
-                (ex.: 'compra' para INDUSTRIALIZACAO_FB_LF). F3a v25+ —
-                separado de l10n_br_tipo_pedido_po porque DFe e PO precisam
-                de tipos diferentes neste fluxo (DFe 'compra' destrava
-                action_gerar_po_dfe; PO 'serv-industrializacao' fixa
-                journal ENTIN + CFOP 1949).
+                (vem de L10N_BR_TIPO_PEDIDO_POR_ACAO[acao]['dfe']). Para
+                INDUSTRIALIZACAO_FB_LF = 'serv-industrializacao' (corrigido
+                C6/D-V30-1 2026-06-02; 'compra' e' REJEITADO pela whitelist do
+                escriturar_dfe, escrituracao.py:1390). F3a v25+ — separado de
+                l10n_br_tipo_pedido_po porque DFe e PO podem ter tipos
+                diferentes neste fluxo. ATENCAO: as 7 acoes CANDIDATE ainda
+                mapeiam dfe='compra' = BUG LATENTE (quebraria este passo via
+                fluxo-L3 opt-in); pendente canary p/ alinhar a tipo da
+                whitelist (retorno/outro/transf-filial).
             l10n_br_tipo_pedido_po: tipo do pedido escrito na PO no passo 5
                 (ex.: 'serv-industrializacao' para INDUSTRIALIZACAO_FB_LF).
                 Invoice herda da PO no passo 9.
@@ -2996,7 +3001,8 @@ class FaturamentoPipelineExecutor:
 
         out['dfe_id'] = dfe_id
 
-        # ----- Passo 3: escriturar_dfe (F3b v25+: tipo='compra' p/ DFe) -----
+        # ----- Passo 3: escriturar_dfe (F3b v25+: tipo do DFe vem do mapping;
+        # INDUSTRIALIZACAO_FB_LF='serv-industrializacao' — C6/D-V30-1) -----
         r3 = escr_svc.escriturar_dfe(
             dfe_id=dfe_id or 0,  # type-hint friendly; atomo valida
             l10n_br_tipo_pedido=l10n_br_tipo_pedido_dfe,
