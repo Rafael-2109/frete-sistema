@@ -109,3 +109,46 @@ def test_verify_arithmetic_resposta_vazia():
 
     assert result['ok'] is True
     assert result['issues'] == []
+
+
+# ─── Bug do parser (2026-06-03) — falso-positivo 42/201 em PROD ───────────────
+# O Sonnet é um modelo de raciocínio: ignora "responda EXATAMENTE OK" e RACIOCINA
+# passo-a-passo, concluindo com "OK"/✓ (aritmética correta). O parser antigo exigia
+# `resultado.upper() == 'OK'` exato → o raciocínio (len≫5, ≠ 'OK') caía no else e
+# marcava ok=False com o próprio raciocínio como "issue". Fix: discriminar pela
+# CONCLUSÃO (última linha == OK OU veredito estruturado), não por igualdade exata
+# nem pela palavra "ERRO" (uma descrição de erro pode não conter "ERRO").
+
+class TestVerifyArithmeticParserRobusto:
+    """Parser robusto a raciocínio do Sonnet (bug 2026-06-03)."""
+
+    def _run(self, fake_out, monkeypatch):
+        from app.agente.sdk import verifiers
+        monkeypatch.setattr(verifiers, '_call_sonnet_verifier', lambda prompt: fake_out)
+        return verifiers.verify_arithmetic("resposta com numeros")
+
+    def test_raciocinio_concluindo_ok(self, monkeypatch):
+        # Caso real PROD (step 196/199): raciocínio correto concluindo com OK.
+        out = "Verificando: 1.549 + 290 + 2 + 25 = 1.866 (confere)\n\nOK"
+        assert self._run(out, monkeypatch) == {'ok': True, 'issues': []}
+
+    def test_raciocinio_confere_concluindo_ok(self, monkeypatch):
+        # Caso real PROD (step 195): linha única de cálculo + conclusão OK.
+        out = "41 + 37 + 3 = 81, confere com o total declarado.\n\nOK"
+        assert self._run(out, monkeypatch)['ok'] is True
+
+    def test_veredito_estruturado_ok(self, monkeypatch):
+        # Novo contrato do prompt: veredito explícito.
+        assert self._run("VEREDITO: OK", monkeypatch)['ok'] is True
+
+    def test_veredito_estruturado_erro(self, monkeypatch):
+        out = "Conferindo a soma...\nVEREDITO: ERRO — total diz 5 itens mas a tabela tem 8"
+        r = self._run(out, monkeypatch)
+        assert r['ok'] is False
+        assert r['issues'] and 'ERRO' in r['issues'][0]
+
+    def test_descricao_de_erro_sem_palavra_erro(self, monkeypatch):
+        # Garante que o fix NÃO regride o contrato existente: uma descrição de
+        # discrepância (sem 'OK' na conclusão) continua sendo ok=False.
+        out = "Total diz 20 itens mas a tabela soma 18"
+        assert self._run(out, monkeypatch)['ok'] is False

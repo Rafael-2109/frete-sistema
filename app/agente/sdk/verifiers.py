@@ -17,6 +17,7 @@ Wiring futuro (Onda 3, USE_AGENT_VERIFY):
       executoras (dry-run em app/odoo/estoque/), nunca duplicados aqui.
 """
 import logging
+import re
 from typing import Callable, List, Optional
 
 logger = logging.getLogger('sistema_fretes')
@@ -31,9 +32,11 @@ ARITHMETIC_SYSTEM_PROMPT = (
     "  - Contagem de linhas contradiz quantidade mencionada\n\n"
     "NÃO avalie: qualidade da escrita, completude, formatação ou "
     "informações que não envolvem cálculos.\n\n"
-    "Se não há erro aritmético, responda EXATAMENTE: OK\n"
-    "Se encontrar um erro, descreva em UMA frase curta "
-    "(ex: 'Total diz 5 itens mas tabela tem 8')."
+    "Você PODE raciocinar passo a passo. Mas TERMINE a resposta com uma linha de "
+    "veredito, exatamente num destes formatos:\n"
+    "  VEREDITO: OK\n"
+    "  VEREDITO: ERRO — <frase curta>  "
+    "(ex: 'VEREDITO: ERRO — total diz 5 itens mas tabela tem 8')"
 )
 
 
@@ -55,6 +58,41 @@ def _call_sonnet_verifier(prompt: str) -> str:
         if getattr(block, 'type', None) == 'text':
             return block.text
     return ''
+
+
+def _interpreta_veredito_aritmetico(resultado: str) -> dict:
+    """Interpreta a saída do verifier aritmético de forma robusta a raciocínio.
+
+    Bug 2026-06-03 (42/201 em PROD): o Sonnet é um modelo de raciocínio e ignora
+    "responda EXATAMENTE OK" — raciocina passo-a-passo e conclui com "OK"/✓ quando
+    a aritmética está correta. O parser antigo (`resultado.upper() == 'OK'`) tratava
+    qualquer raciocínio (len≫5, ≠ 'OK') como inconsistência → falso-positivo.
+
+    Discrimina pela CONCLUSÃO, não por igualdade exata nem pela palavra "ERRO"
+    (uma descrição de discrepância pode não conter "ERRO"):
+      1. Veredito estruturado `VEREDITO: OK` / `VEREDITO: ERRO ...` (novo prompt) — autoritativo.
+      2. Fallback (sem veredito): conclusão = última linha não-vazia normalizada. Se for
+         'OK' → sem erro; senão → inconsistência (preserva o contrato p/ descrições de
+         erro como 'Total diz 20 mas soma 18').
+    """
+    texto = (resultado or '').strip()
+    if not texto:
+        return {'ok': True, 'issues': []}
+
+    # 1) Veredito estruturado explícito (novo prompt).
+    m = re.search(r'VEREDITO\s*:\s*(.+)', texto, re.IGNORECASE | re.DOTALL)
+    if m:
+        verdito = m.group(1).strip()
+        if re.match(r'OK\b', verdito, re.IGNORECASE) and not re.search(r'\bERRO\b', verdito, re.IGNORECASE):
+            return {'ok': True, 'issues': []}
+        return {'ok': False, 'issues': [texto]}
+
+    # 2) Fallback: conclusão = última linha não-vazia (normalizada s/ pontuação/markdown).
+    linhas = [ln.strip() for ln in texto.splitlines() if ln.strip()]
+    ultima_norm = re.sub(r'[^A-Za-z]', '', linhas[-1]).upper() if linhas else ''
+    if ultima_norm == 'OK':
+        return {'ok': True, 'issues': []}
+    return {'ok': False, 'issues': [texto]}
 
 
 def verify_arithmetic(
@@ -99,15 +137,14 @@ def verify_arithmetic(
         prompt = ''.join(partes)
 
         raw = _call_sonnet_verifier(prompt)
-        resultado = raw.strip() if raw else ''
-
-        # "OK" (case-insensitive) ou resultado muito curto = sem problemas
-        if not resultado or resultado.upper() == 'OK' or len(resultado) < 5:
+        veredito = _interpreta_veredito_aritmetico(raw)
+        if veredito['ok']:
             logger.debug('[verify_arithmetic] OK — nenhuma inconsistência aritmética')
-            return {'ok': True, 'issues': []}
-
-        logger.warning(f'[verify_arithmetic] inconsistência detectada: {resultado}')
-        return {'ok': False, 'issues': [resultado]}
+        else:
+            logger.warning(
+                f"[verify_arithmetic] inconsistência detectada: {veredito['issues'][0][:200]}"
+            )
+        return veredito
 
     except Exception as exc:
         # Best-effort: falha silenciosa — verifier nunca quebra o caller
