@@ -275,3 +275,15 @@ def test_recebimento_automatico_confere_so_considerados(db):
     chassis_conf = {c.numero_chassi for c in receb.conferencias if not c.substituida}
     assert c1 not in chassis_conf
     assert c2 in chassis_conf
+
+
+# ---------------------------------------------------------------------------
+# Task 7 — Rotas desconsiderar/reverter (smoke: registro no url_map)
+# ---------------------------------------------------------------------------
+def test_rotas_desconsiderar_reverter_registradas(app):
+    # require_hora_perm exige usuario admin/permissionado autenticado em sessao;
+    # nao ha fixture pronta de auth HORA, entao validamos o registro das rotas
+    # (POST endpoints existem no url_map) em vez de inventar fixture de login.
+    rules = {r.endpoint for r in app.url_map.iter_rules()}
+    assert 'hora.nfs_desconsiderar_item' in rules
+    assert 'hora.nfs_reverter_item' in rules
