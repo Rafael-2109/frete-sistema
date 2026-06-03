@@ -32,4 +32,5 @@ atualizado: 2026-06-02
 - [Relatório de Confronto de Inventário — Design](2026-05-26-relatorio-confronto-inventario-design.md)
 - [Inventário Cíclico — Contagem parcial por quant + Plano de ajustes — Design](2026-05-31-inventario-ciclico-contagem-ajustes-design.md)
 - [Design — Capacitar `gestor-estoque-odoo` para remessa inter-company FB→LF (insumo direto, avulsa)](2026-06-02-capacitacao-gestor-remessa-fb-lf-design.md)
+- [consultando-venda-loja (design)](2026-06-02-skill-consultando-venda-loja-design.md) — skill READ de vendas Lojas HORA (Onda F)
 - [carregando-motos-assai (design)](2026-06-02-skill-carregando-motos-assai-design.md) — skill READ+WRITE de carregamento Motos Assai (Onda F)
