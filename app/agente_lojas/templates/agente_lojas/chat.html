@@ -99,7 +99,9 @@
     </div>
   </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
 (function () {
   const form = document.getElementById('chat-form');
@@ -108,6 +110,9 @@
   const log = document.getElementById('chat-log');
   const sessionPicker = document.getElementById('session-picker');
   const newSessionBtn = document.getElementById('new-session-btn');
+  // CSRF: CSRFProtect e global (app/__init__.py) e as rotas /agente-lojas/api/*
+  // NAO estao isentas. Token vem do <meta name="csrf-token"> de base.html.
+  const csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   let sessionId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
 
   // Histórico de sessões — popula dropdown com /api/sessions GET (filtered
@@ -450,7 +455,7 @@
     try {
       const resp = await fetch('/agente-lojas/api/user-answer', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
         body: JSON.stringify({ session_id: askPendingSessionId, answers }),
       });
       if (!resp.ok) {
@@ -486,7 +491,7 @@
     try {
       const resp = await fetch('/agente-lojas/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
         body: JSON.stringify({ message, session_id: sessionId }),
       });
 

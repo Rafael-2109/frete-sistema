@@ -196,6 +196,20 @@ compartilha com 'web' (nao e critico enquanto nao houver memorias).
 4. **Sessoes sao marcadas com `agente='lojas'` no insert**. Listagem
    deve SEMPRE incluir `.filter_by(agente='lojas')`.
 
+5. **`<script>` do chat DEVE ficar em `{% block scripts %}`, NUNCA em
+   `{% block content %}`.** No `base.html` o `bootstrap.bundle.min.js` carrega
+   DEPOIS do `{% block content %}` e ANTES do `{% block scripts %}`. Um IIFE
+   no content que use `bootstrap`/`jQuery` em parse-time (ex.:
+   `new bootstrap.Modal(...)`) estoura `ReferenceError`, aborta o script
+   inteiro e o `addEventListener('submit')` nunca registra -> o `<form>` faz
+   submit nativo (reload: "tela pisca e a mensagem some"). Regressao coberta
+   por `tests/agente_lojas/test_chat_template.py`.
+
+6. **Fetch POST `/agente-lojas/api/*` DEVE enviar header `X-CSRFToken`**
+   (lido de `<meta name="csrf-token">`). `CSRFProtect` e global
+   (`app/__init__.py`) e estas rotas NAO estao isentas — sem o header o POST
+   retorna 400.
+
 ---
 
 ## Referencias
