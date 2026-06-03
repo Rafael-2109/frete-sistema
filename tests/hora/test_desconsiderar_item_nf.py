@@ -294,3 +294,27 @@ def test_nf_detalhe_template_compila(app):
     with app.app_context():
         tmpl = app.jinja_env.get_template('hora/nf_detalhe.html')
         assert tmpl is not None
+
+
+# ---------------------------------------------------------------------------
+# Gates adicionais (cobertura)
+# ---------------------------------------------------------------------------
+def test_desconsiderar_bloqueia_nf_em_recebimento(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    loja, mod = _loja(), _modelo()
+    nf = _nf(loja, [_chassi()], mod)
+    _recebimento(nf, loja)  # NF entrou em recebimento
+    with pytest.raises(ValueError, match='recebimento'):
+        desconsiderar_item_nf(nf.itens[0].id)
+
+
+def test_desconsiderar_bloqueia_chassi_em_outro_item_nf_considerado(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    loja, mod = _loja(), _modelo()
+    c = _chassi()
+    nf1 = _nf(loja, [c], mod)                       # item considerado com chassi c
+    nf2 = _nf(loja, [c], mod, criar_motos=False)    # outro item de NF com o mesmo chassi
+    with pytest.raises(ValueError):
+        desconsiderar_item_nf(nf2.itens[0].id)
+    # nf1 permanece intacto
+    assert nf1.itens[0].desconsiderado is False

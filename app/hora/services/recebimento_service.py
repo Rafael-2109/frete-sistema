@@ -661,7 +661,7 @@ def reprocessar_recebimentos_para_nf(
     if not recebimentos:
         return resultado
 
-    chassis_nf_atual = {i.numero_chassi for i in nf.itens}
+    chassis_nf_atual = {i.numero_chassi for i in nf.itens_considerados}
 
     for rec in recebimentos:
         resultado['recebimentos_processados'] += 1
@@ -1678,7 +1678,7 @@ def _redefinir_divergencias(conf: HoraRecebimentoConferencia, rec: HoraRecebimen
     db.session.flush()
 
     item_nf = HoraNfEntradaItem.query.filter_by(
-        nf_id=rec.nf_id, numero_chassi=conf.numero_chassi,
+        nf_id=rec.nf_id, numero_chassi=conf.numero_chassi, desconsiderado=False,
     ).first()
 
     # Mantem o snapshot tipo_divergencia (compat) = prioridade: CHASSI_EXTRA > modelo/cor > avaria
