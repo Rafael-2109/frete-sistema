@@ -19,11 +19,12 @@ atualizado: 2026-06-03
   - [Etapa 1 — FB SAÍDA / Remessa (5901, CST51) — ✅ JÁ CORRETO (referência)](#etapa-1-fb-saída-remessa-5901-cst51-já-correto-referência)
   - [Etapa 2 — LF ENTRADA / Recebe remessa (1901) — ✅ EXECUTADA E VALIDADA (Model B, 2026-06-01)](#etapa-2-lf-entrada-recebe-remessa-1901-executada-e-validada-model-b-2026-06-01)
   - [Etapa 3 — LF PRODUÇÃO / MO (interno) — ✅ EXECUTADA E VALIDADA (2026-06-01)](#etapa-3-lf-produção-mo-interno-executada-e-validada-2026-06-01)
-  - [Etapa 4 — LF SAÍDA / Retorno (NF MISTA 5902+5903+5124) — 🔴 BLOQUEADO POR DESENHO (v2.4)](#etapa-4-lf-saída-retorno-nf-mista-590259035124-bloqueado-por-desenho-v24)
-  - [Etapa 5 — FB ENTRADA / Recebe retorno (1124+1902+1903) — 🔴 PRINCIPAL](#etapa-5-fb-entrada-recebe-retorno-112419021903-principal)
+  - [Etapa 4 — LF SAÍDA / Retorno — 🟢 DESBLOQUEADO (Contadora APROVOU 2 NF, 2026-06-02) — a IMPLEMENTAR (v2.8)](#etapa-4-lf-saída-retorno-desbloqueado-contadora-aprovou-2-nf-2026-06-02-a-implementar-v28)
+  - [Etapa 5 — FB ENTRADA / Recebe retorno (1124+1902+1903) — 🟢 DESBLOQUEADO (= Etapa 4; Contadora aprovou) — a IMPLEMENTAR](#etapa-5-fb-entrada-recebe-retorno-112419021903-desbloqueado-etapa-4-contadora-aprovou-a-implementar)
 - [3. Prova de fechamento (✔v2 — baixa única; caso com sobra)](#3-prova-de-fechamento-v2-baixa-única-caso-com-sobra)
 - [4. Levers — o que configurar](#4-levers-o-que-configurar)
 - [5. Decisões / verificações pendentes](#5-decisões-verificações-pendentes)
+- [6. Requisitos da Contadora (APROVAÇÃO 2026-06-02) — desenho da implementação 2-NF](#6-requisitos-da-contadora-aprovação-2026-06-02-desenho-da-implementação-2-nf)
 - [Histórico](#histórico)
 - [Contexto](#contexto)
 
@@ -88,7 +89,8 @@ NET = `D 5101010001 (ATIVA) +I / C 1150100002 −I` (SVL via 1150100012 + NF fp2
 MO manual (BoM 3695→3646). Consumo (terceiros)→PRODUÇÃO; produção do PA←PRODUÇÃO. **Invariante ✔v2: a LF só agrega `consu` (ÁGUA) + serviço — NUNCA adiciona `product` próprio ao PA de terceiros.** Conta `1150100004 PRODUÇÃO` transitória (zera por MO).
 > **✅ Validado em PROD (piloto 4870112):** MOs 20252 (BATELADA→semi 31092) + 20254 (PA→31093). **Net-zero terceiros confirmado**: `1150100004` (produção) bal=0 E `1150200001` (terceiros) bal=0 nas duas MOs; **estoque próprio LF (1150100001/002/007) intacto** (double-count R$785k NÃO se repetiu). AVCO do PA na LF = R$188,62 (custo LF dos comps, transitório — valor final na FB = Ic+S vem da NF de retorno, §3/§7). **Fix G-ENT-10** (RUNBOOK §0.7): MO via XML-RPC exige `picked=True` nas `stock.move.line` dos raws antes do `button_mark_done` (senão `skip_consumption` cancela os raws = produz sem consumir).
 
-### Etapa 4 — LF SAÍDA / Retorno (NF MISTA 5902+5903+5124) — 🔴 BLOQUEADO POR DESENHO (v2.4)
+### Etapa 4 — LF SAÍDA / Retorno — 🟢 DESBLOQUEADO (Contadora APROVOU 2 NF, 2026-06-02) — a IMPLEMENTAR (v2.8)
+> 🟢 **v2.8 (2026-06-02): a Contadora APROVOU emitir em 2 NF** (retorno de insumos 5902 SEPARADO do serviço 5124) com 3 requisitos — **R1** emissão automática · **R2** escrituração automática · **R3** vínculo (ver **§6**). Caminho (b) confirmado; **Forma 2 (pipeline deriva a 2ª NF da BoM)** = `ACHADOS §G/§H/§I`. As notas v2.4–v2.7 abaixo são o histórico do desenho (mantidas; o BLOQUEIO por desenho foi **resolvido** pela aprovação).
 > 🔴 **v2.4 (2026-06-01, grounding sessão 5 — `ACHADOS`):** o plano abaixo (Lever L4: criar journal LF + `tipo.pedido.diario(dev-industrializacao/perda)`) está **REFUTADO**. A NF de retorno **real** é MISTA e cai em **j847 VENDA PRODUÇÃO** (header `venda-industrializacao`, op 5902 = **2864**), não por `dev-industrializacao`/`perda` (que já têm journal: j1002/j1003) nem em PERDAS. Logo a NF mista **não baixa a PASSIVA** hoje. **Fechar G4 exige decisão FISCAL da Contadora** — **EXPERIMENTO (sessão 5) provou que a opção (a) [no_payment no journal] NÃO baixa a 5902 em NF mista** (o `D CLIENTES` do serviço absorve). **Caminho = opção (b): emitir a 5902 em NF SEPARADA** do serviço (simbólica pura → no_payment baixa a PASSIVA, como na perda j1003). Detalhe: `PROPOSTA §4` + `MATERIAL_CONTADORA_G4.md`.
 >
 > 🟢 **v2.7 (2026-06-02, grounding sessão 7 — `ACHADOS §"ACHADO 2026-06-02 (sessão 7)"`): o "COMO" do caminho (b) mapeado ao vivo.** A separação é de **COMPOSIÇÃO de linhas, não de movimento**: as linhas 5902 (insumos) **já são simbólicas hoje** (0 `stock.move`; só o **PA na linha 5124** move — provado em `VND/2026/00359`). O journal (= no_payment) vem do `picking_type.l10n_br_tipo_pedido` (robô: **1 picking = 1 NF**). **Gaps para executar (b):** (a) **nenhum journal sale LF aponta a PASSIVA `5101020001`** → criar/repontar 1 journal de retorno-de-insumos com `no_payment=26667` (mudar o j1002 RETRABALHO atingiria todo o retrabalho); (b) **pt98** (retorno terceiros `31093→26489`) tem **`tipo_pedido=False`** → não roteia — falta picking_type saindo de 31093 com `tipo_pedido`; (c) a NF de insumos é **simbólica (sem movimento)** → definir o **veículo** (picking simbólico OU composição SO/robô em 2 docs). O precedente **SARET** (pt97/j1002) prova o **mecanismo contábil** mas é **devolução de produto REAL** (estoque próprio LF), não o retorno simbólico de terceiros.
@@ -100,7 +102,7 @@ MO manual (BoM 3695→3646). Consumo (terceiros)→PRODUÇÃO; produção do PA�
 - ⚠️ **LF deve usar SÓ a PASSIVA `51020xx`** — hoje a LF também debita `5101010001 (ATIVA)` via journal **"SAÍDA - PERDAS"** (+R$ 8,67M) ✔v2 → corrigir operação/journal de saída LF p/ não cair em PERDAS.
 - **Lever L4** ~~(✔v2.2 "caminho mapeado": criar journal LF sale + `tipo.pedido.diario(LF, dev-industrializacao/perda)` p/ a 5902 op 850)~~ 🔴 **REFUTADO v2.4** (ver nota no topo desta Etapa 4 + `ACHADOS §sessão 5`): a NF mista de retorno cai em **j847/venda-industrializacao** (op 5902 = **2864**, não 850/dev-industrializacao); aquele plano é **inerte**. ✔v2.1 confirmado: granularidade POR LINHA (5902/5124 coexistem na mesma NF, operações distintas) — **mas o journal é UNO (do cabeçalho)**. Fechar G4 = 1 das 3 opções (`PROPOSTA §4`), decisão Rafael+Contadora. Obrigação do piloto a baixar = **R$ 278,56** (ENTIN 737062).
 
-### Etapa 5 — FB ENTRADA / Recebe retorno (1124+1902+1903) — 🔴 PRINCIPAL
+### Etapa 5 — FB ENTRADA / Recebe retorno (1124+1902+1903) — 🟢 DESBLOQUEADO (= Etapa 4; Contadora aprovou) — a IMPLEMENTAR
 - **Física**: hoje **2.880× pt1 genérico** vs 10× pt52 → 🔧 rotear DFe → **pt52** (`src=26489`).
 - **Lançamento-alvo por linha (✔v2 — baixa ÚNICA de I, sem double-count):**
   - **1902 (insumos consumidos, simbólico)**: **`D 1150100007 PA (incorpora I_consumido) / C 5101010001 (baixa I_consumido)`** — ✔v2.2 **Contadora CONFIRMOU Ativo→Ativo** (não CPV; CPV só na venda final do PA). **NÃO gera stock.move de entrada dos componentes** (senão SVL re-infla estoque = o R$ 785k). *Estado atual (errado) verificado: a entrada cai em j1001 ENTSI (no_payment VAZIO) + re-infla MP/EMB — `ACHADO 2026-06-01`.*
@@ -137,8 +139,8 @@ Remessa: insumos `I = Ic (consumido) + Is (sobra)`; valor agregado `S`. Invarian
 | L1 | LF estoque (SVL) | repoint categorias LF → valoração terceiros (desenho A: input/output=transitórias) | config | ✅ validado **só ajuste simples**; re-testar fluxo entrada+MO (Fase 2) ✔v2 |
 | L2 | LF entrada física | pt64 `dst=31092` | config+processo | 🔧 |
 | L3 | LF MO / conta PRODUÇÃO | `1150100004` transitória vs terceiros | ❓Contador / Fase 2 | 🔧 |
-| L4 | LF retorno (5902→baixa PASSIVA) | **v2.5:** EXPERIMENTO provou que no_payment NÃO baixa a 5902 em NF mista (CLIENTES absorve). **Caminho = opção (b): 5902 em NF SEPARADA** → journal c/ no_pay 26667 (`PROPOSTA §4`) | **aprovação FISCAL** (Contadora) | 🔴 aguarda Contadora |
-| **L5a** | FB entrada: NF credita `5101010001` | **v2.6 (PROVADO):** no_payment no j1001 **sozinho NÃO baixa** em NF mista (FORNECEDORES do serviço absorve a 1902). **Converge com L4/G4: a 1902 em NF SEPARADA** do serviço | **aprovação FISCAL** (Contadora, = a do G4) | 🔴 converge G4 |
+| L4 | LF retorno (5902→baixa PASSIVA) | **v2.5:** EXPERIMENTO provou que no_payment NÃO baixa a 5902 em NF mista (CLIENTES absorve). **Caminho = opção (b): 5902 em NF SEPARADA** → journal c/ no_pay 26667 (`PROPOSTA §4`) | ✅ **APROVADO** (Contadora 2026-06-02) | 🟢 a implementar (§6) |
+| **L5a** | FB entrada: NF credita `5101010001` | **v2.6 (PROVADO):** no_payment no j1001 **sozinho NÃO baixa** em NF mista (FORNECEDORES do serviço absorve a 1902). **Converge com L4/G4: a 1902 em NF SEPARADA** do serviço | ✅ **APROVADO** (= a do G4, 2026-06-02) | 🟢 a implementar (§6) |
 | **L5b** | FB entrada: `1902` não re-inflar estoque | `l10n_br_movimento_estoque=False` na operação da linha 1902 (**op 3252** criada) — **POR LINHA ✔v2.1** | **config** (resíduo: confirmar picking da NF mista no piloto) | 🟠 |
 | L6 | FB entrada física | rotear DFe → pt52 (`src=26489`) | config+mapeamento CFOP→pt | 🔧 |
 | — | FB saída (remessa) | já correto | — | ✅ |
@@ -157,6 +159,29 @@ Remessa: insumos `I = Ic (consumido) + Is (sobra)`; valor agregado `S`. Invarian
 
 ---
 
+## 6. Requisitos da Contadora (APROVAÇÃO 2026-06-02) — desenho da implementação 2-NF
+
+A Contadora **aprovou separar em 2 NF** (`MATERIAL_CONTADORA §0`) com **3 requisitos**. Cada um mapeia a um achado já provado (`ACHADOS §G/§H/§I`) e à **Forma 2** (nosso pipeline deriva a 2ª NF):
+
+| Req | Exigência da Contadora | Como atender (provado) | Esfera |
+|---|---|---|---|
+| **R1** | NF de retorno emitida **automática** (= a inclusão dos componentes na NF hoje) | a 2ª NF (5902/1902) é derivável da **BoM do PA** (9/9 batem) → o pipeline explode/emite automaticamente (como já faz na remessa) | SAÍDA LF |
+| **R2** | DFe da NF de retorno escriturado **automático junto** com a NF de industrialização | a entrada já é `DFe→PO→invoice` automática (3087 casos) → estender p/ os 2 DFes (serviço+insumos) vinculados | ENTRADA FB |
+| **R3** | **vínculo** entre as 2 NFs (retorno↔industrialização) | `account.move.referencia_ids` (refNFe) na saída + `dfe_id`/`invoice_origin=PO` na entrada | RASTREABILIDADE |
+
+**Forma 1 (subcontratação nativa) DESCARTADA** — configurada (153 BoMs subcontract, subcontratante=LF) mas **dormente** (0 pickings resupply pt75; `ACHADOS §I`). **Forma 2 = nosso pipeline deriva a 2ª NF.**
+
+**Gaps de execução (a resolver na implementação — detalhe em `PROMPT_PROXIMA_SESSAO`):**
+1. **Journal de retorno-insumos** (LF sale) com `no_payment=26667` (PASSIVA `5101020001`) — **NENHUM** journal sale LF aponta a PASSIVA hoje (criar/repontar; mudar j1002 atinge o retrabalho). Lado FB: `no_payment=22800` (ATIVA) no j1001 ou journal dedicado.
+2. **Onde emitir a 2ª NF:** (A) customizar `create_invoice` do CIEL IT (fornecedor) **ou (B) nosso pipeline** (recomendado — mais controle).
+3. **Veículo da NF de insumos** (simbólica, sem movimento físico) + CFOP **5902/1902** (não 5949).
+4. **AVCO Ic+S (G8)** — medir no piloto (`ACHADOS §D`).
+5. **Pontos de código que assumem 1 NF** — `ACHADOS §E` (orchestrator `inventario_pipeline`, Skill 7/8, `recebimento_lf_odoo_service`, ETL `faturamento_service`).
+
+> Mecanismo/provas: `ACHADOS §A–§I`. Próximo passo operacional: `PROMPT_PROXIMA_SESSAO`.
+
+---
+
 ## Histórico
 | Versão | Data | Mudança |
 |---|---|---|
@@ -169,6 +194,7 @@ Remessa: insumos `I = Ic (consumido) + Is (sobra)`; valor agregado `S`. Invarian
 | 2.5 | 2026-06-01 | **EXPERIMENTO no_payment (sessão 5, NF-teste postada/excluída — zero sujeira)** — `ACHADOS §sessão 5 R2`. **Opção (a) [no_payment no j847] DESCARTADA:** em NF mista o `D CLIENTES` do serviço (5124) absorve a contrapartida da 5902; o no_payment só substitui o receivable em NF 100%-simbólica. **R1 RESOLVIDO:** a 1902/op 3252 debita a transitória 1150100011 (não o PA); Ativo→Ativo fecha via SVL físico do PA. **G4 caminho = opção (b): 5902 em NF SEPARADA** do serviço → aguarda aprovação FISCAL da Contadora (`MATERIAL_CONTADORA_G4.md`). |
 | 2.6 | 2026-06-02 | **EXPERIMENTO ENTRADA (sessão 6, NF-teste postada/excluída — zero sujeira) — R-UNIF PROVADO** (`ACHADOS §"ACHADO 2026-06-02 (sessão 6)"`). `no_payment=22800` no j1001 **sozinho NÃO baixa a ATIVA** numa NF mista de entrada: o `FORNECEDORES` do serviço (1124) absorve a 1902 (NET ATIVA=0, FORNECEDORES=−120,05), espelho do `R2` da saída. **G5a CONVERGE com G4:** a 1902 precisa vir em DOC SEPARADO do serviço — **mesma decisão fiscal (Contadora) resolve os 2 lados**. Estrutura real medida: **0/1600 ENTSI tocam a ATIVA**; 1124→op **1917** (docs diziam 3064/3134), 1902→op **2027** (autocancela); 490 mista / 1060 pura-serviço / 1 pura-1902; op 3252 recompute >400s (lento, normal). |
 | 2.7 | 2026-06-02 | **GROUNDING FLUXO 2-NF (sessão 7, READ-only, 5 scripts `s7_*`) — `ACHADOS §"ACHADO 2026-06-02 (sessão 7)"`.** O "COMO" da separação mapeado ao vivo: separação = **composição de linhas** (insumos 5902/1902 já simbólicos, 0 move; PA viaja na linha de serviço 5124↔1124, única com move). Journal = `picking_type.l10n_br_tipo_pedido` (1 picking=1 NF). **3 gaps p/ executar (b):** journal c/ no_payment PASSIVA `5101020001` inexistente; pt98 `tipo_pedido=False`; veículo da NF de insumos simbólica a definir. SARET prova o mecanismo (no_payment em doc total=0) mas é devolução de produto REAL. Anexado ao `MATERIAL_CONTADORA §5`. PA=Ic+S = resíduo do piloto (G8). |
+| **2.8** | **2026-06-02** | **CONTADORA APROVOU emitir 2 NF** (`MATERIAL_CONTADORA §0`) + **3 requisitos** (R1 emissão automática · R2 escrituração automática · R3 vínculo — ver **§6**). Caminho (b) confirmado. **Forma 1 (subcontratação nativa) DESCARTADA** (configurada mas dormente, `ACHADOS §I`); **Forma 2 (pipeline deriva a 2ª NF)** = caminho. **Etapas 4/5 DESBLOQUEADAS** → projeto entra na fase de **IMPLEMENTAÇÃO**. Requisitos+gaps em §6; handoff em `PROMPT_PROXIMA_SESSAO`. |
 
 ## Contexto
 

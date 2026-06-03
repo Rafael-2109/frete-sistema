@@ -17,7 +17,7 @@ atualizado: 2026-06-03
   - [Referência (remessa — já funciona, a espelhar)](#referência-remessa-já-funciona-a-espelhar)
 - [2. IDs verificados (para a config)](#2-ids-verificados-para-a-config)
 - [3. Spec G5a — FB ENTRADA baixar a ATIVA `5101010001` (Design A)](#3-spec-g5a-fb-entrada-baixar-a-ativa-5101010001-design-a)
-- [4. Spec G4 — LF SAÍDA baixar a PASSIVA `5101020001` — 🔴 BLOQUEADO POR DESENHO](#4-spec-g4-lf-saída-baixar-a-passiva-5101020001-bloqueado-por-desenho)
+- [4. Spec G4 — LF SAÍDA baixar a PASSIVA `5101020001` — ✅ APROVADO (caminho b)](#4-spec-g4-lf-saída-baixar-a-passiva-5101020001-aprovado-caminho-b)
   - [As 3 opções (✅ provado qual serve)](#as-3-opções-provado-qual-serve)
 - [5. NF MISTA — granularidade por linha JÁ PROVADA (técnico, não Contador)](#5-nf-mista-granularidade-por-linha-já-provada-técnico-não-contador)
 - [6. "3 PERNAS" (AVCO Ic+S) — POLÍTICA confirmada; MECÂNICA é técnica/piloto](#6-3-pernas-avco-ics-política-confirmada-mecânica-é-técnicapiloto)
@@ -27,6 +27,8 @@ atualizado: 2026-06-03
 > **Papel deste doc (anexo de EXECUÇÃO):** IDs, roteamento ao vivo e passos de dry-run da config G4/G5a. O **desenho-alvo e as DECISÕES** moram na `SOT_OPERACOES.md` (dona) — aqui só se expande o "como". Índice geral: `README.md`.
 >
 > Objetivo: fechar o ciclo contábil do retorno — a LF baixar a PASSIVA `5101020001` (G4) e a FB baixar a ATIVA `5101010001` (G5a). Base: grounding ao vivo 2026-06-01. ⚠️ **Config GLOBAL** (afeta todos os retornos de industrialização) — exige OK Rafael + dry-run antes de qualquer escrita; o piloto **testa**.
+>
+> 🟢 **STATUS 2026-06-03 — Contadora APROVOU emitir 2 NF (caminho b)** (`MATERIAL_CONTADORA §0` · `SOT §6`). As marcações "🔴 BLOQUEADO / aguarda Contadora" mais abaixo (§4, §8) são **HISTÓRICAS (pré-aprovação)** — o caminho (b) está confirmado. O desenho da implementação (Forma 2 — pipeline deriva a 2ª NF da BoM + vínculo refNFe + escrituração automática) e os 3 requisitos **R1/R2/R3** estão em **`SOT §6`**.
 
 ---
 
@@ -118,7 +120,9 @@ Cadeia: `operação → tipo_pedido(_entrada) → tipo.pedido.diario(empresa) �
 
 ---
 
-## 4. Spec G4 — LF SAÍDA baixar a PASSIVA `5101020001` — 🔴 BLOQUEADO POR DESENHO
+## 4. Spec G4 — LF SAÍDA baixar a PASSIVA `5101020001` — ✅ APROVADO (caminho b)
+
+> ✅ **2026-06-02: Contadora aprovou o caminho (b)** (`MATERIAL_CONTADORA §0` · `SOT §6`). O conteúdo abaixo (decisão entre as 3 opções) é o **histórico** que levou à recomendação (b) — agora confirmada.
 
 > **PLANO ANTIGO REFUTADO (grounding sessão 5, `ACHADOS`):** criar journal LF + `tipo.pedido.diario(dev-industrializacao/perda)` é **INERTE** — a NF mista de retorno roteia por header `venda-industrializacao`→**j847** e usa op **2864** (não 850/dev-industrializacao). G4 **não fecha** com o plano antigo.
 
@@ -133,7 +137,7 @@ Cadeia: `operação → tipo_pedido(_entrada) → tipo.pedido.diario(empresa) �
 | **(b) separar a NF: insumos 5902 em NF própria** ⭐ | NF só-5902 (simbólica pura) → journal com no_pay 26667 → `D 5101020001`; serviço 5124 segue em j847 | ✅ **caminho** — espelha a mecânica da NF de perda (j1003) que já baixa via no_payment. Exige decisão fiscal da Contadora (separar retorno-de-insumos do faturamento) + a Skill 8 emitir 2 documentos |
 | **(c) mudar header da NF inteira** | NF mista → journal dedicado | 🔴 não resolve — mistura serviço; o CLIENTES continua absorvendo a 5902 |
 
-> **Conclusão:** o "problema de granularidade" é que o no_payment opera **por cabeçalho de NF** e só substitui o receivable quando a NF é simbólica pura. **A 5902 precisa de NF própria.** Recomendação: **(b)**. Pendente: aprovação fiscal da Contadora (`MATERIAL_CONTADORA_G4.md`) + ajuste da Skill 8 p/ emitir o retorno de insumos separado.
+> **Conclusão:** o "problema de granularidade" é que o no_payment opera **por cabeçalho de NF** e só substitui o receivable quando a NF é simbólica pura. **A 5902 precisa de NF própria.** Recomendação: **(b)** → ✅ **APROVADA pela Contadora (2026-06-02)** + 3 requisitos R1/R2/R3 (`SOT §6`). Resta o ajuste da Skill 8/pipeline p/ emitir o retorno de insumos separado (implementação).
 
 **Serviço 5124:** manter `venda-industrializacao → j847` (CLIENTES + `3101030001 SERVIÇOS`). ✅ espelha o `2120100001 FORNECEDORES` da FB.
 **Física:** retorno por **pt98** (`31093→26489`) — já existe, nunca usado. `[A CONFIRMAR: o piloto valida pt98]`.
@@ -163,7 +167,7 @@ Cadeia: `operação → tipo_pedido(_entrada) → tipo.pedido.diario(empresa) �
 
 1. **R1 (G5a) — ✅ RESOLVIDO por READ-ONLY:** a 1902/op 3252 debita a transitória **1150100011** (não o PA); Ativo→Ativo fecha via SVL físico do PA na Etapa 5 (`ACHADOS §sessão 5` R1). Não precisou criar NF draft.
 2. **G5a (FB) dry-run + go FRESCO:** ajustar o **j1001** — `account_no_payment_id=22800` (5101010001). Script pronto: `scripts/g5a_aplicar_no_payment_j1001.py` (dry-run default; `--confirmar` efetiva; `--reverter` rollback). `tipo.pedido.diario(FB, serv-industrializacao→j1001)` é **provavelmente redundante** (roteamento pelo campo do journal) — `--criar-tpd` opcional como cinto-de-segurança. ⚠️ GLOBAL: afeta ENTSI que ainda usam op 2027 (mov_estoque=True) — rotear 1902 p/ op 3252 é parte do G5a (R1b).
-3. **G4 (LF) — BLOQUEADO por desenho:** decidir entre as 3 opções (§4) com Rafael+Contadora; medir **R2** (NF mista com no_payment) num DRAFT antes de executar. ⚠️ **NÃO** criar journal+tipo.pedido.diario dev-ind/perda (plano refutado, inerte).
+3. **G4 (LF) — ✅ APROVADO (caminho b, 2026-06-02):** emitir a 5902 em NF SEPARADA (R2 já provado: no_payment não baixa em NF mista). Implementação (Forma 2 + 3 requisitos): `SOT §6`. ⚠️ **NÃO** criar journal+tipo.pedido.diario dev-ind/perda (plano refutado, inerte).
 4. **Rotear física**: retorno LF → pt98; entrada FB → pt52.
 5. **Piloto 4870112**: 1 ciclo; medir (`GOALS`): `5101010001(FB)=0`, `5101020001(LF)=0`, `26489=0`, `30720=0`, 0 re-entrada de componentes, PA por `Ic+S`. **Gate:** abortar se `Δ5101020001(LF) != 0` (não basta a config ter sido criada).
 
@@ -178,7 +182,7 @@ Cadeia: `operação → tipo_pedido(_entrada) → tipo.pedido.diario(empresa) �
 | **G5a converge com G4** (1902 em doc separado) | 🔴 **PROVADO (sessão 6)** — `account_no_payment_id` no j1001 sozinho não baixa a ATIVA quando a entrada é mista; exige separar a 1902 do serviço (= a decisão fiscal do G4) |
 | G5a efeito global j1001 | 🟡 prospectivo, restrito ao regime LF (351 ENTSI 2026 = 100% LF) — aceitar/medir variantes simbólicas |
 | G5a resíduo R1 (conta que a op 3252 debita) | 🟡 **medir em DRAFT** — afeta se o ciclo fecha no Ativo (PA vs transitória) |
-| **G4 — separar a NF (opção b)** | 🔴 **aprovação FISCAL Contadora** (experimento provou: no_payment não baixa 5902 em NF mista; opção (a) descartada; caminho = NF separada da 5902) |
+| **G4 — separar a NF (opção b)** | ✅ **APROVADO (Contadora 2026-06-02)** + 3 requisitos R1/R2/R3 (`SOT §6`) — a implementar (Forma 2) |
 | G4 resíduo R2 (NF mista c/ no_payment) | 🟡 **medir em DRAFT** |
 | Mecânica do AVCO (§6) | 🟡 **piloto** — declarar `price_unit=Ic+S` |
 | G5b (op 3252, double-count) | ✅ op criada (1º uso real no piloto) |

@@ -288,7 +288,7 @@ Após `action_liberar_faturamento`: **robô CIEL IT cria a invoice em ~90s** (po
 3. Snapshot baseline de 26489 + 1150100012 (§9).
 
 **Contador / desenho (não bloqueiam o piloto G5b; destravam o fechamento do ciclo):**
-4. **G5a — CONVERGE com G4 (PROVADO sessão 6):** setar `account_no_payment_id=22800` no **j1001** é **necessário mas INSUFICIENTE sozinho** — experimento provou que numa NF de entrada mista o no_payment NÃO baixa a ATIVA (o FORNECEDORES do serviço absorve a 1902). ⇒ a 1902 de entrada precisa vir em **NF separada** do serviço (mesma decisão fiscal do G4). 🔴 **G4 = G5a = aprovação FISCAL da Contadora** — emitir a 5902 (saída) E escriturar a 1902 (entrada) em NF SEPARADA do serviço (`PROPOSTA §4` opção b; `MATERIAL_CONTADORA_G4.md`; `ACHADOS §sessão 6`).
+4. **G5a — CONVERGE com G4 (PROVADO sessão 6):** setar `account_no_payment_id=22800` no **j1001** é **necessário mas INSUFICIENTE sozinho** — experimento provou que numa NF de entrada mista o no_payment NÃO baixa a ATIVA (o FORNECEDORES do serviço absorve a 1902). ⇒ a 1902 de entrada precisa vir em **NF separada** do serviço (mesma decisão fiscal do G4). ✅ **G4 = G5a = APROVADO pela Contadora (2026-06-02)** — a IMPLEMENTAR (Forma 2 + 3 requisitos R1/R2/R3): emitir a 5902 (saída) E escriturar a 1902 (entrada) em NF SEPARADA do serviço (`SOT §6`; `MATERIAL_CONTADORA_G4.md §0`; `ACHADOS §G/§H/§I`).
 5. **3 pernas**: como `Ic` entra no AVCO do PA com a 1902 simbólica (§7).
 6. Conta valoração SVL-LF (`1150200001` × server action 1899) · conta PRODUÇÃO `1150100004` (L3).
 7. Regularização dos acumulados (5101010001 R$60,8M FB + R$8,67M LF; double-count R$785k; 1150100011 −R$1,49bi).

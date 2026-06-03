@@ -15,6 +15,19 @@ atualizado: 2026-06-03
 
 ---
 
+## 0. DECISÃO DA CONTADORA — ✅ APROVADO (2026-06-02)
+
+✅ **Aprovado emitir o retorno em 2 NF:** o retorno simbólico dos insumos (CFOP 5902/1902) sai em **documento separado** do faturamento do serviço (CFOP 5124/1124). Responde **SIM** à pergunta 1 (§4) — sem impedimento fiscal.
+
+**3 condições/requisitos da aprovação** (definem a implementação — DONA: `SOT §6`):
+1. **R1 — emissão automática da NF de retorno:** a 2ª NF deve ser gerada **automaticamente, do mesmo modo que os componentes já entram na NF hoje** (expansão da estrutura/BoM do produto), sem trabalho manual.
+2. **R2 — escrituração automática na entrada:** o DFe da NF de retorno deve ser escriturado **automaticamente junto com** a NF de industrialização (na FB).
+3. **R3 — vínculo entre as 2 NFs** (retorno ↔ industrialização) para rastreabilidade.
+
+⇒ Caminho da §4 = **separar (b)**, confirmado. As seções 1–5 abaixo são o material que embasou a decisão (mantidas para histórico). A engenharia da automação (como atender R1/R2/R3 — Forma 2, pipeline) está em `SOT §6` + `PROMPT_PROXIMA_SESSAO` + provas em `ACHADOS §G/§H/§I`.
+
+---
+
 ## 1. O problema (medido ao vivo)
 
 No regime **FB encomenda → LF industrializa → LF devolve o PA**, a cada ciclo deveriam **zerar**:
