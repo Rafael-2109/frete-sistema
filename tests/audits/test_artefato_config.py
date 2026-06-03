@@ -11,6 +11,8 @@ def test_config_carrega_limiares_fixados():
 
 def test_config_tem_secoes_por_tipo():
     c = config.load()
-    assert set(["Fontes"]).issubset(set(c.required_sections["reference"]))
+    # Onda 4 (calibracao hibrida): reference exige so Papel; Fontes virou opcional (D2 advisory).
+    assert set(["Papel"]).issubset(set(c.required_sections["reference"]))
+    assert "Fontes" not in c.required_sections["reference"]
     assert set(["Rollback", "Verificacao"]).issubset(set(c.required_sections["runbook"]))
     assert set(["Status", "Contexto", "Decisao", "Consequencias"]).issubset(set(c.required_sections["adr"]))

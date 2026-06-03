@@ -1,4 +1,63 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # REGRAS DE NEGOCIO DOS MODELOS - REFERENCIA
+
+> **Papel:** REGRAS DE NEGOCIO DOS MODELOS - REFERENCIA.
+
+## Indice
+
+- [Pedido (app/pedidos/models.py)](#pedido-apppedidosmodelspy)
+  - [E UMA VIEW (nao tabela)](#e-uma-view-nao-tabela)
+  - [REGRA DA VIEW:](#regra-da-view)
+- [PreSeparacaoItem (app/carteira/models.py)](#preseparacaoitem-appcarteiramodelspy)
+  - [DEPRECATED - NAO USAR!](#deprecated---nao-usar)
+- [Embarque (app/embarques/models.py)](#embarque-appembarquesmodelspy)
+  - [Regras de Status](#regras-de-status)
+  - [Tipos de Carga](#tipos-de-carga)
+  - [EmbarqueItem](#embarqueitem)
+- [FaturamentoProduto (app/faturamento/models.py)](#faturamentoproduto-appfaturamentomodelspy)
+  - [GOTCHAS CRITICOS (naming traps):](#gotchas-criticos-naming-traps)
+  - [Regras de Status NF:](#regras-de-status-nf)
+  - [Reversao de NF (Nota de Credito):](#reversao-de-nf-nota-de-credito)
+- [RelatorioFaturamentoImportado (app/faturamento/models.py)](#relatoriofaturamentoimportado-appfaturamentomodelspy)
+  - [Regra: `numero_nf` eh UNIQUE — um registro por NF (resumo da NF inteira, nao por produto)](#regra-numero_nf-eh-unique-um-registro-por-nf-resumo-da-nf-inteira-nao-por-produto)
+- [DespesaExtra (app/fretes/models.py)](#despesaextra-appfretesmodelspy)
+  - [GOTCHAS CRITICOS (naming traps):](#gotchas-criticos-naming-traps)
+  - [REGRAS DE STATUS (5 estados):](#regras-de-status-5-estados)
+  - [Transportadora Override:](#transportadora-override)
+  - [Logica de Sugestao de CTe (3 prioridades):](#logica-de-sugestao-de-cte-3-prioridades)
+- [CadastroPalletizacao (app/producao/models.py)](#cadastropalletizacao-appproducaomodelspy)
+  - [Formulas de Calculo:](#formulas-de-calculo)
+  - [Classificacao do Produto:](#classificacao-do-produto)
+- [ContasAReceber (app/financeiro/models.py)](#contasareceber-appfinanceiromodelspy)
+  - [CHAVE UNICA: empresa + titulo_nf + parcela](#chave-unica-empresa-titulo_nf-parcela)
+  - [Regras de Reconciliacao:](#regras-de-reconciliacao)
+  - [Campos que NAO sao colunas (obtidos via relacionamento):](#campos-que-nao-sao-colunas-obtidos-via-relacionamento)
+  - [Property calculada (NAO coluna):](#property-calculada-nao-coluna)
+- [LiberacaoAntecipacao (app/financeiro/models.py)](#liberacaoantecipacao-appfinanceiromodelspy)
+  - [PRIORIDADE DE MATCH (3 niveis):](#prioridade-de-match-3-niveis)
+  - [Metodos Uteis:](#metodos-uteis)
+- [ContasAReceberAbatimento (app/financeiro/models.py)](#contasareceberabatimento-appfinanceiromodelspy)
+  - [Regra: Abatimentos 1:N vinculados a ContasAReceber](#regra-abatimentos-1n-vinculados-a-contasareceber)
+- [ContasAReceberTipo (app/financeiro/models.py)](#contasarecebertipo-appfinanceiromodelspy)
+  - [Regra: Tabela de dominio para 2 tabelas e 4 campos](#regra-tabela-de-dominio-para-2-tabelas-e-4-campos)
+- [ContasAReceberSnapshot (app/financeiro/models.py)](#contasarecebersnapshot-appfinanceiromodelspy)
+  - [Regra: Historico de alteracoes em campos vindos do Odoo](#regra-historico-de-alteracoes-em-campos-vindos-do-odoo)
+- [Tabelas Auxiliares](#tabelas-auxiliares)
+  - [MovimentacaoEstoque (app/estoque/models.py)](#movimentacaoestoque-appestoquemodelspy)
+  - [ProgramacaoProducao (app/producao/models.py)](#programacaoproducao-appproducaomodelspy)
+  - [ContatoAgendamento (app/cadastros_agendamento/models.py)](#contatoagendamento-appcadastros_agendamentomodelspy)
+  - [CidadeAtendida / CadastroSubRota (app/cotacao/models.py)](#cidadeatendida-cadastrosubrota-appcotacaomodelspy)
+- [Devolucoes (app/devolucao/models.py)](#devolucoes-appdevolucaomodelspy)
+  - [NFDevolucao](#nfdevolucao)
+  - [OcorrenciaDevolucao](#ocorrenciadevolucao)
+  - [DeParaProdutoCliente](#deparaprodutocliente)
 
 **Ultima Atualizacao**: 07/02/2026
 **Uso**: Regras de negocio, gotchas e comportamentos especiais dos modelos secundarios

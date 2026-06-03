@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/validacao-nf-po/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Fluxo Completo: Validacao NF x PO
+
+> **Papel:** Fluxo Completo: Validacao NF x PO.
+
+## Indice
+
+- [Arquivos Principais](#arquivos-principais)
+- [JOB DE VALIDACAO (Orquestracao)](#job-de-validacao-orquestracao)
+  - [4 Etapas do Job (`executar()`, linha 75):](#4-etapas-do-job-executar-linha-75)
+  - [Diferenca Critica:](#diferenca-critica)
+  - [Funcao Convenience (linha 538):](#funcao-convenience-linha-538)
+- [ETAPA 1: Entrada - validar_dfe() (linha 75)](#etapa-1-entrada---validar_dfe-linha-75)
+- [ETAPA 2: Buscar DFE no Odoo - _buscar_dfe() (linha 406)](#etapa-2-buscar-dfe-no-odoo---_buscar_dfe-linha-406)
+- [ETAPA 3: Buscar Linhas DFE - _buscar_dfe_lines() (linha 516)](#etapa-3-buscar-linhas-dfe---_buscar_dfe_lines-linha-516)
+- [ETAPA 4: Conversao De-Para BATCH - _converter_itens_dfe_batch() (linha 550)](#etapa-4-conversao-de-para-batch---_converter_itens_dfe_batch-linha-550)
+- [ETAPA 5: Buscar POs LOCAL - _buscar_pos_fornecedor_local() (linha 792)](#etapa-5-buscar-pos-local---_buscar_pos_fornecedor_local-linha-792)
+- [ETAPA 6: Match com Split - _fazer_match_com_split() (linha 1742)](#etapa-6-match-com-split---_fazer_match_com_split-linha-1742)
+- [ETAPA 7: Registro de Resultados](#etapa-7-registro-de-resultados)
+- [PREVIEW: buscar_preview_pos_candidatos() (linha 2139)](#preview-buscar_preview_pos_candidatos-linha-2139)
+- [Mapeamento Odoo → Local](#mapeamento-odoo-local)
+  - [Cabecalho DFE:](#cabecalho-dfe)
+  - [Linhas DFE:](#linhas-dfe)
+- [Status Possiveis (ValidacaoNfPoDfe.status)](#status-possiveis-validacaonfpodfestatus)
+- [Regra Critica: 100% Match Obrigatorio](#regra-critica-100-match-obrigatorio)
 
 ## Arquivos Principais
 

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/resolvendo-entidades/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Grupos Empresariais
+
+> **Papel:** Grupos Empresariais.
 
 ## Mapeamento Completo
 

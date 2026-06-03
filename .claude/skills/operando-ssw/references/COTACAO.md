@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-ssw/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # COTACAO — 002
+
+> **Papel:** COTACAO — 002.
+
+## Indice
+
+- [cotar_frete_ssw_002.py](#cotar_frete_ssw_002py)
+  - [Parametros](#parametros)
+  - [Regra CEP Origem (CRITICA)](#regra-cep-origem-critica)
+  - [Workflow do Agente](#workflow-do-agente)
+  - [FIELD_MAP (10 campos)](#field_map-10-campos)
+  - [Fluxo SSW](#fluxo-ssw)
+  - [Resultado Agrupado](#resultado-agrupado)
+  - [Formato de Apresentacao](#formato-de-apresentacao)
+  - [GOTCHAS](#gotchas)
 
 Documentacao detalhada do script de cotacao de frete no SSW.
 

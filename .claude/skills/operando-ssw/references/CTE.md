@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-ssw/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # CTE — 004, 007, 101, 222
+
+> **Papel:** CTE — 004, 007, 101, 222.
+
+## Indice
+
+- [FIELD_MAP — emitir_cte_004.py](#field_map-emitir_cte_004py)
+  - [Campos de volume (dimensoes moto) — emitir_cte_004.py](#campos-de-volume-dimensoes-moto-emitir_cte_004py)
+  - [Campos de consulta — consultar_ctrc_101.py](#campos-de-consulta-consultar_ctrc_101py)
+  - [Campos de cancelamento — cancelar_cte_004.py](#campos-de-cancelamento-cancelar_cte_004py)
+- [FIELD_MAP — emitir_cte_complementar_222.py](#field_map-emitir_cte_complementar_222py)
+  - [Campos tela inicial (page1) — emitir_cte_complementar_222.py](#campos-tela-inicial-page1-emitir_cte_complementar_222py)
+  - [Campos tela principal (page2) — emitir_cte_complementar_222.py](#campos-tela-principal-page2-emitir_cte_complementar_222py)
+  - [Constantes do script](#constantes-do-script)
+- [Fluxo SSW Detalhado](#fluxo-ssw-detalhado)
+  - [Emissao (004 → 007 → 101)](#emissao-004-007-101)
+  - [Consulta (101)](#consulta-101)
+  - [Cancelamento (004)](#cancelamento-004)
+- [Fluxo SSW — CTe Complementar (222)](#fluxo-ssw-cte-complementar-222)
+- [Dialogs Automaticos](#dialogs-automaticos)
+  - [emitir_cte_004.py](#emitir_cte_004py)
+  - [cancelar_cte_004.py](#cancelar_cte_004py)
+  - [emitir_cte_complementar_222.py](#emitir_cte_complementar_222py)
+- [Gotchas de Dominio](#gotchas-de-dominio)
+  - [Emissao (004)](#emissao-004)
+  - [Consulta (101)](#consulta-101)
+  - [Cancelamento (004)](#cancelamento-004)
+  - [CT-e Complementar (222)](#ct-e-complementar-222)
+- [Workflow CT-e Completo](#workflow-ct-e-completo)
 
 Gotchas de dominio, FIELD_MAP interno e workflow completo para operacoes CT-e no SSW.
 Para parametros e retornos dos scripts, consultar [SCRIPTS.md](../SCRIPTS.md).

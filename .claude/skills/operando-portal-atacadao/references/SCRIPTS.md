@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-portal-atacadao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Portal Atacadao
+
+> **Papel:** Scripts — Portal Atacadao.
+
+## Indice
+
+- [0. atacadao_common.py — Biblioteca Compartilhada](#0-atacadao_commonpy-biblioteca-compartilhada)
+- [1. imprimir_pedidos.py](#1-imprimir_pedidospy)
+  - [Parametros](#parametros)
+  - [Invocacao](#invocacao)
+  - [Output](#output)
+  - [Dependencias](#dependencias)
+- [2. consultar_agendamentos.py](#2-consultar_agendamentospy)
+  - [Parametros](#parametros)
+  - [Invocacao](#invocacao)
+  - [Output](#output)
+  - [Dependencias](#dependencias)
+- [3. consultar_saldo.py](#3-consultar_saldopy)
+  - [Parametros](#parametros)
+  - [Invocacao](#invocacao)
+  - [Output](#output)
+  - [GOTCHAs](#gotchas)
+  - [Dependencias](#dependencias)
+- [4. agendar_lote.py](#4-agendar_lotepy)
+  - [Parametros](#parametros)
+  - [Invocacao](#invocacao)
+  - [Output (dry-run)](#output-dry-run)
+  - [Output (confirmado)](#output-confirmado)
+  - [Dependencias](#dependencias)
+- [Tabela de Veiculos](#tabela-de-veiculos)
 
 **Caminho**: `.claude/skills/operando-portal-atacadao/scripts/`
 **Invocacao**: `source .venv/bin/activate && python .claude/skills/operando-portal-atacadao/scripts/<script>.py [args]`

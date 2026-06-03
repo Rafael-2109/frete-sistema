@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/executando-odoo-financeiro/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Contas por Empresa no Odoo
+
+> **Papel:** Contas por Empresa no Odoo.
+
+## Indice
+
+- [Empresas (res.company)](#empresas-rescompany)
+- [Contas de Juros de Recebimento](#contas-de-juros-de-recebimento)
+- [Contas de Juros de Pagamento](#contas-de-juros-de-pagamento)
+- [Contas Comuns (Todas as Empresas)](#contas-comuns-todas-as-empresas)
+  - [Contas de Ativo](#contas-de-ativo)
+  - [Contas de Cliente](#contas-de-cliente)
+- [Journals Bancarios](#journals-bancarios)
+  - [Journal de Recebimento (Testado)](#journal-de-recebimento-testado)
+  - [Mapeamento CNAB → Journal](#mapeamento-cnab-journal)
+  - [Como Adicionar Novo Banco](#como-adicionar-novo-banco)
+- [Como Descobrir Novos IDs](#como-descobrir-novos-ids)
+  - [Via Codigo Python](#via-codigo-python)
+  - [Via Skill descobrindo-odoo-estrutura](#via-skill-descobrindo-odoo-estrutura)
+- [Notas Importantes](#notas-importantes)
 
 Mapeamento de IDs de contas contabeis por empresa.
 

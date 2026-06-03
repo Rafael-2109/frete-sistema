@@ -334,7 +334,7 @@ Ref completa de parametros: `references/SCRIPTS.md`
 
 | Quando o agente precisa de... | Ler |
 |-------------------------------|-----|
-| **Parametros, invocacao e output dos scripts** | [SCRIPTS.md](references/SCRIPTS.md) |
-| Seletores e caminhos do portal | [PORTAL_NAVEGACAO.md](references/PORTAL_NAVEGACAO.md) |
+| **Parametros, invocacao e output dos scripts** | [SCRIPTS.md](./references/SCRIPTS.md) |
+| Seletores e caminhos do portal | [PORTAL_NAVEGACAO.md](./references/PORTAL_NAVEGACAO.md) |
 | URLs, veiculos, timeouts padrao | `atacadao_defaults.json` |
 | Config existente (seletores) | `app/portal/atacadao/config.py` |

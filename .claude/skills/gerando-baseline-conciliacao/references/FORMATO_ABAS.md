@@ -1,4 +1,22 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerando-baseline-conciliacao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Formato Canonico das 4 Abas
+
+> **Papel:** Formato Canonico das 4 Abas.
+
+## Indice
+
+- [Aba 1: "Pendentes Mes x Journal" (posicao 1)](#aba-1-pendentes-mes-x-journal-posicao-1)
+- [Aba 2: "Pendentes" (posicao 2)](#aba-2-pendentes-posicao-2)
+- [Aba 3: "Conciliacoes Dia Anterior" (posicao 3)](#aba-3-conciliacoes-dia-anterior-posicao-3)
+- [Aba 4: "Resumo" (posicao 4)](#aba-4-resumo-posicao-4)
+- [Ordenacao final do workbook](#ordenacao-final-do-workbook)
 
 Fonte autoritativa: `/memories/preferences.xml` do user_id=18 (Marcus Lima), secao `<preference name="baseline_conciliacoes">`.
 

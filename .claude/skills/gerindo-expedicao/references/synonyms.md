@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Sinonimos de Entrada - CRITICOS
+
+> **Papel:** Sinonimos de Entrada - CRITICOS.
 
 Apenas termos NAO OBVIOS que Claude nao saberia inferir do contexto.
 

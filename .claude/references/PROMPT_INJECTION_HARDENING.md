@@ -1,4 +1,68 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Prompt Injection Hardening — Defense in Depth
+
+> **Papel:** Prompt Injection Hardening — Defense in Depth.
+
+## Indice
+
+- [Principio Fundamental](#principio-fundamental)
+- [1. Threat Model — o que pode acontecer no Nacom](#1-threat-model-o-que-pode-acontecer-no-nacom)
+  - [1.1 Direct Injection (user message)](#11-direct-injection-user-message)
+  - [1.2 Meta-Instruction Injection](#12-meta-instruction-injection)
+  - [1.3 Indirect Injection (via tool output)](#13-indirect-injection-via-tool-output)
+  - [1.4 RAG Injection (memoria + embeddings)](#14-rag-injection-memoria-embeddings)
+  - [1.5 Few-Shot Injection](#15-few-shot-injection)
+  - [1.6 Authorization Boundary Injection](#16-authorization-boundary-injection)
+- [2. Layered Defense (Defense in Depth)](#2-layered-defense-defense-in-depth)
+- [3. User Input Sanitization (Layer 1)](#3-user-input-sanitization-layer-1)
+  - [3.1 Schema Validation na Route](#31-schema-validation-na-route)
+  - [3.2 Length Limits](#32-length-limits)
+  - [3.3 Encoding Checks](#33-encoding-checks)
+- [4. Prompt Templating (Layer 2)](#4-prompt-templating-layer-2)
+  - [4.1 Never Concatenate User Input Into System Prompt](#41-never-concatenate-user-input-into-system-prompt)
+  - [4.2 Session Context Injection (Hook)](#42-session-context-injection-hook)
+- [5. System Prompt Hardening (Layer 3)](#5-system-prompt-hardening-layer-3)
+  - [5.1 Constitutional L1 como Invariant](#51-constitutional-l1-como-invariant)
+  - [5.2 Meta-Instruction Alert](#52-meta-instruction-alert)
+  - [5.3 Instrucoes Negativas para Safety](#53-instrucoes-negativas-para-safety)
+- [6. Runtime Enforcement (Layer 4)](#6-runtime-enforcement-layer-4)
+  - [6.1 Permission Hooks (PreToolUse)](#61-permission-hooks-pretooluse)
+  - [6.2 MCP Tool Allowlists](#62-mcp-tool-allowlists)
+  - [6.3 Hook PostToolUse — Output Validation](#63-hook-posttooluse-output-validation)
+  - [6.4 Rate Limiting](#64-rate-limiting)
+- [7. Output Filtering (Layer 5)](#7-output-filtering-layer-5)
+  - [7.1 PII Scrub Pre-Response](#71-pii-scrub-pre-response)
+  - [7.2 System Prompt Leak Detection](#72-system-prompt-leak-detection)
+- [8. Memory Content Integrity (RAG Hardening)](#8-memory-content-integrity-rag-hardening)
+  - [8.1 XML Escape (parcial ja existe)](#81-xml-escape-parcial-ja-existe)
+  - [8.2 Content Hash Logging](#82-content-hash-logging)
+  - [8.3 Blocklist de Tags Suspeitas em Memory Content](#83-blocklist-de-tags-suspeitas-em-memory-content)
+  - [8.4 Cross-User Scope (`user_id=0` empresa memories)](#84-cross-user-scope-user_id0-empresa-memories)
+- [9. Graceful Degradation (Layer 6 — when all else fails)](#9-graceful-degradation-layer-6-when-all-else-fails)
+  - [9.1 Least Privilege por Default](#91-least-privilege-por-default)
+  - [9.2 Logging + Auditoria](#92-logging-auditoria)
+  - [9.3 Rate Limiting + Blocking](#93-rate-limiting-blocking)
+  - [9.4 Feedback Loop Humano](#94-feedback-loop-humano)
+  - [9.5 Rollback Pronto](#95-rollback-pronto)
+- [10. Checklist de Deployment](#10-checklist-de-deployment)
+- [11. Test Vectors (manual ate R9 automatizar)](#11-test-vectors-manual-ate-r9-automatizar)
+  - [Direct injection](#direct-injection)
+  - [Meta-instruction tag](#meta-instruction-tag)
+  - [Role play bypass](#role-play-bypass)
+  - [Indirect via tool output](#indirect-via-tool-output)
+  - [Few-shot continuation (apos R17)](#few-shot-continuation-apos-r17)
+  - [Scope escalation](#scope-escalation)
+  - [RAG injection](#rag-injection)
+- [12. Roadmap Integration](#12-roadmap-integration)
+- [Fontes](#fontes)
+- [Notas](#notas)
 
 **Versao**: 1.0
 **Data**: 2026-04-12

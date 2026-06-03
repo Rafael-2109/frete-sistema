@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerando-baseline-conciliacao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Armadilhas documentadas
+
+> **Papel:** Armadilhas documentadas.
+
+## Indice
+
+- [1. Usar tabela local `extrato_item` como fonte](#1-usar-tabela-local-extrato_item-como-fonte)
+- [2. Nomear aba "Baseline" em vez de "Pendentes Mes x Journal"](#2-nomear-aba-baseline-em-vez-de-pendentes-mes-x-journal)
+- [3. Valor Debitos positivo (com abs)](#3-valor-debitos-positivo-com-abs)
+- [4. Omitir secao "Evolucao Baseline" no rodape](#4-omitir-secao-evolucao-baseline-no-rodape)
+- [5. Exibir `SYNC_ODOO_WRITE_DATE` como nome de usuario](#5-exibir-sync_odoo_write_date-como-nome-de-usuario)
+- [6. Omitir a aba "Conciliacoes Dia Anterior"](#6-omitir-a-aba-conciliacoes-dia-anterior)
+- [7. Calcular PGTOS/RECEB via `payment_id IS NOT NULL`](#7-calcular-pgtosreceb-via-payment_id-is-not-null)
+- [8. Consultar apenas 1 fonte para aba D-1](#8-consultar-apenas-1-fonte-para-aba-d-1)
+- [9. Baseline de data passada retorna estado atual](#9-baseline-de-data-passada-retorna-estado-atual)
+- [Matriz de prevencao](#matriz-de-prevencao)
 
 Erros ja cometidos pelo agente em sessoes anteriores do Marcus (user_id=18). Estas armadilhas sao REAIS — cada uma exigiu correcao interativa pelo usuario.
 

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Exemplos de Uso - Gerindo Expedicao
+
+> **Papel:** Exemplos de Uso - Gerindo Expedicao.
 
 Mapeamento de perguntas frequentes para comandos dos scripts.
 

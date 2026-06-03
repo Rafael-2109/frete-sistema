@@ -1,4 +1,64 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/recebimento-fisico-odoo/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Erros Comuns no Recebimento Fisico
+
+> **Papel:** Erros Comuns no Recebimento Fisico.
+
+## Indice
+
+- [Erros Descobertos e Documentados nesta Implementacao](#erros-descobertos-e-documentados-nesta-implementacao)
+- [ERRO 1: "cannot marshal None" no button_validate](#erro-1-cannot-marshal-none-no-button_validate)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [ERRO 2: Usar `odoo.execute()` em vez de `odoo.execute_kw()`](#erro-2-usar-odooexecute-em-vez-de-odooexecute_kw)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo ERRADO](#codigo-errado)
+  - [Codigo CORRETO](#codigo-correto)
+  - [Metodos disponiveis na OdooConnection:](#metodos-disponiveis-na-odooconnection)
+- [ERRO 3: button_validate falha por quality checks pendentes](#erro-3-button_validate-falha-por-quality-checks-pendentes)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [ERRO 4: Lote duplicado (lot_name ja existe)](#erro-4-lote-duplicado-lot_name-ja-existe)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+  - [NOTA:](#nota)
+- [ERRO 5: Create stock.move.line falha por falta de campos obrigatorios](#erro-5-create-stockmoveline-falha-por-falta-de-campos-obrigatorios)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [ERRO 6: Picking ja foi validado (state != assigned)](#erro-6-picking-ja-foi-validado-state-assigned)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [ERRO 7: Soma dos lotes != quantidade esperada](#erro-7-soma-dos-lotes-quantidade-esperada)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [ERRO 8: Lock anti-duplicata impede processamento](#erro-8-lock-anti-duplicata-impede-processamento)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [ERRO 9: Job RQ timeout (>10 min)](#erro-9-job-rq-timeout-10-min)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Solucao](#solucao)
+- [ERRO 10: Campo `reserved_uom_qty` nao existe em stock.move.line](#erro-10-campo-reserved_uom_qty-nao-existe-em-stockmoveline)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo ERRADO](#codigo-errado)
+  - [Codigo CORRETO](#codigo-correto)
+  - [Mapeamento Local](#mapeamento-local)
+  - [Campos Disponiveis (Verificados)](#campos-disponiveis-verificados)
 
 ## Erros Descobertos e Documentados nesta Implementacao
 
@@ -243,7 +303,7 @@ rq.timeouts.JobTimeoutException: Task exceeded maximum timeout
 ```
 
 ### Causa
-Picking com muitos produtos/lotes levou mais de 10 min para processar.
+Picking com diversos produtos/lotes levou mais de 10 min para processar.
 
 ### Solucao
 O timeout esta configurado em 600s (10 min) no job:

@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/monitorando-entregas/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Tabelas do Domínio Entregas
+
+> **Papel:** Tabelas do Domínio Entregas.
+
+## Indice
+
+- [Diagrama de Relacionamentos](#diagrama-de-relacionamentos)
+- [entregas_monitoradas](#entregas_monitoradas)
+- [agendamentos_entrega](#agendamentos_entrega)
+- [nf_devolucao](#nf_devolucao)
+- [ocorrencia_devolucao](#ocorrencia_devolucao)
+- [Queries Comuns](#queries-comuns)
+  - [Entregas Pendentes](#entregas-pendentes)
+  - [Entregas com Problema](#entregas-com-problema)
+  - [Entregas sem Canhoto](#entregas-sem-canhoto)
+  - [Devoluções Abertas](#devoluções-abertas)
+  - [Agendamentos Pendentes](#agendamentos-pendentes)
 
 ## Diagrama de Relacionamentos
 

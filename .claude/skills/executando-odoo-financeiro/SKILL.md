@@ -156,9 +156,9 @@ titulos = odoo.execute_kw(
 
 | Arquivo | Conteudo |
 |---------|----------|
-| [fluxo-recebimento.md](references/fluxo-recebimento.md) | Codigo validado para criar pagamentos e reconciliar |
-| [erros-comuns.md](references/erros-comuns.md) | Armadilhas e como evita-las |
-| [contas-por-empresa.md](references/contas-por-empresa.md) | IDs de contas por company |
+| [fluxo-recebimento.md](./references/fluxo-recebimento.md) | Codigo validado para criar pagamentos e reconciliar |
+| [erros-comuns.md](./references/erros-comuns.md) | Armadilhas e como evita-las |
+| [contas-por-empresa.md](./references/contas-por-empresa.md) | IDs de contas por company |
 
 ## Dados Criticos
 
@@ -316,7 +316,7 @@ baixa_service.reconciliar(credit_line_id, debit_line)
 > **GOTCHA CRITICO**: account_id DEVE ser ULTIMO write. Write na statement_line regenera move_lines, revertendo account_id.
 > NUNCA fazer as 3 operacoes em chamadas separadas (cada uma faz draft→post, causando O11/O12).
 > `_atualizar_campos_extrato()` esta **DEPRECADO** — NAO usar.
-> Ver [erros-comuns.md](references/erros-comuns.md) Erro 11 e Erro 12.
+> Ver [erros-comuns.md](./references/erros-comuns.md) Erro 11 e Erro 12.
 
 ### Correcao Retroativa (Registros Ja Conciliados)
 
@@ -333,7 +333,7 @@ Quando registros JA estao reconciliados (`is_reconciled=True`) mas com campos in
 
 **Script**: `scripts/correcao_campos_extrato_odoo.py` — modos `--verificar-*` e `--corrigir-*`
 
-> Ver [erros-comuns.md](references/erros-comuns.md) Erro 12 e `.claude/references/odoo/GOTCHAS.md` secao "Correcao Retroativa" para fluxo completo.
+> Ver [erros-comuns.md](./references/erros-comuns.md) Erro 12 e `.claude/references/odoo/GOTCHAS.md` secao "Correcao Retroativa" para fluxo completo.
 
 ## Skills Relacionadas
 
@@ -341,4 +341,4 @@ Quando registros JA estao reconciliados (`is_reconciled=True`) mas com campos in
 |-------|-------------|
 | [rastreando-odoo](../rastreando-odoo/SKILL.md) | Consultar/rastrear documentos (leitura) |
 | [descobrindo-odoo-estrutura](../descobrindo-odoo-estrutura/SKILL.md) | Descobrir campos de modelos |
-| [integracao-odoo](../integracao-odoo/SKILL.md) | Criar CTe, despesas extras |
+| `integracao-odoo` | Criar CTe, despesas extras |

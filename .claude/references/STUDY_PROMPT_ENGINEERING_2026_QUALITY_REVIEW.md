@@ -1,4 +1,71 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Quality Review: system_prompt.md v4.2.0
+
+> **Papel:** Quality Review: system_prompt.md v4.2.0.
+
+## Indice
+
+- [Context](#context)
+- [Executive Summary](#executive-summary)
+  - [Overall Score: **4.3 / 5** (MUITO BOM)](#overall-score-43-5-muito-bom)
+  - [Top 7 Strengths](#top-7-strengths)
+  - [Top 8 Issues (priorizadas)](#top-8-issues-priorizadas)
+- [Score Card (Rubrica A-M)](#score-card-rubrica-a-m)
+  - [A. Fundamentos (General Principles)](#a-fundamentos-general-principles)
+  - [B. Estrutura XML](#b-estrutura-xml)
+  - [C. Output Control](#c-output-control)
+  - [D. Tool Use](#d-tool-use)
+  - [E. Thinking / Reasoning](#e-thinking-reasoning)
+  - [F. Agentic Systems](#f-agentic-systems)
+  - [G. Safety / Autonomy](#g-safety-autonomy)
+  - [H. Subagents / Orchestration](#h-subagents-orchestration)
+  - [I. Progressive Disclosure (Skills)](#i-progressive-disclosure-skills)
+  - [J. Memoria](#j-memoria)
+  - [K. Context Management](#k-context-management)
+  - [L. Prompt Caching](#l-prompt-caching)
+  - [M. Constitutional Hierarchy](#m-constitutional-hierarchy)
+  - [Scorecard Final](#scorecard-final)
+- [Findings Concretos](#findings-concretos)
+  - [Q1. Zero few-shot examples formais (A3)](#q1-zero-few-shot-examples-formais-a3)
+  - [Q2. Constitutional hierarchy L1-L4 ausente (M1)](#q2-constitutional-hierarchy-l1-l4-ausente-m1)
+  - [Q3. Parallel tool calls nao mencionado (D2)](#q3-parallel-tool-calls-nao-mencionado-d2)
+  - [Q4. Self-check pre-return ausente (E5)](#q4-self-check-pre-return-ausente-e5)
+  - [Q5. Context awareness prompt ausente (F5)](#q5-context-awareness-prompt-ausente-f5)
+  - [Q6. Tag inconsistency em regras R0-R0d (B1)](#q6-tag-inconsistency-em-regras-r0-r0d-b1)
+  - [Q7. `<current_context>` mistura business + role (A6)](#q7-current_context-mistura-business-role-a6)
+  - [Q8. Erros transientes (Odoo/SSW timeout) nao especificados (F4)](#q8-erros-transientes-odoossw-timeout-nao-especificados-f4)
+- [Coverage Gaps (cenarios operacionais nao cobertos)](#coverage-gaps-cenarios-operacionais-nao-cobertos)
+  - [CG1. Fim de sessao gracioso](#cg1-fim-de-sessao-gracioso)
+  - [CG2. Dados contraditorios (local vs Odoo)](#cg2-dados-contraditorios-local-vs-odoo)
+  - [CG3. Usuario frustrado / emocional](#cg3-usuario-frustrado-emocional)
+  - [CG4. Multi-turn analysis (conversa longa)](#cg4-multi-turn-analysis-conversa-longa)
+  - [CG5. Ambiguidade em timezone](#cg5-ambiguidade-em-timezone)
+  - [CG6. Confidencialidade cross-user](#cg6-confidencialidade-cross-user)
+- [Token Efficiency Analysis](#token-efficiency-analysis)
+  - [Breakdown aproximado](#breakdown-aproximado)
+  - [Oportunidades de enxugamento (~15% ou ~400 tokens)](#oportunidades-de-enxugamento-15-ou-400-tokens)
+- [Golden Rule Assessment ("show to colleague")](#golden-rule-assessment-show-to-colleague)
+  - [Pergunta: um operador logistico novo conseguiria seguir o system_prompt?](#pergunta-um-operador-logistico-novo-conseguiria-seguir-o-system_prompt)
+  - [Pergunta: um Claude 4.6 seguiria?](#pergunta-um-claude-46-seguiria)
+- [Recomendacoes Priorizadas](#recomendacoes-priorizadas)
+  - [P0 (fazer se/quando redesenhar prompt)](#p0-fazer-sequando-redesenhar-prompt)
+  - [P1 (proximo refactor — adicionar valor claro)](#p1-proximo-refactor-adicionar-valor-claro)
+  - [P2 (melhorias quando houver motivo para mexer)](#p2-melhorias-quando-houver-motivo-para-mexer)
+  - [Enxugamento compensatorio (se aplicar todas P1+P2)](#enxugamento-compensatorio-se-aplicar-todas-p1p2)
+- [Comparacao com leaked Opus 4.6 system prompt](#comparacao-com-leaked-opus-46-system-prompt)
+- [Veredito Final](#veredito-final)
+  - [System prompt v4.2.0 e **MUITO BOM** (4.39/5)](#system-prompt-v420-e-muito-bom-4395)
+- [Proxima Revisao](#proxima-revisao)
+- [Appendix A: Metodologia](#appendix-a-metodologia)
+- [Appendix B: Fontes](#appendix-b-fontes)
+- [Contexto](#contexto)
 
 **Versao**: 1.0 (review) — findings aplicados em 2026-04-12 (tarde) como v4.3.0
 **Data**: 2026-04-12
@@ -690,3 +757,7 @@ Sugestao: re-avaliar quando:
 - `.claude/references/AGENT_TEMPLATES.md` (cross-ref para constitutional hierarchy)
 - `.claude/references/MEMORY_PROTOCOL.md` (cross-ref para R0)
 - `.claude/references/REGRAS_OUTPUT.md` (cross-ref para I5/I6)
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

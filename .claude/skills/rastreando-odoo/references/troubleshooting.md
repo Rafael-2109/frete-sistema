@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/rastreando-odoo/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Troubleshooting - Rastreamento Odoo
+
+> **Papel:** Troubleshooting - Rastreamento Odoo.
+
+## Indice
+
+- [Busca nao encontra o PO](#busca-nao-encontra-o-po)
+- [Busca inversa: Fatura para DFE](#busca-inversa-fatura-para-dfe)
+- [Modelo DFE nao encontrado](#modelo-dfe-nao-encontrado)
+  - [Mapeamento de Campos (l10n_br_fiscal.document → l10n_br_ciel_it_account.dfe)](#mapeamento-de-campos-l10n_br_fiscaldocument-l10n_br_ciel_it_accountdfe)
+  - [Mapeamento de Campos (l10n_br_fiscal.document.line → l10n_br_ciel_it_account.dfe.line)](#mapeamento-de-campos-l10n_br_fiscaldocumentline-l10n_br_ciel_it_accountdfeline)
+- [Campos de impostos nao aparecem](#campos-de-impostos-nao-aparecem)
+- [Fatura nao vinculada ao DFE](#fatura-nao-vinculada-ao-dfe)
+- [Titulos nao aparecem na fatura](#titulos-nao-aparecem-na-fatura)
+- [Conciliacao parcial vs total](#conciliacao-parcial-vs-total)
 
 ## Busca nao encontra o PO
 

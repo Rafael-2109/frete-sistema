@@ -1,4 +1,21 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-ssw/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # SSW_COMMON — Funcoes compartilhadas, defaults e batch
+
+> **Papel:** SSW_COMMON — Funcoes compartilhadas, defaults e batch.
+
+## Indice
+
+- [ssw_common.py](#ssw_commonpy)
+- [ssw_defaults.json](#ssw_defaultsjson)
+- [Sequencia de Execucao Batch](#sequencia-de-execucao-batch)
+- [Mapeamento Unidade → Transportadora](#mapeamento-unidade-transportadora)
 
 Documentacao de infraestrutura compartilhada entre scripts SSW.
 

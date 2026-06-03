@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Confiabilidade de Subagentes — Protocolo Operacional
+
+> **Papel:** Confiabilidade de Subagentes — Protocolo Operacional.
+
+## Indice
+
+- [Por Que Este Documento Existe](#por-que-este-documento-existe)
+- [Falhas Documentadas](#falhas-documentadas)
+- [O Que Se Perde na Compressao](#o-que-se-perde-na-compressao)
+- [Protocolo de Mitigacao](#protocolo-de-mitigacao)
+  - [M1: File-System como Memoria Compartilhada (PRINCIPAL)](#m1-file-system-como-memoria-compartilhada-principal)
+  - [M1.1: Ordem de Leitura (SDK 0.1.60+, 2026-04-17)](#m11-ordem-de-leitura-sdk-0160-2026-04-17)
+  - [M2: Prompts Estruturados com Definition of Done](#m2-prompts-estruturados-com-definition-of-done)
+  - [M3: Subagentes Read-Only para Pesquisa](#m3-subagentes-read-only-para-pesquisa)
+  - [M4: Verificacao pelo Principal](#m4-verificacao-pelo-principal)
+- [Guia para o Agente Principal](#guia-para-o-agente-principal)
+  - [Ao Spawnar Subagente via Task Tool](#ao-spawnar-subagente-via-task-tool)
+  - [Quando Verificar (Matriz de Risco)](#quando-verificar-matriz-de-risco)
+  - [Sinais de Alerta no Output do Subagente](#sinais-de-alerta-no-output-do-subagente)
+- [Caso 2026-05-11 — JSONL 6 linhas / turns=0: ERA bug de loader (NAO padrao normal)](#caso-2026-05-11-jsonl-6-linhas-turns0-era-bug-de-loader-nao-padrao-normal)
+  - [Causa real](#causa-real)
+  - [Cascade da falha](#cascade-da-falha)
+  - [Fix](#fix)
+  - [Licao para investigacoes futuras](#licao-para-investigacoes-futuras)
+- [Fontes](#fontes)
+- [Licoes da Revisao Abr/2026](#licoes-da-revisao-abr2026)
+  - [Gaps Detectados e Corrigidos](#gaps-detectados-e-corrigidos)
+  - [Descobertas Criticas](#descobertas-criticas)
+  - [Decisoes Arquiteturais](#decisoes-arquiteturais)
+  - [Tecnicas Avancadas Aplicadas](#tecnicas-avancadas-aplicadas)
+  - [Tecnicas Rejeitadas (por ROI nao provado nesta revisao)](#tecnicas-rejeitadas-por-roi-nao-provado-nesta-revisao)
+  - [Referencias Criadas Nesta Revisao](#referencias-criadas-nesta-revisao)
 
 **Ultima Atualizacao**: 25/05/2026 (notas historicas Abr/2026 + caso 2026-05-11 max_turns loader fix; contagem atualizada para 15 Nacom Goya com `gestor-estoque-odoo` adicionado em 2026-05-24, alem do `auditor-sped-ecd` adicionado em 2026-05-16)
 

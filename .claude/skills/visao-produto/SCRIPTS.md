@@ -1,4 +1,25 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/visao-produto/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Visao Produto (Detalhes)
+
+> **Papel:** Scripts — Visao Produto (Detalhes).
+
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. consultando_produto_completo.py](#1-consultando_produto_completopy)
+- [2. consultando_producao_vs_real.py](#2-consultando_producao_vs_realpy)
+- [Tabelas do Dominio](#tabelas-do-dominio)
+- [Exemplos de Uso](#exemplos-de-uso)
+  - [Cenario 1: Visao completa de produto](#cenario-1-visao-completa-de-produto)
+  - [Cenario 2: Producao vs realizado de um produto](#cenario-2-producao-vs-realizado-de-um-produto)
+  - [Cenario 3: Producao geral (todos os produtos)](#cenario-3-producao-geral-todos-os-produtos)
 
 Referencia detalhada de parametros, retornos e tabelas consultadas.
 

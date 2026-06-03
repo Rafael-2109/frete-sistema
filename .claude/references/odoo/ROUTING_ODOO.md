@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Odoo — Routing para o Agente Web
+
+> **Papel:** Odoo — Routing para o Agente Web.
 
 > **Criado em**: 2026-03-18
 > **Objetivo**: Ponto de entrada Odoo para o agente web — verificar modelos ANTES de executar, saber onde encontrar cada informacao.

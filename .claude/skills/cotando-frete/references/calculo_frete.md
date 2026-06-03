@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/cotando-frete/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Logica Completa de Calculo de Frete
+
+> **Papel:** Logica Completa de Calculo de Frete.
+
+## Indice
+
+- [Visao Geral](#visao-geral)
+- [Passo 1: Determinar ICMS](#passo-1-determinar-icms)
+- [Passo 2: Peso para Calculo](#passo-2-peso-para-calculo)
+- [Passo 3: Frete Base](#passo-3-frete-base)
+- [Passo 4: Componentes Adicionais](#passo-4-componentes-adicionais)
+  - [4.1 GRIS (Gerenciamento de Risco)](#41-gris-gerenciamento-de-risco)
+  - [4.2 ADV (Ad Valorem)](#42-adv-ad-valorem)
+  - [4.3 RCA (Risco de Carga Aquaviaria)](#43-rca-risco-de-carga-aquaviaria)
+  - [4.4 Pedagio](#44-pedagio)
+  - [4.5 Valores Fixos](#45-valores-fixos)
+- [Passo 5: Separar Componentes ANTES e DEPOIS](#passo-5-separar-componentes-antes-e-depois)
+- [Passo 6: Aplicar Frete Minimo VALOR](#passo-6-aplicar-frete-minimo-valor)
+- [Passo 7: Adicionar Componentes POS-MINIMO](#passo-7-adicionar-componentes-pos-minimo)
+- [Passo 8: Aplicar ICMS (se nao incluso)](#passo-8-aplicar-icms-se-nao-incluso)
+- [Passo 9: Calcular Valor Liquido](#passo-9-calcular-valor-liquido)
+- [Passo 10: Resultado Final](#passo-10-resultado-final)
+- [Carga DIRETA vs FRACIONADA](#carga-direta-vs-fracionada)
+  - [FRACIONADA (tipo_carga='FRACIONADA')](#fracionada-tipo_cargafracionada)
+  - [DIRETA (tipo_carga='DIRETA')](#direta-tipo_cargadireta)
+- [Campos que Alteram o Comportamento (Transportadora)](#campos-que-alteram-o-comportamento-transportadora)
+- [Campos da Tabela de Frete (TabelaFreteManager)](#campos-da-tabela-de-frete-tabelafretemanager)
 
 FONTE: `app/utils/calculadora_frete.py` — `CalculadoraFrete.calcular_frete_unificado()`
 

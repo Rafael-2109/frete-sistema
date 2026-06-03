@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/diagnosticando-banco/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Diagnosticando Banco (Detalhes)
+
+> **Papel:** Scripts — Diagnosticando Banco (Detalhes).
+
+## Indice
+
+- [1. health_check_banco.py](#1-health_check_bancopy)
+- [Retorno JSON](#retorno-json)
+  - [Sucesso (--all --resumo)](#sucesso---all---resumo)
+  - [Sucesso (check especifico)](#sucesso-check-especifico)
+  - [Check indisponivel (pg_stat_statements)](#check-indisponivel-pg_stat_statements)
+- [Exemplos de Uso](#exemplos-de-uso)
+  - [Cenario 1: Visao geral rapida](#cenario-1-visao-geral-rapida)
+  - [Cenario 2: Investigar indices](#cenario-2-investigar-indices)
+  - [Cenario 3: Performance](#cenario-3-performance)
+  - [Cenario 4: Capacidade](#cenario-4-capacidade)
+  - [Cenario 5: Manutencao](#cenario-5-manutencao)
+  - [Cenario 6: Producao via Render MCP](#cenario-6-producao-via-render-mcp)
 
 Referencia detalhada de parametros, retornos esperados e exemplos de uso.
 

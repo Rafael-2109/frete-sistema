@@ -1,4 +1,62 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/conciliando-odoo-po/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Erros Comuns na Conciliacao PO x DFe
+
+> **Papel:** Erros Comuns na Conciliacao PO x DFe.
+
+## Indice
+
+- [Erros Descobertos e Corrigidos nesta Implementacao](#erros-descobertos-e-corrigidos-nesta-implementacao)
+- [ERRO 1: Usar `odoo.execute()` em vez de `odoo.execute_kw()`](#erro-1-usar-odooexecute-em-vez-de-odooexecute_kw)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo ERRADO](#codigo-errado)
+  - [Codigo CORRETO](#codigo-correto)
+  - [Metodos disponiveis na OdooConnection:](#metodos-disponiveis-na-odooconnection)
+- [ERRO 2: Criar PO via `create()` esquecendo campos obrigatorios](#erro-2-criar-po-via-create-esquecendo-campos-obrigatorios)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo ERRADO](#codigo-errado)
+  - [Codigo CORRETO](#codigo-correto)
+- [ERRO 3: Chamar `unlink` com formato errado](#erro-3-chamar-unlink-com-formato-errado)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo ERRADO](#codigo-errado)
+  - [Codigo CORRETO](#codigo-correto)
+- [ERRO 4: Linhas do PO de referencia vs linhas individuais](#erro-4-linhas-do-po-de-referencia-vs-linhas-individuais)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo ERRADO](#codigo-errado)
+  - [Codigo CORRETO](#codigo-correto)
+- [ERRO 5: `order_line: False` pode nao funcionar em todas as versoes](#erro-5-order_line-false-pode-nao-funcionar-em-todas-as-versoes)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Mitigacao (ja implementada)](#mitigacao-ja-implementada)
+- [ERRO 6: Nao acumular consumo de mesma linha](#erro-6-nao-acumular-consumo-de-mesma-linha)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo ERRADO](#codigo-errado)
+  - [Codigo CORRETO](#codigo-correto)
+- [ERRO 7: button_confirm pode falhar em PO sem linhas](#erro-7-button_confirm-pode-falhar-em-po-sem-linhas)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Mitigacao](#mitigacao)
+- [ERRO 8: CNPJ formatado vs nao formatado](#erro-8-cnpj-formatado-vs-nao-formatado)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo CORRETO](#codigo-correto)
+- [ERRO 9: Decimal vs float em calculos de quantidade](#erro-9-decimal-vs-float-em-calculos-de-quantidade)
+  - [Sintoma](#sintoma)
+  - [Causa](#causa)
+  - [Codigo CORRETO](#codigo-correto)
+- [Checklist de Depuracao](#checklist-de-depuracao)
+- [Logs Uteis](#logs-uteis)
 
 ## Erros Descobertos e Corrigidos nesta Implementacao
 
@@ -159,7 +217,7 @@ for match in matches:
 Apos `copy()`, PO Conciliador tem linhas duplicadas do PO original + linhas novas.
 
 ### Causa
-Em algumas versoes/customizacoes do Odoo, `order_line: False` no `default` do `copy()`
+Em certas versoes/customizacoes do Odoo, `order_line: False` no `default` do `copy()`
 pode ser ignorado, e as linhas do PO original sao copiadas junto.
 
 ### Mitigacao (ja implementada)

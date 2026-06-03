@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Recebimento de Materiais - Documentacao de Referencia
+
+> **Papel:** Recebimento de Materiais - Documentacao de Referencia.
+
+## Indice
+
+- [Visao Geral](#visao-geral)
+  - [Fases de Implementacao](#fases-de-implementacao)
+- [FASE 1: Validacao Fiscal](#fase-1-validacao-fiscal)
+  - [Objetivo](#objetivo)
+  - [Chave de Perfil Fiscal](#chave-de-perfil-fiscal)
+  - [Campos Validados](#campos-validados)
+  - [Calculo ICMS Final](#calculo-icms-final)
+  - [Fluxo de Validacao](#fluxo-de-validacao)
+  - [Status dos DFEs](#status-dos-dfes)
+- [Tabelas do Banco](#tabelas-do-banco)
+  - [perfil_fiscal_produto_fornecedor](#perfil_fiscal_produto_fornecedor)
+  - [divergencia_fiscal](#divergencia_fiscal)
+  - [cadastro_primeira_compra](#cadastro_primeira_compra)
+  - [validacao_fiscal_dfe](#validacao_fiscal_dfe)
+- [Campos Odoo Utilizados](#campos-odoo-utilizados)
+  - [DFE (l10n_br_ciel_it_account.dfe)](#dfe-l10n_br_ciel_it_accountdfe)
+  - [DFE Line (l10n_br_ciel_it_account.dfe.line)](#dfe-line-l10n_br_ciel_it_accountdfeline)
+- [Arquivos do Modulo](#arquivos-do-modulo)
+  - [Models (20 models em `app/recebimento/models.py`)](#models-20-models-em-apprecebimentomodelspy)
+  - [Services (13 em `app/recebimento/services/`)](#services-13-em-apprecebimentoservices)
+  - [Routes (5 em `app/recebimento/routes/`)](#routes-5-em-apprecebimentoroutes)
+  - [Jobs (3 em `app/recebimento/jobs/`)](#jobs-3-em-apprecebimentojobs)
+- [API Endpoints](#api-endpoints)
+- [Configuracao do Scheduler](#configuracao-do-scheduler)
+- [Proximas Fases](#proximas-fases)
+  - [Fase 5: Criacao Fatura Automatica (Pendente)](#fase-5-criacao-fatura-automatica-pendente)
+  - [Skills Relacionadas](#skills-relacionadas)
 
 **Versao**: 2.0
 **Status**: FASES 1-4 IMPLEMENTADAS

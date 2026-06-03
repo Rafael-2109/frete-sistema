@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ROUTING_SKILLS.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Skill Improvement Roadmap
+
+> **Papel:** Skill Improvement Roadmap.
+
+## Indice
+
+- [Setup da Sessao](#setup-da-sessao)
+  - [Como iniciar (1 comando por aba):](#como-iniciar-1-comando-por-aba)
+- [Etapas por Skill (6 passos + limpeza)](#etapas-por-skill-6-passos-limpeza)
+  - [Passo 1 — Validacao Estrutural](#passo-1-validacao-estrutural)
+  - [Passo 2 — Criar Evals](#passo-2-criar-evals)
+  - [Passo 3 — Executar Evals (with_skill vs without_skill)](#passo-3-executar-evals-with_skill-vs-without_skill)
+  - [Passo 4 — Grading + Benchmark](#passo-4-grading-benchmark)
+  - [Passo 5 — Melhorar SKILL.md](#passo-5-melhorar-skillmd)
+  - [Passo 6 — Criar Trigger Eval Set + Otimizacao de Description](#passo-6-criar-trigger-eval-set-otimizacao-de-description)
+  - [Passo 7 — Limpeza OBRIGATORIA](#passo-7-limpeza-obrigatoria)
+- [Roadmap de Skills](#roadmap-de-skills)
+  - [Legenda](#legenda)
+  - [P1 — Alta Complexidade (>100KB, muitos scripts)](#p1-alta-complexidade-100kb-muitos-scripts)
+  - [P2 — Media Complexidade (scripts + references)](#p2-media-complexidade-scripts-references)
+  - [P3 — Simples (1 script)](#p3-simples-1-script)
+  - [P4 — Reference-Only (sem scripts proprios)](#p4-reference-only-sem-scripts-proprios)
+  - [P5 — Skills Adicionadas Pos-Roadmap](#p5-skills-adicionadas-pos-roadmap)
+  - [SKIP — Meta-skills](#skip-meta-skills)
+- [Referencia Rapida](#referencia-rapida)
+  - [Licoes da cotando-frete](#licoes-da-cotando-frete)
+  - [Tempo Estimado](#tempo-estimado)
 
 **Criado**: 2026-02-26
 **Objetivo**: Passar cada skill pelo ciclo de melhoria do skill-creator

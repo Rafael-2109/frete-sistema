@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Agent Design Guide
+
+> **Papel:** Agent Design Guide.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Frontmatter — Campos Oficiais Suportados](#frontmatter-campos-oficiais-suportados)
+  - [Obrigatorios](#obrigatorios)
+  - [Recomendados](#recomendados)
+  - [Condicionais](#condicionais)
+  - [NAO USAR](#nao-usar)
+- [Formato `skills:` — Lista YAML Obrigatoria](#formato-skills-lista-yaml-obrigatoria)
+- [Model Selection](#model-selection)
+- [Claude 4.6 Gotchas (adicionado 2026-04-12)](#claude-46-gotchas-adicionado-2026-04-12)
+- [Secoes Obrigatorias no System Prompt](#secoes-obrigatorias-no-system-prompt)
+- [Secoes Condicionais](#secoes-condicionais)
+- [Templates Reusaveis](#templates-reusaveis)
+- [Anti-Patterns (NAO FAZER)](#anti-patterns-nao-fazer)
+- [Decision Tree: Novo Agent ou Skill?](#decision-tree-novo-agent-ou-skill)
+- [Validacao Antes de Commit](#validacao-antes-de-commit)
+- [Como Criar Novo Agent](#como-criar-novo-agent)
+- [Como Editar Agent Existente](#como-editar-agent-existente)
+- [Referencias](#referencias)
 
 **Ultima Atualizacao**: 2026-05-25 (refresh SDK 0.2.87 + contagem 16 subagents — `gestor-estoque-odoo` adicionado em 2026-05-24 commit `2af8123e` "orquestrador Odoo — 4 skills + subagente")
 **Escopo**: Manual prescritivo para criar e editar subagents no sistema de fretes Nacom Goya. (O agente isolado `orientador-loja` para Lojas HORA, em `app/agente_lojas/`, segue os mesmos principios mas tem allowlist e contexto separados.)

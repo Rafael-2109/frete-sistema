@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Checklist TagPlus — Go-Live
+
+> **Papel:** Checklist TagPlus — Go-Live.
+
+## Indice
+
+- [A. TagPlus (portal + ERP)](#a-tagplus-portal-erp)
+- [B. Render (deploy + env)](#b-render-deploy-env)
+- [C. Sistema — configuração inicial](#c-sistema-configuração-inicial)
+- [D. Mapeamentos](#d-mapeamentos)
+- [E. Validação](#e-validação)
+- [Rollback](#rollback)
+- [Mudança de Scope OAuth](#mudança-de-scope-oauth)
+- [Esboço (preview de payload)](#esboço-preview-de-payload)
+- [Após Go-Live](#após-go-live)
 
 ## A. TagPlus (portal + ERP)
 

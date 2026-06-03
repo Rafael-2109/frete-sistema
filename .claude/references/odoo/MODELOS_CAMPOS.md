@@ -1,4 +1,48 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Modelos Odoo - Campos e Relacionamentos
+
+> **Papel:** Modelos Odoo - Campos e Relacionamentos.
+
+## Indice
+
+- [MODELOS INEXISTENTES (NAO USAR)](#modelos-inexistentes-nao-usar)
+  - [Mapeamento de Campos (l10n_br_fiscal.document → l10n_br_ciel_it_account.dfe)](#mapeamento-de-campos-l10n_br_fiscaldocument-l10n_br_ciel_it_accountdfe)
+  - [Mapeamento de Campos (l10n_br_fiscal.document.line → l10n_br_ciel_it_account.dfe.line)](#mapeamento-de-campos-l10n_br_fiscaldocumentline-l10n_br_ciel_it_accountdfeline)
+- [Documentos Fiscais Eletronicos (DFe)](#documentos-fiscais-eletronicos-dfe)
+  - [l10n_br_ciel_it_account.dfe](#l10n_br_ciel_it_accountdfe)
+  - [l10n_br_ciel_it_account.dfe.line](#l10n_br_ciel_it_accountdfeline)
+- [Compras](#compras)
+  - [purchase.order](#purchaseorder)
+  - [purchase.order.line](#purchaseorderline)
+- [Vendas](#vendas)
+  - [sale.order](#saleorder)
+  - [sale.order.line](#saleorderline)
+  - [crm.tag](#crmtag)
+- [Estoque e Movimentacoes](#estoque-e-movimentacoes)
+  - [stock.picking](#stockpicking)
+  - [stock.move](#stockmove)
+  - [stock.move.line](#stockmoveline)
+  - [stock.lot](#stocklot)
+- [Qualidade](#qualidade)
+  - [quality.check](#qualitycheck)
+- [Financeiro](#financeiro)
+  - [account.move](#accountmove)
+  - [account.move.line](#accountmoveline)
+  - [account.payment](#accountpayment)
+  - [account.journal](#accountjournal)
+  - [account.bank.statement.line (Extrato Bancario)](#accountbankstatementline-extrato-bancario)
+- [Cadastros](#cadastros)
+  - [res.partner](#respartner)
+  - [product.product](#productproduct)
+  - [product.supplierinfo (De-Para Fornecedor)](#productsupplierinfo-de-para-fornecedor)
+- [Diagrama de Relacionamentos](#diagrama-de-relacionamentos)
 
 **Ultima verificacao:** Janeiro/2026
 

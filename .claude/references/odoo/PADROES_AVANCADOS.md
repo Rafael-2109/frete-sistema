@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Padroes Avancados de Implementacao - Odoo
+
+> **Papel:** Padroes Avancados de Implementacao - Odoo.
+
+## Indice
+
+- [Padrao 1: Auditoria Completa por Etapa](#padrao-1-auditoria-completa-por-etapa)
+- [Padrao 2: Retomada Automatica de Lancamentos Parciais](#padrao-2-retomada-automatica-de-lancamentos-parciais)
+- [Padrao 3: Rollback Inteligente (So se NAO Completou)](#padrao-3-rollback-inteligente-so-se-nao-completou)
+- [Padrao 4: Batch Loading (Evitar N+1)](#padrao-4-batch-loading-evitar-n1)
+- [Padrao 5: Lock Anti-Duplicata com Redis](#padrao-5-lock-anti-duplicata-com-redis)
+- [Padrao 6: Progresso em Tempo Real via Redis](#padrao-6-progresso-em-tempo-real-via-redis)
+- [Padrao 7: Timeout Override para Operacoes Longas](#padrao-7-timeout-override-para-operacoes-longas)
+- [Padrao 8: Commit Preventivo antes de Ops Longas](#padrao-8-commit-preventivo-antes-de-ops-longas)
+- [Arvore de Decisao - Qual Padrao Usar](#arvore-de-decisao---qual-padrao-usar)
+- [Services de Referencia](#services-de-referencia)
 
 **Ultima verificacao:** Janeiro/2026
 

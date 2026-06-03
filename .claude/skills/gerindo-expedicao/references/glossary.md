@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Glossario - Termos do Dominio
+
+> **Papel:** Glossario - Termos do Dominio.
 
 Termos e jargoes utilizados no dominio logistico da Nacom Goya.
 

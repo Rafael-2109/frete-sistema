@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/monitorando-entregas/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Fluxo de Devoluções
+
+> **Papel:** Fluxo de Devoluções.
+
+## Indice
+
+- [Visão Geral](#visão-geral)
+- [Tabelas Envolvidas](#tabelas-envolvidas)
+- [Status da NFD (nf_devolucao.status)](#status-da-nfd-nf_devolucaostatus)
+- [Status da Ocorrência (ocorrencia_devolucao.status)](#status-da-ocorrência-ocorrencia_devolucaostatus)
+- [Destino da Mercadoria (ocorrencia_devolucao.destino)](#destino-da-mercadoria-ocorrencia_devolucaodestino)
+- [Localização Atual (ocorrencia_devolucao.localizacao_atual)](#localização-atual-ocorrencia_devolucaolocalizacao_atual)
+- [Categorias de Ocorrência](#categorias-de-ocorrência)
+- [Responsável pela Tratativa](#responsável-pela-tratativa)
+- [Origem do Problema](#origem-do-problema)
+- [Momento da Devolução](#momento-da-devolução)
+- [Fluxo Típico](#fluxo-típico)
+- [Queries Úteis](#queries-úteis)
+  - [Devoluções Abertas por Categoria](#devoluções-abertas-por-categoria)
+  - [NFDs Aguardando Retorno](#nfds-aguardando-retorno)
+  - [Devoluções por Responsável](#devoluções-por-responsável)
 
 ## Visão Geral
 

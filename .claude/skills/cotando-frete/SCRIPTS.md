@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/cotando-frete/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Cotando Frete (Detalhes)
+
+> **Papel:** Scripts — Cotando Frete (Detalhes).
+
+## Indice
+
+- [1. buscar_tabelas_cidade.py](#1-buscar_tabelas_cidadepy)
+- [2. calcular_cotacao.py](#2-calcular_cotacaopy)
+- [3. consultar_pedido_frete.py](#3-consultar_pedido_fretepy)
+- [4. consultando_frete_real.py](#4-consultando_frete_realpy)
+- [Exemplos de Uso](#exemplos-de-uso)
+  - [Cenario 1: Tabelas para uma cidade](#cenario-1-tabelas-para-uma-cidade)
+  - [Cenario 2: Cotacao com peso e valor](#cenario-2-cotacao-com-peso-e-valor)
+  - [Cenario 3: Frete de pedido existente](#cenario-3-frete-de-pedido-existente)
+  - [Cenario 4: Frete real gasto com cliente](#cenario-4-frete-real-gasto-com-cliente)
+  - [Cenario 5: Divergencias de CTe](#cenario-5-divergencias-de-cte)
 
 Referencia detalhada de parametros, retornos esperados e exemplos de uso.
 

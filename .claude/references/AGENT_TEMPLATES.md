@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Agent Templates — Blocos Reusaveis
+
+> **Papel:** Agent Templates — Blocos Reusaveis.
+
+## Indice
+
+- [pre-mortem](#pre-mortem)
+- [self-critique](#self-critique)
+- [output-format-padrao](#output-format-padrao)
+- [boundary-check-padrao](#boundary-check-padrao)
+- [reliability-protocol-canonical](#reliability-protocol-canonical)
+- [memory-usage](#memory-usage)
+  - [Tools disponiveis nos subagents (6 principais)](#tools-disponiveis-nos-subagents-6-principais)
+  - [QUANDO consultar memoria (leitura)](#quando-consultar-memoria-leitura)
+  - [QUANDO salvar memoria (escrita)](#quando-salvar-memoria-escrita)
+  - [Taxonomia 5 niveis (do services/CLAUDE.md — pattern_analyzer)](#taxonomia-5-niveis-do-servicesclaudemd-pattern_analyzer)
+  - [Formato ao salvar (regra R4 de services/CLAUDE.md)](#formato-ao-salvar-regra-r4-de-servicesclaudemd)
+  - [Protocolo de uso nos subagents (template)](#protocolo-de-uso-nos-subagents-template)
+- [constitutional-hierarchy](#constitutional-hierarchy)
+- [Como Referenciar Estes Blocos](#como-referenciar-estes-blocos)
+- [Historico](#historico)
 
 **Ultima Atualizacao**: 2026-05-25 (contagem subagents 15 -> 16: `gestor-estoque-odoo` adicionado em 2026-05-24 — commit `2af8123e` "orquestrador Odoo — 4 skills + subagente")
 

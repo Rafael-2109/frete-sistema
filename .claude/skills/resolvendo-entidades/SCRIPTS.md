@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/resolvendo-entidades/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Resolvendo Entidades (Detalhes)
+
+> **Papel:** Scripts — Resolvendo Entidades (Detalhes).
+
+## Indice
+
+- [Ambiente Virtual](#ambiente-virtual)
+- [1. resolver_grupo.py](#1-resolver_grupopy)
+- [2. resolver_cliente.py](#2-resolver_clientepy)
+- [3. resolver_produto.py](#3-resolver_produtopy)
+- [4. resolver_pedido.py](#4-resolver_pedidopy)
+- [5. resolver_cidade.py](#5-resolver_cidadepy)
+- [6. resolver_uf.py](#6-resolver_ufpy)
+- [Exemplos de Uso](#exemplos-de-uso)
+  - [Cenario 1: Resolver grupo antes de consultar entregas](#cenario-1-resolver-grupo-antes-de-consultar-entregas)
+  - [Cenario 2: Resolver produto por abreviacao](#cenario-2-resolver-produto-por-abreviacao)
+  - [Cenario 3: Multiplos pedidos](#cenario-3-multiplos-pedidos)
 
 Referencia detalhada de parametros, retornos e estrategias de resolucao.
 

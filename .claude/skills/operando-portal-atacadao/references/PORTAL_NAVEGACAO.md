@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/operando-portal-atacadao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Portal Atacadao — Navegacao e Seletores
+
+> **Papel:** Portal Atacadao — Navegacao e Seletores.
+
+## Indice
+
+- [URLs Conhecidas](#urls-conhecidas)
+- [Seletores Conhecidos (de config.py)](#seletores-conhecidos-de-configpy)
+  - [Pagina de Pedidos](#pagina-de-pedidos)
+  - [Pagina do Pedido](#pagina-do-pedido)
+  - [Formulario de Carga/Agendamento](#formulario-de-cargaagendamento)
+  - [Modal Sucesso](#modal-sucesso)
+  - [Pagina Agendamento](#pagina-agendamento)
+  - [Indicadores de Sessao](#indicadores-de-sessao)
+- [Seletores Descobertos Interativamente](#seletores-descobertos-interativamente)
+  - [Acao 1: Imprimir Pedidos](#acao-1-imprimir-pedidos)
+  - [Acao 2: Consultar Agendamentos](#acao-2-consultar-agendamentos)
+  - [Acao 3: Consultar Saldo](#acao-3-consultar-saldo)
+  - [Acao 4: Agendar em Lote](#acao-4-agendar-em-lote)
+  - [GOTCHA CRITICO: Tipos de Celula XLSX](#gotcha-critico-tipos-de-celula-xlsx)
+  - [Fluxo AJAX do Portal (Agendamento em Lote)](#fluxo-ajax-do-portal-agendamento-em-lote)
+  - [Extracao de Saldo na Validacao](#extracao-de-saldo-na-validacao)
 
 **Portal**: https://atacadao.hodiebooking.com.br
 **Ultima Atualizacao**: 2026-03-07

@@ -131,7 +131,7 @@ NAO confundir: um extrato reconciliado (Conc. A) NAO significa que o titulo esta
 
 **Para parametros completos e retornos JSON**: LER `SCRIPTS.md`
 
-### [normalizar.py](scripts/normalizar.py)
+### [normalizar.py](./scripts/normalizar.py)
 
 Transforma mencoes humanas em identificadores Odoo.
 
@@ -157,7 +157,7 @@ python .claude/skills/rastreando-odoo/scripts/normalizar.py "VCD123" --json
 python .claude/skills/rastreando-odoo/scripts/normalizar.py "VCD123" --detectar
 ```
 
-### [rastrear.py](scripts/rastrear.py)
+### [rastrear.py](./scripts/rastrear.py)
 
 Rastreia fluxo completo a partir de qualquer entrada.
 
@@ -181,7 +181,7 @@ python .claude/skills/rastreando-odoo/scripts/rastrear.py "Atacadao" --json
 python .claude/skills/rastreando-odoo/scripts/rastrear.py "12345" --fluxo compra --json
 ```
 
-### [auditoria_faturas_compra.py](scripts/auditoria_faturas_compra.py)
+### [auditoria_faturas_compra.py](./scripts/auditoria_faturas_compra.py)
 
 Extrai auditoria completa de faturas de compra com titulos, pagamentos e conciliacoes.
 
@@ -203,7 +203,7 @@ python .claude/skills/rastreando-odoo/scripts/auditoria_faturas_compra.py --mes 
 
 **Dados extraidos**: fatura, fornecedor, CNPJ, parcelas, vencimentos, pagamentos, conciliacao bancaria, notas de credito/estornos.
 
-### [auditoria_extrato_bancario.py](scripts/auditoria_extrato_bancario.py)
+### [auditoria_extrato_bancario.py](./scripts/auditoria_extrato_bancario.py)
 
 Extrai auditoria de extrato bancario com status de conciliacao.
 
@@ -222,7 +222,7 @@ python .claude/skills/rastreando-odoo/scripts/auditoria_extrato_bancario.py --in
 
 **Dados extraidos**: data, referencia, valor, parceiro, conta bancaria, status conciliacao.
 
-### [mapeamento_vinculos_completo.py](scripts/mapeamento_vinculos_completo.py)
+### [mapeamento_vinculos_completo.py](./scripts/mapeamento_vinculos_completo.py)
 
 Extrai 5 visoes cruzadas para identificar registros "soltos" (sem vinculo):
 
@@ -246,7 +246,7 @@ python .claude/skills/rastreando-odoo/scripts/mapeamento_vinculos_completo.py --
 - NOTAS_CREDITO: fatura_origem_id, titulo_ids, extrato_ids, CNPJ
 - PAGAMENTOS: extrato_ids, titulo_ids, CNPJ
 
-### [auditoria_conciliacao.py](scripts/auditoria_conciliacao.py)
+### [auditoria_conciliacao.py](./scripts/auditoria_conciliacao.py)
 
 Extrai vinculos documentados via account.partial.reconcile. Classifica em Conciliacao A e B.
 
@@ -265,7 +265,7 @@ python .claude/skills/rastreando-odoo/scripts/auditoria_conciliacao.py --inicio 
 
 **Visoes extraidas**: faturas (com titulos e reconciliacoes), extratos (com links a payments), notas_credito, vinculos_fatura_extrato (cadeia completa fatura→titulo→payment→extrato).
 
-### [relatorio_dfe.py](scripts/relatorio_dfe.py)
+### [relatorio_dfe.py](./scripts/relatorio_dfe.py)
 
 Relatorio de DFEs (documentos fiscais eletronicos) recebidos no periodo, com itens detalhados.
 
@@ -287,7 +287,7 @@ python .claude/skills/rastreando-odoo/scripts/relatorio_dfe.py --inicio 2025-01-
 
 **Dados extraidos**: numero NF, chave NFe, fornecedor, CNPJ, data emissao, valor total, itens (produto, NCM, CFOP, quantidade, valor unitario).
 
-### [vincular_extrato_fatura_excel.py](scripts/vincular_extrato_fatura_excel.py)
+### [vincular_extrato_fatura_excel.py](./scripts/vincular_extrato_fatura_excel.py)
 
 Processa planilha Excel para vincular extratos com faturas automaticamente.
 
@@ -351,8 +351,8 @@ python .claude/skills/rastreando-odoo/scripts/vincular_extrato_fatura_excel.py -
 
 | Arquivo | Conteudo |
 |---------|----------|
-| [relacionamentos.md](references/relacionamentos.md) | Mapeamento de campos, relacionamentos entre tabelas, estrategias de navegacao |
-| [troubleshooting.md](references/troubleshooting.md) | Solucoes para problemas comuns de busca e rastreamento |
+| [relacionamentos.md](./references/relacionamentos.md) | Mapeamento de campos, relacionamentos entre tabelas, estrategias de navegacao |
+| [troubleshooting.md](./references/troubleshooting.md) | Solucoes para problemas comuns de busca e rastreamento |
 
 ## Prefixos de Pedido de Venda
 
@@ -367,5 +367,5 @@ python .claude/skills/rastreando-odoo/scripts/vincular_extrato_fatura_excel.py -
 | Skill | Quando usar |
 |-------|-------------|
 | [descobrindo-odoo-estrutura](../descobrindo-odoo-estrutura/SKILL.md) | Descobrir campos de modelos nao mapeados |
-| [integracao-odoo](../integracao-odoo/SKILL.md) | Criar novos lancamentos fiscais (CTe, despesas) |
+| `integracao-odoo` | Criar novos lancamentos fiscais (CTe, despesas) |
 | [exportando-arquivos](../exportando-arquivos/SKILL.md) | Exportar resultados de auditoria para Excel |

@@ -328,8 +328,8 @@ Campos frequentemente confundidos no modelo `l10n_br_ciel_it_account.dfe`:
 
 ## Referencias
 
-- [Fluxo Completo](references/fluxo-validacao-nf-po.md) - Etapas detalhadas com codigo
-- [Erros Comuns](references/erros-comuns.md) - Armadilhas e solucoes
+- [Fluxo Completo](./references/fluxo-validacao-nf-po.md) - Etapas detalhadas com codigo
+- [Erros Comuns](./references/erros-comuns.md) - Armadilhas e solucoes
 
 ## Skills Relacionadas
 

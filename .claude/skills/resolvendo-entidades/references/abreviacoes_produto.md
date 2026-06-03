@@ -1,4 +1,24 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/resolvendo-entidades/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Abreviacoes de Produto
+
+> **Papel:** Abreviacoes de Produto.
+
+## Indice
+
+- [Tipo Materia Prima (tipo_materia_prima)](#tipo-materia-prima-tipo_materia_prima)
+  - [Aliases Curtos](#aliases-curtos)
+- [Tipo Embalagem (tipo_embalagem)](#tipo-embalagem-tipo_embalagem)
+- [Categorias/Marcas (categoria_produto)](#categoriasmarcas-categoria_produto)
+- [Exemplos de Combinacao](#exemplos-de-combinacao)
+- [Como Funciona a Deteccao](#como-funciona-a-deteccao)
+- [Expansao](#expansao)
 
 ## Tipo Materia Prima (tipo_materia_prima)
 

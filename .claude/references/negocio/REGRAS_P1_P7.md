@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Regras de Prioridade P1-P7 e Envio Parcial
+
+> **Papel:** Regras de Prioridade P1-P7 e Envio Parcial.
 
 > **SYNC**: Este e um reference critico. Ao editar, verificar tambem:
 > - `app/agente/prompts/system_prompt.md` (resumo em `<priorities>` e `<partial_shipping>`)

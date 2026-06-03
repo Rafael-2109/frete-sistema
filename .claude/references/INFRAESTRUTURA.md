@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Infraestrutura — Render & Servicos
+
+> **Papel:** Infraestrutura — Render & Servicos.
+
+## Indice
+
+- [RENDER — MCP Server](#render-mcp-server)
+  - [REGRA: DADOS DE PRODUCAO = RENDER](#regra-dados-de-producao-render)
+  - [IDs dos Recursos (usar direto nas tools)](#ids-dos-recursos-usar-direto-nas-tools)
+  - [Ferramentas MCP Disponiveis](#ferramentas-mcp-disponiveis)
+  - [Exemplos de Uso](#exemplos-de-uso)
+  - [Servicos](#servicos)
+  - [Capacity Planning — baseline 2026-04-22 (30 dias)](#capacity-planning-baseline-2026-04-22-30-dias)
+- [Sentry — Application Monitoring (APM)](#sentry-application-monitoring-apm)
+  - [Env Vars (Render)](#env-vars-render)
+  - [Acesso (por ordem de preferencia)](#acesso-por-ordem-de-preferencia)
+  - [Tools MCP Disponiveis (20 total)](#tools-mcp-disponiveis-20-total)
+- [Odoo ERP](#odoo-erp)
 
 **Ultima Atualizacao**: 22/04/2026
 

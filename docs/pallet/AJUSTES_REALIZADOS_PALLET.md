@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Log de Ajustes Realizados - Modulo Pallet
+
+> **Papel:** Log de Ajustes Realizados - Modulo Pallet.
+
+## Indice
+
+- [COMPARACAO UI x PROCESSO](#comparacao-ui-x-processo)
+  - [Etapa 1: Faturamento](#etapa-1-faturamento)
+  - [Etapa 2: Responsabilidade/Prazos](#etapa-2-responsabilidadeprazos)
+  - [Etapa 3: Resolucao NF Remessa](#etapa-3-resolucao-nf-remessa)
+  - [Etapa 4: Vale Pallet](#etapa-4-vale-pallet)
+  - [Etapa 5: Resolucao Vale](#etapa-5-resolucao-vale)
+- [DIFERENCAS ENCONTRADAS](#diferencas-encontradas)
+  - [D1: Filtro de Movimentos Incompleto](#d1-filtro-de-movimentos-incompleto)
+  - [D2: Dashboard usa prazo fixo no titulo](#d2-dashboard-usa-prazo-fixo-no-titulo)
+  - [D3: Falta Interface de Substituicao](#d3-falta-interface-de-substituicao)
+- [AJUSTES IMPLEMENTADOS](#ajustes-implementados)
+  - [A1: Corrigir Filtro de Movimentos](#a1-corrigir-filtro-de-movimentos)
+  - [A2: Corrigir Template Dashboard](#a2-corrigir-template-dashboard)
+  - [A3: Criar Interface de Substituicao](#a3-criar-interface-de-substituicao)
+- [RESUMO FINAL](#resumo-final)
+- [ARQUIVOS MODIFICADOS/CRIADOS](#arquivos-modificadoscriados)
+- [Contexto](#contexto)
 
 **Data**: 05/01/2026
 **Status**: CONCLUIDO
@@ -159,3 +189,7 @@ Depois: "Remessas Vencidas (7d SP/RED, 30d outros)" - texto fixo explicativo
 4. `app/templates/pallet/substituicao_lista.html` - NOVO
 5. `app/templates/pallet/substituicao.html` - NOVO
 
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

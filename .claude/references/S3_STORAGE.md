@@ -1,4 +1,54 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # S3 Storage — Uso no Sistema de Fretes
+
+> **Papel:** S3 Storage — Uso no Sistema de Fretes.
+
+## Indice
+
+- [Infraestrutura](#infraestrutura)
+- [API Central: `app/utils/file_storage.py`](#api-central-apputilsfile_storagepy)
+  - [Factory](#factory)
+  - [Metodos](#metodos)
+- [Mapa por Modulo](#mapa-por-modulo)
+  - [1. Agente Web — Upload de arquivos do chat](#1-agente-web-upload-de-arquivos-do-chat)
+  - [2. Agente Web — Screenshots Playwright](#2-agente-web-screenshots-playwright)
+  - [3. Agente Web — Archive de sessoes](#3-agente-web-archive-de-sessoes)
+  - [4. CarVia — Custo de Entrega (anexos)](#4-carvia-custo-de-entrega-anexos)
+  - [5. CarVia — XML de NF (DACTE re-parse)](#5-carvia-xml-de-nf-dacte-re-parse)
+  - [6. CarVia — CTe Complementar (XML + DACTE)](#6-carvia-cte-complementar-xml-dacte)
+  - [7. CarVia — Importacao de NFs e CTes](#7-carvia-importacao-de-nfs-e-ctes)
+  - [8. CarVia — Worker SSW (download DACTE via Playwright)](#8-carvia-worker-ssw-download-dacte-via-playwright)
+  - [9. CarVia — Fatura Transportadora (upload PDF)](#9-carvia-fatura-transportadora-upload-pdf)
+  - [10. Devolucao — Ocorrencias (comprovantes)](#10-devolucao-ocorrencias-comprovantes)
+  - [11. Devolucao — NFD (Nota Fiscal de Devolucao)](#11-devolucao-nfd-nota-fiscal-de-devolucao)
+  - [12. Devolucao — Descartes (comprovantes)](#12-devolucao-descartes-comprovantes)
+  - [13. Financeiro — Comprovantes de Pagamento](#13-financeiro-comprovantes-de-pagamento)
+  - [14. Monitoramento — Entregas, Canhotos, Comentarios NF](#14-monitoramento-entregas-canhotos-comentarios-nf)
+  - [15. Separacao — Documentos](#15-separacao-documentos)
+  - [16. Fretes — Faturas de Transportadora](#16-fretes-faturas-de-transportadora)
+  - [17. Fretes — Despesas de Frota](#17-fretes-despesas-de-frota)
+  - [18. Fretes — Emails de Despesa](#18-fretes-emails-de-despesa)
+  - [19. Odoo — CTe (PDF + XML)](#19-odoo-cte-pdf-xml)
+  - [20. Odoo — Entrada de Material (NF-e PDF + XML)](#20-odoo-entrada-de-material-nf-e-pdf-xml)
+  - [21. Portaria — Fotos de Motorista](#21-portaria-fotos-de-motorista)
+  - [22. Rastreamento — Canhotos e Comprovantes de Descarga](#22-rastreamento-canhotos-e-comprovantes-de-descarga)
+  - [23. Pedidos — Leitura (PDFs de pedidos de redes)](#23-pedidos-leitura-pdfs-de-pedidos-de-redes)
+  - [24. Importacao — Temporaria (utils)](#24-importacao-temporaria-utils)
+  - [25. Fretes — Comprovantes de Despesa Extra](#25-fretes-comprovantes-de-despesa-extra)
+- [Mapa de Folders (Referencia Rapida)](#mapa-de-folders-referencia-rapida)
+- [Conventions](#conventions)
+- [Quando usar S3 vs DB vs /tmp](#quando-usar-s3-vs-db-vs-tmp)
+- [Quando NAO usar S3](#quando-nao-usar-s3)
+- [Custo Estimado](#custo-estimado)
+- [Migration path: local → S3](#migration-path-local-s3)
+- [Links](#links)
 
 **Ultima Atualizacao**: 2026-04-16
 

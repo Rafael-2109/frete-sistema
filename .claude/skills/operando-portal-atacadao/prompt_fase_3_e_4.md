@@ -1,3 +1,11 @@
+<!-- doc:meta
+tipo: scratch
+camada: L3
+sot_de: —
+hub: .claude/skills/operando-portal-atacadao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
  A consulta do saldo vai mto de encontro ao processo de realizar o agendamento em lote,   
 pois a planilha exportada com o saldo é a mesma utilizada para preencher a qtd desejada    
 para agendar em lote.                                                                      

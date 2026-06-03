@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Best Practices Anthropic 2026 — Plano de Otimizacao (SDK features)
+
+> **Papel:** Best Practices Anthropic 2026 — Plano de Otimizacao (SDK features).
+
+## Indice
+
+- [Status Atual](#status-atual)
+- [IMPLEMENTADO (Fase 1 — Quick Wins)](#implementado-fase-1-quick-wins)
+  - [0.1 SDK anthropic 0.79.0 → 0.84.0 → 0.98.1 (2026-05-09) + claude-agent-sdk 0.1.80 → 0.2.82 (2026-05-16) → 0.2.87 (2026-05-25)](#01-sdk-anthropic-0790-0840-0981-2026-05-09-claude-agent-sdk-0180-0282-2026-05-16-0287-2026-05-25)
+  - [0.2 Prompt Caching nas chamadas diretas](#02-prompt-caching-nas-chamadas-diretas)
+  - [0.3 Structured Outputs (Constrained Decoding)](#03-structured-outputs-constrained-decoding)
+  - [0.4 pgvector Iterative Scan](#04-pgvector-iterative-scan)
+- [PROXIMOS PASSOS (Fase 2-4)](#proximos-passos-fase-2-4)
+  - [Fase 2 — MCP Servers](#fase-2-mcp-servers)
+  - [Fase 3 — Features de API](#fase-3-features-de-api)
+  - [Fase 4 — Otimizacoes (4h estimadas)](#fase-4-otimizacoes-4h-estimadas)
+  - [Fase 5 — Memoria e Routing (implementado 2026-03-23)](#fase-5-memoria-e-routing-implementado-2026-03-23)
+- [Features JA Disponiveis sem Upgrade Adicional](#features-ja-disponiveis-sem-upgrade-adicional)
+- [Economia Estimada](#economia-estimada)
+- [MCP Servers REJEITADOS](#mcp-servers-rejeitados)
+- [Claude 4.6 Behavioral Changes (adicionado 2026-04-12)](#claude-46-behavioral-changes-adicionado-2026-04-12)
+- [PostgreSQL Producao — Extensoes (verificado 2026-03-08)](#postgresql-producao-extensoes-verificado-2026-03-08)
 
 **Atualizado**: 25/05/2026
 

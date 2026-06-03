@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-expedicao/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Abreviacoes de Produtos
+
+> **Papel:** Abreviacoes de Produtos.
 
 Mapeamento de abreviacoes para busca inteligente de produtos.
 

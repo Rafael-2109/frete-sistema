@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/recebimento-fisico-odoo/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Modelos Odoo - Recebimento Fisico
+
+> **Papel:** Modelos Odoo - Recebimento Fisico.
+
+## Indice
+
+- [Campos Verificados (Explorados em 23/01/2026)](#campos-verificados-explorados-em-23012026)
+- [stock.picking (Recebimento)](#stockpicking-recebimento)
+  - [Filtro para pickings de recebimento pendentes:](#filtro-para-pickings-de-recebimento-pendentes)
+- [stock.move (Movimentos por Produto)](#stockmove-movimentos-por-produto)
+- [stock.move.line (Linhas - Lotes + Quantidade)](#stockmoveline-linhas---lotes-quantidade)
+  - [Operacoes:](#operacoes)
+- [stock.lot (Cadastro de Lotes)](#stocklot-cadastro-de-lotes)
+- [quality.check (Verificacoes de Qualidade)](#qualitycheck-verificacoes-de-qualidade)
+  - [Operacoes:](#operacoes)
+- [quality.point (Templates de Verificacao)](#qualitypoint-templates-de-verificacao)
+- [product.product (Tracking)](#productproduct-tracking)
+  - [Estatisticas do Banco (23/01/2026):](#estatisticas-do-banco-23012026)
+- [Validacao do Picking (button_validate)](#validacao-do-picking-button_validate)
+  - [Pre-requisitos para button_validate funcionar:](#pre-requisitos-para-button_validate-funcionar)
 
 ## Campos Verificados (Explorados em 23/01/2026)
 

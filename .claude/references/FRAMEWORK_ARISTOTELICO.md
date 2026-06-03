@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Framework Aristotelico — Quick Reference
+
+> **Papel:** Framework Aristotelico — Quick Reference.
 
 Referencia rapida para uso em analise, planejamento e situacoes novas.
 

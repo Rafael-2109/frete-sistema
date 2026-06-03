@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Frete Real vs Teorico
+
+> **Papel:** Frete Real vs Teorico.
+
+## Indice
+
+- [4 Tipos de Valor (tabela `fretes`)](#4-tipos-de-valor-tabela-fretes)
+  - [Regra de uso](#regra-de-uso)
+- [Divergencia CTe vs Cotacao](#divergencia-cte-vs-cotacao)
+  - [Campos do modelo Frete](#campos-do-modelo-frete)
+  - [Query de divergencias](#query-de-divergencias)
+- [Despesas Extras (tabela `despesas_extras`)](#despesas-extras-tabela-despesas_extras)
+  - [Tipos de despesa (`tipo_despesa`)](#tipos-de-despesa-tipo_despesa)
+  - [Campos-chave](#campos-chave)
+  - [Custo REAL total de um frete](#custo-real-total-de-um-frete)
+- [Conta Corrente com Transportadoras (tabela `conta_corrente_transportadoras`)](#conta-corrente-com-transportadoras-tabela-conta_corrente_transportadoras)
+  - [Logica](#logica)
+  - [Saldo por transportadora](#saldo-por-transportadora)
+- [Fretes Pendentes de Lancamento no Odoo](#fretes-pendentes-de-lancamento-no-odoo)
+  - [Campos de integracao Odoo](#campos-de-integracao-odoo)
+- [Custo de Frete por Pedido (chain completa)](#custo-de-frete-por-pedido-chain-completa)
+- [Custo de Frete por Cliente (grupo empresarial)](#custo-de-frete-por-cliente-grupo-empresarial)
 
 Documentacao dos 4 tipos de valor de frete e como consultar custos reais.
 

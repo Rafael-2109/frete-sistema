@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Plano de Implementação: Importador de Pedidos de Redes de Atacarejo
+
+> **Papel:** Plano de Implementação: Importador de Pedidos de Redes de Atacarejo.
+
+## Indice
+
+- [1. Resumo do Projeto](#1-resumo-do-projeto)
+- [2. Decisões Confirmadas](#2-decisões-confirmadas)
+- [3. Arquitetura](#3-arquitetura)
+  - [3.1 Estrutura de Módulos](#31-estrutura-de-módulos)
+  - [3.2 Fluxo do Sistema](#32-fluxo-do-sistema)
+- [4. Identificação de Documentos (Atacadão)](#4-identificação-de-documentos-atacadão)
+  - [4.1 Proposta de Compra](#41-proposta-de-compra)
+  - [4.2 Pedido de Compra](#42-pedido-de-compra)
+- [5. Modelos de Dados](#5-modelos-de-dados)
+  - [5.1 TabelaRede (Preços por Rede)](#51-tabelarede-preços-por-rede)
+  - [5.2 RegiaoTabelaRede (Mapeamento UF → Região)](#52-regiaotabelarede-mapeamento-uf-região)
+  - [5.3 RegistroPedidoOdoo (Log de Inserções)](#53-registropedidoodoo-log-de-inserções)
+- [6. Código Existente a Reutilizar](#6-código-existente-a-reutilizar)
+- [7. Cronograma de Implementação](#7-cronograma-de-implementação)
+- [Contexto](#contexto)
 
 **Data**: 04/12/2025
 **Status**: ✅ Em Implementação
@@ -246,3 +274,7 @@ class RegistroPedidoOdoo(db.Model):
 ---
 
 *Documento atualizado em 04/12/2025*
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

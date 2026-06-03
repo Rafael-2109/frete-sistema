@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/lendo-arquivos/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Lendo Arquivos (Detalhes)
+
+> **Papel:** Scripts — Lendo Arquivos (Detalhes).
 
 Referencia detalhada de parametros, retornos e modos de operacao.
 

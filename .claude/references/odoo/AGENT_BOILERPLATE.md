@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Odoo Agent Boilerplate — Blocos Compartilhados
+
+> **Papel:** Odoo Agent Boilerplate — Blocos Compartilhados.
+
+## Indice
+
+- [regra-zero](#regra-zero)
+- [scripts-disponiveis](#scripts-disponiveis)
+  - [Rastrear Fluxo (NF, PO, SO → titulo, pagamento)](#rastrear-fluxo-nf-po-so-titulo-pagamento)
+  - [Descobrir Campos de Modelo](#descobrir-campos-de-modelo)
+  - [Consulta Generica (quando precisa filtro especifico)](#consulta-generica-quando-precisa-filtro-especifico)
+- [conexao-odoo](#conexao-odoo)
+- [checklist-extrato-bancario](#checklist-extrato-bancario)
+  - [Ordem Obrigatoria](#ordem-obrigatoria)
+  - [Gotchas Criticos](#gotchas-criticos)
+  - [Contas-Chave](#contas-chave)
+- [Historico](#historico)
 
 **Ultima Atualizacao**: 2026-04-09
 

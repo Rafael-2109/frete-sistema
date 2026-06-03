@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/exportando-arquivos/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Scripts — Exportando Arquivos (Detalhes)
+
+> **Papel:** Scripts — Exportando Arquivos (Detalhes).
 
 Referencia detalhada de parametros, retornos e modos de operacao.
 

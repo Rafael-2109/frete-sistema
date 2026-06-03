@@ -1,4 +1,68 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/skills/gerindo-agente/SKILL.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # SCRIPTS.md — Referencia Unificada de Parametros
+
+> **Papel:** SCRIPTS.md — Referencia Unificada de Parametros.
+
+## Indice
+
+- [Argumentos Comuns (todos os scripts)](#argumentos-comuns-todos-os-scripts)
+- [memoria.py](#memoriapy)
+  - [view](#view)
+  - [save](#save)
+  - [update](#update)
+  - [delete](#delete)
+  - [list](#list)
+  - [clear](#clear)
+  - [search-cold](#search-cold)
+  - [versions](#versions)
+  - [restore](#restore)
+  - [resolve-pendencia](#resolve-pendencia)
+  - [log-pitfall](#log-pitfall)
+  - [stats](#stats)
+- [sessao.py](#sessaopy)
+  - [list](#list)
+  - [search](#search)
+  - [semantic](#semantic)
+  - [view](#view)
+  - [summary](#summary)
+  - [users](#users)
+  - [delete](#delete)
+- [padrao.py](#padraopy)
+  - [patterns](#patterns)
+  - [pitfalls](#pitfalls)
+  - [analyze](#analyze)
+  - [extract](#extract)
+  - [empresa](#empresa)
+- [grafo.py](#grafopy)
+  - [query](#query)
+  - [entities](#entities)
+  - [links](#links)
+  - [relations](#relations)
+  - [stats](#stats)
+- [diagnostico.py](#diagnosticopy)
+  - [insights](#insights)
+  - [memory-metrics](#memory-metrics)
+  - [health](#health)
+  - [effectiveness](#effectiveness)
+  - [cold-candidates](#cold-candidates)
+  - [conflicts](#conflicts)
+  - [embedding-coverage](#embedding-coverage)
+  - [friction](#friction)
+  - [briefing](#briefing)
+- [manutencao.py](#manutencaopy)
+  - [consolidate](#consolidate)
+  - [cold-move](#cold-move)
+  - [summarize](#summarize)
+  - [reindex-memories](#reindex-memories)
+  - [reindex-sessions](#reindex-sessions)
+  - [cleanup-orphans](#cleanup-orphans)
 
 ## Argumentos Comuns (todos os scripts)
 
