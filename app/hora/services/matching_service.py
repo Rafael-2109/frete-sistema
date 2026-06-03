@@ -44,7 +44,7 @@ class ScoreCandidato:
 
 
 def _chassis_nf(nf: HoraNfEntrada) -> set:
-    return {i.numero_chassi for i in nf.itens if i.numero_chassi}
+    return {i.numero_chassi for i in nf.itens_considerados if i.numero_chassi}
 
 
 def _chassis_pedido_preenchidos(pedido: HoraPedido) -> set:

@@ -228,3 +228,50 @@ def test_reconsiderar_item_nao_desconsiderado_erro(db):
     nf = _nf(loja, [_chassi()], mod)
     with pytest.raises(ValueError):
         reconsiderar_item_nf(nf.itens[0].id)
+
+
+# ---------------------------------------------------------------------------
+# Task 6 — Recebimento e matching ignoram itens desconsiderados
+# ---------------------------------------------------------------------------
+def _recebimento(nf, loja):
+    from app.hora.models import HoraRecebimento
+    r = HoraRecebimento(
+        nf_id=nf.id, loja_id=loja.id, status='EM_CONFERENCIA',
+        criado_em=agora_utc_naive(),
+    )
+    db.session.add(r)
+    db.session.flush()
+    return r
+
+
+def test_recebimento_esperados_ignora_desconsiderado(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    from app.hora.services.recebimento_service import chassis_esperados_mas_nao_conferidos
+    loja, mod = _loja(), _modelo()
+    c1, c2 = _chassi(), _chassi()
+    nf = _nf(loja, [c1, c2], mod)
+    desconsiderar_item_nf(nf.itens[0].id)  # c1 desconsiderado
+    db.session.refresh(nf)
+    rec = _recebimento(nf, loja)
+    esperados = chassis_esperados_mas_nao_conferidos(rec.id)
+    assert c1 not in esperados
+    assert c2 in esperados
+
+
+def test_recebimento_automatico_confere_so_considerados(db):
+    from app.hora.services.nf_entrada_service import desconsiderar_item_nf
+    from app.hora.services import recebimento_service
+    from app.hora.models import HoraRecebimento
+    loja, mod = _loja(), _modelo()
+    c1, c2 = _chassi(), _chassi()
+    nf = _nf(loja, [c1, c2], mod)
+    for it in nf.itens:
+        it.modelo_texto_original = mod.nome_modelo  # resolve modelo no recebimento auto
+    db.session.flush()
+    desconsiderar_item_nf(nf.itens[0].id)  # c1
+    db.session.refresh(nf)
+    recebimento_service.criar_recebimento_automatico_da_nf(nf.id, operador='tester')
+    receb = HoraRecebimento.query.filter_by(nf_id=nf.id, loja_id=loja.id).first()
+    chassis_conf = {c.numero_chassi for c in receb.conferencias if not c.substituida}
+    assert c1 not in chassis_conf
+    assert c2 in chassis_conf
