@@ -32,6 +32,28 @@ O SSW e um sistema integrado para transportadoras que cobre: operacional, comerc
 
 ---
 
+## Sub-indices por diretorio (13)
+
+> Cada diretorio tem seu proprio INDEX.md listando as opcoes/POPs/fluxos documentados.
+
+| Diretorio | Sub-indice | Conteudo |
+|-----------|------------|----------|
+| `cadastros/` | [./cadastros/INDEX.md](./cadastros/INDEX.md) | Unidades, cidades, rotas, clientes, parametros gerais |
+| `comercial/` | [./comercial/INDEX.md](./comercial/INDEX.md) | Tabelas de frete (417-418-420), NTC, consultas, comissoes |
+| `contabilidade/` | [./contabilidade/INDEX.md](./contabilidade/INDEX.md) | Plano de contas, lancamentos, conciliacao, ECD/ECF |
+| `edi/` | [./edi/INDEX.md](./edi/INDEX.md) | Integracao eletronica de dados, planos de manutencao |
+| `embarcador/` | [./embarcador/INDEX.md](./embarcador/INDEX.md) | CTRCs modal aquaviario, previsao de entrega |
+| `financeiro/` | [./financeiro/INDEX.md](./financeiro/INDEX.md) | Faturamento, contas a pagar, CCF, cobranca bancaria |
+| `fiscal/` | [./fiscal/INDEX.md](./fiscal/INDEX.md) | SPED Fiscal/Contribuicoes, ECD, aprovacao de despesas |
+| `fluxos/` | [./fluxos/INDEX.md](./fluxos/INDEX.md) | 20 fluxos end-to-end (F01-F20) |
+| `logistica/` | [./logistica/INDEX.md](./logistica/INDEX.md) | Entrada/saida de estoque, armazem geral, mercadorias |
+| `operacional/` | [./operacional/INDEX.md](./operacional/INDEX.md) | Coletas, emissao CTRC, romaneio, baixa de entregas |
+| `pops/` | [./pops/INDEX.md](./pops/INDEX.md) | 45 POPs (procedimentos operacionais padrao) |
+| `relatorios/` | [./relatorios/INDEX.md](./relatorios/INDEX.md) | Informacoes gerenciais, ordens de servico, check-list |
+| `visao-geral/` | [./visao-geral/INDEX.md](./visao-geral/INDEX.md) | Visao geral dos 12 modulos do SSW |
+
+---
+
 ## Mapa de Documentacao
 
 ### Visao Geral (12 secoes)
