@@ -21,7 +21,7 @@ def test_doc_sem_hub_orfao():
     docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "nada"},
             "b.md": {"tipo": "reference", "hub": None, "text": "x"}}
     fs = _run(docs)
-    assert any(f.path == "b.md" and "orfao" in f.message and f.severity == "report" for f in fs)
+    assert any(f.path == "b.md" and "orfao" in f.message and f.severity == "block" for f in fs)
 
 def test_bidir_doc_declara_hub_mas_hub_nao_lista():
     docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "`I.md`"},
@@ -52,12 +52,16 @@ def test_claude_md_modulo_propaga():
     fs = _run(docs)
     assert not [f for f in fs if f.path == "app/x/ROADMAP.md" and "orfao" in f.message]
 
-def test_severidade_report_nao_altera_exit():
+def test_severidade_block_altera_exit():
+    # SELAGEM (PAD-A Onda 4g, 2026-06-03): C8 foi promovido de 'report' a 'block'.
+    # Orfao agora trava o commit (exit_code != 0). Regressao: se alguem reverter a
+    # promocao para 'report', este teste quebra.
     from scripts.audits.artefato_lint import findings
     docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "nada"},
             "o.md": {"tipo": "reference", "hub": None, "text": "x"}}
     fs = _run(docs)
-    assert fs and findings.exit_code(fs) == 0
+    assert fs and all(f.severity == "block" for f in fs if f.code == "C8")
+    assert findings.exit_code(fs) == 1
 
 def test_hub_missing_file():
     docs = {"CLAUDE.md": {"tipo": "", "hub": None, "text": "`a.md`"},

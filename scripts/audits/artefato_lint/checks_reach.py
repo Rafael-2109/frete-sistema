@@ -43,11 +43,14 @@ def _rel(cand: Path, root: Path) -> str | None:
         return None
 
 def check_reachability(docs: dict[str, dict], cfg, root: Path) -> list[Finding]:
-    """C8 global (advisory). docs: rel -> {'tipo': str, 'hub': str|None, 'text': str}.
+    """C8 global. docs: rel -> {'tipo': str, 'hub': str|None, 'text': str}.
     Emite C8-ORPHAN (nao alcancavel de CLAUDE.md via hubs), C8-BIDIR (item-9: doc
     declara hub que nao o lista de volta), C8-HUBFILE (hub declarado inexistente).
-    Severidade 'report': mede a divida, nao trava commit. Promover a 'block' SO apos
-    Ondas 3-4 reduzirem a divida + OK do usuario (spec §8.5)."""
+    Severidade 'block' (PAD-A Onda 4g, SELAGEM 2026-06-03): apos as Ondas 3-4 zerarem
+    a divida (C8 global = 0) + OK do usuario (spec §8.5), C8 foi promovido de 'report'
+    a 'block' — orfaos/hubs quebrados agora travam o commit, cumprindo a promessa da
+    Onda 1 ('block pos-Onda 3-4'). Auto-skip sob escopo parcial (grafo incompleto)
+    permanece no CLI (--skip-reach)."""
     root = Path(root).resolve()
     managed = set(docs.keys())
     refs = {rel: extract_refs(d["text"], root / rel, root, managed) for rel, d in docs.items()}
@@ -74,11 +77,11 @@ def check_reachability(docs: dict[str, dict], cfg, root: Path) -> list[Finding]:
         if _is_tool_reachable(rel, cfg):
             continue  # reachable-by-tool (skills): fora do grafo de hubs por design
         if rel not in reached:
-            out.append(Finding("C8", rel, 1, "orfao: nao alcancavel de CLAUDE.md via hubs", "report"))
+            out.append(Finding("C8", rel, 1, "orfao: nao alcancavel de CLAUDE.md via hubs", "block"))
         h = d.get("hub")
         if h and h not in ("—", "-") and rel not in hubs:
             if h not in managed:
-                out.append(Finding("C8", rel, 1, f"hub declarado inexistente/nao-gerenciado: {h}", "report"))
+                out.append(Finding("C8", rel, 1, f"hub declarado inexistente/nao-gerenciado: {h}", "block"))
             elif rel not in refs.get(h, set()):
-                out.append(Finding("C8", rel, 1, f"hub {h} nao lista este doc de volta (item-9)", "report"))
+                out.append(Finding("C8", rel, 1, f"hub {h} nao lista este doc de volta (item-9)", "block"))
     return out
