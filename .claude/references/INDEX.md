@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: index
+camada: L1
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Indice de Referencias
+
+> **Papel:** Indice de Referencias.
 
 **Ultima atualizacao**: 2026-06-01 (mapeamento Skill->References ampliado: `escriturando-odoo`, `auditando-cadastro-fiscal-odoo`, `faturando-odoo`)
 
@@ -8,17 +18,17 @@
 
 | Preciso de... | Documento |
 |---------------|-----------|
-| Regras CarteiraPrincipal / Separacao (listeners, status, gotchas) | [modelos/REGRAS_CARTEIRA_SEPARACAO.md](modelos/REGRAS_CARTEIRA_SEPARACAO.md) |
-| Regras Embarque, Faturamento, etc. (status, gotchas, naming traps) | [modelos/REGRAS_MODELOS.md](modelos/REGRAS_MODELOS.md) |
+| Regras CarteiraPrincipal / Separacao (listeners, status, gotchas) | [modelos/REGRAS_CARTEIRA_SEPARACAO.md](./modelos/REGRAS_CARTEIRA_SEPARACAO.md) |
+| Regras Embarque, Faturamento, etc. (status, gotchas, naming traps) | [modelos/REGRAS_MODELOS.md](./modelos/REGRAS_MODELOS.md) |
 | Campos e tipos de QUALQUER tabela | Schemas auto-gerados: `skills/consultando-sql/schemas/tables/{tabela}.json` |
-| Queries SQL / JOINs | [modelos/QUERIES_MAPEAMENTO.md](modelos/QUERIES_MAPEAMENTO.md) |
-| Cadeia Pedido -> Entrega (JOINs, estados, formulas) | [modelos/CADEIA_PEDIDO_ENTREGA.md](modelos/CADEIA_PEDIDO_ENTREGA.md) |
-| Regras de negocio | [negocio/REGRAS_NEGOCIO.md](negocio/REGRAS_NEGOCIO.md) |
-| Frete Real vs Teorico (4 valores, divergencias, conta corrente) | [negocio/FRETE_REAL_VS_TEORICO.md](negocio/FRETE_REAL_VS_TEORICO.md) |
-| Margem e Custeio (formula margem, tabelas de custo) | [negocio/MARGEM_CUSTEIO.md](negocio/MARGEM_CUSTEIO.md) |
-| Prioridades P1-P7, envio parcial, decisao de corte | [negocio/REGRAS_P1_P7.md](negocio/REGRAS_P1_P7.md) |
-| Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](negocio/RECEBIMENTO_MATERIAIS.md) |
-| Historico de decisoes | [negocio/historia_nacom.md](negocio/historia_nacom.md) |
+| Queries SQL / JOINs | [modelos/QUERIES_MAPEAMENTO.md](./modelos/QUERIES_MAPEAMENTO.md) |
+| Cadeia Pedido -> Entrega (JOINs, estados, formulas) | [modelos/CADEIA_PEDIDO_ENTREGA.md](./modelos/CADEIA_PEDIDO_ENTREGA.md) |
+| Regras de negocio | [negocio/REGRAS_NEGOCIO.md](./negocio/REGRAS_NEGOCIO.md) |
+| Frete Real vs Teorico (4 valores, divergencias, conta corrente) | [negocio/FRETE_REAL_VS_TEORICO.md](./negocio/FRETE_REAL_VS_TEORICO.md) |
+| Margem e Custeio (formula margem, tabelas de custo) | [negocio/MARGEM_CUSTEIO.md](./negocio/MARGEM_CUSTEIO.md) |
+| Prioridades P1-P7, envio parcial, decisao de corte | [negocio/REGRAS_P1_P7.md](./negocio/REGRAS_P1_P7.md) |
+| Recebimento de materiais | [negocio/RECEBIMENTO_MATERIAIS.md](./negocio/RECEBIMENTO_MATERIAIS.md) |
+| Historico de decisoes | [negocio/historia_nacom.md](./negocio/historia_nacom.md) |
 | **OBRIGATORIO — Timezone (Brasil naive)** | [REGRAS_TIMEZONE.md](REGRAS_TIMEZONE.md) |
 | **Routing de skills** | [ROUTING_SKILLS.md](ROUTING_SKILLS.md) |
 | **Infraestrutura Render e Odoo** | [INFRAESTRUTURA.md](INFRAESTRUTURA.md) |
@@ -71,13 +81,15 @@
 
 | Preciso de... | Documento |
 |---------------|-----------|
-| IDs fixos (Companies, Picking Types, Journals) | [odoo/IDS_FIXOS.md](odoo/IDS_FIXOS.md) |
-| GOTCHAS criticos (timeouts, campos inexistentes) | [odoo/GOTCHAS.md](odoo/GOTCHAS.md) |
-| Modelos Odoo (DFe, PO, SO, Stock, Financeiro) | [odoo/MODELOS_CAMPOS.md](odoo/MODELOS_CAMPOS.md) |
-| Padroes avancados (auditoria, batch, locks) | [odoo/PADROES_AVANCADOS.md](odoo/PADROES_AVANCADOS.md) |
-| Pipeline Recebimento de Compras (Fases 1-4) | [odoo/PIPELINE_RECEBIMENTO.md](odoo/PIPELINE_RECEBIMENTO.md) |
-| Pipeline Recebimento LF (37 etapas, Playwright NF-e) | [odoo/PIPELINE_RECEBIMENTO_LF.md](odoo/PIPELINE_RECEBIMENTO_LF.md) |
-| Conversao de unidades (UoM) | [odoo/CONVERSAO_UOM.md](odoo/CONVERSAO_UOM.md) |
+| IDs fixos (Companies, Picking Types, Journals) | [odoo/IDS_FIXOS.md](./odoo/IDS_FIXOS.md) |
+| GOTCHAS criticos (timeouts, campos inexistentes) | [odoo/GOTCHAS.md](./odoo/GOTCHAS.md) |
+| Modelos Odoo (DFe, PO, SO, Stock, Financeiro) | [odoo/MODELOS_CAMPOS.md](./odoo/MODELOS_CAMPOS.md) |
+| Padroes avancados (auditoria, batch, locks) | [odoo/PADROES_AVANCADOS.md](./odoo/PADROES_AVANCADOS.md) |
+| Pipeline Recebimento de Compras (Fases 1-4) | [odoo/PIPELINE_RECEBIMENTO.md](./odoo/PIPELINE_RECEBIMENTO.md) |
+| Pipeline Recebimento LF (37 etapas, Playwright NF-e) | [odoo/PIPELINE_RECEBIMENTO_LF.md](./odoo/PIPELINE_RECEBIMENTO_LF.md) |
+| Conversao de unidades (UoM) | [odoo/CONVERSAO_UOM.md](./odoo/CONVERSAO_UOM.md) |
+| Routing das skills Odoo (qual skill para qual operacao) | [odoo/ROUTING_ODOO.md](./odoo/ROUTING_ODOO.md) |
+| Boilerplate/templates de service de integracao Odoo | [odoo/AGENT_BOILERPLATE.md](./odoo/AGENT_BOILERPLATE.md) |
 | Wizard vs API (reconciliacao extrato) | `scripts/analise_baixa_titulos/WIZARD_VS_API_ANALISE.md` |
 | Analise multi-company extrato (teste UI) | `scripts/analise_baixa_titulos/ANALISE_CONCILIACAO_EXTRATO_MULTICOMPANY.md` |
 
@@ -87,12 +99,12 @@
 
 | Preciso de... | Documento |
 |---------------|-----------|
-| APIs, WebServices, autenticacao, metodos (WS Saida, B2C, Entrada, REST) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) |
-| Timestamp incremental (sincronizacao) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 3 |
-| API Faturas a Pagar (REST/JSON) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 7 |
-| B2CConsultaNFe — campos, XML completo, chave 44 digitos | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 5.1 |
-| Gotcha estoque (deposito em Tools) | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 8 |
-| Links de documentacao e manuais | [linx/INTEGRACOES.md](linx/INTEGRACOES.md) secao 13 |
+| APIs, WebServices, autenticacao, metodos (WS Saida, B2C, Entrada, REST) | [linx/INTEGRACOES.md](./linx/INTEGRACOES.md) |
+| Timestamp incremental (sincronizacao) | [linx/INTEGRACOES.md](./linx/INTEGRACOES.md) secao 3 |
+| API Faturas a Pagar (REST/JSON) | [linx/INTEGRACOES.md](./linx/INTEGRACOES.md) secao 7 |
+| B2CConsultaNFe — campos, XML completo, chave 44 digitos | [linx/INTEGRACOES.md](./linx/INTEGRACOES.md) secao 5.1 |
+| Gotcha estoque (deposito em Tools) | [linx/INTEGRACOES.md](./linx/INTEGRACOES.md) secao 8 |
+| Links de documentacao e manuais | [linx/INTEGRACOES.md](./linx/INTEGRACOES.md) secao 13 |
 
 ---
 
@@ -100,8 +112,8 @@
 
 | Documento | Descricao |
 |-----------|-----------|
-| [design/MAPEAMENTO_CORES.md](design/MAPEAMENTO_CORES.md) | Tokens de cor, paleta, dark/light mode |
-| [design/GUIA_COMPONENTES_UI.md](design/GUIA_COMPONENTES_UI.md) | Botoes, badges, cores — qual classe usar |
+| [design/MAPEAMENTO_CORES.md](./design/MAPEAMENTO_CORES.md) | Tokens de cor, paleta, dark/light mode |
+| [design/GUIA_COMPONENTES_UI.md](./design/GUIA_COMPONENTES_UI.md) | Botoes, badges, cores — qual classe usar |
 
 ---
 
