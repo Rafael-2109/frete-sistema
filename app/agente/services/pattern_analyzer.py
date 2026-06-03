@@ -1914,7 +1914,8 @@ Retorne JSON VALIDO:
     {
       "tipo": "correcao|preferencia|expertise|contexto",
       "descricao": "O que foi observado (max 200 chars)",
-      "prescricao": "Quando [situacao], o agente deve [acao] (max 200 chars)"
+      "prescricao": "Quando [situacao], o agente deve [acao] (max 200 chars)",
+      "error_signature": "SO para tipo=correcao: a INTENCAO NORMALIZADA do erro em snake_case (max 60 chars), NAO o texto literal. Ex: 'troca_de_escopo', 'data_formato_ano_mes', 'executou_padrao_vetado', 'respondeu_cluster_errado'. Use a MESMA assinatura para o mesmo erro em sessoes diferentes (e a chave que casa reincidencia). Omita o campo para os demais tipos."
     }
   ]
 }
@@ -1945,6 +1946,7 @@ def _save_personal_insight(
     tipo: str,
     descricao: str,
     prescricao: str,
+    error_signature: str = '',
 ) -> bool:
     """
     Salva insight pessoal como memoria do usuario.
@@ -1995,6 +1997,26 @@ def _save_personal_insight(
                             canonica.importance_score = min(
                                 0.95, (canonica.importance_score or 0.7) + 0.05
                             )
+                            # Fase 3: se a canonica ainda nao tem assinatura, herda a desta
+                            # reincidencia (backfill incremental da assinatura de intencao).
+                            if (error_signature and hasattr(canonica, 'error_signature')
+                                    and not canonica.error_signature):
+                                canonica.error_signature = error_signature[:64]
+                            # Fase 3.3 (sinal harmful, write-path): se a canonica JA e regra dura
+                            # ('mandatory' = injetada no canal duro) e o usuario AINDA corrigiu o
+                            # mesmo erro -> a regra dura FALHOU em prevenir. Conta harmful (outcome
+                            # negativo; alimenta demote/reescrita na 3.6). So colunas novas (aditivo).
+                            try:
+                                from ..config.feature_flags import AGENT_OUTCOME_TRACKING
+                                if (AGENT_OUTCOME_TRACKING and canonica.priority == 'mandatory'
+                                        and hasattr(canonica, 'harmful_count')):
+                                    canonica.harmful_count = (canonica.harmful_count or 0) + 1
+                                    logger.info(
+                                        f"[OUTCOME] Regra dura reincidiu (HARMFUL): '{dup_path}' "
+                                        f"harmful_count={canonica.harmful_count}"
+                                    )
+                            except Exception:
+                                pass
                             db.session.commit()
                             logger.info(
                                 f"[PERSONAL_EXTRACTION] Correcao reincidente REFORCADA: "
@@ -2109,6 +2131,10 @@ def _save_personal_insight(
             mem = AgentMemory.create_file(user_id, path, content)
             mem.category = 'structural'
             mem.importance_score = 0.7
+            # Fase 3: assinatura de intencao normalizada (casa reincidencia entre sessoes).
+            # hasattr guard: seguro durante rollout dual (antes da migration 3.1 chegar ao PROD).
+            if error_signature and hasattr(mem, 'error_signature'):
+                mem.error_signature = error_signature[:64]
 
         else:
             return False
@@ -2202,6 +2228,8 @@ def extrair_insights_pessoais_sessao(
                 tipo = item.get('tipo', '').strip()
                 descricao = item.get('descricao', '').strip()
                 prescricao = item.get('prescricao', '').strip()
+                # Fase 3: assinatura de intencao (so p/ correcao) — casa reincidencia
+                error_signature = item.get('error_signature', '').strip() if tipo == 'correcao' else ''
 
                 if tipo not in _TIPOS_VALIDOS:
                     filtered += 1
@@ -2210,7 +2238,7 @@ def extrair_insights_pessoais_sessao(
                     filtered += 1
                     continue
 
-                if _save_personal_insight(user_id, tipo, descricao, prescricao):
+                if _save_personal_insight(user_id, tipo, descricao, prescricao, error_signature=error_signature):
                     saved += 1
                 else:
                     filtered += 1

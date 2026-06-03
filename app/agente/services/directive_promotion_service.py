@@ -627,6 +627,36 @@ def _avaliar_e_contabilizar(candidata: dict, session_id: str, contadores: dict) 
 # run_directive_promotion_batch
 # ---------------------------------------------------------------------------
 
+def _reframe_as_compiled_memory(content: str) -> str:
+    """Fase 3.2B: reescreve a correcao em frame IMPERATIVO (Compiled Memory) na promocao.
+
+    A Fase 0 mostrou que correcoes tipo-A (que competem com o pedido literal do usuario) so
+    aderem com frame imperativo no topo (caso A: P3 0%->67% so com o frame). Formato de
+    entrada gravado por _save_personal_insight: '[correcao] <descricao>\\nDO: <prescricao>'.
+    Saida:
+        SEMPRE|NUNCA: <prescricao>
+        WHEN: <descricao>
+        DO: <prescricao>
+    IDEMPOTENTE (se ja comeca com SEMPRE/NUNCA, retorna inalterado — nao reprocessa).
+    Heuristica NUNCA quando a prescricao tem negacao explicita (nao/nunca/evitar/ignorar/
+    jamais), senao SEMPRE. Funcao PURA (sem DB/LLM) — testavel isoladamente.
+    """
+    if not content:
+        return content
+    stripped = content.strip()
+    if _re.match(r'^(SEMPRE|NUNCA)\b', stripped, _re.IGNORECASE):
+        return content  # ja em frame imperativo
+    linhas = stripped.split('\n')
+    descricao = _re.sub(r'^\[[^\]]*\]\s*', '', linhas[0]).strip() if linhas else stripped
+    do_linha = next((l for l in linhas if l.strip().upper().startswith('DO:')), '')
+    prescricao = do_linha.split(':', 1)[1].strip() if ':' in do_linha else descricao
+    if not prescricao:
+        return content
+    low = prescricao.lower()
+    verbo = 'NUNCA' if _re.search(r'\b(n[aã]o|nunca|evit\w*|jamais|ignor\w*)\b', low) else 'SEMPRE'
+    return f"{verbo}: {prescricao}\nWHEN: {descricao}\nDO: {prescricao}"
+
+
 def promover_correcoes_recorrentes(threshold: int = None, limit: int = 200, user_id: int = None) -> dict:
     """Fonte 3 do batch (CORRECTION-RECURRENCE): promove correcoes PESSOAIS reincidentes
     a priority='mandatory' para entrarem no canal duro <user_rules> (Fase 1 do loop).
@@ -664,15 +694,32 @@ def promover_correcoes_recorrentes(threshold: int = None, limit: int = 200, user
             q = q.filter(AgentMemory.user_id == user_id)
         candidatas = q.order_by(AgentMemory.correction_count.desc()).limit(limit).all()
         out['avaliadas'] = len(candidatas)
+        reembed = []  # (user_id, path, novo_conteudo) p/ re-embed apos reframe
         for mem in candidatas:
+            # Fase 3.2B: reescreve em frame IMPERATIVO (Compiled Memory) ao virar regra dura.
+            novo = _reframe_as_compiled_memory(mem.content or '')
+            if novo != (mem.content or ''):
+                mem.content = novo
+                out['reescritas'] = out.get('reescritas', 0) + 1
+                reembed.append((mem.user_id, mem.path, novo))
             mem.priority = 'mandatory'
             out['promovidas'] += 1
         if out['promovidas']:
             db.session.commit()
             logger.info(
                 f"[CORRECTION_PROMOTION] {out['promovidas']} correcoes recorrentes "
-                f"promovidas a 'mandatory' (threshold={th}, avaliadas={out['avaliadas']})"
+                f"promovidas a 'mandatory' (threshold={th}, avaliadas={out['avaliadas']}, "
+                f"reescritas={out.get('reescritas', 0)})"
             )
+            # Re-embed best-effort: o reframe mudou o conteudo -> embedding ficaria stale.
+            for _uid, _path, _cont in reembed:
+                try:
+                    from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+                    if MEMORY_SEMANTIC_SEARCH:
+                        from ..tools.memory_mcp_tool import _embed_memory_best_effort
+                        _embed_memory_best_effort(_uid, _path, _cont)
+                except Exception:
+                    pass
     except Exception as exc:
         try:
             from app import db

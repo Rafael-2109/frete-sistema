@@ -516,6 +516,16 @@ USE_USER_RULES_TOP = os.getenv("AGENT_USER_RULES_TOP", "true").lower() == "true"
 # contador estiver populado. OFF = formula historica EXATA preservada.
 USE_RECURRENCE_SCORE = os.getenv("AGENT_RECURRENCE_SCORE", "false").lower() == "true"
 
+# Fase 3.3 do loop corretivo — medicao POR OUTCOME (harmful/helpful), desacoplada do eco
+# textual (effective_count). harmful++ = regra 'mandatory' estava ativa e o MESMO erro
+# reincidiu (a regra dura falhou em prevenir); helpful++ = regra 'mandatory' ativa e SEM
+# reincidencia por K sessoes. Default ON: so escreve em colunas NOVAS (harmful_count/
+# helpful_count) — aditivo e seguro; alimenta o demote (3.6) e o painel de adesao (3.7).
+AGENT_OUTCOME_TRACKING = os.getenv("AGENT_OUTCOME_TRACKING", "true").lower() == "true"
+# Nº de sessoes do usuario SEM reincidencia (apos a regra ficar 'mandatory') para creditar
+# helpful_count a uma regra dura. Conservador por padrao.
+AGENT_OUTCOME_HELPFUL_K_SESSIONS = int(os.getenv("AGENT_OUTCOME_HELPFUL_K_SESSIONS", "3"))
+
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
 # ====================================================================
