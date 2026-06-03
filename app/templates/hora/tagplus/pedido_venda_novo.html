@@ -595,12 +595,15 @@
 
 <!-- ========================== Pagamento ========================== -->
 <div class="card mb-3" id="campo-forma-pagamento">
-  <div class="card-header"><strong><i class="fas fa-money-bill-wave"></i> Pagamento</strong></div>
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong><i class="fas fa-money-bill-wave"></i> Pagamento</strong>
+    {% if is_incompleto %}<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i> Pedido INCOMPLETO — soma das formas deve igualar o valor total</span>{% endif %}
+  </div>
   <div class="card-body">
     {% if permite_editar_pagamentos and pode_editar %}
     <form method="post" action="{{ url_for('hora.vendas_pagamentos_editar', venda_id=venda.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div id="pag-edit-container">
+      <div id="pag-edit-container" data-pag-total="{{ venda.valor_total|float }}">
         {% for p in venda.pagamentos %}
         <div class="row g-2 align-items-end mb-2 pag-edit-linha border rounded p-2">
           <div class="col-md-4">
@@ -648,17 +651,39 @@
               onclick="var t=document.getElementById('tpl-pag-edit');document.getElementById('pag-edit-container').appendChild(t.content.cloneNode(true));">
         <i class="fas fa-plus"></i> Adicionar forma de pagamento
       </button>
+      <div class="mt-2 small d-flex gap-3 flex-wrap">
+        <span>Total formas: <strong id="pag-edit-soma">R$ 0,00</strong></span>
+        <span>Pedido: <strong>{{ venda.valor_total|valor_br }}</strong></span>
+        <span id="pag-edit-aviso" class="text-danger" style="display:none;">⚠ Soma difere do total — salvará como INCOMPLETO.</span>
+      </div>
       <div class="mt-3"><button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Salvar pagamentos</button></div>
     </form>
     {% else %}
-    <table class="table table-sm mb-0">
-      <thead><tr><th>Forma</th><th class="text-end">Valor</th><th class="text-center">Parcelas</th><th>AUT/ID</th></tr></thead>
+    <table class="table table-sm mb-0 align-middle">
+      <thead><tr><th>Forma</th><th class="text-end">Valor</th><th class="text-center">Parcelas</th><th>AUT/ID</th><th class="text-center">Tipo</th></tr></thead>
       <tbody>
+        {% set ns = namespace(soma=0) %}
         {% for p in venda.pagamentos %}
-          <tr><td>{{ p.forma_pagamento_hora }}</td><td class="text-end">{{ p.valor|valor_br }}</td><td class="text-center">{{ p.numero_parcelas or 1 }}x</td><td>{{ p.aut_id or '—' }}</td></tr>
+          {% set ns.soma = ns.soma + p.valor|float %}
+          <tr>
+            <td>{{ p.forma_pagamento_hora }}</td>
+            <td class="text-end">{{ p.valor|valor_br }}</td>
+            <td class="text-center">{{ p.numero_parcelas or 1 }}x</td>
+            <td>{{ p.aut_id or '—' }}</td>
+            <td class="text-center"><small class="text-muted">{% set fm = (formas_pagamento | selectattr('forma_pagamento_hora', 'equalto', p.forma_pagamento_hora) | first) %}{% if fm and fm.tipo_pagamento %}{{ fm.tipo_pagamento }}{% else %}—{% endif %}</small></td>
+          </tr>
         {% else %}
-          <tr><td colspan="4" class="text-muted">Nenhuma forma de pagamento registrada.</td></tr>
+          <tr><td colspan="5" class="text-muted">Nenhuma forma de pagamento registrada.</td></tr>
         {% endfor %}
+        {% if venda.pagamentos %}
+        <tr class="fw-bold">
+          <td>Total formas</td>
+          <td class="text-end">{{ ns.soma|valor_br }}</td>
+          <td colspan="3"><span class="text-muted">vs Pedido: {{ venda.valor_total|valor_br }}</span>
+            {% if (ns.soma - venda.valor_total|float)|abs > 0.01 %}<span class="badge bg-warning text-dark ms-2">⚠ Diferença</span>{% endif %}
+          </td>
+        </tr>
+        {% endif %}
       </tbody>
     </table>
     {% endif %}

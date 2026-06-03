@@ -717,6 +717,32 @@
     wireDescontoSync(root, isNaN(preco) ? null : preco);
   });
 
+  // ----------------- Pagamentos (editor de edicao): soma ao vivo ----------
+  // O editor de edicao usa ids `pag-edit-*` (distintos do modo criacao). Soma
+  // os valores das formas e compara com o valor_total do pedido (data-pag-total).
+  (function() {
+    const cont = document.getElementById('pag-edit-container');
+    const somaEl = document.getElementById('pag-edit-soma');
+    if (!cont || !somaEl) return;
+    const total = parseFloat(cont.dataset.pagTotal || '0');
+    const avisoEl = document.getElementById('pag-edit-aviso');
+    function recalcPagEdit() {
+      let soma = 0;
+      cont.querySelectorAll('input[name="pagamento_valor"]').forEach(function(inp) {
+        const v = parseBR(inp.value);
+        if (!isNaN(v)) soma += v;
+      });
+      somaEl.textContent = 'R$ ' + fmtBR(soma);
+      if (avisoEl) avisoEl.style.display = (Math.abs(soma - total) > 0.01) ? '' : 'none';
+    }
+    cont.addEventListener('input', function(e) {
+      if (e.target && e.target.name === 'pagamento_valor') recalcPagEdit();
+    });
+    // Recalcula ao adicionar/remover linha (botoes usam onclick inline).
+    new MutationObserver(recalcPagEdit).observe(cont, { childList: true });
+    recalcPagEdit();
+  })();
+
   // ----------------- Parcelamento: aviso de intervalo atipico (<7 dias) ---
   (function() {
     const elInt = document.getElementById('f-intervalo');
