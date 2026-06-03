@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Pipeline de Recebimento LF — 37 Etapas com Checkpoint
+
+> **Papel:** Pipeline de Recebimento LF — 37 Etapas com Checkpoint.
+
+## Indice
+
+- [Visao Geral](#visao-geral)
+- [Etapas Resumidas](#etapas-resumidas)
+- [Etapa 23: Transmissao NF-e Transfer (Playwright)](#etapa-23-transmissao-nf-e-transfer-playwright)
+  - [Por que Playwright (e nao XML-RPC)](#por-que-playwright-e-nao-xml-rpc)
+  - [Fluxo](#fluxo)
+  - [Navegacao Robusta](#navegacao-robusta)
+  - [Tratamento de Erros](#tratamento-de-erros)
+  - [Criterio de Sucesso](#criterio-de-sucesso)
+  - [Pre-requisitos Producao](#pre-requisitos-producao)
+  - [Constantes](#constantes)
+  - [Validacao](#validacao)
+- [IDs Fixos do Recebimento LF](#ids-fixos-do-recebimento-lf)
+- [Resiliencia](#resiliencia)
 
 **Ultima verificacao:** 21/02/2026
 **Service:** `app/recebimento/services/recebimento_lf_odoo_service.py`

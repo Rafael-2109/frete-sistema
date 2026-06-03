@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Documentação: Conversão de Código/Unidade de Medida no Odoo
+
+> **Papel:** Documentação: Conversão de Código/Unidade de Medida no Odoo.
+
+## Indice
+
+- [1. Fluxo de Recebimento de Compras no Odoo](#1-fluxo-de-recebimento-de-compras-no-odoo)
+  - [Diagrama do Processo](#diagrama-do-processo)
+- [2. Responsabilidades: Manual vs Automático](#2-responsabilidades-manual-vs-automático)
+- [3. Campos Importantes por Modelo](#3-campos-importantes-por-modelo)
+  - [3.1 DFE (NF-e recebida)](#31-dfe-nf-e-recebida)
+  - [3.2 Pedido de Compra](#32-pedido-de-compra)
+  - [3.3 Picking (Recebimento)](#33-picking-recebimento)
+  - [3.4 De-Para de Fornecedores (NÃO UTILIZADO)](#34-de-para-de-fornecedores-não-utilizado)
+- [4. Unidades de Medida - Fornecedores](#4-unidades-de-medida---fornecedores)
+  - [UoMs que indicam MILHAR](#uoms-que-indicam-milhar)
+  - [Fator de Conversão](#fator-de-conversão)
+  - [Fornecedores Conhecidos que Usam MILHAR](#fornecedores-conhecidos-que-usam-milhar)
+- [5. Exemplo Real Completo](#5-exemplo-real-completo)
+  - [Caso: NF 2649 da Gráfica MKT Prime](#caso-nf-2649-da-gráfica-mkt-prime)
+- [6. Mecanismos Nativos Disponíveis (Não Utilizados)](#6-mecanismos-nativos-disponíveis-não-utilizados)
+  - [6.1 product.supplierinfo.product_uom](#61-productsupplierinfoproduct_uom)
+  - [6.2 product.product.uom_po_id](#62-productproductuom_po_id)
+  - [6.3 UoM MI (ID=181) - CONFIGURAÇÃO INCORRETA](#63-uom-mi-id181---configuração-incorreta)
+- [7. Conclusão](#7-conclusão)
+  - [Processo Atual (Funciona)](#processo-atual-funciona)
+  - [Por que Não Automatizar Agora](#por-que-não-automatizar-agora)
+  - [Referência para Futuro](#referência-para-futuro)
 
 **Status**: Documentação de referência (sem implementação)
 **Data**: 14/01/2026

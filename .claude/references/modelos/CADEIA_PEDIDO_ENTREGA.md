@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Cadeia Completa: Pedido -> Entrega
+
+> **Papel:** Cadeia Completa: Pedido -> Entrega.
+
+## Indice
+
+- [Cadeia de Tabelas](#cadeia-de-tabelas)
+- [JOINs Chave](#joins-chave)
+  - [Pedido -> Separacao](#pedido---separacao)
+  - [Separacao -> Embarque](#separacao---embarque)
+  - [Pedido -> NF (via FaturamentoProduto.origem)](#pedido---nf-via-faturamentoprodutoorigem)
+  - [NF -> Entrega](#nf---entrega)
+  - [Embarque -> Frete](#embarque---frete)
+  - [Co-passageiros (quem embarcou junto)](#co-passageiros-quem-embarcou-junto)
+- [Estados do Pedido](#estados-do-pedido)
+  - [1. Em Carteira (pendente)](#1-em-carteira-pendente)
+  - [2. Separado (aguardando faturamento)](#2-separado-aguardando-faturamento)
+  - [3. Faturado (NF emitida)](#3-faturado-nf-emitida)
+  - [4. Em Transito](#4-em-transito)
+  - [5. Entregue](#5-entregue)
+  - [6. Devolvido (parcial ou total)](#6-devolvido-parcial-ou-total)
+- [Formulas de Calculo por Pedido](#formulas-de-calculo-por-pedido)
+  - [Total do pedido (valor original)](#total-do-pedido-valor-original)
+  - [Total pendente de faturamento](#total-pendente-de-faturamento)
+  - [Total programado para expedicao](#total-programado-para-expedicao)
+  - [Valor faturado](#valor-faturado)
+  - [O que falta entregar](#o-que-falta-entregar)
 
 Documentacao da cadeia de dados desde o pedido ate a entrega final, incluindo JOINs, campos-chave e estados.
 

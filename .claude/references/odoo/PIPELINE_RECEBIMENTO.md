@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Pipeline de Recebimento de Compras - Fases 1-4
+
+> **Papel:** Pipeline de Recebimento de Compras - Fases 1-4.
+
+## Indice
+
+- [Visao Geral](#visao-geral)
+- [FASE 1: Validacao Fiscal](#fase-1-validacao-fiscal)
+  - [Entrada](#entrada)
+  - [Validacao](#validacao)
+  - [Status de Saida](#status-de-saida)
+  - [Tabelas Locais](#tabelas-locais)
+- [FASE 2: Match NF x PO (Validacao Comercial)](#fase-2-match-nf-x-po-validacao-comercial)
+  - [Entrada](#entrada)
+  - [Tolerancias de Validacao](#tolerancias-de-validacao)
+  - [Vinculacao DFE → PO](#vinculacao-dfe-po)
+  - [Status de Saida](#status-de-saida)
+  - [Tabelas Locais](#tabelas-locais)
+- [FASE 3: Consolidacao PO](#fase-3-consolidacao-po)
+  - [Entrada](#entrada)
+  - [Processo](#processo)
+  - [Cenarios de Split](#cenarios-de-split)
+  - [Tabelas Locais](#tabelas-locais)
+- [FASE 4: Recebimento Fisico](#fase-4-recebimento-fisico)
+  - [Entrada](#entrada)
+  - [8 Passos do Recebimento](#8-passos-do-recebimento)
+  - [Quality Checks (OBRIGATORIO antes de button_validate)](#quality-checks-obrigatorio-antes-de-button_validate)
+  - [Lotes (stock.lot)](#lotes-stocklot)
+  - [Status do Picking](#status-do-picking)
+  - [Tabelas Locais](#tabelas-locais)
+- [Fluxo de Status Completo](#fluxo-de-status-completo)
+- [Skills por Fase](#skills-por-fase)
 
 **Ultima verificacao:** Janeiro/2026
 

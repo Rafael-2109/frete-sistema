@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Regras Complementares de Output (I1, I5, I6)
+
+> **Papel:** Regras Complementares de Output (I1, I5, I6).
 
 **Ultima Atualizacao**: 31/03/2026
 

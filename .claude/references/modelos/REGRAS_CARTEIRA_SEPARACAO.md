@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Regras de Negocio: CarteiraPrincipal e Separacao
+
+> **Papel:** Regras de Negocio: CarteiraPrincipal e Separacao.
+
+## Indice
+
+- [CarteiraPrincipal (app/carteira/models.py)](#carteiraprincipal-appcarteiramodelspy)
+  - [CAMPOS QUE NAO EXISTEM EM CarteiraPrincipal - NUNCA USAR](#campos-que-nao-existem-em-carteiraprincipal---nunca-usar)
+- [Separacao (app/separacao/models.py)](#separacao-appseparacaomodelspy)
+  - [REGRA CRITICA: sincronizado_nf](#regra-critica-sincronizado_nf)
+  - [Prioridades de Status (calculado automaticamente pelo listener)](#prioridades-de-status-calculado-automaticamente-pelo-listener)
+  - [Event Listeners da Separacao (app/separacao/models.py)](#event-listeners-da-separacao-appseparacaomodelspy)
+  - [Metodos Auxiliares da Separacao](#metodos-auxiliares-da-separacao)
+- [Diferenca entre Campos de Carteira vs Separacao](#diferenca-entre-campos-de-carteira-vs-separacao)
+  - [Campos Calculados ao Criar Separacao](#campos-calculados-ao-criar-separacao)
+- [Pallets: Calculo Teorico vs Controle Fisico](#pallets-calculo-teorico-vs-controle-fisico)
+  - [GRUPO 1: PALLETS TEORICOS (via CadastroPalletizacao)](#grupo-1-pallets-teoricos-via-cadastropalletizacao)
+  - [GRUPO 2: PALLETS FISICOS (Controle Real - Gestao de Ativos PBR)](#grupo-2-pallets-fisicos-controle-real---gestao-de-ativos-pbr)
 
 **Ultima Atualizacao**: 07/02/2026
 **Fonte de verdade para campos**: `.claude/skills/consultando-sql/schemas/tables/{tabela}.json`

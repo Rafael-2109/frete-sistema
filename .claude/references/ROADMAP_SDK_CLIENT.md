@@ -1,4 +1,65 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Migração: query() → ClaudeSDKClient — ROADMAP VIVO
+
+> **Papel:** Migração: query() → ClaudeSDKClient — ROADMAP VIVO.
+
+## Indice
+
+- [1. CONTEXTO E MOTIVAÇÃO](#1-contexto-e-motivação)
+  - [Por que migrar](#por-que-migrar)
+  - [Resultado da POC](#resultado-da-poc)
+  - [Princípio cardinal](#princípio-cardinal)
+- [2. ARQUITETURA ATUAL vs ALVO](#2-arquitetura-atual-vs-alvo)
+  - [Atual (query() + resume)](#atual-query-resume)
+  - [Alvo (ClaudeSDKClient persistente)](#alvo-claudesdkclient-persistente)
+- [3. INVENTÁRIO DE FUNCIONALIDADES (PARIDADE OBRIGATÓRIA)](#3-inventário-de-funcionalidades-paridade-obrigatória)
+  - [3.1 Endpoints (24 rotas)](#31-endpoints-24-rotas)
+  - [3.2 MCP Tools (38 tools em 7 servers)](#32-mcp-tools-38-tools-em-7-servers)
+  - [3.3 Hooks SDK (6 hooks)](#33-hooks-sdk-6-hooks)
+  - [3.4 ContextVars (5 variáveis)](#34-contextvars-5-variáveis)
+  - [3.5 Services (10 services)](#35-services-10-services)
+  - [3.6 Feature Flags (45 flags)](#36-feature-flags-45-flags)
+  - [3.7 SSE Event Types (12 tipos)](#37-sse-event-types-12-tipos)
+  - [3.8 Timeout Cascade (INVARIANTE)](#38-timeout-cascade-invariante)
+  - [3.9 Thread-Safety Mechanisms (3 mecanismos — PRESERVAR)](#39-thread-safety-mechanisms-3-mecanismos-preservar)
+  - [3.10 Integração Teams (DEVE FUNCIONAR)](#310-integração-teams-deve-funcionar)
+- [4. DESCOBERTAS CRÍTICAS](#4-descobertas-críticas)
+  - [DC-1: Playwright MCP — Globals Compartilhados (RISCO ALTO)](#dc-1-playwright-mcp-globals-compartilhados-risco-alto)
+  - [DC-2: Flask app_context no Daemon Thread (RISCO ALTO)](#dc-2-flask-app_context-no-daemon-thread-risco-alto)
+  - [DC-3: Hooks Persistem com o Client (RISCO MÉDIO)](#dc-3-hooks-persistem-com-o-client-risco-médio)
+  - [DC-4: MCP Servers — Lifecycle no Connect (RISCO BAIXO)](#dc-4-mcp-servers-lifecycle-no-connect-risco-baixo)
+  - [DC-5: _make_streaming_prompt() Eliminável (SIMPLIFICAÇÃO)](#dc-5-_make_streaming_prompt-eliminável-simplificação)
+  - [DC-6: asyncio.Event.set() Cross-Thread (RISCO BAIXO)](#dc-6-asyncioeventset-cross-thread-risco-baixo)
+  - [DC-7: disconnect() Cross-Task Causa Subprocess Zombie (RISCO CRÍTICO — FIXADO)](#dc-7-disconnect-cross-task-causa-subprocess-zombie-risco-crítico-fixado)
+  - [DC-8: CancelledError Bypassa streaming_done_event (RISCO CRÍTICO — FIXADO)](#dc-8-cancellederror-bypassa-streaming_done_event-risco-crítico-fixado)
+- [5. FASES DE IMPLEMENTAÇÃO](#5-fases-de-implementação)
+  - [FASE 0: Infraestrutura (sem mudança de comportamento)](#fase-0-infraestrutura-sem-mudança-de-comportamento)
+  - [FASE 1: Web Streaming (feature-flagged, canary)](#fase-1-web-streaming-feature-flagged-canary)
+  - [FASE 2: Interrupt (feature nova)](#fase-2-interrupt-feature-nova)
+  - [FASE 3: Teams](#fase-3-teams)
+  - [FASE 4: Simplificação (após 2-4 semanas estável)](#fase-4-simplificação-após-2-4-semanas-estável)
+  - [FASE 5: Remoção do path query() (após 2-4 semanas da Fase 4)](#fase-5-remoção-do-path-query-após-2-4-semanas-da-fase-4)
+- [6. ARQUIVOS IMPACTADOS — MAPA COMPLETO](#6-arquivos-impactados-mapa-completo)
+  - [Criados](#criados)
+  - [Modificados](#modificados)
+  - [NÃO impactados (confirmado por análise profunda)](#não-impactados-confirmado-por-análise-profunda)
+- [7. RISCOS — REGISTRO VIVO](#7-riscos-registro-vivo)
+- [8. ROLLBACK — ESTRATÉGIA POR CAMADA](#8-rollback-estratégia-por-camada)
+  - [Rollback Instantâneo (segundos)](#rollback-instantâneo-segundos)
+  - [Rollback por Fase](#rollback-por-fase)
+- [9. VERIFICAÇÃO END-TO-END](#9-verificação-end-to-end)
+  - [Checklist por Fase](#checklist-por-fase)
+  - [Testes de Regressão Automatizáveis](#testes-de-regressão-automatizáveis)
+- [10. LOG DE DECISÕES](#10-log-de-decisões)
+- [11. LOG DE PROGRESSO](#11-log-de-progresso)
+- [12. REFERÊNCIAS](#12-referências)
 
 > **Última atualização**: 2026-04-04
 > **Status geral**: EM PROGRESSO (pausado — Fases 4-5 pendentes)

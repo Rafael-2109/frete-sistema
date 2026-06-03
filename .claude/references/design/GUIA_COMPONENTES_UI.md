@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Guia de Componentes UI — Nacom Goya Design System
+
+> **Papel:** Guia de Componentes UI — Nacom Goya Design System.
+
+## Indice
+
+- [0. TL;DR — Antes de Codar](#0-tldr-antes-de-codar)
+  - [Regras blockantes (ver Secao 6 — codigos P1-P9)](#regras-blockantes-ver-secao-6-codigos-p1-p9)
+  - [Boas praticas](#boas-praticas)
+- [1. Arquitetura (resumo executivo)](#1-arquitetura-resumo-executivo)
+- [2. Badges — Catalogo Canonical (`components/_badges.css`)](#2-badges-catalogo-canonical-components_badgescss)
+  - [2.1 Variantes Bootstrap (filled)](#21-variantes-bootstrap-filled)
+  - [2.2 Variantes outline](#22-variantes-outline)
+  - [2.3 Status canonical (use estes em vez de criar novos)](#23-status-canonical-use-estes-em-vez-de-criar-novos)
+  - [2.4 Quando criar uma classe nova](#24-quando-criar-uma-classe-nova)
+  - [2.5 Erros comuns](#25-erros-comuns)
+- [3. Botoes — `components/_buttons.css`](#3-botoes-components_buttonscss)
+  - [3.1 Mapeamento semantico](#31-mapeamento-semantico)
+  - [3.2 Outline em headers `bg-primary`](#32-outline-em-headers-bg-primary)
+  - [3.3 Erros comuns](#33-erros-comuns)
+- [4. Tabelas — `components/_tables.css`](#4-tabelas-components_tablescss)
+  - [4.1 Row classes canonicais](#41-row-classes-canonicais)
+  - [4.2 NAO use ainda](#42-nao-use-ainda)
+  - [4.3 Coluna utilities](#43-coluna-utilities)
+  - [4.4 Sticky header](#44-sticky-header)
+- [5. Cores Reais Neste Sistema (recap)](#5-cores-reais-neste-sistema-recap)
+- [6. Antipatterns Catalogados](#6-antipatterns-catalogados)
+  - [Audit numerico (`ui_audit.py`) — codigos catalogo](#audit-numerico-ui_auditpy-codigos-catalogo)
+  - [Policy lint (`ui_policy_lint.py`) — codigos blockantes](#policy-lint-ui_policy_lintpy-codigos-blockantes)
+  - [Regression check (pre-commit / CI)](#regression-check-pre-commit-ci)
+- [7. Checklist Pre-Implementacao](#7-checklist-pre-implementacao)
+- [8. Quando Atualizar Este Documento](#8-quando-atualizar-este-documento)
 
 **Ultima Atualizacao**: 2026-05-06
 **Status**: FONTE UNICA — substitui o antigo `MAPEAMENTO_CORES.md`

@@ -1,4 +1,51 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Mapeamento: Fluxo de Processo x Telas do Sistema - Pallet
+
+> **Papel:** Mapeamento: Fluxo de Processo x Telas do Sistema - Pallet.
+
+## Indice
+
+- [RESUMO DAS TELAS DISPONIVEIS](#resumo-das-telas-disponiveis)
+- [ETAPA 1: FATURAMENTO (Emissao de NF de Pallet)](#etapa-1-faturamento-emissao-de-nf-de-pallet)
+  - [Quando Ocorre](#quando-ocorre)
+  - [Fluxo de Decisao](#fluxo-de-decisao)
+  - [Como o Usuario Registra no Sistema](#como-o-usuario-registra-no-sistema)
+  - [Gap Identificado](#gap-identificado)
+- [ETAPA 2: RESPONSABILIDADE E PRAZOS](#etapa-2-responsabilidade-e-prazos)
+  - [Quando Ocorre](#quando-ocorre)
+  - [Regras de Prazo](#regras-de-prazo)
+  - [Como o Usuario Acompanha no Sistema](#como-o-usuario-acompanha-no-sistema)
+  - [Implementacao no Codigo](#implementacao-no-codigo)
+  - [Gap Identificado](#gap-identificado)
+- [ETAPA 3: RESOLUCAO DA NF DE REMESSA](#etapa-3-resolucao-da-nf-de-remessa)
+  - [Tipos de Tratativa](#tipos-de-tratativa)
+  - [Como o Usuario Registra no Sistema](#como-o-usuario-registra-no-sistema)
+  - [Gap Identificado](#gap-identificado)
+- [ETAPA 4: VALE PALLET / CANHOTO](#etapa-4-vale-pallet-canhoto)
+  - [Quando Ocorre](#quando-ocorre)
+  - [Ciclo de Vida do Vale](#ciclo-de-vida-do-vale)
+  - [Como o Usuario Registra no Sistema](#como-o-usuario-registra-no-sistema)
+  - [Baixa Automatica da NF](#baixa-automatica-da-nf)
+  - [Gap Identificado](#gap-identificado)
+- [ETAPA 5: RESOLUCAO DO VALE](#etapa-5-resolucao-do-vale)
+  - [Tipos de Resolucao](#tipos-de-resolucao)
+  - [Como o Usuario Registra no Sistema](#como-o-usuario-registra-no-sistema)
+  - [Gap Identificado](#gap-identificado)
+- [RESUMO DE GAPS](#resumo-de-gaps)
+  - [Gaps Criticos (Afetam Operacao)](#gaps-criticos-afetam-operacao)
+  - [Gaps Moderados (Melhorias)](#gaps-moderados-melhorias)
+  - [Gaps Leves (Nice to Have)](#gaps-leves-nice-to-have)
+- [FLUXO VISUAL DO USUARIO](#fluxo-visual-do-usuario)
+- [SCHEDULER (Automatico)](#scheduler-automatico)
+- [PROXIMOS PASSOS SUGERIDOS](#proximos-passos-sugeridos)
+- [Contexto](#contexto)
 
 **Data**: 05/01/2026
 **Status**: Revisao completa
@@ -381,3 +428,7 @@ Nao requer acao do usuario.
 2. **Prioridade ALTA**: Implementar G3.3 (botao "Emitir Cobranca")
 3. **Prioridade MEDIA**: Corrigir G2.1 (prazo dinamico nos alertas)
 4. **Prioridade BAIXA**: Demais melhorias de UX
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

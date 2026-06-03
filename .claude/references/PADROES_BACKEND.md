@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Padroes Backend — Helpers Compartilhados
+
+> **Papel:** Padroes Backend — Helpers Compartilhados.
 
 **Ultima atualizacao**: 2026-06-01
 

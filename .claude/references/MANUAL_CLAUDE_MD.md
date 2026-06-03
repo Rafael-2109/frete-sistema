@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Manual: Criacao de CLAUDE.md de Modulo
+
+> **Papel:** Manual: Criacao de CLAUDE.md de Modulo.
+
+## Indice
+
+- [S1. Fundamentos Oficiais](#s1-fundamentos-oficiais)
+  - [Hierarquia de Memoria (6 niveis, carregamento em cascata)](#hierarquia-de-memoria-6-niveis-carregamento-em-cascata)
+  - [Subdirectory CLAUDE.md — Comportamento](#subdirectory-claudemd-comportamento)
+  - [@imports](#imports)
+  - [.claude/rules/ (desde v2.0.64)](#clauderules-desde-v2064)
+  - [Limites Praticos](#limites-praticos)
+- [S2. Arquitetura Atual do Projeto](#s2-arquitetura-atual-do-projeto)
+  - [Root CLAUDE.md como Router (172 linhas)](#root-claudemd-como-router-172-linhas)
+  - [Ecossistema de Documentacao](#ecossistema-de-documentacao)
+  - [O que JA esta coberto (NUNCA duplicar no subdir)](#o-que-ja-esta-coberto-nunca-duplicar-no-subdir)
+- [S3. Principios de Design](#s3-principios-de-design)
+  - [P1: Complementar, Nunca Duplicar](#p1-complementar-nunca-duplicar)
+  - [P2: Regras > Descricoes](#p2-regras-descricoes)
+  - [P3: Gotchas > Arquitetura](#p3-gotchas-arquitetura)
+  - [P4: Tabelas > Prosa](#p4-tabelas-prosa)
+  - [P5: Maximo 150 Linhas](#p5-maximo-150-linhas)
+  - [P6: Fontes de Verdade Unicas](#p6-fontes-de-verdade-unicas)
+- [S4. Template Padrao](#s4-template-padrao)
+  - [Notas sobre cada secao](#notas-sobre-cada-secao)
+- [S5. Checklist Pre-Criacao](#s5-checklist-pre-criacao)
+  - [Pesquisa Obrigatoria](#pesquisa-obrigatoria)
+  - [Verificacao Anti-Duplicacao](#verificacao-anti-duplicacao)
+  - [Validacao Final](#validacao-final)
+- [S6. Anti-padroes Especificos do Projeto](#s6-anti-padroes-especificos-do-projeto)
+- [S7. Exemplo Comentado: app/pallet/](#s7-exemplo-comentado-apppallet)
+  - [O que este exemplo demonstra](#o-que-este-exemplo-demonstra)
+- [Checklist de Revisao do Manual](#checklist-de-revisao-do-manual)
 
 **Versao**: 1.0 | **Data**: 14/02/2026
 

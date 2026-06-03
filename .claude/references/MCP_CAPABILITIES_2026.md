@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # MCP Capabilities — Estado do Sistema (Mai/2026)
+
+> **Papel:** MCP Capabilities — Estado do Sistema (Mai/2026).
+
+## Indice
+
+- [Versoes Instaladas](#versoes-instaladas)
+- [Capacidades por Camada](#capacidades-por-camada)
+  - [claude_agent_sdk (wrapper)](#claude_agent_sdk-wrapper)
+  - [mcp 1.26.0 (SDK direto)](#mcp-1260-sdk-direto)
+  - [Enhanced Wrapper (`_mcp_enhanced.py`)](#enhanced-wrapper-_mcp_enhancedpy)
+- [Servidores MCP Registrados (7)](#servidores-mcp-registrados-7)
+  - [SDK 0.1.49–0.1.55 — Features por AgentDefinition](#sdk-01490155-features-por-agentdefinition)
+- [Structured Output — SQL Tool (POC)](#structured-output-sql-tool-poc)
+  - [outputSchema](#outputschema)
+  - [Comportamento](#comportamento)
+- [Features NAO Implementaveis (sem mudanca no SDK)](#features-nao-implementaveis-sem-mudanca-no-sdk)
+- [Features Futuras para Acompanhar](#features-futuras-para-acompanhar)
+- [Fontes](#fontes)
 
 **Atualizado**: 2026-05-25
 

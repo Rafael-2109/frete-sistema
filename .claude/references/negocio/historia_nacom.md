@@ -1,4 +1,81 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # História do Conhecimento - Agente Logístico Nacom Goya
+
+> **Papel:** História do Conhecimento - Agente Logístico Nacom Goya.
+
+## Indice
+
+- [PARTE 1: A EMPRESA](#parte-1-a-empresa)
+  - [1.1 Identidade](#11-identidade)
+  - [1.2 Estrutura do Grupo](#12-estrutura-do-grupo)
+  - [1.3 Marcas](#13-marcas)
+  - [1.4 Produtos](#14-produtos)
+  - [1.5 Modelo de Produção](#15-modelo-de-produção)
+  - [1.6 Características de Produção](#16-características-de-produção)
+  - [1.7 Gargalos (Ordem de Frequência)](#17-gargalos-ordem-de-frequência)
+- [PARTE 2: OS CLIENTES](#parte-2-os-clientes)
+  - [2.1 Top Clientes (75% do Faturamento)](#21-top-clientes-75-do-faturamento)
+  - [2.2 Tipos de Clientes](#22-tipos-de-clientes)
+  - [2.3 Clientes Indústria](#23-clientes-indústria)
+  - [2.4 Clientes Problemáticos](#24-clientes-problemáticos)
+  - [2.5 SLAs e Limites](#25-slas-e-limites)
+  - [2.6 Bloqueios](#26-bloqueios)
+  - [2.7 Contexto Estratégico de Mercado](#27-contexto-estratégico-de-mercado)
+- [PARTE 3: ESTRUTURA COMERCIAL](#parte-3-estrutura-comercial)
+  - [3.1 Gestores e Territórios](#31-gestores-e-territórios)
+- [PARTE 4: FLUXO OPERACIONAL](#parte-4-fluxo-operacional)
+  - [4.1 Equipe](#41-equipe)
+  - [4.2 Fluxo Completo (Swimlane)](#42-fluxo-completo-swimlane)
+  - [4.3 Transporte](#43-transporte)
+  - [4.4 Regras de Roteirização](#44-regras-de-roteirização)
+  - [4.5 Cotação de Frete (3 Níveis)](#45-cotação-de-frete-3-níveis)
+  - [4.6 Problemas Frequentes](#46-problemas-frequentes)
+  - [4.7 Quando Rafael é Acionado](#47-quando-rafael-é-acionado)
+- [PARTE 5: ALGORITMO DE PRIORIZAÇÃO (P1-P7)](#parte-5-algoritmo-de-priorização-p1-p7)
+  - [5.1 Ordem de Análise da Carteira](#51-ordem-de-análise-da-carteira)
+  - [5.2 Hierarquia de Priorização (Regra de Ouro)](#52-hierarquia-de-priorização-regra-de-ouro)
+- [PARTE 6: REGRAS DE ENVIO PARCIAL](#parte-6-regras-de-envio-parcial)
+  - [6.1 Tabela de Decisão](#61-tabela-de-decisão)
+  - [6.2 Limites de Carga (SEMPRE parcial se exceder)](#62-limites-de-carga-sempre-parcial-se-exceder)
+  - [6.3 Casos Especiais](#63-casos-especiais)
+- [PARTE 7: COMUNICAÇÃO](#parte-7-comunicação)
+  - [7.1 Comunicação com PCP](#71-comunicação-com-pcp)
+  - [7.2 Comunicação com Comercial](#72-comunicação-com-comercial)
+- [PARTE 8: FLUXO DE AGENDAMENTO](#parte-8-fluxo-de-agendamento)
+  - [8.1 Estados](#81-estados)
+  - [8.2 Estratégia](#82-estratégia)
+- [PARTE 9: LEADTIMES DE PLANEJAMENTO](#parte-9-leadtimes-de-planejamento)
+  - [9.1 Com data_entrega_pedido Definida](#91-com-data_entrega_pedido-definida)
+  - [9.2 Necessita de Agendamento](#92-necessita-de-agendamento)
+  - [9.3 Outros Casos](#93-outros-casos)
+- [PARTE 10: VOCABULÁRIO INTERNO](#parte-10-vocabulário-interno)
+  - [10.1 Gírias da Operação](#101-gírias-da-operação)
+  - [10.2 Limites de Veículos](#102-limites-de-veículos)
+  - [10.3 Siglas de Produtos](#103-siglas-de-produtos)
+- [PARTE 11: ESCOPO DO AGENTE LOGÍSTICO](#parte-11-escopo-do-agente-logístico)
+  - [11.1 Objetivo](#111-objetivo)
+  - [11.2 Fases de Autonomia](#112-fases-de-autonomia)
+  - [11.3 Quando Escalar para Humano](#113-quando-escalar-para-humano)
+  - [11.4 Limitação](#114-limitação)
+- [PARTE 12: SAZONALIDADE E EXCEÇÕES](#parte-12-sazonalidade-e-exceções)
+  - [12.1 Épocas de Pico](#121-épocas-de-pico)
+  - [12.2 Produtos Sazonais](#122-produtos-sazonais)
+  - [12.3 Produtos Especiais](#123-produtos-especiais)
+- [PARTE 13: IMPLEMENTAÇÃO TÉCNICA](#parte-13-implementação-técnica)
+  - [13.1 Constantes do Sistema](#131-constantes-do-sistema)
+  - [13.2 Grupos Empresariais (Prefixos CNPJ)](#132-grupos-empresariais-prefixos-cnpj)
+  - [13.3 Script Principal](#133-script-principal)
+  - [13.4 Prioridades no Sistema](#134-prioridades-no-sistema)
+- [PARTE 14: HISTÓRICO DE CORREÇÕES](#parte-14-histórico-de-correções)
+  - [14.1 Correções Implementadas no Script](#141-correções-implementadas-no-script)
+  - [14.2 Fluxo para Outras Regiões (não SP/RED/SC-PR)](#142-fluxo-para-outras-regiões-não-spredsc-pr)
 
 > Documento histórico de descoberta de conhecimento tácito do Rafael (dono) para criar o Agente Logístico.
 > Objetivo: Economizar 2-3 horas/dia de análise de carteira.

@@ -1,4 +1,87 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Documentacao Detalhada da UI - Modulo Pallet
+
+> **Papel:** Documentacao Detalhada da UI - Modulo Pallet.
+
+## Indice
+
+- [SUMARIO](#sumario)
+- [1. DASHBOARD](#1-dashboard)
+  - [1.1 Cabecalho](#11-cabecalho)
+  - [1.2 Cards de Resumo (Linha 1)](#12-cards-de-resumo-linha-1)
+  - [1.3 Alertas (Condicional)](#13-alertas-condicional)
+  - [1.4 Tabela Saldos por Destinatario](#14-tabela-saldos-por-destinatario)
+  - [1.5 Tabela Ultimos Movimentos](#15-tabela-ultimos-movimentos)
+- [2. MOVIMENTOS](#2-movimentos)
+  - [2.1 Cabecalho](#21-cabecalho)
+  - [2.2 Filtros](#22-filtros)
+  - [2.3 Tabela de Movimentos](#23-tabela-de-movimentos)
+- [3. REGISTRAR SAIDA](#3-registrar-saida)
+  - [3.1 Cabecalho](#31-cabecalho)
+  - [3.2 Formulario](#32-formulario)
+  - [3.3 Botoes](#33-botoes)
+  - [3.4 JavaScript](#34-javascript)
+- [4. REGISTRAR RETORNO](#4-registrar-retorno)
+  - [4.1 Layout](#41-layout)
+  - [4.2 Formulario](#42-formulario)
+  - [4.3 Painel Saldos Pendentes](#43-painel-saldos-pendentes)
+  - [4.4 Botoes](#44-botoes)
+- [5. BAIXAR MOVIMENTO](#5-baixar-movimento)
+  - [5.1 Layout](#51-layout)
+  - [5.2 Card Detalhes da Saida](#52-card-detalhes-da-saida)
+  - [5.3 Formulario de Baixa](#53-formulario-de-baixa)
+  - [5.4 Botoes](#54-botoes)
+- [6. SINCRONIZAR ODOO](#6-sincronizar-odoo)
+  - [6.1 Cards Explicativos](#61-cards-explicativos)
+  - [6.2 Formulario](#62-formulario)
+  - [6.3 Nota Informativa](#63-nota-informativa)
+  - [6.4 Botoes](#64-botoes)
+- [7. VALE PALLETS](#7-vale-pallets)
+  - [7.1 Cabecalho](#71-cabecalho)
+  - [7.2 Cards de Estatisticas](#72-cards-de-estatisticas)
+  - [7.3 Filtros](#73-filtros)
+  - [7.4 Tabela de Vales](#74-tabela-de-vales)
+  - [7.5 Botoes de Acao por Vale](#75-botoes-de-acao-por-vale)
+- [8. CRIAR/EDITAR VALE](#8-criareditar-vale)
+  - [8.1 Formulario - Dados do Vale](#81-formulario---dados-do-vale)
+  - [8.2 Formulario - Cliente que Emitiu](#82-formulario---cliente-que-emitiu)
+  - [8.3 Formulario - Transportadora Responsavel](#83-formulario---transportadora-responsavel)
+  - [8.4 Formulario - Posse Atual](#84-formulario---posse-atual)
+  - [8.5 Formulario - Arquivamento](#85-formulario---arquivamento)
+  - [8.6 Formulario - Observacao](#86-formulario---observacao)
+  - [8.7 JavaScript](#87-javascript)
+- [9. RECEBER VALE](#9-receber-vale)
+  - [9.1 Acao](#91-acao)
+- [10. ENVIAR PARA RESOLUCAO](#10-enviar-para-resolucao)
+  - [10.1 Resumo do Vale (Alert Info)](#101-resumo-do-vale-alert-info)
+  - [10.2 Formulario](#102-formulario)
+  - [10.3 Botoes](#103-botoes)
+- [11. RESOLVER VALE](#11-resolver-vale)
+  - [11.1 Resumo do Vale](#111-resumo-do-vale)
+  - [11.2 Timeline de Status](#112-timeline-de-status)
+  - [11.3 Formulario](#113-formulario)
+  - [11.4 Alerta](#114-alerta)
+  - [11.5 Botoes](#115-botoes)
+- [12. VINCULAR VENDA](#12-vincular-venda)
+  - [12.1 Dados da Venda (Alert Success)](#121-dados-da-venda-alert-success)
+  - [12.2 Tabela de Remessas Disponiveis](#122-tabela-de-remessas-disponiveis)
+  - [12.3 Botoes](#123-botoes)
+- [APIS DISPONIVEIS](#apis-disponiveis)
+- [FLUXOS DE PROCESSO MAPEADOS](#fluxos-de-processo-mapeados)
+  - [Etapa 1: Faturamento](#etapa-1-faturamento)
+  - [Etapa 2: Responsabilidade/Prazos](#etapa-2-responsabilidadeprazos)
+  - [Etapa 3: Resolucao NF Remessa](#etapa-3-resolucao-nf-remessa)
+  - [Etapa 4: Vale Pallet](#etapa-4-vale-pallet)
+  - [Etapa 5: Resolucao Vale](#etapa-5-resolucao-vale)
+- [FIM DO DOCUMENTO](#fim-do-documento)
+- [Contexto](#contexto)
 
 **Data**: 05/01/2026
 **Versao**: 1.0
@@ -625,3 +708,7 @@ Warning: "Ao resolver o vale, ele sera marcado como concluido e nao podera mais 
 ---
 
 ## FIM DO DOCUMENTO
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

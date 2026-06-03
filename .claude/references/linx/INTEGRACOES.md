@@ -1,4 +1,52 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Linx — Guia de Integracoes e Manuais Tecnicos
+
+> **Papel:** Linx — Guia de Integracoes e Manuais Tecnicos.
+
+## Indice
+
+- [1. Mapa de APIs e WebServices](#1-mapa-de-apis-e-webservices)
+  - [Resumo de Direcoes (Extracao vs Inclusao)](#resumo-de-direcoes-extracao-vs-inclusao)
+- [2. Autenticacao](#2-autenticacao)
+  - [Microvix (WS Saida + B2C)](#microvix-ws-saida-b2c)
+  - [API Faturas a Pagar (REST)](#api-faturas-a-pagar-rest)
+  - [Linx ERP REST](#linx-erp-rest)
+- [3. Mecanismo de Timestamp (CRITICO)](#3-mecanismo-de-timestamp-critico)
+- [4. WS Saida Padrao — Metodos de Consulta](#4-ws-saida-padrao-metodos-de-consulta)
+  - [Movimento (Vendas)](#movimento-vendas)
+  - [Produtos](#produtos)
+  - [Clientes/Fornecedores](#clientesfornecedores)
+  - [Pedidos e Vendedores](#pedidos-e-vendedores)
+  - [Financeiro](#financeiro)
+- [5. WS B2C — Metodos E-commerce](#5-ws-b2c-metodos-e-commerce)
+  - [Formato de requisicao XML](#formato-de-requisicao-xml)
+  - [Metodos de LEITURA (GET)](#metodos-de-leitura-get)
+  - [Metodos de ESCRITA (POST)](#metodos-de-escrita-post)
+  - [5.1. B2CConsultaNFe — Detalhamento (NF-e)](#51-b2cconsultanfe-detalhamento-nf-e)
+- [6. WS Entrada — Envio de Dados para Microvix](#6-ws-entrada-envio-de-dados-para-microvix)
+  - [Metodos de cadastro (diarios, madrugada)](#metodos-de-cadastro-diarios-madrugada)
+  - [Cadastro em tempo real](#cadastro-em-tempo-real)
+  - [Dados aceitos (escopo da API entrada)](#dados-aceitos-escopo-da-api-entrada)
+- [7. API Faturas a Pagar (REST)](#7-api-faturas-a-pagar-rest)
+  - [Campos do request (JSON)](#campos-do-request-json)
+- [8. Integracao de Estoque — Gotcha Critico](#8-integracao-de-estoque-gotcha-critico)
+- [9. Status vs Situacao de Pedidos](#9-status-vs-situacao-de-pedidos)
+- [10. Processo de Contratacao de Integracao](#10-processo-de-contratacao-de-integracao)
+- [11. Restricoes e Limitacoes](#11-restricoes-e-limitacoes)
+- [12. Exemplo de Codigo (Ruby — gem nao-oficial)](#12-exemplo-de-codigo-ruby-gem-nao-oficial)
+- [13. Links de Documentacao — Manuais e APIs](#13-links-de-documentacao-manuais-e-apis)
+  - [Especificacoes WebService Microvix](#especificacoes-webservice-microvix)
+  - [APIs Especializadas](#apis-especializadas)
+  - [Manuais](#manuais)
+  - [Terceiros](#terceiros)
+- [Contexto](#contexto)
 
 **Ultima Atualizacao**: 23/02/2026
 
@@ -420,3 +468,7 @@ result = LinxMicrovix::Request.new('ClientesFornec', {
 | SysMiddle (guia integracao) | https://sysmiddle.com.br/integrar-linxmicrovix-com-erp-padrao/ |
 | Gem Ruby (phbruce) | https://github.com/phbruce/linx_microvix |
 | DocPlayer (spec B2C) | https://docplayer.com.br/227848410-Especificacao-web-service-b2c-linx-microvix-padrao.html |
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

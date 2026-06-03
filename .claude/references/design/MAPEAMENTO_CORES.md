@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # MAPEAMENTO_CORES.md — OBSOLETO
+
+> **Papel:** MAPEAMENTO_CORES.md — OBSOLETO.
 
 > **Este arquivo foi descomissionado em 2026-05-06.**
 >
@@ -22,3 +32,7 @@
 > | Script de auditoria | `scripts/audits/ui_audit.py` |
 >
 > Nao adicione conteudo a este arquivo. Atualize o GUIA ou o README do CSS.
+
+## Contexto
+
+_A completar (PAD-A Onda 4)._

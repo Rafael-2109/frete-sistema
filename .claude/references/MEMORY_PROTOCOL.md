@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-02
+-->
 # Protocolo de Memoria do Agente
+
+> **Papel:** Protocolo de Memoria do Agente.
+
+## Indice
+
+- [Ciclo de Vida](#ciclo-de-vida)
+- [Categorias e Decay](#categorias-e-decay)
+- [Paths Padrao](#paths-padrao)
+- [Criterios de Qualidade](#criterios-de-qualidade)
+- [Protecoes](#protecoes)
+- [Triggers de Salvamento](#triggers-de-salvamento)
+  - [Automatico (silencioso)](#automatico-silencioso)
+  - [Explicito (com confirmacao)](#explicito-com-confirmacao)
+  - [Extracao pos-sessao automatica (2 pipelines)](#extracao-pos-sessao-automatica-2-pipelines)
+- [Formato Narrativo](#formato-narrativo)
 
 **Referencia tecnica** — documento de consulta, NAO implementacao.
 
