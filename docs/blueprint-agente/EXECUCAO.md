@@ -4,6 +4,8 @@
 > sem consultar os gates aqui; NENHUM item é "done" sem marcar o checklist aqui.
 > Spec de design: `BLUEPRINT_MESTRE.md` (+ `eixos/*.md` detalhe, `critica/*.md` revisão).
 > Planos executáveis por onda: `docs/superpowers/plans/` (formato writing-plans, TDD).
+> **FILA FORWARD sequenciada (ondas 0–7 + protocolo de sessão anti-perda): `ROADMAP.md`.**
+> Este arquivo = narrativa/checkpoints; `ROADMAP.md` = a fila do que falta + estado vivo dos cards.
 > Branch do projeto: `feat/agente-evolucao` (worktree isolada). Cadência: **subagent-driven**.
 
 ---
