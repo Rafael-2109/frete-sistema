@@ -591,6 +591,64 @@
     "total_steps": "int",
     "with_componente_culpado": "int"
   },
+  "eval.cases": {
+    "command": "str",
+    "data": {
+      "agent_filter": "null",
+      "by_status": {
+        "error": "int",
+        "fail": "int",
+        "pass": "int"
+      },
+      "cases": [
+        "<empty>"
+      ],
+      "concordance": {
+        "agree": "int",
+        "disagree": "int",
+        "rate": "null",
+        "reviewed": "int"
+      },
+      "listados": "int",
+      "status_filter": "null",
+      "total": "int"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
+  "eval.scores": {
+    "command": "str",
+    "data": {
+      "agent_filter": "null",
+      "agentes": "int",
+      "scores": [
+        {
+          "agent_name": "str",
+          "delta_vs_prev": "float",
+          "git_sha": "str",
+          "mode": "str",
+          "passed": "int",
+          "recorded_at": "str",
+          "runs": "int",
+          "score": "float",
+          "total": "int"
+        }
+      ],
+      "total_runs": "int"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
   "grafo.entities": {
     "entidades": [
       "<empty>"
@@ -618,6 +676,181 @@
     "total_entities": "int",
     "total_links": "int",
     "total_relations": "int"
+  },
+  "loop.corrections": {
+    "command": "str",
+    "data": {
+      "corrections": [
+        "<empty>"
+      ],
+      "listadas": "int",
+      "mandatory_count": "int",
+      "period_days": "int",
+      "promoviveis": "int",
+      "scope": "str",
+      "threshold_promocao": "int",
+      "total": "int"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
+  "loop.directives": {
+    "command": "str",
+    "data": {
+      "directives": [
+        {
+          "created_at": "str",
+          "effective_count": "int",
+          "harmful_count": "int",
+          "helpful_count": "int",
+          "id": "int",
+          "importance": "float",
+          "injected": "bool",
+          "is_cold": "bool",
+          "path": "str",
+          "priority": "str",
+          "status": "str",
+          "titulo": "str"
+        }
+      ],
+      "injetaveis": "int",
+      "listados": "int",
+      "por_status": {
+        "ativa": "int",
+        "candidata": "int",
+        "despromovida": "int",
+        "legado": "int",
+        "shadow": "int"
+      },
+      "scope": "str",
+      "status_filter": "str"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
+  "loop.loop-health": {
+    "command": "str",
+    "data": {
+      "correction_promotion": {
+        "mandatory": "int",
+        "promoviveis": "int",
+        "threshold": "int"
+      },
+      "directive_funnel": {
+        "ativa": "int",
+        "candidata": "int",
+        "despromovida": "int",
+        "legado": "int",
+        "shadow": "int"
+      },
+      "flags": {
+        "AGENT_CORRECTION_PROMOTION": "bool",
+        "AGENT_DIRECTIVE_PROMOTION": "bool",
+        "USE_AGENT_PLANNER": "bool"
+      },
+      "period_days": "int",
+      "plan_state": {
+        "gargalo_b1": "bool",
+        "sessions_total": "int",
+        "status": "str",
+        "teams_sessions": "int",
+        "with_plan": "int",
+        "with_plan_pct": "float"
+      },
+      "scope": "str"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "str"
+    ]
+  },
+  "melhorias.intelligence-report": {
+    "command": "str",
+    "data": {
+      "has_report": "bool",
+      "latest": {
+        "friction_score": "null",
+        "health_score": "null",
+        "recommendation_count": "null",
+        "report_date": "null",
+        "sessions_analyzed": "null"
+      },
+      "series": [
+        "<empty>"
+      ],
+      "series_count": "int",
+      "top_recommendations": [
+        "<empty>"
+      ]
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
+  "melhorias.list-open": {
+    "command": "str",
+    "data": {
+      "by_status": {
+        "proposed": "int",
+        "responded": "int"
+      },
+      "category_filter": "null",
+      "listadas": "int",
+      "suggestions": [
+        {
+          "category": "str",
+          "created_at": "str",
+          "id": "int",
+          "severity": "str",
+          "status": "str",
+          "suggestion_key": "str",
+          "title": "str",
+          "version": "int"
+        }
+      ],
+      "total_abertas": "int"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
+  },
+  "melhorias.show": {
+    "command": "str",
+    "data": {
+      "found": "bool",
+      "suggestion_key": "str",
+      "versions": [
+        "<empty>"
+      ]
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "<empty>"
+    ]
   },
   "memoria.list": {
     "memorias": [

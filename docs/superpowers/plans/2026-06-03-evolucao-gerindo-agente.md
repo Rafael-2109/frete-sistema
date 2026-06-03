@@ -14,12 +14,71 @@ atualizado: 2026-06-03
 
 ## Indice
 
+- [Como continuar (proxima sessao)](#como-continuar-proxima-sessao)
 - [Contexto e diagnostico](#contexto-e-diagnostico)
 - [Censo PROD](#censo-prod)
 - [Decisoes travadas](#decisoes-travadas)
 - [Ondas](#ondas)
 - [Pendencias de decisao / itens abertos](#pendencias-de-decisao--itens-abertos)
 - [Gotchas](#gotchas)
+
+## Como continuar (proxima sessao)
+
+> **Entrada de continuidade — leia isto primeiro.** Atualizado 2026-06-03 pos-Onda 3 fase 3a (READ).
+
+**Estado atual**: Ondas 0/1/2 LIVE em PROD (deploy `dep-d8g31m3eo5us7381cep0` / `d0757d7d3`).
+**Onda 3 fase 3a (READ-first) FEITA** (commit local, ainda nao pushado): 3 scripts novos
+SOMENTE LEITURA — `loop.py` (directives/corrections/loop-health), `eval.py` (scores/cases),
+`melhorias.py` (list-open/show/intelligence-report). Cobertura: **45 testes ZERO-DB** + **33 snapshots**
+DB-bound (golden regravado cirurgicamente, 26 existentes intactos). Validado contra o banco local
++ **cross-check PROD dos agregados** (funil 5 shadow / 81 legado / 0 ativa; eval 16 runs / 4 agentes /
+0 cases; 49 dialogos abertos; 5 intelligence reports). WRITE NAO exposto (dev-only na SKILL.md).
+
+**Verificacoes desta sessao (perguntas do Rafael, todas confirmadas com fonte):**
+- **Cache do prompt NAO e comprometido pelo `approve`.** As diretrizes sao injetadas DINAMICAMENTE
+  pelo hook `UserPromptSubmit` (`hooks.py:1460` `additionalContext`), DEPOIS do prefixo estatico
+  cacheado (`client.py:1663`/`:377`). `memory_injection.py:428-431` documenta a intencao: nao por
+  memoria dinamica no system_prompt justamente para nao invalidar cache. Alinhado a Anthropic.
+- **Migration NAO falta.** PROD (`dpg-d13m38vfte5s738t6p50-a`) JA tem `directive_status` +
+  `error_signature`/`harmful_count`/`helpful_count` + indice `ix_agent_memories_user_errsig`
+  (migrations `2026_06_01_*` e `2026_06_02_*` rodaram). Acao do Rafael = ZERO.
+- **`debug_mode` nao deve ser reinventado** (Rafael tem razao): e so o transporte do bit admin
+  para a daemon thread das MCP tools (`permissions.py:86-98`); o subprocess CLI nem le ContextVar.
+
+**Proximo: Onda 3 fase 3b — flywheel WRITE** (detalhe na secao [Ondas](#ondas)). Atras de `--confirm`,
+**dev-only** (Opcao A — NAO documentar WRITE na SKILL.md; o agente web so enxerga READ):
+1. `loop.approve` (shadow->ativa) — **ALTO RISCO** (muta o prompt vivo). Construir com PREVIEW
+   obrigatorio do `<do>` antes do flip. Ja desbloqueado (colunas em PROD; 5 shadows reais aguardando).
+2. `loop.reject`/`promote-batch`, `eval.review`/`run` (custo Haiku+Opus, aviso), `melhorias.respond`.
+3. **Gate P13** (so se WRITE for exposto ao agente web um dia): usar a allow-list de `can_use_tool`
+   (espelhar `_classify_estoque_restricao` + `ESTOQUE_RESTRICAO_ALLOWED_USER_IDS`, `permissions.py:808`),
+   NAO `debug_mode`. Dev-CLI ja e livre (nao passa por `can_use_tool`).
+
+**RE-LER antes de codar (anti-drift)**:
+- Esta secao + [Decisoes travadas](#decisoes-travadas) + [Ondas](#ondas) Onda 3 + [Gotchas](#gotchas).
+- **Correcao critica de backing**: as funcoes de leitura/resposta do dialogo de melhoria sao
+  metodos do MODELO `AgentImprovementDialogue` + a rota `app/agente/routes/improvement_dialogue.py`
+  (PUT `/<id>/respond`, GET `/pending`) — **NAO** funcoes de `improvement_suggester` (que so tem
+  `executar_batch_improvement`).
+- **Guard `directive_status`** (gotcha `docs/blueprint-agente/EXECUCAO.md:373`): ligar
+  `AGENT_OPERATIONAL_DIRECTIVES` sem a coluna desliga TODAS as diretrizes — `approve` muta o
+  prompt PROD em tempo real (ALTO RISCO).
+- `app/agente/CLAUDE.md`: ANTES de mexer em qualquer item do flywheel (judge/verify/triage/
+  eval-gate A3/promocao A4), LER a spec do eixo (`docs/blueprint-agente/eixos/*.md`) + a critica.
+- **Padroes reusaveis da Onda 2**: `common.run_handler` (boilerplate de main), `success_output`
+  (envelope `{ok,command,data,warnings,errors}` — padrao para subcomandos NOVOS), `format_datetime`
+  TZ-safe, fim de contexto-duplo via `current_app._get_current_object()`. Snapshot: regravar golden
+  com `GERINDO_SNAPSHOT_RECORD=1 pytest tests/agente/test_gerindo_agente_snapshots.py`.
+
+**Coordenacao (frente paralela ativa)**: Rafael trabalha em paralelo no `app/agente/`
+(subagent_validator/hooks + `docs/blueprint-agente/*` + painel insights O0.3). Commitar com
+`git commit -- <paths>` (only-mode) para nao varrer arquivos alheios; NAO entrar no territorio do
+blueprint-agente. Push/deploy = decisao do Rafael (HEADs vem com `[skip render]`; deploy manual via
+api/dashboard).
+
+**Pendencias abertas** (ver [secao](#pendencias-de-decisao--itens-abertos)): OBS-1 (cost-breakdown
+bloqueado por callsite `cost_tracker.insert_entry` nao-wired — sessao do agente web); subagent_validations
+vazio (Rafael atacando via O0.2 "worker desacoplado do FS"); Eixo C vigilancia (NAO criar placeholder).
 
 ## Contexto e diagnostico
 
@@ -103,19 +162,30 @@ Achado vivo: 1 step real teve `judge=success/85` MAS `verify.adversarial.refuted
   verificacao cetica): 4 dims aprovadas; 1 HIGH (null wildcard mascarava crescimento estrutural) + 1
   MEDIUM (RECORD podia gravar shape de erro) + 1 LOW (memoria-stats) — TODOS fechados.
 
-### Onda 3 — flywheel WRITE (escrita total autorizada)
-- **loop.py** (novo): `directives` (lista shadow), `approve --confirm` (shadow->ativa, com guard
-  `directive_status`), `reject --confirm`, `corrections`, `promote-batch --confirm` (wrapper de
-  `directive_promotion_service.run_directive_promotion_batch`), `loop-health` (sinaliza PlanState gargalo).
-  ALTO RISCO: `approve` muta o prompt PROD em tempo real (AGENT_OPERATIONAL_DIRECTIVES ON).
-- **eval.py** (novo): `scores` (agent_eval_scores), `cases` (agent_eval_case — hoje 0), `review --confirm`
-  (ESCRITA `human_verdict`/`reviewed_by` — fecha o gap de UPDATE SQL manual, `eval_runner.py:715-783`),
-  `run --confirm` (dispara `eval_runner`, custo Haiku, subagente real).
-- **melhorias.py** (novo): `list-open`/`list-rejected`/`show` + `respond --confirm` sobre
-  `agent_improvement_dialogue` (125 registros) + `intelligence-report` (le `AgentIntelligenceReport.get_latest`
-  + serie por `report_date`). **CORRECAO de backing (critica)**: as funcoes de leitura/resposta sao
-  metodos do MODELO `AgentImprovementDialogue` + a rota `routes/improvement_dialogue.py` (PUT /<id>/respond,
-  GET /pending) — NAO funcoes de `improvement_suggester` (que so tem `executar_batch_improvement`).
+### Onda 3 fase 3a — flywheel READ-first (FEITA, 2026-06-03)
+3 scripts novos SOMENTE LEITURA (escrita = fase 3b). Padrao Onda 2 (`run_handler` + envelope
+`success_output` + degradacao graciosa + LAZY `from app import db`). Dicts data-driven evitados
+(schema FIXO em `por_status`/`by_status`/`directive_funnel`/`latest`+`has_report`) — snapshot estavel
+local-vs-PROD. `melhorias.show` FORA do snapshot (shape exists/nao-exists, so contrato ZERO-DB).
+- **loop.py**: `directives` (funil shadow/ativa/legado, espelha `_build_operational_directives`),
+  `corrections` (candidatas a `mandatory`, threshold `AGENT_CORRECTION_PROMOTION_THRESHOLD`),
+  `loop-health` (PlanState gargalo B1 + funil + prontidao promocao + flags).
+- **eval.py**: `scores` (agent_eval_scores + delta vs baseline), `cases` (agent_eval_case + concordancia).
+- **melhorias.py**: `list-open` (`get_open_by_category`), `show --key` (historico v1/v2/v3),
+  `intelligence-report` (`get_latest` + serie por `report_date` + top recs).
+- **Cobertura**: 45 testes ZERO-DB + 33 snapshots DB-bound (golden regravado cirurgicamente, 26
+  legados intactos). Validado local + cross-check PROD. SKILL.md/SCRIPTS.md atualizados (so READ).
+
+### Onda 3 fase 3b — flywheel WRITE (escrita total autorizada, dev-only) — PENDENTE
+- **loop.py**: `approve --confirm` (shadow->ativa, **ALTO RISCO** prompt vivo — PREVIEW do `<do>`),
+  `reject --confirm`, `promote-batch --confirm` (wrapper de
+  `directive_promotion_service.run_directive_promotion_batch:790`).
+- **eval.py**: `review --confirm` (ESCRITA `human_verdict`/`reviewed_by` — fecha gap UPDATE SQL manual,
+  `eval_runner.py:715-783`), `run --confirm` (dispara `eval_runner`, custo Haiku+Opus, aviso).
+- **melhorias.py**: `respond --confirm` sobre `agent_improvement_dialogue`. **Backing**:
+  `AgentImprovementDialogue.upsert_response:1334` (cascade p/ versao anterior) / rota PUT `/<id>/respond`
+  — NAO `improvement_suggester`. CUIDADO com o cascade silencioso de status.
+- **Gate**: dev-only (Opcao A). Se exposto ao agente web: allow-list em `can_use_tool` (NAO debug_mode).
 
 ### Onda 4 — observabilidade infra + seguranca + ontologia
 - **P4**: `subagent-metrics` (metrics_dashboard_service, 11 endpoints, 63 metrics) + `subagent-validations`

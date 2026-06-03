@@ -25,10 +25,16 @@ SKILL_SCRIPTS = (
     / '.claude' / 'skills' / 'gerindo-agente' / 'scripts'
 )
 
-SCRIPTS = ['common', 'memoria', 'sessao', 'padrao', 'grafo', 'diagnostico', 'manutencao']
+SCRIPTS = ['common', 'memoria', 'sessao', 'padrao', 'grafo', 'diagnostico', 'manutencao',
+           'loop', 'eval', 'melhorias']
 
 # Onda 1 (camada de evolucao/qualidade) — subcomandos novos em diagnostico.py.
 NOVOS_DIAGNOSTICO = {'step-quality', 'step-coverage', 'rule-adhesion', 'routing', 'recommendations'}
+
+# Onda 3 (flywheel READ) — scripts novos e seus subcomandos READ.
+ONDA3_LOOP = {'directives', 'corrections', 'loop-health'}
+ONDA3_EVAL = {'scores', 'cases'}
+ONDA3_MELHORIAS = {'list-open', 'show', 'intelligence-report'}
 
 
 def _load(name):
@@ -51,7 +57,8 @@ def test_script_importavel(name):
     assert mod is not None
 
 
-@pytest.mark.parametrize('name', ['memoria', 'sessao', 'padrao', 'grafo', 'diagnostico', 'manutencao'])
+@pytest.mark.parametrize('name', ['memoria', 'sessao', 'padrao', 'grafo', 'diagnostico', 'manutencao',
+                                  'loop', 'eval', 'melhorias'])
 def test_subcommands_e_handlers_em_paridade(name):
     """SUBCOMMANDS e HANDLERS NUNCA podem divergir (subcomando sem handler = crash)."""
     mod = _load(name)
@@ -212,3 +219,94 @@ def test_padrao_sem_contexto_duplo():
     assert 'get_app_context' not in mod_src.split('def handle_')[0], (
         "padrao nao deveria mais importar get_app_context"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Onda 3 — flywheel WRITE, fase 3a (READ-first): 3 scripts novos
+# (loop/eval/melhorias), so subcomandos de LEITURA. Tudo ZERO-DB.
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_loop_onda3_registrado():
+    """loop.py: directives/corrections/loop-health registrados e callable."""
+    m = _load('loop')
+    assert ONDA3_LOOP <= set(m.SUBCOMMANDS), f"faltam em SUBCOMMANDS: {ONDA3_LOOP - set(m.SUBCOMMANDS)}"
+    assert ONDA3_LOOP <= set(m.HANDLERS), f"faltam em HANDLERS: {ONDA3_LOOP - set(m.HANDLERS)}"
+    for sub in ONDA3_LOOP:
+        assert callable(m.HANDLERS[sub])
+
+
+def test_loop_scope_subcommands_tem_days_e_all():
+    """loop.corrections e loop-health declaram --days e --all (escopo sistema vs usuario)."""
+    m = _load('loop')
+    for sub in ('corrections', 'loop-health'):
+        argnames = {a['name'] for a in m.SUBCOMMANDS[sub]['args']}
+        assert '--days' in argnames, f"loop.{sub} sem --days"
+        assert '--all' in argnames, f"loop.{sub} sem --all"
+
+
+def test_loop_directives_tem_status():
+    """loop.directives declara --status (filtro do funil)."""
+    m = _load('loop')
+    argnames = {a['name'] for a in m.SUBCOMMANDS['directives']['args']}
+    assert '--status' in argnames, "loop.directives sem --status"
+
+
+def test_eval_onda3_registrado():
+    """eval.py: scores/cases registrados e callable."""
+    m = _load('eval')
+    assert ONDA3_EVAL <= set(m.SUBCOMMANDS), f"faltam em SUBCOMMANDS: {ONDA3_EVAL - set(m.SUBCOMMANDS)}"
+    assert ONDA3_EVAL <= set(m.HANDLERS), f"faltam em HANDLERS: {ONDA3_EVAL - set(m.HANDLERS)}"
+    for sub in ONDA3_EVAL:
+        assert callable(m.HANDLERS[sub])
+
+
+def test_melhorias_onda3_registrado():
+    """melhorias.py: list-open/show/intelligence-report registrados e callable."""
+    m = _load('melhorias')
+    assert ONDA3_MELHORIAS <= set(m.SUBCOMMANDS), (
+        f"faltam em SUBCOMMANDS: {ONDA3_MELHORIAS - set(m.SUBCOMMANDS)}"
+    )
+    assert ONDA3_MELHORIAS <= set(m.HANDLERS), f"faltam em HANDLERS: {ONDA3_MELHORIAS - set(m.HANDLERS)}"
+    for sub in ONDA3_MELHORIAS:
+        assert callable(m.HANDLERS[sub])
+
+
+def test_melhorias_show_exige_key():
+    """melhorias.show exige --key (required) — sem chave nao ha o que mostrar."""
+    m = _load('melhorias')
+    key_arg = next((a for a in m.SUBCOMMANDS['show']['args'] if a['name'] == '--key'), None)
+    assert key_arg is not None, "melhorias.show sem --key"
+    assert key_arg.get('required') is True, "melhorias.show --key deveria ser required"
+
+
+@pytest.mark.parametrize('name', ['loop', 'eval', 'melhorias'])
+def test_onda3_main_delega_run_handler(name):
+    """Os 3 scripts novos usam o padrao Onda 2 (run_handler) — sem parse/contexto manual."""
+    m = _load(name)
+    main_src = inspect.getsource(m.main)
+    assert 'run_handler(' in main_src, f"{name}.main deveria delegar a run_handler"
+
+
+@pytest.mark.parametrize('name', ['loop', 'eval', 'melhorias'])
+def test_onda3_handlers_sem_contexto_duplo(name):
+    """Handlers READ NAO reabrem app context (get_app_context) — run_handler ja cuida."""
+    m = _load(name)
+    for fn in m.HANDLERS.values():
+        src = inspect.getsource(fn)
+        code = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('#'))
+        assert 'get_app_context(' not in code, (
+            f"{name}.{fn.__name__}: contexto-duplo (get_app_context) nao deveria existir"
+        )
+
+
+@pytest.mark.parametrize('name', ['loop', 'eval', 'melhorias'])
+def test_onda3_sem_escrita_no_banco(name):
+    """Fase 3a e READ-ONLY: handlers nao podem commitar nem mutar (so rollback defensivo)."""
+    m = _load(name)
+    for fn in m.HANDLERS.values():
+        src = inspect.getsource(fn)
+        code = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('#'))
+        assert 'session.commit(' not in code, f"{name}.{fn.__name__}: READ-first nao pode commitar"
+        assert 'session.add(' not in code, f"{name}.{fn.__name__}: READ-first nao pode add()"
+        assert 'session.delete(' not in code, f"{name}.{fn.__name__}: READ-first nao pode delete()"

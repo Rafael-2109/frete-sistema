@@ -78,6 +78,19 @@ READ_CASES = [
     ('grafo', 'relations', []),
     ('grafo', 'stats', []),
     ('grafo', 'query', ['--prompt', 'transportadora']),
+    # loop (Onda 3 fase 3a — flywheel READ). 'directives' = empresa (user_id=0).
+    ('loop', 'directives', []),
+    ('loop', 'corrections', ['--days', '30']),
+    ('loop', 'loop-health', ['--days', '30']),
+    # eval (Onda 3 fase 3a — eval-gate A3 READ)
+    ('eval', 'scores', []),
+    ('eval', 'cases', []),
+    # melhorias (Onda 3 fase 3a — dialogo D8 + report D7 READ).
+    ('melhorias', 'list-open', []),
+    # 'show' com chave INEXISTENTE -> found=False/versions=[] deterministico (shape FIXO,
+    # independente do banco) — trava as chaves {suggestion_key, found, versions}.
+    ('melhorias', 'show', ['--key', '__SNAPSHOT_KEY_INEXISTENTE__']),
+    ('melhorias', 'intelligence-report', []),
 ]
 
 CASE_IDS = [f"{s}.{sub}" for s, sub, _ in READ_CASES]
@@ -178,6 +191,22 @@ def _database_url():
     return None
 
 
+def _has_nested_query_error(obj):
+    """True se algum dict (em qualquer nivel) sinaliza degradacao: status=query_error.
+
+    Sub-helpers como _loop_health embutem {'status':'query_error', ...} DENTRO de
+    data['plan_state']/data['loop_health'] — o guard top-level de _run nao alcanca.
+    Gravar esse shape de erro no golden criaria um contrato falso (review Onda 3).
+    """
+    if isinstance(obj, dict):
+        if obj.get('status') == 'query_error':
+            return True
+        return any(_has_nested_query_error(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_has_nested_query_error(v) for v in obj)
+    return False
+
+
 def _run(script, subcommand, extra_args, db_url):
     """Roda o subcomando via subprocess (cwd=raiz, sem ruido) e devolve o dict --json."""
     cmd = [
@@ -203,13 +232,19 @@ def _run(script, subcommand, extra_args, db_url):
     start = max(out.rfind('\n{'), out.rfind('\n['))
     payload = out[start + 1:] if start >= 0 else out
     parsed = json.loads(payload)
-    # Hardening (review Onda 2): NAO aceitar shape de ERRO — senao um query_error no
+    # Hardening (review Onda 2+3): NAO aceitar shape de ERRO — senao um query_error no
     # momento do RECORD gravaria um contrato errado no golden silenciosamente.
     if isinstance(parsed, dict):
         if parsed.get('status') == 'query_error':
             raise RuntimeError(f"{script}.{subcommand}: handler retornou status=query_error: {parsed.get('error')}")
         if parsed.get('ok') is False and parsed.get('errors'):
             raise RuntimeError(f"{script}.{subcommand}: envelope ok=false errors={parsed.get('errors')}")
+        # Onda 3: handler legado sem envelope que degrada para {..., 'error': str} (ex: routing).
+        if isinstance(parsed.get('error'), str) and parsed.get('error'):
+            raise RuntimeError(f"{script}.{subcommand}: degradacao top-level error={parsed.get('error')}")
+        # Onda 3: query_error ANINHADO em data (ex: _loop_health em plan_state/loop_health).
+        if _has_nested_query_error(parsed):
+            raise RuntimeError(f"{script}.{subcommand}: query_error aninhado em data (sub-helper degradou)")
     return parsed
 
 

@@ -69,6 +69,17 @@ atualizado: 2026-06-03
   - [reindex-memories](#reindex-memories)
   - [reindex-sessions](#reindex-sessions)
   - [cleanup-orphans](#cleanup-orphans)
+- [loop.py (flywheel A4 — READ)](#looppy-flywheel-a4--read)
+  - [directives](#directives)
+  - [corrections](#corrections)
+  - [loop-health](#loop-health)
+- [eval.py (eval-gate A3 — READ)](#evalpy-eval-gate-a3--read)
+  - [scores](#scores)
+  - [cases](#cases)
+- [melhorias.py (dialogo D8 + report D7 — READ)](#melhoriaspy-dialogo-d8--report-d7--read)
+  - [list-open](#list-open)
+  - [show](#show)
+  - [intelligence-report](#intelligence-report)
 
 ## Argumentos Comuns (todos os scripts)
 
@@ -355,6 +366,90 @@ Sem argumentos adicionais.
 
 ### cleanup-orphans
 Sem argumentos adicionais.
+
+---
+
+## loop.py (flywheel A4 — READ)
+
+> **READ-only (Onda 3 fase 3a).** Inspeciona a camada A4 (Distill -> Deploy) do
+> blueprint. A ESCRITA (`approve` shadow->ativa, `reject`, `promote-batch`) e
+> **dev-only** e NAO existe aqui — `approve` muta o prompt PROD em tempo real (fase 3b).
+
+### directives
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--status` | str | Nao | all | Filtra por status: `shadow`/`ativa`/`legado`/`candidata`/`despromovida`/`all` |
+
+Funil de diretrizes-empresa (`user_id=0`, paths `/heuristicas/` e `/protocolos/`). Espelha o filtro de `memory_injection._build_operational_directives`: mostra o que ESTA sendo injetado no prompt (status `NULL`/legado ou `ativa`, `importance>=0.7`, nao-cold) vs o que aguarda revisao (`shadow`/`candidata`) ou foi rebaixado (`despromovida`). `por_status` tem schema fixo; `injetaveis` e um teto (antes do filtro de conteudo nivel-5). READ-only, custo $0.
+
+### corrections
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Janela por `created_at` em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+Correcoes (`/memories/corrections/`) candidatas a regra dura. `promovivel` = `correction_count >= AGENT_CORRECTION_PROMOTION_THRESHOLD` (default 2) e `priority != mandatory` e nao-cold — espelha `directive_promotion_service.promover_correcoes_recorrentes`. READ-only, custo $0.
+
+### loop-health
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Janela por `created_at` em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+Saude do flywheel: PlanState (`% de sessoes com data->'plan'`; `<5%` => gargalo B1, promocao A4 vira no-op) + funil de diretrizes + prontidao de promocao + estado das flags (`AGENT_DIRECTIVE_PROMOTION`, `USE_AGENT_PLANNER`, `AGENT_CORRECTION_PROMOTION`). READ-only, custo $0.
+
+---
+
+## eval.py (eval-gate A3 — READ)
+
+> **READ-only (Onda 3 fase 3a).** A ESCRITA (`review` `human_verdict`, `run` que
+> dispara `eval_runner` com custo Haiku+Opus) e **dev-only** e fica para a fase 3b.
+> `--user-id` e exigido por uniformidade do skill (R1, valida o chamador) mas **NAO filtra**:
+> `agent_eval_scores`/`agent_eval_case` sao system-wide (use `--agent` para filtrar por agente).
+
+### scores
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--agent` | str | Nao | — | Filtra por `agent_name` (default: todos) |
+
+Ultimo run por agente (`agent_eval_scores`) + `delta_vs_prev` vs o run anterior (baseline, `models.py:get_baseline_score`) + modo (`report_only`/`enforce`) + contagem de runs. READ-only, custo $0.
+
+### cases
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--agent` | str | Nao | — | Filtra por `agent_name` |
+| `--status` | str | Nao | — | Filtra por `pass`/`fail`/`error` |
+
+Casos por run (`agent_eval_case`) + `human_verdict` + taxa de concordancia judge-vs-humano (`concordance_rate`, calibracao). Em PROD a tabela hoje tem 0 linhas (`USE_AGENT_EVAL_CALIBRATION` OFF) — degrada para lista vazia sem erro. READ-only, custo $0.
+
+---
+
+## melhorias.py (dialogo D8 + report D7 — READ)
+
+> **READ-only (Onda 3 fase 3a).** A ESCRITA (`respond` accept/reject) e **dev-only**
+> (fase 3b). Backing da resposta = `AgentImprovementDialogue.upsert_response`
+> (`models.py:1334`) / rota PUT `/<id>/respond` — **NAO** `improvement_suggester`.
+> `--user-id` e exigido por uniformidade do skill (R1, valida o chamador) mas **NAO filtra**:
+> `agent_improvement_dialogue`/`agent_intelligence_reports` sao system-wide.
+
+### list-open
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--category` | str | Nao | — | Filtra por categoria (`skill_suggestion`/`instruction_request`/...) |
+
+Sugestoes abertas (`status in proposed/responded`, `version=1`) ordenadas por severidade — fonte `AgentImprovementDialogue.get_open_by_category`. READ-only, custo $0.
+
+### show
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--key` | str | **Sim** | — | `suggestion_key` (ex: `IMP-2026-06-03-001`) |
+
+Historico completo (v1/v2/v3) de uma `suggestion_key`: author, status, title, description, `affected_files`, `implementation_notes`. Shape estavel (`found` + `versions[]`). READ-only, custo $0.
+
+### intelligence-report
+Sem argumentos adicionais (usa `--limit` para o tamanho da serie).
+
+Relatorio D7 mais recente (`AgentIntelligenceReport.get_latest`) + serie por `report_date` (montada por query — o modelo nao tem `get_series`) + top 5 recomendacoes de `report_json['recommendations']`. `latest` tem schema fixo (escalares null sem report) + flag `has_report`. READ-only, custo $0.
 
 ---
 

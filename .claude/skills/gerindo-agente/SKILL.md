@@ -1,6 +1,6 @@
 ---
 name: gerindo-agente
-description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil", "qualidade dos turnos", "judge score", "step quality", "cobertura de sinal", "adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de roteamento", "recomendacoes do agente", "PlanState". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
+description: Esta skill deve ser usada quando o usuario precisa gerenciar o Agente Web — memorias persistentes, sessoes anteriores, padroes aprendidos, perfil comportamental, knowledge graph, diagnosticos de saude, analise de friccao, briefing intersessao ou manutencao do sistema. Exemplos que trigam: "memorias do usuario 5", "sessoes anteriores", "historico de conversas", "padroes aprendidos", "pitfalls do sistema", "knowledge graph", "entidades do grafo", "saude do agente", "health score", "metricas do agente", "memorias nao efetivas", "consolidar memorias", "reindexar embeddings", "cleanup do agente", "memorias empresa", "tier frio", "versoes de memoria", "pendencia resolvida", "conflitos de memoria", "cobertura de embeddings", "sumarizar sessao", "analise de friccao", "sinais de frustracao", "briefing entre sessoes", "briefing do agente", "sessoes do Teams", "modelo usado nas sessoes", "perfil comportamental", "perfil do usuario", "user.xml", "gerar perfil", "qualidade dos turnos", "judge score", "step quality", "cobertura de sinal", "adesao de regras", "reincidencia de erro", "sintoma Marcus", "metricas de roteamento", "recomendacoes do agente", "PlanState", "diretrizes operacionais", "diretrizes shadow", "funil de diretrizes", "saude do flywheel", "eval scores", "eval-gate", "calibracao do judge", "dialogo de melhoria", "sugestoes de melhoria", "intelligence report". NAO usar para: consultas SQL ou dados de negocio (usar consultando-sql), lembrar preferencias do PROPRIO Claude Code (usar auto-memory), cotacao de frete (usar cotando-frete), operacoes SSW (usar operando-ssw), Odoo (usar skills Odoo).
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
@@ -109,7 +109,25 @@ O que o usuario quer?
 |   |-- "reindexar memorias"    -> reindex-memories [--reindex]
 |   |-- "reindexar sessoes"     -> reindex-sessions [--reindex]
 |   |-- "cleanup orfaos"        -> cleanup-orphans
+|
+|-- Flywheel / evolucao (diretrizes, eval-gate, dialogo de melhoria) — READ
+|   |-- Diretrizes operacionais (A4)        -> scripts/loop.py
+|   |   |-- "diretrizes shadow/ativa/funil" -> directives [--status shadow|ativa|legado|...]
+|   |   |-- "correcoes p/ regra dura"       -> corrections [--days N] [--all]
+|   |   |-- "saude do flywheel/PlanState"   -> loop-health [--days N] [--all]
+|   |-- Eval-gate offline (A3)              -> scripts/eval.py
+|   |   |-- "eval scores por agente"        -> scores [--agent X]
+|   |   |-- "casos de eval / concordancia"  -> cases [--agent X] [--status pass|fail|error]
+|   |-- Dialogo de melhoria (D8) + report (D7) -> scripts/melhorias.py
+|   |   |-- "sugestoes de melhoria abertas" -> list-open [--category X]
+|   |   |-- "historico de uma sugestao"     -> show --key IMP-...
+|   |   |-- "intelligence report / serie"   -> intelligence-report
 ```
+
+> **Flywheel = somente LEITURA (Onda 3 fase 3a).** Os subcomandos de ESCRITA
+> (`approve` shadow->ativa, `reject`, `promote-batch`, `review`, `run`, `respond`)
+> sao **dev-only** e ainda NAO existem aqui — `approve` muta o prompt PROD em tempo
+> real (ALTO RISCO) e fica para a fase 3b (atras de `--confirm`).
 
 ## REFERENCIA RAPIDA
 
@@ -128,6 +146,9 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `grafo.py` | query, entities, links, relations, stats | Knowledge Graph |
 | `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations**, **status** | Diagnosticos |
 | `manutencao.py` | consolidate, cold-move, summarize, reindex-memories, reindex-sessions, cleanup-orphans | Manutencao |
+| `loop.py` | **directives**, **corrections**, **loop-health** | Flywheel diretrizes (A4) — READ |
+| `eval.py` | **scores**, **cases** | Eval-gate offline (A3) — READ |
+| `melhorias.py` | **list-open**, **show**, **intelligence-report** | Dialogo melhoria (D8) + report (D7) — READ |
 
 ## TRATAMENTO DE ERROS
 
@@ -225,4 +246,16 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/grafo.
 
 # Consolidar memorias redundantes
 source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/manutencao.py consolidate --user-id 5
+
+# Flywheel (READ): funil de diretrizes-empresa (shadow/ativa/legado)
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/loop.py directives --user-id 5
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/loop.py loop-health --user-id 5 --json
+
+# Flywheel (READ): scores do eval-gate por agente + casos
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/eval.py scores --user-id 5
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/eval.py cases --user-id 5 --agent analista-carteira
+
+# Flywheel (READ): sugestoes de melhoria abertas + intelligence report
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/melhorias.py list-open --user-id 5
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/melhorias.py intelligence-report --user-id 5
 ```
