@@ -403,17 +403,32 @@ button.nc-sidebar__search-wrap {
 /* ==========================================================================
    SUBMENU (inline accordion no estado expanded)
    ========================================================================== */
+/* Item que contem submenu vira grid de 2 linhas: link (auto) + submenu (0fr -> 1fr).
+   Anima ate a altura EXATA do submenu, sem teto fixo e sem recorte. Corrige o bug
+   em que submenus longos (ex.: Lojas HORA, ~30 itens > 800px) eram cortados pelo
+   antigo `max-height: 800px` + `overflow: hidden`, escondendo os itens finais e
+   dando a impressao de que o scroll era "engolido" pelo proximo bloco.
+   O `.nc-sidebar__nav` (overflow-y:auto) continua rolando quando o submenu aberto
+   ultrapassa a altura da viewport. Usa :has() (ja adotado neste arquivo, ver
+   regra de tooltip do estado colapsado). */
+.nc-sidebar__item:has(> .nc-sidebar__submenu) {
+    display: grid;
+    grid-template-rows: auto 0fr;
+    transition: grid-template-rows 0.25s ease;
+}
+
+.nc-sidebar__item--open:has(> .nc-sidebar__submenu) {
+    grid-template-rows: auto 1fr;
+}
+
 .nc-sidebar__submenu {
     list-style: none;
     padding: 0;
     margin: 0;
-    max-height: 0;
+    /* min-height:0 + overflow:hidden deixam o track 0fr colapsar a 0 e clipam
+       o conteudo durante a animacao (sem recortar quando aberto em 1fr). */
+    min-height: 0;
     overflow: hidden;
-    transition: max-height 0.25s ease;
-}
-
-.nc-sidebar__item--open > .nc-sidebar__submenu {
-    max-height: 800px;
 }
 
 .nc-sidebar__submenu .nc-sidebar__link {
@@ -779,6 +794,7 @@ button.nc-sidebar__search-wrap {
     .nc-shell,
     .nc-sidebar,
     .nc-sidebar__link,
+    .nc-sidebar__item,
     .nc-sidebar__submenu,
     .nc-sidebar__chevron,
     .nc-sidebar__flyout,
