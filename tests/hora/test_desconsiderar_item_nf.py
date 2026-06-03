@@ -287,3 +287,10 @@ def test_rotas_desconsiderar_reverter_registradas(app):
     rules = {r.endpoint for r in app.url_map.iter_rules()}
     assert 'hora.nfs_desconsiderar_item' in rules
     assert 'hora.nfs_reverter_item' in rules
+
+
+def test_nf_detalhe_template_compila(app):
+    """Garante que o template não tem erro de sintaxe Jinja após a edição."""
+    with app.app_context():
+        tmpl = app.jinja_env.get_template('hora/nf_detalhe.html')
+        assert tmpl is not None

@@ -195,6 +195,7 @@ def nfs_detalhe(nf_id: int):
     return render_template(
         'hora/nf_detalhe.html',
         nf=nf,
+        nf_tem_recebimento=bool(nf.recebimentos),
         pedidos_disponiveis=pedidos_disponiveis,
         lojas_ativas=lojas_ativas,
         vinculos_por_chassi=vinculos,
