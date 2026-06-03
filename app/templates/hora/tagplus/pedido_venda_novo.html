@@ -73,6 +73,30 @@
   </div>
 </div>
 
+{# KPIs: loja emitente, chave de acesso 44d, data, valor total, itens #}
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Loja emitente</div>
+    <div>{% if venda.loja %}<strong>{{ venda.loja.rotulo_display }}</strong>{% else %}<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> sem loja</span>{% endif %}</div>
+  </div></div>
+  <div class="col-md-3"><div class="hora-kpi">
+    <div class="hora-kpi-label">Chave de acesso</div>
+    <div class="chassi-mono small">{{ venda.nf_saida_chave_44 or '—' }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Data</div>
+    <div>{{ venda.data_venda.strftime('%d/%m/%Y') if venda.data_venda else '—' }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Valor total</div>
+    <div>{{ venda.valor_total|valor_br }}</div>
+  </div></div>
+  <div class="col-md-2"><div class="hora-kpi">
+    <div class="hora-kpi-label">Itens</div>
+    <div>{{ venda.itens|length }}</div>
+  </div></div>
+</div>
+
 {# Timeline de status #}
 <div id="timeline-status" class="card mb-3">
   <div class="card-body py-2 d-flex flex-wrap gap-4 small">
@@ -260,6 +284,10 @@
             {% for u in vendedores_disponiveis %}
               <option value="{{ u.nome }}" {% if u.nome == venda.vendedor %}selected{% endif %}>{{ u.nome }}</option>
             {% endfor %}
+            {# Fallback: preserva o vendedor legado/desabilitado para nao zerar ao salvar #}
+            {% if venda.vendedor and venda.vendedor not in (vendedores_disponiveis | map(attribute='nome') | list) %}
+              <option value="{{ venda.vendedor }}" selected>{{ venda.vendedor }} · (não habilitado)</option>
+            {% endif %}
           </select>
         </div>
       </div>
@@ -325,6 +353,10 @@
           <select name="modalidade_frete" id="f-modalidade-frete" class="form-select" {% if ro_oper %}disabled{% endif %}>
             <option value="0" {% if mf == '0' %}selected{% endif %}>0 — Contratação Remetente (CIF)</option>
             <option value="1" {% if mf == '1' %}selected{% endif %}>1 — Contratação Destinatário (FOB)</option>
+            {# Guard: preserva modalidade legada (2/3/4/9) de DANFE/TagPlus sem trocar ao salvar #}
+            {% if mf not in ('0', '1') %}
+              <option value="{{ mf }}" selected disabled>{{ mf }} — (legado, troque para CIF ou FOB)</option>
+            {% endif %}
           </select>
         </div>
         <div class="col-md-3">
@@ -623,10 +655,34 @@
   <summary class="text-muted small" id="secao-historico"><i class="fas fa-history"></i> Histórico de auditoria ({{ venda.auditoria|length }})</summary>
   <div class="table-responsive mt-2">
     <table class="table table-sm small">
-      <thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Detalhe</th></tr></thead>
+      <thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Campo</th><th>De</th><th>Para</th><th>Detalhe</th></tr></thead>
       <tbody>
         {% for a in venda.auditoria %}
-          <tr><td>{{ a.criado_em.strftime('%d/%m %H:%M') if a.criado_em else '—' }}</td><td>{{ a.usuario or '—' }}</td><td><code>{{ a.acao }}</code></td><td>{{ a.detalhe or '' }}</td></tr>
+          <tr><td>{{ a.criado_em.strftime('%d/%m %H:%M') if a.criado_em else '—' }}</td><td>{{ a.usuario or '—' }}</td><td><code>{{ a.acao }}</code></td><td>{{ a.campo_alterado or '—' }}</td><td>{{ a.valor_antes or '—' }}</td><td>{{ a.valor_depois or '—' }}</td><td>{{ a.detalhe or '' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{% endif %}
+
+{# Historico de divergencias — todas (abertas + resolvidas) #}
+{% if venda.divergencias %}
+<details class="mb-3">
+  <summary class="text-muted small">Histórico de divergências ({{ venda.divergencias|length }})</summary>
+  <div class="table-responsive mt-2">
+    <table class="table table-sm small">
+      <thead><tr><th>Tipo</th><th>Chassi</th><th>Detalhe</th><th>Criado</th><th>Resolvida</th><th>Por</th></tr></thead>
+      <tbody>
+        {% for d in venda.divergencias %}
+          <tr class="{% if d.resolvida_em %}text-muted{% endif %}">
+            <td><span class="badge bg-{% if d.resolvida_em %}secondary{% else %}warning{% endif %}">{{ d.tipo }}</span></td>
+            <td>{% if d.numero_chassi %}<span class="chassi-mono">{{ d.numero_chassi }}</span>{% else %}—{% endif %}</td>
+            <td>{{ d.detalhe or '—' }}</td>
+            <td>{{ d.criado_em.strftime('%d/%m %H:%M') if d.criado_em else '—' }}</td>
+            <td>{{ d.resolvida_em.strftime('%d/%m %H:%M') if d.resolvida_em else '—' }}</td>
+            <td>{{ d.resolvida_por or '—' }}</td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
