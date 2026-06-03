@@ -120,6 +120,19 @@
           <button type="submit" class="btn btn-sm btn-outline-primary"
                   {% if not u.sistema_lojas %}disabled{% endif %}>Salvar loja</button>
         </form>
+
+        {# Criterio de pedidos: loja (padrao) vs vendedor #}
+        <form method="post" action="{{ url_for('hora.permissoes_set_criterio_pedidos', user_id=u.id) }}"
+              class="d-flex gap-1 m-0">
+          <select name="criterio_pedidos_hora" class="form-select form-select-sm"
+                  {% if not u.sistema_lojas %}disabled{% endif %}
+                  title="Como filtrar a lista de Pedidos de Venda deste usuario">
+            <option value="loja" {% if (u.criterio_pedidos_hora or 'loja') == 'loja' %}selected{% endif %}>Pedidos: por loja</option>
+            <option value="vendedor" {% if u.criterio_pedidos_hora == 'vendedor' %}selected{% endif %}>Pedidos: por vendedor</option>
+          </select>
+          <button type="submit" class="btn btn-sm btn-outline-primary"
+                  {% if not u.sistema_lojas %}disabled{% endif %}>Salvar critério</button>
+        </form>
       </div>
     </div>
 
