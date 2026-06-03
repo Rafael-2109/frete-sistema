@@ -1,4 +1,57 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Relatório Final Integrado — Avaliação 360° do Agente Nacom Goya
+
+> **Papel:** Relatório Final Integrado — Avaliação 360° do Agente Nacom Goya.
+
+## Indice
+
+- [1. Sumário executivo](#1-sumário-executivo)
+- [2. Bugs ativos P0/P1/P2 (CONFIRMADOS) + status dos refutados](#2-bugs-ativos-p0p1p2-confirmados-status-dos-refutados)
+  - [BUG-1 [P1] — `registrar()` sem savepoint poisona a sessão do pipeline (cascata `PendingRollbackError`)](#bug-1-p1-registrar-sem-savepoint-poisona-a-sessão-do-pipeline-cascata-pendingrollbackerror)
+  - [BUG-2 [P1] — Família "sessão DB poluída no Teams": `MEMORY_MCP` + endpoints sem rollback defensivo](#bug-2-p1-família-sessão-db-poluída-no-teams-memory_mcp-endpoints-sem-rollback-defensivo)
+  - [BUG-3 [P1, segurança] — Gate de autorização WRITE-Odoo cobre só 3 skills; demais operações destrutivas abertas a qualquer usuário](#bug-3-p1-segurança-gate-de-autorização-write-odoo-cobre-só-3-skills-demais-operações-destrutivas-abertas-a-qualquer-usuário)
+  - [BUG-4 [P2] — `max_budget_usd=5` é hard-stop SEM tratamento → pode cortar WRITE Odoo no meio](#bug-4-p2-max_budget_usd5-é-hard-stop-sem-tratamento-pode-cortar-write-odoo-no-meio)
+  - [BUG-5 [P2] — `/bot/answer` retorna 200 "ok" FALSO quando resposta do usuário se perde (0 subscribers)](#bug-5-p2-botanswer-retorna-200-ok-falso-quando-resposta-do-usuário-se-perde-0-subscribers)
+  - [BUG-6 [P2] — `debug_mode` (cross-user admin) provavelmente não propaga ao daemon thread do stream web](#bug-6-p2-debug_mode-cross-user-admin-provavelmente-não-propaga-ao-daemon-thread-do-stream-web)
+  - [BUG-7 [P2, segurança] — `admin_mode` SQL sem backstop determinístico contra DDL](#bug-7-p2-segurança-admin_mode-sql-sem-backstop-determinístico-contra-ddl)
+  - [Fora de escopo do agente (encaminhar aos donos dos módulos)](#fora-de-escopo-do-agente-encaminhar-aos-donos-dos-módulos)
+- [3. Otimizações de custo & eficiência](#3-otimizações-de-custo-eficiência)
+  - [OPT-2 [RESOLVIDO — NÃO É AÇÃO] — Prompt caching já ativo e instrumentado](#opt-2-resolvido-não-é-ação-prompt-caching-já-ativo-e-instrumentado)
+  - [OPT-1 [GAP REAL, ROI por LATÊNCIA não por $] — Default Opus 4.8 + effort high pega TODA consulta read-only não-roteada](#opt-1-gap-real-roi-por-latência-não-por-default-opus-48-effort-high-pega-toda-consulta-read-only-não-roteada)
+  - [OPT-4 [OTIMIZAÇÃO — latência] — Calibrar `effort: xhigh` por carga real do subagente](#opt-4-otimização-latência-calibrar-effort-xhigh-por-carga-real-do-subagente)
+  - [OBS-1 [MELHORIA — desbloqueia decisões futuras] — Telemetria de custo do agente principal está cega](#obs-1-melhoria-desbloqueia-decisões-futuras-telemetria-de-custo-do-agente-principal-está-cega)
+  - [OPT — descartados como over-tuning](#opt-descartados-como-over-tuning)
+- [4. Melhorias de confiabilidade/qualidade](#4-melhorias-de-confiabilidadequalidade)
+  - [CONF-1 [streaming web] — Persistência endurecida HOJE; monitorar, não reescrever](#conf-1-streaming-web-persistência-endurecida-hoje-monitorar-não-reescrever)
+  - [CONF-2 [Teams — pool process-local em 4 workers] — alinhar com a doc oficial](#conf-2-teams-pool-process-local-em-4-workers-alinhar-com-a-doc-oficial)
+  - [CONF-3 [Teams — commits diretos e recursão de fila] — higiene](#conf-3-teams-commits-diretos-e-recursão-de-fila-higiene)
+  - [CONF-4 [system prompt] — CONF-4 do parcial FECHADO (dim 4)](#conf-4-system-prompt-conf-4-do-parcial-fechado-dim-4)
+  - [CONF-5 [memória — qualidade] — Budget de injeção INFINITO em Opus](#conf-5-memória-qualidade-budget-de-injeção-infinito-em-opus)
+  - [CONF-6 [memória — fix de doc] — `get_or_create` JÁ é atômico (doc errada)](#conf-6-memória-fix-de-doc-get_or_create-já-é-atômico-doc-errada)
+- [5. Ampliação de recursos (sem over-engineering)](#5-ampliação-de-recursos-sem-over-engineering)
+- [6. Adoção de features SDK/Anthropic 2026](#6-adoção-de-features-sdkanthropic-2026)
+  - [Aplicabilidade ALTA (adotar)](#aplicabilidade-alta-adotar)
+  - [Aplicabilidade MÉDIA (avaliar, não urgente)](#aplicabilidade-média-avaliar-não-urgente)
+  - [Aplicabilidade BAIXA (ignorar — adotar seria redundante ou regressivo)](#aplicabilidade-baixa-ignorar-adotar-seria-redundante-ou-regressivo)
+- [7. Over-engineering ATUAL (o que já existe demais)](#7-over-engineering-atual-o-que-já-existe-demais)
+  - [OE-1 [CONFIRMADO] — 17 services de inteligência: o que MANTER / CONGELAR / APOSENTAR](#oe-1-confirmado-17-services-de-inteligência-o-que-manter-congelar-aposentar)
+  - [OE-2 [parcial] — Pós-sessão sempre dispara cadeia completa](#oe-2-parcial-pós-sessão-sempre-dispara-cadeia-completa)
+  - [OE-3 [aceitável, NÃO mexer] — Split Caddy + 2 gunicorn](#oe-3-aceitável-não-mexer-split-caddy-2-gunicorn)
+- [8. Documentação desatualizada](#8-documentação-desatualizada)
+- [9. Segurança (riscos reais)](#9-segurança-riscos-reais)
+- [10. Roadmap priorizado (impacto × esforço)](#10-roadmap-priorizado-impacto-esforço)
+  - [Quick wins (baixo esforço, alto/médio impacto) — fazer primeiro](#quick-wins-baixo-esforço-altomédio-impacto-fazer-primeiro)
+  - [Médio prazo](#médio-prazo)
+  - [Avaliar (não fazer sem gatilho)](#avaliar-não-fazer-sem-gatilho)
+- [Anexo — Cobertura e honestidade](#anexo-cobertura-e-honestidade)
+- [Contexto](#contexto)
 
 > **Data**: 2026-05-29 · **Escopo**: Agente Web (SSE, `:5001`) + Teams bot (`:5002`) · **Perfil de uso real**: ~9 sessões/dia medidas (CONTEXTO declarava ~4; dado real de produção = 129 sessões/14d, 17 usuários), ~3 spawns de subagente/dia, indústria de alimentos R$16MM/mês, operadores logísticos + controller (Marcus) + Rafael (admin/dev).
 >
@@ -289,3 +342,7 @@ Este é **uma classe de bug, não um caso isolado** (refinado por dim 2, dim 5, 
 - **Não executei o agente** (sessão read-only). BUG-6/SEC-4 (propagação de ContextVar ao daemon) é [HIPÓTESE] de alta confiança, pendente de confirmação runtime.
 - **Deploy**: live `41d47ed6` contém as correções A2 (confirmado no parcial via Render).
 - **Marcações**: [CONFIRMADO] = evidência verificada · [HIPÓTESE] = plausível, não fechado · refutados explicitamente descartados (A2/A3/A4, `get_or_create`, `flag_modified`, path-traversal de memória que é Postgres não filesystem).
+
+## Contexto
+
+Relatorio integrado da avaliacao 360 do agente web (SSE :5001 + Teams :5002), de 2026-05-29 com errata em 2026-05-30. Os achados (ex.: BUG-1, CONF-2) geraram fixes diretos no codigo — ver `app/odoo/models/operacao_odoo_auditoria.py:90` e `app/teams/CLAUDE.md`. Documento de referencia historica da avaliacao.

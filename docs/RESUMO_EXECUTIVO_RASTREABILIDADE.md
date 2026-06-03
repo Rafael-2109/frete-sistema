@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 📊 RESUMO EXECUTIVO - RASTREABILIDADE DE DADOS
+
+> **Papel:** 📊 RESUMO EXECUTIVO - RASTREABILIDADE DE DADOS.
+
+## Indice
+
+- [Sistema de Agendamento Portal Sendas](#sistema-de-agendamento-portal-sendas)
+- [✅ CORREÇÕES IMPLEMENTADAS](#correções-implementadas)
+  - [1. PROTOCOLO CORRIGIDO](#1-protocolo-corrigido)
+  - [2. PROCESSAMENTO DE MÚLTIPLOS PROTOCOLOS](#2-processamento-de-múltiplos-protocolos)
+  - [3. DOCUMENTO_ORIGEM PRESERVADO](#3-documento_origem-preservado)
+- [🔑 DADOS CRÍTICOS PRESERVADOS](#dados-críticos-preservados)
+- [🎯 PONTOS DE VERIFICAÇÃO](#pontos-de-verificação)
+  - [ENTRADA](#entrada)
+  - [PROCESSAMENTO](#processamento)
+  - [SAÍDA](#saída)
+- [🔒 GARANTIAS TÉCNICAS](#garantias-técnicas)
+  - [1. PROTOCOLO COMO CHAVE MESTRE](#1-protocolo-como-chave-mestre)
+  - [2. RASTREABILIDADE COMPLETA](#2-rastreabilidade-completa)
+  - [3. DADOS NÃO SÃO PERDIDOS](#3-dados-não-são-perdidos)
+- [📈 FLUXO DE DADOS SIMPLIFICADO](#fluxo-de-dados-simplificado)
+- [⚠️ PONTOS DE ATENÇÃO FUTUROS](#pontos-de-atenção-futuros)
+- [✅ CONCLUSÃO](#conclusão)
+- [Contexto](#contexto)
 ## Sistema de Agendamento Portal Sendas
 
 ---
@@ -117,3 +148,7 @@ Protocolo   Preserva      Processa    Preenche    Upload    Extrai    Atualiza
 - Documento técnico completo: `RASTREABILIDADE_DADOS_SENDAS.md`
 - Código corrigido: `sendas_jobs.py` linhas 151-216
 - Testes de fluxo: Todos os 3 fluxos validados
+
+## Contexto
+
+Resumo executivo das correcoes de rastreabilidade de protocolo no modulo Sendas (`app/portal/sendas/routes_fila.py`; campo `AgendamentoEntrega.protocolo_agendamento`). Consolidou 4 documentos anteriores sobre o mesmo tema num unico panorama.

@@ -49,3 +49,4 @@ atualizado: 2026-06-02
 - [A4 — Promoção Automática de Diretriz (batch) — Implementation Plan](2026-06-01-a4-promocao-diretriz.md)
 - [Capacitação do gestor-estoque-odoo p/ remessa FB→LF — Implementation Plan](2026-06-02-capacitacao-gestor-remessa-fb-lf.md)
 - [Loop Corretivo Pessoal — a licao que adere](2026-06-02-loop-corretivo-pessoal.md) — memoria pessoal F1 (eixo G): gravar→reconciliar→promover→injetar-garantido→medir-outcome; resolve "expliquei e fez certo, depois errou de novo" (Marcus)
+- [Roadmap — Evolucao da skill `gerindo-agente` para top-level](2026-06-03-evolucao-gerindo-agente.md) — skill -> superficie unica de gestao/introspeccao do Agente Web (ondas WRITE flywheel)

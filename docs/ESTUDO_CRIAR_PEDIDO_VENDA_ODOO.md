@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Estudo: Criação de Pedido de Venda no Odoo 17
+
+> **Papel:** Estudo: Criação de Pedido de Venda no Odoo 17.
+
+## Indice
+
+- [1. Resumo dos Campos Identificados](#1-resumo-dos-campos-identificados)
+  - [Campos para Criar Pedido via API](#campos-para-criar-pedido-via-api)
+- [2. Valores de Referência](#2-valores-de-referência)
+  - [Incoterms (Tipo de Frete)](#incoterms-tipo-de-frete)
+  - [Destinação de Uso (l10n_br_compra_indcom)](#destinação-de-uso-l10n_br_compra_indcom)
+  - [Empresas](#empresas)
+- [3. Fluxo de Criação do Pedido](#3-fluxo-de-criação-do-pedido)
+  - [Passo 1: Criar o Pedido](#passo-1-criar-o-pedido)
+  - [Passo 2: Calcular Impostos (Preenche CFOP e Operação)](#passo-2-calcular-impostos-preenche-cfop-e-operação)
+  - [Passo 3: Confirmar o Pedido (Opcional)](#passo-3-confirmar-o-pedido-opcional)
+- [4. Descobertas Importantes](#4-descobertas-importantes)
+  - [Campo Crítico: `l10n_br_compra_indcom`](#campo-crítico-l10n_br_compra_indcom)
+  - [Operação Fiscal e CFOP](#operação-fiscal-e-cfop)
+  - [Campos Somente Leitura no Cabeçalho](#campos-somente-leitura-no-cabeçalho)
+- [5. DE-PARA: CarteiraPrincipal → sale.order](#5-de-para-carteiraprincipal-saleorder)
+  - [Campos do Odoo a preencher](#campos-do-odoo-a-preencher)
+- [6. Método de Cálculo de Impostos](#6-método-de-cálculo-de-impostos)
+  - [Método](#método)
+  - [Comportamento](#comportamento)
+  - [Ação do Servidor na Interface](#ação-do-servidor-na-interface)
+- [7. Campos de Impostos Calculados](#7-campos-de-impostos-calculados)
+  - [Cabeçalho (sale.order)](#cabeçalho-saleorder)
+  - [Linha (sale.order.line)](#linha-saleorderline)
+- [8. Referências](#8-referências)
+  - [Arquivos do Sistema](#arquivos-do-sistema)
+  - [Modelos Odoo](#modelos-odoo)
+- [9. Observações Finais](#9-observações-finais)
 
 **Data**: 04/12/2025
 **Versão Odoo**: 17 Enterprise
@@ -150,7 +190,7 @@ O campo **Destinação de Uso** (`l10n_br_compra_indcom`) é **CRÍTICO** para o
 
 ### Campos Somente Leitura no Cabeçalho
 
-Alguns campos no cabeçalho são **calculados** e não podem ser escritos diretamente:
+Os seguintes campos no cabeçalho são **calculados** e não podem ser escritos diretamente:
 - `l10n_br_operacao_id` (cabeçalho) - readonly, store=False
 - `l10n_br_cfop_id` (cabeçalho) - readonly, store=False
 

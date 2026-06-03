@@ -1,4 +1,64 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 📋 ESPECIFICAÇÃO TÉCNICA - SISTEMA UNIFICADO AGENDAMENTO SENDAS
+
+> **Papel:** 📋 ESPECIFICAÇÃO TÉCNICA - SISTEMA UNIFICADO AGENDAMENTO SENDAS.
+
+## Indice
+
+- [🎯 ARQUITETURA](#arquitetura)
+  - [Nomenclatura:](#nomenclatura)
+- [🔍 ETAPA 0: IDENTIFICAÇÃO DO PORTAL](#etapa-0-identificação-do-portal)
+  - [Arquivo Principal: `app/portal/utils/grupo_empresarial.py`](#arquivo-principal-appportalutilsgrupo_empresarialpy)
+  - [JavaScript: `app/templates/carteira/js/agendamento/destinacao-portais.js:36`](#javascript-apptemplatescarteirajsagendamentodestinacao-portaisjs36)
+  - [Endpoints Identificação:](#endpoints-identificação)
+- [📦 ESTRUTURA DE DADOS UNIFICADA](#estrutura-de-dados-unificada)
+- [🔄 FLUXO 1: AGENDAMENTO POR LOTE SP](#fluxo-1-agendamento-por-lote-sp)
+  - [ENTRADA](#entrada)
+  - [DADOS ENVIADOS](#dados-enviados)
+  - [PROCESSAMENTO](#processamento)
+  - [BUSCA DE DADOS (3 FONTES)](#busca-de-dados-3-fontes)
+  - [RETORNO](#retorno)
+- [🔄 FLUXO 2: AGENDAMENTO PELA CARTEIRA](#fluxo-2-agendamento-pela-carteira)
+  - [ENTRADA](#entrada)
+  - [DADOS ENVIADOS](#dados-enviados)
+  - [ADICIONAR NA FILA](#adicionar-na-fila)
+  - [PROCESSAMENTO FILA](#processamento-fila)
+  - [RETORNO](#retorno)
+- [🔄 FLUXO 3: AGENDAMENTO POR NF](#fluxo-3-agendamento-por-nf)
+  - [ENTRADA](#entrada)
+  - [DADOS ENVIADOS](#dados-enviados)
+  - [ADICIONAR NA FILA](#adicionar-na-fila)
+  - [PROCESSAMENTO](#processamento)
+  - [RETORNO](#retorno)
+- [🔧 WORKER UNIFICADO](#worker-unificado)
+  - [Arquivo: `app/portal/workers/sendas_jobs.py`](#arquivo-appportalworkerssendas_jobspy)
+- [📋 PREENCHIMENTO PLANILHA EXCEL](#preenchimento-planilha-excel)
+  - [Arquivo: `app/portal/sendas/preencher_planilha.py`](#arquivo-appportalsendaspreencher_planilhapy)
+  - [MATCHING (linha 547-568)](#matching-linha-547-568)
+  - [COLUNAS](#colunas)
+  - [MODIFICAÇÃO NECESSÁRIA](#modificação-necessária)
+- [🗄️ MODELOS](#modelos)
+  - [FilaAgendamentoSendas](#filaagendamentosendas)
+  - [PortalIntegracao](#portalintegracao)
+- [🚨 CORREÇÕES NECESSÁRIAS](#correções-necessárias)
+  - [1. ENDPOINT ERRADO](#1-endpoint-errado)
+  - [2. WORKER DESTRUINDO DADOS](#2-worker-destruindo-dados)
+  - [3. PREENCHER_PLANILHA](#3-preencher_planilha)
+  - [4. PROTOCOLO NÃO SALVO](#4-protocolo-não-salvo)
+- [📊 REGRAS DE NEGÓCIO](#regras-de-negócio)
+  - [Data Expedição SP](#data-expedição-sp)
+  - [Protocolo](#protocolo)
+  - [Fallback pedido_cliente](#fallback-pedido_cliente)
+- [⚡ DIFERENÇAS PORTAIS](#diferenças-portais)
+  - [SENDAS](#sendas)
+  - [ATACADÃO](#atacadão)
 
 **Versão:** 4.0 DEFINITIVA
 **Data:** 2025-01-14
