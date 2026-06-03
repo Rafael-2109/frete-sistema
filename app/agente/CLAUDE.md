@@ -14,6 +14,12 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 > resultados** de tudo (Ondas 0-4) — ver `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_VALIDACAO.md`
 > (regra inviolavel: **VERIFICAR o estado real em PROD, nao assumir**). Historico anti-drift A4:
 > `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_A4.md`.
+>
+> **AVALIAÇÃO DE MEMÓRIA (2026-06-02)**: `docs/blueprint-agente/RECONCILIACAO_MEMORIA.md` mapeia o
+> sistema de memória aos eixos (NÃO duplicar D=KG / E=qualidade / A4=diretriz empresa, já em execução)
+> e localiza as lacunas em `eixos/C-vigilancia.md` (vigilância proativa / bi-temporal) e
+> `eixos/G-memoria-pessoal.md` (memória pessoal + recuperação). Frente acionável (loop corretivo
+> pessoal — "expliquei e fez certo, depois errou de novo"): `docs/superpowers/plans/2026-06-02-loop-corretivo-pessoal.md`.
 
 ---
 

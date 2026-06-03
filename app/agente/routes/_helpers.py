@@ -529,6 +529,56 @@ def _track_memory_effectiveness(user_id: int, assistant_message: str, injected_m
             pass
 
 
+def _track_outcome_by_recurrence(user_id: int, injected_memory_ids: list[int] = None) -> None:
+    """Fase 3.3 — medicao por OUTCOME (sinal HELPFUL), desacoplada do eco textual.
+
+    Credita helpful_count a uma regra DURA ('mandatory') injetada que NUNCA reincidiu
+    (harmful_count == 0): 1 credito a cada K injecoes limpas (bounded por usage_count % K —
+    nao cresce a cada turno). O sinal HARMFUL e detectado no write-path (pattern_analyzer,
+    quando o MESMO erro reincide mesmo com a regra dura ativa). effective_count (eco textual,
+    _track_memory_effectiveness) permanece intacto SO para o dashboard — desacoplado.
+
+    Best-effort (nunca quebra o response path) + flag-gated (AGENT_OUTCOME_TRACKING). So
+    escreve na coluna NOVA helpful_count (aditivo). Degrada em silencio se a coluna nao
+    existir (rollout dual antes da migration 3.1 no PROD).
+    """
+    try:
+        if not injected_memory_ids:
+            return
+        from ..config.feature_flags import (
+            AGENT_OUTCOME_TRACKING,
+            AGENT_OUTCOME_HELPFUL_K_SESSIONS,
+        )
+        if not AGENT_OUTCOME_TRACKING:
+            return
+        from app.agente.models import AgentMemory
+        k = max(1, AGENT_OUTCOME_HELPFUL_K_SESSIONS)
+        regras = AgentMemory.query.filter(
+            AgentMemory.id.in_(injected_memory_ids),
+            AgentMemory.priority == 'mandatory',
+        ).all()
+        creditadas = 0
+        for mem in regras:
+            if not hasattr(mem, 'harmful_count'):
+                break  # coluna ausente (pre-migration) — degrada silencioso
+            usage = mem.usage_count or 0
+            if (mem.harmful_count or 0) == 0 and usage > 0 and usage % k == 0:
+                mem.helpful_count = (mem.helpful_count or 0) + 1
+                creditadas += 1
+        if creditadas:
+            db.session.commit()
+            logger.debug(
+                f"[OUTCOME] {creditadas} regra(s) dura(s) creditada(s) helpful "
+                f"(user_id={user_id}, K={k})"
+            )
+    except Exception as e:
+        logger.debug(f"[OUTCOME] tracking helpful falhou (ignorado): {e}")
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
 def _check_effectiveness_semantic(
     memory_contents: dict[int, str],
     assistant_message: str,

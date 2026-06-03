@@ -627,13 +627,176 @@ def _avaliar_e_contabilizar(candidata: dict, session_id: str, contadores: dict) 
 # run_directive_promotion_batch
 # ---------------------------------------------------------------------------
 
+def _reframe_as_compiled_memory(content: str) -> str:
+    """Fase 3.2B: reescreve a correcao em frame IMPERATIVO (Compiled Memory) na promocao.
+
+    A Fase 0 mostrou que correcoes tipo-A (que competem com o pedido literal do usuario) so
+    aderem com frame imperativo no topo (caso A: P3 0%->67% so com o frame). Formato de
+    entrada gravado por _save_personal_insight: '[correcao] <descricao>\\nDO: <prescricao>'.
+    Saida:
+        SEMPRE|NUNCA: <prescricao>
+        WHEN: <descricao>
+        DO: <prescricao>
+    IDEMPOTENTE (se ja comeca com SEMPRE/NUNCA, retorna inalterado — nao reprocessa).
+    Heuristica NUNCA quando a prescricao tem negacao explicita (nao/nunca/evitar/ignorar/
+    jamais), senao SEMPRE. Funcao PURA (sem DB/LLM) — testavel isoladamente.
+    """
+    if not content:
+        return content
+    stripped = content.strip()
+    if _re.match(r'^(SEMPRE|NUNCA)\b', stripped, _re.IGNORECASE):
+        return content  # ja em frame imperativo
+    linhas = stripped.split('\n')
+    descricao = _re.sub(r'^\[[^\]]*\]\s*', '', linhas[0]).strip() if linhas else stripped
+    do_linha = next((l for l in linhas if l.strip().upper().startswith('DO:')), '')
+    prescricao = do_linha.split(':', 1)[1].strip() if ':' in do_linha else descricao
+    if not prescricao:
+        return content
+    low = prescricao.lower()
+    verbo = 'NUNCA' if _re.search(r'\b(n[aã]o|nunca|evit\w*|jamais|ignor\w*)\b', low) else 'SEMPRE'
+    return f"{verbo}: {prescricao}\nWHEN: {descricao}\nDO: {prescricao}"
+
+
+def promover_correcoes_recorrentes(threshold: int = None, limit: int = 200, user_id: int = None) -> dict:
+    """Fonte 3 do batch (CORRECTION-RECURRENCE): promove correcoes PESSOAIS reincidentes
+    a priority='mandatory' para entrarem no canal duro <user_rules> (Fase 1 do loop).
+
+    Correcao vem do USUARIO (feedback humano de alta confianca); por isso o filtro NAO e
+    o gate Odoo (que protege a auto-promocao do agente), e sim a REINCIDENCIA: so promove
+    correcao com correction_count >= threshold (default AGENT_CORRECTION_PROMOTION_THRESHOLD).
+    Idempotente (correcao ja 'mandatory' e ignorada pelo filtro). Recorrente (modulo 32 D8):
+    a licao reincidente do usuario e promovida automaticamente, sem script one-shot. Best-effort.
+
+    Returns: {'avaliadas': N, 'promovidas': M}
+    """
+    out = {'avaliadas': 0, 'promovidas': 0}
+    try:
+        from app.agente.config.feature_flags import (
+            AGENT_CORRECTION_PROMOTION,
+            AGENT_CORRECTION_PROMOTION_THRESHOLD,
+        )
+    except Exception:
+        return out
+    if not AGENT_CORRECTION_PROMOTION:
+        return out
+    th = threshold if threshold is not None else AGENT_CORRECTION_PROMOTION_THRESHOLD
+    try:
+        from app.agente.models import AgentMemory
+        from app import db
+        q = AgentMemory.query.filter(
+            AgentMemory.path.like('/memories/corrections/%'),
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.is_cold == False,  # noqa: E712
+            AgentMemory.priority != 'mandatory',
+            AgentMemory.correction_count >= th,
+        )
+        if user_id is not None:
+            q = q.filter(AgentMemory.user_id == user_id)
+        candidatas = q.order_by(AgentMemory.correction_count.desc()).limit(limit).all()
+        out['avaliadas'] = len(candidatas)
+        reembed = []  # (user_id, path, novo_conteudo) p/ re-embed apos reframe
+        for mem in candidatas:
+            # Fase 3.2B: reescreve em frame IMPERATIVO (Compiled Memory) ao virar regra dura.
+            novo = _reframe_as_compiled_memory(mem.content or '')
+            if novo != (mem.content or ''):
+                mem.content = novo
+                out['reescritas'] = out.get('reescritas', 0) + 1
+                reembed.append((mem.user_id, mem.path, novo))
+            mem.priority = 'mandatory'
+            out['promovidas'] += 1
+        if out['promovidas']:
+            db.session.commit()
+            logger.info(
+                f"[CORRECTION_PROMOTION] {out['promovidas']} correcoes recorrentes "
+                f"promovidas a 'mandatory' (threshold={th}, avaliadas={out['avaliadas']}, "
+                f"reescritas={out.get('reescritas', 0)})"
+            )
+            # Re-embed best-effort: o reframe mudou o conteudo -> embedding ficaria stale.
+            for _uid, _path, _cont in reembed:
+                try:
+                    from app.embeddings.config import MEMORY_SEMANTIC_SEARCH
+                    if MEMORY_SEMANTIC_SEARCH:
+                        from ..tools.memory_mcp_tool import _embed_memory_best_effort
+                        _embed_memory_best_effort(_uid, _path, _cont)
+                except Exception:
+                    pass
+    except Exception as exc:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        logger.warning(f"[CORRECTION_PROMOTION] falhou (ignorado): {exc}")
+    return out
+
+
+def demote_stale_rules(harmful_threshold: int = None, limit: int = 200, user_id: int = None) -> dict:
+    """Fonte 3b do batch (DEMOTE): rebaixa regra dura que FALHOU repetidas vezes.
+
+    Espelho de promover_correcoes_recorrentes. Criterio = OUTCOME (nao eco textual): uma
+    correcao JA 'mandatory' (canal duro <user_rules>) com harmful_count >= threshold reincidiu
+    mesmo sendo regra dura -> a regra, como esta escrita, NAO previne o erro. Acao: priority->
+    'contextual' + is_cold=True (puxa de circulacao, pendente de reescrita humana).
+    FLAP-FREE: a promocao (fonte 3) filtra is_cold==False, entao a regra rebaixada NAO e
+    re-promovida no mesmo ciclo. Idempotente (regra ja contextual/cold sai do filtro).
+    Flag AGENT_CORRECTION_DEMOTION (default OFF — demote remove regra explicita do usuario).
+
+    Returns: {'avaliadas': N, 'rebaixadas': M}
+    """
+    out = {'avaliadas': 0, 'rebaixadas': 0}
+    try:
+        from app.agente.config.feature_flags import (
+            AGENT_CORRECTION_DEMOTION,
+            AGENT_OUTCOME_HARMFUL_THRESHOLD,
+        )
+    except Exception:
+        return out
+    if not AGENT_CORRECTION_DEMOTION:
+        return out
+    th = harmful_threshold if harmful_threshold is not None else AGENT_OUTCOME_HARMFUL_THRESHOLD
+    try:
+        from app.agente.models import AgentMemory
+        from app import db
+        q = AgentMemory.query.filter(
+            AgentMemory.path.like('/memories/corrections/%'),
+            AgentMemory.is_directory == False,  # noqa: E712
+            AgentMemory.priority == 'mandatory',
+            AgentMemory.harmful_count >= th,
+        )
+        if user_id is not None:
+            q = q.filter(AgentMemory.user_id == user_id)
+        candidatas = q.order_by(AgentMemory.harmful_count.desc()).limit(limit).all()
+        out['avaliadas'] = len(candidatas)
+        for mem in candidatas:
+            mem.priority = 'contextual'
+            mem.is_cold = True  # fora de circulacao ate reescrita humana (evita flap)
+            out['rebaixadas'] += 1
+        if out['rebaixadas']:
+            db.session.commit()
+            logger.info(
+                f"[CORRECTION_DEMOTION] {out['rebaixadas']} regras duras rebaixadas "
+                f"(harmful_count >= {th}, avaliadas={out['avaliadas']}) — pendentes de reescrita"
+            )
+    except Exception as exc:
+        try:
+            from app import db
+            db.session.rollback()
+        except Exception:
+            pass
+        logger.warning(f"[CORRECTION_DEMOTION] falhou (ignorado): {exc}")
+    return out
+
+
 def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> dict:
     """Varredor A4-batch (D8 módulo 32). Flag-gated por AGENT_DIRECTIVE_PROMOTION.
 
-    DUAS fontes de candidata (a 2ª — Opção B / A4 V2 — desacopla do PlanState):
+    TRES fontes de candidata:
       1. PLANO: sessão com plano 100% concluído → propose_directive_from_plan.
       2. JUDGE: sessão de alta qualidade validada pelo judge (sem precisar de plano)
          → propose_directive_from_judge_session. Resolve o no-op eterno (0 PlanStates).
+      3. CORRECTION-RECURRENCE: correcao PESSOAL reincidente (correction_count >= threshold)
+         → promover_correcoes_recorrentes (priority='mandatory', canal duro <user_rules>).
+         Filtro = reincidencia (feedback humano), NAO o gate Odoo das fontes 1/2.
     Ambas passam pelo MESMO gate (evaluate_and_promote: R9 anti-gaming DOMINA + A3
     report-only). Best-effort: nunca levanta. Sessão processada por uma fonte NÃO é
     re-proposta pela outra (dedup por session_id)."""
@@ -693,6 +856,27 @@ def run_directive_promotion_batch(lookback_hours: int = 24, limit: int = 50) -> 
         except Exception as exc:
             logger.error(f"[directive_promotion] batch(judge): erro session={sid!r}: {exc}")
             _rollback_seguro()
+
+    # ── Fonte 3: CORRECTION-RECURRENCE — promove correcao PESSOAL recorrente a
+    # 'mandatory' (canal duro <user_rules>, Fase 1). Filtro = reincidencia
+    # (correction_count >= threshold), nao gate Odoo (correcao = feedback humano). ──
+    try:
+        _corr = promover_correcoes_recorrentes(limit=limit * 4)
+        contadores['correcoes_promovidas'] = _corr.get('promovidas', 0)
+        contadores['correcoes_reescritas'] = _corr.get('reescritas', 0)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch(correcao): erro: {exc}")
+        _rollback_seguro()
+
+    # ── Fonte 3b: DEMOTE — regra dura que reincidiu repetidas vezes (harmful) sai de
+    # circulacao pendente de reescrita. Commit isolado dentro da funcao (nao reverte a
+    # promocao da fonte 3). Flag-gated (AGENT_CORRECTION_DEMOTION, default OFF). ──
+    try:
+        _dem = demote_stale_rules(limit=limit * 4)
+        contadores['regras_rebaixadas'] = _dem.get('rebaixadas', 0)
+    except Exception as exc:
+        logger.error(f"[directive_promotion] batch(demote): erro: {exc}")
+        _rollback_seguro()
 
     try:
         from app import db

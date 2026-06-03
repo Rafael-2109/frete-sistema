@@ -142,6 +142,11 @@ def get_insights_data(
         # (candidatas a otimizacao de session lifecycle / memory injection).
         current['cache_efficiency'] = _get_cache_efficiency_section(days=days)  # pyright: ignore[reportUndefinedVariable]
 
+        # ── Adesao de regras (Fase 3.7 — loop corretivo pessoal) ──
+        # Reincidencia por error_signature ANTES (correction_count) vs DEPOIS (harmful_count)
+        # da promocao a regra dura. Funcao definida abaixo no mesmo modulo.
+        current['rule_adhesion'] = _get_rule_adhesion_section(days=days)  # pyright: ignore[reportUndefinedVariable]
+
         return current
 
     except Exception as e:
@@ -1603,3 +1608,105 @@ def _get_cache_efficiency_section(days: int = 30) -> dict:
             'low_efficiency_sessions': [],
             'period_days': days,
         }
+
+
+# =============================================================================
+# ADESAO DE REGRAS — loop corretivo pessoal (Fase 3.7)
+# =============================================================================
+
+def get_rule_adhesion_panel(days: int = 30, user_id: Optional[int] = None) -> Dict[str, Any]:
+    """Painel "adesao de regras" — custo $0 (zero LLM).
+
+    Mede o loop corretivo pessoal: quantas correcoes viraram regra dura ('mandatory') e a
+    REINCIDENCIA por error_signature ANTES (correction_count = todas as reincidencias) vs
+    DEPOIS (harmful_count = reincidencias com a regra JA dura) da promocao — o DoD do loop
+    (alvo: erro recorrente do Marcus ~9 -> <=2 apos virar regra dura). helpful_count = injecoes
+    limpas creditadas. Degrada com graca se as colunas da Fase 3.1 ainda nao existirem no banco
+    (rollout dual): 'outcome.available'=False (so os agregados por path/priority).
+    """
+    out = {
+        'total_corrections': 0,
+        'mandatory_count': 0,
+        'mandatory_pct': 0.0,
+        'top_by_signature': [],
+        'outcome': {'harmful_total': 0, 'helpful_total': 0, 'available': True},
+        'period_days': days,
+    }
+    try:
+        from ..models import AgentMemory
+        from app import db
+        from sqlalchemy import text as sql_text
+
+        base = AgentMemory.query.filter(
+            AgentMemory.path.like('/memories/corrections/%'),
+            AgentMemory.is_directory == False,  # noqa: E712
+        )
+        if user_id is not None:
+            base = base.filter(AgentMemory.user_id == user_id)
+        total = base.count()
+        mandatory = base.filter(AgentMemory.priority == 'mandatory').count()
+        out['total_corrections'] = total
+        out['mandatory_count'] = mandatory
+        out['mandatory_pct'] = round(100.0 * mandatory / total, 1) if total else 0.0
+
+        # Reincidencia por assinatura + outcome — depende das colunas da Fase 3.1.
+        try:
+            rows = db.session.execute(sql_text(
+                """
+                SELECT error_signature,
+                       COUNT(*) AS n,
+                       MAX(correction_count) AS cc,
+                       COALESCE(SUM(harmful_count), 0) AS harmful,
+                       COALESCE(SUM(helpful_count), 0) AS helpful,
+                       BOOL_OR(priority = 'mandatory') AS promovida
+                FROM agent_memories
+                WHERE path LIKE '/memories/corrections/%%'
+                  AND error_signature IS NOT NULL
+                  AND (:uid IS NULL OR user_id = :uid)
+                GROUP BY error_signature
+                ORDER BY MAX(correction_count) DESC, COUNT(*) DESC
+                LIMIT 20
+                """
+            ), {'uid': user_id}).fetchall()
+            top, harmful_total, helpful_total = [], 0, 0
+            for r in rows:
+                harmful_total += int(r.harmful or 0)
+                helpful_total += int(r.helpful or 0)
+                top.append({
+                    'error_signature': r.error_signature,
+                    'ocorrencias': int(r.n or 0),
+                    'reincidencia_total': int(r.cc or 0),       # ANTES (todas)
+                    'reincidencia_pos_promocao': int(r.harmful or 0),  # DEPOIS (regra dura)
+                    'helpful_count': int(r.helpful or 0),
+                    'promovida': bool(r.promovida),
+                })
+            out['top_by_signature'] = top
+            out['outcome'] = {
+                'harmful_total': harmful_total,
+                'helpful_total': helpful_total,
+                'available': True,
+            }
+        except Exception as col_err:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            out['outcome'] = {'harmful_total': 0, 'helpful_total': 0, 'available': False}
+            logger.debug(
+                f"[insights] rule_adhesion outcome indisponivel (Fase 3.1 pendente?): {col_err}"
+            )
+    except Exception as e:
+        logger.warning(f"[insights] rule_adhesion_panel falhou: {e}")
+    return out
+
+
+def _get_rule_adhesion_section(days: int = 30) -> dict:
+    """Wrapper flag-gated (espelha _get_subagent_cost_section): {} se o loop corretivo OFF."""
+    from ..config.feature_flags import AGENT_CORRECTION_PROMOTION
+    if not AGENT_CORRECTION_PROMOTION:
+        return {}
+    try:
+        return get_rule_adhesion_panel(days=days)
+    except Exception as e:
+        logger.warning(f"[insights] rule_adhesion_section falhou: {e}")
+        return {}

@@ -1966,6 +1966,9 @@ def _save_messages_to_db(
                     _client = _get_client()
                     injected_ids = getattr(_client, '_last_injected_memory_ids', [])
                     _track_memory_effectiveness(user_id, assistant_message, injected_ids)
+                    # Fase 3.3: medicao por OUTCOME (helpful) — ANTES de zerar injected_ids
+                    from app.agente.routes import _track_outcome_by_recurrence
+                    _track_outcome_by_recurrence(user_id, injected_ids)
                     # Limpar para não vazar entre turnos
                     _client._last_injected_memory_ids = []
             except Exception as eff_err:

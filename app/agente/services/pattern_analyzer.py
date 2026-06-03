@@ -1914,7 +1914,8 @@ Retorne JSON VALIDO:
     {
       "tipo": "correcao|preferencia|expertise|contexto",
       "descricao": "O que foi observado (max 200 chars)",
-      "prescricao": "Quando [situacao], o agente deve [acao] (max 200 chars)"
+      "prescricao": "Quando [situacao], o agente deve [acao] (max 200 chars)",
+      "error_signature": "SO para tipo=correcao: a INTENCAO NORMALIZADA do erro em snake_case (max 60 chars), NAO o texto literal. Ex: 'troca_de_escopo', 'data_formato_ano_mes', 'executou_padrao_vetado', 'respondeu_cluster_errado'. Use a MESMA assinatura para o mesmo erro em sessoes diferentes (e a chave que casa reincidencia). Omita o campo para os demais tipos."
     }
   ]
 }
@@ -1945,6 +1946,7 @@ def _save_personal_insight(
     tipo: str,
     descricao: str,
     prescricao: str,
+    error_signature: str = '',
 ) -> bool:
     """
     Salva insight pessoal como memoria do usuario.
@@ -1981,6 +1983,56 @@ def _save_personal_insight(
             from ..tools.memory_mcp_tool import _check_memory_duplicate
             dup_path = _check_memory_duplicate(user_id, content, current_path=path)
             if dup_path:
+                # Fase 2 (write-path UPDATE-vs-ADD): reincidencia NAO e descartada — e REFORCO.
+                # Repetir a MESMA correcao deve aumentar o peso (correction_count) da canonica,
+                # nao sumir nem duplicar (era a causa de 9 correcoes do mesmo erro coexistindo).
+                # Mem0 ADD/UPDATE/DELETE/NOOP: este caso = UPDATE. correction_count alimenta a
+                # promocao a 'mandatory' (Fase 2 batch) e a ordenacao do canal duro (Fase 1).
+                if tipo == 'correcao':
+                    try:
+                        canonica = AgentMemory.get_by_path(user_id, dup_path)
+                        if canonica is not None:
+                            canonica.correction_count = (canonica.correction_count or 0) + 1
+                            canonica.last_accessed_at = agora_utc_naive()
+                            canonica.importance_score = min(
+                                0.95, (canonica.importance_score or 0.7) + 0.05
+                            )
+                            # Fase 3: se a canonica ainda nao tem assinatura, herda a desta
+                            # reincidencia (backfill incremental da assinatura de intencao).
+                            if (error_signature and hasattr(canonica, 'error_signature')
+                                    and not canonica.error_signature):
+                                canonica.error_signature = error_signature[:64]
+                            # Fase 3.3 (sinal harmful, write-path): se a canonica JA e regra dura
+                            # ('mandatory' = injetada no canal duro) e o usuario AINDA corrigiu o
+                            # mesmo erro -> a regra dura FALHOU em prevenir. Conta harmful (outcome
+                            # negativo; alimenta demote/reescrita na 3.6). So colunas novas (aditivo).
+                            try:
+                                from ..config.feature_flags import AGENT_OUTCOME_TRACKING
+                                if (AGENT_OUTCOME_TRACKING and canonica.priority == 'mandatory'
+                                        and hasattr(canonica, 'harmful_count')):
+                                    canonica.harmful_count = (canonica.harmful_count or 0) + 1
+                                    logger.info(
+                                        f"[OUTCOME] Regra dura reincidiu (HARMFUL): '{dup_path}' "
+                                        f"harmful_count={canonica.harmful_count}"
+                                    )
+                            except Exception:
+                                pass
+                            db.session.commit()
+                            logger.info(
+                                f"[PERSONAL_EXTRACTION] Correcao reincidente REFORCADA: "
+                                f"'{dup_path}' correction_count={canonica.correction_count} "
+                                f"importance={canonica.importance_score:.2f}"
+                            )
+                            return True  # reforco conta como salvo (nao descarta o sinal)
+                    except Exception as reinf_err:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        logger.debug(
+                            f"[PERSONAL_EXTRACTION] Reforco de reincidencia falhou "
+                            f"(ignorado, segue skip): {reinf_err}"
+                        )
                 logger.debug(
                     f"[PERSONAL_EXTRACTION] Dedup: '{path}' similar a '{dup_path}', skipping"
                 )
@@ -2079,6 +2131,10 @@ def _save_personal_insight(
             mem = AgentMemory.create_file(user_id, path, content)
             mem.category = 'structural'
             mem.importance_score = 0.7
+            # Fase 3: assinatura de intencao normalizada (casa reincidencia entre sessoes).
+            # hasattr guard: seguro durante rollout dual (antes da migration 3.1 chegar ao PROD).
+            if error_signature and hasattr(mem, 'error_signature'):
+                mem.error_signature = error_signature[:64]
 
         else:
             return False
@@ -2172,6 +2228,8 @@ def extrair_insights_pessoais_sessao(
                 tipo = item.get('tipo', '').strip()
                 descricao = item.get('descricao', '').strip()
                 prescricao = item.get('prescricao', '').strip()
+                # Fase 3: assinatura de intencao (so p/ correcao) — casa reincidencia
+                error_signature = item.get('error_signature', '').strip() if tipo == 'correcao' else ''
 
                 if tipo not in _TIPOS_VALIDOS:
                     filtered += 1
@@ -2180,7 +2238,7 @@ def extrair_insights_pessoais_sessao(
                     filtered += 1
                     continue
 
-                if _save_personal_insight(user_id, tipo, descricao, prescricao):
+                if _save_personal_insight(user_id, tipo, descricao, prescricao, error_signature=error_signature):
                     saved += 1
                 else:
                     filtered += 1

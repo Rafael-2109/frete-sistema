@@ -48,3 +48,4 @@ atualizado: 2026-06-02
 - [Onda 3 — Fechar o Flywheel + Ontologia Consultável Implementation Plan](2026-05-31-onda-3-flywheel-ontologia.md)
 - [A4 — Promoção Automática de Diretriz (batch) — Implementation Plan](2026-06-01-a4-promocao-diretriz.md)
 - [Capacitação do gestor-estoque-odoo p/ remessa FB→LF — Implementation Plan](2026-06-02-capacitacao-gestor-remessa-fb-lf.md)
+- [Loop Corretivo Pessoal — a licao que adere](2026-06-02-loop-corretivo-pessoal.md) — memoria pessoal F1 (eixo G): gravar→reconciliar→promover→injetar-garantido→medir-outcome; resolve "expliquei e fez certo, depois errou de novo" (Marcus)

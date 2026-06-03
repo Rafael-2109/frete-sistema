@@ -684,6 +684,36 @@ def _build_routing_context(user_id: int) -> Optional[str]:
         return None
 
 
+def _composite_score(decay: float, importance: float,
+                     similarity: Optional[float] = None,
+                     correction_count: int = 0) -> float:
+    """Composite de ranking de memoria (puro/testavel).
+
+    Fase 3.4B (flag USE_RECURRENCE_SCORE, default OFF): soma um eixo de RECORRENCIA
+    (correction_count normalizado, cap 10) ao score — regras reincidentes do usuario
+    sobem no ranking. OFF por padrao porque hoje correction_count e ~0 em quase todas as
+    memorias (so o loop corretivo o popula); ligar antes disso apenas redistribuiria os
+    pesos de decay/importance (regressao silenciosa). Com a flag OFF, retorna a formula
+    historica EXATA (0.3 decay + 0.3 imp + 0.4 sim; fallback 0.3 decay + 0.7 imp).
+    """
+    try:
+        from ..config.feature_flags import USE_RECURRENCE_SCORE
+    except Exception:
+        USE_RECURRENCE_SCORE = False
+
+    if similarity is None:
+        # Fallback sem similaridade (tier2b)
+        if USE_RECURRENCE_SCORE:
+            recurrence = min(int(correction_count or 0), 10) / 10.0
+            return 0.25 * decay + 0.60 * importance + 0.15 * recurrence
+        return 0.3 * decay + 0.7 * importance
+
+    if USE_RECURRENCE_SCORE:
+        recurrence = min(int(correction_count or 0), 10) / 10.0
+        return 0.25 * decay + 0.25 * importance + 0.35 * similarity + 0.15 * recurrence
+    return 0.3 * decay + 0.3 * importance + 0.4 * similarity
+
+
 def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name: str = None) -> tuple[Optional[str], list[int]]:
     """
     Carrega memórias do usuário e formata como contexto para injeção.
@@ -760,16 +790,27 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             tier0_chars = 0
 
             # ── L1: User Rules (SEMPRE, priority=mandatory) — NOVO CANAL ──
+            # Fase 3.4A: regras duras vao para o TOPO ABSOLUTO do contexto (antes de
+            # <user_memories>), nao mais anexadas ao tier0 (que ia para o FIM, apos o
+            # footer). A Fase 0 (AgingBench) mostrou que a regra no topo rende muito mais
+            # (P3=89% vs P1=0%). rules_block_top != None => injetar no topo na montagem final.
+            rules_block_top = None
             try:
-                from ..config.feature_flags import USE_USER_RULES_CHANNEL
+                from ..config.feature_flags import USE_USER_RULES_CHANNEL, USE_USER_RULES_TOP
                 if USE_USER_RULES_CHANNEL:
                     from .memory_injection_rules import _build_user_rules
                     rules_block = _build_user_rules(user_id)
                     if rules_block:
-                        # Nao consome budget — sempre incluido no inicio
-                        tier0_parts.append(rules_block)  # Primeiro no prompt
+                        # Nao consome budget — sempre incluido
                         tier0_chars += len(rules_block)
-                        logger.info(f"[MEMORY_INJECT] L1 user_rules injected: {len(rules_block)} chars")
+                        if USE_USER_RULES_TOP:
+                            rules_block_top = rules_block  # TOPO (maior atencao) na montagem final
+                        else:
+                            tier0_parts.append(rules_block)  # legado: cauda do prompt
+                        logger.info(
+                            f"[MEMORY_INJECT] L1 user_rules injected "
+                            f"({'top' if USE_USER_RULES_TOP else 'tail'}): {len(rules_block)} chars"
+                        )
             except Exception as l1_err:
                 logger.debug(f"[MEMORY_INJECT] L1 rules falhou (ignorado): {l1_err}")
 
@@ -942,7 +983,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                                 else:
                                     decay = 0.5
 
-                                composite = 0.3 * decay + 0.3 * importance + 0.4 * similarity
+                                composite = _composite_score(decay, importance, similarity, mem.correction_count)
                                 scored.append((mem, composite, similarity))
 
                             # Ordenar por composite score (desc), pegar top 10
@@ -999,7 +1040,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                                 decay = _calculate_category_decay(category, hours_since)
                             else:
                                 decay = 0.5
-                            composite = 0.3 * decay + 0.3 * importance + 0.4 * similarity
+                            composite = _composite_score(decay, importance, similarity, mem.correction_count)
                             # Só adicionar se composite razoável
                             if composite >= 0.3:
                                 _pass1_scores[mem.id] = composite
@@ -1170,7 +1211,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
                         decay = _calculate_category_decay(category, hours_since)
                     else:
                         decay = 0.5
-                    composite = 0.3 * decay + 0.7 * importance
+                    composite = _composite_score(decay, importance, correction_count=mem.correction_count)
                 tier2_candidates.append((mem, mem_text, len(mem_text), composite))
 
             # ── PASS 2: Selecionar por composite score dentro do budget ──
@@ -1191,7 +1232,11 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
 
             # ── Montar resultado final ──
             # Memórias estáveis primeiro (maior atenção), operacional ao final
-            selected_parts = [header]
+            selected_parts = []
+            # Fase 3.4A: regras duras (<user_rules>) no TOPO ABSOLUTO — antes do <user_memories>.
+            if rules_block_top:
+                selected_parts.append(rules_block_top + "\n")
+            selected_parts.append(header)
             injected_mems = []
 
             for mem, mem_text in tier1_texts:
@@ -1219,7 +1264,7 @@ def _load_user_memories_for_context(user_id: int, prompt: str = None, model_name
             total_chars = len(result)
             injected_count = len(injected_mems)
 
-            if injected_count == 0 and not tier0_text:
+            if injected_count == 0 and not tier0_text and not rules_block_top:
                 return None, []  # Nenhuma memória coube no budget
 
             # ── v2: Atualizar last_accessed_at + usage_count para memórias injetadas ──

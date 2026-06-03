@@ -1718,10 +1718,15 @@ def process_teams_task_async(
             try:
                 if resposta_texto and teams_user_id:
                     from app.agente.sdk import get_client as _get_client
-                    from app.agente.routes import _track_memory_effectiveness
+                    from app.agente.routes import (
+                        _track_memory_effectiveness,
+                        _track_outcome_by_recurrence,
+                    )
                     _client = _get_client()
                     injected_ids = getattr(_client, '_last_injected_memory_ids', [])
                     _track_memory_effectiveness(teams_user_id, resposta_texto, injected_ids)
+                    # Fase 3.3: medicao por OUTCOME (helpful) — ANTES de zerar injected_ids
+                    _track_outcome_by_recurrence(teams_user_id, injected_ids)
                     _client._last_injected_memory_ids = []
             except Exception as eff_err:
                 logger.warning(f"[TEAMS-ASYNC] Memory effectiveness tracking falhou: {eff_err}")

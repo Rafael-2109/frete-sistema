@@ -56,4 +56,5 @@ from app.agente.routes._helpers import (  # noqa: F401, E402
     run_post_session_processing,
     _calculate_cost,
     _track_memory_effectiveness,
+    _track_outcome_by_recurrence,
 )

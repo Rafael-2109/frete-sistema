@@ -484,8 +484,63 @@ IMPROVEMENT_DIALOGUE_MIN_MESSAGES = int(os.getenv("AGENT_IMPROVEMENT_MIN_MESSAGE
 # Quando true: _build_user_rules() e chamado no inicio da injecao de memoria
 # Injeta <user_rules priority="mandatory"> como PRIMEIRO bloco em tier0_parts
 # Sempre injetado sem consumir budget — priority maxima no prompt.
-# Default false: ativacao gradual apos testes com usuarios piloto.
-USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "false").lower() == "true"
+# Default ON (2026-06-02): canal aditivo e quase inocuo ate a promocao (Fase 2 do
+# loop corretivo) encher o canal — quem promove a 'mandatory' passa pelo gate R9+A3.
+# Manter ON evita a feature virar zumbi (construida, desligada e esquecida).
+USE_USER_RULES_CHANNEL = os.getenv("AGENT_USER_RULES_CHANNEL", "true").lower() == "true"
+
+# Cap de regras no canal duro <user_rules>, ordenado por correction_count DESC.
+# Adesao a instrucoes despenca >100-150 regras (IFScale arXiv:2507.11538) — o canal
+# duro deve ser pequeno e curado. Ver eixos/G-memoria-pessoal.md + plano loop corretivo.
+MANDATORY_RULES_MAX_COUNT = int(os.getenv("AGENT_MANDATORY_RULES_MAX_COUNT", "12"))
+
+# Fase 2 do loop corretivo — promocao de correcao PESSOAL recorrente a 'mandatory'.
+# Roda no batch DIARIO (modulo 32 directive_promotion), nao em script one-shot — assim a
+# licao do usuario e promovida automaticamente e nao fica esquecida. Correcao vem do usuario
+# (feedback humano confiavel); o filtro e a REINCIDENCIA (correction_count >= threshold),
+# nao o gate Odoo. Default ON (evita feature zumbi) — seguro: idempotente + cap na injecao.
+AGENT_CORRECTION_PROMOTION = os.getenv("AGENT_CORRECTION_PROMOTION", "true").lower() == "true"
+AGENT_CORRECTION_PROMOTION_THRESHOLD = int(os.getenv("AGENT_CORRECTION_PROMOTION_THRESHOLD", "2"))
+
+# Fase 3.4A do loop corretivo — posiciona <user_rules> no TOPO ABSOLUTO do contexto
+# injetado (antes de <user_memories>), nao mais na cauda (apos o footer). A Fase 0
+# (AgingBench) provou que a regra no topo rende muito mais (P3=89% vs P1=0%). Default ON:
+# e o coracao da cura de RETRIEVAL; aditivo (so reordena, nao adiciona/remove conteudo) e
+# reversivel por flag. OFF reproduz o comportamento legado (regras na cauda).
+USE_USER_RULES_TOP = os.getenv("AGENT_USER_RULES_TOP", "true").lower() == "true"
+
+# Fase 3.4B do loop corretivo — soma um eixo de RECORRENCIA (correction_count) ao composite
+# score de ranking das memorias contextuais. Default OFF: hoje correction_count e ~0 em
+# quase todas as memorias (so o loop o popula com o tempo); ligar antes disso apenas
+# redistribuiria os pesos de decay/importance (regressao silenciosa). Ligar so depois que o
+# contador estiver populado. OFF = formula historica EXATA preservada.
+USE_RECURRENCE_SCORE = os.getenv("AGENT_RECURRENCE_SCORE", "false").lower() == "true"
+
+# Fase 3.3 do loop corretivo — medicao POR OUTCOME (harmful/helpful), desacoplada do eco
+# textual (effective_count). harmful++ = regra 'mandatory' estava ativa e o MESMO erro
+# reincidiu (a regra dura falhou em prevenir); helpful++ = regra 'mandatory' ativa e SEM
+# reincidencia por K injecoes. Default ON: so escreve em colunas NOVAS (harmful_count/
+# helpful_count) — aditivo e seguro; alimenta o demote (3.6) e o painel de adesao (3.7).
+AGENT_OUTCOME_TRACKING = os.getenv("AGENT_OUTCOME_TRACKING", "true").lower() == "true"
+# Nº de injecoes da regra dura SEM reincidencia (harmful_count==0) para creditar helpful_count
+# (1 credito a cada K injecoes limpas — bounded). Conservador por padrao.
+AGENT_OUTCOME_HELPFUL_K_SESSIONS = int(os.getenv("AGENT_OUTCOME_HELPFUL_K_SESSIONS", "3"))
+
+# Fase 3.6 do loop corretivo — DEMOTE de regra dura que reincidiu repetidas vezes mesmo
+# sendo 'mandatory' (harmful_count >= threshold). Rebaixa priority->'contextual' + is_cold=True
+# (puxa de circulacao pendente de reescrita humana). Flap-free: a promocao filtra is_cold==False.
+# Default OFF (DESVIO consciente da regra "flags ON"): demote REMOVE uma regra explicita do
+# usuario do canal duro — efeito potencialmente surpreendente; validar o criterio antes de ligar.
+AGENT_CORRECTION_DEMOTION = os.getenv("AGENT_CORRECTION_DEMOTION", "false").lower() == "true"
+AGENT_OUTCOME_HARMFUL_THRESHOLD = int(os.getenv("AGENT_OUTCOME_HARMFUL_THRESHOLD", "2"))
+
+# Fase 3.5 do loop corretivo — HARD enforcement (PreToolUse) de invariantes DUROS FORMALIZADOS.
+# So bloqueia tool call cujo input contenha um token proibido declarado EXPLICITAMENTE por uma
+# regra dura via 'ENFORCE_DENY_SUBSTR: <token>' (curadoria humana). NUNCA bloqueia por texto
+# livre; o error_signature (slug de metrica) NAO e usado p/ matching. Fail-open (erro -> permite).
+# Default OFF (DESVIO consciente da regra "flags ON"): enforcement DURO pode bloquear uma operacao
+# legitima por falso-positivo — so ligar com invariantes bem curados (nome de campo, op destrutiva).
+USE_MANDATORY_HARD_ENFORCE = os.getenv("AGENT_MANDATORY_HARD_ENFORCE", "false").lower() == "true"
 
 # ====================================================================
 # Features SDK 0.1.60 — Subagent Transparency (2026-04-16)
