@@ -39,6 +39,8 @@
 | Fluxos L3 escritos | 11: 2.1, 2.2, 2.2.j, 2.4, 2.5, 2.6, 2.9, 3.1, 4.1, **1.2.1 v19+**, **1.2.2 v19+** | `fluxos/` |
 | Fluxos L3 pendentes (galho 1.1 + 1.3 + 2.3) | 1.1.1.x, 1.1.2, 1.1.3, 1.3, 2.3 | `fluxos/` ⬜ |
 
+> **Sessão 2026-06-02 — Canary REAL remessa avulsa FB→LF (INDUSTRIALIZACAO_FB_LF) ✅ end-to-end** (linha de trabalho SEPARADA do canary S2 inventário). Fluxo **1.3.1** LIVE: SAÍDA NF RPI/2026/00248 autorizada SEFAZ (CFOP 5901) + ENTRADA NF ENTIN/2026/06/0004 posted (CFOP 1901). 4 fixes commitados local (NÃO pushados): **C7** (Skill 8 `_registrar_auditoria` guard avulso `ajuste_id None`, `9715c8f3d`) · **C9/C9.1** (Skill 5 `criar_picking_entrada_destino_manual` REABILITADO ex-DEPRECATED: `purchase_line_id` + `warehouse_id`/`partner_id` derivados, `a8835dbff`) · **C10** (Skill 7 `gerar_po_from_dfe` força context company do DFe — GOTCHA 1, `0169e1694`). +10 pytest. **Achado**: DFe-resumo (status 06) NÃO gera picking nativo → entrada manual vinculada à PO é o caminho padrão desta operação (ver `CLAUDE.md §14 D-V30-1` + `fluxos/1.3.1-remessa-avulsa-insumo.md` + memória `capacitacao_gestor_remessa_fb_lf`). **Pendente**: Rafael ajustar estoque (paliativo 15:40 + trânsito 26489) + follow-ups (b) limpar docs 'compra' + (c) avaliar 7 ações restantes do mapeamento. Prompt dedicado: `PROMPT_FOLLOWUPS_REMESSA_FB_LF.md`.
+
 ### Cleanup banco local v26+ (2026-05-27)
 
 - 30 ajustes `FATURAMENTO_LF_2026_05_20 / F5d_BLOCKER_TX / INDUSTRIALIZACAO_FB_LF / APROVADO` DELETADOS (decisão Rafael "isso não existe mais").
