@@ -858,10 +858,14 @@ async function submitJudgeVerdict(caseId, verdict) {
       return;
     }
     const row = document.getElementById('judgeCase-' + caseId);
+    // se o caso revisado era prioritario (badge ⚠adversarial), decrementa tambem
+    // o contador de prioritarios — senao o KPI fica defasado ate o reload (review T5).
+    const eraPrioritario = !!(row && row.querySelector('.badge.bg-warning'));
     if (row) row.remove();
     const prevUnreviewed = parseInt(document.getElementById('judgeUnreviewed')?.textContent || '0', 10);
     const prevPrio = parseInt(document.getElementById('judgePrioritarios')?.textContent || '0', 10);
-    if (json.concordance) renderJudgeConcordance(json.concordance, prevPrio, Math.max(0, prevUnreviewed - 1));
+    const novoPrio = eraPrioritario ? Math.max(0, prevPrio - 1) : prevPrio;
+    if (json.concordance) renderJudgeConcordance(json.concordance, novoPrio, Math.max(0, prevUnreviewed - 1));
   } catch (e) {
     alert('Erro ao gravar veredito');
   }
