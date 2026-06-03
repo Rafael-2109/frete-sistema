@@ -942,6 +942,24 @@ AGENT_EVAL_GATE = os.getenv("AGENT_EVAL_GATE", "false").lower() == "true"
 USE_AGENT_EVAL_CALIBRATION = os.getenv("AGENT_EVAL_CALIBRATION", "false").lower() == "true"
 
 # ====================================================================
+# GATE-1 / E3 — Calibration Sampler do ONLINE judge (flag DEDICADA, T4.5)
+# ====================================================================
+# Gateia o calibration_sampler (workers/calibration_sampler.py) + o módulo 33
+# do D8 (sincronizacao_incremental_definitiva.py), que populam agent_eval_case a
+# partir dos vereditos do ONLINE judge (agent_step.outcome_signal['judge']) para
+# spot-check humano + concordance_rate.
+#
+# DESACOPLADA de AGENT_EVAL_CALIBRATION DE PROPÓSITO (T4.5, pedido Rafael 2026-06-03):
+# aquela flag gateia o eval_runner/A3 (persist_eval_cases), que dispara eval LLM
+# CARO — APOSENTADO e VETADO. Esta flag NÃO compartilha gate com o A3, então ligar
+# a calibração do online judge JAMAIS pode acionar um eval LLM caro, nem num cenário
+# hipotético de A3 religado. O sinal aqui é 100% DB (copiar o veredito do judge já
+# gravado por step_judge) + rotulagem humana barata — zero LLM.
+#
+# Default false. Ativar (GATE-1): AGENT_CALIBRATION_SAMPLER=true. Rollback: =false.
+USE_AGENT_CALIBRATION_SAMPLER = os.getenv("AGENT_CALIBRATION_SAMPLER", "false").lower() == "true"
+
+# ====================================================================
 # Onda 4 — F4/F5: Skill Hints Advisory (flag-OFF por default)
 # ====================================================================
 # Quando ON: hook UserPromptSubmit adiciona bloco <skill_hints priority="advisory">

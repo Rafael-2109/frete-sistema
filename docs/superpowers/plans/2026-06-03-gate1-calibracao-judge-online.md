@@ -179,7 +179,7 @@ class TestVerifyArithmeticParser:
 - [ ] **Step 3:** wirar módulo D8 (espelha módulos 29/30/31; por-ciclo; report-only; try/except).
 - [ ] **Step 4:** testes verdes + commit `feat(e3): sampler de calibracao popula agent_eval_case do online judge`.
 
-**DoD:** com `AGENT_EVAL_CALIBRATION=true`, `agent_eval_case` cresce a partir dos steps julgados em PROD.
+**DoD:** com `AGENT_CALIBRATION_SAMPLER=true` (flag dedicada — T4.5), `agent_eval_case` cresce a partir dos steps julgados em PROD.
 
 ## Task 5
 
@@ -197,11 +197,11 @@ class TestVerifyArithmeticParser:
 
 ## Task 6
 
-**Ligar `AGENT_EVAL_CALIBRATION` + deploy + abertura do GATE-1** (operacional).
+**Ligar `AGENT_CALIBRATION_SAMPLER` (flag dedicada — T4.5) + deploy + abertura do GATE-1** (operacional).
 
 - [ ] **Step 1:** Merge da branch em main (pós code-review) + push → deploy.
 - [ ] **Step 2:** Migration — `agent_eval_case` já existe em PROD (O0.5); sem DDL nova (a menos que Task 4 adicione coluna → migration dupla .py+.sql).
-- [ ] **Step 3:** Ligar `AGENT_EVAL_CALIBRATION=true` no web (srv-d13m38vfte5s738t6p60).
+- [ ] **Step 3:** Ligar `AGENT_CALIBRATION_SAMPLER=true` no web (srv-d13m38vfte5s738t6p60). **NÃO** `AGENT_EVAL_CALIBRATION` (essa é a flag do A3 morto — manter OFF).
 - [ ] **Step 4:** Verificar PROD — `agent_eval_case` cresce; UI lista; rotular 5-10 casos; medir `concordance_rate`.
 - [ ] **Step 5 (validação — tempo/humano):** ≥1 semana de dados úteis + concordance≥80% sobre ≥10 casos. Infra fica 100% pronta+ligada; resta coleta.
 
@@ -216,7 +216,7 @@ Task 1 → Task 2 → Task 3 → Task 4 → Task 5 → Task 6.
 - ✅ **T2** fix parser `verify_arithmetic` (`b46f3366e`, TDD, 154 testes verdes).
 - ✅ **T3** achado judge↔adversarial = viés de credulidade do judge (`f413b7291`, sem código).
 - ✅ **T4** sampler core (`a97da9284`, 7 testes) + wiring módulo 33 D8 (`418360ff4`, flag OFF=shadow).
-- ⬜ **T4.5 (pedido Rafael 2026-06-03 — fazer ANTES do deploy)** DESACOPLAR a flag: o sampler hoje reusa `AGENT_EVAL_CALIBRATION`, que TAMBÉM é lida pelo `eval_runner` (A3). Criar flag DEDICADA `AGENT_CALIBRATION_SAMPLER` em `feature_flags.py` + trocar a referência em `calibration_sampler.py` (gate) e no módulo 33 (`sincronizacao_incremental_definitiva.py`, constante `CALIBRATION_SAMPLER_ENABLED`). **MOTIVO:** garantir que ligar a calibração JAMAIS possa tocar um eval LLM caro, mesmo num cenário hipotético de A3 religado. Hoje é seguro (A3 OFF trava o `eval_runner` via módulo 28), mas o desacoplamento elimina a ambiguidade de vez. TDD: 1 teste do novo gate.
+- ✅ **T4.5 (pedido Rafael 2026-06-03 — feito ANTES do deploy)** DESACOPLADA a flag: criada flag DEDICADA `USE_AGENT_CALIBRATION_SAMPLER` (env `AGENT_CALIBRATION_SAMPLER`, default OFF) em `feature_flags.py`; `calibration_sampler.py` (gate) e o módulo 33 (`sincronizacao_incremental_definitiva.py`, `CALIBRATION_SAMPLER_ENABLED`) passam a lê-la. `eval_runner.py:547` (A3) **intacto** em `USE_AGENT_EVAL_CALIBRATION` → ligar a calibração do online judge JAMAIS aciona um eval LLM caro. TDD: `test_desacoplado_da_flag_a3` (flag A3 ON + sampler OFF = no-op) + `test_flag_off_e_noop` atualizado; 8 testes sampler + 26 `test_eval_runner` (regressão) verdes. **T6 liga `AGENT_CALIBRATION_SAMPLER=true` (NÃO `AGENT_EVAL_CALIBRATION`).**
 - ⬜ **T5** UI de spot-check humano (`routes/insights.py` + `insights.html`) — PRÓXIMA. Recon: ler o padrão do card "Adesão de Regras" (O0.3). Rota GET (`AgentEvalCase.sample_unreviewed('__online_judge__')` + `concordance_rate`) + POST (grava `human_verdict`/`reviewed_by`/`reviewed_at`). Destacar os prioritários (evidence com ⚠ADVERSARIAL).
 - ⬜ **T6** merge → deploy → ligar a flag DEDICADA `AGENT_CALIBRATION_SAMPLER=true` (criada na T4.5 — **NÃO** `AGENT_EVAL_CALIBRATION`) no web. Sem DDL (agent_eval_case já existe). Depois: coleta ≥1 semana + rotular ≥10 → concordance≥80% = GATE-1 fechado.
 

@@ -138,11 +138,13 @@ TRIAGE_ENQUEUER_LOOKBACK_HOURS = int(os.environ.get("TRIAGE_ENQUEUER_LOOKBACK_HO
 TRIAGE_ENQUEUER_LIMIT = int(os.environ.get("TRIAGE_ENQUEUER_LIMIT", "50"))
 
 # Calibration Sampler (33º módulo) — Onda 1 / E3 (calibração do judge ONLINE),
-# flag-OFF por default. REUSA AGENT_EVAL_CALIBRATION. Roda POR CICLO (cada tick),
-# INLINE (sem RQ) — leve: DB sweep + insert. Popula agent_eval_case a partir dos
-# vereditos do online judge (substitui a fonte morta eval_runner/A3, aposentado)
-# p/ spot-check humano + concordance. DEFAULT false: modulo e' no-op. Ativar em deploy.
-CALIBRATION_SAMPLER_ENABLED = os.environ.get("AGENT_EVAL_CALIBRATION", "false").lower() == "true"
+# flag-OFF por default. Flag DEDICADA AGENT_CALIBRATION_SAMPLER (T4.5) — DESACOPLADA
+# de AGENT_EVAL_CALIBRATION (que gateia o eval_runner/A3 LLM caro, APOSENTADO): ligar
+# o sampler JAMAIS aciona um eval LLM caro. Roda POR CICLO (cada tick), INLINE (sem RQ)
+# — leve: DB sweep + insert. Popula agent_eval_case a partir dos vereditos do online
+# judge (substitui a fonte morta eval_runner/A3) p/ spot-check humano + concordance.
+# DEFAULT false: modulo e' no-op. Ativar em deploy.
+CALIBRATION_SAMPLER_ENABLED = os.environ.get("AGENT_CALIBRATION_SAMPLER", "false").lower() == "true"
 CALIBRATION_SAMPLER_LOOKBACK_HOURS = int(os.environ.get("CALIBRATION_SAMPLER_LOOKBACK_HOURS", "24"))
 CALIBRATION_SAMPLER_LIMIT = int(os.environ.get("CALIBRATION_SAMPLER_LIMIT", "200"))
 
@@ -2238,7 +2240,8 @@ def executar_sincronizacao():
         logger.info(f"   [TIMER] Step 32 (Directive Promotion): {time.time() - _t_step:.1f}s")
 
         # ── 3️⃣3️⃣ CALIBRATION SAMPLER — popula agent_eval_case do online judge (33º módulo) ──
-        # Onda 1 / E3 (re-apontado pós-aposentadoria A3). Flag AGENT_EVAL_CALIBRATION default OFF → no-op.
+        # Onda 1 / E3 (re-apontado pós-aposentadoria A3). Flag DEDICADA AGENT_CALIBRATION_SAMPLER
+        # (T4.5, desacoplada do A3) default OFF → no-op.
         # Quando ON: varre AgentStep recentes (lookback) com outcome_signal['judge'] e
         # insere casos em agent_eval_case (dedup por step_uid) p/ spot-check humano +
         # concordance_rate. Prioriza discordância judge=success x adversarial.refuted (Task 3).

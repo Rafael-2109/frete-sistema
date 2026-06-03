@@ -82,12 +82,26 @@ class TestMapJudgeToCaseFields:
 
 
 class TestPopulateCalibrationCasesGate:
-    """INV-6: flag OFF = no-op (não toca DB)."""
+    """INV-6: flag OFF = no-op (não toca DB). Gate = USE_AGENT_CALIBRATION_SAMPLER
+    (flag DEDICADA, T4.5) — desacoplada da flag do A3 (USE_AGENT_EVAL_CALIBRATION)."""
 
     def test_flag_off_e_noop(self, monkeypatch):
         import app.agente.config.feature_flags as ff
-        monkeypatch.setattr(ff, 'USE_AGENT_EVAL_CALIBRATION', False)
+        monkeypatch.setattr(ff, 'USE_AGENT_CALIBRATION_SAMPLER', False, raising=False)
         from app.agente.workers.calibration_sampler import populate_calibration_cases
         result = populate_calibration_cases()
+        assert result.get('skipped') == 'flag_off'
+        assert result['inseridos'] == 0
+
+    def test_desacoplado_da_flag_a3(self, monkeypatch):
+        """T4.5: a flag do A3 (USE_AGENT_EVAL_CALIBRATION, que gateia o eval_runner
+        LLM caro) ligada NÃO pode ligar o sampler. Só USE_AGENT_CALIBRATION_SAMPLER
+        controla a calibração — garante que ligar o sampler JAMAIS toque um eval LLM."""
+        import app.agente.config.feature_flags as ff
+        monkeypatch.setattr(ff, 'USE_AGENT_EVAL_CALIBRATION', True, raising=False)
+        monkeypatch.setattr(ff, 'USE_AGENT_CALIBRATION_SAMPLER', False, raising=False)
+        from app.agente.workers.calibration_sampler import populate_calibration_cases
+        result = populate_calibration_cases()
+        # Apesar da flag do A3 ON, o sampler permanece OFF (no-op, não toca DB).
         assert result.get('skipped') == 'flag_off'
         assert result['inseridos'] == 0

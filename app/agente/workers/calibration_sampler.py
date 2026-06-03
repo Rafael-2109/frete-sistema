@@ -16,9 +16,10 @@ de ALTO VALOR de calibração (o judge diz bom, o cético substantivo refuta) �
 o viés de CREDULIDADE do judge. São marcados (prioridade + razão do adversarial na
 evidence) para a UI de revisão (Task 5) destacá-los.
 
-Gate: USE_AGENT_EVAL_CALIBRATION (OFF por default). Best-effort total (INV-6).
-SHADOW: o wiring (módulo D8 no scheduler) é a Task 4 Step 3 — sem caller automático
-nesta versão.
+Gate: USE_AGENT_CALIBRATION_SAMPLER (flag DEDICADA, OFF por default — T4.5).
+Desacoplada de AGENT_EVAL_CALIBRATION (que gateia o eval_runner/A3 LLM caro,
+APOSENTADO): ligar a calibração do online judge JAMAIS aciona um eval LLM caro.
+Best-effort total (INV-6).
 """
 import logging
 from datetime import timedelta
@@ -82,7 +83,7 @@ def populate_calibration_cases(now=None, lookback_hours=24, limit=200) -> dict:
 
     Comportamento (espelha `step_judge.enqueue_pending_judges`, mas SÍNCRONO —
     insert direto em DB, sem RQ, pois é leve):
-    1. Gate USE_AGENT_EVAL_CALIBRATION (import LAZY p/ patch de teste). OFF = no-op.
+    1. Gate USE_AGENT_CALIBRATION_SAMPLER (import LAZY p/ patch de teste). OFF = no-op.
     2. Janela: steps com `created_at` em [now-lookback, now].
     3. Mapeia (via `_map_judge_to_case_fields`) só os que têm veredito judge.
     4. Dedup: pula `case_id` (=step_uid) já presente em `agent_eval_case` (idempotente).
@@ -90,8 +91,8 @@ def populate_calibration_cases(now=None, lookback_hours=24, limit=200) -> dict:
 
     Returns: {'inseridos': int, 'candidatos': int, 'prioritarios': int} (+ 'skipped').
     """
-    from app.agente.config.feature_flags import USE_AGENT_EVAL_CALIBRATION
-    if not USE_AGENT_EVAL_CALIBRATION:
+    from app.agente.config.feature_flags import USE_AGENT_CALIBRATION_SAMPLER
+    if not USE_AGENT_CALIBRATION_SAMPLER:
         return {'inseridos': 0, 'candidatos': 0, 'prioritarios': 0, 'skipped': 'flag_off'}
 
     from app.utils.timezone import agora_utc_naive
