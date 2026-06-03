@@ -46,3 +46,16 @@ def test_write_carimba_e_fica_verde(tmp_path):
     txt1 = alvo.read_text(encoding="utf-8")
     M.run(scope_root=tmp_path, paths=["docs/conhecimento.md"], hub="docs/INDEX.md", write=True)
     assert alvo.read_text(encoding="utf-8") == txt1, "segundo --write nao pode re-carimbar (idempotente)"
+
+def test_tipo_override_flipa_classify(tmp_path):
+    """--tipo/--camada forcam o tipo, sobrepondo o classify (review de cluster)."""
+    (tmp_path / ".claude" / "references").mkdir(parents=True)
+    (tmp_path / "docs").mkdir(parents=True)
+    (tmp_path / "docs" / "INDEX.md").write_text("# i", encoding="utf-8")
+    alvo = tmp_path / ".claude" / "references" / "STUDY_X.md"
+    alvo.write_text("# Study X\n\ntexto de estudo\n", encoding="utf-8")
+    assert M.classify(".claude/references/STUDY_X.md", "x")[0] == "reference", "sem override = reference"
+    M.run(scope_root=tmp_path, paths=[".claude/references/STUDY_X.md"], hub="docs/INDEX.md",
+          write=True, tipo_override="explanation", camada_override="L3")
+    txt = alvo.read_text(encoding="utf-8")
+    assert "tipo: explanation" in txt and "camada: L3" in txt, txt[:120]

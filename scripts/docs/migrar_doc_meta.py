@@ -225,6 +225,8 @@ def run(
     hub: str,
     write: bool = False,
     data: str = "2026-06-02",
+    tipo_override: str | None = None,
+    camada_override: str | None = None,
 ) -> int:
     cfg = lint_config.load()
     scope_root = Path(scope_root)
@@ -242,6 +244,10 @@ def run(
         if tipo == "":
             print(f"SKIP {rel} (SKILL/yaml)")
             continue
+        if tipo_override:
+            tipo = tipo_override
+            if camada_override:
+                camada = camada_override
 
         cand = _build_candidate(rel, text, tipo, camada, hub, data, cfg)
 
@@ -299,6 +305,8 @@ def main() -> None:
         "--write", action="store_true", help="Efetivar gravacao (ausente = dry-run)"
     )
     parser.add_argument("--data", default="2026-06-02", help="Data do carimbo (YYYY-MM-DD)")
+    parser.add_argument("--tipo", default=None, help="Forca o tipo (override do classify) — p/ review de cluster")
+    parser.add_argument("--camada", default=None, help="Forca a camada (L1|L2|L3) — usado com --tipo")
     args = parser.parse_args()
 
     run(
@@ -307,6 +315,8 @@ def main() -> None:
         hub=args.hub,
         write=args.write,
         data=args.data,
+        tipo_override=args.tipo,
+        camada_override=args.camada,
     )
 
 
