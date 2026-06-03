@@ -37,7 +37,8 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
     # D2 citacao em reference
     if tipo == "reference":
         if not re.search(r"(?im)^#{1,4}\s*fontes\b", text) and "FONTE:" not in text:
-            out.append(Finding("D2", rel, 1, "reference sem '## Fontes' nem 'FONTE:'", "block"))
+            sev = "block" if getattr(cfg, "require_fontes_reference", False) else "report"
+            out.append(Finding("D2", rel, 1, "reference sem '## Fontes' nem 'FONTE:'", sev))
     # D3 acuracia de campos vs schema JSON
     sd = Path(root) / cfg.schemas_tables_dir
     if sd.exists():

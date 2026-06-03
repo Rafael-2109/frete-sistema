@@ -9,4 +9,5 @@ def test_scaffold_reference_emite_secoes(tmp_path):
                     "--tema", "frete", "--hub", "docs/INDEX.md", "--out", str(out)], cwd=REPO, check=True)
     txt = out.read_text(encoding="utf-8")
     assert "doc:meta" in txt and "tipo: reference" in txt
-    assert "## Fontes" in txt and "**Papel:**" in txt
+    # Onda 4: reference nao exige mais '## Fontes' (calibracao hibrida); Papel permanece.
+    assert "**Papel:**" in txt

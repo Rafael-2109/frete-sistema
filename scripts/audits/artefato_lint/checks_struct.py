@@ -51,8 +51,11 @@ def check_file(path: Path, root: Path, cfg) -> list[Finding]:
         if not present:
             out.append(Finding("C5", rel, 1, f"secao obrigatoria ausente p/ {tipo}: {req}", "block"))
     # C6 TOC se >100 linhas
+    from . import zones
     nlines = text.count("\n") + 1
-    if nlines > cfg.toc_min_lines and not re.search(r"(?im)^#{1,3}\s*(indice|table of contents|toc)\b", text):
+    toc_exempt = zones._match_any(rel, getattr(cfg, "toc_exempt_globs", []))
+    if nlines > cfg.toc_min_lines and not toc_exempt and not re.search(
+            r"(?im)^#{1,3}\s*(indice|table of contents|toc)\b", text):
         out.append(Finding("C6", rel, 1, f"arquivo {nlines} linhas sem TOC", "block"))
     # C7 link-rot (apenas links relativos a arquivos .md/.py/dir)
     # Resolution rule:

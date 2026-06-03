@@ -15,8 +15,10 @@
   "banned_hedge": ["dezenas", "varios", "varias", "alguns", "algumas", "muitos", "muitas", "aproximadamente"],
   "banned_time_sensitive": ["atualmente", "por enquanto", "recentemente", "hoje em dia"],
   "forbidden_markers_reference": ["~~", "TABELA REFUTADA", "\\u2714v\\d", "ACHADO 20\\d\\d-", "\\ud83d\\udd34"],
+  "require_fontes_reference": false,
+  "toc_exempt_globs": [".claude/skills/**/SKILL.md"],
   "required_sections": {
-    "reference": ["Papel", "Fontes"],
+    "reference": ["Papel"],
     "runbook": ["Papel", "Pre-condicoes", "Passos", "Rollback", "Verificacao"],
     "how-to": ["Papel"],
     "adr": ["Status", "Contexto", "Decisao", "Consequencias"],

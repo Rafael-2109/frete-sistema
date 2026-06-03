@@ -41,6 +41,10 @@ class Config:
     def id_hardcoded_regex(self): return self.raw["id_hardcoded_regex"]
     @property
     def schemas_tables_dir(self): return self.raw["schemas_tables_dir"]
+    @property
+    def require_fontes_reference(self): return self.raw.get("require_fontes_reference", False)
+    @property
+    def toc_exempt_globs(self): return self.raw.get("toc_exempt_globs", [])
 
 def load(path: Path = CONFIG_PATH) -> "Config":
     return Config(json.loads(Path(path).read_text(encoding="utf-8")))
