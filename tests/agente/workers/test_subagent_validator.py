@@ -119,6 +119,60 @@ def test_validator_summary_error_aborts_gracefully(app):
     mock_haiku.assert_not_called()
 
 
+def test_validator_uses_summary_from_payload(app, sample_summary):
+    """Worker em container Render separado (sem o /tmp do web onde o CLI grava
+    o transcript) usa o summary recebido no payload do job em vez de reler o
+    filesystem via get_subagent_summary. Desacopla o consumidor do FS."""
+    from app.agente.workers.subagent_validator import validate_subagent_output
+    from app.agente.models import AgentSession
+    from app import db
+
+    with app.app_context():
+        AgentSession.query.filter_by(session_id='sess-val-payload').delete()
+        db.session.commit()
+
+        sess = AgentSession(
+            session_id='sess-val-payload', user_id=1, title='t', data={}
+        )
+        db.session.add(sess)
+        db.session.commit()
+
+        haiku_response = json.dumps({
+            'score': 35,
+            'reason': 'Resposta menciona 30, SQL retornou 24',
+            'flagged_claims': ['30 pedidos em aberto'],
+        })
+
+        def _must_not_read_fs(*args, **kwargs):
+            raise AssertionError(
+                'get_subagent_summary NAO deve ser chamado quando summary_dict '
+                'vem no payload (worker sem acesso ao filesystem do web)'
+            )
+
+        with patch('app.agente.workers.subagent_validator.get_subagent_summary',
+                   side_effect=_must_not_read_fs), \
+             patch('app.agente.workers.subagent_validator._call_haiku',
+                   return_value=haiku_response), \
+             patch('app.agente.workers.subagent_validator._push_validation_event') as mock_push, \
+             patch('app.agente.workers.subagent_validator.create_app',
+                   return_value=app):
+            validate_subagent_output(
+                session_id='sess-val-payload', agent_id='a1', threshold=70,
+                summary_dict=sample_summary.to_dict(),
+            )
+
+        db.session.refresh(sess)
+        assert 'subagent_validations' in sess.data
+        entries = sess.data['subagent_validations']['entries']
+        assert len(entries) == 1
+        assert entries[0]['score'] == 35
+        assert entries[0]['agent_type'] == 'analista-carteira'
+        mock_push.assert_called_once()  # score < threshold -> push SSE
+
+        db.session.delete(sess)
+        db.session.commit()
+
+
 def test_validator_invalid_json_haiku_response(app, sample_summary):
     """Haiku retorna JSON invalido → job aborta sem persistir."""
     from app.agente.workers.subagent_validator import validate_subagent_output

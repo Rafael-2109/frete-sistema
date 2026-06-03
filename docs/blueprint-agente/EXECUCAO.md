@@ -173,9 +173,16 @@ Fundações: (i) **S0 schema de passo** (física) · (ii) **par E↔D** (semânt
    `[JUDGE_ENQUEUER]`/`[VERIFY_ENQUEUER]`/`[TRIAGE_ENQUEUER]`/`[EVAL_GATE]` no Render.
 
 **Achados do code-review final (não-bloqueantes, anotados):**
-- MED-1 (pré-existente, fora de escopo): `agent_validation` ausente do `--queues` hardcoded em
-  `start_worker_render.sh:301` → jobs `validate_subagent_output` não processados em PROD. **Corrigir
-  numa próxima sessão** (não introduzido pela A3).
+- MED-1 (RESOLVIDO 2026-06-03 — card O0.2): o texto original ("`agent_validation` ausente do
+  `--queues`") já estava OBSOLETO — a fila fora adicionada aos 3 arquivos em `f50df8421` (em PROD).
+  Mas o feature seguia 100% INERTE (verificado PROD: 0 logs `[validator]`, `agent_sessions.data ?
+  'subagent_validations'`=0) por um defeito ARQUITETURAL: o worker RQ roda em container Render separado
+  e não acessa o transcript JSONL em `/tmp/.claude` do web → `get_subagent_summary` retornava
+  status=error e `validate_subagent_output` abortava (`subagent_validator.py:128`). **FIX**: o hook
+  SubagentStop (web) computa o summary com FS local e o passa no payload do job (`summary_dict`); o
+  worker usa o payload em vez de reler o FS (`subagent_validator._summary_from_dict`). TDD +2 testes
+  (consumidor + produtor/wiring), 764 verdes em `tests/agente/`. Estado: 🟢 shadow; pendente
+  deploy + observar em PROD (→ 🔵). Detalhe no `ROADMAP.md` card O0.2.
 - MED-2: migrations agent_eval_* fora do build.sh → ação manual no Render Shell (padrão do projeto).
 
 **Próximo:** A4-batch — ver `docs/blueprint-agente/PROMPT_PROXIMA_SESSAO_A4.md` (criado com regra

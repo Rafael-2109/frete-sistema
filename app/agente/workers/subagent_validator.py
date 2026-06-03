@@ -20,7 +20,7 @@ import logging
 from typing import Optional
 
 from app import create_app
-from app.agente.sdk.subagent_reader import get_subagent_summary
+from app.agente.sdk.subagent_reader import get_subagent_summary, SubagentSummary
 from app.utils.timezone import agora_brasil_naive
 
 logger = logging.getLogger('sistema_fretes')
@@ -111,23 +111,54 @@ def _parse_haiku_json(raw: str) -> Optional[dict]:
         return None
 
 
+def _summary_from_dict(d: dict) -> SubagentSummary:
+    """Reconstroi SubagentSummary a partir do payload do job.
+
+    O hook (web) serializa via SubagentSummary.to_dict(); aqui so precisamos
+    dos campos que o validador consome (status/agent_type/tools_used/
+    findings_text). Os demais recebem defaults inofensivos.
+    """
+    return SubagentSummary(
+        agent_id=d.get('agent_id', ''),
+        agent_type=d.get('agent_type', ''),
+        status=d.get('status', 'done'),
+        started_at=None,
+        ended_at=None,
+        duration_ms=d.get('duration_ms'),
+        tools_used=d.get('tools_used') or [],
+        findings_text=d.get('findings_text') or '',
+    )
+
+
 def validate_subagent_output(
     session_id: str,
     agent_id: str,
     threshold: int = 70,
+    summary_dict: Optional[dict] = None,
 ) -> None:
-    """Job RQ: valida output do subagent, persiste e notifica se score baixo."""
+    """Job RQ: valida output do subagent, persiste e notifica se score baixo.
+
+    summary_dict: summary ja computado pelo hook (web). Usado quando o worker
+    roda em container Render separado do web e NAO tem acesso ao transcript
+    JSONL em /tmp (caso PROD — ver O0.2). Se ausente (DEV, mesmo filesystem),
+    re-le via get_subagent_summary (back-compat).
+    """
     logger.info(
         f"[validator] iniciando: session={session_id} "
-        f"agent_id={agent_id[:12] if agent_id else 'N/A'}"
+        f"agent_id={agent_id[:12] if agent_id else 'N/A'} "
+        f"summary_from_payload={summary_dict is not None}"
     )
 
-    summary = get_subagent_summary(
-        session_id, agent_id, include_pii=True, max_tool_chars=1000
-    )
+    if summary_dict is not None:
+        summary = _summary_from_dict(summary_dict)
+    else:
+        summary = get_subagent_summary(
+            session_id, agent_id, include_pii=True, max_tool_chars=1000
+        )
     if summary.status == 'error':
         logger.warning(
-            f"[validator] summary error (agent_id={agent_id}), abortando"
+            f"[validator] summary error (agent_id={agent_id}, "
+            f"summary_from_payload={summary_dict is not None}), abortando"
         )
         return
 

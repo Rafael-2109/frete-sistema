@@ -978,6 +978,40 @@ def build_hooks(
             )
             if USE_SUBAGENT_VALIDATION and session_id and agent_id:
                 try:
+                    # O worker RQ roda em container Render separado (sem acesso
+                    # ao /tmp/.claude do web, onde o CLI grava o transcript do
+                    # subagente). Computamos o summary AQUI (o web tem o FS) e
+                    # o passamos serializado no payload — desacopla o consumidor
+                    # do filesystem. Sem isso o job sempre abortava com
+                    # status=error em PROD (O0.2 — ver docs/blueprint-agente).
+                    summary_payload = None
+                    try:
+                        from .subagent_reader import get_subagent_summary as _gss
+                        _val_summary = _gss(
+                            session_id=session_id,
+                            agent_id=agent_id,
+                            agent_type=agent_type,
+                            include_pii=True,
+                            max_tool_chars=1000,
+                        )
+                        if _val_summary.status == 'done':
+                            # include_cost=False: o validador nao usa cost_usd;
+                            # enxuga o payload RQ.
+                            summary_payload = _val_summary.to_dict(
+                                include_cost=False
+                            )
+                            # findings_text pode ter 100KB+ (subagente pesado);
+                            # o validador so usa [:3000]. Trunca p/ manter o
+                            # payload RQ enxuto no Redis.
+                            _ft = summary_payload.get('findings_text') or ''
+                            if len(_ft) > 4000:
+                                summary_payload['findings_text'] = _ft[:4000]
+                    except Exception as _sum_err:
+                        logger.debug(
+                            f"[HOOK:SubagentStop] summary p/ validacao "
+                            f"falhou: {_sum_err}"
+                        )
+
                     import os
                     from rq import Queue
                     import redis
@@ -990,11 +1024,17 @@ def build_hooks(
                         session_id=session_id,
                         agent_id=agent_id,
                         threshold=SUBAGENT_VALIDATION_THRESHOLD,
+                        summary_dict=summary_payload,
                         job_timeout=60,
+                        # failure_ttl curto: o payload carrega PII (summary com
+                        # include_pii=True). Default RQ p/ job falho = 1 ano no
+                        # Redis; aqui limitamos a 1h (sucesso expira em ~8min).
+                        failure_ttl=3600,
                     )
                     logger.debug(
                         f"[HOOK:SubagentStop] validacao enfileirada "
-                        f"(agent_type={agent_type}, agent_id={agent_id[:12]})"
+                        f"(agent_type={agent_type}, agent_id={agent_id[:12]}, "
+                        f"summary_payload={summary_payload is not None})"
                     )
                 except Exception as val_err:
                     logger.debug(

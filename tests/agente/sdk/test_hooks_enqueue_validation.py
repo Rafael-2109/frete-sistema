@@ -84,6 +84,65 @@ def test_subagent_stop_enqueues_validation_when_flag_on(tmp_path, app):
         db.session.commit()
 
 
+def test_subagent_stop_passes_summary_dict_in_payload(tmp_path, app):
+    """Hook computa o summary NO WEB (que tem o transcript em /tmp) e o passa
+    no payload do job. O worker RQ roda em container Render separado sem acesso
+    a esse /tmp — sem o summary no payload o job aborta (status=error)."""
+    from app.agente.models import AgentSession
+    from app.agente.sdk.subagent_reader import SubagentSummary
+    from app import db
+
+    with app.app_context():
+        AgentSession.query.filter_by(session_id='sess-enq-sum').delete()
+        db.session.commit()
+        sess = AgentSession(
+            session_id='sess-enq-sum', user_id=1, title='t', data={}
+        )
+        db.session.add(sess)
+        db.session.commit()
+
+        done_summary = SubagentSummary(
+            agent_id='aid-sum', agent_type='analista-carteira', status='done',
+            started_at=None, ended_at=None, duration_ms=100,
+            tools_used=[{'name': 'query_sql', 'args_summary': 'SELECT 1',
+                         'result_summary': '24', 'tool_use_id': 't1'}],
+            findings_text='resumo do subagente',
+        )
+
+        mock_queue = MagicMock()
+
+        with patch('app.agente.sdk.subagent_reader.get_subagent_summary',
+                   return_value=done_summary), \
+             patch('rq.Queue', return_value=mock_queue), \
+             patch('redis.from_url', return_value=MagicMock()):
+            hooks = _make_hooks()
+            handler = _find_stop_handler(hooks)
+            assert handler is not None
+            import asyncio
+            asyncio.run(handler({
+                'agent_id': 'aid-sum',
+                'agent_type': 'analista-carteira',
+                'agent_transcript_path': _make_transcript(tmp_path),
+                'session_id': 'sess-enq-sum',
+            }, None, MagicMock()))
+
+        assert mock_queue.enqueue.called, 'Queue.enqueue nao foi chamado'
+        call = mock_queue.enqueue.call_args
+        assert 'summary_dict' in call.kwargs, 'summary_dict ausente no payload'
+        payload = call.kwargs['summary_dict']
+        assert payload is not None, 'summary_dict deveria vir preenchido (status=done)'
+        assert payload['agent_type'] == 'analista-carteira'
+        assert payload['findings_text'] == 'resumo do subagente'
+        assert payload['tools_used'][0]['name'] == 'query_sql'
+        # PII no payload -> job falho NAO pode reter no Redis por 1 ano (default RQ)
+        assert call.kwargs.get('failure_ttl') == 3600
+        # cost_usd nao e usado pelo validador -> nao deve ir no payload
+        assert 'cost_usd' not in payload
+
+        db.session.delete(sess)
+        db.session.commit()
+
+
 def test_subagent_stop_skips_enqueue_when_flag_off(tmp_path, app):
     """Quando USE_SUBAGENT_VALIDATION=false, nao enfileira."""
     from app.agente.models import AgentSession
