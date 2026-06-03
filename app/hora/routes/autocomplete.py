@@ -36,10 +36,21 @@ def _limit_arg(default: int = 20, maximum: int = 50) -> int:
 @hora_bp.route('/autocomplete/chassi')
 @require_hora_perm('estoque', 'ver')
 def autocomplete_chassi():
+    # Filtros opcionais (tela de Pedido de Venda — cascata + disponibilidade):
+    # disponivel=1 restringe a chassis em estoque; modelo_id/cor filtram.
+    disponivel = (request.args.get('disponivel') or '0').strip() == '1'
+    try:
+        modelo_id = int(request.args.get('modelo_id') or 0) or None
+    except ValueError:
+        modelo_id = None
+    cor = (request.args.get('cor') or '').strip().upper() or None
     return jsonify(autocomplete_service.chassis(
         q=request.args.get('q') or '',
         lojas_permitidas_ids=lojas_permitidas_ids(),
         limit=_limit_arg(),
+        disponivel=disponivel,
+        modelo_id=modelo_id,
+        cor=cor,
     ))
 
 
