@@ -53,6 +53,20 @@
         <i class="fas fa-file-invoice-dollar"></i> NFe (TagPlus)
       </a>
     {% endif %}
+    {# Reimportar do TagPlus: vendas com emissao TagPlus (tagplus_nfe_id).
+       Util quando o backfill em lote falhou em algum campo e o operador quer
+       re-rodar so esta NF apos o fix. #}
+    {% if pode_criar and tem_emissao and venda.emissao_nfe.tagplus_nfe_id %}
+      <form method="post" action="{{ url_for('hora.tagplus_backfill_nfe_unica') }}" class="d-inline"
+            onsubmit="return confirm('Reimportar esta NF do TagPlus? Campos vazios serao preenchidos a partir da API; edicoes manuais sao preservadas.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="tagplus_nfe_id" value="{{ venda.emissao_nfe.tagplus_nfe_id }}">
+        <button type="submit" class="btn btn-sm btn-outline-warning"
+                title="Reexecuta o backfill apenas para esta NFe (sincrono)">
+          <i class="fas fa-redo"></i> Reimportar do TagPlus
+        </button>
+      </form>
+    {% endif %}
     <a href="{{ url_for('hora.vendas_lista') }}" class="btn btn-sm btn-outline-secondary">
       <i class="fas fa-list"></i> Voltar a lista
     </a>
@@ -154,7 +168,7 @@
           </div>
           <div class="col-md-3">
             <button type="submit" class="btn btn-sm btn-warning w-100"
-                    onclick="return confirm('Descartar pedido #{{ venda.id }}?');">Descartar (NF teste)</button>
+                    onclick="return confirm('Descartar pedido #{{ venda.id }}? A NFe NAO sera cancelada na SEFAZ.');">Descartar (NF teste)</button>
           </div>
         </div>
       </form>
@@ -315,8 +329,11 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Valor do frete (R$)</label>
+          {# disabled (nao readonly) p/ alinhar aos demais campos de frete:
+             input disabled NAO e submetido -> preserva valor_frete historico
+             em pedido FATURADO/CANCELADO ao salvar (regressao P-25). #}
           <input type="text" name="valor_frete" id="f-valor-frete" class="form-control" inputmode="decimal"
-                 value="{% if venda.valor_frete %}{{ venda.valor_frete|valor_br }}{% endif %}" {% if ro_oper %}readonly{% endif %}>
+                 value="{% if venda.valor_frete %}{{ venda.valor_frete|valor_br }}{% endif %}" {% if ro_oper %}disabled{% endif %}>
         </div>
         <div class="col-md-3">
           <label class="form-label">Tipo</label>
@@ -335,8 +352,13 @@
   </div>
 
   {% if not is_cancelado %}
-  <div class="d-flex gap-2 mb-3">
+  <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
     <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Salvar dados do pedido</button>
+    <small class="text-muted">
+      {% if is_faturado %}<i class="fas fa-lock"></i> Pedido FATURADO — apenas observações são editáveis.
+      {% elif is_confirmado %}<i class="fas fa-info-circle"></i> Pedido CONFIRMADO — cliente (nome/CPF) não pode mais ser alterado.
+      {% else %}<i class="fas fa-pen"></i> COTAÇÃO — todos os campos editáveis.{% endif %}
+    </small>
   </div>
   {% endif %}
 </form>
