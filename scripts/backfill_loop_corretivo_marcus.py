@@ -163,6 +163,17 @@ def main():
     with app.app_context():
         modo = "DRY-RUN (nada sera escrito)" if dry_run else "CONFIRMAR (WRITE)"
         print(f"=== BACKFILL LOOP CORRETIVO — user {args.user_id} — MODO: {modo} ===")
+
+        # PRE-FLIGHT: o model AgentMemory ja tem as colunas da Fase 3.1; se o BANCO ainda nao,
+        # o commit falharia ("column does not exist"). Exigir a migration 3.1 ANTES (no PROD).
+        from sqlalchemy import inspect as _sa_inspect
+        cols = {c['name'] for c in _sa_inspect(db.engine).get_columns('agent_memories')}
+        faltando = {'error_signature', 'harmful_count', 'helpful_count'} - cols
+        if faltando:
+            print(f"\n[ABORTADO] colunas da Fase 3.1 ausentes no banco: {sorted(faltando)}.")
+            print("  Rode a migration ANTES: "
+                  "python scripts/migrations/2026_06_02_agent_memories_error_signature.py")
+            sys.exit(2)
         clusters = list(CLUSTERS_CORE)
         if args.incluir_baseline:
             clusters.append(CLUSTER_BASELINE)
