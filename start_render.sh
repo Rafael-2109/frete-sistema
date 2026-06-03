@@ -127,18 +127,12 @@ python pre_start.py || echo " WARN: pre_start.py falhou (nao critico)"
 echo " Verificando migracoes do banco..."
 python -m flask db upgrade 2>/dev/null || echo " Migracoes ja aplicadas"
 
-# Sincronizacao incremental em background
-if [ -f "app/scheduler/sincronizacao_incremental_definitiva.py" ]; then
-    mkdir -p logs
-    python -m app.scheduler.sincronizacao_incremental_definitiva &
-    SYNC_PID=$!
-    sleep 3
-    if kill -0 $SYNC_PID 2>/dev/null; then
-        echo " ✅ Sincronizacao incremental iniciada (PID: $SYNC_PID)"
-    else
-        echo " ⚠️ Scheduler de sincronizacao falhou"
-    fi
-fi
+# Sincronizacao incremental: MOVIDA para DEPOIS do Caddy subir (fim do script).
+# Motivo (2026-06-03): o sync e PESADO (faturamento + carteira + auditoria, varios
+# minutos de CPU/DB/Odoo). Rodando aqui (antes do gunicorn), STARVAVA os 4+1 workers
+# durante o boot -> eles nao ficavam 200-OK na janela do health-wait -> start_render.sh
+# fazia FATAL exit ANTES do Caddy -> porta 10000 nunca abria -> deploy update_failed
+# (flaky). Agora roda so depois que os gunicorns estao prontos E o Caddy bindou a porta.
 
 if [ "$MCP_ENABLED" = "true" ]; then
     echo " Iniciando MCP em background..."
@@ -232,9 +226,9 @@ GUNICORN_SISTEMA_PID=$!
 echo " Gunicorn-sistema PID: $GUNICORN_SISTEMA_PID"
 
 # Aguarda gunicorns subirem (health check antes do nginx)
-echo " Aguardando gunicorns ficarem prontos (max 90s)..."
+echo " Aguardando gunicorns ficarem prontos (max 240s)..."
 GUNICORNS_READY=false
-for attempt in $(seq 1 45); do
+for attempt in $(seq 1 120); do
     # Health: /agente/api/health (agente_bp url_prefix=/agente) e /auth/login
     # (auth_bp url_prefix=/auth — rota /login GET retorna 200 sem auth).
     # NAO usar /login direto (404) nem / (302 redirect).
@@ -260,13 +254,13 @@ for attempt in $(seq 1 45); do
     fi
 
     if [ $((attempt % 5)) -eq 0 ]; then
-        echo "   attempt $attempt/45 agente=$AGENTE_RC sistema=$SISTEMA_RC"
+        echo "   attempt $attempt/120 agente=$AGENTE_RC sistema=$SISTEMA_RC"
     fi
     sleep 2
 done
 
 if [ "$GUNICORNS_READY" != "true" ]; then
-    echo " ❌ FATAL: gunicorns nao ficaram prontos em 90s"
+    echo " ❌ FATAL: gunicorns nao ficaram prontos em 240s"
     kill $GUNICORN_AGENTE_PID $GUNICORN_SISTEMA_PID 2>/dev/null
     exit 1
 fi
@@ -341,6 +335,25 @@ fi
     > >(sed -u 's/^/[CADDY] /') 2> >(sed -u 's/^/[CADDY] /' >&2) &
 NGINX_PID=$!
 echo " Caddy PID: $NGINX_PID"
+
+# ---------------------------------------------------------------------
+# 7b. Sincronizacao incremental em background — APOS o Caddy subir.
+# ---------------------------------------------------------------------
+# Movida para ca (2026-06-03): os gunicorns ja passaram no health-wait e o Caddy
+# ja vai bindar :10000 (Render detecta o deploy como live). So AGORA lancamos o
+# sync PESADO (faturamento + carteira + auditoria), que assim NAO compete mais com
+# o boot dos workers — eliminando o flake de health-check/FATAL-antes-do-Caddy.
+if [ -f "app/scheduler/sincronizacao_incremental_definitiva.py" ]; then
+    mkdir -p logs
+    sleep 5  # margem p/ Caddy bindar a porta e o Render marcar o deploy live
+    python -m app.scheduler.sincronizacao_incremental_definitiva &
+    SYNC_PID=$!
+    if kill -0 $SYNC_PID 2>/dev/null; then
+        echo " ✅ Sincronizacao incremental iniciada pos-Caddy (PID: $SYNC_PID)"
+    else
+        echo " ⚠️ Scheduler de sincronizacao falhou"
+    fi
+fi
 
 # Aguarda Caddy (trap captura signals em paralelo)
 wait $NGINX_PID
