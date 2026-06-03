@@ -1,4 +1,28 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 509 — Geracao de Pre-Fatura
+
+> **Papel:** Opcao 509 — Geracao de Pre-Fatura.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Geracao](#tela-geracao)
+  - [Rodape (Metodos de Inclusao)](#rodape-metodos-de-inclusao)
+  - [Importar CSV](#importar-csv)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 2 paginas consolidadas

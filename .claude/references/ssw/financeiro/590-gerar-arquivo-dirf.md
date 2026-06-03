@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 590 — Gerar Arquivo DIRF (Declaração do Imposto de Renda Retido na Fonte)
+
+> **Papel:** Opção 590 — Gerar Arquivo DIRF (Declaração do Imposto de Renda Retido na Fonte).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Opção 490 (Comprovante DIRF sem software RF)](#opção-490-comprovante-dirf-sem-software-rf)
+  - [Opção 590 (Arquivo DIRF oficial)](#opção-590-arquivo-dirf-oficial)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Preparação anual](#preparação-anual)
+  - [Geração de arquivo DIRF (opção 590)](#geração-de-arquivo-dirf-opção-590)
+  - [Geração de comprovantes alternativos (opção 490)](#geração-de-comprovantes-alternativos-opção-490)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Financeiro/Fiscal
 > **Páginas de ajuda**: 1 página consolidada (referência da opção 490 relacionada)

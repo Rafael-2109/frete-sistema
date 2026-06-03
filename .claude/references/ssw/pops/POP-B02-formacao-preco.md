@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-B02 — Entender Formacao de Preco (Simulacao)
+
+> **Papel:** POP-B02 — Entender Formacao de Preco (Simulacao).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Componentes do Preco: O Que Forma o Frete](#etapa-1-componentes-do-preco-o-que-forma-o-frete)
+  - [ETAPA 2 — Formula de Calculo do Frete](#etapa-2-formula-de-calculo-do-frete)
+  - [ETAPA 3 — De Onde Vem Cada Componente (Mapa de Opcoes)](#etapa-3-de-onde-vem-cada-componente-mapa-de-opcoes)
+  - [ETAPA 4 — Prioridade de Selecao de Tabelas](#etapa-4-prioridade-de-selecao-de-tabelas)
+  - [ETAPA 5 — Como Verificar na Simulacao (Opcao 004)](#etapa-5-como-verificar-na-simulacao-opcao-004)
+  - [ETAPA 6 — Problemas Comuns que Causam Calculo Errado](#etapa-6-problemas-comuns-que-causam-calculo-errado)
+  - [ETAPA 7 — Fluxo de Diagnostico Rapido](#etapa-7-fluxo-de-diagnostico-rapido)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: B — Comercial e Precificacao
 > **Prioridade**: P1 (Alta — resolver problema recorrente de simulacao incorreta)

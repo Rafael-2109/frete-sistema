@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 07 — Frota
+
+> **Papel:** 07 — Frota.
+
+## Indice
+
+- [Sumario](#sumario)
+- [Funcionalidades](#funcionalidades)
+- [Arquitetura](#arquitetura)
+  - [Fontes de OS automaticas](#fontes-de-os-automaticas)
+- [1. Consumo de Combustivel](#1-consumo-de-combustivel)
+  - [Fontes de dados](#fontes-de-dados)
+  - [Consultas](#consultas)
+- [2. Manutencoes](#2-manutencoes)
+  - [Configuracao](#configuracao)
+  - [Funcionamento](#funcionamento)
+- [3. Pneus](#3-pneus)
+  - [Processo](#processo)
+  - [Atualizacao automatica](#atualizacao-automatica)
+  - [Consultas](#consultas)
+- [4. Ordens de Servico](#4-ordens-de-servico)
+- [5. Implantacao](#5-implantacao)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Status de Implantacao](#status-de-implantacao)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_frota.htm` (02/11/2019)
 > **Links internos**: 50 | **Imagens**: 1

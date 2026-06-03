@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 476 — Liquidação de Despesas
+
+> **Papel:** Opção 476 — Liquidação de Despesas.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela de Liquidação](#tela-de-liquidação)
+- [Abas / Sub-telas](#abas-sub-telas)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Liquidar Uma Despesa](#liquidar-uma-despesa)
+  - [Liquidar Diversas Despesas](#liquidar-diversas-despesas)
+  - [Estornar Liquidação](#estornar-liquidação)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Financeiro
 > **Páginas de ajuda**: 1 página consolidada (mais referência ssw0095.htm)

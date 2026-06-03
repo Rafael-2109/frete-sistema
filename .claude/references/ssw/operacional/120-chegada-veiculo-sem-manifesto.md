@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 120 — Chegada de Veículo sem Manifesto
+
+> **Papel:** Opção 120 — Chegada de Veículo sem Manifesto.
 
 > **Módulo**: Operacional/Portaria
 > **Referência interna**: Opção 130

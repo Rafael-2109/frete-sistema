@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Fluxos de Processo End-to-End — SSW Sistemas
+
+> **Papel:** Fluxos de Processo End-to-End — SSW Sistemas.
 
 > **Versao**: 1.1 (split em arquivos individuais)
 > **Fonte**: 227 docs de opcoes + 12 visoes gerais

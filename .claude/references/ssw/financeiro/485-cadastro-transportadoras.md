@@ -1,4 +1,45 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 485 — Cadastro de Transportadoras
+
+> **Papel:** Opcao 485 — Cadastro de Transportadoras.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Identificacao](#identificacao)
+  - [Endereco](#endereco)
+  - [Contato](#contato)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Transportadora Subcontratante](#cadastrar-transportadora-subcontratante)
+  - [Gerar CTRCs em Lote a partir de Manifesto (Opcao 006)](#gerar-ctrcs-em-lote-a-partir-de-manifesto-opcao-006)
+  - [Aprovar Tabela de Comissionamento (Opcao 508)](#aprovar-tabela-de-comissionamento-opcao-508)
+  - [Consultar Transportadoras Cadastradas (Opcao 012)](#consultar-transportadoras-cadastradas-opcao-012)
+  - [Gerar Planilha de Transportadoras (Opcao 928)](#gerar-planilha-de-transportadoras-opcao-928)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Sigla da Transportadora](#sigla-da-transportadora)
+  - [Manifesto de Transportadora SSW](#manifesto-de-transportadora-ssw)
+  - [Tipos de Documento Gerados](#tipos-de-documento-gerados)
+  - [Placa de Veiculo de Coleta](#placa-de-veiculo-de-coleta)
+  - [Recebedor](#recebedor)
+  - [Tabela de Comissionamento](#tabela-de-comissionamento)
+  - [Integracao Azul Cargo (ssw3027 / ssw3071)](#integracao-azul-cargo-ssw3027-ssw3071)
+  - [Tipo de Mercadoria (Opcao 406)](#tipo-de-mercadoria-opcao-406)
+  - [Especie de Mercadoria (Opcao 407)](#especie-de-mercadoria-opcao-407)
+  - [Conferente (Opcao 111)](#conferente-opcao-111)
+  - [Consulta e Exportacao](#consulta-e-exportacao)
+  - [Multiempresa](#multiempresa)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 6 paginas consolidadas

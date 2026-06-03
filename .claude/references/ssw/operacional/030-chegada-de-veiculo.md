@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 030 — Chegada de Veículo
+
+> **Papel:** Opção 030 — Chegada de Veículo.
 
 > **Módulo**: Operacional — Transferência/Contratação
 > **Páginas de ajuda**: 6 páginas consolidadas

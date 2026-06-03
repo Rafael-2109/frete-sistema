@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/edi/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 603 — Geração e Envio Automático de EDIs
+
+> **Papel:** Opção 603 — Geração e Envio Automático de EDIs.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configuração Inicial](#configuração-inicial)
+  - [Estabilização do Envio](#estabilização-do-envio)
+  - [Operação](#operação)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Tipos de Arquivos Gerados](#tipos-de-arquivos-gerados)
+  - [EMBARCADOS](#embarcados)
+  - [COBRANÇA](#cobrança)
+  - [OCORRÊNCIAS](#ocorrências)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Escolha de Critérios](#escolha-de-critérios)
+  - [Periodicidade](#periodicidade)
+  - [Formato de Arquivo](#formato-de-arquivo)
+  - [Clientes sem Email](#clientes-sem-email)
+  - [Acompanhamento Diário](#acompanhamento-diário)
+  - [Processo Completo](#processo-completo)
+  - [Métodos de Envio](#métodos-de-envio)
+  - [Programas EDI Específicos](#programas-edi-específicos)
 
 > **Módulo**: EDI
 > **Páginas de ajuda**: 17 páginas consolidadas

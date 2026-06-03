@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 380 — Definicao do Orcamento
+
+> **Papel:** Opcao 380 — Definicao do Orcamento.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Duplicar e Replicar](#duplicar-e-replicar)
+  - [Tela Principal](#tela-principal)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro Normal](#cadastro-normal)
+  - [Replicar Janeiro para Demais Meses](#replicar-janeiro-para-demais-meses)
+  - [Duplicar Orcamento de Unidade Referencia](#duplicar-orcamento-de-unidade-referencia)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada

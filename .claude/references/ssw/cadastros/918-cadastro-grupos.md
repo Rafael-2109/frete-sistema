@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 918 — Cadastro de Grupos
+
+> **Papel:** Opcao 918 — Cadastro de Grupos.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Criacao de Novo Grupo](#criacao-de-novo-grupo)
+  - [Alteracao de Permissoes](#alteracao-de-permissoes)
+  - [Relatorio de Grupos](#relatorio-de-grupos)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Grupo 092 SSWMOBILE](#grupo-092-sswmobile)
+  - [Principio do Menor Privilegio](#principio-do-menor-privilegio)
+  - [Acesso a Tabelas de Frete](#acesso-a-tabelas-de-frete)
+  - [Relatorios Gerenciais](#relatorios-gerenciais)
+  - [Usuarios Master](#usuarios-master)
+  - [Grupos Tipicos](#grupos-tipicos)
+  - [Mudanca de Grupo](#mudanca-de-grupo)
+  - [Auditoria](#auditoria)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Cadastros
 > **Paginas de ajuda**: 6 paginas consolidadas

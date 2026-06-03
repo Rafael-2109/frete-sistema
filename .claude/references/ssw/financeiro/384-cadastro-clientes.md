@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 384 — Cadastro de Clientes
+
+> **Papel:** Opcao 384 — Cadastro de Clientes.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Identificacao](#identificacao)
+  - [Faturamento e Cobranca](#faturamento-e-cobranca)
+  - [Reversao de Frete](#reversao-de-frete)
+  - [Observacoes](#observacoes)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Inclusao de Novo Cliente](#inclusao-de-novo-cliente)
+  - [Configuracao de Envio Automatico de Faturas](#configuracao-de-envio-automatico-de-faturas)
+  - [Alteracao em Lote](#alteracao-em-lote)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Forma de Liquidacao](#forma-de-liquidacao)
+  - [Envio Automatico de Faturas](#envio-automatico-de-faturas)
+  - [Entregador](#entregador)
+  - [Unidade de Cobranca](#unidade-de-cobranca)
+  - [Reversao de Frete](#reversao-de-frete)
+  - [Faturamento Automatico vs Manual](#faturamento-automatico-vs-manual)
+  - [Observacoes em Documentos](#observacoes-em-documentos)
+  - [Multiempresa](#multiempresa)
+  - [Integracao com CTRCs](#integracao-com-ctrcs)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 14 paginas consolidadas

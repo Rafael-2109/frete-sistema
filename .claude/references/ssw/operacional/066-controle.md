@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 066 — Controle (Remessa Vias de Cobranca CTRCs)
+
+> **Papel:** Opcao 066 — Controle (Remessa Vias de Cobranca CTRCs).
 
 > **Modulo**: Financeiro — Faturamento
 > **Paginas de ajuda**: 1 pagina consolidada

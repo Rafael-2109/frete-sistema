@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-D01 — Contratar Veiculo para Carga Direta
+
+> **Papel:** POP-D01 — Contratar Veiculo para Carga Direta.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar Opcao 072](#etapa-1-acessar-opcao-072)
+  - [ETAPA 2 — Informar Origem e Destino](#etapa-2-informar-origem-e-destino)
+  - [ETAPA 3 — Definir Tipo de Carga e Valor](#etapa-3-definir-tipo-de-carga-e-valor)
+  - [ETAPA 4 — CIOT (Automatico)](#etapa-4-ciot-automatico)
+  - [ETAPA 5 — Vale Pedagio (Obrigatorio para Terceiros)](#etapa-5-vale-pedagio-obrigatorio-para-terceiros)
+  - [ETAPA 6 — Confirmar Contratacao](#etapa-6-confirmar-contratacao)
+  - [ETAPA 7 — Proximo Passo (Sequencia Legal)](#etapa-7-proximo-passo-sequencia-legal)
+- [Tres Tipos de Contratacao](#tres-tipos-de-contratacao)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: D — Operacional: Transporte e Entrega
 > **Prioridade**: P1 (Alta — formalizar custos de carga direta)

@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 091 — Controle de CTRCs Segregados
+
+> **Papel:** Opção 091 — Controle de CTRCs Segregados.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Formas de Segregação](#formas-de-segregação)
+  - [Segregação do CTRC](#segregação-do-ctrc)
+  - [Segregação dos Volumes (com código de barras)](#segregação-dos-volumes-com-código-de-barras)
+- [Campos / Interface](#campos-interface)
+- [Restrições de CTRCs Segregados](#restrições-de-ctrcs-segregados)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Incluir na Segregação](#incluir-na-segregação)
+  - [Retirar da Segregação](#retirar-da-segregação)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Relatório 179 — CTRCs com Pendência](#relatório-179-ctrcs-com-pendência)
+  - [Dados Importantes do Relatório 179](#dados-importantes-do-relatório-179)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Operacional — Controle de Segregação
 > **Páginas de ajuda**: 2 páginas consolidadas

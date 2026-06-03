@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 183 — Tabela de Produtos Controlados
+
+> **Papel:** Opcao 183 — Tabela de Produtos Controlados.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal (Opcao 183)](#tela-principal-opcao-183)
+  - [Controlado](#controlado)
+  - [ANVISA](#anvisa)
+  - [Perecivel](#perecivel)
+  - [Vacina](#vacina)
+  - [Relatorio (Link "Relacao de Produtos Controlados")](#relatorio-link-relacao-de-produtos-controlados)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Produto Controlado (Equipe SSW)](#cadastrar-produto-controlado-equipe-ssw)
+  - [Consultar Produtos Controlados (Usuarios Finais)](#consultar-produtos-controlados-usuarios-finais)
+  - [Gerar Relatorios para Orgaos Controladores (Opcao 083)](#gerar-relatorios-para-orgaos-controladores-opcao-083)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 2 paginas consolidadas (183, 083)

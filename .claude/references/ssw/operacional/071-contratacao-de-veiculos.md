@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 071 — Notas Fiscais Importadas via EDI (Contratação de Veículos)
+
+> **Papel:** Opção 071 — Notas Fiscais Importadas via EDI (Contratação de Veículos).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Integrações com Clientes Específicos](#integrações-com-clientes-específicos)
+  - [DAFITI / CFG (CNPJ raiz: 11200418)](#dafiti-cfg-cnpj-raiz-11200418)
+  - [PROCEDA 5.0 (diversos embarcadores)](#proceda-50-diversos-embarcadores)
+  - [Magazine Luiza / Magalu Log (CNPJ raiz: 47960950, 24230747)](#magazine-luiza-magalu-log-cnpj-raiz-47960950-24230747)
+  - [XML CT-e Padrão (diversos embarcadores)](#xml-ct-e-padrão-diversos-embarcadores)
+  - [PROCEDA 3.0 A (diversos embarcadores)](#proceda-30-a-diversos-embarcadores)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional — Importação e Geração de CTRCs
 > **Páginas de ajuda**: 38 páginas consolidadas

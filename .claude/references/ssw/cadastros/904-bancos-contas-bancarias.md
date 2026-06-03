@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 904 — Parâmetros de Banco
+
+> **Papel:** Opção 904 — Parâmetros de Banco.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+  - [Contas a Pagar](#contas-a-pagar)
+  - [Chave PIX](#chave-pix)
+  - [Credenciais PIX e API de Cobrança](#credenciais-pix-e-api-de-cobrança)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastramento de Nova Conta Bancária](#cadastramento-de-nova-conta-bancária)
+  - [Homologação da Cobrança Bancária](#homologação-da-cobrança-bancária)
+  - [Habilitação do PIX](#habilitação-do-pix)
+  - [Configurando o CAIXA INTERNO (banco 999)](#configurando-o-caixa-interno-banco-999)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Geral](#geral)
+  - [PIX](#pix)
+  - [API de Cobrança](#api-de-cobrança)
+  - [Remessa do Sicredi](#remessa-do-sicredi)
+  - [Avisos por E-mail](#avisos-por-e-mail)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Cadastros
 > **Páginas de ajuda**: 4 páginas consolidadas

@@ -1,4 +1,50 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 903 — Parâmetros Gerais do SSW
+
+> **Papel:** Opção 903 — Parâmetros Gerais do SSW.
+
+## Indice
+
+- [Função](#função)
+- [Estrutura de Sub-módulos](#estrutura-de-sub-módulos)
+  - [1. Frete](#1-frete)
+  - [2. Prazos](#2-prazos)
+  - [3. Crédito](#3-crédito)
+  - [4. Operação](#4-operação)
+  - [5. Outros](#5-outros)
+  - [6. PEF/CIOT](#6-pefciot)
+  - [7. Gerenciamento de Risco](#7-gerenciamento-de-risco)
+  - [8. SMS](#8-sms)
+  - [9. Site, e-mails e telefone](#9-site-e-mails-e-telefone)
+  - [10. Envio de pré-CTRCs ao SEFAZ](#10-envio-de-pré-ctrcs-ao-sefaz)
+  - [11. Autorização e operação com pré-CTRCs](#11-autorização-e-operação-com-pré-ctrcs)
+  - [12. Certificados Digitais](#12-certificados-digitais)
+  - [13. Emissão de CTRCs](#13-emissão-de-ctrcs)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Hierarquias de Configuração](#hierarquias-de-configuração)
+  - [Bloqueios Automáticos](#bloqueios-automáticos)
+  - [Previsão de Entrega](#previsão-de-entrega)
+  - [Produtos Perigosos](#produtos-perigosos)
+  - [CTRCs Complementares](#ctrcs-complementares)
+  - [Retenções CTRB/RPA](#retenções-ctrbrpa)
+  - [Taxas Adicionais](#taxas-adicionais)
+  - [Estou Chegando — Detalhes Técnicos](#estou-chegando-detalhes-técnicos)
+  - [Controle de Estoque (Pallets/Gaiolas/Chapas)](#controle-de-estoque-palletsgaiolaschapas)
+  - [Busca de XMLs — Detalhes de Guarda](#busca-de-xmls-detalhes-de-guarda)
+  - [Certificado Digital — Avisos Importantes](#certificado-digital-avisos-importantes)
+  - [LGPD — Portal](#lgpd-portal)
+- [Acesso e Permissões](#acesso-e-permissões)
+- [Versões e Atualizações](#versões-e-atualizações)
+- [Dicas de Uso](#dicas-de-uso)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Cadastros / Sistema
 > **Páginas de ajuda**: 31 páginas consolidadas

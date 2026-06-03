@@ -1,4 +1,50 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 056 — Informações Gerenciais (Relatórios Diários)
+
+> **Papel:** Opção 056 — Informações Gerenciais (Relatórios Diários).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Conceitos Fundamentais](#conceitos-fundamentais)
+  - [6 Objetivos (TED - Direção)](#6-objetivos-ted---direção)
+  - [Resultados-chave (Velocidade)](#resultados-chave-velocidade)
+- [Interface](#interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Recursos nos Relatórios](#recursos-nos-relatórios)
+- [Relatórios Disponíveis](#relatórios-disponíveis)
+  - [OBJETIVO 1 — Transportadora tem que dar LUCRO](#objetivo-1-transportadora-tem-que-dar-lucro)
+  - [OBJETIVO 2 — Entregas no prazo (Cliente satisfeito dá lucro)](#objetivo-2-entregas-no-prazo-cliente-satisfeito-dá-lucro)
+  - [OBJETIVO 4 — CTRC e o cliente têm que dar LUCRO](#objetivo-4-ctrc-e-o-cliente-têm-que-dar-lucro)
+  - [OBJETIVO 3 — Caminhão tem que dar LUCRO](#objetivo-3-caminhão-tem-que-dar-lucro)
+  - [OBJETIVO 5 — Unidade dando LUCRO](#objetivo-5-unidade-dando-lucro)
+  - [OBJETIVO 6 — Inadimplência](#objetivo-6-inadimplência)
+- [Relatórios Comerciais](#relatórios-comerciais)
+  - [Monitoração de Clientes](#monitoração-de-clientes)
+  - [Produção de Vendedores](#produção-de-vendedores)
+  - [Comissionamento de Vendedores](#comissionamento-de-vendedores)
+  - [Comissionamento de Cotação](#comissionamento-de-cotação)
+- [Outros Relatórios](#outros-relatórios)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Processamento](#processamento)
+  - [Permissões](#permissões)
+  - [Ajuda Contextual](#ajuda-contextual)
+  - [Big Brother SSW](#big-brother-ssw)
+  - [CTRCs Excluídos](#ctrcs-excluídos)
+  - [Diferença de Valores](#diferença-de-valores)
+  - [Disponibilização](#disponibilização)
+  - [Modelo de Resultados](#modelo-de-resultados)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Info Gerenciais
 > **Páginas de ajuda**: 15 páginas consolidadas
@@ -52,37 +98,37 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 
 #### 001 - SITUAÇÃO GERAL
 - Mostra ENTRADAS e SAÍDAS para viabilidade do negócio
-- [Mais detalhes](ssw0344.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0344.htm)
 
 #### 075 - MONITORAÇÃO DE CLIENTES - POR UNIDADE
 - Volume acumulado do mês por cliente da unidade vs mês anterior
 - Acompanhamento por vendedor da unidade
 - Disponível nas unidades
-- [Mais detalhes](ssw0663.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0663.htm)
 
 #### 050 e 052 - VOLUMES EXPEDIDOS
 - 050: Volume diário (dia anterior)
 - 052: Volume acumulado no mês
 - Analítico por cliente, RESUMO por unidade (MTZ)
 - Não considera: cancelados, anulados, de anulação (opção 520), unificadores (opção 172)
-- [Mais detalhes](ssw1296.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw1296.htm)
 
 #### 054 e 056 - VOLUMES RECEBIDOS
 - 054: Volume diário
 - 056: Volume acumulado no mês
 - Analítico por cliente, RESUMO por unidade (MTZ)
-- [Mais detalhes](ssw1297.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw1297.htm)
 
 #### 058 e 059 - VOLUMES EXPEDIDOS E RECEBIDOS - POR CIDADE
 - Por unidade e cidade
 - Cidades com setores de coleta/entrega (opção 404) mostram totais por setor
-- [Mais detalhes](ssw0529.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0529.htm)
 
 #### 060 e 061 - VOLUMES DE CARGAS TRANSBORDADAS
 - 060: Volume diário
 - 061: Volume acumulado no mês
 - RESUMO por unidade (MTZ)
-- [Mais detalhes](ssw1298.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw1298.htm)
 
 #### 069 - MAIORES CLIENTES - DA TRANSPORTADORA EXCEL
 - Mesmo relatório 070, em Excel
@@ -93,24 +139,24 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - Classificação ABC e indicadores
 - Filiais veem seus clientes, MTZ vê todas
 - Coluna REAJNE: % reajuste necessário para atingir resultado (opção 469)
-- [Mais detalhes](ssw0664.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0664.htm)
 
 #### 100 - SITUAÇÃO DO CAIXA
 - Fluxo financeiro de 15 dias futuros
 - Entradas por conta bancária, saídas por eventos
-- [Mais detalhes](ssw0365.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0365.htm)
 
 #### 150 e 152 - VOLUMES DOS PAGADORES/NÃO PAGADORES
 - 150: Volume diário
 - 152: Volume acumulado do mês
 - Separado por pagadores e não pagadores
-- [Mais detalhes](ssw1085.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw1085.htm)
 
 #### 151 e 153 - VOLUMES DOS PAGADORES
 - 151: Volume diário
 - 153: Volume acumulado do mês
 - Analítico por clientes pagadores, RESUMO por unidade (MTZ)
-- [Mais detalhes](ssw1298.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw1298.htm)
 
 ---
 
@@ -120,50 +166,50 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - CTRCs com entrega vencida e não baixados
 - 013: Mesmo que 011, em Excel
 - Mais importante sob perspectiva do cliente
-- [Mais detalhes](ssw0133.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0133.htm)
 
 #### 088 - PERFORMANCE DE COLETAS E ENTREGAS
 - Situação atual: não coletados e não entregues
 - Últimos 7 dias e 30 dias
 - Relatório diário
-- [Mais detalhes](ssw0722.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0722.htm)
 
 #### 080 - SITUAÇÃO DE SAÍDAS E CHEGADAS DE VEÍCULOS
 - Veículos (Manifestos) que saíram/chegaram nas últimas 24h
 - Comparação com horários limites (opção 403)
-- [Mais detalhes](ssw0355.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0355.htm)
 
 #### 164 - TEMPO DE TRANSBORDO POR UNIDADE
 - Tempo de permanência de CTRCs por unidade
 - Separado: saídos ontem vs ainda na unidade
 - Relatório diário
-- [Mais detalhes](ssw0858.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0858.htm)
 
 #### 012 - PERFORMANCE DOS CTRCS ENTREGUES
 - CTRCs entregues ontem
 - Gráfico: quantos dias úteis antes/depois da previsão
 - Relatório diário
-- [Mais detalhes](ssw0878.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0878.htm)
 
 #### 087 - OCORRÊNCIAS DADAS FORA DO CLIENTE
 - Veículos e CTRCs entregues
 - Indica se ocorrência foi via SSWMobile no local de entrega ou não
-- [Mais detalhes](ssw3201.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw3201.htm)
 
 #### 084 - PERFORMANCE DE ENTREGAS POR CIDADE DESTINO
 - Performance para todas as cidades atendidas
 - Relatório mensal (dias 01 e 10)
-- [Mais detalhes](ssw0088.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0088.htm)
 
 #### 083 - PERFORMANCE DE ENTREGAS POR CLIENTE EMITENTE
 - Performance para todos clientes emitentes
 - Relatório mensal (dias 01 e 10)
-- [Mais detalhes](ssw0088.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0088.htm)
 
 #### 081 - PERFORMANCE ENTREGA UNID DESTINATÁRIA (SEM TRANSFERÊNCIA)
 - Avalia parceiro entregador
 - Considera só prazo de entrega, sem transferência
-- [Mais detalhes](ssw0088.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0088.htm)
 
 ---
 
@@ -173,7 +219,7 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - CTRCs emitidos no dia anterior com resultado abaixo do estabelecido (opção 469)
 - Duas avaliações: Resultado Comercial Mínimo e Desconto Máximo sobre NTC
 - "Nenhuma transportadora quebrou com armazém vazio, e sim com armazém cheio de CTRCs com frete ruim"
-- [Mais detalhes](ssw0190.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0190.htm)
 
 #### SITUAÇÃO DO CLIENTE (opção 102)
 - Item GERAL e link PRODUÇÃO MENSAL
@@ -187,12 +233,12 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - Clientes que enviam valor do frete no EDI
 - Compara frete do EDI com calculado pelas tabelas
 - Mostra diferença
-- [Mais detalhes](ssw0190.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0190.htm)
 
 #### 130 - TAXAS ADICIONAIS NÃO COBRADAS
 - CTRCs com serviços adicionais prestados mas não cobrados
 - Geralmente por falta de tabelas ou não emissão de CTRC Complementar
-- [Mais detalhes](ssw0476.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0476.htm)
 
 ---
 
@@ -203,24 +249,24 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - Compara frete recebido (manifestos) com custo CTRB
 - Custo não pode ultrapassar % estabelecido em modelo de resultados
 - Mesmo raciocínio para coletas/entregas (Romaneio vs Remuneração)
-- [Mais detalhes](ssw0136.htm, ssw0702.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0136.htm), [complemento](https://sistema.ssw.inf.br/ajuda/ssw0702.htm)
 
 #### 021 - RESULTADO DE TRANSFERÊNCIAS REALIZADAS (MENSAL)
 - Disponível todo dia 01
 - Por veículo, motorista e rota
 - Quanto veículo de transferência comprometeu do frete no mês
-- [Mais detalhes](ssw0511.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0511.htm)
 
 #### 023 - RESULTADO DAS COLETAS/ENTREGAS
 - Diário, por unidade
 - Quanto veículos de coletas/entregas comprometeram dos fretes
-- [Mais detalhes](ssw0702.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0702.htm)
 
 #### 022 - RESULTADO DE COLETAS/ENTREGAS REALIZADAS (MENSAL)
 - Disponível dia 01 do mês seguinte
 - Todos CTRBs Coleta/Entrega emitidos
 - Respectivos fretes e índice de comprometimento
-- [Mais detalhes](ssw0514.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0514.htm)
 
 ---
 
@@ -233,7 +279,7 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - Alternativa: soma dos resultados individuais de todos CTRCs emitidos (opção 101) no dia
 - Receita: fretes dos CTRCs
 - Despesas: pagamentos às unidades (expedição, recepção, etc) + transferência (opção 403)
-- [Mais detalhes](ssw1068.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw1068.htm)
 
 ---
 
@@ -243,19 +289,19 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - Por cliente, todas faturas atrasadas de liquidação
 - Processado às 09:30h (após recepção de retornos bancários)
 - Para cobrança por vendedores, gerentes e outros (usar opção 480 para registrar esforço)
-- [Mais detalhes](ssw0087.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0087.htm)
 
 #### 157 - E-MAILS ENVIADOS - ENVIO DE FATURAS
 - Faturas enviadas via e-mail conforme cadastro cliente (opção 384/Envia fatura bloqueto)
-- [Mais detalhes](ssw0506.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0506.htm)
 
 #### 154 - FATURA POR EMAIL NÃO IMPRESSA
 - Faturas por e-mail não impressas a 4 dias ou menos antes do vencimento
-- [Mais detalhes](ssw0506.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0506.htm)
 
 #### 156 - E-MAILS ENVIADOS - ATRASO DE LIQUIDAÇÃO
 - E-mails disparados por atraso conforme cadastro cliente (opção 384/Envia aviso atraso) e opção 903/Prazos
-- [Mais detalhes](ssw0087.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0087.htm)
 
 #### 041 - FRETE A VISTA NÃO LIQUIDADO
 - CTRCs A VISTA não liquidados (CIF ou FOB)
@@ -263,11 +309,11 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - CIF relacionado na origem, FOB no destino
 - Excel disponível também no relatório 44
 - Colunas: TIPO, ROMANEIO, PLACA, VENCIMEN, ATRASO, M (arquivo morto), PIX (QR Code ativo)
-- [Mais detalhes](ssw0085.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0085.htm)
 
 #### 155 - E-MAILS ENVIADOS AUTOMATICAMENTE
 - E-mails disparados pela opção 100: faturas não liquidadas mensal, aniversário, mensagens diversas
-- [Mais detalhes](ssw0597.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0597.htm)
 
 ---
 
@@ -279,13 +325,13 @@ Dezenas de relatórios diários agrupados em torno de 6 objetivos vitais para di
 - Volume acumulado do mês dos clientes da unidade vs mês anterior
 - Por vendedor da unidade
 - Disponível nas unidades
-- [Mais detalhes](ssw0663.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0663.htm)
 
 #### 073 - MONITORAÇÃO DE CLIENTES - REF MÊS ANTERIOR
 - Volume acumulado do mês dos clientes da transportadora vs mês anterior
 - Por vendedor de toda transportadora
 - Disponível na matriz
-- [Mais detalhes](ssw0663.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0663.htm)
 
 ### Produção de Vendedores
 
@@ -296,12 +342,12 @@ Não considera: cancelados, de anulação (opção 520), unificadores (opção 1
 - Totalizado por cliente
 - Cliente pode ser ALVO, com METAS por cliente e vendedor
 - Disponível nas unidades
-- [Mais detalhes](ssw0356.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0356.htm)
 
 #### 126 - PRODUÇÃO DE VENDEDOR - RESUMO
 - Relatório 125 mostrando apenas totais por vendedor de todas unidades
 - Disponível apenas para matriz
-- [Mais detalhes](ssw0356.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0356.htm)
 
 ### Comissionamento de Vendedores
 
@@ -310,17 +356,17 @@ Não considera: cancelados, de anulação (opção 520), unificadores (opção 1
 **120 - COMISSÃO DE VENDEDOR**
 - Mapa analítico (por CTRC)
 - Vendedores da unidade
-- [Mais detalhes](ssw0342.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0342.htm)
 
 **121 - COMISSÃO DE VENDEDOR - EXCEL**
 - Mapa em Excel dos vendedores da unidade
-- [Mais detalhes](ssw0342.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0342.htm)
 
 **127 - COMISSÃO DE VENDEDOR - PREVISÃO**
 - Por vendedor, comissões (CTRCs) previstas para pagamento
 - PROX COM (já garantidas), PREV COM (dependentes de condição, ex: liquidação)
 - Útil para identificar comissões não pagas mas incluídas na previsão
-- [Mais detalhes](ssw0361.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0361.htm)
 
 **123 - CLIENTES SEM MOVIMENTAÇÃO - POR VENDEDOR**
 - Clientes vinculados ao vendedor sem movimentação no período de comissionamento
@@ -331,25 +377,25 @@ Não considera: cancelados, de anulação (opção 520), unificadores (opção 1
 - Mapa (120) totalizado por cliente
 - Para pagamento das comissões
 - Por unidades, todos vendedores
-- [Mais detalhes](ssw0343.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0343.htm)
 
 **128 - COMISSÃO DE VENDEDOR - PREVISÃO SINTÉTICO**
 - Relatório 127 das unidades, apenas para Matriz
 - Apenas por vendedor
 - Comissões futuras a serem pagas
-- [Mais detalhes](ssw0361.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0361.htm)
 
 ### Comissionamento de Cotação
 
 #### 131 - COMISSÃO DE COTAÇÃO
 - Mapa analítico (por CTRC) dos cotadores da unidade
 - Processado junto com comissão de vendedores (relatório 120)
-- [Mais detalhes](ssw0577.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0577.htm)
 
 #### 132 - COMISSÃO DE COTAÇÃO - RESUMO
 - Valores dos cotadores de todas unidades
 - Resumo do 131, para matriz
-- [Mais detalhes](ssw0577.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0577.htm)
 
 ---
 
@@ -359,31 +405,31 @@ Não considera: cancelados, de anulação (opção 520), unificadores (opção 1
 - Comissão de agências e parceiros conforme opção 408
 - Agendado pela opção 903/Processamento batch
 - Uso das unidades
-- [Mais detalhes](ssw0342.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0342.htm)
 
 #### 111 - COMISSÃO DE AGENCIAMENTO - PREVISÃO
 - Comissões devidas mas não pagas (condição não atendida)
-- [Mais detalhes](ssw0342.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0342.htm)
 
 #### 112 - COMISSÃO DE AGENCIAMENTO - RESUMO
 - Resumido por unidade, de todas unidades
-- [Mais detalhes](ssw0342.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0342.htm)
 
 #### 165 - RELATÓRIO PARA CONFERÊNCIA DE AVERBAÇÃO
 - Dados do arquivo de averbação (opção 600)
 - Valores de mercadorias para avaliar correção
 - Gerado junto com arquivo de averbação
-- [Mais detalhes](ssw0304.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0304.htm)
 
 #### 090 - DIVERGÊNCIAS DE UNIDADES DO CADASTRO DE CLIENTES
 - Alterações frequentes em cadastros (opção 483 e 402) desorganizam unidades
 - Alerta diferenças entre Unidade Responsável, Cobrança e Operacional (opção 402)
-- [Mais detalhes](ssw0249.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0249.htm)
 
 #### 074 - CLIENTES PESSOA JURÍDICA NÃO CONTRIBUINTE
 - Pessoas jurídicas cadastradas ontem com IE ISENTO
 - Alerta: IE Isento gera frete com alíquota interna
-- [Mais detalhes](ssw0758.htm)
+- [Mais detalhes](https://sistema.ssw.inf.br/ajuda/ssw0758.htm)
 
 ---
 

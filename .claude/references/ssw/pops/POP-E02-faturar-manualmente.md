@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-E02 — Faturar Manualmente
+
+> **Papel:** POP-E02 — Faturar Manualmente.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Trocar para Unidade MTZ](#etapa-1-trocar-para-unidade-mtz)
+  - [ETAPA 2 — Verificar CTRCs Disponiveis (Recomendado)](#etapa-2-verificar-ctrcs-disponiveis-recomendado)
+  - [ETAPA 3 — Acessar Opcao 437](#etapa-3-acessar-opcao-437)
+  - [ETAPA 4 — Selecionar CTRCs](#etapa-4-selecionar-ctrcs)
+  - [ETAPA 5 — Definir Dados da Fatura](#etapa-5-definir-dados-da-fatura)
+  - [ETAPA 6 — Gerar e Confirmar Fatura](#etapa-6-gerar-e-confirmar-fatura)
+  - [ETAPA 7 — Enviar ao Cliente](#etapa-7-enviar-ao-cliente)
+- [Fluxo Atual vs Futuro](#fluxo-atual-vs-futuro)
+- [Separacao de Faturas](#separacao-de-faturas)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: E — Financeiro: Recebiveis
 > **Prioridade**: P1 (Alta — processo ja existente, precisa padronizar)

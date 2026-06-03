@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 124 — Entrada no Almoxarifado
+
+> **Papel:** Opção 124 — Entrada no Almoxarifado.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela de Entrada (Opção 124)](#tela-de-entrada-opção-124)
+  - [Tela de Saída (Opção 126)](#tela-de-saída-opção-126)
+  - [Tela de Ajuste (Opção 127)](#tela-de-ajuste-opção-127)
+  - [Tela de Consulta (Opção 128)](#tela-de-consulta-opção-128)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Entrada de Produtos](#entrada-de-produtos)
+  - [Saída de Produtos](#saída-de-produtos)
+  - [Ajuste de Saldo (MTZ apenas)](#ajuste-de-saldo-mtz-apenas)
+  - [Consulta de Estoque](#consulta-de-estoque)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 4 páginas consolidadas

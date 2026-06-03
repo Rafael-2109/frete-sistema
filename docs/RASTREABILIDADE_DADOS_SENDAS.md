@@ -1,4 +1,58 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 📊 DOCUMENTO TÉCNICO - RASTREABILIDADE COMPLETA DOS DADOS
+
+> **Papel:** 📊 DOCUMENTO TÉCNICO - RASTREABILIDADE COMPLETA DOS DADOS.
+
+## Indice
+
+- [Sistema de Agendamento Portal Sendas - 3 Fluxos](#sistema-de-agendamento-portal-sendas---3-fluxos)
+- [🎯 OBJETIVO](#objetivo)
+- [📍 ETAPA 1: ORIGEM DOS DADOS](#etapa-1-origem-dos-dados)
+  - [DADOS ENVIADOS:](#dados-enviados)
+  - [ESTRUTURA COMPLETA GERADA:](#estrutura-completa-gerada)
+- [📍 ETAPA 2: ENFILEIRAMENTO](#etapa-2-enfileiramento)
+- [📍 ETAPA 3: RECEPÇÃO NO WORKER](#etapa-3-recepção-no-worker)
+  - [PRESERVAÇÃO DOS DADOS:](#preservação-dos-dados)
+  - [LOG DE VERIFICAÇÃO:](#log-de-verificação)
+- [📍 ETAPA 4: CALLBACK PARA PLANILHA](#etapa-4-callback-para-planilha)
+- [📍 ETAPA 5: PREENCHIMENTO DA PLANILHA](#etapa-5-preenchimento-da-planilha)
+  - [RECEPÇÃO E USO DOS DADOS:](#recepção-e-uso-dos-dados)
+  - [ESCRITA NA PLANILHA:](#escrita-na-planilha)
+- [📍 ETAPA 6: UPLOAD E RETORNO](#etapa-6-upload-e-retorno)
+- [📍 ETAPA 7: PROCESSAMENTO DO RETORNO](#etapa-7-processamento-do-retorno)
+  - [EXTRAÇÃO CORRETA DO PROTOCOLO:](#extração-correta-do-protocolo)
+- [📍 ETAPA 8: SALVAMENTO NO BANCO](#etapa-8-salvamento-no-banco)
+  - [ATUALIZAÇÃO DAS SEPARAÇÕES:](#atualização-das-separações)
+- [📍 ETAPA 1: ORIGEM DOS DADOS](#etapa-1-origem-dos-dados)
+  - [DADOS ENVIADOS DO FRONTEND:](#dados-enviados-do-frontend)
+- [📍 ETAPA 2: ADIÇÃO NA FILA E GERAÇÃO DO PROTOCOLO](#etapa-2-adição-na-fila-e-geração-do-protocolo)
+  - [PROCESSAMENTO E ENRIQUECIMENTO:](#processamento-e-enriquecimento)
+- [📍 ETAPA 3: PROCESSAMENTO DA FILA](#etapa-3-processamento-da-fila)
+  - [AGRUPAMENTO E GERAÇÃO DE PROTOCOLO:](#agrupamento-e-geração-de-protocolo)
+- [📍 ETAPA 4: ENFILEIRAMENTO](#etapa-4-enfileiramento)
+- [📍 ETAPAS 5-8: PROCESSAMENTO E RETORNO](#etapas-5-8-processamento-e-retorno)
+  - [RETORNO DO FLUXO 2:](#retorno-do-fluxo-2)
+- [📍 ETAPA 1: ORIGEM DOS DADOS](#etapa-1-origem-dos-dados)
+  - [DADOS ENVIADOS DO FRONTEND:](#dados-enviados-do-frontend)
+- [📍 ETAPA 2: ADIÇÃO NA FILA](#etapa-2-adição-na-fila)
+  - [BUSCA E ENRIQUECIMENTO DOS DADOS:](#busca-e-enriquecimento-dos-dados)
+- [📍 ETAPA 3: PROCESSAMENTO E RETORNO](#etapa-3-processamento-e-retorno)
+  - [CRIAÇÃO DE REGISTRO DE AGENDAMENTO:](#criação-de-registro-de-agendamento)
+  - [FALLBACK PARA SEPARAÇÃO:](#fallback-para-separação)
+- [1. PROTOCOLO SEMPRE PRESENTE E ÚNICO](#1-protocolo-sempre-presente-e-único)
+- [2. DADOS COMPLETOS PRESERVADOS](#2-dados-completos-preservados)
+- [3. PROTOCOLO ÚNICO POR ENTIDADE](#3-protocolo-único-por-entidade)
+- [4. IDENTIFICAÇÃO CORRETA DO TIPO DE FLUXO](#4-identificação-correta-do-tipo-de-fluxo)
+- [5. DOCUMENTO_ORIGEM PRESERVADO](#5-documento_origem-preservado)
+- [SISTEMA FUNCIONANDO CORRETAMENTE:](#sistema-funcionando-corretamente)
+- [Contexto](#contexto)
 ## Sistema de Agendamento Portal Sendas - 3 Fluxos
 
 **Versão:** 1.0
@@ -573,3 +627,7 @@ FLUXO 3: [Frontend] → [Fila:193-253] → [Processar:387-447] → [Worker:12-77
 5. **FALLBACKS:** Implementados para casos especiais (NF, pedido_cliente)
 
 **GARANTIA:** Sistema mantém consistência total de protocolos e não perde dados em nenhuma etapa do processo.
+
+## Contexto
+
+Descreve a rastreabilidade de protocolo e dados no fluxo de agendamento Sendas (`app/portal/sendas/`; funcoes `gerar_protocolo_sendas` e `buscar_dados_completos_cnpj`). Doc de 2025-09 — o worker `sendas_jobs.py` citado foi substituido por processamento inline na rota (`routes_fila.py`); o modelo de rastreabilidade segue vigente.

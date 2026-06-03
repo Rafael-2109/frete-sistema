@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 580 — Pagamento da Folha de Pessoal
+
+> **Papel:** Opção 580 — Pagamento da Folha de Pessoal.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial — Menu de Funções](#tela-inicial-menu-de-funções)
+  - [Tela — Importação da Folha de Pessoal](#tela-importação-da-folha-de-pessoal)
+  - [Tela — Liberação para Contas a Pagar](#tela-liberação-para-contas-a-pagar)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Preparação (executar uma vez)](#preparação-executar-uma-vez)
+  - [Processamento mensal](#processamento-mensal)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Financeiro/Contas a Pagar
 > **Páginas de ajuda**: 2 páginas consolidadas

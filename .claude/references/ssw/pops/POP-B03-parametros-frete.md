@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-B03 — Configurar Parametros de Frete
+
+> **Papel:** POP-B03 — Configurar Parametros de Frete.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar Parametros Gerais (Opcao 903/Frete)](#etapa-1-verificar-parametros-gerais-opcao-903frete)
+  - [ETAPA 2 — Configurar Limites de Cotacao (Opcao 469)](#etapa-2-configurar-limites-de-cotacao-opcao-469)
+  - [ETAPA 3 — Configurar Parametros por Cliente (Opcao 423)](#etapa-3-configurar-parametros-por-cliente-opcao-423)
+  - [ETAPA 4 — Investigar Opcao 062 [CONFIRMAR]](#etapa-4-investigar-opcao-062-confirmar)
+  - [ETAPA 5 — Testar Configuracoes](#etapa-5-testar-configuracoes)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: B — Comercial e Precificacao
 > **Prioridade**: P1 (Alta — pode ser causa da simulacao incorreta)

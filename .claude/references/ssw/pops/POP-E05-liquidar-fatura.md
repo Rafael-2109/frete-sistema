@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-E05 — Liquidar/Baixar Fatura Recebida
+
+> **Papel:** POP-E05 — Liquidar/Baixar Fatura Recebida.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [CENARIO A — Liquidacao de Frete FOB a Vista (Opcao 048)](#cenario-a-liquidacao-de-frete-fob-a-vista-opcao-048)
+  - [CENARIO B — Liquidacao via Caixa Online (Opcao 458)](#cenario-b-liquidacao-via-caixa-online-opcao-458)
+  - [CENARIO C — Liquidacao de Faturas (Opcao 457)](#cenario-c-liquidacao-de-faturas-opcao-457)
+- [Fluxo Atual vs Futuro](#fluxo-atual-vs-futuro)
+- [Impacto da NAO Liquidacao](#impacto-da-nao-liquidacao)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: E — Financeiro: Recebiveis
 > **Prioridade**: P1 (Alta — fechar ciclo financeiro)

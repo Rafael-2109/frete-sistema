@@ -1,4 +1,36 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-C07 — Carta de Correcao CT-e
+
+> **Papel:** POP-C07 — Carta de Correcao CT-e.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar se Erro Pode Ser Corrigido por CC-e](#etapa-1-verificar-se-erro-pode-ser-corrigido-por-cc-e)
+  - [ETAPA 2 — Emitir Carta de Correcao (Opcao 007)](#etapa-2-emitir-carta-de-correcao-opcao-007)
+  - [ETAPA 3 — Enviar CC-e ao SEFAZ](#etapa-3-enviar-cc-e-ao-sefaz)
+  - [ETAPA 4 — Verificar CC-e Autorizada](#etapa-4-verificar-cc-e-autorizada)
+  - [ETAPA 5 — Comunicar Cliente e Transportadora](#etapa-5-comunicar-cliente-e-transportadora)
+- [Multiplas Cartas de Correcao](#multiplas-cartas-de-correcao)
+- [Alternativas a Carta de Correcao](#alternativas-a-carta-de-correcao)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

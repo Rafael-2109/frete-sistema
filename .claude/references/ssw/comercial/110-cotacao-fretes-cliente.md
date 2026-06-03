@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 110 — Cotação de Fretes pelo Cliente
+
+> **Papel:** Opção 110 — Cotação de Fretes pelo Cliente.
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 1 página consolidada
@@ -71,4 +81,3 @@ Permite que clientes com acesso ao SSW efetuem simulações de cotações de fre
 - **Cubagem via dimensões**: Link disponível para calcular m3 a partir das dimensões dos volumes
 - **Validação de tabelas**: Ferramenta útil para cliente conferir se tabelas cadastradas estão corretas
 - **Quantidade de pares**: Campo opcional, relevante apenas para tabelas específicas que cobram por par de volumes
-

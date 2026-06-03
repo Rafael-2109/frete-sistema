@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 104 — Faturas Repassadas para Agências
+
+> **Papel:** Opção 104 — Faturas Repassadas para Agências.
 
 > **Módulo**: Comercial/Financeiro
 > **Referência interna**: Opção 466

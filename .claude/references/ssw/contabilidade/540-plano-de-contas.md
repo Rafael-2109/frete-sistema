@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/contabilidade/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 540 — Plano de Contas
+
+> **Papel:** Opção 540 — Plano de Contas.
 
 > **Módulo**: Contabilidade
 > **Páginas de ajuda**: 1 página consolidada (nota: arquivo lido era opção 543)

@@ -1,4 +1,63 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 📊 Módulo BI (Business Intelligence) - Documentação
+
+> **Papel:** 📊 Módulo BI (Business Intelligence) - Documentação.
+
+## Indice
+
+- [📋 Visão Geral](#visão-geral)
+- [🎯 Objetivos](#objetivos)
+- [🏗️ Arquitetura](#arquitetura)
+  - [Estrutura de Camadas](#estrutura-de-camadas)
+- [📁 Estrutura de Arquivos](#estrutura-de-arquivos)
+- [🔄 Processo ETL](#processo-etl)
+  - [Execução Manual](#execução-manual)
+  - [Execução via Interface](#execução-via-interface)
+  - [Agendamento Automático (Cron)](#agendamento-automático-cron)
+- [📊 KPIs Principais](#kpis-principais)
+  - [1. Custo por KG](#1-custo-por-kg)
+  - [2. Custo por R$ Faturado](#2-custo-por-r-faturado)
+  - [3. Taxa de Despesas Extras](#3-taxa-de-despesas-extras)
+  - [4. Divergência Cotado vs Pago](#4-divergência-cotado-vs-pago)
+  - [5. Eficiência da Transportadora](#5-eficiência-da-transportadora)
+- [🎨 Dashboards Disponíveis](#dashboards-disponíveis)
+  - [Dashboard Principal (`/bi/dashboard`)](#dashboard-principal-bidashboard)
+  - [Dashboard de Transportadoras (`/bi/transportadoras`)](#dashboard-de-transportadoras-bitransportadoras)
+  - [Dashboard Regional (`/bi/regional`)](#dashboard-regional-biregional)
+  - [Dashboard de Despesas (`/bi/despesas`)](#dashboard-de-despesas-bidespesas)
+- [🔌 APIs Disponíveis](#apis-disponíveis)
+  - [Indicadores Principais](#indicadores-principais)
+  - [Evolução Mensal](#evolução-mensal)
+  - [Ranking Transportadoras](#ranking-transportadoras)
+  - [Análise Regional](#análise-regional)
+  - [Despesas por Tipo](#despesas-por-tipo)
+  - [Executar ETL](#executar-etl)
+- [🗄️ Tabelas do Data Warehouse](#tabelas-do-data-warehouse)
+  - [bi_frete_agregado](#bi_frete_agregado)
+  - [bi_despesa_detalhada](#bi_despesa_detalhada)
+  - [bi_performance_transportadora](#bi_performance_transportadora)
+  - [bi_analise_regional](#bi_analise_regional)
+  - [bi_indicador_mensal](#bi_indicador_mensal)
+- [🔧 Configuração](#configuração)
+  - [Instalação das Tabelas](#instalação-das-tabelas)
+  - [Primeira Carga de Dados](#primeira-carga-de-dados)
+  - [Permissões Necessárias](#permissões-necessárias)
+- [📈 Otimizações Implementadas](#otimizações-implementadas)
+  - [Índices](#índices)
+  - [Performance](#performance)
+  - [Queries Otimizadas](#queries-otimizadas)
+- [🚀 Melhorias Futuras](#melhorias-futuras)
+  - [Fase 2](#fase-2)
+  - [Fase 3](#fase-3)
+- [📝 Notas Importantes](#notas-importantes)
+- [🆘 Suporte](#suporte)
 
 ## 📋 Visão Geral
 

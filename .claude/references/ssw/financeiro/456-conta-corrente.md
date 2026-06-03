@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 456 — Conta Corrente
+
+> **Papel:** Opcao 456 — Conta Corrente.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Consulta de Conta Corrente](#consulta-de-conta-corrente)
+  - [Lancamentos](#lancamentos)
+  - [Lancamento Manual (Link: Lancar e conciliar despesas)](#lancamento-manual-link-lancar-e-conciliar-despesas)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Consultar Saldo e Lancamentos](#consultar-saldo-e-lancamentos)
+  - [Lancar Despesa Diretamente na Conta](#lancar-despesa-diretamente-na-conta)
+  - [Conciliar Conta Corrente (Versao Antiga - Opcao 569)](#conciliar-conta-corrente-versao-antiga---opcao-569)
+  - [Conciliar Conta Corrente (Versao Nova - Opcao 669)](#conciliar-conta-corrente-versao-nova---opcao-669)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Origem dos Lancamentos](#origem-dos-lancamentos)
+  - [Conciliacao Bancaria](#conciliacao-bancaria)
+  - [Duas Versoes de Conciliacao](#duas-versoes-de-conciliacao)
+  - [Filtros de Texto (Opcao 669)](#filtros-de-texto-opcao-669)
+  - [seq_extr](#seq_extr)
+  - [ACNI - Adiantamentos e Creditos Nao Identificados](#acni---adiantamentos-e-creditos-nao-identificados)
+  - [Lancamentos que Entram Automaticamente Conciliados](#lancamentos-que-entram-automaticamente-conciliados)
+  - [Busca de Lancamentos (Opcao 669)](#busca-de-lancamentos-opcao-669)
+  - [Multi-empresa](#multi-empresa)
+  - [Layout CSV (Opcao 669)](#layout-csv-opcao-669)
+  - [Limitacoes](#limitacoes)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 2 paginas consolidadas

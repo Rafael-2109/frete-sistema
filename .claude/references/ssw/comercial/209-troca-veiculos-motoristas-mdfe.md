@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 209 — Troca Veículos e/ou Motoristas de MDF-e
+
+> **Papel:** Opção 209 — Troca Veículos e/ou Motoristas de MDF-e.
 
 > **Módulo**: Comercial / Operacional
 > **Páginas de ajuda**: 1 página consolidada

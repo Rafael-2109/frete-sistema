@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/logistica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 733 — Emissão de RPSs
+
+> **Papel:** Opção 733 — Emissão de RPSs.
 
 > **Módulo**: Logística
 > **Páginas de ajuda**: 2 páginas consolidadas

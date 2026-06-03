@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 163 — Cadastro de Ajudantes
+
+> **Papel:** Opcao 163 — Cadastro de Ajudantes.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Cadastro (Opcao 163)](#cadastro-opcao-163)
+  - [Relatorio (Opcao 164)](#relatorio-opcao-164)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Novo Ajudante](#cadastrar-novo-ajudante)
+  - [Bloquear Ajudante](#bloquear-ajudante)
+  - [Gerar Relatorio de Ajudantes](#gerar-relatorio-de-ajudantes)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada (referencia na opcao 164)

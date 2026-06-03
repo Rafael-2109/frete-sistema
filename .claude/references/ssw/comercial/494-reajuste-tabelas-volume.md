@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 494 — Reajuste de Tabelas por Volumes
+
+> **Papel:** Opção 494 — Reajuste de Tabelas por Volumes.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Primeira Tela — Critérios de Seleção](#primeira-tela-critérios-de-seleção)
+  - [Segunda Tela — Confirmação e Percentuais](#segunda-tela-confirmação-e-percentuais)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 2 páginas consolidadas

@@ -1,4 +1,27 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 503 — Manutencao de Eventos
+
+> **Papel:** Opcao 503 — Manutencao de Eventos.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela 2 (Complementar)](#tela-2-complementar)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 2 paginas consolidadas

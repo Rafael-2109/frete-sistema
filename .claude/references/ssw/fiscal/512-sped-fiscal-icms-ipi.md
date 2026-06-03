@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 512 — SPED Fiscal ICMS/IPI
+
+> **Papel:** Opção 512 — SPED Fiscal ICMS/IPI.
 
 > **Módulo**: Fiscal
 > **Páginas de ajuda**: 1 página consolidada

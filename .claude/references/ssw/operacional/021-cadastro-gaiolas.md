@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 021 — Cadastro de Gaiolas e Estoque de Pallets e Chapas
+
+> **Papel:** Opcao 021 — Cadastro de Gaiolas e Estoque de Pallets e Chapas.
 
 > **Modulo**: Operacional — Expedicao
 > **Paginas de ajuda**: 1 pagina consolidada

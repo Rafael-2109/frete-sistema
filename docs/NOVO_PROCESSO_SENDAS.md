@@ -1,3 +1,17 @@
+<!-- doc:meta
+tipo: explanation
+camada: L3
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
+
+> **Papel:** NOVO_PROCESSO_SENDAS.
+
+## Indice
+
+- [Contexto](#contexto)
 Preciso refatorar o sistema de agendamento do portal do Sendas.
 Atualmente há 3 fluxos, sendo eles:
 Fluxo 1- Agendamento em lote
@@ -211,3 +225,7 @@ logs/sincronizacao_incremental.log | tail -10
 
 grep -E "RETRY|tentativa"
 logs/sincronizacao_incremental.log | tail -5
+
+## Contexto
+
+Documenta o desenho do processo de agendamento Sendas em 4 etapas, implementado em `app/portal/sendas/` (services de comparacao/exportacao/verificacao + modelo `FilaAgendamentoSendas`). Doc de 2025-09: parte da arquitetura original (Redis Queue / `sendas_jobs.py`) foi refatorada para fila em banco, mas o fluxo conceitual descrito permanece valido.

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 305 — Cadastro de Ocorrencias do SSWMobile 4
+
+> **Papel:** Opcao 305 — Cadastro de Ocorrencias do SSWMobile 4.
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 2 paginas consolidadas (opcoes 305 e 890)

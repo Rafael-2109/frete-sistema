@@ -310,7 +310,7 @@ Chama `insights_service.get_rule_adhesion_panel`. Mede o loop corretivo pessoal 
 | `--days` | int | Nao | 30 | Periodo em dias |
 | `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
 
-Chama `insights_service.get_routing_metrics`. Taxa de ambiguidade (AskUserQuestion), sessoes struggling (muitas msgs/poucos tools), distribuicao de skills, instrumentacao. Distribuicao completa via `--json`. READ-only, custo $0.
+Chama `insights_service.get_routing_metrics`. Taxa de ambiguidade (AskUserQuestion), sessoes struggling (volume alto de msgs, poucos tools), distribuicao de skills, instrumentacao. Distribuicao completa via `--json`. READ-only, custo $0.
 
 ### recommendations
 | Argumento | Tipo | Obrigatorio | Default | Descricao |

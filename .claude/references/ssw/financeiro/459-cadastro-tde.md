@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 459 — Relacao de Adicionais (Debitos e Creditos)
+
+> **Papel:** Opcao 459 — Relacao de Adicionais (Debitos e Creditos).
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface — VERIFICADOS](#campos-interface-verificados)
+  - [Secao 1: Consulta de Adicionais](#secao-1-consulta-de-adicionais)
+  - [Secao 2: Exclusao de Adicionais](#secao-2-exclusao-de-adicionais)
+  - [Acoes Disponiveis](#acoes-disponiveis)
+  - [Tipos Comuns de Adicionais (Debitos)](#tipos-comuns-de-adicionais-debitos)
+  - [Tipos Comuns de Adicionais (Creditos)](#tipos-comuns-de-adicionais-creditos)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Adicional](#cadastrar-adicional)
+  - [Verificar Disponibilidade para Faturamento](#verificar-disponibilidade-para-faturamento)
+  - [Faturar com Adicionais](#faturar-com-adicionais)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
+- [Status CarVia](#status-carvia)
 
 > **Modulo**: Contas a Receber / CTRCs disponíveis (menu: Contas a Receber > CTRCs disponíveis > 459)
 > **Status CarVia**: ACESSIVEL — tela de consulta/exclusao de adicionais disponiveis para faturamento

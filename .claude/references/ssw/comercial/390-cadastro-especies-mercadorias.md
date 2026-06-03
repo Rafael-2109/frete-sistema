@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 390 — Cadastro de Espécies de Mercadorias
+
+> **Papel:** Opção 390 — Cadastro de Espécies de Mercadorias.
 
 > **Módulo**: Comercial/Cadastro
 > **Referência interna**: Opção 407

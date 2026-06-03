@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 403 — Cadastro de Rotas
+
+> **Papel:** Opção 403 — Cadastro de Rotas.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Nova Rota](#cadastrar-nova-rota)
+  - [Uso no Cálculo de Previsão de Entrega](#uso-no-cálculo-de-previsão-de-entrega)
+  - [Configurar Comissionamento por Rota](#configurar-comissionamento-por-rota)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Prazo de Transferência](#prazo-de-transferência)
+  - [Hora de Corte](#hora-de-corte)
+  - [Quantidade de Pedágios](#quantidade-de-pedágios)
+  - [Unidades Alternativas](#unidades-alternativas)
+  - [Comissionamento](#comissionamento)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Cadastros
 > **Páginas de ajuda**: 2 páginas consolidadas

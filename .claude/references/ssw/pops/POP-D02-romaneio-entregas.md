@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-D02 — Criar Romaneio de Entregas
+
+> **Papel:** POP-D02 — Criar Romaneio de Entregas.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar Opcao 035](#etapa-1-acessar-opcao-035)
+  - [ETAPA 2 — Informar Veiculo e Motorista](#etapa-2-informar-veiculo-e-motorista)
+  - [ETAPA 3 — Selecionar CTRCs](#etapa-3-selecionar-ctrcs)
+  - [ETAPA 4 — Definir Sequencia de Entregas (Opcional)](#etapa-4-definir-sequencia-de-entregas-opcional)
+  - [ETAPA 5 — Confirmar Emissao](#etapa-5-confirmar-emissao)
+  - [ETAPA 6 — Impressoes (Opcional)](#etapa-6-impressoes-opcional)
+  - [ETAPA 7 — Proximo Passo (Sequencia Legal)](#etapa-7-proximo-passo-sequencia-legal)
+- [Cancelamento de Romaneio](#cancelamento-de-romaneio)
+  - [Pode cancelar quando:](#pode-cancelar-quando)
+  - [NAO pode cancelar quando:](#nao-pode-cancelar-quando)
+  - [O que o cancelamento faz:](#o-que-o-cancelamento-faz)
+- [Romaneio vs Manifesto Operacional](#romaneio-vs-manifesto-operacional)
+- [Baixa Obrigatoria do Dia Anterior](#baixa-obrigatoria-do-dia-anterior)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: D — Operacional: Transporte e Entrega
 > **Prioridade**: P1 (Alta — pre-requisito do MDF-e)

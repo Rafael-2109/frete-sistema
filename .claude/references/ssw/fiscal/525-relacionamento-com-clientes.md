@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 525 — Relacionamento com Clientes
+
+> **Papel:** Opcao 525 — Relacionamento com Clientes.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar CNAE (opcao 525)](#cadastrar-cnae-opcao-525)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Tipos de Informacao](#tipos-de-informacao)
+  - [Filtros Importantes](#filtros-importantes)
+  - [Impressao](#impressao)
+  - [CNAE](#cnae)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 1 pagina consolidada

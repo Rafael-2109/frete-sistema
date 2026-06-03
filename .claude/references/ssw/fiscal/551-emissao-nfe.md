@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 551 — Emissao de NF-e
+
+> **Papel:** Opcao 551 — Emissao de NF-e.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+  - [Entradas](#entradas)
+  - [Saidas](#saidas)
+  - [Cobrar Servicos](#cobrar-servicos)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela 02 (Dados da NF-e)](#tela-02-dados-da-nf-e)
+  - [Dados do Produto](#dados-do-produto)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Emitir NF-e de Entrada](#emitir-nf-e-de-entrada)
+  - [Emitir NF-e de Saida](#emitir-nf-e-de-saida)
+  - [ICMS Monofasico Combustiveis (RS)](#icms-monofasico-combustiveis-rs)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Responsabilidade Fiscal](#responsabilidade-fiscal)
+  - [Cancelamento](#cancelamento)
+  - [Venda Parcelada de Ativos](#venda-parcelada-de-ativos)
+  - [ICMS Monofasico (RS)](#icms-monofasico-rs)
+  - [ICMS Monofasico (SC)](#icms-monofasico-sc)
+  - [IBS/CBS (LC 214/2025)](#ibscbs-lc-2142025)
+  - [Faturamento](#faturamento)
+  - [Importacao CSV](#importacao-csv)
+  - [Cadastro Previo](#cadastro-previo)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 2 paginas consolidadas

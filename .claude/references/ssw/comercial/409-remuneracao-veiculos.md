@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 409 — Remuneração de Veículos
+
+> **Papel:** Opção 409 — Remuneração de Veículos.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Componentes da Tabela de Remuneração](#componentes-da-tabela-de-remuneração)
+  - [Opção 086 — Replicação de Tabelas](#opção-086-replicação-de-tabelas)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Processo Normal (Manual)](#processo-normal-manual)
+  - [Processo Automatizado](#processo-automatizado)
+  - [Opção 093 — Digitação de Odômetro](#opção-093-digitação-de-odômetro)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Opções Relacionadas ao Processo](#opções-relacionadas-ao-processo)
+  - [Opções de Controle Financeiro](#opções-de-controle-financeiro)
+  - [Opções de Análise de Resultado](#opções-de-análise-de-resultado)
+  - [Opções Operacionais](#opções-operacionais)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Período e Cálculos](#período-e-cálculos)
+  - [Base de Cálculo](#base-de-cálculo)
+  - [Veículos da Frota](#veículos-da-frota)
+  - [Impostos e Retenções](#impostos-e-retenções)
+  - [Unidades do Mesmo Armazém](#unidades-do-mesmo-armazém)
+  - [Índices de Resultado](#índices-de-resultado)
+  - [Pontos de Atenção](#pontos-de-atenção)
+  - [Remuneração no Modelo de Resultados](#remuneração-no-modelo-de-resultados)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 7 páginas consolidadas

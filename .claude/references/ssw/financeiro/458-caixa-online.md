@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 458 — Caixa Online
+
+> **Papel:** Opcao 458 — Caixa Online.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Consulta de Caixa](#consulta-de-caixa)
+  - [Lancamentos](#lancamentos)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Consultar Saldo de Caixa](#consultar-saldo-de-caixa)
+  - [Lancar Movimentacao de Caixa](#lancar-movimentacao-de-caixa)
+  - [Conciliar Caixa com Contagem Fisica](#conciliar-caixa-com-contagem-fisica)
+  - [Gerar Relatorio de Situacao do Caixa](#gerar-relatorio-de-situacao-do-caixa)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Diferenca entre Caixa e Conta Corrente](#diferenca-entre-caixa-e-conta-corrente)
+  - [Origem dos Lancamentos](#origem-dos-lancamentos)
+  - [Conciliacao de Caixa](#conciliacao-de-caixa)
+  - [Relatorio 100 - Situacao do Caixa](#relatorio-100---situacao-do-caixa)
+  - [Desconto de Duplicatas](#desconto-de-duplicatas)
+  - [Saldo de Conta Corrente de Fornecedor (CCF)](#saldo-de-conta-corrente-de-fornecedor-ccf)
+  - [Grupos de Eventos](#grupos-de-eventos)
+  - [CTRCs Disponiveis para Faturar](#ctrcs-disponiveis-para-faturar)
+  - [Conciliacao Manual vs Automatica](#conciliacao-manual-vs-automatica)
+  - [Cadastro de Caixas](#cadastro-de-caixas)
+  - [Multiempresa](#multiempresa)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 1 pagina consolidada

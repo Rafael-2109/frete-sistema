@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 408 — Comissao de Unidades
+
+> **Papel:** Opcao 408 — Comissao de Unidades.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Comissao Geral - Como Expedidora](#tela-comissao-geral---como-expedidora)
+  - [Tela Comissao Geral - Como Receptora](#tela-comissao-geral---como-receptora)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Fluxo Basico (Nova Parceria):](#fluxo-basico-nova-parceria)
+  - [Fluxo Calculo:](#fluxo-calculo)
+  - [Fluxo Encerramento de Parceria:](#fluxo-encerramento-de-parceria)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Conceitos Fundamentais](#conceitos-fundamentais)
+  - [Tabelas Especificas (Ordem de Prioridade)](#tabelas-especificas-ordem-de-prioridade)
+  - [Calculo de Comissao](#calculo-de-comissao)
+  - [Formas de Credito CCF](#formas-de-credito-ccf)
+  - [Parcelas e Taxas](#parcelas-e-taxas)
+  - [SSW Basico para Parceiros](#ssw-basico-para-parceiros)
+  - [Unidades Alternativas](#unidades-alternativas)
+  - [Frete Aereo](#frete-aereo)
+  - [Multiempresas - Relatorios](#multiempresas---relatorios)
+  - [Restricoes e Limites](#restricoes-e-limites)
+  - [Aprovacao e Seguranca](#aprovacao-e-seguranca)
+  - [Historico e Relatorios](#historico-e-relatorios)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 10 paginas consolidadas

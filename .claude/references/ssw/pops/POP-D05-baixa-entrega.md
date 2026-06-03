@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-D05 — Registrar Baixa de Entrega
+
+> **Papel:** POP-D05 — Registrar Baixa de Entrega.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Acessar Registro de Baixa](#etapa-1-acessar-registro-de-baixa)
+  - [ETAPA 2: Escolher Forma de Baixa](#etapa-2-escolher-forma-de-baixa)
+  - [ETAPA 3: Preencher Dados da Baixa](#etapa-3-preencher-dados-da-baixa)
+  - [ETAPA 4: Validar e Confirmar](#etapa-4-validar-e-confirmar)
+  - [ETAPA 5: Processar Romaneios Itinerantes (se aplicável)](#etapa-5-processar-romaneios-itinerantes-se-aplicável)
+  - [ETAPA 6: Verificar CTRC de Reentrega Automática (se habilitado)](#etapa-6-verificar-ctrc-de-reentrega-automática-se-habilitado)
+  - [ETAPA 7: Estornar Baixa (se necessário)](#etapa-7-estornar-baixa-se-necessário)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: D — Operacional: Transporte e Entrega
 **Prioridade**: P1 (Alta — fecha ciclo operacional)

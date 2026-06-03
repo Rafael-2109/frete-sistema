@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 506 — Relacao de CTRCs Indenizados
+
+> **Papel:** Opcao 506 — Relacao de CTRCs Indenizados.
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 1 pagina consolidada

@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A08 — Cadastrar Veículo
+
+> **Papel:** POP-A08 — Cadastrar Veículo.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Acessar Cadastro de Veículos](#etapa-1-acessar-cadastro-de-veículos)
+  - [ETAPA 2: Preencher Dados Obrigatórios](#etapa-2-preencher-dados-obrigatórios)
+  - [ETAPA 3: Configurar Odômetro (se aplicável)](#etapa-3-configurar-odômetro-se-aplicável)
+  - [ETAPA 4: Atualização Automática de Odômetro (configurar)](#etapa-4-atualização-automática-de-odômetro-configurar)
+  - [ETAPA 5: Vincular à Unidade](#etapa-5-vincular-à-unidade)
+  - [ETAPA 6: Validar e Salvar](#etapa-6-validar-e-salvar)
+  - [ETAPA 7: Configurar Login SSW Mobile (se aplicável)](#etapa-7-configurar-login-ssw-mobile-se-aplicável)
+- [Contexto CarVia (Hoje vs Futuro)](#contexto-carvia-hoje-vs-futuro)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: A — Implantação e Cadastros
 **Prioridade**: P2 (Média — necessário quando CarVia tiver veículos próprios ou agregados)

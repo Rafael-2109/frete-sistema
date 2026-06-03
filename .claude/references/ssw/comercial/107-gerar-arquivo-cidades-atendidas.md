@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 107 — Gerar Arquivo de Cidades Atendidas
+
+> **Papel:** Opção 107 — Gerar Arquivo de Cidades Atendidas.
 
 > **Módulo**: Comercial
 > **Referência interna**: Opção 601

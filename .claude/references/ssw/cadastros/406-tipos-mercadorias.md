@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 406 — Cadastro de Tipos de Mercadorias
+
+> **Papel:** Opção 406 — Cadastro de Tipos de Mercadorias.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Opção 010 - Relação de Tipos de Mercadorias](#opção-010---relação-de-tipos-de-mercadorias)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Novo Tipo de Mercadoria](#cadastrar-novo-tipo-de-mercadoria)
+  - [Vincular ao Cliente (opção 483/Mercadorias)](#vincular-ao-cliente-opção-483mercadorias)
+  - [Sugestão Automática via NCM (opção 207)](#sugestão-automática-via-ncm-opção-207)
+  - [Uso em Tabelas de Frete](#uso-em-tabelas-de-frete)
+  - [Configurar Comissionamento Específico](#configurar-comissionamento-específico)
+  - [Definir Unidade Alternativa](#definir-unidade-alternativa)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Tributação ICMS](#tributação-icms)
+  - [Densidade e Cálculo de Frete](#densidade-e-cálculo-de-frete)
+  - [Mercadorias Prioritárias](#mercadorias-prioritárias)
+  - [Prazo de Entrega](#prazo-de-entrega)
+  - [Restrição de Unidades Expedidoras](#restrição-de-unidades-expedidoras)
+  - [Tabelas de Frete](#tabelas-de-frete)
+  - [Sugestão Automática via NCM](#sugestão-automática-via-ncm)
+  - [Diferença entre Tipo e Espécie](#diferença-entre-tipo-e-espécie)
+  - [Comissionamento e Remuneração](#comissionamento-e-remuneração)
+  - [Simulação de Tabelas](#simulação-de-tabelas)
+  - [Unidade Alternativa por Tipo (Embarcador)](#unidade-alternativa-por-tipo-embarcador)
 
 > **Módulo**: Cadastros
 > **Páginas de ajuda**: 7 páginas consolidadas

@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/logistica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 701 — Entradas no Estoque
+
+> **Papel:** Opção 701 — Entradas no Estoque.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+  - [Métodos de Entrada](#métodos-de-entrada)
+  - [Opções Relacionadas no Menu](#opções-relacionadas-no-menu)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Processo Armazém Geral](#processo-armazém-geral)
+  - [Processo Operador Logístico](#processo-operador-logístico)
+  - [Integração com WMS](#integração-com-wms)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Operações de Estoque](#operações-de-estoque)
+  - [Documentos Fiscais](#documentos-fiscais)
+  - [Cadastros](#cadastros)
+  - [Cobrança e Transporte](#cobrança-e-transporte)
+  - [Integração WMS](#integração-wms)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Tipos de Operação](#tipos-de-operação)
+  - [ICMS e Tributação](#icms-e-tributação)
+  - [CFOPs Automáticos](#cfops-automáticos)
+  - [Retorno Simbólico vs Não Simbólico](#retorno-simbólico-vs-não-simbólico)
+  - [Simples Remessa](#simples-remessa)
+  - [Limites e Restrições](#limites-e-restrições)
+  - [Relatórios e Consultas](#relatórios-e-consultas)
+  - [Integração WMS (opção 709)](#integração-wms-opção-709)
+  - [Pontos de Atenção](#pontos-de-atenção)
 
 > **Módulo**: Logística
 > **Páginas de ajuda**: 6 páginas consolidadas

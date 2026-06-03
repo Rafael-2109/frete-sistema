@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 10 — Fiscal
+
+> **Papel:** 10 — Fiscal.
+
+## Indice
+
+- [Sumario](#sumario)
+- [Configuracoes](#configuracoes)
+  - [Estadual](#estadual)
+  - [Federal](#federal)
+  - [Municipal](#municipal)
+- [Operacao](#operacao)
+  - [Emissao de documentos](#emissao-de-documentos)
+- [Relatorios e Arquivos Fiscais](#relatorios-e-arquivos-fiscais)
+  - [Fechamento](#fechamento)
+  - [Estadual](#estadual)
+  - [Federal](#federal)
+  - [Municipal](#municipal)
+  - [Complementares](#complementares)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_fiscal.htm` (28/03/2022)
 > **Links internos**: 55 | **Imagens**: 0

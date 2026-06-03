@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 097 — Cadastro de Tipos de Veículos
+
+> **Papel:** Opção 097 — Cadastro de Tipos de Veículos.
 
 > **Módulo**: Operacional — Configuração de Veículos
 > **Páginas de ajuda**: 1 página consolidada

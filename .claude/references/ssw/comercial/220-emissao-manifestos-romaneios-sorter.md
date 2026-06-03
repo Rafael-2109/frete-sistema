@@ -1,4 +1,26 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 220 — Emissão de Manifestos e Romaneios com Sorter
+
+> **Papel:** Opção 220 — Emissão de Manifestos e Romaneios com Sorter.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela de Monitoração](#tela-de-monitoração)
+  - [Outros Recursos](#outros-recursos)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Comercial / Operacional
 > **Páginas de ajuda**: 1 página consolidada

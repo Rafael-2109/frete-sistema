@@ -1,4 +1,59 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 102 — Consulta CTRC Simplificada
+
+> **Papel:** Opção 102 — Consulta CTRC Simplificada.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+  - [Configurações Necessárias](#configurações-necessárias)
+  - [Permissões e Restrições](#permissões-e-restrições)
+- [Campos / Interface](#campos-interface)
+  - [TELA 01 — Critérios de Busca](#tela-01-critérios-de-busca)
+  - [TELA 02 — Resultado da Consulta](#tela-02-resultado-da-consulta)
+  - [Rodapé — Links Funcionais](#rodapé-links-funcionais)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [1. Consulta Básica](#1-consulta-básica)
+  - [2. Rastreamento Completo](#2-rastreamento-completo)
+  - [3. Consulta Cross-Domain](#3-consulta-cross-domain)
+  - [4. Arquivo Morto](#4-arquivo-morto)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Distância Total do CTRC](#distância-total-do-ctrc)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Prioridade de Dados](#prioridade-de-dados)
+  - [Peso/Cubagem para Cálculo](#pesocubagem-para-cálculo)
+  - [Arquivo Morto](#arquivo-morto)
+  - [Comprovante de Entrega](#comprovante-de-entrega)
+  - [Restrições de Acesso](#restrições-de-acesso)
+  - [Última Ocorrência](#última-ocorrência)
+  - [Substituição Tributária](#substituição-tributária)
+  - [IBS/CBS](#ibscbs)
+  - [Unitização](#unitização)
+  - [CT-e SVC (SEFAZ Virtual Contingência)](#ct-e-svc-sefaz-virtual-contingência)
+  - [E-mail Automático (LGPD)](#e-mail-automático-lgpd)
+  - [Gaiola/Pallet](#gaiolapallet)
+  - [SSWBar/Sorter](#sswbarsorter)
+  - [PIS/COFINS](#piscofins)
+  - [Prazo Unidade Destinatária](#prazo-unidade-destinatária)
+  - [DACTE — Itens Importantes](#dacte-itens-importantes)
+  - [Protocolo Webservice](#protocolo-webservice)
+  - [Previsão de Entrega](#previsão-de-entrega)
+  - ["Estou Chegando" (SSWMobile)](#estou-chegando-sswmobile)
+  - [Código ONU](#código-onu)
+  - [CT-e Redespacho Intermediário](#ct-e-redespacho-intermediário)
+  - [WS-CTRCs Não Gerados](#ws-ctrcs-não-gerados)
+  - [Página de Averbação PAMWEB (ssw0267.htm)](#página-de-averbação-pamweb-ssw0267htm)
+  - [Desbloqueio E-mail (ssw1931.htm)](#desbloqueio-e-mail-ssw1931htm)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 3 páginas consolidadas (ssw0053.htm, ssw0267.htm, ssw1931.htm)

@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcoes Complementares — Modulo Comercial
+
+> **Papel:** Opcoes Complementares — Modulo Comercial.
+
+## Indice
+
+- [Opcao 428 — Recepcao Capa Remessa Comprovantes](#opcao-428-recepcao-capa-remessa-comprovantes)
+  - [Funcao](#funcao)
+  - [Quando Usar](#quando-usar)
+  - [Campos Principais](#campos-principais)
+  - [Integracao](#integracao)
+  - [Gotchas](#gotchas)
+- [Opcao 431 — Unidades do Mesmo Armazem](#opcao-431-unidades-do-mesmo-armazem)
+  - [Funcao](#funcao)
+  - [Quando Usar](#quando-usar)
+  - [Campos Principais](#campos-principais)
+  - [Integracao](#integracao)
+  - [Gotchas](#gotchas)
+- [Opcao 433 — [Consulta/Relatorio Especifico]](#opcao-433-consultarelatorio-especifico)
+- [Opcao 435 — [Consulta/Relatorio Especifico]](#opcao-435-consultarelatorio-especifico)
+- [Opcao 469 — [Impressao/Relatorio]](#opcao-469-impressaorelatorio)
+  - [Referencia Provavel](#referencia-provavel)
+- [Opcao 518 — [Especifico]](#opcao-518-especifico)
+- [Fluxo Geral - Comprovantes e Comissionamento](#fluxo-geral---comprovantes-e-comissionamento)
+  - [Ciclo Completo Parceria SSW:](#ciclo-completo-parceria-ssw)
+  - [Ciclo Completo Agregado:](#ciclo-completo-agregado)
+  - [Unidades Mesmo Armazem:](#unidades-mesmo-armazem)
+- [Integracao Geral](#integracao-geral)
+- [Observacoes Gerais](#observacoes-gerais)
+  - [Arquivo de Comprovantes](#arquivo-de-comprovantes)
+  - [Formas Credito CCF (Comissao Parcerias)](#formas-credito-ccf-comissao-parcerias)
+  - [Unidades Compartilhadas](#unidades-compartilhadas)
+  - [Rastreabilidade](#rastreabilidade)
 
 > **Modulo**: Comercial
 > **Opcoes**: 428, 431, 433, 435, 469, 518

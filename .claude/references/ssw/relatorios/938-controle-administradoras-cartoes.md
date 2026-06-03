@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 938 — Administradoras de Cartões
+
+> **Papel:** Opção 938 — Administradoras de Cartões.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Processo](#processo)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+  - [Configurações Específicas](#configurações-específicas)
+- [Administradoras e CNPJs](#administradoras-e-cnpjs)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Administradora](#cadastrar-administradora)
+  - [Configurar Pin Pad ADYEN](#configurar-pin-pad-adyen)
+  - [Configurar Pin Pad SITEF](#configurar-pin-pad-sitef)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Pin Pad vs Máquina de Cartão](#pin-pad-vs-máquina-de-cartão)
+  - [Dias de Crédito](#dias-de-crédito)
+  - [Tarifa](#tarifa)
+  - [Conta Bancária](#conta-bancária)
+  - [Bandeira Opcional](#bandeira-opcional)
+  - [Limpar Usuário (SITEF)](#limpar-usuário-sitef)
+  - [Multiempresa](#multiempresa)
+  - [CNPJs como Complementos](#cnpjs-como-complementos)
+  - [Manuais de Integração](#manuais-de-integração)
 
 > **Módulo**: Sistema (Controle)
 > **Páginas de ajuda**: 2 páginas consolidadas

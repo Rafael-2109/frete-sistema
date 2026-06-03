@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 443 — Gera Arquivo de Cobrança (CNAB Remessa)
+
+> **Papel:** Opção 443 — Gera Arquivo de Cobrança (CNAB Remessa).
 
 > **Módulo**: Financeiro
 > **Páginas de ajuda**: 1 página consolidada (referenciada na opção 444)

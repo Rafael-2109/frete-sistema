@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 321 — Cadastro de Bombas Internas (Abastecimento)
+
+> **Papel:** Opção 321 — Cadastro de Bombas Internas (Abastecimento).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+  - [Rodapé](#rodapé)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Nova Bomba](#cadastrar-nova-bomba)
+  - [Ajustar Estoque](#ajustar-estoque)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Volume Atual](#volume-atual)
+  - [Valores Diferenciados](#valores-diferenciados)
+  - [Controle de Estoque](#controle-de-estoque)
+  - [Múltiplas Bombas](#múltiplas-bombas)
+  - [Abastecimento](#abastecimento)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Frota
 > **Páginas de ajuda**: 1 página consolidada

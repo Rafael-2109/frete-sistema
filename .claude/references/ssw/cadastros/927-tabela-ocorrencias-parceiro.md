@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 927 — Tabela de Ocorrências de Parceiros (Padrão Proceda 3.0)
+
+> **Papel:** Opção 927 — Tabela de Ocorrências de Parceiros (Padrão Proceda 3.0).
 
 > **Módulo**: Cadastros/Integração
 > **Páginas de ajuda**: 1 página consolidada

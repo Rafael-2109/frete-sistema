@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 560 — Aprovacao de Despesas
+
+> **Papel:** Opcao 560 — Aprovacao de Despesas.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela de Aprovacao](#tela-de-aprovacao)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configuracao Inicial (Uma Vez)](#configuracao-inicial-uma-vez)
+  - [Processo Recorrente](#processo-recorrente)
+  - [Aprovar Despesas](#aprovar-despesas)
+  - [Desaprovar (Remover Marca)](#desaprovar-remover-marca)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Processo de Aprovacao Centralizada](#processo-de-aprovacao-centralizada)
+  - [Selecao por Parcela](#selecao-por-parcela)
+  - [Controle de Orcamento](#controle-de-orcamento)
+  - [Aprovacao Flexivel](#aprovacao-flexivel)
+  - [Liquidacao Controlada](#liquidacao-controlada)
+  - [Filtros Uteis](#filtros-uteis)
+  - [Total dos Pagamentos Marcados](#total-dos-pagamentos-marcados)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 1 pagina consolidada

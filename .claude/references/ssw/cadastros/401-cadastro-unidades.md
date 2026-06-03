@@ -1,4 +1,48 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 401 — Cadastro de Unidades
+
+> **Papel:** Opcao 401 — Cadastro de Unidades.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Dados Basicos](#dados-basicos)
+  - [Dados Fiscais](#dados-fiscais)
+  - [Dados Bancarios](#dados-bancarios)
+  - [Multi-Empresa](#multi-empresa)
+  - [Parametrizacao Fiscal (CT-e/NF-e/MDF-e)](#parametrizacao-fiscal-ct-enf-emdf-e)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Criacao de Nova Unidade](#criacao-de-nova-unidade)
+  - [Configuracao para CT-e/NF-e/MDF-e](#configuracao-para-ct-enf-emdf-e)
+  - [Multi-Empresa](#multi-empresa)
+  - [Tabela CNPJ x Dominio](#tabela-cnpj-x-dominio)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Numeracao de Documentos Fiscais](#numeracao-de-documentos-fiscais)
+  - [SEFAZ Especiais](#sefaz-especiais)
+  - [Simples Nacional](#simples-nacional)
+  - [Regime PIS/COFINS](#regime-piscofins)
+  - [Multi-Empresa](#multi-empresa)
+  - [Tipos de Unidade](#tipos-de-unidade)
+  - [Unidades Centralizadoras](#unidades-centralizadoras)
+  - [Banco/Conta](#bancoconta)
+  - [Correios](#correios)
+  - [Formularios CTRC (pre-eletronico)](#formularios-ctrc-pre-eletronico)
+  - [Termo de Abertura/Encerramento de Livros](#termo-de-aberturaencerramento-de-livros)
+  - [GNRE](#gnre)
+  - [Integracao REINF](#integracao-reinf)
+  - [EDI Embarcados (Padrão GUANAPACK)](#edi-embarcados-padrão-guanapack)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Cadastros
 > **Paginas de ajuda**: 21 paginas consolidadas (referencias cruzadas)

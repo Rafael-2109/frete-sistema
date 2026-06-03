@@ -1,4 +1,37 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-G01 — Sequencia Legal Obrigatoria (Carga Direta)
+
+> **Papel:** POP-G01 — Sequencia Legal Obrigatoria (Carga Direta).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Pre-requisitos Gerais](#pre-requisitos-gerais)
+- [Sequencia INVIOLAVEL](#sequencia-inviolavel)
+- [Passo-a-Passo Detalhado](#passo-a-passo-detalhado)
+  - [ETAPA 1 — Verificar cadastros (Motorista e Veiculo)](#etapa-1-verificar-cadastros-motorista-e-veiculo)
+  - [ETAPA 2 — Consultar Gerenciadora de Risco](#etapa-2-consultar-gerenciadora-de-risco)
+  - [ETAPA 3 — Emitir CT-e](#etapa-3-emitir-ct-e)
+  - [ETAPA 4 — Contratar Veiculo](#etapa-4-contratar-veiculo)
+  - [ETAPA 5 — Criar Romaneio de Entregas](#etapa-5-criar-romaneio-de-entregas)
+  - [ETAPA 6 — Criar Manifesto e Emitir MDF-e (SE INTERESTADUAL)](#etapa-6-criar-manifesto-e-emitir-mdf-e-se-interestadual)
+  - [ETAPA 7 — Liberar Embarque](#etapa-7-liberar-embarque)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Cenarios Especiais](#cenarios-especiais)
+  - [Carga com multiplas NF-es](#carga-com-multiplas-nf-es)
+  - [Transporte MUNICIPAL (mesma cidade)](#transporte-municipal-mesma-cidade)
+  - [NF-e emitida em UF diferente da operacao](#nf-e-emitida-em-uf-diferente-da-operacao)
+- [POPs Relacionados](#pops-relacionados)
+- [Verificacao Playwright — Resumo](#verificacao-playwright-resumo)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: G — Compliance, Frota e Gestao
 > **Prioridade**: P0 (URGENTE — risco legal/seguro)

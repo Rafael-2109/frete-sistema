@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-C06 — Cancelar CT-e
+
+> **Papel:** POP-C06 — Cancelar CT-e.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Verificar se Cancelamento e Possivel](#etapa-1-verificar-se-cancelamento-e-possivel)
+  - [ETAPA 2 — Cancelar Manifesto (Se Aplicavel)](#etapa-2-cancelar-manifesto-se-aplicavel)
+  - [ETAPA 3 — Cancelar CT-e (Opcao 004 ou 007)](#etapa-3-cancelar-ct-e-opcao-004-ou-007)
+  - [ETAPA 4 — Verificar Cancelamento](#etapa-4-verificar-cancelamento)
+  - [ETAPA 5 — Efeitos Colaterais e Proximos Passos](#etapa-5-efeitos-colaterais-e-proximos-passos)
+- [Alternativas ao Cancelamento](#alternativas-ao-cancelamento)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

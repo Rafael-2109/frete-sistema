@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/contabilidade/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 541 — Lançamentos Automáticos
+
+> **Papel:** Opção 541 — Lançamentos Automáticos.
 
 > **Módulo**: Contabilidade
 > **Páginas de ajuda**: 1 página consolidada

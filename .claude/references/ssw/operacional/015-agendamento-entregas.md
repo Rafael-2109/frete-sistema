@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 015 — Agendamento de Entregas
+
+> **Papel:** Opção 015 — Agendamento de Entregas.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+  - [Para cobrança do agendamento:](#para-cobrança-do-agendamento)
+  - [Exigências fiscais:](#exigências-fiscais)
+- [Campos / Interface](#campos-interface)
+  - [TELA INICIAL](#tela-inicial)
+  - [TELA AGENDAR UM CTRC](#tela-agendar-um-ctrc)
+  - [TELA AGENDAR DIVERSOS CTRCs](#tela-agendar-diversos-ctrcs)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [1. Agendamento Combinado com o Recebedor](#1-agendamento-combinado-com-o-recebedor)
+  - [2. Agendamento por E-mail](#2-agendamento-por-e-mail)
+  - [3. Cobrança do Serviço](#3-cobrança-do-serviço)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Opções Relacionadas](#opções-relacionadas)
+  - [Administração de Agendamentos (Opção 081)](#administração-de-agendamentos-opção-081)
+  - [Informações ao Cliente](#informações-ao-cliente)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Regras de Negócio](#regras-de-negócio)
+  - [Limitações e Restrições](#limitações-e-restrições)
+  - [Relacionamento com Tutoriais](#relacionamento-com-tutoriais)
 
 > **Módulo**: Operacional
 > **Páginas de ajuda**: 4 páginas consolidadas
@@ -206,4 +240,4 @@ Registra o agendamento de entregas de CTRCs, combinando com o recebedor, e permi
 ### Relacionamento com Tutoriais
 
 Para mais informações, consulte o tutorial:
-- [Complementação de frete: Conceitos](javascript:show('/ajuda/ssw0684_conceito.htm'))
+- [Complementação de frete: Conceitos](https://sistema.ssw.inf.br/ajuda/ssw0684_conceito.htm)

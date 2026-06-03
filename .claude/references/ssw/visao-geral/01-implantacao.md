@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 01 — Implantacao do SSW
+
+> **Papel:** 01 — Implantacao do SSW.
+
+## Indice
+
+- [Sumario](#sumario)
+- [1. Providencias Iniciais](#1-providencias-iniciais)
+- [2. Implantacao Basica](#2-implantacao-basica)
+  - [Cadastros obrigatorios (ordem sugerida)](#cadastros-obrigatorios-ordem-sugerida)
+  - [Treinamento](#treinamento)
+  - [Apos treinamento](#apos-treinamento)
+  - [Operacao definitiva](#operacao-definitiva)
+- [3. SSWBar (Codigo de Barras)](#3-sswbar-codigo-de-barras)
+  - [Infraestrutura por estacao](#infraestrutura-por-estacao)
+  - [Operacao SSWBar](#operacao-sswbar)
+- [4. SSWMobile (App Motorista)](#4-sswmobile-app-motorista)
+  - [Configuracoes](#configuracoes)
+  - [Operacao](#operacao)
+- [5. SSWScan (Escaneamento)](#5-sswscan-escaneamento)
+- [6. Parcerias com Outras Transportadoras](#6-parcerias-com-outras-transportadoras)
+  - [3 modos de operacao](#3-modos-de-operacao)
+  - [Configuracoes](#configuracoes)
+  - [Comissionamento](#comissionamento)
+- [7. Remuneracao de Veiculos de Coleta/Entrega](#7-remuneracao-de-veiculos-de-coletaentrega)
+- [8. Remuneracao de Veiculos de Transferencia](#8-remuneracao-de-veiculos-de-transferencia)
+- [Arvore de Navegacao](#arvore-de-navegacao)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_implantacao.htm` (18/10/2025)
 > **Links internos**: 106 | **Imagens**: 2

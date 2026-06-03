@@ -79,7 +79,7 @@ file-relative     ->  prefixe ./ :              [titulo](./sub/y.md)         (cl
 mesmo diretorio   ->  nome nu (sem /):          [titulo](y.md)               (ja e file-relative)
 ```
 
-Links legados file-relative com `/` sem `./` (ex.: `modelos/X.md` em INDEX.md antigos) **nao** sao creditados pelo grafo C8 ate migrarem — divida da varredura por cluster (Onda 4+). NAO bloqueiam: C8 e advisory (`report`).
+Links legados file-relative com `/` sem `./` (ex.: `modelos/X.md` em INDEX.md antigos) **nao** sao creditados pelo grafo C8. A varredura por cluster (Onda 4a–4g) **migrou todo o legado gerenciado** e zerou a divida (C8 global = 0). Em **2026-06-03 (SELAGEM, Onda 4g)** os checks `C1` (header), `C7` (link-rot) e `C8` (alcancabilidade) foram **promovidos a `block`**: orfaos, hubs quebrados e links nao-`./` agora **travam o commit**. C8 faz auto-skip sob escopo parcial (grafo incompleto) — so trava no audit completo / commit que toca o grafo.
 
 ## Checklist resumido (9 itens)
 

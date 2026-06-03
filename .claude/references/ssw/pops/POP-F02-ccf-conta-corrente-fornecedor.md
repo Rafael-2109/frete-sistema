@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-F02 — Gerenciar CCF (Conta Corrente do Fornecedor)
+
+> **Papel:** POP-F02 — Gerenciar CCF (Conta Corrente do Fornecedor).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [OPERACAO 1 — Consultar Saldo](#operacao-1-consultar-saldo)
+  - [OPERACAO 2 — Debito Manual (Despesa do Fornecedor)](#operacao-2-debito-manual-despesa-do-fornecedor)
+  - [OPERACAO 3 — Credito Automatico (Contratacao)](#operacao-3-credito-automatico-contratacao)
+  - [OPERACAO 4 — Acerto de Saldo (Pagamento)](#operacao-4-acerto-de-saldo-pagamento)
+  - [OPERACAO 5 — Consultar Todas as CCFs (Opcao 611)](#operacao-5-consultar-todas-as-ccfs-opcao-611)
+- [Lancamentos Automaticos na CCF](#lancamentos-automaticos-na-ccf)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: F — Financeiro: Pagaveis
 > **Prioridade**: P1 (Alta — controle de saldo com parceiros)

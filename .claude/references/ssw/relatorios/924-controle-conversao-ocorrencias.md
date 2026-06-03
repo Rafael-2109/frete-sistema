@@ -1,4 +1,38 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/relatorios/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 924 — Conversão de Ocorrências da Subcontratada
+
+> **Papel:** Opção 924 — Conversão de Ocorrências da Subcontratada.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Processo](#processo)
+  - [Conversão Automática](#conversão-automática)
+  - [Instruções (Caminho Inverso)](#instruções-caminho-inverso)
+  - [Subcontratos em Cadeia](#subcontratos-em-cadeia)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Seguinte](#tela-seguinte)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Requisito: Ambas SSW](#requisito-ambas-ssw)
+  - [Conversão de Ocorrências](#conversão-de-ocorrências)
+  - [Instruções (Caminho Inverso)](#instruções-caminho-inverso)
+  - [Subcontratos de Subcontratos](#subcontratos-de-subcontratos)
+  - [Visualização de Ocorrências do Parceiro](#visualização-de-ocorrências-do-parceiro)
+  - [Diferença opção 924 vs 908](#diferença-opção-924-vs-908)
+  - [Cadastro por Subcontratante](#cadastro-por-subcontratante)
+  - [Código Correspondente](#código-correspondente)
 
 > **Módulo**: Sistema (Controle)
 > **Páginas de ajuda**: 1 página consolidada

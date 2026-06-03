@@ -1,4 +1,48 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 478 — Cadastro de Fornecedores
+
+> **Papel:** Opcao 478 — Cadastro de Fornecedores.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Identificacao](#identificacao)
+  - [CCF - Conta Corrente de Fornecedor](#ccf---conta-corrente-de-fornecedor)
+  - [Dados Bancarios](#dados-bancarios)
+  - [Outros](#outros)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Novo Fornecedor](#cadastrar-novo-fornecedor)
+  - [Ativar CCF (Conta Corrente de Fornecedor)](#ativar-ccf-conta-corrente-de-fornecedor)
+  - [Configurar Acerto Automatico de Saldo CCF](#configurar-acerto-automatico-de-saldo-ccf)
+  - [Cadastrar Fornecedor de PEF/CIOT](#cadastrar-fornecedor-de-pefciot)
+  - [Consultar Fornecedores com CCF](#consultar-fornecedores-com-ccf)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [CCF - Conta Corrente de Fornecedor](#ccf---conta-corrente-de-fornecedor)
+  - [Tipos de Fornecedor](#tipos-de-fornecedor)
+  - [Acerto de Saldo CCF](#acerto-de-saldo-ccf)
+  - [Evento Padrao](#evento-padrao)
+  - [Unidade Pagamento](#unidade-pagamento)
+  - [PEF / CIOT](#pef-ciot)
+  - [CIOT Agregado](#ciot-agregado)
+  - [Multiempresa](#multiempresa)
+  - [INSS e IR Retidos no CTRB](#inss-e-ir-retidos-no-ctrb)
+  - [Adiantamentos](#adiantamentos)
+  - [Consulta de Fornecedores (Opcao 535)](#consulta-de-fornecedores-opcao-535)
+  - [Especialidade](#especialidade)
+  - [Conta Bancaria](#conta-bancaria)
+  - [Fornecedor Inativo](#fornecedor-inativo)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 4 paginas consolidadas

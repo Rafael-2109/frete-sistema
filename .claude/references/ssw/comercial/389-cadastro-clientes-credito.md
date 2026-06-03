@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 389 — Cadastro de Clientes - Credito
+
+> **Papel:** Opcao 389 — Cadastro de Clientes - Credito.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Credito Individual (Opcao 389)](#credito-individual-opcao-389)
+  - [Liberacao Provisoria (Opcao 323)](#liberacao-provisoria-opcao-323)
+  - [Grupo de Clientes (Opcao 583)](#grupo-de-clientes-opcao-583)
+  - [Parametros Globais de Credito (Opcao 903/Credito)](#parametros-globais-de-credito-opcao-903credito)
+  - [Prazos (Opcao 903/Prazos)](#prazos-opcao-903prazos)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Configurar Credito Individual](#configurar-credito-individual)
+  - [Conceder Liberacao Provisoria](#conceder-liberacao-provisoria)
+  - [Criar Grupo Comercial](#criar-grupo-comercial)
+  - [Configurar Parametros Globais](#configurar-parametros-globais)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 4 paginas consolidadas (323, 583, Prazos, Credito)

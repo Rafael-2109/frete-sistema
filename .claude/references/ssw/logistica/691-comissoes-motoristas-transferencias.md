@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/logistica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 691 — Comissões de Motoristas de Transferências
+
+> **Papel:** Opção 691 — Comissões de Motoristas de Transferências.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Base de Cálculo - Manifesto](#base-de-cálculo---manifesto)
+  - [Base de Cálculo - CTRB](#base-de-cálculo---ctrb)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro de Comissão](#cadastro-de-comissão)
+  - [Apuração da Comissão](#apuração-da-comissão)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Lançamentos na CCF (opção 486)](#lançamentos-na-ccf-opção-486)
+  - [Débito de Despesas](#débito-de-despesas)
+  - [Saldo e Acerto](#saldo-e-acerto)
+  - [Critérios Importantes](#critérios-importantes)
 
 > **Módulo**: Logística
 > **Páginas de ajuda**: 2 páginas consolidadas

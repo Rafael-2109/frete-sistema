@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 125 — Rastreamento de Produtos
+
+> **Papel:** Opção 125 — Rastreamento de Produtos.
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 1 página consolidada

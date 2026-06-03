@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-F06 — Aprovar Despesas Pendentes
+
+> **Papel:** POP-F06 — Aprovar Despesas Pendentes.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [CONFIGURACAO INICIAL (Uma Vez)](#configuracao-inicial-uma-vez)
+  - [PROCESSO RECORRENTE](#processo-recorrente)
+  - [DESAPROVAR (Remover Marca)](#desaprovar-remover-marca)
+- [Fluxo Completo de Aprovacao](#fluxo-completo-de-aprovacao)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Indicadores de Saude](#indicadores-de-saude)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

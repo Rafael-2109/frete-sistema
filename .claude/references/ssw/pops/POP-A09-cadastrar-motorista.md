@@ -1,4 +1,34 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A09 — Cadastrar Motorista
+
+> **Papel:** POP-A09 — Cadastrar Motorista.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Acessar Cadastro de Motoristas](#etapa-1-acessar-cadastro-de-motoristas)
+  - [ETAPA 2: Preencher Dados Obrigatórios [CONFIRMAR campos exatos]](#etapa-2-preencher-dados-obrigatórios-confirmar-campos-exatos)
+  - [ETAPA 3: Vincular a Transportadora/Proprietário](#etapa-3-vincular-a-transportadoraproprietário)
+  - [ETAPA 4: Verificar Bloqueios e Quarentena](#etapa-4-verificar-bloqueios-e-quarentena)
+  - [ETAPA 5: Configurar Gerenciadora de Risco (se aplicável)](#etapa-5-configurar-gerenciadora-de-risco-se-aplicável)
+  - [ETAPA 6: Validar e Salvar](#etapa-6-validar-e-salvar)
+  - [ETAPA 7: Testar em Manifesto](#etapa-7-testar-em-manifesto)
+- [Contexto CarVia (Hoje vs Futuro)](#contexto-carvia-hoje-vs-futuro)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: A — Implantação e Cadastros
 **Prioridade**: P2 (Média — necessário para cargas diretas com terceiros)

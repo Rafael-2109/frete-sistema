@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 135 — Carregar GPS
+
+> **Papel:** Opção 135 — Carregar GPS.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Seguinte](#tela-seguinte)
+  - [Lista de CTRCs (parte central)](#lista-de-ctrcs-parte-central)
+  - [Janela "Apontar no Mapa"](#janela-apontar-no-mapa)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Gerar Arquivo de Coordenadas](#gerar-arquivo-de-coordenadas)
+  - [Carregar GPS Fisicamente](#carregar-gps-fisicamente)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 1 página consolidada

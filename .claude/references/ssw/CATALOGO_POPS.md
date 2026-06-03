@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Catalogo de POPs — CarVia Logistica
+
+> **Papel:** Catalogo de POPs — CarVia Logistica.
+
+## Indice
+
+- [Estrutura de cada POP](#estrutura-de-cada-pop)
+- [Convencoes](#convencoes)
+- [Visao Geral — 45 POPs em 7 categorias](#visao-geral-45-pops-em-7-categorias)
+  - [Detalhamento](#detalhamento)
+  - [Detalhamento](#detalhamento)
+  - [Detalhamento](#detalhamento)
+  - [Detalhamento](#detalhamento)
+  - [Detalhamento](#detalhamento)
+  - [Detalhamento](#detalhamento)
+  - [Detalhamento](#detalhamento)
+- [Onda 1 — Urgente / Risco Legal (6 POPs)](#onda-1-urgente-risco-legal-6-pops)
+- [Onda 2 — Operacao Financeira (7 POPs)](#onda-2-operacao-financeira-7-pops)
+- [Onda 3 — Cadastros e Comercial (8 POPs)](#onda-3-cadastros-e-comercial-8-pops)
+- [Onda 4 — Controle e Gestao (10 POPs)](#onda-4-controle-e-gestao-10-pops)
+- [Onda 5 — Complementares (14 POPs)](#onda-5-complementares-14-pops)
 
 > **Criado em**: 2026-02-15
 > **Fonte**: CARVIA_OPERACAO.md + fluxos/INDEX.md + 228 docs SSW

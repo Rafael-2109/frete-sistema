@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 208 — SSWMobile 4 (versão desktop)
+
+> **Papel:** Opção 208 — SSWMobile 4 (versão desktop).
 
 > **Módulo**: Operacional/Entregas
 > **Referência interna**: Opção 155

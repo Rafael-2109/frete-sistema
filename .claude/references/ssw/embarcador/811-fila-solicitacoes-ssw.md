@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/embarcador/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 811 — Fila de Solicitações (Equipe SSW)
+
+> **Papel:** Opção 811 — Fila de Solicitações (Equipe SSW).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Conceitos Importantes](#conceitos-importantes)
+  - [Equipes SSW](#equipes-ssw)
+  - [Horas](#horas)
+  - [Validadores](#validadores)
+- [Campos / Interface](#campos-interface)
+  - [Tela Cadastrar](#tela-cadastrar)
+  - [Tela Cadastrar 2 (Campos Complementares)](#tela-cadastrar-2-campos-complementares)
+- [Tipos de Solicitação](#tipos-de-solicitação)
+  - [Exclusivos da Equipe DEV (contabilizam horas)](#exclusivos-da-equipe-dev-contabilizam-horas)
+  - [Uso Geral (contabilizam horas)](#uso-geral-contabilizam-horas)
+  - [Uso Geral (NÃO contabilizam horas do mês)](#uso-geral-não-contabilizam-horas-do-mês)
+- [Prioridades (Projeto e Manutenção)](#prioridades-projeto-e-manutenção)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastrar Solicitação](#cadastrar-solicitação)
+  - [Executar Solicitação](#executar-solicitação)
+  - [Funcionalidades Adicionais](#funcionalidades-adicionais)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Tipos de Horas](#tipos-de-horas)
+  - [Férias e Ausências](#férias-e-ausências)
+  - [Relatórios Diários (Opção 056)](#relatórios-diários-opção-056)
+  - [Cálculo de Premiação Mensal](#cálculo-de-premiação-mensal)
+  - [PLR Anual](#plr-anual)
+  - [Validação](#validação)
+  - [PCT (Percentual)](#pct-percentual)
+  - [Campos do Relatório 255](#campos-do-relatório-255)
+  - [Observação Importante](#observação-importante)
 
 > **Módulo**: Embarcador (Interno SSW)
 > **Páginas de ajuda**: 2 páginas consolidadas

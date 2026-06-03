@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 427 — Resultado por Cliente
+
+> **Papel:** Opção 427 — Resultado por Cliente.
 
 > **Módulo**: Comercial/Análise
 > **Referência interna**: Opção 449

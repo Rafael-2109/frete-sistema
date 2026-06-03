@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 167 — Conferencia do SSWCOL
+
+> **Papel:** Opcao 167 — Conferencia do SSWCOL.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela de Conferencia (SSW - Opcao 167)](#tela-de-conferencia-ssw---opcao-167)
+  - [SSWCOL (Notebook de Coleta)](#sswcol-notebook-de-coleta)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Instalacao e Configuracao](#instalacao-e-configuracao)
+  - [Coleta em Campo (Offline)](#coleta-em-campo-offline)
+  - [Conferencia no SSW (Online)](#conferencia-no-ssw-online)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada

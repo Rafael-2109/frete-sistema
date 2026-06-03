@@ -1,4 +1,59 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 007 — Impressão e Autorização de CT-es
+
+> **Papel:** Opção 007 — Impressão e Autorização de CT-es.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+  - [Documentos Digitados (Opção 004 ou 006)](#documentos-digitados-opção-004-ou-006)
+  - [Formulários Fiscais (Impressão em Matricial)](#formulários-fiscais-impressão-em-matricial)
+  - [Configurações de Averbação (Opção 903)](#configurações-de-averbação-opção-903)
+  - [Configurações de Pré-CT-e (Opção 903)](#configurações-de-pré-ct-e-opção-903)
+  - [Parceiros Alternativos (Opção 408, 401, 402)](#parceiros-alternativos-opção-408-401-402)
+  - [Fatura/Boleto na Expedição](#faturaboleto-na-expedição)
+  - [Tipo de Impressora](#tipo-de-impressora)
+  - [Instalação de Impressora](#instalação-de-impressora)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Ações de Impressão](#ações-de-impressão)
+  - [Ações de Reimpressão](#ações-de-reimpressão)
+  - [Links Adicionais](#links-adicionais)
+  - [Impressão da Observação do CT-e](#impressão-da-observação-do-ct-e)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [1. Fluxo Geral — Impressão de CT-es](#1-fluxo-geral-impressão-de-ct-es)
+  - [2. Fluxo de Reimpressão](#2-fluxo-de-reimpressão)
+  - [3. Fluxo de Troca de Parceiro](#3-fluxo-de-troca-de-parceiro)
+  - [4. Fluxo de Autorização de Pré-CT-es (Modo Automático)](#4-fluxo-de-autorização-de-pré-ct-es-modo-automático)
+  - [5. Fluxo de Averbação (Automático)](#5-fluxo-de-averbação-automático)
+  - [6. Fluxo de Cálculo de CO2 (Automático)](#6-fluxo-de-cálculo-de-co2-automático)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+  - [Antes da Impressão](#antes-da-impressão)
+  - [Durante a Impressão](#durante-a-impressão)
+  - [Após a Impressão](#após-a-impressão)
+  - [Averbação](#averbação)
+  - [Pré-CT-es](#pré-ct-es)
+  - [CO2](#co2)
+- [Observações e Gotchas](#observações-e-gotchas)
+  - [Regras do Processo](#regras-do-processo)
+  - [Troca de Parceiro](#troca-de-parceiro)
+  - [Troca Excepcional (Opção 094)](#troca-excepcional-opção-094)
+  - [Fatura/Boleto na Expedição](#faturaboleto-na-expedição)
+  - [Averbação](#averbação)
+  - [Pré-CT-es](#pré-ct-es)
+  - [Gerenciamento de Risco (Opção 903)](#gerenciamento-de-risco-opção-903)
+  - [CO2 (Opção 330)](#co2-opção-330)
+  - [Integração com Envia By Bus (Ssw2366)](#integração-com-envia-by-bus-ssw2366)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional
 > **Páginas de ajuda**: 12 páginas consolidadas

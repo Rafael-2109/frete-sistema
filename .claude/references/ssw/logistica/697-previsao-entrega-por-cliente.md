@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/logistica/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 697 — Previsão de Entrega por Cliente (Origem-Destino)
+
+> **Papel:** Opção 697 — Previsão de Entrega por Cliente (Origem-Destino).
 
 > **Módulo**: Logística
 > **Páginas de ajuda**: 1 página consolidada

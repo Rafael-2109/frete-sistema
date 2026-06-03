@@ -1,4 +1,41 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 009 — Impressao de RPS e Geracao de NFS-e
+
+> **Papel:** Opcao 009 — Impressao de RPS e Geracao de NFS-e.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+  - [Imprimir RPSs](#imprimir-rpss)
+  - [Reimprimir RPSs](#reimprimir-rpss)
+  - [Associar NFS-e (pdf)](#associar-nfs-e-pdf)
+  - [Buscar NFS-e](#buscar-nfs-e)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Impressao Normal (Prefeituras sem Webservice)](#impressao-normal-prefeituras-sem-webservice)
+  - [Impressao com Webservice (Prefeituras com Autorizacao Sincrona)](#impressao-com-webservice-prefeituras-com-autorizacao-sincrona)
+  - [Associar PDF de NFS-e](#associar-pdf-de-nfs-e)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Regras Fiscais (Lei Complementar 116)](#regras-fiscais-lei-complementar-116)
+  - [Processo de Emissao](#processo-de-emissao)
+  - [Prefeituras com Webservice (Autorizacao Sincrona)](#prefeituras-com-webservice-autorizacao-sincrona)
+  - [Prefeituras sem Webservice (Modo Assincrono)](#prefeituras-sem-webservice-modo-assincrono)
+  - [Substituicao Tributaria](#substituicao-tributaria)
+  - [Associacao de PDFs](#associacao-de-pdfs)
+  - [Modo de Envio](#modo-de-envio)
+  - [Programas de Integracao](#programas-de-integracao)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Operacional — Fiscal
 > **Paginas de ajuda**: 3 paginas consolidadas

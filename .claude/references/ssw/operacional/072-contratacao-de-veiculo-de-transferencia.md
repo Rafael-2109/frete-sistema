@@ -1,4 +1,31 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 072 — Contratação de Veículo de Transferência
+
+> **Papel:** Opção 072 — Contratação de Veículo de Transferência.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface — Tela Inicial](#campos-interface-tela-inicial)
+  - [Rodapé Tela Inicial](#rodapé-tela-inicial)
+- [Campos / Interface — Tela Principal](#campos-interface-tela-principal)
+- [Tipos de Contratação](#tipos-de-contratação)
+- [CIOT — Comunicação Obrigatória ANTT](#ciot-comunicação-obrigatória-antt)
+  - [CIOT Manual Gratuito](#ciot-manual-gratuito)
+- [Vale Pedágio — Obrigatório para Terceiros](#vale-pedágio-obrigatório-para-terceiros)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional — Contratação e Remuneração
 > **Páginas de ajuda**: 16 páginas consolidadas

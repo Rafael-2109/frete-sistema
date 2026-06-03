@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-F05 — Registrar Bloqueio Financeiro de CTRC
+
+> **Papel:** POP-F05 — Registrar Bloqueio Financeiro de CTRC.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar Opcao 462](#etapa-1-acessar-opcao-462)
+  - [ETAPA 2 — Identificar CTRC](#etapa-2-identificar-ctrc)
+  - [ETAPA 3 — Registrar Bloqueio](#etapa-3-registrar-bloqueio)
+  - [ETAPA 4 — Verificar Bloqueio Ativo](#etapa-4-verificar-bloqueio-ativo)
+  - [ETAPA 5 — Desbloquear CTRC (Quando Resolver)](#etapa-5-desbloquear-ctrc-quando-resolver)
+- [Cenarios de Uso (CarVia)](#cenarios-de-uso-carvia)
+  - [Cenario 1 — Avaria na Entrega](#cenario-1-avaria-na-entrega)
+  - [Cenario 2 — Erro de Peso no CTe](#cenario-2-erro-de-peso-no-cte)
+  - [Cenario 3 — Cliente Contesta Valor](#cenario-3-cliente-contesta-valor)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Indicadores de Saude](#indicadores-de-saude)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Notas Importantes](#notas-importantes)
+- [Historico](#historico)
 
 > **Versao**: 1.0
 > **Criado em**: 2026-02-16

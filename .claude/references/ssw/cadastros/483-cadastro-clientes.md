@@ -1,4 +1,54 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/cadastros/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 483 — Cadastro de Clientes
+
+> **Papel:** Opcao 483 — Cadastro de Clientes.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Dados Basicos](#dados-basicos)
+  - [Parametros Operacionais](#parametros-operacionais)
+  - [Cobranca e Faturamento](#cobranca-e-faturamento)
+  - [Servicos Adicionais (Remetente/Destinatario)](#servicos-adicionais-remetentedestinatario)
+  - [Envio de XML/DACTE](#envio-de-xmldacte)
+  - [Outros](#outros)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro de Novo Cliente](#cadastro-de-novo-cliente)
+  - [Importacao em Lote (CSV)](#importacao-em-lote-csv)
+  - [Consulta no SEFAZ](#consulta-no-sefaz)
+  - [Atualizacao Automatica](#atualizacao-automatica)
+  - [Configuracoes Complementares (Links Rodape)](#configuracoes-complementares-links-rodape)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [CNPJ/CPF Especiais](#cnpjcpf-especiais)
+  - [CFOP e Tributacao](#cfop-e-tributacao)
+  - [Situacao Cadastral (SitCad)](#situacao-cadastral-sitcad)
+  - [Simples Nacional (SN)](#simples-nacional-sn)
+  - [E-mail e Comunicacao](#e-mail-e-comunicacao)
+  - [ICMS/ISS e PIS/COFINS Repassados](#icmsiss-e-piscofins-repassados)
+  - [Servicos Adicionais](#servicos-adicionais)
+  - [Latitude/Longitude](#latitudelongitude)
+  - [Classificacao ABC](#classificacao-abc)
+  - [Busca em Outros Dominios](#busca-em-outros-dominios)
+  - [Unidade Responsavel](#unidade-responsavel)
+  - [CEP Invalido](#cep-invalido)
+  - [Devolve Canhoto de NF](#devolve-canhoto-de-nf)
+  - [Codigo OTM](#codigo-otm)
+  - [Usuarios Restritos](#usuarios-restritos)
+  - [CT-e 3.0 vs 4.0](#ct-e-30-vs-40)
+  - [Importacao CSV](#importacao-csv)
+  - [Cadastro SEFAZ (XML)](#cadastro-sefaz-xml)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Cadastros
 > **Paginas de ajuda**: 34 paginas consolidadas (referencias cruzadas)

@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A02 — Cadastrar Unidade Parceira (Terceiro)
+
+> **Papel:** POP-A02 — Cadastrar Unidade Parceira (Terceiro).
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Definir Sigla IATA da Cidade](#etapa-1-definir-sigla-iata-da-cidade)
+  - [ETAPA 2 — Acessar Opcao 401 e Incluir Nova Unidade](#etapa-2-acessar-opcao-401-e-incluir-nova-unidade)
+  - [ETAPA 3 — Preencher Dados Fiscais (CNPJ da CarVia)](#etapa-3-preencher-dados-fiscais-cnpj-da-carvia)
+  - [ETAPA 4 — Preencher Dados Bancarios (Conta da CarVia)](#etapa-4-preencher-dados-bancarios-conta-da-carvia)
+  - [ETAPA 5 — Confirmar e Gravar](#etapa-5-confirmar-e-gravar)
+  - [ETAPA 6 — Verificar Cadastro](#etapa-6-verificar-cadastro)
+  - [ETAPA 7 — Proximo Passo: Cadastrar Cidades e Rotas](#etapa-7-proximo-passo-cadastrar-cidades-e-rotas)
+- [Contexto CarVia](#contexto-carvia)
+  - [Unidades T Existentes (Referencia)](#unidades-t-existentes-referencia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P1 (Alta — base para rotas, cidades, tabelas e operacao com parceiros)

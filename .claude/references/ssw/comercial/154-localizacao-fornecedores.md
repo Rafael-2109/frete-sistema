@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 154 — Localizacao de Fornecedores
+
+> **Papel:** Opcao 154 — Localizacao de Fornecedores.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela de Busca](#tela-de-busca)
+  - [Tela Resultante (Colunas da Tabela)](#tela-resultante-colunas-da-tabela)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Localizacao Basica de Fornecedores](#localizacao-basica-de-fornecedores)
+  - [Processo Completo de Compras (Integracao)](#processo-completo-de-compras-integracao)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 4 paginas consolidadas (154, 157, 158, 159)

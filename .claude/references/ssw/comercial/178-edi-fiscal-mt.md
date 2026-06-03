@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 178 — Geracao de Arquivo EDI Fiscal MT
+
+> **Papel:** Opcao 178 — Geracao de Arquivo EDI Fiscal MT.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+  - [Tela de Selecao de Manifestos](#tela-de-selecao-de-manifestos)
+  - [Dados Complementares (Opcao 115)](#dados-complementares-opcao-115)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Geracao de Arquivo EDI Fiscal MT](#geracao-de-arquivo-edi-fiscal-mt)
+  - [Retransmissao de Arquivo](#retransmissao-de-arquivo)
+  - [Complementacao de Dados das NF-es (Opcao 115)](#complementacao-de-dados-das-nf-es-opcao-115)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada

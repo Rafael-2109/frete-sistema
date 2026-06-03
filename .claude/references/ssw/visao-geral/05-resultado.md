@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 05 — Resultado
+
+> **Papel:** 05 — Resultado.
+
+## Indice
+
+- [Sumario](#sumario)
+- [1. Resultado do CTRC](#1-resultado-do-ctrc)
+  - [Relatorio vital](#relatorio-vital)
+- [2. Resultado do Cliente](#2-resultado-do-cliente)
+- [3. Resultado do Caminhao](#3-resultado-do-caminhao)
+  - [Relatorios](#relatorios)
+- [4. Resultado da Unidade](#4-resultado-da-unidade)
+  - [Relatorios alternativos (so financeiro)](#relatorios-alternativos-so-financeiro)
+- [5. Resultado da Transportadora](#5-resultado-da-transportadora)
+- [Modelo Visual](#modelo-visual)
+- [Contexto CarVia](#contexto-carvia)
+  - [Opcoes que CarVia usa](#opcoes-que-carvia-usa)
+  - [Opcoes que CarVia NAO usa (mas deveria)](#opcoes-que-carvia-nao-usa-mas-deveria)
+  - [Status de Implantacao](#status-de-implantacao)
+  - [Responsaveis](#responsaveis)
 
 > **Fonte**: `visao_geral_resultado.htm` (09/03/2025)
 > **Links internos**: 30 | **Imagens**: 1

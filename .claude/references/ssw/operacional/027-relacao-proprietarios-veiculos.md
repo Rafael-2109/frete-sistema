@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 027 — Relacao de Proprietarios de Veiculos
+
+> **Papel:** Opcao 027 — Relacao de Proprietarios de Veiculos.
 
 > **Modulo**: Operacional — Frota
 > **Paginas de ajuda**: 1 pagina consolidada (tambem referencia opcao 046)

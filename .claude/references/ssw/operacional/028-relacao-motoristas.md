@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 028 — Relacao de Motoristas
+
+> **Papel:** Opcao 028 — Relacao de Motoristas.
 
 > **Modulo**: Operacional — Frota
 > **Paginas de ajuda**: 1 pagina consolidada (tambem referencia opcao 047)

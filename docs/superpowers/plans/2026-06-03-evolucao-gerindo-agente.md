@@ -2,7 +2,7 @@
 tipo: how-to
 camada: L2
 sot_de: evolucao da skill gerindo-agente (roadmap por ondas)
-hub: .claude/skills/gerindo-agente/SKILL.md
+hub: docs/superpowers/plans/INDEX.md
 superseded_by: —
 atualizado: 2026-06-03
 -->

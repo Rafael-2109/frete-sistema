@@ -1,4 +1,35 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 448 — Desconto de Duplicatas - Cadastramento
+
+> **Papel:** Opcao 448 — Desconto de Duplicatas - Cadastramento.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Faturas em Carteira](#faturas-em-carteira)
+  - [Faixa de Faturas](#faixa-de-faturas)
+  - [Atualizacao Automatica](#atualizacao-automatica)
+  - [Estorno](#estorno)
+  - [Emissao de Duplicata](#emissao-de-duplicata)
+  - [Relatorios](#relatorios)
+  - [Percentual de Desconto](#percentual-de-desconto)
+  - [Formas de Desconto no SSW](#formas-de-desconto-no-ssw)
+  - [Data do Credito](#data-do-credito)
+  - [Unidade Cedente](#unidade-cedente)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Financeiro
 > **Paginas de ajuda**: 4 paginas consolidadas

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 290 — Tabela de Requisitos PGR
+
+> **Papel:** Opcao 290 — Tabela de Requisitos PGR.
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 2 paginas consolidadas (duplicadas)

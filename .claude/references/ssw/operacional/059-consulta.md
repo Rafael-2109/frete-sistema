@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 059 — Consulta (Observacao CTRC/Boleto por Cliente)
+
+> **Papel:** Opcao 059 — Consulta (Observacao CTRC/Boleto por Cliente).
 
 > **Modulo**: Cadastro — Clientes
 > **Paginas de ajuda**: 1 pagina consolidada

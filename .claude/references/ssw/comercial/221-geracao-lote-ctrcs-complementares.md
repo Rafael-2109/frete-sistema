@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 221 — Geracao em Lote de CTRCs Complementares
+
+> **Papel:** Opcao 221 — Geracao em Lote de CTRCs Complementares.
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada

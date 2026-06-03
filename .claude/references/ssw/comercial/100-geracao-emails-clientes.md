@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 100 — Geração de E-mails para Clientes
+
+> **Papel:** Opção 100 — Geração de E-mails para Clientes.
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Devedores](#tela-devedores)
+  - [Tela Aniversariantes](#tela-aniversariantes)
+  - [Tela Mensagens Diversas](#tela-mensagens-diversas)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Devedores](#devedores)
+  - [Aniversariantes](#aniversariantes)
+  - [Mensagens Diversas](#mensagens-diversas)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Comercial
 > **Páginas de ajuda**: 3 páginas consolidadas

@@ -1,4 +1,46 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 004 — Emissao de CTRCs
+
+> **Papel:** Opcao 004 — Emissao de CTRCs.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface (Principais)](#campos-interface-principais)
+  - [Tipo de Documento](#tipo-de-documento)
+  - [Dados Basicos](#dados-basicos)
+  - [Nota Fiscal](#nota-fiscal)
+  - [Frete](#frete)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Emissao Normal (com Tabela)](#emissao-normal-com-tabela)
+  - [Emissao com Frete Informado](#emissao-com-frete-informado)
+  - [Emissao de Subcontrato](#emissao-de-subcontrato)
+  - [Emissao de CT-e Complementar](#emissao-de-ct-e-complementar)
+  - [Alterar pre-CTRC (antes do SEFAZ)](#alterar-pre-ctrc-antes-do-sefaz)
+  - [Cancelar pre-CTRC (antes do SEFAZ)](#cancelar-pre-ctrc-antes-do-sefaz)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Pre-CTRC vs CTRC Autorizado](#pre-ctrc-vs-ctrc-autorizado)
+  - [Placa de Coleta](#placa-de-coleta)
+  - [Etiquetas Sequenciais (NR1/NR2)](#etiquetas-sequenciais-nr1nr2)
+  - [Cubagem/Pesagem Obrigatoria](#cubagempesagem-obrigatoria)
+  - [RPS vs CT-e](#rps-vs-ct-e)
+  - [Subcontrato Nao Fiscal](#subcontrato-nao-fiscal)
+  - [Tabela de Frete](#tabela-de-frete)
+  - [Complementar](#complementar)
+  - [CT-e Redespacho Intermediario](#ct-e-redespacho-intermediario)
+  - [Fatura/Bloqueto na Expedicao](#faturabloqueto-na-expedicao)
+  - [Numero de Controle](#numero-de-controle)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Operacional — Fiscal / Comercial
 > **Paginas de ajuda**: 19 paginas consolidadas

@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 081 — CTRCs Disponíveis para Entrega (Romaneio)
+
+> **Papel:** Opção 081 — CTRCs Disponíveis para Entrega (Romaneio).
+
+## Indice
+
+- [Função](#função)
+- [Quando Usar](#quando-usar)
+- [Pré-requisitos](#pré-requisitos)
+- [Campos / Interface — Filtros](#campos-interface-filtros)
+- [Funções de Roteirização (Rodapé)](#funções-de-roteirização-rodapé)
+- [Processo de Roteirização](#processo-de-roteirização)
+- [Sequência do Roteiro](#sequência-do-roteiro)
+- [RELATÓRIO 1 — Sem Roteirizar](#relatório-1-sem-roteirizar)
+- [RELATÓRIO 2 — Roteirizados](#relatório-2-roteirizados)
+- [Integração com Outras Opções](#integração-com-outras-opções)
+- [Observações e Gotchas](#observações-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Módulo**: Operacional — Planejamento de Entregas
 > **Páginas de ajuda**: Parte das 6 páginas consolidadas da opção 030

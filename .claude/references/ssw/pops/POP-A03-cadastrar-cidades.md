@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-A03 — Cadastrar Cidades Atendidas
+
+> **Papel:** POP-A03 — Cadastrar Cidades Atendidas.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Quando Executar (Trigger)](#quando-executar-trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar e Filtrar Cidades](#etapa-1-acessar-e-filtrar-cidades)
+  - [ETAPA 2 — Localizar e Acessar Cidade](#etapa-2-localizar-e-acessar-cidade)
+  - [ETAPA 3 — Preencher Dados Operacionais](#etapa-3-preencher-dados-operacionais)
+  - [ETAPA 4 — Preencher Campos Opcionais](#etapa-4-preencher-campos-opcionais)
+  - [ETAPA 5 — Configurar Complementos (Link MAIS)](#etapa-5-configurar-complementos-link-mais)
+  - [ETAPA 6 — Salvar e Replicar](#etapa-6-salvar-e-replicar)
+  - [ETAPA 7 — Importar Dados de Parceiro (Recurso Avancado)](#etapa-7-importar-dados-de-parceiro-recurso-avancado)
+- [Contexto CarVia](#contexto-carvia)
+  - [Hoje](#hoje)
+  - [Futuro (com POP implantado)](#futuro-com-pop-implantado)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [Exemplo Completo: Campo Grande/MS (Parceiro Alemar)](#exemplo-completo-campo-grandems-parceiro-alemar)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Praca Operacional vs Praca Comercial](#praca-operacional-vs-praca-comercial)
+  - [Calculo de Previsao de Entrega](#calculo-de-previsao-de-entrega)
+  - [Operacoes FEC (Fechada ou Completa)](#operacoes-fec-fechada-ou-completa)
+  - [Taxas e Valores](#taxas-e-valores)
+  - [Unidades Alternativas](#unidades-alternativas)
+  - [Atualizacao Automatica](#atualizacao-automatica)
+  - [Importacao e Exportacao](#importacao-e-exportacao)
+  - [Faixas de CEPs](#faixas-de-ceps)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico](#historico)
 
 > **Categoria**: A — Implantacao e Cadastros
 > **Prioridade**: P1 (Alta — necessario para cotacao e emissao de CT-e)

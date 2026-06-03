@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-F04 — Conciliar Banco
+
+> **Papel:** POP-F04 — Conciliar Banco.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequencia](#frequencia)
+- [Pre-requisitos](#pre-requisitos)
+  - [Sistema](#sistema)
+  - [Operacional](#operacional)
+  - [Pessoas](#pessoas)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Obter Extrato Bancario](#etapa-1-obter-extrato-bancario)
+  - [ETAPA 2: Conciliar Cheques Compensados (Opcao 456)](#etapa-2-conciliar-cheques-compensados-opcao-456)
+  - [ETAPA 3: Conciliar Transferencias Entre Contas (Opcao 456)](#etapa-3-conciliar-transferencias-entre-contas-opcao-456)
+  - [ETAPA 4: Conciliar Tarifas Bancarias (Opcao 456)](#etapa-4-conciliar-tarifas-bancarias-opcao-456)
+  - [ETAPA 5: Lancar Creditos Nao Identificados (Opcao 571)](#etapa-5-lancar-creditos-nao-identificados-opcao-571)
+  - [ETAPA 6: Calcular Saldo Esperado no SSW](#etapa-6-calcular-saldo-esperado-no-ssw)
+  - [ETAPA 7: Executar Conciliacao Bancaria (Opcao 569)](#etapa-7-executar-conciliacao-bancaria-opcao-569)
+  - [ETAPA 8: Validar Bloqueios Automaticos](#etapa-8-validar-bloqueios-automaticos)
+  - [ETAPA 9: Investigar Divergencias (Se Checkpoint ETAPA 6 Falhou)](#etapa-9-investigar-divergencias-se-checkpoint-etapa-6-falhou)
+  - [ETAPA 10: Documentar Conciliacao (Controle Interno)](#etapa-10-documentar-conciliacao-controle-interno)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Solucoes](#erros-comuns-e-solucoes)
+- [Verificacao Playwright](#verificacao-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Historico de Revisoes](#historico-de-revisoes)
 
 **Categoria**: F — Financeiro: Pagaveis
 **Prioridade**: P1 (Alta)

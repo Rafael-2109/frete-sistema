@@ -1,4 +1,29 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 166 — Capturar Volumes que Gerarao CTRCs
+
+> **Papel:** Opcao 166 — Capturar Volumes que Gerarao CTRCs.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Principal](#tela-principal)
+  - [SSWCar (Alternativa Offline)](#sswcar-alternativa-offline)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Processo Completo (Web)](#processo-completo-web)
+  - [Processo com SSWMobile](#processo-com-sswmobile)
+  - [Processo com SSWCar (Offline)](#processo-com-sswcar-offline)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada

@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/visao-geral/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # 08 — Logistica (Armazenagem)
+
+> **Papel:** 08 — Logistica (Armazenagem).
 
 > **Fonte**: `visao_geral_logistica.htm` (01/09/2024)
 > **Links internos**: 24 | **Imagens**: 1

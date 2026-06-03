@@ -29,20 +29,18 @@ atualizado: 2026-06-02
 
 ## Importador de pedidos (redes Sendas/Tenda)
 - `docs/planos/PLANO_IMPORTADOR_PEDIDOS_REDES.md` — plano do importador de pedidos das redes
-- `docs/ESPECIFICACAO_IMPORTADOR_PEDIDOS_TENDA.md` — especificacao do importador Tenda
-- `docs/IMPLEMENTATION_PLAN_SENDAS.md` — implementation plan Sendas
-- `docs/NOVO_PROCESSO_SENDAS.md` — novo processo Sendas
+- `docs/NOVO_PROCESSO_SENDAS.md` — novo processo Sendas (4 etapas, `app/portal/sendas/`)
 - `docs/RASTREABILIDADE_DADOS_SENDAS.md` — rastreabilidade de dados Sendas
 - `docs/RESUMO_EXECUTIVO_RASTREABILIDADE.md` — resumo executivo de rastreabilidade
 - `docs/TECHNICAL_SPEC_SENDAS.md` — technical spec Sendas
 
 ## Pedido de venda no Odoo
-- `docs/CAMPOS_CRIAR_PEDIDO_ODOO.md` — campos para criar pedido no Odoo
-- `docs/ESTUDO_CRIAR_PEDIDO_VENDA_ODOO.md` — estudo criar pedido de venda Odoo
+- `docs/ESTUDO_CRIAR_PEDIDO_VENDA_ODOO.md` — estudo criar pedido de venda Odoo (`app/pedidos/integracao_odoo/`)
 - `docs/ODOO_CONTAS_RECEBER_EXPLICACAO_CAMPOS.md` — Odoo contas a receber (campos)
 
 ## Avulsos
-- `docs/BI_MODULO.md` — modulo de BI
-- `docs/IMPORTACAO_DADOS.md` — importacao de dados
-- `docs/ROADMAP_LICITACAO_FRETE.md` — roadmap de licitacao de frete
+- `docs/BI_MODULO.md` — modulo de BI (`app/bi/`)
 - `docs/RELATORIO_AVALIACAO_360_AGENTE_2026-05-29.md` — relatorio de avaliacao 360 do agente (2026-05-29)
+
+## Arquivados (legado morto — `docs/_deprecated/`, fora da auditoria)
+- `docs/_deprecated/` — specs/planos nunca construidos ou superseded (CAMPOS_CRIAR_PEDIDO_ODOO, ESPECIFICACAO_IMPORTADOR_PEDIDOS_TENDA, IMPLEMENTATION_PLAN_SENDAS, IMPORTACAO_DADOS, ROADMAP_LICITACAO_FRETE). Ver `docs/_deprecated/README.md`.

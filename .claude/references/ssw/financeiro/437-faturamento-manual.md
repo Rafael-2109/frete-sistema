@@ -1,4 +1,30 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/financeiro/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 437 — Faturamento Manual
+
+> **Papel:** Opcao 437 — Faturamento Manual.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Diferenca entre Opcao 437 e Opcao 436](#diferenca-entre-opcao-437-e-opcao-436)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Lista de CTRCs Disponiveis](#lista-de-ctrcs-disponiveis)
+  - [Dados da Fatura](#dados-da-fatura)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+- [POPs Relacionados](#pops-relacionados)
+- [Status CarVia](#status-carvia)
 
 > **Modulo**: Contas a Receber / Faturamento (menu: Contas a Receber > Faturamento > 437)
 > **Status CarVia**: ATIVO (E02)

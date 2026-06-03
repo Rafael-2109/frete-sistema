@@ -117,6 +117,16 @@ atualizado: 2026-06-02
 
 ---
 
+## SSW (Sistema da Transportadora — CarVia)
+
+| Preciso de... | Documento |
+|---------------|-----------|
+| Indice completo do SSW (13 sub-indices, 220 opcoes, 45 POPs, 20 fluxos) | [ssw/INDEX.md](./ssw/INDEX.md) |
+| Decision tree: intencao -> documento (POPs, opcoes, fluxos) | [ssw/ROUTING_SSW.md](./ssw/ROUTING_SSW.md) |
+| Status de adocao de cada POP pela CarVia | [ssw/CARVIA_STATUS.md](./ssw/CARVIA_STATUS.md) |
+
+---
+
 ## Mapeamento Skill -> References
 
 | Skill | References Utilizadas |

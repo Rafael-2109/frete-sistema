@@ -1,4 +1,47 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/operacional/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 003 — Ordem de Coleta / Gerenciamento
+
+> **Papel:** Opcao 003 — Ordem de Coleta / Gerenciamento.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Tela Inicial](#tela-inicial)
+  - [Tela Setores](#tela-setores)
+  - [Tela Comandar](#tela-comandar)
+- [Abas / Sub-telas](#abas-sub-telas)
+  - [Ordem de Coleta](#ordem-de-coleta)
+  - [Romaneio de Coletas](#romaneio-de-coletas)
+  - [Documentos de Coleta](#documentos-de-coleta)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Comandar Coletas](#comandar-coletas)
+  - [Baixar Coleta Realizada](#baixar-coleta-realizada)
+  - [Cancelar Coleta](#cancelar-coleta)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Situacoes de Coletas](#situacoes-de-coletas)
+  - [Mudanca Automatica de Data](#mudanca-automatica-de-data)
+  - [Armazem Operacional](#armazem-operacional)
+  - [Veiculos Sugeridos](#veiculos-sugeridos)
+  - [Gerenciamento de Risco (GR)](#gerenciamento-de-risco-gr)
+  - [Site de Rastreamento](#site-de-rastreamento)
+  - [SMS ao Cliente](#sms-ao-cliente)
+  - [Vinculo CTRC e Situacao Coletada](#vinculo-ctrc-e-situacao-coletada)
+  - [SSWMobile](#sswmobile)
+  - [Relacao de Mercadorias Coletadas](#relacao-de-mercadorias-coletadas)
+  - [Coletas em Parceiros SSW](#coletas-em-parceiros-ssw)
+  - [Unidades Sem Opcao 003](#unidades-sem-opcao-003)
+  - [Shopee B2C](#shopee-b2c)
 
 > **Modulo**: Operacional — Coleta/Entrega
 > **Paginas de ajuda**: 8 paginas consolidadas

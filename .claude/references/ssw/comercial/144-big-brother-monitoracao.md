@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 144 — Big Brother SSW - Monitoração das Ações
+
+> **Papel:** Opção 144 — Big Brother SSW - Monitoração das Ações.
 
 > **Módulo**: Administrativo/Gerencial
 > **Referência interna**: Opção 145

@@ -1,4 +1,40 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 423 — Parametros Comerciais do Cliente
+
+> **Papel:** Opcao 423 — Parametros Comerciais do Cliente.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Reentrega, Devolucao e Recoleta](#reentrega-devolucao-e-recoleta)
+  - [Armazenagem](#armazenagem)
+  - [Servicos Complementares](#servicos-complementares)
+  - [Outros Parametros](#outros-parametros)
+- [Fluxo de Uso](#fluxo-de-uso)
+  - [Cadastro Parametros Cliente:](#cadastro-parametros-cliente)
+  - [Emissao Reentrega/Devolucao (opcao 016):](#emissao-reentregadevolucao-opcao-016)
+  - [Armazenagem (opcao 136 + 199):](#armazenagem-opcao-136-199)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Reentrega vs Devolucao](#reentrega-vs-devolucao)
+  - [Base de Calculo](#base-de-calculo)
+  - [Armazenagem](#armazenagem)
+  - [Servicos Complementares (CTRC Complementar)](#servicos-complementares-ctrc-complementar)
+  - [Restricoes](#restricoes)
+  - [Devolucao - Particularidades](#devolucao---particularidades)
+  - [Cubagem](#cubagem)
+  - [Fallback](#fallback)
+- [POPs Relacionados](#pops-relacionados)
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 8 paginas consolidadas

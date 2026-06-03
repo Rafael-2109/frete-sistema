@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-B04 — Analisar Resultado por CTRC
+
+> **Papel:** POP-B04 — Analisar Resultado por CTRC.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1 — Acessar relatório de CTRCs com prejuízo (diário)](#etapa-1-acessar-relatório-de-ctrcs-com-prejuízo-diário)
+  - [ETAPA 2 — Analisar CTRC específico (opção 101)](#etapa-2-analisar-ctrc-específico-opção-101)
+  - [ETAPA 3 — Identificar causa do prejuízo/margem baixa](#etapa-3-identificar-causa-do-prejuízomargem-baixa)
+  - [ETAPA 4 — Corrigir parâmetros no SSW](#etapa-4-corrigir-parâmetros-no-ssw)
+  - [ETAPA 5 — Verificar RC Mínimo e Desconto NTC Máximo (opção 062)](#etapa-5-verificar-rc-mínimo-e-desconto-ntc-máximo-opção-062)
+  - [ETAPA 6 — Documentar e prevenir recorrência](#etapa-6-documentar-e-prevenir-recorrência)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: B — Comercial e Precificação
 **Prioridade**: P1 (Alta — "CTRC tem que dar LUCRO")

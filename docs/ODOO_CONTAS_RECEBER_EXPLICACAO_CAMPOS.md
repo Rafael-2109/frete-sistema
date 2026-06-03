@@ -1,4 +1,60 @@
+<!-- doc:meta
+tipo: reference
+camada: L2
+sot_de: —
+hub: docs/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # TABELAS DO ODOO - CONTAS A RECEBER
+
+> **Papel:** TABELAS DO ODOO - CONTAS A RECEBER.
+
+## Indice
+
+- [Documentação Consolidada com Explicação de Cada Campo](#documentação-consolidada-com-explicação-de-cada-campo)
+- [RESUMO DAS TABELAS](#resumo-das-tabelas)
+- [DIAGRAMA DE RELACIONAMENTOS](#diagrama-de-relacionamentos)
+- [Descrição](#descrição)
+- [Campos CRÍTICOS para Contas a Receber](#campos-críticos-para-contas-a-receber)
+  - [🔴 IDENTIFICAÇÃO DO TÍTULO](#identificação-do-título)
+  - [🔴 VALORES FINANCEIROS](#valores-financeiros)
+  - [🔴 DESCONTO CONCEDIDO](#desconto-concedido)
+  - [🔴 STATUS DE PAGAMENTO](#status-de-pagamento)
+  - [🔴 RECONCILIAÇÃO (MECANISMO DE BAIXA)](#reconciliação-mecanismo-de-baixa)
+  - [🔴 DATAS](#datas)
+  - [🔴 CLIENTE E EMPRESA](#cliente-e-empresa)
+  - [🔴 VÍNCULO COM PAGAMENTO](#vínculo-com-pagamento)
+  - [🟡 CAMPOS BRASILEIROS (l10n_br)](#campos-brasileiros-l10n_br)
+- [Descrição](#descrição)
+- [Campos CRÍTICOS](#campos-críticos)
+  - [🔴 IDENTIFICAÇÃO](#identificação)
+  - [🔴 STATUS](#status)
+  - [🔴 VALORES](#valores)
+  - [🔴 RELACIONAMENTOS](#relacionamentos)
+- [Descrição](#descrição)
+- [Campos CRÍTICOS](#campos-críticos)
+  - [🔴 IDENTIFICAÇÃO](#identificação)
+  - [🔴 TIPO E DIREÇÃO](#tipo-e-direção)
+  - [🔴 VALORES](#valores)
+  - [🔴 DATAS E STATUS](#datas-e-status)
+  - [🔴 RELACIONAMENTOS](#relacionamentos)
+  - [🟡 MÉTODO DE PAGAMENTO](#método-de-pagamento)
+- [Descrição](#descrição)
+- [Campos COMPLETOS (são apenas 18!)](#campos-completos-são-apenas-18)
+- [Como funciona a reconciliação:](#como-funciona-a-reconciliação)
+- [Descrição](#descrição)
+- [Campos COMPLETOS (são apenas 9!)](#campos-completos-são-apenas-9)
+- [Método 1: Verificar campo l10n_br_paga (mais simples)](#método-1-verificar-campo-l10n_br_paga-mais-simples)
+- [Método 2: Verificar amount_residual (mais preciso)](#método-2-verificar-amount_residual-mais-preciso)
+- [Método 3: Verificar reconciliação completa](#método-3-verificar-reconciliação-completa)
+- [Método 4: Verificar reconciliações parciais](#método-4-verificar-reconciliações-parciais)
+- [1. DESCONTO CONTRATUAL (na emissão)](#1-desconto-contratual-na-emissão)
+- [2. NOTA DE CRÉDITO (devolução/bonificação)](#2-nota-de-crédito-devoluçãobonificação)
+- [3. PAGAMENTO (baixa normal)](#3-pagamento-baixa-normal)
+- [4. WRITE-OFF (ajuste/diferença)](#4-write-off-ajustediferença)
+- [Tabela ContasAReceber (já existente)](#tabela-contasareceber-já-existente)
+- [NOVA Tabela: ContasAReceberBaixa (sugestão)](#nova-tabela-contasareceberbaixa-sugestão)
 ## Documentação Consolidada com Explicação de Cada Campo
 
 **Data:** 2025-11-28

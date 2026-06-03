@@ -1,4 +1,33 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/pops/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # POP-D04 — Registrar Chegada de Veículo
+
+> **Papel:** POP-D04 — Registrar Chegada de Veículo.
+
+## Indice
+
+- [Objetivo](#objetivo)
+- [Trigger](#trigger)
+- [Frequência](#frequência)
+- [Pré-requisitos](#pré-requisitos)
+- [Passo-a-Passo](#passo-a-passo)
+  - [ETAPA 1: Acessar Registro de Chegada](#etapa-1-acessar-registro-de-chegada)
+  - [ETAPA 2: Identificar o Manifesto](#etapa-2-identificar-o-manifesto)
+  - [ETAPA 3: Registrar Dados de Chegada](#etapa-3-registrar-dados-de-chegada)
+  - [ETAPA 4: Confirmar Registro](#etapa-4-confirmar-registro)
+  - [ETAPA 5: Verificar Atualização (SSWBar)](#etapa-5-verificar-atualização-sswbar)
+  - [ETAPA 6: Monitorar Descarregamento (Opcional)](#etapa-6-monitorar-descarregamento-opcional)
+- [Contexto CarVia](#contexto-carvia)
+- [Erros Comuns e Soluções](#erros-comuns-e-soluções)
+- [Verificação Playwright](#verificação-playwright)
+- [POPs Relacionados](#pops-relacionados)
+- [Histórico de Revisões](#histórico-de-revisões)
 
 **Categoria**: D — Operacional: Transporte e Entrega
 **Prioridade**: P2 (Média)

@@ -1,4 +1,32 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/fiscal/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 533 — Liquidacao de Subcontratos via Mapa de Comissao
+
+> **Papel:** Opcao 533 — Liquidacao de Subcontratos via Mapa de Comissao.
+
+## Indice
+
+- [Funcao](#funcao)
+- [Quando Usar](#quando-usar)
+- [Pre-requisitos](#pre-requisitos)
+- [Campos / Interface](#campos-interface)
+  - [Listagem de CTRCs](#listagem-de-ctrcs)
+  - [Rodape](#rodape)
+- [Fluxo de Uso](#fluxo-de-uso)
+- [Integracao com Outras Opcoes](#integracao-com-outras-opcoes)
+- [Observacoes e Gotchas](#observacoes-e-gotchas)
+  - [Recomendacao Importante](#recomendacao-importante)
+  - [Subcontratante Nao Usa SSW](#subcontratante-nao-usa-ssw)
+  - [Comissao de Calculo](#comissao-de-calculo)
+  - [Conferencia e Diferencas](#conferencia-e-diferencas)
+  - [Liquidacao](#liquidacao)
+  - [Impressao](#impressao)
 
 > **Modulo**: Fiscal
 > **Paginas de ajuda**: 1 pagina consolidada

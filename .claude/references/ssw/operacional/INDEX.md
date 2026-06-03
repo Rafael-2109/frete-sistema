@@ -1,9 +1,29 @@
+<!-- doc:meta
+tipo: index
+camada: L1
+sot_de: —
+hub: .claude/references/ssw/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Modulo OPERACIONAL — Coleta e Entrega — Indice
+
+> **Papel:** Modulo OPERACIONAL — Coleta e Entrega — Indice.
 
 > **Sistema**: SSW Sistemas
 > **Modulo**: Operacional — Coleta/Entrega
 > **Documentacao completa**: 18 opcoes documentadas
 > **Ultima atualizacao**: 2026-02-14
+
+## Indice
+
+- [Visao Geral](#visao-geral)
+- [Opcoes Documentadas](#opcoes-documentadas)
+- [Fluxo Operacional Tipico](#fluxo-operacional-tipico)
+- [Integracao com SSWMobile](#integracao-com-sswmobile)
+- [Referencias Cruzadas](#referencias-cruzadas)
+- [Observacoes Gerais](#observacoes-gerais)
+- [Documentacao Adicional](#documentacao-adicional)
 
 ## Visao Geral
 
@@ -135,3 +155,32 @@ Ativacao via Opcao 903/Operacao:
 - **SSW Sistemas**: `.claude/references/ssw/INDEX.md`
 - **Manual SSW completo**: https://sistema.ssw.inf.br/ajuda/
 - **APIs SSW**: https://ssw.inf.br/ws/
+- [Opcao 004 — Emissao de CTRCs](004-emissao-ctrcs.md)
+- [Opção 006 — Emissão de CT-e/CT-e OS em Lote](006-emissao-cte-os.md)
+- [Opção 007 — Impressão e Autorização de CT-es](007-emissao-cte-complementar.md)
+- [Opcao 009 — Impressao de RPS e Geracao de NFS-e](009-impressao-rps-nfse.md)
+- [Opcao 011 — Identificacao de Volumes](011-identificacao-volumes.md)
+- [Opção 015 — Agendamento de Entregas](015-agendamento-entregas.md)
+- [Opcao 018 — Gerenciamento dos SSWBars](018-gerenciamento-sswbar.md)
+- [Opcao 019 — Emissao do Manifesto Operacional](019-manifesto-operacional.md)
+- [Opção 020 — Manifesto de Carga](020-manifesto-carga.md)
+- [Opcao 021 — Cadastro de Gaiolas e Estoque de Pallets e Chapas](021-cadastro-gaiolas.md)
+- [Opção 025 — Saída de Veículos](025-saida-veiculos.md)
+- [Opcao 027 — Relacao de Proprietarios de Veiculos](027-relacao-proprietarios-veiculos.md)
+- [Opcao 028 — Relacao de Motoristas](028-relacao-motoristas.md)
+- [Opção 030 — Chegada de Veículo](030-chegada-de-veiculo.md)
+- [Opção 031 — CTRCs com Determinada Ocorrência](031-controle-de-chegada.md)
+- [Opção 033 — Ocorrências de Transferência](033-ocorrencias-de-transferencia.md)
+- [Opção 071 — Notas Fiscais Importadas via EDI (Contratação de Veículos)](071-contratacao-de-veiculos.md)
+- [Opção 072 — Contratação de Veículo de Transferência](072-contratacao-de-veiculo-de-transferencia.md)
+- [Opção 073 (077) — Reemissão de CTRBs](073-controle-de-contratacao.md)
+- [Opção 081 — CTRCs Disponíveis para Entrega (Romaneio)](081-romaneio.md)
+- [Opção 084 — Informar Pesos e Volumes de NFs (opção 148 — Resultados de Cubagem/Pesagem)](084-controle.md)
+- [Opção 087 — Apreensão Fiscal de Mercadorias (TAD)](087-controle.md)
+- [Opção 091 — Controle de CTRCs Segregados](091-consulta.md)
+- [Opção 097 — Cadastro de Tipos de Veículos](097-controle.md)
+- [Opção 099 — Cobrança de Estadia na Entrega](099-consulta.md)
+- [Opcao 108 — Instrucoes para Ocorrencias de Entrega](108-ocorrencias-entrega.md)
+- [Opção 120 — Chegada de Veículo sem Manifesto](120-chegada-veiculo-sem-manifesto.md)
+- [Opção 133 — Informar Ocorrências em CTRCs](133-ocorrencias-ctrcs.md)
+- [Opção 136 — Cobrança de Armazenagem](136-cobranca-armazenagem.md)

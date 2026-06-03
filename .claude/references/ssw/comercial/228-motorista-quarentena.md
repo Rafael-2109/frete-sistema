@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opcao 228 — Motorista e Quarentena
+
+> **Papel:** Opcao 228 — Motorista e Quarentena.
 
 > **Modulo**: Comercial
 > **Paginas de ajuda**: 1 pagina consolidada

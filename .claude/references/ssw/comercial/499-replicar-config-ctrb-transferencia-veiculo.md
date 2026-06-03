@@ -1,4 +1,14 @@
+<!-- doc:meta
+tipo: how-to
+camada: L2
+sot_de: —
+hub: .claude/references/ssw/comercial/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Opção 499 — Replicar Configurações do CTRB de Transferência por Veículo
+
+> **Papel:** Opção 499 — Replicar Configurações do CTRB de Transferência por Veículo.
 
 > **Módulo**: Comercial/Operacional
 > **Páginas de ajuda**: 1 página consolidada
