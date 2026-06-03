@@ -80,16 +80,28 @@ Achado vivo: 1 step real teve `judge=success/85` MAS `verify.adversarial.refuted
 - SKILL.md (description + decision tree + tabela) e SCRIPTS.md (TOC + corpo) atualizados.
 - Validado: 5 subcomandos rodam end-to-end contra o banco local; 18/18 pytest verdes.
 
-### Onda 2 — rede de seguranca + consolidacao
-- **P12 (pre-requisito ja iniciado na Onda 1)**: estender pytest com SNAPSHOTS do shape `--json`
-  ATUAL de cada subcomando legado, ANTES de refatorar `common.py`. Remover/converter os 2 evals
-  orfaos (`evals/evals.json`, `evals/trigger_eval_set.json` — lixo, nenhum harness le).
-- **P7**: `diagnostico.py status` (agregador canonico) — consolida stats+memory-metrics+grafo.stats+
-  embedding-coverage+health+friction+rule-adhesion+loop-health; elimina 4 duplicacoes de metrica.
-  Cuidado: chamar `get_insights_data` 1x e fatiar (nao N vezes).
-- **P8**: refator `common.py` — reviver `success_output` (envelope `{ok,command,data,warnings,errors}`),
-  `run_handler` (recebe app/ctx do main, fim do contexto-duplo em padrao.analyze/extract/profile),
-  `format_datetime` TZ-safe. SO depois do snapshot/pytest travar o shape. 1 script por vez.
+### Onda 2 — rede de seguranca + consolidacao (FEITA, 2026-06-03)
+- **P12** ✅ rede de seguranca de snapshot: `tests/agente/test_gerindo_agente_snapshots.py`
+  trava o shape `--json` (esqueleto de tipos, valores ignorados) de 26 subcomandos READ pelo
+  caminho REAL `main()`/`run_handler` (subprocess, NAO in-process — para exercitar o codigo que o
+  P8 refatora). Golden: `tests/agente/snapshots/gerindo_agente_json_shapes.json`. DB-bound, SKIPa
+  sem `.env` (preserva o fast-path ZERO-DB). Tolerante a dado esparso (open-map `<map>` / empty-list
+  `<empty>` / null) SEM mascarar regressao estrutural (null so tolera escalar — fix do review). Os
+  2 evals orfaos foram removidos (commit `2dfc16b00`). Baseline gravado PRE-refactor; compare
+  pos-refactor PROVOU 25/25 legados inalterados.
+- **P7** ✅ `diagnostico.py status` (agregador canonico): chama `get_insights_data` 1x + `get_memory_metrics`
+  1x (traz grafo stats via `knowledge_graph`) + `_memoria_stats` + `_embedding_coverage` + `_loop_health`
+  — consolida os 8 (stats+memory-metrics+grafo.stats+embedding-coverage+health+friction+rule-adhesion+
+  loop-health), elimina as 3 chamadas redundantes a `get_insights_data` (insights/health/recommendations).
+  `--all`-safe (`(:uid IS NULL OR ...)`); sinaliza gargalo B1; emite envelope canonico em `--json`.
+- **P8** ✅ refator `common.py`: `success_output` revivido como envelope `{ok,command,data,warnings,errors}`
+  (era codigo morto), `run_handler` (centraliza parse->1 ctx->resolve->dispatch), `format_datetime`
+  TZ-safe (aware->BRT, naive inalterado=snapshot-safe), `error_exit` -> `NoReturn`. `padrao.py` migrado
+  (1 script por vez): fim do contexto-duplo em analyze/extract/profile via `current_app._get_current_object()`
+  — mesmo padrao da Onda 1 (`manutencao.summarize`), NAO `run_handler`-passa-app (menor churn, snapshot-safe).
+- **Cobertura**: 24 testes ZERO-DB (contrato) + 26 snapshots DB-bound. Review adversarial (5 dims +
+  verificacao cetica): 4 dims aprovadas; 1 HIGH (null wildcard mascarava crescimento estrutural) + 1
+  MEDIUM (RECORD podia gravar shape de erro) + 1 LOW (memoria-stats) — TODOS fechados.
 
 ### Onda 3 — flywheel WRITE (escrita total autorizada)
 - **loop.py** (novo): `directives` (lista shadow), `approve --confirm` (shadow->ativa, com guard

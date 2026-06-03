@@ -10,7 +10,11 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NoReturn, Optional, Tuple
+from zoneinfo import ZoneInfo
+
+# Convencao do projeto: Brasil-naive (ver .claude/references/REGRAS_TIMEZONE.md).
+_BRT = ZoneInfo('America/Sao_Paulo')
 
 
 def sys_path_setup():
@@ -101,9 +105,16 @@ def format_table(headers: List[str], rows: List[List[str]], max_col_width: int =
 
 
 def format_datetime(dt: Optional[datetime]) -> str:
-    """Formata datetime como DD/MM/YYYY HH:MM (BR naive)."""
+    """Formata datetime como DD/MM/YYYY HH:MM (horario de Brasilia).
+
+    TZ-safe: um datetime AWARE e convertido para America/Sao_Paulo antes de
+    formatar (evita exibir UTC cru); um datetime/date NAIVE e formatado como
+    esta (convencao Brasil-naive do projeto). Ver REGRAS_TIMEZONE.md.
+    """
     if not dt:
         return '-'
+    if getattr(dt, 'tzinfo', None) is not None:
+        dt = dt.astimezone(_BRT).replace(tzinfo=None)
     return dt.strftime('%d/%m/%Y %H:%M')
 
 
@@ -135,26 +146,36 @@ def resolve_user(user_id: int) -> dict:
     return {'id': user.id, 'nome': user.nome, 'email': user.email}
 
 
-def success_output(data: Any, json_mode: bool = False) -> None:
-    """Imprime resultado formatado (text ou JSON)."""
+def success_output(
+    command: str,
+    data: Any,
+    json_mode: bool = False,
+    warnings: Optional[List[str]] = None,
+    errors: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Envelope canonico de saida `{ok, command, data, warnings, errors}`.
+
+    Em `--json`, imprime o envelope serializado (contrato estavel para consumo
+    programatico). Sempre RETORNA o envelope (util para teste). O corpo humano
+    (texto) e responsabilidade do handler — este helper so cuida do `--json`.
+
+    Padrao para subcomandos NOVOS (Onda 2+). Subcomandos legados mantem o
+    `print(format_json(...))` cru por compatibilidade (travada pelo snapshot P12).
+    """
+    envelope = {
+        'ok': not errors,
+        'command': command,
+        'data': data,
+        'warnings': warnings or [],
+        'errors': errors or [],
+    }
     if json_mode:
-        if isinstance(data, str):
-            print(data)
-        else:
-            print(format_json(data))
-    else:
-        if isinstance(data, str):
-            print(data)
-        elif isinstance(data, dict):
-            for key, value in data.items():
-                print(f"{key}: {value}")
-        elif isinstance(data, list):
-            for item in data:
-                print(item)
+        print(format_json(envelope))
+    return envelope
 
 
-def error_exit(msg: str, code: int = 1) -> None:
-    """Imprime erro para stderr e encerra."""
+def error_exit(msg: str, code: int = 1) -> NoReturn:
+    """Imprime erro para stderr e encerra (nunca retorna)."""
     print(f"ERRO: {msg}", file=sys.stderr)
     sys.exit(code)
 
@@ -189,3 +210,30 @@ def parse_args_with_subcommands(
 
     args = parser.parse_args()
     return args, args.subcommand
+
+
+def run_handler(
+    description: str,
+    subcommands: Dict[str, Dict[str, Any]],
+    handlers: Dict[str, Any],
+    no_resolve_subcommands: Tuple[str, ...] = (),
+) -> None:
+    """Boilerplate de main(): parse -> 1 app context -> resolve_user -> dispatch.
+
+    Centraliza o padrao repetido nos scripts da skill, abrindo o app context UMA
+    unica vez. Handlers que precisam do objeto `app` (ex: para passar a um service)
+    devem usar `flask.current_app._get_current_object()` DENTRO do contexto — nunca
+    chamar `get_app_context()` de novo (evita o create_app duplicado / contexto-duplo).
+
+    no_resolve_subcommands: subcomandos que NAO exigem usuario valido (ex: 'users'
+    em sessao.py, que e admin/cross-user).
+    """
+    args, subcommand = parse_args_with_subcommands(description, subcommands)
+    app, ctx = get_app_context()  # noqa: F841 — app fica disponivel via current_app
+    with ctx:
+        if subcommand not in no_resolve_subcommands:
+            resolve_user(args.user_id)
+        handler = handlers.get(subcommand)
+        if not handler:
+            error_exit(f"Subcomando desconhecido: {subcommand}")
+        handler(args)

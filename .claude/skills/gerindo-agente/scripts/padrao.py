@@ -18,8 +18,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..')))
 
 from common import (
-    error_exit, format_datetime, format_json,
-    get_app_context, parse_args_with_subcommands, resolve_user, truncate,
+    error_exit, format_datetime, format_json, run_handler, truncate,
 )
 
 
@@ -127,9 +126,11 @@ def handle_pitfalls(args):
 
 def handle_analyze(args):
     """Executar analise de padroes."""
+    from flask import current_app
     from app.agente.services.pattern_analyzer import analyze_and_save
 
-    app, _ = get_app_context()
+    # Reutiliza o app context ja aberto por run_handler (evita contexto-duplo / 2x create_app).
+    app = current_app._get_current_object()
 
     print("Executando analise de padroes via Sonnet...")
     try:
@@ -151,6 +152,7 @@ def handle_analyze(args):
 
 def handle_extract(args):
     """Extrair conhecimento de uma sessao."""
+    from flask import current_app
     from app.agente.models import AgentSession
     from app.agente.services.pattern_analyzer import extrair_conhecimento_sessao
 
@@ -164,7 +166,8 @@ def handle_extract(args):
     if len(messages) < 3:
         error_exit("Sessao tem menos de 3 mensagens. Nao ha conteudo suficiente.")
 
-    app, _ = get_app_context()
+    # Reutiliza o app context ja aberto por run_handler (evita contexto-duplo / 2x create_app).
+    app = current_app._get_current_object()
 
     print("Extraindo conhecimento da sessao via Sonnet...")
     try:
@@ -220,9 +223,11 @@ def handle_profile(args):
     from app.agente.models import AgentMemory
 
     if args.generate:
+        from flask import current_app
         from app.agente.services.pattern_analyzer import generate_and_save_profile
 
-        app, _ = get_app_context()
+        # Reutiliza o app context ja aberto por run_handler (evita contexto-duplo / 2x create_app).
+        app = current_app._get_current_object()
 
         print("Gerando perfil comportamental via Sonnet (~$0.006)...")
         try:
@@ -283,20 +288,9 @@ HANDLERS = {
 
 
 def main():
-    args, subcommand = parse_args_with_subcommands(
-        'Padroes e aprendizado do agente', SUBCOMMANDS
-    )
-
-    # analyze e extract criam seu proprio app context via service
-    # mas precisamos do contexto para resolver_user e queries
-    app, ctx = get_app_context()
-    with ctx:
-        resolve_user(args.user_id)
-        handler = HANDLERS.get(subcommand)
-        if handler:
-            handler(args)
-        else:
-            error_exit(f"Subcomando desconhecido: {subcommand}")
+    # run_handler centraliza: parse -> 1 app context -> resolve_user -> dispatch.
+    # Handlers que precisam de `app` usam current_app (sem contexto-duplo).
+    run_handler('Padroes e aprendizado do agente', SUBCOMMANDS, HANDLERS)
 
 
 if __name__ == '__main__':

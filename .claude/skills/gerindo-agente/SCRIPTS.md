@@ -4,7 +4,7 @@ camada: L2
 sot_de: —
 hub: .claude/skills/gerindo-agente/SKILL.md
 superseded_by: —
-atualizado: 2026-06-02
+atualizado: 2026-06-03
 -->
 # SCRIPTS.md — Referencia Unificada de Parametros
 
@@ -61,6 +61,7 @@ atualizado: 2026-06-02
   - [rule-adhesion](#rule-adhesion)
   - [routing](#routing)
   - [recommendations](#recommendations)
+  - [status](#status)
 - [manutencao.py](#manutencaopy)
   - [consolidate](#consolidate)
   - [cold-move](#cold-move)
@@ -319,6 +320,14 @@ Chama `insights_service.get_routing_metrics`. Taxa de ambiguidade (AskUserQuesti
 
 Compoe `insights_service.get_insights_data` + `recommendations_engine.generate_recommendations` — lista COMPLETA (ate 5, ordenada por severidade), diferente de `insights` que trunca a 3. READ-only, custo $0.
 
+### status
+| Argumento | Tipo | Obrigatorio | Default | Descricao |
+|-----------|------|-------------|---------|-----------|
+| `--days` | int | Nao | 30 | Periodo em dias |
+| `--all` | flag | Nao | false | Escopo do sistema inteiro (todos os usuarios) |
+
+**Agregador canonico** (Onda 2). Chama `get_insights_data` UMA UNICA vez e fatia health/friction/resolution/adoption/overview/deltas/recommendations/rule_adhesion — eliminando as 3 chamadas redundantes de `insights`/`health`/`recommendations`. Soma `memory-metrics` (+ grafo stats via `knowledge_graph`), `embedding-coverage` e loop-health/PlanState (sinaliza gargalo B1). Em `--json` emite o **envelope canonico** `{ok, command, data, warnings, errors}`. READ-only, custo $0.
+
 ---
 
 ## manutencao.py
@@ -346,3 +355,12 @@ Sem argumentos adicionais.
 
 ### cleanup-orphans
 Sem argumentos adicionais.
+
+---
+
+## Cobertura de testes
+
+| Arquivo | Tipo | O que cobre |
+|---------|------|-------------|
+| `tests/agente/test_gerindo_agente_skill.py` | ZERO-DB (importlib + inspect) | Contrato: paridade SUBCOMMANDS/HANDLERS, args, destrutivas exigem `--confirm`, envelope `success_output`, `format_datetime` TZ-safe, `run_handler`, ausencia de contexto-duplo em `padrao`. |
+| `tests/agente/test_gerindo_agente_snapshots.py` | DB-bound (subprocess), skippa sem `.env` | Rede de seguranca P12: trava o shape `--json` (esqueleto de tipos) de cada subcomando READ pelo caminho real `main()`/`run_handler`. Golden: `tests/agente/snapshots/gerindo_agente_json_shapes.json`. Regravar: `GERINDO_SNAPSHOT_RECORD=1 pytest ...`. |

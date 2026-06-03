@@ -1,0 +1,705 @@
+{
+  "diagnostico.briefing": {
+    "briefing_xml": "str",
+    "has_briefing": "bool",
+    "user_id": "int"
+  },
+  "diagnostico.cold-candidates": {
+    "candidatos": [
+      {
+        "category": "str",
+        "importance_score": "float",
+        "path": "str",
+        "updated_at": "str",
+        "usage_count": "int"
+      }
+    ],
+    "total": "int"
+  },
+  "diagnostico.conflicts": {
+    "conflitos": [
+      "<empty>"
+    ],
+    "total": "int"
+  },
+  "diagnostico.effectiveness": {
+    "memorias": [
+      {
+        "category": "str",
+        "effective_count": "int",
+        "is_cold": "bool",
+        "path": "str",
+        "ratio": "float",
+        "usage_count": "int"
+      }
+    ],
+    "total": "int"
+  },
+  "diagnostico.embedding-coverage": {
+    "memorias": {
+      "cobertura": "float",
+      "com_embedding": "int",
+      "total": "int"
+    },
+    "sessoes": {
+      "cobertura": "float",
+      "com_embedding": "int",
+      "total": "int"
+    }
+  },
+  "diagnostico.friction": {
+    "abandoned_sessions": [
+      {
+        "cost_usd": "float",
+        "created_at": "str",
+        "first_message": "str",
+        "message_count": "int",
+        "session_id": "str",
+        "title": "str"
+      }
+    ],
+    "friction_score": "float",
+    "frustration_signals": [
+      {
+        "created_at": "str",
+        "session_id": "str",
+        "signal_count": "int",
+        "signals": [
+          {
+            "marker": "str",
+            "message": "str",
+            "type": "str"
+          }
+        ],
+        "title": "str"
+      }
+    ],
+    "generated_at": "str",
+    "no_tool_sessions": [
+      "<empty>"
+    ],
+    "period_days": "int",
+    "repeated_queries": [
+      {
+        "count": "int",
+        "examples": [
+          "str"
+        ],
+        "query": "str",
+        "sessions": "int"
+      }
+    ],
+    "summary": "str",
+    "total_sessions_analyzed": "int"
+  },
+  "diagnostico.health": {
+    "adoption_rate": "float",
+    "friction_score": "float",
+    "health_score": "float",
+    "period_days": "int",
+    "resolution_rate": "float"
+  },
+  "diagnostico.insights": {
+    "adoption_rate": "float",
+    "cache_efficiency": {
+      "hit_rate_global": "float",
+      "low_efficiency_sessions": [
+        "<empty>"
+      ],
+      "period_days": "int",
+      "sessoes_com_tokens": "int",
+      "sessoes_total": "int",
+      "total_cache_creation_tokens": "int",
+      "total_cache_read_tokens": "int",
+      "total_input_tokens": "int"
+    },
+    "cost_per_resolution": "float",
+    "costs": {
+      "by_user": [
+        {
+          "cost_usd": "float",
+          "name": "str",
+          "sessions": "int",
+          "user_id": "int"
+        }
+      ],
+      "weekly": [
+        {
+          "cost_usd": "float",
+          "week": "str"
+        }
+      ]
+    },
+    "daily": {
+      "cost_values": [
+        "float"
+      ],
+      "dates": [
+        "str"
+      ],
+      "message_counts": [
+        "int"
+      ],
+      "resolution_rates": [
+        "int"
+      ],
+      "session_counts": [
+        "int"
+      ]
+    },
+    "deltas": {
+      "avg_cost_per_session": "null",
+      "friction_score": "null",
+      "resolution_rate": "null",
+      "total_cost_usd": "null",
+      "total_sessions": "null",
+      "unique_users": "null"
+    },
+    "friction": {
+      "abandoned_sessions": [
+        {
+          "cost_usd": "float",
+          "created_at": "str",
+          "first_message": "str",
+          "message_count": "int",
+          "session_id": "str",
+          "title": "str"
+        }
+      ],
+      "friction_score": "float",
+      "frustration_signals": [
+        {
+          "created_at": "str",
+          "session_id": "str",
+          "signal_count": "int",
+          "signals": [
+            {
+              "marker": "str",
+              "message": "str",
+              "type": "str"
+            }
+          ],
+          "title": "str"
+        }
+      ],
+      "generated_at": "str",
+      "no_tool_sessions": [
+        "<empty>"
+      ],
+      "period_days": "int",
+      "repeated_queries": [
+        {
+          "count": "int",
+          "examples": [
+            "str"
+          ],
+          "query": "str",
+          "sessions": "int"
+        }
+      ],
+      "summary": "str",
+      "total_sessions_analyzed": "int"
+    },
+    "generated_at": "str",
+    "health_score": "float",
+    "memory_health": {
+      "by_scope": "<map>",
+      "cold_tier": "int",
+      "conflicting": "int",
+      "ineffective": "int",
+      "total": "int",
+      "with_enrichments": "int"
+    },
+    "model_distribution": "<map>",
+    "overview": {
+      "avg_cost_per_session": "float",
+      "avg_messages_per_session": "float",
+      "sessions_with_summary": "int",
+      "total_cost_usd": "float",
+      "total_messages": "int",
+      "total_sessions": "int",
+      "unique_users": "int"
+    },
+    "period_days": "int",
+    "recommendations": [
+      {
+        "action": {
+          "label": "str",
+          "target": "str",
+          "type": "str"
+        },
+        "description": "str",
+        "icon": "str",
+        "metric_value": "float",
+        "severity": "str",
+        "threshold": "float",
+        "title": "str"
+      }
+    ],
+    "resolution_rate": "float",
+    "resolved_sessions": "int",
+    "rule_adhesion": {
+      "mandatory_count": "int",
+      "mandatory_pct": "float",
+      "outcome": {
+        "available": "bool",
+        "harmful_total": "int",
+        "helpful_total": "int"
+      },
+      "period_days": "int",
+      "top_by_signature": [
+        "<empty>"
+      ],
+      "total_corrections": "int"
+    },
+    "sessions": {
+      "all": [
+        {
+          "cost_usd": "float",
+          "created_at": "str",
+          "has_summary": "bool",
+          "message_count": "int",
+          "model": "str",
+          "session_id": "str",
+          "status": "str",
+          "title": "str",
+          "topics": [
+            "<empty>"
+          ],
+          "user_name": "str"
+        }
+      ]
+    },
+    "subagent_costs": {
+      "period_days": "int",
+      "top_subagents": [
+        "<empty>"
+      ],
+      "total_cost_30d": "int"
+    },
+    "suggestion_feedback": {
+      "click_rate": "float",
+      "sessions_with_clicks": "int",
+      "sessions_with_suggestions": "int",
+      "top_clicked": [
+        "<empty>"
+      ],
+      "total_clicks": "int"
+    },
+    "tools": {
+      "by_category": [
+        {
+          "category": "str",
+          "color": "str",
+          "count": "int",
+          "domain": "str"
+        }
+      ],
+      "by_domain": [
+        {
+          "color": "str",
+          "count": "int",
+          "domain": "str"
+        }
+      ],
+      "most_used": [
+        {
+          "count": "int",
+          "tool": "str"
+        }
+      ]
+    },
+    "topics": [
+      {
+        "count": "int",
+        "topic": "str"
+      }
+    ],
+    "users": {
+      "most_active": [
+        {
+          "cost_usd": "float",
+          "messages": "int",
+          "name": "str",
+          "sessions": "int",
+          "user_id": "int"
+        }
+      ]
+    }
+  },
+  "diagnostico.memory-metrics": {
+    "accessed_in_period": "int",
+    "avg_importance_score": "float",
+    "capdo_quality": {
+      "domain_diversity": {
+        "balanced": "bool",
+        "distribution": "<map>",
+        "max_domain_pct": "float"
+      },
+      "effective_use_rate": "float",
+      "knowledge_type_distribution": "<map>",
+      "never_used_after_30d": "int",
+      "noise_rate": "float",
+      "prescricao_count": "int",
+      "prescricao_coverage": "float",
+      "total_effective": "int",
+      "total_usage": "int"
+    },
+    "categories": "<map>",
+    "cold_tier": {
+      "gc_candidates_90d": "int",
+      "total": "int"
+    },
+    "correction_count_stats": {
+      "avg_per_memory": "float",
+      "memories_with_corrections": "int",
+      "total_corrections": "int"
+    },
+    "corrections_count": "int",
+    "decay_distribution": {
+      "1-7d": "int",
+      "30-90d": "int",
+      "7-30d": "int",
+      "<1d": "int",
+      ">90d": "int"
+    },
+    "effective_use_rate": "float",
+    "knowledge_graph": {
+      "entities_by_type": "<map>",
+      "top_entities": [
+        "<empty>"
+      ],
+      "total_entities": "int",
+      "total_links": "int",
+      "total_relations": "int"
+    },
+    "most_corrected_memories": [
+      "<empty>"
+    ],
+    "noise_rate": "float",
+    "orphan_embeddings": "int",
+    "period_days": "int",
+    "total_memories": "int",
+    "utilization_rate": "float"
+  },
+  "diagnostico.recommendations": {
+    "period_days": "int",
+    "recommendations": [
+      {
+        "action": {
+          "label": "str",
+          "target": "str",
+          "type": "str"
+        },
+        "description": "str",
+        "icon": "str",
+        "metric_value": "float",
+        "severity": "str",
+        "threshold": "float",
+        "title": "str"
+      }
+    ],
+    "scope": "str",
+    "total": "int"
+  },
+  "diagnostico.routing": {
+    "ambiguidade": {
+      "sessions_askuser": "int",
+      "sessions_com_skill": "int",
+      "taxa_askuser_pct": "float",
+      "taxa_skill_pct": "float"
+    },
+    "corrections": [
+      {
+        "created_at": "str",
+        "path": "str",
+        "preview": "str"
+      }
+    ],
+    "health_score": "int",
+    "instrumentacao": {
+      "correction_count_ativo": "bool",
+      "effective_count_ativo": "bool",
+      "resolves_to_ativo": "bool",
+      "usage_count_ativo": "bool"
+    },
+    "period_days": "int",
+    "sessions_com_summary": "int",
+    "skill_distribution": [
+      {
+        "count": "int",
+        "tool": "str"
+      }
+    ],
+    "struggling": [
+      "<empty>"
+    ],
+    "top_corrected": [
+      "<empty>"
+    ],
+    "topics": [
+      {
+        "count": "int",
+        "topic": "str"
+      }
+    ],
+    "total_sessions": "int"
+  },
+  "diagnostico.rule-adhesion": {
+    "mandatory_count": "int",
+    "mandatory_pct": "float",
+    "outcome": {
+      "available": "bool",
+      "harmful_total": "int",
+      "helpful_total": "int"
+    },
+    "period_days": "int",
+    "top_by_signature": [
+      "<empty>"
+    ],
+    "total_corrections": "int"
+  },
+  "diagnostico.status": {
+    "command": "str",
+    "data": {
+      "deltas": {
+        "avg_cost_per_session": "null",
+        "friction_score": "null",
+        "resolution_rate": "null",
+        "total_cost_usd": "null",
+        "total_sessions": "null",
+        "unique_users": "null"
+      },
+      "embeddings": {
+        "memorias": {
+          "cobertura": "float",
+          "com_embedding": "int",
+          "total": "int"
+        },
+        "sessoes": {
+          "cobertura": "float",
+          "com_embedding": "int",
+          "total": "int"
+        }
+      },
+      "graph": {
+        "total_entities": "int",
+        "total_links": "int",
+        "total_relations": "int"
+      },
+      "health": {
+        "adoption_rate": "float",
+        "classification": "str",
+        "friction_score": "float",
+        "health_score": "float",
+        "resolution_rate": "float"
+      },
+      "loop_health": {
+        "gargalo_b1": "bool",
+        "sessions_total": "int",
+        "status": "str",
+        "teams_sessions": "int",
+        "with_plan": "int",
+        "with_plan_pct": "float"
+      },
+      "memory": {
+        "accessed_in_period": "int",
+        "cold_tier": {
+          "gc_candidates_90d": "int",
+          "total": "int"
+        },
+        "conflitos": "int",
+        "corrections_count": "int",
+        "media_efetividade": "float",
+        "media_uso": "float",
+        "orphan_embeddings": "int",
+        "por_escopo": "<map>",
+        "total_caracteres": "int",
+        "total_memories": "int",
+        "utilization_rate": "float"
+      },
+      "overview": {
+        "avg_cost_per_session": "float",
+        "avg_messages_per_session": "float",
+        "sessions_with_summary": "int",
+        "total_cost_usd": "float",
+        "total_messages": "int",
+        "total_sessions": "int",
+        "unique_users": "int"
+      },
+      "period_days": "int",
+      "recommendations": [
+        {
+          "severity": "str",
+          "title": "str"
+        }
+      ],
+      "rule_adhesion": {
+        "mandatory_count": "int",
+        "outcome_available": "bool",
+        "total_corrections": "int"
+      },
+      "scope": "str"
+    },
+    "errors": [
+      "<empty>"
+    ],
+    "ok": "bool",
+    "warnings": [
+      "str"
+    ]
+  },
+  "diagnostico.step-coverage": {
+    "by_channel": [
+      {
+        "channel": "str",
+        "judged": "int",
+        "last_step": "str",
+        "total": "int",
+        "triaged": "int",
+        "verified": "int"
+      }
+    ],
+    "period_days": "int",
+    "plan_state": {
+      "sessions_total": "int",
+      "teams_sessions": "int",
+      "with_plan": "int",
+      "with_plan_pct": "float"
+    },
+    "scope": "str",
+    "status": "str",
+    "steps_total": "int"
+  },
+  "diagnostico.step-quality": {
+    "adversarial_refuted": "int",
+    "avg_judge_score": "null",
+    "high_frustration": "int",
+    "judge_failure": "int",
+    "judge_success": "int",
+    "judged": "int",
+    "label_distribution": [
+      "<empty>"
+    ],
+    "period_days": "int",
+    "scope": "str",
+    "status": "str",
+    "success_but_refuted": "int",
+    "top_componente_culpado": [
+      "<empty>"
+    ],
+    "total_steps": "int",
+    "with_componente_culpado": "int"
+  },
+  "grafo.entities": {
+    "entidades": [
+      "<empty>"
+    ],
+    "total": "int"
+  },
+  "grafo.query": {
+    "prompt": "str",
+    "resultados": [
+      "<empty>"
+    ],
+    "total": "int"
+  },
+  "grafo.relations": {
+    "relacoes": [
+      "<empty>"
+    ],
+    "total": "int"
+  },
+  "grafo.stats": {
+    "entities_by_type": "<map>",
+    "top_entities": [
+      "<empty>"
+    ],
+    "total_entities": "int",
+    "total_links": "int",
+    "total_relations": "int"
+  },
+  "memoria.list": {
+    "memorias": [
+      {
+        "category": "str",
+        "content_length": "int",
+        "correction_count": "int",
+        "effective_count": "int",
+        "escopo": "str",
+        "has_potential_conflict": "bool",
+        "id": "int",
+        "importance_score": "float",
+        "is_cold": "bool",
+        "last_accessed_at": "str",
+        "path": "str",
+        "updated_at": "str",
+        "usage_count": "int"
+      }
+    ],
+    "total": "int"
+  },
+  "memoria.search-cold": {
+    "query": "str",
+    "resultados": [
+      "<empty>"
+    ]
+  },
+  "memoria.stats": {
+    "cold": "int",
+    "conflitos": "int",
+    "media_efetividade": "float",
+    "media_uso": "float",
+    "por_categoria": "<map>",
+    "por_escopo": "<map>",
+    "total_caracteres": "int",
+    "total_memorias": "int"
+  },
+  "padrao.empresa": {
+    "memorias_empresa": [
+      "<empty>"
+    ],
+    "total": "int"
+  },
+  "sessao.list": {
+    "sessoes": [
+      {
+        "created_at": "str",
+        "id": "int",
+        "last_message": "str",
+        "message_count": "int",
+        "model": "str",
+        "session_id": "str",
+        "title": "str",
+        "total_cost_usd": "float",
+        "updated_at": "str",
+        "user_id": "int"
+      }
+    ],
+    "total": "int"
+  },
+  "sessao.search": {
+    "query": "str",
+    "resultados": [
+      {
+        "cost_usd": "float",
+        "message_count": "int",
+        "session_id": "str",
+        "title": "str",
+        "updated_at": "str"
+      }
+    ]
+  },
+  "sessao.users": {
+    "usuarios": [
+      {
+        "last_activity": "str",
+        "nome": "str",
+        "total_cost_usd": "float",
+        "total_messages": "int",
+        "total_sessions": "int",
+        "user_id": "int"
+      }
+    ]
+  }
+}

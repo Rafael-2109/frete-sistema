@@ -30,7 +30,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from common import (
     error_exit, format_datetime, format_json, format_table,
-    get_app_context, parse_args_with_subcommands, resolve_user, truncate,
+    get_app_context, parse_args_with_subcommands, resolve_user,
+    success_output, truncate,
 )
 
 
@@ -109,6 +110,13 @@ SUBCOMMANDS = {
     },
     'recommendations': {
         'help': 'Recomendacoes acionaveis completas (custo $0)',
+        'args': [
+            {'name': '--days', 'type': int, 'default': 30, 'help': 'Periodo em dias (default: 30)'},
+            {'name': '--all', 'action': 'store_true', 'dest': 'all_users', 'help': 'Sistema inteiro (todos os usuarios)'},
+        ],
+    },
+    'status': {
+        'help': 'Status canonico consolidado (agregador unico, 1x get_insights_data)',
         'args': [
             {'name': '--days', 'type': int, 'default': 30, 'help': 'Periodo em dias (default: 30)'},
             {'name': '--all', 'action': 'store_true', 'dest': 'all_users', 'help': 'Sistema inteiro (todos os usuarios)'},
@@ -542,6 +550,138 @@ def _scope_label(args):
     return 'TODOS os usuarios' if _scope_uid(args) is None else f'user_id={args.user_id}'
 
 
+def _classify_health(score):
+    """Classificacao textual do health score (0-100)."""
+    if score >= 80:
+        return 'EXCELENTE'
+    if score >= 60:
+        return 'BOM'
+    if score >= 40:
+        return 'REGULAR'
+    return 'CRITICO'
+
+
+def _embedding_coverage(uid):
+    """Cobertura de embeddings (memorias + sessoes), --all-safe (uid=None => sistema).
+
+    Replica handle_embedding_coverage mas com filtro `(:uid IS NULL OR ...)` para
+    suportar escopo de sistema inteiro. Tabelas podem nao existir (try/except).
+    """
+    from app import db
+    from app.agente.models import AgentMemory, AgentSession
+    from sqlalchemy import text
+
+    mq = AgentMemory.query.filter(AgentMemory.is_directory == False)  # noqa: E712
+    if uid is not None:
+        mq = mq.filter(AgentMemory.user_id == uid)
+    total_memories = mq.count()
+
+    mem_embed = 0
+    try:
+        mem_embed = db.session.execute(text(
+            "SELECT COUNT(DISTINCT memory_id) FROM agent_memory_embeddings "
+            "WHERE (:uid IS NULL OR user_id = :uid)"
+        ), {'uid': uid}).scalar() or 0
+    except Exception:
+        db.session.rollback()
+
+    sq = AgentSession.query
+    if uid is not None:
+        sq = sq.filter_by(user_id=uid)
+    total_sessions = sq.count()
+
+    sess_embed = 0
+    try:
+        sess_embed = db.session.execute(text(
+            "SELECT COUNT(DISTINCT session_id) FROM session_turn_embeddings "
+            "WHERE (:uid IS NULL OR user_id = :uid)"
+        ), {'uid': uid}).scalar() or 0
+    except Exception:
+        db.session.rollback()
+
+    return {
+        'memorias': {
+            'total': total_memories,
+            'com_embedding': mem_embed,
+            'cobertura': round(mem_embed / total_memories * 100, 1) if total_memories else 0,
+        },
+        'sessoes': {
+            'total': total_sessions,
+            'com_embedding': sess_embed,
+            'cobertura': round(sess_embed / total_sessions * 100, 1) if total_sessions else 0,
+        },
+    }
+
+
+def _loop_health(days, uid):
+    """PlanState / loop-health (--all-safe). Replica a plan_sql de step-coverage.
+
+    Sinaliza o gargalo B1 (PlanState ~0 -> promocao A4 vira no-op). Inclui
+    'status': 'query_error' se a consulta falhar (degradacao graciosa).
+    """
+    from app import db
+    from app.utils.timezone import agora_utc_naive
+    from datetime import timedelta
+    from sqlalchemy import text
+
+    since = agora_utc_naive() - timedelta(days=days)
+    try:
+        row = db.session.execute(text("""
+            SELECT count(*) AS total,
+                   count(*) FILTER (WHERE data::jsonb ? 'plan') AS with_plan,
+                   count(*) FILTER (WHERE session_id LIKE 'teams_%') AS teams_sessions
+            FROM agent_sessions
+            WHERE created_at >= :since AND (:uid IS NULL OR user_id = :uid)
+        """), {'since': since, 'uid': uid}).fetchone()
+    except Exception as e:
+        db.session.rollback()
+        return {'status': 'query_error', 'error': str(e)}
+
+    total = (row.total or 0) if row else 0
+    with_plan = (row.with_plan or 0) if row else 0
+    teams = (row.teams_sessions or 0) if row else 0
+    pct = round(100.0 * with_plan / total, 1) if total else 0.0
+    return {
+        'status': 'ok',
+        'sessions_total': total,
+        'with_plan': with_plan,
+        'with_plan_pct': pct,
+        'teams_sessions': teams,
+        'gargalo_b1': bool(total > 0 and pct < 5),
+    }
+
+
+def _memoria_stats(uid):
+    """Agregado leve de memorias (espelha memoria.stats), --all-safe (uid=None => sistema).
+
+    Fecha o item 'stats' do agregador status com escalares distintos de memory-metrics:
+    total de caracteres, media de uso/efetividade, conflitos e distribuicao por escopo.
+    """
+    from app import db
+    from app.agente.models import AgentMemory
+    from sqlalchemy import func
+
+    base = [AgentMemory.is_directory == False]  # noqa: E712
+    if uid is not None:
+        base.append(AgentMemory.user_id == uid)
+
+    total_chars = db.session.query(func.sum(func.length(AgentMemory.content))).filter(*base).scalar() or 0
+    conflitos = AgentMemory.query.filter(*base, AgentMemory.has_potential_conflict == True).count()  # noqa: E712
+    avg_usage = db.session.query(func.avg(AgentMemory.usage_count)).filter(*base).scalar() or 0
+    avg_effective = db.session.query(func.avg(AgentMemory.effective_count)).filter(*base).scalar() or 0
+    escopo_counts = db.session.query(
+        AgentMemory.escopo, func.count(AgentMemory.id)
+    ).filter(*base).group_by(AgentMemory.escopo).all()
+
+    return {
+        'total_caracteres': int(total_chars),
+        'conflitos': conflitos,
+        'media_uso': round(float(avg_usage), 1),
+        'media_efetividade': round(float(avg_effective), 1),
+        'por_escopo': {esc: count for esc, count in escopo_counts},
+    }
+
+
 def handle_step_quality(args):
     """Qualidade por-turno: judge score/label, vies sem-tool, adversarial refutou.
 
@@ -850,6 +990,123 @@ def handle_recommendations(args):
         print()
 
 
+def handle_status(args):
+    """Status canonico consolidado do agente (agregador unico, custo $0 de tokens).
+
+    Chama get_insights_data UMA UNICA vez e fatia health/friction/resolution/adoption/
+    overview/deltas/recommendations/rule_adhesion — eliminando as 3 chamadas
+    redundantes de insights/health/recommendations. Soma memory-metrics (+grafo stats
+    via knowledge_graph), embedding-coverage e loop-health/PlanState. Emite o envelope
+    canonico em --json. Suporta --all (sistema inteiro).
+    """
+    from app.agente.services.insights_service import get_insights_data, get_memory_metrics
+
+    uid = _scope_uid(args)
+    warnings = []
+
+    # 1) UMA chamada a get_insights_data (compare=True, igual aos handlers que substitui).
+    insights = get_insights_data(days=args.days, user_id=uid, compare=True)
+    friction = insights.get('friction', {}) or {}
+    rule = insights.get('rule_adhesion', {}) or {}
+    if not rule:
+        warnings.append("rule_adhesion vazio (flag AGENT_CORRECTION_PROMOTION OFF ou sem correcoes)")
+
+    # 2) memory-metrics (inclui knowledge_graph = grafo stats numa so chamada).
+    mem = get_memory_metrics(days=args.days, user_id=uid)
+    if mem.get('error'):
+        warnings.append(f"memory-metrics degradado: {mem['error']}")
+    kg = mem.get('knowledge_graph', {}) or {}
+
+    # 3) complementos (queries diretas, --all-safe).
+    mstats = _memoria_stats(uid)
+    embeddings = _embedding_coverage(uid)
+    loop = _loop_health(args.days, uid)
+    if loop.get('status') == 'query_error':
+        warnings.append(f"loop-health indisponivel: {loop.get('error')}")
+    if loop.get('gargalo_b1'):
+        warnings.append("[GARGALO B1] PlanState ~0 (<5%) -> promocao A4 (Distill->Deploy) vira no-op")
+
+    health = insights.get('health_score', 0)
+    data = {
+        'period_days': args.days,
+        'scope': _scope_label(args),
+        'health': {
+            'health_score': health,
+            'classification': _classify_health(health),
+            'resolution_rate': insights.get('resolution_rate', 0),
+            'adoption_rate': insights.get('adoption_rate', 0),
+            'friction_score': friction.get('friction_score', 0),
+        },
+        'overview': insights.get('overview', {}),
+        'deltas': insights.get('deltas', {}),
+        'memory': {
+            'total_memories': mem.get('total_memories', 0),
+            'utilization_rate': mem.get('utilization_rate', 0),
+            'accessed_in_period': mem.get('accessed_in_period', 0),
+            'corrections_count': mem.get('corrections_count', 0),
+            'orphan_embeddings': mem.get('orphan_embeddings', 0),
+            'cold_tier': mem.get('cold_tier', {}),
+            # 'stats' do roadmap (memoria.stats): escalares distintos de memory-metrics.
+            'total_caracteres': mstats['total_caracteres'],
+            'media_uso': mstats['media_uso'],
+            'media_efetividade': mstats['media_efetividade'],
+            'conflitos': mstats['conflitos'],
+            'por_escopo': mstats['por_escopo'],
+        },
+        'graph': {
+            'total_entities': kg.get('total_entities', 0),
+            'total_links': kg.get('total_links', 0),
+            'total_relations': kg.get('total_relations', 0),
+        },
+        'embeddings': embeddings,
+        'loop_health': loop,
+        'rule_adhesion': {
+            'total_corrections': rule.get('total_corrections', 0),
+            'mandatory_count': rule.get('mandatory_count', 0),
+            'outcome_available': bool((rule.get('outcome', {}) or {}).get('available', False)),
+        },
+        'recommendations': [
+            {'severity': r.get('severity'), 'title': r.get('title')}
+            for r in (insights.get('recommendations', []) or [])[:5]
+            if isinstance(r, dict)
+        ],
+    }
+
+    if args.json_mode:
+        success_output('status', data, json_mode=True, warnings=warnings)
+        return
+
+    h = data['health']
+    print(f"STATUS do Agente ({args.days} dias, {data['scope']}):\n")
+    print(f"  Saude: {h['health_score']:.1f}/100 ({h['classification']})")
+    print(f"    Resolucao {h['resolution_rate']:.1f}% | Adocao {h['adoption_rate']:.1f}% | Friccao {h['friction_score']}")
+    ov = data['overview']
+    print(f"  Sessoes: {ov.get('total_sessions', 0)} | Mensagens: {ov.get('total_messages', 0)} | Custo ${ov.get('total_cost_usd', 0):.4f}")
+    m = data['memory']
+    print(f"  Memoria: {m['total_memories']} memorias | utilizacao {m['utilization_rate']:.1f}% | "
+          f"{m['corrections_count']} correcoes | orfaos {m['orphan_embeddings']}")
+    print(f"    media uso {m['media_uso']}x | efetividade {m['media_efetividade']}x | "
+          f"conflitos {m['conflitos']} | {m['total_caracteres']} chars")
+    g = data['graph']
+    print(f"  Grafo: {g['total_entities']} entidades, {g['total_links']} links, {g['total_relations']} relacoes")
+    em = data['embeddings']
+    print(f"  Embeddings: memorias {em['memorias']['cobertura']:.1f}% | sessoes {em['sessoes']['cobertura']:.1f}%")
+    if loop.get('status') != 'query_error':
+        gargalo = " [GARGALO B1]" if loop.get('gargalo_b1') else ""
+        print(f"  Loop/PlanState: {loop['with_plan']}/{loop['sessions_total']} sessoes c/ plano ({loop['with_plan_pct']}%){gargalo}")
+    ra = data['rule_adhesion']
+    extra = "" if ra['outcome_available'] else " (outcome de reincidencia indisponivel)"
+    print(f"  Adesao de regras: {ra['total_corrections']} correcoes, {ra['mandatory_count']} regras duras{extra}")
+    if data['recommendations']:
+        print("\n  Recomendacoes:")
+        for r in data['recommendations']:
+            print(f"    [{str(r.get('severity', '?')).upper()}] {r.get('title', '')}")
+    if warnings:
+        print("\n  Avisos:")
+        for w in warnings:
+            print(f"    - {w}")
+
+
 HANDLERS = {
     'insights': handle_insights,
     'memory-metrics': handle_memory_metrics,
@@ -865,6 +1122,7 @@ HANDLERS = {
     'rule-adhesion': handle_rule_adhesion,
     'routing': handle_routing,
     'recommendations': handle_recommendations,
+    'status': handle_status,
 }
 
 

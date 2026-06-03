@@ -99,6 +99,7 @@ O que o usuario quer?
 |   |-- "adesao de regras"      -> rule-adhesion [--days N] [--all]
 |   |-- "metricas de roteamento"-> routing [--days N] [--all]
 |   |-- "recomendacoes"         -> recommendations [--days N] [--all]
+|   |-- "status / visao geral"  -> status [--days N] [--all]   (agregador canonico)
 |
 |-- Manutencao (consolidar, cold, reindexar, cleanup)
 |   -> scripts/manutencao.py
@@ -125,7 +126,7 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/{SCRIP
 | `sessao.py` | list, search, semantic, view, summary, users, delete | Sessoes |
 | `padrao.py` | patterns, pitfalls, analyze, extract, empresa, profile | Padroes |
 | `grafo.py` | query, entities, links, relations, stats | Knowledge Graph |
-| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations** | Diagnosticos |
+| `diagnostico.py` | insights, memory-metrics, health, effectiveness, cold-candidates, conflicts, embedding-coverage, friction, briefing, **step-quality**, **step-coverage**, **rule-adhesion**, **routing**, **recommendations**, **status** | Diagnosticos |
 | `manutencao.py` | consolidate, cold-move, summarize, reindex-memories, reindex-sessions, cleanup-orphans | Manutencao |
 
 ## TRATAMENTO DE ERROS
@@ -208,6 +209,10 @@ source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/diagno
 
 # Briefing intersessao
 source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/diagnostico.py briefing --user-id 5
+
+# Status canonico consolidado (agregador unico; --all = sistema inteiro)
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/diagnostico.py status --user-id 5 --days 30
+source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/diagnostico.py status --all --json
 
 # Ver perfil comportamental
 source .venv/bin/activate && python .claude/skills/gerindo-agente/scripts/padrao.py profile --user-id 5

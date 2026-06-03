@@ -129,3 +129,86 @@ def test_destrutivas_exigem_confirm():
     ses = _load('sessao')
     names = {a['name'] for a in ses.SUBCOMMANDS['delete']['args']}
     assert '--confirm' in names, "sessao.delete deveria exigir --confirm"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Onda 2 — P7 (status agregador) + P8 (common.py: run_handler / success_output
+# envelope / format_datetime TZ-safe + fim do contexto-duplo em padrao).
+# Tudo ZERO-DB: importlib + inspect, sem create_app/token.
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_diagnostico_status_registrado_onda2():
+    """O agregador 'status' (P7) esta registrado, com handler callable e --days/--all."""
+    d = _load('diagnostico')
+    assert 'status' in d.SUBCOMMANDS, "status ausente de SUBCOMMANDS"
+    assert 'status' in d.HANDLERS and callable(d.HANDLERS['status'])
+    argnames = {a['name'] for a in d.SUBCOMMANDS['status']['args']}
+    assert {'--days', '--all'} <= argnames, f"status sem --days/--all: {argnames}"
+
+
+def test_status_chama_get_insights_data_uma_vez():
+    """P7: o agregador NAO pode reintroduzir a duplicacao — get_insights_data 1x."""
+    d = _load('diagnostico')
+    src = inspect.getsource(d.handle_status)
+    assert src.count('get_insights_data(') == 1, (
+        "status deve chamar get_insights_data UMA unica vez e fatiar (nao N vezes)"
+    )
+
+
+def test_common_success_output_envelope():
+    """P8: success_output revivido produz o envelope canonico {ok,command,data,warnings,errors}."""
+    c = _load('common')
+    env = c.success_output('cmd-x', {'a': 1}, json_mode=False, warnings=['w'])
+    assert env == {
+        'ok': True, 'command': 'cmd-x', 'data': {'a': 1},
+        'warnings': ['w'], 'errors': [],
+    }
+    # ok=False quando ha erros.
+    env_err = c.success_output('cmd-y', None, errors=['boom'])
+    assert env_err['ok'] is False and env_err['errors'] == ['boom']
+
+
+def test_common_format_datetime_tz_safe():
+    """P8: format_datetime e TZ-safe — naive inalterado, aware convertido para BRT."""
+    from datetime import datetime, timezone
+    c = _load('common')
+    assert c.format_datetime(None) == '-'
+    # naive: formatado como esta (convencao Brasil-naive).
+    assert c.format_datetime(datetime(2026, 6, 3, 14, 30)) == '03/06/2026 14:30'
+    # aware UTC: convertido para America/Sao_Paulo (UTC-3) antes de formatar.
+    aware = datetime(2026, 6, 3, 14, 30, tzinfo=timezone.utc)
+    assert c.format_datetime(aware) == '03/06/2026 11:30'
+
+
+def test_common_run_handler_contrato():
+    """P8: run_handler existe e expoe o contrato (description, subcommands, handlers, no_resolve)."""
+    c = _load('common')
+    assert callable(c.run_handler)
+    params = inspect.signature(c.run_handler).parameters
+    assert list(params)[:3] == ['description', 'subcommands', 'handlers']
+    assert 'no_resolve_subcommands' in params
+    assert params['no_resolve_subcommands'].default == ()
+
+
+def test_padrao_sem_contexto_duplo():
+    """P8: padrao migrou para run_handler e os 3 handlers usam current_app (sem contexto-duplo)."""
+    p = _load('padrao')
+    # main() delega a run_handler (nao reabre parse/contexto na mao).
+    main_src = inspect.getsource(p.main)
+    assert 'run_handler(' in main_src, "padrao.main deveria delegar a run_handler"
+    # Os handlers que precisam de app NAO podem mais chamar get_app_context().
+    for fn in (p.handle_analyze, p.handle_extract, p.handle_profile):
+        src = inspect.getsource(fn)
+        code = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('#'))
+        assert 'get_app_context(' not in code, (
+            f"{fn.__name__}: contexto-duplo (get_app_context) deveria ter sido removido"
+        )
+        assert 'current_app' in code, (
+            f"{fn.__name__}: deveria reutilizar o contexto via current_app"
+        )
+    # padrao nao deve mais importar get_app_context (run_handler cuida do contexto).
+    mod_src = inspect.getsource(p)
+    assert 'get_app_context' not in mod_src.split('def handle_')[0], (
+        "padrao nao deveria mais importar get_app_context"
+    )
