@@ -595,6 +595,12 @@ ganhou `tipo_pagamento` ('A_VISTA' | 'A_PRAZO' | NULL). Item de venda
 **Mudancas de assinatura**:
 - `_resolver_preco_tabela(modelo_id, na_data, valor_final, forma_pagamento_hora=None)`
   → retorna agora 5-tupla: `(preco_ref, desconto_rs, desconto_pct, tabela_id, divergencia)`.
+  **Regressao 2026-06-03**: o backfill TagPlus (`tagplus/backfill_service._criar_itens_da_api`)
+  ficou esquecido desempacotando 4 valores → `ValueError: too many values to unpack (expected 4)`
+  no backfill de NFs. Fix: desempacota 5 + grava `desconto_percentual=desconto_pct` no
+  `HoraVendaItem` (invariante `venda.py:258`). Guard de aridade:
+  `tests/hora/test_resolver_preco_tabela_arity.py` (AST, sem DB). Ao mudar a aridade
+  desta funcao, atualize TODOS os call sites de uma vez.
 - `cadastro_service.criar_modelo` / `atualizar_modelo` aceitam `preco_a_vista` e
   `preco_a_prazo` (str/Decimal/None — `_normalizar_preco` aceita formato BR).
 
