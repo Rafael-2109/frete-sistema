@@ -356,6 +356,25 @@ app/odoo/estoque/
 
 > Esta seção registra DESVIOS DA DOCUMENTAÇÃO ou DO PRINCÍPIO FUNDADOR que sessões anteriores cometeram. **Cada desvio listado aqui já foi corrigido**, mas permanece registrado para que sessões futuras saibam que o problema foi detectado e tratado — e não o reintroduzam acidentalmente.
 
+### D-V30-1 — Canary REAL remessa avulsa FB→LF: DFe-resumo NÃO gera picking nativo + C7/C9/C9.1 (2026-06-02)
+
+**Detectado em**: 2026-06-02 — canary REAL Task 5 (INDUSTRIALIZACAO_FB_LF avulsa: 105000002 30,56kg + 105000044 5,36kg, FB→LF lote P-02/06). SAÍDA NF RPI/2026/00248 (move 744869) AUTORIZADA SEFAZ (CFOP 5901); ENTRADA NF ENTIN/2026/06/0004 (move 745414) posted (CFOP 1901, fp 131); picking LF/IN/01796 done; saldo LF/Estoque/P-02/06 = 30,56 + 5,36.
+
+**3 fixes (commitados local, NÃO pushados):**
+- **C7** (`9715c8f3d`): `_registrar_auditoria` (`faturamento.py` + `_invoice_helpers.py`) pula quando `ajuste_id is None`. Caminho avulso (folha 1.3.1, `ajuste_ids=None`) batia em `registro_id` NOT NULL → `NotNullViolation` mascarada pelo try/except mas que envenenava a sessão SQLAlchemy nos commits críticos da Skill 8 (CRITICAL-1 pós-SEFAZ). Espelha guard do orchestrator (D-V29-1 nota b). Os 28 testes unitários NÃO pegaram (try/except mascara) — só o dry-run da CADEIA real expôs (mesmo padrão do GAP-1).
+- **C9/C9.1** (`a8835dbff`): átomo `criar_picking_entrada_destino_manual` (Skill 5) ganhou `purchase_line_id` por move (C9) + DERIVA `warehouse_id` do picking_type + aceita `partner_id` (C9.1). Todos opcionais/retrocompatíveis.
+
+**ACHADO ARQUITETURAL — AP2 refutado para DFe-resumo**: a premissa da deprecação do AP2 ("picking de entrada vem do motor via DFe→PO→picking nativo") NÃO vale para INDUSTRIALIZACAO_FB_LF: o DFe é resumo (`l10n_br_status='06'`) e o `button_confirm` da PO NÃO dispara o procurement (move_ids vazio) MESMO com route 133/account LF/picking_type 19/team 143 corretos (4 POs confirmaram sem picking: 42914/15/16/17). Logo o picking de entrada MANUAL VINCULADO à PO é o caminho PADRÃO (não exceção) desta operação. O picking manual precisa REPLICAR o picking NATIVO (gold standard PO 42759/picking 322616 = Vendors→LF/Estoque com `warehouse_id`/`group_id`/`partner_id`) — senão `button_validate` falha `Fault 2 'Source Location not set'`. C9.1 codifica `warehouse_id`+`partner_id`. O átomo foi **reabilitado** (docblock atualizado de DEPRECATED → REABILITADO C9).
+
+**GOTCHA 1 (causa raiz do account errado)**: `action_gerar_po_dfe` usa a company do USUÁRIO (uid 42=FB) → PO.lines com `account_id` da FB (22611) em vez do LF (26459) → `criar_invoice_from_po` travaria 'Empresas incompatíveis'. Forçar `context={'allowed_company_ids':[dest],'company_id':dest}` resolve nativamente. O átomo `gerar_po_from_dfe` (`escrituracao.py`) NÃO força esse context → **follow-up C10**.
+
+**LIÇÕES ATEMPORAIS**:
+1. Antes de depreciar um átomo de "criação manual" assumindo que "o motor faz", validar em TODOS os caminhos do motor — DFe-resumo é um caso onde o motor NÃO faz.
+2. Picking manual vinculado a PO precisa dos campos do picking NATIVO (`warehouse_id`, `partner_id`) p/ `button_validate` passar — não basta `location_id` estar setado.
+3. `tipo_pedido` DFe='compra' NÃO afeta a geração do picking (POs serv-industrializacao também geram) — correlação ≠ causa.
+
+**Onde**: `scripts/picking.py` (C9/C9.1) + `scripts/faturamento.py`/`_invoice_helpers.py` (C7) + `fluxos/1.3.1-remessa-avulsa-insumo.md` (PASSO 8 + Status) + memória `capacitacao_gestor_remessa_fb_lf`.
+
 ### D-V29-1 — Follow-up CR findings F1+F3 + achado CFOP 5902 reincidente (2026-05-29)
 
 **Detectado em**: 2026-05-29 v29+ — follow-up dos 2 CR findings do code-reviewer v28+ (decisão Rafael) + auditoria READ-only do candidato natural de canary.
