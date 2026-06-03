@@ -347,6 +347,39 @@ não escritos (B3 adiado + sem feedback). Latência: judge/verify/triage 100% of
 
 ---
 
+### 📍 CHECKPOINT 2026-06-03 (tarde) — RE-VERIFICAÇÃO PROD DO ZERO (10 pontos)
+
+> Atende à META-RESSALVA do checkpoint da manhã: re-verifiquei **do zero em PROD** (MCP Render — PG `dpg-d13m38vfte5s738t6p50-a`, web `srv-d13m38vfte5s738t6p60`, worker `srv-d2muidggjchc73d4segg`) cada ponto, **sem assumir** a leitura anterior (feita com contexto cheio). READ-ONLY — **nada ligado**. **Janela real: 3 dias úteis** (31/05=1 step teste · 01/06=144 · 02/06=36 · 03/06=20 → **201 steps / 32 sessões / 11 users / web-only; teams=0**). Disciplina TZ aplicada (`created_at` Brasil-naive vs `now()` UTC).
+
+**Veredito por ponto (todos medidos agora):**
+
+| # | Ponto | Veredito | Evidência PROD |
+|---|---|---|---|
+| 1 | Regressão do deploy gap | ✅ sem regressão | runtime no range `d0757d7d3..3d183a9df` = só `insights.html` (O0.3); resto docs. Sentry 0 issue nova de blueprint. `3d183a9df` LIVE 17:55. `gkpj`/30min = pré-existente (LOG 01/06) |
+| 2 | O0.2 ao vivo | ⚠️ não-exercido | `subagent_validations`=0/759 — porque `Task`=0/201 (nunca houve subagente p/ validar). Mesma causa do B1 |
+| 3 | O0.4 (24h) | 🟡 cedo, proxies OK | `effective_count` 435/630 cc>0 (max 494); health composto não computado; 24h não fechou (ligado hoje) |
+| 4 | Marcus (1 sem) | 🟡 baseline favorável | `responder_cluster_ou_escopo_errado` 8 ocorrências TODAS de abril (09-13/04); 0 reincidência pós-intervenção 03/06; janela <1 dia → inconclusivo |
+| 5 | O0.3 ao vivo | 🟡 wiring OK | rota `insights.py:13 @agente_bp.route('/insights')` + painel +85L (`d1bfc1655`) + teste; render autenticado não validado (read-only) |
+| 6 | B1 PlanState | 🔴 ~0 confirmado | `Task`=0/201; `data?'plan'`=1/759 (única = sessão-demo user 1, id 760). Gargalo do flywheel persiste |
+| 7 | GATE-1 / viés judge | ⚠️ viés REFUTADO, sinal ainda não-confiável | sem-tool failure **36,7%** (22/60) < com-tool 49,6% (o "88%" era n=16). MAS judge↔adversarial discordam **63%** (127/201); `arithmetic.ok=false` 42/201 com texto de evidência "OK" (suspeita bug parser); `agent_eval_case`=0 → **GATE-1 ❌** |
+| 8 | A3 baseline | 🔴 quebrado — **causa nova** | 16 linhas TODAS `score=0/passed=0`. Causa REAL: `[Errno 2] No such file or directory: 'claude'` (CLI ausente no worker), **não** X7 nem I2. Ver BLOQUEIOS ATIVOS |
+| 9 | D3 proveniência | 🔴 0 confirmado | relations 0/7214 `source_session_id` + 0/7214 `valid_from`; links 0/2256. Path de escrita não-instrumentado |
+| 10 | Higiene deploy | ✅ esclarecido (invertido) | web estava 1 commit À FRENTE (docs `0a00855c8`), NÃO atrás; hoje ambos em `3d183a9df`=HEAD origin/main |
+
+**Divergências materiais vs checkpoint da manhã (a leitura de contexto-cheio errou em 4):**
+1. **A3**: `agent_eval_scores` **0 → 16 linhas**, e a causa NÃO é transação/X7 (era LOCAL) — é **CLI `claude` ausente no worker**. O fix X7 aplicado (LOG 01/06 tarde) não cobre o problema real de PROD.
+2. **Viés judge "sem-tool=failure 88%"**: artefato de n=16; **dissolveu** (36,7%) na janela de 3 dias.
+3. **A4/diretrizes**: `directive_status` **não é "tudo NULL"** — há **5 `shadow`** (ids 846/848/856/864/865), 4 "validadas pelo judge" incl. **ruído** (id 848 = turno "BOM DIA"). Log atual: `AGENT_DIRECTIVE_PROMOTION=OFF, NÃO persiste` (diverge do 01/06=ON). Shadow nunca injetada (seguro) → evidência viva do risco de reward-hacking com judge não-calibrado.
+4. **Higiene**: o skew era o WEB à frente, não o worker atrás.
+
+**Confirmados (a leitura da manhã acertou):** B1≈0 (Task=0), D3=0, O0.2 inerte por falta de combustível, GATE-1 ❌. **Cobertura de sinal AMADURECEU**: judge/verify/frustration 201/201, triage 200/201 (era 51/67). Ciclo D8 (30min) roda limpo: `[JUDGE/VERIFY/TRIAGE_ENQUEUER]` + `[directive_promotion]`→`[eval_gate] Gate OK baseline=0.700 candidate=0.850`.
+
+**Gates (medido):** GATE-0 web ✅ / teams ⬜ · GATE-1 ❌ · GATE-2 ⚠️ parcial · GATE-3 ❌.
+
+**Próximo passo (ordem; nada ligado — regra de ouro intacta):** (1) **consertar invocação do `eval_runner` no worker** (CLI `claude` ausente) — pré-req binário do A3/GATE-1; (2) **E3 calibração do judge** (`AGENT_EVAL_CALIBRATION` + spot-check 5-10%; reconciliar judge↔adversarial; bug `arithmetic.ok`); (3) decisão de design **B1 combustível** (triage→PlanState vs decompor via Task); (4) coletar ≥1 semana úteis; (5) manter `AGENT_DIRECTIVE_PROMOTION` OFF. **Refino desta sessão (b+a, feitos):** **(b)** fix do `eval_runner` **confirmado** = resolver o CLI bundled do SDK (`claude_agent_sdk/_bundled/claude`, que JÁ existe no worker via `pip`) em `build_subprocess_invoke_fn` (`eval_gate_service.py:224`, único ponto) — opção (b) refinada, ~5 linhas, 1 arquivo, destrava web+worker (detalhe em BLOQUEIOS ATIVOS). **(a)** `gkpj`/30min **descartado como blueprint**: ocorre no INÍCIO do ciclo D8 (antes dos Steps 29-32, que completam OK), pré-existente desde 01/06, sem issue Sentry nova atribuível; causa-raiz exata não-determinada (provável módulo de sync anterior), baixa prioridade.
+
+---
+
 ## ONDAS E ITENS
 
 > Status: ⬜ pending · 🟡 em progresso · 🔵 shadow (código pronto, validando comportamento) · ✅ done
@@ -446,6 +479,7 @@ não escritos (B3 adiado + sem feedback). Latência: judge/verify/triage 100% of
 - _(nenhum — S0b/S0c desbloqueadas)_ — **RESOLVIDO 2026-05-31**: Rafael commitou `skills_whitelist.py` na main (commit `18e57919c`, Solução B allow→deny-list). `feat/agente-evolucao` mergeou main (merge limpo, exit 0), trazendo `skills_whitelist.py` (3 grupos + união) + `client.py` lendo-o. S0b consolidou SPED nele; S0c segue.
 - **GATE-0 (fora do meu alcance)**: exige `agent_step` gravando em PROD ≥48h (web E teams) → depende de PUSH/DEPLOY do Rafael. Onda 1 NÃO inicia antes (protocolo §COMO USAR). Implementação Onda 0 fica code-complete na branch, sem push.
 - **GATE-A4 ATIVAÇÃO (gate humano, NÃO automático)**: antes de ligar `AGENT_OPERATIONAL_DIRECTIVES=ON` em PROD, a coluna `agent_memories.directive_status` DEVE existir (rodar `scripts/migrations/2026_06_01_agent_memories_directive_status.py` no Render Shell OU wirar no `build.sh` junto ao bloco A3 26d ao mergear na main). Senão o builder cai em `UndefinedColumn` (engolido pelo `except`) e **desliga TODAS as diretrizes silenciosamente** (inclusive legado). A promoção `shadow→ativa` é revisão MANUAL das candidatas. `AGENT_DIRECTIVE_PROMOTION=ON` só produz candidatas úteis quando `USE_AGENT_PLANNER` gera PlanState + `AGENT_STEP_JUDGE` acumula judge signal (senão o batch ABSTÉM = no-op seguro).
+- **🔴 A3 BASELINE IMPOSSÍVEL EM PROD (descoberto 2026-06-03 tarde)**: o `eval_runner` (módulo 28 D8, fila `agent_eval`) roda diariamente no worker (~11h, ~7s) mas grava `score=0/passed=0` em TODAS as linhas de `agent_eval_scores` (16/16). Causa medida nos logs do worker: o subprocesso falha com `[Errno 2] No such file or directory: 'claude'` — **o CLI `claude` NÃO está no PATH do container worker Render**. NÃO é o bug X7/transação (era LOCAL, NACOM052) nem o caveat I2 (stdout vazio). `build_subprocess_invoke_fn` (`eval_gate_service.py:192`, monta `claude -p --agent <nome>`) trata `FileNotFoundError` (:270) → todo caso vira 'error'/fail → score=0 universal, job "completa" report-only. **FIX CONFIRMADO (2026-06-03 tarde) = opção (b) refinada**: o CLI `claude` **já está no worker** — vem BUNDLED no pacote `claude_agent_sdk` (`<site-packages>/claude_agent_sdk/_bundled/claude`, instalado via `pip`; verificado EXISTE+EXEC). O `start_render.sh:92` (web) já o resolve por esse path; o worker não faz pre-warm e o `build_subprocess_invoke_fn` chama `'claude'` pelo nome → não está no PATH → `FileNotFoundError`. **Correção**: em `eval_gate_service.py:224` (ÚNICO ponto de invocação), trocar `'claude'` por `str(Path(claude_agent_sdk.__file__).parent / '_bundled' / 'claude')` com fallback para `'claude'` (PATH) — ~5 linhas, 1 arquivo, destrava web E worker. Descartadas: (a) instalar CLI via npm no worker = redundante (já bundled); (c) trocar subprocess por API/SDK = mudaria a semântica do `--agent` (perde skills/tools do agente real). Após o fix: rodar 1 run supervisionado (`python -m app.agente.workers.eval_runner --agent analista-carteira`) + inspecionar `cases[].evidence` (caveat I2) — pode revelar gaps secundários (API key / Node no worker). Enquanto não resolvido, **A3 (gate de regressão) é não-funcional e GATE-1 não fecha** por este eixo.
 
 ## LOG DE EXECUÇÃO (append-only — 1 linha por item concluído)
 - 2026-05-30 — Onda 0 planejada (plano writing-plans) + design gate da chave resolvido. S0a liberado para Task 1.
@@ -476,6 +510,7 @@ não escritos (B3 adiado + sem feedback). Latência: judge/verify/triage 100% of
 - 2026-06-01 (tarde) — **RAFAEL ESCOLHEU OPÇÃO B + corrigir ambiguidade do prompt (implementado, TDD)**:
   (a) **Prompt** (`system_prompt.md` `<delegation_pattern>`): removida a contradição (`<task_management>` dizia "não p/ trivial", `<delegation_pattern>` dizia "sempre criar task p/ delegação"). Agora: **delegação ÚNICA não precisa de TaskCreate** (o spawn já emite task_started/progress/subagent_summary na UI); TaskCreate **só** em orquestração 2+ delegações/passos. (Risco: muda prompt LIVE — mudança cirúrgica.)
   (b) **A4 V2 / Opção B** (`directive_promotion_service.py`): nova fonte de candidata `propose_directive_from_judge_session` (sessão de ALTA QUALIDADE validada pelo judge: ≥2 passos julgados, 0 `failure`, média ≥0.7) — **independente de PlanState**, fiel à spec §2.3 (critério = quality_signal). Wirada como 2ª fonte em `run_directive_promotion_batch` (dedup por session_id; MESMO gate `evaluate_and_promote`: R9 anti-gaming + A3 report-only). Candidatas → `directive_status='shadow'` → **NUNCA injetadas** (dupla segurança intacta). TDD: 7 testes (6 pura + 1 batch judge), 3 batch existentes atualizados; **36 directive + 219 services/workers/sdk green**. **Evidência PROD**: 0 sessões qualificam HOJE (6 sessões ≥2 julgados, TODAS com falhas, média 33-51 < 70) — MAS o "0" deixou de ser **estrutural** (PlanState=Task nunca emitido) e virou **de dados** (janela ~14h só de sessões Odoo que falharam) → resolve sozinho com volume + sessões limpas + o judge corrigido (turnos informativos antes mal-pontuados viram success). **NÃO commitado/deployado** (branch `manutencao/semanal-2026-06-01`).
+- 2026-06-03 (tarde) — **RE-VERIFICAÇÃO PROD DO ZERO** (READ-ONLY, sessão fresca, nada ligado): re-medi os 10 pontos do CHECKPOINT da manhã (201 steps / 3d úteis). **4 divergências materiais**: A3 `agent_eval_scores` 0→16 mas TODAS `score=0` por **CLI `claude` ausente no worker** (não X7); viés judge "sem-tool=failure 88%"→**36,7%** (refutado na janela maior); **5 diretrizes `shadow`** (A4 não é no-op; flag `AGENT_DIRECTIVE_PROMOTION` OFF agora); skew de deploy era o WEB à frente (não worker atrás). Confirmados: B1≈0 (Task=0/201) / D3=0 (0/7214) / O0.2 inerte (subagent_validations=0). GATE-1 ❌ (judge↔adversarial discordam 63%, `agent_eval_case`=0). Detalhe → checkpoint dedicado acima + BLOQUEIOS ATIVOS.
 
 ## Atualizado
 
