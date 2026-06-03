@@ -171,6 +171,7 @@ SKILL_TO_CATEGORY: Dict[str, str] = {
     'acompanhando-saida-assai': 'Saida Motos Assai (Separacao + NF Q.P.A.)',
     'conferindo-recibo-assai': 'Recibos Motochefe (Conferencia)',
     'registrando-evento-moto-assai': 'Eventos Pipeline Motos Assai',
+    'carregando-motos-assai': 'Saida Motos Assai (Carregamento)',
 }
 
 

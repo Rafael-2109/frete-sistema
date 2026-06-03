@@ -4,7 +4,7 @@ camada: L1
 sot_de: —
 hub: docs/superpowers/specs/INDEX.md
 superseded_by: —
-atualizado: 2026-06-01
+atualizado: 2026-06-02
 -->
 # Specs — indice
 > **Papel:** mapa das specs de design. So ponteiros.
@@ -32,3 +32,4 @@ atualizado: 2026-06-01
 - [Relatório de Confronto de Inventário — Design](2026-05-26-relatorio-confronto-inventario-design.md)
 - [Inventário Cíclico — Contagem parcial por quant + Plano de ajustes — Design](2026-05-31-inventario-ciclico-contagem-ajustes-design.md)
 - [Design — Capacitar `gestor-estoque-odoo` para remessa inter-company FB→LF (insumo direto, avulsa)](2026-06-02-capacitacao-gestor-remessa-fb-lf-design.md)
+- [carregando-motos-assai (design)](2026-06-02-skill-carregando-motos-assai-design.md) — skill READ+WRITE de carregamento Motos Assai (Onda F)

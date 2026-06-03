@@ -78,6 +78,7 @@ atualizado: 2026-06-02
 | MOTOS ASSAÍ — SAÍDA/NFs | "separações Assaí", "NF Q.P.A.", "match BATEU/DIVERGENTE" | -> `acompanhando-saida-assai` |
 | MOTOS ASSAÍ — RECIBO MOTOCHEFE | "recibos pendentes Motochefe", "conferir recibo RM-", "wizard recebimento" | -> `conferindo-recibo-assai` |
 | MOTOS ASSAÍ — EVENTOS WRITE | "registra montagem", "disponibiliza", "reverte", "separar chassi" | -> `registrando-evento-moto-assai` |
+| MOTOS ASSAÍ — CARREGAMENTO (READ+WRITE) | "carregamentos em andamento", "iniciar/finalizar carregamento", "escanear chassi na carga", "reabre carregamento" | -> `carregando-motos-assai` |
 | MOTOS ASSAÍ — CROSS-ENTIDADE | "como está operação Q.P.A.?", "resumo Motos Assaí" | -> Subagente `gestor-motos-assai` |
 
 ---
@@ -245,9 +246,10 @@ Cada skill tem `SKILL.md` em `.claude/skills/<nome>/`. `consultando-sql` e invoc
 `consultando-venda-loja` (consultar vendas + validar preco/desconto + margem, READ),
 `rastreando-chassi` (historico completo de UM chassi: pedido->NF->recebimento->venda)
 
-### Skills motos_assai (6)
+### Skills motos_assai (7)
 `consultando-estoque-assai`, `rastreando-chassi-assai`, `acompanhando-pedido-compra-assai`,
-`acompanhando-saida-assai`, `conferindo-recibo-assai`, `registrando-evento-moto-assai`
+`acompanhando-saida-assai`, `conferindo-recibo-assai`, `registrando-evento-moto-assai`,
+`carregando-motos-assai`
 
 ### Skills SPED ECD audit (4) — USO EXCLUSIVO do subagent `auditor-sped-ecd`
 `parseando-sped-ecd` (parse Leiaute 9 streaming -> dict JSON em /tmp/),
