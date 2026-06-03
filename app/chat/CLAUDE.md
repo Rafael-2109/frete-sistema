@@ -1,4 +1,50 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Chat — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Chat in-app + alertas do sistema unificados.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+- [Regras criticas](#regras-criticas)
+  - [R1: Redis e opcional — publish best-effort](#r1-redis-e-opcional-publish-best-effort)
+  - [R2: Realtime via POLLING ADAPTATIVO (nao SSE)](#r2-realtime-via-polling-adaptativo-nao-sse)
+  - [R3: PermissionChecker em TODA rota de escrita](#r3-permissionchecker-em-toda-rota-de-escrita)
+  - [R4: `sanitize_for_json` em `ChatMessage.dados`](#r4-sanitize_for_json-em-chatmessagedados)
+  - [R5: Alertas unificados em `chat_message`](#r5-alertas-unificados-em-chat_message)
+  - [R6: Mentions so valem para membros ativos](#r6-mentions-so-valem-para-membros-ativos)
+  - [R7: URL validation em deep_link](#r7-url-validation-em-deep_link)
+  - [R8: Soft delete esconde content](#r8-soft-delete-esconde-content)
+- [API publica](#api-publica)
+  - [SystemNotifier (para workers que disparam alertas)](#systemnotifier-para-workers-que-disparam-alertas)
+  - [Hooks (wrappers testados para eventos comuns)](#hooks-wrappers-testados-para-eventos-comuns)
+- [Gotchas](#gotchas)
+  - [Bug #1: FK circular `last_read_message_id`](#bug-1-fk-circular-last_read_message_id)
+  - [Bug #2: SSE com 4 workers gunicorn](#bug-2-sse-com-4-workers-gunicorn)
+  - [Bug #3: `query.get()` cacheado em tests](#bug-3-queryget-cacheado-em-tests)
+  - [Bug #4: NULL semantics no unread](#bug-4-null-semantics-no-unread)
+  - [Bug #5: Poluicao DB em tests](#bug-5-poluicao-db-em-tests)
+  - [Bug #6: `get_or_create_dm` cria duplicata em concorrencia (P0 fix)](#bug-6-get_or_create_dm-cria-duplicata-em-concorrencia-p0-fix)
+  - [Bug #7: Markdown renderer e DEAD CODE](#bug-7-markdown-renderer-e-dead-code)
+  - [Débito: Hooks de alerta nao instalados em workers (nao e bug)](#débito-hooks-de-alerta-nao-instalados-em-workers-nao-e-bug)
+- [Ativacao de alertas — tasks pendentes](#ativacao-de-alertas-tasks-pendentes)
+  - [Recebimento (Task 21)](#recebimento-task-21)
+  - [DFE bloqueado (Task 22)](#dfe-bloqueado-task-22)
+  - [CTe divergente (Task 23)](#cte-divergente-task-23)
+- [Observabilidade](#observabilidade)
+- [Interdependencias](#interdependencias)
+
+## Contexto
+
+~2.0K LOC, 22 arquivos py/html. Chat in-app (threads, DM, grupos, reactions, busca FTS, SSE/poll) com alertas do sistema unificados via NotificationDispatcher. MVP da branch `feature/chat-inapp`; hardening P0 aplicado em `fix/chat-audit-p0`. Spec e plano em `docs/superpowers/`.
 
 **LOC**: ~2.0K | **Arquivos**: 22 py/html + 2 JS + 1 CSS | **Atualizado**: 2026-05-13
 
@@ -209,7 +255,7 @@ Mesmo padrao em `get_or_create_system_dm` (workers RQ concorrentes).
 ### Bug #7: Markdown renderer e DEAD CODE
 `render_markdown` e `sanitize_html` em `markdown_parser.py` NAO sao invocados
 em lugar nenhum do backend. Frontend (`chat_ui.js:203`) usa `escapeHtml(m.content)`
-direto. Resultado: `**bold**` aparece literal, `[link](url)` nao vira link clicavel.
+direto. Resultado: `**bold**` aparece literal e links markdown nao viram clicaveis.
 O UNICO vetor de link e `deep_link` (validado via `url_safe`).
 
 Decisao pendente: ativar markdown (aplicar `sanitize_html` no `_message_dict`) OU

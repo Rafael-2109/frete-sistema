@@ -1,4 +1,43 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # WhatsApp Bot — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo WhatsApp Bot — canal WhatsApp via OpenClaw + Baileys (nao-oficial), com o cerebro no Agent SDK Nacom.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+- [Arquitetura — "Caminho D" (gateway puro)](#arquitetura-caminho-d-gateway-puro)
+- [Regras Criticas (espelhadas do Teams)](#regras-criticas-espelhadas-do-teams)
+  - [R1: Thread non-daemon — `daemon=False` OBRIGATORIO](#r1-thread-non-daemon-daemonfalse-obrigatorio)
+  - [R2: Commit com retry — SEMPRE usar `_commit_with_retry()`](#r2-commit-com-retry-sempre-usar-_commit_with_retry)
+  - [R3: Re-fetch apos task perdida](#r3-re-fetch-apos-task-perdida)
+  - [R4: ContextVars MCP — set ANTES, clear no finally](#r4-contextvars-mcp-set-antes-clear-no-finally)
+  - [R5: Cleanup obrigatorio no `finally`](#r5-cleanup-obrigatorio-no-finally)
+  - [R6: Sender identity vem do PLUGIN, NUNCA do agente](#r6-sender-identity-vem-do-plugin-nunca-do-agente)
+  - [R7: Plugin Fail-Open compensado](#r7-plugin-fail-open-compensado)
+  - [R8: WhatsApp ≠ Teams — formatacao limitada](#r8-whatsapp-teams-formatacao-limitada)
+- [Modelo WhatsAppTask](#modelo-whatsapptask)
+- [Endpoints](#endpoints)
+- [Configuracao (variaveis de ambiente)](#configuracao-variaveis-de-ambiente)
+- [Pontos NAO implementados (Fase 6)](#pontos-nao-implementados-fase-6)
+- [Troubleshooting](#troubleshooting)
+  - [Plugin envia mas Flask rejeita 403 sender_not_authorized](#plugin-envia-mas-flask-rejeita-403-sender_not_authorized)
+  - [Resposta nao chega no WhatsApp](#resposta-nao-chega-no-whatsapp)
+  - [Task fica em "processing" infinitamente](#task-fica-em-processing-infinitamente)
+  - [Plugin nao consegue rodar inbound_claim](#plugin-nao-consegue-rodar-inbound_claim)
+- [Interdependencias](#interdependencias)
+
+## Contexto
+
+~875 LOC, 5 arquivos Python + plugin TS externo. O plugin `nacom-bridge` (em `~/.openclaw/plugins/`) faz roteamento deterministico e posta inbound aqui; o processamento fica todo no Agent SDK. Ground truth do OpenClaw em `memory/openclaw_whatsapp_integration.md`.
 
 **LOC**: ~875 | **Arquivos**: 5 (Python) + plugin TS externo | **Atualizado**: 09/05/2026
 

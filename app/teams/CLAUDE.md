@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Teams Bot — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Teams Bot — bot assincrono do Microsoft Teams via Azure Function bridge.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+- [Regras Criticas](#regras-criticas)
+  - [R1: Thread non-daemon — `daemon=False` OBRIGATORIO](#r1-thread-non-daemon-daemonfalse-obrigatorio)
+  - [R2: Commit com retry — SEMPRE usar `_commit_with_retry()`](#r2-commit-com-retry-sempre-usar-_commit_with_retry)
+  - [R3: Re-fetch apos SSL dropped](#r3-re-fetch-apos-ssl-dropped)
+  - [R4: `no_autoflush` — SEMPRE antes de query em contexto dirty](#r4-no_autoflush-sempre-antes-de-query-em-contexto-dirty)
+  - [R5: Cleanup obrigatorio no `finally`](#r5-cleanup-obrigatorio-no-finally)
+  - [R6: TTL usa `updated_at` — NUNCA `created_at`](#r6-ttl-usa-updated_at-nunca-created_at)
+  - [R7: CancelledError e BaseException](#r7-cancellederror-e-baseexception)
+- [Modelo TeamsTask](#modelo-teamstask)
+  - [R8: Fila de mensagens — max 1 por conversa](#r8-fila-de-mensagens-max-1-por-conversa)
+- [Endpoints](#endpoints)
+- [Gotchas](#gotchas)
+  - [Bug Teams #1: Transcript persistence](#bug-teams-1-transcript-persistence)
+  - [Bug Teams #2: Race condition `/bot/answer`](#bug-teams-2-race-condition-botanswer)
+  - [Dispatch v2 vs v3](#dispatch-v2-vs-v3)
+  - [Auto-cadastro de usuarios](#auto-cadastro-de-usuarios)
+  - [session_id vs sdk_session_id](#session_id-vs-sdk_session_id)
+  - [DC-8: Subprocess zombie apos CancelledError](#dc-8-subprocess-zombie-apos-cancellederror)
+  - [Fix 3: App instance do gunicorn](#fix-3-app-instance-do-gunicorn)
+- [Feature Flags](#feature-flags)
+- [Interdependencias](#interdependencias)
+
+## Contexto
+
+~2.5K LOC, 4 arquivos. Threads non-daemon (concluem durante reciclagem do gunicorn) + retry de SSL + persistencia de transcript. Regras criticas: `daemon=False` obrigatorio em `process_teams_task_async()` e `_commit_with_retry()` sempre (nunca commit direto — Render derruba SSL em idle).
 
 **LOC**: ~2.5K | **Arquivos**: 4 | **Atualizado**: 01/06/2026
 

@@ -1,4 +1,39 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Odoo — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Odoo — integracao bidirecional com o Odoo ERP (CIEL IT) via XML-RPC.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+- [Patterns de Desenvolvimento](#patterns-de-desenvolvimento)
+  - [P1: Anti-Detach — Extrair Dados ORM Antes de Operacoes Longas](#p1-anti-detach-extrair-dados-orm-antes-de-operacoes-longas)
+  - [P2: Fire-and-Polling para Operacoes > 30s](#p2-fire-and-polling-para-operacoes-30s)
+  - [P3: Timeout Adaptativo com Reconnect](#p3-timeout-adaptativo-com-reconnect)
+  - [P4: Batch Fan-Out (N Queries → Join em Memoria)](#p4-batch-fan-out-n-queries-join-em-memoria)
+  - [P5: Checkpointing — Commit entre Fases Independentes](#p5-checkpointing-commit-entre-fases-independentes)
+  - [P6: Retomada de Processo — Verificar Estado Antes de Recriar](#p6-retomada-de-processo-verificar-estado-antes-de-recriar)
+  - [P7: Commit Antes de Operacao Longa ao Odoo](#p7-commit-antes-de-operacao-longa-ao-odoo)
+  - [P8: Audit Hook Deterministico em execute_kw (2026-05-28)](#p8-audit-hook-deterministico-em-execute_kw-2026-05-28)
+- [Gotchas](#gotchas)
+- [Interdependencias](#interdependencias)
+- [Subpacote `estoque/` — orquestrador Odoo (skills WRITE)](#subpacote-estoque-orquestrador-odoo-skills-write)
+  - [Skills L2 atômicas (1 objeto Odoo cada — catálogo principal)](#skills-l2-atômicas-1-objeto-odoo-cada-catálogo-principal)
+  - [Orchestrators C3 macros (compõem skills L2 — NÃO são skills L2 atômicas, ver `estoque/CLAUDE.md §3.1`)](#orchestrators-c3-macros-compõem-skills-l2-não-são-skills-l2-atômicas-ver-estoqueclaudemd-31)
+  - [Sub-skill PRE-FLIGHT](#sub-skill-pre-flight)
+- [References](#references)
+
+## Contexto
+
+70 arquivos, ~41.9K LOC. API-only (sem models SQLAlchemy proprios, salvo 2 excecoes de inventario/auditoria) — le/escreve models de 8+ outros modulos; e o modulo mais consumido do sistema (37+ arquivos externos importam). O subpacote `estoque/` (orquestrador WRITE + READ ao vivo) tem guia proprio em `app/odoo/estoque/CLAUDE.md`.
 
 **70 arquivos** | **~41.9K LOC** | **Atualizado**: 01/06/2026
 

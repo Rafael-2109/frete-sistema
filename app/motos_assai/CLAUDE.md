@@ -1,4 +1,75 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Módulo Motos Assaí
+
+> **Papel:** guia de desenvolvimento do modulo Motos Assai — operacao B2B Q.P.A. -> Sendas/Assai com motos eletricas, isolada de outros modulos.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Fronteira do módulo (o que NÃO fazer)](#fronteira-do-módulo-o-que-não-fazer)
+- [Convenções obrigatórias](#convenções-obrigatórias)
+  - [1. Prefixo de tabela `assai_`](#1-prefixo-de-tabela-assai_)
+  - [2. Blueprint isolado](#2-blueprint-isolado)
+  - [3. Toggle master `sistema_motos_assai`](#3-toggle-master-sistema_motos_assai)
+  - [4. Menu](#4-menu)
+- [Invariante central](#invariante-central)
+- [Eventos por chassi (`assai_moto_evento.tipo`)](#eventos-por-chassi-assai_moto_eventotipo)
+- [Modelo de dados (29 tabelas)](#modelo-de-dados-29-tabelas)
+- [Lista de constantes/aliases por arquivo](#lista-de-constantesaliases-por-arquivo)
+- [Services complementares (responsabilidades)](#services-complementares-responsabilidades)
+- [Plano 3 implementado (2026-05-07)](#plano-3-implementado-2026-05-07)
+  - [Parsers de recibo Motochefe (PDF + XLSX + LLM)](#parsers-de-recibo-motochefe-pdf-xlsx-llm)
+  - [chassi_validator e moto_evento_service](#chassi_validator-e-moto_evento_service)
+  - [Wizard de recebimento físico A→B→C→D](#wizard-de-recebimento-físico-abcd)
+  - [Lock pessimista e invariantes de concorrência](#lock-pessimista-e-invariantes-de-concorrência)
+  - [Recebimento como SOT](#recebimento-como-sot)
+  - [Status do recibo](#status-do-recibo)
+  - [Rotas adicionadas (Plano 3)](#rotas-adicionadas-plano-3)
+  - [Fixtures de teste](#fixtures-de-teste)
+- [Plano 2 implementado (2026-05-07)](#plano-2-implementado-2026-05-07)
+  - [Parsers de PDF (`services/parsers/`)](#parsers-de-pdf-servicesparsers)
+  - [`modelo_resolver` — service COMPARTILHADO](#modelo_resolver-service-compartilhado)
+  - [Fluxo Pedido VOE → Compra Motochefe](#fluxo-pedido-voe-compra-motochefe)
+- [Plano 4 implementado (2026-05-07)](#plano-4-implementado-2026-05-07)
+  - [Pipeline de saída (ESTOQUE → MONTADA/PENDENTE → DISPONIVEL → SEPARADA → FATURADA)](#pipeline-de-saída-estoque-montadapendente-disponivel-separada-faturada)
+- [Plano 5 implementado (2026-05-12) — Integração lista_pedidos.html](#plano-5-implementado-2026-05-12-integração-lista_pedidoshtml)
+  - [Novos modelos (2 tabelas)](#novos-modelos-2-tabelas)
+  - [`AssaiSeparacao` ganhou 4 campos override](#assaiseparacao-ganhou-4-campos-override)
+  - [Mudança crítica: N separações por (pedido, loja)](#mudança-crítica-n-separações-por-pedido-loja)
+  - [Espelhamento Nacom — fallback dos 4 campos](#espelhamento-nacom-fallback-dos-4-campos)
+  - [Fluxo de finalização com saldo planejado](#fluxo-de-finalização-com-saldo-planejado)
+  - [Ajuste pós-NF (NF é fonte de verdade)](#ajuste-pós-nf-nf-é-fonte-de-verdade)
+  - [Novas rotas (blueprint `/motos-assai`)](#novas-rotas-blueprint-motos-assai)
+  - [Endpoints retrocompatíveis (sem `?sep_id`)](#endpoints-retrocompatíveis-sem-sep_id)
+  - [Telas rápidas](#telas-rápidas)
+  - [Endpoints adicionados (Plano 4)](#endpoints-adicionados-plano-4)
+  - [Estados de evento finais (Plano 4)](#estados-de-evento-finais-plano-4)
+- [Módulo completo — visão geral arquitetural](#módulo-completo-visão-geral-arquitetural)
+- [Skills + Agente disponíveis](#skills-agente-disponíveis)
+- [Manutenção / Roadmap futuro](#manutenção-roadmap-futuro)
+- [CCe como entidade (2026-05-13)](#cce-como-entidade-2026-05-13)
+  - [Por que esse design](#por-que-esse-design)
+  - [Modelo `AssaiCce` (Migration 28)](#modelo-assaicce-migration-28)
+  - [Cenários cobertos (3 entradas)](#cenários-cobertos-3-entradas)
+  - [Match reverso ao importar NF](#match-reverso-ao-importar-nf)
+  - [Tipo `IGNORADA` (DUPLICATAS / ENDERECO)](#tipo-ignorada-duplicatas-endereco)
+  - [Idempotência](#idempotência)
+  - [Rotas (`/motos-assai/cce/*`)](#rotas-motos-assaicce)
+  - [Arquivos](#arquivos)
+  - [Gotchas](#gotchas)
+- [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
+- [Referências](#referências)
+
+## Contexto
+
+29 tabelas com prefixo `assai_`, blueprint isolado. Pipeline completo implementado: Cadastros -> Parser VOE -> Pedido -> Compra -> Recibo Motochefe -> Recebimento fisico -> Saida (NF Q.P.A.). Fronteira estrita contra HORA/CarVia/Motochefe (reuso so via adapter/subclasse).
 
 **Data**: 2026-05-13
 **Status**: Foundation + Cadastros (Plano 1) + Parser VOE + Pedido + Compra (Plano 2) + Recibo Motochefe + Recebimento físico (Plano 3) + Pipeline de saída completo (Plano 4) + **Integração lista_pedidos.html (Plano 5)** + **CCe como entidade com match reverso (2026-05-13)** — TODOS implementados.

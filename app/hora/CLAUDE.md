@@ -1,4 +1,42 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Módulo HORA — Lojas Motochefe
+
+> **Papel:** guia de desenvolvimento do modulo HORA — controle de estoque unitario de motos eletricas nas lojas fisicas da HORA (B2C varejo), com fronteira estrita contra outros modulos.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Fronteira do módulo (o que NÃO fazer)](#fronteira-do-módulo-o-que-não-fazer)
+- [Convenções obrigatórias](#convenções-obrigatórias)
+  - [1. Prefixo de tabela `hora_`](#1-prefixo-de-tabela-hora_)
+  - [2. Blueprint Flask isolado](#2-blueprint-flask-isolado)
+  - [3. Menu](#3-menu)
+- [Invariante central (resumo)](#invariante-central-resumo)
+- [Modelo de dados (46 tabelas — núcleo conceitual abaixo)](#modelo-de-dados-46-tabelas-núcleo-conceitual-abaixo)
+  - [Tabelas complementares (32)](#tabelas-complementares-32)
+- [Autorização granular (decorator + service)](#autorização-granular-decorator-service)
+- [Parsers reusados (via adapter)](#parsers-reusados-via-adapter)
+- [O que NÃO fazer (lista explícita)](#o-que-não-fazer-lista-explícita)
+- [Ordem de implementação planejada](#ordem-de-implementação-planejada)
+- [11. Peças (cadastro, estoque, faturamento) — 2026-05-05](#11-peças-cadastro-estoque-faturamento-2026-05-05)
+- [13. Listagem de Pedidos de Venda com itens inline + filtro chassi — 2026-05-06](#13-listagem-de-pedidos-de-venda-com-itens-inline-filtro-chassi-2026-05-06)
+- [14. Backfill `tagplus_pedido_id` para vendas legadas — 2026-05-06](#14-backfill-tagplus_pedido_id-para-vendas-legadas-2026-05-06)
+- [12. Unificação de modelos (N nomes → 1 canônico) — 2026-05-06](#12-unificação-de-modelos-n-nomes-1-canônico-2026-05-06)
+- [15. Preço A vista / A prazo + desconto % por moto — 2026-05-06](#15-preço-a-vista-a-prazo-desconto-por-moto-2026-05-06)
+- [16. Campo `consumidor_final` no faturamento TagPlus — 2026-05-07 (revisado)](#16-campo-consumidor_final-no-faturamento-tagplus-2026-05-07-revisado)
+- [Onboarding Tours (2026-05-08)](#onboarding-tours-2026-05-08)
+- [Referências](#referências)
+
+## Contexto
+
+PJ distinta da Motochefe-distribuidora e da CarVia. Nao compartilha dados com modulos vizinhos — joins, FKs cross-modulo e imports de modelos de outros modulos sao proibidos (reuso so via adapter). Fluxos pedido -> NF -> recebimento em producao, com permissoes granulares ativas. A fronteira e reforcada em camada-tool pelo Agente Lojas HORA (`app/agente_lojas/`).
 
 **Data**: 2026-05-20 (atualizado)
 **Status**: em produção — modelos, migrations e fluxos pedido→NF→recebimento implementados; permissões granulares ativas.

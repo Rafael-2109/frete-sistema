@@ -1,4 +1,50 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Modulo Devolucao — Guia para Claude Code
+
+> **Papel:** ponto de entrada do modulo Devolucao — gestao completa de devolucoes de mercadoria (registro -> descarte/retorno) com De-Para de produto via Claude Haiku.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Sub-documentacao](#sub-documentacao)
+- [O que este modulo faz](#o-que-este-modulo-faz)
+- [Arquitetura em uma tela](#arquitetura-em-uma-tela)
+- [Gotchas Criticos](#gotchas-criticos)
+  - [1. Nomenclatura confusa: NFD pode ser **NF de venda revertida**](#1-nomenclatura-confusa-nfd-pode-ser-nf-de-venda-revertida)
+  - [2. CNPJs excluidos globalmente](#2-cnpjs-excluidos-globalmente)
+  - [3. Pallets NAO sao devolucoes de produto](#3-pallets-nao-sao-devolucoes-de-produto)
+  - [4. Status da ocorrencia e **auto-computado**](#4-status-da-ocorrencia-e-auto-computado)
+  - [5. Numero de ocorrencia: formato global sequencial](#5-numero-de-ocorrencia-formato-global-sequencial)
+  - [6. CNPJ vem em dois formatos](#6-cnpj-vem-em-dois-formatos)
+  - [7. Lookup tables com FK + legado varchar (cache denormalizado)](#7-lookup-tables-com-fk-legado-varchar-cache-denormalizado)
+  - [8. Permissoes granulares para CRUD de lookups](#8-permissoes-granulares-para-crud-de-lookups)
+  - [9. Data de resolucao ≠ data de entrada](#9-data-de-resolucao-data-de-entrada)
+  - [10. `abort(4xx)` NAO funciona](#10-abort4xx-nao-funciona)
+  - [11. CNPJ_EXCLUIDOS em filtros do dashboard](#11-cnpj_excluidos-em-filtros-do-dashboard)
+- [Integracao com outros modulos](#integracao-com-outros-modulos)
+- [Storage S3](#storage-s3)
+- [Scheduler (cron job)](#scheduler-cron-job)
+- [Servicos — funcao-por-funcao](#servicos-funcao-por-funcao)
+  - [NFDService (nfd_service.py)](#nfdservice-nfd_servicepy)
+  - [ReversaoService (reversao_service.py)](#reversaoservice-reversao_servicepy)
+  - [MonitoramentoSyncService (monitoramento_sync_service.py)](#monitoramentosyncservice-monitoramento_sync_servicepy)
+  - [AIResolverService (ai_resolver_service.py)](#airesolverservice-ai_resolver_servicepy)
+  - [FretePlaceholderService (frete_placeholder_service.py)](#freteplaceholderservice-frete_placeholder_servicepy)
+- [Migrations relevantes](#migrations-relevantes)
+- [Fase 5 e Fase 6 (NAO implementadas)](#fase-5-e-fase-6-nao-implementadas)
+- [TODOs abertos (`prompt.md`)](#todos-abertos-promptmd)
+- [Quick References](#quick-references)
+
+## Contexto
+
+~13.9K LOC (17 arquivos) + 7 templates + 32 migrations, versao 3.0.0 (Fases 1-4.5 em prod, 5-6 pendentes). Este CLAUDE.md e o indice do modulo; detalhes profundos nos sub-docs (CLAUDE_APIS, CLAUDE_MODELOS, CLAUDE_FLUXOS) e o historico narrativo do produto no `README.md`.
 
 **Ultima Atualizacao**: 22/04/2026
 **Stats**: ~13.9K LOC Python (17 arquivos) + 7 templates + 32 migrations

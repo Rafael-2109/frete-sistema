@@ -1,4 +1,44 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # CarVia — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo CarVia — gestao de frete subcontratado (importar NF/CTe, matchear NF-CTe, subcontratar transportadoras, gerar faturas) e emissao de CTe no SSW.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Sub-docs (progressive disclosure)](#sub-docs-progressive-disclosure)
+- [Estrutura](#estrutura)
+- [Regras Criticas](#regras-criticas)
+  - [R1: Modulo isolado — SEM dependencia de Embarque/Frete/Financeiro](#r1-modulo-isolado-sem-dependencia-de-embarquefretefinanceiro)
+  - [R2: Lazy imports nos routes e services](#r2-lazy-imports-nos-routes-e-services)
+  - [R3: peso_utilizado = max(bruto, cubado) — SEMPRE recalcular](#r3-peso_utilizado-maxbruto-cubado-sempre-recalcular)
+  - [R4: Fluxo de status e irreversivel (exceto cancelamento)](#r4-fluxo-de-status-e-irreversivel-exceto-cancelamento)
+  - [R5: Fatura vincula por status elegivel + fatura_id IS NULL](#r5-fatura-vincula-por-status-elegivel-fatura_id-is-null)
+  - [R6: Classificacao de CTe por CNPJ emitente](#r6-classificacao-de-cte-por-cnpj-emitente)
+  - [R7: numero_sequencial_transportadora — auto-increment logico](#r7-numero_sequencial_transportadora-auto-increment-logico)
+  - [R8: Numeracao sequencial CTe-### / Sub-### / COMP-###](#r8-numeracao-sequencial-cte--sub--comp-)
+  - [R10-R13: Orquestrador e condicoes comerciais](#r10-r13-orquestrador-e-condicoes-comerciais)
+  - [R11: Conciliacao quita titulo](#r11-conciliacao-quita-titulo)
+  - [R14: Admin — Hard Delete com Auditoria](#r14-admin-hard-delete-com-auditoria)
+  - [R14.1: Cascade de Cancelamento (B3, 2026-04-18)](#r141-cascade-de-cancelamento-b3-2026-04-18)
+  - [R15: Emissao SSW — SSL Drop Resilience](#r15-emissao-ssw-ssl-drop-resilience)
+  - [R16 + R17: Pre-vinculo e historico de match](#r16-r17-pre-vinculo-e-historico-de-match)
+  - [R18: NF Triangular (2026-04-20) — vinculo NF Transferencia -> NF Venda](#r18-nf-triangular-2026-04-20-vinculo-nf-transferencia---nf-venda)
+  - [R19: SOT Tomador/Incoterm = XML do CTe (2026-04-20)](#r19-sot-tomadorincoterm-xml-do-cte-2026-04-20)
+- [Modelos](#modelos)
+- [Interdependencias](#interdependencias)
+- [Permissao](#permissao)
+
+## Contexto
+
+107 arquivos, ~67.2K LOC, 109 templates. Importa NF PDFs/XMLs + CTe XMLs, faz match NF-CTe, subcontrata com cotacao via tabelas existentes, gera faturas de cliente e transportadora e emite CTe direto no SSW via Playwright. Detalhe por topico nos sub-docs (CONFERENCIA, FINANCEIRO, IMPORTACAO, etc.) — prefira ler o sub-doc a reconstruir o contexto a partir do codigo.
 
 **107 arquivos** | **~67.2K LOC** | **109 templates** | **Atualizado**: 2026-06-01
 

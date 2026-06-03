@@ -1,4 +1,78 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Agente Logistico Web — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Agente Web — wrapper do Claude Agent SDK que serve o chat web (SSE) e o bot do Teams (async). Abra antes de editar `app/agente/`.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+- [Arquitetura de Prompts (v3 — 28/03/2026)](#arquitetura-de-prompts-v3-28032026)
+  - [Principio: Separacao Estrutural (DOC-1.md)](#principio-separacao-estrutural-doc-1md)
+  - [Dois modos (feature flag `USE_CUSTOM_SYSTEM_PROMPT`)](#dois-modos-feature-flag-use_custom_system_prompt)
+  - [Camadas (com flag true)](#camadas-com-flag-true)
+  - [Separacao de responsabilidades](#separacao-de-responsabilidades)
+  - [O que mudou na v3 (v4.2.0 do system_prompt)](#o-que-mudou-na-v3-v420-do-system_prompt)
+  - [Rollback](#rollback)
+  - [Arquivos envolvidos](#arquivos-envolvidos)
+- [Regras Criticas](#regras-criticas)
+  - [R1: Dois IDs de sessao — NUNCA confundir](#r1-dois-ids-de-sessao-nunca-confundir)
+  - [R2: Thread-safety — 3 mecanismos distintos](#r2-thread-safety-3-mecanismos-distintos)
+  - [Async Migration — Dual Event (pending_questions.py)](#async-migration-dual-event-pending_questionspy)
+  - [R3: Stream safety — None sentinel + done_event](#r3-stream-safety-none-sentinel-done_event)
+  - [R4: AskUserQuestion — blocking cross-arquivo + cross-worker (Redis)](#r4-askuserquestion-blocking-cross-arquivo-cross-worker-redis)
+  - [R5: MCP tools — NAO callable](#r5-mcp-tools-nao-callable)
+  - [R6: MCP Enhanced Wrapper](#r6-mcp-enhanced-wrapper)
+  - [R7: JSONB — flag_modified](#r7-jsonb-flag_modified)
+  - [R9: Audit Hook Deterministico Odoo — propagacao via PreToolUse (2026-05-28)](#r9-audit-hook-deterministico-odoo-propagacao-via-pretooluse-2026-05-28)
+  - [R10: Persistencia da resposta — PRIMARY (thread daemon) vs DEFESA (generator finally)](#r10-persistencia-da-resposta-primary-thread-daemon-vs-defesa-generator-finally)
+- [Hierarquia de Timeouts](#hierarquia-de-timeouts)
+- [Gotchas](#gotchas)
+  - [system_prompt.md vs preset_operacional.md vs CLAUDE.md](#system_promptmd-vs-preset_operacionalmd-vs-claudemd)
+  - [SDK max_buffer_size: 10MB](#sdk-max_buffer_size-10mb)
+  - [Screenshot compression: 750KB limit](#screenshot-compression-750kb-limit)
+  - [Prerequisitos de execucao](#prerequisitos-de-execucao)
+  - [S3 Storage (screenshots, archive)](#s3-storage-screenshots-archive)
+  - [Arquivos legados — NAO usar, NAO estender](#arquivos-legados-nao-usar-nao-estender)
+  - [Services (17 arquivos, ~10.5K LOC)](#services-17-arquivos-105k-loc)
+  - [MCP Tools de memoria (memory_mcp_tool.py v2.1.0 Enhanced, 12 operacoes)](#mcp-tools-de-memoria-memory_mcp_toolpy-v210-enhanced-12-operacoes)
+  - [MCP Tools de sessao (session_search_tool.py v4.0.0 Enhanced, 4 operacoes)](#mcp-tools-de-sessao-session_search_toolpy-v400-enhanced-4-operacoes)
+  - [Debug Mode — Injecao de Contexto (client.py)](#debug-mode-injecao-de-contexto-clientpy)
+- [Pipeline SSE — Contrato de 3 Camadas](#pipeline-sse-contrato-de-3-camadas)
+  - [R8: Novo evento = atualizar TODAS as 3 camadas](#r8-novo-evento-atualizar-todas-as-3-camadas)
+  - [Excecao R8: eventos emitidos de `can_use_tool` (raw SSE via event_queue)](#excecao-r8-eventos-emitidos-de-can_use_tool-raw-sse-via-event_queue)
+  - [Mapa de eventos (atualizado 2026-05-25)](#mapa-de-eventos-atualizado-2026-05-25)
+- [Artifacts (2026-05-12)](#artifacts-2026-05-12)
+  - [Componentes](#componentes)
+  - [Fluxo](#fluxo)
+  - [Seguranca](#seguranca)
+  - [Gotchas](#gotchas)
+- [Telemetria per-invocacao de subagent (A1+A2+A3, 2026-05-16)](#telemetria-per-invocacao-de-subagent-a1a2a3-2026-05-16)
+  - [Componentes](#componentes)
+  - [Fluxo](#fluxo)
+  - [Feature flags](#feature-flags)
+  - [Gotchas](#gotchas)
+  - [Roadmap (Fase A em curso)](#roadmap-fase-a-em-curso)
+- [Memoria Compartilhada (PRD v2.1)](#memoria-compartilhada-prd-v21)
+  - [Conceito](#conceito)
+  - [Tabela usuarios: id=0 = "Sistema"](#tabela-usuarios-id0-sistema)
+  - [Colunas adicionadas em agent_memories](#colunas-adicionadas-em-agent_memories)
+  - [Busca inclui user_id=0](#busca-inclui-user_id0)
+  - [Extracao pos-sessao](#extracao-pos-sessao)
+  - [Role Awareness](#role-awareness)
+- [Versao SDK atual](#versao-sdk-atual)
+- [Export critico: Teams](#export-critico-teams)
+
+## Contexto
+
+Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~48.9K LOC em 96 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.87) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
 
 **LOC**: ~48.9K | **Arquivos**: 96 | **Atualizado**: 01/06/2026
 

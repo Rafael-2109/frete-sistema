@@ -1,4 +1,18 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: .claude/references/INDEX.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Sistema de Fretes — Referencia Compartilhada
+
+> **Papel:** referencia compartilhada do projeto, lida por AMBOS os contextos (Claude Code dev + Agent SDK web) — tech stack, regras universais, indice de referencias, caminhos do sistema e subagentes.
+
+## Contexto
+
+Ponto de entrada do repositorio. Conteudo dev-only (Quick Start, CSS, migrations, CLAUDE.md de modulo) vive em `~/.claude/CLAUDE.md`. A fonte de dados de producao e o MCP do Render (ver `.claude/references/INFRAESTRUTURA.md`); campos de tabela vem dos schemas JSON; antes de qualquer skill ou operacao Odoo, ler `.claude/references/ROUTING_SKILLS.md`.
 
 **Ultima Atualizacao**: 01/06/2026
 
@@ -162,6 +176,7 @@ Gotchas rapidos:
 | Motos Assai (B2B Q.P.A.) | `app/motos_assai/routes/`, `app/motos_assai/services/`, `app/motos_assai/models/`, `app/templates/motos_assai/` — ver `app/motos_assai/CLAUDE.md` |
 | Financeiro | `app/financeiro/routes/`, `app/financeiro/services/`, `app/financeiro/workers/` — ver `app/financeiro/CLAUDE.md` |
 | Odoo | `app/odoo/services/`, `app/odoo/utils/`, `app/odoo/jobs/` — ver `app/odoo/CLAUDE.md` |
+| Relatorios Fiscais (SPED ECD) | `app/relatorios_fiscais/routes.py`, `app/relatorios_fiscais/services/`, `app/relatorios_fiscais/manual_ecd/` — ver `app/relatorios_fiscais/CLAUDE.md` |
 | CarVia | `app/carvia/routes/`, `app/carvia/services/`, `app/templates/carvia/` — ver `app/carvia/CLAUDE.md` |
 | Seguranca | `app/seguranca/routes/`, `app/seguranca/services/`, `app/templates/seguranca/` — ver `app/seguranca/CLAUDE.md` |
 | Teams Bot | `app/teams/` — ver `app/teams/CLAUDE.md` |

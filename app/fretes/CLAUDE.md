@@ -1,4 +1,63 @@
+<!-- doc:meta
+tipo: explanation
+camada: L1
+sot_de: —
+hub: CLAUDE.md
+superseded_by: —
+atualizado: 2026-06-03
+-->
 # Fretes — Guia de Desenvolvimento
+
+> **Papel:** guia de desenvolvimento do modulo Fretes (CORE) — frete real Nacom (industria embarca): Cotacao -> Frete -> CTe -> Lancamento Odoo -> Pagamento -> Conta Corrente.
+
+## Indice
+
+- [Contexto](#contexto)
+- [Estrutura](#estrutura)
+- [Blueprints](#blueprints)
+- [Regras Criticas](#regras-criticas)
+  - [R1: Anti-detach SQLAlchemy — extrair dados ANTES da Etapa 6](#r1-anti-detach-sqlalchemy-extrair-dados-antes-da-etapa-6)
+  - [R2: Etapa 16 — re-fetch com sessao nova](#r2-etapa-16-re-fetch-com-sessao-nova)
+  - [R3: Etapa 8 DESABILITADA — nao reativar sem testes](#r3-etapa-8-desabilitada-nao-reativar-sem-testes)
+  - [R4: Etapas 12 e 14 sao OPCIONAIS — erros ignorados](#r4-etapas-12-e-14-sao-opcionais-erros-ignorados)
+  - [R5: CNPJ tomador → company mapeado](#r5-cnpj-tomador-company-mapeado)
+  - [R6: Tolerancia R$ 5,00 e bloqueio de fatura](#r6-tolerancia-r-500-e-bloqueio-de-fatura)
+  - [R7: Sem Redis lock no lancamento individual](#r7-sem-redis-lock-no-lancamento-individual)
+  - [R8: Dois vinculos CTe ↔ Frete podem divergir](#r8-dois-vinculos-cte-frete-podem-divergir)
+- [Models](#models)
+- [Origem do Frete — 2 caminhos](#origem-do-frete-2-caminhos)
+  - [Caminho 1: Automatico (a maior parte do volume)](#caminho-1-automatico-a-maior-parte-do-volume)
+  - [Caminho 2: Manual](#caminho-2-manual)
+  - [Caminho 3: Cancelamento](#caminho-3-cancelamento)
+- [Lancamento de Freteiros (fluxo paralelo)](#lancamento-de-freteiros-fluxo-paralelo)
+  - [Diferencas chave](#diferencas-chave)
+  - [Pontos de atencao](#pontos-de-atencao)
+- [CalculadoraFrete — visualizacao vs lancamento](#calculadorafrete-visualizacao-vs-lancamento)
+- [Fluxo Lancamento Odoo (16 etapas)](#fluxo-lancamento-odoo-16-etapas)
+- [Workers RQ](#workers-rq)
+- [Funcoes Exportadas (consumidores externos)](#funcoes-exportadas-consumidores-externos)
+- [Interdependencias](#interdependencias)
+- [Gotchas](#gotchas)
+  - [G1: `buscar_ctes_relacionados` carrega TUDO](#g1-buscar_ctes_relacionados-carrega-tudo)
+  - [G2: `l10n_br_data_entrada` SEMPRE atualizado (mesmo retomada)](#g2-l10n_br_data_entrada-sempre-atualizado-mesmo-retomada)
+  - [G3: `FreteLancado` e dead code](#g3-fretelancado-e-dead-code)
+  - [G4: Rotas `*_antigo` nao removidas](#g4-rotas-_antigo-nao-removidas)
+  - [G5: FrotaDespesa.odoo_vendor_bill_id reservado mas nunca preenchido](#g5-frotadespesaodoo_vendor_bill_id-reservado-mas-nunca-preenchido)
+  - [G6: Commits explicitos antes Etapa 12 e 14](#g6-commits-explicitos-antes-etapa-12-e-14)
+  - [G7: 7 docs em `services/documentacao_odoo/`](#g7-7-docs-em-servicesdocumentacao_odoo)
+- [Permissao e Menu](#permissao-e-menu)
+- [Skills Relacionadas](#skills-relacionadas)
+- [Referencias (ponteiros para docs externas)](#referencias-ponteiros-para-docs-externas)
+  - [Documentacao interna do modulo](#documentacao-interna-do-modulo)
+  - [Padroes e patterns (cross-modulo)](#padroes-e-patterns-cross-modulo)
+  - [Regras de negocio](#regras-de-negocio)
+  - [Reconciliacao financeira (pagamento de fretes)](#reconciliacao-financeira-pagamento-de-fretes)
+  - [Modelos e schemas](#modelos-e-schemas)
+  - [Skills e subagentes operacionais](#skills-e-subagentes-operacionais)
+
+## Contexto
+
+20 arquivos Python, ~19.0K LOC, 43 templates. Modulo CORE com o `lancamento_odoo_service.py` (16 etapas DFe -> PO -> Invoice). Padroes Odoo (P1-P7) em `app/odoo/CLAUDE.md`; frete real vs teorico em `.claude/references/negocio/FRETE_REAL_VS_TEORICO.md`.
 
 **20 arquivos Python** | **~19.0K LOC** | **43 templates** | **Atualizado**: 2026-05-08
 
