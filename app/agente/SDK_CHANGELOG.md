@@ -1,9 +1,72 @@
-# Agente Web — SDK Changelog (0.1.49 → 0.2.87)
+# Agente Web — SDK Changelog (0.1.49 → 0.2.89)
 
 > Historico de adocoes, breaking changes, bug fixes e features NAO adotadas do
 > Claude Agent SDK + Anthropic SDK Python. Extraido de `CLAUDE.md` para reducao de ruido.
 >
-> **Atualizado**: 2026-05-25 (SDK 0.2.87 + CLI 2.1.150 + adocao tardia das Task* tools)
+> **Atualizado**: 2026-06-03 (SDK 0.2.89 + CLI bundled 2.1.162 — upgrade so do CLI)
+
+---
+
+## SDK 0.2.87 → 0.2.89 (2026-06-03) — CLI bundled 2.1.150 → 2.1.162
+
+**Versao**: `claude-agent-sdk==0.2.89` (CLI bundled 2.1.162) + `anthropic==0.98.1`
+**Bump intermediario**: 0.2.88 (CLI bundled 2.1.161)
+
+### Mudancas no SDK Python (quase zero!)
+
+Fonte primaria verificada: `CHANGELOG.md` oficial do repo + release pages v0.2.88/v0.2.89.
+
+- **0.2.89**: SO bump do CLI bundled 2.1.161 → 2.1.162. Nada no codigo Python.
+- **0.2.88**: 1 bug fix + CI interno + CLI bundled 2.1.150 → 2.1.161.
+  - **Bug fix**: `session_store` code paths (`TranscriptMirrorBatcher`, `session_resume`,
+    `sessions`) portados de `asyncio` bruto para `anyio` — corrige crash
+    `TypeError: trio.run received unrecognized yield message` ao passar `session_store=`
+    sob **trio**. **NAO afeta este projeto** (rodamos asyncio/anyio/gevent, nunca trio).
+  - Interno: CI e2e migrado para Workload Identity Federation (escopo Anthropic).
+
+**Breaking changes no SDK Python: NENHUMA.** `ClaudeAgentOptions`, hooks, `can_use_tool`,
+`skills=`, `strict_mcp_config` inalterados. Upgrade gratis no codigo (so requirements + pip).
+
+### O ganho real: CLI bundled 2.1.150 → 2.1.162 (~12 versoes)
+
+O SDK resolve o CLI **bundled com prioridade absoluta**
+(`_internal/transport/subprocess_cli.py:_find_bundled_cli` ANTES de `shutil.which("claude")`).
+O Render NAO instala `@anthropic-ai/claude-code` via npm → producao roda o `_bundled/claude`
+do wheel. Logo o `pip install claude-agent-sdk==0.2.89` E o veiculo que entrega as features do
+CLI a producao (troca `_bundled/claude` de 2.1.150 → 2.1.162; confirmado em `_cli_version.py`).
+
+Destaques aplicaveis ao agente (Opus 4.8 default + subagentes + stream-json + MCP, headless):
+
+| CLI | Mudanca | Impacto |
+|-----|---------|---------|
+| 2.1.156 | Fix Opus 4.8: thinking blocks modificados causando API errors | 🔴 Default e Opus 4.8 — elimina erros 400 intermitentes de thinking (rodavamos 2.1.150, ANTES do fix) |
+| 2.1.161 | Fix: output de subagente background corrompendo stdout do `claude -p` | 🔴 Agente usa subagentes em modo headless/print |
+| 2.1.161 | Parallel tool calls: Bash que falha nao cancela mais as outras chamadas | 🟡 Agente faz tool calls paralelas |
+| 2.1.161 | Fix: subagentes concluidos presos como "running" em erro | 🟡 Telemetria/UI de subagente |
+| 2.1.161 | `claude mcp` deixou de imprimir secrets (credenciais redigidas) | 🔐 Seguranca |
+| 2.1.162 | Fix: Esc no inicio do turno descartado em sessoes stream-json | 🟡 SDK usa `--output-format stream-json` |
+| 2.1.162 | Fix: MCP `timeout` < 1000ms arredondado errado | 🟡 Agente usa MCP |
+| 2.1.157 | Plugins em `.claude/skills` auto-carregados sem marketplace | 🟢 |
+| 2.1.154 | Stdio MCP servers recebem `CLAUDE_CODE_SESSION_ID` + `CLAUDECODE=1` | 🟢 (se usar stdio MCP) |
+| 2.1.154 | Hardening: deteccao de exfiltracao + `rm -rf $HOME` com trailing slash bloqueado | 🔐 Seguranca |
+
+### ⚠️ Ponto de atencao NAO validado (sem smoke test nesta sessao)
+
+**2.1.160**: modo `acceptEdits` agora pede prompt antes de escrever shell startup files /
+build-tool configs que concedem execucao de codigo. O agente roda
+`permission_mode="acceptEdits"` (`sdk/client.py:1547,2275`) **headless**, sem humano para
+responder prompt do CLI. Risco pratico BAIXO (agente nao escreve em `~/.bashrc` nem build
+configs, e tem callback `can_use_tool`), mas a interacao desse novo prompt com `can_use_tool`
+em headless NAO foi validada por smoke test. Monitorar as primeiras sessoes pos-deploy.
+
+Confirmado SEM impacto: o projeto NAO usa `CLAUDE_CODE_OPUS_4_6_FAST_MODE_OVERRIDE`
+(env var removida em 2.1.160).
+
+### Como foi atualizado (2026-06-03)
+- `requirements.txt:70`: `claude-agent-sdk==0.2.89`
+- venv: `pip install claude-agent-sdk==0.2.89` (confirmado `_cli_version.py` = 2.1.162)
+- `CLAUDE.md` (raiz) tech stack + `app/agente/CLAUDE.md` secao "Versao SDK atual"
+- **SEM worktree, SEM smoke test** (a pedido). Deploy dispara ao push em `main`.
 
 ---
 

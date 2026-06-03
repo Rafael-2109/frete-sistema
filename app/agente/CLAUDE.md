@@ -72,13 +72,13 @@ atualizado: 2026-06-03
 
 ## Contexto
 
-Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~48.9K LOC em 96 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.87) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
+Encapsula o Claude Agent SDK (chat web SSE + Teams bot async); ~48.9K LOC em 96 arquivos. O rastreador VIVO da evolucao (flywheel/blueprint Ondas 0-4) e `docs/blueprint-agente/EXECUCAO.md`; o historico do SDK (0.1.49 -> 0.2.89) fica em `SDK_CHANGELOG.md`. Regra inviolavel: antes de mexer em qualquer item do flywheel (judge/verify/triage/eval-gate A3/promocao A4), ler a spec do eixo + a critica (licao anti-drift).
 
 **LOC**: ~48.9K | **Arquivos**: 96 | **Atualizado**: 01/06/2026
 
 Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 
-> **Historico SDK** (changelog 0.1.49 → 0.2.87 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
+> **Historico SDK** (changelog 0.1.49 → 0.2.89 + anthropic 0.85 → 0.98.1 — features adotadas, breaking changes, bug fixes): ver `SDK_CHANGELOG.md`.
 >
 > **EVOLUCAO DO AGENTE (flywheel/blueprint Ondas 0-4)**: o rastreador VIVO de verdade e' o
 > `docs/blueprint-agente/EXECUCAO.md` (estado de cada item, gates, log append-only). Design por
@@ -103,7 +103,7 @@ Wrapper do Claude Agent SDK: chat web (SSE) + Teams bot (async).
 app/agente/                          # Root — 6 arquivos
 ├── __init__.py                      # Blueprint import de routes/ + init_app()
 ├── CLAUDE.md                        # Este arquivo (guia dev)
-├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.2.87 (features, breaking, fixes) — inclui revisao retroativa do 0.2.82 (2 breakings omitidas)
+├── SDK_CHANGELOG.md                 # Historico SDK 0.1.49 -> 0.2.89 (features, breaking, fixes) — inclui revisao retroativa do 0.2.82 (2 breakings omitidas)
 ├── ROLLBACK_SESSION_STORE.md        # Procedimento rollback PostgresSessionStore (Fase B)
 ├── historia.md                      # Referencia historica (legado, 76K)
 ├── models.py                        # SQLAlchemy models (AgentSession, AgentMemory, etc.)
@@ -775,7 +775,7 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
 
 ## Versao SDK atual
 
-- **claude-agent-sdk**: `0.2.87` | **CLI bundled**: 2.1.150 | **anthropic**: `0.98.1`
+- **claude-agent-sdk**: `0.2.89` | **CLI bundled**: 2.1.162 | **anthropic**: `0.98.1`
 - **Task* tools** (SDK 0.2.82+): TodoWrite substituido por `TaskCreate`/`TaskUpdate`/`TaskGet`/`TaskList`.
   Emit via `task_event` SSE (3 actions: created/updated/snapshot). Orientacao em `system_prompt.md`
   bloco `<task_management>`. Parser em `client.py:_build_task_event` (Nacom) e
@@ -827,7 +827,7 @@ Apos baseline numerico estavel: prosseguir para **Fase B (Quality)**.
   Adocao gratis via upgrade.
 
 > **Historico completo de adocoes, breaking changes, bug fixes e features NAO adotadas**:
-> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.2.87 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
+> ver `SDK_CHANGELOG.md` (changelog 0.1.49 → 0.2.89 + anthropic 0.85 → 0.98.1 com fluxos detalhados, gotchas e arquitetura).
 
 ---
 
