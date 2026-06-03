@@ -50,6 +50,8 @@ E1 outcome_signal → E2 step_judge → E3 calibração do judge → E4 fused_sc
 ```
 Sem `E4` confiável, ligar atuador = promover ruído. Por isso Ondas 1–2 (olhos) vêm antes das Ondas 3+ (mãos).
 
+> **2026-06-03 — A3 APOSENTADO:** o eval offline LLM caro (A3) foi vetado/desligado. O `E3 calibração` calibra o **ONLINE judge** (`agent_step.outcome_signal.judge`, vivo em PROD), populando `agent_eval_case` via sampler — NÃO mais o `eval_runner`. Ver `plans/2026-06-03-gate1-calibracao-judge-online.md`.
+
 ---
 
 ## ONDA 0 — Colher o que já plantamos + fecho rápido (baixo risco) — **AGORA**
@@ -71,9 +73,9 @@ Sem `E4` confiável, ligar atuador = promover ruído. Por isso Ondas 1–2 (olho
 | O1.1 | E1: persistir thumbs/frustração em `agent_step.outcome_signal` (`update_outcome`) | feature | `AGENT_QUALITY_SPINE` | `count(outcome_signal IS NOT NULL)>0` 1 semana | — |
 | O1.2 | A-A0: persistir 👍👎 + `escalated_to_human`/`user_correction_received` | wiring | `AGENT_QUALITY_SPINE` | `turn_quality.explicit_feedback` = ±1 após clique | — |
 | O1.3 | E2: `step_judge` por passo, ancorado no audit Odoo (R9 domina) | wiring | `AGENT_STEP_JUDGE` | `count(agent_step_judgments)>0` 48h; refute<50% | O1.1 |
-| O1.4 | A3 Fase 2: `eval_runner --agent analista-carteira` → baseline real | validation | `AGENT_EVAL_GATE` | `agent_eval_scores`≥1 linha (git_sha real); evidence revisado | O0.5 |
-| O1.5 | E3: harness de calibração do judge + `agent_eval_case` + `concordance_rate` (corrige viés sem-tool=fail 88%) | feature | `AGENT_EVAL_CALIBRATION` | concordance≥80%; ≥10 casos anotados | O1.4 |
-| O1.G | **GATE-1**: ≥1 semana de dados + judge calibrado (destrava confiar no sinal) | validation | — | dados PROD ≥7d + concordance medida | O1.3,O1.5 |
+| O1.4 | ❌ **APOSENTADO (2026-06-03)** — A3 (eval LLM caro) VETADO; `AGENT_EVAL_GATE`=false em PROD, fix revertido. NÃO é mais dep de O1.5 (ver EXECUCAO.md) | — | ❌ | — |
+| O1.5 | E3 **re-apontado p/ ONLINE judge** (pós-A3): sampler popula `agent_eval_case` de `agent_step.outcome_signal.judge` (não `eval_runner`) + `concordance_rate` + spot-check humano; inclui fix dos parsers do verify (arithmetic 42/201, judge↔adversarial 63%). Plano: `plans/2026-06-03-gate1-calibracao-judge-online.md` | feature | `AGENT_EVAL_CALIBRATION` | concordance≥80%; ≥10 steps anotados | O1.3 |
+| O1.G | **GATE-1**: bugs do verify corrigidos + ≥1 semana de dados + judge calibrado — **NÃO depende mais do A3** | validation | — | dados PROD ≥7d + concordance≥80% | O1.3,O1.5 |
 
 ## ONDA 2 — Qualidade como moeda (fused_score)
 
